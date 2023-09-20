@@ -4,9 +4,12 @@
 
 ## Quick start:
 1. `pip install nrpy`
-2. Solving the wave equation in Cartesian coordinates: `python3 -m nrpy.examples.wave_equation_cartesian` , then follow the instructions for compiling & running the generated C code.
-3. Solving the wave equation in curvilinear coordinates: `python3 -m nrpy.examples.wave_equation_curvilinear` , then follow the instructions for compiling & running the generated C code.
-4. **Two black holes collide**: Solving the general relativistic field equations in curvilinear coordinates: `python3 -m nrpy.examples.two_blackholes_collide` , then follow the instructions for compiling & running the generated C code.
+2. Choose a project to build, run the provided command, then follow the instructions for compiling & running the generated C code.
+   3. Wave equation solver
+      3. **Cartesian coordinates**: `python3 -m nrpy.examples.wave_equation_cartesian`
+      3. **Curvilinear coordinates**: `python3 -m nrpy.examples.wave_equation_curvilinear`
+   4. General relativity
+      5. **Two black holes collide**: `python3 -m nrpy.examples.two_blackholes_collide`
 
 ## Slow start, in case you want to develop NRPy+ directly:
 1. Clone this repository.
