@@ -1,4 +1,4 @@
-[![Python CI](https://github.com/nrpy/nrpy/actions/workflows/master.yml/badge.svg)](https://github.com/nrpy/nrpy/actions/workflows/master.yml)
+[![Python CI](https://github.com/nrpy/nrpy/actions/workflows/main.yml/badge.svg)](https://github.com/nrpy/nrpy/actions/workflows/main.yml)
 
 # NRPy+: Python-Based Code Generation for Numerical Relativity... and Beyond!
 

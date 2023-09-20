@@ -102,6 +102,5 @@ if __name__ == "__main__":
         ],
         url="https://github.com/nrpy/nrpy",
         author="Zachariah Etienne",
-        author_email="zachetie __at_ gmail **dot* com",
         install_requires=requirements,
     )
