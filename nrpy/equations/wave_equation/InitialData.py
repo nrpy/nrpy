@@ -86,7 +86,7 @@ class InitialData:
         #                                                           xx[0]*sp.sin(xx[1])*sp.sin(xx[2]),
         #
         #                                                           xx[0]*sp.cos(xx[1])]
-        if "reference_metric" in sys.modules:
+        if any("reference_metric" in key for key in sys.modules):
             # pylint: disable=C0415
             import nrpy.reference_metric as refmetric
 
@@ -148,7 +148,7 @@ class InitialData:
         #         or if CoordSystem="Spherical", then xx_to_Cart = [xx[0]*sp.sin(xx[1])*sp.cos(xx[2]),
         #                                                       xx[0]*sp.sin(xx[1])*sp.sin(xx[2]),
         #                                                       xx[0]*sp.cos(xx[1])]
-        if "reference_metric" in sys.modules:
+        if any("reference_metric" in key for key in sys.modules):
             # pylint: disable=C0415
             import nrpy.reference_metric as refmetric
 

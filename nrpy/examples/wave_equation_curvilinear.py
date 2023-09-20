@@ -331,7 +331,9 @@ def register_CFunction_rhs_eval(enable_rfm_pre: bool) -> None:
     )
 
 
-register_CFunction_exact_solution_single_point(in_CoordSystem=CoordSystem)
+register_CFunction_exact_solution_single_point(
+    in_CoordSystem=CoordSystem, in_WaveType=WaveType, in_default_sigma=default_sigma
+)
 register_CFunction_initial_data()
 numgrids.register_CFunction_numerical_grids_and_timestep_setup(
     CoordSystem, grid_physical_size, Nxx_dict
