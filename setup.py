@@ -4,6 +4,11 @@ To install the nrpy package, navigate to this directory and execute:
     pip install .
 
 This will install nrpy and its required dependencies.
+
+Instructions for uploading latest release to PyPI:
+
+    rm -rf build dist && python setup.py sdist bdist_wheel && twine check dist/*
+    twine upload dist/*
 """
 
 import os
@@ -66,7 +71,6 @@ if __name__ == "__main__":
 
     dir_setup = os.path.dirname(os.path.realpath(__file__))
     requirements = read_requirements_file()
-
     setup(
         name="nrpy",
         version=get_nrpy_version(dir_setup),
