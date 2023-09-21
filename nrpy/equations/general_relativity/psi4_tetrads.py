@@ -255,12 +255,12 @@ if __name__ == "__main__":
         "SinhSpherical",
         "SinhSpherical_rfm_precompute",
     ]:
-        enable_rfm_precompute = False
+        enable_rfm_pre = False
         Coord_in = Coord
         if "rfm_precompute" in Coord:
             Coord_in = Coord.replace("_rfm_precompute", "")
-            enable_rfm_precompute = True
-        psi4 = Psi4Tetrads(Coord_in, enable_rfm_precompute)
+            enable_rfm_pre = True
+        psi4 = Psi4Tetrads(CoordSystem=Coord_in, enable_rfm_precompute=enable_rfm_pre)
         results_dict = ve.process_dictionary_of_expressions(
             psi4.__dict__, fixed_mpfs_for_free_symbols=True
         )

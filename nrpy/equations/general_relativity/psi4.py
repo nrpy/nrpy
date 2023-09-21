@@ -306,14 +306,14 @@ if __name__ == "__main__":
             "SinhSpherical",
             "SinhSpherical_rfm_precompute",
         ]:
-            enable_rfm_precompute = False
+            enable_rfm_pre = False
             Coord_in = Coord
             if "rfm_precompute" in Coord:
                 Coord_in = Coord.replace("_rfm_precompute", "")
-                enable_rfm_precompute = True
+                enable_rfm_pre = True
             psi4 = Psi4(
                 CoordSystem=Coord_in,
-                enable_rfm_precompute=enable_rfm_precompute,
+                enable_rfm_precompute=enable_rfm_pre,
                 tetrad=tetrad,
             )
             results_dict = ve.process_dictionary_of_expressions(

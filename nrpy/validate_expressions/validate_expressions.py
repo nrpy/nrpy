@@ -359,6 +359,22 @@ def compare_against_trusted(
 
     trusted_results_dict = trusted.trusted_dict
 
+    if len(trusted_results_dict) != len(results_dict):
+        missing_keys: Set["str"] = set()
+        if len(results_dict) > len(trusted_results_dict):
+            missing_keys = set(results_dict.keys()) - set(trusted_results_dict.keys())
+        if len(results_dict) < len(trusted_results_dict):
+            missing_keys = set(trusted_results_dict.keys()) - set(results_dict.keys())
+        raise ValueError(
+            "\n*** FAILURE: NUMBER OF TESTED EXPRESSIONS DOES NOT MATCH ***\n"
+            f"{len(results_dict)} = number of expressions tested in results dictionary.\n"
+            f"{len(trusted_results_dict)} = number of expressions tested in trusted results dictionary.\n"
+            f"Here are the missing expressions: {missing_keys}\n"
+            f"If you trust the new version, then delete {trusted_file_relpath}/tests/{trusted_file_basename}.py and rerun to generate a new version.\n"
+            "BE SURE TO INDICATE THE REASON FOR UPDATING THE TRUSTED FILE IN THE COMMIT MESSAGE.\n"
+            "***************\n"
+        )
+
     for key in trusted_results_dict:
         # We compare relative error here. Pass if abs_diff <= |trusted value| * tolerance
         tolerance = 10 ** (-4.0 / 5.0 * precision)

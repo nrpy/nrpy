@@ -114,9 +114,9 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
             file.write(f"{CFunction.function_prototype}\n")
 
     CFLAGS_dict = {
-        "default": "-O2 -march=native -g -fopenmp -Wall -Wno-unused-variable",
+        "default": "-O2 -march=native -g -Wall -Wno-unused-variable",
         # FASTCFLAGS: -O3 causes AVX-2+ SIMD optimizations to be used on MoL update loops. -O2 drops to SSE2
-        "fast": "-O3 -funroll-loops -march=native -g -fopenmp -Wall -Wno-unused-variable -std=gnu99",
+        "fast": "-O3 -funroll-loops -march=native -g -Wall -Wno-unused-variable -std=gnu99",
         # DEBUGCFLAGS: OpenMP requires -fopenmp, and when disabling -fopenmp, unknown pragma warnings appear. -Wunknown-pragmas silences these warnings
         "debug": "-O2 -g -Wall -Wno-unused-variable -Wno-unknown-pragmas",
     }
@@ -175,6 +175,16 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
             Makefile.write(f"CFLAGS = {CHOSEN_CFLAGS}\n")
             for value in CFLAGS_dict.values():
                 Makefile.write(f"#CFLAGS = {value}\n")
+            Makefile.write(
+                "# Does the compiler support OpenMP? If so add -fopenmp to CFLAGS."
+            )
+            Makefile.write(
+                r"""
+LDFLAGS =
+CFLAGS += $(shell echo '#include <omp.h>\nint main() { return 0; }' | $(CC) -x c -fopenmp - -o /dev/null 2>/dev/null && echo "-fopenmp" || echo "-Wno-unknown-pragmas")
+LDFLAGS += $(shell echo '#include <omp.h>\nint main() { return 0; }' | $(CC) -x c -fopenmp - -o /dev/null 2>/dev/null && echo "-lgomp")
+"""
+            )
             include_dirs_str = ""
             if include_dirs is not None:
                 if not isinstance(include_dirs, list):
@@ -191,7 +201,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
             Makefile.write(f"{exec_name}: {obj_dependency_str}\n")
             # LINKER STEP:
             Makefile.write(
-                f"\t$(CC) {obj_dependency_str} -o {exec_name}{linked_libraries}\n"
+                f"\t$(CC) {obj_dependency_str} -o {exec_name}{linked_libraries} $(LDFLAGS)\n"
             )
             # MAKE CLEAN:
             Makefile.write(
