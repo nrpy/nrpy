@@ -29,6 +29,7 @@ import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions
 import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numgrids
 import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xxCart
 import nrpy.infrastructures.BHaH.general_relativity.BSSN_C_codegen_library as BCl
+import nrpy.infrastructures.BHaH.special_functions.spin_weight_minus2_spherical_harmonics as swm2sh
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -304,6 +305,7 @@ MoL.MoL_register_CFunctions(
 xxCart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
 xxCart.register_CFunction_xx_to_Cart(CoordSystem)
 progress.register_CFunction_progress_indicator()
+swm2sh.register_CFunction_spin_weight_minus2_sph_harmonics(maximum_l=8)
 
 #########################################################
 # STEP 3: Generate header files, register C functions and
