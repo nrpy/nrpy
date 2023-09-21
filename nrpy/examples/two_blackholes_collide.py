@@ -56,6 +56,7 @@ fd_order = 4
 radiation_BC_fd_order = 2
 enable_simd = True
 separate_Ricci_and_BSSN_RHS = True
+boundary_conditions_desc = "outgoing radiation"
 
 OMP_collapse = 1
 if "Spherical" in CoordSystem:
@@ -136,12 +137,12 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {
         exit(1);
       }
 
-      const int center_of_grid_idx = IDX3(NGHOSTS, Nxx_plus_2NGHOSTS1 / 2, Nxx_plus_2NGHOSTS2 / 2);
+      const int r_mid_idx = IDX3(Nxx_plus_2NGHOSTS1 / 2, Nxx_plus_2NGHOSTS1 / 2, Nxx_plus_2NGHOSTS2 / 2);
 
-      const REAL H_at_center = diagnostic_output_gfs[IDX4pt(HGF, center_of_grid_idx)];
-      const REAL M2_at_center = diagnostic_output_gfs[IDX4pt(MSQUAREDGF, center_of_grid_idx)];
-      const REAL alpha_at_center = y_n_gfs[IDX4pt(ALPHAGF, center_of_grid_idx)];
-      const REAL trK_at_center = y_n_gfs[IDX4pt(TRKGF, center_of_grid_idx)];
+      const REAL H_at_center = diagnostic_output_gfs[IDX4pt(HGF, r_mid_idx)];
+      const REAL M2_at_center = diagnostic_output_gfs[IDX4pt(MSQUAREDGF, r_mid_idx)];
+      const REAL alpha_at_center = y_n_gfs[IDX4pt(ALPHAGF, r_mid_idx)];
+      const REAL trK_at_center = y_n_gfs[IDX4pt(TRKGF, r_mid_idx)];
 
       fprintf(outfile, "%e %e %e %e %e\n", time, log10(fabs(H_at_center + 1e-16)), log10(fabs(M2_at_center + 1e-16)), alpha_at_center, trK_at_center);
 
@@ -327,12 +328,11 @@ Bdefines_h.output_BHaH_defines_h(
     CoordSystem=CoordSystem,
 )
 main.register_CFunction_main_c(
+    initial_data_desc=IDtype,
     MoL_method=MoL_method,
-    # initial_data_desc=WaveType,
-    # initial_data_function_call="initial_data(&griddata);",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
-    boundary_conditions_desc="Quadratic extrapolation, manually defined",
+    boundary_conditions_desc=boundary_conditions_desc,
 )
 
 if enable_simd:

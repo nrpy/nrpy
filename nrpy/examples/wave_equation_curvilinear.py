@@ -58,6 +58,7 @@ MoL_method = "RK4"
 fd_order = 4
 radiation_BC_fd_order = 2
 enable_simd = True
+boundary_conditions_desc = "outgoing radiation"
 
 project_dir = os.path.join("project", project_name)
 
@@ -380,12 +381,11 @@ Bdefines_h.output_BHaH_defines_h(
     CoordSystem=CoordSystem,
 )
 main.register_CFunction_main_c(
+    initial_data_desc=WaveType,
     MoL_method=MoL_method,
-    # initial_data_desc=WaveType,
-    # initial_data_function_call="initial_data(&griddata);",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
-    boundary_conditions_desc="Quadratic extrapolation, manually defined",
+    boundary_conditions_desc=boundary_conditions_desc,
 )
 
 if enable_simd:

@@ -431,8 +431,7 @@ Bdefines_h.output_BHaH_defines_h(
 )
 main.register_CFunction_main_c(
     MoL_method=MoL_method,
-    # initial_data_desc=WaveType,
-    # initial_data_function_call="initial_data(&griddata);",
+    initial_data_desc=WaveType,
     boundary_conditions_desc="Quadratic extrapolation, manually defined",
 )
 

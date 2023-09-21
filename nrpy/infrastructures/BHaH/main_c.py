@@ -1,5 +1,5 @@
 """
-Generates a C main function for all codes in the BHaH infrastructure.
+Generates the C main() function for all codes in the BHaH infrastructure.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -11,8 +11,7 @@ import nrpy.c_function as cfc
 
 def register_CFunction_main_c(
     MoL_method: str,
-    # initial_data_desc: str,
-    # initial_data_function_call: str,
+    initial_data_desc: str = "",
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
     boundary_conditions_desc: str = "",
@@ -22,15 +21,19 @@ def register_CFunction_main_c(
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 0}",
 ) -> None:
     """
-    Generates a C main function with given command-line inputs.
+    Generates the C main() function for all codes in the BHaH infrastructure.
 
     :param MoL_method: Method of Lines algorithm used to step forward in time.
-    :param boundary_conditions_desc: Description of the boundary conditions.
-    :param prefunc: Prefunction for handling pre-right-hand-side operations, default is an empty string.
-    :param pre_MoL_timestep: Code for handling pre-right-hand-side operations, default is an empty string.
-    :param post_MoL_timestep: Code for handling post-right-hand-side operations, default is an empty string.
+    :param initial_data_desc: Description for initial data, default is an empty string.
+    :param enable_rfm_precompute: Enable rfm precomputation, default is False.
+    :param enable_CurviBCs: Enable CurviBCs, default is False.
+    :param boundary_conditions_desc: Description of the boundary conditions, default is an empty string.
+    :param prefunc: String that appears before main(). DO NOT populate this, except when debugging, default is an empty string.
+    :param pre_MoL_step_forward_in_time: Code for handling pre-right-hand-side operations, default is an empty string.
+    :param post_MoL_step_forward_in_time: Code for handling post-right-hand-side operations, default is an empty string.
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 0}".
     """
+    initial_data_desc += " "
     # Make sure all required C functions are registered
     missing_functions: List[Tuple[str, str]] = []
     for func_tuple in [
@@ -70,12 +73,12 @@ Step 1.d: Set each CodeParameter in griddata.params to default.
         desc += "Step 1.e: Set non-parfile parameters related to numerical grid, then set up numerical grids and CFL-limited timestep.\n"
     if enable_rfm_precompute:
         desc += "Step 1.f: Set up boundary condition struct (bcstruct)\n"
-    desc += r"""Step 2: Declare and allocate memory for gridfunctions
-Step 3: Finalize initialization: set up initial data, etc.
+    desc += f"""Step 2: Declare and allocate memory for gridfunctions
+Step 3: Finalize initialization: set up {initial_data_desc}initial data, etc.
 Step 4: MAIN SIMULATION LOOP
 - Step 4.a: Output diagnostics
 - Step 4.b: Prepare to step forward in time
-- Step 4.c: Step forward in time using Method of Lines with {MoL_method} algorithm, applying {boundary_conditions_desc} extrapolation, manually defined boundary conditions
+- Step 4.c: Step forward in time using Method of Lines with {MoL_method} algorithm, applying {boundary_conditions_desc} boundary conditions.
 - Step 4.d: Finish up step in time
 Step 5: Free all allocated memory"""
     c_type = "int"
