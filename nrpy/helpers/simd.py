@@ -6,6 +6,8 @@ Emails: ksible *at* outlook *dot** com
 """
 
 from typing import Dict, Union, Any, Optional
+import shutil
+from pathlib import Path
 from sympy import (
     Basic,
     Expr,
@@ -722,6 +724,31 @@ def expr_convert_to_simd_intrins(
             if simp_expr_diff != 0:
                 raise Warning("Expression Difference: " + str(simp_expr_diff))
     return expr
+
+
+def copy_simd_intrinsics_h(project_dir: str) -> None:
+    """
+    Copies simd_intrinsics.h into project directory.
+
+    :param project_dir: The path of the project directory where the file will be copied.
+    """
+    simd_path = Path(project_dir) / "simd"
+    simd_path.mkdir(parents=True, exist_ok=True)
+
+    try:
+        import importlib.resources  # pylint: disable=E1101  # only Python 3.7+ has importlib.resources
+
+        source_path = (
+            # pylint: disable=E1101
+            importlib.resources.files("nrpy.helpers")
+            / "simd_intrinsics.h"
+        )
+        shutil.copy(str(source_path), str(simd_path))
+    except ImportError:  # Fallback to resource_filename for older Python versions
+        from pkg_resources import resource_filename  # type: ignore
+
+        source_path = resource_filename("nrpy.helpers", "simd_intrinsics.h")
+        shutil.copy(source_path, str(simd_path))  # type: ignore
 
 
 if __name__ == "__main__":

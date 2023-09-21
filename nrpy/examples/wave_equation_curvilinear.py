@@ -12,12 +12,12 @@ Author: Zachariah B. Etienne
 #         and compile-time parameters.
 import shutil
 import os
-from pathlib import Path
 
 import nrpy.c_function as cfc
 import nrpy.params as par
 import nrpy.grid as gri
 import nrpy.c_codegen as ccg
+import nrpy.helpers.simd as simd
 
 from nrpy.equations.wave_equation.WaveEquationCurvilinear_RHSs import (
     WaveEquationCurvilinear_RHSs,
@@ -389,22 +389,7 @@ main.register_CFunction_main_c(
 )
 
 if enable_simd:
-    project_path = Path("project") / project_name
-    simd_path = project_path / "simd"
-    simd_path.mkdir(parents=True, exist_ok=True)
-
-    try:
-        import importlib.resources  # pylint: disable=E1101  # only Python 3.7+ has importlib.resources
-
-        source_path = (
-            importlib.resources.files("nrpy.helpers") / "simd_intrinsics.h"
-        )  # pylint: disable=E1101
-        shutil.copy(str(source_path), str(simd_path))
-    except ImportError:  # Fallback to resource_filename for older Python versions
-        from pkg_resources import resource_filename  # type: ignore
-
-        source_path = resource_filename("nrpy.helpers", "simd_intrinsics.h")
-        shutil.copy(source_path, str(simd_path))  # type: ignore
+    simd.copy_simd_intrinsics_h(project_dir=project_dir)
 
 Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir, project_name=project_name, exec_name=project_name

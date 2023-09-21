@@ -401,9 +401,7 @@ def validate(
                     )
 
                 # 1. First we solve the ODE exactly
-                sol = sp.dsolve(
-                    sp.Eq(y(t).diff(t), rhs_dict[rhs_dict_key](y(t), t)), y(t)
-                ).rhs
+                sol = sp.dsolve(sp.Eq(y(t).diff(t), rhs_dict_value(y(t), t)), y(t)).rhs
                 constants = sp.solve([sol.subs(t, tn) - yn])
                 if isinstance(constants, list):
                     exact = sol.subs(constants[0].items())
