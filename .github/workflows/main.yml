@@ -38,6 +38,13 @@ jobs:
         mypy --version
         black --version
 
+    - name: pip install check
+      run: |
+        pip install .
+        python -m nrpy.examples.wave_equation_cartesian && cat project/wavetoy/Makefile && cd project/wavetoy && make && cd ../../
+        python -m nrpy.examples.wave_equation_curvilinear && cat project/wavetoy/Makefile && cd project/curviwavetoy && make && cd ../../
+        python -m nrpy.examples.two_blackholes_collide && cat project/wavetoy/Makefile && cd project/two_blackholes_collide && make && cd ../../
+
     - name: Run doctests, black, mypy, and pylint on each file.
       run: |
         failed_tests=()
@@ -75,10 +82,3 @@ jobs:
           echo "The following tests failed: ${failed_tests[*]}"
           exit 1
         fi
-
-    - name: Run doctests, black, mypy, and pylint on each file.
-      run: |
-        pip install .
-        python -m nrpy.examples.wave_equation_cartesian && cat project/wavetoy/Makefile && cd project/wavetoy && make && cd ../../
-        python -m nrpy.examples.wave_equation_curvilinear && cat project/wavetoy/Makefile && cd project/curviwavetoy && make && cd ../../
-        python -m nrpy.examples.two_blackholes_collide && cat project/wavetoy/Makefile && cd project/two_blackholes_collide && make && cd ../../
