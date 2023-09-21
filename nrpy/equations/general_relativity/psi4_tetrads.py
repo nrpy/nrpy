@@ -8,7 +8,7 @@ Authors: Zachariah B. Etienne
          and Patrick Nelson
 """
 
-# Step 1.a: import all needed modules from NRPy+:
+# Step 1.a: import all needed modules
 from typing import List, cast, Union
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
 import nrpy.params as par  # NRPy+: Parameter interface
@@ -17,9 +17,7 @@ import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.equations.general_relativity.BSSN_to_ADM import BSSN_to_ADM
 
-# Step 1.b: Initialize TetradChoice parameter
-# Current option: quasiKinnersley = choice made in Baker, Campanelli, and Lousto. PRD 65, 044001 (2002)
-par.register_param(str, __name__, "tetrad_choice", "quasiKinnersley")
+# Step 1.b: Declare free parameter
 # use_metric_to_construct_unit_normal=False: consistent with WeylScal4 ETK thorn.
 par.register_param(bool, __name__, "use_metric_to_construct_unit_normal", False)
 
@@ -31,18 +29,22 @@ class Psi4Tetrads:
 
     :param CoordSystem: The coordinate system to be used. Default is 'Cartesian'.
     :param enable_rfm_precompute: Flag to enable/disable reference metric precomputation. Default is False.
+    :param tetrad: quasiKinnersley = choice made in Baker, Campanelli, and Lousto. PRD 65, 044001 (2002)
 
     :raises ValueError: If an unsupported tetrad choice is made.
     """
 
     def __init__(
-        self, CoordSystem: str = "Cartesian", enable_rfm_precompute: bool = False
+        self,
+        CoordSystem: str = "Cartesian",
+        enable_rfm_precompute: bool = False,
+        tetrad: str = "quasiKinnersley",
     ):
         # Step 1.c: Check if tetrad choice is implemented:
-        self.tetrad_choice = par.parval_from_str("tetrad_choice")
+        self.tetrad_choice = tetrad
         if self.tetrad_choice != "quasiKinnersley":
             raise ValueError(
-                f"ERROR: {__name__}::TetradChoice = {self.tetrad_choice} currently unsupported!"
+                f"ERROR: tetrad = {self.tetrad_choice} currently unsupported!"
             )
 
         # Step 1.d: Given the chosen coordinate system, set up

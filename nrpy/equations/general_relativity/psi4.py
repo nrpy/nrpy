@@ -6,7 +6,7 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-# Step 1.a: import all needed modules from NRPy+:
+# Step 1.a: import needed modules
 from typing import List, cast
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
@@ -20,38 +20,40 @@ class Psi4:
 
     :param CoordSystem: The coordinate system to be used. Default is 'Cartesian'.
     :param enable_rfm_precompute: Flag to enable/disable reference metric precomputation. Default is False.
-    :param specify_tetrad: Specify the tetrad explicitly? Default is True. False means to leave it symbolic.
+    :param tetrad: Specify the tetrad explicitly? Default is True. False means to leave it symbolic.
     """
 
     def __init__(
         self,
         CoordSystem: str = "Cartesian",
         enable_rfm_precompute: bool = False,
-        specify_tetrad: bool = True,
+        tetrad: str = "leave_symbolic",
     ):
-        # Step 1.d: Import all ADM quantities as written in terms of BSSN quantities
+        # Step 1.b: Import all ADM quantities as written in terms of BSSN quantities
         BtoA = BSSN_to_ADM(
             CoordSystem=CoordSystem,
             enable_rfm_precompute=enable_rfm_precompute,
         )
 
-        # Step 1.e: Set up tetrad vectors
+        # Step 1.c: Set up tetrad vectors
         mre4U: List[sp.Expr]
         mim4U: List[sp.Expr]
         n4U: List[sp.Expr]
-        if specify_tetrad:
-            BP4t = Psi4Tetrads(
-                CoordSystem=CoordSystem, enable_rfm_precompute=enable_rfm_precompute
-            )
-            mre4U = BP4t.mre4U
-            mim4U = BP4t.mim4U
-            n4U = BP4t.n4U
-        else:
+        if tetrad == "leave_symbolic":
             # For code validation against NRPy+ psi_4 tutorial module (Tutorial-Psi4.ipynb);
             #   ensures a more complete code validation.
             mre4U = cast(List[sp.Expr], ixp.declarerank1("mre4U", dimension=4))
             mim4U = cast(List[sp.Expr], ixp.declarerank1("mim4U", dimension=4))
             n4U = cast(List[sp.Expr], ixp.declarerank1("n4U", dimension=4))
+        else:
+            BP4t = Psi4Tetrads(
+                CoordSystem=CoordSystem,
+                enable_rfm_precompute=enable_rfm_precompute,
+                tetrad=tetrad,
+            )
+            mre4U = BP4t.mre4U
+            mim4U = BP4t.mim4U
+            n4U = BP4t.n4U
 
         # Step 2: Construct the (rank-4) Riemann curvature tensor associated with the ADM 3-metric:
         RDDDD = ixp.zerorank4()
@@ -298,25 +300,30 @@ if __name__ == "__main__":
     else:
         print(f"Doctest passed: All {results.attempted} test(s) passed")
 
-    for Coord in [
-        "Spherical",
-        "SinhSpherical",
-        "SinhSpherical_rfm_precompute",
-    ]:
-        enable_rfm_precompute = False
-        Coord_in = Coord
-        if "rfm_precompute" in Coord:
-            Coord_in = Coord.replace("_rfm_precompute", "")
-            enable_rfm_precompute = True
-        psi4 = Psi4(Coord_in, enable_rfm_precompute)
-        results_dict = ve.process_dictionary_of_expressions(
-            psi4.__dict__, fixed_mpfs_for_free_symbols=True
-        )
-        ve.compare_or_generate_trusted_results(
-            os.path.abspath(__file__),
-            os.getcwd(),
-            # File basename. If this is set to "trusted_module_test1", then
-            #   trusted results_dict will be stored in tests/trusted_module_test1.py
-            f"{os.path.splitext(os.path.basename(__file__))[0]}_{Coord}",
-            results_dict,
-        )
+    for tetrad in ["quasiKinnersley", "leave_symbolic"]:
+        for Coord in [
+            "Spherical",
+            "SinhSpherical",
+            "SinhSpherical_rfm_precompute",
+        ]:
+            enable_rfm_precompute = False
+            Coord_in = Coord
+            if "rfm_precompute" in Coord:
+                Coord_in = Coord.replace("_rfm_precompute", "")
+                enable_rfm_precompute = True
+            psi4 = Psi4(
+                CoordSystem=Coord_in,
+                enable_rfm_precompute=enable_rfm_precompute,
+                tetrad=tetrad,
+            )
+            results_dict = ve.process_dictionary_of_expressions(
+                psi4.__dict__, fixed_mpfs_for_free_symbols=True
+            )
+            ve.compare_or_generate_trusted_results(
+                os.path.abspath(__file__),
+                os.getcwd(),
+                # File basename. If this is set to "trusted_module_test1", then
+                #   trusted results_dict will be stored in tests/trusted_module_test1.py
+                f"{os.path.splitext(os.path.basename(__file__))[0]}_{tetrad}_{Coord}",
+                results_dict,
+            )

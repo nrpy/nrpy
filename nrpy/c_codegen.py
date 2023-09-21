@@ -331,7 +331,7 @@ def c_codegen(
             for varname, expr in zip(output_varname_str, sympyexpr_list)
         )
 
-        commentblock += f" {expressions}\n */\n"  # Added a space before `{expressions}`
+        commentblock += f" {expressions}\n */\n"
 
     # Step 4a: If common subexpression elimination (CSE) disabled, then
     #         just output the SymPy string in the most boring way,

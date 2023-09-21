@@ -51,9 +51,10 @@ def register_CFunction_numerical_grids_and_timestep_setup(
     params = "commondata_struct *restrict commondata, params_struct *restrict params, griddata_struct *restrict griddata"
     body = r"""const REAL grid_physical_size = params->grid_physical_size;
 const REAL t_final = commondata->t_final;
-params->Nxx0 *= commondata->convergence_factor;
-params->Nxx1 *= commondata->convergence_factor;
-params->Nxx2 *= commondata->convergence_factor;
+// Don't increase resolution across an axis of symmetry:
+if(params->Nxx0 != 2) params->Nxx0 *= commondata->convergence_factor;
+if(params->Nxx1 != 2) params->Nxx1 *= commondata->convergence_factor;
+if(params->Nxx2 != 2) params->Nxx2 *= commondata->convergence_factor;
 
 params->Nxx_plus_2NGHOSTS0 = params->Nxx0 + 2*NGHOSTS;
 params->Nxx_plus_2NGHOSTS1 = params->Nxx1 + 2*NGHOSTS;

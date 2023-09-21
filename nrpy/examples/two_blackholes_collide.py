@@ -9,26 +9,12 @@ Author: Zachariah B. Etienne
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
-from typing import List
 from pathlib import Path
 import shutil
 import os
-import sympy as sp
 
 import nrpy.params as par
 import nrpy.c_function as cfc
-import nrpy.grid as gri
-import nrpy.c_codegen as ccg
-import nrpy.indexedexp as ixp
-import nrpy.reference_metric as refmetric
-
-from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
-from nrpy.equations.general_relativity.BSSN_RHSs import BSSN_RHSs
-from nrpy.equations.general_relativity.BSSN_gauge_RHSs import BSSN_gauge_RHSs
-from nrpy.equations.general_relativity.InitialData_Cartesian import (
-    InitialData_Cartesian,
-)
-from nrpy.equations.general_relativity.BSSN_constraints import BSSN_constraints
 
 from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
 from nrpy.infrastructures.BHaH import rfm_precompute
@@ -41,8 +27,8 @@ import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
 import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numgrids
-import nrpy.infrastructures.BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter as admid
 import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xxCart
+import nrpy.infrastructures.BHaH.general_relativity.BSSN_C_codegen_library as BCl
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -92,47 +78,6 @@ par.adjust_CodeParam_default("t_final", t_final)
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
-def register_CFunction_initial_data() -> None:
-    """
-    Register the initial data function for the wave equation with specific parameters.
-    """
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-
-    ID = InitialData_Cartesian(IDtype=IDtype)
-    admid.register_CFunction_exact_ADM_ID_function(
-        IDCoordSystem, IDtype, ID.alpha, ID.betaU, ID.BU, ID.gammaDD, ID.KDD
-    )
-    admid.register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
-        CoordSystem, IDCoordSystem=IDCoordSystem
-    )
-
-    desc = r"""Set initial data."""
-    c_type = "void"
-    name = "initial_data"
-    params = "const commondata_struct *restrict commondata, griddata_struct *restrict griddata"
-    # Unpack griddata
-    body = r"""
-ID_persist_struct ID_persist;
-for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
-  // Unpack griddata struct:
-  params_struct *restrict params = &griddata[grid].params;
-"""
-    body += f"initial_data_reader__convert_ADM_{IDCoordSystem}_to_BSSN(commondata, griddata, &ID_persist, {IDtype});"
-    body += """
-  apply_bcs_outerextrap_and_inner(commondata, params, &griddata->bcstruct, griddata->gridfuncs.y_n_gfs);
-}
-"""
-    cfc.register_CFunction(
-        includes=includes,
-        desc=desc,
-        c_type=c_type,
-        name=name,
-        params=params,
-        include_CodeParameters_h=False,
-        body=body,
-    )
-
-
 def register_CFunction_diagnostics(in_CoordSystem: str, plane: str = "yz") -> None:
     """
     Register C function for simulation diagnostics.
@@ -293,347 +238,9 @@ if(commondata->time + commondata->dt > commondata->t_final) printf("\n");
     )
 
 
-def register_CFunction_rhs_eval(
-    in_CoordSystem: str,
-    in_enable_rfm_precompute: bool,
-    in_enable_simd: bool,
-    in_LapseEvolutionOption: str,
-    in_ShiftEvolutionOption: str,
-) -> None:
-    """
-    Register the right-hand side evaluation function for the BSSN equations.
-
-    :param in_CoordSystem: The coordinate system to be used.
-    :param in_enable_rfm_precompute: Whether or not to enable reference metric precomputation.
-    :param in_enable_simd: Whether or not to enable SIMD (Single Instruction, Multiple Data).
-    :param in_LapseEvolutionOption: The lapse function evolution option.
-    :param in_ShiftEvolutionOption: The shift vector evolution option.
-    :return: None
-    """
-    includes = ["BHaH_defines.h"]
-    if in_enable_simd:
-        includes += [os.path.join("simd", "simd_intrinsics.h")]
-    desc = r"""Set RHSs for the BSSN evolution equations."""
-    c_type = "void"
-    name = "rhs_eval"
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], const REAL *restrict auxevol_gfs, const REAL *restrict in_gfs, REAL *restrict rhs_gfs"
-    if in_enable_rfm_precompute:
-        params = params.replace(
-            "REAL *restrict xx[3]", "const rfm_struct *restrict rfmstruct"
-        )
-    # Populate BSSN rhs variables
-    rhs = BSSN_RHSs[
-        CoordSystem + "_rfm_precompute" if in_enable_rfm_precompute else CoordSystem
-    ]
-    BSSN_RHSs_varnames = rhs.BSSN_RHSs_varnames
-    BSSN_RHSs_exprs = rhs.BSSN_RHSs_exprs
-    alpha_rhs, vet_rhsU, bet_rhsU = BSSN_gauge_RHSs(
-        in_CoordSystem,
-        in_enable_rfm_precompute,
-        LapseEvolutionOption=in_LapseEvolutionOption,
-        ShiftEvolutionOption=in_ShiftEvolutionOption,
-    )
-    BSSN_RHSs_varnames += ["alpha_rhs"]
-    BSSN_RHSs_exprs += [alpha_rhs]
-    for i in range(3):
-        BSSN_RHSs_varnames += [f"vet_rhsU{i}", f"bet_rhsU{i}"]
-        BSSN_RHSs_exprs += [vet_rhsU[i], bet_rhsU[i]]
-    sorted_list = sorted(zip(BSSN_RHSs_varnames, BSSN_RHSs_exprs))
-    BSSN_RHSs_varnames, BSSN_RHSs_exprs = [list(t) for t in zip(*sorted_list)]
-
-    BSSN_RHSs_access_gf: List[str] = []
-    for var in BSSN_RHSs_varnames:
-        BSSN_RHSs_access_gf += [
-            gri.BHaHGridFunction.access_gf(
-                var.replace("_rhs", ""),
-                0,
-                0,
-                0,
-                gf_array_name="rhs_gfs",
-            )
-        ]
-    # Set up upwind control vector (betaU)
-    rfm = refmetric.reference_metric[
-        in_CoordSystem + "_rfm_precompute"
-        if in_enable_rfm_precompute
-        else in_CoordSystem
-    ]
-    betaU = ixp.zerorank1()
-    vetU = ixp.declarerank1("vetU")
-    for i in range(3):
-        # self.lambda_rhsU[i] = self.Lambdabar_rhsU[i] / rfm.ReU[i]
-        betaU[i] = vetU[i] * rfm.ReU[i]
-    body = lp.simple_loop(
-        loop_body=ccg.c_codegen(
-            BSSN_RHSs_exprs,
-            BSSN_RHSs_access_gf,
-            enable_fd_codegen=True,
-            enable_simd=in_enable_simd,
-            upwind_control_vec=betaU,
-        ),
-        loop_region="interior",
-        enable_simd=in_enable_simd,
-        CoordSystem=in_CoordSystem,
-        enable_rfm_precompute=in_enable_rfm_precompute,
-        read_xxs=not in_enable_rfm_precompute,
-        OMP_collapse=OMP_collapse,
-    )
-
-    cfc.register_CFunction(
-        include_CodeParameters_h=True,
-        includes=includes,
-        desc=desc,
-        c_type=c_type,
-        name=name,
-        params=params,
-        body=body,
-        enable_simd=in_enable_simd,
-    )
-
-
-def register_CFunction_Ricci_eval(
-    in_CoordSystem: str,
-    in_enable_rfm_precompute: bool,
-    in_enable_simd: bool,
-    in_OMP_collapse: int,
-) -> None:
-    """
-    Register the Ricci evaluation function.
-
-    :param in_CoordSystem: The coordinate system to be used.
-    :param in_enable_rfm_precompute: Whether or not to enable reference metric precomputation.
-    :param in_enable_simd: Whether or not to enable SIMD instructions.
-    :param in_OMP_collapse: Degree of OpenMP loop collapsing.
-    :return: None
-    """
-    orig_LeaveRicciSymbolic = par.parval_from_str("LeaveRicciSymbolic")
-    if orig_LeaveRicciSymbolic:
-        del BSSN_quantities[
-            in_CoordSystem + "_rfm_precompute"
-            if in_enable_rfm_precompute
-            else in_CoordSystem
-        ]
-
-        par.set_parval_from_str("LeaveRicciSymbolic", False)
-    Bq = BSSN_quantities[
-        in_CoordSystem + "_rfm_precompute"
-        if in_enable_rfm_precompute
-        else in_CoordSystem
-    ]
-
-    includes = ["BHaH_defines.h"]
-    if in_enable_simd:
-        includes += [os.path.join("simd", "simd_intrinsics.h")]
-    desc = r"""Set Ricci tensor."""
-    c_type = "void"
-    name = "Ricci_eval"
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], const REAL *restrict in_gfs, REAL *restrict auxevol_gfs"
-    if in_enable_rfm_precompute:
-        params = params.replace(
-            "REAL *restrict xx[3]", "const rfm_struct *restrict rfmstruct"
-        )
-    # Populate Ricci tensor
-    Ricci_access_gfs: List[str] = []
-    for var in Bq.Ricci_varnames:
-        Ricci_access_gfs += [
-            gri.BHaHGridFunction.access_gf(var, 0, 0, 0, gf_array_name="auxevol_gfs")
-        ]
-    body = lp.simple_loop(
-        loop_body=ccg.c_codegen(
-            Bq.Ricci_exprs,
-            Ricci_access_gfs,
-            enable_fd_codegen=True,
-            enable_simd=in_enable_simd,
-        ),
-        loop_region="interior",
-        enable_simd=in_enable_simd,
-        CoordSystem=in_CoordSystem,
-        enable_rfm_precompute=in_enable_rfm_precompute,
-        read_xxs=not in_enable_rfm_precompute,
-        OMP_collapse=in_OMP_collapse,
-    )
-
-    if orig_LeaveRicciSymbolic:
-        par.set_parval_from_str("LeaveRicciSymbolic", orig_LeaveRicciSymbolic)
-        del BSSN_quantities[
-            in_CoordSystem + "_rfm_precompute"
-            if in_enable_rfm_precompute
-            else in_CoordSystem
-        ]
-        _ = BSSN_quantities[
-            in_CoordSystem + "_rfm_precompute"
-            if in_enable_rfm_precompute
-            else in_CoordSystem
-        ]
-
-    cfc.register_CFunction(
-        include_CodeParameters_h=True,
-        includes=includes,
-        desc=desc,
-        c_type=c_type,
-        name=name,
-        params=params,
-        body=body,
-        enable_simd=in_enable_simd,
-    )
-
-
-def register_CFunction_constraints(
-    in_CoordSystem: str,
-    in_enable_rfm_precompute: bool,
-    in_enable_simd: bool,
-    in_OMP_collapse: int,
-) -> None:
-    """
-    Register the BSSN constraints evaluation function.
-
-    :param in_CoordSystem: The coordinate system to be used.
-    :param in_enable_rfm_precompute: Whether or not to enable reference metric precomputation.
-    :param in_enable_simd: Whether or not to enable SIMD instructions.
-    :param in_OMP_collapse: Degree of OpenMP loop collapsing.
-    :return: None
-    """
-    Bcon = BSSN_constraints[
-        CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
-    ]
-
-    includes = ["BHaH_defines.h"]
-    if enable_simd:
-        includes += [os.path.join("simd", "simd_intrinsics.h")]
-    desc = r"""Evaluate BSSN constraints."""
-    c_type = "void"
-    name = "constraints_eval"
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], const REAL *restrict in_gfs, const REAL *restrict auxevol_gfs, REAL *restrict diagnostic_output_gfs"
-    if enable_rfm_precompute:
-        params = params.replace(
-            "REAL *restrict xx[3]", "const rfm_struct *restrict rfmstruct"
-        )
-    Constraints_access_gfs: List[str] = []
-    for var in ["H", "MSQUARED"]:
-        Constraints_access_gfs += [
-            gri.BHaHGridFunction.access_gf(
-                var, 0, 0, 0, gf_array_name="diagnostic_output_gfs"
-            )
-        ]
-    body = lp.simple_loop(
-        loop_body=ccg.c_codegen(
-            [Bcon.H, Bcon.Msquared],
-            Constraints_access_gfs,
-            enable_fd_codegen=True,
-            enable_simd=in_enable_simd,
-        ),
-        loop_region="interior",
-        enable_simd=in_enable_simd,
-        CoordSystem=in_CoordSystem,
-        enable_rfm_precompute=in_enable_rfm_precompute,
-        read_xxs=not in_enable_rfm_precompute,
-        OMP_collapse=in_OMP_collapse,
-    )
-
-    cfc.register_CFunction(
-        include_CodeParameters_h=True,
-        includes=includes,
-        desc=desc,
-        c_type=c_type,
-        name=name,
-        params=params,
-        body=body,
-        enable_simd=enable_simd,
-    )
-
-
-def register_CFunction_enforce_detgammabar_equals_detgammahat(
-    in_CoordSystem: str,
-    in_enable_rfm_precompute: bool,
-    in_OMP_collapse: int,
-) -> None:
-    """
-    Register the function that enforces the det(gammabar) = det(gammahat) constraint.
-
-    :param in_CoordSystem: The coordinate system to be used.
-    :param in_enable_rfm_precompute: Whether or not to enable reference metric precomputation.
-    :param in_OMP_collapse: Degree of OpenMP loop collapsing.
-    :return: None
-    """
-    Bq = BSSN_quantities[
-        in_CoordSystem + "_rfm_precompute"
-        if in_enable_rfm_precompute
-        else in_CoordSystem
-    ]
-    rfm = refmetric.reference_metric[
-        in_CoordSystem + "_rfm_precompute"
-        if in_enable_rfm_precompute
-        else in_CoordSystem
-    ]
-
-    includes = ["BHaH_defines.h"]
-    desc = r"""Enforce det(gammabar) = det(gammahat) constraint. Required for strong hyperbolicity."""
-    c_type = "void"
-    name = "enforce_detgammabar_equals_detgammahat"
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], REAL *restrict in_gfs"
-    if in_enable_rfm_precompute:
-        params = params.replace(
-            "REAL *restrict xx[3]", "const rfm_struct *restrict rfmstruct"
-        )
-
-    # First define the Kronecker delta:
-    KroneckerDeltaDD = ixp.zerorank2()
-    for i in range(3):
-        KroneckerDeltaDD[i][i] = sp.sympify(1)
-
-    # The detgammabar in BSSN_RHSs is set to detgammahat when BSSN_RHSs::detgbarOverdetghat_equals_one=True (default),
-    #    so we manually compute it here:
-    dummygammabarUU, detgammabar = ixp.symm_matrix_inverter3x3(Bq.gammabarDD)
-
-    # Next apply the constraint enforcement equation above.
-    nrpyAbs = sp.Function("nrpyAbs")
-    hprimeDD = ixp.zerorank2()
-    for i in range(3):
-        for j in range(3):
-            hprimeDD[i][j] = (nrpyAbs(rfm.detgammahat) / detgammabar) ** (
-                sp.Rational(1, 3)
-            ) * (KroneckerDeltaDD[i][j] + Bq.hDD[i][j]) - KroneckerDeltaDD[i][j]
-
-    hDD_access_gfs: List[str] = []
-    hprimeDD_expr_list: List[sp.Expr] = []
-    for i in range(3):
-        for j in range(i, 3):
-            hDD_access_gfs += [
-                gri.BHaHGridFunction.access_gf(
-                    f"hDD{i}{j}", 0, 0, 0, gf_array_name="in_gfs"
-                )
-            ]
-            hprimeDD_expr_list += [hprimeDD[i][j]]
-
-    # To evaluate the cube root, SIMD support requires e.g., SLEEF.
-    body = lp.simple_loop(
-        loop_body=ccg.c_codegen(
-            hprimeDD_expr_list,
-            hDD_access_gfs,
-            enable_fd_codegen=True,
-            enable_simd=False,
-        ),
-        loop_region="all points",
-        enable_simd=False,
-        CoordSystem=in_CoordSystem,
-        enable_rfm_precompute=in_enable_rfm_precompute,
-        read_xxs=not in_enable_rfm_precompute,
-        OMP_collapse=in_OMP_collapse,
-    )
-
-    cfc.register_CFunction(
-        include_CodeParameters_h=True,
-        includes=includes,
-        desc=desc,
-        c_type=c_type,
-        name=name,
-        params=params,
-        body=body,
-        enable_simd=False,
-    )
-
-
-register_CFunction_initial_data()
+BCl.register_CFunction_initial_data(
+    CoordSystem=CoordSystem, IDtype=IDtype, IDCoordSystem=IDCoordSystem
+)
 numgrids.register_CFunction_numerical_grids_and_timestep_setup(
     CoordSystem, grid_physical_size, Nxx_dict
 )
@@ -641,33 +248,34 @@ register_CFunction_diagnostics(in_CoordSystem=CoordSystem)
 if enable_rfm_precompute:
     rfm_precompute.register_CFunctions_rfm_precompute(CoordSystem)
 print("Constructing rhs_eval C function...")
-register_CFunction_rhs_eval(
-    in_CoordSystem=CoordSystem,
-    in_enable_rfm_precompute=enable_rfm_precompute,
-    in_enable_simd=enable_simd,
-    in_LapseEvolutionOption=LapseEvolutionOption,
-    in_ShiftEvolutionOption=ShiftEvolutionOption,
+BCl.register_CFunction_rhs_eval(
+    CoordSystem=CoordSystem,
+    enable_rfm_precompute=enable_rfm_precompute,
+    enable_simd=enable_simd,
+    LapseEvolutionOption=LapseEvolutionOption,
+    ShiftEvolutionOption=ShiftEvolutionOption,
+    OMP_collapse=OMP_collapse,
 )
 print("Finished constructing rhs_eval C function.")
 print("Started constructing Ricci C function.")
-register_CFunction_Ricci_eval(
-    in_CoordSystem=CoordSystem,
-    in_enable_rfm_precompute=enable_rfm_precompute,
-    in_enable_simd=enable_simd,
-    in_OMP_collapse=OMP_collapse,
+BCl.register_CFunction_Ricci_eval(
+    CoordSystem=CoordSystem,
+    enable_rfm_precompute=enable_rfm_precompute,
+    enable_simd=enable_simd,
+    OMP_collapse=OMP_collapse,
 )
 print("Finished constructing Ricci C function.")
-register_CFunction_enforce_detgammabar_equals_detgammahat(
-    in_CoordSystem=CoordSystem,
-    in_enable_rfm_precompute=enable_rfm_precompute,
-    in_OMP_collapse=OMP_collapse,
+BCl.register_CFunction_enforce_detgammabar_equals_detgammahat(
+    CoordSystem=CoordSystem,
+    enable_rfm_precompute=enable_rfm_precompute,
+    OMP_collapse=OMP_collapse,
 )
 print("Started constructing constraints C function.")
-register_CFunction_constraints(
-    in_CoordSystem=CoordSystem,
-    in_enable_rfm_precompute=enable_rfm_precompute,
-    in_enable_simd=enable_simd,
-    in_OMP_collapse=OMP_collapse,
+BCl.register_CFunction_constraints(
+    CoordSystem=CoordSystem,
+    enable_rfm_precompute=enable_rfm_precompute,
+    enable_simd=enable_simd,
+    OMP_collapse=OMP_collapse,
 )
 print("Finished constructing constraints C function.")
 
