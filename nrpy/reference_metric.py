@@ -56,7 +56,7 @@ class ReferenceMetric:
         # Grid coordinates. In Cartesian self.xx[0],xx[1],xx[2] = x,y,z; in Spherical r, theta, phi, etc.
         self.xx = cast(List[sp.Symbol], ixp.declarerank1("xx", dimension=3))
         # Cartesian coordinate; will only be a linear function of self.xx if CoordSystem==Cartesian.
-        self.Cartx, self.Carty, self.Cartz = sp.symbols("Cartx Carty Cartz", real=True)
+        self.Cartx, self.Carty, self.Cartz = sp.symbols("Cartx Carty Cartz")
         # self.xx_to_Cart must be set as a function of (self.xx[0],xx[1],xx[2])
         self.xx_to_Cart = [sp.sympify(0)] * 3
         # self.Cart_to_xx must be set as a function of (Cartx, Carty, Cartz)
@@ -877,7 +877,6 @@ class ReferenceMetric:
             add_to_parfile=self.add_rfm_params_to_parfile,
             add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
         )
-        # var1, var2= sp.symbols('var1 var2',real=True)
         bScale, SINHWAA = par.register_CodeParameters(
             "REAL",
             self.CodeParam_modulename,

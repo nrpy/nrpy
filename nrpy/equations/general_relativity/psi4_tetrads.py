@@ -73,25 +73,17 @@ class Psi4Tetrads:
         detgamma = sp.simplify(BtoA.detgamma)
         gammaUU = ixp.zerorank2()
         for i in range(3):
-            for j in range(3):
-                gammaUU[i][j] = sp.simplify(BtoA.gammaUU[i][j])
+            for j in range(i, 3):
+                # The simplify() here is SLOW, so we try to use it sparingly.
+                gammaUU[i][j] = gammaUU[j][i] = sp.simplify(BtoA.gammaUU[i][j])
 
         # Step 2.c: Define v1U and v2U
         v1UCart = [-y, x, sp.sympify(0)]
         v2UCart = [x, y, z]
 
         # Step 2.d: Construct the Jacobian d x_Cart^i / d xx^j
-        Jac_dUCart_dDrfmUD = ixp.zerorank2()
-        for i in range(3):
-            for j in range(3):
-                Jac_dUCart_dDrfmUD[i][j] = sp.simplify(
-                    sp.diff(rfm.xx_to_Cart[i], rfm.xx[j])
-                )
-
         # Step 2.e: Invert above Jacobian to get needed d xx^j / d x_Cart^i
-        Jac_dUrfm_dDCartUD, dummyDET = ixp.generic_matrix_inverter3x3(
-            Jac_dUCart_dDrfmUD
-        )
+        Jac_dUrfm_dDCartUD = rfm.Jac_dUrfm_dDCartUD
 
         # Step 2.e.i: Simplify expressions for d xx^j / d x_Cart^i:
         for i in range(3):

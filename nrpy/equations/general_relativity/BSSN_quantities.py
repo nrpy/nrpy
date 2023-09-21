@@ -50,7 +50,9 @@ class BSSNQuantities:
                 self.lambdaU = ixp.declarerank1("lambdaU")
                 self.vetU = ixp.declarerank1("vetU")
                 self.betU = ixp.declarerank1("betU")
-                self.trK, self.cf, self.alpha = sp.symbols("trK cf alpha", real=True)
+                self.trK, self.cf, self.alpha = sp.symbols(
+                    "trK cf alpha"
+                )  # , real=True)  # no tensor gridfunction is real=True. Do this for consistency.
                 BSSN_quantities_gfs_are_registered = True
 
         if not BSSN_quantities_gfs_are_registered:
