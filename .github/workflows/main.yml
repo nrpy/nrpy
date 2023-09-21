@@ -32,13 +32,6 @@ jobs:
     - name: Display sympy version
       run: echo "Running CI tests with SymPy version = $(isympy --version)"
 
-    - name: pip install check
-      run: |
-        pip install .
-        python -m nrpy.examples.wave_equation_cartesian && cat project/wavetoy/Makefile && cd project/wavetoy && make && cd ../../
-        python -m nrpy.examples.wave_equation_curvilinear && cat project/wavetoy/Makefile && cd project/curviwavetoy && make && cd ../../
-        python -m nrpy.examples.two_blackholes_collide && cat project/wavetoy/Makefile && cd project/two_blackholes_collide && make && cd ../../
-
     - name: Check mypy and black versions when Python != 3.6.7 chosen (they are too broken in that Python version).
       if: matrix.python-version != '3.6.7'
       run: |
@@ -82,3 +75,10 @@ jobs:
           echo "The following tests failed: ${failed_tests[*]}"
           exit 1
         fi
+
+    - name: Check that pip installed nrpy creates valid, compilable C example projects
+      run: |
+        pip install .
+        python -m nrpy.examples.wave_equation_cartesian && cat project/wavetoy/Makefile && cd project/wavetoy && make && cd ../../
+        python -m nrpy.examples.wave_equation_curvilinear && cat project/wavetoy/Makefile && cd project/curviwavetoy && make && cd ../../
+        python -m nrpy.examples.two_blackholes_collide && cat project/wavetoy/Makefile && cd project/two_blackholes_collide && make && cd ../../
