@@ -181,8 +181,8 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
             Makefile.write(
                 r"""
 LDFLAGS =
-CFLAGS += $(shell echo "#include <omp.h>\nint main() { return 0; }" | $(CC) -x c -fopenmp - -o /dev/null 2>/dev/null && echo "-fopenmp" || echo "-Wno-unknown-pragmas")
-LDFLAGS += $(shell echo "#include <omp.h>\nint main() { return 0; }" | $(CC) -x c -fopenmp - -o /dev/null 2>/dev/null && echo "-lgomp")
+CFLAGS += $(shell echo '#include <omp.h>\nint main() { return 0; }' | $(CC) -x c -fopenmp - -o /dev/null 2>/dev/null && echo '-fopenmp' || echo '-Wno-unknown-pragmas')
+LDFLAGS += $(shell echo '#include <omp.h>\nint main() { return 0; }' | $(CC) -x c -fopenmp - -o /dev/null 2>/dev/null && echo '-lgomp')
 """
             )
             include_dirs_str = ""
