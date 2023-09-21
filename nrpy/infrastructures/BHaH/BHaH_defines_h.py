@@ -151,6 +151,8 @@ def output_BHaH_defines_h(
 #include <errno.h>
 #include <ctype.h>
 """
+    if any("progress_indicator" in key for key in sys.modules):
+        gen_Nbd_str += "#include <time.h>\n"
     if enable_simd:
         gen_Nbd_str += "// output_BHaH_defines_h(...,enable_simd=True) was called so we #include SIMD intrinsics:\n"
         gen_Nbd_str += """#include "simd/simd_intrinsics.h"\n"""
