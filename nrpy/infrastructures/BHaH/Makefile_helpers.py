@@ -181,8 +181,15 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
             Makefile.write(
                 r"""
 LDFLAGS =
-CFLAGS += $(shell echo '#include <omp.h>\nint main() { return 0; }' | $(CC) -x c -fopenmp - -o /dev/null 2>/dev/null && echo '-fopenmp' || echo '-Wno-unknown-pragmas')
-LDFLAGS += $(shell echo '#include <omp.h>\nint main() { return 0; }' | $(CC) -x c -fopenmp - -o /dev/null 2>/dev/null && echo '-lgomp')
+
+# Check for OpenMP support
+OPENMP_FLAG = -fopenmp
+COMPILER_SUPPORTS_OPENMP := $(shell echo | $(CC) $(OPENMP_FLAG) -E - >/dev/null 2>&1 && echo YES || echo NO)
+
+ifeq ($(COMPILER_SUPPORTS_OPENMP), YES)
+    CFLAGS += $(OPENMP_FLAG)
+    LDFLAGS += -lgomp
+endif
 """
             )
             include_dirs_str = ""
