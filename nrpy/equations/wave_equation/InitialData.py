@@ -54,14 +54,14 @@ class InitialData:
             )
 
         if WaveType == "PlaneWave":
-            self.uu_ID, self.vv_ID = self.PlaneWave(
+            self.uu_ID, self.vv_ID = PlaneWave(
                 CoordSystem=CoordSystem,
                 default_k0=default_k0,
                 default_k1=default_k1,
                 default_k2=default_k2,
             )
         elif WaveType == "SphericalGaussian":
-            self.uu_ID, self.vv_ID = self.SphericalGaussian(
+            self.uu_ID, self.vv_ID = SphericalGaussian(
                 CoordSystem=CoordSystem, default_sigma=default_sigma
             )
         else:
@@ -69,121 +69,122 @@ class InitialData:
                 f"Error: WaveEquation initial data WaveType={WaveType} not supported."
             )
 
-    # Set up spherically-symmetric Gaussian initial data
-    def SphericalGaussian(
-        self, CoordSystem: str = "Cartesian", default_sigma: float = 3.0
-    ) -> Tuple[sp.Expr, sp.Expr]:
-        """
-        Set up initial data for a spherically-symmetric Gaussian wave.
 
-        :param CoordSystem: The coordinate system, defaults to "Cartesian"
-        :param default_sigma: The default value for sigma, defaults to 3
-        """
+# Set up spherically-symmetric Gaussian initial data
+def SphericalGaussian(
+    CoordSystem: str = "Cartesian", default_sigma: float = 3.0
+) -> Tuple[sp.Expr, sp.Expr]:
+    """
+    Set up initial data for a spherically-symmetric Gaussian wave.
 
-        # Step 1: Set up Cartesian coordinates in terms of the native CoordSystem we have chosen.
-        #         E.g., if CoordSystem="Cartesian", then xx_to_Cart = [xx[0],xx[1],xx[2]]
-        #         or if CoordSystem="Spherical", then xx_to_Cart = [xx[0]*sp.sin(xx[1])*sp.cos(xx[2]),
-        #                                                           xx[0]*sp.sin(xx[1])*sp.sin(xx[2]),
-        #
-        #                                                           xx[0]*sp.cos(xx[1])]
-        if any("reference_metric" in key for key in sys.modules):
-            # pylint: disable=C0415
-            import nrpy.reference_metric as refmetric
+    :param CoordSystem: The coordinate system, defaults to "Cartesian"
+    :param default_sigma: The default value for sigma, defaults to 3
+    """
 
-            rfm = refmetric.reference_metric[CoordSystem]
-            xx_to_Cart = rfm.xx_to_Cart
-        else:
-            xx_to_Cart = cast(List[sp.Symbol], ixp.declarerank1("xx"))
+    # Step 1: Set up Cartesian coordinates in terms of the native CoordSystem we have chosen.
+    #         E.g., if CoordSystem="Cartesian", then xx_to_Cart = [xx[0],xx[1],xx[2]]
+    #         or if CoordSystem="Spherical", then xx_to_Cart = [xx[0]*sp.sin(xx[1])*sp.cos(xx[2]),
+    #                                                           xx[0]*sp.sin(xx[1])*sp.sin(xx[2]),
+    #
+    #                                                           xx[0]*sp.cos(xx[1])]
+    if any("reference_metric" in key for key in sys.modules):
+        # pylint: disable=C0415
+        import nrpy.reference_metric as refmetric
 
-        # Step 2: Declare free parameters intrinsic to these initial data
-        # provided as a C parameter by MoLtimestepping.MoL
-        time = sp.symbols("time", real=True)
-        sigma = par.register_CodeParameter(
-            c_type_alias="REAL",
-            module=thismodule,
-            name="sigma",
-            defaultvalue=default_sigma,
-            commondata=True,
-        )
+        rfm = refmetric.reference_metric[CoordSystem]
+        xx_to_Cart = rfm.xx_to_Cart
+    else:
+        xx_to_Cart = cast(List[sp.Symbol], ixp.declarerank1("xx"))
 
-        # Step 3: Compute r
-        r = sp.sympify(0)
-        for i in range(3):
-            r += xx_to_Cart[i] ** 2
-        r = sp.sqrt(r)
+    # Step 2: Declare free parameters intrinsic to these initial data
+    # provided as a C parameter by MoLtimestepping.MoL
+    time = sp.symbols("time", real=True)
+    sigma = par.register_CodeParameter(
+        c_type_alias="REAL",
+        module=thismodule,
+        name="sigma",
+        defaultvalue=default_sigma,
+        commondata=True,
+    )
 
-        # Step 4: Set initial data for uu and vv, where vv_ID = \partial_t uu_ID.
-        # uu_ID = (r - wavespeed*time)/r * sp.exp(- (r - wavespeed*time)**2 / (2*sigma**2) )
-        # By convention, limit(uu, r->infinity) = 2. This ensures that relative error is well defined.
-        uu_ID = (
-            +((r - wavespeed * time) / r)
-            * sp.exp(-((r - wavespeed * time) ** 2) / (2 * sigma**2))
-            + ((r + wavespeed * time) / r)
-            * sp.exp(-((r + wavespeed * time) ** 2) / (2 * sigma**2))
-        ) + sp.sympify(
-            2
-        )  # Adding 2 ensures relative error is well defined (solution does not cross zero)
-        vv_ID = sp.diff(uu_ID, time)
+    # Step 3: Compute r
+    r = sp.sympify(0)
+    for i in range(3):
+        r += xx_to_Cart[i] ** 2
+    r = sp.sqrt(r)
 
-        return uu_ID, vv_ID
+    # Step 4: Set initial data for uu and vv, where vv_ID = \partial_t uu_ID.
+    # uu_ID = (r - wavespeed*time)/r * sp.exp(- (r - wavespeed*time)**2 / (2*sigma**2) )
+    # By convention, limit(uu, r->infinity) = 2. This ensures that relative error is well defined.
+    uu_ID = (
+        +((r - wavespeed * time) / r)
+        * sp.exp(-((r - wavespeed * time) ** 2) / (2 * sigma**2))
+        + ((r + wavespeed * time) / r)
+        * sp.exp(-((r + wavespeed * time) ** 2) / (2 * sigma**2))
+    ) + sp.sympify(
+        2
+    )  # Adding 2 ensures relative error is well defined (solution does not cross zero)
+    vv_ID = sp.diff(uu_ID, time)
 
-    # Set up monochromatic plane-wave initial data
-    def PlaneWave(
-        self,
-        CoordSystem: str = "Cartesian",
-        default_k0: float = 1,
-        default_k1: float = 1,
-        default_k2: float = 1,
-    ) -> Tuple[sp.Expr, sp.Expr]:
-        """
-        Set up initial data for a monochromatic plane wave.
+    return uu_ID, vv_ID
 
-        :param CoordSystem: The coordinate system, defaults to "Cartesian"
-        :param default_k0: The default value for k0, defaults to 1
-        :param default_k1: The default value for k1, defaults to 1
-        :param default_k2: The default value for k2, defaults to 1
-        """
-        # Step 1: Set up Cartesian coordinates in terms of the native CoordSystem we have chosen.
-        #         E.g., if CoordSystem="Cartesian", then xx_to_Cart = [xx[0],xx[1],xx[2]]
-        #         or if CoordSystem="Spherical", then xx_to_Cart = [xx[0]*sp.sin(xx[1])*sp.cos(xx[2]),
-        #                                                       xx[0]*sp.sin(xx[1])*sp.sin(xx[2]),
-        #                                                       xx[0]*sp.cos(xx[1])]
-        if any("reference_metric" in key for key in sys.modules):
-            # pylint: disable=C0415
-            import nrpy.reference_metric as refmetric
 
-            rfm = refmetric.reference_metric[CoordSystem]
-            xx_to_Cart = rfm.xx_to_Cart
-        else:
-            xx_to_Cart = cast(List[sp.Symbol], ixp.declarerank1("xx"))
+# Set up monochromatic plane-wave initial data
+def PlaneWave(
+    CoordSystem: str = "Cartesian",
+    default_k0: float = 1,
+    default_k1: float = 1,
+    default_k2: float = 1,
+) -> Tuple[sp.Expr, sp.Expr]:
+    """
+    Set up initial data for a monochromatic plane wave.
 
-        # Step 2: Declare free parameters intrinsic to these initial data
-        time = sp.symbols(
-            "time", real=True
-        )  # provided as a C parameter by MoLtimestepping.MoL
-        kk = par.register_CodeParameters(
-            c_type_alias="REAL",
-            module=thismodule,
-            names=["kk0", "kk1", "kk2"],
-            defaultvalues=[default_k0, default_k1, default_k2],
-            commondata=True,
-        )
+    :param CoordSystem: The coordinate system, defaults to "Cartesian"
+    :param default_k0: The default value for k0, defaults to 1
+    :param default_k1: The default value for k1, defaults to 1
+    :param default_k2: The default value for k2, defaults to 1
+    """
+    # Step 1: Set up Cartesian coordinates in terms of the native CoordSystem we have chosen.
+    #         E.g., if CoordSystem="Cartesian", then xx_to_Cart = [xx[0],xx[1],xx[2]]
+    #         or if CoordSystem="Spherical", then xx_to_Cart = [xx[0]*sp.sin(xx[1])*sp.cos(xx[2]),
+    #                                                       xx[0]*sp.sin(xx[1])*sp.sin(xx[2]),
+    #                                                       xx[0]*sp.cos(xx[1])]
+    if any("reference_metric" in key for key in sys.modules):
+        # pylint: disable=C0415
+        import nrpy.reference_metric as refmetric
 
-        # Step 3: Normalize the k vector
-        kk_norm_factor = sp.sqrt(kk[0] ** 2 + kk[1] ** 2 + kk[2] ** 2)
+        rfm = refmetric.reference_metric[CoordSystem]
+        xx_to_Cart = rfm.xx_to_Cart
+    else:
+        xx_to_Cart = cast(List[sp.Symbol], ixp.declarerank1("xx"))
 
-        # Step 4: Compute k_norm.x
-        dot_product = sp.sympify(0)
-        for i in range(3):
-            dot_product += kk[i] * xx_to_Cart[i]
-        dot_product /= kk_norm_factor
+    # Step 2: Declare free parameters intrinsic to these initial data
+    time = sp.symbols(
+        "time", real=True
+    )  # provided as a C parameter by MoLtimestepping.MoL
+    kk = par.register_CodeParameters(
+        c_type_alias="REAL",
+        module=thismodule,
+        names=["kk0", "kk1", "kk2"],
+        defaultvalues=[default_k0, default_k1, default_k2],
+        commondata=True,
+    )
 
-        # Step 5: Set initial data for uu and vv, where vv_ID = \partial_t uu_ID.
-        # By convention, we set uu such that it is never zero. This ensures that relative error in uu is well defined.
-        uu_ID = sp.sin(dot_product - wavespeed * time) + 2
-        vv_ID = sp.diff(uu_ID, time)
+    # Step 3: Normalize the k vector
+    kk_norm_factor = sp.sqrt(kk[0] ** 2 + kk[1] ** 2 + kk[2] ** 2)
 
-        return uu_ID, vv_ID
+    # Step 4: Compute k_norm.x
+    dot_product = sp.sympify(0)
+    for i in range(3):
+        dot_product += kk[i] * xx_to_Cart[i]
+    dot_product /= kk_norm_factor
+
+    # Step 5: Set initial data for uu and vv, where vv_ID = \partial_t uu_ID.
+    # By convention, we set uu such that it is never zero. This ensures that relative error in uu is well defined.
+    uu_ID = sp.sin(dot_product - wavespeed * time) + 2
+    vv_ID = sp.diff(uu_ID, time)
+
+    return uu_ID, vv_ID
 
 
 if __name__ == "__main__":

@@ -233,27 +233,24 @@ class BHaHGridFunction(GridFunction):
             gridfunction_lists()
             (['evol_gf1', 'evol_gf2'], ['aux_gf1', 'aux_gf2'], ['auxevol_gf1', 'auxevol_gf2'])
         """
+        # Initialize dictionary for holding lists of gridfunction names for each group.
         groups: Dict[str, List[str]] = {
             "EVOL": [],
             "AUX": [],
             "AUXEVOL": [],
         }
 
+        # Iterate through the global dictionary of gridfunctions.
         for _key, gf in glb_gridfcs_dict.items():
             if gf.group in groups:
                 groups[gf.group].append(gf.name)
 
-        # Sort the lists
-        for group in groups:
+        # Sort the lists. Iterating through a copy of the keys to avoid modifying the dictionary while iterating.
+        for group in list(groups.keys()):
             groups[group] = sorted(groups[group])
 
-        BHaH_lists: Tuple[List[str], List[str], List[str]] = (
-            groups["EVOL"],
-            groups["AUX"],
-            groups["AUXEVOL"],
-        )
-
-        return BHaH_lists
+        # Pack the sorted lists into a tuple and return.
+        return groups["EVOL"], groups["AUX"], groups["AUXEVOL"]
 
     @staticmethod
     def gridfunction_defines() -> str:

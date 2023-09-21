@@ -168,7 +168,7 @@ def cse_preprocess(
                 # Perform partial factoring on entire expression
                 # This collect is very expensive, so make sure var exists in expr.free_symbols!
                 free_symbols = expr.free_symbols
-                needed_var_set: list[sp.Basic] = []
+                needed_var_set: List[sp.Basic] = []
                 for var in var_set:
                     if var in free_symbols:
                         needed_var_set += [var]

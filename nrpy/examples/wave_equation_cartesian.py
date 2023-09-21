@@ -441,9 +441,11 @@ if enable_simd:
     simd_path.mkdir(parents=True, exist_ok=True)
 
     try:
-        import importlib.resources  # pylint: disable=E1101  # for Python 3.7+
+        import importlib.resources  # pylint: disable=E1101  # only Python 3.7+ has importlib.resources
 
-        source_path = importlib.resources.files("nrpy.helpers") / "simd_intrinsics.h"
+        source_path = (
+            importlib.resources.files("nrpy.helpers") / "simd_intrinsics.h"
+        )  # pylint: disable=E1101
         shutil.copy(str(source_path), str(simd_path))
     except ImportError:  # Fallback to resource_filename for older Python versions
         from pkg_resources import resource_filename  # type: ignore

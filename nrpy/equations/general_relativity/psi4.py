@@ -300,7 +300,7 @@ if __name__ == "__main__":
     else:
         print(f"Doctest passed: All {results.attempted} test(s) passed")
 
-    for tetrad in ["quasiKinnersley", "leave_symbolic"]:
+    for in_tetrad in ["quasiKinnersley", "leave_symbolic"]:
         for Coord in [
             "Spherical",
             "SinhSpherical",
@@ -314,7 +314,7 @@ if __name__ == "__main__":
             psi4 = Psi4(
                 CoordSystem=Coord_in,
                 enable_rfm_precompute=enable_rfm_pre,
-                tetrad=tetrad,
+                tetrad=in_tetrad,
             )
             results_dict = ve.process_dictionary_of_expressions(
                 psi4.__dict__, fixed_mpfs_for_free_symbols=True
@@ -324,6 +324,6 @@ if __name__ == "__main__":
                 os.getcwd(),
                 # File basename. If this is set to "trusted_module_test1", then
                 #   trusted results_dict will be stored in tests/trusted_module_test1.py
-                f"{os.path.splitext(os.path.basename(__file__))[0]}_{tetrad}_{Coord}",
+                f"{os.path.splitext(os.path.basename(__file__))[0]}_{in_tetrad}_{Coord}",
                 results_dict,
             )
