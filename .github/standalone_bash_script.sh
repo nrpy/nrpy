@@ -8,7 +8,7 @@ python -m pip install --upgrade pip
 if [ -f requirements.txt ]; then
   pip install -r requirements.txt
 fi
-pip install mypy pylint black clang-format
+pip install mypy pylint black clang-format ipython
 
 # Display sympy version
 echo "Running CI tests with SymPy version = $(isympy --version)"
