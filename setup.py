@@ -49,7 +49,7 @@ def clang_format_is_installed() -> bool:
             stderr=subprocess.PIPE,
         )
         return True
-    except FileNotFoundError:
+    except (FileNotFoundError, subprocess.CalledProcessError):
         return False
 
 
