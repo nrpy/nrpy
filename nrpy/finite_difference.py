@@ -86,18 +86,14 @@ par.register_param(py_type=int, module=__name__, name="fd_order", value=4)
 #  .... row, but with each element e_j -> e_j^(L-1)
 #  A1 is used later to validate the inverted
 #  matrix.
-def setup_FD_matrix__return_inverse(
+def setup_FD_matrix__return_inverse_lowlevel(
     stencil_width: int, UPDOWNWIND_stencil_shift: int
 ) -> Any:
     """
     Function to set up finite difference matrix and return its inverse.
 
-    Parameters
-    ----------
-    stencil_width : int
-        Width of the stencil.
-    UPDOWNWIND_stencil_shift : int
-        Shift in the stencil for upwind or downwind.
+    :param stencil_width: Width of the stencil.
+    :param UPDOWNWIND_stencil_shift: Shift in the stencil for upwind or downwind.
 
     Returns
     -------
@@ -106,7 +102,7 @@ def setup_FD_matrix__return_inverse(
 
     Example
     -------
-    >>> setup_FD_matrix__return_inverse(3, 0)
+    >>> setup_FD_matrix__return_inverse_lowlevel(3, 0)
     Matrix([
     [0, -1/2, 1/2],
     [1,    0,  -1],
@@ -133,6 +129,59 @@ def setup_FD_matrix__return_inverse(
     U_inv = U.inv()
     # M's inverse is then U_inv * L_inv
     return U_inv * L_inv
+
+
+class Matrix_dict(Dict[Tuple[int, int], sp.Matrix]):
+    """Custom dictionary for storing FD coeff matrices, as the inversion is expensive"""
+
+    def __getitem__(self, key: Tuple[int, int]) -> sp.Matrix:
+        if key not in self:
+            stencil_width = key[0]
+            UPDOWNWIND_stencil_shift = key[1]
+            self.__setitem__(
+                key,
+                setup_FD_matrix__return_inverse_lowlevel(
+                    stencil_width=stencil_width,
+                    UPDOWNWIND_stencil_shift=UPDOWNWIND_stencil_shift,
+                ),
+            )
+        return dict.__getitem__(self, key)
+
+    def __setitem__(self, key: Tuple[int, int], value: sp.Matrix) -> None:
+        dict.__setitem__(self, key, value)
+
+
+FD_Matrix_dict = Matrix_dict()
+
+
+def setup_FD_matrix__return_inverse(
+    stencil_width: int, UPDOWNWIND_stencil_shift: int
+) -> Any:
+    """
+    Wrapper function to set up finite difference matrix and return its inverse.
+    If the inputs have already been processed through
+    setup_FD_matrix__return_inverse_lowlevel() (i.e., the matrix has already
+    been inverted), this function will simply return the inverse matrix stored within
+    FD_Matrix_dict((stencil_width, UPDOWNWIND_stencil_shift). Otherwise, it will
+    populate the FD_Matrix_dict with this matrix.
+
+    :param stencil_width: Width of the stencil.
+    :param UPDOWNWIND_stencil_shift: Shift in the stencil for upwind or downwind.
+
+    Returns
+    -------
+    sp.Matrix
+        Inverse of the finite difference matrix.
+
+    Example
+    -------
+    >>> setup_FD_matrix__return_inverse(3, 0)
+    Matrix([
+    [0, -1/2, 1/2],
+    [1,    0,  -1],
+    [0,  1/2, 1/2]])
+    """
+    return FD_Matrix_dict[(stencil_width, UPDOWNWIND_stencil_shift)]
 
 
 def compute_fdcoeffs_fdstencl(
@@ -318,7 +367,7 @@ def extract_list_of_deriv_var_strings_from_sympyexpr_list(
     ValueError: If a variable in the SymPy expression isn't registered as a gridfunction or Cparameter.
 
     Doctest:
-    >>> import indexedexp as ixp
+    >>> import nrpy.indexedexp as ixp
     >>> from typing import cast
     >>> gri.glb_gridfcs_dict.clear()
     >>> vU = gri.register_gridfunctions_for_single_rank1("vU")
@@ -431,7 +480,7 @@ def extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars(
     Tuple[List[str], List[str]]: Tuple containing lists of base gridfunctions and derivative operators.
 
     Doctest:
-    >>> import indexedexp as ixp
+    >>> import nrpy.indexedexp as ixp
     >>> c_dD = ixp.declarerank1("c_dD")
     >>> aDD_dD = ixp.declarerank3("aDD_dD")
     >>> aDD_dKOD = ixp.declarerank3("aDD_dD")
@@ -524,7 +573,7 @@ def read_gfs_from_memory(
     :return: A string containing C code that represents the reading of grid functions at the
         necessary points in memory.
 
-    >>> import indexedexp as ixp
+    >>> import nrpy.indexedexp as ixp
     >>> gri.glb_gridfcs_dict.clear()
     >>> par.set_parval_from_str("Infrastructure", "BHaH")
     >>> vU       = gri.register_gridfunctions_for_single_rank1("vU", group="EVOL")
@@ -744,7 +793,7 @@ def read_gfs_from_memory(
 
 
 def FD_operators_to_sympy_expressions(
-    list_of_deriv_vars: List[sp.Basic],
+    list_of_deriv_vars: List[sp.Symbol],
     list_of_base_gridfunction_names_in_derivs: List[str],
     list_of_deriv_operators: List[str],
     fdcoeffs: List[List[sp.Rational]],
@@ -752,7 +801,18 @@ def FD_operators_to_sympy_expressions(
     enable_simd: bool = False,
 ) -> Tuple[List[sp.Basic], List[str]]:
     """
-    >>> import indexedexp as ixp
+    Convert finite difference (FD) operators to SymPy expressions.
+
+    :param list_of_deriv_vars: List of sympy symbols
+    :param list_of_base_gridfunction_names_in_derivs: List of base grid function names involved in derivatives.
+    :param list_of_deriv_operators: List of derivative operators.
+    :param fdcoeffs: List of finite difference coefficients.
+    :param fdstencl: List of finite difference stencils.
+    :param enable_simd: Whether to enable SIMD.
+
+    :return: Tuple containing the list of SymPy expressions for the finite difference operators and the corresponding left-hand side variable names.
+
+    >>> import nrpy.indexedexp as ixp
     >>> gri.glb_gridfcs_dict.clear()
     >>> par.set_parval_from_str("Infrastructure", "BHaH")
     >>> hDD      = gri.register_gridfunctions_for_single_rank2("hDD", group="EVOL", symmetry="sym01")

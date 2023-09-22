@@ -284,6 +284,41 @@ def c_codegen(
         ) = fin.extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars(
             list_of_deriv_vars
         )
+
+        # Store fdcoeffs and stencil (tuple) for each unique
+        #   derivative operator to deriv_operator_dict
+        deriv_operator_dict = {}
+        for deriv_op in superfast_uniq(list_of_deriv_operators):
+            deriv_operator_dict[deriv_op] = fin.compute_fdcoeffs_fdstencl(
+                deriv_op, CCGParams.fd_order
+            )
+            print(deriv_op)
+
+        def construct_deriv_prototypes():
+            pass
+            # deriv_var_list = []
+            # base_gf_name_list = []
+            # deriv_op_list = []
+            # fdcoeffs_list = []
+            # fdstencl_list = []
+            # for deriv_op, deriv_op_tuple in deriv_operator_dict.items():
+            #     deriv_var_list += [sp.Symbol(f"DUMMEE_{deriv_op}")]
+            #     base_gf_name_list += [sp.Symbol(f"DUMMEE")]
+            #     deriv_op_list += [deriv_op]
+            #     fdcoeffs_list += [deriv_op_tuple[0]]
+            #     fdstencl_list += [deriv_op_tuple[1]]
+            # FDexprs, FDlhsvarnames = fin.FD_operators_to_sympy_expressions(
+            #     deriv_var_list,
+            #     base_gf_name_list,
+            #     deriv_op_list,
+            #     fdcoeffs_list,
+            #     fdstencl_list,
+            #     enable_simd=CCGParams.enable_simd,
+            # )
+            # print(FDexprs)
+
+        construct_deriv_prototypes()
+
         fdcoeffs: List[List[sp.Rational]] = [
             [] for _ in range(len(list_of_deriv_operators))
         ]
@@ -291,9 +326,7 @@ def c_codegen(
             [[] for _ in range(4)] for __ in range(len(list_of_deriv_operators))
         ]
         for i, deriv_op in enumerate(list_of_deriv_operators):
-            fdcoeffs[i], fdstencl[i] = fin.compute_fdcoeffs_fdstencl(
-                deriv_op, CCGParams.fd_order
-            )
+            fdcoeffs[i], fdstencl[i] = deriv_operator_dict[deriv_op]
 
         read_from_memory_C_code = fin.read_gfs_from_memory(
             list_of_base_gridfunction_names_in_derivs,
@@ -817,7 +850,7 @@ def gridfunction_management_and_FD_codegen(
             fdstencl,
             enable_simd=CCGParams.enable_simd,
         )
-
+    # print(FDlhsvarnames)
     # Step 5.b.i: (Upwinded derivatives algorithm, part 1):
     # If an upwinding control vector is specified, determine
     #    which of the elements of the vector will be required.
