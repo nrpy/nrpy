@@ -15,8 +15,8 @@ import os
 import sys
 from pathlib import Path
 from typing import List
-from setuptools import setup, find_packages  # type: ignore
 import subprocess
+from setuptools import setup, find_packages  # type: ignore
 
 # pylint: disable=consider-using-f-string
 

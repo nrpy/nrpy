@@ -736,7 +736,8 @@ def copy_simd_intrinsics_h(project_dir: str) -> None:
     simd_path.mkdir(parents=True, exist_ok=True)
 
     try:
-        import importlib.resources  # pylint: disable=E1101  # only Python 3.7+ has importlib.resources
+        # only Python 3.7+ has importlib.resources
+        import importlib.resources  # pylint: disable=E1101,C0415
 
         source_path = (
             # pylint: disable=E1101
@@ -745,6 +746,7 @@ def copy_simd_intrinsics_h(project_dir: str) -> None:
         )
         shutil.copy(str(source_path), str(simd_path))
     except ImportError:  # Fallback to resource_filename for older Python versions
+        # pylint: disable=E1101,C0415
         from pkg_resources import resource_filename  # type: ignore
 
         source_path = resource_filename("nrpy.helpers", "simd_intrinsics.h")
