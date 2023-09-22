@@ -37,10 +37,10 @@ def flatten_tensor(tensor: List[Any]) -> List[Any]:
 
 def assert_equal(
     vardict_1: Union[
-        Dict[str, sp.Expr, List[sp.Expr], List[List[sp.Expr]]], sp.Expr, str
+        Dict[str, Union[sp.Expr, List[sp.Expr], List[List[sp.Expr]]]], sp.Expr, str
     ],
     vardict_2: Union[
-        Dict[str, sp.Expr, List[sp.Expr], List[List[sp.Expr]]], sp.Expr, int
+        Dict[str, Union[sp.Expr, List[sp.Expr], List[List[sp.Expr]]]], sp.Expr, int
     ],
     suppress_message: bool = False,
 ) -> None:
@@ -89,12 +89,15 @@ def assert_equal(
     vardict_2_results_dict = process_dictionary_of_expressions(
         vardict_2, fixed_mpfs_for_free_symbols=True
     )
+    for key in vardict_1_results_dict.keys():
+        print(vardict_1_results_dict[key])
+        print(str(vardict_2_results_dict[key]) + "\n")
     for var_1, var_2 in zip(vardict_1_results_dict, vardict_2_results_dict):
         tolerance = 10 ** (-4.0 / 5.0 * precision)
         abs_diff = fabs(vardict_1_results_dict[var_1] - vardict_2_results_dict[var_2])
         avg = (vardict_1_results_dict[var_1] + vardict_2_results_dict[var_2]) / 2
         if abs_diff > fabs(avg) * tolerance:
-            print(f"Error on {var_1}: {abs_diff} > {fabs(avg)} * {tolerance}")
+            print(f"Error on {var_1}: {abs_diff} > {fabs(avg)*tolerance}")
             raise AssertionError
 
     if not suppress_message:
@@ -226,7 +229,7 @@ def convert_one_expression_to_mpfmpc(
 
 
 def process_dictionary_of_expressions(
-    dictionary: Dict[Any, sp.Expr],
+    dictionary: Dict[Any, Any],
     fixed_mpfs_for_free_symbols: bool = False,
     verbose: bool = True,
 ) -> Dict[str, Union[mpf, mpc]]:

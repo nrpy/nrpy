@@ -6,7 +6,7 @@ Test that handwritten BSSN quantities within
 Author: Ken Sible
 Email:  ksible *at* outlook *dot* com
 """
-
+from typing import List, cast
 import sympy as sp
 from nrpylatex import parse_latex  # type: ignore
 
@@ -26,17 +26,17 @@ def test_example_BSSN() -> bool:
         bool: True if test is successful, otherwise False.
     """
     # Initialize to junk values, to make the linter and mypy happy.
-    h_rhsDD = [[sp.Symbol("x") ** 2] * 3] * 3
-    a_rhsDD = [[sp.Symbol("x") ** 2] * 3] * 3
-    RbarDD = [[sp.Symbol("x") ** 2] * 3] * 3
-    bet_rhsU = [sp.Symbol("x") ** 2] * 3
-    vet_rhsU = [sp.Symbol("x") ** 2] * 3
-    Lambdabar_rhsU = [sp.Symbol("x") ** 2] * 3
-    MU = [sp.Symbol("x") ** 2] * 3
-    H = sp.Symbol("x")
-    cf_rhs = sp.Symbol("x")
-    alpha_rhs = sp.Symbol("x")
-    trK_rhs = sp.Symbol("x")
+    h_rhsDD = cast(List[List[sp.Expr]], [[None] * 3] * 3)
+    a_rhsDD = cast(List[List[sp.Expr]], [[None] * 3] * 3)
+    RbarDD = cast(List[List[sp.Expr]], [[None] * 3] * 3)
+    bet_rhsU = cast(List[sp.Expr], [None] * 3)
+    vet_rhsU = cast(List[sp.Expr], [None] * 3)
+    Lambdabar_rhsU = cast(List[sp.Expr], [None] * 3)
+    MU = cast(List[sp.Expr], [None] * 3)
+    H = cast(sp.Expr, None)
+    cf_rhs = cast(sp.Expr, None)
+    alpha_rhs = cast(sp.Expr, None)
+    trK_rhs = cast(sp.Expr, None)
 
     parse_latex(
         r"""
@@ -142,7 +142,6 @@ def test_example_BSSN() -> bool:
     par.set_parval_from_str("LeaveRicciSymbolic", False)
     BSSN_quantities.BSSN_quantities.clear()
     Bq = BSSN_quantities.BSSN_quantities["Cartesian"]
-
     try:
         assert_equal(
             {
@@ -165,11 +164,11 @@ def test_example_BSSN() -> bool:
                 "Lambdabar_rhsU": rhs.Lambdabar_rhsU,
                 "a_rhsDD": rhs.a_rhsDD,
                 "alpha_rhs": trusted_alpha_rhs,
-                "vet_rhsU": trusted_vet_rhsU,
-                "bet_rhsU": trusted_bet_rhsU,
+                "vet_rhsU": cast(List[sp.Expr], trusted_vet_rhsU),
+                "bet_rhsU": cast(List[sp.Expr], trusted_bet_rhsU),
                 "H": bssncon.H,
                 "MU": bssncon.MU,
-                "RbarDD": Bq.RbarDD,
+                "RbarDD": cast(List[List[sp.Expr]], Bq.RbarDD),
             },
             suppress_message=False,
         )
@@ -181,6 +180,6 @@ def test_example_BSSN() -> bool:
 if __name__ == "__main__":
     if not test_example_BSSN():
         raise AssertionError(
-            "Error: NRPy+ based BSSN expressions (Cartesian, Tmunu=False)"
+            "Error: NRPy+ based BSSN expressions (Cartesian, Tmunu=False) "
             "disagree with NRPyLaTeX generated expressions"
         )
