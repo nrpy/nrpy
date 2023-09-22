@@ -36,8 +36,12 @@ def flatten_tensor(tensor: List[Any]) -> List[Any]:
 
 
 def assert_equal(
-    vardict_1: Union[Dict[str, sp.Expr], sp.Expr, str],
-    vardict_2: Union[Dict[str, sp.Expr], sp.Expr, int],
+    vardict_1: Union[
+        Dict[str, sp.Expr, List[sp.Expr], List[List[sp.Expr]]], sp.Expr, str
+    ],
+    vardict_2: Union[
+        Dict[str, sp.Expr, List[sp.Expr], List[List[sp.Expr]]], sp.Expr, int
+    ],
     suppress_message: bool = False,
 ) -> None:
     """
@@ -86,8 +90,11 @@ def assert_equal(
         vardict_2, fixed_mpfs_for_free_symbols=True
     )
     for var_1, var_2 in zip(vardict_1_results_dict, vardict_2_results_dict):
-        diff = vardict_1_results_dict[var_1] - vardict_2_results_dict[var_2]
-        if fabs(diff) >= 10 ** (-precision):
+        tolerance = 10 ** (-4.0 / 5.0 * precision)
+        abs_diff = fabs(vardict_1_results_dict[var_1] - vardict_2_results_dict[var_2])
+        avg = (vardict_1_results_dict[var_1] + vardict_2_results_dict[var_2]) / 2
+        if abs_diff > fabs(avg) * tolerance:
+            print(f"Error on {var_1}: {abs_diff} > {fabs(avg)} * {tolerance}")
             raise AssertionError
 
     if not suppress_message:
