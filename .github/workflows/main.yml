@@ -38,6 +38,15 @@ jobs:
         mypy --version
         black --version
 
+    - name: Check that pip installed nrpy creates valid, compilable C example projects
+      run: |
+        clang-format --version
+        pwd
+        pip install .
+        python -m nrpy.examples.wave_equation_cartesian && cd project/wavetoy && make && cd ../../
+        python -m nrpy.examples.wave_equation_curvilinear cd project/curviwavetoy && make && cd ../../
+        python -m nrpy.examples.two_blackholes_collide && cd project/two_blackholes_collide && make && cd ../../
+
     - name: Run doctests, black, mypy, and pylint on each file.
       run: |
         failed_tests=()
@@ -75,10 +84,3 @@ jobs:
           echo "The following tests failed: ${failed_tests[*]}"
           exit 1
         fi
-
-    - name: Check that pip installed nrpy creates valid, compilable C example projects
-      run: |
-        pip install .
-        python -m nrpy.examples.wave_equation_cartesian && cd project/wavetoy && make && cd ../../
-        python -m nrpy.examples.wave_equation_curvilinear cd project/curviwavetoy && make && cd ../../
-        python -m nrpy.examples.two_blackholes_collide && cd project/two_blackholes_collide && make && cd ../../
