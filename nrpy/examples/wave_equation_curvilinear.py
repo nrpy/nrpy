@@ -17,7 +17,7 @@ import nrpy.c_function as cfc
 import nrpy.params as par
 import nrpy.grid as gri
 import nrpy.c_codegen as ccg
-import nrpy.helpers.simd as simd
+from nrpy.helpers import simd
 
 from nrpy.equations.wave_equation.WaveEquationCurvilinear_RHSs import (
     WaveEquationCurvilinear_RHSs,

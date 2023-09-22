@@ -14,7 +14,7 @@ import os
 
 import nrpy.params as par
 import nrpy.c_function as cfc
-import nrpy.helpers.simd as simd
+from nrpy.helpers import simd
 
 from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
 from nrpy.infrastructures.BHaH import rfm_precompute

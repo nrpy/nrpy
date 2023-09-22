@@ -145,6 +145,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     LDFLAGS_str += " -lm"
 
     CFLAGS_str = f"CFLAGS = {CFLAGS_dict[compiler_opt_option]}\n"
+    del CFLAGS_dict[compiler_opt_option]
     for value in CFLAGS_dict.values():
         CFLAGS_str += f"#CFLAGS = {value}\n"
 
@@ -180,7 +181,7 @@ all: {exec_name}
 	$(CC) $(CFLAGS) $(INCLUDEDIRS) -c $< -o $@
 
 {exec_name}: $(OBJ_FILES)
-	$(CC) $^ -o $@ -lm $(LDFLAGS)
+	$(CC) $^ -o $@ $(LDFLAGS)
 
 clean:
 	rm -f *.o */*.o *~ */*~ ./#* *.txt *.dat *.avi *.png {exec_name}
@@ -216,7 +217,7 @@ def compile_Makefile(
     if shutil.which(CC) is None:
         raise FileNotFoundError(f"{CC} C compiler is not found")
     if shutil.which("make") is None:
-        raise FileNotFoundError(f"make is not found")
+        raise FileNotFoundError("make is not found")
 
     # Assuming output_CFunctions_function_prototypes_and_construct_Makefile is defined elsewhere
     output_CFunctions_function_prototypes_and_construct_Makefile(
