@@ -89,9 +89,6 @@ def assert_equal(
     vardict_2_results_dict = process_dictionary_of_expressions(
         vardict_2, fixed_mpfs_for_free_symbols=True
     )
-    for key in vardict_1_results_dict.keys():
-        print(vardict_1_results_dict[key])
-        print(str(vardict_2_results_dict[key]) + "\n")
     for var_1, var_2 in zip(vardict_1_results_dict, vardict_2_results_dict):
         tolerance = 10 ** (-4.0 / 5.0 * precision)
         abs_diff = fabs(vardict_1_results_dict[var_1] - vardict_2_results_dict[var_2])
