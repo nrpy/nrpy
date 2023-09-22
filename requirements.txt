@@ -1,3 +1,2 @@
-clang-format
 sympy
 black

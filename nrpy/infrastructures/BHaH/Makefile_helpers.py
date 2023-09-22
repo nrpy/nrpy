@@ -20,11 +20,9 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir: str,
     project_name: str,
     exec_name: str = "",
-    uses_free_parameters_h: bool = False,
     compiler_opt_option: str = "default",
     addl_CFLAGS: Optional[List[str]] = None,
     addl_libraries: Optional[List[str]] = None,
-    use_make: bool = True,
     CC: str = "gcc",
     create_lib: bool = False,
     include_dirs: Optional[List[str]] = None,
@@ -35,11 +33,9 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     :param project_dir: The root directory of the C project.
     :param project_name: Name of the C project.
     :param exec_name: The name of the executable. If set to empty string, same as project_name.
-    :param uses_free_parameters_h: Specifies whether the free_parameters.h is used. Defaults to False.
     :param compiler_opt_option: Compiler optimization option. Defaults to "default". Other options: "fast" and "debug"
     :param addl_CFLAGS: Additional compiler flags. Must be a list.
     :param addl_libraries: Additional libraries to link. Must be a list.
-    :param use_make: Whether to use make. Defaults to True.
     :param CC: C compiler to use. Defaults to "gcc".
     :param create_lib: Whether to create a library. Defaults to False.
     :param include_dirs: List of include directories. Must be a list.
@@ -134,53 +130,38 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
             for key in CFLAGS_dict:
                 CFLAGS_dict[key] += f" {FLAG}"
 
-    obj_dependency_str_list = []
-    dep_list = []
-    compile_list = []
-
+    OBJ_FILES_str = "OBJ_FILES ="
     for c_file in Makefile_list_of_files:
-        object_file = c_file.replace(".c", ".o")
-        obj_dependency_str_list.append(f"{object_file}")
-        addl_headers = ""
-        if uses_free_parameters_h:
-            if c_file == "main.c":
-                addl_headers += " free_parameters.h"
-        dep_list.append(object_file + ": " + c_file + addl_headers)
-        compile_list.append(
-            f"\t$(CC) $(CFLAGS) $(INCLUDEDIRS) -c {c_file} -o {object_file}"
-        )
+        OBJ_FILES_str += " " + c_file.replace(".c", ".o")
 
-    obj_dependency_str = " ".join(obj_dependency_str_list)
-
-    linked_libraries = ""
+    LDFLAGS_str = "LDFLAGS ="
     if addl_libraries is not None:
         if not isinstance(addl_libraries, list):
             raise ValueError(
                 "Error: output_CFunctions_function_prototypes_and_construct_Makefile(): addl_libraries must be a list!"
             )
         for lib in addl_libraries:
-            linked_libraries += f" {lib}"
-    linked_libraries += " -lm"
+            LDFLAGS_str += f" {lib}"
+    LDFLAGS_str += " -lm"
 
-    CHOSEN_CFLAGS = CFLAGS_dict[compiler_opt_option]
+    CFLAGS_str = f"CFLAGS = {CFLAGS_dict[compiler_opt_option]}\n"
+    for value in CFLAGS_dict.values():
+        CFLAGS_str += f"#CFLAGS = {value}\n"
 
-    if "openmp" in CHOSEN_CFLAGS:
-        linked_libraries += " -lgomp"
+    INCLUDEDIRS_str = "INCLUDEDIRS ="
+    if include_dirs is not None:
+        if not isinstance(include_dirs, list):
+            raise TypeError(
+                "Error: output_CFunctions_function_prototypes_and_construct_Makefile(): include_dirs must be a list!"
+            )
+        INCLUDEDIRS_str = " ".join(f"-I{include_dir}" for include_dir in include_dirs)
 
     # Below code is responsible for either writing a Makefile or a backup shell script depending on the conditions
-    if use_make:
-        makefile_path = Path(project_Path) / "Makefile"
-        with makefile_path.open("w", encoding="utf-8") as Makefile:
-            Makefile.write(f"CC = {CC}\n")
-            Makefile.write(f"CFLAGS = {CHOSEN_CFLAGS}\n")
-            for value in CFLAGS_dict.values():
-                Makefile.write(f"#CFLAGS = {value}\n")
-            Makefile.write(
-                "# Does the compiler support OpenMP? If so add -fopenmp to CFLAGS."
-            )
-            Makefile.write(
-                r"""
-LDFLAGS =
+    Makefile_str = f"""
+CC = {CC}
+{CFLAGS_str}
+{INCLUDEDIRS_str}
+{LDFLAGS_str}
 
 # Check for OpenMP support
 OPENMP_FLAG = -fopenmp
@@ -188,54 +169,31 @@ COMPILER_SUPPORTS_OPENMP := $(shell echo | $(CC) $(OPENMP_FLAG) -E - >/dev/null 
 
 ifeq ($(COMPILER_SUPPORTS_OPENMP), YES)
     CFLAGS += $(OPENMP_FLAG)
-    LDFLAGS += -lgomp
+    LDFLAGS += $(OPENMP_FLAG)  # -lgomp does not work with clang in termux
 endif
+
+{OBJ_FILES_str}
+
+all: {exec_name}
+
+%.o: %.c $(COMMON_HEADERS)
+	$(CC) $(CFLAGS) $(INCLUDEDIRS) -c $< -o $@
+
+{exec_name}: $(OBJ_FILES)
+	$(CC) $^ -o $@ -lm $(LDFLAGS)
+
+clean:
+	rm -f *.o */*.o *~ */*~ ./#* *.txt *.dat *.avi *.png {exec_name}
 """
-            )
-            include_dirs_str = ""
-            if include_dirs is not None:
-                if not isinstance(include_dirs, list):
-                    raise TypeError(
-                        "Error: output_CFunctions_function_prototypes_and_construct_Makefile(): include_dirs must be a list!"
-                    )
-                include_dirs_str = " ".join(
-                    f"-I{include_dir}" for include_dir in include_dirs
-                )
-            Makefile.write(f"INCLUDEDIRS = {include_dirs_str}\n")
-            Makefile.write(f"all: {exec_name} {obj_dependency_str}\n")
-            for idx, dep in enumerate(dep_list):
-                Makefile.write(f"{dep}\n{compile_list[idx]}\n\n")
-            Makefile.write(f"{exec_name}: {obj_dependency_str}\n")
-            # LINKER STEP:
-            Makefile.write(
-                f"\t$(CC) {obj_dependency_str} -o {exec_name}{linked_libraries} $(LDFLAGS)\n"
-            )
-            # MAKE CLEAN:
-            Makefile.write(
-                f"\nclean:\n\trm -f *.o */*.o *~ */*~ ./#* *.txt *.dat *.avi *.png {exec_name}\n"
-            )
-    else:
-        backup_path = Path(project_Path) / "backup_script_nomake.sh"
-        with backup_path.open("w", encoding="utf-8") as backup:
-            for compile_line in compile_list:
-                backup.write(
-                    compile_line.replace("$(CC)", CC)
-                    .replace("$(CFLAGS)", CFLAGS_dict["default"])
-                    .replace("\t", "")
-                    + "\n"
-                )
-            cflags_default = CFLAGS_dict["default"]
-            backup.write(
-                f"{CC} {cflags_default} {obj_dependency_str} -o {exec_name}{linked_libraries}\n"
-            )
-        backup_path.chmod(0o700)
+    makefile_path = Path(project_Path) / "Makefile"
+    with makefile_path.open("w", encoding="utf-8") as Makefile:
+        Makefile.write(Makefile_str)
 
 
 def compile_Makefile(
     project_dir: str,
     project_name: str,
     exec_name: str,
-    uses_free_parameters_h: bool = False,
     compiler_opt_option: str = "fast",
     addl_CFLAGS: Optional[List[str]] = None,
     addl_libraries: Optional[List[str]] = None,
@@ -248,7 +206,6 @@ def compile_Makefile(
     :param project_dir: Root directory for C code.
     :param project_name: Name of the project.
     :param exec_name: Name of the executable.
-    :param uses_free_parameters_h: Whether free parameters are used (default: False).
     :param compiler_opt_option: Compiler optimization option (default: "fast").
     :param addl_CFLAGS: Additional CFLAGS.
     :param addl_libraries: Additional libraries.
@@ -258,38 +215,29 @@ def compile_Makefile(
 
     if shutil.which(CC) is None:
         raise FileNotFoundError(f"{CC} C compiler is not found")
-
-    use_make = shutil.which("make") is not None
+    if shutil.which("make") is None:
+        raise FileNotFoundError(f"make is not found")
 
     # Assuming output_CFunctions_function_prototypes_and_construct_Makefile is defined elsewhere
     output_CFunctions_function_prototypes_and_construct_Makefile(
         project_dir=project_dir,
         project_name=project_name,
         exec_name=exec_name,
-        uses_free_parameters_h=uses_free_parameters_h,
         compiler_opt_option=compiler_opt_option,
         addl_CFLAGS=addl_CFLAGS,
         addl_libraries=addl_libraries,
-        use_make=use_make,
         CC=CC,
     )
 
     orig_working_directory = os.getcwd()
     os.chdir(project_dir)
 
-    if use_make:
-        subprocess.run(
-            f"make -j{multiprocessing.cpu_count() + 2}",
-            stdout=subprocess.DEVNULL,
-            shell=True,
-            check=True,
-        )
-    else:
-        subprocess.run(
-            Path(project_dir).joinpath("backup_script_nomake.sh"),
-            shell=True,
-            check=True,
-        )
+    subprocess.run(
+        f"make -j{multiprocessing.cpu_count() + 2}",
+        stdout=subprocess.DEVNULL,
+        shell=True,
+        check=True,
+    )
 
     os.chdir(orig_working_directory)
 
@@ -308,7 +256,6 @@ def compile_Makefile(
             project_dir=project_dir,
             project_name=project_name,
             exec_name=exec_name,
-            uses_free_parameters_h=uses_free_parameters_h,
             compiler_opt_option="debug",
             addl_CFLAGS=addl_CFLAGS,
             addl_libraries=addl_libraries,

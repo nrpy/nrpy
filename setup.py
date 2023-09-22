@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 from typing import List
 from setuptools import setup, find_packages  # type: ignore
-
+import subprocess
 
 # pylint: disable=consider-using-f-string
 
@@ -33,6 +33,24 @@ def check_python_version() -> None:
                 sys.version_info[0], sys.version_info[1]
             )
         )
+
+
+def clang_format_is_installed() -> bool:
+    """
+    Check if clang-format is installed.
+
+    :return: True if clang-format is installed, False otherwise.
+    """
+    try:
+        subprocess.run(
+            ["clang-format", "--version"],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        return True
+    except FileNotFoundError:
+        return False
 
 
 def read_requirements_file() -> List[str]:
@@ -70,7 +88,11 @@ if __name__ == "__main__":
     check_python_version()
 
     dir_setup = os.path.dirname(os.path.realpath(__file__))
+
     requirements = read_requirements_file()
+    if not clang_format_is_installed():
+        requirements += ["clang-format"]
+
     setup(
         name="nrpy",
         version=get_nrpy_version(dir_setup),
