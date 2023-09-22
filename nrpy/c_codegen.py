@@ -292,32 +292,39 @@ def c_codegen(
             deriv_operator_dict[deriv_op] = fin.compute_fdcoeffs_fdstencl(
                 deriv_op, CCGParams.fd_order
             )
-            print(deriv_op)
 
-        def construct_deriv_prototypes():
-            pass
-            # deriv_var_list = []
-            # base_gf_name_list = []
-            # deriv_op_list = []
-            # fdcoeffs_list = []
-            # fdstencl_list = []
-            # for deriv_op, deriv_op_tuple in deriv_operator_dict.items():
-            #     deriv_var_list += [sp.Symbol(f"DUMMEE_{deriv_op}")]
-            #     base_gf_name_list += [sp.Symbol(f"DUMMEE")]
-            #     deriv_op_list += [deriv_op]
-            #     fdcoeffs_list += [deriv_op_tuple[0]]
-            #     fdstencl_list += [deriv_op_tuple[1]]
-            # FDexprs, FDlhsvarnames = fin.FD_operators_to_sympy_expressions(
-            #     deriv_var_list,
-            #     base_gf_name_list,
-            #     deriv_op_list,
-            #     fdcoeffs_list,
-            #     fdstencl_list,
-            #     enable_simd=CCGParams.enable_simd,
-            # )
-            # print(FDexprs)
-
-        construct_deriv_prototypes()
+        # def construct_deriv_prototypes():
+        #     deriv_var_list = []
+        #     base_gf_name_list = []
+        #     deriv_op_list = []
+        #     fdcoeffs_list = []
+        #     fdstencl_list = []
+        #     for deriv_op, deriv_op_tuple in deriv_operator_dict.items():
+        #         deriv_var_list += [sp.Symbol(f"DUMMEE_{deriv_op}")]
+        #         base_gf_name_list += [sp.Symbol(f"DUMMEE")]
+        #         deriv_op_list += [deriv_op]
+        #         fdcoeffs_list += [deriv_op_tuple[0]]
+        #         fdstencl_list += [deriv_op_tuple[1]]
+        #     FDexprs, _ = fin.FD_operators_to_sympy_expressions(
+        #         deriv_var_list,
+        #         base_gf_name_list,
+        #         deriv_op_list,
+        #         fdcoeffs_list,
+        #         fdstencl_list,
+        #         enable_simd=CCGParams.enable_simd,
+        #     )
+        #     sympyexpr_list, map_symbol_to_rational = cse_preprocess(
+        #         FDexprs,
+        #         prefix="FDPart1",
+        #         declare_neg1_as_symbol=CCGParams.enable_simd,
+        #         negative=CCGParams.enable_simd,
+        #         factor=True,
+        #     )
+        #     for item in sympyexpr_list:
+        #         print("hey", item)
+        #     print(map_symbol_to_rational)
+        #
+        # construct_deriv_prototypes()
 
         fdcoeffs: List[List[sp.Rational]] = [
             [] for _ in range(len(list_of_deriv_operators))
@@ -710,7 +717,7 @@ def gridfunction_management_and_FD_codegen(
     This function generates C code kernels for reading/writing gridfunctions
     and performing finite-differences with gridfunction data.
 
-    :param List[sp.Expr] sympyexpr_list: List of sympy expressions.
+    :param List[sp.Basic] sympyexpr_list: List of sympy expressions.
     :param Union[List[str], str] output_varname_str: Output variable name(s) as string or list of strings.
     :param List[Union[sp.Symbol, sp.Basic]] list_of_deriv_vars: List of variables for derivative operations.
     :param List[str] list_of_base_gridfunction_names_in_derivs: List of base grid function names used in derivatives.
