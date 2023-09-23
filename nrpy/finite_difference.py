@@ -793,7 +793,7 @@ def read_gfs_from_memory(
 
 
 def FD_operators_to_sympy_expressions(
-    list_of_deriv_vars: List[sp.Basic],
+    list_of_deriv_vars: List[sp.Symbol],
     list_of_base_gridfunction_names_in_derivs: List[str],
     list_of_deriv_operators: List[str],
     fdcoeffs: List[List[sp.Rational]],

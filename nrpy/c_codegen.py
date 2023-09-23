@@ -9,7 +9,7 @@ Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
 import logging
 import re  # Regular expressions can be toxic due to edge cases -- we use them sparingly
 import sys
-from typing import List, Union, Dict, Any, Optional, Sequence
+from typing import List, Union, Dict, Any, Optional, Sequence, Tuple
 import sympy as sp
 import nrpy.finite_difference as fin
 import nrpy.params as par
@@ -53,6 +53,7 @@ class CCodeGen:
         enable_fd_functions: bool = False,
         mem_alloc_style: str = "210",
         upwind_control_vec: Union[List[sp.Symbol], sp.Symbol] = sp.Symbol("unset"),
+        symbol_to_Rational_dict: Optional[Dict[sp.Basic, sp.Rational]] = None,
         clang_format_enable: bool = False,
         clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 200}",
     ) -> None:
@@ -118,6 +119,7 @@ class CCodeGen:
         self.enable_fd_functions = enable_fd_functions
         self.mem_alloc_style = mem_alloc_style
         self.upwind_control_vec = upwind_control_vec
+        self.symbol_to_Rational_dict = symbol_to_Rational_dict
         self.clang_format_enable = clang_format_enable
         self.clang_format_options = clang_format_options
 
@@ -293,39 +295,6 @@ def c_codegen(
                 deriv_op, CCGParams.fd_order
             )
 
-        # def construct_deriv_prototypes():
-        #     deriv_var_list = []
-        #     base_gf_name_list = []
-        #     deriv_op_list = []
-        #     fdcoeffs_list = []
-        #     fdstencl_list = []
-        #     for deriv_op, deriv_op_tuple in deriv_operator_dict.items():
-        #         deriv_var_list += [sp.Symbol(f"DUMMEE_{deriv_op}")]
-        #         base_gf_name_list += [sp.Symbol(f"DUMMEE")]
-        #         deriv_op_list += [deriv_op]
-        #         fdcoeffs_list += [deriv_op_tuple[0]]
-        #         fdstencl_list += [deriv_op_tuple[1]]
-        #     FDexprs, _ = fin.FD_operators_to_sympy_expressions(
-        #         deriv_var_list,
-        #         base_gf_name_list,
-        #         deriv_op_list,
-        #         fdcoeffs_list,
-        #         fdstencl_list,
-        #         enable_simd=CCGParams.enable_simd,
-        #     )
-        #     sympyexpr_list, map_symbol_to_rational = cse_preprocess(
-        #         FDexprs,
-        #         prefix="FDPart1",
-        #         declare_neg1_as_symbol=CCGParams.enable_simd,
-        #         negative=CCGParams.enable_simd,
-        #         factor=True,
-        #     )
-        #     for item in sympyexpr_list:
-        #         print("hey", item)
-        #     print(map_symbol_to_rational)
-        #
-        # construct_deriv_prototypes()
-
         fdcoeffs: List[List[sp.Rational]] = [
             [] for _ in range(len(list_of_deriv_operators))
         ]
@@ -350,15 +319,14 @@ def c_codegen(
             list_of_deriv_vars,
             list_of_base_gridfunction_names_in_derivs,
             list_of_deriv_operators,
-            fdcoeffs,
-            fdstencl,
+            deriv_operator_dict,
             read_from_memory_Ccode=read_from_memory_C_code,
             upwind_control_vec=CCGParams.upwind_control_vec,
             enable_fd_functions=CCGParams.enable_fd_functions,
             enable_simd=CCGParams.enable_simd,
         )
 
-    # Step 3: If CCGParams.verbose, then output the original SymPy
+    # Step 4: If CCGParams.verbose, then output the original SymPy
     #         expression(s) in code comments prior to actual C code
     if CCGParams.verbose:
         plural = "s" if len(output_varname_str) > 1 else ""
@@ -401,20 +369,24 @@ def c_codegen(
 
         varprefix = CCGParams.cse_varprefix
         if CCGParams.enable_cse_preprocess or CCGParams.enable_simd:
-            # If enable_cse_preprocess == True, then perform partial factorization
-            # If enable_simd == True, then declare _NegativeOne_ in preprocessing
-            factor_negative = CCGParams.enable_simd and CCGParams.simd_find_more_subs
+            if not CCGParams.symbol_to_Rational_dict:
+                # If enable_cse_preprocess == True, then perform partial factorization
+                # If enable_simd == True, then declare _NegativeOne_ in preprocessing
+                factor_negative = (
+                    CCGParams.enable_simd and CCGParams.simd_find_more_subs
+                )
 
-            sympyexpr_list, map_symbol_to_rational = cse_preprocess(
-                sympyexpr_list,
-                prefix=varprefix,
-                declare_neg1_as_symbol=CCGParams.enable_simd,
-                negative=factor_negative,
-                factor=CCGParams.enable_cse_preprocess,
-            )
-            for v in map_symbol_to_rational:
-                p, q = float(map_symbol_to_rational[v].p), float(
-                    map_symbol_to_rational[v].q
+                sympyexpr_list, CCGParams.symbol_to_Rational_dict = cse_preprocess(
+                    sympyexpr_list,
+                    prefix=varprefix,
+                    declare_neg1_as_symbol=CCGParams.enable_simd,
+                    negative=factor_negative,
+                    factor=CCGParams.enable_cse_preprocess,
+                )
+        if CCGParams.symbol_to_Rational_dict:
+            for v in CCGParams.symbol_to_Rational_dict:
+                p, q = float(CCGParams.symbol_to_Rational_dict[v].p), float(
+                    CCGParams.symbol_to_Rational_dict[v].q
                 )
                 if not CCGParams.enable_simd:
                     RATIONAL_decls += f"const {CCGParams.c_type_alias} {str(v)} = "
@@ -487,7 +459,7 @@ def c_codegen(
             if CCGParams.enable_simd:
                 outstring += (
                     f"{full_type_string}{common_subexpression[0]} = "
-                    f"{expr_convert_to_simd_intrins(common_subexpression[1], map_symbol_to_rational, varprefix, CCGParams.simd_find_more_FMAsFMSs)};\n"
+                    f"{expr_convert_to_simd_intrins(common_subexpression[1], CCGParams.symbol_to_Rational_dict, varprefix, CCGParams.simd_find_more_FMAsFMSs)};\n"
                 )
             else:
                 if CCGParams.postproc_substitution_dict:
@@ -512,7 +484,7 @@ def c_codegen(
             if CCGParams.enable_simd:
                 outstring += (
                     f"{varnames_excluding_SCALAR_TMPs[i]} = "
-                    f"{expr_convert_to_simd_intrins(result, map_symbol_to_rational, varprefix, CCGParams.simd_find_more_FMAsFMSs)};\n"
+                    f"{expr_convert_to_simd_intrins(result, CCGParams.symbol_to_Rational_dict, varprefix, CCGParams.simd_find_more_FMAsFMSs)};\n"
                 )
             else:
                 if CCGParams.postproc_substitution_dict:
@@ -537,10 +509,10 @@ def c_codegen(
         # Resolution: This function extends lists "simd_const_varnms" and "simd_const_values",
         #             which store the name of each constant SIMD array (e.g., _Integer_1) and
         #             the value of each variable (e.g., 1.0).
-        if CCGParams.enable_simd:
-            for v in map_symbol_to_rational:
-                p, q = float(map_symbol_to_rational[v].p), float(
-                    map_symbol_to_rational[v].q
+        if CCGParams.enable_simd and CCGParams.symbol_to_Rational_dict:
+            for v in CCGParams.symbol_to_Rational_dict:
+                p, q = float(CCGParams.symbol_to_Rational_dict[v].p), float(
+                    CCGParams.symbol_to_Rational_dict[v].q
                 )
                 simd_const_varnms.append(str(v))
                 simd_const_values.append(str(p) if q == 1 else f"{p}/{q}")
@@ -708,8 +680,7 @@ def gridfunction_management_and_FD_codegen(
     list_of_deriv_vars: List[Union[sp.Symbol, sp.Basic]],
     list_of_base_gridfunction_names_in_derivs: List[str],
     list_of_deriv_operators: List[str],
-    fdcoeffs: List[List[sp.Rational]],
-    fdstencl: List[List[List[int]]],
+    deriv_operator_dict: Dict[str, Tuple[List[sp.Rational], List[List[int]]]],
     read_from_memory_Ccode: str,
     **kwargs: Any,
 ) -> str:
@@ -722,8 +693,6 @@ def gridfunction_management_and_FD_codegen(
     :param List[Union[sp.Symbol, sp.Basic]] list_of_deriv_vars: List of variables for derivative operations.
     :param List[str] list_of_base_gridfunction_names_in_derivs: List of base grid function names used in derivatives.
     :param List[str] list_of_deriv_operators: List of derivative operators.
-    :param List[List[sp.Rational]] fdcoeffs: List of finite difference coefficients.
-    :param List[List[List[int]]] fdstencl: List of finite difference stencil points.
     :param str read_from_memory_Ccode: C code string to read from memory.
     :param Any kwargs: Optional additional parameters.
     :return str: A string of code generated based on input parameters.
@@ -737,6 +706,7 @@ def gridfunction_management_and_FD_codegen(
     >>> c_type="double"
     >>> c_type_alias="REAL"
     >>> enable_fd_functions=False
+    >>> fd_order = 2
     >>> upwind_control_vec = gri.register_gridfunctions_for_single_rank1("vetU", group="EVOL")
     >>> vU       = gri.register_gridfunctions_for_single_rank1("vU", group="EVOL")
     >>> hDD      = gri.register_gridfunctions_for_single_rank2("hDD", group="EVOL", symmetry="sym01")
@@ -758,7 +728,12 @@ def gridfunction_management_and_FD_codegen(
     ['hDD01', 'hDD02', 'hDD02', 'hDD02', 'hDD02']
     >>> fdcoeffs = [[] for _ in list_of_deriv_operators]
     >>> fdstencl = [[[] for _ in range(4)] for __ in list_of_deriv_operators]
-    >>> for i, deriv_op in enumerate(list_of_deriv_operators): fdcoeffs[i], fdstencl[i] = fin.compute_fdcoeffs_fdstencl(deriv_op, 2)
+    >>> for i, deriv_op in enumerate(list_of_deriv_operators): fdcoeffs[i], fdstencl[i] = fin.compute_fdcoeffs_fdstencl(deriv_op, fd_order)
+    >>> deriv_operator_dict = {}
+    >>> for deriv_op in superfast_uniq(list_of_deriv_operators):
+    ...     deriv_operator_dict[deriv_op] = fin.compute_fdcoeffs_fdstencl(
+    ...         deriv_op, fd_order
+    ...     )
     >>> memread_Ccode = fin.read_gfs_from_memory(
     ...    list_of_base_gridfunction_names_in_derivs,
     ...    fdstencl,
@@ -767,8 +742,8 @@ def gridfunction_management_and_FD_codegen(
     ...    enable_simd=enable_simd,
     ... )
     >>> print(gridfunction_management_and_FD_codegen(exprlist, ["a0", "a1"], list_of_deriv_vars,
-    ...          list_of_base_gridfunction_names_in_derivs, list_of_deriv_operators,
-    ...          fdcoeffs, fdstencl, memread_Ccode, upwind_control_vec=upwind_control_vec,
+    ...          list_of_base_gridfunction_names_in_derivs, list_of_deriv_operators, deriv_operator_dict,
+    ...          memread_Ccode, upwind_control_vec=upwind_control_vec,
     ...          enable_fd_functions=enable_fd_functions, enable_simd=enable_simd))
     /*
      * NRPy+-Generated GF Access/FD Code, Step 1 of 3:
@@ -791,13 +766,13 @@ def gridfunction_management_and_FD_codegen(
     const REAL FDPart1_Integer_2 = 2.0;
     const REAL FDPart1_Rational_3_2 = 3.0/2.0;
     const REAL FDPart1tmp0 = FDPart1_Rational_3_2*hDD02;
-    const REAL hDD_dD011 = FDPart1_Rational_1_2*invdxx1*(-hDD01_i1m1 + hDD01_i1p1);
     const REAL UpwindAlgInputhDD_ddnD020 = invdxx0*(-FDPart1_Integer_2*hDD02_i0m1 + FDPart1_Rational_1_2*hDD02_i0m2 + FDPart1tmp0);
     const REAL UpwindAlgInputhDD_ddnD022 = invdxx2*(-FDPart1_Integer_2*hDD02_i2m1 + FDPart1_Rational_1_2*hDD02_i2m2 + FDPart1tmp0);
     const REAL UpwindAlgInputhDD_dupD020 = invdxx0*(FDPart1_Integer_2*hDD02_i0p1 - FDPart1_Rational_1_2*hDD02_i0p2 - FDPart1tmp0);
     const REAL UpwindAlgInputhDD_dupD022 = invdxx2*(FDPart1_Integer_2*hDD02_i2p1 - FDPart1_Rational_1_2*hDD02_i2p2 - FDPart1tmp0);
     const REAL UpwindControlVectorU0 = vetU0;
     const REAL UpwindControlVectorU2 = vetU2;
+    const REAL hDD_dD011 = FDPart1_Rational_1_2*invdxx1*(-hDD01_i1m1 + hDD01_i1p1);
     <BLANKLINE>
     /*
      * NRPy+-Generated GF Access/FD Code, Step 2 of 3:
@@ -835,6 +810,7 @@ def gridfunction_management_and_FD_codegen(
     #             variables.
     FDexprs: List[sp.Basic] = []
     FDlhsvarnames: List[str] = []
+    symbol_to_Rational_dict: Dict[sp.Basic, sp.Rational] = {}
     if CCGParams.enable_fd_functions:
         # Compute finite differences using function calls (instead of inlined calculations)?
         # Fdd FD functions to c_function's outC_function_dict (C function dictionary),
@@ -849,15 +825,68 @@ def gridfunction_management_and_FD_codegen(
         #     fdstencl,
         # )
     else:
-        FDexprs, FDlhsvarnames = fin.FD_operators_to_sympy_expressions(
-            list_of_deriv_vars,
-            list_of_base_gridfunction_names_in_derivs,
-            list_of_deriv_operators,
-            fdcoeffs,
-            fdstencl,
-            enable_simd=CCGParams.enable_simd,
-        )
-    # print(FDlhsvarnames)
+
+        def construct_deriv_prototypes() -> (
+            Tuple[Dict[sp.Basic, sp.Rational], List[sp.Basic], List[str]]
+        ):
+            deriv_var_list = []
+            base_gf_name_list = []
+            deriv_op_list = []
+            fdcoeffs_list = []
+            fdstencl_list = []
+            for deriv_op, deriv_op_tuple in sorted(deriv_operator_dict.items()):
+                deriv_var_list += [sp.Symbol(f"DUMMEE_{deriv_op}")]
+                base_gf_name_list += ["DUMMEE"]
+                deriv_op_list += [deriv_op]
+                fdcoeffs_list += [deriv_op_tuple[0]]
+                fdstencl_list += [deriv_op_tuple[1]]
+            proto_FDexprs, proto_FDlhsvarnames = fin.FD_operators_to_sympy_expressions(
+                deriv_var_list,
+                base_gf_name_list,
+                deriv_op_list,
+                fdcoeffs_list,
+                fdstencl_list,
+                enable_simd=CCGParams.enable_simd,
+            )
+            # Factorize proto_FDexprs and convert Rationals to symbols, store symbol->Rational dictionary.
+            proto_FDexprs, symbol_to_Rational_dict = cse_preprocess(
+                proto_FDexprs,
+                prefix="FDPart1",
+                declare_neg1_as_symbol=CCGParams.enable_simd,
+                negative=CCGParams.enable_simd,
+                factor=True,
+            )
+
+            FDexprs = []
+            FDlhsvarnames = []
+            for i, deriv_var_symbol in enumerate(list_of_deriv_vars):
+                # unpack
+                operator = list_of_deriv_operators[i]
+                proto_idx = deriv_op_list.index(operator)
+                gf_name = list_of_base_gridfunction_names_in_derivs[i]
+
+                FDlhsvarnames += [
+                    proto_FDlhsvarnames[proto_idx].replace(
+                        str(deriv_var_list[proto_idx]), str(deriv_var_symbol)
+                    )
+                ]
+
+                replace_dict = {}
+                for symb in proto_FDexprs[proto_idx].free_symbols:
+                    if "DUMMEE" in str(symb):
+                        replace_dict[symb] = sp.Symbol(
+                            str(symb).replace("DUMMEE", gf_name)
+                        )
+                FDexprs += [proto_FDexprs[proto_idx].xreplace(replace_dict)]
+
+            return symbol_to_Rational_dict, FDexprs, FDlhsvarnames
+
+        (
+            symbol_to_Rational_dict,
+            FDexprs,
+            FDlhsvarnames,
+        ) = construct_deriv_prototypes()
+
     # Step 5.b.i: (Upwinded derivatives algorithm, part 1):
     # If an upwinding control vector is specified, determine
     #    which of the elements of the vector will be required.
@@ -896,6 +925,15 @@ def gridfunction_management_and_FD_codegen(
                 f"const {CCGParams.c_type_alias} UpwindControlVectorU{dirn}"
             ]
 
+    if FDlhsvarnames:
+        # Zip the lists, sort by FDlhsvarnames, then unzip
+        sorted_pairs = sorted(zip(FDlhsvarnames, FDexprs))
+        sorted_varnames, sorted_exprs = zip(*sorted_pairs)
+
+        # Convert the sorted tuples back to lists
+        FDlhsvarnames = list(sorted_varnames)
+        FDexprs = list(sorted_exprs)
+
     # Step 5.x: Output useful code comment regarding
     #           which step we are on. *At most* this
     #           is a 3-step process:
@@ -912,24 +950,26 @@ def gridfunction_management_and_FD_codegen(
 
     Coutput = ""
 
+    # Copy kwargs
+    kwargs_FDPart1 = kwargs.copy()
+    kwargs_FDPart2 = kwargs.copy()
     if len(read_from_memory_Ccode) > 0:
         Coutput += f"""/*\n * NRPy+-Generated GF Access/FD Code, Step {NRPy_FD_StepNumber} of {NRPy_FD__Number_of_Steps}:
  * Read gridfunction(s) from main memory and compute FD stencils as needed.\n */
 """
 
         NRPy_FD_StepNumber = NRPy_FD_StepNumber + 1
-        # Copy kwargs
-        kwargs_FDPart1 = kwargs.copy()
         # We choose the CSE temporary variable prefix "FDpart1" for the finite difference coefficients:
         kwargs_FDPart1.update(
             {
                 "cse_varprefix": "FDPart1",
                 "verbose": False,
                 "include_braces": False,
-                "enable_cse_preprocess": True,
-                "simd_find_more_subs": True,
+                "enable_cse_preprocess": False,
+                "simd_find_more_subs": False,
                 "automatically_read_gf_data_from_memory": False,
                 "enable_fd_codegen": False,
+                "symbol_to_Rational_dict": symbol_to_Rational_dict,
             }
         )
 
@@ -1000,6 +1040,7 @@ const REAL_SIMD_ARRAY upwind_Integer_{n} = ConstSIMD(tmp_upwind_Integer_{n});
 
         # Copy kwargs
         kwargs_FDPart2 = kwargs_FDPart1.copy()
+        kwargs_FDPart2["symbol_to_Rational_dict"] = {}
         # We choose the CSE temporary variable prefix "FDpart1" for the finite difference coefficients:
         kwargs_FDPart2.update(
             {

@@ -81,7 +81,7 @@ def cse_preprocess(
     _NegativeOne_ = sp.Symbol(prefix + "_NegativeOne_")
 
     # Maps to hold symbol to rational and rational to symbol mappings
-    map_sym_to_rat: Dict[sp.Basic, sp.Rational] = OrderedDict()
+    symbol_to_Rational_dict: Dict[sp.Basic, sp.Rational] = OrderedDict()
     map_rat_to_sym: Dict[sp.Rational, sp.Basic] = OrderedDict()
 
     # Loop over each expression in the input list
@@ -125,7 +125,7 @@ def cse_preprocess(
                         repl = sp.Symbol(var_name)
 
                         # Add mapping of symbol to rational and rational to symbol
-                        map_sym_to_rat[repl], map_rat_to_sym[subexpr] = subexpr, repl  # type: ignore
+                        symbol_to_Rational_dict[repl], map_rat_to_sym[subexpr] = subexpr, repl  # type: ignore
 
                     # Update subexpression in the subtree
                     subtree.expr = repl * sign
@@ -140,7 +140,7 @@ def cse_preprocess(
                         sp.S.NegativeOne, sp.Symbol("didnotfind_subtree_expr")
                     )
                     if subtree.expr == sp.Symbol("didnotfind_subtree_expr"):
-                        map_sym_to_rat[_NegativeOne_] = sp.S.NegativeOne
+                        symbol_to_Rational_dict[_NegativeOne_] = sp.S.NegativeOne
                         map_rat_to_sym[subexpr] = _NegativeOne_  # type: ignore
                         subtree.expr = _NegativeOne_
             # Update expression from reconstructed tree
@@ -150,7 +150,7 @@ def cse_preprocess(
             if factor:
                 # Get set of symbols to factor, excluding _NegativeOne_
                 var_set = [
-                    var for var in map_sym_to_rat if var != _NegativeOne_
+                    var for var in symbol_to_Rational_dict if var != _NegativeOne_
                 ]  # using list comprehension
 
                 # Handle factoring of function argument(s)
@@ -212,7 +212,7 @@ def cse_preprocess(
                 if tmp_expr != expr:
                     # using get() to avoid try-except:
                     if map_rat_to_sym.get(sp.S.One) is None:
-                        map_sym_to_rat[_One_], map_rat_to_sym[sp.S.One] = (
+                        symbol_to_Rational_dict[_One_], map_rat_to_sym[sp.S.One] = (
                             sp.S.One,
                             _One_,
                         )
@@ -224,7 +224,7 @@ def cse_preprocess(
                 # Helper function to replace symbols with their corresponding rational numbers
                 def lookup_rational(arg: sp.Basic) -> sp.Basic:
                     if isinstance(arg, sp.Symbol):
-                        arg = map_sym_to_rat.get(arg, arg)
+                        arg = symbol_to_Rational_dict.get(arg, arg)
                     return arg
 
                 # Create new tree for debugging
@@ -248,7 +248,7 @@ def cse_preprocess(
             expr_list[i] = expr
 
     # At the end, return the modified expressions and the dictionary mapping symbols to rational numbers
-    return expr_list, map_sym_to_rat
+    return expr_list, symbol_to_Rational_dict
 
 
 def cse_postprocess(

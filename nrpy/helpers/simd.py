@@ -135,7 +135,7 @@ def CosSIMD_check(a: Symbol) -> Any:
 
 def expr_convert_to_simd_intrins(
     expr: Basic,
-    map_sym_to_rat: Optional[Dict[Basic, Rational]] = None,
+    symbol_to_Rational_dict: Optional[Dict[Basic, Rational]] = None,
     prefix: str = "",
     simd_find_more_FMAsFMSs: bool = True,
     debug: bool = False,
@@ -218,11 +218,11 @@ def expr_convert_to_simd_intrins(
             if isinstance(arg, Symbol):
                 var(str(arg))
 
-    if map_sym_to_rat is None:
-        cse_preprocessed_expr_list, map_sym_to_rat = cse_preprocess(expr)
+    if symbol_to_Rational_dict is None:
+        cse_preprocessed_expr_list, symbol_to_Rational_dict = cse_preprocess(expr)
         expr = cse_preprocessed_expr_list[0]
 
-    map_rat_to_sym = {map_sym_to_rat[v]: v for v in map_sym_to_rat}
+    map_rat_to_sym = {symbol_to_Rational_dict[v]: v for v in symbol_to_Rational_dict}
 
     expr_orig, tree = expr, ExprTree(expr)
 
@@ -279,14 +279,14 @@ def expr_convert_to_simd_intrins(
             try:
                 map_rat_to_sym[sympify(1)]
             except KeyError:
-                map_sym_to_rat[one], map_rat_to_sym[sympify(1)] = S.One, one
+                symbol_to_Rational_dict[one], map_rat_to_sym[sympify(1)] = S.One, one
             return DivSIMD(one, IntegerPowSIMD(a, -n))
         if n == -1:
             one = Symbol(prefix + "_Integer_1")
             try:
                 map_rat_to_sym[sympify(1)]
             except KeyError:
-                map_sym_to_rat[one], map_rat_to_sym[sympify(1)] = S.One, one
+                symbol_to_Rational_dict[one], map_rat_to_sym[sympify(1)] = S.One, one
             return DivSIMD(one, a)
         if n == 1:
             return a
@@ -298,7 +298,7 @@ def expr_convert_to_simd_intrins(
     ) -> Union[Expr, Symbol, Rational, Basic]:
         if arg.func == Symbol:
             try:
-                arg = map_sym_to_rat[arg]
+                arg = symbol_to_Rational_dict[arg]
             except KeyError:
                 pass
         return arg

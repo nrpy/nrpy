@@ -293,6 +293,7 @@ if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
                                      RK_INPUT_GFS, RK_OUTPUT_GFS);"""
 if not enable_rfm_precompute:
     rhs_string = rhs_string.replace("rfmstruct", "xx")
+
 MoL.MoL_register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,
@@ -302,10 +303,13 @@ MoL.MoL_register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
 )
+print("Finished constructing MoL C functions.")
 xxCart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
 xxCart.register_CFunction_xx_to_Cart(CoordSystem)
 progress.register_CFunction_progress_indicator()
-swm2sh.register_CFunction_spin_weight_minus2_sph_harmonics(maximum_l=8)
+# print("Started constructing SWm2SH functions.")
+# swm2sh.register_CFunction_spin_weight_minus2_sph_harmonics(maximum_l=8)
+# print("Finished constructing SWm2SH functions.")
 
 #########################################################
 # STEP 3: Generate header files, register C functions and
