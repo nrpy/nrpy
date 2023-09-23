@@ -830,24 +830,25 @@ def gridfunction_management_and_FD_codegen(
             Tuple[Dict[sp.Basic, sp.Rational], List[sp.Basic], List[str]]
         ):
             deriv_var_list = []
-            base_gf_name_list = []
             deriv_op_list = []
             fdcoeffs_list = []
             fdstencl_list = []
             for deriv_op, deriv_op_tuple in sorted(deriv_operator_dict.items()):
-                deriv_var_list += [sp.Symbol(f"DUMMEE_{deriv_op}")]
-                base_gf_name_list += ["DUMMEE"]
+                deriv_var_list += [sp.Symbol(f"FDPROTO_{deriv_op}")]
                 deriv_op_list += [deriv_op]
                 fdcoeffs_list += [deriv_op_tuple[0]]
                 fdstencl_list += [deriv_op_tuple[1]]
-            proto_FDexprs, proto_FDlhsvarnames = fin.FD_operators_to_sympy_expressions(
+
+            (
+                proto_FDexprs,
+                proto_FDlhsvarnames,
+            ) = fin.proto_FD_operators_to_sympy_expressions(
                 deriv_var_list,
-                base_gf_name_list,
-                deriv_op_list,
                 fdcoeffs_list,
                 fdstencl_list,
                 enable_simd=CCGParams.enable_simd,
             )
+
             # Factorize proto_FDexprs and convert Rationals to symbols, store symbol->Rational dictionary.
             proto_FDexprs, symbol_to_Rational_dict = cse_preprocess(
                 proto_FDexprs,
@@ -873,9 +874,9 @@ def gridfunction_management_and_FD_codegen(
 
                 replace_dict = {}
                 for symb in proto_FDexprs[proto_idx].free_symbols:
-                    if "DUMMEE" in str(symb):
+                    if "FDPROTO" in str(symb):
                         replace_dict[symb] = sp.Symbol(
-                            str(symb).replace("DUMMEE", gf_name)
+                            str(symb).replace("FDPROTO", gf_name)
                         )
                 FDexprs += [proto_FDexprs[proto_idx].xreplace(replace_dict)]
 

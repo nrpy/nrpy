@@ -792,10 +792,8 @@ def read_gfs_from_memory(
     return read_gf_from_memory_Ccode
 
 
-def FD_operators_to_sympy_expressions(
-    list_of_deriv_vars: List[sp.Symbol],
-    list_of_base_gridfunction_names_in_derivs: List[str],
-    list_of_deriv_operators: List[str],
+def proto_FD_operators_to_sympy_expressions(
+    list_of_proto_deriv_symbs: List[sp.Symbol],
     fdcoeffs: List[List[sp.Rational]],
     fdstencl: List[List[List[int]]],
     enable_simd: bool = False,
@@ -803,9 +801,7 @@ def FD_operators_to_sympy_expressions(
     """
     Convert finite difference (FD) operators to SymPy expressions.
 
-    :param list_of_deriv_vars: List of sympy symbols
-    :param list_of_base_gridfunction_names_in_derivs: List of base grid function names involved in derivatives.
-    :param list_of_deriv_operators: List of derivative operators.
+    :param list_of_proto_deriv_symbs: List of prototype derivative variables (e.g., [sp.Symbol("dDD12")])
     :param fdcoeffs: List of finite difference coefficients.
     :param fdstencl: List of finite difference stencils.
     :param enable_simd: Whether to enable SIMD.
@@ -815,55 +811,58 @@ def FD_operators_to_sympy_expressions(
     >>> import nrpy.indexedexp as ixp
     >>> gri.glb_gridfcs_dict.clear()
     >>> par.set_parval_from_str("Infrastructure", "BHaH")
-    >>> hDD      = gri.register_gridfunctions_for_single_rank2("hDD", group="EVOL", symmetry="sym01")
-    >>> hDD_dD   = ixp.declarerank3("hDD_dD", symmetry="sym01")
-    >>> hDD_dupD = ixp.declarerank3("hDD_dupD", symmetry="sym01")
-    >>> vU       = gri.register_gridfunctions_for_single_rank1("vU", group="EVOL")
-    >>> vU_dDD   = ixp.declarerank3("vU_dDD", symmetry="sym12")
+    >>> dum = gri.register_gridfunctions("FDPROTO")[0]
+    >>> dum_dD   = ixp.declarerank1("FDPROTO_dD")
+    >>> dum_dupD = ixp.declarerank1("FDPROTO_dupD")
+    >>> dum_dKOD = ixp.declarerank1("FDPROTO_dKOD")
+    >>> dum_dDD  = ixp.declarerank2("FDPROTO_dDD", symmetry="sym01")
+    >>> vU = ixp.declarerank1("vU")
     >>> a0, a1, b, c = par.register_CodeParameters(c_type_alias="REAL", module=__name__, names=["a0", "a1", "b", "c"], defaultvalues=1)
-    >>> exprlist = [b*hDD[1][0] + c*hDD_dD[0][1][1] - a0*vU_dDD[2][1][0], c*hDD_dupD[0][2][2] + b*hDD_dupD[0][2][0] + a1*a0*vU[1]]
+    >>> exprlist = [b*dum_dDD[1][0] + c*dum - a0*dum_dupD[2], c*dum_dKOD[1] + a1*a0*vU[1]]
     >>> free_symbols_list = []
     >>> for expr in exprlist:
     ...     free_symbols_list.extend(expr.free_symbols)
-    >>> list_of_deriv_vars = extract_list_of_deriv_var_strings_from_sympyexpr_list(free_symbols_list, sp.Symbol("unset"))
-    >>> print(list_of_deriv_vars)
-    [hDD_dD011, hDD_ddnD020, hDD_ddnD022, hDD_dupD020, hDD_dupD022, vU_dDD201]
-    >>> list_of_base_gridfunction_names_in_derivs, list_of_deriv_operators = extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars(list_of_deriv_vars)
-    >>> print(list_of_base_gridfunction_names_in_derivs)
-    ['hDD01', 'hDD02', 'hDD02', 'hDD02', 'hDD02', 'vU2']
-    >>> fdcoeffs = [[] for _ in list_of_deriv_operators]
-    >>> fdstencl = [[[] for _ in range(4)] for __ in list_of_deriv_operators]
-    >>> for i, deriv_op in enumerate(list_of_deriv_operators): fdcoeffs[i], fdstencl[i] = compute_fdcoeffs_fdstencl(deriv_op, 2)
+    >>> list_of_proto_deriv_symbs = extract_list_of_deriv_var_strings_from_sympyexpr_list(free_symbols_list, sp.Symbol("unset"))
+    >>> print(list_of_proto_deriv_symbs)
+    [FDPROTO_dDD01, FDPROTO_dKOD1, FDPROTO_ddnD2, FDPROTO_dupD2]
+    >>> list_of_proto_deriv_ops = [str(item).split("_")[1] for item in list_of_proto_deriv_symbs]
+    >>> print(list_of_proto_deriv_ops)
+    ['dDD01', 'dKOD1', 'ddnD2', 'dupD2']
+    >>> fdcoeffs = [[] for _ in list_of_proto_deriv_ops]
+    >>> fdstencl = [[[] for _ in range(4)] for __ in list_of_proto_deriv_ops]
+    >>> for i, deriv_op in enumerate(list_of_proto_deriv_ops): fdcoeffs[i], fdstencl[i] = compute_fdcoeffs_fdstencl(deriv_op, 2)
     >>> print(fdstencl)
-    [[[0, -1, 0], [0, 1, 0]], [[-2, 0, 0], [-1, 0, 0], [0, 0, 0]], [[0, 0, -2], [0, 0, -1], [0, 0, 0]], [[0, 0, 0], [1, 0, 0], [2, 0, 0]], [[0, 0, 0], [0, 0, 1], [0, 0, 2]], [[-1, -1, 0], [1, -1, 0], [-1, 1, 0], [1, 1, 0]]]
-    >>> print(list_of_deriv_operators)
-    ['dD1', 'ddnD0', 'ddnD2', 'dupD0', 'dupD2', 'dDD01']
-    >>> # print(read_gfs_from_memory(list_of_base_gridfunction_names_in_derivs, fdstencl, free_symbols_list, "210", enable_simd=False))
-    >>> FDexprs, FDlhsvarnames = FD_operators_to_sympy_expressions(list_of_deriv_vars, list_of_base_gridfunction_names_in_derivs,
-    ...                                                            list_of_deriv_operators, fdcoeffs, fdstencl)
+    [[[-1, -1, 0], [1, -1, 0], [-1, 1, 0], [1, 1, 0]], [[0, -2, 0], [0, -1, 0], [0, 0, 0], [0, 1, 0], [0, 2, 0]], [[0, 0, -2], [0, 0, -1], [0, 0, 0]], [[0, 0, 0], [0, 0, 1], [0, 0, 2]]]
+    >>> FDexprs, FDlhsvarnames = proto_FD_operators_to_sympy_expressions(list_of_proto_deriv_symbs, fdcoeffs, fdstencl)
     >>> for i, lhs in enumerate(FDlhsvarnames):
     ...     print(f"{lhs} = {FDexprs[i]}")
-    const REAL hDD_dD011 = invdxx1*(-hDD01_i1m1/2 + hDD01_i1p1/2)
-    const REAL UpwindAlgInputhDD_ddnD020 = invdxx0*(3*hDD02/2 - 2*hDD02_i0m1 + hDD02_i0m2/2)
-    const REAL UpwindAlgInputhDD_ddnD022 = invdxx2*(3*hDD02/2 - 2*hDD02_i2m1 + hDD02_i2m2/2)
-    const REAL UpwindAlgInputhDD_dupD020 = invdxx0*(-3*hDD02/2 + 2*hDD02_i0p1 - hDD02_i0p2/2)
-    const REAL UpwindAlgInputhDD_dupD022 = invdxx2*(-3*hDD02/2 + 2*hDD02_i2p1 - hDD02_i2p2/2)
-    const REAL vU_dDD201 = invdxx0*invdxx1*(vU2_i0m1_i1m1/4 - vU2_i0m1_i1p1/4 - vU2_i0p1_i1m1/4 + vU2_i0p1_i1p1/4)
+    const REAL FDPROTO_dDD01 = invdxx0*invdxx1*(FDPROTO_i0m1_i1m1/4 - FDPROTO_i0m1_i1p1/4 - FDPROTO_i0p1_i1m1/4 + FDPROTO_i0p1_i1p1/4)
+    const REAL FDPROTO_dKOD1 = invdxx1*(-3*FDPROTO/8 + FDPROTO_i1m1/4 - FDPROTO_i1m2/16 + FDPROTO_i1p1/4 - FDPROTO_i1p2/16)
+    const REAL UpwindAlgInputFDPROTO_ddnD2 = invdxx2*(3*FDPROTO/2 - 2*FDPROTO_i2m1 + FDPROTO_i2m2/2)
+    const REAL UpwindAlgInputFDPROTO_dupD2 = invdxx2*(-3*FDPROTO/2 + 2*FDPROTO_i2p1 - FDPROTO_i2p2/2)
+    >>> FDexprs, FDlhsvarnames = proto_FD_operators_to_sympy_expressions(list_of_proto_deriv_symbs, fdcoeffs, fdstencl, enable_simd=True)
+    >>> for lhs in FDlhsvarnames:
+    ...     print(f"{lhs}")
+    const REAL_SIMD_ARRAY FDPROTO_dDD01
+    const REAL_SIMD_ARRAY FDPROTO_dKOD1
+    const REAL_SIMD_ARRAY UpwindAlgInputFDPROTO_ddnD2
+    const REAL_SIMD_ARRAY UpwindAlgInputFDPROTO_dupD2
     """
-
     # Set invdxx symbol list:
     invdxx = [sp.sympify(f"invdxx{d}") for d in range(3)]
-    FDexprs = [sp.sympify(0)] * len(list_of_deriv_vars)
-    FDlhsvarnames = [""] * len(list_of_deriv_vars)
+    FDexprs = [sp.sympify(0)] * len(list_of_proto_deriv_symbs)
+    FDlhsvarnames = [""] * len(list_of_proto_deriv_symbs)
 
     # Step 5.a.ii.A: Output finite difference expressions to Coutput string
-    for i, deriv_var_symbol in enumerate(list_of_deriv_vars):
+    list_of_proto_deriv_ops = [
+        str(item).split("_")[1] for item in list_of_proto_deriv_symbs
+    ]
+    for i, proto_deriv_var_symbol in enumerate(list_of_proto_deriv_symbs):
         # Unpack:
-        gf_base_name = list_of_base_gridfunction_names_in_derivs[i]
-        operator = list_of_deriv_operators[i]
-        deriv_var = str(deriv_var_symbol)
-        if "_dupD" in deriv_var or "_ddnD" in deriv_var:
-            deriv_var = f"UpwindAlgInput{deriv_var}"
+        operator = list_of_proto_deriv_ops[i]
+        proto_deriv_var = str(proto_deriv_var_symbol)
+        if "_dupD" in proto_deriv_var or "_ddnD" in proto_deriv_var:
+            proto_deriv_var = f"UpwindAlgInput{proto_deriv_var}"
 
         # First add element to FDlhsvarnames:
         c_type_alias = gri.glb_gridfcs_dict[
@@ -872,12 +871,12 @@ def FD_operators_to_sympy_expressions(
         if enable_simd:
             if c_type_alias in ("REAL", "CCTK_REAL", "double"):
                 c_type_alias = "REAL_SIMD_ARRAY"
-        FDlhsvarnames[i] = f"const {c_type_alias} {deriv_var}"
+        FDlhsvarnames[i] = f"const {c_type_alias} {proto_deriv_var}"
 
         # Add element to FDexprs:
         for j in range(len(fdcoeffs[i])):
             varname = fd_temp_variable_name(
-                gf_base_name, fdstencl[i][j][0], fdstencl[i][j][1], fdstencl[i][j][2]
+                "FDPROTO", fdstencl[i][j][0], fdstencl[i][j][1], fdstencl[i][j][2]
             )
             FDexprs[i] += fdcoeffs[i][j] * sp.sympify(varname)
 
