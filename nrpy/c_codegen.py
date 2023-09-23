@@ -579,8 +579,9 @@ def c_codegen(
 
     if CCGParams.cache_enable:
         try:
-            with open(cache_file, "wb") as file:
-                pickle.dump(final_Ccode_output_str, file)
+            if "does_not_exist" not in str(cache_file):
+                with open(cache_file, "wb") as file:
+                    pickle.dump(final_Ccode_output_str, file)
         except pickle.PicklingError:
             pass
 
