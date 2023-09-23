@@ -7,6 +7,10 @@ Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
 """
 
 import logging
+from appdirs import user_cache_dir
+from pathlib import Path
+import hashlib
+import pickle
 import re  # Regular expressions can be toxic due to edge cases -- we use them sparingly
 import sys
 from typing import List, Union, Dict, Any, Optional, Sequence, Tuple
@@ -51,6 +55,7 @@ class CCodeGen:
         automatically_read_gf_data_from_memory: bool = False,
         enforce_c_parameters_must_be_defined: bool = False,
         enable_fd_functions: bool = False,
+        cache_enable: bool = True,
         mem_alloc_style: str = "210",
         upwind_control_vec: Union[List[sp.Symbol], sp.Symbol] = sp.Symbol("unset"),
         symbol_to_Rational_dict: Optional[Dict[sp.Basic, sp.Rational]] = None,
@@ -117,6 +122,7 @@ class CCodeGen:
         )
         self.enforce_c_parameters_must_be_defined = enforce_c_parameters_must_be_defined
         self.enable_fd_functions = enable_fd_functions
+        self.cache_enable = cache_enable
         self.mem_alloc_style = mem_alloc_style
         self.upwind_control_vec = upwind_control_vec
         self.symbol_to_Rational_dict = symbol_to_Rational_dict
@@ -242,6 +248,26 @@ def c_codegen(
     <BLANKLINE>
     """
     CCGParams = CCodeGen(**kwargs)
+    cache_dir = Path(user_cache_dir("nrpy"))
+    cache_file = "does_not_exist"
+    if CCGParams.cache_enable:
+        try:
+            pickle_expr = pickle.dumps(sympyexpr)
+            pickle_prms = pickle.dumps(CCGParams.__dict__)
+            pickle_vars = pickle.dumps(output_varname_str)
+            pickle_kwgs = pickle.dumps(kwargs)
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            cache_file = cache_dir / (
+                hashlib.sha256(
+                    pickle_expr + pickle_prms + pickle_vars + pickle_kwgs
+                ).hexdigest()
+                + ".nrpycache"
+            )
+            if cache_file.exists():
+                with open(cache_file, "rb") as file:
+                    return pickle.load(file)
+        except pickle.PicklingError:
+            pass
 
     # Step 1: Initialize
     #  commentblock: comment block containing the input SymPy string,
@@ -550,6 +576,13 @@ def c_codegen(
     )
     if CCGParams.include_braces:
         final_Ccode_output_str += "}\n"
+
+    if CCGParams.cache_enable:
+        try:
+            with open(cache_file, "wb") as file:
+                pickle.dump(final_Ccode_output_str, file)
+        except pickle.PicklingError:
+            pass
 
     # Step 7: Return result string
     return final_Ccode_output_str

@@ -15,6 +15,7 @@ import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy
 from nrpy.helpers.expr_tree import ExprTree
 
 
+# @profile
 def cse_preprocess(
     expr_list: Union[
         sp.Basic,
@@ -86,166 +87,164 @@ def cse_preprocess(
 
     # Loop over each expression in the input list
     for i, expr in enumerate(expr_list):
-        # There is nothing we can do to improve the performance of a symbol, so skip over such expressions.
-        if not isinstance(expr, sp.Symbol):
-            # Create an expression tree for each expression
-            tree = ExprTree(expr)
+        # Create an expression tree for each expression
+        tree = ExprTree(expr)
 
-            # Preorder traversal of the expression tree, searching for rational numbers
-            for subtree in tree.preorder():
-                subexpr = subtree.expr
+        # Preorder traversal of the expression tree, searching for rational numbers
+        for subtree in tree.preorder():
+            subexpr = subtree.expr
 
-                # If the subexpression is a Rational type and it's not equal to Negative One
-                if isinstance(subexpr, sp.Rational) and subexpr != sp.S.NegativeOne:
-                    # mypy is clueless here; subexpr is sp.Rational, and mypy complains that it could be something else!
+            # If the subexpression is a Rational type and it's not equal to Negative One
+            if isinstance(subexpr, sp.Rational) and subexpr != sp.S.NegativeOne:
+                # mypy is clueless here; subexpr is sp.Rational, and mypy complains that it could be something else!
 
-                    # Continue loop if the subexpression is an exponent in a power function, we don't want to replace it
-                    if subtree.func == sp.Pow:
-                        continue
+                # Continue loop if the subexpression is an exponent in a power function, we don't want to replace it
+                if subtree.func == sp.Pow:
+                    continue
 
-                    # If rational < 0, factor out negative, leaving positive rational
-                    sign = 1 if subexpr >= 0 else -1
-                    subexpr *= sign
+                # If rational < 0, factor out negative, leaving positive rational
+                sign = 1 if subexpr >= 0 else -1
+                subexpr *= sign
 
-                    # If rational number hasn't been encountered before, replace
-                    # it with a symbol using get() to avoid try-except;
-                    # typehinting note: subexpr is guaranteed to be Rational.
-                    repl = map_rat_to_sym.get(subexpr)  # type: ignore
-                    if repl is None:
-                        p, q = subexpr.p, subexpr.q  # type: ignore
+                # If rational number hasn't been encountered before, replace
+                # it with a symbol using get() to avoid try-except;
+                # typehinting note: subexpr is guaranteed to be Rational.
+                repl = map_rat_to_sym.get(subexpr)  # type: ignore
+                if repl is None:
+                    p, q = subexpr.p, subexpr.q  # type: ignore
 
-                        # Name the variable based on its value and whether it's an integer or a rational number
-                        var_name = (
-                            f"{prefix}_Rational_{p}_{q}"
-                            if q != 1
-                            else f"{prefix}_Integer_{p}"
-                        )
-
-                        # Replace the rational number with the symbol in the expression
-                        repl = sp.Symbol(var_name)
-
-                        # Add mapping of symbol to rational and rational to symbol
-                        symbol_to_Rational_dict[repl], map_rat_to_sym[subexpr] = subexpr, repl  # type: ignore
-
-                    # Update subexpression in the subtree
-                    subtree.expr = repl * sign
-
-                    if sign < 0:
-                        tree.build(subtree, clear=False)
-
-                # If declare_neg1_as_symbol is True, replace negative one with symbol
-                elif declare_neg1_as_symbol and subexpr == sp.S.NegativeOne:
-                    # using get() to avoid try-except
-                    subtree.expr = map_rat_to_sym.get(
-                        sp.S.NegativeOne, sp.Symbol("didnotfind_subtree_expr")
+                    # Name the variable based on its value and whether it's an integer or a rational number
+                    var_name = (
+                        f"{prefix}_Rational_{p}_{q}"
+                        if q != 1
+                        else f"{prefix}_Integer_{p}"
                     )
-                    if subtree.expr == sp.Symbol("didnotfind_subtree_expr"):
-                        symbol_to_Rational_dict[_NegativeOne_] = sp.S.NegativeOne
-                        map_rat_to_sym[subexpr] = _NegativeOne_  # type: ignore
-                        subtree.expr = _NegativeOne_
+
+                    # Replace the rational number with the symbol in the expression
+                    repl = sp.Symbol(var_name)
+
+                    # Add mapping of symbol to rational and rational to symbol
+                    symbol_to_Rational_dict[repl], map_rat_to_sym[subexpr] = subexpr, repl  # type: ignore
+
+                # Update subexpression in the subtree
+                subtree.expr = repl * sign
+
+                if sign < 0:
+                    tree.build(subtree, clear=False)
+
+            # If declare_neg1_as_symbol is True, replace negative one with symbol
+            elif declare_neg1_as_symbol and subexpr == sp.S.NegativeOne:
+                # using get() to avoid try-except
+                subtree.expr = map_rat_to_sym.get(
+                    sp.S.NegativeOne, sp.Symbol("didnotfind_subtree_expr")
+                )
+                if subtree.expr == sp.Symbol("didnotfind_subtree_expr"):
+                    symbol_to_Rational_dict[_NegativeOne_] = sp.S.NegativeOne
+                    map_rat_to_sym[subexpr] = _NegativeOne_  # type: ignore
+                    subtree.expr = _NegativeOne_
+        # Update expression from reconstructed tree
+        expr = tree.reconstruct()
+
+        # Perform partial factoring if factor is True
+        if factor:
+            # Get set of symbols to factor, excluding _NegativeOne_
+            var_set = [
+                var for var in symbol_to_Rational_dict if var != _NegativeOne_
+            ]  # using list comprehension
+
+            # Handle factoring of function argument(s)
+            for subtree in tree.preorder():
+                if isinstance(subtree.expr, sp.Function):
+                    arg = subtree.children[0]
+                    for var in var_set:
+                        if var in arg.expr.free_symbols:
+                            arg.expr = sp.collect(arg.expr, var)
+                    tree.build(arg)
+
             # Update expression from reconstructed tree
             expr = tree.reconstruct()
 
-            # Perform partial factoring if factor is True
-            if factor:
-                # Get set of symbols to factor, excluding _NegativeOne_
-                var_set = [
-                    var for var in symbol_to_Rational_dict if var != _NegativeOne_
-                ]  # using list comprehension
+            # Perform partial factoring on entire expression
+            # This collect is very expensive, so make sure var exists in expr.free_symbols!
+            free_symbols = expr.free_symbols
+            needed_var_set: List[sp.Basic] = []
+            for var in var_set:
+                if var in free_symbols:
+                    needed_var_set += [var]
+            expr = sp.collect(expr, needed_var_set)
+            tree.root.expr = expr
+            tree.build(tree.root)
 
-                # Handle factoring of function argument(s)
-                for subtree in tree.preorder():
-                    if isinstance(subtree.expr, sp.Function):
-                        arg = subtree.children[0]
-                        for var in var_set:
-                            if var in arg.expr.free_symbols:
-                                arg.expr = sp.collect(arg.expr, var)
-                        tree.build(arg)
+        # If negative is True, perform partial factoring on _NegativeOne_
+        if negative:
+            for subtree in tree.preorder():
+                if isinstance(subtree.expr, sp.Function):
+                    arg = subtree.children[0]
+                    arg.expr = sp.collect(arg.expr, _NegativeOne_)
+                    tree.build(arg)
+            expr = sp.collect(tree.reconstruct(), _NegativeOne_)
+            tree.root.expr = expr
+            tree.build(tree.root)
 
-                # Update expression from reconstructed tree
+        # If declare is True, simplify (-1)^n
+        if declare_neg1_as_symbol:
+            changed_expr = False
+            _One_ = sp.Symbol(prefix + "_Integer_1")
+            for subtree in tree.preorder():
+                subexpr = subtree.expr
+                if subexpr.func == sp.Pow:
+                    base, exponent = subexpr.args[0], subexpr.args[1]
+                    if base == _NegativeOne_ and isinstance(exponent, int):
+                        subtree.expr = _One_ if exponent % 2 == 0 else _NegativeOne_
+                        tree.build(subtree)
+                        changed_expr = True
+            if changed_expr:
                 expr = tree.reconstruct()
 
-                # Perform partial factoring on entire expression
-                # This collect is very expensive, so make sure var exists in expr.free_symbols!
-                free_symbols = expr.free_symbols
-                needed_var_set: List[sp.Basic] = []
-                for var in var_set:
-                    if var in free_symbols:
-                        needed_var_set += [var]
-                expr = sp.collect(expr, needed_var_set)
-                tree.root.expr = expr
-                tree.build(tree.root)
-
-            # If negative is True, perform partial factoring on _NegativeOne_
-            if negative:
-                for subtree in tree.preorder():
-                    if isinstance(subtree.expr, sp.Function):
-                        arg = subtree.children[0]
-                        arg.expr = sp.collect(arg.expr, _NegativeOne_)
-                        tree.build(arg)
-                expr = sp.collect(tree.reconstruct(), _NegativeOne_)
-                tree.root.expr = expr
-                tree.build(tree.root)
-
-            # If declare is True, simplify (-1)^n
-            if declare_neg1_as_symbol:
-                changed_expr = False
-                _One_ = sp.Symbol(prefix + "_Integer_1")
-                for subtree in tree.preorder():
-                    subexpr = subtree.expr
-                    if subexpr.func == sp.Pow:
-                        base, exponent = subexpr.args[0], subexpr.args[1]
-                        if base == _NegativeOne_ and isinstance(exponent, int):
-                            subtree.expr = _One_ if exponent % 2 == 0 else _NegativeOne_
-                            tree.build(subtree)
-                            changed_expr = True
-                if changed_expr:
-                    expr = tree.reconstruct()
-
-            # Replace any remaining ones with symbol _One_ after partial factoring
-            if factor or negative:
-                _One_ = sp.Symbol(prefix + "_Integer_1")
-                for subtree in tree.preorder():
-                    if subtree.expr == sp.S.One:
-                        subtree.expr = _One_
-                tmp_expr = tree.reconstruct()
-                if tmp_expr != expr:
-                    # using get() to avoid try-except:
-                    if map_rat_to_sym.get(sp.S.One) is None:
-                        symbol_to_Rational_dict[_One_], map_rat_to_sym[sp.S.One] = (
-                            sp.S.One,
-                            _One_,
-                        )
-                        subtree.expr = _One_
-                    expr = tmp_expr
-
-            # If debug is True, back-substitute everything and check difference
-            if debug:
-                # Helper function to replace symbols with their corresponding rational numbers
-                def lookup_rational(arg: sp.Basic) -> sp.Basic:
-                    if isinstance(arg, sp.Symbol):
-                        arg = symbol_to_Rational_dict.get(arg, arg)
-                    return arg
-
-                # Create new tree for debugging
-                debug_tree = ExprTree(expr)
-
-                # Replace symbols with their corresponding rational numbers in the debug tree
-                for subtree in debug_tree.preorder():
-                    subexpr = subtree.expr
-                    if subexpr.func == sp.Symbol:
-                        subtree.expr = lookup_rational(subexpr)
-                debug_expr = tree.reconstruct()
-
-                # Calculate the difference between the original and the debug expression
-                if sp.simplify(cast(sp.Expr, expr) - debug_expr) != 0:
-                    # If the difference is not zero, it means something went wrong in the replacement
-                    raise ValueError(
-                        "Debugging error: Difference in expressions is non-zero."
+        # Replace any remaining ones with symbol _One_ after partial factoring
+        if factor or negative:
+            _One_ = sp.Symbol(prefix + "_Integer_1")
+            for subtree in tree.preorder():
+                if subtree.expr == sp.S.One:
+                    subtree.expr = _One_
+            tmp_expr = tree.reconstruct()
+            if tmp_expr != expr:
+                # using get() to avoid try-except:
+                if map_rat_to_sym.get(sp.S.One) is None:
+                    symbol_to_Rational_dict[_One_], map_rat_to_sym[sp.S.One] = (
+                        sp.S.One,
+                        _One_,
                     )
+                    subtree.expr = _One_
+                expr = tmp_expr
 
-                # Replace the expression in the list with the new processed expression
-            expr_list[i] = expr
+        # If debug is True, back-substitute everything and check difference
+        if debug:
+            # Helper function to replace symbols with their corresponding rational numbers
+            def lookup_rational(arg: sp.Basic) -> sp.Basic:
+                if isinstance(arg, sp.Symbol):
+                    arg = symbol_to_Rational_dict.get(arg, arg)
+                return arg
+
+            # Create new tree for debugging
+            debug_tree = ExprTree(expr)
+
+            # Replace symbols with their corresponding rational numbers in the debug tree
+            for subtree in debug_tree.preorder():
+                subexpr = subtree.expr
+                if subexpr.func == sp.Symbol:
+                    subtree.expr = lookup_rational(subexpr)
+            debug_expr = tree.reconstruct()
+
+            # Calculate the difference between the original and the debug expression
+            if sp.simplify(cast(sp.Expr, expr) - debug_expr) != 0:
+                # If the difference is not zero, it means something went wrong in the replacement
+                raise ValueError(
+                    "Debugging error: Difference in expressions is non-zero."
+                )
+
+            # Replace the expression in the list with the new processed expression
+        expr_list[i] = expr
 
     # At the end, return the modified expressions and the dictionary mapping symbols to rational numbers
     return expr_list, symbol_to_Rational_dict
