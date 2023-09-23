@@ -5,6 +5,7 @@ import sympy as sp
 import nrpy.indexedexp as ixp
 import nrpy.params as par
 from nrpy.helpers.generic import superfast_uniq
+from nrpy.helpers.cached_functions import cached_simplify
 
 # grid_physical_size is set based entirely on CoordSystem. So it is a rfm parameter not a grid parameter.
 par.register_param(bool, __name__, "enable_grid_physical_size", True)
@@ -297,7 +298,7 @@ class ReferenceMetric:
                 for k in range(3):
                     if self.SymPySimplifyExpressions:
                         #                    ghatDDdD[i][j][k] = sp.trigsimp(sp.diff(ghatDD[i][j], xx[k])) # FIXME: BAD: MUST BE SIMPLIFIED OR ANSWER IS INCORRECT! Must be some bug in sympy...
-                        self.ghatDDdD[i][j][k] = sp.simplify(
+                        self.ghatDDdD[i][j][k] = cached_simplify(
                             sp.diff(self.ghatDD[i][j], self.xx[k])
                         )  # FIXME: BAD: MUST BE SIMPLIFIED OR ANSWER IS INCORRECT! Must be some bug in sympy...
                     else:

@@ -15,6 +15,7 @@ import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tenso
 from nrpy.equations.general_relativity.BSSN_to_ADM import BSSN_to_ADM
 from nrpy.equations.general_relativity.ADM_to_BSSN import ADM_to_BSSN
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
+from nrpy.helpers.cached_functions import cached_simplify
 
 
 # g_{mu nu} in terms of BSSN (if inputvars=="BSSN") or ADM (if inputvars=="ADM") variables.
@@ -180,7 +181,7 @@ def g4DD_to_ADM(
 
     # Step 4.b: alpha = sqrt(beta^2 - g_{00}):
     alpha = (
-        sp.sqrt(sp.simplify(beta_squared) - g4DD[0][0])
+        sp.sqrt(cached_simplify(beta_squared) - g4DD[0][0])
         if not g4DD_is_input_into_this_function
         else sp.sqrt(beta_squared - g4DD[0][0])
     )

@@ -11,6 +11,7 @@ Authors: Brandon Clark
 """
 from typing import cast, Dict
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
+from nrpy.helpers.cached_functions import cached_simplify
 
 
 def Y(
@@ -67,7 +68,7 @@ def Y(
             * (2 * l + 1)
             / (4 * sp.pi * sp.factorial(l + s) * sp.factorial(l - s))
         )
-        * sp.simplify(negative_one**m * sp.sin(th / 2) ** (2 * l) * Sum),
+        * cached_simplify(negative_one**m * sp.sin(th / 2) ** (2 * l) * Sum),
     )
 
 

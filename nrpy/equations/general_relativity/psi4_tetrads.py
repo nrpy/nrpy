@@ -16,6 +16,7 @@ import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tenso
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.equations.general_relativity.BSSN_to_ADM import BSSN_to_ADM
+from nrpy.helpers.cached_functions import cached_simplify
 
 # Step 1.b: Declare free parameter
 # use_metric_to_construct_unit_normal=False: consistent with WeylScal4 ETK thorn.
@@ -72,12 +73,12 @@ class Psi4Tetrads:
         #           BSSN.ADM_in_terms_of_BSSN;
         #           simplify detgamma & gammaUU expressions,
         #           which expedites Psi4 codegen.
-        detgamma = sp.simplify(BtoA.detgamma)
+        detgamma = cached_simplify(BtoA.detgamma)
         gammaUU = ixp.zerorank2()
         for i in range(3):
             for j in range(i, 3):
                 # The simplify() here is SLOW, so we try to use it sparingly.
-                gammaUU[i][j] = gammaUU[j][i] = sp.simplify(BtoA.gammaUU[i][j])
+                gammaUU[i][j] = gammaUU[j][i] = cached_simplify(BtoA.gammaUU[i][j])
 
         # Step 2.c: Define v1U and v2U
         v1UCart = [-y, x, sp.sympify(0)]
@@ -90,7 +91,7 @@ class Psi4Tetrads:
         # Step 2.e.i: Simplify expressions for d xx^j / d x_Cart^i:
         for i in range(3):
             for j in range(3):
-                Jac_dUrfm_dDCartUD[i][j] = sp.simplify(Jac_dUrfm_dDCartUD[i][j])
+                Jac_dUrfm_dDCartUD[i][j] = cached_simplify(Jac_dUrfm_dDCartUD[i][j])
 
         # Step 2.f: Transform v1U and v2U from the Cartesian to the xx^i basis
         v1U = ixp.zerorank1()
@@ -119,9 +120,9 @@ class Psi4Tetrads:
         #             Drat. Simplification with certain versions of SymPy & coord systems results in a hang. Let's just
         #             evaluate the expressions so the most trivial optimizations can be performed.
         for a in range(3):
-            v1U[a] = v1U[a].doit()  # sp.simplify(v1U[a])
-            v2U[a] = v2U[a].doit()  # sp.simplify(v2U[a])
-            v3U[a] = v3U[a].doit()  # sp.simplify(v3U[a])
+            v1U[a] = v1U[a].doit()  # cached_simplify(v1U[a])
+            v2U[a] = v2U[a].doit()  # cached_simplify(v2U[a])
+            v3U[a] = v3U[a].doit()  # cached_simplify(v3U[a])
 
         # Step 2.h: Define omega_{ij}
         omegaDD = ixp.zerorank2()

@@ -307,9 +307,9 @@ print("Finished constructing MoL C functions.")
 xxCart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
 xxCart.register_CFunction_xx_to_Cart(CoordSystem)
 progress.register_CFunction_progress_indicator()
-# print("Started constructing SWm2SH functions.")
-# swm2sh.register_CFunction_spin_weight_minus2_sph_harmonics(maximum_l=8)
-# print("Finished constructing SWm2SH functions.")
+print("Started constructing SWm2SH functions.")
+swm2sh.register_CFunction_spin_weight_minus2_sph_harmonics(maximum_l=8)
+print("Finished constructing SWm2SH functions.")
 
 #########################################################
 # STEP 3: Generate header files, register C functions and
