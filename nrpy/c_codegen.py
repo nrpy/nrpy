@@ -7,13 +7,13 @@ Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
 """
 
 import logging
-from appdirs import user_cache_dir
 from pathlib import Path
 import hashlib
 import pickle
 import re  # Regular expressions can be toxic due to edge cases -- we use them sparingly
 import sys
-from typing import List, Union, Dict, Any, Optional, Sequence, Tuple
+from typing import List, Union, Dict, Any, Optional, Sequence, Tuple, cast
+from appdirs import user_cache_dir  # type: ignore
 import sympy as sp
 import nrpy.finite_difference as fin
 import nrpy.params as par
@@ -224,10 +224,10 @@ def c_codegen(
     :return: A string containing the generated C code.
 
     >>> x, y, z = sp.symbols("x y z", real=True)
-    >>> print(c_codegen(x**2 + sp.sqrt(y) - sp.sin(x*z), "double blah", include_braces=False, verbose=False))
+    >>> print(c_codegen(x**2 + sp.sqrt(y) - sp.sin(x*z), "double blah", include_braces=False, verbose=False, cache_enable=False))
     double blah = ((x)*(x)) + sqrt(y) - sin(x*z);
     <BLANKLINE>
-    >>> print(c_codegen(x**5 + x**3 + x - 1/x, "REAL_SIMD_ARRAY blah", include_braces=False, verbose=False, enable_simd=True))
+    >>> print(c_codegen(x**5 + x**3 + x - 1/x, "REAL_SIMD_ARRAY blah", include_braces=False, verbose=False, enable_simd=True, cache_enable=False))
     const double dbl_Integer_1 = 1.0;
     const REAL_SIMD_ARRAY _Integer_1 = ConstSIMD(dbl_Integer_1);
     <BLANKLINE>
@@ -236,7 +236,17 @@ def c_codegen(
     <BLANKLINE>
     REAL_SIMD_ARRAY blah = FusedMulAddSIMD(MulSIMD(x, x), x, FusedMulAddSIMD(MulSIMD(MulSIMD(MulSIMD(x, x), x), x), x, SubSIMD(x, DivSIMD(_Integer_1, x))));
     <BLANKLINE>
-    >>> print(c_codegen(x**5 + x**3 + sp.sin(x**3), "REAL_SIMD_ARRAY blah", enable_simd=True))
+    >>> print(c_codegen(x**5 + x**3 + sp.sin(x**3), "REAL_SIMD_ARRAY blah", enable_simd=True, cache_enable=True))
+    /*
+     *  Original SymPy expression:
+     *  "REAL_SIMD_ARRAY blah = x**5 + x**3 + sin(x**3)"
+     */
+    {
+    const REAL_SIMD_ARRAY tmp0 = MulSIMD(MulSIMD(x, x), x);
+    REAL_SIMD_ARRAY blah = AddSIMD(tmp0, FusedMulAddSIMD(MulSIMD(MulSIMD(MulSIMD(x, x), x), x), x, SinSIMD(tmp0)));
+    }
+    <BLANKLINE>
+    >>> print(c_codegen(x**5 + x**3 + sp.sin(x**3), "REAL_SIMD_ARRAY blah", enable_simd=True, cache_enable=True))
     /*
      *  Original SymPy expression:
      *  "REAL_SIMD_ARRAY blah = x**5 + x**3 + sin(x**3)"
@@ -249,7 +259,7 @@ def c_codegen(
     """
     CCGParams = CCodeGen(**kwargs)
     cache_dir = Path(user_cache_dir("nrpy"))
-    cache_file = "does_not_exist"
+    cache_file = Path("does_not_exist")
     if CCGParams.cache_enable:
         try:
             pickle_expr = pickle.dumps(sympyexpr)
@@ -265,7 +275,7 @@ def c_codegen(
             )
             if cache_file.exists():
                 with open(cache_file, "rb") as file:
-                    return pickle.load(file)
+                    return cast(str, pickle.load(file))
         except pickle.PicklingError:
             pass
 

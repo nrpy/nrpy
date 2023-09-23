@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Clear cache
+rm -rf ~/.cache/nrpy
+
 # Display Python version
 python --version
 
