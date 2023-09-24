@@ -31,6 +31,8 @@ def cache_file(unique_id: str) -> Path:
         """
         return hashlib.sha256(unique_id.encode("utf-8")).hexdigest()
 
+    if not Path(user_cache_dir("nrpy")).exists():
+        Path(user_cache_dir("nrpy")).mkdir(parents=True, exist_ok=True)
     return Path(user_cache_dir("nrpy")) / f"{get_hash(unique_id)}.nrpycache"
 
 
