@@ -10,7 +10,12 @@ Author: Zachariah B. Etienne
 from typing import Dict, List, Any, cast
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
 
-from nrpy.helpers.cached_functions import is_cached, read_cached, write_cached
+from nrpy.helpers.cached_functions import (
+    is_cached,
+    read_cached,
+    write_cached,
+    NRPy_params_checksum,
+)
 import nrpy.params as par  # NRPy+: Parameter interface
 import nrpy.grid as gri
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
@@ -36,10 +41,9 @@ class BSSNRHSs:
         self, CoordSystem: str = "Cartesian", enable_rfm_precompute: bool = False
     ):
         enable_T4munu = par.parval_from_str("enable_T4munu")
-        EvolvedConformalFactor_cf = par.parval_from_str("EvolvedConformalFactor_cf")
-        LeaveRicciSymbolic = par.parval_from_str("LeaveRicciSymbolic")
-
-        self.unique_id = f"{__file__}{CoordSystem}{enable_rfm_precompute}{EvolvedConformalFactor_cf}{LeaveRicciSymbolic}{enable_T4munu}"
+        self.unique_id = (
+            f"{__file__}{CoordSystem}{enable_rfm_precompute}{NRPy_params_checksum()}"
+        )
         if is_cached(self.unique_id):
             self.__dict__ = cast(Dict[Any, Any], read_cached(self.unique_id))
             return

@@ -10,7 +10,12 @@ Author: Zachariah B. Etienne
 from typing import Dict, cast, Any
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
 
-from nrpy.helpers.cached_functions import is_cached, read_cached, write_cached
+from nrpy.helpers.cached_functions import (
+    is_cached,
+    read_cached,
+    write_cached,
+    NRPy_params_checksum,
+)
 import nrpy.params as par  # NRPy+: Parameter interface
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 import nrpy.grid as gri  # NRPy+: Functions having to do with numerical grids
@@ -31,9 +36,7 @@ class BSSNconstraints:
         CoordSystem: str = "Cartesian",
         enable_rfm_precompute: bool = False,
     ) -> None:
-        enable_T4munu = par.parval_from_str("enable_T4munu")
         register_MU_gridfunctions = par.parval_from_str("register_MU_gridfunctions")
-        LeaveRicciSymbolic = par.parval_from_str("LeaveRicciSymbolic")
 
         # Step 1.b: Given the chosen coordinate system, set up
         #           corresponding reference metric and needed
@@ -63,7 +66,9 @@ class BSSNconstraints:
                 "MU", group="AUX", gf_array_name="diagnostic_output_gfs"
             )
 
-        self.unique_id = f"{__file__}{CoordSystem}{enable_rfm_precompute}{enable_T4munu}{LeaveRicciSymbolic}{register_MU_gridfunctions}"
+        self.unique_id = (
+            f"{__file__}{CoordSystem}{enable_rfm_precompute}{NRPy_params_checksum()}"
+        )
         if is_cached(self.unique_id):
             self.__dict__ = cast(Dict[Any, Any], read_cached(self.unique_id))
             return

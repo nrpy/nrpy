@@ -12,6 +12,17 @@ from pathlib import Path
 from typing import cast, Any
 from appdirs import user_cache_dir  # type: ignore
 import sympy as sp
+import nrpy.params as par
+
+
+def get_hash(unique_id: str) -> str:
+    """
+    Generate a hash string for a given unique ID.
+
+    :param unique_id: A unique identifier to be hashed.
+    :return: The hash string.
+    """
+    return hashlib.sha256(unique_id.encode("utf-8")).hexdigest()
 
 
 def cache_file(unique_id: str) -> Path:
@@ -22,18 +33,15 @@ def cache_file(unique_id: str) -> Path:
     :return: The cache file path.
     """
 
-    def get_hash(unique_id: str) -> str:
-        """
-        Generate a hash string for a given unique ID.
-
-        :param unique_id: A unique identifier to be hashed.
-        :return: The hash string.
-        """
-        return hashlib.sha256(unique_id.encode("utf-8")).hexdigest()
-
     if not Path(user_cache_dir("nrpy")).exists():
         Path(user_cache_dir("nrpy")).mkdir(parents=True, exist_ok=True)
     return Path(user_cache_dir("nrpy")) / f"{get_hash(unique_id)}.nrpycache"
+
+
+def NRPy_params_checksum() -> str:
+    return get_hash(
+        str(pickle.dumps({k: v for k, v in sorted(par.glb_params_dict.items())}))
+    )
 
 
 def is_cached(unique_id: str) -> bool:
@@ -53,6 +61,7 @@ def read_cached(unique_id: str) -> Any:
     :param unique_id: A unique identifier to read data for.
     :return: The data read from the cache file.
     """
+    # print(unique_id)
     with open(cache_file(unique_id), "rb") as file:
         # print(f"Reading cached file {file.name}.")
         return pickle.load(file)
