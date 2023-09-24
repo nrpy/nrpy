@@ -1,12 +1,13 @@
 """
 Generic helper functions used throughout NRPy+.
 """
-from typing import List, Any
+from typing import List, Any, cast
 import subprocess
 import hashlib
 import lzma
 import base64
 from difflib import ndiff
+from nrpy.helpers.cached_functions import is_cached, read_cached, write_cached
 
 
 #
@@ -74,7 +75,9 @@ def clang_format(
       return 0;
     }
     """
-
+    unique_id = c_code_str + clang_format_options
+    if is_cached(unique_id):
+        return cast(str, read_cached(unique_id))
     with subprocess.Popen(
         ["clang-format", clang_format_options],
         stdin=subprocess.PIPE,
@@ -86,6 +89,7 @@ def clang_format(
 
         # If the process exited without errors, return the formatted code
         if process.returncode == 0:
+            write_cached(unique_id, stdout.decode())
             return stdout.decode()
 
         raise RuntimeError(f"Error using clang-format: {stderr.decode()}")

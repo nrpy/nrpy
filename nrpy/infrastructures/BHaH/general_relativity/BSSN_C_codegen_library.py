@@ -165,7 +165,6 @@ def register_CFunction_rhs_eval(
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
     )
-
     cfc.register_CFunction(
         include_CodeParameters_h=True,
         includes=includes,

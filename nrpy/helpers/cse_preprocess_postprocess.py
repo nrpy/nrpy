@@ -15,7 +15,6 @@ import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy
 from nrpy.helpers.expr_tree import ExprTree
 
 
-# @profile
 def cse_preprocess(
     expr_list: Union[
         sp.Basic,
