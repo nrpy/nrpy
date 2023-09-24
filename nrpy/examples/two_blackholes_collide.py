@@ -11,10 +11,14 @@ Author: Zachariah B. Etienne
 #         and compile-time parameters.
 import shutil
 import os
+from inspect import currentframe as cf
+from typing import cast, Union
+import time
 
 import nrpy.params as par
 import nrpy.c_function as cfc
 from nrpy.helpers import simd
+import nrpy.helpers.parallel_codegen as pcg
 
 from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
 from nrpy.infrastructures.BHaH import rfm_precompute
@@ -32,6 +36,7 @@ import nrpy.infrastructures.BHaH.general_relativity.BSSN_C_codegen_library as BC
 import nrpy.infrastructures.BHaH.special_functions.spin_weight_minus2_spherical_harmonics as swm2sh
 
 par.set_parval_from_str("Infrastructure", "BHaH")
+start_time = time.time()
 
 # Code-generation-time parameters:
 project_name = "two_blackholes_collide"
@@ -68,6 +73,7 @@ project_dir = os.path.join("project", project_name)
 # First clean the project directory, if it exists.
 shutil.rmtree(project_dir, ignore_errors=True)
 
+par.set_parval_from_str("parallel_codegen_enable", True)
 par.set_parval_from_str("fd_order", fd_order)
 par.set_parval_from_str("LeaveRicciSymbolic", separate_Ricci_and_BSSN_RHS)
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
@@ -80,7 +86,9 @@ par.adjust_CodeParam_default("t_final", t_final)
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
-def register_CFunction_diagnostics(in_CoordSystem: str, plane: str = "yz") -> None:
+def register_CFunction_diagnostics(
+    in_CoordSystem: str, plane: str = "yz"
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register C function for simulation diagnostics.
 
@@ -88,6 +96,9 @@ def register_CFunction_diagnostics(in_CoordSystem: str, plane: str = "yz") -> No
     :param plane: The default plane for diagnostics; defaults to "yz".
     :return: None
     """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cf().f_code.co_name}", locals())
+        return None
     _ = par.CodeParameter(
         "REAL", __name__, "diagnostics_output_every", 0.25, commondata=True
     )
@@ -238,6 +249,7 @@ if(commondata->time + commondata->dt > commondata->t_final) printf("\n");
         include_CodeParameters_h=False,
         body=body,
     )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
 BCl.register_CFunction_initial_data(
@@ -249,7 +261,6 @@ numgrids.register_CFunction_numerical_grids_and_timestep_setup(
 register_CFunction_diagnostics(in_CoordSystem=CoordSystem)
 if enable_rfm_precompute:
     rfm_precompute.register_CFunctions_rfm_precompute(CoordSystem)
-print("Constructing rhs_eval C function...")
 BCl.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
@@ -258,32 +269,33 @@ BCl.register_CFunction_rhs_eval(
     ShiftEvolutionOption=ShiftEvolutionOption,
     OMP_collapse=OMP_collapse,
 )
-print("Finished constructing rhs_eval C function.")
-print("Started constructing Ricci C function.")
 BCl.register_CFunction_Ricci_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_simd=enable_simd,
     OMP_collapse=OMP_collapse,
 )
-print("Finished constructing Ricci C function.")
 BCl.register_CFunction_enforce_detgammabar_equals_detgammahat(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     OMP_collapse=OMP_collapse,
 )
-print("Started constructing constraints C function.")
 BCl.register_CFunction_constraints(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_simd=enable_simd,
     OMP_collapse=OMP_collapse,
 )
-print("Finished constructing constraints C function.")
+print(f"Section 1 finished at {time.time() - start_time:.4f} seconds")
+
+pcg.do_parallel_codegen()
+
+print(f"Section 2 finished at {time.time() - start_time:.4f} seconds")
 
 cbc.CurviBoundaryConditions_register_C_functions(
     CoordSystem, radiation_BC_fd_order=radiation_BC_fd_order
 )
+print(f"Section 3 finished at {time.time() - start_time:.4f} seconds")
 rhs_string = """
 Ricci_eval(commondata, params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
@@ -303,13 +315,13 @@ MoL.MoL_register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
 )
-print("Finished constructing MoL C functions.")
+print(f"Section 4 finished at {time.time() - start_time:.4f} seconds")
 xxCart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
 xxCart.register_CFunction_xx_to_Cart(CoordSystem)
 progress.register_CFunction_progress_indicator()
-print("Started constructing SWm2SH functions.")
+print(f"Section 5 finished at {time.time() - start_time:.4f} seconds")
 swm2sh.register_CFunction_spin_weight_minus2_sph_harmonics(maximum_l=8)
-print("Finished constructing SWm2SH functions.")
+print(f"Section 6 finished at {time.time() - start_time:.4f} seconds")
 
 #########################################################
 # STEP 3: Generate header files, register C functions and

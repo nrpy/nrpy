@@ -6,15 +6,19 @@ Library of C functions for solving the BSSN equations in
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
-from typing import List
+from typing import List, Union, cast
 from pathlib import Path
+from inspect import currentframe as cf
 import sympy as sp
 
 import nrpy.grid as gri
 import nrpy.params as par
 import nrpy.c_codegen as ccg
+import nrpy.c_function as cfc
 import nrpy.indexedexp as ixp
 import nrpy.reference_metric as refmetric
+
+import nrpy.helpers.parallel_codegen as pcg
 
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.equations.general_relativity.BSSN_RHSs import BSSN_RHSs
@@ -24,13 +28,12 @@ from nrpy.equations.general_relativity.InitialData_Cartesian import (
     InitialData_Cartesian,
 )
 import nrpy.infrastructures.BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter as admid
-import nrpy.c_function as cfc
 import nrpy.infrastructures.BHaH.simple_loop as lp
 
 
 def register_CFunction_initial_data(
     CoordSystem: str, IDtype: str, IDCoordSystem: str
-) -> None:
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register C functions for converting ADM initial data to BSSN variables and applying boundary conditions.
     The function performs the following operations:
@@ -42,6 +45,10 @@ def register_CFunction_initial_data(
     :param IDtype: The type of initial data
     :param IDCoordSystem: The native coordinate system of the initial data
     """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cf().f_code.co_name}", locals())
+        return None
+
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
     ID = InitialData_Cartesian(IDtype=IDtype)
@@ -79,6 +86,7 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
         include_CodeParameters_h=False,
         body=body,
     )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
 def register_CFunction_rhs_eval(
@@ -88,7 +96,7 @@ def register_CFunction_rhs_eval(
     LapseEvolutionOption: str,
     ShiftEvolutionOption: str,
     OMP_collapse: int = 1,
-) -> None:
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the right-hand side evaluation function for the BSSN equations.
 
@@ -99,6 +107,10 @@ def register_CFunction_rhs_eval(
     :param ShiftEvolutionOption: Lapse evolution equation choice.
     :return: None
     """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cf().f_code.co_name}", locals())
+        return None
+
     includes = ["BHaH_defines.h"]
     if enable_simd:
         includes += [str(Path("simd") / "simd_intrinsics.h")]
@@ -175,6 +187,7 @@ def register_CFunction_rhs_eval(
         body=body,
         enable_simd=enable_simd,
     )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
 def register_CFunction_Ricci_eval(
@@ -182,7 +195,7 @@ def register_CFunction_Ricci_eval(
     enable_rfm_precompute: bool,
     enable_simd: bool,
     OMP_collapse: int,
-) -> None:
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the Ricci evaluation function.
 
@@ -192,11 +205,21 @@ def register_CFunction_Ricci_eval(
     :param OMP_collapse: Degree of OpenMP loop collapsing.
     :return: None
     """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cf().f_code.co_name}", locals())
+        return None
+
     orig_LeaveRicciSymbolic = par.parval_from_str("LeaveRicciSymbolic")
     if orig_LeaveRicciSymbolic:
-        del BSSN_quantities[
-            CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
-        ]
+        # try/except in case BSSN_quantities hasn't been set yet.
+        try:
+            del BSSN_quantities[
+                CoordSystem + "_rfm_precompute"
+                if enable_rfm_precompute
+                else CoordSystem
+            ]
+        except KeyError:
+            pass
 
         par.set_parval_from_str("LeaveRicciSymbolic", False)
     Bq = BSSN_quantities[
@@ -254,6 +277,7 @@ def register_CFunction_Ricci_eval(
         body=body,
         enable_simd=enable_simd,
     )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
 def register_CFunction_constraints(
@@ -261,7 +285,7 @@ def register_CFunction_constraints(
     enable_rfm_precompute: bool,
     enable_simd: bool,
     OMP_collapse: int,
-) -> None:
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the BSSN constraints evaluation function.
 
@@ -271,6 +295,10 @@ def register_CFunction_constraints(
     :param OMP_collapse: Degree of OpenMP loop collapsing.
     :return: None
     """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cf().f_code.co_name}", locals())
+        return None
+
     Bcon = BSSN_constraints[
         CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
     ]
@@ -318,13 +346,14 @@ def register_CFunction_constraints(
         body=body,
         enable_simd=enable_simd,
     )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
 def register_CFunction_enforce_detgammabar_equals_detgammahat(
     CoordSystem: str,
     enable_rfm_precompute: bool,
     OMP_collapse: int,
-) -> None:
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the function that enforces the det(gammabar) = det(gammahat) constraint.
 
@@ -333,6 +362,10 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
     :param OMP_collapse: Degree of OpenMP loop collapsing.
     :return: None
     """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cf().f_code.co_name}", locals())
+        return None
+
     Bq = BSSN_quantities[
         CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
     ]
@@ -405,3 +438,4 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
         body=body,
         enable_simd=False,
     )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
