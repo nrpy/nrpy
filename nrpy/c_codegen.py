@@ -7,9 +7,9 @@ Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
 """
 
 import logging
-from pathlib import Path
-import hashlib
 import pickle
+import hashlib
+
 import re  # Regular expressions can be toxic due to edge cases -- we use them sparingly
 import sys
 from typing import List, Union, Dict, Any, Optional, Sequence, Tuple, cast
@@ -18,6 +18,7 @@ import sympy as sp
 import nrpy.finite_difference as fin
 import nrpy.params as par
 
+from nrpy.helpers.cached_functions import is_cached, read_cached, write_cached
 from nrpy.helpers.simd import expr_convert_to_simd_intrins
 from nrpy.helpers.generic import superfast_uniq, clang_format
 from nrpy.helpers.cse_preprocess_postprocess import (
@@ -258,24 +259,16 @@ def c_codegen(
     <BLANKLINE>
     """
     CCGParams = CCodeGen(**kwargs)
-    cache_dir = Path(user_cache_dir("nrpy"))
-    cache_file = Path("does_not_exist")
+    unique_id = "unset"
     if CCGParams.cache_enable:
         try:
             pickle_expr = pickle.dumps(sympyexpr)
             pickle_prms = pickle.dumps(CCGParams.__dict__)
             pickle_vars = pickle.dumps(output_varname_str)
             pickle_kwgs = pickle.dumps(kwargs)
-            cache_dir.mkdir(parents=True, exist_ok=True)
-            cache_file = cache_dir / (
-                hashlib.sha256(
-                    pickle_expr + pickle_prms + pickle_vars + pickle_kwgs
-                ).hexdigest()
-                + ".nrpycache"
-            )
-            if cache_file.exists():
-                with open(cache_file, "rb") as file:
-                    return cast(str, pickle.load(file))
+            unique_id = str(pickle_expr + pickle_prms + pickle_vars + pickle_kwgs)
+            if is_cached(unique_id):
+                return cast(str, read_cached(unique_id))
         except pickle.PicklingError:
             pass
 
@@ -349,18 +342,29 @@ def c_codegen(
         )
 
         # This calls outputC as needed to construct a C kernel that does gridfunction management with or without FDs
-        return gridfunction_management_and_FD_codegen(
-            sympyexpr_list,
-            output_varname_str,
-            list_of_deriv_vars,
-            list_of_base_gridfunction_names_in_derivs,
-            list_of_deriv_operators,
-            deriv_operator_dict,
-            read_from_memory_Ccode=read_from_memory_C_code,
-            upwind_control_vec=CCGParams.upwind_control_vec,
-            enable_fd_functions=CCGParams.enable_fd_functions,
-            enable_simd=CCGParams.enable_simd,
+        outstr_gridfunction_management_and_FD_codegen = (
+            gridfunction_management_and_FD_codegen(
+                sympyexpr_list,
+                output_varname_str,
+                list_of_deriv_vars,
+                list_of_base_gridfunction_names_in_derivs,
+                list_of_deriv_operators,
+                deriv_operator_dict,
+                read_from_memory_Ccode=read_from_memory_C_code,
+                upwind_control_vec=CCGParams.upwind_control_vec,
+                enable_fd_functions=CCGParams.enable_fd_functions,
+                enable_simd=CCGParams.enable_simd,
+            )
         )
+        if CCGParams.cache_enable:
+            try:
+                if unique_id != "blah":
+                    write_cached(
+                        unique_id, outstr_gridfunction_management_and_FD_codegen
+                    )
+            except pickle.PicklingError:
+                pass
+        return outstr_gridfunction_management_and_FD_codegen
 
     # Step 4: If CCGParams.verbose, then output the original SymPy
     #         expression(s) in code comments prior to actual C code
@@ -589,9 +593,8 @@ def c_codegen(
 
     if CCGParams.cache_enable:
         try:
-            if "does_not_exist" not in str(cache_file):
-                with open(cache_file, "wb") as file:
-                    pickle.dump(final_Ccode_output_str, file)
+            if unique_id != "blah":
+                write_cached(unique_id, final_Ccode_output_str)
         except pickle.PicklingError:
             pass
 

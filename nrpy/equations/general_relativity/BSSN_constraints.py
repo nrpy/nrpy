@@ -7,8 +7,10 @@ Author: Zachariah B. Etienne
 """
 
 # Step 1: Initialize needed Python/NRPy+ modules
-from typing import Dict
+from typing import Dict, cast, Any
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
+
+from nrpy.helpers.cached_functions import is_cached, read_cached, write_cached
 import nrpy.params as par  # NRPy+: Parameter interface
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 import nrpy.grid as gri  # NRPy+: Functions having to do with numerical grids
@@ -29,6 +31,10 @@ class BSSNconstraints:
         CoordSystem: str = "Cartesian",
         enable_rfm_precompute: bool = False,
     ) -> None:
+        enable_T4munu = par.parval_from_str("enable_T4munu")
+        register_MU_gridfunctions = par.parval_from_str("register_MU_gridfunctions")
+        LeaveRicciSymbolic = par.parval_from_str("LeaveRicciSymbolic")
+
         # Step 1.b: Given the chosen coordinate system, set up
         #           corresponding reference metric and needed
         #           reference metric quantities
@@ -52,13 +58,15 @@ class BSSNconstraints:
             _ = gri.register_gridfunctions(
                 "MSQUARED", group="AUX", gf_array_name="diagnostic_output_gfs"
             )
-        if (
-            par.parval_from_str("register_MU_gridfunctions")
-            and "MU" not in gri.glb_gridfcs_dict
-        ):
+        if register_MU_gridfunctions and "MU" not in gri.glb_gridfcs_dict:
             _ = gri.register_gridfunctions_for_single_rank1(
                 "MU", group="AUX", gf_array_name="diagnostic_output_gfs"
             )
+
+        self.unique_id = f"{__file__}{CoordSystem}{enable_rfm_precompute}{enable_T4munu}{LeaveRicciSymbolic}{register_MU_gridfunctions}"
+        if is_cached(self.unique_id):
+            self.__dict__ = cast(Dict[Any, Any], read_cached(self.unique_id))
+            return
 
         # Step 2: Hamiltonian constraint.
         #################################
@@ -171,6 +179,8 @@ class BSSNconstraints:
         for i in range(3):
             self.mU[i] = self.MU[i] / rfm.ReU[i]
 
+        write_cached(self.unique_id, self.__dict__)
+
 
 class BSSNconstraints_dict(Dict[str, BSSNconstraints]):
     """Custom dictionary for storing BSSNconstraints objects."""
@@ -181,7 +191,7 @@ class BSSNconstraints_dict(Dict[str, BSSNconstraints]):
             CoordSystem = CoordSystem_in.replace("_rfm_precompute", "")
             enable_T4munu = par.parval_from_str("enable_T4munu")
             print(
-                f"Setting up BSSN_quantities for CoordSystem = {CoordSystem}, enable_T4munu={enable_T4munu}."
+                f"Setting up BSSN_constraints for CoordSystem = {CoordSystem}, enable_T4munu={enable_T4munu}."
             )
             self.__setitem__(
                 CoordSystem, BSSNconstraints(CoordSystem, enable_rfm_precompute=False)

@@ -4,10 +4,11 @@ This module provides functions that declare and define useful BSSN quantities
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
-from typing import Dict, List
+from typing import Dict, List, cast, Any
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
 
 # Step 1: Import all needed modules from NRPy+:
+from nrpy.helpers.cached_functions import is_cached, read_cached, write_cached
 import nrpy.params as par  # NRPy+: Parameter interface
 import nrpy.grid as gri  # NRPy+: Functions having to do with numerical grids
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
@@ -42,20 +43,20 @@ class BSSNQuantities:
 
         #   Check to see if this function has already been called.
         #   If so, do not register the gridfunctions again!
-        BSSN_quantities_gfs_are_registered = False
-        for gf in gri.glb_gridfcs_dict.values():
-            if "hDD00" in gf.name:
-                self.hDD = ixp.declarerank2("hDD", symmetry="sym01")
-                self.aDD = ixp.declarerank2("aDD", symmetry="sym01")
-                self.lambdaU = ixp.declarerank1("lambdaU")
-                self.vetU = ixp.declarerank1("vetU")
-                self.betU = ixp.declarerank1("betU")
-                self.trK, self.cf, self.alpha = sp.symbols(
-                    "trK cf alpha"
-                )  # , real=True)  # no tensor gridfunction is real=True. Do this for consistency.
-                BSSN_quantities_gfs_are_registered = True
+        enable_T4munu = par.parval_from_str("enable_T4munu")
+        EvolvedConformalFactor_cf = par.parval_from_str("EvolvedConformalFactor_cf")
+        LeaveRicciSymbolic = par.parval_from_str("LeaveRicciSymbolic")
 
-        if not BSSN_quantities_gfs_are_registered:
+        if any("hDD00" in gf.name for gf in gri.glb_gridfcs_dict.values()):
+            self.hDD = ixp.declarerank2("hDD", symmetry="sym01")
+            self.aDD = ixp.declarerank2("aDD", symmetry="sym01")
+            self.lambdaU = ixp.declarerank1("lambdaU")
+            self.vetU = ixp.declarerank1("vetU")
+            self.betU = ixp.declarerank1("betU")
+            self.trK, self.cf, self.alpha = sp.symbols(
+                "trK cf alpha"
+            )  # , real=True)  # no tensor gridfunction is real=True. Do this for consistency.
+        else:
             # Step 2.a: Register indexed quantities, using ixp.register_... functions
             self.hDD = gri.register_gridfunctions_for_single_rank2(
                 "hDD", symmetry="sym01", f_infinity=0.0, wavespeed=1.0
@@ -79,6 +80,23 @@ class BSSNQuantities:
                 f_infinity=[0.0, 1.0, 1.0],
                 wavespeed=[1.0, 1.0, sp.sqrt(2.0)],
             )
+
+        if LeaveRicciSymbolic and not any(
+            "RbarDD00" in gf.name for gf in gri.glb_gridfcs_dict.values()
+        ):
+            self.RbarDD = gri.register_gridfunctions_for_single_rank2(
+                "RbarDD",
+                symmetry="sym01",
+                group="AUXEVOL",
+                gf_array_name="auxevol_gfs",
+            )
+        else:
+            self.RbarDD = ixp.declarerank2("RbarDD", symmetry="sym01")
+
+        self.unique_id = f"{__file__}{CoordSystem}{enable_rfm_precompute}{enable_T4munu}{EvolvedConformalFactor_cf}{LeaveRicciSymbolic}"
+        if is_cached(self.unique_id):
+            self.__dict__ = cast(Dict[Any, Any], read_cached(self.unique_id))
+            return
 
         # fmt: off
         # Step 3: Define all basic conformal BSSN tensors
@@ -379,16 +397,8 @@ class BSSNQuantities:
                     self.DGammaU[i] += self.gammabarUU[j][k] * self.DGammaUDD[i][j][k]
 
         # If we wish to leave Ricci symbolic, there's no point continuing to define RbarDD symbolically:
-        if par.parval_from_str("LeaveRicciSymbolic"):
-            Rbar_is_gf = False
-            for gf in gri.glb_gridfcs_dict.values():
-                if "RbarDD00" in gf.name:
-                    self.RbarDD = ixp.declarerank2("RbarDD", symmetry="sym01")
-                    Rbar_is_gf = True
-            if not Rbar_is_gf:
-                self.RbarDD = gri.register_gridfunctions_for_single_rank2(
-                    "RbarDD", symmetry="sym01", group="AUXEVOL", gf_array_name="auxevol_gfs"
-                )
+        if LeaveRicciSymbolic:
+            pass
         else:
             # Step 7.c.iii: Define \Delta_{ijk} = \bar{\gamma}_{im} \Delta^m_{jk}
             DGammaDDD = ixp.zerorank3()
@@ -573,6 +583,8 @@ class BSSNQuantities:
         # Sort the lists alphabetically by varname:
         sorted_list = sorted(zip(self.Ricci_varnames, self.Ricci_exprs))
         self.Ricci_varnames, self.Ricci_exprs = [list(t) for t in zip(*sorted_list)]
+
+        write_cached(self.unique_id, self.__dict__)
 
     # fmt: on
 

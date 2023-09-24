@@ -7,8 +7,10 @@ Author: Zachariah B. Etienne
 """
 
 # Step 1.a: import all needed modules from NRPy+:
-from typing import Dict, List
+from typing import Dict, List, Any, cast
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
+
+from nrpy.helpers.cached_functions import is_cached, read_cached, write_cached
 import nrpy.params as par  # NRPy+: Parameter interface
 import nrpy.grid as gri
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
@@ -33,6 +35,15 @@ class BSSNRHSs:
     def __init__(
         self, CoordSystem: str = "Cartesian", enable_rfm_precompute: bool = False
     ):
+        enable_T4munu = par.parval_from_str("enable_T4munu")
+        EvolvedConformalFactor_cf = par.parval_from_str("EvolvedConformalFactor_cf")
+        LeaveRicciSymbolic = par.parval_from_str("LeaveRicciSymbolic")
+
+        self.unique_id = f"{__file__}{CoordSystem}{enable_rfm_precompute}{EvolvedConformalFactor_cf}{LeaveRicciSymbolic}{enable_T4munu}"
+        if is_cached(self.unique_id):
+            self.__dict__ = cast(Dict[Any, Any], read_cached(self.unique_id))
+            return
+
         # Step 1.c: Given the chosen coordinate system, set up
         #           corresponding reference metric and needed
         #           reference metric quantities
@@ -310,7 +321,7 @@ class BSSNRHSs:
                 self.Lambdabar_rhsU[i] += -sp.Rational(4, 3) * alpha * gammabarUU[i][j] * trK_dD[j]
 
         # Step 7: Add T4munu if enable_T4munu
-        if par.parval_from_str("enable_T4munu"):
+        if enable_T4munu:
             if "T4UU00" not in gri.glb_gridfcs_dict:
                 _ = gri.register_gridfunctions_for_single_rank2(
                     "T4UU",
@@ -365,6 +376,7 @@ class BSSNRHSs:
         self.BSSN_RHSs_varnames, self.BSSN_RHSs_exprs = [
             list(t) for t in zip(*sorted_list)
         ]
+        write_cached(self.unique_id, self.__dict__)
 
 
 class BSSNRHSs_dict(Dict[str, BSSNRHSs]):
@@ -372,9 +384,10 @@ class BSSNRHSs_dict(Dict[str, BSSNRHSs]):
 
     def __getitem__(self, CoordSystem_in: str) -> BSSNRHSs:
         if CoordSystem_in not in self:
+            enable_T4munu = par.parval_from_str("enable_T4munu")
+
             # In case [CoordSystem]_rfm_precompute is passed:
             CoordSystem = CoordSystem_in.replace("_rfm_precompute", "")
-            enable_T4munu = par.parval_from_str("enable_T4munu")
             print(
                 f"Setting up BSSN_RHSs for CoordSystem = {CoordSystem}, enable_T4munu={enable_T4munu}."
             )
