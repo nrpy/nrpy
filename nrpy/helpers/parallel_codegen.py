@@ -88,7 +88,9 @@ def register_func_call(name: str, args: Dict[str, Any]) -> None:
     return None
 
 
-def unpack_NRPy_environment_dict(NRPy_environment_dict: Dict[str, NRPyEnv_type]):
+def unpack_NRPy_environment_dict(
+    NRPy_environment_dict: Dict[str, NRPyEnv_type]
+) -> None:
     for env in NRPy_environment_dict.values():
         par.glb_params_dict.update(env[0])
         par.glb_code_params_dict.update(env[1])
@@ -96,7 +98,9 @@ def unpack_NRPy_environment_dict(NRPy_environment_dict: Dict[str, NRPyEnv_type])
         gri.glb_gridfcs_dict.update(env[3])
 
 
-def get_nested_function(module_path: str, function_name: str) -> Optional[Callable]:
+def get_nested_function(
+    module_path: str, function_name: str
+) -> Callable[..., NRPyEnv_type]:
     """
     Retrieves a nested function from a specified Python module.
 
@@ -146,14 +150,7 @@ def parallel_function_call(PCG: Any) -> NRPyEnv_type:
         return function_to_call(**function_args)
 
     except Exception as ex:
-        import traceback
-
-        tb_str = traceback.format_exception(
-            etype=type(ex), value=ex, tb=ex.__traceback__
-        )
-        raise Exception(
-            f"An error occurred while calling the function: {ex}\n Traceback: {''.join(tb_str)}"
-        )
+        raise Exception(f"An error occurred while calling the function: {ex}") from ex
 
 
 def do_parallel_codegen() -> None:
