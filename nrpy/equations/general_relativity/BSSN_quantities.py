@@ -105,7 +105,6 @@ class BSSNQuantities:
         #        in terms of BSSN gridfunctions.
         # Step 3.a: Defines gammabarDD, AbarDD, LambdabarU, betaU, BU
 
-        print(self.unique_id)
         if is_cached(self.unique_id):
             self.__dict__ = cast(Dict[Any, Any], read_cached(self.unique_id))
             return
