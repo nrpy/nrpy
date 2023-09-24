@@ -61,7 +61,7 @@ def read_cached(unique_id: str) -> Any:
     :param unique_id: A unique identifier to read data for.
     :return: The data read from the cache file.
     """
-    # print(unique_id)
+    # print(f"Reading " + str(unique_id[:80]).replace("\n", ""))
     with open(cache_file(unique_id), "rb") as file:
         # print(f"Reading cached file {file.name}.")
         return pickle.load(file)
@@ -74,6 +74,7 @@ def write_cached(unique_id: str, data: Any) -> None:
     :param unique_id: A unique identifier to write data for.
     :param data: The data to be written to the cache.
     """
+    # print(f"Writing " + str(unique_id[:80]).replace("\n", ""))
     with open(cache_file(unique_id), "wb") as file:
         # print(f"Writing cached file {file.name}.")
         pickle.dump(data, file)

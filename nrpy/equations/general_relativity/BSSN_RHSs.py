@@ -7,15 +7,9 @@ Author: Zachariah B. Etienne
 """
 
 # Step 1.a: import all needed modules from NRPy+:
-from typing import Dict, List, Any, cast
+from typing import Dict, List
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
 
-from nrpy.helpers.cached_functions import (
-    is_cached,
-    read_cached,
-    write_cached,
-    NRPy_params_checksum,
-)
 import nrpy.params as par  # NRPy+: Parameter interface
 import nrpy.grid as gri
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
@@ -41,12 +35,6 @@ class BSSNRHSs:
         self, CoordSystem: str = "Cartesian", enable_rfm_precompute: bool = False
     ):
         enable_T4munu = par.parval_from_str("enable_T4munu")
-        self.unique_id = (
-            f"{__file__}{CoordSystem}{enable_rfm_precompute}{NRPy_params_checksum()}"
-        )
-        if is_cached(self.unique_id):
-            self.__dict__ = cast(Dict[Any, Any], read_cached(self.unique_id))
-            return
 
         # Step 1.c: Given the chosen coordinate system, set up
         #           corresponding reference metric and needed
@@ -380,7 +368,6 @@ class BSSNRHSs:
         self.BSSN_RHSs_varnames, self.BSSN_RHSs_exprs = [
             list(t) for t in zip(*sorted_list)
         ]
-        write_cached(self.unique_id, self.__dict__)
 
 
 class BSSNRHSs_dict(Dict[str, BSSNRHSs]):

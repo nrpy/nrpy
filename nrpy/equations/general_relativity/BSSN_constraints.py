@@ -7,15 +7,9 @@ Author: Zachariah B. Etienne
 """
 
 # Step 1: Initialize needed Python/NRPy+ modules
-from typing import Dict, cast, Any
+from typing import Dict
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
 
-from nrpy.helpers.cached_functions import (
-    is_cached,
-    read_cached,
-    write_cached,
-    NRPy_params_checksum,
-)
 import nrpy.params as par  # NRPy+: Parameter interface
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 import nrpy.grid as gri  # NRPy+: Functions having to do with numerical grids
@@ -65,13 +59,6 @@ class BSSNconstraints:
             _ = gri.register_gridfunctions_for_single_rank1(
                 "MU", group="AUX", gf_array_name="diagnostic_output_gfs"
             )
-
-        self.unique_id = (
-            f"{__file__}{CoordSystem}{enable_rfm_precompute}{NRPy_params_checksum()}"
-        )
-        if is_cached(self.unique_id):
-            self.__dict__ = cast(Dict[Any, Any], read_cached(self.unique_id))
-            return
 
         # Step 2: Hamiltonian constraint.
         #################################
@@ -183,8 +170,6 @@ class BSSNconstraints:
         self.mU = ixp.zerorank1()
         for i in range(3):
             self.mU[i] = self.MU[i] / rfm.ReU[i]
-
-        write_cached(self.unique_id, self.__dict__)
 
 
 class BSSNconstraints_dict(Dict[str, BSSNconstraints]):

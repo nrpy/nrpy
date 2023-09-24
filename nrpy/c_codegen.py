@@ -7,18 +7,14 @@ Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
 """
 
 import logging
-import pickle
-import hashlib
 
 import re  # Regular expressions can be toxic due to edge cases -- we use them sparingly
 import sys
-from typing import List, Union, Dict, Any, Optional, Sequence, Tuple, cast
-from appdirs import user_cache_dir  # type: ignore
+from typing import List, Union, Dict, Any, Optional, Sequence, Tuple
 import sympy as sp
 import nrpy.finite_difference as fin
 import nrpy.params as par
 
-from nrpy.helpers.cached_functions import is_cached, read_cached, write_cached
 from nrpy.helpers.simd import expr_convert_to_simd_intrins
 from nrpy.helpers.generic import superfast_uniq, clang_format
 from nrpy.helpers.cse_preprocess_postprocess import (
@@ -56,7 +52,6 @@ class CCodeGen:
         automatically_read_gf_data_from_memory: bool = False,
         enforce_c_parameters_must_be_defined: bool = False,
         enable_fd_functions: bool = False,
-        cache_enable: bool = True,
         mem_alloc_style: str = "210",
         upwind_control_vec: Union[List[sp.Symbol], sp.Symbol] = sp.Symbol("unset"),
         symbol_to_Rational_dict: Optional[Dict[sp.Basic, sp.Rational]] = None,
@@ -123,7 +118,6 @@ class CCodeGen:
         )
         self.enforce_c_parameters_must_be_defined = enforce_c_parameters_must_be_defined
         self.enable_fd_functions = enable_fd_functions
-        self.cache_enable = cache_enable
         self.mem_alloc_style = mem_alloc_style
         self.upwind_control_vec = upwind_control_vec
         self.symbol_to_Rational_dict = symbol_to_Rational_dict
@@ -225,10 +219,10 @@ def c_codegen(
     :return: A string containing the generated C code.
 
     >>> x, y, z = sp.symbols("x y z", real=True)
-    >>> print(c_codegen(x**2 + sp.sqrt(y) - sp.sin(x*z), "double blah", include_braces=False, verbose=False, cache_enable=False))
+    >>> print(c_codegen(x**2 + sp.sqrt(y) - sp.sin(x*z), "double blah", include_braces=False, verbose=False))
     double blah = ((x)*(x)) + sqrt(y) - sin(x*z);
     <BLANKLINE>
-    >>> print(c_codegen(x**5 + x**3 + x - 1/x, "REAL_SIMD_ARRAY blah", include_braces=False, verbose=False, enable_simd=True, cache_enable=False))
+    >>> print(c_codegen(x**5 + x**3 + x - 1/x, "REAL_SIMD_ARRAY blah", include_braces=False, verbose=False, enable_simd=True))
     const double dbl_Integer_1 = 1.0;
     const REAL_SIMD_ARRAY _Integer_1 = ConstSIMD(dbl_Integer_1);
     <BLANKLINE>
@@ -237,7 +231,7 @@ def c_codegen(
     <BLANKLINE>
     REAL_SIMD_ARRAY blah = FusedMulAddSIMD(MulSIMD(x, x), x, FusedMulAddSIMD(MulSIMD(MulSIMD(MulSIMD(x, x), x), x), x, SubSIMD(x, DivSIMD(_Integer_1, x))));
     <BLANKLINE>
-    >>> print(c_codegen(x**5 + x**3 + sp.sin(x**3), "REAL_SIMD_ARRAY blah", enable_simd=True, cache_enable=True))
+    >>> print(c_codegen(x**5 + x**3 + sp.sin(x**3), "REAL_SIMD_ARRAY blah", enable_simd=True))
     /*
      *  Original SymPy expression:
      *  "REAL_SIMD_ARRAY blah = x**5 + x**3 + sin(x**3)"
@@ -247,7 +241,7 @@ def c_codegen(
     REAL_SIMD_ARRAY blah = AddSIMD(tmp0, FusedMulAddSIMD(MulSIMD(MulSIMD(MulSIMD(x, x), x), x), x, SinSIMD(tmp0)));
     }
     <BLANKLINE>
-    >>> print(c_codegen(x**5 + x**3 + sp.sin(x**3), "REAL_SIMD_ARRAY blah", enable_simd=True, cache_enable=True))
+    >>> print(c_codegen(x**5 + x**3 + sp.sin(x**3), "REAL_SIMD_ARRAY blah", enable_simd=True))
     /*
      *  Original SymPy expression:
      *  "REAL_SIMD_ARRAY blah = x**5 + x**3 + sin(x**3)"
@@ -259,18 +253,6 @@ def c_codegen(
     <BLANKLINE>
     """
     CCGParams = CCodeGen(**kwargs)
-    unique_id = "unset"
-    if CCGParams.cache_enable:
-        try:
-            pickle_expr = pickle.dumps(sympyexpr)
-            pickle_prms = pickle.dumps(CCGParams.__dict__)
-            pickle_vars = pickle.dumps(output_varname_str)
-            pickle_kwgs = pickle.dumps(kwargs)
-            unique_id = str(pickle_expr + pickle_prms + pickle_vars + pickle_kwgs)
-            if is_cached(unique_id):
-                return cast(str, read_cached(unique_id))
-        except pickle.PicklingError:
-            pass
 
     # Step 1: Initialize
     #  commentblock: comment block containing the input SymPy string,
@@ -342,29 +324,18 @@ def c_codegen(
         )
 
         # This calls outputC as needed to construct a C kernel that does gridfunction management with or without FDs
-        outstr_gridfunction_management_and_FD_codegen = (
-            gridfunction_management_and_FD_codegen(
-                sympyexpr_list,
-                output_varname_str,
-                list_of_deriv_vars,
-                list_of_base_gridfunction_names_in_derivs,
-                list_of_deriv_operators,
-                deriv_operator_dict,
-                read_from_memory_Ccode=read_from_memory_C_code,
-                upwind_control_vec=CCGParams.upwind_control_vec,
-                enable_fd_functions=CCGParams.enable_fd_functions,
-                enable_simd=CCGParams.enable_simd,
-            )
+        return gridfunction_management_and_FD_codegen(
+            sympyexpr_list,
+            output_varname_str,
+            list_of_deriv_vars,
+            list_of_base_gridfunction_names_in_derivs,
+            list_of_deriv_operators,
+            deriv_operator_dict,
+            read_from_memory_Ccode=read_from_memory_C_code,
+            upwind_control_vec=CCGParams.upwind_control_vec,
+            enable_fd_functions=CCGParams.enable_fd_functions,
+            enable_simd=CCGParams.enable_simd,
         )
-        if CCGParams.cache_enable:
-            try:
-                if unique_id != "blah":
-                    write_cached(
-                        unique_id, outstr_gridfunction_management_and_FD_codegen
-                    )
-            except pickle.PicklingError:
-                pass
-        return outstr_gridfunction_management_and_FD_codegen
 
     # Step 4: If CCGParams.verbose, then output the original SymPy
     #         expression(s) in code comments prior to actual C code
@@ -590,13 +561,6 @@ def c_codegen(
     )
     if CCGParams.include_braces:
         final_Ccode_output_str += "}\n"
-
-    if CCGParams.cache_enable:
-        try:
-            if unique_id != "blah":
-                write_cached(unique_id, final_Ccode_output_str)
-        except pickle.PicklingError:
-            pass
 
     # Step 7: Return result string
     return final_Ccode_output_str

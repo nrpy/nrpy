@@ -4,16 +4,10 @@ This module provides functions that declare and define useful BSSN quantities
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
-from typing import Dict, List, cast, Any
+from typing import Dict, List
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
 
 # Step 1: Import all needed modules from NRPy+:
-from nrpy.helpers.cached_functions import (
-    is_cached,
-    read_cached,
-    write_cached,
-    NRPy_params_checksum,
-)
 import nrpy.params as par  # NRPy+: Parameter interface
 import nrpy.grid as gri  # NRPy+: Functions having to do with numerical grids
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
@@ -49,9 +43,6 @@ class BSSNQuantities:
         #   Check to see if this function has already been called.
         #   If so, do not register the gridfunctions again!
         LeaveRicciSymbolic = par.parval_from_str("LeaveRicciSymbolic")
-        self.unique_id = (
-            f"{__file__}{CoordSystem}{enable_rfm_precompute}{NRPy_params_checksum()}"
-        )
 
         if any("hDD00" in gf.name for gf in gri.glb_gridfcs_dict.values()):
             self.hDD = ixp.declarerank2("hDD", symmetry="sym01")
@@ -104,11 +95,6 @@ class BSSNQuantities:
         #        gammabarDD,AbarDD,LambdabarU,betaU,BU
         #        in terms of BSSN gridfunctions.
         # Step 3.a: Defines gammabarDD, AbarDD, LambdabarU, betaU, BU
-
-        if is_cached(self.unique_id):
-            self.__dict__ = cast(Dict[Any, Any], read_cached(self.unique_id))
-            return
-
         rfm = refmetric.reference_metric[
             CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
         ]
@@ -588,8 +574,6 @@ class BSSNQuantities:
         # Sort the lists alphabetically by varname:
         sorted_list = sorted(zip(self.Ricci_varnames, self.Ricci_exprs))
         self.Ricci_varnames, self.Ricci_exprs = [list(t) for t in zip(*sorted_list)]
-
-        write_cached(self.unique_id, self.__dict__)
 
     # fmt: on
 

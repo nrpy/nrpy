@@ -75,7 +75,7 @@ def clang_format(
       return 0;
     }
     """
-    unique_id = c_code_str + clang_format_options
+    unique_id = __name__ + c_code_str + clang_format_options
     if is_cached(unique_id):
         return cast(str, read_cached(unique_id))
     with subprocess.Popen(
