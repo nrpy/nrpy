@@ -930,10 +930,10 @@ def proto_FD_operators_to_sympy_expressions(
     >>> FDexprs, FDlhsvarnames, symbol_to_Rational_dict = proto_FD_operators_to_sympy_expressions(list_of_proto_deriv_symbs, fd_order, fdcoeffs, fdstencl)
     >>> for i, lhs in enumerate(FDlhsvarnames):
     ...     print(f"{lhs} = {FDexprs[i]}")
-    const REAL FDPROTO_dDD01 = invdxx0*invdxx1*(FDPROTO_i0m1_i1m1/4 - FDPROTO_i0m1_i1p1/4 - FDPROTO_i0p1_i1m1/4 + FDPROTO_i0p1_i1p1/4)
-    const REAL FDPROTO_dKOD1 = invdxx1*(-3*FDPROTO/8 + FDPROTO_i1m1/4 - FDPROTO_i1m2/16 + FDPROTO_i1p1/4 - FDPROTO_i1p2/16)
-    const REAL UpwindAlgInputFDPROTO_ddnD2 = invdxx2*(3*FDPROTO/2 - 2*FDPROTO_i2m1 + FDPROTO_i2m2/2)
-    const REAL UpwindAlgInputFDPROTO_dupD2 = invdxx2*(-3*FDPROTO/2 + 2*FDPROTO_i2p1 - FDPROTO_i2p2/2)
+    const REAL FDPROTO_dDD01 = FDPart1_Rational_1_4*invdxx0*invdxx1*(FDPROTO_i0m1_i1m1 - FDPROTO_i0m1_i1p1 - FDPROTO_i0p1_i1m1 + FDPROTO_i0p1_i1p1)
+    const REAL FDPROTO_dKOD1 = invdxx1*(-FDPROTO*FDPart1_Rational_3_8 + FDPart1_Rational_1_16*(-FDPROTO_i1m2 - FDPROTO_i1p2) + FDPart1_Rational_1_4*(FDPROTO_i1m1 + FDPROTO_i1p1))
+    const REAL UpwindAlgInputFDPROTO_ddnD2 = invdxx2*(FDPROTO*FDPart1_Rational_3_2 - FDPROTO_i2m1*FDPart1_Integer_2 + FDPROTO_i2m2*FDPart1_Rational_1_2)
+    const REAL UpwindAlgInputFDPROTO_dupD2 = invdxx2*(-FDPROTO*FDPart1_Rational_3_2 + FDPROTO_i2p1*FDPart1_Integer_2 - FDPROTO_i2p2*FDPart1_Rational_1_2)
     >>> FDexprs, FDlhsvarnames, symbol_to_Rational_dict = proto_FD_operators_to_sympy_expressions(list_of_proto_deriv_symbs, fd_order, fdcoeffs, fdstencl, enable_simd=True)
     >>> for lhs in FDlhsvarnames:
     ...     print(f"{lhs}")
