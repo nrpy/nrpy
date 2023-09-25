@@ -15,6 +15,7 @@ import sympy as sp
 import nrpy.grid as gri
 import nrpy.params as par
 import nrpy.c_codegen as ccg
+import nrpy.finite_difference as fin
 import nrpy.c_function as cfc
 import nrpy.indexedexp as ixp
 import nrpy.reference_metric as refmetric
@@ -94,6 +95,7 @@ def register_CFunction_rhs_eval(
     CoordSystem: str,
     enable_rfm_precompute: bool,
     enable_simd: bool,
+    enable_fd_functions: bool,
     LapseEvolutionOption: str,
     ShiftEvolutionOption: str,
     OMP_collapse: int = 1,
@@ -170,6 +172,7 @@ def register_CFunction_rhs_eval(
             enable_fd_codegen=True,
             enable_simd=enable_simd,
             upwind_control_vec=betaU,
+            enable_fd_functions=enable_fd_functions,
         ),
         loop_region="interior",
         enable_simd=enable_simd,
@@ -181,6 +184,7 @@ def register_CFunction_rhs_eval(
     cfc.register_CFunction(
         include_CodeParameters_h=True,
         includes=includes,
+        prefunc=fin.construct_FD_functions_prefunc() if enable_fd_functions else "",
         desc=desc,
         c_type=c_type,
         name=name,
@@ -195,6 +199,7 @@ def register_CFunction_Ricci_eval(
     CoordSystem: str,
     enable_rfm_precompute: bool,
     enable_simd: bool,
+    enable_fd_functions: bool,
     OMP_collapse: int,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
@@ -250,6 +255,7 @@ def register_CFunction_Ricci_eval(
             Ricci_access_gfs,
             enable_fd_codegen=True,
             enable_simd=enable_simd,
+            enable_fd_functions=enable_fd_functions,
         ),
         loop_region="interior",
         enable_simd=enable_simd,
@@ -270,6 +276,7 @@ def register_CFunction_Ricci_eval(
 
     cfc.register_CFunction(
         include_CodeParameters_h=True,
+        prefunc=fin.construct_FD_functions_prefunc() if enable_fd_functions else "",
         includes=includes,
         desc=desc,
         c_type=c_type,
@@ -353,6 +360,7 @@ def register_CFunction_constraints(
 def register_CFunction_enforce_detgammabar_equals_detgammahat(
     CoordSystem: str,
     enable_rfm_precompute: bool,
+    enable_fd_functions: bool,
     OMP_collapse: int,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
@@ -420,6 +428,7 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
             hDD_access_gfs,
             enable_fd_codegen=True,
             enable_simd=False,
+            enable_fd_functions=enable_fd_functions,
         ),
         loop_region="all points",
         enable_simd=False,
@@ -431,6 +440,7 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
 
     cfc.register_CFunction(
         include_CodeParameters_h=True,
+        prefunc=fin.construct_FD_functions_prefunc() if enable_fd_functions else "",
         includes=includes,
         desc=desc,
         c_type=c_type,

@@ -14,6 +14,7 @@ import nrpy.params as par  # NRPy+: parameter interface
 import nrpy.grid as gri  # NRPy+: Functions having to do with numerical grids
 import nrpy.c_function as cfc
 from nrpy.helpers.generic import superfast_uniq
+from nrpy.helpers.cse_preprocess_postprocess import cse_preprocess
 
 par.register_param(py_type=int, module=__name__, name="fd_order", value=4)
 
@@ -809,31 +810,40 @@ class FDFunction:
         c_type_alias: str,
         fd_order: int,
         operator: str,
+        symbol_to_Rational_dict: Dict[sp.Basic, sp.Rational],
         FDexpr: sp.Basic,
         enable_simd: bool,
     ) -> None:
         self.c_type_alias = c_type_alias
         self.fd_order = fd_order
         self.operator = operator
+        self.symbol_to_Rational_dict = symbol_to_Rational_dict
         self.FDexpr = FDexpr
         self.enable_simd = enable_simd
-
         self.c_function_name = "SIMD_" if enable_simd else ""
         self.c_function_name += f"fd_function_{self.operator}_fdorder{self.fd_order}"
 
-        # Prepare the function call string
-        self.c_function_call = f"{self.c_function_name}("
-        for invdx in ["invdxx0", "invdxx1", "invdxx2"]:
-            if invdx in sp.srepr(self.FDexpr):
-                self.c_function_call += f"{invdx},"
-        self.c_function_call += ",".join(
-            sorted(str(symb) for symb in self.FDexpr.free_symbols)
+        self.CFunction: cfc.CFunction
+
+    def c_function_call(self, gf_name: str, deriv_var: str) -> str:
+        if "_dupD" in deriv_var or "_ddnD" in deriv_var:
+            deriv_var = f"UpwindAlgInput{deriv_var}"
+        c_function_call = (
+            f"const {self.c_type_alias} {deriv_var} = {self.c_function_name}("
         )
-        self.c_function_call += ")"
+        c_function_call += ",".join(
+            sorted(
+                str(symb)
+                for symb in self.FDexpr.free_symbols
+                if "FDPart1_" not in str(symb)
+            )
+        )
 
-        self.c_function = self.CFunction_fd_function()
+        c_function_call = c_function_call.replace("FDPROTO", gf_name)
+        c_function_call += ")"
+        return c_function_call
 
-    def CFunction_fd_function(self) -> cfc.CFunction:
+    def CFunction_fd_function(self, FDexpr_c_code: str) -> cfc.CFunction:
         """
         Generates a C function based on the given finite-difference expression.
 
@@ -843,24 +853,31 @@ class FDFunction:
         c_type_alias = self.c_type_alias
         name = self.c_function_name
         params = ""
-        for invdx in ["invdxx0", "invdxx1", "invdxx2"]:
-            if invdx in sp.srepr(self.FDexpr):
-                params += f"const {c_type_alias} {invdx},"
         params += ",".join(
             sorted(
-                f"const {c_type_alias} {str(symb)}" for symb in self.FDexpr.free_symbols
+                f"const {c_type_alias} {str(symb)}"
+                for symb in self.FDexpr.free_symbols
+                if "FDPart1_" not in str(symb)
             )
         )
-        body = f"return {sp.ccode(self.FDexpr)};"
+
+        body = f"{FDexpr_c_code}\n return FD_result;"
 
         return cfc.CFunction(
             includes=includes,
-            desc=f"Finite difference function for operator {self.operator}, with FD accuracy order {self.fd_order}",
-            c_type=c_type_alias,
+            desc=f"Finite difference function for operator {self.operator}, with FD accuracy order {self.fd_order}.",
+            c_type=f"static {c_type_alias}",
             name=name,
             params=params,
             body=body,
         )
+
+
+def construct_FD_functions_prefunc() -> str:
+    prefunc = ""
+    for fd_func in FDFunctions_dict.values():
+        prefunc += fd_func.CFunction.full_function
+    return prefunc
 
 
 FDFunctions_dict: Dict[str, FDFunction] = {}
@@ -872,7 +889,7 @@ def proto_FD_operators_to_sympy_expressions(
     fdcoeffs: List[List[sp.Rational]],
     fdstencl: List[List[List[int]]],
     enable_simd: bool = False,
-) -> Tuple[List[sp.Basic], List[str]]:
+) -> Tuple[List[sp.Basic], List[str], Dict[sp.Basic, sp.Rational]]:
     """
     Convert finite difference (FD) operators to SymPy expressions.
 
@@ -910,14 +927,14 @@ def proto_FD_operators_to_sympy_expressions(
     >>> for i, deriv_op in enumerate(list_of_proto_deriv_ops): fdcoeffs[i], fdstencl[i] = compute_fdcoeffs_fdstencl(deriv_op, fd_order)
     >>> print(fdstencl)
     [[[-1, -1, 0], [1, -1, 0], [-1, 1, 0], [1, 1, 0]], [[0, -2, 0], [0, -1, 0], [0, 0, 0], [0, 1, 0], [0, 2, 0]], [[0, 0, -2], [0, 0, -1], [0, 0, 0]], [[0, 0, 0], [0, 0, 1], [0, 0, 2]]]
-    >>> FDexprs, FDlhsvarnames = proto_FD_operators_to_sympy_expressions(list_of_proto_deriv_symbs, fd_order, fdcoeffs, fdstencl)
+    >>> FDexprs, FDlhsvarnames, symbol_to_Rational_dict = proto_FD_operators_to_sympy_expressions(list_of_proto_deriv_symbs, fd_order, fdcoeffs, fdstencl)
     >>> for i, lhs in enumerate(FDlhsvarnames):
     ...     print(f"{lhs} = {FDexprs[i]}")
     const REAL FDPROTO_dDD01 = invdxx0*invdxx1*(FDPROTO_i0m1_i1m1/4 - FDPROTO_i0m1_i1p1/4 - FDPROTO_i0p1_i1m1/4 + FDPROTO_i0p1_i1p1/4)
     const REAL FDPROTO_dKOD1 = invdxx1*(-3*FDPROTO/8 + FDPROTO_i1m1/4 - FDPROTO_i1m2/16 + FDPROTO_i1p1/4 - FDPROTO_i1p2/16)
     const REAL UpwindAlgInputFDPROTO_ddnD2 = invdxx2*(3*FDPROTO/2 - 2*FDPROTO_i2m1 + FDPROTO_i2m2/2)
     const REAL UpwindAlgInputFDPROTO_dupD2 = invdxx2*(-3*FDPROTO/2 + 2*FDPROTO_i2p1 - FDPROTO_i2p2/2)
-    >>> FDexprs, FDlhsvarnames = proto_FD_operators_to_sympy_expressions(list_of_proto_deriv_symbs, fd_order, fdcoeffs, fdstencl, enable_simd=True)
+    >>> FDexprs, FDlhsvarnames, symbol_to_Rational_dict = proto_FD_operators_to_sympy_expressions(list_of_proto_deriv_symbs, fd_order, fdcoeffs, fdstencl, enable_simd=True)
     >>> for lhs in FDlhsvarnames:
     ...     print(f"{lhs}")
     const REAL_SIMD_ARRAY FDPROTO_dDD01
@@ -929,6 +946,7 @@ def proto_FD_operators_to_sympy_expressions(
     invdxx = [sp.sympify(f"invdxx{d}") for d in range(3)]
     FDexprs = [sp.sympify(0)] * len(list_of_proto_deriv_symbs)
     FDlhsvarnames = [""] * len(list_of_proto_deriv_symbs)
+    symbol_to_Rational_dicts = [{}] * len(list_of_proto_deriv_symbs)
 
     # Step 5.a.ii.A: Output finite difference expressions to Coutput string
     list_of_proto_deriv_ops = [
@@ -980,14 +998,32 @@ def proto_FD_operators_to_sympy_expressions(
             raise ValueError(
                 f"Error: Was unable to parse derivative operator: {operator}"
             )
+
+        # Factorize proto_FDexprs and convert Rationals to symbols, store symbol->Rational dictionary.
+        processed_FDexpr, symbol_to_Rational_dicts[i] = cse_preprocess(
+            FDexprs[i],
+            prefix="FDPart1",
+            declare_neg1_as_symbol=enable_simd,
+            negative=enable_simd,
+            factor=True,
+        )
+        FDexprs[i] = processed_FDexpr[0]
+
         FDFunctions_dict[operator] = FDFunction(
             c_type_alias=c_type_alias,
             fd_order=fd_order,
             operator=operator,
-            FDexpr=FDexprs[-1],
+            symbol_to_Rational_dict=symbol_to_Rational_dicts[i],
+            FDexpr=FDexprs[i],
             enable_simd=enable_simd,
         )
-    return FDexprs, FDlhsvarnames
+
+    symbol_to_Rational_dict = {}
+
+    for i, op in enumerate(FDFunctions_dict.keys()):
+        FDFunctions_dict[op].FDexpr = FDexprs[i]
+        symbol_to_Rational_dict.update(symbol_to_Rational_dicts[i])
+    return FDexprs, FDlhsvarnames, symbol_to_Rational_dict
 
 
 if __name__ == "__main__":

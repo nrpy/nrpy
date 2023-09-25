@@ -64,6 +64,7 @@ radiation_BC_fd_order = 8
 enable_simd = True
 separate_Ricci_and_BSSN_RHS = True
 parallel_codegen_enable = True
+enable_fd_functions = True
 boundary_conditions_desc = "outgoing radiation"
 
 OMP_collapse = 1
@@ -267,6 +268,7 @@ BCl.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_simd=enable_simd,
+    enable_fd_functions=enable_fd_functions,
     LapseEvolutionOption=LapseEvolutionOption,
     ShiftEvolutionOption=ShiftEvolutionOption,
     OMP_collapse=OMP_collapse,
@@ -275,11 +277,13 @@ BCl.register_CFunction_Ricci_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_simd=enable_simd,
+    enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
 BCl.register_CFunction_enforce_detgammabar_equals_detgammahat(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
+    enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
 BCl.register_CFunction_constraints(
