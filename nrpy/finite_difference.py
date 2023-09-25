@@ -792,6 +792,26 @@ def read_gfs_from_memory(
     return read_gf_from_memory_Ccode
 
 
+class FDPrototype:
+    def __init__(self, deriv_var: str, FDexpr: sp.Basic):
+        self.deriv_var = deriv_var
+        self.FDexpr = FDexpr
+
+#     def CFunction_prototype(self):
+#         name = f"FD_FUNCTION_{self.deriv_var}"
+#         params = ""
+#         if "invdxx0" in sp.srepr(self.FDexpr):
+#             params += "const REAL"
+#         params += ",".join(sorted(str(symb) for symb in self.FDexpr.free_symbols))
+#
+#
+# def construct_finite_difference_functions_h():
+#     pass
+
+
+FDPrototypes_dict: Dict[str, FDPrototype] = {}
+
+
 def proto_FD_operators_to_sympy_expressions(
     list_of_proto_deriv_symbs: List[sp.Symbol],
     fdcoeffs: List[List[sp.Rational]],
@@ -903,7 +923,7 @@ def proto_FD_operators_to_sympy_expressions(
             raise ValueError(
                 f"Error: Was unable to parse derivative operator: {operator}"
             )
-
+        FDPrototypes_dict[operator] = FDPrototype(operator, FDexprs[-1])
     return FDexprs, FDlhsvarnames
 
 
