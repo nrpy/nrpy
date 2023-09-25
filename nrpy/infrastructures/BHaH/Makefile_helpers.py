@@ -106,8 +106,8 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     with open(
         project_Path / "BHaH_function_prototypes.h", "w", encoding="utf-8"
     ) as file:
-        for CFunction in CFunction_dict.values():
-            file.write(f"{CFunction.function_prototype}\n")
+        for key in sorted(CFunction_dict.keys()):
+            file.write(f"{CFunction_dict[key].function_prototype}\n")
 
     CFLAGS_dict = {
         "default": "-O2 -march=native -g -Wall -Wno-unused-variable",
