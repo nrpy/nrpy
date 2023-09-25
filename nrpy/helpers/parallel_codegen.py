@@ -9,10 +9,9 @@ Author: Zachariah B. Etienne
 
 from typing import Any, Callable, Dict, Tuple, Union, cast
 from importlib import import_module
-import platform
 import time
 
-from multiprocess import Pool, Manager  # type: ignore
+from multiprocess import Pool, Manager  # type: ignore # pylint: disable=E0611
 import nrpy.grid as gri
 import nrpy.c_function as cfc
 import nrpy.params as par
@@ -89,13 +88,6 @@ def pcg_registration_phase() -> bool:
     """
     :return: Boolean indicating if the parallel code generation registration phase is active.
     """
-    # if platform.system() == "Darwin":
-    #     print("Warning: ProcessPoolExecutor() broken on MacOS; for details why see")
-    #     print(
-    #         "https://forums.macrumors.com/threads/python-m1-and-multiprocessing.2292927/"
-    #     )
-    #     print("Disabling parallel codegen...")
-    #     par.set_parval_from_str("parallel_codegen_enable", False)
     return (
         cast(bool, par.parval_from_str("parallel_codegen_enable"))
         and par.parval_from_str("parallel_codegen_stage") == "register"
@@ -195,7 +187,6 @@ def do_parallel_codegen() -> None:
     """
     Performs parallel code generation by calling registered functions concurrently.
 
-    :param None: No parameters.
     :raises RuntimeError: If TimeoutError or CancelledError occurs during execution.
     """
     if not par.parval_from_str("parallel_codegen_enable"):
