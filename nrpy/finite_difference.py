@@ -801,6 +801,7 @@ class FDFunction:
     :param c_type_alias: The alias for the C data type used in the function.
     :param fd_order: The order of accuracy for the finite difference scheme.
     :param operator: The operator with respect to which the derivative is taken.
+    :param symbol_to_Rational_dict: Dictionary mapping sympy symbols to their corresponding sympy Rationals.
     :param FDexpr: The sympy expression representing the finite-difference formula.
     :param enable_simd: A flag to specify if SIMD instructions should be used.
     """
@@ -826,6 +827,14 @@ class FDFunction:
         self.CFunction: cfc.CFunction
 
     def c_function_call(self, gf_name: str, deriv_var: str) -> str:
+        """
+        Generates the C function call for a given grid function name and derivative variable.
+
+        :param gf_name: The name of the grid function.
+        :param deriv_var: The variable that represents the derivative.
+
+        :return: The C function call as a string.
+        """
         if "_dupD" in deriv_var or "_ddnD" in deriv_var:
             deriv_var = f"UpwindAlgInput{deriv_var}"
         c_function_call = (
@@ -874,6 +883,11 @@ class FDFunction:
 
 
 def construct_FD_functions_prefunc() -> str:
+    """
+    Constructs the prefunc (CFunction) strings for all finite-difference functions stored in FDFunctions_dict.
+
+    :return: The concatenated prefunc (CFunction) strings as a single string.
+    """
     prefunc = ""
     for fd_func in FDFunctions_dict.values():
         prefunc += fd_func.CFunction.full_function
@@ -946,7 +960,9 @@ def proto_FD_operators_to_sympy_expressions(
     invdxx = [sp.sympify(f"invdxx{d}") for d in range(3)]
     FDexprs = [sp.sympify(0)] * len(list_of_proto_deriv_symbs)
     FDlhsvarnames = [""] * len(list_of_proto_deriv_symbs)
-    symbol_to_Rational_dicts = [{}] * len(list_of_proto_deriv_symbs)
+    symbol_to_Rational_dicts: List[Dict[sp.Basic, sp.Rational]] = [{}] * len(
+        list_of_proto_deriv_symbs
+    )
 
     # Step 5.a.ii.A: Output finite difference expressions to Coutput string
     list_of_proto_deriv_ops = [
