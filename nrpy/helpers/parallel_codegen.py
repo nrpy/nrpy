@@ -12,7 +12,7 @@ from importlib import import_module
 import platform
 import time
 
-from multiprocess.context import Pool, Manager  # type: ignore
+from multiprocess import Pool, Manager  # type: ignore
 import nrpy.grid as gri
 import nrpy.c_function as cfc
 import nrpy.params as par
