@@ -96,7 +96,7 @@ if __name__ == "__main__":
         name="nrpy",
         version=get_nrpy_version(dir_setup),
         license="BSD-2-Clause",
-        data_files=[("license", ["LICENSE.txt"])],
+        data_files=[("license", ["LICENSE"])],
         description="Python/SymPy-based code generation for numerical relativity... and beyond!",
         long_description=(Path(__file__).parent / "README.md").read_text("UTF-8"),
         long_description_content_type="text/markdown",
