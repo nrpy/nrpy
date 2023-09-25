@@ -10,6 +10,8 @@ Author: Zachariah B. Etienne
 from typing import Any, Callable, Dict, Tuple, Union, cast
 from importlib import import_module
 import concurrent.futures as concf
+import time
+
 import nrpy.grid as gri
 import nrpy.c_function as cfc
 import nrpy.params as par
@@ -168,6 +170,7 @@ def do_parallel_codegen() -> None:
 
     NRPy_environment_to_unpack: Dict[str, Any] = {}
 
+    start_time = time.time()
     with concf.ProcessPoolExecutor() as executor:
         futures = {
             executor.submit(parallel_function_call, value): key
@@ -179,7 +182,9 @@ def do_parallel_codegen() -> None:
             try:
                 NRPy_environment_to_unpack[key] = future.result()
                 funcname_args = ParallelCodeGen_dict[key].function_name
-                print(f"Worker associated with function '{funcname_args}' is done.")
+                print(
+                    f"In {(time.time()-start_time):.3f}s, worker completed task '{funcname_args}'"
+                )
             except (concf.TimeoutError, concf.CancelledError) as e:
                 raise RuntimeError(
                     f"An error occurred in the process associated with key '{key}':\n {e}"

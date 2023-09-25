@@ -291,7 +291,8 @@ BCl.register_CFunction_constraints(
 swm2sh.register_CFunction_spin_weight_minus2_sph_harmonics(maximum_l=8)
 print(f"Section 1 finished at {time.time() - start_time:.4f} seconds")
 
-pcg.do_parallel_codegen()
+if __name__ == "__main__":
+    pcg.do_parallel_codegen()
 
 print(f"Section 2 finished at {time.time() - start_time:.4f} seconds")
 

@@ -366,7 +366,9 @@ if enable_rfm_precompute:
     rfm_precompute.register_CFunctions_rfm_precompute(CoordSystem)
 register_CFunction_rhs_eval(enable_rfm_precompute)
 
-pcg.do_parallel_codegen()
+
+if __name__ == "__main__":
+    pcg.do_parallel_codegen()
 
 cbc.CurviBoundaryConditions_register_C_functions(
     CoordSystem, radiation_BC_fd_order=radiation_BC_fd_order
