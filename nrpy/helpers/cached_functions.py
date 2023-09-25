@@ -39,9 +39,12 @@ def cache_file(unique_id: str) -> Path:
 
 
 def NRPy_params_checksum() -> str:
-    return get_hash(
-        str(pickle.dumps({k: v for k, v in sorted(par.glb_params_dict.items())}))
-    )
+    """
+    Generate a checksum of NRPy+ parameters stored in par.glb_params_dict
+
+    :return: The checksum.
+    """
+    return get_hash(str(pickle.dumps(dict(sorted(par.glb_params_dict.items())))))
 
 
 def is_cached(unique_id: str) -> bool:
