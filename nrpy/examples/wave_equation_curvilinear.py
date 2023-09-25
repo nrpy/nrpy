@@ -13,6 +13,7 @@ Author: Zachariah B. Etienne
 import shutil
 import os
 from inspect import currentframe as cf
+import concurrent.futures as concf
 from types import FrameType as FT
 from typing import cast, Union, Dict, Any
 import time
@@ -382,13 +383,13 @@ if __name__ == "__main__":
         NRPy_environment_to_unpack: Dict[str, Any] = {}
 
         start_time = time.time()
-        with cf.ProcessPoolExecutor() as executor:
+        with concf.ProcessPoolExecutor() as executor:
             futures = {
                 executor.submit(pcg.parallel_function_call, value): key
                 for key, value in pcg.ParallelCodeGen_dict.items()
             }
 
-            for future in cf.as_completed(futures):
+            for future in concf.as_completed(futures):
                 key = futures[future]
                 try:
                     NRPy_environment_to_unpack[key] = future.result()
@@ -396,7 +397,7 @@ if __name__ == "__main__":
                     print(
                         f"In {(time.time()-start_time):.3f}s, worker completed task '{funcname_args}'"
                     )
-                except (cf.TimeoutError, cf.CancelledError) as e:
+                except (concf.TimeoutError, concf.CancelledError) as e:
                     raise RuntimeError(
                         f"An error occurred in the process associated with key '{key}':\n {e}"
                     ) from e
