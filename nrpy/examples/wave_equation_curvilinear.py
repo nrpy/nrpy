@@ -403,7 +403,7 @@ if __name__ == "__main__":
 
         pcg.unpack_NRPy_environment_dict(NRPy_environment_to_unpack)
 
-    pcg.do_parallel_codegen()
+    do_parallel_codegen()
 
 cbc.CurviBoundaryConditions_register_C_functions(
     CoordSystem, radiation_BC_fd_order=radiation_BC_fd_order
