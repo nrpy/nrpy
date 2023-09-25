@@ -1027,14 +1027,15 @@ const REAL_SIMD_ARRAY upwind_Integer_{n} = ConstSIMD(tmp_upwind_Integer_{n});
         upwind_expr_list, var_list = [], []
 
         # Iterate over the list of derivative variables
-        for i, deriv_var in enumerate(list_of_deriv_vars):
+        for i, deriv_var_symb in enumerate(list_of_deriv_vars):
+            deriv_var = str(deriv_var_symb)
             operator = list_of_deriv_operators[i]
 
             # Check if the operator is a 5-length string and contains "dupD"
             if len(operator) == 5 and "dupD" in operator:
                 var_dupD = sp.sympify(f"UpwindAlgInput{deriv_var}")
                 var_ddnD = sp.sympify(
-                    f"UpwindAlgInput{str(deriv_var).replace('_dupD', '_ddnD')}"
+                    f"UpwindAlgInput{deriv_var.replace('_dupD', '_ddnD')}"
                 )
 
                 # Extract direction for upwind operation
@@ -1047,7 +1048,7 @@ const REAL_SIMD_ARRAY upwind_Integer_{n} = ConstSIMD(tmp_upwind_Integer_{n});
 
                 # Update expression and variable lists
                 upwind_expr_list.append(upwind_expr)
-                var_list.append(f"const {CCGParams.c_type_alias} {str(deriv_var)}")
+                var_list.append(f"const {CCGParams.c_type_alias} {deriv_var}")
 
         # Copy kwargs
         kwargs_FDPart2 = kwargs_FDPart1.copy()
