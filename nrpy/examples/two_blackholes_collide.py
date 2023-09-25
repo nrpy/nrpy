@@ -11,7 +11,7 @@ Author: Zachariah B. Etienne
 #         and compile-time parameters.
 import shutil
 import os
-from inspect import currentframe as cf
+from inspect import currentframe as cfr
 from types import FrameType as FT
 from typing import cast, Union
 import time
@@ -99,7 +99,7 @@ def register_CFunction_diagnostics(
     :return: None
     """
     if pcg.pcg_registration_phase():
-        pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
     _ = par.CodeParameter(
         "REAL", __name__, "diagnostics_output_every", 0.25, commondata=True

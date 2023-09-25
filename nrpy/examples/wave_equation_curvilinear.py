@@ -12,11 +12,9 @@ Author: Zachariah B. Etienne
 #         and compile-time parameters.
 import shutil
 import os
-from inspect import currentframe as cf
-import concurrent.futures as concf
+from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import cast, Union, Dict, Any
-import time
+from typing import cast, Union
 
 import nrpy.c_function as cfc
 import nrpy.params as par
@@ -100,7 +98,7 @@ def register_CFunction_exact_solution_single_point(
     :param default_k2: The default value for the plane wave wavenumber k in the z-direction
     """
     if pcg.pcg_registration_phase():
-        pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
     # Populate uu_ID, vv_ID
@@ -144,7 +142,7 @@ def register_CFunction_initial_data() -> Union[None, pcg.NRPyEnv_type]:
     Register the initial data function for the wave equation with specific parameters.
     """
     if pcg.pcg_registration_phase():
-        pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
@@ -196,7 +194,7 @@ def register_CFunction_diagnostics() -> Union[None, pcg.NRPyEnv_type]:
     Register the right-hand side evaluation function for the wave equation with specific parameters.
     """
     if pcg.pcg_registration_phase():
-        pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
@@ -310,7 +308,7 @@ def register_CFunction_rhs_eval(enable_rfm_pre: bool) -> Union[None, pcg.NRPyEnv
     :return: None
     """
     if pcg.pcg_registration_phase():
-        pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
     includes = ["BHaH_defines.h"]
     if enable_simd:
@@ -369,42 +367,8 @@ if enable_rfm_precompute:
 register_CFunction_rhs_eval(enable_rfm_precompute)
 
 
-if __name__ == "__main__":
-
-    def do_parallel_codegen() -> None:
-        """
-        Performs parallel code generation by calling registered functions concurrently.
-        """
-        if not par.parval_from_str("parallel_codegen_enable"):
-            return
-
-        par.set_parval_from_str("parallel_codegen_stage", "codegen")
-
-        NRPy_environment_to_unpack: Dict[str, Any] = {}
-
-        start_time = time.time()
-        with concf.ProcessPoolExecutor() as executor:
-            futures = {
-                executor.submit(pcg.parallel_function_call, value): key
-                for key, value in pcg.ParallelCodeGen_dict.items()
-            }
-
-            for future in concf.as_completed(futures):
-                key = futures[future]
-                try:
-                    NRPy_environment_to_unpack[key] = future.result()
-                    funcname_args = pcg.ParallelCodeGen_dict[key].function_name
-                    print(
-                        f"In {(time.time()-start_time):.3f}s, worker completed task '{funcname_args}'"
-                    )
-                except (concf.TimeoutError, concf.CancelledError) as e:
-                    raise RuntimeError(
-                        f"An error occurred in the process associated with key '{key}':\n {e}"
-                    ) from e
-
-        pcg.unpack_NRPy_environment_dict(NRPy_environment_to_unpack)
-
-    do_parallel_codegen()
+if __name__ == "__main__" and parallel_codegen_enable:
+    pcg.do_parallel_codegen()
 
 cbc.CurviBoundaryConditions_register_C_functions(
     CoordSystem, radiation_BC_fd_order=radiation_BC_fd_order

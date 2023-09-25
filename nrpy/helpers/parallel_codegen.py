@@ -10,8 +10,8 @@ Author: Zachariah B. Etienne
 from typing import Any, Callable, Dict, Tuple, Union, cast
 from importlib import import_module
 import concurrent.futures as concf
+import platform
 import time
-import concurrent.futures as cf
 
 import nrpy.grid as gri
 import nrpy.c_function as cfc
@@ -89,6 +89,13 @@ def pcg_registration_phase() -> bool:
     """
     :return: Boolean indicating if the parallel code generation registration phase is active.
     """
+    if platform.system() == "Darwin":
+        print("Warning: ProcessPoolExecutor() broken on MacOS; for details why see")
+        print(
+            "https://forums.macrumors.com/threads/python-m1-and-multiprocessing.2292927/"
+        )
+        print("Disabling parallel codegen...")
+        par.set_parval_from_str("parallel_codegen_enable", False)
     return (
         cast(bool, par.parval_from_str("parallel_codegen_enable"))
         and par.parval_from_str("parallel_codegen_stage") == "register"
