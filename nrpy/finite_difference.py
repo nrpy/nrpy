@@ -12,6 +12,7 @@ from operator import itemgetter
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
 import nrpy.params as par  # NRPy+: parameter interface
 import nrpy.grid as gri  # NRPy+: Functions having to do with numerical grids
+import nrpy.c_function as cfc
 from nrpy.helpers.generic import superfast_uniq
 
 par.register_param(py_type=int, module=__name__, name="fd_order", value=4)
@@ -792,28 +793,82 @@ def read_gfs_from_memory(
     return read_gf_from_memory_Ccode
 
 
-class FDPrototype:
-    def __init__(self, deriv_var: str, FDexpr: sp.Basic):
-        self.deriv_var = deriv_var
+class FDFunction:
+    """
+    A class to represent Finite-Difference (FD) functions in C.
+
+    :param c_type_alias: The alias for the C data type used in the function.
+    :param fd_order: The order of accuracy for the finite difference scheme.
+    :param operator: The operator with respect to which the derivative is taken.
+    :param FDexpr: The sympy expression representing the finite-difference formula.
+    :param enable_simd: A flag to specify if SIMD instructions should be used.
+    """
+
+    def __init__(
+        self,
+        c_type_alias: str,
+        fd_order: int,
+        operator: str,
+        FDexpr: sp.Basic,
+        enable_simd: bool,
+    ) -> None:
+        self.c_type_alias = c_type_alias
+        self.fd_order = fd_order
+        self.operator = operator
         self.FDexpr = FDexpr
+        self.enable_simd = enable_simd
 
-#     def CFunction_prototype(self):
-#         name = f"FD_FUNCTION_{self.deriv_var}"
-#         params = ""
-#         if "invdxx0" in sp.srepr(self.FDexpr):
-#             params += "const REAL"
-#         params += ",".join(sorted(str(symb) for symb in self.FDexpr.free_symbols))
-#
-#
-# def construct_finite_difference_functions_h():
-#     pass
+        self.c_function_name = "SIMD_" if enable_simd else ""
+        self.c_function_name += f"fd_function_{self.operator}_fdorder{self.fd_order}"
+
+        # Prepare the function call string
+        self.c_function_call = f"{self.c_function_name}("
+        for invdx in ["invdxx0", "invdxx1", "invdxx2"]:
+            if invdx in sp.srepr(self.FDexpr):
+                self.c_function_call += f"{invdx},"
+        self.c_function_call += ",".join(
+            sorted(str(symb) for symb in self.FDexpr.free_symbols)
+        )
+        self.c_function_call += ")"
+
+        self.c_function = self.CFunction_fd_function()
+
+    def CFunction_fd_function(self) -> cfc.CFunction:
+        """
+        Generates a C function based on the given finite-difference expression.
+
+        :return: A cfc.CFunction object that encapsulates the C function details.
+        """
+        includes: List[str] = []
+        c_type_alias = self.c_type_alias
+        name = self.c_function_name
+        params = ""
+        for invdx in ["invdxx0", "invdxx1", "invdxx2"]:
+            if invdx in sp.srepr(self.FDexpr):
+                params += f"const {c_type_alias} {invdx},"
+        params += ",".join(
+            sorted(
+                f"const {c_type_alias} {str(symb)}" for symb in self.FDexpr.free_symbols
+            )
+        )
+        body = f"return {sp.ccode(self.FDexpr)};"
+
+        return cfc.CFunction(
+            includes=includes,
+            desc=f"Finite difference function for operator {self.operator}, with FD accuracy order {self.fd_order}",
+            c_type=c_type_alias,
+            name=name,
+            params=params,
+            body=body,
+        )
 
 
-FDPrototypes_dict: Dict[str, FDPrototype] = {}
+FDFunctions_dict: Dict[str, FDFunction] = {}
 
 
 def proto_FD_operators_to_sympy_expressions(
     list_of_proto_deriv_symbs: List[sp.Symbol],
+    fd_order: int,
     fdcoeffs: List[List[sp.Rational]],
     fdstencl: List[List[List[int]]],
     enable_simd: bool = False,
@@ -822,6 +877,7 @@ def proto_FD_operators_to_sympy_expressions(
     Convert finite difference (FD) operators to SymPy expressions.
 
     :param list_of_proto_deriv_symbs: List of prototype derivative variables (e.g., [sp.Symbol("dDD12")])
+    :param fd_order: Finite-difference accuracy order
     :param fdcoeffs: List of finite difference coefficients.
     :param fdstencl: List of finite difference stencils.
     :param enable_simd: Whether to enable SIMD.
@@ -831,6 +887,7 @@ def proto_FD_operators_to_sympy_expressions(
     >>> import nrpy.indexedexp as ixp
     >>> gri.glb_gridfcs_dict.clear()
     >>> par.set_parval_from_str("Infrastructure", "BHaH")
+    >>> fd_order = 2
     >>> dum = gri.register_gridfunctions("FDPROTO")[0]
     >>> dum_dD   = ixp.declarerank1("FDPROTO_dD")
     >>> dum_dupD = ixp.declarerank1("FDPROTO_dupD")
@@ -850,17 +907,17 @@ def proto_FD_operators_to_sympy_expressions(
     ['dDD01', 'dKOD1', 'ddnD2', 'dupD2']
     >>> fdcoeffs = [[] for _ in list_of_proto_deriv_ops]
     >>> fdstencl = [[[] for _ in range(4)] for __ in list_of_proto_deriv_ops]
-    >>> for i, deriv_op in enumerate(list_of_proto_deriv_ops): fdcoeffs[i], fdstencl[i] = compute_fdcoeffs_fdstencl(deriv_op, 2)
+    >>> for i, deriv_op in enumerate(list_of_proto_deriv_ops): fdcoeffs[i], fdstencl[i] = compute_fdcoeffs_fdstencl(deriv_op, fd_order)
     >>> print(fdstencl)
     [[[-1, -1, 0], [1, -1, 0], [-1, 1, 0], [1, 1, 0]], [[0, -2, 0], [0, -1, 0], [0, 0, 0], [0, 1, 0], [0, 2, 0]], [[0, 0, -2], [0, 0, -1], [0, 0, 0]], [[0, 0, 0], [0, 0, 1], [0, 0, 2]]]
-    >>> FDexprs, FDlhsvarnames = proto_FD_operators_to_sympy_expressions(list_of_proto_deriv_symbs, fdcoeffs, fdstencl)
+    >>> FDexprs, FDlhsvarnames = proto_FD_operators_to_sympy_expressions(list_of_proto_deriv_symbs, fd_order, fdcoeffs, fdstencl)
     >>> for i, lhs in enumerate(FDlhsvarnames):
     ...     print(f"{lhs} = {FDexprs[i]}")
     const REAL FDPROTO_dDD01 = invdxx0*invdxx1*(FDPROTO_i0m1_i1m1/4 - FDPROTO_i0m1_i1p1/4 - FDPROTO_i0p1_i1m1/4 + FDPROTO_i0p1_i1p1/4)
     const REAL FDPROTO_dKOD1 = invdxx1*(-3*FDPROTO/8 + FDPROTO_i1m1/4 - FDPROTO_i1m2/16 + FDPROTO_i1p1/4 - FDPROTO_i1p2/16)
     const REAL UpwindAlgInputFDPROTO_ddnD2 = invdxx2*(3*FDPROTO/2 - 2*FDPROTO_i2m1 + FDPROTO_i2m2/2)
     const REAL UpwindAlgInputFDPROTO_dupD2 = invdxx2*(-3*FDPROTO/2 + 2*FDPROTO_i2p1 - FDPROTO_i2p2/2)
-    >>> FDexprs, FDlhsvarnames = proto_FD_operators_to_sympy_expressions(list_of_proto_deriv_symbs, fdcoeffs, fdstencl, enable_simd=True)
+    >>> FDexprs, FDlhsvarnames = proto_FD_operators_to_sympy_expressions(list_of_proto_deriv_symbs, fd_order, fdcoeffs, fdstencl, enable_simd=True)
     >>> for lhs in FDlhsvarnames:
     ...     print(f"{lhs}")
     const REAL_SIMD_ARRAY FDPROTO_dDD01
@@ -923,156 +980,14 @@ def proto_FD_operators_to_sympy_expressions(
             raise ValueError(
                 f"Error: Was unable to parse derivative operator: {operator}"
             )
-        FDPrototypes_dict[operator] = FDPrototype(operator, FDexprs[-1])
+        FDFunctions_dict[operator] = FDFunction(
+            c_type_alias=c_type_alias,
+            fd_order=fd_order,
+            operator=operator,
+            FDexpr=FDexprs[-1],
+            enable_simd=enable_simd,
+        )
     return FDexprs, FDlhsvarnames
-
-
-################
-# def output_finite_difference_functions_h(path=os.path.join(".")):
-#     with open(os.path.join(path, "finite_difference_functions.h"), "w") as file:
-#         file.write(
-#             """
-# #ifndef __FD_FUNCTIONS_H__
-# #define __FD_FUNCTIONS_H__
-# #include "math.h"
-# #include "stdio.h"
-# #include "stdlib.h"
-# """
-#         )
-#         UNUSED = "__attribute__((unused))"
-#         NOINLINE = "__attribute__((noinline))"
-#         if par.parval_from_str("grid::GridFuncMemAccess") == "ETK":
-#             UNUSED = "CCTK_ATTRIBUTE_UNUSED"
-#             NOINLINE = "CCTK_ATTRIBUTE_NOINLINE"
-#         file.write("#define _UNUSED   " + UNUSED + "\n")
-#         file.write("#define _NOINLINE " + NOINLINE + "\n")
-#
-#         for key, item in outC_function_dict.items():
-#             if "__FD_OPERATOR_FUNC__" in item:
-#                 file.write(
-#                     item.replace(
-#                         "const REAL_SIMD_ARRAY _NegativeOne_ =",
-#                         "const REAL_SIMD_ARRAY " + UNUSED + " _NegativeOne_ =",
-#                     )
-#                 )  # Many of the NegativeOne's get optimized away in the SIMD postprocessing step. No need for all the warnings
-#
-#         # Clear all FD functions from outC_function_dict after outputting to finite_difference_functions.h.
-#         #   Otherwise c_codegen will be outputting these as separate individual C codes & attempting to build them in Makefile.
-#         key_list_del = []
-#         element_del = []
-#         for i, func in enumerate(outC_function_master_list):
-#             if "__FD_OPERATOR_FUNC__" in func.desc:
-#                 if func.name not in key_list_del:
-#                     key_list_del += [func.name]
-#                 if func not in element_del:
-#                     element_del += [func]
-#         for func in element_del:
-#             outC_function_master_list.remove(func)
-#         for key in key_list_del:
-#             outC_function_dict.pop(key)
-#             if key in outC_function_prototype_dict:
-#                 outC_function_prototype_dict.pop(key)
-#         file.write("#endif // #ifndef __FD_FUNCTIONS_H__\n")
-
-
-################
-
-
-# def add_FD_func_to_outC_function_dict(fd_order, enable_simd=False):
-#     # Step 5.a.ii.A: First construct a list of all the unique finite difference functions
-#     c_type = "REAL"
-#     if par.parval_from_str("grid::GridFuncMemAccess") == "ETK":
-#         c_type = "CCTK_REAL"
-#     func_prefix = "order_" + str(fd_order) + "_"
-#     if enable_simd:
-#         c_type = "REAL_SIMD_ARRAY"
-#         func_prefix = "SIMD_" + func_prefix
-#
-#     # Stores the needed calls to the functions we're adding to outC_function_dict:
-#     FDfunccall_list = []
-#     for op in list_of_uniq_deriv_operators:
-#         which_op_idx = find_which_op_idx(op, list_of_deriv_operators)
-#
-#         rhs_expr = sp.sympify(0)
-#         for j in range(len(fdcoeffs[which_op_idx])):
-#             var = sp.sympify("f" + varsuffix("f", fdstencl[which_op_idx][j], FDparams))
-#             rhs_expr += fdcoeffs[which_op_idx][j] * var
-#
-#         # Multiply each expression by the appropriate power
-#         #   of 1/dx[i]
-#         used_invdxx = [False, False, False]
-#         invdxx = [sp.sympify(f"invdxx{d}") for d in range(3)]
-#
-#         # Check if the last character in the op string is an integer
-#         if not op[-1].isdigit():
-#             raise ValueError(f"Error: Expected an integer at the end of op: {op}")
-#
-#         # Extract the integer at the end of the op string
-#         direction = int(op[-1])
-#
-#         # Second-order derivatives:
-#         if op.startswith("dDD"):
-#             if not op[-2].isdigit():
-#                 raise ValueError(f"Error: Expected two integers at the end of op: {op}")
-#             direction1 = int(op[-2])
-#             direction2 = direction
-#             used_invdxx[direction1] = used_invdxx[direction2] = True
-#             rhs_expr *= invdxx[direction1] * invdxx[direction2]
-#         # First-order or Kreiss-Oliger derivatives:
-#         elif op.startswith(("dKOD", "dD", "dupD", "ddnD")):
-#             rhs_expr *= invdxx[direction]
-#             used_invdxx[direction] = True
-#         else:
-#             raise ValueError(f"Error: Was unable to parse derivative operator: {op}")
-#
-#         invdxx_params = [f"const {c_type} invdxx{d}" for d in range(3) if used_invdxx[d]]
-#         fdcoeffs_params = [
-#             f"const {c_type} f{varsuffix('', fdstencl[which_op_idx][j], FDparams)}"
-#             for j in range(len(fdcoeffs[which_op_idx]))
-#         ]
-#
-#         outfunc_params = ", ".join(invdxx_params + fdcoeffs_params)
-#
-#         for i, deriv_operator in enumerate(list_of_deriv_operators):
-#             if deriv_operator == op:
-#                 invdxx_funccall = [f"invdxx{d}" for d in range(3) if used_invdxx[d]]
-#                 gfname = list_of_base_gridfunction_names_in_derivs[i]
-#                 fdcoeffs_funccall = [
-#                     f"{gfname}{varsuffix(gfname, fdstencl[which_op_idx][j], FDparams)}"
-#                     for j in range(len(fdcoeffs[which_op_idx]))
-#                 ]
-#
-#                 funccall = f"{type__var(list_of_deriv_vars[i], FDparams)} = {func_prefix}f_{op}({', '.join(invdxx_funccall + fdcoeffs_funccall)});"
-#                 FDfunccall_list.append(funccall)
-#
-#         func_name = f"{func_prefix}f_{op}"
-#         if func_name not in outC_function_dict:
-#             p = f"preindent=1,enable_simd={FDparams.enable_simd},outCverbose=False,cse_preprocess=True,include_braces=False"
-#             outFDstr = outputC(rhs_expr, "retval", "returnstring", params=p).replace(
-#                 "retval = ", "return "
-#             )
-#
-#             op_description = (
-#                 str(op)
-#                 .replace("dDD", "second derivative: ")
-#                 .replace("dD", "first derivative: ")
-#                 .replace("dKOD", "Kreiss-Oliger derivative: ")
-#                 .replace("dupD", "upwinded derivative: ")
-#                 .replace("ddnD", "downwinded derivative: ")
-#             )
-#             desc = f" * (__FD_OPERATOR_FUNC__) Finite difference operator for {op_description} direction. In Cartesian coordinates, directions 0,1,2 correspond to x,y,z directions, respectively."
-#
-#             register_CFunction(
-#                 desc=desc,
-#                 c_type=f"static {c_type} _NOINLINE _UNUSED",
-#                 name=func_name,
-#                 enableCparameters=False,
-#                 params=outfunc_params,
-#                 preloop="",
-#                 body=outFDstr,
-#             )
-#
-#     return FDfunccall_list
 
 
 if __name__ == "__main__":

@@ -855,6 +855,7 @@ def gridfunction_management_and_FD_codegen(
                 proto_FDlhsvarnames,
             ) = fin.proto_FD_operators_to_sympy_expressions(
                 deriv_var_list,
+                CCGParams.fd_order,
                 fdcoeffs_list,
                 fdstencl_list,
                 enable_simd=CCGParams.enable_simd,
