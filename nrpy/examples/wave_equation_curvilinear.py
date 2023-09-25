@@ -12,12 +12,16 @@ Author: Zachariah B. Etienne
 #         and compile-time parameters.
 import shutil
 import os
+from inspect import currentframe as cf
+from types import FrameType as FT
+from typing import cast, Union
 
 import nrpy.c_function as cfc
 import nrpy.params as par
 import nrpy.grid as gri
 import nrpy.c_codegen as ccg
 from nrpy.helpers import simd
+import nrpy.helpers.parallel_codegen as pcg
 
 from nrpy.equations.wave_equation.WaveEquationCurvilinear_RHSs import (
     WaveEquationCurvilinear_RHSs,
@@ -58,6 +62,7 @@ MoL_method = "RK4"
 fd_order = 4
 radiation_BC_fd_order = 2
 enable_simd = True
+parallel_codegen_enable = True
 boundary_conditions_desc = "outgoing radiation"
 
 project_dir = os.path.join("project", project_name)
@@ -65,6 +70,7 @@ project_dir = os.path.join("project", project_name)
 # First clean the project directory, if it exists.
 shutil.rmtree(project_dir, ignore_errors=True)
 
+par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 par.set_parval_from_str("fd_order", fd_order)
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 par.adjust_CodeParam_default("t_final", t_final)
@@ -80,7 +86,7 @@ def register_CFunction_exact_solution_single_point(
     default_k0: float = 1.0,
     default_k1: float = 1.0,
     default_k2: float = 1.0,
-) -> None:
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Registers the C function for the exact solution at a single point.
 
@@ -91,6 +97,9 @@ def register_CFunction_exact_solution_single_point(
     :param default_k1: The default value for the plane wave wavenumber k in the y-direction
     :param default_k2: The default value for the plane wave wavenumber k in the z-direction
     """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
+        return None
 
     # Populate uu_ID, vv_ID
     ID = InitialData(
@@ -125,20 +134,24 @@ def register_CFunction_exact_solution_single_point(
         include_CodeParameters_h=True,
         body=body,
     )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
-def register_CFunction_initial_data() -> None:
+def register_CFunction_initial_data() -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the initial data function for the wave equation with specific parameters.
     """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
+        return None
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
     desc = r"""Set initial data to params.time==0 corresponds to the initial data."""
     c_type = "void"
     name = "initial_data"
     params = "const commondata_struct *restrict commondata, griddata_struct *restrict griddata"
-    uu_gf_obj = gri.glb_gridfcs_dict["uu"]
-    vv_gf_obj = gri.glb_gridfcs_dict["vv"]
+    uu_gf_memaccess = gri.BHaHGridFunction.access_gf("uu")
+    vv_gf_memaccess = gri.BHaHGridFunction.access_gf("vv")
     # Unpack griddata
     body = r"""
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
@@ -152,8 +165,8 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
 """
     body += lp.simple_loop(
         loop_body="exact_solution_single_point(commondata, params, xx0,xx1,xx2,"
-        f"&{uu_gf_obj.read_gf_from_memory_Ccode_onept()},"
-        f"&{vv_gf_obj.read_gf_from_memory_Ccode_onept()});",
+        f"&{uu_gf_memaccess},"
+        f"&{vv_gf_memaccess});",
         read_xxs=True,
         loop_region="all points",
         OMP_collapse=OMP_collapse,
@@ -168,6 +181,7 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
         include_CodeParameters_h=False,
         body=body,
     )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
 _ = par.CodeParameter(
@@ -175,10 +189,13 @@ _ = par.CodeParameter(
 )
 
 
-def register_CFunction_diagnostics() -> None:
+def register_CFunction_diagnostics() -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the right-hand side evaluation function for the wave equation with specific parameters.
     """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
+        return None
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
     desc = r"""Diagnostics."""
@@ -277,9 +294,10 @@ if(commondata->time + commondata->dt > commondata->t_final) printf("\n");
         include_CodeParameters_h=False,
         body=body,
     )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
-def register_CFunction_rhs_eval(enable_rfm_pre: bool) -> None:
+def register_CFunction_rhs_eval(enable_rfm_pre: bool) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the right-hand side (RHS) evaluation function for the wave equation.
 
@@ -289,6 +307,9 @@ def register_CFunction_rhs_eval(enable_rfm_pre: bool) -> None:
     :param enable_rfm_pre: Whether or not to enable reference metric precomputation.
     :return: None
     """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
+        return None
     includes = ["BHaH_defines.h"]
     if enable_simd:
         includes += [os.path.join("simd", "simd_intrinsics.h")]
@@ -330,6 +351,7 @@ def register_CFunction_rhs_eval(enable_rfm_pre: bool) -> None:
         body=body,
         enable_simd=enable_simd,
     )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
 register_CFunction_exact_solution_single_point(
@@ -343,6 +365,9 @@ register_CFunction_diagnostics()
 if enable_rfm_precompute:
     rfm_precompute.register_CFunctions_rfm_precompute(CoordSystem)
 register_CFunction_rhs_eval(enable_rfm_precompute)
+
+pcg.do_parallel_codegen()
+
 cbc.CurviBoundaryConditions_register_C_functions(
     CoordSystem, radiation_BC_fd_order=radiation_BC_fd_order
 )

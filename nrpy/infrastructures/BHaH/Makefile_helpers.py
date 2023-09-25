@@ -131,7 +131,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
                 CFLAGS_dict[key] += f" {FLAG}"
 
     OBJ_FILES_str = "OBJ_FILES ="
-    for c_file in Makefile_list_of_files:
+    for c_file in sorted(Makefile_list_of_files):
         OBJ_FILES_str += " " + c_file.replace(".c", ".o")
 
     LDFLAGS_str = "LDFLAGS ="

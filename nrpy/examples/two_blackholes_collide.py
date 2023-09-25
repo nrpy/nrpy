@@ -12,6 +12,7 @@ Author: Zachariah B. Etienne
 import shutil
 import os
 from inspect import currentframe as cf
+from types import FrameType as FT
 from typing import cast, Union
 import time
 
@@ -62,6 +63,7 @@ fd_order = 8
 radiation_BC_fd_order = 8
 enable_simd = True
 separate_Ricci_and_BSSN_RHS = True
+parallel_codegen_enable = True
 boundary_conditions_desc = "outgoing radiation"
 
 OMP_collapse = 1
@@ -73,7 +75,7 @@ project_dir = os.path.join("project", project_name)
 # First clean the project directory, if it exists.
 shutil.rmtree(project_dir, ignore_errors=True)
 
-par.set_parval_from_str("parallel_codegen_enable", True)
+par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 par.set_parval_from_str("fd_order", fd_order)
 par.set_parval_from_str("LeaveRicciSymbolic", separate_Ricci_and_BSSN_RHS)
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
@@ -97,7 +99,7 @@ def register_CFunction_diagnostics(
     :return: None
     """
     if pcg.pcg_registration_phase():
-        pcg.register_func_call(f"{__name__}.{cf().f_code.co_name}", locals())
+        pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
         return None
     _ = par.CodeParameter(
         "REAL", __name__, "diagnostics_output_every", 0.25, commondata=True
@@ -286,6 +288,7 @@ BCl.register_CFunction_constraints(
     enable_simd=enable_simd,
     OMP_collapse=OMP_collapse,
 )
+swm2sh.register_CFunction_spin_weight_minus2_sph_harmonics(maximum_l=8)
 print(f"Section 1 finished at {time.time() - start_time:.4f} seconds")
 
 pcg.do_parallel_codegen()
@@ -319,9 +322,6 @@ print(f"Section 4 finished at {time.time() - start_time:.4f} seconds")
 xxCart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
 xxCart.register_CFunction_xx_to_Cart(CoordSystem)
 progress.register_CFunction_progress_indicator()
-print(f"Section 5 finished at {time.time() - start_time:.4f} seconds")
-swm2sh.register_CFunction_spin_weight_minus2_sph_harmonics(maximum_l=8)
-print(f"Section 6 finished at {time.time() - start_time:.4f} seconds")
 
 #########################################################
 # STEP 3: Generate header files, register C functions and

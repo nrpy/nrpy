@@ -9,6 +9,7 @@ Author: Zachariah B. Etienne
 from typing import List, Union, cast
 from pathlib import Path
 from inspect import currentframe as cf
+from types import FrameType as FT
 import sympy as sp
 
 import nrpy.grid as gri
@@ -46,7 +47,7 @@ def register_CFunction_initial_data(
     :param IDCoordSystem: The native coordinate system of the initial data
     """
     if pcg.pcg_registration_phase():
-        pcg.register_func_call(f"{__name__}.{cf().f_code.co_name}", locals())
+        pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
         return None
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
@@ -108,7 +109,7 @@ def register_CFunction_rhs_eval(
     :return: None
     """
     if pcg.pcg_registration_phase():
-        pcg.register_func_call(f"{__name__}.{cf().f_code.co_name}", locals())
+        pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
         return None
 
     includes = ["BHaH_defines.h"]
@@ -206,7 +207,7 @@ def register_CFunction_Ricci_eval(
     :return: None
     """
     if pcg.pcg_registration_phase():
-        pcg.register_func_call(f"{__name__}.{cf().f_code.co_name}", locals())
+        pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
         return None
 
     orig_LeaveRicciSymbolic = par.parval_from_str("LeaveRicciSymbolic")
@@ -296,7 +297,7 @@ def register_CFunction_constraints(
     :return: None
     """
     if pcg.pcg_registration_phase():
-        pcg.register_func_call(f"{__name__}.{cf().f_code.co_name}", locals())
+        pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
         return None
 
     Bcon = BSSN_constraints[
@@ -363,7 +364,7 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
     :return: None
     """
     if pcg.pcg_registration_phase():
-        pcg.register_func_call(f"{__name__}.{cf().f_code.co_name}", locals())
+        pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
         return None
 
     Bq = BSSN_quantities[

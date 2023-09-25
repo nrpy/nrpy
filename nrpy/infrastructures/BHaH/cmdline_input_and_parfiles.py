@@ -217,7 +217,8 @@ invalid parameter names.
         if (1 == 0) param_index = -2;
 """
     i = 0
-    for key, CodeParam in par.glb_code_params_dict.items():
+    for key in sorted(par.glb_code_params_dict.keys()):
+        CodeParam = par.glb_code_params_dict[key]
         if (
             CodeParam.add_to_parfile
             and CodeParam.commondata
@@ -241,7 +242,8 @@ invalid parameter names.
         if (param_index == -2) exit(1); // impossible.
 """
     i = 0
-    for key, CodeParam in par.glb_code_params_dict.items():
+    for key in sorted(par.glb_code_params_dict.keys()):
+        CodeParam = par.glb_code_params_dict[key]
         if CodeParam.add_to_parfile and CodeParam.commondata:
             if CodeParam.c_type_alias == "int":
                 body += f'else if(param_index == {i}) read_integer(value, &commondata->{key}, "{key}");\n'

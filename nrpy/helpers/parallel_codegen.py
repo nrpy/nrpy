@@ -7,20 +7,23 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import Any, Callable, Dict, Optional, Tuple, Union, cast
+from typing import Any, Callable, Dict, Tuple, Union, cast
 from importlib import import_module
-from concurrent.futures import ProcessPoolExecutor, as_completed
+import concurrent.futures as concf
 import nrpy.grid as gri
 import nrpy.c_function as cfc
 import nrpy.params as par
-
 
 par.register_param(bool, __name__, "parallel_codegen_enable", False)
 par.register_param(str, __name__, "parallel_codegen_stage", "register")
 
 
 class ParallelCodeGen:
-    def __init__(self, path: str, args: Dict[str, Any]):
+    """
+    A class for holding the details of a function for parallel code generation.
+    """
+
+    def __init__(self, path: str, args: Dict[str, Any]) -> None:
         """
         Initializes a ParallelCodeGen object.
 
@@ -54,7 +57,7 @@ NRPyEnv_type = Tuple[
 
 def NRPyEnv() -> NRPyEnv_type:
     """
-    :return: Tuple containing various global dictionaries
+    :return: Tuple containing various global dictionaries.
     """
     return (
         par.glb_params_dict,
@@ -64,9 +67,24 @@ def NRPyEnv() -> NRPyEnv_type:
     )
 
 
+def unpack_NRPy_environment_dict(
+    NRPy_environment_dict: Dict[str, NRPyEnv_type]
+) -> None:
+    """
+    Unpacks the NRPy environment dictionaries.
+
+    :param NRPy_environment_dict: Dictionary containing NRPy environment types.
+    """
+    for env in NRPy_environment_dict.values():
+        par.glb_params_dict.update(env[0])
+        par.glb_code_params_dict.update(env[1])
+        cfc.CFunction_dict.update(env[2])
+        gri.glb_gridfcs_dict.update(env[3])
+
+
 def pcg_registration_phase() -> bool:
     """
-    :return: Boolean indicating if the parallel code generation registration phase is active
+    :return: Boolean indicating if the parallel code generation registration phase is active.
     """
     return (
         cast(bool, par.parval_from_str("parallel_codegen_enable"))
@@ -78,24 +96,13 @@ def register_func_call(name: str, args: Dict[str, Any]) -> None:
     """
     Registers a function call if the parallel code generation registration phase is active.
 
-    :param name: Name of the function
-    :param args: Arguments to pass to the function
-    :return: Boolean indicating if the function call was registered
+    :param name: Name of the function.
+    :param args: Arguments to pass to the function.
     """
     if name + str(args) in ParallelCodeGen_dict:
         raise ValueError(f"Already registered {name + str(args)}.")
+
     ParallelCodeGen_dict[name + str(args)] = ParallelCodeGen(name, args)
-    return None
-
-
-def unpack_NRPy_environment_dict(
-    NRPy_environment_dict: Dict[str, NRPyEnv_type]
-) -> None:
-    for env in NRPy_environment_dict.values():
-        par.glb_params_dict.update(env[0])
-        par.glb_code_params_dict.update(env[1])
-        cfc.CFunction_dict.update(env[2])
-        gri.glb_gridfcs_dict.update(env[3])
 
 
 def get_nested_function(
@@ -106,12 +113,12 @@ def get_nested_function(
 
     :param module_path: The dot-separated path to the Python module.
     :param function_name: The dot-separated path to the nested function within the module.
-    :return: The nested function if found, otherwise None.
+    :return: The nested function if found.
     """
     try:
         module = import_module(module_path)
     except ImportError as e:
-        raise ImportError(f"Module could not be imported: {e}")
+        raise ImportError(f"Module could not be imported: {e}") from e
 
     function_parts = function_name.split(".")
     try:
@@ -119,23 +126,21 @@ def get_nested_function(
         for part in function_parts:
             nested_obj = getattr(nested_obj, part)
     except AttributeError as e:
-        raise AttributeError(f"Error accessing nested object: {e}")
+        raise AttributeError(f"Error accessing nested object: {e}") from e
 
-    if callable(nested_obj):
-        return nested_obj
-    else:
+    if not callable(nested_obj):
         raise TypeError(
             f"The specified path {function_name} did not lead to a callable function."
         )
+    return nested_obj
 
 
 def parallel_function_call(PCG: Any) -> NRPyEnv_type:
     """
-    Calls the registered function specified by the given key and ParallelCodeGen object.
+    Calls the registered function specified by the given ParallelCodeGen object.
 
-    :param key: The key corresponding to the function to be called.
     :param PCG: The ParallelCodeGen object containing function details.
-    :param NRPy_environment_to_unpack: Dictionary for storing results of the function calls.
+    :return: The result of the function call, packed as NRPyEnv_type.
     """
     try:
         module_path = PCG.module_path
@@ -144,38 +149,40 @@ def parallel_function_call(PCG: Any) -> NRPyEnv_type:
 
         function_to_call = get_nested_function(module_path, function_name)
 
-        if function_to_call is None:
-            raise KeyError(f"Function '{function_name}' not found.")
-
         return function_to_call(**function_args)
 
-    except Exception as ex:
-        raise Exception(f"An error occurred while calling the function: {ex}") from ex
+    except (ImportError, AttributeError, TypeError) as ex:
+        raise RuntimeError(
+            f"An error occurred while calling the function: {ex}"
+        ) from ex
 
 
 def do_parallel_codegen() -> None:
     """
     Performs parallel code generation by calling registered functions concurrently.
     """
+    if not par.parval_from_str("parallel_codegen_enable"):
+        return
+
     par.set_parval_from_str("parallel_codegen_stage", "codegen")
 
     NRPy_environment_to_unpack: Dict[str, Any] = {}
 
-    with ProcessPoolExecutor() as executor:
+    with concf.ProcessPoolExecutor() as executor:
         futures = {
             executor.submit(parallel_function_call, value): key
             for key, value in ParallelCodeGen_dict.items()
         }
 
-        for future in as_completed(futures):
+        for future in concf.as_completed(futures):
             key = futures[future]
             try:
                 NRPy_environment_to_unpack[key] = future.result()
                 funcname_args = ParallelCodeGen_dict[key].function_name
                 print(f"Worker associated with function '{funcname_args}' is done.")
-            except Exception as e:
-                raise Exception(
+            except (concf.TimeoutError, concf.CancelledError) as e:
+                raise RuntimeError(
                     f"An error occurred in the process associated with key '{key}':\n {e}"
-                )
+                ) from e
 
     unpack_NRPy_environment_dict(NRPy_environment_to_unpack)
