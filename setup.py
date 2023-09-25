@@ -6,7 +6,6 @@ To install the nrpy package, navigate to this directory and execute:
 This will install nrpy and its required dependencies.
 
 Instructions for uploading latest release to PyPI:
-
     rm -rf build dist && python setup.py sdist bdist_wheel && twine check dist/*
     twine upload dist/*
 """
@@ -96,6 +95,8 @@ if __name__ == "__main__":
     setup(
         name="nrpy",
         version=get_nrpy_version(dir_setup),
+        license="BSD-2-Clause",
+        data_files=[("license", ["LICENSE.txt"])],
         description="Python/SymPy-based code generation for numerical relativity... and beyond!",
         long_description=(Path(__file__).parent / "README.md").read_text("UTF-8"),
         long_description_content_type="text/markdown",
