@@ -9,10 +9,10 @@ Author: Zachariah B. Etienne
 
 from typing import Any, Callable, Dict, Tuple, Union, cast
 from importlib import import_module
-import concurrent.futures as concf
 import platform
 import time
 
+from multiprocess.context import Pool, Manager  # type: ignore
 import nrpy.grid as gri
 import nrpy.c_function as cfc
 import nrpy.params as par
@@ -89,13 +89,13 @@ def pcg_registration_phase() -> bool:
     """
     :return: Boolean indicating if the parallel code generation registration phase is active.
     """
-    if platform.system() == "Darwin":
-        print("Warning: ProcessPoolExecutor() broken on MacOS; for details why see")
-        print(
-            "https://forums.macrumors.com/threads/python-m1-and-multiprocessing.2292927/"
-        )
-        print("Disabling parallel codegen...")
-        par.set_parval_from_str("parallel_codegen_enable", False)
+    # if platform.system() == "Darwin":
+    #     print("Warning: ProcessPoolExecutor() broken on MacOS; for details why see")
+    #     print(
+    #         "https://forums.macrumors.com/threads/python-m1-and-multiprocessing.2292927/"
+    #     )
+    #     print("Disabling parallel codegen...")
+    #     par.set_parval_from_str("parallel_codegen_enable", False)
     return (
         cast(bool, par.parval_from_str("parallel_codegen_enable"))
         and par.parval_from_str("parallel_codegen_stage") == "register"
@@ -167,35 +167,52 @@ def parallel_function_call(PCG: Any) -> NRPyEnv_type:
         ) from ex
 
 
+def wrapper_func(args: Tuple[Dict[str, Any], str, Any]) -> Any:
+    """
+    A wrapper function for parallel processing.
+
+    :param args: A tuple containing the shared dictionary, key, and value for each task.
+    :return: The key and the result of the parallel_function_call.
+    :raises RuntimeError: If any exception occurs during execution.
+    """
+    shared_dict, key, value = args
+    start_time = time.time()
+    try:
+        result = parallel_function_call(value)
+        shared_dict[key] = result
+        funcname_args = value.function_name
+        print(
+            f"In {(time.time()-start_time):.3f}s, worker completed task '{funcname_args}'"
+        )
+        return key, result
+    except Exception as e:
+        raise RuntimeError(
+            f"An error occurred in the process associated with key '{key}':\n {e}"
+        ) from e
+
+
 def do_parallel_codegen() -> None:
     """
     Performs parallel code generation by calling registered functions concurrently.
+
+    :param None: No parameters.
+    :raises RuntimeError: If TimeoutError or CancelledError occurs during execution.
     """
     if not par.parval_from_str("parallel_codegen_enable"):
         return
 
     par.set_parval_from_str("parallel_codegen_stage", "codegen")
 
-    NRPy_environment_to_unpack: Dict[str, Any] = {}
+    manager = Manager()
+    NRPy_environment_to_unpack: Dict[str, Any] = manager.dict()
 
-    start_time = time.time()
-    with concf.ProcessPoolExecutor() as executor:
-        futures = {
-            executor.submit(parallel_function_call, value): key
-            for key, value in ParallelCodeGen_dict.items()
-        }
+    with Pool() as pool:
+        pool.map(
+            wrapper_func,
+            [
+                (NRPy_environment_to_unpack, key, value)
+                for key, value in ParallelCodeGen_dict.items()
+            ],
+        )
 
-        for future in concf.as_completed(futures):
-            key = futures[future]
-            try:
-                NRPy_environment_to_unpack[key] = future.result()
-                funcname_args = ParallelCodeGen_dict[key].function_name
-                print(
-                    f"In {(time.time()-start_time):.3f}s, worker completed task '{funcname_args}'"
-                )
-            except (concf.TimeoutError, concf.CancelledError) as e:
-                raise RuntimeError(
-                    f"An error occurred in the process associated with key '{key}':\n {e}"
-                ) from e
-
-    unpack_NRPy_environment_dict(NRPy_environment_to_unpack)
+    unpack_NRPy_environment_dict(dict(NRPy_environment_to_unpack))
