@@ -18,11 +18,8 @@ from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.equations.general_relativity.BSSN_to_ADM import BSSN_to_ADM
 from nrpy.helpers.cached_functions import cached_simplify
 
+
 # Step 1.b: Declare free parameter
-# use_metric_to_construct_unit_normal=False: consistent with WeylScal4 ETK thorn.
-par.register_param(bool, __name__, "use_metric_to_construct_unit_normal", False)
-
-
 class Psi4Tetrads:
     """
     Class responsible for constructing tetrads needed for the computation
@@ -40,6 +37,8 @@ class Psi4Tetrads:
         CoordSystem: str = "Cartesian",
         enable_rfm_precompute: bool = False,
         tetrad: str = "quasiKinnersley",
+        # use_metric_to_construct_unit_normal=False: consistent with WeylScal4 ETK thorn.
+        use_metric_to_construct_unit_normal: bool = False,
     ):
         # Step 1.c: Check if tetrad choice is implemented:
         self.tetrad_choice = tetrad
@@ -182,6 +181,7 @@ class Psi4Tetrads:
         update_omega(omegaDD, 1, 2, e1U, e2U, v3U, gammaDD)
         for a in range(3):
             e3U[a] = v3U[a] - omegaDD[0][2] * e1U[a] - omegaDD[1][2] * e2U[a]
+
         # Then normalize:
         update_omega(omegaDD, 2, 2, e1U, e2U, e3U, gammaDD)
         for a in range(3):
@@ -200,7 +200,7 @@ class Psi4Tetrads:
             phi4U[a + 1] = e1U[a]
 
         # FIXME? assumes alpha=1, beta^i = 0
-        if par.parval_from_str("use_metric_to_construct_unit_normal"):
+        if use_metric_to_construct_unit_normal:
             # Eq. 2.116 in Baumgarte & Shapiro:
             #  n^mu = {1/alpha, -beta^i/alpha}. Note that n_mu = {alpha,0}, so n^mu n_mu = -1.
             Bq = BSSN_quantities[
@@ -230,12 +230,12 @@ class Psi4Tetrads:
             add_to_set_CodeParameters_h=False,
             add_to_glb_code_params_dict=False,
         )
-        isqrt2 = M_SQRT1_2  # 1/sp.sqrt(2) <- SymPy drops precision to 15 sig. digits in unit tests
+        one_over_sqrt2 = M_SQRT1_2  # 1/sp.sqrt(2) <- SymPy drops precision to 15 sig. digits in unit tests
         for mu in range(4):
-            self.l4U[mu] = isqrt2 * (u4U[mu] + r4U[mu])
-            self.n4U[mu] = isqrt2 * (u4U[mu] - r4U[mu])
-            self.mre4U[mu] = isqrt2 * theta4U[mu]
-            self.mim4U[mu] = isqrt2 * phi4U[mu]
+            self.l4U[mu] = one_over_sqrt2 * (u4U[mu] + r4U[mu])
+            self.n4U[mu] = one_over_sqrt2 * (u4U[mu] - r4U[mu])
+            self.mre4U[mu] = one_over_sqrt2 * theta4U[mu]
+            self.mim4U[mu] = one_over_sqrt2 * phi4U[mu]
 
 
 if __name__ == "__main__":

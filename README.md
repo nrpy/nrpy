@@ -1,6 +1,6 @@
 [![Python CI](https://github.com/nrpy/nrpy/actions/workflows/main.yml/badge.svg)](https://github.com/nrpy/nrpy/actions/workflows/main.yml)
 
-# NRPy+ 2.0: Next-generation Python/SymPy-Based Code Generation for Numerical Relativity... and Beyond!
+# NRPy+ 2.0: Python/SymPy-Based Code Generation for Numerical Relativity... and Beyond!
 
 ## Quick start:
 1. `pip install nrpy`

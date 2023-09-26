@@ -290,10 +290,23 @@ BCl.register_CFunction_constraints(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_simd=enable_simd,
+    enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
 swm2sh.register_CFunction_spin_weight_minus2_sph_harmonics(maximum_l=8)
-print(f"Section 1 finished at {time.time() - start_time:.4f} seconds")
+
+for which_part in range(3):
+    BCl.register_CFunction_psi4_part(
+        CoordSystem=CoordSystem,
+        which_part=which_part,
+        enable_fd_functions=enable_fd_functions,
+        OMP_collapse=OMP_collapse,
+        output_empty_function=False,
+    )
+BCl.register_CFunction_psi4_tetrad(
+    CoordSystem=CoordSystem,
+    output_empty_function=False,
+)
 
 if __name__ == "__main__":
     pcg.do_parallel_codegen()

@@ -254,6 +254,11 @@ def c_codegen(
     }
     <BLANKLINE>
     """
+    # Injected tuples wreak havoc in this function, so check for them & error out if spotted.
+    if isinstance(sympyexpr, tuple):
+        raise TypeError("sympyexpr cannot be a tuple")
+    if isinstance(output_varname_str, tuple):
+        raise TypeError("output_varname_str cannot be a tuple")
     CCGParams = CCodeGen(**kwargs)
     if CCGParams.enable_fd_codegen:
         fin.FDFunctions_dict.clear()

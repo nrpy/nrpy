@@ -6,7 +6,7 @@ Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
 """
 
 import os
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple
 from nrpy.helpers.generic import prefix_with_star, clang_format
 
 
@@ -79,7 +79,7 @@ class CFunction:
         self.clang_format_options = clang_format_options
 
         self.function_prototype = f"{self.c_type} {self.name}({self.params});"
-        self.full_function = self.generate_full_function()
+        self.raw_function, self.full_function = self.generate_full_function()
 
     @staticmethod
     def subdirectory_depth(subdirectory: str) -> int:
@@ -125,7 +125,7 @@ class CFunction:
 
         return len(folders)
 
-    def generate_full_function(self) -> str:
+    def generate_full_function(self) -> Tuple[str, str]:
         """
         Constructs a full C function from a class instance.
         """
@@ -174,7 +174,7 @@ class CFunction:
 
         complete_func += f"{self.function_prototype.replace(';', '')} {{\n{include_Cparams_str}{self.body}}}\n"
 
-        return clang_format(
+        return complete_func, clang_format(
             complete_func, clang_format_options=self.clang_format_options
         )
 
