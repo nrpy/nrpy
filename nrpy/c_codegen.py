@@ -503,6 +503,14 @@ def c_codegen(
         # cse_results[1] specifies the varnames in terms of CSE variables.
         for i, result in enumerate(cse_results[1]):
             if CCGParams.enable_simd:
+                if (
+                    CCGParams.simd_clean_NegativeOnes_after_processing
+                    and len(cse_results[1]) > 1
+                ):
+                    raise RuntimeWarning(
+                        f"Disabling simd_clean_NegativeOnes_after_processing since len(cse_results[1])={len(cse_results[1])}>1"
+                    )
+                    CCGParams.simd_clean_NegativeOnes_after_processing = False
                 simd_expr = expr_convert_to_simd_intrins(
                     result,
                     CCGParams.symbol_to_Rational_dict,

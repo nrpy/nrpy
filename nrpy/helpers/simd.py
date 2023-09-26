@@ -727,7 +727,7 @@ def expr_convert_to_simd_intrins(
 
     def remove_unused_NegativeOnes_from_symbol_to_Rational_dict(
         expr: Union[Basic, Expr], symbol_to_Rational_dict: Dict[Basic, Rational]
-    ):
+    ) -> None:
         """
         In matching many patterns above, we have removed NegativeOne's from expressions.
         If all -1 have been removed, this function removes {prefix}_NegativeOne_ from
