@@ -158,8 +158,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         INCLUDEDIRS_str = " ".join(f"-I{include_dir}" for include_dir in include_dirs)
 
     # Below code is responsible for either writing a Makefile or a backup shell script depending on the conditions
-    Makefile_str = f"""
-CC = {CC}
+    Makefile_str = f"""CC = {CC}
 {CFLAGS_str}
 {INCLUDEDIRS_str}
 {LDFLAGS_str}

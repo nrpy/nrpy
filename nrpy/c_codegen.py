@@ -881,37 +881,47 @@ def gridfunction_management_and_FD_codegen(
     #     upwind derivatives with respect to only
     #     two of the three dimensions are used. Here
     #     we find all directions used for upwinding.
-    upwind_FDlhsvarnames: List[str] = []
-    upwind_FDexprs: List[sp.Basic] = []
-    for deriv_op in list_of_deriv_operators:
-        if "dupD" in deriv_op and not isinstance(CCGParams.upwind_control_vec, list):
-            print(
-                "Warning: found an upwinded derivative, but upwind_control_vec was not set to a list."
-            )
-    upwind_directions = []
-    if isinstance(CCGParams.upwind_control_vec, list):
-        upwind_directions_unsorted_withdups: List[int] = []
+    def process_upwinded_derivatives() -> Tuple[List[sp.Basic], List[str], List[int]]:
+        upwind_FDexprs: List[sp.Basic] = []
+        upwind_FDlhsvarnames: List[str] = []
         for deriv_op in list_of_deriv_operators:
-            if "dupD" in deriv_op:
-                deriv_dirn = deriv_op[-1]
-                if not deriv_dirn.isdigit():
-                    raise ValueError(
-                        f"Error: Derivative operator {deriv_op} does not contain a valid direction (must be an integer)."
-                    )
-                upwind_directions_unsorted_withdups += [int(deriv_dirn)]
-        if len(upwind_directions_unsorted_withdups) > 0:
-            upwind_directions = sorted(
-                superfast_uniq(upwind_directions_unsorted_withdups)
-            )
-        #   If upwind control vector is specified,
-        #        add upwind control vectors to the
-        #        derivative expression list, so its
-        #        needed elements are read from memory.
-        for dirn in upwind_directions:
-            upwind_FDexprs += [CCGParams.upwind_control_vec[dirn]]
-            upwind_FDlhsvarnames += [
-                f"const {CCGParams.c_type_alias} UpwindControlVectorU{dirn}"
-            ]
+            if "dupD" in deriv_op and not isinstance(
+                CCGParams.upwind_control_vec, list
+            ):
+                print(
+                    "Warning: found an upwinded derivative, but upwind_control_vec was not set to a list."
+                )
+        upwind_directions = []
+        if isinstance(CCGParams.upwind_control_vec, list):
+            upwind_directions_unsorted_withdups: List[int] = []
+            for deriv_op in list_of_deriv_operators:
+                if "dupD" in deriv_op:
+                    deriv_dirn = deriv_op[-1]
+                    if not deriv_dirn.isdigit():
+                        raise ValueError(
+                            f"Error: Derivative operator {deriv_op} does not contain a valid direction (must be an integer)."
+                        )
+                    upwind_directions_unsorted_withdups += [int(deriv_dirn)]
+            if len(upwind_directions_unsorted_withdups) > 0:
+                upwind_directions = sorted(
+                    superfast_uniq(upwind_directions_unsorted_withdups)
+                )
+            #   If upwind control vector is specified,
+            #        add upwind control vectors to the
+            #        derivative expression list, so its
+            #        needed elements are read from memory.
+            for dirn in upwind_directions:
+                upwind_FDexprs += [CCGParams.upwind_control_vec[dirn]]
+                upwind_FDlhsvarnames += [
+                    f"const {CCGParams.c_type_alias} UpwindControlVectorU{dirn}"
+                ]
+        return upwind_FDexprs, upwind_FDlhsvarnames, upwind_directions
+
+    (
+        upwind_FDexprs,
+        upwind_FDlhsvarnames,
+        upwind_directions,
+    ) = process_upwinded_derivatives()
 
     if not CCGParams.enable_fd_codegen:
         FDexprs += upwind_FDexprs
