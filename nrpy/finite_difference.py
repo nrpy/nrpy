@@ -13,6 +13,7 @@ import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy
 import nrpy.params as par  # NRPy+: parameter interface
 import nrpy.grid as gri  # NRPy+: Functions having to do with numerical grids
 import nrpy.c_function as cfc
+from nrpy.helpers.simd import expr_convert_to_simd_intrins
 from nrpy.helpers.generic import superfast_uniq
 from nrpy.helpers.cse_preprocess_postprocess import cse_preprocess
 
@@ -882,6 +883,9 @@ class FDFunction:
         )
 
 
+FDFunctions_dict: Dict[str, FDFunction] = {}
+
+
 def construct_FD_functions_prefunc() -> str:
     """
     Constructs the prefunc (CFunction) strings for all finite-difference functions stored in FDFunctions_dict.
@@ -892,9 +896,6 @@ def construct_FD_functions_prefunc() -> str:
     for fd_func in FDFunctions_dict.values():
         prefunc += fd_func.CFunction.full_function
     return prefunc
-
-
-FDFunctions_dict: Dict[str, FDFunction] = {}
 
 
 def proto_FD_operators_to_sympy_expressions(

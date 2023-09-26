@@ -43,6 +43,7 @@ class CCodeGen:
         enable_simd: bool = False,
         simd_find_more_subs: bool = False,
         simd_find_more_FMAsFMSs: bool = True,
+        simd_clean_NegativeOnes_after_processing: bool = False,
         simd_debug: bool = False,
         enable_GoldenKernels: bool = False,
         SCALAR_TMP_varnames: Optional[List[str]] = None,
@@ -74,6 +75,7 @@ class CCodeGen:
         :param enable_simd: Boolean to enable SIMD.
         :param simd_find_more_subs: Boolean for SIMD optimization.
         :param simd_find_more_FMAsFMSs: Boolean for SIMD optimization.
+        :param simd_clean_NegativeOnes_after_processing: Boolean for clearing unused _NegativeOne_'s
         :param simd_debug: Boolean for SIMD debugging.
         :param enable_GoldenKernels: Boolean to enable Golden Kernels.
         :param SCALAR_TMP_varnames: List of temporary scalar variable names.
@@ -101,6 +103,9 @@ class CCodeGen:
         self.enable_simd = enable_simd
         self.simd_find_more_subs = simd_find_more_subs
         self.simd_find_more_FMAsFMSs = simd_find_more_FMAsFMSs
+        self.simd_clean_NegativeOnes_after_processing = (
+            simd_clean_NegativeOnes_after_processing
+        )
         self.simd_debug = simd_debug
         self.enable_GoldenKernels = enable_GoldenKernels
         self.SCALAR_TMP_varnames = (
@@ -467,9 +472,15 @@ def c_codegen(
         for common_subexpression in cse_results[0]:
             full_type_string = f"const {CCGParams.c_type_alias} "
             if CCGParams.enable_simd:
+                simd_expr = expr_convert_to_simd_intrins(
+                    common_subexpression[1],
+                    CCGParams.symbol_to_Rational_dict,
+                    varprefix,
+                    CCGParams.simd_find_more_FMAsFMSs,
+                    debug=CCGParams.simd_debug,
+                )
                 outstring += (
-                    f"{full_type_string}{common_subexpression[0]} = "
-                    f"{expr_convert_to_simd_intrins(common_subexpression[1], CCGParams.symbol_to_Rational_dict, varprefix, CCGParams.simd_find_more_FMAsFMSs, debug=CCGParams.simd_debug)};\n"
+                    f"{full_type_string}{common_subexpression[0]} = {simd_expr};\n"
                 )
             else:
                 if CCGParams.postproc_substitution_dict:
@@ -492,10 +503,15 @@ def c_codegen(
         # cse_results[1] specifies the varnames in terms of CSE variables.
         for i, result in enumerate(cse_results[1]):
             if CCGParams.enable_simd:
-                outstring += (
-                    f"{varnames_excluding_SCALAR_TMPs[i]} = "
-                    f"{expr_convert_to_simd_intrins(result, CCGParams.symbol_to_Rational_dict, varprefix, CCGParams.simd_find_more_FMAsFMSs, debug=CCGParams.simd_debug)};\n"
+                simd_expr = expr_convert_to_simd_intrins(
+                    result,
+                    CCGParams.symbol_to_Rational_dict,
+                    varprefix,
+                    CCGParams.simd_find_more_FMAsFMSs,
+                    clean_NegativeOnes_after_processing=CCGParams.simd_clean_NegativeOnes_after_processing,
+                    debug=CCGParams.simd_debug,
                 )
+                outstring += f"{varnames_excluding_SCALAR_TMPs[i]} = {simd_expr};\n"
             else:
                 if CCGParams.postproc_substitution_dict:
                     result = apply_substitution_dict(
@@ -603,20 +619,6 @@ def ccode_postproc(string: str, CCGParams: CCodeGen) -> str:
     :return: The processed C code string.
     """
 
-    # Define the dictionary to map the c_type to corresponding cmath function suffix
-    cmath_suffixes = {
-        "float": "f",
-        "double": "",
-        "long double": "l",
-    }
-
-    # If the c_type is not one of the known keys, raise an error
-    if CCGParams.c_type not in cmath_suffixes:
-        raise ValueError(f"{__name__}::c_type = '{CCGParams.c_type}' not supported")
-
-    # Get the corresponding cmath function suffix from the dictionary
-    cmath_suffix = cmath_suffixes[CCGParams.c_type]
-
     # Append the cmath function suffix to standard C math library functions:
     c_funcs = [
         "pow",
@@ -634,18 +636,38 @@ def ccode_postproc(string: str, CCGParams: CCodeGen) -> str:
         "fmin",
         "fmax",
     ]
+    has_c_func = False
+    for func in c_funcs:
+        if f"{func}(" in string:
+            has_c_func = True
+            break
 
-    # Add "(" to the end of each function name and join them with '|' to create a pattern that matches any of them
-    pattern = "|".join([f"{func}\\(" for func in c_funcs])
+    if has_c_func:
+        # Define the dictionary to map the c_type to corresponding cmath function suffix
+        cmath_suffixes = {
+            "float": "f",
+            "double": "",
+            "long double": "l",
+        }
 
-    # Use a lambda function to add the suffix to the matched function name
-    string = re.sub(
-        pattern, lambda match: f"{match.group()[:-1]}{cmath_suffix}(", string
-    )
+        # If the c_type is not one of the known keys, raise an error
+        if CCGParams.c_type not in cmath_suffixes:
+            raise ValueError(f"{__name__}::c_type = '{CCGParams.c_type}' not supported")
 
-    # If c_type is not 'long double', get rid of the "L" suffix on floating point numbers:
-    if CCGParams.c_type != "long double":
-        string = re.sub(r"([0-9.]+)L/([0-9.]+)L", "(\\1 / \\2)", string)
+        # Get the corresponding cmath function suffix from the dictionary
+        cmath_suffix = cmath_suffixes[CCGParams.c_type]
+
+        # Add "(" to the end of each function name and join them with '|' to create a pattern that matches any of them
+        pattern = "|".join([f"{func}\\(" for func in c_funcs])
+
+        # Use a lambda function to add the suffix to the matched function name
+        string = re.sub(
+            pattern, lambda match: f"{match.group()[:-1]}{cmath_suffix}(", string
+        )
+
+        # If c_type is not 'long double', get rid of the "L" suffix on floating point numbers:
+        if CCGParams.c_type != "long double":
+            string = re.sub(r"([0-9.]+)L/([0-9.]+)L", "(\\1 / \\2)", string)
 
     return string
 
@@ -954,7 +976,6 @@ def gridfunction_management_and_FD_codegen(
 
     # Copy kwargs
     kwargs_FDPart1 = kwargs.copy()
-    kwargs_FDPart2 = kwargs.copy()
     if len(read_from_memory_Ccode) > 0:
         Coutput += f"""/*\n * NRPy+-Generated GF Access/FD Code, Step {NRPy_FD_StepNumber} of {NRPy_FD__Number_of_Steps}:
  * Read gridfunction(s) from main memory and compute FD stencils as needed.\n */
@@ -998,7 +1019,10 @@ def gridfunction_management_and_FD_codegen(
             #   all the FD functions that go into a function's prefunc.
             for FDFunction in fin.FDFunctions_dict.values():
                 kwargs_FDPart1.update(
-                    {"symbol_to_Rational_dict": FDFunction.symbol_to_Rational_dict}
+                    {
+                        "symbol_to_Rational_dict": FDFunction.symbol_to_Rational_dict,
+                        "simd_clean_NegativeOnes_after_processing": True,
+                    }
                 )
                 FDFunction.CFunction = FDFunction.CFunction_fd_function(
                     c_codegen(
@@ -1068,6 +1092,7 @@ const REAL_SIMD_ARRAY upwind_Integer_{n} = ConstSIMD(tmp_upwind_Integer_{n});
             {
                 "enable_cse_preprocess": CCGParams.enable_cse_preprocess,
                 "simd_find_more_subs": CCGParams.simd_find_more_subs,
+                "simd_clean_NegativeOnes_after_processing": False,
                 "cse_varprefix": "FDPart2",
             }
         )

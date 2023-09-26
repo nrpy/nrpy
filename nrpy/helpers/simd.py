@@ -138,6 +138,7 @@ def expr_convert_to_simd_intrins(
     symbol_to_Rational_dict: Optional[Dict[Basic, Rational]] = None,
     prefix: str = "",
     simd_find_more_FMAsFMSs: bool = True,
+    clean_NegativeOnes_after_processing: bool = False,
     debug: bool = False,
 ) -> Union[Basic, Expr]:
     """Convert expression to SIMD compiler intrinsics
@@ -723,6 +724,39 @@ def expr_convert_to_simd_intrins(
             simp_expr_diff = simplify(expr_diff)
             if simp_expr_diff != 0:
                 raise Warning("Expression Difference: " + str(simp_expr_diff))
+
+    def remove_unused_NegativeOnes_from_symbol_to_Rational_dict(
+        expr: Union[Basic, Expr], symbol_to_Rational_dict: Dict[Basic, Rational]
+    ):
+        """
+        In matching many patterns above, we have removed NegativeOne's from expressions.
+        If all -1 have been removed, this function removes {prefix}_NegativeOne_ from
+        symbol_to_Rational_dict, so it doesn't get declared as an unused temporary variable.
+
+        :param expr: The mathematical expression from which NegativeOne's have been removed.
+        :param symbol_to_Rational_dict: Dictionary mapping symbols to Rational numbers.
+        """
+        NegOne_in_symbol_to_Rational_dict = False
+        NegOne_symb = Symbol("none") * 2
+        NegOne_symb_str = f"{prefix}_NegativeOne_"
+        for symb in symbol_to_Rational_dict.keys():
+            if str(symb) == NegOne_symb_str:
+                NegOne_symb = symb
+                NegOne_in_symbol_to_Rational_dict = True
+                break
+        found_NegOne_in_free_symbols = False
+        for symb in expr.free_symbols:
+            if str(symb) == NegOne_symb_str:
+                found_NegOne_in_free_symbols = True
+                break
+        if NegOne_in_symbol_to_Rational_dict and not found_NegOne_in_free_symbols:
+            del symbol_to_Rational_dict[NegOne_symb]
+
+    if symbol_to_Rational_dict and clean_NegativeOnes_after_processing:
+        remove_unused_NegativeOnes_from_symbol_to_Rational_dict(
+            expr, symbol_to_Rational_dict
+        )
+
     return expr
 
 

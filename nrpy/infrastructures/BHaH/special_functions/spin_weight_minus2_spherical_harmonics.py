@@ -46,15 +46,19 @@ def register_CFunction_spin_weight_minus2_sph_harmonics(
         body += "    switch(m) {\n"
         for m in range(-l, l + 1):
             body += f"    case {m}:\n"
-            body += "      {\n"
+            body += "       {\n"
+            body += f"      // l = {l}, m = {m}:\n"
             Y_m2_lm = SWSH.Y(-2, l, m, th, ph)
             body += ccg.c_codegen(
-                [sp.re(Y_m2_lm), sp.im(Y_m2_lm)], ["*reYlmswm2_l_m", "*imYlmswm2_l_m"]
+                [sp.re(Y_m2_lm), sp.im(Y_m2_lm)],
+                ["*reYlmswm2_l_m", "*imYlmswm2_l_m"],
+                verbose=False,
+                include_braces=False,
             )
-            body += "      }\n"
+            body += "       }\n"
             body += "      return;\n"
-        body += "    }  // END switch(m)\n"
-    body += "  } // END switch(l)\n"
+        body += f"    }}  // END switch(l == {l})\n"
+    body += "  } // END switch blocks\n"
     body += rf"""
   fprintf(stderr, "ERROR: SpinWeight_minus2_SphHarmonics handles only l=[0,{maximum_l}] and only m=[-l,+l] is defined.\n");
   fprintf(stderr, "       You chose l=%d and m=%d, which is out of these bounds.\n",l,m);
