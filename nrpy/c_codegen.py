@@ -996,7 +996,7 @@ def gridfunction_management_and_FD_codegen(
             # Declare FDFunction.CFunction for all items in FDFunction_dict.
             #   Then calling fin.construct_FD_functions_prefunc() will generate
             #   all the FD functions that go into a function's prefunc.
-            for key, FDFunction in fin.FDFunctions_dict.items():
+            for FDFunction in fin.FDFunctions_dict.values():
                 kwargs_FDPart1.update(
                     {"symbol_to_Rational_dict": FDFunction.symbol_to_Rational_dict}
                 )
