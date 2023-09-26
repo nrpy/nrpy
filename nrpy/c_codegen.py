@@ -507,7 +507,7 @@ def c_codegen(
                     CCGParams.simd_clean_NegativeOnes_after_processing
                     and len(cse_results[1]) > 1
                 ):
-                    raise RuntimeWarning(
+                    print(
                         f"Disabling simd_clean_NegativeOnes_after_processing since len(cse_results[1])={len(cse_results[1])}>1"
                     )
                     CCGParams.simd_clean_NegativeOnes_after_processing = False
