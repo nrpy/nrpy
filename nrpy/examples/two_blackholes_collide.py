@@ -307,6 +307,7 @@ BCl.register_CFunction_psi4_tetrad(
     CoordSystem=CoordSystem,
     output_empty_function=False,
 )
+BCl.register_CFunction_psi4_spinweightm2_decomposition_on_sphlike_grids()
 
 if __name__ == "__main__":
     pcg.do_parallel_codegen()

@@ -58,11 +58,11 @@ class CFunction:
         body: str = "",
         clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 200}",
     ) -> None:
-        if not name or not desc or not body:
-            raise ValueError(
-                "Error in CFunction: 'name', 'desc', and 'body' must be set. "
-                "Please provide appropriate values for these attributes."
-            )
+        for attribute in [(name, "name"), (desc, "desc"), (body, "body")]:
+            if not attribute[0]:
+                raise ValueError(
+                    f"Error in CFunction: '{attribute[1]}' attribute must be set. "
+                )
         if includes and not isinstance(includes, list):
             raise ValueError("includes must take the form of a list")
 
