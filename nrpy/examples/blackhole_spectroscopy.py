@@ -40,23 +40,21 @@ par.set_parval_from_str("Infrastructure", "BHaH")
 start_time = time.time()
 
 # Code-generation-time parameters:
-project_name = "two_blackholes_collide"
-CoordSystem = "Spherical"
+project_name = "blackhole_spectroscopy"
+CoordSystem = "SinhSpherical"
 IDtype = "BrillLindquist"
 IDCoordSystem = "Cartesian"
 LapseEvolutionOption = "OnePlusLog"
 ShiftEvolutionOption = "GammaDriving2ndOrder_Covariant"
-GammaDriving_eta = 1.0
-grid_physical_size = 7.5
-t_final = 1.0 * grid_physical_size
+GammaDriving_eta = 2.0
+grid_physical_size = 300.0
+t_final = 1.5 * grid_physical_size
 Nxx_dict = {
-    "Spherical": [72, 12, 2],
-    "SinhSpherical": [72, 12, 2],
-    "Cartesian": [64, 64, 64],
+    "SinhSpherical": [800, 16, 2],
 }
 default_BH1_mass = default_BH2_mass = 0.5
-default_BH1_z_posn = +0.5
-default_BH2_z_posn = -0.5
+default_BH1_z_posn = +0.25
+default_BH2_z_posn = -0.25
 enable_rfm_precompute = True
 MoL_method = "RK4"
 fd_order = 8
@@ -71,6 +69,9 @@ OMP_collapse = 1
 if "Spherical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "2")
     OMP_collapse = 2  # about 2x faster
+    if CoordSystem == "SinhSpherical":
+        sinh_width = 0.2
+
 project_dir = os.path.join("project", project_name)
 
 # First clean the project directory, if it exists.
@@ -239,6 +240,39 @@ fprintf(outfile, "%e %e %e %e %e %e %e\n", xCart[0], xCart[1], xCart[2], log10(f
     body += r"""
       fclose(outfile);
     }
+      // Do psi4 output, but only if the grid is spherical-like.
+      if (strstr(CoordSystemName, "Spherical") != NULL) {
+
+        // Adjusted to match Tutorial-Start_to_Finish-BSSNCurvilinear-Two_BHs_Collide-Psi4.ipynb
+        const int psi4_spinweightm2_sph_harmonics_max_l = 2;
+        int num_of_R_exts = 0;
+        REAL *restrict list_of_R_exts;
+        for (int R_ext_idx = (Nxx_plus_2NGHOSTS0 - NGHOSTS) / 4; R_ext_idx < (Nxx_plus_2NGHOSTS0 - NGHOSTS) * 0.9; R_ext_idx += 10)
+          num_of_R_exts++;
+        list_of_R_exts = (REAL *restrict)malloc(sizeof(REAL) * num_of_R_exts); // Use 'double' to store floating-point numbers
+
+        num_of_R_exts = 0;
+        for (int R_ext_idx = (Nxx_plus_2NGHOSTS0 - NGHOSTS) / 4; R_ext_idx < (Nxx_plus_2NGHOSTS0 - NGHOSTS) * 0.9; R_ext_idx += 10) {
+          // Step 2.a: Set the extraction radius R_ext based on the radial index R_ext_idx
+          REAL R_ext;
+          REAL xCart[3];
+          //void xx_to_Cart(const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], const int i0, const int i1, const int i2, REAL xCart[3]) {
+          xx_to_Cart(commondata, params, xx, R_ext_idx, 1, 1, xCart); // values for itheta and iphi don't matter.
+          list_of_R_exts[num_of_R_exts] = sqrt(xCart[0] * xCart[0] + xCart[1] * xCart[1] + xCart[2] * xCart[2]);
+          printf("%.15e\n", list_of_R_exts[num_of_R_exts]);
+          num_of_R_exts++;
+        }
+
+        // Set psi4.
+        psi4_part0(commondata, params, xx, y_n_gfs, diagnostic_output_gfs);
+        psi4_part1(commondata, params, xx, y_n_gfs, diagnostic_output_gfs);
+        psi4_part2(commondata, params, xx, y_n_gfs, diagnostic_output_gfs);
+        printf("%e %d\n", list_of_R_exts[0], num_of_R_exts);
+        // Decompose psi4 into spin-weight -2  spherical harmonics & output to files.
+        psi4_spinweightm2_decomposition_on_sphlike_grids(commondata, params, diagnostic_output_gfs, list_of_R_exts, num_of_R_exts, psi4_spinweightm2_sph_harmonics_max_l, xx);
+
+        free(list_of_R_exts);
+      }
   }
 }
 progress_indicator(commondata, griddata);
@@ -295,6 +329,21 @@ BCl.register_CFunction_constraints(
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
+swm2sh.register_CFunction_spin_weight_minus2_sph_harmonics(maximum_l=8)
+
+for which_part in range(3):
+    BCl.register_CFunction_psi4_part(
+        CoordSystem=CoordSystem,
+        which_part=which_part,
+        enable_fd_functions=enable_fd_functions,
+        OMP_collapse=OMP_collapse,
+        output_empty_function=False,
+    )
+BCl.register_CFunction_psi4_tetrad(
+    CoordSystem=CoordSystem,
+    output_empty_function=False,
+)
+BCl.register_CFunction_psi4_spinweightm2_decomposition_on_sphlike_grids()
 
 if __name__ == "__main__":
     pcg.do_parallel_codegen()

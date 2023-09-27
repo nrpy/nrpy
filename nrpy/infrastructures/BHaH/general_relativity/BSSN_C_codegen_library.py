@@ -666,6 +666,7 @@ def register_CFunction_psi4_tetrad(
         desc=desc,
         name=name,
         params=params,
+        include_CodeParameters_h=True,
         body=body,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
