@@ -13,6 +13,8 @@ import shutil
 import subprocess
 import multiprocessing
 from typing import List, Optional
+import cpuinfo
+
 from nrpy.c_function import CFunction_dict
 
 
@@ -116,6 +118,44 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         # DEBUGCFLAGS: OpenMP requires -fopenmp, and when disabling -fopenmp, unknown pragma warnings appear. -Wunknown-pragmas silences these warnings
         "debug": "-O2 -g -Wall -Wno-unused-variable -Wno-unknown-pragmas",
     }
+
+    cpu_info = cpuinfo.get_cpu_info()
+    # # invalid data
+    # if cpu_info.get("l1_data_cache_size"):
+    #     for key, value in CFLAGS_dict.items():
+    #         CFLAGS_dict[
+    #             key
+    #         ] += (
+    #             f" --param l1-cache-size={int(cpu_info.get('l1_data_cache_size')/1024)}"
+    #         )
+    if cpu_info.get("l2_cache_size"):
+        for key, value in CFLAGS_dict.items():
+            CFLAGS_dict[
+                key
+            ] += f" --param l2-cache-size={int(cpu_info.get('l2_cache_size')/1024)}"
+
+    if any("avx512" in flag for flag in cpu_info["flags"]):
+        # -march=native hangs when using GCC on
+        avx512_features = [
+            "avx512f",
+            "avx512pf",
+            "avx512er",
+            "avx512cd",
+            "avx512vl",
+            "avx512bw",
+            "avx512dq",
+            "avx512ifma",
+            "avx512vbmi",
+        ]
+        # manually add the avx-512 featureset
+        avx512_compileflags = ""
+        for feature in avx512_features:
+            if any(flag.replace("_", "") == feature for flag in cpu_info["flags"]):
+                avx512_compileflags += f"-m{feature} "
+        for key, value in CFLAGS_dict.items():
+            CFLAGS_dict[key] = CFLAGS_dict[key].replace(
+                "-march=native", avx512_compileflags
+            )
 
     if CC == "gcc":
         for key in CFLAGS_dict:

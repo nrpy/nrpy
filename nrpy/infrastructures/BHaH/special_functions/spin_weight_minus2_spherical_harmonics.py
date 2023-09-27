@@ -9,21 +9,30 @@ from typing import cast, Union
 from inspect import currentframe as cf
 from types import FrameType as FT
 import sympy as sp
+
+import nrpy.params as par
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.equations.special_functions.spin_weighted_spherical_harmonics as SWSH
 
+par.register_param(
+    int,
+    __name__,
+    "swm2sh_maximum_l_mode_generated",
+    2,
+)
+par.register_CodeParameter(
+    "int", __name__, "swm2sh_maximum_l_mode_to_compute", 2, commondata=True
+)
 
-def register_CFunction_spin_weight_minus2_sph_harmonics(
-    maximum_l: int = 8,
-) -> Union[None, pcg.NRPyEnv_type]:
+
+def register_CFunction_spin_weight_minus2_sph_harmonics() -> (
+    Union[None, pcg.NRPyEnv_type]
+):
     """
     Registers a C function for computing the spin-weight -2 spherical harmonic
     for a given (l, m) pair at a specific point (theta, phi).
-
-    :param maximum_l: The maximum value of the angular momentum number 'l' up to which
-                      the function will compute the spin-weight -2 spherical harmonics.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
@@ -41,7 +50,15 @@ def register_CFunction_spin_weight_minus2_sph_harmonics(
     # real=True for th, ph is ESSENTIAL, so that sp.re and sp.im function properly below.
     th, ph = sp.symbols("th ph", real=True)
     body = "switch(l) {\n"
-    for l in range(maximum_l + 1):  # Output values up to and including l=8.
+
+    # maximum_l: The maximum value of the angular momentum number 'l' up to which
+    #                  the function will compute the spin-weight -2 spherical harmonics.
+    swm2sh_maximum_l_mode_generated = par.parval_from_str(
+        "swm2sh_maximum_l_mode_generated"
+    )
+    for l in range(
+        swm2sh_maximum_l_mode_generated + 1
+    ):  # Output values up to and including l=8.
         body += f"  case {l}:\n"
         body += "    switch(m) {\n"
         for m in range(-l, l + 1):
@@ -60,7 +77,7 @@ def register_CFunction_spin_weight_minus2_sph_harmonics(
         body += f"    }}  // END switch(l == {l})\n"
     body += "  } // END switch blocks\n"
     body += rf"""
-  fprintf(stderr, "ERROR: SpinWeight_minus2_SphHarmonics handles only l=[0,{maximum_l}] and only m=[-l,+l] is defined.\n");
+  fprintf(stderr, "ERROR: SpinWeight_minus2_SphHarmonics handles only l=[0,swm2sh_maximum_l_mode_generated={swm2sh_maximum_l_mode_generated}] and only m=[-l,+l] is defined.\n");
   fprintf(stderr, "       You chose l=%d and m=%d, which is out of these bounds.\n",l,m);
   exit(1);
 """

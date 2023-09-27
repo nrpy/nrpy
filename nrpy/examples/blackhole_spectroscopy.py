@@ -49,6 +49,9 @@ ShiftEvolutionOption = "GammaDriving2ndOrder_Covariant"
 GammaDriving_eta = 2.0
 grid_physical_size = 300.0
 t_final = 1.5 * grid_physical_size
+diagnostics_output_every = 0.5
+swm2sh_maximum_l_mode_generated = 8
+swm2sh_maximum_l_mode_to_compute = 2  # for consistency with NRPy 1.0 version.
 Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
 }
@@ -57,8 +60,8 @@ default_BH1_z_posn = +0.25
 default_BH2_z_posn = -0.25
 enable_rfm_precompute = True
 MoL_method = "RK4"
-fd_order = 8
-radiation_BC_fd_order = 8
+fd_order = 10
+radiation_BC_fd_order = 2
 enable_simd = True
 separate_Ricci_and_BSSN_RHS = True
 parallel_codegen_enable = True
@@ -68,6 +71,7 @@ boundary_conditions_desc = "outgoing radiation"
 OMP_collapse = 1
 if "Spherical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "2")
+    par.adjust_CodeParam_default("CFL_FACTOR", 1.0)
     OMP_collapse = 2  # about 2x faster
     if CoordSystem == "SinhSpherical":
         sinh_width = 0.2
@@ -77,14 +81,14 @@ project_dir = os.path.join("project", project_name)
 # First clean the project directory, if it exists.
 shutil.rmtree(project_dir, ignore_errors=True)
 
+# Set NRPy parameters that steer the code generation
 par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 par.set_parval_from_str("fd_order", fd_order)
 par.set_parval_from_str("enable_RbarDD_gridfunctions", separate_Ricci_and_BSSN_RHS)
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
-
-# In the following function we overwrite t_final (registered as a CodeParameter in MoL),
-#    so let's remove it from the parfile
-par.adjust_CodeParam_default("t_final", t_final)
+par.set_parval_from_str(
+    "swm2sh_maximum_l_mode_generated", swm2sh_maximum_l_mode_generated
+)
 
 
 #########################################################
@@ -104,7 +108,11 @@ def register_CFunction_diagnostics(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
     _ = par.CodeParameter(
-        "REAL", __name__, "diagnostics_output_every", 0.25, commondata=True
+        "REAL",
+        __name__,
+        "diagnostics_output_every",
+        diagnostics_output_every,
+        commondata=True,
     )
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
@@ -259,7 +267,7 @@ fprintf(outfile, "%e %e %e %e %e %e %e\n", xCart[0], xCart[1], xCart[2], log10(f
           //void xx_to_Cart(const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], const int i0, const int i1, const int i2, REAL xCart[3]) {
           xx_to_Cart(commondata, params, xx, R_ext_idx, 1, 1, xCart); // values for itheta and iphi don't matter.
           list_of_R_exts[num_of_R_exts] = sqrt(xCart[0] * xCart[0] + xCart[1] * xCart[1] + xCart[2] * xCart[2]);
-          printf("%.15e\n", list_of_R_exts[num_of_R_exts]);
+          // printf("%.15e\n", list_of_R_exts[num_of_R_exts]);
           num_of_R_exts++;
         }
 
@@ -267,7 +275,6 @@ fprintf(outfile, "%e %e %e %e %e %e %e\n", xCart[0], xCart[1], xCart[2], log10(f
         psi4_part0(commondata, params, xx, y_n_gfs, diagnostic_output_gfs);
         psi4_part1(commondata, params, xx, y_n_gfs, diagnostic_output_gfs);
         psi4_part2(commondata, params, xx, y_n_gfs, diagnostic_output_gfs);
-        printf("%e %d\n", list_of_R_exts[0], num_of_R_exts);
         // Decompose psi4 into spin-weight -2  spherical harmonics & output to files.
         psi4_spinweightm2_decomposition_on_sphlike_grids(commondata, params, diagnostic_output_gfs, list_of_R_exts, num_of_R_exts, psi4_spinweightm2_sph_harmonics_max_l, xx);
 
@@ -326,7 +333,7 @@ BCl.register_CFunction_constraints(
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
-swm2sh.register_CFunction_spin_weight_minus2_sph_harmonics(maximum_l=8)
+swm2sh.register_CFunction_spin_weight_minus2_sph_harmonics()
 
 for which_part in range(3):
     BCl.register_CFunction_psi4_part(
@@ -378,19 +385,24 @@ xxCart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
 xxCart.register_CFunction_xx_to_Cart(CoordSystem)
 progress.register_CFunction_progress_indicator()
 
+# Reset CodeParameter defaults according to variables set above.
+if CoordSystem == "SinhSpherical":
+    par.adjust_CodeParam_default("SINHW", sinh_width)
+par.adjust_CodeParam_default("eta", GammaDriving_eta)
+par.adjust_CodeParam_default(
+    "swm2sh_maximum_l_mode_to_compute", swm2sh_maximum_l_mode_to_compute
+)
+par.adjust_CodeParam_default("BH1_mass", default_BH1_mass)
+par.adjust_CodeParam_default("BH2_mass", default_BH2_mass)
+par.adjust_CodeParam_default("BH1_posn_z", default_BH1_z_posn)
+par.adjust_CodeParam_default("BH2_posn_z", default_BH2_z_posn)
+par.adjust_CodeParam_default("t_final", t_final)
+
 #########################################################
 # STEP 3: Generate header files, register C functions and
 #         command line parameters, set up boundary conditions,
 #         and create a Makefile for this project.
 #         Project is output to project/[project_name]/
-if CoordSystem == "SinhSpherical":
-    par.adjust_CodeParam_default("SINHW", sinh_width)
-par.adjust_CodeParam_default("eta", GammaDriving_eta)
-par.adjust_CodeParam_default("BH1_mass", default_BH1_mass)
-par.adjust_CodeParam_default("BH2_mass", default_BH2_mass)
-par.adjust_CodeParam_default("BH1_posn_z", default_BH1_z_posn)
-par.adjust_CodeParam_default("BH2_posn_z", default_BH2_z_posn)
-
 CPs.write_CodeParameters_h_files(project_dir=project_dir)
 CPs.register_CFunctions_params_commondata_struct_set_to_default()
 cmdpar.generate_default_parfile(project_dir=project_dir, project_name=project_name)

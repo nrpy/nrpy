@@ -684,13 +684,13 @@ def register_CFunction_psi4_spinweightm2_decomposition_on_sphlike_grids() -> (
     prefunc = r"""
 static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1,const int Nxx_plus_2NGHOSTS2,
                                                     const REAL dxx1, const REAL dxx2,
-                                                    const int psi4_spinweightm2_sph_harmonics_max_l, const REAL curr_time, const REAL R_ext,
+                                                    const int swm2sh_maximum_l_mode_to_compute, const REAL curr_time, const REAL R_ext,
                                                     const REAL *restrict th_array, const REAL *restrict sinth_array, const REAL *restrict ph_array,
                                                     const REAL *restrict psi4r_at_R_ext, const REAL *restrict psi4i_at_R_ext) {
   char filename[100];  FILE *outpsi4_l_m;
   // Output header at t=0:
   if(curr_time==0) {
-    for(int l=2;l<=psi4_spinweightm2_sph_harmonics_max_l;l++) {
+    for(int l=2;l<=swm2sh_maximum_l_mode_to_compute;l++) {
       sprintf(filename,"Rpsi4_l%d-r%06.1f.txt",l,(double)R_ext);
       outpsi4_l_m = fopen(filename, "w");
       fprintf(outpsi4_l_m, "# column 1: t-R_ext = [retarded time]\n");
@@ -704,7 +704,7 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
   }
 
   // Output one file per l mode; each column represents a unique complex component of l,m
-  for(int l=2;l<=psi4_spinweightm2_sph_harmonics_max_l;l++) {
+  for(int l=2;l<=swm2sh_maximum_l_mode_to_compute;l++) {
     sprintf(filename,"Rpsi4_l%d-r%06.1f.txt",l,(double)R_ext);
     outpsi4_l_m = fopen(filename, "a");
     char oneline[10000];
@@ -819,7 +819,7 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
       }
       // Step 3: Perform integrations across all l,m modes from l=2 up to and including L_MAX (global variable):
       lowlevel_decompose_psi4_into_swm2_modes(Nxx_plus_2NGHOSTS1,Nxx_plus_2NGHOSTS2,
-                                              dxx1,dxx2, psi4_spinweightm2_sph_harmonics_max_l,
+                                              dxx1,dxx2, swm2sh_maximum_l_mode_to_compute,
                                               time, R_ext, th_array, sinth_array, ph_array,
                                               psi4r_at_R_ext,psi4i_at_R_ext);
     }
