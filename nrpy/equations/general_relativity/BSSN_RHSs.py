@@ -7,8 +7,8 @@ Author: Zachariah B. Etienne
 """
 
 # Step 1.a: import all needed modules from NRPy+:
-from typing import Dict, OrderedDict
-from collections import OrderedDict as ODict
+from typing import Dict
+from collections import OrderedDict
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
 
 import nrpy.params as par  # NRPy+: Parameter interface
@@ -352,7 +352,7 @@ class BSSNRHSs:
         # print(str(trK_rhs).replace("xx2","xx3").replace("xx1","xx2").replace("xx0","xx1").replace("**","^").replace("_","").replace("sin(xx2)","Sinx2").replace("xx","x").replace("sin(2*x2)","Sin2x2").replace("cos(x2)","Cosx2").replace("detgbaroverdetghat","detg"))
         # print(str(bet_rhsU[0]).replace("xx2","xx3").replace("xx1","xx2").replace("xx0","xx1").replace("**","^").replace("_","").replace("sin(xx2)","Sinx2").replace("xx","x").replace("sin(2*x2)","Sin2x2").replace("cos(x2)","Cosx2").replace("detgbaroverdetghat","detg"))
 
-        self.BSSN_RHSs_varname_to_expr_dict: OrderedDict[str, sp.Expr] = ODict()
+        self.BSSN_RHSs_varname_to_expr_dict: OrderedDict[str, sp.Expr] = OrderedDict()
         self.BSSN_RHSs_varname_to_expr_dict["cf_rhs"] = self.cf_rhs
         self.BSSN_RHSs_varname_to_expr_dict["trK_rhs"] = self.trK_rhs
         for i in range(3):
@@ -361,7 +361,7 @@ class BSSNRHSs:
                 self.BSSN_RHSs_varname_to_expr_dict[f"a_rhsDD{i}{j}"] = self.a_rhsDD[i][j]
                 self.BSSN_RHSs_varname_to_expr_dict[f"h_rhsDD{i}{j}"] = self.h_rhsDD[i][j]
         # Sort the lists alphabetically by varname:
-        self.BSSN_RHSs_varname_to_expr_dict = ODict(sorted(self.BSSN_RHSs_varname_to_expr_dict.items()))
+        self.BSSN_RHSs_varname_to_expr_dict = OrderedDict(sorted(self.BSSN_RHSs_varname_to_expr_dict.items()))
         # fmt: on
 
 
