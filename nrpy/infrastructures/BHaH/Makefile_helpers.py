@@ -132,7 +132,9 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         for key, value in CFLAGS_dict.items():
             CFLAGS_dict[
                 key
-            ] += f" --param l2-cache-size={int(cpu_info.get('l2_cache_size')/1024)}"
+            ] += (
+                f" --param l2-cache-size={int(int(cpu_info.get('l2_cache_size'))/1024)}"
+            )
 
     if any("avx512" in flag for flag in cpu_info["flags"]):
         # -march=native hangs when using GCC on
