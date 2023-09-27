@@ -128,9 +128,11 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {
     REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
     REAL *restrict diagnostic_output_gfs = griddata[grid].gridfuncs.diagnostic_output_gfs;
     REAL *restrict xx[3];
-    for (int ww = 0; ww < 3; ww++)
-      xx[ww] = griddata[grid].xx[ww];
-    const params_struct *restrict params = &griddata[grid].params;
+    {
+      for (int ww = 0; ww < 3; ww++)
+        xx[ww] = griddata[grid].xx[ww];
+    }
+    params_struct *restrict params = &griddata[grid].params;
 #include "set_CodeParameters.h"
 
     // Constraint output
@@ -236,6 +238,25 @@ fprintf(outfile, "%e %e %e %e %e %e %e\n", xCart[0], xCart[1], xCart[2], log10(f
     )
     body += r"""
       fclose(outfile);
+    }
+    // Do psi4 output, but only if the grid is spherical-like.
+    if(strstr(CoordSystemName, "Spherical") != NULL) {
+      const int psi4_spinweightm2_sph_harmonics_max_l = 8;
+      const int num_of_R_exts = 3;
+      REAL list_of_R_exts[num_of_R_exts];
+
+      // Initialize the array
+      list_of_R_exts[0] = grid_physical_size * 0.5;
+      list_of_R_exts[1] = grid_physical_size * 0.6;
+      list_of_R_exts[2] = grid_physical_size * 0.7;
+
+      // Set psi4.
+      psi4_part0(commondata, params, xx, y_n_gfs, diagnostic_output_gfs);
+      psi4_part1(commondata, params, xx, y_n_gfs, diagnostic_output_gfs);
+      psi4_part2(commondata, params, xx, y_n_gfs, diagnostic_output_gfs);
+
+      // Decompose psi4 into spin-weight -2  spherical harmonics & output to files.
+      psi4_spinweightm2_decomposition_on_sphlike_grids(commondata, params, diagnostic_output_gfs, list_of_R_exts, num_of_R_exts, psi4_spinweightm2_sph_harmonics_max_l, xx);
     }
   }
 }

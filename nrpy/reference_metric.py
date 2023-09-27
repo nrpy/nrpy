@@ -19,6 +19,15 @@ par.register_CodeParameter(
     defaultvalue=10.0,
     add_to_glb_code_params_dict=True,
 )
+par.register_CodeParameter(
+    "char[50]",
+    __name__,
+    "CoordSystemName",
+    "must set",
+    add_to_glb_code_params_dict=True,
+    add_to_parfile=False,
+    add_to_set_CodeParameters_h=True,
+)
 
 
 class ReferenceMetric:

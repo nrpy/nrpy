@@ -127,15 +127,21 @@ def write_CodeParameters_h_files(
     const REAL a = commondata->a;                               // CodeParameters_c_files::a
     const bool BHaH_is_amazing = params->BHaH_is_amazing;       // CodeParameters_c_files::BHaH_is_amazing
     const REAL pi_three_sigfigs = commondata->pi_three_sigfigs; // CodeParameters_c_files::pi_three_sigfigs
-    char some_string[100];
-    strncpy(some_string, params->some_string, 100); // CodeParameters_c_files::some_string
+    char some_string[100];                                      // CodeParameters_c_files::some_string
+    {
+      strncpy(some_string, params->some_string, 99);
+      some_string[99] = '\\0';
+    } // Properly null terminate char array.
     <BLANKLINE>
     >>> print((project_dir / 'set_CodeParameters-nopointer.h').read_text())
     const REAL a = commondata.a;                               // CodeParameters_c_files::a
     const bool BHaH_is_amazing = params.BHaH_is_amazing;       // CodeParameters_c_files::BHaH_is_amazing
     const REAL pi_three_sigfigs = commondata.pi_three_sigfigs; // CodeParameters_c_files::pi_three_sigfigs
-    char some_string[100];
-    strncpy(some_string, params.some_string, 100); // CodeParameters_c_files::some_string
+    char some_string[100];                                     // CodeParameters_c_files::some_string
+    {
+      strncpy(some_string, params.some_string, 99);
+      some_string[99] = '\\0';
+    } // Properly null terminate char array.
     <BLANKLINE>
     >>> print((project_dir / 'set_CodeParameters-simd.h').read_text())
     const REAL NOSIMDa = commondata->a;                                         // CodeParameters_c_files::a
@@ -174,7 +180,7 @@ def write_CodeParameters_h_files(
                 if "char" in CPtype and "[" in CPtype and "]" in CPtype:
                     # Handle char array C type
                     CPsize = CPtype.split("[")[1].split("]")[0]
-                    Coutput = f"char {CPname}[{CPsize}];  strncpy({CPname}, {struct}{pointer}{CPname}, {CPsize});{comment}\n"
+                    Coutput = f"char {CPname}[{CPsize}]; {comment} \n {{ strncpy({CPname}, {struct}{pointer}{CPname}, {int(CPsize)-1}); {CPname}[{int(CPsize)-1}]='\\0'; }} // Properly null terminate char array.\n"
                 else:
                     # Handle all other C types
                     Coutput = f"const {CPtype} {CPname} = {struct}{pointer}{CPname};{comment}\n"

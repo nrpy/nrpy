@@ -43,14 +43,17 @@ def register_CFunction_numerical_grids_and_timestep_setup(
     for dirn in range(3):
         par.adjust_CodeParam_default(f"Nxx{dirn}", Nxx_dict[CoordSystem][dirn])
     par.adjust_CodeParam_default("grid_physical_size", grid_physical_size)
+    par.adjust_CodeParam_default("CoordSystemName", CoordSystem)
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = f"Set up a cell-centered {CoordSystem} grid of size grid_physical_size."
     c_type = "void"
     name = "numerical_grids_and_timestep_setup"
     params = "commondata_struct *restrict commondata, params_struct *restrict params, griddata_struct *restrict griddata"
-    body = r"""const REAL grid_physical_size = params->grid_physical_size;
+    body = rf"""const REAL grid_physical_size = params->grid_physical_size;
 const REAL t_final = commondata->t_final;
+snprintf(params->CoordSystemName, 50, "{CoordSystem}");
+
 // Don't increase resolution across an axis of symmetry:
 if(params->Nxx0 != 2) params->Nxx0 *= commondata->convergence_factor;
 if(params->Nxx1 != 2) params->Nxx1 *= commondata->convergence_factor;
