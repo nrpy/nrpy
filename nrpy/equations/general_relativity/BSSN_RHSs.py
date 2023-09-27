@@ -379,7 +379,9 @@ class BSSNRHSs_dict(Dict[str, BSSNRHSs]):
             CoordSystem = CoordSystem_in.replace("_rfm_precompute", "")
 
             enable_T4munu = par.parval_from_str("enable_T4munu")
-            enable_RbarDD_gridfunctions = par.parval_from_str("enable_RbarDD_gridfunctions")
+            enable_RbarDD_gridfunctions = par.parval_from_str(
+                "enable_RbarDD_gridfunctions"
+            )
             print(
                 f"Setting up BSSN_RHSs for CoordSystem = {CoordSystem}, enable_T4munu={enable_T4munu}, Rij symbolic={enable_RbarDD_gridfunctions}."
             )

@@ -586,7 +586,9 @@ class BSSNQuantities_dict(Dict[str, BSSNQuantities]):
             # In case [CoordSystem]_rfm_precompute is passed:
             CoordSystem = CoordSystem_in.replace("_rfm_precompute", "")
             enable_T4munu = par.parval_from_str("enable_T4munu")
-            enable_RbarDD_gridfunctions = par.parval_from_str("enable_RbarDD_gridfunctions")
+            enable_RbarDD_gridfunctions = par.parval_from_str(
+                "enable_RbarDD_gridfunctions"
+            )
             print(
                 f"Setting up BSSN_quantities for CoordSystem = {CoordSystem}, enable_T4munu={enable_T4munu}, Rij symbolic={enable_RbarDD_gridfunctions}."
             )
