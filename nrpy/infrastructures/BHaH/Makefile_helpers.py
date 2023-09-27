@@ -13,7 +13,7 @@ import shutil
 import subprocess
 import multiprocessing
 from typing import List, Optional
-import cpuinfo
+import cpuinfo  # type: ignore
 
 from nrpy.c_function import CFunction_dict
 
