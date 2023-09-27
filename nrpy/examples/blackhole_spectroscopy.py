@@ -294,9 +294,6 @@ if(commondata->time + commondata->dt > commondata->t_final) printf("\n");
 BCl.register_CFunction_initial_data(
     CoordSystem=CoordSystem, IDtype=IDtype, IDCoordSystem=IDCoordSystem
 )
-numgrids.register_CFunction_numerical_grids_and_timestep_setup(
-    CoordSystem, grid_physical_size, Nxx_dict
-)
 register_CFunction_diagnostics(in_CoordSystem=CoordSystem)
 if enable_rfm_precompute:
     rfm_precompute.register_CFunctions_rfm_precompute(CoordSystem)
@@ -350,6 +347,9 @@ if __name__ == "__main__":
 
 print(f"Section 2 finished at {time.time() - start_time:.4f} seconds")
 
+numgrids.register_CFunction_numerical_grids_and_timestep_setup(
+    CoordSystem, grid_physical_size, Nxx_dict
+)
 cbc.CurviBoundaryConditions_register_C_functions(
     CoordSystem, radiation_BC_fd_order=radiation_BC_fd_order
 )
@@ -384,8 +384,12 @@ progress.register_CFunction_progress_indicator()
 #         and create a Makefile for this project.
 #         Project is output to project/[project_name]/
 if CoordSystem == "SinhSpherical":
-    par.adjust_CodeParam_default("SINHW", 0.4)
+    par.adjust_CodeParam_default("SINHW", sinh_width)
 par.adjust_CodeParam_default("eta", GammaDriving_eta)
+par.adjust_CodeParam_default("BH1_mass", default_BH1_mass)
+par.adjust_CodeParam_default("BH2_mass", default_BH2_mass)
+par.adjust_CodeParam_default("BH1_posn_z", default_BH1_z_posn)
+par.adjust_CodeParam_default("BH2_posn_z", default_BH2_z_posn)
 
 CPs.write_CodeParameters_h_files(project_dir=project_dir)
 CPs.register_CFunctions_params_commondata_struct_set_to_default()

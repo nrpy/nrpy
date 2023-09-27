@@ -84,11 +84,11 @@ class InitialData_Cartesian:
         BH1_posn_x, BH1_posn_y, BH1_posn_z = par.register_CodeParameters(
             "REAL", __name__, ["BH1_posn_x", "BH1_posn_y", "BH1_posn_z"], [0.0, 0.0, +0.5], commondata=True
         )
-        BH1_mass = par.register_CodeParameter("REAL", __name__, "BH1_mass", 1.0, commondata=True)
+        BH1_mass = par.register_CodeParameter("REAL", __name__, "BH1_mass", 0.5, commondata=True)
         BH2_posn_x, BH2_posn_y, BH2_posn_z = par.register_CodeParameters(
             "REAL", __name__, ["BH2_posn_x", "BH2_posn_y", "BH2_posn_z"], [0.0, 0.0, -0.5], commondata=True
         )
-        BH2_mass = par.register_CodeParameter("REAL", __name__, "BH2_mass", 1.0, commondata=True)
+        BH2_mass = par.register_CodeParameter("REAL", __name__, "BH2_mass", 0.5, commondata=True)
 
         x = self.x
         y = self.y
