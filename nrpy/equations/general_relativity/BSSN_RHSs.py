@@ -7,7 +7,8 @@ Author: Zachariah B. Etienne
 """
 
 # Step 1.a: import all needed modules from NRPy+:
-from typing import Dict, List
+from typing import Dict, OrderedDict
+from collections import OrderedDict as ODict
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
 
 import nrpy.params as par  # NRPy+: Parameter interface
@@ -351,23 +352,17 @@ class BSSNRHSs:
         # print(str(trK_rhs).replace("xx2","xx3").replace("xx1","xx2").replace("xx0","xx1").replace("**","^").replace("_","").replace("sin(xx2)","Sinx2").replace("xx","x").replace("sin(2*x2)","Sin2x2").replace("cos(x2)","Cosx2").replace("detgbaroverdetghat","detg"))
         # print(str(bet_rhsU[0]).replace("xx2","xx3").replace("xx1","xx2").replace("xx0","xx1").replace("**","^").replace("_","").replace("sin(xx2)","Sinx2").replace("xx","x").replace("sin(2*x2)","Sin2x2").replace("cos(x2)","Cosx2").replace("detgbaroverdetghat","detg"))
 
-        # fmt: on
-
-        self.BSSN_RHSs_varnames: List[str] = []
-        self.BSSN_RHSs_exprs: List[sp.Expr] = []
-        self.BSSN_RHSs_varnames += ["cf_rhs", "trK_rhs"]
-        self.BSSN_RHSs_exprs += [self.cf_rhs, self.trK_rhs]
+        self.BSSN_RHSs_varname_to_expr_dict: OrderedDict[str, sp.Expr] = ODict()
+        self.BSSN_RHSs_varname_to_expr_dict["cf_rhs"] = self.cf_rhs
+        self.BSSN_RHSs_varname_to_expr_dict["trK_rhs"] = self.trK_rhs
         for i in range(3):
-            self.BSSN_RHSs_varnames += [f"lambda_rhsU{i}"]
-            self.BSSN_RHSs_exprs += [self.lambda_rhsU[i]]
+            self.BSSN_RHSs_varname_to_expr_dict[f"lambda_rhsU{i}"] = self.lambda_rhsU[i]
             for j in range(i, 3):
-                self.BSSN_RHSs_varnames += [f"a_rhsDD{i}{j}", f"h_rhsDD{i}{j}"]
-                self.BSSN_RHSs_exprs += [self.a_rhsDD[i][j], self.h_rhsDD[i][j]]
+                self.BSSN_RHSs_varname_to_expr_dict[f"a_rhsDD{i}{j}"] = self.a_rhsDD[i][j]
+                self.BSSN_RHSs_varname_to_expr_dict[f"h_rhsDD{i}{j}"] = self.h_rhsDD[i][j]
         # Sort the lists alphabetically by varname:
-        sorted_list = sorted(zip(self.BSSN_RHSs_varnames, self.BSSN_RHSs_exprs))
-        self.BSSN_RHSs_varnames, self.BSSN_RHSs_exprs = [
-            list(t) for t in zip(*sorted_list)
-        ]
+        self.BSSN_RHSs_varname_to_expr_dict = ODict(sorted(self.BSSN_RHSs_varname_to_expr_dict.items()))
+        # fmt: on
 
 
 class BSSNRHSs_dict(Dict[str, BSSNRHSs]):

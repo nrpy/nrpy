@@ -6,6 +6,7 @@ Library of C functions for solving the BSSN equations in
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
+from collections import OrderedDict as ODict
 from typing import List, Union, cast
 from pathlib import Path
 from inspect import currentframe as cfr
@@ -98,8 +99,13 @@ def register_CFunction_rhs_eval(
     enable_rfm_precompute: bool,
     enable_simd: bool,
     enable_fd_functions: bool,
+    enable_KreissOliger_dissipation: bool,
     LapseEvolutionOption: str,
     ShiftEvolutionOption: str,
+    KreissOliger_strength_mult_by_W: bool = False,
+    # when mult by W, strength_gauge=0.99 & strength_nongauge=0.3 is best.
+    KreissOliger_strength_gauge: float = 0.3,
+    KreissOliger_strength_nongauge: float = 0.3,
     OMP_collapse: int = 1,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
@@ -131,24 +137,90 @@ def register_CFunction_rhs_eval(
     rhs = BSSN_RHSs[
         CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
     ]
-    BSSN_RHSs_varnames = rhs.BSSN_RHSs_varnames
-    BSSN_RHSs_exprs = rhs.BSSN_RHSs_exprs
     alpha_rhs, vet_rhsU, bet_rhsU = BSSN_gauge_RHSs(
         CoordSystem,
         enable_rfm_precompute,
         LapseEvolutionOption=LapseEvolutionOption,
         ShiftEvolutionOption=ShiftEvolutionOption,
     )
-    BSSN_RHSs_varnames += ["alpha_rhs"]
-    BSSN_RHSs_exprs += [alpha_rhs]
+    rhs.BSSN_RHSs_varname_to_expr_dict["alpha_rhs"] = alpha_rhs
     for i in range(3):
-        BSSN_RHSs_varnames += [f"vet_rhsU{i}", f"bet_rhsU{i}"]
-        BSSN_RHSs_exprs += [vet_rhsU[i], bet_rhsU[i]]
-    sorted_list = sorted(zip(BSSN_RHSs_varnames, BSSN_RHSs_exprs))
-    BSSN_RHSs_varnames, BSSN_RHSs_exprs = [list(t) for t in zip(*sorted_list)]
+        rhs.BSSN_RHSs_varname_to_expr_dict[f"vet_rhsU{i}"] = vet_rhsU[i]
+        rhs.BSSN_RHSs_varname_to_expr_dict[f"bet_rhsU{i}"] = bet_rhsU[i]
+
+    rhs.BSSN_RHSs_varname_to_expr_dict = ODict(
+        sorted(rhs.BSSN_RHSs_varname_to_expr_dict.items())
+    )
+
+    # Add Kreiss-Oliger dissipation to the BSSN RHSs:
+    if enable_KreissOliger_dissipation:
+        diss_strength_gauge, diss_strength_nongauge = par.register_CodeParameters(
+            "REAL",
+            __name__,
+            ["KreissOliger_strength_gauge", "KreissOliger_strength_nongauge"],
+            [KreissOliger_strength_gauge, KreissOliger_strength_nongauge],
+            commondata=True,
+        )
+
+        if KreissOliger_strength_mult_by_W:
+            Bq = BSSN_quantities[
+                CoordSystem + "_rfm_precompute"
+                if enable_rfm_precompute
+                else CoordSystem
+            ]
+            EvolvedConformalFactor_cf = par.parval_from_str("EvolvedConformalFactor_cf")
+            if EvolvedConformalFactor_cf == "W":
+                diss_strength_gauge *= Bq.cf
+                diss_strength_nongauge *= Bq.cf
+            elif EvolvedConformalFactor_cf == "chi":
+                diss_strength_gauge *= sp.sqrt(Bq.cf)
+                diss_strength_nongauge *= sp.sqrt(Bq.cf)
+            elif EvolvedConformalFactor_cf == "phi":
+                diss_strength_gauge *= sp.exp(-2 * Bq.cf)
+                diss_strength_nongauge *= sp.exp(-2 * Bq.cf)
+
+        rfm = refmetric.reference_metric[
+            CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
+        ]
+        alpha_dKOD = ixp.declarerank1("alpha_dKOD")
+        cf_dKOD = ixp.declarerank1("cf_dKOD")
+        trK_dKOD = ixp.declarerank1("trK_dKOD")
+        betU_dKOD = ixp.declarerank2("betU_dKOD", symmetry="nosym")
+        vetU_dKOD = ixp.declarerank2("vetU_dKOD", symmetry="nosym")
+        lambdaU_dKOD = ixp.declarerank2("lambdaU_dKOD", symmetry="nosym")
+        aDD_dKOD = ixp.declarerank3("aDD_dKOD", symmetry="sym01")
+        hDD_dKOD = ixp.declarerank3("hDD_dKOD", symmetry="sym01")
+        for k in range(3):
+            rhs.BSSN_RHSs_varname_to_expr_dict["alpha_rhs"] += (
+                diss_strength_gauge * alpha_dKOD[k] * rfm.ReU[k]
+            )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
+            rhs.BSSN_RHSs_varname_to_expr_dict["cf_rhs"] += (
+                diss_strength_nongauge * cf_dKOD[k] * rfm.ReU[k]
+            )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
+            rhs.BSSN_RHSs_varname_to_expr_dict["trK_rhs"] += (
+                diss_strength_nongauge * trK_dKOD[k] * rfm.ReU[k]
+            )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
+            for i in range(3):
+                if "2ndOrder" in ShiftEvolutionOption:
+                    rhs.BSSN_RHSs_varname_to_expr_dict[f"bet_rhsU{i}"] += (
+                        diss_strength_gauge * betU_dKOD[i][k] * rfm.ReU[k]
+                    )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
+                rhs.BSSN_RHSs_varname_to_expr_dict[f"vet_rhsU{i}"] += (
+                    diss_strength_gauge * vetU_dKOD[i][k] * rfm.ReU[k]
+                )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
+                rhs.BSSN_RHSs_varname_to_expr_dict[f"lambda_rhsU{i}"] += (
+                    diss_strength_nongauge * lambdaU_dKOD[i][k] * rfm.ReU[k]
+                )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
+                for j in range(i, 3):
+                    rhs.BSSN_RHSs_varname_to_expr_dict[f"a_rhsDD{i}{j}"] += (
+                        diss_strength_nongauge * aDD_dKOD[i][j][k] * rfm.ReU[k]
+                    )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
+                    rhs.BSSN_RHSs_varname_to_expr_dict[f"h_rhsDD{i}{j}"] += (
+                        diss_strength_nongauge * hDD_dKOD[i][j][k] * rfm.ReU[k]
+                    )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
 
     BSSN_RHSs_access_gf: List[str] = []
-    for var in BSSN_RHSs_varnames:
+    for var in rhs.BSSN_RHSs_varname_to_expr_dict.keys():
         BSSN_RHSs_access_gf += [
             gri.BHaHGridFunction.access_gf(
                 var.replace("_rhs", ""),
@@ -169,7 +241,7 @@ def register_CFunction_rhs_eval(
         betaU[i] = vetU[i] * rfm.ReU[i]
     body = lp.simple_loop(
         loop_body=ccg.c_codegen(
-            BSSN_RHSs_exprs,
+            list(rhs.BSSN_RHSs_varname_to_expr_dict.values()),
             BSSN_RHSs_access_gf,
             enable_fd_codegen=True,
             enable_simd=enable_simd,

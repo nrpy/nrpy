@@ -34,7 +34,6 @@ import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions
 import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numgrids
 import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xxCart
 import nrpy.infrastructures.BHaH.general_relativity.BSSN_C_codegen_library as BCl
-import nrpy.infrastructures.BHaH.special_functions.spin_weight_minus2_spherical_harmonics as swm2sh
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 start_time = time.time()
@@ -65,6 +64,7 @@ enable_simd = True
 separate_Ricci_and_BSSN_RHS = True
 parallel_codegen_enable = True
 enable_fd_functions = True
+enable_KreissOliger_dissipation = False
 boundary_conditions_desc = "outgoing radiation"
 
 OMP_collapse = 1
@@ -272,6 +272,7 @@ BCl.register_CFunction_rhs_eval(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_simd=enable_simd,
     enable_fd_functions=enable_fd_functions,
+    enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
     LapseEvolutionOption=LapseEvolutionOption,
     ShiftEvolutionOption=ShiftEvolutionOption,
     OMP_collapse=OMP_collapse,

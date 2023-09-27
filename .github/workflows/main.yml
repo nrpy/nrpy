@@ -84,6 +84,7 @@ jobs:
         python -m nrpy.examples.wave_equation_cartesian   && cd project/wavetoy && make && cd ../../
         python -m nrpy.examples.wave_equation_curvilinear && cd project/curviwavetoy && make && cd ../../
         python -m nrpy.examples.two_blackholes_collide    && cd project/two_blackholes_collide && make && cd ../../
+        python -m nrpy.examples.blackhole_spectroscopy    && cd project/blackhole_spectroscopy && make && cd ../../
   build-mac:
     runs-on: macos-latest
 
@@ -116,3 +117,4 @@ jobs:
         python -m nrpy.examples.wave_equation_cartesian   && cd project/wavetoy && make && cd ../../
         python -m nrpy.examples.wave_equation_curvilinear && cd project/curviwavetoy && make && cd ../../
         python -m nrpy.examples.two_blackholes_collide    && cd project/two_blackholes_collide && make && cd ../../
+        python -m nrpy.examples.blackhole_spectroscopy    && cd project/blackhole_spectroscopy && make && cd ../../

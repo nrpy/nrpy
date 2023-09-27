@@ -9,6 +9,8 @@ Author: Zachariah B. Etienne
 
 from pathlib import Path
 from typing import List
+import sympy as sp
+
 import nrpy.params as par
 import nrpy.c_function as cfc
 from nrpy.helpers.generic import clang_format

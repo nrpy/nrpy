@@ -12,7 +12,7 @@ Authors: Zachariah B. Etienne
 """
 
 # Step 1: Import all needed modules from NRPy+:
-from typing import Tuple, Sequence
+from typing import Tuple, List
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
 import nrpy.params as par  # NRPy+: Parameter interface
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
@@ -32,7 +32,7 @@ def BSSN_gauge_RHSs(
     enable_rfm_precompute: bool = False,
     LapseEvolutionOption: str = "OnePlusLog",
     ShiftEvolutionOption: str = "GammaDriving2ndOrder_Covariant",
-) -> Tuple[sp.Expr, Sequence[sp.Expr], Sequence[sp.Expr]]:
+) -> Tuple[sp.Expr, List[sp.Expr], List[sp.Expr]]:
     """
     Core gauge evolution equation right-hand-side expression generation function.
 

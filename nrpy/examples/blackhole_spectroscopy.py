@@ -44,6 +44,10 @@ project_name = "blackhole_spectroscopy"
 CoordSystem = "SinhSpherical"
 IDtype = "BrillLindquist"
 IDCoordSystem = "Cartesian"
+enable_KreissOliger_dissipation = True
+KreissOliger_strength_mult_by_W = True
+KreissOliger_strength_gauge = 0.99
+KreissOliger_strength_nongauge = 0.3
 LapseEvolutionOption = "OnePlusLog"
 ShiftEvolutionOption = "GammaDriving2ndOrder_Covariant"
 GammaDriving_eta = 2.0
@@ -309,8 +313,12 @@ BCl.register_CFunction_rhs_eval(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_simd=enable_simd,
     enable_fd_functions=enable_fd_functions,
+    enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
     LapseEvolutionOption=LapseEvolutionOption,
     ShiftEvolutionOption=ShiftEvolutionOption,
+    KreissOliger_strength_mult_by_W=KreissOliger_strength_mult_by_W,
+    KreissOliger_strength_gauge=KreissOliger_strength_gauge,
+    KreissOliger_strength_nongauge=KreissOliger_strength_nongauge,
     OMP_collapse=OMP_collapse,
 )
 BCl.register_CFunction_Ricci_eval(
