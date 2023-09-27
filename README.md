@@ -15,7 +15,7 @@
 ## Slow start, in case you want to develop NRPy+ directly:
 
 1. Clone this repository, and `cd nrpy`
-1. Add the repository root directory to your Python path. `export PYTHONPATH=.:$PYTHONPATH` . For convenience, add this command to your `~/.bashrc` file: `echo export PYTHONPATH=.:$PYTHONPATH >> ~/.bashrc`
+1. Add the repository root directory to your Python path. `export PYTHONPATH=.:$PYTHONPATH` . For convenience, add this command to your `~/.bashrc` file: `echo "export PYTHONPATH=.:\$PYTHONPATH" >> ~/.bashrc`
 1. Then e.g., run an example code: `python3 nrpy/examples/wave_equation_cartesian`, then follow the instructions for compiling & running the generated C code.
 1. Run `./wavetoy`. It'll output at various times the solution from the point closest to r=0, as well as the relative error compared to the exact solution at that point to a file `out0d-conv_factor1.00.txt`.
 1. All BlackHoles@Home (BHaH) infrastructure codes now support parameter files, and each code generation automatically outputs a parfile named `[project name].par`. So you'll find an editable `wavetoy.par`.
