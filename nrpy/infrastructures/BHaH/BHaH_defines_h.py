@@ -104,6 +104,8 @@ def output_BHaH_defines_h(
     enable_simd: bool = True,
     fin_NGHOSTS_add_one_for_upwinding: bool = False,
     MoL_method: str = "RK4",
+    set_parity_on_aux: bool = False,
+    set_parity_on_auxevol: bool = False,
     CoordSystem: str = "Cartesian",
     ID_persist_struct_contents_str: str = "",
     include_T4UU: bool = False,
@@ -336,7 +338,9 @@ typedef struct __bc_struct__ {
 } bc_struct;
 """
         CBC_Nbd_str += CBC.BHaH_defines_set_gridfunction_defines_with_parity_types(
-            verbose=True
+            set_parity_on_aux=set_parity_on_aux,
+            set_parity_on_auxevol=set_parity_on_auxevol,
+            verbose=True,
         )
         BHaH_defines_h_dict["CurviBoundaryConditions"] = CBC_Nbd_str
 

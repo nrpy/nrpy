@@ -290,22 +290,24 @@ class BHaHGridFunction(GridFunction):
         ) = BHaHGridFunction.gridfunction_lists()
 
         outstr = f"{define_gfs('EVOL', evolved_variables_list)}"
+
+        if evolved_variables_list:
+            # mypy: doesn't consider that this func is only called for BHaHGridFunctions.
+            f_infinity_list = [str(glb_gridfcs_dict[var].f_infinity) for var in evolved_variables_list]  # type: ignore
+            f_wavespeed_list = [str(glb_gridfcs_dict[var].wavespeed) for var in evolved_variables_list]  # type: ignore
+
+            f_infinity_str = ", ".join(f_infinity_list)
+            f_wavespeed_str = ", ".join(f_wavespeed_list)
+
+            outstr += "\n\n// SET gridfunctions_f_infinity[i] = evolved gridfunction i's value in the limit r->infinity:\n"
+            outstr += f"static const REAL gridfunctions_f_infinity[NUM_EVOL_GFS] = {{ {f_infinity_str} }};\n"
+
+            outstr += "\n\n// SET gridfunctions_wavespeed[i] = evolved gridfunction i's characteristic wave speed:\n"
+            outstr += f"static const REAL gridfunctions_wavespeed[NUM_EVOL_GFS] = {{ {f_wavespeed_str} }};\n"
+
         outstr += f"{define_gfs('AUX', auxiliary_variables_list)}"
         outstr += f"{define_gfs('AUXEVOL', auxevol_variables_list)}"
 
-        if evolved_variables_list:
-            outstr += "\n\n// SET gridfunctions_f_infinity[i] = value of gridfunction i in the limit r->infinity:\n"
-            f_infinity_str = ""
-            f_wavespeed_str = ""
-            for var_string in evolved_variables_list:
-                gf = glb_gridfcs_dict[var_string]
-                # mypy: doesn't consider that this func is only called for BHaHGridFunctions.
-                f_infinity_str += str(gf.f_infinity) + ","  # type: ignore
-                f_wavespeed_str += str(gf.wavespeed) + ","  # type: ignore
-
-            outstr += f"static const REAL gridfunctions_f_infinity[NUM_EVOL_GFS] = {{ {f_infinity_str[:-1] } }};\n"
-            outstr += "\n\n// SET gridfunctions_wavespeed[i] = gridfunction i's characteristic wave speed:\n"
-            outstr += f"static const REAL gridfunctions_wavespeed[NUM_EVOL_GFS] = {{ {f_wavespeed_str[:-1]} }};\n"
         return outstr
 
 

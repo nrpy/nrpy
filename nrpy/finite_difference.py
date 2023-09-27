@@ -13,7 +13,6 @@ import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy
 import nrpy.params as par  # NRPy+: parameter interface
 import nrpy.grid as gri  # NRPy+: Functions having to do with numerical grids
 import nrpy.c_function as cfc
-from nrpy.helpers.simd import expr_convert_to_simd_intrins
 from nrpy.helpers.generic import superfast_uniq
 from nrpy.helpers.cse_preprocess_postprocess import cse_preprocess
 

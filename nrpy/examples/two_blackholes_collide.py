@@ -78,7 +78,7 @@ shutil.rmtree(project_dir, ignore_errors=True)
 
 par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 par.set_parval_from_str("fd_order", fd_order)
-par.set_parval_from_str("LeaveRicciSymbolic", separate_Ricci_and_BSSN_RHS)
+par.set_parval_from_str("enable_RbarDD_gridfunctions", separate_Ricci_and_BSSN_RHS)
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 
 # In the following function we overwrite t_final (registered as a CodeParameter in MoL),

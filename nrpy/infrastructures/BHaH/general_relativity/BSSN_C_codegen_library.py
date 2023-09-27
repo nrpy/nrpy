@@ -217,8 +217,10 @@ def register_CFunction_Ricci_eval(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    orig_LeaveRicciSymbolic = par.parval_from_str("LeaveRicciSymbolic")
-    if orig_LeaveRicciSymbolic:
+    orig_enable_RbarDD_gridfunctions = par.parval_from_str(
+        "enable_RbarDD_gridfunctions"
+    )
+    if orig_enable_RbarDD_gridfunctions:
         # try/except in case BSSN_quantities hasn't been set yet.
         try:
             del BSSN_quantities[
@@ -228,8 +230,7 @@ def register_CFunction_Ricci_eval(
             ]
         except KeyError:
             pass
-
-        par.set_parval_from_str("LeaveRicciSymbolic", False)
+        par.set_parval_from_str("enable_RbarDD_gridfunctions", False)
     Bq = BSSN_quantities[
         CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
     ]
@@ -267,8 +268,10 @@ def register_CFunction_Ricci_eval(
         OMP_collapse=OMP_collapse,
     )
 
-    if orig_LeaveRicciSymbolic:
-        par.set_parval_from_str("LeaveRicciSymbolic", orig_LeaveRicciSymbolic)
+    if orig_enable_RbarDD_gridfunctions:
+        par.set_parval_from_str(
+            "enable_RbarDD_gridfunctions", orig_enable_RbarDD_gridfunctions
+        )
         del BSSN_quantities[
             CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
         ]

@@ -16,7 +16,7 @@ import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 #  Declare/initialize parameters for this module
 par.register_param(str, __name__, "EvolvedConformalFactor_cf", "W")
 par.register_param(bool, __name__, "detgbarOverdetghat_equals_one", True)
-par.register_param(bool, __name__, "LeaveRicciSymbolic", False)
+par.register_param(bool, __name__, "enable_RbarDD_gridfunctions", False)
 par.register_param(bool, __name__, "enable_T4munu", False)
 
 
@@ -42,7 +42,7 @@ class BSSNQuantities:
 
         #   Check to see if this function has already been called.
         #   If so, do not register the gridfunctions again!
-        LeaveRicciSymbolic = par.parval_from_str("LeaveRicciSymbolic")
+        enable_RbarDD_gridfunctions = par.parval_from_str("enable_RbarDD_gridfunctions")
 
         if any("hDD00" in gf.name for gf in gri.glb_gridfcs_dict.values()):
             self.hDD = ixp.declarerank2("hDD", symmetry="sym01")
@@ -78,7 +78,7 @@ class BSSNQuantities:
                 wavespeed=[1.0, 1.0, sp.sqrt(2.0)],
             )
 
-        if LeaveRicciSymbolic and not any(
+        if enable_RbarDD_gridfunctions and not any(
             "RbarDD00" in gf.name for gf in gri.glb_gridfcs_dict.values()
         ):
             self.RbarDD = gri.register_gridfunctions_for_single_rank2(
@@ -388,7 +388,7 @@ class BSSNQuantities:
                     self.DGammaU[i] += self.gammabarUU[j][k] * self.DGammaUDD[i][j][k]
 
         # If we wish to leave Ricci symbolic, there's no point continuing to define RbarDD symbolically:
-        if LeaveRicciSymbolic:
+        if enable_RbarDD_gridfunctions:
             pass
         else:
             # Step 7.c.iii: Define \Delta_{ijk} = \bar{\gamma}_{im} \Delta^m_{jk}
@@ -586,8 +586,9 @@ class BSSNQuantities_dict(Dict[str, BSSNQuantities]):
             # In case [CoordSystem]_rfm_precompute is passed:
             CoordSystem = CoordSystem_in.replace("_rfm_precompute", "")
             enable_T4munu = par.parval_from_str("enable_T4munu")
+            enable_RbarDD_gridfunctions = par.parval_from_str("enable_RbarDD_gridfunctions")
             print(
-                f"Setting up BSSN_quantities for CoordSystem = {CoordSystem}, enable_T4munu={enable_T4munu}."
+                f"Setting up BSSN_quantities for CoordSystem = {CoordSystem}, enable_T4munu={enable_T4munu}, Rij symbolic={enable_RbarDD_gridfunctions}."
             )
             self.__setitem__(
                 CoordSystem, BSSNQuantities(CoordSystem, enable_rfm_precompute=False)

@@ -131,7 +131,7 @@ def test_example_BSSN() -> bool:
         \end{align}
     """
     )
-    par.set_parval_from_str("LeaveRicciSymbolic", True)
+    par.set_parval_from_str("enable_RbarDD_gridfunctions", True)
     rhs = BSSN_RHSs.BSSN_RHSs["Cartesian"]
     (
         trusted_alpha_rhs,
@@ -139,7 +139,7 @@ def test_example_BSSN() -> bool:
         trusted_bet_rhsU,
     ) = BSSN_gauge_RHSs.BSSN_gauge_RHSs()
     bssncon = BSSN_constraints.BSSN_constraints["Cartesian"]
-    par.set_parval_from_str("LeaveRicciSymbolic", False)
+    par.set_parval_from_str("enable_RbarDD_gridfunctions", False)
     # Clear BSSN_quantities.BSSN_quantities["Cartesian"], as it left Ricci symbolic.
     del BSSN_quantities.BSSN_quantities["Cartesian"]
     # Construct full symbolic expression for Ricci (RbarDD)

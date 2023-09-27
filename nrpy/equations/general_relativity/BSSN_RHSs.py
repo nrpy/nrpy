@@ -375,12 +375,13 @@ class BSSNRHSs_dict(Dict[str, BSSNRHSs]):
 
     def __getitem__(self, CoordSystem_in: str) -> BSSNRHSs:
         if CoordSystem_in not in self:
-            enable_T4munu = par.parval_from_str("enable_T4munu")
-
             # In case [CoordSystem]_rfm_precompute is passed:
             CoordSystem = CoordSystem_in.replace("_rfm_precompute", "")
+
+            enable_T4munu = par.parval_from_str("enable_T4munu")
+            enable_RbarDD_gridfunctions = par.parval_from_str("enable_RbarDD_gridfunctions")
             print(
-                f"Setting up BSSN_RHSs for CoordSystem = {CoordSystem}, enable_T4munu={enable_T4munu}."
+                f"Setting up BSSN_RHSs for CoordSystem = {CoordSystem}, enable_T4munu={enable_T4munu}, Rij symbolic={enable_RbarDD_gridfunctions}."
             )
             self.__setitem__(
                 CoordSystem, BSSNRHSs(CoordSystem, enable_rfm_precompute=False)

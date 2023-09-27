@@ -94,6 +94,8 @@ Documented in: Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb
 # const int8_t arrays evol_gf_parity and aux_gf_parity, appended to the end of
 # BHaH_defines.h.
 def BHaH_defines_set_gridfunction_defines_with_parity_types(
+    set_parity_on_aux: bool = False,
+    set_parity_on_auxevol: bool = False,
     verbose: bool = True,
 ) -> str:
     """
@@ -155,36 +157,38 @@ def BHaH_defines_set_gridfunction_defines_with_parity_types(
             )
         return parity_type
 
-    evol_parity_type = set_parity_types(evolved_variables_list)
-    aux_parity_type = set_parity_types(auxiliary_variables_list)
-    auxevol_parity_type = set_parity_types(auxevol_variables_list)
-
     outstr = """
-/* PARITY TYPES FOR ALL GRIDFUNCTIONS.
+/* PARITY TYPES FOR EVOLVED (plus optional) GRIDFUNCTIONS.
  * SEE \"Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb\" FOR DEFINITIONS. */
 """
     if len(evolved_variables_list) > 0:
-        outstr += f"static const int8_t evol_gf_parity[{len(evolved_variables_list)}] = {{ {', '.join(map(str, evol_parity_type[:-1]))}, {evol_parity_type[-1]} }};\n"
+        evol_parity_type = set_parity_types(evolved_variables_list)
 
-    if len(auxiliary_variables_list) > 0:
-        outstr += f"static const int8_t aux_gf_parity[{len(auxiliary_variables_list)}] = {{ {', '.join(map(str, aux_parity_type[:-1]))}, {aux_parity_type[-1]} }};\n"
-
-    if len(auxevol_variables_list) > 0:
-        outstr += f"static const int8_t auxevol_gf_parity[{len(auxevol_variables_list)}] = {{ {', '.join(map(str, auxevol_parity_type[:-1]))}, {auxevol_parity_type[-1]} }};\n"
+        outstr += f"static const int8_t evol_gf_parity[{len(evolved_variables_list)}] = {{ {', '.join(map(str, evol_parity_type)) } }};\n"
+    if set_parity_on_aux:
+        if len(auxiliary_variables_list) > 0:
+            aux_parity_type = set_parity_types(auxiliary_variables_list)
+            outstr += f"static const int8_t aux_gf_parity[{len(auxiliary_variables_list)}] = {{ {', '.join(map(str, aux_parity_type))} }};\n"
+    if set_parity_on_auxevol:
+        if len(auxevol_variables_list) > 0:
+            auxevol_parity_type = set_parity_types(auxevol_variables_list)
+            outstr += f"static const int8_t auxevol_gf_parity[{len(auxevol_variables_list)}] = {{ {', '.join(map(str, auxevol_parity_type))} }};\n"
 
     if verbose:
         for i, evolved_variable in enumerate(evolved_variables_list):
             print(
                 f'Evolved gridfunction "{evolved_variable}" has parity type {evol_parity_type[i]}.'
             )
-        for i, auxiliary_variable in enumerate(auxiliary_variables_list):
-            print(
-                f'Auxiliary gridfunction "{auxiliary_variable}" has parity type {aux_parity_type[i]}.'
-            )
-        for i, auxevol_variable in enumerate(auxevol_variables_list):
-            print(
-                f'AuxEvol gridfunction "{auxevol_variable}" has parity type {auxevol_parity_type[i]}.'
-            )
+        if set_parity_on_aux:
+            for i, auxiliary_variable in enumerate(auxiliary_variables_list):
+                print(
+                    f'Auxiliary gridfunction "{auxiliary_variable}" has parity type {aux_parity_type[i]}.'
+                )
+        if set_parity_on_auxevol:
+            for i, auxevol_variable in enumerate(auxevol_variables_list):
+                print(
+                    f'AuxEvol gridfunction "{auxevol_variable}" has parity type {auxevol_parity_type[i]}.'
+                )
 
     return outstr
 
