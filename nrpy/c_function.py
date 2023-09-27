@@ -41,7 +41,7 @@ class CFunction:
     >>> func2 = CFunction()  # doctest: +ELLIPSIS
     Traceback (most recent call last):
         ...
-    ValueError: Error in CFunction: 'name', 'desc', and 'body' must be set. ...
+    ValueError: Error in CFunction: 'name' attribute must be set....
     """
 
     def __init__(
@@ -61,7 +61,7 @@ class CFunction:
         for attribute in [(name, "name"), (desc, "desc"), (body, "body")]:
             if not attribute[0]:
                 raise ValueError(
-                    f"Error in CFunction: '{attribute[1]}' attribute must be set. "
+                    f"Error in CFunction: '{attribute[1]}' attribute must be set."
                 )
         if includes and not isinstance(includes, list):
             raise ValueError("includes must take the form of a list")
