@@ -45,10 +45,15 @@ def register_CFunction_progress_indicator() -> None:
   const REAL phys_time_per_sec = (commondata->time - 0) / seconds_elapsed;
   // const REAL RHS_pt_evals_per_sec = num_RHS_pt_evals / (time_in_ns / 1.0e9);
   const REAL seconds_remaining = (int)((commondata->t_final - commondata->time) / phys_time_per_sec);
-  const int time_remaining__hrs  = (int)(seconds_remaining / 3600.0);
-  const int time_remaining__mins = (int)(seconds_remaining / 60.0) % 60;
-  const int time_remaining__secs = (int)(seconds_remaining) - time_remaining__mins*60 - time_remaining__hrs*3600;
-
+  int time_remaining__hrs  = (int)(seconds_remaining / 3600.0);
+  int time_remaining__mins = (int)(seconds_remaining / 60.0) % 60;
+  int time_remaining__secs = (int)(seconds_remaining) - time_remaining__mins*60 - time_remaining__hrs*3600;
+  if (commondata->nn == 0) {
+    // Just display zeros for ETA at the zeroth iteration
+    time_remaining__hrs = 0;
+    time_remaining__mins = 0;
+    time_remaining__secs = 0;
+  }
   // Step 2: Output simulation progress to stderr
   fprintf(stderr,"%c[2K", 27); // Clear the line
   fprintf(stderr, "It: %d t=%.3f / %.1f = %.2f%% dt=1/%.1f | t/h=%.2f ETA %dh%02dm%02ds\r", commondata->nn,

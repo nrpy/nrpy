@@ -47,7 +47,7 @@ IDCoordSystem = "Cartesian"
 enable_KreissOliger_dissipation = True
 KreissOliger_strength_mult_by_W = True
 KreissOliger_strength_gauge = 0.99
-KreissOliger_strength_nongauge = 0.3
+KreissOliger_strength_nongauge = 0.1
 LapseEvolutionOption = "OnePlusLog"
 ShiftEvolutionOption = "GammaDriving2ndOrder_Covariant"
 GammaDriving_eta = 2.0
@@ -64,8 +64,8 @@ default_BH1_z_posn = +0.25
 default_BH2_z_posn = -0.25
 enable_rfm_precompute = True
 MoL_method = "RK4"
-fd_order = 10
-radiation_BC_fd_order = 2
+fd_order = 8
+radiation_BC_fd_order = 4
 enable_simd = True
 separate_Ricci_and_BSSN_RHS = True
 parallel_codegen_enable = True
@@ -182,7 +182,7 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {
     // 1D output
     {
       char filename[256];
-      sprintf(filename, "out1d-conv_factor%.2f-t%.2f.txt", convergence_factor, time);
+      sprintf(filename, "out1d-conv_factor%.2f-t%08.2f.txt", convergence_factor, time);
       FILE *outfile;
       outfile = fopen(filename, "w");
       if (outfile == NULL) {
@@ -225,7 +225,7 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {
     // 2D output:
     {{
       char filename[256];
-      sprintf(filename, "out2d-{plane}_plane-conv_factor%.2f-t%.2f.txt", convergence_factor, time);
+      sprintf(filename, "out2d-{plane}_plane-conv_factor%.2f-t%08.2f.txt", convergence_factor, time);
       FILE *outfile;
       outfile = fopen(filename, "w");
       if (outfile == NULL) {{
@@ -257,23 +257,13 @@ fprintf(outfile, "%e %e %e %e %e %e %e\n", xCart[0], xCart[1], xCart[2], log10(f
 
         // Adjusted to match Tutorial-Start_to_Finish-BSSNCurvilinear-Two_BHs_Collide-Psi4.ipynb
         const int psi4_spinweightm2_sph_harmonics_max_l = 2;
-        int num_of_R_exts = 0;
-        REAL *restrict list_of_R_exts;
-        for (int R_ext_idx = (Nxx_plus_2NGHOSTS0 - NGHOSTS) / 4; R_ext_idx < (Nxx_plus_2NGHOSTS0 - NGHOSTS) * 0.9; R_ext_idx += 10)
-          num_of_R_exts++;
-        list_of_R_exts = (REAL *restrict)malloc(sizeof(REAL) * num_of_R_exts); // Use 'double' to store floating-point numbers
-
-        num_of_R_exts = 0;
-        for (int R_ext_idx = (Nxx_plus_2NGHOSTS0 - NGHOSTS) / 4; R_ext_idx < (Nxx_plus_2NGHOSTS0 - NGHOSTS) * 0.9; R_ext_idx += 10) {
-          // Step 2.a: Set the extraction radius R_ext based on the radial index R_ext_idx
-          REAL R_ext;
-          REAL xCart[3];
-          //void xx_to_Cart(const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], const int i0, const int i1, const int i2, REAL xCart[3]) {
-          xx_to_Cart(commondata, params, xx, R_ext_idx, 1, 1, xCart); // values for itheta and iphi don't matter.
-          list_of_R_exts[num_of_R_exts] = sqrt(xCart[0] * xCart[0] + xCart[1] * xCart[1] + xCart[2] * xCart[2]);
-          // printf("%.15e\n", list_of_R_exts[num_of_R_exts]);
-          num_of_R_exts++;
-        }
+#define num_of_R_exts 24
+        const REAL list_of_R_exts[num_of_R_exts] =
+        { 10.0, 20.0, 21.0, 22.0, 23.0,
+          24.0, 25.0, 26.0, 27.0, 28.0,
+          29.0, 30.0, 31.0, 32.0, 33.0,
+          35.0, 40.0, 50.0, 60.0, 70.0,
+          80.0, 90.0, 100.0, 150.0 };
 
         // Set psi4.
         psi4_part0(commondata, params, xx, y_n_gfs, diagnostic_output_gfs);
@@ -281,12 +271,11 @@ fprintf(outfile, "%e %e %e %e %e %e %e\n", xCart[0], xCart[1], xCart[2], log10(f
         psi4_part2(commondata, params, xx, y_n_gfs, diagnostic_output_gfs);
         // Decompose psi4 into spin-weight -2  spherical harmonics & output to files.
         psi4_spinweightm2_decomposition_on_sphlike_grids(commondata, params, diagnostic_output_gfs, list_of_R_exts, num_of_R_exts, psi4_spinweightm2_sph_harmonics_max_l, xx);
-
-        free(list_of_R_exts);
       }
   }
 }
-progress_indicator(commondata, griddata);
+if(fabs(round(currtime / (outevery*0.1)) * (outevery*0.1) - currtime) < 0.5*currdt)
+    progress_indicator(commondata, griddata);
 if(commondata->time + commondata->dt > commondata->t_final) printf("\n");
 """
 
