@@ -104,6 +104,7 @@ if __name__ == "__main__":
         packages=find_packages(),
         package_data={
             "nrpy.helpers": ["simd_intrinsics.h"],
+            "nrpy": ["py.typed"],
         },
         classifiers=[
             "License :: OSI Approved :: BSD License",
