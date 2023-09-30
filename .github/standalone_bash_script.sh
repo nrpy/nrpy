@@ -22,7 +22,7 @@ failed_tests=()
 # Use find to locate python files based on pattern or directory structure.
 #   Don't analyze Python scripts in tests/ (though they should pass!)
 #   Ignore CarpetX infrastructure for now as well...
-python_files=$(find . -name '*.py' -not -name '__init__.py' -not -path './build/*' -not -path './nrpy/infrastructures/CarpetX/*' -not -path '*/tests/*')
+python_files=$(find . -name '*.py' -not -name '__init__.py' -not -path './build/*' -not -path './nrpy/infrastructures/CarpetX/*' -not -path '*/tests/*' -not -path '*/in_progress/*')
 
 # Loop through each python file
 for python_file in $python_files; do
