@@ -28,9 +28,10 @@ def register_griddata_struct_and_return_griddata_struct_str() -> str:
         "params_struct params",
         "BHaH parameters, generated from NRPy+'s CodeParameters",
     )
-    griddata_commondata.register_griddata_commondata(
-        "MoL", "MoL_gridfunctions_struct gridfuncs", "MoL gridfunctions"
-    )
+    if any("MoL" in key for key in sys.modules):
+        griddata_commondata.register_griddata_commondata(
+            "MoL", "MoL_gridfunctions_struct gridfuncs", "MoL gridfunctions"
+        )
 
     if any("reference_metric" in key for key in sys.modules):
         griddata_commondata.register_griddata_commondata(
