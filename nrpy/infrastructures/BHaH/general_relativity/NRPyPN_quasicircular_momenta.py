@@ -5,6 +5,10 @@ Sets up C function for setting 3.5PN quasicircular
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
+from typing import Union, cast
+from types import FrameType as FT
+from inspect import currentframe as cfr
+
 from nrpypn.NRPyPN_shortcuts import (
     m1,
     m2,
@@ -24,6 +28,7 @@ from nrpypn.PN_p_r import PN_p_r
 import nrpy.params as par
 import nrpy.c_function as cfc
 import nrpy.c_codegen as ccg
+import nrpy.helpers.parallel_codegen as pcg
 
 par.register_CodeParameters(
     "REAL",
@@ -54,10 +59,13 @@ par.register_CodeParameters(
 )
 
 
-def register_CFunction_NRPyPN_quasicircular_momenta() -> None:
+def register_CFunction_NRPyPN_quasicircular_momenta() -> Union[None, pcg.NRPyEnv_type]:
     """
     Generates a function for setting quasicircular momenta using NRPyPN.
     """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
 
     includes = ["BHaH_defines.h"]
     desc = """Compute quasicircular momenta using validated expressions from NRPyPN."""
@@ -107,3 +115,4 @@ printf("p_t, p_r = %.15e %.15e\n", Pt, Pr);
         params=params,
         body=body,
     )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
