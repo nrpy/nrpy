@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Dict
 import shutil
 
+import nrpy.params as par
 import nrpy.c_function as cfc
 
 bbh_params = namedtuple(
@@ -18,6 +19,21 @@ bbh_params = namedtuple(
     "q d M_chix M_chiy M_chiz m_chix m_chiy m_chiz p_t p_r bare_mass_m_plus bare_mass_m_minus NA NB Nphi",
 )
 bbh_params_dict: Dict[str, bbh_params] = {}
+
+par.register_CodeParameters(
+    "REAL",
+    __name__,
+    [
+        "bbhzx_BH_M_chix",
+        "bbhzx_BH_M_chiy",
+        "bbhzx_BH_M_chiz",
+        "bbhzx_BH_m_chix",
+        "bbhzx_BH_m_chiy",
+        "bbhzx_BH_m_chiz",
+    ],
+    [0, 0, 0, 0, 0, 0],
+    commondata=True,
+)
 
 
 def add_to_bbh_params_dict(
@@ -246,7 +262,7 @@ def register_CFunction_BBH_params_for_TwoPunctures():
   }
 
   if (strcmp(TP_ID_type, "NRPyPN") == 0) {
-    // The inputs for commondata->bbh_physical_params.chi_BH_{m,M}
+    // The inputs for commondata->bbhxy_BH_{m,M}_chi{x,y,z}
     //   assume the BHs are initially (instantaneously) orbiting on
     //   the xy plane. So does NRPyPN:
     {
@@ -269,12 +285,12 @@ def register_CFunction_BBH_params_for_TwoPunctures():
     commondata->bbhzx_BH_M_chiy = commondata->bbhxy_BH_M_chiz;
 
     fprintf(stderr, "NRPyPN: Found p_t, p_r = %.8f %.8f\n",
-            commondata->bbh_physical_params.initial_p_t,
-            commondata->bbh_physical_params.initial_p_r);
+            commondata->p_t,
+            commondata->p_r);
     // For q=1, spins=0, diameter_of_separation=4.0, p_r is negative.
     //    This is likely due to the separation being too small.
     //    We assume below that p_r is positive, so let's fix it:
-    if(commondata->bbh_physical_params.initial_p_r < 0.0) commondata->bbh_physical_params.initial_p_r *= -1.0;
+    if(commondata->p_r < 0.0) commondata->p_r *= -1.0;
   }"""
     # Loop through the bbh_params_dict items to populate the body string
     for key, item in bbh_params_dict.items():

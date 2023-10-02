@@ -262,7 +262,6 @@ fprintf(outfile, "%e %e %e %e %e %e %e\n", xCart[0], xCart[1], xCart[2], log10(f
     }
   }
 }
-progress_indicator(commondata, griddata);
 if(commondata->time + commondata->dt > commondata->t_final) printf("\n");
 """
 

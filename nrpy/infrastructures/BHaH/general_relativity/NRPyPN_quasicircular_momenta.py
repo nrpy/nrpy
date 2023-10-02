@@ -50,22 +50,6 @@ par.register_CodeParameters(
     "REAL",
     __name__,
     [
-        "bbhzx_d_sep",
-        "bbhzx_q_massratio_gt_1",
-        "bbhzx_BH_M_chix",
-        "bbhzx_BH_M_chiy",
-        "bbhzx_BH_M_chiz",
-        "bbhzx_BH_m_chix",
-        "bbhzx_BH_m_chiy",
-        "bbhzx_BH_m_chiz",
-    ],
-    [10.0, 1.24, 0, 0, 0, 0, 0, 0],
-    commondata=True,
-)
-par.register_CodeParameters(
-    "REAL",
-    __name__,
-    [
         "p_t",
         "p_r",
     ],
