@@ -17,6 +17,8 @@ import nrpy.grid as gri  # NRPy+: Functions having to do with numerical grids
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 import nrpy.finite_difference as fin  # NRPy+: Finite-difference module
+from nrpy.infrastructures.BHaH import griddata_commondata
+from nrpy.infrastructures.BHaH import BHaH_defines_h
 from nrpy.validate_expressions.validate_expressions import check_zero
 
 _ = par.CodeParameter(
@@ -189,7 +191,6 @@ def BHaH_defines_set_gridfunction_defines_with_parity_types(
                 print(
                     f'AuxEvol gridfunction "{auxevol_variable}" has parity type {auxevol_parity_type[i]}.'
                 )
-
     return outstr
 
 
@@ -1289,22 +1290,11 @@ applies BCs to the inner boundary points, which may map either to the grid inter
     )
 
 
-# Only call this after ALL gridfunctions have been registered!
-# def CurviBoundaryConditions_register_BHaH_defines(verbose=True):
-#     # Then set up the dictionary entry for CurviBC in BHaH_defines
-#     Nbd_str = BHaH_defines_CurviBC_data_structures()
-#     Nbd_str += BHaH_defines_set_gridfunction_defines_with_parity_types(
-#         verbose=verbose
-#     )
-#     outC_BHaH_defines_h_dict["CurviBoundaryConditions"] = Nbd_str
-#
-#     # Register griddata_struct variables for this module,
-#     #   where griddata_struct is declared in BHaH_defines.h
-#     gri.glb_griddata_struct_list += [gri.glb_griddata(__name__, "bc_struct bcstruct;")]
-
-
 def CurviBoundaryConditions_register_C_functions(
-    CoordSystem: str, radiation_BC_fd_order: int = 2
+    CoordSystem: str,
+    radiation_BC_fd_order: int = 2,
+    set_parity_on_aux: bool = False,
+    set_parity_on_auxevol: bool = False,
 ) -> None:
     """
     Registers various C functions responsible for handling boundary conditions.
@@ -1326,6 +1316,58 @@ def CurviBoundaryConditions_register_C_functions(
 
     # Register C function to apply boundary conditions to outer-extrapolated and inner boundary points.
     register_CFunction_apply_bcs_outerextrap_and_inner()
+
+    # Register bcstruct's contribution to griddata_struct:
+    griddata_commondata.register_griddata_commondata(
+        __name__,
+        "bc_struct bcstruct",
+        "all data needed to perform boundary conditions in curvilinear coordinates",
+    )
+
+    # Register bcstruct's contribution to BHaH_defines.h:
+    CBC_BHd_str = r"""
+// NRPy+ Curvilinear Boundary Conditions: Core data structures
+// Documented in: Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb
+
+typedef struct __innerpt_bc_struct__ {
+  int dstpt;  // dstpt is the 3D grid index IDX3S(i0,i1,i2) of the inner boundary point (i0,i1,i2)
+  int srcpt;  // srcpt is the 3D grid index (a la IDX3S) to which the inner boundary point maps
+  int8_t parity[10];  // parity[10] is a calculation of dot products for the 10 independent parity types
+} innerpt_bc_struct;
+
+typedef struct __outerpt_bc_struct__ {
+  short i0,i1,i2;  // the outer boundary point grid index (i0,i1,i2), on the 3D grid
+  int8_t FACEX0,FACEX1,FACEX2;  // 1-byte integers that store
+  //                               FACEX0,FACEX1,FACEX2 = +1, 0, 0 if on the i0=i0min face,
+  //                               FACEX0,FACEX1,FACEX2 = -1, 0, 0 if on the i0=i0max face,
+  //                               FACEX0,FACEX1,FACEX2 =  0,+1, 0 if on the i1=i2min face,
+  //                               FACEX0,FACEX1,FACEX2 =  0,-1, 0 if on the i1=i1max face,
+  //                               FACEX0,FACEX1,FACEX2 =  0, 0,+1 if on the i2=i2min face, or
+  //                               FACEX0,FACEX1,FACEX2 =  0, 0,-1 if on the i2=i2max face,
+} outerpt_bc_struct;
+
+typedef struct __bc_info_struct__ {
+  int num_inner_boundary_points;  // stores total number of inner boundary points
+  int num_pure_outer_boundary_points[NGHOSTS][3];  // stores number of outer boundary points on each
+  //                                                  ghostzone level and direction (update min and
+  //                                                  max faces simultaneously on multiple cores)
+  int bc_loop_bounds[NGHOSTS][6][6];  // stores outer boundary loop bounds. Unused after bcstruct_set_up()
+} bc_info_struct;
+
+typedef struct __bc_struct__ {
+  innerpt_bc_struct *restrict inner_bc_array;  // information needed for updating each inner boundary point
+  outerpt_bc_struct *restrict pure_outer_bc_array[NGHOSTS*3]; // information needed for updating each outer
+  //                                                             boundary point
+  bc_info_struct bc_info;  // stores number of inner and outer boundary points, needed for setting loop
+  //                          bounds and parallelizing over as many boundary points as possible.
+} bc_struct;
+"""
+    CBC_BHd_str += BHaH_defines_set_gridfunction_defines_with_parity_types(
+        set_parity_on_aux=set_parity_on_aux,
+        set_parity_on_auxevol=set_parity_on_auxevol,
+        verbose=True,
+    )
+    BHaH_defines_h.register_BHaH_defines(__name__, CBC_BHd_str)
 
 
 if __name__ == "__main__":

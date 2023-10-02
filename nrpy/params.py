@@ -119,6 +119,8 @@ class CodeParameter:
 glb_params_dict: Dict[str, NRPyParameter] = {}
 # Where we store C runtime parameters and default values of parameters.
 glb_code_params_dict: Dict[str, CodeParameter] = {}
+# Where we dictionaries of dictionaries
+glb_extras_dict: Dict[str, Dict[str, Any]] = {}
 
 
 def register_param(py_type: Any, module: str, name: str, value: Any) -> None:

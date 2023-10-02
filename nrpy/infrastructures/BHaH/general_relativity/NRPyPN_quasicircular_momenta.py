@@ -34,16 +34,32 @@ par.register_CodeParameters(
     "REAL",
     __name__,
     [
-        "q_mass_ratio_gt_1",
-        "d_sep",
-        "chi1x",
-        "chi1y",
-        "chi1z",
-        "chi2x",
-        "chi2y",
-        "chi2z",
+        "bbhxy_d_sep",
+        "bbhxy_q_massratio_gt_1",
+        "bbhxy_BH_M_chix",
+        "bbhxy_BH_M_chiy",
+        "bbhxy_BH_M_chiz",
+        "bbhxy_BH_m_chix",
+        "bbhxy_BH_m_chiy",
+        "bbhxy_BH_m_chiz",
     ],
-    [1.0, 10.0, 0, 0, 0, 0, 0, 0],
+    [10.0, 1.24, 0, 0, 0, 0, 0, 0],
+    commondata=True,
+)
+par.register_CodeParameters(
+    "REAL",
+    __name__,
+    [
+        "bbhzx_d_sep",
+        "bbhzx_q_massratio_gt_1",
+        "bbhzx_BH_M_chix",
+        "bbhzx_BH_M_chiy",
+        "bbhzx_BH_M_chiz",
+        "bbhzx_BH_m_chix",
+        "bbhzx_BH_m_chiy",
+        "bbhzx_BH_m_chiz",
+    ],
+    [10.0, 1.24, 0, 0, 0, 0, 0, 0],
     commondata=True,
 )
 par.register_CodeParameters(
@@ -75,23 +91,24 @@ def register_CFunction_NRPyPN_quasicircular_momenta() -> Union[None, pcg.NRPyEnv
     body = r"""// compute quasicircular parameters if commondata.p_t and commondata.p_r not
     // already set in the parfile (i.e., reset from their default values of -1.0).
 if(commondata->p_t == -1.0 && commondata->p_r == -1.0) {
-    const REAL q = commondata->q_mass_ratio_gt_1;
-    const REAL r = commondata->d_sep;
-    const REAL chi1U0 = commondata->chi1x;
-    const REAL chi1U1 = commondata->chi1y;
-    const REAL chi1U2 = commondata->chi1z;
-    const REAL chi2U0 = commondata->chi2x;
-    const REAL chi2U1 = commondata->chi2y;
-    const REAL chi2U2 = commondata->chi2z;
+    // In NRPyPN, q = m2/m1 = mass_M/mass_m. So mass_m = object 1, and mass_M is object 2.
+    const REAL q = commondata->bbhxy_q_mass_ratio_gt_1;
+    const REAL r = commondata->bbhxy_d_sep;
+    const REAL chi1U0 = commondata->bbhxy_BH_M_chix;
+    const REAL chi1U1 = commondata->bbhxy_BH_M_chiy;
+    const REAL chi1U2 = commondata->bbhxy_BH_M_chiz;
+    const REAL chi2U0 = commondata->bbhxy_BH_m_chix;
+    const REAL chi2U1 = commondata->bbhxy_BH_m_chiy;
+    const REAL chi2U2 = commondata->bbhxy_BH_m_chiz;
 
-    const REAL m1 = 1.0 / (1.0 + q);
-    const REAL m2 =   q / (1.0 + q);
-    const REAL S1U0 = chi1U0 * m1*m1;
-    const REAL S1U1 = chi1U1 * m1*m1;
-    const REAL S1U2 = chi1U2 * m1*m1;
-    const REAL S2U0 = chi2U0 * m2*m2;
-    const REAL S2U1 = chi2U1 * m2*m2;
-    const REAL S2U2 = chi2U2 * m2*m2;
+    const REAL mass_M =   q / (1.0 + q);
+    const REAL mass_m = 1.0 / (1.0 + q);
+    const REAL S1U0 = chi1U0 * mass_m*mass_m;
+    const REAL S1U1 = chi1U1 * mass_m*mass_m;
+    const REAL S1U2 = chi1U2 * mass_m*mass_m;
+    const REAL S2U0 = chi2U0 * mass_M*mass_M;
+    const REAL S2U1 = chi2U1 * mass_M*mass_M;
+    const REAL S2U2 = chi2U2 * mass_M*mass_M;
 REAL Pt, Pr;
 """
     # Compute p_t, the tangential component of momentum

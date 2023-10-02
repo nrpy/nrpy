@@ -6,9 +6,11 @@ License: Lesser GNU Public License, version 2.0+
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
-
 from collections import namedtuple  # Standard Python: Enable namedtuple data type
+from pathlib import Path
 from typing import Dict
+import shutil
+
 import nrpy.c_function as cfc
 
 bbh_params = namedtuple(
@@ -177,14 +179,14 @@ add_to_bbh_params_dict(
 )
 
 
-def add_to_Cfunction_dict_TwoPunctures_BBH_params_library__set_BBH_params():
-    includes = ["NRPy_basic_defines.h", "NRPy_function_prototypes.h"]
+def register_CFunction_BBH_params_for_TwoPunctures():
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """This function provides both
   * a library of input BBH parameters for TwoPunctures, as well as
   * a means to generate quasicircular BBH input parameters from arbitrary physical inputs.
 """
     c_type = "void"
-    name = "TwoPunctures_BBH_params_library__set_BBH_params"
+    name = "BBH_params_for_TwoPunctures"
     params = "commondata_struct *restrict commondata, char *restrict TP_ID_type, ID_persist_struct *restrict par"
     body = r"""  // First set default parameters:
 
@@ -243,16 +245,13 @@ def add_to_Cfunction_dict_TwoPunctures_BBH_params_library__set_BBH_params():
     }
   }
 
-  if(strcmp(TP_ID_type, "NRPyPN")==0) {
+  if (strcmp(TP_ID_type, "NRPyPN") == 0) {
     // The inputs for commondata->bbh_physical_params.chi_BH_{m,M}
     //   assume the BHs are initially (instantaneously) orbiting on
     //   the xy plane. So does NRPyPN:
-    set_physical_params_NRPyPN(commondata->bbh_physical_params.mass_ratio,
-                               commondata->bbh_physical_params.chi_BH_M,
-                               commondata->bbh_physical_params.chi_BH_m,
-                               commondata->bbh_physical_params.initial_orbital_separation,
-                               &commondata->bbh_physical_params.initial_p_t,
-                               &commondata->bbh_physical_params.initial_p_r);
+    {
+      NRPyPN_quasicircular_momenta(commondata);
+    }
 
     // However, TwoPunctures below assumes the BHs are orbiting
     //   in the xz plane (par->swap_xz).
@@ -261,19 +260,13 @@ def add_to_Cfunction_dict_TwoPunctures_BBH_params_library__set_BBH_params():
     //   this function.
     // Inputs: xy-plane. Outputs: zx-plane:
     //  z = x, x = y, y = z
-    REAL zx_plane_chi_BH_m[3], zx_plane_chi_BH_M[3];
-    zx_plane_chi_BH_m[2] = commondata->bbh_physical_params.chi_BH_m[0];
-    zx_plane_chi_BH_m[0] = commondata->bbh_physical_params.chi_BH_m[1];
-    zx_plane_chi_BH_m[1] = commondata->bbh_physical_params.chi_BH_m[2];
+    commondata->bbhzx_BH_m_chiz = commondata->bbhxy_BH_m_chix;
+    commondata->bbhzx_BH_m_chix = commondata->bbhxy_BH_m_chiy;
+    commondata->bbhzx_BH_m_chiy = commondata->bbhxy_BH_m_chiz;
 
-    zx_plane_chi_BH_M[2] = commondata->bbh_physical_params.chi_BH_M[0];
-    zx_plane_chi_BH_M[0] = commondata->bbh_physical_params.chi_BH_M[1];
-    zx_plane_chi_BH_M[1] = commondata->bbh_physical_params.chi_BH_M[2];
-
-    for(int ii=0;ii<3;ii++) {
-      commondata->bbh_physical_params.chi_BH_m[ii] = zx_plane_chi_BH_m[ii];
-      commondata->bbh_physical_params.chi_BH_M[ii] = zx_plane_chi_BH_M[ii];
-    }
+    commondata->bbhzx_BH_M_chiz = commondata->bbhxy_BH_M_chix;
+    commondata->bbhzx_BH_M_chix = commondata->bbhxy_BH_M_chiy;
+    commondata->bbhzx_BH_M_chiy = commondata->bbhxy_BH_M_chiz;
 
     fprintf(stderr, "NRPyPN: Found p_t, p_r = %.8f %.8f\n",
             commondata->bbh_physical_params.initial_p_t,
@@ -390,5 +383,40 @@ def add_to_Cfunction_dict_TwoPunctures_BBH_params_library__set_BBH_params():
   commondata->mass_ratio_for_grid_centroid_offset = commondata->bbh_physical_params.mass_ratio;
 """
     cfc.register_CFunction(
-        includes=includes, desc=desc, c_type=c_type, name=name, params=params, body=body
+        subdirectory="TwoPunctures",
+        includes=includes,
+        desc=desc,
+        c_type=c_type,
+        name=name,
+        params=params,
+        body=body,
     )
+
+
+def copy_TwoPunctures_h(project_Path: Path) -> None:
+    """
+    Copies TwoPunctures.h into project directory.
+
+    :param project_Path: The path of the project directory where the file will be copied.
+    """
+    try:
+        # only Python 3.7+ has importlib.resources
+        import importlib.resources  # pylint: disable=E1101,C0415
+
+        source_path = (
+            # pylint: disable=E1101
+            importlib.resources.files(
+                "nrpy.infrastructures.BHaH.general_relativity.TwoPunctures"
+            )
+            / "TwoPunctures.h"
+        )
+        shutil.copy(str(source_path), str(project_Path))
+    except ImportError:  # Fallback to resource_filename for older Python versions
+        # pylint: disable=E1101,C0415
+        from pkg_resources import resource_filename  # type: ignore
+
+        source_path = resource_filename(
+            "nrpy.infrastructures.BHaH.general_relativity.TwoPunctures",
+            "TwoPunctures.h",
+        )
+        shutil.copy(source_path, str(project_Path))  # type: ignore

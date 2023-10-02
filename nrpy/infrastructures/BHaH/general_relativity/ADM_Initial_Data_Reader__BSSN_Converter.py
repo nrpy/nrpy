@@ -24,6 +24,7 @@ from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.equations.general_relativity.ADM_to_BSSN import ADM_to_BSSN
 
 import nrpy.infrastructures.BHaH.simple_loop as lp
+from nrpy.infrastructures.BHaH import BHaH_defines_h
 
 
 def register_CFunction_exact_ADM_ID_function(
@@ -513,6 +514,7 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     IDCoordSystem: str = "Spherical",
     include_T4UU: bool = False,
     enable_fd_functions: bool = False,
+    ID_persist_struct_str: str = "",
 ) -> None:
     """
     Register the CFunction for converting initial ADM data to BSSN variables.
@@ -522,8 +524,36 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     :param IDCoordSystem: Coordinate system for input ADM variables. Defaults to "Spherical".
     :param include_T4UU: Whether to include stress-energy tensor components.
     :param enable_fd_functions: Whether to enable finite-difference functions.
-
     """
+    # Step 1: construct this function's contribution to BHaH_defines.h:
+    BHd = r"""typedef struct __initial_data_struct__ {
+  REAL alpha;
+
+  REAL betaSphorCartU0, betaSphorCartU1, betaSphorCartU2;
+  REAL BSphorCartU0, BSphorCartU1, BSphorCartU2;
+
+  REAL gammaSphorCartDD00, gammaSphorCartDD01, gammaSphorCartDD02;
+  REAL gammaSphorCartDD11, gammaSphorCartDD12, gammaSphorCartDD22;
+
+  REAL KSphorCartDD00, KSphorCartDD01, KSphorCartDD02;
+  REAL KSphorCartDD11, KSphorCartDD12, KSphorCartDD22;
+"""
+    if include_T4UU:
+        BHd += """
+  REAL T4SphorCartUU00,T4SphorCartUU01,T4SphorCartUU02,T4SphorCartUU03;
+  REAL                 T4SphorCartUU11,T4SphorCartUU12,T4SphorCartUU13;
+  REAL                                 T4SphorCartUU22,T4SphorCartUU23;
+  REAL                                                 T4SphorCartUU33;
+"""
+    BHd += """
+} initial_data_struct;
+"""
+    BHd += "typedef struct __ID_persist_struct__ {\n"
+    BHd += ID_persist_struct_str + "\n"
+    BHd += "} ID_persist_struct;\n"
+    BHaH_defines_h.register_BHaH_defines(__name__, BHd)
+
+    # Step 2: include BHaH_defines.h and register CFunction.
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     if enable_fd_functions:
         includes += ["finite_difference_functions.h"]
@@ -642,7 +672,6 @@ typedef struct __rescaled_BSSN_rfm_basis_struct__ {
 
   initial_data_lambdaU_grid_interior(commondata, &griddata->params, griddata->xx, griddata->gridfuncs.y_n_gfs);
 """
-
     cfc.register_CFunction(
         includes=includes,
         prefunc=prefunc,
@@ -653,52 +682,6 @@ typedef struct __rescaled_BSSN_rfm_basis_struct__ {
         include_CodeParameters_h=False,
         body=body,
     )
-    # return pickle_NRPy_env()
-
-
-def generate_BHaH_defines_contribution(
-    ID_persist_struct_contents_str: str = "", include_T4UU: bool = False
-) -> str:
-    """
-    Generates C code for the BHaH initial data definitions and contributions.
-
-    :param ID_persist_struct_contents_str: String containing the content of the ID_persist_struct structure.
-    :param include_T4UU: Boolean indicating whether to include the T4UU terms.
-    :return: A string containing the generated C code for the initial data structures.
-
-    >>> generate_BHaH_defines_contribution("", False).startswith("typedef struct __initial_data_struct__ {")
-    True
-    >>> "T4SphorCartUU00" in generate_BHaH_defines_contribution("", True)
-    True
-    """
-
-    Nbd = r"""typedef struct __initial_data_struct__ {
-  REAL alpha;
-
-  REAL betaSphorCartU0, betaSphorCartU1, betaSphorCartU2;
-  REAL BSphorCartU0, BSphorCartU1, BSphorCartU2;
-
-  REAL gammaSphorCartDD00, gammaSphorCartDD01, gammaSphorCartDD02;
-  REAL gammaSphorCartDD11, gammaSphorCartDD12, gammaSphorCartDD22;
-
-  REAL KSphorCartDD00, KSphorCartDD01, KSphorCartDD02;
-  REAL KSphorCartDD11, KSphorCartDD12, KSphorCartDD22;
-"""
-    if include_T4UU:
-        Nbd += """
-  REAL T4SphorCartUU00,T4SphorCartUU01,T4SphorCartUU02,T4SphorCartUU03;
-  REAL                 T4SphorCartUU11,T4SphorCartUU12,T4SphorCartUU13;
-  REAL                                 T4SphorCartUU22,T4SphorCartUU23;
-  REAL                                                 T4SphorCartUU33;
-"""
-    Nbd += """
-} initial_data_struct;
-"""
-
-    Nbd += "typedef struct __ID_persist_struct__ {\n"
-    Nbd += ID_persist_struct_contents_str + "\n"
-    Nbd += "} ID_persist_struct;\n"
-    return Nbd
 
 
 if __name__ == "__main__":

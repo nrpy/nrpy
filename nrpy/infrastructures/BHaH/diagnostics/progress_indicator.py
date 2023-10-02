@@ -8,6 +8,7 @@ Author: Zachariah B. Etienne
 
 import nrpy.c_function as cfc
 import nrpy.params as par
+from nrpy.infrastructures.BHaH import BHaH_defines_h
 
 _ = par.register_CodeParameter(
     "TIMEVAR",
@@ -27,6 +28,22 @@ def register_CFunction_progress_indicator() -> None:
     The function updates the elapsed time and other metrics to give the user an
     idea of the progress being made in the computation.
     """
+    BHaH_defines_h.register_BHaH_defines(
+        __name__,
+        r"""#ifdef __linux__
+// Timer with nanosecond resolution. Only on Linux.
+#define TIMEVAR struct timespec
+#define CURRTIME_FUNC(currtime) clock_gettime(CLOCK_REALTIME, currtime)
+#define TIME_IN_NS(start, end) (REAL)(1000000000L * (end.tv_sec - start.tv_sec) + end.tv_nsec - start.tv_nsec);
+#else
+// Low-resolution timer, 1-second resolution. Widely available.
+#define TIMEVAR time_t
+#define CURRTIME_FUNC(currtime) time(currtime)
+#define TIME_IN_NS(start, end) (REAL)(difftime(end, start)*1.0e9 + 1e-6) // Round up to avoid divide-by-zero.
+#endif
+""",
+    )
+
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "time.h"]
     desc = """Output progress indicator, including elapsed time and other metrics to give the user an
     idea of the status of the the computation."""

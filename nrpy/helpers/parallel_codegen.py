@@ -54,6 +54,7 @@ NRPyEnv_type = Tuple[
             gri.CarpetXGridFunction,
         ],
     ],
+    Dict[str, Dict[str, Any]],
 ]
 
 
@@ -66,7 +67,29 @@ def NRPyEnv() -> NRPyEnv_type:
         par.glb_code_params_dict,
         cfc.CFunction_dict,
         gri.glb_gridfcs_dict,
+        par.glb_extras_dict,
     )
+
+
+def deep_update(d: Dict[Any, Any], u: Dict[Any, Any]) -> None:
+    """
+    Perform a deep update on a dictionary.
+
+    :param d: The original dictionary to update.
+    :param u: The dictionary containing new keys and values.
+
+    >>> original = {'a': 1, 'b': {'c': 2}}
+    >>> new = {'a': 'new_a', 'b': {'d': 'new_d'}}
+    >>> deep_update(original, new)
+    >>> original == {'a': 'new_a', 'b': {'c': 2, 'd': 'new_d'}}
+    True
+    """
+    for k, v in u.items():
+        if isinstance(v, dict):
+            d[k] = d.get(k, {})
+            deep_update(d[k], v)
+        else:
+            d[k] = v
 
 
 def unpack_NRPy_environment_dict(
@@ -77,11 +100,13 @@ def unpack_NRPy_environment_dict(
 
     :param NRPy_environment_dict: Dictionary containing NRPy environment types.
     """
+
     for env in NRPy_environment_dict.values():
         par.glb_params_dict.update(env[0])
         par.glb_code_params_dict.update(env[1])
         cfc.CFunction_dict.update(env[2])
         gri.glb_gridfcs_dict.update(env[3])
+        deep_update(par.glb_extras_dict, env[4])
 
 
 def pcg_registration_phase() -> bool:
@@ -207,3 +232,16 @@ def do_parallel_codegen() -> None:
         )
 
     unpack_NRPy_environment_dict(dict(NRPy_environment_to_unpack))
+
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

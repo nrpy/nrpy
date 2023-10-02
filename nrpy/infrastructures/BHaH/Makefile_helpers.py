@@ -59,45 +59,43 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
 
     Makefile_list_of_files: List[str] = []
 
-    def add_to_Makefile(project_Path: Path, path_and_file: str) -> Path:
+    def add_to_Makefile(project_Path: Path, subdir_Path: Path, file_name: str) -> Path:
         """
         Add the given path and file to the Makefile list of files and return the joined path.
 
-        :param project_Path: The Path of the project
-        :param path_and_file: The path and file, which can start with "./"
+        :param project_Path: The Path of the project.
+        :param subdir_Path: The subdirectory path within the project.
+        :param file_name: The filename.
         :return: The joined path of project_dir and path_and_file without "./" prefix
         """
-        # Removing "./" prefix if it exists
-        if path_and_file.startswith("./"):
-            path_and_file = path_and_file[2:]
-
-        Makefile_list_of_files.append(path_and_file)
-        return project_Path / path_and_file
+        Makefile_list_of_files.append(str(subdir_Path / file_name))
+        return project_Path / subdir_Path / file_name
 
     # Output all CFunctions to file. Keep track of all functions being output for the Makefile.
     list_of_uniq_functions: List[str] = []
     for name, CFunction in CFunction_dict.items():
         # Convention: Output all C functions starting in [CoordSystem] into the CoordSystem/ subdirectory.
         if "__rfm__" in name:
-            subdir = name.split("__rfm__")[-1]
-            (project_Path / subdir).mkdir(exist_ok=True)
+            subdir_Path = Path(name.split("__rfm__")[-1])
+            (project_Path / subdir_Path).mkdir(parents=True, exist_ok=True)
             with open(
-                add_to_Makefile(project_Path, f"{subdir}/{name}.c"),
+                add_to_Makefile(project_Path, subdir_Path, f"{name}.c"),
                 "w",
                 encoding="utf-8",
             ) as file:
                 file.write(CFunction.full_function)
-        elif CFunction.subdirectory != "":
-            subdir = CFunction.subdirectory
+        elif CFunction.subdirectory:
+            subdir_Path = Path(CFunction.subdirectory)
+            (project_Path / subdir_Path).mkdir(parents=True, exist_ok=True)
             with open(
-                add_to_Makefile(project_Path, f"{subdir}/{name}.c"),
+                add_to_Makefile(project_Path, subdir_Path, f"{name}.c"),
                 "w",
                 encoding="utf-8",
             ) as file:
                 file.write(CFunction.full_function)
         else:
             with open(
-                add_to_Makefile(project_Path, f"{name}.c"),
+                add_to_Makefile(project_Path, Path("."), f"{name}.c"),
                 "w",
                 encoding="utf-8",
             ) as file:

@@ -85,19 +85,17 @@ cmdpar.generate_default_parfile(project_dir=project_dir, project_name=project_na
 cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
     project_name=project_name,
     cmdline_inputs=[
-        "q_mass_ratio_gt_1",
-        "d_sep",
-        "chi1x",
-        "chi1y",
-        "chi1z",
-        "chi2x",
-        "chi2y",
-        "chi2z",
+        "bbh_q_mass_ratio_gt_1",
+        "bbh_d_sep",
+        "bbh_chi1x",
+        "bbh_chi1y",
+        "bbh_chi1z",
+        "bbh_chi2x",
+        "bbh_chi2y",
+        "bbh_chi2z",
     ],
 )
-Bdefines_h.output_BHaH_defines_h(
-    project_dir=project_dir, enable_simd=False, MoL_method="disabled"
-)
+Bdefines_h.output_BHaH_defines_h(project_dir=project_dir, enable_simd=False)
 register_CFunction_main_c()
 
 Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(

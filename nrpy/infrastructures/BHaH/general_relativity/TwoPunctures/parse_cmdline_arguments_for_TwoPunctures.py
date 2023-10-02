@@ -9,11 +9,11 @@ Author: Zachariah B. Etienne
 import nrpy.c_function as cfc
 
 
-def add_to_Cfunction_dict__TwoPunctures_parse_cmdline_arguments():
+def register_CFunction_parse_cmdline_arguments_for_TwoPunctures():
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """Parse command-line arguments for TwoPunctures initial data"""
     c_type = "void"
-    name = "TwoPunctures_parse_cmdline_arguments"
+    name = "parse_cmdline_arguments_for_TwoPunctures"
     params = "const int argc, const char *argv[], ID_persist_struct *restrict ID_persist, commondata_struct *restrict commondata"
     body = r"""
   // Step 0.d: Set ID_type and TP_ID_type
@@ -36,7 +36,7 @@ def add_to_Cfunction_dict__TwoPunctures_parse_cmdline_arguments():
     // PUNCTURES ORBIT IN THE z-x PLANE; y-AXIS IS PERPENDICULAR TO INITIAL ORBITAL PLANE
     int ww=1;
     commondata->bbh_physical_params.initial_orbital_separation = strtod(argv[ww], NULL); ww++;
-    commondata->bbh_physical_params.mass_ratio                 = strtod(argv[ww], NULL); ww++;
+    commondata->bbh_physical_params.mass_ratio = strtod(argv[ww], NULL); ww++;
     if(commondata->bbh_physical_params.mass_ratio < 1.0) {
       fprintf(stderr, "ERROR: we use the mass ratio convention such that mass_ratio = q = M/m >= 1.0. q=%.5f is invalid\n", commondata->bbh_physical_params.mass_ratio);
       exit(1);
@@ -45,12 +45,12 @@ def add_to_Cfunction_dict__TwoPunctures_parse_cmdline_arguments():
     // The inputs assume the BHs are initially (instantaneously) orbiting on the xy plane.
     //   This is by convention. Our actual simulations are performed on the zx plane,
     //   and conversions are performed in TwoPunctures_BBH_params_library__set_BBH_params.c
-    commondata->bbh_physical_params.chi_BH_M[0]                = strtod(argv[ww], NULL); ww++;
-    commondata->bbh_physical_params.chi_BH_M[1]                = strtod(argv[ww], NULL); ww++;
-    commondata->bbh_physical_params.chi_BH_M[2]                = strtod(argv[ww], NULL); ww++;
-    commondata->bbh_physical_params.chi_BH_m[0]                = strtod(argv[ww], NULL); ww++;
-    commondata->bbh_physical_params.chi_BH_m[1]                = strtod(argv[ww], NULL); ww++;
-    commondata->bbh_physical_params.chi_BH_m[2]                = strtod(argv[ww], NULL); ww++;
+    commondata->bbh_physical_params.chi_BH_M[0] = strtod(argv[ww], NULL); ww++;
+    commondata->bbh_physical_params.chi_BH_M[1] = strtod(argv[ww], NULL); ww++;
+    commondata->bbh_physical_params.chi_BH_M[2] = strtod(argv[ww], NULL); ww++;
+    commondata->bbh_physical_params.chi_BH_m[0] = strtod(argv[ww], NULL); ww++;
+    commondata->bbh_physical_params.chi_BH_m[1] = strtod(argv[ww], NULL); ww++;
+    commondata->bbh_physical_params.chi_BH_m[2] = strtod(argv[ww], NULL); ww++;
     if(argc == 10) sprintf(TP_ID_type, "TP_BL_custom");
     if(commondata->bbh_physical_params.initial_orbital_separation <= 0 ||
        commondata->bbh_physical_params.initial_orbital_separation >= 30) {
@@ -78,5 +78,11 @@ def add_to_Cfunction_dict__TwoPunctures_parse_cmdline_arguments():
   fprintf(stderr, "#################################\n");
 """
     cfc.register_CFunction(
-        includes=includes, desc=desc, c_type=c_type, name=name, params=params, body=body
+        subdirectory="TwoPunctures",
+        includes=includes,
+        desc=desc,
+        c_type=c_type,
+        name=name,
+        params=params,
+        body=body,
     )

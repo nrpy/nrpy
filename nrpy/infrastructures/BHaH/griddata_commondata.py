@@ -7,6 +7,7 @@ Author: Zachariah B. Etienne
 """
 
 from typing import Dict, List
+import nrpy.params as par
 
 
 class GridCommonData:
@@ -27,10 +28,10 @@ class GridCommonData:
             raise ValueError("GridData.c_declaration cannot have a semicolon inside.")
 
 
-# griddata_struct stores data specific to each grid
-glb_griddata_struct_dict: Dict[str, List[GridCommonData]] = {}
-# commondata_struct stores data common to all grids
-glb_commondata_struct_dict: Dict[str, List[GridCommonData]] = {}
+# # griddata_struct stores data specific to each grid
+# glb_griddata_struct_dict: Dict[str, List[GridCommonData]] = {}
+# # commondata_struct stores data common to all grids
+# glb_commondata_struct_dict: Dict[str, List[GridCommonData]] = {}
 
 
 def register_griddata_commondata(
@@ -48,9 +49,9 @@ def register_griddata_commondata(
 
     Doctest:
     >>> register_griddata_commondata("my_module", "struct my_module", "my_module's description")
-    >>> glb_griddata_struct_dict["my_module"][0].c_declaration
+    >>> par.glb_extras_dict["griddata_struct"]["my_module"][0].c_declaration
     'struct my_module'
-    >>> print(glb_griddata_struct_dict["my_module"][0].description)
+    >>> print(par.glb_extras_dict["griddata_struct"]["my_module"][0].description)
     my_module's description
     >>> register_griddata_commondata("my_module", "struct my_module", "my description")  # doctest: +IGNORE_EXCEPTION_DETAIL
     Traceback (most recent call last):
@@ -59,7 +60,7 @@ def register_griddata_commondata(
     """
 
     def register_griddata_or_commondata(
-        dictionary: Dict[str, List["GridCommonData"]]
+        dictionary: Dict[str, List[GridCommonData]]
     ) -> None:
         if module in dictionary:
             if any(gd.c_declaration == c_declaration for gd in dictionary[module]):
@@ -73,9 +74,17 @@ def register_griddata_commondata(
             dictionary[module] = [GridCommonData(module, c_declaration, description)]
 
     if is_commondata:
-        register_griddata_or_commondata(glb_commondata_struct_dict)
+        # commondata_struct stores data common to all grids
+        if "commondata_struct" not in par.glb_extras_dict.keys():
+            par.glb_extras_dict["commondata_struct"]: Dict[
+                str, List[GridCommonData]
+            ] = {}
+        register_griddata_or_commondata(par.glb_extras_dict["commondata_struct"])
     else:
-        register_griddata_or_commondata(glb_griddata_struct_dict)
+        # griddata_struct stores data specific to each grid
+        if "griddata_struct" not in par.glb_extras_dict.keys():
+            par.glb_extras_dict["griddata_struct"]: Dict[str, List[GridCommonData]] = {}
+        register_griddata_or_commondata(par.glb_extras_dict["griddata_struct"])
 
 
 if __name__ == "__main__":

@@ -31,8 +31,8 @@ import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
-import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numgrids
-import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xxCart
+import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
+import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xxCartxx
 import nrpy.infrastructures.BHaH.general_relativity.BSSN_C_codegen_library as BCl
 
 par.set_parval_from_str("Infrastructure", "BHaH")
@@ -258,10 +258,13 @@ if(commondata->time + commondata->dt > commondata->t_final) printf("\n");
 
 
 BCl.register_CFunction_initial_data(
-    CoordSystem=CoordSystem, IDtype=IDtype, IDCoordSystem=IDCoordSystem
+    CoordSystem=CoordSystem,
+    IDtype=IDtype,
+    IDCoordSystem=IDCoordSystem,
+    ID_persist_struct_str="",
 )
 
-numgrids.register_CFunction_numerical_grids_and_timestep_setup(
+numericalgrids.register_CFunction_numerical_grids_and_timestep_setup(
     CoordSystem, grid_physical_size, Nxx_dict
 )
 register_CFunction_diagnostics(in_CoordSystem=CoordSystem)
@@ -327,8 +330,8 @@ MoL.MoL_register_CFunctions(
     enable_curviBCs=True,
 )
 print(f"Section 4 finished at {time.time() - start_time:.4f} seconds")
-xxCart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
-xxCart.register_CFunction_xx_to_Cart(CoordSystem)
+xxCartxx.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
+xxCartxx.register_CFunction_xx_to_Cart(CoordSystem)
 progress.register_CFunction_progress_indicator()
 
 #########################################################
@@ -355,7 +358,6 @@ Bdefines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     enable_simd=enable_simd,
     fin_NGHOSTS_add_one_for_upwinding=True,
-    MoL_method=MoL_method,
     CoordSystem=CoordSystem,
 )
 main.register_CFunction_main_c(

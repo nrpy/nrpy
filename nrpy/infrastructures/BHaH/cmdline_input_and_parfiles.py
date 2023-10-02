@@ -101,7 +101,7 @@ static void read_chararray(const char *value, char *result, const char *param_na
 """
     if cmdline_inputs is None:
         cmdline_inputs = []
-    list_of_steerable_params_str = " ".join(cmdline_inputs)
+    list_of_steerable_params_str = "  ".join(cmdline_inputs)
     prefunc += rf"""// Function to print usage instructions
 static void print_usage() {{
   fprintf(stderr, "Usage option 0: ./{project_name} [--help or -h] <- Outputs this usage command\n");

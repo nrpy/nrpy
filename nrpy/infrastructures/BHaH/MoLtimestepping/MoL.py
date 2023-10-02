@@ -22,6 +22,8 @@ from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary impor
 from nrpy.helpers.generic import (
     superfast_uniq,
 )
+from nrpy.infrastructures.BHaH import griddata_commondata
+from nrpy.infrastructures.BHaH import BHaH_defines_h
 
 # fmt: off
 _ = par.CodeParameter("int", __name__, "nn_0", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
@@ -805,6 +807,7 @@ def MoL_register_CFunctions(
     enable_rfm_precompute: bool = False,
     enable_curviBCs: bool = False,
     enable_simd: bool = False,
+    register_MoL_step_forward_in_time: bool = True,
 ) -> None:
     """
     Registers C functions and NRPy basic defines.
@@ -874,15 +877,44 @@ def MoL_register_CFunctions(
     for which_gfs in ["y_n_gfs", "non_y_n_gfs"]:
         register_CFunction_MoL_malloc(Butcher_dict, MoL_method, which_gfs)
         register_CFunction_MoL_free_memory(Butcher_dict, MoL_method, which_gfs)
-    register_CFunction_MoL_step_forward_in_time(
-        Butcher_dict,
-        MoL_method,
-        rhs_string,
-        post_rhs_string,
-        post_post_rhs_string,
-        enable_rfm_precompute=enable_rfm_precompute,
-        enable_curviBCs=enable_curviBCs,
-        enable_simd=enable_simd,
+    if register_MoL_step_forward_in_time:
+        register_CFunction_MoL_step_forward_in_time(
+            Butcher_dict,
+            MoL_method,
+            rhs_string,
+            post_rhs_string,
+            post_post_rhs_string,
+            enable_rfm_precompute=enable_rfm_precompute,
+            enable_curviBCs=enable_curviBCs,
+            enable_simd=enable_simd,
+        )
+
+    griddata_commondata.register_griddata_commondata(
+        __name__, "MoL_gridfunctions_struct gridfuncs", "MoL gridfunctions"
+    )
+
+    # Generating gridfunction names based on the given MoL method
+    (
+        y_n_gridfunctions,
+        non_y_n_gridfunctions_list,
+        _diagnostic_gridfunctions_point_to,
+        _diagnostic_gridfunctions2_point_to,
+    ) = generate_gridfunction_names(Butcher_dict, MoL_method=MoL_method)
+
+    # Step 3.b: Create MoL_timestepping struct:
+    BHaH_defines_h.register_BHaH_defines(
+        __name__,
+        f"typedef struct __MoL_gridfunctions_struct__ {{\n"
+        f"REAL *restrict {y_n_gridfunctions};\n"
+        + "".join(f"REAL *restrict {gfs};\n" for gfs in non_y_n_gridfunctions_list)
+        + r"""REAL *restrict diagnostic_output_gfs;
+REAL *restrict diagnostic_output_gfs2;
+} MoL_gridfunctions_struct;
+
+#define LOOP_ALL_GFS_GPS(ii) \
+_Pragma("omp parallel for") \
+  for(int (ii)=0;(ii)<Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;(ii)++)
+""",
     )
 
 

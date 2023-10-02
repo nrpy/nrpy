@@ -427,7 +427,8 @@ cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
     project_name=project_name, cmdline_inputs=["convergence_factor"]
 )
 Bdefines_h.output_BHaH_defines_h(
-    project_dir=project_dir, enable_simd=enable_simd, MoL_method=MoL_method
+    project_dir=project_dir,
+    enable_simd=enable_simd,
 )
 main.register_CFunction_main_c(
     MoL_method=MoL_method,

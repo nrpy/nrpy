@@ -36,7 +36,7 @@ import nrpy.infrastructures.BHaH.main_c as main
 import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
-import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numgrids
+import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 
 par.set_parval_from_str("Infrastructure", "BHaH")
@@ -358,7 +358,7 @@ register_CFunction_exact_solution_single_point(
     in_CoordSystem=CoordSystem, in_WaveType=WaveType, in_default_sigma=default_sigma
 )
 register_CFunction_initial_data()
-numgrids.register_CFunction_numerical_grids_and_timestep_setup(
+numericalgrids.register_CFunction_numerical_grids_and_timestep_setup(
     CoordSystem, grid_physical_size, Nxx_dict
 )
 register_CFunction_diagnostics()
@@ -404,7 +404,6 @@ cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
 Bdefines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     enable_simd=enable_simd,
-    MoL_method=MoL_method,
     CoordSystem=CoordSystem,
 )
 main.register_CFunction_main_c(

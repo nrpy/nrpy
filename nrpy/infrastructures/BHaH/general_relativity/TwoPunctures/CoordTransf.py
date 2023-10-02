@@ -196,7 +196,6 @@ rx3_To_xyz (int nvar, REAL x, REAL r, REAL phi,
 
     cfc.register_CFunction(
         prefunc=prefunc,
-        includes=includes,
         desc=desc,
         name=name,
         params=params,

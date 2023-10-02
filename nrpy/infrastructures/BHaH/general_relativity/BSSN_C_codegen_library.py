@@ -37,7 +37,10 @@ import nrpy.infrastructures.BHaH.simple_loop as lp
 
 
 def register_CFunction_initial_data(
-    CoordSystem: str, IDtype: str, IDCoordSystem: str
+    CoordSystem: str,
+    IDtype: str,
+    IDCoordSystem: str,
+    ID_persist_struct_str: str,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register C functions for converting ADM initial data to BSSN variables and applying boundary conditions.
@@ -56,13 +59,22 @@ def register_CFunction_initial_data(
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
-    ID = InitialData_Cartesian(IDtype=IDtype)
+    try:
+        ID = InitialData_Cartesian(IDtype=IDtype)
+        admid.register_CFunction_exact_ADM_ID_function(
+            IDCoordSystem, IDtype, ID.alpha, ID.betaU, ID.BU, ID.gammaDD, ID.KDD
+        )
+    except ValueError or RuntimeError:
+        print(
+            f"Warning: {IDtype} does not correspond to an implemented exact initial data type."
+        )
+        print("Assuming initial data functionality is implemented elsewhere.")
+        pass
 
-    admid.register_CFunction_exact_ADM_ID_function(
-        IDCoordSystem, IDtype, ID.alpha, ID.betaU, ID.BU, ID.gammaDD, ID.KDD
-    )
     admid.register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
-        CoordSystem, IDCoordSystem=IDCoordSystem
+        CoordSystem,
+        IDCoordSystem=IDCoordSystem,
+        ID_persist_struct_str=ID_persist_struct_str,
     )
 
     desc = "Set initial data."
