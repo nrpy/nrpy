@@ -24,8 +24,6 @@ par.register_CodeParameters(
     ["TP_npoints_A", "TP_npoints_B", "TP_npoints_phi"],
     [-1, -1, -1],
     commondata=True,
-    add_to_parfile=True,
-    add_to_set_CodeParameters_h=False,
 )
 par.register_CodeParameters(
     "REAL",
@@ -33,8 +31,6 @@ par.register_CodeParameters(
     ["TP_bare_mass_m", "TP_bare_mass_M"],
     [-1, -1],
     commondata=True,
-    add_to_parfile=True,
-    add_to_set_CodeParameters_h=False,
 )
 par.register_CodeParameters(
     "REAL",

@@ -46,7 +46,8 @@ grid_physical_size = 10.0
 LapseEvolutionOption = "OnePlusLog"
 ShiftEvolutionOption = "GammaDriving2ndOrder_Covariant"
 GammaDriving_eta = 1.0
-t_final = 0.0 * grid_physical_size
+diagnostics_output_every = 0.25
+t_final = 0.5 * diagnostics_output_every
 
 CoordSystem = "SinhSpherical"
 Nxx_dict = {
@@ -97,7 +98,11 @@ def register_CFunction_diagnostics(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
     _ = par.CodeParameter(
-        "REAL", __name__, "diagnostics_output_every", 0.25, commondata=True
+        "REAL",
+        __name__,
+        "diagnostics_output_every",
+        diagnostics_output_every,
+        commondata=True,
     )
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
