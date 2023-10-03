@@ -11,6 +11,7 @@
      - **Curvilinear coordinates**: `python3 -m nrpy.examples.wave_equation_curvilinear`
    - **General relativity**
      - **Two black holes collide**: `python3 -m nrpy.examples.two_blackholes_collide`
+     - **Black hole spectroscopy**: `python3 -m nrpy.examples.blackhole_spectroscopy`
 
 ## Slow start, in case you want to develop NRPy+ directly:
 
