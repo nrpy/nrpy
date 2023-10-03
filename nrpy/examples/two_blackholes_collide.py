@@ -81,8 +81,6 @@ par.set_parval_from_str("fd_order", fd_order)
 par.set_parval_from_str("enable_RbarDD_gridfunctions", separate_Ricci_and_BSSN_RHS)
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 
-# In the following function we overwrite t_final (registered as a CodeParameter in MoL),
-#    so let's remove it from the parfile
 par.adjust_CodeParam_default("t_final", t_final)
 
 

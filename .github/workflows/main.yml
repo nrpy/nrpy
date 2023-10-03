@@ -119,3 +119,4 @@ jobs:
         python -m nrpy.examples.two_blackholes_collide    && cd project/two_blackholes_collide && make && cd ../../
         python -m nrpy.examples.blackhole_spectroscopy    && cd project/blackhole_spectroscopy && make && cd ../../
         python -m nrpy.examples.nrpypn_quasicircular_momenta && cd project/nrpypn_quasicircular_momenta && make && cd ../../
+        python -m nrpy.examples.bbh_TwoPunctures          && cd project/bbh_TwoPunctures && make && cd ../../

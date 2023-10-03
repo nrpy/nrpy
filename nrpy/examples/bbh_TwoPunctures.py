@@ -21,12 +21,13 @@ from nrpy.helpers import simd
 import nrpy.helpers.parallel_codegen as pcg
 
 import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.TwoPunctures_lib as TPl
-from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import TwoPunctures_lib
 import nrpy.infrastructures.BHaH.general_relativity.BSSN_C_codegen_library as BCl
 import nrpy.infrastructures.BHaH.general_relativity.NRPyPN_quasicircular_momenta as NRPyPNqm
 import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
+import nrpy.infrastructures.BHaH.main_c as main
+from nrpy.infrastructures.BHaH import rfm_precompute
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
@@ -42,6 +43,11 @@ IDtype = "TP_Interp"
 IDCoordSystem = "Cartesian"
 BBH_ID_choice = "GW150914ET"
 grid_physical_size = 10.0
+LapseEvolutionOption = "OnePlusLog"
+ShiftEvolutionOption = "GammaDriving2ndOrder_Covariant"
+GammaDriving_eta = 1.0
+t_final = 0.0 * grid_physical_size
+
 CoordSystem = "SinhSpherical"
 Nxx_dict = {
     "SinhSpherical": [128, 64, 2],
@@ -58,6 +64,8 @@ enable_simd = True
 enable_fd_functions = True
 enable_RbarDD_gridfunctions = True
 parallel_codegen_enable = True
+enable_KreissOliger_dissipation = False
+boundary_conditions_desc = "outgoing radiation"
 
 project_dir = os.path.join("project", project_name)
 
@@ -69,46 +77,12 @@ par.set_parval_from_str("fd_order", fd_order)
 par.set_parval_from_str("enable_RbarDD_gridfunctions", enable_RbarDD_gridfunctions)
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 
+par.adjust_CodeParam_default("t_final", t_final)
+
 
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
-def register_CFunction_main_c() -> None:
-    """
-    Generates a simplified C main() function for setting quasicircular momenta using NRPyPN.
-    """
-
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """-={ main() function }=-
-Step 1.a: Set each commondata CodeParameter to default.
-Step 1.b: Overwrite default values to parfile values. Then overwrite parfile values with values set at cmd line.
-Step 2: Compute quasicircular parameters."""
-    c_type = "int"
-    name = "main"
-    params = "int argc, const char *argv[]"
-    body = r"""  commondata_struct commondata; // commondata contains parameters common to all grids.
-  griddata_struct *restrict griddata; // griddata contains data specific to an individual grid.
-
-// Step 1.a: Set each commondata CodeParameter to default.
-commondata_struct_set_to_default(&commondata);
-// Step 1.b: Overwrite default values to parfile values. Then overwrite parfile values with values set at cmd line.
-cmdline_input_and_parfile_parser(&commondata, argc, argv);
-
-// Step 2: compute quasicircular parameters.
-NRPyPN_quasicircular_momenta(&commondata);
-
-return 0;
-"""
-    cfc.register_CFunction(
-        includes=includes,
-        desc=desc,
-        c_type=c_type,
-        name=name,
-        params=params,
-        body=body,
-    )
-
-
 def register_CFunction_diagnostics(
     in_CoordSystem: str, plane: str = "yz"
 ) -> Union[None, pcg.NRPyEnv_type]:
@@ -277,11 +251,53 @@ if(commondata->time + commondata->dt > commondata->t_final) printf("\n");
 
 
 NRPyPNqm.register_CFunction_NRPyPN_quasicircular_momenta()
+TPl.register_C_functions()
+BCl.register_CFunction_initial_data(
+    CoordSystem=CoordSystem,
+    IDtype=IDtype,
+    IDCoordSystem=IDCoordSystem,
+    ID_persist_struct_str=TPl.ID_persist_str(),
+    populate_ID_persist_struct_str=r"""
+initialize_ID_persist_struct(commondata, &ID_persist);
+TP_solve(&ID_persist);
+""",
+    free_ID_persist_struct_str=r"""
+{
+  extern void free_derivs (derivs * v, int n);  // <- Needed to free memory allocated by TwoPunctures.
+  // <- Free memory allocated within ID_persist.
+  // Now that we're finished with par.v and par.cf_v (needed in setting up ID, we can free up memory for TwoPunctures' grids...
+  free_derivs (&ID_persist.v,    ID_persist.npoints_A * ID_persist.npoints_B * ID_persist.npoints_phi);
+  free_derivs (&ID_persist.cf_v, ID_persist.npoints_A * ID_persist.npoints_B * ID_persist.npoints_phi);
+}
+""",
+)
 
+numericalgrids.register_CFunction_numerical_grids_and_timestep_setup(
+    CoordSystem, grid_physical_size, Nxx_dict
+)
+register_CFunction_diagnostics(in_CoordSystem=CoordSystem)
+if enable_rfm_precompute:
+    rfm_precompute.register_CFunctions_rfm_precompute(CoordSystem)
+BCl.register_CFunction_rhs_eval(
+    CoordSystem=CoordSystem,
+    enable_rfm_precompute=enable_rfm_precompute,
+    enable_simd=enable_simd,
+    enable_fd_functions=enable_fd_functions,
+    enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
+    LapseEvolutionOption=LapseEvolutionOption,
+    ShiftEvolutionOption=ShiftEvolutionOption,
+    OMP_collapse=OMP_collapse,
+)
 BCl.register_CFunction_Ricci_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_simd=enable_simd,
+    enable_fd_functions=enable_fd_functions,
+    OMP_collapse=OMP_collapse,
+)
+BCl.register_CFunction_enforce_detgammabar_equals_detgammahat(
+    CoordSystem=CoordSystem,
+    enable_rfm_precompute=enable_rfm_precompute,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
@@ -292,35 +308,6 @@ BCl.register_CFunction_constraints(
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
-numericalgrids.register_CFunction_numerical_grids_and_timestep_setup(
-    CoordSystem, grid_physical_size, Nxx_dict
-)
-
-TPl.register_C_functions()
-
-
-BCl.register_CFunction_initial_data(
-    CoordSystem=CoordSystem,
-    IDtype=IDtype,
-    IDCoordSystem=IDCoordSystem,
-    ID_persist_struct_str=TwoPunctures_lib.ID_persist_str(),
-    populate_ID_persist_struct_str=r"""
-initialize_ID_persist_struct(commondata, &ID_persist);
-TP_solve(&ID_persist);
-""",
-    free_ID_persist_struct_str=r"""
-{
-  extern void free_derivs (derivs * v, int n);  // <- Needed to free memory allocated by TwoPunctures.
-  // <- Free memory allocated within ID_persist.
-  // Now that we're finished with par.v and par.cf_v (needed in setting up ID, we can free up memory for TwoPunctures' grids...
-  free_derivs (&ID_persist.v,    ID_persist.npoints_A * ID_persist.npoints_B * ID_persist.npoints_phi * 1);
-  free_derivs (&ID_persist.cf_v, ID_persist.npoints_A * ID_persist.npoints_B * ID_persist.npoints_phi * 1);
-}
-""",
-)
-
-register_CFunction_main_c()
-register_CFunction_diagnostics(in_CoordSystem=CoordSystem, plane="yz")
 
 if __name__ == "__main__" and parallel_codegen_enable:
     pcg.do_parallel_codegen()
@@ -328,7 +315,13 @@ if __name__ == "__main__" and parallel_codegen_enable:
 cbc.CurviBoundaryConditions_register_C_functions(
     CoordSystem, radiation_BC_fd_order=radiation_BC_fd_order
 )
-MoL.MoL_register_CFunctions(register_MoL_step_forward_in_time=False)
+MoL.MoL_register_CFunctions(
+    MoL_method=MoL_method,
+    rhs_string="",
+    post_rhs_string="",
+    enable_rfm_precompute=enable_rfm_precompute,
+    enable_curviBCs=True,
+)
 xxCartxx.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
 xxCartxx.register_CFunction_xx_to_Cart(CoordSystem)
 
@@ -359,6 +352,14 @@ Bdefines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     enable_simd=enable_simd,
     CoordSystem=CoordSystem,
+)
+
+main.register_CFunction_main_c(
+    initial_data_desc=IDtype,
+    MoL_method=MoL_method,
+    enable_rfm_precompute=enable_rfm_precompute,
+    enable_CurviBCs=True,
+    boundary_conditions_desc=boundary_conditions_desc,
 )
 
 if enable_simd:
