@@ -9,10 +9,6 @@ Author: Zachariah B. Etienne
 from collections import namedtuple  # Standard Python: Enable namedtuple data type
 from typing import Dict
 
-from nrpy.infrastructures.BHaH.cmdline_input_and_parfiles import (
-    generate_default_parfile,
-)
-
 bbh_params = namedtuple(
     "bbh_params",
     "q d M_chix M_chiy M_chiz m_chix m_chiy m_chiz p_t p_r bare_mass_m_plus bare_mass_m_minus NA NB Nphi",
@@ -21,23 +17,43 @@ bbh_params_dict: Dict[str, bbh_params] = {}
 
 
 def add_to_bbh_params_dict(
-    name,
-    q=1.0,
-    d=2.0,
-    M_chix=0.0,
-    M_chiy=0.0,
-    M_chiz=0.0,
-    m_chix=0.0,
-    m_chiy=0.0,
-    m_chiz=0.0,
-    p_t=0.0,
-    p_r=0.0,
-    bare_mass_m_plus=-1.0,
-    bare_mass_m_minus=-1.0,
-    NA=-1,
-    NB=-1,
-    Nphi=-1,
-):
+    name: str,
+    q: float = 1.0,
+    d: float = 2.0,
+    M_chix: float = 0.0,
+    M_chiy: float = 0.0,
+    M_chiz: float = 0.0,
+    m_chix: float = 0.0,
+    m_chiy: float = 0.0,
+    m_chiz: float = 0.0,
+    p_t: float = 0.0,
+    p_r: float = 0.0,
+    bare_mass_m_plus: float = -1.0,
+    bare_mass_m_minus: float = -1.0,
+    NA: int = -1,
+    NB: int = -1,
+    Nphi: int = -1,
+) -> None:
+    """
+    Adds a new entry to the bbh_params_dict with the given parameters.
+
+    :param name: The name identifier for the bbh parameters.
+    :param q: Mass ratio.
+    :param d: Separation.
+    :param M_chix: Spin of the larger black hole in the x-direction.
+    :param M_chiy: Spin of the larger black hole in the y-direction.
+    :param M_chiz: Spin of the larger black hole in the z-direction.
+    :param m_chix: Spin of the smaller black hole in the x-direction.
+    :param m_chiy: Spin of the smaller black hole in the y-direction.
+    :param m_chiz: Spin of the smaller black hole in the z-direction.
+    :param p_t: Tangential momentum.
+    :param p_r: Radial momentum.
+    :param bare_mass_m_plus: Bare mass of the larger black hole.
+    :param bare_mass_m_minus: Bare mass of the smaller black hole.
+    :param NA: Number of grid points in A region.
+    :param NB: Number of grid points in B region.
+    :param Nphi: Number of azimuthal grid points.
+    """
     bbh_params_dict[name] = bbh_params(
         q,
         d,
@@ -178,52 +194,52 @@ add_to_bbh_params_dict(
     Nphi=6,
 )
 
-
-def output_bbh_parfile_library():
-    # Loop through the bbh_params_dict items to populate the body string
-    for key, item in bbh_params_dict.items():
-        body += f""" else if(strcmp(TP_ID_type, "{key}")==0) {{
-        commondata->mass_ratio = {item.q};
-        commondata->initial_orbital_separation = {item.d};
-    """
-        if item.M_chix != 0.0:
-            body += f"    commondata->chi_BH_M[0] = {item.M_chix};\n"
-        if item.M_chiy != 0.0:
-            body += f"    commondata->chi_BH_M[1] = {item.M_chiy};\n"
-        if item.M_chiz != 0.0:
-            body += f"    commondata->chi_BH_M[2] = {item.M_chiz};\n"
-
-        if item.m_chix != 0.0:
-            body += f"    commondata->chi_BH_m[0] = {item.m_chix};\n"
-        if item.m_chiy != 0.0:
-            body += f"    commondata->chi_BH_m[1] = {item.m_chiy};\n"
-        if item.m_chiz != 0.0:
-            body += f"    commondata->chi_BH_m[2] = {item.m_chiz};\n"
-
-        body += f"    commondata->initial_p_t = {item.p_t};\n"
-        body += f"    commondata->initial_p_r = {item.p_r};\n"
-
-        if item.bare_mass_m_plus != -1.0 and item.bare_mass_m_minus != -1.0:
-            body += f"    par->give_bare_mass = true; //User provides bare masses rather than target ADM masses\n"
-            body += f"    par->par_m_plus = {item.bare_mass_m_plus};\n"
-            body += f"    par->par_m_minus = {item.bare_mass_m_minus};\n"
-
-        if item.NA > 0:
-            body += f"    par->npoints_A   = {item.NA};\n"
-        if item.NB > 0:
-            body += f"    par->npoints_B   = {item.NB};\n"
-        if item.Nphi > 0:
-            body += f"    par->npoints_phi = {item.Nphi};\n"
-
-        body += "  }"
-
-    body += r""" else {
-        fprintf(stderr, "Error: did not recognize TwoPunctures ID type = %s\n", TP_ID_type);
-        fprintf(stderr, "       Please pick one of the following library cases, or choose your own parameters:\n");
-        fprintf(stderr,"""
-
-    keys_str = ",".join([f"{key}\\n" for key in bbh_params_dict.keys()])
-    body += f'"{keys_str}\\n"'
-    body += r""");
-        exit(1);
-      }"""
+#
+# def output_bbh_parfile_library():
+#     # Loop through the bbh_params_dict items to populate the body string
+#     for key, item in bbh_params_dict.items():
+#         body += f""" else if(strcmp(TP_ID_type, "{key}")==0) {{
+#         commondata->mass_ratio = {item.q};
+#         commondata->initial_orbital_separation = {item.d};
+#     """
+#         if item.M_chix != 0.0:
+#             body += f"    commondata->chi_BH_M[0] = {item.M_chix};\n"
+#         if item.M_chiy != 0.0:
+#             body += f"    commondata->chi_BH_M[1] = {item.M_chiy};\n"
+#         if item.M_chiz != 0.0:
+#             body += f"    commondata->chi_BH_M[2] = {item.M_chiz};\n"
+#
+#         if item.m_chix != 0.0:
+#             body += f"    commondata->chi_BH_m[0] = {item.m_chix};\n"
+#         if item.m_chiy != 0.0:
+#             body += f"    commondata->chi_BH_m[1] = {item.m_chiy};\n"
+#         if item.m_chiz != 0.0:
+#             body += f"    commondata->chi_BH_m[2] = {item.m_chiz};\n"
+#
+#         body += f"    commondata->initial_p_t = {item.p_t};\n"
+#         body += f"    commondata->initial_p_r = {item.p_r};\n"
+#
+#         if item.bare_mass_m_plus != -1.0 and item.bare_mass_m_minus != -1.0:
+#             body += f"    par->give_bare_mass = true; //User provides bare masses rather than target ADM masses\n"
+#             body += f"    par->par_m_plus = {item.bare_mass_m_plus};\n"
+#             body += f"    par->par_m_minus = {item.bare_mass_m_minus};\n"
+#
+#         if item.NA > 0:
+#             body += f"    par->npoints_A   = {item.NA};\n"
+#         if item.NB > 0:
+#             body += f"    par->npoints_B   = {item.NB};\n"
+#         if item.Nphi > 0:
+#             body += f"    par->npoints_phi = {item.Nphi};\n"
+#
+#         body += "  }"
+#
+#     body += r""" else {
+#         fprintf(stderr, "Error: did not recognize TwoPunctures ID type = %s\n", TP_ID_type);
+#         fprintf(stderr, "       Please pick one of the following library cases, or choose your own parameters:\n");
+#         fprintf(stderr,"""
+#
+#     keys_str = ",".join([f"{key}\\n" for key in bbh_params_dict.keys()])
+#     body += f'"{keys_str}\\n"'
+#     body += r""");
+#         exit(1);
+#       }"""

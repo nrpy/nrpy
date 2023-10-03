@@ -75,15 +75,13 @@ def register_griddata_commondata(
 
     if is_commondata:
         # commondata_struct stores data common to all grids
-        if "commondata_struct" not in par.glb_extras_dict.keys():
-            par.glb_extras_dict["commondata_struct"]: Dict[
-                str, List[GridCommonData]
-            ] = {}
+        if "commondata_struct" not in par.glb_extras_dict:
+            par.glb_extras_dict["commondata_struct"] = {}
         register_griddata_or_commondata(par.glb_extras_dict["commondata_struct"])
     else:
         # griddata_struct stores data specific to each grid
-        if "griddata_struct" not in par.glb_extras_dict.keys():
-            par.glb_extras_dict["griddata_struct"]: Dict[str, List[GridCommonData]] = {}
+        if "griddata_struct" not in par.glb_extras_dict:
+            par.glb_extras_dict["griddata_struct"] = {}
         register_griddata_or_commondata(par.glb_extras_dict["griddata_struct"])
 
 

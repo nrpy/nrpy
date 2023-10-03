@@ -25,7 +25,10 @@ Authors: Marcus Ansorg
 import nrpy.c_function as cfc
 
 
-def register_CFunction_TP_utilities(includes=None):
+def register_CFunction_TP_utilities() -> None:
+    """
+    Register C function TP_utilities(), a collection of functions for memory allocation/deallocation, vector operations, etc.
+    """
     desc = "TP_utilities.c from TwoPunctures. Note that this C file is just a collection of functions for memory allocation/deallocation, vector operations, etc. TP_utilities() is unused."
     # prefunc contains most of the source code
     prefunc = "// " + desc + "\n\n"
@@ -570,7 +573,6 @@ scalarproduct (REAL *v, REAL *w, int n)
     cfc.register_CFunction(
         subdirectory="TwoPunctures",
         prefunc=prefunc,
-        includes=includes,
         desc=desc,
         name=name,
         params=params,

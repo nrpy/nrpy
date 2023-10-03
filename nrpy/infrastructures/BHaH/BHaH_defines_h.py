@@ -63,9 +63,15 @@ typedef struct __griddata__ {
     return griddata_struct_def
 
 
-def register_BHaH_defines(module: str, BHaH_defines: str):
-    if "BHaH_defines" not in par.glb_extras_dict.keys():
-        par.glb_extras_dict["BHaH_defines"]: Dict[str, str] = {}
+def register_BHaH_defines(module: str, BHaH_defines: str) -> None:
+    """
+    Register to par.glb_extras_dict["BHaH_defines"] contributions from a given module to BHaH_defines.h.
+
+    :param module: The name of the module for which the defines are being registered.
+    :param BHaH_defines: The contribution (string) to BHaH_defines.h.
+    """
+    if "BHaH_defines" not in par.glb_extras_dict:
+        par.glb_extras_dict["BHaH_defines"] = {}
 
     if module not in par.glb_extras_dict["BHaH_defines"].keys():
         par.glb_extras_dict["BHaH_defines"][module] = BHaH_defines
@@ -73,7 +79,7 @@ def register_BHaH_defines(module: str, BHaH_defines: str):
 
 def output_BHaH_defines_h(
     project_dir: str,
-    additional_includes: Optional[List] = None,
+    additional_includes: Optional[List[str]] = None,
     REAL_means: str = "double",
     enable_simd: bool = True,
     fin_NGHOSTS_add_one_for_upwinding: bool = False,

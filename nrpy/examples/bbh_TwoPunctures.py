@@ -353,9 +353,9 @@ cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
         "bbhxy_BH_m_chiz",
     ],
 )
-TPl.copy_TwoPunctures_h(project_Path=Path(project_dir))
+TPl.copy_TwoPunctures_header_files(TwoPunctures_Path=Path(project_dir) / "TwoPunctures")
 Bdefines_h.output_BHaH_defines_h(
-    additional_includes=["TwoPunctures.h"],
+    additional_includes=[str(Path("TwoPunctures") / Path("TwoPunctures.h"))],
     project_dir=project_dir,
     enable_simd=enable_simd,
     CoordSystem=CoordSystem,
@@ -365,7 +365,10 @@ if enable_simd:
     simd.copy_simd_intrinsics_h(project_dir=project_dir)
 
 Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
-    project_dir=project_dir, project_name=project_name, exec_name=project_name
+    project_dir=project_dir,
+    project_name=project_name,
+    exec_name=project_name,
+    addl_libraries=["-lgsl", "-lgslcblas"],
 )
 print(
     f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."

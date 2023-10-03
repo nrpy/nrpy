@@ -5,7 +5,7 @@
 #define REAL double
 
 #include "TwoPunctures.h"
-#include "../NRPy_basic_defines.h"
+#include "../BHaH_defines.h"
 
 //#define REAL double
 #define CCTK_EQUALS(A,B) (strncmp(A,B,100)==0)
@@ -122,6 +122,6 @@ void LinEquations (ID_persist_struct par, REAL A, REAL B, REAL X, REAL R,
 /* Routines in  "Newton.c"*/
 void TestRelax (ID_persist_struct par,
                 int nvar, int n1, int n2, int n3, derivs v, REAL *dv);
-void Newton (ID_persist_struct par,
+void TP_Newton (ID_persist_struct par,
              int nvar, int n1, int n2, int n3, derivs v,
 	           REAL tol, int itmax);

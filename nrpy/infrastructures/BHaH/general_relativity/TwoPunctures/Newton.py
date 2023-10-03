@@ -22,7 +22,10 @@ Authors: Marcus Ansorg
 import nrpy.c_function as cfc
 
 
-def register_CFunction_TP_Newton(includes=None):
+def register_CFunction_TP_Newton() -> None:
+    """
+    Register C function TP_Newton(), provides Newton-Raphson algorithm needed for adjusting bare masses to achieve target BH masses.
+    """
     desc = "Newton.c from TwoPunctures. Note that this C file is a collection of functions for Newton-Raphson method, with TP_Newton() being housed here."
     # prefunc contains most of the source code
     prefunc = f"// {desc}\n\n"
@@ -586,7 +589,6 @@ bicgstab (ID_persist_struct par,
     cfc.register_CFunction(
         subdirectory="TwoPunctures",
         prefunc=prefunc,
-        includes=includes,
         desc=desc,
         name=name,
         params=params,

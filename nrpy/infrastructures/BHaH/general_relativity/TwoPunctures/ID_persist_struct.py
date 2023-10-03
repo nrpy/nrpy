@@ -9,7 +9,15 @@ Author: Zachariah B. Etienne
 import nrpy.c_function as cfc
 import nrpy.params as par
 
-
+par.register_CodeParameter(
+    "char[100]",
+    "TwoPunctures",
+    "TP_BBH_description",
+    "No name",
+    commondata=True,
+    add_to_parfile=True,
+    add_to_set_CodeParameters_h=False,
+)
 par.register_CodeParameters(
     "int",
     "TwoPunctures",
@@ -19,8 +27,6 @@ par.register_CodeParameters(
     add_to_parfile=True,
     add_to_set_CodeParameters_h=False,
 )
-
-
 par.register_CodeParameters(
     "REAL",
     "TwoPunctures",
@@ -30,11 +36,29 @@ par.register_CodeParameters(
     add_to_parfile=True,
     add_to_set_CodeParameters_h=False,
 )
+par.register_CodeParameters(
+    "REAL",
+    __name__,
+    [
+        "bbhzx_BH_M_chix",
+        "bbhzx_BH_M_chiy",
+        "bbhzx_BH_M_chiz",
+        "bbhzx_BH_m_chix",
+        "bbhzx_BH_m_chiy",
+        "bbhzx_BH_m_chiz",
+    ],
+    [0, 0, 0, 0, 0, 0],
+    commondata=True,
+)
 
 
-def register_CFunction_initialize_ID_persist_struct():
+def register_CFunction_initialize_ID_persist_struct() -> None:
+    """
+    Register C function initialize_ID_persist_struct(), which populates ID_persist_struct with defaults, and overrides defaults with commondata.
+    """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Initialize ID_persist_struct"""
+    desc = """Initialize ID_persist_struct: populate some with defaults; set others with inputs from commondata;
+    set up initial_p_t and initial_p_r if not set in parfile; and finally rotate inputs from xy to zx plane."""
     c_type = "void"
     name = "initialize_ID_persist_struct"
     params = "commondata_struct *restrict commondata, ID_persist_struct *restrict par"
@@ -75,7 +99,7 @@ def register_CFunction_initialize_ID_persist_struct():
 
   // Any of the above parameters will be overwritten depending on the ID type.
 
-  fprintf(stderr, "Setting up %s TwoPunctures initial data...\n", TP_ID_type);
+  fprintf(stderr, "Setting up %s TwoPunctures initial data...\n", commondata->TP_BBH_description);
 
   // Step 2: Set values from commondata
   // Step 2.a: Set TwoPunctures grid
@@ -90,11 +114,6 @@ def register_CFunction_initialize_ID_persist_struct():
       par->npoints_A   = 48; //Number of coefficients in the compactified radial direction
       par->npoints_B   = 48; //Number of coefficients in the angular direction
       par->npoints_phi = 20; //Number of coefficients in the phi direction
-    }
-    if(strcmp(TP_ID_type, "NRPyPN_cheapTP")==0) { // NRPyPN, but with "cheap" TwoPunctures
-      par->npoints_A   = 30; //Number of coefficients in the compactified radial direction
-      par->npoints_B   = 30; //Number of coefficients in the angular direction
-      par->npoints_phi = 16; //Number of coefficients in the phi direction
     }
   }
 
@@ -193,6 +212,16 @@ def register_CFunction_initialize_ID_persist_struct():
   par->par_S_minus[1] *= -1.0;
   par->par_S_plus[1]  *= -1.0;
 }
+
+  fprintf(stderr, "#################################\n");
+  fprintf(stderr, "-={ INITIAL BINARY PARAMETERS }=-\n");
+  fprintf(stderr, "M=1 (sum of individual ADM masses as defined in TwoPunctures)\n");
+  fprintf(stderr, "d_initial/M = %.15f, q = %.15f\n", commondata->initial_sep,commondata->mass_ratio);
+  fprintf(stderr, "bbhxy_BH_m_chi = %.15f %.15f %.15f\n", commondata->bbhxy_BH_m_chix,commondata->bbhxy_BH_m_chiy,commondata->bbhxy_BH_m_chiz);
+  fprintf(stderr, "bbhxy_BH_M_chi = %.15f %.15f %.15f\n", commondata->bbhxy_BH_M_chix,commondata->bbhxy_BH_M_chiy,commondata->bbhxy_BH_M_chiz);
+  fprintf(stderr, "p_t = %.15f, p_r = %.15f\n", commondata->initial_p_t,commondata->initial_p_r);
+  fprintf(stderr, "TP resolution: %d  %d  %d\n", par->npoints_A,par->npoints_B,par->npoints_phi);
+  fprintf(stderr, "#################################\n");
 """
     cfc.register_CFunction(
         subdirectory="TwoPunctures",

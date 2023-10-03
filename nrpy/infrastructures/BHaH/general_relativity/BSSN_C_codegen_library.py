@@ -66,12 +66,11 @@ def register_CFunction_initial_data(
         admid.register_CFunction_exact_ADM_ID_function(
             IDCoordSystem, IDtype, ID.alpha, ID.betaU, ID.BU, ID.gammaDD, ID.KDD
         )
-    except ValueError or RuntimeError:
+    except (ValueError, RuntimeError):
         print(
             f"Warning: {IDtype} does not correspond to an implemented exact initial data type."
         )
         print("Assuming initial data functionality is implemented elsewhere.")
-        pass
 
     admid.register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
         CoordSystem,

@@ -18,7 +18,10 @@ Authors: Marcus Ansorg
 import nrpy.c_function as cfc
 
 
-def register_CFunction_TP_solve():
+def register_CFunction_TP_solve() -> None:
+    """
+    Register C function TP_solve(), main driver function for pseudospectral solve.
+    """
     includes = ["stdio.h", "TP_utilities.h", "TwoPunctures.h"]
     desc = "Driver routine for pseudospectral solve."
     name = "TP_solve"
@@ -105,7 +108,7 @@ def register_CFunction_TP_solve():
       do {
         fprintf(stderr,"Bare masses: mp=%.15g, mm=%.15g\n",
                (double)par->mp, (double)par->mm);
-        Newton (*par, nvar, n1, n2, n3, par->v, par->Newton_tol, 1);
+        TP_Newton (*par, nvar, n1, n2, n3, par->v, par->Newton_tol, 1);
 
         F_of_v (*par, nvar, n1, n2, n3, par->v, F, u);
 
@@ -140,7 +143,7 @@ def register_CFunction_TP_solve():
       fprintf(stderr,"Found bare masses.\n");
     }
 
-    Newton (*par, nvar, n1, n2, n3, par->v, par->Newton_tol, par->Newton_maxit);
+    TP_Newton (*par, nvar, n1, n2, n3, par->v, par->Newton_tol, par->Newton_maxit);
 
     F_of_v (*par, nvar, n1, n2, n3, par->v, F, u);
 

@@ -24,7 +24,10 @@ Authors: Marcus Ansorg
 import nrpy.c_function as cfc
 
 
-def register_CFunction_TP_Equations(includes=None):
+def register_CFunction_TP_Equations() -> None:
+    """
+    Register C function TP_Equations(), provides basic equations functions for TwoPunctures solver.
+    """
     desc = "Equations.c from TwoPunctures. Note that this C file is just a collection of functions for basic equations. TP_Equations() is unused."
     # prefunc contains most of the source code
     prefunc = f"// {desc}\n\n"
@@ -228,7 +231,6 @@ LinEquations (ID_persist_struct par, REAL A, REAL B, REAL X, REAL R,
     cfc.register_CFunction(
         subdirectory="TwoPunctures",
         prefunc=prefunc,
-        includes=includes,
         desc=desc,
         name=name,
         params=params,
