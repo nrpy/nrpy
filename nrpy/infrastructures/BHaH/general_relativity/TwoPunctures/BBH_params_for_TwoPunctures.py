@@ -244,7 +244,7 @@ def register_CFunction_BBH_params_for_TwoPunctures():
 
   {
     // Default TwoPunctures grid setup
-    if(commondata->bbh_physical_params.mass_ratio >= 2.0) {
+    if(commondata->q_massratio_gt_1 >= 2.0) {
       // higher mass ratios need higher spectral resolution on TwoPunctures grid.
       par->npoints_A   = 66; //Number of coefficients in the compactified radial direction
       par->npoints_B   = 66; //Number of coefficients in the angular direction
@@ -357,10 +357,10 @@ def register_CFunction_BBH_params_for_TwoPunctures():
   const REAL q   = commondata->bbh_physical_params.mass_ratio;
   const REAL p_t = commondata->bbh_physical_params.initial_p_t;
   const REAL p_r = commondata->bbh_physical_params.initial_p_r;
-  commondata->bbh_physical_params.mass_M =   q / (1.0 + q);
-  commondata->bbh_physical_params.mass_m = 1.0 / (1.0 + q);
-  par->target_M_plus  = commondata->bbh_physical_params.mass_M; //MORE MASSIVE: target ADM mass for m+
-  par->target_M_minus = commondata->bbh_physical_params.mass_m; //LESS MASSIVE: target ADM mass for m-
+  commondata->mass_M =   q / (1.0 + q);
+  commondata->mass_m = 1.0 / (1.0 + q);
+  par->target_M_plus  = commondata->mass_M; //MORE MASSIVE: target ADM mass for m+
+  par->target_M_minus = commondata->mass_m; //LESS MASSIVE: target ADM mass for m-
   if(par->give_bare_mass == false) {
     // Set initial guesses for bare masses. Typically
     //   these are roughly 0.9*target_M_plus/minus, but

@@ -85,14 +85,14 @@ cmdpar.generate_default_parfile(project_dir=project_dir, project_name=project_na
 cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
     project_name=project_name,
     cmdline_inputs=[
-        "bbh_q_mass_ratio_gt_1",
-        "bbh_d_sep",
-        "bbh_chi1x",
-        "bbh_chi1y",
-        "bbh_chi1z",
-        "bbh_chi2x",
-        "bbh_chi2y",
-        "bbh_chi2z",
+        "d_sep",
+        "q_massratio_gt_1",
+        "bbhxy_BH_M_chix",
+        "bbhxy_BH_M_chiy",
+        "bbhxy_BH_M_chiz",
+        "bbhxy_BH_m_chix",
+        "bbhxy_BH_m_chiy",
+        "bbhxy_BH_m_chiz",
     ],
 )
 Bdefines_h.output_BHaH_defines_h(project_dir=project_dir, enable_simd=False)
