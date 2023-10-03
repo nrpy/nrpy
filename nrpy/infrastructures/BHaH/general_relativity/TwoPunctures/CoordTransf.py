@@ -195,6 +195,7 @@ rx3_To_xyz (int nvar, REAL x, REAL r, REAL phi,
 """
 
     cfc.register_CFunction(
+        subdirectory="TwoPunctures",
         prefunc=prefunc,
         desc=desc,
         name=name,

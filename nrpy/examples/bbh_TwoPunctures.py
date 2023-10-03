@@ -20,8 +20,7 @@ import nrpy.params as par
 from nrpy.helpers import simd
 import nrpy.helpers.parallel_codegen as pcg
 
-import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.parse_cmdline_arguments_for_TwoPunctures as tp_cmdline
-import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.BBH_params_for_TwoPunctures as tp_params
+import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.TwoPunctures_lib as TPl
 from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import TwoPunctures_lib
 import nrpy.infrastructures.BHaH.general_relativity.BSSN_C_codegen_library as BCl
 import nrpy.infrastructures.BHaH.general_relativity.NRPyPN_quasicircular_momenta as NRPyPNqm
@@ -39,7 +38,7 @@ par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Code-generation-time parameters:
 project_name = "bbh_TwoPunctures"
-IDtype = "TwoPunctures"
+IDtype = "TP_Interp"
 IDCoordSystem = "Cartesian"
 BBH_ID_choice = "GW150914ET"
 grid_physical_size = 10.0
@@ -297,14 +296,27 @@ numericalgrids.register_CFunction_numerical_grids_and_timestep_setup(
     CoordSystem, grid_physical_size, Nxx_dict
 )
 
-tp_cmdline.register_CFunction_parse_cmdline_arguments_for_TwoPunctures()
-tp_params.register_CFunction_BBH_params_for_TwoPunctures()
+TPl.register_C_functions()
+
 
 BCl.register_CFunction_initial_data(
     CoordSystem=CoordSystem,
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
     ID_persist_struct_str=TwoPunctures_lib.ID_persist_str(),
+    populate_ID_persist_struct_str=r"""
+initialize_ID_persist_struct(commondata, &ID_persist);
+TP_solve(&ID_persist);
+""",
+    free_ID_persist_struct_str=r"""
+{
+  extern void free_derivs (derivs * v, int n);  // <- Needed to free memory allocated by TwoPunctures.
+  // <- Free memory allocated within ID_persist.
+  // Now that we're finished with par.v and par.cf_v (needed in setting up ID, we can free up memory for TwoPunctures' grids...
+  free_derivs (&ID_persist.v,    ID_persist.npoints_A * ID_persist.npoints_B * ID_persist.npoints_phi * 1);
+  free_derivs (&ID_persist.cf_v, ID_persist.npoints_A * ID_persist.npoints_B * ID_persist.npoints_phi * 1);
+}
+""",
 )
 
 register_CFunction_main_c()
@@ -329,9 +341,19 @@ CPs.write_CodeParameters_h_files(project_dir=project_dir)
 CPs.register_CFunctions_params_commondata_struct_set_to_default()
 cmdpar.generate_default_parfile(project_dir=project_dir, project_name=project_name)
 cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
-    project_name=project_name, cmdline_inputs=["convergence_factor"]
+    project_name=project_name,
+    cmdline_inputs=[
+        "initial_sep",
+        "mass_ratio",
+        "bbhxy_BH_M_chix",
+        "bbhxy_BH_M_chiy",
+        "bbhxy_BH_M_chiz",
+        "bbhxy_BH_m_chix",
+        "bbhxy_BH_m_chiy",
+        "bbhxy_BH_m_chiz",
+    ],
 )
-tp_params.copy_TwoPunctures_h(project_Path=Path(project_dir))
+TPl.copy_TwoPunctures_h(project_Path=Path(project_dir))
 Bdefines_h.output_BHaH_defines_h(
     additional_includes=["TwoPunctures.h"],
     project_dir=project_dir,

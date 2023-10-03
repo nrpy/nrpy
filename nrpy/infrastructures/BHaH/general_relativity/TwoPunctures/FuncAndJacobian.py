@@ -22,7 +22,7 @@ Authors: Marcus Ansorg
 import nrpy.c_function as cfc
 
 
-def add_FuncAndJacobian_to_Cfunction_dict():
+def register_CFunction_FuncAndJacobian():
     desc = "FuncAndJacobian.c from TwoPunctures. Note that this C file is just a collection of functions for computing Jacobians. TP_FuncAndJacobian() is unused."
     # prefunc contains most of the source code
     prefunc = f"// {desc}\n\n"
@@ -1035,6 +1035,7 @@ void SpecCoef(int n1, int n2, int n3, int ivar, REAL *v, REAL *cf)
 """
 
     cfc.register_CFunction(
+        subdirectory="TwoPunctures",
         prefunc=prefunc,
         desc=desc,
         name=name,

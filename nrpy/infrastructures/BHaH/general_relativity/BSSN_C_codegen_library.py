@@ -41,6 +41,8 @@ def register_CFunction_initial_data(
     IDtype: str,
     IDCoordSystem: str,
     ID_persist_struct_str: str,
+    populate_ID_persist_struct_str: str = "",
+    free_ID_persist_struct_str: str = "",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register C functions for converting ADM initial data to BSSN variables and applying boundary conditions.
@@ -80,7 +82,9 @@ def register_CFunction_initial_data(
     desc = "Set initial data."
     c_type = "void"
     name = "initial_data"
-    params = "const commondata_struct *restrict commondata, griddata_struct *restrict griddata"
+    params = (
+        "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
+    )
 
     # Unpack griddata
     body = """
@@ -89,11 +93,16 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   // Unpack griddata struct:
   params_struct *restrict params = &griddata[grid].params;
 """
+    if populate_ID_persist_struct_str:
+        body += populate_ID_persist_struct_str
     body += f"initial_data_reader__convert_ADM_{IDCoordSystem}_to_BSSN(commondata, griddata, &ID_persist, {IDtype});"
     body += """
   apply_bcs_outerextrap_and_inner(commondata, params, &griddata->bcstruct, griddata->gridfuncs.y_n_gfs);
 }
 """
+    if free_ID_persist_struct_str:
+        body += free_ID_persist_struct_str
+
     cfc.register_CFunction(
         includes=includes,
         desc=desc,

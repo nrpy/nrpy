@@ -34,8 +34,8 @@ par.register_CodeParameters(
     "REAL",
     __name__,
     [
-        "d_sep",
-        "q_massratio_gt_1",
+        "initial_sep",
+        "mass_ratio",
         "mass_M",
         "mass_m",
         "bbhxy_BH_M_chix",
@@ -78,8 +78,8 @@ def register_CFunction_NRPyPN_quasicircular_momenta() -> Union[None, pcg.NRPyEnv
     // already set in the parfile (i.e., reset from their default values of -1.0).
 if(commondata->initial_p_t == -1.0 && commondata->initial_p_r == -1.0) {
     // In NRPyPN, q = m2/m1 = mass_M/mass_m. So mass_m = object 1, and mass_M is object 2.
-    const REAL q = commondata->q_massratio_gt_1;
-    const REAL r = commondata->d_sep;
+    const REAL q = commondata->mass_ratio;
+    const REAL r = commondata->initial_sep;
     const REAL chi1U0 = commondata->bbhxy_BH_M_chix;
     const REAL chi1U1 = commondata->bbhxy_BH_M_chiy;
     const REAL chi1U2 = commondata->bbhxy_BH_M_chiz;

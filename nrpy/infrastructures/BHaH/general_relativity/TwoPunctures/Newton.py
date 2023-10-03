@@ -22,8 +22,8 @@ Authors: Marcus Ansorg
 import nrpy.c_function as cfc
 
 
-def add_Newton_to_Cfunction_dict(includes=None):
-    desc = "Newton.c from TwoPunctures. Note that this C file is a collection of functions for Newton-Raphson method, with Newton() being housed here."
+def register_CFunction_TP_Newton(includes=None):
+    desc = "Newton.c from TwoPunctures. Note that this C file is a collection of functions for Newton-Raphson method, with TP_Newton() being housed here."
     # prefunc contains most of the source code
     prefunc = f"// {desc}\n\n"
     prefunc += r"""/* TwoPunctures:  File  "Newton.c"*/
@@ -522,7 +522,7 @@ bicgstab (ID_persist_struct par,
 /* -------------------------------------------------------------------*/
 """
 
-    name = "Newton"
+    name = "TP_Newton"
     params = """ID_persist_struct par,
             int const nvar, int const n1, int const n2, int const n3,
             derivs v,
@@ -584,6 +584,7 @@ bicgstab (ID_persist_struct par,
 """
 
     cfc.register_CFunction(
+        subdirectory="TwoPunctures",
         prefunc=prefunc,
         includes=includes,
         desc=desc,

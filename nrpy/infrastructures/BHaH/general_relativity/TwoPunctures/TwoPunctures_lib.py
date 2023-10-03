@@ -7,12 +7,48 @@ License: Lesser GNU Public License, version 2.0+
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
+from pathlib import Path
+import shutil
+
 import nrpy.c_function as cfc
-import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.FuncAndJacobian as TP_FuncAndJacobian
-import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.CoordTransf as TP_CoordTransforms
-import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.Equations as TP_Equations
-import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.Newton as Newton
-import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.TP_utilities as TP_Utils
+from nrpy.infrastructures.BHaH import BHaH_defines_h
+from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import ID_persist_struct
+from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import CoordTransf
+from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import Equations
+from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import FuncAndJacobian
+from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import Newton
+from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import TP_interp
+from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import TP_solve
+from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import TP_utilities
+
+
+def copy_TwoPunctures_h(project_Path: Path) -> None:
+    """
+    Copies TwoPunctures.h into project directory.
+
+    :param project_Path: The path of the project directory where the file will be copied.
+    """
+    try:
+        # only Python 3.7+ has importlib.resources
+        import importlib.resources  # pylint: disable=E1101,C0415
+
+        source_path = (
+            # pylint: disable=E1101
+            importlib.resources.files(
+                "nrpy.infrastructures.BHaH.general_relativity.TwoPunctures"
+            )
+            / "TwoPunctures.h"
+        )
+        shutil.copy(str(source_path), str(project_Path))
+    except ImportError:  # Fallback to resource_filename for older Python versions
+        # pylint: disable=E1101,C0415
+        from pkg_resources import resource_filename  # type: ignore
+
+        source_path = resource_filename(
+            "nrpy.infrastructures.BHaH.general_relativity.TwoPunctures",
+            "TwoPunctures.h",
+        )
+        shutil.copy(source_path, str(project_Path))  # type: ignore
 
 
 def ID_persist_str():
@@ -61,7 +97,36 @@ def ID_persist_str():
 """
 
 
-def add_TwoPunctures_initialize_parameters_to_Cfunction_dict():
+def register_CFunction_bbh_initial_params():
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    desc = """Output initial data parameters for binary black hole system."""
+    c_type = "void"
+    name = "bbh_initial_params"
+    params = (
+        "ID_persist_struct *restrict ID_persist, commondata_struct *restrict commondata"
+    )
+    body = r"""  fprintf(stderr, "#################################\n");
+  fprintf(stderr, "-={ INITIAL BINARY PARAMETERS }=-\n");
+  fprintf(stderr, "M=1 (sum of individual ADM masses as defined in TwoPunctures)\n");
+  fprintf(stderr, "d_initial/M = %.15f, q = %.15f\n", commondata->initial_orbital_separation,commondata->mass_ratio);
+  fprintf(stderr, "bbhxy_BH_m_chi = %.15f %.15f %.15f\n", commondata->bbhxy_BH_m_chi[0],commondata->bbhxy_BH_m_chi[1],commondata->bbhxy_BH_m_chi[2]);
+  fprintf(stderr, "bbhxy_BH_M_chi = %.15f %.15f %.15f\n", commondata->bbhxy_BH_M_chi[0],commondata->bbhxy_BH_M_chi[1],commondata->bbhxy_BH_M_chi[2]);
+  fprintf(stderr, "p_t = %.15f, p_r = %.15f\n", commondata->initial_p_t,commondata->initial_p_r);
+  fprintf(stderr, "TP resolution: %d  %d  %d\n", ID_persist->npoints_A,ID_persist->npoints_B,ID_persist->npoints_phi);
+  fprintf(stderr, "#################################\n");
+"""
+    cfc.register_CFunction(
+        subdirectory="TwoPunctures",
+        includes=includes,
+        desc=desc,
+        c_type=c_type,
+        name=name,
+        params=params,
+        body=body,
+    )
+
+
+def register_CFunction_TwoPunctures_initialize_parameters():
     includes = [
         "../NRPy_basic_defines.h",
         "../NRPy_function_prototypes.h",
@@ -337,6 +402,7 @@ def add_TwoPunctures_initialize_parameters_to_Cfunction_dict():
   }
 """
     cfc.register_CFunction(
+        subdirectory="TwoPunctures",
         includes=includes,
         desc=desc,
         name=name,
@@ -345,64 +411,17 @@ def add_TwoPunctures_initialize_parameters_to_Cfunction_dict():
     )
 
 
-def register_BHaH_defines():
-    Nbd_str = """
-typedef struct DERIVS
-{
-  REAL *d0, *d1, *d2, *d3, *d11, *d12, *d13, *d22, *d23, *d33;
-} derivs;
-
-typedef struct __ID_persist_struct {
-  derivs v;    // stores coefficients
-  derivs cf_v; // stores coefficients
-  
-  int npoints_A; //Number of coefficients in the compactified radial direction
-  int npoints_B; //Number of coefficients in the angular direction
-  int npoints_phi; //Number of coefficients in the phi direction
-  int Newton_maxit; //Maximum number of Newton iterations
-
-  REAL adm_tol; //Tolerance of ADM masses when give_bare_mass=no
-  REAL Newton_tol; //Tolerance for Newton solver
-  REAL TP_epsilon; //A small number to smooth out singularities at the puncture locations
-  REAL TP_Tiny; //Tiny number to avoid nans near or at the pucture locations
-  REAL TP_Extend_Radius; //Radius of an extended spacetime instead of the puncture
-  REAL par_b; //x coordinate of the m+ puncture STEERABLE=always
-  REAL par_m_plus; //mass of the m+ puncture STEERABLE = ALWAYS
-  REAL par_m_minus; //mass of the m- puncture STEERABLE = ALWAYS
-  REAL target_M_plus; //target ADM mass for m+
-  REAL target_M_minus; //target ADM mass for m-
-  REAL par_P_plus[3]; //momentum of the m+ puncture
-  REAL par_P_minus[3]; //momentum of the m- puncture
-  REAL par_S_plus[3]; //spin of the m+ puncture
-  REAL par_S_minus[3]; //spin of the m- puncture
-  REAL center_offset[3]; //offset b=0 to position (x,y,z)
-  REAL initial_lapse_psi_exponent; //Exponent n for psi^-n initial lapse profile
-
-  bool verbose; //Print screen output while solving
-  bool keep_u_around; //Keep the variable u around after solving
-  bool give_bare_mass; //User provides bare masses rather than target ADM masses
-  bool swap_xz; //Swap x and z coordinates when interpolating, so that the black holes are separated in the z direction
-  bool use_sources; //Use sources?
-  bool rescale_sources; //If sources are used - rescale them after solving?
-  //bool use_external_initial_guess; //Set initial guess by external function?
-  bool do_residuum_debug_output; //Output debug information about the residuum
-  bool do_initial_debug_output; //Output debug information about initial guess
-  bool multiply_old_lapse; //Multiply the old lapse with the new one
-  bool solve_momentum_constraint; //Solve for momentum constraint?
-
-  char grid_setup_method[100]; //How to fill the 3D grid from the spectral grid
-  char initial_lapse[100]; //initial lapse
-} ID_persist_struct;
-"""
-    BHaH_defines["TwoPunctures"] = Nbd_str
-
-
 def register_C_functions():
-    add_TwoPunctures_solve_to_Cfunction_dict()
-    add_TwoPunctures_Interp_to_Cfunction_dict()
-    add_TwoPunctures_initialize_parameters_to_Cfunction_dict()
-    TP_FuncAndJacobian.add_FuncAndJacobian_to_Cfunction_dict()
-    TP_CoordTransforms.add_CoordTransf_to_Cfunction_dict()
-    TP_Equations.add_Equations_to_Cfunction_dict()
-    Newton.add_Newton_to_Cfunction_dict()
-    TP_Utils.add_TP_utilities_to_Cfunction_dict()
+    register_CFunction_bbh_initial_params()
+    register_CFunction_TwoPunctures_initialize_parameters()
+
+    ID_persist_struct.register_CFunction_initialize_ID_persist_struct()
+
+    # Original TwoPunctures functions:
+    CoordTransf.register_CFunction_TP_CoordTransf()
+    Equations.register_CFunction_TP_Equations()
+    FuncAndJacobian.register_CFunction_FuncAndJacobian()
+    Newton.register_CFunction_TP_Newton()
+    TP_interp.register_CFunction_TP_Interp()
+    TP_solve.register_CFunction_TP_solve()
+    TP_utilities.register_CFunction_TP_utilities()

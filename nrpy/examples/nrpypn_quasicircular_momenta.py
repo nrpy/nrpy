@@ -85,8 +85,8 @@ cmdpar.generate_default_parfile(project_dir=project_dir, project_name=project_na
 cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
     project_name=project_name,
     cmdline_inputs=[
-        "d_sep",
-        "q_massratio_gt_1",
+        "initial_sep",
+        "mass_ratio",
         "bbhxy_BH_M_chix",
         "bbhxy_BH_M_chiy",
         "bbhxy_BH_M_chiz",

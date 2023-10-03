@@ -18,10 +18,10 @@ Authors: Marcus Ansorg
 import nrpy.c_function as cfc
 
 
-def add_TwoPunctures_solve_to_Cfunction_dict():
+def register_CFunction_TP_solve():
     includes = ["stdio.h", "TP_utilities.h", "TwoPunctures.h"]
-    desc = "TwoPunctures_solve()."
-    name = "TwoPunctures_solve"
+    desc = "Driver routine for pseudospectral solve."
+    name = "TP_solve"
     params = "ID_persist_struct *par"
     body = r"""
   par->mp = par->par_m_plus;
@@ -192,5 +192,10 @@ def add_TwoPunctures_solve_to_Cfunction_dict():
   free_derivs (&u, ntotal);
 """
     cfc.register_CFunction(
-        includes=includes, desc=desc, name=name, params=params, body=body
+        subdirectory="TwoPunctures",
+        includes=includes,
+        desc=desc,
+        name=name,
+        params=params,
+        body=body,
     )

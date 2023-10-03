@@ -18,9 +18,9 @@ Authors: Marcus Ansorg
 import nrpy.c_function as cfc
 
 
-def add_TwoPunctures_Interp_to_Cfunction_dict():
+def register_CFunction_TP_Interp():
     includes = ["assert.h", "TP_utilities.h", "TwoPunctures.h"]
-    desc = "TwoPunctures_Interp()."
+    desc = "Spectral interpolation from TwoPunctures grids onto an arbitrary point xCart[3] = {x,y,z} in the Cartesian basis."
     prefunc = f"// {desc}\n\n"
     prefunc += """
 //#define STANDALONE_UNIT_TEST
@@ -36,8 +36,9 @@ void swap (REAL * restrict const a, REAL * restrict const b)
 #define SWAP(a,b) (swap(&(a),&(b)))
 /* -------------------------------------------------------------------*/
 """
-    name = "TwoPunctures_Interp"
-    params = """const paramstruct *params, const REAL xCart[3], const ID_persist_struct *restrict ID_persist, initial_data_struct *restrict initial_data"""
+    name = "TP_Interp"
+    params = """const commondata_struct *restrict commondata, const params_struct *params, const REAL xCart[3],
+     const ID_persist_struct *restrict ID_persist, initial_data_struct *restrict initial_data"""
     body = r"""
   const REAL mp = ID_persist->mp;
   const REAL mm = ID_persist->mm;
@@ -395,6 +396,7 @@ int main() {
 """
 
     cfc.register_CFunction(
+        subdirectory="TwoPunctures",
         prefunc=prefunc,
         includes=includes,
         desc=desc,
