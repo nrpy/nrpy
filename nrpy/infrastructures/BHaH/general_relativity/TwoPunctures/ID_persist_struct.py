@@ -32,20 +32,6 @@ par.register_CodeParameters(
     [-1, -1],
     commondata=True,
 )
-par.register_CodeParameters(
-    "REAL",
-    __name__,
-    [
-        "bbhzx_BH_M_chix",
-        "bbhzx_BH_M_chiy",
-        "bbhzx_BH_M_chiz",
-        "bbhzx_BH_m_chix",
-        "bbhzx_BH_m_chiy",
-        "bbhzx_BH_m_chiz",
-    ],
-    [0, 0, 0, 0, 0, 0],
-    commondata=True,
-)
 
 
 def register_CFunction_initialize_ID_persist_struct() -> None:
@@ -120,6 +106,7 @@ def register_CFunction_initialize_ID_persist_struct() -> None:
   //           (-1.0 is *exactly* representable in single/double precision)
   if (commondata->initial_p_t == -1.0 || commondata->initial_p_r == -1.0) {
     NRPyPN_quasicircular_momenta(commondata);
+    fprintf(stderr, "NRPyPN: Found p_t, p_r = %.8f %.8f\n", commondata->initial_p_t, commondata->initial_p_r);
   }
 
   // Step 2.c: Prepare inputs for TwoPunctures, which will set up the binary
@@ -136,15 +123,14 @@ def register_CFunction_initialize_ID_persist_struct() -> None:
   //   this function.
   // Inputs: xy-plane. Outputs: zx-plane:
   //  z = x, x = y, y = z
-  commondata->bbhzx_BH_m_chiz = commondata->bbhxy_BH_m_chix;
-  commondata->bbhzx_BH_m_chix = commondata->bbhxy_BH_m_chiy;
-  commondata->bbhzx_BH_m_chiy = commondata->bbhxy_BH_m_chiz;
+  const REAL bbhzx_BH_m_chiz = commondata->bbhxy_BH_m_chix;
+  const REAL bbhzx_BH_m_chix = commondata->bbhxy_BH_m_chiy;
+  const REAL bbhzx_BH_m_chiy = commondata->bbhxy_BH_m_chiz;
 
-  commondata->bbhzx_BH_M_chiz = commondata->bbhxy_BH_M_chix;
-  commondata->bbhzx_BH_M_chix = commondata->bbhxy_BH_M_chiy;
-  commondata->bbhzx_BH_M_chiy = commondata->bbhxy_BH_M_chiz;
+  const REAL bbhzx_BH_M_chiz = commondata->bbhxy_BH_M_chix;
+  const REAL bbhzx_BH_M_chix = commondata->bbhxy_BH_M_chiy;
+  const REAL bbhzx_BH_M_chiy = commondata->bbhxy_BH_M_chiz;
 
-  fprintf(stderr, "NRPyPN: Found p_t, p_r = %.8f %.8f\n", commondata->initial_p_t, commondata->initial_p_r);
   // For q=1, spins=0, diameter_of_separation=4.0, p_r is negative.
   //    This is likely due to the separation being too small.
   //    We assume below that p_r is positive, so let's fix it:
@@ -197,13 +183,13 @@ def register_CFunction_initialize_ID_persist_struct() -> None:
     par->par_P_minus[2] = -p_t; // momentum of the m- puncture
     {
       // Dimensionless spin parameter chi = J/M^2 --> J = chi * M^2
-      par->par_S_minus[0] = commondata->bbhzx_BH_m_chix * par->target_M_minus * par->target_M_minus;
-      par->par_S_minus[1] = commondata->bbhzx_BH_m_chiy * par->target_M_minus * par->target_M_minus;
-      par->par_S_minus[2] = commondata->bbhzx_BH_m_chiz * par->target_M_minus * par->target_M_minus;
+      par->par_S_minus[0] = bbhzx_BH_m_chix * par->target_M_minus * par->target_M_minus;
+      par->par_S_minus[1] = bbhzx_BH_m_chiy * par->target_M_minus * par->target_M_minus;
+      par->par_S_minus[2] = bbhzx_BH_m_chiz * par->target_M_minus * par->target_M_minus;
 
-      par->par_S_plus[0] = commondata->bbhzx_BH_M_chix * par->target_M_plus * par->target_M_plus;
-      par->par_S_plus[1] = commondata->bbhzx_BH_M_chiy * par->target_M_plus * par->target_M_plus;
-      par->par_S_plus[2] = commondata->bbhzx_BH_M_chiz * par->target_M_plus * par->target_M_plus;
+      par->par_S_plus[0] = bbhzx_BH_M_chix * par->target_M_plus * par->target_M_plus;
+      par->par_S_plus[1] = bbhzx_BH_M_chiy * par->target_M_plus * par->target_M_plus;
+      par->par_S_plus[2] = bbhzx_BH_M_chiz * par->target_M_plus * par->target_M_plus;
     }
     // Since we flip x<->z, the sign of the y-component of spin must
     //   flip in order to keep a right-handed coordinate system,

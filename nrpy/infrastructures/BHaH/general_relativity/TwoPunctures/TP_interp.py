@@ -40,7 +40,7 @@ void swap (REAL * restrict const a, REAL * restrict const b)
 /* -------------------------------------------------------------------*/
 """
     name = "TP_Interp"
-    params = """const commondata_struct *restrict commondata, const params_struct *params, const REAL xCart[3],
+    params = """const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xCart[3],
      const ID_persist_struct *restrict ID_persist, initial_data_struct *restrict initial_data"""
     body = r"""
   const REAL mp = ID_persist->mp;

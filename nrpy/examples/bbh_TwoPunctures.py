@@ -157,10 +157,11 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {
 
       const REAL H_at_center = diagnostic_output_gfs[IDX4pt(HGF, r_mid_idx)];
       const REAL M2_at_center = diagnostic_output_gfs[IDX4pt(MSQUAREDGF, r_mid_idx)];
+      const REAL cf_at_center = y_n_gfs[IDX4pt(CFGF, r_mid_idx)];
       const REAL alpha_at_center = y_n_gfs[IDX4pt(ALPHAGF, r_mid_idx)];
       const REAL trK_at_center = y_n_gfs[IDX4pt(TRKGF, r_mid_idx)];
 
-      fprintf(outfile, "%e %e %e %e %e\n", time, log10(fabs(H_at_center + 1e-16)), log10(fabs(M2_at_center + 1e-16)), alpha_at_center, trK_at_center);
+      fprintf(outfile, "%e %e %e %e %e %e\n", time, log10(fabs(H_at_center + 1e-16)), log10(fabs(M2_at_center + 1e-16)), cf_at_center, alpha_at_center, trK_at_center);
 
       fclose(outfile);
     }
@@ -168,7 +169,7 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {
     // 1D output
     {
       char filename[256];
-      sprintf(filename, "out1d-conv_factor%.2f-t%.2f.txt", convergence_factor, time);
+      sprintf(filename, "out1d-conv_factor%.2f-t%08.2f.txt", convergence_factor, time);
       FILE *outfile;
       outfile = fopen(filename, "w");
       if (outfile == NULL) {
@@ -197,11 +198,12 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {
           xx_to_Cart(commondata, params, xx, i0, i1, i2, xCart);
 
           const REAL alphaL = y_n_gfs[IDX4pt(ALPHAGF, idx3)];
+          const REAL cfL = y_n_gfs[IDX4pt(CFGF, idx3)];
           const REAL trKL = y_n_gfs[IDX4pt(TRKGF, idx3)];
           const REAL HL = diagnostic_output_gfs[IDX4pt(HGF, idx3)];
           const REAL M2L = diagnostic_output_gfs[IDX4pt(MSQUAREDGF, idx3)];
 
-          fprintf(outfile, "%e %e %e %e %e\n", xCart[2], log10(fabs(HL + 1e-16)), log10(fabs(M2L + 1e-16)), alphaL, trKL);
+          fprintf(outfile, "%e %e %e %e %e %e\n", xCart[2], log10(fabs(HL + 1e-16)), log10(fabs(M2L + 1e-16)), cfL, alphaL, trKL);
         }
       }
       fclose(outfile);
@@ -211,7 +213,7 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {
     // 2D output:
     {{
       char filename[256];
-      sprintf(filename, "out2d-{plane}_plane-conv_factor%.2f-t%.2f.txt", convergence_factor, time);
+      sprintf(filename, "out2d-{plane}_plane-conv_factor%.2f-t%08.2f.txt", convergence_factor, time);
       FILE *outfile;
       outfile = fopen(filename, "w");
       if (outfile == NULL) {{
@@ -226,11 +228,12 @@ REAL xCart[3];
 xx_to_Cart(commondata, params, xx, i0, i1, i2, xCart);
 
 const REAL alphaL = y_n_gfs[IDX4pt(ALPHAGF, idx3)];
+const REAL cfL = y_n_gfs[IDX4pt(CFGF, idx3)];
 const REAL trKL = y_n_gfs[IDX4pt(TRKGF, idx3)];
 const REAL HL = diagnostic_output_gfs[IDX4pt(HGF, idx3)];
 const REAL M2L = diagnostic_output_gfs[IDX4pt(MSQUAREDGF, idx3)];
 
-fprintf(outfile, "%e %e %e %e %e %e %e\n", xCart[0], xCart[1], xCart[2], log10(fabs(HL + 1e-16)), log10(fabs(M2L + 1e-16)), alphaL, trKL);
+fprintf(outfile, "%e %e %e %e %e %e %e %e\n", xCart[0], xCart[1], xCart[2], log10(fabs(HL + 1e-16)), log10(fabs(M2L + 1e-16)), cfL, alphaL, trKL);
 """,
         CoordSystem=in_CoordSystem,
         plane=plane,

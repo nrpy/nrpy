@@ -36,8 +36,6 @@ par.register_CodeParameters(
     [
         "initial_sep",
         "mass_ratio",
-        "mass_M",
-        "mass_m",
         "bbhxy_BH_M_chix",
         "bbhxy_BH_M_chiy",
         "bbhxy_BH_M_chiz",
@@ -45,8 +43,19 @@ par.register_CodeParameters(
         "bbhxy_BH_m_chiy",
         "bbhxy_BH_m_chiz",
     ],
-    [10.0, 1.0, 0.5, 0.5, 0, 0, 0, 0, 0, 0],
+    [10.0, 1.0, 0, 0, 0, 0, 0, 0],
     commondata=True,
+)
+par.register_CodeParameters(
+    "REAL",
+    __name__,
+    [
+        "mass_M",
+        "mass_m",
+    ],
+    [0.5, 0.5],
+    commondata=True,
+    add_to_parfile=False,
 )
 par.register_CodeParameters(
     "REAL",
