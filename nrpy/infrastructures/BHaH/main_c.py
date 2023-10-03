@@ -73,14 +73,15 @@ Step 1.d: Set each CodeParameter in griddata.params to default.
         desc += "Step 1.e: Set non-parfile parameters related to numerical grid, then set up numerical grids and CFL-limited timestep.\n"
     if enable_rfm_precompute:
         desc += "Step 1.f: Set up boundary condition struct (bcstruct)\n"
-    desc += f"""Step 2: Declare and allocate memory for gridfunctions
+    desc += f"""Step 2: Initial data are set on y_n_gfs gridfunctions. Allocate storage for them first.
 Step 3: Finalize initialization: set up {initial_data_desc}initial data, etc.
-Step 4: MAIN SIMULATION LOOP
-- Step 4.a: Output diagnostics
-- Step 4.b: Prepare to step forward in time
-- Step 4.c: Step forward in time using Method of Lines with {MoL_method} algorithm, applying {boundary_conditions_desc} boundary conditions.
-- Step 4.d: Finish up step in time
-Step 5: Free all allocated memory"""
+Step 4: Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping
+Step 5: MAIN SIMULATION LOOP
+- Step 5.a: Output diagnostics
+- Step 5.b: Prepare to step forward in time
+- Step 5.c: Step forward in time using Method of Lines with {MoL_method} algorithm, applying {boundary_conditions_desc} boundary conditions.
+- Step 5.d: Finish up step in time
+Step 6: Free all allocated memory"""
     c_type = "int"
     name = "main"
     params = "int argc, const char *argv[]"
@@ -112,30 +113,33 @@ for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
   rfm_precompute_defines(&commondata, &griddata[grid].params, &griddata[grid].rfmstruct, griddata[grid].xx);
 """
     body += r"""
-  // Step 2: Declare and allocate memory for gridfunctions
+  // Step 2: Initial data are set on y_n_gfs gridfunctions. Allocate storage for them first.
   MoL_malloc_y_n_gfs(&commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
-  MoL_malloc_non_y_n_gfs(&commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
 }
 // Step 3: Finalize initialization: set up initial data, etc.
 initial_data(&commondata, griddata);
 
-// Step 4: MAIN SIMULATION LOOP
+// Step 4: Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping
+for(int grid=0; grid<commondata.NUMGRIDS; grid++)
+  MoL_malloc_non_y_n_gfs(&commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
+
+// Step 5: MAIN SIMULATION LOOP
 while(commondata.time < commondata.t_final) { // Main loop to progress forward in time.
-  // Step 4.a: Main loop, part 1: Output diagnostics
+  // Step 5.a: Main loop, part 1: Output diagnostics
   diagnostics(&commondata, griddata);
 
-  // Step 4.b: Main loop, part 2 (pre_MoL_step_forward_in_time): Prepare to step forward in time
+  // Step 5.b: Main loop, part 2 (pre_MoL_step_forward_in_time): Prepare to step forward in time
 """
     if pre_MoL_step_forward_in_time != "":
         body += pre_MoL_step_forward_in_time
     else:
         body += "  // (nothing here; specify by setting pre_MoL_step_forward_in_time string in register_CFunction_main_c().)\n"
     body += f"""
-  // Step 4.c: Main loop, part 3: Step forward in time using Method of Lines with {MoL_method} algorithm,
+  // Step 5.c: Main loop, part 3: Step forward in time using Method of Lines with {MoL_method} algorithm,
   //           applying {boundary_conditions_desc} boundary conditions.
   MoL_step_forward_in_time(&commondata, griddata);
 
-  // Step 4.d: Main loop, part 4 (post_MoL_step_forward_in_time): Finish up step in time
+  // Step 5.d: Main loop, part 4 (post_MoL_step_forward_in_time): Finish up step in time
 """
     if post_MoL_step_forward_in_time != "":
         body += post_MoL_step_forward_in_time
