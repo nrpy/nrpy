@@ -103,7 +103,10 @@ if __name__ == "__main__":
         python_requires=">=3.6",
         packages=find_packages(),
         package_data={
-            "nrpy.infrastructures.BHaH.general_relativity.TwoPunctures": ["TP_utilities.h", "TwoPunctures.h"],
+            "nrpy.infrastructures.BHaH.general_relativity.TwoPunctures": [
+                "TP_utilities.h",
+                "TwoPunctures.h",
+            ],
             "nrpy.helpers": ["simd_intrinsics.h"],
             "nrpy": ["py.typed"],
         },
