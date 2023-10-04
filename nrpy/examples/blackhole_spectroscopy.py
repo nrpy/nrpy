@@ -474,7 +474,8 @@ Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_name=project_name,
     exec_name=project_name,
     compiler_opt_option="default",
-    addl_libraries=["-lgsl", "-lgslcblas"],
+    addl_CFLAGS=["$(shell gsl-config --cflags)"],
+    addl_libraries=["$(shell gsl-config --libs)"],
 )
 print(
     f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."

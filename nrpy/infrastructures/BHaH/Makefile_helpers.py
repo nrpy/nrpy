@@ -118,14 +118,6 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     }
 
     cpu_info = cpuinfo.get_cpu_info()
-    # # invalid data
-    # if cpu_info.get("l1_data_cache_size"):
-    #     for key, value in CFLAGS_dict.items():
-    #         CFLAGS_dict[
-    #             key
-    #         ] += (
-    #             f" --param l1-cache-size={int(cpu_info.get('l1_data_cache_size')/1024)}"
-    #         )
     if cpu_info.get("l2_cache_size"):
         try:
             l2_cache_size_KB = int(int(cpu_info.get("l2_cache_size")) / 1024)
