@@ -29,21 +29,19 @@ def register_CFunction_TP_Interp() -> None:
 //#define STANDALONE_UNIT_TEST
 
 /* Swap two variables */
-static inline
-void swap (REAL * restrict const a, REAL * restrict const b)
-{
-  REAL const t = *a; *a=*b; *b=t;
+static inline void swap(REAL *restrict const a, REAL *restrict const b) {
+  REAL const t = *a;
+  *a = *b;
+  *b = t;
 }
 
 #undef SWAP
-#define SWAP(a,b) (swap(&(a),&(b)))
-/* -------------------------------------------------------------------*/
+#define SWAP(a, b) (swap(&(a), &(b)))
 """
     name = "TP_Interp"
     params = """const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xCart[3],
      const ID_persist_struct *restrict ID_persist, initial_data_struct *restrict initial_data"""
-    body = r"""
-  const REAL mp = ID_persist->mp;
+    body = r"""  const REAL mp = ID_persist->mp;
   const REAL mm = ID_persist->mm;
 
   const REAL x = xCart[0];
@@ -58,18 +56,14 @@ void swap (REAL * restrict const a, REAL * restrict const b)
   enum GRID_SETUP_METHOD { GSM_Taylor_expansion, GSM_evaluation };
   enum GRID_SETUP_METHOD gsm;
 
-  if (CCTK_EQUALS(ID_persist->grid_setup_method, "Taylor expansion"))
-    {
-      gsm = GSM_Taylor_expansion;
-    }
-  else if (CCTK_EQUALS(ID_persist->grid_setup_method, "evaluation"))
-    {
-      gsm = GSM_evaluation;
-    }
-  else
-    {
-      fprintf(stderr,"internal error\n");exit(1);
-    }
+  if (CCTK_EQUALS(ID_persist->grid_setup_method, "Taylor expansion")) {
+    gsm = GSM_Taylor_expansion;
+  } else if (CCTK_EQUALS(ID_persist->grid_setup_method, "evaluation")) {
+    gsm = GSM_evaluation;
+  } else {
+    fprintf(stderr, "internal error\n");
+    exit(1);
+  }
 
   antisymmetric_lapse = CCTK_EQUALS(ID_persist->initial_lapse, "twopunctures-antisymmetric");
   averaged_lapse = CCTK_EQUALS(ID_persist->initial_lapse, "twopunctures-averaged");
@@ -84,7 +78,7 @@ void swap (REAL * restrict const a, REAL * restrict const b)
     fprintf(stderr,"Setting initial lapse to a Brownsville-style profile with exp %f.\n",(double)ID_persist->initial_lapse_psi_exponent);
   */
 
-  //printf("Interpolating result\n");
+  // printf("Interpolating result\n");
   /* ZACH DISABLED. ADM VARIABLE INPUT SHOULD SUFFICE.
      if (CCTK_EQUALS(metric_type, "static conformal")) {
      if (CCTK_EQUALS(conformal_storage, "factor")) {
@@ -110,74 +104,61 @@ void swap (REAL * restrict const a, REAL * restrict const b)
   for(REAL x=-10.0;x<10.0;x+=dx) {
     REAL y=0.0,z=0.0;
   */
-  REAL alp_out = -1.0e100;  // Set to crazy value in case parameters set incorrectly
-  REAL gxx_out,gxy_out,gxz_out,gyy_out,gyz_out,gzz_out;
-  //REAL puncture_u_out;
-  REAL Kxx_out,Kxy_out,Kxz_out,Kyy_out,Kyz_out,Kzz_out;
+  REAL alp_out = -1.0e100; // Set to crazy value in case parameters set incorrectly
+  REAL gxx_out, gxy_out, gxz_out, gyy_out, gyz_out, gzz_out;
+  // REAL puncture_u_out;
+  REAL Kxx_out, Kxy_out, Kxz_out, Kyy_out, Kyz_out, Kzz_out;
 
   REAL xx, yy, zz;
   xx = x - ID_persist->center_offset[0];
   yy = y - ID_persist->center_offset[1];
   zz = z - ID_persist->center_offset[2];
 
-  //We implement swapping the x and z coordinates as follows.
-  //   The bulk of the code that performs the actual calculations
-  //   is unchanged.  This code looks only at local variables.
-  //   Before the bulk --i.e., here-- we swap all x and z tensor
-  //   components, and after the code --i.e., at the end of this
-  //   main loop-- we swap everything back.
+  // We implement swapping the x and z coordinates as follows.
+  //    The bulk of the code that performs the actual calculations
+  //    is unchanged.  This code looks only at local variables.
+  //    Before the bulk --i.e., here-- we swap all x and z tensor
+  //    components, and after the code --i.e., at the end of this
+  //    main loop-- we swap everything back.
   if (ID_persist->swap_xz) {
     // Swap the x and z coordinates
-    SWAP (xx, zz);
+    SWAP(xx, zz);
   }
 
-  REAL r_plus
-    = sqrt(pow(xx - ID_persist->par_b, 2) + pow(yy, 2) + pow(zz, 2));
-  REAL r_minus
-    = sqrt(pow(xx + ID_persist->par_b, 2) + pow(yy, 2) + pow(zz, 2));
+  REAL r_plus = sqrt(pow(xx - ID_persist->par_b, 2) + pow(yy, 2) + pow(zz, 2));
+  REAL r_minus = sqrt(pow(xx + ID_persist->par_b, 2) + pow(yy, 2) + pow(zz, 2));
 
   REAL U;
-  switch (gsm)
-    {
-    case GSM_Taylor_expansion:
-      U = PunctTaylorExpandAtArbitPosition
-        (*ID_persist, 0, nvar, n1, n2, n3, ID_persist->v, xx, yy, zz);
-      break;
-    case GSM_evaluation:
-      U = PunctIntPolAtArbitPositionFast(*ID_persist, 0, nvar, n1, n2, n3, ID_persist->cf_v, xx, yy, zz);
-      break;
-    default:
-      assert (0);
-    }
-  r_plus = pow (pow (r_plus, 4) + pow (ID_persist->TP_epsilon, 4), 0.25);
-  r_minus = pow (pow (r_minus, 4) + pow (ID_persist->TP_epsilon, 4), 0.25);
+  switch (gsm) {
+  case GSM_Taylor_expansion:
+    U = PunctTaylorExpandAtArbitPosition(*ID_persist, 0, nvar, n1, n2, n3, ID_persist->v, xx, yy, zz);
+    break;
+  case GSM_evaluation:
+    U = PunctIntPolAtArbitPositionFast(*ID_persist, 0, nvar, n1, n2, n3, ID_persist->cf_v, xx, yy, zz);
+    break;
+  default:
+    assert(0);
+  }
+  r_plus = pow(pow(r_plus, 4) + pow(ID_persist->TP_epsilon, 4), 0.25);
+  r_minus = pow(pow(r_minus, 4) + pow(ID_persist->TP_epsilon, 4), 0.25);
   if (r_plus < ID_persist->TP_Tiny)
     r_plus = ID_persist->TP_Tiny;
   if (r_minus < ID_persist->TP_Tiny)
     r_minus = ID_persist->TP_Tiny;
-  REAL psi1 = 1
-    + 0.5 * mp / r_plus
-    + 0.5 * mm / r_minus + U;
-#define EXTEND(M,r)                                             \
-  ( M * (3./8 * pow(r, 4) / pow(ID_persist->TP_Extend_Radius, 5) -     \
-         5./4 * pow(r, 2) / pow(ID_persist->TP_Extend_Radius, 3) +     \
-         15./8 / ID_persist->TP_Extend_Radius))
+  REAL psi1 = 1 + 0.5 * mp / r_plus + 0.5 * mm / r_minus + U;
+#define EXTEND(M, r) (M * (3. / 8 * pow(r, 4) / pow(ID_persist->TP_Extend_Radius, 5) - 5. / 4 * pow(r, 2) / pow(ID_persist->TP_Extend_Radius, 3) + 15. / 8 / ID_persist->TP_Extend_Radius))
   if (r_plus < ID_persist->TP_Extend_Radius) {
-    psi1 = 1
-      + 0.5 * EXTEND(mp,r_plus)
-      + 0.5 * mm / r_minus + U;
+    psi1 = 1 + 0.5 * EXTEND(mp, r_plus) + 0.5 * mm / r_minus + U;
   }
   if (r_minus < ID_persist->TP_Extend_Radius) {
-    psi1 = 1
-      + 0.5 * EXTEND(mm,r_minus)
-      + 0.5 * mp / r_plus + U;
+    psi1 = 1 + 0.5 * EXTEND(mm, r_minus) + 0.5 * mp / r_plus + U;
   }
   REAL static_psi = 1;
 
   REAL Aij[3][3];
-  BY_Aijofxyz (*ID_persist, xx, yy, zz, Aij);
+  BY_Aijofxyz(*ID_persist, xx, yy, zz, Aij);
 
-  REAL old_alp=1.0;
+  REAL old_alp = 1.0;
   if (ID_persist->multiply_old_lapse)
     old_alp = alp_out;
 
@@ -195,63 +176,63 @@ void swap (REAL * restrict const a, REAL * restrict const b)
     xp = xx - ID_persist->par_b;
     yp = yy;
     zp = zz;
-    rp = sqrt (xp*xp + yp*yp + zp*zp);
-    rp = pow (pow (rp, 4) + pow (ID_persist->TP_epsilon, 4), 0.25);
+    rp = sqrt(xp * xp + yp * yp + zp * zp);
+    rp = pow(pow(rp, 4) + pow(ID_persist->TP_epsilon, 4), 0.25);
     if (rp < ID_persist->TP_Tiny)
       rp = ID_persist->TP_Tiny;
-    ir = 1.0/rp;
+    ir = 1.0 / rp;
 
     if (rp < ID_persist->TP_Extend_Radius) {
       ir = EXTEND(1., rp);
     }
 
-    s1 = 0.5* mp *ir;
-    s3 = -s1*ir*ir;
-    s5 = -3.0*s3*ir*ir;
+    s1 = 0.5 * mp * ir;
+    s3 = -s1 * ir * ir;
+    s5 = -3.0 * s3 * ir * ir;
 
     p += s1;
 
-    px += xp*s3;
-    py += yp*s3;
-    pz += zp*s3;
+    px += xp * s3;
+    py += yp * s3;
+    pz += zp * s3;
 
-    pxx += xp*xp*s5 + s3;
-    pxy += xp*yp*s5;
-    pxz += xp*zp*s5;
-    pyy += yp*yp*s5 + s3;
-    pyz += yp*zp*s5;
-    pzz += zp*zp*s5 + s3;
+    pxx += xp * xp * s5 + s3;
+    pxy += xp * yp * s5;
+    pxz += xp * zp * s5;
+    pyy += yp * yp * s5 + s3;
+    pyz += yp * zp * s5;
+    pzz += zp * zp * s5 + s3;
 
     /* second puncture */
     xp = xx + ID_persist->par_b;
     yp = yy;
     zp = zz;
-    rp = sqrt (xp*xp + yp*yp + zp*zp);
-    rp = pow (pow (rp, 4) + pow (ID_persist->TP_epsilon, 4), 0.25);
+    rp = sqrt(xp * xp + yp * yp + zp * zp);
+    rp = pow(pow(rp, 4) + pow(ID_persist->TP_epsilon, 4), 0.25);
     if (rp < ID_persist->TP_Tiny)
       rp = ID_persist->TP_Tiny;
-    ir = 1.0/rp;
+    ir = 1.0 / rp;
 
     if (rp < ID_persist->TP_Extend_Radius) {
       ir = EXTEND(1., rp);
     }
 
-    s1 = 0.5* mm *ir;
-    s3 = -s1*ir*ir;
-    s5 = -3.0*s3*ir*ir;
+    s1 = 0.5 * mm * ir;
+    s3 = -s1 * ir * ir;
+    s5 = -3.0 * s3 * ir * ir;
 
     p += s1;
 
-    px += xp*s3;
-    py += yp*s3;
-    pz += zp*s3;
+    px += xp * s3;
+    py += yp * s3;
+    pz += zp * s3;
 
-    pxx += xp*xp*s5 + s3;
-    pxy += xp*yp*s5;
-    pxz += xp*zp*s5;
-    pyy += yp*yp*s5 + s3;
-    pyz += yp*zp*s5;
-    pzz += zp*zp*s5 + s3;
+    pxx += xp * xp * s5 + s3;
+    pxy += xp * yp * s5;
+    pxz += xp * zp * s5;
+    pyy += yp * yp * s5 + s3;
+    pyz += yp * zp * s5;
+    pzz += zp * zp * s5 + s3;
 
     /* ZACH DISABLED:
        if (*conformal_state >= 1) {
@@ -276,18 +257,18 @@ void swap (REAL * restrict const a, REAL * restrict const b)
     if (pmn_lapse)
       alp_out = pow(p, ID_persist->initial_lapse_psi_exponent);
     if (brownsville_lapse)
-      alp_out = 2.0/(1.0+pow(p, ID_persist->initial_lapse_psi_exponent));
+      alp_out = 2.0 / (1.0 + pow(p, ID_persist->initial_lapse_psi_exponent));
 
   } /* if conformal-state > 0 */
 
-  //puncture_u_out = U;
+  // puncture_u_out = U;
 
-  gxx_out = pow (psi1 / static_psi, 4);
+  gxx_out = pow(psi1 / static_psi, 4);
   gxy_out = 0;
   gxz_out = 0;
-  gyy_out = pow (psi1 / static_psi, 4);
+  gyy_out = pow(psi1 / static_psi, 4);
   gyz_out = 0;
-  gzz_out = pow (psi1 / static_psi, 4);
+  gzz_out = pow(psi1 / static_psi, 4);
 
   Kxx_out = Aij[0][0] / pow(psi1, 2);
   Kxy_out = Aij[0][1] / pow(psi1, 2);
@@ -297,19 +278,13 @@ void swap (REAL * restrict const a, REAL * restrict const b)
   Kzz_out = Aij[2][2] / pow(psi1, 2);
 
   if (antisymmetric_lapse || averaged_lapse) {
-    alp_out =
-      ((1.0 -0.5* mp /r_plus -0.5* mm/r_minus)
-       /(1.0 +0.5* mp /r_plus +0.5* mm/r_minus));
+    alp_out = ((1.0 - 0.5 * mp / r_plus - 0.5 * mm / r_minus) / (1.0 + 0.5 * mp / r_plus + 0.5 * mm / r_minus));
 
     if (r_plus < ID_persist->TP_Extend_Radius) {
-      alp_out =
-        ((1.0 -0.5*EXTEND(mp, r_plus) -0.5* mm/r_minus)
-         /(1.0 +0.5*EXTEND(mp, r_plus) +0.5* mm/r_minus));
+      alp_out = ((1.0 - 0.5 * EXTEND(mp, r_plus) - 0.5 * mm / r_minus) / (1.0 + 0.5 * EXTEND(mp, r_plus) + 0.5 * mm / r_minus));
     }
     if (r_minus < ID_persist->TP_Extend_Radius) {
-      alp_out =
-        ((1.0 -0.5*EXTEND(mm, r_minus) -0.5* mp/r_plus)
-         /(1.0 +0.5*EXTEND(mp, r_minus) +0.5* mp/r_plus));
+      alp_out = ((1.0 - 0.5 * EXTEND(mm, r_minus) - 0.5 * mp / r_plus) / (1.0 + 0.5 * EXTEND(mp, r_minus) + 0.5 * mp / r_plus));
     }
 
     if (averaged_lapse) {
@@ -330,28 +305,28 @@ void swap (REAL * restrict const a, REAL * restrict const b)
     SWAP (psixy_out, psiyz_out);
     }
     */
-    SWAP (gxx_out, gzz_out);
-    SWAP (gxy_out, gyz_out);
-    SWAP (Kxx_out, Kzz_out);
-    SWAP (Kxy_out, Kyz_out);
+    SWAP(gxx_out, gzz_out);
+    SWAP(gxy_out, gyz_out);
+    SWAP(Kxx_out, Kzz_out);
+    SWAP(Kxy_out, Kyz_out);
   } /* if swap_xz */
 
-    /* ZACH DISABLED: DO NOT USE MATTER SOURCE TERMS.
-       if (ID_persist->use_sources && ID_persist->rescale_sources)
-       {
-       Rescale_Sources(cctk_lsh[0]*cctk_lsh[1]*cctk_lsh[2],
-       x, y, z,
-       (conformal_state > 0) ? psi : NULL,
-       gxx, gyy, gzz,
-       gxy, gxz, gyz);
-       }
-       fprintf(outascii_file, "%e %e %e | gij's: %e %e %e %e %e %e | Kij's: %e %e %e %e %e %e | alp: %e | TwoPunctures OUTPUT\n",xx,yy,zz,
-       gxx_out,gxy_out,gxz_out,gyy_out,gyz_out,gzz_out,
-       Kxx_out,Kxy_out,Kxz_out,Kyy_out,Kyz_out,Kzz_out,
-       alp_out);
-       }
-       fclose(outascii_file);
-    */
+  /* ZACH DISABLED: DO NOT USE MATTER SOURCE TERMS.
+     if (ID_persist->use_sources && ID_persist->rescale_sources)
+     {
+     Rescale_Sources(cctk_lsh[0]*cctk_lsh[1]*cctk_lsh[2],
+     x, y, z,
+     (conformal_state > 0) ? psi : NULL,
+     gxx, gyy, gzz,
+     gxy, gxz, gyz);
+     }
+     fprintf(outascii_file, "%e %e %e | gij's: %e %e %e %e %e %e | Kij's: %e %e %e %e %e %e | alp: %e | TwoPunctures OUTPUT\n",xx,yy,zz,
+     gxx_out,gxy_out,gxz_out,gyy_out,gyz_out,gzz_out,
+     Kxx_out,Kxy_out,Kxz_out,Kyy_out,Kyz_out,Kzz_out,
+     alp_out);
+     }
+     fclose(outascii_file);
+  */
 
   initial_data->gammaSphorCartDD00 = gxx_out;
   initial_data->gammaSphorCartDD01 = gxy_out;
@@ -378,22 +353,22 @@ void swap (REAL * restrict const a, REAL * restrict const b)
   ///////////////////////////////////
 #ifdef STANDALONE_UNIT_TEST
 
-int main() {
+  int main() {
 
-  ID_persist_struct par;
-  char ID_type[100];
-  snprintf(ID_type,100,"QC0");
-  TwoPunctures_initialize_parameters(ID_type, &par);
+    ID_persist_struct par;
+    char ID_type[100];
+    snprintf(ID_type, 100, "QC0");
+    TwoPunctures_initialize_parameters(ID_type, &par);
 
-  TwoPunctures_solve(&par);
+    TwoPunctures_solve(&par);
 
-  TwoPunctures_Interp(&par);
+    TwoPunctures_Interp(&par);
 
-  free_derivs (&par.v, par.npoints_A * par.npoints_B * par.npoints_phi * 1);
-  free_derivs (&par.cf_v, par.npoints_A * par.npoints_B * par.npoints_phi * 1);
+    free_derivs(&par.v, par.npoints_A * par.npoints_B * par.npoints_phi * 1);
+    free_derivs(&par.cf_v, par.npoints_A * par.npoints_B * par.npoints_phi * 1);
 
-  return 0;
-}
+    return 0;
+  }
 
 #endif
 """
