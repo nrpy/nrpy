@@ -88,12 +88,14 @@ def register_CFunction_initial_data(
     # Unpack griddata
     body = """
 ID_persist_struct ID_persist;
+"""
+    if populate_ID_persist_struct_str:
+        body += populate_ID_persist_struct_str
+    body += """
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   // Unpack griddata struct:
   params_struct *restrict params = &griddata[grid].params;
 """
-    if populate_ID_persist_struct_str:
-        body += populate_ID_persist_struct_str
     body += f"initial_data_reader__convert_ADM_{IDCoordSystem}_to_BSSN(commondata, griddata, &ID_persist, {IDtype});"
     body += """
   apply_bcs_outerextrap_and_inner(commondata, params, &griddata->bcstruct, griddata->gridfuncs.y_n_gfs);

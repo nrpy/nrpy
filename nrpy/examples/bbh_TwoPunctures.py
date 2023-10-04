@@ -56,10 +56,13 @@ Nxx_dict = {
 MoL_method = "RK4"  # MoL activated to set up gridfunctions for us.
 OMP_collapse = 1
 if "Spherical" in CoordSystem:
-    par.set_parval_from_str("symmetry_axes", "12")
-    OMP_collapse = 1  # about 2x faster
+    par.set_parval_from_str("symmetry_axes", "2")
+    par.adjust_CodeParam_default("CFL_FACTOR", 1.0)
+    OMP_collapse = 2  # about 2x faster
+    if CoordSystem == "SinhSpherical":
+        sinh_width = 0.2
 enable_rfm_precompute = True
-fd_order = 4
+fd_order = 8
 radiation_BC_fd_order = 2
 enable_simd = True
 enable_fd_functions = True
@@ -333,6 +336,12 @@ MoL.MoL_register_CFunctions(
 xxCartxx.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
 xxCartxx.register_CFunction_xx_to_Cart(CoordSystem)
 
+# Reset CodeParameter defaults according to variables set above.
+if CoordSystem == "SinhSpherical":
+    par.adjust_CodeParam_default("SINHW", sinh_width)
+par.adjust_CodeParam_default("eta", GammaDriving_eta)
+
+
 #########################################################
 # STEP 3: Generate header files, register C functions and
 #         command line parameters, set up boundary conditions,
@@ -358,6 +367,7 @@ TPl.copy_TwoPunctures_header_files(TwoPunctures_Path=Path(project_dir) / "TwoPun
 Bdefines_h.output_BHaH_defines_h(
     additional_includes=[str(Path("TwoPunctures") / Path("TwoPunctures.h"))],
     project_dir=project_dir,
+    fin_NGHOSTS_add_one_for_upwinding=True,
     enable_simd=enable_simd,
     CoordSystem=CoordSystem,
 )
