@@ -11,6 +11,7 @@ Author: Zachariah B. Etienne
 #         and compile-time parameters.
 import shutil
 import os
+from pathlib import Path
 from inspect import currentframe as cfr
 from types import FrameType as FT
 from typing import cast, Union
@@ -23,6 +24,8 @@ import nrpy.helpers.parallel_codegen as pcg
 
 from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
 from nrpy.infrastructures.BHaH import rfm_precompute
+import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.TwoPunctures_lib as TPl
+import nrpy.infrastructures.BHaH.general_relativity.NRPyPN_quasicircular_momenta as NRPyPNqm
 import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
@@ -42,8 +45,18 @@ start_time = time.time()
 # Code-generation-time parameters:
 project_name = "blackhole_spectroscopy"
 CoordSystem = "SinhSpherical"
-IDtype = "BrillLindquist"
+IDtype = "TP_Interp"
 IDCoordSystem = "Cartesian"
+
+initial_sep = 0.5
+mass_ratio = 1.0  # must be >= 1.0. Will need higher resolution for > 1.0.
+BH_m_chix = 0.0  # dimensionless spin parameter for less-massive BH
+BH_M_chix = 0.0  # dimensionless spin parameter for more-massive BH
+initial_p_r = 0.0  # want this to be <= 0.0. 0.0 -> fall from rest, < 0.0 -> boosted toward each other.
+TP_npoints_A = 48
+TP_npoints_B = 48
+TP_npoints_phi = 4
+
 enable_KreissOliger_dissipation = True
 KreissOliger_strength_mult_by_W = True
 KreissOliger_strength_gauge = 0.99
@@ -294,11 +307,26 @@ if(commondata->time + commondata->dt > commondata->t_final) printf("\n");
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
+NRPyPNqm.register_CFunction_NRPyPN_quasicircular_momenta()
+TPl.register_C_functions()
 BCl.register_CFunction_initial_data(
     CoordSystem=CoordSystem,
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
-    ID_persist_struct_str="",
+    ID_persist_struct_str=TPl.ID_persist_str(),
+    populate_ID_persist_struct_str=r"""
+initialize_ID_persist_struct(commondata, &ID_persist);
+TP_solve(&ID_persist);
+""",
+    free_ID_persist_struct_str=r"""
+{
+  extern void free_derivs (derivs * v, int n);  // <- Needed to free memory allocated by TwoPunctures.
+  // <- Free memory allocated within ID_persist.
+  // Now that we're finished with par.v and par.cf_v (needed in setting up ID, we can free up memory for TwoPunctures' grids...
+  free_derivs (&ID_persist.v,    ID_persist.npoints_A * ID_persist.npoints_B * ID_persist.npoints_phi);
+  free_derivs (&ID_persist.cf_v, ID_persist.npoints_A * ID_persist.npoints_B * ID_persist.npoints_phi);
+}
+""",
 )
 register_CFunction_diagnostics(in_CoordSystem=CoordSystem)
 if enable_rfm_precompute:
@@ -389,17 +417,27 @@ xxCartxx.register_CFunction_xx_to_Cart(CoordSystem)
 progress.register_CFunction_progress_indicator()
 
 # Reset CodeParameter defaults according to variables set above.
+# Coord system parameters
 if CoordSystem == "SinhSpherical":
     par.adjust_CodeParam_default("SINHW", sinh_width)
+par.adjust_CodeParam_default("t_final", t_final)
+# Initial data parameters
+par.adjust_CodeParam_default("initial_sep", initial_sep)
+par.adjust_CodeParam_default("mass_ratio", mass_ratio)
+par.adjust_CodeParam_default("bbhxy_BH_m_chix", BH_m_chix)
+par.adjust_CodeParam_default("bbhxy_BH_M_chix", BH_M_chix)
+par.adjust_CodeParam_default("initial_p_t", 0.0)
+par.adjust_CodeParam_default("initial_p_r", initial_p_r)
+par.adjust_CodeParam_default("TP_npoints_A", TP_npoints_A)
+par.adjust_CodeParam_default("TP_npoints_B", TP_npoints_B)
+par.adjust_CodeParam_default("TP_npoints_phi", TP_npoints_phi)
+par.adjust_CodeParam_default("TP_bare_mass_m", 1.0 / (1.0 + mass_ratio))
+par.adjust_CodeParam_default("TP_bare_mass_M", mass_ratio / (1.0 + mass_ratio))
+# Evolution / diagnostics parameters
 par.adjust_CodeParam_default("eta", GammaDriving_eta)
 par.adjust_CodeParam_default(
     "swm2sh_maximum_l_mode_to_compute", swm2sh_maximum_l_mode_to_compute
 )
-par.adjust_CodeParam_default("BH1_mass", default_BH1_mass)
-par.adjust_CodeParam_default("BH2_mass", default_BH2_mass)
-par.adjust_CodeParam_default("BH1_posn_z", default_BH1_z_posn)
-par.adjust_CodeParam_default("BH2_posn_z", default_BH2_z_posn)
-par.adjust_CodeParam_default("t_final", t_final)
 
 #########################################################
 # STEP 3: Generate header files, register C functions and
@@ -412,10 +450,12 @@ cmdpar.generate_default_parfile(project_dir=project_dir, project_name=project_na
 cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
     project_name=project_name, cmdline_inputs=["convergence_factor"]
 )
+TPl.copy_TwoPunctures_header_files(TwoPunctures_Path=Path(project_dir) / "TwoPunctures")
 Bdefines_h.output_BHaH_defines_h(
+    additional_includes=[str(Path("TwoPunctures") / Path("TwoPunctures.h"))],
     project_dir=project_dir,
-    enable_simd=enable_simd,
     fin_NGHOSTS_add_one_for_upwinding=True,
+    enable_simd=enable_simd,
     CoordSystem=CoordSystem,
 )
 main.register_CFunction_main_c(
@@ -434,6 +474,7 @@ Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_name=project_name,
     exec_name=project_name,
     compiler_opt_option="default",
+    addl_libraries=["-lgsl", "-lgslcblas"],
 )
 print(
     f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
