@@ -69,12 +69,12 @@ static inline void swap(REAL *restrict const a, REAL *restrict const b) {
   averaged_lapse = CCTK_EQUALS(ID_persist->initial_lapse, "twopunctures-averaged");
   pmn_lapse = CCTK_EQUALS(ID_persist->initial_lapse, "psi^n");
   /*
-  if (pmn_lapse)
+    if (pmn_lapse)
     fprintf(stderr,"Setting initial lapse to psi^%f profile.\n",(double)ID_persist->initial_lapse_psi_exponent);
   */
   brownsville_lapse = CCTK_EQUALS(ID_persist->initial_lapse, "brownsville");
   /*
-  if (brownsville_lapse)
+    if (brownsville_lapse)
     fprintf(stderr,"Setting initial lapse to a Brownsville-style profile with exp %f.\n",(double)ID_persist->initial_lapse_psi_exponent);
   */
 
@@ -97,11 +97,11 @@ static inline void swap(REAL *restrict const a, REAL *restrict const b) {
   // MAIN OUTPUT LOOP
 
   /*
-  char filename[100];
-  sprintf(filename,"outTwoPunctures.txt");
-  FILE *outascii_file = fopen(filename, "w");
-  const REAL dx = 0.1;
-  for(REAL x=-10.0;x<10.0;x+=dx) {
+    char filename[100];
+    sprintf(filename,"outTwoPunctures.txt");
+    FILE *outascii_file = fopen(filename, "w");
+    const REAL dx = 0.1;
+    for(REAL x=-10.0;x<10.0;x+=dx) {
     REAL y=0.0,z=0.0;
   */
   REAL alp_out = -1.0e100; // Set to crazy value in case parameters set incorrectly
@@ -109,10 +109,17 @@ static inline void swap(REAL *restrict const a, REAL *restrict const b) {
   // REAL puncture_u_out;
   REAL Kxx_out, Kxy_out, Kxz_out, Kyy_out, Kyz_out, Kzz_out;
 
+  // rotate xy to zx via: x->z , y->x, z->y.
+  // z_dest = x_src; x_dest = y_src; y_dest = z_src
   REAL xx, yy, zz;
-  xx = x - ID_persist->center_offset[0];
-  yy = y - ID_persist->center_offset[1];
-  zz = z - ID_persist->center_offset[2];
+  {
+    const REAL x_dest = x - ID_persist->center_offset[0];
+    const REAL y_dest = y - ID_persist->center_offset[1];
+    const REAL z_dest = z - ID_persist->center_offset[2];
+    xx = z_dest;
+    yy = x_dest;
+    zz = y_dest;
+  }
 
   // We implement swapping the x and z coordinates as follows.
   //    The bulk of the code that performs the actual calculations
@@ -327,20 +334,22 @@ static inline void swap(REAL *restrict const a, REAL *restrict const b) {
      }
      fclose(outascii_file);
   */
+  // New z = old x
+  // New x = old y
+  // New y = old z
+  initial_data->gammaSphorCartDD22 = gxx_out;
+  initial_data->gammaSphorCartDD02 = gxy_out;  // Technically gammaSphorCartDD20 = gammaSphorCartDD02
+  initial_data->gammaSphorCartDD12 = gxz_out;  // Technically gammaSphorCartDD21 = gammaSphorCartDD12
+  initial_data->gammaSphorCartDD00 = gyy_out;
+  initial_data->gammaSphorCartDD01 = gyz_out;
+  initial_data->gammaSphorCartDD11 = gzz_out;
 
-  initial_data->gammaSphorCartDD00 = gxx_out;
-  initial_data->gammaSphorCartDD01 = gxy_out;
-  initial_data->gammaSphorCartDD02 = gxz_out;
-  initial_data->gammaSphorCartDD11 = gyy_out;
-  initial_data->gammaSphorCartDD12 = gyz_out;
-  initial_data->gammaSphorCartDD22 = gzz_out;
-
-  initial_data->KSphorCartDD00 = Kxx_out;
-  initial_data->KSphorCartDD01 = Kxy_out;
-  initial_data->KSphorCartDD02 = Kxz_out;
-  initial_data->KSphorCartDD11 = Kyy_out;
-  initial_data->KSphorCartDD12 = Kyz_out;
-  initial_data->KSphorCartDD22 = Kzz_out;
+  initial_data->KSphorCartDD22 = Kxx_out;
+  initial_data->KSphorCartDD02 = Kxy_out;  // Technically KSphorCartDD20 = KSphorCartDD02
+  initial_data->KSphorCartDD12 = Kxz_out;  // Technically KSphorCartDD21 = KSphorCartDD12
+  initial_data->KSphorCartDD00 = Kyy_out;
+  initial_data->KSphorCartDD01 = Kyz_out;
+  initial_data->KSphorCartDD11 = Kzz_out;
 
   initial_data->alpha = alp_out;
   initial_data->betaSphorCartU0 = 0;

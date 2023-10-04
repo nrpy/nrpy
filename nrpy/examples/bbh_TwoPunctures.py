@@ -41,18 +41,28 @@ par.set_parval_from_str("Infrastructure", "BHaH")
 project_name = "bbh_TwoPunctures"
 IDtype = "TP_Interp"
 IDCoordSystem = "Cartesian"
-BBH_ID_choice = "GW150914ET"
+
+initial_sep = 0.5
+mass_ratio = 1.0  # must be >= 1.0. Will need higher resolution for > 1.0.
+BH_m_chix = 0.0
+BH_M_chix = 0.0
+initial_p_r = 0.0  # want this to be <= 0.0. 0.0 -> fall from rest, < 0.0 -> boosted toward each other.
+TP_npoints_A = 48
+TP_npoints_B = 48
+TP_npoints_phi = 4
+
 grid_physical_size = 10.0
 LapseEvolutionOption = "OnePlusLog"
 ShiftEvolutionOption = "GammaDriving2ndOrder_Covariant"
 GammaDriving_eta = 1.0
 diagnostics_output_every = 0.25
-t_final = 0.5 * diagnostics_output_every
+t_final = 0.000001
 
 CoordSystem = "SinhSpherical"
 Nxx_dict = {
     "SinhSpherical": [128, 64, 2],
 }
+
 MoL_method = "RK4"  # MoL activated to set up gridfunctions for us.
 OMP_collapse = 1
 if "Spherical" in CoordSystem:
@@ -61,6 +71,7 @@ if "Spherical" in CoordSystem:
     OMP_collapse = 2  # about 2x faster
     if CoordSystem == "SinhSpherical":
         sinh_width = 0.2
+
 enable_rfm_precompute = True
 fd_order = 8
 radiation_BC_fd_order = 2
@@ -340,7 +351,17 @@ xxCartxx.register_CFunction_xx_to_Cart(CoordSystem)
 if CoordSystem == "SinhSpherical":
     par.adjust_CodeParam_default("SINHW", sinh_width)
 par.adjust_CodeParam_default("eta", GammaDriving_eta)
-
+par.adjust_CodeParam_default("initial_sep", initial_sep)
+par.adjust_CodeParam_default("mass_ratio", mass_ratio)
+par.adjust_CodeParam_default("bbhxy_BH_m_chix", BH_m_chix)
+par.adjust_CodeParam_default("bbhxy_BH_M_chix", BH_M_chix)
+par.adjust_CodeParam_default("initial_p_t", 0.0)
+par.adjust_CodeParam_default("initial_p_r", initial_p_r)
+par.adjust_CodeParam_default("TP_npoints_A", TP_npoints_A)
+par.adjust_CodeParam_default("TP_npoints_B", TP_npoints_B)
+par.adjust_CodeParam_default("TP_npoints_phi", TP_npoints_phi)
+par.adjust_CodeParam_default("TP_bare_mass_m", 1.0 / (1.0 + mass_ratio))
+par.adjust_CodeParam_default("TP_bare_mass_M", mass_ratio / (1.0 + mass_ratio))
 
 #########################################################
 # STEP 3: Generate header files, register C functions and
@@ -353,14 +374,15 @@ cmdpar.generate_default_parfile(project_dir=project_dir, project_name=project_na
 cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
     project_name=project_name,
     cmdline_inputs=[
-        "initial_sep",
-        "mass_ratio",
-        "bbhxy_BH_M_chix",
-        "bbhxy_BH_M_chiy",
-        "bbhxy_BH_M_chiz",
-        "bbhxy_BH_m_chix",
-        "bbhxy_BH_m_chiy",
-        "bbhxy_BH_m_chiz",
+        "convergence_factor"
+        # "initial_sep",
+        # "mass_ratio",
+        # "bbhxy_BH_M_chix",
+        # "bbhxy_BH_M_chiy",
+        # "bbhxy_BH_M_chiz",
+        # "bbhxy_BH_m_chix",
+        # "bbhxy_BH_m_chiy",
+        # "bbhxy_BH_m_chiz",
     ],
 )
 TPl.copy_TwoPunctures_header_files(TwoPunctures_Path=Path(project_dir) / "TwoPunctures")

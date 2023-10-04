@@ -39,13 +39,19 @@ def register_CFunction_initialize_ID_persist_struct() -> None:
     Register C function initialize_ID_persist_struct(), which populates ID_persist_struct with defaults, and overrides defaults with commondata.
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Initialize ID_persist_struct: populate some with defaults; set others with inputs from commondata;
-    set up initial_p_t and initial_p_r if not set in parfile; and finally rotate inputs from xy to zx plane."""
+    desc = """
+IMPORTANT: We set up initial data in TwoPunctures assuming the BBH is initially in the xy-plane,
+           as that is what TwoPunctures was designed to do in the Toolkit, AND this is what NRPyPN
+           assumes. Also the "swap_xz" option in TwoPunctures results in a non-right-handed
+           coordinate system. So we set up initial data in xy, then ***at the end*** we simply
+           rotate xy to zx via: x->z , y->x, z->y.
+Initialize ID_persist_struct: populate some with defaults; set others with inputs from commondata;
+set up initial_p_t and initial_p_r if not set in parfile.
+"""
     c_type = "void"
     name = "initialize_ID_persist_struct"
     params = "commondata_struct *restrict commondata, ID_persist_struct *restrict par"
-    body = r"""  REAL bbhxz_BH_m_chi[3], bbhxz_BH_M_chi[3];
-  // Step 1: Set default values
+    body = r"""  // Step 1: Set default TwoPunctures values
 
   // psi^-2 initial lapse performs better than twopunctures-averaged.
   //   HOWEVER, "twopunctures-averaged" is default in the TwoPunctures
@@ -67,7 +73,7 @@ def register_CFunction_initialize_ID_persist_struct() -> None:
 
   par->verbose = true;         // Print screen output while solving
   par->keep_u_around = false;  // Keep the variable u around after solving
-  par->swap_xz = true;         // Swap x and z coordinates when interpolating, so that the black holes are separated in the z direction
+  par->swap_xz = false;         // Swap x and z coordinates when interpolating, so that the black holes are separated in the z direction
   par->use_sources = false;    // Use sources?
   par->rescale_sources = true; // If sources are used - rescale them after solving?
   // par->use_external_initial_guess; // Set initial guess by external function?
@@ -111,37 +117,8 @@ def register_CFunction_initialize_ID_persist_struct() -> None:
     //   the xy plane. So does NRPyPN:
     NRPyPN_quasicircular_momenta(commondata);
 
-    // For q=1, spins=0, diameter_of_separation=4.0, p_r is negative.
-    //    This is likely due to the separation being too small.
-    //    We assume below that p_r is positive, so let's fix it:
-    if(commondata->initial_p_r < 0.0) commondata->initial_p_r *= -1.0;
-
-    fprintf(stderr, "NRPyPN: Found p_t, p_r = %.8f %.8f\n", commondata->initial_p_t, commondata->initial_p_r);
+    fprintf(stderr, "NRPyPN: Found |p_t|, |p_r| = %.8f %.8f\n", fabs(commondata->initial_p_t), fabs(commondata->initial_p_r));
   }
-
-  // Step 2.c: SWAP X AND Z, so the binary initially orbits on the xz-plane.
-  //           Prepare inputs for TwoPunctures, which will set up the binary
-  //           to be orbiting on the *xz* plane. Here we convert all inputs
-  //           to be consistent with this assumption.
-
-  // IMPORTANT: The inputs for commondata->bbhxy_BH_{m,M}_chi{x,y,z}
-  //   assume the BHs are initially (instantaneously) orbiting on
-  //   the xy plane. So does NRPyPN.
-  // However, we will configure TwoPunctures to assume the BHs are
-  //   orbiting in the xz plane (par->swap_xz = true).
-  // IMPORTANT: Flipping x<->z will change the sign of the
-  //   yhat direction. This sign flip is done AT THE BOTTOM OF
-  //   this function.
-  // Inputs: xy-plane. Outputs: xz-plane:
-  //  z = x, x = z
-  bbhxz_BH_m_chi[2] = commondata->bbhxy_BH_m_chix;
-  bbhxz_BH_m_chi[0] = commondata->bbhxy_BH_m_chiz;
-  bbhxz_BH_m_chi[1] = commondata->bbhxy_BH_m_chiy;
-
-  bbhxz_BH_M_chi[2] = commondata->bbhxy_BH_M_chix;
-  bbhxz_BH_M_chi[0] = commondata->bbhxy_BH_M_chiz;
-  bbhxz_BH_M_chi[1] = commondata->bbhxy_BH_M_chiy;
-
 
   // UNIVERSAL PARAMETERS:
   {
@@ -176,27 +153,24 @@ def register_CFunction_initialize_ID_persist_struct() -> None:
     //   Initialize center_offset to zero before setting z component
     for (int ii = 0; ii < 3; ii++)
       par->center_offset[ii] = 0.0;
-    par->center_offset[2] = -(grid_dist_from_origin_BH_m - grid_dist_from_origin_BH_M) * 0.5;
+    par->center_offset[0] = -(grid_dist_from_origin_BH_m - grid_dist_from_origin_BH_M) * 0.5;
 
-    // PUNCTURES ORBIT IN THE X-Z PLANE:
     //   Initialize linear momenta to zero before setting initial radial and tangential momenta
     for (int ii = 0; ii < 3; ii++)
       par->par_P_plus[ii] = par->par_P_minus[ii] = 0.0;
-    par->par_P_plus[0] = -p_r;  // momentum of the m+ puncture
-    par->par_P_minus[0] = +p_r; // momentum of the m- puncture
+    par->par_P_plus[0] = -fabs(p_r);  // momentum of the m+ puncture
+    par->par_P_minus[0] = +fabs(p_r); // momentum of the m- puncture
 
-    par->par_P_plus[2] = +p_t;  // momentum of the m+ puncture
-    par->par_P_minus[2] = -p_t; // momentum of the m- puncture
-    for(int ii=0;ii<3;ii++) {
+    par->par_P_plus[1] = +fabs(p_t);  // momentum of the m+ puncture
+    par->par_P_minus[1] = -fabs(p_t); // momentum of the m- puncture
+    for (int ii = 0; ii < 3; ii++) {
+      const REAL bbhxy_BH_m_chi[3] = {commondata->bbhxy_BH_m_chix, commondata->bbhxy_BH_m_chiy, commondata->bbhxy_BH_m_chiz };
+      const REAL bbhxy_BH_M_chi[3] = {commondata->bbhxy_BH_M_chix, commondata->bbhxy_BH_M_chiy, commondata->bbhxy_BH_M_chiz };
+
       // Dimensionless spin parameter chi = J/M^2 --> J = chi * M^2
-      par->par_S_minus[ii] = bbhxz_BH_m_chi[ii] * par->target_M_minus * par->target_M_minus;
-      par->par_S_plus[ii]  = bbhxz_BH_M_chi[ii] * par->target_M_plus  * par->target_M_plus;
+      par->par_S_minus[ii] = bbhxy_BH_m_chi[ii] * par->target_M_minus * par->target_M_minus;
+      par->par_S_plus[ii] = bbhxy_BH_M_chi[ii] * par->target_M_plus * par->target_M_plus;
     }
-    // Since we flip x<->z, the sign of the y-component of spin must
-    //   flip in order to keep a right-handed coordinate system,
-    //   consistent with assumptions in NRPyPN.
-    par->par_S_minus[1] *= -1.0;
-    par->par_S_plus[1] *= -1.0;
   }
 
   fprintf(stderr, "#################################\n");
@@ -205,7 +179,7 @@ def register_CFunction_initialize_ID_persist_struct() -> None:
   fprintf(stderr, "d_initial/M = %.15f, q = %.15f\n", commondata->initial_sep, commondata->mass_ratio);
   fprintf(stderr, "bbhxy_BH_m_chi = %.15f %.15f %.15f\n", commondata->bbhxy_BH_m_chix, commondata->bbhxy_BH_m_chiy, commondata->bbhxy_BH_m_chiz);
   fprintf(stderr, "bbhxy_BH_M_chi = %.15f %.15f %.15f\n", commondata->bbhxy_BH_M_chix, commondata->bbhxy_BH_M_chiy, commondata->bbhxy_BH_M_chiz);
-  fprintf(stderr, "p_t = %.15f, p_r = %.15f\n", commondata->initial_p_t, commondata->initial_p_r);
+  fprintf(stderr, "|p_t| = %.15f, |p_r| = %.15f\n", fabs(commondata->initial_p_t), fabs(commondata->initial_p_r));
   fprintf(stderr, "TP resolution: %d  %d  %d\n", par->npoints_A, par->npoints_B, par->npoints_phi);
   fprintf(stderr, "#################################\n");
 """
