@@ -12,21 +12,20 @@ from nrpy.helpers.generic import prefix_with_star, clang_format
 
 class CFunction:
     r"""
-    Represents a C function with all its properties.
+    Stores a C function and associated properties.
 
+    :param subdirectory: Path from the root source directory to this C function. Defaults to the current directory.
+    :param enable_simd: Boolean to enable SIMD. Default is False.
     :param includes: A list of strings representing include files.
-    :param prefunc: An optional string representing a pre-function code.
+    :param prefunc: A string representing a pre-function code. Defaults to an empty string.
     :param desc: A description of the function.
-    :param c_type: The C type of the function (e.g., void, int).
+    :param c_type: The C type of the function (e.g., void, int). Default is "void".
     :param name: The name of the function.
-    :param params: A string representing the function's input parameters.
-    :param preloop: An optional string representing a pre-loop code.
-    :param body: A string representing the body of the function.
-    :param postloop: An optional string representing a post-loop code.
-    :param subdirectory: An optional string representing the path from the root source directory to this C function.
-    :param include_CodeParameters_h: An optional boolean to enable C parameters.
-    :param clang_format_options: Options for the clang-format tool.
-    :param loop_options_kwargs: Any additional loop options passed as keyword arguments.
+    :param CoordSystem_for_wrapper_func: Coordinate system for the wrapper function. E.g., if set to Cartesian -> create subdirectory/name() wrapper function and subdirectory/Cartesian/name__rfm__Cartesian(). Defaults to an empty string.
+    :param params: A string representing the function's input parameters. Defaults to an empty string.
+    :param include_CodeParameters_h: Boolean to enable C parameters. Default is False.
+    :param body: The body of the function.
+    :param clang_format_options: Options for the clang-format tool. Defaults to "-style={BasedOnStyle: LLVM, ColumnLimit: 200}".
 
     DocTests:
     >>> func = CFunction(desc="just a test... testing 1,2,3", name="main", params="", body="return 0;")
@@ -53,6 +52,7 @@ class CFunction:
         desc: str = "",
         c_type: str = "void",
         name: str = "",
+        CoordSystem_for_wrapper_func: str = "",
         params: str = "",
         include_CodeParameters_h: bool = False,
         body: str = "",
@@ -73,6 +73,7 @@ class CFunction:
         self.desc = desc
         self.c_type = c_type
         self.name = name
+        self.CoordSystem_for_wrapper_func = CoordSystem_for_wrapper_func
         self.params = params
         self.include_CodeParameters_h = include_CodeParameters_h
         self.body = body
@@ -183,6 +184,20 @@ class CFunction:
 CFunction_dict: Dict[str, CFunction] = {}
 
 
+def name_with_CoordSystem(name: str, CoordSystem_for_wrapper_func: str) -> str:
+    """
+    Appends a CoordSystem_for_wrapper_func string with a specific format to the provided name.
+
+    :param name: The wrapper function name.
+    :param CoordSystem_for_wrapper_func: The coordinate system subdirectory string.
+    :return: The coordinate-specific function name.
+
+    >>> name_with_CoordSystem("xx_to_Cart", "SinhSpherical")
+    'xx_to_Cart__rfm__SinhSpherical'
+    """
+    return f"{name}__rfm__{CoordSystem_for_wrapper_func}"
+
+
 def register_CFunction(
     subdirectory: str = os.path.join("."),
     enable_simd: bool = False,
@@ -191,6 +206,7 @@ def register_CFunction(
     desc: str = "",
     c_type: str = "void",
     name: str = "",
+    CoordSystem_for_wrapper_func: str = "",
     params: str = "",
     include_CodeParameters_h: bool = False,
     body: str = "",
@@ -199,30 +215,33 @@ def register_CFunction(
     """
     Adds a C function to a dictionary called CFunction_dict, using the provided parameters.
 
-    :param subdirectory: An optional string representing the path from the root source directory to this C function.
-    :param enable_simd: An optional boolean to enable simd.
+    :param subdirectory: Path from the root source directory to this C function. Defaults to the current directory.
+    :param enable_simd: Boolean to enable SIMD. Default is False.
     :param includes: A list of strings representing include files.
-    :param prefunc: An optional string representing a pre-function code.
+    :param prefunc: A string representing a pre-function code. Defaults to an empty string.
     :param desc: A description of the function.
-    :param c_type: The C type of the function (e.g., void, int).
+    :param c_type: The C type of the function (e.g., void, int). Default is "void".
     :param name: The name of the function.
-    :param params: A string representing the function's input parameters.
-    :param include_CodeParameters_h: An optional boolean to enable C parameters.
-    :param body: A string representing the body of the function.
-    :param clang_format_options: Options for the clang-format tool.
+    :param CoordSystem_for_wrapper_func: Coordinate system for the wrapper function. E.g., if set to Cartesian -> create subdirectory/name() wrapper function and subdirectory/Cartesian/name__rfm__Cartesian(). Defaults to an empty string.
+    :param params: A string representing the function's input parameters. Defaults to an empty string.
+    :param include_CodeParameters_h: Boolean to enable C parameters. Default is False.
+    :param body: The body of the function.
+    :param clang_format_options: Options for the clang-format tool. Defaults to "-style={BasedOnStyle: LLVM, ColumnLimit: 200}".
 
     :raises ValueError: If the name is already registered in CFunction_dict.
     """
-    if name in CFunction_dict:
-        raise ValueError(f"Error: already registered {name} in CFunction_dict.")
-    CFunction_dict[name] = CFunction(
+    actual_name = name_with_CoordSystem(name, CoordSystem_for_wrapper_func)
+    if actual_name in CFunction_dict:
+        raise ValueError(f"Error: already registered {actual_name} in CFunction_dict.")
+    CFunction_dict[actual_name] = CFunction(
         subdirectory=subdirectory,
         enable_simd=enable_simd,
         includes=includes,
         prefunc=prefunc,
         desc=desc,
         c_type=c_type,
-        name=name,
+        name=actual_name,
+        CoordSystem_for_wrapper_func=CoordSystem_for_wrapper_func,
         params=params,
         include_CodeParameters_h=include_CodeParameters_h,
         body=body,
