@@ -166,9 +166,6 @@ def register_CFunctions_rfm_precompute(CoordSystem: str) -> None:
         name = "rfm_precompute_" + func[0]
         params = "const commondata_struct *restrict commondata, const params_struct *restrict params, rfm_struct *restrict rfmstruct"
         include_CodeParameters_h = True
-        if func[0] == "free":
-            include_CodeParameters_h = False
-            params = "rfm_struct *restrict rfmstruct"
         if func[0] == "defines":
             params += ", REAL *restrict xx[3]"
 
@@ -178,6 +175,7 @@ def register_CFunctions_rfm_precompute(CoordSystem: str) -> None:
             includes=includes,
             desc=desc,
             c_type=c_type,
+            CoordSystem_for_wrapper_func=CoordSystem,
             name=name,
             params=params,
             include_CodeParameters_h=include_CodeParameters_h,

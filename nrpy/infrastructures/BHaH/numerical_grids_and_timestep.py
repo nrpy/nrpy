@@ -12,7 +12,6 @@ import nrpy.c_function as cfc
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
 import nrpy.c_codegen as ccg
-from nrpy.infrastructures.BHaH.rfm_wrapper_functions import get_CoordSystem_hash
 
 
 # fmt: off

@@ -83,6 +83,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
         prefunc=prefunc,
         desc=desc,
         c_type="void",
+        CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,
         include_CodeParameters_h=True,
@@ -119,6 +120,7 @@ REAL xx2 = xx[2][i2];
         desc="Compute Cartesian coordinates given local grid coordinate (xx0,xx1,xx2), "
         "  accounting for the origin of this grid being possibly off-center.",
         c_type="void",
+        CoordSystem_for_wrapper_func=CoordSystem,
         name="xx_to_Cart",
         params="const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3],const int i0,const int i1,const int i2, REAL xCart[3]",
         include_CodeParameters_h=True,

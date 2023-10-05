@@ -74,17 +74,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     # Output all CFunctions to file. Keep track of all functions being output for the Makefile.
     list_of_uniq_functions: List[str] = []
     for name, CFunction in CFunction_dict.items():
-        # Convention: Output all C functions starting in [CoordSystem] into the CoordSystem/ subdirectory.
-        if "__rfm__" in name:
-            subdir_Path = Path(name.split("__rfm__")[-1])
-            (project_Path / subdir_Path).mkdir(parents=True, exist_ok=True)
-            with open(
-                add_to_Makefile(project_Path, subdir_Path, f"{name}.c"),
-                "w",
-                encoding="utf-8",
-            ) as file:
-                file.write(CFunction.full_function)
-        elif CFunction.subdirectory:
+        if CFunction.subdirectory:
             subdir_Path = Path(CFunction.subdirectory)
             (project_Path / subdir_Path).mkdir(parents=True, exist_ok=True)
             with open(

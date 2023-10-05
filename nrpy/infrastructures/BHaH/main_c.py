@@ -155,7 +155,7 @@ for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
   MoL_free_memory_non_y_n_gfs(&griddata[grid].gridfuncs);"""
     if enable_rfm_precompute:
         body += r"""
-  rfm_precompute_free(&griddata[grid].rfmstruct);"""
+  rfm_precompute_free(&commondata, &griddata[grid].params, &griddata[grid].rfmstruct);"""
     if enable_CurviBCs:
         body += r"""
   free(griddata[grid].bcstruct.inner_bc_array);

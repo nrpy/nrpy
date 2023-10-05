@@ -96,7 +96,7 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   // Unpack griddata struct:
   params_struct *restrict params = &griddata[grid].params;
 """
-    body += f"initial_data_reader__convert_ADM_{IDCoordSystem}_to_BSSN(commondata, griddata, &ID_persist, {IDtype});"
+    body += f"initial_data_reader__convert_ADM_{IDCoordSystem}_to_BSSN(commondata, params, griddata, &ID_persist, {IDtype});"
     body += """
   apply_bcs_outerextrap_and_inner(commondata, params, &griddata->bcstruct, griddata->gridfuncs.y_n_gfs);
 }
@@ -380,6 +380,7 @@ def register_CFunction_Ricci_eval(
         includes=includes,
         desc=desc,
         c_type=c_type,
+        CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,
         body=body,
@@ -451,6 +452,7 @@ def register_CFunction_constraints(
         prefunc=fin.construct_FD_functions_prefunc() if enable_fd_functions else "",
         desc=desc,
         c_type=c_type,
+        CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,
         include_CodeParameters_h=True,
@@ -552,6 +554,7 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
         includes=includes,
         desc=desc,
         c_type=c_type,
+        CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,
         body=body,
@@ -673,6 +676,7 @@ psi4_tetrad(commondata, params,
         includes=includes,
         prefunc=fin.construct_FD_functions_prefunc() if enable_fd_functions else "",
         desc=desc,
+        CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,
         include_CodeParameters_h=True,
@@ -759,6 +763,7 @@ def register_CFunction_psi4_tetrad(
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
+        CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,
         include_CodeParameters_h=True,

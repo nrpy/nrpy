@@ -238,6 +238,7 @@ def Cfunction_ADM_SphorCart_to_Cart(
     )
 
     return cfc.CFunction(
+        subdirectory=IDCoordSystem,  # Probably not needed
         desc=desc,
         c_type=c_type,
         name=name,
@@ -315,7 +316,6 @@ def Cfunction_ADM_Cart_to_BSSN_Cart(include_T4UU: bool = False) -> str:
         c_type=c_type,
         name=name,
         params=params,
-        include_CodeParameters_h=True,
         body=body,
     ).full_function
 
@@ -430,6 +430,7 @@ to the basis specified by `reference_metric::CoordSystem`, then rescale these BS
     )
 
     return cfc.CFunction(
+        subdirectory=CoordSystem,
         desc=desc,
         c_type=c_type,
         name=name,
@@ -499,6 +500,7 @@ def Cfunction_initial_data_lambdaU_grid_interior(CoordSystem: str) -> str:
     )
 
     return cfc.CFunction(
+        subdirectory=CoordSystem,
         desc=desc,
         c_type=c_type,
         name=name,
@@ -624,32 +626,32 @@ typedef struct __rescaled_BSSN_rfm_basis_struct__ {
     desc = f"Read ADM data in the {IDCoordSystem} basis, and output rescaled BSSN data in the {CoordSystem} basis"
     c_type = "void"
     name = f"initial_data_reader__convert_ADM_{IDCoordSystem}_to_BSSN"
-    params = """const commondata_struct *restrict commondata, griddata_struct *restrict griddata, ID_persist_struct *restrict ID_persist,
+    params = """const commondata_struct *restrict commondata, const params_struct *restrict params, griddata_struct *restrict griddata, ID_persist_struct *restrict ID_persist,
     void ID_function(const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xCart[3],
                      const ID_persist_struct *restrict ID_persist,
                      initial_data_struct *restrict initial_data)"""
 
     body = r"""
-  const int Nxx_plus_2NGHOSTS0 = griddata->params.Nxx_plus_2NGHOSTS0;
-  const int Nxx_plus_2NGHOSTS1 = griddata->params.Nxx_plus_2NGHOSTS1;
-  const int Nxx_plus_2NGHOSTS2 = griddata->params.Nxx_plus_2NGHOSTS2;
+  const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
+  const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
+  const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
 
   LOOP_OMP("omp parallel for", i0,0,Nxx_plus_2NGHOSTS0, i1,0,Nxx_plus_2NGHOSTS1, i2,0,Nxx_plus_2NGHOSTS2) {
     // xCart is the global Cartesian coordinate, which accounts for any grid offsets from the origin.
-    REAL xCart[3];  xx_to_Cart(commondata, &griddata->params, griddata->xx, i0,i1,i2, xCart);
+    REAL xCart[3];  xx_to_Cart(commondata, params, griddata->xx, i0,i1,i2, xCart);
 
     // Read or compute initial data at destination point xCart
     initial_data_struct initial_data;
-    ID_function(commondata, &griddata->params, xCart, ID_persist, &initial_data);
+    ID_function(commondata, params, xCart, ID_persist, &initial_data);
 
     ADM_Cart_basis_struct ADM_Cart_basis;
-    ADM_SphorCart_to_Cart(commondata, &griddata->params, xCart, &initial_data, &ADM_Cart_basis);
+    ADM_SphorCart_to_Cart(commondata, params, xCart, &initial_data, &ADM_Cart_basis);
 
     BSSN_Cart_basis_struct BSSN_Cart_basis;
-    ADM_Cart_to_BSSN_Cart(commondata, &griddata->params, xCart, &ADM_Cart_basis, &BSSN_Cart_basis);
+    ADM_Cart_to_BSSN_Cart(commondata, params, xCart, &ADM_Cart_basis, &BSSN_Cart_basis);
 
     rescaled_BSSN_rfm_basis_struct rescaled_BSSN_rfm_basis;
-    BSSN_Cart_to_rescaled_BSSN_rfm(commondata, &griddata->params, xCart, &BSSN_Cart_basis, &rescaled_BSSN_rfm_basis);
+    BSSN_Cart_to_rescaled_BSSN_rfm(commondata, params, xCart, &BSSN_Cart_basis, &rescaled_BSSN_rfm_basis);
 
     const int idx3 = IDX3(i0,i1,i2);
 
@@ -677,6 +679,7 @@ typedef struct __rescaled_BSSN_rfm_basis_struct__ {
         prefunc=prefunc,
         desc=desc,
         c_type=c_type,
+        CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,
         include_CodeParameters_h=False,

@@ -7,6 +7,7 @@ Author: Zachariah B. Etienne
 """
 from typing import List, Dict
 import hashlib
+import re
 
 import nrpy.c_function as cfc
 from nrpy.infrastructures.BHaH.BHaH_defines_h import register_BHaH_defines
@@ -63,22 +64,37 @@ def register_CFunctions_CoordSystem_wrapper_funcs() -> None:
                 CoordSystem_hash_dict[CoordSystem] = get_CoordSystem_hash(CoordSystem)
                 list_of_CoordSystems += [CoordSystem]
                 wrapper_subdir = CFunc.subdirectory.replace(CoordSystem, "")
-        params_list = base_CFunc.params.split(",")
+
+        # Construct function call:
+        # Remove linebreaks from params
+        params = base_CFunc.params.replace("\n", "")
+        # Remove multiple spaces to tidy up the line a little.
+        params = " ".join(params.split())
+        # Case: functions passed to function.
+        # Remove all function arguments. E.g., void f(REAL x) -> void f.
+        params = re.sub("\\(.*\\)", "", params)
+        # Case: fixed-size arrays.
+        # Remove size. E.g., const REAL xx[3] -> const REAL xx.
+        params = re.sub("\\[[0-9A-Z_]*\\]", "", params)
+        # Remove pointers, which might brush against variable name.
+        params_sanitized = params.replace("*", " ")
         params = ""
-        for param in params_list:
-            param_name = param.replace("*", " ").split(" ")[-1]
-            params += f"{param_name},"
+        # Split sanitized params string according to commas:
+        for param in params_sanitized.split(","):
+            # Remove type, keep only what's after the comma.
+            params += param.strip().split(" ")[-1] + ", "
+
         wrapper_body = "switch (CoordSystem_hash) {\n"
         for CoordSystem in sorted(list_of_CoordSystems):
             wrapper_body += f"case {CoordSystem.upper()}:\n"
             wrapper_body += (
-                f"  {wrapper_func_name}__rfm__{CoordSystem}({params[:-1]});\n"
+                f"  {wrapper_func_name}__rfm__{CoordSystem}({params[:-2]});\n"
             )
             wrapper_body += "  break;\n"
-        wrapper_body += r"""default:
-  fprintf(stderr, "ERROR: CoordSystem hash = %d not #define'd!\n", CoordSystem_hash);
+        wrapper_body += rf"""default:
+  fprintf(stderr, "ERROR in {wrapper_func_name}(): CoordSystem hash = %d not #define'd!\n", CoordSystem_hash);
   exit(1);
-}"""
+}}"""
         cfc.register_CFunction(
             subdirectory=wrapper_subdir,
             enable_simd=False,
@@ -93,7 +109,6 @@ def register_CFunctions_CoordSystem_wrapper_funcs() -> None:
             body=wrapper_body,
             clang_format_options=base_CFunc.clang_format_options,
         )
-        print(f"Registered {wrapper_func_name}")
 
     BHd_str = ""
     for key, item in CoordSystem_hash_dict.items():
