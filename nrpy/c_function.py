@@ -195,7 +195,9 @@ def name_with_CoordSystem(name: str, CoordSystem_for_wrapper_func: str) -> str:
     >>> name_with_CoordSystem("xx_to_Cart", "SinhSpherical")
     'xx_to_Cart__rfm__SinhSpherical'
     """
-    return f"{name}__rfm__{CoordSystem_for_wrapper_func}"
+    if CoordSystem_for_wrapper_func:
+        return f"{name}__rfm__{CoordSystem_for_wrapper_func}"
+    return name
 
 
 def register_CFunction(
