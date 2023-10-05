@@ -23,6 +23,7 @@ import nrpy.helpers.parallel_codegen as pcg
 
 from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
 from nrpy.infrastructures.BHaH import rfm_precompute
+from nrpy.infrastructures.BHaH import rfm_wrapper_functions
 import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
@@ -58,8 +59,8 @@ default_BH1_z_posn = +0.5
 default_BH2_z_posn = -0.5
 enable_rfm_precompute = True
 MoL_method = "RK4"
-fd_order = 8
-radiation_BC_fd_order = 8
+fd_order = 4
+radiation_BC_fd_order = 4
 enable_simd = True
 separate_Ricci_and_BSSN_RHS = True
 parallel_codegen_enable = True
@@ -334,6 +335,7 @@ print(f"Section 4 finished at {time.time() - start_time:.4f} seconds")
 xxCartxx.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
 xxCartxx.register_CFunction_xx_to_Cart(CoordSystem)
 progress.register_CFunction_progress_indicator()
+rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
 #########################################################
 # STEP 3: Generate header files, register C functions and
@@ -348,7 +350,6 @@ par.adjust_CodeParam_default("BH2_mass", default_BH2_mass)
 par.adjust_CodeParam_default("BH1_posn_z", default_BH1_z_posn)
 par.adjust_CodeParam_default("BH2_posn_z", default_BH2_z_posn)
 
-
 CPs.write_CodeParameters_h_files(project_dir=project_dir)
 CPs.register_CFunctions_params_commondata_struct_set_to_default()
 cmdpar.generate_default_parfile(project_dir=project_dir, project_name=project_name)
@@ -361,6 +362,7 @@ Bdefines_h.output_BHaH_defines_h(
     fin_NGHOSTS_add_one_for_upwinding=True,
     CoordSystem=CoordSystem,
 )
+
 main.register_CFunction_main_c(
     initial_data_desc=IDtype,
     MoL_method=MoL_method,
@@ -371,7 +373,6 @@ main.register_CFunction_main_c(
 
 if enable_simd:
     simd.copy_simd_intrinsics_h(project_dir=project_dir)
-
 Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,

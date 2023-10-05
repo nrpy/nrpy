@@ -24,7 +24,9 @@ import nrpy.helpers.parallel_codegen as pcg
 
 from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
 from nrpy.infrastructures.BHaH import rfm_precompute
+from nrpy.infrastructures.BHaH import rfm_wrapper_functions
 import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.TwoPunctures_lib as TPl
+import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.ID_persist_struct as IDps
 import nrpy.infrastructures.BHaH.general_relativity.NRPyPN_quasicircular_momenta as NRPyPNqm
 import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
@@ -313,7 +315,7 @@ BCl.register_CFunction_initial_data(
     CoordSystem=CoordSystem,
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
-    ID_persist_struct_str=TPl.ID_persist_str(),
+    ID_persist_struct_str=IDps.ID_persist_str(),
     populate_ID_persist_struct_str=r"""
 initialize_ID_persist_struct(commondata, &ID_persist);
 TP_solve(&ID_persist);
@@ -415,6 +417,7 @@ print(f"Section 4 finished at {time.time() - start_time:.4f} seconds")
 xxCartxx.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
 xxCartxx.register_CFunction_xx_to_Cart(CoordSystem)
 progress.register_CFunction_progress_indicator()
+rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
 # Reset CodeParameter defaults according to variables set above.
 # Coord system parameters

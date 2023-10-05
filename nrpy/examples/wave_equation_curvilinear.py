@@ -30,6 +30,7 @@ from nrpy.equations.wave_equation.InitialData import InitialData
 import nrpy.infrastructures.BHaH.simple_loop as lp
 from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
 from nrpy.infrastructures.BHaH import rfm_precompute
+from nrpy.infrastructures.BHaH import rfm_wrapper_functions
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 import nrpy.infrastructures.BHaH.main_c as main
@@ -389,6 +390,7 @@ MoL.MoL_register_CFunctions(
     enable_curviBCs=True,
 )
 progress.register_CFunction_progress_indicator()
+rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
 #########################################################
 # STEP 3: Generate header files, register C functions and

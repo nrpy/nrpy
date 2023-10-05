@@ -53,55 +53,6 @@ def copy_TwoPunctures_header_files(TwoPunctures_Path: Path) -> None:
             shutil.copy(source_path, str(TwoPunctures_Path))  # type: ignore
 
 
-def ID_persist_str() -> str:
-    """
-    Return contents of ID_persist_struct for TwoPunctures initial data.
-    """
-    return r"""
-  derivs v;    // stores coefficients
-  derivs cf_v; // stores coefficients
-
-  REAL mp,mm, mp_adm,mm_adm, E, J1,J2,J3;
-
-  int npoints_A; //Number of coefficients in the compactified radial direction
-  int npoints_B; //Number of coefficients in the angular direction
-  int npoints_phi; //Number of coefficients in the phi direction
-  int Newton_maxit; //Maximum number of Newton iterations
-
-  REAL adm_tol; //Tolerance of ADM masses when give_bare_mass=no
-  REAL Newton_tol; //Tolerance for Newton solver
-  REAL TP_epsilon; //A small number to smooth out singularities at the puncture locations
-  REAL TP_Tiny; //Tiny number to avoid nans near or at the pucture locations
-  REAL TP_Extend_Radius; //Radius of an extended spacetime instead of the puncture
-  REAL par_b; //x coordinate of the m+ puncture STEERABLE=always
-  REAL par_m_plus; //mass of the m+ puncture STEERABLE = ALWAYS
-  REAL par_m_minus; //mass of the m- puncture STEERABLE = ALWAYS
-  REAL target_M_plus; //target ADM mass for m+
-  REAL target_M_minus; //target ADM mass for m-
-  REAL par_P_plus[3]; //momentum of the m+ puncture
-  REAL par_P_minus[3]; //momentum of the m- puncture
-  REAL par_S_plus[3]; //spin of the m+ puncture
-  REAL par_S_minus[3]; //spin of the m- puncture
-  REAL center_offset[3]; //offset b=0 to position (x,y,z)
-  REAL initial_lapse_psi_exponent; //Exponent n for psi^-n initial lapse profile
-
-  bool verbose; //Print screen output while solving
-  bool keep_u_around; //Keep the variable u around after solving
-  bool give_bare_mass; //User provides bare masses rather than target ADM masses
-  bool swap_xz; //Swap x and z coordinates when interpolating, so that the black holes are separated in the z direction
-  bool use_sources; //Use sources?
-  bool rescale_sources; //If sources are used - rescale them after solving?
-  //bool use_external_initial_guess; //Set initial guess by external function?
-  bool do_residuum_debug_output; //Output debug information about the residuum
-  bool do_initial_debug_output; //Output debug information about initial guess
-  bool multiply_old_lapse; //Multiply the old lapse with the new one
-  bool solve_momentum_constraint; //Solve for momentum constraint?
-
-  char grid_setup_method[100]; //How to fill the 3D grid from the spectral grid
-  char initial_lapse[100]; //initial lapse
-"""
-
-
 def register_C_functions() -> None:
     """Register all C functions needed for TwoPunctures solve."""
     ID_persist_struct.register_CFunction_initialize_ID_persist_struct()

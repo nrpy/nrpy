@@ -1,3 +1,17 @@
+/*
+TwoPunctures creates initial for two puncture black holes using a
+single domain spectral method.  This method is described in
+Marcus Ansorg, Bernd Brügmann, Wolfgang Tichy, "A single-domain
+spectral method for black hole puncture data", PRD 70, 064011 (2004),
+arXiv:gr-qc/0404056.
+
+Code originally from Einstein Toolkit's EinsteinInitialData
+arrangement:
+https://bitbucket.org/einsteintoolkit/einsteininitialdata
+
+License: Lesser GNU Public License, version 2.0+
+*/
+
 /* TwoPunctures:  File  "utilities.h"*/
 
 #include <math.h>

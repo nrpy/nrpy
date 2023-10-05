@@ -283,6 +283,7 @@ def register_CFunction_rhs_eval(
         prefunc=fin.construct_FD_functions_prefunc() if enable_fd_functions else "",
         desc=desc,
         c_type=c_type,
+        CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,
         body=body,

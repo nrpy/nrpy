@@ -12,6 +12,8 @@ import nrpy.c_function as cfc
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
 import nrpy.c_codegen as ccg
+from nrpy.infrastructures.BHaH.rfm_wrapper_functions import get_CoordSystem_hash
+
 
 # fmt: off
 for i in range(3):
@@ -23,6 +25,7 @@ for i in range(3):
     _ = par.CodeParameter("REAL", __name__, f"invdxx{i}", add_to_parfile=False, add_to_set_CodeParameters_h=True)
     _ = par.CodeParameter("REAL", __name__, f"dxx{i}", add_to_parfile=False, add_to_set_CodeParameters_h=True)
 _ = par.CodeParameter("REAL", __name__, "convergence_factor", 1.0, commondata=True)
+_ = par.CodeParameter("int", __name__, "CoordSystem_hash", commondata=False, add_to_parfile=False)
 # fmt: on
 
 
@@ -62,6 +65,9 @@ if(params->Nxx2 != 2) params->Nxx2 *= commondata->convergence_factor;
 params->Nxx_plus_2NGHOSTS0 = params->Nxx0 + 2*NGHOSTS;
 params->Nxx_plus_2NGHOSTS1 = params->Nxx1 + 2*NGHOSTS;
 params->Nxx_plus_2NGHOSTS2 = params->Nxx2 + 2*NGHOSTS;
+
+// Set CoordSystem_hash, used for multi-coordinate-system evolutions. Hash is #define'd in BHaH_defines.h
+params->CoordSystem_hash = {CoordSystem.upper()};
 
 // Set grid size to grid_physical_size (set above, based on params->grid_physical_size):
 """
