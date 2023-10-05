@@ -193,7 +193,7 @@ def function_name_and_subdir_with_CoordSystem(
     :param subdirectory: The subdirectory within which we place this function.
     :param name: The wrapper function name.
     :param CoordSystem_for_wrapper_func: The coordinate system subdirectory string.
-    :return: The coordinate-specific function name.
+    :return: The coordinate-specific subdirectory and function name.
 
     >>> function_name_and_subdir_with_CoordSystem(os.path.join("."), "xx_to_Cart", "SinhSpherical")
     ('./SinhSpherical', 'xx_to_Cart__rfm__SinhSpherical')
