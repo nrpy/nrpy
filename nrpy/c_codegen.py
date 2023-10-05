@@ -224,6 +224,9 @@ def c_codegen(
     >>> print(c_codegen(x**2 + sp.sqrt(y) - sp.sin(x*z), "double blah", include_braces=False, verbose=False))
     double blah = ((x)*(x)) + sqrt(y) - sin(x*z);
     <BLANKLINE>
+    >>> print(c_codegen(1/x**2 + 1/sp.sqrt(y) - 1/sp.sin(x*z), "double blah", include_braces=False, verbose=False))
+    double blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
+    <BLANKLINE>
     >>> print(c_codegen(x**5 + x**3 + x - 1/x, "REAL_SIMD_ARRAY blah", include_braces=False, verbose=False, enable_simd=True))
     const double dbl_Integer_1 = 1.0;
     const REAL_SIMD_ARRAY _Integer_1 = ConstSIMD(dbl_Integer_1);
@@ -602,7 +605,9 @@ nrpyAbs = sp.Function("nrpyAbs")
 custom_functions_for_SymPy_ccode = {
     "nrpyAbs": "fabs",
     "Pow": [
+        (lambda b, e: e == sp.Rational(1, 2), lambda b, e: f"sqrt({b})"),
         (lambda b, e: e == 0.5, lambda b, e: f"sqrt({b})"),
+        (lambda b, e: e == -sp.Rational(1, 2), lambda b, e: f"(1.0/sqrt({b}))"),
         (lambda b, e: e == -0.5, lambda b, e: f"(1.0/sqrt({b}))"),
         (lambda b, e: e == sp.S.One / 3, lambda b, e: f"cbrt({b})"),
         (lambda b, e: e == -sp.S.One / 3, lambda b, e: f"(1.0/cbrt({b}))"),
