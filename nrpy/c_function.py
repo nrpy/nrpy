@@ -184,20 +184,26 @@ class CFunction:
 CFunction_dict: Dict[str, CFunction] = {}
 
 
-def name_with_CoordSystem(name: str, CoordSystem_for_wrapper_func: str) -> str:
+def function_name_and_subdir_with_CoordSystem(
+    subdirectory: str, name: str, CoordSystem_for_wrapper_func: str
+) -> Tuple[str, str]:
     """
     Appends a CoordSystem_for_wrapper_func string with a specific format to the provided name.
 
+    :param subdirectory: The subdirectory within which we place this function.
     :param name: The wrapper function name.
     :param CoordSystem_for_wrapper_func: The coordinate system subdirectory string.
     :return: The coordinate-specific function name.
 
-    >>> name_with_CoordSystem("xx_to_Cart", "SinhSpherical")
-    'xx_to_Cart__rfm__SinhSpherical'
+    >>> function_name_and_subdir_with_CoordSystem("xx_to_Cart", "SinhSpherical")
+    'SinhSpherical', 'xx_to_Cart__rfm__SinhSpherical'
     """
     if CoordSystem_for_wrapper_func:
-        return f"{name}__rfm__{CoordSystem_for_wrapper_func}"
-    return name
+        return (
+            os.path.join(subdirectory, CoordSystem_for_wrapper_func),
+            "{name}__rfm__{CoordSystem_for_wrapper_func}",
+        )
+    return subdirectory, name
 
 
 def register_CFunction(
@@ -232,11 +238,13 @@ def register_CFunction(
 
     :raises ValueError: If the name is already registered in CFunction_dict.
     """
-    actual_name = name_with_CoordSystem(name, CoordSystem_for_wrapper_func)
+    actual_subdirectory, actual_name = function_name_and_subdir_with_CoordSystem(
+        subdirectory, name, CoordSystem_for_wrapper_func
+    )
     if actual_name in CFunction_dict:
         raise ValueError(f"Error: already registered {actual_name} in CFunction_dict.")
     CFunction_dict[actual_name] = CFunction(
-        subdirectory=subdirectory,
+        subdirectory=actual_subdirectory,
         enable_simd=enable_simd,
         includes=includes,
         prefunc=prefunc,
