@@ -43,21 +43,18 @@ import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Code-generation-time parameters:
-project_name = "curviwavetoy"
+project_name = "multicoords_curviwavetoy"
 WaveType = "SphericalGaussian"
 default_sigma = 3.0
 grid_physical_size = 10.0
 t_final = 0.8 * grid_physical_size
-CoordSystem = "Spherical"
+list_of_CoordSystems = ["Spherical", "SinhSpherical", "Cartesian"]
 Nxx_dict = {
     "Spherical": [64, 2, 2],
     "SinhSpherical": [64, 2, 2],
     "Cartesian": [64, 64, 64],
 }
 OMP_collapse = 1
-if "Spherical" in CoordSystem and WaveType == "SphericalGaussian":
-    par.set_parval_from_str("symmetry_axes", "12")
-    OMP_collapse = 2  # about 2x faster
 enable_rfm_precompute = True
 MoL_method = "RK4"
 fd_order = 4
@@ -73,7 +70,6 @@ shutil.rmtree(project_dir, ignore_errors=True)
 
 par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 par.set_parval_from_str("fd_order", fd_order)
-par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 par.adjust_CodeParam_default("t_final", t_final)
 
 
@@ -299,7 +295,9 @@ if(commondata->time + commondata->dt > commondata->t_final) printf("\n");
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
-def register_CFunction_rhs_eval(enable_rfm_pre: bool) -> Union[None, pcg.NRPyEnv_type]:
+def register_CFunction_rhs_eval(
+    CoordSystem: str, enable_rfm_pre: bool
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the right-hand side (RHS) evaluation function for the wave equation.
 
@@ -312,6 +310,12 @@ def register_CFunction_rhs_eval(enable_rfm_pre: bool) -> Union[None, pcg.NRPyEnv
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
+
+    OMP_collapse = 1
+    if "Spherical" in CoordSystem and WaveType == "SphericalGaussian":
+        par.set_parval_from_str("symmetry_axes", "12")
+        OMP_collapse = 2  # about 2x faster
+
     includes = ["BHaH_defines.h"]
     if enable_simd:
         includes += [os.path.join("simd", "simd_intrinsics.h")]
@@ -357,28 +361,35 @@ def register_CFunction_rhs_eval(enable_rfm_pre: bool) -> Union[None, pcg.NRPyEnv
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
-register_CFunction_exact_solution_single_point(
-    in_CoordSystem=CoordSystem, in_WaveType=WaveType, in_default_sigma=default_sigma
-)
 register_CFunction_initial_data()
+
 numericalgrids.register_CFunctions(
-    list_of_CoordSystems=[CoordSystem],
+    list_of_CoordSystems=list_of_CoordSystems,
     grid_physical_size=grid_physical_size,
     Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
 )
+for CoordSystem in list_of_CoordSystems:
+    par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
+    register_CFunction_exact_solution_single_point(
+        in_CoordSystem=CoordSystem, in_WaveType=WaveType, in_default_sigma=default_sigma
+    )
+    if enable_rfm_precompute:
+        rfm_precompute.register_CFunctions_rfm_precompute(CoordSystem)
+    register_CFunction_rhs_eval(
+        CoordSystem=CoordSystem, enable_rfm_pre=enable_rfm_precompute
+    )
+
 register_CFunction_diagnostics()
-if enable_rfm_precompute:
-    rfm_precompute.register_CFunctions_rfm_precompute(CoordSystem)
-register_CFunction_rhs_eval(enable_rfm_precompute)
 
 
 if __name__ == "__main__" and parallel_codegen_enable:
     pcg.do_parallel_codegen()
 
 cbc.CurviBoundaryConditions_register_C_functions(
-    list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order
+    list_of_CoordSystems=list_of_CoordSystems,
+    radiation_BC_fd_order=radiation_BC_fd_order,
 )
 rhs_string = """rhs_eval(commondata, params, rfmstruct,  RK_INPUT_GFS, RK_OUTPUT_GFS);
 if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
@@ -432,9 +443,3 @@ print(
     f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
 )
 print(f"    Parameter file can be found in {project_name}.par")
-
-# print(cfc.CFunction_dict["initial_data"].full_function)
-# print(cfc.CFunction_dict["rhs_eval"].full_function)
-# print(cfc.CFunction_dict["apply_bcs"].full_function)
-# print(cfc.CFunction_dict["parameter_file_read_and_parse"].full_function)
-# print(cfc.CFunction_dict["main"].full_function)

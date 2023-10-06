@@ -169,7 +169,8 @@ def register_CFunctions_rfm_precompute(CoordSystem: str) -> None:
         if func[0] == "defines":
             params += ", REAL *restrict xx[3]"
 
-        body = func[1]
+        body = " "
+        body += func[1]
 
         cfc.register_CFunction(
             includes=includes,

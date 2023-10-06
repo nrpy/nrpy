@@ -1,5 +1,5 @@
 """
-This module provides functions for setting up Curvilinear boundary conditions,
+This module provides functions for setting up Curvilinea boundary conditions,
     as documented in Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb
 
 Authors: Zachariah B. Etienne
@@ -1305,7 +1305,7 @@ applies BCs to the inner boundary points, which may map either to the grid inter
 
 
 def CurviBoundaryConditions_register_C_functions(
-    CoordSystem: str,
+    list_of_CoordSystems: List[str],
     radiation_BC_fd_order: int = 2,
     set_parity_on_aux: bool = False,
     set_parity_on_auxevol: bool = False,
@@ -1316,14 +1316,15 @@ def CurviBoundaryConditions_register_C_functions(
     :param CoordSystem: The coordinate system to use.
     :param radiation_BC_fd_order: Finite differencing order for the radiation boundary conditions. Default is 2.
     """
-    # Register C function to set up the boundary condition struct.
-    register_CFunction_bcstruct_set_up(CoordSystem=CoordSystem)
+    for CoordSystem in list_of_CoordSystems:
+        # Register C function to set up the boundary condition struct.
+        register_CFunction_bcstruct_set_up(CoordSystem=CoordSystem)
 
-    # Register C function to apply boundary conditions to both pure outer and inner boundary points.
-    register_CFunction_apply_bcs_outerradiation_and_inner(
-        CoordSystem=CoordSystem,
-        radiation_BC_fd_order=radiation_BC_fd_order,
-    )
+        # Register C function to apply boundary conditions to both pure outer and inner boundary points.
+        register_CFunction_apply_bcs_outerradiation_and_inner(
+            CoordSystem=CoordSystem,
+            radiation_BC_fd_order=radiation_BC_fd_order,
+        )
 
     # Register C function to apply boundary conditions to inner-only boundary points.
     register_CFunction_apply_bcs_inner_only()

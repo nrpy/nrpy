@@ -194,17 +194,15 @@ commondata->dt = MIN(commondata->dt, ds_min * commondata->CFL_FACTOR);
 
 
 def register_CFunction_numerical_grids_and_timestep(
-    CoordSystem: str,
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
 ) -> None:
     """
     Registers a C function to set up a numerical grid and timestep.
 
-    :param CoordSystem: The coordinate system used for the simulation.
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = f"Set up a cell-centered {CoordSystem} grid of size grid_physical_size."
+    desc = f"Set up a cell-centered grids of size grid_physical_size."
     c_type = "void"
     name = "numerical_grids_and_timestep"
     params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata, bool calling_for_first_time"
@@ -263,7 +261,7 @@ if(calling_for_first_time) {
 
 
 def register_CFunctions(
-    CoordSystem: str,
+    list_of_CoordSystems: List[str],
     grid_physical_size: float,
     Nxx_dict: Dict[str, List[int]],
     enable_rfm_precompute: bool = False,
@@ -272,21 +270,21 @@ def register_CFunctions(
     """
     Register C functions related to coordinate systems and grid parameters.
 
-    :param CoordSystem: The coordinate system name.
+    :param list_of_CoordSystems: List of CoordSystems
     :param grid_physical_size: Physical size of the grid.
     :param Nxx_dict: Dictionary containing number of grid points.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions.
     """
-    register_CFunction_numerical_grid_params_Nxx_dxx_xx(
-        CoordSystem=CoordSystem,
-        grid_physical_size=grid_physical_size,
-        Nxx_dict=Nxx_dict,
-    )
-    register_CFunction_cfl_limited_timestep(CoordSystem=CoordSystem)
-    register_CFunction_CoordSystem_hash(list_of_CoordSystems=[CoordSystem])
+    for CoordSystem in list_of_CoordSystems:
+        register_CFunction_numerical_grid_params_Nxx_dxx_xx(
+            CoordSystem=CoordSystem,
+            grid_physical_size=grid_physical_size,
+            Nxx_dict=Nxx_dict,
+        )
+        register_CFunction_cfl_limited_timestep(CoordSystem=CoordSystem)
+    register_CFunction_CoordSystem_hash(list_of_CoordSystems)
     register_CFunction_numerical_grids_and_timestep(
-        CoordSystem=CoordSystem,
         enable_rfm_precompute=enable_rfm_precompute,
-        enable_CurviBCs=enable_CurviBCs,
+        enable_CurviBCs=True,
     )
