@@ -370,7 +370,9 @@ numericalgrids.register_CFunctions(
 )
 register_CFunction_diagnostics()
 if enable_rfm_precompute:
-    rfm_precompute.register_CFunctions_rfm_precompute(CoordSystem)
+    rfm_precompute.register_CFunctions_rfm_precompute(
+        list_of_CoordSystems=[CoordSystem]
+    )
 register_CFunction_rhs_eval(enable_rfm_precompute)
 
 

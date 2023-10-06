@@ -375,8 +375,6 @@ for CoordSystem in list_of_CoordSystems:
     register_CFunction_exact_solution_single_point(
         in_CoordSystem=CoordSystem, in_WaveType=WaveType, in_default_sigma=default_sigma
     )
-    if enable_rfm_precompute:
-        rfm_precompute.register_CFunctions_rfm_precompute(CoordSystem)
     register_CFunction_rhs_eval(
         CoordSystem=CoordSystem, enable_rfm_pre=enable_rfm_precompute
     )
@@ -386,6 +384,11 @@ register_CFunction_diagnostics()
 
 if __name__ == "__main__" and parallel_codegen_enable:
     pcg.do_parallel_codegen()
+
+if enable_rfm_precompute:
+    rfm_precompute.register_CFunctions_rfm_precompute(
+        list_of_CoordSystems=list_of_CoordSystems
+    )
 
 cbc.CurviBoundaryConditions_register_C_functions(
     list_of_CoordSystems=list_of_CoordSystems,

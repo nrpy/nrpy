@@ -14,7 +14,6 @@ import os
 from inspect import currentframe as cfr
 from types import FrameType as FT
 from typing import cast, Union
-import time
 
 import nrpy.params as par
 import nrpy.c_function as cfc
@@ -37,7 +36,6 @@ import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xxCartxx
 import nrpy.infrastructures.BHaH.general_relativity.BSSN_C_codegen_library as BCl
 
 par.set_parval_from_str("Infrastructure", "BHaH")
-start_time = time.time()
 
 # Code-generation-time parameters:
 project_name = "two_blackholes_collide"
@@ -267,15 +265,17 @@ BCl.register_CFunction_initial_data(
 )
 
 numericalgrids.register_CFunctions(
-    CoordSystem,
-    grid_physical_size,
-    Nxx_dict,
+    list_of_CoordSystems=[CoordSystem],
+    grid_physical_size=grid_physical_size,
+    Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
 )
 register_CFunction_diagnostics(in_CoordSystem=CoordSystem)
 if enable_rfm_precompute:
-    rfm_precompute.register_CFunctions_rfm_precompute(CoordSystem)
+    rfm_precompute.register_CFunctions_rfm_precompute(
+        list_of_CoordSystems=[CoordSystem]
+    )
 BCl.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
@@ -310,12 +310,9 @@ BCl.register_CFunction_constraints(
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 
-print(f"Section 2 finished at {time.time() - start_time:.4f} seconds")
-
 cbc.CurviBoundaryConditions_register_C_functions(
-    CoordSystem, radiation_BC_fd_order=radiation_BC_fd_order
+    list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order
 )
-print(f"Section 3 finished at {time.time() - start_time:.4f} seconds")
 rhs_string = """
 Ricci_eval(commondata, params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
@@ -335,7 +332,6 @@ MoL.MoL_register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
 )
-print(f"Section 4 finished at {time.time() - start_time:.4f} seconds")
 xxCartxx.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
 xxCartxx.register_CFunction_xx_to_Cart(CoordSystem)
 progress.register_CFunction_progress_indicator()

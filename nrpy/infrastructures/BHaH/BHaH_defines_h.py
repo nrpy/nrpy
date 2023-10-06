@@ -5,10 +5,10 @@ Construct BHaH_defines.h from data registered to griddata_commondata,
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
-
 import sys
 from pathlib import Path
 from typing import Optional, Dict, List
+
 import nrpy.params as par
 import nrpy.grid as gri
 from nrpy.infrastructures.BHaH import griddata_commondata
@@ -202,13 +202,6 @@ def output_BHaH_defines_h(
 // When enable_simd = False, this is the UPWIND_ALG() macro:
 #define UPWIND_ALG(UpwindVecU) UpwindVecU > 0.0 ? 1.0 : 0.0\n"""
         register_BHaH_defines("finite_difference", fin_BHd_str)
-
-    if any("reference_metric" in key for key in sys.modules):
-        # pylint: disable=C0415
-        import nrpy.infrastructures.BHaH.rfm_precompute as rfmp
-
-        rfm_BHd_str = rfmp.ReferenceMetricPrecompute(CoordSystem).BHaH_defines_str
-        register_BHaH_defines("reference_metric", rfm_BHd_str)
 
     ###############################
     # GRID, etc.

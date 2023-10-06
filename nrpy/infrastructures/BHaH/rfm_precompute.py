@@ -5,12 +5,13 @@ Sets up basic functions and loop insertions for precomputed
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
-
 from typing import List
 import sympy as sp
+
 import nrpy.c_function as cfc
 import nrpy.reference_metric as refmetric
 from nrpy.helpers.generic import superfast_uniq
+from nrpy.infrastructures.BHaH.BHaH_defines_h import register_BHaH_defines
 
 
 class ReferenceMetricPrecompute:
@@ -29,8 +30,8 @@ class ReferenceMetricPrecompute:
         #         rfmstruct data from memory (both with and without SIMD enabled), and
         #         freeing allocated memory for the rfmstruct arrays.
 
-        # BHaH_defines_str: String that declares the rfmstruct struct.
-        self.BHaH_defines_str = "typedef struct __rfmstruct__ {\n"
+        # BHaH_defines_list: String that contains the body of the rfmstruct struct.
+        self.BHaH_defines_list: List[str] = []
         self.rfm_struct__define = ""
         # rfmstruct stores pointers to (so far) 1D arrays. The rfm_struct__malloc string allocates space for the arrays.
         self.rfm_struct__malloc = ""
@@ -74,9 +75,9 @@ class ReferenceMetricPrecompute:
                         xx_list.append(rfm.xx[i])
                         malloc_size *= Nxx_plus_2NGHOSTS[i]
 
-                self.BHaH_defines_str += (
-                    f"\tREAL *restrict {freevars_uniq_xx_indep[which_freevar]};\n"
-                )
+                self.BHaH_defines_list += [
+                    f"REAL *restrict {freevars_uniq_xx_indep[which_freevar]};"
+                ]
                 self.rfm_struct__malloc += f"rfmstruct->{freevars_uniq_xx_indep[which_freevar]} = (REAL *)malloc(sizeof(REAL)*{malloc_size});\n"
                 self.rfm_struct__freemem += (
                     f"free(rfmstruct->{freevars_uniq_xx_indep[which_freevar]});\n"
@@ -145,40 +146,47 @@ class ReferenceMetricPrecompute:
 
             which_freevar += 1
 
-        self.BHaH_defines_str += "} rfm_struct;\n"
 
-
-def register_CFunctions_rfm_precompute(CoordSystem: str) -> None:
+def register_CFunctions_rfm_precompute(list_of_CoordSystems: List[str]) -> None:
     """
     Register C functions for reference metric precomputed lookup arrays.
     """
-    rfm_precompute = ReferenceMetricPrecompute(CoordSystem)
+    combined_BHaH_defines_list = []
+    for CoordSystem in list_of_CoordSystems:
+        rfm_precompute = ReferenceMetricPrecompute(CoordSystem)
 
-    for func in [
-        ("malloc", rfm_precompute.rfm_struct__malloc),
-        ("defines", rfm_precompute.rfm_struct__define),
-        ("free", rfm_precompute.rfm_struct__freemem),
-    ]:
-        includes = ["BHaH_defines.h"]
+        for func in [
+            ("malloc", rfm_precompute.rfm_struct__malloc),
+            ("defines", rfm_precompute.rfm_struct__define),
+            ("free", rfm_precompute.rfm_struct__freemem),
+        ]:
+            includes = ["BHaH_defines.h"]
 
-        desc = f"rfm_precompute_{func[0]}: reference metric precomputed lookup arrays: {func[0]}"
-        c_type = "void"
-        name = "rfm_precompute_" + func[0]
-        params = "const commondata_struct *restrict commondata, const params_struct *restrict params, rfm_struct *restrict rfmstruct"
-        include_CodeParameters_h = True
-        if func[0] == "defines":
-            params += ", REAL *restrict xx[3]"
+            desc = f"rfm_precompute_{func[0]}: reference metric precomputed lookup arrays: {func[0]}"
+            c_type = "void"
+            name = "rfm_precompute_" + func[0]
+            params = "const commondata_struct *restrict commondata, const params_struct *restrict params, rfm_struct *restrict rfmstruct"
+            include_CodeParameters_h = True
+            if func[0] == "defines":
+                params += ", REAL *restrict xx[3]"
 
-        body = " "
-        body += func[1]
+            body = " "
+            body += func[1]
 
-        cfc.register_CFunction(
-            includes=includes,
-            desc=desc,
-            c_type=c_type,
-            CoordSystem_for_wrapper_func=CoordSystem,
-            name=name,
-            params=params,
-            include_CodeParameters_h=include_CodeParameters_h,
-            body=body,
-        )
+            combined_BHaH_defines_list.extend(rfm_precompute.BHaH_defines_list)
+            cfc.register_CFunction(
+                includes=includes,
+                desc=desc,
+                c_type=c_type,
+                CoordSystem_for_wrapper_func=CoordSystem,
+                name=name,
+                params=params,
+                include_CodeParameters_h=include_CodeParameters_h,
+                body=body,
+            )
+
+    BHaH_defines = "typedef struct __rfmstruct__ {\n"
+    for item in sorted(superfast_uniq(combined_BHaH_defines_list)):
+        BHaH_defines += f"{item}\n"
+    BHaH_defines += "} rfm_struct;\n"
+    register_BHaH_defines("reference_metric", BHaH_defines)
