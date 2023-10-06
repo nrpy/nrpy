@@ -30,6 +30,9 @@ from nrpy.equations.general_relativity.BSSN_constraints import BSSN_constraints
 from nrpy.equations.general_relativity.InitialData_Cartesian import (
     InitialData_Cartesian,
 )
+from nrpy.equations.general_relativity.InitialData_Spherical import (
+    InitialData_Spherical,
+)
 import nrpy.equations.general_relativity.psi4 as psifour
 import nrpy.equations.general_relativity.psi4_tetrads as psifourtet
 import nrpy.infrastructures.BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter as admid
@@ -62,7 +65,11 @@ def register_CFunction_initial_data(
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
     try:
-        ID = InitialData_Cartesian(IDtype=IDtype)
+        if IDCoordSystem == "Cartesian":
+            ID = InitialData_Cartesian(IDtype=IDtype)
+        else:
+            ID = InitialData_Spherical(IDtype=IDtype)
+
         admid.register_CFunction_exact_ADM_ID_function(
             IDCoordSystem, IDtype, ID.alpha, ID.betaU, ID.BU, ID.gammaDD, ID.KDD
         )
