@@ -361,8 +361,12 @@ register_CFunction_exact_solution_single_point(
     in_CoordSystem=CoordSystem, in_WaveType=WaveType, in_default_sigma=default_sigma
 )
 register_CFunction_initial_data()
-numericalgrids.register_CFunction_numerical_grids_and_timestep_setup(
-    CoordSystem, grid_physical_size, Nxx_dict
+numericalgrids.register_CFunctions(
+    CoordSystem=CoordSystem,
+    grid_physical_size=grid_physical_size,
+    Nxx_dict=Nxx_dict,
+    enable_rfm_precompute=enable_rfm_precompute,
+    enable_CurviBCs=True,
 )
 register_CFunction_diagnostics()
 if enable_rfm_precompute:

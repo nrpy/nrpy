@@ -41,8 +41,8 @@ def register_CFunction_main_c(
         ("commondata_struct_set_to_default", "CodeParameters.py"),
         ("cmdline_input_and_parfile_parser", "cmdline_input_and_parfiles.py"),
         (
-            "numerical_grids_and_timestep_setup",
-            "e.g., reference_metric.py or user defined",
+            "numerical_grids_and_timestep",
+            "e.g., numerical_grids_and_timestep.py or user defined",
         ),
         ("MoL_malloc_y_n_gfs", "MoL.py"),
         ("MoL_malloc_non_y_n_gfs", "MoL.py"),
@@ -90,29 +90,24 @@ Step 6: Free all allocated memory"""
 
 // Step 1.a: Set each commondata CodeParameter to default.
 commondata_struct_set_to_default(&commondata);
+
 // Step 1.b: Overwrite default values to parfile values. Then overwrite parfile values with values set at cmd line.
 cmdline_input_and_parfile_parser(&commondata, argc, argv);
 
 // Step 1.c: Allocate NUMGRIDS griddata arrays, each containing data specific to an individual grid.
 griddata = (griddata_struct *restrict)malloc(sizeof(griddata_struct)*commondata.NUMGRIDS);
+
 // Step 1.d: Set each CodeParameter in griddata.params to default.
 params_struct_set_to_default(&commondata, griddata);
+
+// Step 1.e: Set up numerical grids: xx[3], masks, Nxx, dxx, invdxx, bcstruct, rfm_precompute, timestep, etc.
+{
+  // if calling_for_first_time, then initialize commondata time=nn=t_0=nn_0 = 0
+  const bool calling_for_first_time = true;
+  numerical_grids_and_timestep(&commondata, griddata, calling_for_first_time);
+}
+
 for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
-  // Step 1.e: Set non-parfile parameters related to numerical grid, then set up numerical grids and CFL-limited timestep.
-  numerical_grids_and_timestep_setup(&commondata, &griddata[grid].params, &griddata[grid]);
-"""
-    if enable_CurviBCs:
-        body += r"""
-  // Step 1.f: Set up boundary condition struct (bcstruct)
-  bcstruct_set_up(&commondata, &griddata[grid].params, griddata[grid].xx, &griddata[grid].bcstruct);
-"""
-    if enable_rfm_precompute:
-        body += r"""
-  // Step 1.g: Allocate memory for and define reference-metric precomputation lookup arrays
-  rfm_precompute_malloc(&commondata, &griddata[grid].params, &griddata[grid].rfmstruct);
-  rfm_precompute_defines(&commondata, &griddata[grid].params, &griddata[grid].rfmstruct, griddata[grid].xx);
-"""
-    body += r"""
   // Step 2: Initial data are set on y_n_gfs gridfunctions. Allocate storage for them first.
   MoL_malloc_y_n_gfs(&commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
 }

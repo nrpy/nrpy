@@ -78,7 +78,7 @@ def register_CFunction_numerical_grids_and_timestep_setup() -> None:
     includes = ["BHaH_defines.h"]
     desc = r"""Set up cell-centered Cartesian grids."""
     c_type = "void"
-    name = "numerical_grids_and_timestep_setup"
+    name = "numerical_grids_and_timestep"
     params = "commondata_struct *restrict commondata, params_struct *restrict params, griddata_struct *restrict griddata"
     body = r"""
 params->Nxx0 *= convergence_factor;

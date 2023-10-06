@@ -387,9 +387,14 @@ if __name__ == "__main__":
 
 print(f"Section 2 finished at {time.time() - start_time:.4f} seconds")
 
-numericalgrids.register_CFunction_numerical_grids_and_timestep_setup(
-    CoordSystem, grid_physical_size, Nxx_dict
+numericalgrids.register_CFunctions(
+    CoordSystem=CoordSystem,
+    grid_physical_size=grid_physical_size,
+    Nxx_dict=Nxx_dict,
+    enable_rfm_precompute=enable_rfm_precompute,
+    enable_CurviBCs=True,
 )
+
 cbc.CurviBoundaryConditions_register_C_functions(
     CoordSystem, radiation_BC_fd_order=radiation_BC_fd_order
 )
