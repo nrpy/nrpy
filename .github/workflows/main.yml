@@ -95,13 +95,13 @@ jobs:
 
     - name: Check that pip installed nrpy creates valid, compilable C example projects
       run: |
-        clang-format --version
-        pwd
-        pip install .
-        python -m nrpy.examples.wave_equation_cartesian   && cd project/wavetoy && make && cd ../../
-        python -m nrpy.examples.wave_equation_curvilinear && cd project/curviwavetoy && make && cd ../../
-        python -m nrpy.examples.two_blackholes_collide    && cd project/two_blackholes_collide && make && cd ../../
-        python -m nrpy.examples.blackhole_spectroscopy    && cd project/blackhole_spectroscopy && make && cd ../../
+        pwd &&
+        pip install . &&
+        python -m nrpy.examples.wave_equation_cartesian   && (cd project/wavetoy && make) &&
+        python -m nrpy.examples.wave_equation_curvilinear && (cd project/curviwavetoy && make) &&
+        python -m nrpy.examples.two_blackholes_collide    && (cd project/two_blackholes_collide && make) &&
+        python -m nrpy.examples.blackhole_spectroscopy    && (cd project/blackhole_spectroscopy && make)
+
   build-mac:
     runs-on: macos-latest
 
