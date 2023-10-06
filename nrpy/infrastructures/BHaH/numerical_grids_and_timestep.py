@@ -243,7 +243,7 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   cfl_limited_timestep(commondata, &griddata[grid].params, griddata[grid].xx, &griddata[grid].bcstruct);
 }
 
-// Step 1.f: Initialize timestepping parameters if this is the first time this function is called.
+// Step 1.f: Initialize timestepping parameters to zero if this is the first time this function is called.
 if(calling_for_first_time) {
   commondata->nn = 0;
   commondata->nn_0 = 0;
@@ -257,6 +257,7 @@ if(calling_for_first_time) {
         c_type=c_type,
         name=name,
         params=params,
+        include_CodeParameters_h=False,
         body=body,
     )
 
