@@ -11,6 +11,7 @@ from pathlib import Path
 import os
 import shutil
 import subprocess
+import platform
 import multiprocessing
 from typing import List, Optional
 import cpuinfo  # type: ignore
@@ -25,7 +26,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     compiler_opt_option: str = "default",
     addl_CFLAGS: Optional[List[str]] = None,
     addl_libraries: Optional[List[str]] = None,
-    CC: str = "gcc",
+    CC: str = "autodetect",
     create_lib: bool = False,
     include_dirs: Optional[List[str]] = None,
 ) -> None:
@@ -38,7 +39,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     :param compiler_opt_option: Compiler optimization option. Defaults to "default". Other options: "fast" and "debug"
     :param addl_CFLAGS: Additional compiler flags. Must be a list.
     :param addl_libraries: Additional libraries to link. Must be a list.
-    :param CC: C compiler to use. Defaults to "gcc".
+    :param CC: C compiler to use. Defaults to "autodetect" (clang if using Darwin, gcc otherwise)
     :param create_lib: Whether to create a library. Defaults to False.
     :param include_dirs: List of include directories. Must be a list.
 
@@ -99,6 +100,17 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         for key in sorted(CFunction_dict.keys()):
             file.write(f"{CFunction_dict[key].function_prototype}\n")
 
+    if CC == "autodetect":
+        os_name = platform.system()
+
+        if os_name == "Darwin":
+            CC = "clang"
+        else:
+            CC = "gcc"
+
+    if shutil.which(CC) is None:
+        raise FileNotFoundError(f"{CC} C compiler is not found")
+
     CFLAGS_dict = {
         "default": "-O2 -march=native -g -Wall -Wno-unused-variable",
         # FASTCFLAGS: -O3 causes AVX-2+ SIMD optimizations to be used on MoL update loops. -O2 drops to SSE2
@@ -107,41 +119,43 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         "debug": "-O2 -g -Wall -Wno-unused-variable -Wno-unknown-pragmas",
     }
 
-    cpu_info = cpuinfo.get_cpu_info()
-    if cpu_info.get("l2_cache_size"):
-        try:
-            l2_cache_size_KB = int(int(cpu_info.get("l2_cache_size")) / 1024)
-            for key, value in CFLAGS_dict.items():
-                CFLAGS_dict[key] += f" --param l2-cache-size={l2_cache_size_KB}"
-        except ValueError:
-            # Sometimes cpu_info.get("l2_cache_size") returns a value that has explicit units, like 2.5MiB,
-            #  ignore these cases
-            pass
-    if "flags" in cpu_info:
-        if any("avx512" in flag for flag in cpu_info["flags"]):
-            # -march=native hangs when using GCC on
-            avx512_features = [
-                "avx512f",
-                "avx512pf",
-                "avx512er",
-                "avx512cd",
-                "avx512vl",
-                "avx512bw",
-                "avx512dq",
-                "avx512ifma",
-                "avx512vbmi",
-            ]
-            # manually add the avx-512 featureset
-            avx512_compileflags = ""
-            for feature in avx512_features:
-                if any(flag.replace("_", "") == feature for flag in cpu_info["flags"]):
-                    avx512_compileflags += f"-m{feature} "
-            for key, value in CFLAGS_dict.items():
-                CFLAGS_dict[key] = CFLAGS_dict[key].replace(
-                    "-march=native", avx512_compileflags
-                )
-
     if CC == "gcc":
+        cpu_info = cpuinfo.get_cpu_info()
+        if cpu_info.get("l2_cache_size"):
+            try:
+                l2_cache_size_KB = int(int(cpu_info.get("l2_cache_size")) / 1024)
+                for key, value in CFLAGS_dict.items():
+                    CFLAGS_dict[key] += f" --param l2-cache-size={l2_cache_size_KB}"
+            except ValueError:
+                # Sometimes cpu_info.get("l2_cache_size") returns a value that has explicit units, like 2.5MiB,
+                #  ignore these cases
+                pass
+        if "flags" in cpu_info:
+            if any("avx512" in flag for flag in cpu_info["flags"]):
+                # -march=native hangs when using GCC on
+                avx512_features = [
+                    "avx512f",
+                    "avx512pf",
+                    "avx512er",
+                    "avx512cd",
+                    "avx512vl",
+                    "avx512bw",
+                    "avx512dq",
+                    "avx512ifma",
+                    "avx512vbmi",
+                ]
+                # manually add the avx-512 featureset
+                avx512_compileflags = ""
+                for feature in avx512_features:
+                    if any(
+                        flag.replace("_", "") == feature for flag in cpu_info["flags"]
+                    ):
+                        avx512_compileflags += f"-m{feature} "
+                for key, value in CFLAGS_dict.items():
+                    CFLAGS_dict[key] = CFLAGS_dict[key].replace(
+                        "-march=native", avx512_compileflags
+                    )
+
         for key in CFLAGS_dict:
             CFLAGS_dict[key] += " -std=gnu99"
 
@@ -206,8 +220,9 @@ all: {exec_name}
 {exec_name}: $(OBJ_FILES)
 	$(CC) $^ -o $@ $(LDFLAGS)
 
+# Use $(RM) to be cross-platform compatible.
 clean:
-	rm -f *.o */*.o *~ */*~ ./#* *.txt *.dat *.avi *.png {exec_name}
+	$(RM) *.o */*.o *~ */*~ ./#* *.txt *.dat *.avi *.png {exec_name}
 """
     makefile_path = Path(project_Path) / "Makefile"
     with makefile_path.open("w", encoding="utf-8") as Makefile:
@@ -221,7 +236,7 @@ def compile_Makefile(
     compiler_opt_option: str = "fast",
     addl_CFLAGS: Optional[List[str]] = None,
     addl_libraries: Optional[List[str]] = None,
-    CC: str = "gcc",
+    CC: str = "autodetect",
     attempt: int = 1,
 ) -> None:
     """
@@ -236,6 +251,13 @@ def compile_Makefile(
     :param CC: C compiler (default: "gcc").
     :param attempt: Compilation attempt number (default: 1).
     """
+    if CC == "autodetect":
+        os_name = platform.system()
+
+        if os_name == "Darwin":
+            CC = "clang"
+        else:
+            CC = "gcc"
 
     if shutil.which(CC) is None:
         raise FileNotFoundError(f"{CC} C compiler is not found")

@@ -458,7 +458,9 @@ if enable_simd:
 
 
 Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
-    project_dir=project_dir, project_name=project_name, exec_name=project_name
+    project_dir=project_dir,
+    project_name=project_name,
+    exec_name=project_name,
 )
 print(
     f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
