@@ -57,18 +57,16 @@ def register_CFunction_exact_ADM_ID_function(
     body = ""
 
     if IDCoordSystem == "Spherical":
-        body += r"""
-  REAL xx0,xx1,xx2 __attribute__((unused));
-  {
-    int unused_Cart_to_i0i1i2[3];
-    REAL xx[3];
-    Cart_to_xx_and_nearest_i0i1i2(commondata, params, xCart, xx, unused_Cart_to_i0i1i2);
-    xx0=xx[0];  xx1=xx[1];  xx2=xx[2];
-  }
-  const REAL r  = xx0;
-  const REAL th = xx1;
-  const REAL ph = xx2;
-"""
+        rfm_Spherical = refmetric.reference_metric["Spherical"]
+        body += "const REAL Cartx=xCart[0],Carty=xCart[1],Cartz=xCart[2];\n"
+        body += "REAL r, th, ph;\n"
+        body += ccg.c_codegen(
+            rfm_Spherical.Cart_to_xx,
+            ["r", "th", "ph"],
+            verbose=False,
+            include_braces=True,
+        )
+        body += "const REAL xx0=r, xx1=th, xx2=ph;\n"
     elif IDCoordSystem == "Cartesian":
         body += r"""  const REAL x=xCart[0], y=xCart[1], z=xCart[2];
 """
@@ -340,7 +338,9 @@ to the basis specified by `reference_metric::CoordSystem`, then rescale these BS
                                            const BSSN_Cart_basis_struct *restrict BSSN_Cart_basis,
                                            rescaled_BSSN_rfm_basis_struct *restrict rescaled_BSSN_rfm_basis"""
 
-    body = r"""
+    body = ""
+    if CoordSystem != "Cartesian":
+        body += r"""
   REAL xx0,xx1,xx2 __attribute__((unused));  // xx2 might be unused in the case of axisymmetric initial data.
   {
     int unused_Cart_to_i0i1i2[3];
