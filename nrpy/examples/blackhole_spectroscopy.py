@@ -461,7 +461,6 @@ Bdefines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     fin_NGHOSTS_add_one_for_upwinding=True,
     enable_simd=enable_simd,
-    CoordSystem=CoordSystem,
 )
 main.register_CFunction_main_c(
     initial_data_desc=IDtype,
