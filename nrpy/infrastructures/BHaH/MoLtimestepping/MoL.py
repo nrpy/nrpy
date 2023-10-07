@@ -276,7 +276,7 @@ def single_RK_substep_input_symbolic(
         raise ValueError(
             f"Could not extract substep_time_offset_dt={substep_time_offset_dt} from Butcher table"
         )
-    return_str += "{\n"
+    return_str += "for(int grid=0; grid<commondata->NUMGRIDS; grid++) {\n"
     return_str += (
         f"commondata->time = time_start + {substep_time_offset_str} * commondata->dt;\n"
     )
@@ -440,7 +440,7 @@ const REAL time_start = commondata->time;
         _throwaway2,
     ) = generate_gridfunction_names(Butcher_dict, MoL_method)
 
-    gf_prefix = "griddata->gridfuncs."
+    gf_prefix = "griddata[grid].gridfuncs."
 
     gf_aliases = f"""// Set gridfunction aliases from gridfuncs struct
 // y_n gridfunctions
@@ -449,20 +449,18 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
     for gf in non_y_n_gridfunctions_list:
         gf_aliases += f"REAL *restrict {gf} = {gf_prefix}{gf};\n"
 
-    gf_aliases += "params_struct *restrict params = &griddata->params;\n"
+    gf_aliases += "params_struct *restrict params = &griddata[grid].params;\n"
     if enable_rfm_precompute:
-        gf_aliases += "const rfm_struct *restrict rfmstruct = &griddata->rfmstruct;\n"
-    else:
         gf_aliases += (
-            "REAL *restrict xx[3]; for(int ww=0;ww<3;ww++) xx[ww] = griddata->xx[ww];\n"
+            "const rfm_struct *restrict rfmstruct = &griddata[grid].rfmstruct;\n"
         )
+    else:
+        gf_aliases += "REAL *restrict xx[3]; for(int ww=0;ww<3;ww++) xx[ww] = griddata[grid].xx[ww];\n"
 
     if enable_curviBCs:
-        gf_aliases += "const bc_struct *restrict bcstruct = &griddata->bcstruct;\n"
+        gf_aliases += "const bc_struct *restrict bcstruct = &griddata[grid].bcstruct;\n"
     for i in ["0", "1", "2"]:
-        gf_aliases += (
-            f"const int Nxx_plus_2NGHOSTS{i} = griddata->params.Nxx_plus_2NGHOSTS{i};\n"
-        )
+        gf_aliases += f"const int Nxx_plus_2NGHOSTS{i} = griddata[grid].params.Nxx_plus_2NGHOSTS{i};\n"
 
     # Implement Method of Lines (MoL) Timestepping
     Butcher = Butcher_dict[MoL_method][
