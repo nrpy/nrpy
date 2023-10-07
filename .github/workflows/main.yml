@@ -100,7 +100,10 @@ jobs:
         python -m nrpy.examples.wave_equation_cartesian   && (cd project/wavetoy && make && make clean) &&
         python -m nrpy.examples.wave_equation_curvilinear && (cd project/curviwavetoy && make && make clean) &&
         python -m nrpy.examples.two_blackholes_collide    && (cd project/two_blackholes_collide && make && make clean) &&
-        python -m nrpy.examples.blackhole_spectroscopy    && (cd project/blackhole_spectroscopy && make && make clean)
+        python -m nrpy.examples.blackhole_spectroscopy    && (cd project/blackhole_spectroscopy && make && make clean) &&
+        python -m nrpy.examples.spinning_blackhole        && (cd project/spinning_blackhole && make && make clean) &&
+        python -m nrpy.examples.nrpypn_quasicircular_momenta && (cd project/nrpypn_quasicircular_momenta && make && make clean) &&
+        python -m nrpy.examples.wave_equation_multicoord_wavetoy && (cd project/multicoords_curviwavetoy && make && make clean)
 
   build-mac:
     runs-on: macos-latest
@@ -134,4 +137,7 @@ jobs:
         python -m nrpy.examples.wave_equation_cartesian   && (cd project/wavetoy && make && make clean) &&
         python -m nrpy.examples.wave_equation_curvilinear && (cd project/curviwavetoy && make && make clean) &&
         python -m nrpy.examples.two_blackholes_collide    && (cd project/two_blackholes_collide && make && make clean) &&
-        python -m nrpy.examples.blackhole_spectroscopy    && (cd project/blackhole_spectroscopy && make && make clean)
+        python -m nrpy.examples.blackhole_spectroscopy    && (cd project/blackhole_spectroscopy && make && make clean) &&
+        python -m nrpy.examples.spinning_blackhole        && (cd project/spinning_blackhole && make && make clean) &&
+        python -m nrpy.examples.nrpypn_quasicircular_momenta && (cd project/nrpypn_quasicircular_momenta && make && make clean) &&
+        python -m nrpy.examples.wave_equation_multicoord_wavetoy && (cd project/multicoords_curviwavetoy && make && make clean)
