@@ -65,6 +65,7 @@ def register_CFunction_initial_data(
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
     try:
+        ID: Union[InitialData_Cartesian, InitialData_Spherical]
         if IDCoordSystem == "Cartesian":
             ID = InitialData_Cartesian(IDtype=IDtype)
         else:
