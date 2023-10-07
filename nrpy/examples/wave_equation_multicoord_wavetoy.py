@@ -34,6 +34,7 @@ from nrpy.infrastructures.BHaH import rfm_wrapper_functions
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 import nrpy.infrastructures.BHaH.main_c as main
+from nrpy.infrastructures.BHaH import xx_tofrom_Cart
 import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
@@ -49,6 +50,7 @@ default_sigma = 3.0
 grid_physical_size = 10.0
 t_final = 0.8 * grid_physical_size
 list_of_CoordSystems = ["Spherical", "SinhSpherical", "Cartesian"]
+NUMGRIDS = 3
 Nxx_dict = {
     "Spherical": [64, 2, 2],
     "SinhSpherical": [64, 2, 2],
@@ -70,6 +72,7 @@ shutil.rmtree(project_dir, ignore_errors=True)
 
 par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 par.set_parval_from_str("fd_order", fd_order)
+par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
 par.adjust_CodeParam_default("t_final", t_final)
 
 
@@ -189,7 +192,7 @@ _ = par.CodeParameter(
 
 def register_CFunction_diagnostics() -> Union[None, pcg.NRPyEnv_type]:
     """
-    Register the right-hand side evaluation function for the wave equation with specific parameters.
+    Register the simulation diagnostics function for the wave equation with specific parameters.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -203,84 +206,83 @@ def register_CFunction_diagnostics() -> Union[None, pcg.NRPyEnv_type]:
         "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
     )
 
-    body = r"""
-const REAL currtime = commondata->time, currdt = commondata->dt, outevery = commondata->diagnostics_output_every;
-// Explanation of the if() below:
-// Step 1: round(currtime / outevery) rounds to the nearest integer multiple of currtime.
-// Step 2: Multiplying by outevery yields the exact time we should output again, t_out.
-// Step 3: If fabs(t_out - currtime) < 0.5 * currdt, then currtime is as close to t_out as possible!
-if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {
-for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
-  // Unpack griddata struct:
-  const REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
-  REAL *restrict xx[3];
-  for (int ww = 0; ww < 3; ww++)
-    xx[ww] = griddata[grid].xx[ww];
-  const params_struct *restrict params = &griddata[grid].params;
+    body = r"""  const REAL currtime = commondata->time, currdt = commondata->dt, outevery = commondata->diagnostics_output_every;
+  // Explanation of the if() below:
+  // Step 1: round(currtime / outevery) rounds to the nearest integer multiple of currtime.
+  // Step 2: Multiplying by outevery yields the exact time we should output again, t_out.
+  // Step 3: If fabs(t_out - currtime) < 0.5 * currdt, then currtime is as close to t_out as possible!
+  if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {
+    for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
+      // Unpack griddata struct:
+      const REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
+      REAL *restrict xx[3];
+      for (int ww = 0; ww < 3; ww++)
+        xx[ww] = griddata[grid].xx[ww];
+      const params_struct *restrict params = &griddata[grid].params;
 #include "set_CodeParameters.h"
 
-  // 0D output
-  {
-    char filename[256];
-    sprintf(filename, "out0d-conv_factor%.2f.txt", convergence_factor);
-    FILE *outfile;
-    if (nn == 0)
-      outfile = fopen(filename, "w");
-    else
-      outfile = fopen(filename, "a");
-    if (outfile == NULL) {
-      fprintf(stderr, "Error: Cannot open file %s for writing.\n", filename);
-      exit(1);
+      // 0D output
+      {
+        char filename[256];
+        sprintf(filename, "out0d-%s-conv_factor%.2f.txt", CoordSystemName, convergence_factor);
+        FILE *outfile;
+        if (nn == 0)
+          outfile = fopen(filename, "w");
+        else
+          outfile = fopen(filename, "a");
+        if (outfile == NULL) {
+          fprintf(stderr, "Error: Cannot open file %s for writing.\n", filename);
+          exit(1);
+        }
+        const int i0_mid = Nxx_plus_2NGHOSTS0 / 2;
+        const int i1_mid = Nxx_plus_2NGHOSTS1 / 2;
+        const int i2_mid = Nxx_plus_2NGHOSTS2 / 2;
+        const int center_of_grid_idx = IDX3(i0_mid, i1_mid, i2_mid);
+
+        const REAL num_soln_at_center_UUGF = y_n_gfs[IDX4pt(UUGF, center_of_grid_idx)];
+        const REAL num_soln_at_center_VVGF = y_n_gfs[IDX4pt(VVGF, center_of_grid_idx)];
+        REAL exact_soln_at_center_UUGF, exact_soln_at_center_VVGF;
+        exact_solution_single_point(commondata, params, xx[0][i0_mid], xx[1][i1_mid], xx[2][i2_mid], &exact_soln_at_center_UUGF, &exact_soln_at_center_VVGF);
+
+        fprintf(outfile, "%e %e %e %e %e\n", time, fabs(fabs(num_soln_at_center_UUGF - exact_soln_at_center_UUGF) / exact_soln_at_center_UUGF),
+                fabs(fabs(num_soln_at_center_VVGF - exact_soln_at_center_VVGF) / (1e-16 + exact_soln_at_center_VVGF)), num_soln_at_center_UUGF, exact_soln_at_center_UUGF);
+
+        fclose(outfile);
+      }
+
+      // 1D output
+      {
+        char filename[256];
+        sprintf(filename, "out1d-%s-conv_factor%.2f-t%.2f.txt", CoordSystemName, convergence_factor, time);
+        FILE *outfile;
+        outfile = fopen(filename, "w");
+        if (outfile == NULL) {
+          fprintf(stderr, "Error: Cannot open file %s for writing.\n", filename);
+          exit(1);
+        }
+
+        for (int i0 = NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0++) {
+          const int i1 = Nxx_plus_2NGHOSTS1 / 2;
+          const int i2 = Nxx_plus_2NGHOSTS2 / 2;
+          const int idx3 = IDX3(i0, i1, i2);
+
+          const REAL num_soln_UUGF = y_n_gfs[IDX4pt(UUGF, idx3)];
+          const REAL num_soln_VVGF = y_n_gfs[IDX4pt(VVGF, idx3)];
+          REAL exact_soln_UUGF, exact_soln_VVGF, xCart[3], rr;
+          exact_solution_single_point(commondata, params, xx[0][i0], xx[1][i1], xx[2][i2], &exact_soln_UUGF, &exact_soln_VVGF);
+          xx_to_Cart(commondata, params, xx,i0,i1,i2, xCart);
+          rr = sqrt(xCart[0]*xCart[0] + xCart[1]*xCart[1] + xCart[2]*xCart[2]);
+
+          fprintf(outfile, "%e %e %e %e %e\n", rr, fabs(fabs(num_soln_UUGF - exact_soln_UUGF) / exact_soln_UUGF), fabs(fabs(num_soln_VVGF - exact_soln_VVGF) / (1e-16 + exact_soln_VVGF)),
+                  num_soln_UUGF, exact_soln_UUGF);
+        }
+        fclose(outfile);
+      }
     }
-
-    const int center_of_grid_idx = IDX3(NGHOSTS, Nxx_plus_2NGHOSTS1 / 2, Nxx_plus_2NGHOSTS2 / 2);
-
-    const REAL num_soln_at_center_UUGF = y_n_gfs[IDX4pt(UUGF, center_of_grid_idx)];
-    const REAL num_soln_at_center_VVGF = y_n_gfs[IDX4pt(VVGF, center_of_grid_idx)];
-    REAL exact_soln_at_center_UUGF, exact_soln_at_center_VVGF;
-    exact_solution_single_point(commondata, params, xx[0][NGHOSTS], xx[1][Nxx_plus_2NGHOSTS1 / 2], xx[2][Nxx_plus_2NGHOSTS2 / 2],
-                                &exact_soln_at_center_UUGF, &exact_soln_at_center_VVGF);
-
-    fprintf(outfile, "%e %e %e %e %e\n", time,
-            fabs(fabs(num_soln_at_center_UUGF - exact_soln_at_center_UUGF) / exact_soln_at_center_UUGF),
-            fabs(fabs(num_soln_at_center_VVGF - exact_soln_at_center_VVGF) / (1e-16 + exact_soln_at_center_VVGF)),
-            num_soln_at_center_UUGF, exact_soln_at_center_UUGF);
-
-    fclose(outfile);
   }
-
-
-  // 1D output
-  {
-    char filename[256];
-    sprintf(filename, "out1d-conv_factor%.2f-t%.2f.txt", convergence_factor, time);
-    FILE *outfile;
-    outfile = fopen(filename, "w");
-    if (outfile == NULL) {
-      fprintf(stderr, "Error: Cannot open file %s for writing.\n", filename);
-      exit(1);
-    }
-
-    for(int i0=NGHOSTS;i0<Nxx_plus_2NGHOSTS0-NGHOSTS;i0++) {
-      const int idx3 = IDX3(i0, Nxx_plus_2NGHOSTS1 / 2, Nxx_plus_2NGHOSTS2 / 2);
-
-      const REAL num_soln_UUGF = y_n_gfs[IDX4pt(UUGF, idx3)];
-      const REAL num_soln_VVGF = y_n_gfs[IDX4pt(VVGF, idx3)];
-      REAL exact_soln_UUGF, exact_soln_VVGF;
-      exact_solution_single_point(commondata, params, xx[0][i0], xx[1][Nxx_plus_2NGHOSTS1 / 2], xx[2][Nxx_plus_2NGHOSTS2 / 2],
-                                  &exact_soln_UUGF, &exact_soln_VVGF);
-
-      fprintf(outfile, "%e %e %e %e %e\n", xx[0][i0],
-              fabs(fabs(num_soln_UUGF - exact_soln_UUGF) / exact_soln_UUGF),
-              fabs(fabs(num_soln_VVGF - exact_soln_VVGF) / (1e-16 + exact_soln_VVGF)),
-              num_soln_UUGF, exact_soln_UUGF);
-    }
-    fclose(outfile);
-  }
-}
-}
-progress_indicator(commondata, griddata);
-if(commondata->time + commondata->dt > commondata->t_final) printf("\n");
+  progress_indicator(commondata, griddata);
+  if (commondata->time + commondata->dt > commondata->t_final)
+    printf("\n");
 """
 
     cfc.register_CFunction(
@@ -378,6 +380,7 @@ for CoordSystem in list_of_CoordSystems:
     register_CFunction_rhs_eval(
         CoordSystem=CoordSystem, enable_rfm_pre=enable_rfm_precompute
     )
+    xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
 
 register_CFunction_diagnostics()
 
@@ -426,7 +429,6 @@ cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
 Bdefines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     enable_simd=enable_simd,
-    CoordSystem=CoordSystem,
 )
 main.register_CFunction_main_c(
     initial_data_desc=WaveType,

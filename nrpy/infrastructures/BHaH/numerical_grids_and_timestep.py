@@ -81,7 +81,10 @@ def register_CFunction_numerical_grid_params_Nxx_dxx_xx(
     c_type = "void"
     name = "numerical_grid_params_Nxx_dxx_xx"
     params = "commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3]"
-    body = rf"""
+    body = ""
+    for dirn in range(3):
+        body += f"params->Nxx{dirn} = {Nxx_dict[CoordSystem][dirn]};\n"
+    body += rf"""
 const REAL grid_physical_size = params->grid_physical_size;
 snprintf(params->CoordSystemName, 50, "{CoordSystem}");
 
@@ -202,7 +205,7 @@ def register_CFunction_numerical_grids_and_timestep(
 
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = f"Set up a cell-centered grids of size grid_physical_size."
+    desc = "Set up a cell-centered grids of size grid_physical_size."
     c_type = "void"
     name = "numerical_grids_and_timestep"
     params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata, bool calling_for_first_time"
@@ -286,5 +289,5 @@ def register_CFunctions(
     register_CFunction_CoordSystem_hash(list_of_CoordSystems)
     register_CFunction_numerical_grids_and_timestep(
         enable_rfm_precompute=enable_rfm_precompute,
-        enable_CurviBCs=True,
+        enable_CurviBCs=enable_CurviBCs,
     )

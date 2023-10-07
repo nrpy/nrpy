@@ -41,9 +41,9 @@ for python_file in $python_files; do
   echo "-={ Step 4: pylint }=-"
   PYTHONPATH=.:$PYTHONPATH pylint_score=$(pylint --rcfile=.pylintrc $python_file | tail -2 | grep -Eo '[0-9\.]+' | head -1 || echo "0")
   echo "Pylint score is $pylint_score"
-  if (( $(echo "$pylint_score < 9.5" | bc -l) )); then
+  if (( $(echo "$pylint_score < 9.91" | bc -l) )); then
     PYTHONPATH=.:$PYTHONPATH pylint --rcfile=.pylintrc $python_file || true
-    echo "Pylint score is below 9.5, failing..."
+    echo "Pylint score is below 9.91, failing..."
     failed_tests+=("pylint in $python_file")
     break
   fi

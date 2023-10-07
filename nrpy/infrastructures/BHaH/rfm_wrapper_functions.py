@@ -21,14 +21,15 @@ def get_CoordSystem_hash(CoordSystem: str) -> int:
     :return: A 32-bit integer hash.
 
     >>> get_CoordSystem_hash("Cartesian")
-    3593026460
+    1445542812
     >>> get_CoordSystem_hash("SinhSpherical")
     579707936
     >>> get_CoordSystem_hash("Spherical")
     1307621703
     """
-    # Convert CoordSystem to an md5 sum, then modulo the last 32 bits, so it fits into a 32-bit C integer
-    return int(hashlib.md5(CoordSystem.encode()).hexdigest(), 16) % (1 << 32)
+    # Convert CoordSystem to an md5 sum, then take the last 32 bits.
+    # To ensure the result is a positive 32-bit signed integer, modulo by 2**31.
+    return int(hashlib.md5(CoordSystem.encode()).hexdigest(), 16) % (2**31)
 
 
 def register_CFunctions_CoordSystem_wrapper_funcs() -> None:
@@ -84,7 +85,7 @@ def register_CFunctions_CoordSystem_wrapper_funcs() -> None:
             # Remove type, keep only what's after the comma.
             params += param.strip().split(" ")[-1] + ", "
 
-        wrapper_body = "switch (CoordSystem_hash) {\n"
+        wrapper_body = "switch (params->CoordSystem_hash) {\n"
         for CoordSystem in sorted(list_of_CoordSystems):
             wrapper_body += f"case {CoordSystem.upper()}:\n"
             wrapper_body += (
@@ -92,7 +93,7 @@ def register_CFunctions_CoordSystem_wrapper_funcs() -> None:
             )
             wrapper_body += "  break;\n"
         wrapper_body += rf"""default:
-  fprintf(stderr, "ERROR in {wrapper_func_name}(): CoordSystem hash = %d not #define'd!\n", CoordSystem_hash);
+  fprintf(stderr, "ERROR in {wrapper_func_name}(): CoordSystem hash = %d not #define'd!\n", params->CoordSystem_hash);
   exit(1);
 }}"""
         cfc.register_CFunction(
@@ -105,7 +106,7 @@ def register_CFunctions_CoordSystem_wrapper_funcs() -> None:
             name=wrapper_func_name,
             CoordSystem_for_wrapper_func="",
             params=base_CFunc.params,
-            include_CodeParameters_h=True,  # need CoordSystem_hash
+            include_CodeParameters_h=False,
             body=wrapper_body,
             clang_format_options=base_CFunc.clang_format_options,
         )

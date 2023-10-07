@@ -83,7 +83,6 @@ def output_BHaH_defines_h(
     REAL_means: str = "double",
     enable_simd: bool = True,
     fin_NGHOSTS_add_one_for_upwinding: bool = False,
-    CoordSystem: str = "Cartesian",
     supplemental_defines_dict: Optional[Dict[str, str]] = None,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 0}",
 ) -> None:

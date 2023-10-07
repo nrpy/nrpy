@@ -186,7 +186,6 @@ def register_CFunctions_rfm_precompute(list_of_CoordSystems: List[str]) -> None:
             )
 
     BHaH_defines = "typedef struct __rfmstruct__ {\n"
-    for item in sorted(superfast_uniq(combined_BHaH_defines_list)):
-        BHaH_defines += f"{item}\n"
-    BHaH_defines += "} rfm_struct;\n"
+    BHaH_defines += "\n".join(sorted(superfast_uniq(combined_BHaH_defines_list)))
+    BHaH_defines += "\n} rfm_struct;\n"
     register_BHaH_defines("reference_metric", BHaH_defines)

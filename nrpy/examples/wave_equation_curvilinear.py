@@ -193,7 +193,7 @@ _ = par.CodeParameter(
 
 def register_CFunction_diagnostics() -> Union[None, pcg.NRPyEnv_type]:
     """
-    Register the right-hand side evaluation function for the wave equation with specific parameters.
+    Register the simulation diagnostics function for the wave equation with specific parameters.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())

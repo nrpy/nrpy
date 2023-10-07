@@ -240,7 +240,7 @@ _ = par.CodeParameter(
 
 def register_CFunction_diagnostics() -> None:
     """
-    Register the right-hand side evaluation function for the wave equation with specific parameters.
+    Register the simulation diagnostics function for the wave equation with specific parameters.
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
