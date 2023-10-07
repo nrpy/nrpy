@@ -173,6 +173,9 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {
         fprintf(stderr, "Error: Cannot open file %s for writing.\n", filename);
         exit(1);
       }
+    """
+    if "Spherical" in in_CoordSystem:
+        body += r"""
       for (int i1 = Nxx_plus_2NGHOSTS1 - NGHOSTS - 1; i1 >= NGHOSTS; i1 -= Nxx1-1) {
         int i0_start, i0_end, i0_step;
 
@@ -190,6 +193,15 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {
 
         for (int i0 = i0_start; i0 != i0_end; i0 += i0_step) {
           const int i2 = Nxx_plus_2NGHOSTS2 / 2;
+    """
+    if "Cartesian" in in_CoordSystem:
+        body += r"""
+    {
+      for(int i2=NGHOSTS; i2<Nxx2 + NGHOSTS; i2++) {
+        const int i0 = Nxx_plus_2NGHOSTS0/2;
+        const int i1 = Nxx_plus_2NGHOSTS1/2;
+"""
+    body += r"""
           const int idx3 = IDX3(i0, i1, i2);
           REAL xCart[3];
           xx_to_Cart(commondata, params, xx, i0, i1, i2, xCart);
