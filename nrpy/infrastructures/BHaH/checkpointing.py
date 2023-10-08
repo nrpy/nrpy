@@ -11,7 +11,11 @@ import nrpy.params as par
 
 
 def register_CFunction_read_checkpoint() -> None:
-    """Register read_checkpoint CFunction for reading checkpoints."""
+    """
+    Register read_checkpoint CFunction for reading checkpoints.
+
+    :return: None
+    """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "unistd.h"]
     prefunc = r"""
 #define FREAD(ptr, size, nmemb, stream) { const int numitems=fread((ptr), (size), (nmemb), (stream)); }
@@ -79,7 +83,12 @@ def register_CFunction_read_checkpoint() -> None:
 
 
 def register_CFunction_write_checkpoint(default_checkpoint_every: float = 2.0) -> None:
-    """Register write_checkpoint CFunction for writing checkpoints."""
+    """
+    Register write_checkpoint CFunction for writing checkpoints.
+
+    :param default_checkpoint_every: The default checkpoint interval in physical time units.
+    :return: None
+    """
     par.register_CodeParameter(
         "REAL", __name__, "checkpoint_every", default_checkpoint_every, commondata=True
     )
@@ -150,7 +159,12 @@ if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {
 
 
 def register_CFunctions(default_checkpoint_every: float = 2.0) -> None:
-    """Register CFunctions for checkpointing"""
+    """
+    Register CFunctions for checkpointing.
+
+    :param default_checkpoint_every: The default checkpoint interval in physical time units.
+    :return: None
+    """
     register_CFunction_read_checkpoint()
     register_CFunction_write_checkpoint(
         default_checkpoint_every=default_checkpoint_every
