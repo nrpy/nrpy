@@ -1,5 +1,5 @@
 """
-C function management and registration classes/functions
+C function management and registration classes/functions.
 
 Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
          Ken Sible; ksible **at** outlook **dot* com
@@ -85,7 +85,7 @@ class CFunction:
     @staticmethod
     def subdirectory_depth(subdirectory: str) -> int:
         """
-        Calculates the depth of a given subdirectory by counting the number of folders in the provided path.
+        Calculate the depth of a given subdirectory by counting the number of folders in the provided path.
         It handles leading "./", trailing slashes, and consecutive slashes.
 
         :param subdirectory: The subdirectory path as a string.
@@ -127,9 +127,7 @@ class CFunction:
         return len(folders)
 
     def generate_full_function(self) -> Tuple[str, str]:
-        """
-        Constructs a full C function from a class instance.
-        """
+        """Construct a full C function from a class instance."""
         rel_path_to_root_directory = ""
         for _ in range(self.subdirectory_depth(self.subdirectory)):
             rel_path_to_root_directory = os.path.join(rel_path_to_root_directory, "..")
@@ -188,7 +186,7 @@ def function_name_and_subdir_with_CoordSystem(
     subdirectory: str, name: str, CoordSystem_for_wrapper_func: str
 ) -> Tuple[str, str]:
     """
-    Appends a CoordSystem_for_wrapper_func string with a specific format to the provided name.
+    Append a CoordSystem_for_wrapper_func string with a specific format to the provided name.
 
     :param subdirectory: The subdirectory within which we place this function.
     :param name: The wrapper function name.
@@ -221,7 +219,7 @@ def register_CFunction(
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 200}",
 ) -> None:
     """
-    Adds a C function to a dictionary called CFunction_dict, using the provided parameters.
+    Add a C function to a dictionary called CFunction_dict, using the provided parameters.
 
     :param subdirectory: Path from the root source directory to this C function. Defaults to the current directory.
     :param enable_simd: Boolean to enable SIMD. Default is False.

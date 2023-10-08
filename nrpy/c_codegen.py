@@ -23,7 +23,7 @@ from nrpy.helpers.cse_preprocess_postprocess import (
 
 
 class CCodeGen:
-    """Stores and processes input parameters to c_codegen() below"""
+    """Store and process input parameters to c_codegen() below."""
 
     def __init__(
         self,
@@ -57,7 +57,7 @@ class CCodeGen:
         clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 200}",
     ) -> None:
         """
-        Initializes the CCodeGen class with provided options for generating C code.
+        Initialize the CCodeGen class with provided options for generating C code.
 
         :param prestring: String to be included before the code.
         :param poststring: String to be included after the code.
@@ -210,7 +210,7 @@ def c_codegen(
     **kwargs: Any,
 ) -> str:
     """
-    Outputs C code given SymPy expressions and variable names.
+    Output C code given SymPy expressions and variable names.
 
     :param sympyexpr: A SymPy expression or list of SymPy expressions to be converted.
     :param output_varname_str: A string or list of strings representing the variable name(s) in the output.
@@ -624,9 +624,10 @@ custom_functions_for_SymPy_ccode = {
 
 def ccode_postproc(string: str, CCGParams: CCodeGen) -> str:
     """
-    Processe the generated C code string for functions related to specific data types
-    and precision. Appends the appropriate suffix to standard C math library functions
-    based on the data c_type (e.g., pow -> powf in single precision), and removes
+    Process the generated C code string for functions related to specific data types.
+
+    This function appends the appropriate suffix to standard C math library functions
+    based on the data c_type (e.g., pow -> powf in single precision). It also removes
     the "L" suffix on floating point numbers when not in long double precision.
 
     :param string: The original C code string.
@@ -690,7 +691,9 @@ def apply_substitution_dict(
     expr: sp.Basic, postproc_substitution_dict: Dict[str, str]
 ) -> sp.Basic:
     """
-    Given a SymPy expression and a substitution dictionary, this function
+    Apply substitutions to a SymPy expression based on a dictionary.
+
+    This function takes a SymPy expression and a substitution dictionary and
     applies the substitutions defined in the dictionary to the expression.
 
     :param expr: A SymPy expression.
@@ -728,8 +731,10 @@ def gridfunction_management_and_FD_codegen(
     **kwargs: Any,
 ) -> str:
     """
-    Generate C code kernels for reading/writing gridfunctions
-    and performing finite-differences with gridfunction data.
+    Generate C code kernels for gridfunction management.
+
+    This function produces C code kernels for reading/writing gridfunctions
+    and for performing finite differences with gridfunction data.
 
     :param sympyexpr_list: List of sympy expressions.
     :param output_varname_str: Output variable name(s) as string or list of strings.
