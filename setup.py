@@ -1,8 +1,8 @@
 """
+Install the nrpy package.
+
 To install the nrpy package, navigate to this directory and execute:
-
     pip install .
-
 This will install nrpy and its required dependencies.
 
 Instructions for uploading latest release to PyPI:
@@ -64,7 +64,7 @@ def read_requirements_file() -> List[str]:
 
 def get_nrpy_version(pkg_root_directory: str) -> str:
     """
-    Fetches the version from the nrpy package.
+    Fetch the version from the nrpy package.
 
     :param pkg_root_directory: Root directory where 'release.txt' is located.
     :return: Version as a string.
