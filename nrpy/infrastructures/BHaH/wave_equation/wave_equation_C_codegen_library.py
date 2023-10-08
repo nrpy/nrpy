@@ -102,11 +102,15 @@ def register_CFunction_initial_data(OMP_collapse: int) -> Union[None, pcg.NRPyEn
     desc = r"""Set initial data to params.time==0 corresponds to the initial data."""
     c_type = "void"
     name = "initial_data"
-    params = "const commondata_struct *restrict commondata, griddata_struct *restrict griddata"
+    params = (
+        "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
+    )
     uu_gf_memaccess = gri.BHaHGridFunction.access_gf("uu")
     vv_gf_memaccess = gri.BHaHGridFunction.access_gf("vv")
     # Unpack griddata
     body = r"""
+if( read_checkpoint(commondata, griddata) ) return;
+
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   // Unpack griddata struct:
   params_struct *restrict params = &griddata[grid].params;

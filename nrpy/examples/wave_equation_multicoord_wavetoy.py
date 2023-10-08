@@ -24,6 +24,7 @@ import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 import nrpy.infrastructures.BHaH.main_c as main
 from nrpy.infrastructures.BHaH import xx_tofrom_Cart
+import nrpy.infrastructures.BHaH.checkpointing as chkpt
 import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
@@ -40,6 +41,7 @@ default_sigma = 3.0
 grid_physical_size = 10.0
 t_final = 0.8 * grid_physical_size
 diagnostics_out_every = 0.2
+default_checkpoint_every = 2.0
 list_of_CoordSystems = ["Spherical", "SinhSpherical", "Cartesian"]
 NUMGRIDS = 3
 Nxx_dict = {
@@ -125,6 +127,7 @@ MoL.MoL_register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
 )
+chkpt.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
 progress.register_CFunction_progress_indicator()
 rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
@@ -146,6 +149,7 @@ Bdefines_h.output_BHaH_defines_h(
 main.register_CFunction_main_c(
     initial_data_desc=WaveType,
     MoL_method=MoL_method,
+    pre_MoL_step_forward_in_time="write_checkpoint(&commondata, griddata);\n",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
     boundary_conditions_desc=boundary_conditions_desc,

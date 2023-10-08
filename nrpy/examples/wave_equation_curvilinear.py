@@ -41,6 +41,7 @@ default_sigma = 3.0
 grid_physical_size = 10.0
 t_final = 0.8 * grid_physical_size
 diagnostics_out_every = 0.2
+default_checkpoint_every = 2.0
 CoordSystem = "Spherical"
 Nxx_dict = {
     "Spherical": [64, 2, 2],
@@ -120,7 +121,7 @@ MoL.MoL_register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
 )
-chkpt.register_CFunctions()
+chkpt.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
 
 progress.register_CFunction_progress_indicator()
 rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
@@ -143,6 +144,7 @@ Bdefines_h.output_BHaH_defines_h(
 main.register_CFunction_main_c(
     initial_data_desc=WaveType,
     MoL_method=MoL_method,
+    pre_MoL_step_forward_in_time="write_checkpoint(&commondata, griddata);\n",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
     boundary_conditions_desc=boundary_conditions_desc,

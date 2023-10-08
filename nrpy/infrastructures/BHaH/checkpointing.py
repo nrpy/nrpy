@@ -7,9 +7,10 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 import nrpy.c_function as cfc
+import nrpy.params as par
 
 
-def register_CFunction_read_checkpoint():
+def register_CFunction_read_checkpoint() -> None:
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "unistd.h"]
     prefunc = r"""
 #define FREAD(ptr, size, nmemb, stream) { const int numitems=fread((ptr), (size), (nmemb), (stream)); }
@@ -76,13 +77,22 @@ def register_CFunction_read_checkpoint():
     )
 
 
-def register_CFunction_write_checkpoint():
+def register_CFunction_write_checkpoint(default_checkpoint_every: float = 2.0) -> None:
+    par.register_CodeParameter(
+        "REAL", __name__, "checkpoint_every", default_checkpoint_every, commondata=True
+    )
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "Write a checkpoint file"
     c_type = "void"
     name = "write_checkpoint"
     params = "const commondata_struct *restrict commondata, griddata_struct *restrict griddata"
-    body = r"""  FILE *cp_file = fopen("checkpoint.dat", "w+");
+    body = r"""const REAL currtime = commondata->time, currdt = commondata->dt, outevery = commondata->checkpoint_every;
+// Explanation of the if() below:
+// Step 1: round(currtime / outevery) rounds to the nearest integer multiple of currtime.
+// Step 2: Multiplying by outevery yields the exact time we should output again, t_out.
+// Step 3: If fabs(t_out - currtime) < 0.5 * currdt, then currtime is as close to t_out as possible!
+if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {
+  FILE *cp_file = fopen("checkpoint.dat", "w+");
   fwrite(commondata, sizeof(commondata_struct), 1, cp_file);
   fprintf(stderr, "WRITING CHECKPOINT: cd struct size = %ld time=%e\n", sizeof(commondata_struct), commondata->time);
   for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
@@ -124,6 +134,7 @@ def register_CFunction_write_checkpoint():
   }
   fclose(cp_file);
   fprintf(stderr, "FINISHED WRITING CHECKPOINT\n");
+}
 """
     cfc.register_CFunction(
         includes=includes,
@@ -136,6 +147,8 @@ def register_CFunction_write_checkpoint():
     )
 
 
-def register_CFunctions():
+def register_CFunctions(default_checkpoint_every: float = 2.0) -> None:
     register_CFunction_read_checkpoint()
-    register_CFunction_write_checkpoint()
+    register_CFunction_write_checkpoint(
+        default_checkpoint_every=default_checkpoint_every
+    )
