@@ -1,4 +1,5 @@
-""" Symbolic (N-Ary) Expression Tree
+"""
+Symbolic (N-Ary) Expression Tree.
 
 The following script extends the expression tree from SymPy,
 allowing direct node manipulation for subexpression replacement.

@@ -1,9 +1,10 @@
-""" CSE Partial Factorization and Post-Processing
+"""
+CSE Partial Factorization and Post-Processing.
 
-    The following script will perform partial factorization on SymPy expressions,
-    which should occur before common subexpression elimination (CSE) to prevent the
-    identification of undesirable patterns, and perform post-processing on the
-    the resulting replaced/reduced expressions after the CSE procedure was applied.
+Perform partial factorization on SymPy expressions,
+which should occur before common subexpression elimination (CSE) to prevent the
+identification of undesirable patterns, and perform post-processing on the
+the resulting replaced/reduced expressions after the CSE procedure was applied.
 
 Author: Ken Sible
 Email:  ksible *at* outlook *dot* com
@@ -30,16 +31,19 @@ def cse_preprocess(
     List[sp.Basic],
     Dict[sp.Basic, sp.Rational],
 ]:  # returns a tuple of modified sympy expression(s) and a dictionary mapping symbols to rational numbers
-    """Perform CSE Preprocessing
+    """
+    Perform CSE Preprocessing on given expressions.
 
-    :arg:    single SymPy expression or list of SymPy expressions
-    :arg:    string prefix for variable names (i.e. rational symbols)
-    :arg:    declare symbol for negative one (i.e. _NegativeOne_)
-    :arg:    perform partial factorization (excluding negative symbol)
-    :arg:    include negative symbol in partial factorization
-    :arg:    back-substitute and check difference for debugging
-    :return: modified SymPy expression(s) where all integers and rationals were replaced
-                with temporary placeholder variables that allow for partial factorization
+    Replaces all integers and rationals with temporary placeholder variables
+    that allow for partial factorization.
+
+    :param expr_list: Single SymPy expression or list of SymPy expressions.
+    :param prefix: String prefix for variable names (i.e. rational symbols).
+    :param declare_neg1_as_symbol: If true, declares a symbol for negative one (i.e. _NegativeOne_).
+    :param factor: If true, performs partial factorization (excluding negative symbol).
+    :param negative: If true, includes negative symbol in partial factorization.
+    :param debug: If true, back-substitutes and checks difference for debugging.
+    :return: Tuple containing modified SymPy expression(s) and a dictionary mapping symbols to rational numbers.
 
     Doctests:
     >>> from sympy.abc import x, y, z
@@ -253,13 +257,16 @@ def cse_postprocess(
     cse_output: Tuple[List[Tuple[sp.Symbol, sp.Expr]], List[sp.Expr]]
 ) -> Tuple[List[Tuple[sp.Symbol, sp.Expr]], List[sp.Expr]]:
     """
-    Perform CSE Postprocessing
+    Perform post-processing on the output from SymPy's CSE algorithm.
 
-    This function takes the output from SymPy's Common Subexpression Elimination (CSE), and applies post-processing to the replaced and reduced expressions.
-    The post-processing includes handling scalar temporary variables, ordering the replaced expressions, handling negative symbols, and back-substituting in some cases.
+    This function takes the output from SymPy's Common Subexpression Elimination (CSE) and applies post-processing
+    to the replaced and reduced expressions. The post-processing includes handling scalar temporary variables,
+    ordering the replaced expressions, handling negative symbols, and back-substituting in some cases.
 
-    :param cse_output: Output from SymPy CSE with tuple format: (list of ordered pairs that contain substituted symbols and their replaced expressions, reduced SymPy expression)
-    :return: Output from SymPy CSE where postprocessing, such as back-substitution of addition/product of symbols, has been applied to the replaced/reduced expression(s)
+    :param cse_output: Output from SymPy CSE in the format of a tuple. The tuple contains a list of ordered pairs
+                       that have substituted symbols and their replaced expressions, followed by the reduced SymPy expression.
+    :return: A tuple containing the post-processed output from SymPy CSE. This includes the replaced/reduced expression(s)
+             where postprocessing, such as back-substitution of addition/product of symbols, has been applied.
 
     Doctests:
     >>> from sympy.abc import x, y

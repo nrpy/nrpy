@@ -1,7 +1,10 @@
 """
-Cache-enable versions of functions that are
-* normally slow, and
-* called with the same inputs many times during a development cycle.
+Provides caching functionality to accelerate the execution of repeated, time-consuming tasks.
+
+This module offers utility functions that allow for:
+- Generating and checking cache files based on unique IDs.
+- Storing and retrieving cached data.
+- Efficiently simplifying SymPy expressions by leveraging cached results.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -32,7 +35,6 @@ def cache_file(unique_id: str) -> Path:
     :param unique_id: A unique identifier to be used for generating the file path.
     :return: The cache file path.
     """
-
     if not Path(user_cache_dir("nrpy")).exists():
         Path(user_cache_dir("nrpy")).mkdir(parents=True, exist_ok=True)
     return Path(user_cache_dir("nrpy")) / f"{get_hash(unique_id)}.nrpycache"
@@ -40,7 +42,7 @@ def cache_file(unique_id: str) -> Path:
 
 def NRPy_params_checksum() -> str:
     """
-    Generate a checksum of NRPy+ parameters stored in par.glb_params_dict
+    Generate a checksum of NRPy+ parameters stored in par.glb_params_dict.
 
     :return: The checksum.
     """
