@@ -1,7 +1,7 @@
 """
-This module provides registration functions for
- numerical grid parameters and gridfunctions across
- various infrastructures.
+Provide registration functions for numerical grid parameters.
+
+This module handles grid parameters and grid functions across various NRPy-supported infrastructures.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -20,9 +20,7 @@ _ = par.register_CodeParameter("int", __name__, "NUMGRIDS", 1, commondata=True)
 
 # Core GridFunction class.
 class GridFunction:
-    """
-    Core class for grid functions.
-    """
+    """The core class for grid functions."""
 
     def __init__(self, name: str, group: str = "EVOL") -> None:
         self.c_type_alias: str = "double"
@@ -32,16 +30,12 @@ class GridFunction:
     def read_gf_from_memory_Ccode_onept(
         self, i0_offset: int = 0, i1_offset: int = 0, i2_offset: int = 0, **kwargs: Any
     ) -> str:
-        """
-        Catch-all function for gridfunctions that haven't been set up correctly.
-        """
+        """Catch-all function for gridfunctions that haven't been set up correctly."""
         return f"Please define read_gf_from_memory_Ccode_onept() inside grid.py. Inputs: [class instance] {i0_offset} {i1_offset} {i2_offset} {kwargs}"
 
 
 class BHaHGridFunction(GridFunction):
-    """
-    Subclass for BlackHoles@Home grid functions.
-    """
+    """The subclass for BlackHoles@Home grid functions."""
 
     def __init__(
         self,
@@ -67,23 +61,26 @@ class BHaHGridFunction(GridFunction):
 
     def verify_gridfunction_basename_is_valid(self, name: str) -> None:
         """
-        Validates the gridfunction's base name. Raises ValueError if base name is
-        zero-length or ends with an integer. Raises TypeError if the base name is not a string.
+        Validate the gridfunction's base name.
+
+        Raises a ValueError if base name is zero-length or ends with an integer.
+        Raises TypeError if the base name is not a string.
 
         Gridfunction base names must not end with integers. For instance, a rank-1
-        gridfunction 'vecU1' has a valid base name 'vecU'. Further, a scalar grid-
-        function named 'u2' would have an invalid base name 'u2'. This strict
-        requirement facilitates quick identification of a gridfunction by its name,
-        which is essential for inferring what a gridfunction represents at a glance.
+        gridfunction 'vecU1' has a valid base name 'vecU'. A scalar gridfunction
+        named 'u2' would have an invalid base name 'u2'. This strict requirement
+        facilitates quick identification of a gridfunction by its name.
 
-        Args:
-            name (str): The name of the gridfunction.
+        :param name: The name of the gridfunction.
 
-        Raises:
-            ValueError: If the name is of zero length or ends with an integer.
-            TypeError: If the name is not of type str.
+        Raises
+        ------
+        ValueError
+            If the name is of zero length or ends with an integer.
+        TypeError
+            If the name is not of type str.
 
-        Examples:
+        Example:
             >>> try: GF = BHaHGridFunction(name="h1")
             ... except: "Attempt to create a gridfunction ending in an integer failed. Good."
             'Attempt to create a gridfunction ending in an integer failed. Good.'
@@ -104,7 +101,7 @@ class BHaHGridFunction(GridFunction):
 
     def verify_gridfunction_group_is_valid(self) -> None:
         """
-        Validates the gridfunction group. Raises ValueError if the group is not valid.
+        Validate the gridfunction group.
 
         The valid groups are 'EVOL', 'AUX' and 'AUXEVOL'.
 
@@ -112,13 +109,12 @@ class BHaHGridFunction(GridFunction):
         'AUXEVOL': for auxiliary quantities needed at all points by evolved quantities,
         'AUX': for all other quantities needed at all gridpoints.
 
-        Raises:
-            ValueError: If the group is not valid.
+        :raises ValueError: If the group is not valid.
 
-        Example:
-            >>> try: GF = BHaHGridFunction(name="blah", group="INVALID")
-            ... except: print("Errored out. This is good.")
-            Errored out. This is good.
+        Doctests:
+        >>> try: GF = BHaHGridFunction(name="blah", group="INVALID")
+        ... except: print("Errored out. This is good.")
+        Errored out. This is good.
         """
         valid_groups = (
             "EVOL",
@@ -138,21 +134,16 @@ class BHaHGridFunction(GridFunction):
         self, i0_offset: int = 0, i1_offset: int = 0, i2_offset: int = 0, **kwargs: Any
     ) -> str:
         """
-        This function takes a grid function name, three integer offsets, and an optional keyword arguments dictionary,
-        then returns a formatted string. If 'gf_array_name' is not provided in kwargs, it raises a ValueError.
+        Retrieve a grid function value from memory for a given offset.
 
-        Parameters:
-        gf_name (str): The grid function name
-        i0_offset (int): Offset for the first index
-        i1_offset (int): Offset for the second index
-        i2_offset (int): Offset for the third index
-        kwargs (dict): Optional keyword arguments, expected to have 'gf_array_name'
+        :param i0_offset: Offset for the first index.
+        :param i1_offset: Offset for the second index.
+        :param i2_offset: Offset for the third index.
+        :param kwargs: Optional keyword arguments, expected to have 'gf_array_name'.
 
-        Returns:
-        str: Formatted string
+        :return: Formatted string.
 
-        Raises:
-        ValueError: If 'gf_array_name' is not provided in kwargs
+        :raises ValueError: If 'gf_array_name' is not provided in kwargs.
 
         Doctests:
         >>> glb_gridfcs_dict.clear()
@@ -184,20 +175,17 @@ class BHaHGridFunction(GridFunction):
         gf_array_name: str = "in_gfs",
     ) -> str:
         """
-        This function takes a grid function name, three integer offsets, and an optional keyword arguments dictionary,
-        then returns a formatted string. If 'gf_array_name' is not provided in kwargs, it raises a ValueError.
+        Retrieve a grid function value from memory for a given offset.
 
-        Parameters:
-        gf_name (str): The grid function name
-        i0_offset (int): Offset for the first index
-        i1_offset (int): Offset for the second index
-        i2_offset (int): Offset for the third index
+        :param gf_name: The grid function name.
+        :param i0_offset: Offset for the first index.
+        :param i1_offset: Offset for the second index.
+        :param i2_offset: Offset for the third index.
+        :param gf_array_name: Optional grid function array name.
 
-        Returns:
-        str: Formatted string
+        :return: Formatted string.
 
-        Raises:
-        ValueError: If 'gf_array_name' is not provided in kwargs
+        :raises ValueError: If 'gf_array_name' is not provided.
 
         Doctests:
         >>> BHaHGridFunction.access_gf("aa", 1,2,3)
@@ -214,9 +202,9 @@ class BHaHGridFunction(GridFunction):
     @staticmethod
     def gridfunction_lists() -> Tuple[List[str], List[str], List[str]]:
         """
-        Generates sorted lists of gridfunction names for each group type: 'EVOL', 'AUX', and 'AUXEVOL'.
+        Generate sorted lists of gridfunction names for each group type: 'EVOL', 'AUX', and 'AUXEVOL'.
 
-        The function creates a dictionary with group types as keys and corresponding gridfunction names
+        This function creates a dictionary with group types as keys and corresponding gridfunction names
         as values. It iterates through a global dictionary of gridfunctions, 'glb_gridfcs_dict', and
         appends the gridfunction names to the corresponding group lists in 'groups'. The function then
         sorts each list and returns the sorted lists as a tuple.
@@ -225,9 +213,8 @@ class BHaHGridFunction(GridFunction):
         'glb_gridfcs_dict' whose keys are gridfunction names and values are gridfunction objects. Each
         gridfunction object should have 'group' and 'name' attributes.
 
-        Returns:
-            Tuple[List[str], List[str], List[str]]: A tuple containing lists of gridfunction names
-            for each group: 'EVOL', 'AUX', and 'AUXEVOL', respectively.
+        :returns: A tuple containing lists of gridfunction names
+                  for each group: 'EVOL', 'AUX', and 'AUXEVOL', respectively.
 
         Example:
             gridfunction_lists()
