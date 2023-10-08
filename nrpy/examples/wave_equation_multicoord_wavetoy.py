@@ -298,7 +298,7 @@ def register_CFunction_diagnostics() -> Union[None, pcg.NRPyEnv_type]:
 
 
 def register_CFunction_rhs_eval(
-    CoordSystem: str, enable_rfm_pre: bool
+    in_CoordSystem: str, enable_rfm_pre: bool, in_OMP_collapse: int
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the right-hand side (RHS) evaluation function for the wave equation.
@@ -313,10 +313,10 @@ def register_CFunction_rhs_eval(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    OMP_collapse = 1
+    in_OMP_collapse = 1
     if "Spherical" in CoordSystem and WaveType == "SphericalGaussian":
         par.set_parval_from_str("symmetry_axes", "12")
-        OMP_collapse = 2  # about 2x faster
+        in_OMP_collapse = 2  # about 2x faster
 
     includes = ["BHaH_defines.h"]
     if enable_simd:
@@ -330,7 +330,7 @@ def register_CFunction_rhs_eval(
             "REAL *restrict xx[3]", "const rfm_struct *restrict rfmstruct"
         )
     # Populate uu_rhs, vv_rhs
-    rhs = WaveEquationCurvilinear_RHSs(CoordSystem, enable_rfm_pre)
+    rhs = WaveEquationCurvilinear_RHSs(in_CoordSystem, enable_rfm_pre)
     body = lp.simple_loop(
         loop_body=ccg.c_codegen(
             [rhs.uu_rhs, rhs.vv_rhs],
@@ -343,10 +343,10 @@ def register_CFunction_rhs_eval(
         ),
         loop_region="interior",
         enable_simd=enable_simd,
-        CoordSystem=CoordSystem,
+        CoordSystem=in_CoordSystem,
         enable_rfm_precompute=enable_rfm_pre,
         read_xxs=not enable_rfm_pre,
-        OMP_collapse=OMP_collapse,
+        OMP_collapse=in_OMP_collapse,
     )
 
     cfc.register_CFunction(
@@ -378,7 +378,9 @@ for CoordSystem in list_of_CoordSystems:
         in_CoordSystem=CoordSystem, in_WaveType=WaveType, in_default_sigma=default_sigma
     )
     register_CFunction_rhs_eval(
-        CoordSystem=CoordSystem, enable_rfm_pre=enable_rfm_precompute
+        in_CoordSystem=CoordSystem,
+        enable_rfm_pre=enable_rfm_precompute,
+        in_OMP_collapse=OMP_collapse,
     )
     xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
 
