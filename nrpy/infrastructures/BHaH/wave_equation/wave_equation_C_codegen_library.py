@@ -131,11 +131,6 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
-_ = par.CodeParameter(
-    "REAL", __name__, "diagnostics_output_every", 0.2, commondata=True
-)
-
-
 def register_CFunction_diagnostics(
     default_diagnostics_out_every: float,
 ) -> Union[None, pcg.NRPyEnv_type]:
