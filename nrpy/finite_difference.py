@@ -1,5 +1,5 @@
 """
-This module provides helper functions for c_codegen
+Provide helper functions for c_codegen
  to generate finite-difference C-code kernels.
 
 Author: Zachariah B. Etienne
@@ -189,9 +189,7 @@ def setup_FD_matrix__return_inverse(
 def compute_fdcoeffs_fdstencl(
     derivstring: str, fd_order: int
 ) -> Tuple[List[sp.Rational], List[List[int]]]:
-    """
-    Construct finite difference coefficients and stencils for a given derivative type.
-    """
+    """Construct finite difference coefficients and stencils for a given derivative type."""
     # Step 0: Set finite differencing order, stencil size, and up/downwinding
     if "dKOD" in derivstring:
         fd_order += 2  # par.parval_from_str("FD_KO_ORDER__CENTDERIVS_PLUS")
@@ -303,20 +301,18 @@ def compute_fdcoeffs_fdstencl(
 # STEP 0: DECLARE FD HELPER FUNCTIONS
 def symbol_is_gridfunction_Cparameter_or_other(var: sp.Basic) -> str:
     """
-    Determines a given variable's type.
+    Determine the type of a given variable.
 
-    This function checks whether a given variable is in the list of global grid functions or C parameters,
-    and returns a string indicating its type: either 'gridfunction', 'Cparameter', or 'other'.
+    This function checks whether a given variable is in the list of global grid functions or
+    C parameters, and returns a string indicating its type: either 'gridfunction', 'Cparameter',
+    or 'other'.
 
-    Parameters:
-    var (sp.Symbol): The variable whose type is to be determined.
+    :param var: The variable whose type is to be determined.
 
-    Returns:
-    str: A string indicating the type of the variable. Can be 'gridfunction', 'Cparameter', or 'other'.
+    :return: A string indicating the type of the variable. Can be 'gridfunction', 'Cparameter', or 'other'.
 
-    Raises:
-    ValueError: If the variable is both a gridfunction and a Cparameter, or if it is neither and
-    cannot be identified, a ValueError is raised.
+    :raises ValueError: If the variable is both a gridfunction and a Cparameter, or if it is neither and
+                        cannot be identified.
 
     >>> vetU = gri.register_gridfunctions_for_single_rank1("vetU")
     >>> symbol_is_gridfunction_Cparameter_or_other(vetU[0])
@@ -327,7 +323,6 @@ def symbol_is_gridfunction_Cparameter_or_other(var: sp.Basic) -> str:
     >>> symbol_is_gridfunction_Cparameter_or_other(a)
     'Cparameter'
     """
-
     var_is_gf = str(var) in gri.glb_gridfcs_dict
     var_is_Cparameter = any(
         str(var) == param.name for key, param in par.glb_code_params_dict.items()
@@ -358,15 +353,12 @@ def extract_list_of_deriv_var_strings_from_sympyexpr_list(
     """
     Extract derivative expressions from SymPy expressions' free symbols.
 
-    Args:
-    list_of_free_symbols (List[sp.Basic]): List of free symbols from SymPy expressions.
-    upwind_control_vec (Union[List[sp.Symbol], str]): Upwind control vector.
+    :param list_of_free_symbols: List of free symbols from SymPy expressions.
+    :param upwind_control_vec: Upwind control vector.
 
-    Returns:
-    List[sp.Symbol]: List of derivative variables, creating _ddnD in case upwinding is enabled with control vector.
+    :returns: List of derivative variables, creating _ddnD in case upwinding is enabled with control vector.
 
-    Raises:
-    ValueError: If a variable in the SymPy expression isn't registered as a gridfunction or Cparameter.
+    :raises ValueError: If a variable in the SymPy expression isn't registered as a gridfunction or Cparameter.
 
     Doctest:
     >>> import nrpy.indexedexp as ixp
@@ -424,7 +416,8 @@ def fd_temp_variable_name(
     i1_offset: int,
     i2_offset: int,
 ) -> str:
-    """Generate a unique variable name for use in finite-difference code. This function takes into account
+    """
+    Generate a unique variable name for use in finite-difference code. This function takes into account
     the gridfunction name, and the offsets in the three dimensions.
 
     Example: If a grid function is named hDD00, and we want to read from memory data at i0+1,i1,i2-1,
@@ -432,11 +425,11 @@ def fd_temp_variable_name(
     varname = hDD00, i0_offset = 0, i1_offset = 2, i2_offset = 1 results in
     output: "hDD00_i1p2_i2p1"
 
-    :param gf_basename: The name of the grid function
-    :param i0_offset: The offset for i0
-    :param i1_offset: The offset for i1
-    :param i2_offset: The offset for i2
-    :return: Returns a unique name for a point of data for a grid function
+    :param gf_basename: The name of the grid function.
+    :param i0_offset: The offset for i0.
+    :param i1_offset: The offset for i1.
+    :param i2_offset: The offset for i2.
+    :return: Returns a unique name for a point of data for a grid function.
 
     >>> fd_temp_variable_name("hDD00", -2, 0, -1)
     'hDD00_i0m2_i2m1'
@@ -449,7 +442,6 @@ def fd_temp_variable_name(
     ...
     ValueError: gf_basename must be provided
     """
-
     if not gf_basename:
         raise ValueError("gf_basename must be provided")
 
@@ -475,11 +467,10 @@ def extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars(
     Extract from list_of_deriv_vars a list of base gridfunctions
     and a list of derivative operators.
 
-    Args:
-    list_of_deriv_vars (List[sp.Basic]): List of derivative variables.
+    :param list_of_deriv_vars: List of derivative variables.
 
-    Returns:
-    Tuple[List[str], List[str]]: Tuple containing lists of base gridfunctions and derivative operators.
+    Returns
+    Tuple containing lists of base gridfunctions and derivative operators.
 
     Doctest:
     >>> import nrpy.indexedexp as ixp
@@ -634,7 +625,6 @@ def read_gfs_from_memory(
     const REAL_SIMD_ARRAY vU1 = ReadSIMD(&simd_in_gfs_vU1[IDX4(VU1GF, i0, i1, i2)]);
     <BLANKLINE>
     """
-
     # Step 4a: Compile list of points to read from memory
     #          for each gridfunction i, based on list
     #          provided in fdstencil[i][].
@@ -720,7 +710,7 @@ def read_gfs_from_memory(
             mem_alloc_style: A string that denotes the memory allocation style used in
                 transforming the memory address to a unique index.
 
-        Returns:
+        Returns
             A nested list where each sublist corresponds to a grid function and contains
             the sorted points read from memory for that grid function.
         """

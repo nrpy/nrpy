@@ -1,6 +1,5 @@
 """
-This core NRPy+ module is used for
-generating C code kernels.
+Core NRPy+ module used for generating C code kernels.
 
 Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
          Ken Sible; ksible **at** outlook **dot* com
@@ -24,9 +23,7 @@ from nrpy.helpers.cse_preprocess_postprocess import (
 
 
 class CCodeGen:
-    """
-    Stores and processes input parameters to c_codegen() below
-    """
+    """Stores and processes input parameters to c_codegen() below"""
 
     def __init__(
         self,
@@ -627,7 +624,7 @@ custom_functions_for_SymPy_ccode = {
 
 def ccode_postproc(string: str, CCGParams: CCodeGen) -> str:
     """
-    Processes the generated C code string for functions related to specific data types
+    Processe the generated C code string for functions related to specific data types
     and precision. Appends the appropriate suffix to standard C math library functions
     based on the data c_type (e.g., pow -> powf in single precision), and removes
     the "L" suffix on floating point numbers when not in long double precision.
@@ -636,7 +633,6 @@ def ccode_postproc(string: str, CCGParams: CCodeGen) -> str:
     :param CCGParams: The CCodeGen object containing c_type information.
     :return: The processed C code string.
     """
-
     # Append the cmath function suffix to standard C math library functions:
     c_funcs = [
         "pow",
@@ -697,12 +693,10 @@ def apply_substitution_dict(
     Given a SymPy expression and a substitution dictionary, this function
     applies the substitutions defined in the dictionary to the expression.
 
-    :param expr: A SymPy expression
+    :param expr: A SymPy expression.
     :param postproc_substitution_dict: A dictionary with the original variable names
                                        as keys and the substrings to append as values.
-
     :return: Modified SymPy expression after substitutions.
-    :rtype: sp.Basic
 
     :Example:
 
@@ -711,7 +705,6 @@ def apply_substitution_dict(
     >>> apply_substitution_dict(x**2 + 1, {'x': '_new'})
     x_new**2 + 1
     """
-
     # Loop through all the free symbols in the given SymPy expression.
     for sym in list(expr.free_symbols):
         ss = str(sym)
@@ -735,18 +728,20 @@ def gridfunction_management_and_FD_codegen(
     **kwargs: Any,
 ) -> str:
     """
-    This function generates C code kernels for reading/writing gridfunctions
+    Generate C code kernels for reading/writing gridfunctions
     and performing finite-differences with gridfunction data.
 
-    :param List[sp.Basic] sympyexpr_list: List of sympy expressions.
-    :param Union[List[str], str] output_varname_str: Output variable name(s) as string or list of strings.
-    :param List[Union[sp.Symbol, sp.Basic]] list_of_deriv_vars: List of variables for derivative operations.
-    :param List[str] list_of_base_gridfunction_names_in_derivs: List of base grid function names used in derivatives.
-    :param List[str] list_of_deriv_operators: List of derivative operators.
-    :param str read_from_memory_Ccode: C code string to read from memory.
-    :param Any kwargs: Optional additional parameters.
-    :return str: A string of code generated based on input parameters.
+    :param sympyexpr_list: List of sympy expressions.
+    :param output_varname_str: Output variable name(s) as string or list of strings.
+    :param list_of_deriv_vars: List of variables for derivative operations.
+    :param list_of_base_gridfunction_names_in_derivs: List of base grid function names used in derivatives.
+    :param list_of_deriv_operators: List of derivative operators.
+    :param deriv_operator_dict: Dictionary containing derivative operator information.
+    :param read_from_memory_Ccode: C code string to read from memory.
+    :param kwargs: Optional additional parameters.
+    :return: A string of code generated based on input parameters.
 
+    :Example:
     >>> import nrpy.indexedexp as ixp
     >>> import nrpy.grid as gri
     >>> par.set_parval_from_str("Infrastructure", "BHaH")
@@ -841,7 +836,6 @@ def gridfunction_management_and_FD_codegen(
     a1 = a0*a1*vU1 + b*hDD_dupD020 + c*hDD_dupD022;
     <BLANKLINE>
     """
-
     CCGParams = CCodeGen(**kwargs)
 
     # Step 5.a.i: Read gridfunctions from memory at needed pts.
