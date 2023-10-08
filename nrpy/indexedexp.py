@@ -1,6 +1,5 @@
 """
-indexedexp.py: functions related to indexed expressions,
- including e.g., tensors and pseudotensors:
+indexedexp.py: Functions related to indexed expressions including e.g. tensors and pseudotensors.
 
 Authors: Zachariah Etienne, Kenneth Sible, Steven Brandt
 """
@@ -33,16 +32,13 @@ def create_tensor_symbolic(
     character_zero_index: Optional[str] = "",
 ) -> Sequence[_recur_symbol_type]:
     """
-    Creates a multi-dimensional symbolic tensor of a specified shape.
+    Create a multi-dimensional symbolic tensor of a specified shape.
 
-    Args:
-    shape (int or list of int): The shape of the tensor. If an int is given, a 1D tensor will be created.
-    symbol (str, optional): The base symbol name for elements in the tensor. Defaults to "".
-    preindex (list, optional): The index to start from when naming elements. Defaults to None.
-    character_zero_index (str, optional): The starting character for zero index. Defaults to "".
-
-    Returns:
-    list: A list of sympy symbols representing the tensor.
+    :param shape: The shape of the tensor. A list of integers can be specified to indicate the dimensions of each tensor component.
+    :param symbol: The base symbol name for elements in the tensor. Defaults to "".
+    :param preindex: The index to start from when naming elements. Defaults to None.
+    :param character_zero_index: The starting character for zero index. Defaults to "".
+    :return: A list of sympy symbols representing the tensor.
 
     >>> create_tensor_symbolic(2, 'a')
     [a0, a1]
@@ -106,12 +102,19 @@ def declare_indexedexp(
     idx_expr_basename: Union[str, None], **kwargs: Any
 ) -> _recur_symbol_type:
     """
-    Generate an indexed expression of specified rank and dimension
-       Test 1: convert a symmetric rank-2 tensor to a 1D list & find the number of unique indices.
+    Generate an indexed expression of specified rank and dimension.
+
+    :param idx_expr_basename: Base name for the indexed expression.
+                              If None, no symbolic representation will be generated.
+    :param kwargs: Additional keyword arguments that specify properties of the indexed expression.
+                   E.g., rank, dimension, and symmetry.
+    :return: An indexed expression of the specified properties.
+
+    Doctest 1: convert a symmetric rank-2 tensor to a 1D list & find the number of unique indices.
     >>> ixp = declare_indexedexp('M', rank=2, dimension=3, symmetry='sym01')
     >>> assert func.pipe(ixp, lambda x: func.repeat(func.flatten, x, 1), set, len) == 6
 
-       Test 2: convert a symmetric rank-3 tensor to a 1D list & find the number of unique indices.
+    Doctest 2: convert a symmetric rank-3 tensor to a 1D list & find the number of unique indices.
     >>> ixp = declare_indexedexp('M', rank=3, dimension=3, symmetry='sym01')
     >>> assert len(set(func.repeat(func.flatten, ixp, 2))) == 18
     >>> ixp = declare_indexedexp('M', rank=3, dimension=3, symmetry='sym02')
@@ -121,7 +124,7 @@ def declare_indexedexp(
     >>> ixp = declare_indexedexp('M', rank=3, dimension=3, symmetry='sym012')
     >>> assert len(set(func.repeat(func.flatten, ixp, 2))) == 10
 
-       Test 3: convert a symmetric rank-4 tensor to a 1D list & find the number of unique indices.
+    Doctest 3: convert a symmetric rank-4 tensor to a 1D list & find the number of unique indices.
     >>> ixp = declare_indexedexp('M', rank=4, dimension=3, symmetry='sym01')
     >>> assert len(set(func.repeat(func.flatten, ixp, 3))) == 54
     >>> ixp = declare_indexedexp('M', rank=4, dimension=3, symmetry='sym02')
@@ -151,7 +154,7 @@ def declare_indexedexp(
     >>> ixp = declare_indexedexp('M', rank=4, dimension=3, symmetry='sym0123')
     >>> assert len(set(func.repeat(func.flatten, ixp, 3))) == 15
 
-       Test 4: convert an antisymmetric rank-4 tensor to a 1D list & find the number of unique indices.
+    Doctest 4: convert an antisymmetric rank-4 tensor to a 1D list & find the number of unique indices.
     >>> ixp = declare_indexedexp('M', rank=2, dimension=3, symmetry='anti01')
     >>> assert len(set(map(abs, func.repeat(func.flatten, ixp, 1))).difference({0})) == 3
     >>> ixp = declare_indexedexp('M', rank=3, dimension=3, symmetry='anti012')
@@ -167,19 +170,14 @@ def declare_indexedexp(
         dimension: int,
     ) -> Sequence[_recur_symbol_type]:
         """
-        This function symmetrizes the provided tensor of the given rank according to the specified symmetry.
+        Symmetrize the provided tensor of the given rank according to the specified symmetry.
 
-        Args:
-        rank (int): The rank of the tensor.
-        indexedexp (List[Union[sp.Symbol, sp.Expr, int, float]]): The tensor to symmetrize.
-        symmetry (str): The symmetry to apply.
-        dimension (int): The dimension of the tensor.
-
-        Returns:
-        List[Union[sp.Symbol, sp.Expr, int, float]]: The symmetrized tensor.
-
-        Raises:
-        ValueError: If an unsupported rank or symmetry option is provided.
+        :param rank: The rank of the tensor.
+        :param indexedexp: The tensor to symmetrize.
+        :param symmetry: The symmetry to apply.
+        :param dimension: The dimension of the tensor.
+        :return: The symmetrized tensor.
+        :raises ValueError: If an unsupported rank or symmetry option is provided.
         """
         if rank == 1:
             if symmetry == "nosym":
@@ -247,19 +245,13 @@ def symmetrize_rank2(
     dimension: int,
 ) -> _rank2_type:
     """
-    This function takes a 2D list (matrix), a symmetry option, and a dimension number,
-    and returns the matrix after applying the specified symmetry operation.
+    Symmetrize a 2D list (matrix) based on the given symmetry and dimension.
 
-    Args:
-    indexedexp (_rank2_type): The 2D list or matrix on which to perform the operation.
-    symmetry (str): The symmetry operation to perform. Options include "sym01" or "nosym".
-    dimension (int): The dimension of the matrix.
-
-    Returns:
-    _rank2_type: The matrix after applying the symmetry operation.
-
-    Raises:
-    ValueError: If an unsupported symmetry option is provided.
+    :param indexedexp: The 2D list or matrix on which to perform the operation.
+    :param symmetry: The symmetry operation to perform. Options include "sym01" or "nosym".
+    :param dimension: The dimension of the matrix.
+    :return: The matrix after applying the symmetry operation.
+    :raises ValueError: If an unsupported symmetry option is provided.
 
     Doctest:
     >>> a, b, c, d = sp.symbols('a b c d', real=True)
@@ -288,19 +280,13 @@ def symmetrize_rank3(
     dimension: int,
 ) -> _rank3_type:
     """
-    This function takes a 3D list (tensor), a symmetry option, and a dimension number,
-    and returns the tensor after applying the specified symmetry operation.
+    Symmetrize a 3D list (tensor) based on the given symmetry and dimension.
 
-    Args:
-    indexedexp (_rank3_type): The 3D list or tensor on which to perform the operation.
-    symmetry (str): The symmetry operation to perform. Options include "sym01", "sym02", "sym12", "nosym", and others.
-    dimension (int): The dimension of the tensor.
-
-    Returns:
-    _rank3_type: The tensor after applying the symmetry operation.
-
-    Raises:
-    ValueError: If an unsupported symmetry option is provided.
+    :param indexedexp: The 3D list or tensor on which to perform the operation.
+    :param symmetry: The symmetry operation to perform. Options include "sym01", "sym02", "sym12", "nosym", and others.
+    :param dimension: The dimension of the tensor.
+    :return: The tensor after applying the symmetry operation.
+    :raises ValueError: If an unsupported symmetry option is provided.
 
     Doctest:
     >>> a, b, c, d, e, f, g, h, i0 = sp.symbols('a b c d e f g h i0', real=True)
@@ -355,19 +341,13 @@ def symmetrize_rank4(
     dimension: int,
 ) -> _rank4_type:
     """
-    This function takes a 4D list (4-tensor), a symmetry option, and a dimension number,
-    and returns the 4-tensor after applying the specified symmetry operation.
+    Symmetrize a 4D list (4-tensor) based on the given symmetry and dimension.
 
-    Args:
-    indexedexp (_rank4_type): The 4D list or 4-tensor on which to perform the operation.
-    symmetry (str): The symmetry operation to perform. Options include "sym01", "sym02", "sym12", "sym03", "sym13", "sym23", "nosym", and others.
-    dimension (int): The dimension of the 4-tensor.
-
-    Returns:
-    _rank4_type: The 4-tensor after applying the symmetry operation.
-
-    Raises:
-    ValueError: If an unsupported symmetry option is provided.
+    :param indexedexp: The 4D list or 4-tensor on which to perform the operation.
+    :param symmetry: The symmetry operation to perform. Options include "sym01", "sym02", "sym12", "sym03", "sym13", "sym23", "nosym", and others.
+    :param dimension: The dimension of the 4-tensor.
+    :return: The 4-tensor after applying the symmetry operation.
+    :raises ValueError: If an unsupported symmetry option is provided.
 
     Doctest:
     >>> aDDDD = declarerank4("aDDDD", dimension=3)
@@ -434,28 +414,48 @@ def symmetrize_rank4(
 
 # typehinting: Must allow for sp.Expr in the zerorank*()s, so that it can be modified later
 def zerorank1(dimension: int = -1) -> List[Union[sp.Expr, sp.Symbol]]:
-    """Initialize rank-1 indexedexp to zero."""
+    """
+    Initialize rank-1 indexed expression to zero.
+
+    :param dimension: The dimension of the rank-1 indexed expression. Default is -1.
+    :return: A rank-1 indexed expression initialized to zero.
+    """
     return declare_indexedexp(None, rank=1, dimension=dimension)  # type:ignore
 
 
 def zerorank2(dimension: int = -1) -> List[List[Union[sp.Expr, sp.Symbol]]]:
-    """Initialize rank-2 indexedexp to zero."""
+    """
+    Initialize rank-2 indexed expression to zero.
+
+    :param dimension: The dimension of the rank-2 indexed expression. Default is -1.
+    :return: A rank-2 indexed expression initialized to zero.
+    """
     return declare_indexedexp(None, rank=2, dimension=dimension)  # type:ignore
 
 
 def zerorank3(dimension: int = -1) -> List[List[List[Union[sp.Expr, sp.Symbol]]]]:
-    """Initialize rank-3 indexedexp to zero."""
+    """
+    Initialize rank-3 indexed expression to zero.
+
+    :param dimension: The dimension of the rank-3 indexed expression. Default is -1.
+    :return: A rank-3 indexed expression initialized to zero.
+    """
     return declare_indexedexp(None, rank=3, dimension=dimension)  # type:ignore
 
 
 def zerorank4(dimension: int = -1) -> List[List[List[List[Union[sp.Expr, sp.Symbol]]]]]:
-    """Initialize rank-4 indexedexp to zero."""
+    """
+    Initialize rank-4 indexed expression to zero.
+
+    :param dimension: The dimension of the rank-4 indexed expression. Default is -1.
+    :return: A rank-4 indexed expression initialized to zero.
+    """
     return declare_indexedexp(None, rank=4, dimension=dimension)  # type:ignore
 
 
 def get_rank(IDX_EXPR: Sequence[_recur_symbol_type]) -> int:
     """
-    Gets the rank of the expression based on the nested list structure.
+    Get the rank of the expression based on the nested list structure.
 
     :param IDX_EXPR: The expression to determine the rank of.
     :return: The rank of the expression.
@@ -486,10 +486,11 @@ def zero_out_derivatives_across_symmetry_axes(
     IDX_EXPR: Sequence[_recur_symbol_type],
 ) -> _recur_symbol_type:
     """
-    Checks if an index object performs a derivative across a symmetry axis.
+    Check if an index object performs a derivative across a symmetry axis.
 
-    :param idxobj_str: The string representing the index object.
-    :return: True if the index object performs a derivative across a symmetry axis, False otherwise.
+    :param IDX_EXPR: The expression to check for derivatives across symmetry axes.
+    :return: Zeroed out derivatives across symmetry axes of the expression if any.
+
     >>> zero_out_derivatives_across_symmetry_axes(declarerank1("trK_dD"))
     [trK_dD0, trK_dD1, trK_dD2]
     >>> zero_out_derivatives_across_symmetry_axes(declarerank2("trK_dDD"))
@@ -592,31 +593,55 @@ def zero_out_derivatives_across_symmetry_axes(
 
 
 def declarerank1(idx_expr_basename: str, **kwargs: Any) -> _rank1_type:
-    """Declare rank-1 indexedexp, using idx_expr_basename as base name."""
+    """
+    Declare a rank-1 indexed expression using the provided base name.
+
+    :param idx_expr_basename: The base name for the indexed expression.
+    :param kwargs: Additional arguments passed to declare_indexedexp.
+    :return: The declared rank-1 indexed expression.
+    """
     kwargs["rank"] = 1
     return cast(_rank1_type, declare_indexedexp(idx_expr_basename, **kwargs))
 
 
 def declarerank2(idx_expr_basename: str, **kwargs: Any) -> _rank2_type:
-    """Declare rank-2 indexedexp, using idx_expr_basename as base name."""
+    """
+    Declare a rank-2 indexed expression using the provided base name.
+
+    :param idx_expr_basename: The base name for the indexed expression.
+    :param kwargs: Additional arguments passed to declare_indexedexp.
+    :return: The declared rank-2 indexed expression.
+    """
     kwargs["rank"] = 2
     return cast(_rank2_type, declare_indexedexp(idx_expr_basename, **kwargs))
 
 
 def declarerank3(idx_expr_basename: str, **kwargs: Any) -> _rank3_type:
-    """Declare rank-3 indexedexp, using idx_expr_basename as base name."""
+    """
+    Declare a rank-3 indexed expression using the provided base name.
+
+    :param idx_expr_basename: The base name for the indexed expression.
+    :param kwargs: Additional arguments passed to declare_indexedexp.
+    :return: The declared rank-3 indexed expression.
+    """
     kwargs["rank"] = 3
     return cast(_rank3_type, declare_indexedexp(idx_expr_basename, **kwargs))
 
 
 def declarerank4(idx_expr_basename: str, **kwargs: Any) -> _rank4_type:
-    """Declare rank-4 indexedexp, using idx_expr_basename as base name."""
+    """
+    Declare a rank-4 indexed expression using the provided base name.
+
+    :param idx_expr_basename: The base name for the indexed expression.
+    :param kwargs: Additional arguments passed to declare_indexedexp.
+    :return: The declared rank-4 indexed expression.
+    """
     kwargs["rank"] = 4
     return cast(_rank4_type, declare_indexedexp(idx_expr_basename, **kwargs))
 
 
 class NonInvertibleMatrixError(ZeroDivisionError):
-    """Matrix Not Invertible; Division By Zero"""
+    """Matrix Not Invertible; Division By Zero."""
 
 
 # We use the following functions to evaluate 3-metric inverses
@@ -626,25 +651,18 @@ def symm_matrix_inverter2x2(
     """
     Calculate the inverse and determinant of a symmetric 2x2 matrix.
 
-    This function first calculates the determinant of the input matrix. If the determinant is zero,
-    it raises a NonInvertibleMatrixError. It then calculates the inverse matrix.
+    :param a: A symmetric 2x2 matrix of sympy Expressions or Symbols.
+    :return: Tuple containing:
+             - A symmetric 2x2 inverse matrix of sympy Expressions or Symbols.
+             - A determinant of the input matrix as a sympy Expression or Symbol.
+    :raises NonInvertibleMatrixError: If the input matrix has determinant zero.
 
-    Args:
-        a: A symmetric 2x2 matrix of sympy Expressions or Symbols.
-
-    Returns:
-        Tuple containing the inverse matrix and the determinant.
-
-    Raises:
-        NonInvertibleMatrixError: If the input matrix has determinant zero.
-
-    Examples:
+    Doctest:
     >>> from sympy import symbols
     >>> b, c, d = symbols('b c d')
     >>> matrix = [[b, c], [c, d]]
     >>> inverse, determinant = symm_matrix_inverter2x2(matrix)
     """
-
     # It is far more efficient to write out the matrix determinant and inverse by hand
     #   instead of using SymPy's built-in functions, since the matrix is symmetric.
     outDET = a[0][0] * a[1][1] - a[0][1] ** 2
@@ -667,19 +685,13 @@ def symm_matrix_inverter3x3(
     """
     Calculate the inverse and determinant of a symmetric 3x3 matrix.
 
-    This function first calculates the determinant of the input matrix. If the determinant is zero,
-    it raises a NonInvertibleMatrixError. It then calculates the inverse matrix.
+    :param a: A symmetric 3x3 matrix of sympy Expressions or Symbols.
+    :return: Tuple containing:
+             - A symmetric 3x3 inverse matrix of sympy Expressions or Symbols.
+             - A determinant of the input matrix as a sympy Expression or Symbol.
+    :raises NonInvertibleMatrixError: If the input matrix has determinant zero.
 
-    Args:
-        a: A symmetric 3x3 matrix of sympy Expressions or Symbols.
-
-    Returns:
-        Tuple containing the inverse matrix and the determinant.
-
-    Raises:
-        NonInvertibleMatrixError: If the input matrix has determinant zero.
-
-    Examples:
+    Doctest:
     >>> from sympy import symbols
     >>> a0, b, c, d, e, f = symbols('a0 b c d e f')
     >>> matrix = [[a0, b, c], [b, d, e], [c, e, f]]
@@ -742,20 +754,14 @@ def symm_matrix_inverter4x4(
     a: List[List[Union[sp.Expr, sp.Symbol]]]
 ) -> Tuple[List[List[Union[sp.Expr, sp.Symbol]]], Union[sp.Expr, sp.Symbol]]:
     """
-    Function to calculate the inverse and determinant of a 4x4 symmetric matrix.
+    Calculate the inverse and determinant of a 4x4 symmetric matrix.
 
-    Args:
-        a (List[List[Union[sp.Expr, sp.Symbol]]]): The 4x4 symmetric matrix to be inverted.
-            The matrix elements can be either symbolic expressions or symbols.
-
-    Returns:
-        Tuple[List[List[Union[sp.Expr, sp.Symbol]]], Union[sp.Expr, sp.Symbol]]:
-            A tuple containing two elements.
-            The first element is a 4x4 matrix (list of list) which is the inverse of the input matrix.
-            The second element is the determinant of the input matrix.
-
-    Raises:
-        NonInvertibleMatrixError: Raised when the matrix has determinant zero and hence, non-invertible.
+    :param a: The 4x4 symmetric matrix to be inverted.
+              The matrix elements can be either symbolic expressions or symbols.
+    :return: Tuple containing:
+             - A 4x4 inverse matrix of sympy Expressions or Symbols.
+             - A determinant of the input matrix as a sympy Expression or Symbol.
+    :raises NonInvertibleMatrixError: If the input matrix has determinant zero.
 
     # >>> from nrpy.helpers.assert_equal import check_zero
     # >>> R4DD = declarerank2("R4DD", "sym01", dimension=4)
@@ -774,7 +780,6 @@ def symm_matrix_inverter4x4(
     # ...            if not check_zero(IsUnit[offdiag_i][offdiag_j]):
     # ...                print("Error!")
     """
-
     # It is far more efficient to write out the matrix determinant and inverse by hand
     #   instead of using SymPy's built-in functions, since the matrix is symmetric.
     outDET = (
@@ -911,16 +916,11 @@ def generic_matrix_inverter2x2(
     This function first calculates the determinant of the input matrix. If the determinant is zero,
     it raises a NonInvertibleMatrixError. It then calculates the inverse matrix.
 
-    Args:
-        a: A 2x2 matrix of sympy Expressions or Symbols.
+    :param a: A 2x2 matrix of sympy Expressions or Symbols.
+    :return: Tuple containing the inverse matrix and the determinant.
+    :raises NonInvertibleMatrixError: If the input matrix has determinant zero.
 
-    Returns:
-        Tuple containing the inverse matrix and the determinant.
-
-    Raises:
-        NonInvertibleMatrixError: If the input matrix has determinant zero.
-
-    Examples:
+    Doctest:
     >>> matrix = declarerank2("gDD", dimension=2)
     >>> gUU, detg = generic_matrix_inverter2x2(matrix)
     """
@@ -946,16 +946,11 @@ def generic_matrix_inverter3x3(
     This function first calculates the determinant of the input matrix. If the determinant is zero,
     it raises a NonInvertibleMatrixError. It then calculates the inverse matrix.
 
-    Args:
-        a: A 3x3 matrix of sympy Expressions or Symbols.
+    :param a: A 3x3 matrix of sympy Expressions or Symbols.
+    :return: Tuple containing the inverse matrix and the determinant.
+    :raises NonInvertibleMatrixError: If the input matrix has determinant zero.
 
-    Returns:
-        Tuple containing the inverse matrix and the determinant.
-
-    Raises:
-        NonInvertibleMatrixError: If the input matrix has determinant zero.
-
-    Examples:
+    Doctest:
     >>> gDD = declarerank2("gDD")
     >>> gUU, detg = generic_matrix_inverter3x3(gDD)
     """
@@ -998,16 +993,11 @@ def generic_matrix_inverter4x4(
     This function first calculates the determinant of the input matrix. If the determinant is zero,
     it raises a NonInvertibleMatrixError. It then calculates the inverse matrix.
 
-    Args:
-        a: A 3x3 matrix of sympy Expressions or Symbols.
+    :param a: A 4x4 matrix of sympy Expressions or Symbols.
+    :return: Tuple containing the inverse matrix and the determinant.
+    :raises NonInvertibleMatrixError: If the input matrix has determinant zero.
 
-    Returns:
-        Tuple containing the inverse matrix and the determinant.
-
-    Raises:
-        NonInvertibleMatrixError: If the input matrix has determinant zero.
-
-    Examples:
+    Doctest:
     >>> g4DD = declarerank2("g4DD", dimension=4)
     >>> g4UU, det4g = generic_matrix_inverter4x4(g4DD)
     """
@@ -1204,10 +1194,9 @@ def LeviCivitaSymbol_dim3_rank3() -> List[List[List[int]]]:
     This function creates a 3x3x3 rank-3 tensor where each element corresponds to the Levi-Civita symbol
     epsilon_ijk, calculated using the formula (i - j) * (j - k) * (k - i) * 1/2.
 
-    Returns:
-        A 3x3x3 tensor with integer elements, representing the Levi-Civita symbol.
+    :return: A 3x3x3 tensor with integer elements, representing the Levi-Civita symbol.
 
-    Example:
+    Doctest:
     >>> LeviCivitaSymbol_dim3_rank3()
     [[[0, 0, 0], [0, 0, 1], [0, -1, 0]], [[0, 0, -1], [0, 0, 0], [1, 0, 0]], [[0, 1, 0], [-1, 0, 0], [0, 0, 0]]]
     """
@@ -1238,13 +1227,10 @@ def LeviCivitaTensorUUU_dim3_rank3(
     This function creates a 3x3x3 rank-3 tensor where each element corresponds to the Levi-Civita symbol
     epsilon^ijk, calculated by dividing each Levi-Civita symbol by sqrtgammaDET.
 
-    Args:
-        sqrtgammaDET: A sympy expression that is used to divide each element of the Levi-Civita symbol.
+    :param sqrtgammaDET: A sympy expression that is used to divide each element of the Levi-Civita symbol.
+    :return: A 3x3x3 tensor with elements as sympy expressions, representing the Levi-Civita tensor.
 
-    Returns:
-        A 3x3x3 tensor with elements as sympy expressions, representing the Levi-Civita tensor.
-
-    Example:
+    Doctest:
     >>> sqrtgammaDET = sp.Symbol("sqrtgammaDET")
     >>> LeviCivitaTensorUUU_dim3_rank3(sqrtgammaDET)
     [[[0, 0, 0], [0, 0, 1/sqrtgammaDET], [0, -1/sqrtgammaDET, 0]], [[0, 0, -1/sqrtgammaDET], [0, 0, 0], [1/sqrtgammaDET, 0, 0]], [[0, 1/sqrtgammaDET, 0], [-1/sqrtgammaDET, 0, 0], [0, 0, 0]]]
@@ -1276,13 +1262,10 @@ def LeviCivitaTensorDDD_dim3_rank3(
     This function creates a 3x3x3 rank-3 tensor where each element corresponds to the Levi-Civita symbol
     epsilon_ijk, calculated by multiplying each Levi-Civita symbol by sqrtgammaDET.
 
-    Args:
-        sqrtgammaDET: A sympy expression that is used to multiply each element of the Levi-Civita symbol.
+    :param sqrtgammaDET: A sympy expression that is used to multiply each element of the Levi-Civita symbol.
+    :return: A 3x3x3 tensor with elements as sympy expressions, representing the Levi-Civita tensor.
 
-    Returns:
-        A 3x3x3 tensor with elements as sympy expressions, representing the Levi-Civita tensor.
-
-    Example:
+    Doctest:
     >>> sqrtgammaDET = sp.Symbol("sqrtgammaDET")
     >>> LeviCivitaTensorDDD_dim3_rank3(sqrtgammaDET)
     [[[0, 0, 0], [0, 0, sqrtgammaDET], [0, -sqrtgammaDET, 0]], [[0, 0, -sqrtgammaDET], [0, 0, 0], [sqrtgammaDET, 0, 0]], [[0, sqrtgammaDET, 0], [-sqrtgammaDET, 0, 0], [0, 0, 0]]]
