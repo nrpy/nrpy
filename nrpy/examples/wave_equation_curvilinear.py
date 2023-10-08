@@ -24,6 +24,7 @@ import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 import nrpy.infrastructures.BHaH.main_c as main
 from nrpy.infrastructures.BHaH import xx_tofrom_Cart
+import nrpy.infrastructures.BHaH.checkpointing as chkpt
 import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
@@ -119,6 +120,8 @@ MoL.MoL_register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
 )
+chkpt.register_CFunctions()
+
 progress.register_CFunction_progress_indicator()
 rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
