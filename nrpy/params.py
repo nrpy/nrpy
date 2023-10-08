@@ -1,7 +1,5 @@
 """
-This core NRPy+ module is used for
- initializing, storing, and recalling
- parameters.
+Core NRPy+ module for initializing, storing, and recalling parameters.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -17,6 +15,8 @@ very_verbose = False
 
 class NRPyParameter:
     """
+    Represents an NRPyParameter object.
+
     Doctest:
     >>> param = NRPyParameter(py_type=str, module='module1', name='param0', value='defaultval1')
     >>> param.name in glb_params_dict
@@ -26,6 +26,15 @@ class NRPyParameter:
     """
 
     def __init__(self, py_type: Any, module: str, name: str, value: Any):
+        """
+        Initialize an NRPyParameter object with given properties.
+
+        :param py_type: The type of the parameter, e.g., str, int, float.
+        :param module: Name of the module the parameter belongs to.
+        :param name: Name of the parameter.
+        :param value: The default value of the parameter.
+        :raises ValueError: If the py_type is not one of the valid types.
+        """
         self.py_type = py_type
         self.module = module
         self.name = name
@@ -65,7 +74,7 @@ class CodeParameter:
         add_to_glb_code_params_dict: bool = True,
     ) -> None:
         """
-        Initializes the CodeParameter object.
+        Initialize the CodeParameter object.
 
         :param c_type_alias: C type alias for the parameter.
         :param module: The module where the parameter is defined.
@@ -77,7 +86,6 @@ class CodeParameter:
         :param add_to_set_CodeParameters_h: Add parameter to set_CodeParameters*.h (default: True). Only applies for BHaH.
         :param add_to_glb_code_params_dict: Whether to add the parameter to the global code parameters dictionary (default: True).
         """
-
         self.c_type_alias = c_type_alias
         self.module = module
         self.name = name
@@ -125,14 +133,12 @@ glb_extras_dict: Dict[str, Dict[str, Any]] = {}
 
 def register_param(py_type: Any, module: str, name: str, value: Any) -> None:
     """
-    Initialize a parameter, adding it to the global parameters list if not already present.
+    Initialize a parameter and add it to the global parameters list if not already present.
 
-    Args:
-    param: Parameter object to initialize.
-    is_code_param: Boolean flag indicating if the parameter is a C parameter.
-
-    Returns:
-    None
+    :param py_type: The type of the parameter, e.g., str, int, float.
+    :param module: Name of the module the parameter belongs to.
+    :param name: Name of the parameter.
+    :param value: The default value of the parameter.
 
     Doctest:
     >>> parname = "param1"
@@ -147,15 +153,14 @@ def register_param(py_type: Any, module: str, name: str, value: Any) -> None:
 
 def parval_from_str(parameter_name: str) -> Any:
     """
-    Applies to NRPyParameter objects only!
-    Given a string, find the value of the parameter with that name in the global parameters list.
-    Ignores any prefix including and before '::' in the parameter name.
+    Retrieve the value of an NRPyParameter object from a string.
 
-    Args:
-    parameter_name (str): Name of the parameter to find. Ignores any prefix including and before '::'.
+    Given a string, this function finds the value of the parameter with that name in the global parameters list.
+    It ignores any prefix including and before '::' in the parameter name.
 
-    Returns:
-    Any: Value of the parameter in the global parameters list. Raises a ValueError if the parameter is not found.
+    :param parameter_name: Name of the parameter to find. Ignores any prefix including and before '::'.
+
+    :raises ValueError: If the parameter name is not found in the global parameters list.
 
     Doctest:
     >>> try: parval_from_str('non_existent_param')
@@ -180,15 +185,15 @@ def parval_from_str(parameter_name: str) -> Any:
 
 def set_parval_from_str(parameter_name: str, new_value: Any) -> None:
     """
-    Applies to NRPyParameter objects only!
-    Given a string and a value, update the parameter with that name in the global parameters list to the new value.
+    Apply to NRPyParameter objects only.
 
-    Args:
-    parameter_name (str): Name of the parameter to update.
-    new_value (Any): New value to be assigned to the parameter.
+    Given a string and a value, this function updates the parameter with that name in the global parameters list
+    to the new value.
 
-    Raises:
-    ValueError: If the parameter with the specified name is not found in the global parameters list.
+    :param parameter_name: Name of the parameter to update.
+    :param new_value: New value to be assigned to the parameter.
+
+    :raises ValueError: If the parameter name is not found in the global parameters list.
 
     Doctest:
     >>> try: set_parval_from_str('non_existent_param', -100)
@@ -215,11 +220,11 @@ def register_CodeParameters(
     add_to_glb_code_params_dict: bool = True,
 ) -> List[sp.Symbol]:
     """
-    This function initializes the parameters and returns the symbolic representation of them.
+    Initialize CodeParameters and return their symbolic representation.
 
     :param c_type_alias: C type alias for the parameter.
     :param module: The module where the parameter is defined.
-    :param name: The name of the parameter.
+    :param names: The names of the parameters.
     :param defaultvalues: A list of the default values for the parameters. If it's a single value, it will be duplicated for all parameters.
     :param assumption: Assumption related to the symbol; can be "Real" or "RealPositive" (default: "Real").
     :param commondata: Parameter is common to all grids (True), or each grid has its own value for this parameter (default: False).
@@ -245,7 +250,6 @@ def register_CodeParameters(
     >>> print(outstr)
     1 1 1 1
     """
-
     if not isinstance(names, list) or len(names) == 1:
         raise ValueError(
             "register_CodeParameters() expects a list of MULTIPLE code parameter names."
@@ -290,7 +294,7 @@ def register_CodeParameter(
     add_to_glb_code_params_dict: bool = True,
 ) -> sp.Symbol:
     """
-    This function initializes the parameters and returns the symbolic representation of them.
+    Initialize a CodeParameter and return its symbolic representation.
 
     :param c_type_alias: C type alias for the parameter.
     :param module: The module where the parameter is defined.
@@ -345,7 +349,7 @@ def register_CodeParameter(
 
 def adjust_CodeParam_default(CodeParameter_name: str, new_default: Any) -> None:
     """
-    Adjusts the default value of a given code parameter.
+    Adjust the default value of a given code parameter.
 
     :param CodeParameter_name: The name of the code parameter to be adjusted.
     :param new_default: The new default value for the code parameter.

@@ -1,4 +1,12 @@
-"""This module defines the ReferenceMetric class and handles various functionalities related to the reference metric."""
+"""
+Define the ReferenceMetric class and its related functionalities.
+
+This module defines the ReferenceMetric class which handles various
+functionalities related to the reference metric.
+
+Author: Zachariah B. Etienne
+        zachetie **at** gmail **dot* com
+"""
 
 from typing import Dict, List, Any, Tuple, cast
 import sympy as sp
@@ -32,7 +40,10 @@ par.register_CodeParameter(
 
 class ReferenceMetric:
     """
-    ReferenceMetric class computes and stores quantities related to the reference metric.
+    Handle computations and storage related to the reference metric.
+
+    This class computes and stores quantities related to the reference
+    metric for a given coordinate system.
     """
 
     def __init__(
@@ -600,9 +611,7 @@ class ReferenceMetric:
                             ][l].subs(freevar, self.freevars_uniq_xx_indep[varidx])
 
     def cartesian_like(self) -> None:
-        """
-        Specific initialization for Cartesian-like coordinate systems.
-        """
+        """Initialize class for Cartesian-like coordinate systems."""
         if self.CoordSystem == "Cartesian":
             # return values of par.Cparameters() in the following line of code are unused, so we ignore them.
             par.register_CodeParameters(
@@ -718,9 +727,7 @@ class ReferenceMetric:
         ]
 
     def spherical_like(self) -> None:
-        """
-        Specific initialization for Spherical-like coordinate systems.
-        f"""
+        """Initialize class for Spherical-like coordinate systems."""
         M_PI = par.register_CodeParameter(
             "#define",
             self.CodeParam_modulename,
@@ -869,9 +876,7 @@ class ReferenceMetric:
         # END: Set universal attributes for all spherical-like coordinate systems:
 
     def prolate_spheroidal_like(self) -> None:
-        """
-        Specific initialization for Prolate spheroidal (SymTP)-like coordinate systems.
-        """
+        """Initialize class for Prolate spheroidal (SymTP)-like coordinate systems."""
         M_PI, M_SQRT1_2 = par.register_CodeParameters(
             "#define",
             self.CodeParam_modulename,
@@ -1071,9 +1076,7 @@ class ReferenceMetric:
         # END: Set universal attributes for all prolate-spheroidal-like coordinate systems:
 
     def cylindrical_like(self) -> None:
-        """
-        Specific initialization for Cylindrical-like coordinate systems.
-        """
+        """Initialize class for Cylindrical-like coordinate systems."""
         M_PI = par.register_CodeParameter(
             "#define",
             self.CodeParam_modulename,
