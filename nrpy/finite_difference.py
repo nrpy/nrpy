@@ -1,6 +1,5 @@
 """
-Provide helper functions for c_codegen
- to generate finite-difference C-code kernels.
+Provide helper functions for c_codegen to generate finite-difference C-code kernels.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -92,18 +91,14 @@ def setup_FD_matrix__return_inverse_lowlevel(
     stencil_width: int, UPDOWNWIND_stencil_shift: int
 ) -> Any:
     """
-    Function to set up finite difference matrix and return its inverse.
+    Set up finite difference matrix and return its inverse.
 
     :param stencil_width: Width of the stencil.
     :param UPDOWNWIND_stencil_shift: Shift in the stencil for upwind or downwind.
 
-    Returns
-    -------
-    sp.Matrix
-        Inverse of the finite difference matrix.
+    :return: Inverse of the finite difference matrix.
 
-    Example
-    -------
+    Doctest:
     >>> setup_FD_matrix__return_inverse_lowlevel(3, 0)
     Matrix([
     [0, -1/2, 1/2],
@@ -134,7 +129,12 @@ def setup_FD_matrix__return_inverse_lowlevel(
 
 
 class Matrix_dict(Dict[Tuple[int, int], sp.Matrix]):
-    """Custom dictionary for storing FD coeff matrices, as the inversion is expensive"""
+    """
+    Custom dictionary for storing FD coefficient matrices, as the inversion is expensive.
+
+    :param key: A tuple containing stencil width and UPDOWNWIND stencil shift.
+    :return: A sympy matrix associated with the provided key.
+    """
 
     def __getitem__(self, key: Tuple[int, int]) -> sp.Matrix:
         if key not in self:
@@ -160,7 +160,7 @@ def setup_FD_matrix__return_inverse(
     stencil_width: int, UPDOWNWIND_stencil_shift: int
 ) -> Any:
     """
-    Wrapper function to set up finite difference matrix and return its inverse.
+    Set up finite difference matrix and return its inverse.
     If the inputs have already been processed through
     setup_FD_matrix__return_inverse_lowlevel() (i.e., the matrix has already
     been inverted), this function will simply return the inverse matrix stored within
@@ -169,14 +169,9 @@ def setup_FD_matrix__return_inverse(
 
     :param stencil_width: Width of the stencil.
     :param UPDOWNWIND_stencil_shift: Shift in the stencil for upwind or downwind.
+    :return: Inverse of the finite difference matrix.
 
-    Returns
-    -------
-    sp.Matrix
-        Inverse of the finite difference matrix.
-
-    Example
-    -------
+    Doctest:
     >>> setup_FD_matrix__return_inverse(3, 0)
     Matrix([
     [0, -1/2, 1/2],
@@ -189,7 +184,22 @@ def setup_FD_matrix__return_inverse(
 def compute_fdcoeffs_fdstencl(
     derivstring: str, fd_order: int
 ) -> Tuple[List[sp.Rational], List[List[int]]]:
-    """Construct finite difference coefficients and stencils for a given derivative type."""
+    """
+    Construct finite difference coefficients and stencils for a given derivative type.
+
+    :param derivstring: The string representation of the derivative type. Can include patterns
+                        like "dKOD", "dupD", "ddnD", "dfullupD", "dfulldnD", "DDD", and "DD" to
+                        dictate how the function processes and returns coefficients.
+    :param fd_order: Order of the finite differencing.
+
+    :return: A tuple containing two lists. The first list contains the finite difference coefficients
+             as sympy.Rational numbers, and the second list contains the stencils as lists of integers.
+
+    Note:
+    This function computes the finite difference coefficients and stencil points for various derivative types
+    specified in `derivstring`. The coefficients are determined using the inverse of the finite difference matrix,
+    which is constructed and inverted in the `setup_FD_matrix__return_inverse` function.
+    """
     # Step 0: Set finite differencing order, stencil size, and up/downwinding
     if "dKOD" in derivstring:
         fd_order += 2  # par.parval_from_str("FD_KO_ORDER__CENTDERIVS_PLUS")
@@ -417,19 +427,19 @@ def fd_temp_variable_name(
     i2_offset: int,
 ) -> str:
     """
-    Generate a unique variable name for use in finite-difference code. This function takes into account
-    the gridfunction name, and the offsets in the three dimensions.
+    Generate a unique variable name for use in finite-difference code.
 
-    Example: If a grid function is named hDD00, and we want to read from memory data at i0+1,i1,i2-1,
-    we store the value of this grid function as hDD00_i0p1_i1_i2m1; this function generates this name.
-    varname = hDD00, i0_offset = 0, i1_offset = 2, i2_offset = 1 results in
-    output: "hDD00_i1p2_i2p1"
+    This function takes into account the gridfunction name, and the offsets in the three dimensions to generate
+    a unique name for a point of data for a grid function.
 
     :param gf_basename: The name of the grid function.
     :param i0_offset: The offset for i0.
     :param i1_offset: The offset for i1.
     :param i2_offset: The offset for i2.
-    :return: Returns a unique name for a point of data for a grid function.
+
+    :return: A unique name for a point of data for the grid function.
+
+    :raises ValueError: If the gf_basename is not provided.
 
     >>> fd_temp_variable_name("hDD00", -2, 0, -1)
     'hDD00_i0m2_i2m1'
@@ -464,13 +474,17 @@ def extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars(
     list_of_deriv_vars: List[sp.Basic],
 ) -> Tuple[List[str], List[str]]:
     """
-    Extract from list_of_deriv_vars a list of base gridfunctions
-    and a list of derivative operators.
+    Extract lists of base gridfunctions and derivative operators from list_of_deriv_vars.
+
+    This function will take a list of derivative variables and extract the base gridfunctions
+    and derivative operators from them.
 
     :param list_of_deriv_vars: List of derivative variables.
 
-    Returns
-    Tuple containing lists of base gridfunctions and derivative operators.
+    :return: Tuple containing lists of base gridfunctions and derivative operators.
+
+    :raises TypeError: If the number of integers appearing in the suffix of a variable name
+                       does not match the number of U's + D's in the variable name.
 
     Doctest:
     >>> import nrpy.indexedexp as ixp
@@ -550,21 +564,20 @@ def read_gfs_from_memory(
     enable_simd: bool,
 ) -> str:
     """
-    Generates C code to read grid functions from memory for finite difference derivative
-    calculations. Memory reads are sorted to minimize cache misses.
+    Generate C code to read grid functions from memory for finite difference derivative calculations.
 
-    :param list_of_base_gridfunction_names_in_derivs: A list of base grid function names
-        which are involved in derivative computations.
+    The generated C code will take into account the grid functions and the finite difference stencil
+    provided to optimize memory reads and reduce cache misses.
+
+    :param list_of_base_gridfunction_names_in_derivs: A list of base grid function names involved in derivative computations.
     :param fdstencl: A list of lists representing the finite difference stencil to be used.
-    :param free_symbols_list: A list of symbols present in all SymPy expressions that are
-        passed to the parent function. If there's only one symbol, you can pass it directly.
-    :param mem_alloc_style: A string that denotes the memory allocation style. Options are
-        '012' or '210'. The default '210' means the innermost loop is the "x" direction.
-    :param enable_simd: A boolean flag that indicates whether SIMD (Single Instruction,
-        Multiple Data) should be enabled or not.
-    :param c_type: As string that specifies the C data type (e.g., float, double, REAL_SIMD_ARRAY, etc)
-    :return: A string containing C code that represents the reading of grid functions at the
-        necessary points in memory.
+    :param free_symbols_list: A list of symbols present in all SymPy expressions passed to the parent function.
+                              If there's only one symbol, it can be passed directly.
+    :param mem_alloc_style: Specifies the memory allocation style. Options are '012' or '210'.
+                            Default '210' means the innermost loop is the "x" direction.
+    :param enable_simd: Indicates whether SIMD (Single Instruction, Multiple Data) should be enabled or not.
+
+    :return: A string containing C code representing the reading of grid functions at the necessary points in memory.
 
     >>> import nrpy.indexedexp as ixp
     >>> gri.glb_gridfcs_dict.clear()
@@ -668,13 +681,16 @@ def read_gfs_from_memory(
     #
     def unique_idx(idx3: List[int], mem_alloc_style: str) -> int:
         """
-        Generates a unique index that ensures the indices are ordered in memory.
+        Generate a unique index ensuring the indices are ordered in memory.
+
         This function uses a given offset and size, and supports two memory allocation styles: '210' and '012'.
         Note: The values of offset and size are used solely for ordering purposes and should not be modified.
 
         :param idx3: A list of three indices.
         :param mem_alloc_style: The memory allocation style, either '210' or '012'.
+
         :return: A unique index based on the input indices and memory allocation style.
+
         :raises ValueError: If the provided memory allocation style is unsupported.
         """
         offset = 50  # Offset for memory ordering. Do not modify.
@@ -700,23 +716,30 @@ def read_gfs_from_memory(
         Process and sort the list of memory access points for each grid function.
 
         This function sorts a given list of memory access points for each grid function
-        by transforming them into unique indices and ordering them. The transformation
-        is performed by the nested helper function memory_idx_from_str. The sorted list
+        by transforming them into unique indices and ordering them. The sorted list
         of memory access points enables optimal access pattern during data processing.
 
-        Args:
-            list_of_points_read_from_memory: A nested list where each sublist corresponds
-                to a grid function and contains points read from memory for that grid function.
-            mem_alloc_style: A string that denotes the memory allocation style used in
-                transforming the memory address to a unique index.
+        :param list_of_points_read_from_memory: A nested list where each sublist corresponds to a grid function and
+            contains points read from memory for that grid function.
+        :param mem_alloc_style: A string denoting the memory allocation style used in transforming the memory
+            address to a unique index.
 
-        Returns
-            A nested list where each sublist corresponds to a grid function and contains
-            the sorted points read from memory for that grid function.
+        :return: A nested list where each sublist corresponds to a grid function and contains the sorted points
+            read from memory for that grid function.
         """
 
         def memory_idx_from_str(idx_str: str, mem_alloc_style: str) -> int:
-            """Helper function to get unique index from a string of indices"""
+            """
+            Convert a string of indices into a unique memory index.
+
+            This helper function takes a string representation of indices and returns a unique
+            index based on the provided memory allocation style.
+
+            :param idx_str: A string representation of indices, separated by commas.
+            :param mem_alloc_style: The memory allocation style, either '210' or '012'.
+
+            :return: A unique memory index integer.
+            """
             idx3 = [int(x) for x in idx_str.split(",")]
             return unique_idx(idx3, mem_alloc_style)
 
@@ -818,7 +841,7 @@ class FDFunction:
 
     def c_function_call(self, gf_name: str, deriv_var: str) -> str:
         """
-        Generates the C function call for a given grid function name and derivative variable.
+        Generate the C function call for a given grid function name and derivative variable.
 
         :param gf_name: The name of the grid function.
         :param deriv_var: The variable that represents the derivative.
@@ -844,7 +867,9 @@ class FDFunction:
 
     def CFunction_fd_function(self, FDexpr_c_code: str) -> cfc.CFunction:
         """
-        Generates a C function based on the given finite-difference expression.
+        Generate a C function based on the given finite-difference expression.
+
+        :param FDexpr_c_code: The finite-difference expression in C code format.
 
         :return: A cfc.CFunction object that encapsulates the C function details.
         """
@@ -877,7 +902,7 @@ FDFunctions_dict: Dict[str, FDFunction] = {}
 
 def construct_FD_functions_prefunc() -> str:
     """
-    Constructs the prefunc (CFunction) strings for all finite-difference functions stored in FDFunctions_dict.
+    Construct the prefunc (CFunction) strings for all finite-difference functions stored in FDFunctions_dict.
 
     :return: The concatenated prefunc (CFunction) strings as a single string.
     """
