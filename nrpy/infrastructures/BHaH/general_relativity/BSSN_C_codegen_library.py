@@ -49,14 +49,20 @@ def register_CFunction_initial_data(
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register C functions for converting ADM initial data to BSSN variables and applying boundary conditions.
+
     The function performs the following operations:
     1. Registers the exact ADM initial data function.
     2. Registers a function for converting ADM initial data to BSSN variables in the specified coordinate system.
     3. Generates C code for setting initial data and applying boundary conditions.
 
-    :param CoordSystem: The coordinate system for the calculation
-    :param IDtype: The type of initial data
-    :param IDCoordSystem: The native coordinate system of the initial data
+    :param CoordSystem: The coordinate system for the calculation.
+    :param IDtype: The type of initial data.
+    :param IDCoordSystem: The native coordinate system of the initial data.
+    :param ID_persist_struct_str: A string representing the persistent structure for the initial data.
+    :param populate_ID_persist_struct_str: Optional string to populate the persistent structure for initial data.
+    :param free_ID_persist_struct_str: Optional string to free the persistent structure for initial data.
+
+    :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -134,8 +140,11 @@ def register_CFunction_diagnostics(
     Register C function for simulation diagnostics.
 
     :param CoordSystem: Specifies the coordinate system for the diagnostics.
+    :param default_diagnostics_out_every: Specifies the default diagnostics output frequency.
+    :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     :param plane: The default plane for diagnostics; defaults to "yz".
-    :return: None
+
+    :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -358,9 +367,16 @@ def register_CFunction_rhs_eval(
     :param CoordSystem: The coordinate system to be used.
     :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
     :param enable_simd: Whether or not to enable SIMD (Single Instruction, Multiple Data).
+    :param enable_fd_functions: Whether or not to enable finite difference functions.
+    :param enable_KreissOliger_dissipation: Whether or not to enable Kreiss-Oliger dissipation.
     :param LapseEvolutionOption: Lapse evolution equation choice.
     :param ShiftEvolutionOption: Lapse evolution equation choice.
-    :return: None
+    :param KreissOliger_strength_mult_by_W: Whether to multiply Kreiss-Oliger strength by W.
+    :param KreissOliger_strength_gauge: Gauge strength for Kreiss-Oliger dissipation.
+    :param KreissOliger_strength_nongauge: Non-gauge strength for Kreiss-Oliger dissipation.
+    :param OMP_collapse: Degree of OpenMP loop collapsing.
+
+    :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -527,8 +543,10 @@ def register_CFunction_Ricci_eval(
     :param CoordSystem: The coordinate system to be used.
     :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
     :param enable_simd: Whether or not to enable SIMD instructions.
+    :param enable_fd_functions: Whether or not to enable finite difference functions.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
-    :return: None
+
+    :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -624,8 +642,10 @@ def register_CFunction_constraints(
     :param CoordSystem: The coordinate system to be used.
     :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
     :param enable_simd: Whether or not to enable SIMD instructions.
+    :param enable_fd_functions: Whether or not to enable finite difference functions.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
-    :return: None
+
+    :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -696,7 +716,8 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
     :param CoordSystem: The coordinate system to be used.
     :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
-    :return: None
+
+    :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -785,7 +806,6 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
-#
 def register_CFunction_psi4_part(
     CoordSystem: str,
     which_part: int,
@@ -795,15 +815,15 @@ def register_CFunction_psi4_part(
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Add psi4 to Cfunction dictionary. psi4 is a really huge expression, so we output
-    it in 3 parts: psi4_part0, psi4_part1, and psi4_part2
+    it in 3 parts: psi4_part0, psi4_part1, and psi4_part2.
 
     :param CoordSystem: Coordinate system to be used.
-    :param enable_rfm_precompute: Flag to enable or disable the precomputation of reference metric.
     :param which_part: Specifies which part of psi4 to compute.
+    :param enable_fd_functions: Flag to enable or disable the finite difference functions.
     :param OMP_collapse: OpenMP collapse clause integer value.
     :param output_empty_function: If True, psi4 will be set to zero.
 
-    :return: Returns the modified NRPy environment, if applicable.
+    :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -920,7 +940,8 @@ def register_CFunction_psi4_tetrad(
     :param tetrad: The type of tetrad. Defaults to "quasiKinnersley".
     :param use_metric_to_construct_unit_normal: Whether to use the metric to construct the unit normal. Defaults to False.
     :param output_empty_function: If True, output an empty function body. Defaults to False.
-    :return: A NRPy Environment object or None.
+
+    :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -999,6 +1020,10 @@ def register_CFunction_psi4_spinweightm2_decomposition_on_sphlike_grids() -> (
 ):
     """
     Register C function for decomposing psi4 into spin-weighted spherical harmonics
+
+    :param None: No parameters for this function.
+
+    :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
