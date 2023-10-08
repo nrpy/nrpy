@@ -242,27 +242,26 @@ class BHaHGridFunction(GridFunction):
     @staticmethod
     def gridfunction_defines() -> str:
         """
-        Generates a string representation of all the GridFunction definitions.
-        This function also includes definitions for the values of each gridfunction at infinity and the characteristic wave speed.
-        The output is formatted to be used in C-style languages.
+        Generate a string representation of all the GridFunction definitions.
 
-        This function assumes the existence of a global gridfunction dictionary named 'glb_gridfcs_dict'. The keys of this
-        dictionary should be gridfunction names, and the values should be instances of classes derived from GridFunction.
+        This function also includes definitions for the values of each gridfunction
+        at infinity and the characteristic wave speed. The output is formatted to be
+        used in C-style languages.
 
-        Returns:
-            str: The resulting string representation of the GridFunction definitions.
+        This function assumes the existence of a global gridfunction dictionary named
+        'glb_gridfcs_dict'. The keys of this dictionary should be gridfunction names,
+        and the values should be instances of classes derived from GridFunction.
+
+        :return: The resulting string representation of the GridFunction definitions.
         """
 
         def define_gfs(name: str, gfs: List[str]) -> str:
             """
-            Helper function to generate string representation for a list of GridFunctions.
+            Generate string representation for a list of GridFunctions.
 
-            Args:
-                name (str): The name of the group.
-                gfs (List[str]): The list of GridFunctions.
-
-            Returns:
-                str: The resulting string representation.
+            :param name: The name of the group.
+            :param gfs: The list of GridFunctions.
+            :return: The resulting string representation.
             """
             num_gfs = len(gfs)
             defines = "\n".join(
@@ -299,9 +298,7 @@ class BHaHGridFunction(GridFunction):
 
 
 class BaseETGridFunction(GridFunction):
-    """
-    Subclass for basic (non-CarpetX) Einstein Toolkit grid functions.
-    """
+    """Subclass for basic (non-CarpetX) Einstein Toolkit grid functions."""
 
     def __init__(
         self,
@@ -321,17 +318,14 @@ class BaseETGridFunction(GridFunction):
 
     def verify_gridfunction_group_is_valid(self) -> None:
         """
-        Verifies that the 'group' attribute of the GridFunction instance is one of the valid groups.
+        Verify that the 'group' attribute of the GridFunction instance is one of the valid groups.
 
         The valid groups are:
         'EVOL': for evolved quantities (i.e., quantities stepped forward in time),
         'AUXEVOL': for auxiliary quantities needed at all points by evolved quantities,
         'AUX': for all other quantities needed at all gridpoints.
 
-        If the 'group' attribute is not one of these, a ValueError is raised.
-
-        Raises:
-            ValueError: If the 'group' attribute is not one of the valid groups.
+        :raises ValueError: If the 'group' attribute is not one of the valid groups.
         """
         valid_groups = (
             "EVOL",
@@ -351,18 +345,16 @@ class BaseETGridFunction(GridFunction):
         self, i0_offset: int = 0, i1_offset: int = 0, i2_offset: int = 0, **kwargs: Any
     ) -> str:
         """
-        This function takes a grid function name, three integer offsets, and an optional keyword arguments dictionary,
-        then returns a formatted string. If 'gf_array_name' is not provided in kwargs, it raises a ValueError.
+        Generate a formatted string using the grid function name and offsets.
 
-        Parameters:
-        gf_name (str): The grid function name
-        i0_offset (int): Offset for the first index
-        i1_offset (int): Offset for the second index
-        i2_offset (int): Offset for the third index
-        kwargs (dict): Optional keyword arguments.
+        If 'gf_array_name' is not provided in kwargs, a ValueError is raised.
 
-        Returns:
-        str: Formatted string
+        :param i0_offset: Offset for the first index
+        :param i1_offset: Offset for the second index
+        :param i2_offset: Offset for the third index
+        :param kwargs: Optional keyword arguments.
+        :return: Formatted string
+        :raises ValueError: If 'gf_array_name' is not provided in kwargs or if kwargs are passed when they shouldn't be.
 
         Doctests:
         >>> glb_gridfcs_dict.clear()
@@ -374,7 +366,6 @@ class BaseETGridFunction(GridFunction):
         >>> glb_gridfcs_dict["defg"].read_gf_from_memory_Ccode_onept(0, -1, 0)
         'defg[CCTK_GFINDEX3D(cctkGH, i0, i1-1, i2)]'
         """
-
         if kwargs:
             raise ValueError(
                 "BaseETGridFunction.read_gf_from_memory_Ccode_onept() does not accept kwargs!"
@@ -426,7 +417,7 @@ class CarpetXGridFunction(GridFunction):
 
     def verify_gridfunction_group_is_valid(self) -> None:
         """
-        Verifies that the 'group' attribute of the GridFunction instance is one of the valid groups.
+        Verify that the 'group' attribute of the GridFunction instance is one of the valid groups.
 
         The valid groups are:
         'EVOL': for evolved quantities (i.e., quantities stepped forward in time),
@@ -437,10 +428,7 @@ class CarpetXGridFunction(GridFunction):
         'TILE_TMP': for all temporary quantities defined for CarpetX tiles,
         'SCALAR_TMP': for all temporary quantities defined for doubles.
 
-        If the 'group' attribute is not one of these, a ValueError is raised.
-
-        Raises:
-            ValueError: If the 'group' attribute is not one of the valid groups.
+        :raises ValueError: If the 'group' attribute is not one of the valid groups.
         """
         valid_groups = (
             "EVOL",
@@ -466,15 +454,12 @@ class CarpetXGridFunction(GridFunction):
 
     def verify_gridfunction_centering_is_valid(self) -> None:
         """
-        Verifies that the 'centering' attribute of the GridFunction instance is valid.
+        Verify that the 'centering' attribute of the GridFunction instance is valid.
 
         A valid 'centering' is a 3-character string where each character is either 'C' or 'V'.
         'C' stands for cell-centered quantities, 'V' stands for vertex-centered quantities.
 
-        If the 'centering' attribute is not valid, a ValueError is raised.
-
-        Raises:
-            ValueError: If the 'centering' attribute is not valid.
+        :raises ValueError: If the 'centering' attribute is not valid.
         """
         if len(self.centering) != 3 or any(c not in ("C", "V") for c in self.centering):
             msg = (
@@ -505,7 +490,7 @@ def register_gridfunctions(
     :param kwargs: Additional keyword arguments.
     :return: A list of sympy symbols representing the registered grid functions.
 
-    Example:
+    Doctests:
     >>> glb_gridfcs_dict.clear()
     >>> gridfunc = register_gridfunctions('gridfunc')[0]
     >>> print(gridfunc)
@@ -570,12 +555,9 @@ def register_gridfunctions_for_single_rank1(
     """
     Register gridfunctions for a single rank 1 variable.
 
-    Args:
-        basename: Base name of the gridfunction to register.
-        **kwargs: Additional keyword arguments for registration.
-
-    Returns:
-        List of SymPy symbols.
+    :param basename: Base name of the gridfunction to register.
+    :param kwargs: Additional keyword arguments for registration.
+    :return: List of SymPy symbols.
 
     Doctests:
     >>> glb_gridfcs_dict.clear()
@@ -589,7 +571,6 @@ def register_gridfunctions_for_single_rank1(
     >>> print(outstr[:-1])
     betU0 betU1 betU2
     """
-
     dimension = kwargs.get("dimension", 3)
     if "dimension" in kwargs:
         del kwargs["dimension"]
@@ -618,13 +599,10 @@ def register_gridfunctions_for_single_rank2(
     """
     Register gridfunctions for a single rank 2 variable.
 
-    Args:
-        basename: Base name of the gridfunction to register.
-        symmetry: Optional symmetry for rank 2 gridfunctions.
-        **kwargs: Additional keyword arguments for registration.
-
-    Returns:
-        2D list of SymPy symbols.
+    :param basename: Base name of the gridfunction to register.
+    :param symmetry: Optional symmetry for rank 2 gridfunctions.
+    :param kwargs: Additional keyword arguments for registration.
+    :return: 2D list of SymPy symbols.
 
     Doctests:
     >>> glb_gridfcs_dict.clear()
@@ -638,7 +616,6 @@ def register_gridfunctions_for_single_rank2(
     >>> print(outstr[:-1])
     gDD00 gDD01 gDD02 gDD11 gDD12 gDD22
     """
-
     dimension = kwargs.get("dimension", 3)
     if "dimension" in kwargs:
         del kwargs["dimension"]
