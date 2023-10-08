@@ -116,8 +116,8 @@ def write_CodeParameters_h_files(
     project_dir: str,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 0}",
 ) -> None:
-    """
-    Generates C code to set C parameter constants and writes them to files.
+    r"""
+    Generate C code to set C parameter constants and writes them to files.
 
     :param project_name: The name of the project directory.
     :param project_root_dir: The root directory of the project.
@@ -131,7 +131,7 @@ def write_CodeParameters_h_files(
     char some_string[100];                                      // CodeParameters_c_files::some_string
     {
       strncpy(some_string, params->some_string, 99);
-      some_string[99] = '\\0';
+      some_string[99] = '\0';
     } // Properly null terminate char array.
     <BLANKLINE>
     >>> print((project_dir / 'set_CodeParameters-nopointer.h').read_text())
@@ -141,7 +141,7 @@ def write_CodeParameters_h_files(
     char some_string[100];                                     // CodeParameters_c_files::some_string
     {
       strncpy(some_string, params.some_string, 99);
-      some_string[99] = '\\0';
+      some_string[99] = '\0';
     } // Properly null terminate char array.
     <BLANKLINE>
     >>> print((project_dir / 'set_CodeParameters-simd.h').read_text())

@@ -86,10 +86,13 @@ def register_CFunction_exact_solution_single_point(
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
-def register_CFunction_initial_data(OMP_collapse: int) -> Union[None, pcg.NRPyEnv_type]:
+def register_CFunction_initial_data(
+    OMP_collapse: int, enable_checkpointing: bool = False
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the initial data function for the wave equation with specific parameters.
 
+    :param enable_checkpointing: Attempt to read from a checkpoint file before generating initial data.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
 
     :return: None if in registration phase, else the updated NRPy environment.
@@ -108,7 +111,7 @@ def register_CFunction_initial_data(OMP_collapse: int) -> Union[None, pcg.NRPyEn
     uu_gf_memaccess = gri.BHaHGridFunction.access_gf("uu")
     vv_gf_memaccess = gri.BHaHGridFunction.access_gf("vv")
     # Unpack griddata
-    body = r"""
+    body = r"""// Attempt to read checkpoint file. If it doesn't exist, then continue. Otherwise return.
 if( read_checkpoint(commondata, griddata) ) return;
 
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {

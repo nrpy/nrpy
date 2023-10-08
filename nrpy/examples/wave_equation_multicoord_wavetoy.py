@@ -74,7 +74,9 @@ par.adjust_CodeParam_default("t_final", t_final)
 #         cfc.CFunction_dict["function_name"]
 
 
-wCl.register_CFunction_initial_data(OMP_collapse=OMP_collapse)
+wCl.register_CFunction_initial_data(
+    enable_checkpointing=True, OMP_collapse=OMP_collapse
+)
 
 numericalgrids.register_CFunctions(
     list_of_CoordSystems=list_of_CoordSystems,

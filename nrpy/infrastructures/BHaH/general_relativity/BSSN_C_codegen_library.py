@@ -44,6 +44,7 @@ def register_CFunction_initial_data(
     IDtype: str,
     IDCoordSystem: str,
     ID_persist_struct_str: str,
+    enable_checkpointing: bool = False,
     populate_ID_persist_struct_str: str = "",
     free_ID_persist_struct_str: str = "",
 ) -> Union[None, pcg.NRPyEnv_type]:
@@ -58,6 +59,7 @@ def register_CFunction_initial_data(
     :param CoordSystem: The coordinate system for the calculation.
     :param IDtype: The type of initial data.
     :param IDCoordSystem: The native coordinate system of the initial data.
+    :param enable_checkpointing: Attempt to read from a checkpoint file before generating initial data.
     :param ID_persist_struct_str: A string representing the persistent structure for the initial data.
     :param populate_ID_persist_struct_str: Optional string to populate the persistent structure for initial data.
     :param free_ID_persist_struct_str: Optional string to free the persistent structure for initial data.
@@ -99,10 +101,12 @@ def register_CFunction_initial_data(
         "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
     )
 
-    # Unpack griddata
-    body = """
-ID_persist_struct ID_persist;
+    body = ""
+    if enable_checkpointing:
+        body += """// Attempt to read checkpoint file. If it doesn't exist, then continue. Otherwise return.
+if( read_checkpoint(commondata, griddata) ) return;
 """
+    body += "ID_persist_struct ID_persist;\n"
     if populate_ID_persist_struct_str:
         body += populate_ID_persist_struct_str
     body += """

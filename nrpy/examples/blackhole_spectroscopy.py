@@ -28,6 +28,7 @@ import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 import nrpy.infrastructures.BHaH.main_c as main
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
+import nrpy.infrastructures.BHaH.checkpointing as chkpt
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
 import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
@@ -61,6 +62,7 @@ ShiftEvolutionOption = "GammaDriving2ndOrder_Covariant"
 GammaDriving_eta = 2.0
 grid_physical_size = 300.0
 diagnostics_output_every = 0.5
+default_checkpoint_every = 2.0
 t_final = 1.5 * grid_physical_size
 swm2sh_maximum_l_mode_generated = 8
 swm2sh_maximum_l_mode_to_compute = 2  # for consistency with NRPy 1.0 version.
@@ -112,6 +114,7 @@ BCl.register_CFunction_initial_data(
     CoordSystem=CoordSystem,
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
+    enable_checkpointing=True,
     ID_persist_struct_str=IDps.ID_persist_str(),
     populate_ID_persist_struct_str=r"""
 initialize_ID_persist_struct(commondata, &ID_persist);
@@ -222,6 +225,7 @@ MoL.MoL_register_CFunctions(
 )
 xxCartxx.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
 xxCartxx.register_CFunction_xx_to_Cart(CoordSystem)
+chkpt.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
 progress.register_CFunction_progress_indicator()
 rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
@@ -268,6 +272,7 @@ Bdefines_h.output_BHaH_defines_h(
 )
 main.register_CFunction_main_c(
     initial_data_desc=IDtype,
+    pre_MoL_step_forward_in_time="write_checkpoint(&commondata, griddata);\n",
     MoL_method=MoL_method,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
