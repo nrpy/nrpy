@@ -857,7 +857,8 @@ def MoL_register_CFunctions(
       free(gridfuncs->y_nplus1_running_total_gfs);
       free(gridfuncs->k_odd_gfs);
       free(gridfuncs->k_even_gfs);
-      free(gridfuncs->auxevol_gfs);
+      if (NUM_AUXEVOL_GFS > 0)
+        free(gridfuncs->auxevol_gfs);
     }
     <BLANKLINE>
     >>> print(cfc.CFunction_dict["MoL_malloc_non_y_n_gfs"].full_function)
@@ -874,7 +875,8 @@ def MoL_register_CFunctions(
       gridfuncs->y_nplus1_running_total_gfs = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);
       gridfuncs->k_odd_gfs = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);
       gridfuncs->k_even_gfs = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);
-      gridfuncs->auxevol_gfs = (REAL *restrict)malloc(sizeof(REAL) * NUM_AUXEVOL_GFS * Nxx_plus_2NGHOSTS_tot);
+      if (NUM_AUXEVOL_GFS > 0)
+        gridfuncs->auxevol_gfs = (REAL *restrict)malloc(sizeof(REAL) * NUM_AUXEVOL_GFS * Nxx_plus_2NGHOSTS_tot);
     <BLANKLINE>
       gridfuncs->diagnostic_output_gfs = gridfuncs->y_nplus1_running_total_gfs;
       gridfuncs->diagnostic_output_gfs2 = gridfuncs->k_odd_gfs;
