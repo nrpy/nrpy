@@ -314,7 +314,7 @@ def register_CFunction_rhs_eval(
         return None
 
     in_OMP_collapse = 1
-    if "Spherical" in CoordSystem and WaveType == "SphericalGaussian":
+    if "Spherical" in in_CoordSystem and WaveType == "SphericalGaussian":
         par.set_parval_from_str("symmetry_axes", "12")
         in_OMP_collapse = 2  # about 2x faster
 
@@ -354,7 +354,7 @@ def register_CFunction_rhs_eval(
         includes=includes,
         desc=desc,
         c_type=c_type,
-        CoordSystem_for_wrapper_func=CoordSystem,
+        CoordSystem_for_wrapper_func=in_CoordSystem,
         name=name,
         params=params,
         body=body,
