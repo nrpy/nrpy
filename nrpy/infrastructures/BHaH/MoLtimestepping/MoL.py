@@ -202,6 +202,9 @@ def register_CFunction_MoL_malloc(
         num_gfs = (
             "NUM_EVOL_GFS" if gridfunctions != "auxevol_gfs" else "NUM_AUXEVOL_GFS"
         )
+        # Don't malloc a zero-sized array.
+        if num_gfs == "NUM_AUXEVOL_GFS":
+            body += "  if(NUM_AUXEVOL_GFS > 0) "
         body += (
             f"gridfuncs->{gridfunctions} = (REAL *restrict)malloc(sizeof(REAL) * {num_gfs} * "
             "Nxx_plus_2NGHOSTS_tot);\n"
@@ -786,9 +789,13 @@ def register_CFunction_MoL_free_memory(
 
     name: str = f"MoL_free_memory_{which_gfs}"
     params = "MoL_gridfunctions_struct *restrict gridfuncs"
-    body = "\n".join(
-        [f"    free(gridfuncs->{gridfunction});" for gridfunction in gridfunctions_list]
-    )
+    body = ""
+    for gridfunction in gridfunctions_list:
+        # Don't free a zero-sized array.
+        if gridfunction == "auxevol_gfs":
+            body += f"  if(NUM_AUXEVOL_GFS > 0) free(gridfuncs->{gridfunction});"
+        else:
+            body += f"  free(gridfuncs->{gridfunction});"
     cfc.register_CFunction(
         includes=includes,
         desc=desc,

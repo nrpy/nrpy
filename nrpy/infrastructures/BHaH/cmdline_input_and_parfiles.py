@@ -55,11 +55,25 @@ static char* trim_space(char *str) {
 }
 
 static void safe_copy(char *dest, const char *src, size_t size) {
-  if (strlen(src) >= size) {
-    fprintf(stderr, "Error: Buffer overflow detected.\n");
-    exit(1);
-  }
-  strcpy(dest, src);
+    if (src == NULL) {
+        fprintf(stderr, "Error: Source string is NULL.\n");
+        exit(1);
+    }
+    if (dest == NULL) {
+        fprintf(stderr, "Error: Destination string is NULL.\n");
+        exit(1);
+    }
+    if (size == 0) {
+        fprintf(stderr, "Error: Size is zero.\n");
+        exit(1);
+    }
+    size_t src_len = strlen(src);
+    if (src_len >= size) {
+        fprintf(stderr, "Error: Buffer overflow detected.\n");
+        exit(1);
+    }
+    strncpy(dest, src, size - 1);
+    dest[size - 1] = '\0';
 }
 
 static void read_integer(const char *value, int *result, const char *param_name) {
@@ -89,14 +103,11 @@ static void read_double(const char *value, double *result, const char *param_nam
 }
 
 static void read_chararray(const char *value, char *result, const char *param_name, size_t size) {
-  // Validation logic for string if necessary (e.g., length or format checks)
-
   if (strlen(value) >= size) {
     fprintf(stderr, "Error: Buffer overflow detected for %s.\n", param_name);
     exit(1);
   }
-
-  strcpy(result, value);
+  safe_copy(result, value, size);
 }
 """
     if cmdline_inputs is None:
