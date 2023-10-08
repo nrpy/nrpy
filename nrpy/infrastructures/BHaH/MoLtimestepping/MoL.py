@@ -43,8 +43,9 @@ def is_diagonal_Butcher(
     """
     Check if a given Butcher table (from Butcher_dict) is diagonal.
 
-    :param key: The key to retrieve the Butcher table from the Butcher_dict.
     :param Butcher_dict: A dictionary containing Butcher tables. Each key maps to a table (list of lists).
+    :param key: The key to retrieve the Butcher table from the Butcher_dict.
+
     :return: True if the table is diagonal, False otherwise.
 
     Note:
@@ -242,19 +243,20 @@ def single_RK_substep_input_symbolic(
     """
     Generate C code for a given Runge-Kutta substep.
 
-    Parameters:
-    - comment_block: Block of comments for the generated code.
-    - substep_time_offset_dt: Time offset for the RK substep.
-    - rhs_str: Right-hand side string of the C code.
-    - ...
-    - post_post_rhs_string: String to be used after the post-RHS phase.
+    :param comment_block: Block of comments for the generated code.
+    :param substep_time_offset_dt: Time offset for the RK substep.
+    :param rhs_str: Right-hand side string of the C code.
+    :param rhs_input_expr: Input expression for the RHS.
+    :param rhs_output_expr: Output expression for the RHS.
+    :param RK_lhs_list: List of LHS expressions for RK.
+    :param RK_rhs_list: List of RHS expressions for RK.
+    :param post_rhs_list: List of post-RHS expressions.
+    :param post_rhs_output_list: List of outputs for post-RHS expressions.
+    :param enable_simd: Whether SIMD optimization is enabled.
+    :param gf_aliases: Additional aliases for grid functions.
+    :param post_post_rhs_string: String to be used after the post-RHS phase.
 
-    Returns:
-    - A string containing the generated C code.
-
-    Doctest:
-    # >>> single_RK_substep_input_symbolic("// Test", 0.5, "test", "input", "output", "lhs", sp.Symbol("rhs"), "post_rhs", "post_output")
-    # '...'
+    :return: A string containing the generated C code.
     """
 
     # Ensure all input lists are lists
@@ -410,6 +412,7 @@ def register_CFunction_MoL_step_forward_in_time(
     :param enable_rfm_precompute: Flag to enable reference metric functionality.
     :param enable_curviBCs: Flag to enable curvilinear boundary conditions.
     :param enable_simd: Flag to enable SIMD functionality.
+
     :return: None
 
     Doctest:
@@ -817,6 +820,7 @@ def MoL_register_CFunctions(
     :param enable_rfm_precompute: Enable reference metric support. Default is False.
     :param enable_curviBCs: Enable curvilinear boundary conditions. Default is False.
     :param enable_simd: Enable Single Instruction, Multiple Data (SIMD). Default is False.
+    :param register_MoL_step_forward_in_time: Whether to register the MoL step forward function. Default is True.
 
     :return: None
 

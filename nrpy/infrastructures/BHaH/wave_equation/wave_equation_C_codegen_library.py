@@ -39,9 +39,11 @@ def register_CFunction_exact_solution_single_point(
     :param CoordSystem: The coordinate system to use in setting up initial data.
     :param WaveType: The type of wave: SphericalGaussian or PlaneWave
     :param default_sigma: The default value for the Gaussian width (sigma).
-    :param default_k0: The default value for the plane wave wavenumber k in the x-direction
-    :param default_k1: The default value for the plane wave wavenumber k in the y-direction
-    :param default_k2: The default value for the plane wave wavenumber k in the z-direction
+    :param default_k0: The default value for the plane wave wavenumber k in the x-direction.
+    :param default_k1: The default value for the plane wave wavenumber k in the y-direction.
+    :param default_k2: The default value for the plane wave wavenumber k in the z-direction.
+
+    :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -87,6 +89,10 @@ def register_CFunction_exact_solution_single_point(
 def register_CFunction_initial_data(OMP_collapse: int) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the initial data function for the wave equation with specific parameters.
+
+    :param OMP_collapse: Degree of OpenMP loop collapsing.
+
+    :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -136,6 +142,10 @@ def register_CFunction_diagnostics(
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the simulation diagnostics function for the wave equation with specific parameters.
+
+    :param default_diagnostics_out_every: The default frequency for diagnostics output.
+
+    :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -261,8 +271,13 @@ def register_CFunction_rhs_eval(
     This function sets the right-hand side of the wave equation according to the
     selected coordinate system and specified parameters.
 
+    :param CoordSystem: The coordinate system.
+    :param WaveType: The type of wave.
     :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
-    :return: None
+    :param enable_simd: Whether or not to enable SIMD.
+    :param OMP_collapse: Level of OpenMP loop collapsing.
+
+    :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
