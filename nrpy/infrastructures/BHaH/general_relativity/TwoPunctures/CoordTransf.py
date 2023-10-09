@@ -1,5 +1,6 @@
 """
-Python module registering code from CoordTransf.c in TwoPunctures.
+Register TwoPunctures code CoordTransf.c.
+
 Note that this C file is just a collection of functions for
 Coordinate transformations. The registered function
 TP_CoordTransf() is unused.
@@ -26,9 +27,7 @@ import nrpy.c_function as cfc
 
 
 def register_CFunction_TP_CoordTransf() -> None:
-    """
-    Register C function TP_CoordTransf(), provides functions for coordinate transformations for TwoPunctures solver.
-    """
+    """Register C function TP_CoordTransf(), provides functions for coordinate transformations for TwoPunctures solver."""
     desc = "CoordTransf.c from TwoPunctures. Note that this C file is just a collection of functions for Coordinate transformations. TP_CoordTransf() is unused."
     # prefunc contains most of the source code
     prefunc = f"// {desc}\n\n"

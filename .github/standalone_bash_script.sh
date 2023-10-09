@@ -50,6 +50,8 @@ for python_file in $python_files; do
   if (( $(echo "$pylint_score < 10.00" | bc -l) )); then
     PYTHONPATH=.:$PYTHONPATH pylint --rcfile=.pylintrc $python_file || true
   fi
+  echo "-={ Step 5: pydocstyle }=-"  # Added pydocstyle step
+  pydocstyle $python_file || { failed_tests+=("pydocstyle in $python_file"); break; }
 done
 
 # Exit with failure if any tests failed

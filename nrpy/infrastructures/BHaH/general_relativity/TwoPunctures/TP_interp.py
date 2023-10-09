@@ -1,5 +1,5 @@
 """
-Python module registering C function TwoPunctures_interp from TwoPunctures
+Register TwoPunctures code TwoPunctures_interp.c.
 
 TwoPunctures creates initial for two puncture black holes using a
 single domain spectral method.  This method is described in
@@ -20,7 +20,9 @@ import nrpy.c_function as cfc
 
 def register_CFunction_TP_Interp() -> None:
     """
-    Register C function TP_Interp(), provides spectral interpolator to provide data at arbitrary point x,y,z in Cartesian basis.
+    Register C function TP_Interp().
+
+    Provides spectral interpolator to provide data at arbitrary point x,y,z in Cartesian basis.
     """
     includes = ["assert.h", "TP_utilities.h", "TwoPunctures.h"]
     desc = "Spectral interpolation from TwoPunctures grids onto an arbitrary point xCart[3] = {x,y,z} in the Cartesian basis."

@@ -1,5 +1,5 @@
 """
-Python module registering C functions from FuncAndJacobian.c in TwoPunctures
+Register TwoPunctures code FuncAndJacobian.c.
 
 TwoPunctures creates initial for two puncture black holes using a
 single domain spectral method.  This method is described in
@@ -23,9 +23,7 @@ import nrpy.c_function as cfc
 
 
 def register_CFunction_TP_FuncAndJacobian() -> None:
-    """
-    Register C function TP_FuncAndJacobian(), provides functions computing Jacobians within TwoPunctures solver.
-    """
+    """Register C function TP_FuncAndJacobian(), provides functions computing Jacobians within TwoPunctures solver."""
     desc = "FuncAndJacobian.c from TwoPunctures. Note that this C file is just a collection of functions for computing Jacobians. TP_FuncAndJacobian() is unused."
     # prefunc contains most of the source code
     prefunc = f"// {desc}\n\n"

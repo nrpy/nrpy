@@ -1,6 +1,5 @@
 """
-Python module for registering all TwoPunctures functions within NRPy+'s
-    CFunction dictionary.
+Register all TwoPunctures functions within NRPy+'s CFunction dictionary.
 
 License: Lesser GNU Public License, version 2.0+
 
@@ -22,7 +21,7 @@ from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import TP_utiliti
 
 def copy_TwoPunctures_header_files(TwoPunctures_Path: Path) -> None:
     """
-    Copies TwoPunctures.h and TP_utilities.h into project directory.
+    Copy TwoPunctures.h and TP_utilities.h into project directory.
 
     :param project_Path: The path of the project directory where the file will be copied.
     """

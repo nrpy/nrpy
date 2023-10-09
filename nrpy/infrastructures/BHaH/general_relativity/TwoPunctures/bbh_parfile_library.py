@@ -1,5 +1,5 @@
 """
-Python module for
+Python module for managing initial parameters for binary black hole (BBH) simulations.
 
 License: Lesser GNU Public License, version 2.0+
 
@@ -35,7 +35,7 @@ def add_to_bbh_params_dict(
     Nphi: int = -1,
 ) -> None:
     """
-    Adds a new entry to the bbh_params_dict with the given parameters.
+    Add a new entry to the bbh_params_dict with the given parameters.
 
     :param name: The name identifier for the bbh parameters.
     :param q: Mass ratio.

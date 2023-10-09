@@ -1,6 +1,5 @@
 """
-Python module for initializing and setting BH@H's
-  persistent initial data structure ID_struct.
+Initialize and set BH@H's persistent initial data structure ID_struct for TwoPunctures initial data.
 
 License: Lesser GNU Public License, version 2.0+
 
@@ -36,9 +35,7 @@ par.register_CodeParameters(
 
 
 def ID_persist_str() -> str:
-    """
-    Return contents of ID_persist_struct for TwoPunctures initial data.
-    """
+    """Return contents of ID_persist_struct for TwoPunctures initial data."""
     return r"""
   derivs v;    // stores coefficients
   derivs cf_v; // stores coefficients
@@ -86,7 +83,9 @@ def ID_persist_str() -> str:
 
 def register_CFunction_initialize_ID_persist_struct() -> None:
     """
-    Register C function initialize_ID_persist_struct(), which populates ID_persist_struct with defaults, and overrides defaults with commondata.
+    Register C function initialize_ID_persist_struct().
+
+    This function populates ID_persist_struct with defaults, and overrides defaults with commondata.
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """

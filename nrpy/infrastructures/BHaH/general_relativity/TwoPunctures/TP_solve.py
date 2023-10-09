@@ -1,5 +1,5 @@
 """
-Python module registering C function TwoPunctures_solve from TwoPunctures
+Register TwoPunctures code TwoPunctures_solve.c.
 
 TwoPunctures creates initial for two puncture black holes using a
 single domain spectral method.  This method is described in
@@ -19,9 +19,7 @@ import nrpy.c_function as cfc
 
 
 def register_CFunction_TP_solve() -> None:
-    """
-    Register C function TP_solve(), main driver function for pseudospectral solve.
-    """
+    """Register C function TP_solve(), main driver function for pseudospectral solve."""
     includes = ["stdio.h", "TP_utilities.h", "TwoPunctures.h"]
     desc = "Driver routine for pseudospectral solve."
     name = "TP_solve"

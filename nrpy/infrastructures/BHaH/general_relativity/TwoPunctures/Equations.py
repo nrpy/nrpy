@@ -1,5 +1,6 @@
 """
-Python module registering code from Equations.c in TwoPunctures.
+Register TwoPunctures code Equations.c.
+
 Note that this C file is just a collection of functions for
 basic equations. The registered function TP_Equations() is unused.
 
@@ -25,9 +26,7 @@ import nrpy.c_function as cfc
 
 
 def register_CFunction_TP_Equations() -> None:
-    """
-    Register C function TP_Equations(), provides basic equations functions for TwoPunctures solver.
-    """
+    """Register C function TP_Equations(), provides basic equations functions for TwoPunctures solver."""
     desc = "Equations.c from TwoPunctures. Note that this C file is just a collection of functions for basic equations. TP_Equations() is unused."
     # prefunc contains most of the source code
     prefunc = f"// {desc}\n\n"

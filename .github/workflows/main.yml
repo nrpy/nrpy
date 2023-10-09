@@ -86,6 +86,8 @@ jobs:
             break
           fi
           PYTHONPATH=.:$PYTHONPATH pylint --rcfile=.pylintrc $python_file || true
+          echo "-={ Step 5: pydocstyle }=-"
+          pydocstyle $python_file || { failed_tests+=("pydocstyle in $python_file"); break; }
         done
 
         if [ ${#failed_tests[@]} -ne 0 ]; then

@@ -1,7 +1,5 @@
 """
-Library of C functions for solving the wave equation in
- ***curvilinear*** coordinates, using a reference-metric
- formalism
+Library of C functions for solving the wave equation in curvilinear coordinates, using a reference-metric formalism.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -34,7 +32,7 @@ def register_CFunction_exact_solution_single_point(
     default_k2: float = 1.0,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Registers the C function for the exact solution at a single point.
+    Register the C function for the exact solution at a single point.
 
     :param CoordSystem: The coordinate system to use in setting up initial data.
     :param WaveType: The type of wave: SphericalGaussian or PlaneWave

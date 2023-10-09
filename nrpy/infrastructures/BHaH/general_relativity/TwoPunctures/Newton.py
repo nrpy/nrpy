@@ -1,5 +1,5 @@
 """
-Python module registering C function Newton from TwoPunctures
+Register TwoPunctures code Newton.c.
 
 TwoPunctures creates initial for two puncture black holes using a
 single domain spectral method.  This method is described in
@@ -24,7 +24,9 @@ import nrpy.c_function as cfc
 
 def register_CFunction_TP_Newton() -> None:
     """
-    Register C function TP_Newton(), provides Newton-Raphson algorithm needed for adjusting bare masses to achieve target BH masses.
+    Register C function TP_Newton().
+
+    This function provides Newton-Raphson algorithm needed for adjusting bare masses to achieve target BH masses.
     """
     desc = "Newton.c from TwoPunctures. Note that this C file is a collection of functions for Newton-Raphson method, with TP_Newton() being housed here."
     # prefunc contains most of the source code

@@ -1,6 +1,5 @@
 """
-Register C functions for computing
- the spin-weight -2 spherical harmonics.
+Register C functions for computing the spin-weight -2 spherical harmonics.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot** com
@@ -31,8 +30,8 @@ def register_CFunction_spin_weight_minus2_sph_harmonics() -> (
     Union[None, pcg.NRPyEnv_type]
 ):
     """
-    Registers a C function for computing the spin-weight -2 spherical harmonic
-    for a given (l, m) pair at a specific point (theta, phi).
+    Register C function for computing arbitrary spin-weight -2 spherical harmonics.
+    These spherical harmonics are computed at any (l, m) pair at a specific point (theta, phi).
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
