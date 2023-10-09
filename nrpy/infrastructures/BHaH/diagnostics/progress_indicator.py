@@ -51,14 +51,14 @@ def register_CFunction_progress_indicator() -> None:
     params = """commondata_struct *restrict commondata, const griddata_struct *restrict griddata"""
 
     body = r"""
-  if (commondata->nn == 0) {
+  if (commondata->nn == commondata->nn_0) {
     CURRTIME_FUNC(&commondata->start_wallclock_time);
   }
   TIMEVAR currtime;
   CURRTIME_FUNC(&currtime);
   const REAL time_in_ns = TIME_IN_NS(commondata->start_wallclock_time, currtime);
   const REAL seconds_elapsed = time_in_ns / 1e9;
-  const REAL phys_time_per_sec = (commondata->time - 0) / seconds_elapsed;
+  const REAL phys_time_per_sec = (commondata->time - commondata->t_0) / seconds_elapsed;
   // const REAL RHS_pt_evals_per_sec = num_RHS_pt_evals / (time_in_ns / 1.0e9);
   const REAL seconds_remaining = (int)((commondata->t_final - commondata->time) / phys_time_per_sec);
   int time_remaining__hrs  = (int)(seconds_remaining / 3600.0);
