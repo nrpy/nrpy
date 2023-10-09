@@ -1,6 +1,5 @@
 """
-This module implements the  Goldberg formula for
-  computing spin-weighted spherical harmonics.
+The Goldberg formula for computing spin-weighted spherical harmonics is implemented here.
   (https://aip.scitation.org/doi/10.1063/1.1705135)
 Wikipedia also has an article on Spin-Weighted Spherical Hamronics:
   (https://en.wikipedia.org/w/index.php?title=Spin-weighted_spherical_harmonics&oldid=853425244)
@@ -24,7 +23,7 @@ def Y(
     GenerateMathematicaCode: bool = False,
 ) -> sp.Expr:
     """
-    Computes the spin-weighted spherical harmonics using the Goldberg formula.
+    Compute the spin-weighted spherical harmonics using the Goldberg formula.
     Refer to https://aip.scitation.org/doi/10.1063/1.1705135 and Wikipedia's article on
     Spin-weighted spherical harmonics:
     https://en.wikipedia.org/w/index.php?title=Spin-weighted_spherical_harmonics&oldid=853425244

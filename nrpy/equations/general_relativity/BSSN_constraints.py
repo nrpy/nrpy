@@ -1,6 +1,5 @@
 """
-This module constructs expressions for the
-  BSSN Hamiltonian and momentum constraint equations.
+Construct expressions for the BSSN Hamiltonian and momentum constraint equations.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -23,7 +22,7 @@ par.register_param(bool, __name__, "register_MU_gridfunctions", False)
 
 
 class BSSNconstraints:
-    """Sets up and stores expressions for BSSN constraints."""
+    """Set up and store expressions for BSSN constraints."""
 
     def __init__(
         self,

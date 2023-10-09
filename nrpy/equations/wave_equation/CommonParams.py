@@ -1,5 +1,5 @@
 """
-Common parameters for scalar wave evolutions
+Common parameters for scalar wave evolutions.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com

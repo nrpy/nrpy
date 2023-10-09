@@ -1,6 +1,5 @@
 """
-This module constructs expressions for ADM
-  quantities in terms of BSSN quantities.
+Construct expressions for ADM quantities in terms of BSSN quantities.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -20,7 +19,7 @@ class BSSN_to_ADM:
         self, CoordSystem: str = "Cartesian", enable_rfm_precompute: bool = False
     ):
         """
-        Initialize the BSSN_to_ADM class, sets: gammaDD, gammaDDdD, gammaDDdDD, gammaUU, detgamma, GammaUDD, KDD, KDDdD
+        Initialize the BSSN_to_ADM class, sets: gammaDD, gammaDDdD, gammaDDdDD, gammaUU, detgamma, GammaUDD, KDD, KDDdD.
 
         :param CoordSystem: String describing the coordinate system of the inputs.
         :param enable_rfm_precompute: Boolean flag to enable reference metric precomputation

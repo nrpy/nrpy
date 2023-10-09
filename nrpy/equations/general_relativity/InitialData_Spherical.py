@@ -1,7 +1,7 @@
 """
-Set up initial data for solving Einstein's equations
-  of general relativity, for data most naturally specified
-  in Spherical coordinates. Outputs ADM quantities.
+Set up initial data for solving Einstein's equations of general relativity, for data most naturally specified in Spherical coordinates.
+
+Outputs ADM quantities.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -19,11 +19,7 @@ import nrpy.equations.general_relativity.BSSN_quantities  # pylint: disable=unus
 
 
 class InitialData_Spherical:
-    """
-    Set up initial data for solving Einstein's equations
-      of general relativity, for data most naturally specified
-      in Spherical coordinates. Outputs ADM quantities.
-    """
+    """Construct and store Spherical initial data for Einstein's equations of general relativity, as ADM quantities."""
 
     def __init__(self, IDtype: str, override_gauge_with_standard: bool = False) -> None:
         self.IDtype = IDtype
@@ -89,8 +85,7 @@ class InitialData_Spherical:
 
     # fmt: off
     def UIUCBlackHole(self) -> Tuple[List[List[sp.Expr]], List[List[sp.Expr]]]:
-        """Sets up ADM quantities for a spinning black hole in the UIUC initial data slicing,
-           Liu, Etienne, & Shapiro (2009) https://arxiv.org/pdf/1001.4077.pdf"""
+        """Set ADM quantities for a spinning black hole in the UIUC initial data slicing, Liu, Etienne, & Shapiro (2009) https://arxiv.org/pdf/1001.4077.pdf."""
         M, chi = par.register_CodeParameters("REAL", __name__, ["M", "chi"], [1.0, 0.99], commondata=True)
         r = self.r
         th = self.th
@@ -158,8 +153,7 @@ class InitialData_Spherical:
         return gammaDD, KDD
 
     def StaticTrumpet(self) -> Tuple[List[List[sp.Expr]],List[List[sp.Expr]], sp.Expr, List[sp.Expr], List[sp.Expr]]:
-        """Sets up ADM quantities for trumpet black hole initial data,
-        Dennison and Baumgarte (2014) https://arxiv.org/pdf/1403.5484.pdf"""
+        """Set ADM quantities for trumpet black hole initial data, Dennison and Baumgarte (2014) https://arxiv.org/pdf/1403.5484.pdf."""
         M = par.register_CodeParameter("REAL", __name__, "M", 1.0, commondata=True)
         r = self.r
         th = self.th
@@ -211,10 +205,10 @@ class InitialData_Spherical:
         return gammaDD, KDD, alpha, betaU, BU
 
     def OffsetKerrSchild(self) -> Tuple[List[List[sp.Expr]],List[List[sp.Expr]], sp.Expr, List[sp.Expr], List[sp.Expr]]:
-        """Sets up initial data for a spinning black hole in Kerr-Schild coordinates,
-           with a radial offset r0 that removes the region r<r0.
-           See e.g., Etienne et al (2017) https://arxiv.org/pdf/1704.00599.pdf"""
-
+        """
+        Set ADM quantities for a spinning black hole in Kerr-Schild coordinates, with a radial offset r0 removing r<r0 region.
+        See e.g., Etienne et al (2017) https://arxiv.org/pdf/1704.00599.pdf
+        """
         M, a, r0 = par.register_CodeParameters("REAL", __name__, ["M", "a", "r0"], [1.0, 0.9, 1.0], commondata=True)
         r = self.r
         th = self.th

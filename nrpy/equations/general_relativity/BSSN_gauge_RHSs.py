@@ -1,9 +1,9 @@
 """
-This module constructs the right-hand sides (RHSs)
-  expressions for the time evolution equations of the
-  BSSN gauge quantities alpha and beta^i (i.e., the
-  lapse and shift). Several popular gauge conditions are
-  implemented.
+Implement some popular gauge evolution equations for BSSN.
+
+Construct the right-hand sides (RHSs) expressions for the
+  time evolution equations of the BSSN gauge quantities alpha
+  and beta^i (i.e., the lapse and shift).
 
 Authors: Zachariah B. Etienne
         zachetie **at** gmail **dot* com

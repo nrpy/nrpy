@@ -1,6 +1,7 @@
 """
-This module constructs the right-hand sides (RHS)
-  expressions of the BSSN time evolution equations.
+Construct the right-hand side (RHS) expressions for the BSSN (Baumgarte-Shapiro-Shibata-Nakamura) evolution equations.
+
+These equations are used for numerical relativity simulations and are derived from Einstein's field equations.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -26,11 +27,7 @@ have_already_called_BSSN_RHSs_function = False
 
 
 class BSSNRHSs:
-    """
-    Constructs the right-hand side (RHS) expressions for the BSSN (Baumgarte-Shapiro-Shibata-Nakamura) time
-    evolution equations. These equations are used for numerical relativity simulations and
-    are derived from Einstein's field equations.
-    """
+    """Construct and store the BSSN RHSs."""
 
     def __init__(
         self, CoordSystem: str = "Cartesian", enable_rfm_precompute: bool = False

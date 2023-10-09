@@ -1,7 +1,5 @@
 """
-This module constructs expressions for
-  BSSN stress-energy source terms, in terms of
-  elements of T^{mu nu}.
+Construct expressions for BSSN stress-energy source terms, in terms of elements of T^{mu nu}.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com

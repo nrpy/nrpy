@@ -1,5 +1,5 @@
 """
-This module provides functions that declare and define useful BSSN quantities
+Provide functions that declare and define useful BSSN quantities.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -22,7 +22,7 @@ par.register_param(bool, __name__, "enable_T4munu", False)
 
 class BSSNQuantities:
     """
-    This class handles the BSSN quantities involved in General Relativity simulations.
+    Construct and store the BSSN quantities involved in General Relativity simulations.
     It takes care of registering the necessary grid functions for these quantities.
 
     :param CoordSystem: (string) The coordinate system being used, defaults to "Cartesian"

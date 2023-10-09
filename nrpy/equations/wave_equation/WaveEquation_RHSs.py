@@ -1,10 +1,5 @@
 """
-Generating C code for the right-hand-side
- of the scalar wave equation, in
- ***Cartesian*** coordinates, in
- arbitrary spatial dimension
- (up to four spatial dimensions
-  supported at the moment)
+Construct symbolic expressions for the right-hand-side of the wave equation, in Cartesian coordinates.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -45,15 +40,13 @@ class WaveEquation_RHSs:
 
     def __init__(self) -> None:
         """
-        Main function for scalar wave RHS expressions. It defines and computes the right-hand sides
-        for the scalar wave equation evolution.
+        Construct right-hand-sides (RHSs) for wave equation in Cartesian coordinates.
 
         :return: None
 
         .. note::
             Class variables uu_rhs and vv_rhs will be set in this function.
         """
-
         # Step 1: Declare the rank-2 indexed expression \partial_{ij} u,
         #         which is symmetric about the interchange of indices i and j.
         #         Derivative variables like these must have an underscore

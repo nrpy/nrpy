@@ -1,6 +1,5 @@
 """
-Sets up a complete C code project for setting 3.5PN quasicircular
-  momenta for binary black holes, using NRPyPN.
+Set up a complete C code project for setting 3.5PN quasicircular momenta for binary black holes, using NRPyPN.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -37,10 +36,7 @@ shutil.rmtree(project_dir, ignore_errors=True)
 
 
 def register_CFunction_main_c() -> None:
-    """
-    Generates a simplified C main() function for setting quasicircular momenta using NRPyPN.
-    """
-
+    """Generate a simplified C main() function for setting quasicircular momenta using NRPyPN."""
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """-={ main() function }=-
 Step 1.a: Set each commondata CodeParameter to default.

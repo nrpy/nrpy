@@ -1,7 +1,12 @@
 """
-Sets up a complete C code for solving the general relativistic
-  field equations in curvilinear coordinates on a cell-centered
-  grid, using a reference metric.
+Black hole spectroscopy example.
+
+Specifically, evolve Brill-Lindquist initial data forward in time
+  and monitors the ringing of the merged black hole over time via
+  psi4.
+This example sets up a complete C code for solving the GR field
+  equations in curvilinear coordinates on a cell-centered grid,
+  using a reference metric approach.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com

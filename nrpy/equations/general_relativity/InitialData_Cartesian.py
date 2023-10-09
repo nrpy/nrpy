@@ -1,7 +1,7 @@
 """
-Set up initial data for solving Einstein's equations
-  of general relativity, for data most naturally specified
-  in Cartesian coordinates. Outputs ADM quantities.
+Set up initial data for solving Einstein's equations of general relativity, for data most naturally specified in Cartesian coordinates.
+
+Outputs ADM quantities.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -19,10 +19,7 @@ import nrpy.equations.general_relativity.BSSN_quantities  # pylint: disable=unus
 
 
 class InitialData_Cartesian:
-    """
-    Set up initial data for solving Einstein's equations
-    of general relativity, for data most naturally specified
-    in Cartesian coordinates. Outputs ADM quantities."""
+    """Construct and store Cartesian initial data for Einstein's equations of general relativity, as ADM quantities."""
 
     def __init__(self, IDtype: str, override_gauge_with_standard: bool = False) -> None:
         """

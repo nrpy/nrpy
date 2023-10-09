@@ -1,8 +1,5 @@
 """
-Generating C code for plane wave initial
- data for the scalar wave equation in
- ***Cartesian*** coordinates, in up to
- *three* spatial dimensions
+Construct symbolic expressions for initial data for the wave equation, in 3 spatial coordinates.
 
 Authors: Zachariah B. Etienne
          zachetie **at** gmail **dot* com
@@ -80,7 +77,6 @@ def SphericalGaussian(
     :param CoordSystem: The coordinate system, defaults to "Cartesian"
     :param default_sigma: The default value for sigma, defaults to 3
     """
-
     # Step 1: Set up Cartesian coordinates in terms of the native CoordSystem we have chosen.
     #         E.g., if CoordSystem="Cartesian", then xx_to_Cart = [xx[0],xx[1],xx[2]]
     #         or if CoordSystem="Spherical", then xx_to_Cart = [xx[0]*sp.sin(xx[1])*sp.cos(xx[2]),

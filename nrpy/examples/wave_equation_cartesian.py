@@ -1,7 +1,5 @@
 """
-Sets up a complete C code project for solving the wave equation
-  in Cartesian coordinates, on a cell-centered Cartesian
-  grid.
+Set up a complete C code project for solving the wave equation in Cartesian coordinates, on a cell-centered Cartesian grid.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -148,7 +146,7 @@ def register_CFunction_exact_solution_single_point(
     default_k2: float = 1.0,
 ) -> None:
     """
-    Registers the C function for the exact solution at a single point.
+    Register a C function for the exact solution at a single point.
 
     :param in_WaveType: The type of wave: SphericalGaussian or PlaneWave
     :param in_default_sigma: The default value for the Gaussian width (sigma).
@@ -156,7 +154,6 @@ def register_CFunction_exact_solution_single_point(
     :param default_k1: The default value for the plane wave wavenumber k in the y-direction
     :param default_k2: The default value for the plane wave wavenumber k in the z-direction
     """
-
     # Populate uu_ID, vv_ID
     ID = InitialData(
         WaveType=in_WaveType,
@@ -192,9 +189,7 @@ def register_CFunction_exact_solution_single_point(
 
 
 def register_CFunction_initial_data() -> None:
-    """
-    Register the initial data function for the wave equation with specific parameters.
-    """
+    """Register the initial data function for the wave equation with specific parameters."""
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
     desc = r"""Set initial data to params.time==0 corresponds to the initial data."""
@@ -239,9 +234,7 @@ _ = par.CodeParameter(
 
 
 def register_CFunction_diagnostics() -> None:
-    """
-    Register the simulation diagnostics function for the wave equation with specific parameters.
-    """
+    """Register the simulation diagnostics function for the wave equation with specific parameters."""
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
     desc = r"""Diagnostics."""
@@ -317,9 +310,7 @@ if(commondata->time + commondata->dt > commondata->t_final) printf("\n");
 
 
 def register_CFunction_rhs_eval() -> None:
-    """
-    Register the right-hand side evaluation function for the wave equation with specific parameters.
-    """
+    """Register the right-hand side evaluation function for the wave equation with specific parameters."""
     includes = ["BHaH_defines.h"]
     if enable_simd:
         includes += [os.path.join("simd", "simd_intrinsics.h")]

@@ -1,7 +1,5 @@
 """
-Sets up a complete C code project for solving the wave equation
-  in curvilinear coordinates on a cell-centered grid,
-  using a reference metric.
+Sets up a complete C code project for solving the wave equation in curvilinear coordinates on a cell-centered grid, using a reference metric.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com

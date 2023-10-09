@@ -1,8 +1,5 @@
 """
-Define sympy expressions for the right-hand-side
- of the wave equation, in
- ***curvilinear*** coordinates, using a
- reference-metric formalism
+Construct symbolic expressions for the right-hand-side of the wave equation, in curvilinear coordinates, using a reference-metric formalism.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com

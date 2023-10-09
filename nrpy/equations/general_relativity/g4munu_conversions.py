@@ -1,8 +1,5 @@
 """
-This module constructs expressions for
-  ADM or BSSN quantities in terms of the
-  4-metric g4DD, and g4DD/g4UU in terms of
-  ADM/BSSN quantities.
+Construct expressions for ADM or BSSN quantities in terms of the 4-metric g4DD, and g4DD/g4UU in terms of ADM/BSSN quantities.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -31,7 +28,6 @@ def ADM_to_g4DD(
     :param betaU: Shift vector, beta^i.
     :param alpha: Lapse function, alpha.
     :return: 4x4 metric tensor, g_{mu nu}.
-
     """
     # Step 0: Initialize 4x4 tensor to store g_{mu nu}
     g4DD = ixp.zerorank2(dimension=4)
@@ -148,7 +144,6 @@ def g4DD_to_ADM(
     :param g4DD: The input 4-metric tensor (g_{mu nu}) represented as a 4x4 matrix.
     :return: Tuple containing (gamma_{ij}), (alpha), and (beta^i) in the same order.
     """
-
     # Step 1: Declare g4DD as a 4-metric tensor:
     g4DD_is_input_into_this_function = True
     if g4DD is None:
@@ -202,7 +197,6 @@ def g4DD_to_BSSN(
     :param enable_rfm_precompute: Whether to enable precomputation of reference metric quantities.
     :return: Tuple containing BSSN variables (hDD), (cf), (vetU), and (alpha).
     """
-
     gammaDD, alpha, betaU = g4DD_to_ADM(g4DD)
 
     # Convert ADM to BSSN based on the 4-metric tensor

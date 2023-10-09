@@ -1,7 +1,10 @@
 """
-Sets up a complete C code for solving the general relativistic
-  field equations in curvilinear coordinates on a cell-centered
-  grid, using a reference metric.
+Two black holes collide example.
+
+Specifically, evolve Brill-Lindquist initial data forward in time;
+this example sets up a complete C code for solving the GR field
+  equations in curvilinear coordinates on a cell-centered grid,
+  using a reference metric approach.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com

@@ -1,7 +1,5 @@
 """
-This module constructs tetrads needed to
-compute psi_4 (as well as other Weyl scalars
-and invariants if desired).
+Construct tetrads needed to compute psi_4 (as well as other Weyl scalars and invariants if desired).
 
 Authors: Zachariah B. Etienne
          (zachetie **at** gmail **dot* com),
@@ -22,8 +20,7 @@ from nrpy.helpers.cached_functions import cached_simplify
 # Step 1.b: Declare free parameter
 class Psi4Tetrads:
     """
-    Class responsible for constructing tetrads needed for the computation
-    of Weyl scalars like psi_4, and other GR invariants.
+    Class responsible for constructing tetrads needed for the computation of Weyl scalars like psi_4, and other GR invariants.
 
     :param CoordSystem: The coordinate system to be used. Default is 'Cartesian'.
     :param enable_rfm_precompute: Flag to enable/disable reference metric precomputation. Default is False.

@@ -1,6 +1,5 @@
 """
-This module constructs psi_4, with
-respect to any tetrad
+Constructs psi_4, with respect to an arbitrary, unspecified tetrad.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -16,7 +15,7 @@ from nrpy.equations.general_relativity.psi4_tetrads import Psi4Tetrads
 
 class Psi4:
     """
-    Class responsible for constructing psi_4 with respect to any specified tetrad.
+    Class responsible for constructing psi_4 with respect to an arbitrary, unspecified tetrad.
 
     :param CoordSystem: The coordinate system to be used. Default is 'Cartesian'.
     :param enable_rfm_precompute: Flag to enable/disable reference metric precomputation. Default is False.

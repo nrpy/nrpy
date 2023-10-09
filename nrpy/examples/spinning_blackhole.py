@@ -1,7 +1,11 @@
 """
-Sets up a complete C code for solving the general relativistic
-  field equations in curvilinear coordinates on a cell-centered
-  grid, using a reference metric.
+Spinning black hole example.
+
+Specifically, evolve a spinning black hole in the UIUC initial data slicing,
+  Liu, Etienne, & Shapiro (2009) https://arxiv.org/pdf/1001.4077.pdf;
+  this example sets up a complete C code for solving the GR field
+  equations in curvilinear coordinates on a cell-centered grid,
+  using a reference metric approach.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com

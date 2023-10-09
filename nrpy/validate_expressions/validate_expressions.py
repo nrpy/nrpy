@@ -1,4 +1,6 @@
-""" Assert SymPy Expression Equality
+"""
+Assert SymPy Expression Equality.
+
 Authors: Ken Sible, Zachariah Etienne
 Emails:  ksible *at* outlook *dot* com
          zachetie *at** gmail *dot** com
@@ -21,7 +23,7 @@ precision = 30
 
 def flatten_tensor(tensor: List[Any]) -> List[Any]:
     """
-    Recursively flattens a tensor (list of lists of lists of...) to a simple list.
+    Recursively flatten a tensor (list of lists of lists of...) to a simple list.
 
     :param tensor: The tensor to flatten
     :return: A flattened list
@@ -45,7 +47,7 @@ def assert_equal(
     suppress_message: bool = False,
 ) -> None:
     """
-    Asserts the equality of SymPy expressions or dictionaries containing SymPy expressions.
+    Assert the equality of SymPy expressions or dictionaries containing SymPy expressions.
 
     :param vardict_1: A SymPy expression or dictionary of SymPy expressions.
     :param vardict_2: A SymPy expression or dictionary of SymPy expressions to compare with vardict_1.
@@ -105,7 +107,6 @@ def inject_mpfs_into_cse_expression(
     free_symbols_dict: Dict[sp.Symbol, Any],
     replaced: List[Tuple[mpf, mpf]],
     reduced: List[sp.Expr],
-    precision_factor: int = 1,
 ) -> Union[mpf, mpc]:
     """
     Calculate a numerical value for a given expression using the values in free_symbols_dict.
@@ -113,17 +114,17 @@ def inject_mpfs_into_cse_expression(
     :param free_symbols_dict: Dictionary of free symbols and their corresponding values.
     :param replaced: List of tuples containing simplified expressions from SymPy's cse algorithm.
     :param reduced: List of reduced expressions from SymPy's cse algorithm.
-    :param precision_factor: Factor by which to increase the precision of the calculated numerical value.
     :return: Numerical value of the expression as either mpf or mpc.
     """
     # Original logic, assumes reduced list only has one element
     reduced_expr = reduced[0]
-    mp.dps = precision_factor * precision
 
     for lhs, rhs in replaced:
         free_symbols_dict[lhs] = rhs.xreplace(free_symbols_dict)
+        # print("HEY", free_symbols_dict[lhs], rhs)
 
     reduced_expr = reduced_expr.xreplace(free_symbols_dict)
+    # print("HEY", reduced_expr)
 
     # nrpyAbs = sp.Function("nrpyAbs")
     # reduced_expr = reduced_expr.subs(nrpyAbs, sp.Abs)
@@ -131,9 +132,7 @@ def inject_mpfs_into_cse_expression(
     try:
         res = mpf(reduced_expr)
     except TypeError:
-        res = mpc(sp.N(reduced_expr, precision))
-
-    mp.dps = precision
+        res = mpc(sp.N(reduced_expr, mp.dps))
     return res
 
 
@@ -146,11 +145,9 @@ def convert_free_symbols_set_to_mpf_dict(
 
     :param free_symbols_set: Set of free symbols to be converted.
     :param fixed_mpfs_for_free_symbols: Flag to indicate if the mpf values should be fixed.
-    :param precision: The precision to set for mp.dps.
 
     :return: Dictionary with free symbols as keys and their corresponding mpf values as values.
     """
-    mp.dps = precision
     free_symbols_dict: Dict[sp.Symbol, Any] = {}
 
     # Setting each variable in free_symbols_set to a random number in [0, 1) according to the hashed string
@@ -176,7 +173,7 @@ def convert_one_expression_to_mpfmpc(
     verbose: bool = True,
 ) -> Union[mpf, mpc]:
     """
-    Converts a given SymPy expression to either mpf or mpc form.
+    Convert a given SymPy expression to either mpf or mpc form.
 
     :param expr: SymPy expression to convert
     :param fixed_mpfs_for_free_symbols: Whether to fix mpf values for free symbols
@@ -186,6 +183,7 @@ def convert_one_expression_to_mpfmpc(
     >>> convert_one_expression_to_mpfmpc(sp.sympify(0))
     mpf('0.0')
     """
+    mp.dps = precision
     # Speeds up evaluation of Spherical rfm quantities by about 5%
     if expr == sp.sympify(0):
         return mpf(0.0)
@@ -205,23 +203,36 @@ def convert_one_expression_to_mpfmpc(
     result_value = inject_mpfs_into_cse_expression(mpf_symbols_dict, replaced, reduced)
 
     if mp.fabs(result_value) != mp.mpf("0.0") and mp.fabs(result_value) < 10 ** (
-        (-4.0 / 5.0) * precision
+        (-4.0 / 5.0) * mp.dps
     ):
         if verbose:
             print(
                 f"Found |result| ({mp.fabs(result_value)}) close to zero. "
-                "Checking if indeed it should be zero."
+                f"Checking if indeed it should be zero. dps={mp.dps}"
             )
-        new_result_value = inject_mpfs_into_cse_expression(
-            mpf_symbols_dict, replaced, reduced, precision_factor=2
+        mp.dps = 2 * precision
+        mpf_symbols_dict = convert_free_symbols_set_to_mpf_dict(
+            free_symbols_set,
+            fixed_mpfs_for_free_symbols=fixed_mpfs_for_free_symbols,
         )
-        if mp.fabs(new_result_value) < 10 ** (-(4.0 / 5.0) * precision):
+        new_result_value = inject_mpfs_into_cse_expression(
+            mpf_symbols_dict, replaced, reduced
+        )
+        if mp.fabs(new_result_value) < 10 ** (-(4.0 / 5.0) * mp.dps):
             if verbose:
                 print(
                     f"After re-evaluating with twice the digits of precision, |result| dropped to "
-                    f"{new_result_value}. Setting value to zero"
+                    f"{mp.fabs(new_result_value)}. Setting value to zero. dps={mp.dps}"
                 )
             result_value = mp.mpf("0.0")
+        else:
+            if verbose:
+                print(
+                    f"After re-evaluating with twice the digits of precision, |result| dropped to "
+                    f"{mp.fabs(new_result_value)}. NOT setting value to zero. dps={mp.dps}"
+                )
+
+        mp.dps = precision
     return result_value
 
 
@@ -264,7 +275,7 @@ def process_dictionary_of_expressions(
 
 def check_zero(expression: sp.Expr, verbose: bool = False) -> bool:
     """
-    Checks if a given expression evaluates to zero.
+    Check if a given expression evaluates to zero.
 
     :param expression: The SymPy expression to check.
     :param verbose: Flag for additional output.
@@ -296,7 +307,7 @@ def output_trusted(
     results_dict: Dict[Any, Union[mpf, mpc]],
 ) -> None:
     """
-    Writes a trusted dictionary to a file with appropriate import headers.
+    Write a trusted dictionary to a file with appropriate import headers.
 
     :param os_path_abspath: The absolute path to the current module. Use os.path.abspath(__file__)
     :param os_getcwd: The current working directory. Use os.getcwd()
@@ -341,7 +352,7 @@ def compare_against_trusted(
     results_dict: Dict[Any, Union[mpf, mpc]],
 ) -> None:
     """
-    Compares the results dictionary against a trusted dictionary.
+    Compare the results dictionary against a trusted dictionary.
 
     :param os_path_abspath: The absolute path to the current module. Use os.path.abspath(__file__)
     :param os_getcwd: The current working directory. Use os.getcwd()
@@ -384,7 +395,7 @@ def compare_against_trusted(
 
     for key in trusted_results_dict:
         # We compare relative error here. Pass if abs_diff <= |trusted value| * tolerance
-        tolerance = 10 ** (-4.0 / 5.0 * precision)
+        tolerance = 10 ** (-4.0 / 5.0 * mp.dps)
         abs_diff = results_dict[key] - mpc(trusted_results_dict[key])
         if fabs(abs_diff) > fabs(mpc(trusted_results_dict[key])) * tolerance:
             raise ValueError(
@@ -406,8 +417,7 @@ def compare_or_generate_trusted_results(
     results_dict: Dict[Any, Union[mpf, mpc]],
 ) -> None:
     """
-    If the trusted dictionary file exists, compares the results dictionary against a trusted dictionary;
-    otherwise generate a new trusted dictionary.
+    Compare the results dictionary against a trusted dictionary or (if trusted dict does not exist) generate a new one.
 
     :param os_path_abspath: The absolute path to the current module. Use os.path.abspath(__file__)
     :param os_getcwd: The current working directory. Use os.getcwd()

@@ -1,6 +1,5 @@
 """
-This module constructs expressions for BSSN
-  quantities in terms of ADM quantities.
+Construct expressions for BSSN quantities in terms of ADM quantities.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -20,7 +19,7 @@ import nrpy.equations.general_relativity.BSSN_quantities  # pylint: disable=unus
 
 
 class ADM_to_BSSN:
-    """Sets up and stores expressions for BSSN variables in terms of ADM quantities"""
+    """Sets up and stores expressions for BSSN variables in terms of ADM quantities."""
 
     def __init__(
         self,
@@ -202,8 +201,11 @@ if __name__ == "__main__":
             List[sp.Expr],
         ]
     ):
-        """Sets up Static Trumpet initial data. Cannot import InitialData_Spherical here,
-        as that would result in a circular dependency."""
+        """
+        Set up Static Trumpet initial data.
+
+        Cannot import InitialData_Spherical here, as that would result in a circular dependency.
+        """
         M, r, th = sp.symbols("M r th", real=True)
         psi0 = sp.sqrt(1 + M / r)
         IDgammaDD = ixp.zerorank2()

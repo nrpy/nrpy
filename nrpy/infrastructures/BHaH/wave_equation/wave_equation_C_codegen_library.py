@@ -110,11 +110,12 @@ def register_CFunction_initial_data(
     )
     uu_gf_memaccess = gri.BHaHGridFunction.access_gf("uu")
     vv_gf_memaccess = gri.BHaHGridFunction.access_gf("vv")
-    # Unpack griddata
-    body = r"""// Attempt to read checkpoint file. If it doesn't exist, then continue. Otherwise return.
+    body = ""
+    if enable_checkpointing:
+        body += """// Attempt to read checkpoint file. If it doesn't exist, then continue. Otherwise return.
 if( read_checkpoint(commondata, griddata) ) return;
-
-for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
+"""
+    body += r"""for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   // Unpack griddata struct:
   params_struct *restrict params = &griddata[grid].params;
 #include "set_CodeParameters.h"
