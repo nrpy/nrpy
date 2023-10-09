@@ -339,12 +339,7 @@ REAL Cartz = xCart[2];
   //         (Cartx,Carty,Cartz) == (Cartx(x0(i0)),Cartx(x1(i1)),Cartx(x2(i2)))
   //         If not, error out!
 
-  // Step 3.a: Compute x0(i0_inbounds),x1(i1_inbounds),x2(i2_inbounds):
-  const REAL x0_inbounds = xx[0][i0_inbounds];
-  const REAL x1_inbounds = xx[1][i1_inbounds];
-  const REAL x2_inbounds = xx[2][i2_inbounds];
-
-  // Step 3.b: Compute {{x,y,z}}Cart_from_xx, as a
+  // Step 3.a: Compute {{x,y,z}}Cart_from_xx, as a
   //           function of i0,i1,i2
   REAL xCart_from_xx, yCart_from_xx, zCart_from_xx;
   {{
@@ -361,7 +356,7 @@ REAL Cartz = xCart[2];
 
     body += f"""  }}
 
-  // Step 3.c: Compute {{x,y,z}}Cart_from_xx_inbounds, as a
+  // Step 3.b: Compute {{x,y,z}}Cart_from_xx_inbounds, as a
   //           function of i0_inbounds,i1_inbounds,i2_inbounds
   REAL xCart_from_xx_inbounds, yCart_from_xx_inbounds, zCart_from_xx_inbounds;
   {{
@@ -379,7 +374,7 @@ REAL Cartz = xCart[2];
     body += (
         r"""  }
 
-  // Step 3.d: Compare xCart_from_xx to xCart_from_xx_inbounds;
+  // Step 3.c: Compare xCart_from_xx to xCart_from_xx_inbounds;
   //           they should be identical!!!
 #define EPS_REL 1e-8
   const REAL norm_factor = sqrt(xCart_from_xx*xCart_from_xx + yCart_from_xx*yCart_from_xx + zCart_from_xx*zCart_from_xx) + 1e-15;
