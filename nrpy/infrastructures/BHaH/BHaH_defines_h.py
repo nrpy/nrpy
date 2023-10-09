@@ -100,7 +100,7 @@ def output_BHaH_defines_h(
     >>> from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
     >>> import nrpy.finite_difference as fin
     >>> from nrpy.helpers.generic import compress_string_to_base64, decompress_base64_to_string, diff_strings
-    >>> MoL.MoL_register_CFunctions(register_MoL_step_forward_in_time=False)
+    >>> MoL.register_CFunctions(register_MoL_step_forward_in_time=False)
     >>> project_dir = Path("/tmp", "tmp_BHaH_defines_h")
     >>> project_dir.mkdir(parents=True, exist_ok=True)
     >>> output_BHaH_defines_h(project_dir=str(project_dir))
