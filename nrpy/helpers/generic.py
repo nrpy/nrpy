@@ -1,5 +1,9 @@
 """
 Generic helper functions used throughout NRPy+.
+
+Author: Zachariah B. Etienne
+        zachetie **at** gmail **dot* com
+        Dave Kirby (super-fast uniq function)
 """
 from typing import List, Any, cast
 import subprocess
@@ -13,9 +17,12 @@ from nrpy.helpers.cached_functions import is_cached, read_cached, write_cached
 #
 def superfast_uniq(seq: List[Any]) -> List[Any]:
     """
-    super fast 'uniq' function, that preserves order.
-    f8() function from https://www.peterbe.com/plog/uniqifiers-benchmark
-    Author: Dave Kirby
+    Super fast 'uniq' function that preserves order.
+
+    :param seq: List of elements.
+    :return: List with unique elements in the order they first appear in the original list.
+
+    Example from https://www.peterbe.com/plog/uniqifiers-benchmark by Dave Kirby.
     """
     # Order preserving
     seen = set()
@@ -24,22 +31,17 @@ def superfast_uniq(seq: List[Any]) -> List[Any]:
 
 # Used within c_function to create multi-line comments.
 def prefix_with_star(input_string: str) -> str:
-    """
-    Prefixes every line in the given multi-line string with "* ".
-    First, removes leading and trailing whitespaces from each line.
+    r"""
+    Prefix every line in the input string with "* ".
 
-    Args:
-    - input_string (str): The input multi-line string to be prefixed.
-
-    Returns:
-    - str: The modified string with "* " prefixed on every line.
+    :param input_string: The input multi-line string to be prefixed.
+    :return: The modified string with "* " prefixed on every line.
 
     Example:
-    >>> s = "   Hello   \\n   World   "
+    >>> s = "   Hello\n   World   "
     >>> prefix_with_star(s)
-    '   * Hello\\n   * World'
+    '   * Hello\n   * World'
     """
-
     # Splitting the string by line breaks, trimming each line, and prefixing
     lines = input_string.split("\n")
     prefixed_lines = ["   * " + line.strip() for line in lines]
@@ -53,25 +55,21 @@ def clang_format(
     c_code_str: str,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 0}",
 ) -> str:
-    """
-    Formats a given C code string using clang-format.
+    r"""
+    Format a given C code string using clang-format.
 
-    Parameters:
-    - c_code_str (str): The C code string that needs to be formatted.
+    :param c_code_str: The C code string to be formatted.
+    :param clang_format_options: Formatting options for clang-format.
+    :return: Formatted C code string.
+    :raises RuntimeError: If clang-format encounters any error.
 
-    Returns:
-    - str: Formatted C code string.
-
-    Raises:
-    - RuntimeError: If clang-format encounters any error.
-
-    Examples:
-    >>> print(clang_format(r'''int main() { printf("Hello, World!"); for(int i=0;i<10;i++) for(int j=i;j<10;j++) printf("%d %d\\n",i,j); return 0; }'''))
+    Doctest:
+    >>> print(clang_format(r'''int main() { printf("Hello, World!"); for(int i=0;i<10;i++) for(int j=i;j<10;j++) printf("%d %d\n",i,j); return 0; }'''))
     int main() {
       printf("Hello, World!");
       for (int i = 0; i < 10; i++)
         for (int j = i; j < 10; j++)
-          printf("%d %d\\n", i, j);
+          printf("%d %d\n", i, j);
       return 0;
     }
     """
@@ -96,16 +94,16 @@ def clang_format(
 
 
 def diff_strings(str1: str, str2: str) -> str:
-    """
-    Generates a side-by-side diff between two strings using difflib, excluding intra-line details.
+    r"""
+    Generate a side-by-side diff between two strings excluding intra-line details.
 
-    :param str1: The first string to compare.
-    :param str2: The second string to compare.
-    :return: The side-by-side diff between the two strings.
+    :param str1: First string for comparison.
+    :param str2: Second string for comparison.
+    :return: Side-by-side diff of the two strings.
 
     Doctests:
-    >>> str1 = "line1\\nline2\\nline3"
-    >>> str2 = "line1\\nline2\\nline4"
+    >>> str1 = "line1\nline2\nline3"
+    >>> str2 = "line1\nline2\nline4"
     >>> print(diff_strings(str1, str2))
     - line3
     + line4
@@ -126,10 +124,10 @@ def diff_strings(str1: str, str2: str) -> str:
 
 def hash_to_signed_32bit(s: str) -> int:
     """
-    Compute the SHA-256 hash of a given string and convert it to a signed 32-bit integer.
+    Compute the SHA-256 hash of a string and convert it to a signed 32-bit integer.
 
-    :param s: The input string.
-    :return: The signed 32-bit integer representation.
+    :param s: Input string.
+    :return: Signed 32-bit integer representation of the hash.
 
     >>> hash_to_signed_32bit("Hello")
     641210729
@@ -150,10 +148,10 @@ def hash_to_signed_32bit(s: str) -> int:
 
 def compress_string_to_base64(input_string: str) -> str:
     """
-    Compresses the given input string using LZMA with maximum compression and returns the result as a Base64 encoded string.
+    Compress the input string and return as Base64 encoded string.
 
-    :param input_string: The string to be compressed.
-    :return: The Base64 encoded compressed string.
+    :param input_string: String to be compressed.
+    :return: Base64 encoded compressed string.
 
     Doctests:
     >>> original_string = "This is a test string that will be compressed."
@@ -161,7 +159,6 @@ def compress_string_to_base64(input_string: str) -> str:
     >>> print(compressed_string)  # Output will be a Base64 encoded compressed string with line breaks
     /Td6WFoAAATm1rRGAgAhARwAAAAQz1jMAQAtVGhpcyBpcyBhIHRlc3Qgc3RyaW5nIHRoYXQgd2lsbCBiZSBjb21wcmVzc2VkLgAAAMZJbwnhOK2qAAFGLmdQc1oftvN9AQAAAAAEWVo=
     """
-
     # Compress the input string using LZMA with maximum compression
     compressed_data = lzma.compress(input_string.encode(), preset=9)
 
@@ -173,10 +170,10 @@ def compress_string_to_base64(input_string: str) -> str:
 
 def decompress_base64_to_string(input_base64: str) -> str:
     """
-    Decompresses the given Base64 encoded input string that was compressed using LZMA with maximum compression and returns the original string.
+    Decompress a Base64 encoded string to its original form.
 
-    :param input_base64: The Base64 encoded compressed string.
-    :return: The original decompressed string.
+    :param input_base64: Base64 encoded compressed string.
+    :return: Original decompressed string.
 
     Doctests:
     >>> original_string = "This is a test string that will be compressed."
@@ -185,7 +182,6 @@ def decompress_base64_to_string(input_base64: str) -> str:
     >>> decompressed_string == original_string
     True
     """
-
     # Decode the Base64 encoded string
     base64_decoded = base64.b64decode(input_base64)
 

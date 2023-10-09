@@ -1,11 +1,9 @@
 """
-Core Jacobian (basis) transformation functions,
-     for reference metric basis to/from the
-     Cartesian basis.
-
+Core Jacobian (basis) transformation functions.
+For reference metric basis to/from the Cartesian basis.
 
 We define Jacobians relative to the reference metric
-  basis at a point x^j_rfm=(xx0,xx1,xx2)_rfm on the source grid:
+basis at a point x^j_rfm=(xx0,xx1,xx2)_rfm on the source grid:
 
 Jac_dUCart_dDrfmUD[i][j] = dx^i_Cart / dx^j_rfm
 
@@ -13,7 +11,7 @@ via exact differentiation (courtesy SymPy), and the inverse Jacobian
 
 Jac_dUrfm_dDCartUD[i][j] = dx^i_rfm / dx^j_Cart
 
-using NRPy+'s generic_matrix_inverter3x3() function
+using NRPy+'s generic_matrix_inverter3x3() function.
 
 Author: Zachariah B. Etienne; zachetie **at** gmail **dot* com
 """
@@ -28,7 +26,7 @@ def basis_transform_vectorU_from_rfmbasis_to_Cartesian(
     CoordSystem: str, src_vectorU: Sequence[sp.Expr]
 ) -> Sequence[sp.Expr]:
     """
-    Transforms a vector from the reference metric basis to the Cartesian basis.
+    Transform a vector from the reference metric basis to the Cartesian basis.
 
     :param CoordSystem: Coordinate system to use for the reference metric.
     :param src_vectorU: The source vector in the reference metric basis.
@@ -46,7 +44,7 @@ def basis_transform_vectorD_from_rfmbasis_to_Cartesian(
     CoordSystem: str, src_vectorD: Sequence[sp.Expr]
 ) -> Sequence[sp.Expr]:
     """
-    Transforms a covariant vector from the reference metric basis to the Cartesian basis.
+    Transform a covariant vector from the reference metric basis to the Cartesian basis.
 
     :param CoordSystem: Coordinate system to use for the reference metric.
     :param src_vectorD: The source covariant vector in the reference metric basis.
@@ -64,7 +62,7 @@ def basis_transform_tensorDD_from_rfmbasis_to_Cartesian(
     CoordSystem: str, src_tensorDD: Sequence[Sequence[sp.Expr]]
 ) -> Sequence[Sequence[sp.Expr]]:
     """
-    Transforms a rank-2 tensor from the reference metric basis to the Cartesian basis.
+    Transform a rank-2 tensor from the reference metric basis to the Cartesian basis.
 
     :param CoordSystem: Coordinate system to use for the reference metric.
     :param src_tensorDD: The source tensor in the reference metric basis.
@@ -88,7 +86,7 @@ def basis_transform_vectorU_from_Cartesian_to_rfmbasis(
     CoordSystem: str, Cart_src_vectorU: Sequence[sp.Expr]
 ) -> Sequence[sp.Expr]:
     """
-    Transforms a vector from the Cartesian basis to the reference metric basis.
+    Transform a vector from the Cartesian basis to the reference metric basis.
 
     :param CoordSystem: Coordinate system to use for the reference metric.
     :param Cart_src_vectorU: The source vector in Cartesian basis.
@@ -106,7 +104,7 @@ def basis_transform_vectorD_from_Cartesian_to_rfmbasis(
     CoordSystem: str, Cart_src_vectorD: Sequence[sp.Expr]
 ) -> Sequence[sp.Expr]:
     """
-    Transforms a covariant vector from the Cartesian basis to the reference metric basis.
+    Transform a covariant vector from the Cartesian basis to the reference metric basis.
 
     :param CoordSystem: Coordinate system to use for the reference metric.
     :param Cart_src_vectorD: The source covariant vector in Cartesian basis.
@@ -124,7 +122,7 @@ def basis_transform_tensorDD_from_Cartesian_to_rfmbasis(
     CoordSystem: str, Cart_src_tensorDD: Sequence[Sequence[sp.Expr]]
 ) -> Sequence[Sequence[sp.Expr]]:
     """
-    Transforms a rank-2 tensor from the reference metric basis to the Cartesian basis.
+    Transform a rank-2 tensor from the Cartesian basis to the reference metric basis.
 
     :param CoordSystem: Coordinate system to use for the reference metric.
     :param Cart_src_tensorDD: The source tensor in the Cartesian basis.
@@ -149,7 +147,7 @@ def basis_transform_4tensorUU_from_time_indep_rfmbasis_to_Cartesian(
     CoordSystem: str, T4UU: Sequence[Sequence[sp.Expr]]
 ) -> Sequence[Sequence[sp.Expr]]:
     """
-    Transforms a 4-tensor from time-independent reference metric basis to Cartesian basis.
+    Transform a 4-tensor from time-independent reference metric basis to Cartesian basis.
 
     :param CoordSystem: Coordinate system to use for the reference metric.
     :param T4UU: The source 4-tensor in the reference metric basis.
@@ -180,7 +178,7 @@ def basis_transform_4tensorUU_from_Cartesian_to_time_indep_rfmbasis(
     CoordSystem: str, T4UU: Sequence[Sequence[sp.Expr]]
 ) -> Sequence[Sequence[sp.Expr]]:
     """
-    Transforms a 4-tensor from Cartesian basis to time-independent reference metric basis.
+    Transform a 4-tensor from Cartesian basis to time-independent reference metric basis.
 
     :param CoordSystem: Coordinate system to use for the reference metric.
     :param T4UU: The source 4-tensor in Cartesian basis.

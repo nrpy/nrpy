@@ -1,10 +1,11 @@
-""" Convert Expression to SIMD Compiler Intrinsics
+"""
+Convert Expression to SIMD Intrinsics.
+
 Authors: Ken Sible, Thiago Assumpcao, and Zachariah Etienne
 Emails: ksible *at* outlook *dot** com
         assumpcaothiago *at* gmail *dot** com
         zachetie *at* gmail *dot** com
 """
-
 from typing import Dict, Union, Any, Optional
 import shutil
 from pathlib import Path
@@ -38,7 +39,7 @@ from nrpy.helpers.cse_preprocess_postprocess import cse_preprocess
 
 # Basic Arithmetic Operations (Debugging)
 def AbsSIMD_check(a: Symbol) -> Any:
-    """Check that AbsSIMD(a) evaluates to sympy's Abs(a)"""
+    """Check that AbsSIMD(a) evaluates to sympy's Abs(a)."""
     return Abs(a)
 
 
@@ -141,14 +142,18 @@ def expr_convert_to_simd_intrins(
     clean_NegativeOnes_after_processing: bool = False,
     debug: bool = False,
 ) -> Union[Basic, Expr]:
-    """Convert expression to SIMD compiler intrinsics
+    """
+    Convert expression to SIMD compiler intrinsics.
 
-    :arg:    SymPy expression
-    :arg:    symbol to rational dictionary
-    :arg:    option to find more FMA/FMS patterns
-    :arg:    back-substitute and check difference
-    :return: expression containing SIMD compiler intrinsics
+    :param expr: SymPy expression
+    :param symbol_to_Rational_dict: Dictionary that maps symbols to rationals.
+    :param prefix: Prefix for the function calls.
+    :param simd_find_more_FMAsFMSs: Option to find more FMA/FMS patterns.
+    :param clean_NegativeOnes_after_processing: Option to back-substitute and check difference.
+    :param debug: Debug mode flag.
+    :return: Expression containing SIMD compiler intrinsics.
 
+    Doctests:
     >>> from sympy.abc import a, b, c, d
     >>> convert = expr_convert_to_simd_intrins
 
@@ -173,7 +178,6 @@ def expr_convert_to_simd_intrins(
     >>> convert(a**(-5/2))
     DivSIMD(_Integer_1, MulSIMD(MulSIMD(a, a), SqrtSIMD(a)))
 
-    >>> from sympy import Rational
     >>> convert(a**Rational(1, 3))
     CbrtSIMD(a)
 
@@ -213,7 +217,6 @@ def expr_convert_to_simd_intrins(
     >>> convert(-a*b - c)
     NegFusedMulSubSIMD(a, b, c)
     """
-
     for item in preorder_traversal(expr):
         for arg in item.args:
             if isinstance(arg, Symbol):
@@ -374,7 +377,7 @@ def expr_convert_to_simd_intrins(
     tree.reconstruct()
 
     # Step 3: Replace addition and multiplication expressions.
-    #   Note: SIMD addition and multiplication compiler intrinsics can read
+    #   Note: SIMD addition and multiplication intrinsics can read
     #         only two arguments at once, whereas SymPy's Mul() and Add()
     #         operators can read an arbitrary number of arguments.
     #         SymPy: srepr(a*b*c*d) = Mul(a, b, d)
@@ -762,9 +765,13 @@ def expr_convert_to_simd_intrins(
 
 def copy_simd_intrinsics_h(project_dir: str) -> None:
     """
-    Copies simd_intrinsics.h into project directory.
+    Copy simd_intrinsics.h into the specified project directory.
 
     :param project_dir: The path of the project directory where the file will be copied.
+    :return: None
+
+    :raises ImportError: If necessary libraries are not found.
+    :raises FileNotFoundError: If source file is not found.
     """
     simd_path = Path(project_dir) / "simd"
     simd_path.mkdir(parents=True, exist_ok=True)

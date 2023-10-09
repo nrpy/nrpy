@@ -1,6 +1,7 @@
-""" NRPy+ Loop Generation
+"""
+NRPy+ Loop Generation.
 
-The following script generate a single or nested loop of arbitrary
+The following script generates a single or nested loop of arbitrary
 dimension in C, and has support for cache blocking (loop tiling).
 
 Author: Zachariah B. Etienne
@@ -8,7 +9,6 @@ Email: zachetie **at** gmail **dot* com
 Contributor: Ken Sible
 Email: ksible *at* outlook *dot* com
 """
-
 from typing import List, Union, Tuple
 
 
@@ -22,19 +22,17 @@ def loop1D(
     """
     Generate a one-dimensional loop in C.
 
-    Args:
-        idx_var: str, optional: The index variable for the loop.
-        lower_bound: str, optional: The lower bound on the index variable.
-        upper_bound: str, optional: The upper bound on the index variable.
-        increment: str, optional: The increment for the index variable.
-        pragma: str, optional: The OpenMP pragma (https://en.wikipedia.org/wiki/OpenMP).
+    :param idx_var: The index variable for the loop.
+    :param lower_bound: The lower bound on the index variable.
+    :param upper_bound: The upper bound on the index variable.
+    :param increment: The increment for the index variable.
+    :param pragma: The OpenMP pragma (https://en.wikipedia.org/wiki/OpenMP).
 
-    Raises:
-        ValueError: If any argument has a type other than string, an error is thrown.
+    :raises ValueError: If any argument has a type other than string, an error is thrown.
 
-    Returns:
-        tuple[str, str]: Returns a string header and a string footer.
+    :return: Returns a string header and a string footer.
 
+    Doctests:
     >>> header, footer = loop1D(pragma='')
     >>> print(header)
     for (int i = 0; i < N; i++) {
@@ -77,21 +75,19 @@ def loop(
     """
     Generate a nested loop of arbitrary dimension in C.
 
-    Args:
-        idx_var: Union[str, List[str]]: The index variable for the loop.
-        lower_bound: Union[str, List[str]]: The lower bound on the index variable.
-        upper_bound: Union[str, List[str]]: The upper bound on the index variable.
-        increment: Union[str, List[str]]: The increment for the index variable.
-        pragma: Union[str, List[str]]: The OpenMP pragma (https://en.wikipedia.org/wiki/OpenMP).
-        loop_body: str, optional: The body of the loop.
-        tile_size: Union[str, List[str]], optional: The tile size for cache blocking.
+    :param idx_var: The index variable for the loop.
+    :param lower_bound: The lower bound on the index variable.
+    :param upper_bound: The upper bound on the index variable.
+    :param increment: The increment for the index variable.
+    :param pragma: The OpenMP pragma (https://en.wikipedia.org/wiki/OpenMP).
+    :param loop_body: The body of the loop.
+    :param tile_size: The tile size for cache blocking.
 
-    Raises:
-        ValueError: If all list parameters do not have the same length, an error is thrown.
+    :raises ValueError: If all list parameters do not have the same length, an error is thrown.
 
-    Returns:
-        str: Returns a string of the loop or (header, footer).
+    :return: Returns a string of the loop or (header, footer).
 
+    Doctests:
     >>> from nrpy.helpers.generic import clang_format
     >>> header, footer = loop('i', '0', 'N', '1', '')
     >>> print(clang_format(header))

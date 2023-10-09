@@ -1,7 +1,5 @@
 """
-This NRPy+ helper module provides functionality for
- parallel code generation by registering and
- calling functions concurrently.
+Core functions that enable registering and calling functions in parallel.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -21,15 +19,13 @@ par.register_param(str, __name__, "parallel_codegen_stage", "register")
 
 
 class ParallelCodeGen:
-    """
-    A class for holding the details of a function for parallel code generation.
-    """
+    """Stores necessary information to call a function in parallel."""
 
     def __init__(self, path: str, args: Dict[str, Any]) -> None:
         """
-        Initializes a ParallelCodeGen object.
+        Initialize a ParallelCodeGen object.
 
-        :param path: Dot-separated path to the function.
+        :param path: Path to the function.
         :param args: Dictionary containing arguments to pass to the function.
         """
         self.module_path = path.rsplit(".", 1)[0]
@@ -60,6 +56,8 @@ NRPyEnv_type = Tuple[
 
 def NRPyEnv() -> NRPyEnv_type:
     """
+    Retrieve a tuple containing various global dictionaries.
+
     :return: Tuple containing various global dictionaries.
     """
     return (
@@ -78,6 +76,7 @@ def deep_update(d: Dict[Any, Any], u: Dict[Any, Any]) -> None:
     :param d: The original dictionary to update.
     :param u: The dictionary containing new keys and values.
 
+    Doctest:
     >>> original = {'a': 1, 'b': {'c': 2}}
     >>> new = {'a': 'new_a', 'b': {'d': 'new_d'}}
     >>> deep_update(original, new)
@@ -96,11 +95,10 @@ def unpack_NRPy_environment_dict(
     NRPy_environment_dict: Dict[str, NRPyEnv_type]
 ) -> None:
     """
-    Unpacks the NRPy environment dictionaries.
+    Unpack the NRPy environment dictionaries.
 
     :param NRPy_environment_dict: Dictionary containing NRPy environment types.
     """
-
     for env in NRPy_environment_dict.values():
         par.glb_params_dict.update(env[0])
         par.glb_code_params_dict.update(env[1])
@@ -111,7 +109,9 @@ def unpack_NRPy_environment_dict(
 
 def pcg_registration_phase() -> bool:
     """
-    :return: Boolean indicating if the parallel code generation registration phase is active.
+    Determine if the parallel code generation registration phase is active.
+
+    :return: Boolean indicating if the registration phase is active.
     """
     return (
         cast(bool, par.parval_from_str("parallel_codegen_enable"))
@@ -121,7 +121,7 @@ def pcg_registration_phase() -> bool:
 
 def register_func_call(name: str, args: Dict[str, Any]) -> None:
     """
-    Registers a function call if the parallel code generation registration phase is active.
+    Register a function call if the registration phase is active.
 
     :param name: Name of the function.
     :param args: Arguments to pass to the function.
@@ -136,7 +136,7 @@ def get_nested_function(
     module_path: str, function_name: str
 ) -> Callable[..., NRPyEnv_type]:
     """
-    Retrieves a nested function from a specified Python module.
+    Retrieve a nested function from a specified Python module.
 
     :param module_path: The dot-separated path to the Python module.
     :param function_name: The dot-separated path to the nested function within the module.
@@ -164,7 +164,7 @@ def get_nested_function(
 
 def parallel_function_call(PCG: Any) -> NRPyEnv_type:
     """
-    Calls the registered function specified by the given ParallelCodeGen object.
+    Call the registered function specified by the given ParallelCodeGen object.
 
     :param PCG: The ParallelCodeGen object containing function details.
     :return: The result of the function call, packed as NRPyEnv_type.
@@ -186,11 +186,14 @@ def parallel_function_call(PCG: Any) -> NRPyEnv_type:
 
 def wrapper_func(args: Tuple[Dict[str, Any], str, Any]) -> Any:
     """
-    A wrapper function for parallel processing.
+    Execute a given function in parallel, wrapping its call for error-handling and performance logging.
+
+    This function serves as a bridge for parallel processing, ensuring that each task
+    reports its completion time and handles any potential exceptions that may arise during execution.
 
     :param args: A tuple containing the shared dictionary, key, and value for each task.
     :return: The key and the result of the parallel_function_call.
-    :raises RuntimeError: If any exception occurs during execution.
+    :raises RuntimeError: If any exception occurs during the task's execution.
     """
     shared_dict, key, value = args
     start_time = time.time()
@@ -209,11 +212,7 @@ def wrapper_func(args: Tuple[Dict[str, Any], str, Any]) -> Any:
 
 
 def do_parallel_codegen() -> None:
-    """
-    Performs parallel code generation by calling registered functions concurrently.
-
-    :raises RuntimeError: If TimeoutError or CancelledError occurs during execution.
-    """
+    """Perform parallel code generation by calling registered functions concurrently."""
     if not par.parval_from_str("parallel_codegen_enable"):
         return
 

@@ -1,6 +1,9 @@
-""" Functional Programming Toolkit """
-# Author: Ken Sible
-# Email:  ksible *at* outlook *dot* com
+"""
+Functional Programming Toolkit.
+
+Author: Ken Sible
+Email:  ksible *at* outlook *dot* com
+"""
 
 import sys
 from typing import Callable, Iterable, List, Tuple, Optional, Any, Generator, Union
@@ -8,14 +11,11 @@ from typing import Callable, Iterable, List, Tuple, Optional, Any, Generator, Un
 
 def pipe(x: Any, *f: Callable[..., Any]) -> Any:
     """
-    Pipe Operator. Applies a sequence of functions to an input.
+    Pipe operator that applies a sequence of functions to an input.
 
-    Args:
-        x: The input to the first function in the sequence.
-        *f: Functions to apply in sequence.
-
-    Returns:
-        The result of applying all the functions to the input.
+    :param x: The input to the first function in the sequence.
+    :param f: Functions to apply in sequence.
+    :return: The result of applying all the functions to the input.
 
     Doctest:
     >>> pipe(range(5, 0, -1), reversed, list)
@@ -32,13 +32,10 @@ def repeat(f: Callable[..., Any], x: Any, n: int) -> Any:
     """
     Repeats the application of a function a given number of times.
 
-    Args:
-        f: The function to apply.
-        x: The input to the function.
-        n: The number of times to apply the function.
-
-    Returns:
-        The result of repeatedly applying the function.
+    :param f: The function to apply.
+    :param x: The input to the function.
+    :param n: The number of times to apply the function.
+    :return: The result of repeatedly applying the function.
 
     Doctest:
     >>> list(repeat(flatten, [1, 2, [3, [4]], 5], 2))
@@ -53,11 +50,8 @@ def chain(*iterable: Iterable[Any]) -> Generator[Any, None, None]:
     """
     Chains several iterables together.
 
-    Args:
-        *iterable: A sequence of iterables to chain together.
-
-    Returns:
-        A generator that yields elements from each iterable in sequence.
+    :param iterable: A sequence of iterables to chain together.
+    :return: A generator that yields elements from each iterable in sequence.
 
     Doctest:
     >>> list(chain([1], [2, 3], [4, 5]))
@@ -76,11 +70,8 @@ def flatten(iterable: Iterable[Any]) -> Generator[Any, None, None]:
     """
     Flattens a nested iterable into a single-level iterable.
 
-    Args:
-        iterable: The iterable to flatten.
-
-    Returns:
-        A generator that yields the flattened elements of the iterable.
+    :param iterable: The iterable to flatten.
+    :return: A generator that yields the flattened elements of the iterable.
 
     Doctest:
     >>> list(flatten([1, [2, 3], [4, 5]]))
@@ -95,15 +86,12 @@ def reduce(
     initializer: Optional[Any] = None,
 ) -> Any:
     """
-    Applies a binary function in a cumulative way to all the elements of an iterable.
+    Apply a binary function cumulatively to all the elements of an iterable.
 
-    Args:
-        f: The binary function to apply.
-        iterable: The iterable to reduce.
-        initializer: The initial value to start the reduction.
-
-    Returns:
-        The result of reducing the iterable.
+    :param f: The binary function to apply.
+    :param iterable: The iterable to reduce.
+    :param initializer: The initial value to start the reduction.
+    :return: The result of reducing the iterable.
 
     Doctests:
     >>> reduce(lambda x, y: x + y, [1, 2, 3, 4, 5])
@@ -123,13 +111,10 @@ def reduce(
 
 def uniquify(iterable: Iterable[Any]) -> List[Any]:
     """
-    Returns a list with the unique elements of the input iterable, maintaining the order.
+    Return a list with the unique elements of the input iterable, maintaining the order.
 
-    Args:
-        iterable: An iterable.
-
-    Returns:
-        A list with the unique elements of the iterable.
+    :param iterable: An iterable.
+    :return: A list with the unique elements of the iterable.
 
     Doctest:
     >>> uniquify(([1, 1, 2, 3, 3, 3, 4, 5, 5]))
@@ -142,14 +127,11 @@ def product(
     *iterable: Union[Iterable[Any], Tuple[Iterable[Any], ...]], **kwargs: Any
 ) -> Generator[Tuple[Any, ...], None, None]:
     """
-    Returns the Cartesian product of several iterables.
+    Return the Cartesian product of several iterables.
 
-    Args:
-        *iterable: A sequence of iterables.
-        **kwargs: An optional keyword argument 'repeat' to specify a repetition of a single iterable.
-
-    Returns:
-        A generator that yields tuples, each containing one element from each input iterable.
+    :param iterable: A sequence of iterables.
+    :param kwargs: An optional keyword argument 'repeat' to specify a repetition of a single iterable.
+    :return: A generator that yields tuples, each containing one element from each input iterable.
 
     Doctests:
     >>> list(product(['a', 'b'], [1, 2, 3]))

@@ -28,7 +28,10 @@ import sympy as sp
 
 
 class ExprTree:
-    """Symbolic (N-Ary) Expression Tree
+    """
+    Symbolic (N-Ary) Expression Tree.
+
+    :param expr: Root expression for the tree
 
     >>> from sympy.abc import a, b, x
     >>> from sympy import cos
@@ -40,7 +43,12 @@ class ExprTree:
     """
 
     class Node:
-        """Expression Tree Node"""
+        """
+        Expression Tree Node.
+
+        :param expr: Expression for the node
+        :param func: Function for the expression
+        """
 
         def __init__(
             self,
@@ -52,7 +60,7 @@ class ExprTree:
             self.children: List["ExprTree.Node"] = []
 
         def append(self, node: "ExprTree.Node") -> None:
-            """Append to node in expression tree"""
+            """Append to a node in expression tree."""
             self.children.append(node)
 
         def __repr__(self) -> str:
@@ -66,10 +74,11 @@ class ExprTree:
         self.build(self.root)
 
     def build(self, node: Node, clear: bool = True) -> None:
-        """Build expression (sub)tree.
+        """
+        Build expression (sub)tree.
 
-        :arg:   root node of (sub)tree
-        :arg:   clear children (default: True)
+        :param node: Root node of (sub)tree
+        :param clear: Clear children, default is True
 
         >>> from sympy.abc import a, b
         >>> from sympy import cos, sin
@@ -87,10 +96,11 @@ class ExprTree:
             self.build(subtree)
 
     def preorder(self, node: Optional[Node] = None) -> Generator[Node, None, None]:
-        """Generate iterator for preorder traversal.
+        """
+        Generate iterator for preorder traversal.
 
-        :arg:    root node of (sub)tree
-        :return: iterator
+        :param node: Root node of (sub)tree
+        :return: Iterator
 
         >>> from sympy.abc import a, b
         >>> from sympy import cos, Mul
@@ -108,10 +118,11 @@ class ExprTree:
                 yield subtree
 
     def postorder(self, node: Optional[Node] = None) -> Generator[Node, None, None]:
-        """Generate iterator for postorder traversal.
+        """
+        Generate iterator for postorder traversal.
 
-        :arg:    root node of (sub)tree
-        :return: iterator
+        :param node: Root node of (sub)tree
+        :return: Iterator
 
         >>> from sympy.abc import a, b
         >>> from sympy import cos, Mul
@@ -132,8 +143,8 @@ class ExprTree:
         """
         Reconstruct root expression from expression tree.
 
-        :arg:    evaluate root expression (default: False)
-        :return: root expression
+        :param evaluate: Evaluate root expression, default is False
+        :return: Root expression
 
         >>> from sympy.abc import a, b
         >>> from sympy import cos, sin
