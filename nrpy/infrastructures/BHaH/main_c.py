@@ -1,5 +1,5 @@
 """
-Generates the C main() function for all codes in the BHaH infrastructure.
+Generate the C main() function for all codes in the BHaH infrastructure.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -21,7 +21,7 @@ def register_CFunction_main_c(
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 0}",
 ) -> None:
     """
-    Generates the C main() function for all time evolution codes in the BHaH infrastructure.
+    Generate the "generic" C main() function for all simulation codes in the BHaH infrastructure.
 
     :param MoL_method: Method of Lines algorithm used to step forward in time.
     :param initial_data_desc: Description for initial data, default is an empty string.

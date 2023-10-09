@@ -425,7 +425,7 @@ register_CFunction_numerical_grids_and_timestep_setup()
 register_CFunction_diagnostics()
 register_CFunction_rhs_eval()
 register_CFunction_apply_bcs()
-MoL.MoL_register_CFunctions(
+MoL.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string="rhs_eval(commondata, params,  RK_INPUT_GFS, RK_OUTPUT_GFS);",
     post_rhs_string="apply_bcs(commondata, params,  RK_OUTPUT_GFS);",

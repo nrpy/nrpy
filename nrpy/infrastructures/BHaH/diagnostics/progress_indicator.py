@@ -1,6 +1,5 @@
 """
-The BHaH progress indicator, indicating the current
-  iteration, time, timestep, benchmark (t/hr), etc.
+The BHaH progress indicator, indicating the current iteration, time, timestep, benchmark (t/hr), etc.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -23,7 +22,7 @@ _ = par.register_CodeParameter(
 
 def register_CFunction_progress_indicator() -> None:
     """
-    Registers a C function that serves as a progress indicator for the simulation.
+    Register a C function that serves as a progress indicator for the simulation.
 
     The function updates the elapsed time and other metrics to give the user an
     idea of the progress being made in the computation.

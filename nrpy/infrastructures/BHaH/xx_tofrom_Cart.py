@@ -1,7 +1,5 @@
 """
-C function registration for converting between grid
-  coordinate (xx0,xx1,xx2) (uniform grid spacing) to Cartesian
-  coordinate (x,y,z).
+C function registration for converting between grid coordinate (xx0,xx1,xx2) (uniform grid spacing) to Cartesian coordinate (x,y,z).
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -19,7 +17,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     CoordSystem: str, relative_to: str = "local_grid_center"
 ) -> None:
     """
-    Constructs a C function that maps from Cartesian coordinates to xx for the chosen coordinate system.
+    Construct a C function that maps from Cartesian coordinates to xx for the chosen coordinate system.
     Registers the C function for later use.
 
     :param CoordSystem: The coordinate system to use.
@@ -93,7 +91,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
 
 def register_CFunction_xx_to_Cart(CoordSystem: str) -> None:
     """
-    Registers a C function to convert arbitrary NRPy+ coordinates to Cartesian coordinates.
+    Register a C function to convert arbitrary NRPy+ coordinates to Cartesian coordinates.
 
     :param CoordSystem: The coordinate system name as a string.
     """

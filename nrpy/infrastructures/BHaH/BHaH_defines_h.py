@@ -1,6 +1,5 @@
 """
-Construct BHaH_defines.h from data registered to griddata_commondata,
-  CodeParameters, and NRPyParameters.
+Construct BHaH_defines.h from data registered to griddata_commondata, CodeParameters, and NRPyParameters.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -17,7 +16,7 @@ from nrpy.helpers.generic import clang_format
 
 def register_griddata_struct_and_return_griddata_struct_str() -> str:
     """
-    Registers contributions to the griddata struct from different modules and constructs the griddata_struct string.
+    Register contributions to the griddata struct from different modules and constructs the griddata_struct string.
 
     :return: A string representing the typedef structure for grid data, including contributions from BHaH modules,
              reference_metric, CurviBoundaryConditions, and masking, if applicable.
@@ -86,8 +85,8 @@ def output_BHaH_defines_h(
     supplemental_defines_dict: Optional[Dict[str, str]] = None,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 0}",
 ) -> None:
-    """
-    Outputs C code header file with macro definitions and other configurations for the project.
+    r"""
+    Output C code header file with macro definitions and other configurations for the project.
 
     :param project_dir: Directory where the project C code is output
     :param enable_simd: Flag to enable Single Instruction Multiple Data (SIMD) optimizations
@@ -109,8 +108,8 @@ def output_BHaH_defines_h(
     >>> returned_string = (project_dir / "BHaH_defines.h").read_text()
     >>> if returned_string != expected_string:
     ...    compressed_str = compress_string_to_base64(returned_string)
-    ...    error_message = "Trusted BHaH_defines.h string changed!\\n"
-    ...    error_message += "Here's the diff:\\n" + diff_strings(expected_string, returned_string) + "\\n"
+    ...    error_message = "Trusted BHaH_defines.h string changed!\n"
+    ...    error_message += "Here's the diff:\n" + diff_strings(expected_string, returned_string) + "\n"
     ...    raise ValueError(error_message + f"base64-encoded output: {compressed_str}")
     """
     project_Path = Path(project_dir)

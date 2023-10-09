@@ -1,6 +1,5 @@
 """
-Sets up basic functions and loop insertions for precomputed
-  reference metric infrastructure.
+Set up basic functions and loop insertions for precomputed reference metric infrastructure.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -16,11 +15,11 @@ from nrpy.infrastructures.BHaH.BHaH_defines_h import register_BHaH_defines
 
 class ReferenceMetricPrecompute:
     """
-    Base class for reference metric precomputation, stores
-    contribution to BHaH_defines.h, as well as functions to
-    malloc, define, and free rfm precomputation data. Strings
-    for reading rfm precompute quantities within loops
-    are also provided, both for SIMD-ized and non-SIMD loops.
+    Base class for reference metric precomputation.
+
+    This class stores contributions to BHaH_defines.h, as well as functions for memory allocation,
+    definition, and freeing of rfm precomputation data. It also provides strings for reading rfm
+    precompute quantities within loops for both SIMD-ized and non-SIMD loops.
     """
 
     def __init__(self, CoordSystem: str):
@@ -150,6 +149,8 @@ class ReferenceMetricPrecompute:
 def register_CFunctions_rfm_precompute(list_of_CoordSystems: List[str]) -> None:
     """
     Register C functions for reference metric precomputed lookup arrays.
+
+    :param list_of_CoordSystems: List of coordinate systems to register the C functions.
     """
     combined_BHaH_defines_list = []
     for CoordSystem in list_of_CoordSystems:

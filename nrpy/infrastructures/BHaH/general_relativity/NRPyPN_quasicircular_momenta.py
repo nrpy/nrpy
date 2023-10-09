@@ -1,6 +1,5 @@
 """
-Sets up C function for setting 3.5PN quasicircular
-  momenta for binary black holes, using NRPyPN.
+Set up C function for setting 3.5PN quasicircular momenta for binary black holes, using NRPyPN.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -71,9 +70,7 @@ par.register_CodeParameters(
 
 
 def register_CFunction_NRPyPN_quasicircular_momenta() -> Union[None, pcg.NRPyEnv_type]:
-    """
-    Generates a function for setting quasicircular momenta using NRPyPN.
-    """
+    """Register CFunction for setting quasicircular momenta using NRPyPN."""
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None

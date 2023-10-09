@@ -1,6 +1,5 @@
 """
-Manage registration and storage of data stored within
- griddata_struct and commondata_struct.
+Manage registration and storage of data stored within griddata_struct and commondata_struct.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -12,10 +11,11 @@ import nrpy.params as par
 
 class GridCommonData:
     """
-    Represents grid data with a module and declaration information.
+    Represent grid data with a module and declaration information.
 
     :param module: Module associated with the grid data
     :param c_declaration: C code declaration; e.g., "struct params_struct"
+    :param description: Description of the module (default is empty string)
 
     :raises ValueError: If the declaration contains a semicolon
     """
@@ -28,17 +28,11 @@ class GridCommonData:
             raise ValueError("GridData.c_declaration cannot have a semicolon inside.")
 
 
-# # griddata_struct stores data specific to each grid
-# glb_griddata_struct_dict: Dict[str, List[GridCommonData]] = {}
-# # commondata_struct stores data common to all grids
-# glb_commondata_struct_dict: Dict[str, List[GridCommonData]] = {}
-
-
 def register_griddata_commondata(
     module: str, c_declaration: str, description: str = "", is_commondata: bool = False
 ) -> None:
     """
-    Registers grid data into the global dictionary `glb_griddata_struct_dict`.
+    Register grid data into the global dictionary `glb_griddata_struct_dict`.
 
     :param module: Module associated with the grid data
     :param c_declaration: C code declaration; e.g., "struct params_struct"

@@ -308,10 +308,13 @@ invalid parameter names.
 
 def generate_default_parfile(project_dir: str, project_name: str) -> None:
     """
-    Generates a default parameter file with sorted modules and parameters.
+    Generate a default parameter file with sorted modules and parameters.
 
     :param project_dir: The parameter file will be stored in project_dir.
+    :param project_name: The name of the project.
+    :return: None
 
+    Doctest:
     >>> _, __ = par.register_CodeParameters("REAL", "CodeParameters_c_files", ["a", "pi_three_sigfigs"], [1, 3.14], commondata=True)
     >>> ___ = par.register_CodeParameter("#define", "CodeParameters_c_files", "b", 0)
     >>> _leaveitbe = par.register_CodeParameter("REAL", "CodeParameters_c_files", "leaveitbe", add_to_parfile=False, add_to_set_CodeParameters_h=False)

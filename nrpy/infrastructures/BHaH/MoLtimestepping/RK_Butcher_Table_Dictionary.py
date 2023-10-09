@@ -1,7 +1,5 @@
 """
-This module constructs a Python dictionary
-  of Butcher tables for a large number of explicit
-  RK methods.
+Construct a Python dictionary of Butcher tables for explicit RK methods.
 
 Authors: Brandon Clark
          Zachariah B. Etienne
@@ -32,7 +30,6 @@ def generate_Butcher_tables(
     >>> print(Butcher_table)
     [[1], [3/2, -1/2], [23/12, -4/3, 5/12], [55/24, -59/24, 37/24, -3/8], [1901/720, -1387/360, 109/30, -637/360, 251/720], [4277/1440, -2641/480, 4991/720, -3649/720, 959/480, -95/288], [198721/60480, -18637/2520, 235183/20160, -10754/945, 135713/20160, -5603/2520, 19087/60480], [16083/4480, -1152169/120960, 242653/13440, -296053/13440, 2102243/120960, -115747/13440, 32863/13440, -5257/17280], [14097247/3628800, -21562603/1814400, 47738393/1814400, -69927631/1814400, 862303/22680, -45586321/1814400, 19416743/1814400, -4832053/1814400, 1070017/3628800]]
     """
-
     # Initialize the dictionary Butcher_dict
     Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]] = {}
 
@@ -348,9 +345,7 @@ def validate(
     :param included_keys: A list of keys to access the desired Butcher table in Butcher_dict.
     :param verbose: A boolean indicating whether to print verbose output.
 
-    Returns:
-    - None (Prints results of validation tests.)
-
+    Doctests:
     >>> Butcher_dict = generate_Butcher_tables()
     >>> # validate(Butcher_dict, included_keys=["DP5", "DP5alt", "CK5", "DP6", "L6", "DP8", "AHE", "ABS", "ARKF", "ACK", "ADP5", "ADP8", "AB"], verbose=False)
     >>> validate(Butcher_dict, included_keys=["Euler", "RK2 Heun", "RK3", "RK3 Ralston", "RK4"], verbose=False)
@@ -360,7 +355,6 @@ def validate(
     RK3 Ralston: PASSED VALIDATION
     RK4: PASSED VALIDATION
     """
-
     # Defining the right-hand side of the ODE using lambdas
     rhs_dict = {
         "ypt": lambda y, t: y + t,

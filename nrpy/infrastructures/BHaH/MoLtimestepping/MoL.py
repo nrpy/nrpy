@@ -1,8 +1,6 @@
 """
-This module produces the required C codes for
-  implementing MoL timestepping within the BHaH
-  infrastructure, as well as allocating/deallocating
-  required memory as needed.
+Module for producing C codes related to MoL timestepping within the BHaH infrastructure.
+This includes implementation details and functions for allocating and deallocating the necessary memory.
 
 Authors: Brandon Clark
          Zachariah B. Etienne (maintainer)
@@ -51,7 +49,6 @@ def is_diagonal_Butcher(
     Note:
     A Butcher table is diagonal if all its non-diagonal elements are zero.
     """
-
     # Get the Butcher table corresponding to the provided key
     Butcher = Butcher_dict[key][0]
 
@@ -82,6 +79,7 @@ def generate_gridfunction_names(
     :return: A tuple containing y_n_gridfunctions, non_y_n_gridfunctions_list,
              diagnostic_gridfunctions_point_to, and diagnostic_gridfunctions2_point_to.
 
+    Doctests:
     >>> Butcher_dict = generate_Butcher_tables()
     >>> generate_gridfunction_names(Butcher_dict, "RK2 Heun")
     ('y_n_gfs', ['y_nplus1_running_total_gfs', 'k_odd_gfs', 'k_even_gfs', 'auxevol_gfs'], 'y_nplus1_running_total_gfs', 'k_odd_gfs')
@@ -92,7 +90,6 @@ def generate_gridfunction_names(
     >>> generate_gridfunction_names(Butcher_dict, "RK4")
     ('y_n_gfs', ['y_nplus1_running_total_gfs', 'k_odd_gfs', 'k_even_gfs', 'auxevol_gfs'], 'y_nplus1_running_total_gfs', 'k_odd_gfs')
     """
-
     # y_n_gridfunctions store data for the vector of gridfunctions y_i at t_n,
     # the start of each MoL timestep.
     y_n_gridfunctions = "y_n_gfs"
@@ -157,17 +154,13 @@ def register_CFunction_MoL_malloc(
     which_gfs: str,
 ) -> None:
     """
-    Register MoL_malloc_y_n_gfs() and MoL_malloc_non_y_n_gfs(), which allocate memory
-    for the indicated sets of gridfunctions.
+    Register MoL_malloc_y_n_gfs() and MoL_malloc_non_y_n_gfs(), allocating memory for the gridfunctions indicated.
 
     :param MoL_method: Method for the Method of Lines.
     :param which_gfs: Specifies which gridfunctions to consider ("y_n_gfs" or "non_y_n_gfs").
 
+    Doctest: FIXME
     # >>> register_CFunction_MoL_malloc("Euler", "y_n_gfs")
-    # This doctest is a placeholder. In a real-world scenario, we would test
-    # the function's side effects (e.g., updates to global data structures,
-    # file writes, etc.)
-
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
@@ -227,8 +220,6 @@ def register_CFunction_MoL_malloc(
 # single_RK_substep_input_symbolic() performs necessary replacements to
 #   define C code for a single RK substep
 #   (e.g., computing k_1 and then updating the outer boundaries)
-
-
 def single_RK_substep_input_symbolic(
     comment_block: str,
     substep_time_offset_dt: Union[sp.Basic, int, str],
@@ -261,7 +252,6 @@ def single_RK_substep_input_symbolic(
 
     :return: A string containing the generated C code.
     """
-
     # Ensure all input lists are lists
     RK_lhs_list = [RK_lhs_list] if not isinstance(RK_lhs_list, list) else RK_lhs_list
     RK_rhs_list = [RK_rhs_list] if not isinstance(RK_rhs_list, list) else RK_rhs_list
@@ -405,7 +395,7 @@ def register_CFunction_MoL_step_forward_in_time(
     enable_simd: bool = False,
 ) -> None:
     """
-    Register MoL_step_forward_in_time() C function
+    Register MoL_step_forward_in_time() C function, which is the core driver for time evolution in BHaH codes.
 
     :param Butcher_dict: A dictionary containing the Butcher tables for various RK-like methods.
     :param MoL_method: The method of lines (MoL) used for time-stepping.
@@ -759,7 +749,7 @@ def register_CFunction_MoL_free_memory(
     which_gfs: str,
 ) -> None:
     """
-    Method of Lines (MoL) for a given MoL_method: Free memory for the specified gridfunctions.
+    Free memory for the specified Method of Lines (MoL) gridfunctions, given an MoL_method.
 
     :param Butcher_dict: Dictionary containing Butcher tableau for MoL methods.
     :param MoL_method: The Method of Lines method.
@@ -807,7 +797,7 @@ def register_CFunction_MoL_free_memory(
 
 
 # Register all the CFunctions and NRPy basic defines
-def MoL_register_CFunctions(
+def register_CFunctions(
     MoL_method: str = "RK4",
     rhs_string: str = "rhs_eval(Nxx, Nxx_plus_2NGHOSTS, dxx, RK_INPUT_GFS, RK_OUTPUT_GFS);",
     post_rhs_string: str = "apply_bcs(Nxx, Nxx_plus_2NGHOSTS, RK_OUTPUT_GFS);",
@@ -817,8 +807,8 @@ def MoL_register_CFunctions(
     enable_simd: bool = False,
     register_MoL_step_forward_in_time: bool = True,
 ) -> None:
-    """
-    Registers C functions and NRPy basic defines.
+    r"""
+    Register all MoL C functions and NRPy basic defines.
 
     :param MoL_method: The method to be used for MoL. Default is 'RK4'.
     :param rhs_string: RHS function call as string. Default is "rhs_eval(Nxx, Nxx_plus_2NGHOSTS, dxx, RK_INPUT_GFS, RK_OUTPUT_GFS);"
@@ -834,13 +824,13 @@ def MoL_register_CFunctions(
     Doctests:
     >>> from nrpy.helpers.generic import compress_string_to_base64, decompress_base64_to_string, diff_strings
     >>> cfc.CFunction_dict.clear()
-    >>> MoL_register_CFunctions()
+    >>> register_CFunctions()
     >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4BqrA7pdABGaScZHDxOiAHcc/CXr2duHb+UiUyv83OVALtvJ+o7uK/PoSVGe7rPuvil8asOnzsX/43MrS1REEi/tau4rRkS3klwMCWne6D351BIv83jxwuBwBgfb9aLOiuMaxdzlpat7M5Zzy6cqD3qxMNABQOc2xVV5NC/sFWryHJK7NLtTQZSJAkfrM9dF6qg6pG5p6oN+o9MOcVuOHCVrZ0lCxYx6wuKz2IJ/mMdvxXHVGkgQhirxUUEBl62cNh4PSL0+MhkGfI16jrcBnECahxa7QWuvNWwm0wjfXTw392qOizx3AZQeZ/5+eNZqi0kpkBkrvymrzIOqG75TdKqbx/pe1fDjWE/O6Z7oQp5oYUE4dA9PZ3jI8wRP1bZhpauAV7CdlcP2h+0XENf8YcZZsN3IVAMLbUtntwfptu8rRmhQDU3vhO9j4B445lTNOYKmDfabJbduDZF8MlL0IYahsG2SwFnA9kbaZyfby/eh/Nb3tl5hVPEcfxdU3N9es06Sq3BXXWqfdKl6OXPM67oKzXRNVh3Ws2ksls6tzbpEDfQYmf/wqDs4NX0QeW86/hQXn8mfjHXYDoNQNqVLgTuNHFs8oIvC35e9YZ4424yDAPwz2lebc6OXe/N7PREh1TZP1N95J009AF+dYLT2ZnWq/qJON/p195BRcJ7LiludhhK0xmrF+eMj3vFLwBYBWuATm2EMPuSHLpS2/n+AfbhxopUmOl4AX/KEkIzeYN3p+9Mb/QwGJxCnfpLOPT3kutJ61/Hh23VakghoJDuBRAgCFnl9nCB4P6/iP7CcjdCf88e5FkIdCQipIXgsoAM1Tq6i1yDazQ3sKh+Pz0U1xSmLrchB4EUuGd1OGkyg+3QCWlQIaRev73BAHOCfK4iP3fx9yiwwOTl6xCJyI9yC3TVEn+yIQ4hRj9wqStvka/A9yyeBnEOPHxaUM8o6NUdBjQmim31kuu6pYwfAMJirBB6UCxAIl4zYMnmJmtO2JNDO0HRacYdRxpe9fHQcXvHXbf/wGSpG9O7sY1joaDRJNEdd6YR45z0hiS/TSaO3U/pR34XG179xTQdhvQ4YZwLrAVWnpvFRSWGY8BEMtbwHl3CSdnYZOq7mvLvZOaUZVA4k6bJkm+7XVaWH4XR+ksFRPBVrW8/DgHi7RULpQ6DBIcByuxOHi/eeWO33KcC/9/ANmnCSvQ8S655kReZCDTUQJkx2Hp8AnaD7VuyS57qmxvWHjMUT0WI3hc6JqAO7d7diNCeJyzbK/7JQ9ltnGl1doAAAAGJidfWEfeQ2AAHWB6w1AAA5dg+QscRn+wIAAAAABFla")
     >>> returned_string = cfc.CFunction_dict["MoL_step_forward_in_time"].full_function
     >>> if returned_string != expected_string:
     ...    compressed_str = compress_string_to_base64(returned_string)
-    ...    error_message = "Trusted MoL_step_forward_in_time.full_function string changed!\\n Here's the diff:\\n"
-    ...    error_message += "Here's the diff:\\n" + diff_strings(expected_string, returned_string) + "\\n"
+    ...    error_message = "Trusted MoL_step_forward_in_time.full_function string changed!\n Here's the diff:\n"
+    ...    error_message += "Here's the diff:\n" + diff_strings(expected_string, returned_string) + "\n"
     ...    raise ValueError(error_message + f"base64-encoded output: {compressed_str}")
     >>> sorted(cfc.CFunction_dict.keys())
     ['MoL_free_memory_non_y_n_gfs', 'MoL_free_memory_y_n_gfs', 'MoL_malloc_non_y_n_gfs', 'MoL_malloc_y_n_gfs', 'MoL_step_forward_in_time']

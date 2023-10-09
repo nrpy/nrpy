@@ -1,7 +1,5 @@
 """
-Library of C functions for solving the BSSN equations in
- ***curvilinear*** coordinates, using a reference-metric
- formalism
+Library of C functions for solving the BSSN equations in curvilinear coordinates, using a reference-metric formalism.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -818,8 +816,10 @@ def register_CFunction_psi4_part(
     output_empty_function: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Add psi4 to Cfunction dictionary. psi4 is a really huge expression, so we output
-    it in 3 parts: psi4_part0, psi4_part1, and psi4_part2.
+    Add psi4 to Cfunction dictionary.
+
+    psi4 is a really huge expression, so we output it in 3 parts:
+      psi4_part0, psi4_part1, and psi4_part2.
 
     :param CoordSystem: Coordinate system to be used.
     :param which_part: Specifies which part of psi4 to compute.
@@ -1023,7 +1023,7 @@ def register_CFunction_psi4_spinweightm2_decomposition_on_sphlike_grids() -> (
     Union[None, pcg.NRPyEnv_type]
 ):
     """
-    Register C function for decomposing psi4 into spin-weighted spherical harmonics
+    Register C function for decomposing psi4 into spin-weighted spherical harmonics.
 
     :param None: No parameters for this function.
 

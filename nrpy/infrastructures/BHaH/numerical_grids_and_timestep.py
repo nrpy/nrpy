@@ -1,8 +1,7 @@
 """
-Register numerical_grids_and_timestep() C function, as well as
-  functions called by this one.
-These functions set up numerical grids for use within the BHaH
-  infrastructure.
+Register numerical_grids_and_timestep() C function, as well as functions called by this one.
+
+These functions set up numerical grids for use within the BHaH infrastructure.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -31,7 +30,7 @@ _ = par.CodeParameter("int", __name__, "CoordSystem_hash", commondata=False, add
 
 def register_CFunction_CoordSystem_hash(list_of_CoordSystems: List[str]) -> None:
     """
-    Registers a C function to set CoordSystem_hash for all grids.
+    Register a C function to set CoordSystem_hash for all grids.
 
     :param list_of_CoordSystems: The list of coordinate systems used for the simulation.
     """
@@ -60,7 +59,7 @@ def register_CFunction_numerical_grid_params_Nxx_dxx_xx(
     CoordSystem: str, grid_physical_size: float, Nxx_dict: Dict[str, List[int]]
 ) -> None:
     """
-    Registers a C function to Set up a cell-centered grid of size grid_physical_size.
+    Register a C function to Set up a cell-centered grid of size grid_physical_size.
        Set params: Nxx, Nxx_plus_2NGHOSTS, dxx, invdxx, and xx.
 
     :param CoordSystem: The coordinate system used for the simulation.
@@ -148,9 +147,10 @@ for (int j = 0; j < params->Nxx_plus_2NGHOSTS2; j++) xx[2][j] = params->xxmin2 +
 
 def register_CFunction_cfl_limited_timestep(CoordSystem: str) -> None:
     """
-    Registers a C function to find the CFL-limited timestep dt on a numerical grid,
-       where dt = CFL_FACTOR * ds_min , and ds_min is the minimum spacing between
-       neighboring gridpoints on a numerical grid.
+    Register a C function to find the CFL-limited timestep dt on a numerical grid.
+
+    The timestep is determined by the relation dt = CFL_FACTOR * ds_min, where ds_min
+    is the minimum spacing between neighboring gridpoints on a numerical grid.
 
     :param CoordSystem: The coordinate system used for the simulation.
     """
@@ -201,8 +201,14 @@ def register_CFunction_numerical_grids_and_timestep(
     enable_CurviBCs: bool = False,
 ) -> None:
     """
-    Registers a C function to set up a numerical grid and timestep.
+    Register a C function to set up all numerical grids and timestep.
 
+    The function configures the numerical grids based on given parameters, specifically
+    focusing on the usage of reference metric precomputations and curvilinear boundary
+    conditions.
+
+    :param enable_rfm_precompute: Whether to enable reference metric precomputation (default: False).
+    :param enable_CurviBCs: Whether to enable curvilinear boundary conditions (default: False).
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "Set up a cell-centered grids of size grid_physical_size."

@@ -1,6 +1,7 @@
 """
-This module provides functions for setting up Curvilinea boundary conditions,
-    as documented in Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb
+Module providing functions for setting up Curvilinear boundary conditions.
+
+This is documented in Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb.
 
 Authors: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -101,8 +102,10 @@ def BHaH_defines_set_gridfunction_defines_with_parity_types(
     verbose: bool = True,
 ) -> str:
     """
-    Sets the grid function definitions with parity types and appends them to the end of BHaH_defines.h.
+    Set the grid function definitions with parity types and append them to the end of BHaH_defines.h.
 
+    :param set_parity_on_aux: Flag to set parity on auxiliary variables. Default is False.
+    :param set_parity_on_auxevol: Flag to set parity on auxevol variables. Default is False.
     :param verbose: Flag to control printing of details. Default is True.
     :return: A string containing the definitions for all grid functions with their parity types.
     """
@@ -115,7 +118,7 @@ def BHaH_defines_set_gridfunction_defines_with_parity_types(
 
     def set_parity_types(list_of_gf_names: List[str]) -> List[int]:
         """
-        Helper function to set the parity types for a given list of grid function names.
+        Set the parity types for a given list of grid function names.
 
         :param list_of_gf_names: List of grid function names for which to set the parity types.
         :return: A list of integers representing the parity types for the grid functions.
@@ -200,20 +203,18 @@ def Cfunction__EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(
     CoordSystem: str,
 ) -> str:
     """
+    Map points between different coordinate systems.
+
+    This function performs mapping between eigencoordinate form (x0,x1,x2) and its
+    Cartesian equivalent (Cartx, Carty, Cartz), with the assumption of the same grid boundaries
+    for both original and eigencoordinate systems. After mapping to Cartesian, it converts
+    these coordinates back to an 'interior' point in eigencoordinate form. For cell-centered
+    grids, this point aligns with a point on the numerical grid within round-off error.
+    Finally, a check is done to ensure the conversion back to Cartesian matches the original
+    values; an error is thrown if not.
+
     :param CoordSystem: The coordinate system for mapping.
     :return: Body of the C code.
-    desc:
-    The algorithm is a three-step process for mapping points between different
-      coordinate systems.
-    Step 1: It takes a point in eigencoordinate form (x0,x1,x2) and maps it to
-      its Cartesian equivalent (Cartx, Carty, Cartz), assuming the same grid boundaries
-      for both the original and eigencoordinate systems.
-    Step 2: Then it takes these Cartesian coordinates and maps them back to an
-      'interior' point in eigencoordinate form, (x0,x1,x2)', along with the corresponding
-      gridpoint indices (i0, i1, i2). For cell-centered grids, this point will align
-      exactly with a point on the numerical grid, within round-off error.
-    Step 3: Finally, a sanity check is performed to ensure that the conversion back
-      to Cartesian coordinates matches the original Cartesian values; if not, an error is thrown.
     """
     desc = """EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt():
   A coordinate system's "eigencoordinate" is the simplest member
@@ -422,8 +423,7 @@ def Cfunction__set_parity_for_inner_boundary_single_pt(CoordSystem: str) -> str:
     :param CoordSystem: Coordinate system in which to set the parity
     :return: Full function C code as a string
 
-    # >>> Cfunction__set_parity_for_inner_boundary_single_pt("Cartesian")  # doctest placeholder
-    # '...'  # Expected C code
+    Doctest: FIXME
     """
     desc = """set_parity_for_inner_boundary_single_pt():
 Given (x0,x1,x2)=(xx0,xx1,xx2) and
@@ -480,9 +480,10 @@ for all 10 tensor types supported by NRPy+."""
 #      This function is documented in desc= and body= fields below.
 def register_CFunction_bcstruct_set_up(CoordSystem: str) -> None:
     """
-    Register C function for setting up bcstruct, which prescribes how
-    inner and outer boundary points on the computational grid are
-    filled, based on the given coordinate system (CoordSystem).
+    Register C function for setting up bcstruct.
+
+    This function prescribes how inner and outer boundary points on the
+    computational grid are filled, based on the given coordinate system (CoordSystem).
 
     :param CoordSystem: The coordinate system for which to set up boundary conditions.
     """
@@ -743,10 +744,7 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
 ## apply_bcs_inner_only(): Apply inner boundary conditions.
 ##  Function is documented below in desc= and body=.
 def register_CFunction_apply_bcs_inner_only() -> None:
-    """
-    Register C function for filling inner boundary points
-    on the computational grid, as prescribed by bcstruct.
-    """
+    """Register C function for filling inner boundary points on the computational grid, as prescribed by bcstruct."""
     includes = ["BHaH_defines.h"]
     desc = r"""
 Apply BCs to inner boundary points only,
@@ -789,12 +787,7 @@ boundary points ("inner maps to outer").
 ## apply_bcs_outerextrap_and_inner(): Apply extrapolation outer boundary conditions.
 ##  Function is documented below in desc= and body=.
 def register_CFunction_apply_bcs_outerextrap_and_inner() -> None:
-    """
-    Register C function for filling outer boundary points with
-    quadratic polynomial extrapolation, and fill in the inner
-    boundary points as well. All boundary points are filled as
-    prescribed by bcstruct.
-    """
+    """Register C function for filling boundary points with extrapolation and prescribed bcstruct."""
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = r"""#Suppose the outer boundary point is at the i0=max(i0) face. Then we fit known data at i0-3, i0-2, and i0-1
 #  to the unique quadratic polynomial that passes through those points, and fill the data at
@@ -885,14 +878,13 @@ def register_CFunction_apply_bcs_outerextrap_and_inner() -> None:
 # r_and_partial_xi_partial_r_derivs(): Compute r(x0,x1,x2) and dx^i / dr
 def setup_Cfunction_r_and_partial_xi_partial_r_derivs(CoordSystem: str) -> str:
     """
-    Generates C code to compute the radial coordinate r(x0, x1, x2) and its
-    partial derivatives partial x^i / partial r for a given coordinate system.
+    Generate C code to compute the radial coordinate r(x0, x1, x2) and its derivatives.
+
+    Compute the radial coordinate r(x0, x1, x2) and its partial derivatives
+    partial x^i / partial r for a given coordinate system.
 
     :param CoordSystem: The coordinate system for which to compute r and its derivatives.
     :return: A string containing the generated C code for the function.
-
-    The function relies on pre-calculated reference metrics and employs code generation techniques
-    to produce optimized C code for the required calculations.
     """
     desc = "Compute r(xx0,xx1,xx2) and partial_r x^i."
     c_type = "static inline void"
@@ -946,8 +938,7 @@ def get_arb_offset_FD_coeffs_indices(
 
     :return: A tuple containing the list of coefficients and the list of indices
 
-    Example
-    -------
+    Doctest:
     >>> get_arb_offset_FD_coeffs_indices(3, 0, 1)
     ([1/24, -9/8, 9/8, -1/24], [-1, 0, 1, 2])
     """
@@ -967,14 +958,14 @@ def setup_Cfunction_FD1_arbitrary_upwind(
     dirn: int, radiation_BC_fd_order: int = -1
 ) -> str:
     """
-    Setup the C function for computing the 1st derivative finite-difference
-    with arbitrary upwind for a given direction and order.
+    Set up the C function for computing the 1st derivative finite-difference.
+
+    Supports arbitrary upwind for a given direction and order.
 
     :param dirn: Direction in which to compute the derivative.
     :param radiation_BC_fd_order: Finite difference order for radiation boundary condition.
                                   If -1, will use default finite difference order.
     :return: The full C function as a string.
-
     """
     default_FDORDER = par.parval_from_str("fd_order")
     if radiation_BC_fd_order == -1:
@@ -1053,7 +1044,7 @@ def setup_Cfunction_compute_partial_r_f(
 
     :param CoordSystem: Coordinate system to be used for the computation
     :param radiation_BC_fd_order: Order of finite difference for radiation boundary conditions, default is -1
-    :return: A C function code for computing the partial derivative
+    :return: A C function for computing the partial derivative
     """
     desc = "Compute \\partial_r f"
     c_type = "static inline REAL"
@@ -1125,7 +1116,7 @@ def setup_Cfunction_radiation_bcs(
     CoordSystem: str, radiation_BC_fd_order: int = -1
 ) -> str:
     """
-    Generates C code to apply radiation boundary conditions in a given coordinate system.
+    Generate C code to apply radiation boundary conditions in a given coordinate system.
 
     :param CoordSystem: The coordinate system to use.
     :param radiation_BC_fd_order: Finite differencing order to use. Default is -1.
@@ -1211,7 +1202,7 @@ def register_CFunction_apply_bcs_outerradiation_and_inner(
     CoordSystem: str, radiation_BC_fd_order: int = 2
 ) -> None:
     """
-    Registers a C function to apply boundary conditions to both pure outer and inner boundary points.
+    Register a C function to apply boundary conditions to both pure outer and inner boundary points.
 
     :param CoordSystem: The coordinate system to use.
     :param radiation_BC_fd_order: Finite differencing order for the radiation boundary conditions. Default is 2.
@@ -1306,10 +1297,13 @@ def CurviBoundaryConditions_register_C_functions(
     set_parity_on_auxevol: bool = False,
 ) -> None:
     """
-    Registers various C functions responsible for handling boundary conditions.
+    Register various C functions responsible for handling boundary conditions.
 
-    :param CoordSystem: The coordinate system to use.
+    :param list_of_CoordSystems: List of coordinate systems to use.
     :param radiation_BC_fd_order: Finite differencing order for the radiation boundary conditions. Default is 2.
+    :param set_parity_on_aux: If True, set parity on auxiliary grid functions.
+    :param set_parity_on_auxevol: If True, set parity on auxiliary evolution grid functions.
+    :return: None
     """
     for CoordSystem in list_of_CoordSystems:
         # Register C function to set up the boundary condition struct.

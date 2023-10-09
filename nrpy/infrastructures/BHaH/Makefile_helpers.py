@@ -1,7 +1,5 @@
 """
-Construct Makefile for BHaH C-code project, based
- upon C functions registered through the c_function
- NRPy+ module.
+Construct Makefile for BHaH C-code project, based on CFunctions registered in the c_function NRPy+ module.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -45,7 +43,6 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
 
     :raises SystemExit: Exits if errors are encountered.
     """
-
     if not create_lib and "main" not in CFunction_dict:
         raise SystemExit(
             "output_CFunctions_function_prototypes_and_construct_Makefile() error: C codes will not compile if main() function not defined!\n"
@@ -246,9 +243,9 @@ def compile_Makefile(
     :param project_name: Name of the project.
     :param exec_name: Name of the executable.
     :param compiler_opt_option: Compiler optimization option (default: "fast").
-    :param addl_CFLAGS: Additional CFLAGS.
-    :param addl_libraries: Additional libraries.
-    :param CC: C compiler (default: "gcc").
+    :param addl_CFLAGS: Additional CFLAGS (default: None).
+    :param addl_libraries: Additional libraries (default: None).
+    :param CC: C compiler (default: "autodetect").
     :param attempt: Compilation attempt number (default: 1).
     """
     if CC == "autodetect":

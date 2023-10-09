@@ -1,7 +1,5 @@
 """
-Performs the conversion from ADM spacetime variables
- in Spherical or Cartesian coordinates,
- to BSSN quantities in any basis supported by NRPy+.
+Perform the conversion from ADM quantities in spherical/Cartesian coordinates, to BSSN quantities in any NRPy-supported basis.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -37,7 +35,7 @@ def register_CFunction_exact_ADM_ID_function(
     KDD: List[List[sp.Expr]],
 ) -> None:
     """
-    Adds a C function for exact ADM initial data of a given ID type.
+    Register C function for exact ADM initial data of a given ID type.
 
     :param IDCoordSystem: The ID coordinate system.
     :param IDtype: The ID type.
@@ -47,7 +45,6 @@ def register_CFunction_exact_ADM_ID_function(
     :param gammaDD: The 3-metric with lower indices.
     :param KDD: The extrinsic curvature with lower indices.
     """
-
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = f"{IDtype} initial data"
     c_type = "void"
@@ -112,7 +109,6 @@ def register_CFunction_exact_ADM_ID_function(
         include_CodeParameters_h=True,
         body=body,
     )
-    # return pickle_NRPy_env()
 
 
 def Cfunction_ADM_SphorCart_to_Cart(
@@ -127,7 +123,6 @@ def Cfunction_ADM_SphorCart_to_Cart(
 
     :return: The name of the generated C function.
     """
-
     desc = "Convert ADM variables from the spherical or Cartesian basis to the Cartesian basis"
     c_type = "static void"
     name = "ADM_SphorCart_to_Cart"
@@ -322,14 +317,12 @@ def Cfunction_BSSN_Cart_to_rescaled_BSSN_rfm(
     CoordSystem: str, include_T4UU: bool = False
 ) -> str:
     """
-    Convert Cartesian-basis BSSN vectors/tensors *except* lambda^i,
-    to the basis specified by `reference_metric::CoordSystem`, then rescale these BSSN quantities.
+    Convert Cartesian-basis BSSN vectors/tensors (except lambda^i) to CoordSystem basis, then rescale these BSSN quantities.
 
-    :param CoordSystem: Coordinate system to which the variables are to be transformed
-    :param include_T4UU: Whether to include T4UU tensor in the transformation
+    :param CoordSystem: Coordinate system to which the variables are to be transformed.
+    :param include_T4UU: Whether to include T4UU tensor in the transformation.
     :return: Returns the generated C code as a string.
     """
-
     desc = r"""Convert Cartesian-basis BSSN vectors/tensors *except* lambda^i,
 to the basis specified by `reference_metric::CoordSystem`, then rescale these BSSN quantities"""
     c_type = "static void"
@@ -449,7 +442,6 @@ def Cfunction_initial_data_lambdaU_grid_interior(CoordSystem: str) -> str:
     :param CoordSystem: The coordinate system to be used.
     :return: The full function generated for computing lambdaU.
     """
-
     c_type = "static void"
 
     desc = f"Compute lambdaU in {CoordSystem} coordinates"
@@ -526,6 +518,7 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     :param IDCoordSystem: Coordinate system for input ADM variables. Defaults to "Spherical".
     :param include_T4UU: Whether to include stress-energy tensor components.
     :param enable_fd_functions: Whether to enable finite-difference functions.
+    :param ID_persist_struct_str: String for persistent ID structure.
     """
     # Step 1: construct this function's contribution to BHaH_defines.h:
     BHd = r"""typedef struct __initial_data_struct__ {
@@ -567,7 +560,7 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
 
     def T4UU_prettyprint() -> str:
         """
-        Returns a pretty-printed string for T4UU variables in C code.
+        Return a pretty-printed string for T4UU variables in C code.
 
         :return: A string containing the C declarations for T4UU variables.
         """

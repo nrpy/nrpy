@@ -1,6 +1,5 @@
 """
-Register wrapper functions for routines that span multiple
-  coordinate systems.
+Register wrapper functions for routines that span multiple coordinate systems.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com

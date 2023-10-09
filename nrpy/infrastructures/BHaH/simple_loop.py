@@ -38,6 +38,7 @@ def simple_loop(
     :param OMP_collapse: Specifies the number of nested loops to collapse
     :return: Complete loop code, output as a string.
 
+    Doctests:
     >>> from nrpy.helpers.generic import clang_format
     >>> print(clang_format(simple_loop('// <INTERIOR>', loop_region="all points")))
     #pragma omp parallel for
@@ -212,6 +213,8 @@ def simple_loop_2D(
     :param CoordSystem: Coordinate system, e.g., "Cartesian"
     :param plane: Specifies the plane of output: either "xy" or "yz" (default)
     :return: Complete loop code, output as a string.
+
+    Doctests:
     >>> from nrpy.helpers.generic import clang_format
     >>> print(clang_format(simple_loop_2D("// loop body", "Cartesian", plane="xy")))
     // Set 2D loops over xy-plane for Cartesian coordinates.
@@ -247,7 +250,6 @@ def simple_loop_2D(
       // loop body
     }
     """
-
     if plane not in ["xy", "yz"]:
         raise ValueError(
             f"2D loop output only supports xy or yz planes. plane = {plane} not supported."

@@ -1,7 +1,7 @@
 """
-Functions for setting params_struct and commondata_struct parameters
-  to default values specified when registering them within NRPy+'s
-  CodeParameters.
+Functions for setting params_struct and commondata_struct parameters.
+
+Set to default values specified when registering them within NRPy+'s CodeParameters.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -19,8 +19,7 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
     """
     Register a C function to set code parameters to their default values.
 
-    :param None: This function takes no parameters.
-
+    Doctests:
     >>> _, __ = par.register_CodeParameters("REAL", "CodeParameters_c_files", ["a", "pi_three_sigfigs"], [1, 3.14], commondata=True)
     >>> ___ = par.register_CodeParameter("#define", "CodeParameters_c_files", "b", 0)
     >>> _leaveitbe = par.register_CodeParameter("REAL", "CodeParameters_c_files", "leaveitbe", add_to_parfile=False, add_to_set_CodeParameters_h=False)
@@ -119,9 +118,10 @@ def write_CodeParameters_h_files(
     r"""
     Generate C code to set C parameter constants and writes them to files.
 
-    :param project_name: The name of the project directory.
-    :param project_root_dir: The root directory of the project.
+    :param project_dir: The path of the project directory.
     :param clang_format_options: Options for clang_format.
+
+    Doctests:
     >>> project_dir = Path("/tmp/tmp_project/")
     >>> write_CodeParameters_h_files(str(project_dir))
     >>> print((project_dir / 'set_CodeParameters.h').read_text())
@@ -162,6 +162,7 @@ def write_CodeParameters_h_files(
 
     # Step 4.a: Output non-SIMD version, set_CodeParameters.h
     def gen_set_CodeParameters(pointerEnable: bool = True) -> str:
+        """Generate content of set_CodeParameters*.h based on the pointerEnable flag."""
         returnstring = ""
         for CPname, CodeParam in sorted(
             par.glb_code_params_dict.items(), key=lambda x: x[0].lower()
