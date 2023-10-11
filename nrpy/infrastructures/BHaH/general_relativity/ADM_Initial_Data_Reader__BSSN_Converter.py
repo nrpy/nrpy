@@ -323,8 +323,8 @@ def Cfunction_BSSN_Cart_to_rescaled_BSSN_rfm(
     :param include_T4UU: Whether to include T4UU tensor in the transformation.
     :return: Returns the generated C code as a string.
     """
-    desc = r"""Convert Cartesian-basis BSSN vectors/tensors *except* lambda^i,
-to the basis specified by `reference_metric::CoordSystem`, then rescale these BSSN quantities"""
+    desc = rf"""Cartesian -> {CoordSystem} basis transformation of BSSN vectors/tensors *except* lambda^i.
+After the basis transform, all BSSN quantities are rescaled."""
     c_type = "static void"
     name = "BSSN_Cart_to_rescaled_BSSN_rfm"
     params = """const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xCart[3],
