@@ -434,9 +434,9 @@ above for more details), here we compute the parity conditions
 for all 10 tensor types supported by NRPy+."""
     c_type = "static void"
     name = "set_parity_for_inner_boundary_single_pt"
-    params = """const params_struct *restrict params, const REAL xx0,const REAL xx1,const REAL xx2,
-                                                 const REAL x0x1x2_inbounds[3], const int idx,
-                                                 innerpt_bc_struct *restrict innerpt_bc_arr"""
+    params = """const commondata_struct *restrict commondata, const params_struct *restrict params,
+                const REAL xx0,const REAL xx1,const REAL xx2,  const REAL x0x1x2_inbounds[3], const int idx,
+                innerpt_bc_struct *restrict innerpt_bc_arr"""
     body = f"""
     const REAL xx0_inbounds = x0x1x2_inbounds[0];
     const REAL xx1_inbounds = x0x1x2_inbounds[1];
@@ -466,11 +466,13 @@ for all 10 tensor types supported by NRPy+."""
     }} // END for(int whichparity=0;whichparity<10;whichparity++)
     """
     cf = cfc.CFunction(
+        subdirectory=CoordSystem,
         desc=desc,
         c_type=c_type,
         CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,
+        include_CodeParameters_h=True,
         body=body,
     )
     return cf.full_function
@@ -599,7 +601,7 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
           bcstruct->inner_bc_array[which_inner].dstpt = IDX3(i0,i1,i2);
           bcstruct->inner_bc_array[which_inner].srcpt = IDX3(i0i1i2_inbounds[0],i0i1i2_inbounds[1],i0i1i2_inbounds[2]);
           //printf("%d / %d\n",which_inner, bc_info->num_inner_boundary_points);
-          set_parity_for_inner_boundary_single_pt(params, xx[0][i0],xx[1][i1],xx[2][i2],
+          set_parity_for_inner_boundary_single_pt(commondata, params, xx[0][i0],xx[1][i1],xx[2][i2],
                                                   x0x1x2_inbounds, which_inner, bcstruct->inner_bc_array);
 
           which_inner++;
