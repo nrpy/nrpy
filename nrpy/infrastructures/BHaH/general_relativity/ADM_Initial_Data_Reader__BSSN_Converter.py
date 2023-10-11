@@ -663,9 +663,22 @@ typedef struct __rescaled_BSSN_rfm_basis_struct__ {
                 gf = f"T4UU{mu}{nu}"
                 body += f"griddata->gridfuncs.auxevol_gfs[IDX4pt({gf.upper()}GF, idx3)] = rescaled_BSSN_rfm_basis.{gf};\n"
     body += """
+    // Initialize lambdaU to zero
+    griddata->gridfuncs.y_n_gfs[IDX4pt(LAMBDAU0GF, idx3)] = 0.0;
+    griddata->gridfuncs.y_n_gfs[IDX4pt(LAMBDAU1GF, idx3)] = 0.0;
+    griddata->gridfuncs.y_n_gfs[IDX4pt(LAMBDAU2GF, idx3)] = 0.0;
   } // END LOOP over all gridpoints on given grid
 
-  initial_data_lambdaU_grid_interior(commondata, &griddata->params, griddata->xx, griddata->gridfuncs.y_n_gfs);
+  // Now we've set all but lambda^i, which will be computed via a finite-difference of hDD.
+  //    However, hDD is not correctly set in inner boundary points so we apply inner bcs first.
+
+  // Apply inner bcs to get correct values of all tensor quantities across symmetry boundaries;
+  //    BSSN_Cart_to_rescaled_BSSN_rfm() converts each xCart->xx, which guarantees a mapping
+  //    to the grid interior. It therefore does not account for parity conditions across
+  //    symmetry boundaries being correct.
+  apply_bcs_inner_only(commondata, params, &griddata->bcstruct, griddata->gridfuncs.y_n_gfs);
+
+  initial_data_lambdaU_grid_interior(commondata, params, griddata->xx, griddata->gridfuncs.y_n_gfs);
 """
     cfc.register_CFunction(
         includes=includes,
