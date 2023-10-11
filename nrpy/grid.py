@@ -45,7 +45,7 @@ class BHaHGridFunction(GridFunction):
         f_infinity: float = 0.0,
         wavespeed: float = 1.0,
         is_basename: bool = True,
-        gf_array_name: str = "in_gfs",
+        gf_array_name: str = "use_in_gfs_for_EVOL_auxevol_gfs_for_AUXEVOL_etc",
     ) -> None:
         super().__init__(name, group)
         self.c_type_alias = "REAL"  # always use REAL
@@ -53,11 +53,19 @@ class BHaHGridFunction(GridFunction):
         self.f_infinity = f_infinity
         self.wavespeed = wavespeed
         self.is_basename = is_basename
-        self.gf_array_name = gf_array_name
+        self.verify_gridfunction_group_is_valid()
+        if gf_array_name == "use_in_gfs_for_EVOL_auxevol_gfs_for_AUXEVOL_etc":
+            if group == "EVOL":
+                self.gf_array_name = "in_gfs"
+            elif group == "AUXEVOL":
+                self.gf_array_name = "auxevol_gfs"
+            elif group == "AUX":
+                self.gf_array_name = "aux_gfs"
+        else:
+            self.gf_array_name = gf_array_name
 
         if is_basename:
             self.verify_gridfunction_basename_is_valid(self.name)
-        self.verify_gridfunction_group_is_valid()
 
     def verify_gridfunction_basename_is_valid(self, name: str) -> None:
         """
