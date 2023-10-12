@@ -19,7 +19,7 @@ class BSSN_to_ADM:
         self, CoordSystem: str = "Cartesian", enable_rfm_precompute: bool = False
     ):
         """
-        Initialize the BSSN_to_ADM class, sets: gammaDD, gammaDDdD, gammaDDdDD, gammaUU, detgamma, GammaUDD, KDD, KDDdD.
+        Initialize the BSSN_to_ADM class, sets: betaU, gammaDD, gammaDDdD, gammaDDdDD, gammaUU, detgamma, GammaUDD, KDD, KDDdD.
 
         :param CoordSystem: String describing the coordinate system of the inputs.
         :param enable_rfm_precompute: Boolean flag to enable reference metric precomputation
@@ -38,6 +38,9 @@ class BSSN_to_ADM:
         gammabarDD_dD = Bq.gammabarDD_dD
         gammabarDD_dDD = Bq.gammabarDD_dDD
         AbarDD_dD = Bq.AbarDD_dD
+
+        # Step 1.d: betaU comes "for free"
+        self.betaU = Bq.betaU
 
         # Step 2: The ADM three-metric gammaDD and its
         #         derivatives in terms of BSSN quantities.

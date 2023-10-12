@@ -16,6 +16,7 @@ import nrpy.equations.general_relativity.g4munu_conversions as g4conv  # NRPy+: 
 
 def T4UU_and_ADM_to_SDD_SD_S_rho(
     gammaDD: Optional[Sequence[Sequence[sp.Expr]]] = None,
+    betaU: Optional[Sequence[sp.Expr]] = None,
 ) -> Tuple[Sequence[Sequence[sp.Expr]], Sequence[sp.Expr], sp.Expr, sp.Expr]:
     """
     Define BSSN source terms in terms of T^{mu nu} and ADM variables.
@@ -25,7 +26,8 @@ def T4UU_and_ADM_to_SDD_SD_S_rho(
     """
     # Step 1: Define gamma4DD[mu][nu] = g_{mu nu} + n_{mu} n_{nu}
     alpha = sp.symbols("alpha", real=True)
-    betaU = ixp.declarerank1("betaU")
+    if betaU is None:
+        betaU = ixp.declarerank1("betaU")
     if gammaDD is None:
         gammaDD = ixp.declarerank2("gammaDD", symmetry="sym01")
 
@@ -89,7 +91,7 @@ def T4UU_and_BSSN_to_SDD_SD_S_rho(
     BtoA = BSSN_to_ADM(
         CoordSystem=CoordSystem, enable_rfm_precompute=enable_rfm_precompute
     )
-    return T4UU_and_ADM_to_SDD_SD_S_rho(BtoA.gammaDD)
+    return T4UU_and_ADM_to_SDD_SD_S_rho(gammaDD=BtoA.gammaDD, betaU=BtoA.betaU)
 
 
 # Step 3: Add BSSN stress-energy source terms to BSSN RHSs
