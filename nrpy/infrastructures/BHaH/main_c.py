@@ -16,6 +16,7 @@ def register_CFunction_main_c(
     enable_CurviBCs: bool = False,
     boundary_conditions_desc: str = "",
     prefunc: str = "",
+    initialize_constant_auxevol: bool = False,
     pre_MoL_step_forward_in_time: str = "",
     post_MoL_step_forward_in_time: str = "",
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 0}",
@@ -72,16 +73,20 @@ Step 1.d: Set each CodeParameter in griddata.params to default.
     if enable_CurviBCs:
         desc += "Step 1.e: Set non-parfile parameters related to numerical grid, then set up numerical grids and CFL-limited timestep.\n"
     if enable_rfm_precompute:
-        desc += "Step 1.f: Set up boundary condition struct (bcstruct)\n"
+        desc += "Step 1.f: Set up boundary condition struct (bcstruct).\n"
     desc += f"""Step 2: Initial data are set on y_n_gfs gridfunctions. Allocate storage for them first.
 Step 3: Finalize initialization: set up {initial_data_desc}initial data, etc.
-Step 4: Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping
+Step 4: Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping.
+"""
+    if initialize_constant_auxevol:
+        desc += "Step 4.a: Set AUXEVOL gridfunctions that will never change in time."
+    desc += f"""
 Step 5: MAIN SIMULATION LOOP
-- Step 5.a: Output diagnostics
-- Step 5.b: Prepare to step forward in time
+- Step 5.a: Output diagnostics.
+- Step 5.b: Prepare to step forward in time.
 - Step 5.c: Step forward in time using Method of Lines with {MoL_method} algorithm, applying {boundary_conditions_desc} boundary conditions.
-- Step 5.d: Finish up step in time
-Step 6: Free all allocated memory"""
+- Step 5.d: Finish up step in time.
+Step 6: Free all allocated memory."""
     c_type = "int"
     name = "main"
     params = "int argc, const char *argv[]"
@@ -118,7 +123,12 @@ initial_data(&commondata, griddata);
 // Step 4: Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping
 for(int grid=0; grid<commondata.NUMGRIDS; grid++)
   MoL_malloc_non_y_n_gfs(&commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
-
+"""
+    if initialize_constant_auxevol:
+        body += """// Step 4.a: Set AUXEVOL gridfunctions that will never change in time.
+initialize_constant_auxevol(&commondata, griddata);
+"""
+    body += """
 // Step 5: MAIN SIMULATION LOOP
 while(commondata.time < commondata.t_final) { // Main loop to progress forward in time.
   // Step 5.a: Main loop, part 1: Output diagnostics
