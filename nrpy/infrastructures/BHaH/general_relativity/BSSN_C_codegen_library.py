@@ -136,6 +136,7 @@ def register_CFunction_diagnostics(
     CoordSystem: str,
     default_diagnostics_out_every: float,
     enable_psi4_diagnostics: bool = False,
+    enable_progress_indicator: bool = True,
     plane: str = "yz",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
@@ -333,7 +334,10 @@ fprintf(outfile, "%e %e %e %e %e %e %e %e\n", xCart[0], xCart[1], xCart[2], log1
     body += r"""
   }
 }
-progress_indicator(commondata, griddata);
+"""
+    if enable_progress_indicator:
+        body += "progress_indicator(commondata, griddata);"
+    body += r"""
 if(commondata->time + commondata->dt > commondata->t_final) printf("\n");
 """
 

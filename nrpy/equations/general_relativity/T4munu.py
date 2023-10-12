@@ -110,11 +110,12 @@ def BSSN_RHSs_T4UU_source_terms(
         CoordSystem=CoordSystem, enable_rfm_precompute=enable_rfm_precompute
     )
     PI = par.register_CodeParameter(
-        "#define",
+        "REAL",
         __name__,
-        "M_PI",
-        "",
-        add_to_glb_code_params_dict=False,
+        "PI",
+        "3.14159265358979323846264338327950288",
+        add_to_glb_code_params_dict=True,
+        add_to_set_CodeParameters_h=True,
         add_to_parfile=False,
     )
     alpha = sp.symbols("alpha", real=True)
@@ -177,11 +178,12 @@ def BSSN_constraints_T4UU_source_terms(
     )  # _SDD, _S unused
 
     PI = par.register_CodeParameter(
-        "#define",
+        "REAL",
         __name__,
-        "M_PI",
-        "",
-        add_to_glb_code_params_dict=False,
+        "PI",
+        "3.14159265358979323846264338327950288",
+        add_to_glb_code_params_dict=True,
+        add_to_set_CodeParameters_h=True,
         add_to_parfile=False,
     )
 
