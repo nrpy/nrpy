@@ -121,10 +121,8 @@ def inject_mpfs_into_cse_expression(
 
     for lhs, rhs in replaced:
         free_symbols_dict[lhs] = rhs.xreplace(free_symbols_dict)
-        # print("HEY", free_symbols_dict[lhs], rhs)
 
     reduced_expr = reduced_expr.xreplace(free_symbols_dict)
-    # print("HEY", reduced_expr)
 
     # nrpyAbs = sp.Function("nrpyAbs")
     # reduced_expr = reduced_expr.subs(nrpyAbs, sp.Abs)
