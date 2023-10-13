@@ -65,7 +65,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
             exec_or_library_name += ext
 
         def add_flag(flag_list: Optional[List[str]], flag: str) -> List[str]:
-            """Checks if a flag is in the list, adding it if not."""
+            """Check if a flag is in the list, add it if not."""
             if not flag_list:
                 flag_list = []
             if flag not in flag_list:
