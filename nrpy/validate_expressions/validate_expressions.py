@@ -130,7 +130,14 @@ def inject_mpfs_into_cse_expression(
     try:
         res = mpf(reduced_expr)
     except TypeError:
-        res = mpc(sp.N(reduced_expr, mp.dps))
+        if reduced_expr == sp.nan:
+            res = mp.nan
+            print(
+                "inject_mpfs_into_cse_expression warning: after making replacements, found NaN.\n"
+                "   Seems to happen in SymTP Jacobians: rfm.Jac_dUrfm_dDSphUD[i][0]"
+            )
+        else:
+            res = mpc(sp.N(reduced_expr, mp.dps))
     return res
 
 
@@ -271,7 +278,11 @@ def process_dictionary_of_expressions(
     return results_dict
 
 
-def check_zero(expression: sp.Expr, verbose: bool = False) -> bool:
+def check_zero(
+    expression: sp.Expr,
+    fixed_mpfs_for_free_symbols: bool = False,
+    verbose: bool = False,
+) -> bool:
     """
     Check if a given expression evaluates to zero.
 
@@ -292,8 +303,14 @@ def check_zero(expression: sp.Expr, verbose: bool = False) -> bool:
     False
     >>> check_zero((a**2 - b**2) - (a + b)*(a - b))
     True
+    >>> check_zero(sp.sympify(0))
+    True
     """
-    result_value = convert_one_expression_to_mpfmpc(expression, verbose=verbose)
+    result_value = convert_one_expression_to_mpfmpc(
+        expression,
+        fixed_mpfs_for_free_symbols=fixed_mpfs_for_free_symbols,
+        verbose=verbose,
+    )
 
     return bool(result_value == mp.mpf("0.0"))  # Explicitly returning a boolean
 

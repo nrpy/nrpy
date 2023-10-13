@@ -94,6 +94,10 @@ if "Spherical" in CoordSystem:
     OMP_collapse = 2  # about 2x faster
     if CoordSystem == "SinhSpherical":
         sinh_width = 0.2
+if "Cylindrical" in CoordSystem:
+    par.set_parval_from_str("symmetry_axes", "1")
+    par.adjust_CodeParam_default("CFL_FACTOR", 1.0)
+    OMP_collapse = 2  # might be slightly faster
 
 project_dir = os.path.join("project", project_name)
 
@@ -139,7 +143,16 @@ BCl.register_CFunction_diagnostics(
     CoordSystem=CoordSystem,
     default_diagnostics_out_every=diagnostics_output_every,
     enable_psi4_diagnostics=True,
-    plane="yz",
+    grid_center_filename_tuple=("out0d-conv_factor%.2f.txt", "convergence_factor"),
+    axis_filename_tuple=(
+        "out1d-AXIS-conv_factor%.2f-t%08.2f.txt",
+        "convergence_factor, time",
+    ),
+    plane_filename_tuple=(
+        "out2d-PLANE-conv_factor%.2f-t%08.2f.txt",
+        "convergence_factor, time",
+    ),
+    out_quantities_dict="default",
 )
 if enable_rfm_precompute:
     rfm_precompute.register_CFunctions_rfm_precompute(

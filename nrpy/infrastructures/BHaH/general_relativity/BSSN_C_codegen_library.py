@@ -5,7 +5,7 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 from collections import OrderedDict as ODict
-from typing import List, Union, cast
+from typing import List, Union, cast, Tuple, Dict
 from pathlib import Path
 from inspect import currentframe as cfr
 from types import FrameType as FT
@@ -35,6 +35,7 @@ import nrpy.equations.general_relativity.psi4 as psifour
 import nrpy.equations.general_relativity.psi4_tetrads as psifourtet
 import nrpy.infrastructures.BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter as admid
 import nrpy.infrastructures.BHaH.simple_loop as lp
+import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_slices as out012d
 
 
 def register_CFunction_initial_data(
@@ -137,7 +138,19 @@ def register_CFunction_diagnostics(
     default_diagnostics_out_every: float,
     enable_psi4_diagnostics: bool = False,
     enable_progress_indicator: bool = True,
-    plane: str = "yz",
+    grid_center_filename_tuple: Tuple[str, str] = (
+        "out0d-conv_factor%.2f.txt",
+        "convergence_factor",
+    ),
+    axis_filename_tuple: Tuple[str, str] = (
+        "out1d-AXIS-%s-conv_factor%.2f-t%08.2f.txt",
+        "CoordSystemName, convergence_factor, time",
+    ),
+    plane_filename_tuple: Tuple[str, str] = (
+        "out2d-PLANE-%s-conv_factor%.2f-t%08.2f.txt",
+        "CoordSystemName, convergence_factor, time",
+    ),
+    out_quantities_dict: Union[str, Dict[Tuple[str, str], str]] = "default",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register C function for simulation diagnostics.
@@ -145,9 +158,14 @@ def register_CFunction_diagnostics(
     :param CoordSystem: Specifies the coordinate system for the diagnostics.
     :param default_diagnostics_out_every: Specifies the default diagnostics output frequency.
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
-    :param plane: The default plane for diagnostics; defaults to "yz".
+    :param enable_progress_indicator: Whether or not to enable the progress indicator.
+    :param grid_center_filename_tuple: Tuple containing filename and variables for grid center output.
+    :param axis_filename_tuple: Tuple containing filename and variables for axis output.
+    :param plane_filename_tuple: Tuple containing filename and variables for plane output.
+    :param out_quantities_dict: Dictionary or string specifying output quantities.
 
     :return: None if in registration phase, else the updated NRPy environment.
+    :raises TypeError: If `out_quantities_dict` is not a dictionary and not set to "default".
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -161,6 +179,39 @@ def register_CFunction_diagnostics(
     )
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+
+    # fmt: off
+    if out_quantities_dict == "default":
+        out_quantities_dict = {
+            ("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))",
+            ("REAL", "log10sqrtM2L"): "log10(sqrt(diagnostic_output_gfs[IDX4pt(MSQUAREDGF, idx3)]) + 1e-16)",
+            ("REAL", "cfL"): "y_n_gfs[IDX4pt(CFGF, idx3)]",
+            ("REAL", "alphaL"): "y_n_gfs[IDX4pt(ALPHAGF, idx3)]",
+            ("REAL", "trKL"): "y_n_gfs[IDX4pt(TRKGF, idx3)]",
+        }
+    if not isinstance(out_quantities_dict, dict):
+        raise TypeError(f"out_quantities_dict was initialized to {out_quantities_dict}, which is not a dictionary!")
+    # fmt: on
+
+    out012d.register_CFunction_diagnostics_grid_center(
+        CoordSystem=CoordSystem,
+        out_quantities_dict=out_quantities_dict,
+        filename_tuple=grid_center_filename_tuple,
+    )
+    for axis in ["y", "z"]:
+        out012d.register_CFunction_diagnostics_1d_axis(
+            CoordSystem=CoordSystem,
+            out_quantities_dict=out_quantities_dict,
+            filename_tuple=axis_filename_tuple,
+            axis=axis,
+        )
+    for plane in ["xy", "yz"]:
+        out012d.register_CFunction_diagnostics_2d_plane(
+            CoordSystem=CoordSystem,
+            out_quantities_dict=out_quantities_dict,
+            filename_tuple=plane_filename_tuple,
+            plane=plane,
+        )
 
     desc = r"""Diagnostics."""
     c_type = "void"
@@ -194,120 +245,17 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {
       Ricci_eval(commondata, params, &griddata->rfmstruct, y_n_gfs, auxevol_gfs);
       constraints_eval(commondata, params, &griddata->rfmstruct, y_n_gfs, auxevol_gfs, diagnostic_output_gfs);
     }
+
     // 0D output
-    {
-      char filename[256];
-      sprintf(filename, "out0d-conv_factor%.2f.txt", convergence_factor);
-      FILE *outfile;
-      if (nn == 0)
-        outfile = fopen(filename, "w");
-      else
-        outfile = fopen(filename, "a");
-      if (outfile == NULL) {
-        fprintf(stderr, "Error: Cannot open file %s for writing.\n", filename);
-        exit(1);
-      }
-
-      const int r_mid_idx = IDX3(Nxx_plus_2NGHOSTS1 / 2, Nxx_plus_2NGHOSTS1 / 2, Nxx_plus_2NGHOSTS2 / 2);
-
-      const REAL H_at_center = diagnostic_output_gfs[IDX4pt(HGF, r_mid_idx)];
-      const REAL M2_at_center = diagnostic_output_gfs[IDX4pt(MSQUAREDGF, r_mid_idx)];
-      const REAL cf_at_center = y_n_gfs[IDX4pt(CFGF, r_mid_idx)];
-      const REAL alpha_at_center = y_n_gfs[IDX4pt(ALPHAGF, r_mid_idx)];
-      const REAL trK_at_center = y_n_gfs[IDX4pt(TRKGF, r_mid_idx)];
-
-      fprintf(outfile, "%e %e %e %e %e %e\n", time, log10(fabs(H_at_center + 1e-16)), log10(fabs(M2_at_center + 1e-16)), cf_at_center, alpha_at_center, trK_at_center);
-
-      fclose(outfile);
-    }
+    diagnostics_grid_center(commondata, params, &griddata[grid].gridfuncs);
 
     // 1D output
-    {
-      char filename[256];
-      sprintf(filename, "out1d-conv_factor%.2f-t%08.2f.txt", convergence_factor, time);
-      FILE *outfile;
-      outfile = fopen(filename, "w");
-      if (outfile == NULL) {
-        fprintf(stderr, "Error: Cannot open file %s for writing.\n", filename);
-        exit(1);
-      }
-    """
-    if "Spherical" in CoordSystem:
-        body += r"""
-      for (int i1 = Nxx_plus_2NGHOSTS1 - NGHOSTS - 1; i1 >= NGHOSTS; i1 -= Nxx1-1) {
-        int i0_start, i0_end, i0_step;
+    diagnostics_1d_y_axis(commondata, params, xx, &griddata[grid].gridfuncs);
+    diagnostics_1d_z_axis(commondata, params, xx, &griddata[grid].gridfuncs);
 
-        if (i1 == (Nxx_plus_2NGHOSTS1 - NGHOSTS - 1)) {
-          i0_start = Nxx_plus_2NGHOSTS0 - NGHOSTS - 1;
-          i0_end = NGHOSTS - 1;
-          i0_step = -1;
-        } else if (i1 == NGHOSTS) {
-          i0_start = NGHOSTS;
-          i0_end = Nxx_plus_2NGHOSTS0 - NGHOSTS;
-          i0_step = 1;
-        } else {
-          continue; // Skip this iteration if i1 is not one of the special values
-        }
-
-        for (int i0 = i0_start; i0 != i0_end; i0 += i0_step) {
-          const int i2 = Nxx_plus_2NGHOSTS2 / 2;
-    """
-    if "Cartesian" in CoordSystem:
-        body += r"""
-    {
-      for(int i2=NGHOSTS; i2<Nxx2 + NGHOSTS; i2++) {
-        const int i0 = Nxx_plus_2NGHOSTS0/2;
-        const int i1 = Nxx_plus_2NGHOSTS1/2;
-"""
-    body += r"""
-          const int idx3 = IDX3(i0, i1, i2);
-          REAL xCart[3];
-          xx_to_Cart(commondata, params, xx, i0, i1, i2, xCart);
-
-          const REAL alphaL = y_n_gfs[IDX4pt(ALPHAGF, idx3)];
-          const REAL cfL = y_n_gfs[IDX4pt(CFGF, idx3)];
-          const REAL trKL = y_n_gfs[IDX4pt(TRKGF, idx3)];
-          const REAL HL = diagnostic_output_gfs[IDX4pt(HGF, idx3)];
-          const REAL M2L = diagnostic_output_gfs[IDX4pt(MSQUAREDGF, idx3)];
-
-          fprintf(outfile, "%e %e %e %e %e %e\n", xCart[2], log10(fabs(HL + 1e-16)), log10(fabs(M2L + 1e-16)), cfL, alphaL, trKL);
-        }
-      }
-      fclose(outfile);
-    }
-"""
-    body += rf"""
-    // 2D output:
-    {{
-      char filename[256];
-      sprintf(filename, "out2d-{plane}_plane-conv_factor%.2f-t%08.2f.txt", convergence_factor, time);
-      FILE *outfile;
-      outfile = fopen(filename, "w");
-      if (outfile == NULL) {{
-        fprintf(stderr, "Error: Cannot open file %s for writing.\n", filename);
-        exit(1);
-      }}
-"""
-    body += lp.simple_loop_2D(
-        loop_body=r"""
-const int idx3 = IDX3(i0, i1, i2);
-REAL xCart[3];
-xx_to_Cart(commondata, params, xx, i0, i1, i2, xCart);
-
-const REAL alphaL = y_n_gfs[IDX4pt(ALPHAGF, idx3)];
-const REAL cfL = y_n_gfs[IDX4pt(CFGF, idx3)];
-const REAL trKL = y_n_gfs[IDX4pt(TRKGF, idx3)];
-const REAL HL = diagnostic_output_gfs[IDX4pt(HGF, idx3)];
-const REAL M2L = diagnostic_output_gfs[IDX4pt(MSQUAREDGF, idx3)];
-
-fprintf(outfile, "%e %e %e %e %e %e %e %e\n", xCart[0], xCart[1], xCart[2], log10(fabs(HL + 1e-16)), log10(fabs(M2L + 1e-16)), cfL, alphaL, trKL);
-""",
-        CoordSystem=CoordSystem,
-        plane=plane,
-    )
-    body += r"""
-      fclose(outfile);
-    }
+    // 2D output
+    diagnostics_2d_xy_plane(commondata, params, xx, &griddata[grid].gridfuncs);
+    diagnostics_2d_yz_plane(commondata, params, xx, &griddata[grid].gridfuncs);
 """
     if enable_psi4_diagnostics:
         body += r"""      // Do psi4 output, but only if the grid is spherical-like.

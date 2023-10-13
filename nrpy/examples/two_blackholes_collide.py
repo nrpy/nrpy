@@ -69,6 +69,10 @@ OMP_collapse = 1
 if "Spherical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "2")
     OMP_collapse = 2  # about 2x faster
+if "Cylindrical" in CoordSystem:
+    par.set_parval_from_str("symmetry_axes", "1")
+    OMP_collapse = 2  # might be slightly faster
+
 project_dir = os.path.join("project", project_name)
 
 # First clean the project directory, if it exists.
@@ -102,8 +106,17 @@ numericalgrids.register_CFunctions(
 BCl.register_CFunction_diagnostics(
     CoordSystem=CoordSystem,
     default_diagnostics_out_every=diagnostics_output_every,
-    enable_psi4_diagnostics=False,
-    plane="yz",
+    enable_psi4_diagnostics=True,
+    grid_center_filename_tuple=("out0d-conv_factor%.2f.txt", "convergence_factor"),
+    axis_filename_tuple=(
+        "out1d-AXIS-conv_factor%.2f-t%08.2f.txt",
+        "convergence_factor, time",
+    ),
+    plane_filename_tuple=(
+        "out2d-PLANE-conv_factor%.2f-t%08.2f.txt",
+        "convergence_factor, time",
+    ),
+    out_quantities_dict="default",
 )
 if enable_rfm_precompute:
     rfm_precompute.register_CFunctions_rfm_precompute(
