@@ -20,7 +20,7 @@ from nrpy.c_function import CFunction_dict
 def output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir: str,
     project_name: str,
-    exec_name: str = "",
+    exec_or_library_name: str = "",
     compiler_opt_option: str = "default",
     addl_CFLAGS: Optional[List[str]] = None,
     addl_libraries: Optional[List[str]] = None,
@@ -33,7 +33,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
 
     :param project_dir: The root directory of the C project.
     :param project_name: Name of the C project.
-    :param exec_name: The name of the executable. If set to empty string, same as project_name.
+    :param exec_or_library_name: The name of the executable. If set to empty string, same as project_name.
     :param compiler_opt_option: Compiler optimization option. Defaults to "default". Other options: "fast" and "debug"
     :param addl_CFLAGS: Additional compiler flags. Must be a list.
     :param addl_libraries: Additional libraries to link. Must be a list.
@@ -52,8 +52,29 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
 
-    if exec_name == "":
-        exec_name = project_name
+    if exec_or_library_name == "":
+        exec_or_library_name = project_name
+
+    os_name = platform.system()
+    if create_lib:
+        if os_name == "Linux":
+            ext = ".so"
+        elif os_name == "Darwin":
+            ext = ".dylib"
+        if not exec_or_library_name.endswith(ext):
+            exec_or_library_name += ext
+
+        def add_flag(flag_list: Optional[List[str]], flag: str) -> List[str]:
+            """Checks if a flag is in the list, adding it if not."""
+            if not flag_list:
+                flag_list = []
+            if flag not in flag_list:
+                flag_list += [flag]
+            return flag_list
+
+        addl_CFLAGS = add_flag(addl_CFLAGS, "-fPIC")
+        addl_libraries = add_flag(addl_libraries, "-fPIC")
+        addl_libraries = add_flag(addl_libraries, "-shared")
 
     Makefile_list_of_files: List[str] = []
 
@@ -98,8 +119,6 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
             file.write(f"{CFunction_dict[key].function_prototype}\n")
 
     if CC == "autodetect":
-        os_name = platform.system()
-
         if os_name == "Darwin":
             CC = "clang"
         else:
@@ -209,17 +228,17 @@ endif
 
 {OBJ_FILES_str}
 
-all: {exec_name}
+all: {exec_or_library_name}
 
 %.o: %.c $(COMMON_HEADERS)
 	$(CC) $(CFLAGS) $(INCLUDEDIRS) -c $< -o $@
 
-{exec_name}: $(OBJ_FILES)
+{exec_or_library_name}: $(OBJ_FILES)
 	$(CC) $^ -o $@ $(LDFLAGS)
 
 # Use $(RM) to be cross-platform compatible.
 clean:
-	$(RM) *.o */*.o *~ */*~ ./#* *.txt *.dat *.avi *.png {exec_name}
+	$(RM) *.o */*.o *~ */*~ ./#* *.txt *.dat *.avi *.png {exec_or_library_name}
 """
     makefile_path = Path(project_Path) / "Makefile"
     with makefile_path.open("w", encoding="utf-8") as Makefile:
@@ -229,7 +248,7 @@ clean:
 def compile_Makefile(
     project_dir: str,
     project_name: str,
-    exec_name: str,
+    exec_or_library_name: str,
     compiler_opt_option: str = "fast",
     addl_CFLAGS: Optional[List[str]] = None,
     addl_libraries: Optional[List[str]] = None,
@@ -241,7 +260,7 @@ def compile_Makefile(
 
     :param project_dir: Root directory for C code.
     :param project_name: Name of the project.
-    :param exec_name: Name of the executable.
+    :param exec_or_library_name: Name of the executable.
     :param compiler_opt_option: Compiler optimization option (default: "fast").
     :param addl_CFLAGS: Additional CFLAGS (default: None).
     :param addl_libraries: Additional libraries (default: None).
@@ -265,7 +284,7 @@ def compile_Makefile(
     output_CFunctions_function_prototypes_and_construct_Makefile(
         project_dir=project_dir,
         project_name=project_name,
-        exec_name=exec_name,
+        exec_or_library_name=exec_or_library_name,
         compiler_opt_option=compiler_opt_option,
         addl_CFLAGS=addl_CFLAGS,
         addl_libraries=addl_libraries,
@@ -284,7 +303,7 @@ def compile_Makefile(
 
     os.chdir(orig_working_directory)
 
-    exec_path = Path(project_dir).joinpath(exec_name)
+    exec_path = Path(project_dir).joinpath(exec_or_library_name)
     if not exec_path.is_file() and attempt == 1:
         print(
             "Optimized compilation FAILED. Removing optimizations (including OpenMP) and retrying with debug enabled..."
@@ -298,7 +317,7 @@ def compile_Makefile(
         compile_Makefile(
             project_dir=project_dir,
             project_name=project_name,
-            exec_name=exec_name,
+            exec_or_library_name=exec_or_library_name,
             compiler_opt_option="debug",
             addl_CFLAGS=addl_CFLAGS,
             addl_libraries=addl_libraries,
