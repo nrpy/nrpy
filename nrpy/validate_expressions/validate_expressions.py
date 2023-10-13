@@ -153,8 +153,8 @@ def convert_free_symbols_set_to_mpf_dict(
     # Setting each variable in free_symbols_set to a random number in [0, 1) according to the hashed string
     # representation of each variable.
     for var in free_symbols_set:
-        # Make sure M_PI is set to its correct value, pi
-        if str(var) == "M_PI":
+        # Make sure PI is set to its correct value, pi
+        if str(var) in ("PI", "M_PI"):
             free_symbols_dict[var] = mp.mpf(mp.pi)
         # Then make sure M_SQRT1_2 is set to its correct value, 1/sqrt(2)
         elif str(var) == "M_SQRT1_2":
@@ -228,7 +228,7 @@ def convert_one_expression_to_mpfmpc(
         else:
             if verbose:
                 print(
-                    f"After re-evaluating with twice the digits of precision, |result| dropped to "
+                    f"After re-evaluating with twice the digits of precision, |result| didn't change: "
                     f"{mp.fabs(new_result_value)}. NOT setting value to zero. dps={mp.dps}"
                 )
 
