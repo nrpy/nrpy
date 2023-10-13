@@ -219,7 +219,7 @@ if enable_simd:
 Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
-    exec_name=project_name,
+    exec_or_library_name=project_name,
     compiler_opt_option="default",
 )
 print(
