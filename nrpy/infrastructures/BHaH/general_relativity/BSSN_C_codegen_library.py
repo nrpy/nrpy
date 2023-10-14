@@ -113,9 +113,10 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   // Unpack griddata struct:
   params_struct *restrict params = &griddata[grid].params;
 """
-    body += f"initial_data_reader__convert_ADM_{IDCoordSystem}_to_BSSN(commondata, params, griddata, &ID_persist, {IDtype});"
+    body += f"""initial_data_reader__convert_ADM_{IDCoordSystem}_to_BSSN(commondata, params,
+griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_persist, {IDtype});"""
     body += """
-  apply_bcs_outerextrap_and_inner(commondata, params, &griddata->bcstruct, griddata->gridfuncs.y_n_gfs);
+  apply_bcs_outerextrap_and_inner(commondata, params, &griddata[grid].bcstruct, griddata[grid].gridfuncs.y_n_gfs);
 }
 """
     if free_ID_persist_struct_str:
@@ -242,8 +243,8 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {
 
     // Constraint output
     {
-      Ricci_eval(commondata, params, &griddata->rfmstruct, y_n_gfs, auxevol_gfs);
-      constraints_eval(commondata, params, &griddata->rfmstruct, y_n_gfs, auxevol_gfs, diagnostic_output_gfs);
+      Ricci_eval(commondata, params, &griddata[grid].rfmstruct, y_n_gfs, auxevol_gfs);
+      constraints_eval(commondata, params, &griddata[grid].rfmstruct, y_n_gfs, auxevol_gfs, diagnostic_output_gfs);
     }
 
     // 0D output
