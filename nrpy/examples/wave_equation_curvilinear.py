@@ -88,7 +88,7 @@ numericalgrids.register_CFunctions(
 xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
 
 wCl.register_CFunction_diagnostics(
-    CoordSystem=CoordSystem,
+    list_of_CoordSystems=[CoordSystem],
     default_diagnostics_out_every=default_diagnostics_output_every,
     grid_center_filename_tuple=("out0d-conv_factor%.2f.txt", "convergence_factor"),
     axis_filename_tuple=(

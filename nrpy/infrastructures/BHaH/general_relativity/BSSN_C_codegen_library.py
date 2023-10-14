@@ -135,7 +135,7 @@ griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_pers
 
 
 def register_CFunction_diagnostics(
-    CoordSystem: str,
+    list_of_CoordSystems: List[str],
     default_diagnostics_out_every: float,
     enable_psi4_diagnostics: bool = False,
     enable_progress_indicator: bool = True,
@@ -156,7 +156,7 @@ def register_CFunction_diagnostics(
     """
     Register C function for simulation diagnostics.
 
-    :param CoordSystem: Specifies the coordinate system for the diagnostics.
+    :param list_of_CoordSystems: Lists of unique CoordSystems used.
     :param default_diagnostics_out_every: Specifies the default diagnostics output frequency.
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     :param enable_progress_indicator: Whether or not to enable the progress indicator.

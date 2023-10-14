@@ -4,7 +4,7 @@ Library of C functions for solving the wave equation in curvilinear coordinates,
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
-from typing import Union, cast, Tuple, Dict
+from typing import Union, cast, List, Tuple, Dict
 from inspect import currentframe as cfr
 from types import FrameType as FT
 from pathlib import Path
@@ -145,7 +145,7 @@ if( read_checkpoint(commondata, griddata) ) return;
 
 
 def register_CFunction_diagnostics(
-    CoordSystem: str,
+    list_of_CoordSystems: List[str],
     default_diagnostics_out_every: float,
     enable_progress_indicator: bool = True,
     grid_center_filename_tuple: Tuple[str, str] = (
@@ -165,7 +165,7 @@ def register_CFunction_diagnostics(
     """
     Register C function for simulation diagnostics.
 
-    :param CoordSystem: Specifies the coordinate system for the diagnostics.
+    :param list_of_CoordSystems: Lists of unique CoordSystems used.
     :param default_diagnostics_out_every: Specifies the default diagnostics output frequency.
     :param enable_progress_indicator: Whether or not to enable the progress indicator.
     :param grid_center_filename_tuple: Tuple containing filename and variables for grid center output.
@@ -219,30 +219,26 @@ def register_CFunction_diagnostics(
         raise TypeError(f"out_quantities_dict was initialized to {out_quantities_dict}, which is not a dictionary!")
     # fmt: on
 
-    out012d.register_CFunction_diagnostics_grid_center(
-        CoordSystem=CoordSystem,
-        out_quantities_dict=out_quantities_dict,
-        filename_tuple=grid_center_filename_tuple,
-    )
-    for axis in ["y", "z"]:
-        out012d.register_CFunction_diagnostics_1d_axis(
+    for CoordSystem in list_of_CoordSystems:
+        out012d.register_CFunction_diagnostics_grid_center(
             CoordSystem=CoordSystem,
             out_quantities_dict=out_quantities_dict,
-            filename_tuple=axis_filename_tuple,
-            axis=axis,
+            filename_tuple=grid_center_filename_tuple,
         )
-    for plane in ["xy", "yz"]:
-        out012d.register_CFunction_diagnostics_2d_plane(
-            CoordSystem=CoordSystem,
-            out_quantities_dict=out_quantities_dict,
-            filename_tuple=plane_filename_tuple,
-            plane=plane,
-        )
-
-    if not isinstance(out_quantities_dict, dict):
-        raise TypeError(
-            f"out_quantities_dict was initialized to {out_quantities_dict}, which is not a dictionary!"
-        )
+        for axis in ["y", "z"]:
+            out012d.register_CFunction_diagnostics_1d_axis(
+                CoordSystem=CoordSystem,
+                out_quantities_dict=out_quantities_dict,
+                filename_tuple=axis_filename_tuple,
+                axis=axis,
+            )
+        for plane in ["xy", "yz"]:
+            out012d.register_CFunction_diagnostics_2d_plane(
+                CoordSystem=CoordSystem,
+                out_quantities_dict=out_quantities_dict,
+                filename_tuple=plane_filename_tuple,
+                plane=plane,
+            )
     # fmt: on
 
     body = r"""  const REAL currtime = commondata->time, currdt = commondata->dt, outevery = commondata->diagnostics_output_every;

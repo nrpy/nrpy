@@ -103,7 +103,7 @@ numericalgrids.register_CFunctions(
     enable_CurviBCs=True,
 )
 BCl.register_CFunction_diagnostics(
-    CoordSystem=CoordSystem,
+    list_of_CoordSystems=[CoordSystem],
     default_diagnostics_out_every=diagnostics_output_every,
     enable_psi4_diagnostics=False,
     grid_center_filename_tuple=("out0d-conv_factor%.2f.txt", "convergence_factor"),
