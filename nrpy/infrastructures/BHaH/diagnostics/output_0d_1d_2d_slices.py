@@ -53,48 +53,14 @@ def register_CFunction_diagnostics_grid_center(
     and then computes and prints the specified diagnostic quantities to the file for the specific coordinate system provided.
 
     Doctests:
+    >>> from nrpy.helpers.generic import clang_format, compress_string_to_base64, decompress_base64_to_string, diff_strings
     >>> Coord = "SinhCylindrical"
+    >>> axis = "y"
     >>> _ = register_CFunction_diagnostics_grid_center(Coord, out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"})
-    >>> print(cfc.CFunction_dict[f"diagnostics_grid_center__rfm__{Coord}"].full_function)
-    #include "../BHaH_defines.h"
-    #include "../BHaH_function_prototypes.h"
-    /*
-     * Output diagnostic quantities at grid's *physical* center.
-     * For example:
-     * In Cartesian this will be at i0_mid,i1_mid,i2_mid.
-     * In Spherical, this will be at i0_min,i1_mid,i2_mid (i1 and i2 don't matter).
-     * In Cylindrical, this will be at i0_min,i1_mid,i2_mid (i1 == phi doesn't matter).
-     * In SinhSymTP, this will be at i0_min,i1_mid,i2_mid (i2 == phi doesn't matter).
-     */
-    void diagnostics_grid_center__rfm__SinhCylindrical(commondata_struct *restrict commondata, params_struct *restrict params, MoL_gridfunctions_struct *restrict gridfuncs) {
-    #include "../set_CodeParameters.h"
-    <BLANKLINE>
-      // Unpack gridfuncs struct:
-      const REAL *restrict y_n_gfs = gridfuncs->y_n_gfs;
-      const REAL *restrict auxevol_gfs = gridfuncs->auxevol_gfs;
-      const REAL *restrict diagnostic_output_gfs = gridfuncs->diagnostic_output_gfs;
-    <BLANKLINE>
-      // Output to file diagnostic quantities at grid's *physical* center.
-      char filename[256];
-      sprintf(filename, "out0d-conv_factor%.2f.txt", convergence_factor);
-      FILE *outfile = (nn == 0) ? fopen(filename, "w") : fopen(filename, "a");
-      if (!outfile) {
-        fprintf(stderr, "Error: Cannot open file %s for writing.\n", filename);
-        exit(1);
-      }
-    <BLANKLINE>
-      const int i0_center = NGHOSTS;
-      const int i1_center = Nxx_plus_2NGHOSTS1 / 2;
-      const int i2_center = Nxx_plus_2NGHOSTS2 / 2;
-      if (i0_center != -1 && i1_center != -1 && i2_center != -1) {
-        const int idx3 = IDX3(i0_center, i1_center, i2_center);
-        const REAL log10HL = log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16));
-    <BLANKLINE>
-        fprintf(outfile, "%e %.15e\n", time, log10HL);
-      }
-      fclose(outfile);
-    }
-    <BLANKLINE>
+    >>> diag_gc = cfc.CFunction_dict[f"diagnostics_grid_center__rfm__{Coord}"].full_function
+    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4AZ7AttdABGaScZHDxOiAHcc747vJCBLAVaWVRAnpWHX/kkr6QysfzLfXhoCqwdlhv59jJtBxk7nXnUIwIlIQLEtn60ZvFpp58iRzPO8zL7jj2RkmJNOOz7kLOZ5pcKkv0uEf85zfc7uGHClgRs9RiDAbyNwyZiAZlTl/jf5X1BOhD4i/CNHqvMIASlwDFj3mV52zX1ZUDkoYG52BfOdNFZacCi5oHsDHgM7+ghHg469486fkW6QU/5PkBfqLgwrfD2kD9IC2/fjze4k4cO8FgwxirbR6/LauUHbkFJsFCBAZ83EfkAW5j/GtzV6YUHdBv/xFH+frbxblZhQaPN6jo0+xmYnNNuMjEHQcKNBI0LpoumpFdjbOyUkc6hPyxdpuLQ8deT47gKgdD/UPS9XyjKt4EpbJe6N2hNC1hi+T4yVx7E2cO1JTPhul71RriNqgnMYcd1yDaVdg7FrT0DisOxKZDvjp94ui/gk1pxwKEyalNvlK5L8eREIQdyfTsvMuGlKop0eofJl5Uo3xywzxFFvd1k8n/iVYXonyAJv9RSXLuCfmtmT1DPaqXnYsjvrl51xtEfPjJeFb0xogVEN6N5YtOrLE5NDbX57xoQaX7pTqn+zoM+gv61jPArjC207XMM/CdzsgOh28XAmHhyJ2bqAlUt55wP8/zVB3hWBKfsv/1CC0mtKhgZN3sXn0dzbpAPCYbWDOMMRgebmzvuXb9WUixE0cNQHUdjClh9HOHrdqFQ/8qMUer21aBAfH4yTlkGCPZjhQG5JQsgznkZ/6wdLOepBEoISNRbRnczxODx3uCRsbl1/EZiroHxf39pTzqVuceQHLfk1TRFqWuuPneYdhstUrxUshbUAzWVhycjBZOg5hCRQtN0TdX+ugg/rW2vhm3kB/DTg3yE62bk7cWAdy4Z1HUI2sOshteZn7ybuCZrm/xF6tJ+0lqawIN9JDU6R/hPDe2A0drei795WebaAAACXQccqr5wVKgAB9wX8DAAAdyKIxrHEZ/sCAAAAAARZWg==")
+    >>> if diag_gc != expected_string:
+    ...     raise ValueError(f"\n{diff_strings(expected_string, diag_gc)}\n base64-encoded output: {compress_string_to_base64(diag_gc)}")
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -207,9 +173,9 @@ def register_CFunction_diagnostics_1d_axis(
     >>> axis = "y"
     >>> _ = register_CFunction_diagnostics_1d_axis(Coord, out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, axis=axis)
     >>> diag1d = cfc.CFunction_dict[f"diagnostics_1d_{axis}_axis__rfm__{Coord}"].full_function
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4AnoBEZdABGaScZHDxOiAHcc747vJCBLAVaWVRAnpWHX/kkr6QysfzLfXhoCqwdlhv59jJtBxk7nXnSEgrtsCyPSYXzh6+ATGh7ABAkIBSF+o891I4eI9S4eGHzAvGSs7EJpzVyrmy021AfTIND2mYmaWYvVjEpYWAIWJHt6abEm12uy7LfoZTeEyiT+V7goyEruSX8ZbKfF7laQ8cZFJJGqW0hlaZ9xL1O2wbDhTDbIud4y41c+Frfqux0cJRkA9+ftib6biz4gC7XhKoBCKQDExonclhZNXjDOQ4WACA16U3zUNl7b/eEw9iimCglG79US4A+Evk2fi0APwIQ+oI7szdJNmthBLtTAs14+nlh4/DvWDefIt65GBBZC9OcGTxI9cdoCsBRm8wDgGABDWaUqjRZGNZ13gqA8OQN1e5HQdYE82Fhic08j4ZNni9746oPietgEetXIrgoIcd7LnwGr9N23gyGiXMrKBEC+0HbrPw1XmDdYD/ZGCXW/+h9L8+wf+ySU5fSQdWm5gFlbs1bZ7dCocqrYLnLxLUiZDuaMz9Q2VsitMbKGnDBjWXrt/lHLKdv15LQrNk/8d5lVz5xwDCKTAOdvo63lFUfJxeT7Ygxw0zLSEBvSAQuMz3bosH3BtbZ9wmkHNzby96pfnK8D0rPD4lg5TT+mqp1cEDr6GeUSrDtd7mTzWKKPfLW8stYxflfwh5UzX/qZ0hd/3dygbBDF4+zkNH0aVsHukqWhr9GwlwDBYxpSLdneuw9nOLRqLk90uM0PMteT7wE/2Xc8FEtu9QEY3qybO+sp3+D6Bc14nSu8n9m/8aU+/03prnGOxUqad8MM5tsdLfbgNWQbCSf6BNeh1E0/RtR9UUn9xbigmH6Hyyqiv1RCCekzgpzM6NShSHEeInaxPRFvzA39V4rb+MFw+XY8msEyytcp4fhinE5rkyfbUNzlvTv0xcq9gkRCuGvO/Bgn5WcwiLlSdG39d3Mfau1eHtbvNMt+L71JT+BdtyM/qDinKQVjGn2rAsPoRbXImJsCJ/EqQE6ZuYeCc6WnxHHyM+vNVD//z2zsGMXVNUf4HxFo3l5om+S65bp4wR4FuHPya8owdSFqnPEfBu4yshkX7+u53zlMAbo8wS7mj9yh4kgXHTkTZQlaKlPQ1zm5SdbhS+nepDD1Qe+p/FuwlvWbeQVdK/Y9iDVZO1MnROKM5/iLmWimACn5trCJkSD0tCEit4/DRLwQzaL7OoPims6iip/lgSW+ah+ja35UfnhWnO9oshwGorVsUPmpnqSklcigkPdkzHOsF7GgZHe54nEwpYx05MXwFC3mJ6LzdBDNYzGE2A8eMVZho7TXCSDpLagJTDgtHz7tnPoWEaC+2LM2faBWXqZPigsMfVAjF3JwZItzte+3V/oICMo3EbF1M8Feds44BnPOb+liy8o/ryNe9PyVPeD8rlS2KFBJG3q2lS9gAAAApkPCfw/UFk0AAeII6RMAAA42vh2xxGf7AgAAAAAEWVo=")
+    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4AnuBEZdABGaScZHDxOiAHcc747vJCBLAVaWVRAnpWHX/kkr6QysfzLfXhoCqwdlhv59jJtBxk7nXnSEgrtsCyPSYXzh6+ATGh7ABAkIBSF+o891I4eI9S4eGHzAvGSs7EJpzVyrmy021AfTIND2mYmaWYvVjEpYWAIWJHt6abEm12uy7LfoZTeEyiT+V7goyEruSX8ZbKfF7laQ8cZFJJGqW0hlaZ9xL1O2wbDhTDbIud4y41c+Frfqux0cJRkA9+ftib6biz4gC7XhKoBCKQDExonclhZNXjDOQ4WACA16U3zUNl7b/eEw9iimCglG79US4A+Evk2fi0APwIQ+oI7szdJNmthBLtTAs14+nlh4/DvWDefIt65GBBZC9OcGTxI9cdoCsBRm8wDgGABDWaUqjRZGNZ13gqA8OQN1e5HQdYE82EEsbVq/iiEZWsl1LAWAKJ5lVmhDqHFGwZUDF5ldy9pkUlF7BMV2nlYvkovXoa3/3y/HnJOHwNe+yCyhdxYoqtd7O36TsRQde1UgaBaSybPW5jCGahYSx6a/D6FfY7NOPP/Fm6WYAqpySaW9bGomZWS6WzE7O0Pb4sdesnxfQJh4vWsfiUh7zOFDp9LP8Ab+GHm85LMhweZwtPSQQFzoCcthhMXCDRWejMkG0lnOuhrBTopNymfVlya4navLYZtgJGvAHBfXmiuTPobvlnxZ8ce0HvvPhQYOd7EZlGfamRH+F2BACrekV7e0jzG0rVCMAdUgJ5o4LbUIQGaZB3pTVxgLB1S2CQVJGv0XmpOhigYld72MnPs2Ui/POVave3RPWKSkFmnzegFVh1c2b9soeGeWW5CNTWv+sX+e5nPCco4a3KvYSjAYIN2zgCopLQVH+wAuv+27e/paIG30EbQng4Gwr9TEBSIonPV0ud8aD3e2/gW4CHVrh3cC6gArnskXUTK0Gm3VC4jpIO5tWYcGwXaZSBVmm0ExK7cghpIHySZ981k6L6bw4qLTFJM/LXdWl1t+O9hWnTfTqHwCImEIXzCmgzcKEYFP7FP93ar6MrGVmV5MX47umZYvrc4uc26kt5RUNlDDJXZAWzzjdqn63ji/JFl0kcuypNdyO9t9ltaQ2o6VIrG5Cgzv3Vr9w/dRbYgFx8EyNBMGRKIdOq0l1piSZ3lm0vfL03yTC0epYbFwIbNewfI05RZEWuYwT3iKfk9VTVIxNmRF8euNArA7WPnwnGkVfKNs4LLiXZJODaTxBZdfMUusVwv89h+NPmsc/2u6XaEx0LSqGKFvbdrrMiXlwmPM6iDBNs5p5fH/iia7dD88iniHlPccE2BEjZ0lEO2Hegl+FaYXCOPs1nQHlD9UHlfYM9Ia6S5ifh6H283kyvm0FVak5LKA0fUlfhXJwVKwOeVNCNL0aw0YRwGRg9kq9Sw+/fw9Nw9llDGhZKbldawQxEh9Egz5sVMmvlK1ZIw3oM00jVcJAAAAv3cNEyMKiEoAAeII7xMAANJp1TixxGf7AgAAAAAEWVo=")
     >>> if diag1d != expected_string:
-    ...     raise ValueError(f"{diff_strings(expected_string, diag1d)}\n base64-encoded output: {compress_string_to_base64(diag1d)}")
+    ...     raise ValueError(f"\n{diff_strings(expected_string, diag1d)}\n base64-encoded output: {compress_string_to_base64(diag1d)}")
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -291,10 +257,10 @@ def register_CFunction_diagnostics_2d_plane(
     >>> plane = "yz"
     >>> _ = register_CFunction_diagnostics_2d_plane("SinhSymTP", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, plane=plane)
     >>> diag2d = cfc.CFunction_dict[f"diagnostics_2d_{plane}_plane__rfm__{Coord}"].full_function
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4AePA25dABGaScZHDxOiAHcc747vJCBLAVaWVRAnpWHX/kkr6QysfzLfXhoCqwdlhv59jJtBxk7nXnUIwIlIQLEtn60ZvFpp58iRzPO8zL7jj2RkmJNOOz7kLOZ5pcKkv92RfBBV6XfvVRqJRIbNiOKE+HSFEwb7csuCUsf9zB0qgLjaNojvcXVzhXj5lrq9G7GuZvGWxSqMoQWYxmpol2GdvZjHEN5O4OgyeP4QzVSq9/Zu9h9Y0ty+TEFocghu8pf+y9YQkhJOYT5A4IjkO73sC/jYjkv0a/oWFPfH2VsSbaeM1EhZ50gJnJak+jJrUGuc96ZXOOKxZ1MoAeXOuZ4KJlXZJ4FYaB6vtsnUwqXUHh/yxI2Z1P7s5VdHCKPuNKOoZ8gOd9/BwxhwRLSR0mTe0guvTKlhQHzWoglERwDuqt+Yw0TtQ8YuGxxgcgFiSkVuZX2+xFqmY6D+LgSeTHZtfJr4DFW1xyeAw7xiafWFq8I2ROxOagZi+9VYaACh7ISl2iKOe2EaH2GOug8Ak9onC0w9mE5cky2JJoh6wUyLKAQUqD87fwYp/HHKfOv5SCh6+HF7Q8KqW21pywCsqIV8TdMTECcn81w7qmuPKn2nIhVOb3h0kALfaXD39UQ46z3o79PQuB4NLtmAAH0KvKxSC/PpMiz0FKJWsRv3/k1eczqEzFwWjdz4zGa3laQrGZytyLUprurs4vv3YTzGpWZ+XSSvFEppbK1A3A4/ljeCaKtGWn8dfjgIMS1VvgPqzkyWDt3jb1tJh4lv+WcEj8mssEEi5TXUy1jwVgP6JCgHxezu8dJ8ysJQbDH9q57Zazkzxcxf+60W03tuzZRrDlaqE40ooXuyIN+5YpGp+Xom6/0loxModsFdqYIHIgK1IjcXBpVjA3aVLFV/xEyBTKko8Ou5fSeI5YWr+5Af86znjCLUCzjEaS4wU+IVGqhoQtZ4dySCk4qVM5gL8QGESoeE6S+uyIqlvkrcOnwH7x0+2AIHugPhdUoqOLVbKsytDOc9YvCgOOaPrKik3YZewd7cdSMX5wt7DacCng7v4vhgwR3NAmwAL1Erw0ZTo0JxaZmBFBcZSTOLgBloNUGeC4AELXas80mre7CTWeWwd0l9h0hjlpRwrzUvw1L9kolTM5o2vIcxJFARVn8J0moTkqJOzgAAAAAA0PTK7WpKxcAAAYoHkA8AAOqZQnixxGf7AgAAAAAEWVo=")
+    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4AeVA3JdABGaScZHDxOiAHcc747vJCBLAVaWVRAnpWHX/kkr6QysfzLfXhoCqwdlhv59jJtBxk7nXnUIwIlIQLEtn60ZvFpp58iRzPO8zL7jj2RkmJNOOz7kLOZ5pcKkv92RfBBV6XfvVRqJRIbNiOKE+HSFEwb7csuCUsf9zB0qgLjaNojvcXVzhXj5lrq9G7GuZvGWxSqMoQWYxmpol2GdvZjHEN5O4OgyeP4QzVStm900cNC9r0y2my7Zytkn+Mx0Uv6hkLF9g7zaP/UZX15Dy2hY6zOha4Fo+/o62lu/c81AqiLB9sTFsKDusJOfl0PT188hDyTr7TKSaAESAoC9xGzl2fKGTIFbtilo0aq9bbO9hOFcoMjdRGyf/L2sxCaNWvfDX+spA9CJ14bthTMMNwNmvHjPkCR6mxqEGkGg3G3D63KkR17Pa4Jh8bPoREtR/06XBzJHmo8yd25OyvU2tKz6qeQi45EUiN62wUnoIjg6NNSNfyLP48yyWeJXH2fV3lim6PyEp0Nc+tr4wAq3FYrG9hjYjv0uEfHrs/8hF+dvS/3fKeoNH6/EjFGTbEdUPS3uqcjFyY0tkjJv892mfKkBmD9qPZ/Lzw2vJosUiwMtvA2njO6zvRX2ofx5iQPYOhYdRK+rrTAgNKzfLUGIan20QFLbg1MiGtH5aQB0HJUdpw5A5q7aWSZAnitRqsDT3Cm9v2awC0P2eXLfHBGIp4mWUN6VBpNfxx8atdPJxL2seUgFzH1+kribGzyey6VyDWb7tjfftPkjrxabjxWKXbC+T7DW84yTOa3ebuDaYq/oKtT3kQYCfEHU/2YdUZu9+Fs7f1He3bIvCD+8s9reTgsC7UMV3P9hvYA5ATFPoBuLK5qcEEbLpebIdaElZ91qo/adX5lGGm7GsCsGy31UWF2c1MoymNOEs6w+h5ZMtFNOWMTzFwSkeAZSS0yoU2rTcvu7bNZdvuM2GJ0z830zquZUzocvu3a3juq93vvxi+o6KRXWA15s+PbaOfLl4gDq8FS1HBd33WeVyLyHiwI7fQ3HMvcFqZdjn07khbdRyCa2FgndudgCQco0Yv6AUf9thMwRK9rPMp1XS5MiWNoEEu8EoJHSaWVAjUPkmlIXxobFnRVRIPcWLmb/u33qR5pkws2KJlLiZNoGxmXtp09wmaDrnmbYAAAAAEsZ1rPUP8prAAGOB5YPAAAghLjGscRn+wIAAAAABFla")
     >>> if diag2d != expected_string:
     ...     error_message = diff_strings(expected_string, diag2d)
-    ...     raise ValueError(f"{error_message}\n base64-encoded output: {compress_string_to_base64(diag2d)}")
+    ...     raise ValueError(f"\n{error_message}\n base64-encoded output: {compress_string_to_base64(diag2d)}")
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())

@@ -208,13 +208,16 @@ def register_CFunction_diagnostics(
     # fmt: off
     if out_quantities_dict == "default":
         out_quantities_dict = {
-            ("REAL", "log10ErelUU"): "log10(fabs(y_n_gfs[IDX4pt(UUGF, idx3)]-diagnostic_output_gfs[IDX4pt(UUEXACTGF, idx3)])/fabs(diagnostic_output_gfs[IDX4pt(UUEXACTGF, idx3)] + 1e-16) + 1e-16)",
-            ("REAL", "log10ErelVV"): "log10(fabs(y_n_gfs[IDX4pt(VVGF, idx3)]-diagnostic_output_gfs[IDX4pt(VVEXACTGF, idx3)])/fabs(diagnostic_output_gfs[IDX4pt(VVEXACTGF, idx3)] + 1e-16) + 1e-16)",
+            ("REAL", "log10ErelUU"): "log10(fabs((y_n_gfs[IDX4pt(UUGF, idx3)]-diagnostic_output_gfs[IDX4pt(UUEXACTGF, idx3)])/(diagnostic_output_gfs[IDX4pt(UUEXACTGF, idx3)] + 1e-16)) + 1e-16)",
+            ("REAL", "log10ErelVV"): "log10(fabs((y_n_gfs[IDX4pt(VVGF, idx3)]-diagnostic_output_gfs[IDX4pt(VVEXACTGF, idx3)])/(diagnostic_output_gfs[IDX4pt(VVEXACTGF, idx3)] + 1e-16)) + 1e-16)",
             ("REAL", "exactUU"): "diagnostic_output_gfs[IDX4pt(UUEXACTGF, idx3)]",
             ("REAL", "numUU"): "y_n_gfs[IDX4pt(UUGF, idx3)]",
             ("REAL", "exactVV"): "diagnostic_output_gfs[IDX4pt(VVEXACTGF, idx3)]",
             ("REAL", "numVV"): "y_n_gfs[IDX4pt(VVGF, idx3)]",
         }
+    if not isinstance(out_quantities_dict, dict):
+        raise TypeError(f"out_quantities_dict was initialized to {out_quantities_dict}, which is not a dictionary!")
+    # fmt: on
 
     out012d.register_CFunction_diagnostics_grid_center(
         CoordSystem=CoordSystem,
@@ -237,7 +240,9 @@ def register_CFunction_diagnostics(
         )
 
     if not isinstance(out_quantities_dict, dict):
-        raise TypeError(f"out_quantities_dict was initialized to {out_quantities_dict}, which is not a dictionary!")
+        raise TypeError(
+            f"out_quantities_dict was initialized to {out_quantities_dict}, which is not a dictionary!"
+        )
     # fmt: on
 
     body = r"""  const REAL currtime = commondata->time, currdt = commondata->dt, outevery = commondata->diagnostics_output_every;
@@ -274,7 +279,10 @@ def register_CFunction_diagnostics(
       diagnostics_2d_yz_plane(commondata, params, xx, &griddata[grid].gridfuncs);
     }
   }
-  progress_indicator(commondata, griddata);
+"""
+    if enable_progress_indicator:
+        body += "progress_indicator(commondata, griddata);"
+    body += r"""
   if (commondata->time + commondata->dt > commondata->t_final)
     printf("\n");
 """

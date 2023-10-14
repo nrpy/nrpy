@@ -12,6 +12,7 @@
    - **General relativity**
      - **Two black holes collide**: `python3 -m nrpy.examples.two_blackholes_collide`
      - **Black hole spectroscopy**: `python3 -m nrpy.examples.blackhole_spectroscopy`
+     - **Spinning black hole**: `python3 -m nrpy.examples.spinning_blackhole`
 
 ## Slow start, in case you want to develop NRPy+ directly:
 
