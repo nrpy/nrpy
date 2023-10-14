@@ -97,23 +97,23 @@ for CoordSystem in list_of_CoordSystems:
     )
     xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
 
-    wCl.register_CFunction_diagnostics(
-        list_of_CoordSystems=list_of_CoordSystems,
-        default_diagnostics_out_every=default_diagnostics_output_every,
-        grid_center_filename_tuple=(
-            "out0d-%s-conv_factor-%.2f.txt",
-            "CoordSystemName, convergence_factor",
-        ),
-        axis_filename_tuple=(
-            "out1d-AXIS-%s-conv_factor%.2f-t%08.2f.txt",
-            "CoordSystemName, convergence_factor, time",
-        ),
-        plane_filename_tuple=(
-            "out2d-PLANE-%s-conv_factor%.2f-t%08.2f.txt",
-            "CoordSystemName, convergence_factor, time",
-        ),
-        out_quantities_dict="default",
-    )
+wCl.register_CFunction_diagnostics(
+    list_of_CoordSystems=list_of_CoordSystems,
+    default_diagnostics_out_every=default_diagnostics_output_every,
+    grid_center_filename_tuple=(
+        "out0d-%s-conv_factor-%.2f.txt",
+        "CoordSystemName, convergence_factor",
+    ),
+    axis_filename_tuple=(
+        "out1d-AXIS-%s-conv_factor%.2f-t%08.2f.txt",
+        "CoordSystemName, convergence_factor, time",
+    ),
+    plane_filename_tuple=(
+        "out2d-PLANE-%s-conv_factor%.2f-t%08.2f.txt",
+        "CoordSystemName, convergence_factor, time",
+    ),
+    out_quantities_dict="default",
+)
 
 
 if __name__ == "__main__" and parallel_codegen_enable:
