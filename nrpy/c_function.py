@@ -65,6 +65,10 @@ class CFunction:
                 )
         if includes and not isinstance(includes, list):
             raise ValueError("includes must take the form of a list")
+        if CoordSystem_for_wrapper_func and "griddata_struct" in params:
+            raise ValueError(
+                "griddata_struct cannot be passed into a CoordSystem-specific function"
+            )
 
         self.subdirectory = subdirectory
         self.enable_simd = enable_simd
