@@ -163,7 +163,7 @@ rhs_string = """
 Ricci_eval(commondata, params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
 if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
-  apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata->xx,
+  apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].xx,
                                      gridfunctions_wavespeed,gridfunctions_f_infinity,
                                      RK_INPUT_GFS, RK_OUTPUT_GFS);"""
 if not enable_rfm_precompute:

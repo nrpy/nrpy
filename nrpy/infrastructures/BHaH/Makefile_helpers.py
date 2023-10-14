@@ -137,17 +137,23 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
 
     if CC == "gcc":
         cpu_info = cpuinfo.get_cpu_info()
-        if cpu_info.get("l2_cache_size"):
-            try:
-                l2_cache_size_KB = int(int(cpu_info.get("l2_cache_size")) / 1024)
-                for key, value in CFLAGS_dict.items():
-                    CFLAGS_dict[key] += f" --param l2-cache-size={l2_cache_size_KB}"
-            except ValueError:
-                # Sometimes cpu_info.get("l2_cache_size") returns a value that has explicit units, like 2.5MiB,
-                #  ignore these cases
-                pass
         if "flags" in cpu_info:
             if any("avx512" in flag for flag in cpu_info["flags"]):
+                # Experiment:
+                # if cpu_info.get("l2_cache_size"):
+                #     try:
+                #         l2_cache_size_KB = int(
+                #             int(cpu_info.get("l2_cache_size")) / 1024
+                #         )
+                #         for key, value in CFLAGS_dict.items():
+                #             CFLAGS_dict[
+                #                 key
+                #             ] += f" --param l2-cache-size={l2_cache_size_KB}"
+                #     except ValueError:
+                #         # Sometimes cpu_info.get("l2_cache_size") returns a value that has explicit units, like 2.5MiB,
+                #         #  ignore these cases
+                #         pass
+
                 # -march=native hangs when using GCC on
                 avx512_features = [
                     "avx512f",

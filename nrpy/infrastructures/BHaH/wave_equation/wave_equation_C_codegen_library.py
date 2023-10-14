@@ -4,7 +4,7 @@ Library of C functions for solving the wave equation in curvilinear coordinates,
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
-from typing import Union, cast
+from typing import Union, cast, Tuple, Dict
 from inspect import currentframe as cfr
 from types import FrameType as FT
 from pathlib import Path
@@ -21,6 +21,7 @@ from nrpy.equations.wave_equation.WaveEquationCurvilinear_RHSs import (
 )
 from nrpy.equations.wave_equation.InitialData import InitialData
 import nrpy.infrastructures.BHaH.simple_loop as lp
+import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_slices as out012d
 
 
 def register_CFunction_exact_solution_single_point(
@@ -144,14 +145,36 @@ if( read_checkpoint(commondata, griddata) ) return;
 
 
 def register_CFunction_diagnostics(
+    CoordSystem: str,
     default_diagnostics_out_every: float,
+    enable_progress_indicator: bool = True,
+    grid_center_filename_tuple: Tuple[str, str] = (
+        "out0d-conv_factor%.2f.txt",
+        "convergence_factor",
+    ),
+    axis_filename_tuple: Tuple[str, str] = (
+        "out1d-AXIS-%s-conv_factor%.2f-t%08.2f.txt",
+        "CoordSystemName, convergence_factor, time",
+    ),
+    plane_filename_tuple: Tuple[str, str] = (
+        "out2d-PLANE-%s-conv_factor%.2f-t%08.2f.txt",
+        "CoordSystemName, convergence_factor, time",
+    ),
+    out_quantities_dict: Union[str, Dict[Tuple[str, str], str]] = "default",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Register the simulation diagnostics function for the wave equation with specific parameters.
+    Register C function for simulation diagnostics.
 
-    :param default_diagnostics_out_every: The default frequency for diagnostics output.
+    :param CoordSystem: Specifies the coordinate system for the diagnostics.
+    :param default_diagnostics_out_every: Specifies the default diagnostics output frequency.
+    :param enable_progress_indicator: Whether or not to enable the progress indicator.
+    :param grid_center_filename_tuple: Tuple containing filename and variables for grid center output.
+    :param axis_filename_tuple: Tuple containing filename and variables for axis output.
+    :param plane_filename_tuple: Tuple containing filename and variables for plane output.
+    :param out_quantities_dict: Dictionary or string specifying output quantities.
 
     :return: None if in registration phase, else the updated NRPy environment.
+    :raises TypeError: If `out_quantities_dict` is not a dictionary and not set to "default".
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -173,6 +196,50 @@ def register_CFunction_diagnostics(
         "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
     )
 
+    if "uuexact" not in gri.glb_gridfcs_dict:
+        _ = gri.register_gridfunctions(
+            "uuexact", group="AUX", gf_array_name="diagnostic_output_gfs"
+        )
+    if "vvexact" not in gri.glb_gridfcs_dict:
+        _ = gri.register_gridfunctions(
+            "vvexact", group="AUX", gf_array_name="diagnostic_output_gfs"
+        )
+
+    # fmt: off
+    if out_quantities_dict == "default":
+        out_quantities_dict = {
+            ("REAL", "log10ErelUU"): "log10(fabs(y_n_gfs[IDX4pt(UUGF, idx3)]-diagnostic_output_gfs[IDX4pt(UUEXACTGF, idx3)])/fabs(diagnostic_output_gfs[IDX4pt(UUEXACTGF, idx3)] + 1e-16) + 1e-16)",
+            ("REAL", "log10ErelVV"): "log10(fabs(y_n_gfs[IDX4pt(VVGF, idx3)]-diagnostic_output_gfs[IDX4pt(VVEXACTGF, idx3)])/fabs(diagnostic_output_gfs[IDX4pt(VVEXACTGF, idx3)] + 1e-16) + 1e-16)",
+            ("REAL", "exactUU"): "diagnostic_output_gfs[IDX4pt(UUEXACTGF, idx3)]",
+            ("REAL", "numUU"): "y_n_gfs[IDX4pt(UUGF, idx3)]",
+            ("REAL", "exactVV"): "diagnostic_output_gfs[IDX4pt(VVEXACTGF, idx3)]",
+            ("REAL", "numVV"): "y_n_gfs[IDX4pt(VVGF, idx3)]",
+        }
+
+    out012d.register_CFunction_diagnostics_grid_center(
+        CoordSystem=CoordSystem,
+        out_quantities_dict=out_quantities_dict,
+        filename_tuple=grid_center_filename_tuple,
+    )
+    for axis in ["y", "z"]:
+        out012d.register_CFunction_diagnostics_1d_axis(
+            CoordSystem=CoordSystem,
+            out_quantities_dict=out_quantities_dict,
+            filename_tuple=axis_filename_tuple,
+            axis=axis,
+        )
+    for plane in ["xy", "yz"]:
+        out012d.register_CFunction_diagnostics_2d_plane(
+            CoordSystem=CoordSystem,
+            out_quantities_dict=out_quantities_dict,
+            filename_tuple=plane_filename_tuple,
+            plane=plane,
+        )
+
+    if not isinstance(out_quantities_dict, dict):
+        raise TypeError(f"out_quantities_dict was initialized to {out_quantities_dict}, which is not a dictionary!")
+    # fmt: on
+
     body = r"""  const REAL currtime = commondata->time, currdt = commondata->dt, outevery = commondata->diagnostics_output_every;
   // Explanation of the if() below:
   // Step 1: round(currtime / outevery) rounds to the nearest integer multiple of currtime.
@@ -182,69 +249,29 @@ def register_CFunction_diagnostics(
     for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
       // Unpack griddata struct:
       const REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
+      REAL *restrict diagnostic_output_gfs = griddata[grid].gridfuncs.diagnostic_output_gfs;
       REAL *restrict xx[3];
       for (int ww = 0; ww < 3; ww++)
         xx[ww] = griddata[grid].xx[ww];
       const params_struct *restrict params = &griddata[grid].params;
 #include "set_CodeParameters.h"
 
-      // 0D output
-      {
-        char filename[256];
-        sprintf(filename, "out0d-%s-conv_factor%.2f.txt", CoordSystemName, convergence_factor);
-        FILE *outfile;
-        if (nn == 0)
-          outfile = fopen(filename, "w");
-        else
-          outfile = fopen(filename, "a");
-        if (outfile == NULL) {
-          fprintf(stderr, "Error: Cannot open file %s for writing.\n", filename);
-          exit(1);
-        }
-        const int i0_mid = Nxx_plus_2NGHOSTS0 / 2;
-        const int i1_mid = Nxx_plus_2NGHOSTS1 / 2;
-        const int i2_mid = Nxx_plus_2NGHOSTS2 / 2;
-        const int center_of_grid_idx = IDX3(i0_mid, i1_mid, i2_mid);
-
-        const REAL num_soln_at_center_UUGF = y_n_gfs[IDX4pt(UUGF, center_of_grid_idx)];
-        const REAL num_soln_at_center_VVGF = y_n_gfs[IDX4pt(VVGF, center_of_grid_idx)];
-        REAL exact_soln_at_center_UUGF, exact_soln_at_center_VVGF;
-        exact_solution_single_point(commondata, params, xx[0][i0_mid], xx[1][i1_mid], xx[2][i2_mid], &exact_soln_at_center_UUGF, &exact_soln_at_center_VVGF);
-
-        fprintf(outfile, "%e %e %e %e %e\n", time, fabs(fabs(num_soln_at_center_UUGF - exact_soln_at_center_UUGF) / exact_soln_at_center_UUGF),
-                fabs(fabs(num_soln_at_center_VVGF - exact_soln_at_center_VVGF) / (1e-16 + exact_soln_at_center_VVGF)), num_soln_at_center_UUGF, exact_soln_at_center_UUGF);
-
-        fclose(outfile);
+      LOOP_OMP("omp parallel for", i0, NGHOSTS, Nxx0 + NGHOSTS, i1, NGHOSTS, Nxx1 + NGHOSTS, i2, NGHOSTS, Nxx2 + NGHOSTS) {
+        REAL *restrict uexact = &diagnostic_output_gfs[IDX4(UUEXACTGF, i0,i1,i2)];
+        REAL *restrict vexact = &diagnostic_output_gfs[IDX4(VVEXACTGF, i0,i1,i2)];
+        exact_solution_single_point(commondata, params, xx[0][i0], xx[1][i1], xx[2][i2], uexact, vexact);
       }
+
+      // 0D output
+      diagnostics_grid_center(commondata, params, &griddata[grid].gridfuncs);
 
       // 1D output
-      {
-        char filename[256];
-        sprintf(filename, "out1d-%s-conv_factor%.2f-t%.2f.txt", CoordSystemName, convergence_factor, time);
-        FILE *outfile;
-        outfile = fopen(filename, "w");
-        if (outfile == NULL) {
-          fprintf(stderr, "Error: Cannot open file %s for writing.\n", filename);
-          exit(1);
-        }
+      diagnostics_1d_y_axis(commondata, params, xx, &griddata[grid].gridfuncs);
+      diagnostics_1d_z_axis(commondata, params, xx, &griddata[grid].gridfuncs);
 
-        for (int i0 = NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0++) {
-          const int i1 = Nxx_plus_2NGHOSTS1 / 2;
-          const int i2 = Nxx_plus_2NGHOSTS2 / 2;
-          const int idx3 = IDX3(i0, i1, i2);
-
-          const REAL num_soln_UUGF = y_n_gfs[IDX4pt(UUGF, idx3)];
-          const REAL num_soln_VVGF = y_n_gfs[IDX4pt(VVGF, idx3)];
-          REAL exact_soln_UUGF, exact_soln_VVGF, xCart[3], rr;
-          exact_solution_single_point(commondata, params, xx[0][i0], xx[1][i1], xx[2][i2], &exact_soln_UUGF, &exact_soln_VVGF);
-          xx_to_Cart(commondata, params, xx,i0,i1,i2, xCart);
-          rr = sqrt(xCart[0]*xCart[0] + xCart[1]*xCart[1] + xCart[2]*xCart[2]);
-
-          fprintf(outfile, "%e %e %e %e %e\n", rr, fabs(fabs(num_soln_UUGF - exact_soln_UUGF) / exact_soln_UUGF), fabs(fabs(num_soln_VVGF - exact_soln_VVGF) / (1e-16 + exact_soln_VVGF)),
-                  num_soln_UUGF, exact_soln_UUGF);
-        }
-        fclose(outfile);
-      }
+      // 2D output
+      diagnostics_2d_xy_plane(commondata, params, xx, &griddata[grid].gridfuncs);
+      diagnostics_2d_yz_plane(commondata, params, xx, &griddata[grid].gridfuncs);
     }
   }
   progress_indicator(commondata, griddata);

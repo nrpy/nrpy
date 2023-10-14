@@ -6,14 +6,22 @@ Provides checkpointing capabilities to BHaH simulations.
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
+from typing import Tuple
+
 import nrpy.c_function as cfc
 import nrpy.params as par
 
 
-def register_CFunction_read_checkpoint() -> None:
+def register_CFunction_read_checkpoint(
+    filename_tuple: Tuple[str, str] = (
+        r"checkpoint-conv_factor%.2f.dat",
+        "commondata->convergence_factor",
+    ),
+) -> None:
     """
     Register read_checkpoint CFunction for reading checkpoints.
 
+    :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
     :return: None
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "unistd.h"]
@@ -26,11 +34,15 @@ def register_CFunction_read_checkpoint() -> None:
     params = (
         "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
     )
-    body = r"""  // If the checkpoint doesn't exist then return 0.
-  if (access("checkpoint.dat", F_OK) != 0)
+    body = rf"""
+  char filename[256];
+  snprintf(filename, 256, "{filename_tuple[0]}", {filename_tuple[1]});
+"""
+    body += r"""  // If the checkpoint doesn't exist then return 0.
+  if (access(filename, F_OK) != 0)
     return 0;
 
-  FILE *cp_file = fopen("checkpoint.dat", "r");
+  FILE *cp_file = fopen(filename, "r");
   FREAD(commondata, sizeof(commondata_struct), 1, cp_file);
   fprintf(stderr, "cd struct size = %ld time=%e\n", sizeof(commondata_struct), commondata->time);
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
@@ -82,10 +94,17 @@ def register_CFunction_read_checkpoint() -> None:
     )
 
 
-def register_CFunction_write_checkpoint(default_checkpoint_every: float = 2.0) -> None:
+def register_CFunction_write_checkpoint(
+    default_checkpoint_every: float = 2.0,
+    filename_tuple: Tuple[str, str] = (
+        "checkpoint-conv_factor%.2f.dat",
+        "commondata->convergence_factor",
+    ),
+) -> None:
     """
     Register write_checkpoint CFunction for writing checkpoints.
 
+    :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
     :param default_checkpoint_every: The default checkpoint interval in physical time units.
     :return: None
     """
@@ -97,13 +116,18 @@ def register_CFunction_write_checkpoint(default_checkpoint_every: float = 2.0) -
     c_type = "void"
     name = "write_checkpoint"
     params = "const commondata_struct *restrict commondata, griddata_struct *restrict griddata"
-    body = r"""const REAL currtime = commondata->time, currdt = commondata->dt, outevery = commondata->checkpoint_every;
+
+    body = rf"""
+  char filename[256];
+  snprintf(filename, 256, "{filename_tuple[0]}", {filename_tuple[1]});
+"""
+    body += r"""const REAL currtime = commondata->time, currdt = commondata->dt, outevery = commondata->checkpoint_every;
 // Explanation of the if() below:
 // Step 1: round(currtime / outevery) rounds to the nearest integer multiple of currtime.
 // Step 2: Multiplying by outevery yields the exact time we should output again, t_out.
 // Step 3: If fabs(t_out - currtime) < 0.5 * currdt, then currtime is as close to t_out as possible!
 if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {
-  FILE *cp_file = fopen("checkpoint.dat", "w+");
+  FILE *cp_file = fopen(filename, "w+");
   fwrite(commondata, sizeof(commondata_struct), 1, cp_file);
   fprintf(stderr, "WRITING CHECKPOINT: cd struct size = %ld time=%e\n", sizeof(commondata_struct), commondata->time);
   for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
@@ -158,14 +182,21 @@ if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {
     )
 
 
-def register_CFunctions(default_checkpoint_every: float = 2.0) -> None:
+def register_CFunctions(
+    filename_tuple: Tuple[str, str] = (
+        "checkpoint-conv_factor%.2f.dat",
+        "commondata->convergence_factor",
+    ),
+    default_checkpoint_every: float = 2.0,
+) -> None:
     """
     Register CFunctions for checkpointing.
 
+    :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
     :param default_checkpoint_every: The default checkpoint interval in physical time units.
     :return: None
     """
-    register_CFunction_read_checkpoint()
+    register_CFunction_read_checkpoint(filename_tuple=filename_tuple)
     register_CFunction_write_checkpoint(
-        default_checkpoint_every=default_checkpoint_every
+        filename_tuple=filename_tuple, default_checkpoint_every=default_checkpoint_every
     )

@@ -116,15 +116,15 @@ def register_CFunction_numerical_grids_and_timestep_setup() -> None:
     commondata->dt = MIN(commondata->dt, commondata->CFL_FACTOR * MIN(params->dxx0, MIN(params->dxx1, params->dxx2))); // CFL condition
 
     // Set up cell-centered Cartesian coordinate grid, centered at the origin.
-    griddata->xx[0] = (REAL *restrict)malloc(sizeof(REAL) * params->Nxx_plus_2NGHOSTS0);
-    griddata->xx[1] = (REAL *restrict)malloc(sizeof(REAL) * params->Nxx_plus_2NGHOSTS1);
-    griddata->xx[2] = (REAL *restrict)malloc(sizeof(REAL) * params->Nxx_plus_2NGHOSTS2);
+    griddata[grid].xx[0] = (REAL *restrict)malloc(sizeof(REAL) * params->Nxx_plus_2NGHOSTS0);
+    griddata[grid].xx[1] = (REAL *restrict)malloc(sizeof(REAL) * params->Nxx_plus_2NGHOSTS1);
+    griddata[grid].xx[2] = (REAL *restrict)malloc(sizeof(REAL) * params->Nxx_plus_2NGHOSTS2);
     for (int j = 0; j < params->Nxx_plus_2NGHOSTS0; j++)
-      griddata->xx[0][j] = xxmin0 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * params->dxx0;
+      griddata[grid].xx[0][j] = xxmin0 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * params->dxx0;
     for (int j = 0; j < params->Nxx_plus_2NGHOSTS1; j++)
-      griddata->xx[1][j] = xxmin1 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * params->dxx1;
+      griddata[grid].xx[1][j] = xxmin1 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * params->dxx1;
     for (int j = 0; j < params->Nxx_plus_2NGHOSTS2; j++)
-      griddata->xx[2][j] = xxmin2 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * params->dxx2;
+      griddata[grid].xx[2][j] = xxmin2 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * params->dxx2;
   }
 """
     cfc.register_CFunction(

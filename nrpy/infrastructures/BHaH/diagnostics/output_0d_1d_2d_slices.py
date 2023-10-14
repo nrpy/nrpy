@@ -110,7 +110,7 @@ In Cylindrical, this will be at i0_min,i1_mid,i2_mid (i1 == phi doesn't matter).
 In SinhSymTP, this will be at i0_min,i1_mid,i2_mid (i2 == phi doesn't matter)."""
     c_type = "void"
     name = "diagnostics_grid_center"
-    params = "commondata_struct *restrict commondata, params_struct *restrict params, MoL_gridfunctions_struct *restrict gridfuncs"
+    params = "commondata_struct *restrict commondata, const params_struct *restrict params, MoL_gridfunctions_struct *restrict gridfuncs"
 
     NGHOSTS = sp.Symbol("NGHOSTS", real=True)
     Nxx_plus_2NGHOSTS = ixp.declarerank1("Nxx_plus_2NGHOSTS")
@@ -231,7 +231,7 @@ def register_CFunction_diagnostics_1d_axis(
     desc = f"Output diagnostic quantities at gridpoints closest to {axis} axis."
     c_type = "void"
     name = f"diagnostics_1d_{axis}_axis"
-    params = "commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3], MoL_gridfunctions_struct *restrict gridfuncs"
+    params = "commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], MoL_gridfunctions_struct *restrict gridfuncs"
 
     body = rf"""
 // Unpack gridfuncs struct:
@@ -316,7 +316,7 @@ def register_CFunction_diagnostics_2d_plane(
     desc = f"Output diagnostic quantities at gridpoints closest to {plane} plane."
     c_type = "void"
     name = f"diagnostics_2d_{plane}_plane"
-    params = "commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3], MoL_gridfunctions_struct *restrict gridfuncs"
+    params = "commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], MoL_gridfunctions_struct *restrict gridfuncs"
 
     body = rf"""
 // Unpack gridfuncs struct:

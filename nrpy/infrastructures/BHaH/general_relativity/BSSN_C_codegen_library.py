@@ -237,7 +237,7 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {
       for (int ww = 0; ww < 3; ww++)
         xx[ww] = griddata[grid].xx[ww];
     }
-    params_struct *restrict params = &griddata[grid].params;
+    const params_struct *restrict params = &griddata[grid].params;
 #include "set_CodeParameters.h"
 
     // Constraint output

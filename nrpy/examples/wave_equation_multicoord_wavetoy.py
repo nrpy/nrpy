@@ -38,7 +38,7 @@ WaveType = "SphericalGaussian"
 default_sigma = 3.0
 grid_physical_size = 10.0
 t_final = 0.8 * grid_physical_size
-diagnostics_out_every = 0.2
+default_diagnostics_output_every = 0.2
 default_checkpoint_every = 2.0
 list_of_CoordSystems = ["Spherical", "SinhSpherical", "Cartesian"]
 NUMGRIDS = 3
@@ -97,7 +97,23 @@ for CoordSystem in list_of_CoordSystems:
     )
     xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
 
-wCl.register_CFunction_diagnostics(default_diagnostics_out_every=diagnostics_out_every)
+    wCl.register_CFunction_diagnostics(
+        CoordSystem=CoordSystem,
+        default_diagnostics_out_every=default_diagnostics_output_every,
+        grid_center_filename_tuple=(
+            "out0d-%s-conv_factor-%.2f.txt",
+            "CoordSystemName, convergence_factor",
+        ),
+        axis_filename_tuple=(
+            "out1d-AXIS-%s-conv_factor%.2f-t%08.2f.txt",
+            "CoordSystemName, convergence_factor, time",
+        ),
+        plane_filename_tuple=(
+            "out2d-PLANE-%s-conv_factor%.2f-t%08.2f.txt",
+            "CoordSystemName, convergence_factor, time",
+        ),
+        out_quantities_dict="default",
+    )
 
 
 if __name__ == "__main__" and parallel_codegen_enable:
@@ -114,7 +130,7 @@ cbc.CurviBoundaryConditions_register_C_functions(
 )
 rhs_string = """rhs_eval(commondata, params, rfmstruct,  RK_INPUT_GFS, RK_OUTPUT_GFS);
 if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
-  apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata->xx,
+  apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].xx,
                                      gridfunctions_wavespeed,gridfunctions_f_infinity,
                                      RK_INPUT_GFS, RK_OUTPUT_GFS);"""
 if not enable_rfm_precompute:
