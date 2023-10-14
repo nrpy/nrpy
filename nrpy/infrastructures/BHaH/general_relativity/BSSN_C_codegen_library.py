@@ -194,25 +194,26 @@ def register_CFunction_diagnostics(
         raise TypeError(f"out_quantities_dict was initialized to {out_quantities_dict}, which is not a dictionary!")
     # fmt: on
 
-    out012d.register_CFunction_diagnostics_grid_center(
-        CoordSystem=CoordSystem,
-        out_quantities_dict=out_quantities_dict,
-        filename_tuple=grid_center_filename_tuple,
-    )
-    for axis in ["y", "z"]:
-        out012d.register_CFunction_diagnostics_1d_axis(
+    for CoordSystem in list_of_CoordSystems:
+        out012d.register_CFunction_diagnostics_grid_center(
             CoordSystem=CoordSystem,
             out_quantities_dict=out_quantities_dict,
-            filename_tuple=axis_filename_tuple,
-            axis=axis,
+            filename_tuple=grid_center_filename_tuple,
         )
-    for plane in ["xy", "yz"]:
-        out012d.register_CFunction_diagnostics_2d_plane(
-            CoordSystem=CoordSystem,
-            out_quantities_dict=out_quantities_dict,
-            filename_tuple=plane_filename_tuple,
-            plane=plane,
-        )
+        for axis in ["y", "z"]:
+            out012d.register_CFunction_diagnostics_1d_axis(
+                CoordSystem=CoordSystem,
+                out_quantities_dict=out_quantities_dict,
+                filename_tuple=axis_filename_tuple,
+                axis=axis,
+            )
+        for plane in ["xy", "yz"]:
+            out012d.register_CFunction_diagnostics_2d_plane(
+                CoordSystem=CoordSystem,
+                out_quantities_dict=out_quantities_dict,
+                filename_tuple=plane_filename_tuple,
+                plane=plane,
+            )
 
     desc = r"""Diagnostics."""
     c_type = "void"
