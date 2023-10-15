@@ -217,7 +217,7 @@ def register_CFunction_numerical_grids_and_timestep(
     params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata, bool calling_for_first_time"
     body = r"""// Step 1.a: Set CoordSystem_hash
 CoordSystem_hash_setup(commondata, griddata);
-    
+
 // Step 1.b: Set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx based on grid_physical_size
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   numerical_grid_params_Nxx_dxx_xx(commondata, &griddata[grid].params, griddata[grid].xx);
