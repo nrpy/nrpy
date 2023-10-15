@@ -30,6 +30,7 @@ def register_CFunction_main_c(
     :param enable_CurviBCs: Enable CurviBCs, default is False.
     :param boundary_conditions_desc: Description of the boundary conditions, default is an empty string.
     :param prefunc: String that appears before main(). DO NOT populate this, except when debugging, default is an empty string.
+    :param initialize_constant_auxevol: If set to True, `initialize_constant_auxevol` function will be called during the simulation initialization phase to set these constants. Default is False.
     :param pre_MoL_step_forward_in_time: Code for handling pre-right-hand-side operations, default is an empty string.
     :param post_MoL_step_forward_in_time: Code for handling post-right-hand-side operations, default is an empty string.
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 0}".
