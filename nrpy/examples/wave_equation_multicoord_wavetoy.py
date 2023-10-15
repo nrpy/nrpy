@@ -40,12 +40,13 @@ grid_physical_size = 10.0
 t_final = 0.8 * grid_physical_size
 default_diagnostics_output_every = 0.2
 default_checkpoint_every = 2.0
-list_of_CoordSystems = ["Spherical", "SinhSpherical", "Cartesian"]
-NUMGRIDS = 3
+list_of_CoordSystems = ["Spherical", "SinhSpherical", "Cartesian", "SinhCartesian"]
+NUMGRIDS = len(list_of_CoordSystems)
 Nxx_dict = {
     "Spherical": [64, 2, 2],
     "SinhSpherical": [64, 2, 2],
     "Cartesian": [64, 64, 64],
+    "SinhCartesian": [64, 64, 64],
 }
 OMP_collapse = 1
 enable_rfm_precompute = True

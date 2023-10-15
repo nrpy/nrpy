@@ -673,6 +673,7 @@ class ReferenceMetric:
                 0.2,
                 add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
             )
+            self.grid_physical_size_dict = {"AMPLXYZ": "grid_physical_size"}
 
             # Set default values for min and max (x,y,z)
             self.xxmin = [sp.sympify(-1), sp.sympify(-1), sp.sympify(-1)]

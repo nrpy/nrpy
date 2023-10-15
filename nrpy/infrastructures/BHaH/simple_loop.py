@@ -444,7 +444,7 @@ def simple_loop_2D(
             raise ValueError(f"CoordSystem = {CoordSystem} not supported.")
 
     if plane == "yz":
-        if CoordSystem == "Cartesian":
+        if "Cartesian" in CoordSystem:
             i0_pts += [Nxx_plus_2NGHOSTS[0] / 2]
         elif "Cylindrical" in CoordSystem:
             # See documentation for Spherical below; Cylindrical-like coordinates choose xx1 = phi instead of xx2.
