@@ -89,9 +89,10 @@ def output_BHaH_defines_h(
     Output C code header file with macro definitions and other configurations for the project.
 
     :param project_dir: Directory where the project C code is output
+    :param additional_includes: Additional header files to be included in the output
+    :param REAL_means: The floating-point type to be used in the C code (default is "double")
     :param enable_simd: Flag to enable Single Instruction Multiple Data (SIMD) optimizations
     :param fin_NGHOSTS_add_one_for_upwinding: Option to add one extra ghost zone for upwinding
-    :param MoL_method: Specific Method of Lines timestepping method, default is "RK4"
     :param supplemental_defines_dict: Additional key-value pairs to be included in the output file
     :param clang_format_options: Options for clang formatting.
 
