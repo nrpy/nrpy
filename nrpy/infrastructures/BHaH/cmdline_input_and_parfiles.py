@@ -75,64 +75,8 @@ static void safe_copy(char *dest, const char *src, size_t size) {
     strncpy(dest, src, size - 1);
     dest[size - 1] = '\0';
 }
-
-static void read_integer(const char *value, int *result, const char *param_name) {
-  char *endptr;
-  errno = 0; // To detect overflow
-  long int_val = strtol(value, &endptr, 10);
-
-  if (endptr == value || *endptr != '\0' || errno == ERANGE) {
-    fprintf(stderr, "Error: Invalid integer value for %s: %s.\n", param_name, value);
-    exit(1);
-  }
-
-  *result = (int)int_val;
-}
-
-static void read_double(const char *value, double *result, const char *param_name) {
-  char *endptr;
-  errno = 0; // To detect overflow
-  double double_val = strtod(value, &endptr);
-
-  if (endptr == value || *endptr != '\0' || errno == ERANGE) {
-    fprintf(stderr, "Error: Invalid double value for %s: %s.\n", param_name, value);
-    exit(1);
-  }
-
-  *result = double_val;
-}
-
-static void read_chararray(const char *value, char *result, const char *param_name, size_t size) {
-  if (strlen(value) >= size) {
-    fprintf(stderr, "Error: Buffer overflow detected for %s.\n", param_name);
-    exit(1);
-  }
-  safe_copy(result, value, size);
-}
-
-static void read_boolean(const char *value, bool *result, const char *param_name) {
-  // To allow case-insensitive comparison
-  char *lower_value = strdup(value);
-  for (char *p = lower_value; *p != '\0'; p++) {
-    *p = tolower(*p);
-  }
-
-  // Check if the input is "true", "false", "0", or "1"
-  if (strcmp(lower_value, "true") == 0 || strcmp(lower_value, "1") == 0) {
-    *result = true;
-  } else if (strcmp(lower_value, "false") == 0 || strcmp(lower_value, "0") == 0) {
-    *result = false;
-  } else {
-    fprintf(stderr, "Error: Invalid boolean value for %s: %s.\n", param_name, value);
-    free(lower_value);
-    exit(1);
-  }
-
-  // Free the allocated memory for the lowercase copy of the value
-  free(lower_value);
-}
-
 """
+
     if cmdline_inputs is None:
         cmdline_inputs = []
     list_of_steerable_params_str = "  ".join(cmdline_inputs)
@@ -151,7 +95,7 @@ Reads and parses a parameter file to populate commondata_struct commondata.
 
 This function takes in the command-line arguments and a pointer to a commondata_struct.
 It reads the provided file and extracts the parameters defined in the file, populating
-the commmondata_struct with the values. The file is expected to contain key-value pairs
+the commondata_struct with the values. The file is expected to contain key-value pairs
 separated by an equals sign (=), and it may include comments starting with a hash (#).
 The function handles errors such as file opening failure, duplicate parameters, and
 invalid parameter names.
@@ -275,18 +219,22 @@ invalid parameter names.
         // Assign values
         if (param_index == -2) exit(1); // impossible.
 """
+    found_integer = found_REAL = found_chararray = found_boolean = False
     i = 0
     for key in sorted(par.glb_code_params_dict.keys()):
         CodeParam = par.glb_code_params_dict[key]
         if CodeParam.add_to_parfile and CodeParam.commondata:
             if CodeParam.c_type_alias == "int":
                 body += f'else if(param_index == {i}) read_integer(value, &commondata->{key}, "{key}");\n'
+                found_integer = True
                 i += 1
             elif CodeParam.c_type_alias == "REAL":
                 body += f'else if(param_index == {i}) read_double(value, &commondata->{key}, "{key}");\n'
+                found_REAL = True
                 i += 1
             elif CodeParam.c_type_alias == "bool":
                 body += f'else if(param_index == {i}) read_boolean(value, &commondata->{key}, "{key}");\n'
+                found_boolean = True
                 i += 1
             elif (
                 "char" in CodeParam.c_type_alias
@@ -295,6 +243,7 @@ invalid parameter names.
             ):
                 CPsize = CodeParam.c_type_alias.split("[")[1].split("]")[0]
                 body += f'else if(param_index == {i}) read_chararray(value, commondata->{key}, "{key}", {CPsize});\n'
+                found_chararray = True
                 i += 1
     body += r"""        else {
           fprintf(stderr, "Error: Unrecognized parameter %s.\n", param);
@@ -320,6 +269,71 @@ invalid parameter names.
                 body += f'read_double(argv[argc - number_of_steerable_parameters + {i}], &commondata->{key}, "{key}");\n'
                 i += 1
     body += "}\n"
+
+    if found_integer:
+        prefunc += r"""
+static void read_integer(const char *value, int *result, const char *param_name) {
+  char *endptr;
+  errno = 0; // To detect overflow
+  long int_val = strtol(value, &endptr, 10);
+
+  if (endptr == value || *endptr != '\0' || errno == ERANGE) {
+    fprintf(stderr, "Error: Invalid integer value for %s: %s.\n", param_name, value);
+    exit(1);
+  }
+
+  *result = (int)int_val;
+}
+"""
+    if found_REAL:
+        prefunc += r"""
+static void read_double(const char *value, double *result, const char *param_name) {
+  char *endptr;
+  errno = 0; // To detect overflow
+  double double_val = strtod(value, &endptr);
+
+  if (endptr == value || *endptr != '\0' || errno == ERANGE) {
+    fprintf(stderr, "Error: Invalid double value for %s: %s.\n", param_name, value);
+    exit(1);
+  }
+
+  *result = double_val;
+}
+"""
+    if found_chararray:
+        prefunc += r"""
+static void read_chararray(const char *value, char *result, const char *param_name, size_t size) {
+  if (strlen(value) >= size) {
+    fprintf(stderr, "Error: Buffer overflow detected for %s.\n", param_name);
+    exit(1);
+  }
+  safe_copy(result, value, size);
+}
+"""
+    if found_boolean:
+        prefunc += r"""
+static void read_boolean(const char *value, bool *result, const char *param_name) {
+  // To allow case-insensitive comparison
+  char *lower_value = strdup(value);
+  for (char *p = lower_value; *p != '\0'; p++) {
+    *p = tolower(*p);
+  }
+
+  // Check if the input is "true", "false", "0", or "1"
+  if (strcmp(lower_value, "true") == 0 || strcmp(lower_value, "1") == 0) {
+    *result = true;
+  } else if (strcmp(lower_value, "false") == 0 || strcmp(lower_value, "0") == 0) {
+    *result = false;
+  } else {
+    fprintf(stderr, "Error: Invalid boolean value for %s: %s.\n", param_name, value);
+    free(lower_value);
+    exit(1);
+  }
+
+  // Free the allocated memory for the lowercase copy of the value
+  free(lower_value);
+}
+"""
 
     cfc.register_CFunction(
         includes=includes,
