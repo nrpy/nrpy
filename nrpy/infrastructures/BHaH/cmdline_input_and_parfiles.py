@@ -109,6 +109,29 @@ static void read_chararray(const char *value, char *result, const char *param_na
   }
   safe_copy(result, value, size);
 }
+
+static void read_boolean(const char *value, bool *result, const char *param_name) {
+  // To allow case-insensitive comparison
+  char *lower_value = strdup(value);
+  for (char *p = lower_value; *p != '\0'; p++) {
+    *p = tolower(*p);
+  }
+
+  // Check if the input is "true", "false", "0", or "1"
+  if (strcmp(lower_value, "true") == 0 || strcmp(lower_value, "1") == 0) {
+    *result = true;
+  } else if (strcmp(lower_value, "false") == 0 || strcmp(lower_value, "0") == 0) {
+    *result = false;
+  } else {
+    fprintf(stderr, "Error: Invalid boolean value for %s: %s.\n", param_name, value);
+    free(lower_value);
+    exit(1);
+  }
+
+  // Free the allocated memory for the lowercase copy of the value
+  free(lower_value);
+}
+
 """
     if cmdline_inputs is None:
         cmdline_inputs = []
@@ -234,7 +257,7 @@ invalid parameter names.
             CodeParam.add_to_parfile
             and CodeParam.commondata
             and (
-                CodeParam.c_type_alias in ("int", "REAL")
+                CodeParam.c_type_alias in ("int", "REAL", "bool")
                 or "char" in CodeParam.c_type_alias
             )
         ):
@@ -261,6 +284,9 @@ invalid parameter names.
                 i += 1
             elif CodeParam.c_type_alias == "REAL":
                 body += f'else if(param_index == {i}) read_double(value, &commondata->{key}, "{key}");\n'
+                i += 1
+            elif CodeParam.c_type_alias == "bool":
+                body += f'else if(param_index == {i}) read_boolean(value, &commondata->{key}, "{key}");\n'
                 i += 1
             elif (
                 "char" in CodeParam.c_type_alias
