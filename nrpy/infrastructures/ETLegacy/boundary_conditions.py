@@ -1,4 +1,5 @@
 import nrpy.c_function as cfc
+import nrpy.grid as gri
 
 
 def add_to_Cfunction_dict_specify_NewRad_BoundaryConditions_parameters(
@@ -33,26 +34,16 @@ Set up NewRad boundary conditions.
     body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
   DECLARE_CCTK_PARAMETERS;
 """
+    for gfname, gf in gri.glb_gridfcs_dict.items():
+        if gf.group == "EVOL":
+            var_radpower = "1.0"
+            body += f"  NewRad_Apply(cctkGH, {gf}, {gf}_rhs, {gf.f_infinity}, {gf.wavespeed}, {var_radpower});\n"
 
-    for gf in evol_gfs_list:
-        var_at_infinite_r = "0.0"
-        var_char_speed = "1.0"
-        for reg_gf in gri.glb_gridfcs_list:
-            if reg_gf.name + "GF" == gf:
-                var_at_infinite_r = str(reg_gf.f_infinity)
-                var_char_speed = str(reg_gf.wavespeed)
-        var_radpower = "1.0"
-        if "aDD" in gf or "trK" in gf:  # consistent with Lean code.
-            var_radpower = "2.0"
-
-        body += f"  NewRad_Apply(cctkGH, {gf}, {gf.replace('GF', '')}_rhsGF, {var_at_infinite_r}, {var_char_speed}, {var_radpower});\n"
-
-    add_to_Cfunction_dict(
+    cfc.register_CFunction(
         includes=includes,
         desc=desc,
         c_type=c_type,
         name=name,
         params=params,
         body=body,
-        enableCparameters=False,
     )

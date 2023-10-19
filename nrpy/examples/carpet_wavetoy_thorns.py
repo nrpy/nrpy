@@ -60,53 +60,53 @@ standard_ET_includes = ["math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
-def register_CFunction_diagnostics(thorn_name: str) -> Union[None, pcg.NRPyEnv_type]:
-    """
-    Register a C function for the exact solution at a single point.
-
-    :param thorn_name: The Einstein Toolkit thorn name.
-    :param in_WaveType: The type of wave: SphericalGaussian or PlaneWave
-    :param in_default_sigma: The default value for the Gaussian width (sigma).
-    :param default_k0: The default value for the plane wave wavenumber k in the x-direction
-    :param default_k1: The default value for the plane wave wavenumber k in the y-direction
-    :param default_k2: The default value for the plane wave wavenumber k in the z-direction
-    :return: None if in registration phase, else the updated NRPy environment.
-    """
-    if pcg.pcg_registration_phase():
-        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
-        return None
-    # Populate uu_ID, vv_ID
-    ID = InitialData(
-        WaveType=in_WaveType,
-        default_sigma=in_default_sigma,
-        default_k0=default_k0,
-        default_k1=default_k1,
-        default_k2=default_k2,
-    )
-
-    includes = standard_ET_includes
-
-    desc = r"""Exact solution at a single point."""
-    c_type = "void"
-    name = f"{thorn_name}_exact_solution_single_point"
-    params = r"""const CCTK_REAL xx, const CCTK_REAL yy, const CCTK_REAL zz, CCTK_REAL *restrict exact_soln_UUGF, CCTK_REAL *restrict exact_soln_VVGF"""
-    body = ccg.c_codegen(
-        [ID.uu_ID, ID.vv_ID],
-        ["*exact_soln_UUGF", "*exact_soln_VVGF"],
-        verbose=False,
-        include_braces=False,
-    )
-    cfc.register_CFunction(
-        subdirectory=thorn_name,
-        includes=includes,
-        desc=desc,
-        c_type=c_type,
-        name=name,
-        params=params,
-        include_CodeParameters_h=True,
-        body=body,
-    )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+# def register_CFunction_diagnostics(thorn_name: str) -> Union[None, pcg.NRPyEnv_type]:
+#     """
+#     Register a C function for the exact solution at a single point.
+#
+#     :param thorn_name: The Einstein Toolkit thorn name.
+#     :param in_WaveType: The type of wave: SphericalGaussian or PlaneWave
+#     :param in_default_sigma: The default value for the Gaussian width (sigma).
+#     :param default_k0: The default value for the plane wave wavenumber k in the x-direction
+#     :param default_k1: The default value for the plane wave wavenumber k in the y-direction
+#     :param default_k2: The default value for the plane wave wavenumber k in the z-direction
+#     :return: None if in registration phase, else the updated NRPy environment.
+#     """
+#     if pcg.pcg_registration_phase():
+#         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+#         return None
+#     # Populate uu_ID, vv_ID
+#     ID = InitialData(
+#         WaveType=in_WaveType,
+#         default_sigma=in_default_sigma,
+#         default_k0=default_k0,
+#         default_k1=default_k1,
+#         default_k2=default_k2,
+#     )
+#
+#     includes = standard_ET_includes
+#
+#     desc = r"""Exact solution at a single point."""
+#     c_type = "void"
+#     name = f"{thorn_name}_exact_solution_single_point"
+#     params = r"""const CCTK_REAL xx, const CCTK_REAL yy, const CCTK_REAL zz, CCTK_REAL *restrict exact_soln_UUGF, CCTK_REAL *restrict exact_soln_VVGF"""
+#     body = ccg.c_codegen(
+#         [ID.uu_ID, ID.vv_ID],
+#         ["*exact_soln_UUGF", "*exact_soln_VVGF"],
+#         verbose=False,
+#         include_braces=False,
+#     )
+#     cfc.register_CFunction(
+#         subdirectory=thorn_name,
+#         includes=includes,
+#         desc=desc,
+#         c_type=c_type,
+#         name=name,
+#         params=params,
+#         include_CodeParameters_h=True,
+#         body=body,
+#     )
+#     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
 def register_CFunction_exact_solution_single_point(
@@ -189,8 +189,8 @@ def register_CFunction_rhs_eval(thorn_name: str) -> Union[None, pcg.NRPyEnv_type
         loop_body=ccg.c_codegen(
             [rhs.uu_rhs, rhs.vv_rhs],
             [
-                gri.ETLegacyGridFunction.access_gf("uu"),
-                gri.ETLegacyGridFunction.access_gf("vv"),
+                gri.ETLegacyGridFunction.access_gf("uu_rhs"),
+                gri.ETLegacyGridFunction.access_gf("vv_rhs"),
             ],
             enable_fd_codegen=True,
             enable_simd=enable_simd,
@@ -225,6 +225,7 @@ Symmetry_registration.register_CFunction_Symmetry_registration_oldCartGrid3D(
     thorn_name=evol_thorn_name
 )
 
+print(cfc.CFunction_dict[f"{evol_thorn_name}_rhs_eval"].full_function)
 # cbc.CurviBoundaryConditions_register_C_functions(
 #     list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order
 # )

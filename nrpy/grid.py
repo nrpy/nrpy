@@ -349,6 +349,38 @@ class ETLegacyGridFunction(GridFunction):
             )
             raise ValueError(msg)
 
+    @staticmethod
+    def access_gf(
+        gf_name: str,
+        i0_offset: int = 0,
+        i1_offset: int = 0,
+        i2_offset: int = 0,
+    ) -> str:
+        """
+        Retrieve a grid function value from memory for a given offset.
+
+        :param gf_name: The grid function name.
+        :param i0_offset: Offset for the first index.
+        :param i1_offset: Offset for the second index.
+        :param i2_offset: Offset for the third index.
+        :param gf_array_name: Optional grid function array name.
+
+        :return: Formatted string.
+
+        :raises ValueError: If 'gf_array_name' is not provided.
+
+        Doctests:
+        >>> ETLegacyGridFunction.access_gf("aa", 1,2,3)
+        'in_gfs[IDX4(AAGF, i0+1, i1+2, i2+3)]'
+        >>> ETLegacyGridFunction.access_gf("defg", 0, -1, 0, "My_Array")
+        'My_Array[IDX4(DEFGGF, i0, i1-1, i2)]'
+        """
+        i0 = f"i0+{i0_offset}".replace("+-", "-") if i0_offset != 0 else "i0"
+        i1 = f"i1+{i1_offset}".replace("+-", "-") if i1_offset != 0 else "i1"
+        i2 = f"i2+{i2_offset}".replace("+-", "-") if i2_offset != 0 else "i2"
+
+        return f"{gf_name}[CCTK_GFINDEX3D(cctkGH, {i0}, {i1}, {i2})]"
+
     def read_gf_from_memory_Ccode_onept(
         self, i0_offset: int = 0, i1_offset: int = 0, i2_offset: int = 0, **kwargs: Any
     ) -> str:
@@ -374,11 +406,6 @@ class ETLegacyGridFunction(GridFunction):
         >>> glb_gridfcs_dict["defg"].read_gf_from_memory_Ccode_onept(0, -1, 0)
         'defg[CCTK_GFINDEX3D(cctkGH, i0, i1-1, i2)]'
         """
-        if kwargs:
-            raise ValueError(
-                "ETLegacyGridFunction.read_gf_from_memory_Ccode_onept() does not accept kwargs!"
-            )
-
         i0 = f"i0+{i0_offset}".replace("+-", "-") if i0_offset != 0 else "i0"
         i1 = f"i1+{i1_offset}".replace("+-", "-") if i1_offset != 0 else "i1"
         i2 = f"i2+{i2_offset}".replace("+-", "-") if i2_offset != 0 else "i2"
@@ -480,7 +507,8 @@ class CarpetXGridFunction(GridFunction):
 
 # Contains a list of gridfunction objects.
 glb_gridfcs_dict: Dict[
-    str, Union[GridFunction, BHaHGridFunction, ETLegacyGridFunction, CarpetXGridFunction]
+    str,
+    Union[GridFunction, BHaHGridFunction, ETLegacyGridFunction, CarpetXGridFunction],
 ] = {}
 
 

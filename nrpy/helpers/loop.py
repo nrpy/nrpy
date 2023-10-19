@@ -127,7 +127,9 @@ def loop(
     )
 
     if len(set(map(len, [idx_var, lower_bound, upper_bound, increment, pragma]))) != 1:
-        raise ValueError("All list parameters must have the same length.")
+        raise ValueError(
+            f"All list parameters must have the same length. Found lengths: idx_var[{len(idx_var)}], lower_bound[{len(lower_bound)}], upper_bound[{len(upper_bound)}], increment[{len(increment)}], pragma[{len(pragma)}]."
+        )
 
     headers: List[str] = []
     footers: List[str] = []
