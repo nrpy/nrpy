@@ -792,7 +792,7 @@ def read_gfs_from_memory(
         gf = gri.glb_gridfcs_dict[gfname]
         c_type_alias = gf.c_type_alias
         if enable_simd:
-            if par.parval_from_str("Infrastructure") in ("NRPy", "BHaH", "BaseETK"):
+            if par.parval_from_str("Infrastructure") in ("NRPy", "BHaH", "BasicET"):
                 c_type_alias = "REAL_SIMD_ARRAY"
             else:
                 raise ValueError("FIXME: Please specify the c_type for SIMD")

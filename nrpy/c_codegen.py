@@ -148,7 +148,7 @@ class CCodeGen:
             #         Otherwise set c_type="REAL_SIMD_ARRAY", which should be #define'd
             #         within the C code. For example for AVX-256, the C code should have
             #         #define REAL_SIMD_ARRAY __m256d
-            if Infrastructure in ("NRPy", "BHaH", "BaseETK"):
+            if Infrastructure in ("NRPy", "BHaH", "BasicET"):
                 self.c_type = self.c_type_alias = "REAL_SIMD_ARRAY"
             else:
                 raise ValueError("FIXME: Please specify the c_type for SIMD")
@@ -157,7 +157,7 @@ class CCodeGen:
                 self.c_type_alias = self.c_type
             elif Infrastructure == "BHaH":
                 self.c_type_alias = "REAL"
-            elif Infrastructure in ("BaseETK", "CarpetX"):
+            elif Infrastructure in ("BasicET", "CarpetX"):
                 self.c_type_alias = "CCTK_REAL"
             else:
                 self.c_type_alias = ""
