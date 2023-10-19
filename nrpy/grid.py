@@ -305,7 +305,7 @@ class BHaHGridFunction(GridFunction):
         return outstr
 
 
-class BasicETGridFunction(GridFunction):
+class ETLegacyGridFunction(GridFunction):
     """Subclass for basic (non-CarpetX) Einstein Toolkit grid functions."""
 
     def __init__(
@@ -366,7 +366,7 @@ class BasicETGridFunction(GridFunction):
 
         Doctests:
         >>> glb_gridfcs_dict.clear()
-        >>> par.set_parval_from_str("Infrastructure", "BasicET")
+        >>> par.set_parval_from_str("Infrastructure", "ETLegacy")
         >>> abc = register_gridfunctions("abc", group="EVOL")
         >>> glb_gridfcs_dict["abc"].read_gf_from_memory_Ccode_onept(1, 2, 3)
         'abc[CCTK_GFINDEX3D(cctkGH, i0+1, i1+2, i2+3)]'
@@ -376,7 +376,7 @@ class BasicETGridFunction(GridFunction):
         """
         if kwargs:
             raise ValueError(
-                "BasicETGridFunction.read_gf_from_memory_Ccode_onept() does not accept kwargs!"
+                "ETLegacyGridFunction.read_gf_from_memory_Ccode_onept() does not accept kwargs!"
             )
 
         i0 = f"i0+{i0_offset}".replace("+-", "-") if i0_offset != 0 else "i0"
@@ -480,7 +480,7 @@ class CarpetXGridFunction(GridFunction):
 
 # Contains a list of gridfunction objects.
 glb_gridfcs_dict: Dict[
-    str, Union[GridFunction, BHaHGridFunction, BasicETGridFunction, CarpetXGridFunction]
+    str, Union[GridFunction, BHaHGridFunction, ETLegacyGridFunction, CarpetXGridFunction]
 ] = {}
 
 
@@ -535,7 +535,7 @@ def register_gridfunctions(
         if name in glb_gridfcs_dict:
             print(f"Warning: Gridfunction {name} is already registered.")
         else:
-            gf: Union[BHaHGridFunction, BasicETGridFunction, CarpetXGridFunction]
+            gf: Union[BHaHGridFunction, ETLegacyGridFunction, CarpetXGridFunction]
             if Infrastructure == "BHaH":
                 kwargs_modify = kwargs.copy()
                 for param in ["f_infinity", "wavespeed"]:
@@ -543,8 +543,8 @@ def register_gridfunctions(
                         # mypy: Once again bonks out after I've CONFIRMED kwargs.get(param) is not None and is a list!
                         kwargs_modify[param] = kwargs.get(param)[i]  # type: ignore
                 gf = BHaHGridFunction(name, **kwargs_modify)
-            elif Infrastructure == "BasicET":
-                gf = BasicETGridFunction(name, **kwargs)
+            elif Infrastructure == "ETLegacy":
+                gf = ETLegacyGridFunction(name, **kwargs)
             elif Infrastructure == "CarpetX":
                 gf = CarpetXGridFunction(name, **kwargs)
             else:

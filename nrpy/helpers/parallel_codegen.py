@@ -46,7 +46,7 @@ NRPyEnv_type = Tuple[
         Union[
             gri.GridFunction,
             gri.BHaHGridFunction,
-            gri.BasicETGridFunction,
+            gri.ETLegacyGridFunction,
             gri.CarpetXGridFunction,
         ],
     ],
