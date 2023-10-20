@@ -22,6 +22,7 @@ def write_CodeParameters_simd_h_files(
 
     :param project_dir: The path of the project directory.
     :param clang_format_options: Options for clang_format.
+    :return: None
 
     Doctests:
     >>> par.set_parval_from_str("Infrastructure", "ETLegacy")

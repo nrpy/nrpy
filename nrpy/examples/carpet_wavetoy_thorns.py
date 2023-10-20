@@ -18,12 +18,12 @@ import nrpy.params as par
 import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.c_codegen as ccg
-from nrpy.helpers import simd
 import nrpy.helpers.parallel_codegen as pcg
 from nrpy.equations.wave_equation.InitialData import InitialData
 from nrpy.equations.wave_equation.WaveEquation_RHSs import WaveEquation_RHSs
 import nrpy.infrastructures.ETLegacy.simple_loop as lp
 from nrpy.infrastructures.ETLegacy import Symmetry_registration
+from nrpy.infrastructures.ETLegacy import make_code_defn
 
 
 par.set_parval_from_str("Infrastructure", "ETLegacy")
@@ -225,7 +225,10 @@ Symmetry_registration.register_CFunction_Symmetry_registration_oldCartGrid3D(
     thorn_name=evol_thorn_name
 )
 
-print(cfc.CFunction_dict[f"{evol_thorn_name}_rhs_eval"].full_function)
+for thorn in [evol_thorn_name, ID_thorn_name, diag_thorn_name]:
+    make_code_defn.output_CFunctions_and_construct_make_code_defn(
+        project_dir=project_dir, thorn_name=thorn
+    )
 # cbc.CurviBoundaryConditions_register_C_functions(
 #     list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order
 # )

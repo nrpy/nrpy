@@ -13,7 +13,6 @@ def add_to_Cfunction_dict_specify_NewRad_BoundaryConditions_parameters(
 
     :param thorn_name: The name of the NRPy+ generated thorn for which to set up NewRad boundary conditions.
     :return: None
-    :raises: None
     """
     includes = ["math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
     desc = """

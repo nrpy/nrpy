@@ -85,7 +85,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         :param project_Path: The Path of the project.
         :param subdir_Path: The subdirectory path within the project.
         :param file_name: The filename.
-        :return: The joined path of project_dir and path_and_file without "./" prefix
+        :return: Destination Path for the generated code, including project & subdirectory paths: e.g., path/to/code.c.
         """
         Makefile_list_of_files.append(str(subdir_Path / file_name))
         return project_Path / subdir_Path / file_name
