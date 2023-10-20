@@ -22,8 +22,12 @@ import nrpy.helpers.parallel_codegen as pcg
 from nrpy.equations.wave_equation.InitialData import InitialData
 from nrpy.equations.wave_equation.WaveEquation_RHSs import WaveEquation_RHSs
 import nrpy.infrastructures.ETLegacy.simple_loop as lp
-from nrpy.infrastructures.ETLegacy import Symmetry_registration
+from nrpy.infrastructures.ETLegacy import boundary_conditions
+from nrpy.infrastructures.ETLegacy import CodeParameters
 from nrpy.infrastructures.ETLegacy import make_code_defn
+from nrpy.infrastructures.ETLegacy import MoL_registration
+from nrpy.infrastructures.ETLegacy import set_rhss_to_zero
+from nrpy.infrastructures.ETLegacy import Symmetry_registration
 
 
 par.set_parval_from_str("Infrastructure", "ETLegacy")
@@ -221,69 +225,30 @@ register_CFunction_rhs_eval(thorn_name=evol_thorn_name)
 if __name__ == "__main__" and parallel_codegen_enable:
     pcg.do_parallel_codegen()
 
+########################
+# STEP 2: Register functions that depend on all gridfunctions & CodeParameters having been set:
+
 Symmetry_registration.register_CFunction_Symmetry_registration_oldCartGrid3D(
     thorn_name=evol_thorn_name
 )
+boundary_conditions.register_CFunction_specify_NewRad_BoundaryConditions_parameters(
+    thorn_name=evol_thorn_name
+)
+set_rhss_to_zero.register_CFunction_zero_rhss(thorn_name=evol_thorn_name)
+if enable_simd:
+    CodeParameters.write_CodeParameters_simd_h_files(
+        project_dir=project_dir, thorn_name=evol_thorn_name
+    )
+MoL_registration.register_CFunction_MoL_registration(thorn_name=evol_thorn_name)
+
+########################
+# STEP 3: All functions have been registered at this point. Time to output the thorns!
 
 for thorn in [evol_thorn_name, ID_thorn_name, diag_thorn_name]:
     make_code_defn.output_CFunctions_and_construct_make_code_defn(
         project_dir=project_dir, thorn_name=thorn
     )
-# cbc.CurviBoundaryConditions_register_C_functions(
-#     list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order
-# )
-# rhs_string = """rhs_eval(commondata, params, rfmstruct,  RK_INPUT_GFS, RK_OUTPUT_GFS);
-# if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
-#   apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].xx,
-#                                      gridfunctions_wavespeed,gridfunctions_f_infinity,
-#                                      RK_INPUT_GFS, RK_OUTPUT_GFS);"""
-# if not enable_rfm_precompute:
-#     rhs_string = rhs_string.replace("rfmstruct", "xx")
-# MoL.register_CFunctions(
-#     MoL_method=MoL_method,
-#     rhs_string=rhs_string,
-#     post_rhs_string="""if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
-#   apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);""",
-#     enable_rfm_precompute=enable_rfm_precompute,
-#     enable_curviBCs=True,
-# )
-# chkpt.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
-#
-# progress.register_CFunction_progress_indicator()
-# rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
-#
-# #########################################################
-# # STEP 3: Generate header files, register C functions and
-# #         command line parameters, set up boundary conditions,
-# #         and create a Makefile for this project.
-# #         Project is output to project/[project_name]/
-# CPs.write_CodeParameters_h_files(project_dir=project_dir)
-# CPs.register_CFunctions_params_commondata_struct_set_to_default()
-# cmdpar.generate_default_parfile(project_dir=project_dir, project_name=project_name)
-# cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
-#     project_name=project_name, cmdline_inputs=["convergence_factor"]
-# )
-# Bdefines_h.output_BHaH_defines_h(
-#     project_dir=project_dir,
-#     enable_simd=enable_simd,
-# )
-# main.register_CFunction_main_c(
-#     initial_data_desc=WaveType,
-#     pre_MoL_step_forward_in_time="write_checkpoint(&commondata, griddata);\n",
-#     MoL_method=MoL_method,
-#     enable_rfm_precompute=enable_rfm_precompute,
-#     enable_CurviBCs=True,
-#     boundary_conditions_desc=boundary_conditions_desc,
-# )
-#
-# if enable_simd:
-#     simd.copy_simd_intrinsics_h(project_dir=project_dir)
-#
-# Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
-#     project_dir=project_dir,
-#     project_name=project_name,
-#     exec_or_library_name=project_name,
-# )
+
 # print(
 #     f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
 # )

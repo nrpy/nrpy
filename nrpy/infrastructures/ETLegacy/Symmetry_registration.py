@@ -70,6 +70,7 @@ def register_CFunction_Symmetry_registration_oldCartGrid3D(
             body += f'  SetCartSymVN(cctkGH, sym, "{thorn_name}::{gfname}");\n'
 
     cfc.register_CFunction(
+        subdirectory=thorn_name,
         includes=includes,
         desc=desc,
         c_type=c_type,

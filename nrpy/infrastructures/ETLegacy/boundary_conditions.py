@@ -2,7 +2,7 @@ import nrpy.c_function as cfc
 import nrpy.grid as gri
 
 
-def add_to_Cfunction_dict_specify_NewRad_BoundaryConditions_parameters(
+def register_CFunction_specify_NewRad_BoundaryConditions_parameters(
     thorn_name: str,
 ) -> None:
     """
@@ -28,7 +28,7 @@ Set up NewRad boundary conditions.
     falloff rate.
 """
     c_type = "void"
-    name = f"specify_NewRad_BoundaryConditions_parameters_{thorn_name}"
+    name = f"{thorn_name}_specify_NewRad_BoundaryConditions_parameters"
     params = "CCTK_ARGUMENTS"
     body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
   DECLARE_CCTK_PARAMETERS;
@@ -39,6 +39,7 @@ Set up NewRad boundary conditions.
             body += f"  NewRad_Apply(cctkGH, {gf}, {gf}_rhs, {gf.f_infinity}, {gf.wavespeed}, {var_radpower});\n"
 
     cfc.register_CFunction(
+        subdirectory=thorn_name,
         includes=includes,
         desc=desc,
         c_type=c_type,

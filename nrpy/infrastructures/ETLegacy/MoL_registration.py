@@ -7,7 +7,7 @@ Author: Zachariah B. Etienne
 import nrpy.c_function as cfc
 
 
-def add_to_Cfunction_dict_MoL_registration(thorn_name: str) -> None:
+def register_CFunction_MoL_registration(thorn_name: str) -> None:
     """
     Register evolved gridfunctions and RHSs with the MoL timestepper in the Einstein Toolkit.
 
@@ -28,21 +28,22 @@ MoL documentation located in arrangements/CactusBase/MoL/doc
     c_type = "void"
     name = f"MoL_registration_{thorn_name}"
     params = "CCTK_ARGUMENTS"
-    body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
-  DECLARE_CCTK_PARAMETERS;
+    body = f"""DECLARE_CCTK_ARGUMENTS_{name};
+DECLARE_CCTK_PARAMETERS;
 
-  CCTK_INT ierr = 0, group, rhs;
+CCTK_INT ierr = 0, group, rhs;
 
-  // Register evolution & RHS gridfunction groups with MoL, so it knows
-  //  how to perform the appropriate timestepping
+// Register evolution & RHS gridfunction groups with MoL, so it knows
+//  how to perform the appropriate timestepping
 
-  group = CCTK_GroupIndex("{thorn_name}::evol_variables");
-  rhs = CCTK_GroupIndex("{thorn_name}::evol_variables_rhs");
-  ierr += MoLRegisterEvolvedGroup(group, rhs);
+group = CCTK_GroupIndex("{thorn_name}::evol_variables");
+rhs = CCTK_GroupIndex("{thorn_name}::evol_variables_rhs");
+ierr += MoLRegisterEvolvedGroup(group, rhs);
 
-  if (ierr) CCTK_ERROR("Problems registering with MoL");
+if (ierr) CCTK_ERROR("Problems registering with MoL");
 """
     cfc.register_CFunction(
+        subdirectory=thorn_name,
         includes=includes,
         desc=desc,
         c_type=c_type,

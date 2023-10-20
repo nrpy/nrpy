@@ -15,6 +15,7 @@ from nrpy.helpers.generic import clang_format
 
 def write_CodeParameters_simd_h_files(
     project_dir: str,
+    thorn_name: str,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 0}",
 ) -> None:
     r"""
@@ -31,9 +32,9 @@ def write_CodeParameters_simd_h_files(
     >>> _int = par.register_CodeParameter("CCTK_INT", "CodeParameters_c_files", "j0", 1)
     >>> _leaveitbe = par.register_CodeParameter("CCTK_REAL", "CodeParameters_c_files", "leaveitbe", add_to_parfile=False, add_to_set_CodeParameters_h=False)
     >>> cfc.CFunction_dict.clear()
-    >>> project_dir = Path("/tmp/tmp_project/")
-    >>> write_CodeParameters_simd_h_files(str(project_dir))
-    >>> print((project_dir / 'set_CodeParameters-simd.h').read_text())
+    >>> project_dir = Path("/tmp/et_project/")
+    >>> write_CodeParameters_simd_h_files(project_dir=str(project_dir), thorn_name="thorn")
+    >>> print((project_dir / "thorn" / "src"/ "set_CodeParameters-simd.h").read_text())
     const CCTK_REAL NOSIMDa = CCTK_ParameterGet("a", "CodeParameters_c_files", NULL);                               // CodeParameters_c_files::a
     const REAL_SIMD_ARRAY a = ConstSIMD(NOSIMDa);                                                                   // CodeParameters_c_files::a
     const CCTK_INT j0 = params->j0;                                                                                 // CodeParameters_c_files::j0
@@ -42,8 +43,8 @@ def write_CodeParameters_simd_h_files(
     <BLANKLINE>
     """
     # Create output directory if it doesn't already exist
-    project_Path = Path(project_dir)
-    project_Path.mkdir(parents=True, exist_ok=True)
+    src_Path = Path(project_dir) / thorn_name / "src"
+    src_Path.mkdir(parents=True, exist_ok=True)
 
     # Next, output header file for setting C parameters to current values within functions.
     # Step 4: Output set_CodeParameters-simd.h
@@ -67,7 +68,7 @@ def write_CodeParameters_simd_h_files(
                 c_output = f"const {CPtype} {CPname} = {struct}->{CPname};{comment}\n"
                 set_CodeParameters_SIMD_str += c_output
 
-    header_file_simd_path = project_Path / "set_CodeParameters-simd.h"
+    header_file_simd_path = src_Path / "set_CodeParameters-simd.h"
     with header_file_simd_path.open("w", encoding="utf-8") as file:
         file.write(
             clang_format(

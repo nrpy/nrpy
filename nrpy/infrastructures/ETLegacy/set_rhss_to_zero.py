@@ -9,7 +9,7 @@ import nrpy.grid as gri
 import nrpy.c_function as cfc
 
 
-def add_to_Cfunction_dict_zero_rhss(thorn_name: str) -> None:
+def register_CFunction_zero_rhss(thorn_name: str) -> None:
     """
     Initialize RHSs of gridfunctions to zero for a NRPy+ generated Cactus thorn.
 
@@ -28,7 +28,8 @@ def add_to_Cfunction_dict_zero_rhss(thorn_name: str) -> None:
     set_rhss_to_zero = ""
     for gfname, gf in gri.glb_gridfcs_dict.items():
         if gf.group == "EVOL":
-            set_rhss_to_zero += f"{gf}_rhs[CCTK_GFINDEX3D(cctkGH,i0,i1,i2)] = 0.0;\n"
+            gf_access = gf.access_gf(f"{gfname}_rhs", 0, 0, 0)
+            set_rhss_to_zero += f"{gf_access} = 0.0;\n"
     set_rhss_to_zero = set_rhss_to_zero.rstrip()
 
     body += lp.simple_loop(
@@ -39,6 +40,7 @@ def add_to_Cfunction_dict_zero_rhss(thorn_name: str) -> None:
     )
 
     cfc.register_CFunction(
+        subdirectory=thorn_name,
         includes=includes,
         desc=desc,
         c_type=c_type,
