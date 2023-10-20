@@ -229,6 +229,7 @@ def register_CFunction_rhs_eval(thorn_name: str) -> Union[None, pcg.NRPyEnv_type
         """
 schedule FUNC_NAME in MoL_CalcRHS as rhs_eval
 {
+  LANG: C
   READS: evol_variables(everywhere) #, auxevol_variables(interior)
   WRITES: evol_variables_rhs(interior)
 } "MoL: Evaluate WaveToy RHSs"

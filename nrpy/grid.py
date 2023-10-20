@@ -564,17 +564,17 @@ def register_gridfunctions(
             print(f"Warning: Gridfunction {name} is already registered.")
         else:
             gf: Union[BHaHGridFunction, ETLegacyGridFunction, CarpetXGridFunction]
+            kwargs_modify = kwargs.copy()
+            for param in ["f_infinity", "wavespeed"]:
+                if kwargs.get(param) and isinstance(kwargs.get(param), list):
+                    # mypy: Once again bonks out after I've CONFIRMED kwargs.get(param) is not None and is a list!
+                    kwargs_modify[param] = kwargs.get(param)[i]  # type: ignore
             if Infrastructure == "BHaH":
-                kwargs_modify = kwargs.copy()
-                for param in ["f_infinity", "wavespeed"]:
-                    if kwargs.get(param) and isinstance(kwargs.get(param), list):
-                        # mypy: Once again bonks out after I've CONFIRMED kwargs.get(param) is not None and is a list!
-                        kwargs_modify[param] = kwargs.get(param)[i]  # type: ignore
                 gf = BHaHGridFunction(name, **kwargs_modify)
             elif Infrastructure == "ETLegacy":
-                gf = ETLegacyGridFunction(name, **kwargs)
+                gf = ETLegacyGridFunction(name, **kwargs_modify)
             elif Infrastructure == "CarpetX":
-                gf = CarpetXGridFunction(name, **kwargs)
+                gf = CarpetXGridFunction(name, **kwargs_modify)
             else:
                 raise ValueError(f"Infrastructure = {Infrastructure} unknown")
 

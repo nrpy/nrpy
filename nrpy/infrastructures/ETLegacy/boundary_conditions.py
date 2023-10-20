@@ -114,15 +114,28 @@ Set up NewRad boundary conditions.
             var_radpower = "1.0"
             body += f"  NewRad_Apply(cctkGH, {gfname}, {gfname}_rhs, {gf.f_infinity}, {gf.wavespeed}, {var_radpower});\n"
 
-    ET_schedule_bin_entry = (
-        "MoL_PseudoEvolution",
-        """
+    ET_schedule_bins_entries = [
+        (
+            "MoL_CalcRHS",
+            """
+schedule FUNC_NAME in MoL_CalcRHS after BaikalETK_RHS
+{
+  LANG: C
+  READS: evol_variables(everywhere)
+  WRITES: evol_variables_rhs(boundary)
+} "NewRad boundary conditions, scheduled right after RHS eval."
+""",
+        ),
+        (
+            "MoL_PseudoEvolution",
+            """
 # This schedule call is not required for PreSync but remains in the schedule for backward compatibility.
 schedule GROUP ApplyBCs as WaveToy_auxgfs_ApplyBCs in MoL_PseudoEvolution after specify_BoundaryConditions
 {
 } "Apply boundary conditions"
 """,
-    )
+        ),
+    ]
     cfc.register_CFunction(
         subdirectory=thorn_name,
         includes=includes,
@@ -132,7 +145,7 @@ schedule GROUP ApplyBCs as WaveToy_auxgfs_ApplyBCs in MoL_PseudoEvolution after 
         params=params,
         body=body,
         ET_thorn_name=thorn_name,
-        ET_schedule_bins_entries=[ET_schedule_bin_entry],
+        ET_schedule_bins_entries=ET_schedule_bins_entries,
     )
 
 
