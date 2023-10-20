@@ -4,10 +4,9 @@ import nrpy.c_function as cfc
 import os
 
 
-def output_param_ccl(
+def construct_param_ccl(
     thorn_name: str,
-    already_declared_params: List[str],
-    thorn_type: str,
+    list_of_param_ccl_CodeParam_names: List[str],
     shares_extends_str: str = "",
 ) -> None:
     """
@@ -23,13 +22,12 @@ def output_param_ccl(
 
 restricted:
 """
-    for parname, CParam in par.glb_code_params_dict.items():
-        if CParam.add_to_parfile and parname not in already_declared_params:
-            paramccl_str += f'{CParam.c_type_alias} "{CParam.name} (see NRPy+ for parameter definition)"\n'
-            paramccl_str += "{\n"
-            paramccl_str += ' *:* :: "All values accepted. NRPy+ does not restrict the allowed ranges of parameters yet."\n'
-            paramccl_str += f"}} {CParam.defaultvalue}\n\n"
-            already_declared_params += [parname]
+    for parname in list_of_param_ccl_CodeParam_names:
+        paramccl_str += f'{CParam.c_type_alias} "{CParam.name} (see NRPy+ for parameter definition)"\n'
+        paramccl_str += "{\n"
+        paramccl_str += ' *:* :: "All values accepted. NRPy+ does not restrict the allowed ranges of parameters yet."\n'
+        paramccl_str += f"}} {CParam.defaultvalue}\n\n"
+        del list_of_param_ccl_CodeParam_names[parname]
 
     with open(os.path.join(thorn_name, "param.ccl"), "w") as file:
         file.write(paramccl_str)

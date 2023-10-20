@@ -8,7 +8,7 @@ Author: Zachariah B. Etienne
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
-from typing import Union, cast
+from typing import Union, cast, List
 from inspect import currentframe as cfr
 from types import FrameType as FT
 import shutil
@@ -30,6 +30,7 @@ from nrpy.infrastructures.ETLegacy import set_rhss_to_zero
 from nrpy.infrastructures.ETLegacy import Symmetry_registration
 from nrpy.infrastructures.ETLegacy import schedule_ccl
 from nrpy.infrastructures.ETLegacy import interface_ccl
+from nrpy.infrastructures.ETLegacy import param_ccl
 
 
 par.set_parval_from_str("Infrastructure", "ETLegacy")
@@ -255,6 +256,12 @@ MoL_registration.register_CFunction_MoL_registration(thorn_name=evol_thorn_name)
 
 ########################
 # STEP 3: All functions have been registered at this point. Time to output the CCL files & thorns!
+list_of_all_param_ccl_CodeParam_names: List[str] = []
+for CPname, CodeParam in par.glb_code_params_dict.items():
+    if CodeParam.add_to_parfile:
+        list_of_all_param_ccl_CodeParam_names += [CPname]
+
+# CCL files: evol_thorn
 schedule_ccl.construct_schedule_ccl(
     project_dir=project_dir,
     thorn_name=evol_thorn_name,
@@ -275,6 +282,13 @@ USES INCLUDE: Boundary.h
     enable_NewRad=True,
     is_evol_thorn=True,
 )
+# param_ccl.construct_param_ccl(
+#     thorn_name=evol_thorn_name,
+#     shares_extends_str="",
+# )
+
+# CCL files: ID_thorn
+
 
 for thorn in [evol_thorn_name, ID_thorn_name, diag_thorn_name]:
     make_code_defn.output_CFunctions_and_construct_make_code_defn(
