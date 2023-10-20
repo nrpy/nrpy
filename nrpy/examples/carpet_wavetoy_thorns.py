@@ -9,6 +9,7 @@ Author: Zachariah B. Etienne
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
 from typing import Union, cast, List
+from pathlib import Path
 from inspect import currentframe as cfr
 from types import FrameType as FT
 import shutil
@@ -19,6 +20,7 @@ import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.c_codegen as ccg
 import nrpy.helpers.parallel_codegen as pcg
+from nrpy.helpers import simd
 from nrpy.equations.wave_equation.InitialData import InitialData
 from nrpy.equations.wave_equation.WaveEquation_RHSs import WaveEquation_RHSs
 import nrpy.infrastructures.ETLegacy.simple_loop as lp
@@ -314,6 +316,10 @@ for thorn in [evol_thorn_name, ID_thorn_name, diag_thorn_name]:
     make_code_defn.output_CFunctions_and_construct_make_code_defn(
         project_dir=project_dir, thorn_name=thorn
     )
+simd.copy_simd_intrinsics_h(
+    project_dir=str(Path(project_dir) / evol_thorn_name / "src")
+)
+
 
 # print(
 #     f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
