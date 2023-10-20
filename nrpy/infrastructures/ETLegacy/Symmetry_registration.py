@@ -6,6 +6,7 @@ Author: Zachariah B. Etienne
 """
 import nrpy.grid as gri
 import nrpy.c_function as cfc
+from nrpy.infrastructures.ETLegacy import schedule_ccl
 
 
 def register_CFunction_Symmetry_registration_oldCartGrid3D(
@@ -69,6 +70,17 @@ def register_CFunction_Symmetry_registration_oldCartGrid3D(
 
             body += f'  SetCartSymVN(cctkGH, sym, "{thorn_name}::{gfname}");\n'
 
+    schedule_ccl.register_ScheduleCCL(
+        thorn_name=thorn_name,
+        function_name=name,
+        bin="BASEGRID",
+        entry="""schedule FUNC_NAME at BASEGRID as Symmetry_registration
+{
+  LANG: C
+  OPTIONS: Global
+} "Register symmetries, the CartGrid3D way."
+""",
+    )
     cfc.register_CFunction(
         subdirectory=thorn_name,
         includes=includes,

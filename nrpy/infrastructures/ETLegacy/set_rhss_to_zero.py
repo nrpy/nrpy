@@ -4,9 +4,10 @@ Register function to zero out _rhs grid functions.
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
-import nrpy.infrastructures.ETLegacy.simple_loop as lp
 import nrpy.grid as gri
 import nrpy.c_function as cfc
+import nrpy.infrastructures.ETLegacy.simple_loop as lp
+from nrpy.infrastructures.ETLegacy import schedule_ccl
 
 
 def register_CFunction_zero_rhss(thorn_name: str) -> None:
@@ -39,6 +40,17 @@ def register_CFunction_zero_rhss(thorn_name: str) -> None:
         enable_OpenMP=True,
     )
 
+    schedule_ccl.register_ScheduleCCL(
+        thorn_name=thorn_name,
+        function_name=name,
+        bin="BASEGRID",
+        entry="""schedule FUNC_NAME at BASEGRID after Symmetry_registration
+{
+  LANG: C
+  WRITES: evol_variables_rhs(everywhere)
+} "Idea from Lean: set all rhs functions to zero to prevent spurious nans"
+""",
+    )
     cfc.register_CFunction(
         subdirectory=thorn_name,
         includes=includes,

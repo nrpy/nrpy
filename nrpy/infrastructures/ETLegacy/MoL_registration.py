@@ -5,6 +5,7 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 import nrpy.c_function as cfc
+from nrpy.infrastructures.ETLegacy import schedule_ccl
 
 
 def register_CFunction_MoL_registration(thorn_name: str) -> None:
@@ -26,7 +27,7 @@ MoL (the Einstein Toolkit Method of Lines thorn)
 MoL documentation located in arrangements/CactusBase/MoL/doc
 """
     c_type = "void"
-    name = f"MoL_registration_{thorn_name}"
+    name = f"{thorn_name}_MoL_registration"
     params = "CCTK_ARGUMENTS"
     body = f"""DECLARE_CCTK_ARGUMENTS_{name};
 DECLARE_CCTK_PARAMETERS;
@@ -42,6 +43,17 @@ ierr += MoLRegisterEvolvedGroup(group, rhs);
 
 if (ierr) CCTK_ERROR("Problems registering with MoL");
 """
+    schedule_ccl.register_ScheduleCCL(
+        thorn_name=thorn_name,
+        function_name=name,
+        bin="MoL_Register",
+        entry="""schedule FUNC_NAME in MoL_Register
+{
+  LANG: C
+  OPTIONS: META
+} "Register variables for MoL"
+""",
+    )
     cfc.register_CFunction(
         subdirectory=thorn_name,
         includes=includes,

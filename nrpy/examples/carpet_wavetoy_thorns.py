@@ -28,6 +28,7 @@ from nrpy.infrastructures.ETLegacy import make_code_defn
 from nrpy.infrastructures.ETLegacy import MoL_registration
 from nrpy.infrastructures.ETLegacy import set_rhss_to_zero
 from nrpy.infrastructures.ETLegacy import Symmetry_registration
+from nrpy.infrastructures.ETLegacy import schedule_ccl
 
 
 par.set_parval_from_str("Infrastructure", "ETLegacy")
@@ -47,7 +48,7 @@ enable_rfm_precompute = False
 MoL_method = "RK4"
 fd_order = 8
 enable_simd = True
-parallel_codegen_enable = True
+parallel_codegen_enable = False
 CoordSystem = "Cartesian"
 OMP_collapse = 1
 
@@ -203,6 +204,19 @@ def register_CFunction_rhs_eval(thorn_name: str) -> Union[None, pcg.NRPyEnv_type
         enable_simd=enable_simd,
     )
 
+    schedule_ccl.register_ScheduleCCL(
+        thorn_name=thorn_name,
+        function_name=name,
+        bin="MoL_CalcRHS",
+        entry="""schedule FUNC_NAME in MoL_CalcRHS as rhs_eval
+  {
+    LANG: C
+    READS: evol_variables(everywhere),
+#           auxevol_variables(interior)
+    WRITES: evol_variables_rhs(interior)
+  } "MoL: Evaluate WaveToy RHSs"
+""",
+    )
     cfc.register_CFunction(
         subdirectory=thorn_name,
         include_CodeParameters_h=True,
@@ -231,9 +245,7 @@ if __name__ == "__main__" and parallel_codegen_enable:
 Symmetry_registration.register_CFunction_Symmetry_registration_oldCartGrid3D(
     thorn_name=evol_thorn_name
 )
-boundary_conditions.register_CFunction_specify_NewRad_BoundaryConditions_parameters(
-    thorn_name=evol_thorn_name
-)
+boundary_conditions.register_CFunctions(thorn_name=evol_thorn_name)
 set_rhss_to_zero.register_CFunction_zero_rhss(thorn_name=evol_thorn_name)
 if enable_simd:
     CodeParameters.write_CodeParameters_simd_h_files(
@@ -242,7 +254,17 @@ if enable_simd:
 MoL_registration.register_CFunction_MoL_registration(thorn_name=evol_thorn_name)
 
 ########################
-# STEP 3: All functions have been registered at this point. Time to output the thorns!
+# STEP 3: All functions have been registered at this point. Time to output the CCL files & thorns!
+schedule_ccl.construct_schedule_ccl(
+    project_dir=project_dir,
+    thorn_name=evol_thorn_name,
+    STORAGE="""
+STORAGE: evol_variables[3]     # Evolution variables
+STORAGE: evol_variables_rhs[1] # Variables storing right-hand-sides
+# STORAGE: aux_variables[3]      # Diagnostics variables
+# STORAGE: auxevol_variables[1]  # Single-timelevel storage of variables needed for evolutions.
+""",
+)
 
 for thorn in [evol_thorn_name, ID_thorn_name, diag_thorn_name]:
     make_code_defn.output_CFunctions_and_construct_make_code_defn(
