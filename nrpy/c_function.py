@@ -28,8 +28,8 @@ class CFunction:
     :param CoordSystem_for_wrapper_func: (BHaH only) Coordinate system for the wrapper function. E.g., if set to Cartesian -> create subdirectory/name() wrapper function and subdirectory/Cartesian/name__rfm__Cartesian(). Defaults to an empty string.
     :param ET_thorn_name: (ET only) Thorn home for this function.
     :param ET_schedule_bins_entries: (ET only) List of (schedule bin, schedule entry) tuples for Einstein Toolkit schedule.ccl.
-    :param ET_current_thorn_CodeParams_used: (ET only) List of CodeParameters this function uses, for *this thorn's* param.ccl.
-    :param ET_other_thorn_CodeParams_used: (ET only) List of CodeParameters this function uses, for *other thorn's* param.ccl.
+    :param ET_current_thorn_CodeParams_used: (ET only) List of CodeParameter names this function uses, for *this thorn's* param.ccl.
+    :param ET_other_thorn_CodeParams_used: (ET only) List of CodeParameter names this function uses, for *other thorn's* param.ccl.
     :param clang_format_options: Options for the clang-format tool. Defaults to "-style={BasedOnStyle: LLVM, ColumnLimit: 200}".
 
     DocTests:
@@ -63,8 +63,8 @@ class CFunction:
         CoordSystem_for_wrapper_func: str = "",
         ET_thorn_name: str = "",
         ET_schedule_bins_entries: Optional[List[Tuple[str, str]]] = None,
-        ET_current_thorn_CodeParams_used: Optional[List[par.CodeParameter]] = None,
-        ET_other_thorn_CodeParams_used: Optional[List[par.CodeParameter]] = None,
+        ET_current_thorn_CodeParams_used: Optional[List[str]] = None,
+        ET_other_thorn_CodeParams_used: Optional[List[str]] = None,
         clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 200}",
     ) -> None:
         for attribute in [(name, "name"), (desc, "desc"), (body, "body")]:
@@ -239,8 +239,8 @@ def register_CFunction(
     CoordSystem_for_wrapper_func: str = "",
     ET_thorn_name: str = "",
     ET_schedule_bins_entries: Optional[List[Tuple[str, str]]] = None,
-    ET_current_thorn_CodeParams_used: Optional[List[par.CodeParameter]] = None,
-    ET_other_thorn_CodeParams_used: Optional[List[par.CodeParameter]] = None,
+    ET_current_thorn_CodeParams_used: Optional[List[str]] = None,
+    ET_other_thorn_CodeParams_used: Optional[List[str]] = None,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 200}",
 ) -> None:
     """
@@ -259,8 +259,8 @@ def register_CFunction(
     :param CoordSystem_for_wrapper_func: (BHaH only) Coordinate system for the wrapper function. E.g., if set to Cartesian -> create subdirectory/name() wrapper function and subdirectory/Cartesian/name__rfm__Cartesian(). Defaults to an empty string.
     :param ET_thorn_name: (ET only) Thorn home for this function.
     :param ET_schedule_bins_entries: (ET only) List of tuples for Einstein Toolkit schedule.
-    :param ET_current_thorn_CodeParams_used: (ET only) List of native CodeParameters this function uses, for param.ccl.
-    :param ET_other_thorn_CodeParams_used: (ET only) List of foreign CodeParameters this function uses, for param.ccl.
+    :param ET_current_thorn_CodeParams_used: (ET only) List of CodeParameter names this function uses, for *this thorn's* param.ccl.
+    :param ET_other_thorn_CodeParams_used: (ET only) List of CodeParameter names this function uses, for *other thorn's* param.ccl.
     :param clang_format_options: Options for the clang-format tool. Defaults to "-style={BasedOnStyle: LLVM, ColumnLimit: 200}".
 
     :raises ValueError: If the name is already registered in CFunction_dict.

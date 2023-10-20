@@ -1,14 +1,14 @@
 from typing import List
+from pathlib import Path
 import nrpy.params as par
 import nrpy.c_function as cfc
-import os
 
 
 def construct_param_ccl(
+    project_dir: str,
     thorn_name: str,
-    list_of_param_ccl_CodeParam_names: List[str],
     shares_extends_str: str = "",
-) -> None:
+) -> List[str]:
     """
     Generate the content for the param.ccl file and write it to disk.
 
@@ -22,12 +22,20 @@ def construct_param_ccl(
 
 restricted:
 """
-    for parname in list_of_param_ccl_CodeParam_names:
-        paramccl_str += f'{CParam.c_type_alias} "{CParam.name} (see NRPy+ for parameter definition)"\n'
-        paramccl_str += "{\n"
-        paramccl_str += ' *:* :: "All values accepted. NRPy+ does not restrict the allowed ranges of parameters yet."\n'
-        paramccl_str += f"}} {CParam.defaultvalue}\n\n"
-        del list_of_param_ccl_CodeParam_names[parname]
+    CParams_registered_to_params_ccl: List[str] = []
 
-    with open(os.path.join(thorn_name, "param.ccl"), "w") as file:
+    for function_name, CFunction in cfc.CFunction_dict.items():
+        if (
+            CFunction.ET_thorn_name == thorn_name
+            and CFunction.ET_current_thorn_CodeParams_used
+        ):
+            for CPname in CFunction.ET_current_thorn_CodeParams_used:
+                CParam = par.glb_code_params_dict[CPname]
+                paramccl_str += f'{CParam.c_type_alias} "{CParam.name} (see NRPy+ for parameter definition)"\n'
+                paramccl_str += "{\n"
+                paramccl_str += ' *:* :: "All values accepted. NRPy+ does not restrict the allowed ranges of parameters yet."\n'
+                paramccl_str += f"}} {CParam.defaultvalue}\n\n"
+                CParams_registered_to_params_ccl += [CPname]
+    with open(Path(project_dir) / thorn_name / "param.ccl", "w") as file:
         file.write(paramccl_str)
+    return CParams_registered_to_params_ccl
