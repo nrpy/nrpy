@@ -371,9 +371,9 @@ class ETLegacyGridFunction(GridFunction):
 
         Doctests:
         >>> ETLegacyGridFunction.access_gf("aa", 1,2,3)
-        'in_gfs[IDX4(AAGF, i0+1, i1+2, i2+3)]'
-        >>> ETLegacyGridFunction.access_gf("defg", 0, -1, 0, "My_Array")
-        'My_Array[IDX4(DEFGGF, i0, i1-1, i2)]'
+        'aa[CCTK_GFINDEX3D(cctkGH, i0+1, i1+2, i2+3)]'
+        >>> ETLegacyGridFunction.access_gf("defg", 0, -1, 0)
+        'defg[CCTK_GFINDEX3D(cctkGH, i0, i1-1, i2)]'
         """
         i0 = f"i0+{i0_offset}".replace("+-", "-") if i0_offset != 0 else "i0"
         i1 = f"i1+{i1_offset}".replace("+-", "-") if i1_offset != 0 else "i1"
