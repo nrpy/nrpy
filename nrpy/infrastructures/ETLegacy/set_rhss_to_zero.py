@@ -40,17 +40,17 @@ def register_CFunction_zero_rhss(thorn_name: str) -> None:
         enable_OpenMP=True,
     )
 
-    schedule_ccl.register_ScheduleCCL(
-        thorn_name=thorn_name,
-        function_name=name,
-        bin="BASEGRID",
-        entry="""schedule FUNC_NAME at BASEGRID after Symmetry_registration
+    ET_schedule_bin_entry = (
+        "BASEGRID",
+        """
+schedule FUNC_NAME at BASEGRID after Symmetry_registration
 {
   LANG: C
   WRITES: evol_variables_rhs(everywhere)
 } "Idea from Lean: set all rhs functions to zero to prevent spurious nans"
 """,
     )
+
     cfc.register_CFunction(
         subdirectory=thorn_name,
         includes=includes,
@@ -59,4 +59,6 @@ def register_CFunction_zero_rhss(thorn_name: str) -> None:
         name=name,
         params=params,
         body=body,
+        ET_thorn_name=thorn_name,
+        ET_schedule_bins_entries=[ET_schedule_bin_entry],
     )

@@ -55,11 +55,10 @@ ierr = Driver_SelectVarForBC(cctkGH, CCTK_ALL_FACES, 1, -1, "{thorn_name}::{gfna
 if (ierr < 0) CCTK_ERROR("Failed to register BC with Driver for {thorn_name}::{gfname}!");
 """
 
-    schedule_ccl.register_ScheduleCCL(
-        thorn_name=thorn_name,
-        function_name=name,
-        bin="Driver_BoundarySelect",
-        entry="""schedule FUNC_NAME in Driver_BoundarySelect
+    ET_schedule_bin_entry = (
+        "Driver_BoundarySelect",
+        """
+schedule FUNC_NAME in Driver_BoundarySelect
 {
   LANG: C
   OPTIONS: LEVEL
@@ -74,6 +73,8 @@ if (ierr < 0) CCTK_ERROR("Failed to register BC with Driver for {thorn_name}::{g
         name=name,
         params=params,
         body=body,
+        ET_thorn_name=thorn_name,
+        ET_schedule_bins_entries=[ET_schedule_bin_entry],
     )
 
 
@@ -113,6 +114,15 @@ Set up NewRad boundary conditions.
             var_radpower = "1.0"
             body += f"  NewRad_Apply(cctkGH, {gfname}, {gfname}_rhs, {gf.f_infinity}, {gf.wavespeed}, {var_radpower});\n"
 
+    ET_schedule_bin_entry = (
+        "MoL_PseudoEvolution",
+        """
+# This schedule call is not required for PreSync but remains in the schedule for backward compatibility.
+schedule GROUP ApplyBCs as WaveToy_auxgfs_ApplyBCs in MoL_PseudoEvolution after specify_BoundaryConditions
+{
+} "Apply boundary conditions"
+""",
+    )
     cfc.register_CFunction(
         subdirectory=thorn_name,
         includes=includes,
@@ -121,6 +131,8 @@ Set up NewRad boundary conditions.
         name=name,
         params=params,
         body=body,
+        ET_thorn_name=thorn_name,
+        ET_schedule_bins_entries=[ET_schedule_bin_entry],
     )
 
 

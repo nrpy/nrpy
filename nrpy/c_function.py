@@ -4,9 +4,9 @@ C function management and registration classes/functions.
 Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
          Ken Sible; ksible **at** outlook **dot* com
 """
-
 import os
 from typing import Optional, List, Dict, Tuple
+
 import nrpy.params as par
 from nrpy.helpers.generic import prefix_with_star, clang_format
 
@@ -22,10 +22,12 @@ class CFunction:
     :param desc: A description of the function.
     :param c_type: The C type of the function (e.g., void, int). Default is "void".
     :param name: The name of the function.
-    :param CoordSystem_for_wrapper_func: Coordinate system for the wrapper function. E.g., if set to Cartesian -> create subdirectory/name() wrapper function and subdirectory/Cartesian/name__rfm__Cartesian(). Defaults to an empty string.
     :param params: A string representing the function's input parameters. Defaults to an empty string.
     :param include_CodeParameters_h: Boolean to enable C parameters. Default is False.
     :param body: The body of the function.
+    :param CoordSystem_for_wrapper_func: (BHaH only) Coordinate system for the wrapper function. E.g., if set to Cartesian -> create subdirectory/name() wrapper function and subdirectory/Cartesian/name__rfm__Cartesian(). Defaults to an empty string.
+    :param ET_thorn_name: (ET only) Thorn home for this function.
+    :param ET_schedule_bins_entries: (ET only) List of (schedule bin, schedule entry) tuples for Einstein Toolkit schedule.ccl.
     :param clang_format_options: Options for the clang-format tool. Defaults to "-style={BasedOnStyle: LLVM, ColumnLimit: 200}".
 
     DocTests:
@@ -53,10 +55,12 @@ class CFunction:
         desc: str = "",
         c_type: str = "void",
         name: str = "",
-        CoordSystem_for_wrapper_func: str = "",
         params: str = "",
         include_CodeParameters_h: bool = False,
         body: str = "",
+        CoordSystem_for_wrapper_func: str = "",
+        ET_thorn_name: str = "",
+        ET_schedule_bins_entries: Optional[List[Tuple[str, str]]] = None,
         clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 200}",
     ) -> None:
         for attribute in [(name, "name"), (desc, "desc"), (body, "body")]:
@@ -78,10 +82,12 @@ class CFunction:
         self.desc = desc
         self.c_type = c_type
         self.name = name
-        self.CoordSystem_for_wrapper_func = CoordSystem_for_wrapper_func
         self.params = params
         self.include_CodeParameters_h = include_CodeParameters_h
         self.body = body
+        self.CoordSystem_for_wrapper_func = CoordSystem_for_wrapper_func
+        self.ET_thorn_name = ET_thorn_name
+        self.ET_schedule_bins_entries = ET_schedule_bins_entries
         self.clang_format_options = clang_format_options
 
         self.function_prototype = f"{self.c_type} {self.name}({self.params});"
@@ -221,10 +227,12 @@ def register_CFunction(
     desc: str = "",
     c_type: str = "void",
     name: str = "",
-    CoordSystem_for_wrapper_func: str = "",
     params: str = "",
     include_CodeParameters_h: bool = False,
     body: str = "",
+    CoordSystem_for_wrapper_func: str = "",
+    ET_thorn_name: str = "",
+    ET_schedule_bins_entries: Optional[List[Tuple[str, str]]] = None,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 200}",
 ) -> None:
     """
@@ -237,10 +245,12 @@ def register_CFunction(
     :param desc: A description of the function.
     :param c_type: The C type of the function (e.g., void, int). Default is "void".
     :param name: The name of the function.
-    :param CoordSystem_for_wrapper_func: Coordinate system for the wrapper function. E.g., if set to Cartesian -> create subdirectory/name() wrapper function and subdirectory/Cartesian/name__rfm__Cartesian(). Defaults to an empty string.
     :param params: A string representing the function's input parameters. Defaults to an empty string.
     :param include_CodeParameters_h: Boolean to enable C parameters. Default is False.
     :param body: The body of the function.
+    :param CoordSystem_for_wrapper_func: (BHaH only) Coordinate system for the wrapper function. E.g., if set to Cartesian -> create subdirectory/name() wrapper function and subdirectory/Cartesian/name__rfm__Cartesian(). Defaults to an empty string.
+    :param ET_thorn_name: (ET only) Thorn home for this function.
+    :param ET_schedule_bins_entries: (ET only) List of tuples for Einstein Toolkit schedule.
     :param clang_format_options: Options for the clang-format tool. Defaults to "-style={BasedOnStyle: LLVM, ColumnLimit: 200}".
 
     :raises ValueError: If the name is already registered in CFunction_dict.
@@ -258,10 +268,12 @@ def register_CFunction(
         desc=desc,
         c_type=c_type,
         name=actual_name,
-        CoordSystem_for_wrapper_func=CoordSystem_for_wrapper_func,
         params=params,
         include_CodeParameters_h=include_CodeParameters_h,
         body=body,
+        CoordSystem_for_wrapper_func=CoordSystem_for_wrapper_func,
+        ET_thorn_name=ET_thorn_name,
+        ET_schedule_bins_entries=ET_schedule_bins_entries,
         clang_format_options=clang_format_options,
     )
 

@@ -1,7 +1,8 @@
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 from pathlib import Path
 
 import nrpy.grid as gri
+import nrpy.c_function as cfc
 
 
 class ScheduleCCL:
@@ -26,7 +27,12 @@ class ScheduleCCL:
         self.has_been_output = False
 
 
-def construct_schedule_ccl(project_dir: str, thorn_name: str, STORAGE: str) -> None:
+def construct_schedule_ccl(
+    project_dir: str,
+    thorn_name: str,
+    STORAGE: str,
+    extra_schedule_bins_entries: Optional[List[Tuple[str, str]]] = None,
+) -> None:
     """
     Construct the ScheduleCCL string based on its properties.
 
@@ -40,6 +46,22 @@ def construct_schedule_ccl(project_dir: str, thorn_name: str, STORAGE: str) -> N
 # Step 0: Allocate memory for gridfunctions, using the STORAGE: keyword.
 {STORAGE}
 """
+    schedule_ccl_dict: Dict[str, List[ScheduleCCL]] = {}
+    for function_name, item in cfc.CFunction_dict.items():
+        if item.ET_schedule_bins_entries:
+            for bin, entry in item.ET_schedule_bins_entries:
+                schedule_ccl_dict.setdefault(item.ET_thorn_name, []).append(
+                    ScheduleCCL(function_name=function_name, bin=bin, entry=entry)
+                )
+        else:
+            print(
+                f"Warning: No schedule.ccl information (ET_schedule_bins_entries) included for: {function_name}."
+            )
+    if extra_schedule_bins_entries:
+        for bin, entry in extra_schedule_bins_entries:
+            schedule_ccl_dict[thorn_name] += [
+                ScheduleCCL(function_name="", bin=bin, entry=entry)
+            ]
 
     step = 1
     for bin in [
@@ -73,26 +95,6 @@ def construct_schedule_ccl(project_dir: str, thorn_name: str, STORAGE: str) -> N
 
     with open(Path(project_dir) / thorn_name / "schedule.ccl", "w") as file:
         file.write(outstr)
-
-
-schedule_ccl_dict: Dict[str, List[ScheduleCCL]] = {}
-
-
-def register_ScheduleCCL(
-    thorn_name: str, function_name: str, bin: str, entry: str
-) -> None:
-    """
-    Registers a ScheduleCCL object to the schedule_ccl_dict.
-
-    :param thorn_name: The name of the thorn.
-    :param function_name: The name of the function.
-    :param bin: The bin specification.
-    :param entry: The entry description.
-    :raises KeyError: Raised if thorn_name does not exist in schedule_ccl_dict.
-    """
-    schedule_ccl_dict.setdefault(thorn_name, []).append(
-        ScheduleCCL(function_name=function_name, bin=bin, entry=entry)
-    )
 
 
 def auto_EVOL_AUXEVOL_AUX_STORAGE() -> str:

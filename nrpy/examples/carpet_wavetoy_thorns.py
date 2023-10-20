@@ -29,6 +29,7 @@ from nrpy.infrastructures.ETLegacy import MoL_registration
 from nrpy.infrastructures.ETLegacy import set_rhss_to_zero
 from nrpy.infrastructures.ETLegacy import Symmetry_registration
 from nrpy.infrastructures.ETLegacy import schedule_ccl
+from nrpy.infrastructures.ETLegacy import interface_ccl
 
 
 par.set_parval_from_str("Infrastructure", "ETLegacy")
@@ -48,7 +49,7 @@ enable_rfm_precompute = False
 MoL_method = "RK4"
 fd_order = 8
 enable_simd = True
-parallel_codegen_enable = False
+parallel_codegen_enable = True
 CoordSystem = "Cartesian"
 OMP_collapse = 1
 
@@ -203,20 +204,17 @@ def register_CFunction_rhs_eval(thorn_name: str) -> Union[None, pcg.NRPyEnv_type
         loop_region="interior",
         enable_simd=enable_simd,
     )
-
-    schedule_ccl.register_ScheduleCCL(
-        thorn_name=thorn_name,
-        function_name=name,
-        bin="MoL_CalcRHS",
-        entry="""schedule FUNC_NAME in MoL_CalcRHS as rhs_eval
-  {
-    LANG: C
-    READS: evol_variables(everywhere),
-#           auxevol_variables(interior)
-    WRITES: evol_variables_rhs(interior)
-  } "MoL: Evaluate WaveToy RHSs"
+    ET_schedule_bin_entry = (
+        "MoL_CalcRHS",
+        """
+schedule FUNC_NAME in MoL_CalcRHS as rhs_eval
+{
+  READS: evol_variables(everywhere) #, auxevol_variables(interior)
+  WRITES: evol_variables_rhs(interior)
+} "MoL: Evaluate WaveToy RHSs"
 """,
     )
+
     cfc.register_CFunction(
         subdirectory=thorn_name,
         include_CodeParameters_h=True,
@@ -226,6 +224,8 @@ def register_CFunction_rhs_eval(thorn_name: str) -> Union[None, pcg.NRPyEnv_type
         name=name,
         params=params,
         body=body,
+        ET_thorn_name=thorn_name,
+        ET_schedule_bins_entries=[ET_schedule_bin_entry],
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
@@ -264,6 +264,16 @@ STORAGE: evol_variables_rhs[1] # Variables storing right-hand-sides
 # STORAGE: aux_variables[3]      # Diagnostics variables
 # STORAGE: auxevol_variables[1]  # Single-timelevel storage of variables needed for evolutions.
 """,
+)
+interface_ccl.construct_interface_ccl(
+    thorn_name=evol_thorn_name,
+    project_dir=project_dir,
+    inherits="Boundary Grid MethodofLines",
+    USES_INCLUDEs="""USES INCLUDE: Symmetry.h
+USES INCLUDE: Boundary.h
+""",
+    enable_NewRad=True,
+    is_evol_thorn=True,
 )
 
 for thorn in [evol_thorn_name, ID_thorn_name, diag_thorn_name]:

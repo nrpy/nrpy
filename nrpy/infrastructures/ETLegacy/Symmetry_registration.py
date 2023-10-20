@@ -70,11 +70,10 @@ def register_CFunction_Symmetry_registration_oldCartGrid3D(
 
             body += f'  SetCartSymVN(cctkGH, sym, "{thorn_name}::{gfname}");\n'
 
-    schedule_ccl.register_ScheduleCCL(
-        thorn_name=thorn_name,
-        function_name=name,
-        bin="BASEGRID",
-        entry="""schedule FUNC_NAME at BASEGRID as Symmetry_registration
+    ET_schedule_bin_entry = (
+        "BASEGRID",
+        """
+schedule FUNC_NAME at BASEGRID as Symmetry_registration
 {
   LANG: C
   OPTIONS: Global
@@ -89,4 +88,6 @@ def register_CFunction_Symmetry_registration_oldCartGrid3D(
         name=name,
         params=params,
         body=body,
+        ET_thorn_name=thorn_name,
+        ET_schedule_bins_entries=[ET_schedule_bin_entry],
     )

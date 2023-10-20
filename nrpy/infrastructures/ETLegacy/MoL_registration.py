@@ -43,11 +43,11 @@ ierr += MoLRegisterEvolvedGroup(group, rhs);
 
 if (ierr) CCTK_ERROR("Problems registering with MoL");
 """
-    schedule_ccl.register_ScheduleCCL(
-        thorn_name=thorn_name,
-        function_name=name,
-        bin="MoL_Register",
-        entry="""schedule FUNC_NAME in MoL_Register
+
+    ET_schedule_bin_entry = (
+        "MoL_Register",
+        """
+schedule FUNC_NAME in MoL_Register
 {
   LANG: C
   OPTIONS: META
@@ -62,4 +62,6 @@ if (ierr) CCTK_ERROR("Problems registering with MoL");
         name=name,
         params=params,
         body=body,
+        ET_thorn_name=thorn_name,
+        ET_schedule_bins_entries=[ET_schedule_bin_entry],
     )
