@@ -1,7 +1,5 @@
 """
-Functions for setting params_struct and commondata_struct parameters.
-
-Set to default values specified when registering them within NRPy+'s CodeParameters.
+This module contains a function to generate C code strings that read parameter constants based on user configurations.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -17,11 +15,11 @@ def read_CodeParameters(
     declare_invdxxs: bool = True,
 ) -> str:
     r"""
-    Generate C code to set C parameter constants and writes them to files.
+    Generate a C code string to set C parameter constants based on the provided options.
 
     :param list_of_tuples__thorn_CodeParameter: A list of tuples containing thorn and code parameter names.
     :param enable_simd: Flag to enable SIMD for the code parameter.
-    :param declare_invdxxs: Flag to declare inverse delta x.
+    :param declare_invdxxs: Define invdxx0, invdxx1, and invdxx2 based on CCTK_DELTA_SPACE()? Default: True.
 
     :return: A string that contains the generated C code.
 

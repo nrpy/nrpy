@@ -6,7 +6,6 @@ Author: Zachariah B. Etienne
 """
 import nrpy.grid as gri
 import nrpy.c_function as cfc
-from nrpy.infrastructures.ETLegacy import schedule_ccl
 
 
 def register_CFunction_Symmetry_registration_oldCartGrid3D(

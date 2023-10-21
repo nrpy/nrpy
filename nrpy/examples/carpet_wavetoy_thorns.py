@@ -52,7 +52,7 @@ enable_rfm_precompute = False
 MoL_method = "RK4"
 fd_order = 8
 enable_simd = True
-parallel_codegen_enable = False
+parallel_codegen_enable = True
 CoordSystem = "Cartesian"
 OMP_collapse = 1
 
