@@ -81,7 +81,9 @@ public:
     if is_evol_thorn:
         # First, EVOL type:
         evol_gfs = [
-            gfname for gfname, gf in gri.glb_gridfcs_dict.items() if gf.group == "EVOL"
+            f"{gfname}GF"
+            for gfname, gf in gri.glb_gridfcs_dict.items()
+            if gf.group == "EVOL"
         ]
         if evol_gfs:
             outstr += "CCTK_REAL evol_variables type = GF Timelevels=3\n{\n  "
@@ -92,7 +94,7 @@ public:
             # Second EVOL right-hand-sides
             outstr += 'CCTK_REAL evol_variables_rhs type = GF Timelevels=1 TAGS=\'InterpNumTimelevels=1 prolongation="none" checkpoint="no"\'\n{\n  '
             rhs_gfs = [
-                f"{gfname}_rhs"
+                f"{gfname}_rhsGF"
                 for gfname, gf in gri.glb_gridfcs_dict.items()
                 if gf.group == "EVOL"
             ]
@@ -101,7 +103,7 @@ public:
 """
             # Then AUXEVOL type:
             auxevol_gfs = [
-                gfname
+                f"{gfname}GF"
                 for gfname, gf in gri.glb_gridfcs_dict.items()
                 if gf.group == "AUXEVOL"
             ]
@@ -113,13 +115,16 @@ public:
 
     # Then AUX type:
     aux_gfs = [
-        gfname for gfname, gf in gri.glb_gridfcs_dict.items() if gf.group == "AUX"
+        f"{gfname}GF"
+        for gfname, gf in gri.glb_gridfcs_dict.items()
+        if gf.group == "AUX"
     ]
     if aux_gfs:
         outstr += "CCTK_REAL aux_variables type = GF Timelevels=3\n{\n  "
         outstr += ", ".join(aux_gfs) + "\n"
         outstr += """} "Auxiliary gridfunctions for e.g., diagnostics."
 """
-
-    with open(Path(project_dir) / thorn_name / "interface.ccl", "w") as file:
+    output_Path = Path(project_dir) / thorn_name
+    output_Path.mkdir(parents=True, exist_ok=True)
+    with open(output_Path / "interface.ccl", "w") as file:
         file.write(outstr)

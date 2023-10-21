@@ -51,8 +51,8 @@ CCTK_INT ierr CCTK_ATTRIBUTE_UNUSED = 0;
     for gfname, gf in sorted(gri.glb_gridfcs_dict.items()):
         if gf.group == "EVOL":
             body += f"""
-ierr = Driver_SelectVarForBC(cctkGH, CCTK_ALL_FACES, 1, -1, "{thorn_name}::{gfname}", "none");
-if (ierr < 0) CCTK_ERROR("Failed to register BC with Driver for {thorn_name}::{gfname}!");
+ierr = Driver_SelectVarForBC(cctkGH, CCTK_ALL_FACES, 1, -1, "{thorn_name}::{gfname}GF", "none");
+if (ierr < 0) CCTK_ERROR("Failed to register BC with Driver for {thorn_name}::{gfname}GF!");
 """
 
     ET_schedule_bin_entry = (
@@ -112,7 +112,7 @@ Set up NewRad boundary conditions.
     for gfname, gf in gri.glb_gridfcs_dict.items():
         if gf.group == "EVOL":
             var_radpower = "1.0"
-            body += f"  NewRad_Apply(cctkGH, {gfname}, {gfname}_rhs, {gf.f_infinity}, {gf.wavespeed}, {var_radpower});\n"
+            body += f"  NewRad_Apply(cctkGH, {gfname}GF, {gfname}_rhsGF, {gf.f_infinity}, {gf.wavespeed}, {var_radpower});\n"
 
     ET_schedule_bins_entries = [
         (

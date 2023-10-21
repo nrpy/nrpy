@@ -93,7 +93,9 @@ def construct_schedule_ccl(
 """
             outstr += item.entry.replace("FUNC_NAME", item.function_name)
 
-    with open(Path(project_dir) / thorn_name / "schedule.ccl", "w") as file:
+    output_Path = Path(project_dir) / thorn_name
+    output_Path.mkdir(parents=True, exist_ok=True)
+    with open(output_Path / "schedule.ccl", "w") as file:
         file.write(outstr)
 
 

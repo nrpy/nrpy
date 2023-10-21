@@ -6,76 +6,108 @@ Set to default values specified when registering them within NRPy+'s CodeParamet
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
-
-from pathlib import Path
+from typing import Optional, List, Tuple
 
 import nrpy.params as par
-from nrpy.helpers.generic import clang_format
 
 
-def write_CodeParameters_simd_h_files(
-    project_dir: str,
-    thorn_name: str,
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 0}",
-) -> None:
+def read_CodeParameters(
+    list_of_tuples__thorn_CodeParameter: Optional[List[Tuple[str, str]]] = None,
+    enable_simd: bool = False,
+    declare_invdxxs: bool = True,
+) -> str:
     r"""
     Generate C code to set C parameter constants and writes them to files.
 
-    :param project_dir: The path of the project directory.
-    :param clang_format_options: Options for clang_format.
-    :return: None
+    :param list_of_tuples__thorn_CodeParameter: A list of tuples containing thorn and code parameter names.
+    :param enable_simd: Flag to enable SIMD for the code parameter.
+    :param declare_invdxxs: Flag to declare inverse delta x.
+
+    :return: A string that contains the generated C code.
 
     Doctests:
-    >>> par.set_parval_from_str("Infrastructure", "ETLegacy")
-    >>> import nrpy.c_function as cfc
-    >>> _, __ = par.register_CodeParameters("CCTK_REAL", "CodeParameters_c_files", ["a", "pi_three_sigfigs"], [1, 3.14])
-    >>> _int = par.register_CodeParameter("CCTK_INT", "CodeParameters_c_files", "j0", 1)
-    >>> _leaveitbe = par.register_CodeParameter("CCTK_REAL", "CodeParameters_c_files", "leaveitbe", add_to_parfile=False, add_to_set_CodeParameters_h=False)
-    >>> cfc.CFunction_dict.clear()
-    >>> project_dir = Path("/tmp/et_project/")
-    >>> write_CodeParameters_simd_h_files(project_dir=str(project_dir), thorn_name="thorn")
-    >>> print((project_dir / "thorn" / "src"/ "set_CodeParameters-simd.h").read_text())
-    const CCTK_REAL NOSIMDa = CCTK_ParameterGet("a", "CodeParameters_c_files", NULL);                               // CodeParameters_c_files::a
-    const REAL_SIMD_ARRAY a = ConstSIMD(NOSIMDa);                                                                   // CodeParameters_c_files::a
-    const CCTK_INT j0 = params->j0;                                                                                 // CodeParameters_c_files::j0
-    const CCTK_REAL NOSIMDpi_three_sigfigs = CCTK_ParameterGet("pi_three_sigfigs", "CodeParameters_c_files", NULL); // CodeParameters_c_files::pi_three_sigfigs
-    const REAL_SIMD_ARRAY pi_three_sigfigs = ConstSIMD(NOSIMDpi_three_sigfigs);                                     // CodeParameters_c_files::pi_three_sigfigs
+    >>> _, __ = par.register_CodeParameters(c_type_alias="CCTK_REAL", module="ignore", names=["a", "b"], defaultvalues=0.125)
+    >>> outstr = read_CodeParameters(list_of_tuples__thorn_CodeParameter=[("thorna", "a"), ("thornb", "b")],
+    ...                              enable_simd=True, declare_invdxxs=True)
+    >>> print(outstr)
+    const CCTK_REAL *restrict NOSIMDa = CCTK_ParameterGet("a", "thorna", NULL);  // thorna::a
+    const REAL_SIMD_ARRAY a = ConstSIMD(*NOSIMDa);  // thorna::a
+    const CCTK_REAL *restrict NOSIMDb = CCTK_ParameterGet("b", "thornb", NULL);  // thornb::b
+    const REAL_SIMD_ARRAY b = ConstSIMD(*NOSIMDb);  // thornb::b
+    const CCTK_REAL NOSIMDinvdxx0 = 1.0/CCTK_DELTA_SPACE(0);
+    const REAL_SIMD_ARRAY invdxx0 = ConstSIMD(NOSIMDinvdxx0);
+    const CCTK_REAL NOSIMDinvdxx1 = 1.0/CCTK_DELTA_SPACE(1);
+    const REAL_SIMD_ARRAY invdxx1 = ConstSIMD(NOSIMDinvdxx1);
+    const CCTK_REAL NOSIMDinvdxx2 = 1.0/CCTK_DELTA_SPACE(2);
+    const REAL_SIMD_ARRAY invdxx2 = ConstSIMD(NOSIMDinvdxx2);
+    <BLANKLINE>
+    >>> outstr = read_CodeParameters(list_of_tuples__thorn_CodeParameter=[("thorna", "a"), ("thornb", "b")],
+    ...                              enable_simd=False, declare_invdxxs=True)
+    >>> print(outstr)
+    const CCTK_REAL a = CCTK_ParameterGet("a", "thorna", NULL);  // thorna::a
+    const CCTK_REAL b = CCTK_ParameterGet("b", "thornb", NULL);  // thornb::b
+    const CCTK_REAL invdxx0 = 1.0/CCTK_DELTA_SPACE(0);
+    const CCTK_REAL invdxx1 = 1.0/CCTK_DELTA_SPACE(1);
+    const CCTK_REAL invdxx2 = 1.0/CCTK_DELTA_SPACE(2);
+    <BLANKLINE>
+    >>> outstr = read_CodeParameters(list_of_tuples__thorn_CodeParameter=[("thorna", "a"), ("thornb", "b")],
+    ...                              enable_simd=False, declare_invdxxs=False)
+    >>> print(outstr)
+    const CCTK_REAL a = CCTK_ParameterGet("a", "thorna", NULL);  // thorna::a
+    const CCTK_REAL b = CCTK_ParameterGet("b", "thornb", NULL);  // thornb::b
     <BLANKLINE>
     """
-    # Create output directory if it doesn't already exist
-    src_Path = Path(project_dir) / thorn_name / "src"
-    src_Path.mkdir(parents=True, exist_ok=True)
 
-    # Next, output header file for setting C parameters to current values within functions.
-    # Step 4: Output set_CodeParameters-simd.h
-    set_CodeParameters_SIMD_str = ""
-    for CPname, CodeParam in sorted(
-        par.glb_code_params_dict.items(), key=lambda x: x[0].lower()
-    ):
-        # SIMD does not support char arrays.
-        if (
-            CodeParam.add_to_set_CodeParameters_h
-            and "char" not in CodeParam.c_type_alias
-        ):
-            struct = "commondata" if CodeParam.commondata else "params"
-            CPtype = CodeParam.c_type_alias
-            comment = f"  // {CodeParam.module}::{CPname}"
-            if CPtype == "CCTK_REAL" or CPtype == "REAL":
-                c_output = f"""const CCTK_REAL NOSIMD{CPname} = CCTK_ParameterGet("{CPname}", "{CodeParam.module}", NULL);{comment}\n"""
-                c_output += f"const REAL_SIMD_ARRAY {CPname} = ConstSIMD(NOSIMD{CPname});{comment}\n"
-                set_CodeParameters_SIMD_str += c_output
+    def read_CCTK_REAL_CodeParameter(CPname: str, CPthorn: str) -> str:
+        """
+        Reads the CCTK_REAL code parameter based on the given CPname and CPthorn.
+
+        :param CPname: The name of the code parameter.
+        :param CPthorn: The thorn to which the code parameter belongs.
+
+        :return: A string that represents the code for reading the CCTK_REAL parameter.
+
+        >>> read_CCTK_REAL_CodeParameter("invdxx1", "thorn_name")
+        'const CCTK_REAL invdxx1 = 1.0/CCTK_DELTA_SPACE(1);\n'
+        """
+        read_str = ""
+        # fmt: off
+        if CPname.startswith("invdxx"):
+            dirn = CPname[-1]
+            if enable_simd:
+                read_str += f"const CCTK_REAL NOSIMD{CPname} = 1.0/CCTK_DELTA_SPACE({dirn});\n"
+                read_str += f"const REAL_SIMD_ARRAY {CPname} = ConstSIMD(NOSIMD{CPname});\n"
             else:
-                c_output = f"const {CPtype} {CPname} = {struct}->{CPname};{comment}\n"
-                set_CodeParameters_SIMD_str += c_output
+                read_str += f"const CCTK_REAL {CPname} = 1.0/CCTK_DELTA_SPACE({dirn});\n"
+        else:
+            CPcomment = f"  // {CPthorn}::{CPname}"
+            if enable_simd:
+                read_str += f"""const CCTK_REAL *restrict NOSIMD{CPname} = CCTK_ParameterGet("{CPname}", "{CPthorn}", NULL);{CPcomment}\n"""
+                read_str += f"const REAL_SIMD_ARRAY {CPname} = ConstSIMD(*NOSIMD{CPname});{CPcomment}\n"
+            else:
+                read_str += f"""const CCTK_REAL {CPname} = CCTK_ParameterGet("{CPname}", "{CPthorn}", NULL);{CPcomment}\n"""
+        # fmt: on
 
-    header_file_simd_path = src_Path / "set_CodeParameters-simd.h"
-    with header_file_simd_path.open("w", encoding="utf-8") as file:
-        file.write(
-            clang_format(
-                set_CodeParameters_SIMD_str,
-                clang_format_options=clang_format_options,
-            )
-        )
+        return read_str
+
+    read_CodeParameters = ""
+    if list_of_tuples__thorn_CodeParameter:
+        for CPthorn, CPname in sorted(list_of_tuples__thorn_CodeParameter):
+            CodeParam = par.glb_code_params_dict[CPname]
+            if "char" in CodeParam.c_type_alias:
+                raise ValueError("Cannot declare a char array in SIMD.")
+            CPtype = CodeParam.c_type_alias
+            if CPtype == "CCTK_REAL" or CPtype == "REAL":
+                read_CodeParameters += read_CCTK_REAL_CodeParameter(CPname, CPthorn)
+            else:
+                CPcomment = f"  // {CPthorn}::{CPname}"
+                c_output = f'const {CPtype} {CPname} = CCTK_ParameterGet("{CPname}", "{CodeParam.module}", NULL);{CPcomment}\n'
+                read_CodeParameters += c_output
+    if declare_invdxxs:
+        for dirn in range(3):
+            read_CodeParameters += read_CCTK_REAL_CodeParameter(f"invdxx{dirn}", "")
+
+    return read_CodeParameters
 
 
 if __name__ == "__main__":

@@ -36,6 +36,8 @@ restricted:
                 paramccl_str += ' *:* :: "All values accepted. NRPy+ does not restrict the allowed ranges of parameters yet."\n'
                 paramccl_str += f"}} {CParam.defaultvalue}\n\n"
                 CParams_registered_to_params_ccl += [CPname]
-    with open(Path(project_dir) / thorn_name / "param.ccl", "w") as file:
+    output_Path = Path(project_dir) / thorn_name
+    output_Path.mkdir(parents=True, exist_ok=True)
+    with open(output_Path / "param.ccl", "w") as file:
         file.write(paramccl_str)
     return CParams_registered_to_params_ccl

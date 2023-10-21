@@ -379,7 +379,7 @@ class ETLegacyGridFunction(GridFunction):
         i1 = f"i1+{i1_offset}".replace("+-", "-") if i1_offset != 0 else "i1"
         i2 = f"i2+{i2_offset}".replace("+-", "-") if i2_offset != 0 else "i2"
 
-        return f"{gf_name}[CCTK_GFINDEX3D(cctkGH, {i0}, {i1}, {i2})]"
+        return f"{gf_name}GF[CCTK_GFINDEX3D(cctkGH, {i0}, {i1}, {i2})]"
 
     def read_gf_from_memory_Ccode_onept(
         self, i0_offset: int = 0, i1_offset: int = 0, i2_offset: int = 0, **kwargs: Any
@@ -410,7 +410,7 @@ class ETLegacyGridFunction(GridFunction):
         i1 = f"i1+{i1_offset}".replace("+-", "-") if i1_offset != 0 else "i1"
         i2 = f"i2+{i2_offset}".replace("+-", "-") if i2_offset != 0 else "i2"
 
-        ret_string = f"{self.name}[CCTK_GFINDEX3D(cctkGH, {i0}, {i1}, {i2})]"
+        ret_string = f"{self.name}GF[CCTK_GFINDEX3D(cctkGH, {i0}, {i1}, {i2})]"
         if kwargs.get("enable_simd"):
             return f"ReadSIMD(&{ret_string})"
         return ret_string

@@ -120,7 +120,6 @@ def register_CFunction_exact_solution_single_point(
         c_type=c_type,
         name=name,
         params=params,
-        include_CodeParameters_h=True,
         body=body,
         ET_current_thorn_CodeParams_used=["k0", "k1", "k2", "sigma"],
     )
@@ -212,7 +211,12 @@ def register_CFunction_rhs_eval(thorn_name: str) -> Union[None, pcg.NRPyEnv_type
     params = "CCTK_ARGUMENTS"
     # Populate uu_rhs, vv_rhs
     rhs = WaveEquation_RHSs()
-    body = f"DECLARE_CCTK_ARGUMENTS_{name}\n"
+    body = f"DECLARE_CCTK_ARGUMENTS_{name};\n"
+    body += CodeParameters.read_CodeParameters(
+        list_of_tuples__thorn_CodeParameter=[(ID_thorn_name, "wavespeed")],
+        enable_simd=enable_simd,
+        declare_invdxxs=True,
+    )
     body += lp.simple_loop(
         loop_body=ccg.c_codegen(
             [rhs.uu_rhs, rhs.vv_rhs],
@@ -240,7 +244,6 @@ schedule FUNC_NAME in MoL_CalcRHS as rhs_eval
 
     cfc.register_CFunction(
         subdirectory=thorn_name,
-        include_CodeParameters_h=True,
         includes=includes,
         desc=desc,
         c_type=c_type,
@@ -271,10 +274,6 @@ Symmetry_registration.register_CFunction_Symmetry_registration_oldCartGrid3D(
 )
 boundary_conditions.register_CFunctions(thorn_name=evol_thorn_name)
 set_rhss_to_zero.register_CFunction_zero_rhss(thorn_name=evol_thorn_name)
-if enable_simd:
-    CodeParameters.write_CodeParameters_simd_h_files(
-        project_dir=project_dir, thorn_name=evol_thorn_name
-    )
 MoL_registration.register_CFunction_MoL_registration(thorn_name=evol_thorn_name)
 
 ########################
