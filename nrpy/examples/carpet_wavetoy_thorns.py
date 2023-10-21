@@ -177,6 +177,8 @@ schedule FUNC_NAME IN {bin}
 }} "Set up metric fields for binary black hole initial data"
 """,
     )
+    # ET_current_thorn_CodeParams_used = ([],)
+
     cfc.register_CFunction(
         subdirectory=thorn_name,
         includes=includes,
