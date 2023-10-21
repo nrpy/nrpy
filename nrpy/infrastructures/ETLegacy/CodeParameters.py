@@ -85,7 +85,8 @@ def read_CodeParameters(
                 read_str += f"""const CCTK_REAL *restrict NOSIMD{CPname} = CCTK_ParameterGet("{CPname}", "{CPthorn}", NULL);{CPcomment}\n"""
                 read_str += f"const REAL_SIMD_ARRAY {CPname} = ConstSIMD(*NOSIMD{CPname});{CPcomment}\n"
             else:
-                read_str += f"""const CCTK_REAL {CPname} = CCTK_ParameterGet("{CPname}", "{CPthorn}", NULL);{CPcomment}\n"""
+                read_str += f"""const CCTK_REAL *{CPname}ptr = CCTK_ParameterGet("{CPname}", "{CPthorn}", NULL);{CPcomment}\n"""
+                read_str += f"""const CCTK_REAL {CPname} = *{CPname}ptr;\n"""
         # fmt: on
 
         return read_str
@@ -93,7 +94,12 @@ def read_CodeParameters(
     read_CodeParameters = ""
     if list_of_tuples__thorn_CodeParameter:
         for CPthorn, CPname in sorted(list_of_tuples__thorn_CodeParameter):
-            CodeParam = par.glb_code_params_dict[CPname]
+            try:
+                CodeParam = par.glb_code_params_dict[CPname]
+            except KeyError:
+                raise KeyError(
+                    f"{CPname} has not been registered to par.glb_code_params_dict: {par.glb_code_params_dict.keys()}"
+                )
             if "char" in CodeParam.c_type_alias:
                 raise ValueError("Cannot declare a char array in SIMD.")
             CPtype = CodeParam.c_type_alias
@@ -107,7 +113,7 @@ def read_CodeParameters(
         for dirn in range(3):
             read_CodeParameters += read_CCTK_REAL_CodeParameter(f"invdxx{dirn}", "")
 
-    return read_CodeParameters
+    return f"{read_CodeParameters}\n"
 
 
 if __name__ == "__main__":

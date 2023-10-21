@@ -355,6 +355,7 @@ class ETLegacyGridFunction(GridFunction):
         i0_offset: int = 0,
         i1_offset: int = 0,
         i2_offset: int = 0,
+        use_GF_suffix: bool = True,
     ) -> str:
         """
         Retrieve a grid function value from memory for a given offset.
@@ -363,7 +364,7 @@ class ETLegacyGridFunction(GridFunction):
         :param i0_offset: Offset for the first index.
         :param i1_offset: Offset for the second index.
         :param i2_offset: Offset for the third index.
-        :param gf_array_name: Optional grid function array name.
+        :param use_GF_suffix: Suffix gridfunction name with GF (default: True).
 
         :return: Formatted string.
 
@@ -379,7 +380,10 @@ class ETLegacyGridFunction(GridFunction):
         i1 = f"i1+{i1_offset}".replace("+-", "-") if i1_offset != 0 else "i1"
         i2 = f"i2+{i2_offset}".replace("+-", "-") if i2_offset != 0 else "i2"
 
-        return f"{gf_name}GF[CCTK_GFINDEX3D(cctkGH, {i0}, {i1}, {i2})]"
+        access_str = f"{gf_name}[CCTK_GFINDEX3D(cctkGH, {i0}, {i1}, {i2})]"
+        if use_GF_suffix:
+            access_str = f"{gf_name}GF[CCTK_GFINDEX3D(cctkGH, {i0}, {i1}, {i2})]"
+        return access_str
 
     def read_gf_from_memory_Ccode_onept(
         self, i0_offset: int = 0, i1_offset: int = 0, i2_offset: int = 0, **kwargs: Any
@@ -405,14 +409,20 @@ class ETLegacyGridFunction(GridFunction):
         >>> defg = register_gridfunctions("defg", group="EVOL")
         >>> glb_gridfcs_dict["defg"].read_gf_from_memory_Ccode_onept(0, -1, 0, enable_simd=True)
         'ReadSIMD(&defgGF[CCTK_GFINDEX3D(cctkGH, i0, i1-1, i2)])'
+        >>> glb_gridfcs_dict["defg"].read_gf_from_memory_Ccode_onept(0, -1, 0, enable_simd=True, use_GF_suffix=False)
+        'ReadSIMD(&defg[CCTK_GFINDEX3D(cctkGH, i0, i1-1, i2)])'
         """
         i0 = f"i0+{i0_offset}".replace("+-", "-") if i0_offset != 0 else "i0"
         i1 = f"i1+{i1_offset}".replace("+-", "-") if i1_offset != 0 else "i1"
         i2 = f"i2+{i2_offset}".replace("+-", "-") if i2_offset != 0 else "i2"
 
         ret_string = f"{self.name}GF[CCTK_GFINDEX3D(cctkGH, {i0}, {i1}, {i2})]"
+        # if use_GF_suffix defined AND set to False, remove GF suffix
+        if "use_GF_suffix" in kwargs and not kwargs["use_GF_suffix"]:
+            ret_string = f"{self.name}[CCTK_GFINDEX3D(cctkGH, {i0}, {i1}, {i2})]"
         if kwargs.get("enable_simd"):
-            return f"ReadSIMD(&{ret_string})"
+            ret_string = f"ReadSIMD(&{ret_string})"
+
         return ret_string
 
 
