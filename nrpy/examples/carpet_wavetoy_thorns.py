@@ -132,13 +132,13 @@ DECLARE_CCTK_PARAMETERS;
         loop_region="all points",
     )
 
-    bin = "CCTK_INITIAL"
+    schedule_bin = "CCTK_INITIAL"
     if thorn_name == diag_thorn_name:
-        bin = "CCTK_ANALYSIS"
+        schedule_bin = "CCTK_ANALYSIS"
     ET_schedule_bin_entry = (
-        bin,
+        schedule_bin,
         f"""
-schedule FUNC_NAME IN {bin}
+schedule FUNC_NAME IN {schedule_bin}
 {{
   LANG: C
   READS: Grid::x(Everywhere)
