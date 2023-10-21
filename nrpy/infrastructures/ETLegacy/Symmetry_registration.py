@@ -51,7 +51,7 @@ def register_CFunction_Symmetry_registration_oldCartGrid3D(
                 raise ValueError(
                     "Sorry, gridfunctions of rank 3 or greater not supported."
                 )
-            elif len(gfname) > 3 and gfname[-2].isdigit():  # Rank 2
+            if len(gfname) > 3 and gfname[-2].isdigit():  # Rank 2
                 symidx0 = gfname[-2]
                 symidx1 = gfname[-1]
                 body += f"  sym[{symidx0}] *= -1;\n"
