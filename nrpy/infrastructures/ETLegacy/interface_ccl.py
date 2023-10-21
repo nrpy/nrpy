@@ -3,12 +3,12 @@ import nrpy.grid as gri
 
 
 def construct_interface_ccl(
-    thorn_name: str,
     project_dir: str,
+    thorn_name: str,
     inherits: str,
     USES_INCLUDEs: str,
-    enable_NewRad: bool = False,
     is_evol_thorn: bool = False,
+    enable_NewRad: bool = False,
 ) -> None:
     """
     Generates the `interface.ccl` file required for the specified Thorn.
@@ -34,7 +34,9 @@ inherits: {inherits}
 
 # Needed functions and #include's:
 {USES_INCLUDEs}
-
+"""
+    if is_evol_thorn:
+        outstr += """
 # Needed Method of Lines function
 CCTK_INT FUNCTION MoLRegisterEvolvedGroup(CCTK_INT IN EvolvedIndex, \
                                           CCTK_INT IN RHSIndex)
@@ -112,17 +114,16 @@ public:
                 outstr += ", ".join(auxevol_gfs) + "\n"
                 outstr += """} "Auxiliary gridfunctions needed for evaluating the RHSs."
 """
-
-    # Then AUX type:
-    aux_gfs = [
-        f"{gfname}GF"
-        for gfname, gf in gri.glb_gridfcs_dict.items()
-        if gf.group == "AUX"
-    ]
-    if aux_gfs:
-        outstr += "CCTK_REAL aux_variables type = GF Timelevels=3\n{\n  "
-        outstr += ", ".join(aux_gfs) + "\n"
-        outstr += """} "Auxiliary gridfunctions for e.g., diagnostics."
+        # Then AUX type:
+        aux_gfs = [
+            f"{gfname}GF"
+            for gfname, gf in gri.glb_gridfcs_dict.items()
+            if gf.group == "AUX"
+        ]
+        if aux_gfs:
+            outstr += "CCTK_REAL aux_variables type = GF Timelevels=3\n{\n  "
+            outstr += ", ".join(aux_gfs) + "\n"
+            outstr += """} "Auxiliary gridfunctions for e.g., diagnostics."
 """
     output_Path = Path(project_dir) / thorn_name
     output_Path.mkdir(parents=True, exist_ok=True)

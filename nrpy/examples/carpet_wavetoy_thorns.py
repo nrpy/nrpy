@@ -290,19 +290,19 @@ schedule_ccl.construct_schedule_ccl(
     STORAGE="""
 STORAGE: evol_variables[3]     # Evolution variables
 STORAGE: evol_variables_rhs[1] # Variables storing right-hand-sides
-# STORAGE: aux_variables[3]      # Diagnostics variables
 # STORAGE: auxevol_variables[1]  # Single-timelevel storage of variables needed for evolutions.
+STORAGE: aux_variables[3]      # Diagnostics variables
 """,
 )
 interface_ccl.construct_interface_ccl(
-    thorn_name=evol_thorn_name,
     project_dir=project_dir,
+    thorn_name=evol_thorn_name,
     inherits="Boundary Grid MethodofLines",
     USES_INCLUDEs="""USES INCLUDE: Symmetry.h
 USES INCLUDE: Boundary.h
 """,
-    enable_NewRad=True,
     is_evol_thorn=True,
+    enable_NewRad=True,
 )
 CParams_registered_to_params_ccl += param_ccl.construct_param_ccl(
     project_dir=project_dir,
@@ -311,6 +311,29 @@ CParams_registered_to_params_ccl += param_ccl.construct_param_ccl(
 )
 
 # CCL files: ID_thorn
+schedule_ccl.construct_schedule_ccl(
+    project_dir=project_dir,
+    thorn_name=ID_thorn_name,
+    STORAGE="""
+STORAGE: evol_variables[3]     # Evolution variables
+# STORAGE: evol_variables_rhs[1] # Variables storing right-hand-sides
+# STORAGE: aux_variables[3]      # Diagnostics variables
+# STORAGE: auxevol_variables[1]  # Single-timelevel storage of variables needed for evolutions.
+""",
+)
+interface_ccl.construct_interface_ccl(
+    project_dir=project_dir,
+    thorn_name=ID_thorn_name,
+    inherits="Grid WaveToyNRPy  # WaveToyNRPy provides all gridfunctions.",
+    USES_INCLUDEs="",
+    is_evol_thorn=False,
+    enable_NewRad=False,
+)
+CParams_registered_to_params_ccl += param_ccl.construct_param_ccl(
+    project_dir=project_dir,
+    thorn_name=ID_thorn_name,
+    shares_extends_str="",
+)
 
 
 for thorn in [evol_thorn_name, ID_thorn_name, diag_thorn_name]:
