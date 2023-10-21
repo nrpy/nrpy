@@ -28,8 +28,8 @@ from nrpy.infrastructures.ETLegacy import boundary_conditions
 from nrpy.infrastructures.ETLegacy import CodeParameters
 from nrpy.infrastructures.ETLegacy import make_code_defn
 from nrpy.infrastructures.ETLegacy import MoL_registration
-from nrpy.infrastructures.ETLegacy import set_rhss_to_zero
 from nrpy.infrastructures.ETLegacy import Symmetry_registration
+from nrpy.infrastructures.ETLegacy import zero_rhss
 from nrpy.infrastructures.ETLegacy import schedule_ccl
 from nrpy.infrastructures.ETLegacy import interface_ccl
 from nrpy.infrastructures.ETLegacy import param_ccl
@@ -255,7 +255,7 @@ Symmetry_registration.register_CFunction_Symmetry_registration_oldCartGrid3D(
     thorn_name=evol_thorn_name
 )
 boundary_conditions.register_CFunctions(thorn_name=evol_thorn_name)
-set_rhss_to_zero.register_CFunction_zero_rhss(thorn_name=evol_thorn_name)
+zero_rhss.register_CFunction_zero_rhss(thorn_name=evol_thorn_name)
 MoL_registration.register_CFunction_MoL_registration(thorn_name=evol_thorn_name)
 
 ########################

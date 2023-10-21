@@ -7,7 +7,6 @@ Author: Zachariah B. Etienne
 import nrpy.grid as gri
 import nrpy.c_function as cfc
 import nrpy.infrastructures.ETLegacy.simple_loop as lp
-from nrpy.infrastructures.ETLegacy import schedule_ccl
 
 
 def register_CFunction_zero_rhss(thorn_name: str) -> None:
@@ -29,7 +28,7 @@ def register_CFunction_zero_rhss(thorn_name: str) -> None:
     set_rhss_to_zero = ""
     for gfname, gf in gri.glb_gridfcs_dict.items():
         if gf.group == "EVOL":
-            gf_access = gf.access_gf(f"{gfname}_rhs", 0, 0, 0)
+            gf_access = gri.ETLegacyGridFunction.access_gf(f"{gfname}_rhs")
             set_rhss_to_zero += f"{gf_access} = 0.0;\n"
     set_rhss_to_zero = set_rhss_to_zero.rstrip()
 
