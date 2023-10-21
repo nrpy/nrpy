@@ -68,7 +68,7 @@ def register_CFunction_Symmetry_registration_oldCartGrid3D(
                                   Please follow best-practices and rename your gridfunction to be more descriptive."
                 )
 
-            body += f'  SetCartSymVN(cctkGH, sym, "{thorn_name}::{gfname}");\n'
+            body += f'  SetCartSymVN(cctkGH, sym, "{thorn_name}::{gfname}GF");\n'
 
     ET_schedule_bin_entry = (
         "BASEGRID",

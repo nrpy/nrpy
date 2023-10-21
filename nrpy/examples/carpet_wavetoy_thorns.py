@@ -117,11 +117,15 @@ DECLARE_CCTK_PARAMETERS;
     x_gf_access = gri.ETLegacyGridFunction.access_gf("x", use_GF_suffix=False)
     y_gf_access = gri.ETLegacyGridFunction.access_gf("y", use_GF_suffix=False)
     z_gf_access = gri.ETLegacyGridFunction.access_gf("z", use_GF_suffix=False)
-    uu_exact_gf_access = gri.ETLegacyGridFunction.access_gf("uu_exact")
-    vv_exact_gf_access = gri.ETLegacyGridFunction.access_gf("vv_exact")
-    if thorn_name == ID_thorn_name:
-        uu_exact_gf_access = gri.ETLegacyGridFunction.access_gf("uu")
-        vv_exact_gf_access = gri.ETLegacyGridFunction.access_gf("vv")
+    uuGF = "uu"
+    vvGF = "vv"
+    if thorn_name == diag_thorn_name:
+        uuGF = "uu_exact"
+        vvGF = "vv_exact"
+
+    uu_exact_gf_access = gri.ETLegacyGridFunction.access_gf(uuGF)
+    vv_exact_gf_access = gri.ETLegacyGridFunction.access_gf(vvGF)
+
     body += lp.simple_loop(
         f"WaveToy_exact_solution_single_point(cctk_time, {x_gf_access}, {y_gf_access},"
         f"                                             {z_gf_access}, &{uu_exact_gf_access}, &{vv_exact_gf_access});\n",
@@ -140,12 +144,17 @@ schedule FUNC_NAME IN {bin}
   READS: Grid::x(Everywhere)
   READS: Grid::y(Everywhere)
   READS: Grid::z(Everywhere)
-  WRITES: {evol_thorn_name}::uuGF(Everywhere)
-  WRITES: {evol_thorn_name}::vvGF(Everywhere)
+  WRITES: {evol_thorn_name}::{uuGF}GF(Everywhere)
+  WRITES: {evol_thorn_name}::{vvGF}GF(Everywhere)
 }} "Set up metric fields for binary black hole initial data"
 """,
     )
-    # ET_current_thorn_CodeParams_used = ([],)
+    ET_current_thorn_CodeParams_used = None
+    ET_other_thorn_CodeParams_used = None
+    if thorn_name == ID_thorn_name:
+        ET_current_thorn_CodeParams_used = ["sigma", "wavespeed"]
+    if thorn_name == diag_thorn_name:
+        ET_other_thorn_CodeParams_used = ["sigma", "wavespeed"]
 
     cfc.register_CFunction(
         subdirectory=thorn_name,
@@ -158,7 +167,8 @@ schedule FUNC_NAME IN {bin}
         body=body,
         ET_thorn_name=thorn_name,
         ET_schedule_bins_entries=[ET_schedule_bin_entry],
-        ET_current_thorn_CodeParams_used=["sigma", "wavespeed"],
+        ET_current_thorn_CodeParams_used=ET_current_thorn_CodeParams_used,
+        ET_other_thorn_CodeParams_used=ET_other_thorn_CodeParams_used,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
@@ -303,6 +313,36 @@ CParams_registered_to_params_ccl += param_ccl.construct_param_ccl(
     project_dir=project_dir,
     thorn_name=ID_thorn_name,
     shares_extends_str="",
+)
+
+# CCL files: diagnostics thorn
+schedule_ccl.construct_schedule_ccl(
+    project_dir=project_dir,
+    thorn_name=diag_thorn_name,
+    STORAGE="""
+# STORAGE: evol_variables[3]     # Evolution variables
+# STORAGE: evol_variables_rhs[1] # Variables storing right-hand-sides
+STORAGE: aux_variables[3]      # Diagnostics variables
+# STORAGE: auxevol_variables[1]  # Single-timelevel storage of variables needed for evolutions.
+""",
+)
+interface_ccl.construct_interface_ccl(
+    project_dir=project_dir,
+    thorn_name=diag_thorn_name,
+    inherits="Grid WaveToyNRPy  # WaveToyNRPy provides all gridfunctions.",
+    USES_INCLUDEs="",
+    is_evol_thorn=False,
+    enable_NewRad=False,
+)
+CParams_registered_to_params_ccl += param_ccl.construct_param_ccl(
+    project_dir=project_dir,
+    thorn_name=diag_thorn_name,
+    # FIXME: the following line generation could be automated:
+    shares_extends_str="""
+shares: IDWaveToyNRPy
+USES CCTK_REAL sigma
+USES CCTK_REAL wavespeed
+""",
 )
 
 
