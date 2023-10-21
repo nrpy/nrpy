@@ -6,7 +6,6 @@ Author: Zachariah B. Etienne
 """
 import nrpy.c_function as cfc
 import nrpy.grid as gri
-from nrpy.infrastructures.ETLegacy import schedule_ccl
 
 
 def register_CFunction_specify_Driver_BoundaryConditions(thorn_name: str) -> None:

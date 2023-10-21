@@ -5,7 +5,6 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 import nrpy.c_function as cfc
-from nrpy.infrastructures.ETLegacy import schedule_ccl
 
 
 def register_CFunction_MoL_registration(thorn_name: str) -> None:
