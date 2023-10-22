@@ -27,6 +27,7 @@ ActiveThorns = "HDF5"
 ActiveThorns = "LocalInterp"
 
 ActiveThorns = "Slab"
+ActiveThorns = "InitBase"
 
 ################################################################################
 # Initial data
