@@ -42,8 +42,10 @@ def read_CodeParameters(
     >>> outstr = read_CodeParameters(list_of_tuples__thorn_CodeParameter=[("thorna", "a"), ("thornb", "b")],
     ...                              enable_simd=False, declare_invdxxs=True)
     >>> print(outstr)
-    const CCTK_REAL a = CCTK_ParameterGet("a", "thorna", NULL);  // thorna::a
-    const CCTK_REAL b = CCTK_ParameterGet("b", "thornb", NULL);  // thornb::b
+    const CCTK_REAL *aptr = CCTK_ParameterGet("a", "thorna", NULL);  // thorna::a
+    const CCTK_REAL a = *aptr;
+    const CCTK_REAL *bptr = CCTK_ParameterGet("b", "thornb", NULL);  // thornb::b
+    const CCTK_REAL b = *bptr;
     const CCTK_REAL invdxx0 = 1.0/CCTK_DELTA_SPACE(0);
     const CCTK_REAL invdxx1 = 1.0/CCTK_DELTA_SPACE(1);
     const CCTK_REAL invdxx2 = 1.0/CCTK_DELTA_SPACE(2);
@@ -51,8 +53,10 @@ def read_CodeParameters(
     >>> outstr = read_CodeParameters(list_of_tuples__thorn_CodeParameter=[("thorna", "a"), ("thornb", "b")],
     ...                              enable_simd=False, declare_invdxxs=False)
     >>> print(outstr)
-    const CCTK_REAL a = CCTK_ParameterGet("a", "thorna", NULL);  // thorna::a
-    const CCTK_REAL b = CCTK_ParameterGet("b", "thornb", NULL);  // thornb::b
+    const CCTK_REAL *aptr = CCTK_ParameterGet("a", "thorna", NULL);  // thorna::a
+    const CCTK_REAL a = *aptr;
+    const CCTK_REAL *bptr = CCTK_ParameterGet("b", "thornb", NULL);  // thornb::b
+    const CCTK_REAL b = *bptr;
     <BLANKLINE>
     """
 
@@ -111,7 +115,7 @@ def read_CodeParameters(
         for dirn in range(3):
             read_CP_str += read_CCTK_REAL_CodeParameter(f"invdxx{dirn}", "")
 
-    return f"{read_CP_str}\n"
+    return f"{read_CP_str}"
 
 
 if __name__ == "__main__":
