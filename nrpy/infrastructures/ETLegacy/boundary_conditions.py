@@ -54,16 +54,29 @@ ierr = Driver_SelectVarForBC(cctkGH, CCTK_ALL_FACES, 1, -1, "{thorn_name}::{gfna
 if (ierr < 0) CCTK_ERROR("Failed to register BC with Driver for {thorn_name}::{gfname}GF!");
 """
 
-    ET_schedule_bin_entry = (
-        "Driver_BoundarySelect",
-        """
+    ET_schedule_bins_entries = [
+        (
+            "Driver_BoundarySelect",
+            """
 schedule FUNC_NAME in Driver_BoundarySelect
 {
   LANG: C
   OPTIONS: LEVEL
 } "Register boundary conditions in PreSync bin Driver_BoundarySelect."
 """,
-    )
+        ),
+        (
+            "MoL_PostStep",
+            """
+schedule FUNC_NAME in MoL_PostStep
+{
+  LANG: C
+  OPTIONS: LEVEL
+  SYNC: evol_variables
+} "Dummy function to force AMR+interprocessor synchronization"
+""",
+        ),
+    ]
     cfc.register_CFunction(
         subdirectory=thorn_name,
         includes=includes,
@@ -73,7 +86,7 @@ schedule FUNC_NAME in Driver_BoundarySelect
         params=params,
         body=body,
         ET_thorn_name=thorn_name,
-        ET_schedule_bins_entries=[ET_schedule_bin_entry],
+        ET_schedule_bins_entries=ET_schedule_bins_entries,
     )
 
 
