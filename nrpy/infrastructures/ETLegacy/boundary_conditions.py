@@ -109,7 +109,7 @@ Set up NewRad boundary conditions.
   DECLARE_CCTK_PARAMETERS;
 """
     for gfname, gf in gri.glb_gridfcs_dict.items():
-        if gf.group == "EVOL":
+        if gf.group == "EVOL" and isinstance(gf, gri.ETLegacyGridFunction):
             var_radpower = "1.0"
             body += f"  NewRad_Apply(cctkGH, {gfname}GF, {gfname}_rhsGF, {gf.f_infinity}, {gf.wavespeed}, {var_radpower});\n"
 
@@ -148,7 +148,13 @@ schedule GROUP ApplyBCs as WaveToy_auxgfs_ApplyBCs in MoL_PseudoEvolution after 
     )
 
 
-def register_CFunctions(thorn_name: str):
+def register_CFunctions(thorn_name: str) -> None:
+    """
+    Register C functions related to boundary conditions for the given thorn.
+
+    :param thorn_name: The name of the thorn for which to register C functions related to boundary conditions.
+    :return: None
+    """
     register_CFunction_specify_Driver_BoundaryConditions(thorn_name=thorn_name)
     register_CFunction_specify_NewRad_BoundaryConditions_parameters(
         thorn_name=thorn_name
