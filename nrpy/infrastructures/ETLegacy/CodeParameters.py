@@ -89,29 +89,29 @@ def read_CodeParameters(
 
         return read_str
 
-    read_CodeParameters = ""
+    read_CP_str = ""
     if list_of_tuples__thorn_CodeParameter:
         for CPthorn, CPname in sorted(list_of_tuples__thorn_CodeParameter):
             try:
                 CodeParam = par.glb_code_params_dict[CPname]
-            except KeyError:
+            except KeyError as exc:
                 raise KeyError(
                     f"{CPname} has not been registered to par.glb_code_params_dict: {par.glb_code_params_dict.keys()}"
-                )
+                ) from exc
             if "char" in CodeParam.c_type_alias:
                 raise ValueError("Cannot declare a char array in SIMD.")
             CPtype = CodeParam.c_type_alias
-            if CPtype == "CCTK_REAL" or CPtype == "REAL":
-                read_CodeParameters += read_CCTK_REAL_CodeParameter(CPname, CPthorn)
+            if CPtype in ("CCTK_REAL", "REAL"):
+                read_CP_str += read_CCTK_REAL_CodeParameter(CPname, CPthorn)
             else:
                 CPcomment = f"  // {CPthorn}::{CPname}"
                 c_output = f'const {CPtype} {CPname} = CCTK_ParameterGet("{CPname}", "{CodeParam.module}", NULL);{CPcomment}\n'
-                read_CodeParameters += c_output
+                read_CP_str += c_output
     if declare_invdxxs:
         for dirn in range(3):
-            read_CodeParameters += read_CCTK_REAL_CodeParameter(f"invdxx{dirn}", "")
+            read_CP_str += read_CCTK_REAL_CodeParameter(f"invdxx{dirn}", "")
 
-    return f"{read_CodeParameters}\n"
+    return f"{read_CP_str}\n"
 
 
 if __name__ == "__main__":

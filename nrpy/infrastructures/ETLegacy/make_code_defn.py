@@ -30,7 +30,7 @@ def output_CFunctions_and_construct_make_code_defn(
     make_code_defn_list_of_CFunctions: List[cfc.CFunction] = []
 
     # Filter out CFunctions belonging to the specified thorn and append to list
-    for name, CFunction in cfc.CFunction_dict.items():
+    for CFunction in cfc.CFunction_dict.values():
         if CFunction.subdirectory == thorn_name:
             make_code_defn_list_of_CFunctions.append(CFunction)
 
@@ -49,7 +49,7 @@ def output_CFunctions_and_construct_make_code_defn(
 
         # Iterate through sorted list of CFunctions and write each to the make.code.defn file
         for i, CFunction in enumerate(make_code_defn_list_of_CFunctions):
-            with open(src_Path / f"{CFunction.name}.c", "w") as file:
+            with open(src_Path / f"{CFunction.name}.c", "w", encoding="utf-8") as file:
                 file.write(CFunction.full_function)
 
             # If it's not the last iteration, append a backslash:

@@ -32,7 +32,7 @@ restricted:
 """
     CParams_registered_to_params_ccl: List[str] = []
 
-    for function_name, CFunction in cfc.CFunction_dict.items():
+    for CFunction in cfc.CFunction_dict.values():
         if (
             CFunction.ET_thorn_name == thorn_name
             and CFunction.ET_current_thorn_CodeParams_used
@@ -46,6 +46,6 @@ restricted:
                 CParams_registered_to_params_ccl += [CPname]
     output_Path = Path(project_dir) / thorn_name
     output_Path.mkdir(parents=True, exist_ok=True)
-    with open(output_Path / "param.ccl", "w") as file:
+    with open(output_Path / "param.ccl", "w", encoding="utf-8") as file:
         file.write(paramccl_str)
     return CParams_registered_to_params_ccl

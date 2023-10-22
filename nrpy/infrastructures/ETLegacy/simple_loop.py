@@ -7,10 +7,7 @@ Contributor: Ken Sible
 Email: ksible *at* outlook *dot* com
 """
 
-from typing import List, Union, Tuple, Dict
-import sympy as sp
 import nrpy.helpers.loop as lp
-import nrpy.indexedexp as ixp
 
 
 def simple_loop(

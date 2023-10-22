@@ -1,3 +1,9 @@
+"""
+Module for constructing interface.ccl for Cactus thorns.
+
+Author: Zachariah B. Etienne
+        zachetie **at** gmail **dot* com
+"""
 from pathlib import Path
 import nrpy.grid as gri
 
@@ -127,5 +133,5 @@ public:
 """
     output_Path = Path(project_dir) / thorn_name
     output_Path.mkdir(parents=True, exist_ok=True)
-    with open(output_Path / "interface.ccl", "w") as file:
+    with open(output_Path / "interface.ccl", "w", encoding="utf-8") as file:
         file.write(outstr)
