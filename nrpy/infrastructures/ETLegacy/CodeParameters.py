@@ -1,5 +1,6 @@
 """
-This module contains a function to generate C code strings that read parameter constants based on user configurations.
+Generate C code strings for reading specific ET parameters within functions.
+Unlike DECLARE_CCTK_PARAMETERS, read_CodeParameters() is SIMD capable.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -61,8 +62,8 @@ def read_CodeParameters(
     """
 
     def read_CCTK_REAL_CodeParameter(CPname: str, CPthorn: str) -> str:
-        """
-        Reads the CCTK_REAL code parameter based on the given CPname and CPthorn.
+        r"""
+        Read the CCTK_REAL code parameter based on the given CPname and CPthorn.
 
         :param CPname: The name of the code parameter.
         :param CPthorn: The thorn to which the code parameter belongs.
