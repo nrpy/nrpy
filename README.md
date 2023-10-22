@@ -5,7 +5,7 @@
 ## Quick start:
 
 1. `pip install nrpy`
-1. Choose a project to build, run the provided command, then follow the instructions for compiling & running the generated C code.
+1. BlackHoles@Home infrastructure: Choose a project to build, run the provided command, then follow the instructions for compiling & running the generated C code.
    - **Wave equation solver**
      - **Cartesian coordinates**: `python3 -m nrpy.examples.wave_equation_cartesian`
      - **Curvilinear coordinates**: `python3 -m nrpy.examples.wave_equation_curvilinear`
@@ -13,6 +13,9 @@
      - **Two black holes collide**: `python3 -m nrpy.examples.two_blackholes_collide`
      - **Black hole spectroscopy**: `python3 -m nrpy.examples.blackhole_spectroscopy`
      - **Spinning black hole**: `python3 -m nrpy.examples.spinning_blackhole`
+1. Einstein Toolkit infrastructure: Choose a project to build, run the provided command. Check the examples/et_* directory for a ThornList and parameter file. Thorns will be output to project/
+   - **Wave equation solver**
+     - **Cartesian coordinates, with Carpet AMR infrastructure**: `python3 -m nrpy.examples.carpet_wavetoy_thorns.py`
 
 ## Slow start, in case you want to develop NRPy+ directly:
 
