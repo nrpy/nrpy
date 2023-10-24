@@ -9,7 +9,7 @@ python --version
 # Install dependencies
 python -m pip install --upgrade pip
 if [ -f requirements.txt ]; then
-  pip install -r requirements.txt
+  pip install -U -r requirements.txt
 fi
 pip install mypy pylint black clang-format ipython
 
@@ -59,3 +59,11 @@ if [ ${#failed_tests[@]} -ne 0 ]; then
   echo "The following tests failed: ${failed_tests[*]}"
   exit 1
 fi
+
+python nrpy/examples/wave_equation_cartesian   && (cd project/wavetoy && make && make clean) &&
+python nrpy/examples/wave_equation_curvilinear && (cd project/curviwavetoy && make && make clean) &&
+python nrpy/examples/two_blackholes_collide    && (cd project/two_blackholes_collide && make && make clean) &&
+python nrpy/examples/blackhole_spectroscopy    && (cd project/blackhole_spectroscopy && make && make clean) &&
+python nrpy/examples/spinning_blackhole        && (cd project/spinning_blackhole && make && make clean) &&
+python nrpy/examples/nrpypn_quasicircular_momenta && (cd project/nrpypn_quasicircular_momenta && make && make clean) &&
+python nrpy/examples/wave_equation_multicoord_wavetoy && (cd project/multicoords_curviwavetoy && make && make clean)
