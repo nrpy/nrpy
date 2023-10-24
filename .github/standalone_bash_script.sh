@@ -60,10 +60,10 @@ if [ ${#failed_tests[@]} -ne 0 ]; then
   exit 1
 fi
 
-python nrpy/examples/wave_equation_cartesian   && (cd project/wavetoy && make && make clean) &&
-python nrpy/examples/wave_equation_curvilinear && (cd project/curviwavetoy && make && make clean) &&
-python nrpy/examples/two_blackholes_collide    && (cd project/two_blackholes_collide && make && make clean) &&
-python nrpy/examples/blackhole_spectroscopy    && (cd project/blackhole_spectroscopy && make && make clean) &&
-python nrpy/examples/spinning_blackhole        && (cd project/spinning_blackhole && make && make clean) &&
-python nrpy/examples/nrpypn_quasicircular_momenta && (cd project/nrpypn_quasicircular_momenta && make && make clean) &&
-python nrpy/examples/wave_equation_multicoord_wavetoy && (cd project/multicoords_curviwavetoy && make && make clean)
+PYTHONPATH=.:$PYTHONPATH python nrpy/examples/wave_equation_cartesian.py   && (cd project/wavetoy && make && make clean) &&
+PYTHONPATH=.:$PYTHONPATH python nrpy/examples/wave_equation_curvilinear.py && (cd project/curviwavetoy && make && make clean) &&
+PYTHONPATH=.:$PYTHONPATH python nrpy/examples/two_blackholes_collide.py    && (cd project/two_blackholes_collide && make && make clean) &&
+PYTHONPATH=.:$PYTHONPATH python nrpy/examples/blackhole_spectroscopy.py    && (cd project/blackhole_spectroscopy && make && make clean) &&
+PYTHONPATH=.:$PYTHONPATH python nrpy/examples/spinning_blackhole.py        && (cd project/spinning_blackhole && make && make clean) &&
+PYTHONPATH=.:$PYTHONPATH python nrpy/examples/nrpypn_quasicircular_momenta.py && (cd project/nrpypn_quasicircular_momenta && make && make clean) &&
+PYTHONPATH=.:$PYTHONPATH python nrpy/examples/wave_equation_multicoord_wavetoy.py && (cd project/multicoords_curviwavetoy && make && make clean)
