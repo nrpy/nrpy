@@ -48,8 +48,8 @@ def cse_preprocess(
     Doctests:
     >>> from sympy.abc import x, y, z
     >>> expr = -x/12 - y/12 + z
-    >>> cse_preprocess(expr, debug=True)
-    ([_Rational_1_12*(-x - y) + z], OrderedDict([(_Rational_1_12, 1/12)]))
+    >>> repr(cse_preprocess(expr, debug=True)) == "([_Rational_1_12*(-x - y) + z], OrderedDict([(_Rational_1_12, 1/12)]))"
+    True
 
     >>> cse_preprocess(expr, declare_neg1_as_symbol=True, debug=True)
     ([_Rational_1_12*(_NegativeOne_*x + _NegativeOne_*y) + z], OrderedDict([(_Rational_1_12, 1/12), (_NegativeOne_, -1)]))
