@@ -2,20 +2,46 @@
 
 # NRPy+ 2.0: Python/SymPy-Based Code Generation for Numerical Relativity... and Beyond!
 
-## Quick start:
+## Quick start, Step 1:
 
-1. `pip install nrpy`
-1. BlackHoles@Home infrastructure: Choose a project to build, run the provided command, then follow the instructions for compiling & running the generated C code.
-   - **Wave equation solver**
-     - **Cartesian coordinates**: `python3 -m nrpy.examples.wave_equation_cartesian`
-     - **Curvilinear coordinates**: `python3 -m nrpy.examples.wave_equation_curvilinear`
-   - **General relativity**
-     - **Two black holes collide**: `python3 -m nrpy.examples.two_blackholes_collide`
-     - **Black hole spectroscopy**: `python3 -m nrpy.examples.blackhole_spectroscopy`
-     - **Spinning black hole**: `python3 -m nrpy.examples.spinning_blackhole`
-1. Einstein Toolkit infrastructure: Choose a project to build, run the provided command. Check the examples/et_* directory for a ThornList and parameter file. Thorns will be output to project/
-   - **Wave equation solver**
-     - **Cartesian coordinates, with Carpet AMR infrastructure**: `python3 -m nrpy.examples.carpet_wavetoy_thorns`
+```
+pip install nrpy
+```
+
+## Quick start, Step 2: Choose a project to build.
+
+### BlackHoles@Home infrastructure (standalone): Choose a project, run the provided command, then follow the instructions for compiling & running the generated C code.
+
+* **Wave equation solver**
+  - **Cartesian coordinates**:
+    ```
+    python3 -m nrpy.examples.wave_equation_cartesian
+    ```
+  - **Curvilinear coordinates**:
+    ```
+    python3 -m nrpy.examples.wave_equation_curvilinear
+    ```
+* **General relativity**
+  - **Two black holes collide**:
+    ```
+    python3 -m nrpy.examples.two_blackholes_collide
+    ```
+  - **Black hole spectroscopy**:
+    ```
+    python3 -m nrpy.examples.blackhole_spectroscopy
+    ```
+  - **Spinning black hole**:
+    ```
+    python3 -m nrpy.examples.spinning_blackhole
+    ```
+
+### Einstein Toolkit infrastructure: Choose a project to build, run the provided command. Check the `examples/et_*` directory for a ThornList and parameter file. Thorns will be output to `project/`
+
+* **Wave equation solver**
+  - **Cartesian coordinates, with Carpet AMR infrastructure**:
+    ```
+    python3 -m nrpy.examples.carpet_wavetoy_thorns
+    ```
 
 ## Slow start, in case you want to develop NRPy+ directly:
 
