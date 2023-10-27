@@ -48,31 +48,38 @@ def cse_preprocess(
     Doctests:
     >>> from sympy.abc import x, y, z
     >>> expr = -x/12 - y/12 + z
-    >>> repr(cse_preprocess(expr, debug=True)) == "([_Rational_1_12*(-x - y) + z], OrderedDict([(_Rational_1_12, 1/12)]))"
-    True
+    >>> newexpr, odict = cse_preprocess(expr, debug=True)
+    >>> print(newexpr, list(odict.keys()), list(odict.values()))
+    [_Rational_1_12*(-x - y) + z] [_Rational_1_12] [1/12]
 
-    >>> cse_preprocess(expr, declare_neg1_as_symbol=True, debug=True)
-    ([_Rational_1_12*(_NegativeOne_*x + _NegativeOne_*y) + z], OrderedDict([(_Rational_1_12, 1/12), (_NegativeOne_, -1)]))
+    >>> newexpr, odict = cse_preprocess(expr, declare_neg1_as_symbol=True, debug=True)
+    >>> print(newexpr, list(odict.keys()), list(odict.values()))
+    [_Rational_1_12*(_NegativeOne_*x + _NegativeOne_*y) + z] [_Rational_1_12, _NegativeOne_] [1/12, -1]
 
     >>> expr = -x/12 - y/12 + z
-    >>> cse_preprocess(expr, declare_neg1_as_symbol=True, negative=True, debug=True)
-    ([_NegativeOne_*_Rational_1_12*(x + y) + z], OrderedDict([(_Rational_1_12, 1/12), (_NegativeOne_, -1)]))
+    >>> newexpr, odict = cse_preprocess(expr, declare_neg1_as_symbol=True, negative=True, debug=True)
+    >>> print(newexpr, list(odict.keys()), list(odict.values()))
+    [_NegativeOne_*_Rational_1_12*(x + y) + z] [_Rational_1_12, _NegativeOne_] [1/12, -1]
 
-    >>> cse_preprocess(expr, factor=False, debug=True)
-    ([(-_Rational_1_12)*x + (-_Rational_1_12)*y + z], OrderedDict([(_Rational_1_12, 1/12)]))
+    >>> newexpr, odict = cse_preprocess(expr, factor=False, debug=True)
+    >>> print(newexpr, list(odict.keys()), list(odict.values()))
+    [(-_Rational_1_12)*x + (-_Rational_1_12)*y + z] [_Rational_1_12] [1/12]
 
-    >>> cse_preprocess(expr, prefix='FD', debug=True)
-    ([FD_Rational_1_12*(-x - y) + z], OrderedDict([(FD_Rational_1_12, 1/12)]))
+    >>> newexpr, odict = cse_preprocess(expr, prefix='FD', debug=True)
+    >>> print(newexpr, list(odict.keys()), list(odict.values()))
+    [FD_Rational_1_12*(-x - y) + z] [FD_Rational_1_12] [1/12]
 
     >>> from sympy import exp
     >>> expr = exp(3*x + 3*y)
-    >>> cse_preprocess(expr, debug=True)
-    ([exp(_Integer_3*(x + y))], OrderedDict([(_Integer_3, 3)]))
+    >>> newexpr, odict = cse_preprocess(expr, debug=True)
+    >>> print(newexpr, list(odict.keys()), list(odict.values()))
+    [exp(_Integer_3*(x + y))] [_Integer_3] [3]
 
     >>> from sympy import Mul
     >>> expr = Mul((-1)**3, (3*x + 3*y), evaluate=False)
-    >>> cse_preprocess(expr, declare_neg1_as_symbol=True, debug=True)
-    ([_Integer_3*_NegativeOne_*(x + y)], OrderedDict([(_NegativeOne_, -1), (_Integer_3, 3)]))
+    >>> newexpr, odict = cse_preprocess(expr, declare_neg1_as_symbol=True, debug=True)
+    >>> print(newexpr, list(odict.keys()), list(odict.values()))
+    [_Integer_3*_NegativeOne_*(x + y)] [_NegativeOne_, _Integer_3] [-1, 3]
     """
     # Convert input to list if it's not a list
     if not isinstance(expr_list, list):
