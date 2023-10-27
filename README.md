@@ -15,7 +15,7 @@
      - **Spinning black hole**: `python3 -m nrpy.examples.spinning_blackhole`
 1. Einstein Toolkit infrastructure: Choose a project to build, run the provided command. Check the examples/et_* directory for a ThornList and parameter file. Thorns will be output to project/
    - **Wave equation solver**
-     - **Cartesian coordinates, with Carpet AMR infrastructure**: `python3 -m nrpy.examples.carpet_wavetoy_thorns.py`
+     - **Cartesian coordinates, with Carpet AMR infrastructure**: `python3 -m nrpy.examples.carpet_wavetoy_thorns`
 
 ## Slow start, in case you want to develop NRPy+ directly:
 
