@@ -16,18 +16,19 @@ import nrpy.grid as gri
 import nrpy.c_codegen as ccg
 from nrpy.helpers import simd
 
+import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
+import nrpy.infrastructures.BHaH.CodeParameters as CPs
+import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
+import nrpy.infrastructures.BHaH.simple_loop as lp
+import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
+from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
+import nrpy.infrastructures.BHaH.main_c as main
+import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 from nrpy.equations.wave_equation.WaveEquation_RHSs import WaveEquation_RHSs
 from nrpy.equations.wave_equation.WaveEquation_Solutions_InitialData import (
     WaveEquation_solution_Cartesian,
 )
-import nrpy.infrastructures.BHaH.simple_loop as lp
-from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
-import nrpy.infrastructures.BHaH.CodeParameters as CPs
-import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
-import nrpy.infrastructures.BHaH.main_c as main
-import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
-import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
-import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
+
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 

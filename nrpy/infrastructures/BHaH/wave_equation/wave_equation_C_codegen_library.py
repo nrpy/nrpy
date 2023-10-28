@@ -27,7 +27,6 @@ import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_slices as out012d
 
 
 def register_CFunction_exact_solution_single_Cartesian_point(
-    CoordSystem: str,
     WaveType: str = "SphericalGaussian",
     default_sigma: float = 3.0,
     default_k0: float = 1.0,
@@ -37,7 +36,6 @@ def register_CFunction_exact_solution_single_Cartesian_point(
     """
     Register the C function for the exact solution at a single point.
 
-    :param CoordSystem: The coordinate system to use in setting up initial data.
     :param WaveType: The type of wave: SphericalGaussian or PlaneWave
     :param default_sigma: The default value for the Gaussian width (sigma).
     :param default_k0: The default value for the plane wave wavenumber k in the x-direction.
@@ -77,7 +75,6 @@ def register_CFunction_exact_solution_single_Cartesian_point(
         includes=includes,
         desc=desc,
         c_type=c_type,
-        CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,
         include_CodeParameters_h=True,
