@@ -46,6 +46,7 @@ def register_CFunction_initial_data(
     enable_checkpointing: bool = False,
     populate_ID_persist_struct_str: str = "",
     free_ID_persist_struct_str: str = "",
+    include_T4UU: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register C functions for converting ADM initial data to BSSN variables and applying boundary conditions.
@@ -62,6 +63,7 @@ def register_CFunction_initial_data(
     :param ID_persist_struct_str: A string representing the persistent structure for the initial data.
     :param populate_ID_persist_struct_str: Optional string to populate the persistent structure for initial data.
     :param free_ID_persist_struct_str: Optional string to free the persistent structure for initial data.
+    :param include_T4UU: Whether to include the stress-energy tensor. Defaults to False.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -91,6 +93,7 @@ def register_CFunction_initial_data(
         CoordSystem,
         IDCoordSystem=IDCoordSystem,
         ID_persist_struct_str=ID_persist_struct_str,
+        include_T4UU=include_T4UU,
     )
 
     desc = "Set initial data."
