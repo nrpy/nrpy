@@ -86,7 +86,7 @@ numericalgrids.register_CFunctions(
 )
 for CoordSystem in list_of_CoordSystems:
     par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
-    wCl.register_CFunction_exact_solution_single_point(
+    wCl.register_CFunction_exact_solution_single_Cartesian_point(
         CoordSystem=CoordSystem, WaveType=WaveType, default_sigma=default_sigma
     )
     wCl.register_CFunction_rhs_eval(

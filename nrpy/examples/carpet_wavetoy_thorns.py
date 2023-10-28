@@ -21,7 +21,9 @@ import nrpy.grid as gri
 import nrpy.c_codegen as ccg
 import nrpy.helpers.parallel_codegen as pcg
 from nrpy.helpers import simd
-from nrpy.equations.wave_equation.InitialData import InitialData
+from nrpy.equations.wave_equation.WaveEquation_Solutions_InitialData import (
+    WaveEquation_solution_Cartesian,
+)
 from nrpy.equations.wave_equation.WaveEquation_RHSs import WaveEquation_RHSs
 import nrpy.infrastructures.ETLegacy.simple_loop as lp
 from nrpy.infrastructures.ETLegacy import boundary_conditions
@@ -87,8 +89,8 @@ def register_CFunction_exact_solution_all_points(
         return None
     includes = standard_ET_includes
 
-    # Populate uu_ID, vv_ID
-    ID = InitialData(
+    # Populate uu_exactsoln, vv_exactsoln
+    exactsoln = WaveEquation_solution_Cartesian(
         WaveType=in_WaveType,
         default_sigma=in_default_sigma,
     )
@@ -100,7 +102,7 @@ static void WaveToy_exact_solution_single_point(const CCTK_REAL time, const CCTK
 DECLARE_CCTK_PARAMETERS;
 """
     prefunc += ccg.c_codegen(
-        [ID.uu_ID, ID.vv_ID],
+        [exactsoln.uu_exactsoln, exactsoln.vv_exactsoln],
         ["*exact_soln_UUGF", "*exact_soln_VVGF"],
         verbose=False,
         include_braces=False,

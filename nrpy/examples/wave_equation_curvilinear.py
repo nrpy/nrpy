@@ -72,7 +72,7 @@ par.adjust_CodeParam_default("t_final", t_final)
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
-wCl.register_CFunction_exact_solution_single_point(
+wCl.register_CFunction_exact_solution_single_Cartesian_point(
     CoordSystem=CoordSystem, WaveType=WaveType, default_sigma=default_sigma
 )
 wCl.register_CFunction_initial_data(

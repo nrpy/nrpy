@@ -17,7 +17,9 @@ import nrpy.c_codegen as ccg
 from nrpy.helpers import simd
 
 from nrpy.equations.wave_equation.WaveEquation_RHSs import WaveEquation_RHSs
-from nrpy.equations.wave_equation.InitialData import InitialData
+from nrpy.equations.wave_equation.WaveEquation_Solutions_InitialData import (
+    WaveEquation_solution_Cartesian,
+)
 import nrpy.infrastructures.BHaH.simple_loop as lp
 from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
@@ -138,7 +140,7 @@ def register_CFunction_numerical_grids_and_timestep_setup() -> None:
     )
 
 
-def register_CFunction_exact_solution_single_point(
+def register_CFunction_exact_solution_single_Cartesian_point(
     in_WaveType: str = "SphericalGaussian",
     in_default_sigma: float = 3.0,
     default_k0: float = 1.0,
@@ -154,8 +156,8 @@ def register_CFunction_exact_solution_single_point(
     :param default_k1: The default value for the plane wave wavenumber k in the y-direction
     :param default_k2: The default value for the plane wave wavenumber k in the z-direction
     """
-    # Populate uu_ID, vv_ID
-    ID = InitialData(
+    # Populate uu_exactsoln, vv_exactsoln
+    exactsoln = WaveEquation_solution_Cartesian(
         WaveType=in_WaveType,
         default_sigma=in_default_sigma,
         default_k0=default_k0,
@@ -165,14 +167,14 @@ def register_CFunction_exact_solution_single_point(
 
     includes = ["BHaH_defines.h"]
 
-    desc = r"""Exact solution at a single point."""
+    desc = r"""Exact solution at a single Cartesian point (x, y, z) = (xCart0, xCart1, xCart2)."""
     c_type = "void"
-    name = "exact_solution_single_point"
+    name = "exact_solution_single_Cartesian_point"
     params = r"""const commondata_struct *restrict commondata, const params_struct *restrict params,
-    const REAL xx0, const REAL xx1, const REAL xx2,  REAL *restrict exact_soln_UUGF, REAL *restrict exact_soln_VVGF
+    const REAL xCart0, const REAL xCart1, const REAL xCart2,  REAL *restrict exact_soln_UUGF, REAL *restrict exact_soln_VVGF
 """
     body = ccg.c_codegen(
-        [ID.uu_ID, ID.vv_ID],
+        [exactsoln.uu_exactsoln, exactsoln.vv_exactsoln],
         ["*exact_soln_UUGF", "*exact_soln_VVGF"],
         verbose=False,
         include_braces=False,
@@ -210,7 +212,10 @@ def register_CFunction_initial_data() -> None:
       REAL *restrict in_gfs = griddata[grid].gridfuncs.y_n_gfs;
     """
     body += lp.simple_loop(
-        loop_body="exact_solution_single_point(commondata, params, xx0,xx1,xx2,"
+        loop_body="// exact_solution_single_Cartesian_point() takes Cartesian coordinates as input.\n"
+        "// To avoid confusion in other reference metrics, we make this explicit here.\n"
+        "const REAL xCart0 = xx0; const REAL xCart1 = xx1; const REAL xCart2 = xx2;\n"
+        "exact_solution_single_Cartesian_point(commondata, params, xCart0,xCart1,xCart2,"
         f"&{uu_gf_obj.read_gf_from_memory_Ccode_onept()},"
         f"&{vv_gf_obj.read_gf_from_memory_Ccode_onept()});",
         read_xxs=True,
@@ -282,7 +287,7 @@ for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     const REAL num_soln_at_center_UUGF = y_n_gfs[IDX4pt(UUGF, center_of_grid_idx)];
     const REAL num_soln_at_center_VVGF = y_n_gfs[IDX4pt(VVGF, center_of_grid_idx)];
     REAL exact_soln_at_center_UUGF, exact_soln_at_center_VVGF;
-    exact_solution_single_point(commondata, params, xx[0][i0_center], xx[1][i1_center], xx[2][i2_center],
+    exact_solution_single_Cartesian_point(commondata, params, xx[0][i0_center], xx[1][i1_center], xx[2][i2_center],
                                 &exact_soln_at_center_UUGF, &exact_soln_at_center_VVGF);
 
     fprintf(outfile, "%e %e %e %e %e\n", time,
@@ -410,7 +415,7 @@ const int MINFACE = +1;
     )
 
 
-register_CFunction_exact_solution_single_point()
+register_CFunction_exact_solution_single_Cartesian_point()
 register_CFunction_initial_data()
 register_CFunction_numerical_grids_and_timestep_setup()
 register_CFunction_diagnostics()

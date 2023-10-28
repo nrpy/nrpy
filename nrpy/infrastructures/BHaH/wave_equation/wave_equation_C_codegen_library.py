@@ -19,12 +19,14 @@ import nrpy.helpers.parallel_codegen as pcg
 from nrpy.equations.wave_equation.WaveEquationCurvilinear_RHSs import (
     WaveEquationCurvilinear_RHSs,
 )
-from nrpy.equations.wave_equation.InitialData import InitialData
+from nrpy.equations.wave_equation.WaveEquation_Solutions_InitialData import (
+    WaveEquation_solution_Cartesian,
+)
 import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_slices as out012d
 
 
-def register_CFunction_exact_solution_single_point(
+def register_CFunction_exact_solution_single_Cartesian_point(
     CoordSystem: str,
     WaveType: str = "SphericalGaussian",
     default_sigma: float = 3.0,
@@ -49,8 +51,7 @@ def register_CFunction_exact_solution_single_point(
         return None
 
     # Populate uu_ID, vv_ID
-    ID = InitialData(
-        CoordSystem=CoordSystem,
+    exactsoln = WaveEquation_solution_Cartesian(
         WaveType=WaveType,
         default_sigma=default_sigma,
         default_k0=default_k0,
@@ -60,14 +61,14 @@ def register_CFunction_exact_solution_single_point(
 
     includes = ["BHaH_defines.h"]
 
-    desc = r"""Exact solution at a single point."""
+    desc = r"""Exact solution at a single Cartesian point (x, y, z) = (xCart0, xCart1, xCart2)."""
     c_type = "void"
-    name = "exact_solution_single_point"
+    name = "exact_solution_single_Cartesian_point"
     params = r"""const commondata_struct *restrict commondata, const params_struct *restrict params,
-    const REAL xx0, const REAL xx1, const REAL xx2,  REAL *restrict exact_soln_UUGF, REAL *restrict exact_soln_VVGF
+    const REAL xCart0, const REAL xCart1, const REAL xCart2,  REAL *restrict exact_soln_UUGF, REAL *restrict exact_soln_VVGF
 """
     body = ccg.c_codegen(
-        [ID.uu_ID, ID.vv_ID],
+        [exactsoln.uu_exactsoln, exactsoln.vv_exactsoln],
         ["*exact_soln_UUGF", "*exact_soln_VVGF"],
         verbose=False,
         include_braces=False,
@@ -124,7 +125,8 @@ if( read_checkpoint(commondata, griddata) ) return;
   REAL *restrict in_gfs = griddata[grid].gridfuncs.y_n_gfs;
 """
     body += lp.simple_loop(
-        loop_body="exact_solution_single_point(commondata, params, xx0,xx1,xx2,"
+        loop_body="REAL xCart[3]; xx_to_Cart(commondata, params, xx, i0, i1, i2, xCart);\n"
+        "exact_solution_single_Cartesian_point(commondata, params, xCart[0], xCart[1], xCart[2],"
         f"&{uu_gf_memaccess},"
         f"&{vv_gf_memaccess});",
         read_xxs=True,
@@ -258,9 +260,10 @@ def register_CFunction_diagnostics(
 #include "set_CodeParameters.h"
 
       LOOP_OMP("omp parallel for", i0, NGHOSTS, Nxx0 + NGHOSTS, i1, NGHOSTS, Nxx1 + NGHOSTS, i2, NGHOSTS, Nxx2 + NGHOSTS) {
+        REAL xCart[3]; xx_to_Cart(commondata, params, xx, i0, i1, i2, xCart);
         REAL *restrict uexact = &diagnostic_output_gfs[IDX4(UUEXACTGF, i0,i1,i2)];
         REAL *restrict vexact = &diagnostic_output_gfs[IDX4(VVEXACTGF, i0,i1,i2)];
-        exact_solution_single_point(commondata, params, xx[0][i0], xx[1][i1], xx[2][i2], uexact, vexact);
+        exact_solution_single_Cartesian_point(commondata, params, xCart[0], xCart[1], xCart[2], uexact, vexact);
       }
 
       // 0D output
