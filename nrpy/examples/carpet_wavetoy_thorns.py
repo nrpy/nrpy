@@ -97,7 +97,7 @@ def register_CFunction_exact_solution_all_points(
 
     prefunc = r"""
 // Exact solution at a single point.
-static void WaveToy_exact_solution_single_point(const CCTK_REAL time, const CCTK_REAL xx0, const CCTK_REAL xx1, const CCTK_REAL xx2,
+static void WaveToy_exact_solution_single_point(const CCTK_REAL time, const CCTK_REAL xCart0, const CCTK_REAL xCart1, const CCTK_REAL xCart2,
     CCTK_REAL *restrict exact_soln_UUGF, CCTK_REAL *restrict exact_soln_VVGF) {
 DECLARE_CCTK_PARAMETERS;
 """
