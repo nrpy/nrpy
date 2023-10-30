@@ -33,13 +33,13 @@ def simple_loop(
     >>> from nrpy.helpers.generic import clang_format
     >>> print(clang_format(simple_loop(loop_body='// <INTERIOR>', loop_region="all points")))
     #pragma omp parallel for
-    for (int i2 = 0; i2 < cctk_lsh[0]; i2++) {
+    for (int i2 = 0; i2 < cctk_lsh[2]; i2++) {
       for (int i1 = 0; i1 < cctk_lsh[1]; i1++) {
         for (int i0 = 0; i0 < cctk_lsh[0]; i0++) {
           // <INTERIOR>
         } // END LOOP: for (int i0 = 0; i0 < cctk_lsh[0]; i0++)
       }   // END LOOP: for (int i1 = 0; i1 < cctk_lsh[1]; i1++)
-    } // END LOOP: for (int i2 = 0; i2 < cctk_lsh[0]; i2++)
+    } // END LOOP: for (int i2 = 0; i2 < cctk_lsh[2]; i2++)
     <BLANKLINE>
     >>> print(clang_format(simple_loop(loop_body='// <INTERIOR>', loop_region="interior", OMP_custom_pragma="#CUSTOM_OMP")))
     #CUSTOM_OMP
