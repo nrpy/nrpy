@@ -57,7 +57,7 @@ def simple_loop(
         return loop_body
     if loop_region == "all points":
         i2i1i0_mins = ["0", "0", "0"]
-        i2i1i0_maxs = ["cctk_lsh[0]", "cctk_lsh[1]", "cctk_lsh[0]"]
+        i2i1i0_maxs = ["cctk_lsh[2]", "cctk_lsh[1]", "cctk_lsh[0]"]
     # 'InteriorPoints': loop over the interior of a numerical grid, i.e. exclude ghost zones
     elif loop_region == "interior":
         i2i1i0_mins = [
