@@ -443,6 +443,7 @@ cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
 Bdefines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     enable_simd=enable_simd,
+    enable_rfm_precompute=False,
 )
 main.register_CFunction_main_c(
     MoL_method=MoL_method,

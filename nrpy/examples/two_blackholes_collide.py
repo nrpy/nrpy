@@ -19,19 +19,19 @@ import nrpy.params as par
 from nrpy.helpers import simd
 import nrpy.helpers.parallel_codegen as pcg
 
+import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
+import nrpy.infrastructures.BHaH.general_relativity.BSSN_C_codegen_library as BCl
+import nrpy.infrastructures.BHaH.CodeParameters as CPs
+import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
+import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
+import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
+import nrpy.infrastructures.BHaH.main_c as main
+import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
+import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 from nrpy.infrastructures.BHaH import rfm_precompute
 from nrpy.infrastructures.BHaH import rfm_wrapper_functions
-import nrpy.infrastructures.BHaH.CodeParameters as CPs
-import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
-import nrpy.infrastructures.BHaH.main_c as main
-import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
-import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
-import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
-import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
-import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
 import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xxCartxx
-import nrpy.infrastructures.BHaH.general_relativity.BSSN_C_codegen_library as BCl
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -205,6 +205,7 @@ cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
 Bdefines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     enable_simd=enable_simd,
+    enable_rfm_precompute=enable_rfm_precompute,
     fin_NGHOSTS_add_one_for_upwinding=True,
 )
 

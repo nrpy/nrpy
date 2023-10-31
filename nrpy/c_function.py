@@ -30,7 +30,7 @@ class CFunction:
     :param ET_schedule_bins_entries: (ET only) List of (schedule bin, schedule entry) tuples for Einstein Toolkit schedule.ccl.
     :param ET_current_thorn_CodeParams_used: (ET only) List of CodeParameter names this function uses, for *this thorn's* param.ccl.
     :param ET_other_thorn_CodeParams_used: (ET only) List of CodeParameter names this function uses, for *other thorn's* param.ccl.
-    :param clang_format_options: Options for the clang-format tool. Defaults to "-style={BasedOnStyle: LLVM, ColumnLimit: 200}".
+    :param clang_format_options: Options for the clang-format tool. Defaults to "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
 
     DocTests:
     >>> func = CFunction(desc="just a test... testing 1,2,3", name="main", params="", body="return 0;")
@@ -65,7 +65,7 @@ class CFunction:
         ET_schedule_bins_entries: Optional[List[Tuple[str, str]]] = None,
         ET_current_thorn_CodeParams_used: Optional[List[str]] = None,
         ET_other_thorn_CodeParams_used: Optional[List[str]] = None,
-        clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 200}",
+        clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
     ) -> None:
         for attribute in [(name, "name"), (desc, "desc"), (body, "body")]:
             if not attribute[0]:
@@ -241,7 +241,7 @@ def register_CFunction(
     ET_schedule_bins_entries: Optional[List[Tuple[str, str]]] = None,
     ET_current_thorn_CodeParams_used: Optional[List[str]] = None,
     ET_other_thorn_CodeParams_used: Optional[List[str]] = None,
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 200}",
+    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
     """
     Add a C function to a dictionary called CFunction_dict, using the provided parameters.
@@ -261,7 +261,7 @@ def register_CFunction(
     :param ET_schedule_bins_entries: (ET only) List of tuples for Einstein Toolkit schedule.
     :param ET_current_thorn_CodeParams_used: (ET only) List of CodeParameter names this function uses, for *this thorn's* param.ccl.
     :param ET_other_thorn_CodeParams_used: (ET only) List of CodeParameter names this function uses, for *other thorn's* param.ccl.
-    :param clang_format_options: Options for the clang-format tool. Defaults to "-style={BasedOnStyle: LLVM, ColumnLimit: 200}".
+    :param clang_format_options: Options for the clang-format tool. Defaults to "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
 
     :raises ValueError: If the name is already registered in CFunction_dict.
     """

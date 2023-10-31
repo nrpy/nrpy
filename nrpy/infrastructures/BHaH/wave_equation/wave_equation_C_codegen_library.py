@@ -297,7 +297,6 @@ def register_CFunction_diagnostics(
 
 def register_CFunction_rhs_eval(
     CoordSystem: str,
-    WaveType: str,
     enable_rfm_precompute: bool,
     enable_simd: bool,
     OMP_collapse: int,
@@ -309,7 +308,6 @@ def register_CFunction_rhs_eval(
     selected coordinate system and specified parameters.
 
     :param CoordSystem: The coordinate system.
-    :param WaveType: The type of wave.
     :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
     :param enable_simd: Whether or not to enable SIMD.
     :param OMP_collapse: Level of OpenMP loop collapsing.
@@ -319,11 +317,6 @@ def register_CFunction_rhs_eval(
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
-
-    OMP_collapse = 1
-    if "Spherical" in CoordSystem and WaveType == "SphericalGaussian":
-        par.set_parval_from_str("symmetry_axes", "12")
-        OMP_collapse = 2  # about 2x faster
 
     includes = ["BHaH_defines.h"]
     if enable_simd:

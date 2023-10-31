@@ -54,7 +54,7 @@ class CCodeGen:
         upwind_control_vec: Union[List[sp.Symbol], sp.Symbol] = sp.Symbol("unset"),
         symbol_to_Rational_dict: Optional[Dict[sp.Basic, sp.Rational]] = None,
         clang_format_enable: bool = False,
-        clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 200}",
+        clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
     ) -> None:
         """
         Initialize the CCodeGen class with provided options for generating C code.

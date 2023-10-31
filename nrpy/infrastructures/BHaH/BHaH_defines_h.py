@@ -14,10 +14,13 @@ from nrpy.infrastructures.BHaH import griddata_commondata
 from nrpy.helpers.generic import clang_format
 
 
-def register_griddata_struct_and_return_griddata_struct_str() -> str:
+def register_griddata_struct_and_return_griddata_struct_str(
+    enable_rfm_precompute: bool = True,
+) -> str:
     """
     Register contributions to the griddata struct from different modules and constructs the griddata_struct string.
 
+    :param enable_rfm_precompute: A boolean value reflecting whether reference metric precomputation is enabled.
     :return: A string representing the typedef structure for grid data, including contributions from BHaH modules,
              reference_metric, CurviBoundaryConditions, and masking, if applicable.
     """
@@ -38,11 +41,12 @@ def register_griddata_struct_and_return_griddata_struct_str() -> str:
             "char gridname[100]",
             "a user-defined alias for describing the grid",
         )
-        griddata_commondata.register_griddata_commondata(
-            "reference_metric",
-            "rfm_struct rfmstruct",
-            "includes e.g., 1D arrays of reference metric quantities",
-        )
+        if enable_rfm_precompute:
+            griddata_commondata.register_griddata_commondata(
+                "reference_metric",
+                "rfm_struct rfmstruct",
+                "includes e.g., 1D arrays of reference metric quantities",
+            )
 
     griddata_struct_def = r"""
 typedef struct __griddata__ {
@@ -81,9 +85,10 @@ def output_BHaH_defines_h(
     additional_includes: Optional[List[str]] = None,
     REAL_means: str = "double",
     enable_simd: bool = True,
+    enable_rfm_precompute: bool = True,
     fin_NGHOSTS_add_one_for_upwinding: bool = False,
     supplemental_defines_dict: Optional[Dict[str, str]] = None,
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 0}",
+    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
     r"""
     Output C code header file with macro definitions and other configurations for the project.
@@ -92,6 +97,7 @@ def output_BHaH_defines_h(
     :param additional_includes: Additional header files to be included in the output
     :param REAL_means: The floating-point type to be used in the C code (default is "double")
     :param enable_simd: Flag to enable Single Instruction Multiple Data (SIMD) optimizations
+    :param enable_rfm_precompute: A boolean value reflecting whether reference metric precomputation is enabled.
     :param fin_NGHOSTS_add_one_for_upwinding: Option to add one extra ghost zone for upwinding
     :param supplemental_defines_dict: Additional key-value pairs to be included in the output file
     :param clang_format_options: Options for clang formatting.
@@ -206,8 +212,7 @@ def output_BHaH_defines_h(
     # GRID, etc.
     # Then set up the dictionary entry for grid in BHaH_defines
     gri_BHd_str = gri.BHaHGridFunction.gridfunction_defines()
-    gri_BHd_str += (
-        r"""
+    gri_BHd_str += r"""
 // Declare the IDX4(gf,i,j,k) macro, which enables us to store 4-dimensions of
 //   data in a 1D array. In this case, consecutive values of "i"
 //   (all other indices held to a fixed value) are consecutive in memory, where
@@ -230,8 +235,8 @@ _Pragma(__OMP_PRAGMA__)  \
   ( i0i1i2[0] >= (NG) && i0i1i2[0] < (Nxx_plus_2NGHOSTS0)-(NG) &&       \
     i0i1i2[1] >= (NG) && i0i1i2[1] < (Nxx_plus_2NGHOSTS1)-(NG) &&       \
     i0i1i2[2] >= (NG) && i0i1i2[2] < (Nxx_plus_2NGHOSTS2)-(NG) )
-"""
-        + register_griddata_struct_and_return_griddata_struct_str()
+""" + register_griddata_struct_and_return_griddata_struct_str(
+        enable_rfm_precompute=enable_rfm_precompute
     )
     register_BHaH_defines("grid", gri_BHd_str)
 

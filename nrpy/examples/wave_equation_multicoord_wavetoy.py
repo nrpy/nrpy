@@ -91,7 +91,6 @@ for CoordSystem in list_of_CoordSystems:
     par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
     wCl.register_CFunction_rhs_eval(
         CoordSystem=CoordSystem,
-        WaveType=WaveType,
         enable_rfm_precompute=enable_rfm_precompute,
         enable_simd=enable_simd,
         OMP_collapse=OMP_collapse,
@@ -162,6 +161,7 @@ cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
 Bdefines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     enable_simd=enable_simd,
+    enable_rfm_precompute=enable_rfm_precompute,
 )
 main.register_CFunction_main_c(
     initial_data_desc=WaveType,

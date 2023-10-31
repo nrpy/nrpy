@@ -113,7 +113,7 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
 
 def write_CodeParameters_h_files(
     project_dir: str,
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 0}",
+    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
     r"""
     Generate C code to set C parameter constants and writes them to files.

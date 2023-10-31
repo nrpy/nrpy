@@ -53,7 +53,7 @@ def prefix_with_star(input_string: str) -> str:
 
 def clang_format(
     c_code_str: str,
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 0}",
+    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> str:
     r"""
     Format a given C code string using clang-format.

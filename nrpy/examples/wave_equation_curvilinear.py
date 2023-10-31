@@ -41,20 +41,27 @@ t_final = 0.8 * grid_physical_size
 default_diagnostics_output_every = 0.5
 default_checkpoint_every = 50.0
 CoordSystem = "Spherical"
+# symmetry_axes will be set on any i such that Nxx[i] = 2 below.
 Nxx_dict = {
     "Spherical": [64, 2, 2],
     "SinhSpherical": [64, 2, 2],
     "Cartesian": [64, 64, 64],
+    "SinhCartesian": [64, 64, 64],
 }
 OMP_collapse = 1
-if "Spherical" in CoordSystem and WaveType == "SphericalGaussian":
+if (
+    "Spherical" in CoordSystem
+    and WaveType == "SphericalGaussian"
+    and Nxx_dict["Spherical"][1] == Nxx_dict["Spherical"][2] == 2
+):
     par.set_parval_from_str("symmetry_axes", "12")
     OMP_collapse = 2  # about 2x faster
-enable_rfm_precompute = True
+
+enable_rfm_precompute = False
 MoL_method = "RK4"
 fd_order = 4
 radiation_BC_fd_order = 2
-enable_simd = True
+enable_simd = False
 parallel_codegen_enable = True
 boundary_conditions_desc = "outgoing radiation"
 
@@ -108,7 +115,6 @@ if enable_rfm_precompute:
     )
 wCl.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
-    WaveType=WaveType,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_simd=enable_simd,
     OMP_collapse=OMP_collapse,
@@ -155,6 +161,7 @@ cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
 Bdefines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     enable_simd=enable_simd,
+    enable_rfm_precompute=enable_rfm_precompute,
 )
 main.register_CFunction_main_c(
     initial_data_desc=WaveType,

@@ -19,7 +19,7 @@ def register_CFunction_main_c(
     initialize_constant_auxevol: bool = False,
     pre_MoL_step_forward_in_time: str = "",
     post_MoL_step_forward_in_time: str = "",
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 0}",
+    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
     """
     Generate the "generic" C main() function for all simulation codes in the BHaH infrastructure.
@@ -33,7 +33,7 @@ def register_CFunction_main_c(
     :param initialize_constant_auxevol: If set to True, `initialize_constant_auxevol` function will be called during the simulation initialization phase to set these constants. Default is False.
     :param pre_MoL_step_forward_in_time: Code for handling pre-right-hand-side operations, default is an empty string.
     :param post_MoL_step_forward_in_time: Code for handling post-right-hand-side operations, default is an empty string.
-    :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 0}".
+    :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
     """
     initial_data_desc += " "
     # Make sure all required C functions are registered
