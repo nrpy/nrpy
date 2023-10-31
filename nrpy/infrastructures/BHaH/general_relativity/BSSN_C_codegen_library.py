@@ -35,7 +35,7 @@ import nrpy.equations.general_relativity.psi4 as psifour
 import nrpy.equations.general_relativity.psi4_tetrads as psifourtet
 import nrpy.infrastructures.BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter as admid
 import nrpy.infrastructures.BHaH.simple_loop as lp
-import nrpy.infrastructures.BHaH.diagnostics.output_nearby_0d_1d_2d_slices as out012d
+import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices as out012d
 
 
 def register_CFunction_initial_data(
@@ -198,20 +198,20 @@ def register_CFunction_diagnostics(
     # fmt: on
 
     for CoordSystem in list_of_CoordSystems:
-        out012d.register_CFunction_diagnostics_grid_center_nearby(
+        out012d.register_CFunction_diagnostics_nearest_grid_center(
             CoordSystem=CoordSystem,
             out_quantities_dict=out_quantities_dict,
             filename_tuple=grid_center_filename_tuple,
         )
         for axis in ["y", "z"]:
-            out012d.register_CFunction_diagnostics_1d_axis_nearby(
+            out012d.register_CFunction_diagnostics_nearest_1d_axis(
                 CoordSystem=CoordSystem,
                 out_quantities_dict=out_quantities_dict,
                 filename_tuple=axis_filename_tuple,
                 axis=axis,
             )
         for plane in ["xy", "yz"]:
-            out012d.register_CFunction_diagnostics_2d_plane_nearby(
+            out012d.register_CFunction_diagnostics_nearest_2d_plane(
                 CoordSystem=CoordSystem,
                 out_quantities_dict=out_quantities_dict,
                 filename_tuple=plane_filename_tuple,
@@ -252,15 +252,15 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {
     }
 
     // 0D output
-    diagnostics_grid_center(commondata, params, &griddata[grid].gridfuncs);
+    diagnostics_nearest_grid_center(commondata, params, &griddata[grid].gridfuncs);
 
     // 1D output
-    diagnostics_1d_y_axis(commondata, params, xx, &griddata[grid].gridfuncs);
-    diagnostics_1d_z_axis(commondata, params, xx, &griddata[grid].gridfuncs);
+    diagnostics_nearest_1d_y_axis(commondata, params, xx, &griddata[grid].gridfuncs);
+    diagnostics_nearest_1d_z_axis(commondata, params, xx, &griddata[grid].gridfuncs);
 
     // 2D output
-    diagnostics_2d_xy_plane(commondata, params, xx, &griddata[grid].gridfuncs);
-    diagnostics_2d_yz_plane(commondata, params, xx, &griddata[grid].gridfuncs);
+    diagnostics_nearest_2d_xy_plane(commondata, params, xx, &griddata[grid].gridfuncs);
+    diagnostics_nearest_2d_yz_plane(commondata, params, xx, &griddata[grid].gridfuncs);
 """
     if enable_psi4_diagnostics:
         body += r"""      // Do psi4 output, but only if the grid is spherical-like.

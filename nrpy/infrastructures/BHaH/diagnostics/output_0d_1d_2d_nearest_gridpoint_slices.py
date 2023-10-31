@@ -3,13 +3,13 @@ Output simulation data at points closest to grid physical center (0D), grid y or
 
 Functions:
 ----------
-- register_CFunction_diagnostics_grid_center_nearby: Registers C functions for
+- register_CFunction_diagnostics_nearest_grid_center: Registers C functions for
     0-dimensional simulation diagnostics, focusing on gridpoint closest to the grid center.
 
-- register_CFunction_diagnostics_1d_axis_nearby: Registers C functions for
+- register_CFunction_diagnostics_nearest_1d_axis: Registers C functions for
     1-dimensional simulation diagnostics at gridpoints closest to a specified axis such as "x" or "z".
 
-- register_CFunction_diagnostics_2d_plane_nearby: Registers C functions for
+- register_CFunction_diagnostics_nearest_2d_plane: Registers C functions for
     2-dimensional simulation diagnostics at gridpoints closest to  a specified plane like "xy" or "yz".
 
 Each function in this module prepares C functions for writing diagnostic
@@ -31,7 +31,7 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.simple_loop as lp
 
 
-def register_CFunction_diagnostics_grid_center_nearby(
+def register_CFunction_diagnostics_nearest_grid_center(
     CoordSystem: str,
     out_quantities_dict: Dict[Tuple[str, str], str],
     filename_tuple: Tuple[str, str] = (
@@ -56,9 +56,9 @@ def register_CFunction_diagnostics_grid_center_nearby(
     >>> from nrpy.helpers.generic import clang_format, compress_string_to_base64, decompress_base64_to_string, diff_strings
     >>> Coord = "SinhCylindrical"
     >>> axis = "y"
-    >>> _ = register_CFunction_diagnostics_grid_center_nearby(Coord, out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"})
-    >>> diag_gc = cfc.CFunction_dict[f"diagnostics_grid_center__rfm__{Coord}"].full_function
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4AauAt9dABGaScZHDxOiAHcc747vJCBLAVaWVRAnpWHX/kkr6QysfzLfXhoCqwdlhv59jJtBxk7nXnUIwIlIQLEtn60ZvFpp58iRzPO8zL7jj2RkmJNOOz7kLOZ5pcKkv0uEf85zfc7uGHClgRs9RiDAbyNwyZiAZlTl/jf5X1BOhD4i/CNHqvMIASlwDFj3mV52zX1ZUDkoYG52BfOdNFZacCi5oHsDHgM7+ghHg469486fkW6QU/5PkBfqLgwrfD2kD9IC2/fjze4k4cO8FgwxirbR6/LauUHbkFJsFCBAZ83EfkAW5j/GtzV6YUHdBv/xFH+frbxblZhQaPN6jo0+xmYnNNuMjEHQcKNBI0LpoumpFdjbOyUkc6hPyxdpuLQ8deT47gKgcrOr39mTGoBZMsN1oprbraRoHKIhRjjTK+arTvhlXp05RyD4+Lu5SVpYi3LEDKSxgCNdciAMw8SwVKFW9BZzd4YLJoAyaSEsGNVqUF1XuX2CTosnzO/mLvRu+wadiCfzvwcxhtWESATEBDZQhtu3WAn7u+CkC6YyJVNQ7HpPCtimChmMBqZDpztUVeLP248cuCAPPiXEEc3wQ/r5iW6NZbjG0Q+zAirX5mWG39zdjbqkBRh/FuMuZ+YS7sfQKZcHkfKjgcnFNboARLLXxwxdzDk8An4GNqlmRw8slXCCbd0MJE0gwK50o7TRtQ7rlEvnFz7fxJODEi8pRkEfsFruyke0PoLsexRRxHwN8WziNDagXJUrsTCluxVIHgctWsBsVAy9HmBPrr7tJSmluXnApgk8do8nbeabPj5cqm6dIiYjeNonb6KFkFa5EpFDYxbV8ppZ6/RKvy4dy4yhbDcjMKRKtKgst0m0cKeRRa5034zuHz2YvDcTf53RCaUhSBTEXAR6kFuiBC52LcXu3VpzBKm+AEdC1IwYTHuWgNF77ulbBnk4w/O/78q3G4KfBoxSgBSm/Bef60QDVFD2gAAAnWHu/ME4D8sAAfsFrw0AAHcoMGmxxGf7AgAAAAAEWVo=")
+    >>> _ = register_CFunction_diagnostics_nearest_grid_center(Coord, out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"})
+    >>> diag_gc = cfc.CFunction_dict[f"diagnostics_nearest_grid_center__rfm__{Coord}"].full_function
+    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4Aa+AuRdABGaScZHDxOiAHcc747vJCBLAVaWVRAnpWHX/kkr6QysfzLfXhoCqwdlhv59jJtBxk7nXnUIwIlIQLEtn60ZvFpp58iRzPO8zL7jj2RkmJNOOz7kLOZ5pcKkv0uEf85zfc7uGHClgRs9RiDAbyNwyZiAZlTl/jf5X1BOhD4i/CNHqvMIASlwDFj3mV52zX1ZUDkoYG52BfOdNFZacCi5oHsDHgM7+ghHg469486fkW6QU/5PkBfqLgwrfD2kD9IC2/fjze4k4cO8FgwxirbR6/LauUHbkFJsFCBAZ83EfkAW5j/GtzV6YUHdBv/xEzPtaol2zX0IFQZZ7cwWXYpqvP1SvRMe/up5H/J9l0ysvNaZ7yv3AENv9B8I5DngpH9vEjcbljHUyG3agNS4mCDUiZ07JBgndzOv9CCMg55ByQV5EjBaIXbxsNVZeZ5BceUiRGM+NlZYB/FUEfiEUeOfpMCu6CAEr+oelS8jeJZ201U24vYd7Lw+3SHXmHlS9JJiXbWoTYNK20XfM69UZQzvbXqqTHOpGiSDDbBRs/bNc+aDPCbWNhqGxvY1FE8iTCXMFlwYbxpYTRdObzQ490084YvkKIUvwc5wZ0yyydPoLfrTdRmCptnib3BjSvZhDfq1lg3SJ8RBiuucho+lHgKIHk3BQEM4mUjmrbasqcQIvCHHv0azE3u8VA5J4StrwgrwV0MXwgLzePSgKyTDl6g36mnSTgXrkHJwkrzvhs6mtGayfw+J8WsZFqm4QlLgMh0tdyUatAFMb5MGOduOGQrL0oD8FWwnBjdb1ElrWL4XBheNoh5uvv/GYYv4GoW6rIZcyEz1WpXvhyMG9lk7uKBJpnNcoaUb9w5j6cyhLdtMERjJIDfxiemqqYn55zw0oxY69wxeTQAN3LCbDPXOx1URfkcuXxqQXNNXEOPkkDLO62vcRulZp0xWhRKYWy8mEwql4t94UXahNPSuyuyXrkne0Pef1AoAAJLfEC1BJxBOAAGABr8NAAA6+GwfscRn+wIAAAAABFla")
     >>> if diag_gc != expected_string:
     ...     raise ValueError(f"\n{diff_strings(expected_string, diag_gc)}\n base64-encoded output: {compress_string_to_base64(diag_gc)}")
     """
@@ -75,7 +75,7 @@ In Spherical, this will be at i0_min,i1_mid,i2_mid (i1 and i2 don't matter).
 In Cylindrical, this will be at i0_min,i1_mid,i2_mid (i1 == phi doesn't matter).
 In SinhSymTP, this will be at i0_min,i1_mid,i2_mid (i2 == phi doesn't matter)."""
     c_type = "void"
-    name = "diagnostics_grid_center"
+    name = "diagnostics_nearest_grid_center"
     params = "commondata_struct *restrict commondata, const params_struct *restrict params, MoL_gridfunctions_struct *restrict gridfuncs"
 
     NGHOSTS = sp.Symbol("NGHOSTS", real=True)
@@ -148,7 +148,7 @@ fclose(outfile);
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
-def register_CFunction_diagnostics_1d_axis_nearby(
+def register_CFunction_diagnostics_nearest_1d_axis(
     CoordSystem: str,
     out_quantities_dict: Dict[Tuple[str, str], str],
     axis: str,
@@ -171,9 +171,9 @@ def register_CFunction_diagnostics_1d_axis_nearby(
     >>> from nrpy.helpers.generic import clang_format, compress_string_to_base64, decompress_base64_to_string, diff_strings
     >>> Coord = "SinhSpherical"
     >>> axis = "y"
-    >>> _ = register_CFunction_diagnostics_1d_axis_nearby(Coord, out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, axis=axis)
-    >>> diag1d = cfc.CFunction_dict[f"diagnostics_1d_{axis}_axis__rfm__{Coord}"].full_function
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4AodBExdABGaScZHDxOiAHcc747vJCBLAVaWVRAnpWHX/kkr6QysfzLfXhoCqwdlhv59jJtBxk7nXnSEgrtsCyPSYXzh6+ATGh7ABAkIBSF+o891I4eI9S4eGHzAvGSs7EJpzVyrmy021AfTIND2mYmaWYvVjEpYWAIWJHt6abEm12uy7LfoZTeEyiT+V7goyEruSX8ZbKfF7laQ8cZFJJGqW0hlaZ9xL1O2wbDhTDbIud4y41c+Frfqux0cJRkA9+ftib6biz4gC7XhKoBCKQDExonclhZNXjDOQ4WACA16U3zUNl7b/eEw9iimCglG79US4A+Evk2fi0APwIQ+oI7szdJNmthBLtTAs14+nlh4/DvWDefIt65GBBZC9OcGTxI9cdoCsBRm8wDgGABDWaUqjRZGNZ13gqA8OQN1e5HQdYE82EEsbVq/iiEZWsl1LAWAKJ5lVmhDqHFGwVVUuIG5Y2ioMtS66mCj5mFq4Rx0vgi93SERfg62JpcMFGmPHNQjBf6hHuUn3cC+1opMfRJNQHFZ8khM+QiEwiwxxbduZXOUw+rY2iClh/sx+RltG317V8j/X67sJ9jCsqDbEAEEyqf1SXW8aM3zp73HGNSJQaF9L9PpU4qprjEs5AVvaimJ6gCPt7e6cqv0zl47MEFqM8GOQ6CKmDFNWyxIU4pj1i8338eH934RhTtLSGun4Zs0EI8WV9hMYsBwVFh3AUJnz7QcLM1scWu68G9Erf8WZJPuyYlN3wlSEqwoF3mX2qJROLhzLpmsd8/YFgXjqzvFcXJubyqM1VHe/NIkZNj+pBQ0ly2B1dlm8NU6f6/rqP6KPdF39wbVADiBij0YjJxpV/AmFuZA+btm2cXkRt5CsqIzIvSocS2eLfFNN0m08TcDM3L7Os/qzfc8ym92Q1ZBjpQ4BRiV2k79/gm/hr04fFWK6XsQBojPtcJKChOTd5o9HdPRceg3x5hvfUqEYFffwcEMA9DggzITOQCiGqn9mDbo2nzayC7RuCNKnpyM030exRwDV540F+R0FAsXqrbwV+wh6LzX1LlV0155xuhHuepaEV0tLxRh06ztpWS29/yh53gpoABJUccjK9P6wnVcxtydnbkpPYlPcvG6TnZYDlPTMvpvm9zwhT4Jp+/kP8C1GgHj3He5/CmOBWARWukbXjTAzIQ206lsdoofW9Dul4BET81L61uB/zVR4RSC5ghmLot26HmQIyGQVDBI+ompVDjAE78E9GI93y8eANuBb62VZFopyZ3l+taAGD+HCMI/QJh2yghpdzcCQsF6PvRDYWmPlcjQ0RR4ZYMNpW6vqePi6VibNcb/8De0q3cXphevy0ywcUbhA3uyG+TC8hDHyJLYe7bVT85esZ1gDoMJ5C8bmUwZpC4EstKm8N1Od2ibGLWVyPZUUv7+qkZnbJJ5YW0+OF01o23WzJUpx6wl5Iq0u5imTEkpmquA3xNvi2wAACei1ry7tHpGAAHoCJ4UAADIm4JPscRn+wIAAAAABFla")
+    >>> _ = register_CFunction_diagnostics_nearest_1d_axis(Coord, out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, axis=axis)
+    >>> diag1d = cfc.CFunction_dict[f"diagnostics_nearest_1d_{axis}_axis__rfm__{Coord}"].full_function
+    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4AotBFFdABGaScZHDxOiAHcc747vJCBLAVaWVRAnpWHX/kkr6QysfzLfXhoCqwdlhv59jJtBxk7nXnSEgrtsCyPSYXzh6+ATGh7ABAkIBSF+o891I4eI9S4eGHzAvGSs7EJpzVyrmy021AfTIND2mYmaWYvVjEpYWAIWJHt6abEm12uy7LfoZTeEyiT+V7goyEruSX8ZbKfF7laQ8cZFJJGqW0hlaZ9xL1O2wbDhTDbIud4y41c+Frfqux0cJRkA9+ftib6biz4gC7XhKoBCKQDExonclhZNXjDOQ4WACA16U3zUNl7b/eEw9iimCglG79US4A+Evk2fi0APwIQ+oI7szdJNmthBLtTAs14+nlh4/DvWDefIt65GBBZC9Ob+ww2x9COzu7LqOqYSPXC+hhHFm10ZnTvBFLP7pSdh/9hi0QkxhP5GLLWRcoStm76DCEpolzaocROhXbaiF79ieeUGnKlzglpjUCal9XpefO4JnhNX54fJpxkUY/Yoowh2j3mUeMgVSFeefOW8+vBF9UISgWRR+92UO7Ylyz2U4mlSV2k7mNbAjy7KM9nbcm4uuZGIdkxV8oVTL0qQDxZ8UhSoZptXdVi28b6InehoNAScgBea46D0l9B6IMy214XJ6TFxrIH5aC0F7+8cVE7i0nAwwA24jrnChdHtkeiI4tJwzOEmURP1YUxlI/YTyeAmeToJXE9M171XKtOOphkvkVvpeEv8SQFNQ0jniSozgFFQeUeNf7HiBDacmYmu24nrTVwaH/T1ww+OOc+DfMPd2Hed/uG8ko2n7jKgNOikB/LLirMezqn6rosZVifm5GZrYbfxoUdewqXijEHFJnnVllqGoZhw4ZMbGNZtjbmBJjjogghtfHYOHrwpIhJOtuCdX6Ynr41Da58Yozyo1wVRawr6/5TaOVgmDeIAb40oKbnog0T7sdj/ZQYw9HJvnsLrU8/r1nxPcIEurm2eSSeLpYXlt9o96OYvSAzoQ0TR2GtM1gER1SEzwyhcmTmVx1sq8s0e5KrJOCVqXPvkuoO88MdMNdQcCS3R8EpHLgHgag3wCx9/7iPVSz9jc/EyJms++8Hf6YZedPjjhGlnfbQoacj2i3O3EwNKbbTJZW6JCM0efCz0nI2lGrVvZFi58mbzgv98CGTHl+BFG1FPMcZK6dqwoUS17Q5jxn+uE4fPOIco2LXg1IaUDDw/h8EvVjWEgcuGQDAHXkjJalD7Xfa4J9UrmG9x/iN8fESoi7ic2VKr9PR63zkrrXINGY/Lv73/ekcadl9YR+UIZ4kRGmRIhpu+OQgL0mJKgiLNS49yG8OfnHwOeWXo8QPRqNlyX7RdK/mUUpYPIdmw0v10r7NYwa9+Kziyei1dRBW8/qAQmBz2xxcL4UbUpkpiFB9HeKEN1QEc8saDLh4qyAJqnON18+wNbTJDqd9JeOp39aHsf0IyYJIuHgoL5QYkZHAgxrAJl6ogGrCp1egAAAAAmcwtyzpCcZsAAe0IrhQAANryZO+xxGf7AgAAAAAEWVo=")
     >>> if diag1d != expected_string:
     ...     raise ValueError(f"\n{diff_strings(expected_string, diag1d)}\n base64-encoded output: {compress_string_to_base64(diag1d)}")
     """
@@ -196,7 +196,7 @@ def register_CFunction_diagnostics_1d_axis_nearby(
 
     desc = f"Output diagnostic quantities at gridpoints closest to {axis} axis."
     c_type = "void"
-    name = f"diagnostics_1d_{axis}_axis"
+    name = f"diagnostics_nearest_1d_{axis}_axis"
     params = "commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], MoL_gridfunctions_struct *restrict gridfuncs"
 
     body = rf"""
@@ -232,7 +232,7 @@ fclose(outfile);
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
-def register_CFunction_diagnostics_2d_plane_nearby(
+def register_CFunction_diagnostics_nearest_2d_plane(
     CoordSystem: str,
     out_quantities_dict: Dict[Tuple[str, str], str],
     plane: str,
@@ -255,9 +255,9 @@ def register_CFunction_diagnostics_2d_plane_nearby(
     >>> from nrpy.helpers.generic import clang_format, compress_string_to_base64, decompress_base64_to_string, diff_strings
     >>> Coord = "SinhSymTP"
     >>> plane = "yz"
-    >>> _ = register_CFunction_diagnostics_2d_plane_nearby("SinhSymTP", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, plane=plane)
-    >>> diag2d = cfc.CFunction_dict[f"diagnostics_2d_{plane}_plane__rfm__{Coord}"].full_function
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4AfCA3RdABGaScZHDxOiAHcc747vJCBLAVaWVRAnpWHX/kkr6QysfzLfXhoCqwdlhv59jJtBxk7nXnUIwIlIQLEtn60ZvFpp58iRzPO8zL7jj2RkmJNOOz7kLOZ5pcKkv92RfBBV6XfvVRqJRIbNiOKE+HSFEwb7csuCUsf9zB0qgLjaNojvcXVzhXj5lrq9G7GuZvGWxSqMoQWYxmpol2GdvZjHEN5O4OgyeP4QzVStm900cNC9r0y2my7Zytkn+Mx0Uv6hkLF9g7wKDwqH9TrxpV3/flnyYZhM6g8tfR1stiKkD0DKMOTo7G5ZuDDLTICjLIdu3yu7lwu/4AROxXXEQIAaeZvy/SyQxDcQX3caFyp38uJ4U/5Jl/iFqDXToYx7ponlNPbWD6wOY3hYrUaTd5SYq5O9EnGB/SbSHSuwniqf1W6XwfJk+7VAdPFlQMzbsyczUIqqWMHEF9e20Hr4iqGi8Q7QKk82tCHojLFxGGC6pswiqOQHDvemybNDUpMN/Im3ke4NyZCS32eX5MEPwnLG2l0edf3MSL+eq6WhLu/dv8afpeARUK5nzH52Gy5RDYJ14lPqiqCRsu+MgLGUl0dm/e9t8MRXG6Z4k1uq197gxhK2nS0u8L1Vo9P+UiIcUIn6DvSBOCq92qxysUaG4QPwpdX5gkWI40vh933DYo1DWXODZaEOka4a7zdzkHwn5HsNP3GYoNw9HPvJRy225KYYgeiIqLZiMW7QG+bz3l1ZuYWfsDY4Zceee1F4s6TCCUzIWF3TVg4GKOdGzy+vok58JY2PBo/jh2jhDb8Duljt7RHctcWCNdKAPAkyh9HaSri//2SatbEZymgWanvE9xdok/z6O48qNIEiTaLCpgopjmg+YD5hk+BtJqmABxZ/UtbMGSCim90r5MIWxkw2jGJ3z5dJaz7QvClOnn1EhoX3SF0BocSmcqubJtm0vuWByrGI1iEwyIbOclGOxOwpkbfkWFQwZLLvV3Jz7NWtfVqksoYsLSVevYdy3GsiaTYTrQc7MCVf6bA2Gp5VtAtUsM94yoYAZWMByfSQ1hL7U0tQAeD/dDNwXvdumTMlM0Vs1PmfmXml4p54XjCg7gHqTeTRbO007MyAe0pDqH1CF8/XpZDep20cIrbp7ait57gFK50+j+GFOiSVVe7ao39YvGOFvhP3+RAAANDLN86BEvPDAAGQB8MPAABbGLcDscRn+wIAAAAABFla")
+    >>> _ = register_CFunction_diagnostics_nearest_2d_plane("SinhSymTP", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, plane=plane)
+    >>> diag2d = cfc.CFunction_dict[f"diagnostics_nearest_2d_{plane}_plane__rfm__{Coord}"].full_function
+    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4AfSA3ldABGaScZHDxOiAHcc747vJCBLAVaWVRAnpWHX/kkr6QysfzLfXhoCqwdlhv59jJtBxk7nXnUIwIlIQLEtn60ZvFpp58iRzPO8zL7jj2RkmJNOOz7kLOZ5pcKkv92RfBBV6XfvVRqJRIbNiOKE+HSFEwb7csuCUsf9zB0qgLo0SytFxhnW14mQi8WOzQtPby0lBoglttpysw/m7b1NSy56Jyd6v3ORQjM5XKs0j68j0X0IJzMCVR8Dl2FigSsCDy+t+cywlHWLwgbGz8o84kiEsQNi8vwXaFG0ILHJU4KOQHes11bMeMB40iuY3xBqqX6NPdu9FpyfZ66JRRjS85GSxBso4cKi5eGY674iGPLQBQJh/i3W3LgupqIV5Bx1X3o/450Xgj5NjMue4i7H/UfL1qp71Ge6ncAzZ/oKmsPb0h3jrM4DKNwTR39l94STUk3qNpztEXcij8XS4r5W26aH14PylTqhnT83m4d0lNIvXNKIg5tGVQnE6fEAdqPwak1KP1vcYvE9AH1jsWRuSglAlkgAO6zsNGNQvnWq0+BzWA3ywSu8sQ9UBWM9SM6tAc5AazjarASStyn6hOB+ezWZUqpZHcpzvBB7/IEl6/AZzMrbLtyodvAD4I79TJJj9zk7Zn+ZqfVrvfiMNupWLX9QigMAAX3uhZ8Q6+IjCMMIft5IsBCcVTLJKtPRhO/swcHW0FfsBU1Fthx5uRFAOCYFt1OM8Ng9w/f+9hPmolVQj9LnGbVtjafWZ0Ocbg3jxZAbOrRucb9ICXIOX63o05BYQZXCyvt6dqyWvgiBJlsDnAz7DjXCOdj+fWEHWu74+A5TbD+bn0ubpK0b7rwqJ+pbibLGbS6AF8KfE6cNGW108E78JdbM3D9wAv167SThtHXFcD2n3EaDFmnrhiQRpbWhJ1UbHrmOLPvDkrQR7YVP2CTEpWv9ZJ0WHhZheCvjkPAQehJyXxnuWPZ4ezEGgJuULcekUg8iv2i5K23Xm+00mf8YZqur7R+ymDFn7qI4yUTjk8Xo5UTV5BwYATg9vR/V05cXm3JyJy59eZLk3b/VGTn2DKIT90IqXwDV9+lkov+HAZt+hebaINtWfu733vfy1+wn2dj/fZmrrNhmkEIV4o8vFj/pDXb1IqsTTh5lQxFDRTw35DPalplJS79vz4B9rAmS1ghSR+iV+EAAAAAAn1cKhAngTtAAAZUH0w8AAHfeYwOxxGf7AgAAAAAEWVo=")
     >>> if diag2d != expected_string:
     ...     error_message = diff_strings(expected_string, diag2d)
     ...     raise ValueError(f"\n{error_message}\n base64-encoded output: {compress_string_to_base64(diag2d)}")
@@ -281,7 +281,7 @@ def register_CFunction_diagnostics_2d_plane_nearby(
 
     desc = f"Output diagnostic quantities at gridpoints closest to {plane} plane."
     c_type = "void"
-    name = f"diagnostics_2d_{plane}_plane"
+    name = f"diagnostics_nearest_2d_{plane}_plane"
     params = "commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], MoL_gridfunctions_struct *restrict gridfuncs"
 
     body = rf"""
