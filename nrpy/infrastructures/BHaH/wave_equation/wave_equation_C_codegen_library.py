@@ -23,7 +23,7 @@ from nrpy.equations.wave_equation.WaveEquation_Solutions_InitialData import (
     WaveEquation_solution_Cartesian,
 )
 import nrpy.infrastructures.BHaH.simple_loop as lp
-import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_slices as out012d
+import nrpy.infrastructures.BHaH.diagnostics.output_nearby_0d_1d_2d_slices as out012d
 
 
 def register_CFunction_exact_solution_single_Cartesian_point(
@@ -219,20 +219,20 @@ def register_CFunction_diagnostics(
     # fmt: on
 
     for CoordSystem in list_of_CoordSystems:
-        out012d.register_CFunction_diagnostics_grid_center(
+        out012d.register_CFunction_diagnostics_grid_center_nearby(
             CoordSystem=CoordSystem,
             out_quantities_dict=out_quantities_dict,
             filename_tuple=grid_center_filename_tuple,
         )
         for axis in ["y", "z"]:
-            out012d.register_CFunction_diagnostics_1d_axis(
+            out012d.register_CFunction_diagnostics_1d_axis_nearby(
                 CoordSystem=CoordSystem,
                 out_quantities_dict=out_quantities_dict,
                 filename_tuple=axis_filename_tuple,
                 axis=axis,
             )
         for plane in ["xy", "yz"]:
-            out012d.register_CFunction_diagnostics_2d_plane(
+            out012d.register_CFunction_diagnostics_2d_plane_nearby(
                 CoordSystem=CoordSystem,
                 out_quantities_dict=out_quantities_dict,
                 filename_tuple=plane_filename_tuple,
