@@ -205,7 +205,7 @@ Bdefines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     enable_simd=enable_simd,
     enable_rfm_precompute=enable_rfm_precompute,
-    fin_NGHOSTS_add_one_for_upwinding=True,
+    fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
 )
 
 main.register_CFunction_main_c(

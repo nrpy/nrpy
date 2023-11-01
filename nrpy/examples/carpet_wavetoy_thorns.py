@@ -15,12 +15,14 @@ from types import FrameType as FT
 import shutil
 import os
 
-import nrpy.params as par
+import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
-import nrpy.c_codegen as ccg
+import nrpy.indexedexp as ixp
+import nrpy.params as par
 import nrpy.helpers.parallel_codegen as pcg
 from nrpy.helpers import simd
+
 from nrpy.equations.wave_equation.WaveEquation_Solutions_InitialData import (
     WaveEquation_solution_Cartesian,
 )
@@ -54,6 +56,7 @@ enable_rfm_precompute = False
 MoL_method = "RK4"
 fd_order = 8
 enable_simd = True
+enable_KreissOliger_dissipation = False
 parallel_codegen_enable = True
 CoordSystem = "Cartesian"
 OMP_collapse = 1
@@ -195,6 +198,27 @@ def register_CFunction_rhs_eval(thorn_name: str) -> Union[None, pcg.NRPyEnv_type
     params = "CCTK_ARGUMENTS"
     # Populate uu_rhs, vv_rhs
     rhs = WaveEquation_RHSs()
+
+    if enable_KreissOliger_dissipation:
+        diss_strength = par.register_CodeParameter(
+            "REAL",
+            __name__,
+            "KreissOliger_diss_strength",
+            0.9,
+            commondata=True,
+        )
+        uu_dKOD = ixp.declarerank1("uu_dKOD")
+        vv_dKOD = ixp.declarerank1("vv_dKOD")
+        for k in range(3):
+            rhs.uu_rhs += diss_strength * uu_dKOD[k]
+            rhs.vv_rhs += diss_strength * vv_dKOD[k]
+        print(
+            "WARNING: Kreiss-Oliger has been enabled.\n"
+            "  In your parfile, you will need to increase by 1 the following parameters:\n"
+            "   driver::ghost_size and all the\n"
+            "   CoordBase::boundary_size_?_*"
+        )
+
     body = f"DECLARE_CCTK_ARGUMENTS_{name};\n"
     body += CodeParameters.read_CodeParameters(
         list_of_tuples__thorn_CodeParameter=[(ID_thorn_name, "wavespeed")],

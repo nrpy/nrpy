@@ -62,6 +62,7 @@ MoL_method = "RK4"
 fd_order = 4
 radiation_BC_fd_order = 2
 enable_simd = False
+enable_KreissOliger_dissipation = False
 parallel_codegen_enable = True
 boundary_conditions_desc = "outgoing radiation"
 
@@ -117,6 +118,7 @@ wCl.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_simd=enable_simd,
+    enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
     OMP_collapse=OMP_collapse,
 )
 
@@ -162,6 +164,7 @@ Bdefines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     enable_simd=enable_simd,
     enable_rfm_precompute=enable_rfm_precompute,
+    fin_NGHOSTS_add_one_for_upwinding_or_KO=enable_KreissOliger_dissipation,
 )
 main.register_CFunction_main_c(
     initial_data_desc=WaveType,

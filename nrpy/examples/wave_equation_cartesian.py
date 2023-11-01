@@ -10,10 +10,11 @@ Author: Zachariah B. Etienne
 import shutil
 import os
 
-import nrpy.params as par
+import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
-import nrpy.c_codegen as ccg
+import nrpy.indexedexp as ixp
+import nrpy.params as par
 from nrpy.helpers import simd
 
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
@@ -38,9 +39,10 @@ WaveType = "SphericalGaussian"
 default_sigma = 2.0
 MoL_method = "RK4"
 fd_order = 4
-enable_simd = True
 grid_physical_size = 10.0
 t_final = 0.8 * grid_physical_size
+enable_simd = True
+enable_KreissOliger_dissipation = False
 
 project_dir = os.path.join("project", project_name)
 
@@ -53,12 +55,13 @@ par.adjust_CodeParam_default("t_final", t_final)
 
 # fmt: off
 for i in range(3):
-    _ = par.CodeParameter("int", __name__, f"Nxx_plus_2NGHOSTS{i}", add_to_parfile=False, add_to_set_CodeParameters_h=True)
     _ = par.CodeParameter("int", __name__, f"Nxx{i}", 64)
     _ = par.CodeParameter("REAL", __name__, f"xxmin{i}", -grid_physical_size)
     _ = par.CodeParameter("REAL", __name__, f"xxmax{i}", grid_physical_size)
-    _ = par.CodeParameter("REAL", __name__, f"invdxx{i}", add_to_parfile=False, add_to_set_CodeParameters_h=True)
-    _ = par.CodeParameter("REAL", __name__, f"dxx{i}", add_to_parfile=False, add_to_set_CodeParameters_h=True)
+    # parameters whose defaults will be overwritten within numerical_grids_and_timestep_setup():
+    _ = par.CodeParameter("int", __name__, f"Nxx_plus_2NGHOSTS{i}", -1, add_to_parfile=False, add_to_set_CodeParameters_h=True)
+    _ = par.CodeParameter("REAL", __name__, f"invdxx{i}", -0.1, add_to_parfile=False, add_to_set_CodeParameters_h=True)
+    _ = par.CodeParameter("REAL", __name__, f"dxx{i}", -0.1, add_to_parfile=False, add_to_set_CodeParameters_h=True)
 _ = par.CodeParameter("REAL", __name__, "convergence_factor", 1.0, commondata=True)
 # fmt: on
 
@@ -326,6 +329,21 @@ def register_CFunction_rhs_eval() -> None:
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL *restrict in_gfs, REAL *restrict rhs_gfs"
     # Populate uu_rhs, vv_rhs
     rhs = WaveEquation_RHSs()
+
+    if enable_KreissOliger_dissipation:
+        diss_strength = par.register_CodeParameter(
+            "REAL",
+            __name__,
+            "KreissOliger_diss_strength",
+            0.9,
+            commondata=True,
+        )
+        uu_dKOD = ixp.declarerank1("uu_dKOD")
+        vv_dKOD = ixp.declarerank1("vv_dKOD")
+        for k in range(3):
+            rhs.uu_rhs += diss_strength * uu_dKOD[k]
+            rhs.vv_rhs += diss_strength * vv_dKOD[k]
+
     body = lp.simple_loop(
         loop_body=ccg.c_codegen(
             [rhs.uu_rhs, rhs.vv_rhs],

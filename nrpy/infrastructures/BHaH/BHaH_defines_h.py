@@ -86,7 +86,7 @@ def output_BHaH_defines_h(
     REAL_means: str = "double",
     enable_simd: bool = True,
     enable_rfm_precompute: bool = True,
-    fin_NGHOSTS_add_one_for_upwinding: bool = False,
+    fin_NGHOSTS_add_one_for_upwinding_or_KO: bool = False,
     supplemental_defines_dict: Optional[Dict[str, str]] = None,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
@@ -98,7 +98,7 @@ def output_BHaH_defines_h(
     :param REAL_means: The floating-point type to be used in the C code (default is "double")
     :param enable_simd: Flag to enable Single Instruction Multiple Data (SIMD) optimizations
     :param enable_rfm_precompute: A boolean value reflecting whether reference metric precomputation is enabled.
-    :param fin_NGHOSTS_add_one_for_upwinding: Option to add one extra ghost zone for upwinding
+    :param fin_NGHOSTS_add_one_for_upwinding_or_KO: Option to add one extra ghost zone for upwinding
     :param supplemental_defines_dict: Additional key-value pairs to be included in the output file
     :param clang_format_options: Options for clang formatting.
 
@@ -195,7 +195,7 @@ def output_BHaH_defines_h(
     # Then set up the dictionary entry for finite_difference in BHaH_defines
     if any("finite_difference" in key for key in sys.modules):
         NGHOSTS = int(par.parval_from_str("finite_difference::fd_order") / 2)
-        if fin_NGHOSTS_add_one_for_upwinding:
+        if fin_NGHOSTS_add_one_for_upwinding_or_KO:
             NGHOSTS += 1
         fin_BHd_str = f"""
 // Set the number of ghost zones

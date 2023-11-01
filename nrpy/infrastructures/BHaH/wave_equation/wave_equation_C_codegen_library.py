@@ -9,10 +9,12 @@ from inspect import currentframe as cfr
 from types import FrameType as FT
 from pathlib import Path
 
-import nrpy.grid as gri
-import nrpy.params as par
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
+import nrpy.grid as gri
+import nrpy.indexedexp as ixp
+import nrpy.params as par
+import nrpy.reference_metric as refmetric
 
 import nrpy.helpers.parallel_codegen as pcg
 
@@ -299,6 +301,7 @@ def register_CFunction_rhs_eval(
     CoordSystem: str,
     enable_rfm_precompute: bool,
     enable_simd: bool,
+    enable_KreissOliger_dissipation: bool,
     OMP_collapse: int,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
@@ -310,6 +313,7 @@ def register_CFunction_rhs_eval(
     :param CoordSystem: The coordinate system.
     :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
     :param enable_simd: Whether or not to enable SIMD.
+    :param enable_KreissOliger_dissipation: Whether or not to enable Kreiss-Oliger dissipation, to damp high-frequency noise.
     :param OMP_collapse: Level of OpenMP loop collapsing.
 
     :return: None if in registration phase, else the updated NRPy environment.
@@ -331,6 +335,26 @@ def register_CFunction_rhs_eval(
         )
     # Populate uu_rhs, vv_rhs
     rhs = WaveEquationCurvilinear_RHSs(CoordSystem, enable_rfm_precompute)
+    if enable_KreissOliger_dissipation:
+        diss_strength = par.register_CodeParameter(
+            "REAL",
+            __name__,
+            "KreissOliger_diss_strength",
+            0.9,
+            commondata=True,
+        )
+        rfm = refmetric.reference_metric[
+            CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
+        ]
+        uu_dKOD = ixp.declarerank1("uu_dKOD")
+        vv_dKOD = ixp.declarerank1("vv_dKOD")
+        for k in range(3):
+            rhs.uu_rhs += (
+                diss_strength * uu_dKOD[k] * rfm.ReU[k]
+            )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
+            rhs.vv_rhs += (
+                diss_strength * vv_dKOD[k] * rfm.ReU[k]
+            )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
     body = lp.simple_loop(
         loop_body=ccg.c_codegen(
             [rhs.uu_rhs, rhs.vv_rhs],
