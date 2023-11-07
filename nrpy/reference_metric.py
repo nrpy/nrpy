@@ -1294,6 +1294,7 @@ if __name__ == "__main__":
         "SinhCartesian",
         "Cylindrical",
         "SinhCylindrical",
+        "SinhCylindricalv2",
         "SymTP",
         "SinhSymTP",
     ]:
