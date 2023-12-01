@@ -129,13 +129,13 @@ Set up NewRad boundary conditions.
     ET_schedule_bins_entries = [
         (
             "MoL_CalcRHS",
-            """
-schedule FUNC_NAME in MoL_CalcRHS after BaikalETK_RHS
-{
+            f"""
+schedule FUNC_NAME in MoL_CalcRHS after {thorn_name}_RHS
+{{
   LANG: C
   READS: evol_variables(everywhere)
   WRITES: evol_variables_rhs(boundary)
-} "NewRad boundary conditions, scheduled right after RHS eval."
+}} "NewRad boundary conditions, scheduled right after RHS eval."
 """,
         ),
         (
