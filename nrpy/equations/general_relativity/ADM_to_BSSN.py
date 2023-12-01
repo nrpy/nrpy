@@ -130,13 +130,7 @@ class ADM_to_BSSN:
                 ) * (KDD[i][j] - sp.Rational(1, 3) * gammaDD[i][j] * self.trK)
                 self.aDD[i][j] = self.AbarDD[i][j] / rfm.ReDD[i][j]
 
-        # Step 2.d: \bar{Lambda}^i
-        # \bar{Lambda}^i = \bar{gamma}^{jk}(\bar{Gamma}^i_{jk} - \hat{Gamma}^i_{jk}).
-        # Computation of lambdaU is ambiguous here, so we don't do it:
-        #   If gammaDD is analytic, lambdaU is computed from exact derivatives (sp.diff(...)).
-        #   If gammaDD is numerical, lambdaU is computed from finite differences (gammaDD -> hDD -> hDD_dD).
-
-        # Step 2.e: Rescale beta^i and B^i according to the prescription described in
+        # Step 2.d: Rescale beta^i and B^i according to the prescription described in
         #         the [BSSN in curvilinear coordinates tutorial module](Tutorial-BSSNCurvilinear.ipynb)
         #         (also [Ruchlin *et al.*](https://arxiv.org/pdf/1712.07658.pdf)):
         #
