@@ -132,38 +132,9 @@ class ADM_to_BSSN:
 
         # Step 2.d: \bar{Lambda}^i
         # \bar{Lambda}^i = \bar{gamma}^{jk}(\bar{Gamma}^i_{jk} - \hat{Gamma}^i_{jk}).
-        # First compute Christoffel symbols \bar{Gamma}^i_{jk}, with respect to barred metric:
-        GammabarUDD = ixp.zerorank3()
-        for i in range(3):
-            for j in range(3):
-                for k in range(3):
-                    for l in range(3):
-                        GammabarUDD[i][j][k] += (
-                            sp.Rational(1, 2)
-                            * gammabarUU[i][l]
-                            * (
-                                sp.diff(self.gammabarDD[l][j], rfm.xx[k])
-                                + sp.diff(self.gammabarDD[l][k], rfm.xx[j])
-                                - sp.diff(self.gammabarDD[j][k], rfm.xx[l])
-                            )
-                        )
-        # Next evaluate \bar{Lambda}^i, based on GammabarUDD above and GammahatUDD
-        #       (from the reference metric):
-        LambdabarU = ixp.zerorank1()
-        for i in range(3):
-            for j in range(3):
-                for k in range(3):
-                    LambdabarU[i] += gammabarUU[j][k] * (
-                        GammabarUDD[i][j][k] - rfm.GammahatUDD[i][j][k]
-                    )
-        for i in range(3):
-            # We evaluate LambdabarU[i] here to ensure proper cancellations. If these cancellations
-            #   are not applied, certain expressions (e.g., lambdaU[0] in StaticTrumpet) will
-            #   cause SymPy's (v1.5+) CSE algorithm to hang
-            LambdabarU[i] = LambdabarU[i].doit()
-        lambdaU = ixp.zerorank1()
-        for i in range(3):
-            lambdaU[i] = LambdabarU[i] / rfm.ReU[i]
+        # Computation of lambdaU is ambiguous here, so we don't do it:
+        #   If gammaDD is analytic, lambdaU is computed from exact derivatives (sp.diff(...)).
+        #   If gammaDD is numerical, lambdaU is computed from finite differences (gammaDD -> hDD -> hDD_dD).
 
         # Step 2.e: Rescale beta^i and B^i according to the prescription described in
         #         the [BSSN in curvilinear coordinates tutorial module](Tutorial-BSSNCurvilinear.ipynb)
