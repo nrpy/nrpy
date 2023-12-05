@@ -47,15 +47,17 @@ par.set_parval_from_str("Infrastructure", "ETLegacy")
 
 # Code-generation-time parameters:
 project_name = "et_baikal"
-evol_thorn_name = "Baikal"
+thorn_names = ["BaikalVacuum", "Baikal"]
 enable_rfm_precompute = False
 MoL_method = "RK4"
 enable_simd = True
-enable_KreissOliger_dissipation = False
+enable_KreissOliger_dissipation = True
 parallel_codegen_enable = True
 CoordSystem = "Cartesian"
 coord_name = ["x", "y", "z"]
 OMP_collapse = 1
+
+register_MU_gridfunctions = True
 
 project_dir = os.path.join("project", project_name)
 
@@ -63,16 +65,29 @@ project_dir = os.path.join("project", project_name)
 shutil.rmtree(project_dir, ignore_errors=True)
 
 par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
+par.set_parval_from_str("register_MU_gridfunctions", register_MU_gridfunctions)
 standard_ET_includes = ["math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
+
+if "H" not in gri.glb_gridfcs_dict:
+    _ = gri.register_gridfunctions(
+        "H", group="AUX",
+    )
+    _ = gri.register_gridfunctions(
+        "MUSQUARED", group="AUX",
+    )
+    if register_MU_gridfunctions and "MU" not in gri.glb_gridfcs_dict:
+        _ = gri.register_gridfunctions_for_single_rank1(
+            "MU", group="AUX",
+        )
 
 
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
 
-############################################
-#  Declare the Baikal_ADM_to_BSSN function #
-############################################
+##############################################
+#  Declare the ADM_to_BSSN_order_* functions #
+##############################################
 
 def register_CFunction_ADM_to_BSSN(
     thorn_name: str,
@@ -256,9 +271,9 @@ if(FD_order=={fd_order}) {{
     par.set_parval_from_str("fd_order", default_fd_order)
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
-##################################################
-#  Declare the Baikal_Ricci_eval_order_* functions #
-##################################################
+#############################################
+#  Declare the Ricci_eval_order_* functions #
+#############################################
 
 def register_CFunction_Ricci_eval(
     thorn_name: str,
@@ -366,13 +381,13 @@ if(FD_order=={fd_order}) {{
     par.set_parval_from_str("fd_order", default_fd_order)
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
-##################################################
-#  Declare the Baikal_rhs_eval_order_* functions #
-##################################################
+###########################################
+#  Declare the rhs_eval_order_* functions #
+###########################################
 
 def register_CFunction_rhs_eval(
     thorn_name: str,
-    include_T4UU: bool,
+    enable_T4munu: bool,
     CoordSystem: str,
     enable_rfm_precompute: bool,
     enable_simd: bool,
@@ -389,7 +404,7 @@ def register_CFunction_rhs_eval(
 
     :param thorn_name: The Einstein Toolkit thorn name.
     :param CoordSystem: The coordinate system to be used.
-    :param include_T4UU: Whether to include the stress-energy tensor. Defaults to False.
+    :param enable_T4munu: Whether to include the stress-energy tensor. Defaults to False.
     :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
     :param enable_simd: Whether or not to enable SIMD (Single Instruction, Multiple Data).
     :param fd_order: Order of finite difference method
@@ -408,6 +423,10 @@ def register_CFunction_rhs_eval(
     default_fd_order = par.parval_from_str("fd_order")
     # Set this because parallel codegen needs the correct order
     par.set_parval_from_str("fd_order", fd_order)
+
+    default_enable_T4munu = par.parval_from_str("enable_T4munu")
+    # Set this because parallel codegen needs the correct order
+    par.set_parval_from_str("enable_T4munu", enable_T4munu)
 
     includes = standard_ET_includes
     if enable_simd:
@@ -585,9 +604,9 @@ if(FD_order=={fd_order}) {{
     par.set_parval_from_str("fd_order", default_fd_order)
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
-#############################################
-#  Declare the Baikal_BSSN_to_ADM function  #
-#############################################
+######################################
+#  Declare the BSSN_to_ADM function  #
+######################################
 
 def register_CFunction_BSSN_to_ADM(
     thorn_name: str,
@@ -689,6 +708,130 @@ schedule FUNC_NAME IN MoL_PostStep after {thorn_name}_ApplyBCs before ADMBase_Se
 }} "Perform BSSN-to-ADM conversion. Useful for diagnostics."
 """,
     )
+
+    ET_current_thorn_CodeParams_used = None
+    ET_other_thorn_CodeParams_used = None
+
+    cfc.register_CFunction(
+        subdirectory=thorn_name,
+        includes=includes,
+        desc=desc,
+        c_type=c_type,
+        name=name,
+        params=params,
+        body=body,
+        ET_thorn_name=thorn_name,
+        ET_schedule_bins_entries=[ET_schedule_bin_entry],
+        ET_current_thorn_CodeParams_used=ET_current_thorn_CodeParams_used,
+        ET_other_thorn_CodeParams_used=ET_other_thorn_CodeParams_used,
+    )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
+###################################################
+#  Declare the BSSN_constraints_order_* functions #
+###################################################
+
+def register_CFunction_constraints(
+    thorn_name: str,
+    enable_T4munu: bool,
+    CoordSystem: str,
+    enable_rfm_precompute: bool,
+    enable_simd: bool,
+    fd_order: int,
+    OMP_collapse: int = 1,
+    ) -> Union[None, pcg.NRPyEnv_type]:
+    """
+    Register the BSSN constraints evaluation function.
+
+    :param thorn_name: The Einstein Toolkit thorn name.
+    :param CoordSystem: The coordinate system to be used.
+    :param enable_T4munu: Whether to include the stress-energy tensor. Defaults to False.
+    :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
+    :param enable_simd: Whether or not to enable SIMD instructions.
+    :param fd_order: Order of finite difference method
+    :param OMP_collapse: Degree of OpenMP loop collapsing.
+
+    :return: None if in registration phase, else the updated NRPy environment.
+    """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+
+    default_fd_order = par.parval_from_str("fd_order")
+    # Set this because parallel codegen needs the correct order
+    par.set_parval_from_str("fd_order", fd_order)
+
+    default_enable_T4munu = par.parval_from_str("enable_T4munu")
+    # Set this because parallel codegen needs the correct order
+    par.set_parval_from_str("enable_T4munu", enable_T4munu)
+
+    includes = standard_ET_includes
+    if enable_simd:
+        includes += [("./SIMD/simd_intrinsics.h")]
+    desc = r"""Evaluate BSSN constraints."""
+    c_type = "void"
+    name = f"{thorn_name}_BSSN_constraints_order_{fd_order}"
+    params = "CCTK_ARGUMENTS"
+    body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
+"""
+    if enable_simd:
+        body +=f"""
+  const REAL_SIMD_ARRAY invdx0 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(0));
+  const REAL_SIMD_ARRAY invdx1 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(1));
+  const REAL_SIMD_ARRAY invdx2 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(2));
+
+"""
+    else:
+        body +=f"""  DECLARE_CCTK_PARAMETERS;
+
+"""
+
+    Bcon = BSSN_constraints[
+        CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
+    ]
+
+    list_of_output_exprs = [Bcon.H]
+    Constraints_access_gfs: List[str] = [
+        gri.ETLegacyGridFunction.access_gf(
+            "H", 0, 0, 0)]
+
+    for index in range(3):
+        list_of_output_exprs += [Bcon.MU[index]]
+        Constraints_access_gfs += [
+            gri.ETLegacyGridFunction.access_gf(
+                "MU"+str(index), 0, 0, 0)
+        ]
+    body += lp.simple_loop(
+        loop_body=ccg.c_codegen(
+            list_of_output_exprs,
+            Constraints_access_gfs,
+            enable_fd_codegen=True,
+            enable_simd=enable_simd,
+            enable_fd_functions=True,
+        ),
+        loop_region="interior",
+        enable_simd=enable_simd,
+        OMP_collapse=OMP_collapse,
+    )
+
+    schedule = f"""
+schedule FUNC_NAME IN MoL_PseudoEvolution
+{{
+  LANG: C
+    READS: aDD00GF, aDD01GF, aDD02GF, aDD11GF, aDD12GF, aDD22GF, trKGF,
+           hDD00GF, hDD01GF, hDD02GF, hDD11GF, hDD12GF, hDD22GF,
+           cfGF, lambdaU0GF, lambdaU1GF, lambdaU2GF"""
+    if enable_T4munu:
+        schedule += f"""
+           alphaGF, vetU0GF, vetU1GF, vetU2GF,"""
+    schedule += f"""
+    WRITES: aux_variables
+}} "Compute BSSN (Hamiltonian and momentum) constraints, at finite-differencing order {fd_order}"
+"""
+
+    ET_schedule_bin_entry = (
+        "MoL_PseudoEvolution", schedule)
+
     ET_current_thorn_CodeParams_used = None
     ET_other_thorn_CodeParams_used = None
 
@@ -711,99 +854,109 @@ schedule FUNC_NAME IN MoL_PostStep after {thorn_name}_ApplyBCs before ADMBase_Se
 #  Generate functions in parallel #
 ###################################
 
-#for fd_order in [4,6,8]:
-#    par.set_parval_from_str("fd_order", fd_order)
-#    register_CFunction_ADM_to_BSSN(thorn_name=evol_thorn_name, CoordSystem=CoordSystem, fd_order=fd_order,
-#                                   enable_rfm_precompute=enable_rfm_precompute, enable_simd=enable_simd)
-#    register_CFunction_Ricci_eval(thorn_name=evol_thorn_name, fd_order=fd_order, CoordSystem="Cartesian",
-#                                  enable_rfm_precompute=False, enable_simd=enable_simd)
-#    register_CFunction_rhs_eval(thorn_name=evol_thorn_name, include_T4UU=False, fd_order=fd_order, CoordSystem="Cartesian",
-#                                enable_rfm_precompute=False, enable_simd=enable_simd, enable_KreissOliger_dissipation=True)
+for evol_thorn_name in thorn_names:
+    enable_T4munu = True
+    if evol_thorn_name == "Baikal":
+        enable_T4munu = False
+    par.set_parval_from_str("enable_T4munu", False)
 
-register_CFunction_BSSN_to_ADM(thorn_name=evol_thorn_name, CoordSystem="Cartesian")
+    for fd_order in [4,6,8]:
+        par.set_parval_from_str("fd_order", fd_order)
+        register_CFunction_ADM_to_BSSN(thorn_name=evol_thorn_name, CoordSystem=CoordSystem, fd_order=fd_order,
+                                       enable_rfm_precompute=enable_rfm_precompute, enable_simd=enable_simd)
+        register_CFunction_Ricci_eval(thorn_name=evol_thorn_name, fd_order=fd_order, CoordSystem="Cartesian",
+                                      enable_rfm_precompute=False, enable_simd=enable_simd)
+        register_CFunction_rhs_eval(thorn_name=evol_thorn_name, enable_T4munu=enable_T4munu, fd_order=fd_order, CoordSystem="Cartesian",
+                                    enable_rfm_precompute=False, enable_simd=enable_simd,
+                                    enable_KreissOliger_dissipation=enable_KreissOliger_dissipation)
+        register_CFunction_constraints(thorn_name=evol_thorn_name, enable_T4munu=enable_T4munu, fd_order=fd_order, CoordSystem="Cartesian",
+                                    enable_rfm_precompute=False, enable_simd=enable_simd)
+
+    #register_CFunction_BSSN_to_ADM(thorn_name=evol_thorn_name, CoordSystem="Cartesian")
 
 if __name__ == "__main__" and parallel_codegen_enable:
     pcg.do_parallel_codegen()
 
-########################
-# STEP 2: Register functions that depend on all gridfunctions & CodeParameters having been set:
-
-Symmetry_registration.register_CFunction_Symmetry_registration_oldCartGrid3D(
-    thorn_name=evol_thorn_name
-)
-boundary_conditions.register_CFunctions(thorn_name=evol_thorn_name)
-zero_rhss.register_CFunction_zero_rhss(thorn_name=evol_thorn_name)
-MoL_registration.register_CFunction_MoL_registration(thorn_name=evol_thorn_name)
-
-########################
-# STEP 3: All functions have been registered at this point. Time to output the CCL files & thorns!
-
-CParams_registered_to_params_ccl: List[str] = []
-
-# CCL files: evol_thorn
-schedule_ccl.construct_schedule_ccl(
-    project_dir=project_dir,
-    thorn_name=evol_thorn_name,
-    STORAGE="""
-STORAGE: evol_variables[3]     # Evolution variables
-STORAGE: evol_variables_rhs[1] # Variables storing right-hand-sides
-STORAGE: auxevol_variables[1]  # Single-timelevel storage of variables needed for evolutions.
-STORAGE: aux_variables[3]      # Diagnostics variables
-""",
-)
-interface_ccl.construct_interface_ccl(
-    project_dir=project_dir,
-    thorn_name=evol_thorn_name,
-    inherits="ADMBase Boundary Grid",
-    USES_INCLUDEs="""USES INCLUDE: Symmetry.h
-USES INCLUDE: Boundary.h
-USES INCLUDE: Slicing.h
-""",
-    is_evol_thorn=True,
-    enable_NewRad=True,
-)
-
-params_str = f"""
-shares: ADMBase
-
-EXTENDS CCTK_KEYWORD evolution_method "evolution_method"
-{{
-  "{evol_thorn_name}" :: ""
-}}
-
-EXTENDS CCTK_KEYWORD lapse_evolution_method "lapse_evolution_method"
-{{
-  "{evol_thorn_name}" :: ""
-}}
-
-EXTENDS CCTK_KEYWORD shift_evolution_method "shift_evolution_method"
-{{
-  "{evol_thorn_name}" :: ""
-}}
-
-EXTENDS CCTK_KEYWORD dtshift_evolution_method "dtshift_evolution_method"
-{{
-  "{evol_thorn_name}" :: ""
-}}
-
-EXTENDS CCTK_KEYWORD dtlapse_evolution_method "dtlapse_evolution_method"
-{{
-  "{evol_thorn_name}" :: ""
-}}
-"""
-CParams_registered_to_params_ccl += param_ccl.construct_param_ccl(
-    project_dir=project_dir,
-    thorn_name=evol_thorn_name,
-    shares_extends_str=params_str,
-)
-
-for thorn in [evol_thorn_name]:
-    make_code_defn.output_CFunctions_and_construct_make_code_defn(
-        project_dir=project_dir, thorn_name=thorn
+for evol_thorn_name in thorn_names:
+    ########################
+    # STEP 2: Register functions that depend on all gridfunctions & CodeParameters having been set:
+   
+    Symmetry_registration.register_CFunction_Symmetry_registration_oldCartGrid3D(
+        thorn_name=evol_thorn_name
     )
-simd.copy_simd_intrinsics_h(
-    project_dir=str(Path(project_dir) / evol_thorn_name / "src")
-)
+    boundary_conditions.register_CFunctions(thorn_name=evol_thorn_name)
+    zero_rhss.register_CFunction_zero_rhss(thorn_name=evol_thorn_name)
+    MoL_registration.register_CFunction_MoL_registration(thorn_name=evol_thorn_name)
+    
+    ########################
+    # STEP 3: All functions have been registered at this point. Time to output the CCL files & thorns!
+    
+    CParams_registered_to_params_ccl: List[str] = []
+    
+    # CCL files: evol_thorn
+    schedule_ccl.construct_schedule_ccl(
+        project_dir=project_dir,
+        thorn_name=evol_thorn_name,
+        STORAGE="""
+    STORAGE: evol_variables[3]     # Evolution variables
+    STORAGE: evol_variables_rhs[1] # Variables storing right-hand-sides
+    STORAGE: auxevol_variables[1]  # Single-timelevel storage of variables needed for evolutions.
+    STORAGE: aux_variables[3]      # Diagnostics variables
+    """,
+    )
+    interface_ccl.construct_interface_ccl(
+        project_dir=project_dir,
+        thorn_name=evol_thorn_name,
+        inherits="ADMBase Boundary Grid",
+        USES_INCLUDEs="""USES INCLUDE: Symmetry.h
+    USES INCLUDE: Boundary.h
+    USES INCLUDE: Slicing.h
+    """,
+        is_evol_thorn=True,
+        enable_NewRad=True,
+    )
+    
+    params_str = f"""
+    shares: ADMBase
+    
+    EXTENDS CCTK_KEYWORD evolution_method "evolution_method"
+    {{
+      "{evol_thorn_name}" :: ""
+    }}
+    
+    EXTENDS CCTK_KEYWORD lapse_evolution_method "lapse_evolution_method"
+    {{
+      "{evol_thorn_name}" :: ""
+    }}
+    
+    EXTENDS CCTK_KEYWORD shift_evolution_method "shift_evolution_method"
+    {{
+      "{evol_thorn_name}" :: ""
+    }}
+    
+    EXTENDS CCTK_KEYWORD dtshift_evolution_method "dtshift_evolution_method"
+    {{
+      "{evol_thorn_name}" :: ""
+    }}
+    
+    EXTENDS CCTK_KEYWORD dtlapse_evolution_method "dtlapse_evolution_method"
+    {{
+      "{evol_thorn_name}" :: ""
+    }}
+    """
+    CParams_registered_to_params_ccl += param_ccl.construct_param_ccl(
+        project_dir=project_dir,
+        thorn_name=evol_thorn_name,
+        shares_extends_str=params_str,
+    )
+    
+    make_code_defn.output_CFunctions_and_construct_make_code_defn(
+        project_dir=project_dir, thorn_name=evol_thorn_name
+    )
+
+    simd.copy_simd_intrinsics_h(
+        project_dir=str(Path(project_dir) / evol_thorn_name / "src")
+    )
 
 # print(
 #     f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
