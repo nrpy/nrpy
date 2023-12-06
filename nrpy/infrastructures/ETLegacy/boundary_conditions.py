@@ -77,6 +77,7 @@ schedule FUNC_NAME in Driver_BoundarySelect
         ET_schedule_bins_entries=ET_schedule_bins_entries,
     )
 
+
 def register_CFunction_specify_evol_BoundaryConditions(thorn_name: str) -> None:
     """
     Register C functions for specifying boundary conditions within a given thorn.
@@ -150,6 +151,7 @@ schedule GROUP ApplyBCs as {thorn_name}_ApplyBCs in MoL_PostStep after FUNC_NAME
         ET_thorn_name=thorn_name,
         ET_schedule_bins_entries=ET_schedule_bins_entries,
     )
+
 
 def register_CFunction_specify_NewRad_BoundaryConditions_parameters(
     thorn_name: str,
