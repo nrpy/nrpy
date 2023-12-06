@@ -13,6 +13,7 @@ from typing import Union, cast, List
 from pathlib import Path
 from inspect import currentframe as cfr
 from types import FrameType as FT
+import sympy
 import shutil
 import os
 
@@ -51,6 +52,7 @@ thorn_names = ["BaikalVacuum", "Baikal"]
 enable_rfm_precompute = False
 MoL_method = "RK4"
 enable_simd = True
+enable_RbarDD = True
 enable_KreissOliger_dissipation = True
 parallel_codegen_enable = True
 CoordSystem = "Cartesian"
@@ -66,6 +68,8 @@ shutil.rmtree(project_dir, ignore_errors=True)
 
 par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 par.set_parval_from_str("register_MU_gridfunctions", register_MU_gridfunctions)
+par.set_parval_from_str("enable_RbarDD_gridfunctions", enable_RbarDD)
+
 standard_ET_includes = ["math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
 
 if "H" not in gri.glb_gridfcs_dict:
@@ -79,6 +83,14 @@ if "H" not in gri.glb_gridfcs_dict:
         _ = gri.register_gridfunctions_for_single_rank1(
             "MU", group="AUX",
         )
+if not any(
+    "RbarDD00" in gf.name for gf in gri.glb_gridfcs_dict.values()
+):
+           _ = gri.register_gridfunctions_for_single_rank2(
+               "RbarDD",
+               symmetry="sym01",
+               group="AUXEVOL",
+           )
 
 
 #########################################################
@@ -112,7 +124,7 @@ def register_CFunction_ADM_to_BSSN(
         return None
 
     default_fd_order = par.parval_from_str("fd_order")
-    # Set this because parallel codegen needs the correct order
+    # Set this because parallel codegen needs the correct local values
     par.set_parval_from_str("fd_order", fd_order)
 
 
@@ -301,7 +313,7 @@ def register_CFunction_Ricci_eval(
         return None
 
     default_fd_order = par.parval_from_str("fd_order")
-    # Set this because parallel codegen needs the correct order
+    # Set this because parallel codegen needs the correct local values
     par.set_parval_from_str("fd_order", fd_order)
 
     includes = standard_ET_includes
@@ -387,8 +399,8 @@ if(FD_order=={fd_order}) {{
 
 def register_CFunction_rhs_eval(
     thorn_name: str,
-    enable_T4munu: bool,
     CoordSystem: str,
+    enable_T4munu: bool,
     enable_rfm_precompute: bool,
     enable_simd: bool,
     fd_order: int,
@@ -421,11 +433,9 @@ def register_CFunction_rhs_eval(
         return None
 
     default_fd_order = par.parval_from_str("fd_order")
-    # Set this because parallel codegen needs the correct order
-    par.set_parval_from_str("fd_order", fd_order)
-
     default_enable_T4munu = par.parval_from_str("enable_T4munu")
-    # Set this because parallel codegen needs the correct order
+    # Set this because parallel codegen needs the correct local values
+    par.set_parval_from_str("fd_order", fd_order)
     par.set_parval_from_str("enable_T4munu", enable_T4munu)
 
     includes = standard_ET_includes
@@ -473,7 +483,7 @@ def register_CFunction_rhs_eval(
     # Add Kreiss-Oliger dissipation to the BSSN RHSs:
     if enable_KreissOliger_dissipation:
         diss_strength_gauge, diss_strength_nongauge = par.register_CodeParameters(
-            "REAL",
+            "CCTK_REAL",
             __name__,
             ["diss_strength", "diss_strength"],
             [KreissOliger_strength_gauge, KreissOliger_strength_nongauge],
@@ -491,11 +501,11 @@ def register_CFunction_rhs_eval(
                 diss_strength_gauge *= Bq.cf
                 diss_strength_nongauge *= Bq.cf
             elif EvolvedConformalFactor_cf == "chi":
-                diss_strength_gauge *= sp.sqrt(Bq.cf)
-                diss_strength_nongauge *= sp.sqrt(Bq.cf)
+                diss_strength_gauge *= sympy.sqrt(Bq.cf)
+                diss_strength_nongauge *= sympy.sqrt(Bq.cf)
             elif EvolvedConformalFactor_cf == "phi":
-                diss_strength_gauge *= sp.exp(-2 * Bq.cf)
-                diss_strength_nongauge *= sp.exp(-2 * Bq.cf)
+                diss_strength_gauge *= sympy.exp(-2 * Bq.cf)
+                diss_strength_nongauge *= sympy.exp(-2 * Bq.cf)
 
         rfm = refmetric.reference_metric[
             CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
@@ -582,11 +592,9 @@ if(FD_order=={fd_order}) {{
 }}
 """,
     )
-    ET_current_thorn_CodeParams_used = None
-    ET_other_thorn_CodeParams_used = None
 
-    #if fd_order == 4:
-    ET_current_thorn_CodeParams_used = ["eta", "diss_strength"]
+    ET_current_thorn_CodeParams_used = ["eta", "diss_strength", "FD_order"]
+    ET_other_thorn_CodeParams_used = None
 
     cfc.register_CFunction(
         subdirectory=thorn_name,
@@ -727,6 +735,349 @@ schedule FUNC_NAME IN MoL_PostStep after {thorn_name}_ApplyBCs before ADMBase_Se
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
+########################################################
+#  Declare the enforce_detgammahat_constraint function #
+########################################################
+def register_CFunction_enforce_detgammahat_constraint(
+    thorn_name: str,
+    CoordSystem: str,
+    enable_rfm_precompute: bool,
+    OMP_collapse: int = 1,
+) -> Union[None, pcg.NRPyEnv_type]:
+    """
+    Register the function that enforces the det(gammabar) = det(gammahat) constraint.
+
+    :param thorn_name: The Einstein Toolkit thorn name.
+    :param CoordSystem: The coordinate system to be used.
+    :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
+    :param OMP_collapse: Degree of OpenMP loop collapsing.
+
+    :return: None if in registration phase, else the updated NRPy environment.
+    """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+
+    Bq = BSSN_quantities[
+        CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
+    ]
+    rfm = refmetric.reference_metric[
+        CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
+    ]
+
+    includes = standard_ET_includes
+    desc = r"""Enforce det(gammabar) = det(gammahat) constraint. Required for strong hyperbolicity."""
+    c_type = "void"
+    name = f"{thorn_name}_enforce_detgammahat_constraint"
+    params = "CCTK_ARGUMENTS"
+    body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
+  DECLARE_CCTK_PARAMETERS;
+
+"""
+
+
+    # First define the Kronecker delta:
+    KroneckerDeltaDD = ixp.zerorank2()
+    for i in range(3):
+        KroneckerDeltaDD[i][i] = sympy.sympify(1)
+
+    # The detgammabar in BSSN_RHSs is set to detgammahat when BSSN_RHSs::detgbarOverdetghat_equals_one=True (default),
+    #    so we manually compute it here:
+    dummygammabarUU, detgammabar = ixp.symm_matrix_inverter3x3(Bq.gammabarDD)
+
+    # Next apply the constraint enforcement equation above.
+    nrpyAbs = sympy.Function("nrpyAbs")
+    hprimeDD = ixp.zerorank2()
+    for i in range(3):
+        for j in range(3):
+            hprimeDD[i][j] = (nrpyAbs(rfm.detgammahat) / detgammabar) ** (
+                sympy.Rational(1, 3)
+            ) * (KroneckerDeltaDD[i][j] + Bq.hDD[i][j]) - KroneckerDeltaDD[i][j]
+
+    hDD_access_gfs: List[str] = []
+    hprimeDD_expr_list: List[sympy.Expr] = []
+    for i in range(3):
+        for j in range(i, 3):
+            hDD_access_gfs += [
+                gri.ETLegacyGridFunction.access_gf(
+                    f"hDD{i}{j}", 0, 0, 0
+                )
+            ]
+            hprimeDD_expr_list += [hprimeDD[i][j]]
+    for i in range(3):
+        for j in range(i, 3):
+            hDD_access_gfs += [
+                gri.ETLegacyGridFunction.access_gf(
+                    f"hDD{i}{j}", 0, 0, 0
+                )
+            ]
+            hprimeDD_expr_list += [hprimeDD[i][j]]
+
+    # To evaluate the cube root, SIMD support requires e.g., SLEEF.
+    #   Also need to be careful to not access memory out of bounds!
+    #   After all this is a loop over ALL POINTS.
+    #   Exercise to the reader: prove that for any reasonable grid,
+    #   SIMD loops over grid interiors never write data out of bounds
+    #   and are threadsafe for any reasonable number of threads.
+    body = lp.simple_loop(
+        loop_body=ccg.c_codegen(
+            hprimeDD_expr_list,
+            hDD_access_gfs,
+            #enable_fd_codegen=True,
+            enable_simd=False,
+        ),
+        loop_region="all points",
+        enable_simd=False,
+        OMP_collapse=OMP_collapse,
+    )
+
+    schedule = f"""
+schedule FUNC_NAME in MoL_PostStep before ???
+{{
+  LANG: C
+  READS: hDD00GF, hDD01GF, hDD02GF, hDD11GF, hDD12GF, hDD22GF
+  WRITES: hDD00GF(everywhere), hDD01GF(everywhere), hDD02GF(everywhere),
+          hDD11GF(everywhere), hDD12GF(everywhere), hDD22GF(everywhere)
+}} "Enforce detgammabar = detgammahat (= 1 in Cartesian)"
+"""
+
+    ET_schedule_bin_entry = (
+        "MoL_PostStep", schedule)
+
+    ET_current_thorn_CodeParams_used = None
+    ET_other_thorn_CodeParams_used = None
+
+    cfc.register_CFunction(
+        subdirectory=thorn_name,
+        includes=includes,
+        desc=desc,
+        c_type=c_type,
+        name=name,
+        params=params,
+        body=body,
+        ET_thorn_name=thorn_name,
+        ET_schedule_bins_entries=[ET_schedule_bin_entry],
+        ET_current_thorn_CodeParams_used=ET_current_thorn_CodeParams_used,
+        ET_other_thorn_CodeParams_used=ET_other_thorn_CodeParams_used,
+    )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
+########################################################
+#  Declare the T4DD_to_T4UU function #
+########################################################
+#def register_CFunction_T4DD_to_T4UU(
+#    thorn_name: str,
+#    CoordSystem: str,
+#    enable_rfm_precompute: bool,
+#    OMP_collapse: int = 1,
+#) -> Union[None, pcg.NRPyEnv_type]:
+#    """
+#    Register the function that enforces the det(gammabar) = det(gammahat) constraint.
+#
+#    :param thorn_name: The Einstein Toolkit thorn name.
+#    :param CoordSystem: The coordinate system to be used.
+#    :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
+#    :param OMP_collapse: Degree of OpenMP loop collapsing.
+#
+#    :return: None if in registration phase, else the updated NRPy environment.
+#    """
+#    if pcg.pcg_registration_phase():
+#        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+#        return None
+#
+#    Bq = BSSN_quantities[
+#        CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
+#    ]
+#    rfm = refmetric.reference_metric[
+#        CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
+#    ]
+#
+#    includes = standard_ET_includes
+#    desc = r"""Enforce det(gammabar) = det(gammahat) constraint. Required for strong hyperbolicity."""
+#    c_type = "void"
+#    name = f"{thorn_name}_enforce_detgammahat_constraint"
+#    params = "CCTK_ARGUMENTS"
+#    body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
+#  DECLARE_CCTK_PARAMETERS;
+#
+#"""
+#
+#
+#    # First define the Kronecker delta:
+#    KroneckerDeltaDD = ixp.zerorank2()
+#    for i in range(3):
+#        KroneckerDeltaDD[i][i] = sympy.sympify(1)
+#
+#    # The detgammabar in BSSN_RHSs is set to detgammahat when BSSN_RHSs::detgbarOverdetghat_equals_one=True (default),
+#    #    so we manually compute it here:
+#    dummygammabarUU, detgammabar = ixp.symm_matrix_inverter3x3(Bq.gammabarDD)
+#
+#    # Next apply the constraint enforcement equation above.
+#    nrpyAbs = sympy.Function("nrpyAbs")
+#    hprimeDD = ixp.zerorank2()
+#    for i in range(3):
+#        for j in range(3):
+#            hprimeDD[i][j] = (nrpyAbs(rfm.detgammahat) / detgammabar) ** (
+#                sympy.Rational(1, 3)
+#            ) * (KroneckerDeltaDD[i][j] + Bq.hDD[i][j]) - KroneckerDeltaDD[i][j]
+#
+#    hDD_access_gfs: List[str] = []
+#    hprimeDD_expr_list: List[sympy.Expr] = []
+#    for i in range(3):
+#        for j in range(i, 3):
+#            hDD_access_gfs += [
+#                gri.ETLegacyGridFunction.access_gf(
+#                    f"hDD{i}{j}", 0, 0, 0
+#                )
+#            ]
+#            hprimeDD_expr_list += [hprimeDD[i][j]]
+#    for i in range(3):
+#        for j in range(i, 3):
+#            hDD_access_gfs += [
+#                gri.ETLegacyGridFunction.access_gf(
+#                    f"hDD{i}{j}", 0, 0, 0
+#                )
+#            ]
+#            hprimeDD_expr_list += [hprimeDD[i][j]]
+#
+#    # To evaluate the cube root, SIMD support requires e.g., SLEEF.
+#    #   Also need to be careful to not access memory out of bounds!
+#    #   After all this is a loop over ALL POINTS.
+#    #   Exercise to the reader: prove that for any reasonable grid,
+#    #   SIMD loops over grid interiors never write data out of bounds
+#    #   and are threadsafe for any reasonable number of threads.
+#    body = lp.simple_loop(
+#        loop_body=ccg.c_codegen(
+#            hprimeDD_expr_list,
+#            hDD_access_gfs,
+#            #enable_fd_codegen=True,
+#            enable_simd=False,
+#        ),
+#        loop_region="all points",
+#        enable_simd=False,
+#        OMP_collapse=OMP_collapse,
+#    )
+#
+#    schedule = f"""
+#schedule FUNC_NAME in MoL_PostStep before {thorn_name}_specify_evol_BoundaryConditions
+#{{
+#  LANG: C
+#  READS: hDD00GF, hDD01GF, hDD02GF, hDD11GF, hDD12GF, hDD22GF
+#  WRITES: hDD00GF(everywhere), hDD01GF(everywhere), hDD02GF(everywhere),
+#          hDD11GF(everywhere), hDD12GF(everywhere), hDD22GF(everywhere)
+#}} "Enforce detgammabar = detgammahat (= 1 in Cartesian)"
+#"""
+#
+#    ET_schedule_bin_entry = (
+#        "MoL_PostStep", schedule)
+#
+#    ET_current_thorn_CodeParams_used = None
+#    ET_other_thorn_CodeParams_used = None
+#
+#    cfc.register_CFunction(
+#        subdirectory=thorn_name,
+#        includes=includes,
+#        desc=desc,
+#        c_type=c_type,
+#        name=name,
+#        params=params,
+#        body=body,
+#        ET_thorn_name=thorn_name,
+#        ET_schedule_bins_entries=[ET_schedule_bin_entry],
+#        ET_current_thorn_CodeParams_used=ET_current_thorn_CodeParams_used,
+#        ET_other_thorn_CodeParams_used=ET_other_thorn_CodeParams_used,
+#    )
+#    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
+#########################################
+#  Declare the floor_the_lapse function #
+#########################################
+def register_CFunction_floor_the_lapse(
+    thorn_name: str,
+    CoordSystem: str,
+    enable_rfm_precompute: bool,
+    OMP_collapse: int = 1,
+) -> Union[None, pcg.NRPyEnv_type]:
+    """
+    Register the function that enforces the det(gammabar) = det(gammahat) constraint.
+
+    :param thorn_name: The Einstein Toolkit thorn name.
+    :param CoordSystem: The coordinate system to be used.
+    :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
+    :param OMP_collapse: Degree of OpenMP loop collapsing.
+
+    :return: None if in registration phase, else the updated NRPy environment.
+    """
+
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+
+    desc = """Apply floor to the lapse."""
+    c_type = "void"
+    name = f"{thorn_name}_floor_the_lapse"
+    params = "CCTK_ARGUMENTS"
+    includes = standard_ET_includes
+    body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
+  DECLARE_CCTK_PARAMETERS;
+
+#ifndef MAX
+#define MAX(a,b) ( ((a) > (b)) ? (a) : (b) )
+#endif
+
+"""
+    #lapse_floor = par.register_CodeParameter(
+    #    "REAL",
+    #    __name__,
+    #    "lapse_floor",
+    #    "1e-15",
+    #    add_to_glb_code_params_dict=True,
+    #)
+
+    lapse_access_gfs = [
+        gri.ETLegacyGridFunction.access_gf(
+            f"alpha", 0, 0, 0
+        )
+            ]
+    loop_body = lapse_access_gfs[0] + " = MAX(" + lapse_access_gfs[0] + ", lapse_floor);"
+
+    body += lp.simple_loop(
+        loop_body=loop_body,
+        loop_region="all points",
+        enable_simd=False,
+        OMP_collapse=OMP_collapse,
+    )
+
+    schedule = f"""
+schedule FUNC_NAME in MoL_PostStep before enforce_detgammahat_constraint_Baikal before {thorn_name}_specify_evol_BoundaryConditions
+{{
+  LANG: C
+  READS: alphaGF(everywhere)
+  WRITES: alphaGF(everywhere)
+}} "Set lapse = max(lapse_floor, lapse)"
+"""
+
+    ET_schedule_bin_entry = (
+        "MoL_PostStep", schedule)
+
+    ET_current_thorn_CodeParams_used = ["lapse_floor"]
+    ET_other_thorn_CodeParams_used = None
+
+    cfc.register_CFunction(
+        subdirectory=thorn_name,
+        includes=includes,
+        desc=desc,
+        c_type=c_type,
+        name=name,
+        params=params,
+        body=body,
+        ET_thorn_name=thorn_name,
+        ET_schedule_bins_entries=[ET_schedule_bin_entry],
+        ET_current_thorn_CodeParams_used=ET_current_thorn_CodeParams_used,
+        ET_other_thorn_CodeParams_used=ET_other_thorn_CodeParams_used,
+    )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
 ###################################################
 #  Declare the BSSN_constraints_order_* functions #
 ###################################################
@@ -745,7 +1096,7 @@ def register_CFunction_constraints(
 
     :param thorn_name: The Einstein Toolkit thorn name.
     :param CoordSystem: The coordinate system to be used.
-    :param enable_T4munu: Whether to include the stress-energy tensor. Defaults to False.
+    :param enable_T4munu: Whether to include the stress-energy tensor.
     :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
     :param enable_simd: Whether or not to enable SIMD instructions.
     :param fd_order: Order of finite difference method
@@ -758,11 +1109,9 @@ def register_CFunction_constraints(
         return None
 
     default_fd_order = par.parval_from_str("fd_order")
-    # Set this because parallel codegen needs the correct order
-    par.set_parval_from_str("fd_order", fd_order)
-
     default_enable_T4munu = par.parval_from_str("enable_T4munu")
-    # Set this because parallel codegen needs the correct order
+    # Set this because parallel codegen needs the correct local values
+    par.set_parval_from_str("fd_order", fd_order)
     par.set_parval_from_str("enable_T4munu", enable_T4munu)
 
     includes = standard_ET_includes
@@ -855,12 +1204,28 @@ schedule FUNC_NAME IN MoL_PseudoEvolution
 ###################################
 
 for evol_thorn_name in thorn_names:
-    enable_T4munu = True
-    if evol_thorn_name == "Baikal":
-        enable_T4munu = False
-    par.set_parval_from_str("enable_T4munu", False)
+    lapse_floor = par.register_CodeParameter(
+        "CCTK_REAL",
+        __name__,
+        "lapse_floor",
+        "1e-15",
+        add_to_glb_code_params_dict=True,
+    )
+    fd_order_param = par.register_CodeParameter(
+        "CCTK_INT",
+        __name__,
+        "FD_order",
+        "4",
+        add_to_glb_code_params_dict=True,
+    )
 
-    for fd_order in [4,6,8]:
+    enable_T4munu = True
+    fd_order_list = [2,4]
+    if evol_thorn_name == "BaikalVacuum":
+        enable_T4munu = False
+        fd_order_list = [4,6,8]
+
+    for fd_order in fd_order_list:
         par.set_parval_from_str("fd_order", fd_order)
         register_CFunction_ADM_to_BSSN(thorn_name=evol_thorn_name, CoordSystem=CoordSystem, fd_order=fd_order,
                                        enable_rfm_precompute=enable_rfm_precompute, enable_simd=enable_simd)
@@ -870,9 +1235,13 @@ for evol_thorn_name in thorn_names:
                                     enable_rfm_precompute=False, enable_simd=enable_simd,
                                     enable_KreissOliger_dissipation=enable_KreissOliger_dissipation)
         register_CFunction_constraints(thorn_name=evol_thorn_name, enable_T4munu=enable_T4munu, fd_order=fd_order, CoordSystem="Cartesian",
-                                    enable_rfm_precompute=False, enable_simd=enable_simd)
+                                       enable_rfm_precompute=False, enable_simd=enable_simd)
 
-    #register_CFunction_BSSN_to_ADM(thorn_name=evol_thorn_name, CoordSystem="Cartesian")
+    register_CFunction_BSSN_to_ADM(thorn_name=evol_thorn_name, CoordSystem="Cartesian")
+    register_CFunction_floor_the_lapse(thorn_name=evol_thorn_name, CoordSystem="Cartesian",
+                                       enable_rfm_precompute=False)
+    register_CFunction_enforce_detgammahat_constraint(thorn_name=evol_thorn_name, CoordSystem="Cartesian",
+                                                      enable_rfm_precompute=False)
 
 if __name__ == "__main__" and parallel_codegen_enable:
     pcg.do_parallel_codegen()
