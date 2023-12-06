@@ -268,7 +268,7 @@ class BSSNQuantities:
         # Step 7.a: Defines RbarDD, DGammaUDD, gammabarDD_dHatD, DGammaU
 
         # Step 7.a.i: Define \varepsilon_{ij} = epsDD[i][j]
-        epsDD = ixp.zerorank3()
+        epsDD = ixp.zerorank2()
         for i in range(3):
             for j in range(3):
                 epsDD[i][j] = self.hDD[i][j] * rfm.ReDD[i][j]
