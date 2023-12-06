@@ -61,19 +61,7 @@ if (ierr < 0) CCTK_ERROR("Failed to register BC with Driver for {thorn_name}::{g
 schedule FUNC_NAME in Driver_BoundarySelect
 {
   LANG: C
-  OPTIONS: LEVEL
 } "Register boundary conditions in PreSync bin Driver_BoundarySelect."
-""",
-        ),
-        (
-            "MoL_PostStep",
-            """
-schedule FUNC_NAME in MoL_PostStep
-{
-  LANG: C
-  OPTIONS: LEVEL
-  SYNC: evol_variables
-} "Dummy function to force AMR+interprocessor synchronization"
 """,
         ),
     ]
@@ -89,6 +77,79 @@ schedule FUNC_NAME in MoL_PostStep
         ET_schedule_bins_entries=ET_schedule_bins_entries,
     )
 
+def register_CFunction_specify_evol_BoundaryConditions(thorn_name: str) -> None:
+    """
+    Register C functions for specifying boundary conditions within a given thorn.
+
+    This function generates and registers C code that sets the boundary conditions
+    for both auxiliary and evolved grid functions within a specific thorn. The
+    boundary conditions are specified based on the `Boundary` method in the
+    Einstein Toolkit.
+
+    :param thorn_name: The name of the thorn for which to specify boundary conditions.
+    :return: None
+    """
+    includes = [
+        "stdio.h",
+        "cctk.h",
+        "cctk_Arguments.h",
+        "cctk_Parameters.h",
+        "cctk_Faces.h",
+        "util_Table.h",
+    ]
+
+    desc = """
+EVOL variables are set to use `none` boundary conditions, as these are set via NewRad.
+
+Since we choose NewRad boundary conditions, we must register all
+evolved gridfunctions to have boundary type "none". This is because
+NewRad directly modifies the RHSs.
+
+This code is based on Kranc's McLachlan/ML_BSSN/src/Boundaries.cc code.
+"""
+
+    c_type = "void"
+    name = f"{thorn_name}_specify_evol_BoundaryConditions"
+    params = "CCTK_ARGUMENTS"
+
+    body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
+DECLARE_CCTK_PARAMETERS;
+CCTK_INT ierr CCTK_ATTRIBUTE_UNUSED = 0;
+"""
+    for gfname, gf in sorted(gri.glb_gridfcs_dict.items()):
+        if gf.group == "EVOL":
+            body += f"""
+ierr = Boundary_SelectVarForBC(cctkGH, CCTK_ALL_FACES, 1, -1, "{thorn_name}::{gfname}GF", "none");
+if (ierr < 0) CCTK_ERROR("Failed to register BC with Boundary for {thorn_name}::{gfname}GF!");
+"""
+
+    ET_schedule_bins_entries = [
+        (
+            "MoL_PostStep",
+            f"""
+schedule FUNC_NAME in MoL_PostStep
+{{
+  LANG: C
+  SYNC: evol_variables
+}} "Register boundary conditions and perform AMR+interprocessor synchronization"
+
+schedule GROUP ApplyBCs as {thorn_name}_ApplyBCs in MoL_PostStep after FUNC_NAME
+{{
+}} "Group for applying boundary conditions"
+""",
+        ),
+    ]
+    cfc.register_CFunction(
+        subdirectory=thorn_name,
+        includes=includes,
+        desc=desc,
+        c_type=c_type,
+        name=name,
+        params=params,
+        body=body,
+        ET_thorn_name=thorn_name,
+        ET_schedule_bins_entries=ET_schedule_bins_entries,
+    )
 
 def register_CFunction_specify_NewRad_BoundaryConditions_parameters(
     thorn_name: str,
@@ -169,6 +230,7 @@ def register_CFunctions(thorn_name: str) -> None:
     :return: None
     """
     register_CFunction_specify_Driver_BoundaryConditions(thorn_name=thorn_name)
+    register_CFunction_specify_evol_BoundaryConditions(thorn_name=thorn_name)
     register_CFunction_specify_NewRad_BoundaryConditions_parameters(
         thorn_name=thorn_name
     )
