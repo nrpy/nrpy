@@ -5,9 +5,18 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
+# Notes from development:
+#
+# BSSN_to_ADM:
+# - I don't understand the purpose of the second scheduling in Baikal
+#   but it is necessary for tests to pass.
+# MoL_PostStep:
+# - scheduling adjusted to be deterministic w.ur.t other functions
+
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
+import re
 from collections import OrderedDict as ODict
 from typing import Union, cast, List
 from pathlib import Path
@@ -72,27 +81,6 @@ par.set_parval_from_str("register_MU_gridfunctions", register_MU_gridfunctions)
 
 standard_ET_includes = ["math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
 
-if "H" not in gri.glb_gridfcs_dict:
-    _ = gri.register_gridfunctions(
-        "H", group="AUX",
-    )
-    _ = gri.register_gridfunctions(
-        "MUSQUARED", group="AUX",
-    )
-    if register_MU_gridfunctions and "MU" not in gri.glb_gridfcs_dict:
-        _ = gri.register_gridfunctions_for_single_rank1(
-            "MU", group="AUX",
-        )
-if not any(
-    "RbarDD00" in gf.name for gf in gri.glb_gridfcs_dict.values()
-):
-           _ = gri.register_gridfunctions_for_single_rank2(
-               "RbarDD",
-               symmetry="sym01",
-               group="AUXEVOL",
-           )
-
-
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
@@ -130,11 +118,7 @@ def register_CFunction_ADM_to_BSSN(
 
     desc = """Converting from ADM to BSSN quantities is required in the Einstein Toolkit,
 as initial data are given in terms of ADM quantities, and {thorn_name} evolves the BSSN quantities."""
-    c_type = "void"
     name = f"{thorn_name}_ADM_to_BSSN_order_{fd_order}"
-    params = "CCTK_ARGUMENTS"
-    includes = standard_ET_includes
-
     body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
   DECLARE_CCTK_PARAMETERS;
 
@@ -145,21 +129,21 @@ as initial data are given in terms of ADM quantities, and {thorn_name} evolves t
 
     for i in range(3):
         shift_gf_access  = gri.ETLegacyGridFunction.access_gf(gf_name="beta"+coord_name[i], use_GF_suffix=False)
-        loop_body += f"const double local_betaU{i} = {shift_gf_access};\n"
+        loop_body += f"const CCTK_REAL local_betaU{i} = {shift_gf_access};\n"
 
     for i in range(3):
         dtshift_gf_access  = gri.ETLegacyGridFunction.access_gf(gf_name="dtbeta"+coord_name[i], use_GF_suffix=False)
-        loop_body += f"const double local_BU{i} = {dtshift_gf_access};\n"
+        loop_body += f"const CCTK_REAL local_BU{i} = {dtshift_gf_access};\n"
 
     for i in range(3):
         for j in range(i, 3):
             gamma_gf_access  = gri.ETLegacyGridFunction.access_gf(gf_name="g"+coord_name[i]+coord_name[j], use_GF_suffix=False)
-            loop_body += f"const double local_gDD{i}{j} = {gamma_gf_access};\n"
+            loop_body += f"const CCTK_REAL local_gDD{i}{j} = {gamma_gf_access};\n"
 
     for i in range(3):
         for j in range(i, 3):
             curv_gf_access  = gri.ETLegacyGridFunction.access_gf(gf_name="k"+coord_name[i]+coord_name[j], use_GF_suffix=False)
-            loop_body += f"const double local_kDD{i}{j} = {curv_gf_access};\n"
+            loop_body += f"const CCTK_REAL local_kDD{i}{j} = {curv_gf_access};\n"
 
     gammaCartDD = ixp.declarerank2("local_gDD", symmetry="sym01")
     KCartDD = ixp.declarerank2("local_kDD", symmetry="sym01")
@@ -250,35 +234,32 @@ as initial data are given in terms of ADM quantities, and {thorn_name} evolves t
   ExtrapolateGammas(cctkGH, lambdaU2GF);
 """
 
-    ET_schedule_bin_entry = (
-        "CCTK_INITIAL",
-        f"""
-if(FD_order=={fd_order}) {{
+    schedule = f"""
+if(FD_order == {fd_order}) {{
   schedule FUNC_NAME at CCTK_INITIAL after ADMBase_PostInitial
   {{
     LANG: C
-    READS: ADMBase::metric,
-           ADMBase::shift,
-           ADMBase::curv,
-           ADMBase::dtshift,
-           ADMBase::lapse
+    READS:  ADMBase::metric,
+            ADMBase::shift,
+            ADMBase::curv,
+            ADMBase::dtshift,
+            ADMBase::lapse
     WRITES: evol_variables
     SYNC: evol_variables
   }} "Convert initial data into BSSN variables"
 }}
-""",
-    )
+"""
 
     cfc.register_CFunction(
         subdirectory=thorn_name,
-        includes=includes,
+        includes=standard_ET_includes,
         desc=desc,
-        c_type=c_type,
+        c_type="void",
         name=name,
-        params=params,
+        params="CCTK_ARGUMENTS",
         body=body,
         ET_thorn_name=thorn_name,
-        ET_schedule_bins_entries=[ET_schedule_bin_entry],
+        ET_schedule_bins_entries=[("CCTK_INITIAL", schedule)],
     )
     par.set_parval_from_str("fd_order", default_fd_order)
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
@@ -321,16 +302,14 @@ def register_CFunction_Ricci_eval(
     if enable_simd:
         includes += [("./SIMD/simd_intrinsics.h")]
     desc = r"""Set RHSs for the BSSN evolution equations."""
-    c_type = "void"
     name = f"{thorn_name}_Ricci_eval_order_{fd_order}"
-    params = "CCTK_ARGUMENTS"
     body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
 """
     if enable_simd:
         body +=f"""
-  const REAL_SIMD_ARRAY invdx0 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(0));
-  const REAL_SIMD_ARRAY invdx1 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(1));
-  const REAL_SIMD_ARRAY invdx2 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(2));
+  const REAL_SIMD_ARRAY invdxx0 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(0));
+  const REAL_SIMD_ARRAY invdxx1 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(1));
+  const REAL_SIMD_ARRAY invdxx2 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(2));
 
 """
     else:
@@ -361,35 +340,28 @@ def register_CFunction_Ricci_eval(
         OMP_collapse=OMP_collapse,
     )
 
-    ET_schedule_bin_entry = (
-        "MoL_CalcRHS",
-        f"""
-if(FD_order=={fd_order}) {{
-  schedule FUNC_NAME IN MoL_CalcRHS as {thorn_name}_Ricci before {thorn_name}_RHS
+    schedule = f"""
+if(FD_order == {fd_order}) {{
+  schedule FUNC_NAME in MoL_CalcRHS as {thorn_name}_Ricci before {thorn_name}_RHS
   {{
     LANG: C
-    READS: hDD00GF, hDD01GF, hDD02GF, hDD11GF, hDD12GF, hDD22GF,
-           lambdaU0GF, lambdaU1GF, lambdaU2GF
+    READS:  hDD00GF, hDD01GF, hDD02GF, hDD11GF, hDD12GF, hDD22GF,
+            lambdaU0GF, lambdaU1GF, lambdaU2GF
     WRITES: RbarDD00GF, RbarDD01GF, RbarDD02GF, RbarDD11GF, RbarDD12GF, RbarDD22GF
   }} "Compute Ricci tensor, needed for BSSN RHSs, at finite-differencing order {fd_order}"
 }}
-""",
-    )
-    ET_current_thorn_CodeParams_used = None
-    ET_other_thorn_CodeParams_used = None
+"""
 
     cfc.register_CFunction(
         subdirectory=thorn_name,
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        c_type="void",
         name=name,
-        params=params,
+        params="CCTK_ARGUMENTS",
         body=body,
         ET_thorn_name=thorn_name,
-        ET_schedule_bins_entries=[ET_schedule_bin_entry],
-        ET_current_thorn_CodeParams_used=ET_current_thorn_CodeParams_used,
-        ET_other_thorn_CodeParams_used=ET_other_thorn_CodeParams_used,
+        ET_schedule_bins_entries=[("MoL_CalcRHS", schedule)],
     )
     par.set_parval_from_str("fd_order", default_fd_order)
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
@@ -443,18 +415,15 @@ def register_CFunction_rhs_eval(
     includes = standard_ET_includes
     if enable_simd:
         includes += [("./SIMD/simd_intrinsics.h")]
-    #gri.register_gridfunctions(["uu_exact", "vv_exact"], group="AUX")
     desc = r"""Set RHSs for the BSSN evolution equations."""
-    c_type = "void"
     name = f"{thorn_name}_rhs_eval_order_{fd_order}"
-    params = "CCTK_ARGUMENTS"
     body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
 """
     if enable_simd:
         body +=f"""
-  const REAL_SIMD_ARRAY invdx0 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(0));
-  const REAL_SIMD_ARRAY invdx1 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(1));
-  const REAL_SIMD_ARRAY invdx2 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(2));
+  const REAL_SIMD_ARRAY invdxx0 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(0));
+  const REAL_SIMD_ARRAY invdxx1 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(1));
+  const REAL_SIMD_ARRAY invdxx2 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(2));
   const CCTK_REAL *param_eta CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("eta", "{thorn_name}", NULL);
   const REAL_SIMD_ARRAY eta CCTK_ATTRIBUTE_UNUSED = ConstSIMD(*param_eta);
   const CCTK_REAL *param_diss_strength CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("diss_strength", "{thorn_name}", NULL);
@@ -551,6 +520,12 @@ def register_CFunction_rhs_eval(
 
     BSSN_RHSs_access_gf: List[str] = []
     for var in rhs.BSSN_RHSs_varname_to_expr_dict.keys():
+        pattern = re.compile(r'([a-zA-Z_]+)_rhs([a-zA-Z_]+[0-2]+)')
+        patmatch = pattern.match(var)
+        if patmatch:
+            var_name = patmatch.group(1) + patmatch.group(2) + "_rhs"
+        else:
+            var_name = var
         BSSN_RHSs_access_gf += [
             gri.ETLegacyGridFunction.access_gf(gf_name=var)
         ]
@@ -562,7 +537,6 @@ def register_CFunction_rhs_eval(
     betaU = ixp.zerorank1()
     vetU = ixp.declarerank1("vetU")
     for i in range(3):
-        # self.lambda_rhsU[i] = self.Lambdabar_rhsU[i] / rfm.ReU[i]
         betaU[i] = vetU[i] * rfm.ReU[i]
     body += lp.simple_loop(
         loop_body=ccg.c_codegen(
@@ -578,36 +552,33 @@ def register_CFunction_rhs_eval(
         OMP_collapse=OMP_collapse,
     )
 
-    ET_schedule_bin_entry = (
-        "MoL_CalcRHS",
-        f"""
-if(FD_order=={fd_order}) {{
-  schedule FUNC_NAME IN MoL_CalcRHS as {thorn_name}_RHS after {thorn_name}_Ricci
+    schedule = f"""
+if(FD_order == {fd_order}) {{
+  schedule FUNC_NAME in MoL_CalcRHS as {thorn_name}_RHS after {thorn_name}_Ricci
   {{
     LANG: C
-    READS: evol_variables(everywhere),
-           auxevol_variables(interior)
+    READS:  evol_variables(everywhere),
+            auxevol_variables(interior)
     WRITES: evol_variables_rhs(interior)
   }} "Evaluate BSSN RHSs, at finite-differencing order {fd_order}"
 }}
-""",
-    )
+"""
 
-    ET_current_thorn_CodeParams_used = ["eta", "diss_strength", "FD_order"]
-    ET_other_thorn_CodeParams_used = None
+    params = ["eta", "diss_strength", "FD_order"]
+    if thorn_name == "Baikal":
+        params += ["PI"]
 
     cfc.register_CFunction(
         subdirectory=thorn_name,
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        c_type="void",
         name=name,
-        params=params,
+        params="CCTK_ARGUMENTS",
         body=body,
         ET_thorn_name=thorn_name,
-        ET_schedule_bins_entries=[ET_schedule_bin_entry],
-        ET_current_thorn_CodeParams_used=ET_current_thorn_CodeParams_used,
-        ET_other_thorn_CodeParams_used=ET_other_thorn_CodeParams_used,
+        ET_schedule_bins_entries=[("MoL_CalcRHS", schedule)],
+        ET_current_thorn_CodeParams_used=params
     )
     par.set_parval_from_str("fd_order", default_fd_order)
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
@@ -637,11 +608,8 @@ def register_CFunction_BSSN_to_ADM(
     includes = standard_ET_includes
     if enable_simd:
         includes += [("./SIMD/simd_intrinsics.h")]
-    #gri.register_gridfunctions(["uu_exact", "vv_exact"], group="AUX")
     desc = r"""Set RHSs for the BSSN evolution equations."""
-    c_type = "void"
     name = f"{thorn_name}_BSSN_to_ADM"
-    params = "CCTK_ARGUMENTS"
     body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
   DECLARE_CCTK_PARAMETERS;
 
@@ -673,7 +641,7 @@ def register_CFunction_BSSN_to_ADM(
     for i in range(3):
         for j in range(i, 3):
             hDD_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name="hDD"+str(i)+str(j))
-            loop_body += f"const double hDD{i}{j} = {hDD_gf_access};\n"
+            loop_body += f"const CCTK_REAL hDD{i}{j} = {hDD_gf_access};\n"
 
             gamma_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name="g"+coord_name[i]+coord_name[j], use_GF_suffix=False)
             list_of_output_exprs += [bssn2adm.gammaDD[i][j]]
@@ -682,7 +650,7 @@ def register_CFunction_BSSN_to_ADM(
     for i in range(3):
         for j in range(i, 3):
             aDD_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name="k"+str(i)+str(j))
-            loop_body += f"const double aDD{i}{j} = {aDD_gf_access};\n"
+            loop_body += f"const CCTK_REAL aDD{i}{j} = {aDD_gf_access};\n"
 
             curv_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name="k"+coord_name[i]+coord_name[j], use_GF_suffix=False)
             list_of_output_exprs += [bssn2adm.KDD[i][j]]
@@ -704,34 +672,54 @@ def register_CFunction_BSSN_to_ADM(
         OMP_collapse=OMP_collapse,
     )
 
-    ET_schedule_bin_entry = (
-        "MoL_PostStep",
+    schedule_poststep = ("MoL_PostStep",
         f"""
-schedule FUNC_NAME IN MoL_PostStep after {thorn_name}_ApplyBCs before ADMBase_SetADMVars
+schedule FUNC_NAME in MoL_PostStep after {thorn_name}_enforce_detgammahat_constraint before ADMBase_SetADMVars
 {{
   LANG: C
-  READS: evol_variables(everywhere),
-         auxevol_variables(interior)
-  WRITES: evol_variables_rhs(interior)
+  READS:  aDD00GF, aDD01GF, aDD02GF, aDD11GF, aDD12GF, aDD22GF,
+          hDD00GF, hDD01GF, hDD02GF, hDD11GF, hDD12GF, hDD22GF,
+          vetU0GF, vetU1GF, vetU2GF, betU0GF, betU1GF, betU2GF,
+          cfGF, trKGF, alphaGF
+  WRITES: ADMBase::metric(everywhere),
+          ADMBase::shift(everywhere),
+          ADMBase::curv(everywhere),
+          ADMBase::dtshift(everywhere),
+          ADMBase::lapse(everywhere)
 }} "Perform BSSN-to-ADM conversion. Useful for diagnostics."
-""",
-    )
+""")
 
-    ET_current_thorn_CodeParams_used = None
-    ET_other_thorn_CodeParams_used = None
+    schedule_pseudoevol = ("MoL_PseudoEvolution",
+        f"""
+schedule FUNC_NAME in MoL_PseudoEvolution after {thorn_name}_auxgfs_ApplyBCs
+{{
+  LANG: C
+  READS:  aDD00GF, aDD01GF, aDD02GF, aDD11GF, aDD12GF, aDD22GF,
+          hDD00GF, hDD01GF, hDD02GF, hDD11GF, hDD12GF, hDD22GF,
+          vetU0GF, vetU1GF, vetU2GF, betU0GF, betU1GF, betU2GF,
+          cfGF, trKGF, alphaGF
+  WRITES: ADMBase::metric(everywhere),
+          ADMBase::shift(everywhere),
+          ADMBase::curv(everywhere),
+          ADMBase::dtshift(everywhere),
+          ADMBase::lapse(everywhere)
+}} "Perform BSSN-to-ADM conversion in MoL_PseudoEvolution. Needed for proper HydroBase integration."
+""")
+
+    ET_schedule_bins_entries = [schedule_poststep]
+    if thorn_name == "Baikal":
+        ET_schedule_bins_entries += [schedule_pseudoevol]
 
     cfc.register_CFunction(
         subdirectory=thorn_name,
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        c_type="void",
         name=name,
-        params=params,
+        params="CCTK_ARGUMENTS",
         body=body,
         ET_thorn_name=thorn_name,
-        ET_schedule_bins_entries=[ET_schedule_bin_entry],
-        ET_current_thorn_CodeParams_used=ET_current_thorn_CodeParams_used,
-        ET_other_thorn_CodeParams_used=ET_other_thorn_CodeParams_used,
+        ET_schedule_bins_entries=ET_schedule_bins_entries,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
@@ -765,16 +753,12 @@ def register_CFunction_enforce_detgammahat_constraint(
         CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
     ]
 
-    includes = standard_ET_includes
     desc = r"""Enforce det(gammabar) = det(gammahat) constraint. Required for strong hyperbolicity."""
-    c_type = "void"
     name = f"{thorn_name}_enforce_detgammahat_constraint"
-    params = "CCTK_ARGUMENTS"
     body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
   DECLARE_CCTK_PARAMETERS;
 
 """
-
 
     # First define the Kronecker delta:
     KroneckerDeltaDD = ixp.zerorank2()
@@ -802,12 +786,6 @@ def register_CFunction_enforce_detgammahat_constraint(
                 gri.ETLegacyGridFunction.access_gf(gf_name=f"hDD{i}{j}")
             ]
             hprimeDD_expr_list += [hprimeDD[i][j]]
-#    for i in range(3):
-#        for j in range(i, 3):
-#            hDD_access_gfs += [
-#                gri.ETLegacyGridFunction.access_gf(gf_name=f"hDD{i}{j}")
-#            ]
-#            hprimeDD_expr_list += [hprimeDD[i][j]]
 
     # To evaluate the cube root, SIMD support requires e.g., SLEEF.
     #   Also need to be careful to not access memory out of bounds!
@@ -815,12 +793,12 @@ def register_CFunction_enforce_detgammahat_constraint(
     #   Exercise to the reader: prove that for any reasonable grid,
     #   SIMD loops over grid interiors never write data out of bounds
     #   and are threadsafe for any reasonable number of threads.
-    body = lp.simple_loop(
+    body += lp.simple_loop(
         loop_body=ccg.c_codegen(
             hprimeDD_expr_list,
             hDD_access_gfs,
-            #enable_fd_codegen=True,
             enable_simd=False,
+            automatically_read_gf_data_from_memory=True
         ),
         loop_region="all points",
         enable_simd=False,
@@ -831,30 +809,22 @@ def register_CFunction_enforce_detgammahat_constraint(
 schedule FUNC_NAME in MoL_PostStep
 {{
   LANG: C
-  READS: hDD00GF, hDD01GF, hDD02GF, hDD11GF, hDD12GF, hDD22GF
+  READS:  hDD00GF, hDD01GF, hDD02GF, hDD11GF, hDD12GF, hDD22GF
   WRITES: hDD00GF(everywhere), hDD01GF(everywhere), hDD02GF(everywhere),
           hDD11GF(everywhere), hDD12GF(everywhere), hDD22GF(everywhere)
 }} "Enforce detgammabar = detgammahat (= 1 in Cartesian)"
 """
 
-    ET_schedule_bin_entry = (
-        "MoL_PostStep", schedule)
-
-    ET_current_thorn_CodeParams_used = None
-    ET_other_thorn_CodeParams_used = None
-
     cfc.register_CFunction(
         subdirectory=thorn_name,
-        includes=includes,
+        includes=standard_ET_includes,
         desc=desc,
-        c_type=c_type,
+        c_type="void",
         name=name,
-        params=params,
+        params="CCTK_ARGUMENTS",
         body=body,
         ET_thorn_name=thorn_name,
-        ET_schedule_bins_entries=[ET_schedule_bin_entry],
-        ET_current_thorn_CodeParams_used=ET_current_thorn_CodeParams_used,
-        ET_other_thorn_CodeParams_used=ET_other_thorn_CodeParams_used,
+        ET_schedule_bins_entries=[("MoL_PostStep", schedule)],
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
@@ -888,16 +858,13 @@ def register_CFunction_T4DD_to_T4UU(
         CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
     ]
 
-    includes = standard_ET_includes
     desc = r"""Compute T4UU from T4DD (provided by TmunuBase),
 using BSSN quantities as inputs for the 4D raising operation
 
 WARNING: Do not enable SIMD here, as it is not guaranteed that
          cctk_lsh[0]*cctk_lsh[1]*cctk_lsh[2] is a multiple of
          SIMD_width!"""
-    c_type = "void"
     name = f"{thorn_name}_T4DD_to_T4UU"
-    params = "CCTK_ARGUMENTS"
     body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
   DECLARE_CCTK_PARAMETERS;
 
@@ -926,17 +893,20 @@ WARNING: Do not enable SIMD here, as it is not guaranteed that
 
     loop_body = ""
     lapse_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name=f"alpha")
-    loop_body += f"const double alpha = {lapse_gf_access};\n"
+    loop_body += f"const CCTK_REAL alpha = {lapse_gf_access};\n"
     cf_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name=f"cf")
-    loop_body += f"const double cf = {cf_gf_access};\n"
+    loop_body += f"const CCTK_REAL cf = {cf_gf_access};\n"
     for i in range(3):
-        vet_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name=f"vet{i}")
-        loop_body += f"const double vet{i} = {vet_gf_access};\n"
+        vet_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name=f"vetU{i}")
+        loop_body += f"const CCTK_REAL vetU{i} = {vet_gf_access};\n"
+    for i in range(3):
         for j in range(i, 3):
-            Tmunu_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name="eT"+coord_name[i]+coord_name[j], use_GF_suffix=False)
-            loop_body += f"const double T4DD{i}{j} = {Tmunu_gf_access};\n"
             hDD_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name=f"hDD{i}{j}")
-            loop_body += f"const double hDD{i}{j} = {hDD_gf_access};\n"
+            loop_body += f"const CCTK_REAL hDD{i}{j} = {hDD_gf_access};\n"
+    for i in range(4):
+        for j in range(i, 4):
+            Tmunu_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name="eT"+coord_name_4D[i]+coord_name_4D[j], use_GF_suffix=False)
+            loop_body += f"const CCTK_REAL T4DD{i}{j} = {Tmunu_gf_access};\n"
 
     loop_body += ccg.c_codegen(
         T4UU_expr_list,
@@ -944,41 +914,54 @@ WARNING: Do not enable SIMD here, as it is not guaranteed that
         enable_simd=False,
     )
 
-    body = lp.simple_loop(
+    body += lp.simple_loop(
         loop_body=loop_body,
         loop_region="all points",
         enable_simd=False,
         OMP_collapse=OMP_collapse,
     )
 
-    schedule = f"""
-schedule FUNC_NAME in MoL_PostStep
+    schedule1 = f"""
+schedule FUNC_NAME in MoL_CalcRHS before {thorn_name}_RHS
 {{
   LANG: C
-  READS: hDD00GF, hDD01GF, hDD02GF, hDD11GF, hDD12GF, hDD22GF
-  WRITES: hDD00GF(everywhere), hDD01GF(everywhere), hDD02GF(everywhere),
-          hDD11GF(everywhere), hDD12GF(everywhere), hDD22GF(everywhere)
+  READS:  TmunuBase::stress_energy_scalar,
+          TmunuBase::stress_energy_vector,
+          TmunuBase::stress_energy_tensor,
+          hDD00GF, hDD01GF, hDD02GF, hDD11GF, hDD12GF, hDD22GF,
+          alphaGF, cfGF, vetU0GF, vetU1GF, vetU2GF
+  WRITES: T4UU00GF(everywhere), T4UU01GF(everywhere), T4UU02GF(everywhere), T4UU03GF(everywhere),
+          T4UU11GF(everywhere), T4UU12GF(everywhere), T4UU13GF(everywhere),
+          T4UU22GF(everywhere), T4UU23GF(everywhere), T4UU33GF(everywhere)
+}} "Compute T4UU from T4DD (provided in eT?? from TmunuBase), needed for BSSN RHSs"
+"""
+    schedule2 = f"""
+schedule FUNC_NAME in MoL_PseudoEvolution before {thorn_name}_BSSN_constraints
+{{
+  LANG: C
+  READS:  TmunuBase::stress_energy_scalar,
+          TmunuBase::stress_energy_vector,
+          TmunuBase::stress_energy_tensor,
+          hDD00GF, hDD01GF, hDD02GF, hDD11GF, hDD12GF, hDD22GF,
+          alphaGF, cfGF, vetU0GF, vetU1GF, vetU2GF
+  WRITES: T4UU00GF(everywhere), T4UU01GF(everywhere), T4UU02GF(everywhere), T4UU03GF(everywhere),
+          T4UU11GF(everywhere), T4UU12GF(everywhere), T4UU13GF(everywhere),
+          T4UU22GF(everywhere), T4UU23GF(everywhere), T4UU33GF(everywhere)
 }} "Compute T4UU from T4DD (provided in eT?? from TmunuBase), needed for BSSN constraints"
 """
-
-    ET_schedule_bin_entry = (
-        "MoL_PostStep", schedule)
-
-    ET_current_thorn_CodeParams_used = None
-    ET_other_thorn_CodeParams_used = None
+    schedule_RHS = ("MoL_CalcRHS", schedule1)
+    schedule_constraints = ("MoL_PseudoEvolution", schedule2)
 
     cfc.register_CFunction(
         subdirectory=thorn_name,
-        includes=includes,
+        includes=standard_ET_includes,
         desc=desc,
-        c_type=c_type,
+        c_type="void",
         name=name,
-        params=params,
+        params="CCTK_ARGUMENTS",
         body=body,
         ET_thorn_name=thorn_name,
-        ET_schedule_bins_entries=[ET_schedule_bin_entry],
-        ET_current_thorn_CodeParams_used=ET_current_thorn_CodeParams_used,
-        ET_other_thorn_CodeParams_used=ET_other_thorn_CodeParams_used,
+        ET_schedule_bins_entries=[schedule_RHS, schedule_constraints],
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
@@ -1007,10 +990,7 @@ def register_CFunction_floor_the_lapse(
         return None
 
     desc = """Apply floor to the lapse."""
-    c_type = "void"
     name = f"{thorn_name}_floor_the_lapse"
-    params = "CCTK_ARGUMENTS"
-    includes = standard_ET_includes
     body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
   DECLARE_CCTK_PARAMETERS;
 
@@ -1019,14 +999,6 @@ def register_CFunction_floor_the_lapse(
 #endif
 
 """
-    #lapse_floor = par.register_CodeParameter(
-    #    "REAL",
-    #    __name__,
-    #    "lapse_floor",
-    #    "1e-15",
-    #    add_to_glb_code_params_dict=True,
-    #)
-
     lapse_access_gfs = [
         gri.ETLegacyGridFunction.access_gf(gf_name=f"alpha")
             ]
@@ -1043,29 +1015,22 @@ def register_CFunction_floor_the_lapse(
 schedule FUNC_NAME in MoL_PostStep before {thorn_name}_enforce_detgammahat_constraint
 {{
   LANG: C
-  READS: alphaGF(everywhere)
+  READS:  alphaGF(everywhere)
   WRITES: alphaGF(everywhere)
 }} "Set lapse = max(lapse_floor, lapse)"
 """
 
-    ET_schedule_bin_entry = (
-        "MoL_PostStep", schedule)
-
-    ET_current_thorn_CodeParams_used = ["lapse_floor"]
-    ET_other_thorn_CodeParams_used = None
-
     cfc.register_CFunction(
         subdirectory=thorn_name,
-        includes=includes,
+        includes=standard_ET_includes,
         desc=desc,
-        c_type=c_type,
+        c_type="void",
         name=name,
-        params=params,
+        params="CCTK_ARGUMENTS",
         body=body,
         ET_thorn_name=thorn_name,
-        ET_schedule_bins_entries=[ET_schedule_bin_entry],
-        ET_current_thorn_CodeParams_used=ET_current_thorn_CodeParams_used,
-        ET_other_thorn_CodeParams_used=ET_other_thorn_CodeParams_used,
+        ET_schedule_bins_entries=[("MoL_PostStep", schedule)],
+        ET_current_thorn_CodeParams_used=["lapse_floor"]
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
@@ -1109,16 +1074,14 @@ def register_CFunction_constraints(
     if enable_simd:
         includes += [("./SIMD/simd_intrinsics.h")]
     desc = r"""Evaluate BSSN constraints."""
-    c_type = "void"
     name = f"{thorn_name}_BSSN_constraints_order_{fd_order}"
-    params = "CCTK_ARGUMENTS"
     body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
 """
     if enable_simd:
         body +=f"""
-  const REAL_SIMD_ARRAY invdx0 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(0));
-  const REAL_SIMD_ARRAY invdx1 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(1));
-  const REAL_SIMD_ARRAY invdx2 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(2));
+  const REAL_SIMD_ARRAY invdxx0 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(0));
+  const REAL_SIMD_ARRAY invdxx1 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(1));
+  const REAL_SIMD_ARRAY invdxx2 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(2));
 
 """
     else:
@@ -1153,38 +1116,84 @@ def register_CFunction_constraints(
     )
 
     schedule = f"""
-schedule FUNC_NAME IN MoL_PseudoEvolution
-{{
-  LANG: C
-    READS: aDD00GF, aDD01GF, aDD02GF, aDD11GF, aDD12GF, aDD22GF, trKGF,
-           hDD00GF, hDD01GF, hDD02GF, hDD11GF, hDD12GF, hDD22GF,
-           cfGF, lambdaU0GF, lambdaU1GF, lambdaU2GF"""
+if(FD_order == {fd_order}) {{
+  schedule FUNC_NAME in MoL_PseudoEvolution as {thorn_name}_BSSN_constraints after BaikalVacuum_ApplyBCs
+  {{
+    LANG: C
+    READS:  aDD00GF, aDD01GF, aDD02GF, aDD11GF, aDD12GF, aDD22GF,
+            hDD00GF, hDD01GF, hDD02GF, hDD11GF, hDD12GF, hDD22GF,
+            trKGF, cfGF, lambdaU0GF, lambdaU1GF, lambdaU2GF"""
     if enable_T4munu:
-        schedule += f"""
-           alphaGF, vetU0GF, vetU1GF, vetU2GF,"""
+        schedule += f""",
+            alphaGF, vetU0GF, vetU1GF, vetU2GF,
+            T4UU00GF, T4UU01GF, T4UU02GF, T4UU03GF"""
     schedule += f"""
     WRITES: aux_variables
-}} "Compute BSSN (Hamiltonian and momentum) constraints, at finite-differencing order {fd_order}"
+  }} "Compute BSSN (Hamiltonian and momentum) constraints, at finite-differencing order {fd_order}"
+}}
 """
 
-    ET_schedule_bin_entry = (
-        "MoL_PseudoEvolution", schedule)
-
-    ET_current_thorn_CodeParams_used = None
-    ET_other_thorn_CodeParams_used = None
+    params = None
+    if thorn_name == "Baikal":
+        params = ["PI"]
 
     cfc.register_CFunction(
         subdirectory=thorn_name,
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        c_type="void",
         name=name,
-        params=params,
+        params="CCTK_ARGUMENTS",
         body=body,
         ET_thorn_name=thorn_name,
-        ET_schedule_bins_entries=[ET_schedule_bin_entry],
-        ET_current_thorn_CodeParams_used=ET_current_thorn_CodeParams_used,
-        ET_other_thorn_CodeParams_used=ET_other_thorn_CodeParams_used,
+        ET_schedule_bins_entries=[("MoL_PseudoEvolution", schedule)],
+        ET_current_thorn_CodeParams_used=params
+    )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
+#########################################
+#  Declare the RegisterSlicing function #
+#########################################
+
+def register_CFunction_slicing(
+    thorn_name: str,
+    ) -> Union[None, pcg.NRPyEnv_type]:
+    """
+    Register the slicing registration function.
+
+    :param thorn_name: The Einstein Toolkit thorn name.
+
+    :return: None if in registration phase, else the updated NRPy environment.
+    """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+
+    desc = f"""Register slicing condition for NRPy+-generated thorn {thorn_name}."""
+    name = f"{thorn_name}_RegisterSlicing"
+    body = f"""
+    Einstein_RegisterSlicing ("{thorn_name}");
+  return 0;"""
+
+    schedule = """
+schedule FUNC_NAME at STARTUP
+{
+  LANG: C
+  OPTIONS: meta
+} "Register 3+1 slicing condition"
+"""
+
+
+    cfc.register_CFunction(
+        subdirectory=thorn_name,
+        includes=["Slicing.h", "cctk.h"],
+        desc=desc,
+        c_type="int",
+        name=name,
+        params="",
+        body=body,
+        ET_thorn_name=thorn_name,
+        ET_schedule_bins_entries=[("STARTUP", schedule)],
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
@@ -1228,6 +1237,7 @@ for evol_thorn_name in thorn_names:
         register_CFunction_constraints(thorn_name=evol_thorn_name, enable_T4munu=enable_T4munu, fd_order=fd_order, CoordSystem="Cartesian",
                                        enable_rfm_precompute=False, enable_simd=enable_simd)
 
+    register_CFunction_slicing(thorn_name=evol_thorn_name)
     register_CFunction_BSSN_to_ADM(thorn_name=evol_thorn_name, CoordSystem="Cartesian")
     register_CFunction_floor_the_lapse(thorn_name=evol_thorn_name, CoordSystem="Cartesian",
                                        enable_rfm_precompute=False)
@@ -1258,52 +1268,53 @@ for evol_thorn_name in thorn_names:
         project_dir=project_dir,
         thorn_name=evol_thorn_name,
         STORAGE="""
-    STORAGE: evol_variables[3]     # Evolution variables
-    STORAGE: evol_variables_rhs[1] # Variables storing right-hand-sides
-    STORAGE: auxevol_variables[1]  # Single-timelevel storage of variables needed for evolutions.
-    STORAGE: aux_variables[3]      # Diagnostics variables
-    """,
+STORAGE: evol_variables[3]     # Evolution variables
+STORAGE: evol_variables_rhs[1] # Variables storing right-hand-sides
+STORAGE: auxevol_variables[1]  # Single-timelevel storage of variables needed for evolutions.
+STORAGE: aux_variables[3]      # Diagnostics variables""",
     )
     interface_ccl.construct_interface_ccl(
         project_dir=project_dir,
         thorn_name=evol_thorn_name,
-        inherits="ADMBase Boundary Grid",
+        inherits="ADMBase Boundary Grid TmunuBase",
         USES_INCLUDEs="""USES INCLUDE: Symmetry.h
-    USES INCLUDE: Boundary.h
-    USES INCLUDE: Slicing.h
-    """,
+USES INCLUDE: Boundary.h
+USES INCLUDE: Slicing.h
+
+# Needed to convert ADM initial data into BSSN initial data (gamma extrapolation)
+CCTK_INT FUNCTION ExtrapolateGammas(CCTK_POINTER_TO_CONST IN cctkGH, CCTK_REAL ARRAY INOUT var)
+REQUIRES FUNCTION ExtrapolateGammas""",
         is_evol_thorn=True,
         enable_NewRad=True,
     )
     
     params_str = f"""
-    shares: ADMBase
-    
-    EXTENDS CCTK_KEYWORD evolution_method "evolution_method"
-    {{
-      "{evol_thorn_name}" :: ""
-    }}
-    
-    EXTENDS CCTK_KEYWORD lapse_evolution_method "lapse_evolution_method"
-    {{
-      "{evol_thorn_name}" :: ""
-    }}
-    
-    EXTENDS CCTK_KEYWORD shift_evolution_method "shift_evolution_method"
-    {{
-      "{evol_thorn_name}" :: ""
-    }}
-    
-    EXTENDS CCTK_KEYWORD dtshift_evolution_method "dtshift_evolution_method"
-    {{
-      "{evol_thorn_name}" :: ""
-    }}
-    
-    EXTENDS CCTK_KEYWORD dtlapse_evolution_method "dtlapse_evolution_method"
-    {{
-      "{evol_thorn_name}" :: ""
-    }}
-    """
+shares: ADMBase
+
+EXTENDS CCTK_KEYWORD evolution_method "evolution_method"
+{{
+  "{evol_thorn_name}" :: ""
+}}
+
+EXTENDS CCTK_KEYWORD lapse_evolution_method "lapse_evolution_method"
+{{
+  "{evol_thorn_name}" :: ""
+}}
+
+EXTENDS CCTK_KEYWORD shift_evolution_method "shift_evolution_method"
+{{
+  "{evol_thorn_name}" :: ""
+}}
+
+EXTENDS CCTK_KEYWORD dtshift_evolution_method "dtshift_evolution_method"
+{{
+  "{evol_thorn_name}" :: ""
+}}
+
+EXTENDS CCTK_KEYWORD dtlapse_evolution_method "dtlapse_evolution_method"
+{{
+  "{evol_thorn_name}" :: ""
+}}"""
     CParams_registered_to_params_ccl += param_ccl.construct_param_ccl(
         project_dir=project_dir,
         thorn_name=evol_thorn_name,
@@ -1317,8 +1328,3 @@ for evol_thorn_name in thorn_names:
     simd.copy_simd_intrinsics_h(
         project_dir=str(Path(project_dir) / evol_thorn_name / "src")
     )
-
-# print(
-#     f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
-# )
-# print(f"    Parameter file can be found in {project_name}.par")
