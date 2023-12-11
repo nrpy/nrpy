@@ -42,8 +42,7 @@ inherits: {inherits}
     if is_evol_thorn:
         outstr += """
 # Needed Method of Lines function
-CCTK_INT FUNCTION MoLRegisterEvolvedGroup(CCTK_INT IN EvolvedIndex, \
-                                          CCTK_INT IN RHSIndex)
+CCTK_INT FUNCTION MoLRegisterEvolvedGroup(CCTK_INT IN EvolvedIndex, CCTK_INT IN RHSIndex)
 REQUIRES FUNCTION MoLRegisterEvolvedGroup
 
 # Needed Boundary Conditions function
@@ -95,6 +94,7 @@ public:
             outstr += "CCTK_REAL evol_variables type = GF Timelevels=3\n{\n  "
             outstr += ", ".join(evol_gfs) + "\n"
             outstr += """} "Evolved gridfunctions."
+
 """
 
             # Second EVOL right-hand-sides
@@ -106,6 +106,7 @@ public:
             ]
             outstr += ", ".join(rhs_gfs) + "\n"
             outstr += """} "Right-hand-side gridfunctions."
+
 """
             # Then AUXEVOL type:
             auxevol_gfs = [
@@ -117,6 +118,7 @@ public:
                 outstr += 'CCTK_REAL auxevol_variables type = GF Timelevels=1 TAGS=\'InterpNumTimelevels=1 prolongation="none" checkpoint="no"\'\n{\n  '
                 outstr += ", ".join(auxevol_gfs) + "\n"
                 outstr += """} "Auxiliary gridfunctions needed for evaluating the RHSs."
+
 """
         # Then AUX type:
         aux_gfs = [
@@ -128,6 +130,7 @@ public:
             outstr += "CCTK_REAL aux_variables type = GF Timelevels=3\n{\n  "
             outstr += ", ".join(aux_gfs) + "\n"
             outstr += """} "Auxiliary gridfunctions for e.g., diagnostics."
+
 """
     output_Path = Path(project_dir) / thorn_name
     output_Path.mkdir(parents=True, exist_ok=True)

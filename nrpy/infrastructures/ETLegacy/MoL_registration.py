@@ -22,8 +22,7 @@ def register_CFunction_MoL_registration(thorn_name: str) -> None:
 with the Method of Lines timestepper
 MoL (the Einstein Toolkit Method of Lines thorn)
 (MoL thorn, found in arrangements/CactusBase/MoL).
-MoL documentation located in arrangements/CactusBase/MoL/doc
-"""
+MoL documentation located in arrangements/CactusBase/MoL/doc"""
     c_type = "void"
     name = f"{thorn_name}_MoL_registration"
     params = "CCTK_ARGUMENTS"
