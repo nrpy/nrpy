@@ -319,7 +319,7 @@ class ETLegacyGridFunction(GridFunction):
         f_infinity: float = 0.0,
         wavespeed: float = 1.0,
         is_basename: bool = True,
-        gf_array_name: str = None, # only included for BHaH compatibility
+        gf_array_name: str = None,  # only included for BHaH compatibility
     ) -> None:
         super().__init__(name, group, dimension)
         self.rank = rank
@@ -443,7 +443,7 @@ class CarpetXGridFunction(GridFunction):
         wavespeed: float = 1.0,
         is_basename: bool = True,
         centering: str = "C",
-        gf_array_name: str = None, # only included for BHaH compatibility
+        gf_array_name: str = None,  # only included for BHaH compatibility
     ) -> None:
         super().__init__(name, group, dimension)
         self.rank = rank
@@ -677,9 +677,7 @@ def register_gridfunctions_for_single_rank2(
 
     # Step 1: Declare a list of lists of SymPy variables,
     #         where IDX_OBJ_TMP[i][j] = gf_basename+str(i)+str(j)
-    IDX_OBJ_TMP = ixp.declarerank2(
-        basename, symmetry=symmetry, **kwargs
-    )
+    IDX_OBJ_TMP = ixp.declarerank2(basename, symmetry=symmetry, **kwargs)
 
     # Step 2: register each gridfunction, being careful not
     #         not to store duplicates due to rank-2 symmetries.
