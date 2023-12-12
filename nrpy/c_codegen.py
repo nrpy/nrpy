@@ -1,3 +1,4 @@
+# >> Handled by type check
 """
 Core NRPy+ module used for generating C code kernels.
 
@@ -9,7 +10,7 @@ import logging
 
 import re  # Regular expressions can be toxic due to edge cases -- we use them sparingly
 import sys
-from typing import List, Union, Dict, Any, Optional, Sequence, Tuple
+from typing import List, Union, Dict, Any, Optional, Sequence, Tuple, Literal
 import sympy as sp
 import nrpy.finite_difference as fin
 import nrpy.params as par
@@ -21,6 +22,24 @@ from nrpy.helpers.cse_preprocess_postprocess import (
     cse_postprocess,
 )  # NRPy+: CSE preprocessing and postprocessing
 
+c_type_list = Literal[
+    # Traditional C types
+    "double",
+    "float",
+    "long double",
+
+    # Standard C++ types
+    "std::float16_t",
+    "std::float32_t",
+    "std::float64_t",
+    "std::float128_t",
+    "std::bfloat16_t",
+
+    # SIMD
+    "REAL_SIMD_ARRAY",
+
+    # Maybe add complex numbers?
+]
 
 class CCodeGen:
     """Store and process input parameters to c_codegen() below."""
@@ -30,7 +49,7 @@ class CCodeGen:
         prestring: str = "",
         poststring: str = "",
         include_braces: bool = True,
-        c_type: str = "double",
+        c_type: c_type_list = "double",
         c_type_alias: str = "",
         verbose: bool = True,
         enable_cse: bool = True,
@@ -130,14 +149,6 @@ class CCodeGen:
 
         # Now, process input!
 
-        # Set c_type and c_type_alias
-        if self.c_type not in ("float", "double", "long double"):
-            raise ValueError(
-                "c_type must be a standard C type for floating point numbers: float, double, or long double,\n"
-                "as it is used to find the appropriate transcendental function; e.g., sin(), sinf(), or sinl().\n"
-                "c_type_alias will appear in the generated code, and will be set according to infrastructure.\n"
-                f"You chose c_type={self.c_type}"
-            )
         Infrastructure = par.parval_from_str("Infrastructure")
         if self.enable_simd:
             if self.c_type not in "double":
