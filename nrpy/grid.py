@@ -556,6 +556,7 @@ def register_gridfunctions(
     c_type_alias CCTK_REAL
     name gridfunc
     group EVOL
+    dimension 3
     rank 0
     f_infinity 0.0
     wavespeed 1.0
@@ -566,6 +567,7 @@ def register_gridfunctions(
     c_type_alias CCTK_REAL
     name gridfunc1
     group EVOL
+    dimension 3
     rank 0
     f_infinity 1.0
     wavespeed 1.0
