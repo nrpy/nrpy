@@ -670,7 +670,8 @@ def ccode_postproc(string: str, CCGParams: CCodeGen) -> str:
 
     if has_c_func:
         # Define the dictionary to map the c_type to corresponding cmath function suffix
-        cmath_suffixes = {
+        suffix_list = Literal["f","l",""]
+        cmath_suffixes : Dict[c_type_list, suffix_list] = {
             # Traditional C types
             "double" : "",
             "float": "f",
