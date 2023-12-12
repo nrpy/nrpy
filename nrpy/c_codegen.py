@@ -671,9 +671,22 @@ def ccode_postproc(string: str, CCGParams: CCodeGen) -> str:
     if has_c_func:
         # Define the dictionary to map the c_type to corresponding cmath function suffix
         cmath_suffixes = {
+            # Traditional C types
+            "double" : "",
             "float": "f",
-            "double": "",
-            "long double": "l",
+            "long double" : "l",
+
+            # Standard C++ types
+            "std::float16_t" : "", # h?
+            "std::float32_t" : "f", 
+            "std::float64_t" : "",
+            "std::float128_t" : "l",
+            "std::bfloat16_t" : "", # b?
+
+            # SIMD
+            "REAL_SIMD_ARRAY" : "", # d?
+
+            # Maybe add complex numbers?
         }
 
         # If the c_type is not one of the known keys, raise an error
