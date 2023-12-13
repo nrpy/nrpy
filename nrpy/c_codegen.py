@@ -10,10 +10,11 @@ import logging
 
 import re  # Regular expressions can be toxic due to edge cases -- we use them sparingly
 import sys
-from typing import List, Union, Dict, Any, Optional, Sequence, Tuple, Literal
+from typing import List, Union, Dict, Any, Optional, Sequence, Tuple, Literal, get_args
 import sympy as sp
 import nrpy.finite_difference as fin
 import nrpy.params as par
+from json import dumps
 
 from nrpy.helpers.simd import expr_convert_to_simd_intrins
 from nrpy.helpers.generic import superfast_uniq, clang_format
@@ -105,6 +106,14 @@ class CCodeGen:
         :param upwind_control_vec: Upwind control vector as a symbol or list of symbols.
         :param clang_format_enable: Boolean to enable clang formatting.
         :param clang_format_options: Options for clang formatting.
+        >>> c = CCodeGen(c_type="double")
+        >>> c.c_type
+        'double'
+        >>> CCodeGen(c_type="foo") 
+        Traceback (most recent call last):
+          ...
+        ValueError: c_type must be a standard C type for floating point numbers: typing.Literal['double', 'float', 'long double', 'std::float16_t', 'std::float32_t', 'std::float64_t', 'std::float128_t', 'std::bfloat16_t', 'REAL_SIMD_ARRAY']. You chose c_type=foo
+
         """
         self.prestring = prestring
         self.poststring = poststring
@@ -149,6 +158,12 @@ class CCodeGen:
 
         # Now, process input!
 
+        # Set c_type and c_type_alias
+        if self.c_type not in get_args(c_type_list):
+            raise ValueError(
+                f"c_type must be a standard C type for floating point numbers: {c_type_list}. "
+                f"You chose c_type={self.c_type}"
+            )
         Infrastructure = par.parval_from_str("Infrastructure")
         if self.enable_simd:
             if self.c_type not in "double":
@@ -211,6 +226,19 @@ class CCodeGen:
         if self.enable_fd_codegen:
             self.automatically_read_gf_data_from_memory = True
 
+    def __repr__(self):
+        """
+        Create a human readable representation of the CCodeGen object and what's in it
+        """
+        args = []
+        for d in dir(self):
+            if d.startswith("_"):
+                continue
+            v = getattr(self,d)
+            if type(v) in [str,int]:
+                args += [d+"="+dumps(v)]
+        sorted(args)
+        return "CCodeGen(" + ", ".join(args) + ")"
 
 def c_codegen(
     sympyexpr: Union[
