@@ -319,10 +319,11 @@ class ETLegacyGridFunction(GridFunction):
         f_infinity: float = 0.0,
         wavespeed: float = 1.0,
         is_basename: bool = True,
-        gf_array_name: str = None,  # only included for BHaH compatibility
+        gf_array_name: str = "",
     ) -> None:
         super().__init__(name, group, dimension)
         self.rank = rank
+        _gf_array_name = gf_array_name
         self.f_infinity = f_infinity
         self.wavespeed = wavespeed
         self.is_basename = is_basename
@@ -443,10 +444,11 @@ class CarpetXGridFunction(GridFunction):
         wavespeed: float = 1.0,
         is_basename: bool = True,
         centering: str = "C",
-        gf_array_name: str = None,  # only included for BHaH compatibility
+        gf_array_name: str = "",
     ) -> None:
         super().__init__(name, group, dimension)
         self.rank = rank
+        _gf_array_name = gf_array_name
         self.f_infinity = f_infinity
         self.wavespeed = wavespeed
         self.is_basename = is_basename
