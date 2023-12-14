@@ -85,7 +85,7 @@ class ADM_to_BSSN:
                 self.hDD[i][j] = (self.gammabarDD[i][j] - rfm.ghatDD[i][j]) / rfm.ReDD[
                     i
                 ][j]
-        gammabarUU, gammabarDET = ixp.symm_matrix_inverter3x3(self.gammabarDD)
+        _gammabarUU, gammabarDET = ixp.symm_matrix_inverter3x3(self.gammabarDD)
 
         self.cf = sp.sympify(0)
 
