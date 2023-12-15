@@ -31,8 +31,8 @@ def register_CFunction_rhs_eval(
     enable_KreissOliger_dissipation: bool,
     KreissOliger_strength_mult_by_W: bool = False,
     # when mult by W, strength_gauge=0.99 & strength_nongauge=0.3 is best.
-    KreissOliger_strength_gauge: float = 0.3,
-    KreissOliger_strength_nongauge: float = 0.3,
+    KreissOliger_strength_gauge: float = 0.1,
+    KreissOliger_strength_nongauge: float = 0.1,
     OMP_collapse: int = 1,
     ) -> Union[None, pcg.NRPyEnv_type]:
     """
