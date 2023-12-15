@@ -46,11 +46,15 @@ def register_CFunction_ADM_to_BSSN(
     par.set_parval_from_str("fd_order", fd_order)
 
 
-    desc = """Converting from ADM to BSSN quantities is required in the Einstein Toolkit,
+    desc = f"""Converting from ADM to BSSN quantities is required in the Einstein Toolkit,
 as initial data are given in terms of ADM quantities, and {thorn_name} evolves the BSSN quantities."""
     name = f"{thorn_name}_ADM_to_BSSN_order_{fd_order}"
     body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
   DECLARE_CCTK_PARAMETERS;
+
+  const CCTK_REAL invdxx0 = 1.0 / CCTK_DELTA_SPACE(0);
+  const CCTK_REAL invdxx1 = 1.0 / CCTK_DELTA_SPACE(1);
+  const CCTK_REAL invdxx2 = 1.0 / CCTK_DELTA_SPACE(2);
 
 """
     lapse_gf_access  = gri.ETLegacyGridFunction.access_gf(gf_name="alp", use_GF_suffix=False)
@@ -85,7 +89,7 @@ as initial data are given in terms of ADM quantities, and {thorn_name} evolves t
     cf_gf_access  = gri.ETLegacyGridFunction.access_gf(gf_name="cf")
     trK_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name="trK")
     list_of_output_exprs = [adm2bssn.cf, adm2bssn.trK]
-    list_of_output_varnames = [cf_gf_access, cf_gf_access]
+    list_of_output_varnames = [cf_gf_access, trK_gf_access]
     for i in range(3):
         vetU_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name=f"vetU{i}")
         list_of_output_exprs += [adm2bssn.vetU[i]]

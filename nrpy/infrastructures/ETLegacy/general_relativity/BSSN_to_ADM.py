@@ -59,12 +59,17 @@ def register_CFunction_BSSN_to_ADM(
         loop_body += f"{shift_gf_access} = {bssn_shift_gf_access};\n"
 
     for i in range(3):
-        bssn_dtshift_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name="bet"+str(i), use_GF_suffix=False)
+        bssn_dtshift_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name="betU"+str(i))
         dtshift_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name="dtbeta"+coord_name[i], use_GF_suffix=False)
         loop_body += f"{dtshift_gf_access} = {bssn_dtshift_gf_access};\n"
 
     list_of_output_exprs = []
     list_of_output_varnames = []
+
+    cf_gf_access  = gri.ETLegacyGridFunction.access_gf(gf_name="cf")
+    trK_gf_access  = gri.ETLegacyGridFunction.access_gf(gf_name="trK")
+    loop_body += f"const CCTK_REAL cf = {cf_gf_access};\n"
+    loop_body += f"const CCTK_REAL trK = {trK_gf_access};\n"
 
     for i in range(3):
         for j in range(i, 3):
@@ -77,7 +82,7 @@ def register_CFunction_BSSN_to_ADM(
 
     for i in range(3):
         for j in range(i, 3):
-            aDD_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name="k"+str(i)+str(j))
+            aDD_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name="aDD"+str(i)+str(j))
             loop_body += f"const CCTK_REAL aDD{i}{j} = {aDD_gf_access};\n"
 
             curv_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name="k"+coord_name[i]+coord_name[j], use_GF_suffix=False)
