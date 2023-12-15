@@ -43,19 +43,20 @@ This code is based on Kranc's McLachlan/ML_BSSN/src/Boundaries.cc code."""
     params = "CCTK_ARGUMENTS"
 
     body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
-DECLARE_CCTK_PARAMETERS;
-CCTK_INT ierr CCTK_ATTRIBUTE_UNUSED = 0;
+  DECLARE_CCTK_PARAMETERS;
+  CCTK_INT ierr CCTK_ATTRIBUTE_UNUSED = 0;
+  const CCTK_INT bndsize = FD_order / 2 + 1; // <- bndsize = number of ghostzones
 """
     for gfname, gf in sorted(gri.glb_gridfcs_dict.items()):
         if gf.group == "EVOL":
             body += f"""
-ierr = Driver_SelectVarForBC(cctkGH, CCTK_ALL_FACES, 1, -1, "{thorn_name}::{gfname}GF", "none");
-if (ierr < 0) CCTK_ERROR("Failed to register BC with Driver for {thorn_name}::{gfname}GF!");
+  ierr = Driver_SelectVarForBC(cctkGH, CCTK_ALL_FACES, 1, -1, "{thorn_name}::{gfname}GF", "none");
+  if (ierr < 0) CCTK_ERROR("Failed to register BC with Driver for {thorn_name}::{gfname}GF!");
 """
         elif gf.group == "AUX":
             body += f"""
-ierr = Driver_SelectVarForBC(cctkGH, CCTK_ALL_FACES, 1, -1, "{thorn_name}::{gfname}GF", "flat");
-if (ierr < 0) CCTK_ERROR("Failed to register BC with Driver for {thorn_name}::{gfname}GF!");
+  ierr = Driver_SelectVarForBC(cctkGH, CCTK_ALL_FACES, bndsize, -1, "{thorn_name}::{gfname}GF", "flat");
+  if (ierr < 0) CCTK_ERROR("Failed to register BC with Driver for {thorn_name}::{gfname}GF!");
 """
 
     ET_schedule_bins_entries = [
@@ -116,14 +117,14 @@ This code is based on Kranc's McLachlan/ML_BSSN/src/Boundaries.cc code."""
     params = "CCTK_ARGUMENTS"
 
     body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
-DECLARE_CCTK_PARAMETERS;
-CCTK_INT ierr CCTK_ATTRIBUTE_UNUSED = 0;
+  DECLARE_CCTK_PARAMETERS;
+  CCTK_INT ierr CCTK_ATTRIBUTE_UNUSED = 0;
 """
     for gfname, gf in sorted(gri.glb_gridfcs_dict.items()):
         if gf.group == "EVOL":
             body += f"""
-ierr = Boundary_SelectVarForBC(cctkGH, CCTK_ALL_FACES, 1, -1, "{thorn_name}::{gfname}GF", "none");
-if (ierr < 0) CCTK_ERROR("Failed to register BC with Boundary for {thorn_name}::{gfname}GF!");
+  ierr = Boundary_SelectVarForBC(cctkGH, CCTK_ALL_FACES, 1, -1, "{thorn_name}::{gfname}GF", "none");
+  if (ierr < 0) CCTK_ERROR("Failed to register BC with Boundary for {thorn_name}::{gfname}GF!");
 """
 
     ET_schedule_bins_entries = [
@@ -185,20 +186,16 @@ This code is based on Kranc's McLachlan/ML_BSSN/src/Boundaries.cc code."""
     params = "CCTK_ARGUMENTS"
 
     body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
-DECLARE_CCTK_PARAMETERS;
-CCTK_INT ierr CCTK_ATTRIBUTE_UNUSED = 0;
+  DECLARE_CCTK_PARAMETERS;
+  CCTK_INT ierr CCTK_ATTRIBUTE_UNUSED = 0;
+  const CCTK_INT bndsize = FD_order / 2 + 1; // <- bndsize = number of ghostzones
 """
     for gfname, gf in sorted(gri.glb_gridfcs_dict.items()):
         if gf.group == "AUX":
             body += f"""
-ierr = Boundary_SelectVarForBC(cctkGH, CCTK_ALL_FACES, 1, -1, "{thorn_name}::{gfname}GF", "flat");
-if (ierr < 0) CCTK_ERROR("Failed to register BC with Boundary for {thorn_name}::{gfname}GF!");
+  ierr = Boundary_SelectVarForBC(cctkGH, CCTK_ALL_FACES, bndsize, -1, "{thorn_name}::{gfname}GF", "flat");
+  if (ierr < 0) CCTK_ERROR("Failed to register BC with Boundary for {thorn_name}::{gfname}GF!");
 """
-
-    # Baikal has something like
-    #
-    # const CCTK_INT bndsize = FD_order / 2 + 1;  // <- bndsize = number of ghostzones
-    # ierr = Boundary_SelectVarForBC(cctkGH, CCTK_ALL_FACES, bndsize, -1, "Baikal::HGF", "flat");
 
     ET_schedule_bins_entries = [
         (
