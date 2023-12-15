@@ -54,7 +54,7 @@ class BSSNconstraints:
             _ = gri.register_gridfunctions(
                 "MSQUARED", group="AUX", gf_array_name="diagnostic_output_gfs"
             )
-        if register_MU_gridfunctions and "MU" not in gri.glb_gridfcs_dict:
+        if register_MU_gridfunctions and "MU0" not in gri.glb_gridfcs_dict:
             _ = gri.register_gridfunctions_for_single_rank1(
                 "MU", group="AUX", gf_array_name="diagnostic_output_gfs"
             )
