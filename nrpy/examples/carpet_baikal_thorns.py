@@ -140,7 +140,7 @@ for evol_thorn_name in thorn_names:
     ########################
     # STEP 3: Register functions that depend on all gridfunctions & CodeParameters having been set
     ########################
-   
+
     Symmetry_registration.register_CFunction_Symmetry_registration_oldCartGrid3D(
         thorn_name=evol_thorn_name
     )
