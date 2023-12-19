@@ -1,4 +1,4 @@
-from typing import Literal, get_args, get_origin
+from typing_extensions import Literal, get_args, get_origin
 import inspect
 
 def check_literals()->None:

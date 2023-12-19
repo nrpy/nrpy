@@ -10,7 +10,8 @@ import logging
 
 import re  # Regular expressions can be toxic due to edge cases -- we use them sparingly
 import sys
-from typing import List, Union, Dict, Any, Optional, Sequence, Tuple, Literal
+from typing import List, Union, Dict, Any, Optional, Sequence, Tuple
+from typing_extensions import Literal
 import sympy as sp
 import nrpy.finite_difference as fin
 import nrpy.params as par
