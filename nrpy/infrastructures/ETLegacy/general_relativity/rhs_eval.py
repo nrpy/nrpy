@@ -12,6 +12,7 @@ import nrpy.params as par
 import nrpy.indexedexp as ixp
 import nrpy.helpers.parallel_codegen as pcg
 from nrpy.helpers import simd
+import nrpy.finite_difference as fin
 
 import nrpy.infrastructures.ETLegacy.simple_loop as lp
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
@@ -226,6 +227,7 @@ if(FD_order == {fd_order}) {{
         c_type="void",
         name=name,
         params="CCTK_ARGUMENTS",
+        prefunc=fin.construct_FD_functions_prefunc(),
         body=body,
         ET_thorn_name=thorn_name,
         ET_schedule_bins_entries=[("MoL_CalcRHS", schedule)],
