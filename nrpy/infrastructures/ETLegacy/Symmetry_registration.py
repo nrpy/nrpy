@@ -39,7 +39,7 @@ def register_CFunction_Symmetry_registration_oldCartGrid3D(
 
     for gfname, gf in gri.glb_gridfcs_dict.items():
         # We only apply symmetries to evolved gridfunctions.
-        if gf.group == "EVOL":
+        if gf.group in ["EVOL", "AUXEVOL", "AUX"]:
             body += """
   // Default to scalar symmetry:
   sym[0] = 1; sym[1] = 1; sym[2] = 1;
@@ -52,13 +52,21 @@ def register_CFunction_Symmetry_registration_oldCartGrid3D(
                     "Sorry, gridfunctions of rank 3 or greater not supported."
                 )
             if len(gfname) > 3 and gfname[-2].isdigit():  # Rank 2
-                symidx0 = gfname[-2]
-                symidx1 = gfname[-1]
-                body += f"  sym[{symidx0}] *= -1;\n"
-                body += f"  sym[{symidx1}] *= -1;\n"
+                symidx0 = int(gfname[-2])
+                symidx1 = int(gfname[-1])
+                if gf.dimension == 4:
+                    symidx0 -= 1
+                    if symidx0 >= 0:
+                        body += f"  sym[{symidx0}] *= -1;\n"
+                    symidx1 -= 1
+                    if symidx1 >= 0:
+                        body += f"  sym[{symidx1}] *= -1;\n"
+                else:
+                    body += f"  sym[{symidx0}] *= -1;\n"
+                    body += f"  sym[{symidx1}] *= -1;\n"
             elif gfname[-1].isdigit():  # Rank 1
                 symidx = gfname[-1]
-                body += f"  sym[{symidx}] *= -1;\n"
+                body += f"  sym[{symidx}] = -1;\n"
             elif not gfname[-1].isdigit():  # Rank 0
                 body += "  // (this gridfunction is a scalar -- no need to change default sym[]'s!)\n"
             else:

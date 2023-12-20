@@ -25,10 +25,11 @@ _ = par.register_CodeParameter("int", __name__, "NUMGRIDS", 1, commondata=True)
 class GridFunction:
     """The core class for grid functions."""
 
-    def __init__(self, name: str, group: str = "EVOL") -> None:
+    def __init__(self, name: str, group: str = "EVOL", dimension: int = 3) -> None:
         self.c_type_alias: str = "double"
         self.name: str = name
         self.group: str = group
+        self.dimension = dimension
 
     def read_gf_from_memory_Ccode_onept(
         self, i0_offset: int = 0, i1_offset: int = 0, i2_offset: int = 0, **kwargs: Any
@@ -45,12 +46,13 @@ class BHaHGridFunction(GridFunction):
         name: str,
         group: str = "EVOL",
         rank: int = 0,
+        dimension: int = 3,
         f_infinity: float = 0.0,
         wavespeed: float = 1.0,
         is_basename: bool = True,
         gf_array_name: str = "use_in_gfs_for_EVOL_auxevol_gfs_for_AUXEVOL_etc",
     ) -> None:
-        super().__init__(name, group)
+        super().__init__(name, group, dimension)
         self.c_type_alias = "REAL"  # always use REAL
         self.rank = rank
         self.f_infinity = f_infinity
@@ -316,12 +318,15 @@ class ETLegacyGridFunction(GridFunction):
         name: str,
         group: str = "EVOL",
         rank: int = 0,
+        dimension: int = 3,
         f_infinity: float = 0.0,
         wavespeed: float = 1.0,
         is_basename: bool = True,
+        gf_array_name: str = "",
     ) -> None:
-        super().__init__(name, group)
+        super().__init__(name, group, dimension)
         self.rank = rank
+        _gf_array_name = gf_array_name
         self.f_infinity = f_infinity
         self.wavespeed = wavespeed
         self.is_basename = is_basename
@@ -437,13 +442,16 @@ class CarpetXGridFunction(GridFunction):
         name: str,
         group: str = "",
         rank: int = 0,
+        dimension: int = 3,
         f_infinity: float = 0.0,
         wavespeed: float = 1.0,
         is_basename: bool = True,
-        centering: centerings = "CCC",
+        centering: str = "C",
+        gf_array_name: str = "",
     ) -> None:
-        super().__init__(name, group)
+        super().__init__(name, group, dimension)
         self.rank = rank
+        _gf_array_name = gf_array_name
         self.f_infinity = f_infinity
         self.wavespeed = wavespeed
         self.is_basename = is_basename
@@ -553,6 +561,7 @@ def register_gridfunctions(
     c_type_alias CCTK_REAL
     name gridfunc
     group EVOL
+    dimension 3
     rank 0
     f_infinity 0.0
     wavespeed 1.0
@@ -563,6 +572,7 @@ def register_gridfunctions(
     c_type_alias CCTK_REAL
     name gridfunc1
     group EVOL
+    dimension 3
     rank 0
     f_infinity 1.0
     wavespeed 1.0
@@ -669,14 +679,12 @@ def register_gridfunctions_for_single_rank2(
     gDD00 gDD01 gDD02 gDD11 gDD12 gDD22
     """
     dimension = kwargs.get("dimension", 3)
-    if "dimension" in kwargs:
-        del kwargs["dimension"]
+    if "dimension" not in kwargs:
+        kwargs["dimension"] = 3
 
     # Step 1: Declare a list of lists of SymPy variables,
     #         where IDX_OBJ_TMP[i][j] = gf_basename+str(i)+str(j)
-    IDX_OBJ_TMP = ixp.declarerank2(
-        basename, symmetry=symmetry, dimension=dimension, **kwargs
-    )
+    IDX_OBJ_TMP = ixp.declarerank2(basename, symmetry=symmetry, **kwargs)
 
     # Step 2: register each gridfunction, being careful not
     #         not to store duplicates due to rank-2 symmetries.
