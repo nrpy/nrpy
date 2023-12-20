@@ -7,10 +7,13 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 from typing import List, Any, Union, Dict, Tuple, Optional, Sequence
+from typing_extensions import Literal
 import sympy as sp
 import nrpy.indexedexp as ixp
 import nrpy.params as par
 
+
+centerings = Literal["CCC","CCV","CVC","CVV","VCC","VCV","VVC","VVV","CC","CV","VC","VV","V","C"]
 
 Cart_origin = par.register_CodeParameters(
     "REAL", __name__, ["Cart_originx", "Cart_originy", "Cart_originz"], 0.0
@@ -437,7 +440,7 @@ class CarpetXGridFunction(GridFunction):
         f_infinity: float = 0.0,
         wavespeed: float = 1.0,
         is_basename: bool = True,
-        centering: str = "C",
+        centering: centerings = "CCC",
     ) -> None:
         super().__init__(name, group)
         self.rank = rank

@@ -1,5 +1,23 @@
-from typing_extensions import Literal, get_args, get_origin
+from typing_extensions import Literal #, get_args, get_origin <- Not in typing_extensions
 import inspect
+from json import dumps
+
+_literal = Literal["x"]
+
+def is_literal(arg):
+    return type(_literal) == type(arg)
+
+try:
+    # Ideally, use get_args from typing...
+    from typing import get_args
+except ImportError as ae:
+    # But if you can't get get_args,
+    # create our own. Works for Python 3.6
+    def get_args(lit):
+        if is_literal(lit):
+            return lit.__values__
+        else:
+            return []
 
 def check_literals()->None:
     """
@@ -29,7 +47,7 @@ def check_literals()->None:
         parameter_annotation = signature.parameters[parameter_name].annotation
         if parameter_annotation is None:
             continue
-        if get_origin(parameter_annotation) != Literal:
+        if not is_literal(parameter_annotation):
             continue
         parameter_value = calling_frame.f_locals[parameter_name]
         checked_pars += [(parameter_name, parameter_value)]
