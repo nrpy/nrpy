@@ -239,8 +239,10 @@ def declare_indexedexp(
     )
     symmetry = kwargs.get("symmetry")
     if symmetry:
-        if not (symmetry.startswith("sym") or symmetry.startswith("anti")):
-            raise ValueError(f"Unsupported symmetry '{symmetry}' for indexed expression. Valid symmetry options must start with 'sym' or 'anti'")
+        if not symmetry.startswith(("sym", "anti", "nosym")):
+            raise ValueError(
+                f"Unsupported symmetry '{symmetry}' for indexed expression. Valid symmetry options must start with 'sym', 'anti', or 'nosym'"
+            )
         indexedexp = symmetrize(
             rank, cast(_rank2_type, indexedexp), symmetry, dimension
         )
