@@ -118,7 +118,7 @@ def declare_indexedexp(
     >>> try:
     ...     Merror = declare_indexedexp('M', rank=2, dimension=3, symmetry='01')
     ... except ValueError as e:
-    ...     assert str(e) == "Unsupported symmetry '01' for indexed expression. Valid symmetry options must start with 'sym' or 'anti'"
+    ...     assert str(e) == "Unsupported symmetry '01' for indexed expression. Valid symmetry options must start with 'sym', 'anti', or 'nosym'"
 
     Doctest 3: convert a symmetric rank-3 tensor to a 1D list & find the number of unique indices.
     >>> ixp = declare_indexedexp('M', rank=3, dimension=3, symmetry='sym01')
