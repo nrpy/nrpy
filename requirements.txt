@@ -6,3 +6,4 @@ nrpylatex
 py-cpuinfo
 pydocstyle
 sympy
+typing-extensions
