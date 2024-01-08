@@ -15,7 +15,6 @@ from typing_extensions import Literal
 import sympy as sp
 import nrpy.finite_difference as fin
 import nrpy.params as par
-from nrpy.utils import check_literals, get_repr
 
 from nrpy.helpers.simd import expr_convert_to_simd_intrins
 from nrpy.helpers.generic import superfast_uniq, clang_format
@@ -23,25 +22,24 @@ from nrpy.helpers.cse_preprocess_postprocess import (
     cse_preprocess,
     cse_postprocess,
 )  # NRPy+: CSE preprocessing and postprocessing
+from nrpy.utils import check_literals, get_repr
 
 c_type_list = Literal[
     # Traditional C types
     "double",
     "float",
     "long double",
-
     # Standard C++ types
     "std::float16_t",
     "std::float32_t",
     "std::float64_t",
     "std::float128_t",
     "std::bfloat16_t",
-
     # SIMD
     "REAL_SIMD_ARRAY",
-
     # Maybe add complex numbers?
 ]
+
 
 class CCodeGen:
     """Store and process input parameters to c_codegen() below."""
@@ -110,7 +108,7 @@ class CCodeGen:
         >>> c = CCodeGen(c_type="double")
         >>> c.c_type
         'double'
-        >>> CCodeGen(c_type="foo") 
+        >>> CCodeGen(c_type="foo")
         Traceback (most recent call last):
           ...
         ValueError: In function '__init__': parameter 'c_type' has value: 'foo', which is not in the allowed_values set: ('double', 'float', 'long double', 'std::float16_t', 'std::float32_t', 'std::float64_t', 'std::float128_t', 'std::bfloat16_t', 'REAL_SIMD_ARRAY')
@@ -223,11 +221,10 @@ class CCodeGen:
         if self.enable_fd_codegen:
             self.automatically_read_gf_data_from_memory = True
 
-    def __repr__(self)->str:
-        """
-        Create a human readable representation of the CCodeGen object and what's in it
-        """
+    def __repr__(self) -> str:
+        """Create a human readable representation of the CCodeGen object and what's in it."""
         return get_repr()
+
 
 def c_codegen(
     sympyexpr: Union[
@@ -687,23 +684,20 @@ def ccode_postproc(string: str, CCGParams: CCodeGen) -> str:
 
     if has_c_func:
         # Define the dictionary to map the c_type to corresponding cmath function suffix
-        suffix_list = Literal["f","l",""]
-        cmath_suffixes : Dict[c_type_list, suffix_list] = {
+        suffix_list = Literal["f", "l", ""]
+        cmath_suffixes: Dict[c_type_list, suffix_list] = {
             # Traditional C types
-            "double" : "",
+            "double": "",
             "float": "f",
-            "long double" : "l",
-
+            "long double": "l",
             # Standard C++ types
-            "std::float16_t" : "", # h?
-            "std::float32_t" : "f", 
-            "std::float64_t" : "",
-            "std::float128_t" : "l",
-            "std::bfloat16_t" : "", # b?
-
+            "std::float16_t": "",  # h?
+            "std::float32_t": "f",
+            "std::float64_t": "",
+            "std::float128_t": "l",
+            "std::bfloat16_t": "",  # b?
             # SIMD
-            "REAL_SIMD_ARRAY" : "", # d?
-
+            "REAL_SIMD_ARRAY": "",  # d?
             # Maybe add complex numbers?
         }
 
