@@ -121,28 +121,3 @@ def construct_schedule_ccl(
     output_Path.mkdir(parents=True, exist_ok=True)
     with open(output_Path / "schedule.ccl", "w", encoding="utf-8") as file:
         file.write(outstr)
-
-
-# def auto_EVOL_AUXEVOL_AUX_STORAGE() -> str:
-#     outstr = ""
-#     for gfname, gf in gri.glb_gridfcs_dict.items():
-#         if gf.group == "EVOL":
-#             outstr += """
-# STORAGE: evol_variables[3]     # Evolution variables
-# STORAGE: evol_variables_rhs[1] # Variables storing right-hand-sides
-# """
-#             break
-#     for gfname, gf in gri.glb_gridfcs_dict.items():
-#         if gf.group == "AUXEVOL":
-#             outstr += """
-# STORAGE: auxevol_variables[1]  # Single-timelevel storage of variables needed for evolutions.
-# """
-#             break
-#
-#     for gfname, gf in gri.glb_gridfcs_dict.items():
-#         if gf.group == "AUX":
-#             outstr += """
-# STORAGE: aux_variables[3]      # Diagnostics variables
-# """
-#             break
-#     return outstr
