@@ -457,7 +457,7 @@ class CarpetXGridFunction(GridFunction):
     def __init__(
         self,
         name: str,
-        group: str = "",
+        group: str = "EVOL",
         rank: int = 0,
         dimension: int = 3,
         f_infinity: float = 0.0,
@@ -549,6 +549,105 @@ class CarpetXGridFunction(GridFunction):
             )
             raise ValueError(msg)
 
+    @staticmethod
+    def access_gf(
+        gf_name: str,
+        i0_offset: int = 0,
+        i1_offset: int = 0,
+        i2_offset: int = 0,
+        use_GF_suffix: bool = True,
+        reuse_index = False,
+        index_name = "",
+    ) -> str:
+        """
+        Retrieve a grid function value from memory for a given offset.
+
+        :param gf_name: The grid function name.
+        :param i0_offset: Offset for the first index.
+        :param i1_offset: Offset for the second index.
+        :param i2_offset: Offset for the third index.
+        :param use_GF_suffix: Suffix gridfunction name with GF (default: True).
+        :param reuse_index: Use provided grid function index instead of computing it directly (default: False).
+        :param index_name: Name of predefined index variable.
+
+        :return: Formatted string.
+
+        :raises ValueError: If 'gf_array_name' is not provided.
+
+        Doctests:
+        >>> CarpetXGridFunction.access_gf("aa",1,2,3)
+        'aaGF(p.I + 1*p.DI[0] + 2*p.DI[1] + 3*p.DI[2])'
+        >>> CarpetXGridFunction.access_gf("defg", 0, -1, 0)
+        'defgGF(p.I - 1*p.DI[1])'
+        """
+        index = index_name
+        if not reuse_index:
+            index = "p.I"
+            if i0_offset != 0:
+                index += f" + {i0_offset}*p.DI[0]".replace("+ -", "-")
+            if i1_offset != 0:
+                index += f" + {i1_offset}*p.DI[1]".replace("+ -", "-")
+            if i2_offset != 0:
+                index += f" + {i2_offset}*p.DI[2]".replace("+ -", "-")
+
+        access_str = f"{gf_name}({index})"
+        if use_GF_suffix:
+            access_str = f"{gf_name}GF({index})"
+        return access_str
+
+
+
+    def read_gf_from_memory_Ccode_onept(
+        self, i0_offset: int = 0, i1_offset: int = 0, i2_offset: int = 0, **kwargs: Any
+    ) -> str:
+        """
+        Generate a formatted string using the grid function name and offsets.
+
+        :param i0_offset: Offset for the first index
+        :param i1_offset: Offset for the second index
+        :param i2_offset: Offset for the third index
+        :param kwargs: Optional keyword arguments.
+        :return: Formatted string
+        :raises ValueError: If 'gf_array_name' is not provided in kwargs or if kwargs are passed when they shouldn't be.
+
+        Doctests:
+        >>> glb_gridfcs_dict.clear()
+        >>> par.set_parval_from_str("Infrastructure", "ETLegacy")
+        >>> abc = register_gridfunctions("abc", group="EVOL")
+        >>> glb_gridfcs_dict["abc"].read_gf_from_memory_Ccode_onept(1, 2, 3)
+        'abcGF(p.I + 1*p.DI[0] + 2*p.DI[1] 3*p.DI[2])'
+        >>> defg = register_gridfunctions("defg", group="EVOL")
+        >>> glb_gridfcs_dict["defg"].read_gf_from_memory_Ccode_onept(0, -1, 0, enable_simd=True)
+        'ReadSIMD(&defgGF(p.I - 1*p.DI[1]))'
+        >>> glb_gridfcs_dict["defg"].read_gf_from_memory_Ccode_onept(0, -1, 0, enable_simd=True, use_GF_suffix=False)
+        'ReadSIMD(&defg(p.I - 1*p.DI[1]))'
+        """
+
+       # if "reuse_index" in kwargs and not kwargs["reuse_index"]:
+        index = "p.I"
+        if i0_offset != 0:
+            index += f" + {i0_offset}*p.DI[0]".replace("+ -", "-")
+        if i1_offset != 0:
+            index += f" + {i1_offset}*p.DI[1]".replace("+ -", "-")
+        if i2_offset != 0:
+            index += f" + {i2_offset}*p.DI[2]".replace("+ -", "-")
+       # else:
+       #     if "index_name" in kwargs:
+       #         index = kwargs["index_name"]
+       #     else:
+       #         #Error out
+       #         exit(1)
+
+        ret_string = f"{self.name}"
+        # if use_GF_suffix defined AND set to True, add GF suffix
+        if "use_GF_suffix" in kwargs and kwargs["use_GF_suffix"]:
+            ret_string += "GF"
+        ret_string += f"({index})"
+
+        if kwargs.get("enable_simd"):
+            ret_string = f"ReadSIMD(&{ret_string})"
+
+        return ret_string
 
 # Contains a list of gridfunction objects.
 glb_gridfcs_dict: Dict[
