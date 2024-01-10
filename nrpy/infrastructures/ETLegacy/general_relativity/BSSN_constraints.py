@@ -52,7 +52,7 @@ def register_CFunction_BSSN_constraints(
 
     includes = standard_ET_includes
     if enable_simd:
-        includes += [("./SIMD/simd_intrinsics.h")]
+        includes += [("./simd/simd_intrinsics.h")]
     desc = r"""Evaluate BSSN constraints."""
     name = f"{thorn_name}_BSSN_constraints_order_{fd_order}"
     body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
@@ -62,6 +62,8 @@ def register_CFunction_BSSN_constraints(
   const REAL_SIMD_ARRAY invdxx0 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(0));
   const REAL_SIMD_ARRAY invdxx1 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(1));
   const REAL_SIMD_ARRAY invdxx2 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(2));
+  const CCTK_REAL *param_PI CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("PI", "{thorn_name}", NULL);
+  const REAL_SIMD_ARRAY PI CCTK_ATTRIBUTE_UNUSED = ConstSIMD(*param_PI);
 
 """
     else:
@@ -89,6 +91,7 @@ def register_CFunction_BSSN_constraints(
             enable_fd_codegen=True,
             enable_simd=enable_simd,
             enable_fd_functions=True,
+            enable_GoldenKernels=True,
         ),
         loop_region="interior",
         enable_simd=enable_simd,

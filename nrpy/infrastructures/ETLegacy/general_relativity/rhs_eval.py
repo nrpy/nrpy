@@ -29,6 +29,8 @@ def register_CFunction_rhs_eval(
     enable_rfm_precompute: bool,
     enable_simd: bool,
     fd_order: int,
+    LapseEvolutionOption: str,
+    ShiftEvolutionOption: str,
     enable_KreissOliger_dissipation: bool,
     KreissOliger_strength_mult_by_W: bool = False,
     # when mult by W, strength_gauge=0.99 & strength_nongauge=0.3 is best.
@@ -45,6 +47,8 @@ def register_CFunction_rhs_eval(
     :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
     :param enable_simd: Whether or not to enable SIMD (Single Instruction, Multiple Data).
     :param fd_order: Order of finite difference method
+    :param LapseEvolutionOption: Lapse evolution equation choice.
+    :param ShiftEvolutionOption: Lapse evolution equation choice.
     :param enable_KreissOliger_dissipation: Whether or not to enable Kreiss-Oliger dissipation.
     :param KreissOliger_strength_mult_by_W: Whether to multiply Kreiss-Oliger strength by W.
     :param KreissOliger_strength_gauge: Gauge strength for Kreiss-Oliger dissipation.
@@ -66,7 +70,7 @@ def register_CFunction_rhs_eval(
 
     includes = standard_ET_includes
     if enable_simd:
-        includes += [("./SIMD/simd_intrinsics.h")]
+        includes += [("./simd/simd_intrinsics.h")]
     desc = r"""Set RHSs for the BSSN evolution equations."""
     name = f"{thorn_name}_rhs_eval_order_{fd_order}"
     body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
@@ -76,6 +80,8 @@ def register_CFunction_rhs_eval(
   const REAL_SIMD_ARRAY invdxx0 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(0));
   const REAL_SIMD_ARRAY invdxx1 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(1));
   const REAL_SIMD_ARRAY invdxx2 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(2));
+  const CCTK_REAL *param_PI CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("PI", "{thorn_name}", NULL);
+  const REAL_SIMD_ARRAY PI CCTK_ATTRIBUTE_UNUSED = ConstSIMD(*param_PI);
   const CCTK_REAL *param_eta CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("eta", "{thorn_name}", NULL);
   const REAL_SIMD_ARRAY eta CCTK_ATTRIBUTE_UNUSED = ConstSIMD(*param_eta);
   const CCTK_REAL *param_diss_strength CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("diss_strength", "{thorn_name}", NULL);
@@ -93,6 +99,8 @@ def register_CFunction_rhs_eval(
     alpha_rhs, vet_rhsU, bet_rhsU = BSSN_gauge_RHSs(
         CoordSystem,
         enable_rfm_precompute,
+        LapseEvolutionOption=LapseEvolutionOption,
+        ShiftEvolutionOption=ShiftEvolutionOption
     )
     rhs.BSSN_RHSs_varname_to_expr_dict["alpha_rhs"] = alpha_rhs
     for i in range(3):
@@ -152,10 +160,10 @@ def register_CFunction_rhs_eval(
                 diss_strength_nongauge * trK_dKOD[k] * rfm.ReU[k]
             )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
             for i in range(3):
-                #if "2ndOrder" in ShiftEvolutionOption:
-                #    rhs.BSSN_RHSs_varname_to_expr_dict[f"bet_rhsU{i}"] += (
-                #        diss_strength_gauge * betU_dKOD[i][k] * rfm.ReU[k]
-                #    )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
+                if "2ndOrder" in ShiftEvolutionOption:
+                    rhs.BSSN_RHSs_varname_to_expr_dict[f"bet_rhsU{i}"] += (
+                        diss_strength_gauge * betU_dKOD[i][k] * rfm.ReU[k]
+                    )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
                 rhs.BSSN_RHSs_varname_to_expr_dict[f"vet_rhsU{i}"] += (
                     diss_strength_gauge * vetU_dKOD[i][k] * rfm.ReU[k]
                 )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
@@ -198,6 +206,7 @@ def register_CFunction_rhs_eval(
             enable_simd=enable_simd,
             upwind_control_vec=betaU,
             enable_fd_functions=True,
+            enable_GoldenKernels=True,
         ),
         loop_region="interior",
         enable_simd=enable_simd,
