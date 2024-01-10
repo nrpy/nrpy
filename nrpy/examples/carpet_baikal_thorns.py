@@ -1,8 +1,8 @@
 """
 Generates Einstein Toolkit thorns for solving the wave equation on Cartesian AMR grids with Carpet.
 
-Author: Zachariah B. Etienne
-        zachetie **at** gmail **dot* com
+Author: Samuel Cupp
+        scupp1 **at** my **dot** apsu **dot** edu
 """
 
 # Notes from development:
