@@ -62,6 +62,8 @@ thorn_names = ["Baikal", "BaikalVacuum"] # note that this ordering matters due t
 enable_rfm_precompute = False
 MoL_method = "RK4"
 enable_simd = True
+LapseEvolutionOption = "OnePlusLog"
+ShiftEvolutionOption = "GammaDriving2ndOrder_NoCovariant"
 enable_KreissOliger_dissipation = True
 parallel_codegen_enable = True
 CoordSystem = "Cartesian"
@@ -113,6 +115,7 @@ for evol_thorn_name in thorn_names:
                                       enable_rfm_precompute=False, enable_simd=enable_simd)
         register_CFunction_rhs_eval(thorn_name=evol_thorn_name, enable_T4munu=enable_T4munu, fd_order=fd_order, CoordSystem="Cartesian",
                                     enable_rfm_precompute=False, enable_simd=enable_simd,
+                                    LapseEvolutionOption=LapseEvolutionOption, ShiftEvolutionOption=ShiftEvolutionOption,
                                     enable_KreissOliger_dissipation=enable_KreissOliger_dissipation)
         register_CFunction_BSSN_constraints(thorn_name=evol_thorn_name, enable_T4munu=enable_T4munu, fd_order=fd_order,
                                             CoordSystem="Cartesian", enable_rfm_precompute=False, enable_simd=enable_simd)
