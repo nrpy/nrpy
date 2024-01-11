@@ -93,6 +93,8 @@ def register_CFunction_enforce_detgammahat_constraint(
             hDD_access_gfs,
             enable_simd=False,
             automatically_read_gf_data_from_memory=True,
+            enable_fd_codegen=True,
+            enable_fd_functions=True,
         ),
         loop_region="all points",
         enable_simd=False,
