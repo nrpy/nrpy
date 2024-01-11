@@ -1,3 +1,9 @@
+"""
+Generates function to compute the right-hand sides of the BSSN evolution equations.
+
+Author: Samuel Cupp
+        scupp1 **at** my **dot** apsu **dot** edu
+"""
 import re
 from collections import OrderedDict as ODict
 from typing import Union, cast, List
@@ -11,7 +17,6 @@ import nrpy.grid as gri
 import nrpy.params as par
 import nrpy.indexedexp as ixp
 import nrpy.helpers.parallel_codegen as pcg
-from nrpy.helpers import simd
 import nrpy.finite_difference as fin
 
 import nrpy.infrastructures.CarpetX.simple_loop as lp
@@ -22,6 +27,7 @@ import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 
 standard_ET_includes = ["math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
 
+
 def register_CFunction_rhs_eval(
     thorn_name: str,
     CoordSystem: str,
@@ -29,12 +35,14 @@ def register_CFunction_rhs_eval(
     enable_rfm_precompute: bool,
     enable_simd: bool,
     fd_order: int,
+    LapseEvolutionOption: str,
+    ShiftEvolutionOption: str,
     enable_KreissOliger_dissipation: bool,
     KreissOliger_strength_mult_by_W: bool = False,
     # when mult by W, strength_gauge=0.99 & strength_nongauge=0.3 is best.
     KreissOliger_strength_gauge: float = 0.1,
     KreissOliger_strength_nongauge: float = 0.1,
-    ) -> Union[None, pcg.NRPyEnv_type]:
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the right-hand side evaluation function for the BSSN equations.
 
@@ -44,6 +52,8 @@ def register_CFunction_rhs_eval(
     :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
     :param enable_simd: Whether or not to enable SIMD (Single Instruction, Multiple Data).
     :param fd_order: Order of finite difference method
+    :param LapseEvolutionOption: Lapse evolution equation choice.
+    :param ShiftEvolutionOption: Lapse evolution equation choice.
     :param enable_KreissOliger_dissipation: Whether or not to enable Kreiss-Oliger dissipation.
     :param KreissOliger_strength_mult_by_W: Whether to multiply Kreiss-Oliger strength by W.
     :param KreissOliger_strength_gauge: Gauge strength for Kreiss-Oliger dissipation.
@@ -55,8 +65,9 @@ def register_CFunction_rhs_eval(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    default_fd_order = par.parval_from_str("fd_order")
-    default_enable_T4munu = par.parval_from_str("enable_T4munu")
+    old_fd_order = par.parval_from_str("fd_order")
+    old_enable_T4munu = par.parval_from_str("enable_T4munu")
+    old_enable_RbarDD_gridfunctions = par.parval_from_str("enable_RbarDD_gridfunctions")
     # Set this because parallel codegen needs the correct local values
     par.set_parval_from_str("fd_order", fd_order)
     par.set_parval_from_str("enable_T4munu", enable_T4munu)
@@ -64,16 +75,18 @@ def register_CFunction_rhs_eval(
 
     includes = standard_ET_includes
     if enable_simd:
-        includes += [("./SIMD/simd_intrinsics.h")]
+        includes += [("./simd/simd_intrinsics.h")]
     desc = r"""Set RHSs for the BSSN evolution equations."""
     name = f"{thorn_name}_rhs_eval_order_{fd_order}"
     body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
 """
     if enable_simd:
-        body +=f"""
+        body += f"""
   const REAL_SIMD_ARRAY invdxx0 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(0));
   const REAL_SIMD_ARRAY invdxx1 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(1));
   const REAL_SIMD_ARRAY invdxx2 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(2));
+  const CCTK_REAL *param_PI CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("PI", "{thorn_name}", NULL);
+  const REAL_SIMD_ARRAY PI CCTK_ATTRIBUTE_UNUSED = ConstSIMD(*param_PI);
   const CCTK_REAL *param_eta CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("eta", "{thorn_name}", NULL);
   const REAL_SIMD_ARRAY eta CCTK_ATTRIBUTE_UNUSED = ConstSIMD(*param_eta);
   const CCTK_REAL *param_diss_strength CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("diss_strength", "{thorn_name}", NULL);
@@ -81,7 +94,7 @@ def register_CFunction_rhs_eval(
 
 """
     else:
-        body +=f"""  DECLARE_CCTK_PARAMETERS;
+        body += """  DECLARE_CCTK_PARAMETERS;
 
 """
 
@@ -91,6 +104,8 @@ def register_CFunction_rhs_eval(
     alpha_rhs, vet_rhsU, bet_rhsU = BSSN_gauge_RHSs(
         CoordSystem,
         enable_rfm_precompute,
+        LapseEvolutionOption=LapseEvolutionOption,
+        ShiftEvolutionOption=ShiftEvolutionOption,
     )
     rhs.BSSN_RHSs_varname_to_expr_dict["alpha_rhs"] = alpha_rhs
     for i in range(3):
@@ -150,10 +165,10 @@ def register_CFunction_rhs_eval(
                 diss_strength_nongauge * trK_dKOD[k] * rfm.ReU[k]
             )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
             for i in range(3):
-                #if "2ndOrder" in ShiftEvolutionOption:
-                #    rhs.BSSN_RHSs_varname_to_expr_dict[f"bet_rhsU{i}"] += (
-                #        diss_strength_gauge * betU_dKOD[i][k] * rfm.ReU[k]
-                #    )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
+                if "2ndOrder" in ShiftEvolutionOption:
+                    rhs.BSSN_RHSs_varname_to_expr_dict[f"bet_rhsU{i}"] += (
+                        diss_strength_gauge * betU_dKOD[i][k] * rfm.ReU[k]
+                    )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
                 rhs.BSSN_RHSs_varname_to_expr_dict[f"vet_rhsU{i}"] += (
                     diss_strength_gauge * vetU_dKOD[i][k] * rfm.ReU[k]
                 )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
@@ -170,15 +185,13 @@ def register_CFunction_rhs_eval(
 
     BSSN_RHSs_access_gf: List[str] = []
     for var in rhs.BSSN_RHSs_varname_to_expr_dict.keys():
-        pattern = re.compile(r'([a-zA-Z_]+)_rhs([a-zA-Z_]+[0-2]+)')
+        pattern = re.compile(r"([a-zA-Z_]+)_rhs([a-zA-Z_]+[0-2]+)")
         patmatch = pattern.match(var)
         if patmatch:
             var_name = patmatch.group(1) + patmatch.group(2) + "_rhs"
         else:
             var_name = var
-        BSSN_RHSs_access_gf += [
-            gri.CarpetXGridFunction.access_gf(gf_name=var_name)
-        ]
+        BSSN_RHSs_access_gf += [gri.CarpetXGridFunction.access_gf(gf_name=var_name)]
 
     # Set up upwind control vector (betaU)
     rfm = refmetric.reference_metric[
@@ -196,6 +209,7 @@ def register_CFunction_rhs_eval(
             enable_simd=enable_simd,
             upwind_control_vec=betaU,
             enable_fd_functions=True,
+            enable_GoldenKernels=True,
         ),
         loop_region="interior",
         enable_simd=enable_simd,
@@ -228,7 +242,14 @@ if(FD_order == {fd_order}) {{
         body=body,
         ET_thorn_name=thorn_name,
         ET_schedule_bins_entries=[("ODESolvers_RHS", schedule)],
-        ET_current_thorn_CodeParams_used=params
+        ET_current_thorn_CodeParams_used=params,
     )
-    par.set_parval_from_str("fd_order", default_fd_order)
+
+    # Reset to the initial values
+    par.set_parval_from_str("fd_order", old_fd_order)
+    par.set_parval_from_str("enable_T4munu", old_enable_T4munu)
+    par.set_parval_from_str(
+        "enable_RbarDD_gridfunctions", old_enable_RbarDD_gridfunctions
+    )
+
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())

@@ -7,11 +7,12 @@ Contributor: Ken Sible
 Email: ksible *at* outlook *dot* com
 """
 
+
 def simple_loop(
     loop_body: str,
     enable_simd: bool = False,
     loop_region: str = "",
-    loop_centering: list = [0,0,0],
+    loop_centering: list = [0, 0, 0],
     run_on_device: bool = True,
 ) -> str:
     """
@@ -55,17 +56,17 @@ def simple_loop(
     if run_on_device:
         loop_macro += "_device"
 
-    if loop_centering[0] not in [0,1]:
+    if loop_centering[0] not in [0, 1]:
         raise ValueError(
-            f'loop_centering[0] = {loop_centering[0]} unsupported. Choose 0 or 1 for vertex- or cell-centering, respectively.'
+            f"loop_centering[0] = {loop_centering[0]} unsupported. Choose 0 or 1 for vertex- or cell-centering, respectively."
         )
-    if loop_centering[1] not in [0,1]:
+    if loop_centering[1] not in [0, 1]:
         raise ValueError(
-            f'loop_centering[1] = {loop_centering[1]} unsupported. Choose 0 or 1 for vertex- or cell-centering, respectively.'
+            f"loop_centering[1] = {loop_centering[1]} unsupported. Choose 0 or 1 for vertex- or cell-centering, respectively."
         )
-    if loop_centering[2] not in [0,1]:
+    if loop_centering[2] not in [0, 1]:
         raise ValueError(
-            f'loop_centering[2] = {loop_centering[2]} unsupported. Choose 0 or 1 for vertex- or cell-centering, respectively.'
+            f"loop_centering[2] = {loop_centering[2]} unsupported. Choose 0 or 1 for vertex- or cell-centering, respectively."
         )
     # loop_centering: set loop to properly choose stencil based on the given centering
     loop_macro += f"<{loop_centering[0]}, {loop_centering[1]}, {loop_centering[2]}>(\n"
@@ -75,7 +76,8 @@ def simple_loop(
         + "grid.nghostzones,\n"
         + "[=] CCTK_HOST(const Loop::PointDesc &p) CCTK_ATTRIBUTE_ALWAYS_INLINE {\n"
         + loop_body
-        + "}); // END LOOP: " + loop_macro
+        + "}); // END LOOP: "
+        + loop_macro
     )
 
 

@@ -638,10 +638,10 @@ class CarpetXGridFunction(GridFunction):
        #         #Error out
        #         exit(1)
 
-        ret_string = f"{self.name}"
+        ret_string = f"{self.name}GF"
         # if use_GF_suffix defined AND set to True, add GF suffix
-        if "use_GF_suffix" in kwargs and kwargs["use_GF_suffix"]:
-            ret_string += "GF"
+        if "use_GF_suffix" in kwargs and not kwargs["use_GF_suffix"]:
+            ret_string = f"{self.name}GF"
         ret_string += f"({index})"
 
         if kwargs.get("enable_simd"):

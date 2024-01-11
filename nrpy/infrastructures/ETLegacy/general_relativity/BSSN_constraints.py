@@ -105,7 +105,7 @@ def register_CFunction_BSSN_constraints(
 
     schedule = f"""
 if(FD_order == {fd_order}) {{
-  schedule FUNC_NAME in MoL_PseudoEvolution as {thorn_name}_BSSN_constraints after BaikalVacuum_ApplyBCs
+  schedule FUNC_NAME in MoL_PseudoEvolution as {thorn_name}_BSSN_constraints after {thorn_name}_ApplyBCs
   {{
     LANG: C
     READS:  aDD00GF, aDD01GF, aDD02GF, aDD11GF, aDD12GF, aDD22GF,

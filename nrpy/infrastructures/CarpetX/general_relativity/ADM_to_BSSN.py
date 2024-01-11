@@ -1,7 +1,12 @@
-from typing import Union, cast, List
+"""
+Generates function to compute the BSSN variables from the ADM variables.
+
+Author: Samuel Cupp
+        scupp1 **at** my **dot** apsu **dot** edu
+"""
+from typing import Union, cast
 from inspect import currentframe as cfr
 from types import FrameType as FT
-import sympy
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
@@ -9,7 +14,6 @@ import nrpy.grid as gri
 import nrpy.params as par
 import nrpy.indexedexp as ixp
 import nrpy.helpers.parallel_codegen as pcg
-from nrpy.helpers import simd
 
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 import nrpy.infrastructures.CarpetX.simple_loop as lp
@@ -19,32 +23,28 @@ import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 standard_ET_includes = ["math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
 coord_name = ["x", "y", "z"]
 
+
 def register_CFunction_ADM_to_BSSN(
     thorn_name: str,
     CoordSystem: str,
-    enable_rfm_precompute: bool,
-    enable_simd: bool,
-    fd_order: int) -> Union[None, pcg.NRPyEnv_type]:
+    fd_order: int,
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Convert ADM variables in the Cartesian basis to BSSN variables in the Cartesian basis.
 
     :param thorn_name: The Einstein Toolkit thorn name.
     :param CoordSystem: The coordinate system to be used.
-    :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
-    :param enable_simd: Whether or not to enable SIMD (Single Instruction, Multiple Data).
     :param fd_order: Order of finite difference method
 
     :return: A string representing the full C function.
     """
-
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    default_fd_order = par.parval_from_str("fd_order")
+    old_fd_order = par.parval_from_str("fd_order")
     # Set this because parallel codegen needs the correct local values
     par.set_parval_from_str("fd_order", fd_order)
-
 
     desc = f"""Converting from ADM to BSSN quantities is required in the Einstein Toolkit,
 as initial data are given in terms of ADM quantities, and {thorn_name} evolves the BSSN quantities."""
@@ -57,26 +57,36 @@ as initial data are given in terms of ADM quantities, and {thorn_name} evolves t
   const CCTK_REAL invdxx2 = 1.0 / CCTK_DELTA_SPACE(2);
 
 """
-    lapse_gf_access  = gri.CarpetXGridFunction.access_gf(gf_name="alp", use_GF_suffix=False)
-    lapse2_gf_access  = gri.CarpetXGridFunction.access_gf(gf_name="alpha")
+    lapse_gf_access = gri.CarpetXGridFunction.access_gf(
+        gf_name="alp", use_GF_suffix=False
+    )
+    lapse2_gf_access = gri.CarpetXGridFunction.access_gf(gf_name="alpha")
     loop_body = lapse2_gf_access + " = " + lapse_gf_access + ";\n"
 
     for i in range(3):
-        shift_gf_access  = gri.CarpetXGridFunction.access_gf(gf_name="beta"+coord_name[i], use_GF_suffix=False)
+        shift_gf_access = gri.CarpetXGridFunction.access_gf(
+            gf_name="beta" + coord_name[i], use_GF_suffix=False
+        )
         loop_body += f"const CCTK_REAL local_betaU{i} = {shift_gf_access};\n"
 
     for i in range(3):
-        dtshift_gf_access  = gri.CarpetXGridFunction.access_gf(gf_name="dtbeta"+coord_name[i], use_GF_suffix=False)
+        dtshift_gf_access = gri.CarpetXGridFunction.access_gf(
+            gf_name="dtbeta" + coord_name[i], use_GF_suffix=False
+        )
         loop_body += f"const CCTK_REAL local_BU{i} = {dtshift_gf_access};\n"
 
     for i in range(3):
         for j in range(i, 3):
-            gamma_gf_access  = gri.CarpetXGridFunction.access_gf(gf_name="g"+coord_name[i]+coord_name[j], use_GF_suffix=False)
+            gamma_gf_access = gri.CarpetXGridFunction.access_gf(
+                gf_name="g" + coord_name[i] + coord_name[j], use_GF_suffix=False
+            )
             loop_body += f"const CCTK_REAL local_gDD{i}{j} = {gamma_gf_access};\n"
 
     for i in range(3):
         for j in range(i, 3):
-            curv_gf_access  = gri.CarpetXGridFunction.access_gf(gf_name="k"+coord_name[i]+coord_name[j], use_GF_suffix=False)
+            curv_gf_access = gri.CarpetXGridFunction.access_gf(
+                gf_name="k" + coord_name[i] + coord_name[j], use_GF_suffix=False
+            )
             loop_body += f"const CCTK_REAL local_kDD{i}{j} = {curv_gf_access};\n"
 
     gammaCartDD = ixp.declarerank2("local_gDD", symmetry="sym01")
@@ -86,7 +96,7 @@ as initial data are given in terms of ADM quantities, and {thorn_name} evolves t
     BU = ixp.declarerank1("local_BU")
     adm2bssn = ADM_to_BSSN(gammaCartDD, KCartDD, betaU, BU, "Cartesian")
 
-    cf_gf_access  = gri.CarpetXGridFunction.access_gf(gf_name="cf")
+    cf_gf_access = gri.CarpetXGridFunction.access_gf(gf_name="cf")
     trK_gf_access = gri.CarpetXGridFunction.access_gf(gf_name="trK")
     list_of_output_exprs = [adm2bssn.cf, adm2bssn.trK]
     list_of_output_varnames = [cf_gf_access, trK_gf_access]
@@ -161,7 +171,7 @@ as initial data are given in terms of ADM quantities, and {thorn_name} evolves t
         loop_region="interior",
     )
 
-    body += f"""
+    body += """
   //ExtrapolateGammas(cctkGH, lambdaU0GF);
   //ExtrapolateGammas(cctkGH, lambdaU1GF);
   //ExtrapolateGammas(cctkGH, lambdaU2GF);
@@ -194,5 +204,8 @@ if(FD_order == {fd_order}) {{
         ET_thorn_name=thorn_name,
         ET_schedule_bins_entries=[("CCTK_INITIAL", schedule)],
     )
-    par.set_parval_from_str("fd_order", default_fd_order)
+
+    # Reset to the initial values
+    par.set_parval_from_str("fd_order", old_fd_order)
+
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
