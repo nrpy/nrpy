@@ -1,3 +1,9 @@
+"""
+Generates function to enforce the det(gammabar) = det(gammahat) constraint..
+
+Author: Samuel Cupp
+        scupp1 **at** my **dot** apsu **dot** edu
+"""
 from typing import Union, cast, List
 from inspect import currentframe as cfr
 from types import FrameType as FT
@@ -6,16 +12,15 @@ import sympy
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
-import nrpy.params as par
 import nrpy.indexedexp as ixp
 import nrpy.helpers.parallel_codegen as pcg
-from nrpy.helpers import simd
 
 import nrpy.infrastructures.CarpetX.simple_loop as lp
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 
 standard_ET_includes = ["math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
+
 
 def register_CFunction_enforce_detgammahat_constraint(
     thorn_name: str,
@@ -71,9 +76,7 @@ def register_CFunction_enforce_detgammahat_constraint(
     hprimeDD_expr_list: List[sympy.Expr] = []
     for i in range(3):
         for j in range(i, 3):
-            hDD_access_gfs += [
-                gri.CarpetXGridFunction.access_gf(gf_name=f"hDD{i}{j}")
-            ]
+            hDD_access_gfs += [gri.CarpetXGridFunction.access_gf(gf_name=f"hDD{i}{j}")]
             hprimeDD_expr_list += [hprimeDD[i][j]]
 
     # To evaluate the cube root, SIMD support requires e.g., SLEEF.
@@ -87,13 +90,15 @@ def register_CFunction_enforce_detgammahat_constraint(
             hprimeDD_expr_list,
             hDD_access_gfs,
             enable_simd=False,
-            automatically_read_gf_data_from_memory=True
+            automatically_read_gf_data_from_memory=True,
+            enable_fd_codegen=True,
+            enable_fd_functions=True,
         ),
         loop_region="all points",
         enable_simd=False,
     )
 
-    schedule = f"""
+    schedule = """
 schedule FUNC_NAME in ODESolvers_PostStep
 {{
   LANG: C

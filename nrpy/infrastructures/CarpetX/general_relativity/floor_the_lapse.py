@@ -1,36 +1,31 @@
-from typing import Union, cast, List
+"""
+Generates a function to enforce a minimum on the lapse grid function.
+
+Author: Samuel Cupp
+        scupp1 **at** my **dot** apsu **dot** edu
+"""
+from typing import Union, cast
 from inspect import currentframe as cfr
 from types import FrameType as FT
-import sympy
 
-import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
-import nrpy.params as par
-import nrpy.indexedexp as ixp
 import nrpy.helpers.parallel_codegen as pcg
-from nrpy.helpers import simd
-
 import nrpy.infrastructures.CarpetX.simple_loop as lp
-import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 
 standard_ET_includes = ["math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
 
+
 def register_CFunction_floor_the_lapse(
     thorn_name: str,
-    CoordSystem: str,
-    enable_rfm_precompute: bool,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the function that enforces the det(gammabar) = det(gammahat) constraint.
 
     :param thorn_name: The Einstein Toolkit thorn name.
-    :param CoordSystem: The coordinate system to be used.
-    :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
-
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
@@ -45,10 +40,10 @@ def register_CFunction_floor_the_lapse(
 #endif
 
 """
-    lapse_access_gfs = [
-        gri.CarpetXGridFunction.access_gf(gf_name=f"alpha")
-            ]
-    loop_body = lapse_access_gfs[0] + " = MAX(" + lapse_access_gfs[0] + ", lapse_floor);"
+    lapse_access_gfs = [gri.CarpetXGridFunction.access_gf(gf_name="alpha")]
+    loop_body = (
+        lapse_access_gfs[0] + " = MAX(" + lapse_access_gfs[0] + ", lapse_floor);"
+    )
 
     body += lp.simple_loop(
         loop_body=loop_body,
@@ -75,6 +70,6 @@ schedule FUNC_NAME in ODESolvers_PostStep before {thorn_name}_enforce_detgammaha
         body=body,
         ET_thorn_name=thorn_name,
         ET_schedule_bins_entries=[("ODESolvers_PostStep", schedule)],
-        ET_current_thorn_CodeParams_used=["lapse_floor"]
+        ET_current_thorn_CodeParams_used=["lapse_floor"],
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
