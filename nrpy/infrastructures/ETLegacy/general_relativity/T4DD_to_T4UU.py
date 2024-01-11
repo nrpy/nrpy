@@ -1,3 +1,9 @@
+"""
+Generates function to raise the stress-energy tensor using the BSSN variables.
+
+Author: Samuel Cupp
+        scupp1 **at** my **dot** apsu **dot** edu
+"""
 from typing import Union, cast, List
 from inspect import currentframe as cfr
 from types import FrameType as FT
@@ -6,18 +12,15 @@ import sympy
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
-import nrpy.params as par
 import nrpy.indexedexp as ixp
 import nrpy.helpers.parallel_codegen as pcg
-from nrpy.helpers import simd
 
 import nrpy.infrastructures.ETLegacy.simple_loop as lp
 import nrpy.equations.general_relativity.g4munu_conversions as g4conv
-from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
-import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 
 standard_ET_includes = ["math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
 coord_name = ["t", "x", "y", "z"]
+
 
 def register_CFunction_T4DD_to_T4UU(
     thorn_name: str,
@@ -39,13 +42,6 @@ def register_CFunction_T4DD_to_T4UU(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    Bq = BSSN_quantities[
-        CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
-    ]
-    rfm = refmetric.reference_metric[
-        CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
-    ]
-
     desc = r"""Compute T4UU from T4DD (provided by TmunuBase),
 using BSSN quantities as inputs for the 4D raising operation
 
@@ -58,31 +54,31 @@ WARNING: Do not enable SIMD here, as it is not guaranteed that
 
 """
 
-    g4UU = g4conv.BSSN_to_g4UU(CoordSystem=CoordSystem, enable_rfm_precompute=enable_rfm_precompute)
+    g4UU = g4conv.BSSN_to_g4UU(
+        CoordSystem=CoordSystem, enable_rfm_precompute=enable_rfm_precompute
+    )
 
     T4DD = ixp.declarerank2("T4DD", dimension=4, symmetry="sym01")
     T4UU = ixp.zerorank2(dimension=4)
     for mu in range(4):
         for nu in range(4):
-            T4UU[mu][nu] = sum([
-                               sum([T4DD[alpha][beta] * g4UU[mu][alpha] * g4UU[nu][beta]
-                                    for alpha in range(4)])
-                                for beta in range(4)])
+            for alpha in range(4):
+                for beta in range(4):
+                    T4UU[mu][nu] += T4DD[alpha][beta] * g4UU[mu][alpha] * g4UU[nu][beta]
 
     T4DD_access_gfs: List[str] = []
     T4UU_expr_list: List[sympy.Expr] = []
     for i in range(4):
         for j in range(i, 4):
             T4DD_access_gfs += [
-                gri.ETLegacyGridFunction.access_gf(
-                    gf_name=f"T4UU{i}{j}")
+                gri.ETLegacyGridFunction.access_gf(gf_name=f"T4UU{i}{j}")
             ]
             T4UU_expr_list += [T4UU[i][j]]
 
     loop_body = ""
-    lapse_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name=f"alpha")
+    lapse_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name="alpha")
     loop_body += f"const CCTK_REAL alpha = {lapse_gf_access};\n"
-    cf_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name=f"cf")
+    cf_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name="cf")
     loop_body += f"const CCTK_REAL cf = {cf_gf_access};\n"
     for i in range(3):
         vet_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name=f"vetU{i}")
@@ -93,7 +89,9 @@ WARNING: Do not enable SIMD here, as it is not guaranteed that
             loop_body += f"const CCTK_REAL hDD{i}{j} = {hDD_gf_access};\n"
     for i in range(4):
         for j in range(i, 4):
-            Tmunu_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name="eT"+coord_name[i]+coord_name[j], use_GF_suffix=False)
+            Tmunu_gf_access = gri.ETLegacyGridFunction.access_gf(
+                gf_name="eT" + coord_name[i] + coord_name[j], use_GF_suffix=False
+            )
             loop_body += f"const CCTK_REAL T4DD{i}{j} = {Tmunu_gf_access};\n"
 
     loop_body += ccg.c_codegen(

@@ -1,22 +1,25 @@
+"""
+Generates function to compute the Ricci tensor for use in the BSSN evolution equations.
+
+Author: Samuel Cupp
+        scupp1 **at** my **dot** apsu **dot** edu
+"""
 from typing import Union, cast, List
 from inspect import currentframe as cfr
 from types import FrameType as FT
-import sympy
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.params as par
-import nrpy.indexedexp as ixp
 import nrpy.helpers.parallel_codegen as pcg
-from nrpy.helpers import simd
 import nrpy.finite_difference as fin
 
 import nrpy.infrastructures.ETLegacy.simple_loop as lp
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
-import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 
 standard_ET_includes = ["math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
+
 
 def register_CFunction_Ricci_eval(
     thorn_name: str,
@@ -25,7 +28,7 @@ def register_CFunction_Ricci_eval(
     enable_simd: bool,
     fd_order: int,
     OMP_collapse: int = 1,
-    ) -> Union[None, pcg.NRPyEnv_type]:
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the right-hand side evaluation function for the BSSN equations.
 
@@ -38,12 +41,11 @@ def register_CFunction_Ricci_eval(
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
-
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    default_fd_order = par.parval_from_str("fd_order")
+    old_fd_order = par.parval_from_str("fd_order")
     # Set this because parallel codegen needs the correct local values
     par.set_parval_from_str("fd_order", fd_order)
     par.set_parval_from_str("enable_RbarDD_gridfunctions", False)
@@ -56,14 +58,14 @@ def register_CFunction_Ricci_eval(
     body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
 """
     if enable_simd:
-        body +=f"""
+        body += """
   const REAL_SIMD_ARRAY invdxx0 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(0));
   const REAL_SIMD_ARRAY invdxx1 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(1));
   const REAL_SIMD_ARRAY invdxx2 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(2));
 
 """
     else:
-        body +=f"""  DECLARE_CCTK_PARAMETERS;
+        body += """  DECLARE_CCTK_PARAMETERS;
 
 """
 
@@ -74,9 +76,7 @@ def register_CFunction_Ricci_eval(
     # Populate Ricci tensor
     Ricci_access_gfs: List[str] = []
     for var in Bq.Ricci_varnames:
-        Ricci_access_gfs += [
-            gri.ETLegacyGridFunction.access_gf(gf_name=var)
-        ]
+        Ricci_access_gfs += [gri.ETLegacyGridFunction.access_gf(gf_name=var)]
     body += lp.simple_loop(
         loop_body=ccg.c_codegen(
             Bq.Ricci_exprs,
@@ -115,5 +115,6 @@ if(FD_order == {fd_order}) {{
         ET_thorn_name=thorn_name,
         ET_schedule_bins_entries=[("MoL_CalcRHS", schedule)],
     )
-    par.set_parval_from_str("fd_order", default_fd_order)
+    # Reset to the initial values
+    par.set_parval_from_str("fd_order", old_fd_order)
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())

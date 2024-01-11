@@ -1,5 +1,5 @@
 """
-Generates Einstein Toolkit thorns for solving the wave equation on Cartesian AMR grids with Carpet.
+Generates Einstein Toolkit thorns for evolving the BSSN equations on Cartesian AMR grids with Carpet.
 
 Author: Samuel Cupp
         scupp1 **at** my **dot** apsu **dot** edu
@@ -11,32 +11,22 @@ Author: Samuel Cupp
 # - I don't understand the purpose of the second scheduling in Baikal
 #   but it is necessary for tests to pass.
 # MoL_PostStep:
-# - scheduling adjusted to be deterministic w.ur.t other functions
+# - scheduling adjusted to be deterministic w.r.t. other functions
 
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
-import re
-from collections import OrderedDict as ODict
-from typing import Union, cast, List
+from typing import List
 from pathlib import Path
-from inspect import currentframe as cfr
-from types import FrameType as FT
-import sympy
 import shutil
 import os
 
-import nrpy.c_codegen as ccg
-import nrpy.c_function as cfc
 import nrpy.grid as gri
-import nrpy.indexedexp as ixp
 import nrpy.params as par
 import nrpy.helpers.parallel_codegen as pcg
 from nrpy.helpers import simd
 
-import nrpy.infrastructures.ETLegacy.simple_loop as lp
 from nrpy.infrastructures.ETLegacy import boundary_conditions
-from nrpy.infrastructures.ETLegacy import CodeParameters
 from nrpy.infrastructures.ETLegacy import make_code_defn
 from nrpy.infrastructures.ETLegacy import MoL_registration
 from nrpy.infrastructures.ETLegacy import Symmetry_registration
@@ -46,19 +36,40 @@ from nrpy.infrastructures.ETLegacy import interface_ccl
 from nrpy.infrastructures.ETLegacy import param_ccl
 
 # All needed functions can be imported from the ETLegacy infrastructure
-from nrpy.infrastructures.ETLegacy.general_relativity.ADM_to_BSSN import register_CFunction_ADM_to_BSSN
-from nrpy.infrastructures.ETLegacy.general_relativity.BSSN_to_ADM import register_CFunction_BSSN_to_ADM
-from nrpy.infrastructures.ETLegacy.general_relativity.enforce_detgammahat_constraint import register_CFunction_enforce_detgammahat_constraint
-from nrpy.infrastructures.ETLegacy.general_relativity.floor_the_lapse import register_CFunction_floor_the_lapse
-from nrpy.infrastructures.ETLegacy.general_relativity.RegisterSlicing import register_CFunction_RegisterSlicing
-from nrpy.infrastructures.ETLegacy.general_relativity.BSSN_constraints import register_CFunction_BSSN_constraints
-from nrpy.infrastructures.ETLegacy.general_relativity.Ricci_eval import register_CFunction_Ricci_eval
-from nrpy.infrastructures.ETLegacy.general_relativity.rhs_eval import register_CFunction_rhs_eval
-from nrpy.infrastructures.ETLegacy.general_relativity.T4DD_to_T4UU import register_CFunction_T4DD_to_T4UU
+from nrpy.infrastructures.ETLegacy.general_relativity.ADM_to_BSSN import (
+    register_CFunction_ADM_to_BSSN,
+)
+from nrpy.infrastructures.ETLegacy.general_relativity.BSSN_to_ADM import (
+    register_CFunction_BSSN_to_ADM,
+)
+from nrpy.infrastructures.ETLegacy.general_relativity.enforce_detgammahat_constraint import (
+    register_CFunction_enforce_detgammahat_constraint,
+)
+from nrpy.infrastructures.ETLegacy.general_relativity.floor_the_lapse import (
+    register_CFunction_floor_the_lapse,
+)
+from nrpy.infrastructures.ETLegacy.general_relativity.RegisterSlicing import (
+    register_CFunction_RegisterSlicing,
+)
+from nrpy.infrastructures.ETLegacy.general_relativity.BSSN_constraints import (
+    register_CFunction_BSSN_constraints,
+)
+from nrpy.infrastructures.ETLegacy.general_relativity.Ricci_eval import (
+    register_CFunction_Ricci_eval,
+)
+from nrpy.infrastructures.ETLegacy.general_relativity.rhs_eval import (
+    register_CFunction_rhs_eval,
+)
+from nrpy.infrastructures.ETLegacy.general_relativity.T4DD_to_T4UU import (
+    register_CFunction_T4DD_to_T4UU,
+)
 
 # Code-generation-time parameters:
 project_name = "et_baikal"
-thorn_names = ["Baikal", "BaikalVacuum"] # note that this ordering matters due to how ccl files generate
+thorn_names = [
+    "Baikal",
+    "BaikalVacuum",
+]  # note that this ordering matters due to how ccl files generate
 enable_rfm_precompute = False
 MoL_method = "RK4"
 enable_simd = True
@@ -100,45 +111,69 @@ for evol_thorn_name in thorn_names:
     )
 
     enable_T4munu = False
-    fd_order_list = [4,6,8]
+    fd_order_list = [4, 6, 8]
     if evol_thorn_name == "Baikal":
         enable_T4munu = True
-        fd_order_list = [2,4]
-        register_CFunction_T4DD_to_T4UU(thorn_name=evol_thorn_name, CoordSystem=CoordSystem,
-                                        enable_rfm_precompute=False)
+        fd_order_list = [2, 4]
+        register_CFunction_T4DD_to_T4UU(
+            thorn_name=evol_thorn_name,
+            CoordSystem=CoordSystem,
+            enable_rfm_precompute=False,
+        )
 
     for fd_order in fd_order_list:
         par.set_parval_from_str("fd_order", fd_order)
-        register_CFunction_ADM_to_BSSN(thorn_name=evol_thorn_name, CoordSystem=CoordSystem, fd_order=fd_order,
-                                       enable_rfm_precompute=enable_rfm_precompute, enable_simd=enable_simd)
-        register_CFunction_Ricci_eval(thorn_name=evol_thorn_name, fd_order=fd_order, CoordSystem="Cartesian",
-                                      enable_rfm_precompute=False, enable_simd=enable_simd)
-        register_CFunction_rhs_eval(thorn_name=evol_thorn_name, enable_T4munu=enable_T4munu, fd_order=fd_order, CoordSystem="Cartesian",
-                                    enable_rfm_precompute=False, enable_simd=enable_simd,
-                                    LapseEvolutionOption=LapseEvolutionOption, ShiftEvolutionOption=ShiftEvolutionOption,
-                                    enable_KreissOliger_dissipation=enable_KreissOliger_dissipation)
-        register_CFunction_BSSN_constraints(thorn_name=evol_thorn_name, enable_T4munu=enable_T4munu, fd_order=fd_order,
-                                            CoordSystem="Cartesian", enable_rfm_precompute=False, enable_simd=enable_simd)
+        register_CFunction_ADM_to_BSSN(
+            thorn_name=evol_thorn_name,
+            CoordSystem=CoordSystem,
+            fd_order=fd_order,
+        )
+        register_CFunction_Ricci_eval(
+            thorn_name=evol_thorn_name,
+            fd_order=fd_order,
+            CoordSystem="Cartesian",
+            enable_rfm_precompute=False,
+            enable_simd=enable_simd,
+        )
+        register_CFunction_rhs_eval(
+            thorn_name=evol_thorn_name,
+            enable_T4munu=enable_T4munu,
+            fd_order=fd_order,
+            CoordSystem="Cartesian",
+            enable_rfm_precompute=False,
+            enable_simd=enable_simd,
+            LapseEvolutionOption=LapseEvolutionOption,
+            ShiftEvolutionOption=ShiftEvolutionOption,
+            enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
+        )
+        register_CFunction_BSSN_constraints(
+            thorn_name=evol_thorn_name,
+            enable_T4munu=enable_T4munu,
+            fd_order=fd_order,
+            CoordSystem="Cartesian",
+            enable_rfm_precompute=False,
+            enable_simd=enable_simd,
+        )
 
     register_CFunction_RegisterSlicing(thorn_name=evol_thorn_name)
     register_CFunction_BSSN_to_ADM(thorn_name=evol_thorn_name, CoordSystem="Cartesian")
-    register_CFunction_floor_the_lapse(thorn_name=evol_thorn_name, CoordSystem="Cartesian",
-                                       enable_rfm_precompute=False)
-    register_CFunction_enforce_detgammahat_constraint(thorn_name=evol_thorn_name, CoordSystem="Cartesian",
-                                                      enable_rfm_precompute=False)
+    register_CFunction_floor_the_lapse(thorn_name=evol_thorn_name)
+    register_CFunction_enforce_detgammahat_constraint(
+        thorn_name=evol_thorn_name, CoordSystem="Cartesian", enable_rfm_precompute=False
+    )
 
 ########################
-#  STEP 2: Generate functions in parallel 
+#  STEP 2: Generate functions in parallel
 ########################
 
 if __name__ == "__main__" and parallel_codegen_enable:
     pcg.do_parallel_codegen()
 
 for evol_thorn_name in thorn_names:
-    if evol_thorn_name=="BaikalVacuum":
+    if evol_thorn_name == "BaikalVacuum":
         for i in range(4):
-            for j in range(i,4):
-                gri.glb_gridfcs_dict.pop("T4UU"+str(i)+str(j))
+            for j in range(i, 4):
+                gri.glb_gridfcs_dict.pop("T4UU" + str(i) + str(j))
 
     ########################
     # STEP 3: Register functions that depend on all gridfunctions & CodeParameters having been set
@@ -150,14 +185,14 @@ for evol_thorn_name in thorn_names:
     boundary_conditions.register_CFunctions(thorn_name=evol_thorn_name)
     zero_rhss.register_CFunction_zero_rhss(thorn_name=evol_thorn_name)
     MoL_registration.register_CFunction_MoL_registration(thorn_name=evol_thorn_name)
-    
+
     ########################
     # STEP 4: Generate ccl files for this thorn
     ########################
-    
+
     CParams_registered_to_params_ccl: List[str] = []
-    
-    # CCL files: evol_thorn
+
+    # CCL files
     schedule_ccl.construct_schedule_ccl(
         project_dir=project_dir,
         thorn_name=evol_thorn_name,
@@ -185,7 +220,7 @@ REQUIRES FUNCTION ExtrapolateGammas""",
         is_evol_thorn=True,
         enable_NewRad=True,
     )
-    
+
     params_str = f"""
 shares: ADMBase
 
@@ -218,7 +253,7 @@ EXTENDS CCTK_KEYWORD dtlapse_evolution_method "dtlapse_evolution_method"
         thorn_name=evol_thorn_name,
         shares_extends_str=params_str,
     )
-    
+
     make_code_defn.output_CFunctions_and_construct_make_code_defn(
         project_dir=project_dir, thorn_name=evol_thorn_name
     )

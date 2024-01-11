@@ -1,3 +1,9 @@
+"""
+Generates function to compute the right-hand sides of the BSSN evolution equations.
+
+Author: Samuel Cupp
+        scupp1 **at** my **dot** apsu **dot** edu
+"""
 import re
 from collections import OrderedDict as ODict
 from typing import Union, cast, List
@@ -11,7 +17,6 @@ import nrpy.grid as gri
 import nrpy.params as par
 import nrpy.indexedexp as ixp
 import nrpy.helpers.parallel_codegen as pcg
-from nrpy.helpers import simd
 import nrpy.finite_difference as fin
 
 import nrpy.infrastructures.ETLegacy.simple_loop as lp
@@ -21,6 +26,7 @@ from nrpy.equations.general_relativity.BSSN_gauge_RHSs import BSSN_gauge_RHSs
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 
 standard_ET_includes = ["math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
+
 
 def register_CFunction_rhs_eval(
     thorn_name: str,
@@ -37,7 +43,7 @@ def register_CFunction_rhs_eval(
     KreissOliger_strength_gauge: float = 0.1,
     KreissOliger_strength_nongauge: float = 0.1,
     OMP_collapse: int = 1,
-    ) -> Union[None, pcg.NRPyEnv_type]:
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the right-hand side evaluation function for the BSSN equations.
 
@@ -61,8 +67,9 @@ def register_CFunction_rhs_eval(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    default_fd_order = par.parval_from_str("fd_order")
-    default_enable_T4munu = par.parval_from_str("enable_T4munu")
+    old_fd_order = par.parval_from_str("fd_order")
+    old_enable_T4munu = par.parval_from_str("enable_T4munu")
+    old_enable_RbarDD_gridfunctions = par.parval_from_str("enable_RbarDD_gridfunctions")
     # Set this because parallel codegen needs the correct local values
     par.set_parval_from_str("fd_order", fd_order)
     par.set_parval_from_str("enable_T4munu", enable_T4munu)
@@ -76,7 +83,7 @@ def register_CFunction_rhs_eval(
     body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
 """
     if enable_simd:
-        body +=f"""
+        body += f"""
   const REAL_SIMD_ARRAY invdxx0 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(0));
   const REAL_SIMD_ARRAY invdxx1 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(1));
   const REAL_SIMD_ARRAY invdxx2 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(2));
@@ -89,7 +96,7 @@ def register_CFunction_rhs_eval(
 
 """
     else:
-        body +=f"""  DECLARE_CCTK_PARAMETERS;
+        body += """  DECLARE_CCTK_PARAMETERS;
 
 """
 
@@ -100,7 +107,7 @@ def register_CFunction_rhs_eval(
         CoordSystem,
         enable_rfm_precompute,
         LapseEvolutionOption=LapseEvolutionOption,
-        ShiftEvolutionOption=ShiftEvolutionOption
+        ShiftEvolutionOption=ShiftEvolutionOption,
     )
     rhs.BSSN_RHSs_varname_to_expr_dict["alpha_rhs"] = alpha_rhs
     for i in range(3):
@@ -180,15 +187,13 @@ def register_CFunction_rhs_eval(
 
     BSSN_RHSs_access_gf: List[str] = []
     for var in rhs.BSSN_RHSs_varname_to_expr_dict.keys():
-        pattern = re.compile(r'([a-zA-Z_]+)_rhs([a-zA-Z_]+[0-2]+)')
+        pattern = re.compile(r"([a-zA-Z_]+)_rhs([a-zA-Z_]+[0-2]+)")
         patmatch = pattern.match(var)
         if patmatch:
             var_name = patmatch.group(1) + patmatch.group(2) + "_rhs"
         else:
             var_name = var
-        BSSN_RHSs_access_gf += [
-            gri.ETLegacyGridFunction.access_gf(gf_name=var_name)
-        ]
+        BSSN_RHSs_access_gf += [gri.ETLegacyGridFunction.access_gf(gf_name=var_name)]
 
     # Set up upwind control vector (betaU)
     rfm = refmetric.reference_metric[
@@ -240,7 +245,14 @@ if(FD_order == {fd_order}) {{
         body=body,
         ET_thorn_name=thorn_name,
         ET_schedule_bins_entries=[("MoL_CalcRHS", schedule)],
-        ET_current_thorn_CodeParams_used=params
+        ET_current_thorn_CodeParams_used=params,
     )
-    par.set_parval_from_str("fd_order", default_fd_order)
+
+    # Reset to the initial values
+    par.set_parval_from_str("fd_order", old_fd_order)
+    par.set_parval_from_str("enable_T4munu", old_enable_T4munu)
+    par.set_parval_from_str(
+        "enable_RbarDD_gridfunctions", old_enable_RbarDD_gridfunctions
+    )
+
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
