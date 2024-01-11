@@ -1,18 +1,20 @@
-from typing import Union, cast, List
+"""
+Generates function to register the space-time 3+1 slicing condition with Cactus.
+
+Author: Samuel Cupp
+        scupp1 **at** my **dot** apsu **dot** edu
+"""
+from typing import Union, cast
 from inspect import currentframe as cfr
 from types import FrameType as FT
-import sympy
 
-import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-import nrpy.grid as gri
-import nrpy.params as par
-import nrpy.indexedexp as ixp
 import nrpy.helpers.parallel_codegen as pcg
+
 
 def register_CFunction_RegisterSlicing(
     thorn_name: str,
-    ) -> Union[None, pcg.NRPyEnv_type]:
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the slicing registration function.
 
@@ -37,7 +39,6 @@ schedule FUNC_NAME at STARTUP
   OPTIONS: meta
 } "Register 3+1 slicing condition"
 """
-
 
     cfc.register_CFunction(
         subdirectory=thorn_name,
