@@ -13,7 +13,17 @@ except ImportError as ae:
     # But if you can't get get_args,
     # create our own. Works for Python 3.6
     def get_args(tp: Any) -> Tuple[Any, ...]:
-        """Provide the functionality of get_args for earlier versions of Python."""
+        """
+        Provide the functionality of get_args for earlier versions of Python.
+
+        :param tp: The type to extract arguments from.
+        :return: A tuple of arguments extracted from the type.
+
+        >>> get_args(Literal["x", "y", "z"])
+        ('x', 'y', 'z')
+        >>> get_args(int)
+        ()
+        """
         if is_literal(tp):
             ret = tuple(tp.__values__)
         else:
@@ -31,12 +41,35 @@ _literal = Literal["x"]
 
 
 def is_literal(arg: Any) -> bool:
-    """Determine whether a type matches Literal."""
+    """
+    Determine whether a type matches Literal.
+
+    :param arg: The argument to check.
+    :return: True if arg is a Literal type, False otherwise.
+
+    >>> is_literal(Literal["a", "b"])
+    True
+    >>> is_literal(int)
+    False
+    """
     return type(_literal) is type(arg)
 
 
 def check_literals() -> None:
-    """Check that the Literal type annotations of the calling function match the arguments the function was actually called with."""
+    """
+    Check that the Literal type annotations of the calling function match the arguments the function was actually called with.
+
+    :raises ValueError: If the value of any parameter doesn't match its allowed Literal values.
+
+    >>> def foo(a:Literal["fish","bird"]):
+    ...    check_literals()
+    ...    print("ok")
+    >>> foo("fish")
+    ok
+    >>> try: foo("dog")
+    ... except: "not ok"
+    not ok
+    """
     current_frame = inspect.currentframe()
     assert current_frame is not None
     calling_frame = current_frame.f_back
@@ -79,11 +112,18 @@ def check_literals() -> None:
 def get_repr() -> str:
     """
     Generate a useful value for returning in a __repr__() function.
-    Usage:
-        class Foo:
-           ...
-        def __repr__(self):
-           return get_repr()
+
+    :return: A string representation of the calling object.
+
+    # Example usage inside a class:
+    >>> class MyClass:
+    ...     def __init__(self, name: str, age: int):
+    ...         self.name = name
+    ...         self.age = age
+    ...     def __repr__(self):
+    ...         return get_repr()
+    >>> repr(MyClass("John", 30))
+    'MyClass(name="John", age=30)'
     """
     current_frame = inspect.currentframe()
     assert current_frame is not None
