@@ -102,7 +102,8 @@ def register_CFunction_enforce_detgammahat_constraint(
 schedule FUNC_NAME in ODESolvers_PostStep
 {{
   LANG: C
-  READS:  hDD00GF, hDD01GF, hDD02GF, hDD11GF, hDD12GF, hDD22GF
+  READS:  hDD00GF(everywhere), hDD01GF(everywhere), hDD02GF(everywhere),
+          hDD11GF(everywhere), hDD12GF(everywhere), hDD22GF(everywhere)
   WRITES: hDD00GF(everywhere), hDD01GF(everywhere), hDD02GF(everywhere),
           hDD11GF(everywhere), hDD12GF(everywhere), hDD22GF(everywhere)
 }} "Enforce detgammabar = detgammahat (= 1 in Cartesian)"

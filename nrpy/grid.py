@@ -558,8 +558,8 @@ class CarpetXGridFunction(GridFunction):
         i1_offset: int = 0,
         i2_offset: int = 0,
         use_GF_suffix: bool = True,
-        reuse_index = False,
-        index_name = "",
+        reuse_index: bool = False,
+        index_name: str = "",
     ) -> str:
         """
         Retrieve a grid function value from memory for a given offset.
@@ -586,18 +586,16 @@ class CarpetXGridFunction(GridFunction):
         if not reuse_index:
             index = "p.I"
             if i0_offset != 0:
-                index += f" + {i0_offset}*p.DI[0]".replace("+ -", "-")
+                index += f" + {i0_offset}*p.DI[0]".replace("+ -", "- ")
             if i1_offset != 0:
-                index += f" + {i1_offset}*p.DI[1]".replace("+ -", "-")
+                index += f" + {i1_offset}*p.DI[1]".replace("+ -", "- ")
             if i2_offset != 0:
-                index += f" + {i2_offset}*p.DI[2]".replace("+ -", "-")
+                index += f" + {i2_offset}*p.DI[2]".replace("+ -", "- ")
 
         access_str = f"{gf_name}({index})"
         if use_GF_suffix:
             access_str = f"{gf_name}GF({index})"
         return access_str
-
-
 
     def read_gf_from_memory_Ccode_onept(
         self, i0_offset: int = 0, i1_offset: int = 0, i2_offset: int = 0, **kwargs: Any
@@ -614,31 +612,30 @@ class CarpetXGridFunction(GridFunction):
 
         Doctests:
         >>> glb_gridfcs_dict.clear()
-        >>> par.set_parval_from_str("Infrastructure", "ETLegacy")
+        >>> par.set_parval_from_str("Infrastructure", "CarpetX")
         >>> abc = register_gridfunctions("abc", group="EVOL")
         >>> glb_gridfcs_dict["abc"].read_gf_from_memory_Ccode_onept(1, 2, 3)
-        'abcGF(p.I + 1*p.DI[0] + 2*p.DI[1] 3*p.DI[2])'
+        'abcGF(p.I + 1*p.DI[0] + 2*p.DI[1] + 3*p.DI[2])'
         >>> defg = register_gridfunctions("defg", group="EVOL")
         >>> glb_gridfcs_dict["defg"].read_gf_from_memory_Ccode_onept(0, -1, 0, enable_simd=True)
         'ReadSIMD(&defgGF(p.I - 1*p.DI[1]))'
         >>> glb_gridfcs_dict["defg"].read_gf_from_memory_Ccode_onept(0, -1, 0, enable_simd=True, use_GF_suffix=False)
         'ReadSIMD(&defg(p.I - 1*p.DI[1]))'
         """
-
-       # if "reuse_index" in kwargs and not kwargs["reuse_index"]:
+        # if "reuse_index" in kwargs and not kwargs["reuse_index"]:
         index = "p.I"
         if i0_offset != 0:
-            index += f" + {i0_offset}*p.DI[0]".replace("+ -", "-")
+            index += f" + {i0_offset}*p.DI[0]".replace("+ -", "- ")
         if i1_offset != 0:
-            index += f" + {i1_offset}*p.DI[1]".replace("+ -", "-")
+            index += f" + {i1_offset}*p.DI[1]".replace("+ -", "- ")
         if i2_offset != 0:
-            index += f" + {i2_offset}*p.DI[2]".replace("+ -", "-")
-       # else:
-       #     if "index_name" in kwargs:
-       #         index = kwargs["index_name"]
-       #     else:
-       #         #Error out
-       #         exit(1)
+            index += f" + {i2_offset}*p.DI[2]".replace("+ -", "- ")
+        # else:
+        #     if "index_name" in kwargs:
+        #         index = kwargs["index_name"]
+        #     else:
+        #         #Error out
+        #         exit(1)
 
         ret_string = f"{self.name}GF"
         # if use_GF_suffix defined AND set to True, add GF suffix
@@ -650,6 +647,7 @@ class CarpetXGridFunction(GridFunction):
             ret_string = f"ReadSIMD(&{ret_string})"
 
         return ret_string
+
 
 # Contains a list of gridfunction objects.
 glb_gridfcs_dict: Dict[
@@ -718,8 +716,10 @@ def register_gridfunctions(
                     # mypy: Once again bonks out after I've CONFIRMED kwargs.get(param) is not None and is a list!
                     kwargs_modify[param] = kwargs.get(param)[i]  # type: ignore
             if Infrastructure == "BHaH":
+                kwargs_modify.pop("parity", None)
                 gf = BHaHGridFunction(name, **kwargs_modify)
             elif Infrastructure == "ETLegacy":
+                kwargs_modify.pop("parity", None)
                 gf = ETLegacyGridFunction(name, **kwargs_modify)
             elif Infrastructure == "CarpetX":
                 if kwargs.get("parity") and isinstance(kwargs.get("parity"), list):
@@ -842,7 +842,14 @@ def register_gridfunctions_for_single_rank2(
             # Add default M_tt and M_ti parities
             parity += ["+1 +1 +1", "-1 +1 +1", "+1 -1 +1", "+1 +1 -1"]
         # Add default M_ij parities
-        parity += ["+1 +1 +1", "-1 -1 +1", "-1 +1 -1", "+1 +1 +1", "+1 -1 -1", "+1 +1 +1"]
+        parity += [
+            "+1 +1 +1",
+            "-1 -1 +1",
+            "-1 +1 -1",
+            "+1 +1 +1",
+            "+1 -1 -1",
+            "+1 +1 +1",
+        ]
         kwargs["parity"] = parity
     register_gridfunctions(gf_list, **kwargs)
 
