@@ -464,6 +464,7 @@ class CarpetXGridFunction(GridFunction):
         wavespeed: float = 1.0,
         is_basename: bool = True,
         centering: centerings = "CCC",
+        parity: str = "+1 +1 +1",
         gf_array_name: str = "",
         thorn: str = "Cactus",
     ) -> None:
@@ -477,6 +478,7 @@ class CarpetXGridFunction(GridFunction):
         self.wavespeed = wavespeed
         self.is_basename = is_basename
         self.centering = centering
+        self.parity = parity
 
         group_suffixes = {
             "EXTERNAL": "_ext",
@@ -641,7 +643,7 @@ class CarpetXGridFunction(GridFunction):
         ret_string = f"{self.name}GF"
         # if use_GF_suffix defined AND set to True, add GF suffix
         if "use_GF_suffix" in kwargs and not kwargs["use_GF_suffix"]:
-            ret_string = f"{self.name}GF"
+            ret_string = f"{self.name}"
         ret_string += f"({index})"
 
         if kwargs.get("enable_simd"):
@@ -720,6 +722,9 @@ def register_gridfunctions(
             elif Infrastructure == "ETLegacy":
                 gf = ETLegacyGridFunction(name, **kwargs_modify)
             elif Infrastructure == "CarpetX":
+                if kwargs.get("parity") and isinstance(kwargs.get("parity"), list):
+                    # mypy: Once again bonks out after I've CONFIRMED kwargs.get("parity") is not None and is a list!
+                    kwargs_modify["parity"] = kwargs.get("parity")[i]  # type: ignore
                 gf = CarpetXGridFunction(name, **kwargs_modify)
             else:
                 raise ValueError(f"Infrastructure = {Infrastructure} unknown")
@@ -769,6 +774,14 @@ def register_gridfunctions_for_single_rank1(
     # and rank is set to 1.
     kwargs["is_basename"] = False
     kwargs["rank"] = 1
+    if "parity" not in kwargs:
+        parity = []
+        if dimension == 4:
+            # Add default v_t parity
+            parity += ["+1 +1 +1"]
+        # Add default v_i parities
+        parity += ["-1 +1 +1", "+1 -1 +1", "+1 +1 -1"]
+        kwargs["parity"] = parity
     register_gridfunctions(gf_list, **kwargs)
 
     # Step 3: Return array of SymPy variables
@@ -800,6 +813,7 @@ def register_gridfunctions_for_single_rank2(
     """
     dimension = kwargs.get("dimension", 3)
     if "dimension" not in kwargs:
+        dimension = 3
         kwargs["dimension"] = 3
 
     # Step 1: Declare a list of lists of SymPy variables,
@@ -822,6 +836,14 @@ def register_gridfunctions_for_single_rank2(
     # and rank is set to 2.
     kwargs["is_basename"] = False
     kwargs["rank"] = 2
+    if "parity" not in kwargs:
+        parity = []
+        if dimension == 4:
+            # Add default M_tt and M_ti parities
+            parity += ["+1 +1 +1", "-1 +1 +1", "+1 -1 +1", "+1 +1 -1"]
+        # Add default M_ij parities
+        parity += ["+1 +1 +1", "-1 -1 +1", "-1 +1 -1", "+1 +1 +1", "+1 -1 -1", "+1 +1 +1"]
+        kwargs["parity"] = parity
     register_gridfunctions(gf_list, **kwargs)
 
     # Step 3: Return array of SymPy variables
