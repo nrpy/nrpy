@@ -68,7 +68,7 @@ def check_literals() -> None:
     ok
     >>> try: foo("dog")
     ... except: "not ok"
-    not ok
+    'not ok'
     """
     current_frame = inspect.currentframe()
     assert current_frame is not None
@@ -123,7 +123,7 @@ def get_repr() -> str:
     ...     def __repr__(self):
     ...         return get_repr()
     >>> repr(MyClass("John", 30))
-    'MyClass(name="John", age=30)'
+    'MyClass(age=30, name="John")'
     """
     current_frame = inspect.currentframe()
     assert current_frame is not None
@@ -141,3 +141,16 @@ def get_repr() -> str:
             args += [d + "=" + dumps(v)]
     sorted(args)
     return calling_class_name + "(" + ", ".join(args) + ")"
+
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")
