@@ -63,14 +63,15 @@ inherits: {inherits}
 public:
 """
     if is_evol_thorn:
+        evol_parities = ""
+        evol_gfs = []
         # First, EVOL type:
-        evol_gfs = [
-            f"{gfname}GF"
-            for gfname, gf in gri.glb_gridfcs_dict.items()
-            if gf.group == "EVOL"
-        ]
+        for gfname, gf in gri.glb_gridfcs_dict.items():
+            if gf.group == "EVOL":
+                evol_parities += f"{gf.parity}  "
+                evol_gfs += [f"{gfname}GF"]
         if evol_gfs:
-            outstr += "CCTK_REAL evol_variables type = GF Timelevels=1\n{\n  "
+            outstr += f"CCTK_REAL evol_variables type = GF Timelevels=1 TAGS=\'rhs=\"evol_variables_rhs\" parities={{{evol_parities}}}\'\n{{\n  "
             outstr += ", ".join(evol_gfs) + "\n"
             outstr += """} "Evolved gridfunctions."
 
@@ -88,25 +89,27 @@ public:
 
 """
             # Then AUXEVOL type:
-            auxevol_gfs = [
-                f"{gfname}GF"
-                for gfname, gf in gri.glb_gridfcs_dict.items()
-                if gf.group == "AUXEVOL"
-            ]
+            auxevol_parities = ""
+            auxevol_gfs = []
+            for gfname, gf in gri.glb_gridfcs_dict.items():
+                if gf.group == "AUXEVOL":
+                    auxevol_parities += f"{gf.parity}  "
+                    auxevol_gfs += [f"{gfname}GF"]
             if auxevol_gfs:
-                outstr += 'CCTK_REAL auxevol_variables type = GF Timelevels=1 TAGS=\'InterpNumTimelevels=1 prolongation="none" checkpoint="no"\'\n{\n  '
+                outstr += f'CCTK_REAL auxevol_variables type = GF Timelevels=1 TAGS=\'InterpNumTimelevels=1 prolongation="none" checkpoint="no" parities={{{auxevol_parities}}}\'\n{{\n  '
                 outstr += ", ".join(auxevol_gfs) + "\n"
                 outstr += """} "Auxiliary gridfunctions needed for evaluating the RHSs."
 
 """
         # Then AUX type:
-        aux_gfs = [
-            f"{gfname}GF"
-            for gfname, gf in gri.glb_gridfcs_dict.items()
-            if gf.group == "AUX"
-        ]
+        aux_parities = ""
+        aux_gfs = []
+        for gfname, gf in gri.glb_gridfcs_dict.items():
+            if gf.group == "AUX":
+                aux_parities += f"{gf.parity}  "
+                aux_gfs += [f"{gfname}GF"]
         if aux_gfs:
-            outstr += "CCTK_REAL aux_variables type = GF Timelevels=1\n{\n  "
+            outstr += f"CCTK_REAL aux_variables type = GF Timelevels=1 TAGS=\'parities={{{aux_parities}}}\'\n{{\n  "
             outstr += ", ".join(aux_gfs) + "\n"
             outstr += """} "Auxiliary gridfunctions for e.g., diagnostics."
 
