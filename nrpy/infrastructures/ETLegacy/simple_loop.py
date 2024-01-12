@@ -53,8 +53,6 @@ def simple_loop(
     <BLANKLINE>
     """
     # 'AllPoints': loop over all points on a numerical grid, including ghost zones
-    if loop_region == "":
-        return loop_body
     if loop_region == "all points":
         i2i1i0_mins = ["0", "0", "0"]
         i2i1i0_maxs = ["cctk_lsh[2]", "cctk_lsh[1]", "cctk_lsh[0]"]
