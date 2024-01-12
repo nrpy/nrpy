@@ -147,7 +147,7 @@ schedule FUNC_NAME in MoL_PostStep after {thorn_name}_enforce_detgammahat_constr
     schedule_pseudoevol = (
         "MoL_PseudoEvolution",
         f"""
-schedule FUNC_NAME in MoL_PseudoEvolution after {thorn_name}_auxgfs_ApplyBCs
+schedule FUNC_NAME in MoL_PseudoEvolution after {thorn_name}_aux_ApplyBCs
 {{
   LANG: C
   READS:  aDD00GF, aDD01GF, aDD02GF, aDD11GF, aDD12GF, aDD22GF,

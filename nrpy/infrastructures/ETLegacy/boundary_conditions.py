@@ -138,7 +138,7 @@ schedule FUNC_NAME in MoL_PostStep
   SYNC: evol_variables
 }} "Register boundary conditions and perform AMR+interprocessor synchronization"
 
-schedule GROUP ApplyBCs as {thorn_name}_ApplyBCs in MoL_PostStep after FUNC_NAME
+schedule GROUP ApplyBCs as {thorn_name}_evol_ApplyBCs in MoL_PostStep after FUNC_NAME
 {{
 }} "Apply registered boundary conditions"
 """,
@@ -208,7 +208,7 @@ schedule FUNC_NAME in MoL_PseudoEvolution after {thorn_name}_BSSN_constraints
   SYNC: aux_variables
 }} "Register boundary conditions and perform AMR+interprocessor synchronization"
 
-schedule GROUP ApplyBCs as {thorn_name}_auxgfs_ApplyBCs in MoL_PseudoEvolution after FUNC_NAME
+schedule GROUP ApplyBCs as {thorn_name}_aux_ApplyBCs in MoL_PseudoEvolution after FUNC_NAME
 {{
 }} "Apply registered boundary conditions"
 """,
