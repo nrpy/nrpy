@@ -1,11 +1,10 @@
-from typing_extensions import Literal #, get_args, get_origin <- Not in typing_extensions
-import inspect
-from json import dumps
+"""
+Provide utility functions for use by multiple classes.
 
-_literal = Literal["x"]
-
-def is_literal(arg):
-    return type(_literal) == type(arg)
+Author: Steven R. Brandt
+        sbrandt **at** cct **dot** lsu **dot** edu
+"""
+from typing import Any, Tuple
 
 try:
     # Ideally, use get_args from typing...
@@ -13,32 +12,51 @@ try:
 except ImportError as ae:
     # But if you can't get get_args,
     # create our own. Works for Python 3.6
-    def get_args(lit):
-        if is_literal(lit):
-            return lit.__values__
+    def get_args(tp: Any) -> Tuple[Any, ...]:
+        """Provide the functionality of get_args for earlier versions of Python."""
+        if is_literal(tp):
+            ret = tuple(tp.__values__)
         else:
-            return []
+            ret = tuple()
+        return ret
 
-def check_literals()->None:
-    """
-    Check that the Literal type annotations of the calling function match
-    the arguments the function was actually called with.
-    """
-    calling_frame = inspect.currentframe().f_back
+
+import inspect
+from json import dumps
+from typing_extensions import (
+    Literal,
+)  # , get_args, get_origin <- Not in typing_extensions
+
+_literal = Literal["x"]
+
+
+def is_literal(arg: Any) -> bool:
+    """Determine whether a type matches Literal."""
+    return type(_literal) is type(arg)
+
+
+def check_literals() -> None:
+    """Check that the Literal type annotations of the calling function match the arguments the function was actually called with."""
+    current_frame = inspect.currentframe()
+    assert current_frame is not None
+    calling_frame = current_frame.f_back
+    assert calling_frame is not None
     calling_func_name = calling_frame.f_code.co_name
     # Hunt for the calling function in the current frame
-    if 'self' in calling_frame.f_locals:
+    if "self" in calling_frame.f_locals:
         # Is it a member function?
-        calling_self_ref = calling_frame.f_locals['self']
+        calling_self_ref = calling_frame.f_locals["self"]
         calling_func = getattr(calling_self_ref, calling_func_name)
-        full_name = calling_self_ref.__class__.__name__ + "." + calling_func_name
+        # full_name = calling_self_ref.__class__.__name__ + "." + calling_func_name
     else:
         # Is it a regular function? If so, is it locally defined?
+        assert calling_frame.f_back is not None
+        assert calling_frame.f_back.f_locals is not None
         calling_func = calling_frame.f_back.f_locals.get(calling_func_name, None)
         # If it is a regular function and not locally defined, it must be globally defined.
         if calling_func is None:
             calling_func = calling_frame.f_globals[calling_func_name]
-        full_name = calling_func_name
+        # full_name = calling_func_name
     signature = inspect.signature(calling_func)
     checked_pars = []
     for parameter_name in signature.parameters:
@@ -53,9 +71,12 @@ def check_literals()->None:
         checked_pars += [(parameter_name, parameter_value)]
         allowed_values = get_args(parameter_annotation)
         if parameter_value not in allowed_values:
-            raise ValueError(f"In function '{calling_func_name}': parameter '{parameter_name}' has value: '{parameter_value}', which is not in the allowed_values set: {allowed_values}")
+            raise ValueError(
+                f"In function '{calling_func_name}': parameter '{parameter_name}' has value: '{parameter_value}', which is not in the allowed_values set: {allowed_values}"
+            )
 
-def get_repr()->str:
+
+def get_repr() -> str:
     """
     Generate a useful value for returning in a __repr__() function.
     Usage:
@@ -64,16 +85,19 @@ def get_repr()->str:
         def __repr__(self):
            return get_repr()
     """
-    calling_frame = inspect.currentframe().f_back
-    calling_func_name = calling_frame.f_code.co_name
-    calling_self_ref = calling_frame.f_locals['self']
-    calling_class_name = calling_self_ref.__class__.__name__
+    current_frame = inspect.currentframe()
+    assert current_frame is not None
+    calling_frame = current_frame.f_back
+    assert calling_frame is not None
+    # calling_func_name = calling_frame.f_code.co_name
+    calling_self_ref = calling_frame.f_locals["self"]
+    calling_class_name: str = calling_self_ref.__class__.__name__
     args = []
     for d in dir(calling_self_ref):
         if d.startswith("_"):
             continue
-        v = getattr(calling_self_ref,d)
-        if type(v) in [str,int]:
-            args += [d+"="+dumps(v)]
+        v = getattr(calling_self_ref, d)
+        if type(v) in [str, int]:
+            args += [d + "=" + dumps(v)]
     sorted(args)
     return calling_class_name + "(" + ", ".join(args) + ")"
