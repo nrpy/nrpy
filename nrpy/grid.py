@@ -11,7 +11,7 @@ from typing_extensions import Literal
 import sympy as sp
 import nrpy.indexedexp as ixp
 import nrpy.params as par
-from nrpy.utils import check_literals
+from nrpy.helpers.type_annotation_utilities import validate_literal_arguments
 
 
 centerings = Literal[
@@ -468,7 +468,7 @@ class CarpetXGridFunction(GridFunction):
     ) -> None:
         super().__init__(name, group, dimension)
         assert group is not None
-        check_literals()
+        validate_literal_arguments()
         self.thorn = thorn
         self.rank = rank
         _gf_array_name = gf_array_name

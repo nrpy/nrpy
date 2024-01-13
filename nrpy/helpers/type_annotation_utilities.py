@@ -24,7 +24,7 @@ except ImportError as ae:
         >>> get_args(int)
         ()
         """
-        if is_literal(tp):
+        if is_type_literal(tp):
             ret = tuple(tp.__values__)
         else:
             ret = tuple()
@@ -40,29 +40,29 @@ from typing_extensions import (
 _literal = Literal["x"]
 
 
-def is_literal(arg: Any) -> bool:
+def is_type_literal(arg: Any) -> bool:
     """
     Determine whether a type matches Literal.
 
     :param arg: The argument to check.
     :return: True if arg is a Literal type, False otherwise.
 
-    >>> is_literal(Literal["a", "b"])
+    >>> is_type_literal(Literal["a", "b"])
     True
-    >>> is_literal(int)
+    >>> is_type_literal(int)
     False
     """
     return type(_literal) is type(arg)
 
 
-def check_literals() -> None:
+def validate_literal_arguments() -> None:
     """
     Check that the Literal type annotations of the calling function match the arguments the function was actually called with.
 
     :raises ValueError: If the value of any parameter doesn't match its allowed Literal values.
 
     >>> def foo(a:Literal["fish","bird"]):
-    ...    check_literals()
+    ...    validate_literal_arguments()
     ...    print("ok")
     >>> foo("fish")
     ok
@@ -98,7 +98,7 @@ def check_literals() -> None:
         parameter_annotation = signature.parameters[parameter_name].annotation
         if parameter_annotation is None:
             continue
-        if not is_literal(parameter_annotation):
+        if not is_type_literal(parameter_annotation):
             continue
         parameter_value = calling_frame.f_locals[parameter_name]
         checked_pars += [(parameter_name, parameter_value)]
@@ -109,7 +109,7 @@ def check_literals() -> None:
             )
 
 
-def get_repr() -> str:
+def generate_class_representation() -> str:
     """
     Generate a useful value for returning in a __repr__() function.
 
@@ -121,7 +121,7 @@ def get_repr() -> str:
     ...         self.name = name
     ...         self.age = age
     ...     def __repr__(self):
-    ...         return get_repr()
+    ...         return generate_class_representation()
     >>> repr(MyClass("John", 30))
     'MyClass(age=30, name="John")'
     """

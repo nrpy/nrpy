@@ -22,7 +22,7 @@ from nrpy.helpers.cse_preprocess_postprocess import (
     cse_preprocess,
     cse_postprocess,
 )  # NRPy+: CSE preprocessing and postprocessing
-from nrpy.utils import check_literals, get_repr
+from nrpy.helpers.type_annotation_utilities import validate_literal_arguments, generate_class_representation
 
 c_type_list = Literal[
     # Traditional C types
@@ -114,7 +114,7 @@ class CCodeGen:
         ValueError: In function '__init__': parameter 'c_type' has value: 'foo', which is not in the allowed_values set: ('double', 'float', 'long double', 'std::float16_t', 'std::float32_t', 'std::float64_t', 'std::float128_t', 'std::bfloat16_t', 'REAL_SIMD_ARRAY')
 
         """
-        check_literals()
+        validate_literal_arguments()
         self.prestring = prestring
         self.poststring = poststring
         self.include_braces = include_braces
@@ -223,7 +223,7 @@ class CCodeGen:
 
     def __repr__(self) -> str:
         """Create a human readable representation of the CCodeGen object and what's in it."""
-        return get_repr()
+        return generate_class_representation()
 
 
 def c_codegen(
