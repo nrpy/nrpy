@@ -51,8 +51,14 @@ def is_type_literal(arg: Any) -> bool:
     True
     >>> is_type_literal(int)
     False
+    >>> is_type_literal(Tuple[str,int])
+    False
     """
-    return type(_literal) is type(arg)
+    origin = getattr(_literal, "__origin__")
+    arg_origin = getattr(arg, "__origin__", None)
+    if arg_origin is None:
+        return False
+    return origin is arg_origin
 
 
 def validate_literal_arguments() -> None:
