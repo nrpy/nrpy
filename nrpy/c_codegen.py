@@ -22,7 +22,10 @@ from nrpy.helpers.cse_preprocess_postprocess import (
     cse_preprocess,
     cse_postprocess,
 )  # NRPy+: CSE preprocessing and postprocessing
-from nrpy.helpers.type_annotation_utilities import validate_literal_arguments, generate_class_representation
+from nrpy.helpers.type_annotation_utilities import (
+    validate_literal_arguments,
+    generate_class_representation,
+)
 
 c_type_list = Literal[
     # Traditional C types
