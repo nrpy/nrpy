@@ -104,13 +104,13 @@ def register_CFunction_enforce_detgammahat_constraint(
 
     schedule = """
 schedule FUNC_NAME in MoL_PostStep
-{{
+{
   LANG: C
   READS:  hDD00GF(everywhere), hDD01GF(everywhere), hDD02GF(everywhere),
           hDD11GF(everywhere), hDD12GF(everywhere), hDD22GF(everywhere)
   WRITES: hDD00GF(everywhere), hDD01GF(everywhere), hDD02GF(everywhere),
           hDD11GF(everywhere), hDD12GF(everywhere), hDD22GF(everywhere)
-}} "Enforce detgammabar = detgammahat (= 1 in Cartesian)"
+} "Enforce detgammabar = detgammahat (= 1 in Cartesian)"
 """
 
     cfc.register_CFunction(
