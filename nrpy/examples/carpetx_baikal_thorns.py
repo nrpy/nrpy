@@ -57,7 +57,7 @@ thorn_names = [
     "BaikalVacuumX",
 ]  # note that this ordering matters due to how ccl files generate
 enable_rfm_precompute = False
-enable_simd = True
+enable_simd = False
 LapseEvolutionOption = "OnePlusLog"
 ShiftEvolutionOption = "GammaDriving2ndOrder_NoCovariant"
 enable_KreissOliger_dissipation = True
@@ -186,7 +186,7 @@ STORAGE: aux_variables[1]      # Diagnostics variables""",
         project_dir=project_dir,
         thorn_name=evol_thorn_name,
         inherits=inherits,
-        USES_INCLUDEs="""USES INCLUDE: Slicing.h
+        USES_INCLUDEs="""USES INCLUDE: loop_device.hxx
 
 # Needed to convert ADM initial data into BSSN initial data (gamma extrapolation)
 #CCTK_INT FUNCTION ExtrapolateGammas(CCTK_POINTER_TO_CONST IN cctkGH, CCTK_REAL ARRAY INOUT var)

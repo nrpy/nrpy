@@ -19,7 +19,7 @@ import nrpy.infrastructures.CarpetX.simple_loop as lp
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 
-standard_ET_includes = ["math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
+standard_ET_includes = ["loop_device.hxx", "math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
 
 
 def register_CFunction_enforce_detgammahat_constraint(
@@ -49,7 +49,7 @@ def register_CFunction_enforce_detgammahat_constraint(
 
     desc = r"""Enforce det(gammabar) = det(gammahat) constraint. Required for strong hyperbolicity."""
     name = f"{thorn_name}_enforce_detgammahat_constraint"
-    body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
+    body = f"""  DECLARE_CCTK_ARGUMENTSX_{name};
   DECLARE_CCTK_PARAMETERS;
 
 """
@@ -100,13 +100,13 @@ def register_CFunction_enforce_detgammahat_constraint(
 
     schedule = """
 schedule FUNC_NAME in ODESolvers_PostStep
-{{
+{
   LANG: C
   READS:  hDD00GF(everywhere), hDD01GF(everywhere), hDD02GF(everywhere),
           hDD11GF(everywhere), hDD12GF(everywhere), hDD22GF(everywhere)
   WRITES: hDD00GF(everywhere), hDD01GF(everywhere), hDD02GF(everywhere),
           hDD11GF(everywhere), hDD12GF(everywhere), hDD22GF(everywhere)
-}} "Enforce detgammabar = detgammahat (= 1 in Cartesian)"
+} "Enforce detgammabar = detgammahat (= 1 in Cartesian)"
 """
 
     cfc.register_CFunction(

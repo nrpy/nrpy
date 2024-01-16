@@ -18,7 +18,7 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.CarpetX.simple_loop as lp
 import nrpy.equations.general_relativity.g4munu_conversions as g4conv
 
-standard_ET_includes = ["math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
+standard_ET_includes = ["loop_device.hxx", "math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
 coord_name = ["t", "x", "y", "z"]
 
 
@@ -47,7 +47,7 @@ WARNING: Do not enable SIMD here, as it is not guaranteed that
          cctk_lsh[0]*cctk_lsh[1]*cctk_lsh[2] is a multiple of
          SIMD_width!"""
     name = f"{thorn_name}_T4DD_to_T4UU"
-    body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
+    body = f"""  DECLARE_CCTK_ARGUMENTSX_{name};
   DECLARE_CCTK_PARAMETERS;
 
 """

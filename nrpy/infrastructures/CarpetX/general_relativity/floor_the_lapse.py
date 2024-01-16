@@ -13,7 +13,7 @@ import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.CarpetX.simple_loop as lp
 
-standard_ET_includes = ["math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
+standard_ET_includes = ["loop_device.hxx", "math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
 
 
 def register_CFunction_floor_the_lapse(
@@ -32,7 +32,7 @@ def register_CFunction_floor_the_lapse(
 
     desc = """Apply floor to the lapse."""
     name = f"{thorn_name}_floor_the_lapse"
-    body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
+    body = f"""  DECLARE_CCTK_ARGUMENTSX_{name};
   DECLARE_CCTK_PARAMETERS;
 
 #ifndef MAX

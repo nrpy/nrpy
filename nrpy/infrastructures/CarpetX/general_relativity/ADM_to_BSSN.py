@@ -20,7 +20,7 @@ import nrpy.infrastructures.CarpetX.simple_loop as lp
 from nrpy.equations.general_relativity.ADM_to_BSSN import ADM_to_BSSN
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 
-standard_ET_includes = ["math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
+standard_ET_includes = ["loop_device.hxx", "math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
 coord_name = ["x", "y", "z"]
 
 
@@ -49,7 +49,7 @@ def register_CFunction_ADM_to_BSSN(
     desc = f"""Converting from ADM to BSSN quantities is required in the Einstein Toolkit,
 as initial data are given in terms of ADM quantities, and {thorn_name} evolves the BSSN quantities."""
     name = f"{thorn_name}_ADM_to_BSSN_order_{fd_order}"
-    body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
+    body = f"""  DECLARE_CCTK_ARGUMENTSX_{name};
   DECLARE_CCTK_PARAMETERS;
 
   const CCTK_REAL invdxx0 = 1.0 / CCTK_DELTA_SPACE(0);
