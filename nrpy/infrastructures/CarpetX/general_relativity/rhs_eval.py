@@ -25,7 +25,13 @@ from nrpy.equations.general_relativity.BSSN_RHSs import BSSN_RHSs
 from nrpy.equations.general_relativity.BSSN_gauge_RHSs import BSSN_gauge_RHSs
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 
-standard_ET_includes = ["loop_device.hxx", "math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
+standard_ET_includes = [
+    "loop_device.hxx",
+    "math.h",
+    "cctk.h",
+    "cctk_Arguments.h",
+    "cctk_Parameters.h",
+]
 
 
 def register_CFunction_rhs_eval(

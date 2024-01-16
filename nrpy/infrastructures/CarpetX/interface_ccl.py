@@ -9,10 +9,12 @@ from pathlib import Path
 import nrpy.grid as gri
 from nrpy.helpers.safewrite import SafeWrite
 
-def carpetx_gfs()->Iterator[Tuple[str,gri.CarpetXGridFunction]]:
+
+def carpetx_gfs() -> Iterator[Tuple[str, gri.CarpetXGridFunction]]:
     for gfname, gf in gri.glb_gridfcs_dict.items():
         assert type(gf) == gri.CarpetXGridFunction
         yield (gfname, gf)
+
 
 def construct_interface_ccl(
     project_dir: str,
@@ -77,7 +79,7 @@ public:
                 evol_parities += f"{gf.parity}  "
                 evol_gfs += [f"{gfname}GF"]
         if evol_gfs:
-            outstr += f"CCTK_REAL evol_variables type = GF Timelevels=1 TAGS=\'rhs=\"evol_variables_rhs\" parities={{{evol_parities}}}\'\n{{\n  "
+            outstr += f"CCTK_REAL evol_variables type = GF Timelevels=1 TAGS='rhs=\"evol_variables_rhs\" parities={{{evol_parities}}}'\n{{\n  "
             outstr += ", ".join(evol_gfs) + "\n"
             outstr += """} "Evolved gridfunctions."
 
@@ -86,9 +88,7 @@ public:
             # Second EVOL right-hand-sides
             outstr += 'CCTK_REAL evol_variables_rhs type = GF Timelevels=1 TAGS=\'InterpNumTimelevels=1 prolongation="none" checkpoint="no"\'\n{\n  '
             rhs_gfs = [
-                f"{gfname}_rhsGF"
-                for gfname, gf in carpetx_gfs() 
-                if gf.group == "EVOL"
+                f"{gfname}_rhsGF" for gfname, gf in carpetx_gfs() if gf.group == "EVOL"
             ]
             outstr += ", ".join(rhs_gfs) + "\n"
             outstr += """} "Right-hand-side gridfunctions."
@@ -115,7 +115,7 @@ public:
                 aux_parities += f"{gf.parity}  "
                 aux_gfs += [f"{gfname}GF"]
         if aux_gfs:
-            outstr += f"CCTK_REAL aux_variables type = GF Timelevels=1 TAGS=\'parities={{{aux_parities}}}\'\n{{\n  "
+            outstr += f"CCTK_REAL aux_variables type = GF Timelevels=1 TAGS='parities={{{aux_parities}}}'\n{{\n  "
             outstr += ", ".join(aux_gfs) + "\n"
             outstr += """} "Auxiliary gridfunctions for e.g., diagnostics."
 

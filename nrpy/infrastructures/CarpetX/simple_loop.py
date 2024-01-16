@@ -8,6 +8,7 @@ Email: ksible *at* outlook *dot* com
 """
 from typing import List
 
+
 def simple_loop(
     loop_body: str,
     enable_simd: bool = False,
