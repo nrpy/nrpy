@@ -71,9 +71,6 @@ par.set_parval_from_str("Infrastructure", "CarpetX")
 par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 par.set_parval_from_str("register_MU_gridfunctions", register_MU_gridfunctions)
 
-# First clean the project directory, if it exists.
-shutil.rmtree(project_dir, ignore_errors=True)
-
 ########################
 # STEP 1: register functions and parameters
 ########################

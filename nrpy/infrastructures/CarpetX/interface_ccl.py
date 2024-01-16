@@ -7,10 +7,10 @@ Author: Zachariah B. Etienne
 from typing import cast, Iterator, Tuple
 from pathlib import Path
 import nrpy.grid as gri
-
+from nrpy.helpers.safewrite import SafeWrite
 
 def carpetx_gfs()->Iterator[Tuple[str,gri.CarpetXGridFunction]]:
-    for gfname, gf in carpetx_gfs():
+    for gfname, gf in gri.glb_gridfcs_dict.items():
         assert type(gf) == gri.CarpetXGridFunction
         yield (gfname, gf)
 
@@ -122,5 +122,5 @@ public:
 """
     output_Path = Path(project_dir) / thorn_name
     output_Path.mkdir(parents=True, exist_ok=True)
-    with open(output_Path / "interface.ccl", "w", encoding="utf-8") as file:
+    with SafeWrite(output_Path / "interface.ccl", encoding="utf-8") as file:
         file.write(outstr)

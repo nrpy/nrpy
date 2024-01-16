@@ -6,13 +6,13 @@ Email: zachetie **at** gmail **dot* com
 Contributor: Ken Sible
 Email: ksible *at* outlook *dot* com
 """
-
+from typing import List
 
 def simple_loop(
     loop_body: str,
     enable_simd: bool = False,
     loop_region: str = "",
-    loop_centering: list = [0, 0, 0],
+    loop_centering: List[int] = [0, 0, 0],
     run_on_device: bool = True,
 ) -> str:
     """
