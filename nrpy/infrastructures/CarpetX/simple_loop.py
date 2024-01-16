@@ -56,6 +56,9 @@ def simple_loop(
 
     if run_on_device:
         loop_macro += "_device"
+        run_on = "DEVICE"
+    else:
+        run_on - "HOST"
 
     if loop_centering[0] not in [0, 1]:
         raise ValueError(
@@ -72,14 +75,12 @@ def simple_loop(
     # loop_centering: set loop to properly choose stencil based on the given centering
     loop_macro += f"<{loop_centering[0]}, {loop_centering[1]}, {loop_centering[2]}>(\n"
 
-    return str(
-        loop_macro
-        + "grid.nghostzones,\n"
-        + "[=] CCTK_HOST(const Loop::PointDesc &p) CCTK_ATTRIBUTE_ALWAYS_INLINE {\n"
-        + loop_body
-        + "}); // END LOOP: "
-        + loop_macro
-    )
+    return str(loop_macro
+               + "grid.nghostzones,\n"
+               + f"""[=] CCTK_{run_on}(const Loop::PointDesc &p) CCTK_ATTRIBUTE_ALWAYS_INLINE {{\n"""
+               + loop_body
+               + "}); // END LOOP: "
+               + loop_macro)
 
 
 if __name__ == "__main__":
