@@ -18,7 +18,7 @@ import nrpy.finite_difference as fin
 import nrpy.infrastructures.CarpetX.simple_loop as lp
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 
-standard_ET_includes = ["math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
+standard_ET_includes = ["loop_device.hxx", "math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
 
 
 def register_CFunction_Ricci_eval(
@@ -53,7 +53,7 @@ def register_CFunction_Ricci_eval(
         includes += [("./simd/simd_intrinsics.h")]
     desc = r"""Compute Ricci tensor for the BSSN evolution equations."""
     name = f"{thorn_name}_Ricci_eval_order_{fd_order}"
-    body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
+    body = f"""  DECLARE_CCTK_ARGUMENTSX_{name};
 """
     if enable_simd:
         body += """
@@ -63,7 +63,10 @@ def register_CFunction_Ricci_eval(
 
 """
     else:
-        body += """  DECLARE_CCTK_PARAMETERS;
+        body += """  const CCTK_REAL invdxx0 CCTK_ATTRIBUTE_UNUSED = 1.0/CCTK_DELTA_SPACE(0);
+  const CCTK_REAL invdxx1 CCTK_ATTRIBUTE_UNUSED = 1.0/CCTK_DELTA_SPACE(1);
+  const CCTK_REAL invdxx2 CCTK_ATTRIBUTE_UNUSED = 1.0/CCTK_DELTA_SPACE(2);
+  DECLARE_CCTK_PARAMETERS;
 
 """
 

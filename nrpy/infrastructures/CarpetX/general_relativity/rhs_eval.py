@@ -25,7 +25,7 @@ from nrpy.equations.general_relativity.BSSN_RHSs import BSSN_RHSs
 from nrpy.equations.general_relativity.BSSN_gauge_RHSs import BSSN_gauge_RHSs
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 
-standard_ET_includes = ["math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
+standard_ET_includes = ["loop_device.hxx", "math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
 
 
 def register_CFunction_rhs_eval(
@@ -78,7 +78,7 @@ def register_CFunction_rhs_eval(
         includes += [("./simd/simd_intrinsics.h")]
     desc = r"""Set RHSs for the BSSN evolution equations."""
     name = f"{thorn_name}_rhs_eval_order_{fd_order}"
-    body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
+    body = f"""  DECLARE_CCTK_ARGUMENTSX_{name};
 """
     if enable_simd:
         body += f"""
@@ -94,7 +94,12 @@ def register_CFunction_rhs_eval(
 
 """
     else:
-        body += """  DECLARE_CCTK_PARAMETERS;
+        body += """  const CCTK_REAL invdxx0 CCTK_ATTRIBUTE_UNUSED = 1.0/CCTK_DELTA_SPACE(0);
+  const CCTK_REAL invdxx1 CCTK_ATTRIBUTE_UNUSED = 1.0/CCTK_DELTA_SPACE(1);
+  const CCTK_REAL invdxx2 CCTK_ATTRIBUTE_UNUSED = 1.0/CCTK_DELTA_SPACE(2);
+  DECLARE_CCTK_PARAMETERS;
+
+  #define UPWIND_ALG(UpwindVecU) UpwindVecU > 0.0 ? 1.0 : 0.0
 
 """
 

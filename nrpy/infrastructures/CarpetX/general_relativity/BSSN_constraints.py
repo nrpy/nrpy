@@ -18,7 +18,7 @@ import nrpy.finite_difference as fin
 import nrpy.infrastructures.CarpetX.simple_loop as lp
 from nrpy.equations.general_relativity.BSSN_constraints import BSSN_constraints
 
-standard_ET_includes = ["math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
+standard_ET_includes = ["loop_device.hxx", "math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
 
 
 def register_CFunction_BSSN_constraints(
@@ -56,7 +56,7 @@ def register_CFunction_BSSN_constraints(
         includes += [("./simd/simd_intrinsics.h")]
     desc = r"""Evaluate BSSN constraints."""
     name = f"{thorn_name}_BSSN_constraints_order_{fd_order}"
-    body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
+    body = f"""  DECLARE_CCTK_ARGUMENTSX_{name};
 """
     if enable_simd:
         body += f"""
@@ -68,7 +68,10 @@ def register_CFunction_BSSN_constraints(
 
 """
     else:
-        body += """  DECLARE_CCTK_PARAMETERS;
+        body += """  const CCTK_REAL invdxx0 CCTK_ATTRIBUTE_UNUSED = 1.0/CCTK_DELTA_SPACE(0);
+  const CCTK_REAL invdxx1 CCTK_ATTRIBUTE_UNUSED = 1.0/CCTK_DELTA_SPACE(1);
+  const CCTK_REAL invdxx2 CCTK_ATTRIBUTE_UNUSED = 1.0/CCTK_DELTA_SPACE(2);
+  DECLARE_CCTK_PARAMETERS;
 
 """
 
@@ -100,7 +103,7 @@ def register_CFunction_BSSN_constraints(
     schedule = f"""
 if(FD_order == {fd_order}) {{
   # Originally in MoL_PseudoEvolution; consider changing when subcycling is added
-  schedule FUNC_NAME in ODESolvers_PostStep as {thorn_name}_BSSN_constraints after {thorn_name}_ApplyBCs
+  schedule FUNC_NAME in ODESolvers_PostStep as {thorn_name}_BSSN_constraints
   {{
     LANG: C
     READS:  aDD00GF, aDD01GF, aDD02GF, aDD11GF, aDD12GF, aDD22GF,

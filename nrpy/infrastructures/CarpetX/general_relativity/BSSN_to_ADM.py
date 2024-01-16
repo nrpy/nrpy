@@ -16,7 +16,7 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.CarpetX.simple_loop as lp
 from nrpy.equations.general_relativity.BSSN_to_ADM import BSSN_to_ADM
 
-standard_ET_includes = ["math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
+standard_ET_includes = ["loop_device.hxx", "math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
 coord_name = ["x", "y", "z"]
 
 
@@ -39,7 +39,7 @@ def register_CFunction_BSSN_to_ADM(
     includes = standard_ET_includes
     desc = r"""Perform BSSN-to-ADM conversion. Useful for diagnostics."""
     name = f"{thorn_name}_BSSN_to_ADM"
-    body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
+    body = f"""  DECLARE_CCTK_ARGUMENTSX_{name};
   DECLARE_CCTK_PARAMETERS;
 
 """
