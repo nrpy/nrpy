@@ -4,9 +4,15 @@ Module for constructing interface.ccl for Cactus thorns.
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
+from typing import cast, Iterator, Tuple
 from pathlib import Path
 import nrpy.grid as gri
 
+
+def carpetx_gfs()->Iterator[Tuple[str,gri.CarpetXGridFunction]]:
+    for gfname, gf in carpetx_gfs():
+        assert type(gf) == gri.CarpetXGridFunction
+        yield (gfname, gf)
 
 def construct_interface_ccl(
     project_dir: str,
@@ -66,7 +72,7 @@ public:
         evol_parities = ""
         evol_gfs = []
         # First, EVOL type:
-        for gfname, gf in gri.glb_gridfcs_dict.items():
+        for gfname, gf in carpetx_gfs():
             if gf.group == "EVOL":
                 evol_parities += f"{gf.parity}  "
                 evol_gfs += [f"{gfname}GF"]
@@ -81,7 +87,7 @@ public:
             outstr += 'CCTK_REAL evol_variables_rhs type = GF Timelevels=1 TAGS=\'InterpNumTimelevels=1 prolongation="none" checkpoint="no"\'\n{\n  '
             rhs_gfs = [
                 f"{gfname}_rhsGF"
-                for gfname, gf in gri.glb_gridfcs_dict.items()
+                for gfname, gf in carpetx_gfs() 
                 if gf.group == "EVOL"
             ]
             outstr += ", ".join(rhs_gfs) + "\n"
@@ -91,7 +97,7 @@ public:
             # Then AUXEVOL type:
             auxevol_parities = ""
             auxevol_gfs = []
-            for gfname, gf in gri.glb_gridfcs_dict.items():
+            for gfname, gf in carpetx_gfs():
                 if gf.group == "AUXEVOL":
                     auxevol_parities += f"{gf.parity}  "
                     auxevol_gfs += [f"{gfname}GF"]
@@ -104,7 +110,7 @@ public:
         # Then AUX type:
         aux_parities = ""
         aux_gfs = []
-        for gfname, gf in gri.glb_gridfcs_dict.items():
+        for gfname, gf in carpetx_gfs():
             if gf.group == "AUX":
                 aux_parities += f"{gf.parity}  "
                 aux_gfs += [f"{gfname}GF"]
