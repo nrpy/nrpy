@@ -244,7 +244,7 @@ def register_CFunction_rhs_eval(thorn_name: str) -> Union[None, pcg.NRPyEnv_type
 schedule FUNC_NAME in MoL_CalcRHS as rhs_eval
 {
   LANG: C
-  READS: evol_variables(everywhere) #, auxevol_variables(interior)
+  READS: evol_variables(everywhere)
   WRITES: evol_variables_rhs(interior)
 } "MoL: Evaluate WaveToy RHSs"
 """,
@@ -296,7 +296,6 @@ schedule_ccl.construct_schedule_ccl(
     STORAGE="""
 STORAGE: evol_variables[3]     # Evolution variables
 STORAGE: evol_variables_rhs[1] # Variables storing right-hand-sides
-# STORAGE: auxevol_variables[1]  # Single-timelevel storage of variables needed for evolutions.
 STORAGE: aux_variables[3]      # Diagnostics variables
 """,
 )
@@ -308,12 +307,13 @@ interface_ccl.construct_interface_ccl(
 USES INCLUDE: Boundary.h
 """,
     is_evol_thorn=True,
-    enable_NewRad=True,
+    enable_NewRad=False,
 )
 CParams_registered_to_params_ccl += param_ccl.construct_param_ccl(
     project_dir=project_dir,
     thorn_name=evol_thorn_name,
-    shares_extends_str="",
+    shares_extends_str=f"""shares: {ID_thorn_name}
+USES CCTK_REAL wavespeed""",
 )
 
 # CCL files: ID_thorn
@@ -321,16 +321,13 @@ schedule_ccl.construct_schedule_ccl(
     project_dir=project_dir,
     thorn_name=ID_thorn_name,
     STORAGE="""
-STORAGE: evol_variables[3]     # Evolution variables
-# STORAGE: evol_variables_rhs[1] # Variables storing right-hand-sides
-# STORAGE: aux_variables[3]      # Diagnostics variables
-# STORAGE: auxevol_variables[1]  # Single-timelevel storage of variables needed for evolutions.
+STORAGE: evol_variables[3] # Evolution variables
 """,
 )
 interface_ccl.construct_interface_ccl(
     project_dir=project_dir,
     thorn_name=ID_thorn_name,
-    inherits="Grid WaveToyNRPy  # WaveToyNRPy provides all gridfunctions.",
+    inherits=f"""Grid {evol_thorn_name} # {evol_thorn_name} provides all gridfunctions.""",
     USES_INCLUDEs="",
     is_evol_thorn=False,
     enable_NewRad=False,
@@ -346,16 +343,13 @@ schedule_ccl.construct_schedule_ccl(
     project_dir=project_dir,
     thorn_name=diag_thorn_name,
     STORAGE="""
-# STORAGE: evol_variables[3]     # Evolution variables
-# STORAGE: evol_variables_rhs[1] # Variables storing right-hand-sides
-STORAGE: aux_variables[3]      # Diagnostics variables
-# STORAGE: auxevol_variables[1]  # Single-timelevel storage of variables needed for evolutions.
+STORAGE: aux_variables[3] # Diagnostics variables
 """,
 )
 interface_ccl.construct_interface_ccl(
     project_dir=project_dir,
     thorn_name=diag_thorn_name,
-    inherits="Grid WaveToyNRPy  # WaveToyNRPy provides all gridfunctions.",
+    inherits=f"""Grid {evol_thorn_name} # {evol_thorn_name} provides all gridfunctions.""",
     USES_INCLUDEs="",
     is_evol_thorn=False,
     enable_NewRad=False,
@@ -364,8 +358,8 @@ CParams_registered_to_params_ccl += param_ccl.construct_param_ccl(
     project_dir=project_dir,
     thorn_name=diag_thorn_name,
     # FIXME: the following line generation could be automated:
-    shares_extends_str="""
-shares: IDWaveToyNRPy
+    shares_extends_str=f"""
+shares: {ID_thorn_name}
 USES CCTK_REAL sigma
 USES CCTK_REAL wavespeed
 """,
@@ -379,9 +373,3 @@ for thorn in [evol_thorn_name, ID_thorn_name, diag_thorn_name]:
 simd.copy_simd_intrinsics_h(
     project_dir=str(Path(project_dir) / evol_thorn_name / "src")
 )
-
-
-# print(
-#     f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
-# )
-# print(f"    Parameter file can be found in {project_name}.par")
