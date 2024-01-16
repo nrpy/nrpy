@@ -18,7 +18,13 @@ import nrpy.finite_difference as fin
 import nrpy.infrastructures.CarpetX.simple_loop as lp
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 
-standard_ET_includes = ["loop_device.hxx", "math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
+standard_ET_includes = [
+    "loop_device.hxx",
+    "math.h",
+    "cctk.h",
+    "cctk_Arguments.h",
+    "cctk_Parameters.h",
+]
 
 
 def register_CFunction_Ricci_eval(

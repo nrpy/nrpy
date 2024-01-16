@@ -43,7 +43,7 @@ def output_CFunctions_and_construct_make_code_defn(
     make_code_defn_file = src_Path / "make.code.defn"
 
     # Open and write to the make.code.defn file
-    #with make_code_defn_file.open("w") as make_code_defn:
+    # with make_code_defn_file.open("w") as make_code_defn:
     with SafeWrite(make_code_defn_file) as make_code_defn:
         make_code_defn.write(f"# make.code.defn file for thorn {thorn_name}\n\n")
         make_code_defn.write("# Source files that need to be compiled:\n")
