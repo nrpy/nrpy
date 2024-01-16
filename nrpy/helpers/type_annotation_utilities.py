@@ -38,6 +38,7 @@ from typing_extensions import (
 )  # , get_args, get_origin <- Not in typing_extensions
 
 _literal = Literal["x"]
+_tuple = Tuple[str, int]
 
 
 def is_type_literal(arg: Any) -> bool:
@@ -54,7 +55,17 @@ def is_type_literal(arg: Any) -> bool:
     >>> is_type_literal(Tuple[str,int])
     False
     """
-    origin = getattr(_literal, "__origin__")
+    # Checking that the type is the same works
+    # on most platforms. In a few rare cases
+    # we get 'typing._GenericAlias' for both.
+    if type(_literal) is not type(_tuple):
+        return type(_literal) is type(arg)
+
+    # This, also, doesn't work everywhere.
+    origin = getattr(_literal, "__origin__", None)
+
+    assert origin is not None, "Cannot whether an object is a Literal"
+
     arg_origin = getattr(arg, "__origin__", None)
     if arg_origin is None:
         return False
