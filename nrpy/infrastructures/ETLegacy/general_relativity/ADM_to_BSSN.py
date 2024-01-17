@@ -1,8 +1,9 @@
 """
 Generates function to compute the BSSN variables from the ADM variables.
 
-Author: Samuel Cupp
-        scupp1 **at** my **dot** apsu **dot** edu
+Authors: Zachariah B. Etienne
+        zachetie **at** gmail **dot* com
+         Samuel Cupp
 """
 
 from typing import Union, cast
