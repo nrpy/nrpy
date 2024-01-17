@@ -1,8 +1,9 @@
 """
 Generates Einstein Toolkit thorns for evolving the BSSN equations on Cartesian AMR grids with Carpet.
 
-Author: Samuel Cupp
-        scupp1 **at** my **dot** apsu **dot** edu
+Authors: Zachariah B. Etienne
+        zachetie **at** gmail **dot* com
+         Samuel Cupp
 """
 
 # Notes from development:

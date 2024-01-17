@@ -66,7 +66,13 @@ shutil.rmtree(project_dir, ignore_errors=True)
 
 par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 par.set_parval_from_str("fd_order", fd_order)
-standard_ET_includes = ["loop_device.hxx", "math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
+standard_ET_includes = [
+    "loop_device.hxx",
+    "math.h",
+    "cctk.h",
+    "cctk_Arguments.h",
+    "cctk_Parameters.h",
+]
 
 
 #########################################################
@@ -112,7 +118,7 @@ DECLARE_CCTK_PARAMETERS;
 
     gri.register_gridfunctions(["uu_exact", "vv_exact"], group="AUX")
     desc = r"""Set the exact solution at all grid points."""
-    c_type = "extern \"C\" void"
+    c_type = 'extern "C" void'
     name = f"{thorn_name}_exact_solution_all_points"
     params = "CCTK_ARGUMENTS"
     body = f"DECLARE_CCTK_ARGUMENTSX_{name};\n"

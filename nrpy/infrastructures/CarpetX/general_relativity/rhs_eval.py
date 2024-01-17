@@ -1,8 +1,9 @@
 """
 Generates function to compute the right-hand sides of the BSSN evolution equations.
 
-Author: Samuel Cupp
-        scupp1 **at** my **dot** apsu **dot** edu
+Authors: Zachariah B. Etienne
+        zachetie **at** gmail **dot* com
+         Samuel Cupp
 """
 import re
 from collections import OrderedDict as ODict

@@ -1,8 +1,9 @@
 """
 Generates function to raise the stress-energy tensor using the BSSN variables.
 
-Author: Samuel Cupp
-        scupp1 **at** my **dot** apsu **dot** edu
+Authors: Zachariah B. Etienne
+        zachetie **at** gmail **dot* com
+         Samuel Cupp
 """
 
 from typing import Union, cast, List
