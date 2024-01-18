@@ -42,17 +42,132 @@ _ = par.register_CodeParameter("int", __name__, "NUMGRIDS", 1, commondata=True)
 class GridFunction:
     """The core class for grid functions."""
 
-    def __init__(self, name: str, group: str = "EVOL", dimension: int = 3) -> None:
+    def __init__(
+        self, name: str, group: str = "EVOL", rank: int = 0, dimension: int = 3
+    ) -> None:
         self.c_type_alias: str = "double"
         self.name: str = name
         self.group: str = group
-        self.dimension = dimension
+        self.rank: int = rank
+        self.dimension: int = dimension
 
     def read_gf_from_memory_Ccode_onept(
         self, i0_offset: int = 0, i1_offset: int = 0, i2_offset: int = 0, **kwargs: Any
     ) -> str:
         """Catch-all function for gridfunctions that haven't been set up correctly."""
         return f"Please define read_gf_from_memory_Ccode_onept() inside grid.py. Inputs: [class instance] {i0_offset} {i1_offset} {i2_offset} {kwargs}"
+
+    @staticmethod
+    def gridfunction_lists() -> Tuple[List[str], List[str], List[str]]:
+        """
+        Generate sorted lists of gridfunction names for each group type: 'EVOL', 'AUX', and 'AUXEVOL'.
+
+        This function creates a dictionary with group types as keys and corresponding gridfunction names
+        as values. It iterates through a global dictionary of gridfunctions, 'glb_gridfcs_dict', and
+        appends the gridfunction names to the corresponding group lists in 'groups'. The function then
+        sorts each list and returns the sorted lists as a tuple.
+
+        Note: This function assumes the existence of a global gridfunction dictionary named
+        'glb_gridfcs_dict' whose keys are gridfunction names and values are gridfunction objects. Each
+        gridfunction object should have 'group' and 'name' attributes.
+
+        :returns: A tuple containing lists of gridfunction names
+                  for each group: 'EVOL', 'AUX', and 'AUXEVOL', respectively.
+
+        Example:
+            gridfunction_lists()
+            (['evol_gf1', 'evol_gf2'], ['aux_gf1', 'aux_gf2'], ['auxevol_gf1', 'auxevol_gf2'])
+        """
+        # Initialize dictionary for holding lists of gridfunction names for each group.
+        groups: Dict[str, List[str]] = {
+            "EVOL": [],
+            "AUX": [],
+            "AUXEVOL": [],
+        }
+
+        # Iterate through the global dictionary of gridfunctions.
+        for _key, gf in glb_gridfcs_dict.items():
+            if gf.group in groups:
+                groups[gf.group].append(gf.name)
+
+        # Sort the lists. Iterating through a copy of the keys to avoid modifying the dictionary while iterating.
+        for group in list(groups.keys()):
+            groups[group] = sorted(groups[group])
+
+        # Pack the sorted lists into a tuple and return.
+        return groups["EVOL"], groups["AUX"], groups["AUXEVOL"]
+
+    @staticmethod
+    def set_parity_types(list_of_gf_names: List[str]) -> List[int]:
+        """
+        Set the parity types for a given list of grid function names.
+
+        :param list_of_gf_names: List of grid function names for which to set the parity types.
+        :return: A list of integers representing the parity types for the grid functions.
+        """
+        parity_type: List[int] = []
+        for name in list_of_gf_names:
+            for gf in glb_gridfcs_dict.values():
+                if gf.name == name:
+                    parity_type__orig_len = len(parity_type)
+                    if gf.rank == 0:
+                        parity_type.append(0)
+                    elif gf.rank == 1:
+                        parity_type.append(int(gf.name[-1]) + 1)
+                    elif gf.rank == 2:
+                        idx0 = gf.name[-2]
+                        idx1 = gf.name[-1]
+                        parity_conditions: Dict[Tuple[str, str], int] = {}
+                        if gf.dimension == 3:
+                            parity_conditions = {
+                                ("0", "0"): 4,
+                                ("0", "1"): 5,
+                                ("1", "0"): 5,
+                                ("0", "2"): 6,
+                                ("2", "0"): 6,
+                                ("1", "1"): 7,
+                                ("1", "2"): 8,
+                                ("2", "1"): 8,
+                                ("2", "2"): 9,
+                            }
+                        elif gf.dimension == 4:
+                            parity_conditions = {
+                                # scalar tt component
+                                ("0", "0"): 0,
+                                # vector ti components
+                                ("0", "1"): 1,
+                                ("1", "0"): 1,
+                                ("0", "2"): 2,
+                                ("2", "0"): 2,
+                                ("0", "3"): 3,
+                                ("3", "0"): 3,
+                                # tensor ij components
+                                ("1", "1"): 4,
+                                ("1", "2"): 5,
+                                ("2", "1"): 5,
+                                ("1", "3"): 6,
+                                ("3", "1"): 6,
+                                ("2", "2"): 7,
+                                ("2", "3"): 8,
+                                ("3", "2"): 8,
+                                ("3", "3"): 9,
+                            }
+
+                        parity_value: Union[int, None] = parity_conditions.get(
+                            (idx0, idx1)
+                        )
+                        if parity_value is not None:
+                            parity_type.append(parity_value)
+                    if len(parity_type) == parity_type__orig_len:
+                        raise ValueError(
+                            f"Error: Could not figure out parity type for {gf.group} gridfunction: {gf.name}, {gf.name[-2]}, {gf.name[-1]}, {gf.rank}"
+                        )
+
+        if len(parity_type) != len(list_of_gf_names):
+            raise ValueError(
+                "Error: For some reason the length of the parity types list did not match the length of the gf list."
+            )
+        return parity_type
 
 
 class BHaHGridFunction(GridFunction):
@@ -228,46 +343,6 @@ class BHaHGridFunction(GridFunction):
         i2 = f"i2+{i2_offset}".replace("+-", "-") if i2_offset != 0 else "i2"
 
         return f"{gf_array_name}[IDX4({gf_name.upper()}GF, {i0}, {i1}, {i2})]"
-
-    @staticmethod
-    def gridfunction_lists() -> Tuple[List[str], List[str], List[str]]:
-        """
-        Generate sorted lists of gridfunction names for each group type: 'EVOL', 'AUX', and 'AUXEVOL'.
-
-        This function creates a dictionary with group types as keys and corresponding gridfunction names
-        as values. It iterates through a global dictionary of gridfunctions, 'glb_gridfcs_dict', and
-        appends the gridfunction names to the corresponding group lists in 'groups'. The function then
-        sorts each list and returns the sorted lists as a tuple.
-
-        Note: This function assumes the existence of a global gridfunction dictionary named
-        'glb_gridfcs_dict' whose keys are gridfunction names and values are gridfunction objects. Each
-        gridfunction object should have 'group' and 'name' attributes.
-
-        :returns: A tuple containing lists of gridfunction names
-                  for each group: 'EVOL', 'AUX', and 'AUXEVOL', respectively.
-
-        Example:
-            gridfunction_lists()
-            (['evol_gf1', 'evol_gf2'], ['aux_gf1', 'aux_gf2'], ['auxevol_gf1', 'auxevol_gf2'])
-        """
-        # Initialize dictionary for holding lists of gridfunction names for each group.
-        groups: Dict[str, List[str]] = {
-            "EVOL": [],
-            "AUX": [],
-            "AUXEVOL": [],
-        }
-
-        # Iterate through the global dictionary of gridfunctions.
-        for _key, gf in glb_gridfcs_dict.items():
-            if gf.group in groups:
-                groups[gf.group].append(gf.name)
-
-        # Sort the lists. Iterating through a copy of the keys to avoid modifying the dictionary while iterating.
-        for group in list(groups.keys()):
-            groups[group] = sorted(groups[group])
-
-        # Pack the sorted lists into a tuple and return.
-        return groups["EVOL"], groups["AUX"], groups["AUXEVOL"]
 
     @staticmethod
     def gridfunction_defines() -> str:
@@ -681,8 +756,8 @@ def register_gridfunctions(
     c_type_alias CCTK_REAL
     name gridfunc
     group EVOL
-    dimension 3
     rank 0
+    dimension 3
     f_infinity 0.0
     wavespeed 1.0
     is_basename True
@@ -692,8 +767,8 @@ def register_gridfunctions(
     c_type_alias CCTK_REAL
     name gridfunc1
     group EVOL
-    dimension 3
     rank 0
+    dimension 3
     f_infinity 1.0
     wavespeed 1.0
     is_basename True

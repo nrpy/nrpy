@@ -3,8 +3,9 @@ Module for constructing interface.ccl for Cactus thorns.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
+        Samuel Cupp
 """
-from typing import cast, Iterator, Tuple
+from typing import cast, Iterator, Tuple, List
 from pathlib import Path
 import nrpy.grid as gri
 from nrpy.helpers.safewrite import SafeWrite
@@ -70,15 +71,51 @@ inherits: {inherits}
 
 public:
 """
+    (
+        evolved_variables_list,
+        auxiliary_variables_list,
+        auxevol_variables_list,
+    ) = gri.CarpetXGridFunction.gridfunction_lists()[0:3]
+
+    def construct_parity_string(parities: List[int]) -> str:
+        """
+        Construct the parities tag for a variable group using the list of parity values
+        given by set_parity_types
+
+        :param list_of_gf_names: List of grid function names for which to set the parity types.
+        :return: A list of integers representing the parity types for the grid functions.
+        """
+        parity_tag = ""
+        for parity_value in parities:
+            parity_tag += "  "
+            # scalar and tensor xx, yy, zz components
+            if parity_value in [0, 4, 7, 9]:
+                parity_tag += "+1 +1 +1"
+            # vector components
+            elif parity_value == 1:
+                parity_tag += "-1 +1 +1"
+            elif parity_value == 2:
+                parity_tag += "+1 -1 +1"
+            elif parity_value == 3:
+                parity_tag += "+1 +1 -1"
+            # tensor off-diagonal components
+            elif parity_value == 5:  # xy
+                parity_tag += "-1 -1 +1"
+            elif parity_value == 6:  # xz
+                parity_tag += "-1 +1 -1"
+            elif parity_value == 8:  # yz
+                parity_tag += "+1 -1 -1"
+
+        return parity_tag
+
     if is_evol_thorn:
-        evol_parities = ""
-        evol_gfs = []
-        # First, EVOL type:
-        for gfname, gf in carpetx_gfs():
-            if gf.group == "EVOL":
-                evol_parities += f"{gf.parity}  "
-                evol_gfs += [f"{gfname}GF"]
-        if evol_gfs:
+        if evolved_variables_list:
+            # First, EVOL type:
+            evol_parity_type = gri.CarpetXGridFunction.set_parity_types(
+                evolved_variables_list
+            )
+            evol_parities = construct_parity_string(evol_parity_type)
+            evol_gfs = [evol_gf + "GF" for evol_gf in evolved_variables_list]
             outstr += f"CCTK_REAL evol_variables type = GF Timelevels=1 TAGS='rhs=\"evol_variables_rhs\" parities={{{evol_parities}}}'\n{{\n  "
             outstr += ", ".join(evol_gfs) + "\n"
             outstr += """} "Evolved gridfunctions."
@@ -87,34 +124,35 @@ public:
 
             # Second EVOL right-hand-sides
             outstr += 'CCTK_REAL evol_variables_rhs type = GF Timelevels=1 TAGS=\'InterpNumTimelevels=1 prolongation="none" checkpoint="no"\'\n{\n  '
-            rhs_gfs = [
-                f"{gfname}_rhsGF" for gfname, gf in carpetx_gfs() if gf.group == "EVOL"
-            ]
+            rhs_gfs = [evol_gf + "_rhsGF" for evol_gf in evolved_variables_list]
+            # rhs_gfs = [
+            #    f"{gfname}_rhsGF" for gfname, gf in carpetx_gfs() if gf.group == "EVOL"
+            # ]
             outstr += ", ".join(rhs_gfs) + "\n"
             outstr += """} "Right-hand-side gridfunctions."
 
 """
             # Then AUXEVOL type:
-            auxevol_parities = ""
-            auxevol_gfs = []
-            for gfname, gf in carpetx_gfs():
-                if gf.group == "AUXEVOL":
-                    auxevol_parities += f"{gf.parity}  "
-                    auxevol_gfs += [f"{gfname}GF"]
-            if auxevol_gfs:
+            if auxevol_variables_list:
+                auxevol_parity_type = gri.CarpetXGridFunction.set_parity_types(
+                    auxevol_variables_list
+                )
+                auxevol_parities = construct_parity_string(auxevol_parity_type)
+                auxevol_gfs = [
+                    auxevol_gf + "GF" for auxevol_gf in auxevol_variables_list
+                ]
                 outstr += f'CCTK_REAL auxevol_variables type = GF Timelevels=1 TAGS=\'InterpNumTimelevels=1 prolongation="none" checkpoint="no" parities={{{auxevol_parities}}}\'\n{{\n  '
                 outstr += ", ".join(auxevol_gfs) + "\n"
                 outstr += """} "Auxiliary gridfunctions needed for evaluating the RHSs."
 
 """
         # Then AUX type:
-        aux_parities = ""
-        aux_gfs = []
-        for gfname, gf in carpetx_gfs():
-            if gf.group == "AUX":
-                aux_parities += f"{gf.parity}  "
-                aux_gfs += [f"{gfname}GF"]
-        if aux_gfs:
+        if auxiliary_variables_list:
+            aux_parity_type = gri.CarpetXGridFunction.set_parity_types(
+                auxiliary_variables_list
+            )
+            aux_parities = construct_parity_string(aux_parity_type)
+            aux_gfs = [aux_gf + "GF" for aux_gf in auxiliary_variables_list]
             outstr += f"CCTK_REAL aux_variables type = GF Timelevels=1 TAGS='parities={{{aux_parities}}}'\n{{\n  "
             outstr += ", ".join(aux_gfs) + "\n"
             outstr += """} "Auxiliary gridfunctions for e.g., diagnostics."
