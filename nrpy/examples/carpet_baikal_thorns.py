@@ -6,14 +6,6 @@ Authors: Zachariah B. Etienne
          Samuel Cupp
 """
 
-# Notes from development:
-#
-# BSSN_to_ADM:
-# - I don't understand the purpose of the second scheduling in Baikal
-#   but it is necessary for tests to pass.
-# MoL_PostStep:
-# - scheduling adjusted to be deterministic w.r.t. other functions
-
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
@@ -87,9 +79,6 @@ project_dir = os.path.join("project", project_name)
 par.set_parval_from_str("Infrastructure", "ETLegacy")
 par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 par.set_parval_from_str("register_MU_gridfunctions", register_MU_gridfunctions)
-
-# First clean the project directory, if it exists.
-shutil.rmtree(project_dir, ignore_errors=True)
 
 ########################
 # STEP 1: register functions and parameters
