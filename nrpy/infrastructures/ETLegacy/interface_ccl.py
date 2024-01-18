@@ -3,6 +3,7 @@ Module for constructing interface.ccl for Cactus thorns.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
+        Samuel Cupp
 """
 
 from pathlib import Path
@@ -84,14 +85,15 @@ REQUIRES FUNCTION NewRad_Apply
 
 public:
 """
+    (
+        evolved_variables_list,
+        auxiliary_variables_list,
+        auxevol_variables_list,
+    ) = gri.CarpetXGridFunction.gridfunction_lists()[0:3]
     if is_evol_thorn:
-        # First, EVOL type:
-        evol_gfs = [
-            f"{gfname}GF"
-            for gfname, gf in gri.glb_gridfcs_dict.items()
-            if gf.group == "EVOL"
-        ]
-        if evol_gfs:
+        if evolved_variables_list:
+            # First, EVOL type:
+            evol_gfs = [evol_gf + "GF" for evol_gf in evolved_variables_list]
             outstr += "CCTK_REAL evol_variables type = GF Timelevels=3\n{\n  "
             outstr += ", ".join(evol_gfs) + "\n"
             outstr += """} "Evolved gridfunctions."
@@ -100,34 +102,24 @@ public:
 
             # Second EVOL right-hand-sides
             outstr += 'CCTK_REAL evol_variables_rhs type = GF Timelevels=1 TAGS=\'InterpNumTimelevels=1 prolongation="none" checkpoint="no"\'\n{\n  '
-            rhs_gfs = [
-                f"{gfname}_rhsGF"
-                for gfname, gf in gri.glb_gridfcs_dict.items()
-                if gf.group == "EVOL"
-            ]
+            rhs_gfs = [evol_gf + "_rhsGF" for evol_gf in evolved_variables_list]
             outstr += ", ".join(rhs_gfs) + "\n"
             outstr += """} "Right-hand-side gridfunctions."
 
 """
             # Then AUXEVOL type:
-            auxevol_gfs = [
-                f"{gfname}GF"
-                for gfname, gf in gri.glb_gridfcs_dict.items()
-                if gf.group == "AUXEVOL"
-            ]
-            if auxevol_gfs:
+            if auxevol_variables_list:
+                auxevol_gfs = [
+                    auxevol_gf + "GF" for auxevol_gf in auxevol_variables_list
+                ]
                 outstr += 'CCTK_REAL auxevol_variables type = GF Timelevels=1 TAGS=\'InterpNumTimelevels=1 prolongation="none" checkpoint="no"\'\n{\n  '
                 outstr += ", ".join(auxevol_gfs) + "\n"
                 outstr += """} "Auxiliary gridfunctions needed for evaluating the RHSs."
 
 """
         # Then AUX type:
-        aux_gfs = [
-            f"{gfname}GF"
-            for gfname, gf in gri.glb_gridfcs_dict.items()
-            if gf.group == "AUX"
-        ]
-        if aux_gfs:
+        if auxiliary_variables_list:
+            aux_gfs = [aux_gf + "GF" for aux_gf in auxiliary_variables_list]
             outstr += "CCTK_REAL aux_variables type = GF Timelevels=3\n{\n  "
             outstr += ", ".join(aux_gfs) + "\n"
             outstr += """} "Auxiliary gridfunctions for e.g., diagnostics."

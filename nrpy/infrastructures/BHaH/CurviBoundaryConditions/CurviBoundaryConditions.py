@@ -116,67 +116,25 @@ def BHaH_defines_set_gridfunction_defines_with_parity_types(
         auxevol_variables_list,
     ) = gri.BHaHGridFunction.gridfunction_lists()[0:3]
 
-    def set_parity_types(list_of_gf_names: List[str]) -> List[int]:
-        """
-        Set the parity types for a given list of grid function names.
-
-        :param list_of_gf_names: List of grid function names for which to set the parity types.
-        :return: A list of integers representing the parity types for the grid functions.
-        """
-        parity_type: List[int] = []
-        for name in list_of_gf_names:
-            for gf in gri.glb_gridfcs_dict.values():
-                if isinstance(gf, gri.BHaHGridFunction) and gf.name == name:
-                    parity_type__orig_len = len(parity_type)
-                    if gf.rank == 0:
-                        parity_type.append(0)
-                    elif gf.rank == 1:
-                        parity_type.append(int(gf.name[-1]) + 1)
-                    elif gf.rank == 2:
-                        idx0 = gf.name[-2]
-                        idx1 = gf.name[-1]
-                        parity_conditions: Dict[Tuple[str, str], int] = {
-                            ("0", "0"): 4,
-                            ("0", "1"): 5,
-                            ("1", "0"): 5,
-                            ("0", "2"): 6,
-                            ("2", "0"): 6,
-                            ("1", "1"): 7,
-                            ("1", "2"): 8,
-                            ("2", "1"): 8,
-                            ("2", "2"): 9,
-                        }
-                        parity_value: Union[int, None] = parity_conditions.get(
-                            (idx0, idx1)
-                        )
-                        if parity_value is not None:
-                            parity_type.append(parity_value)
-                    if len(parity_type) == parity_type__orig_len:
-                        raise ValueError(
-                            f"Error: Could not figure out parity type for {gf.group} gridfunction: {gf.name}, {gf.name[-2]}, {gf.name[-1]}, {gf.rank}"
-                        )
-
-        if len(parity_type) != len(list_of_gf_names):
-            raise ValueError(
-                "Error: For some reason the length of the parity types list did not match the length of the gf list."
-            )
-        return parity_type
-
     outstr = """
 /* PARITY TYPES FOR EVOLVED (plus optional) GRIDFUNCTIONS.
  * SEE \"Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb\" FOR DEFINITIONS. */
 """
     if len(evolved_variables_list) > 0:
-        evol_parity_type = set_parity_types(evolved_variables_list)
+        evol_parity_type = gri.BHaHGridFunction.set_parity_types(evolved_variables_list)
 
         outstr += f"static const int8_t evol_gf_parity[{len(evolved_variables_list)}] = {{ {', '.join(map(str, evol_parity_type)) } }};\n"
     if set_parity_on_aux:
         if len(auxiliary_variables_list) > 0:
-            aux_parity_type = set_parity_types(auxiliary_variables_list)
+            aux_parity_type = gri.BHaHGridFunction.set_parity_types(
+                auxiliary_variables_list
+            )
             outstr += f"static const int8_t aux_gf_parity[{len(auxiliary_variables_list)}] = {{ {', '.join(map(str, aux_parity_type))} }};\n"
     if set_parity_on_auxevol:
         if len(auxevol_variables_list) > 0:
-            auxevol_parity_type = set_parity_types(auxevol_variables_list)
+            auxevol_parity_type = gri.BHaHGridFunction.set_parity_types(
+                auxevol_variables_list
+            )
             outstr += f"static const int8_t auxevol_gf_parity[{len(auxevol_variables_list)}] = {{ {', '.join(map(str, auxevol_parity_type))} }};\n"
 
     if verbose:

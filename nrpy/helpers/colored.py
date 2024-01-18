@@ -1,11 +1,16 @@
-from typing_extensions import Literal
-from typing import Any, Dict
+"""
+Placeholder
+
+Author: Steven Brandt
+"""
 import sys
+from typing import Any, Dict
+from typing_extensions import Literal
 
 color_names = Literal["red", "green", "yellow", "blue", "magenta", "cyan"]
 
 
-def not_colored(arg: Any, c: color_names) -> str:
+def not_colored(arg: Any) -> str:
     return repr(arg)
 
 
@@ -21,7 +26,7 @@ reset = "\033[0m"
 
 
 def colored(arg: Any, c: color_names) -> str:
-    assert type(c) == str
+    assert isinstance(c, str)
     assert c in colors
     s = str(arg)
     return colors[c] + s + reset
