@@ -10,7 +10,18 @@ from typing_extensions import Literal
 color_names = Literal["red", "green", "yellow", "blue", "magenta", "cyan"]
 
 
-def not_colored(arg: Any) -> str:
+def not_colored(
+    arg: Any,
+    c: color_names # pylint: disable=unused-argument
+) -> str:
+    """
+    Function used when coloring should be disabled.
+
+    :param arg: the object to convert to a plain string
+    :param c: a valid color name
+
+    :return: a stringified version of arg
+    """
     return repr(arg)
 
 
@@ -26,6 +37,14 @@ reset = "\033[0m"
 
 
 def colored(arg: Any, c: color_names) -> str:
+    """
+    Function used when coloring should be enabled.
+
+    :param arg: the object to convert to a plain string
+    :param c: a valid color name
+
+    :return: a colored and stringified version of arg
+    """
     assert isinstance(c, str)
     assert c in colors
     s = str(arg)
