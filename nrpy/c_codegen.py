@@ -1,3 +1,4 @@
+# >> Handled by type check
 """
 Core NRPy+ module used for generating C code kernels.
 
@@ -10,6 +11,7 @@ import logging
 import re  # Regular expressions can be toxic due to edge cases -- we use them sparingly
 import sys
 from typing import List, Union, Dict, Any, Optional, Sequence, Tuple
+from typing_extensions import Literal
 import sympy as sp
 import nrpy.finite_difference as fin
 import nrpy.params as par
@@ -20,6 +22,26 @@ from nrpy.helpers.cse_preprocess_postprocess import (
     cse_preprocess,
     cse_postprocess,
 )  # NRPy+: CSE preprocessing and postprocessing
+from nrpy.helpers.type_annotation_utilities import (
+    validate_literal_arguments,
+    generate_class_representation,
+)
+
+c_type_list = Literal[
+    # Traditional C types
+    "double",
+    "float",
+    "long double",
+    # Standard C++ types
+    "std::float16_t",
+    "std::float32_t",
+    "std::float64_t",
+    "std::float128_t",
+    "std::bfloat16_t",
+    # SIMD
+    "REAL_SIMD_ARRAY",
+    # Maybe add complex numbers?
+]
 
 
 class CCodeGen:
@@ -30,11 +52,11 @@ class CCodeGen:
         prestring: str = "",
         poststring: str = "",
         include_braces: bool = True,
-        c_type: str = "double",
+        c_type: c_type_list = "double",
         c_type_alias: str = "",
         verbose: bool = True,
         enable_cse: bool = True,
-        cse_sorting: str = "canonical",
+        cse_sorting: Literal["canonical", "none"] = "canonical",
         cse_varprefix: str = "",
         enable_cse_preprocess: bool = False,
         enable_simd: bool = False,
@@ -50,7 +72,7 @@ class CCodeGen:
         automatically_read_gf_data_from_memory: bool = False,
         enforce_c_parameters_must_be_defined: bool = False,
         enable_fd_functions: bool = False,
-        mem_alloc_style: str = "210",
+        mem_alloc_style: Literal["210", "012"] = "210",
         upwind_control_vec: Union[List[sp.Symbol], sp.Symbol] = sp.Symbol("unset"),
         symbol_to_Rational_dict: Optional[Dict[sp.Basic, sp.Rational]] = None,
         clang_format_enable: bool = False,
@@ -86,7 +108,16 @@ class CCodeGen:
         :param upwind_control_vec: Upwind control vector as a symbol or list of symbols.
         :param clang_format_enable: Boolean to enable clang formatting.
         :param clang_format_options: Options for clang formatting.
+        >>> c = CCodeGen(c_type="double")
+        >>> c.c_type
+        'double'
+        >>> CCodeGen(c_type="foo")
+        Traceback (most recent call last):
+          ...
+        ValueError: In function '__init__': parameter 'c_type' has value: 'foo', which is not in the allowed_values set: ('double', 'float', 'long double', 'std::float16_t', 'std::float32_t', 'std::float64_t', 'std::float128_t', 'std::bfloat16_t', 'REAL_SIMD_ARRAY')
+
         """
+        validate_literal_arguments()
         self.prestring = prestring
         self.poststring = poststring
         self.include_braces = include_braces
@@ -131,13 +162,6 @@ class CCodeGen:
         # Now, process input!
 
         # Set c_type and c_type_alias
-        if self.c_type not in ("float", "double", "long double"):
-            raise ValueError(
-                "c_type must be a standard C type for floating point numbers: float, double, or long double,\n"
-                "as it is used to find the appropriate transcendental function; e.g., sin(), sinf(), or sinl().\n"
-                "c_type_alias will appear in the generated code, and will be set according to infrastructure.\n"
-                f"You chose c_type={self.c_type}"
-            )
         Infrastructure = par.parval_from_str("Infrastructure")
         if self.enable_simd:
             if self.c_type not in "double":
@@ -200,6 +224,10 @@ class CCodeGen:
         if self.enable_fd_codegen:
             self.automatically_read_gf_data_from_memory = True
 
+    def __repr__(self) -> str:
+        """Create a human readable representation of the CCodeGen object and what's in it."""
+        return generate_class_representation()
+
 
 def c_codegen(
     sympyexpr: Union[
@@ -214,7 +242,7 @@ def c_codegen(
 
     :param sympyexpr: A SymPy expression or list of SymPy expressions to be converted.
     :param output_varname_str: A string or list of strings representing the variable name(s) in the output.
-    :param kwargs: Additional keyword arguments for customization.
+    :param kwargs: Additional keyword arguments for customization. They are used to initialize a CCodeGen object.
     :return: A string containing the generated C code.
 
     >>> x, y, z = sp.symbols("x y z", real=True)
@@ -659,10 +687,21 @@ def ccode_postproc(string: str, CCGParams: CCodeGen) -> str:
 
     if has_c_func:
         # Define the dictionary to map the c_type to corresponding cmath function suffix
-        cmath_suffixes = {
-            "float": "f",
+        suffix_list = Literal["f", "l", ""]
+        cmath_suffixes: Dict[c_type_list, suffix_list] = {
+            # Traditional C types
             "double": "",
+            "float": "f",
             "long double": "l",
+            # Standard C++ types
+            "std::float16_t": "",  # h?
+            "std::float32_t": "f",
+            "std::float64_t": "",
+            "std::float128_t": "l",
+            "std::bfloat16_t": "",  # b?
+            # SIMD
+            "REAL_SIMD_ARRAY": "",  # d?
+            # Maybe add complex numbers?
         }
 
         # If the c_type is not one of the known keys, raise an error
