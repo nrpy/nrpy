@@ -1,5 +1,5 @@
 """
-Placeholder
+Placeholder.
 
 Author: Steven Brandt
 """
@@ -10,12 +10,9 @@ from typing_extensions import Literal
 color_names = Literal["red", "green", "yellow", "blue", "magenta", "cyan"]
 
 
-def not_colored(
-    arg: Any,
-    c: color_names # pylint: disable=unused-argument
-) -> str:
+def not_colored(arg: Any, c: color_names) -> str:  # pylint: disable=unused-argument
     """
-    Function used when coloring should be disabled.
+    Provide stringified version of the argument with coloring disabled.
 
     :param arg: the object to convert to a plain string
     :param c: a valid color name
@@ -38,7 +35,7 @@ reset = "\033[0m"
 
 def colored(arg: Any, c: color_names) -> str:
     """
-    Function used when coloring should be enabled.
+    Provide stringified version of the argument with colored text.
 
     :param arg: the object to convert to a plain string
     :param c: a valid color name

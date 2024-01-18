@@ -13,7 +13,7 @@ from pathlib import Path
 from nrpy.helpers.colored import colored
 
 try:
-    from clang_format import _get_executable as get_executable  # type: ignore[import-not-found]
+    from clang_format import _get_executable as get_executable  # type: ignore[import-untyped]
 except ModuleNotFoundError:
 
     def get_executable(_: str) -> str:
@@ -37,7 +37,6 @@ class SafeWrite:
     """
 
     # black insists on indenting this way, pylint does not allow it
-    # pylint: disable=C0330
     def __init__(
         self,
         fname: Union[Path, str],
