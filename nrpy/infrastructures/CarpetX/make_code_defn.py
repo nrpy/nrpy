@@ -43,7 +43,6 @@ def output_CFunctions_and_construct_make_code_defn(
     make_code_defn_file = src_Path / "make.code.defn"
 
     # Open and write to the make.code.defn file
-    # with make_code_defn_file.open("w") as make_code_defn:
     with SafeWrite(make_code_defn_file) as make_code_defn:
         make_code_defn.write(f"# make.code.defn file for thorn {thorn_name}\n\n")
         make_code_defn.write("# Source files that need to be compiled:\n")
@@ -51,7 +50,9 @@ def output_CFunctions_and_construct_make_code_defn(
 
         # Iterate through sorted list of CFunctions and write each to the make.code.defn file
         for i, CFunction in enumerate(make_code_defn_list_of_CFunctions):
-            with SafeWrite(src_Path / f"{CFunction.name}.cxx", encoding="utf-8") as file:
+            with SafeWrite(
+                src_Path / f"{CFunction.name}.cxx", encoding="utf-8"
+            ) as file:
                 file.write(CFunction.full_function)
 
             # If it's not the last iteration, append a backslash:

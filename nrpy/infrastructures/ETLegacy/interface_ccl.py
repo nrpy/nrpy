@@ -8,6 +8,7 @@ Author: Zachariah B. Etienne
 
 from pathlib import Path
 import nrpy.grid as gri
+from nrpy.helpers.safewrite import SafeWrite
 
 
 def construct_interface_ccl(
@@ -127,5 +128,5 @@ public:
 """
     output_Path = Path(project_dir) / thorn_name
     output_Path.mkdir(parents=True, exist_ok=True)
-    with open(output_Path / "interface.ccl", "w", encoding="utf-8") as file:
+    with SafeWrite(output_Path / "interface.ccl", encoding="utf-8") as file:
         file.write(outstr)

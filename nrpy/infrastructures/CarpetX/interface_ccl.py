@@ -5,16 +5,10 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
         Samuel Cupp
 """
-from typing import cast, Iterator, Tuple, List
+from typing import List
 from pathlib import Path
 import nrpy.grid as gri
 from nrpy.helpers.safewrite import SafeWrite
-
-
-def carpetx_gfs() -> Iterator[Tuple[str, gri.CarpetXGridFunction]]:
-    for gfname, gf in gri.glb_gridfcs_dict.items():
-        assert type(gf) == gri.CarpetXGridFunction
-        yield (gfname, gf)
 
 
 def construct_interface_ccl(
@@ -125,9 +119,6 @@ public:
             # Second EVOL right-hand-sides
             outstr += 'CCTK_REAL evol_variables_rhs type = GF Timelevels=1 TAGS=\'InterpNumTimelevels=1 prolongation="none" checkpoint="no"\'\n{\n  '
             rhs_gfs = [evol_gf + "_rhsGF" for evol_gf in evolved_variables_list]
-            # rhs_gfs = [
-            #    f"{gfname}_rhsGF" for gfname, gf in carpetx_gfs() if gf.group == "EVOL"
-            # ]
             outstr += ", ".join(rhs_gfs) + "\n"
             outstr += """} "Right-hand-side gridfunctions."
 
