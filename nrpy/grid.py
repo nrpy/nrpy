@@ -43,19 +43,71 @@ class GridFunction:
     """The core class for grid functions."""
 
     def __init__(
-        self, name: str, group: str = "EVOL", rank: int = 0, dimension: int = 3
+        self,
+        name: str,
+        group: str = "EVOL",
+        rank: int = 0,
+        dimension: int = 3,
+        f_infinity: float = 0.0,
+        wavespeed: float = 1.0,
+        is_basename: bool = True,
     ) -> None:
-        self.c_type_alias: str = "double"
         self.name: str = name
         self.group: str = group
         self.rank: int = rank
         self.dimension: int = dimension
+        self.f_infinity: float = f_infinity
+        self.wavespeed: float = wavespeed
+        self.is_basename: bool = is_basename
+
+        if is_basename:
+            self.verify_gridfunction_basename_is_valid(self.name)
 
     def read_gf_from_memory_Ccode_onept(
         self, i0_offset: int = 0, i1_offset: int = 0, i2_offset: int = 0, **kwargs: Any
     ) -> str:
         """Catch-all function for gridfunctions that haven't been set up correctly."""
         return f"Please define read_gf_from_memory_Ccode_onept() inside grid.py. Inputs: [class instance] {i0_offset} {i1_offset} {i2_offset} {kwargs}"
+
+    def verify_gridfunction_basename_is_valid(self, name: str) -> None:
+        """
+        Validate the gridfunction's base name.
+
+        Raises a ValueError if base name is zero-length or ends with an integer.
+        Raises TypeError if the base name is not a string.
+
+        Gridfunction base names must not end with integers. For instance, a rank-1
+        gridfunction 'vecU1' has a valid base name 'vecU'. A scalar gridfunction
+        named 'u2' would have an invalid base name 'u2'. This strict requirement
+        facilitates quick identification of a gridfunction by its name.
+
+        :param name: The name of the gridfunction.
+
+        Raises
+        ------
+        ValueError
+            If the name is of zero length or ends with an integer.
+        TypeError
+            If the name is not of type str.
+
+        Example:
+            >>> try: GF = GridFunction(name="h1")
+            ... except: "Attempt to create a gridfunction ending in an integer failed. Good."
+            'Attempt to create a gridfunction ending in an integer failed. Good.'
+        """
+        # First check for zero-length basenames:
+        if len(name) == 0:
+            raise ValueError("Tried to register gridfunction without a name!")
+
+        if not isinstance(name, str):
+            raise TypeError("Gridfunction names must be strings")
+
+        if len(name) > 0 and name[-1].isdigit():
+            raise ValueError(
+                f"Tried to register gridfunction with base name: {name}\n"
+                f"To ensure that finite difference code generations do not get confused,\n"
+                f"gridfunctions with base names ending in an integer are forbidden; pick a new name."
+            )
 
     @staticmethod
     def gridfunction_lists() -> Tuple[List[str], List[str], List[str]]:
@@ -160,7 +212,7 @@ class GridFunction:
                             parity_type.append(parity_value)
                     if len(parity_type) == parity_type__orig_len:
                         raise ValueError(
-                            f"Error: Could not figure out parity type for {gf.group} gridfunction: {gf.name}, {gf.name[-2]}, {gf.name[-1]}, {gf.rank}"
+                            f"Error: Could not figure out parity type for {gf.group} gridfunction: {gf.name}, {gf.name[-2]}, {gf.name[-1]}, {gf.rank}, {gf.dimension}"
                         )
 
         if len(parity_type) != len(list_of_gf_names):
@@ -184,12 +236,10 @@ class BHaHGridFunction(GridFunction):
         is_basename: bool = True,
         gf_array_name: str = "use_in_gfs_for_EVOL_auxevol_gfs_for_AUXEVOL_etc",
     ) -> None:
-        super().__init__(name, group, dimension)
+        super().__init__(
+            name, group, rank, dimension, f_infinity, wavespeed, is_basename
+        )
         self.c_type_alias = "REAL"  # always use REAL
-        self.rank = rank
-        self.f_infinity = f_infinity
-        self.wavespeed = wavespeed
-        self.is_basename = is_basename
         self.verify_gridfunction_group_is_valid()
         if gf_array_name == "use_in_gfs_for_EVOL_auxevol_gfs_for_AUXEVOL_etc":
             if group == "EVOL":
@@ -200,49 +250,6 @@ class BHaHGridFunction(GridFunction):
                 self.gf_array_name = "aux_gfs"
         else:
             self.gf_array_name = gf_array_name
-
-        if is_basename:
-            self.verify_gridfunction_basename_is_valid(self.name)
-
-    def verify_gridfunction_basename_is_valid(self, name: str) -> None:
-        """
-        Validate the gridfunction's base name.
-
-        Raises a ValueError if base name is zero-length or ends with an integer.
-        Raises TypeError if the base name is not a string.
-
-        Gridfunction base names must not end with integers. For instance, a rank-1
-        gridfunction 'vecU1' has a valid base name 'vecU'. A scalar gridfunction
-        named 'u2' would have an invalid base name 'u2'. This strict requirement
-        facilitates quick identification of a gridfunction by its name.
-
-        :param name: The name of the gridfunction.
-
-        Raises
-        ------
-        ValueError
-            If the name is of zero length or ends with an integer.
-        TypeError
-            If the name is not of type str.
-
-        Example:
-            >>> try: GF = BHaHGridFunction(name="h1")
-            ... except: "Attempt to create a gridfunction ending in an integer failed. Good."
-            'Attempt to create a gridfunction ending in an integer failed. Good.'
-        """
-        # First check for zero-length basenames:
-        if len(name) == 0:
-            raise ValueError("Tried to register gridfunction without a name!")
-
-        if not isinstance(name, str):
-            raise TypeError("Gridfunction names must be strings")
-
-        if len(name) > 0 and name[-1].isdigit():
-            raise ValueError(
-                f"Tried to register gridfunction with base name: {name}\n"
-                f"To ensure that finite difference code generations do not get confused,\n"
-                f"gridfunctions with base names ending in an integer are forbidden; pick a new name."
-            )
 
     def verify_gridfunction_group_is_valid(self) -> None:
         """
@@ -383,9 +390,12 @@ class BHaHGridFunction(GridFunction):
         outstr = f"{define_gfs('EVOL', evolved_variables_list)}"
 
         if evolved_variables_list:
-            # mypy: doesn't consider that this func is only called for BHaHGridFunctions.
-            f_infinity_list = [str(glb_gridfcs_dict[var].f_infinity) for var in evolved_variables_list]  # type: ignore
-            f_wavespeed_list = [str(glb_gridfcs_dict[var].wavespeed) for var in evolved_variables_list]  # type: ignore
+            f_infinity_list = [
+                str(glb_gridfcs_dict[var].f_infinity) for var in evolved_variables_list
+            ]
+            f_wavespeed_list = [
+                str(glb_gridfcs_dict[var].wavespeed) for var in evolved_variables_list
+            ]
 
             f_infinity_str = ", ".join(f_infinity_list)
             f_wavespeed_str = ", ".join(f_wavespeed_list)
@@ -416,12 +426,10 @@ class ETLegacyGridFunction(GridFunction):
         is_basename: bool = True,
         gf_array_name: str = "",
     ) -> None:
-        super().__init__(name, group, dimension)
-        self.rank = rank
+        super().__init__(
+            name, group, rank, dimension, f_infinity, wavespeed, is_basename
+        )
         _gf_array_name = gf_array_name
-        self.f_infinity = f_infinity
-        self.wavespeed = wavespeed
-        self.is_basename = is_basename
         self.c_type_alias = "CCTK_REAL"
 
     def verify_gridfunction_group_is_valid(self) -> None:
@@ -539,21 +547,17 @@ class CarpetXGridFunction(GridFunction):
         wavespeed: float = 1.0,
         is_basename: bool = True,
         centering: centerings = "CCC",
-        parity: str = "+1 +1 +1",
         gf_array_name: str = "",
         thorn: str = "Cactus",
     ) -> None:
-        super().__init__(name, group, dimension)
-        assert group is not None
+        super().__init__(
+            name, group, rank, dimension, f_infinity, wavespeed, is_basename
+        )
         validate_literal_arguments()
         self.thorn = thorn
-        self.rank = rank
         _gf_array_name = gf_array_name
-        self.f_infinity = f_infinity
-        self.wavespeed = wavespeed
-        self.is_basename = is_basename
+        self.c_type_alias = "CCTK_REAL"
         self.centering = centering
-        self.parity = parity
 
         group_suffixes = {
             "EXTERNAL": "_ext",
@@ -736,7 +740,7 @@ glb_gridfcs_dict: Dict[
 
 
 def register_gridfunctions(
-    names: Union[str, List[str]], **kwargs: Any
+    names: Union[str, List[str]], dimension: int = 3, **kwargs: Any
 ) -> List[sp.Symbol]:
     """
     Register grid functions with a specified name or list of names.
@@ -747,13 +751,12 @@ def register_gridfunctions(
 
     Doctests:
     >>> glb_gridfcs_dict.clear()
+    >>> par.set_parval_from_str("Infrastructure", "BHaH")
     >>> gridfunc = register_gridfunctions('gridfunc')[0]
     >>> print(gridfunc)
     gridfunc
-    >>> # glb_gridfcs_dict["gridfunc"] is of type BHaHGridFunction. __dict__.items() access all variables in the class.
     >>> for key, value in glb_gridfcs_dict["gridfunc"].__dict__.items():
     ...     print(key, value)
-    c_type_alias CCTK_REAL
     name gridfunc
     group EVOL
     rank 0
@@ -761,17 +764,20 @@ def register_gridfunctions(
     f_infinity 0.0
     wavespeed 1.0
     is_basename True
-    >>> gridfunc1, gridfunc2 = register_gridfunctions(['gridfunc1', 'gridfunc2'], f_infinity=[1.0, 4.0])
+    c_type_alias REAL
+    gf_array_name in_gfs
+    >>> par.set_parval_from_str("Infrastructure", "ETLegacy")
+    >>> gridfunc1, gridfunc2 = register_gridfunctions(['gridfunc1', 'gridfunc2'], f_infinity=[1.0, 4.0], is_basename=False)
     >>> for key, value in glb_gridfcs_dict["gridfunc1"].__dict__.items():
     ...     print(key, value)
-    c_type_alias CCTK_REAL
     name gridfunc1
     group EVOL
     rank 0
     dimension 3
     f_infinity 1.0
     wavespeed 1.0
-    is_basename True
+    is_basename False
+    c_type_alias CCTK_REAL
     """
     # Step 1: Convert names to a list if it's not already a list
     if not isinstance(names, list):
@@ -791,16 +797,11 @@ def register_gridfunctions(
                     # mypy: Once again bonks out after I've CONFIRMED kwargs.get(param) is not None and is a list!
                     kwargs_modify[param] = kwargs.get(param)[i]  # type: ignore
             if Infrastructure == "BHaH":
-                kwargs_modify.pop("parity", None)
-                gf = BHaHGridFunction(name, **kwargs_modify)
+                gf = BHaHGridFunction(name, dimension=dimension, **kwargs_modify)
             elif Infrastructure == "ETLegacy":
-                kwargs_modify.pop("parity", None)
-                gf = ETLegacyGridFunction(name, **kwargs_modify)
+                gf = ETLegacyGridFunction(name, dimension=dimension, **kwargs_modify)
             elif Infrastructure == "CarpetX":
-                if kwargs.get("parity") and isinstance(kwargs.get("parity"), list):
-                    # mypy: Once again bonks out after I've CONFIRMED kwargs.get("parity") is not None and is a list!
-                    kwargs_modify["parity"] = kwargs.get("parity")[i]  # type: ignore
-                gf = CarpetXGridFunction(name, **kwargs_modify)
+                gf = CarpetXGridFunction(name, dimension=dimension, **kwargs_modify)
             else:
                 raise ValueError(f"Infrastructure = {Infrastructure} unknown")
 
@@ -812,7 +813,7 @@ def register_gridfunctions(
 
 
 def register_gridfunctions_for_single_rank1(
-    basename: str, **kwargs: Any
+    basename: str, dimension: int = 3, **kwargs: Any
 ) -> Sequence[sp.Expr]:
     """
     Register gridfunctions for a single rank 1 variable.
@@ -833,10 +834,6 @@ def register_gridfunctions_for_single_rank1(
     >>> print(outstr[:-1])
     betU0 betU1 betU2
     """
-    dimension = kwargs.get("dimension", 3)
-    if "dimension" in kwargs:
-        del kwargs["dimension"]
-
     # Step 1: Declare a list of SymPy variables,
     #         where IDX_OBJ_TMP[i] = gf_basename+str(i)
     IDX_OBJ_TMP = ixp.declarerank1(basename, dimension=dimension, **kwargs)
@@ -849,22 +846,14 @@ def register_gridfunctions_for_single_rank1(
     # and rank is set to 1.
     kwargs["is_basename"] = False
     kwargs["rank"] = 1
-    if "parity" not in kwargs:
-        parity = []
-        if dimension == 4:
-            # Add default v_t parity
-            parity += ["+1 +1 +1"]
-        # Add default v_i parities
-        parity += ["-1 +1 +1", "+1 -1 +1", "+1 +1 -1"]
-        kwargs["parity"] = parity
-    register_gridfunctions(gf_list, **kwargs)
+    register_gridfunctions(gf_list, dimension, **kwargs)
 
     # Step 3: Return array of SymPy variables
     return IDX_OBJ_TMP
 
 
 def register_gridfunctions_for_single_rank2(
-    basename: str, symmetry: Optional[str] = None, **kwargs: Any
+    basename: str, symmetry: Optional[str] = None, dimension: int = 3, **kwargs: Any
 ) -> Sequence[Sequence[sp.Expr]]:
     """
     Register gridfunctions for a single rank 2 variable.
@@ -886,14 +875,11 @@ def register_gridfunctions_for_single_rank2(
     >>> print(outstr[:-1])
     gDD00 gDD01 gDD02 gDD11 gDD12 gDD22
     """
-    dimension = kwargs.get("dimension", 3)
-    if "dimension" not in kwargs:
-        dimension = 3
-        kwargs["dimension"] = 3
-
     # Step 1: Declare a list of lists of SymPy variables,
     #         where IDX_OBJ_TMP[i][j] = gf_basename+str(i)+str(j)
-    IDX_OBJ_TMP = ixp.declarerank2(basename, symmetry=symmetry, **kwargs)
+    IDX_OBJ_TMP = ixp.declarerank2(
+        basename, symmetry=symmetry, dimension=dimension, **kwargs
+    )
 
     # Step 2: register each gridfunction, being careful not
     #         not to store duplicates due to rank-2 symmetries.
@@ -911,22 +897,7 @@ def register_gridfunctions_for_single_rank2(
     # and rank is set to 2.
     kwargs["is_basename"] = False
     kwargs["rank"] = 2
-    if "parity" not in kwargs:
-        parity = []
-        if dimension == 4:
-            # Add default M_tt and M_ti parities
-            parity += ["+1 +1 +1", "-1 +1 +1", "+1 -1 +1", "+1 +1 -1"]
-        # Add default M_ij parities
-        parity += [
-            "+1 +1 +1",
-            "-1 -1 +1",
-            "-1 +1 -1",
-            "+1 +1 +1",
-            "+1 -1 -1",
-            "+1 +1 +1",
-        ]
-        kwargs["parity"] = parity
-    register_gridfunctions(gf_list, **kwargs)
+    register_gridfunctions(gf_list, dimension, **kwargs)
 
     # Step 3: Return array of SymPy variables
     return IDX_OBJ_TMP
