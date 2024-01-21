@@ -24,6 +24,7 @@ from nrpy.infrastructures.CarpetX import zero_rhss
 from nrpy.infrastructures.CarpetX import schedule_ccl
 from nrpy.infrastructures.CarpetX import interface_ccl
 from nrpy.infrastructures.CarpetX import param_ccl
+from nrpy.infrastructures.CarpetX import configuration_ccl
 
 # All needed functions can be imported from the CarpetX infrastructure
 from nrpy.infrastructures.CarpetX.general_relativity.ADM_to_BSSN import (
@@ -178,6 +179,11 @@ STORAGE: evol_variables[1]     # Evolution variables
 STORAGE: evol_variables_rhs[1] # Variables storing right-hand-sides
 STORAGE: auxevol_variables[1]  # Single-timelevel storage of variables needed for evolutions.
 STORAGE: aux_variables[1]      # Diagnostics variables""",
+    )
+
+    configuration_ccl.construct_configuration_ccl(
+        project_dir=project_dir,
+        thorn_name=evol_thorn_name,
     )
 
     inherits = "ADMBaseX"
