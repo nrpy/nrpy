@@ -61,9 +61,6 @@ OMP_collapse = 1
 
 project_dir = os.path.join("project", project_name)
 
-# First clean the project directory, if it exists.
-shutil.rmtree(project_dir, ignore_errors=True)
-
 par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 par.set_parval_from_str("fd_order", fd_order)
 standard_ET_includes = [
@@ -116,6 +113,20 @@ DECLARE_CCTK_PARAMETERS;
     )
     prefunc += "}\n"
 
+    prefunc += r"""
+// Exact solution at a single point around the origin.
+static void WaveToy_exact_solution_single_point_r0(const CCTK_REAL time, const CCTK_REAL xCart0, const CCTK_REAL xCart1, const CCTK_REAL xCart2,
+    CCTK_REAL *restrict exact_soln_UUGF, CCTK_REAL *restrict exact_soln_VVGF) {
+DECLARE_CCTK_PARAMETERS;
+"""
+    prefunc += ccg.c_codegen(
+        [exactsoln.uu_exactsoln_r0, exactsoln.vv_exactsoln_r0],
+        ["*exact_soln_UUGF", "*exact_soln_VVGF"],
+        verbose=False,
+        include_braces=False,
+    )
+    prefunc += "}\n"
+
     gri.register_gridfunctions(["uu_exact", "vv_exact"], group="AUX")
     desc = r"""Set the exact solution at all grid points."""
     c_type = 'extern "C" void'
@@ -136,8 +147,17 @@ DECLARE_CCTK_PARAMETERS;
     vv_exact_gf_access = gri.CarpetXGridFunction.access_gf(vvGF)
 
     body += lp.simple_loop(
-        f"WaveToy_exact_solution_single_point(cctk_time, {x_gf_access}, {y_gf_access},"
-        f"                                             {z_gf_access}, &{uu_exact_gf_access}, &{vv_exact_gf_access});\n",
+        f"""CCTK_REAL local_x = {x_gf_access};
+  CCTK_REAL local_y = {y_gf_access};
+  CCTK_REAL local_z = {z_gf_access};
+  if(local_x*local_x + local_y*local_y + local_z*local_z > 1e-20) {{
+  WaveToy_exact_solution_single_point(cctk_time, local_x, local_y,
+                                      local_z, &{uu_exact_gf_access}, &{vv_exact_gf_access});
+}} else {{
+  WaveToy_exact_solution_single_point_r0(cctk_time, local_x, local_y,
+                                      local_z, &{uu_exact_gf_access}, &{vv_exact_gf_access});
+}}
+""",
         loop_region="all points",
     )
 
