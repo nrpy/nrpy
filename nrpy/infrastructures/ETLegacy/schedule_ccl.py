@@ -65,7 +65,7 @@ def construct_schedule_ccl(
 {STORAGE}
 """
     schedule_ccl_dict: Dict[str, List[ScheduleCCL]] = {}
-    for function_name, item in cfc.CFunction_dict.items():
+    for function_name, item in sorted(cfc.CFunction_dict.items()):
         if item.ET_schedule_bins_entries:
             for schedule_bin, entry in item.ET_schedule_bins_entries:
                 schedule_ccl_dict.setdefault(item.ET_thorn_name, []).append(
