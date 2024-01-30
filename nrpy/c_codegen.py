@@ -372,6 +372,7 @@ def c_codegen(
             upwind_control_vec=CCGParams.upwind_control_vec,
             enable_fd_functions=CCGParams.enable_fd_functions,
             enable_simd=CCGParams.enable_simd,
+            enable_GoldenKernels=CCGParams.enable_GoldenKernels,
         )
 
     # Step 4: If CCGParams.verbose, then output the original SymPy
@@ -1150,6 +1151,7 @@ const REAL_SIMD_ARRAY upwind_Integer_{n} = ConstSIMD(tmp_upwind_Integer_{n});
             {
                 "enable_cse_preprocess": CCGParams.enable_cse_preprocess,
                 "simd_find_more_subs": CCGParams.simd_find_more_subs,
+                "enable_GoldenKernels": CCGParams.enable_GoldenKernels,
                 "simd_clean_NegativeOnes_after_processing": False,
                 "cse_varprefix": "FDPart2",
             }
