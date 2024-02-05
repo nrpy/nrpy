@@ -4,6 +4,7 @@ Generates a function to enforce a minimum on the lapse grid function.
 Author: Samuel Cupp
         scupp1 **at** my **dot** apsu **dot** edu
 """
+
 from typing import Union, cast
 from inspect import currentframe as cfr
 from types import FrameType as FT

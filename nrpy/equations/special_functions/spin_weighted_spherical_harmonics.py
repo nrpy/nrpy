@@ -8,6 +8,7 @@ Authors: Brandon Clark
          Zachariah B. Etienne
          zachetie **at** gmail **dot* com
 """
+
 from typing import cast, Dict
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
 

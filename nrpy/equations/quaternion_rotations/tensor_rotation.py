@@ -6,6 +6,7 @@ This script will perform symbolic tensor rotation on SymPy expressions using Qua
 Author: Ken Sible
 Email:  ksible *at* outlook *dot* com
 """
+
 from typing import List, Union, cast
 
 import sympy as sp

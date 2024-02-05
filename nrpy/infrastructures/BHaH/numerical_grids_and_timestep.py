@@ -6,6 +6,7 @@ These functions set up numerical grids for use within the BHaH infrastructure.
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
+
 from typing import Dict, List
 import sympy as sp
 import nrpy.c_function as cfc

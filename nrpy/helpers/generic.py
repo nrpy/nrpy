@@ -5,6 +5,7 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
         Dave Kirby (super-fast uniq function)
 """
+
 from typing import List, Any, cast
 import subprocess
 import hashlib

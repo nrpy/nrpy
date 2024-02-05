@@ -157,15 +157,13 @@ if __name__ == "__main__":
         print(f"Doctest passed: All {results.attempted} test(s) passed")
 
     # Cannot import InitialData_Spherical here, as that would result in a circular dependency.
-    def StaticTrumpet_standalone() -> (
-        Tuple[
-            List[List[sp.Expr]],
-            List[List[sp.Expr]],
-            sp.Expr,
-            List[sp.Expr],
-            List[sp.Expr],
-        ]
-    ):
+    def StaticTrumpet_standalone() -> Tuple[
+        List[List[sp.Expr]],
+        List[List[sp.Expr]],
+        sp.Expr,
+        List[sp.Expr],
+        List[sp.Expr],
+    ]:
         """
         Set up Static Trumpet initial data.
 

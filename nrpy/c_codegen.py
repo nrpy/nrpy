@@ -381,9 +381,11 @@ def c_codegen(
         commentblock += f"/*\n *  Original SymPy expression{plural}:\n"
 
         expressions = "\n".join(
-            f'*  "[{varname} = {expr}]"'
-            if len(output_varname_str) > 1
-            else f'*  "{varname} = {expr}"'
+            (
+                f'*  "[{varname} = {expr}]"'
+                if len(output_varname_str) > 1
+                else f'*  "{varname} = {expr}"'
+            )
             for varname, expr in zip(output_varname_str, sympyexpr_list)
         )
 

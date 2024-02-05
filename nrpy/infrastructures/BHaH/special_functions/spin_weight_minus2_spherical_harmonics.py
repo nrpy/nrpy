@@ -4,6 +4,7 @@ Register C functions for computing the spin-weight -2 spherical harmonics.
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot** com
 """
+
 from typing import cast, Union
 from inspect import currentframe as cf
 from types import FrameType as FT

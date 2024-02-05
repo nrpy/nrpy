@@ -5,7 +5,6 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-
 # Initialize core Python/NRPy+ modules
 # Step 1: Initialize core Python/NRPy+ modules
 from typing import List, cast, Sequence, Optional

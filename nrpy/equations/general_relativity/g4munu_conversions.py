@@ -5,7 +5,6 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-
 from typing import Optional, Sequence, Tuple, Dict, Any
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support

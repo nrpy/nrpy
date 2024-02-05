@@ -9,6 +9,7 @@ the resulting replaced/reduced expressions after the CSE procedure was applied.
 Author: Ken Sible
 Email:  ksible *at* outlook *dot* com
 """
+
 import sys  # Standard Python module for multiplatform OS-level functions
 from collections import OrderedDict
 from typing import Union, List, Tuple, Dict, cast

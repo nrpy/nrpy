@@ -753,9 +753,7 @@ class ReferenceMetric:
             th = self.xx[1]
             ph = self.xx[2]
 
-            self.Cart_to_xx[0] = sp.sqrt(
-                self.Cartx**2 + self.Carty**2 + self.Cartz**2
-            )
+            self.Cart_to_xx[0] = sp.sqrt(self.Cartx**2 + self.Carty**2 + self.Cartz**2)
             self.Cart_to_xx[1] = sp.acos(self.Cartz / self.Cart_to_xx[0])
             self.Cart_to_xx[2] = sp.atan2(self.Carty, self.Cartx)
         elif self.CoordSystem == "SinhSpherical":
@@ -1047,9 +1045,7 @@ class ReferenceMetric:
         # var1 = sp.sqrt(AA**2 + (bScale * sp.sin(self.xx[1])) ** 2)
         #      = sp.sqrt(self.f0_of_xx0_funcform**2 + (bScale * self.f1_of_xx1_funcform) ** 2)
 
-        var1_funcform = sp.sqrt(
-            self.f0_of_xx0_funcform**2 + self.f4_of_xx1_funcform**2
-        )
+        var1_funcform = sp.sqrt(self.f0_of_xx0_funcform**2 + self.f4_of_xx1_funcform**2)
         self.scalefactor_orthog_funcform[0] = (
             sp.diff(self.f0_of_xx0_funcform, self.xx[0])
             * var1_funcform
@@ -1152,9 +1148,7 @@ class ReferenceMetric:
                 / (sp.exp(1 / SINHWZ) - sp.exp(-1 / SINHWZ))
             )
             self.Cart_to_xx[0] = SINHWRHO * sp.asinh(
-                sp.sqrt(self.Cartx**2 + self.Carty**2)
-                * sp.sinh(1 / SINHWRHO)
-                / AMPLRHO
+                sp.sqrt(self.Cartx**2 + self.Carty**2) * sp.sinh(1 / SINHWRHO) / AMPLRHO
             )
             self.Cart_to_xx[1] = sp.atan2(self.Carty, self.Cartx)
             self.Cart_to_xx[2] = SINHWZ * sp.asinh(

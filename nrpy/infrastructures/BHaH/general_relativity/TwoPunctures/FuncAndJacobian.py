@@ -19,6 +19,7 @@ Authors: Marcus Ansorg
          Zachariah B. Etienne (pasted original code into Python strings)
          zachetie **at** gmail **dot* com
 """
+
 import nrpy.c_function as cfc
 
 

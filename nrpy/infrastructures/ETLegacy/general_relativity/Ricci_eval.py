@@ -4,6 +4,7 @@ Generates function to compute the Ricci tensor for use in the BSSN evolution equ
 Author: Samuel Cupp
         scupp1 **at** my **dot** apsu **dot** edu
 """
+
 from typing import Union, cast, List
 from inspect import currentframe as cfr
 from types import FrameType as FT

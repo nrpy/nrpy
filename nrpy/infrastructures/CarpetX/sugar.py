@@ -537,9 +537,11 @@ def namefun(
     """
     symbol = prefix
     result = [
-        sp.Symbol(symbol + "".join(ixnam(n) for n in index + [i]))
-        if symbol
-        else sp.sympify(0)
+        (
+            sp.Symbol(symbol + "".join(ixnam(n) for n in index + [i]))
+            if symbol
+            else sp.sympify(0)
+        )
         for i in range(shape[0])
     ]
     return result

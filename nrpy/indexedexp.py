@@ -74,15 +74,17 @@ def create_tensor_symbolic(
 
     # Generate the tensor
     tensor = [
-        sp.Symbol(
-            symbol
-            + "".join(
-                index_to_char[start_idx + n] if character_zero_index else str(n)
-                for n in preindex + [i]
-            ),
+        (
+            sp.Symbol(
+                symbol
+                + "".join(
+                    index_to_char[start_idx + n] if character_zero_index else str(n)
+                    for n in preindex + [i]
+                ),
+            )
+            if symbol
+            else sp.sympify(0)
         )
-        if symbol
-        else sp.sympify(0)
         for i in range(shape[0])
     ]
 

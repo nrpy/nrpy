@@ -6,6 +6,7 @@ This module handles grid parameters and grid functions across various NRPy-suppo
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
+
 from typing import List, Any, Union, Dict, Tuple, Optional, Sequence
 from typing_extensions import Literal
 import sympy as sp

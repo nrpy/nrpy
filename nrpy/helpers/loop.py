@@ -9,6 +9,7 @@ Email: zachetie **at** gmail **dot* com
 Contributor: Ken Sible
 Email: ksible *at* outlook *dot* com
 """
+
 from typing import List, Union, Tuple
 
 
@@ -121,9 +122,7 @@ def loop(
     tile_size = (
         []
         if tile_size == ""
-        else [tile_size]
-        if isinstance(tile_size, str)
-        else tile_size
+        else [tile_size] if isinstance(tile_size, str) else tile_size
     )
 
     if len(set(map(len, [idx_var, lower_bound, upper_bound, increment, pragma]))) != 1:

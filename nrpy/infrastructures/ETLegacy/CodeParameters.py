@@ -5,6 +5,7 @@ Unlike DECLARE_CCTK_PARAMETERS, read_CodeParameters() is SIMD capable.
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
+
 from typing import Optional, List, Tuple
 
 import nrpy.params as par

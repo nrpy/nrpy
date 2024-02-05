@@ -9,6 +9,7 @@ this example sets up a complete C code for solving the GR field
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
+
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.

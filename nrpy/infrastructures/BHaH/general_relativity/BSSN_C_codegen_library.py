@@ -4,6 +4,7 @@ Library of C functions for solving the BSSN equations in curvilinear coordinates
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
+
 from collections import OrderedDict as ODict
 from typing import List, Union, cast, Tuple, Dict
 from pathlib import Path
@@ -383,9 +384,11 @@ def register_CFunction_rhs_eval(
 
         if KreissOliger_strength_mult_by_W:
             Bq = BSSN_quantities[
-                CoordSystem + "_rfm_precompute"
-                if enable_rfm_precompute
-                else CoordSystem
+                (
+                    CoordSystem + "_rfm_precompute"
+                    if enable_rfm_precompute
+                    else CoordSystem
+                )
             ]
             EvolvedConformalFactor_cf = par.parval_from_str("EvolvedConformalFactor_cf")
             if EvolvedConformalFactor_cf == "W":
@@ -518,9 +521,11 @@ def register_CFunction_Ricci_eval(
         # try/except in case BSSN_quantities hasn't been set yet.
         try:
             del BSSN_quantities[
-                CoordSystem + "_rfm_precompute"
-                if enable_rfm_precompute
-                else CoordSystem
+                (
+                    CoordSystem + "_rfm_precompute"
+                    if enable_rfm_precompute
+                    else CoordSystem
+                )
             ]
         except KeyError:
             pass

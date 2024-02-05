@@ -10,6 +10,7 @@ Specifically, evolve a spinning black hole in the UIUC initial data slicing,
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
+
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.

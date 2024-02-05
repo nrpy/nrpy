@@ -1,9 +1,7 @@
 appdirs
-black
 multiprocess
 nrpypn
 nrpylatex
 py-cpuinfo
-pydocstyle
 sympy
 typing-extensions

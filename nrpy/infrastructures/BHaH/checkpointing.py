@@ -6,6 +6,7 @@ Provides checkpointing capabilities to BHaH simulations.
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
+
 from typing import Tuple
 
 import nrpy.c_function as cfc

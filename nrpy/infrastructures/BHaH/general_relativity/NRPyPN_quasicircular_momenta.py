@@ -4,6 +4,7 @@ Set up C function for setting 3.5PN quasicircular momenta for binary black holes
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
+
 from typing import Union, cast
 from types import FrameType as FT
 from inspect import currentframe as cfr

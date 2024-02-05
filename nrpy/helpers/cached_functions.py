@@ -9,6 +9,7 @@ This module offers utility functions that allow for:
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
+
 import hashlib
 import pickle
 from pathlib import Path

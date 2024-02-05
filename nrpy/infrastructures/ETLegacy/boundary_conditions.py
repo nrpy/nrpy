@@ -4,6 +4,7 @@ Registration of boundary condition functions.
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
+
 import nrpy.c_function as cfc
 import nrpy.grid as gri
 

@@ -4,6 +4,7 @@ Provide functions that declare and define useful BSSN quantities.
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
+
 from typing import Dict, List
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
 

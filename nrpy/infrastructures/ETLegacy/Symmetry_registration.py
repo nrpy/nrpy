@@ -4,6 +4,7 @@ Registration of symmetry conditions for gridfunctions.
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
+
 import nrpy.grid as gri
 import nrpy.c_function as cfc
 

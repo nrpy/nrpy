@@ -268,12 +268,12 @@ def process_dictionary_of_expressions(
             if isinstance(rhs, list):
                 for element, item in enumerate(flatten_tensor(rhs)):
                     if isinstance(item, sp.Expr):
-                        results_dict[
-                            f"{lhs}_{element}"
-                        ] = convert_one_expression_to_mpfmpc(
-                            item,
-                            fixed_mpfs_for_free_symbols=fixed_mpfs_for_free_symbols,
-                            verbose=verbose,
+                        results_dict[f"{lhs}_{element}"] = (
+                            convert_one_expression_to_mpfmpc(
+                                item,
+                                fixed_mpfs_for_free_symbols=fixed_mpfs_for_free_symbols,
+                                verbose=verbose,
+                            )
                         )
     return results_dict
 

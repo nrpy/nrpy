@@ -4,6 +4,7 @@ Manage registration and storage of data stored within griddata_struct and common
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
+
 from typing import Dict, List
 
 import nrpy.params as par

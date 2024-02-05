@@ -298,9 +298,11 @@ def single_RK_substep_input_symbolic(
     var_type = "REAL_SIMD_ARRAY" if enable_simd else "REAL"
 
     RK_lhs_str_list = [
-        f"const REAL_SIMD_ARRAY __rhs_exp_{i}"
-        if enable_simd
-        else f"{str(el).replace('gfsL', 'gfs[i]')}"
+        (
+            f"const REAL_SIMD_ARRAY __rhs_exp_{i}"
+            if enable_simd
+            else f"{str(el).replace('gfsL', 'gfs[i]')}"
+        )
         for i, el in enumerate(RK_lhs_list)
     ]
 

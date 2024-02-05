@@ -4,6 +4,7 @@ Library of C functions for solving the wave equation in curvilinear coordinates,
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
+
 from typing import Union, cast, List, Tuple, Dict
 from inspect import currentframe as cfr
 from types import FrameType as FT

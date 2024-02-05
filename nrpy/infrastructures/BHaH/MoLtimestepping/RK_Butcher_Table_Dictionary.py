@@ -454,7 +454,7 @@ def validate(
                         f" NUMCL SERIES: {num_series}",
                         " Subtracting the numerical result from the exact Taylor expansion, we find a local truncation error of",
                         " (Coefficients of order 1e-15 or less may generally be ignored, as these are at roundoff error):",
-                        sp.pretty(diff_with_roundoff)
+                        sp.pretty(diff_with_roundoff),
                         # Using `pretty` instead of `pretty_print` since the latter prints directly to the console
                     ]
                     return "\n".join(output_lines)

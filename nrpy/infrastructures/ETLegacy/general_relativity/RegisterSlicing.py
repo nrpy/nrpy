@@ -4,6 +4,7 @@ Generates function to register the space-time 3+1 slicing condition with Cactus.
 Author: Samuel Cupp
         scupp1 **at** my **dot** apsu **dot** edu
 """
+
 from typing import Union, cast
 from inspect import currentframe as cfr
 from types import FrameType as FT

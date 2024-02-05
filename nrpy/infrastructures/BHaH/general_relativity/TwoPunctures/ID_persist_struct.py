@@ -6,6 +6,7 @@ License: Lesser GNU Public License, version 2.0+
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
+
 import nrpy.c_function as cfc
 import nrpy.params as par
 

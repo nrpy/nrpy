@@ -4,6 +4,7 @@ Test that handwritten BSSN quantities within equations/general_relativity/*.py m
 Author: Ken Sible
 Email:  ksible *at* outlook *dot* com
 """
+
 from typing import List, cast
 import sympy as sp
 from nrpylatex import parse_latex  # type: ignore

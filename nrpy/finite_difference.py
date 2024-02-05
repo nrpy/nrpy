@@ -109,9 +109,9 @@ def setup_FD_matrix__return_inverse_lowlevel(
     for i in range(stencil_width):
         for j in range(stencil_width):
             if i == 0:
-                M[
-                    (i, j)
-                ] = 1  # Setting n^0 = 1 for all n, including n=0, because this matches the pattern
+                M[(i, j)] = (
+                    1  # Setting n^0 = 1 for all n, including n=0, because this matches the pattern
+                )
             else:
                 dist_from_xeq0_col = (
                     j - sp.Rational((stencil_width - 1), 2) + UPDOWNWIND_stencil_shift

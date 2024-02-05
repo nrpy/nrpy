@@ -4,6 +4,7 @@ Provide utility functions for use by multiple classes.
 Author: Steven R. Brandt
         sbrandt **at** cct **dot** lsu **dot** edu
 """
+
 from typing import Any, Tuple
 
 try:

@@ -4,6 +4,7 @@ Construct BHaH_defines.h from data registered to griddata_commondata, CodeParame
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
+
 import sys
 from pathlib import Path
 from typing import Optional, Dict, List
