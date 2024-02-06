@@ -24,13 +24,13 @@ def test_example_BSSN() -> bool:
     :returns: True if test is successful, otherwise False.
     """
     # Initialize to junk values, to make the linter and mypy happy.
-    h_rhsDD = cast(List[List[sp.Expr]], [[None] * 3] * 3)
-    a_rhsDD = cast(List[List[sp.Expr]], [[None] * 3] * 3)
-    RbarDD = cast(List[List[sp.Expr]], [[None] * 3] * 3)
-    bet_rhsU = cast(List[sp.Expr], [None] * 3)
-    vet_rhsU = cast(List[sp.Expr], [None] * 3)
-    Lambdabar_rhsU = cast(List[sp.Expr], [None] * 3)
-    MU = cast(List[sp.Expr], [None] * 3)
+    h_rhsDD: List[List[sp.Expr]] = [[]]
+    a_rhsDD: List[List[sp.Expr]] = [[]]
+    RbarDD: List[List[sp.Expr]] = [[]]
+    bet_rhsU: List[sp.Expr] = []
+    vet_rhsU: List[sp.Expr] = []
+    Lambdabar_rhsU: List[sp.Expr] = []
+    MU: List[sp.Expr] = []
     H = cast(sp.Expr, None)
     cf_rhs = cast(sp.Expr, None)
     alpha_rhs = cast(sp.Expr, None)
