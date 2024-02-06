@@ -142,7 +142,9 @@ def cse_preprocess(
                     )
 
                 # Update subexpression in the subtree
-                subtree.expr = cast(sp.Expr, repl * cast(sp.Basic, sign))
+                subtree.expr = cast(
+                    sp.Expr, cast(sp.Basic, repl) * cast(sp.Basic, sign)
+                )
 
                 if sign < 0:
                     tree.build(subtree, clear=False)
@@ -155,7 +157,7 @@ def cse_preprocess(
                 )
                 if subtree.expr == sp.Symbol("didnotfind_subtree_expr"):
                     symbol_to_Rational_dict[_NegativeOne_] = sp.S.NegativeOne
-                    map_rat_to_sym[subexpr] = _NegativeOne_
+                    map_rat_to_sym[cast(int, subexpr)] = _NegativeOne_
                     subtree.expr = _NegativeOne_
         # Update expression from reconstructed tree
         expr = tree.reconstruct()
