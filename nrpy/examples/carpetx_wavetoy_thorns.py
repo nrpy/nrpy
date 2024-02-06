@@ -28,7 +28,6 @@ from nrpy.equations.wave_equation.WaveEquation_Solutions_InitialData import (
 )
 from nrpy.equations.wave_equation.WaveEquation_RHSs import WaveEquation_RHSs
 import nrpy.infrastructures.CarpetX.simple_loop as lp
-from nrpy.infrastructures.CarpetX import boundary_conditions
 from nrpy.infrastructures.CarpetX import CodeParameters
 from nrpy.infrastructures.CarpetX import make_code_defn
 from nrpy.infrastructures.CarpetX import zero_rhss

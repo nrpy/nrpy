@@ -48,6 +48,7 @@ class GridFunction:
         group: str = "EVOL",
         rank: int = 0,
         dimension: int = 3,
+        c_type_alias: str = "REAL",
         f_infinity: float = 0.0,
         wavespeed: float = 1.0,
         is_basename: bool = True,
@@ -56,6 +57,7 @@ class GridFunction:
         self.group: str = group
         self.rank: int = rank
         self.dimension: int = dimension
+        self.c_type_alias: str = c_type_alias
         self.f_infinity: float = f_infinity
         self.wavespeed: float = wavespeed
         self.is_basename: bool = is_basename
@@ -237,9 +239,8 @@ class BHaHGridFunction(GridFunction):
         gf_array_name: str = "use_in_gfs_for_EVOL_auxevol_gfs_for_AUXEVOL_etc",
     ) -> None:
         super().__init__(
-            name, group, rank, dimension, f_infinity, wavespeed, is_basename
+            name, group, rank, dimension, "REAL", f_infinity, wavespeed, is_basename
         )
-        self.c_type_alias = "REAL"  # always use REAL
         self.verify_gridfunction_group_is_valid()
         if gf_array_name == "use_in_gfs_for_EVOL_auxevol_gfs_for_AUXEVOL_etc":
             if group == "EVOL":
@@ -427,10 +428,16 @@ class ETLegacyGridFunction(GridFunction):
         gf_array_name: str = "",
     ) -> None:
         super().__init__(
-            name, group, rank, dimension, f_infinity, wavespeed, is_basename
+            name,
+            group,
+            rank,
+            dimension,
+            "CCTK_REAL",
+            f_infinity,
+            wavespeed,
+            is_basename,
         )
         _gf_array_name = gf_array_name
-        self.c_type_alias = "CCTK_REAL"
 
     def verify_gridfunction_group_is_valid(self) -> None:
         """
@@ -551,12 +558,18 @@ class CarpetXGridFunction(GridFunction):
         thorn: str = "Cactus",
     ) -> None:
         super().__init__(
-            name, group, rank, dimension, f_infinity, wavespeed, is_basename
+            name,
+            group,
+            rank,
+            dimension,
+            "CCTK_REAL",
+            f_infinity,
+            wavespeed,
+            is_basename,
         )
         validate_literal_arguments()
         self.thorn = thorn
         _gf_array_name = gf_array_name
-        self.c_type_alias = "CCTK_REAL"
         self.centering = centering
 
         group_suffixes = {
@@ -761,10 +774,10 @@ def register_gridfunctions(
     group EVOL
     rank 0
     dimension 3
+    c_type_alias REAL
     f_infinity 0.0
     wavespeed 1.0
     is_basename True
-    c_type_alias REAL
     gf_array_name in_gfs
     >>> par.set_parval_from_str("Infrastructure", "ETLegacy")
     >>> gridfunc1, gridfunc2 = register_gridfunctions(['gridfunc1', 'gridfunc2'], f_infinity=[1.0, 4.0], is_basename=False)
@@ -774,10 +787,10 @@ def register_gridfunctions(
     group EVOL
     rank 0
     dimension 3
+    c_type_alias CCTK_REAL
     f_infinity 1.0
     wavespeed 1.0
     is_basename False
-    c_type_alias CCTK_REAL
     """
     # Step 1: Convert names to a list if it's not already a list
     if not isinstance(names, list):

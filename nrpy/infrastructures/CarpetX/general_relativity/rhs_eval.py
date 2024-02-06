@@ -5,6 +5,7 @@ Authors: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
          Samuel Cupp
 """
+
 import re
 from collections import OrderedDict as ODict
 from typing import Union, cast, List
@@ -140,9 +141,11 @@ def register_CFunction_rhs_eval(
 
         if KreissOliger_strength_mult_by_W:
             Bq = BSSN_quantities[
-                CoordSystem + "_rfm_precompute"
-                if enable_rfm_precompute
-                else CoordSystem
+                (
+                    CoordSystem + "_rfm_precompute"
+                    if enable_rfm_precompute
+                    else CoordSystem
+                )
             ]
             EvolvedConformalFactor_cf = par.parval_from_str("EvolvedConformalFactor_cf")
             if EvolvedConformalFactor_cf == "W":

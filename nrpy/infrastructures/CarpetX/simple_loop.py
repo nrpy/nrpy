@@ -6,6 +6,7 @@ Email: zachetie **at** gmail **dot* com
 Contributor: Ken Sible
 Email: ksible *at* outlook *dot* com
 """
+
 from typing import List
 
 
@@ -55,7 +56,9 @@ def simple_loop(
         )
 
     if enable_simd:
-        raise ValueError("CarpetX SIMD generation is not yet supported. Please generate with enable_simd=False.")
+        raise ValueError(
+            "CarpetX SIMD generation is not yet supported. Please generate with enable_simd=False."
+        )
 
     if run_on_device:
         loop_macro += "_device"
