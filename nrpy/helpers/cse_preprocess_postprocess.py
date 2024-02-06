@@ -142,9 +142,7 @@ def cse_preprocess(
                     )
 
                 # Update subexpression in the subtree
-                subtree.expr = cast(
-                    sp.Expr, cast(sp.Basic, repl) * cast(sp.Basic, sign)
-                )
+                subtree.expr = cast(sp.Expr, repl * cast(sp.Expr, sign))
 
                 if sign < 0:
                     tree.build(subtree, clear=False)
