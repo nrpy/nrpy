@@ -120,7 +120,7 @@ def cse_preprocess(
                 # If rational number hasn't been encountered before, replace
                 # it with a symbol using get() to avoid try-except;
                 # typehinting note: subexpr is guaranteed to be Rational.
-                repl = map_rat_to_sym.get(subexpr)
+                repl = map_rat_to_sym.get(cast(sp.Rational, subexpr))
                 if repl is None:
                     p, q = subexpr.p, subexpr.q
 
