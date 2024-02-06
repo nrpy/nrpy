@@ -981,9 +981,7 @@ def register_CFunction_psi4_tetrad(
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
-def register_CFunction_psi4_spinweightm2_decomposition_on_sphlike_grids() -> (
-    Union[None, pcg.NRPyEnv_type]
-):
+def register_CFunction_psi4_spinweightm2_decomposition_on_sphlike_grids() -> None:
     """
     Register C function for decomposing psi4 into spin-weighted spherical harmonics.
 
@@ -991,9 +989,6 @@ def register_CFunction_psi4_spinweightm2_decomposition_on_sphlike_grids() -> (
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
-    if pcg.pcg_registration_phase():
-        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
-        return None
     prefunc = r"""
 static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1,const int Nxx_plus_2NGHOSTS2,
                                                     const REAL dxx1, const REAL dxx2,
@@ -1151,4 +1146,3 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
         include_CodeParameters_h=True,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
