@@ -120,9 +120,9 @@ def cse_preprocess(
                 # If rational number hasn't been encountered before, replace
                 # it with a symbol using get() to avoid try-except;
                 # typehinting note: subexpr is guaranteed to be Rational.
-                repl = map_rat_to_sym.get(subexpr)  # type: ignore
+                repl = map_rat_to_sym.get(subexpr)
                 if repl is None:
-                    p, q = subexpr.p, subexpr.q  # type: ignore
+                    p, q = subexpr.p, subexpr.q
 
                     # Name the variable based on its value and whether it's an integer or a rational number
                     var_name = (
@@ -135,7 +135,10 @@ def cse_preprocess(
                     repl = sp.Symbol(var_name)
 
                     # Add mapping of symbol to rational and rational to symbol
-                    symbol_to_Rational_dict[repl], map_rat_to_sym[subexpr] = subexpr, repl  # type: ignore
+                    symbol_to_Rational_dict[repl], map_rat_to_sym[subexpr] = (
+                        subexpr,
+                        repl,
+                    )
 
                 # Update subexpression in the subtree
                 subtree.expr = repl * sign
@@ -151,7 +154,7 @@ def cse_preprocess(
                 )
                 if subtree.expr == sp.Symbol("didnotfind_subtree_expr"):
                     symbol_to_Rational_dict[_NegativeOne_] = sp.S.NegativeOne
-                    map_rat_to_sym[subexpr] = _NegativeOne_  # type: ignore
+                    map_rat_to_sym[subexpr] = _NegativeOne_
                     subtree.expr = _NegativeOne_
         # Update expression from reconstructed tree
         expr = tree.reconstruct()

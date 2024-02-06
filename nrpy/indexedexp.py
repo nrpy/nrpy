@@ -16,7 +16,7 @@ import nrpy.params as par
 # Used to specify axes of symmetry so that derivatives across these axes get set to zero
 par.register_param(py_type=str, module=__name__, name="symmetry_axes", value="")
 
-_symbol_type = sp.Expr
+_symbol_type = Any  # sp.Expr
 _rank1_type = Sequence[_symbol_type]
 _rank2_type = Sequence[_rank1_type]
 _rank3_type = Sequence[_rank2_type]

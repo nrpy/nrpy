@@ -497,9 +497,14 @@ class BSSNQuantities:
         # Step 9.a: Defines phi_dD, phi_dupD, phi_dDD, exp_m4phi, phi_dBarD, phi_dBarDD
 
         # Step 9.a.i: Define partial derivatives of \phi in terms of evolved quantity "cf":
-        cf_dD = ixp.declarerank1("cf_dD")
-        cf_dupD = ixp.declarerank1("cf_dupD")  # Needed for \partial_t \phi next.
-        cf_dDD = ixp.declarerank2("cf_dDD", symmetry="sym01")
+        cf_dD = ixp.zerorank1()
+        cf_dupD = ixp.zerorank1()  # Needed for \partial_t \phi next.
+        cf_dDD = ixp.zerorank2()
+        for i in range(3):
+            cf_dD[i] = ixp.declarerank1("cf_dD")[i]
+            cf_dupD[i] = ixp.declarerank1("cf_dupD")[i]
+            for j in range(3):
+                cf_dDD[i][j] = ixp.declarerank2("cf_dDD", symmetry="sym01")[i][j]
         self.phi_dD = ixp.zerorank1()
         self.phi_dupD = ixp.zerorank1()
         self.phi_dDD = ixp.zerorank2()
