@@ -70,7 +70,9 @@ class WaveEquation_solution_Cartesian:
 
 
 # Set up spherically-symmetric Gaussian initial data in Cartesian coordinates
-def SphericalGaussian(default_sigma: float = 3.0) -> Tuple[sp.Expr, sp.Expr]:
+def SphericalGaussian(
+    default_sigma: float = 3.0,
+) -> Tuple[sp.Expr, sp.Expr, sp.Expr, sp.Expr]:
     """
     Set up initial data for a spherically-symmetric Gaussian wave.
 
@@ -122,9 +124,7 @@ def SphericalGaussian(default_sigma: float = 3.0) -> Tuple[sp.Expr, sp.Expr]:
     ) + sp.sympify(
         2
     )  # Adding 2 ensures relative error is well defined (solution does not cross zero)
-    print(uu_exactsoln_r0)
     uu_exactsoln_r0 = uu_exactsoln_r0.subs(rvar, r)
-    print(uu_exactsoln_r0)
     vv_exactsoln_r0 = sp.diff(uu_exactsoln_r0, time)
 
     return uu_exactsoln, vv_exactsoln, uu_exactsoln_r0, vv_exactsoln_r0

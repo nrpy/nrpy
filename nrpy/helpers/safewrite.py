@@ -3,6 +3,7 @@ The Safewrite class helps users see and understand changes to generated output f
 
 Author: Steven R. Brandt
 """
+
 from typing import Any, Optional, Union
 import io
 import os
@@ -55,19 +56,18 @@ class SafeWrite:
     def __exit__(self, ty: Any, val: Any, tb: Any) -> None:
         print("Checking", self.fname, end="...")
         newcontent = self.fd.getvalue()
+        encoding = self.encoding
+        if encoding is None:
+            encoding = "utf-8"
         if self.do_format:
-            pipe = Popen(
+            with Popen(
                 [clang_formatter], stdout=PIPE, stdin=PIPE, universal_newlines=True
-            )
-            out, _err = pipe.communicate(newcontent)
-            newcontent = out
+            ) as pipe:
+                out, _err = pipe.communicate(newcontent)
+                newcontent = out
         if os.path.exists(self.fname):
-            if self.encoding is not None:
-                with open(self.fname, encoding=self.encoding) as fd:
-                    oldcontent = fd.read()
-            else:
-                with open(self.fname) as fd:
-                    oldcontent = fd.read()
+            with open(self.fname, encoding=encoding) as fd:
+                oldcontent = fd.read()
             do_write = newcontent.strip() != oldcontent.strip()
             if do_write and verbose:
                 print("Diff for:", self.fname)
@@ -80,12 +80,8 @@ class SafeWrite:
             do_write = True
         if do_write:
             assert not nochange
-            if self.encoding is not None:
-                with open(self.fname, "w", encoding=self.encoding) as fd:
-                    fd.write(newcontent)
-            else:
-                with open(self.fname, "w") as fd:
-                    fd.write(newcontent)
+            with open(self.fname, "w", encoding=encoding) as fd:
+                fd.write(newcontent)
             print(colored("[written]", "red"))
         else:
             print(colored("[no changes]", "green"))
