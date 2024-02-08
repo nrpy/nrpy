@@ -22,18 +22,11 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.finite_difference as fin
 
 import nrpy.infrastructures.CarpetX.simple_loop as lp
+from nrpy.infrastructures.CarpetX.CarpetX_include_header import define_standard_includes
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.equations.general_relativity.BSSN_RHSs import BSSN_RHSs
 from nrpy.equations.general_relativity.BSSN_gauge_RHSs import BSSN_gauge_RHSs
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
-
-standard_ET_includes = [
-    "loop_device.hxx",
-    "math.h",
-    "cctk.h",
-    "cctk_Arguments.h",
-    "cctk_Parameters.h",
-]
 
 
 def register_CFunction_rhs_eval(
@@ -81,7 +74,7 @@ def register_CFunction_rhs_eval(
     par.set_parval_from_str("enable_T4munu", enable_T4munu)
     par.set_parval_from_str("enable_RbarDD_gridfunctions", True)
 
-    includes = standard_ET_includes
+    includes = define_standard_includes()
     if enable_simd:
         includes += [("./simd/simd_intrinsics.h")]
     desc = r"""Set RHSs for the BSSN evolution equations."""

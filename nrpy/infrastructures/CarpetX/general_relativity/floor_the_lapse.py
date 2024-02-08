@@ -14,14 +14,7 @@ import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.CarpetX.simple_loop as lp
-
-standard_ET_includes = [
-    "loop_device.hxx",
-    "math.h",
-    "cctk.h",
-    "cctk_Arguments.h",
-    "cctk_Parameters.h",
-]
+from nrpy.infrastructures.CarpetX.CarpetX_include_header import define_standard_includes
 
 
 def register_CFunction_floor_the_lapse(
@@ -70,7 +63,7 @@ schedule FUNC_NAME in ODESolvers_PostStep before {thorn_name}_enforce_detgammaha
 
     cfc.register_CFunction(
         subdirectory=thorn_name,
-        includes=standard_ET_includes,
+        includes=define_standard_includes(),
         desc=desc,
         c_type="void",
         name=name,
