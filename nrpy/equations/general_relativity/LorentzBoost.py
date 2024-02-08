@@ -31,7 +31,7 @@ class LorentzBoost:
         self.LorentzMatrix = self._compute_LorentzMatrix(vBoost)
 
         # Compute inverse Lorentz matrix using the 3-velocity vector with a negative sign
-        inverse_vBoost = inverse_vBoost = [-vB for vB in vBoost]
+        inverse_vBoost = [-vB for vB in vBoost]
         self.InverseLorentzMatrix = self._compute_LorentzMatrix(inverse_vBoost)
 
     def _compute_LorentzMatrix(
