@@ -100,3 +100,21 @@ pip install nrpy
 - We'll migrate the Jupyter notebooks to [a new nrpytutorial GitHub repo](https://github.com/nrpy/nrpytutorial) as they are updated to NRPy+ 2.0.
 - All the core `.py` files from nrpytutorial have been modernized & ported to NRPy+ 2.0.
 - What `.py` files remain in nrpytutorial will be ported to NRPy+ 2.0.
+
+## Contributing to NRPy+ 2.0
+
+Want to contribute to NRPy+ 2.0? Great! First clone the NRPy 2.0 repo:
+```
+git clone https://github.com/nrpy/nrpy.git
+```
+
+Next, you'll want to make sure your development environment is consistent with what GitHub Actions expects:
+```
+cd nrpy
+pip install -U -r requirements-dev.txt
+```
+
+Finally, to run anything in the NRPy+ repo, you'll need to set your `PYTHONPATH` appropriately. If you're using bash, attach the following line to the bottom of your `.bashrc` file:
+```
+export PYTHONPATH=$PYTHONPATH:.
+```
