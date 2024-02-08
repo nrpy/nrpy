@@ -7,25 +7,16 @@ Author: Thiago Assumpção
 License: BSD 2-Clause
 """
 
-# The name of this module ("LorentzBoost") is given by __name__:
-thismodule: str = __name__
-
 # Import needed modules
-from typing import cast, List, Sequence, Union
+from typing import cast, Sequence, List
 import sympy as sp  # For symbolic computations
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
-
-_symbol_type = sp.Expr
-_rank1_type = Union[List[_symbol_type], Sequence[_symbol_type]]
-_rank2_type = Union[List[_rank1_type], Sequence[_rank1_type]]
-_rank3_type = Union[List[_rank2_type], Sequence[_rank2_type]]
-_rank4_type = Union[List[_rank3_type], Sequence[_rank3_type]]
 
 
 class LorentzBoost:
     """Sets up Lorentz boost in Cartesian coordinates."""
 
-    def __init__(self, vBoost: _rank1_type) -> None:
+    def __init__(self, vBoost: Sequence[sp.Expr]) -> None:
         """
         Set up Lorentz boost in Cartesian coordinates.
 
@@ -36,7 +27,6 @@ class LorentzBoost:
                 Lorentz transformation matrix in Cartesian coordinates. See, e.g.,
                 https://en.wikipedia.org/wiki/Lorentz_transformation#Proper_transformations:
         """
-
         # Compute Lorentz matrix
         self.LorentzMatrix = self._compute_LorentzMatrix(vBoost)
 
@@ -44,7 +34,9 @@ class LorentzBoost:
         inverse_vBoost = inverse_vBoost = [-vB for vB in vBoost]
         self.InverseLorentzMatrix = self._compute_LorentzMatrix(inverse_vBoost)
 
-    def _compute_LorentzMatrix(self, vBoost: _rank1_type) -> _rank2_type:
+    def _compute_LorentzMatrix(
+        self, vBoost: Sequence[sp.Expr]
+    ) -> Sequence[Sequence[sp.Expr]]:
         """
         Create Lorentz boost matrix in Cartesian coordinates.
 
@@ -52,7 +44,6 @@ class LorentzBoost:
 
         :return LorentzMatrix: Lorentz transformation matrix in Cartesian coordinates.
         """
-
         # Step 1: Compute Lorentz factor from 3-velocity
         vBoost2 = sp.sympify(0)
         for i in range(3):
@@ -83,12 +74,12 @@ class LorentzBoost:
             indexedexp=LorentzMatrix, symmetry="sym01", dimension=4
         )
         # Since ixp.symmetrize_rank2 returns a Sequence[Sequence[sp.Expr]] type,
-        # we need to recast LorentzMatrix into a List[List[sp.Expr]] again
+        # we need to recast LorentzMatrix into a Sequence[Sequence[sp.Expr]] again
         LorentzMatrix = cast(List[List[sp.Expr]], _LorentzMatrix)
 
         return LorentzMatrix
 
-    def boost_vecU(self, vecU: _rank1_type) -> _rank1_type:
+    def boost_vecU(self, vecU: Sequence[sp.Expr]) -> Sequence[sp.Expr]:
         """
         Boost a contravariant 4-vector (upper index).
 
@@ -96,7 +87,6 @@ class LorentzBoost:
 
         :return boosted_vecU: Boosted 4-vector in Cartesian coordinates.
         """
-
         # Declare Lorentz matrix locally
         LorentzMatrix = self.LorentzMatrix
 
@@ -109,7 +99,9 @@ class LorentzBoost:
                 boosted_vecU[i] += LorentzMatrix[i][j] * vecU[j]
         return boosted_vecU
 
-    def boost_tensorDD(self, tensorDD: _rank2_type) -> _rank2_type:
+    def boost_tensorDD(
+        self, tensorDD: Sequence[Sequence[sp.Expr]]
+    ) -> Sequence[Sequence[sp.Expr]]:
         """
         Boost a tensor with two lower indices.
 
@@ -117,7 +109,6 @@ class LorentzBoost:
 
         :return boosted_tensorDD: Boosted tensor in Cartesian coordinates.
         """
-
         # Declare inverse Lorentz matrix locally
         InverseLorentzMatrix = self.InverseLorentzMatrix
 
@@ -136,7 +127,9 @@ class LorentzBoost:
                         )
         return boosted_tensorDD
 
-    def boost_tensorDDD(self, tensorDDD: _rank3_type) -> _rank3_type:
+    def boost_tensorDDD(
+        self, tensorDDD: Sequence[Sequence[Sequence[sp.Expr]]]
+    ) -> Sequence[Sequence[Sequence[sp.Expr]]]:
         """
         Boost a tensor with three lower indices.
 
@@ -144,7 +137,6 @@ class LorentzBoost:
 
         :return boosted_tensorDDD: Boosted tensor in Cartesian coordinates.
         """
-
         # Declare inverse Lorentz matrix locally
         InverseLorentzMatrix = self.InverseLorentzMatrix
 
@@ -166,7 +158,9 @@ class LorentzBoost:
                                 )
         return boosted_tensorDDD
 
-    def boost_tensorDDDD(self, tensorDDDD: _rank4_type) -> _rank4_type:
+    def boost_tensorDDDD(
+        self, tensorDDDD: Sequence[Sequence[Sequence[Sequence[sp.Expr]]]]
+    ) -> Sequence[Sequence[Sequence[Sequence[sp.Expr]]]]:
         """
         Boost a tensor with three four indices.
 
@@ -174,7 +168,6 @@ class LorentzBoost:
 
         :return boosted_tensorDDD: Boosted tensor in Cartesian coordinates.
         """
-
         # Declare inverse Lorentz matrix locally
         InverseLorentzMatrix = self.InverseLorentzMatrix
 
