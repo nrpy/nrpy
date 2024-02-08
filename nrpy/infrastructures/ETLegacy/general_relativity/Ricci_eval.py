@@ -18,9 +18,10 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.finite_difference as fin
 
 import nrpy.infrastructures.ETLegacy.simple_loop as lp
+from nrpy.infrastructures.ETLegacy.ETLegacy_include_header import (
+    define_standard_includes,
+)
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
-
-standard_ET_includes = ["math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
 
 
 def register_CFunction_Ricci_eval(
@@ -52,7 +53,7 @@ def register_CFunction_Ricci_eval(
     par.set_parval_from_str("fd_order", fd_order)
     par.set_parval_from_str("enable_RbarDD_gridfunctions", False)
 
-    includes = standard_ET_includes
+    includes = define_standard_includes()
     if enable_simd:
         includes += [("./simd/simd_intrinsics.h")]
     desc = r"""Compute Ricci tensor for the BSSN evolution equations."""
