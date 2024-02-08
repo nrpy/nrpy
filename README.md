@@ -118,3 +118,9 @@ Finally, to run anything in the NRPy+ repo, you'll need to set your `PYTHONPATH`
 ```
 export PYTHONPATH=$PYTHONPATH:.
 ```
+
+Once this is set up, you can run any Python script in the NRPy+ 2.0 repo from the repository's root directory. For example,
+```
+python3 nrpy/helpers/cse_preprocess_postprocess.py
+```
+will run all the doctests in that file.
