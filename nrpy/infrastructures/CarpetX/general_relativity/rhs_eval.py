@@ -11,7 +11,7 @@ from collections import OrderedDict as ODict
 from typing import Union, cast, List
 from inspect import currentframe as cfr
 from types import FrameType as FT
-import sympy
+import sympy as sp
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
@@ -152,11 +152,11 @@ def register_CFunction_rhs_eval(
                 diss_strength_gauge *= Bq.cf
                 diss_strength_nongauge *= Bq.cf
             elif EvolvedConformalFactor_cf == "chi":
-                diss_strength_gauge *= sympy.sqrt(Bq.cf)
-                diss_strength_nongauge *= sympy.sqrt(Bq.cf)
+                diss_strength_gauge *= sp.sqrt(Bq.cf)
+                diss_strength_nongauge *= sp.sqrt(Bq.cf)
             elif EvolvedConformalFactor_cf == "phi":
-                diss_strength_gauge *= sympy.exp(-2 * Bq.cf)
-                diss_strength_nongauge *= sympy.exp(-2 * Bq.cf)
+                diss_strength_gauge *= sp.exp(-2 * Bq.cf)
+                diss_strength_nongauge *= sp.exp(-2 * Bq.cf)
 
         rfm = refmetric.reference_metric[
             CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem

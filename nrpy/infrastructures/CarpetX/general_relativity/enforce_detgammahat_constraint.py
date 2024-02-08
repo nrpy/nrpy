@@ -9,7 +9,7 @@ Authors: Zachariah B. Etienne
 from typing import Union, cast, List
 from inspect import currentframe as cfr
 from types import FrameType as FT
-import sympy
+import sympy as sp
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
@@ -65,23 +65,23 @@ def register_CFunction_enforce_detgammahat_constraint(
     # First define the Kronecker delta:
     KroneckerDeltaDD = ixp.zerorank2()
     for i in range(3):
-        KroneckerDeltaDD[i][i] = sympy.sympify(1)
+        KroneckerDeltaDD[i][i] = sp.sympify(1)
 
     # The detgammabar in BSSN_RHSs is set to detgammahat when BSSN_RHSs::detgbarOverdetghat_equals_one=True (default),
     #    so we manually compute it here:
     dummygammabarUU, detgammabar = ixp.symm_matrix_inverter3x3(Bq.gammabarDD)
 
     # Next apply the constraint enforcement equation above.
-    nrpyAbs = sympy.Function("nrpyAbs")
+    nrpyAbs = sp.Function("nrpyAbs")
     hprimeDD = ixp.zerorank2()
     for i in range(3):
         for j in range(3):
             hprimeDD[i][j] = (nrpyAbs(rfm.detgammahat) / detgammabar) ** (
-                sympy.Rational(1, 3)
+                sp.Rational(1, 3)
             ) * (KroneckerDeltaDD[i][j] + Bq.hDD[i][j]) - KroneckerDeltaDD[i][j]
 
     hDD_access_gfs: List[str] = []
-    hprimeDD_expr_list: List[sympy.Expr] = []
+    hprimeDD_expr_list: List[sp.Expr] = []
     for i in range(3):
         for j in range(i, 3):
             hDD_access_gfs += [gri.CarpetXGridFunction.access_gf(gf_name=f"hDD{i}{j}")]

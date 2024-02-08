@@ -9,7 +9,7 @@ Authors: Zachariah B. Etienne
 from typing import Union, cast, List
 from inspect import currentframe as cfr
 from types import FrameType as FT
-import sympy
+import sympy as sp
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
@@ -69,7 +69,7 @@ WARNING: Do not enable SIMD here, as it is not guaranteed that
                     T4UU[mu][nu] += T4DD[alpha][beta] * g4UU[mu][alpha] * g4UU[nu][beta]
 
     T4DD_access_gfs: List[str] = []
-    T4UU_expr_list: List[sympy.Expr] = []
+    T4UU_expr_list: List[sp.Expr] = []
     for i in range(4):
         for j in range(i, 4):
             T4DD_access_gfs += [
