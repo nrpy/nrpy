@@ -16,10 +16,10 @@ import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 
 import nrpy.infrastructures.ETLegacy.simple_loop as lp
+from nrpy.infrastructures.ETLegacy.ETLegacy_include_header import (
+    define_standard_includes,
+)
 from nrpy.equations.general_relativity.BSSN_to_ADM import BSSN_to_ADM
-
-standard_ET_includes = ["math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
-coord_name = ["x", "y", "z"]
 
 
 def register_CFunction_BSSN_to_ADM(
@@ -40,7 +40,6 @@ def register_CFunction_BSSN_to_ADM(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    includes = standard_ET_includes
     desc = r"""Perform BSSN-to-ADM conversion. Useful for diagnostics."""
     name = f"{thorn_name}_BSSN_to_ADM"
     body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
@@ -58,6 +57,7 @@ def register_CFunction_BSSN_to_ADM(
 
     loop_body = lapse_gf_access + " = " + lapse2_gf_access + ";\n"
 
+    coord_name = ["x", "y", "z"]
     for i in range(3):
         bssn_shift_gf_access = gri.ETLegacyGridFunction.access_gf(
             gf_name="vetU" + str(i)
@@ -170,7 +170,7 @@ schedule FUNC_NAME in MoL_PseudoEvolution after {thorn_name}_aux_ApplyBCs
 
     cfc.register_CFunction(
         subdirectory=thorn_name,
-        includes=includes,
+        includes=define_standard_includes(),
         desc=desc,
         c_type="void",
         name=name,
