@@ -18,16 +18,8 @@ import nrpy.indexedexp as ixp
 import nrpy.helpers.parallel_codegen as pcg
 
 import nrpy.infrastructures.CarpetX.simple_loop as lp
+from nrpy.infrastructures.CarpetX.CarpetX_include_header import define_standard_includes
 import nrpy.equations.general_relativity.g4munu_conversions as g4conv
-
-standard_ET_includes = [
-    "loop_device.hxx",
-    "math.h",
-    "cctk.h",
-    "cctk_Arguments.h",
-    "cctk_Parameters.h",
-]
-coord_name = ["t", "x", "y", "z"]
 
 
 def register_CFunction_T4DD_to_T4UU(
@@ -89,10 +81,13 @@ WARNING: Do not enable SIMD here, as it is not guaranteed that
     for i in range(3):
         vet_gf_access = gri.CarpetXGridFunction.access_gf(gf_name=f"vetU{i}")
         loop_body += f"const CCTK_REAL vetU{i} = {vet_gf_access};\n"
+
     for i in range(3):
         for j in range(i, 3):
             hDD_gf_access = gri.CarpetXGridFunction.access_gf(gf_name=f"hDD{i}{j}")
             loop_body += f"const CCTK_REAL hDD{i}{j} = {hDD_gf_access};\n"
+
+    coord_name = ["t", "x", "y", "z"]
     for i in range(4):
         for j in range(i, 4):
             Tmunu_gf_access = gri.CarpetXGridFunction.access_gf(
@@ -145,7 +140,7 @@ schedule FUNC_NAME in ODESolvers_PostStep before {thorn_name}_BSSN_constraints
 
     cfc.register_CFunction(
         subdirectory=thorn_name,
-        includes=standard_ET_includes,
+        includes=define_standard_includes(),
         desc=desc,
         c_type="void",
         name=name,

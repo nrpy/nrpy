@@ -19,17 +19,9 @@ import nrpy.helpers.parallel_codegen as pcg
 
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 import nrpy.infrastructures.CarpetX.simple_loop as lp
+from nrpy.infrastructures.CarpetX.CarpetX_include_header import define_standard_includes
 from nrpy.equations.general_relativity.ADM_to_BSSN import ADM_to_BSSN
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
-
-standard_ET_includes = [
-    "loop_device.hxx",
-    "math.h",
-    "cctk.h",
-    "cctk_Arguments.h",
-    "cctk_Parameters.h",
-]
-coord_name = ["x", "y", "z"]
 
 
 def register_CFunction_ADM_to_BSSN(
@@ -71,6 +63,7 @@ as initial data are given in terms of ADM quantities, and {thorn_name} evolves t
     lapse2_gf_access = gri.CarpetXGridFunction.access_gf(gf_name="alpha")
     loop_body = lapse2_gf_access + " = " + lapse_gf_access + ";\n"
 
+    coord_name = ["x", "y", "z"]
     for i in range(3):
         shift_gf_access = gri.CarpetXGridFunction.access_gf(
             gf_name="beta" + coord_name[i], use_GF_suffix=False
@@ -203,7 +196,7 @@ if(FD_order == {fd_order}) {{
 
     cfc.register_CFunction(
         subdirectory=thorn_name,
-        includes=standard_ET_includes,
+        includes=define_standard_includes(),
         desc=desc,
         c_type="void",
         name=name,

@@ -18,16 +18,9 @@ import nrpy.indexedexp as ixp
 import nrpy.helpers.parallel_codegen as pcg
 
 import nrpy.infrastructures.CarpetX.simple_loop as lp
+from nrpy.infrastructures.CarpetX.CarpetX_include_header import define_standard_includes
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
-
-standard_ET_includes = [
-    "loop_device.hxx",
-    "math.h",
-    "cctk.h",
-    "cctk_Arguments.h",
-    "cctk_Parameters.h",
-]
 
 
 def register_CFunction_enforce_detgammahat_constraint(
@@ -119,7 +112,7 @@ schedule FUNC_NAME in ODESolvers_PostStep
 
     cfc.register_CFunction(
         subdirectory=thorn_name,
-        includes=standard_ET_includes,
+        includes=define_standard_includes(),
         desc=desc,
         c_type="void",
         name=name,
