@@ -8,7 +8,7 @@ License: BSD 2-Clause
 """
 
 # Import needed modules
-from typing import cast, Sequence, List
+from typing import cast, List
 import sympy as sp  # For symbolic computations
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 
@@ -16,7 +16,7 @@ import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tenso
 class LorentzBoost:
     """Sets up Lorentz boost in Cartesian coordinates."""
 
-    def __init__(self, vBoost: Sequence[sp.Expr]) -> None:
+    def __init__(self, vBoost: List[sp.Expr]) -> None:
         """
         Set up Lorentz boost in Cartesian coordinates.
 
@@ -34,9 +34,7 @@ class LorentzBoost:
         inverse_vBoost = [-vB for vB in vBoost]
         self.InverseLorentzMatrix = self._compute_LorentzMatrix(inverse_vBoost)
 
-    def _compute_LorentzMatrix(
-        self, vBoost: Sequence[sp.Expr]
-    ) -> Sequence[Sequence[sp.Expr]]:
+    def _compute_LorentzMatrix(self, vBoost: List[sp.Expr]) -> List[List[sp.Expr]]:
         """
         Create Lorentz boost matrix in Cartesian coordinates.
 
@@ -73,13 +71,13 @@ class LorentzBoost:
         _LorentzMatrix = ixp.symmetrize_rank2(
             indexedexp=LorentzMatrix, symmetry="sym01", dimension=4
         )
-        # Since ixp.symmetrize_rank2 returns a Sequence[Sequence[sp.Expr]] type,
-        # we need to recast LorentzMatrix into a Sequence[Sequence[sp.Expr]] again
+        # Since ixp.symmetrize_rank2 returns a List[List[sp.Expr]] type,
+        # we need to recast LorentzMatrix into a List[List[sp.Expr]] again
         LorentzMatrix = cast(List[List[sp.Expr]], _LorentzMatrix)
 
         return LorentzMatrix
 
-    def boost_vecU(self, vecU: Sequence[sp.Expr]) -> Sequence[sp.Expr]:
+    def boost_vecU(self, vecU: List[sp.Expr]) -> List[sp.Expr]:
         """
         Boost a contravariant 4-vector (upper index).
 
@@ -99,9 +97,7 @@ class LorentzBoost:
                 boosted_vecU[i] += LorentzMatrix[i][j] * vecU[j]
         return boosted_vecU
 
-    def boost_tensorDD(
-        self, tensorDD: Sequence[Sequence[sp.Expr]]
-    ) -> Sequence[Sequence[sp.Expr]]:
+    def boost_tensorDD(self, tensorDD: List[List[sp.Expr]]) -> List[List[sp.Expr]]:
         """
         Boost a tensor with two lower indices.
 
@@ -128,8 +124,8 @@ class LorentzBoost:
         return boosted_tensorDD
 
     def boost_tensorDDD(
-        self, tensorDDD: Sequence[Sequence[Sequence[sp.Expr]]]
-    ) -> Sequence[Sequence[Sequence[sp.Expr]]]:
+        self, tensorDDD: List[List[List[sp.Expr]]]
+    ) -> List[List[List[sp.Expr]]]:
         """
         Boost a tensor with three lower indices.
 
@@ -159,8 +155,8 @@ class LorentzBoost:
         return boosted_tensorDDD
 
     def boost_tensorDDDD(
-        self, tensorDDDD: Sequence[Sequence[Sequence[Sequence[sp.Expr]]]]
-    ) -> Sequence[Sequence[Sequence[Sequence[sp.Expr]]]]:
+        self, tensorDDDD: List[List[List[List[sp.Expr]]]]
+    ) -> List[List[List[List[sp.Expr]]]]:
         """
         Boost a tensor with three four indices.
 
@@ -208,7 +204,7 @@ if __name__ == "__main__":
         print(f"Doctest passed: All {results.attempted} test(s) passed")
 
     # Declare symbolic variables for the 3-velocity vector
-    vB = ixp.declarerank1("vB", dimension=3)
+    vB = cast(List[sp.Expr], ixp.declarerank1("vB", dimension=3))
 
     # Initialize LorentzBoost with the symbolic 3-velocity vector
     lb = LorentzBoost(vB)
@@ -217,10 +213,18 @@ if __name__ == "__main__":
     input_dict = lb.__dict__.copy()
 
     # Declare symbolic tensors for testing the boost functions
-    vU = ixp.declarerank1("vU", dimension=4)
-    tDD = ixp.declarerank2("tDD", dimension=4, symmetry="sym01")
-    tDDD = ixp.declarerank3("tDDD", dimension=4, symmetry="sym012")
-    tDDDD = ixp.declarerank4("tDDDD", dimension=4, symmetry="sym0123")
+    vU = cast(List[sp.Expr], ixp.declarerank1("vU", dimension=4))
+    tDD = cast(
+        List[List[sp.Expr]], ixp.declarerank2("tDD", dimension=4, symmetry="sym01")
+    )
+    tDDD = cast(
+        List[List[List[sp.Expr]]],
+        ixp.declarerank3("tDDD", dimension=4, symmetry="sym012"),
+    )
+    tDDDD = cast(
+        List[List[List[List[sp.Expr]]]],
+        ixp.declarerank4("tDDDD", dimension=4, symmetry="sym0123"),
+    )
 
     # Extend input_dict with the symbolic expressions for the boosted quantities
     input_dict["boosted_vU"] = lb.boost_vecU(vU)
