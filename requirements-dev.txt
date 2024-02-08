@@ -1,0 +1,10 @@
+appdirs
+black==24.1.1
+multiprocess
+mypy==1.8.0
+nrpypn
+nrpylatex
+py-cpuinfo
+sympy
+typing-extensions
+pylint
