@@ -23,7 +23,8 @@ def simple_loop(
     :param loop_body: Loop body
     :param enable_simd: Enable SIMD support
     :param loop_region: Loop over all points on a numerical grid or just the interior
-    :param enable_OpenMP: Enable loop parallelization using OpenMP
+    :param loop_centering: Sets the centering of the loop (0 = "V", 1 = "C")
+    :param run_on_device: Run loop kernel on device (GPU) instead of host (CPU)
     :return: Complete loop code, output as a string.
 
     Doctests:
