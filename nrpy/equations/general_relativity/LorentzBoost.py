@@ -101,14 +101,14 @@ class LorentzBoost:
         """
         Perform inverse boost on a contravariant 4-vector (upper index).
 
-        :param vecU: 4-vector in Cartesian coordinates to be boosted.
+        :param vecU: 4-vector in Cartesian coordinates to be inversely boosted.
 
-        :return boosted_vecU: Boosted 4-vector in Cartesian coordinates.
+        :return inverse_boost_vecU: Inversely boosted 4-vector in Cartesian coordinates.
         """
         # Declare inverse Lorentz matrix locally
         InverseLorentzMatrix = self.InverseLorentzMatrix
 
-        # Declare indexed expression for vector to be inverse boosted
+        # Declare indexed expression for vector to be inversely boosted
         inverse_boosted_vecU = ixp.zerorank1(dimension=4)
 
         # Perform Lorentz transformation on vecU
