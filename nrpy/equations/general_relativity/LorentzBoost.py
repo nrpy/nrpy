@@ -103,7 +103,7 @@ class LorentzBoost:
 
         :param vecU: 4-vector in Cartesian coordinates to be inversely boosted.
 
-        :return inverse_boost_vecU: Inversely boosted 4-vector in Cartesian coordinates.
+        :return inverse_boosted_vecU: Inversely boosted 4-vector in Cartesian coordinates.
         """
         # Declare inverse Lorentz matrix locally
         InverseLorentzMatrix = self.InverseLorentzMatrix
