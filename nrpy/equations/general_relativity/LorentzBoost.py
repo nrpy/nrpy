@@ -92,10 +92,30 @@ class LorentzBoost:
         boosted_vecU = ixp.zerorank1(dimension=4)
 
         # Perform Lorentz transformation on vecU
-        for i in range(4):
-            for j in range(4):
-                boosted_vecU[i] += LorentzMatrix[i][j] * vecU[j]
+        for mu in range(4):
+            for nu in range(4):
+                boosted_vecU[mu] += LorentzMatrix[mu][nu] * vecU[nu]
         return boosted_vecU
+
+    def inverse_boost_vecU(self, vecU: List[sp.Expr]) -> List[sp.Expr]:
+        """
+        Perform inverse boost on a contravariant 4-vector (upper index).
+
+        :param vecU: 4-vector in Cartesian coordinates to be inversely boosted.
+
+        :return inverse_boosted_vecU: Inversely boosted 4-vector in Cartesian coordinates.
+        """
+        # Declare inverse Lorentz matrix locally
+        InverseLorentzMatrix = self.InverseLorentzMatrix
+
+        # Declare indexed expression for vector to be inversely boosted
+        inverse_boosted_vecU = ixp.zerorank1(dimension=4)
+
+        # Perform Lorentz transformation on vecU
+        for mu in range(4):
+            for nu in range(4):
+                inverse_boosted_vecU[mu] += InverseLorentzMatrix[mu][nu] * vecU[nu]
+        return inverse_boosted_vecU
 
     def boost_tensorDD(self, tensorDD: List[List[sp.Expr]]) -> List[List[sp.Expr]]:
         """
@@ -112,14 +132,14 @@ class LorentzBoost:
         boosted_tensorDD = ixp.zerorank2(dimension=4)
 
         # Perform Lorentz transformation
-        for i1 in range(4):
-            for i2 in range(4):
-                for j1 in range(4):
-                    for j2 in range(4):
-                        boosted_tensorDD[i1][i2] += (
-                            InverseLorentzMatrix[j1][i1]
-                            * InverseLorentzMatrix[j2][i2]
-                            * tensorDD[j1][j2]
+        for mu1 in range(4):
+            for mu2 in range(4):
+                for nu1 in range(4):
+                    for nu2 in range(4):
+                        boosted_tensorDD[mu1][mu2] += (
+                            InverseLorentzMatrix[nu1][mu1]
+                            * InverseLorentzMatrix[nu2][mu2]
+                            * tensorDD[nu1][nu2]
                         )
         return boosted_tensorDD
 
@@ -140,17 +160,17 @@ class LorentzBoost:
         boosted_tensorDDD = ixp.zerorank3(dimension=4)
 
         # Perform Lorentz transformation
-        for i1 in range(4):
-            for i2 in range(4):
-                for i3 in range(4):
-                    for j1 in range(4):
-                        for j2 in range(4):
-                            for j3 in range(4):
-                                boosted_tensorDDD[i1][i2][i3] += (
-                                    InverseLorentzMatrix[j1][i1]
-                                    * InverseLorentzMatrix[j2][i2]
-                                    * InverseLorentzMatrix[j3][i3]
-                                    * tensorDDD[j1][j2][j3]
+        for mu1 in range(4):
+            for mu2 in range(4):
+                for mu3 in range(4):
+                    for nu1 in range(4):
+                        for nu2 in range(4):
+                            for nu3 in range(4):
+                                boosted_tensorDDD[mu1][mu2][mu3] += (
+                                    InverseLorentzMatrix[nu1][mu1]
+                                    * InverseLorentzMatrix[nu2][mu2]
+                                    * InverseLorentzMatrix[nu3][mu3]
+                                    * tensorDDD[nu1][nu2][nu3]
                                 )
         return boosted_tensorDDD
 
@@ -171,20 +191,20 @@ class LorentzBoost:
         boosted_tensorDDDD = ixp.zerorank4(dimension=4)
 
         # Perform Lorentz transformation
-        for i1 in range(4):
-            for i2 in range(4):
-                for i3 in range(4):
-                    for i4 in range(4):
-                        for j1 in range(4):
-                            for j2 in range(4):
-                                for j3 in range(4):
-                                    for j4 in range(4):
-                                        boosted_tensorDDDD[i1][i2][i3][i4] += (
-                                            InverseLorentzMatrix[j1][i1]
-                                            * InverseLorentzMatrix[j2][i2]
-                                            * InverseLorentzMatrix[j3][i3]
-                                            * InverseLorentzMatrix[j4][i4]
-                                            * tensorDDDD[j1][j2][j3][j4]
+        for mu1 in range(4):
+            for mu2 in range(4):
+                for mu3 in range(4):
+                    for mu4 in range(4):
+                        for nu1 in range(4):
+                            for nu2 in range(4):
+                                for nu3 in range(4):
+                                    for nu4 in range(4):
+                                        boosted_tensorDDDD[mu1][mu2][mu3][mu4] += (
+                                            InverseLorentzMatrix[nu1][mu1]
+                                            * InverseLorentzMatrix[nu2][mu2]
+                                            * InverseLorentzMatrix[nu3][mu3]
+                                            * InverseLorentzMatrix[nu4][mu4]
+                                            * tensorDDDD[nu1][nu2][nu3][nu4]
                                         )
         return boosted_tensorDDDD
 
@@ -228,6 +248,7 @@ if __name__ == "__main__":
 
     # Extend input_dict with the symbolic expressions for the boosted quantities
     input_dict["boosted_vU"] = lb.boost_vecU(vU)
+    input_dict["inverse_boosted_vU"] = lb.inverse_boost_vecU(vU)
     input_dict["boosted_tDD"] = lb.boost_tensorDD(tDD)
     input_dict["boosted_tDDD"] = lb.boost_tensorDDD(tDDD)
     input_dict["boosted_tDDDD"] = lb.boost_tensorDDDD(tDDDD)
