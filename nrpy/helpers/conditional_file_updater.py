@@ -36,7 +36,6 @@ class ConditionalFileUpdater:
     """
 
     # black insists on indenting this way, pylint does not allow it
-    # pylint: disable=bad-continuation
     def __init__(
         self,
         fname: Union[Path, str],
