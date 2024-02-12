@@ -30,5 +30,7 @@ REQUIRES Loop CarpetX
 """
     output_Path = Path(project_dir) / thorn_name
     output_Path.mkdir(parents=True, exist_ok=True)
-    with ConditionalFileUpdater(output_Path / "configuration.ccl", encoding="utf-8") as fd:
+    with ConditionalFileUpdater(
+        output_Path / "configuration.ccl", encoding="utf-8"
+    ) as fd:
         fd.write(outstr)
