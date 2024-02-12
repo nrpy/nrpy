@@ -128,5 +128,7 @@ public:
 """
     output_Path = Path(project_dir) / thorn_name
     output_Path.mkdir(parents=True, exist_ok=True)
-    with ConditionalFileUpdater(output_Path / "interface.ccl", encoding="utf-8") as file:
+    with ConditionalFileUpdater(
+        output_Path / "interface.ccl", encoding="utf-8"
+    ) as file:
         file.write(outstr)
