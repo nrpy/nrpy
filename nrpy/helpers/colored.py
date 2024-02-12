@@ -1,5 +1,5 @@
 """
-Placeholder.
+The colored package allows you to create output using one of six basic colors. It automatically shuts off coloring if output is not to a terminal. Exception: It will still color output in a Jupyter notebook.
 
 Author: Steven Brandt
 """
@@ -36,17 +36,16 @@ reset = "\033[0m"
 
 def colored(arg: Any, c: color_names) -> str:
     """
-    Provide stringified version of the argument with colored text.
+    Return the stringified version of the argument with the specified color.
 
-    :param arg: the object to convert to a plain string
-    :param c: a valid color name
-
-    :return: a colored and stringified version of arg
+    :param arg: The object to convert to a string
+    :param c: The name of the color to use
+    :return: A stringified and colored version of `arg`
+    :raises AssertionError: If `c` is not a string or not a valid color name
     """
-    assert isinstance(c, str)
-    assert c in colors
-    s = str(arg)
-    return colors[c] + s + reset
+    assert isinstance(c, str), "Color name must be a string"
+    assert c in colors, f"Invalid color name: {c}"
+    return colors[c] + str(arg) + reset
 
 
 if hasattr(sys.stdout, "isatty"):
