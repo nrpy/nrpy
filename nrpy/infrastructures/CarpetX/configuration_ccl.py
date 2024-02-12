@@ -9,7 +9,7 @@ Author: Zachariah B. Etienne
 
 from pathlib import Path
 
-from nrpy.helpers.safewrite import SafeWrite
+from nrpy.helpers.conditional_file_updater import ConditionalFileUpdater
 
 
 def construct_configuration_ccl(
@@ -30,5 +30,5 @@ REQUIRES Loop CarpetX
 """
     output_Path = Path(project_dir) / thorn_name
     output_Path.mkdir(parents=True, exist_ok=True)
-    with SafeWrite(output_Path / "configuration.ccl", encoding="utf-8") as fd:
+    with ConditionalFileUpdater(output_Path / "configuration.ccl", encoding="utf-8") as fd:
         fd.write(outstr)

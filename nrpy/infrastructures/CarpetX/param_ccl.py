@@ -9,7 +9,7 @@ from typing import List
 from pathlib import Path
 import nrpy.params as par
 import nrpy.c_function as cfc
-from nrpy.helpers.safewrite import SafeWrite
+from nrpy.helpers.conditional_file_updater import ConditionalFileUpdater
 
 
 def construct_param_ccl(
@@ -50,6 +50,6 @@ restricted:
                     CParams_registered_to_params_ccl += [CPname]
     output_Path = Path(project_dir) / thorn_name
     output_Path.mkdir(parents=True, exist_ok=True)
-    with SafeWrite(output_Path / "param.ccl", encoding="utf-8") as file:
+    with ConditionalFileUpdater(output_Path / "param.ccl", encoding="utf-8") as file:
         file.write(paramccl_str)
     return CParams_registered_to_params_ccl
