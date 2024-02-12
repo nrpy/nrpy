@@ -49,7 +49,8 @@ class ConditionalFileUpdater:
 
     def __enter__(self) -> io.TextIOWrapper:
         """
-        Create a StringIO proxy for the file. We will store the output
+        Create a StringIO proxy for the file.
+        We will store the output
         here so that we can later compare it with the contents of the file.
 
         :return: A StringIO object.
@@ -59,8 +60,8 @@ class ConditionalFileUpdater:
 
     def __exit__(self, ty: Any, val: Any, tb: Any) -> None:
         """
-        Output is finished. Open the file and check whether its contents match. Only if they do not
-        should the file be updated.
+        Output is finished. Open the file and check whether its contents match.
+        Only if they do not should the file be updated.
 
         :param ty: unused
         :param val: unused
