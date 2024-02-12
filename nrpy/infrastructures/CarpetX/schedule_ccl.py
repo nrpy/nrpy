@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Tuple
 from pathlib import Path
 
 import nrpy.c_function as cfc
-from nrpy.helpers.safewrite import SafeWrite
+from nrpy.helpers.conditional_file_updater import ConditionalFileUpdater
 
 
 class ScheduleCCL:
@@ -117,5 +117,5 @@ def construct_schedule_ccl(
 
     output_Path = Path(project_dir) / thorn_name
     output_Path.mkdir(parents=True, exist_ok=True)
-    with SafeWrite(output_Path / "schedule.ccl", encoding="utf-8") as file:
+    with ConditionalFileUpdater(output_Path / "schedule.ccl", encoding="utf-8") as file:
         file.write(outstr)
