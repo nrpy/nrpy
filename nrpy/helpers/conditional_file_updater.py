@@ -96,3 +96,15 @@ class ConditionalFileUpdater:
             print(c.colored("[written]", "red"))
         else:
             print(c.colored("[no changes]", "green"))
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")
