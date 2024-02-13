@@ -94,38 +94,47 @@ public:
     if is_evol_thorn:
         if evolved_variables_list:
             # First, EVOL type:
-            evol_gfs = [evol_gf + "GF" for evol_gf in evolved_variables_list]
-            outstr += "CCTK_REAL evol_variables type = GF Timelevels=3\n{\n  "
-            outstr += ", ".join(evol_gfs) + "\n"
-            outstr += """} "Evolved gridfunctions."
+            evol_gfs = ", ".join([evol_gf + "GF" for evol_gf in evolved_variables_list])
+            outstr += f"""CCTK_REAL evol_variables type = GF Timelevels=3
+{{
+  {evol_gfs}
+}} "Evolved gridfunctions."
 
 """
 
             # Second EVOL right-hand-sides
-            outstr += 'CCTK_REAL evol_variables_rhs type = GF Timelevels=1 TAGS=\'InterpNumTimelevels=1 prolongation="none" checkpoint="no"\'\n{\n  '
-            rhs_gfs = [evol_gf + "_rhsGF" for evol_gf in evolved_variables_list]
-            outstr += ", ".join(rhs_gfs) + "\n"
-            outstr += """} "Right-hand-side gridfunctions."
+            rhs_gfs = ", ".join(
+                [evol_gf + "_rhsGF" for evol_gf in evolved_variables_list]
+            )
+            outstr += f"""CCTK_REAL evol_variables_rhs type = GF Timelevels=1 TAGS='InterpNumTimelevels=1 prolongation="none" checkpoint="no"'
+{{
+  {rhs_gfs}
+}} "Right-hand-side gridfunctions."
 
 """
+
             # Then AUXEVOL type:
             if auxevol_variables_list:
-                auxevol_gfs = [
-                    auxevol_gf + "GF" for auxevol_gf in auxevol_variables_list
-                ]
-                outstr += 'CCTK_REAL auxevol_variables type = GF Timelevels=1 TAGS=\'InterpNumTimelevels=1 prolongation="none" checkpoint="no"\'\n{\n  '
-                outstr += ", ".join(auxevol_gfs) + "\n"
-                outstr += """} "Auxiliary gridfunctions needed for evaluating the RHSs."
+                auxevol_gfs = ", ".join(
+                    [auxevol_gf + "GF" for auxevol_gf in auxevol_variables_list]
+                )
+                outstr += f"""CCTK_REAL auxevol_variables type = GF Timelevels=1 TAGS='InterpNumTimelevels=1 prolongation="none" checkpoint="no"'
+{{
+  {auxevol_gfs}
+}} "Auxiliary gridfunctions needed for evaluating the RHSs."
 
 """
+
         # Then AUX type:
         if auxiliary_variables_list:
-            aux_gfs = [aux_gf + "GF" for aux_gf in auxiliary_variables_list]
-            outstr += "CCTK_REAL aux_variables type = GF Timelevels=3\n{\n  "
-            outstr += ", ".join(aux_gfs) + "\n"
-            outstr += """} "Auxiliary gridfunctions for e.g., diagnostics."
+            aux_gfs = ", ".join([aux_gf + "GF" for aux_gf in auxiliary_variables_list])
+            outstr += f"""CCTK_REAL aux_variables type = GF Timelevels=3
+{{
+  {aux_gfs}
+}} "Auxiliary gridfunctions for e.g., diagnostics."
 
 """
+
     output_Path = Path(project_dir) / thorn_name
     output_Path.mkdir(parents=True, exist_ok=True)
     with ConditionalFileUpdater(
