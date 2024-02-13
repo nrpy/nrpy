@@ -11,7 +11,6 @@ Authors: Zachariah B. Etienne
 #         and compile-time parameters.
 from typing import List
 from pathlib import Path
-import shutil
 import os
 
 import nrpy.grid as gri

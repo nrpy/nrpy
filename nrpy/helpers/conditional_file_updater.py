@@ -19,23 +19,29 @@ nochange = False
 
 class ConditionalFileUpdater:
     """
-    Content Comparison: It compares the existing file content with the new content to determine if an update is necessary.
-    Optional Formatting: It can format the new content before the comparison and potential update, using tools like clang-format.
-    Change Notification: It notifies the user of any changes or the lack thereof, with an option to display a detailed diff if in verbose mode.
-    Safe Writing: It avoids writing to the file if there are no changes, reducing unnecessary disk writes and preserving file timestamps.
+    A class to conditionally update files based on content comparison, with optional formatting.
+
+    This class compares the existing file content with the new content to determine if an update is necessary.
+    It can optionally format the new content before the comparison and potential update using tools like clang-format.
+    It notifies the user of any changes or the lack thereof, with an option to display a detailed diff if in verbose mode.
+    It avoids writing to the file if there are no changes, reducing unnecessary disk writes and preserving file timestamps.
+
+    :param fname: The name or path of the file to be potentially updated.
+    :param encoding: The encoding to use when reading and writing the file. Defaults to 'utf-8'.
+    :param do_format: Flag indicating whether the new content should be formatted before comparison. Defaults to False.
+
     >>> import os
-    >>> c.colored = c.coloring_is_disabled
-    >>> testf = "/tmp/_test_.txt"
-    >>> os.unlink(testf)
-    >>> with ConditionalFileUpdater(testf) as fd:
-    ...   print("Testing", file=fd)
+    >>> c.is_colored = c.coloring_is_disabled
+    >>> test_file = "/tmp/_test_.txt"
+    >>> os.unlink(test_file)
+    >>> with ConditionalFileUpdater(test_file) as fd:
+    ...     print("Testing", file=fd)
     Checking /tmp/_test_.txt...[written]
-    >>> with ConditionalFileUpdater(testf) as fd:
-    ...   print("Testing", file=fd)
+    >>> with ConditionalFileUpdater(test_file) as fd:
+    ...     print("Testing", file=fd)
     Checking /tmp/_test_.txt...[no changes]
     """
 
-    # black insists on indenting this way, pylint does not allow it
     def __init__(
         self,
         fname: Union[Path, str],
@@ -60,46 +66,47 @@ class ConditionalFileUpdater:
 
     def __exit__(self, ty: Any, val: Any, tb: Any) -> None:
         """
-        Output is finished. Open the file and check whether its contents match.
-        Only if they do not should the file be updated.
+        Exit the runtime context and compare the file's new content with its existing content, updating if necessary.
 
-        :param ty: unused
-        :param val: unused
-        :param tb: unused
-
-        :return: None
+        :param ty: Exception type if an exception was raised within the context.
+        :param val: Exception value if an exception was raised within the context.
+        :param tb: Traceback object if an exception was raised within the context.
         """
-        print("Checking", self.fname, end="...")
-        newcontent = self.fd.getvalue()
-        encoding = self.encoding
-        if encoding is None:
-            encoding = "utf-8"
+        print(f"Checking {self.fname}...", end="")
+        new_content = self.fd.getvalue()
         if self.do_format:
-            newcontent = clang_format(newcontent)
+            new_content = clang_format(new_content)
+
+        # Determine if the file exists and read its content if it does.
+        old_content = ""
         if os.path.exists(self.fname):
-            with open(self.fname, encoding=encoding) as fd:
-                oldcontent = fd.read()
-            do_write = newcontent.strip() != oldcontent.strip()
-            if do_write and verbose:
-                print("Diff for:", self.fname)
-                oldlines = [line + "\n" for line in oldcontent.strip().split("\n")]
-                newlines = [line + "\n" for line in newcontent.strip().split("\n")]
-                sys.stdout.writelines(
-                    context_diff(oldlines, newlines, fromfile="before", tofile="after")
-                )
-        else:
-            do_write = True
+            with open(self.fname, encoding=self.encoding) as fd:
+                old_content = fd.read()
+
+        # Decide whether to write based on a comparison of stripped content.
+        do_write = new_content.strip() != old_content.strip()
+
         if do_write:
-            assert not nochange
-            with open(self.fname, "w", encoding=encoding) as fd:
-                fd.write(newcontent)
-            print(c.colored("[written]", "red"))
+            if verbose:
+                print("Diff for:", self.fname)
+                old_lines = [line + "\n" for line in old_content.strip().split("\n")]
+                new_lines = [line + "\n" for line in new_content.strip().split("\n")]
+                sys.stdout.writelines(
+                    context_diff(
+                        old_lines, new_lines, fromfile="before", tofile="after"
+                    )
+                )
+
+            if not nochange:
+                with open(self.fname, "w", encoding=self.encoding) as fd:
+                    fd.write(new_content)
+                print(c.is_colored("[written]", "red"))
         else:
-            print(c.colored("[no changes]", "green"))
+            print(c.is_colored("[no changes]", "green"))
+
 
 if __name__ == "__main__":
     import doctest
-    import sys
 
     results = doctest.testmod()
 

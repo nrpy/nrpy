@@ -12,7 +12,6 @@ from typing import Union, cast, List
 from pathlib import Path
 from inspect import currentframe as cfr
 from types import FrameType as FT
-import shutil
 import os
 
 import nrpy.c_codegen as ccg
