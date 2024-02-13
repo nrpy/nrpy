@@ -33,7 +33,9 @@ class ConditionalFileUpdater:
     >>> import os
     >>> c.is_colored = c.coloring_is_disabled
     >>> test_file = "/tmp/_test_.txt"
-    >>> os.unlink(test_file)
+    >>> with open(test_file, 'w') as f: # Ensure the file exists for the unlink example
+    ...     _ = f.write('Temporary file content') # Ignore the return value
+    >>> os.unlink(test_file)  # Now safe to unlink, as the file is guaranteed to exist
     >>> with ConditionalFileUpdater(test_file) as fd:
     ...     print("Testing", file=fd)
     Checking /tmp/_test_.txt...[written]
@@ -64,13 +66,15 @@ class ConditionalFileUpdater:
         self.fd = io.StringIO()
         return self.fd
 
-    def __exit__(self, ty: Any, val: Any, tb: Any) -> None:
+    def __exit__(
+        self, exception_type: Any, exception_value: Any, traceback: Any
+    ) -> None:
         """
         Exit the runtime context and compare the file's new content with its existing content, updating if necessary.
 
-        :param ty: Exception type if an exception was raised within the context.
-        :param val: Exception value if an exception was raised within the context.
-        :param tb: Traceback object if an exception was raised within the context.
+        :param exception_type: Exception type if an exception was raised within the context.
+        :param exception_value: Exception value if an exception was raised within the context.
+        :param traceback: Traceback object if an exception was raised within the context.
         """
         print(f"Checking {self.fname}...", end="")
         new_content = self.fd.getvalue()
@@ -80,13 +84,13 @@ class ConditionalFileUpdater:
         # Determine if the file exists and read its content if it does.
         old_content = ""
         if os.path.exists(self.fname):
-            with open(self.fname, encoding=self.encoding) as fd:
-                old_content = fd.read()
+            with open(self.fname, encoding=self.encoding) as file_descriptor:
+                old_content = file_descriptor.read()
 
         # Decide whether to write based on a comparison of stripped content.
-        do_write = new_content.strip() != old_content.strip()
+        should_write = new_content.strip() != old_content.strip()
 
-        if do_write:
+        if should_write:
             if verbose:
                 print("Diff for:", self.fname)
                 old_lines = [line + "\n" for line in old_content.strip().split("\n")]
@@ -98,8 +102,8 @@ class ConditionalFileUpdater:
                 )
 
             if not nochange:
-                with open(self.fname, "w", encoding=self.encoding) as fd:
-                    fd.write(new_content)
+                with open(self.fname, "w", encoding=self.encoding) as file_descriptor:
+                    file_descriptor.write(new_content)
                 print(c.is_colored("[written]", "red"))
         else:
             print(c.is_colored("[no changes]", "green"))

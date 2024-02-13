@@ -10,11 +10,25 @@ import sys
 from typing import Any, Dict
 from typing_extensions import Literal
 
-color_names = Literal["red", "green", "yellow", "blue", "magenta", "cyan"]
+# Define the type for color names
+ColorNames = Literal["red", "green", "yellow", "blue", "magenta", "cyan"]
+
+# Dictionary mapping color names to terminal color codes
+colors: Dict[ColorNames, str] = {
+    "red": "\033[31m",
+    "green": "\033[32m",
+    "yellow": "\033[33m",
+    "blue": "\033[34m",
+    "magenta": "\033[35m",
+    "cyan": "\033[36m",
+}
+
+# Reset color code
+reset: str = "\033[0m"
 
 
 def coloring_is_disabled(
-    arg: Any, c: color_names  # pylint: disable=unused-argument
+    arg: Any, c: ColorNames  # pylint: disable=unused-argument
 ) -> str:
     """
     Provide a stringified version of the argument with coloring disabled.
@@ -31,18 +45,7 @@ def coloring_is_disabled(
     return str(arg)
 
 
-colors: Dict[color_names, str] = {
-    "red": "\033[31m",
-    "green": "\033[32m",
-    "yellow": "\033[33m",
-    "blue": "\033[34m",
-    "magenta": "\033[35m",
-    "cyan": "\033[36m",
-}
-reset = "\033[0m"
-
-
-def coloring_is_enabled(arg: Any, c: color_names) -> str:
+def coloring_is_enabled(arg: Any, c: ColorNames) -> str:
     r"""
     Return the stringified version of the argument with the specified color.
     Coloring will be disabled if the output is not being sent to a notebook cell
@@ -65,20 +68,16 @@ def coloring_is_enabled(arg: Any, c: color_names) -> str:
 
 
 # Determine if output is to a terminal or a Jupyter notebook
-if hasattr(sys.stdout, "isatty"):
-    is_tty = sys.stdout.isatty()
-else:
-    is_tty = False
-is_jupyter = (
+is_tty: bool = sys.stdout.isatty() if hasattr(sys.stdout, "isatty") else False
+is_jupyter: bool = (
     type(sys.stdout).__name__ == "OutStream"
     and type(sys.stdout).__module__ == "ipykernel.iostream"
 )
 
 # Choose the appropriate coloring function based on the output destination
-if (not is_tty) and (not is_jupyter):
-    is_colored = coloring_is_disabled
-else:
-    is_colored = coloring_is_enabled
+is_colored = (
+    coloring_is_disabled if not is_tty and not is_jupyter else coloring_is_enabled
+)
 
 if __name__ == "__main__":
     import doctest
