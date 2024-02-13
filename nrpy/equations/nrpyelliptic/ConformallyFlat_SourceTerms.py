@@ -291,7 +291,7 @@ if __name__ == "__main__":
         "SinhSymTP",
     ]:
         # Compute source terms
-        psi_background, ADD_times_AUU = compute_psi_background_and_ADD_times_AUU(
+        _psi_background, _ADD_times_AUU = compute_psi_background_and_ADD_times_AUU(
             CoordSystem=Coord
         )
 
@@ -299,8 +299,8 @@ if __name__ == "__main__":
         input_dict = {}
 
         # Extend input_dict with the symbolic expressions for the source terms
-        input_dict[f"psi_background_{Coord}"] = psi_background
-        input_dict[f"ADD_times_AUU_{Coord}"] = ADD_times_AUU
+        input_dict[f"psi_background_{Coord}"] = _psi_background
+        input_dict[f"ADD_times_AUU_{Coord}"] = _ADD_times_AUU
 
         results_dict = ve.process_dictionary_of_expressions(
             input_dict, fixed_mpfs_for_free_symbols=True
