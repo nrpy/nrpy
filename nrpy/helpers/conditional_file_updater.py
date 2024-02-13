@@ -11,7 +11,7 @@ from difflib import context_diff
 import sys
 from pathlib import Path
 from nrpy.helpers.generic import clang_format
-import nrpy.helpers.colored as c
+import nrpy.helpers.coloring as c
 
 verbose = False
 nochange = False
