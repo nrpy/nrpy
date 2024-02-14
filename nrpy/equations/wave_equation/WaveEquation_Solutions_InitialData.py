@@ -57,9 +57,12 @@ class WaveEquation_solution_Cartesian:
                 default_k2=default_k2,
             )
         elif WaveType == "SphericalGaussian":
-            self.uu_exactsoln, self.vv_exactsoln = SphericalGaussian(
-                default_sigma=default_sigma
-            )
+            (
+                self.uu_exactsoln,
+                self.vv_exactsoln,
+                self.uu_exactsoln_r0,
+                self.vv_exactsoln_r0,
+            ) = SphericalGaussian(default_sigma=default_sigma)
         else:
             raise ValueError(
                 f"Error: WaveEquation initial data WaveType={WaveType} not supported."
@@ -67,7 +70,9 @@ class WaveEquation_solution_Cartesian:
 
 
 # Set up spherically-symmetric Gaussian initial data in Cartesian coordinates
-def SphericalGaussian(default_sigma: float = 3.0) -> Tuple[sp.Expr, sp.Expr]:
+def SphericalGaussian(
+    default_sigma: float = 3.0,
+) -> Tuple[sp.Expr, sp.Expr, sp.Expr, sp.Expr]:
     """
     Set up initial data for a spherically-symmetric Gaussian wave.
 
@@ -106,7 +111,23 @@ def SphericalGaussian(default_sigma: float = 3.0) -> Tuple[sp.Expr, sp.Expr]:
     )  # Adding 2 ensures relative error is well defined (solution does not cross zero)
     vv_exactsoln = sp.diff(uu_exactsoln, time)
 
-    return uu_exactsoln, vv_exactsoln
+    # In the limit r->0, this equation is undefined, but we can use L'Hôpital's rule to
+    # find the solution. The denominator is 1/r, which becomes 1. We evaluate the numerator
+    # using sympy.
+    rvar = sp.symbols("rvar", real=True)
+    uu_exactsoln_r0 = sp.diff(
+        +(rvar - wavespeed * time)
+        * sp.exp(-((rvar - wavespeed * time) ** 2) / (2 * sigma**2))
+        + (rvar + wavespeed * time)
+        * sp.exp(-((rvar + wavespeed * time) ** 2) / (2 * sigma**2)),
+        rvar,
+    ) + sp.sympify(
+        2
+    )  # Adding 2 ensures relative error is well defined (solution does not cross zero)
+    uu_exactsoln_r0 = uu_exactsoln_r0.subs(rvar, r)
+    vv_exactsoln_r0 = sp.diff(uu_exactsoln_r0, time)
+
+    return uu_exactsoln, vv_exactsoln, uu_exactsoln_r0, vv_exactsoln_r0
 
 
 # Set up monochromatic plane-wave initial data

@@ -88,13 +88,10 @@ def construct_schedule_ccl(
     step = 1
     for schedule_bin in [
         "STARTUP",
-        "Driver_BoundarySelect",
         "BASEGRID",
         "CCTK_INITIAL",
-        "MoL_Register",
-        "MoL_CalcRHS",
-        "MoL_PostStep",
-        "MoL_PseudoEvolution",
+        "ODESolvers_RHS",
+        "ODESolvers_PostStep",
     ]:
         already_output_header = False
         for sccl in schedule_ccl_dict[thorn_name]:

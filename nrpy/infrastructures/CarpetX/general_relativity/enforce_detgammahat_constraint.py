@@ -17,10 +17,8 @@ import nrpy.grid as gri
 import nrpy.indexedexp as ixp
 import nrpy.helpers.parallel_codegen as pcg
 
-import nrpy.infrastructures.ETLegacy.simple_loop as lp
-from nrpy.infrastructures.ETLegacy.ETLegacy_include_header import (
-    define_standard_includes,
-)
+import nrpy.infrastructures.CarpetX.simple_loop as lp
+from nrpy.infrastructures.CarpetX.CarpetX_include_header import define_standard_includes
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 
@@ -29,7 +27,6 @@ def register_CFunction_enforce_detgammahat_constraint(
     thorn_name: str,
     CoordSystem: str,
     enable_rfm_precompute: bool,
-    OMP_collapse: int = 1,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the function that enforces the det(gammabar) = det(gammahat) constraint.
@@ -37,7 +34,6 @@ def register_CFunction_enforce_detgammahat_constraint(
     :param thorn_name: The Einstein Toolkit thorn name.
     :param CoordSystem: The coordinate system to be used.
     :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
-    :param OMP_collapse: Degree of OpenMP loop collapsing.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -54,7 +50,7 @@ def register_CFunction_enforce_detgammahat_constraint(
 
     desc = r"""Enforce det(gammabar) = det(gammahat) constraint. Required for strong hyperbolicity."""
     name = f"{thorn_name}_enforce_detgammahat_constraint"
-    body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
+    body = f"""  DECLARE_CCTK_ARGUMENTSX_{name};
   DECLARE_CCTK_PARAMETERS;
 
 """
@@ -81,7 +77,7 @@ def register_CFunction_enforce_detgammahat_constraint(
     hprimeDD_expr_list: List[sp.Expr] = []
     for i in range(3):
         for j in range(i, 3):
-            hDD_access_gfs += [gri.ETLegacyGridFunction.access_gf(gf_name=f"hDD{i}{j}")]
+            hDD_access_gfs += [gri.CarpetXGridFunction.access_gf(gf_name=f"hDD{i}{j}")]
             hprimeDD_expr_list += [hprimeDD[i][j]]
 
     # To evaluate the cube root, SIMD support requires e.g., SLEEF.
@@ -101,11 +97,10 @@ def register_CFunction_enforce_detgammahat_constraint(
         ),
         loop_region="all points",
         enable_simd=False,
-        OMP_collapse=OMP_collapse,
     )
 
     schedule = """
-schedule FUNC_NAME in MoL_PostStep
+schedule FUNC_NAME in ODESolvers_PostStep
 {
   LANG: C
   READS:  hDD00GF(everywhere), hDD01GF(everywhere), hDD02GF(everywhere),
@@ -124,6 +119,6 @@ schedule FUNC_NAME in MoL_PostStep
         params="CCTK_ARGUMENTS",
         body=body,
         ET_thorn_name=thorn_name,
-        ET_schedule_bins_entries=[("MoL_PostStep", schedule)],
+        ET_schedule_bins_entries=[("ODESolvers_PostStep", schedule)],
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())

@@ -209,8 +209,10 @@ def cse_preprocess(
                 subexpr = subtree.expr
                 if subexpr.func == sp.Pow:
                     base, exponent = subexpr.args[0], subexpr.args[1]
-                    if base == _NegativeOne_ and isinstance(exponent, int):
-                        subtree.expr = _One_ if exponent % 2 == 0 else _NegativeOne_
+                    if base == _NegativeOne_:
+                        subtree.expr = (
+                            _One_ if sp.Integer(exponent) % 2 == 0 else _NegativeOne_
+                        )
                         tree.build(subtree)
                         changed_expr = True
             if changed_expr:

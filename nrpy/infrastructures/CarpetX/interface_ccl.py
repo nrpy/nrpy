@@ -6,6 +6,7 @@ Author: Zachariah B. Etienne
         Samuel Cupp
 """
 
+from typing import List
 from pathlib import Path
 import nrpy.grid as gri
 from nrpy.helpers.conditional_file_updater import ConditionalFileUpdater
@@ -42,42 +43,21 @@ inherits: {inherits}
 # Needed functions and #include's:
 {USES_INCLUDEs}
 """
-    if is_evol_thorn:
-        outstr += """
-# Needed Method of Lines function
-CCTK_INT FUNCTION MoLRegisterEvolvedGroup(CCTK_INT IN EvolvedIndex, CCTK_INT IN RHSIndex)
-REQUIRES FUNCTION MoLRegisterEvolvedGroup
-
-# Needed Boundary Conditions function
-CCTK_INT FUNCTION GetBoundarySpecification(CCTK_INT IN size, CCTK_INT OUT ARRAY nboundaryzones, CCTK_INT OUT ARRAY is_internal, CCTK_INT OUT ARRAY is_staggered, CCTK_INT OUT ARRAY shiftout)
-USES FUNCTION GetBoundarySpecification
-
-CCTK_INT FUNCTION SymmetryTableHandleForGrid(CCTK_POINTER_TO_CONST IN cctkGH)
-USES FUNCTION SymmetryTableHandleForGrid
-
-CCTK_INT FUNCTION Boundary_SelectVarForBC(CCTK_POINTER_TO_CONST IN GH, CCTK_INT IN faces, CCTK_INT IN boundary_width, CCTK_INT IN table_handle, CCTK_STRING IN var_name, CCTK_STRING IN bc_name)
-USES FUNCTION Boundary_SelectVarForBC
-
-CCTK_INT FUNCTION Driver_SelectVarForBC(CCTK_POINTER_TO_CONST IN GH, CCTK_INT IN faces, CCTK_INT IN boundary_width, CCTK_INT IN table_handle, CCTK_STRING IN group_name, CCTK_STRING IN bc_name)
-USES FUNCTION Driver_SelectVarForBC
-"""
     if enable_NewRad:
         outstr += r"""
-# Needed for EinsteinEvolve/NewRad outer boundary condition driver:
-CCTK_INT FUNCTION                         \
-    NewRad_Apply                          \
-        (CCTK_POINTER_TO_CONST IN cctkGH, \
-         CCTK_REAL ARRAY IN var,          \
-         CCTK_REAL ARRAY INOUT rhs,       \
-         CCTK_REAL IN var0,               \
-         CCTK_REAL IN v0,                 \
-         CCTK_INT IN radpower)
-REQUIRES FUNCTION NewRad_Apply
+# Note: we don't have NewRad yet
+# Needed for NewRad outer boundary condition driver:
+#CCTK_INT FUNCTION                         \
+#    NewRad_Apply                          \
+#        (CCTK_POINTER_TO_CONST IN cctkGH, \
+#         CCTK_REAL ARRAY IN var,          \
+#         CCTK_REAL ARRAY INOUT rhs,       \
+#         CCTK_REAL IN var0,               \
+#         CCTK_REAL IN v0,                 \
+#         CCTK_INT IN radpower)
+#REQUIRES FUNCTION NewRad_Apply
 """
     outstr += """
-# FIXME: add info for symmetry conditions:
-#    https://einsteintoolkit.org/thornguide/CactusBase/SymBase/documentation.html
-
 # Tell the Toolkit that we want all gridfunctions
 #    to be visible to other thorns by using
 #    the keyword "public". Note that declaring these
@@ -91,11 +71,47 @@ public:
         auxiliary_variables_list,
         auxevol_variables_list,
     ) = gri.CarpetXGridFunction.gridfunction_lists()[0:3]
+
+    def construct_parity_string(parities: List[int]) -> str:
+        """
+        Construct the parities tag for a variable group using the list of parity values
+        given by set_parity_types
+
+        :param list_of_gf_names: List of grid function names for which to set the parity types.
+        :return: A list of integers representing the parity types for the grid functions.
+        """
+        parity_tag = ""
+        for parity_value in parities:
+            parity_tag += "  "
+            # scalar and tensor xx, yy, zz components
+            if parity_value in [0, 4, 7, 9]:
+                parity_tag += "+1 +1 +1"
+            # vector components
+            elif parity_value == 1:
+                parity_tag += "-1 +1 +1"
+            elif parity_value == 2:
+                parity_tag += "+1 -1 +1"
+            elif parity_value == 3:
+                parity_tag += "+1 +1 -1"
+            # tensor off-diagonal components
+            elif parity_value == 5:  # xy
+                parity_tag += "-1 -1 +1"
+            elif parity_value == 6:  # xz
+                parity_tag += "-1 +1 -1"
+            elif parity_value == 8:  # yz
+                parity_tag += "+1 -1 -1"
+
+        return parity_tag
+
     if is_evol_thorn:
         if evolved_variables_list:
             # First, EVOL type:
             evol_gfs = ", ".join([evol_gf + "GF" for evol_gf in evolved_variables_list])
-            outstr += f"""CCTK_REAL evol_variables type = GF Timelevels=3
+            evol_parity_type = gri.CarpetXGridFunction.set_parity_types(
+                evolved_variables_list
+            )
+            evol_parities = construct_parity_string(evol_parity_type)
+            outstr += f"""CCTK_REAL evol_variables type = GF Timelevels=1 TAGS='rhs="evol_variables_rhs" parities={{{evol_parities}}}'
 {{
   {evol_gfs}
 }} "Evolved gridfunctions."
@@ -118,7 +134,11 @@ public:
                 auxevol_gfs = ", ".join(
                     [auxevol_gf + "GF" for auxevol_gf in auxevol_variables_list]
                 )
-                outstr += f"""CCTK_REAL auxevol_variables type = GF Timelevels=1 TAGS='InterpNumTimelevels=1 prolongation="none" checkpoint="no"'
+                auxevol_parity_type = gri.CarpetXGridFunction.set_parity_types(
+                    auxevol_variables_list
+                )
+                auxevol_parities = construct_parity_string(auxevol_parity_type)
+                outstr += f"""CCTK_REAL auxevol_variables type = GF Timelevels=1 TAGS='InterpNumTimelevels=1 prolongation="none" checkpoint="no" parities={{{auxevol_parities}}}'
 {{
   {auxevol_gfs}
 }} "Auxiliary gridfunctions needed for evaluating the RHSs."
@@ -128,7 +148,11 @@ public:
         # Then AUX type:
         if auxiliary_variables_list:
             aux_gfs = ", ".join([aux_gf + "GF" for aux_gf in auxiliary_variables_list])
-            outstr += f"""CCTK_REAL aux_variables type = GF Timelevels=3
+            aux_parity_type = gri.CarpetXGridFunction.set_parity_types(
+                auxiliary_variables_list
+            )
+            aux_parities = construct_parity_string(aux_parity_type)
+            outstr += f"""CCTK_REAL aux_variables type = GF Timelevels=1 TAGS='parities={{{aux_parities}}}'
 {{
   {aux_gfs}
 }} "Auxiliary gridfunctions for e.g., diagnostics."

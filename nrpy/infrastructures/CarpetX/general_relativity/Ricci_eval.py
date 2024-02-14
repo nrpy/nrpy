@@ -17,10 +17,8 @@ import nrpy.params as par
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.finite_difference as fin
 
-import nrpy.infrastructures.ETLegacy.simple_loop as lp
-from nrpy.infrastructures.ETLegacy.ETLegacy_include_header import (
-    define_standard_includes,
-)
+import nrpy.infrastructures.CarpetX.simple_loop as lp
+from nrpy.infrastructures.CarpetX.CarpetX_include_header import define_standard_includes
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 
 
@@ -30,7 +28,6 @@ def register_CFunction_Ricci_eval(
     enable_rfm_precompute: bool,
     enable_simd: bool,
     fd_order: int,
-    OMP_collapse: int = 1,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the right-hand side evaluation function for the BSSN equations.
@@ -40,7 +37,6 @@ def register_CFunction_Ricci_eval(
     :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
     :param enable_simd: Whether or not to enable SIMD (Single Instruction, Multiple Data).
     :param fd_order: Order of finite difference method
-    :param OMP_collapse: Degree of OpenMP loop collapsing.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -58,7 +54,7 @@ def register_CFunction_Ricci_eval(
         includes += [("./simd/simd_intrinsics.h")]
     desc = r"""Compute Ricci tensor for the BSSN evolution equations."""
     name = f"{thorn_name}_Ricci_eval_order_{fd_order}"
-    body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
+    body = f"""  DECLARE_CCTK_ARGUMENTSX_{name};
 """
     if enable_simd:
         body += """
@@ -68,7 +64,10 @@ def register_CFunction_Ricci_eval(
 
 """
     else:
-        body += """  DECLARE_CCTK_PARAMETERS;
+        body += """  const CCTK_REAL invdxx0 CCTK_ATTRIBUTE_UNUSED = 1.0/CCTK_DELTA_SPACE(0);
+  const CCTK_REAL invdxx1 CCTK_ATTRIBUTE_UNUSED = 1.0/CCTK_DELTA_SPACE(1);
+  const CCTK_REAL invdxx2 CCTK_ATTRIBUTE_UNUSED = 1.0/CCTK_DELTA_SPACE(2);
+  DECLARE_CCTK_PARAMETERS;
 
 """
 
@@ -79,7 +78,7 @@ def register_CFunction_Ricci_eval(
     # Populate Ricci tensor
     Ricci_access_gfs: List[str] = []
     for var in Bq.Ricci_varnames:
-        Ricci_access_gfs += [gri.ETLegacyGridFunction.access_gf(gf_name=var)]
+        Ricci_access_gfs += [gri.CarpetXGridFunction.access_gf(gf_name=var)]
     body += lp.simple_loop(
         loop_body=ccg.c_codegen(
             Bq.Ricci_exprs,
@@ -91,12 +90,11 @@ def register_CFunction_Ricci_eval(
         ),
         loop_region="interior",
         enable_simd=enable_simd,
-        OMP_collapse=OMP_collapse,
     )
 
     schedule = f"""
 if(FD_order == {fd_order}) {{
-  schedule FUNC_NAME in MoL_CalcRHS as {thorn_name}_Ricci before {thorn_name}_RHS
+  schedule FUNC_NAME in ODESolvers_RHS as {thorn_name}_Ricci before {thorn_name}_RHS
   {{
     LANG: C
     READS:  hDD00GF, hDD01GF, hDD02GF, hDD11GF, hDD12GF, hDD22GF,
@@ -116,7 +114,7 @@ if(FD_order == {fd_order}) {{
         prefunc=fin.construct_FD_functions_prefunc(),
         body=body,
         ET_thorn_name=thorn_name,
-        ET_schedule_bins_entries=[("MoL_CalcRHS", schedule)],
+        ET_schedule_bins_entries=[("ODESolvers_RHS", schedule)],
     )
     # Reset to the initial values
     par.set_parval_from_str("fd_order", old_fd_order)

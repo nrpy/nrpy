@@ -26,25 +26,22 @@ from nrpy.equations.wave_equation.WaveEquation_Solutions_InitialData import (
     WaveEquation_solution_Cartesian,
 )
 from nrpy.equations.wave_equation.WaveEquation_RHSs import WaveEquation_RHSs
-import nrpy.infrastructures.ETLegacy.simple_loop as lp
-from nrpy.infrastructures.ETLegacy import boundary_conditions
-from nrpy.infrastructures.ETLegacy import CodeParameters
-from nrpy.infrastructures.ETLegacy import make_code_defn
-from nrpy.infrastructures.ETLegacy import MoL_registration
-from nrpy.infrastructures.ETLegacy import Symmetry_registration
-from nrpy.infrastructures.ETLegacy import zero_rhss
-from nrpy.infrastructures.ETLegacy import schedule_ccl
-from nrpy.infrastructures.ETLegacy import interface_ccl
-from nrpy.infrastructures.ETLegacy import param_ccl
+import nrpy.infrastructures.CarpetX.simple_loop as lp
+from nrpy.infrastructures.CarpetX import CodeParameters
+from nrpy.infrastructures.CarpetX import make_code_defn
+from nrpy.infrastructures.CarpetX import zero_rhss
+from nrpy.infrastructures.CarpetX import schedule_ccl
+from nrpy.infrastructures.CarpetX import interface_ccl
+from nrpy.infrastructures.CarpetX import param_ccl
 
 
-par.set_parval_from_str("Infrastructure", "ETLegacy")
+par.set_parval_from_str("Infrastructure", "CarpetX")
 
 # Code-generation-time parameters:
 project_name = "et_wavetoy"
-ID_thorn_name = "IDWaveToyNRPy"
-diag_thorn_name = "diagWaveToyNRPy"
-evol_thorn_name = "WaveToyNRPy"
+ID_thorn_name = "IDWaveToyNRPyX"
+diag_thorn_name = "diagWaveToyNRPyX"
+evol_thorn_name = "WaveToyNRPyX"
 WaveType = "SphericalGaussian"
 default_sigma = 3.0
 grid_physical_size = 10.0
@@ -54,7 +51,7 @@ default_checkpoint_every = 50.0
 enable_rfm_precompute = False
 MoL_method = "RK4"
 fd_order = 8
-enable_simd = True
+enable_simd = False
 enable_KreissOliger_dissipation = False
 parallel_codegen_enable = True
 CoordSystem = "Cartesian"
@@ -64,7 +61,13 @@ project_dir = os.path.join("project", project_name)
 
 par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 par.set_parval_from_str("fd_order", fd_order)
-standard_ET_includes = ["math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
+standard_ET_includes = [
+    "loop_device.hxx",
+    "math.h",
+    "cctk.h",
+    "cctk_Arguments.h",
+    "cctk_Parameters.h",
+]
 
 
 #########################################################
@@ -124,22 +127,22 @@ DECLARE_CCTK_PARAMETERS;
 
     gri.register_gridfunctions(["uu_exact", "vv_exact"], group="AUX")
     desc = r"""Set the exact solution at all grid points."""
-    c_type = "void"
+    c_type = 'extern "C" void'
     name = f"{thorn_name}_exact_solution_all_points"
     params = "CCTK_ARGUMENTS"
-    body = f"DECLARE_CCTK_ARGUMENTS_{name};\n"
+    body = f"DECLARE_CCTK_ARGUMENTSX_{name};\n"
 
-    x_gf_access = gri.ETLegacyGridFunction.access_gf("x", use_GF_suffix=False)
-    y_gf_access = gri.ETLegacyGridFunction.access_gf("y", use_GF_suffix=False)
-    z_gf_access = gri.ETLegacyGridFunction.access_gf("z", use_GF_suffix=False)
+    x_gf_access = "p.x"
+    y_gf_access = "p.y"
+    z_gf_access = "p.z"
     uuGF = "uu"
     vvGF = "vv"
     if thorn_name == diag_thorn_name:
         uuGF = "uu_exact"
         vvGF = "vv_exact"
 
-    uu_exact_gf_access = gri.ETLegacyGridFunction.access_gf(uuGF)
-    vv_exact_gf_access = gri.ETLegacyGridFunction.access_gf(vvGF)
+    uu_exact_gf_access = gri.CarpetXGridFunction.access_gf(uuGF)
+    vv_exact_gf_access = gri.CarpetXGridFunction.access_gf(vvGF)
 
     body += lp.simple_loop(
         f"""CCTK_REAL local_x = {x_gf_access};
@@ -165,9 +168,6 @@ DECLARE_CCTK_PARAMETERS;
 schedule FUNC_NAME IN {schedule_bin}
 {{
   LANG: C
-  READS: Grid::x(Everywhere)
-  READS: Grid::y(Everywhere)
-  READS: Grid::z(Everywhere)
   WRITES: {evol_thorn_name}::{uuGF}GF(Everywhere)
   WRITES: {evol_thorn_name}::{vvGF}GF(Everywhere)
 }} "Set up metric fields for binary black hole initial data"
@@ -238,7 +238,7 @@ def register_CFunction_rhs_eval(thorn_name: str) -> Union[None, pcg.NRPyEnv_type
             "   CoordBase::boundary_size_?_*"
         )
 
-    body = f"DECLARE_CCTK_ARGUMENTS_{name};\n"
+    body = f"DECLARE_CCTK_ARGUMENTSX_{name};\n"
     body += CodeParameters.read_CodeParameters(
         list_of_tuples__thorn_CodeParameter=[(ID_thorn_name, "wavespeed")],
         enable_simd=enable_simd,
@@ -248,8 +248,8 @@ def register_CFunction_rhs_eval(thorn_name: str) -> Union[None, pcg.NRPyEnv_type
         loop_body=ccg.c_codegen(
             [rhs.uu_rhs, rhs.vv_rhs],
             [
-                gri.ETLegacyGridFunction.access_gf("uu_rhs"),
-                gri.ETLegacyGridFunction.access_gf("vv_rhs"),
+                gri.CarpetXGridFunction.access_gf("uu_rhs"),
+                gri.CarpetXGridFunction.access_gf("vv_rhs"),
             ],
             enable_fd_codegen=True,
             enable_simd=enable_simd,
@@ -258,9 +258,9 @@ def register_CFunction_rhs_eval(thorn_name: str) -> Union[None, pcg.NRPyEnv_type
         enable_simd=enable_simd,
     )
     ET_schedule_bin_entry = (
-        "MoL_CalcRHS",
+        "ODESolvers_RHS",
         """
-schedule FUNC_NAME in MoL_CalcRHS as rhs_eval
+schedule FUNC_NAME in ODESolvers_RHS as rhs_eval
 {
   LANG: C
   READS: evol_variables(everywhere)
@@ -296,12 +296,7 @@ if __name__ == "__main__" and parallel_codegen_enable:
 ########################
 # STEP 2: Register functions that depend on all gridfunctions & CodeParameters having been set:
 
-Symmetry_registration.register_CFunction_Symmetry_registration_oldCartGrid3D(
-    thorn_name=evol_thorn_name
-)
-boundary_conditions.register_CFunctions(thorn_name=evol_thorn_name)
 zero_rhss.register_CFunction_zero_rhss(thorn_name=evol_thorn_name)
-MoL_registration.register_CFunction_MoL_registration(thorn_name=evol_thorn_name)
 
 ########################
 # STEP 3: All functions have been registered at this point. Time to output the CCL files & thorns!
@@ -313,17 +308,16 @@ schedule_ccl.construct_schedule_ccl(
     project_dir=project_dir,
     thorn_name=evol_thorn_name,
     STORAGE="""
-STORAGE: evol_variables[3]     # Evolution variables
+STORAGE: evol_variables[1]     # Evolution variables
 STORAGE: evol_variables_rhs[1] # Variables storing right-hand-sides
-STORAGE: aux_variables[3]      # Diagnostics variables
+STORAGE: aux_variables[1]      # Diagnostics variables
 """,
 )
 interface_ccl.construct_interface_ccl(
     project_dir=project_dir,
     thorn_name=evol_thorn_name,
-    inherits="Boundary Grid MethodofLines",
-    USES_INCLUDEs="""USES INCLUDE: Symmetry.h
-USES INCLUDE: Boundary.h
+    inherits="",
+    USES_INCLUDEs="""USES INCLUDE: loop_device.hxx
 """,
     is_evol_thorn=True,
     enable_NewRad=False,
@@ -340,14 +334,15 @@ schedule_ccl.construct_schedule_ccl(
     project_dir=project_dir,
     thorn_name=ID_thorn_name,
     STORAGE="""
-STORAGE: evol_variables[3] # Evolution variables
+STORAGE: evol_variables[1] # Evolution variables
 """,
 )
 interface_ccl.construct_interface_ccl(
     project_dir=project_dir,
     thorn_name=ID_thorn_name,
-    inherits=f"""Grid {evol_thorn_name} # {evol_thorn_name} provides all gridfunctions.""",
-    USES_INCLUDEs="",
+    inherits=f"""{evol_thorn_name} # {evol_thorn_name} provides all gridfunctions.""",
+    USES_INCLUDEs="""USES INCLUDE: loop_device.hxx
+""",
     is_evol_thorn=False,
     enable_NewRad=False,
 )
@@ -362,13 +357,13 @@ schedule_ccl.construct_schedule_ccl(
     project_dir=project_dir,
     thorn_name=diag_thorn_name,
     STORAGE="""
-STORAGE: aux_variables[3] # Diagnostics variables
+STORAGE: aux_variables[1] # Diagnostics variables
 """,
 )
 interface_ccl.construct_interface_ccl(
     project_dir=project_dir,
     thorn_name=diag_thorn_name,
-    inherits=f"""Grid {evol_thorn_name} # {evol_thorn_name} provides all gridfunctions.""",
+    inherits=f"""{evol_thorn_name} # {evol_thorn_name} provides all gridfunctions.""",
     USES_INCLUDEs="",
     is_evol_thorn=False,
     enable_NewRad=False,

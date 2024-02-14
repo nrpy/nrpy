@@ -21,10 +21,8 @@ import nrpy.indexedexp as ixp
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.finite_difference as fin
 
-import nrpy.infrastructures.ETLegacy.simple_loop as lp
-from nrpy.infrastructures.ETLegacy.ETLegacy_include_header import (
-    define_standard_includes,
-)
+import nrpy.infrastructures.CarpetX.simple_loop as lp
+from nrpy.infrastructures.CarpetX.CarpetX_include_header import define_standard_includes
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.equations.general_relativity.BSSN_RHSs import BSSN_RHSs
 from nrpy.equations.general_relativity.BSSN_gauge_RHSs import BSSN_gauge_RHSs
@@ -45,7 +43,6 @@ def register_CFunction_rhs_eval(
     # when mult by W, strength_gauge=0.99 & strength_nongauge=0.3 is best.
     KreissOliger_strength_gauge: float = 0.1,
     KreissOliger_strength_nongauge: float = 0.1,
-    OMP_collapse: int = 1,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the right-hand side evaluation function for the BSSN equations.
@@ -62,7 +59,6 @@ def register_CFunction_rhs_eval(
     :param KreissOliger_strength_mult_by_W: Whether to multiply Kreiss-Oliger strength by W.
     :param KreissOliger_strength_gauge: Gauge strength for Kreiss-Oliger dissipation.
     :param KreissOliger_strength_nongauge: Non-gauge strength for Kreiss-Oliger dissipation.
-    :param OMP_collapse: Degree of OpenMP loop collapsing.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -83,7 +79,7 @@ def register_CFunction_rhs_eval(
         includes += [("./simd/simd_intrinsics.h")]
     desc = r"""Set RHSs for the BSSN evolution equations."""
     name = f"{thorn_name}_rhs_eval_order_{fd_order}"
-    body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
+    body = f"""  DECLARE_CCTK_ARGUMENTSX_{name};
 """
     if enable_simd:
         body += f"""
@@ -99,7 +95,12 @@ def register_CFunction_rhs_eval(
 
 """
     else:
-        body += """  DECLARE_CCTK_PARAMETERS;
+        body += """  const CCTK_REAL invdxx0 CCTK_ATTRIBUTE_UNUSED = 1.0/CCTK_DELTA_SPACE(0);
+  const CCTK_REAL invdxx1 CCTK_ATTRIBUTE_UNUSED = 1.0/CCTK_DELTA_SPACE(1);
+  const CCTK_REAL invdxx2 CCTK_ATTRIBUTE_UNUSED = 1.0/CCTK_DELTA_SPACE(2);
+  DECLARE_CCTK_PARAMETERS;
+
+  #define UPWIND_ALG(UpwindVecU) UpwindVecU > 0.0 ? 1.0 : 0.0
 
 """
 
@@ -198,7 +199,7 @@ def register_CFunction_rhs_eval(
             var_name = patmatch.group(1) + patmatch.group(2) + "_rhs"
         else:
             var_name = var
-        BSSN_RHSs_access_gf += [gri.ETLegacyGridFunction.access_gf(gf_name=var_name)]
+        BSSN_RHSs_access_gf += [gri.CarpetXGridFunction.access_gf(gf_name=var_name)]
 
     # Set up upwind control vector (betaU)
     rfm = refmetric.reference_metric[
@@ -220,12 +221,11 @@ def register_CFunction_rhs_eval(
         ),
         loop_region="interior",
         enable_simd=enable_simd,
-        OMP_collapse=OMP_collapse,
     )
 
     schedule = f"""
 if(FD_order == {fd_order}) {{
-  schedule FUNC_NAME in MoL_CalcRHS as {thorn_name}_RHS after {thorn_name}_Ricci
+  schedule FUNC_NAME in ODESolvers_RHS as {thorn_name}_RHS after {thorn_name}_Ricci
   {{
     LANG: C
     READS:  evol_variables(everywhere),
@@ -249,7 +249,7 @@ if(FD_order == {fd_order}) {{
         prefunc=fin.construct_FD_functions_prefunc(),
         body=body,
         ET_thorn_name=thorn_name,
-        ET_schedule_bins_entries=[("MoL_CalcRHS", schedule)],
+        ET_schedule_bins_entries=[("ODESolvers_RHS", schedule)],
         ET_current_thorn_CodeParams_used=params,
     )
 

@@ -17,10 +17,8 @@ import nrpy.grid as gri
 import nrpy.indexedexp as ixp
 import nrpy.helpers.parallel_codegen as pcg
 
-import nrpy.infrastructures.ETLegacy.simple_loop as lp
-from nrpy.infrastructures.ETLegacy.ETLegacy_include_header import (
-    define_standard_includes,
-)
+import nrpy.infrastructures.CarpetX.simple_loop as lp
+from nrpy.infrastructures.CarpetX.CarpetX_include_header import define_standard_includes
 import nrpy.equations.general_relativity.g4munu_conversions as g4conv
 
 
@@ -28,7 +26,6 @@ def register_CFunction_T4DD_to_T4UU(
     thorn_name: str,
     CoordSystem: str,
     enable_rfm_precompute: bool,
-    OMP_collapse: int = 1,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the function that enforces the det(gammabar) = det(gammahat) constraint.
@@ -36,7 +33,6 @@ def register_CFunction_T4DD_to_T4UU(
     :param thorn_name: The Einstein Toolkit thorn name.
     :param CoordSystem: The coordinate system to be used.
     :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
-    :param OMP_collapse: Degree of OpenMP loop collapsing.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -51,7 +47,7 @@ WARNING: Do not enable SIMD here, as it is not guaranteed that
          cctk_lsh[0]*cctk_lsh[1]*cctk_lsh[2] is a multiple of
          SIMD_width!"""
     name = f"{thorn_name}_T4DD_to_T4UU"
-    body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
+    body = f"""  DECLARE_CCTK_ARGUMENTSX_{name};
   DECLARE_CCTK_PARAMETERS;
 
 """
@@ -73,29 +69,28 @@ WARNING: Do not enable SIMD here, as it is not guaranteed that
     for i in range(4):
         for j in range(i, 4):
             T4DD_access_gfs += [
-                gri.ETLegacyGridFunction.access_gf(gf_name=f"T4UU{i}{j}")
+                gri.CarpetXGridFunction.access_gf(gf_name=f"T4UU{i}{j}")
             ]
             T4UU_expr_list += [T4UU[i][j]]
 
     loop_body = ""
-    lapse_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name="alpha")
+    lapse_gf_access = gri.CarpetXGridFunction.access_gf(gf_name="alpha")
     loop_body += f"const CCTK_REAL alpha = {lapse_gf_access};\n"
-    cf_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name="cf")
+    cf_gf_access = gri.CarpetXGridFunction.access_gf(gf_name="cf")
     loop_body += f"const CCTK_REAL cf = {cf_gf_access};\n"
-
     for i in range(3):
-        vet_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name=f"vetU{i}")
+        vet_gf_access = gri.CarpetXGridFunction.access_gf(gf_name=f"vetU{i}")
         loop_body += f"const CCTK_REAL vetU{i} = {vet_gf_access};\n"
 
     for i in range(3):
         for j in range(i, 3):
-            hDD_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name=f"hDD{i}{j}")
+            hDD_gf_access = gri.CarpetXGridFunction.access_gf(gf_name=f"hDD{i}{j}")
             loop_body += f"const CCTK_REAL hDD{i}{j} = {hDD_gf_access};\n"
 
     coord_name = ["t", "x", "y", "z"]
     for i in range(4):
         for j in range(i, 4):
-            Tmunu_gf_access = gri.ETLegacyGridFunction.access_gf(
+            Tmunu_gf_access = gri.CarpetXGridFunction.access_gf(
                 gf_name="eT" + coord_name[i] + coord_name[j], use_GF_suffix=False
             )
             loop_body += f"const CCTK_REAL T4DD{i}{j} = {Tmunu_gf_access};\n"
@@ -110,39 +105,38 @@ WARNING: Do not enable SIMD here, as it is not guaranteed that
         loop_body=loop_body,
         loop_region="all points",
         enable_simd=False,
-        OMP_collapse=OMP_collapse,
     )
 
     schedule1 = f"""
-schedule FUNC_NAME in MoL_CalcRHS before {thorn_name}_RHS
+schedule FUNC_NAME in ODESolvers_RHS before {thorn_name}_RHS
 {{
   LANG: C
-  READS:  TmunuBase::stress_energy_scalar,
-          TmunuBase::stress_energy_vector,
-          TmunuBase::stress_energy_tensor,
+  READS:  TmunuBaseX::stress_energy_scalar,
+          TmunuBaseX::stress_energy_vector,
+          TmunuBaseX::stress_energy_tensor,
           hDD00GF, hDD01GF, hDD02GF, hDD11GF, hDD12GF, hDD22GF,
           alphaGF, cfGF, vetU0GF, vetU1GF, vetU2GF
   WRITES: T4UU00GF(everywhere), T4UU01GF(everywhere), T4UU02GF(everywhere), T4UU03GF(everywhere),
           T4UU11GF(everywhere), T4UU12GF(everywhere), T4UU13GF(everywhere),
           T4UU22GF(everywhere), T4UU23GF(everywhere), T4UU33GF(everywhere)
-}} "Compute T4UU from T4DD (provided in eT?? from TmunuBase), needed for BSSN RHSs"
+}} "Compute T4UU from T4DD (provided in eT?? from TmunuBaseX), needed for BSSN RHSs"
 """
     schedule2 = f"""
-schedule FUNC_NAME in MoL_PseudoEvolution before {thorn_name}_BSSN_constraints
+schedule FUNC_NAME in ODESolvers_PostStep before {thorn_name}_BSSN_constraints
 {{
   LANG: C
-  READS:  TmunuBase::stress_energy_scalar,
-          TmunuBase::stress_energy_vector,
-          TmunuBase::stress_energy_tensor,
+  READS:  TmunuBaseX::stress_energy_scalar,
+          TmunuBaseX::stress_energy_vector,
+          TmunuBaseX::stress_energy_tensor,
           hDD00GF, hDD01GF, hDD02GF, hDD11GF, hDD12GF, hDD22GF,
           alphaGF, cfGF, vetU0GF, vetU1GF, vetU2GF
   WRITES: T4UU00GF(everywhere), T4UU01GF(everywhere), T4UU02GF(everywhere), T4UU03GF(everywhere),
           T4UU11GF(everywhere), T4UU12GF(everywhere), T4UU13GF(everywhere),
           T4UU22GF(everywhere), T4UU23GF(everywhere), T4UU33GF(everywhere)
-}} "Compute T4UU from T4DD (provided in eT?? from TmunuBase), needed for BSSN constraints"
+}} "Compute T4UU from T4DD (provided in eT?? from TmunuBaseX), needed for BSSN constraints"
 """
-    schedule_RHS = ("MoL_CalcRHS", schedule1)
-    schedule_constraints = ("MoL_PseudoEvolution", schedule2)
+    schedule_RHS = ("ODESolvers_CalcRHS", schedule1)
+    schedule_constraints = ("ODESolvers_PseudoEvolution", schedule2)
 
     cfc.register_CFunction(
         subdirectory=thorn_name,

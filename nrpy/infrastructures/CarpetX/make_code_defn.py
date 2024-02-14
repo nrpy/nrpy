@@ -51,13 +51,13 @@ def output_CFunctions_and_construct_make_code_defn(
         # Iterate through sorted list of CFunctions and write each to the make.code.defn file
         for i, CFunction in enumerate(make_code_defn_list_of_CFunctions):
             with ConditionalFileUpdater(
-                src_Path / f"{CFunction.name}.c", encoding="utf-8"
+                src_Path / f"{CFunction.name}.cxx", encoding="utf-8"
             ) as file:
                 file.write(CFunction.full_function)
 
             # If it's not the last iteration, append a backslash:
             if i < len(make_code_defn_list_of_CFunctions) - 1:
-                make_code_defn.write(f"       {CFunction.name}.c \\\n")
+                make_code_defn.write(f"       {CFunction.name}.cxx \\\n")
             # If it's the last iteration, don't append a backslash:
             else:
-                make_code_defn.write(f"       {CFunction.name}.c\n")
+                make_code_defn.write(f"       {CFunction.name}.cxx\n")

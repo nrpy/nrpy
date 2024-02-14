@@ -18,10 +18,8 @@ import nrpy.indexedexp as ixp
 import nrpy.helpers.parallel_codegen as pcg
 
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
-import nrpy.infrastructures.ETLegacy.simple_loop as lp
-from nrpy.infrastructures.ETLegacy.ETLegacy_include_header import (
-    define_standard_includes,
-)
+import nrpy.infrastructures.CarpetX.simple_loop as lp
+from nrpy.infrastructures.CarpetX.CarpetX_include_header import define_standard_includes
 from nrpy.equations.general_relativity.ADM_to_BSSN import ADM_to_BSSN
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 
@@ -51,7 +49,7 @@ def register_CFunction_ADM_to_BSSN(
     desc = f"""Converting from ADM to BSSN quantities is required in the Einstein Toolkit,
 as initial data are given in terms of ADM quantities, and {thorn_name} evolves the BSSN quantities."""
     name = f"{thorn_name}_ADM_to_BSSN_order_{fd_order}"
-    body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
+    body = f"""  DECLARE_CCTK_ARGUMENTSX_{name};
   DECLARE_CCTK_PARAMETERS;
 
   const CCTK_REAL invdxx0 = 1.0 / CCTK_DELTA_SPACE(0);
@@ -59,35 +57,35 @@ as initial data are given in terms of ADM quantities, and {thorn_name} evolves t
   const CCTK_REAL invdxx2 = 1.0 / CCTK_DELTA_SPACE(2);
 
 """
-    lapse_gf_access = gri.ETLegacyGridFunction.access_gf(
+    lapse_gf_access = gri.CarpetXGridFunction.access_gf(
         gf_name="alp", use_GF_suffix=False
     )
-    lapse2_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name="alpha")
+    lapse2_gf_access = gri.CarpetXGridFunction.access_gf(gf_name="alpha")
     loop_body = lapse2_gf_access + " = " + lapse_gf_access + ";\n"
 
     coord_name = ["x", "y", "z"]
     for i in range(3):
-        shift_gf_access = gri.ETLegacyGridFunction.access_gf(
+        shift_gf_access = gri.CarpetXGridFunction.access_gf(
             gf_name="beta" + coord_name[i], use_GF_suffix=False
         )
         loop_body += f"const CCTK_REAL local_betaU{i} = {shift_gf_access};\n"
 
     for i in range(3):
-        dtshift_gf_access = gri.ETLegacyGridFunction.access_gf(
+        dtshift_gf_access = gri.CarpetXGridFunction.access_gf(
             gf_name="dtbeta" + coord_name[i], use_GF_suffix=False
         )
         loop_body += f"const CCTK_REAL local_BU{i} = {dtshift_gf_access};\n"
 
     for i in range(3):
         for j in range(i, 3):
-            gamma_gf_access = gri.ETLegacyGridFunction.access_gf(
+            gamma_gf_access = gri.CarpetXGridFunction.access_gf(
                 gf_name="g" + coord_name[i] + coord_name[j], use_GF_suffix=False
             )
             loop_body += f"const CCTK_REAL local_gDD{i}{j} = {gamma_gf_access};\n"
 
     for i in range(3):
         for j in range(i, 3):
-            curv_gf_access = gri.ETLegacyGridFunction.access_gf(
+            curv_gf_access = gri.CarpetXGridFunction.access_gf(
                 gf_name="k" + coord_name[i] + coord_name[j], use_GF_suffix=False
             )
             loop_body += f"const CCTK_REAL local_kDD{i}{j} = {curv_gf_access};\n"
@@ -99,26 +97,26 @@ as initial data are given in terms of ADM quantities, and {thorn_name} evolves t
     BU = ixp.declarerank1("local_BU")
     adm2bssn = ADM_to_BSSN(gammaCartDD, KCartDD, betaU, BU, "Cartesian")
 
-    cf_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name="cf")
-    trK_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name="trK")
+    cf_gf_access = gri.CarpetXGridFunction.access_gf(gf_name="cf")
+    trK_gf_access = gri.CarpetXGridFunction.access_gf(gf_name="trK")
     list_of_output_exprs = [adm2bssn.cf, adm2bssn.trK]
     list_of_output_varnames = [cf_gf_access, trK_gf_access]
     for i in range(3):
-        vetU_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name=f"vetU{i}")
+        vetU_gf_access = gri.CarpetXGridFunction.access_gf(gf_name=f"vetU{i}")
         list_of_output_exprs += [adm2bssn.vetU[i]]
         list_of_output_varnames += [vetU_gf_access]
     for i in range(3):
-        betU_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name=f"betU{i}")
+        betU_gf_access = gri.CarpetXGridFunction.access_gf(gf_name=f"betU{i}")
         list_of_output_exprs += [adm2bssn.betU[i]]
         list_of_output_varnames += [betU_gf_access]
     for i in range(3):
         for j in range(i, 3):
-            hDD_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name=f"hDD{i}{j}")
+            hDD_gf_access = gri.CarpetXGridFunction.access_gf(gf_name=f"hDD{i}{j}")
             list_of_output_exprs += [adm2bssn.hDD[i][j]]
             list_of_output_varnames += [hDD_gf_access]
     for i in range(3):
         for j in range(i, 3):
-            aDD_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name=f"aDD{i}{j}")
+            aDD_gf_access = gri.CarpetXGridFunction.access_gf(gf_name=f"aDD{i}{j}")
             list_of_output_exprs += [adm2bssn.aDD[i][j]]
             list_of_output_varnames += [aDD_gf_access]
 
@@ -134,7 +132,6 @@ as initial data are given in terms of ADM quantities, and {thorn_name} evolves t
         loop_body=loop_body,
         enable_simd=False,
         loop_region="all points",
-        enable_OpenMP=True,
     )
 
     body += "\n"
@@ -164,9 +161,9 @@ as initial data are given in terms of ADM quantities, and {thorn_name} evolves t
         ccg.c_codegen(
             lambdaU,
             [
-                gri.ETLegacyGridFunction.access_gf("lambdaU0"),
-                gri.ETLegacyGridFunction.access_gf("lambdaU1"),
-                gri.ETLegacyGridFunction.access_gf("lambdaU2"),
+                gri.CarpetXGridFunction.access_gf("lambdaU0"),
+                gri.CarpetXGridFunction.access_gf("lambdaU1"),
+                gri.CarpetXGridFunction.access_gf("lambdaU2"),
             ],
             verbose=False,
             include_braces=False,
@@ -176,21 +173,21 @@ as initial data are given in terms of ADM quantities, and {thorn_name} evolves t
     )
 
     body += """
-  ExtrapolateGammas(cctkGH, lambdaU0GF);
-  ExtrapolateGammas(cctkGH, lambdaU1GF);
-  ExtrapolateGammas(cctkGH, lambdaU2GF);
+  //ExtrapolateGammas(cctkGH, lambdaU0GF);
+  //ExtrapolateGammas(cctkGH, lambdaU1GF);
+  //ExtrapolateGammas(cctkGH, lambdaU2GF);
 """
 
     schedule = f"""
 if(FD_order == {fd_order}) {{
-  schedule FUNC_NAME at CCTK_INITIAL after ADMBase_PostInitial
+  schedule FUNC_NAME at CCTK_INITIAL after ADMBaseX_PostInitial
   {{
     LANG: C
-    READS:  ADMBase::metric,
-            ADMBase::shift,
-            ADMBase::curv,
-            ADMBase::dtshift,
-            ADMBase::lapse
+    READS:  ADMBaseX::metric,
+            ADMBaseX::shift,
+            ADMBaseX::curv,
+            ADMBaseX::dtshift,
+            ADMBaseX::lapse
     WRITES: evol_variables
     SYNC: evol_variables
   }} "Convert initial data into BSSN variables"

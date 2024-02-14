@@ -17,10 +17,8 @@ import nrpy.params as par
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.finite_difference as fin
 
-import nrpy.infrastructures.ETLegacy.simple_loop as lp
-from nrpy.infrastructures.ETLegacy.ETLegacy_include_header import (
-    define_standard_includes,
-)
+import nrpy.infrastructures.CarpetX.simple_loop as lp
+from nrpy.infrastructures.CarpetX.CarpetX_include_header import define_standard_includes
 from nrpy.equations.general_relativity.BSSN_constraints import BSSN_constraints
 
 
@@ -31,7 +29,6 @@ def register_CFunction_BSSN_constraints(
     enable_rfm_precompute: bool,
     enable_simd: bool,
     fd_order: int,
-    OMP_collapse: int = 1,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the BSSN constraints evaluation function.
@@ -42,7 +39,6 @@ def register_CFunction_BSSN_constraints(
     :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
     :param enable_simd: Whether or not to enable SIMD instructions.
     :param fd_order: Order of finite difference method
-    :param OMP_collapse: Degree of OpenMP loop collapsing.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -61,7 +57,7 @@ def register_CFunction_BSSN_constraints(
         includes += [("./simd/simd_intrinsics.h")]
     desc = r"""Evaluate BSSN constraints."""
     name = f"{thorn_name}_BSSN_constraints_order_{fd_order}"
-    body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
+    body = f"""  DECLARE_CCTK_ARGUMENTSX_{name};
 """
     if enable_simd:
         body += f"""
@@ -73,7 +69,10 @@ def register_CFunction_BSSN_constraints(
 
 """
     else:
-        body += """  DECLARE_CCTK_PARAMETERS;
+        body += """  const CCTK_REAL invdxx0 CCTK_ATTRIBUTE_UNUSED = 1.0/CCTK_DELTA_SPACE(0);
+  const CCTK_REAL invdxx1 CCTK_ATTRIBUTE_UNUSED = 1.0/CCTK_DELTA_SPACE(1);
+  const CCTK_REAL invdxx2 CCTK_ATTRIBUTE_UNUSED = 1.0/CCTK_DELTA_SPACE(2);
+  DECLARE_CCTK_PARAMETERS;
 
 """
 
@@ -82,14 +81,12 @@ def register_CFunction_BSSN_constraints(
     ]
 
     list_of_output_exprs = [Bcon.H]
-    Constraints_access_gfs: List[str] = [
-        gri.ETLegacyGridFunction.access_gf(gf_name="H")
-    ]
+    Constraints_access_gfs: List[str] = [gri.CarpetXGridFunction.access_gf(gf_name="H")]
 
     for index in range(3):
         list_of_output_exprs += [Bcon.MU[index]]
         Constraints_access_gfs += [
-            gri.ETLegacyGridFunction.access_gf(gf_name="MU" + str(index))
+            gri.CarpetXGridFunction.access_gf(gf_name="MU" + str(index))
         ]
     body += lp.simple_loop(
         loop_body=ccg.c_codegen(
@@ -102,12 +99,12 @@ def register_CFunction_BSSN_constraints(
         ),
         loop_region="interior",
         enable_simd=enable_simd,
-        OMP_collapse=OMP_collapse,
     )
 
     schedule = f"""
 if(FD_order == {fd_order}) {{
-  schedule FUNC_NAME in MoL_PseudoEvolution as {thorn_name}_BSSN_constraints
+  # Originally in MoL_PseudoEvolution; consider changing when subcycling is added
+  schedule FUNC_NAME in ODESolvers_PostStep as {thorn_name}_BSSN_constraints
   {{
     LANG: C
     READS:  aDD00GF, aDD01GF, aDD02GF, aDD11GF, aDD12GF, aDD22GF,
@@ -137,7 +134,7 @@ if(FD_order == {fd_order}) {{
         prefunc=fin.construct_FD_functions_prefunc(),
         body=body,
         ET_thorn_name=thorn_name,
-        ET_schedule_bins_entries=[("MoL_PseudoEvolution", schedule)],
+        ET_schedule_bins_entries=[("ODESolvers_PostStep", schedule)],
         ET_current_thorn_CodeParams_used=params,
     )
 
