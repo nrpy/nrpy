@@ -8,7 +8,7 @@ License: BSD 2-Clause
 """
 
 # Step Import needed modules:
-from typing import cast, List, Tuple
+from typing import cast, List, Tuple, Union
 import sympy as sp  # For symbolic computations
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
@@ -84,12 +84,12 @@ def replace_cart_coord_by_xx(rfm: refmetric.ReferenceMetric, expr: sp.Expr) -> s
 
 
 def VU_cart_two_punctures(
-    _x0U: List[sp.Expr],
-    _P0U: List[sp.Expr],
-    _S0U: List[sp.Expr],
-    _x1U: List[sp.Expr],
-    _P1U: List[sp.Expr],
-    _S1U: List[sp.Expr],
+    _x0U: List[sp.Symbol],
+    _P0U: List[sp.Symbol],
+    _S0U: List[sp.Symbol],
+    _x1U: List[sp.Symbol],
+    _P1U: List[sp.Symbol],
+    _S1U: List[sp.Symbol],
 ) -> List[sp.Expr]:
     """
     Compute Bowen-York vector for two punctures in Cartesian coordinates.
@@ -107,14 +107,20 @@ def VU_cart_two_punctures(
     # Set spatial dimension
     dimension = 3
 
-    def dot(vec1: List[sp.Expr], vec2: List[sp.Expr]) -> sp.Expr:
+    def dot(
+        vec1: Union[List[sp.Symbol], List[sp.Expr]],
+        vec2: Union[List[sp.Symbol], List[sp.Expr]],
+    ) -> sp.Expr:
         """Compute dot product of two vectors in 3D space, assuming Cartesian coordinates."""
         vec1_dot_vec2 = sp.sympify(0)
         for i in range(dimension):
             vec1_dot_vec2 += vec1[i] * vec2[i]
         return cast(sp.Expr, vec1_dot_vec2)
 
-    def cross(vec1: List[sp.Expr], vec2: List[sp.Expr]) -> List[sp.Expr]:
+    def cross(
+        vec1: Union[List[sp.Symbol], List[sp.Expr]],
+        vec2: Union[List[sp.Symbol], List[sp.Expr]],
+    ) -> List[sp.Expr]:
         """Compute cross product of two vectors in 3D space, assuming Cartesian coordinates."""
         vec1_cross_vec2 = ixp.zerorank1()
         LeviCivitaSymbol = ixp.LeviCivitaSymbol_dim3_rank3()
@@ -125,7 +131,7 @@ def VU_cart_two_punctures(
         return vec1_cross_vec2
 
     def VU_cart_single_puncture(
-        xU: List[sp.Expr], PU: List[sp.Expr], SU: List[sp.Expr]
+        xU: List[sp.Symbol], PU: List[sp.Symbol], SU: List[sp.Symbol]
     ) -> List[sp.Expr]:
         """Compute Bowen-York vector for a single puncture."""
         r = sp.sympify(0)
