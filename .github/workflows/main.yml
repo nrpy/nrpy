@@ -78,9 +78,9 @@ jobs:
           echo "-={ Step 4: pylint }=-"
           if [ "${{ matrix.python-version }}" != "3.6.7" ]; then
             PYTHONPATH=.:$PYTHONPATH pylint --rcfile=.pylintrc $python_file || true
-            PYTHONPATH=.:$PYTHONPATH pylint_score=$(pylint --rcfile=.pylintrc $python_file | tail -2 | grep -Eo '[0-9\.]+' | head -1 || echo "0")
+            pylint_score=$(PYTHONPATH=.:$PYTHONPATH pylint --rcfile=.pylintrc $python_file | tail -2 | grep -Eo '[0-9\.]+' | head -1 || echo "0")
           else
-            PYTHONPATH=.:$PYTHONPATH pylint_score=$(pylint --rcfile=.pylintrc_python36 $python_file | tail -2 | grep -Eo '[0-9\.]+' | head -1 || echo "0")
+            pylint_score=$(PYTHONPATH=.:$PYTHONPATH pylint --rcfile=.pylintrc_python36 $python_file | tail -2 | grep -Eo '[0-9\.]+' | head -1 || echo "0")
           fi
           echo "Pylint score is $pylint_score"
           if (( $(echo "$pylint_score < 9.5" | bc -l) )); then
