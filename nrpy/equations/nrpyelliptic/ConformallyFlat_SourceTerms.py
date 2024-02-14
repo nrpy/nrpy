@@ -36,7 +36,7 @@ def compute_psi_background_and_ADD_times_AUU(
     # Step 1: Set up the reference metric
     rfm = refmetric.reference_metric[CoordSystem]
 
-    # Step 2: Define and Cartesian coordinates
+    # Step 2: Define Cartesian coordinates
     xxCart = [rfm.Cartx, rfm.Carty, rfm.Cartz]
 
     # Step 3: Set relative positions of each puncture
@@ -56,7 +56,7 @@ def compute_psi_background_and_ADD_times_AUU(
     VU_cart = VU_cart_two_punctures(x0U, P0U, S0U, x1U, P1U, S1U)
 
     # Step 6: Define extrinsic curvature
-    ADD_conf_cart = ADD_conf_cartesian(rfm, VU_cart)
+    ADD_conf_cart = ADD_conf_cartesian(xxCart, VU_cart)
 
     # Step 7: Compute the scalar ADD*AUU in Cartesian coordinates
     ADD_times_AUU_conf_cart = ADD_times_AUU_conf_cartesian(ADD_conf_cart)
@@ -161,21 +161,18 @@ def VU_cart_two_punctures(
 
 
 def ADD_conf_cartesian(
-    rfm: refmetric.ReferenceMetric, VU_cart: List[sp.Expr]
+    xxCart: List[sp.Expr], VU_cart: List[sp.Expr]
 ) -> List[List[sp.Expr]]:
     """
     Compute conformal, tracefree extrinsic curvature in Cartesian coordinates.
 
-    :param rfm: Computed reference metric quantities
+    :param xxCart: Vector of Cartesian coordinates
     :param VU_cart: Bowen-York vector in Cartesian coordinates
 
     :return: Conformal extrinsic curvature with two lower indices, in Cartesian coordinates
     """
     # Set spatial dimension
     dimension = 3
-
-    # Define Cartesian coordinates
-    xxCart = [rfm.Cartx, rfm.Carty, rfm.Cartz]
 
     # Define vector field V_i
     VD_cart = ixp.zerorank1()
