@@ -8,7 +8,7 @@ License: BSD 2-Clause
 """
 
 # Step Import needed modules:
-from typing import Any, List, Tuple
+from typing import cast, List, Tuple
 import sympy as sp  # For symbolic computations
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
@@ -22,12 +22,10 @@ from nrpy.equations.nrpyelliptic.CommonParams import (
     S1U,
 )
 
-_symbol_type = Any
-
 
 def compute_psi_background_and_ADD_times_AUU(
     CoordSystem: str,
-) -> Tuple[_symbol_type, _symbol_type]:
+) -> Tuple[sp.Expr, sp.Expr]:
     """
     Compute conformal factor and contraction of conformal extrinsic curvature.
 
@@ -69,15 +67,15 @@ def compute_psi_background_and_ADD_times_AUU(
     return psi_background, ADD_times_AUU
 
 
-def dot(vec1: List[_symbol_type], vec2: List[_symbol_type]) -> _symbol_type:
+def dot(vec1: List[sp.Expr], vec2: List[sp.Expr]) -> sp.Expr:
     """Compute dot product of two vectors in 3D space, assuming Cartesian coordinates."""
     vec1_dot_vec2 = sp.sympify(0)
     for i in range(3):
         vec1_dot_vec2 += vec1[i] * vec2[i]
-    return vec1_dot_vec2
+    return cast(sp.Expr, vec1_dot_vec2)
 
 
-def cross(vec1: List[_symbol_type], vec2: List[_symbol_type]) -> List[_symbol_type]:
+def cross(vec1: List[sp.Expr], vec2: List[sp.Expr]) -> List[sp.Expr]:
     """Compute cross product of two vectors in 3D space, assuming Cartesian coordinates."""
     vec1_cross_vec2 = ixp.zerorank1()
     LeviCivitaSymbol = ixp.LeviCivitaSymbol_dim3_rank3()
@@ -88,11 +86,11 @@ def cross(vec1: List[_symbol_type], vec2: List[_symbol_type]) -> List[_symbol_ty
     return vec1_cross_vec2
 
 
-def replace_cart_coord_by_xx(rfm: _symbol_type, expr: _symbol_type) -> _symbol_type:
+def replace_cart_coord_by_xx(rfm: refmetric.ReferenceMetric, expr: sp.Expr) -> sp.Expr:
     """
     Replace Cartx, Carty, and Cartz by their definitions in terms of the rfm coordinates.
 
-    :param rfm: Dictionary of reference metric quantities
+    :param rfm: Computed reference metric quantities
     :param expr: Original SymPy expression
 
     :return: The modified SymPy expression
@@ -105,13 +103,13 @@ def replace_cart_coord_by_xx(rfm: _symbol_type, expr: _symbol_type) -> _symbol_t
 
 
 def VU_cart_two_punctures(
-    _x0U: List[_symbol_type],
-    _P0U: List[_symbol_type],
-    _S0U: List[_symbol_type],
-    _x1U: List[_symbol_type],
-    _P1U: List[_symbol_type],
-    _S1U: List[_symbol_type],
-) -> List[_symbol_type]:
+    _x0U: List[sp.Expr],
+    _P0U: List[sp.Expr],
+    _S0U: List[sp.Expr],
+    _x1U: List[sp.Expr],
+    _P1U: List[sp.Expr],
+    _S1U: List[sp.Expr],
+) -> List[sp.Expr]:
     """
     Compute Bowen-York vector for two punctures in Cartesian coordinates.
 
@@ -129,8 +127,8 @@ def VU_cart_two_punctures(
     dimension = 3
 
     def VU_cart_single_puncture(
-        xU: List[_symbol_type], PU: List[_symbol_type], SU: List[_symbol_type]
-    ) -> List[_symbol_type]:
+        xU: List[sp.Expr], PU: List[sp.Expr], SU: List[sp.Expr]
+    ) -> List[sp.Expr]:
         """Compute Bowen-York vector for a single puncture."""
         r = sp.sympify(0)
         for i in range(dimension):
@@ -159,12 +157,12 @@ def VU_cart_two_punctures(
 
 
 def ADD_conf_cartesian(
-    rfm: _symbol_type, VU_cart: List[_symbol_type]
-) -> List[List[_symbol_type]]:
+    rfm: refmetric.ReferenceMetric, VU_cart: List[sp.Expr]
+) -> List[List[sp.Expr]]:
     """
     Compute conformal, tracefree extrinsic curvature in Cartesian coordinates.
 
-    :param rfm: Dictionary of reference metric quantities
+    :param rfm: Computed reference metric quantities
     :param VU_cart: Bowen-York vector in Cartesian coordinates
 
     :return: Conformal extrinsic curvature with two lower indices, in Cartesian coordinates
@@ -192,9 +190,10 @@ def ADD_conf_cartesian(
         V_cart_div += VD_cart_dD[i][i]
 
     # Define Kronecker delta symbol as a function
-    def kronecker_delta(i: int, j: int) -> _symbol_type:
+    def kronecker_delta(i: int, j: int) -> sp.Expr:
         """Compute Kronecker delta symbol."""
-        return sp.sympify(0) if i == j else sp.sympify(1)
+        delta_ij = sp.sympify(0) if i == j else sp.sympify(1)
+        return cast(sp.Expr, delta_ij)
 
     #  Compute the components of the conformal extrinsic curvature
     ADD_conf_cart = ixp.zerorank2()
@@ -209,8 +208,8 @@ def ADD_conf_cartesian(
 
 
 def ADD_times_AUU_conf_cartesian(
-    ADD_conf_cart: List[List[_symbol_type]],
-) -> _symbol_type:
+    ADD_conf_cart: List[List[sp.Expr]],
+) -> sp.Expr:
     """
     Compute contraction of conformal extrinsic curvature in Cartesian coordinates.
 
@@ -227,15 +226,15 @@ def ADD_times_AUU_conf_cartesian(
         for j in range(dimension):
             ADD_times_AUU_conf_cart += ADD_conf_cart[i][j] * ADD_conf_cart[i][j]
 
-    return ADD_times_AUU_conf_cart
+    return cast(sp.Expr, ADD_times_AUU_conf_cart)
 
 
 def psi_background_cartesian(
-    _bare_mass_0: _symbol_type,
-    _xU0: List[_symbol_type],
-    _bare_mass_1: _symbol_type,
-    _xU1: List[_symbol_type],
-) -> _symbol_type:
+    _bare_mass_0: sp.Expr,
+    _xU0: List[sp.Expr],
+    _bare_mass_1: sp.Expr,
+    _xU1: List[sp.Expr],
+) -> sp.Expr:
     """
     Compute singular piece of conformal factor for two punctures in Cartesian coordinates.
 
@@ -250,8 +249,8 @@ def psi_background_cartesian(
     dimension = 3
 
     def psi_background_cartesian_single_puncture(
-        bare_mass: _symbol_type, xU: List[_symbol_type]
-    ) -> _symbol_type:
+        bare_mass: sp.Expr, xU: List[sp.Expr]
+    ) -> sp.Expr:
         """Compute conformal factor for a single puncture."""
         # Compute distance of puncture from the origin
         r = sp.sympify(0)
@@ -260,13 +259,15 @@ def psi_background_cartesian(
         r = sp.sqrt(r)
 
         # Compute contribution to conformal factor
-        return bare_mass / (2 * r)
+        psi_single = bare_mass / (2 * r)
+        return cast(sp.Expr, psi_single)
 
     psi_puncture_0 = psi_background_cartesian_single_puncture(_bare_mass_0, _xU0)
     psi_puncture_1 = psi_background_cartesian_single_puncture(_bare_mass_1, _xU1)
 
     # Compute superposition of conformal factors, adding 1 for the asymptotic limit
-    return sp.sympify(1) + psi_puncture_0 + psi_puncture_1
+    psi = sp.sympify(1) + psi_puncture_0 + psi_puncture_1
+    return cast(sp.Expr, psi)
 
 
 if __name__ == "__main__":
