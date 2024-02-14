@@ -36,11 +36,19 @@ bare_mass_1 = par.register_CodeParameter(
 zPunc = par.register_CodeParameter("REAL", thismodule, "zPunc", 5.0, commondata=True)
 
 # Step P3.c.1: linear momentum 0
-P0U = par.register_CodeParameters("REAL", thismodule, ["P0_x", "P0_y", "P0_z"], 0.0, commondata=True)
+P0U = par.register_CodeParameters(
+    "REAL", thismodule, ["P0_x", "P0_y", "P0_z"], 0.0, commondata=True
+)
 # Step P3.c.2: linear momentum 1
-P1U = par.register_CodeParameters("REAL", thismodule, ["P1_x", "P1_y", "P1_z"], 0.0, commondata=True)
+P1U = par.register_CodeParameters(
+    "REAL", thismodule, ["P1_x", "P1_y", "P1_z"], 0.0, commondata=True
+)
 
 # Step P3.d.1: angular momentum 0
-S0U = par.register_CodeParameters("REAL", thismodule, ["S0_x", "S0_y", "S0_z"], 0.0, commondata=True)
+S0U = par.register_CodeParameters(
+    "REAL", thismodule, ["S0_x", "S0_y", "S0_z"], 0.0, commondata=True
+)
 # Step P3.d.2: angular momentum 1
-S1U = par.register_CodeParameters("REAL", thismodule, ["S1_x", "S1_y", "S1_z"], 0.0, commondata=True)
+S1U = par.register_CodeParameters(
+    "REAL", thismodule, ["S1_x", "S1_y", "S1_z"], 0.0, commondata=True
+)
