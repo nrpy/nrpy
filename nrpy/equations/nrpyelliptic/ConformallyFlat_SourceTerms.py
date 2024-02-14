@@ -67,6 +67,7 @@ def compute_psi_background_and_ADD_times_AUU(
     return psi_background, ADD_times_AUU
 
 
+# FIXME: replace with xx_to_Cart() in C code
 def replace_cart_coord_by_xx(rfm: refmetric.ReferenceMetric, expr: sp.Expr) -> sp.Expr:
     """
     Replace Cartx, Carty, and Cartz by their definitions in terms of the rfm coordinates.
