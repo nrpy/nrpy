@@ -67,25 +67,6 @@ def compute_psi_background_and_ADD_times_AUU(
     return psi_background, ADD_times_AUU
 
 
-def dot(vec1: List[sp.Expr], vec2: List[sp.Expr]) -> sp.Expr:
-    """Compute dot product of two vectors in 3D space, assuming Cartesian coordinates."""
-    vec1_dot_vec2 = sp.sympify(0)
-    for i in range(3):
-        vec1_dot_vec2 += vec1[i] * vec2[i]
-    return cast(sp.Expr, vec1_dot_vec2)
-
-
-def cross(vec1: List[sp.Expr], vec2: List[sp.Expr]) -> List[sp.Expr]:
-    """Compute cross product of two vectors in 3D space, assuming Cartesian coordinates."""
-    vec1_cross_vec2 = ixp.zerorank1()
-    LeviCivitaSymbol = ixp.LeviCivitaSymbol_dim3_rank3()
-    for i in range(3):
-        for j in range(3):
-            for k in range(3):
-                vec1_cross_vec2[i] += LeviCivitaSymbol[i][j][k] * vec1[j] * vec2[k]
-    return vec1_cross_vec2
-
-
 def replace_cart_coord_by_xx(rfm: refmetric.ReferenceMetric, expr: sp.Expr) -> sp.Expr:
     """
     Replace Cartx, Carty, and Cartz by their definitions in terms of the rfm coordinates.
@@ -125,6 +106,23 @@ def VU_cart_two_punctures(
     """
     # Set spatial dimension
     dimension = 3
+
+    def dot(vec1: List[sp.Expr], vec2: List[sp.Expr]) -> sp.Expr:
+        """Compute dot product of two vectors in 3D space, assuming Cartesian coordinates."""
+        vec1_dot_vec2 = sp.sympify(0)
+        for i in range(dimension):
+            vec1_dot_vec2 += vec1[i] * vec2[i]
+        return cast(sp.Expr, vec1_dot_vec2)
+
+    def cross(vec1: List[sp.Expr], vec2: List[sp.Expr]) -> List[sp.Expr]:
+        """Compute cross product of two vectors in 3D space, assuming Cartesian coordinates."""
+        vec1_cross_vec2 = ixp.zerorank1()
+        LeviCivitaSymbol = ixp.LeviCivitaSymbol_dim3_rank3()
+        for i in range(dimension):
+            for j in range(dimension):
+                for k in range(dimension):
+                    vec1_cross_vec2[i] += LeviCivitaSymbol[i][j][k] * vec1[j] * vec2[k]
+        return vec1_cross_vec2
 
     def VU_cart_single_puncture(
         xU: List[sp.Expr], PU: List[sp.Expr], SU: List[sp.Expr]
