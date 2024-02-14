@@ -203,10 +203,7 @@ STORAGE: aux_variables[3]      # Diagnostics variables""",
         USES_INCLUDEs="""USES INCLUDE: Symmetry.h
 USES INCLUDE: Boundary.h
 USES INCLUDE: Slicing.h
-
-# Needed to convert ADM initial data into BSSN initial data (gamma extrapolation)
-CCTK_INT FUNCTION ExtrapolateGammas(CCTK_POINTER_TO_CONST IN cctkGH, CCTK_REAL ARRAY INOUT var)
-REQUIRES FUNCTION ExtrapolateGammas""",
+""",
         is_evol_thorn=True,
         enable_NewRad=True,
     )
