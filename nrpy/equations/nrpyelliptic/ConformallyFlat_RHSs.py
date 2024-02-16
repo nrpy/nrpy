@@ -9,6 +9,7 @@ License: BSD 2-Clause
 """
 
 # Step P1: Import needed modules:
+from collections import OrderedDict
 import sympy as sp  # For symbolic computations
 import nrpy.grid as gri  # NRPy+: Functionality for handling numerical grids
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
@@ -120,6 +121,17 @@ class HyperbolicRelaxationCurvilinearRHSs:
 
         # Step 9: Multiply vv_rhs by variable_wavespeed**2 according to the hyperbolization precription
         self.vv_rhs *= variable_wavespeed * variable_wavespeed
+
+        # Step 10: Create dictionary that maps variable names to symbolic expressions
+        self.NRPyElliptic_RHSs_varname_to_expr_dict: OrderedDict[str, sp.Expr] = (
+            OrderedDict()
+        )
+        self.NRPyElliptic_RHSs_varname_to_expr_dict["uu_rhs"] = self.uu_rhs
+        self.NRPyElliptic_RHSs_varname_to_expr_dict["vv_rhs"] = self.vv_rhs
+        # Sort the lists alphabetically by varname:
+        self.NRPyElliptic_RHSs_varname_to_expr_dict = OrderedDict(
+            sorted(self.NRPyElliptic_RHSs_varname_to_expr_dict.items())
+        )
 
 
 if __name__ == "__main__":
