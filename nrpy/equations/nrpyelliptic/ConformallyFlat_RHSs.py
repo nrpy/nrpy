@@ -19,7 +19,7 @@ from nrpy.equations.nrpyelliptic.CommonParams import eta_damping
 # Specify RHSs as class variables,
 # to enable access outside this
 # function (e.g., for C code output)
-class RelaxationEquationCurvilinear_RHSs:
+class HyperbolicRelaxationCurvilinearRHSs:
     """Class sets up and stores sympy expressions for wave equation RHSs in curvilinear coordinates."""
 
     def __init__(self, CoordSystem: str, enable_rfm_precompute: bool) -> None:
@@ -145,7 +145,7 @@ if __name__ == "__main__":
         "SymTP",
         "SinhSymTP",
     ]:
-        RHS = RelaxationEquationCurvilinear_RHSs(
+        RHS = HyperbolicRelaxationCurvilinearRHSs(
             CoordSystem=Coord, enable_rfm_precompute=False
         )
         results_dict = ve.process_dictionary_of_expressions(
