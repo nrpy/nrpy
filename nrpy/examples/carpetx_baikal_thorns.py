@@ -18,6 +18,7 @@ import nrpy.params as par
 import nrpy.helpers.parallel_codegen as pcg
 from nrpy.helpers import simd
 
+from nrpy.infrastructures.CarpetX import boundary_conditions
 from nrpy.infrastructures.CarpetX import make_code_defn
 from nrpy.infrastructures.CarpetX import zero_rhss
 from nrpy.infrastructures.CarpetX import schedule_ccl
@@ -160,6 +161,7 @@ for evol_thorn_name in thorn_names:
     # STEP 3: Register functions that depend on all gridfunctions & CodeParameters having been set
     ########################
 
+    boundary_conditions.register_CFunctions(thorn_name=evol_thorn_name)
     zero_rhss.register_CFunction_zero_rhss(thorn_name=evol_thorn_name)
 
     ########################
@@ -192,11 +194,7 @@ STORAGE: aux_variables[1]      # Diagnostics variables""",
         project_dir=project_dir,
         thorn_name=evol_thorn_name,
         inherits=inherits,
-        USES_INCLUDEs="""USES INCLUDE: loop_device.hxx
-
-# Needed to convert ADM initial data into BSSN initial data (gamma extrapolation)
-#CCTK_INT FUNCTION ExtrapolateGammas(CCTK_POINTER_TO_CONST IN cctkGH, CCTK_REAL ARRAY INOUT var)
-#REQUIRES FUNCTION ExtrapolateGammas""",
+        USES_INCLUDEs="USES INCLUDE: loop_device.hxx",
         is_evol_thorn=True,
         enable_NewRad=True,
     )

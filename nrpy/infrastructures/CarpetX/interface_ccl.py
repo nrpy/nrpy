@@ -44,18 +44,7 @@ inherits: {inherits}
 {USES_INCLUDEs}
 """
     if enable_NewRad:
-        outstr += r"""
-# Note: we don't have NewRad yet
-# Needed for NewRad outer boundary condition driver:
-#CCTK_INT FUNCTION                         \
-#    NewRad_Apply                          \
-#        (CCTK_POINTER_TO_CONST IN cctkGH, \
-#         CCTK_REAL ARRAY IN var,          \
-#         CCTK_REAL ARRAY INOUT rhs,       \
-#         CCTK_REAL IN var0,               \
-#         CCTK_REAL IN v0,                 \
-#         CCTK_INT IN radpower)
-#REQUIRES FUNCTION NewRad_Apply
+        outstr += r"""USES INCLUDE HEADER: newradx.hxx
 """
     outstr += """
 # Tell the Toolkit that we want all gridfunctions

@@ -63,6 +63,10 @@ USES FUNCTION Driver_SelectVarForBC
 """
     if enable_NewRad:
         outstr += r"""
+# Needed to convert ADM initial data into BSSN initial data (Gamma extrapolation)
+CCTK_INT FUNCTION ExtrapolateGammas(CCTK_POINTER_TO_CONST IN cctkGH, CCTK_REAL ARRAY INOUT var)
+REQUIRES FUNCTION ExtrapolateGammas
+
 # Needed for EinsteinEvolve/NewRad outer boundary condition driver:
 CCTK_INT FUNCTION                         \
     NewRad_Apply                          \
