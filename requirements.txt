@@ -1,7 +1,6 @@
 appdirs
 multiprocess
 nrpypn
-nrpylatex
 py-cpuinfo
 sympy
 typing-extensions
