@@ -49,7 +49,7 @@ import nrpy.infrastructures.BHaH.special_functions.spin_weight_minus2_spherical_
 import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.TwoPunctures_lib as TPl
 import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xxCartxx
 
-par.set_parval_from_str("Infrastructure", "superB")
+par.set_parval_from_str("Infrastructure", "BHaH")
 
 
 # Code-generation-time parameters:
