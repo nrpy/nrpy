@@ -146,7 +146,9 @@ for (int j = 0; j < params->Nxx_plus_2NGHOSTS2; j++) xx[2][j] = params->xxmin2 +
     )
 
 
-def register_CFunction_cfl_limited_timestep(CoordSystem: str) -> None:
+def register_CFunction_cfl_limited_timestep(
+    CoordSystem: str, use_unit_CFL: bool = False
+) -> None:
     """
     Register a C function to find the CFL-limited timestep dt on a numerical grid.
 
@@ -182,9 +184,12 @@ LOOP_NOOMP(i0, NGHOSTS, Nxx_plus_2NGHOSTS0-NGHOSTS,
         include_braces=False,
     )
     body += """ds_min = MIN(ds_min, MIN(dsmin0, MIN(dsmin1, dsmin2)));
-}
-commondata->dt = MIN(commondata->dt, ds_min * commondata->CFL_FACTOR);
-"""
+}"""
+    if use_unit_CFL:
+        body += "commondata->dt = MIN(commondata->dt, ds_min);"
+    else:
+        body += "commondata->dt = MIN(commondata->dt, ds_min * CFL_FACTOR);"
+
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
@@ -276,6 +281,7 @@ def register_CFunctions(
     Nxx_dict: Dict[str, List[int]],
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
+    use_unit_CFL: bool = False,
 ) -> None:
     """
     Register C functions related to coordinate systems and grid parameters.
@@ -292,7 +298,9 @@ def register_CFunctions(
             grid_physical_size=grid_physical_size,
             Nxx_dict=Nxx_dict,
         )
-        register_CFunction_cfl_limited_timestep(CoordSystem=CoordSystem)
+        register_CFunction_cfl_limited_timestep(
+            CoordSystem=CoordSystem, use_unit_CFL=use_unit_CFL
+        )
     register_CFunction_CoordSystem_hash(list_of_CoordSystems)
     register_CFunction_numerical_grids_and_timestep(
         enable_rfm_precompute=enable_rfm_precompute,
