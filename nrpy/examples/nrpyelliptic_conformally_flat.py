@@ -71,24 +71,33 @@ boundary_conditions_desc = "outgoing radiation"
 # fmt: off
 initial_data_type = "gw150914"  # choices are: "gw150914", "axisymmetric", and "single_puncture"
 
+q = 36.0 / 29.0
+Pr = -0.00084541526517121  # Radial linear momentum
+Pphi = 0.09530152296974252  # Azimuthal linear momentum
+S0_y_dimless = 0.31
+S1_y_dimless = -0.46
+m0_adm = q / (1.0 + q)
+m1_adm = 1.0 / (1.0 + q)
+
 gw150914_params = {
     "zPunc": 5.0,
-    "q": (q := 36.0 / 29.0),
+    "q": q,
     "bare_mass_0": 0.51841993533587039,
     "bare_mass_1": 0.39193567996522616,
-    "Pr"  : (Pr   := -0.00084541526517121),  # Radial linear momentum
-    "Pphi": (Pphi :=  0.09530152296974252),  # Azimuthal linear momentum
-    "S0_y_dimless" : (S0_y_dimless :=  0.31),
-    "S1_y_dimless" : (S1_y_dimless := -0.46),
-    "m0_adm": (m0_adm := q / (1.0 + q)),
-    "m1_adm": (m1_adm := 1.0 / (1.0 + q)),
-    "S0_y":  S0_y_dimless * (m0_adm ** 2),
-    "S1_y":  S1_y_dimless * (m1_adm ** 2),
-    "P0_x":  Pphi,
-    "P0_z":  Pr,
+    "Pr": Pr,
+    "Pphi": Pphi,
+    "S0_y_dimless": S0_y_dimless,
+    "S1_y_dimless": S1_y_dimless,
+    "m0_adm": m0_adm,
+    "m1_adm": m1_adm,
+    "S0_y": S0_y_dimless * (m0_adm ** 2),
+    "S1_y": S1_y_dimless * (m1_adm ** 2),
+    "P0_x": Pphi,
+    "P0_z": Pr,
     "P1_x": -Pphi,
     "P1_z": -Pr,
 }
+
 
 axisymmetric_params = {
     "zPunc": 5.0,
