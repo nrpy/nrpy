@@ -48,6 +48,7 @@ from nrpy.infrastructures.BHaH import rfm_wrapper_functions
 import nrpy.infrastructures.BHaH.special_functions.spin_weight_minus2_spherical_harmonics as swm2sh
 import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.TwoPunctures_lib as TPl
 import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xxCartxx
+import nrpy.infrastructures.superB.diagnostics as superBdiagnostics
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -148,7 +149,22 @@ TP_solve(&ID_persist);
 }
 """,
 )
-BCl.register_CFunction_diagnostics(
+# ~ BCl.register_CFunction_diagnostics(
+    # ~ list_of_CoordSystems=[CoordSystem],
+    # ~ default_diagnostics_out_every=diagnostics_output_every,
+    # ~ enable_psi4_diagnostics=True,
+    # ~ grid_center_filename_tuple=("out0d-conv_factor%.2f.txt", "convergence_factor"),
+    # ~ axis_filename_tuple=(
+        # ~ "out1d-AXIS-conv_factor%.2f-t%08.2f.txt",
+        # ~ "convergence_factor, time",
+    # ~ ),
+    # ~ plane_filename_tuple=(
+        # ~ "out2d-PLANE-conv_factor%.2f-t%08.2f.txt",
+        # ~ "convergence_factor, time",
+    # ~ ),
+    # ~ out_quantities_dict="default",
+# ~ )
+superBdiagnostics.register_CFunction_diagnostics(
     list_of_CoordSystems=[CoordSystem],
     default_diagnostics_out_every=diagnostics_output_every,
     enable_psi4_diagnostics=True,
