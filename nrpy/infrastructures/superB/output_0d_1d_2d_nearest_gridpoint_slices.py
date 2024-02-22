@@ -55,9 +55,8 @@ const REAL *restrict y_n_gfs = gridfuncs->y_n_gfs;
 const REAL *restrict auxevol_gfs = gridfuncs->auxevol_gfs;
 const REAL *restrict diagnostic_output_gfs = gridfuncs->diagnostic_output_gfs;
 
-const int num_diagnostic_1d_y_pts = diagnosticptoffsetstruct->num_diagnostic_1d_y_pts;
-
-for (int which_pt = 0; which_pt < num_diagnostic_1d_y_pts; which_pt++) {{
+const int num_diagnostic_pts = = {'diagnosticptoffsetstruct->num_diagnostic_1d_y_pts;' if axis == "y" else 'diagnosticptoffsetstruct->num_diagnostic_1d_z_pts;'}
+for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {{
   const int idx3 = diagnosticptoffsetstruct->localidx3_diagnostic_1d_y_pt[which_pt];
   const int i0 = diagnosticptoffsetstruct->locali0_diagnostic_1d_y_pt[which_pt];
   const int i1 = diagnosticptoffsetstruct->locali1_diagnostic_1d_y_pt[which_pt];
