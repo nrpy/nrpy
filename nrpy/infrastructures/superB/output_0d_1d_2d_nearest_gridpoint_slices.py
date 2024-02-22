@@ -55,12 +55,16 @@ const REAL *restrict y_n_gfs = gridfuncs->y_n_gfs;
 const REAL *restrict auxevol_gfs = gridfuncs->auxevol_gfs;
 const REAL *restrict diagnostic_output_gfs = gridfuncs->diagnostic_output_gfs;
 
-const int num_diagnostic_pts = = {'diagnosticptoffsetstruct->num_diagnostic_1d_y_pts;' if axis == "y" else 'diagnosticptoffsetstruct->num_diagnostic_1d_z_pts;'}
+const int num_diagnostic_pts = {'diagnosticptoffsetstruct->num_diagnostic_1d_y_pts;' if axis == "y" else 'diagnosticptoffsetstruct->num_diagnostic_1d_z_pts;'}
+const int *restrict idx3_diagnostic_pt = {'diagnosticptoffsetstruct->localidx3_diagnostic_1d_y_pt;' if axis == "y" else 'diagnosticptoffsetstruct->localidx3_diagnostic_1d_z_pt;'}
+const int *restrict i0_diagnostic_pt = {'diagnosticptoffsetstruct->locali0_diagnostic_1d_y_pt;' if axis == "y" else 'diagnosticptoffsetstruct->locali0_diagnostic_1d_z_pt;'}
+const int *restrict i1_diagnostic_pt = {'diagnosticptoffsetstruct->locali1_diagnostic_1d_y_pt;' if axis == "y" else 'diagnosticptoffsetstruct->locali1_diagnostic_1d_z_pt;'}
+const int *restrict i2_diagnostic_pt = {'diagnosticptoffsetstruct->locali2_diagnostic_1d_y_pt;' if axis == "y" else 'diagnosticptoffsetstruct->locali2_diagnostic_1d_z_pt;'}
 for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {{
-  const int idx3 = diagnosticptoffsetstruct->localidx3_diagnostic_1d_y_pt[which_pt];
-  const int i0 = diagnosticptoffsetstruct->locali0_diagnostic_1d_y_pt[which_pt];
-  const int i1 = diagnosticptoffsetstruct->locali1_diagnostic_1d_y_pt[which_pt];
-  const int i2 = diagnosticptoffsetstruct->locali2_diagnostic_1d_y_pt[which_pt];
+  const int idx3 = idx3_diagnostic_pt[which_pt];
+  const int i0 = i0_diagnostic_pt[which_pt];
+  const int i1 = i1_diagnostic_pt[which_pt];
+  const int i2 = i2_diagnostic_ptt[which_pt];
   REAL xCart[3];
   xx_to_Cart(commondata, params, xx, i0, i1, i2, xCart);
   const REAL xCart_axis = {'xCart[1];' if axis == "y" else 'xCart[2];'}
@@ -77,14 +81,14 @@ for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {{
     )
     for value in out_quantities_dict.values():
       output_to_file += f"{value}, "
-    output_to_file = f"{output_to_file[:-2]});\n}}\n"
+    output_to_file = f"{output_to_file[:-2]});\n"
 
     body += output_to_file
 
-    body += r"""
-  const int offsetpt_firstfield = diagnosticptoffsetstruct->offset_diagnostic_1d_y_pt[which_pt];
+    body += rf"""
+  const int offsetpt_firstfield = {'diagnosticptoffsetstruct->offset_diagnostic_1d_y_pt[which_pt];' if axis == "y" else 'diagnosticptoffsetstruct->offset_diagnostic_1d_z_pt[which_pt];'}
   Ck::IO::write(token, output_to_file, sizeinbytes, offsetpt_firstfield);
-}
+}}
 """
     cfc.register_CFunction(
         includes=includes,
