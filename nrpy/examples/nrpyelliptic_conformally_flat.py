@@ -38,6 +38,9 @@ grid_physical_size = 1.0e6
 t_final = grid_physical_size
 default_diagnostics_output_every = 100
 default_checkpoint_every = 50.0
+eta_damping = 11.0
+MINIMUM_GLOBAL_WAVESPEED = 0.7
+CFL_FACTOR = 1.0  # NRPyElliptic wave speed prescription assumes this parameter is ALWAYS set to 1
 CoordSystem = "SinhSymTP"
 Nxx_dict = {
     "SinhSymTP": [128, 128, 16],
@@ -154,7 +157,6 @@ numericalgrids.register_CFunctions(
     Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
-    use_unit_CFL=True,
 )
 xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
 
@@ -218,6 +220,11 @@ chkpt.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
 
 progress.register_CFunction_progress_indicator()
 rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
+
+# Update parameters needed for hyperbolic relaxation method
+par.adjust_CodeParam_default("eta_damping", eta_damping)
+par.adjust_CodeParam_default("MINIMUM_GLOBAL_WAVESPEED", MINIMUM_GLOBAL_WAVESPEED)
+par.adjust_CodeParam_default("CFL_FACTOR", CFL_FACTOR)
 
 # Update parameters specific to the coordinate system
 if CoordSystem == "SinhSymTP":
