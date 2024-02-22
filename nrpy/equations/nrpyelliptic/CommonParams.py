@@ -15,9 +15,14 @@ import nrpy.params as par  # NRPy+: Parameter interface
 # Step P1: Define time parameter
 time = par.register_CodeParameter("REAL", __name__, "time", 0.0)
 
-# Step P2: Define the damping parameter used in the hyperbolic relaxation method
+# Step P2.a: Define the damping parameter used in the hyperbolic relaxation method
 eta_damping = par.register_CodeParameter(
     "REAL", __name__, "eta_damping", 10.0, commondata=True
+)
+
+# Step P2.b: Define the parameter that controls minimum value of wavespeed in the numerical domain
+MINIMUM_GLOBAL_WAVESPEED = par.register_CodeParameter(
+    "REAL", __name__, "MINIMUM_GLOBAL_WAVESPEED", 0.7, commondata=True
 )
 
 # Step P3: Define puncture parameters
