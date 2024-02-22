@@ -8,13 +8,8 @@ Author: Zachariah B. Etienne
 from typing import Dict, Tuple, Union, cast
 from inspect import currentframe as cfr
 from types import FrameType as FT
-
-import sympy as sp
-
-import nrpy.indexedexp as ixp
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.BHaH.simple_loop as lp
 
 
 def register_CFunction_diagnostics_nearest_1d_axis(
@@ -37,13 +32,6 @@ def register_CFunction_diagnostics_nearest_1d_axis(
         )
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-
-    prefunc, loop_1d = lp.simple_loop_1D(
-        CoordSystem=CoordSystem,
-        out_quantities_dict=out_quantities_dict,
-        axis=axis,
-    )
-
     desc = f"Output diagnostic quantities at gridpoints closest to {axis} axis."
     c_type = "void"
     name = f"diagnostics_nearest_1d_{axis}_axis"
@@ -101,5 +89,3 @@ for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {{
         body=body,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
-
-
