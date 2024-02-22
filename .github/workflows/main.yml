@@ -104,6 +104,7 @@ jobs:
         pip install . &&
         python -m nrpy.examples.wave_equation_cartesian   && (cd project/wavetoy && make && make clean) &&
         python -m nrpy.examples.wave_equation_curvilinear && (cd project/curviwavetoy && make && make clean) &&
+        python -m nrpy.examples.nrpyelliptic_conformally_flat && (cd project/nrpyelliptic_conformally_flat && make && make clean) &&
         python -m nrpy.examples.two_blackholes_collide    && (cd project/two_blackholes_collide && make && make clean) &&
         python -m nrpy.examples.blackhole_spectroscopy    && (cd project/blackhole_spectroscopy && make && make clean) &&
         python -m nrpy.examples.spinning_blackhole        && (cd project/spinning_blackhole && make && make clean) &&
@@ -142,6 +143,7 @@ jobs:
         pip install . &&
         python -m nrpy.examples.wave_equation_cartesian   && (cd project/wavetoy && make && make clean) &&
         python -m nrpy.examples.wave_equation_curvilinear && (cd project/curviwavetoy && make && make clean) &&
+        python -m nrpy.examples.nrpyelliptic_conformally_flat && (cd project/nrpyelliptic_conformally_flat && make && make clean) &&
         python -m nrpy.examples.two_blackholes_collide    && (cd project/two_blackholes_collide && make && make clean) &&
         python -m nrpy.examples.blackhole_spectroscopy    && (cd project/blackhole_spectroscopy && make && make clean) &&
         python -m nrpy.examples.spinning_blackhole        && (cd project/spinning_blackhole && make && make clean) &&
