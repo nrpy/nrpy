@@ -62,6 +62,7 @@ fi
 
 PYTHONPATH=.:$PYTHONPATH python nrpy/examples/wave_equation_cartesian.py   && (cd project/wavetoy && make && make clean) &&
 PYTHONPATH=.:$PYTHONPATH python nrpy/examples/wave_equation_curvilinear.py && (cd project/curviwavetoy && make && make clean) &&
+PYTHONPATH=.:$PYTHONPATH python nrpy/examples/nrpyelliptic_conformally_flat.py && (cd project/nrpyelliptic_conformally_flat && make && make clean) &&
 PYTHONPATH=.:$PYTHONPATH python nrpy/examples/two_blackholes_collide.py    && (cd project/two_blackholes_collide && make && make clean) &&
 PYTHONPATH=.:$PYTHONPATH python nrpy/examples/blackhole_spectroscopy.py    && (cd project/blackhole_spectroscopy && make && make clean) &&
 PYTHONPATH=.:$PYTHONPATH python nrpy/examples/spinning_blackhole.py        && (cd project/spinning_blackhole && make && make clean) &&
