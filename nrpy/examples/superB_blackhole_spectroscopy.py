@@ -11,7 +11,6 @@ This example sets up a complete C code for solving the GR field
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
-
         Nishita Jadoo
         njadoo **at** uidaho **dot* edu
 
@@ -149,21 +148,6 @@ TP_solve(&ID_persist);
 }
 """,
 )
-# ~ BCl.register_CFunction_diagnostics(
-    # ~ list_of_CoordSystems=[CoordSystem],
-    # ~ default_diagnostics_out_every=diagnostics_output_every,
-    # ~ enable_psi4_diagnostics=True,
-    # ~ grid_center_filename_tuple=("out0d-conv_factor%.2f.txt", "convergence_factor"),
-    # ~ axis_filename_tuple=(
-        # ~ "out1d-AXIS-conv_factor%.2f-t%08.2f.txt",
-        # ~ "convergence_factor, time",
-    # ~ ),
-    # ~ plane_filename_tuple=(
-        # ~ "out2d-PLANE-conv_factor%.2f-t%08.2f.txt",
-        # ~ "convergence_factor, time",
-    # ~ ),
-    # ~ out_quantities_dict="default",
-# ~ )
 superBdiagnostics.register_CFunction_diagnostics(
     list_of_CoordSystems=[CoordSystem],
     default_diagnostics_out_every=diagnostics_output_every,

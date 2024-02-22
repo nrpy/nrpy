@@ -17,7 +17,8 @@ import nrpy.reference_metric as refmetric
 
 import nrpy.helpers.parallel_codegen as pcg
 
-import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices as out012d
+# ~ import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices as out012d
+import nrpy.infrastructures.superB.output_0d_1d_2d_nearest_gridpoint_slices as out012d
 
 
 def register_CFunction_diagnostics(
@@ -81,11 +82,11 @@ def register_CFunction_diagnostics(
     # fmt: on
 
     for CoordSystem in list_of_CoordSystems:
-        out012d.register_CFunction_diagnostics_nearest_grid_center(
-            CoordSystem=CoordSystem,
-            out_quantities_dict=out_quantities_dict,
-            filename_tuple=grid_center_filename_tuple,
-        )
+        # ~ out012d.register_CFunction_diagnostics_nearest_grid_center(
+            # ~ CoordSystem=CoordSystem,
+            # ~ out_quantities_dict=out_quantities_dict,
+            # ~ filename_tuple=grid_center_filename_tuple,
+        # ~ )
         for axis in ["y", "z"]:
             out012d.register_CFunction_diagnostics_nearest_1d_axis(
                 CoordSystem=CoordSystem,
@@ -93,13 +94,13 @@ def register_CFunction_diagnostics(
                 filename_tuple=axis_filename_tuple,
                 axis=axis,
             )
-        for plane in ["xy", "yz"]:
-            out012d.register_CFunction_diagnostics_nearest_2d_plane(
-                CoordSystem=CoordSystem,
-                out_quantities_dict=out_quantities_dict,
-                filename_tuple=plane_filename_tuple,
-                plane=plane,
-            )
+        # ~ for plane in ["xy", "yz"]:
+            # ~ out012d.register_CFunction_diagnostics_nearest_2d_plane(
+                # ~ CoordSystem=CoordSystem,
+                # ~ out_quantities_dict=out_quantities_dict,
+                # ~ filename_tuple=plane_filename_tuple,
+                # ~ plane=plane,
+            # ~ )
 
     desc = r"""Diagnostics."""
     c_type = "void"
@@ -112,9 +113,9 @@ def register_CFunction_diagnostics(
 for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
 
   const int num_diagnostic_1d_y_pts = griddata[grid].diagnosticptoffsetstruct.num_diagnostic_1d_y_pts;
-  const int num_diagnostic_1d_z_pts = griddata[grid].diagnosticptoffsetstruct->num_diagnostic_1d_z_pts;
-  const int num_diagnostic_2d_xy_pts = griddata[grid].diagnosticptoffsetstruct->num_diagnostic_2d_xy_pts;
-  const int num_diagnostic_2d_yz_pts = griddata[grid].diagnosticptoffsetstruct->num_diagnostic_2d_yz_pts;
+  const int num_diagnostic_1d_z_pts = griddata[grid].diagnosticptoffsetstruct.num_diagnostic_1d_z_pts;
+  const int num_diagnostic_2d_xy_pts = griddata[grid].diagnosticptoffsetstruct.num_diagnostic_2d_xy_pts;
+  const int num_diagnostic_2d_yz_pts = griddata[grid].diagnosticptoffsetstruct.num_diagnostic_2d_yz_pts;
 
 
   const bool b_diagnostics = (num_diagnostic_1d_y_pts > 0) ||
@@ -123,7 +124,6 @@ for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
                         (num_diagnostic_2d_yz_pts > 0);
 
   if (b_diagnostics) {
-
     // Unpack griddata struct:
     const REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
     REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
@@ -142,20 +142,23 @@ for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
       constraints_eval(commondata, params, &griddata[grid].rfmstruct, y_n_gfs, auxevol_gfs, diagnostic_output_gfs);
     }
 
-    // 1D output
-    if (num_diagnostic_1d_y_pts > 0 && which_output == output_1d_y) {
-      diagnostics_nearest_1d_y_axis(commondata, params, xx, &griddata[grid].gridfuncs, &griddata[grid].diagnosticptoffsetstruct, token);
-    }
-    if (num_diagnostic_1d_z_pts > 0 && which_output == output_1d_z) {
-      diagnostics_nearest_1d_z_axis(commondata, params, xx, &griddata[grid].gridfuncs, &griddata[grid].diagnosticptoffsetstruct, token);
-    }
-
-    // 2D output
-    if (num_diagnostic_2d_xy_pts > 0 && which_output == output_2d_xy) {
-      diagnostics_nearest_2d_xy_plane(commondata, params, xx, &griddata[grid].gridfuncs, &griddata[grid].diagnosticptoffsetstruct, token);
-    }
-    if (num_diagnostic_2d_yz_pts > 0 && which_output == output_2d_yz) {
-      diagnostics_nearest_2d_yz_plane(commondata, params, xx, &griddata[grid].gridfuncs, &griddata[grid].diagnosticptoffsetstruct, token);
+    // 1D and 2D outputs
+    if (which_output == output_1d_y) {
+      if (num_diagnostic_1d_y_pts > 0) {
+        diagnostics_nearest_1d_y_axis(commondata, params, xx, &griddata[grid].gridfuncs, &griddata[grid].diagnosticptoffsetstruct, token);
+      }
+    } else if (which_output == output_1d_z) {
+      if (num_diagnostic_1d_z_pts > 0) {
+        diagnostics_nearest_1d_z_axis(commondata, params, xx, &griddata[grid].gridfuncs, &griddata[grid].diagnosticptoffsetstruct, token);
+      }
+    } else if (which_output == output_2d_xy) {
+      if (num_diagnostic_2d_xy_pts > 0) {
+        diagnostics_nearest_2d_xy_plane(commondata, params, xx, &griddata[grid].gridfuncs, &griddata[grid].diagnosticptoffsetstruct, token);
+      }
+    } else if (which_output == output_2d_yz) {
+      if (num_diagnostic_2d_yz_pts > 0) {
+        diagnostics_nearest_2d_yz_plane(commondata, params, xx, &griddata[grid].gridfuncs, &griddata[grid].diagnosticptoffsetstruct, token);
+      }
     }
   }
 }
