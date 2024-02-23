@@ -48,6 +48,7 @@ const int *restrict idx3_diagnostic_pt = {'diagnosticptoffsetstruct->localidx3_d
 const int *restrict i0_diagnostic_pt = {'diagnosticptoffsetstruct->locali0_diagnostic_1d_y_pt;' if axis == "y" else 'diagnosticptoffsetstruct->locali0_diagnostic_1d_z_pt;'}
 const int *restrict i1_diagnostic_pt = {'diagnosticptoffsetstruct->locali1_diagnostic_1d_y_pt;' if axis == "y" else 'diagnosticptoffsetstruct->locali1_diagnostic_1d_z_pt;'}
 const int *restrict i2_diagnostic_pt = {'diagnosticptoffsetstruct->locali2_diagnostic_1d_y_pt;' if axis == "y" else 'diagnosticptoffsetstruct->locali2_diagnostic_1d_z_pt;'}
+const int *restrict offsetpt_firstfield = {'diagnosticptoffsetstruct->offset_diagnostic_1d_y_pt;' if axis == "y" else 'diagnosticptoffsetstruct->offset_diagnostic_1d_z_pt;'}
 for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {{
   const int idx3 = idx3_diagnostic_pt[which_pt];
   const int i0 = i0_diagnostic_pt[which_pt];
@@ -59,9 +60,9 @@ for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {{
   int sizeinbytes = 23 * (len(out_quantities_dict) + 1);
   char out[sizeinbytes+1];
   snprintf(out, sizeof(out), " """
-    output_to_file = "%.15e,"
+    output_to_file = "% .15e,"
     for key in out_quantities_dict.keys():
-      printf_c_type = "%.15e" if key[0] != "int" else "%d"
+      printf_c_type = "% .15e" if key[0] != "int" else "%d"
       output_to_file += f"{printf_c_type} "
 
     output_to_file = (
@@ -73,9 +74,8 @@ for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {{
 
     body += output_to_file
 
-    body += rf"""
-  const int offsetpt_firstfield = {'diagnosticptoffsetstruct->offset_diagnostic_1d_y_pt[which_pt];' if axis == "y" else 'diagnosticptoffsetstruct->offset_diagnostic_1d_z_pt[which_pt];'}
-  Ck::IO::write(token, output_to_file, sizeinbytes, offsetpt_firstfield);
+    body += rf"""    
+  Ck::IO::write(token, output_to_file, sizeinbytes, offsetpt_firstfield[which_pt]);
 }}
 """
     cfc.register_CFunction(
@@ -140,12 +140,13 @@ def register_CFunction_diagnostics_nearest_2d_plane(
 const REAL *restrict y_n_gfs = gridfuncs->y_n_gfs;
 const REAL *restrict auxevol_gfs = gridfuncs->auxevol_gfs;
 const REAL *restrict diagnostic_output_gfs = gridfuncs->diagnostic_output_gfs;
-
+// Unpack diagnosticptoffset struct:
 const int num_diagnostic_pts = {'diagnosticptoffsetstruct->num_diagnostic_2d_xy_pts;' if plane == "xy" else 'diagnosticptoffsetstruct->num_diagnostic_2d_yz_pts;'}
 const int *restrict idx3_diagnostic_pt = {'diagnosticptoffsetstruct->localidx3_diagnostic_2d_xy_pt;' if plane == "xy" else 'diagnosticptoffsetstruct->localidx3_diagnostic_2d_yz_pt;'}
 const int *restrict i0_diagnostic_pt = {'diagnosticptoffsetstruct->locali0_diagnostic_2d_xy_pt;' if plane == "xy" else 'diagnosticptoffsetstruct->locali0_diagnostic_2d_yz_pt;'}
 const int *restrict i1_diagnostic_pt = {'diagnosticptoffsetstruct->locali1_diagnostic_2d_xy_pt;' if plane == "xy" else 'diagnosticptoffsetstruct->locali1_diagnostic_2d_yz_pt;'}
 const int *restrict i2_diagnostic_pt = {'diagnosticptoffsetstruct->locali2_diagnostic_2d_xy_pt;' if plane == "xy" else 'diagnosticptoffsetstruct->locali2_diagnostic_2d_yz_pt;'}
+const int *restrict offsetpt_firstfield = {'diagnosticptoffsetstruct->offset_diagnostic_2d_xy_pt;' if plane == "xy" else 'diagnosticptoffsetstruct->offset_diagnostic_2d_yz_pt;'}
 for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {{
   const int idx3 = idx3_diagnostic_pt[which_pt];
   const int i0 = i0_diagnostic_pt[which_pt];
@@ -156,9 +157,9 @@ for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {{
   int sizeinbytes = 23 * (len(out_quantities_dict) + 2);
   char out[sizeinbytes+1];
   snprintf(out, sizeof(out), " """
-    output_to_file = "%.15e %.15e,"
+    output_to_file = "% .15e % .15e,"
     for key in out_quantities_dict.keys():
-      printf_c_type = "%.15e" if key[0] != "int" else "%d"
+      printf_c_type = "% .15e" if key[0] != "int" else "%d"
       output_to_file += f"{printf_c_type} "
 
     if plane == "xy":
@@ -177,7 +178,7 @@ for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {{
 
     body += rf"""
   const int offsetpt_firstfield = {'diagnosticptoffsetstruct->offset_diagnostic_2d_xy_pt[which_pt];' if plane == "xy" else 'diagnosticptoffsetstruct->offset_diagnostic_2d_yz_pt[which_pt];'}
-  Ck::IO::write(token, output_to_file, sizeinbytes, offsetpt_firstfield);
+  Ck::IO::write(token, output_to_file, sizeinbytes, offsetpt_firstfield[which_pt]);
 }}
 """
     cfc.register_CFunction(
