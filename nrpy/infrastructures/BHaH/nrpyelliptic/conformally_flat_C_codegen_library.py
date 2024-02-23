@@ -523,6 +523,9 @@ def register_CFunction_diagnostics(
   // Compute l2-norm of Hamiltonian constraint violation
   const REAL residual_H = compute_L2_norm_of_gridfunction(commondata, griddata, integration_radius, RESIDUAL_HGF, diagnostic_output_gfs);
 
+  // Update residual to be used in stop condition
+  commondata->log10_current_residual = residual_H;
+
   // Output l2-norm of Hamiltonian constraint violation to file
   {
     char filename[256];
@@ -595,9 +598,19 @@ def register_CFunction_check_stop_conditions() -> Union[None, pcg.NRPyEnv_type]:
         "bool", __name__, "stop_relaxation", False, commondata=True
     )
 
-    # # Register parameter that sets the total number of relaxation steps
+    # Register parameter that sets the total number of relaxation steps
     _N_final = par.register_CodeParameter(
         "int", __name__, "N_final", 0, commondata=True
+    )
+
+    # Register parameter that sets the tolerance for log of residual
+    _log10_residual_tolerance = par.register_CodeParameter(
+        "REAL", __name__, "log10_residual_tolerance", -15.8, commondata=True
+    )
+
+    # Register parameter that sets log of residual to be updated at every time step
+    _log10_current_residual = par.register_CodeParameter(
+        "REAL", __name__, "log10_current_residual", 1.0, commondata=True
     )
 
     body = r"""  // Since this version of NRPyElliptic is unigrid, we simply set the grid index to 0
@@ -608,8 +621,10 @@ def register_CFunction_check_stop_conditions() -> Union[None, pcg.NRPyEnv_type]:
 #include "set_CodeParameters.h"
 
   // Check if total number of iteration steps has been reached
-  if (nn >= N_final){
+  if ((nn >= N_final) || (log10_current_residual < log10_residual_tolerance)){
     printf("Exiting main loop after %8d iterations\n", nn);
+    printf("The tolerance for the logarithmic residual is %.8e\n", log10_residual_tolerance);
+    printf("Exiting relaxation with logarithmic residual of %.8e\n", log10_current_residual);
     commondata->stop_relaxation = true;
   }
 """
