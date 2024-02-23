@@ -35,7 +35,8 @@ par.set_parval_from_str("Infrastructure", "BHaH")
 # Code-generation-time parameters:
 project_name = "nrpyelliptic_conformally_flat"
 grid_physical_size = 1.0e6
-t_final = grid_physical_size
+t_final = grid_physical_size  # This parameter is effectively not used in NRPyElliptic
+N_final = 10000  # Sets the maximum number of relaxation steps
 default_diagnostics_output_every = 100
 default_checkpoint_every = 50.0
 eta_damping = 11.0
@@ -225,6 +226,7 @@ rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 par.adjust_CodeParam_default("eta_damping", eta_damping)
 par.adjust_CodeParam_default("MINIMUM_GLOBAL_WAVESPEED", MINIMUM_GLOBAL_WAVESPEED)
 par.adjust_CodeParam_default("CFL_FACTOR", CFL_FACTOR)
+par.adjust_CodeParam_default("N_final", N_final)
 
 # Update parameters specific to the coordinate system
 if CoordSystem == "SinhSymTP":
