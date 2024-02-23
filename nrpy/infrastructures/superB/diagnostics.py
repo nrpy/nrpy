@@ -1,6 +1,4 @@
 """
-Library of C functions for solving the BSSN equations in curvilinear coordinates, using a reference-metric formalism.
-
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
         Nishita Jadoo
@@ -17,7 +15,6 @@ import nrpy.reference_metric as refmetric
 
 import nrpy.helpers.parallel_codegen as pcg
 
-# ~ import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices as out012d
 import nrpy.infrastructures.superB.output_0d_1d_2d_nearest_gridpoint_slices as out012d
 
 
@@ -94,13 +91,13 @@ def register_CFunction_diagnostics(
                 filename_tuple=axis_filename_tuple,
                 axis=axis,
             )
-        # ~ for plane in ["xy", "yz"]:
-            # ~ out012d.register_CFunction_diagnostics_nearest_2d_plane(
-                # ~ CoordSystem=CoordSystem,
-                # ~ out_quantities_dict=out_quantities_dict,
-                # ~ filename_tuple=plane_filename_tuple,
-                # ~ plane=plane,
-            # ~ )
+        for plane in ["xy", "yz"]:
+            out012d.register_CFunction_diagnostics_nearest_2d_plane(
+                CoordSystem=CoordSystem,
+                out_quantities_dict=out_quantities_dict,
+                filename_tuple=plane_filename_tuple,
+                plane=plane,
+            )
 
     desc = r"""Diagnostics."""
     c_type = "void"
