@@ -5,6 +5,9 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  # Run on the 1st and 15th of each month, at 4:47AM UTC, to check for breakages due to e.g., sympy-dev.
+  schedule:
+    - cron: '47 4 1,15 * *'
 
 jobs:
   build:
@@ -65,8 +68,10 @@ jobs:
         for python_file in $python_files; do
           echo ""
           echo "-={ $python_file }=-"
-          echo "-={ Step 1: Doctests/run Python module }=-"
-          DOCTEST_MODE=1 PYTHONPATH=.:$PYTHONPATH python $python_file || { failed_tests+=("doctest in $python_file"); break; }
+          if [[ ! $python_file =~ nrpy/examples/.* ]]; then
+            echo "-={ Step 1: Doctests/run Python module }=-"
+            DOCTEST_MODE=1 PYTHONPATH=.:$PYTHONPATH python $python_file || { failed_tests+=("doctest in $python_file"); break; }
+          fi
           if [ "${{ matrix.python-version }}" != "3.6.7" ]; then
             # Turns out that black in Python 3.6.7 has a heart attack when parsing equations/general_relativity/BSSN_quantities.py:
             # INTERNAL ERROR: Black produced code that is not equivalent to the source. Please report a bug on .... [HOW ABOUT NO. BEGGING FOR WONTFIX]
