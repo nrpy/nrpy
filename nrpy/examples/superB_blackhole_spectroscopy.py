@@ -48,6 +48,7 @@ import nrpy.infrastructures.BHaH.special_functions.spin_weight_minus2_spherical_
 import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.TwoPunctures_lib as TPl
 import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xxCartxx
 import nrpy.infrastructures.superB.diagnostics as superBdiagnostics
+import nrpy.infrastructures.superB.numerical_grids as superBnumericalgrids
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -82,6 +83,9 @@ swm2sh_maximum_l_mode_generated = 8
 swm2sh_maximum_l_mode_to_compute = 2  # for consistency with NRPy 1.0 version.
 Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
+}
+Nchare_dict = {
+    "SinhSpherical": [200, 1, 1],
 }
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.25
@@ -218,7 +222,7 @@ BCl.register_CFunction_psi4_tetrad(
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 # Does not need to be parallelized.
-BCl.register_CFunction_psi4_spinweightm2_decomposition_on_sphlike_grids()
+# ~ BCl.register_CFunction_psi4_spinweightm2_decomposition_on_sphlike_grids()
 
 numericalgrids.register_CFunctions(
     list_of_CoordSystems=[CoordSystem],
@@ -227,6 +231,16 @@ numericalgrids.register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
 )
+
+superBnumericalgrids.register_CFunctions(
+    list_of_CoordSystems=[CoordSystem],
+    grid_physical_size=grid_physical_size,
+    Nxx_dict=Nxx_dict,
+    Nchare_dict=Nchare_dict,
+    enable_rfm_precompute=enable_rfm_precompute,
+    enable_CurviBCs=True,
+)
+
 
 cbc.CurviBoundaryConditions_register_C_functions(
     list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order
