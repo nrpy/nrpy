@@ -9,7 +9,7 @@ Authors: Zachariah B. Etienne
 """
 
 # Step P1: Import needed NRPy+ core modules:
-from typing import List, Dict, Tuple, Union
+from typing import List, Tuple
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
