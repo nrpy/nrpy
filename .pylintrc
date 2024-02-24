@@ -62,28 +62,30 @@ confidence=
 # no Warning level messages displayed, use "--disable=all --enable=classes
 # --disable=W".
 #        singleton-comparison, # ADDED, with hesitation since some might be good suggestions, but far too many false positives
-disable=too-many-arguments,         # ADDED: no sane alternative to many arguments sometimes.
-        too-many-locals,            # ADDED: no sane alternative to many locals sometimes.
-        too-many-branches,          # ADDED: no sane alternative to many branches sometimes.
-        too-many-statements,        # ADDED: I want to make a statement: many statements are fine.
-        too-many-lines,             # ADDED: no sane alternative to many lines sometimes.
-        too-many-nested-blocks,     # ADDED: no sane alternative to many nested loops sometimes.
-        too-many-boolean-expressions, # ADDED: no sane alternative to many Boolean expressions sometimes.
-        invalid-name,               # ADDED: snake case not followed nonsense.
-        not-callable,               # ADDED: sympy functions not meant to be callable.
-        line-too-long,              # ADDED: yeah sometimes lines are longer than PEP-8, improves readability.
-        unbalanced-tuple-unpacking, # ADDED: false positives: does not understand returned tuples from e.g., par.register_CodeParameters().
-        use-maxsplit-arg,           # ADDED: suggestion just clutters the code.
-        too-many-instance-attributes, # ADDED: dumb class warning
-        too-few-public-methods,     # ADDED: dumb class warning
-        raw-checker-failed,
-        bad-inline-option,
-        locally-disabled,
-        file-ignored,
-        suppressed-message,
-        useless-suppression,
-        deprecated-pragma,
-        use-symbolic-message-instead
+disable=
+    too-many-arguments,             # ADDED: no sane alternative to many arguments sometimes.
+    too-many-locals,                # ADDED: no sane alternative to many locals sometimes.
+    too-many-branches,              # ADDED: no sane alternative to many branches sometimes.
+    too-many-statements,            # ADDED: I want to make a statement: many statements are fine.
+    too-many-lines,                 # ADDED: no sane alternative to many lines sometimes.
+    too-many-nested-blocks,         # ADDED: no sane alternative to many nested loops sometimes.
+    too-many-boolean-expressions,   # ADDED: no sane alternative to many Boolean expressions sometimes.
+    invalid-name,                   # ADDED: snake case not followed nonsense.
+    not-callable,                   # ADDED: sympy functions not meant to be callable.
+    line-too-long,                  # ADDED: yeah sometimes lines are longer than PEP-8, improves readability.
+    unbalanced-tuple-unpacking,     # ADDED: false positives: does not understand returned tuples from e.g., par.register_CodeParameters().
+    use-maxsplit-arg,               # ADDED: suggestion just clutters the code.
+    too-many-instance-attributes,   # ADDED: dumb class warning.
+    too-few-public-methods,         # ADDED: dumb class warning.
+    raw-checker-failed,
+    bad-inline-option,
+    locally-disabled,
+    file-ignored,
+    suppressed-message,
+    useless-suppression,
+    deprecated-pragma,
+    use-symbolic-message-instead
+
 
 # Enable the message, report, category or checker with the given id(s). You can
 # either give multiple identifier separated by comma (,) or put this option
