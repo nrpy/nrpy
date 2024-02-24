@@ -13,12 +13,13 @@ from nrpy.helpers.conditional_file_updater import ConditionalFileUpdater
 
 
 def construct_param_ccl(
-    project_dir: str,
-    thorn_name: str,
-    shares_extends_str: str = "",
+    project_dir: str, thorn_name: str, shares_extends_str: str = ""
 ) -> List[str]:
     """
     Generate the content for the param.ccl file and write it to disk.
+
+    This function generates the param.ccl file for a specified thorn in a Cactus
+    computational toolkit project. The file is written to the project directory.
 
     :param project_dir: The directory where the project resides.
     :param thorn_name: Name of the thorn.
@@ -47,7 +48,7 @@ restricted:
                     paramccl_str += "{\n"
                     paramccl_str += ' *:* :: "All values accepted. NRPy+ does not restrict the allowed ranges of parameters yet."\n'
                     paramccl_str += f"}} {CParam.defaultvalue}\n\n"
-                    CParams_registered_to_params_ccl += [CPname]
+                    CParams_registered_to_params_ccl.append(CPname)
     output_Path = Path(project_dir) / thorn_name
     output_Path.mkdir(parents=True, exist_ok=True)
     with ConditionalFileUpdater(output_Path / "param.ccl", encoding="utf-8") as file:
