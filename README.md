@@ -34,6 +34,10 @@ pip install nrpy
     ```
     python3 -m nrpy.examples.spinning_blackhole
     ```
+  - **Binary black hole initial data, courtesy NRPyElliptic**:
+    ```
+    python3 -m nrpy.examples.nrpyelliptic_conformally_flat
+    ```
 
 ### Einstein Toolkit infrastructure: Choose a project to build, run the provided command. Check the `examples/et_*` directory for a ThornList and parameter file. Thorns will be output to `project/`
 
@@ -41,6 +45,11 @@ pip install nrpy
   - **Cartesian coordinates, with Carpet AMR infrastructure**:
     ```
     python3 -m nrpy.examples.carpet_wavetoy_thorns
+    ```
+* **General relativity: Generate Baikal and BaikalVacuum thorns**
+  - **Cartesian coordinates, with Carpet AMR infrastructure**:
+    ```
+    python3 -m nrpy.examples.carpet_baikal_thorns
     ```
 
 ## Slow start, in case you want to develop NRPy+ directly:
