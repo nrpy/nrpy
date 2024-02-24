@@ -49,6 +49,7 @@ import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.TwoPunctures_li
 import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xxCartxx
 import nrpy.infrastructures.superB.diagnostics as superBdiagnostics
 import nrpy.infrastructures.superB.numerical_grids as superBnumericalgrids
+import nrpy.infrastructures.superB.CurviBoundaryConditions as superBcbc
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -231,7 +232,6 @@ numericalgrids.register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
 )
-
 superBnumericalgrids.register_CFunctions(
     list_of_CoordSystems=[CoordSystem],
     grid_physical_size=grid_physical_size,
@@ -241,8 +241,10 @@ superBnumericalgrids.register_CFunctions(
     enable_CurviBCs=True,
 )
 
-
 cbc.CurviBoundaryConditions_register_C_functions(
+    list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order
+)
+superBcbc.CurviBoundaryConditions_register_C_functions(
     list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order
 )
 
