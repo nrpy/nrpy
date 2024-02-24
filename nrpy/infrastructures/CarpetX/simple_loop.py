@@ -42,11 +42,21 @@ def simple_loop(
     """
     if loop_centering is None:
         loop_centering = [0, 0, 0]
+    elif (
+        not isinstance(loop_centering, list)
+        or len(loop_centering) != 3
+        or not all(isinstance(x, int) for x in loop_centering)
+    ):
+        raise ValueError(
+            "loop_centering must be set to None (defaults to [0,0,0]) or be a list of three integers."
+        )
 
     loop_macro = "grid.loop_"
 
+    # 'AllPoints': loop over all points on a numerical grid, including ghost zones
     if loop_region == "all points":
         loop_macro += "all"
+    # 'InteriorPoints': loop over the interior of a numerical grid, i.e. exclude ghost zones
     elif loop_region == "interior":
         loop_macro += "int"
     else:
