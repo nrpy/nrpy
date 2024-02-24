@@ -11,7 +11,7 @@ python -m pip install --upgrade pip
 if [ -f requirements.txt ]; then
   pip install -U -r requirements.txt
 fi
-pip install -U mypy==1.8.0 pylint black==24.1.1 clang-format ipython setuptools
+pip install -U -r requirements-dev.txt
 
 # Display sympy version
 echo "Running CI tests with SymPy version = $(isympy --version)"
@@ -21,8 +21,7 @@ failed_tests=()
 
 # Use find to locate python files based on pattern or directory structure.
 #   Don't analyze Python scripts in tests/ (though they should pass!)
-#   Ignore CarpetX infrastructure for now as well...
-python_files=$(find . -name '*.py' -not -name '__init__.py' -not -path './build/*' -not -path './nrpy/infrastructures/CarpetX/*' -not -path '*/tests/*')
+python_files=$(find . -name '*.py' -not -name '__init__.py' -not -path './build/*' -not -path '*/tests/*')
 
 # Loop through each python file
 for python_file in $python_files; do

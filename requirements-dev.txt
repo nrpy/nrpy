@@ -1,11 +1,11 @@
 appdirs
-black==24.1.1
+black==24.2.0
 multiprocess
 mypy==1.8.0
 nrpypn
 nrpylatex
 py-cpuinfo
 pydocstyle
+pylint
 sympy
 typing-extensions
-pylint
