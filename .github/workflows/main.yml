@@ -39,10 +39,10 @@ jobs:
         if [ "${{ matrix.python-version }}" != "3.6.7" ]; then
           pip install -U -r requirements-dev.txt
         else
-          # Don't install mypy, black, or any other Python package requiring a specific version.
-          grep -v '==' requirements-dev.txt | pip install -U -r /dev/stdin
+          # Install packages from requirements-dev.txt except those with a fixed version.
+          cat requirements-dev.txt | grep -v '==' | xargs pip install -U
         fi
-        pip install -U pylint clang-format ipython setuptools
+        pip install -U clang-format ipython setuptools
         sudo apt-get -y install libgsl-dev
 
     - name: Install latest DEVELOPMENT sympy for ubuntu-22.04
