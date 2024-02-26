@@ -12,9 +12,9 @@ Instructions for uploading latest release to PyPI:
 
 import os
 import sys
+import subprocess
 from pathlib import Path
 from typing import List
-import subprocess
 from setuptools import setup, find_packages  # type: ignore
 
 # pylint: disable=consider-using-f-string
@@ -24,7 +24,7 @@ def check_python_version() -> None:
     """
     Check for the minimum Python version (3.6 or newer).
 
-    :raises: SystemExit if the Python version is less than 3.6.
+    :raises SystemExit if the Python version is less than 3.6.
     """
     if sys.version_info < (3, 6):
         raise SystemExit(
@@ -71,7 +71,7 @@ def get_nrpy_version(pkg_root_directory: str) -> str:
     :raises ValueError: When version information could not be found.
     """
     with open(
-        os.path.join(pkg_root_directory, "nrpy", "release.txt"), encoding="utf-8"
+        Path(pkg_root_directory) / "nrpy" / "release.txt", encoding="utf-8"
     ) as file:
         for line in file:
             if line.startswith("version ="):
@@ -90,7 +90,7 @@ if __name__ == "__main__":
 
     requirements = read_requirements_file()
     if not clang_format_is_installed():
-        requirements += ["clang-format"]
+        requirements.append("clang-format")
 
     setup(
         name="nrpy",
@@ -98,7 +98,9 @@ if __name__ == "__main__":
         license="BSD-2-Clause",
         data_files=[("license", ["LICENSE"])],
         description="Python/SymPy-based code generation for numerical relativity... and beyond!",
-        long_description=(Path(__file__).parent / "README.md").read_text("UTF-8"),
+        long_description=(Path(__file__).parent / "README.md").read_text(
+            encoding="utf-8"
+        ),
         long_description_content_type="text/markdown",
         python_requires=">=3.6",
         packages=find_packages(),
