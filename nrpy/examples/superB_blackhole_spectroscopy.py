@@ -51,6 +51,7 @@ import nrpy.infrastructures.superB.diagnostics as superBdiagnostics
 import nrpy.infrastructures.superB.numerical_grids as superBnumericalgrids
 import nrpy.infrastructures.superB.CurviBoundaryConditions as superBcbc
 import nrpy.infrastructures.superB.MoL as superBMoL
+import nrpy.infrastructures.superB.main_c as superBmain
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -258,7 +259,7 @@ if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
                                      RK_INPUT_GFS, RK_OUTPUT_GFS);"""
 if not enable_rfm_precompute:
     rhs_string = rhs_string.replace("rfmstruct", "xx")
-    
+
 superBMoL.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,
@@ -316,13 +317,19 @@ Bdefines_h.output_BHaH_defines_h(
     enable_rfm_precompute=enable_rfm_precompute,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
 )
-main.register_CFunction_main_c(
-    initial_data_desc=IDtype,
-    pre_MoL_step_forward_in_time="write_checkpoint(&commondata, griddata);\n",
-    MoL_method=MoL_method,
-    enable_rfm_precompute=enable_rfm_precompute,
-    enable_CurviBCs=True,
-    boundary_conditions_desc=boundary_conditions_desc,
+# ~ main.register_CFunction_main_c(
+    # ~ initial_data_desc=IDtype,
+    # ~ pre_MoL_step_forward_in_time="write_checkpoint(&commondata, griddata);\n",
+    # ~ MoL_method=MoL_method,
+    # ~ enable_rfm_precompute=enable_rfm_precompute,
+    # ~ enable_CurviBCs=True,
+    # ~ boundary_conditions_desc=boundary_conditions_desc,
+# ~ )
+superBmain.output_commondata_object_h(
+    project_dir=project_dir,
+)
+superBmain.output_main_cpp(
+    project_dir=project_dir,
 )
 
 if enable_simd:
