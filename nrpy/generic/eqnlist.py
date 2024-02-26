@@ -5,11 +5,26 @@ from sympy.core.expr import Expr
 from sympy import symbols, Function, diff
 from sympy import cse as cse_ 
 
+# Quieting mypy. Not sure if this trick is needed.
 cse_return = Tuple[List[Tuple[Symbol,Expr]],List[Expr]]
 def cse(arg:List[Expr])->cse_return:
     return cast(cse_return,cse_(arg)) # type: ignore[no-untyped-call]
 
 class EqnList:
+    """
+    This class models a generic list of equations. As such, it knows nothing about the rest of NRPy+.
+    Ultimately, the information in this class will be used to generate a loop to be output by NRPy+.
+    All it knows are the following things:
+    (1) params - These are quantities that are generated outside the loop.
+    (2) inputs - These are quantities which are read by equations but never written by them.
+    (3) outputs - These are quantities which are written by equations but never read by them.
+    (4) equations - These relate inputs to outputs. These may contain temporary variables, i.e.
+                    quantities that are both read and written by equations.
+
+    This class can remove equations and parameters that are not needed, but will complain
+    about inputs that are not needed. It can also detect errors in the classification of
+    symbols as inputs/outputs/params.
+    """
     def __init__(self)->None:
         self.eqns:Dict[Symbol,Expr] = dict()
         self.params:Set[Symbol] = set()
@@ -35,8 +50,8 @@ class EqnList:
     def add_eqn(self, lhs:Symbol, rhs:Expr)->None:
         self.eqns[lhs] = rhs
 
-    def optimize(self)->None:
-        self.trim()
+    def diagnose(self)->None:
+        """ Discover inconsistencies and errors in the param/input/output/equation sets. """
         needed:Set[Symbol] = set()
         used:Set[Symbol] = set()
         temps:Set[Symbol] = set()
@@ -81,6 +96,7 @@ class EqnList:
                 print(f"Warning: symbol '{k}' appears in inputs but is not needed")
 
     def trim(self)->None:
+        """ Remove temporaries of the form "a=b". They are clutter. """
         subs:Dict[Symbol,Symbol] = dict()
         for k,v in self.eqns.items():
             if v.is_symbol:
@@ -98,6 +114,7 @@ class EqnList:
         self.eqns = new_eqns
 
     def cse(self)->None:
+        """ Invoke Sympy's CSE method, but ensure that the order of the resulting assignments is correct. """
         indexes:List[Symbol]=list()
         old_eqns:List[Expr]=list()
         for k in self.eqns:
@@ -119,19 +136,20 @@ class EqnList:
         for k in self.order:
             print(" ",k,"->",self.eqns[k])
 
-a, b, c, d, e, f, g = symbols("a b c d e f g")
-el = EqnList()
-el.add_input(a)
-el.add_input(f)
-el.add_input(b)
-el.add_output(d)
-el.add_eqn(c, e+b+a**3)
-el.add_eqn(c, g+f+a**3)
-el.add_eqn(e, a**2)
-el.add_eqn(g, e)
-el.add_eqn(d, c*b+a**3)
-el.optimize()
-el.dump()
-el.cse()
-el.optimize()
-el.dump()
+if __name__ == "__main__":
+    a, b, c, d, e, f, g = symbols("a b c d e f g")
+    el = EqnList()
+    el.add_input(a)
+    el.add_input(f)
+    el.add_input(b)
+    el.add_output(d)
+    el.add_eqn(c, e+b+a**3)
+    el.add_eqn(c, g+f+a**3)
+    el.add_eqn(e, a**2)
+    el.add_eqn(g, e)
+    el.add_eqn(d, c*b+a**3)
+    el.diagnose()
+    el.dump()
+    el.cse()
+    el.diagnose()
+    el.dump()
