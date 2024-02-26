@@ -270,7 +270,7 @@ superBMoL.register_CFunctions(
 )
 xxCartxx.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
 xxCartxx.register_CFunction_xx_to_Cart(CoordSystem)
-chkpt.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
+# ~ chkpt.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
 progress.register_CFunction_progress_indicator()
 rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 

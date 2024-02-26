@@ -116,8 +116,7 @@ def register_CFunction_bcstruct_set_up(CoordSystem: str) -> None:
           if (charecommstruct->globalidx3pt_to_chareidx3[globalidx3] == IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])){
             // convert i0, etc to local i0
             const int localidx3 = charecommstruct->globalidx3pt_to_localidx3pt[globalidx3];
-            int locali0, locali1, locali2;
-            REVERSE_IDX3GENERAL(localidx3, Nxx0chare, Nxx1chare);
+            int locali0, locali1, locali2 = REVERSE_IDX3GENERAL(localidx3, Nxx0chare, Nxx1chare);
             bcstruct_chare->pure_outer_bc_array[dirn + (3 * which_gz)][which_idx2d_chare].i0 = locali0;
             bcstruct_chare->pure_outer_bc_array[dirn + (3 * which_gz)][which_idx2d_chare].i1 = locali1;
             bcstruct_chare->pure_outer_bc_array[dirn + (3 * which_gz)][which_idx2d_chare].i2 = locali2;
