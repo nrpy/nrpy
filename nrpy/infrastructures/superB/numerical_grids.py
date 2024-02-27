@@ -15,7 +15,7 @@ import nrpy.c_function as cfc
 import nrpy.reference_metric as refmetric
 import nrpy.c_codegen as ccg
 
-def register_CFunction_numerical_grid_params_Nxx_dxx_xx(
+def register_CFunction_numerical_grid_params_Nxx_dxx_xx_chare(
     CoordSystem: str, grid_physical_size: float, Nxx_dict: Dict[str, List[int]], Nchare_dict: Dict[str, List[int]]
 ) -> None:
     """
@@ -30,57 +30,47 @@ def register_CFunction_numerical_grid_params_Nxx_dxx_xx(
     desc = f"Set up a cell-centered {CoordSystem} grid of size grid_physical_size. Set params: Nxx, Nxx_plus_2NGHOSTS, dxx, invdxx, and xx."
     c_type = "void"
     name = "numerical_grid_params_Nxx_dxx_xx_chare"
-    params = "commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3], const int chare_index[3]"
+    params = "commondata_struct *restrict commondata, const params_struct *restrict params, params_struct *restrict params_chare, REAL *restrict xx[3], const int chare_index[3]"
     body = ""
-    for dirn in range(3):
-        NxxoverNchare = Nxx_dict[CoordSystem][dirn] // Nchare_dict[CoordSystem][dirn] if Nxx_dict[CoordSystem][dirn] % Nchare_dict[CoordSystem][dirn] == 0 else ValueError("Result of dividing Nxx by Nchare is not an integer")
-        body += f"params->Nxx{dirn} = {NxxoverNchare};\n"
+    for dirn in range(3):        
+        body += f"params_chare->Nxx{dirn} = params->Nxx{dirn}/{Nchare_dict[CoordSystem][dirn]};\n"
     body += rf"""
-const REAL grid_physical_size = params->grid_physical_size;
-snprintf(params->CoordSystemName, 50, "{CoordSystem}");
+const REAL grid_physical_size = params_chare->grid_physical_size;
+snprintf(params_chare->CoordSystemName, 50, "{CoordSystem}");
 
-// convergence_factor does not increase resolution across an axis of symmetry:
-if(params->Nxx0 != 2) params->Nxx0 *= commondata->convergence_factor;
-if(params->Nxx1 != 2) params->Nxx1 *= commondata->convergence_factor;
-if(params->Nxx2 != 2) params->Nxx2 *= commondata->convergence_factor;
-
-params->Nxx_plus_2NGHOSTS0 = params->Nxx0 + 2*NGHOSTS;
-params->Nxx_plus_2NGHOSTS1 = params->Nxx1 + 2*NGHOSTS;
-params->Nxx_plus_2NGHOSTS2 = params->Nxx2 + 2*NGHOSTS;
+params_chare->Nxx_plus_2NGHOSTS0 = params_chare->Nxx0 + 2*NGHOSTS;
+params_chare->Nxx_plus_2NGHOSTS1 = params_chare->Nxx1 + 2*NGHOSTS;
+params_chare->Nxx_plus_2NGHOSTS2 = params_chare->Nxx2 + 2*NGHOSTS;
 
 // Set grid size to grid_physical_size (set above, based on params->grid_physical_size):
 """
     rfm = refmetric.reference_metric[CoordSystem]
     for key, value in rfm.grid_physical_size_dict.items():
-        body += f"params->{key} = {value};\n"
+        body += f"params_chare>{key} = {value};\n"
+        
     body += "\n// Set xxmin, xxmax\n"
     for minmax in ["min", "max"]:
-        for dirn in range(3):
-            dx = (rfm.xxmax[dirn] - rfm.xxmin[dirn])/Nxx_dict[CoordSystem][dirn]            
-            str_chare_value = (
-              f"{rfm.xxmin[dirn]} + ({dx} * ((REAL)params->Nxx{dirn}) * ((REAL)chare_index[{dirn}]))" 
-              if minmax == "min"
-              else f"{rfm.xxmin[dirn]} + ({dx} * ((REAL)params->Nxx{dirn}) * ((REAL)(chare_index[{dirn}] + 1)))"
-            )
-            param_dir = f"params->xx{minmax}{dirn}"          
-            body += f"{param_dir} = {str_chare_value};\n"
+        for dirn in range(3):            
+            param_dir = f"params_chare->xx{minmax}{dirn}"          
+            body += f"{param_dir} = params->xx{minmax}{dirn} + (params->dxx{dirn} * (REAL)(params_chare->Nxx{dirn} * chare_index[{dirn}]));\n"
 
-    body += """
-params->dxx0 = (params->xxmax0 - params->xxmin0) / ((REAL)params->Nxx0);
-params->dxx1 = (params->xxmax1 - params->xxmin1) / ((REAL)params->Nxx1);
-params->dxx2 = (params->xxmax2 - params->xxmin2) / ((REAL)params->Nxx2);
+    body += r"""  
+              
+params_chare->dxx0 = params->dxx0;
+params_chare->dxx1 = params->dxx1;
+params_chare->dxx2 = params->dxx2;
 
-params->invdxx0 = ((REAL)params->Nxx0) / (params->xxmax0 - params->xxmin0);
-params->invdxx1 = ((REAL)params->Nxx1) / (params->xxmax1 - params->xxmin1);
-params->invdxx2 = ((REAL)params->Nxx2) / (params->xxmax2 - params->xxmin2);
+params_chare->invdxx0 = params->invdxx0;
+params_chare->invdxx1 = params->invdxx1;
+params_chare->invdxx2 = params->invdxx2;
 
 // Set up cell-centered Cartesian coordinate grid, centered at the origin.
-xx[0] = (REAL *restrict)malloc(sizeof(REAL)*params->Nxx_plus_2NGHOSTS0);
-xx[1] = (REAL *restrict)malloc(sizeof(REAL)*params->Nxx_plus_2NGHOSTS1);
-xx[2] = (REAL *restrict)malloc(sizeof(REAL)*params->Nxx_plus_2NGHOSTS2);
-for (int j = 0; j < params->Nxx_plus_2NGHOSTS0; j++) xx[0][j] = params->xxmin0 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * params->dxx0;
-for (int j = 0; j < params->Nxx_plus_2NGHOSTS1; j++) xx[1][j] = params->xxmin1 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * params->dxx1;
-for (int j = 0; j < params->Nxx_plus_2NGHOSTS2; j++) xx[2][j] = params->xxmin2 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * params->dxx2;
+xx[0] = (REAL *restrict)malloc(sizeof(REAL)*params_chare->Nxx_plus_2NGHOSTS0);
+xx[1] = (REAL *restrict)malloc(sizeof(REAL)*params_chare->Nxx_plus_2NGHOSTS1);
+xx[2] = (REAL *restrict)malloc(sizeof(REAL)*params_chare->Nxx_plus_2NGHOSTS2);
+for (int j = 0; j < params_chare->Nxx_plus_2NGHOSTS0; j++) xx[0][j] = params_chare->xxmin0 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * params_chare->dxx0;
+for (int j = 0; j < params_chare->Nxx_plus_2NGHOSTS1; j++) xx[1][j] = params_chare->xxmin1 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * params_chare->dxx1;
+for (int j = 0; j < params_chare->Nxx_plus_2NGHOSTS2; j++) xx[2][j] = params_chare->xxmin2 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * params_chare->dxx2;
 """
     cfc.register_CFunction(
         includes=includes,
@@ -94,7 +84,7 @@ for (int j = 0; j < params->Nxx_plus_2NGHOSTS2; j++) xx[2][j] = params->xxmin2 +
     )
 
 
-def register_CFunction_numerical_grids(
+def register_CFunction_numerical_grids_chare(
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
 ) -> None:
@@ -112,10 +102,10 @@ def register_CFunction_numerical_grids(
     desc = "Set up a cell-centered grids of size grid_physical_size."
     c_type = "void"
     name = "numerical_grids_chare"
-    params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
+    params = "commondata_struct *restrict commondata, const griddata_struct *restrict griddata, griddata_struct *restrict griddata_chare, const int chare_index[3]"
     body = r"""// Step 1.b: Set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx based on grid_physical_size
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
-  numerical_grid_params_Nxx_dxx_xx_chare(commondata, &griddata[grid].params, griddata[grid].xx);
+  numerical_grid_params_Nxx_dxx_xx_chare(commondata, &griddata[grid].params, &griddata_chare[grid].params, griddata_chare[grid].xx, chare_index);
 }
 
 // Step 1.c: Allocate memory for and define reference-metric precomputation lookup tables
@@ -123,8 +113,8 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
     if enable_rfm_precompute:
         body += r"""
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
-  rfm_precompute_malloc(commondata, &griddata[grid].params, &griddata[grid].rfmstruct);
-  rfm_precompute_defines(commondata, &griddata[grid].params, &griddata[grid].rfmstruct, griddata[grid].xx);
+  rfm_precompute_malloc(commondata, &griddata_chare[grid].params, &griddata_chare[grid].rfmstruct);
+  rfm_precompute_defines(commondata, &griddata_chare[grid].params, &griddata_chare[grid].rfmstruct, griddata_chare[grid].xx);
 }
 """
     else:
@@ -133,7 +123,7 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
     if enable_CurviBCs:
         body += r"""
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
-  bcstruct_set_up_chare(commondata, &griddata[grid].params, griddata[grid].xx, &griddata[grid].bcstruct);
+  bcstruct_chare_set_up(commondata, &griddata[grid].params, &griddata_chare[grid].params, griddata_chare[grid].xx, &griddata[grid].bcstruct, &griddata_chare[grid].bcstruct, chare_index);
 }
 """
     else:
@@ -168,13 +158,13 @@ def register_CFunctions(
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions.
     """
     for CoordSystem in list_of_CoordSystems:
-        register_CFunction_numerical_grid_params_Nxx_dxx_xx(
+        register_CFunction_numerical_grid_params_Nxx_dxx_xx_chare(
             CoordSystem=CoordSystem,
             grid_physical_size=grid_physical_size,
             Nxx_dict=Nxx_dict,
             Nchare_dict=Nchare_dict,
         )
-    register_CFunction_numerical_grids(
+    register_CFunction_numerical_grids_chare(
         enable_rfm_precompute=enable_rfm_precompute,
         enable_CurviBCs=enable_CurviBCs,
     )

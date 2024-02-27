@@ -62,6 +62,50 @@ class CommondataObject {
         )
 
 
+def output_main_h(
+    project_dir: str,
+    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+) -> None:
+    """
+    Generate main.h
+    :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
+    """
+    project_Path = Path(project_dir)
+    project_Path.mkdir(parents=True, exist_ok=True)
+
+    file_output_str = """#ifndef __MAIN_H__
+#define __MAIN_H__
+
+#include "main.decl.h"
+#include "timetepping.decl.h"
+
+class Main : public CBase_Main {
+
+  private:
+    /// Member Variables (Object State) ///
+    CProxy_Timetepping_array;
+
+    /// Private Member Functions ///
+
+ public:
+
+  /// Constructors ///
+  Main(CkArgMsg* msg);
+  Main(CkMigrateMessage* msg);
+
+  /// Entry Methods ///
+  void done();
+};
+
+#endif //__MAIN_H__
+"""
+    main_h_file = project_Path / "main.h"
+    with main_h_file.open("w", encoding="utf-8") as file:
+        file.write(
+            clang_format(file_output_str, clang_format_options=clang_format_options)
+        )
+
+
 def output_main_cpp(
     project_dir: str,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
@@ -75,25 +119,13 @@ def output_main_cpp(
     # Make sure all required C functions are registered
     missing_functions: List[Tuple[str, str]] = []
     for func_tuple in [
-        ("params_struct_set_to_default", "CodeParameters.py"),
         ("commondata_struct_set_to_default", "CodeParameters.py"),
         ("cmdline_input_and_parfile_parser", "cmdline_input_and_parfiles.py"),
-        (
-            "numerical_grids_and_timestep",
-            "e.g., numerical_grids_and_timestep.py or user defined",
-        ),
-        ("MoL_malloc_y_n_gfs", "MoL.py"),
-        ("MoL_malloc_non_y_n_gfs", "MoL.py"),
-        ("initial_data", "initial_data.py"),
-        ("MoL_step_forward_in_time", "MoL.py"),
-        ("diagnostics", "diagnostics.py"),
-        ("MoL_free_memory_y_n_gfs", "MoL.py"),
-        ("MoL_free_memory_non_y_n_gfs", "MoL.py"),
     ]:
         if func_tuple[0] not in cfc.CFunction_dict:
             missing_functions += [func_tuple]
     if missing_functions:
-        error_msg = "Error: These functions are required for all BHaH main() functions, and are not registered.\n"
+        error_msg = "Error: These functions are required, and are not registered.\n"
         for func_tuple in missing_functions:
             error_msg += (
                 f'  {func_tuple[0]}, registered by function within "{func_tuple[1]}"\n'
@@ -141,50 +173,6 @@ void Main::done() {
 """
     main_cpp_file = project_Path / "main.cpp"
     with main_cpp_file.open("w", encoding="utf-8") as file:
-        file.write(
-            clang_format(file_output_str, clang_format_options=clang_format_options)
-        )
-
-
-def output_main_h(
-    project_dir: str,
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
-) -> None:
-    """
-    Generate main.h
-    :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
-    """
-    project_Path = Path(project_dir)
-    project_Path.mkdir(parents=True, exist_ok=True)
-
-    file_output_str = """#ifndef __MAIN_H__
-#define __MAIN_H__
-
-#include "main.decl.h"
-#include "timetepping.decl.h"
-
-class Main : public CBase_Main {
-
-  private:
-    /// Member Variables (Object State) ///
-    CProxy_Timetepping_array;
-
-    /// Private Member Functions ///
-
- public:
-
-  /// Constructors ///
-  Main(CkArgMsg* msg);
-  Main(CkMigrateMessage* msg);
-
-  /// Entry Methods ///
-  void done();
-};
-
-#endif //__MAIN_H__
-"""
-    main_h_file = project_Path / "main.h"
-    with main_h_file.open("w", encoding="utf-8") as file:
         file.write(
             clang_format(file_output_str, clang_format_options=clang_format_options)
         )
@@ -246,5 +234,13 @@ def output_commondata_object_h_and_main_h_cpp_ci(
 
     output_main_ci(
         project_dir=project_dir,
+    )
+
+    # register a dummy main so as not to raise SystemExit("output_CFunctions_function_prototypes_and_construct_Makefile() error: C codes will not compile if main() function not defined....)
+    # in infrastructures/BHaH/Makefile_helpers.py
+    cfc.register_CFunction(
+        desc="dummy main",
+        name="main",
+        body="dummy main",
     )
 
