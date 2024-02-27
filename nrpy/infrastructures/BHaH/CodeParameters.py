@@ -23,6 +23,7 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
     >>> _, __ = par.register_CodeParameters("REAL", "CodeParameters_c_files", ["a", "pi_three_sigfigs"], [1, 3.14], commondata=True)
     >>> ___ = par.register_CodeParameter("#define", "CodeParameters_c_files", "b", 0)
     >>> _leaveitbe = par.register_CodeParameter("REAL", "CodeParameters_c_files", "leaveitbe", add_to_parfile=False, add_to_set_CodeParameters_h=False)
+    >>> _int = par.register_CodeParameter("int", "CodeParameters_c_files", "blah_int", 1, commondata=True, add_to_parfile=True, add_to_set_CodeParameters_h=False)
     >>> _str = par.register_CodeParameter("char[100]", "CodeParameters_c_files", "some_string", "cheese")
     >>> _bool = par.register_CodeParameter("bool", "CodeParameters_c_files", "BHaH_is_amazing", True, add_to_set_CodeParameters_h=True)
     >>> cfc.CFunction_dict.clear()
@@ -51,6 +52,7 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
     <BLANKLINE>
       // Set commondata_struct variables to default
       commondata->a = 1;                   // CodeParameters_c_files::a
+      commondata->blah_int = 1;            // CodeParameters_c_files::blah_int
       commondata->pi_three_sigfigs = 3.14; // CodeParameters_c_files::pi_three_sigfigs
     }
     <BLANKLINE>
@@ -70,7 +72,7 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
             if (function_name == "commondata_struct" and CodeParam.commondata) or (
                 function_name == "params_struct" and not CodeParam.commondata
             ):
-                if CodeParam.add_to_parfile and CodeParam.add_to_set_CodeParameters_h:
+                if CodeParam.add_to_parfile:
                     struct = "commondata" if CodeParam.commondata else "params"
                     CPtype = CodeParam.c_type_alias
                     comment = f"  // {CodeParam.module}::{parname}"

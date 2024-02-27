@@ -62,8 +62,7 @@ def chain(*iterable: Iterable[Any]) -> Generator[Any, None, None]:
             iter(iter_)
         except TypeError:
             iter_ = [iter_]
-        for element in iter_:
-            yield element
+        yield from iter_
 
 
 def flatten(iterable: Iterable[Any]) -> Generator[Any, None, None]:

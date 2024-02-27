@@ -355,11 +355,12 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
     :return: None
 
     Doctest:
-    >>> _, __ = par.register_CodeParameters("REAL", "CodeParameters_c_files", ["a", "pi_three_sigfigs"], [1, 3.14], commondata=True)
+    >>> _, __ = par.register_CodeParameters("REAL", "CodeParameters_c_files", ["a", "pi_three_sigfigs"], [1.0, 3.14], commondata=True)
     >>> ___ = par.register_CodeParameter("#define", "CodeParameters_c_files", "b", 0)
     >>> _leaveitbe = par.register_CodeParameter("REAL", "CodeParameters_c_files", "leaveitbe", add_to_parfile=False, add_to_set_CodeParameters_h=False)
     >>> _leaveitoutofparfile = par.register_CodeParameter("REAL", "CodeParameters_c_files", "leaveitoutofparfile", add_to_parfile=False)
     >>> _str = par.register_CodeParameter("char", "CodeParameters_c_files", "string[100]", "cheese", commondata=True)
+    >>> _int = par.register_CodeParameter("int", "CodeParameters_c_files", "blahint", -1, commondata=True, add_to_parfile=True, add_to_set_CodeParameters_h=False)
     >>> _bool = par.register_CodeParameter("bool", "CodeParameters_c_files", "BHaH_is_amazing", "true")
     >>> cfc.CFunction_dict.clear()
     >>> project_dir = Path("/tmp/tmp_BHaH_parfile")
@@ -370,7 +371,8 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
     ###########################
     ###########################
     ### Module: CodeParameters_c_files
-    a = 1                    # (type: REAL)
+    a = 1.0                  # (type: REAL)
+    blahint = -1             # (type: int)
     pi_three_sigfigs = 3.14  # (type: REAL)
     string = "cheese"        # (type: char array)
     <BLANKLINE>
@@ -383,7 +385,7 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
     ):
         if CodeParam.commondata:
             CPtype = CodeParam.c_type_alias
-            if CodeParam.add_to_set_CodeParameters_h and CodeParam.add_to_parfile:
+            if CodeParam.add_to_parfile:
                 if CPtype == "char":
                     chararray_name = parname.split("[")[0]
                     parfile_output_dict[CodeParam.module].append(

@@ -114,8 +114,7 @@ class ExprTree:
             node = self.root
         yield node
         for child in node.children:
-            for subtree in self.preorder(child):
-                yield subtree
+            yield from self.preorder(child)
 
     def postorder(self, node: Optional[Node] = None) -> Generator[Node, None, None]:
         """
@@ -135,8 +134,7 @@ class ExprTree:
         if node is None:
             node = self.root
         for child in node.children:
-            for subtree in self.postorder(child):
-                yield subtree
+            yield from self.postorder(child)
         yield node
 
     def reconstruct(self, evaluate: bool = False) -> sp.Basic:

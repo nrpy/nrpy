@@ -25,6 +25,8 @@ _ = par.register_CodeParameter(
     "output_progress_every",
     1,
     commondata=True,
+    add_to_parfile=True,
+    add_to_set_CodeParameters_h=False,
 )
 
 
@@ -76,7 +78,7 @@ def register_CFunction_progress_indicator(
 
   // Proceed only if progress output is enabled (output_progress_every > 0)
   // and the current iteration (nn) is a multiple of the output frequency (output_progress_every)
-  if (commondata->output_progress_every <= 0 || commondata->nn % commondata->output_progress_every != 0)
+  if (! (commondata->output_progress_every >= 0 && (commondata->nn % commondata->output_progress_every == 0)) )
     return;
 
   TIMEVAR currtime;

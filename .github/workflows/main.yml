@@ -150,6 +150,8 @@ jobs:
       run: |
         pwd &&
         pip install . &&
+        mkdir tmp &&
+        cd tmp &&
         python -m nrpy.examples.wave_equation_cartesian   && (cd project/wavetoy && make && make clean) &&
         python -m nrpy.examples.wave_equation_curvilinear && (cd project/curviwavetoy && make && make clean) &&
         python -m nrpy.examples.nrpyelliptic_conformally_flat && (cd project/nrpyelliptic_conformally_flat && make && make clean) &&
