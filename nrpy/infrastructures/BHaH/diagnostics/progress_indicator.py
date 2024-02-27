@@ -24,6 +24,7 @@ _ = par.register_CodeParameter(
     __name__,
     "output_progress_every",
     1,
+    commondata=True,
 )
 
 
