@@ -35,7 +35,7 @@ def register_CFunction_progress_indicator(
           commondata->time, commondata->t_final, 100.0 * commondata->time / commondata->t_final,
           1.0 / (double)commondata->dt, (double)(phys_time_per_sec * 3600.0),
           time_remaining__hrs, time_remaining__mins, time_remaining__secs);
-  fflush({output_target});  // Flush the stderr buffer
+  fflush(stderr);  // Flush the stderr buffer
 """,
 ) -> None:
     """
