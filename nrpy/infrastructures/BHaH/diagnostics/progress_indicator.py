@@ -30,12 +30,12 @@ _ = par.register_CodeParameter(
 
 def register_CFunction_progress_indicator(
     progress_str: str = r"""
-  fprintf(stderr, "%c[2K", 27);  # Clear the line
+  fprintf(stderr, "%c[2K", 27);  // Clear the line
   fprintf(stderr, "It: %d t=%.3f / %.1f = %.2f%% dt=1/%.1f | t/h=%.2f ETA %dh%02dm%02ds\r", commondata->nn,
           commondata->time, commondata->t_final, 100.0 * commondata->time / commondata->t_final,
           1.0 / (double)commondata->dt, (double)(phys_time_per_sec * 3600.0),
           time_remaining__hrs, time_remaining__mins, time_remaining__secs);
-  fflush({output_target});  # Flush the stderr buffer
+  fflush({output_target});  // Flush the stderr buffer
 """,
 ) -> None:
     """
