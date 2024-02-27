@@ -19,13 +19,31 @@ _ = par.register_CodeParameter(
     add_to_set_CodeParameters_h=False,
 )
 
+_ = par.register_CodeParameter(
+    "int",
+    __name__,
+    "output_progress_every",
+    1,
+)
 
-def register_CFunction_progress_indicator() -> None:
+
+def register_CFunction_progress_indicator(
+    progress_str: str = r"""
+  fprintf(stderr, "%c[2K", 27);  # Clear the line
+  fprintf(stderr, "It: %d t=%.3f / %.1f = %.2f%% dt=1/%.1f | t/h=%.2f ETA %dh%02dm%02ds\r", commondata->nn,
+          commondata->time, commondata->t_final, 100.0 * commondata->time / commondata->t_final,
+          1.0 / (double)commondata->dt, (double)(phys_time_per_sec * 3600.0),
+          time_remaining__hrs, time_remaining__mins, time_remaining__secs);
+  fflush({output_target});  # Flush the stderr buffer
+""",
+) -> None:
     """
     Register a C function that serves as a progress indicator for the simulation.
 
-    The function updates the elapsed time and other metrics to give the user an
+    This function updates the elapsed time and other metrics to give the user an
     idea of the progress being made in the computation.
+
+    :param progress_str: String representing the progress output format.
     """
     BHaH_defines_h.register_BHaH_defines(
         __name__,
@@ -38,14 +56,14 @@ def register_CFunction_progress_indicator() -> None:
 // Low-resolution timer, 1-second resolution. Widely available.
 #define TIMEVAR time_t
 #define CURRTIME_FUNC(currtime) time(currtime)
-#define TIME_IN_NS(start, end) (REAL)(difftime(end, start)*1.0e9 + 1e-6) // Round up to avoid divide-by-zero.
+#define TIME_IN_NS(start, end) (REAL)(difftime(end, start) * 1.0e9 + 1e-6)  // Round up to avoid divide-by-zero.
 #endif
 """,
     )
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "time.h"]
     desc = """Output progress indicator, including elapsed time and other metrics to give the user an
-    idea of the status of the the computation."""
+    idea of the status of the computation."""
     c_type = "void"
     name = "progress_indicator"
     params = """commondata_struct *restrict commondata, const griddata_struct *restrict griddata"""
@@ -54,6 +72,12 @@ def register_CFunction_progress_indicator() -> None:
   if (commondata->nn == commondata->nn_0) {
     CURRTIME_FUNC(&commondata->start_wallclock_time);
   }
+
+  // Proceed only if progress output is enabled (output_progress_every > 0)
+  // and the current iteration (nn) is a multiple of the output frequency (output_progress_every)
+  if (commondata->output_progress_every <= 0 || commondata->nn % commondata->output_progress_every != 0)
+    return;
+
   TIMEVAR currtime;
   CURRTIME_FUNC(&currtime);
   const REAL time_in_ns = TIME_IN_NS(commondata->start_wallclock_time, currtime);
@@ -63,20 +87,16 @@ def register_CFunction_progress_indicator() -> None:
   const REAL seconds_remaining = (int)((commondata->t_final - commondata->time) / phys_time_per_sec);
   int time_remaining__hrs  = (int)(seconds_remaining / 3600.0);
   int time_remaining__mins = (int)(seconds_remaining / 60.0) % 60;
-  int time_remaining__secs = (int)(seconds_remaining) - time_remaining__mins*60 - time_remaining__hrs*3600;
+  int time_remaining__secs = (int)(seconds_remaining) - time_remaining__mins * 60 - time_remaining__hrs * 3600;
   if (commondata->nn == 0) {
     // Just display zeros for ETA at the zeroth iteration
     time_remaining__hrs = 0;
     time_remaining__mins = 0;
     time_remaining__secs = 0;
-  }
-  // Step 2: Output simulation progress to stderr
-  fprintf(stderr,"%c[2K", 27); // Clear the line
-  fprintf(stderr, "It: %d t=%.3f / %.1f = %.2f%% dt=1/%.1f | t/h=%.2f ETA %dh%02dm%02ds\r", commondata->nn,
-          commondata->time, commondata->t_final, 100.0*commondata->time / commondata->t_final,
-          1.0 / (double)commondata->dt, (double)(phys_time_per_sec * 3600.0),
-          time_remaining__hrs, time_remaining__mins, time_remaining__secs);
-  fflush(stderr); // Flush the stderr buffer
+  }"""
+    body += rf"""
+  // Step 2: Output simulation progress
+{progress_str}
 """
     cfc.register_CFunction(
         includes=includes,

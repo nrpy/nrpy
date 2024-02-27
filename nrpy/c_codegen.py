@@ -1,4 +1,3 @@
-# >> Handled by type check
 """
 Core NRPy+ module used for generating C code kernels.
 
