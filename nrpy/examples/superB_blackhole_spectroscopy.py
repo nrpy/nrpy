@@ -52,6 +52,7 @@ import nrpy.infrastructures.superB.numerical_grids as superBnumericalgrids
 import nrpy.infrastructures.superB.CurviBoundaryConditions as superBcbc
 import nrpy.infrastructures.superB.MoL as superBMoL
 import nrpy.infrastructures.superB.main_chare as superBmain
+import nrpy.infrastructures.superB.timestepping_chare as superBtimestepping
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -327,6 +328,18 @@ Bdefines_h.output_BHaH_defines_h(
 # ~ )
 superBmain.output_commondata_object_h_and_main_h_cpp_ci(
     project_dir=project_dir,
+)
+superBtimestepping.output_timestepping_cpp(
+    project_dir=project_dir,
+    initial_data_desc=IDtype,
+    pre_MoL_step_forward_in_time="write_checkpoint(&commondata, griddata);\n",
+    MoL_method=MoL_method,
+    enable_rfm_precompute=enable_rfm_precompute,
+    enable_CurviBCs=True,
+    boundary_conditions_desc=boundary_conditions_desc,
+)
+superBtimestepping.output_timestepping_h(
+    project_dir=project_dir,    
 )
 
 
