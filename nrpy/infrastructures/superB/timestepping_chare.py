@@ -7,6 +7,7 @@ Author: Zachariah B. Etienne
 """
 
 from typing import List, Tuple, Optional, Dict
+import itertools
 import nrpy.c_function as cfc
 import sys
 from pathlib import Path
@@ -15,6 +16,86 @@ import nrpy.grid as gri
 from nrpy.infrastructures.BHaH import griddata_commondata
 from nrpy.helpers.generic import clang_format
 from nrpy.infrastructures.BHaH import BHaH_defines_h
+
+import itertools
+
+def generate_mol_step_forward_code(rk_substep):
+    return f"""
+    serial{{
+        MoL_step_forward_in_time(&commondata, griddata_chare, time_start, {rk_substep});
+    }}
+    """
+
+def generate_send_neighbor_data_code(which_gf, neighbor_direction):
+    return f"""
+    serial {{
+        send_neighbor_data({which_gf}, {neighbor_direction});
+    }}
+    """
+
+def generate_ghost_code(axis, axis_index, pos_ghost_type, neg_ghost_type, nchare_var):
+    this_index_var = f"thisIndex.{axis}"
+    pos_ghost_func = f"{pos_ghost_type.lower()}"
+    neg_ghost_func = f"{neg_ghost_type.lower()}"
+    return f"""
+    if({this_index_var} < {nchare_var} - 1) {{
+        when {pos_ghost_func}(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {{
+            serial {{
+                process_ghost({pos_ghost_type}, type_gfs, len_tmpBuffer, tmpBuffer);
+            }}
+        }}
+    }}
+    if({this_index_var} > 0) {{
+        when {neg_ghost_func}(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {{
+            serial {{
+                process_ghost({neg_ghost_type}, type_gfs, len_tmpBuffer, tmpBuffer);
+            }}
+        }}
+    }}
+    """
+
+
+# Define ghost types for each axis
+x_pos_ghost_type = "EAST_GHOST"
+x_neg_ghost_type = "WEST_GHOST"
+y_pos_ghost_type = "NORTH_GHOST"
+y_neg_ghost_type = "SOUTH_GHOST"
+z_pos_ghost_type = "TOP_GHOST"
+z_neg_ghost_type = "BOTTOM_GHOST"
+
+def generate_diagnostics_code(dimension, direction, num_fields, tot_num_diagnostic_pts):
+    code = f"""
+    // {dimension} {direction}
+    when ready_{dimension}_{direction}(Ck::IO::FileReadyMsg *m_{dimension}_{direction}) {{
+        serial {{
+        f_{dimension}_{direction} = m_{dimension}_{direction}->file;
+        CkCallback sessionStart_{dimension}_{direction}(CkIndex_Timestepping::start_write_{dimension}_{direction}(0), thisProxy);
+        CkCallback sessionEnd_{dimension}_{direction}(CkIndex_Timestepping::test_written_{dimension}_{direction}(0), thisProxy);
+        int totsizeinbytes = 23 * {num_fields} * {tot_num_diagnostic_pts};
+        Ck::IO::startSession(f_{dimension}_{direction}, totsizeinbytes, 0, sessionStart_{dimension}_{direction}, sessionEnd_{dimension}_{direction});
+        delete m_{dimension}_{direction};
+        }}
+    }}
+    when start_write_{dimension}_{direction}(Ck::IO::SessionReadyMsg *m_{dimension}_{direction}){{
+        serial {{
+        thisProxy.diagnostics_ckio_{dimension}_{direction}(m_{dimension}_{direction}->session);
+        delete m_{dimension}_{direction};
+        }}
+    }}
+    when test_written_{dimension}_{direction}(CkReductionMsg *m_{dimension}_{direction}) {{
+        serial {{
+        delete m_{dimension}_{direction};
+        CkCallback cb_{dimension}_{direction}(CkIndex_Timestepping::closed_{dimension}_{direction}(0), thisProxy);
+        Ck::IO::close(f_{dimension}_{direction}, cb_{dimension}_{direction});
+        }}
+    }}
+    when closed_{dimension}_{direction}(CkReductionMsg *m_{dimension}_{direction}) {{
+        serial {{
+        delete m_{dimension}_{direction};
+        }}
+    }}
+    """
+    return code
 
 
 
@@ -44,15 +125,15 @@ class Timestepping : public CBase_Timestepping {
     commondata_struct commondata;
     griddata_struct *griddata;
     griddata_struct *griddata_chare;
-    bool is_boundarychare;        
+    bool is_boundarychare;
     REAL time_start;
-    bool contains_gridcenter;    
+    bool contains_gridcenter;
     bool write_diagnostics_this_step;
     const int which_grid_diagnostics = 0;
     Ck::IO::File f_1d_y;
     Ck::IO::File f_1d_z;
     Ck::IO::File f_2d_xy;
-    Ck::IO::File f_2d_yz;    
+    Ck::IO::File f_2d_yz;
 
     /// Member Functions (private) ///
 
@@ -63,7 +144,7 @@ class Timestepping : public CBase_Timestepping {
     /// Destructor ///
     ~Timestepping();
 
-    /// Entry Methods ///  
+    /// Entry Methods ///
 };
 
 #endif //__TIMESTEPPING_H__
@@ -154,23 +235,23 @@ extern /* readonly */ CProxy_Main mainProxy;
     if initialize_constant_auxevol:
         file_output_str += "*Step 4.a: Set AUXEVOL gridfunctions that will never change in time."
     file_output_str += r"""*/
-"""    
-    file_output_str += r"""  
+"""
+    file_output_str += r"""
 Timestepping::Timestepping(CommondataObject &&inData) {
 
-  if (thisIndex.x == 0 || 
-      thisIndex.y == 0 || 
-      thisIndex.z == 0 || 
-      thisIndex.x == (Nchare0-1) || 
-      thisIndex.y == (Nchare1-1) || 
+  if (thisIndex.x == 0 ||
+      thisIndex.y == 0 ||
+      thisIndex.z == 0 ||
+      thisIndex.x == (Nchare0-1) ||
+      thisIndex.y == (Nchare1-1) ||
       thisIndex.z == (Nchare2-1)) {
       is_boundarychare = true;
     }
-    
+
   commondata = inData.commondata;
 
   // Step 1.c: Allocate NUMGRIDS griddata arrays, each containing data specific to an individual grid.
-  griddata = (griddata_struct *restrict)malloc(sizeof(griddata_struct) * commondata.NUMGRIDS);  
+  griddata = (griddata_struct *restrict)malloc(sizeof(griddata_struct) * commondata.NUMGRIDS);
   griddata_chare = (griddata_struct *restrict)malloc(sizeof(griddata_struct) * commondata.NUMGRIDS);
 
   // Step 1.d: Set each CodeParameter in griddata.params to default.
@@ -200,14 +281,14 @@ Timestepping::Timestepping(CommondataObject &&inData) {
     if initialize_constant_auxevol:
         file_output_str += r"""
   // Step 4.a: Set AUXEVOL gridfunctions that will never change in time.
-  initialize_constant_auxevol(&commondata, griddata_chare);  
+  initialize_constant_auxevol(&commondata, griddata_chare);
 """
     file_output_str += """
 }
 """
     file_output_str += r"""
 // destructor
-Timestepping::~Timestepping() {        
+Timestepping::~Timestepping() {
   // Step 5: Free all allocated memory
   for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
     MoL_free_memory_y_n_gfs(griddata_chare[grid].gridfuncs);
@@ -222,7 +303,7 @@ Timestepping::~Timestepping() {
     for(int ng=0;ng<NGHOSTS*3;ng++) {
      free(griddata[grid].bcstruct.pure_outer_bc_array[ng]);
      free(griddata_chare[grid].bcstruct.pure_outer_bc_array[ng]);
-    }  
+    }
     for(int i=0;i<3;i++) {
       free(griddata[grid].xx[i]);
       free(griddata_chare[grid].xx[i]);
@@ -241,7 +322,7 @@ Timestepping::~Timestepping() {
 
 def output_timestepping_ci(
     project_dir: str,
-    MoL_method: str,            
+    MoL_method: str,
     pre_MoL_step_forward_in_time: str = "",
     post_MoL_step_forward_in_time: str = "",
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
@@ -249,11 +330,11 @@ def output_timestepping_ci(
     """
     Generate timestepping.ci
 
-    :param MoL_method: Method of Lines algorithm used to step forward in time.      
+    :param MoL_method: Method of Lines algorithm used to step forward in time.
     :param pre_MoL_step_forward_in_time: Code for handling pre-right-hand-side operations, default is an empty string.
     :param post_MoL_step_forward_in_time: Code for handling post-right-hand-side operations, default is an empty string.
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
-    """      
+    """
 
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
@@ -280,8 +361,8 @@ def output_timestepping_ci(
         }
         // Step 5.a: Main loop, part 1: Output diagnostics
         serial {
-          if (write_diagnostics_this_step && contains_gridcenter) {           
-            diagnostics_center(&commondata, griddata_chare);            
+          if (write_diagnostics_this_step && contains_gridcenter) {
+            diagnostics_center(&commondata, griddata_chare);
           }
         }
         // Create sessions for ckio file writing from first chare only
@@ -316,361 +397,75 @@ def output_timestepping_ci(
               Ck::IO::open(filename, opened_2d_yz, opts);
             }
           }
-          // 1d y
-          when ready_1d_y(Ck::IO::FileReadyMsg *m_1d_y) {
-            serial {              
-            f_1d_y = m_1d_y->file;
-            CkCallback sessionStart_1d_y(CkIndex_Timestepping::start_write_1d_y(0), thisProxy);
-            CkCallback sessionEnd_1d_y(CkIndex_Timestepping::test_written_1d_y(0), thisProxy);  
-            int tot_num_diagnostic_pts = griddata[which_grid_diagnostics].diagnosticptoffsetstruct.tot_num_diagnostic_1d_y_pts;            
-            int num_fields = griddata[which_grid_diagnostics].diagnosticptoffsetstruct.num_output_quantities + 1;
-            int totsizeinbytes = 23 * num_fields * tot_num_diagnostic_pts;
-            Ck::IO::startSession(f_1d_y, totsizeinbytes, 0, sessionStart_1d_y, sessionEnd_1d_y);
-            delete m_1d_y;    
-            }
-          }
-          when start_write_1d_y(Ck::IO::SessionReadyMsg *m_1d_y){
-            serial {
-            thisProxy.diagnostics_ckio(m_1d_y->session, OUTPUT_1D_Y);
-            delete m_1d_y;                
-            }
-          }
-          when test_written_1d_y(CkReductionMsg *m_1d_y) {
-            serial {
-            delete m_1d_y;                
-            CkCallback cb_1d_y(CkIndex_Timestepping::closed_1d_y(0), thisProxy);
-            Ck::IO::close(f_1d_y, cb_1d_y);                
-            }
-          }
-          when closed_1d_y(CkReductionMsg *m_1d_y) {
-            serial {
-            delete m_1d_y;                
-            }
-          }
-          // 1d z
-          when ready_1d_z(Ck::IO::FileReadyMsg *m_1d_z) {
-            serial {                               
-            f_1d_z = m_1d_z->file;
-            CkCallback sessionStart_1d_z(CkIndex_Timestepping::start_write_1d_z(0), thisProxy);
-            CkCallback sessionEnd_1d_z(CkIndex_Timestepping::test_written_1d_z(0), thisProxy);
-            int tot_num_diagnostic_pts = griddata[which_grid_diagnostics].diagnosticptoffsetstruct.tot_num_diagnostic_1d_z_pts;            
-            int num_fields = griddata[which_grid_diagnostics].diagnosticptoffsetstruct.num_output_quantities + 1;
-            int totsizeinbytes = 23 * num_fields * tot_num_diagnostic_pts;
-            Ck::IO::startSession(f_1d_z, totsizeinbytes, 0, sessionStart_1d_z, sessionEnd_1d_z);
-            delete m_1d_z;
-            }
-          }            
-          when start_write_1d_z(Ck::IO::SessionReadyMsg *m_1d_z){
-            serial {
-            thisProxy.diagnostics_ckio(m_1d_z->session, OUTPUT_1D_Z);                
-            delete m_1d_z;
-            }
-          }            
-          when test_written_1d_z(CkReductionMsg *m_1d_z) {
-            serial {                
-            delete m_1d_z;                
-            CkCallback cb_1d_z(CkIndex_Timestepping::closed_1d_z(0), thisProxy);
-            Ck::IO::close(f_1d_z, cb_1d_z);
-            }
-          }            
-          when closed_1d_z(CkReductionMsg *m_1d_z) {
-            serial {                
-            delete m_1d_z;
-            }
-          }
-          //2d xy
-          when ready_2d_xy(Ck::IO::FileReadyMsg *m_2d_xy) {
-            serial {
-            f_2d_xy = m_2d_xy->file;
-            CkCallback sessionStart_2d_xy(CkIndex_Timestepping::start_write_2d_xy(0), thisProxy);
-            CkCallback sessionEnd_2d_xy(CkIndex_Timestepping::test_written_2d_xy(0), thisProxy);            
-            int tot_num_diagnostic_pts = griddata[which_grid_diagnostics].diagnosticptoffsetstruct.tot_num_diagnostic_2d_xy_pts;            
-            int num_fields = griddata[which_grid_diagnostics].diagnosticptoffsetstruct.num_output_quantities + 2;
-            int totsizeinbytes = 23 * num_fields * tot_num_diagnostic_pts;
-            Ck::IO::startSession(f_2d_xy, totsizeinbytes, 0, sessionStart_2d_xy, sessionEnd_2d_xy);
-            delete m_2d_xy;
-            }
-          }
-          when start_write_2d_xy(Ck::IO::SessionReadyMsg *m_2d_xy) {
-            serial {
-            thisProxy.diagnostics_ckio_2d_xy(m_2d_xy->session, OUTPUT_2D_XY);
-            delete m_2d_xy;
-            }
-          }
-          when test_written_2d_xy(CkReductionMsg *m_2d_xy) {
-            serial {
-            delete m_2d_xy;
-            CkCallback cb_2d_xy(CkIndex_Timestepping::closed_2d_xy(0), thisProxy);
-            Ck::IO::close(f_2d_xy, cb_2d_xy);
-            }
-          }
-          when closed_2d_xy(CkReductionMsg *m_2d_xy) {
-            serial {
-            delete m_2d_xy;
-            }
-          }
-          // 2d yz
-          when ready_2d_yz(Ck::IO::FileReadyMsg *m_2d_yz) {
-            serial {
-            f_2d_yz = m_2d_yz->file;
-            CkCallback sessionStart_2d_yz(CkIndex_Timestepping::start_write_2d_yz(0), thisProxy);
-            CkCallback sessionEnd_2d_yz(CkIndex_Timestepping::test_written_2d_yz(0), thisProxy);
-            int tot_num_diagnostic_pts = griddata[which_grid_diagnostics].diagnosticptoffsetstruct.tot_num_diagnostic_2d_yz_pts;            
-            int num_fields = griddata[which_grid_diagnostics].diagnosticptoffsetstruct.num_output_quantities + 2;
-            int totsizeinbytes = 23 * num_fields * tot_num_diagnostic_pts;
-            Ck::IO::startSession(f_2d_yz, totsizeinbytes, 0, sessionStart_2d_yz, sessionEnd_2d_yz);
-            delete m_2d_yz;
-            }
-          }
-          when start_write_2d_yz(Ck::IO::SessionReadyMsg *m_2d_yz) {
-            serial {
-            thisProxy.diagnostics_ckio_2d_yz(m_2d_yz->session, OUTPUT_2D_YZ);
-            delete m_2d_yz;
-            }
-          }
-          when test_written_2d_yz(CkReductionMsg *m_2d_yz) {
-            serial {
-            delete m_2d_yz;
-            CkCallback cb_2d_yz(CkIndex_Timestepping::closed_2d_yz(0), thisProxy);
-            Ck::IO::close(f_2d_yz, cb_2d_yz);
-            }
-          }
-          when closed_2d_yz(CkReductionMsg *m_2d_yz) {
-            serial {
-            delete m_2d_yz;
-            }
-          }          
-        }
+"""
+    # Generate code for 1d y diagnostics
+    file_output_str += generate_diagnostics_code("1d", "y", "griddata[which_grid_diagnostics].diagnosticptoffsetstruct.num_output_quantities + 1", "griddata[which_grid_diagnostics].diagnosticptoffsetstruct.tot_num_diagnostic_1d_y_pts")
+
+    # Generate code for 1d z diagnostics
+    file_output_str += generate_diagnostics_code("1d", "z", "griddata[which_grid_diagnostics].diagnosticptoffsetstruct.num_output_quantities + 1", "griddata[which_grid_diagnostics].diagnosticptoffsetstruct.tot_num_diagnostic_1d_z_pts")
+
+    # Generate code for 2d xy diagnostics
+    file_output_str += generate_diagnostics_code("2d", "xy", "griddata[which_grid_diagnostics].diagnosticptoffsetstruct.num_output_quantities + 2", "griddata[which_grid_diagnostics].diagnosticptoffsetstruct.tot_num_diagnostic_2d_xy_pts")
+
+    # Generate code for 2d yz diagnostics
+    file_output_str += generate_diagnostics_code("2d", "yz", "griddata[which_grid_diagnostics].diagnosticptoffsetstruct.num_output_quantities + 2", "griddata[which_grid_diagnostics].diagnosticptoffsetstruct.tot_num_diagnostic_2d_yz_pts")
+
+    file_output_str += r"""
+      }
 """
     if pre_MoL_step_forward_in_time != "":
         file_output_str += pre_MoL_step_forward_in_time
     else:
-        file_output_str += "  // (nothing here; specify by setting pre_MoL_step_forward_in_time string in register_CFunction_main_c().)\n"    
-        
+        file_output_str += "  // (nothing here; specify by setting pre_MoL_step_forward_in_time string in register_CFunction_main_c().)\n"
+
+
     file_output_str += r"""
-        serial{
-          MoL_step_forward_in_time(&commondata, griddata_chare, time_start, RK_SUBSTEP_K1);
-        }        
-        serial {
-          send_neighbor_data(K_ODD, EAST_WEST);
-        }
-        if(thisIndex.x < Nchare0 - 1) {
-          when eastGhost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
-            serial {
-              process_ghost(EAST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer);
-            }
-          }
-        }
-        if(thisIndex.x > 0) {
-          when westGhost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
-            serial {
-              process_ghost(WEST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer);
-            }
-          }
-        }
-        serial{
-          send_neighbor_data(K_ODD, NORTH_SOUTH);
-        }
-        if(thisIndex.y < Nchare1 - 1) {
-         when northGhost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
-            serial {
-              process_ghost(NORTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer);
-            }
-          }
-        }
-        if(thisIndex.y > 0){
-          when southGhost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
-            serial {
-              process_ghost(SOUTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer);
-            }
-          }
-        }
-        serial {
-          send_neighbor_data(K_ODD, TOP_BOTTOM);
-        }
-        if(thisIndex.z < Nchare2 - 1) {
-         when topGhost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
-            serial {
-              process_ghost(TOP_GHOST, type_gfs, len_tmpBuffer, tmpBuffer);
-            }
-          }
-        }
-        if(thisIndex.z > 0) {
-          when bottomGhost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
-            serial {
-              process_ghost(BOTTOM_GHOST, type_gfs, len_tmpBuffer, tmpBuffer);
-            }
-          }
-        }        
-        serial{
-          MoL_step_forward_in_time(&commondata, griddata_chare, time_start, RK_SUBSTEP_K2);
-        }        
-        serial {
-          send_neighbor_data(K_EVEN, EAST_WEST);
-        }
-        if(thisIndex.x < Nchare0 - 1) {
-          when eastGhost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
-            serial {
-              process_ghost(EAST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer);
-            }
-          }
-        }
-        if(thisIndex.x > 0) {
-          when westGhost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
-            serial {
-              process_ghost(WEST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer);
-            }
-          }
-        }
-        serial{
-          send_neighbor_data(K_EVEN, NORTH_SOUTH);
-        }
-        if(thisIndex.y < Nchare1 - 1) {
-         when northGhost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
-            serial {
-              process_ghost(NORTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer);
-            }
-          }
-        }
-        if(thisIndex.y > 0){
-          when southGhost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
-            serial {
-              process_ghost(SOUTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer);
-            }
-          }
-        }
-        serial {
-           send_neighbor_data(K_EVEN, TOP_BOTTOM);
-        }
-        if(thisIndex.z < Nchare2 - 1) {
-         when topGhost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
-            serial {
-              process_ghost(TOP_GHOST, type_gfs, len_tmpBuffer, tmpBuffer);
-            }
-          }
-        }
-        if(thisIndex.z > 0) {
-          when bottomGhost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
-            serial {
-              process_ghost(BOTTOM_GHOST, type_gfs, len_tmpBuffer, tmpBuffer);
-            }
-          }
-        }
-        serial{
-          MoL_step_forward_in_time(&commondata, griddata_chare, time_start, RK_SUBSTEP_K3);          
-        }        
-        serial {
-          send_neighbor_data(K_ODD, EAST_WEST);
-        }
-        if(thisIndex.x < Nchare0 - 1) {
-          when eastGhost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
-            serial {
-              process_ghost(EAST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer);
-            }
-          }
-        }
-        if(thisIndex.x > 0) {
-          when westGhost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
-            serial {
-              process_ghost(WEST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer);
-            }
-          }
-        }
-        serial{
-          send_neighbor_data(K_ODD, NORTH_SOUTH);
-        }
-        if(thisIndex.y < Nchare1 - 1) {
-         when northGhost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
-            serial {
-              process_ghost(NORTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer);
-            }
-          }
-        }
-        if(thisIndex.y > 0){
-          when southGhost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
-            serial {
-              process_ghost(SOUTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer);
-            }
-          }
-        }
-        serial {
-           send_neighbor_data(K_ODD, TOP_BOTTOM);
-        }
-        if(thisIndex.z < Nchare2 - 1) {
-         when topGhost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
-            serial {
-              process_ghost(TOP_GHOST, type_gfs, len_tmpBuffer, tmpBuffer);
-            }
-          }
-        }
-        if(thisIndex.z > 0) {
-          when bottomGhost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
-            serial {
-              process_ghost(BOTTOM_GHOST, type_gfs, len_tmpBuffer, tmpBuffer);
-            }
-          }
-        }        
-        serial{
-          MoL_step_forward_in_time(&commondata, griddata_chare, time_start, RK_SUBSTEP_K4);          
-        }                
-        serial {
-          send_neighbor_data(Y_N, EAST_WEST);
-        }
-        if(thisIndex.x < Nchare0 - 1) {
-          when eastGhost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
-            serial {
-              process_ghost(EAST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer);
-            }
-          }
-        }
-        if(thisIndex.x > 0) {
-          when westGhost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
-            serial {
-              process_ghost(WEST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer);
-            }
-          }
-        }
-        serial{
-          send_neighbor_data(Y_N, NORTH_SOUTH);
-        }
-        if(thisIndex.y < Nchare1 - 1) {
-         when northGhost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
-            serial {
-              process_ghost(NORTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer);
-            }
-          }
-        }
-        if(thisIndex.y > 0){
-          when southGhost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
-            serial {
-              process_ghost(SOUTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer);
-            }
-          }
-        }
-        serial {
-           send_neighbor_data(Y_N, TOP_BOTTOM);
-        }
-        if(thisIndex.z < Nchare2 - 1) {
-         when topGhost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
-            serial {
-              process_ghost(TOP_GHOST, type_gfs, len_tmpBuffer, tmpBuffer);
-            }
-          }
-        }
-        if(thisIndex.z > 0) {
-          when bottomGhost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
-            serial {
-              process_ghost(BOTTOM_GHOST, type_gfs, len_tmpBuffer, tmpBuffer);
-            }
-          }
-        }
-"""
+    """
+    # Loop over RK substeps and axes
+    for rk_substep, axis in itertools.product([f"RK_SUBSTEP_K{k}" for k in range(1, 5)], ['x', 'y', 'z']):
+        if axis == 'x':
+            pos_ghost_type = x_pos_ghost_type
+            neg_ghost_type = x_neg_ghost_type
+            nchare_var = "Nchare0"
+        elif axis == 'y':
+            pos_ghost_type = y_pos_ghost_type
+            neg_ghost_type = y_neg_ghost_type
+            nchare_var = "Nchare1"
+        elif axis == 'z':
+            pos_ghost_type = z_pos_ghost_type
+            neg_ghost_type = z_neg_ghost_type
+            nchare_var = "Nchare2"
+
+        # Generate code for this RK substep and axis
+        if rk_substep == 'RK_SUBSTEP_K1':
+            which_gf = 'K_ODD'
+        elif rk_substep == 'RK_SUBSTEP_K2':
+            which_gf = 'K_EVEN'
+        elif rk_substep == 'RK_SUBSTEP_K3':
+            which_gf = 'K_ODD'
+        elif rk_substep == 'RK_SUBSTEP_K4':
+            which_gf = 'Y_N'
+        else:
+            raise ValueError(f"Unknown RK substep: {rk_substep}")
+
+        file_output_str += generate_mol_step_forward_code(rk_substep)
+        file_output_str += generate_send_neighbor_data_code(which_gf, 'EAST_WEST')
+        file_output_str += generate_ghost_code(axis, 0, pos_ghost_type, neg_ghost_type, nchare_var)
+        file_output_str += generate_send_neighbor_data_code(which_gf, 'NORTH_SOUTH')
+        file_output_str += generate_ghost_code(axis, 1, pos_ghost_type, neg_ghost_type, nchare_var)
+        file_output_str += generate_send_neighbor_data_code(which_gf, 'TOP_BOTTOM')
+        file_output_str += generate_ghost_code(axis, 2, pos_ghost_type, neg_ghost_type, nchare_var)
+
+    file_output_str += r"""
+        """
+
+
     if post_MoL_step_forward_in_time != "":
         file_output_str += post_MoL_step_forward_in_time
     else:
         file_output_str += "  // (nothing here; specify by setting post_MoL_step_forward_in_time string in register_CFunction_main_c().)\n"
-    
-    file_output_str += r"""                     
+
+    file_output_str += r"""
         serial {
           // Adding dt to commondata->time many times will induce roundoff error,
           //   so here we set time based on the iteration number.
@@ -682,7 +477,7 @@ def output_timestepping_ci(
       serial{
         mainProxy.done();
       }
-    };    
+    };
     entry void start_write_1d_y(Ck::IO::SessionReadyMsg *m);
     entry void start_write_1d_z(Ck::IO::SessionReadyMsg *m);
     entry void start_write_2d_xy(Ck::IO::SessionReadyMsg *m);
@@ -694,18 +489,18 @@ def output_timestepping_ci(
     entry void closed_1d_y(CkReductionMsg *m);
     entry void closed_1d_z(CkReductionMsg *m);
     entry void closed_2d_xy(CkReductionMsg *m);
-    entry void closed_2d_yz(CkReductionMsg *m);    
+    entry void closed_2d_yz(CkReductionMsg *m);
     entry void diagnostics_ckio(Ck::IO::Session token, int which_output) {
       serial {
         diagnostics(&commondata, griddata_chare, token, which_output, which_grid_diagnostics);
       }
-    }              
-    entry void eastGhost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
-    entry void westGhost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
-    entry void northGhost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
-    entry void southGhost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
-    entry void topGhost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
-    entry void bottomGhost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
+    }
+    entry void east_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
+    entry void west_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
+    entry void north_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
+    entry void south_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
+    entry void top_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
+    entry void bottom_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
   };
 };
 """
@@ -727,44 +522,48 @@ def output_timestepping_h_cpp_ci(
     pre_MoL_step_forward_in_time: str = "",
     post_MoL_step_forward_in_time: str = "",
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
-) -> None:  
-  
+) -> None:
+
     output_timestepping_h(
-      project_dir=project_dir,    
+      project_dir=project_dir,
     )
-        
+
     output_timestepping_cpp(
-      project_dir=project_dir,      
+      project_dir=project_dir,
       MoL_method=MoL_method,
       enable_rfm_precompute=enable_rfm_precompute,
       enable_CurviBCs=True,
       boundary_conditions_desc=boundary_conditions_desc,
     )
-        
+
     output_timestepping_ci(
-      project_dir=project_dir,      
+      project_dir=project_dir,
       MoL_method=MoL_method,
       pre_MoL_step_forward_in_time=pre_MoL_step_forward_in_time,
-      post_MoL_step_forward_in_time=post_MoL_step_forward_in_time,      
+      post_MoL_step_forward_in_time=post_MoL_step_forward_in_time,
     )
-    
+
+
     BHaH_defines_h.register_BHaH_defines(
-    __name__, """#define K_ODD 0  
-#define K_EVEN 1  
-#define Y_N 2  
-#define EAST_WEST_DIR 0  
-#define NORTH_SOUTH_DIR 1  
-#define TOP_BOTTOM_DIR 2  
-#define EAST_GHOST 0  
-#define WEST_GHOST 1  
-#define NORTH_GHOST 2:
-#define SOUTH_GHOST 3  
-#define TOP_GHOST 4  
-#define BOTTOM_GHOST 5  
-#define RK_SUBSTEP_K1 1  
-#define RK_SUBSTEP_K2 2  
-#define RK_SUBSTEP_K3 3  
-#define RK_SUBSTEP_K4 4   
-""",
+    __name__,
+    f"""
+    #define K_ODD 0
+    #define K_EVEN 1
+    #define Y_N 2
+    #define EAST_WEST 0
+    #define NORTH_SOUTH 1
+    #define TOP_BOTTOM 2
+    #define {x_pos_ghost_type} 1
+    #define {x_neg_ghost_type} 2
+    #define {y_pos_ghost_type} 3
+    #define {y_neg_ghost_type} 4
+    #define {z_pos_ghost_type} 5
+    #define {z_neg_ghost_type} 6
+    #define RK_SUBSTEP_K1 1
+    #define RK_SUBSTEP_K2 2
+    #define RK_SUBSTEP_K3 3
+    #define RK_SUBSTEP_K4 4
+    """,
     )
+
 
