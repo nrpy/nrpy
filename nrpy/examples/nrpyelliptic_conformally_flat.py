@@ -222,7 +222,7 @@ chkpt.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
 
 # Define string with print statement for progress indicator
 progress_str = r"""
-  fprintf(stderr, "n / nn_max = %d / %d ; log10(residual) / log10(residual_target) =  %.4f / %.4f \r",
+  fprintf(stderr, "nn / nn_max = %d / %d ; log10(residual) / log10(residual_target) =  %.4f / %.4f \r",
     commondata->nn,
     commondata->nn_max,
     commondata->log10_current_residual,
