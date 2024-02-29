@@ -7,11 +7,12 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import List, Any, Union, Dict, Tuple, Optional, Sequence
+from typing import List, Any, Union, Dict, Tuple, Optional, Sequence, cast
 from typing_extensions import Literal
 import sympy as sp
 import nrpy.indexedexp as ixp
 import nrpy.params as par
+import nrpy.helpers.functional as func
 from nrpy.helpers.type_annotation_utilities import validate_literal_arguments
 
 
@@ -913,6 +914,87 @@ def register_gridfunctions_for_single_rank2(
     register_gridfunctions(gf_list, dimension, **kwargs)
 
     # Step 3: Return array of SymPy variables
+    return IDX_OBJ_TMP
+
+
+def register_gridfunctions_for_single_rankN(
+    basename: str,
+    rank: int,
+    symmetry: Optional[str] = None,
+    dimension: int = 3,
+    **kwargs: Any,
+) -> Union[
+    List[sp.Symbol],
+    List[List[sp.Symbol]],
+    List[List[List[sp.Symbol]]],
+    List[List[List[List[sp.Symbol]]]],
+]:
+    """
+    Register gridfunctions for a single variable of arbitrary rank.
+
+    :param basename: Base name of the gridfunction to register.
+    :param rank: Rank of the tensor for which to register gridfunctions.
+    :param symmetry: Optional symmetry for the gridfunctions. Defaults to None.
+    :param dimension: Dimension of the space. Defaults to 3.
+    :param kwargs: Additional keyword arguments for gridfunction registration.
+    :return: Nested list of SymPy symbols representing the tensor gridfunctions.
+
+    Doctests:
+    >>> glb_gridfcs_dict.clear()
+    >>> register_gridfunctions_for_single_rankN("g", rank=2, symmetry="sym01")
+    [[g00, g01, g02], [g01, g11, g12], [g02, g12, g22]]
+
+    >>> glb_gridfcs_dict.clear()
+    >>> register_gridfunctions_for_single_rankN("A", rank=1)
+    [A0, A1, A2]
+
+    >>> glb_gridfcs_dict.clear()
+    >>> register_gridfunctions_for_single_rankN("R", rank=4, symmetry="sym01_sym23", dimension=4)
+    [[[[R0000, R0001, R0002, R0003], [R0001, R0011, R0012, R0013], [R0002, R0012, R0022, R0023], [R0003, R0013, R0023, R0033]], [[R0100, R0101, R0102, R0103], [R0101, R0111, R0112, R0113], [R0102, R0112, R0122, R0123], [R0103, R0113, R0123, R0133]], [[R0200, R0201, R0202, R0203], [R0201, R0211, R0212, R0213], [R0202, R0212, R0222, R0223], [R0203, R0213, R0223, R0233]], [[R0300, R0301, R0302, R0303], [R0301, R0311, R0312, R0313], [R0302, R0312, R0322, R0323], [R0303, R0313, R0323, R0333]]], [[[R0100, R0101, R0102, R0103], [R0101, R0111, R0112, R0113], [R0102, R0112, R0122, R0123], [R0103, R0113, R0123, R0133]], [[R1100, R1101, R1102, R1103], [R1101, R1111, R1112, R1113], [R1102, R1112, R1122, R1123], [R1103, R1113, R1123, R1133]], [[R1200, R1201, R1202, R1203], [R1201, R1211, R1212, R1213], [R1202, R1212, R1222, R1223], [R1203, R1213, R1223, R1233]], [[R1300, R1301, R1302, R1303], [R1301, R1311, R1312, R1313], [R1302, R1312, R1322, R1323], [R1303, R1313, R1323, R1333]]], [[[R0200, R0201, R0202, R0203], [R0201, R0211, R0212, R0213], [R0202, R0212, R0222, R0223], [R0203, R0213, R0223, R0233]], [[R1200, R1201, R1202, R1203], [R1201, R1211, R1212, R1213], [R1202, R1212, R1222, R1223], [R1203, R1213, R1223, R1233]], [[R2200, R2201, R2202, R2203], [R2201, R2211, R2212, R2213], [R2202, R2212, R2222, R2223], [R2203, R2213, R2223, R2233]], [[R2300, R2301, R2302, R2303], [R2301, R2311, R2312, R2313], [R2302, R2312, R2322, R2323], [R2303, R2313, R2323, R2333]]], [[[R0300, R0301, R0302, R0303], [R0301, R0311, R0312, R0313], [R0302, R0312, R0322, R0323], [R0303, R0313, R0323, R0333]], [[R1300, R1301, R1302, R1303], [R1301, R1311, R1312, R1313], [R1302, R1312, R1322, R1323], [R1303, R1313, R1323, R1333]], [[R2300, R2301, R2302, R2303], [R2301, R2311, R2312, R2313], [R2302, R2312, R2322, R2323], [R2303, R2313, R2323, R2333]], [[R3300, R3301, R3302, R3303], [R3301, R3311, R3312, R3313], [R3302, R3312, R3322, R3323], [R3303, R3313, R3323, R3333]]]]
+    """
+    # Determine the correct function to call based on rank
+    if rank == 1:
+        IDX_OBJ_TMP = cast(
+            List[sp.Symbol], ixp.declarerank1(basename, dimension=dimension, **kwargs)
+        )
+    elif rank == 2:
+        IDX_OBJ_TMP = cast(
+            List[List[sp.Symbol]],
+            ixp.declarerank2(
+                basename, symmetry=symmetry, dimension=dimension, **kwargs
+            ),
+        )
+    elif rank == 3:
+        IDX_OBJ_TMP = cast(
+            List[List[List[sp.Symbol]]],
+            ixp.declarerank3(
+                basename, symmetry=symmetry, dimension=dimension, **kwargs
+            ),
+        )
+    elif rank == 4:
+        IDX_OBJ_TMP = cast(
+            List[List[List[List[sp.Symbol]]]],
+            ixp.declarerank4(
+                basename, symmetry=symmetry, dimension=dimension, **kwargs
+            ),
+        )
+    else:
+        raise ValueError(f"Unsupported rank: {rank}. Rank must be between 1 and 4.")
+
+    # Flatten the list to register each gridfunction only once
+    flat_list = [
+        item
+        for sublist in func.flatten(IDX_OBJ_TMP)
+        for item in (sublist if isinstance(sublist, list) else [sublist])
+    ]
+    unique_gf_list = list(set(map(str, flat_list)))
+
+    # Manually adjust kwargs for registration
+    kwargs["is_basename"] = False
+    kwargs["rank"] = rank
+    register_gridfunctions(unique_gf_list, dimension, **kwargs)
+
+    # Return the original nested list structure of SymPy symbols
     return IDX_OBJ_TMP
 
 
