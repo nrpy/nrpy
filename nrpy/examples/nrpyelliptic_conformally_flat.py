@@ -36,7 +36,7 @@ par.set_parval_from_str("Infrastructure", "BHaH")
 project_name = "nrpyelliptic_conformally_flat"
 grid_physical_size = 1.0e6
 t_final = grid_physical_size  # This parameter is effectively not used in NRPyElliptic
-N_final = 10000  # Sets the maximum number of relaxation steps
+n_max = 10000  # Sets the maximum number of relaxation steps
 log10_residual_tolerance = -15.8  # Set tolerance for log10(residual) to stop relaxation
 default_diagnostics_output_every = 100
 default_checkpoint_every = 50.0
@@ -220,14 +220,24 @@ MoL.register_CFunctions(
 )
 chkpt.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
 
-progress.register_CFunction_progress_indicator()
+# Define string with print statement for progress indicator
+progress_str = r"""
+  fprintf(stderr, "n / n_max = %d / %d ; log10(residual) / log10(residual_target) =  %.4f / %.4f \r",
+    commondata->nn,
+    commondata->n_max,
+    commondata->log10_current_residual,
+    commondata->log10_residual_tolerance);
+"""
+progress.register_CFunction_progress_indicator(
+    progress_str=progress_str, compute_ETA=False
+)
 rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
 # Update parameters needed for hyperbolic relaxation method
 par.adjust_CodeParam_default("eta_damping", eta_damping)
 par.adjust_CodeParam_default("MINIMUM_GLOBAL_WAVESPEED", MINIMUM_GLOBAL_WAVESPEED)
 par.adjust_CodeParam_default("CFL_FACTOR", CFL_FACTOR)
-par.adjust_CodeParam_default("N_final", N_final)
+par.adjust_CodeParam_default("n_max", n_max)
 par.adjust_CodeParam_default("log10_residual_tolerance", log10_residual_tolerance)
 
 # Update parameters specific to the coordinate system
