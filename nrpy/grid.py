@@ -12,7 +12,6 @@ from typing_extensions import Literal
 import sympy as sp
 import nrpy.indexedexp as ixp
 import nrpy.params as par
-import nrpy.helpers.functional as func
 from nrpy.helpers.type_annotation_utilities import validate_literal_arguments
 
 
@@ -944,15 +943,38 @@ def register_gridfunctions_for_single_rankN(
     >>> glb_gridfcs_dict.clear()
     >>> register_gridfunctions_for_single_rankN("g", rank=2, symmetry="sym01")
     [[g00, g01, g02], [g01, g11, g12], [g02, g12, g22]]
+    >>> print(sorted(list(glb_gridfcs_dict)))
+    ['g00', 'g01', 'g02', 'g11', 'g12', 'g22']
 
     >>> glb_gridfcs_dict.clear()
     >>> register_gridfunctions_for_single_rankN("A", rank=1)
     [A0, A1, A2]
+    >>> print(sorted(list(glb_gridfcs_dict)))
+    ['A0', 'A1', 'A2']
 
     >>> glb_gridfcs_dict.clear()
     >>> register_gridfunctions_for_single_rankN("R", rank=4, symmetry="sym01_sym23", dimension=4)
     [[[[R0000, R0001, R0002, R0003], [R0001, R0011, R0012, R0013], [R0002, R0012, R0022, R0023], [R0003, R0013, R0023, R0033]], [[R0100, R0101, R0102, R0103], [R0101, R0111, R0112, R0113], [R0102, R0112, R0122, R0123], [R0103, R0113, R0123, R0133]], [[R0200, R0201, R0202, R0203], [R0201, R0211, R0212, R0213], [R0202, R0212, R0222, R0223], [R0203, R0213, R0223, R0233]], [[R0300, R0301, R0302, R0303], [R0301, R0311, R0312, R0313], [R0302, R0312, R0322, R0323], [R0303, R0313, R0323, R0333]]], [[[R0100, R0101, R0102, R0103], [R0101, R0111, R0112, R0113], [R0102, R0112, R0122, R0123], [R0103, R0113, R0123, R0133]], [[R1100, R1101, R1102, R1103], [R1101, R1111, R1112, R1113], [R1102, R1112, R1122, R1123], [R1103, R1113, R1123, R1133]], [[R1200, R1201, R1202, R1203], [R1201, R1211, R1212, R1213], [R1202, R1212, R1222, R1223], [R1203, R1213, R1223, R1233]], [[R1300, R1301, R1302, R1303], [R1301, R1311, R1312, R1313], [R1302, R1312, R1322, R1323], [R1303, R1313, R1323, R1333]]], [[[R0200, R0201, R0202, R0203], [R0201, R0211, R0212, R0213], [R0202, R0212, R0222, R0223], [R0203, R0213, R0223, R0233]], [[R1200, R1201, R1202, R1203], [R1201, R1211, R1212, R1213], [R1202, R1212, R1222, R1223], [R1203, R1213, R1223, R1233]], [[R2200, R2201, R2202, R2203], [R2201, R2211, R2212, R2213], [R2202, R2212, R2222, R2223], [R2203, R2213, R2223, R2233]], [[R2300, R2301, R2302, R2303], [R2301, R2311, R2312, R2313], [R2302, R2312, R2322, R2323], [R2303, R2313, R2323, R2333]]], [[[R0300, R0301, R0302, R0303], [R0301, R0311, R0312, R0313], [R0302, R0312, R0322, R0323], [R0303, R0313, R0323, R0333]], [[R1300, R1301, R1302, R1303], [R1301, R1311, R1312, R1313], [R1302, R1312, R1322, R1323], [R1303, R1313, R1323, R1333]], [[R2300, R2301, R2302, R2303], [R2301, R2311, R2312, R2313], [R2302, R2312, R2322, R2323], [R2303, R2313, R2323, R2333]], [[R3300, R3301, R3302, R3303], [R3301, R3311, R3312, R3313], [R3302, R3312, R3322, R3323], [R3303, R3313, R3323, R3333]]]]
+    >>> print(sorted(list(glb_gridfcs_dict)))
+    ['R0000', 'R0001', 'R0002', 'R0003', 'R0011', 'R0012', 'R0013', 'R0022', 'R0023', 'R0033', 'R0100', 'R0101', 'R0102', 'R0103', 'R0111', 'R0112', 'R0113', 'R0122', 'R0123', 'R0133', 'R0200', 'R0201', 'R0202', 'R0203', 'R0211', 'R0212', 'R0213', 'R0222', 'R0223', 'R0233', 'R0300', 'R0301', 'R0302', 'R0303', 'R0311', 'R0312', 'R0313', 'R0322', 'R0323', 'R0333', 'R1100', 'R1101', 'R1102', 'R1103', 'R1111', 'R1112', 'R1113', 'R1122', 'R1123', 'R1133', 'R1200', 'R1201', 'R1202', 'R1203', 'R1211', 'R1212', 'R1213', 'R1222', 'R1223', 'R1233', 'R1300', 'R1301', 'R1302', 'R1303', 'R1311', 'R1312', 'R1313', 'R1322', 'R1323', 'R1333', 'R2200', 'R2201', 'R2202', 'R2203', 'R2211', 'R2212', 'R2213', 'R2222', 'R2223', 'R2233', 'R2300', 'R2301', 'R2302', 'R2303', 'R2311', 'R2312', 'R2313', 'R2322', 'R2323', 'R2333', 'R3300', 'R3301', 'R3302', 'R3303', 'R3311', 'R3312', 'R3313', 'R3322', 'R3323', 'R3333']
     """
+
+    def flatten_list(nested_list: List[Any]) -> List[Any]:
+        """
+        Flattens a nested list into a single list.
+
+        :param nested_list: The list to be flattened.
+        :return: A single list containing all the elements of the nested list.
+
+        >>> flatten_list([[1, 2], [3, 4]])
+        [1, 2, 3, 4]
+        >>> flatten_list([[[1], [2]], [[3], [4]]])
+        [1, 2, 3, 4]
+        """
+        if not isinstance(nested_list, list):
+            return [nested_list]
+        return [item for sublist in nested_list for item in flatten_list(sublist)]
+
     # Add type hint to IDX_OBJ_TMP, or some versions of mypy will assume its type from its first usage (List[sp.Symbol])
     IDX_OBJ_TMP: Union[
         List[sp.Symbol],
@@ -993,7 +1015,7 @@ def register_gridfunctions_for_single_rankN(
     # Flatten the list to register each gridfunction only once
     flat_list = [
         item
-        for sublist in func.flatten(IDX_OBJ_TMP)
+        for sublist in flatten_list(IDX_OBJ_TMP)
         for item in (sublist if isinstance(sublist, list) else [sublist])
     ]
     unique_gf_list = list(set(map(str, flat_list)))
