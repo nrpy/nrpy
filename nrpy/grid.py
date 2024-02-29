@@ -938,6 +938,7 @@ def register_gridfunctions_for_single_rankN(
     :param dimension: Dimension of the space. Defaults to 3.
     :param kwargs: Additional keyword arguments for gridfunction registration.
     :return: Nested list of SymPy symbols representing the tensor gridfunctions.
+    :raises ValueError: If the rank is not between 1 and 4, inclusive.
 
     Doctests:
     >>> glb_gridfcs_dict.clear()
