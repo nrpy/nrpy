@@ -227,6 +227,7 @@ progress_str = r"""
     commondata->nn_max,
     commondata->log10_current_residual,
     commondata->log10_residual_tolerance);
+  fflush(stderr); // Flush the stderr buffer
 """
 progress.register_CFunction_progress_indicator(
     progress_str=progress_str, compute_ETA=False
@@ -309,10 +310,19 @@ Bdefines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     enable_simd=enable_simd,
 )
+# Define post_MoL_step_forward_in_time string for main function
+post_MoL_step_forward_in_time = r"""    check_stop_conditions(&commondata, griddata);
+    if (commondata.stop_relaxation) {
+      // Force a checkpoint when stop condition is reached.
+      commondata.checkpoint_every = 1e-4;
+      write_checkpoint(&commondata, griddata);
+      break;
+    }
+"""
 main.register_CFunction_main_c(
     initial_data_desc="",
     pre_MoL_step_forward_in_time="write_checkpoint(&commondata, griddata);\n",
-    post_MoL_step_forward_in_time="check_stop_conditions(&commondata, griddata);\nif (commondata.stop_relaxation) break;\n",
+    post_MoL_step_forward_in_time=post_MoL_step_forward_in_time,
     MoL_method=MoL_method,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,

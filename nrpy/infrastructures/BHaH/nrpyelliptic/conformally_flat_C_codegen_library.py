@@ -623,7 +623,7 @@ def register_CFunction_check_stop_conditions() -> Union[None, pcg.NRPyEnv_type]:
 
   // Check if total number of iteration steps has been reached
   if ((nn >= nn_max) || (log10_current_residual < log10_residual_tolerance)){
-    printf("Exiting main loop after %8d iterations\n", nn);
+    printf("\nExiting main loop after %8d iterations\n", nn);
     printf("The tolerance for the logarithmic residual is %.8e\n", log10_residual_tolerance);
     printf("Exiting relaxation with logarithmic residual of %.8e\n", log10_current_residual);
     commondata->stop_relaxation = true;
