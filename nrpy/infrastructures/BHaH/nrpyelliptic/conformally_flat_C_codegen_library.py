@@ -602,7 +602,7 @@ def register_CFunction_check_stop_conditions() -> Union[None, pcg.NRPyEnv_type]:
     )
 
     # Register parameter that sets the total number of relaxation steps
-    _n_max = par.register_CodeParameter("int", __name__, "n_max", 0, commondata=True)
+    _nn_max = par.register_CodeParameter("int", __name__, "nn_max", 0, commondata=True)
 
     # Register parameter that sets the tolerance for log of residual
     _log10_residual_tolerance = par.register_CodeParameter(
@@ -622,7 +622,7 @@ def register_CFunction_check_stop_conditions() -> Union[None, pcg.NRPyEnv_type]:
 #include "set_CodeParameters.h"
 
   // Check if total number of iteration steps has been reached
-  if ((nn >= n_max) || (log10_current_residual < log10_residual_tolerance)){
+  if ((nn >= nn_max) || (log10_current_residual < log10_residual_tolerance)){
     printf("Exiting main loop after %8d iterations\n", nn);
     printf("The tolerance for the logarithmic residual is %.8e\n", log10_residual_tolerance);
     printf("Exiting relaxation with logarithmic residual of %.8e\n", log10_current_residual);
