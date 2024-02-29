@@ -311,13 +311,7 @@ cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
     project_name=project_name, cmdline_inputs=["convergence_factor"]
 )
 TPl.copy_TwoPunctures_header_files(TwoPunctures_Path=Path(project_dir) / "TwoPunctures")
-Bdefines_h.output_BHaH_defines_h(
-    additional_includes=[str(Path("TwoPunctures") / Path("TwoPunctures.h"))],
-    project_dir=project_dir,
-    enable_simd=enable_simd,
-    enable_rfm_precompute=enable_rfm_precompute,
-    fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
-)
+
 # ~ main.register_CFunction_main_c(
     # ~ initial_data_desc=IDtype,
     # ~ pre_MoL_step_forward_in_time="write_checkpoint(&commondata, griddata);\n",
@@ -329,17 +323,20 @@ Bdefines_h.output_BHaH_defines_h(
 superBmain.output_commondata_object_h_and_main_h_cpp_ci(
     project_dir=project_dir,
 )
-superBtimestepping.output_timestepping_cpp(
+superBtimestepping.output_timestepping_h_cpp_ci(
     project_dir=project_dir,
-    initial_data_desc=IDtype,
-    pre_MoL_step_forward_in_time="write_checkpoint(&commondata, griddata);\n",
+    initial_data_desc=IDtype,    
     MoL_method=MoL_method,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
     boundary_conditions_desc=boundary_conditions_desc,
 )
-superBtimestepping.output_timestepping_h(
-    project_dir=project_dir,    
+Bdefines_h.output_BHaH_defines_h(
+    additional_includes=[str(Path("TwoPunctures") / Path("TwoPunctures.h"))],
+    project_dir=project_dir,
+    enable_simd=enable_simd,
+    enable_rfm_precompute=enable_rfm_precompute,
+    fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
 )
 
 

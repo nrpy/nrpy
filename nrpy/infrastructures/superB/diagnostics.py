@@ -12,11 +12,9 @@ from types import FrameType as FT
 import nrpy.params as par
 import nrpy.c_function as cfc
 import nrpy.reference_metric as refmetric
-
 import nrpy.helpers.parallel_codegen as pcg
-
 import nrpy.infrastructures.superB.output_0d_1d_2d_nearest_gridpoint_slices as out012d
-
+from nrpy.infrastructures.BHaH import BHaH_defines_h
 
 def register_CFunction_diagnostics(
     list_of_CoordSystems: List[str],
@@ -140,19 +138,19 @@ for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     }
 
     // 1D and 2D outputs
-    if (which_output == output_1d_y) {
+    if (which_output == OUTPUT_1D_Y) {
       if (num_diagnostic_1d_y_pts > 0) {
         diagnostics_nearest_1d_y_axis(commondata, params, xx, &griddata[grid].gridfuncs, &griddata[grid].diagnosticptoffsetstruct, token);
       }
-    } else if (which_output == output_1d_z) {
+    } else if (which_output == OUTPUT_1D_Z) {
       if (num_diagnostic_1d_z_pts > 0) {
         diagnostics_nearest_1d_z_axis(commondata, params, xx, &griddata[grid].gridfuncs, &griddata[grid].diagnosticptoffsetstruct, token);
       }
-    } else if (which_output == output_2d_xy) {
+    } else if (which_output == OUTPUT_2D_XY) {
       if (num_diagnostic_2d_xy_pts > 0) {
         diagnostics_nearest_2d_xy_plane(commondata, params, xx, &griddata[grid].gridfuncs, &griddata[grid].diagnosticptoffsetstruct, token);
       }
-    } else if (which_output == output_2d_yz) {
+    } else if (which_output == OUTPUT_2D_YZ) {
       if (num_diagnostic_2d_yz_pts > 0) {
         diagnostics_nearest_2d_yz_plane(commondata, params, xx, &griddata[grid].gridfuncs, &griddata[grid].diagnosticptoffsetstruct, token);
       }
@@ -171,6 +169,15 @@ for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
         include_CodeParameters_h=False,
         body=body,
     )
+    
+    BHaH_defines_h.register_BHaH_defines(
+    __name__, """#define OUTPUT_1D_Y 1  
+#define OUTPUT_1D_Z 2  
+#define OUTPUT_2D_XY 3  
+#define OUTPUT_2D_YZ 4  
+""",
+    )
+
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
