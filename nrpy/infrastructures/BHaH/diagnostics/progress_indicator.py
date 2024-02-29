@@ -39,6 +39,7 @@ def register_CFunction_progress_indicator(
           time_remaining__hrs, time_remaining__mins, time_remaining__secs);
   fflush(stderr);  // Flush the stderr buffer
 """,
+    compute_ETA: bool = True,
 ) -> None:
     """
     Register a C function that serves as a progress indicator for the simulation.
@@ -71,16 +72,20 @@ def register_CFunction_progress_indicator(
     name = "progress_indicator"
     params = """commondata_struct *restrict commondata, const griddata_struct *restrict griddata"""
 
-    body = r"""
+    body = ""
+    if compute_ETA:
+        body += r"""  // Evaluate current time, for ETA calculation.
   if (commondata->nn == commondata->nn_0) {
     CURRTIME_FUNC(&commondata->start_wallclock_time);
-  }
-
+  }"""
+    body += """
   // Proceed only if progress output is enabled (output_progress_every > 0)
   // and the current iteration (nn) is a multiple of the output frequency (output_progress_every)
   if (! (commondata->output_progress_every >= 0 && (commondata->nn % commondata->output_progress_every == 0)) )
-    return;
-
+    return;"""
+    if compute_ETA:
+        body += """
+  // Compute ETA:
   TIMEVAR currtime;
   CURRTIME_FUNC(&currtime);
   const REAL time_in_ns = TIME_IN_NS(commondata->start_wallclock_time, currtime);
@@ -97,8 +102,9 @@ def register_CFunction_progress_indicator(
     time_remaining__mins = 0;
     time_remaining__secs = 0;
   }"""
+
     body += rf"""
-  // Step 2: Output simulation progress
+  // Output simulation progress:
 {progress_str}
 """
     cfc.register_CFunction(
