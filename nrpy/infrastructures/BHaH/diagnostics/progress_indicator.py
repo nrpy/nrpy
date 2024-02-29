@@ -74,8 +74,9 @@ def register_CFunction_progress_indicator(
 
     body = ""
     if compute_ETA:
-        body += r"""  // Evaluate current time, for ETA calculation.
+        body += r"""
   if (commondata->nn == commondata->nn_0) {
+    // Evaluate start_wallclock_time, for ETA calculation.
     CURRTIME_FUNC(&commondata->start_wallclock_time);
   }"""
     body += """
