@@ -314,7 +314,7 @@ Bdefines_h.output_BHaH_defines_h(
 post_MoL_step_forward_in_time = r"""    check_stop_conditions(&commondata, griddata);
     if (commondata.stop_relaxation) {
       // Force a checkpoint when stop condition is reached.
-      commondata.checkpoint_every = 1e-4;
+      commondata.checkpoint_every = 1e-4*commondata.dt;
       write_checkpoint(&commondata, griddata);
       break;
     }
