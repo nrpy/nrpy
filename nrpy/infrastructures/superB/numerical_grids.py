@@ -123,6 +123,7 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
     if enable_CurviBCs:
         body += r"""
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
+  charecommstruct_set_up(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, chare_index);
   bcstruct_chare_set_up(commondata, &griddata[grid].params, &griddata_chare[grid].params, griddata_chare[grid].xx, &griddata[grid].bcstruct, &griddata_chare[grid].bcstruct, chare_index);
 }
 """

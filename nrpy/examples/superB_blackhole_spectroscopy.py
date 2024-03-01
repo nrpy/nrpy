@@ -53,6 +53,7 @@ import nrpy.infrastructures.superB.CurviBoundaryConditions as superBcbc
 import nrpy.infrastructures.superB.MoL as superBMoL
 import nrpy.infrastructures.superB.main_chare as superBmain
 import nrpy.infrastructures.superB.timestepping_chare as superBtimestepping
+import nrpy.infrastructures.superB.chare_communication_maps as charecomm
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -246,6 +247,9 @@ superBnumericalgrids.register_CFunctions(
 
 cbc.CurviBoundaryConditions_register_C_functions(
     list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order
+)
+charecomm.chare_comm_register_C_functions(
+    list_of_CoordSystems=[CoordSystem]
 )
 superBcbc.CurviBoundaryConditions_register_C_functions(
     list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order

@@ -495,7 +495,7 @@ void Timestepping::send_neighbor_data(const int type_gfs, const int dir, const i
 """
     file_output_str += r"""
 // process neighbor ghosts
-void Timestepping::process_ghost(const int type_ghost, const int type_gfs, const int len_tmpBuffer, const REAL *restrict vals, const int grid) (
+void Timestepping::process_ghost(const int type_ghost, const int type_gfs, const int len_tmpBuffer, const REAL *restrict vals, const int grid) {
   const int Nxx0 = griddata_chare[grid].params.Nxx0;
   const int Nxx1 = griddata_chare[grid].params.Nxx1;
   const int Nxx2 = griddata_chare[grid].params.Nxx2;
@@ -522,9 +522,9 @@ void Timestepping::process_ghost(const int type_ghost, const int type_gfs, const
       for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
         int i0 = Nxx0chare + (2 * NGHOSTS) - 1;
         for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
-          for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2chare; i2++) {
-            for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1chare; i1++) {
-              gfs[IDX4CHARE(which_gf, i0, i1, i2)] = vals[IDXFACES0(which_gf, which_inner, i1, i2)];
+          for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
+            for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++) {
+              gfs[IDX4(which_gf, i0, i1, i2)] = vals[IDXFACES0(which_gf, which_inner, i1, i2)];
             }
           }
           i0--;
@@ -535,9 +535,9 @@ void Timestepping::process_ghost(const int type_ghost, const int type_gfs, const
       for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
         int i0 = 0;
         for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
-          for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2chare; i2++) {
-            for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1chare; i1++) {
-              gfs[IDX4CHARE(which_gf, i0, i1, i2)] = vals[IDXFACES0(which_gf, which_inner, i1, i2)];
+          for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
+            for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++) {
+              gfs[IDX4(which_gf, i0, i1, i2)] = vals[IDXFACES0(which_gf, which_inner, i1, i2)];
             }
           }
           i0++;
@@ -548,9 +548,9 @@ void Timestepping::process_ghost(const int type_ghost, const int type_gfs, const
       for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
         int i1 = Nxx1chare + (2 * NGHOSTS) - 1;
         for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
-          for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2chare; i2++) {
-            for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0chare; i0++) {
-              gfs[IDX4CHARE(which_gf, i0, i1, i2)] = vals[IDXFACES1(which_gf, which_inner, i0, i2)];
+          for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
+            for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++) {
+              gfs[IDX4(which_gf, i0, i1, i2)] = vals[IDXFACES1(which_gf, which_inner, i0, i2)];
             }
           }
           i1--;
@@ -561,9 +561,9 @@ void Timestepping::process_ghost(const int type_ghost, const int type_gfs, const
       for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
         int i1 = 0;
         for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
-          for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2chare; i2++) {
-            for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0chare; i0++) {
-              gfs[IDX4CHARE(which_gf, i0, i1, i2)] = vals[IDXFACES1(which_gf, which_inner, i0, i2)];
+          for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
+            for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++) {
+              gfs[IDX4(which_gf, i0, i1, i2)] = vals[IDXFACES1(which_gf, which_inner, i0, i2)];
             }
           }
           i1++;
@@ -574,9 +574,9 @@ void Timestepping::process_ghost(const int type_ghost, const int type_gfs, const
       for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
         int i2 = Nxx2chare + (2 * NGHOSTS) - 1;
         for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
-          for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1chare; i1++) {
-            for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0chare; i0++) {
-              gfs[IDX4CHARE(which_gf, i0, i1, i2)] = vals[IDXFACES2(which_gf, which_inner, i0, i1)];
+          for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++) {
+            for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++) {
+              gfs[IDX4(which_gf, i0, i1, i2)] = vals[IDXFACES2(which_gf, which_inner, i0, i1)];
             }
           }
           i2--;
@@ -587,9 +587,9 @@ void Timestepping::process_ghost(const int type_ghost, const int type_gfs, const
       for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
         int i2 = 0;
         for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
-          for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1chare; i1++) {
-            for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0chare; i0++) {
-              gfs[IDX4CHARE(which_gf, i0, i1, i2)] = vals[IDXFACES2(which_gf, which_inner, i0, i1)];
+          for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++) {
+            for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++) {
+              gfs[IDX4(which_gf, i0, i1, i2)] = vals[IDXFACES2(which_gf, which_inner, i0, i1)];
             }
           }
           i2++;
