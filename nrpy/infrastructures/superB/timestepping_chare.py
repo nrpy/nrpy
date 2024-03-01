@@ -17,8 +17,6 @@ from nrpy.infrastructures.BHaH import griddata_commondata
 from nrpy.helpers.generic import clang_format
 from nrpy.infrastructures.BHaH import BHaH_defines_h
 
-import itertools
-
 def generate_mol_step_forward_code(rk_substep):
     return f"""
     serial{{
@@ -29,7 +27,7 @@ def generate_mol_step_forward_code(rk_substep):
 def generate_send_neighbor_data_code(which_gf, neighbor_direction):
     return f"""
     serial {{
-        send_neighbor_data({which_gf}, {neighbor_direction});
+        send_neighbor_data({which_gf}, {neighbor_direction}, grid);
     }}
     """
 
@@ -41,19 +39,18 @@ def generate_ghost_code(axis, axis_index, pos_ghost_type, neg_ghost_type, nchare
     if({this_index_var} < {nchare_var} - 1) {{
         when {pos_ghost_func}(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {{
             serial {{
-                process_ghost({pos_ghost_type}, type_gfs, len_tmpBuffer, tmpBuffer);
+                process_ghost({pos_ghost_type}, type_gfs, len_tmpBuffer, tmpBuffer, grid);
             }}
         }}
     }}
     if({this_index_var} > 0) {{
         when {neg_ghost_func}(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {{
             serial {{
-                process_ghost({neg_ghost_type}, type_gfs, len_tmpBuffer, tmpBuffer);
+                process_ghost({neg_ghost_type}, type_gfs, len_tmpBuffer, tmpBuffer, grid);
             }}
         }}
     }}
     """
-
 
 # Define ghost types for each axis
 x_pos_ghost_type = "EAST_GHOST"
@@ -78,7 +75,7 @@ def generate_diagnostics_code(dimension, direction, num_fields, tot_num_diagnost
     }}
     when start_write_{dimension}_{direction}(Ck::IO::SessionReadyMsg *m_{dimension}_{direction}){{
         serial {{
-        thisProxy.diagnostics_ckio_{dimension}_{direction}(m_{dimension}_{direction}->session);
+        thisProxy.diagnostics_ckio(m_{dimension}_{direction}->session, OUTPUT_{dimension.upper()}_{direction.upper()});
         delete m_{dimension}_{direction};
         }}
     }}
@@ -96,6 +93,52 @@ def generate_diagnostics_code(dimension, direction, num_fields, tot_num_diagnost
     }}
     """
     return code
+    
+    
+def register_CFunction_timestepping_malloc() -> None:
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    desc = "Allocate memory for temporary buffers used to communicate face data"
+    c_type = "void"
+    name = "timestepping_malloc_tmpBuffer"
+    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, tmpbuffers_struct *restrict tmpBuffers"
+    body = """
+const int Nxx_plus_2NGHOSTS_face0 = Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
+const int Nxx_plus_2NGHOSTS_face1 = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS2;
+const int Nxx_plus_2NGHOSTS_face2 = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1;
+
+tmpBuffers->tmpBuffer_EW = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * NGHOSTS * Nxx_plus_2NGHOSTS_face0);
+tmpBuffers->tmpBuffer_NS = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * NGHOSTS * Nxx_plus_2NGHOSTS_face1);
+tmpBuffers->tmpBuffer_TB = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * NGHOSTS * Nxx_plus_2NGHOSTS_face2);
+"""
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        c_type=c_type,
+        name=name,
+        params=params,
+        include_CodeParameters_h=True,
+        body=body,
+    )
+    
+def register_CFunction_timestepping_free_memory() -> None:    
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    desc = "Free memory for temporary buffers used to communicate face data"    
+    c_type = "void"
+    name = "timestepping_free_memory_tmpBuffer"    
+    params = "tmpBuffers_struct *restrict tmpBuffers"      
+    body = """
+if (tmpBuffers->tmpBuffer_EW != NULL) free(tmpBuffers->tmpBuffer_EW);
+if (tmpBuffers->tmpBuffer_NS != NULL) free(tmpBuffers->tmpBuffer_NS);
+if (tmpBuffers->tmpBuffer_TB != NULL) free(tmpBuffers->tmpBuffer_TB);
+"""
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        c_type=c_type,
+        name=name,
+        params=params,
+        body=body,
+    )
 
 
 
@@ -134,7 +177,7 @@ class Timestepping : public CBase_Timestepping {
     Ck::IO::File f_1d_z;
     Ck::IO::File f_2d_xy;
     Ck::IO::File f_2d_yz;
-
+    
     /// Member Functions (private) ///
 
   public:
@@ -270,13 +313,18 @@ Timestepping::Timestepping(CommondataObject &&inData) {
     // Step 2: Initial data are set on y_n_gfs gridfunctions. Allocate storage for them first.
     MoL_malloc_y_n_gfs(&commondata, griddata_chare[grid].params, griddata_chare[grid].gridfuncs);
   }
-
+    
   // Step 3: Finalize initialization: set up initial data, etc.
   initial_data(&commondata, griddata_chare);
 
   // Step 4: Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping
   for(int grid=0; grid<commondata.NUMGRIDS; grid++)
     MoL_malloc_non_y_n_gfs(&commondata, griddata_chare[grid].params, griddata_chare[grid].gridfuncs);
+    
+  // Allocate storage for temporary buffers, needed for communicating face data
+  for(int grid=0; grid<commondata.NUMGRIDS; grid++)
+    timestepping_malloc_tmpBuffer(&commondata, griddata_chare[grid].params, griddata_chare[grid].tmpBuffers);  
+  
 """
     if initialize_constant_auxevol:
         file_output_str += r"""
@@ -292,7 +340,8 @@ Timestepping::~Timestepping() {
   // Step 5: Free all allocated memory
   for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
     MoL_free_memory_y_n_gfs(griddata_chare[grid].gridfuncs);
-    MoL_free_memory_non_y_n_gfs(griddata_chare[grid].gridfuncs);"""
+    MoL_free_memory_non_y_n_gfs(griddata_chare[grid].gridfuncs);
+    timestepping_free_memory_tmpBuffer(griddata_chare[grid].tmpBuffers);"""
     if enable_rfm_precompute:
         file_output_str += r"""
     rfm_precompute_free(&commondata, griddata_chare[grid].params, griddata_chare[grid].rfmstruct);"""
@@ -312,6 +361,135 @@ Timestepping::~Timestepping() {
   free(griddata);
   free(griddata_chare);
 }
+"""
+    file_output_str += r"""
+// send NGHOSTS number of interior faces with face extents that include ghosts
+void Timestepping::send_neighbor_data(int type_gfs, int dir, int grid) {  
+  const int Nxx0 = griddata_chare[grid].params.Nxx0;
+  const int Nxx1 = griddata_chare[grid].params.Nxx1;
+  const int Nxx2 = griddata_chare[grid].params.Nxx2;
+  const int Nxx_plus_2NGHOSTS0 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS0;
+  const int Nxx_plus_2NGHOSTS1 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS1;
+  const int Nxx_plus_2NGHOSTS2 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS2;  
+  REAL *restrict tmpBuffer_EW = griddata_chare[grid].tmpBuffers.tmpBuffer_EW;
+  REAL *restrict tmpBuffer_NS = griddata_chare[grid].tmpBuffers.tmpBuffer_NS;
+  REAL *restrict tmpBuffer_TB = griddata_chare[grid].tmpBuffers.tmpBuffer_TB;  
+  const REAL *restrict gfs = nullptr;
+  switch (type_gfs) {
+    case K_ODD:
+      gfs = griddata_chare[grid].gridfuncs.k_odd_gfs;
+      break;
+    case K_EVEN:
+      gfs = griddata_chare[grid].gridfuncs.k_even_gfs;
+      break;
+    case Y_N:
+      gfs = griddata_chare[grid].gridfuncs.y_n_gfs;
+      break;
+    default:
+      break;
+  }
+  switch (dir) {
+    case EAST_WEST:
+      //send to west
+      if (thisIndex.x > 0) {
+        for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
+          int i0 = 2*NGHOSTS - 1;
+          for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
+            for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
+              for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1chare; i1++) {
+                tmpBuffer_EW[IDXFACES0(which_gf, which_inner, i1, i2)] = gfs[IDX4(which_gf, i0, i1, i2)];
+              }
+            }
+            i0--;
+          }
+        }
+        thisProxy[CkArrayIndex3D(thisIndex.x - 1, thisIndex.y, thisIndex.z)].east_ghost(type_gfs, NUM_EVOL_GFS*NGHOSTS*Nxx_plus_2NGHOSTS1chare*Nxx_plus_2NGHOSTS2, tmpBuffer_EW);
+      }
+      //send to east
+      if (thisIndex.x < Nchare0 - 1) {
+        for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
+          int i0 = Nxx0;
+          for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
+            for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
+              for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1chare; i1++) {
+                tmpBuffer_EW[IDXFACES0(which_gf, which_inner, i1, i2)] = gfs[IDX4(which_gf, i0, i1, i2)];
+              }
+            }
+            i0++;
+          }
+        }
+        thisProxy[CkArrayIndex3D(thisIndex.x + 1, thisIndex.y, thisIndex.z)].west_ghost(type_gfs, NUM_EVOL_GFS*NGHOSTS*Nxx_plus_2NGHOSTS1chare*Nxx_plus_2NGHOSTS2, tmpBuffer_EW);
+      }
+      break;
+    case NORTH_SOUTH:
+      //send to south
+      if (thisIndex.y > 0) {
+        for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
+          int i1 = 2*NGHOSTS - 1;
+          for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
+            for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
+              for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++) {
+                tmpBuffer_NS[IDXFACES1(which_gf, which_inner, i0, i2)] = gfs[IDX4(which_gf, i0, i1, i2)];
+              }
+            }
+            i1--;
+          }
+        }
+        thisProxy[CkArrayIndex3D(thisIndex.x, thisIndex.y - 1, thisIndex.z)].north_ghost(type_gfs, NUM_EVOL_GFS*NGHOSTS*Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS2, tmpBuffer_NS);
+      }
+      //send to north
+      if (thisIndex.y < Nchare1 - 1) {
+        for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
+          int i1 = Nxx1;
+          for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
+            for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
+              for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++) {
+                tmpBuffer_NS[IDXFACES1(which_gf, which_inner, i0, i2)] = gfs[IDX4(which_gf, i0, i1, i2)];
+              }
+            }
+            i1++;
+          }
+        }
+        thisProxy[CkArrayIndex3D(thisIndex.x, thisIndex.y + 1, thisIndex.z)].south_ghost(type_gfs, NUM_EVOL_GFS*NGHOSTS*Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS2, tmpBuffer_NS);
+      }
+      break;
+    case TOP_BOTTOM:
+      //send to bottom
+      if (thisIndex.z > 0) {
+        for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
+          int i2 = 2*NGHOSTS - 1;
+          for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
+            for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1chare; i1++) {
+              for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++) {
+                tmpBuffer_TB[IDXFACES2(which_gf, which_inner, i0, i1)] = gfs[IDX4(which_gf, i0, i1, i2)];
+              }
+            }
+            i2--;
+          }
+        }
+        thisProxy[CkArrayIndex3D(thisIndex.x, thisIndex.y, thisIndex.z - 1)].top_ghost(type_gfs, NUM_EVOL_GFS*NGHOSTS*Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1chare, tmpBuffer_TB);
+      }
+      //send to top
+      if (thisIndex.z < Nchare2 - 1) {
+        for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
+          int i2 = Nxx2;
+          for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
+            for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1chare; i1++) {
+              for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++) {
+                tmpBuffer_TB[IDXFACES2(which_gf, which_inner, i0, i1)] = gfs[IDX4(which_gf, i0, i1, i2)];
+              }
+            }
+            i2++;
+          }
+        }
+        thisProxy[CkArrayIndex3D(thisIndex.x, thisIndex.y, thisIndex.z + 1)].bottom_ghost(type_gfs, NUM_EVOL_GFS*NGHOSTS*Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1chare, tmpBuffer_TB);
+      }
+      break;
+    default:
+      return;
+    }
+}
+
 """
     timestepping_cpp_file = project_Path / "timestepping.cpp"
     with timestepping_cpp_file.open("w", encoding="utf-8") as file:
@@ -427,14 +605,17 @@ def output_timestepping_ci(
             pos_ghost_type = x_pos_ghost_type
             neg_ghost_type = x_neg_ghost_type
             nchare_var = "Nchare0"
+            direction = 'EAST_WEST'
         elif axis == 'y':
             pos_ghost_type = y_pos_ghost_type
             neg_ghost_type = y_neg_ghost_type
             nchare_var = "Nchare1"
+            direction = 'NORTH_SOUTH'
         elif axis == 'z':
             pos_ghost_type = z_pos_ghost_type
             neg_ghost_type = z_neg_ghost_type
             nchare_var = "Nchare2"
+            direction = 'TOP_BOTTOM'
 
         # Generate code for this RK substep and axis
         if rk_substep == 'RK_SUBSTEP_K1':
@@ -449,16 +630,13 @@ def output_timestepping_ci(
             raise ValueError(f"Unknown RK substep: {rk_substep}")
 
         file_output_str += generate_mol_step_forward_code(rk_substep)
-        file_output_str += generate_send_neighbor_data_code(which_gf, 'EAST_WEST')
-        file_output_str += generate_ghost_code(axis, 0, pos_ghost_type, neg_ghost_type, nchare_var)
-        file_output_str += generate_send_neighbor_data_code(which_gf, 'NORTH_SOUTH')
-        file_output_str += generate_ghost_code(axis, 1, pos_ghost_type, neg_ghost_type, nchare_var)
-        file_output_str += generate_send_neighbor_data_code(which_gf, 'TOP_BOTTOM')
-        file_output_str += generate_ghost_code(axis, 2, pos_ghost_type, neg_ghost_type, nchare_var)
+        file_output_str += "for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {"            
+        file_output_str += generate_send_neighbor_data_code(which_gf, direction)
+        file_output_str += generate_ghost_code(axis, 0, pos_ghost_type, neg_ghost_type, nchare_var)        
+        file_output_str += "}"            
 
     file_output_str += r"""
         """
-
 
     if post_MoL_step_forward_in_time != "":
         file_output_str += post_MoL_step_forward_in_time
@@ -510,7 +688,7 @@ def output_timestepping_ci(
             clang_format(file_output_str, clang_format_options=clang_format_options)
         )
 
-def output_timestepping_h_cpp_ci(
+def output_timestepping_h_cpp_ci_register_CFunctions(
     project_dir: str,
     MoL_method: str,
     initial_data_desc: str = "",
@@ -523,7 +701,7 @@ def output_timestepping_h_cpp_ci(
     post_MoL_step_forward_in_time: str = "",
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
-
+    
     output_timestepping_h(
       project_dir=project_dir,
     )
@@ -542,12 +720,21 @@ def output_timestepping_h_cpp_ci(
       pre_MoL_step_forward_in_time=pre_MoL_step_forward_in_time,
       post_MoL_step_forward_in_time=post_MoL_step_forward_in_time,
     )
+    
+    register_CFunction_timestepping_malloc()
+    
+    register_CFunction_timestepping_free_memory()
 
+    # Register temporary buffers for face data communication to griddata_struct:
+    griddata_commondata.register_griddata_commondata(
+        __name__,        
+        "tmpBuffers_struct tmpBuffers",
+        "temporary buffer for sending face data to neighbor chares",
+    )    
 
     BHaH_defines_h.register_BHaH_defines(
     __name__,
-    f"""
-    #define K_ODD 0
+    rf"""#define K_ODD 0
     #define K_EVEN 1
     #define Y_N 2
     #define EAST_WEST 0
@@ -563,7 +750,14 @@ def output_timestepping_h_cpp_ci(
     #define RK_SUBSTEP_K2 2
     #define RK_SUBSTEP_K3 3
     #define RK_SUBSTEP_K4 4
+    #define IDXFACES0(g, inner, j, k) ((j) + Nxx_plus_2NGHOSTS1 * ((k) + Nxx_plus_2NGHOSTS2 * ((inner) + NGHOSTS * (g))))
+    #define IDXFACES1(g, inner, i, k) ((i) + Nxx_plus_2NGHOSTS0 * ((k) + Nxx_plus_2NGHOSTS2 * ((inner) + NGHOSTS * (g))))
+    #define IDXFACES2(g, inner, i, j) ((i) + Nxx_plus_2NGHOSTS0 * ((j) + Nxx_plus_2NGHOSTS1 * ((inner) + NGHOSTS * (g))))
+    
+    typedef struct __tmpBuffers_struct__ {{    
+      REAL *restrict tmpBuffer_EW;
+      REAL *restrict tmpBuffer_NS;
+      REAL *restrict tmpBuffer_TB;      
+    }} tmpBuffers_struct;
     """,
     )
-
-

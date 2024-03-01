@@ -323,7 +323,7 @@ TPl.copy_TwoPunctures_header_files(TwoPunctures_Path=Path(project_dir) / "TwoPun
 superBmain.output_commondata_object_h_and_main_h_cpp_ci(
     project_dir=project_dir,
 )
-superBtimestepping.output_timestepping_h_cpp_ci(
+superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
     project_dir=project_dir,
     initial_data_desc=IDtype,    
     MoL_method=MoL_method,
