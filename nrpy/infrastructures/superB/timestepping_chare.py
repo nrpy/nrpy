@@ -179,6 +179,9 @@ class Timestepping : public CBase_Timestepping {
     Ck::IO::File f_2d_yz;
     
     /// Member Functions (private) ///
+    void send_neighbor_data(const int type_gfs, const int dir, const int grid);
+    void process_ghost(const int type_ghost, const int type_gfs, const int len_tmpBuffer, const REAL *restrict tmpBuffer, const int grid);
+
 
   public:
     /// Constructors ///
@@ -364,7 +367,7 @@ Timestepping::~Timestepping() {
 """
     file_output_str += r"""
 // send NGHOSTS number of interior faces with face extents that include ghosts
-void Timestepping::send_neighbor_data(int type_gfs, int dir, int grid) {  
+void Timestepping::send_neighbor_data(const int type_gfs, const int dir, const int grid) {  
   const int Nxx0 = griddata_chare[grid].params.Nxx0;
   const int Nxx1 = griddata_chare[grid].params.Nxx1;
   const int Nxx2 = griddata_chare[grid].params.Nxx2;
@@ -396,14 +399,14 @@ void Timestepping::send_neighbor_data(int type_gfs, int dir, int grid) {
           int i0 = 2*NGHOSTS - 1;
           for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
             for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
-              for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1chare; i1++) {
+              for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++) {
                 tmpBuffer_EW[IDXFACES0(which_gf, which_inner, i1, i2)] = gfs[IDX4(which_gf, i0, i1, i2)];
               }
             }
             i0--;
           }
         }
-        thisProxy[CkArrayIndex3D(thisIndex.x - 1, thisIndex.y, thisIndex.z)].east_ghost(type_gfs, NUM_EVOL_GFS*NGHOSTS*Nxx_plus_2NGHOSTS1chare*Nxx_plus_2NGHOSTS2, tmpBuffer_EW);
+        thisProxy[CkArrayIndex3D(thisIndex.x - 1, thisIndex.y, thisIndex.z)].east_ghost(type_gfs, NUM_EVOL_GFS*NGHOSTS*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2, tmpBuffer_EW);
       }
       //send to east
       if (thisIndex.x < Nchare0 - 1) {
@@ -411,14 +414,14 @@ void Timestepping::send_neighbor_data(int type_gfs, int dir, int grid) {
           int i0 = Nxx0;
           for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
             for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
-              for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1chare; i1++) {
+              for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++) {
                 tmpBuffer_EW[IDXFACES0(which_gf, which_inner, i1, i2)] = gfs[IDX4(which_gf, i0, i1, i2)];
               }
             }
             i0++;
           }
         }
-        thisProxy[CkArrayIndex3D(thisIndex.x + 1, thisIndex.y, thisIndex.z)].west_ghost(type_gfs, NUM_EVOL_GFS*NGHOSTS*Nxx_plus_2NGHOSTS1chare*Nxx_plus_2NGHOSTS2, tmpBuffer_EW);
+        thisProxy[CkArrayIndex3D(thisIndex.x + 1, thisIndex.y, thisIndex.z)].west_ghost(type_gfs, NUM_EVOL_GFS*NGHOSTS*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2, tmpBuffer_EW);
       }
       break;
     case NORTH_SOUTH:
@@ -459,7 +462,7 @@ void Timestepping::send_neighbor_data(int type_gfs, int dir, int grid) {
         for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
           int i2 = 2*NGHOSTS - 1;
           for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
-            for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1chare; i1++) {
+            for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++) {
               for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++) {
                 tmpBuffer_TB[IDXFACES2(which_gf, which_inner, i0, i1)] = gfs[IDX4(which_gf, i0, i1, i2)];
               }
@@ -467,14 +470,14 @@ void Timestepping::send_neighbor_data(int type_gfs, int dir, int grid) {
             i2--;
           }
         }
-        thisProxy[CkArrayIndex3D(thisIndex.x, thisIndex.y, thisIndex.z - 1)].top_ghost(type_gfs, NUM_EVOL_GFS*NGHOSTS*Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1chare, tmpBuffer_TB);
+        thisProxy[CkArrayIndex3D(thisIndex.x, thisIndex.y, thisIndex.z - 1)].top_ghost(type_gfs, NUM_EVOL_GFS*NGHOSTS*Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1, tmpBuffer_TB);
       }
       //send to top
       if (thisIndex.z < Nchare2 - 1) {
         for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
           int i2 = Nxx2;
           for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
-            for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1chare; i1++) {
+            for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++) {
               for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++) {
                 tmpBuffer_TB[IDXFACES2(which_gf, which_inner, i0, i1)] = gfs[IDX4(which_gf, i0, i1, i2)];
               }
@@ -482,15 +485,122 @@ void Timestepping::send_neighbor_data(int type_gfs, int dir, int grid) {
             i2++;
           }
         }
-        thisProxy[CkArrayIndex3D(thisIndex.x, thisIndex.y, thisIndex.z + 1)].bottom_ghost(type_gfs, NUM_EVOL_GFS*NGHOSTS*Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1chare, tmpBuffer_TB);
+        thisProxy[CkArrayIndex3D(thisIndex.x, thisIndex.y, thisIndex.z + 1)].bottom_ghost(type_gfs, NUM_EVOL_GFS*NGHOSTS*Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1, tmpBuffer_TB);
       }
       break;
     default:
       return;
     }
 }
-
 """
+    file_output_str += r"""
+// process neighbor ghosts
+void Timestepping::process_ghost(const int type_ghost, const int type_gfs, const int len_tmpBuffer, const REAL *restrict vals, const int grid) (
+  const int Nxx0 = griddata_chare[grid].params.Nxx0;
+  const int Nxx1 = griddata_chare[grid].params.Nxx1;
+  const int Nxx2 = griddata_chare[grid].params.Nxx2;
+  const int Nxx_plus_2NGHOSTS0 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS0;
+  const int Nxx_plus_2NGHOSTS1 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS1;
+  const int Nxx_plus_2NGHOSTS2 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS2;
+  
+  REAL *restrict gfs = nullptr;
+  switch (type_gfs) {
+  case K_ODD:
+    gfs = griddata_chare[grid].gridfuncs.k_odd_gfs;
+    break;
+  case K_EVEN:
+    gfs = griddata_chare[grid].gridfuncs.k_even_gfs;
+    break;
+  case Y_N:
+    gfs = griddata_chare[grid].gridfuncs.y_n_gfs;
+    break;
+  default:
+    break;
+  }
+  switch (type_ghost) {    
+    case EAST_GHOST:    
+      for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
+        int i0 = Nxx0chare + (2 * NGHOSTS) - 1;
+        for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
+          for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2chare; i2++) {
+            for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1chare; i1++) {
+              gfs[IDX4CHARE(which_gf, i0, i1, i2)] = vals[IDXFACES0(which_gf, which_inner, i1, i2)];
+            }
+          }
+          i0--;
+        }
+      }
+      break;      
+    case WEST_GHOST:        
+      for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
+        int i0 = 0;
+        for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
+          for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2chare; i2++) {
+            for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1chare; i1++) {
+              gfs[IDX4CHARE(which_gf, i0, i1, i2)] = vals[IDXFACES0(which_gf, which_inner, i1, i2)];
+            }
+          }
+          i0++;
+        }
+      }
+      break;      
+    case NORTH_GHOST:
+      for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
+        int i1 = Nxx1chare + (2 * NGHOSTS) - 1;
+        for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
+          for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2chare; i2++) {
+            for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0chare; i0++) {
+              gfs[IDX4CHARE(which_gf, i0, i1, i2)] = vals[IDXFACES1(which_gf, which_inner, i0, i2)];
+            }
+          }
+          i1--;
+        }
+      }
+      break;
+    case SOUTH_GHOST:
+      for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
+        int i1 = 0;
+        for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
+          for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2chare; i2++) {
+            for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0chare; i0++) {
+              gfs[IDX4CHARE(which_gf, i0, i1, i2)] = vals[IDXFACES1(which_gf, which_inner, i0, i2)];
+            }
+          }
+          i1++;
+        }
+      }
+      break;
+    case TOP_GHOST:
+      for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
+        int i2 = Nxx2chare + (2 * NGHOSTS) - 1;
+        for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
+          for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1chare; i1++) {
+            for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0chare; i0++) {
+              gfs[IDX4CHARE(which_gf, i0, i1, i2)] = vals[IDXFACES2(which_gf, which_inner, i0, i1)];
+            }
+          }
+          i2--;
+        }
+      }
+      break;
+    case BOTTOM_GHOST:
+      for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
+        int i2 = 0;
+        for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
+          for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1chare; i1++) {
+            for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0chare; i0++) {
+              gfs[IDX4CHARE(which_gf, i0, i1, i2)] = vals[IDXFACES2(which_gf, which_inner, i0, i1)];
+            }
+          }
+          i2++;
+        }
+      }
+      break;
+  }
+}
+"""
+
+
     timestepping_cpp_file = project_Path / "timestepping.cpp"
     with timestepping_cpp_file.open("w", encoding="utf-8") as file:
         file.write(
@@ -518,8 +628,8 @@ def output_timestepping_ci(
     project_Path.mkdir(parents=True, exist_ok=True)
 
     file_output_str = r"""module timestepping {
-  include "BHaH_defines.h"
-  include "BHaH_function_prototypes.h"
+  include "BHaH_defines.h";
+  include "BHaH_function_prototypes.h";
   include "CommondataObject.h";
   include "ckio.h";
   array [3D] Timestepping {
