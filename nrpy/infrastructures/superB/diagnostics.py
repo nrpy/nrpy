@@ -15,6 +15,7 @@ import nrpy.reference_metric as refmetric
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.superB.output_0d_1d_2d_nearest_gridpoint_slices as out012d
 from nrpy.infrastructures.BHaH import BHaH_defines_h
+from nrpy.infrastructures.BHaH import griddata_commondata
 
 def register_CFunction_diagnostics(
     list_of_CoordSystems: List[str],
@@ -76,12 +77,7 @@ def register_CFunction_diagnostics(
         raise TypeError(f"out_quantities_dict was initialized to {out_quantities_dict}, which is not a dictionary!")
     # fmt: on
 
-    for CoordSystem in list_of_CoordSystems:
-        # ~ out012d.register_CFunction_diagnostics_nearest_grid_center(
-            # ~ CoordSystem=CoordSystem,
-            # ~ out_quantities_dict=out_quantities_dict,
-            # ~ filename_tuple=grid_center_filename_tuple,
-        # ~ )
+    for CoordSystem in list_of_CoordSystems:        
         for axis in ["y", "z"]:
             out012d.register_CFunction_diagnostics_nearest_1d_axis(
                 CoordSystem=CoordSystem,
@@ -89,6 +85,14 @@ def register_CFunction_diagnostics(
                 filename_tuple=axis_filename_tuple,
                 axis=axis,
             )
+            out012d.register_CFunction_diagnostics_set_up_nearest_1d_axis(
+                CoordSystem=CoordSystem,
+                out_quantities_dict=out_quantities_dict,
+                filename_tuple=axis_filename_tuple,
+                axis=axis,
+            )                        
+            
+            
         for plane in ["xy", "yz"]:
             out012d.register_CFunction_diagnostics_nearest_2d_plane(
                 CoordSystem=CoordSystem,
@@ -96,6 +100,13 @@ def register_CFunction_diagnostics(
                 filename_tuple=plane_filename_tuple,
                 plane=plane,
             )
+            out012d.register_CFunction_diagnostics_set_up_nearest_2d_plane(
+                CoordSystem=CoordSystem,
+                out_quantities_dict=out_quantities_dict,
+                filename_tuple=plane_filename_tuple,
+                plane=plane,
+            )
+            
 
     desc = r"""Diagnostics."""
     c_type = "void"
@@ -170,11 +181,53 @@ for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
         body=body,
     )
     
+    # Register diagnostic_struct's contribution to griddata_struct:
+    griddata_commondata.register_griddata_commondata(
+        __name__,
+        "diagnostic_struct diagnosticstruct",
+        "store indices of 1d and 2d diagnostic points, the offset in the output file, etc",
+    )
+    
     BHaH_defines_h.register_BHaH_defines(
     __name__, """#define OUTPUT_1D_Y 1  
 #define OUTPUT_1D_Z 2  
 #define OUTPUT_2D_XY 3  
 #define OUTPUT_2D_YZ 4  
+typedef struct __diagnostic_struct__ {
+  int num_output_quantities;
+  int tot_num_diagnostic_1d_y_pts;
+  int tot_num_diagnostic_1d_z_pts;
+  int tot_num_diagnostic_2d_xy_pts;
+  int tot_num_diagnostic_2d_yz_pts;
+  int num_diagnostic_1d_y_pts;
+  int num_diagnostic_1d_z_pts;
+  int num_diagnostic_2d_xy_pts;
+  int num_diagnostic_2d_yz_pts;
+  int *restrict localidx3_diagnostic_1d_y_pt;
+  int *restrict locali0_diagnostic_1d_y_pt;
+  int *restrict locali1_diagnostic_1d_y_pt;
+  int *restrict locali2_diagnostic_1d_y_pt;
+  int *restrict offset_diagnostic_1d_y_pt;
+  int *restrict localidx3_diagnostic_1d_z_pt;
+  int *restrict locali0_diagnostic_1d_z_pt;
+  int *restrict locali1_diagnostic_1d_z_pt;
+  int *restrict locali2_diagnostic_1d_z_pt;
+  int *restrict offset_diagnostic_1d_z_pt;
+  int *restrict localidx3_diagnostic_2d_xy_pt;
+  int *restrict locali0_diagnostic_2d_xy_pt;
+  int *restrict locali1_diagnostic_2d_xy_pt;
+  int *restrict locali2_diagnostic_2d_xy_pt;
+  int *restrict offset_diagnostic_2d_xy_pt;
+  int *restrict localidx3_diagnostic_2d_yz_pt;
+  int *restrict locali0_diagnostic_2d_yz_pt;
+  int *restrict locali1_diagnostic_2d_yz_pt;
+  int *restrict locali2_diagnostic_2d_yz_pt;
+  int *restrict offset_diagnostic_2d_yz_pt;
+  char filename_1d_y[256];
+  char filename_1d_z[256];
+  char filename_2d_xy[256];
+  char filename_2d_yz[256];
+} diagnostic_struct;
 """,
     )
 

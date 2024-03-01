@@ -166,8 +166,6 @@ def chare_comm_register_C_functions(
     list_of_CoordSystems: List[str],    
 ) -> None:
     """
-    Register various C functions responsible for handling boundary conditions.
-
     :param list_of_CoordSystems: List of coordinate systems to use.    
     :return: None
     """
@@ -187,20 +185,20 @@ def chare_comm_register_C_functions(
     r"""#define IDX3_OF_CHARE(i, j, k) ((i) + Nchare0 * ((j) + Nchare1 * ((k))))
 #define IDX3GENERAL(i, j, k, Ni, Nj) ((i) + (Ni) * ((j) + (Nj) * (k)))
 #define REVERSE_IDX3GENERAL(index, Ni, Nj) \
-    { \
-        int k = (index) % (Nj); \
-        int temp = (index) / (Nj); \
-        int j = temp % (Ni); \
-        int i = temp / (Ni); \
-        i, j, k; \
-    }
+{ \
+	int k = (index) % (Nj); \
+	int temp = (index) / (Nj); \
+	int j = temp % (Ni); \
+	int i = temp / (Ni); \
+	i, j, k; \
+}
 
-    typedef struct __charecomm_struct__ {
-      int *restrict globalidx3pt_to_chareidx3;    // which chare is evolving or applying bcs to grid point
-      int *restrict globalidx3pt_to_localidx3pt;  // local index of grid point on chare that is evolving or setting bcs for gridpoint
-      int *restrict localidx3pt_to_globalidx3pt;  // local to this chare  
-    } charecomm_struct;    
-    """,
+typedef struct __charecomm_struct__ {
+  int *restrict globalidx3pt_to_chareidx3;    // which chare is evolving or applying bcs to grid point
+  int *restrict globalidx3pt_to_localidx3pt;  // local index of grid point on chare that is evolving or setting bcs for gridpoint
+  int *restrict localidx3pt_to_globalidx3pt;  // local to this chare  
+} charecomm_struct;    
+""",
     )
 
 
