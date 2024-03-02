@@ -37,7 +37,7 @@ def register_CFunction_diagnostics_nearest_1d_axis(
     desc = f"Output diagnostic quantities at gridpoints closest to {axis} axis."
     c_type = "void"
     name = f"diagnostics_nearest_1d_{axis}_axis"
-    params = "commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], MoL_gridfunctions_struct *restrict gridfuncs, const diagnostic_pt_offset_struct *restrict diagnosticptoffsetstruct, Ck::IO::Session token"
+    params = "commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], MoL_gridfunctions_struct *restrict gridfuncs, const diagnostic_pt_offset_struct *restrict diagnosticstruct, Ck::IO::Session token"
 
     body = rf"""
 // Unpack gridfuncs struct:
@@ -45,12 +45,12 @@ const REAL *restrict y_n_gfs = gridfuncs->y_n_gfs;
 const REAL *restrict auxevol_gfs = gridfuncs->auxevol_gfs;
 const REAL *restrict diagnostic_output_gfs = gridfuncs->diagnostic_output_gfs;
 
-const int num_diagnostic_pts = {'diagnosticptoffsetstruct->num_diagnostic_1d_y_pts;' if axis == "y" else 'diagnosticptoffsetstruct->num_diagnostic_1d_z_pts;'}
-const int *restrict idx3_diagnostic_pt = {'diagnosticptoffsetstruct->localidx3_diagnostic_1d_y_pt;' if axis == "y" else 'diagnosticptoffsetstruct->localidx3_diagnostic_1d_z_pt;'}
-const int *restrict i0_diagnostic_pt = {'diagnosticptoffsetstruct->locali0_diagnostic_1d_y_pt;' if axis == "y" else 'diagnosticptoffsetstruct->locali0_diagnostic_1d_z_pt;'}
-const int *restrict i1_diagnostic_pt = {'diagnosticptoffsetstruct->locali1_diagnostic_1d_y_pt;' if axis == "y" else 'diagnosticptoffsetstruct->locali1_diagnostic_1d_z_pt;'}
-const int *restrict i2_diagnostic_pt = {'diagnosticptoffsetstruct->locali2_diagnostic_1d_y_pt;' if axis == "y" else 'diagnosticptoffsetstruct->locali2_diagnostic_1d_z_pt;'}
-const int *restrict offsetpt_firstfield = {'diagnosticptoffsetstruct->offset_diagnostic_1d_y_pt;' if axis == "y" else 'diagnosticptoffsetstruct->offset_diagnostic_1d_z_pt;'}
+const int num_diagnostic_pts = {'diagnosticstruct->num_diagnostic_1d_y_pts;' if axis == "y" else 'diagnosticstruct->num_diagnostic_1d_z_pts;'}
+const int *restrict idx3_diagnostic_pt = {'diagnosticstruct->localidx3_diagnostic_1d_y_pt;' if axis == "y" else 'diagnosticstruct->localidx3_diagnostic_1d_z_pt;'}
+const int *restrict i0_diagnostic_pt = {'diagnosticstruct->locali0_diagnostic_1d_y_pt;' if axis == "y" else 'diagnosticstruct->locali0_diagnostic_1d_z_pt;'}
+const int *restrict i1_diagnostic_pt = {'diagnosticstruct->locali1_diagnostic_1d_y_pt;' if axis == "y" else 'diagnosticstruct->locali1_diagnostic_1d_z_pt;'}
+const int *restrict i2_diagnostic_pt = {'diagnosticstruct->locali2_diagnostic_1d_y_pt;' if axis == "y" else 'diagnosticstruct->locali2_diagnostic_1d_z_pt;'}
+const int *restrict offsetpt_firstfield = {'diagnosticstruct->offset_diagnostic_1d_y_pt;' if axis == "y" else 'diagnosticstruct->offset_diagnostic_1d_z_pt;'}
 for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {{
   const int idx3 = idx3_diagnostic_pt[which_pt];
   const int i0 = i0_diagnostic_pt[which_pt];
@@ -76,7 +76,7 @@ for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {{
 
     body += output_to_file
 
-    body += rf"""    
+    body += rf"""
   Ck::IO::write(token, output_to_file, sizeinbytes, offsetpt_firstfield[which_pt]);
 }}
 """
@@ -135,7 +135,7 @@ def register_CFunction_diagnostics_nearest_2d_plane(
     desc = f"Output diagnostic quantities at gridpoints closest to {plane} plane."
     c_type = "void"
     name = f"diagnostics_nearest_2d_{plane}_plane"
-    params = "commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], MoL_gridfunctions_struct *restrict gridfuncs, const diagnostic_pt_offset_struct *restrict diagnosticptoffsetstruct, Ck::IO::Session token"
+    params = "commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], MoL_gridfunctions_struct *restrict gridfuncs, const diagnostic_pt_offset_struct *restrict diagnosticstruct, Ck::IO::Session token"
 
     body = rf"""
 // Unpack gridfuncs struct:
@@ -143,12 +143,12 @@ const REAL *restrict y_n_gfs = gridfuncs->y_n_gfs;
 const REAL *restrict auxevol_gfs = gridfuncs->auxevol_gfs;
 const REAL *restrict diagnostic_output_gfs = gridfuncs->diagnostic_output_gfs;
 // Unpack diagnosticptoffset struct:
-const int num_diagnostic_pts = {'diagnosticptoffsetstruct->num_diagnostic_2d_xy_pts;' if plane == "xy" else 'diagnosticptoffsetstruct->num_diagnostic_2d_yz_pts;'}
-const int *restrict idx3_diagnostic_pt = {'diagnosticptoffsetstruct->localidx3_diagnostic_2d_xy_pt;' if plane == "xy" else 'diagnosticptoffsetstruct->localidx3_diagnostic_2d_yz_pt;'}
-const int *restrict i0_diagnostic_pt = {'diagnosticptoffsetstruct->locali0_diagnostic_2d_xy_pt;' if plane == "xy" else 'diagnosticptoffsetstruct->locali0_diagnostic_2d_yz_pt;'}
-const int *restrict i1_diagnostic_pt = {'diagnosticptoffsetstruct->locali1_diagnostic_2d_xy_pt;' if plane == "xy" else 'diagnosticptoffsetstruct->locali1_diagnostic_2d_yz_pt;'}
-const int *restrict i2_diagnostic_pt = {'diagnosticptoffsetstruct->locali2_diagnostic_2d_xy_pt;' if plane == "xy" else 'diagnosticptoffsetstruct->locali2_diagnostic_2d_yz_pt;'}
-const int *restrict offsetpt_firstfield = {'diagnosticptoffsetstruct->offset_diagnostic_2d_xy_pt;' if plane == "xy" else 'diagnosticptoffsetstruct->offset_diagnostic_2d_yz_pt;'}
+const int num_diagnostic_pts = {'diagnosticstruct->num_diagnostic_2d_xy_pts;' if plane == "xy" else 'diagnosticstruct->num_diagnostic_2d_yz_pts;'}
+const int *restrict idx3_diagnostic_pt = {'diagnosticstruct->localidx3_diagnostic_2d_xy_pt;' if plane == "xy" else 'diagnosticstruct->localidx3_diagnostic_2d_yz_pt;'}
+const int *restrict i0_diagnostic_pt = {'diagnosticstruct->locali0_diagnostic_2d_xy_pt;' if plane == "xy" else 'diagnosticstruct->locali0_diagnostic_2d_yz_pt;'}
+const int *restrict i1_diagnostic_pt = {'diagnosticstruct->locali1_diagnostic_2d_xy_pt;' if plane == "xy" else 'diagnosticstruct->locali1_diagnostic_2d_yz_pt;'}
+const int *restrict i2_diagnostic_pt = {'diagnosticstruct->locali2_diagnostic_2d_xy_pt;' if plane == "xy" else 'diagnosticstruct->locali2_diagnostic_2d_yz_pt;'}
+const int *restrict offsetpt_firstfield = {'diagnosticstruct->offset_diagnostic_2d_xy_pt;' if plane == "xy" else 'diagnosticstruct->offset_diagnostic_2d_yz_pt;'}
 for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {{
   const int idx3 = idx3_diagnostic_pt[which_pt];
   const int i0 = i0_diagnostic_pt[which_pt];
@@ -179,7 +179,7 @@ for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {{
     body += output_to_file
 
     body += rf"""
-  const int offsetpt_firstfield = {'diagnosticptoffsetstruct->offset_diagnostic_2d_xy_pt[which_pt];' if plane == "xy" else 'diagnosticptoffsetstruct->offset_diagnostic_2d_yz_pt[which_pt];'}
+  const int offsetpt_firstfield = {'diagnosticstruct->offset_diagnostic_2d_xy_pt[which_pt];' if plane == "xy" else 'diagnosticstruct->offset_diagnostic_2d_yz_pt[which_pt];'}
   Ck::IO::write(token, output_to_file, sizeinbytes, offsetpt_firstfield[which_pt]);
 }}
 """
@@ -194,8 +194,8 @@ for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {{
         body=body,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
-    
-    
+
+
 def register_CFunction_diagnostics_set_up_nearest_1d_axis(
     CoordSystem: str,
     out_quantities_dict: Dict[Tuple[str, str], str],
@@ -245,12 +245,69 @@ def register_CFunction_diagnostics_set_up_nearest_1d_axis(
     desc = f"Setup diagnostic quantities at gridpoints closest to {axis} axis."
     c_type = "void"
     name = f"diagnosticstruct_set_up_nearest_1d_{axis}_axis"
-    params = "commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], MoL_gridfunctions_struct *restrict gridfuncs"
+    params = "commondata_struct *restrict commondata, const params_struct *restrict params, const params_struct *restrict params_chare, const charecomm_struct *restrict charecommstruct, const REAL *restrict xx[3], const int chare_index[3]"
 
     body = rf"""
+const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
+const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
+const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
+const int Nxx0 = params->Nxx0;
+const int Nxx1 = params->Nxx1;
+const int Nxx2 = params->Nxx2;
+const int Nxx_plus_2NGHOSTS0chare = params_chare->Nxx_plus_2NGHOSTS0;
+const int Nxx_plus_2NGHOSTS1chare = params_chare->Nxx_plus_2NGHOSTS1;
+const int Nxx_plus_2NGHOSTS2chare = params_chare->Nxx_plus_2NGHOSTS2;
+const int Nxx0chare = params_chare->Nxx0;
+const int Nxx1chare = params_chare->Nxx1;
+const int Nxx2chare = params_chare->Nxx2;
 
+char filename[256];
+sprintf(filename, "{filename_tuple[0].replace('AXIS', axis)}", {filename_tuple[1]});
+diagnosticstruct->filename_1d_{axis} = filename;
+diagnosticstruct->num_output_quantities = {len(out_quantities_dict)};
 
 {loop_1d}
+
+diagnosticstruct->tot_num_diagnostic_1d_{axis}_pts = data_index;
+
+int num_diagnostics_chare = 0;
+for (int i = 0; i < data_index; i++) {{
+  const int i0 = data_points[i].i0;
+  const int i1 = data_points[i].i1;
+  const int i2 = data_points[i].i2;
+  const int idx3 = IDX3(i0, i1, i2);
+  if (charecommstruct->globalidx3pt_to_chareidx3[idx3] == IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])) {{
+    num_diagnostics_chare++;
+  }}
+}}
+diagnosticstruct->num_diagnostic_1d_{axis}_pts = num_diagnostics_chare;
+diagnosticstruct->localidx3_diagnostic_1d_{axis}_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
+diagnosticstruct->locali0_diagnostic_1d_{axis}_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
+diagnosticstruct->locali1_diagnostic_1d_{axis}_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
+diagnosticstruct->locali2_diagnostic_1d_{axis}_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
+diagnosticstruct->offset_diagnostic_1d_{axis}_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
+
+// compute offset in bytes for first field for each diagnostic pt
+int sizeinbytes = 23 * (diagnosticstruct->num_output_quantities + 1);
+int which_diagnostics_chare = 0;
+int which_diagnostic_global = 0;
+for (int i = 0; i < data_index; i++) {{
+  const int i0 = data_points[i].i0;
+  const int i1 = data_points[i].i1;
+  const int i2 = data_points[i].i2;
+  const int idx3 = IDX3(i0, i1, i2);
+  if (charecommstruct->globalidx3pt_to_chareidx3[idx3] == IDX3_OF_CHARE(chareindex0, chareindex1, chareindex2)){{
+    int localidx3 = charecommstruct->globalidx3pt_to_localidx3pt[idx3];
+    int locali0, locali1, locali2 = REVERSE_IDX3GENERAL(localidx3, Nxx0chare, Nxx1chare);                                                                                                           \
+    diagnosticstruct->localidx3_diagnostic_1d_{axis}_pt[which_diagnostics_chare] = localidx3;
+    diagnosticstruct->locali0_diagnostic_1d_{axis}_pt[which_diagnostics_chare] =  locali0;
+    diagnosticstruct->locali1_diagnostic_1d_{axis}_pt[which_diagnostics_chare] =  locali1;
+    diagnosticstruct->locali2_diagnostic_1d_{axis}_pt[which_diagnostics_chare] =  locali2;
+    diagnosticstruct->offset_diagnostic_1d_{axis}_pt[which_diagnostics_chare] = which_diagnostic_global * sizeinbytes;
+    which_diagnostics_chare++;
+  }}
+  which_diagnostic_global++;
+}}
 
 """
     cfc.register_CFunction(
@@ -261,7 +318,7 @@ def register_CFunction_diagnostics_set_up_nearest_1d_axis(
         CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,
-        include_CodeParameters_h=True,
+        include_CodeParameters_h=False,
         body=body,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
@@ -317,14 +374,67 @@ def register_CFunction_diagnostics_set_up_nearest_2d_plane(
     desc = f"Set up diagnostic quantities at gridpoints closest to {plane} plane."
     c_type = "void"
     name = f"diagnosticstruct_set_up_nearest_2d_{plane}_plane"
-    params = "commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], MoL_gridfunctions_struct *restrict gridfuncs"
+    params = "commondata_struct *restrict commondata, const params_struct *restrict params, const params_struct *restrict params_chare, const charecomm_struct *restrict charecommstruct, const REAL *restrict xx[3]"
 
     body = rf"""
+const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
+const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
+const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
+const int Nxx0 = params->Nxx0;
+const int Nxx1 = params->Nxx1;
+const int Nxx2 = params->Nxx2;
+const int Nxx_plus_2NGHOSTS0chare = params_chare->Nxx_plus_2NGHOSTS0;
+const int Nxx_plus_2NGHOSTS1chare = params_chare->Nxx_plus_2NGHOSTS1;
+const int Nxx_plus_2NGHOSTS2chare = params_chare->Nxx_plus_2NGHOSTS2;
+const int Nxx0chare = params_chare->Nxx0;
+const int Nxx1chare = params_chare->Nxx1;
+const int Nxx2chare = params_chare->Nxx2;
 
 char filename[256];
 sprintf(filename, "{filename_tuple[0].replace('PLANE', plane)}", {filename_tuple[1]});
+diagnosticstruct->filename_2d_{plane} = filename;
+diagnosticstruct->num_output_quantities = {len(out_quantities_dict)};
+
 
 {loop_2d}
+
+diagnosticstruct->tot_num_diagnostic_2d_{plane}_pts = numpts_i0 * numpts_i1 * numpts_i2;
+
+int num_diagnostics_chare = 0;
+LOOP_NOOMP(i0_pt, 0, numpts_i0, i1_pt, 0, numpts_i1, i2_pt, 0, numpts_i2) {{
+  const int i0 = i0_pts[i0_pt], i1 = i1_pts[i1_pt], i2 = i2_pts[i2_pt];
+  const int idx3 = IDX3(i0, i1, i2);
+  if (charecommstruct->globalidx3pt_to_chareidx3[idx3] == IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])) {{
+    num_diagnostics_chare++;
+  }}
+}}
+diagnosticptoffsetstruct->num_diagnostic_2d_{plane}_pts = num_diagnostics_chare;
+diagnosticptoffsetstruct->locali0_diagnostic_2d_{plane}_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
+diagnosticptoffsetstruct->locali1_diagnostic_2d_{plane}_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
+diagnosticptoffsetstruct->locali2_diagnostic_2d_{plane}_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
+diagnosticptoffsetstruct->localidx3_diagnostic_2d_{plane}_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
+diagnosticptoffsetstruct->offset_diagnostic_2d_{plane}_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
+// compute offset in bytes for first field for each diagnostic pt
+int sizeinbytes = 23 * (diagnosticstruct->num_output_quantities + 2);
+
+int which_diagnostics_chare = 0;
+int which_diagnostic_global = 0;
+LOOP_NOOMP(i0_pt, 0, numpts_i0, i1_pt, 0, numpts_i1, i2_pt, 0, numpts_i2) {{
+  const int i0 = i0_pts[i0_pt], i1 = i1_pts[i1_pt], i2 = i2_pts[i2_pt];
+  const int idx3 = IDX3(i0, i1, i2);
+  if (charecommstruct->globalidx3pt_to_chareidx3[idx3] == IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])){{
+    // store the local idx3 of diagnostic point
+    int localidx3 = charecommstruct->globalidx3pt_to_localidx3pt[idx3];
+    int locali0, locali1, locali2 = REVERSE_IDX3GENERAL(localidx3, Nxx0chare, Nxx1chare);                                                                                                           \
+    diagnosticptoffsetstruct->localidx3_diagnostic_2d_{plane}_pt[which_diagnostics_chare] = localidx3;
+    diagnosticptoffsetstruct->locali0_diagnostic_2d_{plane}_pt[which_diagnostics_chare] =  locali0;
+    diagnosticptoffsetstruct->locali1_diagnostic_2d_{plane}_pt[which_diagnostics_chare] =  locali1;
+    diagnosticptoffsetstruct->locali2_diagnostic_2d_{plane}_pt[which_diagnostics_chare] =  locali2;
+    diagnosticptoffsetstruct->offset_diagnostic_2d_{plane}_pt[which_diagnostics_chare] = which_diagnostic_global * sizeinbytes;
+    which_diagnostics_chare++;
+  }}
+  which_diagnostic_global++;
+}}
 
 """
     cfc.register_CFunction(
@@ -334,7 +444,7 @@ sprintf(filename, "{filename_tuple[0].replace('PLANE', plane)}", {filename_tuple
         CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,
-        include_CodeParameters_h=True,
+        include_CodeParameters_h=False,
         body=body,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())

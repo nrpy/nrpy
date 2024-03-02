@@ -25,14 +25,14 @@ def register_CFunction_numerical_grid_params_Nxx_dxx_xx_chare(
     :param CoordSystem: The coordinate system used for the simulation.
     :param grid_physical_size: The physical size of the grid.
     :param Nxx_dict: A dictionary that maps coordinate systems to lists containing the number of grid points along each direction.
-    """        
+    """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = f"Set up a cell-centered {CoordSystem} grid of size grid_physical_size. Set params: Nxx, Nxx_plus_2NGHOSTS, dxx, invdxx, and xx."
     c_type = "void"
     name = "numerical_grid_params_Nxx_dxx_xx_chare"
     params = "commondata_struct *restrict commondata, const params_struct *restrict params, params_struct *restrict params_chare, REAL *restrict xx[3], const int chare_index[3]"
     body = ""
-    for dirn in range(3):        
+    for dirn in range(3):
         body += f"params_chare->Nxx{dirn} = params->Nxx{dirn}/{Nchare_dict[CoordSystem][dirn]};\n"
     body += rf"""
 const REAL grid_physical_size = params_chare->grid_physical_size;
@@ -47,15 +47,15 @@ params_chare->Nxx_plus_2NGHOSTS2 = params_chare->Nxx2 + 2*NGHOSTS;
     rfm = refmetric.reference_metric[CoordSystem]
     for key, value in rfm.grid_physical_size_dict.items():
         body += f"params_chare>{key} = {value};\n"
-        
+
     body += "\n// Set xxmin, xxmax\n"
     for minmax in ["min", "max"]:
-        for dirn in range(3):            
-            param_dir = f"params_chare->xx{minmax}{dirn}"          
+        for dirn in range(3):
+            param_dir = f"params_chare->xx{minmax}{dirn}"
             body += f"{param_dir} = params->xx{minmax}{dirn} + (params->dxx{dirn} * (REAL)(params_chare->Nxx{dirn} * chare_index[{dirn}]));\n"
 
-    body += r"""  
-              
+    body += r"""
+
 params_chare->dxx0 = params->dxx0;
 params_chare->dxx1 = params->dxx1;
 params_chare->dxx2 = params->dxx2;
@@ -125,11 +125,17 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   charecommstruct_set_up(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, chare_index);
   bcstruct_chare_set_up(commondata, &griddata[grid].params, &griddata_chare[grid].params, griddata_chare[grid].xx, &griddata[grid].bcstruct, &griddata_chare[grid].bcstruct, chare_index);
+  // 1D diagnostics set up
+  diagnosticstruct_set_up_nearest_1d_y_axis(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index);
+  diagnosticstruct_set_up_nearest_1d_z_axis(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index);
+  // 2D diagnostics set up
+  diagnosticstruct_set_up_nearest_2d_xy_plane(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index);
+  diagnosticstruct_set_up_nearest_2d_yz_plane(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index);
 }
 """
     else:
         body += "// (curvilinear boundary conditions bcstruct disabled)\n"
-    
+
     cfc.register_CFunction(
         includes=includes,
         desc=desc,

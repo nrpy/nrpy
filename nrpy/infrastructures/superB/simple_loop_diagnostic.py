@@ -180,10 +180,7 @@ static int compare(const void *a, const void *b) {
 
     qsort = r"""
 qsort(data_points, data_index, sizeof(data_point_1d_struct), compare);
-
-for (int i = 0; i < data_index; i++) {
-  fprintf(outfile, "%.15e """  
-
+"""
     out_string += qsort
 
     return prefunc_content, out_string
@@ -291,11 +288,6 @@ int i0_pts[numpts_i0], i1_pts[numpts_i1], i2_pts[numpts_i2];
             for j, pt in enumerate(i012_pts[i]):
                 out_string += f"i{i}_pts[{j}] = (int)({sp.ccode(pt)});\n"
 
-    out_string += """// Main loop:
-LOOP_NOOMP(i0_pt,0,numpts_i0, i1_pt,0,numpts_i1, i2_pt,0,numpts_i2) {
-  const int i0 = i0_pts[i0_pt], i1 = i1_pts[i1_pt], i2 = i2_pts[i2_pt];
-  const int idx3 = IDX3(i0, i1, i2);  
-"""
     return out_string
 
 
