@@ -1,24 +1,27 @@
 """
 Use the Sympy Indexed type for relativity expressions.
 """
-from sympy import symbols, IndexedBase, Idx, sympify, Eq, Indexed
+from typing import Union, Set, Dict, List, Any, cast
+from sympy import IndexedBase, Idx, Eq, Indexed, Basic, Mul, Expr, Eq, Symbol
 from here import here
 from inspect import currentframe
+from nrpy.generic.sympywrap import *
 
-i, j, k = symbols('i j k', cls=Idx)
-multype = type(i*j)
+i, j, k = mkIdxs('i j k')
+multype = Mul #type(i*j)
 addtype = type(i+j)
-eqtype = type(Eq(i,j))
+eqtype = Eq
 powtype = type(i**j)
+#IndexType = Union[Idx,multype]
 
 dimension = 3
-def set_dimension(dim):
+def set_dimension(dim:int)->None:
     global dimension
     dimension = dim
 
-symmetries = dict()
+symmetries : Dict[IndexedBase, IndexedBase] = dict()
 
-def get_indices(xpr):
+def get_indices(xpr:Basic)->Set[IndexType]:
     """ Return all indices of IndexedBase objects in xpr. """
     ret = set()
     if type(xpr) in [multype, addtype, powtype]:
@@ -29,7 +32,7 @@ def get_indices(xpr):
         ret.update(xpr.indices)
     return ret
 
-def byname(x):
+def byname(x:IndexType)->str:
     """ Return a string suitable for sorting a list of upper/lower indices. Use negative indices as down indices. """
     s = str(x)
     if s[0] == "-":
@@ -37,7 +40,7 @@ def byname(x):
     else:
         return s
 
-def get_free_indices(xpr):
+def get_free_indices(xpr:Basic)->Set[IndexType]:
     """ Return all uncontracted indices in xpr. """
     indices = list(get_indices(xpr))
     indices = sorted(indices, key=byname)
@@ -51,7 +54,7 @@ def get_free_indices(xpr):
             i += 1
     return ret
 
-def get_contracted_indices(xpr):
+def get_contracted_indices(xpr:Basic)->Set[IndexType]:
     """ Return all contracted indices in xpr. """
     indices = list(get_indices(xpr))
     indices = sorted(indices, key=byname)
@@ -65,7 +68,7 @@ def get_contracted_indices(xpr):
             i += 1
     return ret
 
-def incr(index_list, index_values):
+def incr(index_list:List[IndexType], index_values:Dict[IndexType, int])->bool:
     """ Increment the indices in index_list, creating an index_values table with all possible permutations. """
     if len(index_list) == 0:
         return False
@@ -95,9 +98,9 @@ def incr(index_list, index_values):
             break
     return True
 
-def expand_contracted_indices(xpr):
+def expand_contracted_indices(xpr:Expr)->Expr:
     if type(xpr) == addtype:
-        ret = sympify(0)
+        ret : Expr = sympify(0)
         for arg in xpr.args:
             ret += expand_contracted_indices(arg)
         return ret
@@ -105,14 +108,15 @@ def expand_contracted_indices(xpr):
     if len(index_list) == 0:
         return xpr
     output = sympify(0)
-    index_values = dict()
+    index_values : Dict[IndexType, int]= dict()
     while incr(index_list, index_values):
-        output += xpr.subs(index_values).subs(symmetries)
+        output += do_subs(xpr, index_values, symmetries)
     return output
 
-def expand_free_indices(xpr):
+def expand_free_indices(xpr:Union[Expr,Eq])->List[Expr]:
     index_list = sorted(list(get_free_indices(xpr)), key=str)
-    output = list()
+    output : List[Expr] = list()
+    new_xpr : Union[Expr,Eq]
     if type(xpr) == addtype:
         new_xpr = sympify(0)
         for arg in xpr.args:
@@ -123,26 +127,27 @@ def expand_free_indices(xpr):
     elif type(xpr) == multype or type(xpr) == Indexed:
         xpr = expand_contracted_indices(xpr)
     elif type(xpr) == eqtype:
-        xpr = Eq(xpr.lhs, expand_contracted_indices(xpr.rhs))
+        xpr = mkEq(xpr.lhs, expand_contracted_indices(xpr.rhs))
         index_list = sorted(list(get_free_indices(xpr.lhs)), key=str)
     else:
         assert False, f"Type is {type(xpr)}"
-    index_values = dict()
+    index_values : Dict[IndexType, int] = dict()
     while incr(index_list, index_values):
         assert len(index_values) != 0, "Something very bad happened"
-        if type(xpr) == Indexed and xpr.subs(index_values) in symmetries:
+        if type(xpr) == Indexed and do_subs(xpr, index_values) in symmetries:
             continue
         if type(xpr) == eqtype and xpr.lhs.subs(index_values) in symmetries:
             continue
         output += [xpr.subs(index_values).subs(symmetries)]
     return output
 
-def add_asym(tens, ix1, ix2):
-    return add_sym(tens, ix1, ix2, sgn=-1)
+def add_asym(tens:Indexed, ix1:Idx, ix2:Idx)->None:
+    add_sym(tens, ix1, ix2, sgn=-1)
 
-def add_sym(tens, ix1, ix2, sgn=1):
+def add_sym(tens:Indexed, ix1:Idx, ix2:Idx, sgn:int=1)->None:
     assert type(tens) == Indexed
-    base = tens.args[0]
+    assert type(tens.args[0]) == IndexedBase, f"tens.args[0]={type(tens.args[0])}"
+    base:IndexedBase = tens.args[0]
     i1 = -1
     i2 = -1
     for i in range(1,len(tens.args)):
@@ -155,7 +160,7 @@ def add_sym(tens, ix1, ix2, sgn=1):
     assert i1 != i2, f"Index {ix1} cannot be symmetric with itself in {tens}"
     if i1 > i2:
         i1, i2 = i2, i1
-    index_list = list(tens.args)[1:]
+    index_list : List[IndexType] = cast(List[IndexType], list(tens.args)[1:])
     # create an index list with i1 and i2 swapped
     index_list2 = \
         index_list[:i1] + \
@@ -163,16 +168,16 @@ def add_sym(tens, ix1, ix2, sgn=1):
         index_list[i1+1:i2] + \
         index_list[i1:i1+1] + \
         index_list[i2+1:]
-    index_values = dict()
+    index_values : Dict[IndexType,int] = dict()
     while incr(index_list, index_values):
         if index_values[ix1] > index_values[ix2]:
             args1 = [index_values[ix] for ix in index_list]
             args2 = [index_values[ix] for ix in index_list2]
-            term1 = Indexed(base, *args1)
-            term2 = Indexed(base, *args2)
+            term1 = mkIndexed(base, *args1)
+            term2 = mkIndexed(base, *args2)
             symmetries[term1] = sgn*term2
 
-def mksymbol_for_tensor(out):
+def mksymbol_for_tensor(out:Indexed)->Symbol:
     """
     Define a symbol for a tensor using standard NRPy+ rules.
     For an upper index put a U, for a lower index put a D.
@@ -191,7 +196,7 @@ def mksymbol_for_tensor(out):
             base += "D"
     for i in out.args[1:]:
         base += str(abs(i))
-    return symbols(base)
+    return mkSymbol(base)
 
 subs = dict()
 def fill_in(indexed:IndexedBase, f, normalize:bool=True):
@@ -201,13 +206,11 @@ def fill_in(indexed:IndexedBase, f, normalize:bool=True):
             inds = tuple([abs(i)-1 for i in list(inds)])
         subs[out] = f(*inds)
 
-def expand(arg):
+def expand(arg:Expr)->Expr:
     return expand_contracted_indices(arg).subs(subs)
-
-IndexType = Union[Idx,multype]
             
 class GF:
-    def __init__(self):
+    def __init__(self)->None:
         self.symmetries = dict()
 
     def add_sym(self, tens:Indexed, ix1:IndexType, ix2:IndexType):
@@ -242,12 +245,11 @@ class GF:
                 term2 = Indexed(base, *args2)
                 self.symmetries[term1] = sgn*term2
     
-    def decl(self, *args):
+    def decl(self, basename:str, indices:List[IndexType])->IndexedBase:
         globs = currentframe().f_back.f_globals
-        for i in range(0,len(args),2):
-            basename = args[i]
-            indices = args[i+1]
-            globs[basename] = IndexedBase(basename, shape=(dimension)*len(indices) )
+        ret = mkIndexedBase(basename, shape=(dimension)*len(indices) ) #
+        globs[basename] = ret
+        return ret
 
 if __name__ == "__main__":
     #===========================
@@ -257,7 +259,6 @@ if __name__ == "__main__":
     M = IndexedBase('M')
     P = IndexedBase('P')
     R = IndexedBase('R')
-    i, j, k = symbols('i j k', cls=Idx)
 
     # Negative index is contracted
     mm = M[i,j]*M[-j,k]
