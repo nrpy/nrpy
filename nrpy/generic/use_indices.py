@@ -3,6 +3,8 @@ Use the Sympy Indexed type for relativity expressions.
 """
 from sympy import symbols, IndexedBase, Idx, sympify, Eq, Indexed
 from here import here
+from inspect import currentframe
+
 i, j, k = symbols('i j k', cls=Idx)
 multype = type(i*j)
 addtype = type(i+j)
@@ -10,6 +12,9 @@ eqtype = type(Eq(i,j))
 powtype = type(i**j)
 
 dimension = 3
+def set_dimension(dim):
+    global dimension
+    dimension = dim
 
 symmetries = dict()
 
@@ -121,7 +126,7 @@ def expand_free_indices(xpr):
         xpr = Eq(xpr.lhs, expand_contracted_indices(xpr.rhs))
         index_list = sorted(list(get_free_indices(xpr.lhs)), key=str)
     else:
-        assert False
+        assert False, f"Type is {type(xpr)}"
     index_values = dict()
     while incr(index_list, index_values):
         assert len(index_values) != 0, "Something very bad happened"
@@ -187,40 +192,97 @@ def mksymbol_for_tensor(out):
     for i in out.args[1:]:
         base += str(abs(i))
     return symbols(base)
+
+subs = dict()
+def fill_in(indexed:IndexedBase, f, normalize:bool=True):
+    for out in expand_free_indices(indexed):
+        inds = out.indices
+        if normalize:
+            inds = tuple([abs(i)-1 for i in list(inds)])
+        subs[out] = f(*inds)
+
+def expand(arg):
+    return expand_contracted_indices(arg).subs(subs)
+
+IndexType = Union[Idx,multype]
             
-#===========================
-# IndexedBase is a tensor object without indices
-# Indexed is a tensor object with indices
-# indices are of type Idx
-M = IndexedBase('M')
-P = IndexedBase('P')
-R = IndexedBase('R')
-i, j, k = symbols('i j k', cls=Idx)
+class GF:
+    def __init__(self):
+        self.symmetries = dict()
 
-# Negative index is contracted
-mm = M[i,j]*M[-j,k]
+    def add_sym(self, tens:Indexed, ix1:IndexType, ix2:IndexType):
+        assert type(tens) == Indexed
+        base = tens.args[0]
+        i1 = -1
+        i2 = -1
+        for i in range(1,len(tens.args)):
+            if tens.args[i] == ix1:
+                i1 = i-1
+            if tens.args[i] == ix2:
+                i2 = i-1
+        assert i1 != -1, f"Index {ix1} not in {tens}"
+        assert i2 != -2, f"Index {ix2} not in {tens}"
+        assert i1 != i2, f"Index {ix1} cannot be symmetric with itself in {tens}"
+        if i1 > i2:
+            i1, i2 = i2, i1
+        index_list = list(tens.args)[1:]
+        # create an index list with i1 and i2 swapped
+        index_list2 = \
+            index_list[:i1] + \
+            index_list[i2:i2+1] + \
+            index_list[i1+1:i2] + \
+            index_list[i1:i1+1] + \
+            index_list[i2+1:]
+        index_values = dict()
+        while incr(index_list, index_values):
+            if index_values[ix1] > index_values[ix2]:
+                args1 = [index_values[ix] for ix in index_list]
+                args2 = [index_values[ix] for ix in index_list2]
+                term1 = Indexed(base, *args1)
+                term2 = Indexed(base, *args2)
+                self.symmetries[term1] = sgn*term2
+    
+    def decl(self, *args):
+        globs = currentframe().f_back.f_globals
+        for i in range(0,len(args),2):
+            basename = args[i]
+            indices = args[i+1]
+            globs[basename] = IndexedBase(basename, shape=(dimension)*len(indices) )
 
-# Define symmetries
-add_asym(P[i,j],i,j)
-add_asym(M[i,j],i,j)
+if __name__ == "__main__":
+    #===========================
+    # IndexedBase is a tensor object without indices
+    # Indexed is a tensor object with indices
+    # indices are of type Idx
+    M = IndexedBase('M')
+    P = IndexedBase('P')
+    R = IndexedBase('R')
+    i, j, k = symbols('i j k', cls=Idx)
 
-# Want to generate code for an equation like this:
-form = Eq(P[i,k], mm + R[i,k])
+    # Negative index is contracted
+    mm = M[i,j]*M[-j,k]
 
-print("form:",form.lhs,"=",form.rhs)
+    # Define symmetries
+    add_asym(P[i,j],i,j)
+    add_asym(M[i,j],i,j)
 
-# Create substitution rules for code generation
-mysubs = dict()
-for out in expand_free_indices(M[-i,j]) + \
-        expand_free_indices(M[i,j]) + \
-        expand_free_indices(R[i,j]) + \
-        expand_free_indices(P[i,j]):
-    # mksymbol_for_tensor uses the standard NRPy+ notation
-    mysubs[out] = mksymbol_for_tensor(out)
+    # Want to generate code for an equation like this:
+    form = Eq(P[i,k], mm + R[i,k])
 
-# Generate the code expressions by iterating over
-# the free (non-contracted) indices in the equation
-for out in  expand_free_indices(form):
-    # Substitute the resluts with mysubs
-    # Internally, the rhs will have contracted indices expanded
-    print(out.lhs.subs(mysubs),"=",out.rhs.subs(mysubs))
+    print("form:",form.lhs,"=",form.rhs)
+
+    # Create substitution rules for code generation
+    mysubs = dict()
+    for out in expand_free_indices(M[-i,j]) + \
+            expand_free_indices(M[i,j]) + \
+            expand_free_indices(R[i,j]) + \
+            expand_free_indices(P[i,j]):
+        # mksymbol_for_tensor uses the standard NRPy+ notation
+        mysubs[out] = mksymbol_for_tensor(out)
+
+    # Generate the code expressions by iterating over
+    # the free (non-contracted) indices in the equation
+    for out in  expand_free_indices(form):
+        # Substitute the resluts with mysubs
+        # Internally, the rhs will have contracted indices expanded
+        print(out.lhs.subs(mysubs),"=",out.rhs.subs(mysubs))
