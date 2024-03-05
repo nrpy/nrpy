@@ -336,7 +336,7 @@ superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
     boundary_conditions_desc=boundary_conditions_desc,
 )
 Bdefines_h.output_BHaH_defines_h(
-    additional_includes=[str(Path("TwoPunctures") / Path("TwoPunctures.h"))],
+    additional_includes=[str(Path("TwoPunctures") / Path("TwoPunctures.h")), "ckio.h"],
     project_dir=project_dir,
     enable_simd=enable_simd,
     enable_rfm_precompute=enable_rfm_precompute,

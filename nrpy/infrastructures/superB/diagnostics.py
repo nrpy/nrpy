@@ -77,7 +77,12 @@ def register_CFunction_diagnostics(
         raise TypeError(f"out_quantities_dict was initialized to {out_quantities_dict}, which is not a dictionary!")
     # fmt: on
 
-    for CoordSystem in list_of_CoordSystems:        
+    for CoordSystem in list_of_CoordSystems:
+        out012d.register_CFunction_diagnostics_nearest_grid_center(
+            CoordSystem=CoordSystem,
+            out_quantities_dict=out_quantities_dict,
+            filename_tuple=grid_center_filename_tuple,
+        )        
         for axis in ["y", "z"]:
             out012d.register_CFunction_diagnostics_nearest_1d_axis(
                 CoordSystem=CoordSystem,
@@ -112,62 +117,70 @@ def register_CFunction_diagnostics(
     c_type = "void"
     name = "diagnostics"
     params = (
-        "commondata_struct *restrict commondata, griddata_struct *restrict griddata, Ck::IO::Session token, int which_output"
+        "commondata_struct *restrict commondata, griddata_struct *restrict griddata, Ck::IO::Session token, constint which_output, const int grid"
     )
 
     body = r"""
-for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
-
-  const int num_diagnostic_1d_y_pts = griddata[grid].diagnosticptoffsetstruct.num_diagnostic_1d_y_pts;
-  const int num_diagnostic_1d_z_pts = griddata[grid].diagnosticptoffsetstruct.num_diagnostic_1d_z_pts;
-  const int num_diagnostic_2d_xy_pts = griddata[grid].diagnosticptoffsetstruct.num_diagnostic_2d_xy_pts;
-  const int num_diagnostic_2d_yz_pts = griddata[grid].diagnosticptoffsetstruct.num_diagnostic_2d_yz_pts;
 
 
-  const bool b_diagnostics = (num_diagnostic_1d_y_pts > 0) ||
-                        (num_diagnostic_1d_z_pts > 0) ||
-                        (num_diagnostic_2d_xy_pts > 0) ||
-                        (num_diagnostic_2d_yz_pts > 0);
+const int num_diagnostic_1d_y_pts = griddata[grid].diagnosticstruct.num_diagnostic_1d_y_pts;
+const int num_diagnostic_1d_z_pts = griddata[grid].diagnosticstruct.num_diagnostic_1d_z_pts;
+const int num_diagnostic_2d_xy_pts = griddata[grid].diagnosticstruct.num_diagnostic_2d_xy_pts;
+const int num_diagnostic_2d_yz_pts = griddata[grid].diagnosticstruct.num_diagnostic_2d_yz_pts;
 
-  if (b_diagnostics) {
-    // Unpack griddata struct:
-    const REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
-    REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
-    REAL *restrict diagnostic_output_gfs = griddata[grid].gridfuncs.diagnostic_output_gfs;
-    REAL *restrict xx[3];
-    {
-      for (int ww = 0; ww < 3; ww++)
-        xx[ww] = griddata[grid].xx[ww];
-    }
-    const params_struct *restrict params = &griddata[grid].params;
-  #include "set_CodeParameters.h"
 
-    // Constraint output
-    {
-      Ricci_eval(commondata, params, &griddata[grid].rfmstruct, y_n_gfs, auxevol_gfs);
-      constraints_eval(commondata, params, &griddata[grid].rfmstruct, y_n_gfs, auxevol_gfs, diagnostic_output_gfs);
-    }
+const bool write_diagnostics = (which_output == OUTPUT_0D) ||
+					(num_diagnostic_1d_y_pts > 0) ||
+					(num_diagnostic_1d_z_pts > 0) ||
+					(num_diagnostic_2d_xy_pts > 0) ||
+					(num_diagnostic_2d_yz_pts > 0);
 
-    // 1D and 2D outputs
-    if (which_output == OUTPUT_1D_Y) {
-      if (num_diagnostic_1d_y_pts > 0) {
-        diagnostics_nearest_1d_y_axis(commondata, params, xx, &griddata[grid].gridfuncs, &griddata[grid].diagnosticptoffsetstruct, token);
-      }
-    } else if (which_output == OUTPUT_1D_Z) {
-      if (num_diagnostic_1d_z_pts > 0) {
-        diagnostics_nearest_1d_z_axis(commondata, params, xx, &griddata[grid].gridfuncs, &griddata[grid].diagnosticptoffsetstruct, token);
-      }
-    } else if (which_output == OUTPUT_2D_XY) {
-      if (num_diagnostic_2d_xy_pts > 0) {
-        diagnostics_nearest_2d_xy_plane(commondata, params, xx, &griddata[grid].gridfuncs, &griddata[grid].diagnosticptoffsetstruct, token);
-      }
-    } else if (which_output == OUTPUT_2D_YZ) {
-      if (num_diagnostic_2d_yz_pts > 0) {
-        diagnostics_nearest_2d_yz_plane(commondata, params, xx, &griddata[grid].gridfuncs, &griddata[grid].diagnosticptoffsetstruct, token);
-      }
-    }
+if (write_diagnostics) {
+// Unpack griddata struct:
+const REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
+REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
+REAL *restrict diagnostic_output_gfs = griddata[grid].gridfuncs.diagnostic_output_gfs;
+REAL *restrict xx[3];
+{
+  for (int ww = 0; ww < 3; ww++)
+	xx[ww] = griddata[grid].xx[ww];
+}
+const params_struct *restrict params = &griddata[grid].params;
+#include "set_CodeParameters.h"
+
+// Constraint output
+{
+  Ricci_eval(commondata, params, &griddata[grid].rfmstruct, y_n_gfs, auxevol_gfs);
+  constraints_eval(commondata, params, &griddata[grid].rfmstruct, y_n_gfs, auxevol_gfs, diagnostic_output_gfs);
+}
+
+// // 0D, 1D and 2D outputs
+if (which_output == OUTPUT_0D) {
+    diagnostics_nearest_grid_center(commondata, params, &griddata[grid].gridfuncs);
+            
+	progress_indicator(commondata, griddata);
+	if (commondata->time + commondata->dt > commondata->t_final)
+	  printf("\n");        
+	    
+} else if (which_output == OUTPUT_1D_Y) {	  
+  if (num_diagnostic_1d_y_pts > 0) {
+	diagnostics_nearest_1d_y_axis(commondata, params, xx, &griddata[grid].gridfuncs, &griddata[grid].diagnosticstruct, token);
+  }
+} else if (which_output == OUTPUT_1D_Z) {
+  if (num_diagnostic_1d_z_pts > 0) {
+	diagnostics_nearest_1d_z_axis(commondata, params, xx, &griddata[grid].gridfuncs, &griddata[grid].diagnosticstruct, token);
+  }
+} else if (which_output == OUTPUT_2D_XY) {
+  if (num_diagnostic_2d_xy_pts > 0) {
+	diagnostics_nearest_2d_xy_plane(commondata, params, xx, &griddata[grid].gridfuncs, &griddata[grid].diagnosticstruct, token);
+  }
+} else if (which_output == OUTPUT_2D_YZ) {
+  if (num_diagnostic_2d_yz_pts > 0) {
+	diagnostics_nearest_2d_yz_plane(commondata, params, xx, &griddata[grid].gridfuncs, &griddata[grid].diagnosticstruct, token);
   }
 }
+}
+
 
 """
 
@@ -189,7 +202,8 @@ for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     )
     
     BHaH_defines_h.register_BHaH_defines(
-    __name__, """#define OUTPUT_1D_Y 1  
+    __name__, r"""#define OUTPUT_0D 0  
+#define OUTPUT_1D_Y 1  
 #define OUTPUT_1D_Z 2  
 #define OUTPUT_2D_XY 3  
 #define OUTPUT_2D_YZ 4  

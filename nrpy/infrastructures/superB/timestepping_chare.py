@@ -170,7 +170,7 @@ class Timestepping : public CBase_Timestepping {
     griddata_struct *griddata_chare;
     bool is_boundarychare;
     REAL time_start;
-    bool contains_gridcenter;
+    //bool contains_gridcenter;
     bool write_diagnostics_this_step;
     const int which_grid_diagnostics = 0;
     Ck::IO::File f_1d_y;
@@ -359,7 +359,30 @@ Timestepping::~Timestepping() {
     for(int i=0;i<3;i++) {
       free(griddata[grid].xx[i]);
       free(griddata_chare[grid].xx[i]);
-    }
+    }    
+    free(griddata_chare[grid].diagnosticstruct.localidx3_diagnostic_1d_y_pt);
+    free(griddata_chare[grid].diagnosticstruct.locali0_diagnostic_1d_y_pt);
+    free(griddata_chare[grid].diagnosticstruct.locali1_diagnostic_1d_y_pt);
+    free(griddata_chare[grid].diagnosticstruct.locali2_diagnostic_1d_y_pt);
+    free(griddata_chare[grid].diagnosticstruct.offset_diagnostic_1d_y_pt);
+    free(griddata_chare[grid].diagnosticstruct.localidx3_diagnostic_1d_z_pt);
+    free(griddata_chare[grid].diagnosticstruct.locali0_diagnostic_1d_z_pt);
+    free(griddata_chare[grid].diagnosticstruct.locali1_diagnostic_1d_z_pt);
+    free(griddata_chare[grid].diagnosticstruct.locali2_diagnostic_1d_z_pt);
+    free(griddata_chare[grid].diagnosticstruct.offset_diagnostic_1d_z_pt);
+    free(griddata_chare[grid].diagnosticstruct.localidx3_diagnostic_2d_xy_pt);
+    free(griddata_chare[grid].diagnosticstruct.locali0_diagnostic_2d_xy_pt);
+    free(griddata_chare[grid].diagnosticstruct.locali1_diagnostic_2d_xy_pt);
+    free(griddata_chare[grid].diagnosticstruct.locali2_diagnostic_2d_xy_pt);
+    free(griddata_chare[grid].diagnosticstruct.offset_diagnostic_2d_xy_pt);
+    free(griddata_chare[grid].diagnosticstruct.localidx3_diagnostic_2d_yz_pt);
+    free(griddata_chare[grid].diagnosticstruct.locali0_diagnostic_2d_yz_pt);
+    free(griddata_chare[grid].diagnosticstruct.locali1_diagnostic_2d_yz_pt);
+    free(griddata_chare[grid].diagnosticstruct.locali2_diagnostic_2d_yz_pt);
+    free(griddata_chare[grid].diagnosticstruct.offset_diagnostic_2d_yz_pt);    
+    free(griddata_chare[grid].charecommstruct.globalidx3pt_to_chareidx3);
+    free(griddata_chare[grid].charecommstruct.globalidx3pt_to_localidx3pt);
+    free(griddata_chare[grid].charecommstruct.localidx3pt_to_globalidx3pt);        
   }
   free(griddata);
   free(griddata_chare);
@@ -648,14 +671,19 @@ def output_timestepping_ci(
           write_diagnostics_this_step = fabs(round(commondata.time / commondata.diagnostics_output_every) * commondata.diagnostics_output_every - commondata.time) < 0.5 * commondata.dt;
         }
         // Step 5.a: Main loop, part 1: Output diagnostics
-        serial {
-          if (write_diagnostics_this_step && contains_gridcenter) {
-            diagnostics_center(&commondata, griddata_chare);
-          }
-        }
+        //serial {
+        //  if (write_diagnostics_this_step && contains_gridcenter) {                              
+        //    diagnostics(&commondata, griddata_chare, Ck::IO::Session(), OUTPUT_0D, which_grid_diagnostics);
+        //  }
+        //}
         // Create sessions for ckio file writing from first chare only
         if (write_diagnostics_this_step && thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
           serial {
+            progress_indicator(commondata, griddata);
+            if (commondata->time + commondata->dt > commondata->t_final)
+              printf("\n");
+                    
+          
             {
               char filename[256];
               sprintf(filename, "out1d-y-conv_factor%.2f-t%08.2f.txt", commondata.convergence_factor, commondata.time);
@@ -710,39 +738,42 @@ def output_timestepping_ci(
     file_output_str += r"""
     """
     # Loop over RK substeps and axes
-    for rk_substep, axis in itertools.product([f"RK_SUBSTEP_K{k}" for k in range(1, 5)], ['x', 'y', 'z']):
-        if axis == 'x':
-            pos_ghost_type = x_pos_ghost_type
-            neg_ghost_type = x_neg_ghost_type
-            nchare_var = "Nchare0"
-            direction = 'EAST_WEST'
-        elif axis == 'y':
-            pos_ghost_type = y_pos_ghost_type
-            neg_ghost_type = y_neg_ghost_type
-            nchare_var = "Nchare1"
-            direction = 'NORTH_SOUTH'
-        elif axis == 'z':
-            pos_ghost_type = z_pos_ghost_type
-            neg_ghost_type = z_neg_ghost_type
-            nchare_var = "Nchare2"
-            direction = 'TOP_BOTTOM'
-
-        # Generate code for this RK substep and axis
-        if rk_substep == 'RK_SUBSTEP_K1':
-            which_gf = 'K_ODD'
-        elif rk_substep == 'RK_SUBSTEP_K2':
-            which_gf = 'K_EVEN'
-        elif rk_substep == 'RK_SUBSTEP_K3':
-            which_gf = 'K_ODD'
-        elif rk_substep == 'RK_SUBSTEP_K4':
-            which_gf = 'Y_N'
-        else:
-            raise ValueError(f"Unknown RK substep: {rk_substep}")
-
+    for k in range(1, 5):
+        rk_substep = f"RK_SUBSTEP_K{k}"
         file_output_str += generate_mol_step_forward_code(rk_substep)
         file_output_str += "for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {"            
-        file_output_str += generate_send_neighbor_data_code(which_gf, direction)
-        file_output_str += generate_ghost_code(axis, 0, pos_ghost_type, neg_ghost_type, nchare_var)        
+        for axis in ['x', 'y', 'z']:
+            # do something with rk_substep and axis
+            if axis == 'x':
+                pos_ghost_type = x_pos_ghost_type
+                neg_ghost_type = x_neg_ghost_type
+                nchare_var = "Nchare0"
+                direction = 'EAST_WEST'
+            elif axis == 'y':
+                pos_ghost_type = y_pos_ghost_type
+                neg_ghost_type = y_neg_ghost_type
+                nchare_var = "Nchare1"
+                direction = 'NORTH_SOUTH'
+            elif axis == 'z':
+                pos_ghost_type = z_pos_ghost_type
+                neg_ghost_type = z_neg_ghost_type
+                nchare_var = "Nchare2"
+                direction = 'TOP_BOTTOM'
+
+            # Generate code for this RK substep and axis
+            if rk_substep == 'RK_SUBSTEP_K1':
+                which_gf = 'K_ODD'
+            elif rk_substep == 'RK_SUBSTEP_K2':
+                which_gf = 'K_EVEN'
+            elif rk_substep == 'RK_SUBSTEP_K3':
+                which_gf = 'K_ODD'
+            elif rk_substep == 'RK_SUBSTEP_K4':
+                which_gf = 'Y_N'
+            else:
+                raise ValueError(f"Unknown RK substep: {rk_substep}")
+            
+            file_output_str += generate_send_neighbor_data_code(which_gf, direction)
+            file_output_str += generate_ghost_code(axis, 0, pos_ghost_type, neg_ghost_type, nchare_var)        
         file_output_str += "}"            
 
     file_output_str += r"""

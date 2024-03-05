@@ -160,6 +160,7 @@ Main::Main(CkArgMsg* msg) {
   cmdline_input_and_parfile_parser(&commondataObj.commondata, msg->argc, msg->argv);
 
   timestepping_array = CProxy_Timestepping::ckNew(commondataObj, Nchare0, Nchare1, Nchare2);
+  
   timestepping_array.start();
 }
 
