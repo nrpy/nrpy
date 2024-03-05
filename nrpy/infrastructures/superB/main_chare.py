@@ -15,6 +15,12 @@ import nrpy.grid as gri
 from nrpy.infrastructures.BHaH import griddata_commondata
 from nrpy.helpers.generic import clang_format
 
+# fmt: off
+_ = par.CodeParameter("int", __name__, "Nchare0", 1, add_to_parfile=True, add_to_set_CodeParameters_h=True, commondata=True)
+_ = par.CodeParameter("int", __name__, "Nchare1", 1, add_to_parfile=True, add_to_set_CodeParameters_h=True, commondata=True)
+_ = par.CodeParameter("int", __name__, "Nchare2", 1, add_to_parfile=True, add_to_set_CodeParameters_h=True, commondata=True)
+# fmt: on
+
 
 def output_commondata_object_h(
     project_dir: str,
@@ -159,7 +165,7 @@ Main::Main(CkArgMsg* msg) {
   // Step 1.b: Overwrite default values to parfile values. Then overwrite parfile values with values set at cmd line.
   cmdline_input_and_parfile_parser(&commondataObj.commondata, msg->argc, msg->argv);
 
-  timestepping_array = CProxy_Timestepping::ckNew(commondataObj, Nchare0, Nchare1, Nchare2);
+  timestepping_array = CProxy_Timestepping::ckNew(commondataObj, &commondataObj.commondata.Nchare0, &commondataObj.commondata.Nchare1, &commondataObj.commondata.Nchare2);
   
   timestepping_array.start();
 }

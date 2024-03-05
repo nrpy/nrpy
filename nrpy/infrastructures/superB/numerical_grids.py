@@ -16,7 +16,7 @@ import nrpy.reference_metric as refmetric
 import nrpy.c_codegen as ccg
 
 def register_CFunction_numerical_grid_params_Nxx_dxx_xx_chare(
-    CoordSystem: str, grid_physical_size: float, Nxx_dict: Dict[str, List[int]], Nchare_dict: Dict[str, List[int]]
+    CoordSystem: str, grid_physical_size: float, Nxx_dict: Dict[str, List[int]]
 ) -> None:
     """
     Register a C function to Set up a cell-centered grid of size grid_physical_size.
@@ -33,7 +33,7 @@ def register_CFunction_numerical_grid_params_Nxx_dxx_xx_chare(
     params = "commondata_struct *restrict commondata, const params_struct *restrict params, params_struct *restrict params_chare, REAL *restrict xx[3], const int chare_index[3]"
     body = ""
     for dirn in range(3):
-        body += f"params_chare->Nxx{dirn} = params->Nxx{dirn}/{Nchare_dict[CoordSystem][dirn]};\n"
+        body += f"params_chare->Nxx{dirn} = params->Nxx{dirn}/Nchare{dirn};\n"
     body += rf"""
 const REAL grid_physical_size = params_chare->grid_physical_size;
 snprintf(params_chare->CoordSystemName, 50, "{CoordSystem}");
@@ -150,8 +150,7 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
 def register_CFunctions(
     list_of_CoordSystems: List[str],
     grid_physical_size: float,
-    Nxx_dict: Dict[str, List[int]],
-    Nchare_dict: Dict[str, List[int]],
+    Nxx_dict: Dict[str, List[int]],    
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
 ) -> None:
@@ -168,8 +167,7 @@ def register_CFunctions(
         register_CFunction_numerical_grid_params_Nxx_dxx_xx_chare(
             CoordSystem=CoordSystem,
             grid_physical_size=grid_physical_size,
-            Nxx_dict=Nxx_dict,
-            Nchare_dict=Nchare_dict,
+            Nxx_dict=Nxx_dict,            
         )
     register_CFunction_numerical_grids_chare(
         enable_rfm_precompute=enable_rfm_precompute,

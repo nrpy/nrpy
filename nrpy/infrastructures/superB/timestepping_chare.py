@@ -284,17 +284,13 @@ extern /* readonly */ CProxy_Main mainProxy;
 """
     file_output_str += r"""
 Timestepping::Timestepping(CommondataObject &&inData) {
-
-  if (thisIndex.x == 0 ||
-      thisIndex.y == 0 ||
-      thisIndex.z == 0 ||
-      thisIndex.x == (Nchare0-1) ||
-      thisIndex.y == (Nchare1-1) ||
-      thisIndex.z == (Nchare2-1)) {
-      is_boundarychare = true;
-    }
-
+    
   commondata = inData.commondata;
+
+  if (thisIndex.x == 0 || thisIndex.y == 0 || thisIndex.z == 0 || thisIndex.x == (commondata.Nchare0 - 1) || thisIndex.y == (commondata.Nchare1 - 1) ||
+      thisIndex.z == (commondata.Nchare2 - 1)) {
+    is_boundarychare = true;
+  }
 
   // Step 1.c: Allocate NUMGRIDS griddata arrays, each containing data specific to an individual grid.
   griddata = (griddata_struct *restrict)malloc(sizeof(griddata_struct) * commondata.NUMGRIDS);
@@ -391,6 +387,9 @@ Timestepping::~Timestepping() {
     file_output_str += r"""
 // send NGHOSTS number of interior faces with face extents that include ghosts
 void Timestepping::send_neighbor_data(const int type_gfs, const int dir, const int grid) {  
+  const int Nchare0 = commondata.Nchare0; 
+  const int Nchare1 = commondata.Nchare1;
+  const int Nchare2 = commondata.Nchare2;
   const int Nxx0 = griddata_chare[grid].params.Nxx0;
   const int Nxx1 = griddata_chare[grid].params.Nxx1;
   const int Nxx2 = griddata_chare[grid].params.Nxx2;
@@ -747,17 +746,17 @@ def output_timestepping_ci(
             if axis == 'x':
                 pos_ghost_type = x_pos_ghost_type
                 neg_ghost_type = x_neg_ghost_type
-                nchare_var = "Nchare0"
+                nchare_var = "commondata.Nchare0"
                 direction = 'EAST_WEST'
             elif axis == 'y':
                 pos_ghost_type = y_pos_ghost_type
                 neg_ghost_type = y_neg_ghost_type
-                nchare_var = "Nchare1"
+                nchare_var = "commondata.Nchare1"
                 direction = 'NORTH_SOUTH'
             elif axis == 'z':
                 pos_ghost_type = z_pos_ghost_type
                 neg_ghost_type = z_neg_ghost_type
-                nchare_var = "Nchare2"
+                nchare_var = "commondata.Nchare2"
                 direction = 'TOP_BOTTOM'
 
             # Generate code for this RK substep and axis

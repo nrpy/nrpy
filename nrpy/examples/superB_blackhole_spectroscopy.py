@@ -89,9 +89,9 @@ swm2sh_maximum_l_mode_to_compute = 2  # for consistency with NRPy 1.0 version.
 Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
 }
-Nchare_dict = {
-    "SinhSpherical": [200, 1, 1],
-}
+par.adjust_CodeParam_default("Nchare0", 200)
+par.adjust_CodeParam_default("Nchare1", 1)
+par.adjust_CodeParam_default("Nchare2", 1)
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.25
 default_BH2_z_posn = -0.25
@@ -239,8 +239,7 @@ numericalgrids.register_CFunctions(
 superBnumericalgrids.register_CFunctions(
     list_of_CoordSystems=[CoordSystem],
     grid_physical_size=grid_physical_size,
-    Nxx_dict=Nxx_dict,
-    Nchare_dict=Nchare_dict,
+    Nxx_dict=Nxx_dict,    
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
 )

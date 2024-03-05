@@ -24,6 +24,9 @@ def register_CFunction_charecommstruct_set_up(CoordSystem: str) -> None:
     name = "charecommstruct_set_up"
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const params_struct *restrict params_chare, charecomm_struct* charecommstruct, const int thischareindex[3]"
     body = r"""
+  const int Nchare0 = commondata->Nchare0;
+  const int Nchare1 = commondata->Nchare1;
+  const int Nchare2 = commondata->Nchare2;
   const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
   const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
   const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;  
