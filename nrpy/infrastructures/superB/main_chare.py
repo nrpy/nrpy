@@ -14,6 +14,7 @@ import nrpy.params as par
 import nrpy.grid as gri
 from nrpy.infrastructures.BHaH import griddata_commondata
 from nrpy.helpers.generic import clang_format
+from nrpy.infrastructures.BHaH import BHaH_defines_h
 
 # fmt: off
 _ = par.CodeParameter("int", __name__, "Nchare0", 1, add_to_parfile=True, add_to_set_CodeParameters_h=True, commondata=True)
@@ -166,7 +167,7 @@ Main::Main(CkArgMsg* msg) {
   cmdline_input_and_parfile_parser(&commondataObj.commondata, msg->argc, msg->argv);
 
   timestepping_array = CProxy_Timestepping::ckNew(commondataObj, &commondataObj.commondata.Nchare0, &commondataObj.commondata.Nchare1, &commondataObj.commondata.Nchare2);
-  
+
   timestepping_array.start();
 }
 
@@ -242,12 +243,3 @@ def output_commondata_object_h_and_main_h_cpp_ci(
     output_main_ci(
         project_dir=project_dir,
     )
-
-    # register a dummy main so as not to raise SystemExit("output_CFunctions_function_prototypes_and_construct_Makefile() error: C codes will not compile if main() function not defined....)
-    # in infrastructures/BHaH/Makefile_helpers.py
-    cfc.register_CFunction(
-        desc="dummy main",
-        name="main",
-        body="dummy main",
-    )
-

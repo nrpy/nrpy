@@ -165,7 +165,7 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
         
         # k_1
         body += """        
-    case RK_substep_k1:
+    case RK_SUBSTEP_K1:
 """
         body += """
 // In a diagonal RK3 method like this one, only 3 gridfunctions need be defined. Below implements this approach.
@@ -202,7 +202,7 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
 
         # k_2
         body += """         
-          case RK_substep_k2:
+          case RK_SUBSTEP_K2:
 """
         body += (
             single_RK_substep_input_symbolic(
@@ -243,7 +243,7 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
 
         # k_3
         body += """         
-          case RK_substep_k3:
+          case RK_SUBSTEP_K3:
 """
         body += (
             single_RK_substep_input_symbolic(
@@ -302,7 +302,7 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                     post_rhs_output = next_y_input
                     
                 body += f"""         
-          case RK_substep_k{str(s + 1)}:
+          case RK_SUBSTEP_K{str(s + 1)}:
 """
                 body += f"""{single_RK_substep_input_symbolic(
                     comment_block=f"// -={{ START k{str(s + 1)} substep }}=-",
@@ -402,7 +402,7 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                                 )
                         post_rhs_output = y_n
                     body += f"""         
-          case RK_substep_k{str(s + 1)}:
+          case RK_SUBSTEP_K{str(s + 1)}:
 """
                     body += (
                         single_RK_substep_input_symbolic(
@@ -544,9 +544,9 @@ def register_CFunctions(
         _diagnostic_gridfunctions2_point_to,
     ) = generate_gridfunction_names(Butcher_dict, MoL_method=MoL_method)
 
-    # Step 3.b: Create MoL_timestepping struct:
+    # Step 3.b: Create MoL_timestepping struct:    
     BHaH_defines_h.register_BHaH_defines(
-        __name__,
+        "nrpy.infrastructures.BHaH.MoLtimestepping.MoL",
         f"typedef struct __MoL_gridfunctions_struct__ {{\n"
         f"REAL *restrict {y_n_gridfunctions};\n"
         + "".join(f"REAL *restrict {gfs};\n" for gfs in non_y_n_gridfunctions_list)

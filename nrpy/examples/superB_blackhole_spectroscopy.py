@@ -54,6 +54,9 @@ import nrpy.infrastructures.superB.MoL as superBMoL
 import nrpy.infrastructures.superB.main_chare as superBmain
 import nrpy.infrastructures.superB.timestepping_chare as superBtimestepping
 import nrpy.infrastructures.superB.chare_communication_maps as charecomm
+import nrpy.infrastructures.superB.Makefile_helpers as superBMakefile
+import nrpy.infrastructures.superB.superB.superB_lib as superBl
+
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -239,7 +242,7 @@ numericalgrids.register_CFunctions(
 superBnumericalgrids.register_CFunctions(
     list_of_CoordSystems=[CoordSystem],
     grid_physical_size=grid_physical_size,
-    Nxx_dict=Nxx_dict,    
+    Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
 )
@@ -315,27 +318,22 @@ cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
 )
 TPl.copy_TwoPunctures_header_files(TwoPunctures_Path=Path(project_dir) / "TwoPunctures")
 
-# ~ main.register_CFunction_main_c(
-    # ~ initial_data_desc=IDtype,
-    # ~ pre_MoL_step_forward_in_time="write_checkpoint(&commondata, griddata);\n",
-    # ~ MoL_method=MoL_method,
-    # ~ enable_rfm_precompute=enable_rfm_precompute,
-    # ~ enable_CurviBCs=True,
-    # ~ boundary_conditions_desc=boundary_conditions_desc,
-# ~ )
 superBmain.output_commondata_object_h_and_main_h_cpp_ci(
     project_dir=project_dir,
 )
 superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
     project_dir=project_dir,
-    initial_data_desc=IDtype,    
+    initial_data_desc=IDtype,
     MoL_method=MoL_method,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
     boundary_conditions_desc=boundary_conditions_desc,
 )
+
+superBl.copy_superB_header_files(superB_Path=Path(project_dir) / "superB")
+
 Bdefines_h.output_BHaH_defines_h(
-    additional_includes=[str(Path("TwoPunctures") / Path("TwoPunctures.h")), "ckio.h"],
+    additional_includes=[str(Path("TwoPunctures") / Path("TwoPunctures.h")), str(Path("superB") / Path("superB.h"))],
     project_dir=project_dir,
     enable_simd=enable_simd,
     enable_rfm_precompute=enable_rfm_precompute,
@@ -346,13 +344,14 @@ Bdefines_h.output_BHaH_defines_h(
 if enable_simd:
     simd.copy_simd_intrinsics_h(project_dir=project_dir)
 
-Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
+superBMakefile.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
     exec_or_library_name=project_name,
     compiler_opt_option="default",
     addl_CFLAGS=["$(shell gsl-config --cflags)"],
-    addl_libraries=["$(shell gsl-config --libs)"],
+    addl_libraries=["$(shell gsl-config --libs)", "-module CkIO"],
+    CC="~/charm/bin/charmc",
 )
 print(
     f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."

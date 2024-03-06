@@ -13,7 +13,7 @@ from nrpy.infrastructures.BHaH import BHaH_defines_h
 def register_CFunction_charecommstruct_set_up(CoordSystem: str) -> None:
     """
     Register C function for setting up charecommstruct.
-    
+
     """
     includes = [
         "BHaH_defines.h",
@@ -29,10 +29,10 @@ def register_CFunction_charecommstruct_set_up(CoordSystem: str) -> None:
   const int Nchare2 = commondata->Nchare2;
   const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
   const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
-  const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;  
+  const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
   const int Nxx0 = params->Nxx0;
   const int Nxx1 = params->Nxx1;
-  const int Nxx2 = params->Nxx2;  
+  const int Nxx2 = params->Nxx2;
   const int Nxx_plus_2NGHOSTS0chare = params_chare->Nxx_plus_2NGHOSTS0;
   const int Nxx_plus_2NGHOSTS1chare = params_chare->Nxx_plus_2NGHOSTS1;
   const int Nxx_plus_2NGHOSTS2chare = params_chare->Nxx_plus_2NGHOSTS2;
@@ -41,7 +41,7 @@ def register_CFunction_charecommstruct_set_up(CoordSystem: str) -> None:
   const int Nxx2chare = params_chare->Nxx2;
 
   const int ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
-  charecommstruct->globalidx3pt_to_chareidx3 = (int *)malloc(sizeof(int) * ntot); 
+  charecommstruct->globalidx3pt_to_chareidx3 = (int *)malloc(sizeof(int) * ntot);
   charecommstruct->globalidx3pt_to_localidx3pt = (int *)malloc(sizeof(int) * ntot);
 
   int startlocali;
@@ -61,7 +61,7 @@ def register_CFunction_charecommstruct_set_up(CoordSystem: str) -> None:
     } else  {
       endlocalk = Nxx2chare + NGHOSTS - 1;
     }
-    for (int charej = 0; charej < Nchare1; charej++) {    
+    for (int charej = 0; charej < Nchare1; charej++) {
       if (charej == 0) {
         startlocalj = 0;
       } else {
@@ -86,16 +86,16 @@ def register_CFunction_charecommstruct_set_up(CoordSystem: str) -> None:
         for (int localk = startlocalk; localk <= endlocalk; localk++) {
           for (int localj = startlocalj; localj <= endlocalj; localj++) {
             for (int locali = startlocali; locali <= endlocali; locali++) {
-              
+
               int localidx3 =  IDX3GENERAL(locali, localj, localk, Nxx0chare, Nxx1chare);
-              
+
               int globali = mapLocalToGlobalIdx0(charei, locali, Nxx0chare);
               int globalj = mapLocalToGlobalIdx1(charej, localj, Nxx1chare);
-              int globalk = mapLocalToGlobalIdx2(charek, localk, Nxx2chare);                            
+              int globalk = mapLocalToGlobalIdx2(charek, localk, Nxx2chare);
               int globalidx3 =  IDX3GENERAL(globali, globalj, globalk, Nxx0, Nxx1);
-                            
-              charecommstruct->globalidx3pt_to_chareidx3[globalidx3] = IDX3_OF_CHARE(charei, charej, charek);              
-              
+
+              charecommstruct->globalidx3pt_to_chareidx3[globalidx3] = IDX3_OF_CHARE(charei, charej, charek);
+
               charecommstruct->globalidx3pt_to_localidx3pt[globalidx3] = localidx3;
             }
           }
@@ -103,7 +103,7 @@ def register_CFunction_charecommstruct_set_up(CoordSystem: str) -> None:
       }// end charei
     }// end charej
   }// end charek
-  
+
   // local to this chare
   const int ntotchare = Nxx_plus_2NGHOSTS0chare * Nxx_plus_2NGHOSTS1chare * Nxx_plus_2NGHOSTS2chare;
   charecommstruct->localidx3pt_to_globalidx3pt = (int *restrict)malloc(sizeof(int) * ntotchare);
@@ -116,14 +116,14 @@ def register_CFunction_charecommstruct_set_up(CoordSystem: str) -> None:
   for (int localk = startlocalk; localk <= endlocalk; localk++) {
     for (int localj = startlocalj; localj <= endlocalj; localj++) {
       for (int locali = startlocali; locali <= endlocali; locali++) {
-        
+
         int localidx3 =  IDX3GENERAL(locali, localj, localk, Nxx0chare, Nxx1chare);
-        
+
         int globali = mapLocalToGlobalIdx0(thischareindex[0], locali, Nxx0chare);
         int globalj = mapLocalToGlobalIdx0(thischareindex[1], localj, Nxx1chare);
         int globalk = mapLocalToGlobalIdx0(thischareindex[2], localk, Nxx2chare);
         int globalidx3 =  IDX3GENERAL(globali, globalj, globalk, Nxx0, Nxx1);
-                      
+
         charecommstruct->localidx3pt_to_globalidx3pt[localidx3] = globalidx3;
       }
     }
@@ -166,10 +166,10 @@ static int mapGlobalToLocalIdx2(int chareidx2, int global_idx2, int Nxx2chare) {
 
 
 def chare_comm_register_C_functions(
-    list_of_CoordSystems: List[str],    
+    list_of_CoordSystems: List[str],
 ) -> None:
     """
-    :param list_of_CoordSystems: List of coordinate systems to use.    
+    :param list_of_CoordSystems: List of coordinate systems to use.
     :return: None
     """
     for CoordSystem in list_of_CoordSystems:
@@ -182,28 +182,6 @@ def chare_comm_register_C_functions(
         "charecomm_struct charecommstruct",
         "maps that convert between index of a pt in chare's local grid to the index on the global grid, etc",
     )
-    
-    BHaH_defines_h.register_BHaH_defines(
-    __name__,
-    r"""#define IDX3_OF_CHARE(i, j, k) ((i) + Nchare0 * ((j) + Nchare1 * ((k))))
-#define IDX3GENERAL(i, j, k, Ni, Nj) ((i) + (Ni) * ((j) + (Nj) * (k)))
-#define REVERSE_IDX3GENERAL(index, Ni, Nj) \
-{ \
-	int k = (index) % (Nj); \
-	int temp = (index) / (Nj); \
-	int j = temp % (Ni); \
-	int i = temp / (Ni); \
-	i, j, k; \
-}
-
-typedef struct __charecomm_struct__ {
-  int *restrict globalidx3pt_to_chareidx3;    // which chare is evolving or applying bcs to grid point
-  int *restrict globalidx3pt_to_localidx3pt;  // local index of grid point on chare that is evolving or setting bcs for gridpoint
-  int *restrict localidx3pt_to_globalidx3pt;  // local to this chare  
-} charecomm_struct;    
-""",
-    )
-
 
 
 if __name__ == "__main__":

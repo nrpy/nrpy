@@ -82,7 +82,7 @@ def register_CFunction_diagnostics(
             CoordSystem=CoordSystem,
             out_quantities_dict=out_quantities_dict,
             filename_tuple=grid_center_filename_tuple,
-        )        
+        )
         for axis in ["y", "z"]:
             out012d.register_CFunction_diagnostics_nearest_1d_axis(
                 CoordSystem=CoordSystem,
@@ -95,9 +95,9 @@ def register_CFunction_diagnostics(
                 out_quantities_dict=out_quantities_dict,
                 filename_tuple=axis_filename_tuple,
                 axis=axis,
-            )                        
-            
-            
+            )
+
+
         for plane in ["xy", "yz"]:
             out012d.register_CFunction_diagnostics_nearest_2d_plane(
                 CoordSystem=CoordSystem,
@@ -111,13 +111,13 @@ def register_CFunction_diagnostics(
                 filename_tuple=plane_filename_tuple,
                 plane=plane,
             )
-            
+
 
     desc = r"""Diagnostics."""
     c_type = "void"
     name = "diagnostics"
     params = (
-        "commondata_struct *restrict commondata, griddata_struct *restrict griddata, Ck::IO::Session token, constint which_output, const int grid"
+        "commondata_struct *restrict commondata, griddata_struct *restrict griddata, Ck::IO::Session token, const int which_output, const int grid"
     )
 
     body = r"""
@@ -157,12 +157,12 @@ const params_struct *restrict params = &griddata[grid].params;
 // // 0D, 1D and 2D outputs
 if (which_output == OUTPUT_0D) {
     diagnostics_nearest_grid_center(commondata, params, &griddata[grid].gridfuncs);
-            
+
 	progress_indicator(commondata, griddata);
 	if (commondata->time + commondata->dt > commondata->t_final)
-	  printf("\n");        
-	    
-} else if (which_output == OUTPUT_1D_Y) {	  
+	  printf("\n");
+
+} else if (which_output == OUTPUT_1D_Y) {
   if (num_diagnostic_1d_y_pts > 0) {
 	diagnostics_nearest_1d_y_axis(commondata, params, xx, &griddata[grid].gridfuncs, &griddata[grid].diagnosticstruct, token);
   }
@@ -193,58 +193,12 @@ if (which_output == OUTPUT_0D) {
         include_CodeParameters_h=False,
         body=body,
     )
-    
+
     # Register diagnostic_struct's contribution to griddata_struct:
     griddata_commondata.register_griddata_commondata(
         __name__,
         "diagnostic_struct diagnosticstruct",
         "store indices of 1d and 2d diagnostic points, the offset in the output file, etc",
     )
-    
-    BHaH_defines_h.register_BHaH_defines(
-    __name__, r"""#define OUTPUT_0D 0  
-#define OUTPUT_1D_Y 1  
-#define OUTPUT_1D_Z 2  
-#define OUTPUT_2D_XY 3  
-#define OUTPUT_2D_YZ 4  
-typedef struct __diagnostic_struct__ {
-  int num_output_quantities;
-  int tot_num_diagnostic_1d_y_pts;
-  int tot_num_diagnostic_1d_z_pts;
-  int tot_num_diagnostic_2d_xy_pts;
-  int tot_num_diagnostic_2d_yz_pts;
-  int num_diagnostic_1d_y_pts;
-  int num_diagnostic_1d_z_pts;
-  int num_diagnostic_2d_xy_pts;
-  int num_diagnostic_2d_yz_pts;
-  int *restrict localidx3_diagnostic_1d_y_pt;
-  int *restrict locali0_diagnostic_1d_y_pt;
-  int *restrict locali1_diagnostic_1d_y_pt;
-  int *restrict locali2_diagnostic_1d_y_pt;
-  int *restrict offset_diagnostic_1d_y_pt;
-  int *restrict localidx3_diagnostic_1d_z_pt;
-  int *restrict locali0_diagnostic_1d_z_pt;
-  int *restrict locali1_diagnostic_1d_z_pt;
-  int *restrict locali2_diagnostic_1d_z_pt;
-  int *restrict offset_diagnostic_1d_z_pt;
-  int *restrict localidx3_diagnostic_2d_xy_pt;
-  int *restrict locali0_diagnostic_2d_xy_pt;
-  int *restrict locali1_diagnostic_2d_xy_pt;
-  int *restrict locali2_diagnostic_2d_xy_pt;
-  int *restrict offset_diagnostic_2d_xy_pt;
-  int *restrict localidx3_diagnostic_2d_yz_pt;
-  int *restrict locali0_diagnostic_2d_yz_pt;
-  int *restrict locali1_diagnostic_2d_yz_pt;
-  int *restrict locali2_diagnostic_2d_yz_pt;
-  int *restrict offset_diagnostic_2d_yz_pt;
-  char filename_1d_y[256];
-  char filename_1d_z[256];
-  char filename_2d_xy[256];
-  char filename_2d_yz[256];
-} diagnostic_struct;
-""",
-    )
 
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
-
-
