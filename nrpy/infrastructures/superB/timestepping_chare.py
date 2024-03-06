@@ -542,7 +542,7 @@ void Timestepping::process_ghost(const int type_ghost, const int type_gfs, const
   switch (type_ghost) {
     case EAST_GHOST:
       for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
-        int i0 = Nxx0chare + (2 * NGHOSTS) - 1;
+        int i0 = Nxx0 + (2 * NGHOSTS) - 1;
         for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
           for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
             for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++) {
@@ -568,7 +568,7 @@ void Timestepping::process_ghost(const int type_ghost, const int type_gfs, const
       break;
     case NORTH_GHOST:
       for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
-        int i1 = Nxx1chare + (2 * NGHOSTS) - 1;
+        int i1 = Nxx1 + (2 * NGHOSTS) - 1;
         for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
           for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
             for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++) {
@@ -594,7 +594,7 @@ void Timestepping::process_ghost(const int type_ghost, const int type_gfs, const
       break;
     case TOP_GHOST:
       for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
-        int i2 = Nxx2chare + (2 * NGHOSTS) - 1;
+        int i2 = Nxx2 + (2 * NGHOSTS) - 1;
         for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
           for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++) {
             for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++) {

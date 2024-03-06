@@ -85,7 +85,7 @@ ShiftEvolutionOption = "GammaDriving2ndOrder_Covariant"
 GammaDriving_eta = 2.0
 grid_physical_size = 300.0
 diagnostics_output_every = 0.5
-default_checkpoint_every = 2.0
+default_checkpoint_every = 1000000000000.0
 t_final = 1.5 * grid_physical_size
 swm2sh_maximum_l_mode_generated = 8
 swm2sh_maximum_l_mode_to_compute = 2  # for consistency with NRPy 1.0 version.
@@ -278,7 +278,7 @@ superBMoL.register_CFunctions(
 )
 xxCartxx.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
 xxCartxx.register_CFunction_xx_to_Cart(CoordSystem)
-# ~ chkpt.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
+chkpt.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
 progress.register_CFunction_progress_indicator()
 rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
@@ -349,7 +349,7 @@ superBMakefile.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_name=project_name,
     exec_or_library_name=project_name,
     compiler_opt_option="default",
-    addl_CFLAGS=["$(shell gsl-config --cflags)"],
+    addl_CFLAGS=["$(shell gsl-config --cflags)", "-fpermissive "],
     addl_libraries=["$(shell gsl-config --libs)", "-module CkIO"],
     CC="~/charm/bin/charmc",
 )

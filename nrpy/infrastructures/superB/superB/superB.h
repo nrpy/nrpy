@@ -19,6 +19,10 @@
     j = temp % (Ni); \
     i = temp / (Ni); \
 }
+#define IDXFACES0(g, inner, j, k) ((j) + Nxx_plus_2NGHOSTS1 * ((k) + Nxx_plus_2NGHOSTS2 * ((inner) + NGHOSTS * (g))))
+#define IDXFACES1(g, inner, i, k) ((i) + Nxx_plus_2NGHOSTS0 * ((k) + Nxx_plus_2NGHOSTS2 * ((inner) + NGHOSTS * (g))))
+#define IDXFACES2(g, inner, i, j) ((i) + Nxx_plus_2NGHOSTS0 * ((j) + Nxx_plus_2NGHOSTS1 * ((inner) + NGHOSTS * (g))))
+
 
 #define OUTPUT_0D 0
 #define OUTPUT_1D_Y 1
@@ -42,9 +46,6 @@
 #define RK_SUBSTEP_K2 2
 #define RK_SUBSTEP_K3 3
 #define RK_SUBSTEP_K4 4
-#define IDXFACES0(g, inner, j, k) ((j) + Nxx_plus_2NGHOSTS1 * ((k) + Nxx_plus_2NGHOSTS2 * ((inner) + NGHOSTS * (g))))
-#define IDXFACES1(g, inner, i, k) ((i) + Nxx_plus_2NGHOSTS0 * ((k) + Nxx_plus_2NGHOSTS2 * ((inner) + NGHOSTS * (g))))
-#define IDXFACES2(g, inner, i, j) ((i) + Nxx_plus_2NGHOSTS0 * ((j) + Nxx_plus_2NGHOSTS1 * ((inner) + NGHOSTS * (g))))
 
 typedef struct __charecomm_struct__ {
   int *restrict globalidx3pt_to_chareidx3;    // which chare is evolving or applying bcs to grid point

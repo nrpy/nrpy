@@ -380,9 +380,8 @@ const int Nxx0chare = params_chare->Nxx0;
 const int Nxx1chare = params_chare->Nxx1;
 const int Nxx2chare = params_chare->Nxx2;
 
-char filename[256];
-sprintf(filename, "{filename_tuple[0].replace('AXIS', axis)}");
-diagnosticstruct->filename_1d_{axis} = filename;
+strcpy(diagnosticstruct->filename_1d_{axis}, "{filename_tuple[0].replace('AXIS', axis)}");
+
 diagnosticstruct->num_output_quantities = {len(out_quantities_dict)};
 
 {loop_1d}
@@ -513,11 +512,9 @@ const int Nxx0chare = params_chare->Nxx0;
 const int Nxx1chare = params_chare->Nxx1;
 const int Nxx2chare = params_chare->Nxx2;
 
-char filename[256];
-sprintf(filename, "{filename_tuple[0].replace('PLANE', plane)}");
-diagnosticstruct->filename_2d_{plane} = filename;
-diagnosticstruct->num_output_quantities = {len(out_quantities_dict)};
+strcpy(diagnosticstruct->filename_2d_{plane}, "{filename_tuple[0].replace('PLANE', plane)}");
 
+diagnosticstruct->num_output_quantities = {len(out_quantities_dict)};
 
 {loop_2d}
 
@@ -531,12 +528,12 @@ LOOP_NOOMP(i0_pt, 0, numpts_i0, i1_pt, 0, numpts_i1, i2_pt, 0, numpts_i2) {{
     num_diagnostics_chare++;
   }}
 }}
-diagnosticptoffsetstruct->num_diagnostic_2d_{plane}_pts = num_diagnostics_chare;
-diagnosticptoffsetstruct->locali0_diagnostic_2d_{plane}_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
-diagnosticptoffsetstruct->locali1_diagnostic_2d_{plane}_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
-diagnosticptoffsetstruct->locali2_diagnostic_2d_{plane}_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
-diagnosticptoffsetstruct->localidx3_diagnostic_2d_{plane}_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
-diagnosticptoffsetstruct->offset_diagnostic_2d_{plane}_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
+diagnosticstruct->num_diagnostic_2d_{plane}_pts = num_diagnostics_chare;
+diagnosticstruct->locali0_diagnostic_2d_{plane}_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
+diagnosticstruct->locali1_diagnostic_2d_{plane}_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
+diagnosticstruct->locali2_diagnostic_2d_{plane}_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
+diagnosticstruct->localidx3_diagnostic_2d_{plane}_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
+diagnosticstruct->offset_diagnostic_2d_{plane}_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
 // compute offset in bytes for first field for each diagnostic pt
 int sizeinbytes = 23 * (diagnosticstruct->num_output_quantities + 2);
 
@@ -550,11 +547,11 @@ LOOP_NOOMP(i0_pt, 0, numpts_i0, i1_pt, 0, numpts_i1, i2_pt, 0, numpts_i2) {{
     int localidx3 = charecommstruct->globalidx3pt_to_localidx3pt[idx3];
     int locali0, locali1, locali2;
     REVERSE_IDX3GENERAL(localidx3, Nxx0chare, Nxx1chare, locali0, locali1, locali2);
-    diagnosticptoffsetstruct->localidx3_diagnostic_2d_{plane}_pt[which_diagnostics_chare] = localidx3;
-    diagnosticptoffsetstruct->locali0_diagnostic_2d_{plane}_pt[which_diagnostics_chare] =  locali0;
-    diagnosticptoffsetstruct->locali1_diagnostic_2d_{plane}_pt[which_diagnostics_chare] =  locali1;
-    diagnosticptoffsetstruct->locali2_diagnostic_2d_{plane}_pt[which_diagnostics_chare] =  locali2;
-    diagnosticptoffsetstruct->offset_diagnostic_2d_{plane}_pt[which_diagnostics_chare] = which_diagnostic_global * sizeinbytes;
+    diagnosticstruct->localidx3_diagnostic_2d_{plane}_pt[which_diagnostics_chare] = localidx3;
+    diagnosticstruct->locali0_diagnostic_2d_{plane}_pt[which_diagnostics_chare] =  locali0;
+    diagnosticstruct->locali1_diagnostic_2d_{plane}_pt[which_diagnostics_chare] =  locali1;
+    diagnosticstruct->locali2_diagnostic_2d_{plane}_pt[which_diagnostics_chare] =  locali2;
+    diagnosticstruct->offset_diagnostic_2d_{plane}_pt[which_diagnostics_chare] = which_diagnostic_global * sizeinbytes;
     which_diagnostics_chare++;
   }}
   which_diagnostic_global++;

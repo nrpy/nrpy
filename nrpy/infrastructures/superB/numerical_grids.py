@@ -31,7 +31,11 @@ def register_CFunction_numerical_grid_params_Nxx_dxx_xx_chare(
     c_type = "void"
     name = "numerical_grid_params_Nxx_dxx_xx_chare"
     params = "commondata_struct *restrict commondata, const params_struct *restrict params, params_struct *restrict params_chare, REAL *restrict xx[3], const int chare_index[3]"
-    body = ""
+    body = """
+const int Nchare0 = commondata->Nchare0;
+const int Nchare1 = commondata->Nchare1;
+const int Nchare2 = commondata->Nchare2;    
+"""
     for dirn in range(3):
         body += f"params_chare->Nxx{dirn} = params->Nxx{dirn}/Nchare{dirn};\n"
     body += rf"""
@@ -46,7 +50,7 @@ params_chare->Nxx_plus_2NGHOSTS2 = params_chare->Nxx2 + 2*NGHOSTS;
 """
     rfm = refmetric.reference_metric[CoordSystem]
     for key, value in rfm.grid_physical_size_dict.items():
-        body += f"params_chare>{key} = {value};\n"
+        body += f"params_chare->{key} = {value};\n"
 
     body += "\n// Set xxmin, xxmax\n"
     for minmax in ["min", "max"]:
