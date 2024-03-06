@@ -653,8 +653,8 @@ def output_timestepping_ci(
     project_Path.mkdir(parents=True, exist_ok=True)
 
     file_output_str = r"""module timestepping {
-  include "BHaH_defines.h"
-  include "BHaH_function_prototypes.h"
+  include "BHaH_defines.h";
+  include "BHaH_function_prototypes.h";
   include "commondata_object.h";
   include "ckio.h";
   array [3D] Timestepping {
