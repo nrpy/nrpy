@@ -45,15 +45,16 @@ class CommondataObject {
 """
     struct_list: List[str] = []  # List to store individual struct elements
     for parname, CodeParam in par.glb_code_params_dict.items():
-      struct = "commondata"
-      CPtype = CodeParam.c_type_alias
-      comment = f"  // {CodeParam.module}::{parname}"
-      if "char" in CPtype and "[" in CPtype and "]" in CPtype:
-        chararray_size = CPtype.split("[")[1].replace("]", "")
-        c_output = f'PUParray(p, {struct}.{parname}, {chararray_size});{comment}\n'
-      else:
-        c_output = f"p|{struct}.{parname};{comment}\n"
-      struct_list.append(c_output)
+        if CodeParam.commondata:
+          struct = "commondata"
+          CPtype = CodeParam.c_type_alias
+          comment = f"  // {CodeParam.module}::{parname}"
+          if "char" in CPtype and "[" in CPtype and "]" in CPtype:
+            chararray_size = CPtype.split("[")[1].replace("]", "")
+            c_output = f'PUParray(p, {struct}.{parname}, {chararray_size});{comment}\n'
+          else:
+            c_output = f"p|{struct}.{parname};{comment}\n"
+          struct_list.append(c_output)
     # Sort the lines alphabetically and join them with line breaks
     file_output_str += "// PUP commondata struct\n"
     file_output_str += "".join(sorted(struct_list))
@@ -84,13 +85,13 @@ def output_main_h(
 #define __MAIN_H__
 
 #include "main.decl.h"
-#include "timetepping.decl.h"
+#include "timestepping.decl.h"
 
 class Main : public CBase_Main {
 
   private:
     /// Member Variables (Object State) ///
-    CProxy_Timetepping_array;
+    CProxy_Timestepping timesteppingArray;
 
     /// Private Member Functions ///
 
@@ -203,7 +204,7 @@ def output_main_ci(
 
   readonly CProxy_Main mainProxy;
 
-  extern module moL_step_forward_in_time;
+  extern module timestepping;
 
   mainchare Main {
     entry Main(CkArgMsg* msg);

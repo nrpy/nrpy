@@ -34,7 +34,7 @@ def register_CFunction_numerical_grid_params_Nxx_dxx_xx_chare(
     body = """
 const int Nchare0 = commondata->Nchare0;
 const int Nchare1 = commondata->Nchare1;
-const int Nchare2 = commondata->Nchare2;    
+const int Nchare2 = commondata->Nchare2;
 """
     for dirn in range(3):
         body += f"params_chare->Nxx{dirn} = params->Nxx{dirn}/Nchare{dirn};\n"
@@ -106,7 +106,7 @@ def register_CFunction_numerical_grids_chare(
     desc = "Set up a cell-centered grids of size grid_physical_size."
     c_type = "void"
     name = "numerical_grids_chare"
-    params = "commondata_struct *restrict commondata, const griddata_struct *restrict griddata, griddata_struct *restrict griddata_chare, const int chare_index[3]"
+    params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata, griddata_struct *restrict griddata_chare, const int chare_index[3]"
     body = r"""// Step 1.b: Set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx based on grid_physical_size
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   numerical_grid_params_Nxx_dxx_xx_chare(commondata, &griddata[grid].params, &griddata_chare[grid].params, griddata_chare[grid].xx, chare_index);

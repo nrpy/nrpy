@@ -155,7 +155,6 @@ def output_timestepping_h(
 
     file_output_str = r"""#ifndef __TIMESTEPPING_H__
 #define __TIMESTEPPING_H__
-
 #include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
 #include "timestepping.decl.h"
@@ -177,6 +176,8 @@ class Timestepping : public CBase_Timestepping {
     Ck::IO::File f_1d_z;
     Ck::IO::File f_2d_xy;
     Ck::IO::File f_2d_yz;
+    int grid; // grid in "for (grid = 0; grid < commondata->NUMGRIDS; grid++)" in .ci file must be declared here
+
 
     /// Member Functions (private) ///
     void send_neighbor_data(const int type_gfs, const int dir, const int grid);
@@ -259,7 +260,6 @@ def output_timestepping_cpp(
     project_Path.mkdir(parents=True, exist_ok=True)
 
     file_output_str = r"""#include "BHaH_defines.h"
-#include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
 #include "timestepping.h"
 #include "main.h"
@@ -305,12 +305,14 @@ Timestepping::Timestepping(CommondataObject &&inData) {
     // if calling_for_first_time, then initialize commondata time=nn=t_0=nn_0 = 0
     const bool calling_for_first_time = true;
     numerical_grids_and_timestep(&commondata, griddata, calling_for_first_time);
-    numerical_grids_chare(&commondata, griddata, griddata_chare, {thisIndex.x, thisIndex.y, thisIndex.z});
+
+    const int thisIndex_arr[3] = {thisIndex.x, thisIndex.y, thisIndex.z};
+    numerical_grids_chare(&commondata, griddata, griddata_chare, thisIndex_arr);
   }
 
   for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
     // Step 2: Initial data are set on y_n_gfs gridfunctions. Allocate storage for them first.
-    MoL_malloc_y_n_gfs(&commondata, griddata_chare[grid].params, griddata_chare[grid].gridfuncs);
+    MoL_malloc_y_n_gfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].gridfuncs);
   }
 
   // Step 3: Finalize initialization: set up initial data, etc.
@@ -318,11 +320,11 @@ Timestepping::Timestepping(CommondataObject &&inData) {
 
   // Step 4: Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping
   for(int grid=0; grid<commondata.NUMGRIDS; grid++)
-    MoL_malloc_non_y_n_gfs(&commondata, griddata_chare[grid].params, griddata_chare[grid].gridfuncs);
+    MoL_malloc_non_y_n_gfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].gridfuncs);
 
   // Allocate storage for temporary buffers, needed for communicating face data
   for(int grid=0; grid<commondata.NUMGRIDS; grid++)
-    timestepping_malloc_tmpBuffer(&commondata, griddata_chare[grid].params, griddata_chare[grid].tmpBuffers);
+    timestepping_malloc_tmpBuffer(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].tmpBuffers);
 
 """
     if initialize_constant_auxevol:
@@ -620,6 +622,7 @@ void Timestepping::process_ghost(const int type_ghost, const int type_gfs, const
       break;
   }
 }
+#include "timestepping.def.h"
 """
 
 
@@ -650,9 +653,9 @@ def output_timestepping_ci(
     project_Path.mkdir(parents=True, exist_ok=True)
 
     file_output_str = r"""module timestepping {
-  include "BHaH_defines.h";
-  include "BHaH_function_prototypes.h";
-  include "CommondataObject.h";
+  include "BHaH_defines.h"
+  include "BHaH_function_prototypes.h"
+  include "commondata_object.h";
   include "ckio.h";
   array [3D] Timestepping {
     entry Timestepping(CommondataObject &inData);
@@ -678,35 +681,35 @@ def output_timestepping_ci(
         // Create sessions for ckio file writing from first chare only
         if (write_diagnostics_this_step && thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
           serial {
-            progress_indicator(commondata, griddata_chare);
+            progress_indicator(&commondata, griddata_chare);
             if (commondata->time + commondata->dt > commondata->t_final)
               printf("\n");
 
 
             {
               char filename[256];
-              sprintf(filename, griddata_chare.diagnosticstruct.filename_1d_y, commondata.convergence_factor, commondata.time);
+              sprintf(filename, griddata_chare[which_grid_diagnostics]->diagnosticstruct.filename_1d_y, commondata.convergence_factor, commondata.time);
               Ck::IO::Options opts;
               CkCallback opened_1d_y(CkIndex_Timestepping::ready_1d_y(NULL), thisProxy);
               Ck::IO::open(filename, opened_1d_y, opts);
             }
             {
               char filename[256];
-              sprintf(filename, griddata_chare.diagnosticstruct.filename_1d_z, commondata.convergence_factor, commondata.time);
+              sprintf(filename, griddata_chare[which_grid_diagnostics]->diagnosticstruct.filename_1d_z, commondata.convergence_factor, commondata.time);
               Ck::IO::Options opts;
               CkCallback opened_1d_z(CkIndex_Timestepping::ready_1d_z(NULL), thisProxy);
               Ck::IO::open(filename, opened_1d_z, opts);
             }
             {
               char filename[256];
-              sprintf(filename, griddata_chare.diagnosticstruct.filename_2d_xy, commondata.convergence_factor, commondata.time);
+              sprintf(filename, griddata_chare[which_grid_diagnostics]->diagnosticstruct.filename_2d_xy, commondata.convergence_factor, commondata.time);
               Ck::IO::Options opts;
               CkCallback opened_2d_xy(CkIndex_Timestepping::ready_2d_xy(NULL), thisProxy);
               Ck::IO::open(filename, opened_2d_xy, opts);
             }
             {
               char filename[256];
-              sprintf(filename, griddata_chare.diagnosticstruct.filename_2d_yz, commondata.convergence_factor, commondata.time);
+              sprintf(filename, griddata_chare[which_grid_diagnostics]->diagnosticstruct.filename_2d_yz, commondata.convergence_factor, commondata.time);
               Ck::IO::Options opts;
               CkCallback opened_2d_yz(CkIndex_Timestepping::ready_2d_yz(NULL), thisProxy);
               Ck::IO::open(filename, opened_2d_yz, opts);
@@ -714,16 +717,16 @@ def output_timestepping_ci(
           }
 """
     # Generate code for 1d y diagnostics
-    file_output_str += generate_diagnostics_code("1d", "y", "griddata[which_grid_diagnostics].diagnosticptoffsetstruct.num_output_quantities + 1", "griddata[which_grid_diagnostics].diagnosticptoffsetstruct.tot_num_diagnostic_1d_y_pts")
+    file_output_str += generate_diagnostics_code("1d", "y", "griddata_chare[which_grid_diagnostics]->diagnosticstruct.num_output_quantities + 1", "griddata_chare[which_grid_diagnostics]->diagnosticstruct.tot_num_diagnostic_1d_y_pts")
 
     # Generate code for 1d z diagnostics
-    file_output_str += generate_diagnostics_code("1d", "z", "griddata[which_grid_diagnostics].diagnosticptoffsetstruct.num_output_quantities + 1", "griddata[which_grid_diagnostics].diagnosticptoffsetstruct.tot_num_diagnostic_1d_z_pts")
+    file_output_str += generate_diagnostics_code("1d", "z", "griddata_chare[which_grid_diagnostics]->diagnosticstruct.num_output_quantities + 1", "griddata_chare[which_grid_diagnostics]->diagnosticstruct.tot_num_diagnostic_1d_z_pts")
 
     # Generate code for 2d xy diagnostics
-    file_output_str += generate_diagnostics_code("2d", "xy", "griddata[which_grid_diagnostics].diagnosticptoffsetstruct.num_output_quantities + 2", "griddata[which_grid_diagnostics].diagnosticptoffsetstruct.tot_num_diagnostic_2d_xy_pts")
+    file_output_str += generate_diagnostics_code("2d", "xy", "griddata_chare[which_grid_diagnostics]->diagnosticstruct.num_output_quantities + 2", "griddata_chare[which_grid_diagnostics]->diagnosticstruct.tot_num_diagnostic_2d_xy_pts")
 
     # Generate code for 2d yz diagnostics
-    file_output_str += generate_diagnostics_code("2d", "yz", "griddata[which_grid_diagnostics].diagnosticptoffsetstruct.num_output_quantities + 2", "griddata[which_grid_diagnostics].diagnosticptoffsetstruct.tot_num_diagnostic_2d_yz_pts")
+    file_output_str += generate_diagnostics_code("2d", "yz", "griddata_chare[which_grid_diagnostics]->diagnosticstruct.num_output_quantities + 2", "griddata_chare[which_grid_diagnostics]->diagnosticstruct.tot_num_diagnostic_2d_yz_pts")
 
     file_output_str += r"""
       }
@@ -740,7 +743,7 @@ def output_timestepping_ci(
     for k in range(1, 5):
         rk_substep = f"RK_SUBSTEP_K{k}"
         file_output_str += generate_mol_step_forward_code(rk_substep)
-        file_output_str += "for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {"
+        file_output_str += "for (grid = 0; grid < commondata->NUMGRIDS; grid++) {"
         for axis in ['x', 'y', 'z']:
             # do something with rk_substep and axis
             if axis == 'x':

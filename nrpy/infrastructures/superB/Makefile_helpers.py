@@ -6,11 +6,13 @@ Author: Zachariah B. Etienne
         njadoo **at** uidaho **dot* edu
 
 superB:
--remove "if not create_lib and "main" not in CFunction_dict: .."
--remove "if shutil.which(CC) is None: ..."
--change file extensions from .c to .cpp
--change "CC ?= {CC}" to "CC = {CC}"
--change "	$(CC) $^ -o $@ $(LDFLAGS)" to  "$(CC) -language charm++ $^ -o $@ $(LDFLAGS)"
+-removed "if not create_lib and "main" not in CFunction_dict: .."
+-removed "if shutil.which(CC) is None: ..."
+-changed file extensions from .c to .cpp
+-changed "CC ?= {CC}" to "CC = {CC}"
+-changed "	$(CC) $^ -o $@ $(LDFLAGS)" to  "$(CC) -language charm++ $^ -o $@ $(LDFLAGS)"
+-added compilation and linking of timestepping.cpp. timestepping.ci, main.cpp and main.ci
+-added *.decl.h *.def.h charmrun to "clean: .."
 """
 
 from pathlib import Path
@@ -51,11 +53,6 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
 
     :raises SystemExit: Exits if errors are encountered.
     """
-    # ~ if not create_lib and "main" not in CFunction_dict:
-        # ~ raise SystemExit(
-            # ~ "output_CFunctions_function_prototypes_and_construct_Makefile() error: C codes will not compile if main() function not defined!\n"
-            # ~ '    Make sure that the main() function registered to CFunction_dict has name "main".'
-        # ~ )
 
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
@@ -136,7 +133,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         # ~ raise FileNotFoundError(f"{CC} C compiler is not found")
 
     CFLAGS_dict = {
-        "default": "-O2 -march=native -g -Wall -Wno-unused-variable",
+        "default": "-O2 -march=native -g",
         # FASTCFLAGS: -O3 causes AVX-2+ SIMD optimizations to be used on MoL update loops. -O2 drops to SSE2
         "fast": "-O3 -funroll-loops -march=native -g -Wall -Wno-unused-variable -std=gnu99",
         # DEBUGCFLAGS: OpenMP requires -fopenmp, and when disabling -fopenmp, unknown pragma warnings appear. -Wunknown-pragmas silences these warnings
@@ -226,7 +223,6 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         INCLUDEDIRS_str = " ".join(f"-I{include_dir}" for include_dir in include_dirs)
 
     # Below code is responsible for either writing a Makefile or a backup shell script depending on the conditions
-    # ~ Makefile_str = f"""CC ?= {CC}  # assigns the value CC to {CC} only if environment variable CC is not already set
     Makefile_str = f"""CC = {CC}  # assigns the value CC to {CC} only if environment variable CC is not already set
 {CFLAGS_str}
 {INCLUDEDIRS_str}
@@ -248,12 +244,28 @@ all: {exec_or_library_name}
 %.o: %.cpp $(COMMON_HEADERS)
 	$(CC) $(CFLAGS) $(INCLUDEDIRS) -c $< -o $@
 
-{exec_or_library_name}: $(OBJ_FILES)
+timestepping.o: timestepping.cpp timestepping.h main.h timestepping.def.h
+	$(CC) $(CFLAGS) $(INCLUDEDIRS) -c $< -o $@
+
+timestepping.h: timestepping.decl.h
+
+timestepping.decl.h timestepping.def.h: timestepping.ci
+	$(CC) $(CFLAGS) $(INCLUDEDIRS) timestepping.ci
+
+main.o: main.cpp main.h main.decl.h main.def.h timestepping.decl.h
+	$(CC) $(CFLAGS) $(INCLUDEDIRS) -c $< -o $@
+
+main.h: timestepping.decl.h main.decl.h
+
+main.decl.h main.def.h: main.ci
+	$(CC) $(CFLAGS) $(INCLUDEDIRS) main.ci
+
+{exec_or_library_name}: $(OBJ_FILES) timestepping.o main.o
 	$(CC) -language charm++ $^ -o $@ $(LDFLAGS)
 
 # Use $(RM) to be cross-platform compatible.
 clean:
-	$(RM) *.o */*.o *~ */*~ ./#* *.txt *.dat *.avi *.png {exec_or_library_name}
+	$(RM) *.o */*.o *~ */*~ ./#* *.txt *.dat *.avi *.png {exec_or_library_name} *.decl.h *.def.h charmrun
 """
     makefile_path = Path(project_Path) / "Makefile"
     with makefile_path.open("w", encoding="utf-8") as Makefile:

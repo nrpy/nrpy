@@ -6,9 +6,9 @@
 #ifndef __SUPERB_H__
 #define __SUPERB_H__
 
-#define restrict __restrict__
-
 #include "ckio.h"
+
+#define restrict __restrict__
 
 #define IDX3_OF_CHARE(i, j, k) ((i) + Nchare0 * ((j) + Nchare1 * ((k))))
 #define IDX3GENERAL(i, j, k, Ni, Nj) ((i) + (Ni) * ((j) + (Nj) * (k)))
