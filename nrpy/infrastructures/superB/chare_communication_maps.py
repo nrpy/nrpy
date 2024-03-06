@@ -136,7 +136,7 @@ static int mapLocalToGlobalIdx0(int chareidx0, int local_idx0, int Nxx0chare) {
     return (chareidx0 * Nxx0chare) + local_idx0;
 }
 static int mapLocalToGlobalIdx1(int chareidx1, int local_idx1, int Nxx1chare) {
-    return (chareidx1 * Nxx1chare) + local_idx1
+    return (chareidx1 * Nxx1chare) + local_idx1;
 }
 static int mapLocalToGlobalIdx2(int chareidx2, int local_idx2, int Nxx2chare) {
     return (chareidx2 * Nxx2chare) + local_idx2;

@@ -133,10 +133,13 @@ int data_index = 0;
     loop_body_store_results = f"""{{
 data_point_1d_struct dp1d;
 dp1d.xCart_axis = {'xCart[1];' if axis == "y" else 'xCart[2];'}
+dp1d.i0 = i0;
+dp1d.i1 = i1;
+dp1d.i2 = i2;
 """
 
-    for key, value in out_quantities_dict.items():
-        loop_body_store_results += f"dp1d.{key[1]} = {value};\n"
+    # ~ for key, value in out_quantities_dict.items():
+        # ~ loop_body_store_results += f"dp1d.{key[1]} = {value};\n"
     loop_body_store_results += "data_points[data_index] = dp1d; data_index++;\n}\n"
 
     # Main loop body.
@@ -165,9 +168,10 @@ LOOP_NOOMP(i0_pt,0,numpts_i0, i1_pt,0,numpts_i1, i2_pt,0,numpts_i2) {{
     prefunc_content = """
 typedef struct {
 REAL xCart_axis;
+int i0;
+int i1;
+int i2;
 """
-    for key in out_quantities_dict.keys():
-        prefunc_content += f"  {key[0]} {key[1]};\n"
     prefunc_content += """} data_point_1d_struct;
 
 // qsort() comparison function for 1D output.

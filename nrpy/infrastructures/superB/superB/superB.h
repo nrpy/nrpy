@@ -12,13 +12,12 @@
 
 #define IDX3_OF_CHARE(i, j, k) ((i) + Nchare0 * ((j) + Nchare1 * ((k))))
 #define IDX3GENERAL(i, j, k, Ni, Nj) ((i) + (Ni) * ((j) + (Nj) * (k)))
-#define REVERSE_IDX3GENERAL(index, Ni, Nj) \
+#define REVERSE_IDX3GENERAL(index, Ni, Nj, i, j, k) \
 { \
-	int k = (index) % (Nj); \
-	int temp = (index) / (Nj); \
-	int j = temp % (Ni); \
-	int i = temp / (Ni); \
-	i, j, k; \
+    k = (index) % (Nj); \
+    int temp = (index) / (Nj); \
+    j = temp % (Ni); \
+    i = temp / (Ni); \
 }
 
 #define OUTPUT_0D 0

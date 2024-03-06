@@ -678,35 +678,35 @@ def output_timestepping_ci(
         // Create sessions for ckio file writing from first chare only
         if (write_diagnostics_this_step && thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
           serial {
-            progress_indicator(commondata, griddata);
+            progress_indicator(commondata, griddata_chare);
             if (commondata->time + commondata->dt > commondata->t_final)
               printf("\n");
 
 
             {
               char filename[256];
-              sprintf(filename, "out1d-y-conv_factor%.2f-t%08.2f.txt", commondata.convergence_factor, commondata.time);
+              sprintf(filename, griddata_chare.diagnosticstruct.filename_1d_y, commondata.convergence_factor, commondata.time);
               Ck::IO::Options opts;
               CkCallback opened_1d_y(CkIndex_Timestepping::ready_1d_y(NULL), thisProxy);
               Ck::IO::open(filename, opened_1d_y, opts);
             }
             {
               char filename[256];
-              sprintf(filename, "out1d-z-conv_factor%.2f-t%08.2f.txt", commondata.convergence_factor, commondata.time);
+              sprintf(filename, griddata_chare.diagnosticstruct.filename_1d_z, commondata.convergence_factor, commondata.time);
               Ck::IO::Options opts;
               CkCallback opened_1d_z(CkIndex_Timestepping::ready_1d_z(NULL), thisProxy);
               Ck::IO::open(filename, opened_1d_z, opts);
             }
             {
               char filename[256];
-              sprintf(filename, "out2d-xy-conv_factor%.2f-t%08.2f.txt", commondata.convergence_factor, commondata.time);
+              sprintf(filename, griddata_chare.diagnosticstruct.filename_2d_xy, commondata.convergence_factor, commondata.time);
               Ck::IO::Options opts;
               CkCallback opened_2d_xy(CkIndex_Timestepping::ready_2d_xy(NULL), thisProxy);
               Ck::IO::open(filename, opened_2d_xy, opts);
             }
             {
               char filename[256];
-              sprintf(filename, "out2d-yz-conv_factor%.2f-t%08.2f.txt", commondata.convergence_factor, commondata.time);
+              sprintf(filename, griddata_chare.diagnosticstruct.filename_2d_yz, commondata.convergence_factor, commondata.time);
               Ck::IO::Options opts;
               CkCallback opened_2d_yz(CkIndex_Timestepping::ready_2d_yz(NULL), thisProxy);
               Ck::IO::open(filename, opened_2d_yz, opts);

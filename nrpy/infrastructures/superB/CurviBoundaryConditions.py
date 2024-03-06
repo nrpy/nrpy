@@ -25,8 +25,11 @@ def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
     desc = r"""Setup bcstruct_chare from bcstruct"""
     c_type = "void"
     name = "bcstruct_chare_set_up"
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const params_struct *restrict params_chare, REAL *restrict xx[3], const bc_struct *restrict bcstruct, bc_struct *restrict bcstruct_chare, const int chare_index[3]"
+    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const params_struct *restrict params_chare, const charecomm_struct *restrict charecommstruct, REAL *restrict xx[3], const bc_struct *restrict bcstruct, bc_struct *restrict bcstruct_chare, const int chare_index[3]"
     body = r"""
+  const int Nchare0 = commondata->Nchare0;
+  const int Nchare1 = commondata->Nchare1;
+  const int Nchare2 = commondata->Nchare2;
   const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
   const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
   const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
@@ -70,7 +73,7 @@ def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
         // Now check srcpt is in local grid
         // If yes, save local index of srcpt
         if (charecommstruct->globalidx3pt_to_chareidx3[srcpt] == IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])) {
-          bcstruct_chare->inner_bc_array[which_inner_chare].srcpt = charecommstruct->global_to_local_idx3[srcpt];
+          bcstruct_chare->inner_bc_array[which_inner_chare].srcpt = charecommstruct->globalidx3pt_to_localidx3pt[srcpt];
         } else {
           printf("Error: dst pt is in chare's grid but not src pt\n");
         }
@@ -116,7 +119,8 @@ def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
           if (charecommstruct->globalidx3pt_to_chareidx3[globalidx3] == IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])){
             // convert i0, etc to local i0
             const int localidx3 = charecommstruct->globalidx3pt_to_localidx3pt[globalidx3];
-            int locali0, locali1, locali2 = REVERSE_IDX3GENERAL(localidx3, Nxx0chare, Nxx1chare);
+            int locali0, locali1, locali2;
+            REVERSE_IDX3GENERAL(localidx3, Nxx0chare, Nxx1chare, locali0, locali1, locali2);
             bcstruct_chare->pure_outer_bc_array[dirn + (3 * which_gz)][which_idx2d_chare].i0 = locali0;
             bcstruct_chare->pure_outer_bc_array[dirn + (3 * which_gz)][which_idx2d_chare].i1 = locali1;
             bcstruct_chare->pure_outer_bc_array[dirn + (3 * which_gz)][which_idx2d_chare].i2 = locali2;

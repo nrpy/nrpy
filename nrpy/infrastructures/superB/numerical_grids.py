@@ -124,13 +124,13 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
         body += r"""
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   charecommstruct_set_up(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, chare_index);
-  bcstruct_chare_set_up(commondata, &griddata[grid].params, &griddata_chare[grid].params, griddata_chare[grid].xx, &griddata[grid].bcstruct, &griddata_chare[grid].bcstruct, chare_index);
+  bcstruct_chare_set_up(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata_chare[grid].xx, &griddata[grid].bcstruct, &griddata_chare[grid].bcstruct, chare_index);
   // 1D diagnostics set up
-  diagnosticstruct_set_up_nearest_1d_y_axis(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index);
-  diagnosticstruct_set_up_nearest_1d_z_axis(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index);
+  diagnosticstruct_set_up_nearest_1d_y_axis(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index, &griddata_chare[grid].diagnosticstruct);
+  diagnosticstruct_set_up_nearest_1d_z_axis(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index, &griddata_chare[grid].diagnosticstruct);
   // 2D diagnostics set up
-  diagnosticstruct_set_up_nearest_2d_xy_plane(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index);
-  diagnosticstruct_set_up_nearest_2d_yz_plane(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index);
+  diagnosticstruct_set_up_nearest_2d_xy_plane(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index, &griddata_chare[grid].diagnosticstruct);
+  diagnosticstruct_set_up_nearest_2d_yz_plane(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index, &griddata_chare[grid].diagnosticstruct);
 }
 """
     else:
@@ -150,7 +150,7 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
 def register_CFunctions(
     list_of_CoordSystems: List[str],
     grid_physical_size: float,
-    Nxx_dict: Dict[str, List[int]],    
+    Nxx_dict: Dict[str, List[int]],
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
 ) -> None:
@@ -167,7 +167,7 @@ def register_CFunctions(
         register_CFunction_numerical_grid_params_Nxx_dxx_xx_chare(
             CoordSystem=CoordSystem,
             grid_physical_size=grid_physical_size,
-            Nxx_dict=Nxx_dict,            
+            Nxx_dict=Nxx_dict,
         )
     register_CFunction_numerical_grids_chare(
         enable_rfm_precompute=enable_rfm_precompute,
