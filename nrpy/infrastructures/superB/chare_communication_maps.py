@@ -87,12 +87,12 @@ def register_CFunction_charecommstruct_set_up(CoordSystem: str) -> None:
           for (int localj = startlocalj; localj <= endlocalj; localj++) {
             for (int locali = startlocali; locali <= endlocali; locali++) {
 
-              int localidx3 =  IDX3GENERAL(locali, localj, localk, Nxx0chare, Nxx1chare);
+              int localidx3 =  IDX3GENERAL(locali, localj, localk, Nxx_plus_2NGHOSTS0chare, Nxx_plus_2NGHOSTS1chare);
 
               int globali = mapLocalToGlobalIdx0(charei, locali, Nxx0chare);
               int globalj = mapLocalToGlobalIdx1(charej, localj, Nxx1chare);
               int globalk = mapLocalToGlobalIdx2(charek, localk, Nxx2chare);
-              int globalidx3 =  IDX3GENERAL(globali, globalj, globalk, Nxx0, Nxx1);
+              int globalidx3 =  IDX3GENERAL(globali, globalj, globalk, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1);
 
               charecommstruct->globalidx3pt_to_chareidx3[globalidx3] = IDX3_OF_CHARE(charei, charej, charek);
 
@@ -117,12 +117,12 @@ def register_CFunction_charecommstruct_set_up(CoordSystem: str) -> None:
     for (int localj = startlocalj; localj <= endlocalj; localj++) {
       for (int locali = startlocali; locali <= endlocali; locali++) {
 
-        int localidx3 =  IDX3GENERAL(locali, localj, localk, Nxx0chare, Nxx1chare);
+        int localidx3 =  IDX3GENERAL(locali, localj, localk, Nxx_plus_2NGHOSTS0chare, Nxx_plus_2NGHOSTS1chare);
 
         int globali = mapLocalToGlobalIdx0(thischareindex[0], locali, Nxx0chare);
         int globalj = mapLocalToGlobalIdx0(thischareindex[1], localj, Nxx1chare);
         int globalk = mapLocalToGlobalIdx0(thischareindex[2], localk, Nxx2chare);
-        int globalidx3 =  IDX3GENERAL(globali, globalj, globalk, Nxx0, Nxx1);
+        int globalidx3 =  IDX3GENERAL(globali, globalj, globalk, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1);
 
         charecommstruct->localidx3pt_to_globalidx3pt[localidx3] = globalidx3;
       }

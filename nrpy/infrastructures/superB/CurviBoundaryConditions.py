@@ -96,7 +96,7 @@ def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
           const short i0 = bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].i0;
           const short i1 = bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].i1;
           const short i2 = bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].i2;
-          const int globalidx3 =  IDX3GENERAL(i0, i1, i2, Nxx0, Nxx1);
+          const int globalidx3 =  IDX3GENERAL(i0, i1, i2, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1);
           if (charecommstruct->globalidx3pt_to_chareidx3[globalidx3] == IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])){
             num_pure_outer_boundary_points_chare++;
           }
@@ -115,12 +115,12 @@ def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
           const short i0 = bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].i0;
           const short i1 = bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].i1;
           const short i2 = bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].i2;
-          const int globalidx3 =  IDX3GENERAL(i0, i1, i2, Nxx0, Nxx1);
+          const int globalidx3 =  IDX3GENERAL(i0, i1, i2, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1);
           if (charecommstruct->globalidx3pt_to_chareidx3[globalidx3] == IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])){
             // convert i0, etc to local i0
             const int localidx3 = charecommstruct->globalidx3pt_to_localidx3pt[globalidx3];
             int locali0, locali1, locali2;
-            REVERSE_IDX3GENERAL(localidx3, Nxx0chare, Nxx1chare, locali0, locali1, locali2);
+            REVERSE_IDX3GENERAL(localidx3, Nxx_plus_2NGHOSTS0chare, Nxx_plus_2NGHOSTS1chare, locali0, locali1, locali2);
             bcstruct_chare->pure_outer_bc_array[dirn + (3 * which_gz)][which_idx2d_chare].i0 = locali0;
             bcstruct_chare->pure_outer_bc_array[dirn + (3 * which_gz)][which_idx2d_chare].i1 = locali1;
             bcstruct_chare->pure_outer_bc_array[dirn + (3 * which_gz)][which_idx2d_chare].i2 = locali2;

@@ -417,7 +417,7 @@ for (int i = 0; i < data_index; i++) {{
   if (charecommstruct->globalidx3pt_to_chareidx3[idx3] == IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])){{
     int localidx3 = charecommstruct->globalidx3pt_to_localidx3pt[idx3];
     int locali0, locali1, locali2;
-    REVERSE_IDX3GENERAL(localidx3, Nxx0chare, Nxx1chare, locali0, locali1, locali2);
+    REVERSE_IDX3GENERAL(localidx3, Nxx_plus_2NGHOSTS0chare, Nxx_plus_2NGHOSTS1chare, locali0, locali1, locali2);
     diagnosticstruct->localidx3_diagnostic_1d_{axis}_pt[which_diagnostics_chare] = localidx3;
     diagnosticstruct->locali0_diagnostic_1d_{axis}_pt[which_diagnostics_chare] =  locali0;
     diagnosticstruct->locali1_diagnostic_1d_{axis}_pt[which_diagnostics_chare] =  locali1;
@@ -546,7 +546,7 @@ LOOP_NOOMP(i0_pt, 0, numpts_i0, i1_pt, 0, numpts_i1, i2_pt, 0, numpts_i2) {{
     // store the local idx3 of diagnostic point
     int localidx3 = charecommstruct->globalidx3pt_to_localidx3pt[idx3];
     int locali0, locali1, locali2;
-    REVERSE_IDX3GENERAL(localidx3, Nxx0chare, Nxx1chare, locali0, locali1, locali2);
+    REVERSE_IDX3GENERAL(localidx3, Nxx_plus_2NGHOSTS0chare, Nxx_plus_2NGHOSTS1chare, locali0, locali1, locali2);
     diagnosticstruct->localidx3_diagnostic_2d_{plane}_pt[which_diagnostics_chare] = localidx3;
     diagnosticstruct->locali0_diagnostic_2d_{plane}_pt[which_diagnostics_chare] =  locali0;
     diagnosticstruct->locali1_diagnostic_2d_{plane}_pt[which_diagnostics_chare] =  locali1;
