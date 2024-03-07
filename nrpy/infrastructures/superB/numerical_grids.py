@@ -107,7 +107,9 @@ def register_CFunction_numerical_grids_chare(
     c_type = "void"
     name = "numerical_grids_chare"
     params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata, griddata_struct *restrict griddata_chare, const int chare_index[3]"
-    body = r"""// Step 1.b: Set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx based on grid_physical_size
+    body = r"""// Step 1.a: Set CoordSystem_hash
+CoordSystem_hash_setup(commondata, griddata_chare);
+    // Step 1.b: Set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx based on grid_physical_size
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   numerical_grid_params_Nxx_dxx_xx_chare(commondata, &griddata[grid].params, &griddata_chare[grid].params, griddata_chare[grid].xx, chare_index);
 }
