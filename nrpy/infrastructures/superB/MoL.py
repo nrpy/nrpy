@@ -5,6 +5,12 @@ Authors: Brandon Clark
          zachetie **at** gmail **dot* com
          Nishita Jadoo
          njadoo **at** uidaho **dot* edu
+
+superB:
+-added time_start as parameter
+-added which RK stage as parameter
+-added switch case depending ok RK stage
+-changed "&griddata[grid].bcstruct" to "&griddata[grid].bcstruct_chare"
 """
 
 from typing import List, Union, Dict, Tuple
@@ -36,10 +42,6 @@ _ = par.CodeParameter("REAL", __name__, "t_final", 10.0, commondata=True)
 # fmt: on
 
 
-# superB: 
-# add time_start as parameter
-# add which RK stage as parameter
-# add switch case depending ok RK stage
 
 ########################################################################################################################
 # EXAMPLE
@@ -136,7 +138,7 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
         gf_aliases += "REAL *restrict xx[3]; for(int ww=0;ww<3;ww++) xx[ww] = griddata[grid].xx[ww];\n"
 
     if enable_curviBCs:
-        gf_aliases += "const bc_struct *restrict bcstruct = &griddata[grid].bcstruct;\n"
+        gf_aliases += "const bc_struct *restrict bcstruct = &griddata[grid].bcstruct_chare;\n"
     for i in ["0", "1", "2"]:
         gf_aliases += f"const int Nxx_plus_2NGHOSTS{i} = griddata[grid].params.Nxx_plus_2NGHOSTS{i};\n"
 
@@ -149,9 +151,9 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
     )  # Specify the number of required steps to update solution
 
     dt = sp.Symbol("commondata->dt", real=True)
-    
+
     body += """
-  switch (which_RK_substep) {          
+  switch (which_RK_substep) {
 """
 
     if is_diagonal_Butcher(Butcher_dict, MoL_method) and "RK3" in MoL_method:
@@ -162,9 +164,9 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
             "k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfsL", real=True
         )
         k2_or_y_nplus_a32_k2_gfs = sp.Symbol("k2_or_y_nplus_a32_k2_gfsL", real=True)
-        
+
         # k_1
-        body += """        
+        body += """
     case RK_SUBSTEP_K1:
 """
         body += """
@@ -201,7 +203,7 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
         )
 
         # k_2
-        body += """         
+        body += """
           case RK_SUBSTEP_K2:
 """
         body += (
@@ -242,7 +244,7 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
         )
 
         # k_3
-        body += """         
+        body += """
           case RK_SUBSTEP_K3:
 """
         body += (
@@ -300,8 +302,8 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                     post_rhs_output = y_n
                 else:  # If on anything but the final step:
                     post_rhs_output = next_y_input
-                    
-                body += f"""         
+
+                body += f"""
           case RK_SUBSTEP_K{str(s + 1)}:
 """
                 body += f"""{single_RK_substep_input_symbolic(
@@ -401,7 +403,7 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                                     y_n + y_nplus1_running_total + rhs_output * dt
                                 )
                         post_rhs_output = y_n
-                    body += f"""         
+                    body += f"""
           case RK_SUBSTEP_K{str(s + 1)}:
 """
                     body += (
@@ -544,7 +546,7 @@ def register_CFunctions(
         _diagnostic_gridfunctions2_point_to,
     ) = generate_gridfunction_names(Butcher_dict, MoL_method=MoL_method)
 
-    # Step 3.b: Create MoL_timestepping struct:    
+    # Step 3.b: Create MoL_timestepping struct:
     BHaH_defines_h.register_BHaH_defines(
         "nrpy.infrastructures.BHaH.MoLtimestepping.MoL",
         f"typedef struct __MoL_gridfunctions_struct__ {{\n"

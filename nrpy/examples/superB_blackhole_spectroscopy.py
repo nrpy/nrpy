@@ -56,6 +56,7 @@ import nrpy.infrastructures.superB.timestepping_chare as superBtimestepping
 import nrpy.infrastructures.superB.chare_communication_maps as charecomm
 import nrpy.infrastructures.superB.Makefile_helpers as superBMakefile
 import nrpy.infrastructures.superB.superB.superB_lib as superBl
+import nrpy.infrastructures.superB.initial_data as superBinitialdata
 
 
 par.set_parval_from_str("Infrastructure", "BHaH")
@@ -140,7 +141,27 @@ par.set_parval_from_str(
 #         cfc.CFunction_dict["function_name"]
 NRPyPNqm.register_CFunction_NRPyPN_quasicircular_momenta()
 TPl.register_C_functions()
-BCl.register_CFunction_initial_data(
+# ~ BCl.register_CFunction_initial_data(
+    # ~ CoordSystem=CoordSystem,
+    # ~ IDtype=IDtype,
+    # ~ IDCoordSystem=IDCoordSystem,
+    # ~ enable_checkpointing=True,
+    # ~ ID_persist_struct_str=IDps.ID_persist_str(),
+    # ~ populate_ID_persist_struct_str=r"""
+# ~ initialize_ID_persist_struct(commondata, &ID_persist);
+# ~ TP_solve(&ID_persist);
+# ~ """,
+    # ~ free_ID_persist_struct_str=r"""
+# ~ {
+  # ~ extern void free_derivs (derivs * v, int n);  // <- Needed to free memory allocated by TwoPunctures.
+  # ~ // <- Free memory allocated within ID_persist.
+  # ~ // Now that we're finished with par.v and par.cf_v (needed in setting up ID, we can free up memory for TwoPunctures' grids...
+  # ~ free_derivs (&ID_persist.v,    ID_persist.npoints_A * ID_persist.npoints_B * ID_persist.npoints_phi);
+  # ~ free_derivs (&ID_persist.cf_v, ID_persist.npoints_A * ID_persist.npoints_B * ID_persist.npoints_phi);
+# ~ }
+# ~ """,
+# ~ )
+superBinitialdata.register_CFunction_initial_data(
     CoordSystem=CoordSystem,
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
