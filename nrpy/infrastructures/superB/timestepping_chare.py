@@ -176,7 +176,7 @@ class Timestepping : public CBase_Timestepping {
     Ck::IO::File f_1d_z;
     Ck::IO::File f_2d_xy;
     Ck::IO::File f_2d_yz;
-    int grid; // grid in "for (grid = 0; grid < commondata->NUMGRIDS; grid++)" in .ci file must be declared here
+    int grid; // grid in "for (grid = 0; grid < commondata.NUMGRIDS; grid++)" in .ci file must be declared here
 
 
     /// Member Functions (private) ///
@@ -336,16 +336,19 @@ Timestepping::Timestepping(CommondataObject &&inData) {
 }
 """
     file_output_str += r"""
+// migration constructor
+Timestepping::Timestepping(CkMigrateMessage *msg) { }
+
 // destructor
 Timestepping::~Timestepping() {
   // Step 5: Free all allocated memory
   for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
-    MoL_free_memory_y_n_gfs(griddata_chare[grid].gridfuncs);
-    MoL_free_memory_non_y_n_gfs(griddata_chare[grid].gridfuncs);
-    timestepping_free_memory_tmpBuffer(griddata_chare[grid].tmpBuffers);"""
+    MoL_free_memory_y_n_gfs(&griddata_chare[grid].gridfuncs);
+    MoL_free_memory_non_y_n_gfs(&griddata_chare[grid].gridfuncs);
+    timestepping_free_memory_tmpBuffer(&griddata_chare[grid].tmpBuffers);"""
     if enable_rfm_precompute:
         file_output_str += r"""
-    rfm_precompute_free(&commondata, griddata_chare[grid].params, griddata_chare[grid].rfmstruct);"""
+    rfm_precompute_free(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].rfmstruct);"""
     if enable_CurviBCs:
         file_output_str += r"""
     free(griddata[grid].bcstruct.inner_bc_array);
@@ -682,34 +685,34 @@ def output_timestepping_ci(
         if (write_diagnostics_this_step && thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
           serial {
             progress_indicator(&commondata, griddata_chare);
-            if (commondata->time + commondata->dt > commondata->t_final)
+            if (commondata.time + commondata.dt > commondata.t_final)
               printf("\n");
 
 
             {
               char filename[256];
-              sprintf(filename, griddata_chare[which_grid_diagnostics]->diagnosticstruct.filename_1d_y, commondata.convergence_factor, commondata.time);
+              sprintf(filename, griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_1d_y, commondata.convergence_factor, commondata.time);
               Ck::IO::Options opts;
               CkCallback opened_1d_y(CkIndex_Timestepping::ready_1d_y(NULL), thisProxy);
               Ck::IO::open(filename, opened_1d_y, opts);
             }
             {
               char filename[256];
-              sprintf(filename, griddata_chare[which_grid_diagnostics]->diagnosticstruct.filename_1d_z, commondata.convergence_factor, commondata.time);
+              sprintf(filename, griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_1d_z, commondata.convergence_factor, commondata.time);
               Ck::IO::Options opts;
               CkCallback opened_1d_z(CkIndex_Timestepping::ready_1d_z(NULL), thisProxy);
               Ck::IO::open(filename, opened_1d_z, opts);
             }
             {
               char filename[256];
-              sprintf(filename, griddata_chare[which_grid_diagnostics]->diagnosticstruct.filename_2d_xy, commondata.convergence_factor, commondata.time);
+              sprintf(filename, griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_2d_xy, commondata.convergence_factor, commondata.time);
               Ck::IO::Options opts;
               CkCallback opened_2d_xy(CkIndex_Timestepping::ready_2d_xy(NULL), thisProxy);
               Ck::IO::open(filename, opened_2d_xy, opts);
             }
             {
               char filename[256];
-              sprintf(filename, griddata_chare[which_grid_diagnostics]->diagnosticstruct.filename_2d_yz, commondata.convergence_factor, commondata.time);
+              sprintf(filename, griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_2d_yz, commondata.convergence_factor, commondata.time);
               Ck::IO::Options opts;
               CkCallback opened_2d_yz(CkIndex_Timestepping::ready_2d_yz(NULL), thisProxy);
               Ck::IO::open(filename, opened_2d_yz, opts);
@@ -717,16 +720,16 @@ def output_timestepping_ci(
           }
 """
     # Generate code for 1d y diagnostics
-    file_output_str += generate_diagnostics_code("1d", "y", "griddata_chare[which_grid_diagnostics]->diagnosticstruct.num_output_quantities + 1", "griddata_chare[which_grid_diagnostics]->diagnosticstruct.tot_num_diagnostic_1d_y_pts")
+    file_output_str += generate_diagnostics_code("1d", "y", "griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 1", "griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_1d_y_pts")
 
     # Generate code for 1d z diagnostics
-    file_output_str += generate_diagnostics_code("1d", "z", "griddata_chare[which_grid_diagnostics]->diagnosticstruct.num_output_quantities + 1", "griddata_chare[which_grid_diagnostics]->diagnosticstruct.tot_num_diagnostic_1d_z_pts")
+    file_output_str += generate_diagnostics_code("1d", "z", "griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 1", "griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_1d_z_pts")
 
     # Generate code for 2d xy diagnostics
-    file_output_str += generate_diagnostics_code("2d", "xy", "griddata_chare[which_grid_diagnostics]->diagnosticstruct.num_output_quantities + 2", "griddata_chare[which_grid_diagnostics]->diagnosticstruct.tot_num_diagnostic_2d_xy_pts")
+    file_output_str += generate_diagnostics_code("2d", "xy", "griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 2", "griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_2d_xy_pts")
 
     # Generate code for 2d yz diagnostics
-    file_output_str += generate_diagnostics_code("2d", "yz", "griddata_chare[which_grid_diagnostics]->diagnosticstruct.num_output_quantities + 2", "griddata_chare[which_grid_diagnostics]->diagnosticstruct.tot_num_diagnostic_2d_yz_pts")
+    file_output_str += generate_diagnostics_code("2d", "yz", "griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 2", "griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_2d_yz_pts")
 
     file_output_str += r"""
       }
@@ -743,7 +746,7 @@ def output_timestepping_ci(
     for k in range(1, 5):
         rk_substep = f"RK_SUBSTEP_K{k}"
         file_output_str += generate_mol_step_forward_code(rk_substep)
-        file_output_str += "for (grid = 0; grid < commondata->NUMGRIDS; grid++) {"
+        file_output_str += "for (grid = 0; grid < commondata.NUMGRIDS; grid++) {"
         for axis in ['x', 'y', 'z']:
             # do something with rk_substep and axis
             if axis == 'x':
@@ -788,7 +791,7 @@ def output_timestepping_ci(
 
     file_output_str += r"""
         serial {
-          // Adding dt to commondata->time many times will induce roundoff error,
+          // Adding dt to commondata.time many times will induce roundoff error,
           //   so here we set time based on the iteration number.
           commondata.time = (REAL)(commondata.nn + 1) * commondata.dt;
           // Finally, increment the timestep n:

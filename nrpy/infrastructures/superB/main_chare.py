@@ -50,10 +50,13 @@ class CommondataObject {
           CPtype = CodeParam.c_type_alias
           comment = f"  // {CodeParam.module}::{parname}"
           if "char" in CPtype and "[" in CPtype and "]" in CPtype:
-            chararray_size = CPtype.split("[")[1].replace("]", "")
-            c_output = f'PUParray(p, {struct}.{parname}, {chararray_size});{comment}\n'
+              chararray_size = CPtype.split("[")[1].replace("]", "")
+              c_output = f'PUParray(p, {struct}.{parname}, {chararray_size});{comment}\n'
+          elif "TIMEVAR" in CPtype:
+              c_output = f"p|{struct}.{parname}.tv_sec;{comment}\n"
+              c_output += f"p|{struct}.{parname}.tv_nsec;{comment}\n"
           else:
-            c_output = f"p|{struct}.{parname};{comment}\n"
+              c_output = f"p|{struct}.{parname};{comment}\n"
           struct_list.append(c_output)
     # Sort the lines alphabetically and join them with line breaks
     file_output_str += "// PUP commondata struct\n"
@@ -165,11 +168,16 @@ Main::Main(CkArgMsg* msg) {
   commondata_struct_set_to_default(&commondataObj.commondata);
 
   // Step 1.b: Overwrite default values to parfile values. Then overwrite parfile values with values set at cmd line.
-  cmdline_input_and_parfile_parser(&commondataObj.commondata, msg->argc, msg->argv);
+  const char** argv_const = new const char*[msg->argc];
+  for (int i = 0; i < msg->argc; i++) {
+      argv_const[i] = msg->argv[i];
+  }
+  cmdline_input_and_parfile_parser(&commondataObj.commondata, msg->argc, argv_const);
+  delete[] argv_const;
 
-  timestepping_array = CProxy_Timestepping::ckNew(commondataObj, &commondataObj.commondata.Nchare0, &commondataObj.commondata.Nchare1, &commondataObj.commondata.Nchare2);
+  timesteppingArray = CProxy_Timestepping::ckNew(commondataObj, commondataObj.commondata.Nchare0, commondataObj.commondata.Nchare1, commondataObj.commondata.Nchare2);
 
-  timestepping_array.start();
+  timesteppingArray.start();
 }
 
 Main::Main(CkMigrateMessage* msg) { }
