@@ -168,12 +168,6 @@ def CurviBoundaryConditions_register_C_functions(
         # Register C function to set up the boundary condition struct.
         register_CFunction_bcstruct_chare_set_up(CoordSystem=CoordSystem)
 
-    # Register bcstruct_chare's contribution to griddata_struct:
-    griddata_commondata.register_griddata_commondata(
-        __name__,
-        "bc_struct bcstruct_chare",
-        "all data needed to perform boundary conditions in curvilinear coordinates in a chare",
-    )
 
 
 if __name__ == "__main__":

@@ -10,7 +10,6 @@ superB:
 -added time_start as parameter
 -added which RK stage as parameter
 -added switch case depending ok RK stage
--changed "&griddata[grid].bcstruct" to "&griddata[grid].bcstruct_chare"
 """
 
 from typing import List, Union, Dict, Tuple
@@ -138,7 +137,7 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
         gf_aliases += "REAL *restrict xx[3]; for(int ww=0;ww<3;ww++) xx[ww] = griddata[grid].xx[ww];\n"
 
     if enable_curviBCs:
-        gf_aliases += "const bc_struct *restrict bcstruct = &griddata[grid].bcstruct_chare;\n"
+        gf_aliases += "const bc_struct *restrict bcstruct = &griddata[grid].bcstruct;\n"
     for i in ["0", "1", "2"]:
         gf_aliases += f"const int Nxx_plus_2NGHOSTS{i} = griddata[grid].params.Nxx_plus_2NGHOSTS{i};\n"
 
