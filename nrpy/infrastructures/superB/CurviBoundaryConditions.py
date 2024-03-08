@@ -117,13 +117,9 @@ def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
           const short i2 = bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].i2;
           const int globalidx3 =  IDX3GENERAL(i0, i1, i2, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1);
           if (charecommstruct->globalidx3pt_to_chareidx3[globalidx3] == IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])){
-            // convert i0, etc to local i0
-            const int localidx3 = charecommstruct->globalidx3pt_to_localidx3pt[globalidx3];
-            int locali0, locali1, locali2;
-            REVERSE_IDX3GENERAL(localidx3, Nxx_plus_2NGHOSTS0chare, Nxx_plus_2NGHOSTS1chare, locali0, locali1, locali2);
-            bcstruct_chare->pure_outer_bc_array[dirn + (3 * which_gz)][which_idx2d_chare].i0 = locali0;
-            bcstruct_chare->pure_outer_bc_array[dirn + (3 * which_gz)][which_idx2d_chare].i1 = locali1;
-            bcstruct_chare->pure_outer_bc_array[dirn + (3 * which_gz)][which_idx2d_chare].i2 = locali2;
+            bcstruct_chare->pure_outer_bc_array[dirn + (3 * which_gz)][which_idx2d_chare].i0 = MAP_GLOBAL_TO_LOCAL_IDX0(chare_index[0], i0, Nxx0chare);	
+            bcstruct_chare->pure_outer_bc_array[dirn + (3 * which_gz)][which_idx2d_chare].i1 = MAP_GLOBAL_TO_LOCAL_IDX1(chare_index[1], i1, Nxx1chare);
+            bcstruct_chare->pure_outer_bc_array[dirn + (3 * which_gz)][which_idx2d_chare].i2 = MAP_GLOBAL_TO_LOCAL_IDX2(chare_index[2], i2, Nxx2chare);
             const short FACEX0 = bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].FACEX0;
             const short FACEX1 = bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].FACEX1;
             const short FACEX2 = bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].FACEX2;

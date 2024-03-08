@@ -178,8 +178,8 @@ for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {{
   const REAL xCart_axis = {'xCart[1];' if axis == "y" else 'xCart[2];'}
   int sizeinbytes = 23 * (diagnosticstruct->num_output_quantities + 1);
   char out[sizeinbytes+1];
-  snprintf(out, sizeof(out), " """
-    output_to_file = "% .15e,"
+  snprintf(out, sizeof(out),"""
+    output_to_file = """ "% .15e """
     for key in out_quantities_dict.keys():
       printf_c_type = "% .15e" if key[0] != "int" else "%d"
       output_to_file += f"{printf_c_type} "
@@ -275,8 +275,8 @@ for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {{
   xx_to_Cart(commondata, params, xx, i0, i1, i2, xCart);
   int sizeinbytes = 23 * (diagnosticstruct->num_output_quantities + 2);
   char out[sizeinbytes+1];
-  snprintf(out, sizeof(out), " """
-    output_to_file = "% .15e % .15e,"
+  snprintf(out, sizeof(out),"""
+    output_to_file = """ "% .15e % .15e """
     for key in out_quantities_dict.keys():
       printf_c_type = "% .15e" if key[0] != "int" else "%d"
       output_to_file += f"{printf_c_type} "
@@ -415,13 +415,11 @@ for (int i = 0; i < data_index; i++) {{
   const int i2 = data_points[i].i2;
   const int idx3 = IDX3(i0, i1, i2);
   if (charecommstruct->globalidx3pt_to_chareidx3[idx3] == IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])){{
-    int localidx3 = charecommstruct->globalidx3pt_to_localidx3pt[idx3];
-    int locali0, locali1, locali2;
-    REVERSE_IDX3GENERAL(localidx3, Nxx_plus_2NGHOSTS0chare, Nxx_plus_2NGHOSTS1chare, locali0, locali1, locali2);
+    int localidx3 = charecommstruct->globalidx3pt_to_localidx3pt[idx3];    
     diagnosticstruct->localidx3_diagnostic_1d_{axis}_pt[which_diagnostics_chare] = localidx3;
-    diagnosticstruct->locali0_diagnostic_1d_{axis}_pt[which_diagnostics_chare] =  locali0;
-    diagnosticstruct->locali1_diagnostic_1d_{axis}_pt[which_diagnostics_chare] =  locali1;
-    diagnosticstruct->locali2_diagnostic_1d_{axis}_pt[which_diagnostics_chare] =  locali2;
+    diagnosticstruct->locali0_diagnostic_1d_{axis}_pt[which_diagnostics_chare] = MAP_GLOBAL_TO_LOCAL_IDX0(chare_index[0], i0, Nxx0chare);
+    diagnosticstruct->locali1_diagnostic_1d_{axis}_pt[which_diagnostics_chare] = MAP_GLOBAL_TO_LOCAL_IDX1(chare_index[1], i1, Nxx1chare);
+    diagnosticstruct->locali2_diagnostic_1d_{axis}_pt[which_diagnostics_chare] = MAP_GLOBAL_TO_LOCAL_IDX2(chare_index[2], i2, Nxx2chare);
     diagnosticstruct->offset_diagnostic_1d_{axis}_pt[which_diagnostics_chare] = which_diagnostic_global * sizeinbytes;
     which_diagnostics_chare++;
   }}
@@ -544,13 +542,11 @@ LOOP_NOOMP(i0_pt, 0, numpts_i0, i1_pt, 0, numpts_i1, i2_pt, 0, numpts_i2) {{
   const int idx3 = IDX3(i0, i1, i2);
   if (charecommstruct->globalidx3pt_to_chareidx3[idx3] == IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])){{
     // store the local idx3 of diagnostic point
-    int localidx3 = charecommstruct->globalidx3pt_to_localidx3pt[idx3];
-    int locali0, locali1, locali2;
-    REVERSE_IDX3GENERAL(localidx3, Nxx_plus_2NGHOSTS0chare, Nxx_plus_2NGHOSTS1chare, locali0, locali1, locali2);
+    int localidx3 = charecommstruct->globalidx3pt_to_localidx3pt[idx3];    
     diagnosticstruct->localidx3_diagnostic_2d_{plane}_pt[which_diagnostics_chare] = localidx3;
-    diagnosticstruct->locali0_diagnostic_2d_{plane}_pt[which_diagnostics_chare] =  locali0;
-    diagnosticstruct->locali1_diagnostic_2d_{plane}_pt[which_diagnostics_chare] =  locali1;
-    diagnosticstruct->locali2_diagnostic_2d_{plane}_pt[which_diagnostics_chare] =  locali2;
+    diagnosticstruct->locali0_diagnostic_2d_{plane}_pt[which_diagnostics_chare] = MAP_GLOBAL_TO_LOCAL_IDX0(chare_index[0], i0, Nxx0chare);
+    diagnosticstruct->locali1_diagnostic_2d_{plane}_pt[which_diagnostics_chare] = MAP_GLOBAL_TO_LOCAL_IDX1(chare_index[1], i1, Nxx1chare);
+    diagnosticstruct->locali2_diagnostic_2d_{plane}_pt[which_diagnostics_chare] = MAP_GLOBAL_TO_LOCAL_IDX2(chare_index[2], i2, Nxx2chare);
     diagnosticstruct->offset_diagnostic_2d_{plane}_pt[which_diagnostics_chare] = which_diagnostic_global * sizeinbytes;
     which_diagnostics_chare++;
   }}

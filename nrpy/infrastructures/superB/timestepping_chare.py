@@ -68,7 +68,9 @@ def generate_diagnostics_code(dimension, direction, num_fields, tot_num_diagnost
         f_{dimension}_{direction} = m_{dimension}_{direction}->file;
         CkCallback sessionStart_{dimension}_{direction}(CkIndex_Timestepping::start_write_{dimension}_{direction}(0), thisProxy);
         CkCallback sessionEnd_{dimension}_{direction}(CkIndex_Timestepping::test_written_{dimension}_{direction}(0), thisProxy);
-        int totsizeinbytes = 23 * {num_fields} * {tot_num_diagnostic_pts};
+        int num_fields = {num_fields};
+        int tot_num_diagnostic_pts = {tot_num_diagnostic_pts};
+        int totsizeinbytes = 23 * num_fields * tot_num_diagnostic_pts;
         Ck::IO::startSession(f_{dimension}_{direction}, totsizeinbytes, 0, sessionStart_{dimension}_{direction}, sessionEnd_{dimension}_{direction});
         delete m_{dimension}_{direction};
         }}

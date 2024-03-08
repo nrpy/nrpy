@@ -86,16 +86,12 @@ def register_CFunction_charecommstruct_set_up(CoordSystem: str) -> None:
         for (int localk = startlocalk; localk <= endlocalk; localk++) {
           for (int localj = startlocalj; localj <= endlocalj; localj++) {
             for (int locali = startlocali; locali <= endlocali; locali++) {
-
-              int localidx3 =  IDX3GENERAL(locali, localj, localk, Nxx_plus_2NGHOSTS0chare, Nxx_plus_2NGHOSTS1chare);
-
-              int globali = mapLocalToGlobalIdx0(charei, locali, Nxx0chare);
-              int globalj = mapLocalToGlobalIdx1(charej, localj, Nxx1chare);
-              int globalk = mapLocalToGlobalIdx2(charek, localk, Nxx2chare);
-              int globalidx3 =  IDX3GENERAL(globali, globalj, globalk, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1);
-
+              int localidx3 = IDX3GENERAL(locali, localj, localk, Nxx_plus_2NGHOSTS0chare, Nxx_plus_2NGHOSTS1chare);
+              int globali = MAP_LOCAL_TO_GLOBAL_IDX0(charei, locali, Nxx0chare);
+              int globalj = MAP_LOCAL_TO_GLOBAL_IDX1(charej, localj, Nxx1chare);
+              int globalk = MAP_LOCAL_TO_GLOBAL_IDX2(charek, localk, Nxx2chare);
+              int globalidx3 = IDX3GENERAL(globali, globalj, globalk, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1);
               charecommstruct->globalidx3pt_to_chareidx3[globalidx3] = IDX3_OF_CHARE(charei, charej, charek);
-
               charecommstruct->globalidx3pt_to_localidx3pt[globalidx3] = localidx3;
             }
           }
@@ -116,45 +112,19 @@ def register_CFunction_charecommstruct_set_up(CoordSystem: str) -> None:
   for (int localk = startlocalk; localk <= endlocalk; localk++) {
     for (int localj = startlocalj; localj <= endlocalj; localj++) {
       for (int locali = startlocali; locali <= endlocali; locali++) {
-
-        int localidx3 =  IDX3GENERAL(locali, localj, localk, Nxx_plus_2NGHOSTS0chare, Nxx_plus_2NGHOSTS1chare);
-
-        int globali = mapLocalToGlobalIdx0(thischareindex[0], locali, Nxx0chare);
-        int globalj = mapLocalToGlobalIdx0(thischareindex[1], localj, Nxx1chare);
-        int globalk = mapLocalToGlobalIdx0(thischareindex[2], localk, Nxx2chare);
-        int globalidx3 =  IDX3GENERAL(globali, globalj, globalk, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1);
-
+        int localidx3 = IDX3GENERAL(locali, localj, localk, Nxx_plus_2NGHOSTS0chare, Nxx_plus_2NGHOSTS1chare);
+        int globali = MAP_LOCAL_TO_GLOBAL_IDX0(thischareindex[0], locali, Nxx0chare);
+        int globalj = MAP_LOCAL_TO_GLOBAL_IDX1(thischareindex[1], localj, Nxx1chare);
+        int globalk = MAP_LOCAL_TO_GLOBAL_IDX2(thischareindex[2], localk, Nxx2chare);
+        int globalidx3 = IDX3GENERAL(globali, globalj, globalk, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1);
         charecommstruct->localidx3pt_to_globalidx3pt[localidx3] = globalidx3;
       }
     }
   }
 """
-    prefunc = r"""
-// The following depend on the chare index
-// A global grid point can be part of 2 local grids
-static int mapLocalToGlobalIdx0(int chareidx0, int local_idx0, int Nxx0chare) {
-    return (chareidx0 * Nxx0chare) + local_idx0;
-}
-static int mapLocalToGlobalIdx1(int chareidx1, int local_idx1, int Nxx1chare) {
-    return (chareidx1 * Nxx1chare) + local_idx1;
-}
-static int mapLocalToGlobalIdx2(int chareidx2, int local_idx2, int Nxx2chare) {
-    return (chareidx2 * Nxx2chare) + local_idx2;
-}
-// Assumes grid point point lies within local grid of chare
-static int mapGlobalToLocalIdx0(int chareidx0, int global_idx0, int Nxx0chare) {
-    return global_idx0 - (chareidx0 * Nxx0chare);
-}
-static int mapGlobalToLocalIdx1(int chareidx1, int global_idx1, int Nxx1chare) {
-    return global_idx1 - (chareidx1 * Nxx1chare);
-}
-static int mapGlobalToLocalIdx2(int chareidx2, int global_idx2, int Nxx2chare) {
-    return global_idx2 - (chareidx2 * Nxx2chare);
-}
-"""
+
     cfc.register_CFunction(
         includes=includes,
-        prefunc=prefunc,
         desc=desc,
         c_type=c_type,
         CoordSystem_for_wrapper_func=CoordSystem,
