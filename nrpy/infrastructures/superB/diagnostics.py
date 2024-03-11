@@ -136,49 +136,44 @@ const bool write_diagnostics = (which_output == OUTPUT_0D) ||
 					(num_diagnostic_2d_yz_pts > 0);
 
 if (write_diagnostics) {
-// Unpack griddata struct:
-const REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
-REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
-REAL *restrict diagnostic_output_gfs = griddata[grid].gridfuncs.diagnostic_output_gfs;
-REAL *restrict xx[3];
-{
-  for (int ww = 0; ww < 3; ww++)
-	xx[ww] = griddata[grid].xx[ww];
-}
-const params_struct *restrict params = &griddata[grid].params;
-#include "set_CodeParameters.h"
-
-// Constraint output
-{
-  Ricci_eval(commondata, params, &griddata[grid].rfmstruct, y_n_gfs, auxevol_gfs);
-  constraints_eval(commondata, params, &griddata[grid].rfmstruct, y_n_gfs, auxevol_gfs, diagnostic_output_gfs);
-}
-
-// // 0D, 1D and 2D outputs
-if (which_output == OUTPUT_0D) {
-    diagnostics_nearest_grid_center(commondata, params, &griddata[grid].gridfuncs);
-
-	progress_indicator(commondata, griddata);
-	if (commondata->time + commondata->dt > commondata->t_final)
-	  printf("\n");
-
-} else if (which_output == OUTPUT_1D_Y) {
-  if (num_diagnostic_1d_y_pts > 0) {
-	diagnostics_nearest_1d_y_axis(commondata, params, xx, &griddata[grid].gridfuncs, &griddata[grid].diagnosticstruct, token);
+  // Unpack griddata struct:
+  const REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
+  REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
+  REAL *restrict diagnostic_output_gfs = griddata[grid].gridfuncs.diagnostic_output_gfs;
+  REAL *restrict xx[3];
+  {
+    for (int ww = 0; ww < 3; ww++)
+    xx[ww] = griddata[grid].xx[ww];
   }
-} else if (which_output == OUTPUT_1D_Z) {
-  if (num_diagnostic_1d_z_pts > 0) {
-	diagnostics_nearest_1d_z_axis(commondata, params, xx, &griddata[grid].gridfuncs, &griddata[grid].diagnosticstruct, token);
+  const params_struct *restrict params = &griddata[grid].params;
+  #include "set_CodeParameters.h"
+
+  // Constraint output
+  {
+    Ricci_eval(commondata, params, &griddata[grid].rfmstruct, y_n_gfs, auxevol_gfs);
+    constraints_eval(commondata, params, &griddata[grid].rfmstruct, y_n_gfs, auxevol_gfs, diagnostic_output_gfs);
   }
-} else if (which_output == OUTPUT_2D_XY) {
-  if (num_diagnostic_2d_xy_pts > 0) {
-	diagnostics_nearest_2d_xy_plane(commondata, params, xx, &griddata[grid].gridfuncs, &griddata[grid].diagnosticstruct, token);
+
+  // // 0D, 1D and 2D outputs
+  if (which_output == OUTPUT_0D) {
+      diagnostics_nearest_grid_center(commondata, params, &griddata[grid].gridfuncs);
+  } else if (which_output == OUTPUT_1D_Y) {
+    if (num_diagnostic_1d_y_pts > 0) {
+    diagnostics_nearest_1d_y_axis(commondata, params, xx, &griddata[grid].gridfuncs, &griddata[grid].diagnosticstruct, token);
+    }
+  } else if (which_output == OUTPUT_1D_Z) {
+    if (num_diagnostic_1d_z_pts > 0) {
+    diagnostics_nearest_1d_z_axis(commondata, params, xx, &griddata[grid].gridfuncs, &griddata[grid].diagnosticstruct, token);
+    }
+  } else if (which_output == OUTPUT_2D_XY) {
+    if (num_diagnostic_2d_xy_pts > 0) {
+    diagnostics_nearest_2d_xy_plane(commondata, params, xx, &griddata[grid].gridfuncs, &griddata[grid].diagnosticstruct, token);
+    }
+  } else if (which_output == OUTPUT_2D_YZ) {
+    if (num_diagnostic_2d_yz_pts > 0) {
+    diagnostics_nearest_2d_yz_plane(commondata, params, xx, &griddata[grid].gridfuncs, &griddata[grid].diagnosticstruct, token);
+    }
   }
-} else if (which_output == OUTPUT_2D_YZ) {
-  if (num_diagnostic_2d_yz_pts > 0) {
-	diagnostics_nearest_2d_yz_plane(commondata, params, xx, &griddata[grid].gridfuncs, &griddata[grid].diagnosticstruct, token);
-  }
-}
 }
 
 

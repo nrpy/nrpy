@@ -684,42 +684,38 @@ def output_timestepping_ci(
         //  }
         //}
         // Create sessions for ckio file writing from first chare only
-        if (write_diagnostics_this_step && thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
-          serial {
-            progress_indicator(&commondata, griddata_chare);
-            if (commondata.time + commondata.dt > commondata.t_final)
-              printf("\n");
-
-
-            {
-              char filename[256];
-              sprintf(filename, griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_1d_y, commondata.convergence_factor, commondata.time);
-              Ck::IO::Options opts;
-              CkCallback opened_1d_y(CkIndex_Timestepping::ready_1d_y(NULL), thisProxy);
-              Ck::IO::open(filename, opened_1d_y, opts);
+        if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
+          if (write_diagnostics_this_step) {
+            serial {
+              {
+                char filename[256];
+                sprintf(filename, griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_1d_y, commondata.convergence_factor, commondata.time);
+                Ck::IO::Options opts;
+                CkCallback opened_1d_y(CkIndex_Timestepping::ready_1d_y(NULL), thisProxy);
+                Ck::IO::open(filename, opened_1d_y, opts);
+              }
+              {
+                char filename[256];
+                sprintf(filename, griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_1d_z, commondata.convergence_factor, commondata.time);
+                Ck::IO::Options opts;
+                CkCallback opened_1d_z(CkIndex_Timestepping::ready_1d_z(NULL), thisProxy);
+                Ck::IO::open(filename, opened_1d_z, opts);
+              }
+              {
+                char filename[256];
+                sprintf(filename, griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_2d_xy, commondata.convergence_factor, commondata.time);
+                Ck::IO::Options opts;
+                CkCallback opened_2d_xy(CkIndex_Timestepping::ready_2d_xy(NULL), thisProxy);
+                Ck::IO::open(filename, opened_2d_xy, opts);
+              }
+              {
+                char filename[256];
+                sprintf(filename, griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_2d_yz, commondata.convergence_factor, commondata.time);
+                Ck::IO::Options opts;
+                CkCallback opened_2d_yz(CkIndex_Timestepping::ready_2d_yz(NULL), thisProxy);
+                Ck::IO::open(filename, opened_2d_yz, opts);
+              }
             }
-            {
-              char filename[256];
-              sprintf(filename, griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_1d_z, commondata.convergence_factor, commondata.time);
-              Ck::IO::Options opts;
-              CkCallback opened_1d_z(CkIndex_Timestepping::ready_1d_z(NULL), thisProxy);
-              Ck::IO::open(filename, opened_1d_z, opts);
-            }
-            {
-              char filename[256];
-              sprintf(filename, griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_2d_xy, commondata.convergence_factor, commondata.time);
-              Ck::IO::Options opts;
-              CkCallback opened_2d_xy(CkIndex_Timestepping::ready_2d_xy(NULL), thisProxy);
-              Ck::IO::open(filename, opened_2d_xy, opts);
-            }
-            {
-              char filename[256];
-              sprintf(filename, griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_2d_yz, commondata.convergence_factor, commondata.time);
-              Ck::IO::Options opts;
-              CkCallback opened_2d_yz(CkIndex_Timestepping::ready_2d_yz(NULL), thisProxy);
-              Ck::IO::open(filename, opened_2d_yz, opts);
-            }
-          }
 """
     # Generate code for 1d y diagnostics
     file_output_str += generate_diagnostics_code("1d", "y", "griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 1", "griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_1d_y_pts")
@@ -734,7 +730,13 @@ def output_timestepping_ci(
     file_output_str += generate_diagnostics_code("2d", "yz", "griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 2", "griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_2d_yz_pts")
 
     file_output_str += r"""
-      }
+          }
+          serial {
+            progress_indicator(&commondata, griddata_chare);
+            if (commondata.time + commondata.dt > commondata.t_final)
+              printf("\n");
+          }
+        }
 """
     if pre_MoL_step_forward_in_time != "":
         file_output_str += pre_MoL_step_forward_in_time
