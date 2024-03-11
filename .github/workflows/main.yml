@@ -53,7 +53,7 @@ jobs:
       if: matrix.os == 'ubuntu-20.04'
       run: pip install sympy
 
-    - name: Display sympy and clang-format versions
+    - name: Display sympy and clang format versions
       run: echo "Running CI tests with SymPy version = $(isympy --version)"
       run: echo "Running CI tests with clang-format version = $(clang-format --version)"
 
