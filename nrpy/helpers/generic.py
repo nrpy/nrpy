@@ -60,7 +60,7 @@ def get_clang_format_version() -> str:
     :return: The combined standard output and standard error from the command.
     :rtype: str
 
-    Examples:
+    Example:
     >>> output = get_clang_format_version()
     >>> isinstance(output, str)
     True
@@ -71,7 +71,7 @@ def get_clang_format_version() -> str:
             ["clang-format", "--version"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True,
+            universal_newlines=True,
             check=True,
         )
         combined_output = completed_process.stdout + completed_process.stderr
