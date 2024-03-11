@@ -55,25 +55,29 @@ def get_clang_format_version() -> str:
     """
     Execute the `clang-format --version` command and return its combined output.
 
-    If the command fails, this function raises a RuntimeError with the error message.
+    If the command fails, it raises a RuntimeError with the error message.
 
     :return: The combined standard output and standard error from the command.
     :rtype: str
 
-    Examples
+    Examples:
     >>> output = get_clang_format_version()
     >>> isinstance(output, str)
     True
     """
     try:
+        # For Python 3.6 compatibility, use subprocess.PIPE instead of capture_output
         completed_process = subprocess.run(
-            ["clang-format", "--version"], capture_output=True, text=True, check=True
+            ["clang-format", "--version"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True,
         )
-        # Combine stdout and stderr for unified output, even if stderr is likely empty on success.
         combined_output = completed_process.stdout + completed_process.stderr
         return combined_output.strip()
     except subprocess.CalledProcessError as e:
-        # Raising an error with the combined output of stdout and stderr.
+        # Raising an error with the combined output of stdout and stderr for detailed diagnostics
         raise RuntimeError(f"Command failed with error: {e.stdout + e.stderr}") from e
 
 
@@ -104,13 +108,14 @@ def clang_format(
     )
     if is_cached(unique_id):
         return cast(str, read_cached(unique_id))
+    # For Python 3.6 compatibility, use subprocess.PIPE instead of capture_output
     with subprocess.Popen(
         ["clang-format", clang_format_options],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     ) as process:
-        # Send your C code string to clang-format and fetch the result
+        # Send C code string to clang-format and fetch the result
         stdout, stderr = process.communicate(input=c_code_str.encode())
 
         # If the process exited without errors, return the formatted code
