@@ -404,6 +404,7 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                         post_rhs_output = y_n
                     body += f"""
           case RK_SUBSTEP_K{str(s + 1)}:
+          {{
 """
                     body += (
                         single_RK_substep_input_symbolic(
@@ -422,6 +423,9 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                         )
                         + f"// -={{ END k{s + 1} substep }}=-\n\n"
                     )
+                    body += """
+          break;
+          }"""
 
     body += """
   }
