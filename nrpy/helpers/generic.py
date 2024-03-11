@@ -15,7 +15,6 @@ from difflib import ndiff
 from nrpy.helpers.cached_functions import is_cached, read_cached, write_cached
 
 
-#
 def superfast_uniq(seq: List[Any]) -> List[Any]:
     """
     Super fast 'uniq' function that preserves order.
@@ -77,13 +76,14 @@ def clang_format(
     unique_id = __name__ + c_code_str + clang_format_options
     if is_cached(unique_id):
         return cast(str, read_cached(unique_id))
+    # For Python 3.6 compatibility, use subprocess.PIPE instead of capture_output
     with subprocess.Popen(
         ["clang-format", clang_format_options],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     ) as process:
-        # Send your C code string to clang-format and fetch the result
+        # Send C code string to clang-format and fetch the result
         stdout, stderr = process.communicate(input=c_code_str.encode())
 
         # If the process exited without errors, return the formatted code
