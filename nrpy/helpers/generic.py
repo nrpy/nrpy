@@ -51,36 +51,6 @@ def prefix_with_star(input_string: str) -> str:
     return result
 
 
-def get_clang_format_version() -> str:
-    """
-    Execute the `clang-format --version` command and return its combined output.
-
-    If the command fails, it raises a RuntimeError with the error message.
-
-    :return: The combined standard output and standard error from the command.
-    :rtype: str
-
-    Example:
-    >>> output = get_clang_format_version()
-    >>> isinstance(output, str)
-    True
-    """
-    try:
-        # For Python 3.6 compatibility, use subprocess.PIPE instead of capture_output
-        completed_process = subprocess.run(
-            ["clang-format", "--version"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            universal_newlines=True,
-            check=True,
-        )
-        combined_output = completed_process.stdout + completed_process.stderr
-        return combined_output.strip()
-    except subprocess.CalledProcessError as e:
-        # Raising an error with the combined output of stdout and stderr for detailed diagnostics
-        raise RuntimeError(f"Command failed with error: {e.stdout + e.stderr}") from e
-
-
 def clang_format(
     c_code_str: str,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
@@ -103,9 +73,7 @@ def clang_format(
       return 0;
     }
     """
-    unique_id = (
-        __name__ + c_code_str + clang_format_options + get_clang_format_version()
-    )
+    unique_id = __name__ + c_code_str + clang_format_options
     if is_cached(unique_id):
         return cast(str, read_cached(unique_id))
     # For Python 3.6 compatibility, use subprocess.PIPE instead of capture_output
