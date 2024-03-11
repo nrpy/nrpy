@@ -15,7 +15,6 @@ from difflib import ndiff
 from nrpy.helpers.cached_functions import is_cached, read_cached, write_cached
 
 
-#
 def superfast_uniq(seq: List[Any]) -> List[Any]:
     """
     Super fast 'uniq' function that preserves order.
@@ -52,6 +51,32 @@ def prefix_with_star(input_string: str) -> str:
     return result
 
 
+def get_clang_format_version() -> str:
+    """
+    Execute the `clang-format --version` command and return its combined output.
+
+    If the command fails, this function raises a RuntimeError with the error message.
+
+    :return: The combined standard output and standard error from the command.
+    :rtype: str
+
+    Examples
+    >>> output = get_clang_format_version()
+    >>> isinstance(output, str)
+    True
+    """
+    try:
+        completed_process = subprocess.run(
+            ["clang-format", "--version"], capture_output=True, text=True, check=True
+        )
+        # Combine stdout and stderr for unified output, even if stderr is likely empty on success.
+        combined_output = completed_process.stdout + completed_process.stderr
+        return combined_output.strip()
+    except subprocess.CalledProcessError as e:
+        # Raising an error with the combined output of stdout and stderr.
+        raise RuntimeError(f"Command failed with error: {e.stdout + e.stderr}") from e
+
+
 def clang_format(
     c_code_str: str,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
@@ -74,7 +99,9 @@ def clang_format(
       return 0;
     }
     """
-    unique_id = __name__ + c_code_str + clang_format_options
+    unique_id = (
+        __name__ + c_code_str + clang_format_options + get_clang_format_version()
+    )
     if is_cached(unique_id):
         return cast(str, read_cached(unique_id))
     with subprocess.Popen(
