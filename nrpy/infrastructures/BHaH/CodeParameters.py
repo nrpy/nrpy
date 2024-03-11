@@ -132,20 +132,22 @@ def write_CodeParameters_h_files(
     const REAL pi_three_sigfigs = commondata->pi_three_sigfigs; // CodeParameters_c_files::pi_three_sigfigs
     char some_string[100];                                      // CodeParameters_c_files::some_string
     {
-      strncpy(some_string, params->some_string, 99);
-      some_string[99] = '\0';
-    } // Properly null terminate char array.
-    <BLANKLINE>
+      // Copy up to 99 characters from params->some_string to some_string
+      strncpy(some_string, params->some_string, 100 - 1);
+      // Explicitly null-terminate some_string to ensure it is a valid C-string
+      some_string[100 - 1] = '\0'; // Properly null terminate char array.
+    }
     >>> print((project_dir / 'set_CodeParameters-nopointer.h').read_text())
     const REAL a = commondata.a;                               // CodeParameters_c_files::a
     const bool BHaH_is_amazing = params.BHaH_is_amazing;       // CodeParameters_c_files::BHaH_is_amazing
     const REAL pi_three_sigfigs = commondata.pi_three_sigfigs; // CodeParameters_c_files::pi_three_sigfigs
     char some_string[100];                                     // CodeParameters_c_files::some_string
     {
-      strncpy(some_string, params.some_string, 99);
-      some_string[99] = '\0';
-    } // Properly null terminate char array.
-    <BLANKLINE>
+      // Copy up to 99 characters from params.some_string to some_string
+      strncpy(some_string, params.some_string, 100 - 1);
+      // Explicitly null-terminate some_string to ensure it is a valid C-string
+      some_string[100 - 1] = '\0'; // Properly null terminate char array.
+    }
     >>> print((project_dir / 'set_CodeParameters-simd.h').read_text())
     const REAL NOSIMDa = commondata->a;                                         // CodeParameters_c_files::a
     const REAL_SIMD_ARRAY a = ConstSIMD(NOSIMDa);                               // CodeParameters_c_files::a
