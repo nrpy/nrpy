@@ -77,45 +77,67 @@ class LorentzBoost:
 
         return LorentzMatrix
 
-    def boost_vecU(self, vecU: List[sp.Expr]) -> List[sp.Expr]:
+    def boost_vectorU(self, vectorU: List[sp.Expr]) -> List[sp.Expr]:
         """
         Boost a contravariant 4-vector (upper index).
 
-        :param vecU: 4-vector in Cartesian coordinates to be boosted.
+        :param vectorU: 4-vector in Cartesian coordinates to be boosted.
 
-        :return boosted_vecU: Boosted 4-vector in Cartesian coordinates.
+        :return boosted_vectorU: Boosted 4-vector in Cartesian coordinates.
         """
         # Declare Lorentz matrix locally
         LorentzMatrix = self.LorentzMatrix
 
         # Declare indexed expression for vector to be boosted
-        boosted_vecU = ixp.zerorank1(dimension=4)
+        boosted_vectorU = ixp.zerorank1(dimension=4)
 
-        # Perform Lorentz transformation on vecU
+        # Perform Lorentz transformation on vectorU
         for mu in range(4):
             for nu in range(4):
-                boosted_vecU[mu] += LorentzMatrix[mu][nu] * vecU[nu]
-        return boosted_vecU
+                boosted_vectorU[mu] += LorentzMatrix[mu][nu] * vectorU[nu]
+        return boosted_vectorU
 
-    def inverse_boost_vecU(self, vecU: List[sp.Expr]) -> List[sp.Expr]:
+    def inverse_boost_vectorU(self, vectorU: List[sp.Expr]) -> List[sp.Expr]:
         """
         Perform inverse boost on a contravariant 4-vector (upper index).
 
-        :param vecU: 4-vector in Cartesian coordinates to be inversely boosted.
+        :param vectorU: 4-vector in Cartesian coordinates to be inversely boosted.
 
-        :return inverse_boosted_vecU: Inversely boosted 4-vector in Cartesian coordinates.
+        :return inverse_boosted_vectorU: Inversely boosted 4-vector in Cartesian coordinates.
         """
         # Declare inverse Lorentz matrix locally
         InverseLorentzMatrix = self.InverseLorentzMatrix
 
         # Declare indexed expression for vector to be inversely boosted
-        inverse_boosted_vecU = ixp.zerorank1(dimension=4)
+        inverse_boosted_vectorU = ixp.zerorank1(dimension=4)
 
-        # Perform Lorentz transformation on vecU
+        # Perform Lorentz transformation on vectorU
         for mu in range(4):
             for nu in range(4):
-                inverse_boosted_vecU[mu] += InverseLorentzMatrix[mu][nu] * vecU[nu]
-        return inverse_boosted_vecU
+                inverse_boosted_vectorU[mu] += (
+                    InverseLorentzMatrix[mu][nu] * vectorU[nu]
+                )
+        return inverse_boosted_vectorU
+
+    def boost_vectorD(self, vectorD: List[sp.Expr]) -> List[sp.Expr]:
+        """
+        Boost a covariant 4-vector (lower index).
+
+        :param vectorD: Vector in Cartesian coordinates to be boosted.
+
+        :return boosted_vectorD: Boosted vector in Cartesian coordinates.
+        """
+        # Declare inverse Lorentz matrix locally
+        InverseLorentzMatrix = self.InverseLorentzMatrix
+
+        # Declare indexed expression for tensor to be boosted
+        boosted_vectorD = ixp.zerorank1(dimension=4)
+
+        # Perform Lorentz transformation
+        for mu in range(4):
+            for nu in range(4):
+                boosted_vectorD[mu] += InverseLorentzMatrix[nu][mu] * vectorD[nu]
+        return boosted_vectorD
 
     def boost_tensorDD(self, tensorDD: List[List[sp.Expr]]) -> List[List[sp.Expr]]:
         """
@@ -234,6 +256,7 @@ if __name__ == "__main__":
 
     # Declare symbolic tensors for testing the boost functions
     vU = cast(List[sp.Expr], ixp.declarerank1("vU", dimension=4))
+    vD = cast(List[sp.Expr], ixp.declarerank1("vD", dimension=4))
     tDD = cast(
         List[List[sp.Expr]], ixp.declarerank2("tDD", dimension=4, symmetry="sym01")
     )
@@ -247,8 +270,9 @@ if __name__ == "__main__":
     )
 
     # Extend input_dict with the symbolic expressions for the boosted quantities
-    input_dict["boosted_vU"] = lb.boost_vecU(vU)
-    input_dict["inverse_boosted_vU"] = lb.inverse_boost_vecU(vU)
+    input_dict["boosted_vU"] = lb.boost_vectorU(vU)
+    input_dict["boosted_vD"] = lb.boost_vectorU(vD)
+    input_dict["inverse_boosted_vU"] = lb.inverse_boost_vectorU(vU)
     input_dict["boosted_tDD"] = lb.boost_tensorDD(tDD)
     input_dict["boosted_tDDD"] = lb.boost_tensorDDD(tDDD)
     input_dict["boosted_tDDDD"] = lb.boost_tensorDDDD(tDDDD)
