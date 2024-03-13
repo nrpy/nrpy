@@ -7,6 +7,9 @@
 #define __SUPERB_H__
 
 #include "ckio.h"
+#ifndef REAL
+#define REAL double // for the REALs below
+#endif
 
 #define restrict __restrict__
 
@@ -26,7 +29,6 @@
 #define MAP_GLOBAL_TO_LOCAL_IDX0(chareidx0, global_idx0, Nxx0chare) (global_idx0 - (chareidx0 * Nxx0chare))// Assumes grid point point lies within local grid of chare
 #define MAP_GLOBAL_TO_LOCAL_IDX1(chareidx1, global_idx1, Nxx1chare) (global_idx1 - (chareidx1 * Nxx1chare))// Assumes grid point point lies within local grid of chare
 #define MAP_GLOBAL_TO_LOCAL_IDX2(chareidx2, global_idx2, Nxx2chare) (global_idx2 - (chareidx2 * Nxx2chare))// Assumes grid point point lies within local grid of chare
-
 
 #define IDXFACES0(g, inner, j, k) ((j) + Nxx_plus_2NGHOSTS1 * ((k) + Nxx_plus_2NGHOSTS2 * ((inner) + NGHOSTS * (g))))
 #define IDXFACES1(g, inner, i, k) ((i) + Nxx_plus_2NGHOSTS0 * ((k) + Nxx_plus_2NGHOSTS2 * ((inner) + NGHOSTS * (g))))
