@@ -3,7 +3,6 @@ Use the Sympy Indexed type for relativity expressions.
 """
 from typing import Union, Set, Dict, List, Any, cast, Callable, Tuple
 from sympy import IndexedBase, Idx, Eq, Indexed, Basic, Mul, Expr, Eq, Symbol, Integer
-from here import here
 from inspect import currentframe
 from nrpy.generic.sympywrap import *
 
@@ -267,7 +266,7 @@ class GF:
             result += [mkEq(do_subs(lhs, self.subs), do_subs(eqn.rhs, inds, self.subs))]
         return result
 
-    def expand(self, arg)->Expr:
+    def expand(self, arg:Symbol)->Expr:
         return do_subs(expand_contracted_indices(arg), self.subs)
 
 if __name__ == "__main__":

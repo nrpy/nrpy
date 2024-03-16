@@ -2,7 +2,8 @@
 The waveequation! It can't be solved too many times.
 """
 
-from sympy import IndexedBase, Idx, symbols, Basic, Expr, Indexed
+from typing import cast
+from sympy import IndexedBase, Idx, symbols, Basic, Expr, Indexed, Symbol, Function
 from nrpy.generic.sympywrap import *
 from nrpy.generic.eqnlist import EqnList
 from nrpy.generic.use_indices import expand, add_sym, fill_in, GF, expand_free_indices
@@ -28,29 +29,31 @@ g   = gf.decl("g",  [i,j])
 # Fill in values
 gf.fill_in(g[i,j], flat_metric)
 # Fill in with defaults
-gf.fill_in(p_t[-i])
+gf.fill_in(p_t[-i], lambda _,i: mkSymbol(f"pD{-i-1}"))
 gf.fill_in(u_d[-i])
-gf.fill_in(p_d[-i,-j])
+gf.fill_in(p_d[-i,-j], lambda _,i,j: mkSymbol(f"pD{-i-1}_dD{-j-1}"))
 
 
 eqnlist = EqnList()
 for ii in range(3):
     term = do_subs(u_d[-ii-1], gf.subs)
-    eqnlist.add_input(term)
-    print(term)
+    eqnlist.add_input(cast(Symbol, term))
+
+eqnlist.add_input(mkSymbol("p"))
+div2 = Function("div2")
+eqnlist.add_eqn(mkSymbol("pD0_dD0"), div2(mkSymbol("p"), sympify(0), sympify(0)))
+eqnlist.add_eqn(mkSymbol("pD1_dD1"), div2(mkSymbol("p"), sympify(1), sympify(1)))
+eqnlist.add_eqn(mkSymbol("pD2_dD2"), div2(mkSymbol("p"), sympify(2), sympify(2)))
 
 eqn1 = mkEq(p_t[-j], u_d[-j])
 for eqn in gf.expand_eqn(eqn1):
-    print(eqn)
     eqnlist.add_output(eqn.lhs)
     eqnlist.add_eqn(eqn.lhs, eqn.rhs)
-eqnlist.add_output(u_t)
+eqnlist.add_output(cast(Symbol, u_t))
 eqn2 = mkEq(u_t, gf.expand(g[i,j]*p_d[-i,-j]))
-
-print(eqn2)
 
 eqnlist.add_eqn(eqn2.lhs, eqn2.rhs)
 
 eqnlist.diagnose()
-print(eqnlist.inputs)
-print(eqnlist.outputs)
+eqnlist.dump()
+eqnlist.cse()

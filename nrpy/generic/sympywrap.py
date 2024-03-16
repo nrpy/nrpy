@@ -1,5 +1,5 @@
 from typing import Tuple, List, Dict, Any, Union, cast
-from sympy import cse as cse_, IndexedBase, Idx, Symbol, Expr, Eq, Basic, sympify as sympify_, Expr, Mul, Indexed
+from sympy import cse as cse_, IndexedBase, Idx, Symbol, Expr, Eq, Basic, sympify as sympify_, Expr, Mul, Indexed, Function
 import re
 
 IndexType = Union[Idx,Mul]
@@ -13,6 +13,9 @@ def mkIdx(name:str)->Idx:
 
 def mkSymbol(name:str)->Symbol:
     return Symbol(name) # type: ignore[no-untyped-call]
+
+def mkFunction(name:str)->Symbol:
+    return Function(name) # type: ignore[no-any-return]
 
 def mkEq(a:Basic, b:Basic)->Eq:
     return Eq(a,b) # type: ignore[no-untyped-call]
@@ -32,7 +35,8 @@ def sympify(arg:Any)->Expr:
 def do_subs(sym:Expr, *tables:Union[
         Dict[Idx|Mul,int],
         Dict[Indexed, Indexed],
-        Dict[Expr, Expr]
+        Dict[Expr, Expr],
+        Dict[Symbol, Symbol]
         ])->Expr:
     result = sym
     for table in tables:

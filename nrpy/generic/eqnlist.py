@@ -3,16 +3,9 @@ from typing import TypeVar, Literal, List, Dict, Union, Tuple, Any, Set, Generic
 from sympy.core.symbol import Symbol
 from sympy.core.expr import Expr
 from sympy import symbols, Function, diff
-from sympy import cse as cse_ 
-from here import here
-from colored import colored
+from nrpy.helpers.coloring import is_colored as colored
 
 from nrpy.generic.sympywrap import *
-
-# Quieting mypy. Not sure if this trick is needed.
-cse_return = Tuple[List[Tuple[Symbol,Expr]],List[Expr]]
-def cse(arg:List[Expr])->cse_return:
-    return cast(cse_return,cse_(arg)) # type: ignore[no-untyped-call]
 
 class EqnList:
     """
@@ -76,7 +69,7 @@ class EqnList:
         for k in self.eqns:
             written.add(k)
             for q in self.eqns[k].free_symbols:
-                read.add(q)
+                read.add(cast(Symbol,q))
 
         if self.verbose:
             print(colored("Read:","green"),read)
@@ -84,7 +77,7 @@ class EqnList:
             print(colored("Temps:","green"),temps)
 
         for k in self.inputs:
-            assert k in read, f"Symbol '{k}' is in inputs, but it is never read."
+            assert k in read, f"Symbol '{k}' is in inputs, but it is never read. {read}"
             assert k not in written, f"Symbol '{k}' is in inputs, but it is assigned to."
 
         for k in self.outputs:
@@ -114,7 +107,7 @@ class EqnList:
 
         again = True
         generation = 0
-        find_cycle : Symbol = None
+        find_cycle : Optional[Symbol] = None
         while True:
             if not again and len(needed) > len(complete) and find_cycle is not None:
                 again = True
@@ -156,9 +149,9 @@ class EqnList:
         print(colored("Order:","green"),self.order)
         for k,v in self.eqns.items():
             assert k in complete, f"Eqn '{k} = {v}' does not contribute to the output."
-            val1 = complete[k]
+            val1:int = complete[k]
             for k2 in v.free_symbols:
-                val2 = complete[k2]
+                val2:int = complete[cast(Symbol,k2)]
                 assert val1 >= val2, f"Symbol '{k}' is part of an assignment cycle."
         for k in needed:
             if k not in complete:
@@ -174,14 +167,14 @@ class EqnList:
         for k,v in self.eqns.items():
             if v.is_symbol:
                 # k is not not needed
-                subs[k] = v
+                subs[k] = cast(Symbol, v)
                 print(f"Warning: equation '{k} = {v}' can be trivially eliminated")
 
         new_eqns:Dict[Symbol,Expr] = dict()
         for k in self.eqns:
             if k not in subs:
                 v = self.eqns[k]
-                v2 = v.subs(subs)
+                v2 = do_subs(v, subs)
                 new_eqns[k] = v2
 
         self.eqns = new_eqns
