@@ -133,7 +133,7 @@ superBnumericalgrids.register_CFunctions(
 superBdiagnostics.register_CFunction_diagnostics(
     list_of_CoordSystems=[CoordSystem],
     default_diagnostics_out_every=diagnostics_output_every,
-    enable_psi4_diagnostics=True,
+    enable_psi4_diagnostics=False,
     grid_center_filename_tuple=("out0d-conv_factor%.2f.txt", "convergence_factor"),
     axis_filename_tuple=(
         "out1d-AXIS-conv_factor%.2f-t%08.2f.txt",

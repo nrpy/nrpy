@@ -72,9 +72,12 @@ params_chare->invdxx2 = params->invdxx2;
 xx[0] = (REAL *restrict)malloc(sizeof(REAL)*params_chare->Nxx_plus_2NGHOSTS0);
 xx[1] = (REAL *restrict)malloc(sizeof(REAL)*params_chare->Nxx_plus_2NGHOSTS1);
 xx[2] = (REAL *restrict)malloc(sizeof(REAL)*params_chare->Nxx_plus_2NGHOSTS2);
-for (int j = 0; j < params_chare->Nxx_plus_2NGHOSTS0; j++) xx[0][j] = params_chare->xxmin0 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * params_chare->dxx0;
-for (int j = 0; j < params_chare->Nxx_plus_2NGHOSTS1; j++) xx[1][j] = params_chare->xxmin1 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * params_chare->dxx1;
-for (int j = 0; j < params_chare->Nxx_plus_2NGHOSTS2; j++) xx[2][j] = params_chare->xxmin2 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * params_chare->dxx2;
+for (int j = 0; j < params_chare->Nxx_plus_2NGHOSTS0; j++)
+  xx[0][j] = params->xxmin0 + ((REAL)(j - NGHOSTS + (params_chare->Nxx0 * chare_index[0])) + (1.0 / 2.0)) * params_chare->dxx0;
+for (int j = 0; j < params_chare->Nxx_plus_2NGHOSTS1; j++)
+  xx[1][j] = params->xxmin1 + ((REAL)(j - NGHOSTS + (params_chare->Nxx1 * chare_index[1])) + (1.0 / 2.0)) * params_chare->dxx1;
+for (int j = 0; j < params_chare->Nxx_plus_2NGHOSTS2; j++)
+  xx[2][j] = params->xxmin2 + ((REAL)(j - NGHOSTS + (params_chare->Nxx2 * chare_index[2])) + (1.0 / 2.0)) * params_chare->dxx2;
 """
     cfc.register_CFunction(
         includes=includes,

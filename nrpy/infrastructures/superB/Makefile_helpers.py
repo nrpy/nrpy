@@ -13,6 +13,7 @@ superB:
 -changed "	$(CC) $^ -o $@ $(LDFLAGS)" to  "$(CC) -language charm++ $^ -o $@ $(LDFLAGS)"
 -added compilation and linking of timestepping.cpp. timestepping.ci, main.cpp and main.ci
 -added *.decl.h *.def.h charmrun to "clean: .."
+-removed openmp "# Check for OpenMP support..."
 """
 
 from pathlib import Path
@@ -227,15 +228,6 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
 {CFLAGS_str}
 {INCLUDEDIRS_str}
 {LDFLAGS_str}
-
-# Check for OpenMP support
-OPENMP_FLAG = -fopenmp
-COMPILER_SUPPORTS_OPENMP := $(shell echo | $(CC) $(OPENMP_FLAG) -E - >/dev/null 2>&1 && echo YES || echo NO)
-
-ifeq ($(COMPILER_SUPPORTS_OPENMP), YES)
-    CFLAGS += $(OPENMP_FLAG)
-    LDFLAGS += $(OPENMP_FLAG)  # -lgomp does not work with clang in termux
-endif
 
 {OBJ_FILES_str}
 
