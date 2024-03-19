@@ -251,6 +251,26 @@ def c_codegen(
     >>> print(c_codegen(1/x**2 + 1/sp.sqrt(y) - 1/sp.sin(x*z), "double blah", include_braces=False, verbose=False))
     double blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
     <BLANKLINE>
+    >>> for c_type in list(c_type_list.__args__):
+    ...     print(c_codegen(1/x**2 + 1/sp.sqrt(y) - 1/sp.sin(x*z), f"{c_type} blah", include_braces=False, verbose=False, c_type=c_type))
+    double blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
+    <BLANKLINE>
+    float blah = -1/sinf(x*z) + (1.0/sqrtf(y)) + (1.0/((x)*(x)));
+    <BLANKLINE>
+    long double blah = -1/sinl(x*z) + (1.0/sqrtl(y)) + (1.0/((x)*(x)));
+    <BLANKLINE>
+    std::float16_t blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
+    <BLANKLINE>
+    std::float32_t blah = -1/sinf(x*z) + (1.0/sqrtf(y)) + (1.0/((x)*(x)));
+    <BLANKLINE>
+    std::float64_t blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
+    <BLANKLINE>
+    std::float128_t blah = -1/sinl(x*z) + (1.0/sqrtl(y)) + (1.0/((x)*(x)));
+    <BLANKLINE>
+    std::bfloat16_t blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
+    <BLANKLINE>
+    REAL_SIMD_ARRAY blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
+    <BLANKLINE>
     >>> print(c_codegen(x**5 + x**3 + x - 1/x, "REAL_SIMD_ARRAY blah", include_braces=False, verbose=False, enable_simd=True))
     const double dbl_Integer_1 = 1.0;
     const REAL_SIMD_ARRAY _Integer_1 = ConstSIMD(dbl_Integer_1);
@@ -280,6 +300,10 @@ def c_codegen(
     REAL_SIMD_ARRAY blah = AddSIMD(tmp0, FusedMulAddSIMD(MulSIMD(MulSIMD(MulSIMD(x, x), x), x), x, SinSIMD(tmp0)));
     }
     <BLANKLINE>
+    >>> print(c_codegen(x**5 + x**3 + sp.sin(x**3), "REAL_SIMD_ARRAY blah", enable_simd=True, c_type="float"))
+    Traceback (most recent call last):
+    ...
+    ValueError: SIMD output currently only supports double precision. Sorry!
     """
     # Injected tuples wreak havoc in this function, so check for them & error out if spotted.
     if isinstance(sympyexpr, tuple):
