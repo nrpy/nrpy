@@ -82,7 +82,7 @@ def register_CFunction_numerical_grids_and_timestep_setup() -> None:
     """
     includes = ["BHaH_defines.h"]
     desc = r"""Set up cell-centered Cartesian grids."""
-    c_type = "void"
+    cfunc_type = "void"
     name = "numerical_grids_and_timestep"
     params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata, bool calling_for_first_time"
     body = r"""
@@ -137,7 +137,7 @@ def register_CFunction_numerical_grids_and_timestep_setup() -> None:
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         include_CodeParameters_h=False,
@@ -173,7 +173,7 @@ def register_CFunction_exact_solution_single_Cartesian_point(
     includes = ["BHaH_defines.h"]
 
     desc = r"""Exact solution at a single Cartesian point (x, y, z) = (xCart0, xCart1, xCart2)."""
-    c_type = "void"
+    cfunc_type = "void"
     name = "exact_solution_single_Cartesian_point"
     params = r"""const commondata_struct *restrict commondata, const params_struct *restrict params,
     const REAL xCart0, const REAL xCart1, const REAL xCart2,  REAL *restrict exact_soln_UUGF, REAL *restrict exact_soln_VVGF
@@ -187,7 +187,7 @@ def register_CFunction_exact_solution_single_Cartesian_point(
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         include_CodeParameters_h=True,
@@ -200,7 +200,7 @@ def register_CFunction_initial_data() -> None:
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
     desc = r"""Set initial data to params.time==0 corresponds to the initial data."""
-    c_type = "void"
+    cfunc_type = "void"
     name = "initial_data"
     params = "const commondata_struct *restrict commondata, griddata_struct *restrict griddata"
     uu_gf_obj = gri.glb_gridfcs_dict["uu"]
@@ -230,7 +230,7 @@ def register_CFunction_initial_data() -> None:
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         include_CodeParameters_h=False,
@@ -248,7 +248,7 @@ def register_CFunction_diagnostics() -> None:
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
     desc = r"""Diagnostics."""
-    c_type = "void"
+    cfunc_type = "void"
     name = "diagnostics"
     params = (
         "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
@@ -311,7 +311,7 @@ if(commondata->time + commondata->dt > commondata->t_final) printf("\n");
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         include_CodeParameters_h=False,
@@ -325,7 +325,7 @@ def register_CFunction_rhs_eval() -> None:
     if enable_simd:
         includes += [os.path.join("simd", "simd_intrinsics.h")]
     desc = r"""Set RHSs for wave equation."""
-    c_type = "void"
+    cfunc_type = "void"
     name = "rhs_eval"
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL *restrict in_gfs, REAL *restrict rhs_gfs"
     # Populate uu_rhs, vv_rhs
@@ -363,7 +363,7 @@ def register_CFunction_rhs_eval() -> None:
         include_CodeParameters_h=True,
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         body=body,
@@ -385,7 +385,7 @@ def register_CFunction_apply_bcs() -> None:
     desc = """Apply (quadratic extrapolation) spatial boundary conditions to the scalar wave gridfunctions.
 BCs are applied to all six boundary faces of the cube, filling in the innermost
 ghost zone first, and moving outward."""
-    c_type = "void"
+    cfunc_type = "void"
     name = "apply_bcs"
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params,REAL *restrict gfs"
     prefunc = r"""
@@ -427,7 +427,7 @@ const int MINFACE = +1;
         includes=includes,
         prefunc=prefunc,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         include_CodeParameters_h=False,

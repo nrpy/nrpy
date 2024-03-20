@@ -201,7 +201,7 @@ if(FD_order == {fd_order}) {{
         subdirectory=thorn_name,
         includes=define_standard_includes(),
         desc=desc,
-        c_type="void",
+        cfunc_type="void",
         name=name,
         params="CCTK_ARGUMENTS",
         body=body,

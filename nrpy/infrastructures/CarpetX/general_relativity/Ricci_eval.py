@@ -108,7 +108,7 @@ if(FD_order == {fd_order}) {{
         subdirectory=thorn_name,
         includes=includes,
         desc=desc,
-        c_type="void",
+        cfunc_type="void",
         name=name,
         params="CCTK_ARGUMENTS",
         prefunc=fin.construct_FD_functions_prefunc(),

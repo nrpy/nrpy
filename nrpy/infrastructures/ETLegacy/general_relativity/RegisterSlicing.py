@@ -46,7 +46,7 @@ schedule FUNC_NAME at STARTUP
         subdirectory=thorn_name,
         includes=["Slicing.h", "cctk.h"],
         desc=desc,
-        c_type="int",
+        cfunc_type="int",
         name=name,
         params="",
         body=body,

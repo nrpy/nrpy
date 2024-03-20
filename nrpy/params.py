@@ -56,14 +56,14 @@ class CodeParameter:
     Class for handling code parameters.
 
     Doctest:
-    >>> param = CodeParameter(c_type_alias='int', module='module2', name='param1', defaultvalue='defaultval2')
+    >>> param = CodeParameter(cparam_type='int', module='module2', name='param1', defaultvalue='defaultval2')
     >>> param.name in glb_code_params_dict
     True
     """
 
     def __init__(
         self,
-        c_type_alias: str,
+        cparam_type: str,
         module: str,
         name: str,
         defaultvalue: Any = "unset",
@@ -76,7 +76,7 @@ class CodeParameter:
         """
         Initialize the CodeParameter object.
 
-        :param c_type_alias: C type alias for the parameter.
+        :param cparam_type: C/C++ type for the parameter.
         :param module: The module where the parameter is defined.
         :param name: The name of the parameter.
         :param defaultvalue: The default value for the parameter (default: "unset").
@@ -86,7 +86,7 @@ class CodeParameter:
         :param add_to_set_CodeParameters_h: Add parameter to set_CodeParameters*.h (default: True). Only applies for BHaH.
         :param add_to_glb_code_params_dict: Whether to add the parameter to the global code parameters dictionary (default: True).
         """
-        self.c_type_alias = c_type_alias
+        self.cparam_type = cparam_type
         self.module = module
         self.name = name
         self.defaultvalue = defaultvalue
@@ -96,7 +96,7 @@ class CodeParameter:
         self.commondata = commondata
         self.add_to_glb_code_params_dict = add_to_glb_code_params_dict
 
-        if c_type_alias == "#define":
+        if cparam_type == "#define":
             self.add_to_parfile = False
             self.add_to_set_CodeParameters_h = False
 
@@ -209,7 +209,7 @@ def set_parval_from_str(parameter_name: str, new_value: Any) -> None:
 
 
 def register_CodeParameters(
-    c_type_alias: str,
+    cparam_type: str,
     module: str,
     names: List[str],
     defaultvalues: Union[str, int, float, List[Union[str, int, float]]] = "unset",
@@ -222,7 +222,7 @@ def register_CodeParameters(
     """
     Initialize CodeParameters and return their symbolic representation.
 
-    :param c_type_alias: C type alias for the parameter.
+    :param cparam_type: C/C++ type for the parameter.
     :param module: The module where the parameter is defined.
     :param names: The names of the parameters.
     :param defaultvalues: A list of the default values for the parameters. If it's a single value, it will be duplicated for all parameters.
@@ -238,7 +238,7 @@ def register_CodeParameters(
 
     Doctest:
     >>> glb_code_params_dict.clear()
-    >>> a0,a1,b,c = register_CodeParameters(c_type_alias="REAL", module=__name__, names=["a0", "a1", "b", "c"], defaultvalues=1)
+    >>> a0,a1,b,c = register_CodeParameters(cparam_type="REAL", module=__name__, names=["a0", "a1", "b", "c"], defaultvalues=1)
     >>> print(a0,a1,b,c)
     a0 a1 b c
     >>> outstr = ""
@@ -267,7 +267,7 @@ def register_CodeParameters(
     symbols = []
     for name, default_val in zip(names, default_val_list):
         CP = CodeParameter(
-            c_type_alias=c_type_alias,
+            cparam_type=cparam_type,
             module=module,
             name=name,
             defaultvalue=default_val,
@@ -283,7 +283,7 @@ def register_CodeParameters(
 
 
 def register_CodeParameter(
-    c_type_alias: str,
+    cparam_type: str,
     module: str,
     name: str,
     defaultvalue: Union[str, int, float] = "unset",
@@ -296,7 +296,7 @@ def register_CodeParameter(
     """
     Initialize a CodeParameter and return its symbolic representation.
 
-    :param c_type_alias: C type alias for the parameter.
+    :param cparam_type: C/C++ type for the parameter.
     :param module: The module where the parameter is defined.
     :param name: The name of the parameter.
     :param defaultvalue: The default value for the parameter (default: "unset").
@@ -312,7 +312,7 @@ def register_CodeParameter(
 
     Doctest:
     >>> glb_code_params_dict.clear()
-    >>> a0 = register_CodeParameter(c_type_alias="REAL", module=__name__, name="a0", add_to_parfile=False, assumption="Real")
+    >>> a0 = register_CodeParameter(cparam_type="REAL", module=__name__, name="a0", add_to_parfile=False, assumption="Real")
     >>> print(a0)
     a0
     >>> outstr = ""
@@ -323,7 +323,7 @@ def register_CodeParameter(
     >>> outstr += " ".join(str(param.defaultvalue) for _, param in glb_code_params_dict.items())
     >>> print(outstr)
     unset
-    >>> a1 = register_CodeParameter(c_type_alias="REAL", module=__name__, name="a1", assumption="Real")
+    >>> a1 = register_CodeParameter(cparam_type="REAL", module=__name__, name="a1", assumption="Real")
     Traceback (most recent call last):
       ...
     ValueError: Parameter a1: Must set a default value for all parameters with add_to_parfile=True
@@ -334,7 +334,7 @@ def register_CodeParameter(
         )
 
     CP = CodeParameter(
-        c_type_alias=c_type_alias,
+        cparam_type=cparam_type,
         module=module,
         name=name,
         defaultvalue=defaultvalue,

@@ -169,7 +169,7 @@ def register_CFunction_MoL_malloc(
    - y_n_gfs are used to store data for the vector of gridfunctions y_i at t_n, at the start of each MoL timestep
    - non_y_n_gfs are needed for intermediate (e.g., k_i) storage in chosen MoL method"""
 
-    c_type = "void"
+    cfunc_type = "void"
 
     (
         y_n_gridfunctions,
@@ -209,7 +209,7 @@ def register_CFunction_MoL_malloc(
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         include_CodeParameters_h=True,
@@ -418,7 +418,7 @@ def register_CFunction_MoL_step_forward_in_time(
         includes += [os.path.join("SIMD", "SIMD_intrinsics.h")]
 
     desc = f'Method of Lines (MoL) for "{MoL_method}" method: Step forward one full timestep.\n'
-    c_type = "void"
+    cfunc_type = "void"
     name = "MoL_step_forward_in_time"
     params = (
         "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
@@ -733,7 +733,7 @@ commondata->nn++;
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         include_CodeParameters_h=False,
@@ -763,7 +763,7 @@ def register_CFunction_MoL_free_memory(
     desc = f'Method of Lines (MoL) for "{MoL_method}" method: Free memory for "{which_gfs}" gridfunctions\n'
     desc += "   - y_n_gfs are used to store data for the vector of gridfunctions y_i at t_n, at the start of each MoL timestep\n"
     desc += "   - non_y_n_gfs are needed for intermediate (e.g., k_i) storage in chosen MoL method\n"
-    c_type = "void"
+    cfunc_type = "void"
 
     (
         y_n_gridfunctions,
@@ -791,7 +791,7 @@ def register_CFunction_MoL_free_memory(
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         body=body,

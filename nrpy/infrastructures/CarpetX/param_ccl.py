@@ -44,7 +44,7 @@ restricted:
                 # only declare parameters once
                 if CPname not in CParams_registered_to_params_ccl:
                     CParam = par.glb_code_params_dict[CPname]
-                    paramccl_str += f'{CParam.c_type_alias} {CParam.name} "(see NRPy+ for parameter definition)"\n'
+                    paramccl_str += f'{CParam.cparam_type} {CParam.name} "(see NRPy+ for parameter definition)"\n'
                     paramccl_str += "{\n"
                     paramccl_str += ' *:* :: "All values accepted. NRPy+ does not restrict the allowed ranges of parameters yet."\n'
                     paramccl_str += f"}} {CParam.defaultvalue}\n\n"

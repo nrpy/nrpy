@@ -45,7 +45,7 @@ def register_CFunction_initial_guess_single_point() -> Union[None, pcg.NRPyEnv_t
     includes = ["BHaH_defines.h"]
 
     desc = r"""Compute initial guess at a single point."""
-    c_type = "void"
+    cfunc_type = "void"
     name = "initial_guess_single_point"
     params = r"""const commondata_struct *restrict commondata, const params_struct *restrict params,
     const REAL xx0, const REAL xx1, const REAL xx2,  REAL *restrict uu_ID, REAL *restrict vv_ID
@@ -59,7 +59,7 @@ def register_CFunction_initial_guess_single_point() -> Union[None, pcg.NRPyEnv_t
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         CoordSystem_for_wrapper_func="",
         name=name,
         params=params,
@@ -86,7 +86,7 @@ def register_CFunction_initial_guess_all_points(
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
     desc = r"""Set initial guess to solutions of hyperbolic relaxation equation at all points."""
-    c_type = "void"
+    cfunc_type = "void"
     name = "initial_data"
     params = (
         "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
@@ -119,7 +119,7 @@ if( read_checkpoint(commondata, griddata) ) return;
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         include_CodeParameters_h=False,
@@ -153,7 +153,7 @@ def register_CFunction_auxevol_gfs_single_point(
     includes = ["BHaH_defines.h"]
 
     desc = r"""Compute AUXEVOL grid functions at a single point."""
-    c_type = "void"
+    cfunc_type = "void"
     name = "auxevol_gfs_single_point"
     params = r"""const commondata_struct *restrict commondata, const params_struct *restrict params,
     const REAL xx0, const REAL xx1, const REAL xx2,  REAL *restrict psi_background, REAL *restrict ADD_times_AUU
@@ -167,7 +167,7 @@ def register_CFunction_auxevol_gfs_single_point(
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         CoordSystem_for_wrapper_func="",
         name=name,
         params=params,
@@ -193,7 +193,7 @@ def register_CFunction_auxevol_gfs_all_points(
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
     desc = r"""Set AUXEVOL gridfunctions at all points."""
-    c_type = "void"
+    cfunc_type = "void"
     name = "auxevol_gfs_all_points"
     params = (
         "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
@@ -222,7 +222,7 @@ def register_CFunction_auxevol_gfs_all_points(
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         include_CodeParameters_h=False,
@@ -246,7 +246,7 @@ def register_CFunction_variable_wavespeed_gfs_all_points(
         return None
     includes = ["BHaH_defines.h"]
     desc = "Compute variable wavespeed for all grids based on local grid spacing."
-    c_type = "void"
+    cfunc_type = "void"
     name = "variable_wavespeed_gfs_all_points"
     params = (
         "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
@@ -292,7 +292,7 @@ def register_CFunction_variable_wavespeed_gfs_all_points(
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         CoordSystem_for_wrapper_func="",
         name=name,
         params=params,
@@ -315,7 +315,7 @@ def register_CFunction_initialize_constant_auxevol() -> Union[None, pcg.NRPyEnv_
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
     desc = r"""Call functions that set up all AUXEVOL gridfunctions."""
-    c_type = "void"
+    cfunc_type = "void"
     name = "initialize_constant_auxevol"
     params = (
         "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
@@ -332,7 +332,7 @@ def register_CFunction_initialize_constant_auxevol() -> Union[None, pcg.NRPyEnv_
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         CoordSystem_for_wrapper_func="",
         name=name,
         params=params,
@@ -358,7 +358,7 @@ def register_CFunction_compute_L2_norm_of_gridfunction(
         return None
     includes = ["BHaH_defines.h"]
     desc = "Compute l2-norm of a gridfunction assuming a single grid."
-    c_type = "REAL"
+    cfunc_type = "REAL"
     name = "compute_L2_norm_of_gridfunction"
     params = """commondata_struct *restrict commondata, griddata_struct *restrict griddata,
                 const REAL integration_radius, const int gf_index, const REAL *restrict in_gf"""
@@ -418,7 +418,7 @@ if(r < integration_radius) {
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         CoordSystem_for_wrapper_func="",
         name=name,
         params=params,
@@ -470,7 +470,7 @@ def register_CFunction_diagnostics(
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = r"""Diagnostics."""
-    c_type = "void"
+    cfunc_type = "void"
     name = "diagnostics"
     params = (
         "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
@@ -569,7 +569,7 @@ def register_CFunction_diagnostics(
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         include_CodeParameters_h=False,
@@ -590,7 +590,7 @@ def register_CFunction_check_stop_conditions() -> Union[None, pcg.NRPyEnv_type]:
         return None
     includes = ["BHaH_defines.h"]
     desc = "Evaluate stop conditions."
-    c_type = "void"
+    cfunc_type = "void"
     name = "check_stop_conditions"
     params = (
         """commondata_struct *restrict commondata, griddata_struct *restrict griddata"""
@@ -633,7 +633,7 @@ def register_CFunction_check_stop_conditions() -> Union[None, pcg.NRPyEnv_type]:
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         CoordSystem_for_wrapper_func="",
         name=name,
         params=params,
@@ -671,7 +671,7 @@ def register_CFunction_rhs_eval(
     if enable_simd:
         includes += [str(Path("simd") / "simd_intrinsics.h")]
     desc = r"""Set RHSs for hyperbolic relaxation equation."""
-    c_type = "void"
+    cfunc_type = "void"
     name = "rhs_eval"
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], const REAL *restrict auxevol_gfs, const REAL *restrict in_gfs, REAL *restrict rhs_gfs"
     if enable_rfm_precompute:
@@ -702,7 +702,7 @@ def register_CFunction_rhs_eval(
         include_CodeParameters_h=True,
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         CoordSystem_for_wrapper_func="",
         name=name,
         params=params,
@@ -741,7 +741,7 @@ def register_CFunction_compute_residual_all_points(
     if enable_simd:
         includes += [str(Path("simd") / "simd_intrinsics.h")]
     desc = r"""Compute residual of the Hamiltonian constraint for the hyperbolic relaxation equation."""
-    c_type = "void"
+    cfunc_type = "void"
     name = "compute_residual_all_points"
     params = """const commondata_struct *restrict commondata, const params_struct *restrict params,
                 REAL *restrict xx[3], const REAL *restrict auxevol_gfs, const REAL *restrict in_gfs,
@@ -773,7 +773,7 @@ def register_CFunction_compute_residual_all_points(
         include_CodeParameters_h=True,
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         CoordSystem_for_wrapper_func="",
         name=name,
         params=params,

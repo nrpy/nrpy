@@ -329,7 +329,7 @@ def symbol_is_gridfunction_Cparameter_or_other(var: sp.Basic) -> str:
     'gridfunction'
     >>> symbol_is_gridfunction_Cparameter_or_other(sp.Symbol('x'))
     'other'
-    >>> a, b = par.register_CodeParameters(c_type_alias="double", module="gridtest", names=["a", "b"], defaultvalues=1)
+    >>> a, b = par.register_CodeParameters(cparam_type="double", module="gridtest", names=["a", "b"], defaultvalues=1)
     >>> symbol_is_gridfunction_Cparameter_or_other(a)
     'Cparameter'
     """
@@ -586,7 +586,7 @@ def read_gfs_from_memory(
     >>> hDD      = gri.register_gridfunctions_for_single_rank2("hDD", group="EVOL", symmetry="sym01")
     >>> hDD_dD   = ixp.declarerank3("hDD_dD", symmetry="sym01")
     >>> hDD_dupD = ixp.declarerank3("hDD_dupD", symmetry="sym01")
-    >>> a0, a1, b, c = par.register_CodeParameters(c_type_alias="REAL", module=__name__, names=["a0", "a1", "b", "c"], defaultvalues=1)
+    >>> a0, a1, b, c = par.register_CodeParameters(cparam_type="REAL", module=__name__, names=["a0", "a1", "b", "c"], defaultvalues=1)
     >>> exprlist = [b*hDD[1][0] + c*hDD_dD[0][1][1], c*hDD_dupD[0][2][2] + b*hDD_dupD[0][2][0] + a1*a0*vU[1]]
     >>> print(exprlist)
     [b*hDD01 + c*hDD_dD011, a0*a1*vU1 + b*hDD_dupD020 + c*hDD_dupD022]
@@ -790,28 +790,28 @@ def read_gfs_from_memory(
     # 'read_gf_from_memory_Ccode' string.
     for gfname, idx in zip(name_sorted_gfs, name_sorted_gfs_idxs):
         gf = gri.glb_gridfcs_dict[gfname]
-        c_type_alias = gf.c_type_alias
+        gf_type = gf.gf_type
         if enable_simd:
             if par.parval_from_str("Infrastructure") in ("BHaH", "CarpetX", "ETLegacy"):
-                c_type_alias = "REAL_SIMD_ARRAY"
+                gf_type = "REAL_SIMD_ARRAY"
             else:
-                raise ValueError("FIXME: Please specify the c_type for SIMD")
+                raise ValueError("FIXME: Please specify the fp_type for SIMD")
         points = sorted_list_of_points_read_from_memory[idx]
         # point is a string of integer offsets that e.g., looks like: -1,2,0
         if points:
             for point in points:
                 # convert point to set of integers
                 i0_offset, i1_offset, i2_offset = map(int, point.split(","))
-                read_gf_from_memory_Ccode += f"const {c_type_alias} {fd_temp_variable_name(gf.name, i0_offset, i1_offset, i2_offset)} = {gf.read_gf_from_memory_Ccode_onept(i0_offset, i1_offset, i2_offset, enable_simd=enable_simd)};\n"
+                read_gf_from_memory_Ccode += f"const {gf_type} {fd_temp_variable_name(gf.name, i0_offset, i1_offset, i2_offset)} = {gf.read_gf_from_memory_Ccode_onept(i0_offset, i1_offset, i2_offset, enable_simd=enable_simd)};\n"
 
     return read_gf_from_memory_Ccode
 
 
 class FDFunction:
     """
-    A class to represent Finite-Difference (FD) functions in C.
+    A class to represent Finite-Difference (FD) functions in C/C++.
 
-    :param c_type_alias: The alias for the C data type used in the function.
+    :param fp_type_alias: Infrastructure-specific alias for the C/C++ floating point data type. E.g., 'REAL' or 'CCTK_REAL'.
     :param fd_order: The order of accuracy for the finite difference scheme.
     :param operator: The operator with respect to which the derivative is taken.
     :param symbol_to_Rational_dict: Dictionary mapping sympy symbols to their corresponding sympy Rationals.
@@ -821,14 +821,14 @@ class FDFunction:
 
     def __init__(
         self,
-        c_type_alias: str,
+        fp_type_alias: str,
         fd_order: int,
         operator: str,
         symbol_to_Rational_dict: Dict[sp.Basic, sp.Rational],
         FDexpr: sp.Basic,
         enable_simd: bool,
     ) -> None:
-        self.c_type_alias = c_type_alias
+        self.fp_type_alias = fp_type_alias
         self.fd_order = fd_order
         self.operator = operator
         self.symbol_to_Rational_dict = symbol_to_Rational_dict
@@ -855,7 +855,7 @@ class FDFunction:
         if "_dupD" in deriv_var or "_ddnD" in deriv_var:
             deriv_var = f"UpwindAlgInput{deriv_var}"
         c_function_call = (
-            f"const {self.c_type_alias} {deriv_var} = {self.c_function_name}("
+            f"const {self.fp_type_alias} {deriv_var} = {self.c_function_name}("
         )
         c_function_call += ",".join(
             sorted(
@@ -878,12 +878,12 @@ class FDFunction:
         :return: A cfc.CFunction object that encapsulates the C function details.
         """
         includes: List[str] = []
-        c_type_alias = self.c_type_alias
+        fp_type_alias = self.fp_type_alias
         name = self.c_function_name
         params = ""
         params += ",".join(
             sorted(
-                f"const {c_type_alias} {str(symb)}"
+                f"const {fp_type_alias} {str(symb)}"
                 for symb in self.FDexpr.free_symbols
                 if "FDPart1_" not in str(symb)
             )
@@ -894,7 +894,7 @@ class FDFunction:
         return cfc.CFunction(
             includes=includes,
             desc=f"Finite difference function for operator {self.operator}, with FD accuracy order {self.fd_order}.",
-            c_type=f"static {self.modifiers} {c_type_alias}",
+            cfunc_type=f"static {self.modifiers} {fp_type_alias}",
             name=name,
             params=params,
             body=body,
@@ -944,7 +944,7 @@ def proto_FD_operators_to_sympy_expressions(
     >>> dum_dKOD = ixp.declarerank1("FDPROTO_dKOD")
     >>> dum_dDD  = ixp.declarerank2("FDPROTO_dDD", symmetry="sym01")
     >>> vU = ixp.declarerank1("vU")
-    >>> a0, a1, b, c = par.register_CodeParameters(c_type_alias="REAL", module=__name__, names=["a0", "a1", "b", "c"], defaultvalues=1)
+    >>> a0, a1, b, c = par.register_CodeParameters(cparam_type="REAL", module=__name__, names=["a0", "a1", "b", "c"], defaultvalues=1)
     >>> exprlist = [b*dum_dDD[1][0] + c*dum - a0*dum_dupD[2], c*dum_dKOD[1] + a1*a0*vU[1]]
     >>> free_symbols_list = []
     >>> for expr in exprlist:
@@ -995,13 +995,13 @@ def proto_FD_operators_to_sympy_expressions(
             proto_deriv_var = f"UpwindAlgInput{proto_deriv_var}"
 
         # First add element to FDlhsvarnames:
-        c_type_alias = gri.glb_gridfcs_dict[
+        gf_type = gri.glb_gridfcs_dict[
             next(iter(gri.glb_gridfcs_dict))
-        ].c_type_alias  # next(iter( grabs any key in the dict.
+        ].gf_type  # next(iter( grabs any key in the dict.
         if enable_simd:
-            if c_type_alias in ("REAL", "CCTK_REAL", "double"):
-                c_type_alias = "REAL_SIMD_ARRAY"
-        FDlhsvarnames[i] = f"const {c_type_alias} {proto_deriv_var}"
+            if gf_type in ("REAL", "CCTK_REAL", "double"):
+                gf_type = "REAL_SIMD_ARRAY"
+        FDlhsvarnames[i] = f"const {gf_type} {proto_deriv_var}"
 
         # Add element to FDexprs:
         for j in range(len(fdcoeffs[i])):
@@ -1045,7 +1045,7 @@ def proto_FD_operators_to_sympy_expressions(
         FDexprs[i] = processed_FDexpr[0]
 
         FDFunctions_dict[operator] = FDFunction(
-            c_type_alias=c_type_alias,
+            fp_type_alias=gf_type,
             fd_order=fd_order,
             operator=operator,
             symbol_to_Rational_dict=symbol_to_Rational_dicts[i],

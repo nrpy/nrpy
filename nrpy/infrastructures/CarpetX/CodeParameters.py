@@ -26,7 +26,7 @@ def read_CodeParameters(
     :return: A string that contains the generated C code.
 
     Doctests:
-    >>> _, __ = par.register_CodeParameters(c_type_alias="CCTK_REAL", module="ignore", names=["a", "b"], defaultvalues=0.125)
+    >>> _, __ = par.register_CodeParameters(cparam_type="CCTK_REAL", module="ignore", names=["a", "b"], defaultvalues=0.125)
     >>> outstr = read_CodeParameters(list_of_tuples__thorn_CodeParameter=[("thorna", "a"), ("thornb", "b")],
     ...                              enable_simd=True, declare_invdxxs=True)
     >>> print(outstr)
@@ -97,9 +97,9 @@ def read_CodeParameters(
                 raise KeyError(
                     f"{CPname} has not been registered to par.glb_code_params_dict: {par.glb_code_params_dict.keys()}"
                 ) from exc
-            if "char" in CodeParam.c_type_alias:
+            if "char" in CodeParam.cparam_type:
                 raise ValueError("Cannot declare a char array in SIMD.")
-            CPtype = CodeParam.c_type_alias
+            CPtype = CodeParam.cparam_type
             if CPtype in ("CCTK_REAL", "REAL"):
                 read_CP_str += read_CCTK_REAL_CodeParameter(CPname, CPthorn)
             else:
