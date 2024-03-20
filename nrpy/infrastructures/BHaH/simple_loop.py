@@ -371,8 +371,8 @@ for (int i = 0; i < data_index; i++) {
   fprintf(outfile, "%.15e """
 
     for key in out_quantities_dict.keys():
-        printf_c_type = "%.15e" if key[0] != "int" else "%d"
-        qsort_and_output_to_file += f"{printf_c_type} "
+        printf_format = "%.15e" if key[0] != "int" else "%d"
+        qsort_and_output_to_file += f"{printf_format} "
 
     qsort_and_output_to_file = (
         f'{qsort_and_output_to_file[:-1]}\\n", data_points[i].xCart_axis, '
@@ -503,8 +503,8 @@ LOOP_NOOMP(i0_pt,0,numpts_i0, i1_pt,0,numpts_i1, i2_pt,0,numpts_i2) {
     out_string += 'fprintf(outfile, "%.15e %.15e '
 
     for key in out_quantities_dict.keys():
-        printf_c_type = "%.15e" if key[0] != "int" else "%d"
-        out_string += f"{printf_c_type} "
+        printf_format = "%.15e" if key[0] != "int" else "%d"
+        out_string += f"{printf_format} "
 
     out_string = f'{out_string[:-1]}\\n", '
 

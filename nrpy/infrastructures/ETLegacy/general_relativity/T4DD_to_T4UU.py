@@ -148,7 +148,7 @@ schedule FUNC_NAME in MoL_PseudoEvolution before {thorn_name}_BSSN_constraints
         subdirectory=thorn_name,
         includes=define_standard_includes(),
         desc=desc,
-        c_type="void",
+        cfunc_type="void",
         name=name,
         params="CCTK_ARGUMENTS",
         body=body,

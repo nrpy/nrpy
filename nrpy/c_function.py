@@ -21,7 +21,7 @@ class CFunction:
     :param includes: A list of strings representing include files.
     :param prefunc: A string representing a pre-function code. Defaults to an empty string.
     :param desc: A description of the function.
-    :param c_type: The C type of the function (e.g., void, int). Default is "void".
+    :param cfunc_type: The C type of the function (e.g., void, int). Default is "void".
     :param name: The name of the function.
     :param params: A string representing the function's input parameters. Defaults to an empty string.
     :param include_CodeParameters_h: Boolean to enable C parameters. Default is False.
@@ -56,7 +56,7 @@ class CFunction:
         includes: Optional[List[str]] = None,
         prefunc: str = "",
         desc: str = "",
-        c_type: str = "void",
+        cfunc_type: str = "void",
         name: str = "",
         params: str = "",
         include_CodeParameters_h: bool = False,
@@ -85,7 +85,7 @@ class CFunction:
         self.includes = includes
         self.prefunc = prefunc
         self.desc = desc
-        self.c_type = c_type
+        self.cfunc_type = cfunc_type
         self.name = name
         self.params = params
         self.include_CodeParameters_h = include_CodeParameters_h
@@ -97,7 +97,7 @@ class CFunction:
         self.ET_other_thorn_CodeParams_used = ET_other_thorn_CodeParams_used
         self.clang_format_options = clang_format_options
 
-        self.function_prototype = f"{self.c_type} {self.name}({self.params});"
+        self.function_prototype = f"{self.cfunc_type} {self.name}({self.params});"
         self.raw_function, self.full_function = self.generate_full_function()
 
     @staticmethod
@@ -232,7 +232,7 @@ def register_CFunction(
     includes: Optional[List[str]] = None,
     prefunc: str = "",
     desc: str = "",
-    c_type: str = "void",
+    cfunc_type: str = "void",
     name: str = "",
     params: str = "",
     include_CodeParameters_h: bool = False,
@@ -252,7 +252,7 @@ def register_CFunction(
     :param includes: A list of strings representing include files.
     :param prefunc: A string representing a pre-function code. Defaults to an empty string.
     :param desc: A description of the function.
-    :param c_type: The C type of the function (e.g., void, int). Default is "void".
+    :param cfunc_type: The C/C++ type of the function (e.g., void, int). Default is "void".
     :param name: The name of the function.
     :param params: A string representing the function's input parameters. Defaults to an empty string.
     :param include_CodeParameters_h: Boolean to enable C parameters. Default is False.
@@ -277,7 +277,7 @@ def register_CFunction(
         includes=includes,
         prefunc=prefunc,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=actual_name,
         params=params,
         include_CodeParameters_h=include_CodeParameters_h,

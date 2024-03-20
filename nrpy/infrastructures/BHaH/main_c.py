@@ -88,7 +88,7 @@ Step 5: MAIN SIMULATION LOOP
 - Step 5.c: Step forward in time using Method of Lines with {MoL_method} algorithm, applying {boundary_conditions_desc} boundary conditions.
 - Step 5.d: Finish up step in time.
 Step 6: Free all allocated memory."""
-    c_type = "int"
+    cfunc_type = "int"
     name = "main"
     params = "int argc, const char *argv[]"
     body = r"""  commondata_struct commondata; // commondata contains parameters common to all grids.
@@ -177,7 +177,7 @@ return 0;
         includes=includes,
         prefunc=prefunc,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         body=body,

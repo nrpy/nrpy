@@ -23,7 +23,7 @@ def register_CFunction_Symmetry_registration_oldCartGrid3D(
     """
     includes = ["cctk.h", "cctk_Arguments.h", "cctk_Parameters.h", "Symmetry.h"]
     desc = f"Register symmetries for NRPy+-generated thorn {thorn_name}"
-    c_type = "void"
+    cfunc_type = "void"
     name = f"{thorn_name}_Symmetry_registration_oldCartGrid3D"
     params = "CCTK_ARGUMENTS"
 
@@ -92,7 +92,7 @@ schedule FUNC_NAME at BASEGRID as Symmetry_registration
         subdirectory=thorn_name,
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         body=body,

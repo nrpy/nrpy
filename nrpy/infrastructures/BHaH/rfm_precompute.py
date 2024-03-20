@@ -165,7 +165,7 @@ def register_CFunctions_rfm_precompute(list_of_CoordSystems: List[str]) -> None:
             includes = ["BHaH_defines.h"]
 
             desc = f"rfm_precompute_{func[0]}: reference metric precomputed lookup arrays: {func[0]}"
-            c_type = "void"
+            cfunc_type = "void"
             name = "rfm_precompute_" + func[0]
             params = "const commondata_struct *restrict commondata, const params_struct *restrict params, rfm_struct *restrict rfmstruct"
             include_CodeParameters_h = True
@@ -179,7 +179,7 @@ def register_CFunctions_rfm_precompute(list_of_CoordSystems: List[str]) -> None:
             cfc.register_CFunction(
                 includes=includes,
                 desc=desc,
-                c_type=c_type,
+                cfunc_type=cfunc_type,
                 CoordSystem_for_wrapper_func=CoordSystem,
                 name=name,
                 params=params,

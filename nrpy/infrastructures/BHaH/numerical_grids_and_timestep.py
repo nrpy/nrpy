@@ -37,7 +37,7 @@ def register_CFunction_CoordSystem_hash(list_of_CoordSystems: List[str]) -> None
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "Set up CoordSystem_hash for all grids"
-    c_type = "void"
+    cfunc_type = "void"
     name = "CoordSystem_hash_setup"
     params = (
         "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
@@ -48,7 +48,7 @@ def register_CFunction_CoordSystem_hash(list_of_CoordSystems: List[str]) -> None
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         include_CodeParameters_h=False,
@@ -78,7 +78,7 @@ def register_CFunction_numerical_grid_params_Nxx_dxx_xx(
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = f"Set up a cell-centered {CoordSystem} grid of size grid_physical_size. Set params: Nxx, Nxx_plus_2NGHOSTS, dxx, invdxx, and xx."
-    c_type = "void"
+    cfunc_type = "void"
     name = "numerical_grid_params_Nxx_dxx_xx"
     params = "commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3]"
     body = ""
@@ -110,8 +110,8 @@ params->Nxx_plus_2NGHOSTS2 = params->Nxx2 + 2*NGHOSTS;
             param_dir = f"params->xx{minmax}{dirn}"
 
             if str_rfm_value in par.glb_code_params_dict:
-                c_type_alias = par.glb_code_params_dict[str_rfm_value].c_type_alias
-                if c_type_alias != "#define":
+                cparam_type = par.glb_code_params_dict[str_rfm_value].cparam_type
+                if cparam_type != "#define":
                     body += f"{param_dir} = params->{rfm_value};\n"
                     continue
 
@@ -137,7 +137,7 @@ for (int j = 0; j < params->Nxx_plus_2NGHOSTS2; j++) xx[2][j] = params->xxmin2 +
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,
@@ -157,7 +157,7 @@ def register_CFunction_cfl_limited_timestep(CoordSystem: str) -> None:
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = f"Output minimum gridspacing ds_min on a {CoordSystem} numerical grid."
-    c_type = "void"
+    cfunc_type = "void"
     name = "cfl_limited_timestep"
     params = "commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3], bc_struct *restrict bcstruct"
     body = r"""
@@ -188,7 +188,7 @@ commondata->dt = MIN(commondata->dt, ds_min * commondata->CFL_FACTOR);
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,
@@ -213,7 +213,7 @@ def register_CFunction_numerical_grids_and_timestep(
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "Set up a cell-centered grids of size grid_physical_size."
-    c_type = "void"
+    cfunc_type = "void"
     name = "numerical_grids_and_timestep"
     params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata, bool calling_for_first_time"
     body = r"""// Step 1.a: Set CoordSystem_hash
@@ -262,7 +262,7 @@ if(calling_for_first_time) {
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         include_CodeParameters_h=False,
