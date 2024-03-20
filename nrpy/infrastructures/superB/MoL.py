@@ -26,7 +26,6 @@ from nrpy.infrastructures.BHaH.MoLtimestepping.MoL import (
     generate_gridfunction_names,
     is_diagonal_Butcher,
     register_CFunction_MoL_free_memory,
-    register_CFunction_MoL_malloc,
     single_RK_substep_input_symbolic
 )
 
@@ -40,6 +39,81 @@ _ = par.CodeParameter("REAL", __name__, "time", add_to_parfile=False, add_to_set
 _ = par.CodeParameter("REAL", __name__, "t_final", 10.0, commondata=True)
 # fmt: on
 
+
+# Also initialize all grid functions to 0.0
+def register_CFunction_MoL_malloc(
+    Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
+    MoL_method: str,
+    which_gfs: str,
+) -> None:
+    """
+    Register MoL_malloc_y_n_gfs() and MoL_malloc_non_y_n_gfs(), allocating memory for the gridfunctions indicated.
+
+    :param MoL_method: Method for the Method of Lines.
+    :param which_gfs: Specifies which gridfunctions to consider ("y_n_gfs" or "non_y_n_gfs").
+
+    Doctest: FIXME
+    # >>> register_CFunction_MoL_malloc("Euler", "y_n_gfs")
+    """
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+
+    # Create a description for the function
+    desc = f"""Method of Lines (MoL) for "{MoL_method}" method: Allocate memory for "{which_gfs}" gridfunctions
+   - y_n_gfs are used to store data for the vector of gridfunctions y_i at t_n, at the start of each MoL timestep
+   - non_y_n_gfs are needed for intermediate (e.g., k_i) storage in chosen MoL method"""
+
+    c_type = "void"
+
+    (
+        y_n_gridfunctions,
+        non_y_n_gridfunctions_list,
+        diagnostic_gridfunctions_point_to,
+        diagnostic_gridfunctions2_point_to,
+    ) = generate_gridfunction_names(Butcher_dict, MoL_method=MoL_method)
+
+    # Determine which gridfunctions to allocate memory for
+    if which_gfs == "y_n_gfs":
+        gridfunctions_list = [y_n_gridfunctions]
+    elif which_gfs == "non_y_n_gfs":
+        gridfunctions_list = non_y_n_gridfunctions_list
+    else:
+        raise ValueError(f'ERROR: which_gfs = "{which_gfs}" unrecognized.')
+
+    name = f"MoL_malloc_{which_gfs}"
+    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, MoL_gridfunctions_struct *restrict gridfuncs"
+
+    # Generate the body of the function
+    body = "const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2;\n"
+    for gridfunctions in gridfunctions_list:
+        num_gfs = (
+            "NUM_EVOL_GFS" if gridfunctions != "auxevol_gfs" else "NUM_AUXEVOL_GFS"
+        )
+        # Don't malloc a zero-sized array.
+        if num_gfs == "NUM_AUXEVOL_GFS":
+            body += "  if(NUM_AUXEVOL_GFS > 0) { "
+        body += (
+            f"gridfuncs->{gridfunctions} = (REAL *restrict)malloc(sizeof(REAL) * {num_gfs} * "
+            "Nxx_plus_2NGHOSTS_tot);\n"
+        )
+        body += rf"""for(int i = 0; i < {num_gfs} * Nxx_plus_2NGHOSTS_tot; i++) {{
+  gridfuncs->{gridfunctions} = 0.0;
+}}
+"""
+        if num_gfs == "NUM_AUXEVOL_GFS":
+            body += "} "
+
+    body += f"\ngridfuncs->diagnostic_output_gfs  = gridfuncs->{diagnostic_gridfunctions_point_to};\n"
+    body += f"gridfuncs->diagnostic_output_gfs2 = gridfuncs->{diagnostic_gridfunctions2_point_to};\n"
+
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        c_type=c_type,
+        name=name,
+        params=params,
+        include_CodeParameters_h=True,
+        body=body,
+    )
 
 
 ########################################################################################################################
