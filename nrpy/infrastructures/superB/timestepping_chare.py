@@ -86,6 +86,7 @@ def generate_diagnostics_code(dimension, direction, num_fields, tot_num_diagnost
         delete m_{dimension}_{direction};
         CkCallback cb_{dimension}_{direction}(CkIndex_Timestepping::closed_{dimension}_{direction}(0), thisProxy);
         Ck::IO::close(f_{dimension}_{direction}, cb_{dimension}_{direction});
+        count_filewritten++;
         }}
     }}
     when closed_{dimension}_{direction}(CkReductionMsg *m_{dimension}_{direction}) {{
@@ -172,13 +173,15 @@ class Timestepping : public CBase_Timestepping {
     bool is_boundarychare;
     REAL time_start;
     //bool contains_gridcenter;
-    bool write_diagnostics_this_step;
+    const int grid = 0;
     const int which_grid_diagnostics = 0;
+    bool write_diagnostics_this_step;
     Ck::IO::File f_1d_y;
     Ck::IO::File f_1d_z;
     Ck::IO::File f_2d_xy;
     Ck::IO::File f_2d_yz;
-    int grid; // grid in "for (grid = 0; grid < commondata.NUMGRIDS; grid++)" in .ci file must be declared here
+    int count_filewritten = 0;
+    const int expected_count_filewritten = 4;
 
 
     /// Member Functions (private) ///
@@ -670,6 +673,42 @@ def output_timestepping_ci(
     entry void ready_2d_yz(Ck::IO::FileReadyMsg *m);
     // Step 5: MAIN SIMULATION LOOP
     entry void start() {
+      serial { send_neighbor_data(Y_N, EAST_WEST, grid); }
+      if (thisIndex.x < commondata.Nchare0 - 1) {
+        when east_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+          serial {
+            process_ghost(EAST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+        }
+      }
+      if (thisIndex.x > 0) {
+        when west_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+          serial {
+            process_ghost(WEST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid);
+          }
+        }
+      }
+      serial { send_neighbor_data(Y_N, NORTH_SOUTH, grid); }
+      if (thisIndex.y < commondata.Nchare1 - 1) {
+        when north_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+          serial { process_ghost(NORTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+        }
+      }
+      if (thisIndex.y > 0) {
+        when south_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+          serial { process_ghost(SOUTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+        }
+      }
+      serial { send_neighbor_data(Y_N, TOP_BOTTOM, grid); }
+      if (thisIndex.z < commondata.Nchare2 - 1) {
+        when top_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+          serial { process_ghost(TOP_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+        }
+      }
+      if (thisIndex.z > 0) {
+        when bottom_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+          serial { process_ghost(BOTTOM_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+        }
+      }
       while (commondata.time < commondata.t_final) { // Main loop to progress forward in time.
         serial {
           time_start = commondata.time;
@@ -685,8 +724,14 @@ def output_timestepping_ci(
         //}
         // Create sessions for ckio file writing from first chare only
         if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
+          serial {
+            progress_indicator(&commondata, griddata_chare);
+            if (commondata.time + commondata.dt > commondata.t_final)
+              printf("\n");
+          }
           if (write_diagnostics_this_step) {
             serial {
+              count_filewritten = 0;
               {
                 char filename[256];
                 sprintf(filename, griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_1d_y, commondata.convergence_factor, commondata.time);
@@ -730,13 +775,14 @@ def output_timestepping_ci(
     file_output_str += generate_diagnostics_code("2d", "yz", "griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 2", "griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_2d_yz_pts")
 
     file_output_str += r"""
-          }
-          serial {
-            progress_indicator(&commondata, griddata_chare);
-            if (commondata.time + commondata.dt > commondata.t_final)
-              printf("\n");
+            if (count_filewritten == expected_count_filewritten) {
+              serial {thisProxy.continue_timestepping(); }
+            }
+          } else {
+            serial {thisProxy.continue_timestepping(); }
           }
         }
+        when continue_timestepping() {
 """
     if pre_MoL_step_forward_in_time != "":
         file_output_str += pre_MoL_step_forward_in_time
@@ -750,7 +796,6 @@ def output_timestepping_ci(
     for k in range(1, 5):
         rk_substep = f"RK_SUBSTEP_K{k}"
         file_output_str += generate_mol_step_forward_code(rk_substep)
-        file_output_str += "for (grid = 0; grid < commondata.NUMGRIDS; grid++) {"
         for axis in ['x', 'y', 'z']:
             # do something with rk_substep and axis
             if axis == 'x':
@@ -783,7 +828,6 @@ def output_timestepping_ci(
 
             file_output_str += generate_send_neighbor_data_code(which_gf, direction)
             file_output_str += generate_ghost_code(axis, 0, pos_ghost_type, neg_ghost_type, nchare_var)
-        file_output_str += "}"
 
     file_output_str += r"""
         """
@@ -792,6 +836,10 @@ def output_timestepping_ci(
         file_output_str += post_MoL_step_forward_in_time
     else:
         file_output_str += "  // (nothing here; specify by setting post_MoL_step_forward_in_time string in register_CFunction_main_c().)\n"
+
+    file_output_str += r"""
+        }
+    """
 
     file_output_str += r"""
         serial {
@@ -829,6 +877,7 @@ def output_timestepping_ci(
     entry void south_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
     entry void top_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
     entry void bottom_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
+    entry void continue_timestepping();
   };
 };
 """
