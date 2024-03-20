@@ -10,7 +10,7 @@ import logging
 import re  # Regular expressions can be toxic due to edge cases -- we use them sparingly
 import sys
 from typing import List, Union, Dict, Any, Optional, Sequence, Tuple
-from typing_extensions import Literal, get_args
+from typing_extensions import Literal
 import sympy as sp
 import nrpy.finite_difference as fin
 import nrpy.params as par
@@ -251,7 +251,7 @@ def c_codegen(
     >>> print(c_codegen(1/x**2 + 1/sp.sqrt(y) - 1/sp.sin(x*z), "double blah", include_braces=False, verbose=False))
     double blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
     <BLANKLINE>
-    >>> for fp_type in list(get_args(fp_type_list)):
+    >>> for fp_type in ["double", "float", "long double", "std::float16_t", "std::float32_t", "std::float64_t", "std::float128_t", "std::bfloat16_t", "REAL_SIMD_ARRAY"]:
     ...     print(c_codegen(1/x**2 + 1/sp.sqrt(y) - 1/sp.sin(x*z), f"{fp_type} blah", include_braces=False, verbose=False, fp_type=fp_type))
     double blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
     <BLANKLINE>
