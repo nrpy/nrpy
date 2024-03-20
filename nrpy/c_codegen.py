@@ -37,9 +37,7 @@ fp_type_list = Literal[
     "std::float64_t",
     "std::float128_t",
     "std::bfloat16_t",
-    # SIMD
-    "REAL_SIMD_ARRAY",
-    # Maybe add complex numbers?
+    # Maybe add complex types?
 ]
 
 
@@ -113,7 +111,7 @@ class CCodeGen:
         >>> CCodeGen(fp_type="foo")
         Traceback (most recent call last):
           ...
-        ValueError: In function '__init__': parameter 'fp_type' has value: 'foo', which is not in the allowed_values set: ('double', 'float', 'long double', 'std::float16_t', 'std::float32_t', 'std::float64_t', 'std::float128_t', 'std::bfloat16_t', 'REAL_SIMD_ARRAY')
+        ValueError: In function '__init__': parameter 'fp_type' has value: 'foo', which is not in the allowed_values set: ('double', 'float', 'long double', 'std::float16_t', 'std::float32_t', 'std::float64_t', 'std::float128_t', 'std::bfloat16_t')
 
         """
         validate_literal_arguments()
@@ -172,7 +170,7 @@ class CCodeGen:
             #         within the C code. For example for AVX-256, the C code should have
             #         #define REAL_SIMD_ARRAY __m256d
             if Infrastructure in ("BHaH", "CarpetX", "ETLegacy"):
-                self.fp_type = self.fp_type_alias = "REAL_SIMD_ARRAY"
+                self.fp_type_alias = "REAL_SIMD_ARRAY"
             else:
                 raise ValueError("FIXME: Please specify the fp_type for SIMD")
         else:
@@ -251,7 +249,7 @@ def c_codegen(
     >>> print(c_codegen(1/x**2 + 1/sp.sqrt(y) - 1/sp.sin(x*z), "double blah", include_braces=False, verbose=False))
     double blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
     <BLANKLINE>
-    >>> for fp_type in ["double", "float", "long double", "std::float16_t", "std::float32_t", "std::float64_t", "std::float128_t", "std::bfloat16_t", "REAL_SIMD_ARRAY"]:
+    >>> for fp_type in ["double", "float", "long double", "std::float16_t", "std::float32_t", "std::float64_t", "std::float128_t", "std::bfloat16_t"]:
     ...     print(c_codegen(1/x**2 + 1/sp.sqrt(y) - 1/sp.sin(x*z), f"{fp_type} blah", include_braces=False, verbose=False, fp_type=fp_type))
     double blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
     <BLANKLINE>
@@ -268,8 +266,6 @@ def c_codegen(
     std::float128_t blah = -1/sinl(x*z) + (1.0/sqrtl(y)) + (1.0/((x)*(x)));
     <BLANKLINE>
     std::bfloat16_t blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
-    <BLANKLINE>
-    REAL_SIMD_ARRAY blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
     <BLANKLINE>
     >>> print(c_codegen(x**5 + x**3 + x - 1/x, "REAL_SIMD_ARRAY blah", include_braces=False, verbose=False, enable_simd=True))
     const double dbl_Integer_1 = 1.0;
@@ -725,9 +721,6 @@ def ccode_postproc(string: str, CCGParams: CCodeGen) -> str:
             "std::float64_t": "",
             "std::float128_t": "l",
             "std::bfloat16_t": "",  # b?
-            # SIMD
-            "REAL_SIMD_ARRAY": "",  # d?
-            # Maybe add complex numbers?
         }
 
         # If the fp_type is not one of the known keys, raise an error
