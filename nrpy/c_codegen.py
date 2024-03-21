@@ -712,6 +712,7 @@ def ccode_postproc(string: str, fp_type: str) -> str:
         "tanh",
         "exp",
         "log",
+        "log10",
         "fabs",
         "fmin",
         "fmax",
