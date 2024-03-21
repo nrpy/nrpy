@@ -429,7 +429,7 @@ def c_codegen(
                 output_varname_str[i],
                 user_functions=custom_functions_for_SymPy_ccode,
             )
-            outstring += f"{ccode_postproc(processed_code, CCGParams)}\n"
+            outstring += f"{ccode_postproc(processed_code, CCGParams.fp_type)}\n"
     # Step 4b: If CSE enabled, then perform CSE using SymPy and then
     #          resulting C code.
     else:
@@ -550,7 +550,7 @@ def c_codegen(
                             common_subexpression[0],
                             user_functions=custom_functions_for_SymPy_ccode,
                         ),
-                        CCGParams,
+                        CCGParams.fp_type,
                     )
                     + "\n"
                 )
@@ -587,7 +587,7 @@ def c_codegen(
                             varnames_excluding_SCALAR_TMPs[i],
                             user_functions=custom_functions_for_SymPy_ccode,
                         ),
-                        CCGParams,
+                        CCGParams.fp_type,
                     )
                     + "\n"
                 )
@@ -672,7 +672,7 @@ custom_functions_for_SymPy_ccode = {
 }
 
 
-def ccode_postproc(string: str, CCGParams: CCodeGen) -> str:
+def ccode_postproc(string: str, fp_type: str) -> str:
     """
     Process the generated C code string for functions related to specific data types.
 
@@ -681,7 +681,7 @@ def ccode_postproc(string: str, CCGParams: CCodeGen) -> str:
     the "L" suffix on floating point numbers when not in long double precision.
 
     :param string: The original C code string.
-    :param CCGParams: The CCodeGen object containing fp_type information.
+    :param fp_type: Floating type information.
     :return: The processed C code string.
     """
     # Append the cmath function suffix to standard C math library functions:
@@ -724,13 +724,13 @@ def ccode_postproc(string: str, CCGParams: CCodeGen) -> str:
         }
 
         # If the fp_type is not one of the known keys, raise an error
-        if CCGParams.fp_type not in cmath_suffixes:
+        if fp_type not in cmath_suffixes:
             raise ValueError(
-                f"{__name__}::fp_type = '{CCGParams.fp_type}' not supported"
+                f"{__name__}::fp_type = '{fp_type}' not supported"
             )
 
         # Get the corresponding cmath function suffix from the dictionary
-        cmath_suffix = cmath_suffixes[CCGParams.fp_type]
+        cmath_suffix = cmath_suffixes[fp_type]
 
         # Add "(" to the end of each function name and join them with '|' to create a pattern that matches any of them
         pattern = "|".join([f"{func}\\(" for func in c_funcs])
@@ -741,7 +741,7 @@ def ccode_postproc(string: str, CCGParams: CCodeGen) -> str:
         )
 
         # If fp_type is not 'long double', get rid of the "L" suffix on floating point numbers:
-        if CCGParams.fp_type != "long double":
+        if fp_type != "long double":
             string = re.sub(r"([0-9.]+)L/([0-9.]+)L", "(\\1 / \\2)", string)
 
     return string
