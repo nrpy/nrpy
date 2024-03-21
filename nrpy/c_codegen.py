@@ -684,6 +684,21 @@ def ccode_postproc(string: str, fp_type: str) -> str:
     :param fp_type: Floating type information.
     :return: The processed C code string.
     """
+    # Define the dictionary to map the fp_type to the corresponding character literal
+    suffix_list = Literal["f", "l", ""]
+    cmath_suffixes: Dict[fp_type_list, suffix_list] = {
+        # Traditional C types
+        "double": "",
+        "float": "f",
+        "long double": "l",
+        # Standard C++ types
+        "std::float16_t": "",  # h?
+        "std::float32_t": "f",
+        "std::float64_t": "",
+        "std::float128_t": "l",
+        "std::bfloat16_t": "",  # b?
+    }
+    
     # Append the cmath function suffix to standard C math library functions:
     c_funcs = [
         "pow",
@@ -708,20 +723,6 @@ def ccode_postproc(string: str, fp_type: str) -> str:
             break
 
     if has_c_func:
-        # Define the dictionary to map the fp_type to corresponding cmath function suffix
-        suffix_list = Literal["f", "l", ""]
-        cmath_suffixes: Dict[fp_type_list, suffix_list] = {
-            # Traditional C types
-            "double": "",
-            "float": "f",
-            "long double": "l",
-            # Standard C++ types
-            "std::float16_t": "",  # h?
-            "std::float32_t": "f",
-            "std::float64_t": "",
-            "std::float128_t": "l",
-            "std::bfloat16_t": "",  # b?
-        }
 
         # If the fp_type is not one of the known keys, raise an error
         if fp_type not in cmath_suffixes:
@@ -743,7 +744,28 @@ def ccode_postproc(string: str, fp_type: str) -> str:
         # If fp_type is not 'long double', get rid of the "L" suffix on floating point numbers:
         if fp_type != "long double":
             string = re.sub(r"([0-9.]+)L/([0-9.]+)L", "(\\1 / \\2)", string)
+    
+    # This will not check/override values that already have a character
+    # literal attached at the end or are not complete decimal values
+    # e.g. 1. vs 1.0
+    has_floating_point_value = len(re.findall("\d+\.\d+", string)) > 0
+    if has_floating_point_value:
+        # If the fp_type is not one of the known keys, raise an error
+        if fp_type not in cmath_suffixes:
+            raise ValueError(
+                f"{__name__}::fp_type = '{fp_type}' not supported"
+            )
+        # Get the corresponding cmath function suffix from the dictionary
+        cmath_suffix = cmath_suffixes[fp_type]
 
+        # Add "(" to the end of each function name and join them with '|' to create a pattern that matches any of them
+        pattern = "\d+\.\d+"
+        
+        # Use a lambda function to add the suffix to the matched function name
+        string = re.sub(
+            pattern, lambda match: f"{match.group()[:]}{cmath_suffix}", string
+        )
+            
     return string
 
 
