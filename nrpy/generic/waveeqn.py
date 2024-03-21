@@ -29,9 +29,9 @@ g   = gf.decl("g",  [i,j])
 # Fill in values
 gf.fill_in(g[i,j], flat_metric)
 # Fill in with defaults
-gf.fill_in(p_t[-i], lambda _,i: mkSymbol(f"pD{-i-1}"))
+gf.fill_in(p_t[-i], lambda _,i: mkSymbol(f"pD{i}"))
 gf.fill_in(u_d[-i])
-gf.fill_in(p_d[-i,-j], lambda _,i,j: mkSymbol(f"pD{-i-1}_dD{-j-1}"))
+gf.fill_in(p_d[-i,-j], lambda _,i,j: mkSymbol(f"pD{i}_dD{j}"))
 
 
 eqnlist = EqnList()
@@ -41,9 +41,11 @@ for ii in range(3):
 
 eqnlist.add_input(mkSymbol("p"))
 div2 = Function("div2")
-eqnlist.add_eqn(mkSymbol("pD0_dD0"), div2(mkSymbol("p"), sympify(0), sympify(0)))
-eqnlist.add_eqn(mkSymbol("pD1_dD1"), div2(mkSymbol("p"), sympify(1), sympify(1)))
-eqnlist.add_eqn(mkSymbol("pD2_dD2"), div2(mkSymbol("p"), sympify(2), sympify(2)))
+def mkdiv2(var, a, b):
+    return div2(mkSymbol(var), sympify(a), sympify(b))
+eqnlist.add_eqn(mkSymbol("pD0_dD0"), mkdiv2("p", 0, 0))
+eqnlist.add_eqn(mkSymbol("pD1_dD1"), mkdiv2("p", 1, 1))
+eqnlist.add_eqn(mkSymbol("pD2_dD2"), mkdiv2("p", 2, 2))
 
 eqn1 = mkEq(p_t[-j], u_d[-j])
 for eqn in gf.expand_eqn(eqn1):
@@ -57,3 +59,20 @@ eqnlist.add_eqn(eqn2.lhs, eqn2.rhs)
 eqnlist.diagnose()
 eqnlist.dump()
 eqnlist.cse()
+eqnlist.diagnose()
+eqnlist.dump()
+
+def generate_cactus_thorn(
+    eqnlist : EqnList
+    project_dir : str,
+    thorn_name : str,
+    inherits : Optional[str]=None)->None:
+    construct_interface_ccl(
+        project_dir=project_dir,
+        thorn_name=thorn_name,
+        inherits=inherits,
+        USES_INCLUDEs="", # Not sure
+        is_evol_thorn=True,
+        enable_NewRad=False)
+
+generate_cactus_thorn(eqnlist, "wavetoy", "WaveToyProj")

@@ -252,11 +252,13 @@ class GF:
         #globs[basename] = ret
         return ret
 
-    def fill_in(self, indexed:IndexedBase, f:fill_in_type=fill_in_default)->None:
+    def fill_in(self, indexed:IndexedBase, f:fill_in_type=fill_in_default, base_zero:bool=True)->None:
         for tup in expand_free_indices(indexed):
             out, _ = tup
             assert type(out) == Indexed
             inds = out.indices
+            if base_zero:
+                inds = [abs(i)-1 for i in inds]
             self.subs[out] = f(out, *inds)
 
     def expand_eqn(self, eqn:Eq)->List[Eq]:
