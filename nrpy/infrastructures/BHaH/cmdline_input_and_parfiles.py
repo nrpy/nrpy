@@ -287,7 +287,7 @@ static void read_integer(const char *value, int *result, const char *param_name)
 """
     if found_REAL:
         prefunc += r"""
-static void read_double(const char *value, double *result, const char *param_name) {
+static void read_double(const char *value, REAL *result, const char *param_name) {
   char *endptr;
   errno = 0; // To detect overflow
   double double_val = strtod(value, &endptr);
@@ -297,7 +297,7 @@ static void read_double(const char *value, double *result, const char *param_nam
     exit(1);
   }
 
-  *result = double_val;
+  *result = (REAL) double_val;
 }
 """
     if found_chararray:
