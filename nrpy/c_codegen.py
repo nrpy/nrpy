@@ -43,12 +43,12 @@ fp_type_list = Literal[
 
 fp_type_to_sympy_type = {
     # Traditional C types
-    "double" : ast.float64,
-    "float"  : ast.float32,
-    "long double" : ast.float80,
+    "double": ast.float64,
+    "float": ast.float32,
+    "long double": ast.float80,
     # Standard C++ types
-    "std::float32_t" : ast.float32,
-    "std::float64_t" : ast.float64,
+    "std::float32_t": ast.float32,
+    "std::float64_t": ast.float64,
     # Unsupported types by sympy ccode generator
     # "std::bfloat16_t": ast.float16,
     # "std::float16_t" : ast.float16,
@@ -67,8 +67,8 @@ class CCodeGen:
         include_braces: bool = True,
         fp_type: fp_type_list = "double",
         fp_type_alias: str = "",
-        fp_ccg_type : ast.FloatType = ast.float64,
-        ccg_type_aliases: dict = {ast.real : ast.float64},
+        fp_ccg_type: ast.FloatType = ast.float64,
+        ccg_type_aliases: dict = {ast.real: ast.float64},
         verbose: bool = True,
         enable_cse: bool = True,
         cse_sorting: Literal["canonical", "none"] = "canonical",
@@ -141,7 +141,7 @@ class CCodeGen:
         self.fp_type = fp_type
         self.fp_type_alias = fp_type_alias
         self.fp_ccg_type = fp_type_to_sympy_type[fp_type]
-        self.ccg_type_aliases = { ast.real : self.fp_ccg_type }
+        self.ccg_type_aliases = {ast.real: self.fp_ccg_type}
         self.verbose = verbose
         self.enable_cse = enable_cse
         self.cse_sorting = cse_sorting
@@ -242,7 +242,7 @@ class CCodeGen:
 
         if self.enable_fd_codegen:
             self.automatically_read_gf_data_from_memory = True
-        
+
         if self.enable_simd and self.fp_ccg_type is not sp.codegen.ast.float64:
             raise ValueError(
                 "SIMD is only compatible with double precision floating point type."
@@ -488,10 +488,11 @@ def c_codegen(
                     RATIONAL_assignment = f"const {CCGParams.fp_type_alias} {str(v)}"
                     RATIONAL_expr = sp.Rational(p, q)
                     RATIONAL_decls += sp.ccode(
-                        RATIONAL_expr, 
+                        RATIONAL_expr,
                         assign_to=RATIONAL_assignment,
-                        type_aliases=CCGParams.ccg_type_aliases)
-                    RATIONAL_decls +="\n"
+                        type_aliases=CCGParams.ccg_type_aliases,
+                    )
+                    RATIONAL_decls += "\n"
 
         #####
         # Prior to the introduction of the SCALAR_TMP type, NRPy+
