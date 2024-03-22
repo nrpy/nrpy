@@ -11,7 +11,8 @@ import re  # Regular expressions can be toxic due to edge cases -- we use them s
 import sys
 from typing import List, Union, Dict, Any, Optional, Sequence, Tuple
 from typing_extensions import Literal
-import sympy as sp, sympy.codegen.ast as ast
+import sympy as sp
+import sympy.codegen.ast as ast
 import nrpy.finite_difference as fin
 import nrpy.params as par
 
@@ -67,8 +68,6 @@ class CCodeGen:
         include_braces: bool = True,
         fp_type: fp_type_list = "double",
         fp_type_alias: str = "",
-        fp_ccg_type: ast.FloatType = ast.float64,
-        ccg_type_aliases: dict = {ast.real: ast.float64},
         verbose: bool = True,
         enable_cse: bool = True,
         cse_sorting: Literal["canonical", "none"] = "canonical",
