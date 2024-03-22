@@ -32,13 +32,13 @@ fp_type_list = Literal[
     "float",
     "long double",
     # Standard C++ types
-    "std::float16_t",
     "std::float32_t",
     "std::float64_t",
-    "std::float128_t",
-    "std::bfloat16_t",
-    # non-Standard C types
-    "__float128",
+    # Unsupported types by sympy ccode generator
+    # "std::bfloat16_t",
+    # "std::float16_t",
+    # "__float128",
+    # "std::float128_t",
 ]
 
 fp_type_to_sympy_type = {
@@ -47,13 +47,13 @@ fp_type_to_sympy_type = {
     "float"  : ast.float32,
     "long double" : ast.float80,
     # Standard C++ types
-    "std::float16_t" : ast.float16,
     "std::float32_t" : ast.float32,
     "std::float64_t" : ast.float64,
-    "std::float128_t": ast.float128,
-    "std::bfloat16_t": ast.float16,
-    # non-Standard C types
-    "__float128" : ast.float128,
+    # Unsupported types by sympy ccode generator
+    # "std::bfloat16_t": ast.float16,
+    # "std::float16_t" : ast.float16,
+    # "__float128" : ast.float128,
+    # "std::float128_t": ast.float128,
 }
 
 
@@ -131,7 +131,7 @@ class CCodeGen:
         >>> CCodeGen(fp_type="foo")
         Traceback (most recent call last):
           ...
-        ValueError: In function '__init__': parameter 'fp_type' has value: 'foo', which is not in the allowed_values set: ('double', 'float', 'long double', 'std::float16_t', 'std::float32_t', 'std::float64_t', 'std::float128_t', 'std::bfloat16_t')
+        ValueError: In function '__init__': parameter 'fp_type' has value: 'foo', which is not in the allowed_values set: ('double', 'float', 'long double', 'std::float32_t', 'std::float64_t')
 
         """
         validate_literal_arguments()
@@ -276,23 +276,20 @@ def c_codegen(
     >>> print(c_codegen(1/x**2 + 1/sp.sqrt(y) - 1/sp.sin(x*z), "double blah", include_braces=False, verbose=False))
     double blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
     <BLANKLINE>
-    >>> for fp_type in ["double", "float", "long double", "std::float16_t", "std::float32_t", "std::float64_t", "std::float128_t", "std::bfloat16_t"]:
+    >>> for fp_type in ["double", "float", "long double", "std::float32_t", "std::float64_t"]:
     ...     print(c_codegen(1/x**2 + 1/sp.sqrt(y) - 1/sp.sin(x*z), f"{fp_type} blah", include_braces=False, verbose=False, fp_type=fp_type))
     double blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
     <BLANKLINE>
-    float blah = -1/sinf(x*z) + (1.0f/sqrtf(y)) + (1.0f/((x)*(x)));
+    float blah = -1/sinf(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
     <BLANKLINE>
-    long double blah = -1/sinl(x*z) + (1.0l/sqrtl(y)) + (1.0l/((x)*(x)));
+    long double blah = -1/sinl(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
     <BLANKLINE>
-    std::float16_t blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
-    <BLANKLINE>
-    std::float32_t blah = -1/sinf(x*z) + (1.0f/sqrtf(y)) + (1.0f/((x)*(x)));
+    std::float32_t blah = -1/sinf(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
     <BLANKLINE>
     std::float64_t blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
     <BLANKLINE>
-    std::float128_t blah = -1/sinl(x*z) + (1.0l/sqrtl(y)) + (1.0l/((x)*(x)));
-    <BLANKLINE>
-    std::bfloat16_t blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
+    >>> print(c_codegen(1.0 * sp.sin(x * sp.pi), "float blah", include_braces=False, fp_type="float", verbose=False))
+    float blah = 1.0F*sinf(M_PI*x);
     <BLANKLINE>
     >>> print(c_codegen(x**5 + x**3 + x - 1/x, "REAL_SIMD_ARRAY blah", include_braces=False, verbose=False, enable_simd=True))
     const double dbl_Integer_1 = 1.0;
@@ -494,6 +491,7 @@ def c_codegen(
                         RATIONAL_expr, 
                         assign_to=RATIONAL_assignment,
                         type_aliases=CCGParams.ccg_type_aliases)
+                    RATIONAL_decls +="\n"
 
         #####
         # Prior to the introduction of the SCALAR_TMP type, NRPy+
@@ -822,7 +820,7 @@ def gridfunction_management_and_FD_codegen(
     const REAL hDD02_i2p2 = in_gfs[IDX4(HDD02GF, i0, i1, i2+2)];
     const REAL vU1 = in_gfs[IDX4(VU1GF, i0, i1, i2)];
     const REAL FDPart1_Rational_1_2 = 1.0/2.0;
-    const REAL FDPart1_Integer_2 = 2.0;
+    const REAL FDPart1_Integer_2 = 2;
     const REAL FDPart1_Rational_3_2 = 3.0/2.0;
     const REAL FDPart1tmp0 = FDPart1_Rational_3_2*hDD02;
     const REAL UpwindAlgInputhDD_ddnD020 = invdxx0*(-FDPart1_Integer_2*hDD02_i0m1 + FDPart1_Rational_1_2*hDD02_i0m2 + FDPart1tmp0);
