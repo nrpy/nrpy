@@ -12,7 +12,7 @@ import sys
 from typing import List, Union, Dict, Any, Optional, Sequence, Tuple
 from typing_extensions import Literal
 import sympy as sp
-import sympy.codegen as spcdg  # unused, but needed due to a module bug in sympy
+import sympy.codegen.ast as sp_ast
 import nrpy.finite_difference as fin
 import nrpy.params as par
 
@@ -44,17 +44,17 @@ fp_type_list = Literal[
 
 fp_type_to_sympy_type = {
     # Traditional C types
-    "double": sp.codegen.ast.float64,
-    "float": sp.codegen.ast.float32,
-    "long double": sp.codegen.ast.float80,
+    "double": sp_ast.float64,
+    "float": sp_ast.float32,
+    "long double": sp_ast.float80,
     # Standard C++ types
-    "std::float32_t": sp.codegen.ast.float32,
-    "std::float64_t": sp.codegen.ast.float64,
+    "std::float32_t": sp_ast.float32,
+    "std::float64_t": sp_ast.float64,
     # Unsupported types by sympy ccode generator
-    # "std::bfloat16_t": sp.codegen.ast.float16,
-    # "std::float16_t" : sp.codegen.ast.float16,
-    # "__float128" : sp.codegen.ast.float128,
-    # "std::float128_t": sp.codegen.ast.float128,
+    # "std::bfloat16_t": sp_ast.float16,
+    # "std::float16_t" : sp_ast.float16,
+    # "__float128" : sp_ast.float128,
+    # "std::float128_t": sp_ast.float128,
 }
 
 
@@ -140,7 +140,7 @@ class CCodeGen:
         self.fp_type = fp_type
         self.fp_type_alias = fp_type_alias
         self.fp_ccg_type = fp_type_to_sympy_type[fp_type]
-        self.ccg_type_aliases = {sp.codegen.ast.real: self.fp_ccg_type}
+        self.ccg_type_aliases = {sp_ast.real: self.fp_ccg_type}
         self.verbose = verbose
         self.enable_cse = enable_cse
         self.cse_sorting = cse_sorting
@@ -242,7 +242,7 @@ class CCodeGen:
         if self.enable_fd_codegen:
             self.automatically_read_gf_data_from_memory = True
 
-        if self.enable_simd and self.fp_ccg_type is not sp.codegen.ast.float64:
+        if self.enable_simd and self.fp_ccg_type is not sp_ast.float64:
             raise ValueError(
                 "SIMD is only compatible with double precision floating point type."
             )
