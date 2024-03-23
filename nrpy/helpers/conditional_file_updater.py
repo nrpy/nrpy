@@ -11,7 +11,7 @@ from difflib import context_diff
 import sys
 from pathlib import Path
 from nrpy.helpers.generic import clang_format
-import nrpy.helpers.coloring as c
+import nrpy.helpers.colorize_text as c
 
 verbose = False
 nochange = False
@@ -31,7 +31,7 @@ class ConditionalFileUpdater:
     :param do_format: Flag indicating whether the new content should be formatted before comparison. Defaults to False.
 
     >>> import os
-    >>> c.is_colored = c.coloring_is_disabled
+    >>> c.is_colorized = c.leave_text_alone
     >>> test_file = "/tmp/_test_.txt"
     >>> with open(test_file, 'w') as f: # Ensure the file exists for the unlink example
     ...     _ = f.write('Temporary file content') # Ignore the return value
@@ -104,9 +104,9 @@ class ConditionalFileUpdater:
             if not nochange:
                 with open(self.fname, "w", encoding=self.encoding) as file_descriptor:
                     file_descriptor.write(new_content)
-                print(c.is_colored("[written]", "red"))
+                print(c.is_colorized("[written]", "red"))
         else:
-            print(c.is_colored("[no changes]", "green"))
+            print(c.is_colorized("[no changes]", "green"))
 
 
 if __name__ == "__main__":
