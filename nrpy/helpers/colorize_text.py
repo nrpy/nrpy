@@ -46,7 +46,7 @@ def leave_text_alone(arg: Any, c: ColorNames) -> str:  # pylint: disable=unused-
     return str(arg)
 
 
-def colorize_text(arg: Any, c: ColorNames) -> str:
+def apply_colorization(arg: Any, c: ColorNames) -> str:
     r"""
     Return the stringified version of the argument with the specified color.
     Coloring will be disabled if the output is not being sent to a notebook cell
@@ -58,9 +58,9 @@ def colorize_text(arg: Any, c: ColorNames) -> str:
     :raises AssertionError: If `c` is not a string or not a valid color name.
 
     >>> import re
-    >>> re.sub(r'\033\[', 'ESC', colorize_text('fish', 'blue'))
+    >>> re.sub(r'\033\[', 'ESC', apply_colorization('fish', 'blue'))
     'ESC34mfishESC0m'
-    >>> re.sub(r'\033\[', 'ESC', colorize_text('fish', 'green'))
+    >>> re.sub(r'\033\[', 'ESC', apply_colorization('fish', 'green'))
     'ESC32mfishESC0m'
     """
     assert isinstance(c, str), "Color name must be a string"
@@ -76,7 +76,7 @@ is_jupyter: bool = (
 )
 
 # Choose the appropriate coloring function based on the output destination
-is_colorized = leave_text_alone if not is_tty and not is_jupyter else colorize_text
+colorize = leave_text_alone if not is_tty and not is_jupyter else apply_colorization
 
 if __name__ == "__main__":
     import doctest

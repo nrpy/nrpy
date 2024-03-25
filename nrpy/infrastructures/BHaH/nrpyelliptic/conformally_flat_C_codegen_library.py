@@ -345,17 +345,17 @@ def register_CFunction_initialize_constant_auxevol() -> Union[None, pcg.NRPyEnv_
 # Define function to compute the l^2 of a gridfunction
 def register_CFunction_compute_L2_norm_of_gridfunction(
     CoordSystem: str,
-) -> Union[None, pcg.NRPyEnv_type]:
+) -> None:
     """
     Register function to compute l2-norm of a gridfunction assuming a single grid.
 
+    Note that parallel codegen is disabled for this function, as it sometimes causes a
+    multiprocess race condition on Python 3.6.7
+
     :param CoordSystem: the rfm coordinate system.
 
-    :return: None if in registration phase, else the updated NRPy environment.
+    :return: None
     """
-    if pcg.pcg_registration_phase():
-        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
-        return None
     includes = ["BHaH_defines.h"]
     desc = "Compute l2-norm of a gridfunction assuming a single grid."
     cfunc_type = "REAL"
@@ -413,7 +413,6 @@ if(r < integration_radius) {
   // Compute and output the log of the l2-norm.
   return log10(1e-16 + sqrt(squared_sum / volume_sum));  // 1e-16 + ... avoids log10(0)
 """
-    # include "set_CodeParameters.h"
 
     cfc.register_CFunction(
         includes=includes,
@@ -425,7 +424,6 @@ if(r < integration_radius) {
         include_CodeParameters_h=False,  # set_CodeParameters.h is manually included after the declaration of params_struct *restrict params
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
 # Define diagnostics function
