@@ -31,7 +31,7 @@ class ConditionalFileUpdater:
     :param do_format: Flag indicating whether the new content should be formatted before comparison. Defaults to False.
 
     >>> import os
-    >>> c.is_colorized = c.leave_text_alone
+    >>> c.colorize = c.leave_text_alone
     >>> test_file = "/tmp/_test_.txt"
     >>> with open(test_file, 'w') as f: # Ensure the file exists for the unlink example
     ...     _ = f.write('Temporary file content') # Ignore the return value
@@ -104,9 +104,9 @@ class ConditionalFileUpdater:
             if not nochange:
                 with open(self.fname, "w", encoding=self.encoding) as file_descriptor:
                     file_descriptor.write(new_content)
-                print(c.is_colorized("[written]", "red"))
+                print(c.colorize("[written]", "red"))
         else:
-            print(c.is_colorized("[no changes]", "green"))
+            print(c.colorize("[no changes]", "green"))
 
 
 if __name__ == "__main__":
