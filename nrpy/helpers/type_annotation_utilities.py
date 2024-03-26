@@ -5,7 +5,7 @@ Author: Steven R. Brandt
         sbrandt **at** cct **dot** lsu **dot** edu
 """
 
-from typing import Any, Tuple
+from typing import Any, Tuple, cast
 
 try:
     from typing import Literal  # Python 3.8+
@@ -32,7 +32,7 @@ except ImportError as ae:
         ()
         """
         if hasattr(tp, "__args__"):  # This works for Python 3.7 and later
-            return tp.__args__
+            return cast(Tuple[Any, ...], tp.__args__)
         elif is_type_literal(tp):
             return tuple(
                 tp.__values__
