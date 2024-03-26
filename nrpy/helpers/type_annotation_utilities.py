@@ -5,17 +5,30 @@ Author: Steven R. Brandt
         sbrandt **at** cct **dot** lsu **dot** edu
 """
 
-from typing import Any, Tuple
-
+from typing import Any, Tuple, cast
 try:
-    # Ideally, use get_args from typing...
-    from typing import get_args
-except ImportError as ae:
-    # But if you can't get get_args,
-    # create our own. Works for Python 3.6
+    from typing import get_args  # Python 3.8 and later
+except ImportError:
+    from typing_extensions import Literal  # Ensure you have typing_extensions installed
+
+    def is_literal_type(tp: Any) -> bool:
+        """
+        Check if the given type is a Literal type.
+
+        :param tp: The type to check.
+        :return: True if tp is a Literal type, False otherwise.
+
+        >>> is_literal_type(Literal["x", "y", "z"])
+        True
+        >>> is_literal_type(int)
+        False
+        """
+        return getattr(tp, '__origin__', None) is Literal
+
     def get_args(tp: Any) -> Tuple[Any, ...]:
         """
-        Provide the functionality of get_args for earlier versions of Python.
+        Provide the functionality of get_args for earlier versions of Python,
+        specifically handling Literal types from typing_extensions.
 
         :param tp: The type to extract arguments from.
         :return: A tuple of arguments extracted from the type.
@@ -25,12 +38,9 @@ except ImportError as ae:
         >>> get_args(int)
         ()
         """
-        if is_type_literal(tp):
-            ret = tuple(tp.__values__)
-        else:
-            ret = tuple()
-        return ret
-
+        if is_literal_type(tp):
+            return cast(Tuple[Any, ...], tp.__args__)
+        return ()
 
 import inspect
 from json import dumps
