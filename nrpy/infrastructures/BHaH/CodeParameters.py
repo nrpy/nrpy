@@ -60,7 +60,7 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
     for function_name in ["commondata_struct", "params_struct"]:
         includes = ["BHaH_defines.h"]
         desc = f"Set {function_name} to default values specified within NRPy+."
-        c_type = "void"
+        cfunc_type = "void"
         name = f"{function_name}_set_to_default"
         params = "commondata_struct *restrict commondata"
         if function_name == "params_struct":
@@ -74,7 +74,7 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
             ):
                 if CodeParam.add_to_parfile:
                     struct = "commondata" if CodeParam.commondata else "params"
-                    CPtype = CodeParam.c_type_alias
+                    CPtype = CodeParam.cparam_type
                     comment = f"  // {CodeParam.module}::{parname}"
                     defaultval = CodeParam.defaultvalue
                     if "char" in CPtype and "[" in CPtype and "]" in CPtype:
@@ -106,7 +106,7 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
             include_CodeParameters_h=False,
             includes=includes,
             desc=desc,
-            c_type=c_type,
+            cfunc_type=cfunc_type,
             name=name,
             params=params,
             body=body,
@@ -177,7 +177,7 @@ def write_CodeParameters_h_files(
                 else:
                     struct = "params"
                 # C parameter type, parameter name
-                CPtype = CodeParam.c_type_alias
+                CPtype = CodeParam.cparam_type
                 # For efficiency reasons, set_CodeParameters*.h does not set char arrays;
                 #   access those from the params struct directly.
                 pointer = "->" if pointerEnable else "."
@@ -228,10 +228,10 @@ def write_CodeParameters_h_files(
         # SIMD does not support char arrays.
         if (
             CodeParam.add_to_set_CodeParameters_h
-            and "char" not in CodeParam.c_type_alias
+            and "char" not in CodeParam.cparam_type
         ):
             struct = "commondata" if CodeParam.commondata else "params"
-            CPtype = CodeParam.c_type_alias
+            CPtype = CodeParam.cparam_type
             comment = f"  // {CodeParam.module}::{CPname}"
             if CPtype == "REAL":
                 c_output = f"const REAL NOSIMD{CPname} = {struct}->{CPname};{comment}\n"

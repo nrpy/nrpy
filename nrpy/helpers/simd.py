@@ -217,6 +217,9 @@ def expr_convert_to_simd_intrins(
 
     >>> convert(-a*b - c)
     NegFusedMulSubSIMD(a, b, c)
+
+    >>> convert(cos(a*b + c))
+    CosSIMD(FusedMulAddSIMD(a, b, c))
     """
     for item in preorder_traversal(expr):
         for arg in item.args:

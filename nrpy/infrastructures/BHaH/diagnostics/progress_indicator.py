@@ -68,7 +68,7 @@ def register_CFunction_progress_indicator(
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "time.h"]
     desc = """Output progress indicator, including elapsed time and other metrics to give the user an
     idea of the status of the computation."""
-    c_type = "void"
+    cfunc_type = "void"
     name = "progress_indicator"
     params = """commondata_struct *restrict commondata, const griddata_struct *restrict griddata"""
 
@@ -111,7 +111,7 @@ def register_CFunction_progress_indicator(
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         include_CodeParameters_h=False,

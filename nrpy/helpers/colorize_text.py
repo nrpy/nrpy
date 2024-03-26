@@ -1,7 +1,10 @@
 """
-The coloring package allows you to create output using one of six basic colors.
-It automatically shuts off coloring if output is not to a terminal.
-Exception: It will still color output in a Jupyter notebook.
+Colorize text output in terminal or Jupyter notebooks.
+
+This module provides functionality to colorize text output to the terminal or Jupyter notebooks,
+offering a choice among six basic colors: red, green, yellow, blue, magenta, and cyan. It
+automatically disables colorization when the output is not directed to a terminal or a Jupyter
+notebook to ensure compatibility across different environments.
 
 Author: Steven Brandt
 """
@@ -27,9 +30,7 @@ colors: Dict[ColorNames, str] = {
 reset: str = "\033[0m"
 
 
-def coloring_is_disabled(
-    arg: Any, c: ColorNames  # pylint: disable=unused-argument
-) -> str:
+def leave_text_alone(arg: Any, c: ColorNames) -> str:  # pylint: disable=unused-argument
     """
     Provide a stringified version of the argument with coloring disabled.
 
@@ -37,15 +38,15 @@ def coloring_is_disabled(
     :param c: A valid color name, unused here but kept for interface consistency.
     :return: A stringified and uncolored version of `arg`.
 
-    >>> coloring_is_disabled('fish', 'blue')
+    >>> leave_text_alone('fish', 'blue')
     'fish'
-    >>> coloring_is_disabled('fish', 'green')
+    >>> leave_text_alone('fish', 'green')
     'fish'
     """
     return str(arg)
 
 
-def coloring_is_enabled(arg: Any, c: ColorNames) -> str:
+def apply_colorization(arg: Any, c: ColorNames) -> str:
     r"""
     Return the stringified version of the argument with the specified color.
     Coloring will be disabled if the output is not being sent to a notebook cell
@@ -57,9 +58,9 @@ def coloring_is_enabled(arg: Any, c: ColorNames) -> str:
     :raises AssertionError: If `c` is not a string or not a valid color name.
 
     >>> import re
-    >>> re.sub(r'\033\[', 'ESC', coloring_is_enabled('fish', 'blue'))
+    >>> re.sub(r'\033\[', 'ESC', apply_colorization('fish', 'blue'))
     'ESC34mfishESC0m'
-    >>> re.sub(r'\033\[', 'ESC', coloring_is_enabled('fish', 'green'))
+    >>> re.sub(r'\033\[', 'ESC', apply_colorization('fish', 'green'))
     'ESC32mfishESC0m'
     """
     assert isinstance(c, str), "Color name must be a string"
@@ -75,9 +76,7 @@ is_jupyter: bool = (
 )
 
 # Choose the appropriate coloring function based on the output destination
-is_colored = (
-    coloring_is_disabled if not is_tty and not is_jupyter else coloring_is_enabled
-)
+colorize = leave_text_alone if not is_tty and not is_jupyter else apply_colorization
 
 if __name__ == "__main__":
     import doctest

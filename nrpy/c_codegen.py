@@ -26,7 +26,7 @@ from nrpy.helpers.type_annotation_utilities import (
     generate_class_representation,
 )
 
-c_type_list = Literal[
+fp_type_list = Literal[
     # Traditional C types
     "double",
     "float",
@@ -37,9 +37,7 @@ c_type_list = Literal[
     "std::float64_t",
     "std::float128_t",
     "std::bfloat16_t",
-    # SIMD
-    "REAL_SIMD_ARRAY",
-    # Maybe add complex numbers?
+    # Maybe add complex types?
 ]
 
 
@@ -51,8 +49,8 @@ class CCodeGen:
         prestring: str = "",
         poststring: str = "",
         include_braces: bool = True,
-        c_type: c_type_list = "double",
-        c_type_alias: str = "",
+        fp_type: fp_type_list = "double",
+        fp_type_alias: str = "",
         verbose: bool = True,
         enable_cse: bool = True,
         cse_sorting: Literal["canonical", "none"] = "canonical",
@@ -83,9 +81,9 @@ class CCodeGen:
         :param prestring: String to be included before the code.
         :param poststring: String to be included after the code.
         :param include_braces: Boolean to decide whether to include braces.
-        :param c_type: C data type, such as 'double'.
-        :param c_type_alias: Alias for the C data type, such as 'REAL' or 'CCTK_REAL'.
-        :param verbose: Boolean for verbosity.
+        :param fp_type: floating-point data type, such as 'double'.
+        :param fp_type_alias: Infrastructure-specific alias for the C/C++ floating point data type. E.g., 'REAL' or 'CCTK_REAL'.
+        :param verbose: Boolean to enable verbose output.
         :param enable_cse: Boolean to enable common subexpression elimination.
         :param cse_sorting: Sorting method for common subexpression elimination.
         :param cse_varprefix: Variable prefix for common subexpression elimination.
@@ -107,21 +105,21 @@ class CCodeGen:
         :param upwind_control_vec: Upwind control vector as a symbol or list of symbols.
         :param clang_format_enable: Boolean to enable clang formatting.
         :param clang_format_options: Options for clang formatting.
-        >>> c = CCodeGen(c_type="double")
-        >>> c.c_type
+        >>> c = CCodeGen(fp_type="double")
+        >>> c.fp_type
         'double'
-        >>> CCodeGen(c_type="foo")
+        >>> CCodeGen(fp_type="foo")
         Traceback (most recent call last):
           ...
-        ValueError: In function '__init__': parameter 'c_type' has value: 'foo', which is not in the allowed_values set: ('double', 'float', 'long double', 'std::float16_t', 'std::float32_t', 'std::float64_t', 'std::float128_t', 'std::bfloat16_t', 'REAL_SIMD_ARRAY')
+        ValueError: In function '__init__': parameter 'fp_type' has value: 'foo', which is not in the allowed_values set: ('double', 'float', 'long double', 'std::float16_t', 'std::float32_t', 'std::float64_t', 'std::float128_t', 'std::bfloat16_t')
 
         """
         validate_literal_arguments()
         self.prestring = prestring
         self.poststring = poststring
         self.include_braces = include_braces
-        self.c_type = c_type
-        self.c_type_alias = c_type_alias
+        self.fp_type = fp_type
+        self.fp_type_alias = fp_type_alias
         self.verbose = verbose
         self.enable_cse = enable_cse
         self.cse_sorting = cse_sorting
@@ -160,30 +158,30 @@ class CCodeGen:
 
         # Now, process input!
 
-        # Set c_type and c_type_alias
+        # Set fp_type and fp_type_alias
         Infrastructure = par.parval_from_str("Infrastructure")
         if self.enable_simd:
-            if self.c_type not in "double":
+            if self.fp_type not in "double":
                 raise ValueError(
                     "SIMD output currently only supports double precision. Sorry!"
                 )
-            # If enable_simd==True, then check if c_type=="double". If not, error out.
-            #         Otherwise set c_type="REAL_SIMD_ARRAY", which should be #define'd
+            # If enable_simd==True, then check if fp_type=="double". If not, error out.
+            #         Otherwise set fp_type="REAL_SIMD_ARRAY", which should be #define'd
             #         within the C code. For example for AVX-256, the C code should have
             #         #define REAL_SIMD_ARRAY __m256d
             if Infrastructure in ("BHaH", "CarpetX", "ETLegacy"):
-                self.c_type = self.c_type_alias = "REAL_SIMD_ARRAY"
+                self.fp_type_alias = "REAL_SIMD_ARRAY"
             else:
-                raise ValueError("FIXME: Please specify the c_type for SIMD")
+                raise ValueError("FIXME: Please specify the fp_type for SIMD")
         else:
             if Infrastructure == "NRPy":
-                self.c_type_alias = self.c_type
+                self.fp_type_alias = self.fp_type
             elif Infrastructure == "BHaH":
-                self.c_type_alias = "REAL"
+                self.fp_type_alias = "REAL"
             elif Infrastructure in ("ETLegacy", "CarpetX"):
-                self.c_type_alias = "CCTK_REAL"
+                self.fp_type_alias = "CCTK_REAL"
             else:
-                self.c_type_alias = ""
+                self.fp_type_alias = ""
 
         if self.enable_GoldenKernels:
             self.enable_cse_preprocess = True
@@ -251,6 +249,24 @@ def c_codegen(
     >>> print(c_codegen(1/x**2 + 1/sp.sqrt(y) - 1/sp.sin(x*z), "double blah", include_braces=False, verbose=False))
     double blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
     <BLANKLINE>
+    >>> for fp_type in ["double", "float", "long double", "std::float16_t", "std::float32_t", "std::float64_t", "std::float128_t", "std::bfloat16_t"]:
+    ...     print(c_codegen(1/x**2 + 1/sp.sqrt(y) - 1/sp.sin(x*z), f"{fp_type} blah", include_braces=False, verbose=False, fp_type=fp_type))
+    double blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
+    <BLANKLINE>
+    float blah = -1/sinf(x*z) + (1.0/sqrtf(y)) + (1.0/((x)*(x)));
+    <BLANKLINE>
+    long double blah = -1/sinl(x*z) + (1.0/sqrtl(y)) + (1.0/((x)*(x)));
+    <BLANKLINE>
+    std::float16_t blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
+    <BLANKLINE>
+    std::float32_t blah = -1/sinf(x*z) + (1.0/sqrtf(y)) + (1.0/((x)*(x)));
+    <BLANKLINE>
+    std::float64_t blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
+    <BLANKLINE>
+    std::float128_t blah = -1/sinl(x*z) + (1.0/sqrtl(y)) + (1.0/((x)*(x)));
+    <BLANKLINE>
+    std::bfloat16_t blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
+    <BLANKLINE>
     >>> print(c_codegen(x**5 + x**3 + x - 1/x, "REAL_SIMD_ARRAY blah", include_braces=False, verbose=False, enable_simd=True))
     const double dbl_Integer_1 = 1.0;
     const REAL_SIMD_ARRAY _Integer_1 = ConstSIMD(dbl_Integer_1);
@@ -280,6 +296,10 @@ def c_codegen(
     REAL_SIMD_ARRAY blah = AddSIMD(tmp0, FusedMulAddSIMD(MulSIMD(MulSIMD(MulSIMD(x, x), x), x), x, SinSIMD(tmp0)));
     }
     <BLANKLINE>
+    >>> print(c_codegen(x**5 + x**3 + sp.sin(x**3), "REAL_SIMD_ARRAY blah", enable_simd=True, fp_type="float"))
+    Traceback (most recent call last):
+    ...
+    ValueError: SIMD output currently only supports double precision. Sorry!
     """
     # Injected tuples wreak havoc in this function, so check for them & error out if spotted.
     if isinstance(sympyexpr, tuple):
@@ -439,7 +459,7 @@ def c_codegen(
                     CCGParams.symbol_to_Rational_dict[v].q
                 )
                 if not CCGParams.enable_simd:
-                    RATIONAL_decls += f"const {CCGParams.c_type_alias} {str(v)} = "
+                    RATIONAL_decls += f"const {CCGParams.fp_type_alias} {str(v)} = "
 
                     # Since Integer is a subclass of Rational in SymPy, we need only check whether
                     # the denominator q = 1 to determine if a rational is an integer.
@@ -505,7 +525,7 @@ def c_codegen(
         # Processing common subexpressions and results from cse_postprocess
         # cse_results[0] contains common subexpression definitions, does not specify varnames.
         for common_subexpression in cse_results[0]:
-            full_type_string = f"const {CCGParams.c_type_alias} "
+            full_type_string = f"const {CCGParams.fp_type_alias} "
             if CCGParams.enable_simd:
                 simd_expr = expr_convert_to_simd_intrins(
                     common_subexpression[1],
@@ -657,11 +677,11 @@ def ccode_postproc(string: str, CCGParams: CCodeGen) -> str:
     Process the generated C code string for functions related to specific data types.
 
     This function appends the appropriate suffix to standard C math library functions
-    based on the data c_type (e.g., pow -> powf in single precision). It also removes
+    based on the data fp_type (e.g., pow -> powf in single precision). It also removes
     the "L" suffix on floating point numbers when not in long double precision.
 
     :param string: The original C code string.
-    :param CCGParams: The CCodeGen object containing c_type information.
+    :param CCGParams: The CCodeGen object containing fp_type information.
     :return: The processed C code string.
     """
     # Append the cmath function suffix to standard C math library functions:
@@ -688,9 +708,9 @@ def ccode_postproc(string: str, CCGParams: CCodeGen) -> str:
             break
 
     if has_c_func:
-        # Define the dictionary to map the c_type to corresponding cmath function suffix
+        # Define the dictionary to map the fp_type to corresponding cmath function suffix
         suffix_list = Literal["f", "l", ""]
-        cmath_suffixes: Dict[c_type_list, suffix_list] = {
+        cmath_suffixes: Dict[fp_type_list, suffix_list] = {
             # Traditional C types
             "double": "",
             "float": "f",
@@ -701,17 +721,16 @@ def ccode_postproc(string: str, CCGParams: CCodeGen) -> str:
             "std::float64_t": "",
             "std::float128_t": "l",
             "std::bfloat16_t": "",  # b?
-            # SIMD
-            "REAL_SIMD_ARRAY": "",  # d?
-            # Maybe add complex numbers?
         }
 
-        # If the c_type is not one of the known keys, raise an error
-        if CCGParams.c_type not in cmath_suffixes:
-            raise ValueError(f"{__name__}::c_type = '{CCGParams.c_type}' not supported")
+        # If the fp_type is not one of the known keys, raise an error
+        if CCGParams.fp_type not in cmath_suffixes:
+            raise ValueError(
+                f"{__name__}::fp_type = '{CCGParams.fp_type}' not supported"
+            )
 
         # Get the corresponding cmath function suffix from the dictionary
-        cmath_suffix = cmath_suffixes[CCGParams.c_type]
+        cmath_suffix = cmath_suffixes[CCGParams.fp_type]
 
         # Add "(" to the end of each function name and join them with '|' to create a pattern that matches any of them
         pattern = "|".join([f"{func}\\(" for func in c_funcs])
@@ -721,8 +740,8 @@ def ccode_postproc(string: str, CCGParams: CCodeGen) -> str:
             pattern, lambda match: f"{match.group()[:-1]}{cmath_suffix}(", string
         )
 
-        # If c_type is not 'long double', get rid of the "L" suffix on floating point numbers:
-        if CCGParams.c_type != "long double":
+        # If fp_type is not 'long double', get rid of the "L" suffix on floating point numbers:
+        if CCGParams.fp_type != "long double":
             string = re.sub(r"([0-9.]+)L/([0-9.]+)L", "(\\1 / \\2)", string)
 
     return string
@@ -794,8 +813,8 @@ def gridfunction_management_and_FD_codegen(
     >>> gri.glb_gridfcs_dict.clear()
     >>> mem_alloc_style = "210"
     >>> enable_simd=False
-    >>> c_type="double"
-    >>> c_type_alias="REAL"
+    >>> fp_type="double"
+    >>> fp_type_alias="REAL"
     >>> enable_fd_functions=False
     >>> fd_order = 2
     >>> upwind_control_vec = gri.register_gridfunctions_for_single_rank1("vetU", group="EVOL")
@@ -803,7 +822,7 @@ def gridfunction_management_and_FD_codegen(
     >>> hDD      = gri.register_gridfunctions_for_single_rank2("hDD", group="EVOL", symmetry="sym01")
     >>> hDD_dD   = ixp.declarerank3("hDD_dD", symmetry="sym01")
     >>> hDD_dupD = ixp.declarerank3("hDD_dupD", symmetry="sym01")
-    >>> a0, a1, b, c = par.register_CodeParameters(c_type_alias=c_type_alias, module=__name__, names=["a0", "a1", "b", "c"], defaultvalues=1)
+    >>> a0, a1, b, c = par.register_CodeParameters(cparam_type=fp_type_alias, module=__name__, names=["a0", "a1", "b", "c"], defaultvalues=1)
     >>> lhs_list = ["REAL a0",                       "REAL a1"]
     >>> exprlist = [b*hDD[1][0] + c*hDD_dD[0][1][1], c*hDD_dupD[0][2][2] + b*hDD_dupD[0][2][0] + a1*a0*vU[1]]
     >>> print(exprlist)
@@ -993,7 +1012,7 @@ def gridfunction_management_and_FD_codegen(
             for dirn in upwind_directions:
                 upwind_FDexprs += [CCGParams.upwind_control_vec[dirn]]
                 upwind_FDlhsvarnames += [
-                    f"const {CCGParams.c_type_alias} UpwindControlVectorU{dirn}"
+                    f"const {CCGParams.fp_type_alias} UpwindControlVectorU{dirn}"
                 ]
         return upwind_FDexprs, upwind_FDlhsvarnames, upwind_directions
 
@@ -1085,7 +1104,7 @@ def gridfunction_management_and_FD_codegen(
                 FDFunction.CFunction = FDFunction.CFunction_fd_function(
                     c_codegen(
                         FDFunction.FDexpr,
-                        f"const {CCGParams.c_type_alias} FD_result",
+                        f"const {CCGParams.fp_type_alias} FD_result",
                         **kwargs_FDPart1,
                     )
                 )
@@ -1109,7 +1128,7 @@ def gridfunction_management_and_FD_codegen(
 const REAL_SIMD_ARRAY upwind_Integer_{n} = ConstSIMD(tmp_upwind_Integer_{n});
 """
             for dirn in upwind_directions:
-                Coutput += f"const {CCGParams.c_type_alias} Upwind{dirn} = UPWIND_ALG(UpwindControlVectorU{dirn});\n"
+                Coutput += f"const {CCGParams.fp_type_alias} Upwind{dirn} = UPWIND_ALG(UpwindControlVectorU{dirn});\n"
 
         upwindU = [sp.sympify(0) for _ in range(3)]
         # Populate upwindU with symbolic expressions based on direction
@@ -1140,7 +1159,7 @@ const REAL_SIMD_ARRAY upwind_Integer_{n} = ConstSIMD(tmp_upwind_Integer_{n});
 
                 # Update expression and variable lists
                 upwind_expr_list.append(upwind_expr)
-                var_list.append(f"const {CCGParams.c_type_alias} {deriv_var}")
+                var_list.append(f"const {CCGParams.fp_type_alias} {deriv_var}")
 
         # Copy kwargs
         kwargs_FDPart2 = kwargs_FDPart1.copy()

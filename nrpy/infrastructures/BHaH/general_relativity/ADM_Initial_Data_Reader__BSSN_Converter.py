@@ -46,7 +46,7 @@ def register_CFunction_exact_ADM_ID_function(
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = f"{IDtype} initial data"
-    c_type = "void"
+    cfunc_type = "void"
     name = IDtype
     params = """const commondata_struct *restrict commondata, const params_struct *restrict params,
     const REAL xCart[3], const ID_persist_struct *restrict ID_persist, initial_data_struct *restrict initial_data"""
@@ -102,7 +102,7 @@ def register_CFunction_exact_ADM_ID_function(
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         include_CodeParameters_h=True,
@@ -123,7 +123,7 @@ def Cfunction_ADM_SphorCart_to_Cart(
     :return: The name of the generated C function.
     """
     desc = "Convert ADM variables from the spherical or Cartesian basis to the Cartesian basis"
-    c_type = "static void"
+    cfunc_type = "static void"
     name = "ADM_SphorCart_to_Cart"
     params = """const commondata_struct *restrict commondata, const params_struct *restrict params,
     const REAL xCart[3], const initial_data_struct *restrict initial_data,
@@ -232,7 +232,7 @@ def Cfunction_ADM_SphorCart_to_Cart(
     return cfc.CFunction(
         subdirectory=IDCoordSystem,  # Probably not needed
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         include_CodeParameters_h=True,
@@ -249,7 +249,7 @@ def Cfunction_ADM_Cart_to_BSSN_Cart(include_T4UU: bool = False) -> str:
     :return: A string representing the full C function.
     """
     desc = "Convert ADM variables in the Cartesian basis to BSSN variables in the Cartesian basis"
-    c_type = "static void"
+    cfunc_type = "static void"
     name = "ADM_Cart_to_BSSN_Cart"
     params = """const commondata_struct *restrict commondata, const params_struct *restrict params,
     const REAL xCart[3], const ADM_Cart_basis_struct *restrict ADM_Cart_basis,
@@ -305,7 +305,7 @@ def Cfunction_ADM_Cart_to_BSSN_Cart(include_T4UU: bool = False) -> str:
 
     return cfc.CFunction(
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         body=body,
@@ -324,7 +324,7 @@ def Cfunction_BSSN_Cart_to_rescaled_BSSN_rfm(
     """
     desc = rf"""Cartesian -> {CoordSystem} basis transformation of BSSN vectors/tensors *except* lambda^i.
 After the basis transform, all BSSN quantities are rescaled."""
-    c_type = "static void"
+    cfunc_type = "static void"
     name = "BSSN_Cart_to_rescaled_BSSN_rfm"
     params = """const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xCart[3],
                                            const BSSN_Cart_basis_struct *restrict BSSN_Cart_basis,
@@ -424,7 +424,7 @@ After the basis transform, all BSSN quantities are rescaled."""
     return cfc.CFunction(
         subdirectory=CoordSystem,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         include_CodeParameters_h=True,
@@ -441,7 +441,7 @@ def Cfunction_initial_data_lambdaU_grid_interior(CoordSystem: str) -> str:
     :param CoordSystem: The coordinate system to be used.
     :return: The full function generated for computing lambdaU.
     """
-    c_type = "static void"
+    cfunc_type = "static void"
 
     desc = f"Compute lambdaU in {CoordSystem} coordinates"
     name = "initial_data_lambdaU_grid_interior"
@@ -493,7 +493,7 @@ def Cfunction_initial_data_lambdaU_grid_interior(CoordSystem: str) -> str:
     return cfc.CFunction(
         subdirectory=CoordSystem,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         include_CodeParameters_h=True,
@@ -616,7 +616,7 @@ typedef struct __rescaled_BSSN_rfm_basis_struct__ {
     prefunc += Cfunction_initial_data_lambdaU_grid_interior(CoordSystem=CoordSystem)
 
     desc = f"Read ADM data in the {IDCoordSystem} basis, and output rescaled BSSN data in the {CoordSystem} basis"
-    c_type = "void"
+    cfunc_type = "void"
     name = f"initial_data_reader__convert_ADM_{IDCoordSystem}_to_BSSN"
     params = """const commondata_struct *restrict commondata, const params_struct *restrict params,
     REAL *restrict xx[3], bc_struct *restrict bcstruct, MoL_gridfunctions_struct *restrict gridfuncs,
@@ -684,7 +684,7 @@ typedef struct __rescaled_BSSN_rfm_basis_struct__ {
         includes=includes,
         prefunc=prefunc,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,

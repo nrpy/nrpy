@@ -147,7 +147,7 @@ schedule FUNC_NAME in ODESolvers_PostStep after {thorn_name}_enforce_detgammahat
         subdirectory=thorn_name,
         includes=includes,
         desc=desc,
-        c_type="void",
+        cfunc_type="void",
         name=name,
         params="CCTK_ARGUMENTS",
         body=body,

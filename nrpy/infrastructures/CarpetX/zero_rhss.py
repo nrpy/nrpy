@@ -19,7 +19,7 @@ def register_CFunction_zero_rhss(thorn_name: str) -> None:
     """
     includes = ["cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
     desc = f"Zero RHSs for NRPy+-generated thorn {thorn_name}"
-    c_type = "void"
+    cfunc_type = "void"
     name = f"{thorn_name}_zero_rhss"
     params = "CCTK_ARGUMENTS"
     body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
@@ -54,7 +54,7 @@ schedule FUNC_NAME at BASEGRID after Symmetry_registration
         subdirectory=thorn_name,
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         body=body,

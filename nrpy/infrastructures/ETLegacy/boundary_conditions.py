@@ -39,7 +39,7 @@ NewRad directly modifies the RHSs.
 
 This code is based on Kranc's McLachlan/ML_BSSN/src/Boundaries.cc code."""
 
-    c_type = "void"
+    cfunc_type = "void"
     name = f"{thorn_name}_specify_Driver_BoundaryConditions"
     params = "CCTK_ARGUMENTS"
 
@@ -75,7 +75,7 @@ schedule FUNC_NAME in Driver_BoundarySelect
         subdirectory=thorn_name,
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         body=body,
@@ -113,7 +113,7 @@ NewRad directly modifies the RHSs.
 
 This code is based on Kranc's McLachlan/ML_BSSN/src/Boundaries.cc code."""
 
-    c_type = "void"
+    cfunc_type = "void"
     name = f"{thorn_name}_specify_evol_BoundaryConditions"
     params = "CCTK_ARGUMENTS"
 
@@ -148,7 +148,7 @@ schedule GROUP ApplyBCs as {thorn_name}_evol_ApplyBCs in MoL_PostStep after FUNC
         subdirectory=thorn_name,
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         body=body,
@@ -182,7 +182,7 @@ def register_CFunction_specify_aux_BoundaryConditions(thorn_name: str) -> None:
 
 This code is based on Kranc's McLachlan/ML_BSSN/src/Boundaries.cc code."""
 
-    c_type = "void"
+    cfunc_type = "void"
     name = f"{thorn_name}_specify_aux_BoundaryConditions"
     params = "CCTK_ARGUMENTS"
 
@@ -218,7 +218,7 @@ schedule GROUP ApplyBCs as {thorn_name}_aux_ApplyBCs in MoL_PseudoEvolution afte
         subdirectory=thorn_name,
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         body=body,
@@ -251,7 +251,7 @@ Set up NewRad boundary conditions.
     the variable at r->infinity. var_char_speed is the propagation
     speed at the outer boundary, and var_radpower is the radial
     falloff rate."""
-    c_type = "void"
+    cfunc_type = "void"
     name = f"{thorn_name}_specify_NewRad_BoundaryConditions_parameters"
     params = "CCTK_ARGUMENTS"
     body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
@@ -280,7 +280,7 @@ schedule FUNC_NAME in MoL_CalcRHS after {thorn_name}_RHS
         subdirectory=thorn_name,
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         body=body,

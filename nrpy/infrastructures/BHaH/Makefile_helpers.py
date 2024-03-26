@@ -215,7 +215,9 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
             raise TypeError(
                 "Error: output_CFunctions_function_prototypes_and_construct_Makefile(): include_dirs must be a list!"
             )
-        INCLUDEDIRS_str = " ".join(f"-I{include_dir}" for include_dir in include_dirs)
+        INCLUDEDIRS_str += " " + " ".join(
+            f"-I{include_dir}" for include_dir in include_dirs
+        )
 
     # Below code is responsible for either writing a Makefile or a backup shell script depending on the conditions
     Makefile_str = f"""CC ?= {CC}  # assigns the value CC to {CC} only if environment variable CC is not already set

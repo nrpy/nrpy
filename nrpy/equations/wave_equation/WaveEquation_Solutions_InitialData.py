@@ -85,7 +85,7 @@ def SphericalGaussian(
     # provided as a C parameter by MoLtimestepping.MoL
     time = sp.symbols("time", real=True)
     sigma = par.register_CodeParameter(
-        c_type_alias="REAL",
+        cparam_type="REAL",
         module=thismodule,
         name="sigma",
         defaultvalue=default_sigma,
@@ -151,7 +151,7 @@ def PlaneWave(
         "time", real=True
     )  # provided as a C parameter by MoLtimestepping.MoL
     kk = par.register_CodeParameters(
-        c_type_alias="REAL",
+        cparam_type="REAL",
         module=thismodule,
         names=["kk0", "kk1", "kk2"],
         defaultvalues=[default_k0, default_k1, default_k2],

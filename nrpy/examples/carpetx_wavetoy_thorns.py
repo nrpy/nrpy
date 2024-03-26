@@ -127,7 +127,7 @@ DECLARE_CCTK_PARAMETERS;
 
     gri.register_gridfunctions(["uu_exact", "vv_exact"], group="AUX")
     desc = r"""Set the exact solution at all grid points."""
-    c_type = 'extern "C" void'
+    cfunc_type = 'extern "C" void'
     name = f"{thorn_name}_exact_solution_all_points"
     params = "CCTK_ARGUMENTS"
     body = f"DECLARE_CCTK_ARGUMENTSX_{name};\n"
@@ -185,7 +185,7 @@ schedule FUNC_NAME IN {schedule_bin}
         includes=includes,
         prefunc=prefunc,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         body=body,
@@ -212,7 +212,7 @@ def register_CFunction_rhs_eval(thorn_name: str) -> Union[None, pcg.NRPyEnv_type
     if enable_simd:
         includes += [os.path.join("simd", "simd_intrinsics.h")]
     desc = r"""Set RHSs for wave equation."""
-    c_type = "void"
+    cfunc_type = "void"
     name = f"{thorn_name}_rhs_eval"
     params = "CCTK_ARGUMENTS"
     # Populate uu_rhs, vv_rhs
@@ -273,7 +273,7 @@ schedule FUNC_NAME in ODESolvers_RHS as rhs_eval
         subdirectory=thorn_name,
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         body=body,

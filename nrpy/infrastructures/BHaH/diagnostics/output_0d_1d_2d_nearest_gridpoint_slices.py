@@ -75,7 +75,7 @@ In Cartesian this will be at i0_mid,i1_mid,i2_mid.
 In Spherical, this will be at i0_min,i1_mid,i2_mid (i1 and i2 don't matter).
 In Cylindrical, this will be at i0_min,i1_mid,i2_mid (i1 == phi doesn't matter).
 In SinhSymTP, this will be at i0_min,i1_mid,i2_mid (i2 == phi doesn't matter)."""
-    c_type = "void"
+    cfunc_type = "void"
     name = "diagnostics_nearest_grid_center"
     params = "commondata_struct *restrict commondata, const params_struct *restrict params, MoL_gridfunctions_struct *restrict gridfuncs"
 
@@ -103,8 +103,8 @@ In SinhSymTP, this will be at i0_min,i1_mid,i2_mid (i2 == phi doesn't matter).""
 
     fprintf = 'fprintf(outfile, "%e '
     for key in out_quantities_dict.keys():
-        printf_c_type = "%.15e" if key[0] != "int" else "%d"
-        fprintf += f"{printf_c_type} "
+        printf_format = "%.15e" if key[0] != "int" else "%d"
+        fprintf += f"{printf_format} "
     fprintf = rf'{fprintf[:-1]}\n", time, '
     for key in out_quantities_dict.keys():
         fprintf += f"{key[1]}, "
@@ -139,7 +139,7 @@ fclose(outfile);
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,
@@ -196,7 +196,7 @@ def register_CFunction_diagnostics_nearest_1d_axis(
     )
 
     desc = f"Output diagnostic quantities at gridpoints closest to {axis} axis."
-    c_type = "void"
+    cfunc_type = "void"
     name = f"diagnostics_nearest_1d_{axis}_axis"
     params = "commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], MoL_gridfunctions_struct *restrict gridfuncs"
 
@@ -223,7 +223,7 @@ fclose(outfile);
         includes=includes,
         prefunc=prefunc,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,
@@ -281,7 +281,7 @@ def register_CFunction_diagnostics_nearest_2d_plane(
     )
 
     desc = f"Output diagnostic quantities at gridpoints closest to {plane} plane."
-    c_type = "void"
+    cfunc_type = "void"
     name = f"diagnostics_nearest_2d_{plane}_plane"
     params = "commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], MoL_gridfunctions_struct *restrict gridfuncs"
 
@@ -307,7 +307,7 @@ fclose(outfile);
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,

@@ -38,7 +38,7 @@ def register_CFunction_specify_NewRad_BoundaryConditions_parameters(
   the variable at r->infinity. var_char_speed is the propagation
   speed at the outer boundary, and var_radpower is the radial
   falloff rate."""
-    c_type = 'extern "C" void'
+    cfunc_type = 'extern "C" void'
     name = f"{thorn_name}_specify_NewRad_BoundaryConditions_parameters"
     params = "CCTK_ARGUMENTS"
     body = f"""  DECLARE_CCTK_ARGUMENTSX_{name};
@@ -69,7 +69,7 @@ schedule FUNC_NAME in ODESolvers_RHS after {thorn_name}_RHS
         subdirectory=thorn_name,
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         body=body,
