@@ -42,13 +42,13 @@ jobs:
         pip install -U clang-format ipython setuptools
         sudo apt-get -y install libgsl-dev
 
-    - name: Install latest DEVELOPMENT sympy for ubuntu-22.04
-      if: matrix.os == 'ubuntu-22.04'
-      run: pip install git+https://github.com/sympy/sympy.git
-
-    - name: Install sympy for ubuntu-20.04
-      if: matrix.os == 'ubuntu-20.04'
-      run: pip install sympy
+    - name: Install sympy or DEVELOPMENT sympy based on Python version
+      run: |
+        if [ "${{ matrix.python-version }}" != "3.7.13" ]; then
+          pip install git+https://github.com/sympy/sympy.git
+        else
+          pip install sympy
+        fi
 
     - name: Display sympy and clang-format versions
       run: |
