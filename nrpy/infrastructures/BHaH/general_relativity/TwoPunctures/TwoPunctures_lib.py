@@ -10,6 +10,13 @@ Author: Zachariah B. Etienne
 from pathlib import Path
 import shutil
 
+# Attempt to determine the correct files function to use based on Python version
+try:
+    from importlib.resources import files as resource_files  # Python 3.9 and newer
+except ImportError:
+    # Fallback for older Python versions: use the backport
+    from importlib_resources import files as resource_files  # type: ignore
+
 from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import ID_persist_struct
 from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import CoordTransf
 from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import Equations
@@ -22,35 +29,24 @@ from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import TP_utiliti
 
 def copy_TwoPunctures_header_files(TwoPunctures_Path: Path) -> None:
     """
-    Copy TwoPunctures.h and TP_utilities.h into project directory.
+    Copy 'TwoPunctures.h' and 'TP_utilities.h' into the specified directory.
 
-    :param project_Path: The path of the project directory where the file will be copied.
+    This function uses the appropriate method based on Python version to copy
+    the header files from the 'nrpy.infrastructures.BHaH.general_relativity.TwoPunctures'
+    package to a specified path.
+
+    :param TwoPunctures_Path: The path of the directory where the files will be copied.
     """
+    # Ensure the target directory exists
     TwoPunctures_Path.mkdir(parents=True, exist_ok=True)
 
-    try:
-        # only Python 3.7+ has importlib.resources
-        from importlib import resources  # pylint: disable=E1101,C0415
+    header_files = ["TwoPunctures.h", "TP_utilities.h"]
+    package = "nrpy.infrastructures.BHaH.general_relativity.TwoPunctures"
 
-        for header_file in ["TwoPunctures.h", "TP_utilities.h"]:
-            source_path = (
-                # pylint: disable=E1101
-                resources.files(
-                    "nrpy.infrastructures.BHaH.general_relativity.TwoPunctures"
-                )
-                / header_file
-            )
-            shutil.copy(str(source_path), str(TwoPunctures_Path / header_file))
-    except ImportError:  # Fallback to resource_filename for older Python versions
-        # pylint: disable=E1101,C0415
-        from pkg_resources import resource_filename  # type: ignore
-
-        for header_file in ["TwoPunctures.h", "TP_utilities.h"]:
-            source_path = resource_filename(
-                "nrpy.infrastructures.BHaH.general_relativity.TwoPunctures",
-                header_file,
-            )
-            shutil.copy(source_path, str(TwoPunctures_Path))  # type: ignore
+    for header_file in header_files:
+        # Use the previously determined files function for resource access
+        source_path = resource_files(package) / header_file
+        shutil.copy(str(source_path), str(TwoPunctures_Path / header_file))
 
 
 def register_C_functions() -> None:
