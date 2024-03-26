@@ -6,6 +6,7 @@ Author: Steven R. Brandt
 """
 
 from typing import Any, Tuple, cast
+
 try:
     from typing import get_args  # Python 3.8 and later
 except ImportError:
@@ -23,7 +24,7 @@ except ImportError:
         >>> is_literal_type(int)
         False
         """
-        return getattr(tp, '__origin__', None) is Literal
+        return getattr(tp, "__origin__", None) is Literal
 
     def get_args(tp: Any) -> Tuple[Any, ...]:
         """
@@ -41,6 +42,7 @@ except ImportError:
         if is_literal_type(tp):
             return cast(Tuple[Any, ...], tp.__args__)
         return ()
+
 
 import inspect
 from json import dumps
