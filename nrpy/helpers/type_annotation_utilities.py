@@ -8,6 +8,12 @@ Author: Steven R. Brandt
 from typing import Any, Tuple
 
 try:
+    from typing import Literal  # Python 3.8+
+except ImportError:
+    from typing_extensions import Literal  # type: ignore
+
+
+try:
     # Ideally, use get_args from typing...
     from typing import get_args
 except ImportError as ae:
@@ -34,9 +40,6 @@ except ImportError as ae:
 
 import inspect
 from json import dumps
-from typing_extensions import (
-    Literal,
-)  # , get_args, get_origin <- Not in typing_extensions
 
 _literal = Literal["x"]
 _tuple = Tuple[str, int]
