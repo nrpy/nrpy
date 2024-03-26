@@ -15,7 +15,7 @@ try:
     from importlib.resources import files as resource_files  # Python 3.9 and newer
 except ImportError:
     # Fallback for older Python versions: use the backport
-    from importlib_resources import files as resource_files  # type: ignore
+    from importlib_resources import files as resource_files
 
 from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import ID_persist_struct
 from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import CoordTransf
