@@ -31,11 +31,11 @@ except ImportError as ae:
         >>> get_args(int)
         ()
         """
-        if is_type_literal(tp):
-            ret = tuple(tp.__values__)
-        else:
-            ret = tuple()
-        return ret
+        if hasattr(tp, '__args__'):  # This works for Python 3.7 and later
+            return tp.__args__
+        elif is_type_literal(tp):
+            return tuple(tp.__values__)  # Fallback for Python 3.6 if you have defined __values__ manually
+        return ()
 
 
 import inspect
