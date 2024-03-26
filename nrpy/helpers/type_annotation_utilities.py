@@ -28,11 +28,14 @@ except ImportError:
 
     def get_args(tp: Any) -> Tuple[Any, ...]:
         """
-        Provide the functionality of get_args for earlier versions of Python,
-        specifically handling Literal types from typing_extensions.
+        Provide the functionality of get_args for earlier versions of Python.
+
+        This function specifically handles Literal types from typing_extensions, extracting
+        and returning the arguments from the provided type. If the provided type does not
+        contain arguments or is not a Literal type, it returns an empty tuple.
 
         :param tp: The type to extract arguments from.
-        :return: A tuple of arguments extracted from the type.
+        :return: A tuple of arguments extracted from the type, or an empty tuple if none.
 
         >>> get_args(Literal["x", "y", "z"])
         ('x', 'y', 'z')
