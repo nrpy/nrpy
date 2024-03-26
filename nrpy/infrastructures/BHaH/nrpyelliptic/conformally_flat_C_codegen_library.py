@@ -444,13 +444,12 @@ def register_CFunction_diagnostics(
     """
     Register C function for simulation diagnostics.
 
-    :param list_of_CoordSystems: Coordinate system used.
+    :param CoordSystem: Coordinate system used.
     :param default_diagnostics_out_every: Specifies the default diagnostics output frequency.
     :param enable_progress_indicator: Whether or not to enable the progress indicator.
     :param axis_filename_tuple: Tuple containing filename and variables for axis output.
     :param plane_filename_tuple: Tuple containing filename and variables for plane output.
     :param out_quantities_dict: Dictionary or string specifying output quantities.
-
     :return: None if in registration phase, else the updated NRPy environment.
     :raises TypeError: If `out_quantities_dict` is not a dictionary and not set to "default".
     """
@@ -467,7 +466,7 @@ def register_CFunction_diagnostics(
     )
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = r"""Diagnostics."""
+    desc = "Diagnostics."
     cfunc_type = "void"
     name = "diagnostics"
     params = (
