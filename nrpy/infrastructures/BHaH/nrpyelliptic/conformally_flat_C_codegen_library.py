@@ -345,7 +345,7 @@ def register_CFunction_initialize_constant_auxevol() -> Union[None, pcg.NRPyEnv_
 # Define function to compute the l^2 of a gridfunction
 def register_CFunction_compute_L2_norm_of_gridfunction(
     CoordSystem: str,
-) -> None:
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register function to compute l2-norm of a gridfunction assuming a single grid.
 
@@ -356,6 +356,10 @@ def register_CFunction_compute_L2_norm_of_gridfunction(
 
     :return: None
     """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+
     includes = ["BHaH_defines.h"]
     desc = "Compute l2-norm of a gridfunction assuming a single grid."
     cfunc_type = "REAL"
@@ -424,6 +428,8 @@ if(r < integration_radius) {
         include_CodeParameters_h=False,  # set_CodeParameters.h is manually included after the declaration of params_struct *restrict params
         body=body,
     )
+
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
 # Define diagnostics function
