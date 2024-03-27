@@ -13,6 +13,12 @@ from multiprocess import Pool, Manager  # type: ignore # pylint: disable=E0611
 import nrpy.grid as gri
 import nrpy.c_function as cfc
 import nrpy.params as par
+import logging
+
+logging.basicConfig(
+    level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
 
 par.register_param(bool, __name__, "parallel_codegen_enable", False)
 par.register_param(str, __name__, "parallel_codegen_stage", "register")
@@ -198,30 +204,20 @@ def wrapper_func(args: Tuple[Dict[str, Any], str, Any]) -> Any:
     shared_dict, key, value = args
     start_time = time.time()
     try:
+        logging.debug(f"Starting task with key: {key}")
         result = parallel_function_call(value)
-        print(
-            key,
-            len(result[0]),
-            len(result[1]),
-            len(result[2]),
-            len(result[3]),
-            len(result[4]),
-        )
+        logging.debug(f"Task {key} completed: {result}")
         shared_dict[key] = result
         funcname_args = value.function_name
-        print(
-            f"In {(time.time()-start_time):.3f}s, worker completed task '{funcname_args}'"
-        )
+        elapsed_time = time.time() - start_time
+        logging.info(f"In {elapsed_time:.3f}s, worker completed task '{funcname_args}'")
         return key, result
     except Exception as e:
-        result = parallel_function_call(value)
+        logging.exception(
+            f"An error occurred in the process associated with key '{key}':"
+        )
         raise RuntimeError(
-            f"An error occurred in the process associated with key '{key}':\n {e}",
-            len(result[0]),
-            len(result[1]),
-            len(result[2]),
-            len(result[3]),
-            len(result[4]),
+            f"An error occurred in the process associated with key '{key}':\n {e}"
         ) from e
 
 
