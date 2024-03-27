@@ -142,9 +142,11 @@ def register_CFunction_auxevol_gfs_single_point(
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
+    print(f"{inspect.currentframe()}: reg. before. {pcg.pcg_registration_phase()}")
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
+    print(f"{inspect.currentframe()}: reg. after. {pcg.pcg_registration_phase()}")
 
     # Compute psi_background and ADD_times_AUU
     psi_background, ADD_times_AUU = compute_psi_background_and_ADD_times_AUU(

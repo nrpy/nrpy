@@ -10,7 +10,7 @@ on:
     - cron: '47 4 1,15 * *'
 
 jobs:
-  lint-and-static-analysis:
+  static-analysis:
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -106,7 +106,7 @@ jobs:
           exit 1
         fi
 
-  test-codegen-ubuntu:
+  codegen-ubuntu:
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -148,7 +148,7 @@ jobs:
         python -m nrpy.examples.nrpypn_quasicircular_momenta && (cd project/nrpypn_quasicircular_momenta && make && make clean) &&
         python -m nrpy.examples.wave_equation_multicoord_wavetoy && (cd project/multicoords_curviwavetoy && make && make clean)
 
-  test-codegen-mac:
+  codegen-mac:
     runs-on: macos-latest
 
     strategy:
