@@ -204,9 +204,9 @@ def wrapper_func(args: Tuple[Dict[str, Any], str, Any]) -> Any:
     shared_dict, key, value = args
     start_time = time.time()
     try:
-        logging.debug(f"Starting task with key: {key}")
+        # logging.debug(f"Starting task with key: {key}")
         result = parallel_function_call(value)
-        logging.debug(f"Task {key} completed: {result}")
+        # logging.debug(f"Task {key} completed: {result}")
         shared_dict[key] = result
         funcname_args = value.function_name
         elapsed_time = time.time() - start_time
