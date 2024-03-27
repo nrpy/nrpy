@@ -94,7 +94,7 @@ def cse_preprocess(
 
     # Maps to hold symbol to rational and rational to symbol mappings
     symbol_to_Rational_dict: Dict[sp.Basic, sp.Rational] = OrderedDict()
-    map_rat_to_sym: Dict[sp.Rational | int, sp.Basic] = OrderedDict()
+    map_rat_to_sym: Dict[Union[sp.Rational, int], sp.Basic] = OrderedDict()
 
     # Loop over each expression in the input list
     for i, expr in enumerate(expr_list):
