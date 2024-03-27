@@ -83,7 +83,14 @@ def register_CFunction_initial_data(
             ID = InitialData_Spherical(IDtype=IDtype)
 
         admid.register_CFunction_exact_ADM_ID_function(
-            IDCoordSystem, IDtype, ID.alpha, ID.betaU, ID.BU, ID.gammaDD, ID.KDD, fp_type=fp_type,
+            IDCoordSystem,
+            IDtype,
+            ID.alpha,
+            ID.betaU,
+            ID.BU,
+            ID.gammaDD,
+            ID.KDD,
+            fp_type=fp_type,
         )
     except (ValueError, RuntimeError):
         print(
@@ -322,7 +329,7 @@ def register_CFunction_rhs_eval(
     KreissOliger_strength_gauge: float = 0.3,
     KreissOliger_strength_nongauge: float = 0.3,
     OMP_collapse: int = 1,
-    fp_type:str = "double",
+    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the right-hand side evaluation function for the BSSN equations.
@@ -503,7 +510,7 @@ def register_CFunction_Ricci_eval(
     enable_simd: bool,
     enable_fd_functions: bool,
     OMP_collapse: int,
-    fp_type:str = "double",
+    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the Ricci evaluation function.
@@ -607,7 +614,7 @@ def register_CFunction_constraints(
     enable_simd: bool,
     enable_fd_functions: bool,
     OMP_collapse: int,
-    fp_type:str = "double",
+    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the BSSN constraints evaluation function.
@@ -684,7 +691,7 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
     enable_rfm_precompute: bool,
     enable_fd_functions: bool,
     OMP_collapse: int,
-    fp_type:str = "double",
+    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the function that enforces the det(gammabar) = det(gammahat) constraint.
@@ -790,7 +797,7 @@ def register_CFunction_psi4_part(
     enable_fd_functions: bool,
     OMP_collapse: int,
     output_empty_function: bool = False,
-    fp_type:str = "double",
+    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Add psi4 to Cfunction dictionary.
@@ -915,7 +922,7 @@ def register_CFunction_psi4_tetrad(
     tetrad: str = "quasiKinnersley",
     use_metric_to_construct_unit_normal: bool = False,
     output_empty_function: bool = False,
-    fp_type:str = "double",
+    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register C function for psi4 tetrad computations.
@@ -984,7 +991,12 @@ def register_CFunction_psi4_tetrad(
             )
         ]
         body += ccg.c_codegen(
-            rhss, lhss, verbose=False, enable_cse=True, include_braces=False, fp_type=fp_type,
+            rhss,
+            lhss,
+            verbose=False,
+            enable_cse=True,
+            include_braces=False,
+            fp_type=fp_type,
         )
 
     cfc.register_CFunction(

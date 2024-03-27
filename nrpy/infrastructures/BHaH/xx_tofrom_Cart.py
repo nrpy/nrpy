@@ -14,7 +14,8 @@ import nrpy.grid as gri
 # Construct Cart_to_xx_and_nearest_i0i1i2() C function for
 # mapping from Cartesian->xx for the chosen CoordSystem.
 def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
-    CoordSystem: str, relative_to: str = "local_grid_center",
+    CoordSystem: str,
+    relative_to: str = "local_grid_center",
     fp_type: str = "double",
 ) -> None:
     """

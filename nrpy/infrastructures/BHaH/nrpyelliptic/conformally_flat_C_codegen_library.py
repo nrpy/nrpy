@@ -33,7 +33,9 @@ import inspect
 # Define functions to set up initial guess
 
 
-def register_CFunction_initial_guess_single_point(fp_type: str = "double") -> Union[None, pcg.NRPyEnv_type]:
+def register_CFunction_initial_guess_single_point(
+    fp_type: str = "double",
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the C function for initial guess of solution at a single point.
 
@@ -135,7 +137,8 @@ if( read_checkpoint(commondata, griddata) ) return;
 
 
 def register_CFunction_auxevol_gfs_single_point(
-    CoordSystem: str, fp_type: str = "double",
+    CoordSystem: str,
+    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the C function for the AUXEVOL grid functions at a single point.
@@ -238,7 +241,8 @@ def register_CFunction_auxevol_gfs_all_points(
 
 
 def register_CFunction_variable_wavespeed_gfs_all_points(
-    CoordSystem: str, fp_type: str = "double",
+    CoordSystem: str,
+    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register function to compute variable wavespeed based on local grid spacing for a single coordinate system.
@@ -356,7 +360,8 @@ def register_CFunction_initialize_constant_auxevol() -> Union[None, pcg.NRPyEnv_
 
 # Define function to compute the l^2 of a gridfunction
 def register_CFunction_compute_L2_norm_of_gridfunction(
-    CoordSystem: str, fp_type: str = "double",
+    CoordSystem: str,
+    fp_type: str = "double",
 ) -> None:
     """
     Register function to compute l2-norm of a gridfunction assuming a single grid.

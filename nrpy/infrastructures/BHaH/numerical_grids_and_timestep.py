@@ -146,7 +146,9 @@ for (int j = 0; j < params->Nxx_plus_2NGHOSTS2; j++) xx[2][j] = params->xxmin2 +
     )
 
 
-def register_CFunction_cfl_limited_timestep(CoordSystem: str, fp_type:str = "double") -> None:
+def register_CFunction_cfl_limited_timestep(
+    CoordSystem: str, fp_type: str = "double"
+) -> None:
     """
     Register a C function to find the CFL-limited timestep dt on a numerical grid.
 
@@ -277,7 +279,7 @@ def register_CFunctions(
     Nxx_dict: Dict[str, List[int]],
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
-    fp_type:str = "double",
+    fp_type: str = "double",
 ) -> None:
     """
     Register C functions related to coordinate systems and grid parameters.
@@ -294,7 +296,9 @@ def register_CFunctions(
             grid_physical_size=grid_physical_size,
             Nxx_dict=Nxx_dict,
         )
-        register_CFunction_cfl_limited_timestep(CoordSystem=CoordSystem, fp_type=fp_type)
+        register_CFunction_cfl_limited_timestep(
+            CoordSystem=CoordSystem, fp_type=fp_type
+        )
     register_CFunction_CoordSystem_hash(list_of_CoordSystems)
     register_CFunction_numerical_grids_and_timestep(
         enable_rfm_precompute=enable_rfm_precompute,

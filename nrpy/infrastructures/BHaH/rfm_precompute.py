@@ -151,7 +151,9 @@ class ReferenceMetricPrecompute:
             which_freevar += 1
 
 
-def register_CFunctions_rfm_precompute(list_of_CoordSystems: List[str], fp_type: str = "double") -> None:
+def register_CFunctions_rfm_precompute(
+    list_of_CoordSystems: List[str], fp_type: str = "double"
+) -> None:
     """
     Register C functions for reference metric precomputed lookup arrays.
 

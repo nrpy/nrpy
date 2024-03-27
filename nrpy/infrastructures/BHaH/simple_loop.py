@@ -23,7 +23,7 @@ def simple_loop(
     enable_OpenMP: bool = True,
     OMP_custom_pragma: str = "",
     OMP_collapse: int = 1,
-    fp_type:str = "double"
+    fp_type: str = "double",
 ) -> str:
     """
     Generate a simple loop in C (for use inside of a function).
