@@ -235,7 +235,7 @@ def do_parallel_codegen() -> None:
     manager = Manager()
     NRPy_environment_to_unpack: Dict[str, Any] = manager.dict()
 
-    with Pool(3) as pool:
+    with Pool() as pool:
         pool.map(
             wrapper_func,
             [
