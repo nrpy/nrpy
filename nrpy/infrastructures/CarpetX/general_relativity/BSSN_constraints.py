@@ -101,6 +101,7 @@ def register_CFunction_BSSN_constraints(
         ),
         loop_region="interior",
         enable_simd=enable_simd,
+        fp_type=fp_type,
     )
 
     schedule = f"""

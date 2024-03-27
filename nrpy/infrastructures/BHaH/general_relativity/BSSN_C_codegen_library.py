@@ -96,6 +96,7 @@ def register_CFunction_initial_data(
         IDCoordSystem=IDCoordSystem,
         ID_persist_struct_str=ID_persist_struct_str,
         include_T4UU=include_T4UU,
+        fp_type=fp_type,
     )
 
     desc = "Set initial data."
@@ -479,6 +480,7 @@ def register_CFunction_rhs_eval(
         enable_rfm_precompute=enable_rfm_precompute,
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
+        fp_type=fp_type,
     )
     cfc.register_CFunction(
         include_CodeParameters_h=True,
@@ -570,6 +572,7 @@ def register_CFunction_Ricci_eval(
         enable_rfm_precompute=enable_rfm_precompute,
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
+        fp_type=fp_type,
     )
 
     if orig_enable_RbarDD_gridfunctions:
@@ -658,6 +661,7 @@ def register_CFunction_constraints(
         enable_rfm_precompute=enable_rfm_precompute,
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
+        fp_type=fp_type,
     )
 
     cfc.register_CFunction(
@@ -762,6 +766,7 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
         enable_rfm_precompute=enable_rfm_precompute,
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
+        fp_type=fp_type,
     )
 
     cfc.register_CFunction(
@@ -889,6 +894,7 @@ psi4_tetrad(commondata, params,
             enable_rfm_precompute=False,
             read_xxs=False,
             OMP_collapse=OMP_collapse,
+            fp_type=fp_type,
         )
 
     cfc.register_CFunction(

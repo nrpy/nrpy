@@ -498,6 +498,7 @@ def Cfunction_initial_data_lambdaU_grid_interior(CoordSystem: str, fp_type:str =
         ),
         loop_region="interior",
         read_xxs=True,
+        fp_type=fp_type,
     )
 
     return cfc.CFunction(

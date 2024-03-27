@@ -126,6 +126,7 @@ def register_CFunction_BSSN_to_ADM(
         loop_region="all points",
         enable_simd=False,
         OMP_collapse=OMP_collapse,
+        fp_type=fp_type,
     )
 
     schedule_poststep = (

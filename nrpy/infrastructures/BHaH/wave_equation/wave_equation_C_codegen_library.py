@@ -89,7 +89,7 @@ def register_CFunction_exact_solution_single_Cartesian_point(
 
 
 def register_CFunction_initial_data(
-    OMP_collapse: int, enable_checkpointing: bool = False
+    OMP_collapse: int, enable_checkpointing: bool = False, fp_type: str = "double"
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the initial data function for the wave equation with specific parameters.
@@ -134,6 +134,7 @@ if( read_checkpoint(commondata, griddata) ) return;
         read_xxs=True,
         loop_region="all points",
         OMP_collapse=OMP_collapse,
+        fp_type=fp_type,
     )
     body += "}\n"
     cfc.register_CFunction(
@@ -376,6 +377,7 @@ def register_CFunction_rhs_eval(
         enable_rfm_precompute=enable_rfm_precompute,
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
+        fp_type=fp_type,
     )
 
     cfc.register_CFunction(

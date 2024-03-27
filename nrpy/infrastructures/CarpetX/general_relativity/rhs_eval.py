@@ -223,6 +223,7 @@ def register_CFunction_rhs_eval(
         ),
         loop_region="interior",
         enable_simd=enable_simd,
+        fp_type=fp_type,
     )
 
     schedule = f"""

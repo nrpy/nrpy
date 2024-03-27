@@ -107,6 +107,7 @@ WARNING: Do not enable SIMD here, as it is not guaranteed that
         loop_body=loop_body,
         loop_region="all points",
         enable_simd=False,
+        fp_type=fp_type,
     )
 
     schedule1 = f"""

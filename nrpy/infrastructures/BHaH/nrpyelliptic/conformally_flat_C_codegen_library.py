@@ -116,6 +116,7 @@ if( read_checkpoint(commondata, griddata) ) return;
         read_xxs=True,
         loop_region="all points",
         OMP_collapse=OMP_collapse,
+        fp_type=fp_type,
     )
     body += "}\n"
     cfc.register_CFunction(
@@ -221,6 +222,7 @@ def register_CFunction_auxevol_gfs_all_points(
         read_xxs=True,
         loop_region="all points",
         OMP_collapse=OMP_collapse,
+        fp_type=fp_type,
     )
     body += "}\n"
     cfc.register_CFunction(
@@ -288,6 +290,7 @@ def register_CFunction_variable_wavespeed_gfs_all_points(
         loop_body="\n" + dsmin_computation_str,
         read_xxs=True,
         loop_region="interior",
+        fp_type=fp_type,
     )
 
     # We must close the loop that was opened in the line 'for(int grid=0; grid<commondata->NUMGRIDS; grid++) {'
@@ -417,6 +420,7 @@ if(r < integration_radius) {
         read_xxs=True,
         loop_region="interior",
         OMP_custom_pragma=r"#pragma omp parallel for reduction(+:squared_sum,volume_sum)",
+        fp_type=fp_type,
     )
 
     body += r"""
@@ -705,6 +709,7 @@ def register_CFunction_rhs_eval(
         enable_rfm_precompute=enable_rfm_precompute,
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
+        fp_type=fp_type,
     )
 
     cfc.register_CFunction(
@@ -778,6 +783,7 @@ def register_CFunction_compute_residual_all_points(
         enable_rfm_precompute=enable_rfm_precompute,
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
+        fp_type=fp_type,
     )
 
     cfc.register_CFunction(

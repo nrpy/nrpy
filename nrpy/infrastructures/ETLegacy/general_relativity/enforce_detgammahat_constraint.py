@@ -104,6 +104,7 @@ def register_CFunction_enforce_detgammahat_constraint(
         loop_region="all points",
         enable_simd=False,
         OMP_collapse=OMP_collapse,
+        fp_type=fp_type,
     )
 
     schedule = """

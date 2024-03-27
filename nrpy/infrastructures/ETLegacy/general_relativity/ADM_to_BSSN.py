@@ -137,6 +137,7 @@ as initial data are given in terms of ADM quantities, and {thorn_name} evolves t
         enable_simd=False,
         loop_region="all points",
         enable_OpenMP=True,
+        fp_type=fp_type,
     )
 
     body += "\n"
@@ -176,6 +177,7 @@ as initial data are given in terms of ADM quantities, and {thorn_name} evolves t
             fp_type=fp_type,
         ),
         loop_region="interior",
+        fp_type=fp_type,
     )
 
     body += """
