@@ -23,6 +23,7 @@ def simple_loop(
     enable_OpenMP: bool = True,
     OMP_custom_pragma: str = "",
     OMP_collapse: int = 1,
+    fp_type:str = "double"
 ) -> str:
     """
     Generate a simple loop in C (for use inside of a function).
@@ -146,7 +147,7 @@ def simple_loop(
         # pylint: disable=C0415
         from nrpy.infrastructures.BHaH import rfm_precompute
 
-        rfmp = rfm_precompute.ReferenceMetricPrecompute(CoordSystem)
+        rfmp = rfm_precompute.ReferenceMetricPrecompute(CoordSystem, fp_type=fp_type)
         if enable_simd:
             read_rfm_xx_arrays = [
                 rfmp.readvr_SIMD_inner_str[0],
