@@ -169,7 +169,7 @@ def register_CFunction_diagnostics(
 
     :param list_of_CoordSystems: Lists of unique CoordSystems used.
     :param default_diagnostics_out_every: Specifies the default diagnostics output frequency.
-    :param enable_progress_indicator: Whether or not to enable the progress indicator.
+    :param enable_progress_indicator: Whether to enable the progress indicator.
     :param grid_center_filename_tuple: Tuple containing filename and variables for grid center output.
     :param axis_filename_tuple: Tuple containing filename and variables for axis output.
     :param plane_filename_tuple: Tuple containing filename and variables for plane output.
@@ -312,9 +312,9 @@ def register_CFunction_rhs_eval(
     selected coordinate system and specified parameters.
 
     :param CoordSystem: The coordinate system.
-    :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
-    :param enable_simd: Whether or not to enable SIMD.
-    :param enable_KreissOliger_dissipation: Whether or not to enable Kreiss-Oliger dissipation, to damp high-frequency noise.
+    :param enable_rfm_precompute: Whether to enable reference metric precomputation.
+    :param enable_simd: Whether to enable SIMD.
+    :param enable_KreissOliger_dissipation: Whether to enable Kreiss-Oliger dissipation, to damp high-frequency noise.
     :param OMP_collapse: Level of OpenMP loop collapsing.
 
     :return: None if in registration phase, else the updated NRPy environment.
