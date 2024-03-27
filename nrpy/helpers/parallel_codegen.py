@@ -218,6 +218,10 @@ def do_parallel_codegen() -> None:
 
     par.set_parval_from_str("parallel_codegen_stage", "codegen")
 
+    print(
+        f"do_parallel_codegen() now starting... {par.parval_from_str('parallel_codegen_stage')}, {pcg_registration_phase()}"
+    )
+
     manager = Manager()
     NRPy_environment_to_unpack: Dict[str, Any] = manager.dict()
 
