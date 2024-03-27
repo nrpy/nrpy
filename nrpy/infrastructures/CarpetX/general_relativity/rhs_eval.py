@@ -43,6 +43,7 @@ def register_CFunction_rhs_eval(
     # when mult by W, strength_gauge=0.99 & strength_nongauge=0.3 is best.
     KreissOliger_strength_gauge: float = 0.1,
     KreissOliger_strength_nongauge: float = 0.1,
+    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the right-hand side evaluation function for the BSSN equations.
@@ -218,6 +219,7 @@ def register_CFunction_rhs_eval(
             upwind_control_vec=betaU,
             enable_fd_functions=True,
             enable_GoldenKernels=True,
+            fp_type=fp_type,
         ),
         loop_region="interior",
         enable_simd=enable_simd,

@@ -27,7 +27,7 @@ par.register_CodeParameter(
 )
 
 
-def register_CFunction_spin_weight_minus2_sph_harmonics() -> (
+def register_CFunction_spin_weight_minus2_sph_harmonics(fp_type:str = "double") -> (
     Union[None, pcg.NRPyEnv_type]
 ):
     """
@@ -71,6 +71,7 @@ def register_CFunction_spin_weight_minus2_sph_harmonics() -> (
                 ["*reYlmswm2_l_m", "*imYlmswm2_l_m"],
                 verbose=False,
                 include_braces=False,
+                fp_type=fp_type,
             )
             body += "       }\n"
             body += "      return;\n"

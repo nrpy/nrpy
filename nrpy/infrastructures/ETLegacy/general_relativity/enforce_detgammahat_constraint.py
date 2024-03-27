@@ -30,6 +30,7 @@ def register_CFunction_enforce_detgammahat_constraint(
     CoordSystem: str,
     enable_rfm_precompute: bool,
     OMP_collapse: int = 1,
+    fp_type: str = "double"
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the function that enforces the det(gammabar) = det(gammahat) constraint.
@@ -98,6 +99,7 @@ def register_CFunction_enforce_detgammahat_constraint(
             automatically_read_gf_data_from_memory=True,
             enable_fd_codegen=True,
             enable_fd_functions=True,
+            fp_type=fp_type,
         ),
         loop_region="all points",
         enable_simd=False,

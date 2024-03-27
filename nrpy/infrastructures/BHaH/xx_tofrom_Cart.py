@@ -14,7 +14,8 @@ import nrpy.grid as gri
 # Construct Cart_to_xx_and_nearest_i0i1i2() C function for
 # mapping from Cartesian->xx for the chosen CoordSystem.
 def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
-    CoordSystem: str, relative_to: str = "local_grid_center"
+    CoordSystem: str, relative_to: str = "local_grid_center",
+    fp_type: str = "double",
 ) -> None:
     """
     Construct a C function that maps from Cartesian coordinates to xx for the chosen coordinate system.
@@ -60,6 +61,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
             [rfm.Cart_to_xx[0], rfm.Cart_to_xx[1], rfm.Cart_to_xx[2]],
             ["xx[0]", "const REAL target_th", "xx[2]"],
             include_braces=False,
+            fp_type=fp_type,
         )
         body += "xx[1] = NewtonRaphson_get_xx1_from_th(params, target_th);\n"
     else:
@@ -67,6 +69,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
             [rfm.Cart_to_xx[0], rfm.Cart_to_xx[1], rfm.Cart_to_xx[2]],
             ["xx[0]", "xx[1]", "xx[2]"],
             include_braces=False,
+            fp_type=fp_type,
         )
 
     body += f"""
@@ -89,7 +92,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     )
 
 
-def register_CFunction_xx_to_Cart(CoordSystem: str) -> None:
+def register_CFunction_xx_to_Cart(CoordSystem: str, fp_type: str = "double") -> None:
     """
     Register a C function to convert arbitrary NRPy+ coordinates to Cartesian coordinates.
 
@@ -111,6 +114,7 @@ REAL xx2 = xx[2][i2];
             rfm.xx_to_Cart[2] + gri.Cart_origin[2],
         ],
         ["xCart[0]", "xCart[1]", "xCart[2]"],
+        fp_type=fp_type,
     )
 
     cfc.register_CFunction(

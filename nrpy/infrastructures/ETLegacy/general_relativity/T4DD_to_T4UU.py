@@ -29,6 +29,7 @@ def register_CFunction_T4DD_to_T4UU(
     CoordSystem: str,
     enable_rfm_precompute: bool,
     OMP_collapse: int = 1,
+    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the function that enforces the det(gammabar) = det(gammahat) constraint.
@@ -104,6 +105,7 @@ WARNING: Do not enable SIMD here, as it is not guaranteed that
         T4UU_expr_list,
         T4DD_access_gfs,
         enable_simd=False,
+        fp_type=fp_type,
     )
 
     body += lp.simple_loop(

@@ -26,6 +26,7 @@ def register_CFunction_BSSN_to_ADM(
     thorn_name: str,
     CoordSystem: str,
     OMP_collapse: int = 1,
+    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Convert BSSN variables in the Cartesian basis to ADM variables in the Cartesian basis.
@@ -116,6 +117,7 @@ def register_CFunction_BSSN_to_ADM(
         verbose=False,
         include_braces=False,
         enable_simd=False,
+        fp_type=fp_type,
     )
     loop_body = loop_body.rstrip()
 

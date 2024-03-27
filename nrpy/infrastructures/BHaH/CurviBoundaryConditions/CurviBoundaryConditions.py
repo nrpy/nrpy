@@ -28,7 +28,7 @@ _ = par.CodeParameter(
 
 
 # Set unit-vector dot products (=parity) for each of the 10 parity condition types
-def parity_conditions_symbolic_dot_products(CoordSystem: str) -> str:
+def parity_conditions_symbolic_dot_products(CoordSystem: str, fp_type: str = "double") -> str:
     """
     Set unit-vector dot products (parity) for each of the 10 parity condition types.
 
@@ -82,7 +82,7 @@ NRPy+ Curvilinear Boundary Conditions: Unit vector dot products for all
 Documented in: Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb
 */
 """
-    return outstr + ccg.c_codegen(parity, lhs_strings)
+    return outstr + ccg.c_codegen(parity, lhs_strings, fp_type=fp_type)
 
 
 # For example, if the gridfunction name ends with "01", then (based on the table in the
@@ -158,7 +158,7 @@ def BHaH_defines_set_gridfunction_defines_with_parity_types(
 # EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt():
 #      This function is documented in desc= and body= fields below.
 def Cfunction__EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(
-    CoordSystem: str,
+    CoordSystem: str, fp_type: str = "double",
 ) -> str:
     """
     Map points between different coordinate systems.
@@ -242,6 +242,7 @@ REAL xx2 = xx[2][i2];
         + ccg.c_codegen(
             [rfm.xx_to_Cart[0], rfm.xx_to_Cart[1], rfm.xx_to_Cart[2]],
             ["xCart[0]", "xCart[1]", "xCart[2]"],
+            fp_type=fp_type,
         )
         + "}\n"
     )
@@ -273,6 +274,7 @@ REAL Cartz = xCart[2];
     body += ccg.c_codegen(
         [rfm.Cart_to_xx[0], rfm.Cart_to_xx[1], rfm.Cart_to_xx[2]],
         ["Cart_to_xx0_inbounds", "Cart_to_xx1_inbounds", "Cart_to_xx2_inbounds"],
+        fp_type=fp_type,
     )
     body += r"""
   // Next compute xxmin[i]. By definition,
@@ -311,6 +313,7 @@ REAL Cartz = xCart[2];
         [rfm_orig.xx_to_Cart[0], rfm_orig.xx_to_Cart[1], rfm_orig.xx_to_Cart[2]],
         ["xCart_from_xx", "yCart_from_xx", "zCart_from_xx"],
         include_braces=False,
+        fp_type=fp_type,
     )
 
     body += f"""  }}
@@ -328,6 +331,7 @@ REAL Cartz = xCart[2];
         [rfm_orig.xx_to_Cart[0], rfm_orig.xx_to_Cart[1], rfm_orig.xx_to_Cart[2]],
         ["xCart_from_xx_inbounds", "yCart_from_xx_inbounds", "zCart_from_xx_inbounds"],
         include_braces=False,
+        fp_type=fp_type,
     )
 
     body += (
@@ -438,7 +442,7 @@ for(int whichparity=0;whichparity<10;whichparity++) {{
 
 # bcstruct_set_up():
 #      This function is documented in desc= and body= fields below.
-def register_CFunction_bcstruct_set_up(CoordSystem: str) -> None:
+def register_CFunction_bcstruct_set_up(CoordSystem: str, fp_type: str = "double") -> None:
     """
     Register C function for setting up bcstruct.
 
@@ -452,7 +456,7 @@ def register_CFunction_bcstruct_set_up(CoordSystem: str) -> None:
         "BHaH_function_prototypes.h",
     ]
     prefunc = Cfunction__EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(
-        CoordSystem
+        CoordSystem, fp_type=fp_type,
     )
     prefunc += Cfunction__set_parity_for_inner_boundary_single_pt(CoordSystem)
     desc = r"""At each coordinate point (x0,x1,x2) situated at grid index (i0,i1,i2):
@@ -836,7 +840,7 @@ def register_CFunction_apply_bcs_outerextrap_and_inner() -> None:
 ##   Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb,
 ##   as well as below, in desc= and body=.
 # r_and_partial_xi_partial_r_derivs(): Compute r(x0,x1,x2) and dx^i / dr
-def setup_Cfunction_r_and_partial_xi_partial_r_derivs(CoordSystem: str) -> str:
+def setup_Cfunction_r_and_partial_xi_partial_r_derivs(CoordSystem: str, fp_type: str = "double") -> str:
     """
     Generate C code to compute the radial coordinate r(x0, x1, x2) and its derivatives.
 
@@ -869,6 +873,7 @@ def setup_Cfunction_r_and_partial_xi_partial_r_derivs(CoordSystem: str) -> str:
         ],
         verbose=False,
         include_braces=False,
+        fp_type=fp_type,
     )
 
     cf = cfc.CFunction(
@@ -915,7 +920,8 @@ def get_arb_offset_FD_coeffs_indices(
 # partial_r f term: FD1_arbitrary_upwind(): C function to evaluate
 #   partial_i f with arbitrary upwinding
 def setup_Cfunction_FD1_arbitrary_upwind(
-    dirn: int, radiation_BC_fd_order: int = -1
+    dirn: int, radiation_BC_fd_order: int = -1,
+    fp_type: str = "double",
 ) -> str:
     """
     Set up the C function for computing the 1st derivative finite-difference.
@@ -927,6 +933,7 @@ def setup_Cfunction_FD1_arbitrary_upwind(
                                   If -1, will use default finite difference order.
     :return: The full C function as a string.
     """
+    import sympy.codegen.ast as sp_ast
     default_FDORDER = par.parval_from_str("fd_order")
     if radiation_BC_fd_order == -1:
         radiation_BC_fd_order = default_FDORDER
@@ -942,6 +949,8 @@ const REAL *restrict gf,  const int i0,const int i1,const int i2, const int offs
     body = "switch(offset) {\n"
 
     tmp_list: List[int] = []
+    fp_ccg_type = ccg.fp_type_to_sympy_type[fp_type]
+    sp_type_alias = {sp_ast.real: fp_ccg_type}
     for offset in range(
         0, int(radiation_BC_fd_order // 2) + 1
     ):  # Use // for integer division
@@ -963,14 +972,14 @@ const REAL *restrict gf,  const int i0,const int i1,const int i2, const int offs
             if i > 0:
                 body += "          "
             if offset_str == "0":
-                body += f"+{sp.ccode(coeff)}*gf[IDX3(i0,i1,i2)]\n"
+                body += f"+{sp.ccode(coeff, type_aliases=sp_type_alias)}*gf[IDX3(i0,i1,i2)]\n"
             else:
                 if dirn == 0:
-                    body += f"+{sp.ccode(coeff)}*gf[IDX3(i0+{offset_str},i1,i2)]\n"
+                    body += f"+{sp.ccode(coeff, type_aliases=sp_type_alias)}*gf[IDX3(i0+{offset_str},i1,i2)]\n"
                 elif dirn == 1:
-                    body += f"+{sp.ccode(coeff)}*gf[IDX3(i0,i1+{offset_str},i2)]\n"
+                    body += f"+{sp.ccode(coeff, type_aliases=sp_type_alias)}*gf[IDX3(i0,i1+{offset_str},i2)]\n"
                 elif dirn == 2:
-                    body += f"+{sp.ccode(coeff)}*gf[IDX3(i0,i1,i2+{offset_str})]\n"
+                    body += f"+{sp.ccode(coeff, type_aliases=sp_type_alias)}*gf[IDX3(i0,i1,i2+{offset_str})]\n"
 
         body = body[:-1].replace("+-", "-") + f") * invdxx{dirn};\n"
 
@@ -1073,7 +1082,7 @@ const REAL partial_x0_partial_r, const REAL partial_x1_partial_r, const REAL par
 
 # radiation_bcs(): Put it all together, for a single outer boundary point.
 def setup_Cfunction_radiation_bcs(
-    CoordSystem: str, radiation_BC_fd_order: int = -1
+    CoordSystem: str, radiation_BC_fd_order: int = -1, fp_type: str = "double",
 ) -> str:
     """
     Generate C code to apply radiation boundary conditions in a given coordinate system.
@@ -1089,10 +1098,10 @@ def setup_Cfunction_radiation_bcs(
         # Do not generate FD1_arbitrary_upwind_xj_dirn() if the symbolic expression for dxj/dr == 0!
         if not check_zero(rfm.Jac_dUrfm_dDSphUD[i][0]):
             prefunc += setup_Cfunction_FD1_arbitrary_upwind(
-                dirn=i, radiation_BC_fd_order=radiation_BC_fd_order
+                dirn=i, radiation_BC_fd_order=radiation_BC_fd_order, fp_type=fp_type,
             )
     prefunc += setup_Cfunction_r_and_partial_xi_partial_r_derivs(
-        CoordSystem=CoordSystem
+        CoordSystem=CoordSystem, fp_type=fp_type,
     )
     prefunc += setup_Cfunction_compute_partial_r_f(
         CoordSystem=CoordSystem, radiation_BC_fd_order=radiation_BC_fd_order
@@ -1159,7 +1168,7 @@ return partial_t_f_outgoing_wave + k * rinv*rinv*rinv;
 #   Apply radiation BCs at outer boundary points, and
 #   inner boundary conditions at inner boundary points.
 def register_CFunction_apply_bcs_outerradiation_and_inner(
-    CoordSystem: str, radiation_BC_fd_order: int = 2
+    CoordSystem: str, radiation_BC_fd_order: int = 2, fp_type:str = "double",
 ) -> None:
     """
     Register a C function to apply boundary conditions to both pure outer and inner boundary points.
@@ -1169,7 +1178,7 @@ def register_CFunction_apply_bcs_outerradiation_and_inner(
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     prefunc = setup_Cfunction_radiation_bcs(
-        CoordSystem=CoordSystem, radiation_BC_fd_order=radiation_BC_fd_order
+        CoordSystem=CoordSystem, radiation_BC_fd_order=radiation_BC_fd_order, fp_type=fp_type
     )
     desc = """This function is responsible for applying boundary conditions (BCs) to both pure outer and inner
 boundary points. In the first step, it parallelizes the task using OpenMP and starts by applying BCs to
@@ -1255,6 +1264,7 @@ def CurviBoundaryConditions_register_C_functions(
     radiation_BC_fd_order: int = 2,
     set_parity_on_aux: bool = False,
     set_parity_on_auxevol: bool = False,
+    fp_type: str = "double",
 ) -> None:
     """
     Register various C functions responsible for handling boundary conditions.
@@ -1267,12 +1277,13 @@ def CurviBoundaryConditions_register_C_functions(
     """
     for CoordSystem in list_of_CoordSystems:
         # Register C function to set up the boundary condition struct.
-        register_CFunction_bcstruct_set_up(CoordSystem=CoordSystem)
+        register_CFunction_bcstruct_set_up(CoordSystem=CoordSystem, fp_type=fp_type)
 
         # Register C function to apply boundary conditions to both pure outer and inner boundary points.
         register_CFunction_apply_bcs_outerradiation_and_inner(
             CoordSystem=CoordSystem,
             radiation_BC_fd_order=radiation_BC_fd_order,
+            fp_type=fp_type,
         )
 
     # Register C function to apply boundary conditions to inner-only boundary points.
