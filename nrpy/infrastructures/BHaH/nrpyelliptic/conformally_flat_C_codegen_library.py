@@ -211,7 +211,6 @@ def register_CFunction_auxevol_gfs_all_points(
     )
     print(f"{inspect.currentframe()}: reg. after. {pcg.pcg_registration_phase()}")
 
-
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
     desc = r"""Set AUXEVOL gridfunctions at all points."""
