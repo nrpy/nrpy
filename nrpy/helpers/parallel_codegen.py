@@ -214,8 +214,14 @@ def wrapper_func(args: Tuple[Dict[str, Any], str, Any]) -> Any:
         )
         return key, result
     except Exception as e:
+        result = parallel_function_call(value)
         raise RuntimeError(
-            f"An error occurred in the process associated with key '{key}':\n {e}"
+            f"An error occurred in the process associated with key '{key}':\n {e}",
+            len(result[0]),
+            len(result[1]),
+            len(result[2]),
+            len(result[3]),
+            len(result[4]),
         ) from e
 
 
