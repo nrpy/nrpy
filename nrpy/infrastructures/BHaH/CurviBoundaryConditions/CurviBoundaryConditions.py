@@ -339,7 +339,22 @@ REAL Cartz = xCart[2];
 
   // Step 3.c: Compare xCart_from_xx to xCart_from_xx_inbounds;
   //           they should be identical!!!
+"""
+    )
+    if fp_type == "float":
+        body +=(
+            r"""
+#define EPS_REL 1e-6
+"""
+        )
+    else:
+        body +=(
+            r"""
 #define EPS_REL 1e-8
+"""
+        )
+    body+=(
+        r"""
   const REAL norm_factor = sqrt(xCart_from_xx*xCart_from_xx + yCart_from_xx*yCart_from_xx + zCart_from_xx*zCart_from_xx) + 1e-15;
   if(fabs( (double)(xCart_from_xx - xCart_from_xx_inbounds) ) > EPS_REL * norm_factor ||
      fabs( (double)(yCart_from_xx - yCart_from_xx_inbounds) ) > EPS_REL * norm_factor ||
@@ -362,6 +377,7 @@ REAL Cartz = xCart[2];
   i0i1i2_inbounds[0] = i0_inbounds;
   i0i1i2_inbounds[1] = i1_inbounds;
   i0i1i2_inbounds[2] = i2_inbounds;
+#undef EPS_REL
 """
     )
     cf = cfc.CFunction(
@@ -399,7 +415,19 @@ for all 10 tensor types supported by NRPy+."""
     params = """const commondata_struct *restrict commondata, const params_struct *restrict params,
                 const REAL xx0,const REAL xx1,const REAL xx2,  const REAL x0x1x2_inbounds[3], const int idx,
                 innerpt_bc_struct *restrict innerpt_bc_arr"""
-    body = f"""
+    if fp_type == "float":
+        body =(
+            r"""
+#define EPS_REL 1e-6
+"""
+        )
+    else:
+        body =(
+            r"""
+#define EPS_REL 1e-8
+"""
+        )
+    body += f"""
 const REAL xx0_inbounds = x0x1x2_inbounds[0];
 const REAL xx1_inbounds = x0x1x2_inbounds[1];
 const REAL xx2_inbounds = x0x1x2_inbounds[2];
@@ -414,7 +442,7 @@ REAL REAL_parity_array[10];
 
 // Next perform sanity check on parity array output: should be +1 or -1 to within 8 significant digits:
 for(int whichparity=0;whichparity<10;whichparity++) {{
-    if( fabs(REAL_parity_array[whichparity]) < 1 - 1e-8 || fabs(REAL_parity_array[whichparity]) > 1 + 1e-8 ) {{
+    if( fabs(REAL_parity_array[whichparity]) < 1 - EPS_REL || fabs(REAL_parity_array[whichparity]) > 1 + EPS_REL ) {{
         fprintf(stderr,"Error at point (%e %e %e), which maps to (%e %e %e).\\n",
                 xx0,xx1,xx2, xx0_inbounds,xx1_inbounds,xx2_inbounds);
         fprintf(stderr,"Parity evaluated to %e , which is not within 8 significant digits of +1 or -1.\\n",
@@ -426,6 +454,7 @@ for(int whichparity=0;whichparity<10;whichparity++) {{
         if(REAL_parity_array[parity] < 0) innerpt_bc_arr[idx].parity[parity] = -1;
     }}
 }} // END for(int whichparity=0;whichparity<10;whichparity++)
+#undef EPS_REL
 """
     cf = cfc.CFunction(
         subdirectory=CoordSystem,
