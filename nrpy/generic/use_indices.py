@@ -1,7 +1,7 @@
 """
 Use the Sympy Indexed type for relativity expressions.
 """
-from typing import Union, Set, Dict, List, Any, cast, Callable, Tuple
+from typing import Union, Set, Dict, List, Any, cast, Callable, Tuple, Optional, Type
 from sympy import IndexedBase, Idx, Eq, Indexed, Basic, Mul, Expr, Eq, Symbol, Integer
 from inspect import currentframe
 from nrpy.generic.sympywrap import *
@@ -210,39 +210,43 @@ def fill_in(indexed:IndexedBase, f:fill_in_type=fill_in_default)->None:
 def expand(arg:Expr)->Expr:
     return do_subs(expand_contracted_indices(arg), subs)
             
+param_default_type = Union[float,int,str,bool]
+param_values_type = Optional[Union[Tuple[float,float],Tuple[int,int],Tuple[bool,bool],str,Set[str]]]
+min_max_type = Union[Tuple[float,float],Tuple[int,int]]
+
 class Param:
-    def __init__(self, name, default, desc, values):
+    def __init__(self, name:str, default:param_default_type, desc:str, values:param_values_type)->None:
         self.name = name
         self.values = values
         self.desc = desc
         self.default = default
 
-    def get_min_max(self):
+    def get_min_max(self)->min_max_type:
         ty = self.get_type()
-        if type == int:
+        if ty == int:
             if self.values is not None:
-                return self.values
-            return [-2**31, 2**31-1]
-        elif type == float:
+                return cast(min_max_type, self.values)
+            return (-2**31, 2**31-1)
+        elif ty == float:
             if self.values is not None:
-                return self.values
-            return [sys.float_info.min, sys.float_info.max]
+                return cast(min_max_type, self.values)
+            return (sys.float_info.min, sys.float_info.max)
         else:
             assert False
 
-    def get_values(self):
+    def get_values(self)->param_values_type:
         if self.values is not None:
             return self.values
         ty = self.get_type()
         if ty == bool:
-            return [False, True]
+            return (False, True)
         elif ty == str:
             return ".*"
         else:
             return self.get_min_max()
 
-    def get_type(self):
-        if values == None:
+    def get_type(self)->Type[Any]:
+        if self.values == None:
             return type(self.default)
         elif type(self.values) == set:
             assert type(self.default) == str
@@ -251,7 +255,7 @@ class Param:
             # values is a regex
             assert type(self.default) == str
             return str
-        elif len(values) == 2:
+        elif type(self.values) == tuple and len(self.values) == 2:
             assert type(self.default) in [int, float]
             assert type(self.values[0]) in [int, float]
             assert type(self.values[1]) in [int, float]
@@ -265,48 +269,51 @@ class Param:
 class GF:
     def __init__(self)->None:
         self.symmetries : Dict[Indexed,Indexed] = dict()
-        self.gfs:Dict[str,IndexedBase] = dict()
+        self.gfs:Dict[str,Union[Indexed, IndexedBase, Symbol]] = dict()
         self.subs : Dict[Expr, Expr] = dict()
         self.eqnlist : EqnList = EqnList()
         self.params : Dict[str,Param] = dict()
         self.base_of : Dict[str, Symbol] = dict()
+        self.groups : Dict[str, Set[Symbol]] = dict()
 
-    def add_param(self, name, default, desc, values=None):
+    def add_param(self, name:str, default:param_default_type, desc:str, values:param_values_type=None)->Symbol:
         self.params[name] = Param(name, default, desc, values)
         return mkSymbol(name)
 
-    def add_eqn2(self, lhs2, rhs2):
-        print(lhs2,"->",rhs2)
+    def _add_eqn2(self, lhs2:Symbol, rhs2:Expr)->None:
         if str(lhs2) in self.gfs:
             self.eqnlist.add_output(lhs2)
         for item in rhs2.free_symbols:
             if str(item) in self.gfs:
-                self.eqnlist.add_input(item)
+                assert item.is_Symbol
+                self.eqnlist.add_input(cast(Symbol, item))
             elif str(item) in self.params:
-                self.eqnlist.add_param(item)
+                assert item.is_Symbol
+                self.eqnlist.add_param(cast(Symbol, item))
         self.eqnlist.add_eqn(lhs2, rhs2)
 
-    def add_eqn(self, lhs, rhs):
+    def add_eqn(self, lhs:Union[Indexed,IndexedBase,Symbol], rhs:Symbol)->None:
+        lhs2 : Symbol
         if type(lhs) == Indexed:
             for tup in expand_free_indices(lhs):
                 lhsx, inds = tup
-                lhs2 = do_subs(lhsx, self.subs)
+                lhs2 = cast(Symbol, do_subs(lhsx, self.subs))
                 rhs2 = do_subs(rhs, inds, self.subs)
-                self.add_eqn2(lhs2, rhs2)
-        elif type(lhs) == IndexedBase:
-            lhs2 = do_subs(lhs, self.subs)
+                self._add_eqn2(lhs2, rhs2)
+        elif type(lhs) in [IndexedBase, Symbol]:
+            lhs2 = cast(Symbol, do_subs(lhs, self.subs))
             rhs2 = do_subs(expand_contracted_indices(rhs), self.subs)
-            self.add_eqn2(lhs2, rhs2)
+            self._add_eqn2(lhs2, rhs2)
         else:
             print("other:",lhs,rhs,type(lhs),type(rhs))
 
-    def cse(self):
+    def cse(self)->None:
         self.eqnlist.cse()
 
-    def dump(self):
+    def dump(self)->None:
         self.eqnlist.dump()
 
-    def diagnose(self):
+    def diagnose(self)->None:
         self.eqnlist.diagnose()
 
     def add_sym(self, tens:Indexed, ix1:IndexType, ix2:IndexType, sgn:int=1)->None:
@@ -355,10 +362,14 @@ class GF:
             inds = out.indices
             if base_zero:
                 inds = [abs(i)-1 for i in inds]
-            subval = f(out, *inds)
-            self.gfs[str(subval)] = subval
-            self.subs[out] = subval
-            self.base_of[subval] = out.base
+            subval_ = f(out, *inds)
+            if subval_.is_Symbol:
+                subval = cast(Symbol, subval_)
+                self.gfs[str(subval)] = subval
+                self.base_of[str(subval)] = out.base
+                members = self.groups.get(out.base, set())
+                members.add(subval)
+            self.subs[out] = subval_
 
     def expand_eqn(self, eqn:Eq)->List[Eq]:
         result : List[Eq] = list()
