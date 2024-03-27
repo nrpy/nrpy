@@ -198,9 +198,20 @@ def register_CFunction_auxevol_gfs_all_points(
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
+    print(f"{inspect.currentframe()}: reg. before {pcg.pcg_registration_phase()}")
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
+    blah = (
+        cast(bool, par.parval_from_str("parallel_codegen_enable"))
+        and par.parval_from_str("parallel_codegen_stage") == "register"
+    )
+    print(
+        f"AFTER pcg_registration_phase(): {par.parval_from_str('parallel_codegen_enable')}, {par.parval_from_str('parallel_codegen_stage')}, {blah}"
+    )
+    print(f"{inspect.currentframe()}: reg. after. {pcg.pcg_registration_phase()}")
+
+
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
     desc = r"""Set AUXEVOL gridfunctions at all points."""
