@@ -51,12 +51,12 @@ def register_CFunction_rhs_eval(
     :param thorn_name: The Einstein Toolkit thorn name.
     :param CoordSystem: The coordinate system to be used.
     :param enable_T4munu: Whether to include the stress-energy tensor. Defaults to False.
-    :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
-    :param enable_simd: Whether or not to enable SIMD (Single Instruction, Multiple Data).
+    :param enable_rfm_precompute: Whether to enable reference metric precomputation.
+    :param enable_simd: Whether to enable SIMD (Single Instruction, Multiple Data).
     :param fd_order: Order of finite difference method
     :param LapseEvolutionOption: Lapse evolution equation choice.
     :param ShiftEvolutionOption: Lapse evolution equation choice.
-    :param enable_KreissOliger_dissipation: Whether or not to enable Kreiss-Oliger dissipation.
+    :param enable_KreissOliger_dissipation: Whether to enable Kreiss-Oliger dissipation.
     :param KreissOliger_strength_mult_by_W: Whether to multiply Kreiss-Oliger strength by W.
     :param KreissOliger_strength_gauge: Gauge strength for Kreiss-Oliger dissipation.
     :param KreissOliger_strength_nongauge: Non-gauge strength for Kreiss-Oliger dissipation.

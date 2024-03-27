@@ -37,7 +37,7 @@ def register_CFunction_enforce_detgammahat_constraint(
 
     :param thorn_name: The Einstein Toolkit thorn name.
     :param CoordSystem: The coordinate system to be used.
-    :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
+    :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
 
     :return: None if in registration phase, else the updated NRPy environment.

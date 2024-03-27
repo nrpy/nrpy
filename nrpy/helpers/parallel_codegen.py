@@ -8,12 +8,14 @@ Author: Zachariah B. Etienne
 from typing import Any, Callable, Dict, Tuple, Union, cast
 from importlib import import_module
 import time
+import logging
 
 from multiprocess import Pool, Manager  # type: ignore # pylint: disable=E0611
 import nrpy.grid as gri
 import nrpy.c_function as cfc
 import nrpy.params as par
 
+logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 par.register_param(bool, __name__, "parallel_codegen_enable", False)
 par.register_param(str, __name__, "parallel_codegen_stage", "register")
 
@@ -198,14 +200,20 @@ def wrapper_func(args: Tuple[Dict[str, Any], str, Any]) -> Any:
     shared_dict, key, value = args
     start_time = time.time()
     try:
+        # logging.debug(f"Starting task with key: {key}")
         result = parallel_function_call(value)
+        # logging.debug(f"Task {key} completed: {result}")
         shared_dict[key] = result
         funcname_args = value.function_name
-        print(
-            f"In {(time.time()-start_time):.3f}s, worker completed task '{funcname_args}'"
+        elapsed_time = time.time() - start_time
+        logging.info(
+            "In %.3fs, worker completed task '%s'", elapsed_time, funcname_args
         )
         return key, result
     except Exception as e:
+        logging.exception(
+            "An error occurred in the process associated with key '%s':", key
+        )
         raise RuntimeError(
             f"An error occurred in the process associated with key '{key}':\n {e}"
         ) from e
