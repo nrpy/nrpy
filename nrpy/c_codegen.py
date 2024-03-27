@@ -451,7 +451,7 @@ def c_codegen(
             processed_code = sp.ccode(
                 expr,
                 output_varname_str[i],
-                user_functions=custom_functions_for_SymPy_ccode,
+                user_functions=custom_functions_for_SymPy_ccode[CCGParams.fp_type],
                 type_aliases=CCGParams.ccg_type_aliases,
             )
             outstring += f"{processed_code}\n"
@@ -573,7 +573,9 @@ def c_codegen(
                     + sp.ccode(
                         common_subexpression[1],
                         common_subexpression[0],
-                        user_functions=custom_functions_for_SymPy_ccode,
+                        user_functions=custom_functions_for_SymPy_ccode[
+                            CCGParams.fp_type
+                        ],
                         type_aliases=CCGParams.ccg_type_aliases,
                     )
                     + "\n"
@@ -608,7 +610,9 @@ def c_codegen(
                     sp.ccode(
                         result,
                         varnames_excluding_SCALAR_TMPs[i],
-                        user_functions=custom_functions_for_SymPy_ccode,
+                        user_functions=custom_functions_for_SymPy_ccode[
+                            CCGParams.fp_type
+                        ],
                         type_aliases=CCGParams.ccg_type_aliases,
                     )
                     + "\n"
@@ -672,25 +676,126 @@ def c_codegen(
 #    codegen to output our desired fabs().
 nrpyAbs = sp.Function("nrpyAbs")
 custom_functions_for_SymPy_ccode = {
-    "nrpyAbs": "fabs",
-    "Pow": [
-        (lambda b, e: e == sp.Rational(1, 2), lambda b, e: f"sqrt({b})"),
-        (lambda b, e: e == 0.5, lambda b, e: f"sqrt({b})"),
-        (lambda b, e: e == -sp.Rational(1, 2), lambda b, e: f"(1.0/sqrt({b}))"),
-        (lambda b, e: e == -0.5, lambda b, e: f"(1.0/sqrt({b}))"),
-        (lambda b, e: e == sp.S.One / 3, lambda b, e: f"cbrt({b})"),
-        (lambda b, e: e == -sp.S.One / 3, lambda b, e: f"(1.0/cbrt({b}))"),
-        (lambda b, e: e == 2, lambda b, e: f"(({b})*({b}))"),
-        (lambda b, e: e == 3, lambda b, e: f"(({b})*({b})*({b}))"),
-        (lambda b, e: e == 4, lambda b, e: f"(({b})*({b})*({b})*({b}))"),
-        (lambda b, e: e == 5, lambda b, e: f"(({b})*({b})*({b})*({b})*({b}))"),
-        (lambda b, e: e == -1, lambda b, e: f"(1.0/({b}))"),
-        (lambda b, e: e == -2, lambda b, e: f"(1.0/(({b})*({b})))"),
-        (lambda b, e: e == -3, lambda b, e: f"(1.0/(({b})*({b})*({b})))"),
-        (lambda b, e: e == -4, lambda b, e: f"(1.0/(({b})*({b})*({b})*({b})))"),
-        (lambda b, e: e == -5, lambda b, e: f"(1.0/(({b})*({b})*({b})*({b})*({b})))"),
-        (lambda b, e: e != -5, "pow"),
-    ],
+    "double": {
+        "nrpyAbs": "fabs",
+        "Pow": [
+            (lambda b, e: e == sp.Rational(1, 2), lambda b, e: f"sqrt({b})"),
+            (lambda b, e: e == 0.5, lambda b, e: f"sqrt({b})"),
+            (lambda b, e: e == -sp.Rational(1, 2), lambda b, e: f"(1.0/sqrt({b}))"),
+            (lambda b, e: e == -0.5, lambda b, e: f"(1.0/sqrt({b}))"),
+            (lambda b, e: e == sp.S.One / 3, lambda b, e: f"cbrt({b})"),
+            (lambda b, e: e == -sp.S.One / 3, lambda b, e: f"(1.0/cbrt({b}))"),
+            (lambda b, e: e == 2, lambda b, e: f"(({b})*({b}))"),
+            (lambda b, e: e == 3, lambda b, e: f"(({b})*({b})*({b}))"),
+            (lambda b, e: e == 4, lambda b, e: f"(({b})*({b})*({b})*({b}))"),
+            (lambda b, e: e == 5, lambda b, e: f"(({b})*({b})*({b})*({b})*({b}))"),
+            (lambda b, e: e == -1, lambda b, e: f"(1.0/({b}))"),
+            (lambda b, e: e == -2, lambda b, e: f"(1.0/(({b})*({b})))"),
+            (lambda b, e: e == -3, lambda b, e: f"(1.0/(({b})*({b})*({b})))"),
+            (lambda b, e: e == -4, lambda b, e: f"(1.0/(({b})*({b})*({b})*({b})))"),
+            (
+                lambda b, e: e == -5,
+                lambda b, e: f"(1.0/(({b})*({b})*({b})*({b})*({b})))",
+            ),
+            (lambda b, e: e != -5, "pow"),
+        ],
+    },
+    "std::float64_t": {
+        "nrpyAbs": "fabs",
+        "Pow": [
+            (lambda b, e: e == sp.Rational(1, 2), lambda b, e: f"sqrt({b})"),
+            (lambda b, e: e == 0.5, lambda b, e: f"sqrt({b})"),
+            (lambda b, e: e == -sp.Rational(1, 2), lambda b, e: f"(1.0/sqrt({b}))"),
+            (lambda b, e: e == -0.5, lambda b, e: f"(1.0/sqrt({b}))"),
+            (lambda b, e: e == sp.S.One / 3, lambda b, e: f"cbrt({b})"),
+            (lambda b, e: e == -sp.S.One / 3, lambda b, e: f"(1.0/cbrt({b}))"),
+            (lambda b, e: e == 2, lambda b, e: f"(({b})*({b}))"),
+            (lambda b, e: e == 3, lambda b, e: f"(({b})*({b})*({b}))"),
+            (lambda b, e: e == 4, lambda b, e: f"(({b})*({b})*({b})*({b}))"),
+            (lambda b, e: e == 5, lambda b, e: f"(({b})*({b})*({b})*({b})*({b}))"),
+            (lambda b, e: e == -1, lambda b, e: f"(1.0/({b}))"),
+            (lambda b, e: e == -2, lambda b, e: f"(1.0/(({b})*({b})))"),
+            (lambda b, e: e == -3, lambda b, e: f"(1.0/(({b})*({b})*({b})))"),
+            (lambda b, e: e == -4, lambda b, e: f"(1.0/(({b})*({b})*({b})*({b})))"),
+            (
+                lambda b, e: e == -5,
+                lambda b, e: f"(1.0/(({b})*({b})*({b})*({b})*({b})))",
+            ),
+            (lambda b, e: e != -5, "pow"),
+        ],
+    },
+    "float": {
+        "nrpyAbs": "fabsf",
+        "Pow": [
+            (lambda b, e: e == sp.Rational(1, 2), lambda b, e: f"sqrtf({b})"),
+            (lambda b, e: e == 0.5, lambda b, e: f"sqrtf({b})"),
+            (lambda b, e: e == -sp.Rational(1, 2), lambda b, e: f"(1.0/sqrtf({b}))"),
+            (lambda b, e: e == -0.5, lambda b, e: f"(1.0/sqrtf({b}))"),
+            (lambda b, e: e == sp.S.One / 3, lambda b, e: f"cbrtf({b})"),
+            (lambda b, e: e == -sp.S.One / 3, lambda b, e: f"(1.0/cbrtf({b}))"),
+            (lambda b, e: e == 2, lambda b, e: f"(({b})*({b}))"),
+            (lambda b, e: e == 3, lambda b, e: f"(({b})*({b})*({b}))"),
+            (lambda b, e: e == 4, lambda b, e: f"(({b})*({b})*({b})*({b}))"),
+            (lambda b, e: e == 5, lambda b, e: f"(({b})*({b})*({b})*({b})*({b}))"),
+            (lambda b, e: e == -1, lambda b, e: f"(1.0/({b}))"),
+            (lambda b, e: e == -2, lambda b, e: f"(1.0/(({b})*({b})))"),
+            (lambda b, e: e == -3, lambda b, e: f"(1.0/(({b})*({b})*({b})))"),
+            (lambda b, e: e == -4, lambda b, e: f"(1.0/(({b})*({b})*({b})*({b})))"),
+            (
+                lambda b, e: e == -5,
+                lambda b, e: f"(1.0/(({b})*({b})*({b})*({b})*({b})))",
+            ),
+            (lambda b, e: e != -5, "powf"),
+        ],
+    },
+    "std::float32_t": {
+        "nrpyAbs": "fabsf",
+        "Pow": [
+            (lambda b, e: e == sp.Rational(1, 2), lambda b, e: f"sqrtf({b})"),
+            (lambda b, e: e == 0.5, lambda b, e: f"sqrtf({b})"),
+            (lambda b, e: e == -sp.Rational(1, 2), lambda b, e: f"(1.0/sqrtf({b}))"),
+            (lambda b, e: e == -0.5, lambda b, e: f"(1.0/sqrtf({b}))"),
+            (lambda b, e: e == sp.S.One / 3, lambda b, e: f"cbrtf({b})"),
+            (lambda b, e: e == -sp.S.One / 3, lambda b, e: f"(1.0/cbrtf({b}))"),
+            (lambda b, e: e == 2, lambda b, e: f"(({b})*({b}))"),
+            (lambda b, e: e == 3, lambda b, e: f"(({b})*({b})*({b}))"),
+            (lambda b, e: e == 4, lambda b, e: f"(({b})*({b})*({b})*({b}))"),
+            (lambda b, e: e == 5, lambda b, e: f"(({b})*({b})*({b})*({b})*({b}))"),
+            (lambda b, e: e == -1, lambda b, e: f"(1.0/({b}))"),
+            (lambda b, e: e == -2, lambda b, e: f"(1.0/(({b})*({b})))"),
+            (lambda b, e: e == -3, lambda b, e: f"(1.0/(({b})*({b})*({b})))"),
+            (lambda b, e: e == -4, lambda b, e: f"(1.0/(({b})*({b})*({b})*({b})))"),
+            (
+                lambda b, e: e == -5,
+                lambda b, e: f"(1.0/(({b})*({b})*({b})*({b})*({b})))",
+            ),
+            (lambda b, e: e != -5, "powf"),
+        ],
+    },
+    "long double": {
+        "nrpyAbs": "fabsl",
+        "Pow": [
+            (lambda b, e: e == sp.Rational(1, 2), lambda b, e: f"sqrtl({b})"),
+            (lambda b, e: e == 0.5, lambda b, e: f"sqrtl({b})"),
+            (lambda b, e: e == -sp.Rational(1, 2), lambda b, e: f"(1.0/sqrtl({b}))"),
+            (lambda b, e: e == -0.5, lambda b, e: f"(1.0/sqrtl({b}))"),
+            (lambda b, e: e == sp.S.One / 3, lambda b, e: f"cbrtl({b})"),
+            (lambda b, e: e == -sp.S.One / 3, lambda b, e: f"(1.0/cbrtl({b}))"),
+            (lambda b, e: e == 2, lambda b, e: f"(({b})*({b}))"),
+            (lambda b, e: e == 3, lambda b, e: f"(({b})*({b})*({b}))"),
+            (lambda b, e: e == 4, lambda b, e: f"(({b})*({b})*({b})*({b}))"),
+            (lambda b, e: e == 5, lambda b, e: f"(({b})*({b})*({b})*({b})*({b}))"),
+            (lambda b, e: e == -1, lambda b, e: f"(1.0/({b}))"),
+            (lambda b, e: e == -2, lambda b, e: f"(1.0/(({b})*({b})))"),
+            (lambda b, e: e == -3, lambda b, e: f"(1.0/(({b})*({b})*({b})))"),
+            (lambda b, e: e == -4, lambda b, e: f"(1.0/(({b})*({b})*({b})*({b})))"),
+            (
+                lambda b, e: e == -5,
+                lambda b, e: f"(1.0/(({b})*({b})*({b})*({b})*({b})))",
+            ),
+            (lambda b, e: e != -5, "powl"),
+        ],
+    },
 }
 
 
