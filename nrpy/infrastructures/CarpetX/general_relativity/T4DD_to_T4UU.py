@@ -32,7 +32,7 @@ def register_CFunction_T4DD_to_T4UU(
 
     :param thorn_name: The Einstein Toolkit thorn name.
     :param CoordSystem: The coordinate system to be used.
-    :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
+    :param enable_rfm_precompute: Whether to enable reference metric precomputation.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """

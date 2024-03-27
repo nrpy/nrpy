@@ -27,7 +27,7 @@ class BSSNQuantities:
     It takes care of registering the necessary grid functions for these quantities.
 
     :param CoordSystem: (string) The coordinate system being used, defaults to "Cartesian"
-    :param enable_rfm_precompute: (bool) Whether or not to enable precomputation for reference metric, defaults to False
+    :param enable_rfm_precompute: (bool) Whether to enable precomputation for reference metric, defaults to False
     """
 
     def __init__(
@@ -37,7 +37,7 @@ class BSSNQuantities:
         Set up all BSSN quantities & store to the class object.
 
         :param CoordSystem: (string) The coordinate system being used, defaults to "Cartesian"
-        :param enable_rfm_precompute: (bool) Whether or not to enable precomputation for reference metric, defaults to False
+        :param enable_rfm_precompute: (bool) Whether to enable precomputation for reference metric, defaults to False
         """
         # Step 2: Register all needed BSSN gridfunctions if needed.
 

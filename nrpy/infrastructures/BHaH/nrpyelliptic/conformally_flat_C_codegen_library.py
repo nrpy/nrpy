@@ -28,6 +28,7 @@ from nrpy.equations.nrpyelliptic.ConformallyFlat_SourceTerms import (
 
 import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices as out012d
+import inspect
 
 # Define functions to set up initial guess
 
@@ -446,13 +447,14 @@ def register_CFunction_diagnostics(
 
     :param CoordSystem: Coordinate system used.
     :param default_diagnostics_out_every: Specifies the default diagnostics output frequency.
-    :param enable_progress_indicator: Whether or not to enable the progress indicator.
+    :param enable_progress_indicator: Whether to enable the progress indicator.
     :param axis_filename_tuple: Tuple containing filename and variables for axis output.
     :param plane_filename_tuple: Tuple containing filename and variables for plane output.
     :param out_quantities_dict: Dictionary or string specifying output quantities.
     :return: None if in registration phase, else the updated NRPy environment.
     :raises TypeError: If `out_quantities_dict` is not a dictionary and not set to "default".
     """
+    print(f"{inspect.currentframe()}: registration? {pcg.pcg_registration_phase()}")
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
@@ -654,8 +656,8 @@ def register_CFunction_rhs_eval(
     selected coordinate system and specified parameters.
 
     :param CoordSystem: The coordinate system.
-    :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
-    :param enable_simd: Whether or not to enable SIMD.
+    :param enable_rfm_precompute: Whether to enable reference metric precomputation.
+    :param enable_simd: Whether to enable SIMD.
     :param OMP_collapse: Level of OpenMP loop collapsing.
 
     :return: None if in registration phase, else the updated NRPy environment.
@@ -724,15 +726,17 @@ def register_CFunction_compute_residual_all_points(
     parameters.
 
     :param CoordSystem: The coordinate system.
-    :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
-    :param enable_simd: Whether or not to enable SIMD.
+    :param enable_rfm_precompute: Whether to enable reference metric precomputation.
+    :param enable_simd: Whether to enable SIMD.
     :param OMP_collapse: Level of OpenMP loop collapsing.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
+    print(f"{inspect.currentframe()}: reg. before. {pcg.pcg_registration_phase()}")
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
+    print(f"{inspect.currentframe()}: reg. after. {pcg.pcg_registration_phase()}")
 
     includes = ["BHaH_defines.h"]
     if enable_simd:

@@ -162,8 +162,8 @@ def register_CFunction_diagnostics(
 
     :param list_of_CoordSystems: Lists of unique CoordSystems used.
     :param default_diagnostics_out_every: Specifies the default diagnostics output frequency.
-    :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
-    :param enable_progress_indicator: Whether or not to enable the progress indicator.
+    :param enable_psi4_diagnostics: Whether to enable psi4 diagnostics.
+    :param enable_progress_indicator: Whether to enable the progress indicator.
     :param grid_center_filename_tuple: Tuple containing filename and variables for grid center output.
     :param axis_filename_tuple: Tuple containing filename and variables for axis output.
     :param plane_filename_tuple: Tuple containing filename and variables for plane output.
@@ -325,10 +325,10 @@ def register_CFunction_rhs_eval(
     Register the right-hand side evaluation function for the BSSN equations.
 
     :param CoordSystem: The coordinate system to be used.
-    :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
-    :param enable_simd: Whether or not to enable SIMD (Single Instruction, Multiple Data).
-    :param enable_fd_functions: Whether or not to enable finite difference functions.
-    :param enable_KreissOliger_dissipation: Whether or not to enable Kreiss-Oliger dissipation.
+    :param enable_rfm_precompute: Whether to enable reference metric precomputation.
+    :param enable_simd: Whether to enable SIMD (Single Instruction, Multiple Data).
+    :param enable_fd_functions: Whether to enable finite difference functions.
+    :param enable_KreissOliger_dissipation: Whether to enable Kreiss-Oliger dissipation.
     :param LapseEvolutionOption: Lapse evolution equation choice.
     :param ShiftEvolutionOption: Lapse evolution equation choice.
     :param KreissOliger_strength_mult_by_W: Whether to multiply Kreiss-Oliger strength by W.
@@ -503,9 +503,9 @@ def register_CFunction_Ricci_eval(
     Register the Ricci evaluation function.
 
     :param CoordSystem: The coordinate system to be used.
-    :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
-    :param enable_simd: Whether or not to enable SIMD instructions.
-    :param enable_fd_functions: Whether or not to enable finite difference functions.
+    :param enable_rfm_precompute: Whether to enable reference metric precomputation.
+    :param enable_simd: Whether to enable SIMD instructions.
+    :param enable_fd_functions: Whether to enable finite difference functions.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
 
     :return: None if in registration phase, else the updated NRPy environment.
@@ -604,9 +604,9 @@ def register_CFunction_constraints(
     Register the BSSN constraints evaluation function.
 
     :param CoordSystem: The coordinate system to be used.
-    :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
-    :param enable_simd: Whether or not to enable SIMD instructions.
-    :param enable_fd_functions: Whether or not to enable finite difference functions.
+    :param enable_rfm_precompute: Whether to enable reference metric precomputation.
+    :param enable_simd: Whether to enable SIMD instructions.
+    :param enable_fd_functions: Whether to enable finite difference functions.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
 
     :return: None if in registration phase, else the updated NRPy environment.
@@ -678,7 +678,7 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
     Register the function that enforces the det(gammabar) = det(gammahat) constraint.
 
     :param CoordSystem: The coordinate system to be used.
-    :param enable_rfm_precompute: Whether or not to enable reference metric precomputation.
+    :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
 
     :return: None if in registration phase, else the updated NRPy environment.
