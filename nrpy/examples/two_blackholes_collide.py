@@ -60,7 +60,7 @@ enable_rfm_precompute = True
 MoL_method = "RK4"
 fd_order = 4
 radiation_BC_fd_order = 4
-enable_simd = True
+enable_simd = False
 separate_Ricci_and_BSSN_RHS = True
 parallel_codegen_enable = True
 enable_fd_functions = True
@@ -165,7 +165,7 @@ if __name__ == "__main__":
     pcg.do_parallel_codegen()
 
 cbc.CurviBoundaryConditions_register_C_functions(
-    list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order, fp_type=fp_type
+    list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order, fp_type=fp_type,
 )
 rhs_string = """
 Ricci_eval(commondata, params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);
