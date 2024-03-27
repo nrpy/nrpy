@@ -199,6 +199,14 @@ def wrapper_func(args: Tuple[Dict[str, Any], str, Any]) -> Any:
     start_time = time.time()
     try:
         result = parallel_function_call(value)
+        print(
+            key,
+            len(result[0]),
+            len(result[1]),
+            len(result[2]),
+            len(result[3]),
+            len(result[4]),
+        )
         shared_dict[key] = result
         funcname_args = value.function_name
         print(
