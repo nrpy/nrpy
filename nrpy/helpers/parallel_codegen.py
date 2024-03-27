@@ -199,7 +199,9 @@ def wrapper_func(args: Tuple[Dict[str, Any], str, Any]) -> Any:
     start_time = time.time()
     try:
         result = parallel_function_call(value)
+        print("Result:", result)  # Debug print
         shared_dict[key] = result
+        print("Shared dict after assignment:", shared_dict)  # Debug print
         funcname_args = value.function_name
         print(
             f"In {(time.time()-start_time):.3f}s, worker completed task '{funcname_args}'"
