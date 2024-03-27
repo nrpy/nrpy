@@ -146,6 +146,8 @@ def register_CFunction_auxevol_gfs_single_point(
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
+    print(f"AFTER pcg_registration_phase(): {par.parval_from_str("parallel_codegen_enable")}, {par.parval_from_str("parallel_codegen_stage")}")
+
     print(f"{inspect.currentframe()}: reg. after. {pcg.pcg_registration_phase()}")
 
     # Compute psi_background and ADD_times_AUU
@@ -738,6 +740,7 @@ def register_CFunction_compute_residual_all_points(
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
+    print(f"AFTER pcg_registration_phase(): {par.parval_from_str("parallel_codegen_enable")}, {par.parval_from_str("parallel_codegen_stage")}")
     print(f"{inspect.currentframe()}: reg. after. {pcg.pcg_registration_phase()}")
 
     includes = ["BHaH_defines.h"]
