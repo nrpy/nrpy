@@ -5,6 +5,9 @@ from typing import Union, Set, Dict, List, Any, cast, Callable, Tuple
 from sympy import IndexedBase, Idx, Eq, Indexed, Basic, Mul, Expr, Eq, Symbol, Integer
 from inspect import currentframe
 from nrpy.generic.sympywrap import *
+from nrpy.generic.eqnlist import EqnList
+from nrpy.helpers.colorize_text import colorize
+import sys
 
 i, j, k = mkIdxs('i j k')
 multype = Mul #type(i*j)
@@ -207,11 +210,104 @@ def fill_in(indexed:IndexedBase, f:fill_in_type=fill_in_default)->None:
 def expand(arg:Expr)->Expr:
     return do_subs(expand_contracted_indices(arg), subs)
             
+class Param:
+    def __init__(self, name, default, desc, values):
+        self.name = name
+        self.values = values
+        self.desc = desc
+        self.default = default
+
+    def get_min_max(self):
+        ty = self.get_type()
+        if type == int:
+            if self.values is not None:
+                return self.values
+            return [-2**31, 2**31-1]
+        elif type == float:
+            if self.values is not None:
+                return self.values
+            return [sys.float_info.min, sys.float_info.max]
+        else:
+            assert False
+
+    def get_values(self):
+        if self.values is not None:
+            return self.values
+        ty = self.get_type()
+        if ty == bool:
+            return [False, True]
+        elif ty == str:
+            return ".*"
+        else:
+            return self.get_min_max()
+
+    def get_type(self):
+        if values == None:
+            return type(self.default)
+        elif type(self.values) == set:
+            assert type(self.default) == str
+            return set # keywords
+        elif type(self.values) == str:
+            # values is a regex
+            assert type(self.default) == str
+            return str
+        elif len(values) == 2:
+            assert type(self.default) in [int, float]
+            assert type(self.values[0]) in [int, float]
+            assert type(self.values[1]) in [int, float]
+            if type(self.default)==float or type(self.values[0]) == float or type(self.values[1]) == float:
+                return float
+            else:
+                return int
+        else:
+            assert False
+
 class GF:
     def __init__(self)->None:
         self.symmetries : Dict[Indexed,Indexed] = dict()
         self.gfs:Dict[str,IndexedBase] = dict()
         self.subs : Dict[Expr, Expr] = dict()
+        self.eqnlist : EqnList = EqnList()
+        self.params : Dict[str,Param] = dict()
+        self.base_of : Dict[str, Symbol] = dict()
+
+    def add_param(self, name, default, desc, values=None):
+        self.params[name] = Param(name, default, desc, values)
+        return mkSymbol(name)
+
+    def add_eqn2(self, lhs2, rhs2):
+        print(lhs2,"->",rhs2)
+        if str(lhs2) in self.gfs:
+            self.eqnlist.add_output(lhs2)
+        for item in rhs2.free_symbols:
+            if str(item) in self.gfs:
+                self.eqnlist.add_input(item)
+            elif str(item) in self.params:
+                self.eqnlist.add_param(item)
+        self.eqnlist.add_eqn(lhs2, rhs2)
+
+    def add_eqn(self, lhs, rhs):
+        if type(lhs) == Indexed:
+            for tup in expand_free_indices(lhs):
+                lhsx, inds = tup
+                lhs2 = do_subs(lhsx, self.subs)
+                rhs2 = do_subs(rhs, inds, self.subs)
+                self.add_eqn2(lhs2, rhs2)
+        elif type(lhs) == IndexedBase:
+            lhs2 = do_subs(lhs, self.subs)
+            rhs2 = do_subs(expand_contracted_indices(rhs), self.subs)
+            self.add_eqn2(lhs2, rhs2)
+        else:
+            print("other:",lhs,rhs,type(lhs),type(rhs))
+
+    def cse(self):
+        self.eqnlist.cse()
+
+    def dump(self):
+        self.eqnlist.dump()
+
+    def diagnose(self):
+        self.eqnlist.diagnose()
 
     def add_sym(self, tens:Indexed, ix1:IndexType, ix2:IndexType, sgn:int=1)->None:
         assert type(tens) == Indexed
@@ -259,7 +355,10 @@ class GF:
             inds = out.indices
             if base_zero:
                 inds = [abs(i)-1 for i in inds]
-            self.subs[out] = f(out, *inds)
+            subval = f(out, *inds)
+            self.gfs[str(subval)] = subval
+            self.subs[out] = subval
+            self.base_of[subval] = out.base
 
     def expand_eqn(self, eqn:Eq)->List[Eq]:
         result : List[Eq] = list()
@@ -310,4 +409,3 @@ if __name__ == "__main__":
         # Internally, the rhs will have contracted indices expanded
         #print(out.lhs.subs(mysubs),"=",out.rhs.subs(mysubs))
         out, inds = tup
-        print(do_subs(out, mysubs),"->",do_subs(form.rhs, inds, mysubs))

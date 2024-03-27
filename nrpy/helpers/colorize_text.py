@@ -64,7 +64,7 @@ def apply_colorization(arg: Any, c: ColorNames) -> str:
     'ESC32mfishESC0m'
     """
     assert isinstance(c, str), "Color name must be a string"
-    assert c in colors, f"Invalid color name: {c}"
+    assert c in colors, f"Invalid color name: {c}. Please use one of {list(colors.keys())}"
     return colors[c] + str(arg) + reset
 
 

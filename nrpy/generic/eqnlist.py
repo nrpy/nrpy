@@ -3,7 +3,7 @@ from typing import TypeVar, Literal, List, Dict, Union, Tuple, Any, Set, Generic
 from sympy.core.symbol import Symbol
 from sympy.core.expr import Expr
 from sympy import symbols, Function, diff
-from nrpy.helpers.coloring import is_colored as colored
+from nrpy.helpers.colorize_text import colorize
 
 from nrpy.generic.sympywrap import *
 
@@ -60,11 +60,9 @@ class EqnList:
         written:Set[Symbol] = set()
 
         if self.verbose:
-            print(colored("Inputs:","green"),self.inputs)
-            print(colored("Outputs:","green"),self.outputs)
-            print(colored("Eqns:","green"))
-            for lhs in self.eqns:
-                print(" ",colored(lhs,"cyan"),"=",self.eqns[lhs])
+            print(colorize("Inputs:","green"),self.inputs)
+            print(colorize("Outputs:","green"),self.outputs)
+            print(colorize("Params:","green"),self.params)
 
         for k in self.eqns:
             written.add(k)
@@ -72,9 +70,9 @@ class EqnList:
                 read.add(cast(Symbol,q))
 
         if self.verbose:
-            print(colored("Read:","green"),read)
-            print(colored("Written:","green"),written)
-            print(colored("Temps:","green"),temps)
+            print(colorize("Read:","green"),read)
+            print(colorize("Written:","green"),written)
+            print(colorize("Temps:","green"),temps)
 
         for k in self.inputs:
             assert k in read, f"Symbol '{k}' is in inputs, but it is never read. {read}"
@@ -88,7 +86,7 @@ class EqnList:
                 temps.add(k)
 
         for k in read:
-            if k not in self.inputs:
+            if k not in self.inputs and k not in self.params:
                 temps.add(k)
 
         for k in temps:
@@ -121,7 +119,7 @@ class EqnList:
             generation += 1
             again = False
             for k in list(needed):
-                if k in self.inputs and k not in complete:
+                if (k in self.inputs or k in self.params) and k not in complete:
                     complete[k] = generation
                     again = True
                 elif k not in complete:
@@ -146,7 +144,7 @@ class EqnList:
                         again = True
                     else:
                         find_cycle = k
-        print(colored("Order:","green"),self.order)
+        print(colorize("Order:","green"),self.order)
         for k,v in self.eqns.items():
             assert k in complete, f"Eqn '{k} = {v}' does not contribute to the output."
             val1:int = complete[k]
@@ -198,9 +196,9 @@ class EqnList:
             self.eqns[k] = m
 
     def dump(self)->None:
-        print("Dumping Equations:")
+        print(colorize("Dumping Equations:","green"))
         for k in self.order:
-            print(" ",k,"->",self.eqns[k])
+            print(" ",colorize(k,"cyan"),"=",self.eqns[k])
 
 if __name__ == "__main__":
     a, b, c, d, e, f, g, q, r = symbols("a b c d e f g q r")
