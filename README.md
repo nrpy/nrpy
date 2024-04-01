@@ -68,12 +68,7 @@ pip install nrpy
   1. Analyze the output from `out0d-conv_factor1.00.txt` and `out0d-conv_factor2.00.txt` in e.g., `gnuplot`.
 1. If working with an Einstein Toolkit project, the output will be Einstein Toolkit modules (thorns). You'll want to either copy or link them to an arrangement in `arrangements/[subdirectory]/`, then add the thorns to your `ThornList`, and compile.
 1. If working with a superB project:
-  1. Install Charm++ following the instructions in https://charm.readthedocs.io/en/latest/charm++/manual.html#installing-charm
-  1. Go to projects/superB_two_blackholes_collide and open the Makefile. Replace "~/charm" in "CC = ~/charm/bin/charmc" with the path to your Charm++ installation directory.
-  1. Type make to build.
-  1. Type ./charmrun +p4 ./superB_two_blackholes_collide to run with 4 processors.
-  1. As in a BlackHoles@Home project parameters can be changed.
-  1. Analyze the output from `out0d-conv_factor1.00.txt` and `out0d-conv_factor2.00.txt` in e.g., `gnuplot`.
+  1. Install Charm++ following the instructions in https://charm.readthedocs.io/en/latest/charm++/manual.html#installing-charm. Then, go to projects/superB_two_blackholes_collide and open the Makefile. Replace "~/charm" in "CC = ~/charm/bin/charmc" with the path to your Charm++ installation directory. Type make to build. Type ./charmrun +p4 ./superB_two_blackholes_collide to run with 4 processors. As in a BlackHoles@Home project parameters can be changed and output from `out0d-conv_factor1.00.txt` and `out0d-conv_factor2.00.txt` can be analysed using e.g., `gnuplot`.
 
 # Contributing to NRPy 2
 
