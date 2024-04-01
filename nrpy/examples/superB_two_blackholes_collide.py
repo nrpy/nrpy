@@ -64,11 +64,9 @@ grid_physical_size = 7.5
 diagnostics_output_every = 0.25
 t_final = 1.0 * grid_physical_size
 Nxx_dict = {
-    "Spherical": [72, 12, 2],
-    "SinhSpherical": [72, 12, 2],
-    "Cartesian": [64, 64, 64],
+    "Spherical": [180, 4, 4],
 }
-par.adjust_CodeParam_default("Nchare0", 12)
+par.adjust_CodeParam_default("Nchare0", 36)
 par.adjust_CodeParam_default("Nchare1", 1)
 par.adjust_CodeParam_default("Nchare2", 1)
 default_BH1_mass = default_BH2_mass = 0.5
@@ -86,12 +84,8 @@ enable_KreissOliger_dissipation = False
 boundary_conditions_desc = "outgoing radiation"
 
 OMP_collapse = 1
-if "Spherical" in CoordSystem:
-    par.set_parval_from_str("symmetry_axes", "2")
+if "Spherical" in CoordSystem:    
     OMP_collapse = 2  # about 2x faster
-if "Cylindrical" in CoordSystem:
-    par.set_parval_from_str("symmetry_axes", "1")
-    OMP_collapse = 2  # might be slightly faster
 
 project_dir = os.path.join("project", project_name)
 
