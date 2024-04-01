@@ -95,6 +95,7 @@ class Main : public CBase_Main {
   private:
     /// Member Variables (Object State) ///
     CProxy_Timestepping timesteppingArray;
+    REAL start_time;
 
     /// Private Member Functions ///
 
@@ -146,7 +147,7 @@ def output_main_cpp(
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
 
-    file_output_str = """#include "BHaH_defines.h"
+    file_output_str = r"""#include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
 #include "main.h"
 #include "timestepping.decl.h"
@@ -160,6 +161,8 @@ def output_main_cpp(
  */
 
 Main::Main(CkArgMsg* msg) {
+  start_time = CkWallTimer();
+
   mainProxy = thisProxy;
 
   CommondataObject commondataObj; // commondataObj.commondata contains parameters common to all grids.
@@ -183,6 +186,7 @@ Main::Main(CkArgMsg* msg) {
 Main::Main(CkMigrateMessage* msg) { }
 
 void Main::done() {
+  CkPrintf("\nTotal wall clock time = %f s.\n", CkWallTimer() - start_time);
   CkExit();
 }
 

@@ -10,6 +10,7 @@ superB:
 -added time_start as parameter
 -added which RK stage as parameter
 -added switch case depending ok RK stage
+-allocate memory to diagnostic output gfs
 """
 
 from typing import List, Union, Dict, Tuple
@@ -40,6 +41,44 @@ _ = par.CodeParameter("REAL", __name__, "time", add_to_parfile=False, add_to_set
 _ = par.CodeParameter("REAL", __name__, "t_final", 10.0, commondata=True)
 # fmt: on
 
+
+def register_CFunction_MoL_malloc_diagnostic_gfs() -> None:
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    desc = "Allocate memory for diagnostic gfs"
+    c_type = "void"
+    name = "MoL_malloc_diagnostic_gfs"
+    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, MoL_gridfunctions_struct *restrict gridfuncs"
+    body = """
+const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;  
+gridfuncs->diagnostic_output_gfs = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);
+"""
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        c_type=c_type,
+        name=name,
+        params=params,
+        include_CodeParameters_h=True,
+        body=body,
+    )    
+
+def register_CFunction_MoL_free_memory_diagnostic_gfs() -> None:
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    desc = "Free memory for diagnostic gfs"
+    c_type = "void"
+    name = "MoL_free_memory_diagnostic_gfs"
+    params = "MoL_gridfunctions_struct *restrict gridfuncs"
+    body = """  
+  free(gridfuncs->diagnostic_output_gfs);  
+"""
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        c_type=c_type,
+        name=name,
+        params=params,
+        body=body,
+    )
 
 
 ########################################################################################################################
@@ -525,6 +564,10 @@ def register_CFunctions(
     for which_gfs in ["y_n_gfs", "non_y_n_gfs"]:
         register_CFunction_MoL_malloc(Butcher_dict, MoL_method, which_gfs)
         register_CFunction_MoL_free_memory(Butcher_dict, MoL_method, which_gfs)
+    
+    register_CFunction_MoL_malloc_diagnostic_gfs()    
+    register_CFunction_MoL_free_memory_diagnostic_gfs()    
+    
     if register_MoL_step_forward_in_time:
         register_CFunction_MoL_step_forward_in_time(
             Butcher_dict,

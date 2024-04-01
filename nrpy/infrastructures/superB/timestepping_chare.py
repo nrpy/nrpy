@@ -143,8 +143,6 @@ if (tmpBuffers->tmpBuffer_TB != NULL) free(tmpBuffers->tmpBuffer_TB);
         body=body,
     )
 
-
-
 def output_timestepping_h(
     project_dir: str,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
@@ -326,6 +324,10 @@ Timestepping::Timestepping(CommondataObject &&inData) {
   // Step 4: Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping
   for(int grid=0; grid<commondata.NUMGRIDS; grid++)
     MoL_malloc_non_y_n_gfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].gridfuncs);
+    
+  // Allocate storage for diagnostic gridfunctions 
+  for(int grid=0; grid<commondata.NUMGRIDS; grid++)
+    MoL_malloc_diagnostic_gfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].gridfuncs);
 
   // Allocate storage for temporary buffers, needed for communicating face data
   for(int grid=0; grid<commondata.NUMGRIDS; grid++)
@@ -350,6 +352,7 @@ Timestepping::~Timestepping() {
   for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
     MoL_free_memory_y_n_gfs(&griddata_chare[grid].gridfuncs);
     MoL_free_memory_non_y_n_gfs(&griddata_chare[grid].gridfuncs);
+    MoL_free_memory_diagnostic_gfs(&griddata_chare[grid].gridfuncs);
     timestepping_free_memory_tmpBuffer(&griddata_chare[grid].tmpBuffers);"""
     if enable_rfm_precompute:
         file_output_str += r"""
