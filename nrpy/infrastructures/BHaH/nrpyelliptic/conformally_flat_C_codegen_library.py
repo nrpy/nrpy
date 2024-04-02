@@ -74,7 +74,7 @@ def register_CFunction_initial_guess_single_point(
 
 
 def register_CFunction_initial_guess_all_points(
-    OMP_collapse: int, enable_checkpointing: bool = False
+    OMP_collapse: int, enable_checkpointing: bool = False, fp_type: str = "double"
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the initial guess function for the hyperbolic relaxation equation.
@@ -186,6 +186,7 @@ def register_CFunction_auxevol_gfs_single_point(
 
 def register_CFunction_auxevol_gfs_all_points(
     OMP_collapse: int,
+    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the C function for the AUXEVOL grid functions at all points.
