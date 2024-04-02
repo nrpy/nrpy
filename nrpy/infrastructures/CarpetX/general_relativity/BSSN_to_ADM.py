@@ -122,7 +122,6 @@ def register_CFunction_BSSN_to_ADM(
         loop_body=loop_body,
         loop_region="all points",
         enable_simd=False,
-        fp_type=fp_type,
     )
 
     schedule = (
