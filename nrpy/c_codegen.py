@@ -32,9 +32,6 @@ fp_type_list = Literal[
     "double",
     "float",
     "long double",
-    # Standard C++ types
-    "std::float32_t",
-    "std::float64_t",
     # Unsupported types by sympy ccode generator
     # "std::bfloat16_t",
     # "std::float16_t",
@@ -47,9 +44,6 @@ fp_type_to_sympy_type = {
     "double": sp_ast.float64,
     "float": sp_ast.float32,
     "long double": sp_ast.float80,
-    # Standard C++ types
-    "std::float32_t": sp_ast.float32,
-    "std::float64_t": sp_ast.float64,
     # Unsupported types by sympy ccode generator
     # "std::bfloat16_t": sp_ast.float16,
     # "std::float16_t" : sp_ast.float16,
@@ -130,7 +124,7 @@ class CCodeGen:
         >>> CCodeGen(fp_type="foo")
         Traceback (most recent call last):
           ...
-        ValueError: In function '__init__': parameter 'fp_type' has value: 'foo', which is not in the allowed_values set: ('double', 'float', 'long double', 'std::float32_t', 'std::float64_t')
+        ValueError: In function '__init__': parameter 'fp_type' has value: 'foo', which is not in the allowed_values set: ('double', 'float', 'long double')
 
         """
         validate_literal_arguments()
@@ -275,17 +269,13 @@ def c_codegen(
     >>> print(c_codegen(1/x**2 + 1/sp.sqrt(y) - 1/sp.sin(x*z), "double blah", include_braces=False, verbose=False))
     double blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
     <BLANKLINE>
-    >>> for fp_type in ["double", "float", "long double", "std::float32_t", "std::float64_t"]:
+    >>> for fp_type in ["double", "float", "long double"]:
     ...     print(c_codegen(1/x**2 + 1/sp.sqrt(y) - 1/sp.sin(x*z), f"{fp_type} blah", include_braces=False, verbose=False, fp_type=fp_type))
     double blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
     <BLANKLINE>
     float blah = -1/sinf(x*z) + (1.0/sqrtf(y)) + (1.0/((x)*(x)));
     <BLANKLINE>
     long double blah = -1/sinl(x*z) + (1.0/sqrtl(y)) + (1.0/((x)*(x)));
-    <BLANKLINE>
-    std::float32_t blah = -1/sinf(x*z) + (1.0/sqrtf(y)) + (1.0/((x)*(x)));
-    <BLANKLINE>
-    std::float64_t blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
     <BLANKLINE>
     >>> print(c_codegen(1.0 * sp.sin(x * sp.pi), "float blah", include_braces=False, fp_type="float", verbose=False))
     float blah = 1.0F*sinf(M_PI*x);
@@ -700,55 +690,7 @@ custom_functions_for_SymPy_ccode = {
             (lambda b, e: e != -5, "pow"),
         ],
     },
-    "std::float64_t": {
-        "nrpyAbs": "fabs",
-        "Pow": [
-            (lambda b, e: e == sp.Rational(1, 2), lambda b, e: f"sqrt({b})"),
-            (lambda b, e: e == 0.5, lambda b, e: f"sqrt({b})"),
-            (lambda b, e: e == -sp.Rational(1, 2), lambda b, e: f"(1.0/sqrt({b}))"),
-            (lambda b, e: e == -0.5, lambda b, e: f"(1.0/sqrt({b}))"),
-            (lambda b, e: e == sp.S.One / 3, lambda b, e: f"cbrt({b})"),
-            (lambda b, e: e == -sp.S.One / 3, lambda b, e: f"(1.0/cbrt({b}))"),
-            (lambda b, e: e == 2, lambda b, e: f"(({b})*({b}))"),
-            (lambda b, e: e == 3, lambda b, e: f"(({b})*({b})*({b}))"),
-            (lambda b, e: e == 4, lambda b, e: f"(({b})*({b})*({b})*({b}))"),
-            (lambda b, e: e == 5, lambda b, e: f"(({b})*({b})*({b})*({b})*({b}))"),
-            (lambda b, e: e == -1, lambda b, e: f"(1.0/({b}))"),
-            (lambda b, e: e == -2, lambda b, e: f"(1.0/(({b})*({b})))"),
-            (lambda b, e: e == -3, lambda b, e: f"(1.0/(({b})*({b})*({b})))"),
-            (lambda b, e: e == -4, lambda b, e: f"(1.0/(({b})*({b})*({b})*({b})))"),
-            (
-                lambda b, e: e == -5,
-                lambda b, e: f"(1.0/(({b})*({b})*({b})*({b})*({b})))",
-            ),
-            (lambda b, e: e != -5, "pow"),
-        ],
-    },
     "float": {
-        "nrpyAbs": "fabsf",
-        "Pow": [
-            (lambda b, e: e == sp.Rational(1, 2), lambda b, e: f"sqrtf({b})"),
-            (lambda b, e: e == 0.5, lambda b, e: f"sqrtf({b})"),
-            (lambda b, e: e == -sp.Rational(1, 2), lambda b, e: f"(1.0/sqrtf({b}))"),
-            (lambda b, e: e == -0.5, lambda b, e: f"(1.0/sqrtf({b}))"),
-            (lambda b, e: e == sp.S.One / 3, lambda b, e: f"cbrtf({b})"),
-            (lambda b, e: e == -sp.S.One / 3, lambda b, e: f"(1.0/cbrtf({b}))"),
-            (lambda b, e: e == 2, lambda b, e: f"(({b})*({b}))"),
-            (lambda b, e: e == 3, lambda b, e: f"(({b})*({b})*({b}))"),
-            (lambda b, e: e == 4, lambda b, e: f"(({b})*({b})*({b})*({b}))"),
-            (lambda b, e: e == 5, lambda b, e: f"(({b})*({b})*({b})*({b})*({b}))"),
-            (lambda b, e: e == -1, lambda b, e: f"(1.0/({b}))"),
-            (lambda b, e: e == -2, lambda b, e: f"(1.0/(({b})*({b})))"),
-            (lambda b, e: e == -3, lambda b, e: f"(1.0/(({b})*({b})*({b})))"),
-            (lambda b, e: e == -4, lambda b, e: f"(1.0/(({b})*({b})*({b})*({b})))"),
-            (
-                lambda b, e: e == -5,
-                lambda b, e: f"(1.0/(({b})*({b})*({b})*({b})*({b})))",
-            ),
-            (lambda b, e: e != -5, "powf"),
-        ],
-    },
-    "std::float32_t": {
         "nrpyAbs": "fabsf",
         "Pow": [
             (lambda b, e: e == sp.Rational(1, 2), lambda b, e: f"sqrtf({b})"),
