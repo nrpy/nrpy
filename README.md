@@ -52,14 +52,6 @@ pip install nrpy
     python3 -m nrpy.examples.carpet_baikal_thorns
     ```
 
-### superB infrastructure : Run the provided command.
-
-* **General relativity**
-  - **Two black holes collide**:
-    ```
-    python3 -m nrpy.examples.superB_two_blackholes_collide
-    ```
-
 ## Quick Start, Step 3
 
 1. If working with a BlackHoles@Home project: follow the directions at the end of the code generation, starting with "Now go into `[directory name]` and type `make` to build, then `[executable]` to run. Parameter file can be found in `[parameter filename]`."
@@ -67,7 +59,31 @@ pip install nrpy
   1. In addition, parameters can be set at the command line. For example, `wavetoy` has a parameter `convergence_factor` that increases the resolution (technically `Nx=Ny=Nz`) by this factor. To output at twice the resolution, simply run `./wavetoy 2.0`, and a new file will be output `out0d-conv_factor2.00.txt`, which contains data at 2x the resolution.
   1. Analyze the output from `out0d-conv_factor1.00.txt` and `out0d-conv_factor2.00.txt` in e.g., `gnuplot`.
 1. If working with an Einstein Toolkit project, the output will be Einstein Toolkit modules (thorns). You'll want to either copy or link them to an arrangement in `arrangements/[subdirectory]/`, then add the thorns to your `ThornList`, and compile.
-1. If working with a superB project, install Charm++ following the instructions in https://charm.readthedocs.io/en/latest/charm++/manual.html#installing-charm. Then, go to projects/superB_two_blackholes_collide and open the Makefile. Replace "~/charm" in "CC = ~/charm/bin/charmc" with the path to your Charm++ installation directory. Type make to build. Type ./charmrun +p4 ./superB_two_blackholes_collide to run with 4 processors. As in a BlackHoles@Home project parameters can be changed and output from `out0d-conv_factor1.00.txt` and `out0d-conv_factor2.00.txt` can be analysed using e.g., `gnuplot`.
+
+
+
+
+## superB infrastructure
+
+1. Pip install NRPy from the superB branch:
+
+    ```
+    pip install git+https://github.com/nishitajadoo/nrpy.git@superB
+    ```
+
+2. Run the following command:
+
+    ```
+    python3 -m nrpy.examples.superB_two_blackholes_collide
+    ```
+
+3. Install Charm++ following the instructions in [Charm++ documentation](https://charm.readthedocs.io/en/latest/charm++/manual.html#installing-charm). Then, go to `projects/superB_two_blackholes_collide` and open the Makefile. Replace `"~/charm"` in `CC = ~/charm/bin/charmc` with the path to your Charm++ installation directory.
+
+4. Type `make` to build. Type `./charmrun +p4 ./superB_two_blackholes_collide` to run with 4 processors for example. As in a BlackHoles@Home project parameters can be changed and output from `out0d-conv_factor1.00.txt` and `out0d-conv_factor2.00.txt` can be analyzed using e.g., `gnuplot`.
+
+
+
+
 
 # Contributing to NRPy 2
 
