@@ -1,5 +1,5 @@
 """
-Custom functions to override SymPy's standard use of POW. 
+Custom functions to override SymPy's standard use of POW.
 In place of the standard C POW function, we substitute POW
 in favor of using computationally more efficient C functions sqrt, cbrt, and standard multiplication.
 This has been expanded to use the correct C function based on the floating point
