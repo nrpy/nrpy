@@ -26,6 +26,7 @@ from nrpy.helpers.type_annotation_utilities import (
     validate_literal_arguments,
     generate_class_representation,
 )
+from nrpy.helpers.custom_c_codegen_functions import custom_functions_for_SymPy_ccode
 
 fp_type_list = Literal[
     # Traditional C types
@@ -665,80 +666,6 @@ def c_codegen(
 #    nrpyAbs, we can sidestep the internal SymPy evaluation and force the C
 #    codegen to output our desired fabs().
 nrpyAbs = sp.Function("nrpyAbs")
-custom_functions_for_SymPy_ccode = {
-    "double": {
-        "nrpyAbs": "fabs",
-        "Pow": [
-            (lambda b, e: e == sp.Rational(1, 2), lambda b, e: f"sqrt({b})"),
-            (lambda b, e: e == 0.5, lambda b, e: f"sqrt({b})"),
-            (lambda b, e: e == -sp.Rational(1, 2), lambda b, e: f"(1.0/sqrt({b}))"),
-            (lambda b, e: e == -0.5, lambda b, e: f"(1.0/sqrt({b}))"),
-            (lambda b, e: e == sp.S.One / 3, lambda b, e: f"cbrt({b})"),
-            (lambda b, e: e == -sp.S.One / 3, lambda b, e: f"(1.0/cbrt({b}))"),
-            (lambda b, e: e == 2, lambda b, e: f"(({b})*({b}))"),
-            (lambda b, e: e == 3, lambda b, e: f"(({b})*({b})*({b}))"),
-            (lambda b, e: e == 4, lambda b, e: f"(({b})*({b})*({b})*({b}))"),
-            (lambda b, e: e == 5, lambda b, e: f"(({b})*({b})*({b})*({b})*({b}))"),
-            (lambda b, e: e == -1, lambda b, e: f"(1.0/({b}))"),
-            (lambda b, e: e == -2, lambda b, e: f"(1.0/(({b})*({b})))"),
-            (lambda b, e: e == -3, lambda b, e: f"(1.0/(({b})*({b})*({b})))"),
-            (lambda b, e: e == -4, lambda b, e: f"(1.0/(({b})*({b})*({b})*({b})))"),
-            (
-                lambda b, e: e == -5,
-                lambda b, e: f"(1.0/(({b})*({b})*({b})*({b})*({b})))",
-            ),
-            (lambda b, e: e != -5, "pow"),
-        ],
-    },
-    "float": {
-        "nrpyAbs": "fabsf",
-        "Pow": [
-            (lambda b, e: e == sp.Rational(1, 2), lambda b, e: f"sqrtf({b})"),
-            (lambda b, e: e == 0.5, lambda b, e: f"sqrtf({b})"),
-            (lambda b, e: e == -sp.Rational(1, 2), lambda b, e: f"(1.0/sqrtf({b}))"),
-            (lambda b, e: e == -0.5, lambda b, e: f"(1.0/sqrtf({b}))"),
-            (lambda b, e: e == sp.S.One / 3, lambda b, e: f"cbrtf({b})"),
-            (lambda b, e: e == -sp.S.One / 3, lambda b, e: f"(1.0/cbrtf({b}))"),
-            (lambda b, e: e == 2, lambda b, e: f"(({b})*({b}))"),
-            (lambda b, e: e == 3, lambda b, e: f"(({b})*({b})*({b}))"),
-            (lambda b, e: e == 4, lambda b, e: f"(({b})*({b})*({b})*({b}))"),
-            (lambda b, e: e == 5, lambda b, e: f"(({b})*({b})*({b})*({b})*({b}))"),
-            (lambda b, e: e == -1, lambda b, e: f"(1.0/({b}))"),
-            (lambda b, e: e == -2, lambda b, e: f"(1.0/(({b})*({b})))"),
-            (lambda b, e: e == -3, lambda b, e: f"(1.0/(({b})*({b})*({b})))"),
-            (lambda b, e: e == -4, lambda b, e: f"(1.0/(({b})*({b})*({b})*({b})))"),
-            (
-                lambda b, e: e == -5,
-                lambda b, e: f"(1.0/(({b})*({b})*({b})*({b})*({b})))",
-            ),
-            (lambda b, e: e != -5, "powf"),
-        ],
-    },
-    "long double": {
-        "nrpyAbs": "fabsl",
-        "Pow": [
-            (lambda b, e: e == sp.Rational(1, 2), lambda b, e: f"sqrtl({b})"),
-            (lambda b, e: e == 0.5, lambda b, e: f"sqrtl({b})"),
-            (lambda b, e: e == -sp.Rational(1, 2), lambda b, e: f"(1.0/sqrtl({b}))"),
-            (lambda b, e: e == -0.5, lambda b, e: f"(1.0/sqrtl({b}))"),
-            (lambda b, e: e == sp.S.One / 3, lambda b, e: f"cbrtl({b})"),
-            (lambda b, e: e == -sp.S.One / 3, lambda b, e: f"(1.0/cbrtl({b}))"),
-            (lambda b, e: e == 2, lambda b, e: f"(({b})*({b}))"),
-            (lambda b, e: e == 3, lambda b, e: f"(({b})*({b})*({b}))"),
-            (lambda b, e: e == 4, lambda b, e: f"(({b})*({b})*({b})*({b}))"),
-            (lambda b, e: e == 5, lambda b, e: f"(({b})*({b})*({b})*({b})*({b}))"),
-            (lambda b, e: e == -1, lambda b, e: f"(1.0/({b}))"),
-            (lambda b, e: e == -2, lambda b, e: f"(1.0/(({b})*({b})))"),
-            (lambda b, e: e == -3, lambda b, e: f"(1.0/(({b})*({b})*({b})))"),
-            (lambda b, e: e == -4, lambda b, e: f"(1.0/(({b})*({b})*({b})*({b})))"),
-            (
-                lambda b, e: e == -5,
-                lambda b, e: f"(1.0/(({b})*({b})*({b})*({b})*({b})))",
-            ),
-            (lambda b, e: e != -5, "powl"),
-        ],
-    },
-}
 
 
 def apply_substitution_dict(
