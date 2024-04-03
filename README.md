@@ -65,7 +65,7 @@ pip install nrpy
 
 ## superB infrastructure
 
-1. Pip install NRPy from the superB branch:
+1. pip install NRPy from the superB branch:
 
     ```
     pip install git+https://github.com/nishitajadoo/nrpy.git@superB
@@ -79,7 +79,7 @@ pip install nrpy
 
 3. Install Charm++ following the instructions in [Charm++ documentation](https://charm.readthedocs.io/en/latest/charm++/manual.html#installing-charm). Then, go to `projects/superB_two_blackholes_collide` and open the Makefile. Replace `"~/charm"` in `CC = ~/charm/bin/charmc` with the path to your Charm++ installation directory.
 
-4. Type `make` to build. Type `./charmrun +p4 ./superB_two_blackholes_collide` to run with 4 processors for example. As in a BlackHoles@Home project parameters can be changed and output from `out0d-conv_factor1.00.txt` and `out0d-conv_factor2.00.txt` can be analyzed using e.g., `gnuplot`.
+4. Type `make` to build. Type `./charmrun +p4 ./superB_two_blackholes_collide` to run with 4 processors, for example. As in a BlackHoles@Home project parameters can be changed and output from `out0d-conv_factor1.00.txt` and `out0d-conv_factor2.00.txt` can be analyzed using e.g., `gnuplot`.
 
 
 
