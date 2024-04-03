@@ -229,7 +229,7 @@ invalid parameter names.
                 found_integer = True
                 i += 1
             elif CodeParam.cparam_type == "REAL":
-                body += f'else if(param_index == {i}) read_double(value, &commondata->{key}, "{key}");\n'
+                body += f'else if(param_index == {i}) read_REAL(value, &commondata->{key}, "{key}");\n'
                 found_REAL = True
                 i += 1
             elif CodeParam.cparam_type == "bool":
@@ -266,7 +266,7 @@ invalid parameter names.
                 body += f'read_integer(argv[argc - number_of_steerable_parameters + {i}], &commondata->{key}, "{key}");\n'
                 i += 1
             elif CodeParam.cparam_type == "REAL":
-                body += f'read_double(argv[argc - number_of_steerable_parameters + {i}], &commondata->{key}, "{key}");\n'
+                body += f'read_REAL(argv[argc - number_of_steerable_parameters + {i}], &commondata->{key}, "{key}");\n'
                 i += 1
     body += "}\n"
 
@@ -287,7 +287,7 @@ static void read_integer(const char *value, int *result, const char *param_name)
 """
     if found_REAL:
         prefunc += r"""
-static void read_double(const char *value, REAL *result, const char *param_name) {
+static void read_REAL(const char *value, REAL *result, const char *param_name) {
   char *endptr;
   errno = 0; // To detect overflow
   double double_val = strtod(value, &endptr);
