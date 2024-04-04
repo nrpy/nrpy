@@ -12,6 +12,7 @@ import sys
 from typing import List, Union, Dict, Any, Optional, Sequence, Tuple
 from typing_extensions import Literal
 import sympy as sp
+import sympy.codegen.ast as sp_ast
 import nrpy.finite_difference as fin
 import nrpy.params as par
 
@@ -25,20 +26,31 @@ from nrpy.helpers.type_annotation_utilities import (
     validate_literal_arguments,
     generate_class_representation,
 )
+from nrpy.helpers.custom_c_codegen_functions import custom_functions_for_SymPy_ccode
 
 fp_type_list = Literal[
     # Traditional C types
     "double",
     "float",
     "long double",
-    # Standard C++ types
-    "std::float16_t",
-    "std::float32_t",
-    "std::float64_t",
-    "std::float128_t",
-    "std::bfloat16_t",
-    # Maybe add complex types?
+    # Unsupported types by sympy ccode generator
+    # "std::bfloat16_t",
+    # "std::float16_t",
+    # "__float128",
+    # "std::float128_t",
 ]
+
+fp_type_to_sympy_type = {
+    # Traditional C types
+    "double": sp_ast.float64,
+    "float": sp_ast.float32,
+    "long double": sp_ast.float80,
+    # Unsupported types by sympy ccode generator
+    # "std::bfloat16_t": sp_ast.float16,
+    # "std::float16_t" : sp_ast.float16,
+    # "__float128" : sp_ast.float128,
+    # "std::float128_t": sp_ast.float128,
+}
 
 
 class CCodeGen:
@@ -83,6 +95,8 @@ class CCodeGen:
         :param include_braces: Boolean to decide whether to include braces.
         :param fp_type: floating-point data type, such as 'double'.
         :param fp_type_alias: Infrastructure-specific alias for the C/C++ floating point data type. E.g., 'REAL' or 'CCTK_REAL'.
+        :param fp_ccg_type: floating-point C code gen type used by sympy to deduce character literals
+        :param ccg_type_aliases: All type aliases to by used by sympy C codegen
         :param verbose: Boolean to enable verbose output.
         :param enable_cse: Boolean to enable common subexpression elimination.
         :param cse_sorting: Sorting method for common subexpression elimination.
@@ -111,7 +125,7 @@ class CCodeGen:
         >>> CCodeGen(fp_type="foo")
         Traceback (most recent call last):
           ...
-        ValueError: In function '__init__': parameter 'fp_type' has value: 'foo', which is not in the allowed_values set: ('double', 'float', 'long double', 'std::float16_t', 'std::float32_t', 'std::float64_t', 'std::float128_t', 'std::bfloat16_t')
+        ValueError: In function '__init__': parameter 'fp_type' has value: 'foo', which is not in the allowed_values set: ('double', 'float', 'long double')
 
         """
         validate_literal_arguments()
@@ -120,6 +134,8 @@ class CCodeGen:
         self.include_braces = include_braces
         self.fp_type = fp_type
         self.fp_type_alias = fp_type_alias
+        self.fp_ccg_type = fp_type_to_sympy_type[fp_type]
+        self.ccg_type_aliases = {sp_ast.real: self.fp_ccg_type}
         self.verbose = verbose
         self.enable_cse = enable_cse
         self.cse_sorting = cse_sorting
@@ -221,6 +237,11 @@ class CCodeGen:
         if self.enable_fd_codegen:
             self.automatically_read_gf_data_from_memory = True
 
+        if self.enable_simd and self.fp_ccg_type is not sp_ast.float64:
+            raise ValueError(
+                "SIMD is only compatible with double precision floating point type."
+            )
+
     def __repr__(self) -> str:
         """Create a human readable representation of the CCodeGen object and what's in it."""
         return generate_class_representation()
@@ -249,7 +270,7 @@ def c_codegen(
     >>> print(c_codegen(1/x**2 + 1/sp.sqrt(y) - 1/sp.sin(x*z), "double blah", include_braces=False, verbose=False))
     double blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
     <BLANKLINE>
-    >>> for fp_type in ["double", "float", "long double", "std::float16_t", "std::float32_t", "std::float64_t", "std::float128_t", "std::bfloat16_t"]:
+    >>> for fp_type in ["double", "float", "long double"]:
     ...     print(c_codegen(1/x**2 + 1/sp.sqrt(y) - 1/sp.sin(x*z), f"{fp_type} blah", include_braces=False, verbose=False, fp_type=fp_type))
     double blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
     <BLANKLINE>
@@ -257,15 +278,8 @@ def c_codegen(
     <BLANKLINE>
     long double blah = -1/sinl(x*z) + (1.0/sqrtl(y)) + (1.0/((x)*(x)));
     <BLANKLINE>
-    std::float16_t blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
-    <BLANKLINE>
-    std::float32_t blah = -1/sinf(x*z) + (1.0/sqrtf(y)) + (1.0/((x)*(x)));
-    <BLANKLINE>
-    std::float64_t blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
-    <BLANKLINE>
-    std::float128_t blah = -1/sinl(x*z) + (1.0/sqrtl(y)) + (1.0/((x)*(x)));
-    <BLANKLINE>
-    std::bfloat16_t blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
+    >>> print(c_codegen(1.0 * sp.sin(x * sp.pi), "float blah", include_braces=False, fp_type="float", verbose=False))
+    float blah = 1.0F*sinf(M_PI*x);
     <BLANKLINE>
     >>> print(c_codegen(x**5 + x**3 + x - 1/x, "REAL_SIMD_ARRAY blah", include_braces=False, verbose=False, enable_simd=True))
     const double dbl_Integer_1 = 1.0;
@@ -392,6 +406,7 @@ def c_codegen(
             enable_fd_functions=CCGParams.enable_fd_functions,
             enable_simd=CCGParams.enable_simd,
             enable_GoldenKernels=CCGParams.enable_GoldenKernels,
+            fp_type=CCGParams.fp_type,
         )
 
     # Step 4: If CCGParams.verbose, then output the original SymPy
@@ -427,9 +442,10 @@ def c_codegen(
             processed_code = sp.ccode(
                 expr,
                 output_varname_str[i],
-                user_functions=custom_functions_for_SymPy_ccode,
+                user_functions=custom_functions_for_SymPy_ccode[CCGParams.fp_type],
+                type_aliases=CCGParams.ccg_type_aliases,
             )
-            outstring += f"{ccode_postproc(processed_code, CCGParams)}\n"
+            outstring += f"{processed_code}\n"
     # Step 4b: If CSE enabled, then perform CSE using SymPy and then
     #          resulting C code.
     else:
@@ -459,13 +475,14 @@ def c_codegen(
                     CCGParams.symbol_to_Rational_dict[v].q
                 )
                 if not CCGParams.enable_simd:
-                    RATIONAL_decls += f"const {CCGParams.fp_type_alias} {str(v)} = "
-
-                    # Since Integer is a subclass of Rational in SymPy, we need only check whether
-                    # the denominator q = 1 to determine if a rational is an integer.
-                    RATIONAL_decls += (
-                        f"{str(p)}/{str(q)};\n" if q != 1 else f"{str(p)};\n"
+                    RATIONAL_assignment = f"const {CCGParams.fp_type_alias} {str(v)}"
+                    RATIONAL_expr = sp.Rational(p, q)
+                    RATIONAL_decls += sp.ccode(
+                        RATIONAL_expr,
+                        assign_to=RATIONAL_assignment,
+                        type_aliases=CCGParams.ccg_type_aliases,
                     )
+                    RATIONAL_decls += "\n"
 
         #####
         # Prior to the introduction of the SCALAR_TMP type, NRPy+
@@ -544,13 +561,13 @@ def c_codegen(
                     )
                 outstring += (
                     full_type_string
-                    + ccode_postproc(
-                        sp.ccode(
-                            common_subexpression[1],
-                            common_subexpression[0],
-                            user_functions=custom_functions_for_SymPy_ccode,
-                        ),
-                        CCGParams,
+                    + sp.ccode(
+                        common_subexpression[1],
+                        common_subexpression[0],
+                        user_functions=custom_functions_for_SymPy_ccode[
+                            CCGParams.fp_type
+                        ],
+                        type_aliases=CCGParams.ccg_type_aliases,
                     )
                     + "\n"
                 )
@@ -581,13 +598,13 @@ def c_codegen(
                         result, CCGParams.postproc_substitution_dict
                     )
                 outstring += (
-                    ccode_postproc(
-                        sp.ccode(
-                            result,
-                            varnames_excluding_SCALAR_TMPs[i],
-                            user_functions=custom_functions_for_SymPy_ccode,
-                        ),
-                        CCGParams,
+                    sp.ccode(
+                        result,
+                        varnames_excluding_SCALAR_TMPs[i],
+                        user_functions=custom_functions_for_SymPy_ccode[
+                            CCGParams.fp_type
+                        ],
+                        type_aliases=CCGParams.ccg_type_aliases,
                     )
                     + "\n"
                 )
@@ -649,102 +666,6 @@ def c_codegen(
 #    nrpyAbs, we can sidestep the internal SymPy evaluation and force the C
 #    codegen to output our desired fabs().
 nrpyAbs = sp.Function("nrpyAbs")
-custom_functions_for_SymPy_ccode = {
-    "nrpyAbs": "fabs",
-    "Pow": [
-        (lambda b, e: e == sp.Rational(1, 2), lambda b, e: f"sqrt({b})"),
-        (lambda b, e: e == 0.5, lambda b, e: f"sqrt({b})"),
-        (lambda b, e: e == -sp.Rational(1, 2), lambda b, e: f"(1.0/sqrt({b}))"),
-        (lambda b, e: e == -0.5, lambda b, e: f"(1.0/sqrt({b}))"),
-        (lambda b, e: e == sp.S.One / 3, lambda b, e: f"cbrt({b})"),
-        (lambda b, e: e == -sp.S.One / 3, lambda b, e: f"(1.0/cbrt({b}))"),
-        (lambda b, e: e == 2, lambda b, e: f"(({b})*({b}))"),
-        (lambda b, e: e == 3, lambda b, e: f"(({b})*({b})*({b}))"),
-        (lambda b, e: e == 4, lambda b, e: f"(({b})*({b})*({b})*({b}))"),
-        (lambda b, e: e == 5, lambda b, e: f"(({b})*({b})*({b})*({b})*({b}))"),
-        (lambda b, e: e == -1, lambda b, e: f"(1.0/({b}))"),
-        (lambda b, e: e == -2, lambda b, e: f"(1.0/(({b})*({b})))"),
-        (lambda b, e: e == -3, lambda b, e: f"(1.0/(({b})*({b})*({b})))"),
-        (lambda b, e: e == -4, lambda b, e: f"(1.0/(({b})*({b})*({b})*({b})))"),
-        (lambda b, e: e == -5, lambda b, e: f"(1.0/(({b})*({b})*({b})*({b})*({b})))"),
-        (lambda b, e: e != -5, "pow"),
-    ],
-}
-
-
-def ccode_postproc(string: str, CCGParams: CCodeGen) -> str:
-    """
-    Process the generated C code string for functions related to specific data types.
-
-    This function appends the appropriate suffix to standard C math library functions
-    based on the data fp_type (e.g., pow -> powf in single precision). It also removes
-    the "L" suffix on floating point numbers when not in long double precision.
-
-    :param string: The original C code string.
-    :param CCGParams: The CCodeGen object containing fp_type information.
-    :return: The processed C code string.
-    """
-    # Append the cmath function suffix to standard C math library functions:
-    c_funcs = [
-        "pow",
-        "sqrt",
-        "cbrt",
-        "sin",
-        "cos",
-        "tan",
-        "sinh",
-        "cosh",
-        "tanh",
-        "exp",
-        "log",
-        "fabs",
-        "fmin",
-        "fmax",
-    ]
-    has_c_func = False
-    for func in c_funcs:
-        if f"{func}(" in string:
-            has_c_func = True
-            break
-
-    if has_c_func:
-        # Define the dictionary to map the fp_type to corresponding cmath function suffix
-        suffix_list = Literal["f", "l", ""]
-        cmath_suffixes: Dict[fp_type_list, suffix_list] = {
-            # Traditional C types
-            "double": "",
-            "float": "f",
-            "long double": "l",
-            # Standard C++ types
-            "std::float16_t": "",  # h?
-            "std::float32_t": "f",
-            "std::float64_t": "",
-            "std::float128_t": "l",
-            "std::bfloat16_t": "",  # b?
-        }
-
-        # If the fp_type is not one of the known keys, raise an error
-        if CCGParams.fp_type not in cmath_suffixes:
-            raise ValueError(
-                f"{__name__}::fp_type = '{CCGParams.fp_type}' not supported"
-            )
-
-        # Get the corresponding cmath function suffix from the dictionary
-        cmath_suffix = cmath_suffixes[CCGParams.fp_type]
-
-        # Add "(" to the end of each function name and join them with '|' to create a pattern that matches any of them
-        pattern = "|".join([f"{func}\\(" for func in c_funcs])
-
-        # Use a lambda function to add the suffix to the matched function name
-        string = re.sub(
-            pattern, lambda match: f"{match.group()[:-1]}{cmath_suffix}(", string
-        )
-
-        # If fp_type is not 'long double', get rid of the "L" suffix on floating point numbers:
-        if CCGParams.fp_type != "long double":
-            string = re.sub(r"([0-9.]+)L/([0-9.]+)L", "(\\1 / \\2)", string)
-
-    return string
 
 
 def apply_substitution_dict(
@@ -873,7 +794,7 @@ def gridfunction_management_and_FD_codegen(
     const REAL hDD02_i2p2 = in_gfs[IDX4(HDD02GF, i0, i1, i2+2)];
     const REAL vU1 = in_gfs[IDX4(VU1GF, i0, i1, i2)];
     const REAL FDPart1_Rational_1_2 = 1.0/2.0;
-    const REAL FDPart1_Integer_2 = 2.0;
+    const REAL FDPart1_Integer_2 = 2;
     const REAL FDPart1_Rational_3_2 = 3.0/2.0;
     const REAL FDPart1tmp0 = FDPart1_Rational_3_2*hDD02;
     const REAL UpwindAlgInputhDD_ddnD020 = invdxx0*(-FDPart1_Integer_2*hDD02_i0m1 + FDPart1_Rational_1_2*hDD02_i0m2 + FDPart1tmp0);

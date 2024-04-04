@@ -7,7 +7,9 @@ Author: Zachariah B. Etienne
 
 from typing import List
 import sympy as sp
+import sympy.codegen.ast as sp_ast
 
+import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.reference_metric as refmetric
 from nrpy.helpers.generic import superfast_uniq
@@ -23,7 +25,7 @@ class ReferenceMetricPrecompute:
     precompute quantities within loops for both SIMD-ized and non-SIMD loops.
     """
 
-    def __init__(self, CoordSystem: str):
+    def __init__(self, CoordSystem: str, fp_type: str = "double"):
         rfm = refmetric.reference_metric[CoordSystem + "_rfm_precompute"]
         # Step 7: Construct needed C code for declaring rfmstruct, allocating storage for
         #         rfmstruct arrays, defining each element in each array, reading the
@@ -64,6 +66,8 @@ class ReferenceMetricPrecompute:
             sp.Symbol("Nxx_plus_2NGHOSTS2", real=True),
         ]
         which_freevar: int = 0
+        fp_ccg_type = ccg.fp_type_to_sympy_type[fp_type]
+        sp_type_alias = {sp_ast.real: fp_ccg_type}
         for expr in freevars_uniq_vals:
             if "_of_xx" in str(freevars_uniq_xx_indep[which_freevar]):
                 frees = list(expr.free_symbols)
@@ -92,7 +96,7 @@ class ReferenceMetricPrecompute:
                         self.rfm_struct__define += (
                             f"for(int i{dirn}=0;i{dirn}<Nxx_plus_2NGHOSTS{dirn};i{dirn}++) {{\n"
                             f"  const REAL xx{dirn} = xx[{dirn}][i{dirn}];\n"
-                            f"  rfmstruct->{freevars_uniq_xx_indep[which_freevar]}[i{dirn}] = {sp.ccode(freevars_uniq_vals[which_freevar])};\n"
+                            f"  rfmstruct->{freevars_uniq_xx_indep[which_freevar]}[i{dirn}] = {sp.ccode(freevars_uniq_vals[which_freevar], type_aliases=sp_type_alias)};\n"
                         )
                         self.rfm_struct__define += "}\n\n"
                         self.readvr_str[
@@ -118,7 +122,7 @@ class ReferenceMetricPrecompute:
                 for(int i1=0;i1<Nxx_plus_2NGHOSTS1;i1++) for(int i0=0;i0<Nxx_plus_2NGHOSTS0;i0++) {{
                   const REAL xx0 = xx[0][i0];
                   const REAL xx1 = xx[1][i1];
-                  rfmstruct->{freevars_uniq_xx_indep[which_freevar]}[i0 + Nxx_plus_2NGHOSTS0*i1] = {sp.ccode(freevars_uniq_vals[which_freevar])};
+                  rfmstruct->{freevars_uniq_xx_indep[which_freevar]}[i0 + Nxx_plus_2NGHOSTS0*i1] = {sp.ccode(freevars_uniq_vals[which_freevar], type_aliases=sp_type_alias)};
                 }}\n\n"""
                     self.readvr_str[
                         0
@@ -147,7 +151,9 @@ class ReferenceMetricPrecompute:
             which_freevar += 1
 
 
-def register_CFunctions_rfm_precompute(list_of_CoordSystems: List[str]) -> None:
+def register_CFunctions_rfm_precompute(
+    list_of_CoordSystems: List[str], fp_type: str = "double"
+) -> None:
     """
     Register C functions for reference metric precomputed lookup arrays.
 
@@ -155,7 +161,7 @@ def register_CFunctions_rfm_precompute(list_of_CoordSystems: List[str]) -> None:
     """
     combined_BHaH_defines_list = []
     for CoordSystem in list_of_CoordSystems:
-        rfm_precompute = ReferenceMetricPrecompute(CoordSystem)
+        rfm_precompute = ReferenceMetricPrecompute(CoordSystem, fp_type=fp_type)
 
         for func in [
             ("malloc", rfm_precompute.rfm_struct__malloc),

@@ -48,6 +48,7 @@ def register_CFunction_initial_data(
     populate_ID_persist_struct_str: str = "",
     free_ID_persist_struct_str: str = "",
     include_T4UU: bool = False,
+    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register C functions for converting ADM initial data to BSSN variables and applying boundary conditions.
@@ -82,7 +83,14 @@ def register_CFunction_initial_data(
             ID = InitialData_Spherical(IDtype=IDtype)
 
         admid.register_CFunction_exact_ADM_ID_function(
-            IDCoordSystem, IDtype, ID.alpha, ID.betaU, ID.BU, ID.gammaDD, ID.KDD
+            IDCoordSystem,
+            IDtype,
+            ID.alpha,
+            ID.betaU,
+            ID.BU,
+            ID.gammaDD,
+            ID.KDD,
+            fp_type=fp_type,
         )
     except (ValueError, RuntimeError):
         print(
@@ -95,6 +103,7 @@ def register_CFunction_initial_data(
         IDCoordSystem=IDCoordSystem,
         ID_persist_struct_str=ID_persist_struct_str,
         include_T4UU=include_T4UU,
+        fp_type=fp_type,
     )
 
     desc = "Set initial data."
@@ -320,6 +329,7 @@ def register_CFunction_rhs_eval(
     KreissOliger_strength_gauge: float = 0.3,
     KreissOliger_strength_nongauge: float = 0.3,
     OMP_collapse: int = 1,
+    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the right-hand side evaluation function for the BSSN equations.
@@ -469,6 +479,7 @@ def register_CFunction_rhs_eval(
             enable_simd=enable_simd,
             upwind_control_vec=betaU,
             enable_fd_functions=enable_fd_functions,
+            fp_type=fp_type,
         ),
         loop_region="interior",
         enable_simd=enable_simd,
@@ -476,6 +487,7 @@ def register_CFunction_rhs_eval(
         enable_rfm_precompute=enable_rfm_precompute,
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
+        fp_type=fp_type,
     )
     cfc.register_CFunction(
         include_CodeParameters_h=True,
@@ -498,6 +510,7 @@ def register_CFunction_Ricci_eval(
     enable_simd: bool,
     enable_fd_functions: bool,
     OMP_collapse: int,
+    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the Ricci evaluation function.
@@ -558,6 +571,7 @@ def register_CFunction_Ricci_eval(
             enable_fd_codegen=True,
             enable_simd=enable_simd,
             enable_fd_functions=enable_fd_functions,
+            fp_type=fp_type,
         ),
         loop_region="interior",
         enable_simd=enable_simd,
@@ -565,6 +579,7 @@ def register_CFunction_Ricci_eval(
         enable_rfm_precompute=enable_rfm_precompute,
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
+        fp_type=fp_type,
     )
 
     if orig_enable_RbarDD_gridfunctions:
@@ -599,6 +614,7 @@ def register_CFunction_constraints(
     enable_simd: bool,
     enable_fd_functions: bool,
     OMP_collapse: int,
+    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the BSSN constraints evaluation function.
@@ -644,6 +660,7 @@ def register_CFunction_constraints(
             enable_fd_codegen=True,
             enable_simd=enable_simd,
             enable_fd_functions=enable_fd_functions,
+            fp_type=fp_type,
         ),
         loop_region="interior",
         enable_simd=enable_simd,
@@ -651,6 +668,7 @@ def register_CFunction_constraints(
         enable_rfm_precompute=enable_rfm_precompute,
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
+        fp_type=fp_type,
     )
 
     cfc.register_CFunction(
@@ -673,6 +691,7 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
     enable_rfm_precompute: bool,
     enable_fd_functions: bool,
     OMP_collapse: int,
+    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the function that enforces the det(gammabar) = det(gammahat) constraint.
@@ -746,6 +765,7 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
             enable_fd_codegen=True,
             enable_simd=False,
             enable_fd_functions=enable_fd_functions,
+            fp_type=fp_type,
         ),
         loop_region="all points",
         enable_simd=False,
@@ -753,6 +773,7 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
         enable_rfm_precompute=enable_rfm_precompute,
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
+        fp_type=fp_type,
     )
 
     cfc.register_CFunction(
@@ -776,6 +797,7 @@ def register_CFunction_psi4_part(
     enable_fd_functions: bool,
     OMP_collapse: int,
     output_empty_function: bool = False,
+    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Add psi4 to Cfunction dictionary.
@@ -871,6 +893,7 @@ psi4_tetrad(commondata, params,
                 ],
                 enable_fd_codegen=True,
                 enable_fd_functions=enable_fd_functions,
+                fp_type=fp_type,
             ),
             loop_region="interior",
             enable_simd=False,
@@ -878,6 +901,7 @@ psi4_tetrad(commondata, params,
             enable_rfm_precompute=False,
             read_xxs=False,
             OMP_collapse=OMP_collapse,
+            fp_type=fp_type,
         )
 
     cfc.register_CFunction(
@@ -898,6 +922,7 @@ def register_CFunction_psi4_tetrad(
     tetrad: str = "quasiKinnersley",
     use_metric_to_construct_unit_normal: bool = False,
     output_empty_function: bool = False,
+    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register C function for psi4 tetrad computations.
@@ -966,7 +991,12 @@ def register_CFunction_psi4_tetrad(
             )
         ]
         body += ccg.c_codegen(
-            rhss, lhss, verbose=False, enable_cse=True, include_braces=False
+            rhss,
+            lhss,
+            verbose=False,
+            enable_cse=True,
+            include_braces=False,
+            fp_type=fp_type,
         )
 
     cfc.register_CFunction(
