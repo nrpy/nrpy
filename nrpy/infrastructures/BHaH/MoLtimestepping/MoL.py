@@ -233,6 +233,7 @@ def single_RK_substep_input_symbolic(
     enable_simd: bool = False,
     gf_aliases: str = "",
     post_post_rhs_string: str = "",
+    fp_type: str = "double",
 ) -> str:
     """
     Generate C code for a given Runge-Kutta substep.
@@ -330,6 +331,7 @@ def single_RK_substep_input_symbolic(
         include_braces=False,
         verbose=False,
         enable_simd=enable_simd,
+        fp_type=fp_type,
     )
 
     if enable_simd:
@@ -395,6 +397,7 @@ def register_CFunction_MoL_step_forward_in_time(
     enable_rfm_precompute: bool = False,
     enable_curviBCs: bool = False,
     enable_simd: bool = False,
+    fp_type: str = "double",
 ) -> None:
     """
     Register MoL_step_forward_in_time() C function, which is the core driver for time evolution in BHaH codes.
@@ -508,6 +511,7 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                 enable_simd=enable_simd,
                 gf_aliases=gf_aliases,
                 post_post_rhs_string=post_post_rhs_string,
+                fp_type=fp_type,
             )
             + "// -={ END k1 substep }=-\n\n"
         )
@@ -546,6 +550,7 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                 enable_simd=enable_simd,
                 gf_aliases=gf_aliases,
                 post_post_rhs_string=post_post_rhs_string,
+                fp_type=fp_type,
             )
             + "// -={ END k2 substep }=-\n\n"
         )
@@ -572,6 +577,7 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                 enable_simd=enable_simd,
                 gf_aliases=gf_aliases,
                 post_post_rhs_string=post_post_rhs_string,
+                fp_type=fp_type,
             )
             + "// -={ END k3 substep }=-\n\n"
         )
@@ -620,6 +626,7 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                     enable_simd=enable_simd,
                     gf_aliases=gf_aliases,
                     post_post_rhs_string=post_post_rhs_string,
+                    fp_type=fp_type,
                 )}// -={{ END k{str(s + 1)} substep }}=-\n\n"""
 
         else:
@@ -641,6 +648,7 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                     enable_simd=enable_simd,
                     gf_aliases=gf_aliases,
                     post_post_rhs_string=post_post_rhs_string,
+                    fp_type=fp_type,
                 )
             else:
                 for s in range(num_steps):
@@ -718,6 +726,7 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                             enable_simd=enable_simd,
                             gf_aliases=gf_aliases,
                             post_post_rhs_string=post_post_rhs_string,
+                            fp_type=fp_type,
                         )
                         + f"// -={{ END k{s + 1} substep }}=-\n\n"
                     )
@@ -808,6 +817,7 @@ def register_CFunctions(
     enable_curviBCs: bool = False,
     enable_simd: bool = False,
     register_MoL_step_forward_in_time: bool = True,
+    fp_type: str = "double",
 ) -> None:
     r"""
     Register all MoL C functions and NRPy basic defines.
@@ -891,6 +901,7 @@ def register_CFunctions(
             enable_rfm_precompute=enable_rfm_precompute,
             enable_curviBCs=enable_curviBCs,
             enable_simd=enable_simd,
+            fp_type=fp_type,
         )
 
     griddata_commondata.register_griddata_commondata(

@@ -38,6 +38,7 @@ par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Code-generation-time parameters:
 project_name = "two_blackholes_collide"
+fp_type = "double"
 CoordSystem = "Spherical"
 IDtype = "BrillLindquist"
 IDCoordSystem = "Cartesian"
@@ -95,6 +96,7 @@ BCl.register_CFunction_initial_data(
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
     ID_persist_struct_str="",
+    fp_type=fp_type,
 )
 
 numericalgrids.register_CFunctions(
@@ -103,6 +105,7 @@ numericalgrids.register_CFunctions(
     Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
+    fp_type=fp_type,
 )
 BCl.register_CFunction_diagnostics(
     list_of_CoordSystems=[CoordSystem],
@@ -110,18 +113,19 @@ BCl.register_CFunction_diagnostics(
     enable_psi4_diagnostics=False,
     grid_center_filename_tuple=("out0d-conv_factor%.2f.txt", "convergence_factor"),
     axis_filename_tuple=(
-        "out1d-AXIS-conv_factor%.2f-t%08.2f.txt",
+        "out1d-AXIS-conv_factor%.2f-t%08.4f.txt",
         "convergence_factor, time",
     ),
     plane_filename_tuple=(
-        "out2d-PLANE-conv_factor%.2f-t%08.2f.txt",
+        "out2d-PLANE-conv_factor%.2f-t%08.4f.txt",
         "convergence_factor, time",
     ),
     out_quantities_dict="default",
 )
 if enable_rfm_precompute:
     rfm_precompute.register_CFunctions_rfm_precompute(
-        list_of_CoordSystems=[CoordSystem]
+        list_of_CoordSystems=[CoordSystem],
+        fp_type=fp_type,
     )
 BCl.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
@@ -132,6 +136,7 @@ BCl.register_CFunction_rhs_eval(
     LapseEvolutionOption=LapseEvolutionOption,
     ShiftEvolutionOption=ShiftEvolutionOption,
     OMP_collapse=OMP_collapse,
+    fp_type=fp_type,
 )
 BCl.register_CFunction_Ricci_eval(
     CoordSystem=CoordSystem,
@@ -139,12 +144,14 @@ BCl.register_CFunction_Ricci_eval(
     enable_simd=enable_simd,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
+    fp_type=fp_type,
 )
 BCl.register_CFunction_enforce_detgammabar_equals_detgammahat(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
+    fp_type=fp_type,
 )
 BCl.register_CFunction_constraints(
     CoordSystem=CoordSystem,
@@ -152,13 +159,16 @@ BCl.register_CFunction_constraints(
     enable_simd=enable_simd,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
+    fp_type=fp_type,
 )
 
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 
 cbc.CurviBoundaryConditions_register_C_functions(
-    list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order
+    list_of_CoordSystems=[CoordSystem],
+    radiation_BC_fd_order=radiation_BC_fd_order,
+    fp_type=fp_type,
 )
 rhs_string = """
 Ricci_eval(commondata, params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);
@@ -178,9 +188,10 @@ MoL.register_CFunctions(
   enforce_detgammabar_equals_detgammahat(commondata, params, rfmstruct, RK_OUTPUT_GFS);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
+    fp_type=fp_type,
 )
-xxCartxx.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
-xxCartxx.register_CFunction_xx_to_Cart(CoordSystem)
+xxCartxx.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem, fp_type=fp_type)
+xxCartxx.register_CFunction_xx_to_Cart(CoordSystem, fp_type=fp_type)
 progress.register_CFunction_progress_indicator()
 rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
@@ -208,6 +219,7 @@ Bdefines_h.output_BHaH_defines_h(
     enable_simd=enable_simd,
     enable_rfm_precompute=enable_rfm_precompute,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
+    REAL_means=fp_type,
 )
 
 main.register_CFunction_main_c(

@@ -31,6 +31,7 @@ def register_CFunction_Ricci_eval(
     enable_simd: bool,
     fd_order: int,
     OMP_collapse: int = 1,
+    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the right-hand side evaluation function for the BSSN equations.
@@ -88,6 +89,7 @@ def register_CFunction_Ricci_eval(
             enable_simd=enable_simd,
             enable_fd_functions=True,
             enable_GoldenKernels=True,
+            fp_type=fp_type,
         ),
         loop_region="interior",
         enable_simd=enable_simd,
