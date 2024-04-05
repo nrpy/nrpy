@@ -107,6 +107,9 @@ if __name__ == "__main__":
                 "TP_utilities.h",
                 "TwoPunctures.h",
             ],
+            "nrpy.infrastructures.superB.superB": [
+                "superB.h",
+            ],
             "nrpy.helpers": ["simd_intrinsics.h"],
             "nrpy": ["py.typed"],
         },
