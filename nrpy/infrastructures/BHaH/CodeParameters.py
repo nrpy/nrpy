@@ -84,7 +84,7 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
                         c_output = f"{struct}->{parname} = {str(defaultval).lower()};{comment}\n"
                     else:
                         raise ValueError(
-                            f"{CodeParam.defaultvalue} is not a valid default value. Note that Booleans must be capitalized."
+                            f"{CodeParam.defaultvalue} is not a valid default value, for parameter {CodeParam.module}::{parname}, commondata = {CodeParam.commondata}"
                         )
                     struct_list.append(c_output)
 
@@ -92,10 +92,10 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
         body = ""
         if function_name == "params_struct":
             body += r"""// Loop over params structs:
-    for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
-    params_struct *restrict params = &griddata[grid].params;
-    """
-            body += "// Set params_struct variables to default\n"
+for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
+  params_struct *restrict params = &griddata[grid].params;
+  // Set params_struct variables to default
+"""
             body += "".join(sorted(struct_list))
             body += "}\n"
         else:
