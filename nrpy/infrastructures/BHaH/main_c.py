@@ -34,6 +34,7 @@ def register_CFunction_main_c(
     :param pre_MoL_step_forward_in_time: Code for handling pre-right-hand-side operations, default is an empty string.
     :param post_MoL_step_forward_in_time: Code for handling post-right-hand-side operations, default is an empty string.
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
+    :raises ValueError: Raised if any required function for BHaH main() is not registered.
     """
     initial_data_desc += " "
     # Make sure all required C functions are registered
@@ -68,11 +69,10 @@ def register_CFunction_main_c(
     desc = """-={ main() function }=-
 Step 1.a: Set each commondata CodeParameter to default.
 Step 1.b: Overwrite default values to parfile values. Then overwrite parfile values with values set at cmd line.
-Step 1.c: Allocate NUMGRIDS griddata arrays, each containing data specific to an individual grid.
+Step 1.c: Allocate NUMGRIDS griddata structs, each containing data specific to an individual grid.
 Step 1.d: Set each CodeParameter in griddata.params to default.
+Step 1.e: Set up numerical grids: xx[3], masks, Nxx, dxx, invdxx, bcstruct, rfm_precompute, timestep, etc.
 """
-    if enable_CurviBCs:
-        desc += "Step 1.e: Set non-parfile parameters related to numerical grid, then set up numerical grids and CFL-limited timestep.\n"
     if enable_rfm_precompute:
         desc += "Step 1.f: Set up boundary condition struct (bcstruct).\n"
     desc += f"""Step 2: Initial data are set on y_n_gfs gridfunctions. Allocate storage for them first.
