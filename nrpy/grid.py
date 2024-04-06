@@ -36,6 +36,18 @@ Cart_origin = par.register_CodeParameters(
     "REAL", __name__, ["Cart_originx", "Cart_originy", "Cart_originz"], 0.0
 )
 _ = par.register_CodeParameter("int", __name__, "NUMGRIDS", 1, commondata=True)
+_ = par.register_CodeParameter(
+    "bool", __name__, "grid_rotates", False, commondata=False, add_to_parfile=False
+)
+_ = par.register_CodeParameter(
+    "#define",
+    __name__,
+    "MAXNUMGRIDS",
+    "15",
+    commondata=False,
+    add_to_set_CodeParameters_h=False,
+    add_to_parfile=False,
+)
 
 
 # Core GridFunction class.

@@ -112,7 +112,7 @@ def output_BHaH_defines_h(
     >>> project_dir = Path("/tmp", "tmp_BHaH_defines_h")
     >>> project_dir.mkdir(parents=True, exist_ok=True)
     >>> output_BHaH_defines_h(project_dir=str(project_dir))
-    >>> expected_string = decompress_base64_to_string("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")
+    >>> expected_string = decompress_base64_to_string("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")
     >>> returned_string = (project_dir / "BHaH_defines.h").read_text()
     >>> if returned_string != expected_string:
     ...    compressed_str = compress_string_to_base64(returned_string)
@@ -146,16 +146,19 @@ def output_BHaH_defines_h(
 #define MIN(A, B) ( ((A) < (B)) ? (A) : (B) )
 #define MAX(A, B) ( ((A) > (B)) ? (A) : (B) )
 #define SQR(A) ((A) * (A))
-
-// START: CodeParameters declared as #define.
 """
+    code_params_includes_define_type = False
     for CPname, CodeParam in par.glb_code_params_dict.items():
         if CodeParam.cparam_type == "#define":
+            if not code_params_includes_define_type:
+                code_params_includes_define_type = True
+                gen_BHd_str += "// START: CodeParameters declared as #define.\n"
             gen_BHd_str += f"""#ifndef {CPname}
-#define {CPname} {CodeParam.defaultvalue}
+#define {CPname} {CodeParam.defaultvalue} // {CodeParam.module}
 #endif
-// END: CodeParameters declared as #define.
 """
+    if code_params_includes_define_type:
+        gen_BHd_str += "// END: CodeParameters declared as #define.\n"
     register_BHaH_defines("general", gen_BHd_str)
 
     #####################################
