@@ -112,7 +112,7 @@ def output_BHaH_defines_h(
     >>> project_dir = Path("/tmp", "tmp_BHaH_defines_h")
     >>> project_dir.mkdir(parents=True, exist_ok=True)
     >>> output_BHaH_defines_h(project_dir=str(project_dir))
-    >>> expected_string = decompress_base64_to_string("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")
+    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4BwrBuddABfgfIRIMIm6AK8ieM7F75y60ltO5/OCqUTELlfw2Aavkuk1Wor0eMtgCtpXQ9sN5zPnD3JlYmA6lNMbBMbAIusNLgezGtqapjQmqntKPtxJKqeYTlxN3HZKgddKvcC6gkqTutNTJ6DCGyf0AKa0/7Y5j2K4edWfrGDStBVpTkBlxXqhlBeYcnALPUIyUEsG2+Dd6KWTHY1njeRZDaOJYfYsTfertE0uT3eDsJygW1QXDKs+BuVaytXgoB6YBkasQW8DS2rJjT2i0ASz71eezefj9Bfr3NNueorLpsQjyQUwZviLkgIyyNeUcNpnXgk7OzABvR1w6MK3zUf5ruveEA0YCupx6oyLdFnklExnzOIRFZGeYcypOBPr6O4B8lnwFnoZOLcnAUuChZuBuUa+s9llGpxGbxigIzxvfXBk2syqxNXRmeY1j6/JoIYSmb/m29bHeNnh8uosNTMWtWkdliQcgROTZEbOIv2F40t7ybzAB4/vDs3ePyUgPvus435JXipAOSgFEpx3LtbaVgXysE+Im0+95JwgCRuAkg7pcWIRBBOUC0QAgGKAqVVfnJ7j1p4oybiC9uLalRpkT6MsEikD6cmyqBNJnZde6LGuWTy3Sh0prbDIPsppNSdvmzURRJDhK+0rjsnOqGMMR5bCfOgO+4SVjtqhC8lV+IFmV8WkJRT0pM1bh/YLxGIPauTVl8nAF7vifeXPoPtDNu72lB3nzRWRHkyIi2czU3h6WYo1WEvUxZzo9EaICc4AJLDKaG7jXsTpFEKSM12e3w1JZEo7ZCHrAkLchq1j2B8jCrfXGwn979bwBhcdbIpwx5YGZl2nh2YmWbmVIdS9oULxk6PmRE/ThAq1N80NeGV+p9RN42BSowuQkn1HULTD1e+7zIY2gbowStwLAEK9rbwoPkR8PDy34quRDAv/m9r0/sKD7tvKq3EHuUliRQpqRLGVjWPiLsTrHhEpxzV81HOJgDivOCAJIGa0Rt8l6hGosCDiB6guK9qopU+KUuch6CcC/v3gqxGCQj+Z0gNbElUJhAgDS4oMBr7mdwvQUBKJB6AjhVkUWOI8EI9SoaQXG90l+K2Al8o+zK8QSTY+Lvsq3f9QYaPYHHkZEkM7e9wi5AinsJKqmRcyRLPEAE/9Uc86g1tTh0TA2SdEuL1ZSmwkeIyN3vNeV6lilWmH1onHAS5Pz+HwWlnlJKmBkjlqJdEeXV3I9lTqsuDHUG/uuq1IAxISgv6M6fOET+OCzbjr2qO6+R82hzYL+Ggb+5A1HZ3CaSdjk8UonWn1UEQ98yZDrtUToZUSL2RVXfLcIp2VL1Oq3kcslLmLnviW5fz8cRj8xz8AG8q21BQBrITQCXvpUmgSxO9ajMhMUYF6Q3CwTwbYdIHXRSvwxz4RhQVpeaAgFGJAj6nICqMXNQdYWdbh9oacECR68D9NSC/kjIwch1Sr73XEbBc9O24MsaHz9PYB7Xlos62gZOdXAm3qZsCeRJe+MvNd5EllDp68iIzhdMGZQ1J2EJ1RkkaAZAe90F+MkyfGPoiqWFNMqYERgF8SwjWAs3WBBMd814tgBCF5kHEav4EKu7458DRooei0SYy8UKlBsQdfF/+N/Bi9HWjHLr1E2juqNBHC0g3kHF1su3pTbwx4SowY3uZ6JM6ckf9lnjEbQNhRL7zf8hXupr7iUXpORpbFjPTXC1AIn5BH3peOEOr9k0R6XI1Ep7+oF1OEeAKDCkGR5yrzqhrbPjw5FDXSTwPGgRfIPPzGFpAPAU4c7OSHpxHgFWs6KTjx2/YdFC1F9jQEW8EGB6k7Mx/2hZAQvNkpJLqCKlsOZ1bht6jUpbSiNrHvQ49FNDnzY/kZPnRljSFpM+bQq6RlQ0z/Dxytr2ORSAqKYGUmmtCjVticfGLKoqor1pndlJU+hygg2neNqtc79AUT+w8OrI+OTZI4Ol6DHKfyVwZOEJu+kG15Z4qHF/BZryfhrcrzkmxyrFl77ItcGtFzM2TVu/CVnKnsjEsbOW/Aj1uu+feX50BwfES7meD0idbBj/PN7NfotXhFzEnBa3oDh7kQ/DCsgZq7gMo4hL5JbLQ4kOOA0cBcMWQJ8MIS+BISFTYGLXeo6lB1C12dJZDaGYQJXre6whiOZpnFLoDjx5UMBO9DTGFiwlNthmgZz+G9Jq/EJCki+9NIj/+rhXZ/ECQgE5cuBKsUkxpaAKLUOfptmWJlAsyUviMLxQwodXFe8dfmt8n8TWfq1jNxBatOQ9FW/OPYeuGHa4YrDrHpu1CHyq3VOlCeCeLES+VCmMeQ05FoWG47sC/mzj5dcSgEkeZCo2oS+IsohbW1lNh4QXsKnoQvMMT4M2RXS6NstAAAb/5BRGg22GAAAYMOrDgAAF8ehMmxxGf7AgAAAAAEWVo=")
     >>> returned_string = (project_dir / "BHaH_defines.h").read_text()
     >>> if returned_string != expected_string:
     ...    compressed_str = compress_string_to_base64(returned_string)
@@ -125,14 +125,15 @@ def output_BHaH_defines_h(
 
     ###############################
     # GENERALLY USEFUL DEFINITIONS
-    gen_BHd_str = """#include <stdio.h>
-#include <math.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdbool.h>
-#include <errno.h>
-#include <ctype.h>
-#include <time.h>
+    gen_BHd_str = """#include <ctype.h>   // Character type functions, such as isdigit, isalpha, etc.
+#include <errno.h>   // Error number definitions
+#include <math.h>    // Transcendental functions, etc.
+#include <stdbool.h> // bool-typed variables
+#include <stdint.h>  // int8_t-typed variables
+#include <stdio.h>   // Basic input/output functions, such as *printf, fopen, fwrite, etc.
+#include <stdlib.h>  // malloc/free, etc.
+#include <string.h>  // String handling functions, such as strlen, strcmp, etc.
+#include <time.h>    // Time-related functions and types, such as time(), clock(),
 """
     if enable_simd:
         gen_BHd_str += "// output_BHaH_defines_h(...,enable_simd=True) was called so we #include SIMD intrinsics:\n"
@@ -144,6 +145,16 @@ def output_BHaH_defines_h(
 
 #define MIN(A, B) ( ((A) < (B)) ? (A) : (B) )
 #define MAX(A, B) ( ((A) > (B)) ? (A) : (B) )
+#define SQR(A) ((A) * (A))
+
+// START: CodeParameters declared as #define.
+"""
+    for CPname, CodeParam in par.glb_code_params_dict.items():
+        if CodeParam.cparam_type == "#define":
+            gen_BHd_str += f"""#ifndef {CPname}
+#define {CPname} {CodeParam.defaultvalue}
+#endif
+// END: CodeParameters declared as #define.
 """
     register_BHaH_defines("general", gen_BHd_str)
 
@@ -162,9 +173,9 @@ def output_BHaH_defines_h(
     # Add all CodeParameters
     # Iterate through the global code parameters dictionary
     for CPname, CodeParam in par.glb_code_params_dict.items():
-        CPtype: str = CodeParam.cparam_type
+        CPtype = CodeParam.cparam_type
         if CPtype != "#define":
-            comment: str = f"  // {CodeParam.module}::{CPname}"
+            comment = f"  // {CodeParam.module}::{CPname}"
             c_output = f"  {CPtype} {CPname};{comment}\n"
             if "char" in CPtype and "[" in CPtype and "]" in CPtype:
                 chararray_size = CPtype.split("[")[1].replace("]", "")
