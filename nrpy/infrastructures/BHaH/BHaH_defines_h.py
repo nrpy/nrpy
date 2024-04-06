@@ -187,6 +187,14 @@ def output_BHaH_defines_h(
             else:
                 CCodelines_params_struct.append(c_output)
 
+    if "commondata_struct" in par.glb_extras_dict:
+        for module, item_list in par.glb_extras_dict["commondata_struct"].items():
+            for item in item_list:
+                c_code_line = f"  {item.c_declaration};"
+                if item.description != "":
+                    c_code_line += f"// <- {module}: {item.description}"
+                CCodelines_commondata_struct.append(c_code_line + "\n")
+
     # Sort CCodelines_params_struct and append them to the par_BHd_str
     for line in sorted(CCodelines_params_struct):
         par_BHd_str += line
@@ -269,7 +277,7 @@ _Pragma(__OMP_PRAGMA__)  \
         "reference_metric",
         "nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions",
         "nrpy.infrastructures.BHaH.MoLtimestepping.MoL",
-        "nrpy.infrastructures.BHaH.interpolate",
+        "nrpy.infrastructures.BHaH.interpolation.interpolation",
         "grid",  # griddata struct depends upon other core modules
     ]
     # Populate BHaH_defines.h with core modules
