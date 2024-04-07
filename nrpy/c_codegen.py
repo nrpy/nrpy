@@ -132,6 +132,12 @@ class CCodeGen:
         self.prestring = prestring
         self.poststring = poststring
         self.include_braces = include_braces
+        # Validate fp_type before attempting to access fp_type_to_sympy_type
+        if fp_type not in fp_type_to_sympy_type:
+            allowed_values = tuple(fp_type_to_sympy_type.keys())
+            raise ValueError(
+                f"In function '__init__': parameter 'fp_type' has value: '{fp_type}', which is not in the allowed_values set: {allowed_values}"
+            )
         self.fp_type = fp_type
         self.fp_type_alias = fp_type_alias
         self.fp_ccg_type = fp_type_to_sympy_type[fp_type]
