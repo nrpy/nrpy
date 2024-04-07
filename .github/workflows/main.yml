@@ -117,6 +117,9 @@ jobs:
       matrix:
         os: ['ubuntu-20.04', 'ubuntu-22.04']
         python-version: ['3.6.7', '3.7.13', '3.x']
+        exclude:
+          - os: 'ubuntu-22.04'
+            python-version: '3.6.7'
 
     steps:
     - uses: actions/checkout@v4
