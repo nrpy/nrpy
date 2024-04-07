@@ -8,6 +8,7 @@ Author: Zachariah B. Etienne
 from typing import Dict, List
 
 import nrpy.params as par
+import nrpy.c_function as cfc
 
 
 class GridCommonData:
@@ -78,6 +79,49 @@ def register_griddata_commondata(
         if "griddata_struct" not in par.glb_extras_dict:
             par.glb_extras_dict["griddata_struct"] = {}
         register_griddata_or_commondata(par.glb_extras_dict["griddata_struct"])
+
+
+def register_CFunction_griddata_free(
+    enable_rfm_precompute: bool,
+    enable_CurviBCs: bool,
+) -> None:
+    """
+    Register the C function griddata_free() to free all memory within the griddata struct.
+
+    :param enable_rfm_precompute: A flag to enable/disable rfm_precompute_free within the C function body.
+    :param enable_CurviBCs: A flag to enable/disable freeing CurviBCs within the C function body.
+    :return: None
+    """
+    desc = """Free all memory within the griddata struct,
+except perhaps non_y_n_gfs (e.g., after a regrid, in which non_y_n_gfs are freed first)."""
+    cfunc_type = "void"
+    name = "griddata_free"
+    params = "const commondata_struct *restrict commondata, griddata_struct *restrict griddata, const bool enable_free_non_y_n_gfs"
+    body = r"""for(int grid=0;grid<commondata->NUMGRIDS;grid++) {
+"""
+    if enable_rfm_precompute:
+        body += "  rfm_precompute_free(commondata, &griddata[grid].params, &griddata[grid].rfmstruct);\n"
+    if enable_CurviBCs:
+        body += r"""
+  free(griddata[grid].bcstruct.inner_bc_array);
+  for(int ng=0;ng<NGHOSTS*3;ng++) free(griddata[grid].bcstruct.pure_outer_bc_array[ng]);
+"""
+    body += r"""
+
+  MoL_free_memory_y_n_gfs(&griddata[grid].gridfuncs);
+  if(enable_free_non_y_n_gfs)
+  for(int i=0;i<3;i++) free(griddata[grid].xx[i]);
+} // END for(int grid=0;grid<commondata->NUMGRIDS;grid++)
+"""
+    body += "free(griddata);\n"
+    cfc.register_CFunction(
+        includes=["BHaH_defines.h", "BHaH_function_prototypes.h"],
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        body=body,
+    )
 
 
 if __name__ == "__main__":

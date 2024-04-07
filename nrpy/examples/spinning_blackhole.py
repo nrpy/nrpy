@@ -26,9 +26,10 @@ import nrpy.infrastructures.BHaH.general_relativity.BSSN_C_codegen_library as BC
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
+from nrpy.infrastructures.BHaH import griddata_commondata
+import nrpy.infrastructures.BHaH.main_c as main
 import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
-import nrpy.infrastructures.BHaH.main_c as main
 import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 from nrpy.infrastructures.BHaH import rfm_precompute
@@ -212,9 +213,10 @@ Bdefines_h.output_BHaH_defines_h(
 main.register_CFunction_main_c(
     initial_data_desc=IDtype,
     MoL_method=MoL_method,
-    enable_rfm_precompute=enable_rfm_precompute,
-    enable_CurviBCs=True,
     boundary_conditions_desc=boundary_conditions_desc,
+)
+griddata_commondata.register_CFunction_griddata_free(
+    enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True
 )
 
 if enable_simd:

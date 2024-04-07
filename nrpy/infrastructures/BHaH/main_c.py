@@ -12,8 +12,6 @@ import nrpy.c_function as cfc
 def register_CFunction_main_c(
     MoL_method: str,
     initial_data_desc: str = "",
-    enable_rfm_precompute: bool = False,
-    enable_CurviBCs: bool = False,
     boundary_conditions_desc: str = "",
     prefunc: str = "",
     initialize_constant_auxevol: bool = False,
@@ -26,8 +24,6 @@ def register_CFunction_main_c(
 
     :param MoL_method: Method of Lines algorithm used to step forward in time.
     :param initial_data_desc: Description for initial data, default is an empty string.
-    :param enable_rfm_precompute: Enable rfm precomputation, default is False.
-    :param enable_CurviBCs: Enable CurviBCs, default is False.
     :param boundary_conditions_desc: Description of the boundary conditions, default is an empty string.
     :param prefunc: String that appears before main(). DO NOT populate this, except when debugging, default is an empty string.
     :param initialize_constant_auxevol: If set to True, `initialize_constant_auxevol` function will be called during the simulation initialization phase to set these constants. Default is False.
@@ -72,17 +68,13 @@ Step 1.b: Overwrite default values to parfile values. Then overwrite parfile val
 Step 1.c: Allocate NUMGRIDS griddata structs, each containing data specific to an individual grid.
 Step 1.d: Set each CodeParameter in griddata.params to default.
 Step 1.e: Set up numerical grids: xx[3], masks, Nxx, dxx, invdxx, bcstruct, rfm_precompute, timestep, etc.
-"""
-    if enable_rfm_precompute:
-        desc += "Step 1.f: Set up boundary condition struct (bcstruct).\n"
-    desc += f"""Step 2: Initial data are set on y_n_gfs gridfunctions. Allocate storage for them first.
+Step 2: Initial data are set on y_n_gfs gridfunctions. Allocate storage for them first.
 Step 3: Finalize initialization: set up {initial_data_desc}initial data, etc.
 Step 4: Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping.
 """
     if initialize_constant_auxevol:
         desc += "Step 4.a: Set AUXEVOL gridfunctions that will never change in time."
-    desc += f"""
-Step 5: MAIN SIMULATION LOOP
+    desc += f"""Step 5: MAIN SIMULATION LOOP
 - Step 5.a: Output diagnostics.
 - Step 5.b: Prepare to step forward in time.
 - Step 5.c: Step forward in time using Method of Lines with {MoL_method} algorithm, applying {boundary_conditions_desc} boundary conditions.
@@ -155,22 +147,11 @@ while(commondata.time < commondata.t_final) { // Main loop to progress forward i
     body += r"""
 } // End main loop to progress forward in time.
 
-// Step 5: Free all allocated memory
-for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
-  MoL_free_memory_y_n_gfs(&griddata[grid].gridfuncs);
-  MoL_free_memory_non_y_n_gfs(&griddata[grid].gridfuncs);"""
-    if enable_rfm_precompute:
-        body += r"""
-  rfm_precompute_free(&commondata, &griddata[grid].params, &griddata[grid].rfmstruct);"""
-    if enable_CurviBCs:
-        body += r"""
-  free(griddata[grid].bcstruct.inner_bc_array);
-  for(int ng=0;ng<NGHOSTS*3;ng++) free(griddata[grid].bcstruct.pure_outer_bc_array[ng]);
-"""
-    body += r"""
-  for(int i=0;i<3;i++) free(griddata[grid].xx[i]);
+// Step 6: Free all allocated memory
+{
+  const bool enable_free_non_y_n_gfs=true;
+  griddata_free(&commondata, griddata, enable_free_non_y_n_gfs);
 }
-free(griddata);
 return 0;
 """
     cfc.register_CFunction(
