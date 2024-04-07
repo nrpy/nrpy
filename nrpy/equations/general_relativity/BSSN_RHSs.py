@@ -349,7 +349,7 @@ class BSSNRHSs:
         # print(str(trK_rhs).replace("xx2","xx3").replace("xx1","xx2").replace("xx0","xx1").replace("**","^").replace("_","").replace("sin(xx2)","Sinx2").replace("xx","x").replace("sin(2*x2)","Sin2x2").replace("cos(x2)","Cosx2").replace("detgbaroverdetghat","detg"))
         # print(str(bet_rhsU[0]).replace("xx2","xx3").replace("xx1","xx2").replace("xx0","xx1").replace("**","^").replace("_","").replace("sin(xx2)","Sinx2").replace("xx","x").replace("sin(2*x2)","Sin2x2").replace("cos(x2)","Cosx2").replace("detgbaroverdetghat","detg"))
 
-        self.BSSN_RHSs_varname_to_expr_dict: OrderedDict[str, sp.Expr] = OrderedDict()
+        self.BSSN_RHSs_varname_to_expr_dict: Dict[str, sp.Expr] = OrderedDict()
         self.BSSN_RHSs_varname_to_expr_dict["cf_rhs"] = self.cf_rhs
         self.BSSN_RHSs_varname_to_expr_dict["trK_rhs"] = self.trK_rhs
         for i in range(3):
