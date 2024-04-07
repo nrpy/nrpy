@@ -11,6 +11,7 @@ Authors: Zachariah B. Etienne
 # Step P1: Import needed NRPy+ core modules:
 from typing import List, Tuple
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
+import sympy.codegen.ast as sp_ast
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.params as par  # NRPy+: Parameter interface
@@ -965,8 +966,6 @@ def setup_Cfunction_FD1_arbitrary_upwind(
                                   If -1, will use default finite difference order.
     :return: The full C function as a string.
     """
-    import sympy.codegen.ast as sp_ast
-
     default_FDORDER = par.parval_from_str("fd_order")
     if radiation_BC_fd_order == -1:
         radiation_BC_fd_order = default_FDORDER
