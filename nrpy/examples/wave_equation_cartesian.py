@@ -19,13 +19,14 @@ import nrpy.params as par
 from nrpy.helpers import simd
 
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
-import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
-import nrpy.infrastructures.BHaH.simple_loop as lp
+import nrpy.infrastructures.BHaH.CodeParameters as CPs
+import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
+from nrpy.infrastructures.BHaH import griddata_commondata
+import nrpy.infrastructures.BHaH.main_c as main
 import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
-import nrpy.infrastructures.BHaH.main_c as main
-import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
+import nrpy.infrastructures.BHaH.simple_loop as lp
 from nrpy.equations.wave_equation.WaveEquation_RHSs import WaveEquation_RHSs
 from nrpy.equations.wave_equation.WaveEquation_Solutions_InitialData import (
     WaveEquation_solution_Cartesian,
@@ -473,6 +474,10 @@ main.register_CFunction_main_c(
     initial_data_desc=WaveType,
     boundary_conditions_desc="Quadratic extrapolation, manually defined",
 )
+griddata_commondata.register_CFunction_griddata_free(
+    enable_rfm_precompute=False, enable_CurviBCs=False
+)
+
 
 if enable_simd:
     simd.copy_simd_intrinsics_h(project_dir=project_dir)
