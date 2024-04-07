@@ -28,7 +28,6 @@ from nrpy.equations.nrpyelliptic.ConformallyFlat_SourceTerms import (
 
 import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices as out012d
-import inspect
 
 # Define functions to set up initial guess
 
@@ -324,10 +323,6 @@ def register_CFunction_initialize_constant_auxevol() -> Union[None, pcg.NRPyEnv_
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
-    blah = (
-        cast(bool, par.parval_from_str("parallel_codegen_enable"))
-        and par.parval_from_str("parallel_codegen_stage") == "register"
-    )
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
