@@ -13,7 +13,7 @@ import shutil
 # Attempt to determine the correct files function to use based on Python version
 try:
     from importlib.resources import files as resource_files  # Python 3.9 and newer
-except (ImportError, AttributeError):  # Will be AttributeError in Python 3.8
+except ImportError:
     # Fallback for older Python versions: use the backport
     from importlib_resources import files as resource_files
 
