@@ -38,6 +38,7 @@ def register_CFunction_ADM_to_BSSN(
     :param thorn_name: The Einstein Toolkit thorn name.
     :param CoordSystem: The coordinate system to be used.
     :param fd_order: Order of finite difference method
+    :param fp_type: Floating point type, e.g., "double".
 
     :return: A string representing the full C function.
     """

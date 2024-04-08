@@ -24,6 +24,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
 
     :param CoordSystem: The coordinate system to use.
     :param relative_to: Whether the computation is relative to the "local_grid_center" or "global_grid_center".
+    :param fp_type: Floating point type, e.g., "double".
 
     :raises ValueError: When the value of `relative_to` is not "local_grid_center" or "global_grid_center".
     """
@@ -98,6 +99,7 @@ def register_CFunction_xx_to_Cart(CoordSystem: str, fp_type: str = "double") -> 
     Register a C function to convert arbitrary NRPy+ coordinates to Cartesian coordinates.
 
     :param CoordSystem: The coordinate system name as a string.
+    :param fp_type: Floating point type, e.g., "double".
     """
     # Arbitrary-coordinate NRPy+ file output, Part 1: output the conversion from (x0,x1,x2) to Cartesian (x,y,z)
     # Suppose grid origin is at 1,1,1. Then the Cartesian gridpoint at 1,2,3 will be 2,3,4; hence

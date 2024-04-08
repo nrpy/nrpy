@@ -38,6 +38,7 @@ def register_CFunction_T4DD_to_T4UU(
     :param CoordSystem: The coordinate system to be used.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
+    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """

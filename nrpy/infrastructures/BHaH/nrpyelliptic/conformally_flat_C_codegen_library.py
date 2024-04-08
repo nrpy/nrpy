@@ -38,6 +38,8 @@ def register_CFunction_initial_guess_single_point(
     """
     Register the C function for initial guess of solution at a single point.
 
+    :param fp_type: Floating point type, e.g., "double".
+
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
@@ -80,6 +82,7 @@ def register_CFunction_initial_guess_all_points(
 
     :param enable_checkpointing: Attempt to read from a checkpoint file before generating initial guess.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
+    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -143,6 +146,7 @@ def register_CFunction_auxevol_gfs_single_point(
     Register the C function for the AUXEVOL grid functions at a single point.
 
     :param CoordSystem: The coordinate system to use in setting up the AUXEVOL gridfunctions.
+    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -191,6 +195,7 @@ def register_CFunction_auxevol_gfs_all_points(
     Register the C function for the AUXEVOL grid functions at all points.
 
     :param OMP_collapse: Degree of OpenMP loop collapsing.
+    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -248,6 +253,7 @@ def register_CFunction_variable_wavespeed_gfs_all_points(
     Register function to compute variable wavespeed based on local grid spacing for a single coordinate system.
 
     :param CoordSystem: The coordinate system to use in the hyperbolic relaxation.
+    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -366,6 +372,7 @@ def register_CFunction_compute_L2_norm_of_gridfunction(
     multiprocess race condition on Python 3.6.7
 
     :param CoordSystem: the rfm coordinate system.
+    :param fp_type: Floating point type, e.g., "double".
 
     :return: None
     """
@@ -673,6 +680,7 @@ def register_CFunction_rhs_eval(
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param enable_simd: Whether to enable SIMD.
     :param OMP_collapse: Level of OpenMP loop collapsing.
+    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -746,6 +754,7 @@ def register_CFunction_compute_residual_all_points(
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param enable_simd: Whether to enable SIMD.
     :param OMP_collapse: Level of OpenMP loop collapsing.
+    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """

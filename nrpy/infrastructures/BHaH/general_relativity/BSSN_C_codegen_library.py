@@ -66,6 +66,7 @@ def register_CFunction_initial_data(
     :param populate_ID_persist_struct_str: Optional string to populate the persistent structure for initial data.
     :param free_ID_persist_struct_str: Optional string to free the persistent structure for initial data.
     :param include_T4UU: Whether to include the stress-energy tensor. Defaults to False.
+    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -345,6 +346,7 @@ def register_CFunction_rhs_eval(
     :param KreissOliger_strength_gauge: Gauge strength for Kreiss-Oliger dissipation.
     :param KreissOliger_strength_nongauge: Non-gauge strength for Kreiss-Oliger dissipation.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
+    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -520,6 +522,7 @@ def register_CFunction_Ricci_eval(
     :param enable_simd: Whether to enable SIMD instructions.
     :param enable_fd_functions: Whether to enable finite difference functions.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
+    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -624,6 +627,7 @@ def register_CFunction_constraints(
     :param enable_simd: Whether to enable SIMD instructions.
     :param enable_fd_functions: Whether to enable finite difference functions.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
+    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -699,6 +703,7 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
     :param CoordSystem: The coordinate system to be used.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
+    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -810,6 +815,7 @@ def register_CFunction_psi4_part(
     :param enable_fd_functions: Flag to enable or disable the finite difference functions.
     :param OMP_collapse: OpenMP collapse clause integer value.
     :param output_empty_function: If True, psi4 will be set to zero.
+    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -931,6 +937,7 @@ def register_CFunction_psi4_tetrad(
     :param tetrad: The type of tetrad. Defaults to "quasiKinnersley".
     :param use_metric_to_construct_unit_normal: Whether to use the metric to construct the unit normal. Defaults to False.
     :param output_empty_function: If True, output an empty function body. Defaults to False.
+    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
