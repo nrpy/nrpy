@@ -131,8 +131,8 @@ if(params->Nxx2 < params->Nxx0 || params->Nxx2 < params->Nxx1)
             param_dir = f"params->xx{minmax}{dirn}"
 
             if str_rfm_value in par.glb_code_params_dict:
-                c_type_alias = par.glb_code_params_dict[str_rfm_value].cparam_type
-                if c_type_alias != "#define":
+                cparam_type = par.glb_code_params_dict[str_rfm_value].cparam_type
+                if cparam_type != "#define":
                     body += f"{param_dir} = params->{rfm_value};\n"
                     continue
 
