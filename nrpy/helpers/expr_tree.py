@@ -29,11 +29,19 @@ import sympy as sp
 
 class ExprTree:
     """
-    Symbolic (N-Ary) Expression Tree.
+    Represents a symbolic expression tree for a given SymPy expression.
 
-    :param expr: Root expression for the tree
+    This class is designed to facilitate tree-based manipulation and traversal
+    of symbolic expressions, supporting operations like building the tree from
+    an expression, preorder and postorder traversal.
 
-    >>> from sympy.abc import a, b, x
+    Attributes
+    ----------
+    root : Node
+        The root node of the expression tree.
+
+    Example:
+    >>> from sympy.abc import a, b
     >>> from sympy import cos
     >>> tree = ExprTree(cos(a + b)**2)
     >>> print(tree)
@@ -44,42 +52,54 @@ class ExprTree:
 
     class Node:
         """
-        Expression Tree Node.
+        Represents a node within an `ExprTree`, holding a SymPy expression and its function.
 
-        :param expr: Expression for the node
-        :param func: Function for the expression
+        Attributes
+        ----------
+        expr : sp.Basic
+            The SymPy expression held by this node.
+        func : Optional[sp.FunctionClass]
+            The function of the expression if applicable.
+        children : List["ExprTree.Node"]
+            Child nodes under this node.
         """
 
-        def __init__(
-            self,
-            expr: sp.Basic,
-            func: Optional[sp.FunctionClass],
-        ) -> None:
+        def __init__(self, expr: sp.Basic, func: Optional[sp.FunctionClass]) -> None:
+            """
+            Initialize an `ExprTree.Node` instance.
+
+            :param expr: The SymPy expression for this node.
+            :param func: The function of the expression, if applicable.
+            """
             self.expr: sp.Basic = expr
             self.func = func
             self.children: List["ExprTree.Node"] = []
 
         def append(self, node: "ExprTree.Node") -> None:
-            """Append to a node in expression tree."""
+            """
+            Append a child node to this node.
+
+            :param node: The `ExprTree.Node` instance to append as a child.
+            """
             self.children.append(node)
 
-        def __repr__(self) -> str:
-            return f"Node({self.expr}, {self.func})"
-
-        def __str__(self) -> str:
-            return str(self.expr)
-
     def __init__(self, expr: sp.Basic) -> None:
+        """
+        Initialize an `ExprTree` with a given root expression.
+
+        :param expr: The SymPy expression to set as the root of the tree.
+        """
         self.root = self.Node(expr, None)
         self.build(self.root)
 
-    def build(self, node: Node, clear: bool = True) -> None:
+    def build(self, node: "ExprTree.Node", clear: bool = True) -> None:
         """
-        Build expression (sub)tree.
+        Recursively build the expression tree from a given node.
 
-        :param node: Root node of (sub)tree
-        :param clear: Clear children, default is True
+        :param node: The node to start building the tree from.
+        :param clear: If `True`, clears existing children of `node` before building.
 
+        Example:
         >>> from sympy.abc import a, b
         >>> from sympy import cos, sin
         >>> tree = ExprTree(cos(a + b)**2)
@@ -95,13 +115,16 @@ class ExprTree:
             node.append(subtree)
             self.build(subtree)
 
-    def preorder(self, node: Optional[Node] = None) -> Generator[Node, None, None]:
+    def preorder(
+        self, node: Optional["ExprTree.Node"] = None
+    ) -> Generator["ExprTree.Node", None, None]:
         """
-        Generate iterator for preorder traversal.
+        Perform a preorder traversal of the tree starting from a given node.
 
-        :param node: Root node of (sub)tree
-        :return: Iterator
+        :param node: The starting node for the traversal. If `None`, starts from the root.
+        :yields: Each node in preorder sequence.
 
+        Example:
         >>> from sympy.abc import a, b
         >>> from sympy import cos, Mul
         >>> tree = ExprTree(cos(a*b)**2)
@@ -116,13 +139,16 @@ class ExprTree:
         for child in node.children:
             yield from self.preorder(child)
 
-    def postorder(self, node: Optional[Node] = None) -> Generator[Node, None, None]:
+    def postorder(
+        self, node: Optional["ExprTree.Node"] = None
+    ) -> Generator["ExprTree.Node", None, None]:
         """
-        Generate iterator for postorder traversal.
+        Perform a postorder traversal of the tree starting from a given node.
 
-        :param node: Root node of (sub)tree
-        :return: Iterator
+        :param node: The starting node for the traversal. If `None`, starts from the root.
+        :yields: Each node in postorder sequence.
 
+        Example:
         >>> from sympy.abc import a, b
         >>> from sympy import cos, Mul
         >>> tree = ExprTree(cos(a*b)**2)
