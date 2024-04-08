@@ -58,6 +58,7 @@ class ReferenceMetric:
         :param CoordSystem: The coordinate system for the reference metric, such as 'Cartesian', 'Spherical', etc.
         :param enable_rfm_precompute: A Boolean indicating whether to enable precomputation of reference metric quantities.
         :param SymPySimplifyExpressions: A boolean indicating whether to simplify expressions using SymPy. Default is False.
+        :raises ValueError: If an unrecognized coordinate system is specified.
         """
         self.CoordSystem = CoordSystem
         self.SymPySimplifyExpressions = SymPySimplifyExpressions
@@ -728,7 +729,11 @@ class ReferenceMetric:
         ]
 
     def spherical_like(self) -> None:
-        """Initialize class for Spherical-like coordinate systems."""
+        """
+        Initialize class for Spherical-like coordinate systems.
+
+        :raises ValueError: If an unrecognized Spherical-like coordinate system is specified.
+        """
         M_PI = par.register_CodeParameter(
             "#define",
             self.CodeParam_modulename,
@@ -875,7 +880,11 @@ class ReferenceMetric:
         # END: Set universal attributes for all spherical-like coordinate systems:
 
     def prolate_spheroidal_like(self) -> None:
-        """Initialize class for Prolate spheroidal (SymTP)-like coordinate systems."""
+        """
+        Initialize class for Prolate spheroidal (SymTP)-like coordinate systems.
+
+        :raises ValueError: If an unrecognized Prolate spheroidal (SymTP)-like coordinate system is specified.
+        """
         M_PI, M_SQRT1_2 = par.register_CodeParameters(
             "#define",
             self.CodeParam_modulename,
@@ -1073,7 +1082,11 @@ class ReferenceMetric:
         # END: Set universal attributes for all prolate-spheroidal-like coordinate systems:
 
     def cylindrical_like(self) -> None:
-        """Initialize class for Cylindrical-like coordinate systems."""
+        """
+        Initialize class for Cylindrical-like coordinate systems.
+
+        :raises ValueError: If an unrecognized Cylindrical-like coordinate system is specified.
+        """
         M_PI = par.register_CodeParameter(
             "#define",
             self.CodeParam_modulename,

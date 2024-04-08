@@ -95,8 +95,6 @@ class CCodeGen:
         :param include_braces: Boolean to decide whether to include braces.
         :param fp_type: floating-point data type, such as 'double'.
         :param fp_type_alias: Infrastructure-specific alias for the C/C++ floating point data type. E.g., 'REAL' or 'CCTK_REAL'.
-        :param fp_ccg_type: floating-point C code gen type used by sympy to deduce character literals
-        :param ccg_type_aliases: All type aliases to by used by sympy C codegen
         :param verbose: Boolean to enable verbose output.
         :param enable_cse: Boolean to enable common subexpression elimination.
         :param cse_sorting: Sorting method for common subexpression elimination.
@@ -117,8 +115,16 @@ class CCodeGen:
         :param enable_fd_functions: Boolean to enable finite difference functions.
         :param mem_alloc_style: Memory allocation style.
         :param upwind_control_vec: Upwind control vector as a symbol or list of symbols.
+        :param symbol_to_Rational_dict: Dictionary mapping sympy symbols to their corresponding sympy Rationals.
         :param clang_format_enable: Boolean to enable clang formatting.
         :param clang_format_options: Options for clang formatting.
+
+        :raises ValueError: If 'fp_type' is not recognized as a valid floating-point type.
+        :raises ValueError: If SIMD optimizations are enabled but the floating-point type is not 'double'.
+        :raises ValueError: If 'upwind_control_vec' is not a sympy Symbol or a list of sympy Symbols.
+        :raises ValueError: If 'fd_order' is not an even, positive integer.
+        :raises ValueError: If SIMD optimizations are requested but the floating-point type is incompatible.
+
         >>> c = CCodeGen(fp_type="double")
         >>> c.fp_type
         'double'
@@ -249,7 +255,15 @@ class CCodeGen:
             )
 
     def __repr__(self) -> str:
-        """Create a human readable representation of the CCodeGen object and what's in it."""
+        """
+        Create a human-readable representation of the CCodeGen object and what's in it.
+
+        Generates a string representation of the CCodeGen instance, detailing its configuration
+        settings and options in a format that is easy to read and understand. This can be useful
+        for debugging or logging purposes, providing quick insights into the instance's state.
+
+        :return: A string that represents the current state and configuration of the CCodeGen object.
+        """
         return generate_class_representation()
 
 
@@ -267,6 +281,11 @@ def c_codegen(
     :param sympyexpr: A SymPy expression or list of SymPy expressions to be converted.
     :param output_varname_str: A string or list of strings representing the variable name(s) in the output.
     :param kwargs: Additional keyword arguments for customization. They are used to initialize a CCodeGen object.
+
+    :raises TypeError: If either `sympyexpr` or `output_varname_str` is a tuple, as tuples can cause issues in this function.
+    :raises ValueError: If the length of `sympyexpr` and `output_varname_str` do not match, indicating a mismatch between the number of expressions and output variable names.
+    :raises ValueError: Under various conditions within the function that are specific to the configuration provided via `kwargs`, such as incompatible options or unsupported configurations.
+
     :return: A string containing the generated C code.
 
     >>> x, y, z = sp.symbols("x y z", real=True)
