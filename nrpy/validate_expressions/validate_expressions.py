@@ -53,6 +53,8 @@ def assert_equal(
     :param vardict_2: A SymPy expression or dictionary of SymPy expressions to compare with vardict_1.
     :param suppress_message: If False, prints a success message when the assertion passes.
 
+    :raises AssertionError: If the expressions or their elements are not equal.
+
     Doctests:
     >>> from sympy import sin, cos
     >>> from sympy.abc import x
@@ -250,7 +252,7 @@ def process_dictionary_of_expressions(
     Process a dictionary of symbolic expressions and convert them to a dictionary of numerical expressions.
 
     :param dictionary: The input dictionary with symbolic expressions.
-    :param fixed_mpfs_for_free_symbols: Flag to indicate if the mpf values should be fixed.
+    :param fixed_mpfs_for_free_symbols: Whether to fix mpf values for free symbols
     :param verbose: Flag to indicate if the function should print verbose output.
 
     :return: A dictionary with the numerical evaluation of the symbolic expressions.
@@ -287,6 +289,7 @@ def check_zero(
     Check if a given expression evaluates to zero.
 
     :param expression: The SymPy expression to check.
+    :param fixed_mpfs_for_free_symbols: Whether to fix mpf values for free symbols
     :param verbose: Flag for additional output.
     :return: True if the expression evaluates to zero, else False.
 
@@ -328,6 +331,8 @@ def output_trusted(
     :param os_getcwd: The current working directory. Use os.getcwd()
     :param trusted_file_basename: The base name for the trusted file.
     :param results_dict: The dictionary containing the results to output as trusted.
+
+    :raises RuntimeError: If an error occurs during file writing.
     """
     output_str = f"trusted_dict = {results_dict}\n"
 
@@ -373,6 +378,9 @@ def compare_against_trusted(
     :param os_getcwd: The current working directory. Use os.getcwd()
     :param trusted_file_basename: The base name for the trusted file.
     :param results_dict: The dictionary containing the results to compare against trusted.
+
+    :raises ImportError: If the trusted dictionary module cannot be imported.
+    :raises ValueError: If there's a mismatch in the number of tested expressions or their values.
     """
     # Calculate the relative path to the directory where the trusted file will be stored
     trusted_file_relpath = Path(os_path_abspath).relative_to(os_getcwd).parent
