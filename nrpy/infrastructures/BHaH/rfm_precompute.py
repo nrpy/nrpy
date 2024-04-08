@@ -158,6 +158,7 @@ def register_CFunctions_rfm_precompute(
     Register C functions for reference metric precomputed lookup arrays.
 
     :param list_of_CoordSystems: List of coordinate systems to register the C functions.
+    :param fp_type: Floating point type, e.g., "double".
     """
     combined_BHaH_defines_list = []
     for CoordSystem in list_of_CoordSystems:

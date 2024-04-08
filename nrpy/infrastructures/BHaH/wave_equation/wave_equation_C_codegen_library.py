@@ -45,6 +45,7 @@ def register_CFunction_exact_solution_single_Cartesian_point(
     :param default_k0: The default value for the plane wave wavenumber k in the x-direction.
     :param default_k1: The default value for the plane wave wavenumber k in the y-direction.
     :param default_k2: The default value for the plane wave wavenumber k in the z-direction.
+    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -94,8 +95,9 @@ def register_CFunction_initial_data(
     """
     Register the initial data function for the wave equation with specific parameters.
 
-    :param enable_checkpointing: Attempt to read from a checkpoint file before generating initial data.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
+    :param enable_checkpointing: Attempt to read from a checkpoint file before generating initial data.
+    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -320,6 +322,7 @@ def register_CFunction_rhs_eval(
     :param enable_simd: Whether to enable SIMD.
     :param enable_KreissOliger_dissipation: Whether to enable Kreiss-Oliger dissipation, to damp high-frequency noise.
     :param OMP_collapse: Level of OpenMP loop collapsing.
+    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """

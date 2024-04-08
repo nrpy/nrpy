@@ -60,6 +60,7 @@ def register_CFunction_rhs_eval(
     :param KreissOliger_strength_mult_by_W: Whether to multiply Kreiss-Oliger strength by W.
     :param KreissOliger_strength_gauge: Gauge strength for Kreiss-Oliger dissipation.
     :param KreissOliger_strength_nongauge: Non-gauge strength for Kreiss-Oliger dissipation.
+    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """

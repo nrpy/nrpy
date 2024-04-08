@@ -250,6 +250,7 @@ def single_RK_substep_input_symbolic(
     :param enable_simd: Whether SIMD optimization is enabled.
     :param gf_aliases: Additional aliases for grid functions.
     :param post_post_rhs_string: String to be used after the post-RHS phase.
+    :param fp_type: Floating point type, e.g., "double".
 
     :return: A string containing the generated C code.
     """
@@ -410,6 +411,7 @@ def register_CFunction_MoL_step_forward_in_time(
     :param enable_rfm_precompute: Flag to enable reference metric functionality.
     :param enable_curviBCs: Flag to enable curvilinear boundary conditions.
     :param enable_simd: Flag to enable SIMD functionality.
+    :param fp_type: Floating point type, e.g., "double".
 
     :return: None
 
@@ -830,6 +832,7 @@ def register_CFunctions(
     :param enable_curviBCs: Enable curvilinear boundary conditions. Default is False.
     :param enable_simd: Enable Single Instruction, Multiple Data (SIMD). Default is False.
     :param register_MoL_step_forward_in_time: Whether to register the MoL step forward function. Default is True.
+    :param fp_type: Floating point type, e.g., "double".
 
     :return: None
 

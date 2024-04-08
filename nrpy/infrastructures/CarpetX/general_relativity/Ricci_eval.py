@@ -38,6 +38,7 @@ def register_CFunction_Ricci_eval(
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param enable_simd: Whether to enable SIMD (Single Instruction, Multiple Data).
     :param fd_order: Order of finite difference method
+    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """

@@ -179,6 +179,7 @@ def register_CFunction_cfl_limited_timestep(
     is the minimum spacing between neighboring gridpoints on a numerical grid.
 
     :param CoordSystem: The coordinate system used for the simulation.
+    :param fp_type: Floating point type, e.g., "double".
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = f"Output minimum gridspacing ds_min on a {CoordSystem} numerical grid."
@@ -326,6 +327,7 @@ def register_CFunctions(
     :param Nxx_dict: Dictionary containing number of grid points.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions.
+    :param fp_type: Floating point type, e.g., "double".
     """
     for CoordSystem in list_of_CoordSystems:
         register_CFunction_numerical_grid_params_Nxx_dxx_xx(

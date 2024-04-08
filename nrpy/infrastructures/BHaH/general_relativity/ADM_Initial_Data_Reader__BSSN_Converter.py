@@ -44,6 +44,7 @@ def register_CFunction_exact_ADM_ID_function(
     :param BU: partial_t beta upper indices.
     :param gammaDD: The 3-metric with lower indices.
     :param KDD: The extrinsic curvature with lower indices.
+    :param fp_type: Floating point type, e.g., "double".
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = f"{IDtype} initial data"
@@ -123,6 +124,7 @@ def Cfunction_ADM_SphorCart_to_Cart(
 
     :param IDCoordSystem: The input coordinate system. Defaults to "Spherical".
     :param include_T4UU: Whether to include the stress-energy tensor. Defaults to False.
+    :param fp_type: Floating point type, e.g., "double".
 
     :return: The name of the generated C function.
     """
@@ -253,6 +255,7 @@ def Cfunction_ADM_Cart_to_BSSN_Cart(
     Convert ADM variables in the Cartesian basis to BSSN variables in the Cartesian basis.
 
     :param include_T4UU: Boolean flag to indicate whether to include T4UU or not.
+    :param fp_type: Floating point type, e.g., "double".
 
     :return: A string representing the full C function.
     """
@@ -331,6 +334,7 @@ def Cfunction_BSSN_Cart_to_rescaled_BSSN_rfm(
 
     :param CoordSystem: Coordinate system to which the variables are to be transformed.
     :param include_T4UU: Whether to include T4UU tensor in the transformation.
+    :param fp_type: Floating point type, e.g., "double".
     :return: Returns the generated C code as a string.
     """
     desc = rf"""Cartesian -> {CoordSystem} basis transformation of BSSN vectors/tensors *except* lambda^i.
@@ -453,6 +457,7 @@ def Cfunction_initial_data_lambdaU_grid_interior(
     Compute lambdaU in the specified coordinate system.
 
     :param CoordSystem: The coordinate system to be used.
+    :param fp_type: Floating point type, e.g., "double".
     :return: The full function generated for computing lambdaU.
     """
     cfunc_type = "static void"
@@ -535,6 +540,7 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     :param include_T4UU: Whether to include stress-energy tensor components.
     :param enable_fd_functions: Whether to enable finite-difference functions.
     :param ID_persist_struct_str: String for persistent ID structure.
+    :param fp_type: Floating point type, e.g., "double".
     """
     # Step 1: construct this function's contribution to BHaH_defines.h:
     BHd = r"""typedef struct __initial_data_struct__ {
