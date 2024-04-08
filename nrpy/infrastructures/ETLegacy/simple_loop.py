@@ -27,7 +27,10 @@ def simple_loop(
     :param enable_OpenMP: Enable loop parallelization using OpenMP
     :param OMP_custom_pragma: Enable loop parallelization using OpenMP with custom pragma
     :param OMP_collapse: Specifies the number of nested loops to collapse
+
     :return: Complete loop code, output as a string.
+
+    :raises ValueError: If an unsupported loop region is specified.
 
     Doctests:
     >>> from nrpy.helpers.generic import clang_format

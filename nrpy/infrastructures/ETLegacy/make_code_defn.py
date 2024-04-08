@@ -25,7 +25,6 @@ def output_CFunctions_and_construct_make_code_defn(
 
     :param project_dir: Project directory, usually "project/{arrangement of thorns directory}".
     :param thorn_name: Name of the thorn for which the make.code.defn file is generated.
-    :return: None
     """
     # Initialize an empty list to collect CFunction objects belonging to the thorn
     make_code_defn_list_of_CFunctions: List[cfc.CFunction] = []

@@ -64,7 +64,7 @@ jobs:
         mypy --version
         black --version
 
-    - name: Run doctests, black, mypy, and pylint on each file.
+    - name: Run doctests, black, mypy, pylint, pydocstyle, and darglint on each file.
       run: |
         failed_tests=()
         # Use find to locate python files based on pattern or directory structure.
@@ -79,7 +79,7 @@ jobs:
             DOCTEST_MODE=1 PYTHONPATH=.:$PYTHONPATH python $python_file || { failed_tests+=("doctest in $python_file"); break; }
           fi
           # Turns out that black in Python 3.6 & 3.7 has a heart attack when parsing equations/general_relativity/BSSN_quantities.py:
-          # INTERNAL ERROR: Black produced code that is not equivalent to the source. Please report a bug on .... [HOW ABOUT NO. BEGGING FOR WONTFIX]
+          # INTERNAL ERROR: Black produced code that is not equivalent to the source. Please report a bug on ....
           if [[ "${{ matrix.python-version }}" != "3.6.7" && "${{ matrix.python-version }}" != "3.7.13" && "${{ matrix.python-version }}" != "3.8.18" ]]; then
             echo "-={ Step 2: black $python_file }=-"
             black --check $python_file || { failed_tests+=("black in $python_file"); break; }
@@ -103,6 +103,8 @@ jobs:
           PYTHONPATH=.:$PYTHONPATH pylint --rcfile=.pylintrc $python_file || true
           echo "-={ Step 5: pydocstyle }=-"
           pydocstyle $python_file || { failed_tests+=("pydocstyle in $python_file"); break; }
+          echo "-={ Step 6: darglint }=-"
+          darglint -v 2 $python_file || { failed_tests+=("darglint in $python_file"); break; }
         done
 
         if [ ${#failed_tests[@]} -ne 0 ]; then

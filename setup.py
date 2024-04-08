@@ -24,7 +24,7 @@ def check_python_version() -> None:
     """
     Check for the minimum Python version (3.6 or newer).
 
-    :raises SystemExit if the Python version is less than 3.6.
+    :raises SystemExit: If the Python version is less than 3.6.
     """
     if sys.version_info < (3, 6):
         raise SystemExit(
