@@ -40,7 +40,7 @@ class LorentzBoost:
 
         :param vBoost: 3-velocity vector in Cartesian coordinates for boost direction.
 
-        :return LorentzMatrix: Lorentz transformation matrix in Cartesian coordinates.
+        :return: A 4x4 Lorentz transformation matrix in Cartesian coordinates.
         """
         # Step 1: Compute Lorentz factor from 3-velocity
         vBoost2 = sp.sympify(0)
@@ -83,7 +83,7 @@ class LorentzBoost:
 
         :param vectorU: 4-vector in Cartesian coordinates to be boosted.
 
-        :return boosted_vectorU: Boosted 4-vector in Cartesian coordinates.
+        :return: Boosted 4-vector in Cartesian coordinates.
         """
         # Declare Lorentz matrix locally
         LorentzMatrix = self.LorentzMatrix
@@ -103,7 +103,7 @@ class LorentzBoost:
 
         :param vectorU: 4-vector in Cartesian coordinates to be inversely boosted.
 
-        :return inverse_boosted_vectorU: Inversely boosted 4-vector in Cartesian coordinates.
+        :return: Inversely boosted 4-vector in Cartesian coordinates.
         """
         # Declare inverse Lorentz matrix locally
         InverseLorentzMatrix = self.InverseLorentzMatrix
@@ -125,7 +125,7 @@ class LorentzBoost:
 
         :param vectorD: Vector in Cartesian coordinates to be boosted.
 
-        :return boosted_vectorD: Boosted vector in Cartesian coordinates.
+        :return: Boosted vector in Cartesian coordinates.
         """
         # Declare inverse Lorentz matrix locally
         InverseLorentzMatrix = self.InverseLorentzMatrix
@@ -145,7 +145,7 @@ class LorentzBoost:
 
         :param tensorDD: tensor in Cartesian coordinates to be boosted.
 
-        :return boosted_tensorDD: Boosted tensor in Cartesian coordinates.
+        :return: Boosted tensor in Cartesian coordinates.
         """
         # Declare inverse Lorentz matrix locally
         InverseLorentzMatrix = self.InverseLorentzMatrix
@@ -173,7 +173,7 @@ class LorentzBoost:
 
         :param tensorDDD: tensor in Cartesian coordinates to be boosted.
 
-        :return boosted_tensorDDD: Boosted tensor in Cartesian coordinates.
+        :return: Boosted tensor in Cartesian coordinates.
         """
         # Declare inverse Lorentz matrix locally
         InverseLorentzMatrix = self.InverseLorentzMatrix
@@ -202,9 +202,9 @@ class LorentzBoost:
         """
         Boost a tensor with three four indices.
 
-        :param tensorDDD: tensor in Cartesian coordinates to be boosted.
+        :param tensorDDDD: tensor in Cartesian coordinates to be boosted.
 
-        :return boosted_tensorDDD: Boosted tensor in Cartesian coordinates.
+        :return: Boosted tensor in Cartesian coordinates.
         """
         # Declare inverse Lorentz matrix locally
         InverseLorentzMatrix = self.InverseLorentzMatrix

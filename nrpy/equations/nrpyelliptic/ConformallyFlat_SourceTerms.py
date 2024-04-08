@@ -112,7 +112,14 @@ def VU_cart_two_punctures(
         vec1: Union[List[sp.Symbol], List[sp.Expr]],
         vec2: Union[List[sp.Symbol], List[sp.Expr]],
     ) -> sp.Expr:
-        """Compute dot product of two vectors in 3D space, assuming Cartesian coordinates."""
+        """
+        Compute the dot product of two vectors in 3D space, assuming Cartesian coordinates.
+
+        :param vec1: A 3D vector represented as a list of sympy expressions or symbols.
+        :param vec2: Another 3D vector represented as a list of sympy expressions or symbols.
+
+        :return: The dot product of vec1 and vec2 as a sympy expression.
+        """
         vec1_dot_vec2 = sp.sympify(0)
         for i in range(dimension):
             vec1_dot_vec2 += vec1[i] * vec2[i]
@@ -122,7 +129,14 @@ def VU_cart_two_punctures(
         vec1: Union[List[sp.Symbol], List[sp.Expr]],
         vec2: Union[List[sp.Symbol], List[sp.Expr]],
     ) -> List[sp.Expr]:
-        """Compute cross product of two vectors in 3D space, assuming Cartesian coordinates."""
+        """
+        Compute the cross product of two vectors in 3D space, assuming Cartesian coordinates.
+
+        :param vec1: A 3D vector represented as a list of sympy expressions or symbols.
+        :param vec2: Another 3D vector represented as a list of sympy expressions or symbols.
+
+        :return: The cross product of vec1 and vec2 as a list of sympy expressions.
+        """
         vec1_cross_vec2 = ixp.zerorank1()
         LeviCivitaSymbol = ixp.LeviCivitaSymbol_dim3_rank3()
         for i in range(dimension):
@@ -134,7 +148,15 @@ def VU_cart_two_punctures(
     def VU_cart_single_puncture(
         xU: List[sp.Symbol], PU: List[sp.Symbol], SU: List[sp.Symbol]
     ) -> List[sp.Expr]:
-        """Compute Bowen-York vector for a single puncture."""
+        """
+        Compute the Bowen-York vector for a single puncture, given the puncture's position, linear momentum, and spin.
+
+        :param xU: A list of sympy symbols representing the Cartesian coordinates of the puncture's position.
+        :param PU: A list of sympy symbols representing the Cartesian components of the puncture's linear momentum.
+        :param SU: A list of sympy symbols representing the Cartesian components of the puncture's spin.
+
+        :return: A list of sympy expressions representing the Cartesian components of the Bowen-York vector field at the puncture.
+        """
         r = sp.sympify(0)
         for i in range(dimension):
             r += sp.Pow(xU[i], 2)
@@ -193,7 +215,14 @@ def ADD_conf_cartesian(
 
     # Define Kronecker delta symbol as a function
     def kronecker_delta(i: int, j: int) -> sp.Expr:
-        """Compute Kronecker delta symbol."""
+        """
+        Compute the Kronecker delta symbol, which is 1 if the indices are equal and 0 otherwise.
+
+        :param i: The first index of the Kronecker delta.
+        :param j: The second index of the Kronecker delta.
+
+        :return: A sympy expression representing the Kronecker delta symbol for the given indices.
+        """
         delta_ij = sp.sympify(0) if i == j else sp.sympify(1)
         return cast(sp.Expr, delta_ij)
 
@@ -253,7 +282,14 @@ def psi_background_cartesian(
     def psi_background_cartesian_single_puncture(
         bare_mass: sp.Expr, xU: List[sp.Expr]
     ) -> sp.Expr:
-        """Compute conformal factor for a single puncture."""
+        """
+        Compute the conformal factor for a single puncture in a conformally flat space.
+
+        :param bare_mass: The bare mass of the puncture.
+        :param xU: A list of sympy expressions representing the Cartesian coordinates of the puncture's position.
+
+        :return: A sympy expression representing the conformal factor at the puncture's location.
+        """
         # Compute distance of puncture from the origin
         r = sp.sympify(0)
         for i in range(dimension):

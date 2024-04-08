@@ -76,7 +76,11 @@ def SphericalGaussian(
     """
     Set up initial data for a spherically-symmetric Gaussian wave.
 
-    :param default_sigma: The default value for sigma, defaults to 3
+    :param default_sigma: The default value for sigma, defaults to 3.
+
+    :return: A tuple containing sympy expressions for the exact solution of the wave equation uu,
+             the time derivative of the wave equation solution vv, and their respective values at
+             the origin (r=0), uu_exactsoln_r0 and vv_exactsoln_r0.
     """
     # Step 1: Set up Cartesian coordinates (x, y, z) = (xCart0, xCart1, xCart2)
     xCart = ixp.declarerank1("xCart")
@@ -139,9 +143,12 @@ def PlaneWave(
     """
     Set up initial data for a monochromatic plane wave.
 
-    :param default_k0: The default value for k0, defaults to 1
-    :param default_k1: The default value for k1, defaults to 1
-    :param default_k2: The default value for k2, defaults to 1
+    :param default_k0: The default value for k0, defaults to 1.
+    :param default_k1: The default value for k1, defaults to 1.
+    :param default_k2: The default value for k2, defaults to 1.
+
+    :return: A tuple containing sympy expressions for the exact solution of the wave equation uu
+             and its time derivative vv.
     """
     # Step 1: Set up Cartesian coordinates (x, y, z) = (xCart0, xCart1, xCart2)
     xCart = ixp.declarerank1("xCart")

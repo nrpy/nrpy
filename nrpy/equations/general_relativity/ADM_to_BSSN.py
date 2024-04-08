@@ -39,8 +39,9 @@ class ADM_to_BSSN:
         :param betaU: Input 3-vector shift.
         :param BU: Input 3-vector B.
         :param CoordSystem: String describing the coordinate system of the inputs.
-        :param enable_rfm_precompute: Boolean flag to enable reference metric precomputation
+        :param enable_rfm_precompute: Boolean flag to enable reference metric precomputation.
         :param compute_cf_only: Boolean flag to compute only the conformal factor.
+        :raises ValueError: If the EvolvedConformalFactor_cf parameter is set to an unknown value.
         """
         # Step 2: All ADM quantities were input into this function in the Spherical or Cartesian
         #         basis, as functions of r,th,ph or x,y,z, respectively. In Steps 1 and 2 above,
@@ -168,6 +169,8 @@ if __name__ == "__main__":
         Set up Static Trumpet initial data.
 
         Cannot import InitialData_Spherical here, as that would result in a circular dependency.
+
+        :return: A tuple containing metric tensor, extrinsic curvature tensor, lapse function, shift vector, and B vector.
         """
         M, r, th = sp.symbols("M r th", real=True)
         psi0 = sp.sqrt(1 + M / r)
