@@ -51,7 +51,7 @@ def chain(*iterable: Iterable[Any]) -> Generator[Any, None, None]:
     Chains several iterables together.
 
     :param iterable: A sequence of iterables to chain together.
-    :return: A generator that yields elements from each iterable in sequence.
+    :yield: A generator that yields elements from each iterable in sequence.
 
     Doctest:
     >>> list(chain([1], [2, 3], [4, 5]))
@@ -130,7 +130,7 @@ def product(
 
     :param iterable: A sequence of iterables.
     :param kwargs: An optional keyword argument 'repeat' to specify a repetition of a single iterable.
-    :return: A generator that yields tuples, each containing one element from each input iterable.
+    :yield: A generator that yields tuples, each containing one element from each input iterable.
 
     Doctests:
     >>> list(product(['a', 'b'], [1, 2, 3]))

@@ -127,6 +127,8 @@ def register_func_call(name: str, args: Dict[str, Any]) -> None:
 
     :param name: Name of the function.
     :param args: Arguments to pass to the function.
+
+    :raises ValueError: If a function call with the same name and arguments has already been registered.
     """
     if name + str(args) in ParallelCodeGen_dict:
         raise ValueError(f"Already registered {name + str(args)}.")
@@ -140,9 +142,18 @@ def get_nested_function(
     """
     Retrieve a nested function from a specified Python module.
 
+    This function dynamically imports a Python module using its dot-separated path and
+    then navigates through the module's attributes to find a nested function or callable
+    object based on a dot-separated function name. If the module cannot be imported, an
+    AttributeError occurs during navigation, or the final object is not callable, appropriate
+    exceptions are raised.
+
     :param module_path: The dot-separated path to the Python module.
     :param function_name: The dot-separated path to the nested function within the module.
     :return: The nested function if found.
+    :raises ImportError: If the module cannot be imported.
+    :raises AttributeError: If an attribute error occurs during navigation to the nested function.
+    :raises TypeError: If the specified path does not lead to a callable function.
     """
     try:
         module = import_module(module_path)
@@ -170,6 +181,7 @@ def parallel_function_call(PCG: Any) -> NRPyEnv_type:
 
     :param PCG: The ParallelCodeGen object containing function details.
     :return: The result of the function call, packed as NRPyEnv_type.
+    :raises RuntimeError: If an error occurs during the dynamic retrieval or the call of the function.
     """
     try:
         module_path = PCG.module_path

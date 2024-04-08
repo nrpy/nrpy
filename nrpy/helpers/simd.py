@@ -40,99 +40,111 @@ from nrpy.helpers.cse_preprocess_postprocess import cse_preprocess
 
 # Basic Arithmetic Operations (Debugging)
 def AbsSIMD_check(a: Symbol) -> Any:
-    """Check that AbsSIMD(a) evaluates to sympy's Abs(a)."""
+    """
+    Check that AbsSIMD(a) evaluates to sympy's Abs(a).
+
+    :param a: The symbol to be evaluated.
+    :return: The absolute value of symbol `a`.
+    """
     return Abs(a)
 
 
 def ConstSIMD_check(a: Basic) -> Float:
-    """Convert a sympy Basic type to a Float with 34 digits of precision."""
+    """
+    Convert a sympy Basic type to a Float with 34 digits of precision.
+
+    :param a: The sympy Basic expression to be converted.
+    :return: A floating-point number with 34 digits of precision.
+    """
     return Float(a, 34)
 
 
 def nrpyAbsSIMD_check(a: Symbol) -> Any:
-    """Check that nrpyAbsSIMD(a) evaluates to sympy's Abs(a)."""
+    """
+    Check that nrpyAbsSIMD(a) evaluates to sympy's Abs(a).
+
+    :param a: The symbol to be evaluated.
+    :return: The absolute value of symbol `a`.
+    """
     return Abs(a)
 
 
 def AddSIMD_check(a: Symbol, b: Symbol) -> Any:
-    """Perform addition operation for sympy Symbols."""
+    """
+    Perform addition operation for sympy Symbols.
+
+    :param a: The first operand.
+    :param b: The second operand.
+    :return: The sum of `a` and `b`.
+    """
     return a + b
 
 
 def SubSIMD_check(a: Symbol, b: Symbol) -> Any:
-    """Perform subtraction operation for sympy Symbols."""
+    """
+    Perform subtraction operation for sympy Symbols.
+
+    :param a: The minuend.
+    :param b: The subtrahend.
+    :return: The difference of `a` and `b`.
+    """
     return a - b
 
 
 def MulSIMD_check(a: Symbol, b: Symbol) -> Any:
-    """Perform multiplication operation for sympy Symbols."""
+    """
+    Perform multiplication operation for sympy Symbols.
+
+    :param a: The first factor.
+    :param b: The second factor.
+    :return: The product of `a` and `b`.
+    """
     return a * b
 
 
 def FusedMulAddSIMD_check(a: Symbol, b: Symbol, c: Symbol) -> Any:
-    """Perform fused multiply-add operation for sympy Symbols."""
+    """
+    Perform fused multiply-add operation for sympy Symbols.
+
+    :param a: The multiplicand.
+    :param b: The multiplier.
+    :param c: The addend.
+    :return: The result of `a * b + c`.
+    """
     return a * b + c
 
 
 def FusedMulSubSIMD_check(a: Symbol, b: Symbol, c: Symbol) -> Any:
-    """Perform fused multiply-subtract operation for sympy Symbols."""
+    """
+    Perform fused multiply-subtract operation for sympy Symbols.
+
+    :param a: The multiplicand.
+    :param b: The multiplier.
+    :param c: The subtrahend.
+    :return: The result of `a * b - c`.
+    """
     return a * b - c
 
 
-def NegFusedMulAddSIMD_check(a: Symbol, b: Symbol, c: Symbol) -> Any:
-    """Perform negated fused multiply-add operation for sympy Symbols."""
-    return -a * b + c
-
-
-def NegFusedMulSubSIMD_check(a: Symbol, b: Symbol, c: Symbol) -> Any:
-    """Perform negated fused multiply-subtract operation for sympy Symbols."""
-    return -a * b - c
-
-
 def DivSIMD_check(a: Symbol, b: Symbol) -> Any:
-    """Perform division operation for sympy Symbols."""
+    """
+    Perform division operation for sympy Symbols.
+
+    :param a: The dividend.
+    :param b: The divisor.
+    :return: The quotient of `a` divided by `b`.
+    """
     return a / b
 
 
 def signSIMD_check(a: Basic) -> Any:
-    """Find the sign of a sympy Basic type."""
+    """
+    Find the sign of a sympy Basic type.
+
+    :param a: The expression to evaluate the sign of.
+    :return: The sign of `a`.
+    """
     return sign(a)
-
-
-# Transcendental Operations (Debugging)
-def PowSIMD_check(a: Symbol, b: Symbol) -> Any:
-    """Perform exponentiation operation for sympy Symbols."""
-    return a**b
-
-
-def SqrtSIMD_check(a: Symbol) -> Any:
-    """Calculate the square root of a sympy Symbol."""
-    return a ** (Rational(1, 2))
-
-
-def CbrtSIMD_check(a: Symbol) -> Any:
-    """Calculate the cube root of a sympy Symbol."""
-    return a ** (Rational(1, 3))
-
-
-def ExpSIMD_check(a: Symbol) -> Any:
-    """Calculate the exponential of a sympy Symbol."""
-    return exp(a)
-
-
-def LogSIMD_check(a: Symbol) -> Any:
-    """Calculate the natural logarithm of a sympy Symbol."""
-    return log(a)
-
-
-def SinSIMD_check(a: Symbol) -> Any:
-    """Calculate the sine of a sympy Symbol."""
-    return sin(a)
-
-
-def CosSIMD_check(a: Symbol) -> Any:
-    """Calculate the cosine of a sympy Symbol."""
-    return cos(a)
 
 
 def expr_convert_to_simd_intrins(
@@ -144,15 +156,19 @@ def expr_convert_to_simd_intrins(
     debug: bool = False,
 ) -> Union[Basic, Expr]:
     """
-    Convert expression to SIMD compiler intrinsics.
+    Convert a given SymPy expression into one that uses SIMD compiler intrinsics.
 
-    :param expr: SymPy expression
-    :param symbol_to_Rational_dict: Dictionary that maps symbols to rationals.
-    :param prefix: Prefix for the function calls.
-    :param simd_find_more_FMAsFMSs: Option to find more FMA/FMS patterns.
-    :param clean_NegativeOnes_after_processing: Option to back-substitute and check difference.
-    :param debug: Debug mode flag.
-    :return: Expression containing SIMD compiler intrinsics.
+    :param expr: The SymPy expression to be converted.
+    :param symbol_to_Rational_dict: An optional dictionary mapping symbols in `expr` to Rational numbers.
+    :param prefix: A prefix to prepend to generated SIMD function names.
+    :param simd_find_more_FMAsFMSs: When True, attempts to find more fused multiply-add/subtract patterns.
+    :param clean_NegativeOnes_after_processing: If True, `-1` symbols are cleaned after processing.
+    :param debug: Enables debug mode, which includes additional validation of the transformation.
+
+    :return: A transformed SymPy expression using SIMD intrinsics.
+
+    :raises Warning: If debug mode is enabled and the transformed expression differs from the original,
+                      indicating a potential issue with the conversion process.
 
     Doctests:
     >>> from sympy.abc import a, b, c, d
@@ -772,10 +788,13 @@ def copy_simd_intrinsics_h(project_dir: str) -> None:
     Copy simd_intrinsics.h into the specified project directory.
 
     :param project_dir: The path of the project directory where the file will be copied.
-    :return: None
 
-    :raises ImportError: If necessary libraries are not found.
-    :raises FileNotFoundError: If source file is not found.
+    :raise ImportError: If the importlib.resources module is not found, indicating
+                         a Python version earlier than 3.7 where this module was introduced.
+    :raise FileNotFoundError: If the simd_intrinsics.h source file is not found within
+                               the package resources.
+    :raise AttributeError: If the files method is not found in importlib.resources,
+                            indicating a Python version earlier than 3.9.
     """
     simd_path = Path(project_dir) / "simd"
     simd_path.mkdir(parents=True, exist_ok=True)
