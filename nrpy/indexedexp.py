@@ -106,11 +106,16 @@ def declare_indexedexp(
     """
     Generate an indexed expression of specified rank and dimension.
 
-    :param idx_expr_basename: Base name for the indexed expression.
-                              If None, no symbolic representation will be generated.
-    :param kwargs: Additional keyword arguments that specify properties of the indexed expression.
-                   E.g., rank, dimension, and symmetry.
-    :return: An indexed expression of the specified properties.
+    This function creates a symbolic representation for tensors or indexed expressions
+    based on provided specifications like rank, dimension, and symmetry.
+
+    :param idx_expr_basename: Base name for the indexed expression. If None,
+                              a symbolic representation is not generated.
+    :param kwargs: Properties of the indexed expression such as 'rank', 'dimension', and 'symmetry'.
+    :return: An indexed expression or tensor as specified.
+
+    :raises ValueError: If 'symmetry' is not a recognized pattern, if 'dimension' or 'rank'
+                        are not correctly specified, or if 'idx_expr_basename' is invalid.
 
     Doctest 1: convert a symmetric rank-2 tensor to a 1D list & find the number of unique indices.
     >>> ixp = declare_indexedexp('M', rank=2, dimension=3, symmetry='sym01')
@@ -498,10 +503,12 @@ def zero_out_derivatives_across_symmetry_axes(
     IDX_EXPR: Sequence[_recur_symbol_type],
 ) -> _recur_symbol_type:
     """
-    Check if an index object performs a derivative across a symmetry axis.
+    Zero derivatives across specified symmetry axes in an indexed expression.
 
-    :param IDX_EXPR: The expression to check for derivatives across symmetry axes.
-    :return: Zeroed out derivatives across symmetry axes of the expression if any.
+    :param IDX_EXPR: Indexed expression to process.
+    :return: The modified expression with derivatives across symmetry axes set to zero.
+    :raises ValueError: If the expression indicates a derivative of order greater than 2,
+                        as this is not supported.
 
     >>> zero_out_derivatives_across_symmetry_axes(declarerank1("trK_dD"))
     [trK_dD0, trK_dD1, trK_dD2]

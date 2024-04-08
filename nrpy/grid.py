@@ -80,29 +80,42 @@ class GridFunction:
     def read_gf_from_memory_Ccode_onept(
         self, i0_offset: int = 0, i1_offset: int = 0, i2_offset: int = 0, **kwargs: Any
     ) -> str:
-        """Catch-all function for gridfunctions that haven't been set up correctly."""
+        """
+        Catch-all function for gridfunctions that haven't been set up correctly.
+
+        This function serves as a placeholder for the specific `read_gf_from_memory_Ccode_onept` implementations within
+        gridfunction classes. It should be overridden in specific gridfunction classes to generate C code for reading
+        a single point of a gridfunction from memory, taking into account any provided offsets.
+
+        :param i0_offset: The offset in the 0th (e.g., x) direction from the current grid point. Default is 0.
+        :param i1_offset: The offset in the 1st (e.g., y) direction from the current grid point. Default is 0.
+        :param i2_offset: The offset in the 2nd (e.g., z) direction from the current grid point. Default is 0.
+        :param kwargs: Additional keyword arguments that might be necessary for specific implementations.
+        :return: A string representing the C code required to read a gridfunction's value from memory at the specified offsets.
+                 As this is a catch-all function, it returns a message prompting to define the function properly within grid.py.
+
+        Example:
+            Assuming an instance `gf` of a GridFunction class with properly overridden `read_gf_from_memory_Ccode_onept` method,
+            calling `gf.read_gf_from_memory_Ccode_onept(i0_offset=1)` would return the C code as a string for reading the gridfunction
+            value at an offset of 1 in the x direction from the current point.
+        """
         return f"Please define read_gf_from_memory_Ccode_onept() inside grid.py. Inputs: [class instance] {i0_offset} {i1_offset} {i2_offset} {kwargs}"
 
     def verify_gridfunction_basename_is_valid(self, name: str) -> None:
         """
         Validate the gridfunction's base name.
 
-        Raises a ValueError if base name is zero-length or ends with an integer.
-        Raises TypeError if the base name is not a string.
-
         Gridfunction base names must not end with integers. For instance, a rank-1
         gridfunction 'vecU1' has a valid base name 'vecU'. A scalar gridfunction
         named 'u2' would have an invalid base name 'u2'. This strict requirement
         facilitates quick identification of a gridfunction by its name.
 
-        :param name: The name of the gridfunction.
+        :param name: The name of the gridfunction to validate.
 
-        Raises
-        ------
-        ValueError
-            If the name is of zero length or ends with an integer.
-        TypeError
-            If the name is not of type str.
+        :raises ValueError: If the name is of zero length or ends with an integer, indicating
+                            it does not meet the naming conventions for gridfunctions.
+        :raises TypeError: If the name is not of type str, ensuring that gridfunction names
+                           are always represented by strings.
 
         Example:
             >>> try: GF = GridFunction(name="h1")
@@ -168,8 +181,16 @@ class GridFunction:
         """
         Set the parity types for a given list of grid function names.
 
+        This method looks up each grid function name in the global grid function dictionary
+        (`glb_gridfcs_dict`) to determine and set the appropriate parity type based on the
+        grid function's rank and spatial dimension. The parity type is an integer that encodes
+        how the grid function transforms under spatial inversion (parity transformation).
+
         :param list_of_gf_names: List of grid function names for which to set the parity types.
         :return: A list of integers representing the parity types for the grid functions.
+        :raises ValueError: If unable to determine the parity type for any of the grid functions
+                            based on their names, ranks, and dimensions, or if the number of
+                            determined parity types does not match the number of input grid function names.
         """
         parity_type: List[int] = []
         for name in list_of_gf_names:
@@ -308,8 +329,6 @@ class BHaHGridFunction(GridFunction):
 
         :return: Formatted string.
 
-        :raises ValueError: If 'gf_array_name' is not provided in kwargs.
-
         Doctests:
         >>> glb_gridfcs_dict.clear()
         >>> par.set_parval_from_str("Infrastructure", "BHaH")
@@ -349,8 +368,6 @@ class BHaHGridFunction(GridFunction):
         :param gf_array_name: Optional grid function array name.
 
         :return: Formatted string.
-
-        :raises ValueError: If 'gf_array_name' is not provided.
 
         Doctests:
         >>> BHaHGridFunction.access_gf("aa", 1,2,3)
@@ -495,8 +512,6 @@ class ETLegacyGridFunction(GridFunction):
 
         :return: Formatted string.
 
-        :raises ValueError: If 'gf_array_name' is not provided.
-
         Doctests:
         >>> ETLegacyGridFunction.access_gf("aa", 1,2,3)
         'aaGF[CCTK_GFINDEX3D(cctkGH, i0+1, i1+2, i2+3)]'
@@ -525,7 +540,6 @@ class ETLegacyGridFunction(GridFunction):
         :param i2_offset: Offset for the third index
         :param kwargs: Optional keyword arguments.
         :return: Formatted string
-        :raises ValueError: If 'gf_array_name' is not provided in kwargs or if kwargs are passed when they shouldn't be.
 
         Doctests:
         >>> glb_gridfcs_dict.clear()
@@ -678,8 +692,6 @@ class CarpetXGridFunction(GridFunction):
 
         :return: Formatted string.
 
-        :raises ValueError: If 'gf_array_name' is not provided.
-
         Doctests:
         >>> CarpetXGridFunction.access_gf("aa",1,2,3)
         'aaGF(p.I + 1*p.DI[0] + 2*p.DI[1] + 3*p.DI[2])'
@@ -712,7 +724,6 @@ class CarpetXGridFunction(GridFunction):
         :param i2_offset: Offset for the third index
         :param kwargs: Optional keyword arguments.
         :return: Formatted string
-        :raises ValueError: If 'gf_array_name' is not provided in kwargs or if kwargs are passed when they shouldn't be.
 
         Doctests:
         >>> glb_gridfcs_dict.clear()
@@ -768,11 +779,13 @@ def register_gridfunctions(
     names: Union[str, List[str]], dimension: int = 3, **kwargs: Any
 ) -> List[sp.Symbol]:
     """
-    Register grid functions with a specified name or list of names.
+    Register grid functions and return corresponding SymPy symbols.
 
-    :param names: A name or list of names of grid functions to be registered.
-    :param kwargs: Additional keyword arguments.
-    :return: A list of sympy symbols representing the registered grid functions.
+    :param names: Grid function name(s) to register.
+    :param dimension: Spatial dimension, default is 3.
+    :param kwargs: Properties like 'group', 'f_infinity', 'wavespeed', 'is_basename'.
+    :return: List of SymPy symbols for the registered grid functions.
+    :raises ValueError: If the infrastructure is not recognized.
 
     Doctests:
     >>> glb_gridfcs_dict.clear()
@@ -841,11 +854,12 @@ def register_gridfunctions_for_single_rank1(
     basename: str, dimension: int = 3, **kwargs: Any
 ) -> Sequence[sp.Expr]:
     """
-    Register gridfunctions for a single rank 1 variable.
+    Register rank-1 gridfunction components based on a basename.
 
-    :param basename: Base name of the gridfunction to register.
-    :param kwargs: Additional keyword arguments for registration.
-    :return: List of SymPy symbols.
+    :param basename: Base name for gridfunction components.
+    :param dimension: Spatial dimension, corresponds to number of components. Default is 3.
+    :param kwargs: Additional options for registration.
+    :return: List of SymPy symbols for the components.
 
     Doctests:
     >>> glb_gridfcs_dict.clear()
@@ -885,6 +899,7 @@ def register_gridfunctions_for_single_rank2(
 
     :param basename: Base name of the gridfunction to register.
     :param symmetry: Optional symmetry for rank 2 gridfunctions.
+    :param dimension: Spatial dimension. Default is 3.
     :param kwargs: Additional keyword arguments for registration.
     :return: 2D list of SymPy symbols.
 
