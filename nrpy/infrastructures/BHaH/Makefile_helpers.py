@@ -15,6 +15,7 @@ from typing import List, Optional
 import cpuinfo  # type: ignore
 
 from nrpy.c_function import CFunction_dict
+from nrpy.helpers.generic import clang_format
 
 
 def output_CFunctions_function_prototypes_and_construct_Makefile(
@@ -27,6 +28,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     CC: str = "autodetect",
     create_lib: bool = False,
     include_dirs: Optional[List[str]] = None,
+    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
     """
     Output C functions registered to CFunction_dict and construct a Makefile for compiling C code.
@@ -40,6 +42,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     :param CC: C compiler to use. Defaults to "autodetect" (clang if using Darwin, gcc otherwise)
     :param create_lib: Whether to create a library. Defaults to False.
     :param include_dirs: List of include directories. Must be a list.
+    :param clang_format_options: Options for the clang-format tool. Defaults to "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
 
     :raises SystemExit: Exits if errors are encountered.
     :raises FileNotFoundError: If the specified C compiler is not found.
@@ -125,8 +128,10 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     with open(
         project_Path / "BHaH_function_prototypes.h", "w", encoding="utf-8"
     ) as file:
+        outstr = ""
         for key in sorted(CFunction_dict.keys()):
-            file.write(f"{CFunction_dict[key].function_prototype}\n")
+            outstr += f"{CFunction_dict[key].function_prototype}\n"
+        file.write(clang_format(outstr, clang_format_options=clang_format_options))
 
     if CC == "autodetect":
         if os_name == "Darwin":
