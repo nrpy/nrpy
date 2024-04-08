@@ -19,7 +19,6 @@ def register_CFunction_specify_NewRad_BoundaryConditions_parameters(
     for a thorn in the Einstein Toolkit.
 
     :param thorn_name: The name of the NRPy+ generated thorn for which to set up NewRad boundary conditions.
-    :return: None
     """
     includes = [
         "math.h",
@@ -83,7 +82,6 @@ def register_CFunctions(thorn_name: str) -> None:
     Register C functions related to boundary conditions for the given thorn.
 
     :param thorn_name: The name of the thorn for which to register C functions related to boundary conditions.
-    :return: None
     """
     register_CFunction_specify_NewRad_BoundaryConditions_parameters(
         thorn_name=thorn_name

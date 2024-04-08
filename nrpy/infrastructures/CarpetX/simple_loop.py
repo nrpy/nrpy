@@ -25,7 +25,10 @@ def simple_loop(
     :param loop_region: Specifies the loop region (e.g., 'all points', 'interior').
     :param loop_centering: Specifies the centering of the loop (0 = 'V', 1 = 'C').
     :param run_on_device: Flag to run loop kernel on device (GPU) instead of host (CPU).
+
     :return: The complete loop code as a string.
+
+    :raises ValueError: If an unsupported loop region is specified.
 
     Doctests:
     >>> from nrpy.helpers.generic import clang_format

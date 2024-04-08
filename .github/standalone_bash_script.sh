@@ -47,6 +47,9 @@ for python_file in $python_files; do
 
   echo "-={ Step 5: pydocstyle }=-"
   pydocstyle $python_file || { failed_tests+=("pydocstyle in $python_file"); break; }
+
+  echo "-={ Step 6: darglint }=-"
+  darglint -v 2 $python_file || { failed_tests+=("darglint in $python_file"); break; }
 done
 
 # Exit with failure if any tests failed

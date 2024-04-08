@@ -25,6 +25,9 @@ def read_CodeParameters(
 
     :return: A string that contains the generated C code.
 
+    :raises KeyError: If a code parameter name has not been registered.
+    :raises ValueError: If attempting to declare a char array in SIMD.
+
     Doctests:
     >>> _, __ = par.register_CodeParameters(cparam_type="CCTK_REAL", module="ignore", names=["a", "b"], defaultvalues=0.125)
     >>> outstr = read_CodeParameters(list_of_tuples__thorn_CodeParameter=[("thorna", "a"), ("thornb", "b")],

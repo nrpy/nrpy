@@ -19,7 +19,6 @@ def register_CFunction_specify_Driver_BoundaryConditions(thorn_name: str) -> Non
     Einstein Toolkit.
 
     :param thorn_name: The name of the thorn for which to specify boundary conditions.
-    :return: None
     """
     includes = [
         "stdio.h",
@@ -93,7 +92,6 @@ def register_CFunction_specify_evol_BoundaryConditions(thorn_name: str) -> None:
     are specified based on the `Boundary` method in the Einstein Toolkit.
 
     :param thorn_name: The name of the thorn for which to specify boundary conditions.
-    :return: None
     """
     includes = [
         "stdio.h",
@@ -167,7 +165,6 @@ def register_CFunction_specify_aux_BoundaryConditions(thorn_name: str) -> None:
     Einstein Toolkit.
 
     :param thorn_name: The name of the thorn for which to specify boundary conditions.
-    :return: None
     """
     includes = [
         "stdio.h",
@@ -237,7 +234,6 @@ def register_CFunction_specify_NewRad_BoundaryConditions_parameters(
     for a thorn in the Einstein Toolkit.
 
     :param thorn_name: The name of the NRPy+ generated thorn for which to set up NewRad boundary conditions.
-    :return: None
     """
     includes = ["math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
     desc = """
@@ -294,7 +290,6 @@ def register_CFunctions(thorn_name: str) -> None:
     Register C functions related to boundary conditions for the given thorn.
 
     :param thorn_name: The name of the thorn for which to register C functions related to boundary conditions.
-    :return: None
     """
     register_CFunction_specify_Driver_BoundaryConditions(thorn_name=thorn_name)
     register_CFunction_specify_evol_BoundaryConditions(thorn_name=thorn_name)

@@ -1020,9 +1020,7 @@ def register_CFunction_psi4_tetrad(
 
 
 def register_CFunction_psi4_spinweightm2_decomposition_on_sphlike_grids() -> None:
-    """
-    Register C function for decomposing psi4 into spin-weighted spherical harmonics.
-    """
+    """Register C function for decomposing psi4 into spin-weighted spherical harmonics."""
     prefunc = r"""
 static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1,const int Nxx_plus_2NGHOSTS2,
                                                     const REAL dxx1, const REAL dxx2,
