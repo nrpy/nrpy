@@ -35,16 +35,19 @@ def cse_preprocess(
     """
     Perform CSE Preprocessing on given expressions.
 
-    Replaces all integers and rationals with temporary placeholder variables
-    that allow for partial factorization.
+    Replace all integers and rationals in the given expression(s) with symbols
+    to allow for improved factorization and simplification. It can declare -1 as a symbol,
+    perform partial factorization, and include the negative symbol in factorization.
 
-    :param expr_list: Single SymPy expression or list of SymPy expressions.
-    :param prefix: String prefix for variable names (i.e. rational symbols).
-    :param declare_neg1_as_symbol: If true, declares a symbol for negative one (i.e. _NegativeOne_).
-    :param factor: If true, performs partial factorization (excluding negative symbol).
-    :param negative: If true, includes negative symbol in partial factorization.
-    :param debug: If true, back-substitutes and checks difference for debugging.
-    :return: Tuple containing modified SymPy expression(s) and a dictionary mapping symbols to rational numbers.
+    :param expr_list: A single expression or a list of expressions to preprocess.
+    :param prefix: Prefix for generated symbol names.
+    :param declare_neg1_as_symbol: If True, declares -1 as a symbol for reuse.
+    :param factor: If True, performs partial factorization on the expressions.
+    :param negative: If True, includes the negative symbol in the partial factorization.
+    :param debug: If True, checks that the substitution doesn't change the expression value.
+    :return: A tuple of the modified expression(s) and a dictionary mapping new symbols to their rational equivalents.
+
+    :raises ValueError: If `debug` is True and the substitution results in a change of the expression value.
 
     Doctests:
     >>> from sympy.abc import x, y, z
