@@ -21,8 +21,10 @@ class BSSN_to_ADM:
         """
         Initialize the BSSN_to_ADM class, sets: betaU, gammaDD, gammaDDdD, gammaDDdDD, gammaUU, detgamma, GammaUDD, KDD, KDDdD.
 
-        :param CoordSystem: String describing the coordinate system of the inputs.
+        :param CoordSystem: Coordinate system to use.
         :param enable_rfm_precompute: Boolean flag to enable reference metric precomputation
+
+        :raises ValueError: If the EvolvedConformalFactor_cf parameter is set to an unknown value.
         """
         # Step 1.b: Set EvolvedConformalFactor_cf from NRPy+ parameter
         EvolvedConformalFactor_cf = par.parval_from_str("EvolvedConformalFactor_cf")

@@ -29,6 +29,7 @@ class HyperbolicRelaxationCurvilinearRHSs:
         Compute the right-hand sides (RHSs) of the hyperbolic relaxation equation in curvilinear coordinates.
 
         :param CoordSystem: The coordinate system being used.
+        :param enable_rfm_precompute: Whether to enable reference metric precomputation.
 
         .. note::
             Class variables uu_rhs, vv_rhs, and residual will be set in this function.

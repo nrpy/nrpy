@@ -22,6 +22,7 @@ def T4UU_and_ADM_to_SDD_SD_S_rho(
     Define BSSN source terms in terms of T^{mu nu} and ADM variables.
 
     :param gammaDD: 3x3 spatial part of the ADM metric tensor, gamma_{ij}
+    :param betaU: shift vector beta^i
     :return: Returns a tuple containing the BSSN source terms SDD, SD, S, and rho.
     """
     # Step 1: Define gamma4DD[mu][nu] = g_{mu nu} + n_{mu} n_{nu}

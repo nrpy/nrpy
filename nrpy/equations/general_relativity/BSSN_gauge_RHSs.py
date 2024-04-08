@@ -42,6 +42,8 @@ def BSSN_gauge_RHSs(
     :param ShiftEvolutionOption: Specifies the shift condition to use.
 
     :return: Returns a tuple of sympy expressions for the right-hand-side of the gauge evolution equations.
+
+    :raises ValueError: If LapseEvolutionOption or ShiftEvolutionOption parameters are set to unsupported values.
     """
     # Step 1.b: Given the chosen coordinate system, set up
     #           corresponding reference metric and needed

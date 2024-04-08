@@ -48,6 +48,7 @@ class WaveEquationCurvilinear_RHSs:
         Compute the right-hand sides (RHSs) of the scalar wave equation in curvilinear coordinates.
 
         :param CoordSystem: The coordinate system being used.
+        :param enable_rfm_precompute: Enable reference metric precomputation.
 
         .. note::
             Class variables uu_rhs and vv_rhs will be set in this function.

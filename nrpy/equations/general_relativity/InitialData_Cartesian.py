@@ -27,6 +27,8 @@ class InitialData_Cartesian:
 
         :param IDtype: The initial data type.
         :param override_gauge_with_standard: Whether to override gauge with standard values or not.
+
+        :raises ValueError: If IDtype not a supported option.
         """
         self.IDtype = IDtype
 

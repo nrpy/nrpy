@@ -79,8 +79,6 @@ def register_CFunction_numerical_grids_and_timestep_setup() -> None:
     This function calls the cfc.register_CFunction method to register a C function
     responsible for the setup of numerical grids and time steps. It defines essential parameters,
     including grid dimensions, time steps, and other related quantities.
-
-    :return: None
     """
     includes = ["BHaH_defines.h"]
     desc = r"""Set up cell-centered Cartesian grids."""
@@ -382,8 +380,6 @@ def register_CFunction_apply_bcs() -> None:
     This function registers a C function responsible for applying spatial boundary
     conditions to the scalar wave grid functions. Quadratic polynomial extrapolation
     is used to update boundary conditions on all six faces of the 3D grid cube.
-
-    :return: None
     """
     includes = ["BHaH_defines.h"]
     desc = """Apply (quadratic extrapolation) spatial boundary conditions to the scalar wave gridfunctions.

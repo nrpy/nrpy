@@ -42,8 +42,6 @@ class WaveEquation_RHSs:
         """
         Construct right-hand-sides (RHSs) for wave equation in Cartesian coordinates.
 
-        :return: None
-
         .. note::
             Class variables uu_rhs and vv_rhs will be set in this function.
         """

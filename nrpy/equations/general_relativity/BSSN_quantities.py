@@ -34,10 +34,12 @@ class BSSNQuantities:
         self, CoordSystem: str = "Cartesian", enable_rfm_precompute: bool = False
     ) -> None:
         """
-        Set up all BSSN quantities & store to the class object.
+        Initialize and set up all BSSN quantities, storing them within the class object.
 
-        :param CoordSystem: (string) The coordinate system being used, defaults to "Cartesian"
-        :param enable_rfm_precompute: (bool) Whether to enable precomputation for reference metric, defaults to False
+        :param CoordSystem: The coordinate system being used, defaults to "Cartesian".
+        :param enable_rfm_precompute: Whether to enable precomputation for reference metric, defaults to False.
+        :raises ValueError: If detgbarOverdetghat_equals_one=False and full implementation is not provided.
+        :raises ValueError: If EvolvedConformalFactor_cf is not one of "W", "chi", or "phi".
         """
         # Step 2: Register all needed BSSN gridfunctions if needed.
 
@@ -550,11 +552,7 @@ class BSSNQuantities:
         # Step 9.a.v: Error out if unsupported EvolvedConformalFactor_cf choice is made:
         cf_choice = par.parval_from_str("EvolvedConformalFactor_cf")
         if cf_choice not in ("phi", "W", "chi"):
-            raise ValueError(
-                "EvolvedConformalFactor_cf == "
-                + par.parval_from_str("EvolvedConformalFactor_cf")
-                + " unsupported!"
-            )
+            raise ValueError(f"EvolvedConformalFactor_cf == {par.parval_from_str('EvolvedConformalFactor_cf')} unsupported!")
 
         # Step 9.b: Define phi_dBarD = phi_dD (since phi is a scalar) and phi_dBarDD (covariant derivative)
         #          \bar{D}_i \bar{D}_j \phi = \phi_{;\bar{i}\bar{j}} = \bar{D}_i \phi_{,j}

@@ -86,7 +86,11 @@ class InitialData_Spherical:
 
     # fmt: off
     def UIUCBlackHole(self) -> Tuple[List[List[sp.Expr]], List[List[sp.Expr]]]:
-        """Set ADM quantities for a spinning black hole in the UIUC initial data slicing, Liu, Etienne, & Shapiro (2009) https://arxiv.org/pdf/1001.4077.pdf."""
+        """
+        Set ADM quantities for a spinning black hole in the UIUC initial data slicing, Liu, Etienne, & Shapiro (2009) https://arxiv.org/pdf/1001.4077.pdf.
+
+        :return: A tuple containing the 3-metric gammaDD and the extrinsic curvature KDD.
+        """
         M, chi = par.register_CodeParameters("REAL", __name__, ["M", "chi"], [1.0, 0.99], commondata=True)
         r = self.r
         th = self.th
@@ -154,7 +158,11 @@ class InitialData_Spherical:
         return gammaDD, KDD
 
     def StaticTrumpet(self) -> Tuple[List[List[sp.Expr]],List[List[sp.Expr]], sp.Expr, List[sp.Expr], List[sp.Expr]]:
-        """Set ADM quantities for trumpet black hole initial data, Dennison and Baumgarte (2014) https://arxiv.org/pdf/1403.5484.pdf."""
+        """
+        Set ADM quantities for trumpet black hole initial data, Dennison and Baumgarte (2014) https://arxiv.org/pdf/1403.5484.pdf.
+
+        :return: A tuple containing the 3-metric (gammaDD), the extrinsic curvature (KDD), the lapse function (alpha), the shift vector (betaU), and its time derivative (BU).
+        """
         M = par.register_CodeParameter("REAL", __name__, "M", 1.0, commondata=True)
         r = self.r
         th = self.th
@@ -209,6 +217,8 @@ class InitialData_Spherical:
         """
         Set ADM quantities for a spinning black hole in Kerr-Schild coordinates, with a radial offset r0 removing r<r0 region.
         See e.g., Etienne et al (2017) https://arxiv.org/pdf/1704.00599.pdf
+
+        :return: A tuple containing the 3-metric (gammaDD), the extrinsic curvature (KDD), the lapse function (alpha), the shift vector (betaU), and its time derivative (BU).
         """
         M, a, r0 = par.register_CodeParameters("REAL", __name__, ["M", "a", "r0"], [1.0, 0.9, 1.0], commondata=True)
         r = self.r
