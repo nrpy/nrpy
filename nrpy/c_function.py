@@ -145,7 +145,24 @@ class CFunction:
         return len(folders)
 
     def generate_full_function(self) -> Tuple[str, str]:
-        """Construct a full C function from a class instance."""
+        """
+        Construct a full C function from a class instance.
+
+        This method combines various components of a C function, including includes,
+        pre-function definitions, function description, function prototype, and body,
+        into a single, formatted C function string. It also optionally applies clang-format
+        to the generated C function string based on the instance's clang format options.
+
+        The generated C function string includes necessary includes for CodeParameters,
+        infrastructure-specific handling for includes, and any pre-function definitions provided.
+        It formats the description as a C comment block and constructs the function body with
+        proper indentation and formatting. If enabled, clang-format is applied to the generated
+        string using the instance's specified formatting options.
+
+        :return: A tuple containing two strings: the raw C function string and the clang-formatted C function string.
+
+        :raises TypeError: If any item in the `includes` list is not a string.
+        """
         rel_path_to_root_directory = ""
         for _ in range(self.subdirectory_depth(self.subdirectory)):
             rel_path_to_root_directory = os.path.join(rel_path_to_root_directory, "..")

@@ -195,6 +195,9 @@ def compute_fdcoeffs_fdstencl(
     :return: A tuple containing two lists. The first list contains the finite difference coefficients
              as sympy.Rational numbers, and the second list contains the stencils as lists of integers.
 
+    :raises ValueError: If "DDD" is found in `derivstring`, indicating that only derivatives up to second order
+                        are currently supported by this function.
+
     Note:
     This function computes the finite difference coefficients and stencil points for various derivative types
     specified in `derivstring`. The coefficients are determined using the inverse of the finite difference matrix,
@@ -368,8 +371,6 @@ def extract_list_of_deriv_var_strings_from_sympyexpr_list(
 
     :returns: List of derivative variables, creating _ddnD in case upwinding is enabled with control vector.
 
-    :raises ValueError: If a variable in the SymPy expression isn't registered as a gridfunction or Cparameter.
-
     Doctest:
     >>> import nrpy.indexedexp as ixp
     >>> from typing import cast
@@ -392,15 +393,11 @@ def extract_list_of_deriv_var_strings_from_sympyexpr_list(
             if any(s in str(var) for s in ["_dD", "_dKOD", "_dupD", "_ddnD"]):
                 list_of_deriv_vars_with_duplicates.append(var)
             else:
+                # At one time this raised a ValueError that
+                #   All variables in SymPy expressions passed to FD_c_codegen() must be registered
+                #   in NRPy+ as either a gridfunction or CodeParameter.
+                # We are now more permissive.
                 pass
-                # err_msg = (
-                #     f'Error: Unregistered variable "{var}" in SymPy expression. '
-                #     "All variables in SymPy expressions passed to FD_c_codegen() must be registered "
-                #     "in NRPy+ as either a gridfunction or Cparameter, by calling "
-                #     f'{var} = register_gridfunctions...() (in ixp/grid) if "{var}" is a gridfunction, or '
-                #     f"{var} = Cparameters() (in par) otherwise (e.g., if it is a free parameter set at C runtime)."
-                # )
-                # raise ValueError(err_msg)
 
     list_of_deriv_vars = superfast_uniq(list_of_deriv_vars_with_duplicates)
     # For upwinding with respect to a control vector (e.g., BSSN shift vector), for each variable
@@ -578,6 +575,9 @@ def read_gfs_from_memory(
     :param enable_simd: Indicates whether SIMD (Single Instruction, Multiple Data) should be enabled or not.
 
     :return: A string containing C code representing the reading of grid functions at the necessary points in memory.
+
+    :raises ValueError: If the SIMD infrastructure is not correctly specified for the current setup,
+                        indicating a mismatch or unsupported configuration for SIMD optimizations.
 
     >>> import nrpy.indexedexp as ixp
     >>> gri.glb_gridfcs_dict.clear()
@@ -926,13 +926,18 @@ def proto_FD_operators_to_sympy_expressions(
     """
     Convert finite difference (FD) operators to SymPy expressions.
 
-    :param list_of_proto_deriv_symbs: List of prototype derivative variables (e.g., [sp.Symbol("dDD12")])
-    :param fd_order: Finite-difference accuracy order
+    :param list_of_proto_deriv_symbs: List of prototype derivative variables (e.g., [sp.Symbol("dDD12")]).
+    :param fd_order: Finite-difference accuracy order.
     :param fdcoeffs: List of finite difference coefficients.
     :param fdstencl: List of finite difference stencils.
-    :param enable_simd: Whether to enable SIMD.
-
-    :return: Tuple containing the list of SymPy expressions for the finite difference operators and the corresponding left-hand side variable names.
+    :param enable_simd: Whether to enable SIMD in the resulting expressions.
+    :return: A tuple containing:
+             - A list of SymPy expressions for the finite difference operators,
+             - A list of corresponding left-hand side variable names,
+             - A dictionary mapping intermediate symbols in the expressions to their numerical values as `sp.Rational`.
+    :raises ValueError: If the last character of a derivative operator is not an integer, indicating a parsing error,
+                        or if the operator string does not start with an expected pattern such as "dDD", "dKOD", "dD", "dupD", or "ddnD",
+                        suggesting an unsupported or incorrectly specified derivative operator.
 
     >>> import nrpy.indexedexp as ixp
     >>> gri.glb_gridfcs_dict.clear()

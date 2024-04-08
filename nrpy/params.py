@@ -74,17 +74,19 @@ class CodeParameter:
         add_to_glb_code_params_dict: bool = True,
     ) -> None:
         """
-        Initialize the CodeParameter object.
+        Initialize a CodeParameter with various properties and assumptions.
 
-        :param cparam_type: C/C++ type for the parameter.
-        :param module: The module where the parameter is defined.
-        :param name: The name of the parameter.
-        :param defaultvalue: The default value for the parameter (default: "unset").
-        :param assumption: Assumption related to the symbol; can be "Real" or "RealPositive" (default: "Real").
-        :param commondata: Parameter is common to all grids (True), or each grid has its own value for this parameter (default: False).
-        :param add_to_parfile: Allow parameter to be set within a parameter file (default: True).
-        :param add_to_set_CodeParameters_h: Add parameter to set_CodeParameters*.h (default: True). Only applies for BHaH.
-        :param add_to_glb_code_params_dict: Whether to add the parameter to the global code parameters dictionary (default: True).
+        :param cparam_type: The data type in C/C++ for the parameter.
+        :param module: The module where this parameter is defined.
+        :param name: Name of the parameter.
+        :param defaultvalue: Default value of the parameter, "unset" by default.
+        :param assumption: Type of symbolic assumption, "Real" or "RealPositive".
+        :param commondata: If True, parameter is common across all grids. Defaults to False.
+        :param add_to_parfile: If True, include this parameter in parameter files. Default is True.
+        :param add_to_set_CodeParameters_h: If True, add to set_CodeParameters*.h, applicable for BHaH. Default is True.
+        :param add_to_glb_code_params_dict: If True, add to global code parameters dictionary. Default is True.
+        :raises ValueError: If `defaultvalue` is "unset" for a parameter intended for a parfile, or if an unsupported
+                            assumption is specified.
         """
         self.cparam_type = cparam_type
         self.module = module
@@ -153,14 +155,12 @@ def register_param(py_type: Any, module: str, name: str, value: Any) -> None:
 
 def parval_from_str(parameter_name: str) -> Any:
     """
-    Retrieve the value of an NRPyParameter object from a string.
+    Retrieve the parameter value from its name as a string.
 
-    Given a string, this function finds the value of the parameter with that name in the global parameters list.
-    It ignores any prefix including and before '::' in the parameter name.
-
-    :param parameter_name: Name of the parameter to find. Ignores any prefix including and before '::'.
-
-    :raises ValueError: If the parameter name is not found in the global parameters list.
+    :param parameter_name: The name of the parameter. If the parameter name includes a module prefix ('module::name'),
+                           only the part after '::' is considered.
+    :return: The value of the parameter. The type of the return value depends on the parameter's stored value.
+    :raises ValueError: If the specified parameter name does not exist in the global parameter dictionary.
 
     Doctest:
     >>> try: parval_from_str('non_existent_param')
