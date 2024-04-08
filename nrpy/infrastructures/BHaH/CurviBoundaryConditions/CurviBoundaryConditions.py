@@ -174,11 +174,14 @@ def Cfunction__EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(
     these coordinates back to an 'interior' point in eigencoordinate form. For cell-centered
     grids, this point aligns with a point on the numerical grid within round-off error.
     Finally, a check is done to ensure the conversion back to Cartesian matches the original
-    values; an error is thrown if not.
+    values; a runtime error is thrown if not.
 
     :param CoordSystem: The coordinate system for mapping.
     :param fp_type: Floating point type, e.g., "double".
+
     :return: Body of the C code.
+
+    :raises RuntimeError: If the conversion back to Cartesian coordinates does not match the original coordinates, indicating an error in the mapping process.
     """
     desc = """EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt():
   A coordinate system's "eigencoordinate" is the simplest member
@@ -1323,7 +1326,6 @@ def CurviBoundaryConditions_register_C_functions(
     :param set_parity_on_aux: If True, set parity on auxiliary grid functions.
     :param set_parity_on_auxevol: If True, set parity on auxiliary evolution grid functions.
     :param fp_type: Floating point type, e.g., "double".
-    :return: None
     """
     for CoordSystem in list_of_CoordSystems:
         # Register C function to set up the boundary condition struct.

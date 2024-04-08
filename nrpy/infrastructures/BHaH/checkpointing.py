@@ -23,7 +23,6 @@ def register_CFunction_read_checkpoint(
     Register read_checkpoint CFunction for reading checkpoints.
 
     :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
-    :return: None
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "unistd.h"]
     prefunc = r"""
@@ -107,7 +106,6 @@ def register_CFunction_write_checkpoint(
 
     :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
     :param default_checkpoint_every: The default checkpoint interval in physical time units.
-    :return: None
     """
     par.register_CodeParameter(
         "REAL", __name__, "checkpoint_every", default_checkpoint_every, commondata=True
@@ -195,7 +193,6 @@ def register_CFunctions(
 
     :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
     :param default_checkpoint_every: The default checkpoint interval in physical time units.
-    :return: None
     """
     register_CFunction_read_checkpoint(filename_tuple=filename_tuple)
     register_CFunction_write_checkpoint(

@@ -345,6 +345,8 @@ def validate(
     :param included_keys: A list of keys to access the desired Butcher table in Butcher_dict.
     :param verbose: A boolean indicating whether to print verbose output.
 
+    :raises ValueError: If validation fails.
+
     Doctests:
     >>> Butcher_dict = generate_Butcher_tables()
     >>> # validate(Butcher_dict, included_keys=["DP5", "DP5alt", "CK5", "DP6", "L6", "DP8", "AHE", "ABS", "ARKF", "ACK", "ADP5", "ADP8", "AB"], verbose=False)

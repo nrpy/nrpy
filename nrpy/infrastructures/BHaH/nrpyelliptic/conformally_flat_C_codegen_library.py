@@ -373,8 +373,6 @@ def register_CFunction_compute_L2_norm_of_gridfunction(
 
     :param CoordSystem: the rfm coordinate system.
     :param fp_type: Floating point type, e.g., "double".
-
-    :return: None
     """
     includes = ["BHaH_defines.h"]
     desc = "Compute l2-norm of a gridfunction assuming a single grid."

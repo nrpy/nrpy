@@ -45,6 +45,8 @@ def register_CFunction_exact_ADM_ID_function(
     :param gammaDD: The 3-metric with lower indices.
     :param KDD: The extrinsic curvature with lower indices.
     :param fp_type: Floating point type, e.g., "double".
+
+    :raises ValueError: If an unsupported coordinate system is specified, ensuring that the function generation is restricted to supported coordinate systems.
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = f"{IDtype} initial data"
@@ -541,6 +543,8 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     :param enable_fd_functions: Whether to enable finite-difference functions.
     :param ID_persist_struct_str: String for persistent ID structure.
     :param fp_type: Floating point type, e.g., "double".
+
+    :raises ValueError: If `addl_includes` is provided but is not a list, ensuring that additional includes are correctly formatted for inclusion.
     """
     # Step 1: construct this function's contribution to BHaH_defines.h:
     BHd = r"""typedef struct __initial_data_struct__ {

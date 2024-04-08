@@ -702,6 +702,7 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
 
     :param CoordSystem: The coordinate system to be used.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
+    :param enable_fd_functions: Whether to enable finite difference functions.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
     :param fp_type: Floating point type, e.g., "double".
 
@@ -1021,10 +1022,6 @@ def register_CFunction_psi4_tetrad(
 def register_CFunction_psi4_spinweightm2_decomposition_on_sphlike_grids() -> None:
     """
     Register C function for decomposing psi4 into spin-weighted spherical harmonics.
-
-    :param None: No parameters for this function.
-
-    :return: None if in registration phase, else the updated NRPy environment.
     """
     prefunc = r"""
 static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1,const int Nxx_plus_2NGHOSTS2,

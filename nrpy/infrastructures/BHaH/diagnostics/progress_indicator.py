@@ -48,6 +48,7 @@ def register_CFunction_progress_indicator(
     idea of the progress being made in the computation.
 
     :param progress_str: String representing the progress output format.
+    :param compute_ETA: Whether to compute the estimated time of arrival.
     """
     BHaH_defines_h.register_BHaH_defines(
         __name__,

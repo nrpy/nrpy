@@ -35,6 +35,8 @@ def register_CFunction_spin_weight_minus2_sph_harmonics(
     These spherical harmonics are computed at any (l, m) pair at a specific point (theta, phi).
 
     :param fp_type: Floating point type, e.g., "double".
+
+    :return: None if in the PCG registration phase, otherwise an NRPy environment object.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())

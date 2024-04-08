@@ -215,7 +215,10 @@ def simple_loop_1D(
     :param CoordSystem: Coordinate system, e.g., "Cartesian"
     :param out_quantities_dict: Output quantities dictionary
     :param axis: Specifies the axis of output: either "x" or "z" axis
+
     :return: Complete loop code, output as a string.
+
+    :raises ValueError: If CoordSystem is not supported by this function.
 
     Doctests:
     >>> from nrpy.helpers.generic import clang_format, compress_string_to_base64, decompress_base64_to_string, diff_strings
@@ -402,7 +405,10 @@ def simple_loop_2D(
     :param CoordSystem: Coordinate system, e.g., "Cartesian"
     :param out_quantities_dict: Dictionary of quantities to be output
     :param plane: Specifies the plane of output: either "xy" or "yz" (default)
+
     :return: Complete loop code, output as a string.
+
+    :raises ValueError: If CoordSystem is not supported by this function.
 
     Doctests:
     >>> from nrpy.helpers.generic import clang_format, compress_string_to_base64, decompress_base64_to_string, diff_strings

@@ -36,7 +36,11 @@ par.register_CodeParameters(
 
 
 def ID_persist_str() -> str:
-    """Return contents of ID_persist_struct for TwoPunctures initial data."""
+    """
+    Return contents of ID_persist_struct for TwoPunctures initial data.
+
+    :return: ID_persist_struct contents.
+    """
     return r"""
   derivs v;    // stores coefficients
   derivs cf_v; // stores coefficients
