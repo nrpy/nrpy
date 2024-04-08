@@ -2,6 +2,25 @@
 
 # NRPy 2: Python/SymPy-Based Code Generation for Numerical Relativity... and Beyond!
 
+## superB infrastructure
+
+1. pip install NRPy from the superB branch:
+
+    ```
+    pip install git+https://github.com/nishitajadoo/nrpy.git@superB
+    ```
+
+2. Run the following command:
+
+    ```
+    python3 -m nrpy.examples.superB_two_blackholes_collide
+    ```
+
+3. Install Charm++ following the instructions in [Charm++ documentation](https://charm.readthedocs.io/en/latest/charm++/manual.html#installing-charm). Then, go to `project/superB_two_blackholes_collide` and open the Makefile. Replace `"~/charm"` in `CC = ~/charm/bin/charmc` with the path to your Charm++ installation directory.
+
+4. Type `make` to build. Type `./charmrun +p4 ./superB_two_blackholes_collide` to run with 4 processors, for example. As in a BlackHoles@Home project parameters can be changed and output from `out0d-conv_factor1.00.txt` and `out0d-conv_factor2.00.txt` can be analyzed using e.g., `gnuplot`.
+
+
 ## Quick start, Step 1:
 
 ```
@@ -51,6 +70,7 @@ pip install nrpy
     ```
     python3 -m nrpy.examples.carpet_baikal_thorns
     ```
+
 ## Quick Start, Step 3
 
 1. If working with a BlackHoles@Home project: follow the directions at the end of the code generation, starting with "Now go into `[directory name]` and type `make` to build, then `[executable]` to run. Parameter file can be found in `[parameter filename]`."
