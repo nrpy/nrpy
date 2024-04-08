@@ -352,7 +352,6 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
 
     :param project_dir: The parameter file will be stored in project_dir.
     :param project_name: The name of the project.
-    :return: None
 
     Doctest:
     >>> _, __ = par.register_CodeParameters("REAL", "CodeParameters_c_files", ["a", "pi_three_sigfigs"], [1.0, 3.14], commondata=True)

@@ -43,15 +43,17 @@ def register_CFunction_diagnostics_nearest_grid_center(
     r"""
     Register C function for "0-dimensional" simulation diagnostics -- output data at gridpoint closest to grid center.
 
+    This function generates a C function that computes and outputs specified diagnostic quantities at the grid point nearest to the physical center of the grid for a given coordinate system. The output is written to a file whose name is specified by `filename_tuple`.
+
     :param CoordSystem: Specifies the coordinate system for the diagnostics.
     :param out_quantities_dict: Dictionary mapping (type, name) tuples to corresponding C definitions.
-       Example: {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}
+        Example: {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}
     :param filename_tuple: Tuple specifying the filename and its corresponding string format.
-       Default: ("out0d-conv_factor%.2f.txt", "convergence_factor")
+        Default: ("out0d-conv_factor%.2f.txt", "convergence_factor")
+
     :return: None if in registration phase, else the updated NRPy environment.
 
-    The function will generate a C function that unpacks grid functions, defines a filename based on the provided format,
-    and then computes and prints the specified diagnostic quantities to the file for the specific coordinate system provided.
+    :raises ValueError: If an unsupported coordinate system is specified, ensuring that diagnostics are only generated for coordinate systems with a defined grid center.
 
     Doctests:
     >>> from nrpy.helpers.generic import clang_format, compress_string_to_base64, decompress_base64_to_string, diff_strings

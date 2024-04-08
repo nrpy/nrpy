@@ -71,7 +71,16 @@ par.register_CodeParameters(
 
 
 def register_CFunction_NRPyPN_quasicircular_momenta() -> Union[None, pcg.NRPyEnv_type]:
-    """Register CFunction for setting quasicircular momenta using NRPyPN."""
+    """
+    Register CFunction for setting quasicircular momenta using NRPyPN.
+
+    This function generates a C function that computes the initial tangential and radial components of the
+    momenta for a binary system in a quasicircular orbit, based on post-Newtonian (PN) approximations.
+    The momenta are calculated using validated expressions from NRPyPN, a Python module for generating
+    symbolic PN expressions.
+
+    :return: None if in registration phase, else the updated NRPy environment.
+    """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None

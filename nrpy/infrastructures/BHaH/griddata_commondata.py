@@ -41,8 +41,6 @@ def register_griddata_commondata(
     :param description: Description of the module (default is empty string)
     :param is_commondata: Whether to register as commondata (default is False)
 
-    :raises ValueError: If the same declaration is registered into the same module twice
-
     Doctest:
     >>> register_griddata_commondata("my_module", "struct my_module", "my_module's description")
     >>> par.glb_extras_dict["griddata_struct"]["my_module"][0].c_declaration
@@ -90,7 +88,6 @@ def register_CFunction_griddata_free(
 
     :param enable_rfm_precompute: A flag to enable/disable rfm_precompute_free within the C function body.
     :param enable_CurviBCs: A flag to enable/disable freeing CurviBCs within the C function body.
-    :return: None
     """
     desc = """Free all memory within the griddata struct,
 except perhaps non_y_n_gfs (e.g., after a regrid, in which non_y_n_gfs are freed first)."""

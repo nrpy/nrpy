@@ -39,6 +39,8 @@ def register_CFunction_numerical_grid_params_Nxx_dxx_xx(
     :param CoordSystem: The coordinate system used for the simulation.
     :param grid_physical_size: The physical size of the grid.
     :param Nxx_dict: A dictionary that maps coordinate systems to lists containing the number of grid points along each direction.
+
+    :raises ValueError: If CoordSystem is not in Nxx_dict.
     """
     if CoordSystem not in Nxx_dict:
         raise ValueError(

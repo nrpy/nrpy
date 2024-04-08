@@ -75,6 +75,7 @@ def generate_gridfunction_names(
     Generate gridfunction names for the specified Method of Lines (MoL) method.
     Used for setting up MoL_malloc, MoL_step_forward_in_time, MoL_free, and BHaH_defines.h
 
+    :param Butcher_dict: Dictionary of Butcher tables for the MoL method.
     :param MoL_method: The MoL method to generate gridfunction names for.
     :return: A tuple containing y_n_gridfunctions, non_y_n_gridfunctions_list,
              diagnostic_gridfunctions_point_to, and diagnostic_gridfunctions2_point_to.
@@ -156,8 +157,11 @@ def register_CFunction_MoL_malloc(
     """
     Register MoL_malloc_y_n_gfs() and MoL_malloc_non_y_n_gfs(), allocating memory for the gridfunctions indicated.
 
+    :param Butcher_dict: Dictionary of Butcher tables for the MoL method.
     :param MoL_method: Method for the Method of Lines.
     :param which_gfs: Specifies which gridfunctions to consider ("y_n_gfs" or "non_y_n_gfs").
+
+    :raises ValueError: If the which_gfs parameter is neither "y_n_gfs" nor "non_y_n_gfs".
 
     Doctest: FIXME
     # >>> register_CFunction_MoL_malloc("Euler", "y_n_gfs")
@@ -253,6 +257,8 @@ def single_RK_substep_input_symbolic(
     :param fp_type: Floating point type, e.g., "double".
 
     :return: A string containing the generated C code.
+
+    :raises ValueError: If substep_time_offset_dt cannot be extracted from the Butcher table.
     """
     # Ensure all input lists are lists
     RK_lhs_list = [RK_lhs_list] if not isinstance(RK_lhs_list, list) else RK_lhs_list
@@ -412,8 +418,6 @@ def register_CFunction_MoL_step_forward_in_time(
     :param enable_curviBCs: Flag to enable curvilinear boundary conditions.
     :param enable_simd: Flag to enable SIMD functionality.
     :param fp_type: Floating point type, e.g., "double".
-
-    :return: None
 
     Doctest:
     # FIXME
@@ -768,7 +772,7 @@ def register_CFunction_MoL_free_memory(
     :param MoL_method: The Method of Lines method.
     :param which_gfs: The gridfunctions to be freed, either 'y_n_gfs' or 'non_y_n_gfs'.
 
-    :raise ValueError: If the 'which_gfs' argument is unrecognized.
+    :raises ValueError: If the 'which_gfs' argument is unrecognized.
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = f'Method of Lines (MoL) for "{MoL_method}" method: Free memory for "{which_gfs}" gridfunctions\n'
@@ -833,8 +837,6 @@ def register_CFunctions(
     :param enable_simd: Enable Single Instruction, Multiple Data (SIMD). Default is False.
     :param register_MoL_step_forward_in_time: Whether to register the MoL step forward function. Default is True.
     :param fp_type: Floating point type, e.g., "double".
-
-    :return: None
 
     Doctests:
     >>> from nrpy.helpers.generic import compress_string_to_base64, decompress_base64_to_string, diff_strings
