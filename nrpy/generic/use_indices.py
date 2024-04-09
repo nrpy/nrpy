@@ -273,8 +273,10 @@ class GF:
         self.subs : Dict[Expr, Expr] = dict()
         self.eqnlist : EqnList = EqnList()
         self.params : Dict[str,Param] = dict()
-        self.base_of : Dict[str, Symbol] = dict()
-        self.groups : Dict[str, Set[Symbol]] = dict()
+        self.base_of : Dict[str, str] = dict()
+        self.groups : Dict[str, List[str]] = dict()
+        self.props : Dict[str,List[Integer]] = dict()
+        self.defn : Dict[str,str] = dict()
 
     def add_param(self, name:str, default:param_default_type, desc:str, values:param_values_type=None)->Symbol:
         self.params[name] = Param(name, default, desc, values)
@@ -352,6 +354,7 @@ class GF:
         #globs = currentframe().f_back.f_globals
         ret = mkIndexedBase(basename, shape=tuple([dimension]*len(indices)) )
         self.gfs[basename] = ret
+        self.defn[basename] = f"{basename}{indices}"
         #globs[basename] = ret
         return ret
 
@@ -363,13 +366,24 @@ class GF:
             if base_zero:
                 inds = [abs(i)-1 for i in inds]
             subval_ = f(out, *inds)
-            if subval_.is_Symbol:
+            if subval_.is_Number:
+                pass
+            elif subval_.is_Function:
+                pass
+            else:
+                assert subval_.is_Symbol, f"{type(subval_)}, {subval_.__class__}, {subval_.is_Function}"
                 subval = cast(Symbol, subval_)
                 self.gfs[str(subval)] = subval
-                self.base_of[str(subval)] = out.base
-                members = self.groups.get(out.base, set())
-                members.add(subval)
+                self.base_of[str(subval)] = str(out.base)
+                if str(out.base) not in self.groups:
+                    self.groups[str(out.base)] = list()
+                members = self.groups[str(out.base)]
+                members.append(str(subval))
+                print(f"base of {subval} is {out.base}")
+                print(f"groups of {out.base} is {members}")
+            print(colorize(subval_,"red"),colorize("->","magenta"),colorize(inds,"cyan"))
             self.subs[out] = subval_
+            self.props[str(subval_)] = out.indices
 
     def expand_eqn(self, eqn:Eq)->List[Eq]:
         result : List[Eq] = list()

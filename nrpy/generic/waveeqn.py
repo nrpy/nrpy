@@ -8,6 +8,7 @@ from nrpy.generic.sympywrap import *
 from nrpy.generic.eqnlist import EqnList
 from nrpy.generic.use_indices import expand, add_sym, fill_in, GF, expand_free_indices
 from nrpy.infrastructures.ETLegacy.interface_ccl import construct_interface_ccl
+from nrpy.helpers.colorize_text import colorize
 
 i, j, k = mkIdxs('i j k')
 
@@ -44,14 +45,11 @@ gf.fill_in(p[-i], lambda _,i: mkSymbol(f"pD{i}"))
 
 # Fill in the deriv variables with a function call
 #
-div2 = Function("div2")
-def mkdiv2(var:str, a:int, b:int)->Symbol:
-    return cast(Symbol, div2(mkSymbol(var), sympify(a), sympify(b)))
-gf.fill_in(p_d[-i,-j], lambda _,i,j: mkdiv2("p",i,j))
-#
 div1 = Function("div1")
 def mkdiv1(var:str, a:int)->Symbol:
     return cast(Symbol, div1(mkSymbol(var), sympify(a)))
+
+gf.fill_in(p_d[-i,-j], lambda _,i,j: mkdiv1(f"pD{j}",i))
 gf.fill_in(u_d[-i], lambda _,i: mkdiv1("u",i))
 
 # Add the equations we want to evolve.
@@ -75,9 +73,61 @@ def generate_cactus_thorn(
     project_dir : str,
     thorn_name : str,
     inherits : Optional[str]=None)->None:
+    output : str = set()
     for gfn in gf.gfs:
-        if gfn in gf.eqnlist.outputs or gfn in gf.eqnlist.inputs:
-            print(colorize(gfn,"magenta"))
+        gfs = mkSymbol(gfn)
+        if gfs in gf.eqnlist.outputs or gfs in gf.eqnlist.inputs:
+            if gfn in gf.base_of:
+                gof = gf.base_of[gfn]
+                if gof in output:
+                    continue
+                output.add(gof)
+                #print(f"base of '{gfn}' is '{gof}'")
+                #print(f">> {gof} {{ {gf.groups[gof]} }}")
+                gplist = list(gf.groups[gof])
+                gflist = " ".join(gplist)
+                comment = gf.defn[gof]
+                centering = ""
+                checkpointing = ""
+                tags = ""
+                props = gf.props[gfn]
+                if len(props) == 2:
+                    if props[0] < 0 and props[1] < 0:
+                        if len(gplist) == 6: # and dim == 3
+                            tags += ' tensortypealias="DD_sym"'
+                        else:
+                            tags += ' tensortypealias="DD"'
+                    elif props[0] > 0 and props[1] > 0:
+                        if len(gplist) == 6: # and dim == 3
+                            tags += ' tensortypealias="UU_sym"'
+                        else:
+                            tags += ' tensortypealias="UU"'
+                    elif props[0] > 0 and props[1] < 0:
+                        tags += ' tensortypealias="DU"'
+                    elif props[0] < 0 and props[1] > 0:
+                        tags += ' tensortypealias="UD"'
+                    else:
+                        assert False
+                elif len(props) == 1:
+                    if props[0] > 0:
+                        tags += ' tensortypealias="U"'
+                    elif props[0] < 0:
+                        tags += ' tensortypealias="D"'
+                    else:
+                        assert False
+                elif len(props) == 0:
+                    tags += ' tensortypealias="Scalar"'
+                if len(tags) > 0:
+                    tags=f"TAGS='{tags.strip()}'"
+                print(f"CCTK_REAL {gof} TYPE=GF {centering} {tags} {{ {gflist} }} \"{comment}\"")
+            else:
+                tags = ""
+                centering=""
+                comment = gf.defn[gfn]
+                tags += ' tensortypealias="Scalar"'
+                if len(tags) > 0:
+                    tags=f"TAGS='{tags.strip()}'"
+                print(f"CCTK_REAL {gfn} TYPE=GF {centering} {tags} {{ {gfn} }} \"{comment}\"")
     #construct_interface_ccl(
     #    project_dir=project_dir,
     #    thorn_name=thorn_name,
