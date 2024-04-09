@@ -2,7 +2,7 @@
 The waveequation! It can't be solved too many times.
 """
 
-from typing import cast, Optional
+from typing import cast, Optional, Set
 from sympy import IndexedBase, Idx, symbols, Basic, Expr, Indexed, Symbol, Function
 from nrpy.generic.sympywrap import *
 from nrpy.generic.eqnlist import EqnList
@@ -22,9 +22,9 @@ def flat_metric(out:Indexed, i:int, j:int)->Expr:
 gf = GF()
 
 # Declare gfs
-p   = gf.decl("p",[i])
-p_t = gf.decl("p_t",[i])
-p_d = gf.decl("p_d",[i,j])
+p   = gf.decl("p",[-i])
+p_t = gf.decl("p_t",[-i])
+p_d = gf.decl("p_d",[-i,-j])
 u   = gf.decl("u",[])
 u_t = gf.decl("u_t",[])
 u_d = gf.decl("u_d",[i])
@@ -73,7 +73,7 @@ def generate_cactus_thorn(
     project_dir : str,
     thorn_name : str,
     inherits : Optional[str]=None)->None:
-    output : str = set()
+    output : Set[str] = set()
     for gfn in gf.gfs:
         gfs = mkSymbol(gfn)
         if gfs in gf.eqnlist.outputs or gfs in gf.eqnlist.inputs:
