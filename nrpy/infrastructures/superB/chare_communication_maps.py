@@ -20,7 +20,7 @@ def register_CFunction_charecommstruct_set_up(CoordSystem: str) -> None:
         "BHaH_function_prototypes.h",
     ]
     desc = r"""Setup charecommstruct"""
-    c_type = "void"
+    cfunc_type = "void"
     name = "charecommstruct_set_up"
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const params_struct *restrict params_chare, charecomm_struct* charecommstruct, const int thischareindex[3]"
     body = r"""
@@ -126,7 +126,7 @@ def register_CFunction_charecommstruct_set_up(CoordSystem: str) -> None:
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,

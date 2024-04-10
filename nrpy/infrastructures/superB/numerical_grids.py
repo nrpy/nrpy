@@ -28,7 +28,7 @@ def register_CFunction_numerical_grid_params_Nxx_dxx_xx_chare(
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = f"Set up a cell-centered {CoordSystem} grid of size grid_physical_size. Set params: Nxx, Nxx_plus_2NGHOSTS, dxx, invdxx, and xx."
-    c_type = "void"
+    cfunc_type = "void"
     name = "numerical_grid_params_Nxx_dxx_xx_chare"
     params = "commondata_struct *restrict commondata, const params_struct *restrict params, params_struct *restrict params_chare, REAL *restrict xx[3], const int chare_index[3]"
     body = """
@@ -82,7 +82,7 @@ for (int j = 0; j < params_chare->Nxx_plus_2NGHOSTS2; j++)
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,
@@ -107,7 +107,7 @@ def register_CFunction_numerical_grids_chare(
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "Set up a cell-centered grids of size grid_physical_size."
-    c_type = "void"
+    cfunc_type = "void"
     name = "numerical_grids_chare"
     params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata, griddata_struct *restrict griddata_chare, const int chare_index[3]"
     body = r"""// Step 1.a: Set CoordSystem_hash
@@ -148,7 +148,7 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         include_CodeParameters_h=False,

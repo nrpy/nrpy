@@ -114,7 +114,7 @@ def register_CFunction_diagnostics(
 
 
     desc = r"""Diagnostics."""
-    c_type = "void"
+    cfunc_type = "void"
     name = "diagnostics"
     params = (
         "commondata_struct *restrict commondata, griddata_struct *restrict griddata, Ck::IO::Session token, const int which_output, const int grid"
@@ -182,7 +182,7 @@ if (write_diagnostics) {
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         include_CodeParameters_h=False,

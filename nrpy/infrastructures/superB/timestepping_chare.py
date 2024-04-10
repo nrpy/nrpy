@@ -101,7 +101,7 @@ def generate_diagnostics_code(dimension, direction, num_fields, tot_num_diagnost
 def register_CFunction_timestepping_malloc() -> None:
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "Allocate memory for temporary buffers used to communicate face data"
-    c_type = "void"
+    cfunc_type = "void"
     name = "timestepping_malloc_tmpBuffer"
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params, tmpBuffers_struct *restrict tmpBuffers"
     body = """
@@ -116,7 +116,7 @@ tmpBuffers->tmpBuffer_TB = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * 
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         include_CodeParameters_h=True,
@@ -126,7 +126,7 @@ tmpBuffers->tmpBuffer_TB = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * 
 def register_CFunction_timestepping_free_memory() -> None:
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "Free memory for temporary buffers used to communicate face data"
-    c_type = "void"
+    cfunc_type = "void"
     name = "timestepping_free_memory_tmpBuffer"
     params = "tmpBuffers_struct *restrict tmpBuffers"
     body = """
@@ -137,7 +137,7 @@ if (tmpBuffers->tmpBuffer_TB != NULL) free(tmpBuffers->tmpBuffer_TB);
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        c_type=c_type,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
         body=body,
@@ -324,8 +324,8 @@ Timestepping::Timestepping(CommondataObject &&inData) {
   // Step 4: Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping
   for(int grid=0; grid<commondata.NUMGRIDS; grid++)
     MoL_malloc_non_y_n_gfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].gridfuncs);
-    
-  // Allocate storage for diagnostic gridfunctions 
+
+  // Allocate storage for diagnostic gridfunctions
   for(int grid=0; grid<commondata.NUMGRIDS; grid++)
     MoL_malloc_diagnostic_gfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].gridfuncs);
 

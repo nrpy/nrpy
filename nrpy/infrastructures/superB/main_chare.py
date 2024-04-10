@@ -47,7 +47,7 @@ class CommondataObject {
     for parname, CodeParam in par.glb_code_params_dict.items():
         if CodeParam.commondata:
           struct = "commondata"
-          CPtype = CodeParam.c_type_alias
+          CPtype = CodeParam.cparam_type
           comment = f"  // {CodeParam.module}::{parname}"
           if "char" in CPtype and "[" in CPtype and "]" in CPtype:
               chararray_size = CPtype.split("[")[1].replace("]", "")
