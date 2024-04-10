@@ -17,6 +17,7 @@ import nrpy.infrastructures.superB.output_0d_1d_2d_nearest_gridpoint_slices as o
 from nrpy.infrastructures.BHaH import BHaH_defines_h
 from nrpy.infrastructures.BHaH import griddata_commondata
 
+
 def register_CFunction_diagnostics(
     list_of_CoordSystems: List[str],
     default_diagnostics_out_every: float,
@@ -97,7 +98,6 @@ def register_CFunction_diagnostics(
                 axis=axis,
             )
 
-
         for plane in ["xy", "yz"]:
             out012d.register_CFunction_diagnostics_nearest_2d_plane(
                 CoordSystem=CoordSystem,
@@ -112,13 +112,10 @@ def register_CFunction_diagnostics(
                 plane=plane,
             )
 
-
     desc = r"""Diagnostics."""
     cfunc_type = "void"
     name = "diagnostics"
-    params = (
-        "commondata_struct *restrict commondata, griddata_struct *restrict griddata, Ck::IO::Session token, const int which_output, const int grid"
-    )
+    params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata, Ck::IO::Session token, const int which_output, const int grid"
 
     body = r"""
 

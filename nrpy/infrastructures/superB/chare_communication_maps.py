@@ -10,6 +10,7 @@ import nrpy.c_function as cfc
 from nrpy.infrastructures.BHaH import griddata_commondata
 from nrpy.infrastructures.BHaH import BHaH_defines_h
 
+
 def register_CFunction_charecommstruct_set_up(CoordSystem: str) -> None:
     """
     Register C function for setting up charecommstruct.

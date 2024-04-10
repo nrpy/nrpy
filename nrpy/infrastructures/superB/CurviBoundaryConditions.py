@@ -12,6 +12,7 @@ from typing import List, Dict, Tuple, Union
 import nrpy.c_function as cfc
 from nrpy.infrastructures.BHaH import griddata_commondata
 
+
 def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
     """
     Register C function for setting up bcstruct_chare.
@@ -163,7 +164,6 @@ def CurviBoundaryConditions_register_C_functions(
     for CoordSystem in list_of_CoordSystems:
         # Register C function to set up the boundary condition struct.
         register_CFunction_bcstruct_chare_set_up(CoordSystem=CoordSystem)
-
 
 
 if __name__ == "__main__":

@@ -251,9 +251,7 @@ superBnumericalgrids.register_CFunctions(
 cbc.CurviBoundaryConditions_register_C_functions(
     list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order
 )
-charecomm.chare_comm_register_C_functions(
-    list_of_CoordSystems=[CoordSystem]
-)
+charecomm.chare_comm_register_C_functions(list_of_CoordSystems=[CoordSystem])
 superBcbc.CurviBoundaryConditions_register_C_functions(
     list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order
 )
@@ -334,7 +332,10 @@ superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
 superBl.copy_superB_header_files(superB_Path=Path(project_dir) / "superB")
 
 Bdefines_h.output_BHaH_defines_h(
-    additional_includes=[str(Path("TwoPunctures") / Path("TwoPunctures.h")), str(Path("superB") / Path("superB.h"))],
+    additional_includes=[
+        str(Path("TwoPunctures") / Path("TwoPunctures.h")),
+        str(Path("superB") / Path("superB.h")),
+    ],
     project_dir=project_dir,
     enable_simd=enable_simd,
     enable_rfm_precompute=enable_rfm_precompute,

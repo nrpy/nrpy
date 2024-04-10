@@ -131,7 +131,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
             CC = "gcc"
 
     # ~ if shutil.which(CC) is None:
-        # ~ raise FileNotFoundError(f"{CC} C compiler is not found")
+    # ~ raise FileNotFoundError(f"{CC} C compiler is not found")
 
     CFLAGS_dict = {
         "default": "-O2 -march=native -g",

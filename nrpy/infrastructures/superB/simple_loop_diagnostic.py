@@ -14,7 +14,6 @@ import nrpy.helpers.loop as lp
 import nrpy.indexedexp as ixp
 
 
-
 def simple_loop_1D(
     CoordSystem: str,
     out_quantities_dict: Dict[Tuple[str, str], str],
@@ -139,7 +138,7 @@ dp1d.i2 = i2;
 """
 
     # ~ for key, value in out_quantities_dict.items():
-        # ~ loop_body_store_results += f"dp1d.{key[1]} = {value};\n"
+    # ~ loop_body_store_results += f"dp1d.{key[1]} = {value};\n"
     loop_body_store_results += "data_points[data_index] = dp1d; data_index++;\n}\n"
 
     # Main loop body.

@@ -15,6 +15,7 @@ import nrpy.c_function as cfc
 import nrpy.reference_metric as refmetric
 import nrpy.c_codegen as ccg
 
+
 def register_CFunction_numerical_grid_params_Nxx_dxx_xx_chare(
     CoordSystem: str, grid_physical_size: float, Nxx_dict: Dict[str, List[int]]
 ) -> None:

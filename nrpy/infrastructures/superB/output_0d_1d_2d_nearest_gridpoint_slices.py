@@ -14,6 +14,7 @@ import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.superB.simple_loop_diagnostic as lp
 
+
 def register_CFunction_diagnostics_nearest_grid_center(
     CoordSystem: str,
     out_quantities_dict: Dict[Tuple[str, str], str],
@@ -181,14 +182,12 @@ for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {{
   snprintf(out, sizeof(out),"""
     output_to_file = """ "% .15e """
     for key in out_quantities_dict.keys():
-      printf_c_type = "% .15e" if key[0] != "int" else "%d"
-      output_to_file += f"{printf_c_type} "
+        printf_c_type = "% .15e" if key[0] != "int" else "%d"
+        output_to_file += f"{printf_c_type} "
 
-    output_to_file = (
-      f'{output_to_file[:-1]}\\n", xCart_axis, '
-    )
+    output_to_file = f'{output_to_file[:-1]}\\n", xCart_axis, '
     for value in out_quantities_dict.values():
-      output_to_file += f"{value}, "
+        output_to_file += f"{value}, "
     output_to_file = f"{output_to_file[:-2]});\n"
 
     body += output_to_file
@@ -208,6 +207,7 @@ for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {{
         body=body,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
 
 def register_CFunction_diagnostics_nearest_2d_plane(
     CoordSystem: str,
@@ -278,19 +278,15 @@ for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {{
   snprintf(out, sizeof(out),"""
     output_to_file = """ "% .15e % .15e """
     for key in out_quantities_dict.keys():
-      printf_c_type = "% .15e" if key[0] != "int" else "%d"
-      output_to_file += f"{printf_c_type} "
+        printf_c_type = "% .15e" if key[0] != "int" else "%d"
+        output_to_file += f"{printf_c_type} "
 
     if plane == "xy":
-      output_to_file = (
-        f'{output_to_file[:-1]}\\n", xCart[0], xCart[1], '
-      )
+        output_to_file = f'{output_to_file[:-1]}\\n", xCart[0], xCart[1], '
     elif plane == "yz":
-      output_to_file = (
-        f'{output_to_file[:-1]}\\n", xCart[1], xCart[2], '
-      )
+        output_to_file = f'{output_to_file[:-1]}\\n", xCart[1], xCart[2], '
     for value in out_quantities_dict.values():
-      output_to_file += f"{value}, "
+        output_to_file += f"{value}, "
     output_to_file = f"{output_to_file[:-2]});\n"
 
     body += output_to_file
@@ -565,5 +561,3 @@ LOOP_NOOMP(i0_pt, 0, numpts_i0, i1_pt, 0, numpts_i1, i2_pt, 0, numpts_i2) {{
         body=body,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
-
-

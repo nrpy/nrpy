@@ -17,6 +17,7 @@ from nrpy.infrastructures.BHaH import griddata_commondata
 from nrpy.helpers.generic import clang_format
 from nrpy.infrastructures.BHaH import BHaH_defines_h
 
+
 def generate_mol_step_forward_code(rk_substep):
     return f"""
     serial{{
@@ -24,12 +25,14 @@ def generate_mol_step_forward_code(rk_substep):
     }}
     """
 
+
 def generate_send_neighbor_data_code(which_gf, neighbor_direction):
     return f"""
     serial {{
         send_neighbor_data({which_gf}, {neighbor_direction}, grid);
     }}
     """
+
 
 def generate_ghost_code(axis, axis_index, pos_ghost_type, neg_ghost_type, nchare_var):
     this_index_var = f"thisIndex.{axis}"
@@ -52,6 +55,7 @@ def generate_ghost_code(axis, axis_index, pos_ghost_type, neg_ghost_type, nchare
     }}
     """
 
+
 # Define ghost types for each axis
 x_pos_ghost_type = "EAST_GHOST"
 x_neg_ghost_type = "WEST_GHOST"
@@ -59,6 +63,7 @@ y_pos_ghost_type = "NORTH_GHOST"
 y_neg_ghost_type = "SOUTH_GHOST"
 z_pos_ghost_type = "TOP_GHOST"
 z_neg_ghost_type = "BOTTOM_GHOST"
+
 
 def generate_diagnostics_code(dimension, direction, num_fields, tot_num_diagnostic_pts):
     code = f"""
@@ -123,6 +128,7 @@ tmpBuffers->tmpBuffer_TB = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * 
         body=body,
     )
 
+
 def register_CFunction_timestepping_free_memory() -> None:
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "Free memory for temporary buffers used to communicate face data"
@@ -142,6 +148,7 @@ if (tmpBuffers->tmpBuffer_TB != NULL) free(tmpBuffers->tmpBuffer_TB);
         params=params,
         body=body,
     )
+
 
 def output_timestepping_h(
     project_dir: str,
@@ -258,7 +265,6 @@ def output_timestepping_cpp(
             )
         raise ValueError(error_msg)
 
-
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
 
@@ -282,7 +288,9 @@ extern /* readonly */ CProxy_Main mainProxy;
 *Step 4: Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping.
 """
     if initialize_constant_auxevol:
-        file_output_str += "*Step 4.a: Set AUXEVOL gridfunctions that will never change in time."
+        file_output_str += (
+            "*Step 4.a: Set AUXEVOL gridfunctions that will never change in time."
+        )
     file_output_str += r"""*/
 """
     file_output_str += r"""
@@ -636,7 +644,6 @@ void Timestepping::process_ghost(const int type_ghost, const int type_gfs, const
 #include "timestepping.def.h"
 """
 
-
     timestepping_cpp_file = project_Path / "timestepping.cpp"
     with timestepping_cpp_file.open("w", encoding="utf-8") as file:
         file.write(
@@ -766,16 +773,36 @@ def output_timestepping_ci(
             }
 """
     # Generate code for 1d y diagnostics
-    file_output_str += generate_diagnostics_code("1d", "y", "griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 1", "griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_1d_y_pts")
+    file_output_str += generate_diagnostics_code(
+        "1d",
+        "y",
+        "griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 1",
+        "griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_1d_y_pts",
+    )
 
     # Generate code for 1d z diagnostics
-    file_output_str += generate_diagnostics_code("1d", "z", "griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 1", "griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_1d_z_pts")
+    file_output_str += generate_diagnostics_code(
+        "1d",
+        "z",
+        "griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 1",
+        "griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_1d_z_pts",
+    )
 
     # Generate code for 2d xy diagnostics
-    file_output_str += generate_diagnostics_code("2d", "xy", "griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 2", "griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_2d_xy_pts")
+    file_output_str += generate_diagnostics_code(
+        "2d",
+        "xy",
+        "griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 2",
+        "griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_2d_xy_pts",
+    )
 
     # Generate code for 2d yz diagnostics
-    file_output_str += generate_diagnostics_code("2d", "yz", "griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 2", "griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_2d_yz_pts")
+    file_output_str += generate_diagnostics_code(
+        "2d",
+        "yz",
+        "griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 2",
+        "griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_2d_yz_pts",
+    )
 
     file_output_str += r"""
             if (count_filewritten == expected_count_filewritten) {
@@ -792,45 +819,46 @@ def output_timestepping_ci(
     else:
         file_output_str += "  // (nothing here; specify by setting pre_MoL_step_forward_in_time string in register_CFunction_main_c().)\n"
 
-
     file_output_str += r"""
     """
     # Loop over RK substeps and axes
     for k in range(1, 5):
         rk_substep = f"RK_SUBSTEP_K{k}"
         file_output_str += generate_mol_step_forward_code(rk_substep)
-        for axis in ['x', 'y', 'z']:
+        for axis in ["x", "y", "z"]:
             # do something with rk_substep and axis
-            if axis == 'x':
+            if axis == "x":
                 pos_ghost_type = x_pos_ghost_type
                 neg_ghost_type = x_neg_ghost_type
                 nchare_var = "commondata.Nchare0"
-                direction = 'EAST_WEST'
-            elif axis == 'y':
+                direction = "EAST_WEST"
+            elif axis == "y":
                 pos_ghost_type = y_pos_ghost_type
                 neg_ghost_type = y_neg_ghost_type
                 nchare_var = "commondata.Nchare1"
-                direction = 'NORTH_SOUTH'
-            elif axis == 'z':
+                direction = "NORTH_SOUTH"
+            elif axis == "z":
                 pos_ghost_type = z_pos_ghost_type
                 neg_ghost_type = z_neg_ghost_type
                 nchare_var = "commondata.Nchare2"
-                direction = 'TOP_BOTTOM'
+                direction = "TOP_BOTTOM"
 
             # Generate code for this RK substep and axis
-            if rk_substep == 'RK_SUBSTEP_K1':
-                which_gf = 'K_ODD'
-            elif rk_substep == 'RK_SUBSTEP_K2':
-                which_gf = 'K_EVEN'
-            elif rk_substep == 'RK_SUBSTEP_K3':
-                which_gf = 'K_ODD'
-            elif rk_substep == 'RK_SUBSTEP_K4':
-                which_gf = 'Y_N'
+            if rk_substep == "RK_SUBSTEP_K1":
+                which_gf = "K_ODD"
+            elif rk_substep == "RK_SUBSTEP_K2":
+                which_gf = "K_EVEN"
+            elif rk_substep == "RK_SUBSTEP_K3":
+                which_gf = "K_ODD"
+            elif rk_substep == "RK_SUBSTEP_K4":
+                which_gf = "Y_N"
             else:
                 raise ValueError(f"Unknown RK substep: {rk_substep}")
 
             file_output_str += generate_send_neighbor_data_code(which_gf, direction)
-            file_output_str += generate_ghost_code(axis, 0, pos_ghost_type, neg_ghost_type, nchare_var)
+            file_output_str += generate_ghost_code(
+                axis, 0, pos_ghost_type, neg_ghost_type, nchare_var
+            )
 
     file_output_str += r"""
         """
@@ -890,6 +918,7 @@ def output_timestepping_ci(
             clang_format(file_output_str, clang_format_options=clang_format_options)
         )
 
+
 def output_timestepping_h_cpp_ci_register_CFunctions(
     project_dir: str,
     MoL_method: str,
@@ -905,22 +934,22 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
 ) -> None:
 
     output_timestepping_h(
-      project_dir=project_dir,
+        project_dir=project_dir,
     )
 
     output_timestepping_cpp(
-      project_dir=project_dir,
-      MoL_method=MoL_method,
-      enable_rfm_precompute=enable_rfm_precompute,
-      enable_CurviBCs=True,
-      boundary_conditions_desc=boundary_conditions_desc,
+        project_dir=project_dir,
+        MoL_method=MoL_method,
+        enable_rfm_precompute=enable_rfm_precompute,
+        enable_CurviBCs=True,
+        boundary_conditions_desc=boundary_conditions_desc,
     )
 
     output_timestepping_ci(
-      project_dir=project_dir,
-      MoL_method=MoL_method,
-      pre_MoL_step_forward_in_time=pre_MoL_step_forward_in_time,
-      post_MoL_step_forward_in_time=post_MoL_step_forward_in_time,
+        project_dir=project_dir,
+        MoL_method=MoL_method,
+        pre_MoL_step_forward_in_time=pre_MoL_step_forward_in_time,
+        post_MoL_step_forward_in_time=post_MoL_step_forward_in_time,
     )
 
     register_CFunction_timestepping_malloc()

@@ -28,7 +28,7 @@ from nrpy.infrastructures.BHaH.MoLtimestepping.MoL import (
     is_diagonal_Butcher,
     register_CFunction_MoL_free_memory,
     register_CFunction_MoL_malloc,
-    single_RK_substep_input_symbolic
+    single_RK_substep_input_symbolic,
 )
 
 # fmt: off
@@ -61,6 +61,7 @@ gridfuncs->diagnostic_output_gfs = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVO
         include_CodeParameters_h=True,
         body=body,
     )
+
 
 def register_CFunction_MoL_free_memory_diagnostic_gfs() -> None:
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
@@ -141,9 +142,7 @@ def register_CFunction_MoL_step_forward_in_time(
     desc = f'Method of Lines (MoL) for "{MoL_method}" method: Step forward one full timestep.\n'
     cfunc_type = "void"
     name = "MoL_step_forward_in_time"
-    params = (
-        "commondata_struct *restrict commondata, griddata_struct *restrict griddata, const REAL time_start, const int which_RK_substep"
-    )
+    params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata, const REAL time_start, const int which_RK_substep"
 
     # Code body
     body = f"""

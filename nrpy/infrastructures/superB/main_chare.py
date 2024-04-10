@@ -46,18 +46,20 @@ class CommondataObject {
     struct_list: List[str] = []  # List to store individual struct elements
     for parname, CodeParam in par.glb_code_params_dict.items():
         if CodeParam.commondata:
-          struct = "commondata"
-          CPtype = CodeParam.cparam_type
-          comment = f"  // {CodeParam.module}::{parname}"
-          if "char" in CPtype and "[" in CPtype and "]" in CPtype:
-              chararray_size = CPtype.split("[")[1].replace("]", "")
-              c_output = f'PUParray(p, {struct}.{parname}, {chararray_size});{comment}\n'
-          elif "TIMEVAR" in CPtype:
-              c_output = f"p|{struct}.{parname}.tv_sec;{comment}\n"
-              c_output += f"p|{struct}.{parname}.tv_nsec;{comment}\n"
-          else:
-              c_output = f"p|{struct}.{parname};{comment}\n"
-          struct_list.append(c_output)
+            struct = "commondata"
+            CPtype = CodeParam.cparam_type
+            comment = f"  // {CodeParam.module}::{parname}"
+            if "char" in CPtype and "[" in CPtype and "]" in CPtype:
+                chararray_size = CPtype.split("[")[1].replace("]", "")
+                c_output = (
+                    f"PUParray(p, {struct}.{parname}, {chararray_size});{comment}\n"
+                )
+            elif "TIMEVAR" in CPtype:
+                c_output = f"p|{struct}.{parname}.tv_sec;{comment}\n"
+                c_output += f"p|{struct}.{parname}.tv_nsec;{comment}\n"
+            else:
+                c_output = f"p|{struct}.{parname};{comment}\n"
+            struct_list.append(c_output)
     # Sort the lines alphabetically and join them with line breaks
     file_output_str += "// PUP commondata struct\n"
     file_output_str += "".join(sorted(struct_list))
@@ -242,7 +244,7 @@ def output_commondata_object_h_and_main_h_cpp_ci(
     """
 
     output_commondata_object_h(
-      project_dir=project_dir,
+        project_dir=project_dir,
     )
 
     output_main_h(

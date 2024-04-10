@@ -84,7 +84,7 @@ enable_KreissOliger_dissipation = False
 boundary_conditions_desc = "outgoing radiation"
 
 OMP_collapse = 1
-if "Spherical" in CoordSystem:    
+if "Spherical" in CoordSystem:
     OMP_collapse = 2  # about 2x faster
 
 project_dir = os.path.join("project", project_name)
@@ -181,9 +181,7 @@ if __name__ == "__main__":
 cbc.CurviBoundaryConditions_register_C_functions(
     list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order
 )
-charecomm.chare_comm_register_C_functions(
-    list_of_CoordSystems=[CoordSystem]
-)
+charecomm.chare_comm_register_C_functions(list_of_CoordSystems=[CoordSystem])
 superBcbc.CurviBoundaryConditions_register_C_functions(
     list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order
 )
@@ -234,7 +232,6 @@ cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
 )
 
 superBl.copy_superB_header_files(superB_Path=Path(project_dir) / "superB")
-
 
 
 superBmain.output_commondata_object_h_and_main_h_cpp_ci(

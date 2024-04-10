@@ -11,7 +11,7 @@ import shutil
 
 def copy_superB_header_files(superB_Path: Path) -> None:
     """
-    Copy superB.h 
+    Copy superB.h
 
     :param project_Path: The path of the project directory where the file will be copied.
     """
@@ -24,9 +24,7 @@ def copy_superB_header_files(superB_Path: Path) -> None:
         for header_file in ["superB.h"]:
             source_path = (
                 # pylint: disable=E1101
-                resources.files(
-                    "nrpy.infrastructures.superB.superB"
-                )
+                resources.files("nrpy.infrastructures.superB.superB")
                 / header_file
             )
             shutil.copy(str(source_path), str(superB_Path / header_file))
