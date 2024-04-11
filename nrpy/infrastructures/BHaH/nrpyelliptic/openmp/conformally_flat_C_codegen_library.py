@@ -1,8 +1,10 @@
 """
 Library of C functions for solving the hyperbolic relaxation equation in curvilinear coordinates, using a reference-metric formalism.
+using openmp parallelization
 
 Authors: Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
          Zachariah B. Etienne; zachetie **at** gmail **dot* com
+         Samuel D. Tootle; sdtootle **at** gmail **dot** com
 """
 
 from typing import Union, cast, Tuple, Dict
@@ -19,12 +21,6 @@ import nrpy.c_function as cfc
 
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.nrpyelliptic.base_conformally_flat_C_codegen_library as base_npe_classes
-# from nrpy.equations.nrpyelliptic.ConformallyFlat_RHSs import (
-#     HyperbolicRelaxationCurvilinearRHSs,
-# )
-# from nrpy.equations.nrpyelliptic.ConformallyFlat_SourceTerms import (
-#     compute_psi_background_and_ADD_times_AUU,
-# )
 
 import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices as out012d
@@ -32,17 +28,19 @@ import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_s
 # Define functions to set up initial guess
 
 
-class register_CFunction_initial_guess_single_point(base_npe_classes.base_register_CFunction_initial_guess_single_point):
+class register_CFunction_initial_guess_single_point(
+    base_npe_classes.base_register_CFunction_initial_guess_single_point
+):
 
     def __new__(self, fp_type="double") -> Union[None, pcg.NRPyEnv_type]:
         args = locals()
-        args.pop('self')
-        args.pop('__class__')
+        args.pop("self")
+        args.pop("__class__")
         if pcg.pcg_registration_phase():
             pcg.register_func_call(f"{__name__}.{self.__name__}", args)
             return None
         super().__init__(self, fp_type=fp_type)
-        
+
         body = ccg.c_codegen(
             [sp.sympify(0), sp.sympify(0)],
             ["*uu_ID", "*vv_ID"],
@@ -62,8 +60,10 @@ class register_CFunction_initial_guess_single_point(base_npe_classes.base_regist
         )
         return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
-class register_CFunction_initial_guess_all_points(base_npe_classes.base_register_CFunction_initial_guess_all_points):
-    
+
+class register_CFunction_initial_guess_all_points(
+    base_npe_classes.base_register_CFunction_initial_guess_all_points
+):
     """
     Register the initial guess function for the hyperbolic relaxation equation.
 
@@ -73,12 +73,16 @@ class register_CFunction_initial_guess_all_points(base_npe_classes.base_register
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
+
     def __new__(
-        self, OMP_collapse: int, enable_checkpointing: bool = False, fp_type: str = "double"
+        self,
+        OMP_collapse: int,
+        enable_checkpointing: bool = False,
+        fp_type: str = "double",
     ) -> Union[None, pcg.NRPyEnv_type]:
         args = locals()
-        args.pop('self')
-        args.pop('__class__')
+        args.pop("self")
+        args.pop("__class__")
         if pcg.pcg_registration_phase():
             pcg.register_func_call(f"{__name__}.{self.__name__}", args)
             return None
@@ -118,7 +122,9 @@ class register_CFunction_initial_guess_all_points(base_npe_classes.base_register
 # Define functions to set AUXEVOL gridfunctions
 
 
-class register_CFunction_auxevol_gfs_single_point(base_npe_classes.base_register_CFunction_auxevol_gfs_single_point):
+class register_CFunction_auxevol_gfs_single_point(
+    base_npe_classes.base_register_CFunction_auxevol_gfs_single_point
+):
     """
     Register the C function for the AUXEVOL grid functions at a single point.
 
@@ -127,6 +133,7 @@ class register_CFunction_auxevol_gfs_single_point(base_npe_classes.base_register
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
+
     def __new__(
         self,
         CoordSystem: str,
@@ -134,8 +141,8 @@ class register_CFunction_auxevol_gfs_single_point(base_npe_classes.base_register
     ) -> Union[None, pcg.NRPyEnv_type]:
 
         args = locals()
-        args.pop('self')
-        args.pop('__class__')
+        args.pop("self")
+        args.pop("__class__")
         if pcg.pcg_registration_phase():
             pcg.register_func_call(f"{__name__}.{self.__name__}", args)
             return None
@@ -161,7 +168,9 @@ class register_CFunction_auxevol_gfs_single_point(base_npe_classes.base_register
         return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
-class register_CFunction_auxevol_gfs_all_points(base_npe_classes.base_register_CFunction_auxevol_gfs_all_points):
+class register_CFunction_auxevol_gfs_all_points(
+    base_npe_classes.base_register_CFunction_auxevol_gfs_all_points
+):
     def __new__(
         self,
         OMP_collapse: int,
@@ -176,8 +185,8 @@ class register_CFunction_auxevol_gfs_all_points(base_npe_classes.base_register_C
         :return: None if in registration phase, else the updated NRPy environment.
         """
         args = locals()
-        args.pop('self')
-        args.pop('__class__')
+        args.pop("self")
+        args.pop("__class__")
         if pcg.pcg_registration_phase():
             pcg.register_func_call(f"{__name__}.{self.__name__}", args)
             return None
@@ -214,7 +223,9 @@ class register_CFunction_auxevol_gfs_all_points(base_npe_classes.base_register_C
         return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
-class register_CFunction_variable_wavespeed_gfs_all_points(base_npe_classes.base_register_CFunction_variable_wavespeed_gfs_all_points):
+class register_CFunction_variable_wavespeed_gfs_all_points(
+    base_npe_classes.base_register_CFunction_variable_wavespeed_gfs_all_points
+):
     def __new__(
         self,
         CoordSystem: str,
@@ -229,8 +240,8 @@ class register_CFunction_variable_wavespeed_gfs_all_points(base_npe_classes.base
         :return: None if in registration phase, else the updated NRPy environment.
         """
         args = locals()
-        args.pop('self')
-        args.pop('__class__')
+        args.pop("self")
+        args.pop("__class__")
         if pcg.pcg_registration_phase():
             pcg.register_func_call(f"{__name__}.{self.__name__}", args)
             return None
@@ -270,8 +281,10 @@ class register_CFunction_variable_wavespeed_gfs_all_points(base_npe_classes.base
         return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
-class register_CFunction_initialize_constant_auxevol(base_npe_classes.base_register_CFunction_initialize_constant_auxevol):
-    
+class register_CFunction_initialize_constant_auxevol(
+    base_npe_classes.base_register_CFunction_initialize_constant_auxevol
+):
+
     def __new__(self) -> Union[None, pcg.NRPyEnv_type]:
         """
         Register function to call all functions that set up AUXEVOL gridfunctions.
@@ -279,8 +292,8 @@ class register_CFunction_initialize_constant_auxevol(base_npe_classes.base_regis
         :return: None if in registration phase, else the updated NRPy environment.
         """
         args = locals()
-        args.pop('self')
-        args.pop('__class__')
+        args.pop("self")
+        args.pop("__class__")
         if pcg.pcg_registration_phase():
             pcg.register_func_call(f"{__name__}.{self.__name__}", args)
             return None
@@ -308,7 +321,9 @@ class register_CFunction_initialize_constant_auxevol(base_npe_classes.base_regis
 
 
 # Define function to compute the l^2 of a gridfunction
-class register_CFunction_compute_L2_norm_of_gridfunction(base_npe_classes.base_register_CFunction_compute_L2_norm_of_gridfunction):
+class register_CFunction_compute_L2_norm_of_gridfunction(
+    base_npe_classes.base_register_CFunction_compute_L2_norm_of_gridfunction
+):
     def __new__(
         self,
         CoordSystem: str,
@@ -324,10 +339,10 @@ class register_CFunction_compute_L2_norm_of_gridfunction(base_npe_classes.base_r
         :param fp_type: Floating point type, e.g., "double".
         """
         args = locals()
-        args.pop('self')
-        args.pop('__class__')
+        args.pop("self")
+        args.pop("__class__")
         super().__init__(self, CoordSystem=CoordSystem, fp_type=fp_type)
-        
+
         loop_body = ccg.c_codegen(
             [
                 self.rfm.xxSph[0],
@@ -392,8 +407,10 @@ if(r < integration_radius) {
 
 
 # Define diagnostics function
-class register_CFunction_diagnostics(base_npe_classes.base_register_CFunction_diagnostics):
-    
+class register_CFunction_diagnostics(
+    base_npe_classes.base_register_CFunction_diagnostics
+):
+
     def __new__(
         self,
         CoordSystem: str,
@@ -421,15 +438,15 @@ class register_CFunction_diagnostics(base_npe_classes.base_register_CFunction_di
         :return: None if in registration phase, else the updated NRPy environment.
         """
         args = locals()
-        args.pop('self')
-        args.pop('__class__')
+        args.pop("self")
+        args.pop("__class__")
         if pcg.pcg_registration_phase():
             pcg.register_func_call(f"{__name__}.{self.__name__}", args)
-            return None        
+            return None
         super().__init__(
-            self, 
+            self,
             default_diagnostics_out_every=default_diagnostics_out_every,
-            out_quantities_dict=out_quantities_dict
+            out_quantities_dict=out_quantities_dict,
         )
 
         for axis in ["y", "z"]:
@@ -525,8 +542,10 @@ class register_CFunction_diagnostics(base_npe_classes.base_register_CFunction_di
 
 
 # Define function to evaluate stop conditions
-class register_CFunction_check_stop_conditions(base_npe_classes.base_register_CFunction_check_stop_conditions):
-    
+class register_CFunction_check_stop_conditions(
+    base_npe_classes.base_register_CFunction_check_stop_conditions
+):
+
     def __new__(self) -> Union[None, pcg.NRPyEnv_type]:
         """
         Register function to evaluate stop conditions.
@@ -534,11 +553,11 @@ class register_CFunction_check_stop_conditions(base_npe_classes.base_register_CF
         :return: None if in registration phase, else the updated NRPy environment.
         """
         args = locals()
-        args.pop('self')
-        args.pop('__class__')
+        args.pop("self")
+        args.pop("__class__")
         if pcg.pcg_registration_phase():
             pcg.register_func_call(f"{__name__}.{self.__name__}", args)
-            return None        
+            return None
         super().__init__(self)
 
         self.body += r"""  // Since this version of NRPyElliptic is unigrid, we simply set the grid index to 0
@@ -596,12 +615,14 @@ class register_CFunction_rhs_eval(base_npe_classes.base_register_CFunction_rhs_e
         :return: None if in registration phase, else the updated NRPy environment.
         """
         args = locals()
-        args.pop('self')
-        args.pop('__class__')
+        args.pop("self")
+        args.pop("__class__")
         if pcg.pcg_registration_phase():
             pcg.register_func_call(f"{__name__}.{self.__name__}", args)
-            return None        
-        super().__init__(self, CoordSystem=CoordSystem, enable_rfm_precompute=enable_rfm_precompute)
+            return None
+        super().__init__(
+            self, CoordSystem=CoordSystem, enable_rfm_precompute=enable_rfm_precompute
+        )
 
         if enable_simd:
             self.includes += [str(Path("simd") / "simd_intrinsics.h")]
@@ -641,7 +662,9 @@ class register_CFunction_rhs_eval(base_npe_classes.base_register_CFunction_rhs_e
 
 
 # Define function to compute residual the solution
-class register_CFunction_compute_residual_all_points(base_npe_classes.base_register_CFunction_compute_residual_all_points):
+class register_CFunction_compute_residual_all_points(
+    base_npe_classes.base_register_CFunction_compute_residual_all_points
+):
     def __new__(
         self,
         CoordSystem: str,
@@ -666,21 +689,25 @@ class register_CFunction_compute_residual_all_points(base_npe_classes.base_regis
         :return: None if in registration phase, else the updated NRPy environment.
         """
         args = locals()
-        args.pop('self')
-        args.pop('__class__')
+        args.pop("self")
+        args.pop("__class__")
         if pcg.pcg_registration_phase():
             pcg.register_func_call(f"{__name__}.{self.__name__}", args)
-            return None        
-        super().__init__(self, CoordSystem=CoordSystem, enable_rfm_precompute=enable_rfm_precompute)
+            return None
+        super().__init__(
+            self, CoordSystem=CoordSystem, enable_rfm_precompute=enable_rfm_precompute
+        )
 
         if enable_simd:
             self.includes += [str(Path("simd") / "simd_intrinsics.h")]
-        
+
         self.body = lp.simple_loop(
             loop_body=ccg.c_codegen(
                 [self.rhs.residual],
                 [
-                    gri.BHaHGridFunction.access_gf("residual_H", gf_array_name="aux_gfs"),
+                    gri.BHaHGridFunction.access_gf(
+                        "residual_H", gf_array_name="aux_gfs"
+                    ),
                 ],
                 enable_fd_codegen=True,
                 enable_simd=enable_simd,

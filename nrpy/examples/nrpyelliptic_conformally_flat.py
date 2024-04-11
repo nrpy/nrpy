@@ -25,7 +25,8 @@ from nrpy.infrastructures.BHaH import griddata_commondata
 import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 import nrpy.infrastructures.BHaH.main_c as main
 from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
-import nrpy.infrastructures.BHaH.nrpyelliptic.conformally_flat_C_codegen_library as nrpyellClib
+import nrpy.infrastructures.BHaH.nrpyelliptic.openmp.conformally_flat_C_codegen_library as nrpyellClib
+# import nrpy.infrastructures.BHaH.nrpyelliptic.base_conformally_flat_C_codegen_library as nrpyellClib
 import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
 from nrpy.infrastructures.BHaH import rfm_precompute
 from nrpy.infrastructures.BHaH import rfm_wrapper_functions
@@ -34,11 +35,12 @@ from nrpy.infrastructures.BHaH import xx_tofrom_Cart
 par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Code-generation-time parameters:
-project_name = "nrpyelliptic_conformally_flat"
+project_name = "nrpyelliptic_conformally_flat_new"
 fp_type = "double"
 grid_physical_size = 1.0e6
 t_final = grid_physical_size  # This parameter is effectively not used in NRPyElliptic
 nn_max = 10000  # Sets the maximum number of relaxation steps
+
 def get_log10_residual_tolerance(fp_type):
     if fp_type == "double":
         return -15.8

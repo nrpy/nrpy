@@ -42,11 +42,11 @@ class base_register_CFunction_initial_guess_single_point:
         Base class for generating the initial guess of solution at a single point.
 
         :param fp_type: Floating point type, e.g., "double".
-        
+
         """
         self.fp_type = fp_type
         self.includes = ["BHaH_defines.h"]
-        
+
         self.desc = r"""Compute initial guess at a single point."""
         self.cfunc_type = "void"
         self.name = "initial_guess_single_point"
@@ -57,16 +57,14 @@ class base_register_CFunction_initial_guess_single_point:
 
 class base_register_CFunction_initial_guess_all_points:
 
-    def __init__(
-        self, enable_checkpointing: bool = False, fp_type: str = "double"
-    ):
+    def __init__(self, enable_checkpointing: bool = False, fp_type: str = "double"):
         """
         Base class for generating the initial guess function for the hyperbolic relaxation equation.
 
         :param enable_checkpointing: Attempt to read from a checkpoint file before generating initial guess.
         :param fp_type: Floating point type, e.g., "double".
-        
-        """ 
+
+        """
         self.fp_type = fp_type
         self.includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
@@ -84,6 +82,7 @@ class base_register_CFunction_initial_guess_all_points:
 if( read_checkpoint(commondata, griddata) ) return;
 """
 
+
 # Define functions to set AUXEVOL gridfunctions
 
 
@@ -99,12 +98,12 @@ class base_register_CFunction_auxevol_gfs_single_point:
 
         :param CoordSystem: The coordinate system to use in setting up the AUXEVOL gridfunctions.
         :param fp_type: Floating point type, e.g., "double".
-        
+
         """
         self.fp_type = fp_type
         # Compute psi_background and ADD_times_AUU
-        self.psi_background, self.ADD_times_AUU = compute_psi_background_and_ADD_times_AUU(
-            CoordSystem
+        self.psi_background, self.ADD_times_AUU = (
+            compute_psi_background_and_ADD_times_AUU(CoordSystem)
         )
 
         self.includes = ["BHaH_defines.h"]
@@ -116,8 +115,9 @@ class base_register_CFunction_auxevol_gfs_single_point:
     const REAL xx0, const REAL xx1, const REAL xx2,  REAL *restrict psi_background, REAL *restrict ADD_times_AUU
 """
 
+
 class base_register_CFunction_auxevol_gfs_all_points:
-    
+
     def __init__(
         self,
         fp_type: str = "double",
@@ -126,7 +126,7 @@ class base_register_CFunction_auxevol_gfs_all_points:
         Base class for generating the function for the AUXEVOL grid functions at all points.
 
         :param fp_type: Floating point type, e.g., "double".
-        
+
         """
         self.fp_type = fp_type
 
@@ -149,7 +149,7 @@ class base_register_CFunction_variable_wavespeed_gfs_all_points:
         fp_type: str = "double",
     ):
         """
-        Base class for generating the function to compute variable wavespeed based on 
+        Base class for generating the function to compute variable wavespeed based on
         local grid spacing for a single coordinate system.
 
         :param CoordSystem: The coordinate system to use in the hyperbolic relaxation.
@@ -159,9 +159,11 @@ class base_register_CFunction_variable_wavespeed_gfs_all_points:
         """
         self.fp_type = fp_type
         self.CoordSystem = CoordSystem
-        
+
         self.includes = ["BHaH_defines.h"]
-        self.desc = "Compute variable wavespeed for all grids based on local grid spacing."
+        self.desc = (
+            "Compute variable wavespeed for all grids based on local grid spacing."
+        )
         self.cfunc_type = "void"
         self.name = "variable_wavespeed_gfs_all_points"
         self.params = (
@@ -178,22 +180,22 @@ class base_register_CFunction_variable_wavespeed_gfs_all_points:
             ],
             ["const REAL dsmin0", "const REAL dsmin1", "const REAL dsmin2"],
             include_braces=False,
-            fp_type=fp_type,
+            fp_type=self.fp_type,
         )
 
-        variable_wavespeed_memaccess = gri.BHaHGridFunction.access_gf("variable_wavespeed")
+        variable_wavespeed_memaccess = gri.BHaHGridFunction.access_gf(
+            "variable_wavespeed"
+        )
 
         self.dsmin_computation_str += f"""\n// Set local wavespeed
             {variable_wavespeed_memaccess} = MINIMUM_GLOBAL_WAVESPEED * MIN(dsmin0, MIN(dsmin1, dsmin2)) / dt;\n"""
 
 
 class base_register_CFunction_initialize_constant_auxevol:
-    
-    def __init__(self) -> Union[None, pcg.NRPyEnv_type]:
-        """
-        Register function to call all functions that set up AUXEVOL gridfunctions.
 
-        :return: None if in registration phase, else the updated NRPy environment.
+    def __init__(self):
+        """
+        Base class for generating the function to call all functions that set up AUXEVOL gridfunctions.
         """
 
         self.includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
@@ -208,12 +210,13 @@ class base_register_CFunction_initialize_constant_auxevol:
 
 # Define function to compute the l^2 of a gridfunction
 class base_register_CFunction_compute_L2_norm_of_gridfunction:
-    def __init__(self,
-    CoordSystem: str,
-    fp_type: str = "double",
+    def __init__(
+        self,
+        CoordSystem: str,
+        fp_type: str = "double",
     ) -> None:
         """
-        Register function to compute l2-norm of a gridfunction assuming a single grid.
+        Base class for generating the function to compute l2-norm of a gridfunction assuming a single grid.
 
         Note that parallel codegen is disabled for this function, as it sometimes causes a
         multiprocess race condition on Python 3.6.7
@@ -230,7 +233,7 @@ class base_register_CFunction_compute_L2_norm_of_gridfunction:
                     const REAL integration_radius, const int gf_index, const REAL *restrict in_gf"""
 
         self.rfm = refmetric.reference_metric[CoordSystem]
-        self.body=""
+        self.body = ""
 
 
 # Define diagnostics function
@@ -241,13 +244,13 @@ class base_register_CFunction_diagnostics:
         out_quantities_dict: Union[str, Dict[Tuple[str, str], str]] = "default",
     ):
         """
-        Register C function for simulation diagnostics.
+        Base class for generating the function for simulation diagnostics.
 
         :param default_diagnostics_out_every: Specifies the default diagnostics output frequency.
         :param out_quantities_dict: Dictionary or string specifying output quantities.
         :raises TypeError: If `out_quantities_dict` is not a dictionary and not set to "default".
         """
-    
+
         _ = par.CodeParameter(
             "int",
             __name__,
@@ -263,7 +266,7 @@ class base_register_CFunction_diagnostics:
         self.params = (
             "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
         )
-        self.out_quantities_dict=out_quantities_dict
+        self.out_quantities_dict = out_quantities_dict
 
         # fmt: off
         print(self.out_quantities_dict, self.out_quantities_dict == "default")
@@ -281,18 +284,16 @@ class base_register_CFunction_diagnostics:
 class base_register_CFunction_check_stop_conditions:
     def __init__(self):
         """
-        Register function to evaluate stop conditions.
+        Base class for generating the function to evaluate stop conditions.
 
         :return: None if in registration phase, else the updated NRPy environment.
         """
-    
+
         self.includes = ["BHaH_defines.h"]
         self.desc = "Evaluate stop conditions."
         self.cfunc_type = "void"
         self.name = "check_stop_conditions"
-        self.params = (
-            """commondata_struct *restrict commondata, griddata_struct *restrict griddata"""
-        )
+        self.params = """commondata_struct *restrict commondata, griddata_struct *restrict griddata"""
 
         # Register a parameter to stop hyperbolic relaxation
         _stop_relaxation = par.register_CodeParameter(
@@ -300,7 +301,9 @@ class base_register_CFunction_check_stop_conditions:
         )
 
         # Register parameter that sets the total number of relaxation steps
-        _nn_max = par.register_CodeParameter("int", __name__, "nn_max", 0, commondata=True)
+        _nn_max = par.register_CodeParameter(
+            "int", __name__, "nn_max", 0, commondata=True
+        )
 
         # Register parameter that sets the tolerance for log of residual
         _log10_residual_tolerance = par.register_CodeParameter(
@@ -311,8 +314,8 @@ class base_register_CFunction_check_stop_conditions:
         _log10_current_residual = par.register_CodeParameter(
             "REAL", __name__, "log10_current_residual", 1.0, commondata=True
         )
-        
-        self.body=""
+
+        self.body = ""
 
 
 # Define function to evaluate RHSs
@@ -323,7 +326,7 @@ class base_register_CFunction_rhs_eval:
         enable_rfm_precompute: bool,
     ):
         """
-        Register the right-hand side (RHS) evaluation function for the hyperbolic relaxation equation.
+        Base class for generating the right-hand side (RHS) evaluation function for the hyperbolic relaxation equation.
 
         This function sets the right-hand side of the hyperbolic relaxation equation according to the
         selected coordinate system and specified parameters.
@@ -331,7 +334,6 @@ class base_register_CFunction_rhs_eval:
         :param CoordSystem: The coordinate system.
         :param enable_rfm_precompute: Whether to enable reference metric precomputation.
         """
-
 
         self.includes = ["BHaH_defines.h"]
         self.desc = r"""Set RHSs for hyperbolic relaxation equation."""
@@ -343,7 +345,9 @@ class base_register_CFunction_rhs_eval:
                 "REAL *restrict xx[3]", "const rfm_struct *restrict rfmstruct"
             )
         # Populate uu_rhs, vv_rhs
-        self.rhs = HyperbolicRelaxationCurvilinearRHSs(CoordSystem, enable_rfm_precompute)
+        self.rhs = HyperbolicRelaxationCurvilinearRHSs(
+            CoordSystem, enable_rfm_precompute
+        )
 
 
 # Define function to compute residual the solution
@@ -354,7 +358,7 @@ class base_register_CFunction_compute_residual_all_points:
         enable_rfm_precompute: bool,
     ):
         """
-        Register the residual evaluation function.
+        Base class for generating the residual evaluation function.
 
         This function sets the residual of the Hamiltonian constraint in the hyperbolic
         relaxation equation according to the selected coordinate system and specified
@@ -362,11 +366,6 @@ class base_register_CFunction_compute_residual_all_points:
 
         :param CoordSystem: The coordinate system.
         :param enable_rfm_precompute: Whether to enable reference metric precomputation.
-        :param enable_simd: Whether to enable SIMD.
-        :param OMP_collapse: Level of OpenMP loop collapsing.
-        :param fp_type: Floating point type, e.g., "double".
-
-        :return: None if in registration phase, else the updated NRPy environment.
         """
 
         self.includes = ["BHaH_defines.h"]
@@ -382,4 +381,6 @@ class base_register_CFunction_compute_residual_all_points:
                 "REAL *restrict xx[3]", "const rfm_struct *restrict rfmstruct"
             )
         # Populate residual_H
-        self.rhs = HyperbolicRelaxationCurvilinearRHSs(CoordSystem, enable_rfm_precompute)
+        self.rhs = HyperbolicRelaxationCurvilinearRHSs(
+            CoordSystem, enable_rfm_precompute
+        )
