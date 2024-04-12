@@ -34,14 +34,12 @@ class register_CFunction_initial_guess_single_point(
 
     def __new__(self, fp_type="double") -> Union[None, pcg.NRPyEnv_type]:
         args = locals()
-        args.pop("self")
-        args.pop("__class__")
         if pcg.pcg_registration_phase():
             pcg.register_func_call(f"{__name__}.{self.__name__}", args)
             return None
         super().__init__(self, fp_type=fp_type)
 
-        body = ccg.c_codegen(
+        self.body = ccg.c_codegen(
             [sp.sympify(0), sp.sympify(0)],
             ["*uu_ID", "*vv_ID"],
             verbose=False,
@@ -56,7 +54,7 @@ class register_CFunction_initial_guess_single_point(
             name=self.name,
             params=self.params,
             include_CodeParameters_h=True,
-            body=body,
+            body=self.body,
         )
         return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
@@ -81,8 +79,6 @@ class register_CFunction_initial_guess_all_points(
         fp_type: str = "double",
     ) -> Union[None, pcg.NRPyEnv_type]:
         args = locals()
-        args.pop("self")
-        args.pop("__class__")
         if pcg.pcg_registration_phase():
             pcg.register_func_call(f"{__name__}.{self.__name__}", args)
             return None
@@ -141,8 +137,6 @@ class register_CFunction_auxevol_gfs_single_point(
     ) -> Union[None, pcg.NRPyEnv_type]:
 
         args = locals()
-        args.pop("self")
-        args.pop("__class__")
         if pcg.pcg_registration_phase():
             pcg.register_func_call(f"{__name__}.{self.__name__}", args)
             return None
@@ -185,8 +179,6 @@ class register_CFunction_auxevol_gfs_all_points(
         :return: None if in registration phase, else the updated NRPy environment.
         """
         args = locals()
-        args.pop("self")
-        args.pop("__class__")
         if pcg.pcg_registration_phase():
             pcg.register_func_call(f"{__name__}.{self.__name__}", args)
             return None
@@ -240,8 +232,6 @@ class register_CFunction_variable_wavespeed_gfs_all_points(
         :return: None if in registration phase, else the updated NRPy environment.
         """
         args = locals()
-        args.pop("self")
-        args.pop("__class__")
         if pcg.pcg_registration_phase():
             pcg.register_func_call(f"{__name__}.{self.__name__}", args)
             return None
@@ -292,8 +282,6 @@ class register_CFunction_initialize_constant_auxevol(
         :return: None if in registration phase, else the updated NRPy environment.
         """
         args = locals()
-        args.pop("self")
-        args.pop("__class__")
         if pcg.pcg_registration_phase():
             pcg.register_func_call(f"{__name__}.{self.__name__}", args)
             return None
@@ -339,8 +327,6 @@ class register_CFunction_compute_L2_norm_of_gridfunction(
         :param fp_type: Floating point type, e.g., "double".
         """
         args = locals()
-        args.pop("self")
-        args.pop("__class__")
         super().__init__(self, CoordSystem=CoordSystem, fp_type=fp_type)
 
         loop_body = ccg.c_codegen(
@@ -438,8 +424,6 @@ class register_CFunction_diagnostics(
         :return: None if in registration phase, else the updated NRPy environment.
         """
         args = locals()
-        args.pop("self")
-        args.pop("__class__")
         if pcg.pcg_registration_phase():
             pcg.register_func_call(f"{__name__}.{self.__name__}", args)
             return None
@@ -553,8 +537,6 @@ class register_CFunction_check_stop_conditions(
         :return: None if in registration phase, else the updated NRPy environment.
         """
         args = locals()
-        args.pop("self")
-        args.pop("__class__")
         if pcg.pcg_registration_phase():
             pcg.register_func_call(f"{__name__}.{self.__name__}", args)
             return None
@@ -615,8 +597,6 @@ class register_CFunction_rhs_eval(base_npe_classes.base_register_CFunction_rhs_e
         :return: None if in registration phase, else the updated NRPy environment.
         """
         args = locals()
-        args.pop("self")
-        args.pop("__class__")
         if pcg.pcg_registration_phase():
             pcg.register_func_call(f"{__name__}.{self.__name__}", args)
             return None
@@ -689,8 +669,6 @@ class register_CFunction_compute_residual_all_points(
         :return: None if in registration phase, else the updated NRPy environment.
         """
         args = locals()
-        args.pop("self")
-        args.pop("__class__")
         if pcg.pcg_registration_phase():
             pcg.register_func_call(f"{__name__}.{self.__name__}", args)
             return None
