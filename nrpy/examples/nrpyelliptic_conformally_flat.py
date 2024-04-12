@@ -26,8 +26,7 @@ import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 import nrpy.infrastructures.BHaH.main_c as main
 from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
 import nrpy.infrastructures.BHaH.nrpyelliptic.openmp.conformally_flat_C_codegen_library as nrpyellClib
-# import nrpy.infrastructures.BHaH.nrpyelliptic.base_conformally_flat_C_codegen_library as nrpyellClib
-import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
+import nrpy.infrastructures.BHaH.grid_management.openmp.numerical_grids_and_timestep as numericalgrids
 from nrpy.infrastructures.BHaH import rfm_precompute
 from nrpy.infrastructures.BHaH import rfm_wrapper_functions
 from nrpy.infrastructures.BHaH import xx_tofrom_Cart
