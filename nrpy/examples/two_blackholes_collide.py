@@ -30,10 +30,10 @@ from nrpy.infrastructures.BHaH import griddata_commondata
 import nrpy.infrastructures.BHaH.main_c as main
 import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
-import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
+import nrpy.infrastructures.BHaH.grid_management.openmp.numerical_grids_and_timestep as numericalgrids
 from nrpy.infrastructures.BHaH import rfm_precompute
 from nrpy.infrastructures.BHaH import rfm_wrapper_functions
-import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xxCartxx
+import nrpy.infrastructures.BHaH.grid_management.openmp.xx_tofrom_Cart as xxCartxx
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 

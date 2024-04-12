@@ -24,12 +24,12 @@ from nrpy.infrastructures.BHaH import griddata_commondata
 import nrpy.infrastructures.BHaH.main_c as main
 import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
-import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
+import nrpy.infrastructures.BHaH.grid_management.openmp.numerical_grids_and_timestep as numericalgrids
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 from nrpy.infrastructures.BHaH import rfm_precompute
 from nrpy.infrastructures.BHaH import rfm_wrapper_functions
 import nrpy.infrastructures.BHaH.wave_equation.wave_equation_C_codegen_library as wCl
-from nrpy.infrastructures.BHaH import xx_tofrom_Cart
+from nrpy.infrastructures.BHaH.grid_management.openmp import xx_tofrom_Cart
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 

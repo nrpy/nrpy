@@ -29,7 +29,7 @@ import nrpy.infrastructures.BHaH.nrpyelliptic.openmp.conformally_flat_C_codegen_
 import nrpy.infrastructures.BHaH.grid_management.openmp.numerical_grids_and_timestep as numericalgrids
 from nrpy.infrastructures.BHaH import rfm_precompute
 from nrpy.infrastructures.BHaH import rfm_wrapper_functions
-from nrpy.infrastructures.BHaH import xx_tofrom_Cart
+from nrpy.infrastructures.BHaH.grid_management.openmp import xx_tofrom_Cart
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
