@@ -18,10 +18,12 @@ import nrpy.c_codegen as ccg
 
 
 class base_register_CFunction_numerical_grid_params_Nxx_dxx_xx:
-    
+
     def __init__(
         self,
-        CoordSystem: str, grid_physical_size: float, Nxx_dict: Dict[str, List[int]]
+        CoordSystem: str,
+        grid_physical_size: float,
+        Nxx_dict: Dict[str, List[int]],
     ) -> None:
         """
         Base class for generating the function to Set up a cell-centered grid of size grid_physical_size.
@@ -41,7 +43,9 @@ class base_register_CFunction_numerical_grid_params_Nxx_dxx_xx:
                 f"{CoordSystem} is not in Nxx_dict = {self.Nxx_dict}. Please add it."
             )
         for dirn in range(3):
-            par.adjust_CodeParam_default(f"Nxx{dirn}", self.Nxx_dict[self.CoordSystem][dirn])
+            par.adjust_CodeParam_default(
+                f"Nxx{dirn}", self.Nxx_dict[self.CoordSystem][dirn]
+            )
         par.adjust_CodeParam_default("grid_physical_size", self.grid_physical_size)
         par.adjust_CodeParam_default("CoordSystemName", self.CoordSystem)
 
@@ -67,16 +71,13 @@ Grid setup output:
         self.name = "numerical_grid_params_Nxx_dxx_xx"
         self.params = "const commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3], const int Nx[3], const bool grid_is_resized"
         self.body = "// Start by setting default values for Nxx.\n"
-        
+
         self.rfm = refmetric.reference_metric[self.CoordSystem]
 
 
 class base_register_CFunction_cfl_limited_timestep:
-    
-    def __init__(
-        self,
-        CoordSystem: str, fp_type: str = "double"
-    ) -> None:
+
+    def __init__(self, CoordSystem: str, fp_type: str = "double") -> None:
         """
         Base class for generating the function to find the CFL-limited timestep dt on a numerical grid.
 
@@ -88,16 +89,18 @@ class base_register_CFunction_cfl_limited_timestep:
         """
         self.CoordSystem = CoordSystem
         self.fp_type = fp_type
-        
+
         self.includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-        self.desc = f"Output minimum gridspacing ds_min on a {CoordSystem} numerical grid."
+        self.desc = (
+            f"Output minimum gridspacing ds_min on a {CoordSystem} numerical grid."
+        )
         self.cfunc_type = "void"
         self.name = "cfl_limited_timestep"
         self.params = "commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3], bc_struct *restrict bcstruct"
-        
+
         self.rfm = refmetric.reference_metric[CoordSystem]
         dxx0, dxx1, dxx2 = sp.symbols("dxx0 dxx1 dxx2", real=True)
-        self.body=""
+        self.body = ""
         self.min_body = ccg.c_codegen(
             [
                 sp.Abs(self.rfm.scalefactor_orthog[0] * dxx0),
@@ -116,7 +119,7 @@ commondata->dt = MIN(commondata->dt, ds_min * commondata->CFL_FACTOR);
 
 
 class base_register_CFunction_numerical_grids_and_timestep:
-    
+
     def __init__(
         self,
         list_of_CoordSystems: List[str],
@@ -134,10 +137,10 @@ class base_register_CFunction_numerical_grids_and_timestep:
         :param enable_rfm_precompute: Whether to enable reference metric precomputation (default: False).
         :param enable_CurviBCs: Whether to enable curvilinear boundary conditions (default: False).
         """
-        self.list_of_CoordSystems=list_of_CoordSystems
-        self.enable_rfm_precompute=enable_rfm_precompute
-        self.enable_CurviBCs=enable_CurviBCs
-        
+        self.list_of_CoordSystems = list_of_CoordSystems
+        self.enable_rfm_precompute = enable_rfm_precompute
+        self.enable_CurviBCs = enable_CurviBCs
+
         self.includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
         self.desc = "Set up a cell-centered grids of size grid_physical_size."
         self.cfunc_type = "void"

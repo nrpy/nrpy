@@ -30,11 +30,15 @@ _ = par.CodeParameter("char[200]", __name__, "gridding_choice", "independent gri
 # fmt: on
 
 
-class register_CFunction_numerical_grid_params_Nxx_dxx_xx(base_gm_classes.base_register_CFunction_numerical_grid_params_Nxx_dxx_xx):
-    
+class register_CFunction_numerical_grid_params_Nxx_dxx_xx(
+    base_gm_classes.base_register_CFunction_numerical_grid_params_Nxx_dxx_xx
+):
+
     def __new__(
         self,
-        CoordSystem: str, grid_physical_size: float, Nxx_dict: Dict[str, List[int]]
+        CoordSystem: str,
+        grid_physical_size: float,
+        Nxx_dict: Dict[str, List[int]],
     ) -> None:
         """
         Register a C function to Set up a cell-centered grid of size grid_physical_size.
@@ -46,12 +50,12 @@ class register_CFunction_numerical_grid_params_Nxx_dxx_xx(base_gm_classes.base_r
 
         :raises ValueError: If CoordSystem is not in Nxx_dict.
         """
-        super().__init__(
-            self, CoordSystem, grid_physical_size, Nxx_dict
-        )
-   
+        super().__init__(self, CoordSystem, grid_physical_size, Nxx_dict)
+
         for dirn in range(3):
-            self.body += f"params->Nxx{dirn} = {self.Nxx_dict[self.CoordSystem][dirn]};\n"
+            self.body += (
+                f"params->Nxx{dirn} = {self.Nxx_dict[self.CoordSystem][dirn]};\n"
+            )
         self.body += """
 // If all components of Nx[] are set to reasonable values (i.e., not -1), then set params->Nxx{} to Nx[].
 if( !(Nx[0]==-1 || Nx[1]==-1 || Nx[2]==-1) ) {
@@ -103,7 +107,9 @@ params->Nxx_plus_2NGHOSTS2 = params->Nxx2 + 2*NGHOSTS;
     """
         for minmax in ["min", "max"]:
             for dirn in range(3):
-                rfm_value = self.rfm.xxmin[dirn] if minmax == "min" else self.rfm.xxmax[dirn]
+                rfm_value = (
+                    self.rfm.xxmin[dirn] if minmax == "min" else self.rfm.xxmax[dirn]
+                )
                 str_rfm_value = str(rfm_value)
                 param_dir = f"params->xx{minmax}{dirn}"
 
@@ -114,7 +120,9 @@ params->Nxx_plus_2NGHOSTS2 = params->Nxx2 + 2*NGHOSTS;
                         continue
 
                 if "Cartesian" in self.CoordSystem:
-                    self.body += f"{param_dir} = {rfm_value} * factor_rescale_minmax_xx{dirn};\n"
+                    self.body += (
+                        f"{param_dir} = {rfm_value} * factor_rescale_minmax_xx{dirn};\n"
+                    )
                 else:
                     self.body += f"{param_dir} = {rfm_value};\n"
 
@@ -148,12 +156,11 @@ params->Nxx_plus_2NGHOSTS2 = params->Nxx2 + 2*NGHOSTS;
         )
 
 
-class register_CFunction_cfl_limited_timestep(base_gm_classes.base_register_CFunction_cfl_limited_timestep):
-    
-    def __new__(
-        self,
-        CoordSystem: str, fp_type: str = "double"
-    ) -> None:
+class register_CFunction_cfl_limited_timestep(
+    base_gm_classes.base_register_CFunction_cfl_limited_timestep
+):
+
+    def __new__(self, CoordSystem: str, fp_type: str = "double") -> None:
         """
         Register a C function to find the CFL-limited timestep dt on a numerical grid.
 
@@ -163,9 +170,7 @@ class register_CFunction_cfl_limited_timestep(base_gm_classes.base_register_CFun
         :param CoordSystem: The coordinate system used for the simulation.
         :param fp_type: Floating point type, e.g., "double".
         """
-        super().__init__(
-            self, CoordSystem, fp_type=fp_type
-        )
+        super().__init__(self, CoordSystem, fp_type=fp_type)
         # could be replaced by simple loop?
         self.body = r"""
 REAL ds_min = 1e38;
@@ -179,7 +184,7 @@ LOOP_NOOMP(i0, 0, Nxx_plus_2NGHOSTS0,
     REAL dsmin0, dsmin1, dsmin2;
 """
         self.body += self.min_body
-        
+
         cfc.register_CFunction(
             includes=self.includes,
             desc=self.desc,
@@ -192,8 +197,10 @@ LOOP_NOOMP(i0, 0, Nxx_plus_2NGHOSTS0,
         )
 
 
-class register_CFunction_numerical_grids_and_timestep(base_gm_classes.base_register_CFunction_numerical_grids_and_timestep):
-    
+class register_CFunction_numerical_grids_and_timestep(
+    base_gm_classes.base_register_CFunction_numerical_grids_and_timestep
+):
+
     def __new__(
         self,
         list_of_CoordSystems: List[str],
@@ -212,10 +219,10 @@ class register_CFunction_numerical_grids_and_timestep(base_gm_classes.base_regis
         :param enable_CurviBCs: Whether to enable curvilinear boundary conditions (default: False).
         """
         super().__init__(
-            self, 
-            list_of_CoordSystems, 
+            self,
+            list_of_CoordSystems,
             enable_rfm_precompute=enable_rfm_precompute,
-            enable_CurviBCs=enable_CurviBCs
+            enable_CurviBCs=enable_CurviBCs,
         )
         self.body = r"""
     // Step 1.a: Set each CodeParameter in griddata.params to default, for MAXNUMGRIDS grids.
@@ -231,7 +238,9 @@ class register_CFunction_numerical_grids_and_timestep(base_gm_classes.base_regis
         int grid=0;
     """
         for CoordSystem in self.list_of_CoordSystems:
-            self.body += f"griddata[grid].params.CoordSystem_hash = {CoordSystem.upper()};\n"
+            self.body += (
+                f"griddata[grid].params.CoordSystem_hash = {CoordSystem.upper()};\n"
+            )
             self.body += "numerical_grid_params_Nxx_dxx_xx(commondata, &griddata[grid].params, griddata[grid].xx, Nx, grid_is_resized);\n"
             self.body += "grid++;\n\n"
         self.body += r"""}
@@ -247,8 +256,10 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
 """
         else:
             self.body += "// (reference-metric precomputation disabled)\n"
-        self.body += "\n// Step 1.d: Set up curvilinear boundary condition struct (bcstruct)\n"
-        
+        self.body += (
+            "\n// Step 1.d: Set up curvilinear boundary condition struct (bcstruct)\n"
+        )
+
         if self.enable_CurviBCs:
             self.body += r"""
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
@@ -257,7 +268,7 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
 """
         else:
             self.body += "// (curvilinear boundary conditions bcstruct disabled)\n"
-        
+
         self.body += r"""
 // Step 1.e: Set timestep based on minimum spacing between neighboring gridpoints.
 commondata->dt = 1e30;
