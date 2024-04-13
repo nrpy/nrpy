@@ -19,13 +19,10 @@ import nrpy.grid as gri  # NRPy+: Functions having to do with numerical grids
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 import nrpy.finite_difference as fin  # NRPy+: Finite-difference module
-from nrpy.infrastructures.BHaH import griddata_commondata
-from nrpy.infrastructures.BHaH import BHaH_defines_h
-from nrpy.validate_expressions.validate_expressions import check_zero
 
-_ = par.CodeParameter(
-    "char[50]", __name__, "outer_bc_type", "radiation", commondata=True
-)
+# from nrpy.infrastructures.BHaH import griddata_commondata
+# from nrpy.infrastructures.BHaH import BHaH_defines_h
+from nrpy.validate_expressions.validate_expressions import check_zero
 
 
 # Set unit-vector dot products (=parity) for each of the 10 parity condition types
@@ -473,30 +470,34 @@ for(int whichparity=0;whichparity<10;whichparity++) {{
 
 # bcstruct_set_up():
 #      This function is documented in desc= and body= fields below.
-def register_CFunction_bcstruct_set_up(
-    CoordSystem: str, fp_type: str = "double"
-) -> None:
-    """
-    Register C function for setting up bcstruct.
+class base_register_CFunction_bcstruct_set_up:
+    def __init__(self, CoordSystem: str, fp_type: str = "double") -> None:
+        """
+        Base class for generating the function for setting up bcstruct.
 
-    This function prescribes how inner and outer boundary points on the
-    computational grid are filled, based on the given coordinate system (CoordSystem).
+        This function prescribes how inner and outer boundary points on the
+        computational grid are filled, based on the given coordinate system (CoordSystem).
 
-    :param CoordSystem: The coordinate system for which to set up boundary conditions.
-    :param fp_type: Floating point type, e.g., "double".
-    """
-    includes = [
-        "BHaH_defines.h",
-        "BHaH_function_prototypes.h",
-    ]
-    prefunc = Cfunction__EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(
-        CoordSystem,
-        fp_type=fp_type,
-    )
-    prefunc += Cfunction__set_parity_for_inner_boundary_single_pt(
-        CoordSystem, fp_type=fp_type
-    )
-    desc = r"""At each coordinate point (x0,x1,x2) situated at grid index (i0,i1,i2):
+        :param CoordSystem: The coordinate system for which to set up boundary conditions.
+        :param fp_type: Floating point type, e.g., "double".
+        """
+        self.CoordSystem = CoordSystem
+        self.fp_type = fp_type
+
+        self.includes = [
+            "BHaH_defines.h",
+            "BHaH_function_prototypes.h",
+        ]
+        self.prefunc = (
+            Cfunction__EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(
+                self.CoordSystem,
+                fp_type=self.fp_type,
+            )
+        )
+        self.prefunc += Cfunction__set_parity_for_inner_boundary_single_pt(
+            self.CoordSystem, fp_type=self.fp_type
+        )
+        self.desc = r"""At each coordinate point (x0,x1,x2) situated at grid index (i0,i1,i2):
 Step 1: Set up inner boundary structs bcstruct->inner_bc_array[].
   Recall that at each inner boundary point we must set innerpt_bc_struct:
     typedef struct __innerpt_bc_struct__ {
@@ -553,211 +554,32 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
     regardless of whether the point is an outer or inner point. However
     the struct is set only at outer boundary points. This is slightly
     wasteful, but only in memory, not in CPU."""
-    cfunc_type = "void"
-    name = "bcstruct_set_up"
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], bc_struct *restrict bcstruct"
-    body = r"""
-  ////////////////////////////////////////
-  // STEP 1: SET UP INNER BOUNDARY STRUCTS
-  {
-    // First count the number of inner points.
-    int num_inner = 0;
-    LOOP_OMP("omp parallel for reduction(+:num_inner)",
-             i0,0,Nxx_plus_2NGHOSTS0,  i1,0,Nxx_plus_2NGHOSTS1,  i2,0,Nxx_plus_2NGHOSTS2) {
-      const int i0i1i2[3] = { i0,i1,i2 };
-      if(!IS_IN_GRID_INTERIOR(i0i1i2, Nxx_plus_2NGHOSTS0,Nxx_plus_2NGHOSTS1,Nxx_plus_2NGHOSTS2, NGHOSTS)) {
-        REAL x0x1x2_inbounds[3];
-        int i0i1i2_inbounds[3];
-        EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(commondata, params, xx, i0,i1,i2, x0x1x2_inbounds,i0i1i2_inbounds);
-        if(i0 == i0i1i2_inbounds[0] && i1==i0i1i2_inbounds[1] && i2==i0i1i2_inbounds[2]) {
-          // this is a pure outer boundary point.
-        } else {
-          // this is an inner boundary point, which maps either
-          //  to the grid interior or to an outer boundary point
-          num_inner++;
-        }
-      }
-    }
-    // Store num_inner to bc_info:
-    bcstruct->bc_info.num_inner_boundary_points = num_inner;
-
-    // Next allocate memory for inner_boundary_points:
-    bcstruct->inner_bc_array = (innerpt_bc_struct *restrict)malloc( sizeof(innerpt_bc_struct)*num_inner );
-  }
-
-  // Then set inner_bc_array:
-  {
-    int which_inner = 0;
-    LOOP_NOOMP(i0,0,Nxx_plus_2NGHOSTS0,  i1,0,Nxx_plus_2NGHOSTS1,  i2,0,Nxx_plus_2NGHOSTS2) {
-      const int i0i1i2[3] = { i0,i1,i2 };
-      if(!IS_IN_GRID_INTERIOR(i0i1i2, Nxx_plus_2NGHOSTS0,Nxx_plus_2NGHOSTS1,Nxx_plus_2NGHOSTS2, NGHOSTS)) {
-        REAL x0x1x2_inbounds[3];
-        int i0i1i2_inbounds[3];
-        EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(commondata, params, xx, i0,i1,i2, x0x1x2_inbounds,i0i1i2_inbounds);
-        if(i0 == i0i1i2_inbounds[0] && i1==i0i1i2_inbounds[1] && i2==i0i1i2_inbounds[2]) {
-          // this is a pure outer boundary point.
-        } else {
-          bcstruct->inner_bc_array[which_inner].dstpt = IDX3(i0,i1,i2);
-          bcstruct->inner_bc_array[which_inner].srcpt = IDX3(i0i1i2_inbounds[0],i0i1i2_inbounds[1],i0i1i2_inbounds[2]);
-          //printf("%d / %d\n",which_inner, bc_info->num_inner_boundary_points);
-          set_parity_for_inner_boundary_single_pt(commondata, params, xx[0][i0],xx[1][i1],xx[2][i2],
-                                                  x0x1x2_inbounds, which_inner, bcstruct->inner_bc_array);
-
-          which_inner++;
-        }
-      }
-    }
-  }
-
-  ////////////////////////////////////////
-  // STEP 2: SET UP OUTER BOUNDARY STRUCTS
-  // First set up loop bounds for outer boundary condition updates,
-  //   store to bc_info->bc_loop_bounds[which_gz][face][]. Also
-  //   allocate memory for outer_bc_array[which_gz][face][]:
-  int imin[3] = { NGHOSTS, NGHOSTS, NGHOSTS };
-  int imax[3] = { Nxx_plus_2NGHOSTS0-NGHOSTS, Nxx_plus_2NGHOSTS1-NGHOSTS, Nxx_plus_2NGHOSTS2-NGHOSTS };
-  for(int which_gz=0;which_gz<NGHOSTS;which_gz++) {
-    const int x0min_face_range[6] = { imin[0]-1,imin[0], imin[1],imax[1], imin[2],imax[2] };  imin[0]--;
-    const int x0max_face_range[6] = { imax[0],imax[0]+1, imin[1],imax[1], imin[2],imax[2] };  imax[0]++;
-    const int x1min_face_range[6] = { imin[0],imax[0], imin[1]-1,imin[1], imin[2],imax[2] };  imin[1]--;
-    const int x1max_face_range[6] = { imin[0],imax[0], imax[1],imax[1]+1, imin[2],imax[2] };  imax[1]++;
-    const int x2min_face_range[6] = { imin[0],imax[0], imin[1],imax[1], imin[2]-1,imin[2] };  imin[2]--;
-    const int x2max_face_range[6] = { imin[0],imax[0], imin[1],imax[1], imax[2],imax[2]+1 };  imax[2]++;
-
-    int face=0;
-    ////////////////////////
-    // x0min and x0max faces: Allocate memory for outer_bc_array and set bc_loop_bounds:
-    //                        Note that x0min and x0max faces have exactly the same size.
-    //                   Also, note that face/2 --v   offsets this factor of 2 ------------------------------------------v
-    bcstruct->pure_outer_bc_array[3*which_gz + face/2] = (outerpt_bc_struct *restrict)malloc(sizeof(outerpt_bc_struct) * 2 *
-                                                                                             ((x0min_face_range[1]-x0min_face_range[0]) *
-                                                                                              (x0min_face_range[3]-x0min_face_range[2]) *
-                                                                                              (x0min_face_range[5]-x0min_face_range[4])));
-    // x0min face: Can't set bc_info->bc_loop_bounds[which_gz][face] = { i0min,i0max, ... } since it's not const :(
-    for(int i=0;i<6;i++) { bcstruct->bc_info.bc_loop_bounds[which_gz][face][i] = x0min_face_range[i]; }
-    face++;
-    // x0max face: Set loop bounds & allocate memory for outer_bc_array:
-    for(int i=0;i<6;i++) { bcstruct->bc_info.bc_loop_bounds[which_gz][face][i] = x0max_face_range[i]; }
-    face++;
-    ////////////////////////
-
-    ////////////////////////
-    // x1min and x1max faces: Allocate memory for outer_bc_array and set bc_loop_bounds:
-    //                        Note that x1min and x1max faces have exactly the same size.
-    //                   Also, note that face/2 --v   offsets this factor of 2 ------------------------------------------v
-    bcstruct->pure_outer_bc_array[3*which_gz + face/2] = (outerpt_bc_struct *restrict)malloc(sizeof(outerpt_bc_struct) * 2 *
-                                                                                             ((x1min_face_range[1]-x1min_face_range[0]) *
-                                                                                              (x1min_face_range[3]-x1min_face_range[2]) *
-                                                                                              (x1min_face_range[5]-x1min_face_range[4])));
-    // x1min face: Can't set bc_info->bc_loop_bounds[which_gz][face] = { i0min,i0max, ... } since it's not const :(
-    for(int i=0;i<6;i++) { bcstruct->bc_info.bc_loop_bounds[which_gz][face][i] = x1min_face_range[i]; }
-    face++;
-    // x1max face: Set loop bounds & allocate memory for outer_bc_array:
-    for(int i=0;i<6;i++) { bcstruct->bc_info.bc_loop_bounds[which_gz][face][i] = x1max_face_range[i]; }
-    face++;
-    ////////////////////////
-
-
-    ////////////////////////
-    // x2min and x2max faces: Allocate memory for outer_bc_array and set bc_loop_bounds:
-    //                        Note that x2min and x2max faces have exactly the same size.
-    //                   Also, note that face/2 --v   offsets this factor of 2 ------------------------------------------v
-    bcstruct->pure_outer_bc_array[3*which_gz + face/2] = (outerpt_bc_struct *restrict)malloc(sizeof(outerpt_bc_struct) * 2 *
-                                                                                             ((x2min_face_range[1]-x2min_face_range[0]) *
-                                                                                              (x2min_face_range[3]-x2min_face_range[2]) *
-                                                                                              (x2min_face_range[5]-x2min_face_range[4])));
-    // x2min face: Can't set bc_info->bc_loop_bounds[which_gz][face] = { i0min,i0max, ... } since it's not const :(
-    for(int i=0;i<6;i++) { bcstruct->bc_info.bc_loop_bounds[which_gz][face][i] = x2min_face_range[i]; }
-    face++;
-    // x2max face: Set loop bounds & allocate memory for outer_bc_array:
-    for(int i=0;i<6;i++) { bcstruct->bc_info.bc_loop_bounds[which_gz][face][i] = x2max_face_range[i]; }
-    face++;
-    ////////////////////////
-  }
-
-  for(int which_gz=0;which_gz<NGHOSTS;which_gz++) for(int dirn=0;dirn<3;dirn++) {
-      int idx2d = 0;
-      // LOWER FACE: dirn=0 -> x0min; dirn=1 -> x1min; dirn=2 -> x2min
-      {
-        const int face = dirn*2;
-#define IDX2D_BCS(i0,i0min,i0max, i1,i1min,i1max ,i2,i2min,i2max)       \
-        ( ((i0)-(i0min)) + ((i0max)-(i0min)) * ( ((i1)-(i1min)) + ((i1max)-(i1min)) * ((i2)-(i2min)) ) )
-        const int FACEX0=(face==0) - (face==1); // +1 if face==0 (x0min) ; -1 if face==1 (x0max). Otherwise 0.
-        const int FACEX1=(face==2) - (face==3); // +1 if face==2 (x1min) ; -1 if face==3 (x1max). Otherwise 0.
-        const int FACEX2=(face==4) - (face==5); // +1 if face==4 (x2min) ; -1 if face==5 (x2max). Otherwise 0.
-        LOOP_NOOMP(i0,bcstruct->bc_info.bc_loop_bounds[which_gz][face][0],bcstruct->bc_info.bc_loop_bounds[which_gz][face][1],
-                   i1,bcstruct->bc_info.bc_loop_bounds[which_gz][face][2],bcstruct->bc_info.bc_loop_bounds[which_gz][face][3],
-                   i2,bcstruct->bc_info.bc_loop_bounds[which_gz][face][4],bcstruct->bc_info.bc_loop_bounds[which_gz][face][5]) {
-          REAL x0x1x2_inbounds[3];
-          int i0i1i2_inbounds[3];
-          EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(commondata, params, xx, i0,i1,i2, x0x1x2_inbounds,i0i1i2_inbounds);
-          if(i0 == i0i1i2_inbounds[0] && i1==i0i1i2_inbounds[1] && i2==i0i1i2_inbounds[2]) {
-            bcstruct->pure_outer_bc_array[dirn + (3*which_gz)][idx2d].i0 = i0;
-            bcstruct->pure_outer_bc_array[dirn + (3*which_gz)][idx2d].i1 = i1;
-            bcstruct->pure_outer_bc_array[dirn + (3*which_gz)][idx2d].i2 = i2;
-            bcstruct->pure_outer_bc_array[dirn + (3*which_gz)][idx2d].FACEX0 = FACEX0;
-            bcstruct->pure_outer_bc_array[dirn + (3*which_gz)][idx2d].FACEX1 = FACEX1;
-            bcstruct->pure_outer_bc_array[dirn + (3*which_gz)][idx2d].FACEX2 = FACEX2;
-            idx2d++;
-          }
-        }
-      }
-      // UPPER FACE: dirn=0 -> x0max; dirn=1 -> x1max; dirn=2 -> x2max
-      {
-        const int face = dirn*2+1;
-        const int FACEX0=(face==0) - (face==1); // +1 if face==0 ; -1 if face==1. Otherwise 0.
-        const int FACEX1=(face==2) - (face==3); // +1 if face==2 ; -1 if face==3. Otherwise 0.
-        const int FACEX2=(face==4) - (face==5); // +1 if face==4 ; -1 if face==5. Otherwise 0.
-        LOOP_NOOMP(i0,bcstruct->bc_info.bc_loop_bounds[which_gz][face][0],bcstruct->bc_info.bc_loop_bounds[which_gz][face][1],
-                   i1,bcstruct->bc_info.bc_loop_bounds[which_gz][face][2],bcstruct->bc_info.bc_loop_bounds[which_gz][face][3],
-                   i2,bcstruct->bc_info.bc_loop_bounds[which_gz][face][4],bcstruct->bc_info.bc_loop_bounds[which_gz][face][5]) {
-          REAL x0x1x2_inbounds[3];
-          int i0i1i2_inbounds[3];
-          EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(commondata, params, xx, i0,i1,i2, x0x1x2_inbounds,i0i1i2_inbounds);
-          if(i0 == i0i1i2_inbounds[0] && i1==i0i1i2_inbounds[1] && i2==i0i1i2_inbounds[2]) {
-            bcstruct->pure_outer_bc_array[dirn + (3*which_gz)][idx2d].i0 = i0;
-            bcstruct->pure_outer_bc_array[dirn + (3*which_gz)][idx2d].i1 = i1;
-            bcstruct->pure_outer_bc_array[dirn + (3*which_gz)][idx2d].i2 = i2;
-            bcstruct->pure_outer_bc_array[dirn + (3*which_gz)][idx2d].FACEX0 = FACEX0;
-            bcstruct->pure_outer_bc_array[dirn + (3*which_gz)][idx2d].FACEX1 = FACEX1;
-            bcstruct->pure_outer_bc_array[dirn + (3*which_gz)][idx2d].FACEX2 = FACEX2;
-            idx2d++;
-          }
-        }
-      }
-      bcstruct->bc_info.num_pure_outer_boundary_points[which_gz][dirn] = idx2d;
-    }
-"""
-    cfc.register_CFunction(
-        includes=includes,
-        prefunc=prefunc,
-        desc=desc,
-        cfunc_type=cfunc_type,
-        CoordSystem_for_wrapper_func=CoordSystem,
-        name=name,
-        params=params,
-        include_CodeParameters_h=True,
-        body=body,
-    )
+        self.cfunc_type = "void"
+        self.name = "bcstruct_set_up"
+        self.params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], bc_struct *restrict bcstruct"
 
 
 ###############################
 ## apply_bcs_inner_only(): Apply inner boundary conditions.
 ##  Function is documented below in desc= and body=.
-def register_CFunction_apply_bcs_inner_only() -> None:
-    """Register C function for filling inner boundary points on the computational grid, as prescribed by bcstruct."""
-    includes = ["BHaH_defines.h"]
-    desc = r"""
-Apply BCs to inner boundary points only,
-using data stored in bcstruct->inner_bc_array.
-These structs are set in bcstruct_set_up().
-Inner boundary points map to either the grid
-interior ("pure inner") or to pure outer
-boundary points ("inner maps to outer").
-"""
-    cfunc_type = "void"
-    name = "apply_bcs_inner_only"
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const bc_struct *restrict bcstruct, REAL *restrict gfs"
+class base_register_CFunction_apply_bcs_inner_only:
+    def __init__(self) -> None:
+        """
+        Register C function for filling inner boundary points on the computational grid,
+        as prescribed by bcstruct."""
+        self.includes = ["BHaH_defines.h"]
+        self.desc = r"""
+    Apply BCs to inner boundary points only,
+    using data stored in bcstruct->inner_bc_array.
+    These structs are set in bcstruct_set_up().
+    Inner boundary points map to either the grid
+    interior ("pure inner") or to pure outer
+    boundary points ("inner maps to outer").
+    """
+        self.cfunc_type = "void"
+        self.name = "apply_bcs_inner_only"
+        self.params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const bc_struct *restrict bcstruct, REAL *restrict gfs"
+
     body = r"""
   // Unpack bc_info from bcstruct
   const bc_info_struct *bc_info = &bcstruct->bc_info;
@@ -773,24 +595,17 @@ boundary points ("inner maps to outer").
     } // END for(int pt=0;pt<num_inner_pts;pt++)
   } // END for(int which_gf=0;which_gf<NUM_EVOL_GFS;which_gf++)
 """
-    cfc.register_CFunction(
-        includes=includes,
-        desc=desc,
-        cfunc_type=cfunc_type,
-        name=name,
-        params=params,
-        include_CodeParameters_h=True,
-        body=body,
-    )
 
 
 ###############################
 ## apply_bcs_outerextrap_and_inner(): Apply extrapolation outer boundary conditions.
 ##  Function is documented below in desc= and body=.
-def register_CFunction_apply_bcs_outerextrap_and_inner() -> None:
-    """Register C function for filling boundary points with extrapolation and prescribed bcstruct."""
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = r"""#Suppose the outer boundary point is at the i0=max(i0) face. Then we fit known data at i0-3, i0-2, and i0-1
+class base_register_CFunction_apply_bcs_outerextrap_and_inner:
+
+    def __init__(self) -> None:
+        """Register C function for filling boundary points with extrapolation and prescribed bcstruct."""
+        self.includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+        self.desc = r"""#Suppose the outer boundary point is at the i0=max(i0) face. Then we fit known data at i0-3, i0-2, and i0-1
 #  to the unique quadratic polynomial that passes through those points, and fill the data at
 #  i0 with the value implied from the polynomial.
 #As derived in nrpytutorial's Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb,
@@ -799,76 +614,9 @@ def register_CFunction_apply_bcs_outerextrap_and_inner() -> None:
 #  * f(x0 = constant. Then f_{i0} = f_{i0-3} <- CHECK!
 #  * f(x) = x. WOLOG suppose x0=0. Then f_{i0} = (-3dx) - 3(-2dx) + 3(-dx) = + dx(-3+6-3) = 0 <- CHECK!
 #  * f(x) = x^2. WOLOG suppose x0=0. Then f_{i0} = (-3dx)^2 - 3(-2dx)^2 + 3(-dx)^2 = + dx^2(9-12+3) = 0 <- CHECK!"""
-    cfunc_type = "void"
-    name = "apply_bcs_outerextrap_and_inner"
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const bc_struct *restrict bcstruct, REAL *restrict gfs"
-    body = r"""
-  // Unpack bc_info from bcstruct
-  const bc_info_struct *bc_info = &bcstruct->bc_info;
-
-  ////////////////////////////////////////////////////////
-  // STEP 1 of 2: Apply BCs to pure outer boundary points.
-  //              By "pure" we mean that these points are
-  //              on the outer boundary and not also on
-  //              an inner boundary.
-  //              Here we fill in the innermost ghost zone
-  //              layer first and move outward. At each
-  //              layer, we fill in +/- x0 faces first,
-  //              then +/- x1 faces, finally +/- x2 faces,
-  //              filling in the edges as we go.
-  // Spawn N OpenMP threads, either across all cores, or according to e.g., taskset.
-#pragma omp parallel
-  {
-    for(int which_gz=0;which_gz<NGHOSTS;which_gz++) for(int dirn=0;dirn<3;dirn++) {
-        // This option results in about 1.6% slower runtime for SW curvilinear at 64x24x24 on 8-core Ryzen 9 4900HS
-        //#pragma omp for collapse(2)
-        //for(int which_gf=0;which_gf<NUM_EVOL_GFS;which_gf++) for(int idx2d=0;idx2d<bc_info->num_pure_outer_boundary_points[which_gz][dirn];idx2d++) {
-        //  {
-        // Don't spawn a thread if there are no boundary points to fill; results in a nice little speedup.
-        if(bc_info->num_pure_outer_boundary_points[which_gz][dirn] > 0) {
-#pragma omp for  // threads have been spawned; here we distribute across them
-          for(int idx2d=0;idx2d<bc_info->num_pure_outer_boundary_points[which_gz][dirn];idx2d++) {
-            const short i0 = bcstruct->pure_outer_bc_array[dirn + (3*which_gz)][idx2d].i0;
-            const short i1 = bcstruct->pure_outer_bc_array[dirn + (3*which_gz)][idx2d].i1;
-            const short i2 = bcstruct->pure_outer_bc_array[dirn + (3*which_gz)][idx2d].i2;
-            const short FACEX0 = bcstruct->pure_outer_bc_array[dirn + (3*which_gz)][idx2d].FACEX0;
-            const short FACEX1 = bcstruct->pure_outer_bc_array[dirn + (3*which_gz)][idx2d].FACEX1;
-            const short FACEX2 = bcstruct->pure_outer_bc_array[dirn + (3*which_gz)][idx2d].FACEX2;
-            const int idx_offset0 = IDX3(i0,i1,i2);
-            const int idx_offset1 = IDX3(i0+1*FACEX0,i1+1*FACEX1,i2+1*FACEX2);
-            const int idx_offset2 = IDX3(i0+2*FACEX0,i1+2*FACEX1,i2+2*FACEX2);
-            const int idx_offset3 = IDX3(i0+3*FACEX0,i1+3*FACEX1,i2+3*FACEX2);
-            for(int which_gf=0;which_gf<NUM_EVOL_GFS;which_gf++) {
-              // *** Apply 2nd-order polynomial extrapolation BCs to all outer boundary points. ***
-              gfs[IDX4pt(which_gf, idx_offset0)] =
-                +3.0*gfs[IDX4pt(which_gf, idx_offset1)]
-                -3.0*gfs[IDX4pt(which_gf, idx_offset2)]
-                +1.0*gfs[IDX4pt(which_gf, idx_offset3)];
-            }
-          }
-        }
-      }
-  }
-
-  ///////////////////////////////////////////////////////
-  // STEP 2 of 2: Apply BCs to inner boundary points.
-  //              These map to either the grid interior
-  //              ("pure inner") or to pure outer boundary
-  //              points ("inner maps to outer"). Those
-  //              that map to outer require that outer be
-  //              populated first; hence this being
-  //              STEP 2 OF 2.
-  apply_bcs_inner_only(commondata, params, bcstruct, gfs);
-"""
-    cfc.register_CFunction(
-        includes=includes,
-        desc=desc,
-        cfunc_type=cfunc_type,
-        name=name,
-        params=params,
-        include_CodeParameters_h=True,
-        body=body,
-    )
+        self.cfunc_type = "void"
+        self.name = "apply_bcs_outerextrap_and_inner"
+        self.params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const bc_struct *restrict bcstruct, REAL *restrict gfs"
 
 
 ###############################
@@ -1214,187 +962,113 @@ return partial_t_f_outgoing_wave + k * rinv*rinv*rinv;
 # apply_bcs_outerradiation_and_inner():
 #   Apply radiation BCs at outer boundary points, and
 #   inner boundary conditions at inner boundary points.
-def register_CFunction_apply_bcs_outerradiation_and_inner(
-    CoordSystem: str,
-    radiation_BC_fd_order: int = 2,
-    fp_type: str = "double",
-) -> None:
-    """
-    Register a C function to apply boundary conditions to both pure outer and inner boundary points.
+class base_register_CFunction_apply_bcs_outerradiation_and_inner:
+    def __init__(
+        self,
+        CoordSystem: str,
+        radiation_BC_fd_order: int = 2,
+        fp_type: str = "double",
+    ) -> None:
+        """
+        Register a C function to apply boundary conditions to both pure outer and inner boundary points.
 
-    :param CoordSystem: The coordinate system to use.
-    :param radiation_BC_fd_order: Finite differencing order for the radiation boundary conditions. Default is 2.
-    :param fp_type: Floating point type, e.g., "double".
-    """
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    prefunc = setup_Cfunction_radiation_bcs(
-        CoordSystem=CoordSystem,
-        radiation_BC_fd_order=radiation_BC_fd_order,
-        fp_type=fp_type,
-    )
-    desc = """This function is responsible for applying boundary conditions (BCs) to both pure outer and inner
-boundary points. In the first step, it parallelizes the task using OpenMP and starts by applying BCs to
-the outer boundary points layer-by-layer, prioritizing the faces in the order x0, x1, x2. The second step
-applies BCs to the inner boundary points, which may map either to the grid interior or to the outer boundary.
-"""
-    cfunc_type = "void"
-    name = "apply_bcs_outerradiation_and_inner"
-    params = """const commondata_struct *restrict commondata, const params_struct *restrict params,
-    const bc_struct *restrict bcstruct, REAL *restrict xx[3],
-    const REAL custom_wavespeed[NUM_EVOL_GFS],
-    const REAL custom_f_infinity[NUM_EVOL_GFS],
-    REAL *restrict gfs, REAL *restrict rhs_gfs"""
-    body = r"""
-  // Unpack bc_info from bcstruct
-  const bc_info_struct *bc_info = &bcstruct->bc_info;
+        :param CoordSystem: The coordinate system to use.
+        :param radiation_BC_fd_order: Finite differencing order for the radiation boundary conditions. Default is 2.
+        :param fp_type: Floating point type, e.g., "double".
+        """
+        self.CoordSystem = CoordSystem
+        self.radiation_BC_fd_order = radiation_BC_fd_order
+        self.fp_type = fp_type
 
-  ////////////////////////////////////////////////////////
-  // STEP 1 of 2: Apply BCs to pure outer boundary points.
-  //              By "pure" we mean that these points are
-  //              on the outer boundary and not also on
-  //              an inner boundary.
-  //              Here we fill in the innermost ghost zone
-  //              layer first and move outward. At each
-  //              layer, we fill in +/- x0 faces first,
-  //              then +/- x1 faces, finally +/- x2 faces,
-  //              filling in the edges as we go.
-  // Spawn N OpenMP threads, either across all cores, or according to e.g., taskset.
-#pragma omp parallel
-  {
-    for(int which_gz=0;which_gz<NGHOSTS;which_gz++) for(int dirn=0;dirn<3;dirn++) {
-        // This option results in about 1.6% slower runtime for SW curvilinear at 64x24x24 on 8-core Ryzen 9 4900HS
-        //#pragma omp for collapse(2)
-        //for(int which_gf=0;which_gf<NUM_EVOL_GFS;which_gf++) for(int idx2d=0;idx2d<bc_info->num_pure_outer_boundary_points[which_gz][dirn];idx2d++) {
-        //  {
-        // Don't spawn a thread if there are no boundary points to fill; results in a nice little speedup.
-        if(bc_info->num_pure_outer_boundary_points[which_gz][dirn] > 0) {
-#pragma omp for  // threads have been spawned; here we distribute across them
-          for(int idx2d=0;idx2d<bc_info->num_pure_outer_boundary_points[which_gz][dirn];idx2d++) {
-            const short i0 = bcstruct->pure_outer_bc_array[dirn + (3*which_gz)][idx2d].i0;
-            const short i1 = bcstruct->pure_outer_bc_array[dirn + (3*which_gz)][idx2d].i1;
-            const short i2 = bcstruct->pure_outer_bc_array[dirn + (3*which_gz)][idx2d].i2;
-            const short FACEX0 = bcstruct->pure_outer_bc_array[dirn + (3*which_gz)][idx2d].FACEX0;
-            const short FACEX1 = bcstruct->pure_outer_bc_array[dirn + (3*which_gz)][idx2d].FACEX1;
-            const short FACEX2 = bcstruct->pure_outer_bc_array[dirn + (3*which_gz)][idx2d].FACEX2;
-            const int idx3 = IDX3(i0,i1,i2);
-            for(int which_gf=0;which_gf<NUM_EVOL_GFS;which_gf++) {
-              // *** Apply radiation BCs to all outer boundary points. ***
-              rhs_gfs[IDX4pt(which_gf, idx3)] = radiation_bcs(commondata, params, bcstruct, xx, gfs, rhs_gfs, which_gf,
-                                                               custom_wavespeed[which_gf], custom_f_infinity[which_gf],
-                                                               i0,i1,i2, FACEX0,FACEX1,FACEX2);
-            }
-          }
-        }
-      }
-  }
-
-  ///////////////////////////////////////////////////////
-  // STEP 2 of 2: Apply BCs to inner boundary points.
-  //              These map to either the grid interior
-  //              ("pure inner") or to pure outer boundary
-  //              points ("inner maps to outer"). Those
-  //              that map to outer require that outer be
-  //              populated first; hence this being
-  //              STEP 2 OF 2.
-  apply_bcs_inner_only(commondata, params, bcstruct, rhs_gfs); // <- apply inner BCs to RHS gfs only
-"""
-    cfc.register_CFunction(
-        includes=includes,
-        prefunc=prefunc,
-        desc=desc,
-        cfunc_type=cfunc_type,
-        CoordSystem_for_wrapper_func=CoordSystem,
-        name=name,
-        params=params,
-        include_CodeParameters_h=True,
-        body=body,
-    )
-
-
-def CurviBoundaryConditions_register_C_functions(
-    list_of_CoordSystems: List[str],
-    radiation_BC_fd_order: int = 2,
-    set_parity_on_aux: bool = False,
-    set_parity_on_auxevol: bool = False,
-    fp_type: str = "double",
-) -> None:
-    """
-    Register various C functions responsible for handling boundary conditions.
-
-    :param list_of_CoordSystems: List of coordinate systems to use.
-    :param radiation_BC_fd_order: Finite differencing order for the radiation boundary conditions. Default is 2.
-    :param set_parity_on_aux: If True, set parity on auxiliary grid functions.
-    :param set_parity_on_auxevol: If True, set parity on auxiliary evolution grid functions.
-    :param fp_type: Floating point type, e.g., "double".
-    """
-    for CoordSystem in list_of_CoordSystems:
-        # Register C function to set up the boundary condition struct.
-        register_CFunction_bcstruct_set_up(CoordSystem=CoordSystem, fp_type=fp_type)
-
-        # Register C function to apply boundary conditions to both pure outer and inner boundary points.
-        register_CFunction_apply_bcs_outerradiation_and_inner(
+        self.includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+        self.prefunc = setup_Cfunction_radiation_bcs(
             CoordSystem=CoordSystem,
             radiation_BC_fd_order=radiation_BC_fd_order,
             fp_type=fp_type,
         )
+        self.desc = """This function is responsible for applying boundary conditions (BCs) to both pure outer and inner
+boundary points. In the first step, it parallelizes the task using OpenMP and starts by applying BCs to
+the outer boundary points layer-by-layer, prioritizing the faces in the order x0, x1, x2. The second step
+applies BCs to the inner boundary points, which may map either to the grid interior or to the outer boundary.
+"""
+        self.cfunc_type = "void"
+        self.name = "apply_bcs_outerradiation_and_inner"
+        self.params = """const commondata_struct *restrict commondata, const params_struct *restrict params,
+    const bc_struct *restrict bcstruct, REAL *restrict xx[3],
+    const REAL custom_wavespeed[NUM_EVOL_GFS],
+    const REAL custom_f_infinity[NUM_EVOL_GFS],
+    REAL *restrict gfs, REAL *restrict rhs_gfs
+"""
 
-    # Register C function to apply boundary conditions to inner-only boundary points.
-    register_CFunction_apply_bcs_inner_only()
 
-    # Register C function to apply boundary conditions to outer-extrapolated and inner boundary points.
-    register_CFunction_apply_bcs_outerextrap_and_inner()
+class base_CurviBoundaryConditions_register_C_functions:
 
-    # Register bcstruct's contribution to griddata_struct:
-    griddata_commondata.register_griddata_commondata(
-        __name__,
-        "bc_struct bcstruct",
-        "all data needed to perform boundary conditions in curvilinear coordinates",
-    )
+    def __init__(
+        self,
+        list_of_CoordSystems: List[str],
+        radiation_BC_fd_order: int = 2,
+        set_parity_on_aux: bool = False,
+        set_parity_on_auxevol: bool = False,
+        fp_type: str = "double",
+    ) -> None:
+        """
+        Base class to generate functions responsible for handling boundary conditions.
 
-    # Register bcstruct's contribution to BHaH_defines.h:
-    CBC_BHd_str = r"""
+        :param list_of_CoordSystems: List of coordinate systems to use.
+        :param radiation_BC_fd_order: Finite differencing order for the radiation boundary conditions. Default is 2.
+        :param set_parity_on_aux: If True, set parity on auxiliary grid functions.
+        :param set_parity_on_auxevol: If True, set parity on auxiliary evolution grid functions.
+        :param fp_type: Floating point type, e.g., "double".
+        """
+        self.list_of_CoordSystems = list_of_CoordSystems
+        self.radiation_BC_fd_order = radiation_BC_fd_order
+        self.set_parity_on_aux = set_parity_on_aux
+        self.set_parity_on_auxevol = set_parity_on_auxevol
+        self.fp_type = fp_type
+
+        # Register bcstruct's contribution to BHaH_defines.h:
+        self.CBC_BHd_str = r"""
 // NRPy+ Curvilinear Boundary Conditions: Core data structures
 // Documented in: Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb
 
 typedef struct __innerpt_bc_struct__ {
-  int dstpt;  // dstpt is the 3D grid index IDX3S(i0,i1,i2) of the inner boundary point (i0,i1,i2)
-  int srcpt;  // srcpt is the 3D grid index (a la IDX3S) to which the inner boundary point maps
-  int8_t parity[10];  // parity[10] is a calculation of dot products for the 10 independent parity types
+int dstpt;  // dstpt is the 3D grid index IDX3S(i0,i1,i2) of the inner boundary point (i0,i1,i2)
+int srcpt;  // srcpt is the 3D grid index (a la IDX3S) to which the inner boundary point maps
+int8_t parity[10];  // parity[10] is a calculation of dot products for the 10 independent parity types
 } innerpt_bc_struct;
 
 typedef struct __outerpt_bc_struct__ {
-  short i0,i1,i2;  // the outer boundary point grid index (i0,i1,i2), on the 3D grid
-  int8_t FACEX0,FACEX1,FACEX2;  // 1-byte integers that store
-  //                               FACEX0,FACEX1,FACEX2 = +1, 0, 0 if on the i0=i0min face,
-  //                               FACEX0,FACEX1,FACEX2 = -1, 0, 0 if on the i0=i0max face,
-  //                               FACEX0,FACEX1,FACEX2 =  0,+1, 0 if on the i1=i2min face,
-  //                               FACEX0,FACEX1,FACEX2 =  0,-1, 0 if on the i1=i1max face,
-  //                               FACEX0,FACEX1,FACEX2 =  0, 0,+1 if on the i2=i2min face, or
-  //                               FACEX0,FACEX1,FACEX2 =  0, 0,-1 if on the i2=i2max face,
+short i0,i1,i2;  // the outer boundary point grid index (i0,i1,i2), on the 3D grid
+int8_t FACEX0,FACEX1,FACEX2;  // 1-byte integers that store
+//                               FACEX0,FACEX1,FACEX2 = +1, 0, 0 if on the i0=i0min face,
+//                               FACEX0,FACEX1,FACEX2 = -1, 0, 0 if on the i0=i0max face,
+//                               FACEX0,FACEX1,FACEX2 =  0,+1, 0 if on the i1=i2min face,
+//                               FACEX0,FACEX1,FACEX2 =  0,-1, 0 if on the i1=i1max face,
+//                               FACEX0,FACEX1,FACEX2 =  0, 0,+1 if on the i2=i2min face, or
+//                               FACEX0,FACEX1,FACEX2 =  0, 0,-1 if on the i2=i2max face,
 } outerpt_bc_struct;
 
 typedef struct __bc_info_struct__ {
-  int num_inner_boundary_points;  // stores total number of inner boundary points
-  int num_pure_outer_boundary_points[NGHOSTS][3];  // stores number of outer boundary points on each
-  //                                                  ghostzone level and direction (update min and
-  //                                                  max faces simultaneously on multiple cores)
-  int bc_loop_bounds[NGHOSTS][6][6];  // stores outer boundary loop bounds. Unused after bcstruct_set_up()
+int num_inner_boundary_points;  // stores total number of inner boundary points
+int num_pure_outer_boundary_points[NGHOSTS][3];  // stores number of outer boundary points on each
+//                                                  ghostzone level and direction (update min and
+//                                                  max faces simultaneously on multiple cores)
+int bc_loop_bounds[NGHOSTS][6][6];  // stores outer boundary loop bounds. Unused after bcstruct_set_up()
 } bc_info_struct;
 
 typedef struct __bc_struct__ {
-  innerpt_bc_struct *restrict inner_bc_array;  // information needed for updating each inner boundary point
-  outerpt_bc_struct *restrict pure_outer_bc_array[NGHOSTS*3]; // information needed for updating each outer
-  //                                                             boundary point
-  bc_info_struct bc_info;  // stores number of inner and outer boundary points, needed for setting loop
-  //                          bounds and parallelizing over as many boundary points as possible.
+innerpt_bc_struct *restrict inner_bc_array;  // information needed for updating each inner boundary point
+outerpt_bc_struct *restrict pure_outer_bc_array[NGHOSTS*3]; // information needed for updating each outer
+//                                                             boundary point
+bc_info_struct bc_info;  // stores number of inner and outer boundary points, needed for setting loop
+//                          bounds and parallelizing over as many boundary points as possible.
 } bc_struct;
 """
-    CBC_BHd_str += BHaH_defines_set_gridfunction_defines_with_parity_types(
-        set_parity_on_aux=set_parity_on_aux,
-        set_parity_on_auxevol=set_parity_on_auxevol,
-        verbose=True,
-    )
-    BHaH_defines_h.register_BHaH_defines(__name__, CBC_BHd_str)
+        self.CBC_BHd_str += BHaH_defines_set_gridfunction_defines_with_parity_types(
+            set_parity_on_aux=self.set_parity_on_aux,
+            set_parity_on_auxevol=self.set_parity_on_auxevol,
+            verbose=True,
+        )
 
 
 if __name__ == "__main__":
