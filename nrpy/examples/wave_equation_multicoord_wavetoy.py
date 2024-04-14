@@ -23,7 +23,7 @@ import nrpy.infrastructures.BHaH.CurviBoundaryConditions.openmp.CurviBoundaryCon
 from nrpy.infrastructures.BHaH import griddata_commondata
 import nrpy.infrastructures.BHaH.main_c as main
 import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
-from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
+from nrpy.infrastructures.BHaH.MoLtimestepping.openmp import MoL
 import nrpy.infrastructures.BHaH.grid_management.openmp.numerical_grids_and_timestep as numericalgrids
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 from nrpy.infrastructures.BHaH import rfm_precompute

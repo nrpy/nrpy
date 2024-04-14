@@ -25,7 +25,7 @@ import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 from nrpy.infrastructures.BHaH import griddata_commondata
 import nrpy.infrastructures.BHaH.main_c as main
 import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
-from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
+from nrpy.infrastructures.BHaH.MoLtimestepping.openmp import MoL
 import nrpy.infrastructures.BHaH.simple_loop as lp
 from nrpy.equations.wave_equation.WaveEquation_RHSs import WaveEquation_RHSs
 from nrpy.equations.wave_equation.WaveEquation_Solutions_InitialData import (
