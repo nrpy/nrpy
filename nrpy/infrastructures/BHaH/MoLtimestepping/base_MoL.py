@@ -24,12 +24,17 @@ from nrpy.helpers.generic import (
 
 class RKFunction:
     """
-    A class to represent Runge-Kutte (RK) functions in C/C++.
+    A class to represent Runge-Kutte (RK) substep functions in C/C++.
 
     :param fp_type_alias: Infrastructure-specific alias for the C/C++ floating point data type. E.g., 'REAL' or 'CCTK_REAL'.
     :param operator: The operator with respect to which the derivative is taken.
-    :param symbol_to_Rational_dict: Dictionary mapping sympy symbols to their corresponding sympy Rationals.
+    :param RK_lhs_list: List of LHS expressions for RK substep.
+    :param RK_rhs_list: List of RHS expressions for RK substep.
     :param enable_simd: A flag to specify if SIMD instructions should be used.
+    :param cfunc_type: decorators and return type for the RK substep function
+    :param rk_step: current step (> 0).  Default (None) assumes Euler step
+    :param fp_type: Floating point type, e.g., "double".
+    :param rational_const_alias: Overload const specifier for Rational definitions
     """
 
     def __init__(
@@ -38,10 +43,10 @@ class RKFunction:
         RK_lhs_list: Union[sp.Basic, List[sp.Basic]],
         RK_rhs_list: Union[sp.Basic, List[sp.Basic]],
         enable_simd: bool=False,
-        cfunc_type_modifiers: str = "",
+        cfunc_type: str = "static void",
         rk_step: int = None,
         fp_type: str = "double",
-        const_alias: str = "const",
+        rational_const_alias: str = "const",
     ) -> None:
         self.fp_type_alias = fp_type_alias
         self.rk_step = rk_step
@@ -51,20 +56,22 @@ class RKFunction:
         self.fp_type=fp_type
         self.c_function_name: str = ""
         
-        self.cfunc_type_modifiers=cfunc_type_modifiers
-        self.cfunc_type=f"{self.cfunc_type_modifiers} static void"
-        self.const_alias=const_alias
+        self.cfunc_type=cfunc_type
+        self.rational_const_alias=rational_const_alias
 
         self.CFunction: cfc.CFunction
         self.desc = f"Runge-Kutta function for substep {self.rk_step}."
+        
+        # Save variables that appear in function arguments to be used
+        # to generate a function call
         self.param_vars: List[str] = []
+        
+        # Populate build and populate self.CFunction
         self.CFunction_RK_substep_function()
 
     def CFunction_RK_substep_function(self) -> None:
         """
         Generate a C function based on the given RK substep expression lists.
-
-        :return: A cfc.CFunction object that encapsulates the C function details.
         """
         self.c_function_name = "SIMD_" if self.enable_simd else ""
         self.c_function_name += f"rk_substep_{self.rk_step}"
@@ -128,8 +135,9 @@ class RKFunction:
             enable_simd=self.enable_simd,
             fp_type=self.fp_type,
             enable_cse_preprocess=True,
-            rational_const_alias=self.const_alias
+            rational_const_alias=self.rational_const_alias
         )
+        # Give rationals a better name
         kernel=kernel.replace("_Rational", "RK_Rational")
         
         if self.enable_simd:
@@ -138,11 +146,12 @@ class RKFunction:
                 body += (
                     f"  WriteSIMD(&{str(el).replace('gfsL', 'gfs[i]')}, __rhs_exp_{i});\n"
                 )
-
         else:
             body += kernel.replace("commondata->dt", "dt")
         
         body += "}\n"
+        
+        # Store CFunction
         self.CFunction = cfc.CFunction(
             includes=includes,
             desc=self.desc,
@@ -166,6 +175,7 @@ class RKFunction:
         
         return c_function_call
 
+# Store RK substeps as RKFunctions
 MoL_Functions_dict: Dict[str, RKFunction] = {}
 
 def construct_RK_functions_prefunc() -> str:
@@ -173,7 +183,11 @@ def construct_RK_functions_prefunc() -> str:
     Construct the prefunc (CFunction) strings for all RK functions stored in MoL_Functions_dict.
 
     :return: The concatenated prefunc (CFunction) strings as a single string.
+    :raises ValueError: If the MoL_Functions_dict is empty
     """
+    if len(MoL_Functions_dict.values()) == 0:
+        raise ValueError(f'ERROR: MoL_Functions_dict is empty')
+    
     prefunc = ""
     for fd_func in MoL_Functions_dict.values():
         prefunc += fd_func.CFunction.full_function
@@ -311,9 +325,6 @@ class base_register_CFunction_MoL_malloc:
         :param which_gfs: Specifies which gridfunctions to consider ("y_n_gfs" or "non_y_n_gfs").
 
         :raises ValueError: If the which_gfs parameter is neither "y_n_gfs" nor "non_y_n_gfs".
-
-        Doctest: FIXME
-        # >>> register_CFunction_MoL_malloc("Euler", "y_n_gfs")
         """
         self.Butcher_dict=Butcher_dict
         self.MoL_method=MoL_method
@@ -495,10 +506,12 @@ class base_register_CFunction_MoL_step_forward_in_time:
         post_post_rhs_string: str = "",
         enable_rfm_precompute: bool = False,
         enable_curviBCs: bool = False,
+        enable_simd=False,
         fp_type: str = "double",
     ) -> None:
         """
-        Register MoL_step_forward_in_time() C function, which is the core driver for time evolution in BHaH codes.
+        Base class to facilitate generating the MoL_step_forward_in_time() C function, 
+        which is the core driver for time evolution in BHaH codes.
 
         :param Butcher_dict: A dictionary containing the Butcher tables for various RK-like methods.
         :param MoL_method: The method of lines (MoL) used for time-stepping.
@@ -524,8 +537,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
         self.single_RK_substep_input_symbolic=single_RK_substep_input_symbolic
         self.rk_step_body_dict: Dict[str, str] = {}
         
-        #FIXME
-        self.enable_simd=False
+        self.enable_simd=enable_simd
         
         self.includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
@@ -558,6 +570,9 @@ class base_register_CFunction_MoL_step_forward_in_time:
             0
         ]  # Get the desired Butcher table from the dictionary
         
+    # Generate code that specifies aliases (i.e. pointers) to gridfunctions and useful structs
+    # This needs to be called before generate_RK_steps, but is left as an independent method
+    # in case it needs to be overloaded by a parallelization module
     def setup_gf_aliases(self):
 
         self.gf_aliases = f"""// Set gridfunction aliases from gridfuncs struct
@@ -580,6 +595,9 @@ class base_register_CFunction_MoL_step_forward_in_time:
         for i in ["0", "1", "2"]:
             self.gf_aliases += f"{self.gf_alias_prefix} const int Nxx_plus_2NGHOSTS{i} = griddata[grid].params.Nxx_plus_2NGHOSTS{i};\n"
 
+    # Populate self.rk_step_body_dict dictionary which stores the code related to RK substeps.  This allows
+    # for a high degree of flexibility in generating MoL
+    # Also populates boiler plate code at the head of self.body
     def generate_RK_steps(self):
         num_steps = (
             len(self.Butcher) - 1
@@ -849,6 +867,8 @@ class base_register_CFunction_MoL_step_forward_in_time:
                         )
 
         
+    # The remaining body of the code is generated here.  This is the main
+    # method to be overloaded by parallelization module to customize execution
     def register_final_code(self):
         prefunc = construct_RK_functions_prefunc()
         
