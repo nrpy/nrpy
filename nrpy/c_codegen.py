@@ -86,6 +86,7 @@ class CCodeGen:
         symbol_to_Rational_dict: Optional[Dict[sp.Basic, sp.Rational]] = None,
         clang_format_enable: bool = False,
         clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+        rational_const_alias: str = "const",
     ) -> None:
         """
         Initialize the CCodeGen class with provided options for generating C code.
@@ -118,6 +119,7 @@ class CCodeGen:
         :param symbol_to_Rational_dict: Dictionary mapping sympy symbols to their corresponding sympy Rationals.
         :param clang_format_enable: Boolean to enable clang formatting.
         :param clang_format_options: Options for clang formatting.
+        :param rational_const_alias: Override default alias for specifying rational constness
 
         :raises ValueError: If 'fp_type' is not recognized as a valid floating-point type.
         :raises ValueError: If SIMD optimizations are enabled but the floating-point type is not 'double'.
@@ -181,6 +183,7 @@ class CCodeGen:
         self.symbol_to_Rational_dict = symbol_to_Rational_dict
         self.clang_format_enable = clang_format_enable
         self.clang_format_options = clang_format_options
+        self.rational_const_alias=rational_const_alias
 
         self.fd_order = par.parval_from_str("finite_difference::fd_order")
 
@@ -500,7 +503,7 @@ def c_codegen(
                     CCGParams.symbol_to_Rational_dict[v].q
                 )
                 if not CCGParams.enable_simd:
-                    RATIONAL_assignment = f"const {CCGParams.fp_type_alias} {str(v)}"
+                    RATIONAL_assignment = f"{CCGParams.rational_const_alias} {CCGParams.fp_type_alias} {str(v)}"
                     RATIONAL_expr = sp.Rational(p, q)
                     RATIONAL_decls += sp.ccode(
                         RATIONAL_expr,
