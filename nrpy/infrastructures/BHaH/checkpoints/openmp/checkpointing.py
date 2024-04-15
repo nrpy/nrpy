@@ -1,44 +1,40 @@
 """
-Register CFunctions read_checkpoint and write_checkpoint.
+Register CFunctions read_checkpoint and write_checkpoint using OpenMP parallelization
 
 Provides checkpointing capabilities to BHaH simulations.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
+        Samuel D. Tootle
+        sdtootle **at** gmail **dot** com
 """
 
 from typing import Tuple
 
 import nrpy.c_function as cfc
-import nrpy.params as par
+import nrpy.infrastructures.BHaH.checkpoints.base_checkpointing as base_chkpt
 
 
-def register_CFunction_read_checkpoint(
+
+class register_CFunction_read_checkpoint(base_chkpt.base_register_CFunction_read_checkpoint):
+  def __new__(
+    self,
     filename_tuple: Tuple[str, str] = (
         r"checkpoint-conv_factor%.2f.dat",
         "commondata->convergence_factor",
     ),
-) -> None:
+  ) -> None:
     """
     Register read_checkpoint CFunction for reading checkpoints.
 
     :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
     """
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "unistd.h"]
-    prefunc = r"""
-#define FREAD(ptr, size, nmemb, stream) { const int numitems=fread((ptr), (size), (nmemb), (stream)); }
-"""
-    desc = "Read a checkpoint file"
-    cfunc_type = "int"
-    name = "read_checkpoint"
-    params = (
-        "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
+    super().__init__(
+      self,
+      filename_tuple=filename_tuple,      
     )
-    body = rf"""
-  char filename[256];
-  snprintf(filename, 256, "{filename_tuple[0]}", {filename_tuple[1]});
-"""
-    body += r"""  // If the checkpoint doesn't exist then return 0.
+
+    self.body += r"""  // If the checkpoint doesn't exist then return 0.
   if (access(filename, F_OK) != 0)
     return 0;
 
@@ -83,18 +79,20 @@ def register_CFunction_read_checkpoint(
   return 1;
 """
     cfc.register_CFunction(
-        includes=includes,
-        prefunc=prefunc,
-        desc=desc,
-        cfunc_type=cfunc_type,
-        name=name,
-        params=params,
+        includes=self.includes,
+        prefunc=self.prefunc,
+        desc=self.desc,
+        cfunc_type=self.cfunc_type,
+        name=self.name,
+        params=self.params,
         include_CodeParameters_h=False,
-        body=body,
+        body=self.body,
     )
 
 
-def register_CFunction_write_checkpoint(
+class register_CFunction_write_checkpoint(base_chkpt.base_register_CFunction_write_checkpoint):
+  def __new__(
+    self,  
     default_checkpoint_every: float = 2.0,
     filename_tuple: Tuple[str, str] = (
         "checkpoint-conv_factor%.2f.dat",
@@ -107,20 +105,13 @@ def register_CFunction_write_checkpoint(
     :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
     :param default_checkpoint_every: The default checkpoint interval in physical time units.
     """
-    par.register_CodeParameter(
-        "REAL", __name__, "checkpoint_every", default_checkpoint_every, commondata=True
+    super.__init__(
+      self,
+      default_checkpoint_every=default_checkpoint_every,
+      filename_tuple=filename_tuple
     )
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = "Write a checkpoint file"
-    cfunc_type = "void"
-    name = "write_checkpoint"
-    params = "const commondata_struct *restrict commondata, griddata_struct *restrict griddata"
 
-    body = rf"""
-  char filename[256];
-  snprintf(filename, 256, "{filename_tuple[0]}", {filename_tuple[1]});
-"""
-    body += r"""const REAL currtime = commondata->time, currdt = commondata->dt, outevery = commondata->checkpoint_every;
+    self.body += r"""const REAL currtime = commondata->time, currdt = commondata->dt, outevery = commondata->checkpoint_every;
 // Explanation of the if() below:
 // Step 1: round(currtime / outevery) rounds to the nearest integer multiple of currtime.
 // Step 2: Multiplying by outevery yields the exact time we should output again, t_out.
@@ -171,13 +162,13 @@ if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {
 }
 """
     cfc.register_CFunction(
-        includes=includes,
-        desc=desc,
-        cfunc_type=cfunc_type,
-        name=name,
-        params=params,
+        includes=self.includes,
+        desc=self.desc,
+        cfunc_type=self.cfunc_type,
+        name=self.name,
+        params=self.params,
         include_CodeParameters_h=False,
-        body=body,
+        body=self.body,
     )
 
 
