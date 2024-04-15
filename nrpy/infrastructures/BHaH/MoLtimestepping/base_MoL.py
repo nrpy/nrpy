@@ -1,10 +1,13 @@
 """
-Module for producing C codes related to MoL timestepping within the BHaH infrastructure.
+Module holding base classes and utility codes to facilitate 
+generating C codes related to MoL timestepping within the BHaH infrastructure.
 This includes implementation details and functions for allocating and deallocating the necessary memory.
 
 Authors: Brandon Clark
          Zachariah B. Etienne (maintainer)
          zachetie **at** gmail **dot* com
+         Samuel D. Tootle
+         sdtootle **at** gmail **dot* com
 """
 
 from typing import List, Union, Dict, Tuple
@@ -24,7 +27,6 @@ class RKFunction:
     A class to represent Runge-Kutte (RK) functions in C/C++.
 
     :param fp_type_alias: Infrastructure-specific alias for the C/C++ floating point data type. E.g., 'REAL' or 'CCTK_REAL'.
-    :param fd_order: The order of accuracy for the finite difference scheme.
     :param operator: The operator with respect to which the derivative is taken.
     :param symbol_to_Rational_dict: Dictionary mapping sympy symbols to their corresponding sympy Rationals.
     :param enable_simd: A flag to specify if SIMD instructions should be used.
@@ -520,6 +522,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
         self.enable_curviBCs=enable_curviBCs
         self.fp_type=fp_type
         self.single_RK_substep_input_symbolic=single_RK_substep_input_symbolic
+        self.rk_step_body_dict: Dict[str, str] = {}
         
         #FIXME
         self.enable_simd=False
@@ -596,7 +599,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
             self.body += """
 // In a diagonal RK3 method like this one, only 3 gridfunctions need be defined. Below implements this approach.
 // Using y_n_gfs as input, k1 and apply boundary conditions\n"""
-            self.body += (
+            self.rk_step_body_dict['k1'] = (
                 self.single_RK_substep_input_symbolic(
                     additional_comments="""
 // RHS evaluation:
@@ -629,7 +632,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
             )
 
             # k_2
-            self.body += (
+            self.rk_step_body_dict['k2'] = (
                 self.single_RK_substep_input_symbolic(
                     additional_comments="""
 // RHS evaluation:
@@ -669,7 +672,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
             )
 
             # k_3
-            self.body += (
+            self.rk_step_body_dict['k3'] = (
                 self.single_RK_substep_input_symbolic(
                     additional_comments="""
 // RHS evaluation:
@@ -727,7 +730,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
                     else:  # If on anything but the final step:
                         post_rhs_output = next_y_input
 
-                    self.body += f"""{self.single_RK_substep_input_symbolic(
+                    self.rk_step_body_dict[f"k{s+1}"] = f"""{self.single_RK_substep_input_symbolic(
                         substep_time_offset_dt=self.Butcher[s][0],
                         rhs_str=self.rhs_string,
                         rhs_input_expr=rhs_input,
@@ -749,7 +752,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
                 if (
                     self.MoL_method == "Euler"
                 ):  # Euler's method doesn't require any k_i, and gets its own unique algorithm
-                    self.body += self.single_RK_substep_input_symbolic(
+                    self.rk_step_body_dict[f"Euler"] = self.single_RK_substep_input_symbolic(
                         substep_time_offset_dt=self.Butcher[0][0],
                         rhs_str=self.rhs_string,
                         rhs_input_expr=y_n,
@@ -826,7 +829,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
                                     )
                             post_rhs_output = y_n
                         
-                        self.body += (
+                        self.rk_step_body_dict[f"k{s+1}"] = (
                             self.single_RK_substep_input_symbolic(
                                 substep_time_offset_dt=self.Butcher[s][0],
                                 rhs_str=self.rhs_string,
@@ -845,6 +848,13 @@ class base_register_CFunction_MoL_step_forward_in_time:
                             + f"// -={{ END k{s + 1} substep }}=-\n\n"
                         )
 
+        
+    def register_final_code(self):
+        prefunc = construct_RK_functions_prefunc()
+        
+        for k in self.rk_step_body_dict:
+            self.body += self.rk_step_body_dict[k]
+        
         self.body += """
 // Adding dt to commondata->time many times will induce roundoff error,
 //   so here we set time based on the iteration number.
@@ -853,9 +863,6 @@ commondata->time = (REAL)(commondata->nn + 1) * commondata->dt;
 // Finally, increment the timestep n:
 commondata->nn++;
 """
-        
-    def register_final_code(self):
-        prefunc = construct_RK_functions_prefunc()
         cfc.register_CFunction(
             includes=self.includes,
             desc=self.desc,
