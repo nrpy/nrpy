@@ -105,7 +105,7 @@ class register_CFunction_write_checkpoint(base_chkpt.base_register_CFunction_wri
     :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
     :param default_checkpoint_every: The default checkpoint interval in physical time units.
     """
-    super.__init__(
+    super().__init__(
       self,
       default_checkpoint_every=default_checkpoint_every,
       filename_tuple=filename_tuple
