@@ -599,7 +599,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
             self.body += """
 // In a diagonal RK3 method like this one, only 3 gridfunctions need be defined. Below implements this approach.
 // Using y_n_gfs as input, k1 and apply boundary conditions\n"""
-            self.rk_step_body_dict['k1'] = (
+            self.rk_step_body_dict["RK_SUBSTEP_K3"] = (
                 self.single_RK_substep_input_symbolic(
                     additional_comments="""
 // RHS evaluation:
@@ -632,7 +632,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
             )
 
             # k_2
-            self.rk_step_body_dict['k2'] = (
+            self.rk_step_body_dict["RK_SUBSTEP_K3"] = (
                 self.single_RK_substep_input_symbolic(
                     additional_comments="""
 // RHS evaluation:
@@ -672,7 +672,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
             )
 
             # k_3
-            self.rk_step_body_dict['k3'] = (
+            self.rk_step_body_dict["RK_SUBSTEP_K3"] = (
                 self.single_RK_substep_input_symbolic(
                     additional_comments="""
 // RHS evaluation:
@@ -730,7 +730,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
                     else:  # If on anything but the final step:
                         post_rhs_output = next_y_input
 
-                    self.rk_step_body_dict[f"k{s+1}"] = f"""{self.single_RK_substep_input_symbolic(
+                    self.rk_step_body_dict[f"RK_SUBSTEP_K{s+1}"] = f"""{self.single_RK_substep_input_symbolic(
                         substep_time_offset_dt=self.Butcher[s][0],
                         rhs_str=self.rhs_string,
                         rhs_input_expr=rhs_input,
@@ -752,7 +752,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
                 if (
                     self.MoL_method == "Euler"
                 ):  # Euler's method doesn't require any k_i, and gets its own unique algorithm
-                    self.rk_step_body_dict[f"Euler"] = self.single_RK_substep_input_symbolic(
+                    self.rk_step_body_dict[f"RK_SUBSTEP_K{s+1}"] = self.single_RK_substep_input_symbolic(
                         substep_time_offset_dt=self.Butcher[0][0],
                         rhs_str=self.rhs_string,
                         rhs_input_expr=y_n,
@@ -829,7 +829,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
                                     )
                             post_rhs_output = y_n
                         
-                        self.rk_step_body_dict[f"k{s+1}"] = (
+                        self.rk_step_body_dict[f"RK_SUBSTEP_K{s+1}"] = (
                             self.single_RK_substep_input_symbolic(
                                 substep_time_offset_dt=self.Butcher[s][0],
                                 rhs_str=self.rhs_string,
