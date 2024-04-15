@@ -301,7 +301,9 @@ class register_CFunction_MoL_step_forward_in_time(base_MoL.base_register_CFuncti
         )
         if enable_simd:
             self.includes += [os.path.join("SIMD", "SIMD_intrinsics.h")]
-
+        self.setup_gf_aliases(self)
+        self.generate_RK_steps(self)
+        self.register_final_code(self)
 
 # register_CFunction_MoL_free_memory() registers
 #           MoL_free_memory_y_n_gfs() and
@@ -440,8 +442,8 @@ class register_CFunctions(base_MoL.base_register_CFunctions):
                 self.Butcher_dict,
                 self.MoL_method,
                 self.rhs_string,
-                post_rhs_string,
-                post_post_rhs_string,
+                post_rhs_string=post_rhs_string,
+                post_post_rhs_string=post_post_rhs_string,
                 enable_rfm_precompute=self.enable_rfm_precompute,
                 enable_curviBCs=self.enable_curviBCs,
                 enable_simd=enable_simd,
