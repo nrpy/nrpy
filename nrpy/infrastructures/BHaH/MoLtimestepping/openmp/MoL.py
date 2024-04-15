@@ -31,7 +31,7 @@ _ = par.CodeParameter("REAL", __name__, "t_final", 10.0, commondata=True)
 
 
 class register_CFunction_MoL_malloc(base_MoL.base_register_CFunction_MoL_malloc):
-    
+
     def __new__(
         self,
         Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
@@ -51,9 +51,9 @@ class register_CFunction_MoL_malloc(base_MoL.base_register_CFunction_MoL_malloc)
         # >>> register_CFunction_MoL_malloc("Euler", "y_n_gfs")
         """
         super().__init__(self, Butcher_dict, MoL_method, which_gfs)
-        
+
         # Generate the body of the function
-        
+
         for gridfunctions in self.gridfunctions_list:
             num_gfs = (
                 "NUM_EVOL_GFS" if gridfunctions != "auxevol_gfs" else "NUM_AUXEVOL_GFS"
@@ -106,7 +106,9 @@ class register_CFunction_MoL_malloc(base_MoL.base_register_CFunction_MoL_malloc)
 # k_even    = dt*f(t_n + dt, y_n + k_odd)
 # y_nplus1 += 1/3*k_even
 ########################################################################################################################
-class register_CFunction_MoL_step_forward_in_time(base_MoL.base_register_CFunction_MoL_step_forward_in_time):
+class register_CFunction_MoL_step_forward_in_time(
+    base_MoL.base_register_CFunction_MoL_step_forward_in_time
+):
     def __new__(
         self,
         Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
@@ -153,11 +155,14 @@ class register_CFunction_MoL_step_forward_in_time(base_MoL.base_register_CFuncti
         self.generate_RK_steps(self)
         self.register_final_code(self)
 
+
 # register_CFunction_MoL_free_memory() registers
 #           MoL_free_memory_y_n_gfs() and
 #           MoL_free_memory_non_y_n_gfs(), which free memory for
 #           the indicated sets of gridfunctions
-class register_CFunction_MoL_free_memory(base_MoL.base_register_CFunction_MoL_free_memory):
+class register_CFunction_MoL_free_memory(
+    base_MoL.base_register_CFunction_MoL_free_memory
+):
     def __new__(
         self,
         Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
@@ -177,7 +182,9 @@ class register_CFunction_MoL_free_memory(base_MoL.base_register_CFunction_MoL_fr
         for gridfunction in self.gridfunctions_list:
             # Don't free a zero-sized array.
             if gridfunction == "auxevol_gfs":
-                self.body += f"  if(NUM_AUXEVOL_GFS > 0) free(gridfuncs->{gridfunction});"
+                self.body += (
+                    f"  if(NUM_AUXEVOL_GFS > 0) free(gridfuncs->{gridfunction});"
+                )
             else:
                 self.body += f"  free(gridfuncs->{gridfunction});"
         cfc.register_CFunction(
@@ -192,7 +199,7 @@ class register_CFunction_MoL_free_memory(base_MoL.base_register_CFunction_MoL_fr
 
 # Register all the CFunctions and NRPy basic defines
 class register_CFunctions(base_MoL.base_register_CFunctions):
-    
+
     def __new__(
         self,
         MoL_method: str = "RK4",
@@ -272,7 +279,7 @@ class register_CFunctions(base_MoL.base_register_CFunctions):
         <BLANKLINE>
         """
         super().__init__(
-            self, 
+            self,
             MoL_method=MoL_method,
             rhs_string=rhs_string,
             post_rhs_string=post_rhs_string,
@@ -303,12 +310,13 @@ class register_CFunctions(base_MoL.base_register_CFunctions):
         )
 
         # Add OpenMP specific Loop
-        self.BHaH_MoL_body +="""
+        self.BHaH_MoL_body += """
 #define LOOP_ALL_GFS_GPS(ii) \
 _Pragma("omp parallel for") \
   for(int (ii)=0;(ii)<Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;(ii)++)
 """
         BHaH_defines_h.register_BHaH_defines(__name__, self.BHaH_MoL_body)
+
 
 if __name__ == "__main__":
     import doctest

@@ -22,6 +22,7 @@ from nrpy.helpers.generic import (
     superfast_uniq,
 )
 
+
 class RKFunction:
     """
     A class to represent Runge-Kutte (RK) substep functions in C/C++.
@@ -42,7 +43,7 @@ class RKFunction:
         fp_type_alias: str,
         RK_lhs_list: Union[sp.Basic, List[sp.Basic]],
         RK_rhs_list: Union[sp.Basic, List[sp.Basic]],
-        enable_simd: bool=False,
+        enable_simd: bool = False,
         cfunc_type: str = "static void",
         rk_step: int = None,
         fp_type: str = "double",
@@ -51,21 +52,21 @@ class RKFunction:
         self.fp_type_alias = fp_type_alias
         self.rk_step = rk_step
         self.enable_simd = enable_simd
-        self.RK_rhs_list=RK_rhs_list
-        self.RK_lhs_list=RK_lhs_list
-        self.fp_type=fp_type
+        self.RK_rhs_list = RK_rhs_list
+        self.RK_lhs_list = RK_lhs_list
+        self.fp_type = fp_type
         self.c_function_name: str = ""
-        
-        self.cfunc_type=cfunc_type
-        self.rational_const_alias=rational_const_alias
+
+        self.cfunc_type = cfunc_type
+        self.rational_const_alias = rational_const_alias
 
         self.CFunction: cfc.CFunction
         self.desc = f"Runge-Kutta function for substep {self.rk_step}."
-        
+
         # Save variables that appear in function arguments to be used
         # to generate a function call
         self.param_vars: List[str] = []
-        
+
         # Populate build and populate self.CFunction
         self.CFunction_RK_substep_function()
 
@@ -75,11 +76,11 @@ class RKFunction:
         """
         self.c_function_name = "SIMD_" if self.enable_simd else ""
         self.c_function_name += f"rk_substep_{self.rk_step}"
-        
+
         includes: List[str] = []
         name = self.c_function_name
         params = "params_struct *restrict params, "
-        body: str=""
+        body: str = ""
         for i in ["0", "1", "2"]:
             body += f"const int Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n"
         if self.enable_simd:
@@ -91,7 +92,7 @@ class RKFunction:
             body += "for(int i=0;i<Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;i+=simd_width) {{\n"
         else:
             body += "LOOP_ALL_GFS_GPS(i) {\n"
-        
+
         var_type = "REAL_SIMD_ARRAY" if self.enable_simd else "REAL"
         RK_lhs_str_list = [
             (
@@ -103,7 +104,9 @@ class RKFunction:
         ]
 
         read_list = [
-            read for el in self.RK_rhs_list for read in list(sp.ordered(el.free_symbols))
+            read
+            for el in self.RK_rhs_list
+            for read in list(sp.ordered(el.free_symbols))
         ]
         read_list_unique = superfast_uniq(read_list)
 
@@ -117,16 +120,14 @@ class RKFunction:
                 else:
                     self.param_vars.append(gfs_el[:-3])
                     params += f"{var_type} *restrict {self.param_vars[-1]},"
-                    body += (
-                        f"const {var_type} {el} = {gfs_el};\n"        
-                    )
+                    body += f"const {var_type} {el} = {gfs_el};\n"
         for el in RK_lhs_str_list:
             lhs_var = el[:-3]
             if not lhs_var in params:
                 self.param_vars.append(lhs_var)
                 params += f"{var_type} *restrict {self.param_vars[-1]},"
         params += f"const {var_type} dt"
-        
+
         kernel = c_codegen(
             self.RK_rhs_list,
             RK_lhs_str_list,
@@ -135,22 +136,20 @@ class RKFunction:
             enable_simd=self.enable_simd,
             fp_type=self.fp_type,
             enable_cse_preprocess=True,
-            rational_const_alias=self.rational_const_alias
+            rational_const_alias=self.rational_const_alias,
         )
         # Give rationals a better name
-        kernel=kernel.replace("_Rational", "RK_Rational")
-        
+        kernel = kernel.replace("_Rational", "RK_Rational")
+
         if self.enable_simd:
             body += kernel.replace("commondata->dt", "DT")
             for i, el in enumerate(self.RK_lhs_list):
-                body += (
-                    f"  WriteSIMD(&{str(el).replace('gfsL', 'gfs[i]')}, __rhs_exp_{i});\n"
-                )
+                body += f"  WriteSIMD(&{str(el).replace('gfsL', 'gfs[i]')}, __rhs_exp_{i});\n"
         else:
             body += kernel.replace("commondata->dt", "dt")
-        
+
         body += "}\n"
-        
+
         # Store CFunction
         self.CFunction = cfc.CFunction(
             includes=includes,
@@ -167,16 +166,18 @@ class RKFunction:
 
         :return: The C function call as a string.
         """
-        c_function_call:str = self.c_function_name + "(params, "
+        c_function_call: str = self.c_function_name + "(params, "
         for p in self.param_vars:
             c_function_call += f"{p}, "
-        
-        c_function_call+="commondata->dt);\n"
-        
+
+        c_function_call += "commondata->dt);\n"
+
         return c_function_call
+
 
 # Store RK substeps as RKFunctions
 MoL_Functions_dict: Dict[str, RKFunction] = {}
+
 
 def construct_RK_functions_prefunc() -> str:
     """
@@ -186,8 +187,8 @@ def construct_RK_functions_prefunc() -> str:
     :raises ValueError: If the MoL_Functions_dict is empty
     """
     if len(MoL_Functions_dict.values()) == 0:
-        raise ValueError(f'ERROR: MoL_Functions_dict is empty')
-    
+        raise ValueError(f"ERROR: MoL_Functions_dict is empty")
+
     prefunc = ""
     for fd_func in MoL_Functions_dict.values():
         prefunc += fd_func.CFunction.full_function
@@ -310,7 +311,7 @@ def generate_gridfunction_names(
 
 
 class base_register_CFunction_MoL_malloc:
-    
+
     def __init__(
         self,
         Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
@@ -326,9 +327,9 @@ class base_register_CFunction_MoL_malloc:
 
         :raises ValueError: If the which_gfs parameter is neither "y_n_gfs" nor "non_y_n_gfs".
         """
-        self.Butcher_dict=Butcher_dict
-        self.MoL_method=MoL_method
-        self.which_gfs=which_gfs
+        self.Butcher_dict = Butcher_dict
+        self.MoL_method = MoL_method
+        self.which_gfs = which_gfs
         self.includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
         # Create a description for the function
@@ -355,8 +356,8 @@ class base_register_CFunction_MoL_malloc:
 
         self.name = f"MoL_malloc_{self.which_gfs}"
         self.params = "const commondata_struct *restrict commondata, const params_struct *restrict params, MoL_gridfunctions_struct *restrict gridfuncs"
-        
-        # Generate the body of the function        
+
+        # Generate the body of the function
         self.body = "const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2;\n"
 
 
@@ -413,12 +414,13 @@ def single_RK_substep_input_symbolic(
         else post_rhs_output_list
     )
     comment_block = (
-        f"// -={{ START k{rk_step} substep }}=-" if not rk_step == None else
-        "// ***Euler timestepping only requires one RHS evaluation***"
+        f"// -={{ START k{rk_step} substep }}=-"
+        if not rk_step == None
+        else "// ***Euler timestepping only requires one RHS evaluation***"
     )
-    comment_block+=additional_comments
+    comment_block += additional_comments
     body = f"{comment_block}\n"
-    
+
     if isinstance(substep_time_offset_dt, (int, sp.Rational)):
         substep_time_offset_str = f"{float(substep_time_offset_dt):.17e}"
     else:
@@ -441,19 +443,20 @@ def single_RK_substep_input_symbolic(
     # Part 2: RK update
     RK_key = f"RK_STEP{rk_step}"
     MoL_Functions_dict.update(
-        {RK_key : RKFunction(
-            "REAL", 
-            RK_lhs_list,
-            RK_rhs_list,
-            rk_step=rk_step,
-            enable_simd=enable_simd,
-            fp_type=fp_type,
+        {
+            RK_key: RKFunction(
+                "REAL",
+                RK_lhs_list,
+                RK_rhs_list,
+                rk_step=rk_step,
+                enable_simd=enable_simd,
+                fp_type=fp_type,
             )
         }
-    )   
+    )
 
     body += MoL_Functions_dict[RK_key].c_function_call()
-   
+
     # Part 3: Call post-RHS functions
     for post_rhs, post_rhs_output in zip(post_rhs_list, post_rhs_output_list):
         body += post_rhs.replace(
@@ -510,7 +513,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
         fp_type: str = "double",
     ) -> None:
         """
-        Base class to facilitate generating the MoL_step_forward_in_time() C function, 
+        Base class to facilitate generating the MoL_step_forward_in_time() C function,
         which is the core driver for time evolution in BHaH codes.
 
         :param Butcher_dict: A dictionary containing the Butcher tables for various RK-like methods.
@@ -526,19 +529,19 @@ class base_register_CFunction_MoL_step_forward_in_time:
         Doctest:
         # FIXME
         """
-        self.Butcher_dict=Butcher_dict
-        self.MoL_method=MoL_method
-        self.rhs_string=rhs_string
-        self.post_rhs_string=post_rhs_string
-        self.post_post_rhs_string=post_post_rhs_string
-        self.enable_rfm_precompute=enable_rfm_precompute
-        self.enable_curviBCs=enable_curviBCs
-        self.fp_type=fp_type
-        self.single_RK_substep_input_symbolic=single_RK_substep_input_symbolic
+        self.Butcher_dict = Butcher_dict
+        self.MoL_method = MoL_method
+        self.rhs_string = rhs_string
+        self.post_rhs_string = post_rhs_string
+        self.post_post_rhs_string = post_post_rhs_string
+        self.enable_rfm_precompute = enable_rfm_precompute
+        self.enable_curviBCs = enable_curviBCs
+        self.fp_type = fp_type
+        self.single_RK_substep_input_symbolic = single_RK_substep_input_symbolic
         self.rk_step_body_dict: Dict[str, str] = {}
-        
-        self.enable_simd=enable_simd
-        
+
+        self.enable_simd = enable_simd
+
         self.includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
         self.desc = f'Method of Lines (MoL) for "{self.MoL_method}" method: Step forward one full timestep.\n'
@@ -547,7 +550,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
         self.params = (
             "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
         )
-        
+
         # Code body
         self.body = f"""
     // C code implementation of -={{ {self.MoL_method} }}=- Method of Lines timestepping.
@@ -564,12 +567,12 @@ class base_register_CFunction_MoL_step_forward_in_time:
 
         self.gf_prefix = "griddata[grid].gridfuncs."
         self.gf_alias_prefix = ""
-        
+
         # Implement Method of Lines (MoL) Timestepping
         self.Butcher = self.Butcher_dict[self.MoL_method][
             0
         ]  # Get the desired Butcher table from the dictionary
-        
+
     # Generate code that specifies aliases (i.e. pointers) to gridfunctions and useful structs
     # This needs to be called before generate_RK_steps, but is left as an independent method
     # in case it needs to be overloaded by a parallelization module
@@ -580,13 +583,13 @@ class base_register_CFunction_MoL_step_forward_in_time:
 {self.gf_alias_prefix} REAL *restrict {self.y_n_gridfunctions} = {self.gf_prefix}{self.y_n_gridfunctions};
 // Temporary timelevel & AUXEVOL gridfunctions:\n"""
         for gf in self.non_y_n_gridfunctions_list:
-            self.gf_aliases += f"{self.gf_alias_prefix} REAL *restrict {gf} = {self.gf_prefix}{gf};\n"
+            self.gf_aliases += (
+                f"{self.gf_alias_prefix} REAL *restrict {gf} = {self.gf_prefix}{gf};\n"
+            )
 
         self.gf_aliases += f"{self.gf_alias_prefix} params_struct *restrict params = &griddata[grid].params;\n"
         if self.enable_rfm_precompute:
-            self.gf_aliases += (
-                f"{self.gf_alias_prefix} const rfm_struct *restrict rfmstruct = &griddata[grid].rfmstruct;\n"
-            )
+            self.gf_aliases += f"{self.gf_alias_prefix} const rfm_struct *restrict rfmstruct = &griddata[grid].rfmstruct;\n"
         else:
             self.gf_aliases += f"{self.gf_alias_prefix} REAL *restrict xx[3]; for(int ww=0;ww<3;ww++) xx[ww] = griddata[grid].xx[ww];\n"
 
@@ -605,7 +608,10 @@ class base_register_CFunction_MoL_step_forward_in_time:
 
         dt = sp.Symbol("commondata->dt", real=True)
 
-        if is_diagonal_Butcher(self.Butcher_dict, self.MoL_method) and "RK3" in self.MoL_method:
+        if (
+            is_diagonal_Butcher(self.Butcher_dict, self.MoL_method)
+            and "RK3" in self.MoL_method
+        ):
             # Diagonal RK3 only!!!
             #  In a diagonal RK3 method, only 3 gridfunctions need be defined. Below implements this approach.
             y_n_gfs = sp.Symbol("y_n_gfsL", real=True)
@@ -717,7 +723,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
                 + "// -={ END k3 substep }=-\n\n"
             )
         else:
-            y_n = sp.Symbol("y_n_gfsL", real=True)                
+            y_n = sp.Symbol("y_n_gfsL", real=True)
             if not is_diagonal_Butcher(self.Butcher_dict, self.MoL_method):
                 for s in range(num_steps):
                     next_y_input = sp.Symbol("next_y_input_gfsL", real=True)
@@ -748,7 +754,9 @@ class base_register_CFunction_MoL_step_forward_in_time:
                     else:  # If on anything but the final step:
                         post_rhs_output = next_y_input
 
-                    self.rk_step_body_dict[f"RK_SUBSTEP_K{s+1}"] = f"""{self.single_RK_substep_input_symbolic(
+                    self.rk_step_body_dict[
+                        f"RK_SUBSTEP_K{s+1}"
+                    ] = f"""{self.single_RK_substep_input_symbolic(
                         substep_time_offset_dt=self.Butcher[s][0],
                         rhs_str=self.rhs_string,
                         rhs_input_expr=rhs_input,
@@ -766,23 +774,27 @@ class base_register_CFunction_MoL_step_forward_in_time:
 
             else:
                 y_n = sp.Symbol("y_n_gfsL", real=True)
-                y_nplus1_running_total = sp.Symbol("y_nplus1_running_total_gfsL", real=True)
+                y_nplus1_running_total = sp.Symbol(
+                    "y_nplus1_running_total_gfsL", real=True
+                )
                 if (
                     self.MoL_method == "Euler"
                 ):  # Euler's method doesn't require any k_i, and gets its own unique algorithm
-                    self.rk_step_body_dict[f"RK_SUBSTEP_K{s+1}"] = self.single_RK_substep_input_symbolic(
-                        substep_time_offset_dt=self.Butcher[0][0],
-                        rhs_str=self.rhs_string,
-                        rhs_input_expr=y_n,
-                        rhs_output_expr=y_nplus1_running_total,
-                        RK_lhs_list=[y_n],
-                        RK_rhs_list=[y_n + y_nplus1_running_total * dt],
-                        post_rhs_list=[self.post_rhs_string],
-                        post_rhs_output_list=[y_n],
-                        enable_simd=self.enable_simd,
-                        gf_aliases=self.gf_aliases,
-                        post_post_rhs_string=self.post_post_rhs_string,
-                        fp_type=self.fp_type,
+                    self.rk_step_body_dict[f"RK_SUBSTEP_K{s+1}"] = (
+                        self.single_RK_substep_input_symbolic(
+                            substep_time_offset_dt=self.Butcher[0][0],
+                            rhs_str=self.rhs_string,
+                            rhs_input_expr=y_n,
+                            rhs_output_expr=y_nplus1_running_total,
+                            RK_lhs_list=[y_n],
+                            RK_rhs_list=[y_n + y_nplus1_running_total * dt],
+                            post_rhs_list=[self.post_rhs_string],
+                            post_rhs_output_list=[y_n],
+                            enable_simd=self.enable_simd,
+                            gf_aliases=self.gf_aliases,
+                            post_post_rhs_string=self.post_post_rhs_string,
+                            fp_type=self.fp_type,
+                        )
                     )
                 else:
                     for s in range(num_steps):
@@ -817,7 +829,9 @@ class base_register_CFunction_MoL_step_forward_in_time:
                                     if self.Butcher[num_steps][s + 1] != 1:
                                         RK_rhs_list.append(
                                             y_nplus1_running_total
-                                            + rhs_output * dt * self.Butcher[num_steps][s + 1]
+                                            + rhs_output
+                                            * dt
+                                            * self.Butcher[num_steps][s + 1]
                                         )
                                     else:
                                         RK_rhs_list.append(
@@ -827,7 +841,10 @@ class base_register_CFunction_MoL_step_forward_in_time:
                                     RK_lhs_list.append(rhs_output)
                                     if self.Butcher[s + 1][s + 1] != 1:
                                         RK_rhs_list.append(
-                                            y_n + rhs_output * dt * self.Butcher[s + 1][s + 1]
+                                            y_n
+                                            + rhs_output
+                                            * dt
+                                            * self.Butcher[s + 1][s + 1]
                                         )
                                     else:
                                         RK_rhs_list.append(y_n + rhs_output * dt)
@@ -839,14 +856,16 @@ class base_register_CFunction_MoL_step_forward_in_time:
                                     RK_rhs_list.append(
                                         y_n
                                         + y_nplus1_running_total
-                                        + rhs_output * dt * self.Butcher[num_steps][s + 1]
+                                        + rhs_output
+                                        * dt
+                                        * self.Butcher[num_steps][s + 1]
                                     )
                                 else:
                                     RK_rhs_list.append(
                                         y_n + y_nplus1_running_total + rhs_output * dt
                                     )
                             post_rhs_output = y_n
-                        
+
                         self.rk_step_body_dict[f"RK_SUBSTEP_K{s+1}"] = (
                             self.single_RK_substep_input_symbolic(
                                 substep_time_offset_dt=self.Butcher[s][0],
@@ -855,7 +874,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
                                 rhs_output_expr=rhs_output,
                                 RK_lhs_list=RK_lhs_list,
                                 RK_rhs_list=RK_rhs_list,
-                                rk_step=s+1,
+                                rk_step=s + 1,
                                 post_rhs_list=[self.post_rhs_string],
                                 post_rhs_output_list=[post_rhs_output],
                                 enable_simd=self.enable_simd,
@@ -866,15 +885,14 @@ class base_register_CFunction_MoL_step_forward_in_time:
                             + f"// -={{ END k{s + 1} substep }}=-\n\n"
                         )
 
-        
     # The remaining body of the code is generated here.  This is the main
     # method to be overloaded by parallelization module to customize execution
     def register_final_code(self):
         prefunc = construct_RK_functions_prefunc()
-        
+
         for k in self.rk_step_body_dict:
             self.body += self.rk_step_body_dict[k]
-        
+
         self.body += """
 // Adding dt to commondata->time many times will induce roundoff error,
 //   so here we set time based on the iteration number.
@@ -894,6 +912,7 @@ commondata->nn++;
             prefunc=prefunc,
         )
 
+
 class base_register_CFunction_MoL_free_memory:
     def __init__(
         self,
@@ -910,10 +929,10 @@ class base_register_CFunction_MoL_free_memory:
 
         :raises ValueError: If the 'which_gfs' argument is unrecognized.
         """
-        self.Butcher_dict=Butcher_dict
-        self.MoL_method=MoL_method
-        self.which_gfs=which_gfs
-        
+        self.Butcher_dict = Butcher_dict
+        self.MoL_method = MoL_method
+        self.which_gfs = which_gfs
+
         self.includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
         self.desc = f'Method of Lines (MoL) for "{MoL_method}" method: Free memory for "{which_gfs}" gridfunctions\n'
         self.desc += "   - y_n_gfs are used to store data for the vector of gridfunctions y_i at t_n, at the start of each MoL timestep\n"
@@ -965,15 +984,15 @@ class base_register_CFunctions:
         :param register_MoL_step_forward_in_time: Whether to register the MoL step forward function. Default is True.
         :param fp_type: Floating point type, e.g., "double".
         """
-        self.MoL_method=MoL_method
-        self.rhs_string=rhs_string
-        self.post_rhs_string=post_rhs_string
-        self.post_post_rhs_string=post_post_rhs_string
-        self.enable_rfm_precompute=enable_rfm_precompute
-        self.enable_curviBCs=enable_curviBCs
-        self.register_MoL_step_forward_in_time=register_MoL_step_forward_in_time
-        self.fp_type=fp_type
-        
+        self.MoL_method = MoL_method
+        self.rhs_string = rhs_string
+        self.post_rhs_string = post_rhs_string
+        self.post_post_rhs_string = post_post_rhs_string
+        self.enable_rfm_precompute = enable_rfm_precompute
+        self.enable_curviBCs = enable_curviBCs
+        self.register_MoL_step_forward_in_time = register_MoL_step_forward_in_time
+        self.fp_type = fp_type
+
         self.Butcher_dict = generate_Butcher_tables()
 
         # Generating gridfunction names based on the given MoL method
@@ -985,14 +1004,17 @@ class base_register_CFunctions:
         ) = generate_gridfunction_names(self.Butcher_dict, MoL_method=self.MoL_method)
 
         # Step 3.b: Create MoL_timestepping struct:
-        self.BHaH_MoL_body = f"typedef struct __MoL_gridfunctions_struct__ {{\n" \
-        + f"REAL *restrict {self.y_n_gridfunctions};\n" \
-        + "".join(f"REAL *restrict {gfs};\n" for gfs in self.non_y_n_gridfunctions_list) \
-        + r"""REAL *restrict diagnostic_output_gfs;
+        self.BHaH_MoL_body = (
+            f"typedef struct __MoL_gridfunctions_struct__ {{\n"
+            + f"REAL *restrict {self.y_n_gridfunctions};\n"
+            + "".join(
+                f"REAL *restrict {gfs};\n" for gfs in self.non_y_n_gridfunctions_list
+            )
+            + r"""REAL *restrict diagnostic_output_gfs;
 REAL *restrict diagnostic_output_gfs2;
 } MoL_gridfunctions_struct;
 """
-
+        )
 
 
 if __name__ == "__main__":

@@ -15,26 +15,27 @@ import nrpy.c_function as cfc
 import nrpy.infrastructures.BHaH.checkpoints.base_checkpointing as base_chkpt
 
 
+class register_CFunction_read_checkpoint(
+    base_chkpt.base_register_CFunction_read_checkpoint
+):
+    def __new__(
+        self,
+        filename_tuple: Tuple[str, str] = (
+            r"checkpoint-conv_factor%.2f.dat",
+            "commondata->convergence_factor",
+        ),
+    ) -> None:
+        """
+        Register read_checkpoint CFunction for reading checkpoints.
 
-class register_CFunction_read_checkpoint(base_chkpt.base_register_CFunction_read_checkpoint):
-  def __new__(
-    self,
-    filename_tuple: Tuple[str, str] = (
-        r"checkpoint-conv_factor%.2f.dat",
-        "commondata->convergence_factor",
-    ),
-  ) -> None:
-    """
-    Register read_checkpoint CFunction for reading checkpoints.
+        :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
+        """
+        super().__init__(
+            self,
+            filename_tuple=filename_tuple,
+        )
 
-    :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
-    """
-    super().__init__(
-      self,
-      filename_tuple=filename_tuple,      
-    )
-
-    self.body += r"""  // If the checkpoint doesn't exist then return 0.
+        self.body += r"""  // If the checkpoint doesn't exist then return 0.
   if (access(filename, F_OK) != 0)
     return 0;
 
@@ -78,40 +79,42 @@ class register_CFunction_read_checkpoint(base_chkpt.base_register_CFunction_read
 
   return 1;
 """
-    cfc.register_CFunction(
-        includes=self.includes,
-        prefunc=self.prefunc,
-        desc=self.desc,
-        cfunc_type=self.cfunc_type,
-        name=self.name,
-        params=self.params,
-        include_CodeParameters_h=False,
-        body=self.body,
-    )
+        cfc.register_CFunction(
+            includes=self.includes,
+            prefunc=self.prefunc,
+            desc=self.desc,
+            cfunc_type=self.cfunc_type,
+            name=self.name,
+            params=self.params,
+            include_CodeParameters_h=False,
+            body=self.body,
+        )
 
 
-class register_CFunction_write_checkpoint(base_chkpt.base_register_CFunction_write_checkpoint):
-  def __new__(
-    self,  
-    default_checkpoint_every: float = 2.0,
-    filename_tuple: Tuple[str, str] = (
-        "checkpoint-conv_factor%.2f.dat",
-        "commondata->convergence_factor",
-    ),
-) -> None:
-    """
-    Register write_checkpoint CFunction for writing checkpoints.
+class register_CFunction_write_checkpoint(
+    base_chkpt.base_register_CFunction_write_checkpoint
+):
+    def __new__(
+        self,
+        default_checkpoint_every: float = 2.0,
+        filename_tuple: Tuple[str, str] = (
+            "checkpoint-conv_factor%.2f.dat",
+            "commondata->convergence_factor",
+        ),
+    ) -> None:
+        """
+        Register write_checkpoint CFunction for writing checkpoints.
 
-    :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
-    :param default_checkpoint_every: The default checkpoint interval in physical time units.
-    """
-    super().__init__(
-      self,
-      default_checkpoint_every=default_checkpoint_every,
-      filename_tuple=filename_tuple
-    )
+        :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
+        :param default_checkpoint_every: The default checkpoint interval in physical time units.
+        """
+        super().__init__(
+            self,
+            default_checkpoint_every=default_checkpoint_every,
+            filename_tuple=filename_tuple,
+        )
 
-    self.body += r"""const REAL currtime = commondata->time, currdt = commondata->dt, outevery = commondata->checkpoint_every;
+        self.body += r"""const REAL currtime = commondata->time, currdt = commondata->dt, outevery = commondata->checkpoint_every;
 // Explanation of the if() below:
 // Step 1: round(currtime / outevery) rounds to the nearest integer multiple of currtime.
 // Step 2: Multiplying by outevery yields the exact time we should output again, t_out.
@@ -161,15 +164,15 @@ if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {
   fprintf(stderr, "FINISHED WRITING CHECKPOINT\n");
 }
 """
-    cfc.register_CFunction(
-        includes=self.includes,
-        desc=self.desc,
-        cfunc_type=self.cfunc_type,
-        name=self.name,
-        params=self.params,
-        include_CodeParameters_h=False,
-        body=self.body,
-    )
+        cfc.register_CFunction(
+            includes=self.includes,
+            desc=self.desc,
+            cfunc_type=self.cfunc_type,
+            name=self.name,
+            params=self.params,
+            include_CodeParameters_h=False,
+            body=self.body,
+        )
 
 
 def register_CFunctions(

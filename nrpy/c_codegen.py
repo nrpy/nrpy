@@ -183,7 +183,7 @@ class CCodeGen:
         self.symbol_to_Rational_dict = symbol_to_Rational_dict
         self.clang_format_enable = clang_format_enable
         self.clang_format_options = clang_format_options
-        self.rational_const_alias=rational_const_alias
+        self.rational_const_alias = rational_const_alias
 
         self.fd_order = par.parval_from_str("finite_difference::fd_order")
 
