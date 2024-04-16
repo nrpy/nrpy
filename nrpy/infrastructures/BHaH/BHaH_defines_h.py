@@ -23,8 +23,8 @@ core_modules_list = [
     "params_struct",
     "finite_difference",
     "reference_metric",
-    "nrpy.infrastructures.BHaH.CurviBoundaryConditions.openmp.CurviBoundaryConditions",
-    "nrpy.infrastructures.BHaH.MoLtimestepping.openmp.MoL",
+    "nrpy.infrastructures.BHaH.CurviBoundaryConditions.base_CurviBoundaryConditions",
+    "nrpy.infrastructures.BHaH.MoLtimestepping.base_MoL",
     "nrpy.infrastructures.BHaH.interpolation.interpolation",
     "grid",
 ]

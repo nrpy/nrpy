@@ -29,6 +29,13 @@ _ = par.CodeParameter("REAL", __name__, "time", add_to_parfile=False, add_to_set
 _ = par.CodeParameter("REAL", __name__, "t_final", 10.0, commondata=True)
 # fmt: on
 
+# Update core_modules to use correct key for ordering
+for i, key in enumerate(BHaH_defines_h.core_modules_list):
+    if "nrpy.infrastructures.BHaH.MoLtimestepping" in key:
+        BHaH_defines_h.core_modules_list[i] = (
+            "nrpy.infrastructures.BHaH.MoLtimestepping.openmp.MoL"
+        )
+
 
 class register_CFunction_MoL_malloc(base_MoL.base_register_CFunction_MoL_malloc):
     """
