@@ -27,15 +27,17 @@ import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices as out012d
 
 # Define functions to set up initial guess
-
-
 class openmp_register_CFunction_initial_guess_single_point(
     base_npe_classes.base_register_CFunction_initial_guess_single_point
 ):
 
     def __init__(self, fp_type: str = "double") -> None:
         super().__init__(fp_type=fp_type)
-
+        """
+        OpenMP overload to generate a function that computes the initial guess at a
+        single point.
+        :param fp_type floating point precision of sympy expressions translated to C code
+        """
         self.body = ccg.c_codegen(
             [sp.sympify(0), sp.sympify(0)],
             ["*uu_ID", "*vv_ID"],
@@ -43,48 +45,54 @@ class openmp_register_CFunction_initial_guess_single_point(
             include_braces=False,
             fp_type=self.fp_type,
         )
+        
+        cfc.register_CFunction(
+            includes=self.includes,
+            desc=self.desc,
+            cfunc_type=self.cfunc_type,
+            CoordSystem_for_wrapper_func="",
+            name=self.name,
+            params=self.params,
+            include_CodeParameters_h=True,
+            body=self.body,
+        )
 
 
 def register_CFunction_initial_guess_single_point(
     fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
+    """
+    Helper function for openmp_register_CFunction_initial_guess_single_point
+    to facilitate generating a function to compute the initial guess at a
+    single point and retain compatibility with parallel_codegen.
+    """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
         return None
 
-    self_class = openmp_register_CFunction_initial_guess_single_point(fp_type=fp_type)
-    cfc.register_CFunction(
-        includes=self_class.includes,
-        desc=self_class.desc,
-        cfunc_type=self_class.cfunc_type,
-        CoordSystem_for_wrapper_func="",
-        name=self_class.name,
-        params=self_class.params,
-        include_CodeParameters_h=True,
-        body=self_class.body,
-    )
+    openmp_register_CFunction_initial_guess_single_point(fp_type=fp_type)
+    
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
 class openmp_register_CFunction_initial_guess_all_points(
     base_npe_classes.base_register_CFunction_initial_guess_all_points
 ):
-    """
-    Register the initial guess function for the hyperbolic relaxation equation.
-
-    :param enable_checkpointing: Attempt to read from a checkpoint file before generating initial guess.
-    :param OMP_collapse: Degree of OpenMP loop collapsing.
-    :param fp_type: Floating point type, e.g., "double".
-
-    :return: None if in registration phase, else the updated NRPy environment.
-    """
-
     def __init__(
         self,
         OMP_collapse: int,
         enable_checkpointing: bool = False,
         fp_type: str = "double",
     ) -> None:
+        """
+        OpenMP overload to register the initial guess function for the hyperbolic relaxation equation.
+
+        :param enable_checkpointing: Attempt to read from a checkpoint file before generating initial guess.
+        :param OMP_collapse: Degree of OpenMP loop collapsing.
+        :param fp_type: Floating point type, e.g., "double".
+
+        :return: None.
+        """
         super().__init__(enable_checkpointing, fp_type=fp_type)
 
         self.body += r"""for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
@@ -106,6 +114,16 @@ class openmp_register_CFunction_initial_guess_all_points(
             fp_type=self.fp_type,
         )
         self.body += "}\n"
+        
+        cfc.register_CFunction(
+            includes=self.includes,
+            desc=self.desc,
+            cfunc_type=self.cfunc_type,
+            name=self.name,
+            params=self.params,
+            include_CodeParameters_h=False,
+            body=self.body,
+        )
 
 
 def register_CFunction_initial_guess_all_points(
@@ -114,7 +132,9 @@ def register_CFunction_initial_guess_all_points(
     fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Register the initial guess function for the hyperbolic relaxation equation.
+    Helper function for openmp_register_CFunction_initial_guess_all_points
+    to facilitate generating a function to compute the initial guess at all
+    points and retain compatibility with parallel_codegen.
 
     :param enable_checkpointing: Attempt to read from a checkpoint file before generating initial guess.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
@@ -125,18 +145,10 @@ def register_CFunction_initial_guess_all_points(
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
         return None
-    self_class = openmp_register_CFunction_initial_guess_all_points(
+    openmp_register_CFunction_initial_guess_all_points(
         OMP_collapse, enable_checkpointing, fp_type=fp_type
     )
-    cfc.register_CFunction(
-        includes=self_class.includes,
-        desc=self_class.desc,
-        cfunc_type=self_class.cfunc_type,
-        name=self_class.name,
-        params=self_class.params,
-        include_CodeParameters_h=False,
-        body=self_class.body,
-    )
+    
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
@@ -166,6 +178,17 @@ class openmp_register_CFunction_auxevol_gfs_single_point(
             include_braces=False,
             fp_type=fp_type,
         )
+        
+        cfc.register_CFunction(
+            includes=self.includes,
+            desc=self.desc,
+            cfunc_type=self.cfunc_type,
+            CoordSystem_for_wrapper_func="",
+            name=self.name,
+            params=self.params,
+            include_CodeParameters_h=True,
+            body=self.body,
+        )
 
 
 def register_CFunction_auxevol_gfs_single_point(
@@ -173,7 +196,9 @@ def register_CFunction_auxevol_gfs_single_point(
     fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Register the C function for the AUXEVOL grid functions at a single point.
+    Helper function for openmp_register_CFunction_auxevol_gfs_single_point
+    to facilitate generating a function for the AUXEVOL grid functions at a single point
+    and retain compatibility with parallel_codegen.
 
     :param CoordSystem: The coordinate system to use in setting up the AUXEVOL gridfunctions.
     :param fp_type: Floating point type, e.g., "double".
@@ -183,19 +208,10 @@ def register_CFunction_auxevol_gfs_single_point(
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
         return None
-    self_class = openmp_register_CFunction_auxevol_gfs_single_point(
+    openmp_register_CFunction_auxevol_gfs_single_point(
         CoordSystem, fp_type=fp_type
     )
-    cfc.register_CFunction(
-        includes=self_class.includes,
-        desc=self_class.desc,
-        cfunc_type=self_class.cfunc_type,
-        CoordSystem_for_wrapper_func="",
-        name=self_class.name,
-        params=self_class.params,
-        include_CodeParameters_h=True,
-        body=self_class.body,
-    )
+    
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
@@ -236,6 +252,15 @@ class openmp_register_CFunction_auxevol_gfs_all_points(
             fp_type=self.fp_type,
         )
         self.body += "}\n"
+        cfc.register_CFunction(
+            includes=self.includes,
+            desc=self.desc,
+            cfunc_type=self.cfunc_type,
+            name=self.name,
+            params=self.params,
+            include_CodeParameters_h=False,
+            body=self.body,
+        )
 
 
 def register_CFunction_auxevol_gfs_all_points(
@@ -243,7 +268,9 @@ def register_CFunction_auxevol_gfs_all_points(
     fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Register the C function for the AUXEVOL grid functions at all points.
+    Helper function for openmp_register_CFunction_auxevol_gfs_single_point
+    to facilitate generating a function for the AUXEVOL grid functions at all points
+    and retain compatibility with parallel_codegen.
 
     :param OMP_collapse: Degree of OpenMP loop collapsing.
     :param fp_type: Floating point type, e.g., "double".
@@ -253,18 +280,10 @@ def register_CFunction_auxevol_gfs_all_points(
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
         return None
-    self_class = openmp_register_CFunction_auxevol_gfs_all_points(
+    openmp_register_CFunction_auxevol_gfs_all_points(
         OMP_collapse, fp_type=fp_type
     )
-    cfc.register_CFunction(
-        includes=self_class.includes,
-        desc=self_class.desc,
-        cfunc_type=self_class.cfunc_type,
-        name=self_class.name,
-        params=self_class.params,
-        include_CodeParameters_h=False,
-        body=self_class.body,
-    )
+    
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
@@ -282,7 +301,7 @@ class openmp_register_CFunction_variable_wavespeed_gfs_all_points(
         :param CoordSystem: The coordinate system to use in the hyperbolic relaxation.
         :param fp_type: Floating point type, e.g., "double".
 
-        :return: None if in registration phase, else the updated NRPy environment.
+        :return: None.
         """
         super().__init__(CoordSystem, fp_type=fp_type)
 
@@ -306,34 +325,36 @@ class openmp_register_CFunction_variable_wavespeed_gfs_all_points(
         # We must close the loop that was opened in the line 'for(int grid=0; grid<commondata->NUMGRIDS; grid++) {'
         self.body += r"""} // END LOOP for(int grid=0; grid<commondata->NUMGRIDS; grid++)
                 """
-
+        
+        cfc.register_CFunction(
+            includes=self.includes,
+            desc=self.desc,
+            cfunc_type=self.cfunc_type,
+            CoordSystem_for_wrapper_func="",
+            name=self.name,
+            params=self.params,
+            include_CodeParameters_h=False,  # set_CodeParameters.h is manually included after the declaration of params_struct *restrict params
+            body=self.body,
+        )
 
 def register_CFunction_variable_wavespeed_gfs_all_points(
     CoordSystem: str,
     fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Register function to compute variable wavespeed based on local grid spacing for a single coordinate system.
+    Helper function for openmp_register_CFunction_variable_wavespeed_gfs_all_points
+    to facilitate generating a function to compute variable wavespeed based on local 
+    grid spacing for a single coordinate system and retain compatibility with parallel_codegen.
 
     :param CoordSystem: The coordinate system to use in the hyperbolic relaxation.
     :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
-    self_class = openmp_register_CFunction_variable_wavespeed_gfs_all_points(
+    openmp_register_CFunction_variable_wavespeed_gfs_all_points(
         CoordSystem, fp_type=fp_type
     )
-
-    cfc.register_CFunction(
-        includes=self_class.includes,
-        desc=self_class.desc,
-        cfunc_type=self_class.cfunc_type,
-        CoordSystem_for_wrapper_func="",
-        name=self_class.name,
-        params=self_class.params,
-        include_CodeParameters_h=False,  # set_CodeParameters.h is manually included after the declaration of params_struct *restrict params
-        body=self_class.body,
-    )
+    
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
@@ -345,7 +366,7 @@ class openmp_register_CFunction_initialize_constant_auxevol(
         """
         Register function to call all functions that set up AUXEVOL gridfunctions.
 
-        :return: None if in registration phase, else the updated NRPy environment.
+        :return: None.
         """
         super().__init__()
 
@@ -356,29 +377,32 @@ class openmp_register_CFunction_initialize_constant_auxevol(
         // Set up all other AUXEVOL gridfunctions
         auxevol_gfs_all_points(commondata, griddata);
         """
+        
+        cfc.register_CFunction(
+            includes=self.includes,
+            desc=self.desc,
+            cfunc_type=self.cfunc_type,
+            CoordSystem_for_wrapper_func="",
+            name=self.name,
+            params=self.params,
+            include_CodeParameters_h=False,
+            body=self.body,
+        )
 
 
 def register_CFunction_initialize_constant_auxevol() -> Union[None, pcg.NRPyEnv_type]:
     """
-    Register function to call all functions that set up AUXEVOL gridfunctions.
+    Helper function for openmp_register_CFunction_initialize_constant_auxevol
+    to facilitate generating a function to call all functions that set up AUXEVOL gridfunctions
+    and retain compatibility with parallel_codegen.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
         return None
-    self_class = openmp_register_CFunction_initialize_constant_auxevol()
+    openmp_register_CFunction_initialize_constant_auxevol()
 
-    cfc.register_CFunction(
-        includes=self_class.includes,
-        desc=self_class.desc,
-        cfunc_type=self_class.cfunc_type,
-        CoordSystem_for_wrapper_func="",
-        name=self_class.name,
-        params=self_class.params,
-        include_CodeParameters_h=False,
-        body=self_class.body,
-    )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
@@ -494,7 +518,7 @@ class openmp_register_CFunction_diagnostics(
         :param axis_filename_tuple: Tuple containing filename and variables for axis output.
         :param plane_filename_tuple: Tuple containing filename and variables for plane output.
         :param out_quantities_dict: Dictionary or string specifying output quantities.
-        :return: None if in registration phase, else the updated NRPy environment.
+        :return: None.
         """
         super().__init__(
             default_diagnostics_out_every,
@@ -584,7 +608,15 @@ class openmp_register_CFunction_diagnostics(
   if (commondata->time + commondata->dt > commondata->t_final)
     printf("\n");
 """
-
+        cfc.register_CFunction(
+            includes=self.includes,
+            desc=self.desc,
+            cfunc_type=self.cfunc_type,
+            name=self.name,
+            params=self.params,
+            include_CodeParameters_h=False,
+            body=self.body,
+        )
 
 def register_CFunction_diagnostics(
     CoordSystem: str,
@@ -601,7 +633,9 @@ def register_CFunction_diagnostics(
     out_quantities_dict: Union[str, Dict[Tuple[str, str], str]] = "default",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Register C function for simulation diagnostics.
+    Helper function for openmp_register_CFunction_diagnostics
+    to facilitate generating a function to compute simulation diagnostics
+    and retain compatibility with parallel_codegen.
 
     :param CoordSystem: Coordinate system used.
     :param default_diagnostics_out_every: Specifies the default diagnostics output frequency.
@@ -614,7 +648,7 @@ def register_CFunction_diagnostics(
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
         return None
-    self_class = openmp_register_CFunction_diagnostics(
+    openmp_register_CFunction_diagnostics(
         CoordSystem,
         default_diagnostics_out_every,
         enable_progress_indicator=enable_progress_indicator,
@@ -622,39 +656,24 @@ def register_CFunction_diagnostics(
         plane_filename_tuple=plane_filename_tuple,
         out_quantities_dict=out_quantities_dict,
     )
-    cfc.register_CFunction(
-        includes=self_class.includes,
-        desc=self_class.desc,
-        cfunc_type=self_class.cfunc_type,
-        name=self_class.name,
-        params=self_class.params,
-        include_CodeParameters_h=False,
-        body=self_class.body,
-    )
+
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
 # Define function to evaluate stop conditions
 def register_CFunction_check_stop_conditions() -> Union[None, pcg.NRPyEnv_type]:
     """
-    Register function to evaluate stop conditions.
+    Helper function for base_register_CFunction_check_stop_conditions
+    to facilitate generating a function to evaluate stop conditions
+    and retain compatibility with parallel_codegen.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
         return None
-    self_class = base_npe_classes.base_register_CFunction_check_stop_conditions()
-    cfc.register_CFunction(
-        includes=self_class.includes,
-        desc=self_class.desc,
-        cfunc_type=self_class.cfunc_type,
-        CoordSystem_for_wrapper_func="",
-        name=self_class.name,
-        params=self_class.params,
-        include_CodeParameters_h=False,  # set_CodeParameters.h is manually included after the declaration of params_struct *restrict params
-        body=self_class.body,
-    )
+    base_npe_classes.base_register_CFunction_check_stop_conditions()
+    
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
@@ -672,7 +691,8 @@ class openmp_register_CFunction_rhs_eval(
         fp_type: str = "double",
     ) -> None:
         """
-        OpenMP overload to facilitate generating the right-hand side (RHS) evaluation function for the hyperbolic relaxation equation.
+        OpenMP overload to facilitate generating the right-hand side (RHS) evaluation function 
+        for the hyperbolic relaxation equation.
 
         This function sets the right-hand side of the hyperbolic relaxation equation according to the
         selected coordinate system and specified parameters.
@@ -683,7 +703,7 @@ class openmp_register_CFunction_rhs_eval(
         :param OMP_collapse: Level of OpenMP loop collapsing.
         :param fp_type: Floating point type, e.g., "double".
 
-        :return: None if in registration phase, else the updated NRPy environment.
+        :return: None.
         """
         super().__init__(CoordSystem, enable_rfm_precompute)
 
@@ -710,6 +730,17 @@ class openmp_register_CFunction_rhs_eval(
             fp_type=fp_type,
         )
 
+        cfc.register_CFunction(
+            include_CodeParameters_h=True,
+            includes=self.includes,
+            desc=self.desc,
+            cfunc_type=self.cfunc_type,
+            CoordSystem_for_wrapper_func="",
+            name=self.name,
+            params=self.params,
+            body=self.body,
+            enable_simd=enable_simd,
+        )
 
 def register_CFunction_rhs_eval(
     CoordSystem: str,
@@ -719,10 +750,10 @@ def register_CFunction_rhs_eval(
     fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Register the right-hand side (RHS) evaluation function for the hyperbolic relaxation equation.
-
-    This function sets the right-hand side of the hyperbolic relaxation equation according to the
-    selected coordinate system and specified parameters.
+    
+    Helper function for openmp_register_CFunction_rhs_eval
+    to facilitate generating the right-hand side (RHS) evaluation function 
+    for the hyperbolic relaxation equation and retain compatibility with parallel_codegen.
 
     :param CoordSystem: The coordinate system.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
@@ -735,21 +766,10 @@ def register_CFunction_rhs_eval(
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
         return None
-    self_class = openmp_register_CFunction_rhs_eval(
+    openmp_register_CFunction_rhs_eval(
         CoordSystem, enable_rfm_precompute, enable_simd, OMP_collapse, fp_type=fp_type
     )
 
-    cfc.register_CFunction(
-        include_CodeParameters_h=True,
-        includes=self_class.includes,
-        desc=self_class.desc,
-        cfunc_type=self_class.cfunc_type,
-        CoordSystem_for_wrapper_func="",
-        name=self_class.name,
-        params=self_class.params,
-        body=self_class.body,
-        enable_simd=enable_simd,
-    )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
@@ -778,7 +798,7 @@ class openmp_register_CFunction_compute_residual_all_points(
         :param OMP_collapse: Level of OpenMP loop collapsing.
         :param fp_type: Floating point type, e.g., "double".
 
-        :return: None if in registration phase, else the updated NRPy environment.
+        :return: None.
         """
         super().__init__(
             CoordSystem=CoordSystem, enable_rfm_precompute=enable_rfm_precompute
@@ -806,7 +826,17 @@ class openmp_register_CFunction_compute_residual_all_points(
             OMP_collapse=OMP_collapse,
             fp_type=fp_type,
         )
-
+        cfc.register_CFunction(
+            include_CodeParameters_h=True,
+            includes=self.includes,
+            desc=self.desc,
+            cfunc_type=self.cfunc_type,
+            CoordSystem_for_wrapper_func="",
+            name=self.name,
+            params=self.params,
+            body=self.body,
+            enable_simd=enable_simd,
+        )
 
 def register_CFunction_compute_residual_all_points(
     CoordSystem: str,
@@ -816,11 +846,9 @@ def register_CFunction_compute_residual_all_points(
     fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Register the residual evaluation function.
-
-    This function sets the residual of the Hamiltonian constraint in the hyperbolic
-    relaxation equation according to the selected coordinate system and specified
-    parameters.
+    Helper function for openmp_register_CFunction_compute_residual_all_points
+    to facilitate generating the function to evaluate the residual at all points
+    and retain compatibility with parallel_codegen.
 
     :param CoordSystem: The coordinate system.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
@@ -833,18 +861,8 @@ def register_CFunction_compute_residual_all_points(
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
         return None
-    self_class = openmp_register_CFunction_compute_residual_all_points(
+    openmp_register_CFunction_compute_residual_all_points(
         CoordSystem, enable_rfm_precompute, enable_simd, OMP_collapse, fp_type=fp_type
     )
-    cfc.register_CFunction(
-        include_CodeParameters_h=True,
-        includes=self_class.includes,
-        desc=self_class.desc,
-        cfunc_type=self_class.cfunc_type,
-        CoordSystem_for_wrapper_func="",
-        name=self_class.name,
-        params=self_class.params,
-        body=self_class.body,
-        enable_simd=enable_simd,
-    )
+
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())

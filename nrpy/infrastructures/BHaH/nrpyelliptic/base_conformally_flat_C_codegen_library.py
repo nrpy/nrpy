@@ -285,7 +285,7 @@ class base_register_CFunction_check_stop_conditions:
         """
         Base class for generating the function to evaluate stop conditions.
 
-        :return: None if in registration phase, else the updated NRPy environment.
+        :return: None.
         """
 
         self.includes = ["BHaH_defines.h"]
@@ -329,7 +329,16 @@ class base_register_CFunction_check_stop_conditions:
     commondata->stop_relaxation = true;
   }
 """
-
+        cfc.register_CFunction(
+            includes=self.includes,
+            desc=self.desc,
+            cfunc_type=self.cfunc_type,
+            CoordSystem_for_wrapper_func="",
+            name=self.name,
+            params=self.params,
+            include_CodeParameters_h=False,  # set_CodeParameters.h is manually included after the declaration of params_struct *restrict params
+            body=self.body,
+        )
 
 # Define function to evaluate RHSs
 class base_register_CFunction_rhs_eval:
