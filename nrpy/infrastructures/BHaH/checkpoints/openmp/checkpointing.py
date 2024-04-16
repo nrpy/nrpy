@@ -18,7 +18,7 @@ import nrpy.infrastructures.BHaH.checkpoints.base_checkpointing as base_chkpt
 class register_CFunction_read_checkpoint(
     base_chkpt.base_register_CFunction_read_checkpoint
 ):
-    def __new__(
+    def __init__(
         self,
         filename_tuple: Tuple[str, str] = (
             r"checkpoint-conv_factor%.2f.dat",
@@ -30,10 +30,7 @@ class register_CFunction_read_checkpoint(
 
         :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
         """
-        super().__init__(
-            self,
-            filename_tuple=filename_tuple,
-        )
+        super().__init__(filename_tuple=filename_tuple)
 
         self.body += r"""  // If the checkpoint doesn't exist then return 0.
   if (access(filename, F_OK) != 0)
@@ -94,7 +91,7 @@ class register_CFunction_read_checkpoint(
 class register_CFunction_write_checkpoint(
     base_chkpt.base_register_CFunction_write_checkpoint
 ):
-    def __new__(
+    def __init__(
         self,
         default_checkpoint_every: float = 2.0,
         filename_tuple: Tuple[str, str] = (
@@ -109,7 +106,6 @@ class register_CFunction_write_checkpoint(
         :param default_checkpoint_every: The default checkpoint interval in physical time units.
         """
         super().__init__(
-            self,
             default_checkpoint_every=default_checkpoint_every,
             filename_tuple=filename_tuple,
         )

@@ -15,7 +15,7 @@ import nrpy.infrastructures.BHaH.grid_management.base_xx_tofrom_Cart as base_xx_
 class register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     base_xx_classes.base_register_CFunction__Cart_to_xx_and_nearest_i0i1i2
 ):
-    def __new__(
+    def __init__(
         self,
         CoordSystem: str,
         relative_to: str = "local_grid_center",
@@ -32,7 +32,6 @@ class register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
         :raises ValueError: When the value of `relative_to` is not "local_grid_center" or "global_grid_center".
         """
         super().__init__(
-            self,
             CoordSystem,
             relative_to=relative_to,
             fp_type=fp_type,
@@ -72,7 +71,7 @@ class register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
             self.body += "xx[1] = NewtonRaphson_get_xx1_from_th(params, target_th);\n"
         else:
             self.body += ccg.c_codegen(
-                [rfm.Cart_to_xx[0], rfm.Cart_to_xx[1], rfm.Cart_to_xx[2]],
+                [self.rfm.Cart_to_xx[0], self.rfm.Cart_to_xx[1], self.rfm.Cart_to_xx[2]],
                 ["xx[0]", "xx[1]", "xx[2]"],
                 include_braces=False,
                 fp_type=self.fp_type,
@@ -100,7 +99,7 @@ class register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
 
 class register_CFunction_xx_to_Cart(base_xx_classes.base_register_CFunction_xx_to_Cart):
 
-    def __new__(self, CoordSystem: str, fp_type: str = "double") -> None:
+    def __init__(self, CoordSystem: str, fp_type: str = "double") -> None:
         """
         Register a C function to convert arbitrary NRPy+ coordinates to Cartesian coordinates.
 
@@ -108,7 +107,6 @@ class register_CFunction_xx_to_Cart(base_xx_classes.base_register_CFunction_xx_t
         :param fp_type: Floating point type, e.g., "double".
         """
         super().__init__(
-            self,
             CoordSystem,
             fp_type=fp_type,
         )

@@ -41,7 +41,7 @@ t_final = grid_physical_size  # This parameter is effectively not used in NRPyEl
 nn_max = 10000  # Sets the maximum number of relaxation steps
 
 
-def get_log10_residual_tolerance(fp_type):
+def get_log10_residual_tolerance(fp_type: str) -> float:
     if fp_type == "double":
         return -15.8
     elif fp_type == "float":

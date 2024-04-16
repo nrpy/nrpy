@@ -34,7 +34,7 @@ class register_CFunction_numerical_grid_params_Nxx_dxx_xx(
     base_gm_classes.base_register_CFunction_numerical_grid_params_Nxx_dxx_xx
 ):
 
-    def __new__(
+    def __init__(
         self,
         CoordSystem: str,
         grid_physical_size: float,
@@ -50,7 +50,7 @@ class register_CFunction_numerical_grid_params_Nxx_dxx_xx(
 
         :raises ValueError: If CoordSystem is not in Nxx_dict.
         """
-        super().__init__(self, CoordSystem, grid_physical_size, Nxx_dict)
+        super().__init__(CoordSystem, grid_physical_size, Nxx_dict)
 
         for dirn in range(3):
             self.body += (
@@ -160,7 +160,7 @@ class register_CFunction_cfl_limited_timestep(
     base_gm_classes.base_register_CFunction_cfl_limited_timestep
 ):
 
-    def __new__(self, CoordSystem: str, fp_type: str = "double") -> None:
+    def __init__(self, CoordSystem: str, fp_type: str = "double") -> None:
         """
         Register a C function to find the CFL-limited timestep dt on a numerical grid.
 
@@ -170,7 +170,7 @@ class register_CFunction_cfl_limited_timestep(
         :param CoordSystem: The coordinate system used for the simulation.
         :param fp_type: Floating point type, e.g., "double".
         """
-        super().__init__(self, CoordSystem, fp_type=fp_type)
+        super().__init__(CoordSystem, fp_type=fp_type)
         # could be replaced by simple loop?
         self.body = r"""
 REAL ds_min = 1e38;
@@ -201,7 +201,7 @@ class register_CFunction_numerical_grids_and_timestep(
     base_gm_classes.base_register_CFunction_numerical_grids_and_timestep
 ):
 
-    def __new__(
+    def __init__(
         self,
         list_of_CoordSystems: List[str],
         enable_rfm_precompute: bool = False,
@@ -219,7 +219,6 @@ class register_CFunction_numerical_grids_and_timestep(
         :param enable_CurviBCs: Whether to enable curvilinear boundary conditions (default: False).
         """
         super().__init__(
-            self,
             list_of_CoordSystems,
             enable_rfm_precompute=enable_rfm_precompute,
             enable_CurviBCs=enable_CurviBCs,
