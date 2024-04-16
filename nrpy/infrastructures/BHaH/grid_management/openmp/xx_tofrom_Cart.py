@@ -71,7 +71,11 @@ class register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
             self.body += "xx[1] = NewtonRaphson_get_xx1_from_th(params, target_th);\n"
         else:
             self.body += ccg.c_codegen(
-                [self.rfm.Cart_to_xx[0], self.rfm.Cart_to_xx[1], self.rfm.Cart_to_xx[2]],
+                [
+                    self.rfm.Cart_to_xx[0],
+                    self.rfm.Cart_to_xx[1],
+                    self.rfm.Cart_to_xx[2],
+                ],
                 ["xx[0]", "xx[1]", "xx[2]"],
                 include_braces=False,
                 fp_type=self.fp_type,

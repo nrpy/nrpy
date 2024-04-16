@@ -45,7 +45,9 @@ class openmp_register_CFunction_initial_guess_single_point(
         )
 
 
-def register_CFunction_initial_guess_single_point(fp_type: str = "double") -> Union[None, pcg.NRPyEnv_type]:
+def register_CFunction_initial_guess_single_point(
+    fp_type: str = "double",
+) -> Union[None, pcg.NRPyEnv_type]:
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
         return None
@@ -62,6 +64,7 @@ def register_CFunction_initial_guess_single_point(fp_type: str = "double") -> Un
         body=self_class.body,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
 
 class openmp_register_CFunction_initial_guess_all_points(
     base_npe_classes.base_register_CFunction_initial_guess_all_points
@@ -121,8 +124,10 @@ def register_CFunction_initial_guess_all_points(
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
-        return None    
-    self_class = openmp_register_CFunction_initial_guess_all_points(OMP_collapse, enable_checkpointing, fp_type=fp_type)
+        return None
+    self_class = openmp_register_CFunction_initial_guess_all_points(
+        OMP_collapse, enable_checkpointing, fp_type=fp_type
+    )
     cfc.register_CFunction(
         includes=self_class.includes,
         desc=self_class.desc,
@@ -133,6 +138,8 @@ def register_CFunction_initial_guess_all_points(
         body=self_class.body,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
+
 # Define functions to set AUXEVOL gridfunctions
 class openmp_register_CFunction_auxevol_gfs_single_point(
     base_npe_classes.base_register_CFunction_auxevol_gfs_single_point
@@ -160,6 +167,7 @@ class openmp_register_CFunction_auxevol_gfs_single_point(
             fp_type=fp_type,
         )
 
+
 def register_CFunction_auxevol_gfs_single_point(
     CoordSystem: str,
     fp_type: str = "double",
@@ -175,7 +183,9 @@ def register_CFunction_auxevol_gfs_single_point(
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
         return None
-    self_class = openmp_register_CFunction_auxevol_gfs_single_point(CoordSystem, fp_type=fp_type)
+    self_class = openmp_register_CFunction_auxevol_gfs_single_point(
+        CoordSystem, fp_type=fp_type
+    )
     cfc.register_CFunction(
         includes=self_class.includes,
         desc=self_class.desc,
@@ -187,6 +197,8 @@ def register_CFunction_auxevol_gfs_single_point(
         body=self_class.body,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
+
 class openmp_register_CFunction_auxevol_gfs_all_points(
     base_npe_classes.base_register_CFunction_auxevol_gfs_all_points
 ):
@@ -225,6 +237,7 @@ class openmp_register_CFunction_auxevol_gfs_all_points(
         )
         self.body += "}\n"
 
+
 def register_CFunction_auxevol_gfs_all_points(
     OMP_collapse: int,
     fp_type: str = "double",
@@ -240,7 +253,9 @@ def register_CFunction_auxevol_gfs_all_points(
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
         return None
-    self_class = openmp_register_CFunction_auxevol_gfs_all_points(OMP_collapse, fp_type=fp_type)
+    self_class = openmp_register_CFunction_auxevol_gfs_all_points(
+        OMP_collapse, fp_type=fp_type
+    )
     cfc.register_CFunction(
         includes=self_class.includes,
         desc=self_class.desc,
@@ -251,7 +266,8 @@ def register_CFunction_auxevol_gfs_all_points(
         body=self_class.body,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
-    
+
+
 class openmp_register_CFunction_variable_wavespeed_gfs_all_points(
     base_npe_classes.base_register_CFunction_variable_wavespeed_gfs_all_points
 ):
@@ -291,6 +307,7 @@ class openmp_register_CFunction_variable_wavespeed_gfs_all_points(
         self.body += r"""} // END LOOP for(int grid=0; grid<commondata->NUMGRIDS; grid++)
                 """
 
+
 def register_CFunction_variable_wavespeed_gfs_all_points(
     CoordSystem: str,
     fp_type: str = "double",
@@ -303,7 +320,9 @@ def register_CFunction_variable_wavespeed_gfs_all_points(
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
-    self_class=openmp_register_CFunction_variable_wavespeed_gfs_all_points(CoordSystem, fp_type=fp_type)
+    self_class = openmp_register_CFunction_variable_wavespeed_gfs_all_points(
+        CoordSystem, fp_type=fp_type
+    )
 
     cfc.register_CFunction(
         includes=self_class.includes,
@@ -316,6 +335,7 @@ def register_CFunction_variable_wavespeed_gfs_all_points(
         body=self_class.body,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
 
 class openmp_register_CFunction_initialize_constant_auxevol(
     base_npe_classes.base_register_CFunction_initialize_constant_auxevol
@@ -347,8 +367,8 @@ def register_CFunction_initialize_constant_auxevol() -> Union[None, pcg.NRPyEnv_
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
         return None
-    self_class=openmp_register_CFunction_initialize_constant_auxevol()
-    
+    self_class = openmp_register_CFunction_initialize_constant_auxevol()
+
     cfc.register_CFunction(
         includes=self_class.includes,
         desc=self_class.desc,
@@ -360,7 +380,8 @@ def register_CFunction_initialize_constant_auxevol() -> Union[None, pcg.NRPyEnv_
         body=self_class.body,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
-    
+
+
 # Define function to compute the l^2 of a gridfunction
 class register_CFunction_compute_L2_norm_of_gridfunction(
     base_npe_classes.base_register_CFunction_compute_L2_norm_of_gridfunction
@@ -479,11 +500,11 @@ class openmp_register_CFunction_diagnostics(
             default_diagnostics_out_every,
             out_quantities_dict=out_quantities_dict,
         )
-        
+
         # This has to be here to avoid type issues with mypy
         # An error will throw in super().__init__() if out_quantities_dict != dict
         self.out_quantities_dict: Dict[Tuple[str, str], str] = self.out_quantities_dict
-        
+
         for axis in ["y", "z"]:
             out012d.register_CFunction_diagnostics_nearest_1d_axis(
                 CoordSystem=CoordSystem,
@@ -564,6 +585,7 @@ class openmp_register_CFunction_diagnostics(
     printf("\n");
 """
 
+
 def register_CFunction_diagnostics(
     CoordSystem: str,
     default_diagnostics_out_every: int,
@@ -598,7 +620,7 @@ def register_CFunction_diagnostics(
         enable_progress_indicator=enable_progress_indicator,
         axis_filename_tuple=axis_filename_tuple,
         plane_filename_tuple=plane_filename_tuple,
-        out_quantities_dict=out_quantities_dict
+        out_quantities_dict=out_quantities_dict,
     )
     cfc.register_CFunction(
         includes=self_class.includes,
@@ -611,6 +633,7 @@ def register_CFunction_diagnostics(
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
+
 # Define function to evaluate stop conditions
 def register_CFunction_check_stop_conditions() -> Union[None, pcg.NRPyEnv_type]:
     """
@@ -621,7 +644,7 @@ def register_CFunction_check_stop_conditions() -> Union[None, pcg.NRPyEnv_type]:
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
         return None
-    self_class=base_npe_classes.base_register_CFunction_check_stop_conditions()
+    self_class = base_npe_classes.base_register_CFunction_check_stop_conditions()
     cfc.register_CFunction(
         includes=self_class.includes,
         desc=self_class.desc,
@@ -634,8 +657,11 @@ def register_CFunction_check_stop_conditions() -> Union[None, pcg.NRPyEnv_type]:
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
+
 # Define function to evaluate RHSs
-class openmp_register_CFunction_rhs_eval(base_npe_classes.base_register_CFunction_rhs_eval):
+class openmp_register_CFunction_rhs_eval(
+    base_npe_classes.base_register_CFunction_rhs_eval
+):
 
     def __init__(
         self,
@@ -659,9 +685,7 @@ class openmp_register_CFunction_rhs_eval(base_npe_classes.base_register_CFunctio
 
         :return: None if in registration phase, else the updated NRPy environment.
         """
-        super().__init__(
-            CoordSystem, enable_rfm_precompute
-        )
+        super().__init__(CoordSystem, enable_rfm_precompute)
 
         if enable_simd:
             self.includes += [str(Path("simd") / "simd_intrinsics.h")]
@@ -711,7 +735,7 @@ def register_CFunction_rhs_eval(
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
         return None
-    self_class=openmp_register_CFunction_rhs_eval(
+    self_class = openmp_register_CFunction_rhs_eval(
         CoordSystem, enable_rfm_precompute, enable_simd, OMP_collapse, fp_type=fp_type
     )
 
@@ -727,6 +751,7 @@ def register_CFunction_rhs_eval(
         enable_simd=enable_simd,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
 
 # Define function to compute residual the solution
 class openmp_register_CFunction_compute_residual_all_points(
@@ -782,6 +807,7 @@ class openmp_register_CFunction_compute_residual_all_points(
             fp_type=fp_type,
         )
 
+
 def register_CFunction_compute_residual_all_points(
     CoordSystem: str,
     enable_rfm_precompute: bool,
@@ -807,10 +833,9 @@ def register_CFunction_compute_residual_all_points(
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
         return None
-    self_class = openmp_register_CFunction_compute_residual_all_points(CoordSystem,
-                                                                       enable_rfm_precompute, 
-                                                                       enable_simd, OMP_collapse,
-                                                                       fp_type=fp_type)
+    self_class = openmp_register_CFunction_compute_residual_all_points(
+        CoordSystem, enable_rfm_precompute, enable_simd, OMP_collapse, fp_type=fp_type
+    )
     cfc.register_CFunction(
         include_CodeParameters_h=True,
         includes=self_class.includes,

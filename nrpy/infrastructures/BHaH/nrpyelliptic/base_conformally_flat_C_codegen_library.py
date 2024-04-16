@@ -330,6 +330,7 @@ class base_register_CFunction_check_stop_conditions:
   }
 """
 
+
 # Define function to evaluate RHSs
 class base_register_CFunction_rhs_eval:
     def __init__(
