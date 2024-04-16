@@ -41,18 +41,25 @@ t_final = grid_physical_size  # This parameter is effectively not used in NRPyEl
 nn_max = 10000  # Sets the maximum number of relaxation steps
 
 
-def get_log10_residual_tolerance(fp_type: str) -> float:
-    if fp_type == "double":
-        return -15.8
-    elif fp_type == "float":
-        return -8
+def get_log10_residual_tolerance(fp_type_str: str = "double") -> float:
+    """
+    Determine the residual tolerance based on the fp_precision.
+    
+    :param fp_type_str: string representing the floating point type.
+    :return: float of the residual tolerance based on fp_type.
+    :raises ValueError: If the input fp_type_str branch is not defined.
+    """
+    res=-1
+    if fp_type_str == "double":
+        res = 15.8
+    elif fp_type_str == "float":
+        res = -8.0
     else:
-        raise ValueError(f"residual tolerence not defined for {fp_type} precision")
+        raise ValueError(f"residual tolerence not defined for {fp_type_str} precision")
+    return res
 
-
-log10_residual_tolerance = get_log10_residual_tolerance(
-    fp_type
-)  # Set tolerance for log10(residual) to stop relaxation
+# Set tolerance for log10(residual) to stop relaxation
+log10_residual_tolerance = get_log10_residual_tolerance(fp_type_str=fp_type)
 default_diagnostics_output_every = 100
 default_checkpoint_every = 50.0
 eta_damping = 11.0
