@@ -41,11 +41,11 @@ class RKFunction:
     def __init__(
         self,
         fp_type_alias: str,
-        RK_lhs_list: Union[sp.Basic, List[sp.Basic]],
-        RK_rhs_list: Union[sp.Basic, List[sp.Basic]],
+        RK_lhs_list: List[sp.Basic],
+        RK_rhs_list: List[sp.Basic],
         enable_simd: bool = False,
         cfunc_type: str = "static void",
-        rk_step: int = None,
+        rk_step: Union[int, None] = None,
         fp_type: str = "double",
         rational_const_alias: str = "const",
     ) -> None:
@@ -143,8 +143,8 @@ class RKFunction:
 
         if self.enable_simd:
             body += kernel.replace("commondata->dt", "DT")
-            for i, el in enumerate(self.RK_lhs_list):
-                body += f"  WriteSIMD(&{str(el).replace('gfsL', 'gfs[i]')}, __rhs_exp_{i});\n"
+            for j, el in enumerate(self.RK_lhs_list):
+                body += f"  WriteSIMD(&{str(el).replace('gfsL', 'gfs[i]')}, __rhs_exp_{j});\n"
         else:
             body += kernel.replace("commondata->dt", "dt")
 
@@ -374,7 +374,7 @@ def single_RK_substep_input_symbolic(
     RK_rhs_list: Union[sp.Basic, List[sp.Basic]],
     post_rhs_list: Union[str, List[str]],
     post_rhs_output_list: Union[sp.Basic, List[sp.Basic]],
-    rk_step: int = None,
+    rk_step: Union[int, None] = None,
     enable_simd: bool = False,
     gf_aliases: str = "",
     post_post_rhs_string: str = "",
@@ -509,7 +509,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
         post_post_rhs_string: str = "",
         enable_rfm_precompute: bool = False,
         enable_curviBCs: bool = False,
-        enable_simd=False,
+        enable_simd: bool = False,
         fp_type: str = "double",
     ) -> None:
         """
@@ -576,7 +576,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
     # Generate code that specifies aliases (i.e. pointers) to gridfunctions and useful structs
     # This needs to be called before generate_RK_steps, but is left as an independent method
     # in case it needs to be overloaded by a parallelization module
-    def setup_gf_aliases(self):
+    def setup_gf_aliases(self) -> None:
 
         self.gf_aliases = f"""// Set gridfunction aliases from gridfuncs struct
 // y_n gridfunctions
@@ -601,7 +601,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
     # Populate self.rk_step_body_dict dictionary which stores the code related to RK substeps.  This allows
     # for a high degree of flexibility in generating MoL
     # Also populates boiler plate code at the head of self.body
-    def generate_RK_steps(self):
+    def generate_RK_steps(self) -> None:
         num_steps = (
             len(self.Butcher) - 1
         )  # Specify the number of required steps to update solution
@@ -780,7 +780,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
                 if (
                     self.MoL_method == "Euler"
                 ):  # Euler's method doesn't require any k_i, and gets its own unique algorithm
-                    self.rk_step_body_dict[f"RK_SUBSTEP_K{s+1}"] = (
+                    self.rk_step_body_dict[f"{self.MoL_method}"] = (
                         self.single_RK_substep_input_symbolic(
                             substep_time_offset_dt=self.Butcher[0][0],
                             rhs_str=self.rhs_string,
@@ -887,7 +887,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
 
     # The remaining body of the code is generated here.  This is the main
     # method to be overloaded by parallelization module to customize execution
-    def register_final_code(self):
+    def register_final_code(self) -> None:
         prefunc = construct_RK_functions_prefunc()
 
         for k in self.rk_step_body_dict:

@@ -37,7 +37,7 @@ import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_s
 
 class base_register_CFunction_initial_guess_single_point:
 
-    def __init__(self, fp_type="double") -> None:
+    def __init__(self, fp_type: str = "double") -> None:
         """
         Base class for generating the initial guess of solution at a single point.
 
@@ -193,7 +193,7 @@ class base_register_CFunction_variable_wavespeed_gfs_all_points:
 
 class base_register_CFunction_initialize_constant_auxevol:
 
-    def __init__(self):
+    def __init__(self) -> None:
         """
         Base class for generating the function to call all functions that set up AUXEVOL gridfunctions.
         """

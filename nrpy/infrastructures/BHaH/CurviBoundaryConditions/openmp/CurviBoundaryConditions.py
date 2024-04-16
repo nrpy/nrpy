@@ -47,7 +47,7 @@ core_modules_list = [
 class register_CFunction_bcstruct_set_up(
     base_cbc_classes.base_register_CFunction_bcstruct_set_up
 ):
-    def __new__(self, CoordSystem: str, fp_type: str = "double") -> None:
+    def __init__(self, CoordSystem: str, fp_type: str = "double") -> None:
         """
         Register C function for setting up bcstruct.
 
@@ -57,7 +57,7 @@ class register_CFunction_bcstruct_set_up(
         :param CoordSystem: The coordinate system for which to set up boundary conditions.
         :param fp_type: Floating point type, e.g., "double".
         """
-        super().__init__(self, CoordSystem, fp_type=fp_type)
+        super().__init__(CoordSystem, fp_type=fp_type)
 
         self.body = r"""
   ////////////////////////////////////////
@@ -251,12 +251,12 @@ class register_CFunction_apply_bcs_inner_only(
     base_cbc_classes.base_register_CFunction_apply_bcs_inner_only
 ):
 
-    def __new__(self) -> None:
+    def __init__(self) -> None:
         """
         Register C function for filling inner boundary points on the computational grid,
         as prescribed by bcstruct.
         """
-        super().__init__(self)
+        super().__init__()
 
         self.body = r"""
   // Unpack bc_info from bcstruct
@@ -291,9 +291,9 @@ class register_CFunction_apply_bcs_outerextrap_and_inner(
     base_cbc_classes.base_register_CFunction_apply_bcs_outerextrap_and_inner
 ):
 
-    def __new__(self) -> None:
+    def __init__(self) -> None:
         """Register C function for filling boundary points with extrapolation and prescribed bcstruct."""
-        super().__init__(self)
+        super().__init__()
         self.body = r"""
   // Unpack bc_info from bcstruct
   const bc_info_struct *bc_info = &bcstruct->bc_info;
@@ -709,7 +709,7 @@ return partial_t_f_outgoing_wave + k * rinv*rinv*rinv;
 class register_CFunction_apply_bcs_outerradiation_and_inner(
     base_cbc_classes.base_register_CFunction_apply_bcs_outerradiation_and_inner
 ):
-    def __new__(
+    def __init__(
         self,
         CoordSystem: str,
         radiation_BC_fd_order: int = 2,
@@ -723,7 +723,6 @@ class register_CFunction_apply_bcs_outerradiation_and_inner(
         :param fp_type: Floating point type, e.g., "double".
         """
         super().__init__(
-            self,
             CoordSystem,
             radiation_BC_fd_order=radiation_BC_fd_order,
             fp_type=fp_type,
@@ -799,7 +798,7 @@ class CurviBoundaryConditions_register_C_functions(
     base_cbc_classes.base_CurviBoundaryConditions_register_C_functions
 ):
 
-    def __new__(
+    def __init__(
         self,
         list_of_CoordSystems: List[str],
         radiation_BC_fd_order: int = 2,
@@ -817,7 +816,6 @@ class CurviBoundaryConditions_register_C_functions(
         :param fp_type: Floating point type, e.g., "double".
         """
         super().__init__(
-            self,
             list_of_CoordSystems,
             radiation_BC_fd_order=radiation_BC_fd_order,
             set_parity_on_aux=set_parity_on_aux,

@@ -32,7 +32,7 @@ _ = par.CodeParameter("REAL", __name__, "t_final", 10.0, commondata=True)
 
 class register_CFunction_MoL_malloc(base_MoL.base_register_CFunction_MoL_malloc):
 
-    def __new__(
+    def __init__(
         self,
         Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
         MoL_method: str,
@@ -50,7 +50,7 @@ class register_CFunction_MoL_malloc(base_MoL.base_register_CFunction_MoL_malloc)
         Doctest: FIXME
         # >>> register_CFunction_MoL_malloc("Euler", "y_n_gfs")
         """
-        super().__init__(self, Butcher_dict, MoL_method, which_gfs)
+        super().__init__(Butcher_dict, MoL_method, which_gfs)
 
         # Generate the body of the function
 
@@ -109,7 +109,7 @@ class register_CFunction_MoL_malloc(base_MoL.base_register_CFunction_MoL_malloc)
 class register_CFunction_MoL_step_forward_in_time(
     base_MoL.base_register_CFunction_MoL_step_forward_in_time
 ):
-    def __new__(
+    def __init__(
         self,
         Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
         MoL_method: str,
@@ -138,7 +138,6 @@ class register_CFunction_MoL_step_forward_in_time(
         # FIXME
         """
         super().__init__(
-            self,
             Butcher_dict,
             MoL_method,
             rhs_string=rhs_string,
@@ -151,9 +150,9 @@ class register_CFunction_MoL_step_forward_in_time(
         )
         if enable_simd:
             self.includes += [os.path.join("SIMD", "SIMD_intrinsics.h")]
-        self.setup_gf_aliases(self)
-        self.generate_RK_steps(self)
-        self.register_final_code(self)
+        self.setup_gf_aliases()
+        self.generate_RK_steps()
+        self.register_final_code()
 
 
 # register_CFunction_MoL_free_memory() registers
@@ -163,7 +162,7 @@ class register_CFunction_MoL_step_forward_in_time(
 class register_CFunction_MoL_free_memory(
     base_MoL.base_register_CFunction_MoL_free_memory
 ):
-    def __new__(
+    def __init__(
         self,
         Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
         MoL_method: str,
@@ -178,7 +177,7 @@ class register_CFunction_MoL_free_memory(
 
         :raises ValueError: If the 'which_gfs' argument is unrecognized.
         """
-        super().__init__(self, Butcher_dict, MoL_method, which_gfs)
+        super().__init__(Butcher_dict, MoL_method, which_gfs)
         for gridfunction in self.gridfunctions_list:
             # Don't free a zero-sized array.
             if gridfunction == "auxevol_gfs":
@@ -200,7 +199,7 @@ class register_CFunction_MoL_free_memory(
 # Register all the CFunctions and NRPy basic defines
 class register_CFunctions(base_MoL.base_register_CFunctions):
 
-    def __new__(
+    def __init__(
         self,
         MoL_method: str = "RK4",
         rhs_string: str = "rhs_eval(Nxx, Nxx_plus_2NGHOSTS, dxx, RK_INPUT_GFS, RK_OUTPUT_GFS);",
@@ -279,7 +278,6 @@ class register_CFunctions(base_MoL.base_register_CFunctions):
         <BLANKLINE>
         """
         super().__init__(
-            self,
             MoL_method=MoL_method,
             rhs_string=rhs_string,
             post_rhs_string=post_rhs_string,
