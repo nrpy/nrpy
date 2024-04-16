@@ -269,7 +269,6 @@ class base_register_CFunction_diagnostics:
         self.out_quantities_dict = out_quantities_dict
 
         # fmt: off
-        print(self.out_quantities_dict, self.out_quantities_dict == "default")
         if self.out_quantities_dict == "default":
             self.out_quantities_dict = {
                 ("REAL", "numUU"): "y_n_gfs[IDX4pt(UUGF, idx3)]",
@@ -282,7 +281,7 @@ class base_register_CFunction_diagnostics:
 
 # Define function to evaluate stop conditions
 class base_register_CFunction_check_stop_conditions:
-    def __init__(self):
+    def __init__(self) -> None:
         """
         Base class for generating the function to evaluate stop conditions.
 
@@ -315,8 +314,21 @@ class base_register_CFunction_check_stop_conditions:
             "REAL", __name__, "log10_current_residual", 1.0, commondata=True
         )
 
-        self.body = ""
+        self.body = r"""  // Since this version of NRPyElliptic is unigrid, we simply set the grid index to 0
+  const int grid = 0;
 
+  // Set params
+  params_struct *restrict params = &griddata[grid].params;
+#include "set_CodeParameters.h"
+
+  // Check if total number of iteration steps has been reached
+  if ((nn >= nn_max) || (log10_current_residual < log10_residual_tolerance)){
+    printf("\nExiting main loop after %8d iterations\n", nn);
+    printf("The tolerance for the logarithmic residual is %.8e\n", log10_residual_tolerance);
+    printf("Exiting relaxation with logarithmic residual of %.8e\n", log10_current_residual);
+    commondata->stop_relaxation = true;
+  }
+"""
 
 # Define function to evaluate RHSs
 class base_register_CFunction_rhs_eval:
