@@ -1,6 +1,5 @@
 """
-Module holding base classes and utility codes to facilitate 
-generating C codes related to MoL timestepping within the BHaH infrastructure.
+Module holding base classes and utility codes to facilitate generating C codes related to MoL timestepping within the BHaH infrastructure.
 This includes implementation details and functions for allocating and deallocating the necessary memory.
 
 Authors: Brandon Clark
@@ -71,9 +70,7 @@ class RKFunction:
         self.CFunction_RK_substep_function()
 
     def CFunction_RK_substep_function(self) -> None:
-        """
-        Generate a C function based on the given RK substep expression lists.
-        """
+        """Generate a C function based on the given RK substep expression lists."""
         self.c_function_name = "SIMD_" if self.enable_simd else ""
         self.c_function_name += f"rk_substep_{self.rk_step}"
 
@@ -162,7 +159,7 @@ class RKFunction:
 
     def c_function_call(self) -> str:
         """
-        Generate the C function call for a given RK substep
+        Generate the C function call for a given RK substep.
 
         :return: The C function call as a string.
         """
@@ -187,7 +184,7 @@ def construct_RK_functions_prefunc() -> str:
     :raises ValueError: If the MoL_Functions_dict is empty
     """
     if len(MoL_Functions_dict.values()) == 0:
-        raise ValueError(f"ERROR: MoL_Functions_dict is empty")
+        raise ValueError("ERROR: MoL_Functions_dict is empty")
 
     prefunc = ""
     for fd_func in MoL_Functions_dict.values():
@@ -311,6 +308,15 @@ def generate_gridfunction_names(
 
 
 class base_register_CFunction_MoL_malloc:
+    """
+    Base class to generate MoL_malloc_y_n_gfs() and MoL_malloc_non_y_n_gfs(), allocating memory for the gridfunctions indicated.
+
+    :param Butcher_dict: Dictionary of Butcher tables for the MoL method.
+    :param MoL_method: Method for the Method of Lines.
+    :param which_gfs: Specifies which gridfunctions to consider ("y_n_gfs" or "non_y_n_gfs").
+
+    :raises ValueError: If the which_gfs parameter is neither "y_n_gfs" nor "non_y_n_gfs".
+    """
 
     def __init__(
         self,
@@ -318,15 +324,7 @@ class base_register_CFunction_MoL_malloc:
         MoL_method: str,
         which_gfs: str,
     ) -> None:
-        """
-        Base class to generate MoL_malloc_y_n_gfs() and MoL_malloc_non_y_n_gfs(), allocating memory for the gridfunctions indicated.
 
-        :param Butcher_dict: Dictionary of Butcher tables for the MoL method.
-        :param MoL_method: Method for the Method of Lines.
-        :param which_gfs: Specifies which gridfunctions to consider ("y_n_gfs" or "non_y_n_gfs").
-
-        :raises ValueError: If the which_gfs parameter is neither "y_n_gfs" nor "non_y_n_gfs".
-        """
         self.Butcher_dict = Butcher_dict
         self.MoL_method = MoL_method
         self.which_gfs = which_gfs
@@ -384,7 +382,6 @@ def single_RK_substep_input_symbolic(
     """
     Generate C code for a given Runge-Kutta substep.
 
-    :param comment_block: Block of comments for the generated code.
     :param substep_time_offset_dt: Time offset for the RK substep.
     :param rhs_str: Right-hand side string of the C code.
     :param rhs_input_expr: Input expression for the RHS.
@@ -393,10 +390,12 @@ def single_RK_substep_input_symbolic(
     :param RK_rhs_list: List of RHS expressions for RK.
     :param post_rhs_list: List of post-RHS expressions.
     :param post_rhs_output_list: List of outputs for post-RHS expressions.
+    :param rk_step: Optional integer representing the current RK step.
     :param enable_simd: Whether SIMD optimization is enabled.
     :param gf_aliases: Additional aliases for grid functions.
     :param post_post_rhs_string: String to be used after the post-RHS phase.
     :param fp_type: Floating point type, e.g., "double".
+    :param additional_comments: additional comments to append to auto-generated comment block.
 
     :return: A string containing the generated C code.
 
@@ -415,7 +414,7 @@ def single_RK_substep_input_symbolic(
     )
     comment_block = (
         f"// -={{ START k{rk_step} substep }}=-"
-        if not rk_step == None
+        if not rk_step is None
         else "// ***Euler timestepping only requires one RHS evaluation***"
     )
     comment_block += additional_comments
@@ -500,6 +499,24 @@ def single_RK_substep_input_symbolic(
 # y_nplus1 += 1/3*k_even
 ########################################################################################################################
 class base_register_CFunction_MoL_step_forward_in_time:
+    """
+    Base class to facilitate generating the MoL_step_forward_in_time() C function.
+    The core driver for time evolution in BHaH codes.
+
+    :param Butcher_dict: A dictionary containing the Butcher tables for various RK-like methods.
+    :param MoL_method: The method of lines (MoL) used for time-stepping.
+    :param rhs_string: Right-hand side string of the C code.
+    :param post_rhs_string: Input string for post-RHS phase in the C code.
+    :param post_post_rhs_string: String to be used after the post-RHS phase.
+    :param enable_rfm_precompute: Flag to enable reference metric functionality.
+    :param enable_curviBCs: Flag to enable curvilinear boundary conditions.
+    :param enable_simd: Flag to enable SIMD functionality.
+    :param fp_type: Floating point type, e.g., "double".
+
+    Doctest:
+    # FIXME
+    """
+
     def __init__(
         self,
         Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
@@ -512,23 +529,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
         enable_simd: bool = False,
         fp_type: str = "double",
     ) -> None:
-        """
-        Base class to facilitate generating the MoL_step_forward_in_time() C function,
-        which is the core driver for time evolution in BHaH codes.
 
-        :param Butcher_dict: A dictionary containing the Butcher tables for various RK-like methods.
-        :param MoL_method: The method of lines (MoL) used for time-stepping.
-        :param rhs_string: Right-hand side string of the C code.
-        :param post_rhs_string: Input string for post-RHS phase in the C code.
-        :param post_post_rhs_string: String to be used after the post-RHS phase.
-        :param enable_rfm_precompute: Flag to enable reference metric functionality.
-        :param enable_curviBCs: Flag to enable curvilinear boundary conditions.
-        :param enable_simd: Flag to enable SIMD functionality.
-        :param fp_type: Floating point type, e.g., "double".
-
-        Doctest:
-        # FIXME
-        """
         self.Butcher_dict = Butcher_dict
         self.MoL_method = MoL_method
         self.rhs_string = rhs_string
@@ -572,12 +573,14 @@ class base_register_CFunction_MoL_step_forward_in_time:
         self.Butcher = self.Butcher_dict[self.MoL_method][
             0
         ]  # Get the desired Butcher table from the dictionary
+        self.gf_aliases = ""
 
-    # Generate code that specifies aliases (i.e. pointers) to gridfunctions and useful structs
-    # This needs to be called before generate_RK_steps, but is left as an independent method
-    # in case it needs to be overloaded by a parallelization module
     def setup_gf_aliases(self) -> None:
-
+        """
+        Generate code that specifies aliases (i.e. pointers) to gridfunctions and useful structs.
+        This needs to be called before generate_RK_steps, but is left as an independent method
+        in case it needs to be overloaded by a parallelization module.
+        """
         self.gf_aliases = f"""// Set gridfunction aliases from gridfuncs struct
 // y_n gridfunctions
 {self.gf_alias_prefix} REAL *restrict {self.y_n_gridfunctions} = {self.gf_prefix}{self.y_n_gridfunctions};
@@ -598,10 +601,13 @@ class base_register_CFunction_MoL_step_forward_in_time:
         for i in ["0", "1", "2"]:
             self.gf_aliases += f"{self.gf_alias_prefix} const int Nxx_plus_2NGHOSTS{i} = griddata[grid].params.Nxx_plus_2NGHOSTS{i};\n"
 
-    # Populate self.rk_step_body_dict dictionary which stores the code related to RK substeps.  This allows
-    # for a high degree of flexibility in generating MoL
-    # Also populates boiler plate code at the head of self.body
     def generate_RK_steps(self) -> None:
+        """
+        Populate self.rk_step_body_dict dictionary which stores the code related to RK substeps.
+        This allows for a high degree of flexibility in generating MoL.
+
+        Also populates boiler plate code at the head of self.body.
+        """
         num_steps = (
             len(self.Butcher) - 1
         )  # Specify the number of required steps to update solution
@@ -885,13 +891,15 @@ class base_register_CFunction_MoL_step_forward_in_time:
                             + f"// -={{ END k{s + 1} substep }}=-\n\n"
                         )
 
-    # The remaining body of the code is generated here.  This is the main
-    # method to be overloaded by parallelization module to customize execution
     def register_final_code(self) -> None:
+        """
+        Generate remaining body of the code and register function.
+        This is the main method to be overloaded by parallelization module to customize execution.
+        """
         prefunc = construct_RK_functions_prefunc()
 
-        for k in self.rk_step_body_dict:
-            self.body += self.rk_step_body_dict[k]
+        for _, v in self.rk_step_body_dict.items():
+            self.body += v
 
         self.body += """
 // Adding dt to commondata->time many times will induce roundoff error,
@@ -914,21 +922,23 @@ commondata->nn++;
 
 
 class base_register_CFunction_MoL_free_memory:
+    """
+    Base class to generate function to Free memory for the specified Method of Lines (MoL) gridfunctions, given an MoL_method.
+
+    :param Butcher_dict: Dictionary containing Butcher tableau for MoL methods.
+    :param MoL_method: The Method of Lines method.
+    :param which_gfs: The gridfunctions to be freed, either 'y_n_gfs' or 'non_y_n_gfs'.
+
+    :raises ValueError: If the 'which_gfs' argument is unrecognized.
+    """
+
     def __init__(
         self,
         Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
         MoL_method: str,
         which_gfs: str,
     ) -> None:
-        """
-        Base class to generate function to Free memory for the specified Method of Lines (MoL) gridfunctions, given an MoL_method.
 
-        :param Butcher_dict: Dictionary containing Butcher tableau for MoL methods.
-        :param MoL_method: The Method of Lines method.
-        :param which_gfs: The gridfunctions to be freed, either 'y_n_gfs' or 'non_y_n_gfs'.
-
-        :raises ValueError: If the 'which_gfs' argument is unrecognized.
-        """
         self.Butcher_dict = Butcher_dict
         self.MoL_method = MoL_method
         self.which_gfs = which_gfs
@@ -960,6 +970,20 @@ class base_register_CFunction_MoL_free_memory:
 
 # Register all the CFunctions and NRPy basic defines
 class base_register_CFunctions:
+    r"""
+    Base class to generate MoL C functions and NRPy basic defines.
+
+    :param MoL_method: The method to be used for MoL. Default is 'RK4'.
+    :param rhs_string: RHS function call as string. Default is "rhs_eval(Nxx, Nxx_plus_2NGHOSTS, dxx, RK_INPUT_GFS, RK_OUTPUT_GFS);"
+    :param post_rhs_string: Post-RHS function call as string. Default is "apply_bcs(Nxx, Nxx_plus_2NGHOSTS, RK_OUTPUT_GFS);"
+    :param post_post_rhs_string: Post-post-RHS function call as string. Default is an empty string.
+    :param enable_rfm_precompute: Enable reference metric support. Default is False.
+    :param enable_curviBCs: Enable curvilinear boundary conditions. Default is False.
+    :param enable_simd: Enable Single Instruction, Multiple Data (SIMD). Default is False.
+    :param register_MoL_step_forward_in_time: Whether to register the MoL step forward function. Default is True.
+    :param fp_type: Floating point type, e.g., "double".
+    """
+
     def __init__(
         self,
         MoL_method: str = "RK4",
@@ -971,19 +995,7 @@ class base_register_CFunctions:
         register_MoL_step_forward_in_time: bool = True,
         fp_type: str = "double",
     ) -> None:
-        r"""
-        Base class to generate MoL C functions and NRPy basic defines.
 
-        :param MoL_method: The method to be used for MoL. Default is 'RK4'.
-        :param rhs_string: RHS function call as string. Default is "rhs_eval(Nxx, Nxx_plus_2NGHOSTS, dxx, RK_INPUT_GFS, RK_OUTPUT_GFS);"
-        :param post_rhs_string: Post-RHS function call as string. Default is "apply_bcs(Nxx, Nxx_plus_2NGHOSTS, RK_OUTPUT_GFS);"
-        :param post_post_rhs_string: Post-post-RHS function call as string. Default is an empty string.
-        :param enable_rfm_precompute: Enable reference metric support. Default is False.
-        :param enable_curviBCs: Enable curvilinear boundary conditions. Default is False.
-        :param enable_simd: Enable Single Instruction, Multiple Data (SIMD). Default is False.
-        :param register_MoL_step_forward_in_time: Whether to register the MoL step forward function. Default is True.
-        :param fp_type: Floating point type, e.g., "double".
-        """
         self.MoL_method = MoL_method
         self.rhs_string = rhs_string
         self.post_rhs_string = post_rhs_string
@@ -1005,7 +1017,7 @@ class base_register_CFunctions:
 
         # Step 3.b: Create MoL_timestepping struct:
         self.BHaH_MoL_body = (
-            f"typedef struct __MoL_gridfunctions_struct__ {{\n"
+            "typedef struct __MoL_gridfunctions_struct__ {{\n"
             + f"REAL *restrict {self.y_n_gridfunctions};\n"
             + "".join(
                 f"REAL *restrict {gfs};\n" for gfs in self.non_y_n_gridfunctions_list

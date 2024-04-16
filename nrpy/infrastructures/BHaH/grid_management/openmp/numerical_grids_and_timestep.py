@@ -33,6 +33,17 @@ _ = par.CodeParameter("char[200]", __name__, "gridding_choice", "independent gri
 class register_CFunction_numerical_grid_params_Nxx_dxx_xx(
     base_gm_classes.base_register_CFunction_numerical_grid_params_Nxx_dxx_xx
 ):
+    """
+    Register a C function to Set up a cell-centered grid of size grid_physical_size.
+    Set params: Nxx, Nxx_plus_2NGHOSTS, dxx, invdxx, and xx.
+
+    :param CoordSystem: The coordinate system used for the simulation.
+    :param grid_physical_size: The physical size of the grid.
+    :param Nxx_dict: A dictionary that maps coordinate systems to lists containing the number of grid points along each direction.
+
+    :return: None.
+    :raises ValueError: If CoordSystem is not in Nxx_dict.
+    """
 
     def __init__(
         self,
@@ -40,16 +51,6 @@ class register_CFunction_numerical_grid_params_Nxx_dxx_xx(
         grid_physical_size: float,
         Nxx_dict: Dict[str, List[int]],
     ) -> None:
-        """
-        Register a C function to Set up a cell-centered grid of size grid_physical_size.
-        Set params: Nxx, Nxx_plus_2NGHOSTS, dxx, invdxx, and xx.
-
-        :param CoordSystem: The coordinate system used for the simulation.
-        :param grid_physical_size: The physical size of the grid.
-        :param Nxx_dict: A dictionary that maps coordinate systems to lists containing the number of grid points along each direction.
-
-        :raises ValueError: If CoordSystem is not in Nxx_dict.
-        """
         super().__init__(CoordSystem, grid_physical_size, Nxx_dict)
 
         for dirn in range(3):
@@ -159,17 +160,18 @@ params->Nxx_plus_2NGHOSTS2 = params->Nxx2 + 2*NGHOSTS;
 class register_CFunction_cfl_limited_timestep(
     base_gm_classes.base_register_CFunction_cfl_limited_timestep
 ):
+    """
+    Register a C function to find the CFL-limited timestep dt on a numerical grid.
+
+    The timestep is determined by the relation dt = CFL_FACTOR * ds_min, where ds_min
+    is the minimum spacing between neighboring gridpoints on a numerical grid.
+
+    :param CoordSystem: The coordinate system used for the simulation.
+    :param fp_type: Floating point type, e.g., "double".
+    :return: None.
+    """
 
     def __init__(self, CoordSystem: str, fp_type: str = "double") -> None:
-        """
-        Register a C function to find the CFL-limited timestep dt on a numerical grid.
-
-        The timestep is determined by the relation dt = CFL_FACTOR * ds_min, where ds_min
-        is the minimum spacing between neighboring gridpoints on a numerical grid.
-
-        :param CoordSystem: The coordinate system used for the simulation.
-        :param fp_type: Floating point type, e.g., "double".
-        """
         super().__init__(CoordSystem, fp_type=fp_type)
         # could be replaced by simple loop?
         self.body = r"""
@@ -200,6 +202,18 @@ LOOP_NOOMP(i0, 0, Nxx_plus_2NGHOSTS0,
 class register_CFunction_numerical_grids_and_timestep(
     base_gm_classes.base_register_CFunction_numerical_grids_and_timestep
 ):
+    """
+    Register a C function to set up all numerical grids and timestep.
+
+    The function configures the numerical grids based on given parameters, specifically
+    focusing on the usage of reference metric precomputations and curvilinear boundary
+    conditions.
+
+    :param list_of_CoordSystems: List of CoordSystems
+    :param enable_rfm_precompute: Whether to enable reference metric precomputation (default: False).
+    :param enable_CurviBCs: Whether to enable curvilinear boundary conditions (default: False).
+    :return: None.
+    """
 
     def __init__(
         self,
@@ -207,17 +221,6 @@ class register_CFunction_numerical_grids_and_timestep(
         enable_rfm_precompute: bool = False,
         enable_CurviBCs: bool = False,
     ) -> None:
-        """
-        Register a C function to set up all numerical grids and timestep.
-
-        The function configures the numerical grids based on given parameters, specifically
-        focusing on the usage of reference metric precomputations and curvilinear boundary
-        conditions.
-
-        :param list_of_CoordSystems: List of CoordSystems
-        :param enable_rfm_precompute: Whether to enable reference metric precomputation (default: False).
-        :param enable_CurviBCs: Whether to enable curvilinear boundary conditions (default: False).
-        """
         super().__init__(
             list_of_CoordSystems,
             enable_rfm_precompute=enable_rfm_precompute,

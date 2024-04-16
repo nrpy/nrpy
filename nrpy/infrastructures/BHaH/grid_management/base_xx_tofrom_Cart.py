@@ -1,14 +1,14 @@
 """
-Base classes for Coordinate conversions
+Base classes for Coordinate conversions.
 
 The parallelization modules will generate functions 
 to convert between grid coordinate (xx0,xx1,xx2) (uniform grid spacing) 
 to Cartesian coordinate (x,y,z) within the BHaH infrastructure.
 
-Author: Zachariah B. Etienne
-        zachetie **at** gmail **dot* com
+Authors: Zachariah B. Etienne
+        zachetie **at** gmail **dot** com
         Samuel D. Tootle
-        sdtootle **at** gmail **dot* com        
+        sdtootle **at** gmail **dot** com        
 """
 
 import nrpy.reference_metric as refmetric
@@ -19,22 +19,23 @@ import nrpy.grid as gri
 # Construct Cart_to_xx_and_nearest_i0i1i2() C function for
 # mapping from Cartesian->xx for the chosen CoordSystem.
 class base_register_CFunction__Cart_to_xx_and_nearest_i0i1i2:
+    """
+    Base to generate the function that maps from Cartesian coordinates to xx for the chosen coordinate system.
+    Registers the C function for later use.
+
+    :param CoordSystem: The coordinate system to use.
+    :param relative_to: Whether the computation is relative to the "local_grid_center" or "global_grid_center".
+    :param fp_type: Floating point type, e.g., "double".
+
+    :raises ValueError: When the value of `relative_to` is not "local_grid_center" or "global_grid_center".
+    """
+
     def __init__(
         self,
         CoordSystem: str,
         relative_to: str = "local_grid_center",
         fp_type: str = "double",
     ) -> None:
-        """
-        Base to generate the function that maps from Cartesian coordinates to xx for the chosen coordinate system.
-        Registers the C function for later use.
-
-        :param CoordSystem: The coordinate system to use.
-        :param relative_to: Whether the computation is relative to the "local_grid_center" or "global_grid_center".
-        :param fp_type: Floating point type, e.g., "double".
-
-        :raises ValueError: When the value of `relative_to` is not "local_grid_center" or "global_grid_center".
-        """
         self.CoordSystem = CoordSystem
         self.relative_to = relative_to
         self.fp_type = fp_type
@@ -55,14 +56,14 @@ class base_register_CFunction__Cart_to_xx_and_nearest_i0i1i2:
 
 
 class base_register_CFunction_xx_to_Cart:
+    """
+    Base for generating the function to convert arbitrary NRPy+ coordinates to Cartesian coordinates.
+
+    :param CoordSystem: The coordinate system name as a string.
+    :param fp_type: Floating point type, e.g., "double".
+    """
 
     def __init__(self, CoordSystem: str, fp_type: str = "double") -> None:
-        """
-        Base for generating the function to convert arbitrary NRPy+ coordinates to Cartesian coordinates.
-
-        :param CoordSystem: The coordinate system name as a string.
-        :param fp_type: Floating point type, e.g., "double".
-        """
         self.CoordSystem = CoordSystem
         self.fp_type = fp_type
         self.includes = ["BHaH_defines.h"]

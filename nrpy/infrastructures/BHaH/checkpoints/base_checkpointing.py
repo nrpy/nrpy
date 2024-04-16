@@ -15,6 +15,12 @@ import nrpy.params as par
 
 
 class base_register_CFunction_read_checkpoint:
+    """
+    Base class to generate read_checkpoint CFunction for reading checkpoints.
+
+    :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
+    """
+
     def __init__(
         self,
         filename_tuple: Tuple[str, str] = (
@@ -22,11 +28,6 @@ class base_register_CFunction_read_checkpoint:
             "commondata->convergence_factor",
         ),
     ) -> None:
-        """
-        Base class to generate read_checkpoint CFunction for reading checkpoints.
-
-        :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
-        """
         self.includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "unistd.h"]
         self.prefunc = r"""
 #define FREAD(ptr, size, nmemb, stream) { const int numitems=fread((ptr), (size), (nmemb), (stream)); }
@@ -44,6 +45,13 @@ class base_register_CFunction_read_checkpoint:
 
 
 class base_register_CFunction_write_checkpoint:
+    """
+    Base class to generate write_checkpoint CFunction for writing checkpoints.
+
+    :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
+    :param default_checkpoint_every: The default checkpoint interval in physical time units.
+    """
+
     def __init__(
         self,
         default_checkpoint_every: float = 2.0,
@@ -52,12 +60,6 @@ class base_register_CFunction_write_checkpoint:
             "commondata->convergence_factor",
         ),
     ) -> None:
-        """
-        Base class to generate write_checkpoint CFunction for writing checkpoints.
-
-        :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
-        :param default_checkpoint_every: The default checkpoint interval in physical time units.
-        """
         par.register_CodeParameter(
             "REAL",
             __name__,

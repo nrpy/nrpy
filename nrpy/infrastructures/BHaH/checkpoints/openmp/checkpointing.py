@@ -1,5 +1,5 @@
 """
-Register CFunctions read_checkpoint and write_checkpoint using OpenMP parallelization
+Register CFunctions read_checkpoint and write_checkpoint using OpenMP parallelization.
 
 Provides checkpointing capabilities to BHaH simulations.
 
@@ -18,6 +18,12 @@ import nrpy.infrastructures.BHaH.checkpoints.base_checkpointing as base_chkpt
 class register_CFunction_read_checkpoint(
     base_chkpt.base_register_CFunction_read_checkpoint
 ):
+    """
+    Register read_checkpoint CFunction for reading checkpoints.
+
+    :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
+    """
+
     def __init__(
         self,
         filename_tuple: Tuple[str, str] = (
@@ -25,11 +31,6 @@ class register_CFunction_read_checkpoint(
             "commondata->convergence_factor",
         ),
     ) -> None:
-        """
-        Register read_checkpoint CFunction for reading checkpoints.
-
-        :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
-        """
         super().__init__(filename_tuple=filename_tuple)
 
         self.body += r"""  // If the checkpoint doesn't exist then return 0.
@@ -91,6 +92,13 @@ class register_CFunction_read_checkpoint(
 class register_CFunction_write_checkpoint(
     base_chkpt.base_register_CFunction_write_checkpoint
 ):
+    """
+    Register write_checkpoint CFunction for writing checkpoints.
+
+    :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
+    :param default_checkpoint_every: The default checkpoint interval in physical time units.
+    """
+
     def __init__(
         self,
         default_checkpoint_every: float = 2.0,
@@ -99,12 +107,6 @@ class register_CFunction_write_checkpoint(
             "commondata->convergence_factor",
         ),
     ) -> None:
-        """
-        Register write_checkpoint CFunction for writing checkpoints.
-
-        :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
-        :param default_checkpoint_every: The default checkpoint interval in physical time units.
-        """
         super().__init__(
             default_checkpoint_every=default_checkpoint_every,
             filename_tuple=filename_tuple,

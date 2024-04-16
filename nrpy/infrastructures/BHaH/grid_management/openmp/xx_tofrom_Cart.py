@@ -15,22 +15,24 @@ import nrpy.infrastructures.BHaH.grid_management.base_xx_tofrom_Cart as base_xx_
 class register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     base_xx_classes.base_register_CFunction__Cart_to_xx_and_nearest_i0i1i2
 ):
+    """
+    Construct a C function that maps from Cartesian coordinates to xx for the chosen coordinate system.
+    Registers the C function for later use.
+
+    :param CoordSystem: The coordinate system to use.
+    :param relative_to: Whether the computation is relative to the "local_grid_center" or "global_grid_center".
+    :param fp_type: Floating point type, e.g., "double".
+
+    :return: None.
+    :raises ValueError: When the value of `relative_to` is not "local_grid_center" or "global_grid_center".
+    """
+
     def __init__(
         self,
         CoordSystem: str,
         relative_to: str = "local_grid_center",
         fp_type: str = "double",
     ) -> None:
-        """
-        Construct a C function that maps from Cartesian coordinates to xx for the chosen coordinate system.
-        Registers the C function for later use.
-
-        :param CoordSystem: The coordinate system to use.
-        :param relative_to: Whether the computation is relative to the "local_grid_center" or "global_grid_center".
-        :param fp_type: Floating point type, e.g., "double".
-
-        :raises ValueError: When the value of `relative_to` is not "local_grid_center" or "global_grid_center".
-        """
         super().__init__(
             CoordSystem,
             relative_to=relative_to,
@@ -102,14 +104,15 @@ class register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
 
 
 class register_CFunction_xx_to_Cart(base_xx_classes.base_register_CFunction_xx_to_Cart):
+    """
+    Register a C function to convert arbitrary NRPy+ coordinates to Cartesian coordinates.
+
+    :param CoordSystem: The coordinate system name as a string.
+    :param fp_type: Floating point type, e.g., "double".
+    :return: None.
+    """
 
     def __init__(self, CoordSystem: str, fp_type: str = "double") -> None:
-        """
-        Register a C function to convert arbitrary NRPy+ coordinates to Cartesian coordinates.
-
-        :param CoordSystem: The coordinate system name as a string.
-        :param fp_type: Floating point type, e.g., "double".
-        """
         super().__init__(
             CoordSystem,
             fp_type=fp_type,

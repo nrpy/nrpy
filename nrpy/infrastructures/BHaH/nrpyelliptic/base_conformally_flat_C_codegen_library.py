@@ -1,17 +1,14 @@
 """
-Library of parallelization paradigm agnostic base classes to support generating 
-C functions for solving the hyperbolic relaxation equation in curvilinear coordinates, 
-using a reference-metric formalism.
+Library of parallelization paradigm agnostic base classes.
+Base classes are used to support generating C functions for solving the 
+hyperbolic relaxation equation in curvilinear coordinates, using a reference-metric formalism.
 
 Authors: Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
          Zachariah B. Etienne; zachetie **at** gmail **dot* com
          Samuel D. Tootle; sdtootle **at** gmail **dot** com
 """
 
-from typing import Union, cast, Tuple, Dict
-from inspect import currentframe as cfr
-from types import FrameType as FT
-from pathlib import Path
+from typing import Union, Tuple, Dict
 
 import sympy as sp
 import nrpy.grid as gri
@@ -20,8 +17,6 @@ import nrpy.reference_metric as refmetric
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 
-import nrpy.helpers.parallel_codegen as pcg
-
 from nrpy.equations.nrpyelliptic.ConformallyFlat_RHSs import (
     HyperbolicRelaxationCurvilinearRHSs,
 )
@@ -29,21 +24,17 @@ from nrpy.equations.nrpyelliptic.ConformallyFlat_SourceTerms import (
     compute_psi_background_and_ADD_times_AUU,
 )
 
-import nrpy.infrastructures.BHaH.simple_loop as lp
-import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices as out012d
 
 # Define functions to set up initial guess
-
-
 class base_register_CFunction_initial_guess_single_point:
+    """
+    Base class for generating the initial guess of solution at a single point.
+
+    :param fp_type: Floating point type, e.g., "double".
+    :return: None.
+    """
 
     def __init__(self, fp_type: str = "double") -> None:
-        """
-        Base class for generating the initial guess of solution at a single point.
-
-        :param fp_type: Floating point type, e.g., "double".
-
-        """
         self.fp_type = fp_type
         self.includes = ["BHaH_defines.h"]
 
@@ -56,15 +47,17 @@ class base_register_CFunction_initial_guess_single_point:
 
 
 class base_register_CFunction_initial_guess_all_points:
+    """
+    Base class for generating the initial guess function for the hyperbolic relaxation equation.
 
-    def __init__(self, enable_checkpointing: bool = False, fp_type: str = "double"):
-        """
-        Base class for generating the initial guess function for the hyperbolic relaxation equation.
+    :param enable_checkpointing: Attempt to read from a checkpoint file before generating initial guess.
+    :param fp_type: Floating point type, e.g., "double".
+    :return: None.
+    """
 
-        :param enable_checkpointing: Attempt to read from a checkpoint file before generating initial guess.
-        :param fp_type: Floating point type, e.g., "double".
-
-        """
+    def __init__(
+        self, enable_checkpointing: bool = False, fp_type: str = "double"
+    ) -> None:
         self.fp_type = fp_type
         self.includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
@@ -87,19 +80,19 @@ if( read_checkpoint(commondata, griddata) ) return;
 
 
 class base_register_CFunction_auxevol_gfs_single_point:
+    """
+    Base class for generating the function to compute AUXEVOL grid functions at a single point.
+
+    :param CoordSystem: The coordinate system to use in setting up the AUXEVOL gridfunctions.
+    :param fp_type: Floating point type, e.g., "double".
+    :return: None.
+    """
 
     def __init__(
         self,
         CoordSystem: str,
         fp_type: str = "double",
-    ):
-        """
-        Base class for generating the function to compute AUXEVOL grid functions at a single point.
-
-        :param CoordSystem: The coordinate system to use in setting up the AUXEVOL gridfunctions.
-        :param fp_type: Floating point type, e.g., "double".
-
-        """
+    ) -> None:
         self.fp_type = fp_type
         # Compute psi_background and ADD_times_AUU
         self.psi_background, self.ADD_times_AUU = (
@@ -117,17 +110,18 @@ class base_register_CFunction_auxevol_gfs_single_point:
 
 
 class base_register_CFunction_auxevol_gfs_all_points:
+    """
+    Base class for generating the function for the AUXEVOL grid functions at all points.
+
+    :param fp_type: Floating point type, e.g., "double".
+    :return: None.
+    """
 
     def __init__(
         self,
         fp_type: str = "double",
-    ):
-        """
-        Base class for generating the function for the AUXEVOL grid functions at all points.
+    ) -> None:
 
-        :param fp_type: Floating point type, e.g., "double".
-
-        """
         self.fp_type = fp_type
 
         self.includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
@@ -143,20 +137,21 @@ class base_register_CFunction_auxevol_gfs_all_points:
 
 
 class base_register_CFunction_variable_wavespeed_gfs_all_points:
+    """
+    Base class for generating the function to compute variable wavespeed.
+    Calculation is based on the local grid spacing for a single coordinate system.
+
+    :param CoordSystem: The coordinate system to use in the hyperbolic relaxation.
+    :param fp_type: Floating point type, e.g., "double".
+
+    :return: None.
+    """
+
     def __init__(
         self,
         CoordSystem: str,
         fp_type: str = "double",
-    ):
-        """
-        Base class for generating the function to compute variable wavespeed based on
-        local grid spacing for a single coordinate system.
-
-        :param CoordSystem: The coordinate system to use in the hyperbolic relaxation.
-        :param fp_type: Floating point type, e.g., "double".
-
-        :return: None if in registration phase, else the updated NRPy environment.
-        """
+    ) -> None:
         self.fp_type = fp_type
         self.CoordSystem = CoordSystem
 
@@ -192,12 +187,13 @@ class base_register_CFunction_variable_wavespeed_gfs_all_points:
 
 
 class base_register_CFunction_initialize_constant_auxevol:
+    """
+    Base class for generating the function to call all functions that set up AUXEVOL gridfunctions.
+
+    :return: None
+    """
 
     def __init__(self) -> None:
-        """
-        Base class for generating the function to call all functions that set up AUXEVOL gridfunctions.
-        """
-
         self.includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
         self.desc = r"""Call functions that set up all AUXEVOL gridfunctions."""
@@ -210,20 +206,22 @@ class base_register_CFunction_initialize_constant_auxevol:
 
 # Define function to compute the l^2 of a gridfunction
 class base_register_CFunction_compute_L2_norm_of_gridfunction:
+    """
+    Base class for generating the function to compute l2-norm of a gridfunction assuming a single grid.
+
+    Note that parallel codegen is disabled for this function, as it sometimes causes a
+    multiprocess race condition on Python 3.6.7
+
+    :param CoordSystem: the rfm coordinate system.
+    :param fp_type: Floating point type, e.g., "double".
+    :return: None.
+    """
+
     def __init__(
         self,
         CoordSystem: str,
         fp_type: str = "double",
     ) -> None:
-        """
-        Base class for generating the function to compute l2-norm of a gridfunction assuming a single grid.
-
-        Note that parallel codegen is disabled for this function, as it sometimes causes a
-        multiprocess race condition on Python 3.6.7
-
-        :param CoordSystem: the rfm coordinate system.
-        :param fp_type: Floating point type, e.g., "double".
-        """
         self.fp_type = fp_type
         self.includes = ["BHaH_defines.h"]
         self.desc = "Compute l2-norm of a gridfunction assuming a single grid."
@@ -238,19 +236,19 @@ class base_register_CFunction_compute_L2_norm_of_gridfunction:
 
 # Define diagnostics function
 class base_register_CFunction_diagnostics:
+    """
+    Base class for generating the function for simulation diagnostics.
+
+    :param default_diagnostics_out_every: Specifies the default diagnostics output frequency.
+    :param out_quantities_dict: Dictionary or string specifying output quantities.
+    :raises TypeError: If `out_quantities_dict` is not a dictionary and not set to "default".
+    """
+
     def __init__(
         self,
         default_diagnostics_out_every: int,
         out_quantities_dict: Union[str, Dict[Tuple[str, str], str]] = "default",
-    ):
-        """
-        Base class for generating the function for simulation diagnostics.
-
-        :param default_diagnostics_out_every: Specifies the default diagnostics output frequency.
-        :param out_quantities_dict: Dictionary or string specifying output quantities.
-        :raises TypeError: If `out_quantities_dict` is not a dictionary and not set to "default".
-        """
-
+    ) -> None:
         _ = par.CodeParameter(
             "int",
             __name__,
@@ -281,13 +279,13 @@ class base_register_CFunction_diagnostics:
 
 # Define function to evaluate stop conditions
 class base_register_CFunction_check_stop_conditions:
+    """
+    Base class for generating the function to evaluate stop conditions.
+
+    :return: None.
+    """
+
     def __init__(self) -> None:
-        """
-        Base class for generating the function to evaluate stop conditions.
-
-        :return: None.
-        """
-
         self.includes = ["BHaH_defines.h"]
         self.desc = "Evaluate stop conditions."
         self.cfunc_type = "void"
@@ -340,23 +338,25 @@ class base_register_CFunction_check_stop_conditions:
             body=self.body,
         )
 
+
 # Define function to evaluate RHSs
 class base_register_CFunction_rhs_eval:
+    """
+    Base class for generating the right-hand side (RHS) evaluation function for the hyperbolic relaxation equation.
+
+    This function sets the right-hand side of the hyperbolic relaxation equation according to the
+    selected coordinate system and specified parameters.
+
+    :param CoordSystem: The coordinate system.
+    :param enable_rfm_precompute: Whether to enable reference metric precomputation.
+    :return: None.
+    """
+
     def __init__(
         self,
         CoordSystem: str,
         enable_rfm_precompute: bool,
-    ):
-        """
-        Base class for generating the right-hand side (RHS) evaluation function for the hyperbolic relaxation equation.
-
-        This function sets the right-hand side of the hyperbolic relaxation equation according to the
-        selected coordinate system and specified parameters.
-
-        :param CoordSystem: The coordinate system.
-        :param enable_rfm_precompute: Whether to enable reference metric precomputation.
-        """
-
+    ) -> None:
         self.includes = ["BHaH_defines.h"]
         self.desc = r"""Set RHSs for hyperbolic relaxation equation."""
         self.cfunc_type = "void"
@@ -374,22 +374,23 @@ class base_register_CFunction_rhs_eval:
 
 # Define function to compute residual the solution
 class base_register_CFunction_compute_residual_all_points:
+    """
+    Base class for generating the residual evaluation function.
+
+    This function sets the residual of the Hamiltonian constraint in the hyperbolic
+    relaxation equation according to the selected coordinate system and specified
+    parameters.
+
+    :param CoordSystem: The coordinate system.
+    :param enable_rfm_precompute: Whether to enable reference metric precomputation.
+    :return: None.
+    """
+
     def __init__(
         self,
         CoordSystem: str,
         enable_rfm_precompute: bool,
-    ):
-        """
-        Base class for generating the residual evaluation function.
-
-        This function sets the residual of the Hamiltonian constraint in the hyperbolic
-        relaxation equation according to the selected coordinate system and specified
-        parameters.
-
-        :param CoordSystem: The coordinate system.
-        :param enable_rfm_precompute: Whether to enable reference metric precomputation.
-        """
-
+    ) -> None:
         self.includes = ["BHaH_defines.h"]
 
         self.desc = r"""Compute residual of the Hamiltonian constraint for the hyperbolic relaxation equation."""

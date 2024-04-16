@@ -4,8 +4,10 @@ Module providing functions for setting up Curvilinear boundary conditions.
 This is documented in Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb.
 
 Authors: Zachariah B. Etienne
-        zachetie **at** gmail **dot* com
+        zachetie **at** gmail **dot** com
          Terrence Pierre Jacques
+         Samuel D. Tootle
+         sdtootle **at** gmail **dot** com
 """
 
 # Step P1: Import needed NRPy+ core modules:
@@ -15,8 +17,6 @@ import sympy.codegen.ast as sp_ast
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.params as par  # NRPy+: Parameter interface
-import nrpy.grid as gri  # NRPy+: Functions having to do with numerical grids
-import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 import nrpy.finite_difference as fin  # NRPy+: Finite-difference module
 from nrpy.infrastructures.BHaH import griddata_commondata
@@ -47,16 +47,17 @@ core_modules_list = [
 class register_CFunction_bcstruct_set_up(
     base_cbc_classes.base_register_CFunction_bcstruct_set_up
 ):
+    """
+    Register C function for setting up bcstruct.
+
+    This function prescribes how inner and outer boundary points on the
+    computational grid are filled, based on the given coordinate system (CoordSystem).
+
+    :param CoordSystem: The coordinate system for which to set up boundary conditions.
+    :param fp_type: Floating point type, e.g., "double".
+    """
+
     def __init__(self, CoordSystem: str, fp_type: str = "double") -> None:
-        """
-        Register C function for setting up bcstruct.
-
-        This function prescribes how inner and outer boundary points on the
-        computational grid are filled, based on the given coordinate system (CoordSystem).
-
-        :param CoordSystem: The coordinate system for which to set up boundary conditions.
-        :param fp_type: Floating point type, e.g., "double".
-        """
         super().__init__(CoordSystem, fp_type=fp_type)
 
         self.body = r"""
@@ -250,12 +251,9 @@ class register_CFunction_bcstruct_set_up(
 class register_CFunction_apply_bcs_inner_only(
     base_cbc_classes.base_register_CFunction_apply_bcs_inner_only
 ):
+    """Register C function for filling inner boundary points on the computational grid."""
 
     def __init__(self) -> None:
-        """
-        Register C function for filling inner boundary points on the computational grid,
-        as prescribed by bcstruct.
-        """
         super().__init__()
 
         self.body = r"""
@@ -290,9 +288,9 @@ class register_CFunction_apply_bcs_inner_only(
 class register_CFunction_apply_bcs_outerextrap_and_inner(
     base_cbc_classes.base_register_CFunction_apply_bcs_outerextrap_and_inner
 ):
+    """Register C function for filling boundary points with extrapolation and prescribed bcstruct."""
 
     def __init__(self) -> None:
-        """Register C function for filling boundary points with extrapolation and prescribed bcstruct."""
         super().__init__()
         self.body = r"""
   // Unpack bc_info from bcstruct
@@ -709,19 +707,20 @@ return partial_t_f_outgoing_wave + k * rinv*rinv*rinv;
 class register_CFunction_apply_bcs_outerradiation_and_inner(
     base_cbc_classes.base_register_CFunction_apply_bcs_outerradiation_and_inner
 ):
+    """
+    Register a C function to apply boundary conditions to both pure outer and inner boundary points.
+
+    :param CoordSystem: The coordinate system to use.
+    :param radiation_BC_fd_order: Finite differencing order for the radiation boundary conditions. Default is 2.
+    :param fp_type: Floating point type, e.g., "double".
+    """
+
     def __init__(
         self,
         CoordSystem: str,
         radiation_BC_fd_order: int = 2,
         fp_type: str = "double",
     ) -> None:
-        """
-        Register a C function to apply boundary conditions to both pure outer and inner boundary points.
-
-        :param CoordSystem: The coordinate system to use.
-        :param radiation_BC_fd_order: Finite differencing order for the radiation boundary conditions. Default is 2.
-        :param fp_type: Floating point type, e.g., "double".
-        """
         super().__init__(
             CoordSystem,
             radiation_BC_fd_order=radiation_BC_fd_order,
@@ -797,6 +796,15 @@ class register_CFunction_apply_bcs_outerradiation_and_inner(
 class CurviBoundaryConditions_register_C_functions(
     base_cbc_classes.base_CurviBoundaryConditions_register_C_functions
 ):
+    """
+    Register various C functions responsible for handling boundary conditions.
+
+    :param list_of_CoordSystems: List of coordinate systems to use.
+    :param radiation_BC_fd_order: Finite differencing order for the radiation boundary conditions. Default is 2.
+    :param set_parity_on_aux: If True, set parity on auxiliary grid functions.
+    :param set_parity_on_auxevol: If True, set parity on auxiliary evolution grid functions.
+    :param fp_type: Floating point type, e.g., "double".
+    """
 
     def __init__(
         self,
@@ -806,15 +814,6 @@ class CurviBoundaryConditions_register_C_functions(
         set_parity_on_auxevol: bool = False,
         fp_type: str = "double",
     ) -> None:
-        """
-        Register various C functions responsible for handling boundary conditions.
-
-        :param list_of_CoordSystems: List of coordinate systems to use.
-        :param radiation_BC_fd_order: Finite differencing order for the radiation boundary conditions. Default is 2.
-        :param set_parity_on_aux: If True, set parity on auxiliary grid functions.
-        :param set_parity_on_auxevol: If True, set parity on auxiliary evolution grid functions.
-        :param fp_type: Floating point type, e.g., "double".
-        """
         super().__init__(
             list_of_CoordSystems,
             radiation_BC_fd_order=radiation_BC_fd_order,

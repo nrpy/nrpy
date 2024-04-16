@@ -1,11 +1,13 @@
 """
-Module providing functions for setting up Curvilinear boundary conditions.
+Module providing base classes to support generating functions for setting up Curvilinear boundary conditions.
 
 This is documented in Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb.
 
 Authors: Zachariah B. Etienne
-        zachetie **at** gmail **dot* com
+        zachetie **at** gmail **dot** com
          Terrence Pierre Jacques
+         Samuel D. Tootle
+         sdtootle **at** gmail **dot** com
 """
 
 # Step P1: Import needed NRPy+ core modules:
@@ -471,16 +473,17 @@ for(int whichparity=0;whichparity<10;whichparity++) {{
 # bcstruct_set_up():
 #      This function is documented in desc= and body= fields below.
 class base_register_CFunction_bcstruct_set_up:
+    """
+    Base class for generating the function for setting up bcstruct.
+
+    This function prescribes how inner and outer boundary points on the
+    computational grid are filled, based on the given coordinate system (CoordSystem).
+
+    :param CoordSystem: The coordinate system for which to set up boundary conditions.
+    :param fp_type: Floating point type, e.g., "double".
+    """
+
     def __init__(self, CoordSystem: str, fp_type: str = "double") -> None:
-        """
-        Base class for generating the function for setting up bcstruct.
-
-        This function prescribes how inner and outer boundary points on the
-        computational grid are filled, based on the given coordinate system (CoordSystem).
-
-        :param CoordSystem: The coordinate system for which to set up boundary conditions.
-        :param fp_type: Floating point type, e.g., "double".
-        """
         self.CoordSystem = CoordSystem
         self.fp_type = fp_type
 
@@ -563,10 +566,12 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
 ## apply_bcs_inner_only(): Apply inner boundary conditions.
 ##  Function is documented below in desc= and body=.
 class base_register_CFunction_apply_bcs_inner_only:
+    """
+    Register C function for filling inner boundary points on the computational grid.
+    Filling is prescribed by bcstruct.
+    """
+
     def __init__(self) -> None:
-        """
-        Register C function for filling inner boundary points on the computational grid,
-        as prescribed by bcstruct."""
         self.includes = ["BHaH_defines.h"]
         self.desc = r"""
     Apply BCs to inner boundary points only,
@@ -601,9 +606,9 @@ class base_register_CFunction_apply_bcs_inner_only:
 ## apply_bcs_outerextrap_and_inner(): Apply extrapolation outer boundary conditions.
 ##  Function is documented below in desc= and body=.
 class base_register_CFunction_apply_bcs_outerextrap_and_inner:
+    """Register C function for filling boundary points with extrapolation and prescribed bcstruct."""
 
     def __init__(self) -> None:
-        """Register C function for filling boundary points with extrapolation and prescribed bcstruct."""
         self.includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
         self.desc = r"""#Suppose the outer boundary point is at the i0=max(i0) face. Then we fit known data at i0-3, i0-2, and i0-1
 #  to the unique quadratic polynomial that passes through those points, and fill the data at
@@ -963,19 +968,20 @@ return partial_t_f_outgoing_wave + k * rinv*rinv*rinv;
 #   Apply radiation BCs at outer boundary points, and
 #   inner boundary conditions at inner boundary points.
 class base_register_CFunction_apply_bcs_outerradiation_and_inner:
+    """
+    Register a C function to apply boundary conditions to both pure outer and inner boundary points.
+
+    :param CoordSystem: The coordinate system to use.
+    :param radiation_BC_fd_order: Finite differencing order for the radiation boundary conditions. Default is 2.
+    :param fp_type: Floating point type, e.g., "double".
+    """
+
     def __init__(
         self,
         CoordSystem: str,
         radiation_BC_fd_order: int = 2,
         fp_type: str = "double",
     ) -> None:
-        """
-        Register a C function to apply boundary conditions to both pure outer and inner boundary points.
-
-        :param CoordSystem: The coordinate system to use.
-        :param radiation_BC_fd_order: Finite differencing order for the radiation boundary conditions. Default is 2.
-        :param fp_type: Floating point type, e.g., "double".
-        """
         self.CoordSystem = CoordSystem
         self.radiation_BC_fd_order = radiation_BC_fd_order
         self.fp_type = fp_type
@@ -1002,6 +1008,15 @@ applies BCs to the inner boundary points, which may map either to the grid inter
 
 
 class base_CurviBoundaryConditions_register_C_functions:
+    """
+    Base class to generate functions responsible for handling boundary conditions.
+
+    :param list_of_CoordSystems: List of coordinate systems to use.
+    :param radiation_BC_fd_order: Finite differencing order for the radiation boundary conditions. Default is 2.
+    :param set_parity_on_aux: If True, set parity on auxiliary grid functions.
+    :param set_parity_on_auxevol: If True, set parity on auxiliary evolution grid functions.
+    :param fp_type: Floating point type, e.g., "double".
+    """
 
     def __init__(
         self,
@@ -1011,15 +1026,6 @@ class base_CurviBoundaryConditions_register_C_functions:
         set_parity_on_auxevol: bool = False,
         fp_type: str = "double",
     ) -> None:
-        """
-        Base class to generate functions responsible for handling boundary conditions.
-
-        :param list_of_CoordSystems: List of coordinate systems to use.
-        :param radiation_BC_fd_order: Finite differencing order for the radiation boundary conditions. Default is 2.
-        :param set_parity_on_aux: If True, set parity on auxiliary grid functions.
-        :param set_parity_on_auxevol: If True, set parity on auxiliary evolution grid functions.
-        :param fp_type: Floating point type, e.g., "double".
-        """
         self.list_of_CoordSystems = list_of_CoordSystems
         self.radiation_BC_fd_order = radiation_BC_fd_order
         self.set_parity_on_aux = set_parity_on_aux
