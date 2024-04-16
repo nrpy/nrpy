@@ -44,12 +44,12 @@ nn_max = 10000  # Sets the maximum number of relaxation steps
 def get_log10_residual_tolerance(fp_type_str: str = "double") -> float:
     """
     Determine the residual tolerance based on the fp_precision.
-    
+
     :param fp_type_str: string representing the floating point type.
     :return: float of the residual tolerance based on fp_type.
     :raises ValueError: If the input fp_type_str branch is not defined.
     """
-    res=-1
+    res: float = -1.0
     if fp_type_str == "double":
         res = 15.8
     elif fp_type_str == "float":
@@ -57,6 +57,7 @@ def get_log10_residual_tolerance(fp_type_str: str = "double") -> float:
     else:
         raise ValueError(f"residual tolerence not defined for {fp_type_str} precision")
     return res
+
 
 # Set tolerance for log10(residual) to stop relaxation
 log10_residual_tolerance = get_log10_residual_tolerance(fp_type_str=fp_type)
