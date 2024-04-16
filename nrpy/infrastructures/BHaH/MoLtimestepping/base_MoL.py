@@ -1017,7 +1017,7 @@ class base_register_CFunctions:
 
         # Step 3.b: Create MoL_timestepping struct:
         self.BHaH_MoL_body = (
-            "typedef struct __MoL_gridfunctions_struct__ {{\n"
+            f"typedef struct __MoL_gridfunctions_struct__ {{\n"
             + f"REAL *restrict {self.y_n_gridfunctions};\n"
             + "".join(
                 f"REAL *restrict {gfs};\n" for gfs in self.non_y_n_gridfunctions_list
