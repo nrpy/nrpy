@@ -273,7 +273,7 @@ def single_RK_substep_input_symbolic(
     )
 
     return_str = f"{comment_block}\n"
-    if isinstance(substep_time_offset_dt, (int, sp.Rational)):
+    if isinstance(substep_time_offset_dt, (int, sp.Rational, sp.Mul)):
         substep_time_offset_str = f"{float(substep_time_offset_dt):.17e}"
     else:
         raise ValueError(
@@ -474,7 +474,7 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
         0
     ]  # Get the desired Butcher table from the dictionary
     num_steps = (
-        len(Butcher) - 1
+        len(Butcher) - 1 if Butcher[-1][0] == "" else len(Butcher) - 2
     )  # Specify the number of required steps to update solution
 
     dt = sp.Symbol("commondata->dt", real=True)
