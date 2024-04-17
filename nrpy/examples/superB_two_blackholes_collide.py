@@ -130,11 +130,11 @@ superBdiagnostics.register_CFunction_diagnostics(
     enable_psi4_diagnostics=False,
     grid_center_filename_tuple=("out0d-conv_factor%.2f.txt", "convergence_factor"),
     axis_filename_tuple=(
-        "out1d-AXIS-conv_factor%.2f-t%08.2f.txt",
+        "out1d-AXIS-conv_factor%.2f-t%08.4f.txt",
         "convergence_factor, time",
     ),
     plane_filename_tuple=(
-        "out2d-PLANE-conv_factor%.2f-t%08.2f.txt",
+        "out2d-PLANE-conv_factor%.2f-t%08.4f.txt",
         "convergence_factor, time",
     ),
     out_quantities_dict="default",
