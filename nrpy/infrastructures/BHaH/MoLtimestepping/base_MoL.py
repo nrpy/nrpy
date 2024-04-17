@@ -499,7 +499,7 @@ def single_RK_substep_input_symbolic(
 # y_nplus1 += 1/3*k_even
 ########################################################################################################################
 class base_register_CFunction_MoL_step_forward_in_time:
-    """
+    r"""
     Base class to facilitate generating the MoL_step_forward_in_time() C function.
     The core driver for time evolution in BHaH codes.
 
@@ -513,8 +513,37 @@ class base_register_CFunction_MoL_step_forward_in_time:
     :param enable_simd: Flag to enable SIMD functionality.
     :param fp_type: Floating point type, e.g., "double".
 
-    Doctest:
-    # FIXME
+    Doctests:
+    >>> import nrpy.c_function as cfc, json
+    >>> from nrpy.helpers.generic import decompress_base64_to_string, diff_strings
+    >>> from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import generate_Butcher_tables
+    >>> Butcher_dict = generate_Butcher_tables()
+    >>> with open("nrpy/infrastructures/BHaH/MoLtimestepping/tests/DOCTEST-base_register_CFunction_MoL_step_forward_in_time.json",'r') as f:
+    ...     expected_str_dict = json.load(f)
+    >>> rhs_string = "rhs_eval(commondata, params, rfmstruct,  auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);"
+    >>> post_rhs_string=(
+    ... "if (strncmp(commondata->outer_bc_type, \"extrapolation\", 50) == 0)\n"
+    ... "  apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);"
+    ... )
+    >>> for k, v in Butcher_dict.items():
+    ...     Butcher = Butcher_dict[k][0]
+    ...     cfc.CFunction_dict.clear()
+    ...     MoL_Functions_dict.clear()
+    ...     if Butcher[-1][0] != "":
+    ...         continue
+    ...     MoLclass = base_register_CFunction_MoL_step_forward_in_time(
+    ...         Butcher_dict,
+    ...         k,
+    ...         rhs_string=rhs_string,
+    ...         post_rhs_string=post_rhs_string
+    ...     )
+    ...     MoLclass.setup_gf_aliases()
+    ...     MoLclass.generate_RK_steps()
+    ...     MoLclass.register_final_code()
+    ...     diag_gc = cfc.CFunction_dict["MoL_step_forward_in_time"].full_function
+    ...     expected_str = decompress_base64_to_string(expected_str_dict[k])
+    ...     if diag_gc != expected_str:
+    ...         raise ValueError(f"\\n{k}: {diff_strings(expected_string, diag_gc)}")
     """
 
     def __init__(
@@ -609,7 +638,9 @@ class base_register_CFunction_MoL_step_forward_in_time:
         Also populates boiler plate code at the head of self.body.
         """
         num_steps = (
-            len(self.Butcher) - 1 if self.Butcher[-1][0] == "" else len(self.Butcher) - 2
+            len(self.Butcher) - 1
+            if self.Butcher[-1][0] == ""
+            else len(self.Butcher) - 2
         )  # Specify the number of required steps to update solution
 
         dt = sp.Symbol("commondata->dt", real=True)
