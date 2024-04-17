@@ -19,6 +19,8 @@ def generate_Butcher_tables(
 ) -> Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]]:
     """
     Generate a dictionary of Butcher tables for Explicit Runge Kutta techniques.
+    Adaptive RK schemes include at two sets of coefficients based on a low order (LO)
+    scheme and a high order (HO) scheme.
 
     :param generate_adams_bashforth_method: If True, generate the Adams-Bashforth method. Default is False.
     :param adams_bashforth_order: The order of Adams-Bashforth method to generate. Default is 7.
@@ -197,6 +199,10 @@ def generate_Butcher_tables(
     , 8)
 
     # Step 3.a:  Generating a Dictionary of Butcher Tables for Explicit Runge Kutta Techniques
+
+    # Note: the tables in Step 3 are able to be used in adaptive RK algorithms.  To highlight
+    # which terms are High Order (HO) and Low Order (LO), the string in the 0th cell
+    # is used to document the associated coefficients.
 
     # Step 3.a.i: Adaptive Heun-Euler Method
 
