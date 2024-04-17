@@ -1,4 +1,6 @@
 """
+Module for producing C codes related to MoL timestepping within the superB infrastructure.
+This includes implementation details and functions for allocating and deallocating the necessary memory.
 
 Authors: Brandon Clark
          Zachariah B. Etienne (maintainer)
@@ -6,10 +8,10 @@ Authors: Brandon Clark
          Nishita Jadoo
          njadoo **at** uidaho **dot* edu
 
-superB:
+superB changes/additions to nrpy.infrastructures.BHaH.MoLtimestepping.MoL.py:
 -added time_start as parameter
 -added which RK stage as parameter
--added switch case depending ok RK stage
+-added switch case depending on RK stage
 -allocate memory to diagnostic output gfs
 """
 
@@ -43,43 +45,73 @@ _ = par.CodeParameter("REAL", __name__, "t_final", 10.0, commondata=True)
 
 
 def register_CFunction_MoL_malloc_diagnostic_gfs() -> None:
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = "Allocate memory for diagnostic gfs"
-    cfunc_type = "void"
-    name = "MoL_malloc_diagnostic_gfs"
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, MoL_gridfunctions_struct *restrict gridfuncs"
-    body = """
+    """
+    Register the CFunction 'MoL_malloc_diagnostic_gfs'.
+
+    This function allocates memory for diagnostic grid functions.
+
+    :raises RuntimeError: If an error occurs while registering the CFunction
+
+    :return: None
+    """
+    includes: List[str] = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    desc: str = "Allocate memory for diagnostic gfs"
+    cfunc_type: str = "void"
+    name: str = "MoL_malloc_diagnostic_gfs"
+    params: str = (
+        "const commondata_struct *restrict commondata, const params_struct *restrict params, MoL_gridfunctions_struct *restrict gridfuncs"
+    )
+    body: str = """
 const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
 gridfuncs->diagnostic_output_gfs = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);
 """
-    cfc.register_CFunction(
-        includes=includes,
-        desc=desc,
-        cfunc_type=cfunc_type,
-        name=name,
-        params=params,
-        include_CodeParameters_h=True,
-        body=body,
-    )
+    try:
+        cfc.register_CFunction(
+            includes=includes,
+            desc=desc,
+            cfunc_type=cfunc_type,
+            name=name,
+            params=params,
+            include_CodeParameters_h=True,
+            body=body,
+        )
+    except Exception as e:
+        raise RuntimeError(
+            f"Error registering CFunction 'MoL_malloc_diagnostic_gfs': {str(e)}"
+        ) from e
 
 
 def register_CFunction_MoL_free_memory_diagnostic_gfs() -> None:
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = "Free memory for diagnostic gfs"
-    cfunc_type = "void"
-    name = "MoL_free_memory_diagnostic_gfs"
-    params = "MoL_gridfunctions_struct *restrict gridfuncs"
-    body = """
+    """
+    Register the CFunction 'MoL_free_memory_diagnostic_gfs'.
+
+    This function frees the memory allocated for diagnostic grid functions.
+
+    :raises RuntimeError: If an error occurs while registering the CFunction
+
+    :return: None
+    """
+    includes: List[str] = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    desc: str = "Free memory for diagnostic gfs"
+    cfunc_type: str = "void"
+    name: str = "MoL_free_memory_diagnostic_gfs"
+    params: str = "MoL_gridfunctions_struct *restrict gridfuncs"
+    body: str = """
   free(gridfuncs->diagnostic_output_gfs);
 """
-    cfc.register_CFunction(
-        includes=includes,
-        desc=desc,
-        cfunc_type=cfunc_type,
-        name=name,
-        params=params,
-        body=body,
-    )
+    try:
+        cfc.register_CFunction(
+            includes=includes,
+            desc=desc,
+            cfunc_type=cfunc_type,
+            name=name,
+            params=params,
+            body=body,
+        )
+    except Exception as e:
+        raise RuntimeError(
+            f"Error registering CFunction 'MoL_free_memory_diagnostic_gfs': {str(e)}"
+        ) from e
 
 
 ########################################################################################################################
