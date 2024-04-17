@@ -420,7 +420,7 @@ def single_RK_substep_input_symbolic(
     comment_block += additional_comments
     body = f"{comment_block}\n"
 
-    if isinstance(substep_time_offset_dt, (int, sp.Rational)):
+    if isinstance(substep_time_offset_dt, (int, sp.Rational, sp.Mul)):
         substep_time_offset_str = f"{float(substep_time_offset_dt):.17e}"
     else:
         raise ValueError(
