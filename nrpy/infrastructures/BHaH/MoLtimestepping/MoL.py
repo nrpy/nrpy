@@ -418,9 +418,22 @@ def register_CFunction_MoL_step_forward_in_time(
     :param enable_curviBCs: Flag to enable curvilinear boundary conditions.
     :param enable_simd: Flag to enable SIMD functionality.
     :param fp_type: Floating point type, e.g., "double".
+    :raises ValueError: If unsupported Butcher table specified since adaptive RK steps are not implemented in MoL.
 
     Doctest:
-    # FIXME
+    >>> import nrpy.c_function as cfc, json
+    >>> from nrpy.infrastructures.BHaH.MoLtimestepping.MoL import register_CFunction_MoL_step_forward_in_time
+    >>> from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import (
+    ...     generate_Butcher_tables,
+    ... )
+    >>> from nrpy.helpers.generic import compress_string_to_base64
+    >>> Butcher_dict = generate_Butcher_tables()
+    >>> expected_str_dict=dict()
+    >>> try:
+    ...     register_CFunction_MoL_step_forward_in_time(Butcher_dict, "AHE")
+    ... except ValueError as e:
+    ...     print(f"ValueError: {e.args[0]}")
+    ValueError: Adaptive order Butcher tables are currently not supported in MoL.
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     if enable_simd:
@@ -473,8 +486,15 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
     Butcher = Butcher_dict[MoL_method][
         0
     ]  # Get the desired Butcher table from the dictionary
+
+    if not Butcher[-1][0] == "":
+        raise ValueError(
+            f"Adaptive order Butcher tables are currently not supported in MoL."
+        )
+
+    # Note: this calculation does not work for adaptive steps
     num_steps = (
-        len(Butcher) - 1 if Butcher[-1][0] == "" else len(Butcher) - 2
+        len(Butcher) - 1
     )  # Specify the number of required steps to update solution
 
     dt = sp.Symbol("commondata->dt", real=True)
