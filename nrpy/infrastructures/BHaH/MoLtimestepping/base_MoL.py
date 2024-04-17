@@ -609,7 +609,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
         Also populates boiler plate code at the head of self.body.
         """
         num_steps = (
-            len(self.Butcher) - 1
+            len(self.Butcher) - 1 if self.Butcher[-1][0] == "" else len(self.Butcher) - 2
         )  # Specify the number of required steps to update solution
 
         dt = sp.Symbol("commondata->dt", real=True)
