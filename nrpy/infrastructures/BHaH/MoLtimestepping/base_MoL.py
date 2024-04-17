@@ -512,6 +512,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
     :param enable_curviBCs: Flag to enable curvilinear boundary conditions.
     :param enable_simd: Flag to enable SIMD functionality.
     :param fp_type: Floating point type, e.g., "double".
+    :raises ValueError: If unsupported Butcher table specified since adaptive RK steps are not implemented in MoL.
 
     Doctests:
     >>> import nrpy.c_function as cfc, json
@@ -544,6 +545,13 @@ class base_register_CFunction_MoL_step_forward_in_time:
     ...     expected_str = decompress_base64_to_string(expected_str_dict[k])
     ...     if diag_gc != expected_str:
     ...         raise ValueError(f"\\n{k}: {diff_strings(expected_string, diag_gc)}")
+    >>> cfc.CFunction_dict.clear()
+    >>> MoL_Functions_dict.clear()
+    >>> try:
+    ...     base_register_CFunction_MoL_step_forward_in_time(Butcher_dict, "AHE")
+    ... except ValueError as e:
+    ...     print(f"ValueError: {e.args[0]}")
+    ValueError: Adaptive order Butcher tables are currently not supported in MoL.
     """
 
     def __init__(
@@ -604,6 +612,11 @@ class base_register_CFunction_MoL_step_forward_in_time:
         ]  # Get the desired Butcher table from the dictionary
         self.gf_aliases = ""
 
+        if not self.Butcher[-1][0] == "":
+            raise ValueError(
+                f"Adaptive order Butcher tables are currently not supported in MoL."
+            )
+
     def setup_gf_aliases(self) -> None:
         """
         Generate code that specifies aliases (i.e. pointers) to gridfunctions and useful structs.
@@ -637,10 +650,9 @@ class base_register_CFunction_MoL_step_forward_in_time:
 
         Also populates boiler plate code at the head of self.body.
         """
+        # Note: this calculation does not work for adaptive steps
         num_steps = (
             len(self.Butcher) - 1
-            if self.Butcher[-1][0] == ""
-            else len(self.Butcher) - 2
         )  # Specify the number of required steps to update solution
 
         dt = sp.Symbol("commondata->dt", real=True)
