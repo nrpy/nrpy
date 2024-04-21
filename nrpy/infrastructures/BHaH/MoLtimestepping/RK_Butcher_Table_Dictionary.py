@@ -19,6 +19,8 @@ def generate_Butcher_tables(
 ) -> Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]]:
     """
     Generate a dictionary of Butcher tables for Explicit Runge Kutta techniques.
+    Adaptive RK schemes include at two sets of coefficients based on a low order (LO)
+    scheme and a high order (HO) scheme.
 
     :param generate_adams_bashforth_method: If True, generate the Adams-Bashforth method. Default is False.
     :param adams_bashforth_order: The order of Adams-Bashforth method to generate. Default is 7.
@@ -171,8 +173,8 @@ def generate_Butcher_tables(
     [1, 1],
     [sp.Rational(1,2), sp.Rational(3,8), sp.Rational(1,8)],
     [sp.Rational(2,3), sp.Rational(8,27), sp.Rational(2,27), sp.Rational(8,27)],
-    [(7 - q)/14, (-21 + 9*q)/392, (-56 + 8*q)/392, (336 -48*q)/392, (-63 + 3*q)/392],
-    [(7 + q)/14, (-1155 - 255*q)/1960, (-280 -  40*q)/1960, (-320*q)/1960, (63 + 363*q)/1960, (2352 + 392*q)/1960],
+    [((7 - q)/14).factor(), (-21 + 9*q)/392, (-56 + 8*q)/392, (336 -48*q)/392, (-63 + 3*q)/392],
+    [((7 + q)/14).factor(), (-1155 - 255*q)/1960, (-280 -  40*q)/1960, (-320*q)/1960, (63 + 363*q)/1960, (2352 + 392*q)/1960],
     [1, ( 330 + 105*q)/180, sp.Rational(2,3), (-200 + 280*q)/180, (126 - 189*q)/180, (-686 - 126*q)/180, (490 -  70*q)/180],
     ["", sp.Rational(1, 20), 0, sp.Rational(16, 45), 0, sp.Rational(49, 180), sp.Rational(49, 180), sp.Rational(1, 20)]]
     , 6)
@@ -198,13 +200,17 @@ def generate_Butcher_tables(
 
     # Step 3.a:  Generating a Dictionary of Butcher Tables for Explicit Runge Kutta Techniques
 
+    # Note: the tables in Step 3 are able to be used in adaptive RK algorithms.  To highlight
+    # which terms are High Order (HO) and Low Order (LO), the string in the 0th cell
+    # is used to document the associated coefficients.
+
     # Step 3.a.i: Adaptive Heun-Euler Method
 
     Butcher_dict['AHE'] = (
     [[0],
     [1, 1],
-    ["", sp.Rational(1,2), sp.Rational(1,2)],
-    ["", 1, 0]]
+    ["HO", sp.Rational(1,2), sp.Rational(1,2)],
+    ["LO", 1, 0]]
     , 2)
 
     # Step 3.a.ii: Adaptive Bogacki-Shampine Method
@@ -214,8 +220,8 @@ def generate_Butcher_tables(
     [sp.Rational(1,2), sp.Rational(1,2)],
     [sp.Rational(3,4), 0, sp.Rational(3,4)],
     [1, sp.Rational(2,9), sp.Rational(1,3), sp.Rational(4,9)],
-    ["", sp.Rational(2,9), sp.Rational(1,3), sp.Rational(4,9), 0],
-    ["", sp.Rational(7,24), sp.Rational(1,4), sp.Rational(1,3), sp.Rational(1,8)]]
+    ["HO", sp.Rational(2,9), sp.Rational(1,3), sp.Rational(4,9), 0],
+    ["LO", sp.Rational(7,24), sp.Rational(1,4), sp.Rational(1,3), sp.Rational(1,8)]]
     , 3)
 
     # Step 3.a.iii: Adaptive Runge-Kutta-Fehlberg
@@ -227,8 +233,8 @@ def generate_Butcher_tables(
     [sp.Rational(12,13), sp.Rational(1932,2197), sp.Rational(-7200,2197), sp.Rational(7296,2197)],
     [1, sp.Rational(439,216), -8, sp.Rational(3680,513), sp.Rational(-845,4104)],
     [sp.Rational(1,2), sp.Rational(-8,27), 2, sp.Rational(-3544,2565), sp.Rational(1859,4104), sp.Rational(-11,40)],
-    ["", sp.Rational(16,135), 0, sp.Rational(6656,12825), sp.Rational(28561,56430), sp.Rational(-9,50), sp.Rational(2,55)],
-    ["", sp.Rational(25,216), 0, sp.Rational(1408,2565), sp.Rational(2197,4104), sp.Rational(-1,5), 0]]
+    ["HO", sp.Rational(16,135), 0, sp.Rational(6656,12825), sp.Rational(28561,56430), sp.Rational(-9,50), sp.Rational(2,55)],
+    ["LO", sp.Rational(25,216), 0, sp.Rational(1408,2565), sp.Rational(2197,4104), sp.Rational(-1,5), 0]]
     , 5)
 
     # Step 3.a.iv: Adaptive Cash-Karp
@@ -240,8 +246,8 @@ def generate_Butcher_tables(
     [sp.Rational(3,5), sp.Rational(3,10), sp.Rational(-9,10), sp.Rational(6,5)],
     [1, sp.Rational(-11,54), sp.Rational(5,2), sp.Rational(-70,27), sp.Rational(35,27)],
     [sp.Rational(7,8), sp.Rational(1631,55296), sp.Rational(175,512), sp.Rational(575,13824), sp.Rational(44275,110592), sp.Rational(253,4096)],
-    ["",sp.Rational(37,378), 0, sp.Rational(250,621), sp.Rational(125,594), 0, sp.Rational(512,1771)],
-    ["",sp.Rational(2825,27648), 0, sp.Rational(18575,48384), sp.Rational(13525,55296), sp.Rational(277,14336), sp.Rational(1,4)]]
+    ["HO",sp.Rational(37,378), 0, sp.Rational(250,621), sp.Rational(125,594), 0, sp.Rational(512,1771)],
+    ["LO",sp.Rational(2825,27648), 0, sp.Rational(18575,48384), sp.Rational(13525,55296), sp.Rational(277,14336), sp.Rational(1,4)]]
     , 5)
 
     # Step 3.a.v: Adaptive Dormand-Prince 5(4)
@@ -254,8 +260,8 @@ def generate_Butcher_tables(
     [sp.Rational(8,9), sp.Rational(19372,6561), sp.Rational(-25360,2187), sp.Rational(64448,6561), sp.Rational(-212,729)],
     [1, sp.Rational(9017,3168), sp.Rational(-355,33), sp.Rational(46732,5247), sp.Rational(49,176), sp.Rational(-5103,18656)],
     [1, sp.Rational(35,384), 0, sp.Rational(500,1113), sp.Rational(125,192), sp.Rational(-2187,6784), sp.Rational(11,84)],
-    ["", sp.Rational(35,384), 0, sp.Rational(500,1113), sp.Rational(125,192), sp.Rational(-2187,6784), sp.Rational(11,84), 0],
-    ["", sp.Rational(5179,57600), 0, sp.Rational(7571,16695), sp.Rational(393,640), sp.Rational(-92097,339200), sp.Rational(187,2100), sp.Rational(1,40)]]
+    ["HO", sp.Rational(35,384), 0, sp.Rational(500,1113), sp.Rational(125,192), sp.Rational(-2187,6784), sp.Rational(11,84), 0],
+    ["LO", sp.Rational(5179,57600), 0, sp.Rational(7571,16695), sp.Rational(393,640), sp.Rational(-92097,339200), sp.Rational(187,2100), sp.Rational(1,40)]]
     , 5)
 
     # Step 3.a.vi: Adaptive Dormand-Prince 8(7)
@@ -274,8 +280,8 @@ def generate_Butcher_tables(
     [sp.Rational(1201146811, 1299019798), sp.Rational(-1028468189, 846180014), 0, 0, sp.Rational(8478235783, 508512852), sp.Rational(1311729495, 1432422823), sp.Rational(-10304129995, 1701304382), sp.Rational(-48777925059, 3047939560), sp.Rational(15336726248, 1032824649), sp.Rational(-45442868181, 3398467696), sp.Rational(3065993473, 597172653)],
     [1, sp.Rational(185892177, 718116043), 0, 0, sp.Rational(-3185094517, 667107341), sp.Rational(-477755414, 1098053517), sp.Rational(-703635378, 230739211), sp.Rational(5731566787, 1027545527), sp.Rational(5232866602, 850066563), sp.Rational(-4093664535, 808688257), sp.Rational(3962137247, 1805957418), sp.Rational(65686358, 487910083)],
     [1, sp.Rational(403863854, 491063109), 0, 0, sp.Rational(-5068492393, 434740067), sp.Rational(-411421997, 543043805), sp.Rational(652783627, 914296604), sp.Rational(11173962825, 925320556), sp.Rational(-13158990841, 6184727034), sp.Rational(3936647629, 1978049680), sp.Rational(-160528059, 685178525), sp.Rational(248638103, 1413531060), 0],
-    ["", sp.Rational(14005451, 335480064), 0, 0, 0, 0, sp.Rational(-59238493, 1068277825), sp.Rational(181606767, 758867731), sp.Rational(561292985, 797845732), sp.Rational(-1041891430, 1371343529), sp.Rational(760417239, 1151165299), sp.Rational(118820643, 751138087), sp.Rational(-528747749, 2220607170), sp.Rational(1, 4)],
-    ["", sp.Rational(13451932, 455176623), 0, 0, 0, 0, sp.Rational(-808719846, 976000145), sp.Rational(1757004468, 5645159321), sp.Rational(656045339, 265891186), sp.Rational(-3867574721, 1518517206), sp.Rational(465885868, 322736535), sp.Rational(53011238, 667516719), sp.Rational(2, 45), 0]]
+    ["HO", sp.Rational(14005451, 335480064), 0, 0, 0, 0, sp.Rational(-59238493, 1068277825), sp.Rational(181606767, 758867731), sp.Rational(561292985, 797845732), sp.Rational(-1041891430, 1371343529), sp.Rational(760417239, 1151165299), sp.Rational(118820643, 751138087), sp.Rational(-528747749, 2220607170), sp.Rational(1, 4)],
+    ["LO", sp.Rational(13451932, 455176623), 0, 0, 0, 0, sp.Rational(-808719846, 976000145), sp.Rational(1757004468, 5645159321), sp.Rational(656045339, 265891186), sp.Rational(-3867574721, 1518517206), sp.Rational(465885868, 322736535), sp.Rational(53011238, 667516719), sp.Rational(2, 45), 0]]
     , 8)
 
     # fmt: on
