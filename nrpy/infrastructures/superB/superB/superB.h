@@ -1,6 +1,10 @@
 /*
-
-*/
+ * This file is part of the nrpy.infrastructures.superB package.
+ * It contains definitions and macros for the superB infrastructure.
+ *
+ * Author: Nishita Jadoo
+ *         njadoo **at** uidaho **dot* edu
+ */
 
 /* superB:  File  "superB.h"*/
 #ifndef __SUPERB_H__

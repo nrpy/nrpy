@@ -1,4 +1,5 @@
 """
+Construct Makefile for superB C-code project, based on CFunctions registered in the c_function NRPy+ module.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -52,9 +53,9 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     :param create_lib: Whether to create a library. Defaults to False.
     :param include_dirs: List of include directories. Must be a list.
 
-    :raises SystemExit: Exits if errors are encountered.
+    :raises TypeError: If addl_CFLAGS or include_dirs are not lists.
+    :raises ValueError: If addl_CFLAGS or addl_libraries are specified incorrectly.
     """
-
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
 
@@ -71,7 +72,14 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
             exec_or_library_name += ext
 
         def add_flag(flag_list: Optional[List[str]], flag: str) -> List[str]:
-            """Check if a flag is in the list, add it if not."""
+            """
+            Check if a flag is in the list, add it if not.
+
+            :param flag_list: The list to which the flag should be added.
+            :param flag: The flag to add to the list.
+
+            :return: The updated list with the flag added, if it was not already present.
+            """
             if not flag_list:
                 flag_list = []
             if flag not in flag_list:
@@ -285,6 +293,9 @@ def compile_Makefile(
     :param addl_libraries: Additional libraries (default: None).
     :param CC: C compiler (default: "autodetect").
     :param attempt: Compilation attempt number (default: 1).
+
+    :raises FileNotFoundError: If the C compiler or make is not found.
+    :raises SystemExit: If compilation fails after two attempts.
     """
     if CC == "autodetect":
         os_name = platform.system()

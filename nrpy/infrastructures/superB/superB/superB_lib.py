@@ -1,5 +1,5 @@
 """
-
+Copy 'superB.h' into the specified directory.
 
 Author: Nishita Jadoo
         njadoo **at** uidaho **dot* edu
@@ -11,9 +11,9 @@ import shutil
 
 def copy_superB_header_files(superB_Path: Path) -> None:
     """
-    Copy superB.h
+    Copy superB.h.
 
-    :param project_Path: The path of the project directory where the file will be copied.
+    :param superB_Path: The path of the directory where the files will be copied.
     """
     superB_Path.mkdir(parents=True, exist_ok=True)
 
