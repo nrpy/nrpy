@@ -1,4 +1,5 @@
 """
+Generate main.cpp, main.h, main.ci and commondata.h functions for the superB infrastructure.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -6,15 +7,11 @@ Author: Zachariah B. Etienne
         njadoo **at** uidaho **dot* edu
 """
 
-from typing import List, Tuple, Optional, Dict
-import nrpy.c_function as cfc
-import sys
 from pathlib import Path
+from typing import List, Tuple
+import nrpy.c_function as cfc
 import nrpy.params as par
-import nrpy.grid as gri
-from nrpy.infrastructures.BHaH import griddata_commondata
 from nrpy.helpers.generic import clang_format
-from nrpy.infrastructures.BHaH import BHaH_defines_h
 
 # fmt: off
 _ = par.CodeParameter("int", __name__, "Nchare0", 1, add_to_parfile=True, add_to_set_CodeParameters_h=True, commondata=True)
@@ -28,8 +25,9 @@ def output_commondata_object_h(
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
     r"""
-    Output C code header file with macro definitions and other configurations for the project.
+    Output header file with definition for class CommondataObject.
     :param project_dir: Directory where the project C code is output
+    :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
     """
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
@@ -80,7 +78,8 @@ def output_main_h(
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
     """
-    Generate main.h
+    Generate main.h.
+    :param project_dir: Directory where the project C code is output
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
     """
     project_Path = Path(project_dir)
@@ -125,11 +124,11 @@ def output_main_cpp(
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
     """
-    Generate the "generic" C main() function for all simulation codes in the BHaH infrastructure.
-
+    Generate the "generic" C main() function for all simulation codes in the superB infrastructure.
+    :param project_dir: Directory where the project C code is output
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
+    :raises ValueError: Raised if any required function for superB main() is not registered.
     """
-
     # Make sure all required C functions are registered
     missing_functions: List[Tuple[str, str]] = []
     for func_tuple in [
@@ -206,7 +205,9 @@ def output_main_ci(
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
     """
-    Generate main.h
+    Generate main.ci.
+
+    :param project_dir: Directory where the project C code is output
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
     """
     project_Path = Path(project_dir)
@@ -236,13 +237,11 @@ def output_main_ci(
 
 def output_commondata_object_h_and_main_h_cpp_ci(
     project_dir: str,
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
     """
-    Generate commondata_object.h, main.h, main.cpp and main.ci
-    :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
+    Generate commondata_object.h, main.h, main.cpp and main.ci.
+    :param project_dir: Directory where the project C code is output
     """
-
     output_commondata_object_h(
         project_dir=project_dir,
     )

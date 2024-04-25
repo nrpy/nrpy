@@ -6,19 +6,20 @@ Author: Zachariah B. Etienne
         njadoo **at** uidaho **dot* edu
 """
 
-from typing import List, Tuple, Optional, Dict
-import itertools
-import nrpy.c_function as cfc
-import sys
 from pathlib import Path
-import nrpy.params as par
-import nrpy.grid as gri
+from typing import List, Tuple
+import nrpy.c_function as cfc
 from nrpy.infrastructures.BHaH import griddata_commondata
 from nrpy.helpers.generic import clang_format
-from nrpy.infrastructures.BHaH import BHaH_defines_h
 
 
-def generate_mol_step_forward_code(rk_substep):
+def generate_mol_step_forward_code(rk_substep: str) -> str:
+    """
+    Generate code for MoL step forward in time.
+
+    :param rk_substep: Runge-Kutta substep
+    :return: Code for MoL step forward in time
+    """
     return f"""
     serial{{
         MoL_step_forward_in_time(&commondata, griddata_chare, time_start, {rk_substep});
@@ -26,7 +27,14 @@ def generate_mol_step_forward_code(rk_substep):
     """
 
 
-def generate_send_neighbor_data_code(which_gf, neighbor_direction):
+def generate_send_neighbor_data_code(which_gf: str, neighbor_direction: str) -> str:
+    """
+    Generate code for sending neighbor data.
+
+    :param which_gf: Which grid function
+    :param neighbor_direction: Direction of neighboring grid
+    :return: Code for sending neighbor data
+    """
     return f"""
     serial {{
         send_neighbor_data({which_gf}, {neighbor_direction}, grid);
@@ -34,7 +42,18 @@ def generate_send_neighbor_data_code(which_gf, neighbor_direction):
     """
 
 
-def generate_ghost_code(axis, axis_index, pos_ghost_type, neg_ghost_type, nchare_var):
+def generate_ghost_code(
+    axis: str, pos_ghost_type: str, neg_ghost_type: str, nchare_var: str
+) -> str:
+    """
+    Generate code for ghost zone processing.
+
+    :param axis: Axis index
+    :param pos_ghost_type: Positive ghost zone type
+    :param neg_ghost_type: Negative ghost zone type
+    :param nchare_var: Number of charm grids
+    :return: Code for ghost zone processing
+    """
     this_index_var = f"thisIndex.{axis}"
     pos_ghost_func = f"{pos_ghost_type.lower()}"
     neg_ghost_func = f"{neg_ghost_type.lower()}"
@@ -65,7 +84,18 @@ z_pos_ghost_type = "TOP_GHOST"
 z_neg_ghost_type = "BOTTOM_GHOST"
 
 
-def generate_diagnostics_code(dimension, direction, num_fields, tot_num_diagnostic_pts):
+def generate_diagnostics_code(
+    dimension: str, direction: str, num_fields: str, tot_num_diagnostic_pts: str
+) -> str:
+    """
+    Generate code for diagnostics.
+
+    :param dimension: Dimension index
+    :param direction: Direction of diagnostics (e.g. "x", "y", "z")
+    :param num_fields: Number of fields for diagnostics
+    :param tot_num_diagnostic_pts: Total number of diagnostic points
+    :return: Code for diagnostics
+    """
     code = f"""
     // {dimension} {direction}
     when ready_{dimension}_{direction}(Ck::IO::FileReadyMsg *m_{dimension}_{direction}) {{
@@ -104,6 +134,11 @@ def generate_diagnostics_code(dimension, direction, num_fields, tot_num_diagnost
 
 
 def register_CFunction_timestepping_malloc() -> None:
+    """
+    Register a C function for timestepping malloc.
+
+    :return: None
+    """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "Allocate memory for temporary buffers used to communicate face data"
     cfunc_type = "void"
@@ -130,6 +165,11 @@ tmpBuffers->tmpBuffer_TB = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * 
 
 
 def register_CFunction_timestepping_free_memory() -> None:
+    """
+    Register a C function for timestepping free memory.
+
+    :return: None
+    """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "Free memory for temporary buffers used to communicate face data"
     cfunc_type = "void"
@@ -156,6 +196,8 @@ def output_timestepping_h(
 ) -> None:
     """
     Generate timestepping.h
+
+    :param project_dir: Directory where the project C code is output
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
     """
     project_Path = Path(project_dir)
@@ -215,27 +257,20 @@ class Timestepping : public CBase_Timestepping {
 
 def output_timestepping_cpp(
     project_dir: str,
-    MoL_method: str,
     initial_data_desc: str = "",
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
-    boundary_conditions_desc: str = "",
-    prefunc: str = "",
     initialize_constant_auxevol: bool = False,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
     """
     Generate timestepping.cpp
 
-    :param MoL_method: Method of Lines algorithm used to step forward in time.
+    :param project_dir: Directory where the project C code is output
     :param initial_data_desc: Description for initial data, default is an empty string.
     :param enable_rfm_precompute: Enable rfm precomputation, default is False.
     :param enable_CurviBCs: Enable CurviBCs, default is False.
-    :param boundary_conditions_desc: Description of the boundary conditions, default is an empty string.
-    :param prefunc: String that appears before main(). DO NOT populate this, except when debugging, default is an empty string.
     :param initialize_constant_auxevol: If set to True, `initialize_constant_auxevol` function will be called during the simulation initialization phase to set these constants. Default is False.
-    :param pre_MoL_step_forward_in_time: Code for handling pre-right-hand-side operations, default is an empty string.
-    :param post_MoL_step_forward_in_time: Code for handling post-right-hand-side operations, default is an empty string.
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
     """
     initial_data_desc += " "
@@ -653,7 +688,6 @@ void Timestepping::process_ghost(const int type_ghost, const int type_gfs, const
 
 def output_timestepping_ci(
     project_dir: str,
-    MoL_method: str,
     pre_MoL_step_forward_in_time: str = "",
     post_MoL_step_forward_in_time: str = "",
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
@@ -661,7 +695,7 @@ def output_timestepping_ci(
     """
     Generate timestepping.ci
 
-    :param MoL_method: Method of Lines algorithm used to step forward in time.
+    :param project_dir: Directory where the project C code is output
     :param pre_MoL_step_forward_in_time: Code for handling pre-right-hand-side operations, default is an empty string.
     :param post_MoL_step_forward_in_time: Code for handling post-right-hand-side operations, default is an empty string.
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
@@ -857,7 +891,7 @@ def output_timestepping_ci(
 
             file_output_str += generate_send_neighbor_data_code(which_gf, direction)
             file_output_str += generate_ghost_code(
-                axis, 0, pos_ghost_type, neg_ghost_type, nchare_var
+                axis, pos_ghost_type, neg_ghost_type, nchare_var
             )
 
     file_output_str += r"""
@@ -921,33 +955,31 @@ def output_timestepping_ci(
 
 def output_timestepping_h_cpp_ci_register_CFunctions(
     project_dir: str,
-    MoL_method: str,
-    initial_data_desc: str = "",
     enable_rfm_precompute: bool = False,
-    enable_CurviBCs: bool = False,
-    boundary_conditions_desc: str = "",
-    prefunc: str = "",
-    initialize_constant_auxevol: bool = False,
     pre_MoL_step_forward_in_time: str = "",
     post_MoL_step_forward_in_time: str = "",
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
+    """
+    Output timestepping h, cpp, and ci files and register C functions.
 
+    :param project_dir: Directory where the project C code is output
+    :param enable_rfm_precompute: Enable RFM precompute (default: False)
+    :param pre_MoL_step_forward_in_time: Pre MoL step forward in time (default: "")
+    :param post_MoL_step_forward_in_time: Post MoL step forward in time (default: "")
+    :return: None
+    """
     output_timestepping_h(
         project_dir=project_dir,
     )
 
     output_timestepping_cpp(
         project_dir=project_dir,
-        MoL_method=MoL_method,
         enable_rfm_precompute=enable_rfm_precompute,
         enable_CurviBCs=True,
-        boundary_conditions_desc=boundary_conditions_desc,
     )
 
     output_timestepping_ci(
         project_dir=project_dir,
-        MoL_method=MoL_method,
         pre_MoL_step_forward_in_time=pre_MoL_step_forward_in_time,
         post_MoL_step_forward_in_time=post_MoL_step_forward_in_time,
     )
