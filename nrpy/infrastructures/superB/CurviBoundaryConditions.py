@@ -1,21 +1,21 @@
 """
+C function for setting up the boundary condition struct for the local chare grid using the boundary condition struct for the global grid for Curvilinear boundary conditions.
 
 Authors: Zachariah B. Etienne
-        zachetie **at** gmail **dot* com
+         zachetie **at** gmail **dot* com
          Terrence Pierre Jacques
          Nishita Jadoo
          njadoo **at** uidaho **dot* edu
 """
 
 # Step P1: Import needed NRPy+ core modules:
-from typing import List, Dict, Tuple, Union
+from typing import List
 import nrpy.c_function as cfc
-from nrpy.infrastructures.BHaH import griddata_commondata
 
 
 def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
     """
-    Register C function for setting up bcstruct_chare.
+    Register C function for setting up bc_struct for the local chare grid.
 
     :param CoordSystem: The coordinate system for which to set up boundary conditions.
     """
@@ -148,21 +148,15 @@ def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
 
 def CurviBoundaryConditions_register_C_functions(
     list_of_CoordSystems: List[str],
-    radiation_BC_fd_order: int = 2,
-    set_parity_on_aux: bool = False,
-    set_parity_on_auxevol: bool = False,
 ) -> None:
     """
     Register various C functions responsible for handling boundary conditions.
 
     :param list_of_CoordSystems: List of coordinate systems to use.
-    :param radiation_BC_fd_order: Finite differencing order for the radiation boundary conditions. Default is 2.
-    :param set_parity_on_aux: If True, set parity on auxiliary grid functions.
-    :param set_parity_on_auxevol: If True, set parity on auxiliary evolution grid functions.
     :return: None
     """
     for CoordSystem in list_of_CoordSystems:
-        # Register C function to set up the boundary condition struct.
+        # Register C function to set up the boundary condition struct for local chare grid.
         register_CFunction_bcstruct_chare_set_up(CoordSystem=CoordSystem)
 
 

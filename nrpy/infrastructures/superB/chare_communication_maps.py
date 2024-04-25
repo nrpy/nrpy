@@ -1,20 +1,21 @@
 """
+C function for setting up chare communcation struct for maps between indices on the local chare grid and the global grid, converting idx3 of grid point to the idx3 of the chare evolving it, etc...
 
 Authors: Nishita Jadoo
          njadoo **at** uidaho **dot* edu
 """
 
 # Step P1: Import needed NRPy+ core modules:
-from typing import List, Dict, Tuple, Union
+from typing import List
 import nrpy.c_function as cfc
 from nrpy.infrastructures.BHaH import griddata_commondata
-from nrpy.infrastructures.BHaH import BHaH_defines_h
 
 
 def register_CFunction_charecommstruct_set_up(CoordSystem: str) -> None:
     """
     Register C function for setting up charecommstruct.
 
+    :param CoordSystem: Coordinate system
     """
     includes = [
         "BHaH_defines.h",
@@ -140,11 +141,13 @@ def chare_comm_register_C_functions(
     list_of_CoordSystems: List[str],
 ) -> None:
     """
+    Register C functions for chare communication.
+
     :param list_of_CoordSystems: List of coordinate systems to use.
     :return: None
     """
     for CoordSystem in list_of_CoordSystems:
-        # Register C function to set up the boundary condition struct.
+        # Register C function to set up the chare communication struct.
         register_CFunction_charecommstruct_set_up(CoordSystem=CoordSystem)
 
     # Register charecomm_struct's contribution to griddata_struct:

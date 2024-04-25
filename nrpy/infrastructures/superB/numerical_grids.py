@@ -1,7 +1,7 @@
 """
 Register numerical_grids_chare() C function, as well as functions called by this one.
 
-These functions set up numerical grids for use within the superB infrastructure.
+These functions set up local chare numerical grid using the global grid for use within the superB infrastructure.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -9,23 +9,19 @@ Author: Zachariah B. Etienne
         njadoo **at** uidaho **dot* edu
 """
 
-from typing import Dict, List
-import sympy as sp
+from typing import List
 import nrpy.c_function as cfc
 import nrpy.reference_metric as refmetric
-import nrpy.c_codegen as ccg
 
 
 def register_CFunction_numerical_grid_params_Nxx_dxx_xx_chare(
-    CoordSystem: str, grid_physical_size: float, Nxx_dict: Dict[str, List[int]]
+    CoordSystem: str,
 ) -> None:
     """
     Register a C function to Set up a cell-centered grid of size grid_physical_size.
-       Set params: Nxx, Nxx_plus_2NGHOSTS, dxx, invdxx, and xx.
+       Set params: Nxx, Nxx_plus_2NGHOSTS, dxx, invdxx, and xx.`
 
     :param CoordSystem: The coordinate system used for the simulation.
-    :param grid_physical_size: The physical size of the grid.
-    :param Nxx_dict: A dictionary that maps coordinate systems to lists containing the number of grid points along each direction.
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = f"Set up a cell-centered {CoordSystem} grid of size grid_physical_size. Set params: Nxx, Nxx_plus_2NGHOSTS, dxx, invdxx, and xx."
@@ -160,8 +156,6 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
 
 def register_CFunctions(
     list_of_CoordSystems: List[str],
-    grid_physical_size: float,
-    Nxx_dict: Dict[str, List[int]],
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
 ) -> None:
@@ -169,16 +163,12 @@ def register_CFunctions(
     Register C functions related to coordinate systems and grid parameters.
 
     :param list_of_CoordSystems: List of CoordSystems
-    :param grid_physical_size: Physical size of the grid.
-    :param Nxx_dict: Dictionary containing number of grid points.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions.
     """
     for CoordSystem in list_of_CoordSystems:
         register_CFunction_numerical_grid_params_Nxx_dxx_xx_chare(
             CoordSystem=CoordSystem,
-            grid_physical_size=grid_physical_size,
-            Nxx_dict=Nxx_dict,
         )
     register_CFunction_numerical_grids_chare(
         enable_rfm_precompute=enable_rfm_precompute,
