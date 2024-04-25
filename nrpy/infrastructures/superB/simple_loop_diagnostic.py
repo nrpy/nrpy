@@ -1,46 +1,31 @@
 """
-Simple loop generation for diagnostic file write
+Simple loop generation for use within the superB infrastructure.
 
 Author: Zachariah B. Etienne
 Email: zachetie **at** gmail **dot* com
 Contributor: Ken Sible
 Email: ksible *at* outlook *dot* com
+Contributor: Nishita Jadoo
+Email: njadoo *at* uidaho *dot* edu
 
 """
 
-from typing import List, Union, Tuple, Dict
+from typing import List, Union, Tuple
 import sympy as sp
-import nrpy.helpers.loop as lp
 import nrpy.indexedexp as ixp
 
 
 def simple_loop_1D(
     CoordSystem: str,
-    out_quantities_dict: Dict[Tuple[str, str], str],
     axis: str = "z",
 ) -> Tuple[str, str]:
     r"""
     Generate a simple 1D loop in C (for use inside of a function).
 
     :param CoordSystem: Coordinate system, e.g., "Cartesian"
-    :param out_quantities_dict: Output quantities dictionary
     :param axis: Specifies the axis of output: either "x" or "z" axis
     :return: Complete loop code, output as a string.
-
-    Doctests:
-    >>> from nrpy.helpers.generic import clang_format, compress_string_to_base64, decompress_base64_to_string, diff_strings
-    >>> diag1d = clang_format(simple_loop_1D(CoordSystem="Cartesian", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, axis="y")[1])
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4ASAAjddABfgfJ51OEu5G9+EUlvYp1dk7+K8eO40VXFOrC5KgQdAGZkA+nmwLa3aIodzb3cJ641+dM68R4YgftRQdXGatJLFn6FOce+L5rhgnsnMvkljHaochh2KqpK9sEbv1xn+MV3kddMhWMLGRwssQKqNsAeNMBHVziHlJECGFaTWWDnj0k0dlKF927gVSP7thdDf/zDIZ0bv0zRbyjdVGTg/KxnnF1Ad0wXSILsLCGvv2Q+mD6VTwU3yheYlrnYnZZeUsAUiWiGwXJ4en7FVF98GkBlyQ9/4BOYE6ITi3TA9cUIYyYJzXzosV9ABszAcYWklb30SwrPnEsGp4iwYTffIeX3iSf3V9y1LJhVEziPRR62Iw+Fg/YzIPke50zqQVLSO/YxHpgfRc9gHuEhDwE3b5LLUxZnRipI8NgCk7RY+1sxoabKNwrRjm4j32cSyRIDHHqwt9drJThsr3ik6Y2ljmkuyOT7sooYVVL8+npF7r4MPjP9p4XbQ4Wqd+AM/sqgnlfGw2MxoBrw8FN3L5WNZA4PYYbMwk/PLkNcIGMHvJavyOCqL1sEiRsmiBeTaFeG8084j7oJTtH1WVTeq5+bYNs1Denili0e6Hs6wv4CfL+bKj0v6/l4XI2qqxCOStvyh11EpUgL8H8tqGuKrFpWVvy3uYjHpBr6P9CWgWgR3M4720kHldCRgV/RVFahYlAfKOQAo5JGXTuzww4jQFBkJhhFBQtQNuItDBWKh+TFxUDTmOXMukPhkAAAAKGvTIYQgyTYAAdMEgQkAAE32S/ixxGf7AgAAAAAEWVo=")
-    >>> if diag1d != expected_string:
-    ...     raise ValueError(f"{diff_strings(expected_string, diag1d)}\n base64-encoded output: {compress_string_to_base64(diag1d)}")
-    >>> diag1d = clang_format(simple_loop_1D(CoordSystem="SinhSpherical", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, axis="y")[1])
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4ATJAk5dABfgfJ51OEu5G9+EUlvYp1dk7+K8eO40VXFOwE0lywhL6Na6gbyqpgT1R8e50ML5tgBveOVyZl6U8ClAM+5RMuYtVE+1XueVLF0J9QDYPB/lrsfhIONJAKP/VtgkerMr8ejwimCGmGbFM8KQHLH2Qr6iPaXrqbVso37SpGwID3OAKugmkzy5qdleSgsULA4KPPQaDiyXM21X+kfxEmRnVFIAwwMH4R7KDHeTGEWgJ+8ZkEcu634G9HNinr10zZsG1ZyhJjqJXmI6SKwqSFkoUVkvmrB6n14wevAN//zJa8TdpUIgIMKkGlO10TjtsvWFOvDH4arjW3/2EgKRR1/QeN2YIRqaufz/z111Sul6q2z1mysFx7vNN1CiEZjIsnKQVd6bgB6D4gZcFnjyMl/vVGUoNssGHgbPA3zUJikPxrlY98Qb5aCclWep6Gp7hOwB4wUfvtQZ/TXEjF1Ue9XRAQ9vEt41eHUKxtjSewIvPf1U8lSS48132PyTeNPBOOI8+afNu5m7VzEnPYUI0oO+p0D5QDSXdcJVSgE0R7lWQb62t2peU0r7wVdcDLBOsQa7M7PhZzqJpTflY4+MnrTaQhBykeZD3ADQ9xTT8LiX3NvFcTmTQd/StqDRFfwW8qHrlwP3vM8a99SRy4JJ4v8/WFvpmwXQP++RNnK91WgUX8JJixfzivAh4IRtR+Y5c3a6EfhKxYoRg5mCnujk/dJTSs/rhsPzNpNx7Eb66gh3Z6MUNHhmhH1DWIHt+lDi4ZsVLrdu6HMakW7slMueKO9vAAAAnoB6kHdcIEoAAeoEygkAABR/K5exxGf7AgAAAAAEWVo=")
-    >>> if diag1d != expected_string:
-    ...     raise ValueError(f"{diff_strings(expected_string, diag1d)}\n base64-encoded output: {compress_string_to_base64(diag1d)}")
-    >>> diag1d = clang_format(simple_loop_1D(CoordSystem="Spherical", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, axis="z")[1])
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4ASEAjtdABfgfJ51OEu5G9+EUlvYp1dlAyuYeO40VXFOv/eTS7T39N1d1WAuEsg/wIVqdPkL2NmyE0Z0wib/s9J2rhoPSkyFAtdMiER/4Zf//bctEJLtW0auvD5Twse/NuGMT0C0Yy9gFVoSJfhxIi1c1w/cttPIWplpZd69Uybtrx1SYR1p31EyLpIeJVZqitJRNFJ0S5Rbxtz0WQ4aOJXV2WvgsCigjb0GdPZpdunqATvpCVL8BSkP2YXPuYuy55NnIOvuIfbGSew5g23Nsqf9SQK+UFJNx9K/fmkd9GBouOwKegr/AGP/yffxC23YC6zGlqHIT7r4CixsWKhYSK855u0xleA2Cspg12x8gVHCsuSKbxHoGH43W9OXYSQYN8Tg1yTgAvnDPVB4HLiOtKIAN+xvd+wApMIR6isVwqn24TozmgkCRTFTfM6XS0P8RPQwajr05OoyUYkdYTbhJOppY15vpA5wqrXuGCLy+GRdOR11OpXc1W7gg+tSWD562XzUXXBt9ryInnC4bqBTpYnZMfe8P1i8Iv6yQkHYXMKTCLeJVP208+aH1IamdDoxy++JttEjkpz9uDHlxwIRGlaY8aBft2XxxPR6a0VJ9GmIflyBf1ZfWoJRXOSHFTvgV48RrAkiWuDa03L4CdDW2JsMl+RqefYskbjfDVEtRdzR//bdEOJMso3AH+P3dOT3h8eceZqniq+PfjcM4gFiPwJ97yVU88Dn9TwZRE1HZ7wJ9Z780q+w2yBKEOqC5s343AsAAA2NhflX1595AAHXBIUJAAAMI7jsscRn+wIAAAAABFla")
-    >>> if diag1d != expected_string:
-    ...     raise ValueError(f"Diff:\n {diff_strings(expected_string, diag1d)}\n base64-encoded output: {compress_string_to_base64(diag1d)}")
+    :raises: ValueError: If axis is not 'y' or 'z'.
     """
     if axis not in ["y", "z"]:
         raise ValueError(
@@ -191,31 +176,15 @@ qsort(data_points, data_index, sizeof(data_point_1d_struct), compare);
 
 def simple_loop_2D(
     CoordSystem: str,
-    out_quantities_dict: Dict[Tuple[str, str], str],
     plane: str = "yz",
 ) -> str:
     r"""
     Generate a simple 2D loop in the xy or yz plane in C (for use inside of a function).
 
     :param CoordSystem: Coordinate system, e.g., "Cartesian"
-    :param out_quantities_dict: Dictionary of quantities to be output
     :param plane: Specifies the plane of output: either "xy" or "yz" (default)
     :return: Complete loop code, output as a string.
-
-    Doctests:
-    >>> from nrpy.helpers.generic import clang_format, compress_string_to_base64, decompress_base64_to_string, diff_strings
-    >>> diag2d = clang_format(simple_loop_2D("Cartesian", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, plane="xy"))
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4ANwAcNdABfgfJ51OEu5G9+HknfNr147qqTmBC3cI97UzHG3dLgKhgkSaNA4b0gwik0t5tWJAsdm3VWwiKtWc3tY77eSymZwSFkcARy74iuD1V89PH3ZOsNJwCBtX1mytk8Gmin3gskZ4wSKZZgPSc5pFGLs7OVOubWy/d0Lrc/ncXImAq/TSAcJ47NLlzM/3CwIU2eAHMiuxZJwmpmaSClGnE2qvwVqQNi8nvkxi5CqlqeYLqPKA9f8vDt7yZflaQEHrkw1RqU0L0IfFMpz5010pQ/9nMpdfkDimwxpuWsHu2cVv8TIZ/ESnVBWP7mE4GsECRgilpCvFmQhm9W/wvjaWVMWlOTVEtmUHg2EERMWLVHUHcz/v5b/ASCFs1Gs0IlD4VjAyulNbOdNIgGbbbeaOB7/0WxhmAEDncryySD4nFSRQwktzAgAOqBlU6bEt+1aRggHXko0pyEpSsTTK+THaTkiLDdMs5bxBwdTa0o5wY1ACoHcTKrbjjcKjadqzhdt7xs6nOC+yq53HGFcExgh/EDergbb5pjDHC2lvCQIws4s/Igg8sOg9mU9Igtwl3hxXagF/dcUpkcMLb21DPQtDcwGcHppgwAAAG8zxFlBx4kiAAHfA/EGAACHDcpdscRn+wIAAAAABFla")
-    >>> if diag2d != expected_string:
-    ...     raise ValueError(f"Diff:\n{diff_strings(expected_string, diag2d)}\n base64-encoded output: {compress_string_to_base64(diag2d)}")
-    >>> diag2d = clang_format(simple_loop_2D(CoordSystem="SinhSpherical", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, plane="yz"))
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4AO5Ac5dABfgfJ51OEu5G9+HknfNr147qqWllBPHI97UzHG9N+QT+URR78q1HU1SAj5n0bvig/XkRzY6UtW1SM0KnjsTwz4bVpsXCoU1zeR3qAriRz/uk4HZriJBGPIOm0e8WoWBi8RwETKvt6gklgr2I2dbftr5I0l340lYiBldQBKs3j3wyZDYfCdcY4AJk/JvA/IIROisi++rX10PvyW0tsJkzkeFPub0bpYMtqoyX79CNMEnDvGMujcXFb+hBHRLHJXIFWM6KQuFUnr7bfHZ7q7eq8TmBkj0+mitMIIjgMOgpXdTNv9uwGAEUTd89/jUMvMT6pn+i3T4WtOklcUpfXCEIjXorwIfFGBYmBXjyPppon9hbkHynYraJeBjWAayRs0cRtu4VRyiXKLqwPwtBV0YoCjy4vd8B09bc+/zt1L6/dOr+iea/oYl+cTHoa0kcKKoy4Yaj7L5sOLpwbfh3h3iUMD8yZ9ca0ZR4gSJjv/7WTjawCS+U9UTbVMtd8OSF+p1umNEt4iMOdcwv8nnb8wZO5eZ2xy9ck2gxC9AmJC8k0OauGJPtmdw9Uiv+WaH85zeAAVgfxeigrPqiupqOGE6uC0vE3GP4mnTLVj/0Ry1xQAAANYZRU9EmcEJAAHqA7oHAACSLqpEscRn+wIAAAAABFla")
-    >>> if diag2d != expected_string:
-    ...     raise ValueError(f"Diff:\n{diff_strings(expected_string, diag2d)}\n base64-encoded output: {compress_string_to_base64(diag2d)}")
-    >>> diag2d = clang_format(simple_loop_2D(CoordSystem="SinhSymTP", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, plane="xy"))
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4ANwAchdABfgfJ51OEu5G9+HknfNr147qqTmBC3cI97UzHG9N+QT+ocOVsGYU10j3aThYalczu1S8QtgITDuqHTXU1eapZEQw75OCzSgIofGTPSb4MqSNFlMjWOEYG0I710AGvwqxJmZ+I6L4zF7+PP9FYQ/d9u05L6IMNbDRYe9ph3SaiPkChicl8u/Vm+W3iuoTLsc2OFKVtP8t2ctj+5Ism3MCRN1ayJWME1y2FggLDxEjq7DGxfRhfgm8sS8boaDnAZxBrlKwL4hODHwQgdeNF/okej2WLE7ImUBGfXSrGKTSEBpluwwEffZSDJYHjP/La92PP+Np29gNrKzfUxSKtl/1yJ22RbkRDxffiWDt1z1k8gWNAMjYsGzCgrQFBXg8ffUILaRJs1H9PtWJlOfkeL6KCqW8pJ3YKan/UPfadOCiSuEk4Hp+X47FY+GKXdWkg4abjliDPVrE9gzCZC3lpoVz+XGuh3g1ir2KqB/luykcUtCSwgEjj8lIDYgzlwSIdvDCJ/lvXiSq5sTpza+EtIASZ67N+iqq5B98+3g7sjk2PzD6YGAwJ12YuT6LzMcj09oPouFn3b3QYUJLmhGCtjA8v7xV86PNiMsGQD+TryjJfwT/QAB5APxBgAA6fp3M7HEZ/sCAAAAAARZWg==")
-    >>> if diag2d != expected_string:
-    ...     raise ValueError(f"Diff:\n{diff_strings(expected_string, diag2d)}\n base64-encoded output: {compress_string_to_base64(diag2d)}")
+    :raises: ValueError: If plane is not 'xy' or 'yz'.
     """
     if plane not in ["xy", "yz"]:
         raise ValueError(
