@@ -119,8 +119,6 @@ numericalgrids.register_CFunctions(
 )
 superBnumericalgrids.register_CFunctions(
     list_of_CoordSystems=[CoordSystem],
-    grid_physical_size=grid_physical_size,
-    Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
 )
@@ -183,7 +181,7 @@ cbc.CurviBoundaryConditions_register_C_functions(
 )
 charecomm.chare_comm_register_C_functions(list_of_CoordSystems=[CoordSystem])
 superBcbc.CurviBoundaryConditions_register_C_functions(
-    list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order
+    list_of_CoordSystems=[CoordSystem]
 )
 
 rhs_string = """

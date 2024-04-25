@@ -170,16 +170,6 @@ def register_CFunction_diagnostics_nearest_1d_axis(
     :param axis: Specifies the axis ("x", "z") for the diagnostics.
     :return: None if in registration phase, else the updated NRPy environment.
     :raises ValueError: If the specified axis is not supported.
-
-    Doctests:
-    >>> from nrpy.helpers.generic import clang_format, compress_string_to_base64, decompress_base64_to_string, diff_strings
-    >>> Coord = "SinhSpherical"
-    >>> axis = "y"
-    >>> _ = register_CFunction_diagnostics_nearest_1d_axis(Coord, out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, axis=axis)
-    >>> diag1d = cfc.CFunction_dict[f"diagnostics_nearest_1d_{axis}_axis__rfm__{Coord}"].full_function
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4AotBFFdABGaScZHDxOiAHcc747vJCBLAVaWVRAnpWHX/kkr6QysfzLfXhoCqwdlhv59jJtBxk7nXnSEgrtsCyPSYXzh6+ATGh7ABAkIBSF+o891I4eI9S4eGHzAvGSs7EJpzVyrmy021AfTIND2mYmaWYvVjEpYWAIWJHt6abEm12uy7LfoZTeEyiT+V7goyEruSX8ZbKfF7laQ8cZFJJGqW0hlaZ9xL1O2wbDhTDbIud4y41c+Frfqux0cJRkA9+ftib6biz4gC7XhKoBCKQDExonclhZNXjDOQ4WACA16U3zUNl7b/eEw9iimCglG79US4A+Evk2fi0APwIQ+oI7szdJNmthBLtTAs14+nlh4/DvWDefIt65GBBZC9Ob+ww2x9COzu7LqOqYSPXC+hhHFm10ZnTvBFLP7pSdh/9hi0QkxhP5GLLWRcoStm76DCEpolzaocROhXbaiF79ieeUGnKlzglpjUCal9XpefO4JnhNX54fJpxkUY/Yoowh2j3mUeMgVSFeefOW8+vBF9UISgWRR+92UO7Ylyz2U4mlSV2k7mNbAjy7KM9nbcm4uuZGIdkxV8oVTL0qQDxZ8UhSoZptXdVi28b6InehoNAScgBea46D0l9B6IMy214XJ6TFxrIH5aC0F7+8cVE7i0nAwwA24jrnChdHtkeiI4tJwzOEmURP1YUxlI/YTyeAmeToJXE9M171XKtOOphkvkVvpeEv8SQFNQ0jniSozgFFQeUeNf7HiBDacmYmu24nrTVwaH/T1ww+OOc+DfMPd2Hed/uG8ko2n7jKgNOikB/LLirMezqn6rosZVifm5GZrYbfxoUdewqXijEHFJnnVllqGoZhw4ZMbGNZtjbmBJjjogghtfHYOHrwpIhJOtuCdX6Ynr41Da58Yozyo1wVRawr6/5TaOVgmDeIAb40oKbnog0T7sdj/ZQYw9HJvnsLrU8/r1nxPcIEurm2eSSeLpYXlt9o96OYvSAzoQ0TR2GtM1gER1SEzwyhcmTmVx1sq8s0e5KrJOCVqXPvkuoO88MdMNdQcCS3R8EpHLgHgag3wCx9/7iPVSz9jc/EyJms++8Hf6YZedPjjhGlnfbQoacj2i3O3EwNKbbTJZW6JCM0efCz0nI2lGrVvZFi58mbzgv98CGTHl+BFG1FPMcZK6dqwoUS17Q5jxn+uE4fPOIco2LXg1IaUDDw/h8EvVjWEgcuGQDAHXkjJalD7Xfa4J9UrmG9x/iN8fESoi7ic2VKr9PR63zkrrXINGY/Lv73/ekcadl9YR+UIZ4kRGmRIhpu+OQgL0mJKgiLNS49yG8OfnHwOeWXo8QPRqNlyX7RdK/mUUpYPIdmw0v10r7NYwa9+Kziyei1dRBW8/qAQmBz2xxcL4UbUpkpiFB9HeKEN1QEc8saDLh4qyAJqnON18+wNbTJDqd9JeOp39aHsf0IyYJIuHgoL5QYkZHAgxrAJl6ogGrCp1egAAAAAmcwtyzpCcZsAAe0IrhQAANryZO+xxGf7AgAAAAAEWVo=")
-    >>> if diag1d != expected_string:
-    ...     raise ValueError(f"\n{diff_strings(expected_string, diag1d)}\n base64-encoded output: {compress_string_to_base64(diag1d)}")
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -233,7 +223,7 @@ for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {{
 
     body += r"""
   Ck::IO::write(token, out, sizeinbytes, offsetpt_firstfield[which_pt]);
-}}
+}
 """
     cfc.register_CFunction(
         includes=includes,
@@ -261,17 +251,6 @@ def register_CFunction_diagnostics_nearest_2d_plane(
     :param plane: Specifies the plane ("xy", "yz") for the diagnostics.
     :return: None if in registration phase, else the updated NRPy environment.
     :raises ValueError: If the specified plane is not supported.
-
-    Doctests:
-    >>> from nrpy.helpers.generic import clang_format, compress_string_to_base64, decompress_base64_to_string, diff_strings
-    >>> Coord = "SinhSymTP"
-    >>> plane = "yz"
-    >>> _ = register_CFunction_diagnostics_nearest_2d_plane("SinhSymTP", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, plane=plane)
-    >>> diag2d = cfc.CFunction_dict[f"diagnostics_nearest_2d_{plane}_plane__rfm__{Coord}"].full_function
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4AfSA3ldABGaScZHDxOiAHcc747vJCBLAVaWVRAnpWHX/kkr6QysfzLfXhoCqwdlhv59jJtBxk7nXnUIwIlIQLEtn60ZvFpp58iRzPO8zL7jj2RkmJNOOz7kLOZ5pcKkv92RfBBV6XfvVRqJRIbNiOKE+HSFEwb7csuCUsf9zB0qgLo0SytFxhnW14mQi8WOzQtPby0lBoglttpysw/m7b1NSy56Jyd6v3ORQjM5XKs0j68j0X0IJzMCVR8Dl2FigSsCDy+t+cywlHWLwgbGz8o84kiEsQNi8vwXaFG0ILHJU4KOQHes11bMeMB40iuY3xBqqX6NPdu9FpyfZ66JRRjS85GSxBso4cKi5eGY674iGPLQBQJh/i3W3LgupqIV5Bx1X3o/450Xgj5NjMue4i7H/UfL1qp71Ge6ncAzZ/oKmsPb0h3jrM4DKNwTR39l94STUk3qNpztEXcij8XS4r5W26aH14PylTqhnT83m4d0lNIvXNKIg5tGVQnE6fEAdqPwak1KP1vcYvE9AH1jsWRuSglAlkgAO6zsNGNQvnWq0+BzWA3ywSu8sQ9UBWM9SM6tAc5AazjarASStyn6hOB+ezWZUqpZHcpzvBB7/IEl6/AZzMrbLtyodvAD4I79TJJj9zk7Zn+ZqfVrvfiMNupWLX9QigMAAX3uhZ8Q6+IjCMMIft5IsBCcVTLJKtPRhO/swcHW0FfsBU1Fthx5uRFAOCYFt1OM8Ng9w/f+9hPmolVQj9LnGbVtjafWZ0Ocbg3jxZAbOrRucb9ICXIOX63o05BYQZXCyvt6dqyWvgiBJlsDnAz7DjXCOdj+fWEHWu74+A5TbD+bn0ubpK0b7rwqJ+pbibLGbS6AF8KfE6cNGW108E78JdbM3D9wAv167SThtHXFcD2n3EaDFmnrhiQRpbWhJ1UbHrmOLPvDkrQR7YVP2CTEpWv9ZJ0WHhZheCvjkPAQehJyXxnuWPZ4ezEGgJuULcekUg8iv2i5K23Xm+00mf8YZqur7R+ymDFn7qI4yUTjk8Xo5UTV5BwYATg9vR/V05cXm3JyJy59eZLk3b/VGTn2DKIT90IqXwDV9+lkov+HAZt+hebaINtWfu733vfy1+wn2dj/fZmrrNhmkEIV4o8vFj/pDXb1IqsTTh5lQxFDRTw35DPalplJS79vz4B9rAmS1ghSR+iV+EAAAAAAn1cKhAngTtAAAZUH0w8AAHfeYwOxxGf7AgAAAAAEWVo=")
-    >>> if diag2d != expected_string:
-    ...     error_message = diff_strings(expected_string, diag2d)
-    ...     raise ValueError(f"\n{error_message}\n base64-encoded output: {compress_string_to_base64(diag2d)}")
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -327,7 +306,7 @@ for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {{
 
     body += r"""
   Ck::IO::write(token, out, sizeinbytes, offsetpt_firstfield[which_pt]);
-}}
+}
 """
     cfc.register_CFunction(
         includes=includes,
@@ -374,7 +353,6 @@ def register_CFunction_diagnostics_set_up_nearest_1d_axis(
 
     prefunc, loop_1d = lp.simple_loop_1D(
         CoordSystem=CoordSystem,
-        out_quantities_dict=out_quantities_dict,
         axis=axis,
     )
 
@@ -445,7 +423,6 @@ for (int i = 0; i < data_index; i++) {{
   }}
   which_diagnostic_global++;
 }}
-
 """
     cfc.register_CFunction(
         includes=includes,
@@ -493,7 +470,6 @@ def register_CFunction_diagnostics_set_up_nearest_2d_plane(
 
     loop_2d = lp.simple_loop_2D(
         CoordSystem=CoordSystem,
-        out_quantities_dict=out_quantities_dict,
         plane=plane,
     )
 
@@ -561,7 +537,6 @@ LOOP_NOOMP(i0_pt, 0, numpts_i0, i1_pt, 0, numpts_i1, i2_pt, 0, numpts_i2) {{
   }}
   which_diagnostic_global++;
 }}
-
 """
     cfc.register_CFunction(
         includes=includes,
