@@ -158,7 +158,7 @@ jobs:
         python -m nrpy.examples.wave_equation_multicoord_wavetoy && (cd project/multicoords_curviwavetoy && make && make clean)
 
   codegen-mac:
-    runs-on: macos-latest
+    runs-on: macos-13
 
     strategy:
       matrix:
