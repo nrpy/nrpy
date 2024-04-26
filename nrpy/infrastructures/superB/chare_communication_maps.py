@@ -144,7 +144,7 @@ def chare_comm_register_C_functions(
     Register C functions for chare communication.
 
     :param list_of_CoordSystems: List of coordinate systems to use.
-    :return: None
+    :return None
     """
     for CoordSystem in list_of_CoordSystems:
         # Register C function to set up the chare communication struct.

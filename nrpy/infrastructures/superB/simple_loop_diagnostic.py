@@ -22,10 +22,12 @@ def simple_loop_1D(
     r"""
     Generate a simple 1D loop in C (for use inside of a function).
 
-    :param CoordSystem: Coordinate system, e.g., "Cartesian"
-    :param axis: Specifies the axis of output: either "x" or "z" axis
+    :param CoordSystem: Coordinate system, e.g., "Cartesian".
+    :param axis: Specifies the axis of output: either "x" or "z" axis.
+
     :return: Complete loop code, output as a string.
-    :raises: ValueError: If axis is not 'y' or 'z'.
+
+    :raises ValueError: If axis is not 'y' or 'z'.
     """
     if axis not in ["y", "z"]:
         raise ValueError(
@@ -184,7 +186,7 @@ def simple_loop_2D(
     :param CoordSystem: Coordinate system, e.g., "Cartesian"
     :param plane: Specifies the plane of output: either "xy" or "yz" (default)
     :return: Complete loop code, output as a string.
-    :raises: ValueError: If plane is not 'xy' or 'yz'.
+    :raises ValueError: If plane is not 'xy' or 'yz'.
     """
     if plane not in ["xy", "yz"]:
         raise ValueError(

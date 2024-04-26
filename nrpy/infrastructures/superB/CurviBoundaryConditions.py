@@ -153,7 +153,6 @@ def CurviBoundaryConditions_register_C_functions(
     Register various C functions responsible for handling boundary conditions.
 
     :param list_of_CoordSystems: List of coordinate systems to use.
-    :return: None
     """
     for CoordSystem in list_of_CoordSystems:
         # Register C function to set up the boundary condition struct for local chare grid.

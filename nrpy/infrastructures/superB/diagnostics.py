@@ -1,5 +1,5 @@
 """
-C functions for diagnostics for the superB infrastructure
+C functions for diagnostics for the superB infrastructure.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -178,7 +178,6 @@ if (write_diagnostics) {
 }
 
 """
-
 
     cfc.register_CFunction(
         includes=includes,

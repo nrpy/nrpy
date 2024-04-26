@@ -1,5 +1,5 @@
 """
-Generate main.cpp, main.h, main.ci and commondata.h functions for the superB infrastructure.
+Generate main.cpp, main.h, main.ci and commondata.h for the superB infrastructure.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com

@@ -1,4 +1,5 @@
 """
+Generate timestepping.cpp, timestepping.h and timestepping.ci for the superB infrastructure.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -137,7 +138,7 @@ def register_CFunction_timestepping_malloc() -> None:
     """
     Register a C function for timestepping malloc.
 
-    :return: None
+    :return None
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "Allocate memory for temporary buffers used to communicate face data"
@@ -168,7 +169,7 @@ def register_CFunction_timestepping_free_memory() -> None:
     """
     Register a C function for timestepping free memory.
 
-    :return: None
+    :return None
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "Free memory for temporary buffers used to communicate face data"
@@ -195,7 +196,7 @@ def output_timestepping_h(
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
     """
-    Generate timestepping.h
+    Generate timestepping.h.
 
     :param project_dir: Directory where the project C code is output
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
@@ -264,7 +265,7 @@ def output_timestepping_cpp(
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
     """
-    Generate timestepping.cpp
+    Generate timestepping.cpp.
 
     :param project_dir: Directory where the project C code is output
     :param initial_data_desc: Description for initial data, default is an empty string.
@@ -272,6 +273,7 @@ def output_timestepping_cpp(
     :param enable_CurviBCs: Enable CurviBCs, default is False.
     :param initialize_constant_auxevol: If set to True, `initialize_constant_auxevol` function will be called during the simulation initialization phase to set these constants. Default is False.
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
+    :raises ValueError: Raised if any required function is not registered.
     """
     initial_data_desc += " "
     # Make sure all required C functions are registered
@@ -693,14 +695,14 @@ def output_timestepping_ci(
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
     """
-    Generate timestepping.ci
+    Generate timestepping.ci.
 
     :param project_dir: Directory where the project C code is output
     :param pre_MoL_step_forward_in_time: Code for handling pre-right-hand-side operations, default is an empty string.
     :param post_MoL_step_forward_in_time: Code for handling post-right-hand-side operations, default is an empty string.
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
+    :raises ValueError: Raised if RK substep is not 1, 2, 3 or 4.
     """
-
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
 
@@ -966,7 +968,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
     :param enable_rfm_precompute: Enable RFM precompute (default: False)
     :param pre_MoL_step_forward_in_time: Pre MoL step forward in time (default: "")
     :param post_MoL_step_forward_in_time: Post MoL step forward in time (default: "")
-    :return: None
+    :return None
     """
     output_timestepping_h(
         project_dir=project_dir,
