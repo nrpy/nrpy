@@ -489,7 +489,7 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
 
     if not Butcher[-1][0] == "":
         raise ValueError(
-            f"Adaptive order Butcher tables are currently not supported in MoL."
+            "Adaptive order Butcher tables are currently not supported in MoL."
         )
 
     # Note: this calculation does not work for adaptive steps
