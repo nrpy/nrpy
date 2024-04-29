@@ -77,7 +77,7 @@ class RKFunction:
             )
             for i, el in enumerate(self.RK_lhs_list)
         ]
-        
+
         self.loop_body = c_codegen(
             self.RK_rhs_list,
             self.RK_lhs_str_list,
@@ -90,10 +90,10 @@ class RKFunction:
         )
         # Give rationals a better name
         self.loop_body = self.loop_body.replace("_Rational", "RK_Rational")
-        
+
         self.name = "SIMD_" if self.enable_simd else ""
         self.name += f"rk_substep_{self.rk_step}"
-        
+
         # Populate build and populate self.CFunction
         self.CFunction_RK_substep_function()
 
@@ -102,7 +102,9 @@ class RKFunction:
         self.body = ""
 
         for i in ["0", "1", "2"]:
-            self.body += f"const int Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n"
+            self.body += (
+                f"const int Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n"
+            )
         if self.enable_simd:
             warnings.warn(
                 "enable_simd in MoL is not properly supported -- MoL update loops are not properly bounds checked."
@@ -399,6 +401,7 @@ def single_RK_substep_input_symbolic(
     :param post_post_rhs_string: String to be used after the post-RHS phase.
     :param fp_type: Floating point type, e.g., "double".
     :param additional_comments: additional comments to append to auto-generated comment block.
+    :param rational_const_alias: Optional alias instead of standard const
 
     :return: A string containing the generated C code.
 
@@ -706,7 +709,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
                     gf_aliases=self.gf_aliases,
                     post_post_rhs_string=self.post_post_rhs_string,
                     fp_type=self.fp_type,
-                    rational_const_alias=self.rational_const_alias
+                    rational_const_alias=self.rational_const_alias,
                 )
                 + "// -={ END k1 substep }=-\n\n"
             )
@@ -747,7 +750,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
                     gf_aliases=self.gf_aliases,
                     post_post_rhs_string=self.post_post_rhs_string,
                     fp_type=self.fp_type,
-                    rational_const_alias=self.rational_const_alias
+                    rational_const_alias=self.rational_const_alias,
                 )
                 + "// -={ END k2 substep }=-\n\n"
             )
@@ -776,7 +779,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
                     gf_aliases=self.gf_aliases,
                     post_post_rhs_string=self.post_post_rhs_string,
                     fp_type=self.fp_type,
-                    rational_const_alias=self.rational_const_alias
+                    rational_const_alias=self.rational_const_alias,
                 )
                 + "// -={ END k3 substep }=-\n\n"
             )
@@ -853,7 +856,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
                             gf_aliases=self.gf_aliases,
                             post_post_rhs_string=self.post_post_rhs_string,
                             fp_type=self.fp_type,
-                            rational_const_alias=self.rational_const_alias
+                            rational_const_alias=self.rational_const_alias,
                         )
                     )
                 else:
@@ -941,7 +944,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
                                 gf_aliases=self.gf_aliases,
                                 post_post_rhs_string=self.post_post_rhs_string,
                                 fp_type=self.fp_type,
-                                rational_const_alias=self.rational_const_alias
+                                rational_const_alias=self.rational_const_alias,
                             )
                             + f"// -={{ END k{s + 1} substep }}=-\n\n"
                         )

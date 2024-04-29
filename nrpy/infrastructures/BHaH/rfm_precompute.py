@@ -10,10 +10,8 @@ import sympy as sp
 import sympy.codegen.ast as sp_ast
 
 import nrpy.c_codegen as ccg
-import nrpy.c_function as cfc
 import nrpy.reference_metric as refmetric
 from nrpy.helpers.generic import superfast_uniq
-from nrpy.infrastructures.BHaH.BHaH_defines_h import register_BHaH_defines
 
 
 class ReferenceMetricPrecompute:
@@ -54,7 +52,10 @@ class ReferenceMetricPrecompute:
                 list(x)
                 for x in zip(
                     *sorted(
-                        zip(self.rfm.freevars_uniq_xx_indep, self.rfm.freevars_uniq_vals), key=str
+                        zip(
+                            self.rfm.freevars_uniq_xx_indep, self.rfm.freevars_uniq_vals
+                        ),
+                        key=str,
                     )
                 )
             )
@@ -86,7 +87,7 @@ class ReferenceMetricPrecompute:
                 self.rfm_struct__freemem += (
                     f"free(rfmstruct->{self.freevars_uniq_xx_indep[which_freevar]});\n"
                 )
-                
+
                 output_define_and_readvr = False
                 for dirn in range(3):
                     if (

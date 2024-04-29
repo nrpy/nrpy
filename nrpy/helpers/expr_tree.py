@@ -23,7 +23,7 @@ Email:  ksible *at* outlook *dot* com
 """
 
 import sys  # Standard Python module for multiplatform OS-level functions
-from typing import Generator, List, Optional
+from typing import Generator, List, Optional, Union
 import sympy as sp
 
 
@@ -188,24 +188,28 @@ class ExprTree:
 
     __str__ = __repr__
 
-def get_unique_expression_symbols(expr, exclude: List = []) -> List:
+
+def get_unique_expression_symbols(expr: sp.Basic, exclude: Union[List[str], None] = None) -> List[str]:
     """
-    Get a unique list of expression symbols
-    
+    Get a unique list of expression symbols.
+
     :param expr: Sympy expression
     :param exclude: List of symbol names to exclude
+    :returns: List of unique symbols from the expression
     """
-    def get_expression_symbols__recursive(this_expr):
-        this_symbol_list = list()
+    if exclude is None:
+        exclude = []
+    def get_expression_symbols__recursive(this_expr: sp.Basic) -> List[str]:
+        this_symbol_list = []
         for arg in this_expr.args:
             if isinstance(arg, sp.Symbol):
                 this_symbol_list += [str(arg)]
             this_symbol_list += get_expression_symbols__recursive(arg)
         return this_symbol_list
-    
+
     symbols = get_expression_symbols__recursive(expr)
     return [sym for sym in set(symbols) if not sym in exclude]
-        
+
 
 if __name__ == "__main__":
     import doctest

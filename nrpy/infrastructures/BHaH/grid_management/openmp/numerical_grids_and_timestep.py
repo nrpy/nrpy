@@ -54,7 +54,7 @@ class register_CFunction_numerical_grid_params_Nxx_dxx_xx(
     ) -> None:
         super().__init__(CoordSystem, grid_physical_size, Nxx_dict)
 
-        self.body+="""
+        self.body += """
     // Set up cell-centered Cartesian coordinate grid, centered at the origin.
     xx[0] = (REAL *restrict)malloc(sizeof(REAL)*params->Nxx_plus_2NGHOSTS0);
     xx[1] = (REAL *restrict)malloc(sizeof(REAL)*params->Nxx_plus_2NGHOSTS1);

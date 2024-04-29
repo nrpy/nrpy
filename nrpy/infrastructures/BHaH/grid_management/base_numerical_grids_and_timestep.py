@@ -17,6 +17,7 @@ import nrpy.reference_metric as refmetric
 import nrpy.c_codegen as ccg
 from nrpy.helpers.expr_tree import get_unique_expression_symbols
 
+
 class base_register_CFunction_numerical_grid_params_Nxx_dxx_xx:
     """
     Base class for generating the function to Set up a cell-centered grid of size grid_physical_size.
@@ -190,15 +191,17 @@ class base_register_CFunction_cfl_limited_timestep:
             sp.Abs(self.rfm.scalefactor_orthog[1] * dxx1),
             sp.Abs(self.rfm.scalefactor_orthog[2] * dxx2),
         ]
-        
+
         # Save unique symbols not related to coordinates in case
         # we need to include them in the function body
-        self.unique_symbols = list()
+        self.unique_symbols = []
         for expr in self.min_expressions:
-            sub_list = get_unique_expression_symbols(expr, exclude=[f'xx{i}' for i in range(3)])
+            sub_list = get_unique_expression_symbols(
+                expr, exclude=[f"xx{i}" for i in range(3)]
+            )
             self.unique_symbols += sub_list
         self.unique_symbols = sorted(list(set(self.unique_symbols)))
-        
+
         self.min_body_compute = ccg.c_codegen(
             self.min_expressions,
             ["dsmin0", "dsmin1", "dsmin2"],

@@ -25,9 +25,7 @@ _ = par.CodeParameter(
 # Update core_modules to use correct key for ordering
 for i, key in enumerate(BHaH_defines_h.core_modules_list):
     if "nrpy.infrastructures.BHaH.CurviBoundaryConditions" in key:
-        BHaH_defines_h.core_modules_list[i] = (
-            str(__name__)
-        )
+        BHaH_defines_h.core_modules_list[i] = str(__name__)
 
 
 # bcstruct_set_up():

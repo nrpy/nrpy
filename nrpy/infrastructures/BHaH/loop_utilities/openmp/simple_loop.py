@@ -119,7 +119,7 @@ class simple_loop(base_sl.base_simple_loop):
         OMP_custom_pragma: str = "",
         OMP_collapse: int = 1,
         fp_type: str = "double",
-    ) -> str:
+    ) -> None:
         super().__init__(
             loop_body,
             read_xxs=read_xxs,
@@ -162,7 +162,7 @@ class simple_loop(base_sl.base_simple_loop):
             self.increment = ["1", "1", "simd_width"]
 
         self.initialize_based_on__read_rfm_xx_arrays()
-        
+
         self.prefix_loop_with = [
             self.pragma,
             self.read_rfm_xx_arrays[2],

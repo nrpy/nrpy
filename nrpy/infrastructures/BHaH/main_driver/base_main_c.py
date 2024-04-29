@@ -10,6 +10,7 @@ Author: Zachariah B. Etienne
 from typing import List, Tuple
 import nrpy.c_function as cfc
 
+
 class base_register_CFunction_main_c:
     """
     Base class for generating the "generic" C main() function for all simulation codes in the BHaH infrastructure.
@@ -23,7 +24,8 @@ class base_register_CFunction_main_c:
     :param post_MoL_step_forward_in_time: Code for handling post-right-hand-side operations, default is an empty string.
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
     :raises ValueError: Raised if any required function for BHaH main() is not registered.
-    """    
+    """
+
     def __init__(
         self,
         MoL_method: str,
@@ -35,15 +37,15 @@ class base_register_CFunction_main_c:
         post_MoL_step_forward_in_time: str = "",
         clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
     ) -> None:
-        self.MoL_method=MoL_method
-        self.initial_data_desc=initial_data_desc
-        self.boundary_conditions_desc=boundary_conditions_desc
-        self.prefunc=prefunc
-        self.initialize_constant_auxevol=initialize_constant_auxevol
-        self.pre_MoL_step_forward_in_time=pre_MoL_step_forward_in_time
-        self.post_MoL_step_forward_in_time=post_MoL_step_forward_in_time
-        self.clang_format_options=clang_format_options
-        
+        self.MoL_method = MoL_method
+        self.initial_data_desc = initial_data_desc
+        self.boundary_conditions_desc = boundary_conditions_desc
+        self.prefunc = prefunc
+        self.initialize_constant_auxevol = initialize_constant_auxevol
+        self.pre_MoL_step_forward_in_time = pre_MoL_step_forward_in_time
+        self.post_MoL_step_forward_in_time = post_MoL_step_forward_in_time
+        self.clang_format_options = clang_format_options
+
         self.initial_data_desc += " "
         # Make sure all required C functions are registered
         missing_functions: List[Tuple[str, str]] = []
@@ -68,9 +70,7 @@ class base_register_CFunction_main_c:
         if missing_functions:
             error_msg = "Error: These functions are required for all BHaH main() functions, and are not registered.\n"
             for func_tuple in missing_functions:
-                error_msg += (
-                    f'  {func_tuple[0]}, registered by function within "{func_tuple[1]}"\n'
-                )
+                error_msg += f'  {func_tuple[0]}, registered by function within "{func_tuple[1]}"\n'
             raise ValueError(error_msg)
 
         self.includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
@@ -85,7 +85,9 @@ Step 3: Finalize initialization: set up {self.initial_data_desc}initial data, et
 Step 4: Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping.
 """
         if self.initialize_constant_auxevol:
-            self.desc += "Step 4.a: Set AUXEVOL gridfunctions that will never change in time."
+            self.desc += (
+                "Step 4.a: Set AUXEVOL gridfunctions that will never change in time."
+            )
         self.desc += f"""Step 5: MAIN SIMULATION LOOP
 - Step 5.a: Output diagnostics.
 - Step 5.b: Prepare to step forward in time.

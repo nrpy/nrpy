@@ -27,6 +27,7 @@ import nrpy.finite_difference as fin  # NRPy+: Finite-difference module
 from nrpy.validate_expressions.validate_expressions import check_zero
 from nrpy.helpers.expr_tree import get_unique_expression_symbols
 
+
 # Set unit-vector dot products (=parity) for each of the 10 parity condition types
 def parity_conditions_symbolic_dot_products(
     CoordSystem: str, fp_type: str = "double"
@@ -627,17 +628,14 @@ class setup_Cfunction_r_and_partial_xi_partial_r_derivs:
     :param fp_type: Floating point type, e.g., "double".
     :return: A string containing the generated C code for the function.
     """
-    
-    def __init__(
-        self,
-        CoordSystem: str, fp_type: str = "double"
-    ) -> str:
-        self.CoordSystem=CoordSystem
-        self.fp_type=fp_type
-        self.CFunction = None
+
+    def __init__(self, CoordSystem: str, fp_type: str = "double") -> None:
+        self.CoordSystem = CoordSystem
+        self.fp_type = fp_type
+        self.CFunction = cfc.CFunction()
         self.include_CodeParameters_h = True
-        self.cfunc_decorators=""
-        
+        self.cfunc_decorators = ""
+
         self.desc = "Compute r(xx0,xx1,xx2) and partial_r x^i."
         self.cfunc_type = "static inline void"
         self.name = "r_and_partial_xi_partial_r_derivs"
@@ -647,14 +645,16 @@ class setup_Cfunction_r_and_partial_xi_partial_r_derivs:
         rfm = refmetric.reference_metric[CoordSystem]
         # sp.simplify(expr) is too slow here for SinhCylindrical
         self.expr_list = [
-                rfm.xxSph[0],
-                rfm.Jac_dUrfm_dDSphUD[0][0],
-                rfm.Jac_dUrfm_dDSphUD[1][0],
-                rfm.Jac_dUrfm_dDSphUD[2][0],
-            ]
+            rfm.xxSph[0],
+            rfm.Jac_dUrfm_dDSphUD[0][0],
+            rfm.Jac_dUrfm_dDSphUD[1][0],
+            rfm.Jac_dUrfm_dDSphUD[2][0],
+        ]
         self.unique_symbols = []
         for expr in self.expr_list:
-            sub_list = get_unique_expression_symbols(expr, exclude=[f'xx{i}' for i in range(3)])
+            sub_list = get_unique_expression_symbols(
+                expr, exclude=[f"xx{i}" for i in range(3)]
+            )
             self.unique_symbols += sub_list
         self.unique_symbols = sorted(list(set(self.unique_symbols)))
         self.body = ccg.c_codegen(
@@ -671,7 +671,8 @@ class setup_Cfunction_r_and_partial_xi_partial_r_derivs:
         )
         self.generate_CFunction()
 
-    def generate_CFunction(self):
+    def generate_CFunction(self) -> None:
+        """Generate CFunction from class definitions."""
         self.CFunction = cfc.CFunction(
             subdirectory=self.CoordSystem,
             includes=[],
@@ -681,8 +682,8 @@ class setup_Cfunction_r_and_partial_xi_partial_r_derivs:
             params=self.params,
             include_CodeParameters_h=self.include_CodeParameters_h,
             body=self.body,
-            cfunc_decorators=self.cfunc_decorators
-    )
+            cfunc_decorators=self.cfunc_decorators,
+        )
 
 
 # partial_r f term: generate finite-difference coefficients
@@ -727,26 +728,28 @@ class setup_Cfunction_FD1_arbitrary_upwind:
     :param fp_type: Floating point type, e.g., "double".
     :return: The full C function as a string.
     """
+
     def __init__(
         self,
         dirn: int,
         radiation_BC_fd_order: int = -1,
         fp_type: str = "double",
     ) -> None:
-        self.dirn=dirn
-        self.radiation_BC_fd_order=radiation_BC_fd_order
-        self.fp_type=fp_type
-        
-        import sympy.codegen.ast as sp_ast
+        self.dirn = dirn
+        self.radiation_BC_fd_order = radiation_BC_fd_order
+        self.fp_type = fp_type
+
         self.default_FDORDER = par.parval_from_str("fd_order")
         if radiation_BC_fd_order == -1:
             radiation_BC_fd_order = self.default_FDORDER
 
         par.set_parval_from_str("fd_order", radiation_BC_fd_order)
 
-        self.include_CodeParameters_h=True
+        self.include_CodeParameters_h = True
         self.includes: List[str] = []
-        self.desc = "Compute 1st derivative finite-difference derivative with arbitrary upwind"
+        self.desc = (
+            "Compute 1st derivative finite-difference derivative with arbitrary upwind"
+        )
         self.cfunc_type = "static inline REAL"
         self.cfunc_decorators = ""
         self.name = f"FD1_arbitrary_upwind_x{dirn}_dirn"
@@ -794,9 +797,9 @@ class setup_Cfunction_FD1_arbitrary_upwind:
     """
         par.set_parval_from_str("fd_order", self.default_FDORDER)
         self.generate_CFunction()
-        
+
     def generate_CFunction(self) -> None:
-        "Generate CFunction from class parameters."        
+        """Generate CFunction from class parameters."""
         self.CFunction = cfc.CFunction(
             subdirectory="one_subdirectory_down",
             includes=self.includes,
@@ -819,18 +822,16 @@ class setup_Cfunction_compute_partial_r_f:
     :param CoordSystem: Coordinate system to be used for the computation
     :param radiation_BC_fd_order: Order of finite difference for radiation boundary conditions, default is -1
     :return: A C function for computing the partial derivative
-    """    
-    def __init__(
-        self,
-        CoordSystem: str, radiation_BC_fd_order: int = -1
-    ) -> str:
-        self.CoordSystem=CoordSystem
-        self.radiation_BC_fd_order=radiation_BC_fd_order
-        self.include_CodeParameters_h=True
-        self.includes = []
-        self.cfunc_decorators=""
-        self.CFunction= None
-        
+    """
+
+    def __init__(self, CoordSystem: str, radiation_BC_fd_order: int = -1) -> None:
+        self.CoordSystem = CoordSystem
+        self.radiation_BC_fd_order = radiation_BC_fd_order
+        self.include_CodeParameters_h = True
+        self.includes: List[str] = []
+        self.cfunc_decorators = ""
+        self.CFunction = cfc.CFunction()
+
         self.desc = "Compute \\partial_r f"
         self.cfunc_type = "static inline REAL"
         self.name = "compute_partial_r_f"
@@ -853,7 +854,7 @@ const REAL partial_x0_partial_r, const REAL partial_x1_partial_r, const REAL par
 
   const int ntot = Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2;
 """
-        self.algorithm_header = f"""  
+        self.algorithm_header = """
   ///////////////////////////////////////////////////////////
   // Next we'll compute partial_xi f, using a maximally-centered stencil.
   //   The {{i0,i1,i2}}_offset parameters set the offset of the maximally-centered
@@ -870,8 +871,9 @@ const REAL partial_x0_partial_r, const REAL partial_x1_partial_r, const REAL par
   //  so the (4th order) deriv stencil is: 0,1,2,3,4
     """
         self.generate_CFunction()
-        
-    def regenerate_body(self):
+
+    def regenerate_body(self) -> None:
+        """Regenerate self.body based on class parameters."""
         rfm = refmetric.reference_metric[self.CoordSystem]
         self.body = ""
         for i in range(3):
@@ -889,7 +891,7 @@ const REAL partial_x0_partial_r, const REAL partial_x1_partial_r, const REAL par
         self.body += "  return partial_x0_partial_r*partial_x0_f + partial_x1_partial_r*partial_x1_f + partial_x2_partial_r*partial_x2_f;\n"
 
     def generate_CFunction(self) -> None:
-        "Generate CFunction from class parameters."
+        """Generate CFunction from class parameters."""
         self.regenerate_body()
         self.body = self.tmp_definitions + self.algorithm_header + self.body
         self.CFunction = cfc.CFunction(
@@ -915,32 +917,35 @@ class setup_Cfunction_radiation_bcs:
     :param fp_type: Floating point type, e.g., "double".
     :return: A string containing the generated C code for the function.
     """
+
     def __init__(
         self,
         CoordSystem: str,
         radiation_BC_fd_order: int = -1,
         fp_type: str = "double",
-    ) -> str:
-        self.CoordSystem=CoordSystem
-        self.radiation_BC_fd_order=radiation_BC_fd_order
-        self.fp_type=fp_type
-        
-        self.cfunc_decorators=""
-        self.include_CodeParameters_h=True
+    ) -> None:
+        self.CoordSystem = CoordSystem
+        self.radiation_BC_fd_order = radiation_BC_fd_order
+        self.fp_type = fp_type
+
+        self.cfunc_decorators = ""
+        self.include_CodeParameters_h = True
         self.includes: List[str] = []
         self.prefunc = ""
         self.rfm = refmetric.reference_metric[self.CoordSystem]
-        
+
         # These functions can be replaced to generate different prefunc strings
         self.upwind_setup_func = setup_Cfunction_FD1_arbitrary_upwind
-        self.r_and_partial_xi_partial_r_derivs_prefunc_setup_func = setup_Cfunction_r_and_partial_xi_partial_r_derivs
+        self.r_and_partial_xi_partial_r_derivs_prefunc_setup_func = (
+            setup_Cfunction_r_and_partial_xi_partial_r_derivs
+        )
         self.compute_partial_r_f_setup_func = setup_Cfunction_compute_partial_r_f
-        
+
         # Initialize prefunc strings
-        self.upwind_prefunc=""
-        self.r_and_partial_xi_partial_r_derivs_prefunc=""
-        self.compute_partial_r_f_prefunc=""
-        
+        self.upwind_prefunc = ""
+        self.r_and_partial_xi_partial_r_derivs_prefunc = ""
+        self.compute_partial_r_f_prefunc = ""
+
         self.desc = r"""*** Apply radiation BCs to all outer boundaries. ***
 """
         self.cfunc_type = "static inline REAL"
@@ -989,9 +994,11 @@ return partial_t_f_outgoing_wave + k * rinv*rinv*rinv;
 """
         self.body = ""
         self.generate_CFunction()
+
     def generate_upwind_prefunc(self) -> None:
-        self.upwind_prefunc=""
-        
+        """Generate Upwind prefunctions from expressions and class parameters."""
+        self.upwind_prefunc = ""
+
         for i in range(3):
             # Do not generate FD1_arbitrary_upwind_xj_dirn() if the symbolic expression for dxj/dr == 0!
             if not check_zero(self.rfm.Jac_dUrfm_dDSphUD[i][0]):
@@ -1000,33 +1007,39 @@ return partial_t_f_outgoing_wave + k * rinv*rinv*rinv;
                     radiation_BC_fd_order=self.radiation_BC_fd_order,
                     fp_type=self.fp_type,
                 ).CFunction.full_function
-    
+
     def generate_r_and_partial_xi_partial_r_derivs_prefunc(self) -> None:
-        self.r_and_partial_xi_partial_r_derivs_prefunc=""        
-        self.r_and_partial_xi_partial_r_derivs_prefunc += self.r_and_partial_xi_partial_r_derivs_prefunc_setup_func(
-            CoordSystem=self.CoordSystem,
-            fp_type=self.fp_type,
-        ).CFunction.full_function
-        
-    def generate_compute_partial_r_f_prefunc(self):
-        self.compute_partial_r_f_prefunc=""
+        """Generate additional derivative prefunctions from expressions and class parameters."""
+        self.r_and_partial_xi_partial_r_derivs_prefunc = ""
+        self.r_and_partial_xi_partial_r_derivs_prefunc += (
+            self.r_and_partial_xi_partial_r_derivs_prefunc_setup_func(
+                CoordSystem=self.CoordSystem,
+                fp_type=self.fp_type,
+            ).CFunction.full_function
+        )
+
+    def generate_compute_partial_r_f_prefunc(self) -> None:
+        """Generate additional derivative prefunctions from expressions and class parameters."""
+        self.compute_partial_r_f_prefunc = ""
         self.compute_partial_r_f_prefunc += self.compute_partial_r_f_setup_func(
-            CoordSystem=self.CoordSystem, radiation_BC_fd_order=self.radiation_BC_fd_order
+            CoordSystem=self.CoordSystem,
+            radiation_BC_fd_order=self.radiation_BC_fd_order,
         ).CFunction.full_function
-        
-    def generate_CFunction(self):
+
+    def generate_CFunction(self) -> None:
+        """Generate C Function from class parameters."""
         self.generate_upwind_prefunc()
         self.generate_r_and_partial_xi_partial_r_derivs_prefunc()
         self.generate_compute_partial_r_f_prefunc()
-        
+
         self.prefunc = self.upwind_prefunc
         self.prefunc += self.r_and_partial_xi_partial_r_derivs_prefunc
         self.prefunc += self.compute_partial_r_f_prefunc
-        
+
         self.body = self.variable_defs
         self.body += self.function_calls
-        self.body +=self.algorithm_body
-        
+        self.body += self.algorithm_body
+
         self.CFunction = cfc.CFunction(
             subdirectory=self.CoordSystem,
             includes=self.includes,

@@ -232,6 +232,7 @@ _Pragma(__OMP_PRAGMA__)  \
 
     def generate_output_str(self) -> None:
         """Generate final str."""
+
         def output_key(key_name: str, item_name: str) -> str:
             return f"""
 //********************************************
@@ -256,8 +257,10 @@ _Pragma(__OMP_PRAGMA__)  \
         # Populate BHaH_defines.h with whatever else is desired.
         if self.supplemental_defines_dict:
             for key in self.supplemental_defines_dict:
-                self.file_output_str += output_key(key, self.supplemental_defines_dict[key])
-    
+                self.file_output_str += output_key(
+                    key, self.supplemental_defines_dict[key]
+                )
+
     # Overload this if you need to structure things differently
     def write_to_file(self) -> None:
         """Write final str to header file."""

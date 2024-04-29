@@ -100,7 +100,9 @@ class base_register_CFunction_auxevol_gfs_single_point:
         )
         self.unique_symbols = []
         for expr in [self.psi_background, self.ADD_times_AUU]:
-            self.unique_symbols += get_unique_expression_symbols(expr, exclude=[f'xx{i}' for i in range(3)])
+            self.unique_symbols += get_unique_expression_symbols(
+                expr, exclude=[f"xx{i}" for i in range(3)]
+            )
         self.unique_symbols = sorted(list(set(self.unique_symbols)))
 
         self.includes = ["BHaH_defines.h"]
@@ -178,9 +180,11 @@ class base_register_CFunction_variable_wavespeed_gfs_all_points:
         ]
         self.unique_symbols = []
         for expr in expr_list:
-            self.unique_symbols += get_unique_expression_symbols(expr, exclude=[f'xx{i}' for i in range(3)])
+            self.unique_symbols += get_unique_expression_symbols(
+                expr, exclude=[f"xx{i}" for i in range(3)]
+            )
         self.unique_symbols = sorted(list(set(self.unique_symbols)))
-        
+
         self.dsmin_computation_str = ccg.c_codegen(
             expr_list,
             ["const REAL dsmin0", "const REAL dsmin1", "const REAL dsmin2"],
@@ -247,7 +251,9 @@ class base_register_CFunction_compute_L2_norm_of_gridfunction:
         ]
         self.unique_symbols = []
         for expr in self.expr_list:
-            self.unique_symbols += get_unique_expression_symbols(expr, exclude=[f'xx{i}' for i in range(3)])
+            self.unique_symbols += get_unique_expression_symbols(
+                expr, exclude=[f"xx{i}" for i in range(3)]
+            )
         self.unique_symbols = sorted(list(set(self.unique_symbols)))
         self.body = ""
 

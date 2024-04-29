@@ -32,9 +32,7 @@ _ = par.CodeParameter("REAL", __name__, "t_final", 10.0, commondata=True)
 # Update core_modules to use correct key for ordering
 for i, key in enumerate(BHaH_defines_h.core_modules_list):
     if "nrpy.infrastructures.BHaH.MoLtimestepping" in key:
-        BHaH_defines_h.core_modules_list[i] = (
-            str(__name__)
-        )
+        BHaH_defines_h.core_modules_list[i] = str(__name__)
 
 
 class register_CFunction_MoL_malloc(base_MoL.base_register_CFunction_MoL_malloc):

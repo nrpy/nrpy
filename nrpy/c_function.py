@@ -97,9 +97,13 @@ class CFunction:
         self.ET_current_thorn_CodeParams_used = ET_current_thorn_CodeParams_used
         self.ET_other_thorn_CodeParams_used = ET_other_thorn_CodeParams_used
         self.clang_format_options = clang_format_options
-        self.cfunc_decorators = f"{cfunc_decorators} " if not cfunc_decorators == "" else cfunc_decorators
+        self.cfunc_decorators = (
+            f"{cfunc_decorators} " if cfunc_decorators != "" else cfunc_decorators
+        )
 
-        self.function_prototype = f"{self.cfunc_decorators}{self.cfunc_type} {self.name}({self.params});"
+        self.function_prototype = (
+            f"{self.cfunc_decorators}{self.cfunc_type} {self.name}({self.params});"
+        )
         self.raw_function, self.full_function = self.generate_full_function()
 
     @staticmethod

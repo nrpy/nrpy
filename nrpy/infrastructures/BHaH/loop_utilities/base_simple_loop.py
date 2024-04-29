@@ -10,27 +10,35 @@ Ken Sible
     Email: ksible **at** outlook **dot** com
 """
 
+from typing import List, Tuple
 import nrpy.helpers.loop as lp
 
 implemented_loop_regions = ["", "all points", "interior"]
 
 
-def implemented_loop_regions_err(loop_region):
+def implemented_loop_regions_err(loop_region: str) -> str:
+    """
+    Generate the string that is printed when a loop_region is not defined.
+    
+    :param loop_region: string denoting the intended loop region
+    :returns: the error message describing the loop_region was not found
+    """
     regions = [f'"{region}"' for region in implemented_loop_regions]
     regions[-1] = f"or {regions[-1]}"
     tmp_str = ",".join(regions)
     return f"loop_region = {loop_region} unsupported. Choose {tmp_str}."
 
 
-def get_loop_region_ranges(loop_region, cuda: bool = False) -> str:
+def get_loop_region_ranges(loop_region: str, cuda: bool = False) -> Tuple[List[str], List[str]]:
     """
     Return Loop region index ranges.
 
     :param loop_region: Loop region
+    :param cuda: Toggle whether the loop indices are modified for CUDA compatibility
     :returns: region indicies
     """
-    i2i1i0_mins = None
-    i2i1i0_maxs = None
+    i2i1i0_mins = ["", "", ""]
+    i2i1i0_maxs = ["", "", ""]
     prefix = None if not cuda else "tid"
 
     # 'AllPoints': loop over all points on a numerical grid, including ghost zones
@@ -46,7 +54,11 @@ def get_loop_region_ranges(loop_region, cuda: bool = False) -> str:
             i2i1i0_mins = [f"{prefix}{i}+NGHOSTS" for i in reversed(range(3))]
         else:
             i2i1i0_mins = ["NGHOSTS", "NGHOSTS", "NGHOSTS"]
-        i2i1i0_maxs = ["Nxx_plus_2NGHOSTS2 - NGHOSTS", "Nxx_plus_2NGHOSTS1 - NGHOSTS", "Nxx_plus_2NGHOSTS0 - NGHOSTS"]
+        i2i1i0_maxs = [
+            "Nxx_plus_2NGHOSTS2 - NGHOSTS",
+            "Nxx_plus_2NGHOSTS1 - NGHOSTS",
+            "Nxx_plus_2NGHOSTS0 - NGHOSTS",
+        ]
 
     return i2i1i0_mins, i2i1i0_maxs
 
@@ -83,7 +95,7 @@ class base_simple_loop:
         self.full_loop_body = ""
         if self.loop_region == "":
             self.full_loop_body = self.loop_region
-        if not self.loop_region in implemented_loop_regions:
+        if self.loop_region not in implemented_loop_regions:
             raise ValueError(implemented_loop_regions_err(self.loop_region))
         self.i2i1i0_mins, self.i2i1i0_maxs = get_loop_region_ranges(
             loop_region, cuda=cuda
@@ -121,6 +133,7 @@ class base_simple_loop:
         self.increment = ["1", "1", "1"]
 
     def initialize_based_on__read_rfm_xx_arrays(self) -> None:
+        """Set prefix_loop_with based on initialized rfm object."""
         self.prefix_loop_with = [
             "",
             self.read_rfm_xx_arrays[2],
@@ -130,6 +143,7 @@ class base_simple_loop:
         self.loop_body = self.read_rfm_xx_arrays[0] + self.loop_body
 
     def gen_loop_body(self) -> None:
+        """Generate final loop body."""
         self.full_loop_body = str(
             lp.loop(
                 ["i2", "i1", "i0"],

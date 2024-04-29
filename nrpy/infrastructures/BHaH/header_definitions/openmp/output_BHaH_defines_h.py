@@ -6,14 +6,12 @@ Author: Zachariah B. Etienne
 """
 
 import sys
-from pathlib import Path
 from typing import Optional, Dict, List
 
-import nrpy.params as par
-import nrpy.grid as gri
-from nrpy.infrastructures.BHaH import griddata_commondata
-from nrpy.helpers.generic import clang_format
-from nrpy.infrastructures.BHaH.header_definitions.base_output_BHaH_defines_h import base_output_BHaH_defines_h
+from nrpy.infrastructures.BHaH.header_definitions.base_output_BHaH_defines_h import (
+    base_output_BHaH_defines_h,
+)
+
 
 class output_BHaH_defines_h(base_output_BHaH_defines_h):
     r"""
@@ -42,7 +40,8 @@ class output_BHaH_defines_h(base_output_BHaH_defines_h):
     ...    error_message = "Trusted BHaH_defines.h string changed!\n"
     ...    error_message += "Here's the diff:\n" + diff_strings(expected_string, returned_string) + "\n"
     ...    raise ValueError(error_message + f"base64-encoded output: {compressed_str}")
-    """    
+    """
+
     def __init__(
         self,
         project_dir: str,
@@ -68,6 +67,7 @@ class output_BHaH_defines_h(base_output_BHaH_defines_h):
         self.register_define_blocks()
         self.generate_output_str()
         self.write_to_file()
+
 
 if __name__ == "__main__":
     import doctest
