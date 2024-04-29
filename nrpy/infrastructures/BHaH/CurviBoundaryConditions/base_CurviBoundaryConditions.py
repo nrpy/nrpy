@@ -25,7 +25,7 @@ import nrpy.finite_difference as fin  # NRPy+: Finite-difference module
 # from nrpy.infrastructures.BHaH import griddata_commondata
 # from nrpy.infrastructures.BHaH import BHaH_defines_h
 from nrpy.validate_expressions.validate_expressions import check_zero
-
+from nrpy.helpers.expr_tree import get_unique_expression_symbols
 
 # Set unit-vector dot products (=parity) for each of the 10 parity condition types
 def parity_conditions_symbolic_dot_products(
@@ -210,6 +210,7 @@ def Cfunction__EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(
     params = """const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3],
 const int i0, const int i1, const int i2,
 REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
+    type_literal = "" if fp_type == "double" else "f"
     body = r"""
   // This is a 3-step algorithm:
   // Step 1: (x0,x1,x2) -> (Cartx,Carty,Cartz)
@@ -284,19 +285,19 @@ REAL Cartz = xCart[2];
         ["Cart_to_xx0_inbounds", "Cart_to_xx1_inbounds", "Cart_to_xx2_inbounds"],
         fp_type=fp_type,
     )
-    body += r"""
+    body += rf"""
   // Next compute xxmin[i]. By definition,
-  //    xx[i][j] = xxmin[i] + ((REAL)(j-NGHOSTS) + (1.0/2.0))*dxxi;
-  // -> xxmin[i] = xx[i][0] - ((REAL)(0-NGHOSTS) + (1.0/2.0))*dxxi
-  const REAL xxmin[3] = {
-    xx[0][0] - ((REAL)(0-NGHOSTS) + (1.0/2.0))*dxx0,
-    xx[1][0] - ((REAL)(0-NGHOSTS) + (1.0/2.0))*dxx1,
-    xx[2][0] - ((REAL)(0-NGHOSTS) + (1.0/2.0))*dxx2 };
+  //    xx[i][j] = xxmin[i] + ((REAL)(j-NGHOSTS) + (1.0{type_literal}/2.0{type_literal}))*dxxi;
+  // -> xxmin[i] = xx[i][0] - ((REAL)(0-NGHOSTS) + (1.0{type_literal}/2.0{type_literal}))*dxxi
+  const REAL xxmin[3] = {{
+    xx[0][0] - ((REAL)(0-NGHOSTS) + (1.0{type_literal}/2.0{type_literal}))*dxx0,
+    xx[1][0] - ((REAL)(0-NGHOSTS) + (1.0{type_literal}/2.0{type_literal}))*dxx1,
+    xx[2][0] - ((REAL)(0-NGHOSTS) + (1.0{type_literal}/2.0{type_literal}))*dxx2 }};
 
-  // Finally compute i{0,1,2}_inbounds (add 0.5 to account for rounding down)
-  const int i0_inbounds = (int)( (Cart_to_xx0_inbounds - xxmin[0] - (1.0/2.0)*dxx0 + ((REAL)NGHOSTS)*dxx0)/dxx0 + 0.5 );
-  const int i1_inbounds = (int)( (Cart_to_xx1_inbounds - xxmin[1] - (1.0/2.0)*dxx1 + ((REAL)NGHOSTS)*dxx1)/dxx1 + 0.5 );
-  const int i2_inbounds = (int)( (Cart_to_xx2_inbounds - xxmin[2] - (1.0/2.0)*dxx2 + ((REAL)NGHOSTS)*dxx2)/dxx2 + 0.5 );
+  // Finally compute i{{0,1,2}}_inbounds (add 0.5 to account for rounding down)
+  const int i0_inbounds = (int)( (Cart_to_xx0_inbounds - xxmin[0] - (1.0{type_literal}/2.0{type_literal})*dxx0 + ((REAL)NGHOSTS)*dxx0)/dxx0 + 0.5{type_literal} );
+  const int i1_inbounds = (int)( (Cart_to_xx1_inbounds - xxmin[1] - (1.0{type_literal}/2.0{type_literal})*dxx1 + ((REAL)NGHOSTS)*dxx1)/dxx1 + 0.5{type_literal} );
+  const int i2_inbounds = (int)( (Cart_to_xx2_inbounds - xxmin[2] - (1.0{type_literal}/2.0{type_literal})*dxx2 + ((REAL)NGHOSTS)*dxx2)/dxx2 + 0.5{type_literal} );
 """
 
     # Restore reference_metric::CoordSystem back to the original CoordSystem
@@ -615,9 +616,7 @@ class base_register_CFunction_apply_bcs_outerextrap_and_inner:
 ##   Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb,
 ##   as well as below, in desc= and body=.
 # r_and_partial_xi_partial_r_derivs(): Compute r(x0,x1,x2) and dx^i / dr
-def setup_Cfunction_r_and_partial_xi_partial_r_derivs(
-    CoordSystem: str, fp_type: str = "double"
-) -> str:
+class setup_Cfunction_r_and_partial_xi_partial_r_derivs:
     """
     Generate C code to compute the radial coordinate r(x0, x1, x2) and its derivatives.
 
@@ -628,43 +627,62 @@ def setup_Cfunction_r_and_partial_xi_partial_r_derivs(
     :param fp_type: Floating point type, e.g., "double".
     :return: A string containing the generated C code for the function.
     """
-    desc = "Compute r(xx0,xx1,xx2) and partial_r x^i."
-    cfunc_type = "static inline void"
-    name = "r_and_partial_xi_partial_r_derivs"
-    params = """const commondata_struct *restrict commondata, const params_struct *restrict params,
-    const REAL xx0,const REAL xx1,const REAL xx2,    REAL *r,
-    REAL *partial_x0_partial_r,REAL *partial_x1_partial_r,REAL *partial_x2_partial_r"""
-    rfm = refmetric.reference_metric[CoordSystem]
-    # sp.simplify(expr) is too slow here for SinhCylindrical
-    body = ccg.c_codegen(
-        [
-            rfm.xxSph[0],
-            rfm.Jac_dUrfm_dDSphUD[0][0],
-            rfm.Jac_dUrfm_dDSphUD[1][0],
-            rfm.Jac_dUrfm_dDSphUD[2][0],
-        ],
-        [
-            "*r",
-            "*partial_x0_partial_r",
-            "*partial_x1_partial_r",
-            "*partial_x2_partial_r",
-        ],
-        verbose=False,
-        include_braces=False,
-        fp_type=fp_type,
-    )
+    
+    def __init__(
+        self,
+        CoordSystem: str, fp_type: str = "double"
+    ) -> str:
+        self.CoordSystem=CoordSystem
+        self.fp_type=fp_type
+        self.CFunction = None
+        self.include_CodeParameters_h = True
+        self.cfunc_decorators=""
+        
+        self.desc = "Compute r(xx0,xx1,xx2) and partial_r x^i."
+        self.cfunc_type = "static inline void"
+        self.name = "r_and_partial_xi_partial_r_derivs"
+        self.params = """const commondata_struct *restrict commondata, const params_struct *restrict params,
+        const REAL xx0,const REAL xx1,const REAL xx2,    REAL *r,
+        REAL *partial_x0_partial_r,REAL *partial_x1_partial_r,REAL *partial_x2_partial_r"""
+        rfm = refmetric.reference_metric[CoordSystem]
+        # sp.simplify(expr) is too slow here for SinhCylindrical
+        self.expr_list = [
+                rfm.xxSph[0],
+                rfm.Jac_dUrfm_dDSphUD[0][0],
+                rfm.Jac_dUrfm_dDSphUD[1][0],
+                rfm.Jac_dUrfm_dDSphUD[2][0],
+            ]
+        self.unique_symbols = []
+        for expr in self.expr_list:
+            sub_list = get_unique_expression_symbols(expr, exclude=[f'xx{i}' for i in range(3)])
+            self.unique_symbols += sub_list
+        self.unique_symbols = sorted(list(set(self.unique_symbols)))
+        self.body = ccg.c_codegen(
+            self.expr_list,
+            [
+                "*r",
+                "*partial_x0_partial_r",
+                "*partial_x1_partial_r",
+                "*partial_x2_partial_r",
+            ],
+            verbose=False,
+            include_braces=False,
+            fp_type=fp_type,
+        )
+        self.generate_CFunction()
 
-    cf = cfc.CFunction(
-        subdirectory=CoordSystem,
-        includes=[],
-        desc=desc,
-        cfunc_type=cfunc_type,
-        name=name,
-        params=params,
-        include_CodeParameters_h=True,
-        body=body,
+    def generate_CFunction(self):
+        self.CFunction = cfc.CFunction(
+            subdirectory=self.CoordSystem,
+            includes=[],
+            desc=self.desc,
+            cfunc_type=self.cfunc_type,
+            name=self.name,
+            params=self.params,
+            include_CodeParameters_h=self.include_CodeParameters_h,
+            body=self.body,
+            cfunc_decorators=self.cfunc_decorators
     )
-    return cf.full_function
 
 
 # partial_r f term: generate finite-difference coefficients
@@ -697,11 +715,7 @@ def get_arb_offset_FD_coeffs_indices(
 
 # partial_r f term: FD1_arbitrary_upwind(): C function to evaluate
 #   partial_i f with arbitrary upwinding
-def setup_Cfunction_FD1_arbitrary_upwind(
-    dirn: int,
-    radiation_BC_fd_order: int = -1,
-    fp_type: str = "double",
-) -> str:
+class setup_Cfunction_FD1_arbitrary_upwind:
     """
     Set up the C function for computing the 1st derivative finite-difference.
 
@@ -713,110 +727,133 @@ def setup_Cfunction_FD1_arbitrary_upwind(
     :param fp_type: Floating point type, e.g., "double".
     :return: The full C function as a string.
     """
-    default_FDORDER = par.parval_from_str("fd_order")
-    if radiation_BC_fd_order == -1:
-        radiation_BC_fd_order = default_FDORDER
+    def __init__(
+        self,
+        dirn: int,
+        radiation_BC_fd_order: int = -1,
+        fp_type: str = "double",
+    ) -> None:
+        self.dirn=dirn
+        self.radiation_BC_fd_order=radiation_BC_fd_order
+        self.fp_type=fp_type
+        
+        import sympy.codegen.ast as sp_ast
+        self.default_FDORDER = par.parval_from_str("fd_order")
+        if radiation_BC_fd_order == -1:
+            radiation_BC_fd_order = self.default_FDORDER
 
-    par.set_parval_from_str("fd_order", radiation_BC_fd_order)
+        par.set_parval_from_str("fd_order", radiation_BC_fd_order)
 
-    includes: List[str] = []
-    desc = "Compute 1st derivative finite-difference derivative with arbitrary upwind"
-    cfunc_type = "static inline REAL"
-    name = f"FD1_arbitrary_upwind_x{dirn}_dirn"
-    params = """const commondata_struct *restrict commondata, const params_struct *restrict params,
-const REAL *restrict gf,  const int i0,const int i1,const int i2, const int offset"""
-    body = "switch(offset) {\n"
+        self.include_CodeParameters_h=True
+        self.includes: List[str] = []
+        self.desc = "Compute 1st derivative finite-difference derivative with arbitrary upwind"
+        self.cfunc_type = "static inline REAL"
+        self.cfunc_decorators = ""
+        self.name = f"FD1_arbitrary_upwind_x{dirn}_dirn"
+        self.params = """const commondata_struct *restrict commondata, const params_struct *restrict params,
+    const REAL *restrict gf,  const int i0,const int i1,const int i2, const int offset"""
+        self.body = "switch(offset) {\n"
 
-    tmp_list: List[int] = []
-    fp_ccg_type = ccg.fp_type_to_sympy_type[fp_type]
-    sp_type_alias = {sp_ast.real: fp_ccg_type}
-    for offset in range(
-        0, int(radiation_BC_fd_order // 2) + 1
-    ):  # Use // for integer division
-        tmp_list.append(offset)
-        if offset > 0:
-            tmp_list.append(-offset)
+        tmp_list: List[int] = []
+        fp_ccg_type = ccg.fp_type_to_sympy_type[fp_type]
+        sp_type_alias = {sp_ast.real: fp_ccg_type}
+        for offset in range(
+            0, int(radiation_BC_fd_order // 2) + 1
+        ):  # Use // for integer division
+            tmp_list.append(offset)
+            if offset > 0:
+                tmp_list.append(-offset)
 
-    for offset in tmp_list:
-        body += f"case {offset}:\n"
-        body += "  return ("
-        coeffs, indices = get_arb_offset_FD_coeffs_indices(
-            radiation_BC_fd_order, offset, 1
+        for offset in tmp_list:
+            self.body += f"case {offset}:\n"
+            self.body += "  return ("
+            coeffs, indices = get_arb_offset_FD_coeffs_indices(
+                radiation_BC_fd_order, offset, 1
+            )
+
+            for i, coeff in enumerate(coeffs):
+                if coeff == 0:
+                    continue
+                offset_str: str = str(indices[i])
+                if i > 0:
+                    self.body += "          "
+                if offset_str == "0":
+                    self.body += f"+{sp.ccode(coeff, type_aliases=sp_type_alias)}*gf[IDX3(i0,i1,i2)]\n"
+                else:
+                    if dirn == 0:
+                        self.body += f"+{sp.ccode(coeff, type_aliases=sp_type_alias)}*gf[IDX3(i0+{offset_str},i1,i2)]\n"
+                    elif dirn == 1:
+                        self.body += f"+{sp.ccode(coeff, type_aliases=sp_type_alias)}*gf[IDX3(i0,i1+{offset_str},i2)]\n"
+                    elif dirn == 2:
+                        self.body += f"+{sp.ccode(coeff, type_aliases=sp_type_alias)}*gf[IDX3(i0,i1,i2+{offset_str})]\n"
+
+            self.body = self.body[:-1].replace("+-", "-") + f") * invdxx{dirn};\n"
+
+        self.body += """}
+    return 0.0 / 0.0;  // poison output if offset computed incorrectly
+    """
+        par.set_parval_from_str("fd_order", self.default_FDORDER)
+        self.generate_CFunction()
+        
+    def generate_CFunction(self) -> None:
+        "Generate CFunction from class parameters."        
+        self.CFunction = cfc.CFunction(
+            subdirectory="one_subdirectory_down",
+            includes=self.includes,
+            desc=self.desc,
+            cfunc_type=self.cfunc_type,
+            name=self.name,
+            params=self.params,
+            include_CodeParameters_h=self.include_CodeParameters_h,
+            body=self.body,
+            cfunc_decorators=self.cfunc_decorators,
         )
-
-        for i, coeff in enumerate(coeffs):
-            if coeff == 0:
-                continue
-            offset_str: str = str(indices[i])
-            if i > 0:
-                body += "          "
-            if offset_str == "0":
-                body += f"+{sp.ccode(coeff, type_aliases=sp_type_alias)}*gf[IDX3(i0,i1,i2)]\n"
-            else:
-                if dirn == 0:
-                    body += f"+{sp.ccode(coeff, type_aliases=sp_type_alias)}*gf[IDX3(i0+{offset_str},i1,i2)]\n"
-                elif dirn == 1:
-                    body += f"+{sp.ccode(coeff, type_aliases=sp_type_alias)}*gf[IDX3(i0,i1+{offset_str},i2)]\n"
-                elif dirn == 2:
-                    body += f"+{sp.ccode(coeff, type_aliases=sp_type_alias)}*gf[IDX3(i0,i1,i2+{offset_str})]\n"
-
-        body = body[:-1].replace("+-", "-") + f") * invdxx{dirn};\n"
-
-    body += """}
-return 0.0 / 0.0;  // poison output if offset computed incorrectly
-"""
-
-    cf = cfc.CFunction(
-        subdirectory="one_subdirectory_down",
-        includes=includes,
-        desc=desc,
-        cfunc_type=cfunc_type,
-        name=name,
-        params=params,
-        include_CodeParameters_h=True,
-        body=body,
-    )
-
-    par.set_parval_from_str("fd_order", default_FDORDER)
-
-    return cf.full_function
 
 
 # partial_r f term: Numerically evaluate partial_r f,
 #   calling functions defined above.
-def setup_Cfunction_compute_partial_r_f(
-    CoordSystem: str, radiation_BC_fd_order: int = -1
-) -> str:
+class setup_Cfunction_compute_partial_r_f:
     """
     Set up a C function for computing the partial derivative of f with respect to r.
 
     :param CoordSystem: Coordinate system to be used for the computation
     :param radiation_BC_fd_order: Order of finite difference for radiation boundary conditions, default is -1
     :return: A C function for computing the partial derivative
-    """
-    desc = "Compute \\partial_r f"
-    cfunc_type = "static inline REAL"
-    name = "compute_partial_r_f"
-    params = """const commondata_struct *restrict commondata, const params_struct *restrict params,
+    """    
+    def __init__(
+        self,
+        CoordSystem: str, radiation_BC_fd_order: int = -1
+    ) -> str:
+        self.CoordSystem=CoordSystem
+        self.radiation_BC_fd_order=radiation_BC_fd_order
+        self.include_CodeParameters_h=True
+        self.includes = []
+        self.cfunc_decorators=""
+        self.CFunction= None
+        
+        self.desc = "Compute \\partial_r f"
+        self.cfunc_type = "static inline REAL"
+        self.name = "compute_partial_r_f"
+        self.params = """const commondata_struct *restrict commondata, const params_struct *restrict params,
 REAL *restrict xx[3], const REAL *restrict gfs,
 const int which_gf, const int dest_i0,const int dest_i1,const int dest_i2,
 const int FACEi0,const int FACEi1,const int FACEi2,
 const REAL partial_x0_partial_r, const REAL partial_x1_partial_r, const REAL partial_x2_partial_r"""
-    rfm = refmetric.reference_metric[CoordSystem]
 
-    default_FDORDER = par.parval_from_str("fd_order")
-    if radiation_BC_fd_order == -1:
-        radiation_BC_fd_order = default_FDORDER
+        self.default_FDORDER = par.parval_from_str("fd_order")
+        if radiation_BC_fd_order == -1:
+            radiation_BC_fd_order = self.default_FDORDER
 
-    FD1_stencil_radius = int(radiation_BC_fd_order / 2)
+        self.FD1_stencil_radius = int(radiation_BC_fd_order / 2)
+        self.body = ""
+        self.tmp_definitions = f"""///////////////////////////////////////////////////////////
 
-    body = f"""  ///////////////////////////////////////////////////////////
-
-  // FD1_stencil_radius = radiation_BC_fd_order/2 = {FD1_stencil_radius}
-  const int FD1_stencil_radius = {FD1_stencil_radius};
+  // FD1_stencil_radius = radiation_BC_fd_order/2 = {self.FD1_stencil_radius}
+  const int FD1_stencil_radius = {self.FD1_stencil_radius};
 
   const int ntot = Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2;
-
+"""
+        self.algorithm_header = f"""  
   ///////////////////////////////////////////////////////////
   // Next we'll compute partial_xi f, using a maximally-centered stencil.
   //   The {{i0,i1,i2}}_offset parameters set the offset of the maximally-centered
@@ -831,40 +868,45 @@ const REAL partial_x0_partial_r, const REAL partial_x1_partial_r, const REAL par
 
   // CHECK: if FD1_stencil_radius=2 and dest_i0 = 0, we get i0_offset = FD1_stencil_radius-1 = 2,
   //  so the (4th order) deriv stencil is: 0,1,2,3,4
-"""
-    for i in range(3):
-        si = str(i)
-        if check_zero(rfm.Jac_dUrfm_dDSphUD[i][0]):
-            body += f"  const REAL partial_x{si}_f=0.0;\n"
-        else:
-            body += (
-                f"  int i{si}_offset = FACEi{si};  // Shift stencil away from the face we're updating.\n"
-                f"  // Next adjust i{si}_offset so that FD stencil never goes out of bounds.\n"
-                f"  if(dest_i{si} < FD1_stencil_radius) i{si}_offset = FD1_stencil_radius-dest_i{si};\n"
-                f"  else if(dest_i{si} > (Nxx_plus_2NGHOSTS{si}-FD1_stencil_radius-1)) i{si}_offset = (Nxx_plus_2NGHOSTS{si}-FD1_stencil_radius-1) - dest_i{si};\n"
-                f"  const REAL partial_x{si}_f=FD1_arbitrary_upwind_x{si}_dirn(commondata, params,&gfs[which_gf*ntot],dest_i0,dest_i1,dest_i2,i{si}_offset);\n"
-            )
-    body += "  return partial_x0_partial_r*partial_x0_f + partial_x1_partial_r*partial_x1_f + partial_x2_partial_r*partial_x2_f;\n"
+    """
+        self.generate_CFunction()
+        
+    def regenerate_body(self):
+        rfm = refmetric.reference_metric[self.CoordSystem]
+        self.body = ""
+        for i in range(3):
+            si = str(i)
+            if check_zero(rfm.Jac_dUrfm_dDSphUD[i][0]):
+                self.body += f"  const REAL partial_x{si}_f=0.0;\n"
+            else:
+                self.body += (
+                    f"  int i{si}_offset = FACEi{si};  // Shift stencil away from the face we're updating.\n"
+                    f"  // Next adjust i{si}_offset so that FD stencil never goes out of bounds.\n"
+                    f"  if(dest_i{si} < FD1_stencil_radius) i{si}_offset = FD1_stencil_radius-dest_i{si};\n"
+                    f"  else if(dest_i{si} > (Nxx_plus_2NGHOSTS{si}-FD1_stencil_radius-1)) i{si}_offset = (Nxx_plus_2NGHOSTS{si}-FD1_stencil_radius-1) - dest_i{si};\n"
+                    f"  const REAL partial_x{si}_f=FD1_arbitrary_upwind_x{si}_dirn(commondata, params,&gfs[which_gf*ntot],dest_i0,dest_i1,dest_i2,i{si}_offset);\n"
+                )
+        self.body += "  return partial_x0_partial_r*partial_x0_f + partial_x1_partial_r*partial_x1_f + partial_x2_partial_r*partial_x2_f;\n"
 
-    cf = cfc.CFunction(
-        subdirectory=CoordSystem,
-        includes=[],
-        desc=desc,
-        cfunc_type=cfunc_type,
-        name=name,
-        params=params,
-        include_CodeParameters_h=True,
-        body=body,
-    )
-    return cf.full_function
+    def generate_CFunction(self) -> None:
+        "Generate CFunction from class parameters."
+        self.regenerate_body()
+        self.body = self.tmp_definitions + self.algorithm_header + self.body
+        self.CFunction = cfc.CFunction(
+            subdirectory="one_subdirectory_down",
+            includes=self.includes,
+            desc=self.desc,
+            cfunc_type=self.cfunc_type,
+            name=self.name,
+            params=self.params,
+            include_CodeParameters_h=self.include_CodeParameters_h,
+            body=self.body,
+            cfunc_decorators=self.cfunc_decorators,
+        )
 
 
 # radiation_bcs(): Put it all together, for a single outer boundary point.
-def setup_Cfunction_radiation_bcs(
-    CoordSystem: str,
-    radiation_BC_fd_order: int = -1,
-    fp_type: str = "double",
-) -> str:
+class setup_Cfunction_radiation_bcs:
     """
     Generate C code to apply radiation boundary conditions in a given coordinate system.
 
@@ -873,38 +915,48 @@ def setup_Cfunction_radiation_bcs(
     :param fp_type: Floating point type, e.g., "double".
     :return: A string containing the generated C code for the function.
     """
-    includes: List[str] = []
-    prefunc = ""
-    rfm = refmetric.reference_metric[CoordSystem]
-    for i in range(3):
-        # Do not generate FD1_arbitrary_upwind_xj_dirn() if the symbolic expression for dxj/dr == 0!
-        if not check_zero(rfm.Jac_dUrfm_dDSphUD[i][0]):
-            prefunc += setup_Cfunction_FD1_arbitrary_upwind(
-                dirn=i,
-                radiation_BC_fd_order=radiation_BC_fd_order,
-                fp_type=fp_type,
-            )
-    prefunc += setup_Cfunction_r_and_partial_xi_partial_r_derivs(
-        CoordSystem=CoordSystem,
-        fp_type=fp_type,
-    )
-    prefunc += setup_Cfunction_compute_partial_r_f(
-        CoordSystem=CoordSystem, radiation_BC_fd_order=radiation_BC_fd_order
-    )
-    desc = r"""*** Apply radiation BCs to all outer boundaries. ***
+    def __init__(
+        self,
+        CoordSystem: str,
+        radiation_BC_fd_order: int = -1,
+        fp_type: str = "double",
+    ) -> str:
+        self.CoordSystem=CoordSystem
+        self.radiation_BC_fd_order=radiation_BC_fd_order
+        self.fp_type=fp_type
+        
+        self.cfunc_decorators=""
+        self.include_CodeParameters_h=True
+        self.includes: List[str] = []
+        self.prefunc = ""
+        self.rfm = refmetric.reference_metric[self.CoordSystem]
+        
+        # These functions can be replaced to generate different prefunc strings
+        self.upwind_setup_func = setup_Cfunction_FD1_arbitrary_upwind
+        self.r_and_partial_xi_partial_r_derivs_prefunc_setup_func = setup_Cfunction_r_and_partial_xi_partial_r_derivs
+        self.compute_partial_r_f_setup_func = setup_Cfunction_compute_partial_r_f
+        
+        # Initialize prefunc strings
+        self.upwind_prefunc=""
+        self.r_and_partial_xi_partial_r_derivs_prefunc=""
+        self.compute_partial_r_f_prefunc=""
+        
+        self.desc = r"""*** Apply radiation BCs to all outer boundaries. ***
 """
-    cfunc_type = "static inline REAL"
-    name = "radiation_bcs"
-    params = """const commondata_struct *restrict commondata, const params_struct *restrict params,
-    const bc_struct *restrict bcstruct,REAL *restrict xx[3],
-    const REAL *restrict gfs, REAL *restrict gfs_rhss,
-    const int which_gf, const REAL gf_wavespeed, const REAL gf_f_infinity,
-    const int dest_i0,const int dest_i1,const int dest_i2,
-    const short FACEi0,const short FACEi1,const short FACEi2"""
-    body = r"""// Nearest "interior" neighbor of this gridpoint, based on current face
+        self.cfunc_type = "static inline REAL"
+        self.name = "radiation_bcs"
+        self.params = """const commondata_struct *restrict commondata, const params_struct *restrict params,
+        const bc_struct *restrict bcstruct,REAL *restrict xx[3],
+        const REAL *restrict gfs, REAL *restrict gfs_rhss,
+        const int which_gf, const REAL gf_wavespeed, const REAL gf_f_infinity,
+        const int dest_i0,const int dest_i1,const int dest_i2,
+        const short FACEi0,const short FACEi1,const short FACEi2"""
+        self.variable_defs = r"""// Nearest "interior" neighbor of this gridpoint, based on current face
 const int dest_i0_int=dest_i0+1*FACEi0, dest_i1_int=dest_i1+1*FACEi1, dest_i2_int=dest_i2+1*FACEi2;
 REAL r, partial_x0_partial_r,partial_x1_partial_r,partial_x2_partial_r;
 REAL r_int, partial_x0_partial_r_int,partial_x1_partial_r_int,partial_x2_partial_r_int;
+"""
+        self.function_calls = """
 r_and_partial_xi_partial_r_derivs(commondata, params,xx[0][dest_i0],xx[1][dest_i1],xx[2][dest_i2],
                                   &r, &partial_x0_partial_r, &partial_x1_partial_r,  &partial_x2_partial_r);
 r_and_partial_xi_partial_r_derivs(commondata, params, xx[0][dest_i0_int], xx[1][dest_i1_int], xx[2][dest_i2_int],
@@ -915,7 +967,8 @@ const REAL partial_r_f     = compute_partial_r_f(commondata, params,xx,gfs, whic
 const REAL partial_r_f_int = compute_partial_r_f(commondata, params,xx,gfs, which_gf,dest_i0_int,dest_i1_int,dest_i2_int,
                                                  FACEi0,FACEi1,FACEi2,
                                                  partial_x0_partial_r_int,partial_x1_partial_r_int,partial_x2_partial_r_int);
-
+"""
+        self.algorithm_body = """
 const int idx3 = IDX3(dest_i0,dest_i1,dest_i2);
 const int idx3_int = IDX3(dest_i0_int,dest_i1_int,dest_i2_int);
 
@@ -934,19 +987,58 @@ const REAL partial_t_f_outgoing_wave = -c * (partial_r_f + (f - f_infinity) * ri
 
 return partial_t_f_outgoing_wave + k * rinv*rinv*rinv;
 """
-
-    cf = cfc.CFunction(
-        subdirectory=CoordSystem,
-        includes=includes,
-        prefunc=prefunc,
-        desc=desc,
-        cfunc_type=cfunc_type,
-        name=name,
-        params=params,
-        include_CodeParameters_h=True,
-        body=body,
-    )
-    return cf.full_function
+        self.body = ""
+        self.generate_CFunction()
+    def generate_upwind_prefunc(self) -> None:
+        self.upwind_prefunc=""
+        
+        for i in range(3):
+            # Do not generate FD1_arbitrary_upwind_xj_dirn() if the symbolic expression for dxj/dr == 0!
+            if not check_zero(self.rfm.Jac_dUrfm_dDSphUD[i][0]):
+                self.upwind_prefunc += self.upwind_setup_func(
+                    dirn=i,
+                    radiation_BC_fd_order=self.radiation_BC_fd_order,
+                    fp_type=self.fp_type,
+                ).CFunction.full_function
+    
+    def generate_r_and_partial_xi_partial_r_derivs_prefunc(self) -> None:
+        self.r_and_partial_xi_partial_r_derivs_prefunc=""        
+        self.r_and_partial_xi_partial_r_derivs_prefunc += self.r_and_partial_xi_partial_r_derivs_prefunc_setup_func(
+            CoordSystem=self.CoordSystem,
+            fp_type=self.fp_type,
+        ).CFunction.full_function
+        
+    def generate_compute_partial_r_f_prefunc(self):
+        self.compute_partial_r_f_prefunc=""
+        self.compute_partial_r_f_prefunc += self.compute_partial_r_f_setup_func(
+            CoordSystem=self.CoordSystem, radiation_BC_fd_order=self.radiation_BC_fd_order
+        ).CFunction.full_function
+        
+    def generate_CFunction(self):
+        self.generate_upwind_prefunc()
+        self.generate_r_and_partial_xi_partial_r_derivs_prefunc()
+        self.generate_compute_partial_r_f_prefunc()
+        
+        self.prefunc = self.upwind_prefunc
+        self.prefunc += self.r_and_partial_xi_partial_r_derivs_prefunc
+        self.prefunc += self.compute_partial_r_f_prefunc
+        
+        self.body = self.variable_defs
+        self.body += self.function_calls
+        self.body +=self.algorithm_body
+        
+        self.CFunction = cfc.CFunction(
+            subdirectory=self.CoordSystem,
+            includes=self.includes,
+            prefunc=self.prefunc,
+            desc=self.desc,
+            cfunc_type=self.cfunc_type,
+            name=self.name,
+            params=self.params,
+            include_CodeParameters_h=self.include_CodeParameters_h,
+            body=self.body,
+            cfunc_decorators=self.cfunc_decorators,
+        )
 
 
 # apply_bcs_outerradiation_and_inner():
@@ -976,7 +1068,7 @@ class base_register_CFunction_apply_bcs_outerradiation_and_inner:
             CoordSystem=CoordSystem,
             radiation_BC_fd_order=radiation_BC_fd_order,
             fp_type=fp_type,
-        )
+        ).CFunction.full_function
         self.desc = """This function is responsible for applying boundary conditions (BCs) to both pure outer and inner
 boundary points. In the first step, it parallelizes the task using OpenMP and starts by applying BCs to
 the outer boundary points layer-by-layer, prioritizing the faces in the order x0, x1, x2. The second step

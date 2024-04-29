@@ -26,7 +26,7 @@ _ = par.CodeParameter(
 for i, key in enumerate(BHaH_defines_h.core_modules_list):
     if "nrpy.infrastructures.BHaH.CurviBoundaryConditions" in key:
         BHaH_defines_h.core_modules_list[i] = (
-            "nrpy.infrastructures.BHaH.CurviBoundaryConditions.openmp.CurviBoundaryConditions"
+            str(__name__)
         )
 
 
