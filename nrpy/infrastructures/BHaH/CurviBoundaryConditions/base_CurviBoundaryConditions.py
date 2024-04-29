@@ -632,7 +632,7 @@ class setup_Cfunction_r_and_partial_xi_partial_r_derivs:
     def __init__(self, CoordSystem: str, fp_type: str = "double") -> None:
         self.CoordSystem = CoordSystem
         self.fp_type = fp_type
-        self.CFunction = cfc.CFunction()
+        self.CFunction: cfc.CFunction
         self.include_CodeParameters_h = True
         self.cfunc_decorators = ""
 
@@ -830,7 +830,7 @@ class setup_Cfunction_compute_partial_r_f:
         self.include_CodeParameters_h = True
         self.includes: List[str] = []
         self.cfunc_decorators = ""
-        self.CFunction = cfc.CFunction()
+        self.CFunction: cfc.CFunction
 
         self.desc = "Compute \\partial_r f"
         self.cfunc_type = "static inline REAL"

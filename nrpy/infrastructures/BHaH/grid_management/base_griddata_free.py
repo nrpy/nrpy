@@ -28,6 +28,7 @@ class base_register_CFunction_griddata_free:
         self.body: str = ""
 
     def register_CFunction(self) -> None:
+        """Register CFunction based on class specifications."""
         cfc.register_CFunction(
             includes=self.includes,
             desc=self.desc,

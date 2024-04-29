@@ -19,7 +19,7 @@ implemented_loop_regions = ["", "all points", "interior"]
 def implemented_loop_regions_err(loop_region: str) -> str:
     """
     Generate the string that is printed when a loop_region is not defined.
-    
+
     :param loop_region: string denoting the intended loop region
     :returns: the error message describing the loop_region was not found
     """
@@ -29,7 +29,9 @@ def implemented_loop_regions_err(loop_region: str) -> str:
     return f"loop_region = {loop_region} unsupported. Choose {tmp_str}."
 
 
-def get_loop_region_ranges(loop_region: str, cuda: bool = False) -> Tuple[List[str], List[str]]:
+def get_loop_region_ranges(
+    loop_region: str, cuda: bool = False
+) -> Tuple[List[str], List[str]]:
     """
     Return Loop region index ranges.
 

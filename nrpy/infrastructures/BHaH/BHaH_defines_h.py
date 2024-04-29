@@ -6,13 +6,8 @@ Author: Zachariah B. Etienne
 """
 
 import sys
-from pathlib import Path
-from typing import Optional, Dict, List
-
 import nrpy.params as par
-import nrpy.grid as gri
 from nrpy.infrastructures.BHaH import griddata_commondata
-from nrpy.helpers.generic import clang_format
 
 # The ordering of core_modules_list is based largely on data structure dependencies.
 # E.g., griddata_struct contains bc_struct.  Module names are parellel scheme dependent
