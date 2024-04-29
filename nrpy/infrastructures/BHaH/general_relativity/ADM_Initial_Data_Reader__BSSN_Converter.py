@@ -20,7 +20,7 @@ import nrpy.helpers.jacobians as jac
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.equations.general_relativity.ADM_to_BSSN import ADM_to_BSSN
 
-import nrpy.infrastructures.BHaH.simple_loop as lp
+import nrpy.infrastructures.BHaH.loop_utilities.openmp.simple_loop as lp
 from nrpy.infrastructures.BHaH import BHaH_defines_h
 
 
@@ -511,7 +511,7 @@ def Cfunction_initial_data_lambdaU_grid_interior(
         loop_region="interior",
         read_xxs=True,
         fp_type=fp_type,
-    )
+    ).full_loop_body
 
     return cfc.CFunction(
         subdirectory=CoordSystem,

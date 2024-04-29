@@ -15,14 +15,14 @@ import nrpy.params as par
 from nrpy.helpers import simd
 import nrpy.helpers.parallel_codegen as pcg
 
-import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
+import nrpy.infrastructures.BHaH.header_definitions.openmp.output_BHaH_defines_h as Bdefines_h
 import nrpy.infrastructures.BHaH.checkpoints.openmp.checkpointing as chkpt
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
-from nrpy.infrastructures.BHaH import griddata_commondata
+import nrpy.infrastructures.BHaH.grid_management.openmp.griddata_free as griddata_commondata
 import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
-import nrpy.infrastructures.BHaH.main_c as main
+import nrpy.infrastructures.BHaH.main_driver.openmp.main_c as main
 from nrpy.infrastructures.BHaH.MoLtimestepping.openmp import MoL
 import nrpy.infrastructures.BHaH.CurviBoundaryConditions.openmp.CurviBoundaryConditions as cbc
 import nrpy.infrastructures.BHaH.nrpyelliptic.openmp.conformally_flat_C_codegen_library as nrpyellClib
@@ -51,7 +51,7 @@ def get_log10_residual_tolerance(fp_type_str: str = "double") -> float:
     """
     res: float = -1.0
     if fp_type_str == "double":
-        res = 15.8
+        res = -15.8
     elif fp_type_str == "float":
         res = -8.0
     else:
@@ -337,7 +337,7 @@ if initial_data_type == "axisymmetric":
 #         command line parameters, set up boundary conditions,
 #         and create a Makefile for this project.
 #         Project is output to project/[project_name]/
-CPs.write_CodeParameters_h_files(project_dir=project_dir)
+CPs.write_CodeParameters_h_files(project_dir=project_dir,decorator="[[maybe_unused]]")
 CPs.register_CFunctions_params_commondata_struct_set_to_default()
 cmdpar.generate_default_parfile(project_dir=project_dir, project_name=project_name)
 cmdpar.register_CFunction_cmdline_input_and_parfile_parser(

@@ -20,14 +20,14 @@ import nrpy.params as par
 from nrpy.helpers import simd
 import nrpy.helpers.parallel_codegen as pcg
 
-import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
+import nrpy.infrastructures.BHaH.header_definitions.openmp.output_BHaH_defines_h as Bdefines_h
 import nrpy.infrastructures.BHaH.general_relativity.BSSN_C_codegen_library as BCl
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.CurviBoundaryConditions.openmp.CurviBoundaryConditions as cbc
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 from nrpy.infrastructures.BHaH import griddata_commondata
-import nrpy.infrastructures.BHaH.main_c as main
+import nrpy.infrastructures.BHaH.main_driver.openmp.main_c as main
 import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 from nrpy.infrastructures.BHaH.MoLtimestepping.openmp import MoL
 import nrpy.infrastructures.BHaH.grid_management.openmp.numerical_grids_and_timestep as numericalgrids
@@ -50,7 +50,7 @@ grid_physical_size = 7.5
 diagnostics_output_every = 0.25
 t_final = 1.0 * grid_physical_size
 Nxx_dict = {
-    "Spherical": [72, 12, 2],
+    "Spherical": [64, 16, 16],
     "SinhSpherical": [72, 12, 2],
     "Cartesian": [64, 64, 64],
 }
@@ -61,7 +61,7 @@ enable_rfm_precompute = True
 MoL_method = "RK4"
 fd_order = 4
 radiation_BC_fd_order = 4
-enable_simd = True
+enable_simd = False
 separate_Ricci_and_BSSN_RHS = True
 parallel_codegen_enable = True
 enable_fd_functions = True
@@ -69,12 +69,12 @@ enable_KreissOliger_dissipation = False
 boundary_conditions_desc = "outgoing radiation"
 
 OMP_collapse = 1
-if "Spherical" in CoordSystem:
-    par.set_parval_from_str("symmetry_axes", "2")
-    OMP_collapse = 2  # about 2x faster
-if "Cylindrical" in CoordSystem:
-    par.set_parval_from_str("symmetry_axes", "1")
-    OMP_collapse = 2  # might be slightly faster
+# if "Spherical" in CoordSystem:
+#     par.set_parval_from_str("symmetry_axes", "2")
+#     OMP_collapse = 2  # about 2x faster
+# if "Cylindrical" in CoordSystem:
+#     par.set_parval_from_str("symmetry_axes", "1")
+#     OMP_collapse = 2  # might be slightly faster
 
 project_dir = os.path.join("project", project_name)
 

@@ -25,7 +25,7 @@ from nrpy.equations.wave_equation.WaveEquationCurvilinear_RHSs import (
 from nrpy.equations.wave_equation.WaveEquation_Solutions_InitialData import (
     WaveEquation_solution_Cartesian,
 )
-import nrpy.infrastructures.BHaH.simple_loop as lp
+import nrpy.infrastructures.BHaH.loop_utilities.openmp.simple_loop as lp
 import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices as out012d
 
 
@@ -137,7 +137,7 @@ if( read_checkpoint(commondata, griddata) ) return;
         loop_region="all points",
         OMP_collapse=OMP_collapse,
         fp_type=fp_type,
-    )
+    ).full_loop_body
     body += "}\n"
     cfc.register_CFunction(
         includes=includes,
@@ -381,7 +381,7 @@ def register_CFunction_rhs_eval(
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
         fp_type=fp_type,
-    )
+    ).full_loop_body
 
     cfc.register_CFunction(
         include_CodeParameters_h=True,

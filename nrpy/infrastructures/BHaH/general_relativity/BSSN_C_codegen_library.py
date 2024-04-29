@@ -35,7 +35,7 @@ from nrpy.equations.general_relativity.InitialData_Spherical import (
 import nrpy.equations.general_relativity.psi4 as psifour
 import nrpy.equations.general_relativity.psi4_tetrads as psifourtet
 import nrpy.infrastructures.BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter as admid
-import nrpy.infrastructures.BHaH.simple_loop as lp
+import nrpy.infrastructures.BHaH.loop_utilities.openmp.simple_loop as lp
 import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices as out012d
 
 
@@ -490,7 +490,7 @@ def register_CFunction_rhs_eval(
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
         fp_type=fp_type,
-    )
+    ).full_loop_body
     cfc.register_CFunction(
         include_CodeParameters_h=True,
         includes=includes,
@@ -583,7 +583,7 @@ def register_CFunction_Ricci_eval(
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
         fp_type=fp_type,
-    )
+    ).full_loop_body
 
     if orig_enable_RbarDD_gridfunctions:
         par.set_parval_from_str(
@@ -673,7 +673,7 @@ def register_CFunction_constraints(
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
         fp_type=fp_type,
-    )
+    ).full_loop_body
 
     cfc.register_CFunction(
         includes=includes,
@@ -780,7 +780,7 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
         fp_type=fp_type,
-    )
+    ).full_loop_body
 
     cfc.register_CFunction(
         include_CodeParameters_h=True,
@@ -909,7 +909,7 @@ psi4_tetrad(commondata, params,
             read_xxs=False,
             OMP_collapse=OMP_collapse,
             fp_type=fp_type,
-        )
+        ).full_loop_body
 
     cfc.register_CFunction(
         includes=includes,
