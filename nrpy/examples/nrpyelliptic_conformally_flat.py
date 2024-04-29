@@ -27,7 +27,7 @@ from nrpy.infrastructures.BHaH.MoLtimestepping.openmp import MoL
 import nrpy.infrastructures.BHaH.CurviBoundaryConditions.openmp.CurviBoundaryConditions as cbc
 import nrpy.infrastructures.BHaH.nrpyelliptic.openmp.conformally_flat_C_codegen_library as nrpyellClib
 import nrpy.infrastructures.BHaH.grid_management.openmp.numerical_grids_and_timestep as numericalgrids
-from nrpy.infrastructures.BHaH import rfm_precompute
+import nrpy.infrastructures.BHaH.grid_management.openmp.register_rfm_precompute as rfm_precompute
 from nrpy.infrastructures.BHaH import rfm_wrapper_functions
 from nrpy.infrastructures.BHaH.grid_management.openmp import xx_tofrom_Cart
 
