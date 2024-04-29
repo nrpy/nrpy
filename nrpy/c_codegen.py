@@ -96,6 +96,8 @@ class CCodeGen:
         :param include_braces: Boolean to decide whether to include braces.
         :param fp_type: floating-point data type, such as 'double'.
         :param fp_type_alias: Infrastructure-specific alias for the C/C++ floating point data type. E.g., 'REAL' or 'CCTK_REAL'.
+        :param fp_ccg_type: floating-point C code gen type used by sympy to deduce character literals
+        :param ccg_type_aliases: All type aliases to by used by sympy C codegen
         :param verbose: Boolean to enable verbose output.
         :param enable_cse: Boolean to enable common subexpression elimination.
         :param cse_sorting: Sorting method for common subexpression elimination.
@@ -435,6 +437,7 @@ def c_codegen(
             enable_simd=CCGParams.enable_simd,
             enable_GoldenKernels=CCGParams.enable_GoldenKernels,
             fp_type=CCGParams.fp_type,
+            rational_const_alias=CCGParams.rational_const_alias
         )
 
     # Step 4: If CCGParams.verbose, then output the original SymPy
