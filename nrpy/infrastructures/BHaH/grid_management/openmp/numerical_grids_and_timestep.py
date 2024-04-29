@@ -70,7 +70,7 @@ class register_CFunction_numerical_grid_params_Nxx_dxx_xx(
             CoordSystem_for_wrapper_func=CoordSystem,
             name=self.name,
             params=self.params,
-            include_CodeParameters_h=True,  # keep this False or regret having to debug the mess.
+            include_CodeParameters_h=False,  # keep this False or regret having to debug the mess.
             body=self.body,
         )
 
