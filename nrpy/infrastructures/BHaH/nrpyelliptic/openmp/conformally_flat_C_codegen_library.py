@@ -20,7 +20,7 @@ import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.nrpyelliptic.base_conformally_flat_C_codegen_library as base_npe_classes
 
-import nrpy.infrastructures.BHaH.simple_loop as lp
+import nrpy.infrastructures.BHaH.loop_utilities.openmp.simple_loop as lp
 import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices as out012d
 
 
@@ -116,7 +116,7 @@ class openmp_register_CFunction_initial_guess_all_points(
             loop_region="all points",
             OMP_collapse=OMP_collapse,
             fp_type=self.fp_type,
-        )
+        ).full_loop_body
         self.body += "}\n"
 
         cfc.register_CFunction(
@@ -254,7 +254,7 @@ class openmp_register_CFunction_auxevol_gfs_all_points(
             loop_region="all points",
             OMP_collapse=OMP_collapse,
             fp_type=self.fp_type,
-        )
+        ).full_loop_body
         self.body += "}\n"
         cfc.register_CFunction(
             includes=self.includes,
@@ -323,7 +323,7 @@ class openmp_register_CFunction_variable_wavespeed_gfs_all_points(
             read_xxs=True,
             loop_region="interior",
             fp_type=self.fp_type,
-        )
+        ).full_loop_body
 
         # We must close the loop that was opened in the line 'for(int grid=0; grid<commondata->NUMGRIDS; grid++) {'
         self.body += r"""} // END LOOP for(int grid=0; grid<commondata->NUMGRIDS; grid++)
@@ -477,7 +477,7 @@ if(r < integration_radius) {
             loop_region="interior",
             OMP_custom_pragma=r"#pragma omp parallel for reduction(+:squared_sum,volume_sum)",
             fp_type=self.fp_type,
-        )
+        ).full_loop_body
 
         self.body += r"""
   // Compute and output the log of the l2-norm.
@@ -736,7 +736,7 @@ class openmp_register_CFunction_rhs_eval(
             read_xxs=not enable_rfm_precompute,
             OMP_collapse=OMP_collapse,
             fp_type=fp_type,
-        )
+        ).full_loop_body
 
         cfc.register_CFunction(
             include_CodeParameters_h=True,
@@ -835,7 +835,7 @@ class openmp_register_CFunction_compute_residual_all_points(
             read_xxs=not enable_rfm_precompute,
             OMP_collapse=OMP_collapse,
             fp_type=fp_type,
-        )
+        ).full_loop_body
         cfc.register_CFunction(
             include_CodeParameters_h=True,
             includes=self.includes,
