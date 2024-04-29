@@ -63,6 +63,7 @@ class base_register_CFunctions_rfm_precompute:
                     'body' : body,
                     'CoordSystem' : CoordSystem,
                     'include_CodeParameters_h' : self.include_CodeParameters_h,
+                    'prefunc' : '',
                 }
                 defines_list = [s.replace("restrict","") for s in rfm_precompute.BHaH_defines_list]
                 self.combined_BHaH_defines_list.extend(defines_list)
