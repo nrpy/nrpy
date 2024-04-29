@@ -189,7 +189,9 @@ class ExprTree:
     __str__ = __repr__
 
 
-def get_unique_expression_symbols(expr: sp.Basic, exclude: Union[List[str], None] = None) -> List[str]:
+def get_unique_expression_symbols(
+    expr: sp.Basic, exclude: Union[List[str], None] = None
+) -> List[str]:
     """
     Get a unique list of expression symbols.
 
@@ -199,6 +201,7 @@ def get_unique_expression_symbols(expr: sp.Basic, exclude: Union[List[str], None
     """
     if exclude is None:
         exclude = []
+
     def get_expression_symbols__recursive(this_expr: sp.Basic) -> List[str]:
         this_symbol_list = []
         for arg in this_expr.args:
