@@ -26,6 +26,7 @@ for i in range(3):
     _ = par.CodeParameter("REAL", __name__, f"dxx{i}", add_to_parfile=False, add_to_set_CodeParameters_h=True)
 _ = par.CodeParameter("REAL", __name__, "convergence_factor", 1.0, commondata=True)
 _ = par.CodeParameter("int", __name__, "CoordSystem_hash", commondata=False, add_to_parfile=False)
+_ = par.CodeParameter("int", __name__, "grid_idx", commondata=False, add_to_parfile=False)
 _ = par.CodeParameter("char[200]", __name__, "gridding_choice", "independent grid(s)", commondata=True, add_to_parfile=True)
 # fmt: on
 
@@ -53,90 +54,7 @@ class register_CFunction_numerical_grid_params_Nxx_dxx_xx(
     ) -> None:
         super().__init__(CoordSystem, grid_physical_size, Nxx_dict)
 
-        for dirn in range(3):
-            self.body += (
-                f"params->Nxx{dirn} = {self.Nxx_dict[self.CoordSystem][dirn]};\n"
-            )
-        self.body += """
-// If all components of Nx[] are set to reasonable values (i.e., not -1), then set params->Nxx{} to Nx[].
-if( !(Nx[0]==-1 || Nx[1]==-1 || Nx[2]==-1) ) {
-"""
-        for dirn in range(3):
-            self.body += f"params->Nxx{dirn} = Nx[{dirn}];\n"
-        self.body += f"""}}
-snprintf(params->CoordSystemName, 50, "{CoordSystem}");
-
-if( !grid_is_resized ) {{
-  // convergence_factor does not increase resolution across an axis of symmetry:
-  if(params->Nxx0 != 2) params->Nxx0 *= commondata->convergence_factor;
-  if(params->Nxx1 != 2) params->Nxx1 *= commondata->convergence_factor;
-  if(params->Nxx2 != 2) params->Nxx2 *= commondata->convergence_factor;
-}}
-
-params->Nxx_plus_2NGHOSTS0 = params->Nxx0 + 2*NGHOSTS;
-params->Nxx_plus_2NGHOSTS1 = params->Nxx1 + 2*NGHOSTS;
-params->Nxx_plus_2NGHOSTS2 = params->Nxx2 + 2*NGHOSTS;
-
-// Set grid size to grid_physical_size (set above, based on params->grid_physical_size):
-"""
-
-        # Set grid_physical_size & grid_hole_radius
-        self.body += """{
-        #include "../set_CodeParameters.h"
-        // Set grid size to a function of grid_physical_size, just set in set_CodeParameters.h above:
-        """
-        for key, value in self.rfm.grid_physical_size_dict.items():
-            self.body += f"params->{key} = {value};\n"
-        self.body += "}\n"
-
-        # Set xxmin and xxmax
-        self.body += """if( !grid_is_resized ) {
-    #include "../set_CodeParameters.h"
-    """
-        self.body += "// Set xxmin, xxmax\n"
-        if "Cartesian" in CoordSystem:
-            self.body += """
-    REAL factor_rescale_minmax_xx0 = 1.0;
-    REAL factor_rescale_minmax_xx1 = 1.0;
-    REAL factor_rescale_minmax_xx2 = 1.0;
-    if(params->Nxx0 < params->Nxx1 || params->Nxx0 < params->Nxx2)
-    factor_rescale_minmax_xx0 = ((REAL)params->Nxx0) / ((REAL)MAX(params->Nxx1, params->Nxx2));
-    if(params->Nxx1 < params->Nxx2 || params->Nxx1 < params->Nxx0)
-    factor_rescale_minmax_xx1 = ((REAL)params->Nxx1) / ((REAL)MAX(params->Nxx2, params->Nxx0));
-    if(params->Nxx2 < params->Nxx0 || params->Nxx2 < params->Nxx1)
-    factor_rescale_minmax_xx2 = ((REAL)params->Nxx2) / ((REAL)MAX(params->Nxx0, params->Nxx1));
-    """
-        for minmax in ["min", "max"]:
-            for dirn in range(3):
-                rfm_value = (
-                    self.rfm.xxmin[dirn] if minmax == "min" else self.rfm.xxmax[dirn]
-                )
-                str_rfm_value = str(rfm_value)
-                param_dir = f"params->xx{minmax}{dirn}"
-
-                if str_rfm_value in par.glb_code_params_dict:
-                    cparam_type = par.glb_code_params_dict[str_rfm_value].cparam_type
-                    if cparam_type != "#define":
-                        self.body += f"{param_dir} = params->{rfm_value};\n"
-                        continue
-
-                if "Cartesian" in self.CoordSystem:
-                    self.body += (
-                        f"{param_dir} = {rfm_value} * factor_rescale_minmax_xx{dirn};\n"
-                    )
-                else:
-                    self.body += f"{param_dir} = {rfm_value};\n"
-
-        self.body += """}
-
-    params->dxx0 = (params->xxmax0 - params->xxmin0) / ((REAL)params->Nxx0);
-    params->dxx1 = (params->xxmax1 - params->xxmin1) / ((REAL)params->Nxx1);
-    params->dxx2 = (params->xxmax2 - params->xxmin2) / ((REAL)params->Nxx2);
-
-    params->invdxx0 = ((REAL)params->Nxx0) / (params->xxmax0 - params->xxmin0);
-    params->invdxx1 = ((REAL)params->Nxx1) / (params->xxmax1 - params->xxmin1);
-    params->invdxx2 = ((REAL)params->Nxx2) / (params->xxmax2 - params->xxmin2);
-
+        self.body+="""
     // Set up cell-centered Cartesian coordinate grid, centered at the origin.
     xx[0] = (REAL *restrict)malloc(sizeof(REAL)*params->Nxx_plus_2NGHOSTS0);
     xx[1] = (REAL *restrict)malloc(sizeof(REAL)*params->Nxx_plus_2NGHOSTS1);
@@ -152,7 +70,7 @@ params->Nxx_plus_2NGHOSTS2 = params->Nxx2 + 2*NGHOSTS;
             CoordSystem_for_wrapper_func=CoordSystem,
             name=self.name,
             params=self.params,
-            include_CodeParameters_h=False,  # keep this False or regret having to debug the mess.
+            include_CodeParameters_h=True,  # keep this False or regret having to debug the mess.
             body=self.body,
         )
 
