@@ -32,7 +32,7 @@ import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 from nrpy.infrastructures.BHaH.MoLtimestepping.openmp import MoL
 import nrpy.infrastructures.BHaH.grid_management.openmp.numerical_grids_and_timestep as numericalgrids
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
-from nrpy.infrastructures.BHaH import rfm_precompute
+import nrpy.infrastructures.BHaH.grid_management.openmp.register_rfm_precompute as rfm_precompute
 from nrpy.infrastructures.BHaH import rfm_wrapper_functions
 import nrpy.infrastructures.BHaH.grid_management.openmp.xx_tofrom_Cart as xxCartxx
 

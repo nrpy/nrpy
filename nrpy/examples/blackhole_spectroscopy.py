@@ -37,7 +37,7 @@ import nrpy.infrastructures.BHaH.main_driver.openmp.main_c as main
 import nrpy.infrastructures.BHaH.grid_management.openmp.numerical_grids_and_timestep as numericalgrids
 import nrpy.infrastructures.BHaH.general_relativity.NRPyPN_quasicircular_momenta as NRPyPNqm
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
-from nrpy.infrastructures.BHaH import rfm_precompute
+import nrpy.infrastructures.BHaH.grid_management.openmp.register_rfm_precompute as rfm_precompute
 from nrpy.infrastructures.BHaH import rfm_wrapper_functions
 import nrpy.infrastructures.BHaH.special_functions.spin_weight_minus2_spherical_harmonics as swm2sh
 import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.TwoPunctures_lib as TPl
