@@ -54,7 +54,9 @@ class RKFunction:
         self.RK_rhs_list = RK_rhs_list
         self.RK_lhs_list = RK_lhs_list
         self.fp_type = fp_type
-        self.c_function_name: str = ""
+        self.name: str = ""
+        self.params: str = "params_struct *restrict params, "
+        self.body: str = ""
 
         self.cfunc_type = cfunc_type
         self.rational_const_alias = rational_const_alias
@@ -65,33 +67,9 @@ class RKFunction:
         # Save variables that appear in function arguments to be used
         # to generate a function call
         self.param_vars: List[str] = []
+        self.includes: List[str] = []
 
-        # Populate build and populate self.CFunction
-        self.CFunction_RK_substep_function()
-
-    def CFunction_RK_substep_function(self) -> None:
-        """Generate a C function based on the given RK substep expression lists."""
-        self.c_function_name = "SIMD_" if self.enable_simd else ""
-        self.c_function_name += f"rk_substep_{self.rk_step}"
-
-        includes: List[str] = []
-        name = self.c_function_name
-        params = "params_struct *restrict params, "
-        body: str = ""
-        for i in ["0", "1", "2"]:
-            body += f"const int Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n"
-        if self.enable_simd:
-            warnings.warn(
-                "enable_simd in MoL is not properly supported -- MoL update loops are not properly bounds checked."
-            )
-            body += "const REAL_SIMD_ARRAY DT = ConstSIMD(dt);\n"
-            body += "#pragma omp parallel for\n"
-            body += "for(int i=0;i<Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;i+=simd_width) {{\n"
-        else:
-            body += "LOOP_ALL_GFS_GPS(i) {\n"
-
-        var_type = "REAL_SIMD_ARRAY" if self.enable_simd else "REAL"
-        RK_lhs_str_list = [
+        self.RK_lhs_str_list = [
             (
                 f"const REAL_SIMD_ARRAY __rhs_exp_{i}"
                 if self.enable_simd
@@ -99,6 +77,43 @@ class RKFunction:
             )
             for i, el in enumerate(self.RK_lhs_list)
         ]
+        
+        self.loop_body = c_codegen(
+            self.RK_rhs_list,
+            self.RK_lhs_str_list,
+            include_braces=False,
+            verbose=False,
+            enable_simd=self.enable_simd,
+            fp_type=self.fp_type,
+            enable_cse_preprocess=True,
+            rational_const_alias=self.rational_const_alias,
+        )
+        # Give rationals a better name
+        self.loop_body = self.loop_body.replace("_Rational", "RK_Rational")
+        
+        self.name = "SIMD_" if self.enable_simd else ""
+        self.name += f"rk_substep_{self.rk_step}"
+        
+        # Populate build and populate self.CFunction
+        self.CFunction_RK_substep_function()
+
+    def CFunction_RK_substep_function(self) -> None:
+        """Generate a C function based on the given RK substep expression lists."""
+        self.body = ""
+
+        for i in ["0", "1", "2"]:
+            self.body += f"const int Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n"
+        if self.enable_simd:
+            warnings.warn(
+                "enable_simd in MoL is not properly supported -- MoL update loops are not properly bounds checked."
+            )
+            self.body += "const REAL_SIMD_ARRAY DT = ConstSIMD(dt);\n"
+            self.body += "#pragma omp parallel for\n"
+            self.body += "for(int i=0;i<Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;i+=simd_width) {{\n"
+        else:
+            self.body += "LOOP_ALL_GFS_GPS(i) {\n"
+
+        var_type = "REAL_SIMD_ARRAY" if self.enable_simd else "REAL"
 
         read_list = [
             read
@@ -112,49 +127,36 @@ class RKFunction:
                 gfs_el = str(el).replace("gfsL", "gfs[i]")
                 if self.enable_simd:
                     self.param_vars.append(gfs_el[:-3])
-                    params += f"{var_type} *restrict {self.param_vars[-1]},"
-                    body += f"const {var_type} {el} = ReadSIMD(&{gfs_el});\n"
+                    self.params += f"{var_type} *restrict {self.param_vars[-1]},"
+                    self.body += f"const {var_type} {el} = ReadSIMD(&{gfs_el});\n"
                 else:
                     self.param_vars.append(gfs_el[:-3])
-                    params += f"{var_type} *restrict {self.param_vars[-1]},"
-                    body += f"const {var_type} {el} = {gfs_el};\n"
-        for el in RK_lhs_str_list:
+                    self.params += f"{var_type} *restrict {self.param_vars[-1]},"
+                    self.body += f"const {var_type} {el} = {gfs_el};\n"
+        for el in self.RK_lhs_str_list:
             lhs_var = el[:-3]
-            if not lhs_var in params:
+            if not lhs_var in self.params:
                 self.param_vars.append(lhs_var)
-                params += f"{var_type} *restrict {self.param_vars[-1]},"
-        params += f"const {var_type} dt"
-
-        kernel = c_codegen(
-            self.RK_rhs_list,
-            RK_lhs_str_list,
-            include_braces=False,
-            verbose=False,
-            enable_simd=self.enable_simd,
-            fp_type=self.fp_type,
-            enable_cse_preprocess=True,
-            rational_const_alias=self.rational_const_alias,
-        )
-        # Give rationals a better name
-        kernel = kernel.replace("_Rational", "RK_Rational")
+                self.params += f"{var_type} *restrict {self.param_vars[-1]},"
+        self.params += f"const {var_type} dt"
 
         if self.enable_simd:
-            body += kernel.replace("commondata->dt", "DT")
+            self.body += self.loop_body.replace("commondata->dt", "DT")
             for j, el in enumerate(self.RK_lhs_list):
-                body += f"  WriteSIMD(&{str(el).replace('gfsL', 'gfs[i]')}, __rhs_exp_{j});\n"
+                self.body += f"  WriteSIMD(&{str(el).replace('gfsL', 'gfs[i]')}, __rhs_exp_{j});\n"
         else:
-            body += kernel.replace("commondata->dt", "dt")
+            self.body += self.loop_body.replace("commondata->dt", "dt")
 
-        body += "}\n"
+        self.body += "}\n"
 
         # Store CFunction
         self.CFunction = cfc.CFunction(
-            includes=includes,
+            includes=self.includes,
             desc=self.desc,
             cfunc_type=self.cfunc_type,
-            name=name,
-            params=params,
-            body=body,
+            name=self.name,
+            params=self.params,
+            body=self.body,
         )
 
     def c_function_call(self) -> str:
@@ -163,7 +165,7 @@ class RKFunction:
 
         :return: The C function call as a string.
         """
-        c_function_call: str = self.c_function_name + "(params, "
+        c_function_call: str = self.name + "(params, "
         for p in self.param_vars:
             c_function_call += f"{p}, "
 
@@ -188,7 +190,7 @@ def construct_RK_functions_prefunc() -> str:
 
     prefunc = ""
     for fd_func in MoL_Functions_dict.values():
-        prefunc += fd_func.CFunction.full_function
+        prefunc += fd_func.CFunction.full_function + "\n\n"
     return prefunc
 
 
@@ -378,6 +380,7 @@ def single_RK_substep_input_symbolic(
     post_post_rhs_string: str = "",
     fp_type: str = "double",
     additional_comments: str = "",
+    rational_const_alias: str = "const",
 ) -> str:
     """
     Generate C code for a given Runge-Kutta substep.
@@ -450,6 +453,7 @@ def single_RK_substep_input_symbolic(
                 rk_step=rk_step,
                 enable_simd=enable_simd,
                 fp_type=fp_type,
+                rational_const_alias=rational_const_alias,
             )
         }
     )
@@ -565,6 +569,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
         enable_curviBCs: bool = False,
         enable_simd: bool = False,
         fp_type: str = "double",
+        rational_const_alias: str = "const",
     ) -> None:
 
         self.Butcher_dict = Butcher_dict
@@ -575,6 +580,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
         self.enable_rfm_precompute = enable_rfm_precompute
         self.enable_curviBCs = enable_curviBCs
         self.fp_type = fp_type
+        self.rational_const_alias = rational_const_alias
         self.single_RK_substep_input_symbolic = single_RK_substep_input_symbolic
         self.rk_step_body_dict: Dict[str, str] = {}
 
@@ -700,6 +706,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
                     gf_aliases=self.gf_aliases,
                     post_post_rhs_string=self.post_post_rhs_string,
                     fp_type=self.fp_type,
+                    rational_const_alias=self.rational_const_alias
                 )
                 + "// -={ END k1 substep }=-\n\n"
             )
@@ -740,6 +747,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
                     gf_aliases=self.gf_aliases,
                     post_post_rhs_string=self.post_post_rhs_string,
                     fp_type=self.fp_type,
+                    rational_const_alias=self.rational_const_alias
                 )
                 + "// -={ END k2 substep }=-\n\n"
             )
@@ -768,6 +776,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
                     gf_aliases=self.gf_aliases,
                     post_post_rhs_string=self.post_post_rhs_string,
                     fp_type=self.fp_type,
+                    rational_const_alias=self.rational_const_alias
                 )
                 + "// -={ END k3 substep }=-\n\n"
             )
@@ -819,6 +828,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
                         gf_aliases=self.gf_aliases,
                         post_post_rhs_string=self.post_post_rhs_string,
                         fp_type=self.fp_type,
+                        rational_const_alias=self.rational_const_alias
                     )}// -={{ END k{str(s + 1)} substep }}=-\n\n"""
 
             else:
@@ -843,6 +853,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
                             gf_aliases=self.gf_aliases,
                             post_post_rhs_string=self.post_post_rhs_string,
                             fp_type=self.fp_type,
+                            rational_const_alias=self.rational_const_alias
                         )
                     )
                 else:
@@ -930,6 +941,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
                                 gf_aliases=self.gf_aliases,
                                 post_post_rhs_string=self.post_post_rhs_string,
                                 fp_type=self.fp_type,
+                                rational_const_alias=self.rational_const_alias
                             )
                             + f"// -={{ END k{s + 1} substep }}=-\n\n"
                         )

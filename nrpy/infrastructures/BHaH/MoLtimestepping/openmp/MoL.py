@@ -33,7 +33,7 @@ _ = par.CodeParameter("REAL", __name__, "t_final", 10.0, commondata=True)
 for i, key in enumerate(BHaH_defines_h.core_modules_list):
     if "nrpy.infrastructures.BHaH.MoLtimestepping" in key:
         BHaH_defines_h.core_modules_list[i] = (
-            "nrpy.infrastructures.BHaH.MoLtimestepping.openmp.MoL"
+            str(__name__)
         )
 
 
