@@ -29,7 +29,7 @@ import sympy as sp
 import nrpy.indexedexp as ixp
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.BHaH.simple_loop as lp
+import nrpy.infrastructures.BHaH.loop_utilities.openmp.simple_loop as lp
 
 
 def register_CFunction_diagnostics_nearest_grid_center(
