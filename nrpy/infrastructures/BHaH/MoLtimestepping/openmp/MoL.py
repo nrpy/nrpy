@@ -115,7 +115,7 @@ class register_CFunction_MoL_malloc(base_MoL.base_register_CFunction_MoL_malloc)
 class register_CFunction_MoL_step_forward_in_time(
     base_MoL.base_register_CFunction_MoL_step_forward_in_time
 ):
-    """
+    r"""
     Register MoL_step_forward_in_time() C function, which is the core driver for time evolution in BHaH codes.
 
     :param Butcher_dict: A dictionary containing the Butcher tables for various RK-like methods.
@@ -128,8 +128,42 @@ class register_CFunction_MoL_step_forward_in_time(
     :param enable_simd: Flag to enable SIMD functionality.
     :param fp_type: Floating point type, e.g., "double".
 
-    Doctest:
-    # FIXME
+    DOCTEST:
+    >>> import nrpy.c_function as cfc, json
+    >>> from nrpy.infrastructures.BHaH.MoLtimestepping.base_MoL import MoL_Functions_dict
+    >>> from nrpy.helpers.generic import decompress_base64_to_string, diff_strings
+    >>> from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import generate_Butcher_tables
+    >>> Butcher_dict = generate_Butcher_tables()
+    >>> with open("nrpy/infrastructures/BHaH/MoLtimestepping/tests/DOCTEST-openmp__register_CFunction_MoL_step_forward_in_time.json",'r') as f:
+    ...     expected_str_dict = json.load(f)
+    >>> rhs_string = "rhs_eval(commondata, params, rfmstruct,  auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);"
+    >>> post_rhs_string=(
+    ... "if (strncmp(commondata->outer_bc_type, \"extrapolation\", 50) == 0)\n"
+    ... "  apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);"
+    ... )
+    >>> for k, v in Butcher_dict.items():
+    ...     Butcher = Butcher_dict[k][0]
+    ...     cfc.CFunction_dict.clear()
+    ...     MoL_Functions_dict.clear()
+    ...     if Butcher[-1][0] != "":
+    ...         continue
+    ...     _MoLclass = register_CFunction_MoL_step_forward_in_time(
+    ...         Butcher_dict,
+    ...         k,
+    ...         rhs_string=rhs_string,
+    ...         post_rhs_string=post_rhs_string
+    ...     )
+    ...     diag_gc = cfc.CFunction_dict["MoL_step_forward_in_time"].full_function
+    ...     expected_str = decompress_base64_to_string(expected_str_dict[k])
+    ...     if diag_gc != expected_str:
+    ...         raise ValueError(f"\\n{k}: {diff_strings(expected_string, diag_gc)}")
+    >>> cfc.CFunction_dict.clear()
+    >>> MoL_Functions_dict.clear()
+    >>> try:
+    ...     register_CFunction_MoL_step_forward_in_time(Butcher_dict, "AHE")
+    ... except ValueError as e:
+    ...     print(f"ValueError: {e.args[0]}")
+    ValueError: Adaptive order Butcher tables are currently not supported in MoL.
     """
 
     def __init__(
@@ -223,12 +257,12 @@ class register_CFunctions(base_MoL.base_register_CFunctions):
     >>> from nrpy.helpers.generic import compress_string_to_base64, decompress_base64_to_string, diff_strings
     >>> cfc.CFunction_dict.clear()
     >>> _ = register_CFunctions()
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4CNMBHNdABGaScZHDxOiAHcc/CXr2duHb+UiUyv83OVALtvJ+o7uK/PoSVGe7rPuvil8asOnzsX/43MrS1ReBRFZgQkawI+ZAWFEbmoUaaqYpfoO3aZEtuq8ccmII6pcpTvJSXJAdqsfFHNdhI+ukUE4ucIC0Aud6Kiq7SYm+yXe7fWO2X7YgBtJVshZo9Zw7wYSXfL/ysxDXrqrCktTcTM8HtIxOwos9sw2I89sGN1LrstSEtNhf0HqVtkNCCKpMerpP8FgrhYWA1dwTTbAvMguFRUcdNJGzS3g1ZaJGX7G5jYySoHU0pJ2d+pFJESKVStj0gkUxweXpmt8+fNlgI6NElWpm2V5ABWA9tfHnNBSFmrepJYtJ0N/6zPMXrc1lpYPN0WdRnqFyjJ19zwYCvkDovokVVSj/SO+3B8YVQ6xPkqE5lIqVZikjXHN4sEwTDLVlHppA3M0DKuYrcuDDgUSx/Up2AvFXszeBvWDXEGaVKd9YAeIBHMo980fgOQZGaCpuAl/ZT6RsUc9Z6ci1Rg8FTzBPG+1/NwpppD7Oaamj+kkAqift7YRzBHigxeKAy0talLQzeSZMzJcVNMm7172U/nK2Cbl5zWU4fgSt80zSayfFq/iIHX5vETgZUcGTzRh6WdCcuLt/GmjD7kKsk0qfDo9JGeXvpPDlmmgQLwwnsCl/jCYSFtv0Uhd9QeESXjyDWEUChr/jh/YW+ySr0vi1kSumG0w7IXNP/B35qR62ioxCMmAxUMFE86RYIWqlxcaUx1ESF4rnZ4Sn7Gqs31nt4WLHETh+GDb4cLqwKDSjx9UvYxP74Q3erRrArgpaRN2slvlvuc7Pmm06H/Su6yWcpYujcNR85IF6n99Jy3n43BKGd5IfdjbOdxgoSBBsdm2O9+D9RCYX4qKj3d7LSrafhx/KtyLQlGin1wxB3VWDDpqb+N1TfPEiLYH4e53hMH/DpNOlUz1fEE0MI9MlztNoJ/ThVkMY5zX+gaQXqEAErIBggd7JgEF1V9A+G12tDIu693TondIu19evcc2Xg+tDiSLyjERKCgbyFbtbI2AFm6evfLhRSPm/KIfJbZWPaZ/BDKXn/vavhTYMsr7zdmz0uOassSZdqc8QbLDiyDjcjOXGmROVaytkzptGob+Dg/wEmRsvkGUsEegv0qjROxGygIr8Mj1Ykh66f4edb5IQxt+hV1p2qVsdNDChxwkTdU6MTQyzZEXZ/itnE4BQ8yvwNS+BvNetkfnnGIiVRwEq6gn7TVjarI2fKnqO4AC8N1tWvTJQxDTpWXECv6z9T4p7BZggk4KebwN6CgiSNseoFUELlMPpAu6IgeeorOzO5B9uYiLdnSHKmMk0nqbxYBu7aWXC4HUyCq5rMv4V8cfSAywfdf8+nayTOEUuW0myS+aTKqVaWT8EouiMzAY2cLFFQKQp97iyKLVpRlIK67JX9TyFIwpGAclLEm8kGcfURxMEYjKtyC5kr99Tsm3Ln92ZggPaq8zi9jjSwtj+4t0227tAMQdYem3AABRp+aKG1DUjAABjwnNRgAACNeT0bHEZ/sCAAAAAARZWg==")
+    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4CNPBHFdABGaScZHDxOiAHcc/CXr2duHb+UiUyv83OVALtvJ+o7uK/PoSVGe7rPuvil8asOnzsX/43MrS1ReBRFZgQkawI+ZAWFEbmoUaaqYpfoO3aZEtuq8ccmII6pcpTvJSXJAdqsfFHNdhI+ukUE4ucIC0Aud6Kiq7SYm+yXe7fWO2X7YgBtJVshZo9Zw7wYSXfL/ysxDXrqrCktTcTM8HtIxOwos9sw2I89sGN1LrstSEtNhf0HqVtkNCCKpMerpP8FgrhYWA1dwTTbAvMguFRUcdNJGzS3g1ZaJGX7G5jYySoHU0pJ2d+pFJESKVStj0gkUxweXpmt8+fNlgI6NElWpm2V5ABWA9tfHnNBSFmrepJYtJ0N/6zPMXrc1lpYPN0WdRnqFyjJ19zwYCvkDovokVVSj/SO+3B8YVQ6xPkqE5lIqVZikjXHN4sGc6D3CljUr19ED0cBASfjfTnBNT4KuhsM+CqRk1vEqMWjVuzQLHlf2SDhmAk3Sv    LP7HE2flk/G0QazEy5D73+LiZ29Mf5mxqOS/A+0MT/OG3Fu150c8hrMYRcBQjL3MjoW5VZla1e4DeL5WxTNZm58Et1r4lIDJ9VcrxGygc5gCpMVRwwbMMHp9nU/Q69yZQVeLnm/UfuTcuiAsA7j8aufGJuNur1mOnVgsh1/t5J24ahAVVdaxmYVdmHf0BLb/yKJDM+XD7qmr2OslR6Pdd4CkqXC0jiTaQxGbOpUH9I/TdTruJ1tLwuplOxOJLQ8pdHT+6bv4ipuGJpI2EWH/qLxx4hUi+Nkpo/7j01cZYVz/DiQ4cx7AG2K9wxPzcltZHkoHcFT2TiU4HPYozp5nS7WMfQMOSyZW7BH9sVtW7//ATO1xl6jbnLYU1NhVF8WEqXu1+/uaMetdJhcWjEAM98wZQ9dbQDNg/LT7E/3HpHvZw8EoMqee/f4HCSENxxCTY7np4eiLtcx5jNyraRHyEiSAgKFRdAQJKo5HBnZe/ZbRMEUXOXwfQJdxNoCyCpL3MqWRo7VUSSqXmOHYbtrW6rNq/ZnOjnXYdT5mR1W2I5ij8ynrCatfpmCJ    2693/nd2i0UocVpSWCl91OTPv1VbyvVivsmiQW8pUHn+mrvE2TPsLl69nYdCB/G5N44zB1Zq0yu4PJUukVhbqqsCIK3okrEgWl7ujqhURMkoowYi/wX42wVPcWLz2MWKGEKROsU9oN7zzIW7cKhbd+k8avtW8hugNup6CpchkYI4X9KfRLzH26ngg1JD2UT001dGVi5RmWo2Z2K5D5mkDOMzp0oYUKqfAeeIHqQlUuJ5xWnLlFooK3VXwDW63NebCIn5AGvXQWKCu3QfjJR2LUchAe3BaTw6JLAZbleVZNZBV9/RFof6SyjMzPPBH/vP9Fzv6qtvonPBKfoIQyZZzHd20JxJlPEf7ayIsRRMLGkmJ5tW2wT77yepTZLdXfjiQpXJVNwn/NREdbGKuA9Er91B0Pq0f4G3o2/lFMa0EqH1yWd80IQdDydBnYvb97BRgAAAADvzVptNTFhQgABjQnQRgAAQfkoPrHEZ/sCAAAAAARZWg==")
     >>> returned_string = cfc.CFunction_dict["MoL_step_forward_in_time"].full_function
     >>> if returned_string != expected_string:
     ...    compressed_str = compress_string_to_base64(returned_string)
-    ...    error_message = "Trusted MoL_step_forward_in_time.full_function string changed!\n Here's the diff:\n"
-    ...    error_message += "Here's the diff:\n" + diff_strings(expected_string, returned_string) + "\n"
+    ...    error_message = "Trusted MoL_step_forward_in_time.full_function string changed!\nHere's the diff:\n"
+    ...    error_message += diff_strings(expected_string, returned_string) + "\n"
     ...    raise ValueError(error_message + f"base64-encoded output: {compressed_str}")
     >>> sorted(cfc.CFunction_dict.keys())
     ['MoL_free_memory_non_y_n_gfs', 'MoL_free_memory_y_n_gfs', 'MoL_malloc_non_y_n_gfs', 'MoL_malloc_y_n_gfs', 'MoL_step_forward_in_time']
