@@ -42,6 +42,9 @@ t_final = 0.8 * grid_physical_size
 default_diagnostics_output_every = 0.2
 default_checkpoint_every = 2.0
 list_of_CoordSystems = ["Spherical", "SinhSpherical", "Cartesian", "SinhCartesian"]
+list_of_grid_physical_sizes = []
+for CoordSystem in list_of_CoordSystems:
+    list_of_grid_physical_sizes.append(grid_physical_size)
 NUMGRIDS = len(list_of_CoordSystems)
 Nxx_dict = {
     "Spherical": [64, 2, 2],
@@ -81,7 +84,7 @@ wCl.register_CFunction_initial_data(
 
 numericalgrids.register_CFunctions(
     list_of_CoordSystems=list_of_CoordSystems,
-    grid_physical_size=grid_physical_size,
+    list_of_grid_physical_sizes=list_of_grid_physical_sizes,
     Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,

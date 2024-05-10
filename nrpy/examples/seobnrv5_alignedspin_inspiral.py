@@ -15,15 +15,16 @@ import nrpy.params as par
 import nrpy.c_function as cfc
 
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
+
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
-import nrpy.infrastructures.BHaH.general_relativity.NRPyPN_quasicircular_momenta as NRPyPNqm
+import nrpy.infrastructures.BHaH.seobnr.SEOBNR_C_codegen_library as seobnr_CCL
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Code-generation-time parameters:
-project_name = "nrpypn_quasicircular_momenta"
+project_name = "seobnrv5_aligned_spin_inspiral"
 
 project_dir = os.path.join("project", project_name)
 
@@ -34,28 +35,28 @@ shutil.rmtree(project_dir, ignore_errors=True)
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
-
-
 def register_CFunction_main_c() -> None:
-    """Generate a simplified C main() function for setting quasicircular momenta using NRPyPN."""
+    """Generate a simplified C main() function for computing SEOBNRv5 Hamiltonian and its derivatives."""
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """-={ main() function }=-
 Step 1.a: Set each commondata CodeParameter to default.
 Step 1.b: Overwrite default values to parfile values. Then overwrite parfile values with values set at cmd line.
-Step 2: Compute quasicircular parameters."""
+Step 2: Compute Hamiltonian and derivatives."""
     cfunc_type = "int"
     name = "main"
     params = "int argc, const char *argv[]"
     body = r"""  commondata_struct commondata; // commondata contains parameters common to all grids.
-  griddata_struct *restrict griddata; // griddata contains data specific to an individual grid.
 
 // Step 1.a: Set each commondata CodeParameter to default.
 commondata_struct_set_to_default(&commondata);
 // Step 1.b: Overwrite default values to parfile values. Then overwrite parfile values with values set at cmd line.
 cmdline_input_and_parfile_parser(&commondata, argc, argv);
 
-// Step 2: compute quasicircular parameters.
-NRPyPN_quasicircular_momenta(&commondata);
+// Step 2: Compute SEOBNRv5 Hamiltonian.
+SEOBNRv5_aligned_spin_Hamiltonian(&commondata);
+
+// Step 3: Compute SEOBNRv5 Hamiltonian AND derivatives.
+SEOBNRv5_aligned_spin_Hamiltonian_and_derivs(&commondata);
 
 return 0;
 """
@@ -69,7 +70,8 @@ return 0;
     )
 
 
-NRPyPNqm.register_CFunction_NRPyPN_quasicircular_momenta()
+seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian()
+seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_and_derivs()
 
 #########################################################
 # STEP 3: Generate header files, register C functions and
@@ -82,14 +84,11 @@ cmdpar.generate_default_parfile(project_dir=project_dir, project_name=project_na
 cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
     project_name=project_name,
     cmdline_inputs=[
-        "initial_sep",
+        "initial_separation",
+        "mass_Msun",
         "mass_ratio",
-        "bbhxy_BH_M_chix",
-        "bbhxy_BH_M_chiy",
-        "bbhxy_BH_M_chiz",
-        "bbhxy_BH_m_chix",
-        "bbhxy_BH_m_chiy",
-        "bbhxy_BH_m_chiz",
+        "chi1",
+        "chi2",
     ],
 )
 Bdefines_h.output_BHaH_defines_h(project_dir=project_dir, enable_simd=False)
@@ -100,6 +99,7 @@ Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_name=project_name,
     exec_or_library_name=project_name,
 )
+
 print(
     f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
 )
