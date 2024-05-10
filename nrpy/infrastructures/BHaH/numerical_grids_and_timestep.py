@@ -30,14 +30,13 @@ _ = par.CodeParameter("char[200]", __name__, "gridding_choice", "independent gri
 
 
 def register_CFunction_numerical_grid_params_Nxx_dxx_xx(
-    CoordSystem: str, grid_physical_size: float, Nxx_dict: Dict[str, List[int]]
+    CoordSystem: str, Nxx_dict: Dict[str, List[int]]
 ) -> None:
     """
     Register a C function to Set up a cell-centered grid of size grid_physical_size.
        Set params: Nxx, Nxx_plus_2NGHOSTS, dxx, invdxx, and xx.
 
     :param CoordSystem: The coordinate system used for the simulation.
-    :param grid_physical_size: The physical size of the grid.
     :param Nxx_dict: A dictionary that maps coordinate systems to lists containing the number of grid points along each direction.
 
     :raises ValueError: If CoordSystem is not in Nxx_dict.
@@ -48,7 +47,6 @@ def register_CFunction_numerical_grid_params_Nxx_dxx_xx(
         )
     for dirn in range(3):
         par.adjust_CodeParam_default(f"Nxx{dirn}", Nxx_dict[CoordSystem][dirn])
-    par.adjust_CodeParam_default("grid_physical_size", grid_physical_size)
     par.adjust_CodeParam_default("CoordSystemName", CoordSystem)
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
@@ -71,7 +69,7 @@ Grid setup output:
     cfunc_type = "void"
     name = "numerical_grid_params_Nxx_dxx_xx"
     params = "const commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3], const int Nx[3], const bool grid_is_resized"
-    body = "// Start by setting default values for Nxx.\n"
+    body = "// First set default values for Nxx.\n"
     for dirn in range(3):
         body += f"params->Nxx{dirn} = {Nxx_dict[CoordSystem][dirn]};\n"
     body += """
@@ -229,6 +227,7 @@ commondata->dt = MIN(commondata->dt, ds_min * commondata->CFL_FACTOR);
 
 def register_CFunction_numerical_grids_and_timestep(
     list_of_CoordSystems: List[str],
+    list_of_grid_physical_sizes: List[float],
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
 ) -> None:
@@ -240,6 +239,7 @@ def register_CFunction_numerical_grids_and_timestep(
     conditions.
 
     :param list_of_CoordSystems: List of CoordSystems
+    :param list_of_grid_physical_sizes: List of grid_physical_size for each CoordSystem; needed for Independent grids.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation (default: False).
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions (default: False).
     """
@@ -251,50 +251,51 @@ def register_CFunction_numerical_grids_and_timestep(
     body = r"""
     // Step 1.a: Set each CodeParameter in griddata.params to default, for MAXNUMGRIDS grids.
     params_struct_set_to_default(commondata, griddata);"""
-    body += r"""
-      if(strncmp(commondata->gridding_choice, "independent grid(s)", 200) == 0) {
+    body += rf"""
+      if(strncmp(commondata->gridding_choice, "independent grid(s)", 200) == 0) {{
         // Independent grids
         bool grid_is_resized=false;
-        int Nx[3] = { -1, -1, -1 };
+        int Nx[3] = {{ -1, -1, -1 }};
 
+        // Step 1.b: Set commondata->NUMGRIDS to number of CoordSystems we have
+        commondata->NUMGRIDS = {len(list_of_CoordSystems)};
 
-        // Step 1.b: For each grid, set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx based on grid_physical_size
+        // Step 1.c: For each grid, set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx based on grid_physical_size
         int grid=0;
     """
-    for CoordSystem in list_of_CoordSystems:
+    for which_CoordSystem, CoordSystem in enumerate(list_of_CoordSystems):
         body += f"griddata[grid].params.CoordSystem_hash = {CoordSystem.upper()};\n"
+        body += f"griddata[grid].params.grid_physical_size = {list_of_grid_physical_sizes[which_CoordSystem]};\n"
         body += "numerical_grid_params_Nxx_dxx_xx(commondata, &griddata[grid].params, griddata[grid].xx, Nx, grid_is_resized);\n"
         body += "grid++;\n\n"
     body += r"""}
 
-// Step 1.c: Allocate memory for and define reference-metric precomputation lookup tables
+// Step 1.d: Allocate memory for and define reference-metric precomputation lookup tables
 """
     if enable_rfm_precompute:
-        body += r"""
-for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
+        body += r"""for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   rfm_precompute_malloc(commondata, &griddata[grid].params, &griddata[grid].rfmstruct);
   rfm_precompute_defines(commondata, &griddata[grid].params, &griddata[grid].rfmstruct, griddata[grid].xx);
 }
 """
     else:
         body += "// (reference-metric precomputation disabled)\n"
-    body += "\n// Step 1.d: Set up curvilinear boundary condition struct (bcstruct)\n"
+    body += "\n// Step 1.e: Set up curvilinear boundary condition struct (bcstruct)\n"
     if enable_CurviBCs:
-        body += r"""
-for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
+        body += r"""for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   bcstruct_set_up(commondata, &griddata[grid].params, griddata[grid].xx, &griddata[grid].bcstruct);
 }
 """
     else:
         body += "// (curvilinear boundary conditions bcstruct disabled)\n"
     body += r"""
-// Step 1.e: Set timestep based on minimum spacing between neighboring gridpoints.
+// Step 1.f: Set timestep based on minimum spacing between neighboring gridpoints.
 commondata->dt = 1e30;
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   cfl_limited_timestep(commondata, &griddata[grid].params, griddata[grid].xx, &griddata[grid].bcstruct);
 }
 
-// Step 1.f: Initialize timestepping parameters to zero if this is the first time this function is called.
+// Step 1.g: Initialize timestepping parameters to zero if this is the first time this function is called.
 if(calling_for_first_time) {
   commondata->nn = 0;
   commondata->nn_0 = 0;
@@ -315,7 +316,7 @@ if(calling_for_first_time) {
 
 def register_CFunctions(
     list_of_CoordSystems: List[str],
-    grid_physical_size: float,
+    list_of_grid_physical_sizes: List[float],
     Nxx_dict: Dict[str, List[int]],
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
@@ -325,7 +326,7 @@ def register_CFunctions(
     Register C functions related to coordinate systems and grid parameters.
 
     :param list_of_CoordSystems: List of CoordSystems
-    :param grid_physical_size: Physical size of the grid.
+    :param list_of_grid_physical_sizes: List of grid_physical_size for each CoordSystem; needed for Independent grids.
     :param Nxx_dict: Dictionary containing number of grid points.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions.
@@ -334,7 +335,6 @@ def register_CFunctions(
     for CoordSystem in list_of_CoordSystems:
         register_CFunction_numerical_grid_params_Nxx_dxx_xx(
             CoordSystem=CoordSystem,
-            grid_physical_size=grid_physical_size,
             Nxx_dict=Nxx_dict,
         )
         register_CFunction_cfl_limited_timestep(
@@ -342,6 +342,7 @@ def register_CFunctions(
         )
     register_CFunction_numerical_grids_and_timestep(
         list_of_CoordSystems=list_of_CoordSystems,
+        list_of_grid_physical_sizes=list_of_grid_physical_sizes,
         enable_rfm_precompute=enable_rfm_precompute,
         enable_CurviBCs=enable_CurviBCs,
     )

@@ -100,7 +100,7 @@ BCl.register_CFunction_initial_data(
 
 numericalgrids.register_CFunctions(
     list_of_CoordSystems=[CoordSystem],
-    grid_physical_size=grid_physical_size,
+    list_of_grid_physical_sizes=[grid_physical_size],
     Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,

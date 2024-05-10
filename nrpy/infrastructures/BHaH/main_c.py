@@ -65,9 +65,9 @@ def register_CFunction_main_c(
     desc = """-={ main() function }=-
 Step 1.a: Set each commondata CodeParameter to default.
 Step 1.b: Overwrite default values to parfile values. Then overwrite parfile values with values set at cmd line.
-Step 1.c: Allocate NUMGRIDS griddata structs, each containing data specific to an individual grid.
+Step 1.c: Allocate MAXNUMGRIDS griddata structs, each containing data specific to an individual grid.
 Step 1.d: Set each CodeParameter in griddata.params to default.
-Step 1.e: Set up numerical grids: xx[3], masks, Nxx, dxx, invdxx, bcstruct, rfm_precompute, timestep, etc.
+Step 1.e: Set up numerical grids: NUMGRIDS, xx[3], masks, Nxx, dxx, invdxx, bcstruct, rfm_precompute, timestep, etc.
 Step 2: Initial data are set on y_n_gfs gridfunctions. Allocate storage for them first.
 Step 3: Finalize initialization: set up {initial_data_desc}initial data, etc.
 Step 4: Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping.
@@ -92,13 +92,13 @@ commondata_struct_set_to_default(&commondata);
 // Step 1.b: Overwrite default values to parfile values. Then overwrite parfile values with values set at cmd line.
 cmdline_input_and_parfile_parser(&commondata, argc, argv);
 
-// Step 1.c: Allocate NUMGRIDS griddata arrays, each containing data specific to an individual grid.
-griddata = (griddata_struct *restrict)malloc(sizeof(griddata_struct)*commondata.NUMGRIDS);
+// Step 1.c: Allocate MAXNUMGRIDS griddata arrays, each containing data specific to an individual grid.
+griddata = (griddata_struct *restrict)malloc(sizeof(griddata_struct)*MAXNUMGRIDS);
 
 // Step 1.d: Set each CodeParameter in griddata.params to default.
 params_struct_set_to_default(&commondata, griddata);
 
-// Step 1.e: Set up numerical grids: xx[3], masks, Nxx, dxx, invdxx, bcstruct, rfm_precompute, timestep, etc.
+// Step 1.e: Set up numerical grids: NUMGRIDS, xx[3], masks, Nxx, dxx, invdxx, bcstruct, rfm_precompute, timestep, etc.
 {
   // if calling_for_first_time, then initialize commondata time=nn=t_0=nn_0 = 0
   const bool calling_for_first_time = true;
