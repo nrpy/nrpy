@@ -119,6 +119,8 @@ if(FD_order == {fd_order}) {{
             T4UU00GF, T4UU01GF, T4UU02GF, T4UU03GF"""
     schedule += f"""
     WRITES: aux_variables
+    SYNC: aux_variables
+
   }} "Compute BSSN (Hamiltonian and momentum) constraints, at finite-differencing order {fd_order}"
 }}
 """
