@@ -251,9 +251,10 @@ EXTENDS CCTK_KEYWORD dtlapse_evolution_method "dtlapse_evolution_method"
     simd_name = str(
         Path(project_dir) / evol_thorn_name / "src" / "simd" / "simd_intrinsics.h"
     )
-    with open(simd_name, "r") as file:
+    with open(simd_name, "r", encoding="utf-8") as file:
         contents = file.read()
+
     new_contents = contents.replace("REAL_SIMD_ARRAY REAL", "REAL_SIMD_ARRAY CCTK_REAL")
 
-    with open(simd_name, "w") as file:
+    with open(simd_name, "w", encoding="utf-8") as file:
         file.write(new_contents)
