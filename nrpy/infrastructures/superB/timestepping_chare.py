@@ -857,27 +857,27 @@ def output_timestepping_ci(
 
     file_output_str += r"""
     """
-    # Loop over RK substeps and axes
+    # Loop over RK substeps and loop directions.
     for k in range(1, 5):
         rk_substep = f"RK_SUBSTEP_K{k}"
         file_output_str += generate_mol_step_forward_code(rk_substep)
-        for axis in ["x", "y", "z"]:
-            # do something with rk_substep and axis
-            if axis == "x":
+        for loop_direction in ["x", "y", "z"]:
+            # Determine ghost types and configuration based on the current axis
+            if loop_direction == "x":
                 pos_ghost_type = x_pos_ghost_type
                 neg_ghost_type = x_neg_ghost_type
                 nchare_var = "commondata.Nchare0"
-                direction = "EAST_WEST"
-            elif axis == "y":
+                grid_split_direction = "EAST_WEST"
+            elif loop_direction == "y":
                 pos_ghost_type = y_pos_ghost_type
                 neg_ghost_type = y_neg_ghost_type
                 nchare_var = "commondata.Nchare1"
-                direction = "NORTH_SOUTH"
-            elif axis == "z":
+                grid_split_direction = "NORTH_SOUTH"
+            else:  # loop_direction == "z"
                 pos_ghost_type = z_pos_ghost_type
                 neg_ghost_type = z_neg_ghost_type
                 nchare_var = "commondata.Nchare2"
-                direction = "TOP_BOTTOM"
+                grid_split_direction = "TOP_BOTTOM"
 
             # Generate code for this RK substep and axis
             if rk_substep == "RK_SUBSTEP_K1":
@@ -891,9 +891,9 @@ def output_timestepping_ci(
             else:
                 raise ValueError(f"Unknown RK substep: {rk_substep}")
 
-            file_output_str += generate_send_neighbor_data_code(which_gf, direction)
+            file_output_str += generate_send_neighbor_data_code(which_gf, grid_split_direction)
             file_output_str += generate_ghost_code(
-                axis, pos_ghost_type, neg_ghost_type, nchare_var
+                loop_direction, pos_ghost_type, neg_ghost_type, nchare_var
             )
 
     file_output_str += r"""

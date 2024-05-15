@@ -54,7 +54,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     :param include_dirs: List of include directories. Must be a list.
 
     :raises TypeError: If addl_CFLAGS or include_dirs are not lists.
-    :raises ValueError: If addl_CFLAGS or addl_libraries are specified incorrectly.
+    :raises ValueError: If addl_CFLAGS or addl_libraries are specified incorrectly, or if if OS unsupported.
     """
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
@@ -68,6 +68,8 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
             ext = ".so"
         elif os_name == "Darwin":
             ext = ".dylib"
+        else:
+            raise ValueError(f"Sorry, {os_name} operating system not supported.")
         if not exec_or_library_name.endswith(ext):
             exec_or_library_name += ext
 
