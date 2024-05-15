@@ -647,7 +647,7 @@ class ReferenceMetric:
             prefix = self.CoordSystem[: v2n_index + 3]  # '+3' to include "v2n"
         else:
             raise ValueError(
-                f'Sinhv2() called for CoordSystem not starting with "Sinh+EigenCoord+v2n".'
+                f'Sinhv2() called for CoordSystem {self.CoordSystem}, which does not start with "Sinh+EigenCoord+v2n".'
             )
         # Extract the suffix after the prefix
         suffix = self.CoordSystem[len(prefix) :]
