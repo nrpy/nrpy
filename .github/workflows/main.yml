@@ -42,6 +42,8 @@ jobs:
           # Install packages from requirements-dev.txt except those with a fixed version.
           cat requirements-dev.txt | grep -v '==' | xargs pip install -U
         fi
+        # FIXME: until NRPyLaTeX is updated in pypi.
+        pip install -U git+https://github.com/nrpy/nrpylatex.git
         pip install -U clang-format ipython setuptools
         sudo apt-get -y install libgsl-dev
 
