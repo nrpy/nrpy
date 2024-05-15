@@ -891,7 +891,9 @@ def output_timestepping_ci(
             else:
                 raise ValueError(f"Unknown RK substep: {rk_substep}")
 
-            file_output_str += generate_send_neighbor_data_code(which_gf, grid_split_direction)
+            file_output_str += generate_send_neighbor_data_code(
+                which_gf, grid_split_direction
+            )
             file_output_str += generate_ghost_code(
                 loop_direction, pos_ghost_type, neg_ghost_type, nchare_var
             )
