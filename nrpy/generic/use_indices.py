@@ -6,24 +6,43 @@ from sympy import IndexedBase, Idx, Eq, Indexed, Basic, Mul, Expr, Eq, Symbol, I
 from inspect import currentframe
 from nrpy.generic.sympywrap import *
 from nrpy.generic.eqnlist import EqnList
+from nrpy.generic.symm import Sym
 from nrpy.helpers.colorize_text import colorize
+import re
 import sys
+from here import here
 
-i, j, k = mkIdxs('i j k')
+lookup_pair = dict()
+def mkPair(s:str)->Tuple[Idx,Idx]:
+    assert len(s)
+    u, l = mkIdxs(f"u{s} l{s}")
+    lookup_pair[l] = u
+    lookup_pair[u] = l
+    return u, l
+
+# Some basic indexes to use
+ui, li = mkPair('i')
+uj, lj = mkPair('j')
+uk, lk = mkPair('k')
+ua, la = mkPair('a')
+ub, lb = mkPair('b')
+uc, lc = mkPair('c')
+up_indices = mkIdxs('u0 u1 u2 u3 u4 u5')
+down_indices = mkIdxs('l0 l1 l2 l3 l4 l5')
+u0, u1, u2, u3, u4, u5 = up_indices
+l0, l1, l2, l3, l4, l5 = down_indices
+
 multype = Mul #type(i*j)
-addtype = type(i+j)
+addtype = type(ui + uj)
 eqtype = Eq
-powtype = type(i**j)
-#IndexType = Union[Idx,multype]
+powtype = type(ui**uj)
 
 dimension = 3
 def set_dimension(dim:int)->None:
     global dimension
     dimension = dim
 
-symmetries : Dict[Indexed, Indexed] = dict()
-
-def get_indices(xpr:Basic)->Set[IndexType]:
+def get_indices(xpr:Basic)->Set[Idx]:
     """ Return all indices of IndexedBase objects in xpr. """
     ret = set()
     if type(xpr) in [multype, addtype, powtype]:
@@ -34,134 +53,209 @@ def get_indices(xpr:Basic)->Set[IndexType]:
         ret.update(xpr.indices)
     return ret
 
-def byname(x:IndexType)->str:
-    """ Return a string suitable for sorting a list of upper/lower indices. Use negative indices as down indices. """
+def byname(x:Idx)->str:
+    """ Return a string suitable for sorting a list of upper/lower indices. """
     s = str(x)
-    if s[0] == "-":
-        return s[1:]+"-"
-    else:
-        return s
+    assert len(s) == 2
+    return s[1] + s[0]
 
-def get_free_indices(xpr:Basic)->Set[IndexType]:
+num0 = ord('0')
+num9 = ord('9')
+def is_numeric_index(x:Idx)->bool:
+    s = str(x)
+    assert len(s) == 2
+    n = ord(s[1])
+    return num0 <= n and n <= num9
+
+def get_numeric_index_value(x:Idx)->int:
+    s = str(x)
+    assert is_numeric_index(x)
+    return ord(s[1]) - num0
+
+def is_lower(x:Idx)->bool:
+    s = str(x)
+    return s[0] == 'l'
+
+def is_upper(x:Idx)->bool:
+    s = str(x)
+    return s[0] == 'u'
+
+def get_pair(x:Idx)->Tuple[Idx, Idx]:
+    if is_lower(x):
+        return lookup_pair[x], x
+    else:
+        return x, lookup_pair[x]
+
+def is_pair(a:Idx, b:Idx)->bool:
+    sa = str(a)
+    sb = str(b)
+    assert len(sa) == 2
+    assert len(sb) == 2
+    if sa[1] == sb[1] and ((sa[0] == 'u' and sb[0] == 'l') or (sa[0] == 'l' and sb[0] == 'u')):
+        return True
+    else:
+        return False
+
+# Check that this works
+assert is_pair(ui, li)
+assert is_pair(li, ui)
+assert not is_pair(ui, lj)
+assert not is_pair(li, uj)
+
+def get_free_indices(xpr:Basic)->Set[Idx]:
     """ Return all uncontracted indices in xpr. """
     indices = list(get_indices(xpr))
     indices = sorted(indices, key=byname)
     ret = set()
     i = 0
     while i < len(indices):
-        if i+1 < len(indices) and indices[i] == -indices[i+1]:
+        if i+1 < len(indices) and is_pair(indices[i], indices[i+1]):
             i += 2
         else:
             ret.add(indices[i])
             i += 1
     return ret
 
-def get_contracted_indices(xpr:Basic)->Set[IndexType]:
+M = mkIndexedBase('M',(3,3))
+assert sorted(list(get_free_indices(M[ui,uj]*M[lj, lk])), key=byname) == [ui, lk]
+
+def get_contracted_indices(xpr:Basic)->Set[Idx]:
     """ Return all contracted indices in xpr. """
     indices = list(get_indices(xpr))
     indices = sorted(indices, key=byname)
     ret = set()
     i = 0
     while i < len(indices):
-        if i+1 < len(indices) and indices[i] == -indices[i+1]:
+        if i+1 < len(indices) and is_pair(indices[i], indices[i+1]):
             ret.add(indices[i])
             i += 2
         else:
             i += 1
     return ret
 
-def incr(index_list:List[IndexType], index_values:Dict[IndexType, int])->bool:
+assert sorted(list(get_contracted_indices(M[ui,uj]*M[lj, lk])), key=byname) == [lj]
+
+def incr(index_list:List[Idx], index_values:Dict[Idx, Idx])->bool:
     """ Increment the indices in index_list, creating an index_values table with all possible permutations. """
     if len(index_list) == 0:
         return False
     ix = 0
     if len(index_values)==0:
         for ind_ in index_list:
-            if type(ind_) != Idx:
-                ind = -ind_
-            else:
-                ind = ind_
-            index_values[ind] = 1
-            index_values[-ind] = -1
+            uind, ind = get_pair(ind_)
+            index_values[ind] = l0
+            index_values[uind] = u0
         return True
     while True:
         if ix >= len(index_list):
             return False
-        ind = index_list[ix]
-        if type(ind) != Idx:
-            ind = -ind
-        if index_values[ind] == dimension:
-            index_values[ind] = 1
-            index_values[-ind] = -1 #index_values[ind]
+        uind, ind = get_pair(index_list[ix])
+        index_value = get_numeric_index_value(index_values[ind])
+        if index_value == dimension-1:
+            index_values[ind] = l0
+            index_values[uind] = u0
             ix += 1
         else:
-            index_values[ind] += 1
-            index_values[-ind] = -index_values[ind]
+            index_values[ind] = down_indices[index_value+1]
+            index_values[uind] = up_indices[index_value+1]
             break
     return True
 
-def expand_contracted_indices(xpr:Expr)->Expr:
+# Check
+ilist = [ui, lj]
+dvals : Dict[Idx,Idx] = dict()
+valscount = 0
+while incr(ilist, dvals):
+    valscount += 1
+assert valscount == dimension**2
+
+def expand_contracted_indices(xpr:Expr, sym:Sym)->Expr:
     if type(xpr) == addtype:
         ret : Expr = sympify(0)
         for arg in xpr.args:
             ret += expand_contracted_indices(arg)
         return ret
-    index_list = sorted(list(get_contracted_indices(xpr)), key=str)
+    index_list = sorted(list(get_contracted_indices(xpr)), key=byname)
     if len(index_list) == 0:
         return xpr
     output = sympify(0)
-    index_values : Dict[IndexType, int]= dict()
+    index_values : Dict[Idx, Idx]= dict()
     while incr(index_list, index_values):
-        output += do_subs(xpr, index_values, symmetries)
+        output += do_subs(xpr, index_values, sym)
     return output
 
-def expand_free_indices(xpr:Expr)->List[Tuple[Expr, Dict[IndexType, int]]]:
+# Check
+sym = Sym()
+assert expand_contracted_indices(M[ui, li], sym) == M[u0, l0] + M[u1, l1] + M[u2, l2]
+assert expand_contracted_indices(M[ui, lj]*M[li, uk], sym) == M[l0, uk]*M[u0, lj] + M[l1, uk]*M[u1, lj] + M[l2, uk]*M[u2, lj]
+
+def expand_free_indices(xpr:Expr, sym:Sym)->List[Tuple[Expr, Dict[Idx, Idx]]]:
     index_list = sorted(list(get_free_indices(xpr)), key=str)
-    output : List[Tuple[Expr, Dict[IndexType, int]]] = list()
+    output : List[Tuple[Expr, Dict[Idx, Idx]]] = list()
     xpr = expand_contracted_indices(xpr)
-    index_values : Dict[IndexType, int] = dict()
+    index_values : Dict[Idx, Idx] = dict()
     while incr(index_list, index_values):
         assert len(index_values) != 0, "Something very bad happened"
-        if type(xpr) == Indexed and do_subs(xpr, index_values) in symmetries:
-            continue
-        output += [(do_subs(xpr,index_values, symmetries),index_values.copy())]
+        if type(xpr) == Indexed:
+            result = do_subs(xpr, index_values)
+            if result == symm.apply(result):
+                continue
+        output += [(do_subs(xpr,index_values, sym),index_values.copy())]
     return output
 
-def add_asym(tens:Indexed, ix1:Idx, ix2:Idx)->None:
-    add_sym(tens, ix1, ix2, sgn=-1)
+## def add_asym(tens:Indexed, ix1:Idx, ix2:Idx)->None:
+##     """
+##     add_asym(tens[ua,ub,uc,ud], uc, ud) would make a tensor
+##     that is antisymmetric in the last two indices.
+##     """
+##     add_sym(tens, ix1, ix2, sgn=-1)
 
-def add_sym(tens:Indexed, ix1:Idx, ix2:Idx, sgn:int=1)->None:
-    assert type(tens) == Indexed
-    assert type(tens.args[0]) == IndexedBase, f"tens.args[0]={type(tens.args[0])}"
-    base:IndexedBase = tens.args[0]
-    i1 = -1
-    i2 = -1
-    for i in range(1,len(tens.args)):
-        if tens.args[i] == ix1:
-            i1 = i-1
-        if tens.args[i] == ix2:
-            i2 = i-1
-    assert i1 != -1, f"Index {ix1} not in {tens}"
-    assert i2 != -2, f"Index {ix2} not in {tens}"
-    assert i1 != i2, f"Index {ix1} cannot be symmetric with itself in {tens}"
-    if i1 > i2:
-        i1, i2 = i2, i1
-    index_list : List[IndexType] = cast(List[IndexType], list(tens.args)[1:])
-    # create an index list with i1 and i2 swapped
-    index_list2 = \
-        index_list[:i1] + \
-        index_list[i2:i2+1] + \
-        index_list[i1+1:i2] + \
-        index_list[i1:i1+1] + \
-        index_list[i2+1:]
-    index_values : Dict[IndexType,int] = dict()
-    while incr(index_list, index_values):
-        if index_values[ix1] > index_values[ix2]:
-            args1 = [index_values[ix] for ix in index_list]
-            args2 = [index_values[ix] for ix in index_list2]
-            term1 = mkIndexed(base, *args1)
-            term2 = mkIndexed(base, *args2)
-            symmetries[term1] = sgn*term2
+## def add_sym(tens:Indexed, ix1:Idx, ix2:Idx, sgn:int=1)->None:
+##     """
+##     add_sym(tens[ua,ub,uc,ud], uc, ud) would make a tensor
+##     that is symmetric in the last two indices.
+##     """
+##     assert type(tens) == Indexed
+##     assert type(tens.args[0]) == IndexedBase, f"tens.args[0]={type(tens.args[0])}"
+##     base:IndexedBase = tens.args[0]
+##     i1 = -1
+##     i2 = -1
+##     for i in range(1,len(tens.args)):
+##         if tens.args[i] == ix1:
+##             i1 = i-1
+##         if tens.args[i] == ix2:
+##             i2 = i-1
+##     assert i1 != -1, f"Index {ix1} not in {tens}"
+##     assert i2 != -2, f"Index {ix2} not in {tens}"
+##     assert i1 != i2, f"Index {ix1} cannot be symmetric with itself in {tens}"
+##     if i1 > i2:
+##         i1, i2 = i2, i1
+##     index_list : List[Idx] = cast(List[Idx], list(tens.args)[1:])
+##     # create an index list with i1 and i2 swapped
+##     index_list2 = \
+##         index_list[:i1] + \
+##         index_list[i2:i2+1] + \
+##         index_list[i1+1:i2] + \
+##         index_list[i1:i1+1] + \
+##         index_list[i2+1:]
+##     index_values : Dict[Idx,Idx] = dict()
+##     while incr(index_list, index_values):
+##         if get_numeric_index_value(index_values[ix1]) > get_numeric_index_value(index_values[ix2]):
+##             args1 = [index_values[ix] for ix in index_list]
+##             args2 = [index_values[ix] for ix in index_list2]
+##             term1 = mkIndexed(base, *args1)
+##             term2 = mkIndexed(base, *args2)
+##             symmetries[term1] = sgn*term2
+##             symmetries[term1] = sgn*term2
+
+## # Check
+## add_sym(M[da,db],da,db)
+## assert M[d0,d1].subs(symmetries) == M[d1,d0].subs(symmetries)
+## # It would be bad if anyone actually did this...
+## # A tensor can't really be antisymmetric in its upper indices
+## # and symmetric in its lower indices.
+## add_asym(M[ua,ub],ua,ub)
+## assert M[u0,u1].subs(symmetries) == -M[u1,u0].subs(symmetries)
 
 def mksymbol_for_tensor(out:Indexed)->Symbol:
     """
@@ -176,13 +270,14 @@ def mksymbol_for_tensor(out:Indexed)->Symbol:
     """
     base:str = str(out.args[0])
     for i in out.args[1:]:
-        if i > sympify(0):
+        assert type(i) == Idx
+        if is_upper(i):
             base += "U"
         else:
             base += "D"
     for i in out.args[1:]:
-        assert i.is_Integer
-        base += str(abs(cast(Integer, i))-1)
+        assert type(i) == Idx
+        base += str(get_numeric_index_value(i))
     return mkSymbol(base)
 
 # It's horrible that Python can't let me type this any other way
@@ -199,13 +294,23 @@ def fill_in_default_(out: Indexed, *inds:int)->Expr:
 
 fill_in_default = cast(fill_in_type, fill_in_default_)
 
-subs : Dict[Expr, Expr] = dict()
-def fill_in(indexed:IndexedBase, f:fill_in_type=fill_in_default)->None:
-    for tup in expand_free_indices(indexed):
-        out, _ = tup
-        assert type(out) == Indexed
-        inds = out.indices
-        subs[out] = f(out, *inds)
+## subs : Dict[Expr, Expr] = dict()
+## def fill_in(indexed:IndexedBase, f:fill_in_type=fill_in_default)->None:
+##     for tup in expand_free_indices(indexed):
+##         out, _ = tup
+##         assert type(out) == Indexed
+##         inds = out.indices
+##         subs[out] = f(out, *inds)
+
+## # Check
+## fill_in(M[da,db])
+## assert len(subs) == 6 # M is symmetric
+## subs = dict()
+
+## Q = mkIndexedBase('Q',(3,3))
+## fill_in(Q[da,db])
+## assert len(subs) == 9 # Q has no symmetries
+## subs = dict()
 
 def expand(arg:Expr)->Expr:
     return do_subs(expand_contracted_indices(arg), subs)
@@ -266,9 +371,54 @@ class Param:
         else:
             assert False
 
+####
+div1 = mkFunction("div1")
+val = mkSymbol("val")
+x = mkSymbol("x")
+y = mkSymbol("y")
+z = mkSymbol("z")
+
+#def div1match(u:Symbol)->bool:
+#    if hasattr(u, "func"):
+#        fn = getattr(u, "func")
+#        if fn == div1:
+#            return True
+#    return False
+
+#def div1repl(fun:Symbol)->Expr:
+#    here("fun:",fun, fun.args)
+#    funstr = str(fun.args[0])
+#    g = re.match(r"(.*_d[DU]+)(\d+)$", funstr)
+#    if g:
+#        funstr = g.group(1)
+#        divargs = g.group(2)
+#    else:
+#        funstr += "_d"
+#        divargs = ""
+#    arg2 = fun.args[1]
+#    if arg2 == x:
+#        arg2 = -1
+#    elif arg2 == y:
+#        arg2 = -2
+#    elif arg2 == z:
+#        arg2 = -3
+#    else:
+#        here("arg2:",arg2)
+#        arg2 = int(arg2)
+#    assert arg2 != 0, "For div1repl, we want the base index to be 1 not zero"
+#    if arg2 > 0:
+#        funstr += "U"
+#    else:
+#        funstr += "D"
+#    divargs += str(abs(arg2) - 1)
+#    funstr += divargs
+#    return Symbol(funstr)
+
+####
+
 class GF:
     def __init__(self)->None:
-        self.symmetries : Dict[Indexed,Indexed] = dict()
+        self.symmetries = Sym()
         self.gfs:Dict[str,Union[Indexed, IndexedBase, Symbol]] = dict()
         self.subs : Dict[Expr, Expr] = dict()
         self.eqnlist : EqnList = EqnList()
@@ -277,6 +427,7 @@ class GF:
         self.groups : Dict[str, List[str]] = dict()
         self.props : Dict[str,List[Integer]] = dict()
         self.defn : Dict[str,str] = dict()
+        self.do_div1repl : bool = False
 
     def add_param(self, name:str, default:param_default_type, desc:str, values:param_values_type=None)->Symbol:
         self.params[name] = Param(name, default, desc, values)
@@ -294,20 +445,28 @@ class GF:
                 self.eqnlist.add_param(cast(Symbol, item))
         self.eqnlist.add_eqn(lhs2, rhs2)
 
-    def add_eqn(self, lhs:Union[Indexed,IndexedBase,Symbol], rhs:Symbol)->None:
+    def add_eqn(self, lhs:Union[Indexed,IndexedBase,Symbol], rhs:Symbol, eqntype:str)->None:
         lhs2 : Symbol
         if type(lhs) == Indexed:
             for tup in expand_free_indices(lhs):
                 lhsx, inds = tup
-                lhs2 = cast(Symbol, do_subs(lhsx, self.subs))
-                rhs2 = do_subs(rhs, inds, self.subs)
+                here("inds:",inds)
+                here("lhsx:",lhsx)
+                lhs2 = cast(Symbol, self.do_subs(lhsx, self.subs))
+                here("lhsx:",lhsx)
+                here("rhs:",rhs)
+                rhs2 = self.do_subs(rhs, inds, self.subs)
+                here("rhs:",rhs)
                 self._add_eqn2(lhs2, rhs2)
         elif type(lhs) in [IndexedBase, Symbol]:
-            lhs2 = cast(Symbol, do_subs(lhs, self.subs))
-            rhs2 = do_subs(expand_contracted_indices(rhs), self.subs)
+            lhs2 = cast(Symbol, self.do_subs(lhs, self.subs))
+            eci = expand_contracted_indices(rhs)
+            here("eci:",eci, self.subs)
+            rhs2 = self.do_subs(eci, self.subs)
             self._add_eqn2(lhs2, rhs2)
         else:
             print("other:",lhs,rhs,type(lhs),type(rhs))
+            raise Exception()
 
     def cse(self)->None:
         self.eqnlist.cse()
@@ -318,7 +477,7 @@ class GF:
     def diagnose(self)->None:
         self.eqnlist.diagnose()
 
-    def add_sym(self, tens:Indexed, ix1:IndexType, ix2:IndexType, sgn:int=1)->None:
+    def add_sym(self, tens:Indexed, ix1:Idx, ix2:Idx, sgn:int=1)->None:
         assert type(tens) == Indexed
         base : IndexedBase = cast(IndexedBase, tens.args[0])
         i1 = -1
@@ -333,24 +492,9 @@ class GF:
         assert i1 != i2, f"Index {ix1} cannot be symmetric with itself in {tens}"
         if i1 > i2:
             i1, i2 = i2, i1
-        index_list : List[IndexType] = cast(List[IndexType], list(tens.args)[1:])
-        # create an index list with i1 and i2 swapped
-        index_list2 = \
-            index_list[:i1] + \
-            index_list[i2:i2+1] + \
-            index_list[i1+1:i2] + \
-            index_list[i1:i1+1] + \
-            index_list[i2+1:]
-        index_values : Dict[IndexType, int] = dict()
-        while incr(index_list, index_values):
-            if index_values[ix1] > index_values[ix2]:
-                args1 = [index_values[ix] for ix in index_list]
-                args2 = [index_values[ix] for ix in index_list2]
-                term1 = mkIndexed(base, *args1)
-                term2 = mkIndexed(base, *args2)
-                self.symmetries[term1] = sgn*term2
+        sym.add(tens.base, i1, i2, sgn)
     
-    def decl(self, basename:str, indices:List[IndexType])->IndexedBase:
+    def decl(self, basename:str, indices:List[Idx])->IndexedBase:
         #globs = currentframe().f_back.f_globals
         ret = mkIndexedBase(basename, shape=tuple([dimension]*len(indices)) )
         self.gfs[basename] = ret
@@ -389,48 +533,27 @@ class GF:
         result : List[Eq] = list()
         for tup in expand_free_indices(eqn.lhs):
             lhs, inds = tup
-            result += [mkEq(do_subs(lhs, self.subs), do_subs(eqn.rhs, inds, self.subs))]
+            result += [mkEq(self.do_subs(lhs, self.subs), self.do_subs(eqn.rhs, inds, self.subs))]
         return result
 
     def expand(self, arg:Symbol)->Expr:
-        return do_subs(expand_contracted_indices(arg), self.subs)
+        return self.do_subs(expand_contracted_indices(arg), self.subs)
+
+    def do_subs(self, arg, *subs:Expr):
+        if self.do_div1repl:
+            newv1 = do_subs(arg, *subs)
+            here("subs:",subs)
+            newv2 = newv1.replace(div1match, div1repl)
+            print("Do div:", newv1, "->", newv2)
+            return newv2
+        else:
+            return do_subs(arg, *subs)
 
 if __name__ == "__main__":
-    #===========================
-    # IndexedBase is a tensor object without indices
-    # Indexed is a tensor object with indices
-    # indices are of type Idx
-    M = mkIndexedBase('M',(3,3))
-    P = mkIndexedBase('P',(3,3))
-    R = mkIndexedBase('R',(3,3))
-
-    # Negative index is contracted
-    mm = M[i,j]*M[-j,k]
-
-    # Define symmetries
-    add_asym(P[i,j],i,j)
-    add_asym(M[i,j],i,j)
-
-    # Want to generate code for an equation like this:
-    form = mkEq(P[i,k], expand_contracted_indices(mm + R[i,k]))
-
-    print("form:",form.lhs,"=",form.rhs)
-
-    # Create substitution rules for code generation
-    mysubs : Dict[Expr, Expr] = dict()
-    for tup in expand_free_indices(M[-i,j]) + \
-            expand_free_indices(M[i,j]) + \
-            expand_free_indices(R[i,j]) + \
-            expand_free_indices(P[i,j]):
-        out, _ = tup
-        # mksymbol_for_tensor uses the standard NRPy+ notation
-        assert type(out) == Indexed
-        mysubs[out] = mksymbol_for_tensor(out)
-
-    # Generate the code expressions by iterating over
-    # the free (non-contracted) indices in the equation
-    for tup in  expand_free_indices(form.lhs):
-        # Substitute the resluts with mysubs
-        # Internally, the rhs will have contracted indices expanded
-        #print(out.lhs.subs(mysubs),"=",out.rhs.subs(mysubs))
-        out, inds = tup
+    gf = GF()
+    gf.decl("M",[la,lb])
+    gf.add_sym(M[la,lb], la, lb)
+    gf.decl("B",[lc,lb])
+    for out in gf.expand_eqn(Eq(M[la,lb], B[la,lb])):
+        print(out)
+    pass

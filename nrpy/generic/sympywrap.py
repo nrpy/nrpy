@@ -1,6 +1,14 @@
 from typing import Tuple, List, Dict, Any, Union, cast
 from sympy import cse as cse_, IndexedBase, Idx, Symbol, Expr, Eq, Basic, sympify as sympify_, Expr, Mul, Indexed, Function
 import re
+from abc import ABC, abstractmethod
+from sympy.core.function import UndefinedFunction as UFunc
+
+class Applier(ABC):
+
+    @abstractmethod
+    def apply(self, Basic:Basic)->Basic:
+        ...
 
 IndexType = Union[Idx,Mul]
 
@@ -14,7 +22,7 @@ def mkIdx(name:str)->Idx:
 def mkSymbol(name:str)->Symbol:
     return Symbol(name) # type: ignore[no-untyped-call]
 
-def mkFunction(name:str)->Symbol:
+def mkFunction(name:str)->UFunc:
     return Function(name) # type: ignore[no-any-return]
 
 def mkEq(a:Basic, b:Basic)->Eq:
@@ -33,12 +41,16 @@ def sympify(arg:Any)->Expr:
     return cast(Expr, sympify_(arg)) # type: ignore[no-untyped-call]
 
 def do_subs(sym:Expr, *tables:Union[
-        Dict[Idx|Mul,int],
+        Dict[Idx,Idx],
         Dict[Indexed, Indexed],
         Dict[Expr, Expr],
-        Dict[Symbol, Symbol]
+        Dict[Symbol, Symbol],
+        Applier
         ])->Expr:
     result = sym
     for table in tables:
-        result = cast(Expr, result.subs(table)) # type: ignore[no-untyped-call]
+        if isinstance(table, Applier):
+            result = cast(Expr, table.apply(result))
+        else:
+            result = cast(Expr, result.subs(table)) # type: ignore[no-untyped-call]
     return result

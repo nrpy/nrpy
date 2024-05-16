@@ -20,6 +20,8 @@ def flat_metric(out:Indexed, i:int, j:int)->Expr:
 
 # Create a set of grid functions
 gf = GF()
+m = True
+gf.do_div1repl = m
 
 # Declare gfs
 p   = gf.decl("p",[-i])
@@ -39,22 +41,27 @@ spd = gf.add_param("spd", default=1.0, desc="The wave speed")
 gf.fill_in(g[i,j], flat_metric)
 
 # Fill in with defaults
+gf.fill_in(p[i], lambda _,i: mkSymbol(f"pD{i}"))
 gf.fill_in(p_t[-i], lambda _,i: mkSymbol(f"p_tD{i}"))
-gf.fill_in(p[-i], lambda _,i: mkSymbol(f"pD{i}"))
 
 
 # Fill in the deriv variables with a function call
 #
 div1 = Function("div1")
-def mkdiv1(var:str, a:int)->Symbol:
-    return cast(Symbol, div1(mkSymbol(var), sympify(a)))
+def mkdiv1(var:IndexedBase, a:int)->Symbol:
+    return cast(Symbol, div1(var, sympify(a)))
 
-gf.fill_in(p_d[-i,-j], lambda _,i,j: mkdiv1(f"pD{j}",i))
-gf.fill_in(u_d[-i], lambda _,i: mkdiv1("u",i))
+if m:
+    gf.fill_in(p_d[-i,-j], lambda _,i,j: mkdiv1(p[j],i))
+    gf.fill_in(u_d[-i], lambda _,i: mkdiv1(u,i))
+else:
+    # div1(p[j], i) -> p_D0_dD1
+    gf.fill_in(p_d[-i,-j], lambda _,i,j: div1(p[j],i), base_zero=not m)
+    gf.fill_in(u_d[-i], lambda _,i: div1(u,i), base_zero=not m)
 
 # Add the equations we want to evolve.
-gf.add_eqn(p_t[-j], spd*u_d[-j])
-gf.add_eqn(u_t, spd*g[i,j]*p_d[-i,-j] )
+gf.add_eqn(p_t[-j], spd*div1(u,-j), "EVO")
+gf.add_eqn(u_t, spd*g[i,j]*div1(p[-j],-i), "EVO")
 
 # Ensure the equations make sense
 gf.diagnose()
@@ -68,11 +75,16 @@ gf.cse()
 # Display again in case there are changes
 gf.dump()
 
+# Probably want to have multiple GF objects
+#gf.set_function("wave_evol")
+#gf.set_schedule("MoL_CalcRHS")
+
 def generate_cactus_thorn(
     gf : GF,
     project_dir : str,
     thorn_name : str,
     inherits : Optional[str]=None)->None:
+
     output : Set[str] = set()
     for gfn in gf.gfs:
         gfs = mkSymbol(gfn)
@@ -136,4 +148,6 @@ def generate_cactus_thorn(
     #    is_evol_thorn=True,
     #    enable_NewRad=False)
 
-generate_cactus_thorn(gf, "wavetoy", "WaveToyProj")
+generate_Carpet_thorn(gf, "wavetoy", "WaveToyProj")
+generate_CarpetX_thorn(gf, "wavetoy", "WaveToyProj")
+generate_StandaloneRust(gf)

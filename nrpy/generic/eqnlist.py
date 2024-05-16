@@ -4,6 +4,12 @@ from sympy.core.symbol import Symbol
 from sympy.core.expr import Expr
 from sympy import symbols, Function, diff
 from nrpy.helpers.colorize_text import colorize
+from sympy.core.function import UndefinedFunction as UFunc
+from enum import Enum
+
+class RWSpec(Enum):
+    IN = "Interior"
+    EW = "Everywhere"
 
 from nrpy.generic.sympywrap import *
 
@@ -29,6 +35,13 @@ class EqnList:
         self.outputs:Set[Symbol] = set()
         self.order:List[Symbol] = list()
         self.verbose = True
+        self.is_stencil:Dict[UFunc,bool] = dict()
+        self.read_decls:Dict[Symbol,RWSpec] = dict()
+        self.write_decls:Dict[Symbol,RWSpec] = dict()
+        self.default_read_write_spec:RWSpec = RWSpec.IN
+
+    def add_func(self, fun:UFunc, is_stencil:bool)->None:
+        self.is_stencil[fun] = is_stencil
 
     def add_param(self, lhs:Symbol)->None:
         assert lhs not in self.outputs, f"The symbol '{lhs}' is alredy in outputs"
@@ -59,6 +72,35 @@ class EqnList:
         read:Set[Symbol] = set()
         written:Set[Symbol] = set()
 
+        self.read_decls.clear()
+        self.write_decls.clear()
+
+        self.lhs : Symbol
+
+        def ftrace(sym:Symbol)->bool:
+            if sym.is_Function and self.is_stencil.get(sym.func, False):
+                for arg in sym.args:
+                    sym = cast(Symbol, arg)
+                    self.read_decls[sym] = RWSpec.EW
+                    self.write_decls[self.lhs] = RWSpec.IN
+            return False
+
+        def noop(x:Symbol)->Symbol:
+            return x
+
+        for lhs in self.eqns:
+            self.lhs = lhs
+            rhs = self.eqns[lhs]
+            rhs.replace(ftrace, noop) # type: ignore[no-untyped-call]
+
+        for arg in self.inputs:
+            if arg not in self.read_decls:
+                self.read_decls[arg] = self.default_read_write_spec
+
+        for lhs in self.eqns:
+            rhs = self.eqns[lhs]
+            print(colorize("EQN:","cyan"),lhs,colorize("=","cyan"),rhs)
+
         if self.verbose:
             print(colorize("Inputs:","green"),self.inputs)
             print(colorize("Outputs:","green"),self.outputs)
@@ -72,7 +114,6 @@ class EqnList:
         if self.verbose:
             print(colorize("Read:","green"),read)
             print(colorize("Written:","green"),written)
-            print(colorize("Temps:","green"),temps)
 
         for k in self.inputs:
             assert k in read, f"Symbol '{k}' is in inputs, but it is never read. {read}"
@@ -89,8 +130,11 @@ class EqnList:
             if k not in self.inputs and k not in self.params:
                 temps.add(k)
 
+        if self.verbose:
+            print(colorize("Temps:","green"),temps)
+
         for k in temps:
-            assert k in read, f"Temmporary variable '{k}' is never read"
+            assert k in read, f"Temporary variable '{k}' is never read"
             assert k in written, f"Temporary variable '{k}' is never written"
 
         for k in read:
@@ -145,6 +189,44 @@ class EqnList:
                     else:
                         find_cycle = k
         print(colorize("Order:","green"),self.order)
+
+        # Figure out the rest of the READ/WRITEs
+        for var in self.order:
+            if var in self.inputs and var not in self.read_decls:
+                self.read_decls[var] = RWSpec.EW #self.default_read_write_spec
+            elif var in self.outputs and var not in self.write_decls:
+                spec = RWSpec.EW
+                for rvar in self.eqns[var].free_symbols:
+                    sym = cast(Symbol, rvar)
+                    if self.read_decls.get(sym, RWSpec.EW) == RWSpec.IN:
+                        spec = RWSpec.IN
+                        break
+                self.write_decls[var] = spec
+            elif var in temps and var in self.write_decls and var not in self.read_decls:
+                self.read_decls[var] = self.write_decls[var]
+            elif var in temps and var not in self.write_decls:
+                spec = self.default_read_write_spec
+                if spec != RWSpec.IN:
+                    for rvar in self.eqns[var].free_symbols:
+                        sym = cast(Symbol, rvar)
+                        if self.read_decls.get(sym, RWSpec.EW) == RWSpec.IN:
+                            spec = RWSpec.IN
+                            break
+                self.write_decls[var] = spec
+                self.read_decls[var] = spec
+
+        if self.verbose:
+            print(colorize("READS:","green"),end="")
+            for var, spec in self.read_decls.items():
+                if var in self.inputs:
+                    print(" ",var,"=",colorize(spec.value,"yellow"),sep="",end="")
+            print()
+            print(colorize("WRITES:","green"),end="")
+            for var, spec in self.write_decls.items():
+                if var in self.outputs:
+                    print(" ",var,"=",colorize(spec.value,"yellow"),sep="",end="")
+            print()
+
         for k,v in self.eqns.items():
             assert k in complete, f"Eqn '{k} = {v}' does not contribute to the output."
             val1:int = complete[k]
@@ -202,6 +284,40 @@ class EqnList:
 
 if __name__ == "__main__":
     a, b, c, d, e, f, g, q, r = symbols("a b c d e f g q r")
+    try:
+        div = mkFunction("div")
+        el = EqnList()
+        el.default_read_write_spec = RWSpec.IN
+        el.add_func(div, True)
+        el.add_input(a)
+        el.add_eqn(c, sympify(3))
+        el.add_eqn(b, 2*c+sympify(8))
+        el.add_eqn(f, div(a) + c)
+        el.add_eqn(d, b + c + f)
+        el.add_output(c)
+        el.add_output(d)
+
+        el.diagnose()
+        assert el.read_decls[a] == RWSpec.EW
+        assert el.write_decls[d] == RWSpec.IN
+        assert el.write_decls[c] == RWSpec.EW
+
+        el.default_read_write_spec = RWSpec.EW
+        el.add_func(div, True)
+        el.diagnose()
+        assert el.read_decls[a] == RWSpec.EW
+        assert el.write_decls[d] == RWSpec.IN
+        assert el.write_decls[c] == RWSpec.EW
+
+        el.default_read_write_spec = RWSpec.EW
+        el.add_func(div, False)
+        el.diagnose()
+        assert el.read_decls[a] == RWSpec.EW
+        assert el.write_decls[d] == RWSpec.EW
+        assert el.write_decls[c] == RWSpec.EW
+    finally:
+        print("Test zero passed")
+        print()
 
     try:
         el = EqnList()
