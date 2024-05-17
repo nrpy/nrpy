@@ -198,7 +198,8 @@ def expand_free_indices(xpr:Expr, sym:Sym)->List[Tuple[Expr, Dict[Idx, Idx]]]:
         assert len(index_values) != 0, "Something very bad happened"
         if type(xpr) == Indexed:
             result = do_subs(xpr, index_values)
-            if result == sym.apply(result):
+            sym_result = sym.apply(result)
+            if result != sym_result:
                 continue
         output += [(do_subs(xpr,index_values, sym),index_values.copy())]
     return output
@@ -426,7 +427,7 @@ class GF:
         self.base_of : Dict[str, str] = dict()
         self.groups : Dict[str, List[str]] = dict()
         self.props : Dict[str,List[Integer]] = dict()
-        self.defn : Dict[str,str] = dict()
+        self.defn : Dict[str,Tuple[str,List[Idx]]] = dict()
 
     def add_param(self, name:str, default:param_default_type, desc:str, values:param_values_type=None)->Symbol:
         self.params[name] = Param(name, default, desc, values)
@@ -494,14 +495,17 @@ class GF:
         sym.add(tens.base, i1, i2, sgn)
     
     def decl(self, basename:str, indices:List[Idx])->IndexedBase:
+        ret = mkIndexedBase(basename, shape=tuple([dimension]*len(indices)) )
+        self.gfs[basename] = ret
+        self.defn[basename] = (basename, list(indices))
+
+        # If possible, insert the symbol into the current environment
         frame = currentframe()
         f_back = None if frame is None else frame.f_back
         globs  = None if f_back is None else f_back.f_globals
-        ret = mkIndexedBase(basename, shape=tuple([dimension]*len(indices)) )
-        self.gfs[basename] = ret
-        self.defn[basename] = f"{basename}{indices}"
         if globs is not None:
             globs[basename] = ret
+
         return ret
 
     def fill_in(self, indexed:IndexedBase, f:fill_in_type=fill_in_default, base_zero:bool=True)->None:
@@ -546,11 +550,33 @@ class GF:
 
 if __name__ == "__main__":
     gf = GF()
-    gf.decl("M",[la,lb])
-    gf.add_sym(M[la,lb], la, lb)
-    gf.decl("B",[lc,lb])
+    B = gf.decl("B",[lc,lb])
+    M = gf.decl("M",[la,lb])
 
-    B : IndexedBase
+    # Anti-Symmetric
+    gf.add_sym(M[la,lb], la, lb, -1)
+
+    n = 0
     for out in gf.expand_eqn(mkEq(M[la,lb], B[la,lb])):
         print(out)
-    pass
+        n += 1
+    assert n==3
+
+    # Symmetric
+    N = gf.decl("N",[la,lb])
+    gf.add_sym(N[la,lb], la, lb, 1)
+
+    n = 0
+    for out in gf.expand_eqn(mkEq(N[la,lb], B[la,lb])):
+        print(out)
+        n += 1
+    assert n==6
+
+    # Non-Symmetric
+    Q = gf.decl("Q",[la,lb])
+
+    n = 0
+    for out in gf.expand_eqn(mkEq(Q[la,lb], B[la,lb])):
+        print(out)
+        n += 1
+    assert n==9

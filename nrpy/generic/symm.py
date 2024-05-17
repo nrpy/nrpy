@@ -50,6 +50,7 @@ class Sym(Applier):
                 args[ind1], args[ind2] = args[ind2], args[ind1]
                 retsgn *= sgn
             elif s1 == s2 and sgn < 0:
+                self.modified = True
                 return sympify(0)
         if retsgn == 1:
             ret =  expr.base.__getitem__(tuple(args))
