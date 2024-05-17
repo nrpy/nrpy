@@ -192,13 +192,13 @@ assert expand_contracted_indices(M[ui, lj]*M[li, uk], sym) == M[l0, uk]*M[u0, lj
 def expand_free_indices(xpr:Expr, sym:Sym)->List[Tuple[Expr, Dict[Idx, Idx]]]:
     index_list = sorted(list(get_free_indices(xpr)), key=str)
     output : List[Tuple[Expr, Dict[Idx, Idx]]] = list()
-    xpr = expand_contracted_indices(xpr)
+    xpr = expand_contracted_indices(xpr, sym)
     index_values : Dict[Idx, Idx] = dict()
     while incr(index_list, index_values):
         assert len(index_values) != 0, "Something very bad happened"
         if type(xpr) == Indexed:
             result = do_subs(xpr, index_values)
-            if result == symm.apply(result):
+            if result == sym.apply(result):
                 continue
         output += [(do_subs(xpr,index_values, sym),index_values.copy())]
     return output
@@ -495,11 +495,11 @@ class GF:
         sym.add(tens.base, i1, i2, sgn)
     
     def decl(self, basename:str, indices:List[Idx])->IndexedBase:
-        #globs = currentframe().f_back.f_globals
+        globs = currentframe().f_back.f_globals
         ret = mkIndexedBase(basename, shape=tuple([dimension]*len(indices)) )
         self.gfs[basename] = ret
         self.defn[basename] = f"{basename}{indices}"
-        #globs[basename] = ret
+        globs[basename] = ret
         return ret
 
     def fill_in(self, indexed:IndexedBase, f:fill_in_type=fill_in_default, base_zero:bool=True)->None:
@@ -531,7 +531,7 @@ class GF:
 
     def expand_eqn(self, eqn:Eq)->List[Eq]:
         result : List[Eq] = list()
-        for tup in expand_free_indices(eqn.lhs):
+        for tup in expand_free_indices(eqn.lhs, sym):
             lhs, inds = tup
             result += [mkEq(self.do_subs(lhs, self.subs), self.do_subs(eqn.rhs, inds, self.subs))]
         return result
@@ -554,6 +554,7 @@ if __name__ == "__main__":
     gf.decl("M",[la,lb])
     gf.add_sym(M[la,lb], la, lb)
     gf.decl("B",[lc,lb])
+
     for out in gf.expand_eqn(Eq(M[la,lb], B[la,lb])):
         print(out)
     pass
