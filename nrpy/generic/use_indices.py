@@ -173,7 +173,7 @@ def expand_contracted_indices(xpr:Expr, sym:Sym)->Expr:
     if type(xpr) == addtype:
         ret : Expr = sympify(0)
         for arg in xpr.args:
-            ret += expand_contracted_indices(arg)
+            ret += expand_contracted_indices(arg, sym)
         return ret
     index_list = sorted(list(get_contracted_indices(xpr)), key=byname)
     if len(index_list) == 0:
@@ -312,8 +312,8 @@ fill_in_default = cast(fill_in_type, fill_in_default_)
 ## assert len(subs) == 9 # Q has no symmetries
 ## subs = dict()
 
-def expand(arg:Expr)->Expr:
-    return do_subs(expand_contracted_indices(arg), subs)
+#def expand(arg:Expr, sym:Sym)->Expr:
+#    return do_subs(expand_contracted_indices(arg, sym), subs)
             
 param_default_type = Union[float,int,str,bool]
 param_values_type = Optional[Union[Tuple[float,float],Tuple[int,int],Tuple[bool,bool],str,Set[str]]]
@@ -427,7 +427,6 @@ class GF:
         self.groups : Dict[str, List[str]] = dict()
         self.props : Dict[str,List[Integer]] = dict()
         self.defn : Dict[str,str] = dict()
-        self.do_div1repl : bool = False
 
     def add_param(self, name:str, default:param_default_type, desc:str, values:param_values_type=None)->Symbol:
         self.params[name] = Param(name, default, desc, values)
@@ -448,7 +447,7 @@ class GF:
     def add_eqn(self, lhs:Union[Indexed,IndexedBase,Symbol], rhs:Symbol, eqntype:str)->None:
         lhs2 : Symbol
         if type(lhs) == Indexed:
-            for tup in expand_free_indices(lhs):
+            for tup in expand_free_indices(lhs, self.symmetries):
                 lhsx, inds = tup
                 here("inds:",inds)
                 here("lhsx:",lhsx)
@@ -460,7 +459,7 @@ class GF:
                 self._add_eqn2(lhs2, rhs2)
         elif type(lhs) in [IndexedBase, Symbol]:
             lhs2 = cast(Symbol, self.do_subs(lhs, self.subs))
-            eci = expand_contracted_indices(rhs)
+            eci = expand_contracted_indices(rhs, self.symmetries)
             here("eci:",eci, self.subs)
             rhs2 = self.do_subs(eci, self.subs)
             self._add_eqn2(lhs2, rhs2)
@@ -495,15 +494,18 @@ class GF:
         sym.add(tens.base, i1, i2, sgn)
     
     def decl(self, basename:str, indices:List[Idx])->IndexedBase:
-        globs = currentframe().f_back.f_globals
+        frame = currentframe()
+        f_back = None if frame is None else frame.f_back
+        globs  = None if f_back is None else f_back.f_globals
         ret = mkIndexedBase(basename, shape=tuple([dimension]*len(indices)) )
         self.gfs[basename] = ret
         self.defn[basename] = f"{basename}{indices}"
-        globs[basename] = ret
+        if globs is not None:
+            globs[basename] = ret
         return ret
 
     def fill_in(self, indexed:IndexedBase, f:fill_in_type=fill_in_default, base_zero:bool=True)->None:
-        for tup in expand_free_indices(indexed):
+        for tup in expand_free_indices(indexed, self.symmetries):
             out, _ = tup
             assert type(out) == Indexed
             inds = out.indices
@@ -537,17 +539,10 @@ class GF:
         return result
 
     def expand(self, arg:Symbol)->Expr:
-        return self.do_subs(expand_contracted_indices(arg), self.subs)
+        return self.do_subs(expand_contracted_indices(arg, self.symmetries), self.subs)
 
-    def do_subs(self, arg, *subs:Expr):
-        if self.do_div1repl:
-            newv1 = do_subs(arg, *subs)
-            here("subs:",subs)
-            newv2 = newv1.replace(div1match, div1repl)
-            print("Do div:", newv1, "->", newv2)
-            return newv2
-        else:
-            return do_subs(arg, *subs)
+    def do_subs(self, arg:Expr, *subs:do_subs_table_type)->Expr:
+        return do_subs(arg, *subs)
 
 if __name__ == "__main__":
     gf = GF()
@@ -555,6 +550,7 @@ if __name__ == "__main__":
     gf.add_sym(M[la,lb], la, lb)
     gf.decl("B",[lc,lb])
 
-    for out in gf.expand_eqn(Eq(M[la,lb], B[la,lb])):
+    B : IndexedBase
+    for out in gf.expand_eqn(mkEq(M[la,lb], B[la,lb])):
         print(out)
     pass

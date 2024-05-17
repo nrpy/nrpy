@@ -40,13 +40,15 @@ def mkIndexed(base:IndexedBase, *args:Union[int,IndexType])->Indexed:
 def sympify(arg:Any)->Expr:
     return cast(Expr, sympify_(arg)) # type: ignore[no-untyped-call]
 
-def do_subs(sym:Expr, *tables:Union[
+do_subs_table_type = Union[
         Dict[Idx,Idx],
         Dict[Indexed, Indexed],
         Dict[Expr, Expr],
         Dict[Symbol, Symbol],
         Applier
-        ])->Expr:
+        ]
+
+def do_subs(sym:Expr, *tables:do_subs_table_type)->Expr:
     result = sym
     for table in tables:
         if isinstance(table, Applier):
