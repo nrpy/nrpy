@@ -6,13 +6,14 @@ from typing import cast, Optional, Set
 from sympy import IndexedBase, Idx, symbols, Basic, Expr, Indexed, Symbol, Function
 from nrpy.generic.sympywrap import *
 from nrpy.generic.eqnlist import EqnList
-from nrpy.generic.use_indices import expand, add_sym, fill_in, GF, expand_free_indices
+from nrpy.generic.use_indices import *
 from nrpy.infrastructures.ETLegacy.interface_ccl import construct_interface_ccl
 from nrpy.helpers.colorize_text import colorize
+from here import here
 
-i, j, k = mkIdxs('i j k')
-
-def flat_metric(out:Indexed, i:int, j:int)->Expr:
+def flat_metric(out:Indexed, ni:Idx, nj:Idx)->Expr:
+    i = to_num(ni)
+    j = to_num(nj)
     if i==j:
         return sympify(1)
     else:
@@ -20,51 +21,59 @@ def flat_metric(out:Indexed, i:int, j:int)->Expr:
 
 # Create a set of grid functions
 gf = GF()
-m = True
-gf.do_div1repl = m
 
 # Declare gfs
-p   = gf.decl("p",[-i])
-p_t = gf.decl("p_t",[-i])
-p_d = gf.decl("p_d",[-i,-j])
+p   = gf.decl("p",[li])
+p_t = gf.decl("p_t",[li])
+p_d = gf.decl("p_d",[li,lj])
 u   = gf.decl("u",[])
 u_t = gf.decl("u_t",[])
-u_d = gf.decl("u_d",[i])
+u_d = gf.decl("u_d",[ui])
+
+siter2 = gf.decl("siter2", [li,lj])
+gf.add_sym(siter2[li,lj], li, lj)
+iter1 = gf.decl("iter1", [li])
 
 # Declare the metric
-g   = gf.decl("g",  [i,j])
+g = gf.decl("g",  [li,lj])
 
 # Declare params
 spd = gf.add_param("spd", default=1.0, desc="The wave speed")
 
 # Fill in values
-gf.fill_in(g[i,j], flat_metric)
+gf.fill_in(g[li,lj], flat_metric)
+here()
+gf.fill_in(g[ui,uj], flat_metric)
 
 # Fill in with defaults
-gf.fill_in(p[i], lambda _,i: mkSymbol(f"pD{i}"))
-gf.fill_in(p_t[-i], lambda _,i: mkSymbol(f"p_tD{i}"))
+here()
+gf.fill_in(p[li], lambda _,i: mkSymbol(f"pD{to_num(i)}"))
+here()
+gf.fill_in(p_t[li], lambda _,i: mkSymbol(f"p_tD{to_num(i)}"))
 
 
 # Fill in the deriv variables with a function call
 #
-div1 = Function("div1")
-def mkdiv1(var:IndexedBase, a:int)->Symbol:
-    return cast(Symbol, div1(var, sympify(a)))
+gf.declfun("div1", True)
+here()
+gf.fill_in(p_d[li,lj], lambda _,i,j: div1(p[j],i))
+here()
+gf.fill_in(u_d[li], lambda _,i: div1(u,i))
+here()
+gf.fill_in(siter2[li,lj], alt=div1(p[li],lj), f=lambda _,i,j: mkSymbol(f"pD{to_num(i)}_dD{to_num(j)}"))
+here()
+gf.fill_in(iter1[lj], alt=div1(u,lj), f=lambda _,j: mkSymbol(f"u_dD{to_num(j)}"))
 
-if m:
-    gf.fill_in(p_d[-i,-j], lambda _,i,j: mkdiv1(p[j],i))
-    gf.fill_in(u_d[-i], lambda _,i: mkdiv1(u,i))
-else:
-    # div1(p[j], i) -> p_D0_dD1
-    gf.fill_in(p_d[-i,-j], lambda _,i,j: div1(p[j],i), base_zero=not m)
-    gf.fill_in(u_d[-i], lambda _,i: div1(u,i), base_zero=not m)
+here()
+res = gf.do_subs(spd*g[ui,uj]*div1(p[lj],li))
 
 # Add the equations we want to evolve.
-gf.add_eqn(p_t[-j], spd*div1(u,-j), "EVO")
-gf.add_eqn(u_t, spd*g[i,j]*div1(p[-j],-i), "EVO")
+gf.add_eqn(p_t[lj], spd*div1(u,lj), "EVO")
+gf.add_eqn(u_t, spd*g[ui,uj]*div1(p[lj],li), "EVO")
 
 # Ensure the equations make sense
 gf.diagnose()
+exit(0)
 
 # Display the equations in final form
 gf.dump()
@@ -148,6 +157,6 @@ def generate_cactus_thorn(
     #    is_evol_thorn=True,
     #    enable_NewRad=False)
 
-generate_Carpet_thorn(gf, "wavetoy", "WaveToyProj")
-generate_CarpetX_thorn(gf, "wavetoy", "WaveToyProj")
-generate_StandaloneRust(gf)
+#generate_Carpet_thorn(gf, "wavetoy", "WaveToyProj")
+#generate_CarpetX_thorn(gf, "wavetoy", "WaveToyProj")
+#generate_StandaloneRust(gf)

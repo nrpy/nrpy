@@ -20,6 +20,11 @@ def mkPair(s:str)->Tuple[Idx,Idx]:
     lookup_pair[u] = l
     return u, l
 
+def to_num(ind:Idx):
+    s = str(ind)
+    assert s[0] in ["u", "l"]
+    return int(s[1])
+
 # Some basic indexes to use
 ui, li = mkPair('i')
 uj, lj = mkPair('j')
@@ -27,10 +32,14 @@ uk, lk = mkPair('k')
 ua, la = mkPair('a')
 ub, lb = mkPair('b')
 uc, lc = mkPair('c')
-up_indices = mkIdxs('u0 u1 u2 u3 u4 u5')
-down_indices = mkIdxs('l0 l1 l2 l3 l4 l5')
-u0, u1, u2, u3, u4, u5 = up_indices
-l0, l1, l2, l3, l4, l5 = down_indices
+u0, l0 = mkPair('0')
+u1, l1 = mkPair('1')
+u2, l2 = mkPair('2')
+u3, l3 = mkPair('3')
+u4, l4 = mkPair('4')
+u5, l5 = mkPair('5')
+up_indices = u0, u1, u2, u3, u4, u5 
+down_indices = l0, l1, l2, l3, l4, l5 
 
 multype = Mul #type(i*j)
 addtype = type(ui + uj)
@@ -42,9 +51,27 @@ def set_dimension(dim:int)->None:
     global dimension
     dimension = dim
 
+ord0 = ord('0')
+ord9 = ord('9')
+def is_letter_index(sym):
+    if type(sym) != Idx:
+        return False
+    s = str(sym)
+    if len(s) != 2:
+        return False
+    if s[0] not in ["u","l"]:
+        return False
+    n = ord(s[1])
+    return n < ord0 or n > ord9
+
 def get_indices(xpr:Basic)->Set[Idx]:
     """ Return all indices of IndexedBase objects in xpr. """
     ret = set()
+    for sym in xpr.free_symbols:
+        if is_letter_index(sym):
+            ret.add(sym)
+    return ret
+    ###
     if type(xpr) in [multype, addtype, powtype]:
         for arg in xpr.args:
             ret.update(get_indices(arg))
@@ -434,6 +461,7 @@ class GF:
         return mkSymbol(name)
 
     def _add_eqn2(self, lhs2:Symbol, rhs2:Expr)->None:
+        rhs2 = self.do_subs(expand_contracted_indices(rhs2, self.symmetries))
         if str(lhs2) in self.gfs:
             self.eqnlist.add_output(lhs2)
         for item in rhs2.free_symbols:
@@ -450,18 +478,13 @@ class GF:
         if type(lhs) == Indexed:
             for tup in expand_free_indices(lhs, self.symmetries):
                 lhsx, inds = tup
-                here("inds:",inds)
-                here("lhsx:",lhsx)
                 lhs2 = cast(Symbol, self.do_subs(lhsx, self.subs))
-                here("lhsx:",lhsx)
-                here("rhs:",rhs)
                 rhs2 = self.do_subs(rhs, inds, self.subs)
-                here("rhs:",rhs)
+                rhs2 = self.do_subs(rhs2, inds, self.subs)
                 self._add_eqn2(lhs2, rhs2)
         elif type(lhs) in [IndexedBase, Symbol]:
             lhs2 = cast(Symbol, self.do_subs(lhs, self.subs))
             eci = expand_contracted_indices(rhs, self.symmetries)
-            here("eci:",eci, self.subs)
             rhs2 = self.do_subs(eci, self.subs)
             self._add_eqn2(lhs2, rhs2)
         else:
@@ -494,6 +517,19 @@ class GF:
             i1, i2 = i2, i1
         sym.add(tens.base, i1, i2, sgn)
     
+    def declfun(self, funname:str, is_stencil:bool)->UFunc:
+        fun = mkFunction(funname)
+        self.eqnlist.add_func(fun, is_stencil)
+
+        # If possible, insert the symbol into the current environment
+        frame = currentframe()
+        f_back = None if frame is None else frame.f_back
+        globs  = None if f_back is None else f_back.f_globals
+        if globs is not None:
+            globs[funname] = fun
+
+        return fun
+
     def decl(self, basename:str, indices:List[Idx])->IndexedBase:
         ret = mkIndexedBase(basename, shape=tuple([dimension]*len(indices)) )
         self.gfs[basename] = ret
@@ -508,14 +544,17 @@ class GF:
 
         return ret
 
-    def fill_in(self, indexed:IndexedBase, f:fill_in_type=fill_in_default, base_zero:bool=True)->None:
+    def fill_in(self, indexed:IndexedBase, f:fill_in_type=fill_in_default, alt:Any=None)->None:
         for tup in expand_free_indices(indexed, self.symmetries):
-            out, _ = tup
+            out, indrep = tup
             assert type(out) == Indexed
             inds = out.indices
-            if base_zero:
-                inds = [abs(i)-1 for i in inds]
-            subval_ = f(out, *inds)
+            if alt is None:
+                subj = out
+            else:
+                subj = self.do_subs(alt, indrep)
+            subval_ = f(subj, *inds)
+                
             if subval_.is_Number:
                 pass
             elif subval_.is_Function:
@@ -529,11 +568,8 @@ class GF:
                     self.groups[str(out.base)] = list()
                 members = self.groups[str(out.base)]
                 members.append(str(subval))
-                print(f"base of {subval} is {out.base}")
-                print(f"groups of {out.base} is {members}")
-            print(colorize(subval_,"red"),colorize("->","magenta"),colorize(inds,"cyan"))
-            self.subs[out] = subval_
-            self.props[str(subval_)] = out.indices
+            print(colorize(subj,"red"),colorize("->","magenta"),colorize(subval_,"cyan"))
+            self.subs[subj] = subval_
 
     def expand_eqn(self, eqn:Eq)->List[Eq]:
         result : List[Eq] = list()
@@ -542,11 +578,18 @@ class GF:
             result += [mkEq(self.do_subs(lhs, self.subs), self.do_subs(eqn.rhs, inds, self.subs))]
         return result
 
-    def expand(self, arg:Symbol)->Expr:
-        return self.do_subs(expand_contracted_indices(arg, self.symmetries), self.subs)
+    #def expand(self, arg:Symbol)->Expr:
+    #    return self.do_subs(expand_contracted_indices(arg, self.symmetries), self.subs)
 
     def do_subs(self, arg:Expr, *subs:do_subs_table_type)->Expr:
-        return do_subs(arg, *subs)
+        for i in range(20):
+            new_arg = arg
+            new_arg = expand_contracted_indices(new_arg, self.symmetries)
+            new_arg = do_subs(new_arg, self.subs, *subs)
+            if new_arg == arg:
+                return arg
+            arg = new_arg
+        raise Exception(str(new_args))
 
 if __name__ == "__main__":
     gf = GF()
