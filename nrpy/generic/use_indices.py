@@ -3,6 +3,7 @@ Use the Sympy Indexed type for relativity expressions.
 """
 from typing import Union, Set, Dict, List, Any, cast, Callable, Tuple, Optional, Type
 from sympy import IndexedBase, Idx, Eq, Indexed, Basic, Mul, Expr, Eq, Symbol, Integer
+from sympy.core.function import UndefinedFunction as UFunc
 from inspect import currentframe
 from nrpy.generic.sympywrap import *
 from nrpy.generic.eqnlist import EqnList
@@ -10,7 +11,6 @@ from nrpy.generic.symm import Sym
 from nrpy.helpers.colorize_text import colorize
 import re
 import sys
-from here import here
 
 lookup_pair = dict()
 def mkPair(s:str)->Tuple[Idx,Idx]:
@@ -20,7 +20,7 @@ def mkPair(s:str)->Tuple[Idx,Idx]:
     lookup_pair[u] = l
     return u, l
 
-def to_num(ind:Idx):
+def to_num(ind:Idx)->int:
     s = str(ind)
     assert s[0] in ["u", "l"]
     return int(s[1])
@@ -53,7 +53,7 @@ def set_dimension(dim:int)->None:
 
 ord0 = ord('0')
 ord9 = ord('9')
-def is_letter_index(sym):
+def is_letter_index(sym:Basic)->bool:
     if type(sym) != Idx:
         return False
     s = str(sym)
@@ -69,7 +69,7 @@ def get_indices(xpr:Basic)->Set[Idx]:
     ret = set()
     for sym in xpr.free_symbols:
         if is_letter_index(sym):
-            ret.add(sym)
+            ret.add(cast(Idx, sym))
     return ret
     ###
     if type(xpr) in [multype, addtype, powtype]:
@@ -231,60 +231,6 @@ def expand_free_indices(xpr:Expr, sym:Sym)->List[Tuple[Expr, Dict[Idx, Idx]]]:
         output += [(do_subs(xpr,index_values, sym),index_values.copy())]
     return output
 
-## def add_asym(tens:Indexed, ix1:Idx, ix2:Idx)->None:
-##     """
-##     add_asym(tens[ua,ub,uc,ud], uc, ud) would make a tensor
-##     that is antisymmetric in the last two indices.
-##     """
-##     add_sym(tens, ix1, ix2, sgn=-1)
-
-## def add_sym(tens:Indexed, ix1:Idx, ix2:Idx, sgn:int=1)->None:
-##     """
-##     add_sym(tens[ua,ub,uc,ud], uc, ud) would make a tensor
-##     that is symmetric in the last two indices.
-##     """
-##     assert type(tens) == Indexed
-##     assert type(tens.args[0]) == IndexedBase, f"tens.args[0]={type(tens.args[0])}"
-##     base:IndexedBase = tens.args[0]
-##     i1 = -1
-##     i2 = -1
-##     for i in range(1,len(tens.args)):
-##         if tens.args[i] == ix1:
-##             i1 = i-1
-##         if tens.args[i] == ix2:
-##             i2 = i-1
-##     assert i1 != -1, f"Index {ix1} not in {tens}"
-##     assert i2 != -2, f"Index {ix2} not in {tens}"
-##     assert i1 != i2, f"Index {ix1} cannot be symmetric with itself in {tens}"
-##     if i1 > i2:
-##         i1, i2 = i2, i1
-##     index_list : List[Idx] = cast(List[Idx], list(tens.args)[1:])
-##     # create an index list with i1 and i2 swapped
-##     index_list2 = \
-##         index_list[:i1] + \
-##         index_list[i2:i2+1] + \
-##         index_list[i1+1:i2] + \
-##         index_list[i1:i1+1] + \
-##         index_list[i2+1:]
-##     index_values : Dict[Idx,Idx] = dict()
-##     while incr(index_list, index_values):
-##         if get_numeric_index_value(index_values[ix1]) > get_numeric_index_value(index_values[ix2]):
-##             args1 = [index_values[ix] for ix in index_list]
-##             args2 = [index_values[ix] for ix in index_list2]
-##             term1 = mkIndexed(base, *args1)
-##             term2 = mkIndexed(base, *args2)
-##             symmetries[term1] = sgn*term2
-##             symmetries[term1] = sgn*term2
-
-## # Check
-## add_sym(M[da,db],da,db)
-## assert M[d0,d1].subs(symmetries) == M[d1,d0].subs(symmetries)
-## # It would be bad if anyone actually did this...
-## # A tensor can't really be antisymmetric in its upper indices
-## # and symmetric in its lower indices.
-## add_asym(M[ua,ub],ua,ub)
-## assert M[u0,u1].subs(symmetries) == -M[u1,u0].subs(symmetries)
-
 def mksymbol_for_tensor(out:Indexed)->Symbol:
     """
     Define a symbol for a tensor using standard NRPy+ rules.
@@ -310,38 +256,17 @@ def mksymbol_for_tensor(out:Indexed)->Symbol:
 
 # It's horrible that Python can't let me type this any other way
 fill_in_type = Union[
-    Callable[[Indexed,int], Expr],
-    Callable[[Indexed,int,int], Expr],
-    Callable[[Indexed,int,int,int], Expr],
-    Callable[[Indexed,int,int,int,int], Expr],
-    Callable[[Indexed,int,int,int,int,int], Expr],
-    Callable[[Indexed,int,int,int,int,int,int], Expr]]
+    Callable[[Expr,Idx], Expr],
+    Callable[[Expr,Idx,Idx], Expr],
+    Callable[[Expr,Idx,Idx,Idx], Expr],
+    Callable[[Expr,Idx,Idx,Idx,Idx], Expr],
+    Callable[[Expr,Idx,Idx,Idx,Idx,Idx], Expr],
+    Callable[[Expr,Idx,Idx,Idx,Idx,Idx,Idx], Expr]]
 
 def fill_in_default_(out: Indexed, *inds:int)->Expr:
     return mksymbol_for_tensor(out)
 
 fill_in_default = cast(fill_in_type, fill_in_default_)
-
-## subs : Dict[Expr, Expr] = dict()
-## def fill_in(indexed:IndexedBase, f:fill_in_type=fill_in_default)->None:
-##     for tup in expand_free_indices(indexed):
-##         out, _ = tup
-##         assert type(out) == Indexed
-##         inds = out.indices
-##         subs[out] = f(out, *inds)
-
-## # Check
-## fill_in(M[da,db])
-## assert len(subs) == 6 # M is symmetric
-## subs = dict()
-
-## Q = mkIndexedBase('Q',(3,3))
-## fill_in(Q[da,db])
-## assert len(subs) == 9 # Q has no symmetries
-## subs = dict()
-
-#def expand(arg:Expr, sym:Sym)->Expr:
-#    return do_subs(expand_contracted_indices(arg, sym), subs)
             
 param_default_type = Union[float,int,str,bool]
 param_values_type = Optional[Union[Tuple[float,float],Tuple[int,int],Tuple[bool,bool],str,Set[str]]]
@@ -405,44 +330,6 @@ val = mkSymbol("val")
 x = mkSymbol("x")
 y = mkSymbol("y")
 z = mkSymbol("z")
-
-#def div1match(u:Symbol)->bool:
-#    if hasattr(u, "func"):
-#        fn = getattr(u, "func")
-#        if fn == div1:
-#            return True
-#    return False
-
-#def div1repl(fun:Symbol)->Expr:
-#    here("fun:",fun, fun.args)
-#    funstr = str(fun.args[0])
-#    g = re.match(r"(.*_d[DU]+)(\d+)$", funstr)
-#    if g:
-#        funstr = g.group(1)
-#        divargs = g.group(2)
-#    else:
-#        funstr += "_d"
-#        divargs = ""
-#    arg2 = fun.args[1]
-#    if arg2 == x:
-#        arg2 = -1
-#    elif arg2 == y:
-#        arg2 = -2
-#    elif arg2 == z:
-#        arg2 = -3
-#    else:
-#        here("arg2:",arg2)
-#        arg2 = int(arg2)
-#    assert arg2 != 0, "For div1repl, we want the base index to be 1 not zero"
-#    if arg2 > 0:
-#        funstr += "U"
-#    else:
-#        funstr += "D"
-#    divargs += str(abs(arg2) - 1)
-#    funstr += divargs
-#    return Symbol(funstr)
-
-####
 
 class GF:
     def __init__(self)->None:
@@ -549,6 +436,7 @@ class GF:
             out, indrep = tup
             assert type(out) == Indexed
             inds = out.indices
+            subj : Expr
             if alt is None:
                 subj = out
             else:
@@ -589,7 +477,7 @@ class GF:
             if new_arg == arg:
                 return arg
             arg = new_arg
-        raise Exception(str(new_args))
+        raise Exception(str(arg))
 
 if __name__ == "__main__":
     gf = GF()
