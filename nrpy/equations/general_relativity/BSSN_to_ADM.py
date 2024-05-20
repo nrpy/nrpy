@@ -7,8 +7,9 @@ Author: Zachariah B. Etienne
 
 # Step 1.a: import all needed modules from NRPy+:
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
-import nrpy.params as par  # NRPy+: parameter interface
+
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
+import nrpy.params as par  # NRPy+: parameter interface
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 
 
@@ -174,6 +175,7 @@ if __name__ == "__main__":
     import doctest
     import os
     import sys
+
     import nrpy.validate_expressions.validate_expressions as ve
 
     results = doctest.testmod()

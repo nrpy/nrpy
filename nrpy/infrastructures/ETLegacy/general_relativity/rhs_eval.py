@@ -8,27 +8,27 @@ Authors: Zachariah B. Etienne
 
 import re
 from collections import OrderedDict as ODict
-from typing import Union, cast, List
 from inspect import currentframe as cfr
 from types import FrameType as FT
+from typing import List, Union, cast
+
 import sympy as sp
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-import nrpy.grid as gri
-import nrpy.params as par
-import nrpy.indexedexp as ixp
-import nrpy.helpers.parallel_codegen as pcg
 import nrpy.finite_difference as fin
-
+import nrpy.grid as gri
+import nrpy.helpers.parallel_codegen as pcg
+import nrpy.indexedexp as ixp
 import nrpy.infrastructures.ETLegacy.simple_loop as lp
+import nrpy.params as par
+import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
+from nrpy.equations.general_relativity.BSSN_gauge_RHSs import BSSN_gauge_RHSs
+from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
+from nrpy.equations.general_relativity.BSSN_RHSs import BSSN_RHSs
 from nrpy.infrastructures.ETLegacy.ETLegacy_include_header import (
     define_standard_includes,
 )
-from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
-from nrpy.equations.general_relativity.BSSN_RHSs import BSSN_RHSs
-from nrpy.equations.general_relativity.BSSN_gauge_RHSs import BSSN_gauge_RHSs
-import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 
 
 def register_CFunction_rhs_eval(

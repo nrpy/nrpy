@@ -6,12 +6,14 @@ Author: Zachariah B. Etienne
 """
 
 from typing import Dict, List
+
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
+
+import nrpy.grid as gri  # NRPy+: Functions having to do with numerical grids
+import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 
 # Step 1: Import all needed modules from NRPy+:
 import nrpy.params as par  # NRPy+: Parameter interface
-import nrpy.grid as gri  # NRPy+: Functions having to do with numerical grids
-import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 
 #  Declare/initialize parameters for this module
@@ -614,6 +616,7 @@ if __name__ == "__main__":
     import doctest
     import os
     import sys
+
     import nrpy.validate_expressions.validate_expressions as ve
 
     results = doctest.testmod()

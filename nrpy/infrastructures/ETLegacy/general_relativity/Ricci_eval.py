@@ -6,22 +6,21 @@ Authors: Zachariah B. Etienne
          Samuel Cupp
 """
 
-from typing import Union, cast, List
 from inspect import currentframe as cfr
 from types import FrameType as FT
+from typing import List, Union, cast
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-import nrpy.grid as gri
-import nrpy.params as par
-import nrpy.helpers.parallel_codegen as pcg
 import nrpy.finite_difference as fin
-
+import nrpy.grid as gri
+import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.ETLegacy.simple_loop as lp
+import nrpy.params as par
+from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.infrastructures.ETLegacy.ETLegacy_include_header import (
     define_standard_includes,
 )
-from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 
 
 def register_CFunction_Ricci_eval(

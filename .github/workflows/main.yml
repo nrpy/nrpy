@@ -76,19 +76,33 @@ jobs:
         for python_file in $python_files; do
           echo ""
           echo "-={ $python_file }=-"
+
+          # Initialize step counter
+          step_counter=1
+
           if [[ ! $python_file =~ nrpy/examples/.* ]]; then
-            echo "-={ Step 1: Doctests/run Python module }=-"
+            echo "-={ Step $step_counter: Doctests/run Python module }=-"
             DOCTEST_MODE=1 PYTHONPATH=.:$PYTHONPATH python $python_file || { failed_tests+=("doctest in $python_file"); break; }
+            ((step_counter++))
           fi
+
           # Turns out that black in Python 3.6 & 3.7 has a heart attack when parsing equations/general_relativity/BSSN_quantities.py:
           # INTERNAL ERROR: Black produced code that is not equivalent to the source. Please report a bug on ....
           if [[ "${{ matrix.python-version }}" != "3.6.7" && "${{ matrix.python-version }}" != "3.7.13" && "${{ matrix.python-version }}" != "3.8.18" ]]; then
-            echo "-={ Step 2: black $python_file }=-"
+            echo "-={ Step $step_counter: black }=-"
             black --check $python_file || { failed_tests+=("black in $python_file"); break; }
-            echo "-={ Step 3: mypy }=-"
+            ((step_counter++))
+
+            echo "-={ Step $step_counter: isort }=-"
+            isort --check-only $python_file || { failed_tests+=("isort in $python_file"); break; }
+            ((step_counter++))
+
+            echo "-={ Step $step_counter: mypy }=-"
             PYTHONPATH=.:$PYTHONPATH mypy --strict --pretty --allow-untyped-calls $python_file || { failed_tests+=("mypy in $python_file"); break; }
+            ((step_counter++))
           fi
-          echo "-={ Step 4: pylint }=-"
+
+          echo "-={ Step $step_counter: pylint }=-"
           pylint_score="0"
           if [[ "${{ matrix.python-version }}" == "3.6.7" || "${{ matrix.python-version }}" == "3.7.13" ]]; then
             pylint_score=$(PYTHONPATH=.:$PYTHONPATH pylint --rcfile=.pylintrc_python36 $python_file | tail -2 | grep -Eo '[0-9\.]+' | head -1 || echo "0")
@@ -102,11 +116,15 @@ jobs:
             failed_tests+=("pylint in $python_file")
             break
           fi
-          PYTHONPATH=.:$PYTHONPATH pylint --rcfile=.pylintrc $python_file || true
-          echo "-={ Step 5: pydocstyle }=-"
+          ((step_counter++))
+
+          echo "-={ Step $step_counter: pydocstyle }=-"
           pydocstyle $python_file || { failed_tests+=("pydocstyle in $python_file"); break; }
-          echo "-={ Step 6: darglint }=-"
+          ((step_counter++))
+
+          echo "-={ Step $step_counter: darglint }=-"
           darglint -v 2 $python_file || { failed_tests+=("darglint in $python_file"); break; }
+          ((step_counter++))
         done
 
         if [ ${#failed_tests[@]} -ne 0 ]; then

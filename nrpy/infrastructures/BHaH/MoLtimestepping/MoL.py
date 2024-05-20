@@ -7,21 +7,20 @@ Authors: Brandon Clark
          zachetie **at** gmail **dot* com
 """
 
-from typing import List, Union, Dict, Tuple
 import os  # Standard Python module for multiplatform OS-level functions
 import warnings
+from typing import Dict, List, Tuple, Union
+
 import sympy as sp  # Import SymPy, a computer algebra system written entirely in Python
-import nrpy.params as par  # NRPy+: Parameter interface
+
 import nrpy.c_function as cfc
+import nrpy.params as par  # NRPy+: Parameter interface
 from nrpy.c_codegen import c_codegen
+from nrpy.helpers.generic import superfast_uniq
+from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
 from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import (
     generate_Butcher_tables,
 )
-from nrpy.helpers.generic import (
-    superfast_uniq,
-)
-from nrpy.infrastructures.BHaH import griddata_commondata
-from nrpy.infrastructures.BHaH import BHaH_defines_h
 
 # fmt: off
 _ = par.CodeParameter("int", __name__, "nn_0", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)

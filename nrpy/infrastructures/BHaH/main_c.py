@@ -6,6 +6,7 @@ Author: Zachariah B. Etienne
 """
 
 from typing import List, Tuple
+
 import nrpy.c_function as cfc
 
 

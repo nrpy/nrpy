@@ -5,13 +5,14 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from pathlib import Path
+import multiprocessing
 import os
+import platform
 import shutil
 import subprocess
-import platform
-import multiprocessing
+from pathlib import Path
 from typing import List, Optional
+
 import cpuinfo  # type: ignore
 
 from nrpy.c_function import CFunction_dict

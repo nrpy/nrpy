@@ -7,16 +7,16 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import Tuple, List
-import sympy as sp
-import nrpy.indexedexp as ixp
-import nrpy.params as par
+from typing import List, Tuple
 
-from nrpy.equations.general_relativity.ADM_to_BSSN import ADM_to_BSSN
+import sympy as sp
 
 # NRPy+: This module depends on the parameter EvolvedConformalFactor_cf,
 #        which is defined in BSSN.BSSN_quantities
 import nrpy.equations.general_relativity.BSSN_quantities  # pylint: disable=unused-import
+import nrpy.indexedexp as ixp
+import nrpy.params as par
+from nrpy.equations.general_relativity.ADM_to_BSSN import ADM_to_BSSN
 
 
 class InitialData_Spherical:
@@ -309,6 +309,7 @@ if __name__ == "__main__":
     import doctest
     import os
     import sys
+
     import nrpy.validate_expressions.validate_expressions as ve
 
     results = doctest.testmod()

@@ -15,22 +15,23 @@ superB changes/additions to nrpy.infrastructures.BHaH.MoLtimestepping.MoL.py:
 -allocate memory to diagnostic output gfs
 """
 
-from typing import List, Union, Dict, Tuple
 import os  # Standard Python module for multiplatform OS-level functions
+from typing import Dict, List, Tuple, Union
+
 import sympy as sp  # Import SymPy, a computer algebra system written entirely in Python
-import nrpy.params as par  # NRPy+: Parameter interface
+
 import nrpy.c_function as cfc
-from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import (
-    generate_Butcher_tables,
-)
-from nrpy.infrastructures.BHaH import griddata_commondata
-from nrpy.infrastructures.BHaH import BHaH_defines_h
+import nrpy.params as par  # NRPy+: Parameter interface
+from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
 from nrpy.infrastructures.BHaH.MoLtimestepping.MoL import (
     generate_gridfunction_names,
     is_diagonal_Butcher,
     register_CFunction_MoL_free_memory,
     register_CFunction_MoL_malloc,
     single_RK_substep_input_symbolic,
+)
+from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import (
+    generate_Butcher_tables,
 )
 
 # fmt: off

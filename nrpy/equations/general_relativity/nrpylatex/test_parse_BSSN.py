@@ -6,15 +6,18 @@ Email:  ksible *at* outlook *dot* com
 """
 
 from typing import List, cast
+
 import sympy as sp
 from nrpylatex import parse_latex  # type: ignore
 
-from nrpy.validate_expressions.validate_expressions import assert_equal
 import nrpy.params as par
-from nrpy.equations.general_relativity import BSSN_RHSs
-from nrpy.equations.general_relativity import BSSN_quantities
-from nrpy.equations.general_relativity import BSSN_gauge_RHSs
-from nrpy.equations.general_relativity import BSSN_constraints
+from nrpy.equations.general_relativity import (
+    BSSN_constraints,
+    BSSN_gauge_RHSs,
+    BSSN_quantities,
+    BSSN_RHSs,
+)
+from nrpy.validate_expressions.validate_expressions import assert_equal
 
 
 def test_example_BSSN() -> bool:

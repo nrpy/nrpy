@@ -5,31 +5,33 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
+import os
+
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
 import shutil
-import os
 
-import nrpy.params as par
-from nrpy.helpers import simd
 import nrpy.helpers.parallel_codegen as pcg
-
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 import nrpy.infrastructures.BHaH.checkpointing as chkpt
-import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
+import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
-from nrpy.infrastructures.BHaH import griddata_commondata
 import nrpy.infrastructures.BHaH.main_c as main
 import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
-from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
 import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
-from nrpy.infrastructures.BHaH import rfm_precompute
-from nrpy.infrastructures.BHaH import rfm_wrapper_functions
 import nrpy.infrastructures.BHaH.wave_equation.wave_equation_C_codegen_library as wCl
-from nrpy.infrastructures.BHaH import xx_tofrom_Cart
+import nrpy.params as par
+from nrpy.helpers import simd
+from nrpy.infrastructures.BHaH import (
+    griddata_commondata,
+    rfm_precompute,
+    rfm_wrapper_functions,
+    xx_tofrom_Cart,
+)
+from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 

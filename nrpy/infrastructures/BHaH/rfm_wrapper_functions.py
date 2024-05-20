@@ -5,9 +5,9 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import List, Dict
 import hashlib
 import re
+from typing import Dict, List
 
 import nrpy.c_function as cfc
 from nrpy.infrastructures.BHaH.BHaH_defines_h import register_BHaH_defines

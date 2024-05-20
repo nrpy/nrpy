@@ -8,7 +8,8 @@ Authors: Brandon Clark
 """
 
 # Step 1: Initialize needed Python/NRPy+ modules
-from typing import Dict, List, Union, Tuple
+from typing import Dict, List, Tuple, Union
+
 import sympy as sp  # Import SymPy, Python's computer algebra system
 
 

@@ -10,8 +10,10 @@ Email: njadoo *at* uidaho *dot* edu
 
 """
 
-from typing import List, Union, Tuple
+from typing import List, Tuple, Union
+
 import sympy as sp
+
 import nrpy.indexedexp as ixp
 
 

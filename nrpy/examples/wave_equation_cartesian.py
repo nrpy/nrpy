@@ -5,33 +5,32 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
+import os
+
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
 import shutil
-import os
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.indexedexp as ixp
-import nrpy.params as par
-from nrpy.helpers import simd
-
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
-from nrpy.infrastructures.BHaH import griddata_commondata
 import nrpy.infrastructures.BHaH.main_c as main
 import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
-from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
 import nrpy.infrastructures.BHaH.simple_loop as lp
+import nrpy.params as par
 from nrpy.equations.wave_equation.WaveEquation_RHSs import WaveEquation_RHSs
 from nrpy.equations.wave_equation.WaveEquation_Solutions_InitialData import (
     WaveEquation_solution_Cartesian,
 )
-
+from nrpy.helpers import simd
+from nrpy.infrastructures.BHaH import griddata_commondata
+from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 

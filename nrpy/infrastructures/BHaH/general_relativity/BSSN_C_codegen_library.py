@@ -6,37 +6,36 @@ Author: Zachariah B. Etienne
 """
 
 from collections import OrderedDict as ODict
-from typing import List, Union, cast, Tuple, Dict
-from pathlib import Path
 from inspect import currentframe as cfr
+from pathlib import Path
 from types import FrameType as FT
+from typing import Dict, List, Tuple, Union, cast
+
 import sympy as sp
 
-import nrpy.grid as gri
-import nrpy.params as par
 import nrpy.c_codegen as ccg
-import nrpy.finite_difference as fin
 import nrpy.c_function as cfc
-import nrpy.indexedexp as ixp
-import nrpy.reference_metric as refmetric
-
+import nrpy.equations.general_relativity.psi4 as psifour
+import nrpy.equations.general_relativity.psi4_tetrads as psifourtet
+import nrpy.finite_difference as fin
+import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
-
+import nrpy.indexedexp as ixp
+import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices as out012d
+import nrpy.infrastructures.BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter as admid
+import nrpy.infrastructures.BHaH.simple_loop as lp
+import nrpy.params as par
+import nrpy.reference_metric as refmetric
+from nrpy.equations.general_relativity.BSSN_constraints import BSSN_constraints
+from nrpy.equations.general_relativity.BSSN_gauge_RHSs import BSSN_gauge_RHSs
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.equations.general_relativity.BSSN_RHSs import BSSN_RHSs
-from nrpy.equations.general_relativity.BSSN_gauge_RHSs import BSSN_gauge_RHSs
-from nrpy.equations.general_relativity.BSSN_constraints import BSSN_constraints
 from nrpy.equations.general_relativity.InitialData_Cartesian import (
     InitialData_Cartesian,
 )
 from nrpy.equations.general_relativity.InitialData_Spherical import (
     InitialData_Spherical,
 )
-import nrpy.equations.general_relativity.psi4 as psifour
-import nrpy.equations.general_relativity.psi4_tetrads as psifourtet
-import nrpy.infrastructures.BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter as admid
-import nrpy.infrastructures.BHaH.simple_loop as lp
-import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices as out012d
 
 
 def register_CFunction_initial_data(

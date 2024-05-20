@@ -7,17 +7,19 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
+from collections import OrderedDict
+
 # Step 1.a: import all needed modules from NRPy+:
 from typing import Dict
-from collections import OrderedDict
+
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
 
-import nrpy.params as par  # NRPy+: Parameter interface
 import nrpy.grid as gri
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
+import nrpy.params as par  # NRPy+: Parameter interface
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
-from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.equations.general_relativity import T4munu
+from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 
 have_already_called_BSSN_RHSs_function = False
 
@@ -400,6 +402,7 @@ if __name__ == "__main__":
     import doctest
     import os
     import sys
+
     import nrpy.validate_expressions.validate_expressions as ve
 
     results = doctest.testmod()

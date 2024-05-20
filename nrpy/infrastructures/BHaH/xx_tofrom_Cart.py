@@ -5,10 +5,10 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-import nrpy.reference_metric as refmetric
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
+import nrpy.reference_metric as refmetric
 
 
 # Construct Cart_to_xx_and_nearest_i0i1i2() C function for

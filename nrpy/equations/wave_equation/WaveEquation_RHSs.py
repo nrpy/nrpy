@@ -25,6 +25,7 @@ and nabla is the Laplacian differential operator.
 
 # Step P1: Import needed modules:
 import sympy as sp
+
 import nrpy.grid as gri  # NRPy+: Functionality for handling numerical grids
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 
@@ -72,6 +73,7 @@ if __name__ == "__main__":
     import doctest
     import os
     import sys
+
     import nrpy.validate_expressions.validate_expressions as ve
 
     results = doctest.testmod()

@@ -10,6 +10,7 @@ Author: Zachariah B. Etienne
 """
 
 from typing import List
+
 import nrpy.c_function as cfc
 import nrpy.reference_metric as refmetric
 

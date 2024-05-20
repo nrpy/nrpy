@@ -7,35 +7,37 @@ Emails: ksible *at* outlook *dot** com
         zachetie *at* gmail *dot** com
 """
 
-from typing import Dict, Union, Any, Optional
 import shutil
 from pathlib import Path
+from typing import Any, Dict, Optional, Union
+
 from sympy import (
+    Abs,
+    Add,
     Basic,
     Expr,
     Float,
     Function,
     Integer,
+    Mul,
+    Pow,
     Rational,
+    S,
     Symbol,
-    Abs,
-    Add,
     cos,
     exp,
     log,
-    Mul,
-    Pow,
     preorder_traversal,
     sign,
-    sin,
     simplify,
+    sin,
     srepr,
-    S,
     sympify,
     var,
 )
-from nrpy.helpers.expr_tree import ExprTree
+
 from nrpy.helpers.cse_preprocess_postprocess import cse_preprocess
+from nrpy.helpers.expr_tree import ExprTree
 
 
 # Basic Arithmetic Operations (Debugging)

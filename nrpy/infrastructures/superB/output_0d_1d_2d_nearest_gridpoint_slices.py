@@ -28,13 +28,15 @@ Author: Zachariah B. Etienne
         njadoo **at** uidaho **dot* edu
 """
 
-from typing import Dict, Tuple, Union, cast
 from inspect import currentframe as cfr
 from types import FrameType as FT
+from typing import Dict, Tuple, Union, cast
+
 import sympy as sp
-import nrpy.indexedexp as ixp
+
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
+import nrpy.indexedexp as ixp
 import nrpy.infrastructures.superB.simple_loop_diagnostic as lp
 
 

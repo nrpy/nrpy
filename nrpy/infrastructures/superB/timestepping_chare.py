@@ -9,9 +9,10 @@ Author: Zachariah B. Etienne
 
 from pathlib import Path
 from typing import List, Tuple
+
 import nrpy.c_function as cfc
-from nrpy.infrastructures.BHaH import griddata_commondata
 from nrpy.helpers.generic import clang_format
+from nrpy.infrastructures.BHaH import griddata_commondata
 
 
 def generate_mol_step_forward_code(rk_substep: str) -> str:

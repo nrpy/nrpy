@@ -7,13 +7,14 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import List, Any, Union, Dict, Tuple, Optional, Sequence, cast
-from typing_extensions import Literal
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union, cast
+
 import sympy as sp
+from typing_extensions import Literal
+
 import nrpy.indexedexp as ixp
 import nrpy.params as par
 from nrpy.helpers.type_annotation_utilities import validate_literal_arguments
-
 
 centerings = Literal[
     "CCC",

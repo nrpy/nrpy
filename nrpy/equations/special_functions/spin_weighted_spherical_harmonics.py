@@ -9,7 +9,8 @@ Authors: Brandon Clark
          zachetie **at** gmail **dot* com
 """
 
-from typing import cast, Dict
+from typing import Dict, cast
+
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
 
 from nrpy.helpers.cached_functions import cached_simplify
@@ -77,6 +78,7 @@ if __name__ == "__main__":
     import doctest
     import os
     import sys
+
     import nrpy.validate_expressions.validate_expressions as ve
 
     results = doctest.testmod()

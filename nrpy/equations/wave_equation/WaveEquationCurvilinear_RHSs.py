@@ -26,12 +26,13 @@ partial_t v = hat{g}^{i j} partial_{i} partial_{j} u - hat{Gamma}^i partial_i u
 
 # Step P1: Import needed modules:
 import sympy as sp  # For symbolic computations
+
 import nrpy.grid as gri  # NRPy+: Functionality for handling numerical grids
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
-from nrpy.equations.wave_equation.CommonParams import (
+from nrpy.equations.wave_equation.CommonParams import (  # NRPy+: Common parameters for all WaveEquation modules (defines wavespeed)
     wavespeed,
-)  # NRPy+: Common parameters for all WaveEquation modules (defines wavespeed)
+)
 
 # The name of this module ("WaveEquationCurvilinear") is given by __name__:
 thismodule: str = __name__
@@ -119,6 +120,7 @@ if __name__ == "__main__":
     import doctest
     import os
     import sys
+
     import nrpy.validate_expressions.validate_expressions as ve
 
     results = doctest.testmod()

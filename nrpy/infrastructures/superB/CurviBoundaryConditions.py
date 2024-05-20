@@ -10,6 +10,7 @@ Authors: Zachariah B. Etienne
 
 # Step P1: Import needed NRPy+ core modules:
 from typing import List
+
 import nrpy.c_function as cfc
 
 

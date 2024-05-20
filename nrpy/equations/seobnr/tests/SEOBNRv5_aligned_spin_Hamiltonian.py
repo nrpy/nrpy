@@ -1,4 +1,4 @@
-from mpmath import mpf, mpc  # type: ignore
+from mpmath import mpc, mpf  # type: ignore
 
 trusted_dict = {
     "Hreal": mpc(

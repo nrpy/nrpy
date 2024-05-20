@@ -17,7 +17,9 @@ Author: Zachariah B. Etienne; zachetie **at** gmail **dot* com
 """
 
 from typing import Sequence
+
 import sympy as sp
+
 import nrpy.indexedexp as ixp
 import nrpy.reference_metric as refmetric
 

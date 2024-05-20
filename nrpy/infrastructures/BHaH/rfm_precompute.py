@@ -6,6 +6,7 @@ Author: Zachariah B. Etienne
 """
 
 from typing import List
+
 import sympy as sp
 import sympy.codegen.ast as sp_ast
 

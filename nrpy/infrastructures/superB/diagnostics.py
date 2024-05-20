@@ -7,14 +7,14 @@ Author: Zachariah B. Etienne
         njadoo **at** uidaho **dot* edu
 """
 
-from typing import List, Union, cast, Tuple, Dict
 from inspect import currentframe as cfr
 from types import FrameType as FT
+from typing import Dict, List, Tuple, Union, cast
 
-import nrpy.params as par
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.superB.output_0d_1d_2d_nearest_gridpoint_slices as out012d
+import nrpy.params as par
 from nrpy.infrastructures.BHaH import griddata_commondata
 
 

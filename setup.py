@@ -11,11 +11,12 @@ Instructions for uploading latest release to PyPI:
 """
 
 import os
-import sys
 import subprocess
+import sys
 from pathlib import Path
 from typing import List
-from setuptools import setup, find_packages  # type: ignore
+
+from setuptools import find_packages, setup  # type: ignore
 
 # pylint: disable=consider-using-f-string
 

@@ -9,6 +9,7 @@ Author: Zachariah B. Etienne
 
 from pathlib import Path
 from typing import List, Tuple
+
 import nrpy.c_function as cfc
 import nrpy.params as par
 from nrpy.helpers.generic import clang_format

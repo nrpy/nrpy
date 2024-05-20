@@ -6,8 +6,9 @@ Author: Zachariah B. Etienne
         Samuel Cupp
 """
 
-from typing import List
 from pathlib import Path
+from typing import List
+
 import nrpy.grid as gri
 from nrpy.helpers.conditional_file_updater import ConditionalFileUpdater
 

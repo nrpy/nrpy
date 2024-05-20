@@ -8,8 +8,10 @@ License: BSD 2-Clause
 """
 
 # Import needed modules
-from typing import cast, List
+from typing import List, cast
+
 import sympy as sp  # For symbolic computations
+
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 
 
