@@ -5,38 +5,39 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
+import os
+from inspect import currentframe as cfr
+from pathlib import Path
+from types import FrameType as FT
+
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
-from typing import Union, cast, List
-from pathlib import Path
-from inspect import currentframe as cfr
-from types import FrameType as FT
-import os
+from typing import List, Union, cast
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
-import nrpy.indexedexp as ixp
-import nrpy.params as par
 import nrpy.helpers.parallel_codegen as pcg
-from nrpy.helpers import simd
-
+import nrpy.indexedexp as ixp
+import nrpy.infrastructures.ETLegacy.simple_loop as lp
+import nrpy.params as par
+from nrpy.equations.wave_equation.WaveEquation_RHSs import WaveEquation_RHSs
 from nrpy.equations.wave_equation.WaveEquation_Solutions_InitialData import (
     WaveEquation_solution_Cartesian,
 )
-from nrpy.equations.wave_equation.WaveEquation_RHSs import WaveEquation_RHSs
-import nrpy.infrastructures.ETLegacy.simple_loop as lp
-from nrpy.infrastructures.ETLegacy import boundary_conditions
-from nrpy.infrastructures.ETLegacy import CodeParameters
-from nrpy.infrastructures.ETLegacy import make_code_defn
-from nrpy.infrastructures.ETLegacy import MoL_registration
-from nrpy.infrastructures.ETLegacy import Symmetry_registration
-from nrpy.infrastructures.ETLegacy import zero_rhss
-from nrpy.infrastructures.ETLegacy import schedule_ccl
-from nrpy.infrastructures.ETLegacy import interface_ccl
-from nrpy.infrastructures.ETLegacy import param_ccl
-
+from nrpy.helpers import simd
+from nrpy.infrastructures.ETLegacy import (
+    CodeParameters,
+    MoL_registration,
+    Symmetry_registration,
+    boundary_conditions,
+    interface_ccl,
+    make_code_defn,
+    param_ccl,
+    schedule_ccl,
+    zero_rhss,
+)
 
 par.set_parval_from_str("Infrastructure", "ETLegacy")
 

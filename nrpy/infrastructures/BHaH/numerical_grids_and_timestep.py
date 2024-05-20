@@ -8,11 +8,13 @@ Author: Zachariah B. Etienne
 """
 
 from typing import Dict, List
+
 import sympy as sp
+
+import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
-import nrpy.c_codegen as ccg
 
 # fmt: off
 for i in range(3):

@@ -6,7 +6,7 @@ Email:  ksible *at* outlook *dot* com
 """
 
 import sys
-from typing import Callable, Iterable, List, Tuple, Optional, Any, Generator, Union
+from typing import Any, Callable, Generator, Iterable, List, Optional, Tuple, Union
 
 
 def pipe(x: Any, *f: Callable[..., Any]) -> Any:

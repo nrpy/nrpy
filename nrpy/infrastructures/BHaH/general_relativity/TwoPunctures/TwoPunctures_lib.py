@@ -7,8 +7,8 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from pathlib import Path
 import shutil
+from pathlib import Path
 
 # Attempt to determine the correct files function to use based on Python version
 try:
@@ -17,14 +17,16 @@ except ImportError:
     # Fallback for older Python versions: use the backport
     from importlib_resources import files as resource_files
 
-from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import ID_persist_struct
-from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import CoordTransf
-from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import Equations
-from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import FuncAndJacobian
-from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import Newton
-from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import TP_interp
-from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import TP_solve
-from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import TP_utilities
+from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import (
+    CoordTransf,
+    Equations,
+    FuncAndJacobian,
+    ID_persist_struct,
+    Newton,
+    TP_interp,
+    TP_solve,
+    TP_utilities,
+)
 
 
 def copy_TwoPunctures_header_files(TwoPunctures_Path: Path) -> None:

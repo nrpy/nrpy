@@ -5,8 +5,8 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import List
 from pathlib import Path
+from typing import List
 
 import nrpy.c_function as cfc
 from nrpy.helpers.conditional_file_updater import ConditionalFileUpdater

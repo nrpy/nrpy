@@ -5,21 +5,20 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
+import os
+
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
 import shutil
-import os
 
-import nrpy.params as par
 import nrpy.c_function as cfc
-
-import nrpy.infrastructures.BHaH.CodeParameters as CPs
-
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
-import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
+import nrpy.infrastructures.BHaH.CodeParameters as CPs
+import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 import nrpy.infrastructures.BHaH.seobnr.SEOBNR_C_codegen_library as seobnr_CCL
+import nrpy.params as par
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 

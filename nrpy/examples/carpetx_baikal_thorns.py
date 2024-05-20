@@ -6,29 +6,34 @@ Authors: Zachariah B. Etienne
          Samuel Cupp
 """
 
+import os
+from pathlib import Path
+
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
 from typing import List
-from pathlib import Path
-import os
 
 import nrpy.grid as gri
-import nrpy.params as par
 import nrpy.helpers.parallel_codegen as pcg
+import nrpy.params as par
 from nrpy.helpers import simd
-
-from nrpy.infrastructures.CarpetX import boundary_conditions
-from nrpy.infrastructures.CarpetX import make_code_defn
-from nrpy.infrastructures.CarpetX import zero_rhss
-from nrpy.infrastructures.CarpetX import schedule_ccl
-from nrpy.infrastructures.CarpetX import interface_ccl
-from nrpy.infrastructures.CarpetX import param_ccl
-from nrpy.infrastructures.CarpetX import configuration_ccl
+from nrpy.infrastructures.CarpetX import (
+    boundary_conditions,
+    configuration_ccl,
+    interface_ccl,
+    make_code_defn,
+    param_ccl,
+    schedule_ccl,
+    zero_rhss,
+)
 
 # All needed functions can be imported from the CarpetX infrastructure
 from nrpy.infrastructures.CarpetX.general_relativity.ADM_to_BSSN import (
     register_CFunction_ADM_to_BSSN,
+)
+from nrpy.infrastructures.CarpetX.general_relativity.BSSN_constraints import (
+    register_CFunction_BSSN_constraints,
 )
 from nrpy.infrastructures.CarpetX.general_relativity.BSSN_to_ADM import (
     register_CFunction_BSSN_to_ADM,
@@ -39,14 +44,11 @@ from nrpy.infrastructures.CarpetX.general_relativity.enforce_detgammahat_constra
 from nrpy.infrastructures.CarpetX.general_relativity.floor_the_lapse import (
     register_CFunction_floor_the_lapse,
 )
-from nrpy.infrastructures.CarpetX.general_relativity.BSSN_constraints import (
-    register_CFunction_BSSN_constraints,
+from nrpy.infrastructures.CarpetX.general_relativity.rhs_eval import (
+    register_CFunction_rhs_eval,
 )
 from nrpy.infrastructures.CarpetX.general_relativity.Ricci_eval import (
     register_CFunction_Ricci_eval,
-)
-from nrpy.infrastructures.CarpetX.general_relativity.rhs_eval import (
-    register_CFunction_rhs_eval,
 )
 from nrpy.infrastructures.CarpetX.general_relativity.T4DD_to_T4UU import (
     register_CFunction_T4DD_to_T4UU,

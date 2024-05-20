@@ -5,13 +5,15 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import Sequence, Optional, Tuple, Dict, Any
+from typing import Any, Dict, Optional, Sequence, Tuple
+
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
-import nrpy.params as par  # NRPy+: Parameter interface
-import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
-from nrpy.equations.general_relativity.BSSN_to_ADM import BSSN_to_ADM
-from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
+
 import nrpy.equations.general_relativity.g4munu_conversions as g4conv  # NRPy+: ADM/BSSN <-> 4-metric conversions
+import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
+import nrpy.params as par  # NRPy+: Parameter interface
+from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
+from nrpy.equations.general_relativity.BSSN_to_ADM import BSSN_to_ADM
 
 
 def T4UU_and_ADM_to_SDD_SD_S_rho(
@@ -216,6 +218,7 @@ if __name__ == "__main__":
     import doctest
     import os
     import sys
+
     import nrpy.validate_expressions.validate_expressions as ve
 
     results = doctest.testmod()

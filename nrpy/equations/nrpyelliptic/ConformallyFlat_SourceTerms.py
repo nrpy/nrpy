@@ -8,18 +8,20 @@ License: BSD 2-Clause
 """
 
 # Step Import needed modules:
-from typing import cast, List, Tuple, Union
+from typing import List, Tuple, Union, cast
+
 import sympy as sp  # For symbolic computations
+
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 from nrpy.equations.nrpyelliptic.CommonParams import (
-    bare_mass_0,
-    bare_mass_1,
-    zPunc,
     P0U,
     P1U,
     S0U,
     S1U,
+    bare_mass_0,
+    bare_mass_1,
+    zPunc,
 )
 
 

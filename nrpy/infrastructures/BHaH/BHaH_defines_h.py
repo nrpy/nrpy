@@ -7,12 +7,12 @@ Author: Zachariah B. Etienne
 
 import sys
 from pathlib import Path
-from typing import Optional, Dict, List
+from typing import Dict, List, Optional
 
-import nrpy.params as par
 import nrpy.grid as gri
-from nrpy.infrastructures.BHaH import griddata_commondata
+import nrpy.params as par
 from nrpy.helpers.generic import clang_format
+from nrpy.infrastructures.BHaH import griddata_commondata
 
 
 def register_griddata_struct_and_return_griddata_struct_str(

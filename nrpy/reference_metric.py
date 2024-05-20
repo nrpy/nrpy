@@ -8,12 +8,14 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import Dict, List, Any, Tuple, cast
+from typing import Any, Dict, List, Tuple, cast
+
 import sympy as sp
+
 import nrpy.indexedexp as ixp
 import nrpy.params as par
-from nrpy.helpers.generic import superfast_uniq
 from nrpy.helpers.cached_functions import cached_simplify
+from nrpy.helpers.generic import superfast_uniq
 
 # grid_physical_size is set based entirely on CoordSystem. So it is a rfm parameter not a grid parameter.
 par.register_param(bool, __name__, "enable_grid_physical_size", True)
@@ -1312,8 +1314,9 @@ reference_metric = rfm_dict()
 
 if __name__ == "__main__":
     import doctest
-    import sys
     import os
+    import sys
+
     import nrpy.validate_expressions.validate_expressions as ve
 
     results = doctest.testmod()

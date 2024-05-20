@@ -15,37 +15,35 @@ Note: This is the superB version.
 
 """
 
+import os
+
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
 import shutil
-import os
 from pathlib import Path
 
-import nrpy.params as par
-from nrpy.helpers import simd
 import nrpy.helpers.parallel_codegen as pcg
-
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
-import nrpy.infrastructures.BHaH.general_relativity.BSSN_C_codegen_library as BCl
+import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
-import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
-import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
-from nrpy.infrastructures.BHaH import rfm_precompute
-from nrpy.infrastructures.BHaH import rfm_wrapper_functions
+import nrpy.infrastructures.BHaH.general_relativity.BSSN_C_codegen_library as BCl
+import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
 import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xxCartxx
-import nrpy.infrastructures.superB.diagnostics as superBdiagnostics
-import nrpy.infrastructures.superB.numerical_grids as superBnumericalgrids
-import nrpy.infrastructures.superB.CurviBoundaryConditions as superBcbc
-import nrpy.infrastructures.superB.MoL as superBMoL
-import nrpy.infrastructures.superB.main_chare as superBmain
-import nrpy.infrastructures.superB.timestepping_chare as superBtimestepping
 import nrpy.infrastructures.superB.chare_communication_maps as charecomm
+import nrpy.infrastructures.superB.CurviBoundaryConditions as superBcbc
+import nrpy.infrastructures.superB.diagnostics as superBdiagnostics
+import nrpy.infrastructures.superB.main_chare as superBmain
 import nrpy.infrastructures.superB.Makefile_helpers as superBMakefile
+import nrpy.infrastructures.superB.MoL as superBMoL
+import nrpy.infrastructures.superB.numerical_grids as superBnumericalgrids
 import nrpy.infrastructures.superB.superB.superB_lib as superBl
-
+import nrpy.infrastructures.superB.timestepping_chare as superBtimestepping
+import nrpy.params as par
+from nrpy.helpers import simd
+from nrpy.infrastructures.BHaH import rfm_precompute, rfm_wrapper_functions
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 

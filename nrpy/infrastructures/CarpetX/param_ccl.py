@@ -5,10 +5,11 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import List
 from pathlib import Path
-import nrpy.params as par
+from typing import List
+
 import nrpy.c_function as cfc
+import nrpy.params as par
 from nrpy.helpers.conditional_file_updater import ConditionalFileUpdater
 
 

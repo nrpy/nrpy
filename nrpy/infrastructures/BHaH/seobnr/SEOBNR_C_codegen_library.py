@@ -5,16 +5,17 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import Union, cast
-from types import FrameType as FT
 from inspect import currentframe as cfr
+from types import FrameType as FT
+from typing import Union, cast
+
 import sympy as sp
 
-import nrpy.params as par
-import nrpy.c_function as cfc
 import nrpy.c_codegen as ccg
-import nrpy.helpers.parallel_codegen as pcg
+import nrpy.c_function as cfc
 import nrpy.equations.seobnr.SEOBNRv5_aligned_spin_Hamiltonian as SEOBNRv5_Ham
+import nrpy.helpers.parallel_codegen as pcg
+import nrpy.params as par
 
 # Needed during integration and derived from other quantities; do not set!
 par.register_CodeParameters(

@@ -380,6 +380,7 @@ if __name__ == "__main__":
     import doctest
     import os
     import sys
+
     import nrpy.validate_expressions.validate_expressions as ve
 
     results = doctest.testmod()

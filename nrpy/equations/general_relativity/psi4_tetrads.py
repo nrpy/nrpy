@@ -7,10 +7,12 @@ Authors: Zachariah B. Etienne
 """
 
 # Step 1.a: import all needed modules
-from typing import List, cast, Union
+from typing import List, Union, cast
+
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
-import nrpy.params as par  # NRPy+: Parameter interface
+
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
+import nrpy.params as par  # NRPy+: Parameter interface
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.equations.general_relativity.BSSN_to_ADM import BSSN_to_ADM
@@ -241,6 +243,7 @@ if __name__ == "__main__":
     import doctest
     import os
     import sys
+
     import nrpy.validate_expressions.validate_expressions as ve
 
     results = doctest.testmod()

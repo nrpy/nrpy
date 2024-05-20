@@ -23,19 +23,31 @@ python_files=$(find . -name '*.py' -not -name '__init__.py' -not -path './projec
 
 # Loop through each python file
 for python_file in $python_files; do
+  # Initialize step counter
+  step_counter=1
+
   echo ""
   echo "-={ $python_file }=-"
-  echo "-={ Step 1: Doctests/run Python module }=-"
+
+  echo "-={ Step $step_counter: Doctests/run Python module }=-"
   PYTHONPATH=.:$PYTHONPATH DOCTEST_MODE=1 python $python_file || { failed_tests+=("doctest in $python_file"); break; }
+  ((step_counter++))
 
   if [[ "$python_version" != *"3.6.7"* ]]; then
-    echo "-={ Step 2: black }=-"
+    echo "-={ Step $step_counter: isort }=-"
+    isort --check-only $python_file || { failed_tests+=("isort in $python_file"); break; }
+    ((step_counter++))
+
+    echo "-={ Step $step_counter: black }=-"
     black --check $python_file || { failed_tests+=("black in $python_file"); break; }
-    echo "-={ Step 3: mypy }=-"
+    ((step_counter++))
+
+    echo "-={ Step $step_counter: mypy }=-"
     PYTHONPATH=.:$PYTHONPATH mypy --strict --pretty --allow-untyped-calls $python_file || { failed_tests+=("mypy in $python_file"); break; }
+    ((step_counter++))
   fi
 
-  echo "-={ Step 4: pylint }=-"
+  echo "-={ Step $step_counter: pylint }=-"
   pylint_score=$(PYTHONPATH=.:$PYTHONPATH pylint --rcfile=.pylintrc $python_file | tail -2 | grep -Eo '[0-9\.]+' | head -1 || echo "0")
   echo "Pylint score is $pylint_score"
   if (( $(echo "$pylint_score < 9.91" | bc -l) )); then
@@ -44,12 +56,15 @@ for python_file in $python_files; do
     failed_tests+=("pylint in $python_file")
     break
   fi
+  ((step_counter++))
 
-  echo "-={ Step 5: pydocstyle }=-"
+  echo "-={ Step $step_counter: pydocstyle }=-"
   pydocstyle $python_file || { failed_tests+=("pydocstyle in $python_file"); break; }
+  ((step_counter++))
 
-  echo "-={ Step 6: darglint }=-"
+  echo "-={ Step $step_counter: darglint }=-"
   darglint -v 2 $python_file || { failed_tests+=("darglint in $python_file"); break; }
+  ((step_counter++))
 done
 
 # Exit with failure if any tests failed

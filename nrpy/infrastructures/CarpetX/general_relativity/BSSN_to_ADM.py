@@ -6,18 +6,17 @@ Authors: Zachariah B. Etienne
          Samuel Cupp
 """
 
-from typing import Union, cast
 from inspect import currentframe as cfr
 from types import FrameType as FT
+from typing import Union, cast
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
-
 import nrpy.infrastructures.CarpetX.simple_loop as lp
-from nrpy.infrastructures.CarpetX.CarpetX_include_header import define_standard_includes
 from nrpy.equations.general_relativity.BSSN_to_ADM import BSSN_to_ADM
+from nrpy.infrastructures.CarpetX.CarpetX_include_header import define_standard_includes
 
 
 def register_CFunction_BSSN_to_ADM(

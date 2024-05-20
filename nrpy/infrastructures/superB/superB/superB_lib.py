@@ -5,8 +5,8 @@ Author: Nishita Jadoo
         njadoo **at** uidaho **dot* edu
 """
 
-from pathlib import Path
 import shutil
+from pathlib import Path
 
 
 def copy_superB_header_files(superB_Path: Path) -> None:
