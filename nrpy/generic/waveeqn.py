@@ -10,7 +10,7 @@ from nrpy.generic.use_indices import *
 from nrpy.infrastructures.ETLegacy.interface_ccl import construct_interface_ccl
 from nrpy.helpers.colorize_text import colorize
 
-def flat_metric(out:Indexed, ni:Idx, nj:Idx)->Expr:
+def flat_metric(out:Expr, ni:Idx, nj:Idx)->Expr:
     i = to_num(ni)
     j = to_num(nj)
     if i==j:
@@ -25,8 +25,8 @@ gf = GF()
 p   = gf.decl("p",[li])
 p_t = gf.decl("p_t",[li])
 p_d = gf.decl("p_d",[li,lj])
-u   = gf.decl("u",[])
-u_t = gf.decl("u_t",[])
+u   = gf.declscalar("u")
+u_t = gf.declscalar("u_t")
 u_d = gf.decl("u_d",[ui])
 
 siter2 = gf.decl("siter2", [li,lj])

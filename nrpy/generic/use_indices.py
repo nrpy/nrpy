@@ -402,7 +402,7 @@ class GF:
         assert i1 != i2, f"Index {ix1} cannot be symmetric with itself in {tens}"
         if i1 > i2:
             i1, i2 = i2, i1
-        sym.add(tens.base, i1, i2, sgn)
+        self.symmetries.add(tens.base, i1, i2, sgn)
     
     def declfun(self, funname:str, is_stencil:bool)->UFunc:
         fun = mkFunction(funname)
@@ -417,7 +417,22 @@ class GF:
 
         return fun
 
+    def declscalar(self, basename:str)->Symbol:
+        ret = mkSymbol(basename)
+        self.gfs[basename] = ret
+        self.defn[basename] = (basename, list())
+
+        # If possible, insert the symbol into the current environment
+        frame = currentframe()
+        f_back = None if frame is None else frame.f_back
+        globs  = None if f_back is None else f_back.f_globals
+        if globs is not None:
+            globs[basename] = ret
+
+        return ret
+
     def decl(self, basename:str, indices:List[Idx])->IndexedBase:
+        assert len(indices) > 0, f"Use declscalar() if there are no indices"
         ret = mkIndexedBase(basename, shape=tuple([dimension]*len(indices)) )
         self.gfs[basename] = ret
         self.defn[basename] = (basename, list(indices))
