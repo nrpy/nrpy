@@ -1,8 +1,10 @@
-from typing import Tuple, List, Dict, Any, Union, cast
+from typing import Tuple, List, Dict, Any, Union, cast, Mapping, Callable, Set
 from sympy import cse as cse_, IndexedBase, Idx, Symbol, Expr, Eq, Basic, sympify as sympify_, Expr, Mul, Indexed, Function
 import re
 from abc import ABC, abstractmethod
 from sympy.core.function import UndefinedFunction as UFunc
+
+Math = Union[Symbol, IndexedBase, Idx]
 
 class Applier(ABC):
 
@@ -41,10 +43,10 @@ def sympify(arg:Any)->Expr:
     return cast(Expr, sympify_(arg)) # type: ignore[no-untyped-call]
 
 do_subs_table_type = Union[
-        Dict[Idx,Idx],
-        Dict[Indexed, Indexed],
-        Dict[Expr, Expr],
-        Dict[Symbol, Symbol],
+        Mapping[Idx,Idx],
+        Mapping[Indexed, Indexed],
+        Mapping[Expr, Expr],
+        Mapping[Math, Math],
         Applier
         ]
 
@@ -56,3 +58,36 @@ def do_subs(sym:Expr, *tables:do_subs_table_type)->Expr:
         else:
             result = cast(Expr, result.subs(table)) # type: ignore[no-untyped-call]
     return result
+
+call_match = Union[
+    Callable[[Expr], bool],
+    Callable[[IndexedBase], bool],
+    Callable[[Symbol], bool],
+    Callable[[Math], bool]]
+
+call_replace = Union[
+    Callable[[Expr], Expr],
+    Callable[[IndexedBase], Expr],
+    Callable[[Symbol], Expr],
+    Callable[[Math], Expr]]
+
+def do_replace(sym:Expr, func_m:call_match, func_r:call_replace)->None:
+    sym.replace(func_m, func_r) # type: ignore[no-untyped-call]
+
+def finder(expr:Expr)->Set[Math]:
+    result : Dict[str, Math] = dict()
+    def m(msym:Math)->bool:
+        ty = type(msym)
+        mstr = str(msym)
+        if ty == Symbol:
+            if mstr not in result:
+                result[mstr] = msym
+        elif ty == IndexedBase:
+            result[mstr] = msym
+        elif ty == Idx:
+            result[mstr] = msym
+        return False
+    def r(msym:Expr)->Expr:
+        return msym
+    do_replace(expr, m, r)
+    return set(result.values())

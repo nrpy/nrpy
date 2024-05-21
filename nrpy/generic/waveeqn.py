@@ -25,7 +25,7 @@ gf = GF()
 p   = gf.decl("p",[li])
 p_t = gf.decl("p_t",[li])
 p_d = gf.decl("p_d",[li,lj])
-u   = gf.declscalar("u")
+u   = gf.decl("u", [])
 u_t = gf.declscalar("u_t")
 u_d = gf.decl("u_d",[ui])
 

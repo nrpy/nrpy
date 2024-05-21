@@ -64,10 +64,10 @@ def is_letter_index(sym:Basic)->bool:
     n = ord(s[1])
     return n < ord0 or n > ord9
 
-def get_indices(xpr:Basic)->Set[Idx]:
+def get_indices(xpr:Expr)->Set[Idx]:
     """ Return all indices of IndexedBase objects in xpr. """
     ret = set()
-    for sym in xpr.free_symbols:
+    for sym in finder(xpr):
         if is_letter_index(sym):
             ret.add(cast(Idx, sym))
     return ret
@@ -129,7 +129,7 @@ assert is_pair(li, ui)
 assert not is_pair(ui, lj)
 assert not is_pair(li, uj)
 
-def get_free_indices(xpr:Basic)->Set[Idx]:
+def get_free_indices(xpr:Expr)->Set[Idx]:
     """ Return all uncontracted indices in xpr. """
     indices = list(get_indices(xpr))
     indices = sorted(indices, key=byname)
@@ -146,7 +146,7 @@ def get_free_indices(xpr:Basic)->Set[Idx]:
 M = mkIndexedBase('M',(3,3))
 assert sorted(list(get_free_indices(M[ui,uj]*M[lj, lk])), key=byname) == [ui, lk]
 
-def get_contracted_indices(xpr:Basic)->Set[Idx]:
+def get_contracted_indices(xpr:Expr)->Set[Idx]:
     """ Return all contracted indices in xpr. """
     indices = list(get_indices(xpr))
     indices = sorted(indices, key=byname)
@@ -351,9 +351,9 @@ class GF:
         rhs2 = self.do_subs(expand_contracted_indices(rhs2, self.symmetries))
         if str(lhs2) in self.gfs:
             self.eqnlist.add_output(lhs2)
-        for item in rhs2.free_symbols:
+        for item in finder(rhs2):
             if str(item) in self.gfs:
-                assert item.is_Symbol
+                #assert item.is_Symbol
                 self.eqnlist.add_input(cast(Symbol, item))
             elif str(item) in self.params:
                 assert item.is_Symbol
@@ -432,7 +432,6 @@ class GF:
         return ret
 
     def decl(self, basename:str, indices:List[Idx])->IndexedBase:
-        assert len(indices) > 0, f"Use declscalar() if there are no indices"
         ret = mkIndexedBase(basename, shape=tuple([dimension]*len(indices)) )
         self.gfs[basename] = ret
         self.defn[basename] = (basename, list(indices))

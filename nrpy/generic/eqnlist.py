@@ -2,7 +2,7 @@ from typing import TypeVar, Literal, List, Dict, Union, Tuple, Any, Set, Generic
 
 from sympy.core.symbol import Symbol
 from sympy.core.expr import Expr
-from sympy import symbols, Function, diff
+from sympy import symbols, Function, diff, IndexedBase
 from nrpy.helpers.colorize_text import colorize
 from sympy.core.function import UndefinedFunction as UFunc
 from enum import Enum
@@ -29,15 +29,15 @@ class EqnList:
     symbols as inputs/outputs/params.
     """
     def __init__(self)->None:
-        self.eqns:Dict[Symbol,Expr] = dict()
-        self.params:Set[Symbol] = set()
-        self.inputs:Set[Symbol] = set()
-        self.outputs:Set[Symbol] = set()
-        self.order:List[Symbol] = list()
+        self.eqns:Dict[Math,Expr] = dict()
+        self.params:Set[Math] = set()
+        self.inputs:Set[Math] = set()
+        self.outputs:Set[Math] = set()
+        self.order:List[Math] = list()
         self.verbose = True
         self.is_stencil:Dict[UFunc,bool] = dict()
-        self.read_decls:Dict[Symbol,RWSpec] = dict()
-        self.write_decls:Dict[Symbol,RWSpec] = dict()
+        self.read_decls:Dict[Math,RWSpec] = dict()
+        self.write_decls:Dict[Math,RWSpec] = dict()
         self.default_read_write_spec:RWSpec = RWSpec.IN
 
     def add_func(self, fun:UFunc, is_stencil:bool)->None:
@@ -48,34 +48,34 @@ class EqnList:
         assert lhs not in self.inputs, f"The symbol '{lhs}' is alredy in outputs"
         self.params.add(lhs)
 
-    def add_input(self, lhs:Symbol)->None:
+    def add_input(self, lhs:Math)->None:
         assert lhs not in self.outputs, f"The symbol '{lhs}' is alredy in outputs"
         assert lhs not in self.params, f"The symbol '{lhs}' is alredy in outputs"
         self.inputs.add(lhs)
 
-    def add_output(self, lhs:Symbol)->None:
+    def add_output(self, lhs:Math)->None:
         assert lhs not in self.inputs, f"The symbol '{lhs}' is alredy in outputs"
         assert lhs not in self.params, f"The symbol '{lhs}' is alredy in outputs"
         self.outputs.add(lhs)
 
-    def add_eqn(self, lhs:Symbol, rhs:Expr)->None:
+    def add_eqn(self, lhs:Math, rhs:Expr)->None:
         assert lhs not in self.eqns, f"Equation for '{lhs}' is already defined"
         self.eqns[lhs] = rhs
 
     def diagnose(self)->None:
         """ Discover inconsistencies and errors in the param/input/output/equation sets. """
-        needed:Set[Symbol] = set()
-        complete:Dict[Symbol,int] = dict()
-        temps:Set[Symbol] = set()
+        needed:Set[Math] = set()
+        complete:Dict[Math,int] = dict()
+        temps:Set[Math] = set()
         self.order = list()
 
-        read:Set[Symbol] = set()
-        written:Set[Symbol] = set()
+        read:Set[Math] = set()
+        written:Set[Math] = set()
 
         self.read_decls.clear()
         self.write_decls.clear()
 
-        self.lhs : Symbol
+        self.lhs : Math
 
         def ftrace(sym:Symbol)->bool:
             if sym.is_Function and self.is_stencil.get(sym.func, False):
@@ -108,8 +108,8 @@ class EqnList:
 
         for k in self.eqns:
             written.add(k)
-            for q in self.eqns[k].free_symbols:
-                read.add(cast(Symbol,q))
+            for q in finder(self.eqns[k]):
+                read.add(q)
 
         if self.verbose:
             print(colorize("Read:","green"),read)
@@ -149,7 +149,7 @@ class EqnList:
 
         again = True
         generation = 0
-        find_cycle : Optional[Symbol] = None
+        find_cycle : Optional[Math] = None
         while True:
             if not again and len(needed) > len(complete) and find_cycle is not None:
                 again = True
@@ -170,7 +170,7 @@ class EqnList:
                     assert k in self.eqns, f"Symbol '{k}' is needed but is not written"
                     v = self.eqns[k]
                     can_add = True
-                    for k2 in v.free_symbols:
+                    for k2 in finder(v):
                        if k2 not in complete:
                            # A variable is only complete
                            # if all its free symbols are
@@ -179,7 +179,7 @@ class EqnList:
                        if k2 not in needed:
                            # Since k2 is needed to assign
                            # a value to k, k2 is also needed
-                           needed.add(cast(Symbol,k2))
+                           needed.add(k2)
                            # more work to do
                            again = True
                     if can_add:
@@ -196,9 +196,8 @@ class EqnList:
                 self.read_decls[var] = RWSpec.EW #self.default_read_write_spec
             elif var in self.outputs and var not in self.write_decls:
                 spec = RWSpec.EW
-                for rvar in self.eqns[var].free_symbols:
-                    sym = cast(Symbol, rvar)
-                    if self.read_decls.get(sym, RWSpec.EW) == RWSpec.IN:
+                for rvar in finder(self.eqns[var]):
+                    if self.read_decls.get(rvar, RWSpec.EW) == RWSpec.IN:
                         spec = RWSpec.IN
                         break
                 self.write_decls[var] = spec
@@ -207,9 +206,8 @@ class EqnList:
             elif var in temps and var not in self.write_decls:
                 spec = self.default_read_write_spec
                 if spec != RWSpec.IN:
-                    for rvar in self.eqns[var].free_symbols:
-                        sym = cast(Symbol, rvar)
-                        if self.read_decls.get(sym, RWSpec.EW) == RWSpec.IN:
+                    for rvar in finder(self.eqns[var]):
+                        if self.read_decls.get(rvar, RWSpec.EW) == RWSpec.IN:
                             spec = RWSpec.IN
                             break
                 self.write_decls[var] = spec
@@ -230,7 +228,7 @@ class EqnList:
         for k,v in self.eqns.items():
             assert k in complete, f"Eqn '{k} = {v}' does not contribute to the output."
             val1:int = complete[k]
-            for k2 in v.free_symbols:
+            for k2 in finder(v):
                 val2:int = complete[cast(Symbol,k2)]
                 assert val1 >= val2, f"Symbol '{k}' is part of an assignment cycle."
         for k in needed:
@@ -243,14 +241,14 @@ class EqnList:
 
     def trim(self)->None:
         """ Remove temporaries of the form "a=b". They are clutter. """
-        subs:Dict[Symbol,Symbol] = dict()
+        subs:Dict[Math,Symbol] = dict()
         for k,v in self.eqns.items():
             if v.is_symbol:
                 # k is not not needed
                 subs[k] = cast(Symbol, v)
                 print(f"Warning: equation '{k} = {v}' can be trivially eliminated")
 
-        new_eqns:Dict[Symbol,Expr] = dict()
+        new_eqns:Dict[Math,Expr] = dict()
         for k in self.eqns:
             if k not in subs:
                 v = self.eqns[k]
@@ -261,7 +259,7 @@ class EqnList:
 
     def cse(self)->None:
         """ Invoke Sympy's CSE method, but ensure that the order of the resulting assignments is correct. """
-        indexes:List[Symbol]=list()
+        indexes:List[Math]=list()
         old_eqns:List[Expr]=list()
         for k in self.eqns:
             indexes.append(k)
