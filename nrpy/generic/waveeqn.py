@@ -104,3 +104,5 @@ gf.cse()
 
 # Display again in case there are changes
 gf.dump()
+
+gf.show_tensortypes()

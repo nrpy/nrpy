@@ -445,6 +445,15 @@ class GF:
 
         return ret
 
+    def show_tensortypes(self)->None:
+        for k,v in self.base_of.items():
+            print(colorize(k,"green"),"is a member of",colorize(v,"green"),"with indices",colorize(self.defn[v][1],"cyan"),"and members",colorize(self.groups[v],"magenta"))
+
+    def get_tensortype(self, item:Union[str,Math])->Tuple[str,List[Idx],List[str]]:
+        k = str(item)
+        v = self.base_of[k]
+        return (v, self.defn[v][1], self.groups[v])
+
     def fill_in(self, indexed:IndexedBase, f:fill_in_type=fill_in_default, alt:Any=None)->None:
         for tup in expand_free_indices(indexed, self.symmetries):
             out, indrep = tup
