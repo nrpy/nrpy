@@ -447,10 +447,10 @@ class GF:
 
     def show_tensortypes(self)->None:
         keys : Set[str] = set()
-        for k in self.eqnlist.inputs:
-            keys.add(str(k))
-        for k in self.eqnlist.outputs:
-            keys.add(str(k))
+        for k1 in self.eqnlist.inputs:
+            keys.add(str(k1))
+        for k2 in self.eqnlist.outputs:
+            keys.add(str(k2))
         for k in keys:
             group, indices, members = self.get_tensortype(k)
             print(colorize(k,"green"),"is a member of",colorize(group,"green"),"with indices",colorize(indices,"cyan"),"and members",colorize(members,"magenta"))
@@ -460,7 +460,7 @@ class GF:
         assert k in self.gfs.keys(), f"Not a defined symbol {item}"
         v = self.base_of.get(k, None)
         if v is None:
-            return("none", tuple(), list()) #scalar
+            return("none", list(), list()) #scalar
         return (v, self.defn[v][1], self.groups[v])
 
     def fill_in(self, indexed:IndexedBase, f:fill_in_type=fill_in_default, alt:Any=None)->None:
