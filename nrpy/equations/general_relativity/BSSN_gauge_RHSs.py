@@ -91,7 +91,7 @@ def BSSN_gauge_RHSs(
     elif LapseEvolutionOption == "HarmonicSlicing":
         if EvolvedConformalFactor_cf == "W":
             alpha_rhs = -3 * cf ** (-4) * Brhs.cf_rhs
-        elif LapseEvolutionOption == "phi":
+        elif EvolvedConformalFactor_cf == "phi":
             alpha_rhs = 6 * sp.exp(6 * cf) * Brhs.cf_rhs
         else:
             raise ValueError(
