@@ -10,9 +10,27 @@ echo "Python version: $python_version"
 # Install dependencies
 python -m pip install --upgrade pip
 pip install -U -r requirements.txt
-pip install -U -r requirements-dev.txt
 
-# Display sympy version
+if [[ "$python_version" != *"3.6.7"* && "$python_version" != *"3.7.13"* ]]; then
+  pip install -U -r requirements-dev.txt
+else
+  # Install packages from requirements-dev.txt except those with a fixed version.
+  grep -v '==' requirements-dev.txt | xargs pip install -U
+  pip install -U clang-format
+fi
+
+# Install NRPyLaTeX and additional dependencies
+pip install -U git+https://github.com/nrpy/nrpylatex.git
+pip install -U ipython setuptools
+
+# Install SymPy or development SymPy based on Python version
+# if [[ "$python_version" != *"3.6.7"* && "$python_version" != *"3.7.13"* ]]; then
+#   pip install git+https://github.com/sympy/sympy.git
+# else
+#   pip install sympy
+# fi
+
+# Display SymPy version
 echo "Running CI tests with SymPy version = $(isympy --version)"
 
 # Initialize array to store failed tests
@@ -29,17 +47,19 @@ for python_file in $python_files; do
   echo ""
   echo "-={ $python_file }=-"
 
-  echo "-={ Step $step_counter: Doctests/run Python module }=-"
-  PYTHONPATH=.:$PYTHONPATH DOCTEST_MODE=1 python $python_file || { failed_tests+=("doctest in $python_file"); break; }
-  ((step_counter++))
-
-  if [[ "$python_version" != *"3.6.7"* ]]; then
-    echo "-={ Step $step_counter: isort }=-"
-    isort --check-only $python_file || { failed_tests+=("isort in $python_file"); break; }
+  if [[ ! $python_file =~ nrpy/examples/.* ]]; then
+    echo "-={ Step $step_counter: Doctests/run Python module }=-"
+    DOCTEST_MODE=1 PYTHONPATH=.:$PYTHONPATH python $python_file || { failed_tests+=("doctest in $python_file"); break; }
     ((step_counter++))
+  fi
 
+  if [[ "$python_version" != *"3.6.7"* && "$python_version" != *"3.7.13"* && "$python_version" != *"3.8.18"* ]]; then
     echo "-={ Step $step_counter: black }=-"
     black --check $python_file || { failed_tests+=("black in $python_file"); break; }
+    ((step_counter++))
+
+    echo "-={ Step $step_counter: isort }=-"
+    isort --check-only $python_file || { failed_tests+=("isort in $python_file"); break; }
     ((step_counter++))
 
     echo "-={ Step $step_counter: mypy }=-"
@@ -48,7 +68,12 @@ for python_file in $python_files; do
   fi
 
   echo "-={ Step $step_counter: pylint }=-"
-  pylint_score=$(PYTHONPATH=.:$PYTHONPATH pylint --rcfile=.pylintrc $python_file | tail -2 | grep -Eo '[0-9\.]+' | head -1 || echo "0")
+  pylint_score="0"
+  if [[ "$python_version" == *"3.6.7"* || "$python_version" == *"3.7.13"* ]]; then
+    pylint_score=$(PYTHONPATH=.:$PYTHONPATH pylint --rcfile=.pylintrc_python36 $python_file | tail -2 | grep -Eo '[0-9\.]+' | head -1 || echo "0")
+  else
+    pylint_score=$(PYTHONPATH=.:$PYTHONPATH pylint --rcfile=.pylintrc $python_file | tail -2 | grep -Eo '[0-9\.]+' | head -1 || echo "0")
+  fi
   echo "Pylint score is $pylint_score"
   if (( $(echo "$pylint_score < 9.91" | bc -l) )); then
     PYTHONPATH=.:$PYTHONPATH pylint --rcfile=.pylintrc $python_file || true
@@ -73,11 +98,19 @@ if [ ${#failed_tests[@]} -ne 0 ]; then
   exit 1
 fi
 
-PYTHONPATH=.:$PYTHONPATH python nrpy/examples/wave_equation_cartesian.py   && (cd project/wavetoy && make && make clean) &&
-PYTHONPATH=.:$PYTHONPATH python nrpy/examples/wave_equation_curvilinear.py && (cd project/curviwavetoy && make && make clean) &&
-PYTHONPATH=.:$PYTHONPATH python nrpy/examples/nrpyelliptic_conformally_flat.py && (cd project/nrpyelliptic_conformally_flat && make && make clean) &&
-PYTHONPATH=.:$PYTHONPATH python nrpy/examples/two_blackholes_collide.py    && (cd project/two_blackholes_collide && make && make clean) &&
-PYTHONPATH=.:$PYTHONPATH python nrpy/examples/blackhole_spectroscopy.py    && (cd project/blackhole_spectroscopy && make && make clean) &&
-PYTHONPATH=.:$PYTHONPATH python nrpy/examples/spinning_blackhole.py        && (cd project/spinning_blackhole && make && make clean) &&
-PYTHONPATH=.:$PYTHONPATH python nrpy/examples/nrpypn_quasicircular_momenta.py && (cd project/nrpypn_quasicircular_momenta && make && make clean) &&
-PYTHONPATH=.:$PYTHONPATH python nrpy/examples/wave_equation_multicoord_wavetoy.py && (cd project/multicoords_curviwavetoy && make && make clean)
+# Run example scripts and compile related projects
+example_scripts=(
+  "nrpy/examples/wave_equation_cartesian.py project/wavetoy"
+  "nrpy/examples/wave_equation_curvilinear.py project/curviwavetoy"
+  "nrpy/examples/nrpyelliptic_conformally_flat.py project/nrpyelliptic_conformally_flat"
+  "nrpy/examples/two_blackholes_collide.py project/two_blackholes_collide"
+  "nrpy/examples/blackhole_spectroscopy.py project/blackhole_spectroscopy"
+  "nrpy/examples/spinning_blackhole.py project/spinning_blackhole"
+  "nrpy/examples/nrpypn_quasicircular_momenta.py project/nrpypn_quasicircular_momenta"
+  "nrpy/examples/wave_equation_multicoord_wavetoy.py project/multicoords_curviwavetoy"
+)
+
+for script in "${example_scripts[@]}"; do
+  IFS=' ' read -r script_path project_path <<< "$script"
+  PYTHONPATH=.:$PYTHONPATH python $script_path && (cd $project_path && make && make clean)
+done

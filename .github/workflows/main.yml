@@ -41,10 +41,11 @@ jobs:
         else
           # Install packages from requirements-dev.txt except those with a fixed version.
           cat requirements-dev.txt | grep -v '==' | xargs pip install -U
+          pip install -U clang-format
         fi
         # FIXME: until NRPyLaTeX is updated in pypi.
         pip install -U git+https://github.com/nrpy/nrpylatex.git
-        pip install -U clang-format ipython setuptools
+        pip install -U ipython setuptools
         sudo apt-get -y install libgsl-dev
 
     - name: Install sympy or DEVELOPMENT sympy based on Python version
