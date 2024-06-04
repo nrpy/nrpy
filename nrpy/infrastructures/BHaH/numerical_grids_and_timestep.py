@@ -187,7 +187,7 @@ def register_CFunction_cfl_limited_timestep(
     desc = f"Output minimum gridspacing ds_min on a {CoordSystem} numerical grid."
     cfunc_type = "void"
     name = "cfl_limited_timestep"
-    params = "commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3], bc_struct *restrict bcstruct"
+    params = "commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3]"
     body = r"""
 REAL ds_min = 1e38;
 #pragma omp parallel for reduction(min:ds_min)
@@ -294,7 +294,7 @@ def register_CFunction_numerical_grids_and_timestep(
 // Step 1.f: Set timestep based on minimum spacing between neighboring gridpoints.
 commondata->dt = 1e30;
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
-  cfl_limited_timestep(commondata, &griddata[grid].params, griddata[grid].xx, &griddata[grid].bcstruct);
+  cfl_limited_timestep(commondata, &griddata[grid].params, griddata[grid].xx);
 }
 
 // Step 1.g: Initialize timestepping parameters to zero if this is the first time this function is called.
