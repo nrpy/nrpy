@@ -938,9 +938,11 @@ def output_timestepping_ci(
     entry void closed_2d_yz(CkReductionMsg *m);
     entry void diagnostics_ckio(Ck::IO::Session token, int which_output) {
       serial {
-        diagnostics(&commondata, griddata_chare, token, which_output, which_grid_diagnostics);
+        const int thisIndex_arr[3] = {thisIndex.x, thisIndex.y, thisIndex.z};
+        diagnostics(&commondata, griddata_chare, griddata, token, which_output, which_grid_diagnostics, thisIndex_arr);
       }
     }
+
     entry void east_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
     entry void west_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
     entry void north_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
