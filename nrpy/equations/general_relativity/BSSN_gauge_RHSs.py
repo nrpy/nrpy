@@ -32,6 +32,7 @@ from nrpy.equations.general_relativity.BSSN_RHSs import (  # NRPy+: Constructs B
 def BSSN_gauge_RHSs(
     CoordSystem: str = "Cartesian",
     enable_rfm_precompute: bool = False,
+    enable_T4munu: bool = False,
     LapseEvolutionOption: str = "OnePlusLog",
     ShiftEvolutionOption: str = "GammaDriving2ndOrder_Covariant",
 ) -> Tuple[sp.Expr, List[sp.Expr], List[sp.Expr]]:
@@ -40,6 +41,7 @@ def BSSN_gauge_RHSs(
 
     :param CoordSystem: Specifies the coordinate system.
     :param enable_rfm_precompute: Flag for enabling precomputation of reference metric quantities.
+    :param enable_T4munu: Whether to enable T4munu (stress-energy terms), defaults to False.
     :param LapseEvolutionOption: Specifies the lapse condition to use.
     :param ShiftEvolutionOption: Specifies the shift condition to use.
 
@@ -60,12 +62,16 @@ def BSSN_gauge_RHSs(
     # Step 1.c: Define needed BSSN quantities:
     # Declare scalars & tensors (in terms of rescaled BSSN quantities)
     Bq = BSSN_quantities[
-        CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
+        CoordSystem + ("_rfm_precompute" if enable_rfm_precompute else "")
     ]
     # Step 1.d: Declare BSSN_RHSs (excluding the time evolution equations for the gauge conditions),
-    #    if they haven't already been declared.
+    #    if they haven't already been declared. Note that enable_RbarDD_gridfunctions isn't relevant, as
+    #    no gauge condition (to date) needs RbarDD. However, the Gamma-driving shift does need the RHS
+    #    of LambdabarU, which contains T4munu source terms.
     Brhs = BSSN_RHSs[
-        CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
+        CoordSystem
+        + ("_rfm_precompute" if enable_rfm_precompute else "")
+        + ("_T4munu" if enable_T4munu else "")
     ]
 
     ########################################
@@ -337,9 +343,6 @@ if __name__ == "__main__":
     else:
         print(f"Doctest passed: All {results.attempted} test(s) passed")
 
-    # enable T4munu to ensure a maximally comprehensive test.
-    par.set_parval_from_str("enable_T4munu", True)
-
     for LapseEvolOption in ["OnePlusLog", "HarmonicSlicing", "Frozen", "OnePlusLogAlt"]:
         for ShiftEvolOption in [
             "Frozen",
@@ -357,10 +360,12 @@ if __name__ == "__main__":
                 "SinhSymTP",
             ]:
                 enable_rfm_pre = "rfm_precompute" in Coord
+                enable_T4 = True  # Add stress-energy source terms.
                 base_CoordSystem = Coord.replace("_rfm_precompute", "")
                 inalpha_rhs, invet_rhsU, inbet_rhsU = BSSN_gauge_RHSs(
                     base_CoordSystem,
                     enable_rfm_pre,
+                    enable_T4,
                     LapseEvolOption,
                     ShiftEvolOption,
                 )

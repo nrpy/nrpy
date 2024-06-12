@@ -123,7 +123,7 @@ def BSSN_RHSs_T4UU_source_terms(
     )
     alpha = sp.symbols("alpha", real=True)
     Bq = BSSN_quantities[
-        f"{CoordSystem}_rfm_precompute" if enable_rfm_precompute else CoordSystem
+        CoordSystem + ("_rfm_precompute" if enable_rfm_precompute else "")
     ]
 
     sourceterm_trK_rhs = 4 * PI * alpha * (rho + S)
@@ -229,7 +229,6 @@ if __name__ == "__main__":
         print(f"Doctest passed: All {results.attempted} test(s) passed")
 
     # Notify BSSN_quantities that T4munu is enabled.
-    par.set_parval_from_str("enable_T4munu", True)
     exprs_dict: Dict[str, Any] = {}
     (
         exprs_dict["ADMSDD"],

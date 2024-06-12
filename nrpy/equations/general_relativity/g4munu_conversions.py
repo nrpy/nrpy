@@ -71,7 +71,7 @@ def BSSN_to_g4DD(
     )
     gammaDD = BtoA.gammaDD
     Bq = BSSN_quantities[
-        f"{CoordSystem}_rfm_precompute" if enable_rfm_precompute else CoordSystem
+        CoordSystem + ("_rfm_precompute" if enable_rfm_precompute else "")
     ]
     betaU = Bq.betaU
     alpha = sp.symbols("alpha", real=True)
@@ -127,7 +127,7 @@ def BSSN_to_g4UU(
     )
     gammaDD = BtoA.gammaDD
     Bq = BSSN_quantities[
-        f"{CoordSystem}_rfm_precompute" if enable_rfm_precompute else CoordSystem
+        CoordSystem + ("_rfm_precompute" if enable_rfm_precompute else "")
     ]
     betaU = Bq.betaU
     alpha = sp.symbols("alpha", real=True)

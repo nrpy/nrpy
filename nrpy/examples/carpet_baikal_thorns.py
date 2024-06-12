@@ -121,28 +121,28 @@ for evol_thorn_name in thorn_names:
         )
         register_CFunction_Ricci_eval(
             thorn_name=evol_thorn_name,
-            fd_order=fd_order,
             CoordSystem="Cartesian",
             enable_rfm_precompute=False,
             enable_simd=enable_simd,
+            fd_order=fd_order,
         )
         register_CFunction_rhs_eval(
             thorn_name=evol_thorn_name,
-            enable_T4munu=enable_T4munu,
-            fd_order=fd_order,
             CoordSystem="Cartesian",
             enable_rfm_precompute=False,
+            enable_T4munu=enable_T4munu,
             enable_simd=enable_simd,
+            fd_order=fd_order,
             LapseEvolutionOption=LapseEvolutionOption,
             ShiftEvolutionOption=ShiftEvolutionOption,
             enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
         )
         register_CFunction_BSSN_constraints(
             thorn_name=evol_thorn_name,
-            enable_T4munu=enable_T4munu,
-            fd_order=fd_order,
             CoordSystem="Cartesian",
             enable_rfm_precompute=False,
+            enable_T4munu=enable_T4munu,
+            fd_order=fd_order,
             enable_simd=enable_simd,
         )
 

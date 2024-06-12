@@ -67,7 +67,7 @@ pip install nrpy
 1. If working with an Einstein Toolkit project, the output will be Einstein Toolkit modules (thorns). You'll want to either copy or link them to an arrangement in `arrangements/[subdirectory]/`, then add the thorns to your `ThornList`, and compile.
 1. If working with a superB project, Install Charm++ following the instructions in [Charm++ documentation](https://charm.readthedocs.io/en/latest/charm++/manual.html#installing-charm). Then, go to `project/superB_two_blackholes_collide` and open the Makefile. Replace `"~/charm"` in `CC = ~/charm/bin/charmc` with the path to your Charm++ installation directory. Type `make` to build. Type `./charmrun +p4 ./superB_two_blackholes_collide` to run with 4 processors, for example. As in a BlackHoles@Home project parameters can be changed and output from `out0d-conv_factor1.00.txt` and `out0d-conv_factor2.00.txt` can be analyzed using e.g., `gnuplot`.
 
-# Contributing to NRPy 2
+# Contributing to NRPy 2 and running locally
 
 Want to contribute to NRPy 2? Great! First clone the NRPy 2.0 repo:
 ```
@@ -82,7 +82,7 @@ pip install -U -r requirements-dev.txt
 
 Finally, to run anything in the NRPy repo, you'll need to set your `PYTHONPATH` appropriately. If you're using bash, attach the following line to the bottom of your `.bashrc` file:
 ```
-export PYTHONPATH=$PYTHONPATH:.
+export PYTHONPATH=$PYTHONPATH:`pwd`
 ```
 
 Once this is set up, you can run any Python script in the NRPy 2 repo from the repository's root directory. For example,

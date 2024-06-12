@@ -48,7 +48,6 @@ def register_CFunction_Ricci_eval(
     old_fd_order = par.parval_from_str("fd_order")
     # Set this because parallel codegen needs the correct local values
     par.set_parval_from_str("fd_order", fd_order)
-    par.set_parval_from_str("enable_RbarDD_gridfunctions", False)
 
     includes = define_standard_includes()
     if enable_simd:

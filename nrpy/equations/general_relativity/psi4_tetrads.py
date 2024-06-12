@@ -203,12 +203,9 @@ class Psi4Tetrads:
             # Eq. 2.116 in Baumgarte & Shapiro:
             #  n^mu = {1/alpha, -beta^i/alpha}. Note that n_mu = {alpha,0}, so n^mu n_mu = -1.
             Bq = BSSN_quantities[
-                (
-                    CoordSystem + "_rfm_precompute"
-                    if enable_rfm_precompute
-                    else CoordSystem
-                )
+                CoordSystem + ("_rfm_precompute" if enable_rfm_precompute else "")
             ]
+
             u4U[0] = 1 / Bq.alpha
             for i in range(3):
                 u4U[i + 1] = -Bq.betaU[i] / Bq.alpha
