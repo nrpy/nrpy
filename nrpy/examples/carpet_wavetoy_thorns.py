@@ -66,6 +66,13 @@ project_dir = os.path.join("project", project_name)
 par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 par.set_parval_from_str("fd_order", fd_order)
 standard_ET_includes = ["math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
+_ = par.register_CodeParameter(
+    "CCTK_INT",
+    __name__,
+    "FD_order",
+    fd_order,
+    add_to_glb_code_params_dict=True,
+)
 
 
 #########################################################

@@ -177,7 +177,7 @@ jobs:
         python -m nrpy.examples.spinning_blackhole        && (cd project/spinning_blackhole && make && make clean) &&
         python -m nrpy.examples.nrpypn_quasicircular_momenta && (cd project/nrpypn_quasicircular_momenta && make && make clean) &&
         python -m nrpy.examples.wave_equation_multicoord_wavetoy && (cd project/multicoords_curviwavetoy && make && make clean) &&
-        python -m nrpy.examples.seobnrv5_alignedspin_inspiral && (cd project/seobnrv5_alignedspin_inspiral && make && make clean)
+        python -m nrpy.examples.seobnrv5_aligned_spin_inspiral && (cd project/seobnrv5_aligned_spin_inspiral && make && make clean)
 
   codegen-mac:
     runs-on: macos-13
@@ -219,4 +219,4 @@ jobs:
         python -m nrpy.examples.spinning_blackhole        && (cd project/spinning_blackhole && make && make clean) &&
         python -m nrpy.examples.nrpypn_quasicircular_momenta && (cd project/nrpypn_quasicircular_momenta && make && make clean) &&
         python -m nrpy.examples.wave_equation_multicoord_wavetoy && (cd project/multicoords_curviwavetoy && make && make clean) &&
-        python -m nrpy.examples.seobnrv5_alignedspin_inspiral && (cd project/seobnrv5_alignedspin_inspiral && make && make clean)
+        python -m nrpy.examples.seobnrv5_aligned_spin_inspiral && (cd project/seobnrv5_aligned_spin_inspiral && make && make clean)
