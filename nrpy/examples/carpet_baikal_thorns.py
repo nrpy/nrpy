@@ -93,7 +93,7 @@ for evol_thorn_name in thorn_names:
         "1e-15",
         add_to_glb_code_params_dict=True,
     )
-    fd_order_param = par.register_CodeParameter(
+    _ = par.register_CodeParameter(
         "CCTK_INT",
         __name__,
         "FD_order",

@@ -80,6 +80,7 @@ schedule FUNC_NAME in Driver_BoundarySelect
         body=body,
         ET_thorn_name=thorn_name,
         ET_schedule_bins_entries=ET_schedule_bins_entries,
+        ET_current_thorn_CodeParams_used=["FD_order"],
     )
 
 
