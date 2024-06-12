@@ -294,5 +294,5 @@ if __name__ == "__main__":
             # File basename. If this is set to "trusted_module_test1", then
             #   trusted results_dict will be stored in tests/trusted_module_test1.py
             f"{os.path.splitext(os.path.basename(__file__))[0]}_{LapseEvolOption}_{ShiftEvolOption}_{Coord}_T4munu{T4munu_enable}",
-            cast(dict[str, Any], results_dict),
+            cast(Dict[str, Union[mpf, mpc]], results_dict),
         )
