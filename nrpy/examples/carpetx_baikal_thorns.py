@@ -115,29 +115,29 @@ for evol_thorn_name in thorn_names:
         )
         register_CFunction_Ricci_eval(
             thorn_name=evol_thorn_name,
-            fd_order=fd_order,
             CoordSystem="Cartesian",
             enable_rfm_precompute=False,
             enable_simd=enable_simd,
+            fd_order=fd_order,
         )
         register_CFunction_rhs_eval(
             thorn_name=evol_thorn_name,
-            enable_T4munu=enable_T4munu,
-            fd_order=fd_order,
             CoordSystem="Cartesian",
             enable_rfm_precompute=False,
+            enable_T4munu=enable_T4munu,
             enable_simd=enable_simd,
+            fd_order=fd_order,
             LapseEvolutionOption=LapseEvolutionOption,
             ShiftEvolutionOption=ShiftEvolutionOption,
             enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
         )
         register_CFunction_BSSN_constraints(
             thorn_name=evol_thorn_name,
-            enable_T4munu=enable_T4munu,
-            fd_order=fd_order,
             CoordSystem="Cartesian",
             enable_rfm_precompute=False,
+            enable_T4munu=enable_T4munu,
             enable_simd=enable_simd,
+            fd_order=fd_order,
         )
 
     register_CFunction_BSSN_to_ADM(thorn_name=evol_thorn_name, CoordSystem="Cartesian")
@@ -213,3 +213,14 @@ STORAGE: aux_variables[1]      # Diagnostics variables""",
     simd.copy_simd_intrinsics_h(
         project_dir=str(Path(project_dir) / evol_thorn_name / "src")
     )
+
+    simd_name = str(
+        Path(project_dir) / evol_thorn_name / "src" / "simd" / "simd_intrinsics.h"
+    )
+    with open(simd_name, "r", encoding="utf-8") as file:
+        contents = file.read()
+
+    new_contents = contents.replace("REAL_SIMD_ARRAY REAL", "REAL_SIMD_ARRAY CCTK_REAL")
+
+    with open(simd_name, "w", encoding="utf-8") as file:
+        file.write(new_contents)

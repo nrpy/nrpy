@@ -10,7 +10,6 @@ from typing import List, cast
 import sympy as sp
 from nrpylatex import parse_latex  # type: ignore
 
-import nrpy.params as par
 from nrpy.equations.general_relativity import (
     BSSN_constraints,
     BSSN_gauge_RHSs,
@@ -128,17 +127,13 @@ def test_example_BSSN() -> bool:
         \end{align}
     """
     )
-    par.set_parval_from_str("enable_RbarDD_gridfunctions", True)
-    rhs = BSSN_RHSs.BSSN_RHSs["Cartesian"]
+    rhs = BSSN_RHSs.BSSN_RHSs["Cartesian_RbarDD_gridfunctions"]
     (
         trusted_alpha_rhs,
         trusted_vet_rhsU,
         trusted_bet_rhsU,
     ) = BSSN_gauge_RHSs.BSSN_gauge_RHSs()
-    bssncon = BSSN_constraints.BSSN_constraints["Cartesian"]
-    par.set_parval_from_str("enable_RbarDD_gridfunctions", False)
-    # Clear BSSN_quantities.BSSN_quantities["Cartesian"], as it left Ricci symbolic.
-    del BSSN_quantities.BSSN_quantities["Cartesian"]
+    bssncon = BSSN_constraints.BSSN_constraints["Cartesian_RbarDD_gridfunctions"]
     # Construct full symbolic expression for Ricci (RbarDD)
     Bq = BSSN_quantities.BSSN_quantities["Cartesian"]
     try:

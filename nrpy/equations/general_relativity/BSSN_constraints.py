@@ -29,7 +29,17 @@ class BSSNconstraints:
         self,
         CoordSystem: str = "Cartesian",
         enable_rfm_precompute: bool = False,
+        enable_RbarDD_gridfunctions: bool = False,
+        enable_T4munu: bool = False,
     ) -> None:
+        """
+        Set up symbolic expressions for BSSN constraints, storing them within the class object.
+
+        :param CoordSystem: The coordinate system being used, defaults to "Cartesian".
+        :param enable_rfm_precompute: Whether to enable reference-metric precomputation, defaults to False.
+        :param enable_RbarDD_gridfunctions: (bool) Whether to enable RbarDD gridfunctions, defaults to False.
+        :param enable_T4munu: Whether to enable T4munu (stress-energy terms), defaults to False.
+        """
         register_MU_gridfunctions = par.parval_from_str("register_MU_gridfunctions")
 
         # Step 1.b: Given the chosen coordinate system, set up
@@ -42,7 +52,9 @@ class BSSNconstraints:
             CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
         ]
         Bq = BSSN_quantities[
-            CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
+            CoordSystem
+            + ("_rfm_precompute" if enable_rfm_precompute else "")
+            + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
         ]
 
         # Step 1.c: Register H and MU gridfunctions for
@@ -144,7 +156,7 @@ class BSSNconstraints:
             self.MU[i] *= Bq.exp_m4phi
 
         # Next add T4UUmunu source terms if desired.
-        if par.parval_from_str("enable_T4munu"):
+        if enable_T4munu:
             if "T4UU00" not in gri.glb_gridfcs_dict:
                 _ = gri.register_gridfunctions_for_single_rank2(
                     "T4UU",
@@ -177,18 +189,28 @@ class BSSNconstraints_dict(Dict[str, BSSNconstraints]):
 
     def __getitem__(self, CoordSystem_in: str) -> BSSNconstraints:
         if CoordSystem_in not in self:
-            # In case [CoordSystem]_rfm_precompute is passed:
-            CoordSystem = CoordSystem_in.replace("_rfm_precompute", "")
-            enable_T4munu = par.parval_from_str("enable_T4munu")
+            # In case e.g., [CoordSystem]_rfm_precompute_T4munu or [CoordSystem]_rfm_precompute are passed:
+            CoordSystem = (
+                CoordSystem_in.replace("_rfm_precompute", "")
+                .replace("_RbarDD_gridfunctions", "")
+                .replace("_T4munu", "")
+            )
+            enable_rfm_precompute = "_rfm_precompute" in CoordSystem_in
+            enable_RbarDD_gridfunctions = "_RbarDD_gridfunctions" in CoordSystem_in
+            enable_T4munu = "_T4munu" in CoordSystem_in
+
             print(
-                f"Setting up BSSN_constraints for CoordSystem = {CoordSystem}, enable_T4munu={enable_T4munu}."
+                f"Setting up BSSN_constraints for CoordSystem = {CoordSystem}, enable_T4munu={enable_T4munu}, "
+                f"rfm_precompute={enable_rfm_precompute}, Rij gridfuncs={enable_RbarDD_gridfunctions}."
             )
             self.__setitem__(
-                CoordSystem, BSSNconstraints(CoordSystem, enable_rfm_precompute=False)
-            )
-            self.__setitem__(
-                CoordSystem + "_rfm_precompute",
-                BSSNconstraints(CoordSystem, enable_rfm_precompute=True),
+                CoordSystem_in,
+                BSSNconstraints(
+                    CoordSystem,
+                    enable_rfm_precompute=enable_rfm_precompute,
+                    enable_RbarDD_gridfunctions=enable_RbarDD_gridfunctions,
+                    enable_T4munu=enable_T4munu,
+                ),
             )
         return dict.__getitem__(self, CoordSystem_in)
 
@@ -216,9 +238,6 @@ if __name__ == "__main__":
     else:
         print(f"Doctest passed: All {results.attempted} test(s) passed")
 
-    # enable T4munu to ensure a maximally comprehensive test.
-    par.set_parval_from_str("enable_T4munu", True)
-
     for Coord in [
         "Spherical",
         "SinhSpherical_rfm_precompute",
@@ -227,7 +246,7 @@ if __name__ == "__main__":
         "SinhCylindrical",
         "SinhSymTP",
     ]:
-        bconstraints = BSSN_constraints[Coord]
+        bconstraints = BSSN_constraints[Coord + "_T4munu"]
         results_dict = ve.process_dictionary_of_expressions(
             bconstraints.__dict__, fixed_mpfs_for_free_symbols=True
         )

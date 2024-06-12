@@ -10,9 +10,10 @@ import re
 from collections import OrderedDict as ODict
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import List, Union, cast
+from typing import Any, Dict, List, Union, cast
 
 import sympy as sp
+from mpmath import mpc, mpf  # type: ignore
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
@@ -23,6 +24,7 @@ import nrpy.indexedexp as ixp
 import nrpy.infrastructures.ETLegacy.simple_loop as lp
 import nrpy.params as par
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
+import nrpy.validate_expressions.validate_expressions as ve
 from nrpy.equations.general_relativity.BSSN_gauge_RHSs import BSSN_gauge_RHSs
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.equations.general_relativity.BSSN_RHSs import BSSN_RHSs
@@ -34,8 +36,8 @@ from nrpy.infrastructures.ETLegacy.ETLegacy_include_header import (
 def register_CFunction_rhs_eval(
     thorn_name: str,
     CoordSystem: str,
-    enable_T4munu: bool,
     enable_rfm_precompute: bool,
+    enable_T4munu: bool,
     enable_simd: bool,
     fd_order: int,
     LapseEvolutionOption: str,
@@ -47,14 +49,15 @@ def register_CFunction_rhs_eval(
     KreissOliger_strength_nongauge: float = 0.1,
     OMP_collapse: int = 1,
     fp_type: str = "double",
-) -> Union[None, pcg.NRPyEnv_type]:
+    validate_expressions: bool = False,
+) -> Union[None, Dict[str, Union[mpf, mpc]], pcg.NRPyEnv_type]:
     """
     Register the right-hand side evaluation function for the BSSN equations.
 
     :param thorn_name: The Einstein Toolkit thorn name.
     :param CoordSystem: The coordinate system to be used.
-    :param enable_T4munu: Whether to include the stress-energy tensor. Defaults to False.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
+    :param enable_T4munu: Whether to enable T4munu (stress-energy terms).
     :param enable_simd: Whether to enable SIMD (Single Instruction, Multiple Data).
     :param fd_order: Order of finite difference method
     :param LapseEvolutionOption: Lapse evolution equation choice.
@@ -65,6 +68,7 @@ def register_CFunction_rhs_eval(
     :param KreissOliger_strength_nongauge: Non-gauge strength for Kreiss-Oliger dissipation.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
     :param fp_type: Floating point type, e.g., "double".
+    :param validate_expressions: Whether to validate generated sympy expressions against trusted values.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -73,12 +77,9 @@ def register_CFunction_rhs_eval(
         return None
 
     old_fd_order = par.parval_from_str("fd_order")
-    old_enable_T4munu = par.parval_from_str("enable_T4munu")
-    old_enable_RbarDD_gridfunctions = par.parval_from_str("enable_RbarDD_gridfunctions")
     # Set this because parallel codegen needs the correct local values
     par.set_parval_from_str("fd_order", fd_order)
-    par.set_parval_from_str("enable_T4munu", enable_T4munu)
-    par.set_parval_from_str("enable_RbarDD_gridfunctions", True)
+    enable_RbarDD_gridfunctions = True
 
     includes = define_standard_includes()
     if enable_simd:
@@ -106,11 +107,15 @@ def register_CFunction_rhs_eval(
 """
 
     rhs = BSSN_RHSs[
-        CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
+        CoordSystem
+        + ("_rfm_precompute" if enable_rfm_precompute else "")
+        + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
+        + ("_T4munu" if enable_T4munu else "")
     ]
     alpha_rhs, vet_rhsU, bet_rhsU = BSSN_gauge_RHSs(
-        CoordSystem,
-        enable_rfm_precompute,
+        CoordSystem=CoordSystem,
+        enable_rfm_precompute=enable_rfm_precompute,
+        enable_T4munu=enable_T4munu,
         LapseEvolutionOption=LapseEvolutionOption,
         ShiftEvolutionOption=ShiftEvolutionOption,
     )
@@ -135,11 +140,9 @@ def register_CFunction_rhs_eval(
 
         if KreissOliger_strength_mult_by_W:
             Bq = BSSN_quantities[
-                (
-                    CoordSystem + "_rfm_precompute"
-                    if enable_rfm_precompute
-                    else CoordSystem
-                )
+                CoordSystem
+                + ("_rfm_precompute" if enable_rfm_precompute else "")
+                + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
             ]
             EvolvedConformalFactor_cf = par.parval_from_str("EvolvedConformalFactor_cf")
             if EvolvedConformalFactor_cf == "W":
@@ -193,8 +196,8 @@ def register_CFunction_rhs_eval(
                     )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
 
     BSSN_RHSs_access_gf: List[str] = []
+    pattern = re.compile(r"([a-zA-Z_]+)_rhs([a-zA-Z_]+[0-2]+)")
     for var in rhs.BSSN_RHSs_varname_to_expr_dict.keys():
-        pattern = re.compile(r"([a-zA-Z_]+)_rhs([a-zA-Z_]+[0-2]+)")
         patmatch = pattern.match(var)
         if patmatch:
             var_name = patmatch.group(1) + patmatch.group(2) + "_rhs"
@@ -210,6 +213,10 @@ def register_CFunction_rhs_eval(
     vetU = ixp.declarerank1("vetU")
     for i in range(3):
         betaU[i] = vetU[i] * rfm.ReU[i]
+    if validate_expressions:
+        return ve.process_dictionary_of_expressions(
+            rhs.BSSN_RHSs_varname_to_expr_dict, fixed_mpfs_for_free_symbols=True
+        )
     body += lp.simple_loop(
         loop_body=ccg.c_codegen(
             list(rhs.BSSN_RHSs_varname_to_expr_dict.values()),
@@ -258,9 +265,34 @@ if(FD_order == {fd_order}) {{
 
     # Reset to the initial values
     par.set_parval_from_str("fd_order", old_fd_order)
-    par.set_parval_from_str("enable_T4munu", old_enable_T4munu)
-    par.set_parval_from_str(
-        "enable_RbarDD_gridfunctions", old_enable_RbarDD_gridfunctions
-    )
 
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
+
+if __name__ == "__main__":
+    import os
+
+    Coord = "Cartesian"
+    LapseEvolOption = "OnePlusLog"
+    ShiftEvolOption = "GammaDriving2ndOrder_Covariant"
+    for T4munu_enable in [True, False]:
+        results_dict = register_CFunction_rhs_eval(
+            thorn_name="dummy_thorn_name",
+            CoordSystem=Coord,
+            enable_rfm_precompute=False,
+            enable_T4munu=T4munu_enable,
+            enable_simd=False,
+            fd_order=4,  # unused for this validation.
+            enable_KreissOliger_dissipation=True,
+            LapseEvolutionOption=LapseEvolOption,
+            ShiftEvolutionOption=ShiftEvolOption,
+            validate_expressions=True,
+        )
+        ve.compare_or_generate_trusted_results(
+            os.path.abspath(__file__),
+            os.getcwd(),
+            # File basename. If this is set to "trusted_module_test1", then
+            #   trusted results_dict will be stored in tests/trusted_module_test1.py
+            f"{os.path.splitext(os.path.basename(__file__))[0]}_{LapseEvolOption}_{ShiftEvolOption}_{Coord}_T4munu{T4munu_enable}",
+            cast(dict[Any, Any | Any], results_dict),
+        )

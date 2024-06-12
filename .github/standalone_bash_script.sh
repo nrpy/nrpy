@@ -108,9 +108,26 @@ example_scripts=(
   "nrpy/examples/spinning_blackhole.py project/spinning_blackhole"
   "nrpy/examples/nrpypn_quasicircular_momenta.py project/nrpypn_quasicircular_momenta"
   "nrpy/examples/wave_equation_multicoord_wavetoy.py project/multicoords_curviwavetoy"
+  "nrpy/examples/carpet_baikal_thorns.py project/carpet_baikal_thorns"
+  "nrpy/examples/carpet_wavetoy_thorns.py project/carpet_wavetoy_thorns"
+  "nrpy/examples/carpetx_baikal_thorns.py project/carpetx_baikal_thorns"
+  "nrpy/examples/carpetx_wavetoy_thorns.py project/carpetx_wavetoy_thorns"
+  "nrpy/examples/seobnrv5_aligned_spin_inspiral.py project/seobnrv5_aligned_spin_inspiral"
+  "nrpy/examples/superB_two_blackholes_collide.py project/superB_two_blackholes_collide"
 )
 
 for script in "${example_scripts[@]}"; do
   IFS=' ' read -r script_path project_path <<< "$script"
-  PYTHONPATH=.:$PYTHONPATH python $script_path && (cd $project_path && make && make clean)
+  PYTHONPATH=.:$PYTHONPATH python $script_path
+  if [[ $? -ne 0 ]]; then
+    echo "Error: Python script $script_path failed."
+    exit 1
+  fi
+  if [[ $script_path != *"superB"* && $script_path != *"carpet"* ]]; then
+    (cd $project_path && make && make clean)
+    if [[ $? -ne 0 ]]; then
+      echo "Error: Compilation in $project_path failed."
+      exit 1
+    fi
+  fi
 done

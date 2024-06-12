@@ -49,10 +49,9 @@ def register_CFunction_Ricci_eval(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    old_fd_order = par.parval_from_str("fd_order")
+    orig_fd_order = par.parval_from_str("fd_order")
     # Set this because parallel codegen needs the correct local values
     par.set_parval_from_str("fd_order", fd_order)
-    par.set_parval_from_str("enable_RbarDD_gridfunctions", False)
 
     includes = define_standard_includes()
     if enable_simd:
@@ -121,5 +120,5 @@ if(FD_order == {fd_order}) {{
         ET_schedule_bins_entries=[("MoL_CalcRHS", schedule)],
     )
     # Reset to the initial values
-    par.set_parval_from_str("fd_order", old_fd_order)
+    par.set_parval_from_str("fd_order", orig_fd_order)
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())

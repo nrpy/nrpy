@@ -19,8 +19,6 @@ import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 #  Declare/initialize parameters for this module
 par.register_param(str, __name__, "EvolvedConformalFactor_cf", "W")
 par.register_param(bool, __name__, "detgbarOverdetghat_equals_one", True)
-par.register_param(bool, __name__, "enable_RbarDD_gridfunctions", False)
-par.register_param(bool, __name__, "enable_T4munu", False)
 
 
 class BSSNQuantities:
@@ -30,24 +28,25 @@ class BSSNQuantities:
 
     :param CoordSystem: (string) The coordinate system being used, defaults to "Cartesian"
     :param enable_rfm_precompute: (bool) Whether to enable precomputation for reference metric, defaults to False
+    :param enable_RbarDD_gridfunctions: (bool) Whether to enable RbarDD gridfunctions, defaults to False.
     """
 
     def __init__(
-        self, CoordSystem: str = "Cartesian", enable_rfm_precompute: bool = False
+        self,
+        CoordSystem: str = "Cartesian",
+        enable_rfm_precompute: bool = False,
+        enable_RbarDD_gridfunctions: bool = False,
     ) -> None:
         """
         Initialize and set up all BSSN quantities, storing them within the class object.
 
         :param CoordSystem: The coordinate system being used, defaults to "Cartesian".
         :param enable_rfm_precompute: Whether to enable precomputation for reference metric, defaults to False.
+        :param enable_RbarDD_gridfunctions: (bool) Whether to enable RbarDD gridfunctions, defaults to False.
         :raises ValueError: If detgbarOverdetghat_equals_one=False and full implementation is not provided.
         :raises ValueError: If EvolvedConformalFactor_cf is not one of "W", "chi", or "phi".
         """
         # Step 2: Register all needed BSSN gridfunctions if needed.
-
-        #   Check to see if this function has already been called.
-        #   If so, do not register the gridfunctions again!
-        enable_RbarDD_gridfunctions = par.parval_from_str("enable_RbarDD_gridfunctions")
 
         if any("hDD00" in gf.name for gf in gri.glb_gridfcs_dict.values()):
             self.hDD = ixp.declarerank2("hDD", symmetry="sym01")
@@ -586,20 +585,23 @@ class BSSNQuantities_dict(Dict[str, BSSNQuantities]):
     def __getitem__(self, CoordSystem_in: str) -> BSSNQuantities:
         if CoordSystem_in not in self:
             # In case [CoordSystem]_rfm_precompute is passed:
-            CoordSystem = CoordSystem_in.replace("_rfm_precompute", "")
-            enable_T4munu = par.parval_from_str("enable_T4munu")
-            enable_RbarDD_gridfunctions = par.parval_from_str(
-                "enable_RbarDD_gridfunctions"
+            CoordSystem = CoordSystem_in.replace("_rfm_precompute", "").replace(
+                "_RbarDD_gridfunctions", ""
             )
+            enable_rfm_precompute = "_rfm_precompute" in CoordSystem_in
+            enable_RbarDD_gridfunctions = "_RbarDD_gridfunctions" in CoordSystem_in
+
             print(
-                f"Setting up BSSN_quantities for CoordSystem = {CoordSystem}, enable_T4munu={enable_T4munu}, Rij symbolic={enable_RbarDD_gridfunctions}."
+                f"Setting up BSSN_Quantities for CoordSystem = {CoordSystem}, "
+                f"rfm_precompute={enable_rfm_precompute}, Rij gridfuncs={enable_RbarDD_gridfunctions}."
             )
             self.__setitem__(
-                CoordSystem, BSSNQuantities(CoordSystem, enable_rfm_precompute=False)
-            )
-            self.__setitem__(
-                CoordSystem + "_rfm_precompute",
-                BSSNQuantities(CoordSystem, enable_rfm_precompute=True),
+                CoordSystem_in,
+                BSSNQuantities(
+                    CoordSystem=CoordSystem,
+                    enable_rfm_precompute=enable_rfm_precompute,
+                    enable_RbarDD_gridfunctions=enable_RbarDD_gridfunctions,
+                ),
             )
         return dict.__getitem__(self, CoordSystem_in)
 
@@ -626,13 +628,12 @@ if __name__ == "__main__":
     else:
         print(f"Doctest passed: All {results.attempted} test(s) passed")
 
-    # enable T4munu to ensure a maximally comprehensive test (has no impact here).
-    par.set_parval_from_str("enable_T4munu", True)
-
     for Coord in [
         "Spherical",
         "SinhSpherical",
         "SinhSpherical_rfm_precompute",
+        "SinhSpherical_rfm_precompute_RbarDD_gridfunctions",
+        "SinhSpherical_RbarDD_gridfunctions",
         "Cartesian",
         "SinhCartesian",
         "SinhCylindrical",

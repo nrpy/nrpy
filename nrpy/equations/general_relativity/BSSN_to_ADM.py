@@ -32,7 +32,7 @@ class BSSN_to_ADM:
 
         # Step 1.c: Import all needed basic (unrescaled) BSSN scalars & tensors from BSSN_quantities
         Bq = BSSN_quantities[
-            CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
+            CoordSystem + ("_rfm_precompute" if enable_rfm_precompute else "")
         ]
         gammabarDD = Bq.gammabarDD
         cf = Bq.cf

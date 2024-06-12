@@ -25,9 +25,9 @@ from nrpy.infrastructures.ETLegacy.ETLegacy_include_header import (
 
 def register_CFunction_BSSN_constraints(
     thorn_name: str,
-    enable_T4munu: bool,
     CoordSystem: str,
     enable_rfm_precompute: bool,
+    enable_T4munu: bool,
     enable_simd: bool,
     fd_order: int,
     OMP_collapse: int = 1,
@@ -38,8 +38,8 @@ def register_CFunction_BSSN_constraints(
 
     :param thorn_name: The Einstein Toolkit thorn name.
     :param CoordSystem: The coordinate system to be used.
-    :param enable_T4munu: Whether to include the stress-energy tensor.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
+    :param enable_T4munu: Whether to include the stress-energy tensor.
     :param enable_simd: Whether to enable SIMD instructions.
     :param fd_order: Order of finite difference method
     :param OMP_collapse: Degree of OpenMP loop collapsing.
@@ -50,12 +50,10 @@ def register_CFunction_BSSN_constraints(
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
-
     old_fd_order = par.parval_from_str("fd_order")
-    old_enable_T4munu = par.parval_from_str("enable_T4munu")
     # Set this because parallel codegen needs the correct local values
     par.set_parval_from_str("fd_order", fd_order)
-    par.set_parval_from_str("enable_T4munu", enable_T4munu)
+    enable_RbarDD_gridfunctions = False
 
     includes = define_standard_includes()
     if enable_simd:
@@ -79,7 +77,10 @@ def register_CFunction_BSSN_constraints(
 """
 
     Bcon = BSSN_constraints[
-        CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
+        CoordSystem
+        + ("_rfm_precompute" if enable_rfm_precompute else "")
+        + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
+        + ("_T4munu" if enable_T4munu else "")
     ]
 
     list_of_output_exprs = [Bcon.H]
@@ -90,7 +91,7 @@ def register_CFunction_BSSN_constraints(
     for index in range(3):
         list_of_output_exprs += [Bcon.MU[index]]
         Constraints_access_gfs += [
-            gri.ETLegacyGridFunction.access_gf(gf_name="MU" + str(index))
+            gri.ETLegacyGridFunction.access_gf(gf_name=f"MU{index}")
         ]
     body += lp.simple_loop(
         loop_body=ccg.c_codegen(
@@ -145,6 +146,5 @@ if(FD_order == {fd_order}) {{
 
     # Reset to the initial values
     par.set_parval_from_str("fd_order", old_fd_order)
-    par.set_parval_from_str("enable_T4munu", old_enable_T4munu)
 
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
