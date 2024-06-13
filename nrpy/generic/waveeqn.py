@@ -22,12 +22,12 @@ def flat_metric(out:Expr, ni:Idx, nj:Idx)->Expr:
 gf = GF()
 
 # Declare gfs
-p   = gf.decl("p",[li])
-p_t = gf.decl("p_t",[li])
-p_d = gf.decl("p_d",[li,lj])
-u   = gf.decl("u", [])
+p   = gf.decl("p", [li], "VVC")
+p_t = gf.decl("p_t", [li], "VVC")
+p_d = gf.decl("p_d",[li,lj], "VVC")
+u   = gf.decl("u", [], "VVC")
 u_t = gf.declscalar("u_t")
-u_d = gf.decl("u_d",[ui])
+u_d = gf.decl("u_d", [ui], "VVC")
 
 siter2 = gf.decl("siter2", [li,lj])
 gf.add_sym(siter2[li,lj], li, lj)

@@ -342,6 +342,7 @@ class GF:
         self.groups : Dict[str, List[str]] = dict()
         self.props : Dict[str,List[Integer]] = dict()
         self.defn : Dict[str,Tuple[str,List[Idx]]] = dict()
+        self.centering : Dict[str,str] = dict()
 
     def add_param(self, name:str, default:param_default_type, desc:str, values:param_values_type=None)->Symbol:
         self.params[name] = Param(name, default, desc, values)
@@ -431,10 +432,14 @@ class GF:
 
         return ret
 
-    def decl(self, basename:str, indices:List[Idx])->IndexedBase:
+    def decl(self, basename:str, indices:List[Idx], centering:str="")->IndexedBase:
+        # Note, an actual value of "" is an illegal.
+        # If a centering is not declared, an error should be thrown
+        # when generating code for that variable.
         ret = mkIndexedBase(basename, shape=tuple([dimension]*len(indices)) )
         self.gfs[basename] = ret
         self.defn[basename] = (basename, list(indices))
+        self.centering[basename] = centering
 
         # If possible, insert the symbol into the current environment
         frame = currentframe()
