@@ -133,6 +133,41 @@ jobs:
           exit 1
         fi
 
+  einsteintoolkit-validation:
+    runs-on: ubuntu-20.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download Apptainer image
+        run: wget https://github.com/nrpy/einsteintoolkit_ci_images/releases/download/v1.0.3/custom_ubuntu.sif
+
+      - name: Build Apptainer sandbox
+        run: apptainer build --sandbox custom_ubuntu_sandbox custom_ubuntu.sif
+
+      - name: Run Apptainer container
+        run: |
+          apptainer exec --writable custom_ubuntu_sandbox bash -c "
+          set -e
+          source /opt/jup312/bin/activate
+          python3 --version && isympy --version
+          cd /opt/jup312/nrpy
+          git pull
+          python3 nrpy/examples/carpet_baikal_thorns.py
+          cd /opt/ET_2024_06_beta/arrangements/WVUThorns/
+          rm Baikal*
+          ln -s /opt/jup312/nrpy/project/et_baikal/Baikal* .
+          cp -r /opt/ET_2024_06_beta/repos/wvuthorns/Baikal/tes* Baikal/
+          cp -r /opt/ET_2024_06_beta/repos/wvuthorns/BaikalVacuum/tes* BaikalVacuum/
+          cd /opt/ET_2024_06_beta/
+          ./make_config-runmefirst-gcc
+          make
+          export CCTK_TESTSUITE_RUN_TESTS='Baikal BaikalVacuum'
+          export PROMPT=no
+          make etilgrmhdgcc-testsuite
+          "
+
   codegen-ubuntu:
     runs-on: ${{ matrix.os }}
 
