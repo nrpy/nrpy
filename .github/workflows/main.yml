@@ -159,9 +159,7 @@ jobs:
           python3 --version && isympy --version
           cd /opt/jup312/nrpy
           git pull
-          echo 'hello this is an output to stdout1'
-          python3 nrpy/examples/carpet_baikal_thorns.py
-          echo 'hello this is an output to stdout2'
+          python3 -u nrpy/examples/carpet_baikal_thorns.py
           cd /opt/ET_2024_06_beta/arrangements/WVUThorns/
           rm Baikal*
           ln -s /opt/jup312/nrpy/project/et_baikal/Baikal* .
