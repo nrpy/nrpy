@@ -574,25 +574,25 @@ class BSSNQuantities_dict(Dict[str, BSSNQuantities]):
     """Custom dictionary for storing BSSNQuantities objects."""
 
     def __getitem__(self, CoordSystem_in: str) -> BSSNQuantities:
-        if CoordSystem_in not in self:
-            # In case [CoordSystem]_rfm_precompute is passed:
-            CoordSystem = CoordSystem_in.replace("_rfm_precompute", "").replace(
-                "_RbarDD_gridfunctions", ""
-            )
-            enable_rfm_precompute = "_rfm_precompute" in CoordSystem_in
-            enable_RbarDD_gridfunctions = "_RbarDD_gridfunctions" in CoordSystem_in
+        # In case [CoordSystem]_rfm_precompute is passed:
+        CoordSystem = CoordSystem_in.replace("_rfm_precompute", "").replace(
+            "_RbarDD_gridfunctions", ""
+        )
+        enable_rfm_precompute = "_rfm_precompute" in CoordSystem_in
+        enable_RbarDD_gridfunctions = "_RbarDD_gridfunctions" in CoordSystem_in
 
-            if enable_RbarDD_gridfunctions and not any(
+        if enable_RbarDD_gridfunctions and not any(
                 "RbarDD00" in gf.name for gf in gri.glb_gridfcs_dict.values()
-            ):
-                _ = gri.register_gridfunctions_for_single_rank2(
-                    "RbarDD",
-                    symmetry="sym01",
-                    group="AUXEVOL",
-                    gf_array_name="auxevol_gfs",
-                )
-                logging.info("Just registered RbarDD gridfunctions.")
+        ):
+            _ = gri.register_gridfunctions_for_single_rank2(
+                "RbarDD",
+                symmetry="sym01",
+                group="AUXEVOL",
+                gf_array_name="auxevol_gfs",
+            )
+            logging.info("Just registered RbarDD gridfunctions.")
 
+        if CoordSystem_in not in self:
             print(
                 f"Setting up BSSN_Quantities for CoordSystem = {CoordSystem}, "
                 f"rfm_precompute={enable_rfm_precompute}, Rij gridfuncs={enable_RbarDD_gridfunctions}."
