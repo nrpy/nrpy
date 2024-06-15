@@ -82,7 +82,11 @@ class BSSNQuantities:
                 wavespeed=[1.0, 1.0, sp.sqrt(2.0)],
             )
 
-        print(enable_RbarDD_gridfunctions, gri.glb_gridfcs_dict.keys())
+        print(
+            enable_RbarDD_gridfunctions,
+            gri.glb_gridfcs_dict.keys(),
+            gri.glb_gridfcs_dict.values(),
+        )
         if enable_RbarDD_gridfunctions and not any(
             "RbarDD00" in gf.name for gf in gri.glb_gridfcs_dict.values()
         ):
