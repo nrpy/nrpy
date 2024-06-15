@@ -165,7 +165,7 @@ for evol_thorn_name in thorn_names:
         for i in range(4):
             for j in range(i, 4):
                 gri.glb_gridfcs_dict.pop("T4UU" + str(i) + str(j))
-
+    print(evol_thorn_name, gri.glb_gridfcs_dict.keys())
     ########################
     # STEP 3: Register functions that depend on all gridfunctions & CodeParameters having been set
     ########################
