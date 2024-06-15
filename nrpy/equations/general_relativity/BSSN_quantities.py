@@ -5,6 +5,7 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
+import logging
 from typing import Dict, List
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
@@ -82,7 +83,7 @@ class BSSNQuantities:
                 wavespeed=[1.0, 1.0, sp.sqrt(2.0)],
             )
 
-        print(
+        logging.info(
             enable_RbarDD_gridfunctions,
             gri.glb_gridfcs_dict.keys(),
             gri.glb_gridfcs_dict.values(),
