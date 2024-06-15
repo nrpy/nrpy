@@ -83,22 +83,7 @@ class BSSNQuantities:
                 wavespeed=[1.0, 1.0, sp.sqrt(2.0)],
             )
 
-        logging.info(
-            enable_RbarDD_gridfunctions,
-            gri.glb_gridfcs_dict.keys(),
-            gri.glb_gridfcs_dict.values(),
-        )
-        if enable_RbarDD_gridfunctions and not any(
-            "RbarDD00" in gf.name for gf in gri.glb_gridfcs_dict.values()
-        ):
-            self.RbarDD = gri.register_gridfunctions_for_single_rank2(
-                "RbarDD",
-                symmetry="sym01",
-                group="AUXEVOL",
-                gf_array_name="auxevol_gfs",
-            )
-        else:
-            self.RbarDD = ixp.declarerank2("RbarDD", symmetry="sym01")
+        self.RbarDD = ixp.declarerank2("RbarDD", symmetry="sym01")
 
         # fmt: off
         # Step 3: Define all basic conformal BSSN tensors
@@ -596,6 +581,17 @@ class BSSNQuantities_dict(Dict[str, BSSNQuantities]):
             )
             enable_rfm_precompute = "_rfm_precompute" in CoordSystem_in
             enable_RbarDD_gridfunctions = "_RbarDD_gridfunctions" in CoordSystem_in
+
+            if enable_RbarDD_gridfunctions and not any(
+                "RbarDD00" in gf.name for gf in gri.glb_gridfcs_dict.values()
+            ):
+                _ = gri.register_gridfunctions_for_single_rank2(
+                    "RbarDD",
+                    symmetry="sym01",
+                    group="AUXEVOL",
+                    gf_array_name="auxevol_gfs",
+                )
+                logging.info("Just registered RbarDD gridfunctions.")
 
             print(
                 f"Setting up BSSN_Quantities for CoordSystem = {CoordSystem}, "
