@@ -159,6 +159,7 @@ jobs:
           python3 --version && isympy --version
           cd /opt/jup312/nrpy
           git pull
+          git log | head
           python3 -u nrpy/examples/carpet_baikal_thorns.py
           cd /opt/ET_2024_06_beta/arrangements/WVUThorns/
           rm Baikal*
