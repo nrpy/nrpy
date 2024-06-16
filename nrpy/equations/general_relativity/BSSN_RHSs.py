@@ -53,6 +53,12 @@ class BSSNRHSs:
         ]
 
         # Step 1.e: Import all basic (unrescaled) BSSN scalars & tensors
+        ss = (
+            CoordSystem
+            + ("_rfm_precompute" if enable_rfm_precompute else "")
+            + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
+        )
+        print(f"CALLING BSSNQ: {ss}")
         Bq = BSSN_quantities[
             CoordSystem
             + ("_rfm_precompute" if enable_rfm_precompute else "")
