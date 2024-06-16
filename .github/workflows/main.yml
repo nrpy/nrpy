@@ -156,6 +156,7 @@ jobs:
           set -e
           echo 'hello this is an output to stdout'
           source /opt/jup312/bin/activate
+          export PYTHONPATH=.:$PYTHONPATH
           python3 --version && isympy --version
           cd /opt/jup312/nrpy
           git pull
