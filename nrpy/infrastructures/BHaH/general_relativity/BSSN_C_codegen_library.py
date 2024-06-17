@@ -391,8 +391,11 @@ def register_CFunction_rhs_eval(
         rhs.BSSN_RHSs_varname_to_expr_dict[f"vet_rhsU{i}"] = vet_rhsU[i]
         rhs.BSSN_RHSs_varname_to_expr_dict[f"bet_rhsU{i}"] = bet_rhsU[i]
 
-    rhs.BSSN_RHSs_varname_to_expr_dict = ODict(
-        sorted(rhs.BSSN_RHSs_varname_to_expr_dict.items())
+    # local_BSSN_RHSs_varname_to_expr_dict is modified below if e.g., we add KO terms;
+    #    DO NOT MODIFY rhs.BSSN_RHSs_varname_to_expr_dict!
+    local_BSSN_RHSs_varname_to_expr_dict = rhs.BSSN_RHSs_varname_to_expr_dict.copy()
+    local_BSSN_RHSs_varname_to_expr_dict = ODict(
+        sorted(local_BSSN_RHSs_varname_to_expr_dict.items())
     )
 
     # Add Kreiss-Oliger dissipation to the BSSN RHSs:
@@ -434,36 +437,36 @@ def register_CFunction_rhs_eval(
         aDD_dKOD = ixp.declarerank3("aDD_dKOD", symmetry="sym01")
         hDD_dKOD = ixp.declarerank3("hDD_dKOD", symmetry="sym01")
         for k in range(3):
-            rhs.BSSN_RHSs_varname_to_expr_dict["alpha_rhs"] += (
+            local_BSSN_RHSs_varname_to_expr_dict["alpha_rhs"] += (
                 diss_strength_gauge * alpha_dKOD[k] * rfm.ReU[k]
             )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
-            rhs.BSSN_RHSs_varname_to_expr_dict["cf_rhs"] += (
+            local_BSSN_RHSs_varname_to_expr_dict["cf_rhs"] += (
                 diss_strength_nongauge * cf_dKOD[k] * rfm.ReU[k]
             )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
-            rhs.BSSN_RHSs_varname_to_expr_dict["trK_rhs"] += (
+            local_BSSN_RHSs_varname_to_expr_dict["trK_rhs"] += (
                 diss_strength_nongauge * trK_dKOD[k] * rfm.ReU[k]
             )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
             for i in range(3):
                 if "2ndOrder" in ShiftEvolutionOption:
-                    rhs.BSSN_RHSs_varname_to_expr_dict[f"bet_rhsU{i}"] += (
+                    local_BSSN_RHSs_varname_to_expr_dict[f"bet_rhsU{i}"] += (
                         diss_strength_gauge * betU_dKOD[i][k] * rfm.ReU[k]
                     )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
-                rhs.BSSN_RHSs_varname_to_expr_dict[f"vet_rhsU{i}"] += (
+                local_BSSN_RHSs_varname_to_expr_dict[f"vet_rhsU{i}"] += (
                     diss_strength_gauge * vetU_dKOD[i][k] * rfm.ReU[k]
                 )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
-                rhs.BSSN_RHSs_varname_to_expr_dict[f"lambda_rhsU{i}"] += (
+                local_BSSN_RHSs_varname_to_expr_dict[f"lambda_rhsU{i}"] += (
                     diss_strength_nongauge * lambdaU_dKOD[i][k] * rfm.ReU[k]
                 )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
                 for j in range(i, 3):
-                    rhs.BSSN_RHSs_varname_to_expr_dict[f"a_rhsDD{i}{j}"] += (
+                    local_BSSN_RHSs_varname_to_expr_dict[f"a_rhsDD{i}{j}"] += (
                         diss_strength_nongauge * aDD_dKOD[i][j][k] * rfm.ReU[k]
                     )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
-                    rhs.BSSN_RHSs_varname_to_expr_dict[f"h_rhsDD{i}{j}"] += (
+                    local_BSSN_RHSs_varname_to_expr_dict[f"h_rhsDD{i}{j}"] += (
                         diss_strength_nongauge * hDD_dKOD[i][j][k] * rfm.ReU[k]
                     )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
 
     BSSN_RHSs_access_gf: List[str] = []
-    for var in rhs.BSSN_RHSs_varname_to_expr_dict.keys():
+    for var in local_BSSN_RHSs_varname_to_expr_dict.keys():
         BSSN_RHSs_access_gf += [
             gri.BHaHGridFunction.access_gf(
                 var.replace("_rhs", ""),
@@ -482,14 +485,25 @@ def register_CFunction_rhs_eval(
     for i in range(3):
         # self.lambda_rhsU[i] = self.Lambdabar_rhsU[i] / rfm.ReU[i]
         betaU[i] = vetU[i] * rfm.ReU[i]
+
+    # Perform validation of BSSN_RHSs against trusted version.
+    results_dict = ve.process_dictionary_of_expressions(
+        local_BSSN_RHSs_varname_to_expr_dict, fixed_mpfs_for_free_symbols=True
+    )
     if validate_expressions:
-        return ve.process_dictionary_of_expressions(
-            rhs.BSSN_RHSs_varname_to_expr_dict, fixed_mpfs_for_free_symbols=True
-        )
+        return results_dict
+    ve.compare_or_generate_trusted_results(
+        os.path.abspath(__file__),
+        os.getcwd(),
+        # File basename. If this is set to "trusted_module_test1", then
+        #   trusted results_dict will be stored in tests/trusted_module_test1.py
+        f"{os.path.splitext(os.path.basename(__file__))[0]}_{LapseEvolutionOption}_{ShiftEvolutionOption}_{CoordSystem}_T4munu{enable_T4munu}_KO{enable_KreissOliger_dissipation}",
+        cast(Dict[str, Union[mpf, mpc]], results_dict),
+    )
 
     body = lp.simple_loop(
         loop_body=ccg.c_codegen(
-            list(rhs.BSSN_RHSs_varname_to_expr_dict.values()),
+            list(local_BSSN_RHSs_varname_to_expr_dict.values()),
             BSSN_RHSs_access_gf,
             enable_fd_codegen=True,
             enable_simd=enable_simd,
