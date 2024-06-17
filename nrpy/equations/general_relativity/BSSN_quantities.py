@@ -5,7 +5,6 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-import logging
 from typing import Dict, List
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
@@ -591,13 +590,9 @@ class BSSNQuantities_dict(Dict[str, BSSNQuantities]):
                 group="AUXEVOL",
                 gf_array_name="auxevol_gfs",
             )
-            logging.info("Just registered RbarDD gridfunctions.")
 
         if CoordSystem_in not in self:
-            print(
-                f"Setting up BSSN_Quantities[{CoordSystem_in}]: CoordSystem = {CoordSystem}, "
-                f"rfm_precompute={enable_rfm_precompute}, Rij gridfuncs={enable_RbarDD_gridfunctions}."
-            )
+            print(f"Setting up BSSN_Quantities[{CoordSystem_in}]...")
             self.__setitem__(
                 CoordSystem_in,
                 BSSNQuantities(
