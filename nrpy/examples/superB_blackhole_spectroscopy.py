@@ -128,7 +128,6 @@ shutil.rmtree(project_dir, ignore_errors=True)
 # Set NRPy parameters that steer the code generation
 par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 par.set_parval_from_str("fd_order", fd_order)
-par.set_parval_from_str("enable_RbarDD_gridfunctions", separate_Ricci_and_BSSN_RHS)
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 par.set_parval_from_str(
     "swm2sh_maximum_l_mode_generated", swm2sh_maximum_l_mode_generated
@@ -183,6 +182,8 @@ if enable_rfm_precompute:
 BCl.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
+    enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
+    enable_T4munu=False,
     enable_simd=enable_simd,
     enable_fd_functions=enable_fd_functions,
     enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
@@ -193,13 +194,14 @@ BCl.register_CFunction_rhs_eval(
     KreissOliger_strength_nongauge=KreissOliger_strength_nongauge,
     OMP_collapse=OMP_collapse,
 )
-BCl.register_CFunction_Ricci_eval(
-    CoordSystem=CoordSystem,
-    enable_rfm_precompute=enable_rfm_precompute,
-    enable_simd=enable_simd,
-    enable_fd_functions=enable_fd_functions,
-    OMP_collapse=OMP_collapse,
-)
+if separate_Ricci_and_BSSN_RHS:
+    BCl.register_CFunction_Ricci_eval(
+        CoordSystem=CoordSystem,
+        enable_rfm_precompute=enable_rfm_precompute,
+        enable_simd=enable_simd,
+        enable_fd_functions=enable_fd_functions,
+        OMP_collapse=OMP_collapse,
+    )
 BCl.register_CFunction_enforce_detgammabar_equals_detgammahat(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
@@ -209,6 +211,8 @@ BCl.register_CFunction_enforce_detgammabar_equals_detgammahat(
 BCl.register_CFunction_constraints(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
+    enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
+    enable_T4munu=False,
     enable_simd=enable_simd,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
@@ -253,8 +257,12 @@ superBcbc.CurviBoundaryConditions_register_C_functions(
     list_of_CoordSystems=[CoordSystem]
 )
 
-rhs_string = """
-Ricci_eval(commondata, params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);
+rhs_string = ""
+if separate_Ricci_and_BSSN_RHS:
+    rhs_string += (
+        "Ricci_eval(commondata, params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
+    )
+rhs_string += """
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
 if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
   apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].xx,

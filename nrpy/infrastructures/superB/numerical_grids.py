@@ -112,11 +112,9 @@ def register_CFunction_numerical_grids_chare(
     params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata, griddata_struct *restrict griddata_chare, const int chare_index[3]"
     body = r"""
         int grid=0;
+        griddata_chare[grid].params.CoordSystem_hash = griddata[grid].params.CoordSystem_hash;
+        griddata_chare[grid].params.grid_physical_size = griddata[grid].params.grid_physical_size;
     """
-    for CoordSystem in list_of_CoordSystems:
-        body += (
-            f"griddata_chare[grid].params.CoordSystem_hash = {CoordSystem.upper()};\n"
-        )
     body += r"""
     // Step 1.b: Set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx based on grid_physical_size
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {

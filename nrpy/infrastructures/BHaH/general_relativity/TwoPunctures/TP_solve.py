@@ -35,8 +35,8 @@ def register_CFunction_TP_solve() -> None:
 #if 0
   int percent10 = 0;
 #endif
-  static thread_local REAL *F = NULL;
-  static thread_local derivs u; //, v, cf_v;
+  REAL *F = NULL;
+  derivs u; //, v, cf_v;
   REAL admMass;
 
   if (!F) {
@@ -186,8 +186,6 @@ def register_CFunction_TP_solve() -> None:
 
   free_dvector(F, 0, ntotal - 1);
   free_derivs(&u, ntotal);
-  F = NULL;
-  memset(&u, 0, sizeof(u));
 """
     cfc.register_CFunction(
         subdirectory="TwoPunctures",
