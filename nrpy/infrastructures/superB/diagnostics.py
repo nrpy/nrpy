@@ -21,7 +21,6 @@ from nrpy.infrastructures.BHaH import griddata_commondata
 def register_CFunction_diagnostics(
     list_of_CoordSystems: List[str],
     default_diagnostics_out_every: float,
-    enable_psi4_diagnostics: bool = False,
     grid_center_filename_tuple: Tuple[str, str] = (
         "out0d-conv_factor%.2f.txt",
         "convergence_factor",
@@ -114,133 +113,135 @@ def register_CFunction_diagnostics(
     params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata_chare, griddata_struct *restrict griddata, Ck::IO::Session token, const int which_output, const int grid, const int chare_index[3]"
     body = r"""
 
-
-const int num_diagnostic_1d_y_pts = griddata_chare[grid].diagnosticstruct.num_diagnostic_1d_y_pts;
-const int num_diagnostic_1d_z_pts = griddata_chare[grid].diagnosticstruct.num_diagnostic_1d_z_pts;
-const int num_diagnostic_2d_xy_pts = griddata_chare[grid].diagnosticstruct.num_diagnostic_2d_xy_pts;
-const int num_diagnostic_2d_yz_pts = griddata_chare[grid].diagnosticstruct.num_diagnostic_2d_yz_pts;
-
-
-const bool write_diagnostics = (which_output == OUTPUT_0D) ||
-					(num_diagnostic_1d_y_pts > 0) ||
-					(num_diagnostic_1d_z_pts > 0) ||
-					(num_diagnostic_2d_xy_pts > 0) ||
-					(num_diagnostic_2d_yz_pts > 0);
-
-if (write_diagnostics) {
-  // Unpack griddata_chare struct:
-  const REAL *restrict y_n_gfs = griddata_chare[grid].gridfuncs.y_n_gfs;
-  REAL *restrict auxevol_gfs = griddata_chare[grid].gridfuncs.auxevol_gfs;
-  REAL *restrict diagnostic_output_gfs = griddata_chare[grid].gridfuncs.diagnostic_output_gfs;
-  REAL *restrict xx_chare[3];
-  {
-    for (int ww = 0; ww < 3; ww++)
+  // Unpack griddata and griddata_chare
+const params_struct *restrict params = &griddata[grid].params;
+const params_struct *restrict params_chare = &griddata_chare[grid].params;
+const charecomm_struct *restrict charecommstruct = &griddata_chare[grid].charecommstruct;
+const REAL *restrict y_n_gfs = griddata_chare[grid].gridfuncs.y_n_gfs;
+REAL *restrict auxevol_gfs = griddata_chare[grid].gridfuncs.auxevol_gfs;
+REAL *restrict diagnostic_output_gfs = griddata_chare[grid].gridfuncs.diagnostic_output_gfs;
+REAL *restrict xx_chare[3];
+{
+  for (int ww = 0; ww < 3; ww++)
     xx_chare[ww] = griddata_chare[grid].xx[ww];
-  }
-  const params_struct *restrict params_chare = &griddata_chare[grid].params;
+}
+REAL *restrict xx[3];
+{
+  for (int ww = 0; ww < 3; ww++)
+    xx[ww] = griddata[grid].xx[ww];
+}
+const int Nchare0 = commondata->Nchare0;
+const int Nchare1 = commondata->Nchare1;
+const int Nchare2 = commondata->Nchare2;
+const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
+const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
+const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
 
-  // Constraint output
-  {
-    Ricci_eval(commondata, params_chare, &griddata_chare[grid].rfmstruct, y_n_gfs, auxevol_gfs);
-    constraints_eval(commondata, params_chare, &griddata_chare[grid].rfmstruct, y_n_gfs, auxevol_gfs, diagnostic_output_gfs);
-  }
+if (which_output == OUTPUT_PSI4) {
+  // Do psi4 output, but only if the grid is spherical-like.
+  if (strstr(params_chare->CoordSystemName, "Spherical") != NULL) {
 
-  // // 0D, 1D and 2D outputs
-  if (which_output == OUTPUT_0D) {
-      diagnostics_nearest_grid_center(commondata, params_chare, &griddata_chare[grid].gridfuncs);
-  } else if (which_output == OUTPUT_1D_Y) {
-    if (num_diagnostic_1d_y_pts > 0) {
-    diagnostics_nearest_1d_y_axis(commondata, params_chare, xx_chare, &griddata_chare[grid].gridfuncs, &griddata_chare[grid].diagnosticstruct, token);
+    // Adjusted to match Tutorial-Start_to_Finish-BSSNCurvilinear-Two_BHs_Collide-Psi4.ipynb
+    const int psi4_spinweightm2_sph_harmonics_max_l = 2;
+  #define num_of_R_exts 24
+    const REAL list_of_R_exts[num_of_R_exts] = {10.0, 20.0, 21.0, 22.0, 23.0, 24.0, 25.0, 26.0, 27.0, 28.0, 29.0,  30.0,
+                                                31.0, 32.0, 33.0, 35.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0, 150.0};
+    // Find which R_exts lie in the chares's grid
+    int count_num_of_R_exts_chare = 0;
+    for (int which_R_ext = 0; which_R_ext < num_of_R_exts; which_R_ext++) {
+      const REAL R_ext = list_of_R_exts[which_R_ext];
+      const REAL xCart_R_ext[3] = {R_ext, 0.0, 0.0};
+      int Cart_to_i0i1i2[3];
+      REAL closest_xx[3];
+      Cart_to_xx_and_nearest_i0i1i2(commondata, params, xCart_R_ext, closest_xx, Cart_to_i0i1i2);
+      // Find if the grid point Cart_to_i0i1i2 lies in the chare's grid
+      const int globalidx3 = IDX3GENERAL(Cart_to_i0i1i2[0], Cart_to_i0i1i2[1], Cart_to_i0i1i2[2], Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1);
+      if (charecommstruct->globalidx3pt_to_chareidx3[globalidx3] == IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])) {
+        count_num_of_R_exts_chare++;
+      }
     }
-  } else if (which_output == OUTPUT_1D_Z) {
-    if (num_diagnostic_1d_z_pts > 0) {
-    diagnostics_nearest_1d_z_axis(commondata, params_chare, xx_chare, &griddata_chare[grid].gridfuncs, &griddata_chare[grid].diagnosticstruct, token);
+    // Declare list_of_R_exts_chare with the correct size after counting
+    const int num_of_R_exts_chare = count_num_of_R_exts_chare;
+    REAL list_of_R_exts_chare[num_of_R_exts_chare];
+    count_num_of_R_exts_chare = 0; // Reset the counter
+    for (int which_R_ext = 0; which_R_ext < num_of_R_exts; which_R_ext++) {
+      const REAL R_ext = list_of_R_exts[which_R_ext];
+      const REAL xCart_R_ext[3] = {R_ext, 0.0, 0.0};
+      int Cart_to_i0i1i2[3];
+      REAL closest_xx[3];
+      Cart_to_xx_and_nearest_i0i1i2(commondata, params, xCart_R_ext, closest_xx, Cart_to_i0i1i2);
+      const int globalidx3 = IDX3GENERAL(Cart_to_i0i1i2[0], Cart_to_i0i1i2[1], Cart_to_i0i1i2[2], Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1);
+      if (charecommstruct->globalidx3pt_to_chareidx3[globalidx3] == IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])) {
+        // Set list_of_R_exts_chare
+        list_of_R_exts_chare[count_num_of_R_exts_chare] = R_ext;
+        count_num_of_R_exts_chare++;
+      }
     }
-  } else if (which_output == OUTPUT_2D_XY) {
-    if (num_diagnostic_2d_xy_pts > 0) {
-    diagnostics_nearest_2d_xy_plane(commondata, params_chare, xx_chare, &griddata_chare[grid].gridfuncs, &griddata_chare[grid].diagnosticstruct, token);
+    if (num_of_R_exts_chare > 0) {
+      // Set psi4.
+      psi4_part0(commondata, params_chare, xx_chare, y_n_gfs, diagnostic_output_gfs);
+      psi4_part1(commondata, params_chare, xx_chare, y_n_gfs, diagnostic_output_gfs);
+      psi4_part2(commondata, params_chare, xx_chare, y_n_gfs, diagnostic_output_gfs);
+      // Decompose psi4 into spin-weight -2  spherical harmonics & output to files.
+      psi4_spinweightm2_decomposition_on_sphlike_grids(commondata, params, params_chare, diagnostic_output_gfs, list_of_R_exts_chare,
+                                                       num_of_R_exts_chare, psi4_spinweightm2_sph_harmonics_max_l, xx, chare_index);
     }
-  } else if (which_output == OUTPUT_2D_YZ) {
-    if (num_diagnostic_2d_yz_pts > 0) {
-    diagnostics_nearest_2d_yz_plane(commondata, params_chare, xx_chare, &griddata_chare[grid].gridfuncs, &griddata_chare[grid].diagnosticstruct, token);
+  }
+} else {
+  const int num_diagnostic_1d_y_pts = griddata_chare[grid].diagnosticstruct.num_diagnostic_1d_y_pts;
+  const int num_diagnostic_1d_z_pts = griddata_chare[grid].diagnosticstruct.num_diagnostic_1d_z_pts;
+  const int num_diagnostic_2d_xy_pts = griddata_chare[grid].diagnosticstruct.num_diagnostic_2d_xy_pts;
+  const int num_diagnostic_2d_yz_pts = griddata_chare[grid].diagnosticstruct.num_diagnostic_2d_yz_pts;
+
+
+  const bool write_diagnostics = (which_output == OUTPUT_0D) ||
+            (num_diagnostic_1d_y_pts > 0) ||
+            (num_diagnostic_1d_z_pts > 0) ||
+            (num_diagnostic_2d_xy_pts > 0) ||
+            (num_diagnostic_2d_yz_pts > 0);
+
+  if (write_diagnostics) {
+    // Unpack griddata_chare struct:
+    const REAL *restrict y_n_gfs = griddata_chare[grid].gridfuncs.y_n_gfs;
+    REAL *restrict auxevol_gfs = griddata_chare[grid].gridfuncs.auxevol_gfs;
+    REAL *restrict diagnostic_output_gfs = griddata_chare[grid].gridfuncs.diagnostic_output_gfs;
+    REAL *restrict xx_chare[3];
+    {
+      for (int ww = 0; ww < 3; ww++)
+      xx_chare[ww] = griddata_chare[grid].xx[ww];
+    }
+    const params_struct *restrict params_chare = &griddata_chare[grid].params;
+
+    // Constraint output
+    {
+      Ricci_eval(commondata, params_chare, &griddata_chare[grid].rfmstruct, y_n_gfs, auxevol_gfs);
+      constraints_eval(commondata, params_chare, &griddata_chare[grid].rfmstruct, y_n_gfs, auxevol_gfs, diagnostic_output_gfs);
+    }
+
+    // // 0D, 1D and 2D outputs
+    if (which_output == OUTPUT_0D) {
+        diagnostics_nearest_grid_center(commondata, params_chare, &griddata_chare[grid].gridfuncs);
+    } else if (which_output == OUTPUT_1D_Y) {
+      if (num_diagnostic_1d_y_pts > 0) {
+      diagnostics_nearest_1d_y_axis(commondata, params_chare, xx_chare, &griddata_chare[grid].gridfuncs, &griddata_chare[grid].diagnosticstruct, token);
+      }
+    } else if (which_output == OUTPUT_1D_Z) {
+      if (num_diagnostic_1d_z_pts > 0) {
+      diagnostics_nearest_1d_z_axis(commondata, params_chare, xx_chare, &griddata_chare[grid].gridfuncs, &griddata_chare[grid].diagnosticstruct, token);
+      }
+    } else if (which_output == OUTPUT_2D_XY) {
+      if (num_diagnostic_2d_xy_pts > 0) {
+      diagnostics_nearest_2d_xy_plane(commondata, params_chare, xx_chare, &griddata_chare[grid].gridfuncs, &griddata_chare[grid].diagnosticstruct, token);
+      }
+    } else if (which_output == OUTPUT_2D_YZ) {
+      if (num_diagnostic_2d_yz_pts > 0) {
+      diagnostics_nearest_2d_yz_plane(commondata, params_chare, xx_chare, &griddata_chare[grid].gridfuncs, &griddata_chare[grid].diagnosticstruct, token);
+      }
     }
   }
 """
-
-    if enable_psi4_diagnostics:
-        body += r"""REAL *restrict xx[3];
-      {
-        for (int ww = 0; ww < 3; ww++)
-          xx[ww] = griddata[grid].xx[ww];
-      }
-      const params_struct *restrict params = &griddata[grid].params;
-      const int Nchare0 = commondata->Nchare0;
-      const int Nchare1 = commondata->Nchare1;
-      const int Nchare2 = commondata->Nchare2;
-      const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
-      const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
-      const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
-      const charecomm_struct *restrict charecommstruct = &griddata_chare[grid].charecommstruct;
-
-      // Do psi4 output, but only if the grid is spherical-like.
-      if (strstr(params_chare->CoordSystemName, "Spherical") != NULL) {
-
-        // Adjusted to match Tutorial-Start_to_Finish-BSSNCurvilinear-Two_BHs_Collide-Psi4.ipynb
-        const int psi4_spinweightm2_sph_harmonics_max_l = 2;
-#define num_of_R_exts 24
-        const REAL list_of_R_exts[num_of_R_exts] =
-        { 10.0, 20.0, 21.0, 22.0, 23.0,
-          24.0, 25.0, 26.0, 27.0, 28.0,
-          29.0, 30.0, 31.0, 32.0, 33.0,
-          35.0, 40.0, 50.0, 60.0, 70.0,
-          80.0, 90.0, 100.0, 150.0 };
-        // Find which R_exts lie in the chares's grid
-        int count_num_of_R_exts_chare =  0;
-        for (int which_R_ext = 0; which_R_ext < num_of_R_exts; which_R_ext++) {
-            const REAL R_ext = list_of_R_exts[which_R_ext];
-            const REAL xCart_R_ext[3] = {R_ext, 0.0, 0.0};
-            int Cart_to_i0i1i2[3];
-            REAL closest_xx[3];
-            Cart_to_xx_and_nearest_i0i1i2(commondata, params, xCart_R_ext, closest_xx, Cart_to_i0i1i2);
-            // Find if the grid point Cart_to_i0i1i2 lies in the chare's grid
-            const int globalidx3 = IDX3GENERAL(Cart_to_i0i1i2[0], Cart_to_i0i1i2[1], Cart_to_i0i1i2[2], Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1);
-            if (charecommstruct->globalidx3pt_to_chareidx3[globalidx3] == IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])) {
-                count_num_of_R_exts_chare++;
-            }
-        }
-        // Declare list_of_R_exts_chare with the correct size after counting
-        const int num_of_R_exts_chare = count_num_of_R_exts_chare;
-        REAL list_of_R_exts_chare[num_of_R_exts_chare];
-        count_num_of_R_exts_chare = 0; // Reset the counter
-        for (int which_R_ext = 0; which_R_ext < num_of_R_exts; which_R_ext++) {
-            const REAL R_ext = list_of_R_exts[which_R_ext];
-            const REAL xCart_R_ext[3] = {R_ext, 0.0, 0.0};
-            int Cart_to_i0i1i2[3];
-            REAL closest_xx[3];
-            Cart_to_xx_and_nearest_i0i1i2(commondata, params, xCart_R_ext, closest_xx, Cart_to_i0i1i2);
-            const int globalidx3 = IDX3GENERAL(Cart_to_i0i1i2[0], Cart_to_i0i1i2[1], Cart_to_i0i1i2[2], Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1);
-            if (charecommstruct->globalidx3pt_to_chareidx3[globalidx3] == IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])) {
-              // Set list_of_R_exts_chare
-                list_of_R_exts_chare[count_num_of_R_exts_chare] = R_ext;
-                count_num_of_R_exts_chare++;
-            }
-        }
-
-        if (num_of_R_exts_chare > 0) {
-          // Set psi4.
-          psi4_part0(commondata, params_chare, xx_chare, y_n_gfs, diagnostic_output_gfs);
-          psi4_part1(commondata, params_chare, xx_chare, y_n_gfs, diagnostic_output_gfs);
-          psi4_part2(commondata, params_chare, xx_chare, y_n_gfs, diagnostic_output_gfs);
-          // Decompose psi4 into spin-weight -2  spherical harmonics & output to files.
-          psi4_spinweightm2_decomposition_on_sphlike_grids(commondata, params, params_chare, diagnostic_output_gfs, list_of_R_exts_chare, num_of_R_exts_chare,
-                                                         psi4_spinweightm2_sph_harmonics_max_l, xx, chare_index);
-        }
-      }
-"""
-
     body += r"""
 }
-
 """
 
     cfc.register_CFunction(
@@ -397,8 +398,8 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
             const int locali1 = MAP_GLOBAL_TO_LOCAL_IDX1(chare_index[1], i1, Nxx1chare);
             const int locali2 = MAP_GLOBAL_TO_LOCAL_IDX1(chare_index[2], i2, Nxx2chare);
             sum_psi4r += (diagnostic_output_gfs[IDX4GENERAL(PSI4_PART0REGF, locali0, locali1, locali2, Nxx_plus_2NGHOSTS0chare, Nxx_plus_2NGHOSTS1chare, Nxx_plus_2NGHOSTS2chare)] +
-                          diagnostic_output_gfs[IDX4GENERAL(PSI4_PART0REGF, locali0, locali1, locali2, Nxx_plus_2NGHOSTS0chare, Nxx_plus_2NGHOSTS1chare, Nxx_plus_2NGHOSTS2chare)] +
-                          diagnostic_output_gfs[IDX4GENERAL(PSI4_PART0REGF, locali0, locali1, locali2, Nxx_plus_2NGHOSTS0chare, Nxx_plus_2NGHOSTS1chare, Nxx_plus_2NGHOSTS2chare)]) *
+                          diagnostic_output_gfs[IDX4GENERAL(PSI4_PART1REGF, locali0, locali1, locali2, Nxx_plus_2NGHOSTS0chare, Nxx_plus_2NGHOSTS1chare, Nxx_plus_2NGHOSTS2chare)] +
+                          diagnostic_output_gfs[IDX4GENERAL(PSI4_PART2REGF, locali0, locali1, locali2, Nxx_plus_2NGHOSTS0chare, Nxx_plus_2NGHOSTS1chare, Nxx_plus_2NGHOSTS2chare)]) *
                          l0i__times__w0i_inv[i];
             sum_psi4i += (diagnostic_output_gfs[IDX4GENERAL(PSI4_PART0IMGF, locali0, locali1, locali2, Nxx_plus_2NGHOSTS0chare, Nxx_plus_2NGHOSTS1chare, Nxx_plus_2NGHOSTS2chare)] +
                           diagnostic_output_gfs[IDX4GENERAL(PSI4_PART1IMGF, locali0, locali1, locali2, Nxx_plus_2NGHOSTS0chare, Nxx_plus_2NGHOSTS1chare, Nxx_plus_2NGHOSTS2chare)] +

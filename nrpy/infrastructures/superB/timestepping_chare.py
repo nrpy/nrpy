@@ -694,6 +694,7 @@ def output_timestepping_ci(
     pre_MoL_step_forward_in_time: str = "",
     post_MoL_step_forward_in_time: str = "",
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+    enable_psi4_diagnostics: bool = False,
 ) -> None:
     """
     Generate timestepping.ci.
@@ -763,6 +764,18 @@ def output_timestepping_ci(
         serial {
           write_diagnostics_this_step = fabs(round(commondata.time / commondata.diagnostics_output_every) * commondata.diagnostics_output_every - commondata.time) < 0.5 * commondata.dt;
         }
+        """
+    if enable_psi4_diagnostics:
+        file_output_str += r"""
+        if (write_diagnostics_this_step) {
+          serial {
+            Ck::IO::Session token;  //pass a null token
+            const int thisIndex_arr[3] = {thisIndex.x, thisIndex.y, thisIndex.z};
+            diagnostics(&commondata, griddata_chare, griddata, token, OUTPUT_PSI4, which_grid_diagnostics, thisIndex_arr);
+          }
+        }
+        """
+    file_output_str += r"""
         // Step 5.a: Main loop, part 1: Output diagnostics
         //serial {
         //  if (write_diagnostics_this_step && contains_gridcenter) {
@@ -965,6 +978,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
     enable_rfm_precompute: bool = False,
     pre_MoL_step_forward_in_time: str = "",
     post_MoL_step_forward_in_time: str = "",
+    enable_psi4_diagnostics: bool = False,
 ) -> None:
     """
     Output timestepping h, cpp, and ci files and register C functions.
@@ -989,6 +1003,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         project_dir=project_dir,
         pre_MoL_step_forward_in_time=pre_MoL_step_forward_in_time,
         post_MoL_step_forward_in_time=post_MoL_step_forward_in_time,
+        enable_psi4_diagnostics=enable_psi4_diagnostics,
     )
 
     register_CFunction_timestepping_malloc()

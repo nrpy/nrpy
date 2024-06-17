@@ -163,7 +163,6 @@ TP_solve(&ID_persist);
 superBdiagnostics.register_CFunction_diagnostics(
     list_of_CoordSystems=[CoordSystem],
     default_diagnostics_out_every=diagnostics_output_every,
-    enable_psi4_diagnostics=True,
     grid_center_filename_tuple=("out0d-conv_factor%.2f.txt", "convergence_factor"),
     axis_filename_tuple=(
         "out1d-AXIS-conv_factor%.2f-t%08.2f.txt",
@@ -328,6 +327,7 @@ superBmain.output_commondata_object_h_and_main_h_cpp_ci(
 superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
     project_dir=project_dir,
     enable_rfm_precompute=enable_rfm_precompute,
+    enable_psi4_diagnostics=True,
 )
 
 superBl.copy_superB_header_files(superB_Path=Path(project_dir) / "superB")

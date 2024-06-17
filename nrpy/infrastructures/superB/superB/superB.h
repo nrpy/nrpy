@@ -44,6 +44,7 @@
 #define OUTPUT_1D_Z 2
 #define OUTPUT_2D_XY 3
 #define OUTPUT_2D_YZ 4
+#define OUTPUT_PSI4 5
 
 #define K_ODD 0
 #define K_EVEN 1
