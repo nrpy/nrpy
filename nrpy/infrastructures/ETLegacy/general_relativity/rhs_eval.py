@@ -11,7 +11,7 @@ import re
 from collections import OrderedDict as ODict
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import Any, Dict, List, Union, cast
+from typing import Dict, List, Union, cast
 
 import sympy as sp
 from mpmath import mpc, mpf  # type: ignore
@@ -219,18 +219,18 @@ def register_CFunction_rhs_eval(
         betaU[i] = vetU[i] * rfm.ReU[i]
 
     # Perform validation of BSSN_RHSs against trusted version.
-    results_dict = ve.process_dictionary_of_expressions(
+    results_dictionary = ve.process_dictionary_of_expressions(
         local_BSSN_RHSs_varname_to_expr_dict, fixed_mpfs_for_free_symbols=True
     )
     if validate_expressions:
-        return results_dict
+        return results_dictionary
     ve.compare_or_generate_trusted_results(
         os.path.abspath(__file__),
         os.getcwd(),
         # File basename. If this is set to "trusted_module_test1", then
         #   trusted results_dict will be stored in tests/trusted_module_test1.py
         f"{os.path.splitext(os.path.basename(__file__))[0]}_{LapseEvolutionOption}_{ShiftEvolutionOption}_{CoordSystem}_T4munu{enable_T4munu}_KO{enable_KreissOliger_dissipation}",
-        results_dict,
+        results_dictionary,
     )
 
     body += lp.simple_loop(
