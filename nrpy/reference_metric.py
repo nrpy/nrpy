@@ -1290,9 +1290,10 @@ class rfm_dict(Dict[str, ReferenceMetric]):
 
     def __getitem__(self, CoordSystem_in: str) -> ReferenceMetric:
         if CoordSystem_in not in self:
+            print(f"Setting up reference_metric[{CoordSystem_in}]...")
+
             # In case [CoordSystem]_rfm_precompute is passed:
             CoordSystem = CoordSystem_in.replace("_rfm_precompute", "")
-            print(f"Setting up reference metric for CoordSystem = {CoordSystem}.")
             self.__setitem__(
                 CoordSystem, ReferenceMetric(CoordSystem, enable_rfm_precompute=False)
             )
