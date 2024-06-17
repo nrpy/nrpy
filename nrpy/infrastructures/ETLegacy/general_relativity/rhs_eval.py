@@ -230,7 +230,7 @@ def register_CFunction_rhs_eval(
         # File basename. If this is set to "trusted_module_test1", then
         #   trusted results_dict will be stored in tests/trusted_module_test1.py
         f"{os.path.splitext(os.path.basename(__file__))[0]}_{LapseEvolutionOption}_{ShiftEvolutionOption}_{CoordSystem}_T4munu{enable_T4munu}_KO{enable_KreissOliger_dissipation}",
-        cast(Dict[str, Union[mpf, mpc]], results_dict),
+        results_dict,
     )
 
     body += lp.simple_loop(
