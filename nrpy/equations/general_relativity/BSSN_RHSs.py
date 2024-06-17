@@ -53,12 +53,6 @@ class BSSNRHSs:
         ]
 
         # Step 1.e: Import all basic (unrescaled) BSSN scalars & tensors
-        ss = (
-            CoordSystem
-            + ("_rfm_precompute" if enable_rfm_precompute else "")
-            + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
-        )
-        print(f"CALLING BSSNQ: {ss}")
         Bq = BSSN_quantities[
             CoordSystem
             + ("_rfm_precompute" if enable_rfm_precompute else "")
@@ -394,10 +388,7 @@ class BSSNRHSs_dict(Dict[str, BSSNRHSs]):
             enable_RbarDD_gridfunctions = "_RbarDD_gridfunctions" in CoordSystem_in
             enable_T4munu = "_T4munu" in CoordSystem_in
 
-            print(
-                f"Setting up BSSN_RHSs for CoordSystem = {CoordSystem}, enable_T4munu={enable_T4munu}, "
-                f"rfm_precompute={enable_rfm_precompute}, Rij gridfuncs={enable_RbarDD_gridfunctions}."
-            )
+            print(f"Setting up BSSN_RHSs[{CoordSystem_in}]...")
             self.__setitem__(
                 CoordSystem_in,
                 BSSNRHSs(

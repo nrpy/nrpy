@@ -82,7 +82,7 @@ pip install -U -r requirements-dev.txt
 
 Finally, to run anything in the NRPy repo, you'll need to set your `PYTHONPATH` appropriately. If you're using bash, attach the following line to the bottom of your `.bashrc` file:
 ```
-export PYTHONPATH=$PYTHONPATH:`pwd`
+export PYTHONPATH=$PYTHONPATH:.
 ```
 
 Once this is set up, you can run any Python script in the NRPy 2 repo from the repository's root directory. For example,
