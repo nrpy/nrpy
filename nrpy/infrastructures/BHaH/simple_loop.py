@@ -67,7 +67,7 @@ def simple_loop(
     <BLANKLINE>
     >>> print(clang_format(simple_loop('// <INTERIOR>', loop_region="interior",
     ...       CoordSystem="SinhSymTP", enable_rfm_precompute=True, OMP_collapse=3)))
-    Setting up reference metric for CoordSystem = SinhSymTP.
+    Setting up reference_metric[SinhSymTP_rfm_precompute]...
     #pragma omp parallel for collapse(3)
     for (int i2 = NGHOSTS; i2 < NGHOSTS + Nxx2; i2++) {
       for (int i1 = NGHOSTS; i1 < NGHOSTS + Nxx1; i1++) {
