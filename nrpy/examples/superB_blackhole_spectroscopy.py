@@ -168,6 +168,7 @@ superBdiagnostics.register_CFunction_diagnostics(
         "convergence_factor, time",
     ),
     out_quantities_dict="default",
+    enable_psi4_diagnostics=True,
 )
 if enable_rfm_precompute:
     rfm_precompute.register_CFunctions_rfm_precompute(

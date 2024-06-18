@@ -34,6 +34,7 @@ def register_CFunction_diagnostics(
         "CoordSystemName, convergence_factor, time",
     ),
     out_quantities_dict: Union[str, Dict[Tuple[str, str], str]] = "default",
+    enable_psi4_diagnostics: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register C function for simulation diagnostics.
@@ -44,6 +45,7 @@ def register_CFunction_diagnostics(
     :param axis_filename_tuple: Tuple containing filename and variables for axis output.
     :param plane_filename_tuple: Tuple containing filename and variables for plane output.
     :param out_quantities_dict: Dictionary or string specifying output quantities.
+    :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
 
     :return: None if in registration phase, else the updated NRPy environment.
     :raises TypeError: If `out_quantities_dict` is not a dictionary and not set to "default".
@@ -136,7 +138,9 @@ const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
 const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
 const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
 
-if (which_output == OUTPUT_PSI4) {
+if (which_output == OUTPUT_PSI4) {"""
+    if enable_psi4_diagnostics:
+        body += r"""
   // Do psi4 output, but only if the grid is spherical-like.
   if (strstr(params_chare->CoordSystemName, "Spherical") != NULL) {
 
@@ -185,7 +189,8 @@ if (which_output == OUTPUT_PSI4) {
       psi4_spinweightm2_decomposition_on_sphlike_grids(commondata, params, params_chare, diagnostic_output_gfs, list_of_R_exts_chare,
                                                        num_of_R_exts_chare, psi4_spinweightm2_sph_harmonics_max_l, xx, chare_index);
     }
-  }
+  }"""
+    body += r"""
 } else {
   const int num_diagnostic_1d_y_pts = griddata_chare[grid].diagnosticstruct.num_diagnostic_1d_y_pts;
   const int num_diagnostic_1d_z_pts = griddata_chare[grid].diagnosticstruct.num_diagnostic_1d_z_pts;

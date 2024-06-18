@@ -129,6 +129,7 @@ superBdiagnostics.register_CFunction_diagnostics(
         "convergence_factor, time",
     ),
     out_quantities_dict="default",
+    enable_psi4_diagnostics=False,
 )
 
 if enable_rfm_precompute:
@@ -261,8 +262,7 @@ superBMakefile.output_CFunctions_function_prototypes_and_construct_Makefile(
     addl_libraries=["-module CkIO"],
     CC="~/charm/bin/charmc",
 )
-print
-(
+print(
     f"Finished! Now go into project/{project_name} and type `make` to build, then ./charmrun +p4 ./{project_name} to run with 4 processors, for example."
 )
 print(f"    Parameter file can be found in {project_name}.par")
