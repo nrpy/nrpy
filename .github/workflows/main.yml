@@ -154,7 +154,7 @@ jobs:
         run: |
           apptainer exec --writable custom_ubuntu_sandbox bash -c "
           set -e
-          alias ls='ls --color=auto'
+          rm -f /opt/FAILED.txt
           source /opt/jup312/bin/activate
           export PYTHONPATH=.:$PYTHONPATH
           python3 --version && isympy --version
@@ -176,10 +176,12 @@ jobs:
           export CCTK_TESTSUITE_RUN_TESTS='Baikal BaikalVacuum WaveToyNRPy'
           export PROMPT=no
           make etilgrmhdgcc-testsuite
-          awk '/Number failed/ { if ($NF != 0) exit 1 }' /opt/ET_2024_06_beta/TEST/etilgrmhdgcc/summary.log
-          test_exit_code=$?
-          if [ $test_exit_code -ne 0 ]; then
-            exit $test_exit_code
+          awk '/Number failed/ { if (\$NF != 0) system(\"touch /opt/FAILED.txt\") }' /opt/ET_2024_06_beta/TEST/etilgrmhdgcc/summary.log
+          if [ -f /opt/FAILED.txt ]; then
+            echo AT LEAST ONE ET TEST FAILED
+            exit 1
+          else
+            echo ET TESTS SUCCEEDED
           fi
           "
 
