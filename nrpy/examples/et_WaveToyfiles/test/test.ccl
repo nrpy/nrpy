@@ -1,0 +1,7 @@
+# ABSTOL 1.0e-11
+# RELTOL 1.0e-11
+
+TEST WaveToyNRPy_test
+{
+  RELTOL 1e-11
+}

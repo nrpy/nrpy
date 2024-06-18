@@ -172,7 +172,7 @@ jobs:
           cd /opt/ET_2024_06_beta/
           ./make_config-runmefirst-gcc
           make
-          export CCTK_TESTSUITE_RUN_TESTS='Baikal BaikalVacuum'
+          export CCTK_TESTSUITE_RUN_TESTS='Baikal BaikalVacuum WaveToyNRPy'
           export PROMPT=no
           make etilgrmhdgcc-testsuite
           "
