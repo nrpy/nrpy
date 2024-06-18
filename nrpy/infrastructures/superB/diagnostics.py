@@ -263,6 +263,7 @@ if (which_output == OUTPUT_PSI4) {
 
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
+
 def register_CFunction_psi4_spinweightm2_decomposition_on_sphlike_grids() -> None:
     """Register C function for decomposing psi4 into spin-weighted spherical harmonics."""
     prefunc = r"""
@@ -433,4 +434,3 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
         include_CodeParameters_h=True,
         body=body,
     )
-
