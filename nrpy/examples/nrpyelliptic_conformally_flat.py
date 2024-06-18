@@ -209,13 +209,13 @@ def set_single_puncture_params() -> Dict[str, Any]:
     coordinate_location = 0.0
     m_adm = 0.5
     S_z_dimless = 0.2
-    this_puncture_params = {
+    single_puncture_params = {
         "zPunc": coordinate_location,
         "bare_mass_0": compute_bare_mass(m_adm, S_z_dimless),
         "m0_adm": m_adm,
         "S0_z": S_z_dimless * m_adm**2.0,
     }
-    return this_puncture_params
+    return single_puncture_params
 # fmt: on
 
 project_dir = os.path.join("project", project_name)
@@ -360,8 +360,8 @@ if CoordSystem == "SinhSpherical":
 
 # Update parameters specific to initial data type
 if initial_data_type == "single_puncture":
-    single_puncture_params = set_single_puncture_params()
-    for param, value in single_puncture_params.items():
+    puncture_params = set_single_puncture_params()
+    for param, value in puncture_params.items():
         if param in [
             "zPunc",
             "bare_mass_0",
