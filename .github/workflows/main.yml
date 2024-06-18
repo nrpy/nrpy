@@ -161,10 +161,12 @@ jobs:
           cd /opt/jup312/nrpy
           git pull
           git log | head
+          python3 -u nrpy/examples/carpet_wavetoy_thorns.py
           python3 -u nrpy/examples/carpet_baikal_thorns.py
           cd /opt/ET_2024_06_beta/arrangements/WVUThorns/
           rm Baikal*
           ln -s /opt/jup312/nrpy/project/et_baikal/Baikal* .
+          ln -s /opt/jup312/nrpy/project/et_wavetoy/* .
           cp -r /opt/ET_2024_06_beta/repos/wvuthorns/Baikal/tes* Baikal/
           cp -r /opt/ET_2024_06_beta/repos/wvuthorns/BaikalVacuum/tes* BaikalVacuum/
           cd /opt/ET_2024_06_beta/
