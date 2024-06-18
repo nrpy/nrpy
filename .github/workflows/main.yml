@@ -154,7 +154,7 @@ jobs:
         run: |
           apptainer exec --writable custom_ubuntu_sandbox bash -c "
           set -e
-          echo 'hello this is an output to stdout'
+          alias ls='ls --color=auto'
           source /opt/jup312/bin/activate
           export PYTHONPATH=.:$PYTHONPATH
           python3 --version && isympy --version
@@ -167,6 +167,7 @@ jobs:
           rm Baikal*
           ln -s /opt/jup312/nrpy/project/et_baikal/Baikal* .
           ln -s /opt/jup312/nrpy/project/et_wavetoy/* .
+          ln -s /opt/jup312/nrpy/nrpy/examples/et_WaveToyfiles/test WaveToyNRPy/
           cp -r /opt/ET_2024_06_beta/repos/wvuthorns/Baikal/tes* Baikal/
           cp -r /opt/ET_2024_06_beta/repos/wvuthorns/BaikalVacuum/tes* BaikalVacuum/
           cd /opt/ET_2024_06_beta/
