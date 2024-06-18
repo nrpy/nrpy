@@ -139,12 +139,12 @@ def set_axisymmetric_params() -> Dict[str, Any]:
     """
     Set parameters for an axisymmetric BBH setup.
 
-    This setup by default uses the analytical estimate from 
+    This setup by default uses the analytical estimate from
     Kerr to compute bare masses unless the user specifies them
-    manually.  Thus, the solution will not produce a binary with 
-    accurate puncture masses as measured by an apparent horizon 
-    finder that match the expect puncture ADM masses.  
-    A future extension could include an iterative root finder 
+    manually.  Thus, the solution will not produce a binary with
+    accurate puncture masses as measured by an apparent horizon
+    finder that match the expect puncture ADM masses.
+    A future extension could include an iterative root finder
     to make this more robust.
 
     :return: Dictionary of parameters
@@ -197,12 +197,12 @@ def set_single_puncture_params() -> Dict[str, Any]:
     """
     Set parameters for an axisymmetric BH setup.
 
-    This setup by default uses the analytical estimate from 
+    This setup by default uses the analytical estimate from
     Kerr to compute the bare mass unless the user specifies them
-    manually.  Thus, the solution will not produce a binary with 
-    accurate puncture masses as measured by an apparent horizon 
-    finder that match the expect puncture ADM mass.  
-    A future extension could include an iterative root finder 
+    manually.  Thus, the solution will not produce a binary with
+    accurate puncture masses as measured by an apparent horizon
+    finder that match the expect puncture ADM mass.
+    A future extension could include an iterative root finder
     to make this more robust.
 
     :return: Dictionary of parameters
