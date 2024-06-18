@@ -26,13 +26,14 @@
     j = temp % (Ni); \
     i = temp / (Ni); \
 }
+#define IDX4GENERAL(g, i, j, k, Ni, Nj, Nk) ((i) + Ni * ((j) + Nj * ((k) + Nk * (g))))
 #define MAP_LOCAL_TO_GLOBAL_IDX0(chareidx0, local_idx0, Nxx0chare) ((chareidx0 * Nxx0chare) + local_idx0)
 #define MAP_LOCAL_TO_GLOBAL_IDX1(chareidx1, local_idx1, Nxx1chare) ((chareidx1 * Nxx1chare) + local_idx1)
 #define MAP_LOCAL_TO_GLOBAL_IDX2(chareidx2, local_idx2, Nxx2chare) ((chareidx2 * Nxx2chare) + local_idx2)
 
-#define MAP_GLOBAL_TO_LOCAL_IDX0(chareidx0, global_idx0, Nxx0chare) (global_idx0 - (chareidx0 * Nxx0chare))// Assumes grid point point lies within local grid of chare
-#define MAP_GLOBAL_TO_LOCAL_IDX1(chareidx1, global_idx1, Nxx1chare) (global_idx1 - (chareidx1 * Nxx1chare))// Assumes grid point point lies within local grid of chare
-#define MAP_GLOBAL_TO_LOCAL_IDX2(chareidx2, global_idx2, Nxx2chare) (global_idx2 - (chareidx2 * Nxx2chare))// Assumes grid point point lies within local grid of chare
+#define MAP_GLOBAL_TO_LOCAL_IDX0(chareidx0, global_idx0, Nxx0chare) (global_idx0 - (chareidx0 * Nxx0chare))// Assumes gridpoint lies within local grid of chare
+#define MAP_GLOBAL_TO_LOCAL_IDX1(chareidx1, global_idx1, Nxx1chare) (global_idx1 - (chareidx1 * Nxx1chare))// Assumes gridpoint lies within local grid of chare
+#define MAP_GLOBAL_TO_LOCAL_IDX2(chareidx2, global_idx2, Nxx2chare) (global_idx2 - (chareidx2 * Nxx2chare))// Assumes gridpoint point lies within local grid of chare
 
 #define IDXFACES0(g, inner, j, k) ((j) + Nxx_plus_2NGHOSTS1 * ((k) + Nxx_plus_2NGHOSTS2 * ((inner) + NGHOSTS * (g))))
 #define IDXFACES1(g, inner, i, k) ((i) + Nxx_plus_2NGHOSTS0 * ((k) + Nxx_plus_2NGHOSTS2 * ((inner) + NGHOSTS * (g))))
@@ -43,6 +44,7 @@
 #define OUTPUT_1D_Z 2
 #define OUTPUT_2D_XY 3
 #define OUTPUT_2D_YZ 4
+#define OUTPUT_PSI4 5
 
 #define K_ODD 0
 #define K_EVEN 1

@@ -90,7 +90,6 @@ for (int j = 0; j < params_chare->Nxx_plus_2NGHOSTS2; j++)
 
 
 def register_CFunction_numerical_grids_chare(
-    list_of_CoordSystems: List[str],
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
 ) -> None:
@@ -101,7 +100,6 @@ def register_CFunction_numerical_grids_chare(
     focusing on the usage of reference metric precomputations and curvilinear boundary
     conditions.
 
-    :param list_of_CoordSystems: List of CoordSystems.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation (default: False).
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions (default: False).
     """
@@ -112,11 +110,9 @@ def register_CFunction_numerical_grids_chare(
     params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata, griddata_struct *restrict griddata_chare, const int chare_index[3]"
     body = r"""
         int grid=0;
+        griddata_chare[grid].params.CoordSystem_hash = griddata[grid].params.CoordSystem_hash;
+        griddata_chare[grid].params.grid_physical_size = griddata[grid].params.grid_physical_size;
     """
-    for CoordSystem in list_of_CoordSystems:
-        body += (
-            f"griddata_chare[grid].params.CoordSystem_hash = {CoordSystem.upper()};\n"
-        )
     body += r"""
     // Step 1.b: Set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx based on grid_physical_size
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
@@ -179,7 +175,6 @@ def register_CFunctions(
             CoordSystem=CoordSystem,
         )
     register_CFunction_numerical_grids_chare(
-        list_of_CoordSystems=list_of_CoordSystems,
         enable_rfm_precompute=enable_rfm_precompute,
         enable_CurviBCs=enable_CurviBCs,
     )
