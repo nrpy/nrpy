@@ -154,25 +154,35 @@ jobs:
         run: |
           apptainer exec --writable custom_ubuntu_sandbox bash -c "
           set -e
-          echo 'hello this is an output to stdout'
+          rm -f /opt/FAILED.txt
           source /opt/jup312/bin/activate
           export PYTHONPATH=.:$PYTHONPATH
           python3 --version && isympy --version
           cd /opt/jup312/nrpy
           git pull
           git log | head
+          python3 -u nrpy/examples/carpet_wavetoy_thorns.py
           python3 -u nrpy/examples/carpet_baikal_thorns.py
           cd /opt/ET_2024_06_beta/arrangements/WVUThorns/
           rm Baikal*
           ln -s /opt/jup312/nrpy/project/et_baikal/Baikal* .
+          ln -s /opt/jup312/nrpy/project/et_wavetoy/* .
+          ln -s /opt/jup312/nrpy/nrpy/examples/et_WaveToyfiles/test WaveToyNRPy/
           cp -r /opt/ET_2024_06_beta/repos/wvuthorns/Baikal/tes* Baikal/
           cp -r /opt/ET_2024_06_beta/repos/wvuthorns/BaikalVacuum/tes* BaikalVacuum/
           cd /opt/ET_2024_06_beta/
           ./make_config-runmefirst-gcc
           make
-          export CCTK_TESTSUITE_RUN_TESTS='Baikal BaikalVacuum'
+          export CCTK_TESTSUITE_RUN_TESTS='Baikal BaikalVacuum WaveToyNRPy'
           export PROMPT=no
           make etilgrmhdgcc-testsuite
+          awk '/Number failed/ { if (\$NF != 0) system(\"touch /opt/FAILED.txt\") }' /opt/ET_2024_06_beta/TEST/etilgrmhdgcc/summary.log
+          if [ -f /opt/FAILED.txt ]; then
+            echo AT LEAST ONE ET TEST FAILED
+            exit 1
+          else
+            echo ET TESTS SUCCEEDED
+          fi
           "
 
   codegen-ubuntu:
