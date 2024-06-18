@@ -40,7 +40,6 @@ def register_CFunction_diagnostics(
 
     :param list_of_CoordSystems: Lists of unique CoordSystems used.
     :param default_diagnostics_out_every: Specifies the default diagnostics output frequency.
-    :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     :param grid_center_filename_tuple: Tuple containing filename and variables for grid center output.
     :param axis_filename_tuple: Tuple containing filename and variables for axis output.
     :param plane_filename_tuple: Tuple containing filename and variables for plane output.

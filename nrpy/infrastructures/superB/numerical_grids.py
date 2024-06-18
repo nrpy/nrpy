@@ -90,7 +90,6 @@ for (int j = 0; j < params_chare->Nxx_plus_2NGHOSTS2; j++)
 
 
 def register_CFunction_numerical_grids_chare(
-    list_of_CoordSystems: List[str],
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
 ) -> None:
@@ -101,7 +100,6 @@ def register_CFunction_numerical_grids_chare(
     focusing on the usage of reference metric precomputations and curvilinear boundary
     conditions.
 
-    :param list_of_CoordSystems: List of CoordSystems.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation (default: False).
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions (default: False).
     """
@@ -177,7 +175,6 @@ def register_CFunctions(
             CoordSystem=CoordSystem,
         )
     register_CFunction_numerical_grids_chare(
-        list_of_CoordSystems=list_of_CoordSystems,
         enable_rfm_precompute=enable_rfm_precompute,
         enable_CurviBCs=enable_CurviBCs,
     )

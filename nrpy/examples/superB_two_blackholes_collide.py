@@ -119,7 +119,6 @@ superBnumericalgrids.register_CFunctions(
 superBdiagnostics.register_CFunction_diagnostics(
     list_of_CoordSystems=[CoordSystem],
     default_diagnostics_out_every=diagnostics_output_every,
-    enable_psi4_diagnostics=False,
     grid_center_filename_tuple=("out0d-conv_factor%.2f.txt", "convergence_factor"),
     axis_filename_tuple=(
         "out1d-AXIS-conv_factor%.2f-t%08.4f.txt",
@@ -239,6 +238,7 @@ superBmain.output_commondata_object_h_and_main_h_cpp_ci(
 superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
     project_dir=project_dir,
     enable_rfm_precompute=enable_rfm_precompute,
+    enable_psi4_diagnostics=False,
 )
 
 Bdefines_h.output_BHaH_defines_h(
@@ -261,7 +261,8 @@ superBMakefile.output_CFunctions_function_prototypes_and_construct_Makefile(
     addl_libraries=["-module CkIO"],
     CC="~/charm/bin/charmc",
 )
-print(
-    f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
+print
+(
+    f"Finished! Now go into project/{project_name} and type `make` to build, then ./charmrun +p4 ./{project_name} to run with 4 processors, for example."
 )
 print(f"    Parameter file can be found in {project_name}.par")

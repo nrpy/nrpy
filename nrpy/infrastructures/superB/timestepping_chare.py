@@ -703,6 +703,7 @@ def output_timestepping_ci(
     :param pre_MoL_step_forward_in_time: Code for handling pre-right-hand-side operations, default is an empty string.
     :param post_MoL_step_forward_in_time: Code for handling post-right-hand-side operations, default is an empty string.
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
+    :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     :raises ValueError: Raised if RK substep is not 1, 2, 3 or 4.
     """
     project_Path = Path(project_dir)
@@ -987,6 +988,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
     :param enable_rfm_precompute: Enable RFM precompute (default: False)
     :param pre_MoL_step_forward_in_time: Pre MoL step forward in time (default: "")
     :param post_MoL_step_forward_in_time: Post MoL step forward in time (default: "")
+    :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     :return None
     """
     output_timestepping_h(
