@@ -11,6 +11,9 @@ import os
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
 import shutil
+from math import sqrt
+from typing import Any, Dict
+import nrpypn.eval_p_t_and_p_r as bbhp
 
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
@@ -77,49 +80,142 @@ enable_simd = True
 parallel_codegen_enable = True
 boundary_conditions_desc = "outgoing radiation"
 # fmt: off
-initial_data_type = "gw150914"  # choices are: "gw150914", "axisymmetric", and "single_puncture"
+initial_data_type = "axisymmetric"  # choices are: "gw150914", "axisymmetric", and "single_puncture"
 
-q = 36.0 / 29.0
-Pr = -0.00084541526517121  # Radial linear momentum
-Pphi = 0.09530152296974252  # Azimuthal linear momentum
-S0_y_dimless = 0.31
-S1_y_dimless = -0.46
-m0_adm = q / (1.0 + q)
-m1_adm = 1.0 / (1.0 + q)
+def set_gw150914_params() -> Dict[str, Any]:
+    """
+    Set parameters consistent with GW150914.
+    Parameters are taken from http://einsteintoolkit.org/gallery/bbh/index.html
 
-gw150914_params = {
-    "zPunc": 5.0,
-    "q": q,
-    "bare_mass_0": 0.51841993533587039,
-    "bare_mass_1": 0.39193567996522616,
-    "Pr": Pr,
-    "Pphi": Pphi,
-    "S0_y_dimless": S0_y_dimless,
-    "S1_y_dimless": S1_y_dimless,
-    "m0_adm": m0_adm,
-    "m1_adm": m1_adm,
-    "S0_y": S0_y_dimless * (m0_adm ** 2),
-    "S1_y": S1_y_dimless * (m1_adm ** 2),
-    "P0_x": Pphi,
-    "P0_z": Pr,
-    "P1_x": -Pphi,
-    "P1_z": -Pr,
-}
+    :return: Dictionary of parameters
+    """
+    q = 36.0 / 29.0
+    S0_y_dimless = 0.31
+    S1_y_dimless = -0.46
+    m0_adm = q / (1.0 + q)
+    m1_adm = 1.0 / (1.0 + q)
+
+    # Note, these momenta are the eccentricity reduced values
+    # as obtained from the ETK gallery example, see:
+    # http://einsteintoolkit.org/gallery/bbh/index.html
+    Pr = -0.00084541526517121  # Radial linear momentum
+    Pphi = 0.09530152296974252  # Azimuthal linear momentum
 
 
-axisymmetric_params = {
-    "zPunc": 5.0,
-    "bare_mass_0": 0.5,
-    "bare_mass_1": 0.5,
-    "S0_z": +0.2,
-    "S1_z": -0.2,
-}
+    gw150914_params = {
+        "zPunc": 5.0,
+        "q": q,
+        "bare_mass_0": 0.51841993533587039,
+        "bare_mass_1": 0.39193567996522616,
+        "Pr": Pr,
+        "Pphi": Pphi,
+        "S0_y_dimless": S0_y_dimless,
+        "S1_y_dimless": S1_y_dimless,
+        "m0_adm": m0_adm,
+        "m1_adm": m1_adm,
+        "S0_y": S0_y_dimless * (m0_adm ** 2),
+        "S1_y": S1_y_dimless * (m1_adm ** 2),
+        "P0_x": Pphi,
+        "P0_z": Pr,
+        "P1_x": -Pphi,
+        "P1_z": -Pr,
+    }
+    return gw150914_params
 
-single_puncture_params = {
-    "zPunc": 0.0,
-    "bare_mass_0": 0.5,
-    "S0_z": 0.2,
-}
+def compute_bare_mass(M: float, CHI: float) -> float:
+    """
+    Set analytical Kerr estimate of the bare puncture mass.
+
+    :param M: puncture ADM mass
+    :param CHI: dimensionless spin magnitude of the puncture
+    :return: bare mass
+    """
+    res: float = M * sqrt(0.5 * (1.0 + sqrt(1.0 - CHI**2.0)))
+    return res
+
+
+def set_axisymmetric_params() -> Dict[str, Any]:
+    """
+    Set parameters for an axisymmetric BBH setup.
+
+    This setup by default uses the analytical estimate from 
+    Kerr to compute bare masses unless the user specifies them
+    manually.  Thus, the solution will not produce a binary with 
+    accurate puncture masses as measured by an apparent horizon 
+    finder that match the expect puncture ADM masses.  
+    A future extension could include an iterative root finder 
+    to make this more robust.
+
+    :return: Dictionary of parameters
+    """
+    q = 36.0 / 29.0
+    M_total = 1.0
+    distance = M_total * 5.0
+
+    S0_y_dimless = 0.31
+    S1_y_dimless = -0.46
+    m0_adm = M_total * q   / (1.0 + q)
+    m1_adm = M_total * 1.0 / (1.0 + q)
+
+    bare_m0 = compute_bare_mass(m0_adm, S0_y_dimless)
+    bare_m1 = compute_bare_mass(m1_adm, S1_y_dimless)
+
+    # Compute 3.5PN estimates
+    Pphi, Pr = bbhp.eval__P_t__and__P_r(
+        q,
+        distance,
+        0.0,
+        S0_y_dimless,
+        0.0,
+        0.0,
+        S1_y_dimless,
+        0.0,
+    )
+
+    axisymmetric_params = {
+        "zPunc": distance,
+        "q": q,
+        "bare_mass_0": bare_m0,
+        "bare_mass_1": bare_m1,
+        "Pr": Pr,
+        "Pphi": Pphi,
+        "S0_y_dimless": S0_y_dimless,
+        "S1_y_dimless": S1_y_dimless,
+        "m0_adm": m0_adm,
+        "m1_adm": m1_adm,
+        "S0_y": S0_y_dimless * (m0_adm ** 2),
+        "S1_y": S1_y_dimless * (m1_adm ** 2),
+        "P0_x": Pphi,
+        "P0_z": Pr,
+        "P1_x": -Pphi,
+        "P1_z": -Pr,
+    }
+    return axisymmetric_params
+
+def set_single_puncture_params() -> Dict[str, Any]:
+    """
+    Set parameters for an axisymmetric BH setup.
+
+    This setup by default uses the analytical estimate from 
+    Kerr to compute the bare mass unless the user specifies them
+    manually.  Thus, the solution will not produce a binary with 
+    accurate puncture masses as measured by an apparent horizon 
+    finder that match the expect puncture ADM mass.  
+    A future extension could include an iterative root finder 
+    to make this more robust.
+
+    :return: Dictionary of parameters
+    """
+    coordinate_location = 0.0
+    m_adm = 0.5
+    S_z_dimless = 0.2
+    this_puncture_params = {
+        "zPunc": coordinate_location,
+        "bare_mass_0": compute_bare_mass(m_adm, S_z_dimless),
+        "m0_adm": m_adm,
+        "S0_z": S_z_dimless * m_adm**2.0,
+    }
+    return this_puncture_params
 # fmt: on
 
 project_dir = os.path.join("project", project_name)
@@ -263,8 +359,22 @@ if CoordSystem == "SinhSpherical":
     par.adjust_CodeParam_default("SINHW", SINHW)
 
 # Update parameters specific to initial data type
-if initial_data_type == "gw150914":
-    for param, value in gw150914_params.items():
+if initial_data_type == "single_puncture":
+    single_puncture_params = set_single_puncture_params()
+    for param, value in single_puncture_params.items():
+        if param in [
+            "zPunc",
+            "bare_mass_0",
+            "S0_z",
+        ]:
+            par.adjust_CodeParam_default(param, value)
+else:
+    if initial_data_type == "gw150914":
+        puncture_params = set_gw150914_params()
+    elif initial_data_type == "axisymmetric":
+        puncture_params = set_axisymmetric_params()
+
+    for param, value in puncture_params.items():
         if param in [
             "zPunc",
             "bare_mass_0",
@@ -275,26 +385,6 @@ if initial_data_type == "gw150914":
             "P0_z",
             "P1_x",
             "P1_z",
-        ]:
-            par.adjust_CodeParam_default(param, value)
-
-if initial_data_type == "single_puncture":
-    for param, value in single_puncture_params.items():
-        if param in [
-            "zPunc",
-            "bare_mass_0",
-            "S0_z",
-        ]:
-            par.adjust_CodeParam_default(param, value)
-
-if initial_data_type == "axisymmetric":
-    for param, value in axisymmetric_params.items():
-        if param in [
-            "zPunc",
-            "bare_mass_0",
-            "bare_mass_1",
-            "S0_z",
-            "S1_z",
         ]:
             par.adjust_CodeParam_default(param, value)
 
