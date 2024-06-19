@@ -185,6 +185,48 @@ jobs:
           fi
           "
 
+  charmpp-validation:
+    runs-on: ubuntu-20.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - uses: eWaterCycle/setup-apptainer@v2
+        with:
+          apptainer-version: 1.3.2
+
+      - name: Download Apptainer image
+        run: wget -q https://github.com/nrpy/charmpp_barebones_ci_images/releases/download/v1.0.0/custom_ubuntu_charmpp.sif
+
+      - name: Build Apptainer sandbox
+        run: apptainer build --sandbox custom_ubuntu_charmpp_sandbox custom_ubuntu_charmpp.sif
+
+      - name: Run Apptainer container
+        run: |
+          apptainer exec --writable custom_ubuntu_charmpp_sandbox bash -c "
+          set -e
+          source /opt/jup312/bin/activate
+          export PYTHONPATH=.:$PYTHONPATH
+          export PATH=/opt/charm-8.0.0/bin:$PATH
+          export LD_LIBRARY_PATH=/opt/charm-8.0.0/lib:$LD_LIBRARY_PATH
+          export C_INCLUDE_PATH=/opt/charm-8.0.0/include:$C_INCLUDE_PATH
+          export CPLUS_INCLUDE_PATH=/opt/charm-8.0.0/include:$CPLUS_INCLUDE_PATH
+          python3 --version && isympy --version
+          cd /opt/jup312/nrpy
+          git pull
+          git log | head
+          python3 -u nrpy/examples/superB_two_blackholes_collide.py
+          python3 -u nrpy/examples/superB_blackhole_spectroscopy.py
+          cd project/superB_two_blackholes_collide/
+          make -j2
+          charmrun +p2 ./superB_two_blackholes_collide
+          cd ../../
+          cd project/superB_blackhole_spectroscopy/
+          make -j2
+          "
+
+
   codegen-ubuntu:
     runs-on: ${{ matrix.os }}
 
