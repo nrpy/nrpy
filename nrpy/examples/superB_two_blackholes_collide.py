@@ -260,7 +260,7 @@ superBMakefile.output_CFunctions_function_prototypes_and_construct_Makefile(
     compiler_opt_option="default",
     addl_CFLAGS=["-fpermissive "],
     addl_libraries=["-module CkIO"],
-    CC="~/charm/bin/charmc",
+    CC="charmc",
 )
 print(
     f"Finished! Now go into project/{project_name} and type `make` to build, then ./charmrun +p4 ./{project_name} to run with 4 processors, for example."
