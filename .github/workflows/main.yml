@@ -156,7 +156,7 @@ jobs:
           set -e
           rm -f /opt/FAILED.txt
           source /opt/jup312/bin/activate
-          export PYTHONPATH=.:$PYTHONPATH
+          export PYTHONPATH=.:\$PYTHONPATH
           python3 --version && isympy --version
           cd /opt/jup312/nrpy
           git pull
@@ -207,11 +207,11 @@ jobs:
           apptainer exec --writable custom_ubuntu_charmpp_sandbox bash -c "
           set -e
           source /opt/jup312/bin/activate
-          export PYTHONPATH=.:$PYTHONPATH
-          export PATH=/opt/charm-8.0.0/bin:$PATH
-          export LD_LIBRARY_PATH=/opt/charm-8.0.0/lib:$LD_LIBRARY_PATH
-          export C_INCLUDE_PATH=/opt/charm-8.0.0/include:$C_INCLUDE_PATH
-          export CPLUS_INCLUDE_PATH=/opt/charm-8.0.0/include:$CPLUS_INCLUDE_PATH
+          export PYTHONPATH=.:\$PYTHONPATH
+          export PATH=/opt/charm-8.0.0/bin:\$PATH
+          export LD_LIBRARY_PATH=/opt/charm-8.0.0/lib:\$LD_LIBRARY_PATH
+          export C_INCLUDE_PATH=/opt/charm-8.0.0/include:\$C_INCLUDE_PATH
+          export CPLUS_INCLUDE_PATH=/opt/charm-8.0.0/include:\$CPLUS_INCLUDE_PATH
           python3 --version && isympy --version
           cd /opt/jup312/nrpy
           git pull
