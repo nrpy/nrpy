@@ -174,7 +174,8 @@ class GridFunction:
 
         # Sort the lists. Iterating through a copy of the keys to avoid modifying the dictionary while iterating.
         for group in list(groups.keys()):
-            groups[group] = sorted(groups[group])
+            # Sort case-insensitively to ensure consistent order, e.g., "RbarDD" doesn't appear before "cf".
+            groups[group] = sorted(groups[group], key=lambda x: x.lower())
 
         # Pack the sorted lists into a tuple and return.
         return groups["EVOL"], groups["AUX"], groups["AUXEVOL"]

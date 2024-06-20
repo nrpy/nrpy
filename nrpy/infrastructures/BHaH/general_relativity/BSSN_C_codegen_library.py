@@ -359,6 +359,7 @@ def register_CFunction_rhs_eval(
     :param validate_expressions: Whether to validate generated sympy expressions against trusted values.
 
     :raises ValueError: If EvolvedConformalFactor_cf not set to a supported value: {phi, chi, W}.
+
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
@@ -485,7 +486,11 @@ def register_CFunction_rhs_eval(
             + ("_T4munu" if enable_T4munu else "")
         ]
         if "cahdprefactor" not in gri.glb_gridfcs_dict:
-            _ = gri.register_gridfunctions("cahdprefactor")
+            _ = gri.register_gridfunctions(
+                "cahdprefactor",
+                group="AUXEVOL",
+                gf_array_name="auxevol_gfs",
+            )
         _C_CAHD = par.register_CodeParameter(
             "REAL", __name__, "C_CAHD", 0.15, commondata=True, add_to_parfile=True
         )

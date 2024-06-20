@@ -64,6 +64,8 @@ TP_npoints_phi = 4
 
 enable_KreissOliger_dissipation = True
 enable_CAKO = True
+enable_CAHD = True
+enable_SSL = True
 KreissOliger_strength_gauge = 0.99
 KreissOliger_strength_nongauge = 0.1
 LapseEvolutionOption = "OnePlusLog"
@@ -172,6 +174,8 @@ BCl.register_CFunction_rhs_eval(
     LapseEvolutionOption=LapseEvolutionOption,
     ShiftEvolutionOption=ShiftEvolutionOption,
     enable_CAKO=enable_CAKO,
+    enable_CAHD=enable_CAHD,
+    enable_SSL=enable_SSL,
     KreissOliger_strength_gauge=KreissOliger_strength_gauge,
     KreissOliger_strength_nongauge=KreissOliger_strength_nongauge,
     OMP_collapse=OMP_collapse,
