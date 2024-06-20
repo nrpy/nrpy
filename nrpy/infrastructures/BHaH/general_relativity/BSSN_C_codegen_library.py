@@ -496,7 +496,7 @@ def register_CFunction_rhs_eval(
         )
         # Initialize CAHD_term assuming phi is the evolved conformal factor. CFL_FACTOR is defined in MoL.
         # CAHD_term = -C_CAHD * (sp.symbols("CFL_FACTOR") * sp.symbols("dsmin")) * Bcon.H
-        # -> cahdprefactor = sp.symbols("CFL_FACTOR") * sp.symbols("dsmin")
+        # -> cahdprefactor = C_CAHD * sp.symbols("CFL_FACTOR") * sp.symbols("dsmin")
         CAHD_term = -1 * sp.symbols("cahdprefactor") * Bcon.H
         if EvolvedConformalFactor_cf == "phi":
             pass  # CAHD_term already assumes phi is the evolved conformal factor.
@@ -1263,7 +1263,7 @@ def register_CFunction_cahdprefactor_auxevol_gridfunction(
     fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Add function that sets cahdprefactor gridfunction = CFL_FACTOR * dsmin to Cfunction dictionary.
+    Add function that sets cahdprefactor gridfunction = C_CAHD * CFL_FACTOR * dsmin to Cfunction dictionary.
 
     :param list_of_CoordSystems: Coordinate systems used.
     :param fp_type: Floating point type, e.g., "double".
@@ -1281,7 +1281,7 @@ def register_CFunction_cahdprefactor_auxevol_gridfunction(
 
         rfm = refmetric.reference_metric[CoordSystem]
         dxx0, dxx1, dxx2 = sp.symbols("dxx0 dxx1 dxx2", real=True)
-        loop_body = r"""  // Compute cahdprefactor gridfunction = CFL_FACTOR * dsmin.
+        loop_body = r"""  // Compute cahdprefactor gridfunction = C_CAHD * CFL_FACTOR * dsmin.
 REAL dsmin0, dsmin1, dsmin2;
 """
         loop_body += ccg.c_codegen(
@@ -1294,7 +1294,7 @@ REAL dsmin0, dsmin1, dsmin2;
             include_braces=False,
             fp_type=fp_type,
         )
-        loop_body += """auxevol_gfs[IDX4(CAHDPREFACTORGF, i0, i1, i2)] = CFL_FACTOR * MIN(dsmin0, MIN(dsmin1, dsmin2));"""
+        loop_body += """auxevol_gfs[IDX4(CAHDPREFACTORGF, i0, i1, i2)] = C_CAHD * CFL_FACTOR * MIN(dsmin0, MIN(dsmin1, dsmin2));"""
 
         cfc.register_CFunction(
             includes=["BHaH_defines.h"],
