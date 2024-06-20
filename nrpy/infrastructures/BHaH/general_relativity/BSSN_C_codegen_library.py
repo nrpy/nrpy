@@ -328,10 +328,11 @@ def register_CFunction_rhs_eval(
     enable_KreissOliger_dissipation: bool,
     LapseEvolutionOption: str,
     ShiftEvolutionOption: str,
-    KreissOliger_strength_mult_by_W: bool = False,
-    # when mult by W, strength_gauge=0.99 & strength_nongauge=0.3 is best.
     KreissOliger_strength_gauge: float = 0.3,
     KreissOliger_strength_nongauge: float = 0.3,
+    enable_CAKO: bool = False,
+    enable_CAHD: bool = False,
+    enable_SSL: bool = False,
     OMP_collapse: int = 1,
     fp_type: str = "double",
     validate_expressions: bool = False,
@@ -348,9 +349,11 @@ def register_CFunction_rhs_eval(
     :param enable_KreissOliger_dissipation: Whether to enable Kreiss-Oliger dissipation.
     :param LapseEvolutionOption: Lapse evolution equation choice.
     :param ShiftEvolutionOption: Lapse evolution equation choice.
-    :param KreissOliger_strength_mult_by_W: Whether to multiply Kreiss-Oliger strength by W.
     :param KreissOliger_strength_gauge: Gauge strength for Kreiss-Oliger dissipation.
     :param KreissOliger_strength_nongauge: Non-gauge strength for Kreiss-Oliger dissipation.
+    :param enable_CAKO: Whether to enable curvature-aware Kreiss-Oliger dissipation (multiply strength by W).
+    :param enable_CAHD: Whether to enable curvature-aware Hamiltonian-constraint damping.
+    :param enable_SSL: Whether to enable slow-start lapse.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
     :param fp_type: Floating point type, e.g., "double".
     :param validate_expressions: Whether to validate generated sympy expressions against trusted values.
@@ -398,6 +401,24 @@ def register_CFunction_rhs_eval(
         sorted(local_BSSN_RHSs_varname_to_expr_dict.items())
     )
 
+    # Define conformal factor W.
+    Bq = BSSN_quantities[
+        CoordSystem
+        + ("_rfm_precompute" if enable_rfm_precompute else "")
+        + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
+    ]
+    EvolvedConformalFactor_cf = par.parval_from_str("EvolvedConformalFactor_cf")
+    if EvolvedConformalFactor_cf == "W":
+        W = Bq.cf
+    elif EvolvedConformalFactor_cf == "chi":
+        W = sp.sqrt(Bq.cf)
+    elif EvolvedConformalFactor_cf == "phi":
+        W = sp.exp(-2 * Bq.cf)
+    else:
+        raise ValueError(
+            "Error: only EvolvedConformalFactor_cf = (W or chi or phi) supported."
+        )
+
     # Add Kreiss-Oliger dissipation to the BSSN RHSs:
     if enable_KreissOliger_dissipation:
         diss_strength_gauge, diss_strength_nongauge = par.register_CodeParameters(
@@ -408,22 +429,11 @@ def register_CFunction_rhs_eval(
             commondata=True,
         )
 
-        if KreissOliger_strength_mult_by_W:
-            Bq = BSSN_quantities[
-                CoordSystem
-                + ("_rfm_precompute" if enable_rfm_precompute else "")
-                + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
-            ]
-            EvolvedConformalFactor_cf = par.parval_from_str("EvolvedConformalFactor_cf")
-            if EvolvedConformalFactor_cf == "W":
-                diss_strength_gauge *= Bq.cf
-                diss_strength_nongauge *= Bq.cf
-            elif EvolvedConformalFactor_cf == "chi":
-                diss_strength_gauge *= sp.sqrt(Bq.cf)
-                diss_strength_nongauge *= sp.sqrt(Bq.cf)
-            elif EvolvedConformalFactor_cf == "phi":
-                diss_strength_gauge *= sp.exp(-2 * Bq.cf)
-                diss_strength_nongauge *= sp.exp(-2 * Bq.cf)
+        # vvv BEGIN CAKO vvv
+        if enable_CAKO:
+            diss_strength_gauge *= W
+            diss_strength_nongauge *= W
+        # ^^^ END CAKO ^^^
 
         rfm = refmetric.reference_metric[
             CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
@@ -464,6 +474,60 @@ def register_CFunction_rhs_eval(
                     local_BSSN_RHSs_varname_to_expr_dict[f"h_rhsDD{i}{j}"] += (
                         diss_strength_nongauge * hDD_dKOD[i][j][k] * rfm.ReU[k]
                     )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
+
+    # vvv BEGIN CAHD vvv
+    if enable_CAHD:
+        Bcon = BSSN_constraints[
+            CoordSystem
+            + ("_rfm_precompute" if enable_rfm_precompute else "")
+            + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
+            + ("_T4munu" if enable_T4munu else "")
+        ]
+        if "cahdprefactor" not in gri.glb_gridfcs_dict:
+            _ = gri.register_gridfunctions("cahdprefactor")
+        C_CAHD = par.register_CodeParameter(
+            "REAL", __name__, "C_CAHD", 0.15, commondata=True, add_to_parfile=True
+        )
+        # Initialize CAHD_term assuming phi is the evolved conformal factor. CFL_FACTOR is defined in MoL.
+        # CAHD_term = -C_CAHD * (sp.symbols("CFL_FACTOR") * sp.symbols("dsmin")) * Bcon.H
+        CAHD_term = -sp.symbols("cahdprefactor") * Bcon.H
+        if EvolvedConformalFactor_cf == "phi":
+            pass  # CAHD_term already assumes phi is the evolved conformal factor.
+        elif EvolvedConformalFactor_cf == "W":
+            # \partial_t W = \partial_t e^{-2 phi} = -2 W \partial_t phi
+            CAHD_term *= -2 * Bq.cf
+        elif EvolvedConformalFactor_cf == "chi":
+            # \partial_t chi = \partial_t e^{-4 phi} = -4 chi \partial_t phi
+            CAHD_term *= -4 * Bq.cf
+        else:
+            raise ValueError(
+                "Error: only EvolvedConformalFactor_cf = (W or chi or phi) supported."
+            )
+        local_BSSN_RHSs_varname_to_expr_dict["cf_rhs"] += CAHD_term
+    # ^^^ END CAHD ^^^
+
+    # vvv BEGIN SSL vvv
+    if enable_SSL:
+        SSL_gaussian_prefactor = par.register_CodeParameter(
+            "REAL",
+            __name__,
+            "SSL_gaussian_prefactor",
+            1.0,
+            commondata=True,
+            add_to_parfile=False,
+        )
+        _SSL_h, _SSL_sigma = par.register_CodeParameters(
+            "REAL",
+            __name__,
+            ["SSL_h", "SSL_sigma"],
+            [0.6, 20.0],
+            commondata=True,
+            add_to_parfile=True,
+        )
+        local_BSSN_RHSs_varname_to_expr_dict["alpha_rhs"] -= (
+            W * SSL_gaussian_prefactor * (Bq.alpha - W)
+        )
+    # ^^^ END SSL ^^^
 
     BSSN_RHSs_access_gf: List[str] = []
     for var in local_BSSN_RHSs_varname_to_expr_dict.keys():
@@ -1196,23 +1260,27 @@ if __name__ == "__main__":
     ShiftEvolOption = "GammaDriving2ndOrder_Covariant"
     for Rbar_gfs in [True, False]:
         for T4munu_enable in [True, False]:
-            results_dict = register_CFunction_rhs_eval(
-                CoordSystem=Coord,
-                enable_rfm_precompute=True,
-                enable_RbarDD_gridfunctions=Rbar_gfs,
-                enable_T4munu=T4munu_enable,
-                enable_simd=False,
-                enable_fd_functions=False,
-                enable_KreissOliger_dissipation=True,
-                LapseEvolutionOption=LapseEvolOption,
-                ShiftEvolutionOption=ShiftEvolOption,
-                validate_expressions=True,
-            )
-            ve.compare_or_generate_trusted_results(
-                os.path.abspath(__file__),
-                os.getcwd(),
-                # File basename. If this is set to "trusted_module_test1", then
-                #   trusted results_dict will be stored in tests/trusted_module_test1.py
-                f"{os.path.splitext(os.path.basename(__file__))[0]}_{LapseEvolOption}_{ShiftEvolOption}_{Coord}_Rbargfs{Rbar_gfs}_T4munu{T4munu_enable}",
-                cast(Dict[str, Union[mpf, mpc]], results_dict),
-            )
+            for enable_Improvements in [True, False]:
+                results_dict = register_CFunction_rhs_eval(
+                    CoordSystem=Coord,
+                    enable_rfm_precompute=True,
+                    enable_RbarDD_gridfunctions=Rbar_gfs,
+                    enable_T4munu=T4munu_enable,
+                    enable_simd=False,
+                    enable_fd_functions=False,
+                    enable_KreissOliger_dissipation=True,
+                    LapseEvolutionOption=LapseEvolOption,
+                    ShiftEvolutionOption=ShiftEvolOption,
+                    enable_CAKO=enable_Improvements,
+                    enable_CAHD=enable_Improvements,
+                    enable_SSL=enable_Improvements,
+                    validate_expressions=True,
+                )
+                ve.compare_or_generate_trusted_results(
+                    os.path.abspath(__file__),
+                    os.getcwd(),
+                    # File basename. If this is set to "trusted_module_test1", then
+                    #   trusted results_dict will be stored in tests/trusted_module_test1.py
+                    f"{os.path.splitext(os.path.basename(__file__))[0]}_{LapseEvolOption}_{ShiftEvolOption}_{Coord}_Rbargfs{Rbar_gfs}_T4munu{T4munu_enable}_Improvements{enable_Improvements}",
+                    cast(Dict[str, Union[mpf, mpc]], results_dict),
+                )
