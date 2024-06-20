@@ -9,7 +9,7 @@ from collections import OrderedDict as ODict
 from inspect import currentframe as cfr
 from pathlib import Path
 from types import FrameType as FT
-from typing import Any, Dict, List, Tuple, Union, cast
+from typing import Dict, List, Tuple, Union, cast
 
 import sympy as sp
 from mpmath import mpc, mpf  # type: ignore
@@ -358,6 +358,7 @@ def register_CFunction_rhs_eval(
     :param fp_type: Floating point type, e.g., "double".
     :param validate_expressions: Whether to validate generated sympy expressions against trusted values.
 
+    :raises ValueError: If EvolvedConformalFactor_cf not set to a supported value: {phi, chi, W}.
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
@@ -485,12 +486,12 @@ def register_CFunction_rhs_eval(
         ]
         if "cahdprefactor" not in gri.glb_gridfcs_dict:
             _ = gri.register_gridfunctions("cahdprefactor")
-        C_CAHD = par.register_CodeParameter(
+        _C_CAHD = par.register_CodeParameter(
             "REAL", __name__, "C_CAHD", 0.15, commondata=True, add_to_parfile=True
         )
         # Initialize CAHD_term assuming phi is the evolved conformal factor. CFL_FACTOR is defined in MoL.
         # CAHD_term = -C_CAHD * (sp.symbols("CFL_FACTOR") * sp.symbols("dsmin")) * Bcon.H
-        CAHD_term = -sp.symbols("cahdprefactor") * Bcon.H
+        CAHD_term = -1 * sp.symbols("cahdprefactor") * Bcon.H
         if EvolvedConformalFactor_cf == "phi":
             pass  # CAHD_term already assumes phi is the evolved conformal factor.
         elif EvolvedConformalFactor_cf == "W":
@@ -552,10 +553,9 @@ def register_CFunction_rhs_eval(
 
     # Perform validation of BSSN_RHSs against trusted version.
     if validate_expressions:
-        results_dict = ve.process_dictionary_of_expressions(
+        return ve.process_dictionary_of_expressions(
             local_BSSN_RHSs_varname_to_expr_dict, fixed_mpfs_for_free_symbols=True
         )
-        return results_dict
     # ve.compare_or_generate_trusted_results(
     #     os.path.abspath(__file__),
     #     os.getcwd(),
