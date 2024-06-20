@@ -15,7 +15,7 @@ def register_CFunction_main_c(
     initial_data_desc: str = "",
     boundary_conditions_desc: str = "",
     prefunc: str = "",
-    initialize_constant_auxevol: bool = False,
+    post_non_y_n_auxevol_mallocs: str = "",
     pre_MoL_step_forward_in_time: str = "",
     post_MoL_step_forward_in_time: str = "",
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
@@ -27,9 +27,9 @@ def register_CFunction_main_c(
     :param initial_data_desc: Description for initial data, default is an empty string.
     :param boundary_conditions_desc: Description of the boundary conditions, default is an empty string.
     :param prefunc: String that appears before main(). DO NOT populate this, except when debugging, default is an empty string.
-    :param initialize_constant_auxevol: If set to True, `initialize_constant_auxevol` function will be called during the simulation initialization phase to set these constants. Default is False.
-    :param pre_MoL_step_forward_in_time: Code for handling pre-right-hand-side operations, default is an empty string.
-    :param post_MoL_step_forward_in_time: Code for handling post-right-hand-side operations, default is an empty string.
+    :param post_non_y_n_auxevol_mallocs: Function calls after memory is allocated for non y_n and auxevol gridfunctions, default is an empty string.
+    :param pre_MoL_step_forward_in_time: Function calls prior to each right-hand-side update, default is an empty string.
+    :param post_MoL_step_forward_in_time: Function calls after each right-hand-side update, default is an empty string.
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
     :raises ValueError: Raised if any required function for BHaH main() is not registered.
     """
@@ -73,8 +73,8 @@ Step 2: Initial data are set on y_n_gfs gridfunctions. Allocate storage for them
 Step 3: Finalize initialization: set up {initial_data_desc}initial data, etc.
 Step 4: Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping.
 """
-    if initialize_constant_auxevol:
-        desc += "Step 4.a: Set AUXEVOL gridfunctions that will never change in time."
+    if post_non_y_n_auxevol_mallocs:
+        desc += "Step 4.a: Functions called after memory for non-y_n and auxevol gridfunctions is allocated."
     desc += f"""Step 5: MAIN SIMULATION LOOP
 - Step 5.a: Output diagnostics.
 - Step 5.b: Prepare to step forward in time.
@@ -118,10 +118,12 @@ initial_data(&commondata, griddata);
 for(int grid=0; grid<commondata.NUMGRIDS; grid++)
   MoL_malloc_non_y_n_gfs(&commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
 """
-    if initialize_constant_auxevol:
-        body += """// Step 4.a: Set AUXEVOL gridfunctions that will never change in time.
-initialize_constant_auxevol(&commondata, griddata);
+    if post_non_y_n_auxevol_mallocs:
+        body += (
+            """// Step 4.a: Functions called after memory for non-y_n and auxevol gridfunctions is allocated.
 """
+            + post_non_y_n_auxevol_mallocs
+        )
     body += """
 // Step 5: MAIN SIMULATION LOOP
 while(commondata.time < commondata.t_final) { // Main loop to progress forward in time.

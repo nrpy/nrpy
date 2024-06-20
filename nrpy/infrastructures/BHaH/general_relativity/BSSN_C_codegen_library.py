@@ -496,6 +496,7 @@ def register_CFunction_rhs_eval(
         )
         # Initialize CAHD_term assuming phi is the evolved conformal factor. CFL_FACTOR is defined in MoL.
         # CAHD_term = -C_CAHD * (sp.symbols("CFL_FACTOR") * sp.symbols("dsmin")) * Bcon.H
+        # -> cahdprefactor = sp.symbols("CFL_FACTOR") * sp.symbols("dsmin")
         CAHD_term = -1 * sp.symbols("cahdprefactor") * Bcon.H
         if EvolvedConformalFactor_cf == "phi":
             pass  # CAHD_term already assumes phi is the evolved conformal factor.
@@ -1255,6 +1256,61 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
         include_CodeParameters_h=True,
         body=body,
     )
+
+
+def register_CFunction_cahdprefactor_auxevol_gridfunction(
+    list_of_CoordSystems: List[str],
+    fp_type: str = "double",
+) -> Union[None, pcg.NRPyEnv_type]:
+    """
+    Add function that sets cahdprefactor gridfunction = CFL_FACTOR * dsmin to Cfunction dictionary.
+
+    :param list_of_CoordSystems: Coordinate systems used.
+    :param fp_type: Floating point type, e.g., "double".
+
+    :return: None if in registration phase, else the updated NRPy environment.
+    """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+
+    for CoordSystem in list_of_CoordSystems:
+        desc = "cahdprefactor_auxevol_gridfunction(): Initialize CAHD prefactor (auxevol) gridfunction."
+        name = "cahdprefactor_auxevol_gridfunction"
+        params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], REAL *restrict auxevol_gfs"
+
+        rfm = refmetric.reference_metric[CoordSystem]
+        dxx0, dxx1, dxx2 = sp.symbols("dxx0 dxx1 dxx2", real=True)
+        loop_body = r"""  // Compute cahdprefactor gridfunction = CFL_FACTOR * dsmin.
+REAL dsmin0, dsmin1, dsmin2;
+"""
+        loop_body += ccg.c_codegen(
+            [
+                sp.Abs(rfm.scalefactor_orthog[0] * dxx0),
+                sp.Abs(rfm.scalefactor_orthog[1] * dxx1),
+                sp.Abs(rfm.scalefactor_orthog[2] * dxx2),
+            ],
+            ["dsmin0", "dsmin1", "dsmin2"],
+            include_braces=False,
+            fp_type=fp_type,
+        )
+        loop_body += """auxevol_gfs[IDX4(CAHDPREFACTORGF, i0, i1, i2)] = CFL_FACTOR * MIN(dsmin0, MIN(dsmin1, dsmin2));"""
+
+        cfc.register_CFunction(
+            includes=["BHaH_defines.h"],
+            desc=desc,
+            name=name,
+            params=params,
+            include_CodeParameters_h=True,
+            body=lp.simple_loop(
+                loop_body=loop_body,
+                loop_region="all points",
+                read_xxs=True,
+                fp_type=fp_type,
+            ),
+            CoordSystem_for_wrapper_func=CoordSystem,
+        )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
 if __name__ == "__main__":

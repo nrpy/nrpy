@@ -32,7 +32,7 @@ def simple_loop(
 
     :param loop_body: Loop body
     :param enable_simd: Enable SIMD support
-    :param loop_region: Loop over all points on a numerical grid or just the interior
+    :param loop_region: Loop over "all points" or "interior" of a numerical grid.
     :param read_xxs: Read the xx[3][:] 1D coordinate arrays if interior dependency exists
     :param CoordSystem: Coordinate system, e.g., "Cartesian"
     :param enable_rfm_precompute: Enable pre-computation of reference metric

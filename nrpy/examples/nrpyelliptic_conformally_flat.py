@@ -323,12 +323,12 @@ post_MoL_step_forward_in_time = r"""    check_stop_conditions(&commondata, gridd
     }
 """
 main.register_CFunction_main_c(
+    MoL_method=MoL_method,
     initial_data_desc="",
+    boundary_conditions_desc=boundary_conditions_desc,
+    post_non_y_n_auxevol_mallocs="initialize_constant_auxevol(&commondata, griddata);\n",
     pre_MoL_step_forward_in_time="write_checkpoint(&commondata, griddata);\n",
     post_MoL_step_forward_in_time=post_MoL_step_forward_in_time,
-    MoL_method=MoL_method,
-    boundary_conditions_desc=boundary_conditions_desc,
-    initialize_constant_auxevol=True,
 )
 griddata_commondata.register_CFunction_griddata_free(
     enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True

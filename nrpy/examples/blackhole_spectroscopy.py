@@ -65,9 +65,9 @@ TP_npoints_phi = 4
 enable_KreissOliger_dissipation = True
 enable_CAKO = True
 enable_CAHD = True
-enable_SSL = True
+enable_SSL = False
 KreissOliger_strength_gauge = 0.99
-KreissOliger_strength_nongauge = 0.1
+KreissOliger_strength_nongauge = 0.3
 LapseEvolutionOption = "OnePlusLog"
 ShiftEvolutionOption = "GammaDriving2ndOrder_Covariant"
 GammaDriving_eta = 2.0
@@ -180,6 +180,8 @@ BCl.register_CFunction_rhs_eval(
     KreissOliger_strength_nongauge=KreissOliger_strength_nongauge,
     OMP_collapse=OMP_collapse,
 )
+if enable_CAHD:
+    BCl.register_CFunction_cahdprefactor_auxevol_gridfunction([CoordSystem])
 if separate_Ricci_and_BSSN_RHS:
     BCl.register_CFunction_Ricci_eval(
         CoordSystem=CoordSystem,
@@ -306,11 +308,17 @@ Bdefines_h.output_BHaH_defines_h(
     enable_rfm_precompute=enable_rfm_precompute,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
 )
+post_non_y_n_auxevol_mallocs = ""
+if enable_CAHD:
+    post_non_y_n_auxevol_mallocs = """for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
+    cahdprefactor_auxevol_gridfunction(&commondata, &griddata[grid].params, griddata[grid].xx,  griddata[grid].gridfuncs.auxevol_gfs);
+}\n"""
 main.register_CFunction_main_c(
-    initial_data_desc=IDtype,
-    pre_MoL_step_forward_in_time="write_checkpoint(&commondata, griddata);\n",
     MoL_method=MoL_method,
+    initial_data_desc=IDtype,
     boundary_conditions_desc=boundary_conditions_desc,
+    post_non_y_n_auxevol_mallocs=post_non_y_n_auxevol_mallocs,
+    pre_MoL_step_forward_in_time="write_checkpoint(&commondata, griddata);\n",
 )
 griddata_commondata.register_CFunction_griddata_free(
     enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True
