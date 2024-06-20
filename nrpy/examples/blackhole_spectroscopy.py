@@ -63,7 +63,7 @@ TP_npoints_B = 48
 TP_npoints_phi = 4
 
 enable_KreissOliger_dissipation = True
-KreissOliger_strength_mult_by_W = True
+enable_CAKO = True
 KreissOliger_strength_gauge = 0.99
 KreissOliger_strength_nongauge = 0.1
 LapseEvolutionOption = "OnePlusLog"
@@ -171,7 +171,7 @@ BCl.register_CFunction_rhs_eval(
     enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
     LapseEvolutionOption=LapseEvolutionOption,
     ShiftEvolutionOption=ShiftEvolutionOption,
-    KreissOliger_strength_mult_by_W=KreissOliger_strength_mult_by_W,
+    enable_CAKO=enable_CAKO,
     KreissOliger_strength_gauge=KreissOliger_strength_gauge,
     KreissOliger_strength_nongauge=KreissOliger_strength_nongauge,
     OMP_collapse=OMP_collapse,
