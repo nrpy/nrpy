@@ -70,6 +70,7 @@ enable_simd = True
 LapseEvolutionOption = "OnePlusLog"
 ShiftEvolutionOption = "GammaDriving2ndOrder_NoCovariant"
 enable_KreissOliger_dissipation = True
+enable_improvements = False
 parallel_codegen_enable = True
 CoordSystem = "Cartesian"
 OMP_collapse = 1
@@ -136,6 +137,9 @@ for evol_thorn_name in thorn_names:
             LapseEvolutionOption=LapseEvolutionOption,
             ShiftEvolutionOption=ShiftEvolutionOption,
             enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
+            enable_CAKO=enable_improvements,
+            enable_CAHD=enable_improvements,
+            enable_SSL=enable_improvements,
         )
         register_CFunction_BSSN_constraints(
             thorn_name=evol_thorn_name,

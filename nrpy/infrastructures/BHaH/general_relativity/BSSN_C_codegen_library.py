@@ -325,9 +325,9 @@ def register_CFunction_rhs_eval(
     enable_T4munu: bool,
     enable_simd: bool,
     enable_fd_functions: bool,
-    enable_KreissOliger_dissipation: bool,
     LapseEvolutionOption: str,
     ShiftEvolutionOption: str,
+    enable_KreissOliger_dissipation: bool,
     KreissOliger_strength_gauge: float = 0.3,
     KreissOliger_strength_nongauge: float = 0.3,
     enable_CAKO: bool = False,
@@ -346,9 +346,9 @@ def register_CFunction_rhs_eval(
     :param enable_T4munu: Whether to enable T4munu (stress-energy terms).
     :param enable_simd: Whether to enable SIMD (Single Instruction, Multiple Data).
     :param enable_fd_functions: Whether to enable finite difference functions.
-    :param enable_KreissOliger_dissipation: Whether to enable Kreiss-Oliger dissipation.
     :param LapseEvolutionOption: Lapse evolution equation choice.
     :param ShiftEvolutionOption: Lapse evolution equation choice.
+    :param enable_KreissOliger_dissipation: Whether to enable Kreiss-Oliger dissipation.
     :param KreissOliger_strength_gauge: Gauge strength for Kreiss-Oliger dissipation.
     :param KreissOliger_strength_nongauge: Non-gauge strength for Kreiss-Oliger dissipation.
     :param enable_CAKO: Whether to enable curvature-aware Kreiss-Oliger dissipation (multiply strength by W).

@@ -170,14 +170,14 @@ BCl.register_CFunction_rhs_eval(
     enable_T4munu=False,
     enable_simd=enable_simd,
     enable_fd_functions=enable_fd_functions,
-    enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
     LapseEvolutionOption=LapseEvolutionOption,
     ShiftEvolutionOption=ShiftEvolutionOption,
+    enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
+    KreissOliger_strength_gauge=KreissOliger_strength_gauge,
+    KreissOliger_strength_nongauge=KreissOliger_strength_nongauge,
     enable_CAKO=enable_CAKO,
     enable_CAHD=enable_CAHD,
     enable_SSL=enable_SSL,
-    KreissOliger_strength_gauge=KreissOliger_strength_gauge,
-    KreissOliger_strength_nongauge=KreissOliger_strength_nongauge,
     OMP_collapse=OMP_collapse,
 )
 if enable_CAHD:

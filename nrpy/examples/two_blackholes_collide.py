@@ -68,6 +68,7 @@ separate_Ricci_and_BSSN_RHS = True
 parallel_codegen_enable = True
 enable_fd_functions = True
 enable_KreissOliger_dissipation = False
+enable_CAKO = True
 boundary_conditions_desc = "outgoing radiation"
 
 OMP_collapse = 1
@@ -136,9 +137,10 @@ BCl.register_CFunction_rhs_eval(
     enable_T4munu=False,
     enable_simd=enable_simd,
     enable_fd_functions=enable_fd_functions,
-    enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
     LapseEvolutionOption=LapseEvolutionOption,
     ShiftEvolutionOption=ShiftEvolutionOption,
+    enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
+    enable_CAKO=enable_CAKO,
     OMP_collapse=OMP_collapse,
     fp_type=fp_type,
 )
