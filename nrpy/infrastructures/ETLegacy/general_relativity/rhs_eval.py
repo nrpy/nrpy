@@ -116,8 +116,8 @@ def register_CFunction_rhs_eval(
   const CCTK_REAL *param_diss_strength CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("diss_strength", "{thorn_name}", NULL);
   const REAL_SIMD_ARRAY diss_strength CCTK_ATTRIBUTE_UNUSED = ConstSIMD(*param_diss_strength);
 """
-    if enable_SSL:
-        body += f"""
+        if enable_SSL:
+            body += f"""
     const CCTK_REAL *SSL_h CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("SSL_h", "{thorn_name}", NULL);
     const CCTK_REAL *SSL_sigma CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("SSL_sigma", "{thorn_name}", NULL);
 
