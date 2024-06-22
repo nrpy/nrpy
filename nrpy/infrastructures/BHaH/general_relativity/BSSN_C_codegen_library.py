@@ -515,10 +515,10 @@ def register_CFunction_rhs_eval(
 
     # vvv BEGIN SSL vvv
     if enable_SSL:
-        SSL_gaussian_prefactor = par.register_CodeParameter(
+        SSL_Gaussian_prefactor = par.register_CodeParameter(
             "REAL",
             __name__,
-            "SSL_gaussian_prefactor",
+            "SSL_Gaussian_prefactor",
             1.0,
             commondata=True,
             add_to_parfile=False,
@@ -532,7 +532,7 @@ def register_CFunction_rhs_eval(
             add_to_parfile=True,
         )
         local_BSSN_RHSs_varname_to_expr_dict["alpha_rhs"] -= (
-            W * SSL_gaussian_prefactor * (Bq.alpha - W)
+            W * SSL_Gaussian_prefactor * (Bq.alpha - W)
         )
     # ^^^ END SSL ^^^
 

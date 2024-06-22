@@ -65,7 +65,7 @@ TP_npoints_phi = 4
 enable_KreissOliger_dissipation = True
 enable_CAKO = True
 enable_CAHD = True
-enable_SSL = False
+enable_SSL = True
 KreissOliger_strength_gauge = 0.99
 KreissOliger_strength_nongauge = 0.3
 LapseEvolutionOption = "OnePlusLog"
@@ -238,6 +238,11 @@ cbc.CurviBoundaryConditions_register_C_functions(
 )
 
 rhs_string = ""
+if enable_SSL:
+    rhs_string += """
+// Set SSL strength (SSL_Gaussian_prefactor):
+commondata->SSL_Gaussian_prefactor = commondata->SSL_h * exp(-commondata->time * commondata->time / (2 * commondata->SSL_sigma * commondata->SSL_sigma));
+"""
 if separate_Ricci_and_BSSN_RHS:
     rhs_string += (
         "Ricci_eval(commondata, params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
