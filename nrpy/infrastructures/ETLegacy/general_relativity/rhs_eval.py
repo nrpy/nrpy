@@ -115,6 +115,13 @@ def register_CFunction_rhs_eval(
   const CCTK_REAL *param_diss_strength CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("diss_strength", "{thorn_name}", NULL);
   const REAL_SIMD_ARRAY diss_strength CCTK_ATTRIBUTE_UNUSED = ConstSIMD(*param_diss_strength);
 """
+        if enable_CAHD:
+            body += f"""
+  const CCTK_REAL *param_C_CAHD CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("C_CAHD", "{thorn_name}", NULL);
+  const REAL_SIMD_ARRAY C_CAHD CCTK_ATTRIBUTE_UNUSED = ConstSIMD(*param_C_CAHD);
+  // cahdprefactor = C_CAHD * sp.symbols("CFL_FACTOR") * sp.symbols("dsmin")
+  const REAL_SIMD_ARRAY cahdprefactor CCTK_ATTRIBUTE_UNUSED = MulSIMD(C_CAHD, MulSIMD(,));
+"""
         if enable_SSL:
             body += f"""
     const CCTK_REAL *SSL_h CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("SSL_h", "{thorn_name}", NULL);
@@ -131,6 +138,11 @@ def register_CFunction_rhs_eval(
   DECLARE_CCTK_PARAMETERS;
 
   #define UPWIND_ALG(UpwindVecU) UpwindVecU > 0.0 ? 1.0 : 0.0
+"""
+        if enable_CAHD:
+            body += f"""
+  // cahdprefactor = C_CAHD * sp.symbols("CFL_FACTOR") * sp.symbols("dsmin")
+  const CCTK_REAL cahdprefactor = C_CAHD * ;
 """
         if enable_SSL:
             body += f"""
@@ -364,7 +376,15 @@ if(FD_order == {fd_order}) {{
 }}
 """
 
-    params = ["eta", "diss_strength", "FD_order"]
+    params = ["eta", "FD_order"]
+    if enable_CAKO:
+        params += ["diss_strength_gauge", "diss_strength_nongauge"]
+    else:
+        params += ["diss_strength"]
+    if enable_SSL:
+        params += ["SSL_h", "SSL_sigma"]
+    if enable_CAHD:
+        params += [""]
     if thorn_name == "Baikal":
         params += ["PI"]
 
