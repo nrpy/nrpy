@@ -103,33 +103,6 @@ def register_CFunction_rhs_eval(
   const CCTK_REAL *param_eta CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("eta", "{thorn_name}", NULL);
   const REAL_SIMD_ARRAY eta CCTK_ATTRIBUTE_UNUSED = ConstSIMD(*param_eta);
 """
-        if enable_CAKO:
-            body += f"""
-  const CCTK_REAL *param_diss_strength_gauge CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("diss_strength_gauge", "{thorn_name}", NULL);
-  const REAL_SIMD_ARRAY diss_strength_gauge CCTK_ATTRIBUTE_UNUSED = ConstSIMD(*param_diss_strength_gauge);
-  const CCTK_REAL *param_diss_strength_nongauge CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("diss_strength_nongauge", "{thorn_name}", NULL);
-  const REAL_SIMD_ARRAY diss_strength_nongauge CCTK_ATTRIBUTE_UNUSED = ConstSIMD(*param_diss_strength_nongauge);
-"""
-        else:
-            body += f"""
-  const CCTK_REAL *param_diss_strength CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("diss_strength", "{thorn_name}", NULL);
-  const REAL_SIMD_ARRAY diss_strength CCTK_ATTRIBUTE_UNUSED = ConstSIMD(*param_diss_strength);
-"""
-        if enable_CAHD:
-            body += f"""
-  const CCTK_REAL *param_C_CAHD CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("C_CAHD", "{thorn_name}", NULL);
-  const REAL_SIMD_ARRAY C_CAHD CCTK_ATTRIBUTE_UNUSED = ConstSIMD(*param_C_CAHD);
-  // cahdprefactor = C_CAHD * sp.symbols("CFL_FACTOR") * sp.symbols("dsmin")
-  const REAL_SIMD_ARRAY cahdprefactor CCTK_ATTRIBUTE_UNUSED = MulSIMD(C_CAHD, MulSIMD(,));
-"""
-        if enable_SSL:
-            body += f"""
-    const CCTK_REAL *SSL_h CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("SSL_h", "{thorn_name}", NULL);
-    const CCTK_REAL *SSL_sigma CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("SSL_sigma", "{thorn_name}", NULL);
-
-    const CCTK_REAL noSIMD_SSL_Gaussian_prefactor CCTK_ATTRIBUTE_UNUSED = *SSL_h * exp(-CCTK_TIME * CCTK_TIME / (2 * (*SSL_sigma) * (*SSL_sigma)));
-    const REAL_SIMD_ARRAY SSL_Gaussian_prefactor CCTK_ATTRIBUTE_UNUSED = ConstSIMD(*noSIMD_SSL_Gaussian_prefactor);
-"""
     else:
         body += """
   const CCTK_REAL invdxx0 CCTK_ATTRIBUTE_UNUSED = 1.0/CCTK_DELTA_SPACE(0);
@@ -138,15 +111,6 @@ def register_CFunction_rhs_eval(
   DECLARE_CCTK_PARAMETERS;
 
   #define UPWIND_ALG(UpwindVecU) UpwindVecU > 0.0 ? 1.0 : 0.0
-"""
-        if enable_CAHD:
-            body += f"""
-  // cahdprefactor = C_CAHD * sp.symbols("CFL_FACTOR") * sp.symbols("dsmin")
-  const CCTK_REAL cahdprefactor = C_CAHD * ;
-"""
-        if enable_SSL:
-            body += f"""
-  const CCTK_REAL SSL_Gaussian_prefactor CCTK_ATTRIBUTE_UNUSED = SSL_h * exp(-CCTK_TIME * CCTK_TIME / (2 * (SSL_sigma) * (SSL_sigma)));
 """
     rhs = BSSN_RHSs[
         CoordSystem
@@ -193,6 +157,7 @@ def register_CFunction_rhs_eval(
 
     # Add Kreiss-Oliger dissipation to the BSSN RHSs:
     if enable_KreissOliger_dissipation:
+        # vvv BEGIN CAKO vvv
         if enable_CAKO:
             diss_strength_gauge, diss_strength_nongauge = par.register_CodeParameters(
                 "CCTK_REAL",
@@ -201,6 +166,17 @@ def register_CFunction_rhs_eval(
                 [KreissOliger_strength_gauge, KreissOliger_strength_nongauge],
                 commondata=True,
             )
+            if enable_simd:
+                body += f"""
+  const CCTK_REAL *param_diss_strength_gauge CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("diss_strength_gauge", "{thorn_name}", NULL);
+  const REAL_SIMD_ARRAY diss_strength_gauge CCTK_ATTRIBUTE_UNUSED = ConstSIMD(*param_diss_strength_gauge);
+  const CCTK_REAL *param_diss_strength_nongauge CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("diss_strength_nongauge", "{thorn_name}", NULL);
+  const REAL_SIMD_ARRAY diss_strength_nongauge CCTK_ATTRIBUTE_UNUSED = ConstSIMD(*param_diss_strength_nongauge);
+"""
+            diss_strength_gauge *= W
+            diss_strength_nongauge *= W
+        # ^^^ END CAKO ^^^
+
         else:
             diss_strength_gauge, diss_strength_nongauge = par.register_CodeParameters(
                 "CCTK_REAL",
@@ -209,12 +185,11 @@ def register_CFunction_rhs_eval(
                 [KreissOliger_strength_gauge, KreissOliger_strength_nongauge],
                 commondata=True,
             )
-
-        # vvv BEGIN CAKO vvv
-        if enable_CAKO:
-            diss_strength_gauge *= W
-            diss_strength_nongauge *= W
-        # ^^^ END CAKO ^^^
+            if enable_simd:
+                body += f"""
+  const CCTK_REAL *param_diss_strength CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("diss_strength", "{thorn_name}", NULL);
+  const REAL_SIMD_ARRAY diss_strength CCTK_ATTRIBUTE_UNUSED = ConstSIMD(*param_diss_strength);
+"""
 
         rfm = refmetric.reference_metric[
             CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
@@ -270,9 +245,47 @@ def register_CFunction_rhs_eval(
                 group="AUXEVOL",
                 gf_array_name="auxevol_gfs",
             )
-        _C_CAHD = par.register_CodeParameter(
-            "REAL", __name__, "C_CAHD", 0.15, commondata=True, add_to_parfile=True
+        _C_CAHD, _CFL_FACTOR__ignore_repeats_Carpet_timeref_factors = (
+            par.register_CodeParameters(
+                "REAL",
+                __name__,
+                [
+                    "C_CAHD",
+                    "CFL_FACTOR__ignore_repeats_Carpet_timeref_factors",
+                ],
+                [
+                    0.15,
+                    0.5,
+                ],
+                commondata=True,
+                add_to_parfile=True,
+            )
         )
+        body += """
+#ifndef MIN
+#define MIN(A, B) ( ((A) < (B)) ? (A) : (B) )
+#endif
+  // cahdprefactor = C_CAHD * sp.symbols("CFL_FACTOR") * sp.symbols("dsmin")
+  // Original prescription: -dt * (orig_C_H * dsmin / dt * CFL_FACTOR__ignore_repeats_Carpet_timeref_factors) * H / 4
+  // New prescription: cancel the dt's, set orig_C_H/4 = C_CAHD ->
+  // -C_CAHD * dsmin * CFL_FACTOR__ignore_repeats_Carpet_timeref_factors) * H ,
+  // where CFL_FACTOR is most typically 0.45 or 0.5, and C_CAHD = 0.15 = orig_C_H / 4 = 0.6 / 4
+  // Thus, New & Original prescriptions are the same, just with some redefinitions.
+  const CCTK_REAL dsmin CCTK_ATTRIBUTE_UNUSED = MIN(CCTK_DELTA_SPACE(0),MIN(CCTK_DELTA_SPACE(1),CCTK_DELTA_SPACE(2))); 
+"""
+        if enable_simd:
+            body += f"""
+  const CCTK_REAL *param_CFL_FACTOR__ignore_repeats_Carpet_timeref_factors =
+  CCTK_ParameterGet("CFL_FACTOR__ignore_repeats_Carpet_timeref_factors", "{thorn_name}", NULL); 
+  const CCTK_REAL *param_C_CAHD CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("C_CAHD", "{thorn_name}", NULL);
+  const CCTK_REAL cahdprefactor_NOSIMD = (*param_C_CAHD) * (*param_CFL_FACTOR__ignore_repeats_Carpet_timeref_factors) * dsmin;    
+  const REAL_SIMD_ARRAY cahdprefactor CCTK_ATTRIBUTE_UNUSED = ConstSIMD(cahdprefactor_NOSIMD);
+"""
+        else:
+            body += f"""
+  const CCTK_REAL cahdprefactor CCTK_ATTRIBUTE_UNUSED = C_CAHD * CFL_FACTOR__ignore_repeats_Carpet_timeref_factors * dsmin;
+"""
+
         # Initialize CAHD_term assuming phi is the evolved conformal factor. CFL_FACTOR is defined in MoL.
         # CAHD_term = -C_CAHD * (sp.symbols("CFL_FACTOR") * sp.symbols("dsmin")) * Bcon.H
         # -> cahdprefactor = C_CAHD * sp.symbols("CFL_FACTOR") * sp.symbols("dsmin")
@@ -310,6 +323,19 @@ def register_CFunction_rhs_eval(
             commondata=True,
             add_to_parfile=True,
         )
+        if enable_simd:
+            body += f"""
+    const CCTK_REAL *param_SSL_h CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("SSL_h", "{thorn_name}", NULL);
+    const CCTK_REAL *param_SSL_sigma CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("SSL_sigma", "{thorn_name}", NULL);
+
+    const CCTK_REAL NOSIMD_SSL_Gaussian_prefactor CCTK_ATTRIBUTE_UNUSED = *param_SSL_h * exp(-cctk_time * cctk_time / (2 * (*param_SSL_sigma) * (*param_SSL_sigma)));
+    const REAL_SIMD_ARRAY SSL_Gaussian_prefactor CCTK_ATTRIBUTE_UNUSED = ConstSIMD(NOSIMD_SSL_Gaussian_prefactor);
+"""
+        else:
+            body += f"""
+  const CCTK_REAL SSL_Gaussian_prefactor CCTK_ATTRIBUTE_UNUSED = SSL_h * exp(-cctk_time * cctk_time / (2 * (SSL_sigma) * (SSL_sigma)));
+"""
+
         local_BSSN_RHSs_varname_to_expr_dict["alpha_rhs"] -= (
             W * SSL_Gaussian_prefactor * (Bq.alpha - W)
         )
@@ -384,7 +410,10 @@ if(FD_order == {fd_order}) {{
     if enable_SSL:
         params += ["SSL_h", "SSL_sigma"]
     if enable_CAHD:
-        params += [""]
+        params += [
+            "C_CAHD",
+            "CFL_FACTOR__ignore_repeats_Carpet_timeref_factors",
+        ]
     if thorn_name == "Baikal":
         params += ["PI"]
 
