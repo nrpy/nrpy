@@ -102,7 +102,6 @@ def register_CFunction_rhs_eval(
   const REAL_SIMD_ARRAY PI CCTK_ATTRIBUTE_UNUSED = ConstSIMD(*param_PI);
   const CCTK_REAL *param_eta CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("eta", "{thorn_name}", NULL);
   const REAL_SIMD_ARRAY eta CCTK_ATTRIBUTE_UNUSED = ConstSIMD(*param_eta);
-
 """
         if enable_CAKO:
             body += f"""
@@ -125,13 +124,13 @@ def register_CFunction_rhs_eval(
     const REAL_SIMD_ARRAY SSL_Gaussian_prefactor CCTK_ATTRIBUTE_UNUSED = ConstSIMD(*noSIMD_SSL_Gaussian_prefactor);
 """
     else:
-        body += """  const CCTK_REAL invdxx0 CCTK_ATTRIBUTE_UNUSED = 1.0/CCTK_DELTA_SPACE(0);
+        body += """
+  const CCTK_REAL invdxx0 CCTK_ATTRIBUTE_UNUSED = 1.0/CCTK_DELTA_SPACE(0);
   const CCTK_REAL invdxx1 CCTK_ATTRIBUTE_UNUSED = 1.0/CCTK_DELTA_SPACE(1);
   const CCTK_REAL invdxx2 CCTK_ATTRIBUTE_UNUSED = 1.0/CCTK_DELTA_SPACE(2);
   DECLARE_CCTK_PARAMETERS;
 
   #define UPWIND_ALG(UpwindVecU) UpwindVecU > 0.0 ? 1.0 : 0.0
-
 """
         if enable_SSL:
             body += f"""
