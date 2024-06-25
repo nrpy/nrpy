@@ -137,12 +137,12 @@ def register_CFunction_rhs_eval(
   #define UPWIND_ALG(UpwindVecU) UpwindVecU > 0.0 ? 1.0 : 0.0
 """
         if enable_CAHD:
-            body += f"""
+            body += """
   // cahdprefactor = C_CAHD * sp.symbols("CFL_FACTOR") * sp.symbols("dsmin")
   const CCTK_REAL cahdprefactor = C_CAHD * ;
 """
         if enable_SSL:
-            body += f"""
+            body += """
   const CCTK_REAL SSL_Gaussian_prefactor CCTK_ATTRIBUTE_UNUSED = SSL_h * exp(-CCTK_TIME * CCTK_TIME / (2 * (SSL_sigma) * (SSL_sigma)));
 """
     rhs = BSSN_RHSs[
