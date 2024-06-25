@@ -16,19 +16,23 @@ superB changes/additions to nrpy.infrastructures.BHaH.MoLtimestepping.MoL.py:
 """
 
 import os  # Standard Python module for multiplatform OS-level functions
+import warnings
 from typing import Dict, List, Tuple, Union
 
 import sympy as sp  # Import SymPy, a computer algebra system written entirely in Python
 
 import nrpy.c_function as cfc
 import nrpy.params as par  # NRPy+: Parameter interface
+from nrpy.c_codegen import c_codegen
+from nrpy.helpers.generic import superfast_uniq
 from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
-from nrpy.infrastructures.BHaH.MoLtimestepping.MoL import (
+from nrpy.infrastructures.BHaH.MoLtimestepping.base_MoL import (
     generate_gridfunction_names,
     is_diagonal_Butcher,
+)
+from nrpy.infrastructures.BHaH.MoLtimestepping.openmp.MoL import (
     register_CFunction_MoL_free_memory,
     register_CFunction_MoL_malloc,
-    single_RK_substep_input_symbolic,
 )
 from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import (
     generate_Butcher_tables,
@@ -113,6 +117,154 @@ def register_CFunction_MoL_free_memory_diagnostic_gfs() -> None:
         raise RuntimeError(
             f"Error registering CFunction 'MoL_free_memory_diagnostic_gfs': {str(e)}"
         ) from e
+
+
+# single_RK_substep_input_symbolic() performs necessary replacements to
+#   define C code for a single RK substep
+#   (e.g., computing k_1 and then updating the outer boundaries)
+def single_RK_substep_input_symbolic(
+    comment_block: str,
+    substep_time_offset_dt: Union[sp.Basic, int, str],
+    rhs_str: str,
+    rhs_input_expr: sp.Basic,
+    rhs_output_expr: sp.Basic,
+    RK_lhs_list: Union[sp.Basic, List[sp.Basic]],
+    RK_rhs_list: Union[sp.Basic, List[sp.Basic]],
+    post_rhs_list: Union[str, List[str]],
+    post_rhs_output_list: Union[sp.Basic, List[sp.Basic]],
+    enable_simd: bool = False,
+    gf_aliases: str = "",
+    post_post_rhs_string: str = "",
+    fp_type: str = "double",
+) -> str:
+    """
+    Generate C code for a given Runge-Kutta substep.
+
+    :param comment_block: Block of comments for the generated code.
+    :param substep_time_offset_dt: Time offset for the RK substep.
+    :param rhs_str: Right-hand side string of the C code.
+    :param rhs_input_expr: Input expression for the RHS.
+    :param rhs_output_expr: Output expression for the RHS.
+    :param RK_lhs_list: List of LHS expressions for RK.
+    :param RK_rhs_list: List of RHS expressions for RK.
+    :param post_rhs_list: List of post-RHS expressions.
+    :param post_rhs_output_list: List of outputs for post-RHS expressions.
+    :param enable_simd: Whether SIMD optimization is enabled.
+    :param gf_aliases: Additional aliases for grid functions.
+    :param post_post_rhs_string: String to be used after the post-RHS phase.
+    :param fp_type: Floating point type, e.g., "double".
+
+    :return: A string containing the generated C code.
+
+    :raises ValueError: If substep_time_offset_dt cannot be extracted from the Butcher table.
+    """
+    # Ensure all input lists are lists
+    RK_lhs_list = [RK_lhs_list] if not isinstance(RK_lhs_list, list) else RK_lhs_list
+    RK_rhs_list = [RK_rhs_list] if not isinstance(RK_rhs_list, list) else RK_rhs_list
+    post_rhs_list = (
+        [post_rhs_list] if not isinstance(post_rhs_list, list) else post_rhs_list
+    )
+    post_rhs_output_list = (
+        [post_rhs_output_list]
+        if not isinstance(post_rhs_output_list, list)
+        else post_rhs_output_list
+    )
+
+    return_str = f"{comment_block}\n"
+    if isinstance(substep_time_offset_dt, (int, sp.Rational, sp.Mul)):
+        substep_time_offset_str = f"{float(substep_time_offset_dt):.17e}"
+    else:
+        raise ValueError(
+            f"Could not extract substep_time_offset_dt={substep_time_offset_dt} from Butcher table"
+        )
+    return_str += "for(int grid=0; grid<commondata->NUMGRIDS; grid++) {\n"
+    return_str += (
+        f"commondata->time = time_start + {substep_time_offset_str} * commondata->dt;\n"
+    )
+    return_str += gf_aliases
+
+    # Part 1: RHS evaluation
+    updated_rhs_str = (
+        str(rhs_str)
+        .replace("RK_INPUT_GFS", str(rhs_input_expr).replace("gfsL", "gfs"))
+        .replace("RK_OUTPUT_GFS", str(rhs_output_expr).replace("gfsL", "gfs"))
+    )
+    return_str += updated_rhs_str + "\n"
+
+    # Part 2: RK update
+    if enable_simd:
+        warnings.warn(
+            "enable_simd in MoL is not properly supported -- MoL update loops are not properly bounds checked."
+        )
+        return_str += "#pragma omp parallel for\n"
+        return_str += "for(int i=0;i<Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;i+=simd_width) {{\n"
+    else:
+        return_str += "LOOP_ALL_GFS_GPS(i) {\n"
+
+    var_type = "REAL_SIMD_ARRAY" if enable_simd else "REAL"
+
+    RK_lhs_str_list = [
+        (
+            f"const REAL_SIMD_ARRAY __rhs_exp_{i}"
+            if enable_simd
+            else f"{str(el).replace('gfsL', 'gfs[i]')}"
+        )
+        for i, el in enumerate(RK_lhs_list)
+    ]
+
+    read_list = [
+        read for el in RK_rhs_list for read in list(sp.ordered(el.free_symbols))
+    ]
+    read_list_unique = superfast_uniq(read_list)
+
+    for el in read_list_unique:
+        if str(el) != "commondata->dt":
+            if enable_simd:
+                simd_el = str(el).replace("gfsL", "gfs[i]")
+                return_str += f"const {var_type} {el} = ReadSIMD(&{simd_el});\n"
+            else:
+                return_str += (
+                    f"const {var_type} {el} = {str(el).replace('gfsL', 'gfs[i]')};\n"
+                )
+
+    if enable_simd:
+        return_str += "const REAL_SIMD_ARRAY DT = ConstSIMD(commondata->dt);\n"
+
+    kernel = c_codegen(
+        RK_rhs_list,
+        RK_lhs_str_list,
+        include_braces=False,
+        verbose=False,
+        enable_simd=enable_simd,
+        fp_type=fp_type,
+    )
+
+    if enable_simd:
+        return_str += kernel.replace("commondata->dt", "DT")
+        for i, el in enumerate(RK_lhs_list):
+            return_str += (
+                f"  WriteSIMD(&{str(el).replace('gfsL', 'gfs[i]')}, __rhs_exp_{i});\n"
+            )
+
+    else:
+        return_str += kernel
+
+    return_str += "}\n"
+
+    # Part 3: Call post-RHS functions
+    for post_rhs, post_rhs_output in zip(post_rhs_list, post_rhs_output_list):
+        return_str += post_rhs.replace(
+            "RK_OUTPUT_GFS", str(post_rhs_output).replace("gfsL", "gfs")
+        )
+
+    return_str += "}\n"
+
+    for post_rhs, post_rhs_output in zip(post_rhs_list, post_rhs_output_list):
+        return_str += post_post_rhs_string.replace(
+            "RK_OUTPUT_GFS", str(post_rhs_output).replace("gfsL", "gfs")
+        )
+
+    return return_str
 
 
 ########################################################################################################################
