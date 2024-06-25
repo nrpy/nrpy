@@ -1307,7 +1307,7 @@ REAL dsmin0, dsmin1, dsmin2;
                 loop_region="all points",
                 read_xxs=True,
                 fp_type=fp_type,
-            ),
+            ).full_loop_body,
             CoordSystem_for_wrapper_func=CoordSystem,
         )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
