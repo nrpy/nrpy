@@ -26,7 +26,7 @@ class output_BHaH_defines_h(base_output_BHaH_defines_h):
     :param supplemental_defines_dict: Additional key-value pairs to be included in the output file
     :param clang_format_options: Options for clang formatting.
 
-    >>> from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
+    >>> from nrpy.infrastructures.BHaH.MoLtimestepping.openmp import MoL
     >>> import nrpy.finite_difference as fin
     >>> from nrpy.helpers.generic import compress_string_to_base64, decompress_base64_to_string, diff_strings
     >>> MoL.register_CFunctions(register_MoL_step_forward_in_time=False)
