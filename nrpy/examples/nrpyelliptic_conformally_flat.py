@@ -34,7 +34,7 @@ from nrpy.infrastructures.BHaH.MoLtimestepping.openmp import MoL
 par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Code-generation-time parameters:
-project_name = "nrpyelliptic_conformally_flat_new"
+project_name = "nrpyelliptic_conformally_flat"
 fp_type = "double"
 grid_physical_size = 1.0e6
 t_final = grid_physical_size  # This parameter is effectively not used in NRPyElliptic
