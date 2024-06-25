@@ -190,7 +190,7 @@ class ExprTree:
 
 
 def get_unique_expression_symbols(
-    expr: sp.Basic, exclude: Union[List[str], None] = None
+    expr: sp.Expr, exclude: Union[List[str], None] = None
 ) -> List[str]:
     """
     Get a unique list of expression symbols.
