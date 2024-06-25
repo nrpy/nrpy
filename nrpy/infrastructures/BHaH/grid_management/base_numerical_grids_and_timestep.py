@@ -48,7 +48,9 @@ class base_register_CFunction_numerical_grid_params_Nxx_dxx_xx:
         par.adjust_CodeParam_default("CoordSystemName", self.CoordSystem)
         self.rfm = refmetric.reference_metric[self.CoordSystem]
         self.includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-        self.desc = f"Output minimum gridspacing ds_min on a {CoordSystem} numerical grid."
+        self.desc = (
+            f"Output minimum gridspacing ds_min on a {CoordSystem} numerical grid."
+        )
         self.cfunc_type = "void"
         self.name = "numerical_grid_params_Nxx_dxx_xx"
         self.params = "const commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3], const int Nx[3], const bool grid_is_resized"
