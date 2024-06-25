@@ -134,6 +134,7 @@ def write_CodeParameters_h_files(
     :param set_commondata_only: If True, generate code parameters only if `commondata=True`.
                                 Useful for BHaH projects without grids, like SEOBNR.
     :param clang_format_options: Options for clang_format.
+    :param decorator: Optional decorators for definitions to supress warnings (e.g. [[maybe_unused]])
 
     Doctests:
     >>> project_dir = Path("/tmp/tmp_project/")
@@ -201,20 +202,20 @@ def write_CodeParameters_h_files(
                     #   access those from the params struct directly.
                     pointer = "->" if pointerEnable else "."
 
-                comment = f"  // {CodeParam.module}::{CPname}"
-                if "char" in CPtype and "[" in CPtype and "]" in CPtype:
-                    # Handle char array C type
-                    CPsize = int(CPtype.split("[")[1].split("]")[0])
-                    Coutput = rf"""{decorator}char {CPname}[{CPsize}]; {comment}
+                    comment = f"  // {CodeParam.module}::{CPname}"
+                    if "char" in CPtype and "[" in CPtype and "]" in CPtype:
+                        # Handle char array C type
+                        CPsize = int(CPtype.split("[")[1].split("]")[0])
+                        Coutput = rf"""{decorator}char {CPname}[{CPsize}]; {comment}
 {{
   // Copy up to {CPsize-1} characters from {struct}{pointer}{CPname} to {CPname}
   strncpy({CPname}, {struct}{pointer}{CPname}, {CPsize}-1);
   // Explicitly null-terminate {CPname} to ensure it is a valid C-string
   {CPname}[{CPsize}-1]='\0'; // Properly null terminate char array.
 }}"""
-                else:
-                    # Handle all other C types
-                    Coutput = f"{decorator}const {CPtype} {CPname} = {struct}{pointer}{CPname};{comment}\n"
+                    else:
+                        # Handle all other C types
+                        Coutput = f"{decorator}const {CPtype} {CPname} = {struct}{pointer}{CPname};{comment}\n"
 
                     returnstring += Coutput
 
