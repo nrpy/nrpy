@@ -24,6 +24,7 @@ core_modules_list = [
     "grid",
 ]
 
+
 def register_griddata_struct_and_return_griddata_struct_str(
     enable_rfm_precompute: bool = True,
 ) -> str:
