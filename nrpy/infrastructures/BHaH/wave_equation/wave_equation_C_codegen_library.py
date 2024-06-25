@@ -16,7 +16,7 @@ import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.indexedexp as ixp
 import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices as out012d
-import nrpy.infrastructures.BHaH.simple_loop as lp
+import nrpy.infrastructures.BHaH.loop_utilities.openmp.simple_loop as lp
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
 from nrpy.equations.wave_equation.WaveEquation_Solutions_InitialData import (
