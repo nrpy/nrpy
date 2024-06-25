@@ -11,13 +11,16 @@ Authors: Zachariah B. Etienne
 License: BSD 2-Clause
 """
 
+import sys
+
 # Step P1: Import needed modules:
 from typing import Tuple
-import sys
+
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
-import nrpy.params as par  # NRPy+: Parameter interface
-import nrpy.indexedexp as ixp
+
 import nrpy.grid as gri
+import nrpy.indexedexp as ixp
+import nrpy.params as par  # NRPy+: Parameter interface
 
 # NRPy+: Common parameters for all WaveEquation modules (defines wavespeed)
 from nrpy.equations.wave_equation.CommonParams import wavespeed
@@ -185,6 +188,7 @@ def PlaneWave(
 if __name__ == "__main__":
     import doctest
     import os
+
     import nrpy.validate_expressions.validate_expressions as ve
 
     results = doctest.testmod()

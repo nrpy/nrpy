@@ -7,7 +7,9 @@ Author: Zachariah B. Etienne
 
 # Step 1.a: import needed modules
 from typing import List, cast
+
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
+
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 from nrpy.equations.general_relativity.BSSN_to_ADM import BSSN_to_ADM
 from nrpy.equations.general_relativity.psi4_tetrads import Psi4Tetrads
@@ -290,6 +292,7 @@ if __name__ == "__main__":
     import doctest
     import os
     import sys
+
     import nrpy.validate_expressions.validate_expressions as ve
 
     results = doctest.testmod()

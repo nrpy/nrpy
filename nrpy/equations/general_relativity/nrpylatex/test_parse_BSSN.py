@@ -6,15 +6,17 @@ Email:  ksible *at* outlook *dot* com
 """
 
 from typing import List, cast
+
 import sympy as sp
 from nrpylatex import parse_latex  # type: ignore
 
+from nrpy.equations.general_relativity import (
+    BSSN_constraints,
+    BSSN_gauge_RHSs,
+    BSSN_quantities,
+    BSSN_RHSs,
+)
 from nrpy.validate_expressions.validate_expressions import assert_equal
-import nrpy.params as par
-from nrpy.equations.general_relativity import BSSN_RHSs
-from nrpy.equations.general_relativity import BSSN_quantities
-from nrpy.equations.general_relativity import BSSN_gauge_RHSs
-from nrpy.equations.general_relativity import BSSN_constraints
 
 
 def test_example_BSSN() -> bool:
@@ -38,84 +40,80 @@ def test_example_BSSN() -> bool:
 
     parse_latex(
         r"""
-        % coord [x, y, z]
+        % declare coord x y z
         % ignore "\begin{align}" "\end{align}" "\\%" "\qquad"
 
         \begin{align}
-            % define gammahatDD --dim 3 --zeros
+            % declare metric gammahatDD --zeros --dim 3
             % \hat{\gamma}_{ii} = 1 % noimpsum
-            % assign gammahatDD --metric
-            % define hDD --dim 3 --suffix dD --sym sym01
+            % declare metric gammabarDD hDD --dim 3
             % \bar{\gamma}_{ij} = h_{ij} + \hat{\gamma}_{ij}
-            % assign gammabarDD --suffix dD --metric
 
-            % srepl "\beta" -> "\mathrm{vet}"
-            % define vetU --dim 3 --suffix dD
+            % replace "\beta" -> "\mathrm{vet}"
+            % declare vetU --dim 3
             %% upwind pattern inside Lie derivative expansion
-            % srepl "\mathrm{vet}^{<1..>} \partial_{<1..>}" -> "\mathrm{vet}^{<1..>} % suffix dupD
-            \partial_{<1..>}" --persist
+            % replace "\mathrm{vet}^{\1*} \partial_{\1*}" -> "\mathrm{vet}^{\1*} % suffix dupD
+            \partial_{\1*}"
             %% substitute tensor identity (see appropriate BSSN notebook)
-            % srepl "\bar{D}_k \mathrm{vet}^k" -> "(\partial_k \mathrm{vet}^k + \frac{\partial_k \mathrm{gammahatdet} \mathrm{vet}^k}{2 \mathrm{gammahatdet}})"
+            % replace "\bar{D}_k \mathrm{vet}^k" -> "(\partial_k \mathrm{vet}^k + \frac{\partial_k \mathrm{gammahatdet} \mathrm{vet}^k}{2 \mathrm{gammahatdet}})"
 
-            % srepl "\bar{A}" -> "\mathrm{a}"
-            % define aDD --dim 3 --suffix dD --sym sym01
-            % assign aDD --metric gammabar
-            % srepl "\partial_t \bar{\gamma}" -> "\mathrm{h_rhs}"
+            % replace "\bar{A}" -> "\mathrm{a}"
+            % declare aDD --dim 3 --sym sym01
+            % replace "\partial_t \bar{\gamma}" -> "\mathrm{h_rhs}"
             \partial_t \bar{\gamma}_{ij} &= \mathcal{L}_\beta \bar{\gamma}_{ij} + \frac{2}{3} \bar{\gamma}_{ij} \left(\alpha \bar{A}^k{}_k - \bar{D}_k \beta^k\right) - 2 \alpha \bar{A}_{ij} \\
 
-            % define cf trK --dim 3 --suffix dD
-            % srepl "K" -> "\mathrm{trK}"
+            % declare cf trK phi --dim 3
+            % replace "K" -> "\mathrm{trK}"
             %% replace 'phi' with conformal factor cf = W = e^{-2\phi}
-            % srepl "e^{-4\phi}" -> "\mathrm{cf}^2"
-            % srepl "\partial_t \phi = <1..> \\" -> "\mathrm{cf_rhs} = -2 \mathrm{cf} (<1..>) \\"
-            % srepl "\partial_{<1..>} \phi" -> "\partial_{<1..>} \mathrm{cf} \frac{-1}{2 \mathrm{cf}}" --persist
-            % srepl "\partial_<1> \phi" -> "\partial_<1> \mathrm{cf} \frac{-1}{2 \mathrm{cf}}"
+            % replace "e^{-4\phi}" -> "\mathrm{cf}^2"
+            % replace "\partial_t \phi = \1* \\" -> "\mathrm{cf_rhs} = -2 \mathrm{cf} (\1*) \\"
+            % replace "\partial_{\1*} \phi" -> "\partial_{\1*} \mathrm{cf} \frac{-1}{2 \mathrm{cf}}"
             \partial_t \phi &= \mathcal{L}_\beta \phi + \frac{1}{6} \left(\bar{D}_k \beta^k - \alpha K \right) \\
 
-            % define alpha --dim 3 --suffix dD
-            % srepl "\partial_t \mathrm{trK}" -> "\mathrm{trK_rhs}"
+            % declare alpha --dim 3
+            % replace "\partial_t \mathrm{trK}" -> "\mathrm{trK_rhs}"
             \partial_t K &= \mathcal{L}_\beta K + \frac{1}{3} \alpha K^2 + \alpha \bar{A}_{ij} \bar{A}^{ij}
                 - e^{-4\phi} \left(\bar{D}_i \bar{D}^i \alpha + 2 \bar{D}^i \alpha \bar{D}_i \phi\right) \\
 
-            % srepl "\bar{\Lambda}" -> "\mathrm{lambda}"
-            % define lambdaU --dim 3 --suffix dD
+            % replace "\bar{\Lambda}" -> "\mathrm{lambda}"
+            % declare lambdaU --dim 3
             % \Delta^k_{ij} = \bar{\Gamma}^k_{ij} - \hat{\Gamma}^k_{ij}
-            % assign DeltaUDD --metric gammabar
+            %% assign DeltaUDD --metric gammabar
             % \Delta^k = \bar{\gamma}^{ij} \Delta^k_{ij}
-            % srepl "\partial_t \mathrm{lambda}" -> "\mathrm{Lambdabar_rhs}"
+            % replace "\partial_t \mathrm{lambda}" -> "\mathrm{Lambdabar_rhs}"
             \partial_t \bar{\Lambda}^i &= \mathcal{L}_\beta \bar{\Lambda}^i + \bar{\gamma}^{jk} \hat{D}_j \hat{D}_k \beta^i
                 + \frac{2}{3} \Delta^i \bar{D}_k \beta^k + \frac{1}{3} \bar{D}^i \bar{D}_k \beta^k \\%
                 &\qquad- 2 \bar{A}^{ij} \left(\partial_j \alpha - 6 \alpha \partial_j \phi\right)
                 + 2 \alpha \bar{A}^{jk} \Delta^i_{jk} - \frac{4}{3} \alpha \bar{\gamma}^{ij} \partial_j K \\
 
-            % define RbarDD --dim 3 --suffix dD --sym sym01
+            % declare RbarDD --dim 3 --sym sym01
             X_{ij} &= -2 \alpha \bar{D}_i \bar{D}_j \phi + 4 \alpha \bar{D}_i \phi \bar{D}_j \phi
                 + 2 \bar{D}_i \alpha \bar{D}_j \phi + 2 \bar{D}_j \alpha \bar{D}_i \phi
                 - \bar{D}_i \bar{D}_j \alpha + \alpha \bar{R}_{ij} \\
             \hat{X}_{ij} &= X_{ij} - \frac{1}{3} \bar{\gamma}_{ij} \bar{\gamma}^{kl} X_{kl} \\
-            % srepl "\partial_t \mathrm{a}" -> "\mathrm{a_rhs}"
+            % replace "\partial_t \mathrm{a}" -> "\mathrm{a_rhs}"
             \partial_t \bar{A}_{ij} &= \mathcal{L}_\beta \bar{A}_{ij} - \frac{2}{3} \bar{A}_{ij} \bar{D}_k \beta^k
                 - 2 \alpha \bar{A}_{ik} \bar{A}^k_j + \alpha \bar{A}_{ij} K + e^{-4\phi} \hat{X}_{ij} \\
 
-            % srepl "\partial_t \alpha" -> "\mathrm{alpha_rhs}"
+            % replace "\partial_t \alpha" -> "\mathrm{alpha_rhs}"
             \partial_t \alpha &= \mathcal{L}_\beta \alpha - 2 \alpha K \\
 
-            % srepl "B" -> "\mathrm{bet}"
-            % define betU --dim 3 --suffix dD
-            % srepl "\partial_t \mathrm{vet}" -> "\mathrm{vet_rhs}"
+            % replace "B" -> "\mathrm{bet}"
+            % declare betU --dim 3
+            % replace "\partial_t \mathrm{vet}" -> "\mathrm{vet_rhs}"
             \partial_t \beta^i &= \left[\beta^j % suffix dupD
             \bar{D}_j \beta^i\right] + B^i \\
 
-            % define eta --const
-            % srepl "\partial_t \mathrm{bet}" -> "\mathrm{bet_rhs}"
+            % declare eta --const
+            % replace "\partial_t \mathrm{bet}" -> "\mathrm{bet_rhs}"
             \partial_t B^i &= \left[\beta^j % suffix dupD
             \bar{D}_j B^i\right]
                 + \frac{3}{4} \left(\partial_t \bar{\Lambda}^i - \left[\beta^j % suffix dupD
                 \bar{D}_j \bar{\Lambda}^i\right]\right) - \eta B^i \\
 
             % \bar{R} = \bar{\gamma}^{ij} \bar{R}_{ij}
-            % srepl "\bar{D}^2" -> "\bar{D}^i \bar{D}_i"
-            % srepl "\mathcal{<1>}" -> "<1>"
+            % replace "\bar{D}^2" -> "\bar{D}^i \bar{D}_i"
+            % replace "\mathcal{\1*}" -> "\mathrm{\1*}"
             \mathcal{H} &= \frac{2}{3} K^2 - \bar{A}_{ij} \bar{A}^{ij}
                 + e^{-4\phi} \left(\bar{R} - 8 \bar{D}^i \phi \bar{D}_i \phi - 8 \bar{D}^2 \phi\right) \\
 
@@ -129,17 +127,13 @@ def test_example_BSSN() -> bool:
         \end{align}
     """
     )
-    par.set_parval_from_str("enable_RbarDD_gridfunctions", True)
-    rhs = BSSN_RHSs.BSSN_RHSs["Cartesian"]
+    rhs = BSSN_RHSs.BSSN_RHSs["Cartesian_RbarDD_gridfunctions"]
     (
         trusted_alpha_rhs,
         trusted_vet_rhsU,
         trusted_bet_rhsU,
     ) = BSSN_gauge_RHSs.BSSN_gauge_RHSs()
-    bssncon = BSSN_constraints.BSSN_constraints["Cartesian"]
-    par.set_parval_from_str("enable_RbarDD_gridfunctions", False)
-    # Clear BSSN_quantities.BSSN_quantities["Cartesian"], as it left Ricci symbolic.
-    del BSSN_quantities.BSSN_quantities["Cartesian"]
+    bssncon = BSSN_constraints.BSSN_constraints["Cartesian_RbarDD_gridfunctions"]
     # Construct full symbolic expression for Ricci (RbarDD)
     Bq = BSSN_quantities.BSSN_quantities["Cartesian"]
     try:

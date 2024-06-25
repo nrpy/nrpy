@@ -6,22 +6,22 @@ Authors: Zachariah B. Etienne
          Samuel Cupp
 """
 
-from typing import Union, cast, List
 from inspect import currentframe as cfr
 from types import FrameType as FT
+from typing import List, Union, cast
+
 import sympy as sp
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
+import nrpy.equations.general_relativity.g4munu_conversions as g4conv
 import nrpy.grid as gri
-import nrpy.indexedexp as ixp
 import nrpy.helpers.parallel_codegen as pcg
-
+import nrpy.indexedexp as ixp
 import nrpy.infrastructures.ETLegacy.simple_loop as lp
 from nrpy.infrastructures.ETLegacy.ETLegacy_include_header import (
     define_standard_includes,
 )
-import nrpy.equations.general_relativity.g4munu_conversions as g4conv
 
 
 def register_CFunction_T4DD_to_T4UU(

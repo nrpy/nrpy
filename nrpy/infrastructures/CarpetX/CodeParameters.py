@@ -6,7 +6,7 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import Optional, List, Tuple
+from typing import List, Optional, Tuple
 
 import nrpy.params as par
 

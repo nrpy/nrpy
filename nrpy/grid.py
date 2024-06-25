@@ -7,13 +7,14 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import List, Any, Union, Dict, Tuple, Optional, Sequence, cast
-from typing_extensions import Literal
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union, cast
+
 import sympy as sp
+from typing_extensions import Literal
+
 import nrpy.indexedexp as ixp
 import nrpy.params as par
 from nrpy.helpers.type_annotation_utilities import validate_literal_arguments
-
 
 centerings = Literal[
     "CCC",
@@ -35,7 +36,9 @@ centerings = Literal[
 Cart_origin = par.register_CodeParameters(
     "REAL", __name__, ["Cart_originx", "Cart_originy", "Cart_originz"], 0.0
 )
-_ = par.register_CodeParameter("int", __name__, "NUMGRIDS", 1, commondata=True)
+_ = par.register_CodeParameter(
+    "int", __name__, "NUMGRIDS", 1, commondata=True, add_to_parfile=False
+)
 _ = par.register_CodeParameter(
     "bool", __name__, "grid_rotates", False, commondata=False, add_to_parfile=False
 )
@@ -171,7 +174,8 @@ class GridFunction:
 
         # Sort the lists. Iterating through a copy of the keys to avoid modifying the dictionary while iterating.
         for group in list(groups.keys()):
-            groups[group] = sorted(groups[group])
+            # Sort case-insensitively to ensure consistent order, e.g., "RbarDD" doesn't appear before "cf".
+            groups[group] = sorted(groups[group], key=lambda x: x.lower())
 
         # Pack the sorted lists into a tuple and return.
         return groups["EVOL"], groups["AUX"], groups["AUXEVOL"]

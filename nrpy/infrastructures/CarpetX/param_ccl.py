@@ -5,10 +5,11 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import List
 from pathlib import Path
-import nrpy.params as par
+from typing import List
+
 import nrpy.c_function as cfc
+import nrpy.params as par
 from nrpy.helpers.conditional_file_updater import ConditionalFileUpdater
 
 
@@ -43,12 +44,14 @@ restricted:
             for CPname in CFunction.ET_current_thorn_CodeParams_used:
                 # only declare parameters once
                 if CPname not in CParams_registered_to_params_ccl:
-                    CParam = par.glb_code_params_dict[CPname]
-                    paramccl_str += f'{CParam.cparam_type} {CParam.name} "(see NRPy+ for parameter definition)"\n'
-                    paramccl_str += "{\n"
-                    paramccl_str += ' *:* :: "All values accepted. NRPy+ does not restrict the allowed ranges of parameters yet."\n'
-                    paramccl_str += f"}} {CParam.defaultvalue}\n\n"
                     CParams_registered_to_params_ccl.append(CPname)
+    # Sort the parameters by name, alphabetically, to ensure consistency in codegen.
+    for CPname in sorted(CParams_registered_to_params_ccl):
+        CParam = par.glb_code_params_dict[CPname]
+        paramccl_str += f'{CParam.cparam_type} {CParam.name} "(see NRPy+ for parameter definition)"\n'
+        paramccl_str += "{\n"
+        paramccl_str += ' *:* :: "All values accepted. NRPy+ does not restrict the allowed ranges of parameters yet."\n'
+        paramccl_str += f"}} {CParam.defaultvalue}\n\n"
     output_Path = Path(project_dir) / thorn_name
     output_Path.mkdir(parents=True, exist_ok=True)
     with ConditionalFileUpdater(output_Path / "param.ccl", encoding="utf-8") as file:

@@ -6,9 +6,9 @@ Author: Zachariah B. Etienne
 """
 
 import warnings
-from typing import List, Union, Any, Dict
-import sympy as sp
+from typing import Any, Dict, List, Union
 
+import sympy as sp
 
 very_verbose = False
 

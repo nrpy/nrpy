@@ -8,6 +8,7 @@ Author: Zachariah B. Etienne
 """
 
 from typing import List, Tuple
+
 import nrpy.c_function as cfc
 
 
@@ -19,9 +20,9 @@ class base_register_CFunction_main_c:
     :param initial_data_desc: Description for initial data, default is an empty string.
     :param boundary_conditions_desc: Description of the boundary conditions, default is an empty string.
     :param prefunc: String that appears before main(). DO NOT populate this, except when debugging, default is an empty string.
-    :param initialize_constant_auxevol: If set to True, `initialize_constant_auxevol` function will be called during the simulation initialization phase to set these constants. Default is False.
-    :param pre_MoL_step_forward_in_time: Code for handling pre-right-hand-side operations, default is an empty string.
-    :param post_MoL_step_forward_in_time: Code for handling post-right-hand-side operations, default is an empty string.
+    :param post_non_y_n_auxevol_mallocs: Function calls after memory is allocated for non y_n and auxevol gridfunctions, default is an empty string.
+    :param pre_MoL_step_forward_in_time: Function calls prior to each right-hand-side update, default is an empty string.
+    :param post_MoL_step_forward_in_time: Function calls after each right-hand-side update, default is an empty string.
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
     :raises ValueError: Raised if any required function for BHaH main() is not registered.
     """
@@ -32,7 +33,7 @@ class base_register_CFunction_main_c:
         initial_data_desc: str = "",
         boundary_conditions_desc: str = "",
         prefunc: str = "",
-        initialize_constant_auxevol: bool = False,
+        post_non_y_n_auxevol_mallocs: str = "",
         pre_MoL_step_forward_in_time: str = "",
         post_MoL_step_forward_in_time: str = "",
         clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
@@ -41,7 +42,7 @@ class base_register_CFunction_main_c:
         self.initial_data_desc = initial_data_desc
         self.boundary_conditions_desc = boundary_conditions_desc
         self.prefunc = prefunc
-        self.initialize_constant_auxevol = initialize_constant_auxevol
+        self.post_non_y_n_auxevol_mallocs = post_non_y_n_auxevol_mallocs
         self.pre_MoL_step_forward_in_time = pre_MoL_step_forward_in_time
         self.post_MoL_step_forward_in_time = post_MoL_step_forward_in_time
         self.clang_format_options = clang_format_options
@@ -77,17 +78,15 @@ class base_register_CFunction_main_c:
         self.desc = """-={ main() function }=-
 Step 1.a: Set each commondata CodeParameter to default.
 Step 1.b: Overwrite default values to parfile values. Then overwrite parfile values with values set at cmd line.
-Step 1.c: Allocate NUMGRIDS griddata structs, each containing data specific to an individual grid.
+Step 1.c: Allocate MAXNUMGRIDS griddata structs, each containing data specific to an individual grid.
 Step 1.d: Set each CodeParameter in griddata.params to default.
-Step 1.e: Set up numerical grids: xx[3], masks, Nxx, dxx, invdxx, bcstruct, rfm_precompute, timestep, etc.
+Step 1.e: Set up numerical grids: NUMGRIDS, xx[3], masks, Nxx, dxx, invdxx, bcstruct, rfm_precompute, timestep, etc.
 Step 2: Initial data are set on y_n_gfs gridfunctions. Allocate storage for them first.
 Step 3: Finalize initialization: set up {self.initial_data_desc}initial data, etc.
 Step 4: Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping.
 """
-        if self.initialize_constant_auxevol:
-            self.desc += (
-                "Step 4.a: Set AUXEVOL gridfunctions that will never change in time."
-            )
+        if self.post_non_y_n_auxevol_mallocs:
+            self.desc += "Step 4.a: Functions called after memory for non-y_n and auxevol gridfunctions is allocated."
         self.desc += f"""Step 5: MAIN SIMULATION LOOP
 - Step 5.a: Output diagnostics.
 - Step 5.b: Prepare to step forward in time.
@@ -106,13 +105,13 @@ commondata_struct_set_to_default(&commondata);
 // Step 1.b: Overwrite default values to parfile values. Then overwrite parfile values with values set at cmd line.
 cmdline_input_and_parfile_parser(&commondata, argc, argv);
 
-// Step 1.c: Allocate NUMGRIDS griddata arrays, each containing data specific to an individual grid.
-griddata = (griddata_struct *restrict)malloc(sizeof(griddata_struct)*commondata.NUMGRIDS);
+// Step 1.c: Allocate MAXNUMGRIDS griddata arrays, each containing data specific to an individual grid.
+griddata = (griddata_struct *restrict)malloc(sizeof(griddata_struct)*MAXNUMGRIDS);
 
 // Step 1.d: Set each CodeParameter in griddata.params to default.
 params_struct_set_to_default(&commondata, griddata);
 
-// Step 1.e: Set up numerical grids: xx[3], masks, Nxx, dxx, invdxx, bcstruct, rfm_precompute, timestep, etc.
+// Step 1.e: Set up numerical grids: NUMGRIDS, xx[3], masks, Nxx, dxx, invdxx, bcstruct, rfm_precompute, timestep, etc.
 {
   // if calling_for_first_time, then initialize commondata time=nn=t_0=nn_0 = 0
   const bool calling_for_first_time = true;
@@ -131,9 +130,9 @@ initial_data(&commondata, griddata);
 for(int grid=0; grid<commondata.NUMGRIDS; grid++)
   MoL_malloc_non_y_n_gfs(&commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
 """
-        if self.initialize_constant_auxevol:
-            self.body += """// Step 4.a: Set AUXEVOL gridfunctions that will never change in time.
-initialize_constant_auxevol(&commondata, griddata);
+        if self.post_non_y_n_auxevol_mallocs:
+            self.body += f"""// Step 4.a: Functions called after memory for non-y_n and auxevol gridfunctions is allocated.
+{self.post_non_y_n_auxevol_mallocs}
 """
         self.body += """
 // Step 5: MAIN SIMULATION LOOP

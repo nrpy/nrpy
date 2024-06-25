@@ -3,14 +3,15 @@ Simple loop generation for use within the BHaH infrastructure.
 
 Author: Zachariah B. Etienne
 Email: zachetie **at** gmail **dot* com
-Contributors: 
+Contributors:
     Ken Sible
     Email: ksible *at* outlook *dot* com
     Samuel Tootle
     Email: sdtootle **at** outlook **dot** com
 """
 
-from typing import List, Union, Tuple, Dict
+from typing import Dict, List, Tuple, Union
+
 import sympy as sp
 import nrpy.indexedexp as ixp
 import nrpy.infrastructures.BHaH.loop_utilities.base_simple_loop as base_sl
@@ -22,7 +23,7 @@ class simple_loop(base_sl.base_simple_loop):
 
     :param loop_body: Loop body
     :param enable_simd: Enable SIMD support
-    :param loop_region: Loop over all points on a numerical grid or just the interior
+    :param loop_region: Loop over "all points" or "interior" of a numerical grid.
     :param read_xxs: Read the xx[3][:] 1D coordinate arrays if interior dependency exists
     :param CoordSystem: Coordinate system, e.g., "Cartesian"
     :param enable_rfm_precompute: Enable pre-computation of reference metric
@@ -57,7 +58,7 @@ class simple_loop(base_sl.base_simple_loop):
     <BLANKLINE>
     >>> print(clang_format(simple_loop('// <INTERIOR>', loop_region="interior",
     ...       CoordSystem="SinhSymTP", enable_rfm_precompute=True, OMP_collapse=3).full_loop_body))
-    Setting up reference metric for CoordSystem = SinhSymTP.
+    Setting up reference metric[SinhSymTP_rfm_precompute]...
     #pragma omp parallel for collapse(3)
     for (int i2 = NGHOSTS; i2 < NGHOSTS + Nxx2; i2++) {
       for (int i1 = NGHOSTS; i1 < NGHOSTS + Nxx1; i1++) {

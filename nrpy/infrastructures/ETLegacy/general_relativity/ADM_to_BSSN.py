@@ -6,24 +6,23 @@ Authors: Zachariah B. Etienne
          Samuel Cupp
 """
 
-from typing import Union, cast
 from inspect import currentframe as cfr
 from types import FrameType as FT
+from typing import Union, cast
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
-import nrpy.params as par
-import nrpy.indexedexp as ixp
 import nrpy.helpers.parallel_codegen as pcg
-
-from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
+import nrpy.indexedexp as ixp
 import nrpy.infrastructures.ETLegacy.simple_loop as lp
+import nrpy.params as par
+import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
+from nrpy.equations.general_relativity.ADM_to_BSSN import ADM_to_BSSN
+from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.infrastructures.ETLegacy.ETLegacy_include_header import (
     define_standard_includes,
 )
-from nrpy.equations.general_relativity.ADM_to_BSSN import ADM_to_BSSN
-import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 
 
 def register_CFunction_ADM_to_BSSN(

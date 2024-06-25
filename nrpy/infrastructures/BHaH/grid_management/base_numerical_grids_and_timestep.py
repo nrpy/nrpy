@@ -1,7 +1,7 @@
 """
 Base classes for numerical_grids_and_timestep() C function.
 
-The parallelization modules will generate functions 
+The parallelization modules will generate functions
 to set up numerical grids for use within the BHaH infrastructure.
 
 Author: Zachariah B. Etienne
@@ -12,9 +12,9 @@ Author: Zachariah B. Etienne
 
 from typing import Dict, List
 import sympy as sp
+import nrpy.c_codegen as ccg
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
-import nrpy.c_codegen as ccg
 from nrpy.helpers.expr_tree import get_unique_expression_symbols
 
 
@@ -24,7 +24,6 @@ class base_register_CFunction_numerical_grid_params_Nxx_dxx_xx:
     Set params: Nxx, Nxx_plus_2NGHOSTS, dxx, invdxx, and xx.
 
     :param CoordSystem: The coordinate system used for the simulation.
-    :param grid_physical_size: The physical size of the grid.
     :param Nxx_dict: A dictionary that maps coordinate systems to lists containing the number of grid points along each direction.
 
     :raises ValueError: If CoordSystem is not in Nxx_dict.
@@ -33,12 +32,10 @@ class base_register_CFunction_numerical_grid_params_Nxx_dxx_xx:
     def __init__(
         self,
         CoordSystem: str,
-        grid_physical_size: float,
         Nxx_dict: Dict[str, List[int]],
     ) -> None:
 
         self.CoordSystem = CoordSystem
-        self.grid_physical_size = grid_physical_size
         self.Nxx_dict = Nxx_dict
         if self.CoordSystem not in self.Nxx_dict:
             raise ValueError(
@@ -48,31 +45,14 @@ class base_register_CFunction_numerical_grid_params_Nxx_dxx_xx:
             par.adjust_CodeParam_default(
                 f"Nxx{dirn}", self.Nxx_dict[self.CoordSystem][dirn]
             )
-        par.adjust_CodeParam_default("grid_physical_size", self.grid_physical_size)
         par.adjust_CodeParam_default("CoordSystemName", self.CoordSystem)
         self.rfm = refmetric.reference_metric[self.CoordSystem]
         self.includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-        self.desc = f"""
-Initializes a cell-centered grid in {self.CoordSystem} coordinates based on physical dimensions (grid_physical_size).
-
-Inputs:
-- Nx[] inputs: Specifies new grid dimensions, if needed.
-- grid_is_resized: Indicates if the grid has been manually resized, triggering adjustments to grid parameters.
-- convergence_factor: Multiplier for grid dimensions to refine resolution, applied only if grid hasn't been resized.
-
-Parameter outputs:
-- Nxx: Number of grid points in each direction.
-- Nxx_plus_2NGHOSTS: Total grid points including ghost zones.
-- dxx: Grid spacing.
-- invdxx: Inverse of grid spacing.
-
-Grid setup output:
-- xx: Coordinate values for each (cell-centered) grid point.
-"""
+        self.desc = f"Output minimum gridspacing ds_min on a {CoordSystem} numerical grid."
         self.cfunc_type = "void"
         self.name = "numerical_grid_params_Nxx_dxx_xx"
         self.params = "const commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3], const int Nx[3], const bool grid_is_resized"
-        self.body = "// Start by setting default values for Nxx.\n"
+        self.body = "// First set default values for Nxx.\n"
         for dirn in range(3):
             self.body += (
                 f"params->Nxx{dirn} = {self.Nxx_dict[self.CoordSystem][dirn]};\n"
@@ -181,7 +161,7 @@ class base_register_CFunction_cfl_limited_timestep:
         )
         self.cfunc_type = "void"
         self.name = "cfl_limited_timestep"
-        self.params = "commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3], bc_struct *restrict bcstruct"
+        self.params = "commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3]"
 
         self.rfm = refmetric.reference_metric[CoordSystem]
         dxx0, dxx1, dxx2 = sp.symbols("dxx0 dxx1 dxx2", real=True)
@@ -225,6 +205,7 @@ class base_register_CFunction_numerical_grids_and_timestep:
     conditions.
 
     :param list_of_CoordSystems: List of CoordSystems
+    :param list_of_grid_physical_sizes: List of grid_physical_size for each CoordSystem; needed for Independent grids.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation (default: False).
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions (default: False).
     """
@@ -232,11 +213,13 @@ class base_register_CFunction_numerical_grids_and_timestep:
     def __init__(
         self,
         list_of_CoordSystems: List[str],
+        list_of_grid_physical_sizes: List[float],
         enable_rfm_precompute: bool = False,
         enable_CurviBCs: bool = False,
     ) -> None:
 
         self.list_of_CoordSystems = list_of_CoordSystems
+        self.list_of_grid_physical_sizes = list_of_grid_physical_sizes
         self.enable_rfm_precompute = enable_rfm_precompute
         self.enable_CurviBCs = enable_CurviBCs
 

@@ -6,9 +6,9 @@ Authors: Zachariah B. Etienne
          Samuel Cupp
 """
 
-from typing import Union, cast
 from inspect import currentframe as cfr
 from types import FrameType as FT
+from typing import Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.grid as gri

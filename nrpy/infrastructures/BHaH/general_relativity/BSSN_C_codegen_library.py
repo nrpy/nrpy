@@ -6,37 +6,38 @@ Author: Zachariah B. Etienne
 """
 
 from collections import OrderedDict as ODict
-from typing import List, Union, cast, Tuple, Dict
-from pathlib import Path
 from inspect import currentframe as cfr
+from pathlib import Path
 from types import FrameType as FT
+from typing import Dict, List, Tuple, Union, cast
+
 import sympy as sp
+from mpmath import mpc, mpf  # type: ignore
 
-import nrpy.grid as gri
-import nrpy.params as par
 import nrpy.c_codegen as ccg
-import nrpy.finite_difference as fin
 import nrpy.c_function as cfc
-import nrpy.indexedexp as ixp
-import nrpy.reference_metric as refmetric
-
+import nrpy.equations.general_relativity.psi4 as psifour
+import nrpy.equations.general_relativity.psi4_tetrads as psifourtet
+import nrpy.finite_difference as fin
+import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
-
+import nrpy.indexedexp as ixp
+import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices as out012d
+import nrpy.infrastructures.BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter as admid
+import nrpy.infrastructures.BHaH.loop_utilities.openmp.simple_loop as lp
+import nrpy.params as par
+import nrpy.reference_metric as refmetric
+import nrpy.validate_expressions.validate_expressions as ve
+from nrpy.equations.general_relativity.BSSN_constraints import BSSN_constraints
+from nrpy.equations.general_relativity.BSSN_gauge_RHSs import BSSN_gauge_RHSs
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.equations.general_relativity.BSSN_RHSs import BSSN_RHSs
-from nrpy.equations.general_relativity.BSSN_gauge_RHSs import BSSN_gauge_RHSs
-from nrpy.equations.general_relativity.BSSN_constraints import BSSN_constraints
 from nrpy.equations.general_relativity.InitialData_Cartesian import (
     InitialData_Cartesian,
 )
 from nrpy.equations.general_relativity.InitialData_Spherical import (
     InitialData_Spherical,
 )
-import nrpy.equations.general_relativity.psi4 as psifour
-import nrpy.equations.general_relativity.psi4_tetrads as psifourtet
-import nrpy.infrastructures.BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter as admid
-import nrpy.infrastructures.BHaH.loop_utilities.openmp.simple_loop as lp
-import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices as out012d
 
 
 def register_CFunction_initial_data(
@@ -320,33 +321,44 @@ if(commondata->time + commondata->dt > commondata->t_final) printf("\n");
 def register_CFunction_rhs_eval(
     CoordSystem: str,
     enable_rfm_precompute: bool,
+    enable_RbarDD_gridfunctions: bool,
+    enable_T4munu: bool,
     enable_simd: bool,
     enable_fd_functions: bool,
-    enable_KreissOliger_dissipation: bool,
     LapseEvolutionOption: str,
     ShiftEvolutionOption: str,
-    KreissOliger_strength_mult_by_W: bool = False,
-    # when mult by W, strength_gauge=0.99 & strength_nongauge=0.3 is best.
+    enable_KreissOliger_dissipation: bool,
     KreissOliger_strength_gauge: float = 0.3,
     KreissOliger_strength_nongauge: float = 0.3,
+    enable_CAKO: bool = False,
+    enable_CAHD: bool = False,
+    enable_SSL: bool = False,
     OMP_collapse: int = 1,
     fp_type: str = "double",
-) -> Union[None, pcg.NRPyEnv_type]:
+    validate_expressions: bool = False,
+) -> Union[None, Dict[str, Union[mpf, mpc]], pcg.NRPyEnv_type]:
     """
     Register the right-hand side evaluation function for the BSSN equations.
 
     :param CoordSystem: The coordinate system to be used.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
+    :param enable_RbarDD_gridfunctions: Whether to enable RbarDD gridfunctions.
+    :param enable_T4munu: Whether to enable T4munu (stress-energy terms).
     :param enable_simd: Whether to enable SIMD (Single Instruction, Multiple Data).
     :param enable_fd_functions: Whether to enable finite difference functions.
-    :param enable_KreissOliger_dissipation: Whether to enable Kreiss-Oliger dissipation.
     :param LapseEvolutionOption: Lapse evolution equation choice.
     :param ShiftEvolutionOption: Lapse evolution equation choice.
-    :param KreissOliger_strength_mult_by_W: Whether to multiply Kreiss-Oliger strength by W.
+    :param enable_KreissOliger_dissipation: Whether to enable Kreiss-Oliger dissipation.
     :param KreissOliger_strength_gauge: Gauge strength for Kreiss-Oliger dissipation.
     :param KreissOliger_strength_nongauge: Non-gauge strength for Kreiss-Oliger dissipation.
+    :param enable_CAKO: Whether to enable curvature-aware Kreiss-Oliger dissipation (multiply strength by W).
+    :param enable_CAHD: Whether to enable curvature-aware Hamiltonian-constraint damping.
+    :param enable_SSL: Whether to enable slow-start lapse.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
     :param fp_type: Floating point type, e.g., "double".
+    :param validate_expressions: Whether to validate generated sympy expressions against trusted values.
+
+    :raises ValueError: If EvolvedConformalFactor_cf not set to a supported value: {phi, chi, W}.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -367,11 +379,15 @@ def register_CFunction_rhs_eval(
         )
     # Populate BSSN rhs variables
     rhs = BSSN_RHSs[
-        CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
+        CoordSystem
+        + ("_rfm_precompute" if enable_rfm_precompute else "")
+        + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
+        + ("_T4munu" if enable_T4munu else "")
     ]
     alpha_rhs, vet_rhsU, bet_rhsU = BSSN_gauge_RHSs(
-        CoordSystem,
-        enable_rfm_precompute,
+        CoordSystem=CoordSystem,
+        enable_rfm_precompute=enable_rfm_precompute,
+        enable_T4munu=enable_T4munu,
         LapseEvolutionOption=LapseEvolutionOption,
         ShiftEvolutionOption=ShiftEvolutionOption,
     )
@@ -380,9 +396,30 @@ def register_CFunction_rhs_eval(
         rhs.BSSN_RHSs_varname_to_expr_dict[f"vet_rhsU{i}"] = vet_rhsU[i]
         rhs.BSSN_RHSs_varname_to_expr_dict[f"bet_rhsU{i}"] = bet_rhsU[i]
 
-    rhs.BSSN_RHSs_varname_to_expr_dict = ODict(
-        sorted(rhs.BSSN_RHSs_varname_to_expr_dict.items())
+    # local_BSSN_RHSs_varname_to_expr_dict is modified below if e.g., we add KO terms;
+    #    DO NOT MODIFY rhs.BSSN_RHSs_varname_to_expr_dict!
+    local_BSSN_RHSs_varname_to_expr_dict = rhs.BSSN_RHSs_varname_to_expr_dict.copy()
+    local_BSSN_RHSs_varname_to_expr_dict = ODict(
+        sorted(local_BSSN_RHSs_varname_to_expr_dict.items())
     )
+
+    # Define conformal factor W.
+    Bq = BSSN_quantities[
+        CoordSystem
+        + ("_rfm_precompute" if enable_rfm_precompute else "")
+        + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
+    ]
+    EvolvedConformalFactor_cf = par.parval_from_str("EvolvedConformalFactor_cf")
+    if EvolvedConformalFactor_cf == "W":
+        W = Bq.cf
+    elif EvolvedConformalFactor_cf == "chi":
+        W = sp.sqrt(Bq.cf)
+    elif EvolvedConformalFactor_cf == "phi":
+        W = sp.exp(-2 * Bq.cf)
+    else:
+        raise ValueError(
+            "Error: only EvolvedConformalFactor_cf = (W or chi or phi) supported."
+        )
 
     # Add Kreiss-Oliger dissipation to the BSSN RHSs:
     if enable_KreissOliger_dissipation:
@@ -394,24 +431,11 @@ def register_CFunction_rhs_eval(
             commondata=True,
         )
 
-        if KreissOliger_strength_mult_by_W:
-            Bq = BSSN_quantities[
-                (
-                    CoordSystem + "_rfm_precompute"
-                    if enable_rfm_precompute
-                    else CoordSystem
-                )
-            ]
-            EvolvedConformalFactor_cf = par.parval_from_str("EvolvedConformalFactor_cf")
-            if EvolvedConformalFactor_cf == "W":
-                diss_strength_gauge *= Bq.cf
-                diss_strength_nongauge *= Bq.cf
-            elif EvolvedConformalFactor_cf == "chi":
-                diss_strength_gauge *= sp.sqrt(Bq.cf)
-                diss_strength_nongauge *= sp.sqrt(Bq.cf)
-            elif EvolvedConformalFactor_cf == "phi":
-                diss_strength_gauge *= sp.exp(-2 * Bq.cf)
-                diss_strength_nongauge *= sp.exp(-2 * Bq.cf)
+        # vvv BEGIN CAKO vvv
+        if enable_CAKO:
+            diss_strength_gauge *= W
+            diss_strength_nongauge *= W
+        # ^^^ END CAKO ^^^
 
         rfm = refmetric.reference_metric[
             CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
@@ -425,36 +449,95 @@ def register_CFunction_rhs_eval(
         aDD_dKOD = ixp.declarerank3("aDD_dKOD", symmetry="sym01")
         hDD_dKOD = ixp.declarerank3("hDD_dKOD", symmetry="sym01")
         for k in range(3):
-            rhs.BSSN_RHSs_varname_to_expr_dict["alpha_rhs"] += (
+            local_BSSN_RHSs_varname_to_expr_dict["alpha_rhs"] += (
                 diss_strength_gauge * alpha_dKOD[k] * rfm.ReU[k]
             )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
-            rhs.BSSN_RHSs_varname_to_expr_dict["cf_rhs"] += (
+            local_BSSN_RHSs_varname_to_expr_dict["cf_rhs"] += (
                 diss_strength_nongauge * cf_dKOD[k] * rfm.ReU[k]
             )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
-            rhs.BSSN_RHSs_varname_to_expr_dict["trK_rhs"] += (
+            local_BSSN_RHSs_varname_to_expr_dict["trK_rhs"] += (
                 diss_strength_nongauge * trK_dKOD[k] * rfm.ReU[k]
             )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
             for i in range(3):
                 if "2ndOrder" in ShiftEvolutionOption:
-                    rhs.BSSN_RHSs_varname_to_expr_dict[f"bet_rhsU{i}"] += (
+                    local_BSSN_RHSs_varname_to_expr_dict[f"bet_rhsU{i}"] += (
                         diss_strength_gauge * betU_dKOD[i][k] * rfm.ReU[k]
                     )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
-                rhs.BSSN_RHSs_varname_to_expr_dict[f"vet_rhsU{i}"] += (
+                local_BSSN_RHSs_varname_to_expr_dict[f"vet_rhsU{i}"] += (
                     diss_strength_gauge * vetU_dKOD[i][k] * rfm.ReU[k]
                 )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
-                rhs.BSSN_RHSs_varname_to_expr_dict[f"lambda_rhsU{i}"] += (
+                local_BSSN_RHSs_varname_to_expr_dict[f"lambda_rhsU{i}"] += (
                     diss_strength_nongauge * lambdaU_dKOD[i][k] * rfm.ReU[k]
                 )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
                 for j in range(i, 3):
-                    rhs.BSSN_RHSs_varname_to_expr_dict[f"a_rhsDD{i}{j}"] += (
+                    local_BSSN_RHSs_varname_to_expr_dict[f"a_rhsDD{i}{j}"] += (
                         diss_strength_nongauge * aDD_dKOD[i][j][k] * rfm.ReU[k]
                     )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
-                    rhs.BSSN_RHSs_varname_to_expr_dict[f"h_rhsDD{i}{j}"] += (
+                    local_BSSN_RHSs_varname_to_expr_dict[f"h_rhsDD{i}{j}"] += (
                         diss_strength_nongauge * hDD_dKOD[i][j][k] * rfm.ReU[k]
                     )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
 
+    # vvv BEGIN CAHD vvv
+    if enable_CAHD:
+        Bcon = BSSN_constraints[
+            CoordSystem
+            + ("_rfm_precompute" if enable_rfm_precompute else "")
+            + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
+            + ("_T4munu" if enable_T4munu else "")
+        ]
+        if "cahdprefactor" not in gri.glb_gridfcs_dict:
+            _ = gri.register_gridfunctions(
+                "cahdprefactor",
+                group="AUXEVOL",
+                gf_array_name="auxevol_gfs",
+            )
+        _C_CAHD = par.register_CodeParameter(
+            "REAL", __name__, "C_CAHD", 0.15, commondata=True, add_to_parfile=True
+        )
+        # Initialize CAHD_term assuming phi is the evolved conformal factor. CFL_FACTOR is defined in MoL.
+        # CAHD_term = -C_CAHD * (sp.symbols("CFL_FACTOR") * sp.symbols("dsmin")) * Bcon.H
+        # -> cahdprefactor = C_CAHD * sp.symbols("CFL_FACTOR") * sp.symbols("dsmin")
+        CAHD_term = -1 * sp.symbols("cahdprefactor") * Bcon.H
+        if EvolvedConformalFactor_cf == "phi":
+            pass  # CAHD_term already assumes phi is the evolved conformal factor.
+        elif EvolvedConformalFactor_cf == "W":
+            # \partial_t W = \partial_t e^{-2 phi} = -2 W \partial_t phi
+            CAHD_term *= -2 * Bq.cf
+        elif EvolvedConformalFactor_cf == "chi":
+            # \partial_t chi = \partial_t e^{-4 phi} = -4 chi \partial_t phi
+            CAHD_term *= -4 * Bq.cf
+        else:
+            raise ValueError(
+                "Error: only EvolvedConformalFactor_cf = (W or chi or phi) supported."
+            )
+        local_BSSN_RHSs_varname_to_expr_dict["cf_rhs"] += CAHD_term
+    # ^^^ END CAHD ^^^
+
+    # vvv BEGIN SSL vvv
+    if enable_SSL:
+        SSL_Gaussian_prefactor = par.register_CodeParameter(
+            "REAL",
+            __name__,
+            "SSL_Gaussian_prefactor",
+            1.0,
+            commondata=True,
+            add_to_parfile=False,
+        )
+        _SSL_h, _SSL_sigma = par.register_CodeParameters(
+            "REAL",
+            __name__,
+            ["SSL_h", "SSL_sigma"],
+            [0.6, 20.0],
+            commondata=True,
+            add_to_parfile=True,
+        )
+        local_BSSN_RHSs_varname_to_expr_dict["alpha_rhs"] -= (
+            W * SSL_Gaussian_prefactor * (Bq.alpha - W)
+        )
+    # ^^^ END SSL ^^^
+
     BSSN_RHSs_access_gf: List[str] = []
-    for var in rhs.BSSN_RHSs_varname_to_expr_dict.keys():
+    for var in local_BSSN_RHSs_varname_to_expr_dict.keys():
         BSSN_RHSs_access_gf += [
             gri.BHaHGridFunction.access_gf(
                 var.replace("_rhs", ""),
@@ -473,9 +556,24 @@ def register_CFunction_rhs_eval(
     for i in range(3):
         # self.lambda_rhsU[i] = self.Lambdabar_rhsU[i] / rfm.ReU[i]
         betaU[i] = vetU[i] * rfm.ReU[i]
+
+    # Perform validation of BSSN_RHSs against trusted version.
+    if validate_expressions:
+        return ve.process_dictionary_of_expressions(
+            local_BSSN_RHSs_varname_to_expr_dict, fixed_mpfs_for_free_symbols=True
+        )
+    # ve.compare_or_generate_trusted_results(
+    #     os.path.abspath(__file__),
+    #     os.getcwd(),
+    #     # File basename. If this is set to "trusted_module_test1", then
+    #     #   trusted results_dict will be stored in tests/trusted_module_test1.py
+    #     f"{os.path.splitext(os.path.basename(__file__))[0]}_{LapseEvolutionOption}_{ShiftEvolutionOption}_{CoordSystem}_T4munu{enable_T4munu}_KO{enable_KreissOliger_dissipation}",
+    #     cast(Dict[str, Union[mpf, mpc]], results_dict),
+    # )
+
     body = lp.simple_loop(
         loop_body=ccg.c_codegen(
-            list(rhs.BSSN_RHSs_varname_to_expr_dict.values()),
+            list(local_BSSN_RHSs_varname_to_expr_dict.values()),
             BSSN_RHSs_access_gf,
             enable_fd_codegen=True,
             enable_simd=enable_simd,
@@ -530,24 +628,8 @@ def register_CFunction_Ricci_eval(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    orig_enable_RbarDD_gridfunctions = par.parval_from_str(
-        "enable_RbarDD_gridfunctions"
-    )
-    if orig_enable_RbarDD_gridfunctions:
-        # try/except in case BSSN_quantities hasn't been set yet.
-        try:
-            del BSSN_quantities[
-                (
-                    CoordSystem + "_rfm_precompute"
-                    if enable_rfm_precompute
-                    else CoordSystem
-                )
-            ]
-        except KeyError:
-            pass
-        par.set_parval_from_str("enable_RbarDD_gridfunctions", False)
     Bq = BSSN_quantities[
-        CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
+        CoordSystem + ("_rfm_precompute" if enable_rfm_precompute else "")
     ]
 
     includes = ["BHaH_defines.h"]
@@ -585,17 +667,6 @@ def register_CFunction_Ricci_eval(
         fp_type=fp_type,
     ).full_loop_body
 
-    if orig_enable_RbarDD_gridfunctions:
-        par.set_parval_from_str(
-            "enable_RbarDD_gridfunctions", orig_enable_RbarDD_gridfunctions
-        )
-        del BSSN_quantities[
-            CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
-        ]
-        _ = BSSN_quantities[
-            CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
-        ]
-
     cfc.register_CFunction(
         include_CodeParameters_h=True,
         prefunc=fin.construct_FD_functions_prefunc() if enable_fd_functions else "",
@@ -614,6 +685,8 @@ def register_CFunction_Ricci_eval(
 def register_CFunction_constraints(
     CoordSystem: str,
     enable_rfm_precompute: bool,
+    enable_RbarDD_gridfunctions: bool,
+    enable_T4munu: bool,
     enable_simd: bool,
     enable_fd_functions: bool,
     OMP_collapse: int,
@@ -624,6 +697,8 @@ def register_CFunction_constraints(
 
     :param CoordSystem: The coordinate system to be used.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
+    :param enable_RbarDD_gridfunctions: Whether to enable RbarDD gridfunctions.
+    :param enable_T4munu: Whether to enable T4munu (stress-energy terms).
     :param enable_simd: Whether to enable SIMD instructions.
     :param enable_fd_functions: Whether to enable finite difference functions.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
@@ -636,7 +711,10 @@ def register_CFunction_constraints(
         return None
 
     Bcon = BSSN_constraints[
-        CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
+        CoordSystem
+        + ("_rfm_precompute" if enable_rfm_precompute else "")
+        + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
+        + ("_T4munu" if enable_T4munu else "")
     ]
 
     includes = ["BHaH_defines.h"]
@@ -713,7 +791,7 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
         return None
 
     Bq = BSSN_quantities[
-        CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
+        CoordSystem + ("_rfm_precompute" if enable_rfm_precompute else "")
     ]
     rfm = refmetric.reference_metric[
         CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
@@ -1178,3 +1256,92 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
         include_CodeParameters_h=True,
         body=body,
     )
+
+
+def register_CFunction_cahdprefactor_auxevol_gridfunction(
+    list_of_CoordSystems: List[str],
+    fp_type: str = "double",
+) -> Union[None, pcg.NRPyEnv_type]:
+    """
+    Add function that sets cahdprefactor gridfunction = C_CAHD * CFL_FACTOR * dsmin to Cfunction dictionary.
+
+    :param list_of_CoordSystems: Coordinate systems used.
+    :param fp_type: Floating point type, e.g., "double".
+
+    :return: None if in registration phase, else the updated NRPy environment.
+    """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+
+    for CoordSystem in list_of_CoordSystems:
+        desc = "cahdprefactor_auxevol_gridfunction(): Initialize CAHD prefactor (auxevol) gridfunction."
+        name = "cahdprefactor_auxevol_gridfunction"
+        params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], REAL *restrict auxevol_gfs"
+
+        rfm = refmetric.reference_metric[CoordSystem]
+        dxx0, dxx1, dxx2 = sp.symbols("dxx0 dxx1 dxx2", real=True)
+        loop_body = r"""  // Compute cahdprefactor gridfunction = C_CAHD * CFL_FACTOR * dsmin.
+REAL dsmin0, dsmin1, dsmin2;
+"""
+        loop_body += ccg.c_codegen(
+            [
+                sp.Abs(rfm.scalefactor_orthog[0] * dxx0),
+                sp.Abs(rfm.scalefactor_orthog[1] * dxx1),
+                sp.Abs(rfm.scalefactor_orthog[2] * dxx2),
+            ],
+            ["dsmin0", "dsmin1", "dsmin2"],
+            include_braces=False,
+            fp_type=fp_type,
+        )
+        loop_body += """auxevol_gfs[IDX4(CAHDPREFACTORGF, i0, i1, i2)] = C_CAHD * CFL_FACTOR * MIN(dsmin0, MIN(dsmin1, dsmin2));"""
+
+        cfc.register_CFunction(
+            includes=["BHaH_defines.h"],
+            desc=desc,
+            name=name,
+            params=params,
+            include_CodeParameters_h=True,
+            body=lp.simple_loop(
+                loop_body=loop_body,
+                loop_region="all points",
+                read_xxs=True,
+                fp_type=fp_type,
+            ),
+            CoordSystem_for_wrapper_func=CoordSystem,
+        )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
+
+if __name__ == "__main__":
+    import os
+
+    Coord = "SinhSpherical"
+    LapseEvolOption = "OnePlusLog"
+    ShiftEvolOption = "GammaDriving2ndOrder_Covariant"
+    for Rbar_gfs in [True, False]:
+        for T4munu_enable in [True, False]:
+            for enable_Improvements in [True, False]:
+                results_dict = register_CFunction_rhs_eval(
+                    CoordSystem=Coord,
+                    enable_rfm_precompute=True,
+                    enable_RbarDD_gridfunctions=Rbar_gfs,
+                    enable_T4munu=T4munu_enable,
+                    enable_simd=False,
+                    enable_fd_functions=False,
+                    enable_KreissOliger_dissipation=True,
+                    LapseEvolutionOption=LapseEvolOption,
+                    ShiftEvolutionOption=ShiftEvolOption,
+                    enable_CAKO=enable_Improvements,
+                    enable_CAHD=enable_Improvements,
+                    enable_SSL=enable_Improvements,
+                    validate_expressions=True,
+                )
+                ve.compare_or_generate_trusted_results(
+                    os.path.abspath(__file__),
+                    os.getcwd(),
+                    # File basename. If this is set to "trusted_module_test1", then
+                    #   trusted results_dict will be stored in tests/trusted_module_test1.py
+                    f"{os.path.splitext(os.path.basename(__file__))[0]}_{LapseEvolOption}_{ShiftEvolOption}_{Coord}_Rbargfs{Rbar_gfs}_T4munu{T4munu_enable}_Improvements{enable_Improvements}",
+                    cast(Dict[str, Union[mpf, mpc]], results_dict),
+                )

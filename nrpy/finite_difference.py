@@ -6,14 +6,16 @@ Author: Zachariah B. Etienne
 """
 
 import sys  # Standard Python module for multiplatform OS-level functions
-from typing import Union, List, Tuple, Any, Dict
 from operator import itemgetter
+from typing import Any, Dict, List, Tuple, Union
+
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
-import nrpy.params as par  # NRPy+: parameter interface
-import nrpy.grid as gri  # NRPy+: Functions having to do with numerical grids
+
 import nrpy.c_function as cfc
-from nrpy.helpers.generic import superfast_uniq
+import nrpy.grid as gri  # NRPy+: Functions having to do with numerical grids
+import nrpy.params as par  # NRPy+: parameter interface
 from nrpy.helpers.cse_preprocess_postprocess import cse_preprocess
+from nrpy.helpers.generic import superfast_uniq
 
 par.register_param(py_type=int, module=__name__, name="fd_order", value=4)
 

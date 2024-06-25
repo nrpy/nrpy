@@ -13,10 +13,10 @@ Authors: Zachariah B. Etienne
 # Step P1: Import needed NRPy+ core modules:
 from typing import List
 import nrpy.c_function as cfc
-import nrpy.params as par  # NRPy+: Parameter interface
 from nrpy.infrastructures.BHaH import griddata_commondata
 from nrpy.infrastructures.BHaH import BHaH_defines_h
 import nrpy.infrastructures.BHaH.CurviBoundaryConditions.base_CurviBoundaryConditions as base_cbc_classes
+import nrpy.params as par  # NRPy+: Parameter interface
 
 _ = par.CodeParameter(
     "char[50]", __name__, "outer_bc_type", "radiation", commondata=True

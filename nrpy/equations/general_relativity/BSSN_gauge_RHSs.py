@@ -12,17 +12,19 @@ Authors: Zachariah B. Etienne
 """
 
 # Step 1: Import all needed modules from NRPy+:
-from typing import Tuple, List
+from typing import List, Tuple
+
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
-import nrpy.params as par  # NRPy+: Parameter interface
+
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
+import nrpy.params as par  # NRPy+: Parameter interface
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
-from nrpy.equations.general_relativity.BSSN_quantities import (
+from nrpy.equations.general_relativity.BSSN_quantities import (  # NRPy+: Computes useful BSSN quantities
     BSSN_quantities,
-)  # NRPy+: Computes useful BSSN quantities
-from nrpy.equations.general_relativity.BSSN_RHSs import (
+)
+from nrpy.equations.general_relativity.BSSN_RHSs import (  # NRPy+: Constructs BSSN right-hand-side expressions
     BSSN_RHSs,
-)  # NRPy+: Constructs BSSN right-hand-side expressions
+)
 
 # Step 1.a: Declare/initialize parameters for this module
 
@@ -30,6 +32,7 @@ from nrpy.equations.general_relativity.BSSN_RHSs import (
 def BSSN_gauge_RHSs(
     CoordSystem: str = "Cartesian",
     enable_rfm_precompute: bool = False,
+    enable_T4munu: bool = False,
     LapseEvolutionOption: str = "OnePlusLog",
     ShiftEvolutionOption: str = "GammaDriving2ndOrder_Covariant",
 ) -> Tuple[sp.Expr, List[sp.Expr], List[sp.Expr]]:
@@ -38,6 +41,7 @@ def BSSN_gauge_RHSs(
 
     :param CoordSystem: Specifies the coordinate system.
     :param enable_rfm_precompute: Flag for enabling precomputation of reference metric quantities.
+    :param enable_T4munu: Whether to enable T4munu (stress-energy terms), defaults to False.
     :param LapseEvolutionOption: Specifies the lapse condition to use.
     :param ShiftEvolutionOption: Specifies the shift condition to use.
 
@@ -58,12 +62,16 @@ def BSSN_gauge_RHSs(
     # Step 1.c: Define needed BSSN quantities:
     # Declare scalars & tensors (in terms of rescaled BSSN quantities)
     Bq = BSSN_quantities[
-        CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
+        CoordSystem + ("_rfm_precompute" if enable_rfm_precompute else "")
     ]
     # Step 1.d: Declare BSSN_RHSs (excluding the time evolution equations for the gauge conditions),
-    #    if they haven't already been declared.
+    #    if they haven't already been declared. Note that enable_RbarDD_gridfunctions isn't relevant, as
+    #    no gauge condition (to date) needs RbarDD. However, the Gamma-driving shift does need the RHS
+    #    of LambdabarU, which contains T4munu source terms.
     Brhs = BSSN_RHSs[
-        CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
+        CoordSystem
+        + ("_rfm_precompute" if enable_rfm_precompute else "")
+        + ("_T4munu" if enable_T4munu else "")
     ]
 
     ########################################
@@ -89,7 +97,7 @@ def BSSN_gauge_RHSs(
     elif LapseEvolutionOption == "HarmonicSlicing":
         if EvolvedConformalFactor_cf == "W":
             alpha_rhs = -3 * cf ** (-4) * Brhs.cf_rhs
-        elif LapseEvolutionOption == "phi":
+        elif EvolvedConformalFactor_cf == "phi":
             alpha_rhs = 6 * sp.exp(6 * cf) * Brhs.cf_rhs
         else:
             raise ValueError(
@@ -325,6 +333,7 @@ if __name__ == "__main__":
     import doctest
     import os
     import sys
+
     import nrpy.validate_expressions.validate_expressions as ve
 
     results = doctest.testmod()
@@ -333,9 +342,6 @@ if __name__ == "__main__":
         sys.exit(1)
     else:
         print(f"Doctest passed: All {results.attempted} test(s) passed")
-
-    # enable T4munu to ensure a maximally comprehensive test.
-    par.set_parval_from_str("enable_T4munu", True)
 
     for LapseEvolOption in ["OnePlusLog", "HarmonicSlicing", "Frozen", "OnePlusLogAlt"]:
         for ShiftEvolOption in [
@@ -354,10 +360,12 @@ if __name__ == "__main__":
                 "SinhSymTP",
             ]:
                 enable_rfm_pre = "rfm_precompute" in Coord
+                enable_T4 = True  # Add stress-energy source terms.
                 base_CoordSystem = Coord.replace("_rfm_precompute", "")
                 inalpha_rhs, invet_rhsU, inbet_rhsU = BSSN_gauge_RHSs(
                     base_CoordSystem,
                     enable_rfm_pre,
+                    enable_T4,
                     LapseEvolOption,
                     ShiftEvolOption,
                 )

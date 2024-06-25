@@ -5,30 +5,30 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import Union, cast
-from types import FrameType as FT
 from inspect import currentframe as cfr
+from types import FrameType as FT
+from typing import Union, cast
 
 from nrpypn.NRPyPN_shortcuts import (
-    m1,
-    m2,
-    chi1U,
-    chi2U,
-    r,
-    n12U,
-    n21U,
     S1U,
     S2U,
+    chi1U,
+    chi2U,
+    m1,
+    m2,
+    n12U,
+    n21U,
     p1U,
     p2U,
+    r,
 )
-from nrpypn.PN_p_t import PN_p_t
 from nrpypn.PN_p_r import PN_p_r
+from nrpypn.PN_p_t import PN_p_t
 
-import nrpy.params as par
-import nrpy.c_function as cfc
 import nrpy.c_codegen as ccg
+import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
+import nrpy.params as par
 
 par.register_CodeParameters(
     "REAL",

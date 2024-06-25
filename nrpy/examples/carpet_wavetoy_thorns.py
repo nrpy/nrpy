@@ -5,38 +5,39 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
+import os
+from inspect import currentframe as cfr
+from pathlib import Path
+from types import FrameType as FT
+
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
-from typing import Union, cast, List
-from pathlib import Path
-from inspect import currentframe as cfr
-from types import FrameType as FT
-import os
+from typing import List, Union, cast
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
-import nrpy.indexedexp as ixp
-import nrpy.params as par
 import nrpy.helpers.parallel_codegen as pcg
-from nrpy.helpers import simd
-
+import nrpy.indexedexp as ixp
+import nrpy.infrastructures.ETLegacy.simple_loop as lp
+import nrpy.params as par
+from nrpy.equations.wave_equation.WaveEquation_RHSs import WaveEquation_RHSs
 from nrpy.equations.wave_equation.WaveEquation_Solutions_InitialData import (
     WaveEquation_solution_Cartesian,
 )
-from nrpy.equations.wave_equation.WaveEquation_RHSs import WaveEquation_RHSs
-import nrpy.infrastructures.ETLegacy.simple_loop as lp
-from nrpy.infrastructures.ETLegacy import boundary_conditions
-from nrpy.infrastructures.ETLegacy import CodeParameters
-from nrpy.infrastructures.ETLegacy import make_code_defn
-from nrpy.infrastructures.ETLegacy import MoL_registration
-from nrpy.infrastructures.ETLegacy import Symmetry_registration
-from nrpy.infrastructures.ETLegacy import zero_rhss
-from nrpy.infrastructures.ETLegacy import schedule_ccl
-from nrpy.infrastructures.ETLegacy import interface_ccl
-from nrpy.infrastructures.ETLegacy import param_ccl
-
+from nrpy.helpers import simd
+from nrpy.infrastructures.ETLegacy import (
+    CodeParameters,
+    MoL_registration,
+    Symmetry_registration,
+    boundary_conditions,
+    interface_ccl,
+    make_code_defn,
+    param_ccl,
+    schedule_ccl,
+    zero_rhss,
+)
 
 par.set_parval_from_str("Infrastructure", "ETLegacy")
 
@@ -65,6 +66,13 @@ project_dir = os.path.join("project", project_name)
 par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 par.set_parval_from_str("fd_order", fd_order)
 standard_ET_includes = ["math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters.h"]
+_ = par.register_CodeParameter(
+    "CCTK_INT",
+    __name__,
+    "FD_order",
+    fd_order,
+    add_to_glb_code_params_dict=True,
+)
 
 
 #########################################################
@@ -389,6 +397,18 @@ for thorn in [evol_thorn_name, ID_thorn_name, diag_thorn_name]:
     make_code_defn.output_CFunctions_and_construct_make_code_defn(
         project_dir=project_dir, thorn_name=thorn
     )
+
 simd.copy_simd_intrinsics_h(
     project_dir=str(Path(project_dir) / evol_thorn_name / "src")
 )
+
+simd_name = str(
+    Path(project_dir) / evol_thorn_name / "src" / "simd" / "simd_intrinsics.h"
+)
+with open(simd_name, "r", encoding="utf-8") as file:
+    contents = file.read()
+
+new_contents = contents.replace("REAL_SIMD_ARRAY REAL", "REAL_SIMD_ARRAY CCTK_REAL")
+
+with open(simd_name, "w", encoding="utf-8") as file:
+    file.write(new_contents)

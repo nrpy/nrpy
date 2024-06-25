@@ -7,7 +7,7 @@ Contributor: Ken Sible
 Email: ksible *at* outlook *dot* com
 """
 
-from typing import Union, List
+from typing import List, Union
 
 
 def simple_loop(

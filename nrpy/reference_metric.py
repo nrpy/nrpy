@@ -8,12 +8,14 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import Dict, List, Any, Tuple, cast
+from typing import Any, Dict, List, Tuple, cast
+
 import sympy as sp
+
 import nrpy.indexedexp as ixp
 import nrpy.params as par
-from nrpy.helpers.generic import superfast_uniq
 from nrpy.helpers.cached_functions import cached_simplify
+from nrpy.helpers.generic import superfast_uniq
 
 # grid_physical_size is set based entirely on CoordSystem. So it is a rfm parameter not a grid parameter.
 par.register_param(bool, __name__, "enable_grid_physical_size", True)
@@ -611,6 +613,61 @@ class ReferenceMetric:
                                 k
                             ][l].subs(freevar, self.freevars_uniq_xx_indep[varidx])
 
+    def Sinhv1(self, x: sp.Symbol, AMPL: sp.Symbol, SINHW: sp.Symbol) -> Any:
+        """
+        Set the sinh transformation used by SinhSpherical, SinhCylindrical, and SinhCartesian.
+
+        :param x: The input symbol for the transformation.
+        :param AMPL: The amplitude of the sinh transformation.
+        :param SINHW: The width of the sinh transformation.
+        :return: The transformed value using the sinh function.
+        """
+        return (
+            AMPL
+            * (sp.exp(x / SINHW) - sp.exp(-x / SINHW))
+            / (sp.exp(1 / SINHW) - sp.exp(-1 / SINHW))
+        )
+
+    def Sinhv2(
+        self, x: sp.Symbol, AMPL: sp.Symbol, SINHW: sp.Symbol, slope: sp.Symbol
+    ) -> Any:
+        """
+        Set the sinh transformation used by SinhSphericalv2*, SinhCylindricalv2, and SinhCartesianv2 (future).
+
+        :param x: The input symbol for the transformation.
+        :param AMPL: The amplitude of the sinh transformation.
+        :param SINHW: The width of the sinh transformation.
+        :param slope: The slope modifier for the transformation.
+        :return: The transformed value using the sinh function with an additional slope adjustment.
+        :raises ValueError: If the coordinate system prefix does not start with "Sinh+EigenCoord+v2n" or if the suffix is not an even integer.
+        """
+        # Extract the CoordSystem prefix.
+        # Check if 'v2n' is part of the string
+        v2n_index = self.CoordSystem.find("v2n")
+        if v2n_index != -1 and self.CoordSystem.startswith("Sinh"):
+            # Capture the prefix up to "v2n"
+            prefix = self.CoordSystem[: v2n_index + 3]  # '+3' to include "v2n"
+        else:
+            raise ValueError(
+                f'Sinhv2() called for CoordSystem {self.CoordSystem}, which does not start with "Sinh+EigenCoord+v2n".'
+            )
+        # Extract the suffix after the prefix
+        suffix = self.CoordSystem[len(prefix) :]
+
+        # Check if the suffix is an integer
+        if suffix.isdigit() and int(suffix) % 2 == 0:
+            power_n = int(suffix)  # Convert the suffix to an integer
+        else:
+            raise ValueError(
+                f'What comes after "{prefix}" must be an even integer, so that r(xx0) is an odd function.'
+            )
+        return (
+            (AMPL - slope)  # Technically this is slope*1 [1 in units of x]
+            * x**power_n
+            * (sp.exp(x / SINHW) - sp.exp(-x / SINHW))
+            / (sp.exp(1 / SINHW) - sp.exp(-1 / SINHW))
+        ) + slope * x
+
     def cartesian_like(self) -> None:
         """Initialize class for Cartesian-like coordinate systems."""
         if self.CoordSystem == "Cartesian":
@@ -682,11 +739,7 @@ class ReferenceMetric:
 
             # Compute (xx_to_Cart0,xx_to_Cart1,xx_to_Cart2) from (xx0,xx1,xx2)
             for ii in [0, 1, 2]:
-                self.xx_to_Cart[ii] = (
-                    AMPLXYZ
-                    * (sp.exp(self.xx[ii] / SINHWXYZ) - sp.exp(-self.xx[ii] / SINHWXYZ))
-                    / (sp.exp(1 / SINHWXYZ) - sp.exp(-1 / SINHWXYZ))
-                )
+                self.xx_to_Cart[ii] = self.Sinhv1(self.xx[ii], AMPLXYZ, SINHWXYZ)
 
             # Compute (r,th,ph) from (xx_to_Cart2,xx_to_Cart1,xx_to_Cart2)
             self.xxSph[0] = sp.sqrt(
@@ -741,6 +794,7 @@ class ReferenceMetric:
             "",
             add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
         )
+
         if self.CoordSystem == "Spherical":
             RMAX = par.register_CodeParameter(
                 "REAL",
@@ -781,12 +835,8 @@ class ReferenceMetric:
             self.xxmax = [sp.sympify(1), M_PI, M_PI]
             self.grid_physical_size_dict = {"AMPL": "grid_physical_size"}
 
-            # Set SinhSpherical radial coordinate by default; overwrite later if CoordSystem == "SinhSphericalv2".
-            r = (
-                AMPL
-                * (sp.exp(self.xx[0] / SINHW) - sp.exp(-self.xx[0] / SINHW))
-                / (sp.exp(1 / SINHW) - sp.exp(-1 / SINHW))
-            )
+            # Set SinhSpherical radial coordinate by default; overwrite later if CoordSystem == "SinhSphericalv2n*".
+            r = self.Sinhv1(self.xx[0], AMPL, SINHW)
             th = self.xx[1]
             ph = self.xx[2]
 
@@ -795,9 +845,13 @@ class ReferenceMetric:
             self.Cart_to_xx[1] = sp.acos(self.Cartz / rCart)
             self.Cart_to_xx[2] = sp.atan2(self.Carty, self.Cartx)
 
-        # SinhSphericalv2 adds the parameter "const_dr", which allows for a region near self.xx[0]=0 to have
-        # constant radial resolution of const_dr, provided the sinh() term does not dominate near self.xx[0]=0.
-        elif self.CoordSystem == "SinhSphericalv2":
+        # SinhSphericalv2n[even integer] adds the parameter "r_slope", which allows for a region near self.xx[0]=0 to
+        # have near-constant grid spacing Deltar. If the grid extent is Nx0, then near x0 = 0:
+        # dr/dx0 \approx r_slope
+        # -> dr ~ r_slope dx0
+        # -> Deltar ~ r_slope * Deltax0 ~ r_slope * AMPL/Nx0
+        elif self.CoordSystem.startswith("SinhSphericalv2n"):
+
             AMPL = par.register_CodeParameter(
                 "REAL",
                 self.CodeParam_modulename,
@@ -816,19 +870,14 @@ class ReferenceMetric:
             self.xxmin = [sp.sympify(0), sp.sympify(0), -M_PI]
             self.xxmax = [sp.sympify(1), M_PI, M_PI]
             self.grid_physical_size_dict = {"AMPL": "grid_physical_size"}
-
-            const_dr = par.register_CodeParameter(
+            r_slope = par.register_CodeParameter(
                 "REAL",
                 self.CodeParam_modulename,
-                "const_dr",
+                "r_slope",
                 0.0625,
                 add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
             )
-            r = AMPL * (
-                const_dr * self.xx[0]
-                + (sp.exp(self.xx[0] / SINHW) - sp.exp(-self.xx[0] / SINHW))
-                / (sp.exp(1 / SINHW) - sp.exp(-1 / SINHW))
-            )
+            r = self.Sinhv2(self.xx[0], AMPL, SINHW, r_slope)
             th = self.xx[1]
             ph = self.xx[2]
 
@@ -840,7 +889,6 @@ class ReferenceMetric:
             raise ValueError(
                 f"Spherical-like CoordSystem == {self.CoordSystem} unrecognized"
             )
-
         # BEGIN: Set universal attributes for all spherical-like coordinate systems:
         self.xxSph[0] = r
         self.xxSph[1] = th
@@ -918,11 +966,7 @@ class ReferenceMetric:
             self.xxmax[0] = sp.sympify(1)
             # With xxmax[0] = 1, sinh(xx0/SINHWAA) / sinh(1/SINHWAA) will evaluate to a number between 0 and 1.
             #   Then AA = AMAX * sinh(xx0/SINHWAA) / sinh(1/SINHWAA) will evaluate to a number between 0 and AMAX.
-            AA = (
-                AMAX
-                * (sp.exp(self.xx[0] / SINHWAA) - sp.exp(-self.xx[0] / SINHWAA))
-                / (sp.exp(1 / SINHWAA) - sp.exp(-1 / SINHWAA))
-            )
+            AA = self.Sinhv1(self.xx[0], AMAX, SINHWAA)
 
         var1 = sp.sqrt(AA**2 + (bScale * sp.sin(self.xx[1])) ** 2)
         var2 = sp.sqrt(AA**2 + bScale**2)
@@ -1148,18 +1192,10 @@ class ReferenceMetric:
             }
 
             # Set SinhCylindrical radial & z coordinates by default; overwrite later if CoordSystem == "SinhCylindricalv2".
-            RHOCYL = (
-                AMPLRHO
-                * (sp.exp(self.xx[0] / SINHWRHO) - sp.exp(-self.xx[0] / SINHWRHO))
-                / (sp.exp(1 / SINHWRHO) - sp.exp(-1 / SINHWRHO))
-            )
+            RHOCYL = self.Sinhv1(self.xx[0], AMPLRHO, SINHWRHO)
             # phi coordinate remains unchanged.
             PHICYL = self.xx[1]
-            ZCYL = (
-                AMPLZ
-                * (sp.exp(self.xx[2] / SINHWZ) - sp.exp(-self.xx[2] / SINHWZ))
-                / (sp.exp(1 / SINHWZ) - sp.exp(-1 / SINHWZ))
-            )
+            ZCYL = self.Sinhv1(self.xx[2], AMPLZ, SINHWZ)
             self.Cart_to_xx[0] = SINHWRHO * sp.asinh(
                 sp.sqrt(self.Cartx**2 + self.Carty**2) * sp.sinh(1 / SINHWRHO) / AMPLRHO
             )
@@ -1168,10 +1204,14 @@ class ReferenceMetric:
                 self.Cartz * sp.sinh(1 / SINHWZ) / AMPLZ
             )
 
-        # SinhCylindricalv2 adds the parameters "const_drho", "const_dz", which allows for regions near xx[0]=0
-        # and xx[2]=0 to have constant rho and z resolution of const_drho and const_dz, provided the sinh() terms
-        # do not dominate near xx[0]=0 and xx[2]=0.
-        elif self.CoordSystem == "SinhCylindricalv2":
+        # SinhCylindricalv2n[even integer] adds the parameters "rho_slope" & "z_slope", which allows for a region
+        # near self.xx[0]=0 and self.xx[2]=0 to
+        # have near-constant grid spacing Deltarho and Deltaz, respectively.
+        # For example, if the grid extent in rho is Nx0, then near x0 = 0:
+        # drho/dx0 \approx rho_slope
+        # -> dr ~ rho_slope dx0
+        # -> Deltarho ~ rho_slope * Deltax0 ~ rho_slope * AMPLRHO/Nx0
+        elif self.CoordSystem.startswith("SinhCylindricalv2"):
             AMPLRHO, AMPLZ = par.register_CodeParameters(
                 "REAL",
                 self.CodeParam_modulename,
@@ -1193,25 +1233,17 @@ class ReferenceMetric:
                 "AMPLRHO": "grid_physical_size",
                 "AMPLZ": "grid_physical_size",
             }
-            const_drho, const_dz = par.register_CodeParameters(
+            rho_slope, z_slope = par.register_CodeParameters(
                 "REAL",
                 self.CodeParam_modulename,
-                ["const_drho", "const_dz"],
+                ["rho_slope", "z_slope"],
                 [0.0625, 0.0625],
                 add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
             )
 
-            RHOCYL = AMPLRHO * (
-                const_drho * self.xx[0]
-                + (sp.exp(self.xx[0] / SINHWRHO) - sp.exp(-self.xx[0] / SINHWRHO))
-                / (sp.exp(1 / SINHWRHO) - sp.exp(-1 / SINHWRHO))
-            )
+            RHOCYL = self.Sinhv2(self.xx[0], AMPLRHO, SINHWRHO, rho_slope)
             PHICYL = self.xx[1]
-            ZCYL = AMPLZ * (
-                const_dz * self.xx[2]
-                + (sp.exp(self.xx[2] / SINHWZ) - sp.exp(-self.xx[2] / SINHWZ))
-                / (sp.exp(1 / SINHWZ) - sp.exp(-1 / SINHWZ))
-            )
+            ZCYL = self.Sinhv2(self.xx[2], AMPLZ, SINHWZ, z_slope)
 
             # NO CLOSED-FORM EXPRESSION FOR RADIAL OR Z INVERSION.
             # Cart_to_xx[0] = "NewtonRaphson"
@@ -1258,9 +1290,10 @@ class rfm_dict(Dict[str, ReferenceMetric]):
 
     def __getitem__(self, CoordSystem_in: str) -> ReferenceMetric:
         if CoordSystem_in not in self:
+            print(f"Setting up reference_metric[{CoordSystem_in}]...")
+
             # In case [CoordSystem]_rfm_precompute is passed:
             CoordSystem = CoordSystem_in.replace("_rfm_precompute", "")
-            print(f"Setting up reference metric for CoordSystem = {CoordSystem}.")
             self.__setitem__(
                 CoordSystem, ReferenceMetric(CoordSystem, enable_rfm_precompute=False)
             )
@@ -1282,8 +1315,9 @@ reference_metric = rfm_dict()
 
 if __name__ == "__main__":
     import doctest
-    import sys
     import os
+    import sys
+
     import nrpy.validate_expressions.validate_expressions as ve
 
     results = doctest.testmod()
@@ -1296,12 +1330,12 @@ if __name__ == "__main__":
     for Coord in [
         "Spherical",
         "SinhSpherical",
-        "SinhSphericalv2",
+        "SinhSphericalv2n2",
         "Cartesian",
         "SinhCartesian",
         "Cylindrical",
         "SinhCylindrical",
-        "SinhCylindricalv2",
+        "SinhCylindricalv2n2",
         "SymTP",
         "SinhSymTP",
     ]:

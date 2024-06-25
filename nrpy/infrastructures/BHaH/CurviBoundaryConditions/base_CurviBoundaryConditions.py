@@ -16,14 +16,11 @@ import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy
 import sympy.codegen.ast as sp_ast
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-import nrpy.params as par  # NRPy+: Parameter interface
+import nrpy.finite_difference as fin  # NRPy+: Finite-difference module
 import nrpy.grid as gri  # NRPy+: Functions having to do with numerical grids
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
+import nrpy.params as par  # NRPy+: Parameter interface
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
-import nrpy.finite_difference as fin  # NRPy+: Finite-difference module
-
-# from nrpy.infrastructures.BHaH import griddata_commondata
-# from nrpy.infrastructures.BHaH import BHaH_defines_h
 from nrpy.validate_expressions.validate_expressions import check_zero
 from nrpy.helpers.expr_tree import get_unique_expression_symbols
 

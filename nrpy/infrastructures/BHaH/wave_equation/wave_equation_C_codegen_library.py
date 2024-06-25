@@ -5,28 +5,26 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import Union, cast, List, Tuple, Dict
 from inspect import currentframe as cfr
-from types import FrameType as FT
 from pathlib import Path
+from types import FrameType as FT
+from typing import Dict, List, Tuple, Union, cast
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
+import nrpy.helpers.parallel_codegen as pcg
 import nrpy.indexedexp as ixp
+import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices as out012d
+import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
-
-import nrpy.helpers.parallel_codegen as pcg
-
-from nrpy.equations.wave_equation.WaveEquationCurvilinear_RHSs import (
-    WaveEquationCurvilinear_RHSs,
-)
 from nrpy.equations.wave_equation.WaveEquation_Solutions_InitialData import (
     WaveEquation_solution_Cartesian,
 )
-import nrpy.infrastructures.BHaH.loop_utilities.openmp.simple_loop as lp
-import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices as out012d
+from nrpy.equations.wave_equation.WaveEquationCurvilinear_RHSs import (
+    WaveEquationCurvilinear_RHSs,
+)
 
 
 def register_CFunction_exact_solution_single_Cartesian_point(

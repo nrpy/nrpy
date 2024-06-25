@@ -10,8 +10,8 @@ Author: Zachariah B. Etienne
 from pathlib import Path
 from typing import List
 
-import nrpy.params as par
 import nrpy.c_function as cfc
+import nrpy.params as par
 from nrpy.helpers.generic import clang_format
 
 
@@ -76,7 +76,10 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
             if (function_name == "commondata_struct" and CodeParam.commondata) or (
                 function_name == "params_struct" and not CodeParam.commondata
             ):
-                if CodeParam.add_to_parfile:
+                if (
+                    CodeParam.defaultvalue != "unset"
+                    and CodeParam.cparam_type != "#define"
+                ):
                     struct = "commondata" if CodeParam.commondata else "params"
                     CPtype = CodeParam.cparam_type
                     comment = f"  // {CodeParam.module}::{parname}"
@@ -84,13 +87,14 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
                     if "char" in CPtype and "[" in CPtype and "]" in CPtype:
                         chararray_size = CPtype.split("[")[1].replace("]", "")
                         c_output = f'snprintf({struct}->{parname}, {chararray_size}, "{defaultval}");{comment}\n'
+                        struct_list.append(c_output)
                     elif isinstance(defaultval, (bool, int, float)):
                         c_output = f"{struct}->{parname} = {str(defaultval).lower()};{comment}\n"
+                        struct_list.append(c_output)
                     else:
                         raise ValueError(
-                            f"{CodeParam.defaultvalue} is not a valid default value, for parameter {CodeParam.module}::{parname}, commondata = {CodeParam.commondata}"
+                            f"{CodeParam.defaultvalue} is not a valid default value type ({type(CodeParam.defaultvalue)}), for parameter {CodeParam.module}::{parname}, commondata = {CodeParam.commondata}"
                         )
-                    struct_list.append(c_output)
 
         # Sort the lines alphabetically and join them with line breaks
         body = ""
@@ -119,6 +123,7 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
 
 def write_CodeParameters_h_files(
     project_dir: str,
+    set_commondata_only: bool = False,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
     decorator: str = "",
 ) -> None:
@@ -126,6 +131,8 @@ def write_CodeParameters_h_files(
     Generate C code to set C parameter constants and writes them to files.
 
     :param project_dir: The path of the project directory.
+    :param set_commondata_only: If True, generate code parameters only if `commondata=True`.
+                                Useful for BHaH projects without grids, like SEOBNR.
     :param clang_format_options: Options for clang_format.
 
     Doctests:
@@ -185,15 +192,14 @@ def write_CodeParameters_h_files(
             par.glb_code_params_dict.items(), key=lambda x: x[0].lower()
         ):
             if CodeParam.add_to_set_CodeParameters_h:
-                if CodeParam.commondata:
-                    struct = "commondata"
-                else:
-                    struct = "params"
-                # C parameter type, parameter name
-                CPtype = CodeParam.cparam_type
-                # For efficiency reasons, set_CodeParameters*.h does not set char arrays;
-                #   access those from the params struct directly.
-                pointer = "->" if pointerEnable else "."
+                struct = "commondata" if CodeParam.commondata else "params"
+                # Don't output params if set_commondata_only==True
+                if not (set_commondata_only and struct == "params"):
+                    # C parameter type, parameter name
+                    CPtype = CodeParam.cparam_type
+                    # For efficiency reasons, set_CodeParameters*.h does not set char arrays;
+                    #   access those from the params struct directly.
+                    pointer = "->" if pointerEnable else "."
 
                 comment = f"  // {CodeParam.module}::{CPname}"
                 if "char" in CPtype and "[" in CPtype and "]" in CPtype:
@@ -210,7 +216,7 @@ def write_CodeParameters_h_files(
                     # Handle all other C types
                     Coutput = f"{decorator}const {CPtype} {CPname} = {struct}{pointer}{CPname};{comment}\n"
 
-                returnstring += Coutput
+                    returnstring += Coutput
 
         return returnstring
 
@@ -244,15 +250,21 @@ def write_CodeParameters_h_files(
             and "char" not in CodeParam.cparam_type
         ):
             struct = "commondata" if CodeParam.commondata else "params"
-            CPtype = CodeParam.cparam_type
-            comment = f"  // {CodeParam.module}::{CPname}"
-            if CPtype == "REAL":
-                c_output = f"const REAL NOSIMD{CPname} = {struct}->{CPname};{comment}\n"
-                c_output += f"const REAL_SIMD_ARRAY {CPname} = ConstSIMD(NOSIMD{CPname});{comment}\n"
-                set_CodeParameters_SIMD_str += c_output
-            else:
-                c_output = f"const {CPtype} {CPname} = {struct}->{CPname};{comment}\n"
-                set_CodeParameters_SIMD_str += c_output
+            # Don't output params if set_commondata_only==True
+            if not (set_commondata_only and struct == "params"):
+                CPtype = CodeParam.cparam_type
+                comment = f"  // {CodeParam.module}::{CPname}"
+                if CPtype == "REAL":
+                    c_output = (
+                        f"const REAL NOSIMD{CPname} = {struct}->{CPname};{comment}\n"
+                    )
+                    c_output += f"const REAL_SIMD_ARRAY {CPname} = ConstSIMD(NOSIMD{CPname});{comment}\n"
+                    set_CodeParameters_SIMD_str += c_output
+                else:
+                    c_output = (
+                        f"const {CPtype} {CPname} = {struct}->{CPname};{comment}\n"
+                    )
+                    set_CodeParameters_SIMD_str += c_output
 
     header_file_simd_path = project_Path / "set_CodeParameters-simd.h"
     with header_file_simd_path.open("w", encoding="utf-8") as file:

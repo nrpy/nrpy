@@ -5,13 +5,14 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from pathlib import Path
+import multiprocessing
 import os
+import platform
 import shutil
 import subprocess
-import platform
-import multiprocessing
+from pathlib import Path
 from typing import List, Optional
+
 import cpuinfo  # type: ignore
 
 from nrpy.c_function import CFunction_dict
@@ -47,7 +48,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     :raises SystemExit: Exits if errors are encountered.
     :raises FileNotFoundError: If the specified C compiler is not found.
     :raises TypeError: If addl_CFLAGS or include_dirs are not lists.
-    :raises ValueError: If addl_CFLAGS or addl_libraries are specified incorrectly.
+    :raises ValueError: If addl_CFLAGS or addl_libraries are specified incorrectly, or if if OS unsupported.
     """
     if not create_lib and "main" not in CFunction_dict:
         raise SystemExit(
@@ -67,6 +68,8 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
             ext = ".so"
         elif os_name == "Darwin":
             ext = ".dylib"
+        else:
+            raise ValueError(f"Sorry, {os_name} operating system not supported.")
         if not exec_or_library_name.endswith(ext):
             exec_or_library_name += ext
 

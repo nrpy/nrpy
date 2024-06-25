@@ -6,6 +6,7 @@ Author: Zachariah B. Etienne
 """
 
 import sys
+<<<<<<< HEAD
 import nrpy.params as par
 from nrpy.infrastructures.BHaH import griddata_commondata
 
@@ -23,6 +24,15 @@ core_modules_list = [
     "nrpy.infrastructures.BHaH.interpolation.interpolation",
     "grid",
 ]
+=======
+from pathlib import Path
+from typing import Dict, List, Optional
+
+import nrpy.grid as gri
+import nrpy.params as par
+from nrpy.helpers.generic import clang_format
+from nrpy.infrastructures.BHaH import griddata_commondata
+>>>>>>> main
 
 
 def register_griddata_struct_and_return_griddata_struct_str(

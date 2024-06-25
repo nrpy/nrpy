@@ -5,14 +5,13 @@ Authors: Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
          Zachariah B. Etienne; zachetie **at** gmail **dot* com
 """
 
+import os
+
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
 import shutil
-import os
 
-import nrpy.params as par
-from nrpy.helpers import simd
 import nrpy.helpers.parallel_codegen as pcg
 
 import nrpy.infrastructures.BHaH.header_definitions.openmp.output_BHaH_defines_h as Bdefines_h
@@ -30,6 +29,8 @@ import nrpy.infrastructures.BHaH.grid_management.openmp.numerical_grids_and_time
 import nrpy.infrastructures.BHaH.grid_management.openmp.register_rfm_precompute as rfm_precompute
 from nrpy.infrastructures.BHaH import rfm_wrapper_functions
 from nrpy.infrastructures.BHaH.grid_management.openmp import xx_tofrom_Cart
+import nrpy.params as par
+from nrpy.helpers import simd
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -184,7 +185,7 @@ nrpyellClib.register_CFunction_initialize_constant_auxevol()
 
 numericalgrids.register_CFunctions(
     list_of_CoordSystems=[CoordSystem],
-    grid_physical_size=grid_physical_size,
+    list_of_grid_physical_sizes=[grid_physical_size],
     Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
@@ -358,12 +359,12 @@ post_MoL_step_forward_in_time = r"""    check_stop_conditions(&commondata, gridd
     }
 """
 main.register_CFunction_main_c(
+    MoL_method=MoL_method,
     initial_data_desc="",
+    boundary_conditions_desc=boundary_conditions_desc,
+    post_non_y_n_auxevol_mallocs="initialize_constant_auxevol(&commondata, griddata);\n",
     pre_MoL_step_forward_in_time="write_checkpoint(&commondata, griddata);\n",
     post_MoL_step_forward_in_time=post_MoL_step_forward_in_time,
-    MoL_method=MoL_method,
-    boundary_conditions_desc=boundary_conditions_desc,
-    initialize_constant_auxevol=True,
 )
 griddata_commondata.register_CFunction_griddata_free(
     enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True

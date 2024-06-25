@@ -12,8 +12,10 @@ Email:  ksible *at* outlook *dot* com
 
 import sys  # Standard Python module for multiplatform OS-level functions
 from collections import OrderedDict
-from typing import Union, List, Tuple, Dict, cast
+from typing import Dict, List, Tuple, Union, cast
+
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
+
 from nrpy.helpers.expr_tree import ExprTree
 
 

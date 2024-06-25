@@ -13,7 +13,6 @@ _ = par.register_CodeParameter(
     "TIMEVAR",
     __name__,
     "start_wallclock_time",
-    0.0,
     commondata=True,
     add_to_parfile=False,
     add_to_set_CodeParameters_h=False,
