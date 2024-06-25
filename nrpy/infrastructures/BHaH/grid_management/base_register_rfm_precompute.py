@@ -7,7 +7,7 @@ Authors: Zachariah B. Etienne
         sdtootle **at** gmail **dot** com
 """
 
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 import nrpy.c_function as cfc
 from nrpy.helpers.generic import superfast_uniq

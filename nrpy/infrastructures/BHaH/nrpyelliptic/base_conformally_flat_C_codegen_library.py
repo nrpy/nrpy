@@ -8,21 +8,22 @@ Authors: Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
          Samuel D. Tootle; sdtootle **at** gmail **dot** com
 """
 
-from typing import Union, Tuple, Dict
+from typing import Dict, Tuple, Union
 
 import sympy as sp
+
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
-from nrpy.helpers.expr_tree import get_unique_expression_symbols
 from nrpy.equations.nrpyelliptic.ConformallyFlat_RHSs import (
     HyperbolicRelaxationCurvilinearRHSs,
 )
 from nrpy.equations.nrpyelliptic.ConformallyFlat_SourceTerms import (
     compute_psi_background_and_ADD_times_AUU,
 )
+from nrpy.helpers.expr_tree import get_unique_expression_symbols
 
 
 # Define functions to set up initial guess

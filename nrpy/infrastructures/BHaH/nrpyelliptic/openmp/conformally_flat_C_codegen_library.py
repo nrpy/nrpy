@@ -10,9 +10,10 @@ Authors: Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
 from inspect import currentframe as cf
 from pathlib import Path
 from types import FrameType as FT
-from typing import Union, cast, Tuple, Dict
+from typing import Dict, Tuple, Union, cast
 
 import sympy as sp
+
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
