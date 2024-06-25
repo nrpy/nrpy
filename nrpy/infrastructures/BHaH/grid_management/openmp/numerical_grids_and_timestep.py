@@ -11,9 +11,10 @@ Author: Zachariah B. Etienne
 """
 
 from typing import Dict, List
+
 import nrpy.c_function as cfc
-import nrpy.params as par
 import nrpy.infrastructures.BHaH.grid_management.base_numerical_grids_and_timestep as base_gm_classes
+import nrpy.params as par
 
 # fmt: off
 for i in range(3):
@@ -161,7 +162,9 @@ class register_CFunction_numerical_grids_and_timestep(
         int grid=0;
     """
         for which_CoordSystem, CoordSystem in enumerate(list_of_CoordSystems):
-            self.body += f"griddata[grid].params.CoordSystem_hash = {CoordSystem.upper()};\n"
+            self.body += (
+                f"griddata[grid].params.CoordSystem_hash = {CoordSystem.upper()};\n"
+            )
             self.body += f"griddata[grid].params.grid_physical_size = {list_of_grid_physical_sizes[which_CoordSystem]};\n"
             self.body += "numerical_grid_params_Nxx_dxx_xx(commondata, &griddata[grid].params, griddata[grid].xx, Nx, grid_is_resized);\n"
             self.body += "grid++;\n\n"
@@ -177,7 +180,9 @@ class register_CFunction_numerical_grids_and_timestep(
 """
         else:
             self.body += "// (reference-metric precomputation disabled)\n"
-        self.body += "\n// Step 1.e: Set up curvilinear boundary condition struct (bcstruct)\n"
+        self.body += (
+            "\n// Step 1.e: Set up curvilinear boundary condition struct (bcstruct)\n"
+        )
 
         if self.enable_CurviBCs:
             self.body += r"""for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
@@ -216,7 +221,6 @@ if(calling_for_first_time) {
 def register_CFunctions(
     list_of_CoordSystems: List[str],
     list_of_grid_physical_sizes: List[float],
-    grid_physical_size: float,
     Nxx_dict: Dict[str, List[int]],
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
@@ -227,7 +231,6 @@ def register_CFunctions(
 
     :param list_of_CoordSystems: List of CoordSystems
     :param list_of_grid_physical_sizes: List of grid_physical_size for each CoordSystem; needed for Independent grids.
-    :param grid_physical_size: Physical size of the grid.
     :param Nxx_dict: Dictionary containing number of grid points.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions.
@@ -236,7 +239,6 @@ def register_CFunctions(
     for CoordSystem in list_of_CoordSystems:
         register_CFunction_numerical_grid_params_Nxx_dxx_xx(
             CoordSystem=CoordSystem,
-            grid_physical_size=grid_physical_size,
             Nxx_dict=Nxx_dict,
         )
         register_CFunction_cfl_limited_timestep(
