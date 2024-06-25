@@ -27,19 +27,20 @@ import shutil
 from pathlib import Path
 
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
-import nrpy.infrastructures.BHaH.checkpointing as chkpt
+import nrpy.infrastructures.BHaH.checkpoints.openmp.checkpointing as chkpt
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
-import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
+import nrpy.infrastructures.BHaH.CurviBoundaryConditions.openmp.CurviBoundaryConditions as cbc
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 import nrpy.infrastructures.BHaH.general_relativity.BSSN_C_codegen_library as BCl
 import nrpy.infrastructures.BHaH.general_relativity.NRPyPN_quasicircular_momenta as NRPyPNqm
 import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.ID_persist_struct as IDps
 import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.TwoPunctures_lib as TPl
-import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
+import nrpy.infrastructures.BHaH.grid_management.openmp.numerical_grids_and_timestep as numericalgrids
+import nrpy.infrastructures.BHaH.grid_management.openmp.register_rfm_precompute as rfm_precompute
+import nrpy.infrastructures.BHaH.grid_management.openmp.xx_tofrom_Cart as xxCartxx
+import nrpy.infrastructures.BHaH.header_definitions.openmp.output_BHaH_defines_h as Bdefines_h
 import nrpy.infrastructures.BHaH.special_functions.spin_weight_minus2_spherical_harmonics as swm2sh
-import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xxCartxx
 import nrpy.infrastructures.superB.chare_communication_maps as charecomm
 import nrpy.infrastructures.superB.CurviBoundaryConditions as superBcbc
 import nrpy.infrastructures.superB.diagnostics as superBdiagnostics
@@ -51,7 +52,7 @@ import nrpy.infrastructures.superB.superB.superB_lib as superBl
 import nrpy.infrastructures.superB.timestepping_chare as superBtimestepping
 import nrpy.params as par
 from nrpy.helpers import simd
-from nrpy.infrastructures.BHaH import rfm_precompute, rfm_wrapper_functions
+from nrpy.infrastructures.BHaH import rfm_wrapper_functions
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
