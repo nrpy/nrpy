@@ -11,13 +11,16 @@ Authors: Brandon Clark
 
 import warnings
 from typing import Dict, List, Tuple, Union
+
 import sympy as sp  # Import SymPy, a computer algebra system written entirely in Python
+
 import nrpy.c_function as cfc
 from nrpy.c_codegen import c_codegen
 from nrpy.helpers.generic import superfast_uniq
 from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import (
     generate_Butcher_tables,
 )
+
 
 class RKFunction:
     """
