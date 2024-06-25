@@ -24,6 +24,7 @@ Email:  ksible *at* outlook *dot* com
 
 import sys  # Standard Python module for multiplatform OS-level functions
 from typing import Generator, List, Optional, Union
+
 import sympy as sp
 
 
@@ -205,7 +206,7 @@ def get_unique_expression_symbols(
     >>> xx0 = sp.Symbol('xx0')
     >>> x = cos(a + b)**2 ++ xx0
     >>> get_unique_expression_symbols(x, ["xx0"])
-    ['b', 'a']
+    ['a', 'b']
     """
     if exclude is None:
         exclude = []
@@ -219,7 +220,7 @@ def get_unique_expression_symbols(
         return this_symbol_list
 
     symbols = get_expression_symbols__recursive(expr)
-    return [sym for sym in set(symbols) if not sym in exclude]
+    return sorted([sym for sym in set(symbols) if not sym in exclude])
 
 
 if __name__ == "__main__":
