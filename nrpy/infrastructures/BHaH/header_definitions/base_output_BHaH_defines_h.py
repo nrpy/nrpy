@@ -265,6 +265,7 @@ _Pragma(__OMP_PRAGMA__)  \
         self.file_output_str += """
 #endif
 """
+
     # Overload this if you need to structure things differently
     def write_to_file(self) -> None:
         """Write final str to header file."""
