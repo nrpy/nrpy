@@ -746,6 +746,8 @@ class setup_Cfunction_FD1_arbitrary_upwind:
         dirn: int,
         radiation_BC_fd_order: int = -1,
         fp_type: str = "double",
+        rational_const_alias: str = "const",
+        fp_type_alias: str = "REAL",
     ) -> None:
         self.dirn = dirn
         self.radiation_BC_fd_order = radiation_BC_fd_order
@@ -780,29 +782,63 @@ class setup_Cfunction_FD1_arbitrary_upwind:
                 tmp_list.append(-offset)
 
         for offset in tmp_list:
-            self.body += f"case {offset}:\n"
-            self.body += "  return ("
+            self.body += f"case {offset}:\n{{\n"
             coeffs, indices = get_arb_offset_FD_coeffs_indices(
                 radiation_BC_fd_order, offset, 1
             )
+
+            # Build dictionary of coefficients to enable strong typing
+            # and assignment to Rational declarations.
+            rational_dict = dict()
+            for i, coeff in enumerate(coeffs):
+                if coeff == 0:
+                    continue
+
+                # We store the absolute value in the dictionary to avoid
+                # duplicate assignments
+                sign = -1 if coeff <= 0 else 1
+                decl_coeff = coeff * sign
+                if decl_coeff in rational_dict:
+                    continue
+                v = f"Rational_decl__{decl_coeff.p}_{decl_coeff.q}"
+                rational_dict[decl_coeff] = v
+                RATIONAL_assignment = f"{rational_const_alias} {fp_type_alias} {str(v)}"
+                self.body += sp.ccode(
+                    decl_coeff,
+                    assign_to=RATIONAL_assignment,
+                    type_aliases=sp_type_alias,
+                )
+            self.body += "  return ("
 
             for i, coeff in enumerate(coeffs):
                 if coeff == 0:
                     continue
                 offset_str: str = str(indices[i])
+
+                # Build key since it's abs(coeff)
+                key_sign = -1 if coeff <= 0 else 1
+                decl_coeff = coeff * key_sign
+
+                # ensure the correct sign is applied
+                # in the upwind algorithm
+                sign = "-" if coeff < 0 else "+"
+
                 if i > 0:
                     self.body += "          "
                 if offset_str == "0":
-                    self.body += f"+{sp.ccode(coeff, type_aliases=sp_type_alias)}*gf[IDX3(i0,i1,i2)]\n"
+                    self.body += (
+                        f"{sign} {rational_dict[decl_coeff]}*gf[IDX3(i0,i1,i2)]\n"
+                    )
+
                 else:
                     if dirn == 0:
-                        self.body += f"+{sp.ccode(coeff, type_aliases=sp_type_alias)}*gf[IDX3(i0+{offset_str},i1,i2)]\n"
+                        self.body += f"{sign} {rational_dict[decl_coeff]}*gf[IDX3(i0+{offset_str},i1,i2)]\n"
                     elif dirn == 1:
-                        self.body += f"+{sp.ccode(coeff, type_aliases=sp_type_alias)}*gf[IDX3(i0,i1+{offset_str},i2)]\n"
+                        self.body += f"{sign} {rational_dict[decl_coeff]}*gf[IDX3(i0,i1+{offset_str},i2)]\n"
                     elif dirn == 2:
-                        self.body += f"+{sp.ccode(coeff, type_aliases=sp_type_alias)}*gf[IDX3(i0,i1,i2+{offset_str})]\n"
+                        self.body += f"{sign} {rational_dict[decl_coeff]}*gf[IDX3(i0,i1,i2+{offset_str})]\n"
 
-            self.body = self.body[:-1].replace("+-", "-") + f") * invdxx{dirn};\n"
+            self.body = self.body[:-1].replace("+-", "-") + f") * invdxx{dirn};\n }}\n"
 
         self.body += """}
     return 0.0 / 0.0;  // poison output if offset computed incorrectly
