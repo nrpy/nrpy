@@ -248,12 +248,12 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
     body += (
         f"""
 // Step 1: Convert the (curvilinear) coordinate (x0,x1,x2) to Cartesian coordinates
-{type_alias} REAL xCart[3];  // where (x,y,z) is output
+{type_alias} xCart[3];  // where (x,y,z) is output
 {{
 // xx_to_Cart for EigenCoordinate {rfm.CoordSystem} (orig coord = {rfm_orig.CoordSystem}):
-{type_alias} REAL xx0 = xx[0][i0];
-{type_alias} REAL xx1 = xx[1][i1];
-{type_alias} REAL xx2 = xx[2][i2];
+{type_alias} xx0 = xx[0][i0];
+{type_alias} xx1 = xx[1][i1];
+{type_alias} xx2 = xx[2][i2];
 """
         + ccg.c_codegen(
             [rfm.xx_to_Cart[0], rfm.xx_to_Cart[1], rfm.xx_to_Cart[2]],
@@ -263,9 +263,9 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
         + "}\n"
     )
     body += rf"""
-{type_alias} REAL Cartx = xCart[0];
-{type_alias} REAL Carty = xCart[1];
-{type_alias} REAL Cartz = xCart[2];
+{type_alias} Cartx = xCart[0];
+{type_alias} Carty = xCart[1];
+{type_alias} Cartz = xCart[2];
 """
 
     # Step 2: Output C code for the Eigen-Coordinate mapping from Cartesian->xx':
@@ -287,13 +287,13 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
         )
     # Step 2.b: Output C code for the Eigen-Coordinate mapping from Cartesian->xx:
     body += f"  // Cart_to_xx for EigenCoordinate {rfm.CoordSystem} (orig coord = {rfm_orig.CoordSystem});\n"
-    xx_to_cart_body += ccg.c_codegen(
+    tmp_str = ccg.c_codegen(
         [rfm.Cart_to_xx[0], rfm.Cart_to_xx[1], rfm.Cart_to_xx[2]],
         ["Cart_to_xx0_inbounds", "Cart_to_xx1_inbounds", "Cart_to_xx2_inbounds"],
         fp_type=fp_type,
     )
-    xx_to_cart_body = xx_to_cart_body.replace("REAL", type_alias)
-    body += xx_to_cart_body
+    tmp_str = tmp_str.replace("REAL", type_alias)
+    body += tmp_str
     body += rf"""
   // Next compute xxmin[i]. By definition,
   //    xx[i][j] = xxmin[i] + (({type_alias})(j-NGHOSTS) + (1.0{type_literal}/2.0{type_literal}))*dxxi;
@@ -327,7 +327,7 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
     {type_alias} xx1 = xx[1][i1];
     {type_alias} xx2 = xx[2][i2];
 """
-    tmp_str += ccg.c_codegen(
+    tmp_str = ccg.c_codegen(
         [rfm_orig.xx_to_Cart[0], rfm_orig.xx_to_Cart[1], rfm_orig.xx_to_Cart[2]],
         ["xCart_from_xx", "yCart_from_xx", "zCart_from_xx"],
         include_braces=False,
@@ -782,7 +782,7 @@ class setup_Cfunction_FD1_arbitrary_upwind:
                 tmp_list.append(-offset)
 
         for offset in tmp_list:
-            self.body += f"case {offset}:\n{{\n"
+            self.body += f"case {offset}:\n {{\n"
             coeffs, indices = get_arb_offset_FD_coeffs_indices(
                 radiation_BC_fd_order, offset, 1
             )
