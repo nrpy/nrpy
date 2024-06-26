@@ -6,27 +6,26 @@ Authors: Zachariah B. Etienne
          Samuel Cupp
 """
 
-from typing import Union, cast, List
 from inspect import currentframe as cfr
 from types import FrameType as FT
+from typing import List, Union, cast
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-import nrpy.grid as gri
-import nrpy.params as par
-import nrpy.helpers.parallel_codegen as pcg
 import nrpy.finite_difference as fin
-
+import nrpy.grid as gri
+import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.CarpetX.simple_loop as lp
-from nrpy.infrastructures.CarpetX.CarpetX_include_header import define_standard_includes
+import nrpy.params as par
 from nrpy.equations.general_relativity.BSSN_constraints import BSSN_constraints
+from nrpy.infrastructures.CarpetX.CarpetX_include_header import define_standard_includes
 
 
 def register_CFunction_BSSN_constraints(
     thorn_name: str,
-    enable_T4munu: bool,
     CoordSystem: str,
     enable_rfm_precompute: bool,
+    enable_T4munu: bool,
     enable_simd: bool,
     fd_order: int,
     fp_type: str = "double",
@@ -36,8 +35,8 @@ def register_CFunction_BSSN_constraints(
 
     :param thorn_name: The Einstein Toolkit thorn name.
     :param CoordSystem: The coordinate system to be used.
-    :param enable_T4munu: Whether to include the stress-energy tensor.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
+    :param enable_T4munu: Whether to include the stress-energy tensor.
     :param enable_simd: Whether to enable SIMD instructions.
     :param fd_order: Order of finite difference method
     :param fp_type: Floating point type, e.g., "double".
@@ -49,10 +48,9 @@ def register_CFunction_BSSN_constraints(
         return None
 
     old_fd_order = par.parval_from_str("fd_order")
-    old_enable_T4munu = par.parval_from_str("enable_T4munu")
     # Set this because parallel codegen needs the correct local values
     par.set_parval_from_str("fd_order", fd_order)
-    par.set_parval_from_str("enable_T4munu", enable_T4munu)
+    enable_RbarDD_gridfunctions = False
 
     includes = define_standard_includes()
     if enable_simd:
@@ -79,7 +77,10 @@ def register_CFunction_BSSN_constraints(
 """
 
     Bcon = BSSN_constraints[
-        CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
+        CoordSystem
+        + ("_rfm_precompute" if enable_rfm_precompute else "")
+        + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
+        + ("_T4munu" if enable_T4munu else "")
     ]
 
     list_of_output_exprs = [Bcon.H]
@@ -119,6 +120,8 @@ if(FD_order == {fd_order}) {{
             T4UU00GF, T4UU01GF, T4UU02GF, T4UU03GF"""
     schedule += f"""
     WRITES: aux_variables
+    SYNC: aux_variables
+
   }} "Compute BSSN (Hamiltonian and momentum) constraints, at finite-differencing order {fd_order}"
 }}
 """
@@ -143,6 +146,5 @@ if(FD_order == {fd_order}) {{
 
     # Reset to the initial values
     par.set_parval_from_str("fd_order", old_fd_order)
-    par.set_parval_from_str("enable_T4munu", old_enable_T4munu)
 
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())

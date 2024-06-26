@@ -7,8 +7,8 @@ Author: Zachariah B. Etienne
 
 from typing import Dict, List
 
-import nrpy.params as par
 import nrpy.c_function as cfc
+import nrpy.params as par
 
 
 class GridCommonData:

@@ -6,10 +6,10 @@ Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
 """
 
 import os
-from typing import Optional, List, Dict, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import nrpy.params as par
-from nrpy.helpers.generic import prefix_with_star, clang_format
+from nrpy.helpers.generic import clang_format, prefix_with_star
 
 
 class CFunction:

@@ -1,0 +1,188 @@
+## BASED ON mclachlan/par/qc0-mclachlan.par
+
+Cactus::cctk_run_title = "WaveToyNRPy"
+
+
+Cactus::cctk_full_warnings         = yes
+Cactus::highlight_warning_messages = no
+
+Cactus::terminate   = "iteration"
+Cactus::cctk_itlast = 8
+
+ActiveThorns = "WaveToyNRPy"
+ActiveThorns = "IDWaveToyNRPy"
+ActiveThorns = "diagWaveToyNRPy"
+ActiveThorns = "NewRad"
+
+ActiveThorns = "IOUtil TerminationTrigger"
+
+IO::out_dir = $parfile
+
+
+
+ActiveThorns = "AEILocalInterp"
+
+ActiveThorns = "HDF5"
+
+ActiveThorns = "LocalInterp"
+
+ActiveThorns = "Slab"
+ActiveThorns = "InitBase"
+
+################################################################################
+# Initial data
+################################################################################
+IDWaveToyNRPy::sigma = 3.0
+IDWaveToyNRPy::wavespeed = 1.0
+
+Carpet::init_fill_timelevels            = yes
+#InitBase::initial_data_setup_method     = "init_single_level"
+
+################################################################################
+# Evolution parameters
+################################################################################
+
+ActiveThorns = "MoL Time"
+
+MoL::ODE_Method             = "RK4"
+MoL::MoL_Intermediate_Steps = 4
+MoL::MoL_Num_Scratch_Levels = 1
+
+
+################################################################################
+# Grid parameters
+################################################################################
+
+ActiveThorns = "Carpet CarpetLib CarpetInterp CarpetReduce CarpetSlab"
+
+Carpet::verbose           = no
+Carpet::veryverbose       = no
+Carpet::schedule_barriers = no
+Carpet::storage_verbose   = no
+#Carpet::timers_verbose    = no
+CarpetLib::output_bboxes  = no
+
+driver::ghost_size       = 4  # Based on NRPy+ FD order!
+Carpet::use_buffer_zones = yes
+
+Carpet::prolongation_order_space = 5
+Carpet::prolongation_order_time  = 2
+
+Carpet::convergence_level = 0
+
+Carpet::poison_new_timelevels = yes
+CarpetLib::poison_new_memory  = yes
+
+Carpet::output_timers_every      = 128
+CarpetLib::print_timestats_every = 128
+CarpetLib::print_memstats_every  = 128
+
+
+ActiveThorns = "NaNChecker"
+
+NaNChecker::check_every     = 512
+#NaNChecker::verbose         = "all"
+#NaNChecker::action_if_found = "just warn"
+NaNChecker::action_if_found = "terminate"
+NaNChecker::check_vars      = "
+        WaveToyNRPy::uuGF
+        WaveToyNRPy::vvGF
+"
+
+
+
+ActiveThorns = "Boundary CartGrid3D CoordBase SymBase"
+
+CoordBase::domainsize = "minmax"
+
+CoordBase::xmin = -15 + 0.5*0.46875  # offset by half the spacing of the finest grid.
+CoordBase::ymin = -15 + 0.5*0.46875
+CoordBase::zmin = -15 + 0.5*0.46875
+CoordBase::xmax = +15 + 0.5*0.46875
+CoordBase::ymax = +15 + 0.5*0.46875
+CoordBase::zmax = +15 + 0.5*0.46875
+CoordBase::dx   =    1.875
+CoordBase::dy   =    1.875
+CoordBase::dz   =    1.875
+
+CoordBase::boundary_size_x_lower     = 4
+CoordBase::boundary_size_y_lower     = 4
+CoordBase::boundary_size_z_lower     = 4
+CoordBase::boundary_size_x_upper     = 4
+CoordBase::boundary_size_y_upper     = 4
+CoordBase::boundary_size_z_upper     = 4
+
+
+CartGrid3D::type = "coordbase"
+
+
+ActiveThorns = "CarpetRegrid2"
+
+CarpetRegrid2::regrid_every             = 128
+#CarpetRegrid2::freeze_unaligned_levels = yes
+#CarpetRegrid2::symmetry_rotating180    = yes
+CarpetRegrid2::verbose                 = yes
+
+CarpetRegrid2::num_centres = 1
+
+Carpet::domain_from_coordbase = yes
+Carpet::max_refinement_levels       = 3
+CarpetRegrid2::num_levels_1         = 3
+CarpetRegrid2::position_x_1         = 0.0
+CarpetRegrid2::radius_1[ 1]         = 7.5
+CarpetRegrid2::radius_1[ 2]         = 3.75
+
+# num repeats = 5 -> 2^5 = 32: 0.5 * 1/32.
+Carpet::time_refinement_factors = "[1, 1, 1]"
+Time::dtfac = 0.9 * 0.5 * (1.0/4.0)  # = 0.9 (safety factor) * 0.5 (std CFL) * 1/2^2 (due to 11 repeats in Carpet::time_refinement_factors)
+
+# ActiveThorns = "CarpetIOScalar"
+# IOScalar::outScalar_every = 8
+# IOScalar::one_file_per_group = no
+# IOScalar::outScalar_reductions = "minimum maximum"
+# IOScalar::outScalar_vars     = "
+#   WaveToyNRPy::uuGF
+#   WaveToyNRPy::vvGF
+# "
+
+ActiveThorns = "CarpetIOBasic"
+
+IOBasic::outInfo_every      = 8
+IOBasic::outInfo_reductions = "norm2 maximum minimum"
+IOBasic::outInfo_vars       = "
+  WaveToyNRPy::uuGF
+  WaveToyNRPy::uu_exactGF
+"
+
+
+
+Activethorns = "CarpetIOHDF5"
+
+IOHDF5::checkpoint                  = no
+IO::checkpoint_dir                  = $parfile
+IO::checkpoint_ID                   = no
+###IO::checkpoint_every_walltime_hours = 6.0
+IO::checkpoint_on_terminate         = yes
+
+IO::recover     = "autoprobe"
+IO::recover_dir = $parfile
+
+ActiveThorns = "TimerReport"
+
+TimerReport::out_every                  = 512
+TimerReport::out_filename               = "TimerReport"
+TimerReport::output_all_timers_together = yes
+TimerReport::output_all_timers_readable = yes
+TimerReport::n_top_timers               = 20
+
+ActiveThorns = "CarpetIOASCII"
+IOASCII::out1D_every          = 8
+IOASCII::out_precision        = 14
+IOASCII::out1D_x              = "yes"
+IOASCII::out1D_y              = "no"
+IOASCII::out1D_z              = "no"
+IOASCII::out1D_d              = "no"
+IOASCII::out1D_vars           = "WaveToyNRPy::uuGF"
+
+CarpetIOASCII::compact_format = yes
+CarpetIOASCII::output_ghost_points = no

@@ -6,22 +6,21 @@ Authors: Zachariah B. Etienne
          Samuel Cupp
 """
 
-from typing import Union, cast, List
 from inspect import currentframe as cfr
 from types import FrameType as FT
+from typing import List, Union, cast
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-import nrpy.grid as gri
-import nrpy.params as par
-import nrpy.helpers.parallel_codegen as pcg
 import nrpy.finite_difference as fin
-
+import nrpy.grid as gri
+import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.ETLegacy.simple_loop as lp
+import nrpy.params as par
+from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.infrastructures.ETLegacy.ETLegacy_include_header import (
     define_standard_includes,
 )
-from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 
 
 def register_CFunction_Ricci_eval(
@@ -50,10 +49,9 @@ def register_CFunction_Ricci_eval(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    old_fd_order = par.parval_from_str("fd_order")
+    orig_fd_order = par.parval_from_str("fd_order")
     # Set this because parallel codegen needs the correct local values
     par.set_parval_from_str("fd_order", fd_order)
-    par.set_parval_from_str("enable_RbarDD_gridfunctions", False)
 
     includes = define_standard_includes()
     if enable_simd:
@@ -122,5 +120,5 @@ if(FD_order == {fd_order}) {{
         ET_schedule_bins_entries=[("MoL_CalcRHS", schedule)],
     )
     # Reset to the initial values
-    par.set_parval_from_str("fd_order", old_fd_order)
+    par.set_parval_from_str("fd_order", orig_fd_order)
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())

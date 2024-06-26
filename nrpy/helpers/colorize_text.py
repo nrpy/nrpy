@@ -11,6 +11,7 @@ Author: Steven Brandt
 
 import sys
 from typing import Any, Dict
+
 from typing_extensions import Literal
 
 # Define the type for color names

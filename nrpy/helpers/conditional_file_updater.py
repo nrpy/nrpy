@@ -4,14 +4,15 @@ The ConditionalFileUpdater class helps users see and understand changes to gener
 Author: Steven R. Brandt
 """
 
-from typing import Any, Optional, Union
 import io
 import os
-from difflib import context_diff
 import sys
+from difflib import context_diff
 from pathlib import Path
-from nrpy.helpers.generic import clang_format
+from typing import Any, Optional, Union
+
 import nrpy.helpers.colorize_text as c
+from nrpy.helpers.generic import clang_format
 
 verbose = False
 nochange = False

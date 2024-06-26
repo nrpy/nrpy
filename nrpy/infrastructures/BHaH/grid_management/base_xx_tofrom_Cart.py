@@ -1,19 +1,19 @@
 """
 Base classes for Coordinate conversions.
 
-The parallelization modules will generate functions 
-to convert between grid coordinate (xx0,xx1,xx2) (uniform grid spacing) 
+The parallelization modules will generate functions
+to convert between grid coordinate (xx0,xx1,xx2) (uniform grid spacing)
 to Cartesian coordinate (x,y,z) within the BHaH infrastructure.
 
 Authors: Zachariah B. Etienne
         zachetie **at** gmail **dot** com
         Samuel D. Tootle
-        sdtootle **at** gmail **dot** com        
+        sdtootle **at** gmail **dot** com
 """
 
-import nrpy.reference_metric as refmetric
 import nrpy.c_codegen as ccg
 import nrpy.grid as gri
+import nrpy.reference_metric as refmetric
 from nrpy.helpers.expr_tree import get_unique_expression_symbols
 
 

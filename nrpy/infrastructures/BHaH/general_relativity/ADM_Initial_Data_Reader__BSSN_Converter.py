@@ -7,20 +7,21 @@ Author: Zachariah B. Etienne
 
 # Initialize core Python/NRPy+ modules
 # Step 1: Initialize core Python/NRPy+ modules
-from typing import List, cast, Sequence, Optional
+from typing import List, Optional, Sequence, cast
+
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
-import nrpy.c_function as cfc  # NRPy+: C function registration
+
 import nrpy.c_codegen as ccg  # NRPy+: C code generation
+import nrpy.c_function as cfc  # NRPy+: C function registration
 import nrpy.grid as gri  # NRPy+: Functions having to do with numerical grids
-import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
-import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 import nrpy.helpers.jacobians as jac
+import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
+import nrpy.infrastructures.BHaH.loop_utilities.openmp.simple_loop as lp
+import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
+from nrpy.equations.general_relativity.ADM_to_BSSN import ADM_to_BSSN
 
 # NRPy+: Computes useful BSSN quantities; e.g., gammabarUU & GammabarUDD needed below
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
-from nrpy.equations.general_relativity.ADM_to_BSSN import ADM_to_BSSN
-
-import nrpy.infrastructures.BHaH.loop_utilities.openmp.simple_loop as lp
 from nrpy.infrastructures.BHaH import BHaH_defines_h
 
 
@@ -729,8 +730,8 @@ typedef struct __rescaled_BSSN_rfm_basis_struct__ {
 
 
 if __name__ == "__main__":
-    import sys
     import doctest
+    import sys
 
     results = doctest.testmod()
 

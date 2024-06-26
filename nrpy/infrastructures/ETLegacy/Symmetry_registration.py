@@ -5,8 +5,8 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-import nrpy.grid as gri
 import nrpy.c_function as cfc
+import nrpy.grid as gri
 
 
 def register_CFunction_Symmetry_registration_oldCartGrid3D(

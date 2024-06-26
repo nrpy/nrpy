@@ -1,4 +1,4 @@
-from mpmath import mpf, mpc  # type: ignore
+from mpmath import mpc, mpf  # type: ignore
 
 trusted_dict = {
     "l4U_0": mpf("0.707106781186547524400844362104785"),

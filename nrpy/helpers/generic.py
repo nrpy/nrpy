@@ -6,12 +6,13 @@ Author: Zachariah B. Etienne
         Dave Kirby (super-fast uniq function)
 """
 
-from typing import List, Any, cast
-import subprocess
+import base64
 import hashlib
 import lzma
-import base64
+import subprocess
 from difflib import ndiff
+from typing import Any, List, cast
+
 from nrpy.helpers.cached_functions import is_cached, read_cached, write_cached
 
 

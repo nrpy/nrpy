@@ -11,11 +11,12 @@ Instructions for uploading latest release to PyPI:
 """
 
 import os
-import sys
 import subprocess
+import sys
 from pathlib import Path
 from typing import List
-from setuptools import setup, find_packages  # type: ignore
+
+from setuptools import find_packages, setup  # type: ignore
 
 # pylint: disable=consider-using-f-string
 
@@ -108,6 +109,9 @@ if __name__ == "__main__":
             "nrpy.infrastructures.BHaH.general_relativity.TwoPunctures": [
                 "TP_utilities.h",
                 "TwoPunctures.h",
+            ],
+            "nrpy.infrastructures.superB.superB": [
+                "superB.h",
             ],
             "nrpy.helpers": ["simd_intrinsics.h"],
             "nrpy": ["py.typed"],

@@ -6,6 +6,7 @@ Author: Zachariah B. Etienne
 """
 
 import sys
+
 import nrpy.params as par
 from nrpy.infrastructures.BHaH import griddata_commondata
 

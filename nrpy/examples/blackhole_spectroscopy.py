@@ -12,36 +12,35 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
+import os
+
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
 import shutil
-import os
 from pathlib import Path
 
+import nrpy.helpers.parallel_codegen as pcg
+import nrpy.infrastructures.BHaH.checkpoints.openmp.checkpointing as chkpt
+import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
+import nrpy.infrastructures.BHaH.CodeParameters as CPs
+import nrpy.infrastructures.BHaH.CurviBoundaryConditions.openmp.CurviBoundaryConditions as cbc
+import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
+import nrpy.infrastructures.BHaH.general_relativity.BSSN_C_codegen_library as BCl
+import nrpy.infrastructures.BHaH.general_relativity.NRPyPN_quasicircular_momenta as NRPyPNqm
+import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.ID_persist_struct as IDps
+import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.TwoPunctures_lib as TPl
+import nrpy.infrastructures.BHaH.grid_management.openmp.numerical_grids_and_timestep as numericalgrids
+import nrpy.infrastructures.BHaH.grid_management.openmp.register_rfm_precompute as rfm_precompute
+import nrpy.infrastructures.BHaH.grid_management.openmp.xx_tofrom_Cart as xxCartxx
+import nrpy.infrastructures.BHaH.header_definitions.openmp.output_BHaH_defines_h as Bdefines_h
+import nrpy.infrastructures.BHaH.main_driver.openmp.main_c as main
+import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
+import nrpy.infrastructures.BHaH.special_functions.spin_weight_minus2_spherical_harmonics as swm2sh
 import nrpy.params as par
 from nrpy.helpers import simd
-import nrpy.helpers.parallel_codegen as pcg
-
-import nrpy.infrastructures.BHaH.header_definitions.openmp.output_BHaH_defines_h as Bdefines_h
-import nrpy.infrastructures.BHaH.general_relativity.BSSN_C_codegen_library as BCl
-import nrpy.infrastructures.BHaH.checkpoints.openmp.checkpointing as chkpt
-import nrpy.infrastructures.BHaH.CodeParameters as CPs
-import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
-import nrpy.infrastructures.BHaH.CurviBoundaryConditions.openmp.CurviBoundaryConditions as cbc
-import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.ID_persist_struct as IDps
-from nrpy.infrastructures.BHaH import griddata_commondata
-import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
+from nrpy.infrastructures.BHaH import griddata_commondata, rfm_wrapper_functions
 from nrpy.infrastructures.BHaH.MoLtimestepping.openmp import MoL
-import nrpy.infrastructures.BHaH.main_driver.openmp.main_c as main
-import nrpy.infrastructures.BHaH.grid_management.openmp.numerical_grids_and_timestep as numericalgrids
-import nrpy.infrastructures.BHaH.general_relativity.NRPyPN_quasicircular_momenta as NRPyPNqm
-import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
-import nrpy.infrastructures.BHaH.grid_management.openmp.register_rfm_precompute as rfm_precompute
-from nrpy.infrastructures.BHaH import rfm_wrapper_functions
-import nrpy.infrastructures.BHaH.special_functions.spin_weight_minus2_spherical_harmonics as swm2sh
-import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.TwoPunctures_lib as TPl
-import nrpy.infrastructures.BHaH.grid_management.openmp.xx_tofrom_Cart as xxCartxx
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -61,9 +60,11 @@ TP_npoints_B = 48
 TP_npoints_phi = 4
 
 enable_KreissOliger_dissipation = True
-KreissOliger_strength_mult_by_W = True
+enable_CAKO = True
+enable_CAHD = True
+enable_SSL = True
 KreissOliger_strength_gauge = 0.99
-KreissOliger_strength_nongauge = 0.1
+KreissOliger_strength_nongauge = 0.3
 LapseEvolutionOption = "OnePlusLog"
 ShiftEvolutionOption = "GammaDriving2ndOrder_Covariant"
 GammaDriving_eta = 2.0
@@ -109,7 +110,6 @@ shutil.rmtree(project_dir, ignore_errors=True)
 # Set NRPy parameters that steer the code generation
 par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 par.set_parval_from_str("fd_order", fd_order)
-par.set_parval_from_str("enable_RbarDD_gridfunctions", separate_Ricci_and_BSSN_RHS)
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 par.set_parval_from_str(
     "swm2sh_maximum_l_mode_generated", swm2sh_maximum_l_mode_generated
@@ -163,23 +163,30 @@ if enable_rfm_precompute:
 BCl.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
+    enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
+    enable_T4munu=False,
     enable_simd=enable_simd,
     enable_fd_functions=enable_fd_functions,
-    enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
     LapseEvolutionOption=LapseEvolutionOption,
     ShiftEvolutionOption=ShiftEvolutionOption,
-    KreissOliger_strength_mult_by_W=KreissOliger_strength_mult_by_W,
+    enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
     KreissOliger_strength_gauge=KreissOliger_strength_gauge,
     KreissOliger_strength_nongauge=KreissOliger_strength_nongauge,
+    enable_CAKO=enable_CAKO,
+    enable_CAHD=enable_CAHD,
+    enable_SSL=enable_SSL,
     OMP_collapse=OMP_collapse,
 )
-BCl.register_CFunction_Ricci_eval(
-    CoordSystem=CoordSystem,
-    enable_rfm_precompute=enable_rfm_precompute,
-    enable_simd=enable_simd,
-    enable_fd_functions=enable_fd_functions,
-    OMP_collapse=OMP_collapse,
-)
+if enable_CAHD:
+    BCl.register_CFunction_cahdprefactor_auxevol_gridfunction([CoordSystem])
+if separate_Ricci_and_BSSN_RHS:
+    BCl.register_CFunction_Ricci_eval(
+        CoordSystem=CoordSystem,
+        enable_rfm_precompute=enable_rfm_precompute,
+        enable_simd=enable_simd,
+        enable_fd_functions=enable_fd_functions,
+        OMP_collapse=OMP_collapse,
+    )
 BCl.register_CFunction_enforce_detgammabar_equals_detgammahat(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
@@ -189,6 +196,8 @@ BCl.register_CFunction_enforce_detgammabar_equals_detgammahat(
 BCl.register_CFunction_constraints(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
+    enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
+    enable_T4munu=False,
     enable_simd=enable_simd,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
@@ -215,7 +224,7 @@ BCl.register_CFunction_psi4_spinweightm2_decomposition_on_sphlike_grids()
 
 numericalgrids.register_CFunctions(
     list_of_CoordSystems=[CoordSystem],
-    grid_physical_size=grid_physical_size,
+    list_of_grid_physical_sizes=[grid_physical_size],
     Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
@@ -225,8 +234,17 @@ cbc.CurviBoundaryConditions_register_C_functions(
     list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order
 )
 
-rhs_string = """
-Ricci_eval(commondata, params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);
+rhs_string = ""
+if enable_SSL:
+    rhs_string += """
+// Set SSL strength (SSL_Gaussian_prefactor):
+commondata->SSL_Gaussian_prefactor = commondata->SSL_h * exp(-commondata->time * commondata->time / (2 * commondata->SSL_sigma * commondata->SSL_sigma));
+"""
+if separate_Ricci_and_BSSN_RHS:
+    rhs_string += (
+        "Ricci_eval(commondata, params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
+    )
+rhs_string += """
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
 if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
   apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].xx,
@@ -292,11 +310,17 @@ Bdefines_h.output_BHaH_defines_h(
     enable_rfm_precompute=enable_rfm_precompute,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
 )
+post_non_y_n_auxevol_mallocs = ""
+if enable_CAHD:
+    post_non_y_n_auxevol_mallocs = """for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
+    cahdprefactor_auxevol_gridfunction(&commondata, &griddata[grid].params, griddata[grid].xx,  griddata[grid].gridfuncs.auxevol_gfs);
+}\n"""
 main.register_CFunction_main_c(
-    initial_data_desc=IDtype,
-    pre_MoL_step_forward_in_time="write_checkpoint(&commondata, griddata);\n",
     MoL_method=MoL_method,
+    initial_data_desc=IDtype,
     boundary_conditions_desc=boundary_conditions_desc,
+    post_non_y_n_auxevol_mallocs=post_non_y_n_auxevol_mallocs,
+    pre_MoL_step_forward_in_time="write_checkpoint(&commondata, griddata);\n",
 )
 griddata_commondata.register_CFunction_griddata_free(
     enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True

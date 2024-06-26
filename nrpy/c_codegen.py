@@ -6,27 +6,27 @@ Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
 """
 
 import logging
-
 import re  # Regular expressions can be toxic due to edge cases -- we use them sparingly
 import sys
-from typing import List, Union, Dict, Any, Optional, Sequence, Tuple
-from typing_extensions import Literal
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+
 import sympy as sp
 import sympy.codegen.ast as sp_ast
+from typing_extensions import Literal
+
 import nrpy.finite_difference as fin
 import nrpy.params as par
-
-from nrpy.helpers.simd import expr_convert_to_simd_intrins
-from nrpy.helpers.generic import superfast_uniq, clang_format
-from nrpy.helpers.cse_preprocess_postprocess import (
-    cse_preprocess,
+from nrpy.helpers.cse_preprocess_postprocess import (  # NRPy+: CSE preprocessing and postprocessing
     cse_postprocess,
-)  # NRPy+: CSE preprocessing and postprocessing
-from nrpy.helpers.type_annotation_utilities import (
-    validate_literal_arguments,
-    generate_class_representation,
+    cse_preprocess,
 )
 from nrpy.helpers.custom_c_codegen_functions import custom_functions_for_SymPy_ccode
+from nrpy.helpers.generic import clang_format, superfast_uniq
+from nrpy.helpers.simd import expr_convert_to_simd_intrins
+from nrpy.helpers.type_annotation_utilities import (
+    generate_class_representation,
+    validate_literal_arguments,
+)
 
 fp_type_list = Literal[
     # Traditional C types

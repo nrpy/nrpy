@@ -1,6 +1,6 @@
 """
 Library of parallelization paradigm agnostic base classes.
-Base classes are used to support generating C functions for solving the 
+Base classes are used to support generating C functions for solving the
 hyperbolic relaxation equation in curvilinear coordinates, using a reference-metric formalism.
 
 Authors: Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
@@ -8,21 +8,22 @@ Authors: Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
          Samuel D. Tootle; sdtootle **at** gmail **dot** com
 """
 
-from typing import Union, Tuple, Dict
+from typing import Dict, Tuple, Union
 
 import sympy as sp
+
+import nrpy.c_codegen as ccg
+import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
-import nrpy.c_codegen as ccg
-import nrpy.c_function as cfc
-from nrpy.helpers.expr_tree import get_unique_expression_symbols
 from nrpy.equations.nrpyelliptic.ConformallyFlat_RHSs import (
     HyperbolicRelaxationCurvilinearRHSs,
 )
 from nrpy.equations.nrpyelliptic.ConformallyFlat_SourceTerms import (
     compute_psi_background_and_ADD_times_AUU,
 )
+from nrpy.helpers.expr_tree import get_unique_expression_symbols
 
 
 # Define functions to set up initial guess
@@ -77,8 +78,6 @@ if( read_checkpoint(commondata, griddata) ) return;
 
 
 # Define functions to set AUXEVOL gridfunctions
-
-
 class base_register_CFunction_auxevol_gfs_single_point:
     """
     Base class for generating the function to compute AUXEVOL grid functions at a single point.

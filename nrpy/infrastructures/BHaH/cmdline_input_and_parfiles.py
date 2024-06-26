@@ -5,9 +5,10 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
+from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional
-from collections import defaultdict
+
 import nrpy.c_function as cfc
 import nrpy.params as par
 

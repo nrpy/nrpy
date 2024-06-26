@@ -5,36 +5,36 @@ Authors: Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
          Zachariah B. Etienne; zachetie **at** gmail **dot* com
 """
 
+import os
+
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
 import shutil
-import os
 
-import nrpy.params as par
-from nrpy.helpers import simd
 import nrpy.helpers.parallel_codegen as pcg
-
-import nrpy.infrastructures.BHaH.header_definitions.openmp.output_BHaH_defines_h as Bdefines_h
 import nrpy.infrastructures.BHaH.checkpoints.openmp.checkpointing as chkpt
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
+import nrpy.infrastructures.BHaH.CurviBoundaryConditions.openmp.CurviBoundaryConditions as cbc
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 import nrpy.infrastructures.BHaH.grid_management.openmp.griddata_free as griddata_commondata
-import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
-import nrpy.infrastructures.BHaH.main_driver.openmp.main_c as main
-from nrpy.infrastructures.BHaH.MoLtimestepping.openmp import MoL
-import nrpy.infrastructures.BHaH.CurviBoundaryConditions.openmp.CurviBoundaryConditions as cbc
-import nrpy.infrastructures.BHaH.nrpyelliptic.openmp.conformally_flat_C_codegen_library as nrpyellClib
 import nrpy.infrastructures.BHaH.grid_management.openmp.numerical_grids_and_timestep as numericalgrids
 import nrpy.infrastructures.BHaH.grid_management.openmp.register_rfm_precompute as rfm_precompute
+import nrpy.infrastructures.BHaH.header_definitions.openmp.output_BHaH_defines_h as Bdefines_h
+import nrpy.infrastructures.BHaH.main_driver.openmp.main_c as main
+import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
+import nrpy.infrastructures.BHaH.nrpyelliptic.openmp.conformally_flat_C_codegen_library as nrpyellClib
+import nrpy.params as par
+from nrpy.helpers import simd
 from nrpy.infrastructures.BHaH import rfm_wrapper_functions
 from nrpy.infrastructures.BHaH.grid_management.openmp import xx_tofrom_Cart
+from nrpy.infrastructures.BHaH.MoLtimestepping.openmp import MoL
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Code-generation-time parameters:
-project_name = "nrpyelliptic_conformally_flat_new"
+project_name = "nrpyelliptic_conformally_flat"
 fp_type = "double"
 grid_physical_size = 1.0e6
 t_final = grid_physical_size  # This parameter is effectively not used in NRPyElliptic
@@ -184,7 +184,7 @@ nrpyellClib.register_CFunction_initialize_constant_auxevol()
 
 numericalgrids.register_CFunctions(
     list_of_CoordSystems=[CoordSystem],
-    grid_physical_size=grid_physical_size,
+    list_of_grid_physical_sizes=[grid_physical_size],
     Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
@@ -337,7 +337,7 @@ if initial_data_type == "axisymmetric":
 #         command line parameters, set up boundary conditions,
 #         and create a Makefile for this project.
 #         Project is output to project/[project_name]/
-CPs.write_CodeParameters_h_files(project_dir=project_dir, decorator="[[maybe_unused]]")
+CPs.write_CodeParameters_h_files(project_dir=project_dir)
 CPs.register_CFunctions_params_commondata_struct_set_to_default()
 cmdpar.generate_default_parfile(project_dir=project_dir, project_name=project_name)
 cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
@@ -358,12 +358,12 @@ post_MoL_step_forward_in_time = r"""    check_stop_conditions(&commondata, gridd
     }
 """
 main.register_CFunction_main_c(
+    MoL_method=MoL_method,
     initial_data_desc="",
+    boundary_conditions_desc=boundary_conditions_desc,
+    post_non_y_n_auxevol_mallocs="initialize_constant_auxevol(&commondata, griddata);\n",
     pre_MoL_step_forward_in_time="write_checkpoint(&commondata, griddata);\n",
     post_MoL_step_forward_in_time=post_MoL_step_forward_in_time,
-    MoL_method=MoL_method,
-    boundary_conditions_desc=boundary_conditions_desc,
-    initialize_constant_auxevol=True,
 )
 griddata_commondata.register_CFunction_griddata_free(
     enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True

@@ -95,15 +95,15 @@ ActiveThorns = "Boundary CartGrid3D CoordBase SymBase"
 
 CoordBase::domainsize = "minmax"
 
-CoordBase::xmin = -1500.0 + 0.5*0.023809523809523808  # offset by half the spacing of the finest grid.
-CoordBase::ymin = -1500.0 + 0.5*0.023809523809523808
-CoordBase::zmin = -1500.0 + 0.5*0.023809523809523808
-CoordBase::xmax = +1500.0 + 0.5*0.023809523809523808
-CoordBase::ymax = +1500.0 + 0.5*0.023809523809523808
-CoordBase::zmax = +1500.0 + 0.5*0.023809523809523808
-CoordBase::dx   =    46.875*2
-CoordBase::dy   =    46.875*2
-CoordBase::dz   =    46.875*2
+CoordBase::xmin = -1500.0 + 0.5*0.0457763671875  # offset by half the spacing of the finest grid.
+CoordBase::ymin = -1500.0 + 0.5*0.0457763671875
+CoordBase::zmin = -1500.0 + 0.5*0.0457763671875
+CoordBase::xmax = +1500.0 + 0.5*0.0457763671875
+CoordBase::ymax = +1500.0 + 0.5*0.0457763671875
+CoordBase::zmax = +1500.0 + 0.5*0.0457763671875
+CoordBase::dx   =    93.75
+CoordBase::dy   =    93.75
+CoordBase::dz   =    93.75
 
 CoordBase::boundary_size_x_lower     = 4
 CoordBase::boundary_size_y_lower     = 4

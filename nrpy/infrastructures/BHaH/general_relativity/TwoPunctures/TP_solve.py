@@ -35,8 +35,8 @@ def register_CFunction_TP_solve() -> None:
 #if 0
   int percent10 = 0;
 #endif
-  static REAL *F = NULL;
-  static derivs u; //, v, cf_v;
+  REAL *F = NULL;
+  derivs u; //, v, cf_v;
   REAL admMass;
 
   if (!F) {

@@ -5,16 +5,17 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot** com
 """
 
-from typing import cast, Union
 from inspect import currentframe as cf
 from types import FrameType as FT
+from typing import Union, cast
+
 import sympy as sp
 
-import nrpy.params as par
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-import nrpy.helpers.parallel_codegen as pcg
 import nrpy.equations.special_functions.spin_weighted_spherical_harmonics as SWSH
+import nrpy.helpers.parallel_codegen as pcg
+import nrpy.params as par
 
 par.register_param(
     int,

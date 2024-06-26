@@ -1,4 +1,4 @@
-from mpmath import mpf, mpc  # type: ignore
+from mpmath import mpc, mpf  # type: ignore
 
 trusted_dict = {
     "psi4_im_pt_0": mpc(real="0.0", imag="53.0125628390635915496616313140928"),

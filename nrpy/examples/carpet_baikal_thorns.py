@@ -6,30 +6,35 @@ Authors: Zachariah B. Etienne
          Samuel Cupp
 """
 
+import os
+from pathlib import Path
+
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
 from typing import List
-from pathlib import Path
-import os
 
 import nrpy.grid as gri
-import nrpy.params as par
 import nrpy.helpers.parallel_codegen as pcg
+import nrpy.params as par
 from nrpy.helpers import simd
-
-from nrpy.infrastructures.ETLegacy import boundary_conditions
-from nrpy.infrastructures.ETLegacy import make_code_defn
-from nrpy.infrastructures.ETLegacy import MoL_registration
-from nrpy.infrastructures.ETLegacy import Symmetry_registration
-from nrpy.infrastructures.ETLegacy import zero_rhss
-from nrpy.infrastructures.ETLegacy import schedule_ccl
-from nrpy.infrastructures.ETLegacy import interface_ccl
-from nrpy.infrastructures.ETLegacy import param_ccl
+from nrpy.infrastructures.ETLegacy import (
+    MoL_registration,
+    Symmetry_registration,
+    boundary_conditions,
+    interface_ccl,
+    make_code_defn,
+    param_ccl,
+    schedule_ccl,
+    zero_rhss,
+)
 
 # All needed functions can be imported from the ETLegacy infrastructure
 from nrpy.infrastructures.ETLegacy.general_relativity.ADM_to_BSSN import (
     register_CFunction_ADM_to_BSSN,
+)
+from nrpy.infrastructures.ETLegacy.general_relativity.BSSN_constraints import (
+    register_CFunction_BSSN_constraints,
 )
 from nrpy.infrastructures.ETLegacy.general_relativity.BSSN_to_ADM import (
     register_CFunction_BSSN_to_ADM,
@@ -43,14 +48,11 @@ from nrpy.infrastructures.ETLegacy.general_relativity.floor_the_lapse import (
 from nrpy.infrastructures.ETLegacy.general_relativity.RegisterSlicing import (
     register_CFunction_RegisterSlicing,
 )
-from nrpy.infrastructures.ETLegacy.general_relativity.BSSN_constraints import (
-    register_CFunction_BSSN_constraints,
+from nrpy.infrastructures.ETLegacy.general_relativity.rhs_eval import (
+    register_CFunction_rhs_eval,
 )
 from nrpy.infrastructures.ETLegacy.general_relativity.Ricci_eval import (
     register_CFunction_Ricci_eval,
-)
-from nrpy.infrastructures.ETLegacy.general_relativity.rhs_eval import (
-    register_CFunction_rhs_eval,
 )
 from nrpy.infrastructures.ETLegacy.general_relativity.T4DD_to_T4UU import (
     register_CFunction_T4DD_to_T4UU,
@@ -68,6 +70,7 @@ enable_simd = True
 LapseEvolutionOption = "OnePlusLog"
 ShiftEvolutionOption = "GammaDriving2ndOrder_NoCovariant"
 enable_KreissOliger_dissipation = True
+enable_improvements = False
 parallel_codegen_enable = True
 CoordSystem = "Cartesian"
 OMP_collapse = 1
@@ -91,7 +94,7 @@ for evol_thorn_name in thorn_names:
         "1e-15",
         add_to_glb_code_params_dict=True,
     )
-    fd_order_param = par.register_CodeParameter(
+    _ = par.register_CodeParameter(
         "CCTK_INT",
         __name__,
         "FD_order",
@@ -119,28 +122,31 @@ for evol_thorn_name in thorn_names:
         )
         register_CFunction_Ricci_eval(
             thorn_name=evol_thorn_name,
-            fd_order=fd_order,
             CoordSystem="Cartesian",
             enable_rfm_precompute=False,
             enable_simd=enable_simd,
+            fd_order=fd_order,
         )
         register_CFunction_rhs_eval(
             thorn_name=evol_thorn_name,
-            enable_T4munu=enable_T4munu,
-            fd_order=fd_order,
             CoordSystem="Cartesian",
             enable_rfm_precompute=False,
+            enable_T4munu=enable_T4munu,
             enable_simd=enable_simd,
+            fd_order=fd_order,
             LapseEvolutionOption=LapseEvolutionOption,
             ShiftEvolutionOption=ShiftEvolutionOption,
             enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
+            enable_CAKO=enable_improvements,
+            enable_CAHD=enable_improvements,
+            enable_SSL=enable_improvements,
         )
         register_CFunction_BSSN_constraints(
             thorn_name=evol_thorn_name,
-            enable_T4munu=enable_T4munu,
-            fd_order=fd_order,
             CoordSystem="Cartesian",
             enable_rfm_precompute=False,
+            enable_T4munu=enable_T4munu,
+            fd_order=fd_order,
             enable_simd=enable_simd,
         )
 
@@ -163,7 +169,7 @@ for evol_thorn_name in thorn_names:
         for i in range(4):
             for j in range(i, 4):
                 gri.glb_gridfcs_dict.pop("T4UU" + str(i) + str(j))
-
+    print(evol_thorn_name, gri.glb_gridfcs_dict.keys())
     ########################
     # STEP 3: Register functions that depend on all gridfunctions & CodeParameters having been set
     ########################
@@ -247,3 +253,14 @@ EXTENDS CCTK_KEYWORD dtlapse_evolution_method "dtlapse_evolution_method"
     simd.copy_simd_intrinsics_h(
         project_dir=str(Path(project_dir) / evol_thorn_name / "src")
     )
+
+    simd_name = str(
+        Path(project_dir) / evol_thorn_name / "src" / "simd" / "simd_intrinsics.h"
+    )
+    with open(simd_name, "r", encoding="utf-8") as file:
+        contents = file.read()
+
+    new_contents = contents.replace("REAL_SIMD_ARRAY REAL", "REAL_SIMD_ARRAY CCTK_REAL")
+
+    with open(simd_name, "w", encoding="utf-8") as file:
+        file.write(new_contents)

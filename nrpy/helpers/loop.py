@@ -10,7 +10,7 @@ Contributor: Ken Sible
 Email: ksible *at* outlook *dot* com
 """
 
-from typing import List, Union, Tuple
+from typing import List, Tuple, Union
 
 
 def loop1D(

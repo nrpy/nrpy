@@ -7,21 +7,20 @@ Authors: Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
          Samuel D. Tootle; sdtootle **at** gmail **dot** com
 """
 
-from typing import Union, cast, Tuple, Dict
-from types import FrameType as FT
-from pathlib import Path
 from inspect import currentframe as cf
+from pathlib import Path
+from types import FrameType as FT
+from typing import Dict, Tuple, Union, cast
 
 import sympy as sp
-import nrpy.grid as gri
+
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-
+import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.BHaH.nrpyelliptic.base_conformally_flat_C_codegen_library as base_npe_classes
-
-import nrpy.infrastructures.BHaH.loop_utilities.openmp.simple_loop as lp
 import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices as out012d
+import nrpy.infrastructures.BHaH.loop_utilities.openmp.simple_loop as lp
+import nrpy.infrastructures.BHaH.nrpyelliptic.base_conformally_flat_C_codegen_library as base_npe_classes
 
 
 # Define functions to set up initial guess

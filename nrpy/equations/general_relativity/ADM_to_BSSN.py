@@ -6,16 +6,16 @@ Author: Zachariah B. Etienne
 """
 
 # Step 1: Import needed core NRPy+ modules
-from typing import Sequence, Tuple, List
-import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
-import nrpy.params as par  # NRPy+: Parameter interface
-import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
-import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
+from typing import List, Sequence, Tuple
 
+import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
 
 # NRPy+: This module depends on the parameter EvolvedConformalFactor_cf,
 #        which is defined in BSSN.BSSN_quantities
 import nrpy.equations.general_relativity.BSSN_quantities  # pylint: disable=unused-import
+import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
+import nrpy.params as par  # NRPy+: Parameter interface
+import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 
 
 class ADM_to_BSSN:
@@ -148,6 +148,7 @@ if __name__ == "__main__":
     import doctest
     import os
     import sys
+
     import nrpy.validate_expressions.validate_expressions as ve
 
     results = doctest.testmod()

@@ -13,9 +13,11 @@ Author: Zachariah B. Etienne
 import hashlib
 import pickle
 from pathlib import Path
-from typing import cast, Any
-from appdirs import user_cache_dir  # type: ignore
+from typing import Any, cast
+
 import sympy as sp
+from appdirs import user_cache_dir  # type: ignore
+
 import nrpy.params as par
 
 

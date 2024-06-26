@@ -5,14 +5,15 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import Any, Callable, Dict, Tuple, Union, cast
-from importlib import import_module
-import time
 import logging
+import time
+from importlib import import_module
+from typing import Any, Callable, Dict, Tuple, Union, cast
 
-from multiprocess import Pool, Manager  # type: ignore # pylint: disable=E0611
-import nrpy.grid as gri
+from multiprocess import Manager, Pool  # type: ignore # pylint: disable=E0611
+
 import nrpy.c_function as cfc
+import nrpy.grid as gri
 import nrpy.params as par
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
@@ -245,7 +246,7 @@ def do_parallel_codegen() -> None:
     manager = Manager()
     NRPy_environment_to_unpack: Dict[str, Any] = manager.dict()
 
-    with Pool() as pool:
+    with Pool() as pool:  # Set Pool(processes=1) to disable parallel codegen.
         pool.map(
             wrapper_func,
             [

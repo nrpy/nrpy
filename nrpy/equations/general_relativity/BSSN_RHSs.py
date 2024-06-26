@@ -7,33 +7,41 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
+from collections import OrderedDict
+
 # Step 1.a: import all needed modules from NRPy+:
 from typing import Dict
-from collections import OrderedDict
+
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
 
-import nrpy.params as par  # NRPy+: Parameter interface
 import nrpy.grid as gri
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
+import nrpy.params as par  # NRPy+: Parameter interface
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
-from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.equations.general_relativity import T4munu
-
-have_already_called_BSSN_RHSs_function = False
-
-# Step 1.b: Set the coordinate system for the numerical grid:
-#  DO NOT SET IN STANDALONE PYTHON MODULE
-# par.set_parval_from_str("reference_metric::CoordSystem","Spherical")
+from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 
 
 class BSSNRHSs:
     """Construct and store the BSSN RHSs."""
 
     def __init__(
-        self, CoordSystem: str = "Cartesian", enable_rfm_precompute: bool = False
+        self,
+        CoordSystem: str = "Cartesian",
+        enable_rfm_precompute: bool = False,
+        enable_RbarDD_gridfunctions: bool = False,
+        enable_T4munu: bool = False,
     ):
-        enable_T4munu = par.parval_from_str("enable_T4munu")
+        """
+        Initialize and set up all BSSN quantities, storing them within the class object.
 
+        :param CoordSystem: The coordinate system being used, defaults to "Cartesian".
+        :param enable_rfm_precompute: Whether to enable reference-metric precomputation, defaults to False.
+        :param enable_RbarDD_gridfunctions: (bool) Whether to enable RbarDD gridfunctions, defaults to False.
+        :param enable_T4munu: Whether to enable T4munu (stress-energy terms), defaults to False.
+
+        :raises ValueError: If EvolvedConformalFactor_cf parameter is set to an unsupported value.
+        """
         # Step 1.c: Given the chosen coordinate system, set up
         #           corresponding reference metric and needed
         #           reference metric quantities
@@ -46,8 +54,11 @@ class BSSNRHSs:
 
         # Step 1.e: Import all basic (unrescaled) BSSN scalars & tensors
         Bq = BSSN_quantities[
-            CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
+            CoordSystem
+            + ("_rfm_precompute" if enable_rfm_precompute else "")
+            + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
         ]
+
         gammabarDD = Bq.gammabarDD
         AbarDD = Bq.AbarDD
         LambdabarU = Bq.LambdabarU
@@ -367,22 +378,25 @@ class BSSNRHSs_dict(Dict[str, BSSNRHSs]):
 
     def __getitem__(self, CoordSystem_in: str) -> BSSNRHSs:
         if CoordSystem_in not in self:
-            # In case [CoordSystem]_rfm_precompute is passed:
-            CoordSystem = CoordSystem_in.replace("_rfm_precompute", "")
+            # In case e.g., [CoordSystem]_rfm_precompute_T4munu or [CoordSystem]_rfm_precompute are passed:
+            CoordSystem = (
+                CoordSystem_in.replace("_rfm_precompute", "")
+                .replace("_RbarDD_gridfunctions", "")
+                .replace("_T4munu", "")
+            )
+            enable_rfm_precompute = "_rfm_precompute" in CoordSystem_in
+            enable_RbarDD_gridfunctions = "_RbarDD_gridfunctions" in CoordSystem_in
+            enable_T4munu = "_T4munu" in CoordSystem_in
 
-            enable_T4munu = par.parval_from_str("enable_T4munu")
-            enable_RbarDD_gridfunctions = par.parval_from_str(
-                "enable_RbarDD_gridfunctions"
-            )
-            print(
-                f"Setting up BSSN_RHSs for CoordSystem = {CoordSystem}, enable_T4munu={enable_T4munu}, Rij symbolic={enable_RbarDD_gridfunctions}."
-            )
+            print(f"Setting up BSSN_RHSs[{CoordSystem_in}]...")
             self.__setitem__(
-                CoordSystem, BSSNRHSs(CoordSystem, enable_rfm_precompute=False)
-            )
-            self.__setitem__(
-                CoordSystem + "_rfm_precompute",
-                BSSNRHSs(CoordSystem, enable_rfm_precompute=True),
+                CoordSystem_in,
+                BSSNRHSs(
+                    CoordSystem,
+                    enable_T4munu=enable_T4munu,
+                    enable_rfm_precompute=enable_rfm_precompute,
+                    enable_RbarDD_gridfunctions=enable_RbarDD_gridfunctions,
+                ),
             )
         return dict.__getitem__(self, CoordSystem_in)
 
@@ -400,6 +414,7 @@ if __name__ == "__main__":
     import doctest
     import os
     import sys
+
     import nrpy.validate_expressions.validate_expressions as ve
 
     results = doctest.testmod()
@@ -409,9 +424,6 @@ if __name__ == "__main__":
     else:
         print(f"Doctest passed: All {results.attempted} test(s) passed")
 
-    # enable T4munu to ensure a maximally comprehensive test.
-    par.set_parval_from_str("enable_T4munu", True)
-
     for Coord in [
         "Spherical",
         "SinhSpherical_rfm_precompute",
@@ -420,7 +432,7 @@ if __name__ == "__main__":
         "SinhCylindrical",
         "SinhSymTP",
     ]:
-        brhs = BSSN_RHSs[Coord]
+        brhs = BSSN_RHSs[Coord + "_T4munu"]
         results_dict = ve.process_dictionary_of_expressions(
             brhs.__dict__, fixed_mpfs_for_free_symbols=True
         )

@@ -66,6 +66,7 @@ This code is based on Kranc's McLachlan/ML_BSSN/src/Boundaries.cc code."""
 schedule FUNC_NAME in Driver_BoundarySelect
 {
   LANG: C
+  OPTIONS: meta
 } "Register boundary conditions in PreSync bin Driver_BoundarySelect."
 """,
         ),
@@ -80,6 +81,7 @@ schedule FUNC_NAME in Driver_BoundarySelect
         body=body,
         ET_thorn_name=thorn_name,
         ET_schedule_bins_entries=ET_schedule_bins_entries,
+        ET_current_thorn_CodeParams_used=["FD_order"],
     )
 
 
@@ -133,6 +135,7 @@ This code is based on Kranc's McLachlan/ML_BSSN/src/Boundaries.cc code."""
 schedule FUNC_NAME in MoL_PostStep
 {{
   LANG: C
+  OPTIONS: level
   SYNC: evol_variables
 }} "Register boundary conditions and perform AMR+interprocessor synchronization"
 
@@ -202,6 +205,7 @@ This code is based on Kranc's McLachlan/ML_BSSN/src/Boundaries.cc code."""
 schedule FUNC_NAME in MoL_PseudoEvolution after {thorn_name}_BSSN_constraints
 {{
   LANG: C
+  OPTIONS: level
   SYNC: aux_variables
 }} "Register boundary conditions and perform AMR+interprocessor synchronization"
 

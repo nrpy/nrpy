@@ -3,15 +3,17 @@ Simple loop generation for use within the BHaH infrastructure.
 
 Author: Zachariah B. Etienne
 Email: zachetie **at** gmail **dot* com
-Contributors: 
+Contributors:
     Ken Sible
     Email: ksible *at* outlook *dot* com
     Samuel Tootle
     Email: sdtootle **at** outlook **dot** com
 """
 
-from typing import List, Union, Tuple, Dict
+from typing import Dict, List, Tuple, Union
+
 import sympy as sp
+
 import nrpy.indexedexp as ixp
 import nrpy.infrastructures.BHaH.loop_utilities.base_simple_loop as base_sl
 
@@ -22,7 +24,7 @@ class simple_loop(base_sl.base_simple_loop):
 
     :param loop_body: Loop body
     :param enable_simd: Enable SIMD support
-    :param loop_region: Loop over all points on a numerical grid or just the interior
+    :param loop_region: Loop over "all points" or "interior" of a numerical grid.
     :param read_xxs: Read the xx[3][:] 1D coordinate arrays if interior dependency exists
     :param CoordSystem: Coordinate system, e.g., "Cartesian"
     :param enable_rfm_precompute: Enable pre-computation of reference metric
@@ -47,21 +49,21 @@ class simple_loop(base_sl.base_simple_loop):
     <BLANKLINE>
     >>> print(clang_format(simple_loop('// <INTERIOR>', loop_region="interior", OMP_custom_pragma="#CUSTOM_OMP").full_loop_body))
     #CUSTOM_OMP
-    for (int i2 = NGHOSTS; i2 < NGHOSTS + Nxx2; i2++) {
-      for (int i1 = NGHOSTS; i1 < NGHOSTS + Nxx1; i1++) {
-        for (int i0 = NGHOSTS; i0 < NGHOSTS + Nxx0; i0++) {
+    for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++) {
+      for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++) {
+        for (int i0 = NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0++) {
           // <INTERIOR>
-        } // END LOOP: for (int i0 = NGHOSTS; i0 < NGHOSTS+Nxx0; i0++)
-      } // END LOOP: for (int i1 = NGHOSTS; i1 < NGHOSTS+Nxx1; i1++)
-    } // END LOOP: for (int i2 = NGHOSTS; i2 < NGHOSTS+Nxx2; i2++)
+        } // END LOOP: for (int i0 = NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0++)
+      } // END LOOP: for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++)
+    } // END LOOP: for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++)
     <BLANKLINE>
     >>> print(clang_format(simple_loop('// <INTERIOR>', loop_region="interior",
     ...       CoordSystem="SinhSymTP", enable_rfm_precompute=True, OMP_collapse=3).full_loop_body))
-    Setting up reference metric for CoordSystem = SinhSymTP.
+    Setting up reference_metric[SinhSymTP_rfm_precompute]...
     #pragma omp parallel for collapse(3)
-    for (int i2 = NGHOSTS; i2 < NGHOSTS + Nxx2; i2++) {
-      for (int i1 = NGHOSTS; i1 < NGHOSTS + Nxx1; i1++) {
-        for (int i0 = NGHOSTS; i0 < NGHOSTS + Nxx0; i0++) {
+    for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++) {
+      for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++) {
+        for (int i0 = NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0++) {
           const REAL f1_of_xx1 = rfmstruct->f1_of_xx1[i1];
           const REAL f1_of_xx1__D1 = rfmstruct->f1_of_xx1__D1[i1];
           const REAL f1_of_xx1__DD11 = rfmstruct->f1_of_xx1__DD11[i1];
@@ -76,15 +78,15 @@ class simple_loop(base_sl.base_simple_loop):
           const REAL f2_of_xx0__D0 = rfmstruct->f2_of_xx0__D0[i0];
           const REAL f2_of_xx0__DD00 = rfmstruct->f2_of_xx0__DD00[i0];
           // <INTERIOR>
-        } // END LOOP: for (int i0 = NGHOSTS; i0 < NGHOSTS+Nxx0; i0++)
-      } // END LOOP: for (int i1 = NGHOSTS; i1 < NGHOSTS+Nxx1; i1++)
-    } // END LOOP: for (int i2 = NGHOSTS; i2 < NGHOSTS+Nxx2; i2++)
+        } // END LOOP: for (int i0 = NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0++)
+      } // END LOOP: for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++)
+    } // END LOOP: for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++)
     <BLANKLINE>
     >>> print(clang_format(simple_loop('// <INTERIOR>', loop_region="interior",
     ...       CoordSystem="SinhSymTP", enable_rfm_precompute=True, OMP_collapse=2).full_loop_body))
     #pragma omp parallel for collapse(2)
-    for (int i2 = NGHOSTS; i2 < NGHOSTS + Nxx2; i2++) {
-      for (int i1 = NGHOSTS; i1 < NGHOSTS + Nxx1; i1++) {
+    for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++) {
+      for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++) {
         const REAL f1_of_xx1 = rfmstruct->f1_of_xx1[i1];
         const REAL f1_of_xx1__D1 = rfmstruct->f1_of_xx1__D1[i1];
         const REAL f1_of_xx1__DD11 = rfmstruct->f1_of_xx1__DD11[i1];
@@ -92,7 +94,7 @@ class simple_loop(base_sl.base_simple_loop):
         const REAL f4_of_xx1__D1 = rfmstruct->f4_of_xx1__D1[i1];
         const REAL f4_of_xx1__DD11 = rfmstruct->f4_of_xx1__DD11[i1];
     <BLANKLINE>
-        for (int i0 = NGHOSTS; i0 < NGHOSTS + Nxx0; i0++) {
+        for (int i0 = NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0++) {
           const REAL f0_of_xx0 = rfmstruct->f0_of_xx0[i0];
           const REAL f0_of_xx0__D0 = rfmstruct->f0_of_xx0__D0[i0];
           const REAL f0_of_xx0__DD00 = rfmstruct->f0_of_xx0__DD00[i0];
@@ -101,9 +103,9 @@ class simple_loop(base_sl.base_simple_loop):
           const REAL f2_of_xx0__D0 = rfmstruct->f2_of_xx0__D0[i0];
           const REAL f2_of_xx0__DD00 = rfmstruct->f2_of_xx0__DD00[i0];
           // <INTERIOR>
-        } // END LOOP: for (int i0 = NGHOSTS; i0 < NGHOSTS+Nxx0; i0++)
-      } // END LOOP: for (int i1 = NGHOSTS; i1 < NGHOSTS+Nxx1; i1++)
-    } // END LOOP: for (int i2 = NGHOSTS; i2 < NGHOSTS+Nxx2; i2++)
+        } // END LOOP: for (int i0 = NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0++)
+      } // END LOOP: for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++)
+    } // END LOOP: for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++)
     <BLANKLINE>
     """
 
