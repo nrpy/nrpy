@@ -131,10 +131,6 @@ def register_func_call(name: str, args: Dict[str, Any]) -> None:
 
     :raises ValueError: If a function call with the same name and arguments has already been registered.
     """
-    if "self" in args:
-        args.pop("self")
-    if "__class__" in args:
-        args.pop("__class__")
     if name + str(args) in ParallelCodeGen_dict:
         raise ValueError(f"Already registered {name + str(args)}.")
 
