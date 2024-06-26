@@ -93,7 +93,6 @@ Documented in: Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb
     return outstr + calculation
 
 
-
 # For example, if the gridfunction name ends with "01", then (based on the table in the
 # NRPy+ Jupyter notebook corresponding to this Python module) the set_parity_types()
 # function below will set the parity_type of that gridfunction to 5. We can be assured
@@ -217,7 +216,6 @@ def Cfunction__EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(
 const int i0, const int i1, const int i2,
 REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
     type_alias = "double" if fp_type == "float" else "REAL"
-    type_literal = "" #if fp_type != "float" else "f"
     body = r"""
   // This is a 3-step algorithm:
   // Step 1: (x0,x1,x2) -> (Cartx,Carty,Cartz)
@@ -296,17 +294,17 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
     body += tmp_str
     body += rf"""
   // Next compute xxmin[i]. By definition,
-  //    xx[i][j] = xxmin[i] + (({type_alias})(j-NGHOSTS) + (1.0{type_literal}/2.0{type_literal}))*dxxi;
-  // -> xxmin[i] = xx[i][0] - (({type_alias})(0-NGHOSTS) + (1.0{type_literal}/2.0{type_literal}))*dxxi
+  //    xx[i][j] = xxmin[i] + (({type_alias})(j-NGHOSTS) + (1.0/2.0))*dxxi;
+  // -> xxmin[i] = xx[i][0] - (({type_alias})(0-NGHOSTS) + (1.0/2.0))*dxxi
   const {type_alias} xxmin[3] = {{
-    xx[0][0] - (({type_alias})(0-NGHOSTS) + (1.0{type_literal}/2.0{type_literal}))*dxx0,
-    xx[1][0] - (({type_alias})(0-NGHOSTS) + (1.0{type_literal}/2.0{type_literal}))*dxx1,
-    xx[2][0] - (({type_alias})(0-NGHOSTS) + (1.0{type_literal}/2.0{type_literal}))*dxx2 }};
+    xx[0][0] - (({type_alias})(0-NGHOSTS) + (1.0/2.0))*dxx0,
+    xx[1][0] - (({type_alias})(0-NGHOSTS) + (1.0/2.0))*dxx1,
+    xx[2][0] - (({type_alias})(0-NGHOSTS) + (1.0/2.0))*dxx2 }};
 
   // Finally compute i{{0,1,2}}_inbounds (add 0.5 to account for rounding down)
-  const int i0_inbounds = (int)( (Cart_to_xx0_inbounds - xxmin[0] - (1.0{type_literal}/2.0{type_literal})*dxx0 + (({type_alias})NGHOSTS)*dxx0)/dxx0 + 0.5{type_literal} );
-  const int i1_inbounds = (int)( (Cart_to_xx1_inbounds - xxmin[1] - (1.0{type_literal}/2.0{type_literal})*dxx1 + (({type_alias})NGHOSTS)*dxx1)/dxx1 + 0.5{type_literal} );
-  const int i2_inbounds = (int)( (Cart_to_xx2_inbounds - xxmin[2] - (1.0{type_literal}/2.0{type_literal})*dxx2 + (({type_alias})NGHOSTS)*dxx2)/dxx2 + 0.5{type_literal} );
+  const int i0_inbounds = (int)( (Cart_to_xx0_inbounds - xxmin[0] - (1.0/2.0)*dxx0 + (({type_alias})NGHOSTS)*dxx0)/dxx0 + 0.5 );
+  const int i1_inbounds = (int)( (Cart_to_xx1_inbounds - xxmin[1] - (1.0/2.0)*dxx1 + (({type_alias})NGHOSTS)*dxx1)/dxx1 + 0.5 );
+  const int i2_inbounds = (int)( (Cart_to_xx2_inbounds - xxmin[2] - (1.0/2.0)*dxx2 + (({type_alias})NGHOSTS)*dxx2)/dxx2 + 0.5 );
 """
 
     # Restore reference_metric::CoordSystem back to the original CoordSystem
@@ -703,7 +701,7 @@ class setup_Cfunction_r_and_partial_xi_partial_r_derivs:
 #   for \partial_i f with arbitrary upwinding:
 def get_arb_offset_FD_coeffs_indices(
     FDORDER: int, offset: int, deriv: int
-) -> Tuple[List[float], List[int]]:
+) -> Tuple[List[sp.Number], List[int]]:
     """
     Generate finite-difference coefficients for partial derivatives with arbitrary upwinding.
 
@@ -816,27 +814,27 @@ class setup_Cfunction_FD1_arbitrary_upwind:
                 offset_str: str = str(indices[i])
 
                 # Build key since it's abs(coeff)
-                key_sign = -1 if coeff <= 0 else 1
-                decl_coeff = coeff * key_sign
+                sign = -1 if coeff <= 0 else 1
+                decl_coeff = coeff * sign
 
                 # ensure the correct sign is applied
                 # in the upwind algorithm
-                sign = "-" if coeff < 0 else "+"
+                sign_str = "-" if coeff < 0 else "+"
 
                 if i > 0:
                     self.body += "          "
                 if offset_str == "0":
                     self.body += (
-                        f"{sign} {rational_dict[decl_coeff]}*gf[IDX3(i0,i1,i2)]\n"
+                        f"{sign_str} {rational_dict[decl_coeff]}*gf[IDX3(i0,i1,i2)]\n"
                     )
 
                 else:
                     if dirn == 0:
-                        self.body += f"{sign} {rational_dict[decl_coeff]}*gf[IDX3(i0+{offset_str},i1,i2)]\n"
+                        self.body += f"{sign_str} {rational_dict[decl_coeff]}*gf[IDX3(i0+{offset_str},i1,i2)]\n"
                     elif dirn == 1:
-                        self.body += f"{sign} {rational_dict[decl_coeff]}*gf[IDX3(i0,i1+{offset_str},i2)]\n"
+                        self.body += f"{sign_str} {rational_dict[decl_coeff]}*gf[IDX3(i0,i1+{offset_str},i2)]\n"
                     elif dirn == 2:
-                        self.body += f"{sign} {rational_dict[decl_coeff]}*gf[IDX3(i0,i1,i2+{offset_str})]\n"
+                        self.body += f"{sign_str} {rational_dict[decl_coeff]}*gf[IDX3(i0,i1,i2+{offset_str})]\n"
 
             self.body = self.body[:-1].replace("+-", "-") + f") * invdxx{dirn};\n }}\n"
 
