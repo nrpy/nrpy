@@ -276,7 +276,7 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
   //   Otherwise (i0_inbounds,i1_inbounds,i2_inbounds) is in the grid interior, and data at (i0,i1,i2)
   //      must be replaced with data at (i0_inbounds,i1_inbounds,i2_inbounds), but multiplied by the
   //      appropriate parity condition (+/- 1).
-  {type_alias} REAL Cart_to_xx0_inbounds,Cart_to_xx1_inbounds,Cart_to_xx2_inbounds;
+  {type_alias} Cart_to_xx0_inbounds,Cart_to_xx1_inbounds,Cart_to_xx2_inbounds;
 """
     # Step 2.a: Sanity check: First make sure that rfm.Cart_to_xx has been set. Error out if not!
     if rfm.Cart_to_xx[0] == 0 or rfm.Cart_to_xx[1] == 0 or rfm.Cart_to_xx[2] == 0:
@@ -347,7 +347,7 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
     {type_alias} xx1 = xx[1][i1_inbounds];
     {type_alias} xx2 = xx[2][i2_inbounds];
 """
-    tmp_str += ccg.c_codegen(
+    tmp_str = ccg.c_codegen(
         [rfm_orig.xx_to_Cart[0], rfm_orig.xx_to_Cart[1], rfm_orig.xx_to_Cart[2]],
         ["xCart_from_xx_inbounds", "yCart_from_xx_inbounds", "zCart_from_xx_inbounds"],
         include_braces=False,
