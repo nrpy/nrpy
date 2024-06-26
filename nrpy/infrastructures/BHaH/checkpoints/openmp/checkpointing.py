@@ -11,7 +11,6 @@ Author: Zachariah B. Etienne
 
 from typing import Tuple
 
-import nrpy.c_function as cfc
 import nrpy.infrastructures.BHaH.checkpoints.base_checkpointing as base_chkpt
 
 
@@ -33,7 +32,7 @@ class register_CFunction_read_checkpoint(
     >>> registered_str = cfc.CFunction_dict["read_checkpoint"].full_function
     >>> expected_str = decompress_base64_to_string(expected_str_dict[key])
     >>> if registered_str != expected_str:
-    ...     raise ValueError(f"\\n{k}: {diff_strings(expected_string, registered_str)}")
+    ...     raise ValueError(f"{key}: {diff_strings(expected_str, registered_str)}")
     """
 
     def __init__(
@@ -45,60 +44,7 @@ class register_CFunction_read_checkpoint(
     ) -> None:
         super().__init__(filename_tuple=filename_tuple)
 
-        self.body += r"""  // If the checkpoint doesn't exist then return 0.
-  if (access(filename, F_OK) != 0)
-    return 0;
-
-  FILE *cp_file = fopen(filename, "r");
-  FREAD(commondata, sizeof(commondata_struct), 1, cp_file);
-  fprintf(stderr, "cd struct size = %ld time=%e\n", sizeof(commondata_struct), commondata->time);
-  for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
-    FREAD(&griddata[grid].params, sizeof(params_struct), 1, cp_file);
-
-    int count;
-    FREAD(&count, sizeof(int), 1, cp_file);
-
-    int *restrict out_data_indices = (int *restrict)malloc(sizeof(int) * count);
-    REAL *restrict compact_out_data = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * count);
-
-    const int Nxx_plus_2NGHOSTS0 = griddata[grid].params.Nxx_plus_2NGHOSTS0;
-    const int Nxx_plus_2NGHOSTS1 = griddata[grid].params.Nxx_plus_2NGHOSTS1;
-    const int Nxx_plus_2NGHOSTS2 = griddata[grid].params.Nxx_plus_2NGHOSTS2;
-    const int ntot = griddata[grid].params.Nxx_plus_2NGHOSTS0 * griddata[grid].params.Nxx_plus_2NGHOSTS1 * griddata[grid].params.Nxx_plus_2NGHOSTS2;
-    fprintf(stderr, "Reading checkpoint: grid = %d | pts = %d / %d | %d\n", grid, count, ntot, Nxx_plus_2NGHOSTS2);
-    FREAD(out_data_indices, sizeof(int), count, cp_file);
-    FREAD(compact_out_data, sizeof(REAL), count * NUM_EVOL_GFS, cp_file);
-
-    MoL_malloc_y_n_gfs(commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
-    int which_el = 0;
-#pragma omp parallel for
-    for (int i = 0; i < count; i++) {
-      for (int gf = 0; gf < NUM_EVOL_GFS; gf++) {
-        griddata[grid].gridfuncs.y_n_gfs[IDX4pt(gf, out_data_indices[i])] = compact_out_data[i * NUM_EVOL_GFS + gf];
-      }
-    }
-    free(out_data_indices);
-    free(compact_out_data);
-  }
-  fclose(cp_file);
-  fprintf(stderr, "FINISHED WITH READING\n");
-
-  // Next set t_0 and n_0
-  commondata->t_0 = commondata->time;
-  commondata->nn_0 = commondata->nn;
-
-  return 1;
-"""
-        cfc.register_CFunction(
-            includes=self.includes,
-            prefunc=self.prefunc,
-            desc=self.desc,
-            cfunc_type=self.cfunc_type,
-            name=self.name,
-            params=self.params,
-            include_CodeParameters_h=False,
-            body=self.body,
-        )
+        self.register()
 
 
 class register_CFunction_write_checkpoint(
@@ -120,7 +66,7 @@ class register_CFunction_write_checkpoint(
     >>> registered_str = cfc.CFunction_dict["write_checkpoint"].full_function
     >>> expected_str = decompress_base64_to_string(expected_str_dict[key])
     >>> if registered_str != expected_str:
-    ...     raise ValueError(f"\\n{k}: {diff_strings(expected_string, registered_str)}")
+    ...     raise ValueError(f"\\n{key}: {diff_strings(expected_str, registered_str)}")
     """
 
     def __init__(
@@ -136,17 +82,7 @@ class register_CFunction_write_checkpoint(
             filename_tuple=filename_tuple,
         )
 
-        self.body += r"""const REAL currtime = commondata->time, currdt = commondata->dt, outevery = commondata->checkpoint_every;
-// Explanation of the if() below:
-// Step 1: round(currtime / outevery) rounds to the nearest integer multiple of currtime.
-// Step 2: Multiplying by outevery yields the exact time we should output again, t_out.
-// Step 3: If fabs(t_out - currtime) < 0.5 * currdt, then currtime is as close to t_out as possible!
-if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {
-  FILE *cp_file = fopen(filename, "w+");
-  fwrite(commondata, sizeof(commondata_struct), 1, cp_file);
-  fprintf(stderr, "WRITING CHECKPOINT: cd struct size = %ld time=%e\n", sizeof(commondata_struct), commondata->time);
-  for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
-    fwrite(&griddata[grid].params, sizeof(params_struct), 1, cp_file);
+        self.loop_body = r"""fwrite(&griddata[grid].params, sizeof(params_struct), 1, cp_file);
     const int ntot = ( griddata[grid].params.Nxx_plus_2NGHOSTS0*
                        griddata[grid].params.Nxx_plus_2NGHOSTS1*
                        griddata[grid].params.Nxx_plus_2NGHOSTS2 );
@@ -181,20 +117,8 @@ if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {
     MoL_malloc_y_n_gfs(commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
 #pragma omp parallel for
     for(int i=0;i<ntot*NUM_EVOL_GFS;i++) griddata[grid].gridfuncs.y_n_gfs[i] = griddata[grid].gridfuncs.diagnostic_output_gfs[i];
-  }
-  fclose(cp_file);
-  fprintf(stderr, "FINISHED WRITING CHECKPOINT\n");
-}
 """
-        cfc.register_CFunction(
-            includes=self.includes,
-            desc=self.desc,
-            cfunc_type=self.cfunc_type,
-            name=self.name,
-            params=self.params,
-            include_CodeParameters_h=False,
-            body=self.body,
-        )
+        self.register()
 
 
 def register_CFunctions(
