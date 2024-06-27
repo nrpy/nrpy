@@ -239,12 +239,6 @@ def register_CFunction_rhs_eval(
             + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
             + ("_T4munu" if enable_T4munu else "")
         ]
-        if "cahdprefactor" not in gri.glb_gridfcs_dict:
-            _ = gri.register_gridfunctions(
-                "cahdprefactor",
-                group="AUXEVOL",
-                gf_array_name="auxevol_gfs",
-            )
         _C_CAHD, _CFL_FACTOR__ignore_repeats_Carpet_timeref_factors = (
             par.register_CodeParameters(
                 "REAL",

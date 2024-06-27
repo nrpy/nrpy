@@ -91,8 +91,12 @@ def register_CFunction_BSSN_constraints(
     for index in range(3):
         list_of_output_exprs += [Bcon.MU[index]]
         Constraints_access_gfs += [
-            gri.ETLegacyGridFunction.access_gf(gf_name=f"MU{index}")
+            gri.ETLegacyGridFunction.access_gf(gf_name="MU" + str(index))
         ]
+
+    list_of_output_exprs += [Bcon.Msquared]
+    Constraints_access_gfs += [gri.ETLegacyGridFunction.access_gf(gf_name="MSQUARED")]
+
     body += lp.simple_loop(
         loop_body=ccg.c_codegen(
             list_of_output_exprs,

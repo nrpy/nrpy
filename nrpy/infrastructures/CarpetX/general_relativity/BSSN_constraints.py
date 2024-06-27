@@ -91,6 +91,10 @@ def register_CFunction_BSSN_constraints(
         Constraints_access_gfs += [
             gri.CarpetXGridFunction.access_gf(gf_name="MU" + str(index))
         ]
+
+    list_of_output_exprs += [Bcon.Msquared]
+    Constraints_access_gfs += [gri.CarpetXGridFunction.access_gf(gf_name="MSQUARED")]
+
     body += lp.simple_loop(
         loop_body=ccg.c_codegen(
             list_of_output_exprs,
