@@ -375,7 +375,10 @@ if(FD_order == {fd_order}) {{
     if enable_SSL:
         params += ["SSL_h", "SSL_sigma"]
     if enable_CAHD:
-        params += [""]
+        params += [
+            "C_CAHD",
+            "CFL_FACTOR__ignore_repeats_Carpet_timeref_factors",
+        ]
     if thorn_name == "Baikal":
         params += ["PI"]
 
