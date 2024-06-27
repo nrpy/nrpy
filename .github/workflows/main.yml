@@ -43,6 +43,9 @@ jobs:
           cat requirements-dev.txt | grep -v '==' | xargs pip install -U
           pip install -U clang-format
         fi
+        if [[ "${{ matrix.python-version }}" == "3.8.18" ]]; then
+          pip install pylint==3.2.0  # pylint 3.2.4+ is broken in 3.8.18.
+        fi
         # FIXME: until NRPyLaTeX is updated in pypi.
         pip install -U git+https://github.com/nrpy/nrpylatex.git
         pip install -U ipython setuptools
