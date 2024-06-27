@@ -24,7 +24,7 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.indexedexp as ixp
 import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices as out012d
 import nrpy.infrastructures.BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter as admid
-import nrpy.infrastructures.BHaH.simple_loop as lp
+import nrpy.infrastructures.BHaH.loop_utilities.openmp.simple_loop as lp
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
 import nrpy.validate_expressions.validate_expressions as ve
@@ -588,7 +588,7 @@ def register_CFunction_rhs_eval(
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
         fp_type=fp_type,
-    )
+    ).full_loop_body
     cfc.register_CFunction(
         include_CodeParameters_h=True,
         includes=includes,
@@ -665,7 +665,7 @@ def register_CFunction_Ricci_eval(
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
         fp_type=fp_type,
-    )
+    ).full_loop_body
 
     cfc.register_CFunction(
         include_CodeParameters_h=True,
@@ -751,7 +751,7 @@ def register_CFunction_constraints(
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
         fp_type=fp_type,
-    )
+    ).full_loop_body
 
     cfc.register_CFunction(
         includes=includes,
@@ -858,7 +858,7 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
         fp_type=fp_type,
-    )
+    ).full_loop_body
 
     cfc.register_CFunction(
         include_CodeParameters_h=True,
@@ -987,7 +987,7 @@ psi4_tetrad(commondata, params,
             read_xxs=False,
             OMP_collapse=OMP_collapse,
             fp_type=fp_type,
-        )
+        ).full_loop_body
 
     cfc.register_CFunction(
         includes=includes,
@@ -1307,7 +1307,7 @@ REAL dsmin0, dsmin1, dsmin2;
                 loop_region="all points",
                 read_xxs=True,
                 fp_type=fp_type,
-            ),
+            ).full_loop_body,
             CoordSystem_for_wrapper_func=CoordSystem,
         )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())

@@ -3,30 +3,22 @@ Simple loop generation for use within the BHaH infrastructure.
 
 Author: Zachariah B. Etienne
 Email: zachetie **at** gmail **dot* com
-Contributor: Ken Sible
-Email: ksible *at* outlook *dot* com
+Contributors:
+    Ken Sible
+    Email: ksible *at* outlook *dot* com
+    Samuel Tootle
+    Email: sdtootle **at** outlook **dot** com
 """
 
 from typing import Dict, List, Tuple, Union
 
 import sympy as sp
 
-import nrpy.helpers.loop as lp
 import nrpy.indexedexp as ixp
+import nrpy.infrastructures.BHaH.loop_utilities.base_simple_loop as base_sl
 
 
-def simple_loop(
-    loop_body: str,
-    enable_simd: bool = False,
-    loop_region: str = "",
-    read_xxs: bool = False,
-    CoordSystem: str = "Cartesian",
-    enable_rfm_precompute: bool = False,
-    enable_OpenMP: bool = True,
-    OMP_custom_pragma: str = "",
-    OMP_collapse: int = 1,
-    fp_type: str = "double",
-) -> str:
+class simple_loop(base_sl.base_simple_loop):
     """
     Generate a simple loop in C (for use inside of a function).
 
@@ -45,7 +37,7 @@ def simple_loop(
 
     Doctests:
     >>> from nrpy.helpers.generic import clang_format
-    >>> print(clang_format(simple_loop('// <INTERIOR>', loop_region="all points")))
+    >>> print(clang_format(simple_loop('// <INTERIOR>', loop_region="all points").full_loop_body))
     #pragma omp parallel for
     for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
       for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++) {
@@ -55,23 +47,23 @@ def simple_loop(
       } // END LOOP: for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++)
     } // END LOOP: for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++)
     <BLANKLINE>
-    >>> print(clang_format(simple_loop('// <INTERIOR>', loop_region="interior", OMP_custom_pragma="#CUSTOM_OMP")))
+    >>> print(clang_format(simple_loop('// <INTERIOR>', loop_region="interior", OMP_custom_pragma="#CUSTOM_OMP").full_loop_body))
     #CUSTOM_OMP
-    for (int i2 = NGHOSTS; i2 < NGHOSTS + Nxx2; i2++) {
-      for (int i1 = NGHOSTS; i1 < NGHOSTS + Nxx1; i1++) {
-        for (int i0 = NGHOSTS; i0 < NGHOSTS + Nxx0; i0++) {
+    for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++) {
+      for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++) {
+        for (int i0 = NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0++) {
           // <INTERIOR>
-        } // END LOOP: for (int i0 = NGHOSTS; i0 < NGHOSTS+Nxx0; i0++)
-      } // END LOOP: for (int i1 = NGHOSTS; i1 < NGHOSTS+Nxx1; i1++)
-    } // END LOOP: for (int i2 = NGHOSTS; i2 < NGHOSTS+Nxx2; i2++)
+        } // END LOOP: for (int i0 = NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0++)
+      } // END LOOP: for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++)
+    } // END LOOP: for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++)
     <BLANKLINE>
     >>> print(clang_format(simple_loop('// <INTERIOR>', loop_region="interior",
-    ...       CoordSystem="SinhSymTP", enable_rfm_precompute=True, OMP_collapse=3)))
+    ...       CoordSystem="SinhSymTP", enable_rfm_precompute=True, OMP_collapse=3).full_loop_body))
     Setting up reference_metric[SinhSymTP_rfm_precompute]...
     #pragma omp parallel for collapse(3)
-    for (int i2 = NGHOSTS; i2 < NGHOSTS + Nxx2; i2++) {
-      for (int i1 = NGHOSTS; i1 < NGHOSTS + Nxx1; i1++) {
-        for (int i0 = NGHOSTS; i0 < NGHOSTS + Nxx0; i0++) {
+    for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++) {
+      for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++) {
+        for (int i0 = NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0++) {
           const REAL f1_of_xx1 = rfmstruct->f1_of_xx1[i1];
           const REAL f1_of_xx1__D1 = rfmstruct->f1_of_xx1__D1[i1];
           const REAL f1_of_xx1__DD11 = rfmstruct->f1_of_xx1__DD11[i1];
@@ -86,15 +78,15 @@ def simple_loop(
           const REAL f2_of_xx0__D0 = rfmstruct->f2_of_xx0__D0[i0];
           const REAL f2_of_xx0__DD00 = rfmstruct->f2_of_xx0__DD00[i0];
           // <INTERIOR>
-        } // END LOOP: for (int i0 = NGHOSTS; i0 < NGHOSTS+Nxx0; i0++)
-      } // END LOOP: for (int i1 = NGHOSTS; i1 < NGHOSTS+Nxx1; i1++)
-    } // END LOOP: for (int i2 = NGHOSTS; i2 < NGHOSTS+Nxx2; i2++)
+        } // END LOOP: for (int i0 = NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0++)
+      } // END LOOP: for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++)
+    } // END LOOP: for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++)
     <BLANKLINE>
     >>> print(clang_format(simple_loop('// <INTERIOR>', loop_region="interior",
-    ...       CoordSystem="SinhSymTP", enable_rfm_precompute=True, OMP_collapse=2)))
+    ...       CoordSystem="SinhSymTP", enable_rfm_precompute=True, OMP_collapse=2).full_loop_body))
     #pragma omp parallel for collapse(2)
-    for (int i2 = NGHOSTS; i2 < NGHOSTS + Nxx2; i2++) {
-      for (int i1 = NGHOSTS; i1 < NGHOSTS + Nxx1; i1++) {
+    for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++) {
+      for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++) {
         const REAL f1_of_xx1 = rfmstruct->f1_of_xx1[i1];
         const REAL f1_of_xx1__D1 = rfmstruct->f1_of_xx1__D1[i1];
         const REAL f1_of_xx1__DD11 = rfmstruct->f1_of_xx1__DD11[i1];
@@ -102,7 +94,7 @@ def simple_loop(
         const REAL f4_of_xx1__D1 = rfmstruct->f4_of_xx1__D1[i1];
         const REAL f4_of_xx1__DD11 = rfmstruct->f4_of_xx1__DD11[i1];
     <BLANKLINE>
-        for (int i0 = NGHOSTS; i0 < NGHOSTS + Nxx0; i0++) {
+        for (int i0 = NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0++) {
           const REAL f0_of_xx0 = rfmstruct->f0_of_xx0[i0];
           const REAL f0_of_xx0__D0 = rfmstruct->f0_of_xx0__D0[i0];
           const REAL f0_of_xx0__DD00 = rfmstruct->f0_of_xx0__DD00[i0];
@@ -111,99 +103,91 @@ def simple_loop(
           const REAL f2_of_xx0__D0 = rfmstruct->f2_of_xx0__D0[i0];
           const REAL f2_of_xx0__DD00 = rfmstruct->f2_of_xx0__DD00[i0];
           // <INTERIOR>
-        } // END LOOP: for (int i0 = NGHOSTS; i0 < NGHOSTS+Nxx0; i0++)
-      } // END LOOP: for (int i1 = NGHOSTS; i1 < NGHOSTS+Nxx1; i1++)
-    } // END LOOP: for (int i2 = NGHOSTS; i2 < NGHOSTS+Nxx2; i2++)
+        } // END LOOP: for (int i0 = NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0++)
+      } // END LOOP: for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++)
+    } // END LOOP: for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++)
     <BLANKLINE>
     """
-    # 'AllPoints': loop over all points on a numerical grid, including ghost zones
-    if loop_region == "":
-        return loop_body
-    if loop_region == "all points":
-        i2i1i0_mins = ["0", "0", "0"]
-        i2i1i0_maxs = ["Nxx_plus_2NGHOSTS2", "Nxx_plus_2NGHOSTS1", "Nxx_plus_2NGHOSTS0"]
-    # 'InteriorPoints': loop over the interior of a numerical grid, i.e. exclude ghost zones
-    elif loop_region == "interior":
-        i2i1i0_mins = ["NGHOSTS", "NGHOSTS", "NGHOSTS"]
-        i2i1i0_maxs = ["NGHOSTS+Nxx2", "NGHOSTS+Nxx1", "NGHOSTS+Nxx0"]
-    else:
-        raise ValueError(
-            f'loop_region = {loop_region} unsupported. Choose "", "all points", or "interior"'
-        )
 
-    read_rfm_xx_arrays = ["", "", ""]
-    # 'Read_xxs': read the xx[3][:] 1D coordinate arrays, as some interior dependency exists
-    if read_xxs:
-        if not enable_simd:
-            read_rfm_xx_arrays = [
-                "const REAL xx0 = xx[0][i0];",
-                "const REAL xx1 = xx[1][i1];",
-                "const REAL xx2 = xx[2][i2];",
-            ]
-        else:
+    def __init__(
+        self,
+        loop_body: str,
+        enable_simd: bool = False,
+        loop_region: str = "",
+        read_xxs: bool = False,
+        CoordSystem: str = "Cartesian",
+        enable_rfm_precompute: bool = False,
+        enable_OpenMP: bool = True,
+        OMP_custom_pragma: str = "",
+        OMP_collapse: int = 1,
+        fp_type: str = "double",
+    ) -> None:
+        super().__init__(
+            loop_body,
+            read_xxs=read_xxs,
+            CoordSystem=CoordSystem,
+            enable_rfm_precompute=enable_rfm_precompute,
+            fp_type=fp_type,
+            loop_region=loop_region,
+        )
+        self.enable_simd = enable_simd
+        self.enable_OpenMP = enable_OpenMP
+        self.OMP_custom_pragma = OMP_custom_pragma
+        self.OMP_collapse = OMP_collapse
+
+        # 'Read_xxs': read the xx[3][:] 1D coordinate arrays, as some interior dependency exists
+        if self.read_xxs and enable_simd:
             raise ValueError("no innerSIMD support for Read_xxs (currently).")
-    # 'enable_rfm_precompute': enable pre-computation of reference metric
-    if enable_rfm_precompute:
-        if read_xxs:
-            raise ValueError(
-                "enable_rfm_precompute and Read_xxs cannot both be enabled."
-            )
-        # pylint: disable=C0415
-        from nrpy.infrastructures.BHaH import rfm_precompute
 
-        rfmp = rfm_precompute.ReferenceMetricPrecompute(CoordSystem, fp_type=fp_type)
+        if self.enable_rfm_precompute and enable_simd:
+            self.read_rfm_xx_arrays = [
+                self.rfmp.readvr_SIMD_inner_str[0],
+                self.rfmp.readvr_SIMD_outer_str[1],
+                self.rfmp.readvr_SIMD_outer_str[2],
+            ]
+
+        # 'DisableOpenMP': disable loop parallelization using OpenMP
+        if self.enable_OpenMP or self.OMP_custom_pragma != "":
+            if self.OMP_custom_pragma == "":
+                self.pragma = "#pragma omp parallel for"
+                if self.OMP_collapse > 1:
+                    self.pragma = (
+                        f"#pragma omp parallel for collapse({self.OMP_collapse})"
+                    )
+            # 'OMP_custom_pragma': enable loop parallelization using OpenMP with custom pragma
+            else:
+                self.pragma = self.OMP_custom_pragma
+        else:
+            self.pragma = ""
+
         if enable_simd:
-            read_rfm_xx_arrays = [
-                rfmp.readvr_SIMD_inner_str[0],
-                rfmp.readvr_SIMD_outer_str[1],
-                rfmp.readvr_SIMD_outer_str[2],
-            ]
-        else:
-            read_rfm_xx_arrays = [
-                rfmp.readvr_str[0],
-                rfmp.readvr_str[1],
-                rfmp.readvr_str[2],
-            ]
-    # 'DisableOpenMP': disable loop parallelization using OpenMP
-    if enable_OpenMP or OMP_custom_pragma != "":
-        if OMP_custom_pragma == "":
-            pragma = "#pragma omp parallel for"
-            if OMP_collapse > 1:
-                pragma = f"#pragma omp parallel for collapse({OMP_collapse})"
-        # 'OMP_custom_pragma': enable loop parallelization using OpenMP with custom pragma
-        else:
-            pragma = OMP_custom_pragma
-    else:
-        pragma = ""
-    increment = ["1", "1", "simd_width"] if enable_simd else ["1", "1", "1"]
+            self.increment = ["1", "1", "simd_width"]
 
-    loop_body = read_rfm_xx_arrays[0] + loop_body
-    prefix_loop_with = [pragma, read_rfm_xx_arrays[2], read_rfm_xx_arrays[1]]
-    if OMP_collapse == 2:
-        prefix_loop_with = [
-            pragma,
-            "",
-            read_rfm_xx_arrays[2] + read_rfm_xx_arrays[1],
-        ]
-    elif OMP_collapse == 3:
-        prefix_loop_with = [
-            pragma,
-            "",
-            "",
-        ]
-        # above: loop_body = read_rfm_xx_arrays[0] + loop_body -----v
-        loop_body = read_rfm_xx_arrays[2] + read_rfm_xx_arrays[1] + loop_body
+        self.initialize_based_on__read_rfm_xx_arrays()
 
-    return str(
-        lp.loop(
-            ["i2", "i1", "i0"],
-            i2i1i0_mins,
-            i2i1i0_maxs,
-            increment,
-            prefix_loop_with,
-            loop_body=loop_body,
-        )
-    )
+        self.prefix_loop_with = [
+            self.pragma,
+            self.read_rfm_xx_arrays[2],
+            self.read_rfm_xx_arrays[1],
+        ]
+        if OMP_collapse == 2:
+            self.prefix_loop_with = [
+                self.pragma,
+                "",
+                self.read_rfm_xx_arrays[2] + self.read_rfm_xx_arrays[1],
+            ]
+        elif OMP_collapse == 3:
+            self.prefix_loop_with = [
+                self.pragma,
+                "",
+                "",
+            ]
+            # above: loop_body = read_rfm_xx_arrays[0] + loop_body -----v
+            self.loop_body = (
+                self.read_rfm_xx_arrays[2] + self.read_rfm_xx_arrays[1] + self.loop_body
+            )
+
+        self.gen_loop_body()
 
 
 def simple_loop_1D(

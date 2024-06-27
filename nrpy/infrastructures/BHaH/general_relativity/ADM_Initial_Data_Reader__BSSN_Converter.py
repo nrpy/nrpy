@@ -16,7 +16,7 @@ import nrpy.c_function as cfc  # NRPy+: C function registration
 import nrpy.grid as gri  # NRPy+: Functions having to do with numerical grids
 import nrpy.helpers.jacobians as jac
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
-import nrpy.infrastructures.BHaH.simple_loop as lp
+import nrpy.infrastructures.BHaH.loop_utilities.openmp.simple_loop as lp
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 from nrpy.equations.general_relativity.ADM_to_BSSN import ADM_to_BSSN
 
@@ -512,7 +512,7 @@ def Cfunction_initial_data_lambdaU_grid_interior(
         loop_region="interior",
         read_xxs=True,
         fp_type=fp_type,
-    )
+    ).full_loop_body
 
     return cfc.CFunction(
         subdirectory=CoordSystem,
