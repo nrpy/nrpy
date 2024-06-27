@@ -89,7 +89,7 @@ class base_register_CFunction_read_checkpoint:
 """
 
     def register(self) -> None:
-        "Register function."
+        """Register function."""
         self.body += self.loop_body
         self.body += rf"""  }}
   {self.post_loop_body}
@@ -151,7 +151,7 @@ if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {{
         self.loop_body = ""
 
     def register(self) -> None:
-        "Register function."
+        """Register function."""
         self.body += self.loop_body
         self.body += r"""  }
   fclose(cp_file);
