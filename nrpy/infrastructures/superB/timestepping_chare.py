@@ -8,11 +8,23 @@ Author: Zachariah B. Etienne
 """
 
 from pathlib import Path
-from typing import List, Tuple
+from typing import Dict, List, Tuple, Union
+
+import sympy as sp  # Import SymPy, a computer algebra system written entirely in Python
 
 import nrpy.c_function as cfc
 from nrpy.helpers.generic import clang_format
 from nrpy.infrastructures.BHaH import griddata_commondata
+from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import (
+    generate_Butcher_tables,
+)
+from nrpy.infrastructures.BHaH.MoLtimestepping.MoL import (
+    generate_gridfunction_names,
+)
+from nrpy.infrastructures.superB.MoL import (
+    generate_post_rhs_output_list,
+)
+
 
 
 def generate_mol_step_forward_code(rk_substep: str) -> str:
@@ -256,9 +268,49 @@ class Timestepping : public CBase_Timestepping {
             clang_format(file_output_str, clang_format_options=clang_format_options)
         )
 
+def generate_switch_statement_for_gf_types(Butcher_dict, MoL_method):
+    """
+    Generate the switch statement for grid function types based on the given Method of Lines (MoL) method.
+
+    :param Butcher_dict: Dictionary containing Butcher tableau data.
+    :param MoL_method: Method of Lines (MoL) method name.
+    :return: A string representing the switch statement for the grid function types.
+    :raises KeyError: If the MoL_method is not found in Butcher_dict.
+    """
+    # Generating gridfunction names based on the given MoL method
+    (
+        y_n_gridfunctions,
+        non_y_n_gridfunctions_list,
+        _diagnostic_gridfunctions_point_to,
+        _diagnostic_gridfunctions2_point_to,
+    ) = generate_gridfunction_names(Butcher_dict, MoL_method=MoL_method)
+
+    # Convert y_n_gridfunctions to a list if it's a string
+    gf_list = [y_n_gridfunctions] if isinstance(y_n_gridfunctions, str) else y_n_gridfunctions
+    gf_list.extend(non_y_n_gridfunctions_list)
+
+    switch_statement = """
+switch (type_gfs) {
+"""
+    switch_cases = []
+    for gf in gf_list:
+        switch_cases.append(f"  case {gf.upper()}:")
+        switch_cases.append(f"    gfs = griddata_chare[grid].gridfuncs.{gf.lower()};")
+        switch_cases.append(f"    break;")
+    switch_cases.append("""
+  default:
+    break;
+}
+""")
+
+    switch_body = "\n".join(switch_cases)
+    return switch_statement + switch_body
+
 
 def output_timestepping_cpp(
     project_dir: str,
+    Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
+    MoL_method: str,
     initial_data_desc: str = "",
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
@@ -443,6 +495,9 @@ Timestepping::~Timestepping() {
   free(griddata_chare);
 }
 """
+
+    switch_case_code = generate_switch_statement_for_gf_types(Butcher_dict, MoL_method)
+
     file_output_str += r"""
 // send NGHOSTS number of interior faces with face extents that include ghosts
 void Timestepping::send_neighbor_data(const int type_gfs, const int dir, const int grid) {
@@ -459,19 +514,9 @@ void Timestepping::send_neighbor_data(const int type_gfs, const int dir, const i
   REAL *restrict tmpBuffer_NS = griddata_chare[grid].tmpBuffers.tmpBuffer_NS;
   REAL *restrict tmpBuffer_TB = griddata_chare[grid].tmpBuffers.tmpBuffer_TB;
   const REAL *restrict gfs = nullptr;
-  switch (type_gfs) {
-    case K_ODD:
-      gfs = griddata_chare[grid].gridfuncs.k_odd_gfs;
-      break;
-    case K_EVEN:
-      gfs = griddata_chare[grid].gridfuncs.k_even_gfs;
-      break;
-    case Y_N:
-      gfs = griddata_chare[grid].gridfuncs.y_n_gfs;
-      break;
-    default:
-      break;
-  }
+  """
+    file_output_str += switch_case_code
+    file_output_str += r"""
   switch (dir) {
     case EAST_WEST:
       //send to west
@@ -585,19 +630,10 @@ void Timestepping::process_ghost(const int type_ghost, const int type_gfs, const
   const int Nxx_plus_2NGHOSTS2 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS2;
 
   REAL *restrict gfs = nullptr;
-  switch (type_gfs) {
-  case K_ODD:
-    gfs = griddata_chare[grid].gridfuncs.k_odd_gfs;
-    break;
-  case K_EVEN:
-    gfs = griddata_chare[grid].gridfuncs.k_even_gfs;
-    break;
-  case Y_N:
-    gfs = griddata_chare[grid].gridfuncs.y_n_gfs;
-    break;
-  default:
-    break;
-  }
+"""
+    switch_case_code = generate_switch_statement_for_gf_types(Butcher_dict, MoL_method)
+    file_output_str += switch_case_code
+    file_output_str += r"""
   switch (type_ghost) {
     case EAST_GHOST:
       for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
@@ -691,6 +727,8 @@ void Timestepping::process_ghost(const int type_ghost, const int type_gfs, const
 
 def output_timestepping_ci(
     project_dir: str,
+    Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
+    MoL_method: str,
     pre_MoL_step_forward_in_time: str = "",
     post_MoL_step_forward_in_time: str = "",
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
@@ -722,42 +760,34 @@ def output_timestepping_ci(
     entry void ready_2d_yz(Ck::IO::FileReadyMsg *m);
     // Step 5: MAIN SIMULATION LOOP
     entry void start() {
-      serial { send_neighbor_data(Y_N, EAST_WEST, grid); }
-      if (thisIndex.x < commondata.Nchare0 - 1) {
-        when east_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
-          serial {
-            process_ghost(EAST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
-        }
-      }
-      if (thisIndex.x > 0) {
-        when west_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
-          serial {
-            process_ghost(WEST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid);
-          }
-        }
-      }
-      serial { send_neighbor_data(Y_N, NORTH_SOUTH, grid); }
-      if (thisIndex.y < commondata.Nchare1 - 1) {
-        when north_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
-          serial { process_ghost(NORTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
-        }
-      }
-      if (thisIndex.y > 0) {
-        when south_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
-          serial { process_ghost(SOUTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
-        }
-      }
-      serial { send_neighbor_data(Y_N, TOP_BOTTOM, grid); }
-      if (thisIndex.z < commondata.Nchare2 - 1) {
-        when top_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
-          serial { process_ghost(TOP_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
-        }
-      }
-      if (thisIndex.z > 0) {
-        when bottom_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
-          serial { process_ghost(BOTTOM_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
-        }
-      }
+"""
+
+    for loop_direction in ["x", "y", "z"]:
+        # Determine ghost types and configuration based on the current axis
+        if loop_direction == "x":
+            pos_ghost_type = x_pos_ghost_type
+            neg_ghost_type = x_neg_ghost_type
+            nchare_var = "commondata.Nchare0"
+            grid_split_direction = "EAST_WEST"
+        elif loop_direction == "y":
+            pos_ghost_type = y_pos_ghost_type
+            neg_ghost_type = y_neg_ghost_type
+            nchare_var = "commondata.Nchare1"
+            grid_split_direction = "NORTH_SOUTH"
+        else:  # loop_direction == "z"
+            pos_ghost_type = z_pos_ghost_type
+            neg_ghost_type = z_neg_ghost_type
+            nchare_var = "commondata.Nchare2"
+            grid_split_direction = "TOP_BOTTOM"
+
+        file_output_str += generate_send_neighbor_data_code(
+            "Y_N_GFS", grid_split_direction
+        )
+        file_output_str += generate_ghost_code(
+            loop_direction, pos_ghost_type, neg_ghost_type, nchare_var
+        )
+
+    file_output_str += r"""
       while (commondata.time < commondata.t_final) { // Main loop to progress forward in time.
         serial {
           time_start = commondata.time;
@@ -872,10 +902,13 @@ def output_timestepping_ci(
 
     file_output_str += r"""
     """
+
+    num_steps = (
+        len(Butcher_dict[MoL_method][0]) - 1)
+
     # Loop over RK substeps and loop directions.
-    for k in range(1, 5):
-        rk_substep = f"RK_SUBSTEP_K{k}"
-        file_output_str += generate_mol_step_forward_code(rk_substep)
+    for s in range(num_steps):
+        file_output_str += generate_mol_step_forward_code(f"RK_SUBSTEP_K{s+1}")
         for loop_direction in ["x", "y", "z"]:
             # Determine ghost types and configuration based on the current axis
             if loop_direction == "x":
@@ -894,24 +927,27 @@ def output_timestepping_ci(
                 nchare_var = "commondata.Nchare2"
                 grid_split_direction = "TOP_BOTTOM"
 
-            # Generate code for this RK substep and axis
-            if rk_substep == "RK_SUBSTEP_K1":
-                which_gf = "K_ODD"
-            elif rk_substep == "RK_SUBSTEP_K2":
-                which_gf = "K_EVEN"
-            elif rk_substep == "RK_SUBSTEP_K3":
-                which_gf = "K_ODD"
-            elif rk_substep == "RK_SUBSTEP_K4":
-                which_gf = "Y_N"
-            else:
-                raise ValueError(f"Unknown RK substep: {rk_substep}")
 
-            file_output_str += generate_send_neighbor_data_code(
-                which_gf, grid_split_direction
-            )
-            file_output_str += generate_ghost_code(
-                loop_direction, pos_ghost_type, neg_ghost_type, nchare_var
-            )
+            post_rhs_output_list = generate_post_rhs_output_list(Butcher_dict, MoL_method, s+1)
+
+            # Debugging information
+            # ~ print(f"Length of post_rhs_output_list: {len(post_rhs_output_list)}")
+            # ~ print(f"Contents of post_rhs_output_list: {post_rhs_output_list}")
+
+            # ~ file_output_str += generate_send_neighbor_data_code(
+                # ~ post_rhs_output_list[0], grid_split_direction
+            # ~ )
+            # ~ file_output_str += generate_ghost_code(
+                # ~ loop_direction, pos_ghost_type, neg_ghost_type, nchare_var
+            # ~ )
+            # Loop over each element in post_rhs_output_list
+            for post_rhs_output in post_rhs_output_list:
+                file_output_str += generate_send_neighbor_data_code(
+                    post_rhs_output, grid_split_direction
+                )
+                file_output_str += generate_ghost_code(
+                    loop_direction, pos_ghost_type, neg_ghost_type, nchare_var
+                )
 
     file_output_str += r"""
         """
@@ -976,6 +1012,7 @@ def output_timestepping_ci(
 
 def output_timestepping_h_cpp_ci_register_CFunctions(
     project_dir: str,
+    MoL_method: str = "RK4",
     enable_rfm_precompute: bool = False,
     pre_MoL_step_forward_in_time: str = "",
     post_MoL_step_forward_in_time: str = "",
@@ -995,10 +1032,14 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         project_dir=project_dir,
     )
 
+    Butcher_dict = generate_Butcher_tables()
+
     output_timestepping_cpp(
         project_dir=project_dir,
         enable_rfm_precompute=enable_rfm_precompute,
         enable_CurviBCs=True,
+        Butcher_dict=Butcher_dict,
+        MoL_method=MoL_method,
     )
 
     output_timestepping_ci(
@@ -1006,6 +1047,8 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         pre_MoL_step_forward_in_time=pre_MoL_step_forward_in_time,
         post_MoL_step_forward_in_time=post_MoL_step_forward_in_time,
         enable_psi4_diagnostics=enable_psi4_diagnostics,
+        Butcher_dict=Butcher_dict,
+        MoL_method=MoL_method,
     )
 
     register_CFunction_timestepping_malloc()
