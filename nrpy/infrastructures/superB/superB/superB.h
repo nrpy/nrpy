@@ -46,9 +46,6 @@
 #define OUTPUT_2D_YZ 4
 #define OUTPUT_PSI4 5
 
-#define K_ODD 0
-#define K_EVEN 1
-#define Y_N 2
 #define EAST_WEST 0
 #define NORTH_SOUTH 1
 #define TOP_BOTTOM 2
@@ -58,10 +55,6 @@
 #define SOUTH_GHOST 4
 #define TOP_GHOST 5
 #define BOTTOM_GHOST 6
-#define RK_SUBSTEP_K1 1
-#define RK_SUBSTEP_K2 2
-#define RK_SUBSTEP_K3 3
-#define RK_SUBSTEP_K4 4
 
 typedef struct __charecomm_struct__ {
   int *restrict globalidx3pt_to_chareidx3;    // which chare is evolving or applying bcs to grid point
