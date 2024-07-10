@@ -386,6 +386,6 @@ superBMakefile.output_CFunctions_function_prototypes_and_construct_Makefile(
     CC="charmc",
 )
 print(
-    f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
+    f"Finished! Now go into project/{project_name} and type `make` to build, then ./charmrun +p4 ./{project_name} to run with 4 processors, for example."
 )
 print(f"    Parameter file can be found in {project_name}.par")
