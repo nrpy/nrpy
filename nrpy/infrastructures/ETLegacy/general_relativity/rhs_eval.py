@@ -270,13 +270,13 @@ def register_CFunction_rhs_eval(
         if enable_simd:
             body += f"""
   const CCTK_REAL *param_CFL_FACTOR__ignore_repeats_Carpet_timeref_factors =
-  CCTK_ParameterGet("CFL_FACTOR__ignore_repeats_Carpet_timeref_factors", "{thorn_name}", NULL); 
+  CCTK_ParameterGet("CFL_FACTOR__ignore_repeats_Carpet_timeref_factors", "{thorn_name}", NULL);
   const CCTK_REAL *param_C_CAHD CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("C_CAHD", "{thorn_name}", NULL);
   const CCTK_REAL cahdprefactor_NOSIMD = (*param_C_CAHD) * (*param_CFL_FACTOR__ignore_repeats_Carpet_timeref_factors) * dsmin;    
   const REAL_SIMD_ARRAY cahdprefactor CCTK_ATTRIBUTE_UNUSED = ConstSIMD(cahdprefactor_NOSIMD);
 """
         else:
-            body += f"""
+            body += """
   const CCTK_REAL cahdprefactor CCTK_ATTRIBUTE_UNUSED = C_CAHD * CFL_FACTOR__ignore_repeats_Carpet_timeref_factors * dsmin;
 """
 
@@ -326,7 +326,7 @@ def register_CFunction_rhs_eval(
     const REAL_SIMD_ARRAY SSL_Gaussian_prefactor CCTK_ATTRIBUTE_UNUSED = ConstSIMD(NOSIMD_SSL_Gaussian_prefactor);
 """
         else:
-            body += f"""
+            body += """
   const CCTK_REAL SSL_Gaussian_prefactor CCTK_ATTRIBUTE_UNUSED = SSL_h * exp(-cctk_time * cctk_time / (2 * (SSL_sigma) * (SSL_sigma)));
 """
 
