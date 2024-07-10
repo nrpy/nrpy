@@ -15,16 +15,11 @@ import sympy as sp  # Import SymPy, a computer algebra system written entirely i
 import nrpy.c_function as cfc
 from nrpy.helpers.generic import clang_format
 from nrpy.infrastructures.BHaH import griddata_commondata
+from nrpy.infrastructures.BHaH.MoLtimestepping.MoL import generate_gridfunction_names
 from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import (
     generate_Butcher_tables,
 )
-from nrpy.infrastructures.BHaH.MoLtimestepping.MoL import (
-    generate_gridfunction_names,
-)
-from nrpy.infrastructures.superB.MoL import (
-    generate_post_rhs_output_list,
-)
-
+from nrpy.infrastructures.superB.MoL import generate_post_rhs_output_list
 
 
 def generate_mol_step_forward_code(rk_substep: str) -> str:
@@ -212,7 +207,8 @@ def output_timestepping_h(
     """
     Generate timestepping.h.
 
-    :param project_dir: Directory where the project C code is output
+    :param project_dir: Directory where the project C code is output.
+    :param enable_residual_diagnostics: Flag to enable residual diagnostics, default is False.
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
     """
     project_Path = Path(project_dir)
@@ -274,6 +270,7 @@ class Timestepping : public CBase_Timestepping {
             clang_format(file_output_str, clang_format_options=clang_format_options)
         )
 
+
 def generate_switch_statement_for_gf_types(Butcher_dict, MoL_method):
     """
     Generate the switch statement for grid function types based on the given Method of Lines (MoL) method.
@@ -281,7 +278,6 @@ def generate_switch_statement_for_gf_types(Butcher_dict, MoL_method):
     :param Butcher_dict: Dictionary containing Butcher tableau data.
     :param MoL_method: Method of Lines (MoL) method name.
     :return: A string representing the switch statement for the grid function types.
-    :raises KeyError: If the MoL_method is not found in Butcher_dict.
     """
     # Generating gridfunction names based on the given MoL method
     (
@@ -292,7 +288,9 @@ def generate_switch_statement_for_gf_types(Butcher_dict, MoL_method):
     ) = generate_gridfunction_names(Butcher_dict, MoL_method=MoL_method)
 
     # Convert y_n_gridfunctions to a list if it's a string
-    gf_list = [y_n_gridfunctions] if isinstance(y_n_gridfunctions, str) else y_n_gridfunctions
+    gf_list = (
+        [y_n_gridfunctions] if isinstance(y_n_gridfunctions, str) else y_n_gridfunctions
+    )
     gf_list.extend(non_y_n_gridfunctions_list)
 
     switch_statement = """
@@ -302,12 +300,14 @@ switch (type_gfs) {
     for gf in gf_list:
         switch_cases.append(f"  case {gf.upper()}:")
         switch_cases.append(f"    gfs = griddata_chare[grid].gridfuncs.{gf.lower()};")
-        switch_cases.append(f"    break;")
-    switch_cases.append("""
+        switch_cases.append("    break;")
+    switch_cases.append(
+        """
   default:
     break;
 }
-""")
+"""
+    )
 
     switch_body = "\n".join(switch_cases)
     return switch_statement + switch_body
@@ -328,11 +328,15 @@ def output_timestepping_cpp(
     """
     Generate timestepping.cpp.
 
-    :param project_dir: Directory where the project C code is output
+    :param project_dir: Directory where the project C code is output.
+    :param Butcher_dict: Dictionary containing Butcher tableau for the MoL method.
+    :param MoL_method: Method of Lines (MoL) method name.
+    :param post_non_y_n_auxevol_mallocs: Additional allocations needed post non-y_n gridfunctions.
     :param initial_data_desc: Description for initial data, default is an empty string.
     :param enable_rfm_precompute: Enable rfm precomputation, default is False.
     :param enable_CurviBCs: Enable CurviBCs, default is False.
     :param initialize_constant_auxevol: If set to True, `initialize_constant_auxevol` function will be called during the simulation initialization phase to set these constants. Default is False.
+    :param enable_residual_diagnostics: Enable residual diagnostics, default is False.
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
     :raises ValueError: Raised if any required function is not registered.
     """
@@ -733,7 +737,6 @@ void Timestepping::process_ghost(const int type_ghost, const int type_gfs, const
 }
 """
 
-
     if enable_residual_diagnostics:
         file_output_str += r"""
 void Timestepping::contribute_localsums_for_residualH(REAL localsums_for_residualH[2]) {
@@ -748,7 +751,6 @@ void Timestepping::contribute_localsums_for_residualH(REAL localsums_for_residua
     file_output_str += r"""
 #include "timestepping.def.h"
     """
-
 
     timestepping_cpp_file = project_Path / "timestepping.cpp"
     with timestepping_cpp_file.open("w", encoding="utf-8") as file:
@@ -770,12 +772,14 @@ def output_timestepping_ci(
     """
     Generate timestepping.ci.
 
-    :param project_dir: Directory where the project C code is output
+    :param project_dir: Directory where the project C code is output.
+    :param Butcher_dict: Dictionary containing Butcher tableau for the MoL method.
+    :param MoL_method: Method of Lines (MoL) method name.
     :param pre_MoL_step_forward_in_time: Code for handling pre-right-hand-side operations, default is an empty string.
     :param post_MoL_step_forward_in_time: Code for handling post-right-hand-side operations, default is an empty string.
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
-    :raises ValueError: Raised if RK substep is not 1, 2, 3 or 4.
+    :param enable_residual_diagnostics: Whether or not to enable residual diagnostics.
     """
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
@@ -963,8 +967,7 @@ def output_timestepping_ci(
     file_output_str += r"""
     """
 
-    num_steps = (
-        len(Butcher_dict[MoL_method][0]) - 1)
+    num_steps = len(Butcher_dict[MoL_method][0]) - 1
 
     # Loop over RK substeps and loop directions.
     for s in range(num_steps):
@@ -987,7 +990,9 @@ def output_timestepping_ci(
                 nchare_var = "commondata.Nchare2"
                 grid_split_direction = "TOP_BOTTOM"
 
-            post_rhs_output_list = generate_post_rhs_output_list(Butcher_dict, MoL_method, s+1)
+            post_rhs_output_list = generate_post_rhs_output_list(
+                Butcher_dict, MoL_method, s + 1
+            )
 
             # Loop over each element in post_rhs_output_list
             for post_rhs_output in post_rhs_output_list:
@@ -1006,12 +1011,10 @@ def output_timestepping_ci(
     else:
         file_output_str += "  // (nothing here; specify by setting post_MoL_step_forward_in_time string in register_CFunction_main_c().)\n"
 
-
     if enable_residual_diagnostics:
         file_output_str += r"""
       }
         """
-
 
     file_output_str += r"""
         }
@@ -1101,7 +1104,6 @@ def output_timestepping_ci(
 };
 """
 
-
     timestepping_ci_file = project_Path / "timestepping.ci"
     with timestepping_ci_file.open("w", encoding="utf-8") as file:
         file.write(
@@ -1123,13 +1125,13 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
     Output timestepping h, cpp, and ci files and register C functions.
 
     :param project_dir: Directory where the project C code is output
-    :param enable_rfm_precompute: Enable RFM precompute (default: False)
+    :param MoL_method: Method of Lines (MoL) method name, default is "RK4".
+    :param enable_rfm_precompute: Enable RFM precompute, default is False.
     :param post_non_y_n_auxevol_mallocs: Function calls after memory is allocated for non y_n and auxevol gridfunctions, default is an empty string.
-    :param pre_MoL_step_forward_in_time: Pre MoL step forward in time (default: "")
-    :param post_MoL_step_forward_in_time: Post MoL step forward in time (default: "")
+    :param pre_MoL_step_forward_in_time: Code for handling pre-right-hand-side operations, default is an empty string.
+    :param post_MoL_step_forward_in_time: Code for handling post-right-hand-side operations, default is an empty string.
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     :param enable_residual_diagnostics: Whether or not to enable residual diagnostics.
-    :return None
     """
     output_timestepping_h(
         project_dir=project_dir,

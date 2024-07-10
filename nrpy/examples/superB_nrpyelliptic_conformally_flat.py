@@ -43,7 +43,6 @@ import nrpy.infrastructures.superB.superB.superB_lib as superBl
 import nrpy.infrastructures.superB.timestepping_chare as superBtimestepping
 
 
-
 par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Code-generation-time parameters:
@@ -215,7 +214,9 @@ nrpyellClib.register_CFunction_compute_residual_all_points(
 )
 
 # Generate diagnostics functions
-superBnrpyellClib.register_CFunction_compute_L2_norm_of_gridfunction(CoordSystem=CoordSystem)
+superBnrpyellClib.register_CFunction_compute_L2_norm_of_gridfunction(
+    CoordSystem=CoordSystem
+)
 
 # Register function to check for stop conditions
 nrpyellClib.register_CFunction_check_stop_conditions()
@@ -367,7 +368,7 @@ griddata_commondata.register_CFunction_griddata_free(
 )
 
 Bdefines_h.output_BHaH_defines_h(
-	additional_includes=[str(Path("superB") / Path("superB.h"))],
+    additional_includes=[str(Path("superB") / Path("superB.h"))],
     project_dir=project_dir,
     enable_simd=enable_simd,
 )

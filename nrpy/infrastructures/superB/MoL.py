@@ -45,27 +45,36 @@ _ = par.CodeParameter("REAL", __name__, "t_final", 10.0, commondata=True)
 # fmt: on
 
 
-
 def generate_post_rhs_output_list(
-    Butcher_dict: Dict[str, Tuple[List[List[Union[int, str]]], int]],
+    Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
     MoL_method: str,
-    rk_substep: int
+    rk_substep: int,
 ) -> List[str]:
     """
     Generate post_rhs_output_list based on the Method of Lines (MoL) method and the current RK substep.
+
+    :param Butcher_dict: A dictionary containing the Butcher tableau and its order.
+    :param MoL_method: The method of lines method name.
+    :param rk_substep: The current Runge-Kutta substep.
+    :return: A list of strings representing the post RHS output.
     """
     num_steps = len(Butcher_dict[MoL_method][0]) - 1
     s = rk_substep - 1  # Convert to 0-indexed
 
     if is_diagonal_Butcher(Butcher_dict, MoL_method) and "RK3" in MoL_method:
         y_n_gfs = "Y_N_GFS"
-        k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs = "K1_OR_Y_NPLUS_A21_K1_OR_Y_NPLUS1_RUNNING_TOTAL_GFS"
+        k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs = (
+            "K1_OR_Y_NPLUS_A21_K1_OR_Y_NPLUS1_RUNNING_TOTAL_GFS"
+        )
         k2_or_y_nplus_a32_k2_gfs = "K2_OR_Y_NPLUS_A32_K2_GFS"
 
         if s == 0:
             return [k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs]
         elif s == 1:
-            return [k2_or_y_nplus_a32_k2_gfs, k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs]
+            return [
+                k2_or_y_nplus_a32_k2_gfs,
+                k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs,
+            ]
         elif s == 2:
             return [y_n_gfs]
     else:
@@ -77,7 +86,6 @@ def generate_post_rhs_output_list(
             else:  # If on anything but the final step
                 return [next_y_input]
         else:
-            y_nplus1_running_total = "Y_NPLUS1_RUNNING_TOTAL_GFS"
             if MoL_method == "Euler":
                 return [y_n]
             else:
@@ -94,16 +102,11 @@ def generate_post_rhs_output_list(
     return []  # Default case if no condition is met
 
 
-
-
 def register_CFunction_MoL_malloc_diagnostic_gfs() -> None:
     """
     Register the CFunction 'MoL_malloc_diagnostic_gfs'.
-
     This function allocates memory for diagnostic grid functions.
-
     :raises RuntimeError: If an error occurs while registering the CFunction
-
     :return None
     """
     includes: List[str] = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
@@ -329,7 +332,6 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
         }
 """
 
-
         body += r"""
           case RK_SUBSTEP_K2:
           {
@@ -442,8 +444,8 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                     post_rhs_output = next_y_input
 
                 # ~ body += f"""
-          # ~ case RK_SUBSTEP_K{str(s + 1)}:
-# ~ """
+                # ~ case RK_SUBSTEP_K{str(s + 1)}:
+                # ~ """
                 body += f"""
           case RK_SUBSTEP_K{str(s + 1)}:
           {{
@@ -466,7 +468,6 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                 body += """
           break;
           }"""
-
 
         else:
             y_n = sp.Symbol("y_n_gfsL", real=True)
@@ -589,10 +590,24 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
         body=body,
     )
 
-def create_gf_constants(gf_list):
+
+def create_gf_constants(gf_list: List[str]) -> str:
+    """
+    Create C preprocessor constant definitions from a list of grid functions.
+
+    :param gf_list: A list of grid function names.
+    :return: A string with C preprocessor #define statements for each grid function.
+    """
     return "\n".join(f"#define {gf.upper()} {i}" for i, gf in enumerate(gf_list))
 
-def create_rk_substep_constants(num_steps):
+
+def create_rk_substep_constants(num_steps: int) -> str:
+    """
+    Create C preprocessor constant definitions for Runge-Kutta substeps.
+
+    :param num_steps: The number of Runge-Kutta substeps.
+    :return: A string with C preprocessor #define statements for each substep.
+    """
     return "\n".join(f"#define RK_SUBSTEP_K{s+1} {s+1}" for s in range(num_steps))
 
 
@@ -667,12 +682,16 @@ def register_CFunctions(
     ) = generate_gridfunction_names(Butcher_dict, MoL_method=MoL_method)
 
     # Convert y_n_gridfunctions to a list if it's a string
-    gf_list = [y_n_gridfunctions] if isinstance(y_n_gridfunctions, str) else y_n_gridfunctions
+    gf_list = (
+        [y_n_gridfunctions] if isinstance(y_n_gridfunctions, str) else y_n_gridfunctions
+    )
     gf_list.extend(non_y_n_gridfunctions_list)
 
     gf_constants = create_gf_constants(gf_list)
 
-    rk_substep_constants = create_rk_substep_constants(len(Butcher_dict[MoL_method][0])-1)
+    rk_substep_constants = create_rk_substep_constants(
+        len(Butcher_dict[MoL_method][0]) - 1
+    )
 
     # Step 3.b: Create MoL_timestepping struct:
     BHaH_defines_h.register_BHaH_defines(
@@ -692,9 +711,8 @@ _Pragma("omp parallel for") \
   for(int (ii)=0;(ii)<Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;(ii)++)
 """
         + rf"""// Define constants for rk substeps
-{rk_substep_constants}"""
+{rk_substep_constants}""",
     )
-
 
 
 if __name__ == "__main__":

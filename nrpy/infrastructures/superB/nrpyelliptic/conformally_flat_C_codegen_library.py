@@ -8,27 +8,18 @@ Authors: Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
 """
 
 from inspect import currentframe as cfr
-from pathlib import Path
 from types import FrameType as FT
 from typing import Dict, Tuple, Union, cast
 
-import sympy as sp
-
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.superB.output_0d_1d_2d_nearest_gridpoint_slices as out012d
 import nrpy.infrastructures.BHaH.simple_loop as lp
+import nrpy.infrastructures.superB.output_0d_1d_2d_nearest_gridpoint_slices as out012d
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
-from nrpy.equations.nrpyelliptic.ConformallyFlat_RHSs import (
-    HyperbolicRelaxationCurvilinearRHSs,
-)
-from nrpy.equations.nrpyelliptic.ConformallyFlat_SourceTerms import (
-    compute_psi_background_and_ADD_times_AUU,
-)
 from nrpy.infrastructures.BHaH import griddata_commondata
+
 
 # Define function to compute the l^2 of a gridfunction
 def register_CFunction_compute_L2_norm_of_gridfunction(
@@ -116,12 +107,10 @@ if(r < integration_radius) {
     )
 
 
-
 # Define diagnostics function
 def register_CFunction_diagnostics(
     CoordSystem: str,
     default_diagnostics_out_every: int,
-    enable_progress_indicator: bool = False,
     axis_filename_tuple: Tuple[str, str] = (
         "out1d-AXIS-n-%08d.txt",
         "nn",
@@ -137,7 +126,6 @@ def register_CFunction_diagnostics(
 
     :param CoordSystem: Coordinate system used.
     :param default_diagnostics_out_every: Specifies the default diagnostics output frequency.
-    :param enable_progress_indicator: Whether to enable the progress indicator.
     :param axis_filename_tuple: Tuple containing filename and variables for axis output.
     :param plane_filename_tuple: Tuple containing filename and variables for plane output.
     :param out_quantities_dict: Dictionary or string specifying output quantities.
@@ -160,9 +148,7 @@ def register_CFunction_diagnostics(
     desc = "Diagnostics."
     cfunc_type = "void"
     name = "diagnostics"
-    params = (
-        "commondata_struct *restrict commondata, griddata_struct *restrict griddata_chare, griddata_struct *restrict griddata, Ck::IO::Session token, const int which_output, const int grid, const int chare_index[3], REAL localsums_for_residualH[2]"
-    )
+    params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata_chare, griddata_struct *restrict griddata, Ck::IO::Session token, const int which_output, const int grid, const int chare_index[3], REAL localsums_for_residualH[2]"
 
     # fmt: off
     if out_quantities_dict == "default":
@@ -181,11 +167,11 @@ def register_CFunction_diagnostics(
             axis=axis,
         )
         out012d.register_CFunction_diagnostics_set_up_nearest_1d_axis(
-                CoordSystem=CoordSystem,
-                out_quantities_dict=out_quantities_dict,
-                filename_tuple=axis_filename_tuple,
-                axis=axis,
-         )
+            CoordSystem=CoordSystem,
+            out_quantities_dict=out_quantities_dict,
+            filename_tuple=axis_filename_tuple,
+            axis=axis,
+        )
     for plane in ["xy", "yz"]:
         out012d.register_CFunction_diagnostics_nearest_2d_plane(
             CoordSystem=CoordSystem,
@@ -193,11 +179,11 @@ def register_CFunction_diagnostics(
             plane=plane,
         )
         out012d.register_CFunction_diagnostics_set_up_nearest_2d_plane(
-                CoordSystem=CoordSystem,
-                out_quantities_dict=out_quantities_dict,
-                filename_tuple=plane_filename_tuple,
-                plane=plane,
-            )
+            CoordSystem=CoordSystem,
+            out_quantities_dict=out_quantities_dict,
+            filename_tuple=plane_filename_tuple,
+            plane=plane,
+        )
 
     body = r"""  // Unpack griddata and griddata_chare
   const int nn = commondata->nn;
@@ -290,5 +276,3 @@ def register_CFunction_diagnostics(
     )
 
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
-
-
