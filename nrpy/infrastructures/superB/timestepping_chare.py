@@ -206,6 +206,7 @@ if (tmpBuffers->tmpBuffer_TB != NULL) free(tmpBuffers->tmpBuffer_TB);
 
 def output_timestepping_h(
     project_dir: str,
+    enable_residual_diagnostics: bool = False,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
     """
@@ -247,9 +248,14 @@ class Timestepping : public CBase_Timestepping {
 
     /// Member Functions (private) ///
     void send_neighbor_data(const int type_gfs, const int dir, const int grid);
-    void process_ghost(const int type_ghost, const int type_gfs, const int len_tmpBuffer, const REAL *restrict tmpBuffer, const int grid);
+    void process_ghost(const int type_ghost, const int type_gfs, const int len_tmpBuffer, const REAL *restrict tmpBuffer, const int grid);"""
 
+    if enable_residual_diagnostics:
+        file_output_str += r"""
+  void contribute_localsums_for_residualH(REAL localsums_for_residualH[2]);
+"""
 
+    file_output_str += r"""
   public:
     /// Constructors ///
     Timestepping(CommondataObject &&inData);
@@ -311,10 +317,12 @@ def output_timestepping_cpp(
     project_dir: str,
     Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
     MoL_method: str,
+    post_non_y_n_auxevol_mallocs: str,
     initial_data_desc: str = "",
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
     initialize_constant_auxevol: bool = False,
+    enable_residual_diagnostics: bool = False,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
     """
@@ -422,6 +430,14 @@ Timestepping::Timestepping(CommondataObject &&inData) {
   // Step 4: Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping
   for(int grid=0; grid<commondata.NUMGRIDS; grid++)
     MoL_malloc_non_y_n_gfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].gridfuncs);
+"""
+    if post_non_y_n_auxevol_mallocs:
+        file_output_str += (
+            """// Step 4.a: Functions called after memory for non-y_n and auxevol gridfunctions is allocated.
+"""
+            + post_non_y_n_auxevol_mallocs
+        )
+    file_output_str += """
 
   // Allocate storage for diagnostic gridfunctions
   for(int grid=0; grid<commondata.NUMGRIDS; grid++)
@@ -715,8 +731,24 @@ void Timestepping::process_ghost(const int type_ghost, const int type_gfs, const
       break;
   }
 }
-#include "timestepping.def.h"
 """
+
+
+    if enable_residual_diagnostics:
+        file_output_str += r"""
+void Timestepping::contribute_localsums_for_residualH(REAL localsums_for_residualH[2]) {
+  std::vector<double> outdoubles(2);
+  outdoubles[0] = localsums_for_residualH[0];
+  outdoubles[1] = localsums_for_residualH[1];
+  CkCallback cb(CkIndex_Timestepping::report_sums_for_residualH(NULL), thisProxy);
+  contribute(outdoubles, CkReduction::sum_double, cb);
+}
+    """
+
+    file_output_str += r"""
+#include "timestepping.def.h"
+    """
+
 
     timestepping_cpp_file = project_Path / "timestepping.cpp"
     with timestepping_cpp_file.open("w", encoding="utf-8") as file:
@@ -733,6 +765,7 @@ def output_timestepping_ci(
     post_MoL_step_forward_in_time: str = "",
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
     enable_psi4_diagnostics: bool = False,
+    enable_residual_diagnostics: bool = False,
 ) -> None:
     """
     Generate timestepping.ci.
@@ -792,10 +825,32 @@ def output_timestepping_ci(
         serial {
           time_start = commondata.time;
         }
-        serial {
-          write_diagnostics_this_step = fabs(round(commondata.time / commondata.diagnostics_output_every) * commondata.diagnostics_output_every - commondata.time) < 0.5 * commondata.dt;
-        }
         """
+    if enable_residual_diagnostics:
+        file_output_str += r"""
+        serial {
+          Ck::IO::Session token;  //pass a null token
+          const int thisIndex_arr[3] = {thisIndex.x, thisIndex.y, thisIndex.z};
+          REAL localsums_for_residualH[2];
+          diagnostics(&commondata, griddata_chare, griddata, token, OUTPUT_RESIDUAL, which_grid_diagnostics, thisIndex_arr, localsums_for_residualH);
+          contribute_localsums_for_residualH(localsums_for_residualH);
+        }
+        when continue_after_residual_H_done() {
+        """
+    if enable_residual_diagnostics:
+        file_output_str += r"""
+            serial {
+              const int n_step = commondata.nn;
+              const int outevery = commondata.diagnostics_output_every;
+              write_diagnostics_this_step = n_step % outevery == 0;
+            }
+            """
+    else:
+        file_output_str += r"""
+            serial {
+              write_diagnostics_this_step = fabs(round(commondata.time / commondata.diagnostics_output_every) * commondata.diagnostics_output_every - commondata.time) < 0.5 * commondata.dt;
+            }
+            """
     if enable_psi4_diagnostics:
         file_output_str += r"""
         if (write_diagnostics_this_step) {
@@ -806,52 +861,57 @@ def output_timestepping_ci(
           }
         }
         """
-    file_output_str += r"""
+    if enable_residual_diagnostics:
+        filename_format = "commondata.nn"
+    else:
+        filename_format = "commondata.convergence_factor, commondata.time"
+
+    file_output_str += rf"""
         // Step 5.a: Main loop, part 1: Output diagnostics
-        //serial {
-        //  if (write_diagnostics_this_step && contains_gridcenter) {
+        //serial {{
+        //  if (write_diagnostics_this_step && contains_gridcenter) {{
         //    diagnostics(&commondata, griddata_chare, Ck::IO::Session(), OUTPUT_0D, which_grid_diagnostics);
-        //  }
-        //}
+        //  }}
+        //}}
         // Create sessions for ckio file writing from first chare only
-        if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
-          serial {
+        if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {{
+          serial {{
             progress_indicator(&commondata, griddata_chare);
             if (commondata.time + commondata.dt > commondata.t_final)
               printf("\n");
-          }
-          if (write_diagnostics_this_step) {
-            serial {
+          }}
+          if (write_diagnostics_this_step) {{
+            serial {{
               count_filewritten = 0;
-              {
+              {{
                 char filename[256];
-                sprintf(filename, griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_1d_y, commondata.convergence_factor, commondata.time);
+                sprintf(filename, griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_1d_y, {filename_format});
                 Ck::IO::Options opts;
                 CkCallback opened_1d_y(CkIndex_Timestepping::ready_1d_y(NULL), thisProxy);
                 Ck::IO::open(filename, opened_1d_y, opts);
-              }
-              {
+              }}
+              {{
                 char filename[256];
-                sprintf(filename, griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_1d_z, commondata.convergence_factor, commondata.time);
+                sprintf(filename, griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_1d_z, {filename_format});
                 Ck::IO::Options opts;
                 CkCallback opened_1d_z(CkIndex_Timestepping::ready_1d_z(NULL), thisProxy);
                 Ck::IO::open(filename, opened_1d_z, opts);
-              }
-              {
+              }}
+              {{
                 char filename[256];
-                sprintf(filename, griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_2d_xy, commondata.convergence_factor, commondata.time);
+                sprintf(filename, griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_2d_xy, {filename_format});
                 Ck::IO::Options opts;
                 CkCallback opened_2d_xy(CkIndex_Timestepping::ready_2d_xy(NULL), thisProxy);
                 Ck::IO::open(filename, opened_2d_xy, opts);
-              }
-              {
+              }}
+              {{
                 char filename[256];
-                sprintf(filename, griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_2d_yz, commondata.convergence_factor, commondata.time);
+                sprintf(filename, griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_2d_yz, {filename_format});
                 Ck::IO::Options opts;
                 CkCallback opened_2d_yz(CkIndex_Timestepping::ready_2d_yz(NULL), thisProxy);
                 Ck::IO::open(filename, opened_2d_yz, opts);
-              }
-            }
+              }}
+            }}
 """
     # Generate code for 1d y diagnostics
     file_output_str += generate_diagnostics_code(
@@ -927,19 +987,8 @@ def output_timestepping_ci(
                 nchare_var = "commondata.Nchare2"
                 grid_split_direction = "TOP_BOTTOM"
 
-
             post_rhs_output_list = generate_post_rhs_output_list(Butcher_dict, MoL_method, s+1)
 
-            # Debugging information
-            # ~ print(f"Length of post_rhs_output_list: {len(post_rhs_output_list)}")
-            # ~ print(f"Contents of post_rhs_output_list: {post_rhs_output_list}")
-
-            # ~ file_output_str += generate_send_neighbor_data_code(
-                # ~ post_rhs_output_list[0], grid_split_direction
-            # ~ )
-            # ~ file_output_str += generate_ghost_code(
-                # ~ loop_direction, pos_ghost_type, neg_ghost_type, nchare_var
-            # ~ )
             # Loop over each element in post_rhs_output_list
             for post_rhs_output in post_rhs_output_list:
                 file_output_str += generate_send_neighbor_data_code(
@@ -956,6 +1005,13 @@ def output_timestepping_ci(
         file_output_str += post_MoL_step_forward_in_time
     else:
         file_output_str += "  // (nothing here; specify by setting post_MoL_step_forward_in_time string in register_CFunction_main_c().)\n"
+
+
+    if enable_residual_diagnostics:
+        file_output_str += r"""
+      }
+        """
+
 
     file_output_str += r"""
         }
@@ -988,11 +1044,19 @@ def output_timestepping_ci(
     entry void closed_2d_yz(CkReductionMsg *m);
     entry void diagnostics_ckio(Ck::IO::Session token, int which_output) {
       serial {
-        const int thisIndex_arr[3] = {thisIndex.x, thisIndex.y, thisIndex.z};
+        const int thisIndex_arr[3] = {thisIndex.x, thisIndex.y, thisIndex.z};"""
+    if enable_residual_diagnostics:
+        file_output_str += r"""
+        REAL unused_var[2];
+        diagnostics(&commondata, griddata_chare, griddata, token, which_output, which_grid_diagnostics, thisIndex_arr, unused_var);
+"""
+    else:
+        file_output_str += r"""
         diagnostics(&commondata, griddata_chare, griddata, token, which_output, which_grid_diagnostics, thisIndex_arr);
+"""
+    file_output_str += r"""
       }
     }
-
     entry void east_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
     entry void west_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
     entry void north_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
@@ -1000,9 +1064,44 @@ def output_timestepping_ci(
     entry void top_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
     entry void bottom_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
     entry void continue_timestepping();
+"""
+    if enable_residual_diagnostics:
+        file_output_str += r"""
+    entry void continue_after_residual_H_done();
+    entry void report_sums_for_residualH(CkReductionMsg *msg) {
+      serial {
+        int reducedArrSize=msg->getSize()/sizeof(double);
+        CkAssert(reducedArrSize == 2);
+        double *output=(double *)msg->getData();
+        // Update residual to be used in stop condition
+        commondata.log10_current_residual = log10(1e-16 + sqrt(output[0] / output[1])); // 1e-16 + ... avoids log10(0)
+        // Output l2-norm of Hamiltonian constraint violation to file
+        if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
+          char filename[256];
+          sprintf(filename, "residual_l2_norm.txt");
+          const int nn = commondata.nn;
+          const REAL time = commondata.time;
+          const REAL residual_H =  commondata.log10_current_residual ;
+          FILE *outfile = (nn == 0) ? fopen(filename, "w") : fopen(filename, "a");
+          if (!outfile) {
+            fprintf(stderr, "Error: Cannot open file %s for writing.\n", filename);
+            exit(1);
+          }
+          fprintf(outfile, "%6d %10.4e %.17e\n", nn, time, residual_H);
+          fclose(outfile);
+        }
+        delete msg;
+        thisProxy[CkArrayIndex3D(thisIndex.x, thisIndex.y, thisIndex.z)].continue_after_residual_H_done();
+      }
+    }
+        """
+
+    file_output_str += r"""
   };
 };
 """
+
+
     timestepping_ci_file = project_Path / "timestepping.ci"
     with timestepping_ci_file.open("w", encoding="utf-8") as file:
         file.write(
@@ -1014,22 +1113,27 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
     project_dir: str,
     MoL_method: str = "RK4",
     enable_rfm_precompute: bool = False,
+    post_non_y_n_auxevol_mallocs: str = "",
     pre_MoL_step_forward_in_time: str = "",
     post_MoL_step_forward_in_time: str = "",
     enable_psi4_diagnostics: bool = False,
+    enable_residual_diagnostics: bool = False,
 ) -> None:
     """
     Output timestepping h, cpp, and ci files and register C functions.
 
     :param project_dir: Directory where the project C code is output
     :param enable_rfm_precompute: Enable RFM precompute (default: False)
+    :param post_non_y_n_auxevol_mallocs: Function calls after memory is allocated for non y_n and auxevol gridfunctions, default is an empty string.
     :param pre_MoL_step_forward_in_time: Pre MoL step forward in time (default: "")
     :param post_MoL_step_forward_in_time: Post MoL step forward in time (default: "")
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
+    :param enable_residual_diagnostics: Whether or not to enable residual diagnostics.
     :return None
     """
     output_timestepping_h(
         project_dir=project_dir,
+        enable_residual_diagnostics=enable_residual_diagnostics,
     )
 
     Butcher_dict = generate_Butcher_tables()
@@ -1040,6 +1144,8 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         enable_CurviBCs=True,
         Butcher_dict=Butcher_dict,
         MoL_method=MoL_method,
+        post_non_y_n_auxevol_mallocs=post_non_y_n_auxevol_mallocs,
+        enable_residual_diagnostics=enable_residual_diagnostics,
     )
 
     output_timestepping_ci(
@@ -1047,6 +1153,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         pre_MoL_step_forward_in_time=pre_MoL_step_forward_in_time,
         post_MoL_step_forward_in_time=post_MoL_step_forward_in_time,
         enable_psi4_diagnostics=enable_psi4_diagnostics,
+        enable_residual_diagnostics=enable_residual_diagnostics,
         Butcher_dict=Butcher_dict,
         MoL_method=MoL_method,
     )

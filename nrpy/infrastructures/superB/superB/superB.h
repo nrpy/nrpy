@@ -45,6 +45,7 @@
 #define OUTPUT_2D_XY 3
 #define OUTPUT_2D_YZ 4
 #define OUTPUT_PSI4 5
+#define OUTPUT_RESIDUAL 6
 
 #define EAST_WEST 0
 #define NORTH_SOUTH 1

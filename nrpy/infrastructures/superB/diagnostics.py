@@ -137,10 +137,11 @@ const int Nchare2 = commondata->Nchare2;
 const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
 const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
 const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
-
-if (which_output == OUTPUT_PSI4) {"""
+"""
     if enable_psi4_diagnostics:
         body += r"""
+if (which_output == OUTPUT_PSI4) {
+
   // Do psi4 output, but only if the grid is spherical-like.
   if (strstr(params_chare->CoordSystemName, "Spherical") != NULL) {
 
@@ -189,9 +190,11 @@ if (which_output == OUTPUT_PSI4) {"""
       psi4_spinweightm2_decomposition_on_sphlike_grids(commondata, params, params_chare, diagnostic_output_gfs, list_of_R_exts_chare,
                                                        num_of_R_exts_chare, psi4_spinweightm2_sph_harmonics_max_l, xx, chare_index);
     }
-  }"""
-    body += r"""
+  }
 } else {
+"""
+    body += r"""
+
   const int num_diagnostic_1d_y_pts = griddata_chare[grid].diagnosticstruct.num_diagnostic_1d_y_pts;
   const int num_diagnostic_1d_z_pts = griddata_chare[grid].diagnosticstruct.num_diagnostic_1d_z_pts;
   const int num_diagnostic_2d_xy_pts = griddata_chare[grid].diagnosticstruct.num_diagnostic_2d_xy_pts;
@@ -205,16 +208,6 @@ if (which_output == OUTPUT_PSI4) {"""
             (num_diagnostic_2d_yz_pts > 0);
 
   if (write_diagnostics) {
-    // Unpack griddata_chare struct:
-    const REAL *restrict y_n_gfs = griddata_chare[grid].gridfuncs.y_n_gfs;
-    REAL *restrict auxevol_gfs = griddata_chare[grid].gridfuncs.auxevol_gfs;
-    REAL *restrict diagnostic_output_gfs = griddata_chare[grid].gridfuncs.diagnostic_output_gfs;
-    REAL *restrict xx_chare[3];
-    {
-      for (int ww = 0; ww < 3; ww++)
-      xx_chare[ww] = griddata_chare[grid].xx[ww];
-    }
-    const params_struct *restrict params_chare = &griddata_chare[grid].params;
 
     // Constraint output
     {
@@ -244,7 +237,8 @@ if (which_output == OUTPUT_PSI4) {"""
     }
   }
 """
-    body += r"""
+    if enable_psi4_diagnostics:
+        body += r"""
 }
 """
 
