@@ -580,10 +580,7 @@ class BSSNQuantities_dict(Dict[str, BSSNQuantities]):
         enable_rfm_precompute = "_rfm_precompute" in CoordSystem_in
         enable_RbarDD_gridfunctions = "_RbarDD_gridfunctions" in CoordSystem_in
 
-        if (
-            enable_RbarDD_gridfunctions
-            and not "RbarDD00" in gri.glb_gridfcs_dict.keys()
-        ):
+        if enable_RbarDD_gridfunctions and "RbarDD00" not in gri.glb_gridfcs_dict:
             _ = gri.register_gridfunctions_for_single_rank2(
                 "RbarDD",
                 symmetry="sym01",
