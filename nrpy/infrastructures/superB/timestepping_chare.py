@@ -271,7 +271,10 @@ class Timestepping : public CBase_Timestepping {
         )
 
 
-def generate_switch_statement_for_gf_types(Butcher_dict, MoL_method):
+def generate_switch_statement_for_gf_types(
+    Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
+    MoL_method: str,
+) -> str:
     """
     Generate the switch statement for grid function types based on the given Method of Lines (MoL) method.
 

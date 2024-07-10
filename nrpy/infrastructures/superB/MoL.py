@@ -60,6 +60,7 @@ def generate_post_rhs_output_list(
     """
     num_steps = len(Butcher_dict[MoL_method][0]) - 1
     s = rk_substep - 1  # Convert to 0-indexed
+    post_rhs = []
 
     if is_diagonal_Butcher(Butcher_dict, MoL_method) and "RK3" in MoL_method:
         y_n_gfs = "Y_N_GFS"
@@ -69,25 +70,26 @@ def generate_post_rhs_output_list(
         k2_or_y_nplus_a32_k2_gfs = "K2_OR_Y_NPLUS_A32_K2_GFS"
 
         if s == 0:
-            return [k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs]
+            post_rhs = [k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs]
         elif s == 1:
-            return [
+            post_rhs = [
                 k2_or_y_nplus_a32_k2_gfs,
                 k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs,
             ]
         elif s == 2:
-            return [y_n_gfs]
+            post_rhs = [y_n_gfs]
     else:
         y_n = "Y_N_GFS"
         if not is_diagonal_Butcher(Butcher_dict, MoL_method):
             next_y_input = "NEXT_Y_INPUT_GFS"
             if s == num_steps - 1:  # If on final step
-                return [y_n]
+                post_rhs = [y_n]
             else:  # If on anything but the final step
-                return [next_y_input]
+                post_rhs = [next_y_input]
         else:
+            y_nplus1_running_total = "Y_NPLUS1_RUNNING_TOTAL_GFS"
             if MoL_method == "Euler":
-                return [y_n]
+                post_rhs = [y_n]
             else:
                 if s % 2 == 0:
                     rhs_output = "K_ODD_GFS"
@@ -95,11 +97,11 @@ def generate_post_rhs_output_list(
                     rhs_output = "K_EVEN_GFS"
 
                 if s == num_steps - 1:  # If on the final step
-                    return [y_n]
+                    post_rhs = [y_n]
                 else:  # For anything besides the final step
-                    return [rhs_output]
+                    post_rhs = [rhs_output]
 
-    return []  # Default case if no condition is met
+    return post_rhs  # Return the list of strings representing the post RHS output
 
 
 def register_CFunction_MoL_malloc_diagnostic_gfs() -> None:
