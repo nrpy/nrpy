@@ -89,7 +89,7 @@ boundary_conditions_desc = "outgoing radiation"
 initial_data_type = "gw150914"  # choices are: "gw150914", "axisymmetric", and "single_puncture"
 # Choosing number of chares, Nchare0, Nchare1, and Nchare2, in each direction:
 # 1. for spherical-like coordinates Nchare1 and Nchare2 cannot be greater than 1
-# 2. for cylindrical-like coordinates Nchare1 should be cannot be greater than 1
+# 2. for cylindrical-like coordinates Nchare1 cannot be greater than 1
 # 3. Nxx0/Nchare0, Nxx1/Nchare1, Nxx2/Nchare2 should be an integer greater than NGHOSTS
 if "Spherical" in CoordSystem:
     par.adjust_CodeParam_default("Nchare0", 16)
