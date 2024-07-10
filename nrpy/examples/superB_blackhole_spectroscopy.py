@@ -87,9 +87,6 @@ swm2sh_maximum_l_mode_to_compute = 2  # for consistency with NRPy 1.0 version.
 Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
 }
-par.adjust_CodeParam_default("Nchare0", 20)
-par.adjust_CodeParam_default("Nchare1", 1)
-par.adjust_CodeParam_default("Nchare2", 1)
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.25
 default_BH2_z_posn = -0.25
@@ -102,6 +99,12 @@ separate_Ricci_and_BSSN_RHS = True
 parallel_codegen_enable = True
 enable_fd_functions = True
 boundary_conditions_desc = "outgoing radiation"
+# Choosing number of chares, Nchare0, Nchare1, and Nchare2, in each direction:
+# 1. for spherical-like coordinates Nchare1 and Nchare2 cannot be greater than 1
+# 2. for cylindrical-like coordinates Nchare1 cannot be greater than 1
+# 3. Nxx0/Nchare0, Nxx1/Nchare1, Nxx2/Nchare2 should be an integer greater than NGHOSTS
+if "Spherical" in CoordSystem:
+    par.adjust_CodeParam_default("Nchare0", 20)
 
 OMP_collapse = 1
 if "Spherical" in CoordSystem:

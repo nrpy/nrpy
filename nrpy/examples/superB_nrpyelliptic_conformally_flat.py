@@ -55,17 +55,12 @@ default_checkpoint_every = 50.0
 eta_damping = 11.0
 MINIMUM_GLOBAL_WAVESPEED = 0.7
 CFL_FACTOR = 1.0  # NRPyElliptic wave speed prescription assumes this parameter is ALWAYS set to 1
-# ~ CoordSystem = "SinhSymTP"
-# ~ CoordSystem = "SinhCylindricalv2"
 CoordSystem = "SinhSpherical"
 Nxx_dict = {
     "SinhSymTP": [128, 128, 16],
     "SinhCylindricalv2": [128, 16, 256],
     "SinhSpherical": [128, 64, 16],
 }
-par.adjust_CodeParam_default("Nchare0", 8)
-par.adjust_CodeParam_default("Nchare1", 1)
-par.adjust_CodeParam_default("Nchare2", 1)
 # Set parameters specific to SinhSymTP coordinates
 AMAX = grid_physical_size
 bScale = 5.0
@@ -91,8 +86,16 @@ enable_simd = True
 parallel_codegen_enable = True
 boundary_conditions_desc = "outgoing radiation"
 # fmt: off
-# ~ initial_data_type = "gw150914"  # choices are: "gw150914", "axisymmetric", and "single_puncture"
-initial_data_type = "axisymmetric"  # choices are: "gw150914", "axisymmetric", and "single_puncture"
+initial_data_type = "gw150914"  # choices are: "gw150914", "axisymmetric", and "single_puncture"
+# Choosing number of chares, Nchare0, Nchare1, and Nchare2, in each direction:
+# 1. for spherical-like coordinates Nchare1 and Nchare2 cannot be greater than 1
+# 2. for cylindrical-like coordinates Nchare1 should be cannot be greater than 1
+# 3. Nxx0/Nchare0, Nxx1/Nchare1, Nxx2/Nchare2 should be an integer greater than NGHOSTS
+if "Spherical" in CoordSystem:
+    par.adjust_CodeParam_default("Nchare0", 16)
+if "Cylindrical" in CoordSystem:
+    par.adjust_CodeParam_default("Nchare0", 16)
+    par.adjust_CodeParam_default("Nchare2", 32)
 
 q = 36.0 / 29.0
 Pr = -0.00084541526517121  # Radial linear momentum
