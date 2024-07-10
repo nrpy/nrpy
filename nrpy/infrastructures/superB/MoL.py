@@ -87,7 +87,6 @@ def generate_post_rhs_output_list(
             else:  # If on anything but the final step
                 post_rhs = [next_y_input]
         else:
-            y_nplus1_running_total = "Y_NPLUS1_RUNNING_TOTAL_GFS"
             if MoL_method == "Euler":
                 post_rhs = [y_n]
             else:
