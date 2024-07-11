@@ -256,6 +256,7 @@ superBmain.output_commondata_object_h_and_main_h_cpp_ci(
 )
 superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
     project_dir=project_dir,
+    MoL_method=MoL_method,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_psi4_diagnostics=False,
 )
