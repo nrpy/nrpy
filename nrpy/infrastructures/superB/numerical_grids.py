@@ -45,15 +45,15 @@ if (params->Nxx2 % Nchare2 != 0) {
   fprintf(stderr, "Error: Division does not result in an integer value: Nxx2 %% Nchare2 = %d %% %d = %d\n", params->Nxx2, Nchare2, params->Nxx2 % Nchare2);
   exit(1);
 }
-if (params->Nxx0 / Nchare0 < NGHOSTS) {
+if (Nchare0 > 1 && params->Nxx0 / Nchare0 < NGHOSTS) {
   fprintf(stderr, "Error: params->Nxx0 / Nchare0 is less than NGHOSTS: %d / %d = %d < %d\n", params->Nxx0, Nchare0, params->Nxx0 / Nchare0, NGHOSTS);
   exit(1);
 }
-if (params->Nxx1 / Nchare1 < NGHOSTS) {
+if (Nchare1 > 1 && params->Nxx1 / Nchare1 < NGHOSTS) {
   fprintf(stderr, "Error: params->Nxx1 / Nchare1 is less than NGHOSTS: %d / %d = %d < %d\n", params->Nxx1, Nchare1, params->Nxx1 / Nchare1, NGHOSTS);
   exit(1);
 }
-if (params->Nxx2 / Nchare2 < NGHOSTS) {
+if (Nchare2 > 1 && params->Nxx2 / Nchare2 < NGHOSTS) {
   fprintf(stderr, "Error: params->Nxx2 / Nchare2 is less than NGHOSTS: %d / %d = %d < %d\n", params->Nxx2, Nchare2, params->Nxx2 / Nchare2, NGHOSTS);
   exit(1);
 }
