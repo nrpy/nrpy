@@ -29,10 +29,34 @@ def register_CFunction_numerical_grid_params_Nxx_dxx_xx_chare(
     cfunc_type = "void"
     name = "numerical_grid_params_Nxx_dxx_xx_chare"
     params = "commondata_struct *restrict commondata, const params_struct *restrict params, params_struct *restrict params_chare, REAL *restrict xx[3], const int chare_index[3]"
-    body = """
+    body = r"""
 const int Nchare0 = commondata->Nchare0;
 const int Nchare1 = commondata->Nchare1;
 const int Nchare2 = commondata->Nchare2;
+if (params->Nxx0 % Nchare0 != 0) {
+  fprintf(stderr, "Error: Division does not result in an integer value: Nxx0 %% Nchare0 = %d %% %d = %d\n", params->Nxx0, Nchare0, params->Nxx0 % Nchare0);
+  exit(1);
+}
+if (params->Nxx1 % Nchare1 != 0) {
+  fprintf(stderr, "Error: Division does not result in an integer value: Nxx1 %% Nchare1 = %d %% %d = %d\n", params->Nxx1, Nchare1, params->Nxx1 % Nchare1);
+  exit(1);
+}
+if (params->Nxx2 % Nchare2 != 0) {
+  fprintf(stderr, "Error: Division does not result in an integer value: Nxx2 %% Nchare2 = %d %% %d = %d\n", params->Nxx2, Nchare2, params->Nxx2 % Nchare2);
+  exit(1);
+}
+if (Nchare0 > 1 && params->Nxx0 / Nchare0 < NGHOSTS) {
+  fprintf(stderr, "Error: params->Nxx0 / Nchare0 is less than NGHOSTS: %d / %d = %d < %d\n", params->Nxx0, Nchare0, params->Nxx0 / Nchare0, NGHOSTS);
+  exit(1);
+}
+if (Nchare1 > 1 && params->Nxx1 / Nchare1 < NGHOSTS) {
+  fprintf(stderr, "Error: params->Nxx1 / Nchare1 is less than NGHOSTS: %d / %d = %d < %d\n", params->Nxx1, Nchare1, params->Nxx1 / Nchare1, NGHOSTS);
+  exit(1);
+}
+if (Nchare2 > 1 && params->Nxx2 / Nchare2 < NGHOSTS) {
+  fprintf(stderr, "Error: params->Nxx2 / Nchare2 is less than NGHOSTS: %d / %d = %d < %d\n", params->Nxx2, Nchare2, params->Nxx2 / Nchare2, NGHOSTS);
+  exit(1);
+}
 """
     for dirn in range(3):
         body += f"params_chare->Nxx{dirn} = params->Nxx{dirn}/Nchare{dirn};\n"

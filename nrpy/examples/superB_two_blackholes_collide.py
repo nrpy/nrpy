@@ -59,11 +59,10 @@ grid_physical_size = 7.5
 diagnostics_output_every = 0.25
 t_final = 1.0 * grid_physical_size
 Nxx_dict = {
-    "Spherical": [180, 4, 4],
+    "Spherical": [72, 12, 2],
+    "SinhSpherical": [72, 12, 2],
+    "Cartesian": [64, 64, 64],
 }
-par.adjust_CodeParam_default("Nchare0", 36)
-par.adjust_CodeParam_default("Nchare1", 1)
-par.adjust_CodeParam_default("Nchare2", 1)
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.5
 default_BH2_z_posn = -0.5
@@ -78,10 +77,27 @@ enable_fd_functions = True
 enable_KreissOliger_dissipation = False
 enable_CAKO = True
 boundary_conditions_desc = "outgoing radiation"
+# Choosing number of chares, Nchare0, Nchare1, and Nchare2, in each direction:
+# 1. for spherical-like coordinates Nchare1 and Nchare2 cannot be greater than 1
+# 2. for cylindrical-like coordinates Nchare1 cannot be greater than 1
+# 3. Nxx0/Nchare0, Nxx1/Nchare1, Nxx2/Nchare2 should be an integer greater than NGHOSTS
+if "Spherical" in CoordSystem:
+    par.adjust_CodeParam_default("Nchare0", 18)
+if "Cylindrical" in CoordSystem:
+    par.adjust_CodeParam_default("Nchare0", 18)
+    par.adjust_CodeParam_default("Nchare2", 1)
+if "Cartesian" in CoordSystem:
+    par.adjust_CodeParam_default("Nchare0", 16)
+    par.adjust_CodeParam_default("Nchare1", 16)
+    par.adjust_CodeParam_default("Nchare2", 16)
 
 OMP_collapse = 1
 if "Spherical" in CoordSystem:
+    par.set_parval_from_str("symmetry_axes", "2")
     OMP_collapse = 2  # about 2x faster
+if "Cylindrical" in CoordSystem:
+    par.set_parval_from_str("symmetry_axes", "1")
+    OMP_collapse = 2  # might be slightly faster
 
 project_dir = os.path.join("project", project_name)
 
@@ -240,6 +256,7 @@ superBmain.output_commondata_object_h_and_main_h_cpp_ci(
 )
 superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
     project_dir=project_dir,
+    MoL_method=MoL_method,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_psi4_diagnostics=False,
 )
