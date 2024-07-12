@@ -30,6 +30,13 @@ par.register_CodeParameter(
     add_to_glb_code_params_dict=True,
 )
 par.register_CodeParameter(
+    "REAL",
+    __name__,
+    "grid_hole_radius",
+    defaultvalue=2.0,
+    add_to_glb_code_params_dict=True,
+)
+par.register_CodeParameter(
     "char[50]",
     __name__,
     "CoordSystemName",
@@ -74,6 +81,10 @@ class ReferenceMetric:
         #    to domain size as functions of grid_physical_size CodeParameter
         #    (usually grid_physical_size or -grid_physical_size)
         self.grid_physical_size_dict: Dict[str, str] = {}
+        # grid_hole_radius_dict automatically sets rfm parameters related
+        #    to the size of the hole in *Holey* CoordSystems, as functions
+        #    of holey_radius.
+        self.grid_hole_radius_dict: Dict[str, str] = {}
         self.add_rfm_params_to_parfile = not par.parval_from_str(
             "enable_grid_physical_size"
         )
@@ -177,6 +188,10 @@ class ReferenceMetric:
         elif "Spherical" in CoordSystem:
             self.EigenCoord = "Spherical"
             self.spherical_like()
+        elif "Wedge" in CoordSystem:
+            # Wedges behave the same as Cartesian -- no inner boundaries; every face is an "outer boundary":
+            self.EigenCoord = "Cartesian"
+            self.spherical_wedge_like()
         elif "SymTP" in CoordSystem:
             self.EigenCoord = "SymTP"
             self.prolate_spheroidal_like()
@@ -781,6 +796,146 @@ class ReferenceMetric:
             [sp.sympify(0), sp.sympify(0), sp.sympify(1)],
         ]
 
+    def spherical_wedge_like(self) -> None:
+        """Initialize class for Spherical wedge-like coordinate systems."""
+        # Definitions:
+        # * UWHSinhSpherical = Upper-wedge HoleySinhSpherical
+        # * LWHSinhSpherical = Lower-wedge HoleySinhSpherical
+
+        M_PI = par.register_CodeParameter(
+            "#define",
+            self.CodeParam_modulename,
+            "M_PI",
+            "3.1415926535897932384626433",
+            add_to_parfile=False,
+            add_to_set_CodeParameters_h=False,
+            add_to_glb_code_params_dict=True,
+        )
+        AMPL, SINHW, RMIN = par.register_CodeParameters(
+            "REAL",
+            self.CodeParam_modulename,
+            ["AMPL", "SINHW", "RMIN"],
+            [10.0, 0.2, 2.0],
+            add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
+        )
+        self.grid_hole_radius_dict["RMIN"] = "grid_hole_radius"
+        self.grid_physical_size_dict["AMPL"] = "grid_physical_size"
+
+        # RMIN = AMPL * sinh(x0min/SINHW) / sinh(1/SINHW)
+        # -> x0min = SINHW * asinh(RMIN * sinh(1/SINHW) / AMPL)
+        self.xxmin = [
+            SINHW * sp.asinh(RMIN * sp.sinh(1 / SINHW) / AMPL),
+            sp.Rational(1, 4) * M_PI,
+            -M_PI * sp.Rational(1, 4),
+        ]
+        # Note that RMAX = AMPL:
+        self.xxmax = [
+            SINHW * sp.asinh(AMPL * sp.sinh(1 / SINHW) / AMPL),
+            sp.Rational(3, 4) * M_PI,
+            +M_PI * sp.Rational(1, 4),
+        ]
+
+        # BEGIN: Set universal attributes for all spherical-like coordinate systems:
+        self.xxSph[0] = self.Sinhv1(self.xx[0], AMPL, SINHW)
+        self.xxSph[1] = self.xx[1]
+        self.xxSph[2] = self.xx[2]
+
+        # Wedges take a chunk of a spherical grid and rotate it.
+        #   Scale factors are invariant under such rotations.
+        self.scalefactor_orthog[0] = sp.diff(self.xxSph[0], self.xx[0])
+        self.scalefactor_orthog[1] = self.xxSph[0]
+        self.scalefactor_orthog[2] = self.xxSph[0] * sp.sin(self.xxSph[1])
+
+        # fmt: off
+        self.f0_of_xx0 = self.xxSph[0]
+        self.f1_of_xx1 = sp.sin(self.xxSph[1])
+        self.scalefactor_orthog_funcform[0] = sp.diff(self.f0_of_xx0_funcform, self.xx[0])
+        self.scalefactor_orthog_funcform[1] = self.f0_of_xx0_funcform
+        self.scalefactor_orthog_funcform[2] = self.f0_of_xx0_funcform * self.f1_of_xx1_funcform
+        # fmt: on
+
+        r_ito_Cart = sp.sqrt(self.Cartx**2 + self.Carty**2 + self.Cartz**2)
+        if self.CoordSystem == "UWedgeHSinhSph":
+            # Upper-wedge HoleySinhSpherical
+            # This rotates the wedge 90-degrees counter-clockwise along the y-axis, causing x_old=z_new and z_old=-x_new
+            #   Thus, x_new = -z_old, y_new = y_old, z_new = x_old
+
+            # Upper wedge: x_new = -z_old, y_new = y_old, z_new = x_old
+            self.Cart_to_xx[0] = SINHW * sp.asinh(
+                r_ito_Cart * sp.sinh(1 / SINHW) / AMPL
+            )
+            # Cart_to_xx[1] = sp.acos(Cartz / rr)
+            self.Cart_to_xx[1] = sp.acos(-self.Cartx / r_ito_Cart)
+            # Cart_to_xx[2] = sp.atan2(Carty, Cartx)
+            self.Cart_to_xx[2] = sp.atan2(self.Carty, self.Cartz)
+
+            # Now define xCart, yCart, and zCart in terms of x0,xx[1],xx[2].
+            #   Note that the relation between r and x0 is not necessarily trivial in SinhSpherical coordinates. See above.
+            # orig:
+            # xx_to_Cart[0] = xxSph[0] * sp.sin(xxSph[1]) * sp.cos(xxSph[2])
+            # xx_to_Cart[1] = xxSph[0] * sp.sin(xxSph[1]) * sp.sin(xxSph[2])
+            # xx_to_Cart[2] = xxSph[0] * sp.cos(xxSph[1])
+
+            # Upper wedge: x_new = -z_old, y_new = y_old, z_new = x_old
+            # fmt: off
+            self.xx_to_Cart[0] = -self.xxSph[0] * sp.cos(self.xxSph[1])
+            self.xx_to_Cart[1] = +self.xxSph[0] * sp.sin(self.xxSph[1]) * sp.sin(self.xxSph[2])
+            self.xx_to_Cart[2] = +self.xxSph[0] * sp.sin(self.xxSph[1]) * sp.cos(self.xxSph[2])
+            # fmt: on
+
+            # Set the unit vectors
+            # orig:
+            # UnitVectors = [[sp.sin(xxSph[1])*sp.cos(xxSph[2]), sp.sin(xxSph[1])*sp.sin(xxSph[2]),  sp.cos(xxSph[1])],
+            #                [sp.cos(xxSph[1])*sp.cos(xxSph[2]), sp.cos(xxSph[1])*sp.sin(xxSph[2]), -sp.sin(xxSph[1])],
+            #                [                -sp.sin(xxSph[2]),                  sp.cos(xxSph[2]),  sp.sympify(0)   ]]
+
+            # Upper wedge: x_new = -z_old, y_new = y_old, z_new = x_old
+            xxS = self.xxSph
+            # fmt: off
+            self.UnitVectors = [[-sp.cos(xxS[1]), sp.sin(xxS[1])*sp.sin(xxS[2]), sp.sin(xxS[1])*sp.cos(xxS[2])],
+                                [+sp.sin(xxS[1]), sp.cos(xxS[1])*sp.sin(xxS[2]), sp.cos(xxS[1])*sp.cos(xxS[2])],
+                                [ -sp.sympify(0),                sp.cos(xxS[2]),               -sp.sin(xxS[2])]]
+            # fmt: on
+        if self.CoordSystem == "LWedgeHSinhSph":
+            # Lower-wedge HoleySinhSpherical
+            # This rotates the wedge 90-degrees clockwise along the y-axis, causing x_old=-z_new and z_old=x_new
+            #   Thus, x_new = z_old, y_new = y_old, z_new = -x_old
+
+            # Lower wedge: x_new = z_old, y_new = y_old, z_new = -x_old
+            self.Cart_to_xx[0] = SINHW * sp.asinh(
+                r_ito_Cart * sp.sinh(1 / SINHW) / AMPL
+            )
+            # Cart_to_xx[1] = sp.acos(Cartz / rr)
+            self.Cart_to_xx[1] = sp.acos(self.Cartx / r_ito_Cart)
+            # Cart_to_xx[2] = sp.atan2(Carty, Cartx)
+            self.Cart_to_xx[2] = sp.atan2(self.Carty, -self.Cartz)
+
+            # Now define xCart, yCart, and zCart in terms of x0,xx[1],xx[2].
+            #   Note that the relation between r and x0 is not necessarily trivial in SinhSpherical coordinates. See above.
+            # orig:
+            # xx_to_Cart[0] = xxSph[0] * sp.sin(xxSph[1]) * sp.cos(xxSph[2])
+            # xx_to_Cart[1] = xxSph[0] * sp.sin(xxSph[1]) * sp.sin(xxSph[2])
+            # xx_to_Cart[2] = xxSph[0] * sp.cos(xxSph[1])
+
+            # Lower wedge: x_new = z_old, y_new = y_old, z_new = -x_old
+            # fmt: off
+            self.xx_to_Cart[0] = +self.xxSph[0] * sp.cos(self.xxSph[1])
+            self.xx_to_Cart[1] = +self.xxSph[0] * sp.sin(self.xxSph[1]) * sp.sin(self.xxSph[2])
+            self.xx_to_Cart[2] = -self.xxSph[0] * sp.sin(self.xxSph[1]) * sp.cos(self.xxSph[2])
+
+            # Set the unit vectors
+            # orig:
+            # UnitVectors = [[sp.sin(xxSph[1])*sp.cos(xxSph[2]), sp.sin(xxSph[1])*sp.sin(xxSph[2]),  sp.cos(xxSph[1])],
+            #                [sp.cos(xxSph[1])*sp.cos(xxSph[2]), sp.cos(xxSph[1])*sp.sin(xxSph[2]), -sp.sin(xxSph[1])],
+            #                [                -sp.sin(xxSph[2]),                  sp.cos(xxSph[2]),  sp.sympify(0)   ]]
+
+            # Lower wedge: x_new = z_old, y_new = y_old, z_new = -x_old
+            xxS = self.xxSph
+            self.UnitVectors = [[+sp.cos(xxS[1]), sp.sin(xxS[1])*sp.sin(xxS[2]), -sp.sin(xxS[1])*sp.cos(xxS[2])],
+                                [-sp.sin(xxS[1]), sp.cos(xxS[1])*sp.sin(xxS[2]), -sp.cos(xxS[1])*sp.cos(xxS[2])],
+                                [  sp.sympify(0),                sp.cos(xxS[2]),                +sp.sin(xxS[2])]]
+            # fmt: on
+
     def spherical_like(self) -> None:
         """
         Initialize class for Spherical-like coordinate systems.
@@ -791,8 +946,10 @@ class ReferenceMetric:
             "#define",
             self.CodeParam_modulename,
             "M_PI",
-            "",
-            add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
+            "3.1415926535897932384626433",
+            add_to_parfile=False,
+            add_to_set_CodeParameters_h=False,
+            add_to_glb_code_params_dict=True,
         )
 
         if self.CoordSystem == "Spherical":
@@ -815,7 +972,7 @@ class ReferenceMetric:
             self.Cart_to_xx[0] = sp.sqrt(self.Cartx**2 + self.Carty**2 + self.Cartz**2)
             self.Cart_to_xx[1] = sp.acos(self.Cartz / self.Cart_to_xx[0])
             self.Cart_to_xx[2] = sp.atan2(self.Carty, self.Cartx)
-        elif self.CoordSystem == "SinhSpherical":
+        elif self.CoordSystem.endswith("SinhSpherical"):
             AMPL = par.register_CodeParameter(
                 "REAL",
                 self.CodeParam_modulename,
@@ -831,8 +988,32 @@ class ReferenceMetric:
                 0.2,
                 add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
             )
-            self.xxmin = [sp.sympify(0), sp.sympify(0), -M_PI]
-            self.xxmax = [sp.sympify(1), M_PI, M_PI]
+            if "HoleySinhSpherical" in self.CoordSystem:
+                RMIN = par.register_CodeParameter(
+                    "REAL",
+                    self.CodeParam_modulename,
+                    "RMIN",
+                    2.0,
+                    add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
+                )
+                # RMIN = AMPL * sinh(x0min/SINHW) / sinh(1/SINHW)
+                # -> x0min = SINHW * asinh(RMIN * sinh(1/SINHW) / AMPL)
+                # fmt: off
+                if self.CoordSystem == "HoleySinhSpherical":
+                    self.xxmin = [SINHW * sp.asinh(RMIN * sp.sinh(1 / SINHW) / AMPL), sp.sympify(0), -M_PI]
+                    # Note that RMAX = AMPL:
+                    self.xxmax = [SINHW * sp.asinh(AMPL * sp.sinh(1 / SINHW) / AMPL), M_PI, M_PI]
+                elif self.CoordSystem == "RingHoleySinhSpherical":
+                    self.xxmin = [SINHW * sp.asinh(RMIN * sp.sinh(1 / SINHW)/AMPL), sp.Rational(1, 4)*M_PI, -M_PI]
+                    # Note that RMAX = AMPL:
+                    self.xxmax = [SINHW * sp.asinh(AMPL * sp.sinh(1 / SINHW)/AMPL), sp.Rational(3, 4)*M_PI, M_PI]
+                else:
+                    raise ValueError(f"SinhSpherical coordinate system {self.CoordSystem} not supported!")
+                # fmt: on
+                self.grid_hole_radius_dict = {"RMIN": "grid_hole_radius"}
+            else:
+                self.xxmin = [sp.sympify(0), sp.sympify(0), -M_PI]
+                self.xxmax = [sp.sympify(1), M_PI, M_PI]
             self.grid_physical_size_dict = {"AMPL": "grid_physical_size"}
 
             # Set SinhSpherical radial coordinate by default; overwrite later if CoordSystem == "SinhSphericalv2n*".
@@ -937,8 +1118,10 @@ class ReferenceMetric:
             "#define",
             self.CodeParam_modulename,
             ["M_PI", "M_SQRT1_2"],
-            "",
-            add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
+            ["3.1415926535897932384626433", "0.707106781186547524400844362105"],
+            add_to_parfile=False,
+            add_to_set_CodeParameters_h=False,
+            add_to_glb_code_params_dict=True,
         )
         AMAX = par.register_CodeParameter(
             "REAL",
@@ -1135,8 +1318,10 @@ class ReferenceMetric:
             "#define",
             self.CodeParam_modulename,
             "M_PI",
-            "",
-            add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
+            "3.1415926535897932384626433",
+            add_to_parfile=False,
+            add_to_set_CodeParameters_h=False,
+            add_to_glb_code_params_dict=True,
         )
 
         # Assuming the cylindrical radial coordinate
@@ -1338,6 +1523,10 @@ if __name__ == "__main__":
         "SinhCylindricalv2n2",
         "SymTP",
         "SinhSymTP",
+        "LWedgeHSinhSph",
+        "UWedgeHSinhSph",
+        "RingHoleySinhSpherical",
+        "HoleySinhSpherical",
     ]:
         rfm = reference_metric[Coord]
         results_dict = ve.process_dictionary_of_expressions(

@@ -18,16 +18,16 @@ import nrpy.reference_metric as refmetric
 
 # fmt: off
 for i in range(3):
-    _ = par.CodeParameter("int", __name__, f"Nxx_plus_2NGHOSTS{i}", add_to_parfile=False, add_to_set_CodeParameters_h=True)
     _ = par.CodeParameter("int", __name__, f"Nxx{i}", 64)
+_ = par.CodeParameter("REAL", __name__, "convergence_factor", 1.0, commondata=True)
+for i in range(3):
+    _ = par.CodeParameter("int", __name__, f"Nxx_plus_2NGHOSTS{i}", add_to_parfile=False, add_to_set_CodeParameters_h=True)
     # reference_metric sets xxmin and xxmax below.
     _ = par.CodeParameter("REAL", __name__, f"xxmin{i}", -10.0, add_to_parfile=False, add_to_set_CodeParameters_h=True)
     _ = par.CodeParameter("REAL", __name__, f"xxmax{i}", 10.0, add_to_parfile=False, add_to_set_CodeParameters_h=True)
     _ = par.CodeParameter("REAL", __name__, f"invdxx{i}", add_to_parfile=False, add_to_set_CodeParameters_h=True)
     _ = par.CodeParameter("REAL", __name__, f"dxx{i}", add_to_parfile=False, add_to_set_CodeParameters_h=True)
-_ = par.CodeParameter("REAL", __name__, "convergence_factor", 1.0, commondata=True)
 _ = par.CodeParameter("int", __name__, "CoordSystem_hash", commondata=False, add_to_parfile=False)
-_ = par.CodeParameter("char[200]", __name__, "gridding_choice", "independent grid(s)", commondata=True, add_to_parfile=True)
 # fmt: on
 
 
@@ -56,8 +56,7 @@ def register_CFunction_numerical_grid_params_Nxx_dxx_xx(
 
 Inputs:
 - Nx[] inputs: Specifies new grid dimensions, if needed.
-- grid_is_resized: Indicates if the grid has been manually resized, triggering adjustments to grid parameters.
-- convergence_factor: Multiplier for grid dimensions to refine resolution, applied only if grid hasn't been resized.
+- convergence_factor (set to 1.0 by default): Factor by which grid resolution is increased; set to 1.0 by default.
 
 Parameter outputs:
 - Nxx: Number of grid points in each direction.
@@ -70,79 +69,68 @@ Grid setup output:
 """
     cfunc_type = "void"
     name = "numerical_grid_params_Nxx_dxx_xx"
-    params = "const commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3], const int Nx[3], const bool grid_is_resized"
-    body = "// First set default values for Nxx.\n"
+    params = "const commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3], const int Nx[3]"
+    body = "// Set default values for the grid resolution in each dimension.\n"
     for dirn in range(3):
         body += f"params->Nxx{dirn} = {Nxx_dict[CoordSystem][dirn]};\n"
     body += """
-// If all components of Nx[] are set to reasonable values (i.e., not -1), then set params->Nxx{} to Nx[].
-if( !(Nx[0]==-1 || Nx[1]==-1 || Nx[2]==-1) ) {
+// If all components of Nx[] are set to valid values (i.e., not -1), override the default values with Nx[].
+if( Nx[0]!=-1 && Nx[1]!=-1 && Nx[2]!=-1 ) {
 """
     for dirn in range(3):
         body += f"params->Nxx{dirn} = Nx[{dirn}];\n"
     body += f"""}}
 snprintf(params->CoordSystemName, 50, "{CoordSystem}");
 
-if( !grid_is_resized ) {{
-  // convergence_factor does not increase resolution across an axis of symmetry:
+// Resize grid by convergence_factor; used for convergence testing.
+{{
+  // convergence_factor does not increase resolution across an axis of symmetry (Nxx == 2):
   if(params->Nxx0 != 2) params->Nxx0 *= commondata->convergence_factor;
   if(params->Nxx1 != 2) params->Nxx1 *= commondata->convergence_factor;
   if(params->Nxx2 != 2) params->Nxx2 *= commondata->convergence_factor;
 }}
 
+// Set the full grid size; including the ghostzones (of width NGHOSTS) on the boundaries.
 params->Nxx_plus_2NGHOSTS0 = params->Nxx0 + 2*NGHOSTS;
 params->Nxx_plus_2NGHOSTS1 = params->Nxx1 + 2*NGHOSTS;
 params->Nxx_plus_2NGHOSTS2 = params->Nxx2 + 2*NGHOSTS;
 
-// Set grid size to grid_physical_size (set above, based on params->grid_physical_size):
 """
     rfm = refmetric.reference_metric[CoordSystem]
 
     # Set grid_physical_size & grid_hole_radius
     body += """{
-    #include "../set_CodeParameters.h"
-    // Set grid size to a function of grid_physical_size, just set in set_CodeParameters.h above:
-    """
+#include "../set_CodeParameters.h"
+// Set grid size to a function of grid_physical_size (grid_physical_size set in set_CodeParameters.h above):
+"""
     for key, value in rfm.grid_physical_size_dict.items():
         body += f"params->{key} = {value};\n"
     body += "}\n"
 
-    # Set xxmin and xxmax
-    body += """if( !grid_is_resized ) {
+    # Set grid_hole_radius
+    if "Holey" in CoordSystem or "Wedge" in CoordSystem:
+        body += """{
 #include "../set_CodeParameters.h"
+// Set grid hole radius to a function of grid_hole_radius (grid_hole_radius set in set_CodeParameters.h above):
 """
-    body += "// Set xxmin, xxmax\n"
-    if "Cartesian" in CoordSystem:
-        body += """
-REAL factor_rescale_minmax_xx0 = 1.0;
-REAL factor_rescale_minmax_xx1 = 1.0;
-REAL factor_rescale_minmax_xx2 = 1.0;
-if(params->Nxx0 < params->Nxx1 || params->Nxx0 < params->Nxx2)
-   factor_rescale_minmax_xx0 = ((REAL)params->Nxx0) / ((REAL)MAX(params->Nxx1, params->Nxx2));
-if(params->Nxx1 < params->Nxx2 || params->Nxx1 < params->Nxx0)
-   factor_rescale_minmax_xx1 = ((REAL)params->Nxx1) / ((REAL)MAX(params->Nxx2, params->Nxx0));
-if(params->Nxx2 < params->Nxx0 || params->Nxx2 < params->Nxx1)
-   factor_rescale_minmax_xx2 = ((REAL)params->Nxx2) / ((REAL)MAX(params->Nxx0, params->Nxx1));
+        for key, value in rfm.grid_hole_radius_dict.items():
+            body += f"params->{key} = {value};\n"
+        body += "}\n"
+
+    # Set minimum and maximum values of xx[][] for each grid.
+    body += """{
+#include "../set_CodeParameters.h"
+// Set {xxmin[], xxmax[]} to functions of other rfm parameters (set in set_CodeParameters.h above):
 """
     for minmax in ["min", "max"]:
         for dirn in range(3):
             rfm_value = rfm.xxmin[dirn] if minmax == "min" else rfm.xxmax[dirn]
-            str_rfm_value = str(rfm_value)
-            param_dir = f"params->xx{minmax}{dirn}"
+            body += f"params->xx{minmax}{dirn} = {rfm_value};\n"
+    body += "}\n"
 
-            if str_rfm_value in par.glb_code_params_dict:
-                cparam_type = par.glb_code_params_dict[str_rfm_value].cparam_type
-                if cparam_type != "#define":
-                    body += f"{param_dir} = params->{rfm_value};\n"
-                    continue
-
-            if "Cartesian" in CoordSystem:
-                body += f"{param_dir} = {rfm_value} * factor_rescale_minmax_xx{dirn};\n"
-            else:
-                body += f"{param_dir} = {rfm_value};\n"
-
-    body += """}
-
+    # Set quantities that depend on Nxx and {xxmin, xxmax}, then set up coordinate arrays xx[3][Nxxi].
+    body += """
+// Set quantities that depend on Nxx and {xxmin, xxmax}: dxx, invdxx.
 params->dxx0 = (params->xxmax0 - params->xxmin0) / ((REAL)params->Nxx0);
 params->dxx1 = (params->xxmax1 - params->xxmin1) / ((REAL)params->Nxx1);
 params->dxx2 = (params->xxmax2 - params->xxmin2) / ((REAL)params->Nxx2);
@@ -151,7 +139,9 @@ params->invdxx0 = ((REAL)params->Nxx0) / (params->xxmax0 - params->xxmin0);
 params->invdxx1 = ((REAL)params->Nxx1) / (params->xxmax1 - params->xxmin1);
 params->invdxx2 = ((REAL)params->Nxx2) / (params->xxmax2 - params->xxmin2);
 
-// Set up cell-centered Cartesian coordinate grid, centered at the origin.
+// Set up uniform, cell-centered, topologically Cartesian numerical grid, 
+//   centered at (xxmin[i] + xxmax[i])/2 in direction i, and store
+//   {xx[0], xx[1], xx[2]} arrays.
 xx[0] = (REAL *restrict)malloc(sizeof(REAL)*params->Nxx_plus_2NGHOSTS0);
 xx[1] = (REAL *restrict)malloc(sizeof(REAL)*params->Nxx_plus_2NGHOSTS1);
 xx[2] = (REAL *restrict)malloc(sizeof(REAL)*params->Nxx_plus_2NGHOSTS2);
@@ -230,6 +220,7 @@ commondata->dt = MIN(commondata->dt, ds_min * commondata->CFL_FACTOR);
 def register_CFunction_numerical_grids_and_timestep(
     list_of_CoordSystems: List[str],
     list_of_grid_physical_sizes: List[float],
+    gridding_approach: str = "independent grid(s)",
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
 ) -> None:
@@ -242,38 +233,72 @@ def register_CFunction_numerical_grids_and_timestep(
 
     :param list_of_CoordSystems: List of CoordSystems
     :param list_of_grid_physical_sizes: List of grid_physical_size for each CoordSystem; needed for Independent grids.
+    :param gridding_approach: Choices: "independent grid(s)" or "multipatch"
     :param enable_rfm_precompute: Whether to enable reference metric precomputation (default: False).
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions (default: False).
+
+    :raises ValueError: If invalid gridding_approach selected.
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = "Set up a cell-centered grids of size grid_physical_size."
+    desc = "Set up numerical grids and timestep."
     cfunc_type = "void"
     name = "numerical_grids_and_timestep"
     params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata, bool calling_for_first_time"
     body = r"""
-    // Step 1.a: Set each CodeParameter in griddata.params to default, for MAXNUMGRIDS grids.
-    params_struct_set_to_default(commondata, griddata);"""
+  // Step 1.a: Set each CodeParameter in griddata.params to default, for MAXNUMGRIDS grids.
+  params_struct_set_to_default(commondata, griddata);"""
     body += rf"""
-      if(strncmp(commondata->gridding_choice, "independent grid(s)", 200) == 0) {{
-        // Independent grids
-        bool grid_is_resized=false;
-        int Nx[3] = {{ -1, -1, -1 }};
+  // Independent grids
+  int Nx[3] = {{ -1, -1, -1 }};
 
-        // Step 1.b: Set commondata->NUMGRIDS to number of CoordSystems we have
-        commondata->NUMGRIDS = {len(list_of_CoordSystems)};
-
-        // Step 1.c: For each grid, set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx based on grid_physical_size
-        int grid=0;
-    """
-    for which_CoordSystem, CoordSystem in enumerate(list_of_CoordSystems):
-        body += f"griddata[grid].params.CoordSystem_hash = {CoordSystem.upper()};\n"
-        body += f"griddata[grid].params.grid_physical_size = {list_of_grid_physical_sizes[which_CoordSystem]};\n"
-        body += "numerical_grid_params_Nxx_dxx_xx(commondata, &griddata[grid].params, griddata[grid].xx, Nx, grid_is_resized);\n"
-        body += "grid++;\n\n"
-    body += r"""}
-
-// Step 1.d: Allocate memory for and define reference-metric precomputation lookup tables
+  // Step 1.b: Set commondata->NUMGRIDS to number of CoordSystems we have
+  commondata->NUMGRIDS = {len(list_of_CoordSystems)};
 """
+    if gridding_approach == "independent grid(s)":
+        body += """
+  {
+    // Step 1.c: For each grid, set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx based on grid_physical_size
+    int grid=0;
+"""
+        for which_CoordSystem, CoordSystem in enumerate(list_of_CoordSystems):
+            body += (
+                f"  griddata[grid].params.CoordSystem_hash = {CoordSystem.upper()};\n"
+            )
+            body += f"  griddata[grid].params.grid_physical_size = {list_of_grid_physical_sizes[which_CoordSystem]};\n"
+            body += "  numerical_grid_params_Nxx_dxx_xx(commondata, &griddata[grid].params, griddata[grid].xx, Nx);\n"
+            body += "  grid++;\n\n"
+        body += "}\n"
+    elif gridding_approach == "multipatch":
+        # fmt: off
+        _ = par.CodeParameter("char[200]", __name__, "multipatch_choice",  "", commondata=True, add_to_parfile=True)
+        # fmt: on
+        body += """
+  if(calling_for_first_time) {
+    // Initialize rotation unit vectors
+    // Set the x-hat unit vector (1, 0, 0)
+    commondata->cumulative_regrid_xhatU[0] = 1;
+    commondata->cumulative_regrid_xhatU[1] = 0;
+    commondata->cumulative_regrid_xhatU[2] = 0;
+
+    // Set the y-hat unit vector (0, 1, 0)
+    commondata->cumulative_regrid_yhatU[0] = 0;
+    commondata->cumulative_regrid_yhatU[1] = 1;
+    commondata->cumulative_regrid_yhatU[2] = 0;
+
+    // Set the z-hat unit vector (0, 0, 1)
+    commondata->cumulative_regrid_zhatU[0] = 0;
+    commondata->cumulative_regrid_zhatU[1] = 0;
+    commondata->cumulative_regrid_zhatU[2] = 1;
+  }
+  // Step 1.c: Multipatch grid structures are set up algorithmically.
+  multipatch_grids_set_up(commondata, griddata);
+"""
+    else:
+        raise ValueError(
+            f"""gridding_approach == "{gridding_approach}" not supported.
+        Supported approaches include: "independent grid(s)" (default) and "multipatch"."""
+        )
+    body += "\n// Step 1.d: Allocate memory for and define reference-metric precomputation lookup tables\n"
     if enable_rfm_precompute:
         body += r"""for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   rfm_precompute_malloc(commondata, &griddata[grid].params, &griddata[grid].rfmstruct);
