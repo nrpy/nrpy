@@ -72,12 +72,15 @@ def register_CFunction_main_c(
         step3desc = allocate_auxevol_desc
         step4desc = set_initial_data_desc
     desc = f"""-={{ main() function }}=-
-Step 1.a: Set each commondata CodeParameter to default.
-Step 1.b: Overwrite default values to parfile values. Then overwrite parfile values with values set at cmd line.
-Step 1.c: Allocate MAXNUMGRIDS griddata structures, each containing data for an individual grid.
-Step 1.d: Set each CodeParameter in griddata.params to default.
-Step 1.e: Set up numerical grids: NUMGRIDS, xx[3], masks, Nxx, dxx, invdxx, bcstruct, rfm_precompute, timestep, etc.
-Step 2: Initial data are set on y_n_gfs gridfunctions. Allocate storage for them first.
+Step 1.a: Initialize each CodeParameter in the commondata struc to its default value.
+Step 1.b: Overwrite the default values with those from the parameter file.
+          Then overwrite the parameter file values with those provided via command line arguments.
+Step 1.c: Allocate memory for MAXNUMGRIDS griddata structs,
+          where each structure contains data specific to an individual grid.
+Step 1.d: Initialize each CodeParameter in griddata.params to its default value.
+Step 1.e: Set up numerical grids, including parameters such as NUMGRIDS, xx[3], masks, Nxx, dxx, invdxx,
+          bcstruct, rfm_precompute, timestep, and others.
+Step 2: Allocate storage for the initial data (y_n_gfs gridfunctions) on each grid.
 Step 3: {step3desc}
 Step 4: {step4desc}
 """
@@ -95,27 +98,30 @@ Step 6: Free all allocated memory."""
     body = r"""  commondata_struct commondata; // commondata contains parameters common to all grids.
   griddata_struct *restrict griddata; // griddata contains data specific to an individual grid.
 
-// Step 1.a: Set each commondata CodeParameter to default.
+// Step 1.a: Initialize each CodeParameter in the commondata struc to its default value.
 commondata_struct_set_to_default(&commondata);
 
-// Step 1.b: Overwrite default values to parfile values. Then overwrite parfile values with values set at cmd line.
+// Step 1.b: Overwrite the default values with those from the parameter file.
+//           Then overwrite the parameter file values with those provided via command line arguments.
 cmdline_input_and_parfile_parser(&commondata, argc, argv);
 
-// Step 1.c: Allocate MAXNUMGRIDS griddata arrays, each containing data specific to an individual grid.
+// Step 1.c: Allocate memory for MAXNUMGRIDS griddata structs,
+//           where each structure contains data specific to an individual grid.
 griddata = (griddata_struct *restrict)malloc(sizeof(griddata_struct)*MAXNUMGRIDS);
 
-// Step 1.d: Set each CodeParameter in griddata.params to default.
+// Step 1.d: Initialize each CodeParameter in griddata.params to its default value.
 params_struct_set_to_default(&commondata, griddata);
 
-// Step 1.e: Set up numerical grids: NUMGRIDS, xx[3], masks, Nxx, dxx, invdxx, bcstruct, rfm_precompute, timestep, etc.
+// Step 1.e: Set up numerical grids, including parameters such as NUMGRIDS, xx[3], masks, Nxx, dxx, invdxx,
+//           bcstruct, rfm_precompute, timestep, and others.
 {
-  // if calling_for_first_time, then initialize commondata time=nn=t_0=nn_0 = 0
+  // If this function is being called for the first time, initialize commondata time, nn, t_0, and nn_0 to 0.
   const bool calling_for_first_time = true;
   numerical_grids_and_timestep(&commondata, griddata, calling_for_first_time);
 }
 
 for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
-  // Step 2: Initial data are set on y_n_gfs gridfunctions. Allocate storage for them first.
+  // Step 2: Allocate storage for the initial data (y_n_gfs gridfunctions) on each grid.
   MoL_malloc_y_n_gfs(&commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
 }
 """
