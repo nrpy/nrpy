@@ -13,6 +13,7 @@ import nrpy.c_function as cfc
 def register_CFunction_main_c(
     MoL_method: str,
     initial_data_desc: str = "",
+    set_initial_data_after_auxevol_malloc: bool = False,
     boundary_conditions_desc: str = "",
     prefunc: str = "",
     post_non_y_n_auxevol_mallocs: str = "",
@@ -25,6 +26,7 @@ def register_CFunction_main_c(
 
     :param MoL_method: Method of Lines algorithm used to step forward in time.
     :param initial_data_desc: Description for initial data, default is an empty string.
+    :param set_initial_data_after_auxevol_malloc: Set to True if initial data for y_n_gfs requires auxevol variables be set, e.g., in case of GRHD, initial data must set primitives.
     :param boundary_conditions_desc: Description of the boundary conditions, default is an empty string.
     :param prefunc: String that appears before main(). DO NOT populate this, except when debugging, default is an empty string.
     :param post_non_y_n_auxevol_mallocs: Function calls after memory is allocated for non y_n and auxevol gridfunctions, default is an empty string.
@@ -33,7 +35,6 @@ def register_CFunction_main_c(
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
     :raises ValueError: Raised if any required function for BHaH main() is not registered.
     """
-    initial_data_desc += " "
     # Make sure all required C functions are registered
     missing_functions: List[Tuple[str, str]] = []
     for func_tuple in [
@@ -63,18 +64,25 @@ def register_CFunction_main_c(
         raise ValueError(error_msg)
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """-={ main() function }=-
+    allocate_auxevol_desc = "Allocate storage for non-y_n gridfunctions needed for the Runge-Kutta-like time-stepping."
+    set_initial_data_desc = f"Set {initial_data_desc} initial data."
+    step3desc = set_initial_data_desc
+    step4desc = allocate_auxevol_desc
+    if set_initial_data_after_auxevol_malloc:
+        step3desc = allocate_auxevol_desc
+        step4desc = set_initial_data_desc
+    desc = f"""-={{ main() function }}=-
 Step 1.a: Set each commondata CodeParameter to default.
 Step 1.b: Overwrite default values to parfile values. Then overwrite parfile values with values set at cmd line.
-Step 1.c: Allocate MAXNUMGRIDS griddata structs, each containing data specific to an individual grid.
+Step 1.c: Allocate MAXNUMGRIDS griddata structures, each containing data for an individual grid.
 Step 1.d: Set each CodeParameter in griddata.params to default.
 Step 1.e: Set up numerical grids: NUMGRIDS, xx[3], masks, Nxx, dxx, invdxx, bcstruct, rfm_precompute, timestep, etc.
 Step 2: Initial data are set on y_n_gfs gridfunctions. Allocate storage for them first.
-Step 3: Finalize initialization: set up {initial_data_desc}initial data, etc.
-Step 4: Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping.
+Step 3: {step3desc}
+Step 4: {step4desc}
 """
     if post_non_y_n_auxevol_mallocs:
-        desc += "Step 4.a: Functions called after memory for non-y_n and auxevol gridfunctions is allocated."
+        desc += "Step 4.a: Post-initial-data functions called after memory for non-y_n and auxevol gridfunctions is allocated."
     desc += f"""Step 5: MAIN SIMULATION LOOP
 - Step 5.a: Output diagnostics.
 - Step 5.b: Prepare to step forward in time.
@@ -110,13 +118,23 @@ for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
   // Step 2: Initial data are set on y_n_gfs gridfunctions. Allocate storage for them first.
   MoL_malloc_y_n_gfs(&commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
 }
-
-// Step 3: Finalize initialization: set up initial data, etc.
+"""
+    setup_initial_data_code = """Set up initial data.
 initial_data(&commondata, griddata);
-
-// Step 4: Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping
+"""
+    allocate_storage_code = """Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping.
 for(int grid=0; grid<commondata.NUMGRIDS; grid++)
   MoL_malloc_non_y_n_gfs(&commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
+"""
+    step3code = setup_initial_data_code
+    step4code = allocate_storage_code
+    if set_initial_data_after_auxevol_malloc:
+        step3code = allocate_storage_code
+        step4code = setup_initial_data_code
+    body += f"""
+// Step 3: {step3code}
+
+// Step 4: {step4code}
 """
     if post_non_y_n_auxevol_mallocs:
         body += (
