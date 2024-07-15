@@ -88,7 +88,9 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
                         chararray_size = CPtype.split("[")[1].replace("]", "")
                         c_output = f'snprintf({struct}->{parname}, {chararray_size}, "{defaultval}");{comment}\n'
                         struct_list.append(c_output)
-                    elif isinstance(defaultval, (bool, int, float)):
+                    elif isinstance(defaultval, (bool, int, float)) or (
+                        CPtype == "REAL" and isinstance(defaultval, str)
+                    ):
                         c_output = f"{struct}->{parname} = {str(defaultval).lower()};{comment}\n"
                         struct_list.append(c_output)
                     else:
