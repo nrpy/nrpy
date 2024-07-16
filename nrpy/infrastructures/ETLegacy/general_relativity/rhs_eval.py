@@ -265,14 +265,14 @@ def register_CFunction_rhs_eval(
   // -C_CAHD * dsmin * CFL_FACTOR__ignore_repeats_Carpet_timeref_factors) * H ,
   // where CFL_FACTOR is most typically 0.45 or 0.5, and C_CAHD = 0.15 = orig_C_H / 4 = 0.6 / 4
   // Thus, New & Original prescriptions are the same, just with some redefinitions.
-  const CCTK_REAL dsmin CCTK_ATTRIBUTE_UNUSED = MIN(CCTK_DELTA_SPACE(0),MIN(CCTK_DELTA_SPACE(1),CCTK_DELTA_SPACE(2))); 
+  const CCTK_REAL dsmin CCTK_ATTRIBUTE_UNUSED = MIN(CCTK_DELTA_SPACE(0),MIN(CCTK_DELTA_SPACE(1),CCTK_DELTA_SPACE(2)));
 """
         if enable_simd:
             body += f"""
   const CCTK_REAL *param_CFL_FACTOR__ignore_repeats_Carpet_timeref_factors =
   CCTK_ParameterGet("CFL_FACTOR__ignore_repeats_Carpet_timeref_factors", "{thorn_name}", NULL);
   const CCTK_REAL *param_C_CAHD CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("C_CAHD", "{thorn_name}", NULL);
-  const CCTK_REAL cahdprefactor_NOSIMD = (*param_C_CAHD) * (*param_CFL_FACTOR__ignore_repeats_Carpet_timeref_factors) * dsmin;    
+  const CCTK_REAL cahdprefactor_NOSIMD = (*param_C_CAHD) * (*param_CFL_FACTOR__ignore_repeats_Carpet_timeref_factors) * dsmin;
   const REAL_SIMD_ARRAY cahdprefactor CCTK_ATTRIBUTE_UNUSED = ConstSIMD(cahdprefactor_NOSIMD);
 """
         else:

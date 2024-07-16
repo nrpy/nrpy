@@ -139,7 +139,7 @@ params->invdxx0 = ((REAL)params->Nxx0) / (params->xxmax0 - params->xxmin0);
 params->invdxx1 = ((REAL)params->Nxx1) / (params->xxmax1 - params->xxmin1);
 params->invdxx2 = ((REAL)params->Nxx2) / (params->xxmax2 - params->xxmin2);
 
-// Set up uniform, cell-centered, topologically Cartesian numerical grid, 
+// Set up uniform, cell-centered, topologically Cartesian numerical grid,
 //   centered at (xxmin[i] + xxmax[i])/2 in direction i, and store
 //   {xx[0], xx[1], xx[2]} arrays.
 xx[0] = (REAL *restrict)malloc(sizeof(REAL)*params->Nxx_plus_2NGHOSTS0);
