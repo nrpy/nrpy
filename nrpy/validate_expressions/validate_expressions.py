@@ -164,7 +164,7 @@ def convert_free_symbols_set_to_mpf_dict(
         if str(var) in ("PI", "M_PI"):
             free_symbols_dict[var] = mp.mpf(mp.pi)
         # Then make sure M_SQRT1_2 is set to its correct value, 1/sqrt(2)
-        elif str(var) == "M_SQRT1_2":
+        elif str(var) in ("SQRT1_2", "M_SQRT1_2"):
             free_symbols_dict[var] = mp.mpf(1.0 / mp.sqrt(2.0))
         # All other free variables are set to random numbers
         else:
