@@ -17,6 +17,7 @@ def register_CFunction_main_c(
     boundary_conditions_desc: str = "",
     prefunc: str = "",
     post_non_y_n_auxevol_mallocs: str = "",
+    pre_diagnostics: str = "",
     pre_MoL_step_forward_in_time: str = "",
     post_MoL_step_forward_in_time: str = "",
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
@@ -28,9 +29,10 @@ def register_CFunction_main_c(
     :param initial_data_desc: Description for initial data, default is an empty string.
     :param set_initial_data_after_auxevol_malloc: Set to True if initial data for y_n_gfs requires auxevol variables be set, e.g., in case of GRHD, initial data must set primitives.
     :param boundary_conditions_desc: Description of the boundary conditions, default is an empty string.
-    :param prefunc: String that appears before main(). DO NOT populate this, except when debugging, default is an empty string.
+    :param prefunc: String that appears before main(). DO NOT populate this, EXCEPT when debugging, default is an empty string.
     :param post_non_y_n_auxevol_mallocs: Function calls after memory is allocated for non y_n and auxevol gridfunctions, default is an empty string.
-    :param pre_MoL_step_forward_in_time: Function calls prior to each right-hand-side update, default is an empty string.
+    :param pre_diagnostics: Function calls prior to diagnostics; e.g., regridding. Default is an empty string.
+    :param pre_MoL_step_forward_in_time: Function calls AFTER diagnostics and prior to each right-hand-side update, default is an empty string.
     :param post_MoL_step_forward_in_time: Function calls after each right-hand-side update, default is an empty string.
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
     :raises ValueError: Raised if any required function for BHaH main() is not registered.
@@ -87,10 +89,11 @@ Step 4: {step4desc}
     if post_non_y_n_auxevol_mallocs:
         desc += "Step 4.a: Post-initial-data functions called after memory for non-y_n and auxevol gridfunctions is allocated."
     desc += f"""Step 5: MAIN SIMULATION LOOP
-- Step 5.a: Output diagnostics.
-- Step 5.b: Prepare to step forward in time.
-- Step 5.c: Step forward in time using Method of Lines with {MoL_method} algorithm, applying {boundary_conditions_desc} boundary conditions.
-- Step 5.d: Finish up step in time.
+- Step 5.a: Functions to run prior to diagnostics. E.g., regridding.
+- Step 5.b: Output diagnostics.
+- Step 5.c: Prepare to step forward in time.
+- Step 5.d: Step forward in time using Method of Lines with {MoL_method} algorithm, applying {boundary_conditions_desc} boundary conditions.
+- Step 5.e: Finish up step in time.
 Step 6: Free all allocated memory."""
     cfunc_type = "int"
     name = "main"
@@ -143,29 +146,33 @@ for(int grid=0; grid<commondata.NUMGRIDS; grid++)
 // Step 4: {step4code}
 """
     if post_non_y_n_auxevol_mallocs:
-        body += (
-            """// Step 4.a: Functions called after memory for non-y_n and auxevol gridfunctions is allocated.
-"""
-            + post_non_y_n_auxevol_mallocs
-        )
+        body += "// Step 4.a: Functions called after memory for non-y_n and auxevol gridfunctions is allocated.\n"
+        body += post_non_y_n_auxevol_mallocs
     body += """
 // Step 5: MAIN SIMULATION LOOP
 while(commondata.time < commondata.t_final) { // Main loop to progress forward in time.
-  // Step 5.a: Main loop, part 1: Output diagnostics
+  // Step 5.a: Main loop, part 1 (pre_diagnostics): Functions to run prior to diagnostics. E.g., regridding.
+"""
+    if pre_diagnostics:
+        body += pre_diagnostics
+    else:
+        body += "// (nothing here; specify by setting pre_diagnostics string in register_CFunction_main_c().)\n"
+    body += """
+  // Step 5.b: Main loop, part 2: Output diagnostics
   diagnostics(&commondata, griddata);
 
-  // Step 5.b: Main loop, part 2 (pre_MoL_step_forward_in_time): Prepare to step forward in time
+  // Step 5.c: Main loop, part 3 (pre_MoL_step_forward_in_time): Prepare to step forward in time
 """
-    if pre_MoL_step_forward_in_time != "":
+    if pre_MoL_step_forward_in_time:
         body += pre_MoL_step_forward_in_time
     else:
-        body += "  // (nothing here; specify by setting pre_MoL_step_forward_in_time string in register_CFunction_main_c().)\n"
+        body += "// (nothing here; specify by setting pre_MoL_step_forward_in_time string in register_CFunction_main_c().)\n"
     body += f"""
-  // Step 5.c: Main loop, part 3: Step forward in time using Method of Lines with {MoL_method} algorithm,
+  // Step 5.d: Main loop, part 4: Step forward in time using Method of Lines with {MoL_method} algorithm,
   //           applying {boundary_conditions_desc} boundary conditions.
   MoL_step_forward_in_time(&commondata, griddata);
 
-  // Step 5.d: Main loop, part 4 (post_MoL_step_forward_in_time): Finish up step in time
+  // Step 5.e: Main loop, part 5 (post_MoL_step_forward_in_time): Finish up step in time
 """
     if post_MoL_step_forward_in_time != "":
         body += post_MoL_step_forward_in_time
