@@ -21,13 +21,16 @@ for i in range(3):
     _ = par.CodeParameter("int", __name__, f"Nxx{i}", 64)
 _ = par.CodeParameter("REAL", __name__, "convergence_factor", 1.0, commondata=True)
 for i in range(3):
-    _ = par.CodeParameter("int", __name__, f"Nxx_plus_2NGHOSTS{i}", add_to_parfile=False, add_to_set_CodeParameters_h=True)
+    _ = par.CodeParameter("int", __name__, f"Nxx_plus_2NGHOSTS{i}", add_to_parfile=False,
+                          add_to_set_CodeParameters_h=True)
     # reference_metric sets xxmin and xxmax below.
     _ = par.CodeParameter("REAL", __name__, f"xxmin{i}", -10.0, add_to_parfile=False, add_to_set_CodeParameters_h=True)
     _ = par.CodeParameter("REAL", __name__, f"xxmax{i}", 10.0, add_to_parfile=False, add_to_set_CodeParameters_h=True)
     _ = par.CodeParameter("REAL", __name__, f"invdxx{i}", add_to_parfile=False, add_to_set_CodeParameters_h=True)
     _ = par.CodeParameter("REAL", __name__, f"dxx{i}", add_to_parfile=False, add_to_set_CodeParameters_h=True)
 _ = par.CodeParameter("int", __name__, "CoordSystem_hash", commondata=False, add_to_parfile=False)
+
+
 # fmt: on
 
 
@@ -270,8 +273,19 @@ def register_CFunction_numerical_grids_and_timestep(
         body += "}\n"
     elif gridding_approach == "multipatch":
         # fmt: off
-        _ = par.CodeParameter("char[200]", __name__, "multipatch_choice",  "", commondata=True, add_to_parfile=True)
+        _ = par.CodeParameter("char[200]", __name__, "multipatch_choice", "", commondata=True, add_to_parfile=True)
         # fmt: on
+        for dirn in ["x", "y", "z"]:
+            # Direction of unit vectors relative to original, accounting for accumulation of regrids."
+            _ = par.register_CodeParameter(
+                "REAL",
+                __name__,
+                f"cumulative_regrid_{dirn}hatU[3]",
+                0,
+                commondata=True,
+                add_to_parfile=False,
+                add_to_set_CodeParameters_h=False,
+            )
         body += """
   if(calling_for_first_time) {
     // Initialize rotation unit vectors

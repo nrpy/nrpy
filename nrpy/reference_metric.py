@@ -802,15 +802,8 @@ class ReferenceMetric:
         # * UWHSinhSpherical = Upper-wedge HoleySinhSpherical
         # * LWHSinhSpherical = Lower-wedge HoleySinhSpherical
 
-        M_PI = par.register_CodeParameter(
-            "#define",
-            self.CodeParam_modulename,
-            "M_PI",
-            "3.1415926535897932384626433",
-            add_to_parfile=False,
-            add_to_set_CodeParameters_h=False,
-            add_to_glb_code_params_dict=True,
-        )
+        PI = self.register_pi()
+
         AMPL, SINHW, RMIN = par.register_CodeParameters(
             "REAL",
             self.CodeParam_modulename,
@@ -825,14 +818,14 @@ class ReferenceMetric:
         # -> x0min = SINHW * asinh(RMIN * sinh(1/SINHW) / AMPL)
         self.xxmin = [
             SINHW * sp.asinh(RMIN * sp.sinh(1 / SINHW) / AMPL),
-            sp.Rational(1, 4) * M_PI,
-            -M_PI * sp.Rational(1, 4),
+            sp.Rational(1, 4) * PI,
+            -PI * sp.Rational(1, 4),
         ]
         # Note that RMAX = AMPL:
         self.xxmax = [
             SINHW * sp.asinh(AMPL * sp.sinh(1 / SINHW) / AMPL),
-            sp.Rational(3, 4) * M_PI,
-            +M_PI * sp.Rational(1, 4),
+            sp.Rational(3, 4) * PI,
+            +PI * sp.Rational(1, 4),
         ]
 
         # BEGIN: Set universal attributes for all spherical-like coordinate systems:
@@ -892,9 +885,9 @@ class ReferenceMetric:
             # Upper wedge: x_new = -z_old, y_new = y_old, z_new = x_old
             xxS = self.xxSph
             # fmt: off
-            self.UnitVectors = [[-sp.cos(xxS[1]), sp.sin(xxS[1])*sp.sin(xxS[2]), sp.sin(xxS[1])*sp.cos(xxS[2])],
-                                [+sp.sin(xxS[1]), sp.cos(xxS[1])*sp.sin(xxS[2]), sp.cos(xxS[1])*sp.cos(xxS[2])],
-                                [ -sp.sympify(0),                sp.cos(xxS[2]),               -sp.sin(xxS[2])]]
+            self.UnitVectors = [[-sp.cos(xxS[1]), sp.sin(xxS[1]) * sp.sin(xxS[2]), sp.sin(xxS[1]) * sp.cos(xxS[2])],
+                                [+sp.sin(xxS[1]), sp.cos(xxS[1]) * sp.sin(xxS[2]), sp.cos(xxS[1]) * sp.cos(xxS[2])],
+                                [-sp.sympify(0), sp.cos(xxS[2]), -sp.sin(xxS[2])]]
             # fmt: on
         if self.CoordSystem == "LWedgeHSinhSph":
             # Lower-wedge HoleySinhSpherical
@@ -931,9 +924,9 @@ class ReferenceMetric:
 
             # Lower wedge: x_new = z_old, y_new = y_old, z_new = -x_old
             xxS = self.xxSph
-            self.UnitVectors = [[+sp.cos(xxS[1]), sp.sin(xxS[1])*sp.sin(xxS[2]), -sp.sin(xxS[1])*sp.cos(xxS[2])],
-                                [-sp.sin(xxS[1]), sp.cos(xxS[1])*sp.sin(xxS[2]), -sp.cos(xxS[1])*sp.cos(xxS[2])],
-                                [  sp.sympify(0),                sp.cos(xxS[2]),                +sp.sin(xxS[2])]]
+            self.UnitVectors = [[+sp.cos(xxS[1]), sp.sin(xxS[1]) * sp.sin(xxS[2]), -sp.sin(xxS[1]) * sp.cos(xxS[2])],
+                                [-sp.sin(xxS[1]), sp.cos(xxS[1]) * sp.sin(xxS[2]), -sp.cos(xxS[1]) * sp.cos(xxS[2])],
+                                [sp.sympify(0), sp.cos(xxS[2]), +sp.sin(xxS[2])]]
             # fmt: on
 
     def spherical_like(self) -> None:
@@ -942,15 +935,7 @@ class ReferenceMetric:
 
         :raises ValueError: If an unrecognized Spherical-like coordinate system is specified.
         """
-        M_PI = par.register_CodeParameter(
-            "#define",
-            self.CodeParam_modulename,
-            "M_PI",
-            "3.1415926535897932384626433",
-            add_to_parfile=False,
-            add_to_set_CodeParameters_h=False,
-            add_to_glb_code_params_dict=True,
-        )
+        PI = self.register_pi()
 
         if self.CoordSystem == "Spherical":
             RMAX = par.register_CodeParameter(
@@ -961,8 +946,8 @@ class ReferenceMetric:
                 add_to_parfile=self.add_rfm_params_to_parfile,
                 add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
             )
-            self.xxmin = [sp.sympify(0), sp.sympify(0), -M_PI]
-            self.xxmax = [RMAX, M_PI, M_PI]
+            self.xxmin = [sp.sympify(0), sp.sympify(0), -PI]
+            self.xxmax = [RMAX, PI, PI]
             self.grid_physical_size_dict = {"RMAX": "grid_physical_size"}
 
             r = self.xx[0]
@@ -1000,20 +985,20 @@ class ReferenceMetric:
                 # -> x0min = SINHW * asinh(RMIN * sinh(1/SINHW) / AMPL)
                 # fmt: off
                 if self.CoordSystem == "HoleySinhSpherical":
-                    self.xxmin = [SINHW * sp.asinh(RMIN * sp.sinh(1 / SINHW) / AMPL), sp.sympify(0), -M_PI]
+                    self.xxmin = [SINHW * sp.asinh(RMIN * sp.sinh(1 / SINHW) / AMPL), sp.sympify(0), -PI]
                     # Note that RMAX = AMPL:
-                    self.xxmax = [SINHW * sp.asinh(AMPL * sp.sinh(1 / SINHW) / AMPL), M_PI, M_PI]
+                    self.xxmax = [SINHW * sp.asinh(AMPL * sp.sinh(1 / SINHW) / AMPL), PI, PI]
                 elif self.CoordSystem == "RingHoleySinhSpherical":
-                    self.xxmin = [SINHW * sp.asinh(RMIN * sp.sinh(1 / SINHW)/AMPL), sp.Rational(1, 4)*M_PI, -M_PI]
+                    self.xxmin = [SINHW * sp.asinh(RMIN * sp.sinh(1 / SINHW) / AMPL), sp.Rational(1, 4) * PI, -PI]
                     # Note that RMAX = AMPL:
-                    self.xxmax = [SINHW * sp.asinh(AMPL * sp.sinh(1 / SINHW)/AMPL), sp.Rational(3, 4)*M_PI, M_PI]
+                    self.xxmax = [SINHW * sp.asinh(AMPL * sp.sinh(1 / SINHW) / AMPL), sp.Rational(3, 4) * PI, PI]
                 else:
                     raise ValueError(f"SinhSpherical coordinate system {self.CoordSystem} not supported!")
                 # fmt: on
                 self.grid_hole_radius_dict = {"RMIN": "grid_hole_radius"}
             else:
-                self.xxmin = [sp.sympify(0), sp.sympify(0), -M_PI]
-                self.xxmax = [sp.sympify(1), M_PI, M_PI]
+                self.xxmin = [sp.sympify(0), sp.sympify(0), -PI]
+                self.xxmax = [sp.sympify(1), PI, PI]
             self.grid_physical_size_dict = {"AMPL": "grid_physical_size"}
 
             # Set SinhSpherical radial coordinate by default; overwrite later if CoordSystem == "SinhSphericalv2n*".
@@ -1048,8 +1033,8 @@ class ReferenceMetric:
                 0.2,
                 add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
             )
-            self.xxmin = [sp.sympify(0), sp.sympify(0), -M_PI]
-            self.xxmax = [sp.sympify(1), M_PI, M_PI]
+            self.xxmin = [sp.sympify(0), sp.sympify(0), -PI]
+            self.xxmax = [sp.sympify(1), PI, PI]
             self.grid_physical_size_dict = {"AMPL": "grid_physical_size"}
             r_slope = par.register_CodeParameter(
                 "REAL",
@@ -1102,9 +1087,9 @@ class ReferenceMetric:
         # fmt: off
         # Set the transpose of the matrix of unit vectors
         xxS = self.xxSph
-        self.UnitVectors = [[sp.sin(xxS[1])*sp.cos(xxS[2]), sp.sin(xxS[1])*sp.sin(xxS[2]),  sp.cos(xxS[1])],
-                            [sp.cos(xxS[1])*sp.cos(xxS[2]), sp.cos(xxS[1])*sp.sin(xxS[2]), -sp.sin(xxS[1])],
-                            [              -sp.sin(xxS[2]),                sp.cos(xxS[2]),  sp.sympify(0) ]]
+        self.UnitVectors = [[sp.sin(xxS[1]) * sp.cos(xxS[2]), sp.sin(xxS[1]) * sp.sin(xxS[2]), sp.cos(xxS[1])],
+                            [sp.cos(xxS[1]) * sp.cos(xxS[2]), sp.cos(xxS[1]) * sp.sin(xxS[2]), -sp.sin(xxS[1])],
+                            [-sp.sin(xxS[2]), sp.cos(xxS[2]), sp.sympify(0)]]
         # fmt: on
         # END: Set universal attributes for all spherical-like coordinate systems:
 
@@ -1114,15 +1099,8 @@ class ReferenceMetric:
 
         :raises ValueError: If an unrecognized Prolate spheroidal (SymTP)-like coordinate system is specified.
         """
-        M_PI, M_SQRT1_2 = par.register_CodeParameters(
-            "#define",
-            self.CodeParam_modulename,
-            ["M_PI", "M_SQRT1_2"],
-            ["3.1415926535897932384626433", "0.707106781186547524400844362105"],
-            add_to_parfile=False,
-            add_to_set_CodeParameters_h=False,
-            add_to_glb_code_params_dict=True,
-        )
+        PI = self.register_pi()
+        SQRT1_2 = self.register_sqrt1_2()
         AMAX = par.register_CodeParameter(
             "REAL",
             self.CodeParam_modulename,
@@ -1139,8 +1117,8 @@ class ReferenceMetric:
             add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
         )
 
-        self.xxmin = [sp.sympify(0), sp.sympify(0), -M_PI]
-        self.xxmax = [AMAX, M_PI, M_PI]
+        self.xxmin = [sp.sympify(0), sp.sympify(0), -PI]
+        self.xxmax = [AMAX, PI, PI]
         self.grid_physical_size_dict = {"AMAX": "grid_physical_size"}
 
         AA = self.xx[0]
@@ -1191,8 +1169,8 @@ class ReferenceMetric:
                         - 4 * bScale**2 * rSph**2 * sp.cos(thSph) ** 2
                     )
                 )
-                * M_SQRT1_2
-            )  # M_SQRT1_2 = 1/sqrt(2); define this way for UnitTesting
+                * SQRT1_2
+            )  # SQRT1_2 = 1/sqrt(2); define this way for UnitTesting
 
             # The sign() function in the following expression ensures the correct root is taken.
             self.Cart_to_xx[1] = sp.acos(
@@ -1209,9 +1187,9 @@ class ReferenceMetric:
                         )
                         / bScale**2
                     )
-                    * M_SQRT1_2
+                    * SQRT1_2
                 )
-            )  # M_SQRT1_2 = 1/sqrt(2); define this way for UnitTesting
+            )  # SQRT1_2 = 1/sqrt(2); define this way for UnitTesting
 
             self.Cart_to_xx[2] = phSph
 
@@ -1240,8 +1218,8 @@ class ReferenceMetric:
                         - 4 * bScale**2 * rSph**2 * sp.cos(thSph) ** 2
                     )
                 )
-                * M_SQRT1_2
-            )  # M_SQRT1_2 = 1/sqrt(2); define this way for UnitTesting
+                * SQRT1_2
+            )  # SQRT1_2 = 1/sqrt(2); define this way for UnitTesting
 
             # The sign() function in the following expression ensures the correct root is taken.
             self.Cart_to_xx[1] = sp.acos(
@@ -1258,9 +1236,9 @@ class ReferenceMetric:
                         )
                         / bScale**2
                     )
-                    * M_SQRT1_2
+                    * SQRT1_2
                 )
-            )  # M_SQRT1_2 = 1/sqrt(2); define this way for UnitTesting
+            )  # SQRT1_2 = 1/sqrt(2); define this way for UnitTesting
 
             self.Cart_to_xx[2] = phSph
         else:
@@ -1314,15 +1292,7 @@ class ReferenceMetric:
 
         :raises ValueError: If an unrecognized Cylindrical-like coordinate system is specified.
         """
-        M_PI = par.register_CodeParameter(
-            "#define",
-            self.CodeParam_modulename,
-            "M_PI",
-            "3.1415926535897932384626433",
-            add_to_parfile=False,
-            add_to_set_CodeParameters_h=False,
-            add_to_glb_code_params_dict=True,
-        )
+        PI = self.register_pi()
 
         # Assuming the cylindrical radial coordinate
         #   is positive makes nice simplifications of
@@ -1336,8 +1306,8 @@ class ReferenceMetric:
                 add_to_parfile=self.add_rfm_params_to_parfile,
                 add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
             )
-            self.xxmin = [sp.sympify(0), -M_PI, ZMIN]
-            self.xxmax = [RHOMAX, M_PI, ZMAX]
+            self.xxmin = [sp.sympify(0), -PI, ZMIN]
+            self.xxmax = [RHOMAX, PI, ZMAX]
             self.grid_physical_size_dict = {
                 "RHOMAX": "grid_physical_size",
                 "ZMIN": "-grid_physical_size",
@@ -1369,8 +1339,8 @@ class ReferenceMetric:
                 add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
             )
 
-            self.xxmin = [sp.sympify(0), -M_PI, sp.sympify(-1)]
-            self.xxmax = [sp.sympify(1), M_PI, sp.sympify(+1)]
+            self.xxmin = [sp.sympify(0), -PI, sp.sympify(-1)]
+            self.xxmax = [sp.sympify(1), PI, sp.sympify(+1)]
             self.grid_physical_size_dict = {
                 "AMPLRHO": "grid_physical_size",
                 "AMPLZ": "grid_physical_size",
@@ -1412,8 +1382,8 @@ class ReferenceMetric:
                 [0.2, 0.2],
                 add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
             )
-            self.xxmin = [sp.sympify(0), -M_PI, sp.sympify(-1)]
-            self.xxmax = [sp.sympify(1), M_PI, sp.sympify(+1)]
+            self.xxmin = [sp.sympify(0), -PI, sp.sympify(-1)]
+            self.xxmax = [sp.sympify(1), PI, sp.sympify(+1)]
             self.grid_physical_size_dict = {
                 "AMPLRHO": "grid_physical_size",
                 "AMPLZ": "grid_physical_size",
@@ -1469,6 +1439,38 @@ class ReferenceMetric:
         ]
         # END: Set universal attributes for all Cylindrical-like coordinate systems:
 
+    def register_pi(self) -> sp.Symbol:
+        """
+        Register the mathematical constant pi as a code parameter and return PI as a sympy symbol.
+
+        :return: The sympy symbol "PI".
+        """
+        return par.register_CodeParameter(
+            "REAL",
+            __name__,
+            "PI",
+            "3.14159265358979323846264338327950288",
+            add_to_parfile=False,
+            add_to_set_CodeParameters_h=True,
+            add_to_glb_code_params_dict=True,
+        )
+
+    def register_sqrt1_2(self) -> sp.Symbol:
+        """
+        Register the mathematical constant sqrt(1/2) as a code parameter and return SQRT1_2 as a sympy symbol.
+
+        :return: The sympy symbol "SQRT1_2".
+        """
+        return par.register_CodeParameter(
+            "REAL",
+            __name__,
+            "SQRT1_2",
+            "0.707106781186547524400844362105",
+            add_to_parfile=False,
+            add_to_set_CodeParameters_h=True,
+            add_to_glb_code_params_dict=True,
+        )
+
 
 class rfm_dict(Dict[str, ReferenceMetric]):
     """Custom dictionary for storing ReferenceMetric objects."""
@@ -1496,7 +1498,6 @@ class rfm_dict(Dict[str, ReferenceMetric]):
 
 
 reference_metric = rfm_dict()
-
 
 if __name__ == "__main__":
     import doctest
