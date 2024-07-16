@@ -98,7 +98,7 @@ def assert_equal(
         abs_diff = fabs(vardict_1_results_dict[var_1] - vardict_2_results_dict[var_2])
         avg = (vardict_1_results_dict[var_1] + vardict_2_results_dict[var_2]) / 2
         if abs_diff > fabs(avg) * tolerance:
-            print(f"Error on {var_1}: {abs_diff} > {fabs(avg)*tolerance}")
+            print(f"Error on {var_1}: {abs_diff} > {fabs(avg) * tolerance}")
             raise AssertionError
 
     if not suppress_message:
@@ -109,7 +109,7 @@ def inject_mpfs_into_cse_expression(
     free_symbols_dict: Dict[sp.Symbol, Any],
     replaced: List[Tuple[mpf, mpf]],
     reduced: List[sp.Expr],
-) -> Union[mpf, mpc]:
+) -> Union[mpc, mpf]:
     """
     Calculate a numerical value for a given expression using the values in free_symbols_dict.
 
@@ -178,7 +178,7 @@ def convert_one_expression_to_mpfmpc(
     expr: sp.Expr,
     fixed_mpfs_for_free_symbols: bool = False,
     verbose: bool = True,
-) -> Union[mpf, mpc]:
+) -> Union[mpc, mpf]:
     """
     Convert a given SymPy expression to either mpf or mpc form.
 
@@ -247,7 +247,7 @@ def process_dictionary_of_expressions(
     dictionary: Dict[Any, Any],
     fixed_mpfs_for_free_symbols: bool = False,
     verbose: bool = True,
-) -> Dict[str, Union[mpf, mpc]]:
+) -> Dict[str, Union[mpc, mpf]]:
     """
     Process a dictionary of symbolic expressions and convert them to a dictionary of numerical expressions.
 
@@ -322,7 +322,7 @@ def output_trusted(
     os_path_abspath: str,
     os_getcwd: str,
     trusted_file_basename: str,
-    results_dict: Dict[Any, Union[mpf, mpc]],
+    results_dict: Dict[Any, Union[mpc, mpf]],
 ) -> None:
     """
     Write a trusted dictionary to a file with appropriate import headers.
@@ -338,7 +338,7 @@ def output_trusted(
 
     # Determine necessary import headers based on the presence of mpf and mpc in the output string
     if "mpc(" in output_str and "mpf(" in output_str:
-        header = "from mpmath import mpf, mpc  # type: ignore\n"
+        header = "from mpmath import mpc, mpf  # type: ignore\n"
     elif "mpf(" in output_str:
         header = "from mpmath import mpf  # type: ignore\n"
     elif "mpc(" in output_str:
@@ -369,7 +369,7 @@ def compare_against_trusted(
     os_path_abspath: str,
     os_getcwd: str,
     trusted_file_basename: str,
-    results_dict: Dict[Any, Union[mpf, mpc]],
+    results_dict: Dict[Any, Union[mpc, mpf]],
 ) -> None:
     """
     Compare the results dictionary against a trusted dictionary.
@@ -437,7 +437,7 @@ def compare_or_generate_trusted_results(
     os_path_abspath: str,
     os_getcwd: str,
     trusted_file_basename: str,
-    results_dict: Dict[Any, Union[mpf, mpc]],
+    results_dict: Dict[Any, Union[mpc, mpf]],
 ) -> None:
     """
     Compare the results dictionary against a trusted dictionary or (if trusted dict does not exist) generate a new one.
