@@ -7,7 +7,7 @@ Contributor: Ken Sible
 Email: ksible *at* outlook *dot* com
 """
 
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Sequence, Tuple, Union
 
 import sympy as sp
 
@@ -274,6 +274,11 @@ def simple_loop_1D(
             i1_pts += [Nxx_plus_2NGHOSTS[1] / 2]
             i2_pts += [NGHOSTS + sp.Rational(1, 4) * Nxx[2] - sp.Rational(1, 2)]
             i2_pts += [NGHOSTS + sp.Rational(3, 4) * Nxx[2] - sp.Rational(1, 2)]
+        elif "Wedge" in CoordSystem:
+            # NO POINTS ON Y AXIS
+            i0_pts += [-1]
+            i1_pts += [-1]
+            i2_pts += [-1]
         else:
             raise ValueError(f"CoordSystem = {CoordSystem} not supported.")
 
@@ -283,10 +288,16 @@ def simple_loop_1D(
             i0_pts += [Nxx_plus_2NGHOSTS[0] / 2]
             i1_pts += [Nxx_plus_2NGHOSTS[1] / 2]
         elif "Spherical" in CoordSystem:
-            # z-axis == { th_min & th_max, phi_min  }
-            i1_pts += [NGHOSTS]
-            i1_pts += [Nxx_plus_2NGHOSTS[1] - NGHOSTS - 1]
-            i2_pts += [NGHOSTS]
+            if "Ring" in CoordSystem:
+                # NO POINTS ON Z AXIS
+                i0_pts += [-1]
+                i1_pts += [-1]
+                i2_pts += [-1]
+            else:
+                # z-axis == { th_min & th_max, phi_min  }
+                i1_pts += [NGHOSTS]
+                i1_pts += [Nxx_plus_2NGHOSTS[1] - NGHOSTS - 1]
+                i2_pts += [NGHOSTS]
         elif "Cylindrical" in CoordSystem:
             # Cylindrical: rho,phi,z
             # z-axis == { rho_min & phi_min }
@@ -297,10 +308,16 @@ def simple_loop_1D(
             # self.xx_to_Cart[2] = f(xx0) * sp.cos(self.xx[1])
             #  -> Aim for cos(xx1) = 1 -> xx1 = 0 & pi
             # z_axis == { xx1_min & xx1_max, xx2_min }
-            # FIXME: Probably missing points between foci.
+            # FIXME: Missing points between foci (not an easy fix).
             i1_pts += [NGHOSTS]
             i1_pts += [Nxx_plus_2NGHOSTS[1] - NGHOSTS - 1]
             i2_pts += [NGHOSTS]
+        elif "Wedge" in CoordSystem:
+            # Wedge-like: same as Spherical except x_new = +/-z_old, y_new = y_old, z_new = x_old
+            # Thus the z-axis here is the same as the +x-axis in Spherical-like.
+            # +x-axis == { theta_mid, phi={phi_mid} (since phi goes from -pi to pi) }
+            i1_pts += [Nxx_plus_2NGHOSTS[1] / 2]
+            i2_pts += [Nxx_plus_2NGHOSTS[2] / 2]
         else:
             raise ValueError(f"CoordSystem = {CoordSystem} not supported.")
 
@@ -327,7 +344,9 @@ int data_index = 0;
 """
 
     # Loop body for storing results.
-    loop_body_store_results = f"""{{
+    loop_body_store_results = ""
+    # Continue to append to loop_body_store_results here...
+    loop_body_store_results += f"""{{
 data_point_1d_struct dp1d;
 dp1d.xCart_axis = {'xCart[1];' if axis == "y" else 'xCart[2];'}
 """
@@ -382,8 +401,8 @@ for (int i = 0; i < data_index; i++) {
   fprintf(outfile, "%.15e """
 
     for key in out_quantities_dict.keys():
-        printf_format = "%.15e" if key[0] != "int" else "%d"
-        qsort_and_output_to_file += f"{printf_format} "
+        printf_c_type = "%.15e" if key[0] != "int" else "%d"
+        qsort_and_output_to_file += f"{printf_c_type} "
 
     qsort_and_output_to_file = (
         f'{qsort_and_output_to_file[:-1]}\\n", data_points[i].xCart_axis, '
@@ -399,38 +418,34 @@ for (int i = 0; i < data_index; i++) {
     return prefunc_content, out_string
 
 
-def simple_loop_2D(
-    CoordSystem: str,
-    out_quantities_dict: Dict[Tuple[str, str], str],
-    plane: str = "yz",
-) -> str:
-    r"""
-    Generate a C code snippet to output data in a specified 2D plane within a given coordinate system.
-    The generated code includes a loop that considers the points closest to the specified plane
-    in the provided coordinate system.
+def max_numpts__i012_pts__numpts_2D(
+    CoordSystem: str, plane: str, include_GHOSTS: bool = False
+) -> Tuple[Sequence[sp.Expr], List[List[sp.Expr]], List[Union[int, sp.Expr]]]:
+    """
+    Determine the points and number of points for a 2D loop output in the specified coordinate system and plane.
 
-    :param CoordSystem: Specifies the coordinate system (e.g., "Cartesian" or "Spherical").
-    :param out_quantities_dict: Dictionary containing output quantities. Keys are tuples of (type, name)
-                                and values are the C code expressions to compute the quantities.
-    :param plane: The plane along which the output is generated; accepts either "xy" or "yz" (default is "yz").
-    :return: A string containing the complete loop code to output data in the specified plane.
-    :raises ValueError: If the provided plane is not "xy" or "yz"
-                        or if the CoordSystem is not supported by this function.
+    :param CoordSystem: Specifies the coordinate system (e.g., "Cartesian", "Spherical").
+    :param plane: The plane to consider for the output; either "xy" or "yz".
+    :param include_GHOSTS: Whether to include ghost zones in the computation of max_numpts. Defaults to False.
+    :return: A tuple containing:
+        - max_numpts: A list of the maximum number of points in each direction, either Nxx[3] or Nxx_plus_2NGHOSTS[3] depending on include_GHOSTS.
+        - i012_pts: A list of points for each coordinate, structured as [[i0_pts], [i1_pts], [i2_pts]].
+        - numpts: The number of interior points along each coordinate, structured as [numpts_x, numpts_y, numpts_z].
+    :raises ValueError: If an unsupported `plane` or `CoordSystem` is provided.
 
     Doctests:
-    >>> from nrpy.helpers.generic import clang_format, compress_string_to_base64, decompress_base64_to_string, diff_strings
-    >>> diag2d = clang_format(simple_loop_2D("Cartesian", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, plane="xy"))
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4ANwAcNdABfgfJ51OEu5G9+HknfNr147qqTmBC3cI97UzHG3dLgKhgkSaNA4b0gwik0t5tWJAsdm3VWwiKtWc3tY77eSymZwSFkcARy74iuD1V89PH3ZOsNJwCBtX1mytk8Gmin3gskZ4wSKZZgPSc5pFGLs7OVOubWy/d0Lrc/ncXImAq/TSAcJ47NLlzM/3CwIU2eAHMiuxZJwmpmaSClGnE2qvwVqQNi8nvkxi5CqlqeYLqPKA9f8vDt7yZflaQEHrkw1RqU0L0IfFMpz5010pQ/9nMpdfkDimwxpuWsHu2cVv8TIZ/ESnVBWP7mE4GsECRgilpCvFmQhm9W/wvjaWVMWlOTVEtmUHg2EERMWLVHUHcz/v5b/ASCFs1Gs0IlD4VjAyulNbOdNIgGbbbeaOB7/0WxhmAEDncryySD4nFSRQwktzAgAOqBlU6bEt+1aRggHXko0pyEpSsTTK+THaTkiLDdMs5bxBwdTa0o5wY1ACoHcTKrbjjcKjadqzhdt7xs6nOC+yq53HGFcExgh/EDergbb5pjDHC2lvCQIws4s/Igg8sOg9mU9Igtwl3hxXagF/dcUpkcMLb21DPQtDcwGcHppgwAAAG8zxFlBx4kiAAHfA/EGAACHDcpdscRn+wIAAAAABFla")
-    >>> if diag2d != expected_string:
-    ...     raise ValueError(f"Diff:\n{diff_strings(expected_string, diag2d)}\n base64-encoded output: {compress_string_to_base64(diag2d)}")
-    >>> diag2d = clang_format(simple_loop_2D(CoordSystem="SinhSpherical", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, plane="yz"))
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4AO5Ac5dABfgfJ51OEu5G9+HknfNr147qqWllBPHI97UzHG9N+QT+URR78q1HU1SAj5n0bvig/XkRzY6UtW1SM0KnjsTwz4bVpsXCoU1zeR3qAriRz/uk4HZriJBGPIOm0e8WoWBi8RwETKvt6gklgr2I2dbftr5I0l340lYiBldQBKs3j3wyZDYfCdcY4AJk/JvA/IIROisi++rX10PvyW0tsJkzkeFPub0bpYMtqoyX79CNMEnDvGMujcXFb+hBHRLHJXIFWM6KQuFUnr7bfHZ7q7eq8TmBkj0+mitMIIjgMOgpXdTNv9uwGAEUTd89/jUMvMT6pn+i3T4WtOklcUpfXCEIjXorwIfFGBYmBXjyPppon9hbkHynYraJeBjWAayRs0cRtu4VRyiXKLqwPwtBV0YoCjy4vd8B09bc+/zt1L6/dOr+iea/oYl+cTHoa0kcKKoy4Yaj7L5sOLpwbfh3h3iUMD8yZ9ca0ZR4gSJjv/7WTjawCS+U9UTbVMtd8OSF+p1umNEt4iMOdcwv8nnb8wZO5eZ2xy9ck2gxC9AmJC8k0OauGJPtmdw9Uiv+WaH85zeAAVgfxeigrPqiupqOGE6uC0vE3GP4mnTLVj/0Ry1xQAAANYZRU9EmcEJAAHqA7oHAACSLqpEscRn+wIAAAAABFla")
-    >>> if diag2d != expected_string:
-    ...     raise ValueError(f"Diff:\n{diff_strings(expected_string, diag2d)}\n base64-encoded output: {compress_string_to_base64(diag2d)}")
-    >>> diag2d = clang_format(simple_loop_2D(CoordSystem="SinhSymTP", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, plane="xy"))
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4ANwAchdABfgfJ51OEu5G9+HknfNr147qqTmBC3cI97UzHG9N+QT+ocOVsGYU10j3aThYalczu1S8QtgITDuqHTXU1eapZEQw75OCzSgIofGTPSb4MqSNFlMjWOEYG0I710AGvwqxJmZ+I6L4zF7+PP9FYQ/d9u05L6IMNbDRYe9ph3SaiPkChicl8u/Vm+W3iuoTLsc2OFKVtP8t2ctj+5Ism3MCRN1ayJWME1y2FggLDxEjq7DGxfRhfgm8sS8boaDnAZxBrlKwL4hODHwQgdeNF/okej2WLE7ImUBGfXSrGKTSEBpluwwEffZSDJYHjP/La92PP+Np29gNrKzfUxSKtl/1yJ22RbkRDxffiWDt1z1k8gWNAMjYsGzCgrQFBXg8ffUILaRJs1H9PtWJlOfkeL6KCqW8pJ3YKan/UPfadOCiSuEk4Hp+X47FY+GKXdWkg4abjliDPVrE9gzCZC3lpoVz+XGuh3g1ir2KqB/luykcUtCSwgEjj8lIDYgzlwSIdvDCJ/lvXiSq5sTpza+EtIASZ67N+iqq5B98+3g7sjk2PzD6YGAwJ12YuT6LzMcj09oPouFn3b3QYUJLmhGCtjA8v7xV86PNiMsGQD+TryjJfwT/QAB5APxBgAA6fp3M7HEZ/sCAAAAAARZWg==")
-    >>> if diag2d != expected_string:
-    ...     raise ValueError(f"Diff:\n{diff_strings(expected_string, diag2d)}\n base64-encoded output: {compress_string_to_base64(diag2d)}")
+    >>> for Coord in ["SinhCartesian", "HoleySinhSpherical", "Wedge", "SinhCylindrical"]:
+    ...     print(Coord, max_numpts__i012_pts__numpts_2D(Coord, "yz"))
+    SinhCartesian ([Nxx0, Nxx1, Nxx2], [[Nxx_plus_2NGHOSTS0/2], [], []], [1, Nxx1, Nxx2])
+    HoleySinhSpherical ([Nxx0, Nxx1, Nxx2], [[], [], [NGHOSTS + Nxx2/4 - 1/2, NGHOSTS + 3*Nxx2/4 - 1/2]], [Nxx0, Nxx1, 2])
+    Wedge ([Nxx0, Nxx1, Nxx2], [[], [Nxx_plus_2NGHOSTS1/2], []], [Nxx0, 1, Nxx2])
+    SinhCylindrical ([Nxx0, Nxx1, Nxx2], [[], [NGHOSTS + Nxx1/4 - 1/2, NGHOSTS + 3*Nxx1/4 - 1/2], []], [Nxx0, 2, Nxx2])
+    >>> for Coord in ["SinhCartesian", "HoleySinhSpherical", "Wedge", "SinhCylindrical"]:
+    ...     print(Coord, max_numpts__i012_pts__numpts_2D(Coord, "xy"))
+    SinhCartesian ([Nxx0, Nxx1, Nxx2], [[], [], [Nxx_plus_2NGHOSTS2/2]], [Nxx0, Nxx1, 1])
+    HoleySinhSpherical ([Nxx0, Nxx1, Nxx2], [[], [Nxx_plus_2NGHOSTS1/2], []], [Nxx0, 1, Nxx2])
+    Wedge ([Nxx0, Nxx1, Nxx2], [[], [], [NGHOSTS + Nxx2/4 - 1/2, NGHOSTS + 3*Nxx2/4 - 1/2]], [Nxx0, Nxx1, 2])
+    SinhCylindrical ([Nxx0, Nxx1, Nxx2], [[], [Nxx_plus_2NGHOSTS1/2], []], [Nxx0, 1, Nxx2])
     """
     if plane not in ["xy", "yz"]:
         raise ValueError(
@@ -456,6 +471,14 @@ def simple_loop_2D(
         ):
             # xy-plane == { theta_mid }, where theta index is i1
             i1_pts += [Nxx_plus_2NGHOSTS[1] / 2]
+        elif "Wedge" in CoordSystem:
+            # UWedgeHSinhSph: same as Spherical except x_new = -z_old, y_new = y_old, z_new = x_old
+            # Thus the xy plane here is the same as the -z,y plane in Spherical-like.
+            # LWedgeHSinhSph: same as Spherical except x_new = z_old, y_new = y_old, z_new = -x_old
+            # Thus the xy plane here is the same as the z,y plane in Spherical-like
+            # (for both see discussion below for yz plane in Spherical)
+            i2_pts += [NGHOSTS + sp.Rational(1, 4) * Nxx[2] - sp.Rational(1, 2)]
+            i2_pts += [NGHOSTS + sp.Rational(3, 4) * Nxx[2] - sp.Rational(1, 2)]
         else:
             raise ValueError(f"CoordSystem = {CoordSystem} not supported.")
 
@@ -486,21 +509,68 @@ def simple_loop_2D(
             # # NGHOSTS + Nphi/4 - 1/2 -> Closest plane for -PI/2: NGHOSTS + Nxx2/4 - 1/2
             i2_pts += [NGHOSTS + sp.Rational(1, 4) * Nxx[2] - sp.Rational(1, 2)]
             i2_pts += [NGHOSTS + sp.Rational(3, 4) * Nxx[2] - sp.Rational(1, 2)]
+        elif "Wedge" in CoordSystem:
+            # UWedgeHSinhSph: same as Spherical except x_new = -z_old, y_new = y_old, z_new = x_old
+            # Thus the yz plane here is the same as the y,x plane in Spherical-like.
+            # LWedgeHSinhSph: same as Spherical except x_new = z_old, y_new = y_old, z_new = -x_old
+            # Thus the yz plane here is the same as the y,-x plane in Spherical-like
+            # xy-plane == { theta_mid }, where theta index is i1
+            i1_pts += [Nxx_plus_2NGHOSTS[1] / 2]
         else:
             raise ValueError(f"CoordSystem = {CoordSystem} not supported.")
 
     i012_pts = [i0_pts, i1_pts, i2_pts]
+    max_numpts = Nxx[:]
+    if include_GHOSTS:
+        max_numpts = Nxx_plus_2NGHOSTS[:]
+
     numpts: List[Union[int, sp.Expr]] = [0] * 3
-    numpts[0] = len(i0_pts) if i0_pts else Nxx[0]
-    numpts[1] = len(i1_pts) if i1_pts else Nxx[1]
-    numpts[2] = len(i2_pts) if i2_pts else Nxx[2]
+    numpts[0] = len(i0_pts) if i0_pts else max_numpts[0]
+    numpts[1] = len(i1_pts) if i1_pts else max_numpts[1]
+    numpts[2] = len(i2_pts) if i2_pts else max_numpts[2]
+    return max_numpts, i012_pts, numpts
+
+
+def simple_loop_2D(
+    CoordSystem: str,
+    out_quantities_dict: Dict[Tuple[str, str], str],
+    plane: str = "yz",
+) -> str:
+    r"""
+    Generate a C code snippet to output data in a specified 2D plane within a given coordinate system.
+    The generated code includes a loop that considers the points closest to the specified plane
+    in the provided coordinate system.
+
+    :param CoordSystem: Specifies the coordinate system (e.g., "Cartesian" or "Spherical").
+    :param out_quantities_dict: Dictionary containing output quantities. Keys are tuples of (type, name)
+                                and values are the C code expressions to compute the quantities.
+    :param plane: The plane along which the output is generated; accepts either "xy" or "yz" (default is "yz").
+    :return: A string containing the complete loop code to output data in the specified plane.
+
+    Doctests:
+    >>> from nrpy.helpers.generic import clang_format, compress_string_to_base64, decompress_base64_to_string, diff_strings
+    >>> diag2d = clang_format(simple_loop_2D("Cartesian", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, plane="xy"))
+    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4ANwAcNdABfgfJ51OEu5G9+HknfNr147qqTmBC3cI97UzHG3dLgKhgkSaNA4b0gwik0t5tWJAsdm3VWwiKtWc3tY77eSymZwSFkcARy74iuD1V89PH3ZOsNJwCBtX1mytk8Gmin3gskZ4wSKZZgPSc5pFGLs7OVOubWy/d0Lrc/ncXImAq/TSAcJ47NLlzM/3CwIU2eAHMiuxZJwmpmaSClGnE2qvwVqQNi8nvkxi5CqlqeYLqPKA9f8vDt7yZflaQEHrkw1RqU0L0IfFMpz5010pQ/9nMpdfkDimwxpuWsHu2cVv8TIZ/ESnVBWP7mE4GsECRgilpCvFmQhm9W/wvjaWVMWlOTVEtmUHg2EERMWLVHUHcz/v5b/ASCFs1Gs0IlD4VjAyulNbOdNIgGbbbeaOB7/0WxhmAEDncryySD4nFSRQwktzAgAOqBlU6bEt+1aRggHXko0pyEpSsTTK+THaTkiLDdMs5bxBwdTa0o5wY1ACoHcTKrbjjcKjadqzhdt7xs6nOC+yq53HGFcExgh/EDergbb5pjDHC2lvCQIws4s/Igg8sOg9mU9Igtwl3hxXagF/dcUpkcMLb21DPQtDcwGcHppgwAAAG8zxFlBx4kiAAHfA/EGAACHDcpdscRn+wIAAAAABFla")
+    >>> if diag2d != expected_string:
+    ...     raise ValueError(f"Diff:\n{diff_strings(expected_string, diag2d)}\n base64-encoded output: {compress_string_to_base64(diag2d)}")
+    >>> diag2d = clang_format(simple_loop_2D(CoordSystem="SinhSpherical", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, plane="yz"))
+    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4AO5Ac5dABfgfJ51OEu5G9+HknfNr147qqWllBPHI97UzHG9N+QT+URR78q1HU1SAj5n0bvig/XkRzY6UtW1SM0KnjsTwz4bVpsXCoU1zeR3qAriRz/uk4HZriJBGPIOm0e8WoWBi8RwETKvt6gklgr2I2dbftr5I0l340lYiBldQBKs3j3wyZDYfCdcY4AJk/JvA/IIROisi++rX10PvyW0tsJkzkeFPub0bpYMtqoyX79CNMEnDvGMujcXFb+hBHRLHJXIFWM6KQuFUnr7bfHZ7q7eq8TmBkj0+mitMIIjgMOgpXdTNv9uwGAEUTd89/jUMvMT6pn+i3T4WtOklcUpfXCEIjXorwIfFGBYmBXjyPppon9hbkHynYraJeBjWAayRs0cRtu4VRyiXKLqwPwtBV0YoCjy4vd8B09bc+/zt1L6/dOr+iea/oYl+cTHoa0kcKKoy4Yaj7L5sOLpwbfh3h3iUMD8yZ9ca0ZR4gSJjv/7WTjawCS+U9UTbVMtd8OSF+p1umNEt4iMOdcwv8nnb8wZO5eZ2xy9ck2gxC9AmJC8k0OauGJPtmdw9Uiv+WaH85zeAAVgfxeigrPqiupqOGE6uC0vE3GP4mnTLVj/0Ry1xQAAANYZRU9EmcEJAAHqA7oHAACSLqpEscRn+wIAAAAABFla")
+    >>> if diag2d != expected_string:
+    ...     raise ValueError(f"Diff:\n{diff_strings(expected_string, diag2d)}\n base64-encoded output: {compress_string_to_base64(diag2d)}")
+    >>> diag2d = clang_format(simple_loop_2D(CoordSystem="SinhSymTP", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, plane="xy"))
+    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4ANwAchdABfgfJ51OEu5G9+HknfNr147qqTmBC3cI97UzHG9N+QT+ocOVsGYU10j3aThYalczu1S8QtgITDuqHTXU1eapZEQw75OCzSgIofGTPSb4MqSNFlMjWOEYG0I710AGvwqxJmZ+I6L4zF7+PP9FYQ/d9u05L6IMNbDRYe9ph3SaiPkChicl8u/Vm+W3iuoTLsc2OFKVtP8t2ctj+5Ism3MCRN1ayJWME1y2FggLDxEjq7DGxfRhfgm8sS8boaDnAZxBrlKwL4hODHwQgdeNF/okej2WLE7ImUBGfXSrGKTSEBpluwwEffZSDJYHjP/La92PP+Np29gNrKzfUxSKtl/1yJ22RbkRDxffiWDt1z1k8gWNAMjYsGzCgrQFBXg8ffUILaRJs1H9PtWJlOfkeL6KCqW8pJ3YKan/UPfadOCiSuEk4Hp+X47FY+GKXdWkg4abjliDPVrE9gzCZC3lpoVz+XGuh3g1ir2KqB/luykcUtCSwgEjj8lIDYgzlwSIdvDCJ/lvXiSq5sTpza+EtIASZ67N+iqq5B98+3g7sjk2PzD6YGAwJ12YuT6LzMcj09oPouFn3b3QYUJLmhGCtjA8v7xV86PNiMsGQD+TryjJfwT/QAB5APxBgAA6fp3M7HEZ/sCAAAAAARZWg==")
+    >>> if diag2d != expected_string:
+    ...     raise ValueError(f"Diff:\n{diff_strings(expected_string, diag2d)}\n base64-encoded output: {compress_string_to_base64(diag2d)}")
+    """
     pragma = "#pragma omp parallel for\n"
+    max_numpts, i012_pts, numpts = max_numpts__i012_pts__numpts_2D(CoordSystem, plane)
+
     out_string = f"""// Output data in {plane}-plane in {CoordSystem} coordinates.
 const int numpts_i0={numpts[0]}, numpts_i1={numpts[1]}, numpts_i2={numpts[2]};
 int i0_pts[numpts_i0], i1_pts[numpts_i1], i2_pts[numpts_i2];
 """
     for i in range(3):
-        if numpts[i] == Nxx[i]:
+        if numpts[i] == max_numpts[i]:
             out_string += f"{pragma}for(int i{i}=NGHOSTS; i{i}<Nxx{i} + NGHOSTS; i{i}++) i{i}_pts[i{i}-NGHOSTS] = i{i};\n"
         else:
             for j, pt in enumerate(i012_pts[i]):
@@ -512,15 +582,15 @@ LOOP_NOOMP(i0_pt,0,numpts_i0, i1_pt,0,numpts_i1, i2_pt,0,numpts_i2) {
   const int idx3 = IDX3(i0, i1, i2);
   REAL xCart[3];
   xx_to_Cart(commondata, params, xx, i0, i1, i2, xCart);
-  {
 """
+    out_string += "{"
     for key, value in out_quantities_dict.items():
         out_string += f"const {key[0]} {key[1]} = {value};\n"
     out_string += 'fprintf(outfile, "%.15e %.15e '
 
     for key in out_quantities_dict.keys():
-        printf_format = "%.15e" if key[0] != "int" else "%d"
-        out_string += f"{printf_format} "
+        printf_c_type = "%.15e" if key[0] != "int" else "%d"
+        out_string += f"{printf_c_type} "
 
     out_string = f'{out_string[:-1]}\\n", '
 
