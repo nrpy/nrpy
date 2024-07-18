@@ -212,15 +212,18 @@ def simple_loop_1D(
     axis: str = "z",
 ) -> Tuple[str, str]:
     r"""
-    Generate a simple 1D loop in C (for use inside of a function).
+    Generates a C code snippet to output data along a specified axis in a given coordinate system.
+    The generated code includes a loop that considers the points closest to the specified axis
+    in the provided coordinate system.
 
-    :param CoordSystem: Coordinate system, e.g., "Cartesian"
-    :param out_quantities_dict: Output quantities dictionary
-    :param axis: Specifies the axis of output: either "x" or "z" axis
-
-    :return: Complete loop code, output as a string.
-
-    :raises ValueError: If CoordSystem is not supported by this function.
+    :param CoordSystem: Specifies the coordinate system (e.g., "Cartesian" or "Spherical").
+    :param out_quantities_dict: Dictionary containing quantities tooutput. Keys are tuples of (type, name)
+                                and values are the C code expressions to compute the quantities.
+    :param axis: The axis along which the output is generated; accepts either "y" or "z" (default is "z").
+    :return: A tuple containing two strings: the first string represents the struct and comparison function definitions,
+             and the second string represents the loop code to output data along the specified axis.
+    :raises ValueError: If the provided axis is not "y" or "z",
+                        or if the CoordSystem is not supported by this function.
 
     Doctests:
     >>> from nrpy.helpers.generic import clang_format, compress_string_to_base64, decompress_base64_to_string, diff_strings
@@ -402,15 +405,17 @@ def simple_loop_2D(
     plane: str = "yz",
 ) -> str:
     r"""
-    Generate a simple 2D loop in the xy or yz plane in C (for use inside of a function).
+    Generates a C code snippet to output data in a specified 2D plane within a given coordinate system.
+    The generated code includes a loop that considers the points closest to the specified plane
+    in the provided coordinate system.
 
-    :param CoordSystem: Coordinate system, e.g., "Cartesian"
-    :param out_quantities_dict: Dictionary of quantities to be output
-    :param plane: Specifies the plane of output: either "xy" or "yz" (default)
-
-    :return: Complete loop code, output as a string.
-
-    :raises ValueError: If CoordSystem is not supported by this function.
+    :param CoordSystem: Specifies the coordinate system (e.g., "Cartesian" or "Spherical").
+    :param out_quantities_dict: Dictionary containing output quantities. Keys are tuples of (type, name)
+                                and values are the C code expressions to compute the quantities.
+    :param plane: The plane along which the output is generated; accepts either "xy" or "yz" (default is "yz").
+    :return: A string containing the complete loop code to output data in the specified plane.
+    :raises ValueError: If the provided plane is not "xy" or "yz"
+                        or if the CoordSystem is not supported by this function.
 
     Doctests:
     >>> from nrpy.helpers.generic import clang_format, compress_string_to_base64, decompress_base64_to_string, diff_strings
