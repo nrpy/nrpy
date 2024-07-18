@@ -359,6 +359,7 @@ def register_CFunctions(
     list_of_CoordSystems: List[str],
     list_of_grid_physical_sizes: List[float],
     Nxx_dict: Dict[str, List[int]],
+    gridding_approach: str = "independent grid(s)",
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
     fp_type: str = "double",
@@ -369,6 +370,7 @@ def register_CFunctions(
     :param list_of_CoordSystems: List of CoordSystems
     :param list_of_grid_physical_sizes: List of grid_physical_size for each CoordSystem; needed for Independent grids.
     :param Nxx_dict: Dictionary containing number of grid points.
+    :param gridding_approach: Choices: "independent grid(s)" or "multipatch"
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions.
     :param fp_type: Floating point type, e.g., "double".
@@ -384,6 +386,11 @@ def register_CFunctions(
     register_CFunction_numerical_grids_and_timestep(
         list_of_CoordSystems=list_of_CoordSystems,
         list_of_grid_physical_sizes=list_of_grid_physical_sizes,
+        gridding_approach=gridding_approach,
         enable_rfm_precompute=enable_rfm_precompute,
         enable_CurviBCs=enable_CurviBCs,
     )
+
+    if gridding_approach == "multipatch":
+        # Register regrid & masking functions
+        pass
