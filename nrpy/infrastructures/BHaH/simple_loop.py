@@ -228,15 +228,15 @@ def simple_loop_1D(
     Doctests:
     >>> from nrpy.helpers.generic import clang_format, compress_string_to_base64, decompress_base64_to_string, diff_strings
     >>> diag1d = clang_format(simple_loop_1D(CoordSystem="Cartesian", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, axis="y")[1])
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4ASAAjddABfgfJ51OEu5G9+EUlvYp1dk7+K8eO40VXFOrC5KgQdAGZkA+nmwLa3aIodzb3cJ641+dM68R4YgftRQdXGatJLFn6FOce+L5rhgnsnMvkljHaochh2KqpK9sEbv1xn+MV3kddMhWMLGRwssQKqNsAeNMBHVziHlJECGFaTWWDnj0k0dlKF927gVSP7thdDf/zDIZ0bv0zRbyjdVGTg/KxnnF1Ad0wXSILsLCGvv2Q+mD6VTwU3yheYlrnYnZZeUsAUiWiGwXJ4en7FVF98GkBlyQ9/4BOYE6ITi3TA9cUIYyYJzXzosV9ABszAcYWklb30SwrPnEsGp4iwYTffIeX3iSf3V9y1LJhVEziPRR62Iw+Fg/YzIPke50zqQVLSO/YxHpgfRc9gHuEhDwE3b5LLUxZnRipI8NgCk7RY+1sxoabKNwrRjm4j32cSyRIDHHqwt9drJThsr3ik6Y2ljmkuyOT7sooYVVL8+npF7r4MPjP9p4XbQ4Wqd+AM/sqgnlfGw2MxoBrw8FN3L5WNZA4PYYbMwk/PLkNcIGMHvJavyOCqL1sEiRsmiBeTaFeG8084j7oJTtH1WVTeq5+bYNs1Denili0e6Hs6wv4CfL+bKj0v6/l4XI2qqxCOStvyh11EpUgL8H8tqGuKrFpWVvy3uYjHpBr6P9CWgWgR3M4720kHldCRgV/RVFahYlAfKOQAo5JGXTuzww4jQFBkJhhFBQtQNuItDBWKh+TFxUDTmOXMukPhkAAAAKGvTIYQgyTYAAdMEgQkAAE32S/ixxGf7AgAAAAAEWVo=")
+    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4AT1AmxdABfgfIhlMYIN4cUPfyespQRzjUH+1RgEkebsTINj5AD0Ew8BQihsG+ldk9FmdPbsp0g6RWC5bdGf2YzJ2K/2yuxKCa6CL2nIyRvDVjakbAbX5BMu291HujDeC3jpHflLFFuxS9CUE77JWgfezCN4uqB0IBXg01sUOwGQ2i+BDvk6FyLLzsDHFpcsvComWnDXUETQzVEOZKdTNYgFKLGGNyU9TQjwoS1YkGaTTGweGbY5H/3rJYLSgRQdHenZdtNFoOp+9J1Uj180hax8hJuSI7z+fVa5SfdfdFGFy45TsivVnzwazf0qr7jwpHvr+8zLE4IvP7awONSsmSBZCByG03t+3GAMhtl/LdR8f/VgBeK6njZ7VKg7psNtaNXDSERWJ7JgfXsIQqY0+nK+ed87Mo0iet7Z0JdEQgnUklobffK4Hi7BkVcG9SmDOpW6lGUCvMHl4AGmhuYyTkhv50rVTlGWvqELC2KmmoQXbX30HlPx8tYu15p1fjHJOA6lh8GB24lRndmsh/nNhreAggDe9WD18G0Q80enLlxpmXGPWu75tc765q75DO+DztI6FnMvHAeaikx4Jzslw7+H/Em7JHXk5mRdYCLbu85k8pLorsFlQ7XXzoJz4MvAeGZzV3SWi3a4gpl3dqVOJ/vCzDthCi4igjAoaItvxbg6f1EmqmcVOTBln2sk4ZWI2s7IQfUePg/sCERQt6D1Krs5gLZZqP31hCsLQGmgWHhGbl5YznRW6fWO1LEasTyrEnIeOj16OHPzi6v+yubnui20rSduFqb1tDoFjp2PMQUxSpNP0eZbTSVGGeTtaFEE5+00ABRou1R79IkKAAGIBfYJAADsv4pVscRn+wIAAAAABFla")
     >>> if diag1d != expected_string:
     ...     raise ValueError(f"{diff_strings(expected_string, diag1d)}\n base64-encoded output: {compress_string_to_base64(diag1d)}")
     >>> diag1d = clang_format(simple_loop_1D(CoordSystem="SinhSpherical", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, axis="y")[1])
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4ATJAk5dABfgfJ51OEu5G9+EUlvYp1dk7+K8eO40VXFOwE0lywhL6Na6gbyqpgT1R8e50ML5tgBveOVyZl6U8ClAM+5RMuYtVE+1XueVLF0J9QDYPB/lrsfhIONJAKP/VtgkerMr8ejwimCGmGbFM8KQHLH2Qr6iPaXrqbVso37SpGwID3OAKugmkzy5qdleSgsULA4KPPQaDiyXM21X+kfxEmRnVFIAwwMH4R7KDHeTGEWgJ+8ZkEcu634G9HNinr10zZsG1ZyhJjqJXmI6SKwqSFkoUVkvmrB6n14wevAN//zJa8TdpUIgIMKkGlO10TjtsvWFOvDH4arjW3/2EgKRR1/QeN2YIRqaufz/z111Sul6q2z1mysFx7vNN1CiEZjIsnKQVd6bgB6D4gZcFnjyMl/vVGUoNssGHgbPA3zUJikPxrlY98Qb5aCclWep6Gp7hOwB4wUfvtQZ/TXEjF1Ue9XRAQ9vEt41eHUKxtjSewIvPf1U8lSS48132PyTeNPBOOI8+afNu5m7VzEnPYUI0oO+p0D5QDSXdcJVSgE0R7lWQb62t2peU0r7wVdcDLBOsQa7M7PhZzqJpTflY4+MnrTaQhBykeZD3ADQ9xTT8LiX3NvFcTmTQd/StqDRFfwW8qHrlwP3vM8a99SRy4JJ4v8/WFvpmwXQP++RNnK91WgUX8JJixfzivAh4IRtR+Y5c3a6EfhKxYoRg5mCnujk/dJTSs/rhsPzNpNx7Eb66gh3Z6MUNHhmhH1DWIHt+lDi4ZsVLrdu6HMakW7slMueKO9vAAAAnoB6kHdcIEoAAeoEygkAABR/K5exxGf7AgAAAAAEWVo=")
+    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4AU+AoNdABfgfIhlMYIN4cUPfyespQRzjUH+1RgEkebsTINj5AD0Ew8BQihsG+ldk9FmdPbsrjX64N9akGaoGUFEU5ORWsN5geYreRK86LYVVk5VrW5b1up8AoOcyENkotWRT5RPjzooP+Q6k4ipyEtZJrJd/N3xnTKblsyW9tSweJzngYjTMuNewwn9QJy+Alef+94DLS7fJxXb5xiCY9iYCgUlrO0XH5QCq60B9/9jsrkmmj0vldh4TbEalc9GJgwMvkshPkZqxB9DNrSg4AUJAb8wwag8Q8vaQ2K6Z6dvdO7SjrNpi40eG+S/fvFXS6ufn0z3TWEan+g1cI7PZfnPayTShUzVqO/RUQqU/+1+scsPlyX5pxUBrwMSzzv1SX1ylejzal7vPc8W0KOl1DpzBYMuDnlSuNMpKUk94v062nOik6IKAtnloKUOxXQckuXqqJq0DwsxEto10Fg1J8flB4iGQkxSzr6JsBaSjVqZAMs4rECWTIiro13/p2suO6IeVRgHwPSZM8l0YL85mRwYJwfwmGBfrnVcN9KysQ/h4n7Ps/JgewrHIeeJcEevEu+Bq9cj0iYxUgMGTowG+lybAc7+mtEAjiFkFGMZZ4zvfv75gkBj4D0bva2hff5VklOFJ0hcEBfDWmcX+1NlJsyzdL2v7Ti0NT2T8cs+CXBi5KW9wXMnTy54StxXVes5nQ3TvM1/V0fGWxPA237DakDRbL7axkxVf/jZmj+dOBEOJLJaGHidkbVq+V5tdLqbor7vN81FGhR+wN6afUJdp8Nh343uEQ+aKGgnY3TJH8A8qMoPvnLsdE19jpO35V5RaMmv9+RxwXBet4SzUqBIhOiPiKLB+oOhNN0AAPIhA50NSPdIAAGfBb8KAAAhJAOvscRn+wIAAAAABFla")
     >>> if diag1d != expected_string:
     ...     raise ValueError(f"{diff_strings(expected_string, diag1d)}\n base64-encoded output: {compress_string_to_base64(diag1d)}")
     >>> diag1d = clang_format(simple_loop_1D(CoordSystem="Spherical", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, axis="z")[1])
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4ASEAjtdABfgfJ51OEu5G9+EUlvYp1dlAyuYeO40VXFOv/eTS7T39N1d1WAuEsg/wIVqdPkL2NmyE0Z0wib/s9J2rhoPSkyFAtdMiER/4Zf//bctEJLtW0auvD5Twse/NuGMT0C0Yy9gFVoSJfhxIi1c1w/cttPIWplpZd69Uybtrx1SYR1p31EyLpIeJVZqitJRNFJ0S5Rbxtz0WQ4aOJXV2WvgsCigjb0GdPZpdunqATvpCVL8BSkP2YXPuYuy55NnIOvuIfbGSew5g23Nsqf9SQK+UFJNx9K/fmkd9GBouOwKegr/AGP/yffxC23YC6zGlqHIT7r4CixsWKhYSK855u0xleA2Cspg12x8gVHCsuSKbxHoGH43W9OXYSQYN8Tg1yTgAvnDPVB4HLiOtKIAN+xvd+wApMIR6isVwqn24TozmgkCRTFTfM6XS0P8RPQwajr05OoyUYkdYTbhJOppY15vpA5wqrXuGCLy+GRdOR11OpXc1W7gg+tSWD562XzUXXBt9ryInnC4bqBTpYnZMfe8P1i8Iv6yQkHYXMKTCLeJVP208+aH1IamdDoxy++JttEjkpz9uDHlxwIRGlaY8aBft2XxxPR6a0VJ9GmIflyBf1ZfWoJRXOSHFTvgV48RrAkiWuDa03L4CdDW2JsMl+RqefYskbjfDVEtRdzR//bdEOJMso3AH+P3dOT3h8eceZqniq+PfjcM4gFiPwJ97yVU88Dn9TwZRE1HZ7wJ9Z780q+w2yBKEOqC5s343AsAAA2NhflX1595AAHXBIUJAAAMI7jsscRn+wIAAAAABFla")
+    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4AT5AnJdABfgfIhlMYIN4cUPfyespQRzjUH+1RgEkebsTINj5AD0Ew8BQihsHGY1k9FmdPbsrhibF9Nv4BiDsCPObVIY7ZqQYVYp+DDPK6WTG4MxWRmkapDc/p1H6FPzwc2DnX8W5QSTRqYhnZDVNw5Mel0AuikwKDrF+7C+gE58Hvs1mL3Ikd8RS45EiAyBBheadz676ml8hYqhnxQ3hX7HWNx4aPUbn1MGOamPEvPuxux3UtB6G/YYMMoIkZAcbfTLThEP50XMhkvcCm7zW1fQ1tPHCBvwkckib+cMDWmyCB3b4erz76XsbGOwBNKWOzGHeeYfFeYZ5ob/qpsgF+QhP7Ab/47Noe+WXfzJ6bFJ+gk4ARqfvykWkqeBXrEkQpMAeK3+ra2t/dqUcFvibnZcsc+YOvwdadDwMyZyUXZA0i4qjm8AlR0x7P1bb3z4DsEcJqfOXsXpaV6eHtHloqzY19rfs5e+HhhBeHguaKGdqzetDlIRlpzVJyf2T8MFeEw+btvoSO32O3kd2XWiTMGgok6FDbJq7LlKJDEAZIEfYk0nDV+45cXBPI9IS9BEfHXPHKtHxTTY4gSpNo8PdC+GyqTGj0VW92qU/mjigkmjahkNAmjxV1aCDJKRYSpwIpHvUWazqCNqAuBf5UiFWb6YnP5E2KJ+sK1n0z/YCuUDSpprzoVnLeFbYbkvWih73GGjWCOAnNw2zfE4CsGsrEQHf+M0D7YjBmBqbgxHjG6vNSh2tfKiKw8Is4SwgIJNRILR2oumL51Hq6lHaJMY6f8QTObyDe9O2vES90TtANOMLZxnDQZKBrEebiGvXNhjo+ErTUSicnUAAAAAFyWFPQZVMbkAAY4F+gkAAEnjBcmxxGf7AgAAAAAEWVo=")
     >>> if diag1d != expected_string:
     ...     raise ValueError(f"Diff:\n {diff_strings(expected_string, diag1d)}\n base64-encoded output: {compress_string_to_base64(diag1d)}")
     """
@@ -335,7 +335,7 @@ def simple_loop_1D(
         numpts[2] = len(i2_pts) if i2_pts else Nxx[2]
 
     pragma = "#pragma omp parallel for\n"
-    out_string = f"""// Output along {axis}-axis in {CoordSystem} coordinates.
+    out_string = f"""// Define points for output along the {axis}-axis in {CoordSystem} coordinates.
 const int numpts_i0={numpts[0]}, numpts_i1={numpts[1]}, numpts_i2={numpts[2]};
 int i0_pts[numpts_i0], i1_pts[numpts_i1], i2_pts[numpts_i2];
 
@@ -347,6 +347,7 @@ int data_index = 0;
     loop_body_store_results = ""
     # Continue to append to loop_body_store_results here...
     loop_body_store_results += f"""{{
+// Store the data in the data_point_1d_struct
 data_point_1d_struct dp1d;
 dp1d.xCart_axis = {'xCart[1];' if axis == "y" else 'xCart[2];'}
 """
@@ -366,7 +367,7 @@ dp1d.xCart_axis = {'xCart[1];' if axis == "y" else 'xCart[2];'}
         else:
             for j, pt in enumerate(i012_pts[i]):
                 out_string += f"i{i}_pts[{j}] = (int)({sp.ccode(pt)});\n"
-    out_string += f"""// Main loop:
+    out_string += f"""// Main loop to store data points along the specified axis
 LOOP_NOOMP(i0_pt,0,numpts_i0, i1_pt,0,numpts_i1, i2_pt,0,numpts_i2) {{
   const int i0 = i0_pts[i0_pt], i1 = i1_pts[i1_pt], i2 = i2_pts[i2_pt];
   const int idx3 = IDX3(i0, i1, i2);
@@ -378,7 +379,7 @@ LOOP_NOOMP(i0_pt,0,numpts_i0, i1_pt,0,numpts_i1, i2_pt,0,numpts_i2) {{
 """
 
     # Post-loop: qsort() along xCart_axis and output to file.
-    prefunc_content = """
+    prefunc_content = """// Struct to hold 1D data points
 typedef struct {
 REAL xCart_axis;
 """
@@ -550,22 +551,22 @@ def simple_loop_2D(
     Doctests:
     >>> from nrpy.helpers.generic import clang_format, compress_string_to_base64, decompress_base64_to_string, diff_strings
     >>> diag2d = clang_format(simple_loop_2D("Cartesian", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, plane="xy"))
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4ANwAcNdABfgfJ51OEu5G9+HknfNr147qqTmBC3cI97UzHG3dLgKhgkSaNA4b0gwik0t5tWJAsdm3VWwiKtWc3tY77eSymZwSFkcARy74iuD1V89PH3ZOsNJwCBtX1mytk8Gmin3gskZ4wSKZZgPSc5pFGLs7OVOubWy/d0Lrc/ncXImAq/TSAcJ47NLlzM/3CwIU2eAHMiuxZJwmpmaSClGnE2qvwVqQNi8nvkxi5CqlqeYLqPKA9f8vDt7yZflaQEHrkw1RqU0L0IfFMpz5010pQ/9nMpdfkDimwxpuWsHu2cVv8TIZ/ESnVBWP7mE4GsECRgilpCvFmQhm9W/wvjaWVMWlOTVEtmUHg2EERMWLVHUHcz/v5b/ASCFs1Gs0IlD4VjAyulNbOdNIgGbbbeaOB7/0WxhmAEDncryySD4nFSRQwktzAgAOqBlU6bEt+1aRggHXko0pyEpSsTTK+THaTkiLDdMs5bxBwdTa0o5wY1ACoHcTKrbjjcKjadqzhdt7xs6nOC+yq53HGFcExgh/EDergbb5pjDHC2lvCQIws4s/Igg8sOg9mU9Igtwl3hxXagF/dcUpkcMLb21DPQtDcwGcHppgwAAAG8zxFlBx4kiAAHfA/EGAACHDcpdscRn+wIAAAAABFla")
+    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4APOAftdABfgfIhlMYIN4cUPfyespQRzjUH+1RgEkebsTINj5AD0Ew8BQihsG4xvVIEaWbxkX3h8/EJehlGF5zbTysnCr1xUlJMEf1xS4Esouq+kqM3dFCeiSE9KLTnRNjP8xwHRV5EjkdF9Ji2Hy2enb9GoPlneKNCL2RRr/TqFRCUVfoKiOVuN+geLMLo0B85GbnSI9zBYCvpsLs3c5XO+zsrh/XucMLc4uRaNfj7P8ZDnLJsK+wRcx4uJFx+rkna25NtKRiL3QtCBq1xsggBsRTNwfVbTh9eW4lV9bLeo/FJBk8/nToG2Aodz5di7d7CTjJbWu6eGxKZeXBYxkdnH45MU1JjC57hsAUK+N8iBcIkCac0OUtwGapBAhoSwR3p/T4hdD4VANJw+YWx2WOqQcnjyTIgR0T5BWxC4lKglJgUsKX6RhIcpePnhQXn/rt1oyB6aZGu3TPUNQ9mRmX80+CswFwQ59J5Hd+gj+iOSvfLFuqFqgUxSIaH7yO3YFqiqQYW6hOiWfhvItttDK0CQ8aml50KKYIp5dVrDlKkcnTGFQCEnEauBEZgjkYqhhSYyD9ZBKqCPAlkyVeOw8P3lNblD4gTIj8Ix1jEBnT6CtUG/8NB0T+gyZm/hYfccJ0fiLTWV1H3ffpFDVwA2a7fwt0C3yQT4cSdSF60koEVPTgAAAOF94MkNNdgAAZcEzwcAADO81x2xxGf7AgAAAAAEWVo=")
     >>> if diag2d != expected_string:
     ...     raise ValueError(f"Diff:\n{diff_strings(expected_string, diag2d)}\n base64-encoded output: {compress_string_to_base64(diag2d)}")
     >>> diag2d = clang_format(simple_loop_2D(CoordSystem="SinhSpherical", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, plane="yz"))
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4AO5Ac5dABfgfJ51OEu5G9+HknfNr147qqWllBPHI97UzHG9N+QT+URR78q1HU1SAj5n0bvig/XkRzY6UtW1SM0KnjsTwz4bVpsXCoU1zeR3qAriRz/uk4HZriJBGPIOm0e8WoWBi8RwETKvt6gklgr2I2dbftr5I0l340lYiBldQBKs3j3wyZDYfCdcY4AJk/JvA/IIROisi++rX10PvyW0tsJkzkeFPub0bpYMtqoyX79CNMEnDvGMujcXFb+hBHRLHJXIFWM6KQuFUnr7bfHZ7q7eq8TmBkj0+mitMIIjgMOgpXdTNv9uwGAEUTd89/jUMvMT6pn+i3T4WtOklcUpfXCEIjXorwIfFGBYmBXjyPppon9hbkHynYraJeBjWAayRs0cRtu4VRyiXKLqwPwtBV0YoCjy4vd8B09bc+/zt1L6/dOr+iea/oYl+cTHoa0kcKKoy4Yaj7L5sOLpwbfh3h3iUMD8yZ9ca0ZR4gSJjv/7WTjawCS+U9UTbVMtd8OSF+p1umNEt4iMOdcwv8nnb8wZO5eZ2xy9ck2gxC9AmJC8k0OauGJPtmdw9Uiv+WaH85zeAAVgfxeigrPqiupqOGE6uC0vE3GP4mnTLVj/0Ry1xQAAANYZRU9EmcEJAAHqA7oHAACSLqpEscRn+wIAAAAABFla")
+    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4AQXAgldABfgfIhlMYIN4cUPfyespQRzjUH+1RgEkebsTINj5AD0Ew8BQihsHAm9tIEaWbxkX3iJfpkDNY8C3AcF4owUwxhZ1N50NCItxBlKVFj80aYMhsZ4PkyoOwyyvmAAMTbf01+rgVRy41HN2nLVCbkW0hxsedloR6IXLH+fGmJi764mFKuVGZLhfX+Tel+UBrQdO1IBsp/IcXVHn5TEFnapERVo0OfRF7JB8vARs3EpWRjs8Fcf4i/aEqkPmLxknRjub9f8xbgKCffuhVAjTpRP8V9pbnhxelBKeLmESENqTKb60kB5htC4++puzsjfuQ7reEf1hJKp0nZu0kbkuv2kQshySkF/o6+7Mi2bPxxb3KG81om068KUADAB8CieYaF32WO6DWMX6GI1tqfEELfMu9LyHaGeXy4HduPCE1GxeGZVZ0H/ITMHWiWtNujJsn+ZlVm4jxmSfGwBu07LVh/rRM/d20jjo6x5cNbJ8eujc0zJUmEEi1RVsJmez2frRDeBXbxe0hh4BhD1fRvr0AFlTdtJOU0JHJ2JGfSm1Yr9fj8XKD+grTBW971jCsydOjI8srbCqFcasnhwboxpZlcKCQb6CFmxZeKOFEo0DMP9RMAFl/8xOLas46NveAzGKmJlbtcNAi49kVOO6SV8PmB5DjYguHq3Czgwdx4kmUEzfugEySAZW4jk9YgAAAAAAJUIHs5wIG6JAAGlBJgIAACzauMJscRn+wIAAAAABFla")
     >>> if diag2d != expected_string:
     ...     raise ValueError(f"Diff:\n{diff_strings(expected_string, diag2d)}\n base64-encoded output: {compress_string_to_base64(diag2d)}")
     >>> diag2d = clang_format(simple_loop_2D(CoordSystem="SinhSymTP", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, plane="xy"))
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4ANwAchdABfgfJ51OEu5G9+HknfNr147qqTmBC3cI97UzHG9N+QT+ocOVsGYU10j3aThYalczu1S8QtgITDuqHTXU1eapZEQw75OCzSgIofGTPSb4MqSNFlMjWOEYG0I710AGvwqxJmZ+I6L4zF7+PP9FYQ/d9u05L6IMNbDRYe9ph3SaiPkChicl8u/Vm+W3iuoTLsc2OFKVtP8t2ctj+5Ism3MCRN1ayJWME1y2FggLDxEjq7DGxfRhfgm8sS8boaDnAZxBrlKwL4hODHwQgdeNF/okej2WLE7ImUBGfXSrGKTSEBpluwwEffZSDJYHjP/La92PP+Np29gNrKzfUxSKtl/1yJ22RbkRDxffiWDt1z1k8gWNAMjYsGzCgrQFBXg8ffUILaRJs1H9PtWJlOfkeL6KCqW8pJ3YKan/UPfadOCiSuEk4Hp+X47FY+GKXdWkg4abjliDPVrE9gzCZC3lpoVz+XGuh3g1ir2KqB/luykcUtCSwgEjj8lIDYgzlwSIdvDCJ/lvXiSq5sTpza+EtIASZ67N+iqq5B98+3g7sjk2PzD6YGAwJ12YuT6LzMcj09oPouFn3b3QYUJLmhGCtjA8v7xV86PNiMsGQD+TryjJfwT/QAB5APxBgAA6fp3M7HEZ/sCAAAAAARZWg==")
+    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4APOAf9dABfgfIhlMYIN4cUPfyespQRzjUH+1RgEkebsTINj5AD0Ew8BQihsG4xvVIEaWbxkX3iJfpkDOlQAENwZ5pYH87gVaph5MAUkAZEfp+JtAaWbFdmwHpyodWegADbAuSnNidKn5pe3IwsI+doFc8n4j9JL1477t0UHac/0hpu7A5dnrcNg2ueX4Caw+7+MInN/Nab5zUoCpxLj3OK8Hep9zbPnrVQGtMmXlClwnI3oakoIqQNPo5SvIaamYnJfy5Anr2vJtlGDBTYgk70dNqPYMNE2QXL+iReM80EnlTcze+fkO89qlnpN8cJODamsANsDSSq+UGeokPPRtEcN7UHwLAuE394uh7hyfdcwE0WtOH50jDjodOlWrxPAIQLiF3airOTIheQbqJkaRXZcRT3amRSElh5eV5W7QpAh1Wf2teEemYDycl7k9hZvViYf+9INCI1Mqc3TGcMLBoT8F+ANs3wFPRGxEwUf/yBSE8K85+uQYTerPLBy4xJ0upJtm8gdVcjTX7gIWRnxohyfu2/bQE2Yk74pZx8BlK2BdeVmnVp1h6Yt2GQLNi8pDHk3Leyf/QMowCKbMDvnemvNAk9fwTKEygPUKgXgY2/WAszwW7PB0wKHZjUtY77YgCg89lfpEBOMG/kRqdVkTa/B+ajuaVw9PCXEyxUbuq5bONYqxwAAAAB+W+yG0xvoAAGbBM8HAABIfBVqscRn+wIAAAAABFla")
     >>> if diag2d != expected_string:
     ...     raise ValueError(f"Diff:\n{diff_strings(expected_string, diag2d)}\n base64-encoded output: {compress_string_to_base64(diag2d)}")
     """
     pragma = "#pragma omp parallel for\n"
     max_numpts, i012_pts, numpts = max_numpts__i012_pts__numpts_2D(CoordSystem, plane)
 
-    out_string = f"""// Output data in {plane}-plane in {CoordSystem} coordinates.
+    out_string = f"""// Define points for output along the {plane}-plane in {CoordSystem} coordinates.
 const int numpts_i0={numpts[0]}, numpts_i1={numpts[1]}, numpts_i2={numpts[2]};
 int i0_pts[numpts_i0], i1_pts[numpts_i1], i2_pts[numpts_i2];
 """
@@ -576,14 +577,15 @@ int i0_pts[numpts_i0], i1_pts[numpts_i1], i2_pts[numpts_i2];
             for j, pt in enumerate(i012_pts[i]):
                 out_string += f"i{i}_pts[{j}] = (int)({sp.ccode(pt)});\n"
 
-    out_string += """// Main loop:
+    out_string += """// Main loop to store data points in the specified plane
 LOOP_NOOMP(i0_pt,0,numpts_i0, i1_pt,0,numpts_i1, i2_pt,0,numpts_i2) {
   const int i0 = i0_pts[i0_pt], i1 = i1_pts[i1_pt], i2 = i2_pts[i2_pt];
   const int idx3 = IDX3(i0, i1, i2);
   REAL xCart[3];
   xx_to_Cart(commondata, params, xx, i0, i1, i2, xCart);
 """
-    out_string += "{"
+    out_string += "{\n"
+    out_string += "// Collect diagnostic data\n"
     for key, value in out_quantities_dict.items():
         out_string += f"const {key[0]} {key[1]} = {value};\n"
     out_string += 'fprintf(outfile, "%.15e %.15e '
