@@ -212,7 +212,7 @@ def simple_loop_1D(
     axis: str = "z",
 ) -> Tuple[str, str]:
     r"""
-    Generates a C code snippet to output data along a specified axis in a given coordinate system.
+    Generate a C code snippet to output data along a specified axis in a given coordinate system.
     The generated code includes a loop that considers the points closest to the specified axis
     in the provided coordinate system.
 
@@ -405,7 +405,7 @@ def simple_loop_2D(
     plane: str = "yz",
 ) -> str:
     r"""
-    Generates a C code snippet to output data in a specified 2D plane within a given coordinate system.
+    Generate a C code snippet to output data in a specified 2D plane within a given coordinate system.
     The generated code includes a loop that considers the points closest to the specified plane
     in the provided coordinate system.
 
