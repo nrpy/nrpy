@@ -38,7 +38,7 @@ def register_CFunction_numerical_grid_params_Nxx_dxx_xx(
     CoordSystem: str, Nxx_dict: Dict[str, List[int]]
 ) -> None:
     """
-    Register a C function to Set up a cell-centered grid of size grid_physical_size.
+    Register a C function to set up a cell-centered grid of size grid_physical_size.
        Set params: Nxx, Nxx_plus_2NGHOSTS, dxx, invdxx, and xx.
 
     :param CoordSystem: The coordinate system used for the simulation.

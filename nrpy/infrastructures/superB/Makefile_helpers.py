@@ -55,7 +55,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     :param include_dirs: List of include directories. Must be a list.
 
     :raises TypeError: If addl_CFLAGS or include_dirs are not lists.
-    :raises ValueError: If addl_CFLAGS or addl_libraries are specified incorrectly, or if if OS unsupported.
+    :raises ValueError: If addl_CFLAGS or addl_libraries are specified incorrectly, or if OS unsupported.
     """
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)

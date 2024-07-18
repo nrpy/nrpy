@@ -420,7 +420,7 @@ def register_CFunction_MoL_step_forward_in_time(
     :raises ValueError: If unsupported Butcher table specified since adaptive RK steps are not implemented in MoL.
 
     Doctest:
-    >>> import nrpy.c_function as cfc, json
+    >>> import nrpy.c_function as cfc
     >>> from nrpy.infrastructures.BHaH.MoLtimestepping.MoL import register_CFunction_MoL_step_forward_in_time
     >>> from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import (
     ...     generate_Butcher_tables,
