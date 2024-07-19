@@ -111,22 +111,43 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     )
 
 
-def register_CFunction_xx_to_Cart(CoordSystem: str, fp_type: str = "double") -> None:
+def register_CFunction_xx_to_Cart(
+    CoordSystem: str,
+    gridding_approach: str = "independent grid(s)",
+    fp_type: str = "double",
+) -> None:
     """
-    Register a C function to convert arbitrary NRPy+ coordinates to Cartesian coordinates.
+    Convert uniform-grid coordinate (xx[0], xx[1], xx[2]) to the corresponding Cartesian coordinate.
 
     :param CoordSystem: The coordinate system name as a string.
+    :param gridding_approach: Choices: "independent grid(s)" (default) or "multipatch".
     :param fp_type: Floating point type, e.g., "double".
+
+    :raises ValueError: If an invalid gridding_approach is provided.
     """
-    # Arbitrary-coordinate NRPy+ file output, Part 1: output the conversion from (x0,x1,x2) to Cartesian (x,y,z)
-    # Suppose grid origin is at 1,1,1. Then the Cartesian gridpoint at 1,2,3 will be 2,3,4; hence
-    # the xx_to_Cart[i]+gri.Cart_origin[i] below:
+    if gridding_approach not in {"independent grid(s)", "multipatch"}:
+        raise ValueError(
+            "Invalid value for 'gridding_approach'. Must be 'independent grid(s)' or 'multipatch'."
+        )
+
+    # Description of the conversion process
+    desc = """Compute Cartesian coordinates given local grid coordinates (xx0,xx1,xx2),
+              accounting for the possibility that the origin of this grid is off-center."""
+
+    cfunc_type = "void"
+    name = "xx_to_Cart"
+    params = """const commondata_struct *restrict commondata, const params_struct *restrict params,
+    REAL *restrict xx[3],const int i0,const int i1,const int i2, REAL xCart[3]"""
+
     rfm = refmetric.reference_metric[CoordSystem]
 
+    # ** Code body for the conversion process **
+    # Suppose grid origin is at (1,1,1). Then the Cartesian gridpoint at (1,2,3) will be (2,3,4);
+    # hence the xx_to_Cart[i] + gri.Cart_origin[i] below:
     body = """
-REAL xx0 = xx[0][i0];
-REAL xx1 = xx[1][i1];
-REAL xx2 = xx[2][i2];
+const REAL xx0 = xx[0][i0];
+const REAL xx1 = xx[1][i1];
+const REAL xx2 = xx[2][i2];
 """ + ccg.c_codegen(
         [
             rfm.xx_to_Cart[0] + gri.Cart_origin[0],
@@ -137,14 +158,14 @@ REAL xx2 = xx[2][i2];
         fp_type=fp_type,
     )
 
+    # Register the C function with the provided details
     cfc.register_CFunction(
         includes=["BHaH_defines.h"],
-        desc="Compute Cartesian coordinates given local grid coordinate (xx0,xx1,xx2), "
-        "  accounting for the origin of this grid being possibly off-center.",
-        cfunc_type="void",
+        desc=desc,
+        cfunc_type=cfunc_type,
         CoordSystem_for_wrapper_func=CoordSystem,
-        name="xx_to_Cart",
-        params="const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3],const int i0,const int i1,const int i2, REAL xCart[3]",
+        name=name,
+        params=params,
         include_CodeParameters_h=True,
         body=body,
     )
