@@ -26,8 +26,9 @@ par.register_param(py_type=int, module=__name__, name="fd_order", value=4)
 
 #  Define the to-be-inverted matrix, A.
 #  We define A row-by-row, according to the prescription
-#  derived in notes/notes.pdf, via the following pattern
-#  that applies for arbitrary order.
+#  derived in
+#  https://github.com/zachetienne/nrpytutorial/blob/master/Tutorial-How_NRPy_Computes_Finite_Difference_Coeffs.ipynb
+#  via the following pattern that applies for arbitrary order.
 #
 #  As an example, consider a 5-point finite difference
 #  stencil (4th-order accurate), where we wish to compute
