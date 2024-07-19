@@ -236,7 +236,7 @@ def register_CFunction_numerical_grids_and_timestep(
 
     :param list_of_CoordSystems: List of CoordSystems
     :param list_of_grid_physical_sizes: List of grid_physical_size for each CoordSystem; needed for Independent grids.
-    :param gridding_approach: Choices: "independent grid(s)" or "multipatch"
+    :param gridding_approach: Choices: "independent grid(s)" (default) or "multipatch".
     :param enable_rfm_precompute: Whether to enable reference metric precomputation (default: False).
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions (default: False).
 
@@ -370,7 +370,7 @@ def register_CFunctions(
     :param list_of_CoordSystems: List of CoordSystems
     :param list_of_grid_physical_sizes: List of grid_physical_size for each CoordSystem; needed for Independent grids.
     :param Nxx_dict: Dictionary containing number of grid points.
-    :param gridding_approach: Choices: "independent grid(s)" or "multipatch"
+    :param gridding_approach: Choices: "independent grid(s)" (default) or "multipatch".
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions.
     :param fp_type: Floating point type, e.g., "double".

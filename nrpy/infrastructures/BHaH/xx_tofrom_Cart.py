@@ -16,18 +16,30 @@ import nrpy.reference_metric as refmetric
 def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     CoordSystem: str,
     relative_to: str = "local_grid_center",
+    gridding_approach: str = "independent grid(s)",
     fp_type: str = "double",
 ) -> None:
     """
-    Construct a C function that maps from Cartesian coordinates to xx for the chosen coordinate system.
-    Registers the C function for later use.
+    Construct and register a C function that maps Cartesian coordinates to xx and finds the nearest grid indices.
 
-    :param CoordSystem: The coordinate system to use.
-    :param relative_to: Whether the computation is relative to the "local_grid_center" or "global_grid_center".
+    This function generates a C function which, given Cartesian coordinates (x, y, z),
+    computes the corresponding (xx0, xx1, xx2) coordinates and determines the "closest"
+    grid indices (i0, i1, i2) for the specified coordinate system. The C function is
+    then registered for later use.
+
+    :param CoordSystem: The coordinate system for the local grid patch.
+    :param relative_to: Whether the computation is relative to the "local_grid_center"
+                        (default) or "global_grid_center".
+    :param gridding_approach: Choices: "independent grid(s)" (default) or "multipatch".
     :param fp_type: Floating point type, e.g., "double".
-
-    :raises ValueError: When the value of `relative_to` is not "local_grid_center" or "global_grid_center".
+    :raises ValueError: When the value of `gridding_approach` is not "independent grid(s)"
+                        or "multipatch".
     """
+    if gridding_approach not in {"independent grid(s)", "multipatch"}:
+        raise ValueError(
+            "Invalid value for 'gridding_approach'. Must be 'independent grid(s)' or 'multipatch'."
+        )
+
     rfm = refmetric.reference_metric[CoordSystem]
     prefunc = ""
     desc = """Given Cartesian point (x,y,z), this function outputs the corresponding
@@ -37,27 +49,22 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     name = f"Cart_to_xx_and_nearest_i0i1i2{namesuffix}"
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xCart[3], REAL xx[3], int Cart_to_i0i1i2[3]"
 
-    body = ""
+    body = """
+  // Set (Cartx, Carty, Cartz) relative to the global (as opposed to local) grid.
+  //   This local grid may be offset from the origin by adjusting
+  //   (Cart_originx, Cart_originy, Cart_originz) to nonzero values.
+  REAL Cartx = xCart[0];
+  REAL Carty = xCart[1];
+  REAL Cartz = xCart[2];
+"""
     if relative_to == "local_grid_center":
         body += """
-  // See comments for description on how coordinates are computed relative to the local grid center.
-  const REAL Cartx = xCart[0] - Cart_originx;
-  const REAL Carty = xCart[1] - Cart_originy;
-  const REAL Cartz = xCart[2] - Cart_originz;
+  // Set the origin, (Cartx, Carty, Cartz) = (0, 0, 0), to the center of the local grid patch.
+  Cartx -= Cart_originx;
+  Carty -= Cart_originy;
+  Cartz -= Cart_originz;
+  {
 """
-    elif relative_to == "global_grid_center":
-        body += """
-  // Coordinates are global and no transformation is needed.
-  const REAL Cartx = xCart[0];
-  const REAL Carty = xCart[1];
-  const REAL Cartz = xCart[2];
-"""
-    else:
-        raise ValueError(
-            f"Error: relative_to must be set to either local_grid_center or global_grid_center.\n"
-            f"{relative_to} was chosen."
-        )
-
     if "theta_adj" in CoordSystem:
         body += ccg.c_codegen(
             [rfm.Cart_to_xx[0], rfm.Cart_to_xx[1], rfm.Cart_to_xx[2]],
@@ -74,13 +81,23 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
             fp_type=fp_type,
         )
 
-    body += f"""
-  // Then find the nearest index (i0,i1,i2) on underlying grid to (x,y,z)
-  Cart_to_i0i1i2[0] = (int)( ( xx[0] - ({rfm.xxmin[0]})) / params->dxx0 + 0.5 + NGHOSTS - 0.5 ); // Account for (int) typecast rounding down
-  Cart_to_i0i1i2[1] = (int)( ( xx[1] - ({rfm.xxmin[1]})) / params->dxx1 + 0.5 + NGHOSTS - 0.5 ); // Account for (int) typecast rounding down
-  Cart_to_i0i1i2[2] = (int)( ( xx[2] - ({rfm.xxmin[2]})) / params->dxx2 + 0.5 + NGHOSTS - 0.5 ); // Account for (int) typecast rounding down
+    body += """
+      // Find the nearest grid indices (i0, i1, i2) for the given Cartesian coordinates (x, y, z).
+      // Assuming a cell-centered grid, which follows the pattern:
+      //   xx0[i0] = params->xxmin0 + ((REAL)(i0 - NGHOSTS) + 0.5) * params->dxx0
+      // The index i0 can be derived as:
+      //   i0 = (xx0[i0] - params->xxmin0) / params->dxx0 - 0.5 + NGHOSTS
+      // Now, including typecasts:
+      //   i0 = (int)((xx[0] - params->xxmin0) / params->dxx0 - 0.5 + (REAL)NGHOSTS)
+      // The (int) typecast always rounds down, so we add 0.5 inside the outer parenthesis:
+      //   i0 = (int)((xx[0] - params->xxmin0) / params->dxx0 - 0.5 + (REAL)NGHOSTS + 0.5)
+      // The 0.5 values cancel out:
+      //   i0 =           (int)( ( xx[0] - params->xxmin0 ) / params->dxx0 + (REAL)NGHOSTS )
+      Cart_to_i0i1i2[0] = (int)( ( xx[0] - params->xxmin0 ) / params->dxx0 + (REAL)NGHOSTS );
+      Cart_to_i0i1i2[1] = (int)( ( xx[1] - params->xxmin1 ) / params->dxx1 + (REAL)NGHOSTS );
+      Cart_to_i0i1i2[2] = (int)( ( xx[2] - params->xxmin2 ) / params->dxx2 + (REAL)NGHOSTS );
+  }
 """
-
     cfc.register_CFunction(
         includes=["BHaH_defines.h"],
         prefunc=prefunc,
