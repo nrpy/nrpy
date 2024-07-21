@@ -281,7 +281,7 @@ def register_CFunction_numerical_grids_and_timestep(
                 "REAL",
                 __name__,
                 f"cumulative_regrid_{dirn}hatU[3]",
-                0,
+                "unset",  # Set below in C code when calling_for_first_time.
                 commondata=True,
                 add_to_parfile=False,
                 add_to_set_CodeParameters_h=False,

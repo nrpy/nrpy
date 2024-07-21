@@ -87,16 +87,15 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
                     if "char" in CPtype and "[" in CPtype and "]" in CPtype:
                         chararray_size = CPtype.split("[")[1].replace("]", "")
                         c_output = f'snprintf({struct}->{parname}, {chararray_size}, "{defaultval}");{comment}\n'
-                        struct_list.append(c_output)
                     elif isinstance(defaultval, (bool, int, float)) or (
                         CPtype == "REAL" and isinstance(defaultval, str)
                     ):
                         c_output = f"{struct}->{parname} = {str(defaultval).lower()};{comment}\n"
-                        struct_list.append(c_output)
                     else:
                         raise ValueError(
                             f"{CodeParam.defaultvalue} is not a valid default value type ({type(CodeParam.defaultvalue)}), for parameter {CodeParam.module}::{parname}, commondata = {CodeParam.commondata}"
                         )
+                    struct_list.append(c_output)
 
         # Sort the lines alphabetically and join them with line breaks
         body = ""
