@@ -8,6 +8,7 @@ Emails: ksible *at* outlook *dot** com
 """
 
 import shutil
+import sys
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
@@ -828,7 +829,6 @@ def copy_simd_intrinsics_h(project_dir: str) -> None:
 
 if __name__ == "__main__":
     import doctest
-    import sys
 
     results = doctest.testmod()
 
