@@ -802,22 +802,28 @@ def copy_simd_intrinsics_h(project_dir: str) -> None:
     simd_path.mkdir(parents=True, exist_ok=True)
 
     try:
-        # only Python 3.7+ has importlib.resources, and only Python 3.9+ has importlib.resources.files()
-        import importlib.resources  # pylint: disable=E1101,C0415
+        # Only Python 3.9+ has importlib.resources.files()
+        if sys.version_info >= (3, 9):
+            import importlib.resources  # pylint: disable=E1101,C0415
+            from importlib.abc import Traversable
 
-        source_path = (
-            # pylint: disable=E1101
-            importlib.resources.files("nrpy.helpers")
-            / "simd_intrinsics.h"
-        )
-        shutil.copy(str(source_path), str(simd_path))
+            source_path: Traversable = (
+                importlib.resources.files("nrpy.helpers") / "simd_intrinsics.h"
+            )
+            shutil.copy(str(source_path), str(simd_path))
+        else:
+            raise ImportError("Using fallback for importlib.resources")
     except (ImportError, AttributeError):
         # Fallback for versions without importlib.resources or importlib.resources.files()
-        # pylint: disable=E1101,C0415
-        from pkg_resources import resource_filename  # type: ignore
+        try:
+            from pkg_resources import resource_filename
 
-        source_path = resource_filename("nrpy.helpers", "simd_intrinsics.h")
-        shutil.copy(source_path, str(simd_path))  # type: ignore
+            source_path_str: str = resource_filename(
+                "nrpy.helpers", "simd_intrinsics.h"
+            )
+            shutil.copy(source_path_str, str(simd_path))
+        except ImportError as e:
+            raise ImportError("pkg_resources is not available") from e
 
 
 if __name__ == "__main__":

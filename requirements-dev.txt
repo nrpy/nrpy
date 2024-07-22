@@ -13,4 +13,5 @@ pydocstyle
 pylint
 setuptools
 sympy
+types-setuptools
 typing-extensions
