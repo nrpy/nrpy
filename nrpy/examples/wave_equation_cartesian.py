@@ -28,7 +28,7 @@ from nrpy.equations.wave_equation.WaveEquation_RHSs import WaveEquation_RHSs
 from nrpy.equations.wave_equation.WaveEquation_Solutions_InitialData import (
     WaveEquation_solution_Cartesian,
 )
-from nrpy.helpers import simd
+from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import griddata_commondata
 from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
 
@@ -475,7 +475,12 @@ griddata_commondata.register_CFunction_griddata_free(
 
 
 if enable_simd:
-    simd.copy_simd_intrinsics_h(project_dir=project_dir)
+    copy_files(
+        package="nrpy.helpers",
+        filenames_list=["simd_intrinsics.h"],
+        project_dir=project_dir,
+        subdirectory="simd",
+    )
 
 
 Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(

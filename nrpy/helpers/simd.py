@@ -7,9 +7,7 @@ Emails: ksible *at* outlook *dot** com
         zachetie *at* gmail *dot** com
 """
 
-import shutil
 import sys
-from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
 from sympy import (
@@ -36,14 +34,6 @@ from sympy import (
     sympify,
     var,
 )
-
-# Try to import the 'files' function from 'importlib.resources' for Python 3.9 and newer versions.
-# This provides a consistent API for accessing package resources.
-try:
-    from importlib.resources import files as resource_files  # Python 3.9 and newer
-except ImportError:
-    # Fallback to 'importlib_resources' for older Python versions (pre-3.9) to maintain compatibility.
-    from importlib_resources import files as resource_files
 
 from nrpy.helpers.cse_preprocess_postprocess import cse_preprocess
 from nrpy.helpers.expr_tree import ExprTree
@@ -792,25 +782,6 @@ def expr_convert_to_simd_intrins(
         )
 
     return expr
-
-
-def copy_simd_intrinsics_h(project_dir: str) -> None:
-    """
-    Copy simd_intrinsics.h into the specified project directory.
-
-    This function copies the simd_intrinsics.h file from the 'nrpy.helpers' package to a specified path.
-
-    :param project_dir: The path of the project directory where the file will be copied.
-    """
-    simd_path = Path(project_dir) / "simd"
-    simd_path.mkdir(parents=True, exist_ok=True)
-
-    package = "nrpy.helpers"
-    header_file = "simd_intrinsics.h"
-
-    # Use the previously determined files function for resource access
-    source_path = resource_files(package) / header_file
-    shutil.copy(str(source_path), str(simd_path / header_file))
 
 
 if __name__ == "__main__":

@@ -26,7 +26,7 @@ from nrpy.equations.wave_equation.WaveEquation_RHSs import WaveEquation_RHSs
 from nrpy.equations.wave_equation.WaveEquation_Solutions_InitialData import (
     WaveEquation_solution_Cartesian,
 )
-from nrpy.helpers import simd
+from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.CarpetX import (
     CodeParameters,
     interface_ccl,
@@ -392,8 +392,12 @@ for thorn in [evol_thorn_name, ID_thorn_name, diag_thorn_name]:
     make_code_defn.output_CFunctions_and_construct_make_code_defn(
         project_dir=project_dir, thorn_name=thorn
     )
-simd.copy_simd_intrinsics_h(
-    project_dir=str(Path(project_dir) / evol_thorn_name / "src")
+
+copy_files(
+    package="nrpy.helpers",
+    filenames_list=["simd_intrinsics.h"],
+    project_dir=str(Path(project_dir) / evol_thorn_name / "src"),
+    subdirectory="simd",
 )
 
 simd_name = str(

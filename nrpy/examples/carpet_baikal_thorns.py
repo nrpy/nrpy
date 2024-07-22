@@ -17,7 +17,7 @@ from typing import List
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
-from nrpy.helpers import simd
+from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.ETLegacy import (
     MoL_registration,
     Symmetry_registration,
@@ -250,8 +250,11 @@ EXTENDS CCTK_KEYWORD dtlapse_evolution_method "dtlapse_evolution_method"
         project_dir=project_dir, thorn_name=evol_thorn_name
     )
 
-    simd.copy_simd_intrinsics_h(
-        project_dir=str(Path(project_dir) / evol_thorn_name / "src")
+    copy_files(
+        package="nrpy.helpers",
+        filenames_list=["simd_intrinsics.h"],
+        project_dir=str(Path(project_dir) / evol_thorn_name / "src"),
+        subdirectory="simd",
     )
 
     simd_name = str(

@@ -9,9 +9,19 @@ Author: Zachariah B. Etienne
 import base64
 import hashlib
 import lzma
+import shutil
 import subprocess
 from difflib import ndiff
+from pathlib import Path
 from typing import Any, List, cast
+
+# Try to import the 'files' function from 'importlib.resources' for Python 3.9 and newer versions.
+# This provides a consistent API for accessing package resources.
+try:
+    from importlib.resources import files as resource_files  # Python 3.9 and newer
+except ImportError:
+    # Fallback to 'importlib_resources' for older Python versions (pre-3.9) to maintain compatibility.
+    from importlib_resources import files as resource_files
 
 from nrpy.helpers.cached_functions import is_cached, read_cached, write_cached
 
@@ -191,6 +201,32 @@ def decompress_base64_to_string(input_base64: str) -> str:
     decompressed_data = lzma.decompress(base64_decoded)
 
     return decompressed_data.decode()
+
+
+def copy_files(
+    package: str, filenames_list: List[str], project_dir: str, subdirectory: str
+) -> None:
+    """
+    Copy specified files into a specified subdirectory of the project directory.
+
+    This function copies the given files from the specified package to the specified
+    subdirectory within the project directory.
+
+    :param package: The package path where the files are located.
+    :param filenames_list: A list of filenames to be copied.
+    :param project_dir: The path of the project directory where the files will be copied.
+    :param subdirectory: The name of the subdirectory within the project directory.
+    """
+    # Ensure the subdirectory exists or create it if necessary
+    target_subdir = Path(project_dir) / subdirectory
+    target_subdir.mkdir(parents=True, exist_ok=True)
+
+    for filename in filenames_list:
+        # Get the source path of the file within the package
+        source_path = resource_files(package) / filename
+
+        # Copy the file to the specified subdirectory
+        shutil.copy(str(source_path), str(target_subdir / filename))
 
 
 if __name__ == "__main__":

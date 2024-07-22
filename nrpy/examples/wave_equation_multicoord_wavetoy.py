@@ -24,7 +24,7 @@ import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
 import nrpy.infrastructures.BHaH.wave_equation.wave_equation_C_codegen_library as wCl
 import nrpy.params as par
-from nrpy.helpers import simd
+from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import (
     griddata_commondata,
     rfm_precompute,
@@ -183,7 +183,12 @@ griddata_commondata.register_CFunction_griddata_free(
 )
 
 if enable_simd:
-    simd.copy_simd_intrinsics_h(project_dir=project_dir)
+    copy_files(
+        package="nrpy.helpers",
+        filenames_list=["simd_intrinsics.h"],
+        project_dir=project_dir,
+        subdirectory="simd",
+    )
 
 Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,

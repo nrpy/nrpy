@@ -39,10 +39,9 @@ import nrpy.infrastructures.superB.main_chare as superBmain
 import nrpy.infrastructures.superB.Makefile_helpers as superBMakefile
 import nrpy.infrastructures.superB.MoL as superBMoL
 import nrpy.infrastructures.superB.numerical_grids as superBnumericalgrids
-import nrpy.infrastructures.superB.superB.superB_lib as superBl
 import nrpy.infrastructures.superB.timestepping_chare as superBtimestepping
 import nrpy.params as par
-from nrpy.helpers import simd
+from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import rfm_precompute, rfm_wrapper_functions
 
 par.set_parval_from_str("Infrastructure", "BHaH")
@@ -248,8 +247,12 @@ cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
     project_name=project_name, cmdline_inputs=["convergence_factor"]
 )
 
-superBl.copy_superB_header_files(superB_Path=Path(project_dir) / "superB")
-
+copy_files(
+    package="nrpy.infrastructures.superB.superB",
+    filenames_list=["superB.h"],
+    project_dir=project_dir,
+    subdirectory="superB",
+)
 
 superBmain.output_commondata_object_h_and_main_h_cpp_ci(
     project_dir=project_dir,
@@ -270,7 +273,12 @@ Bdefines_h.output_BHaH_defines_h(
 )
 
 if enable_simd:
-    simd.copy_simd_intrinsics_h(project_dir=project_dir)
+    copy_files(
+        package="nrpy.helpers",
+        filenames_list=["simd_intrinsics.h"],
+        project_dir=project_dir,
+        subdirectory="simd",
+    )
 
 superBMakefile.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,

@@ -37,7 +37,7 @@ import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
 import nrpy.infrastructures.BHaH.special_functions.spin_weight_minus2_spherical_harmonics as swm2sh
 import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xxCartxx
 import nrpy.params as par
-from nrpy.helpers import simd
+from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import (
     griddata_commondata,
     rfm_precompute,
@@ -305,7 +305,12 @@ cmdpar.generate_default_parfile(project_dir=project_dir, project_name=project_na
 cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
     project_name=project_name, cmdline_inputs=["convergence_factor"]
 )
-TPl.copy_TwoPunctures_header_files(TwoPunctures_Path=Path(project_dir) / "TwoPunctures")
+copy_files(
+    package="nrpy.infrastructures.BHaH.general_relativity.TwoPunctures",
+    filenames_list=["TwoPunctures.h", "TP_utilities.h"],
+    project_dir=project_dir,
+    subdirectory="TwoPunctures",
+)
 Bdefines_h.output_BHaH_defines_h(
     additional_includes=[str(Path("TwoPunctures") / Path("TwoPunctures.h"))],
     project_dir=project_dir,
@@ -330,7 +335,12 @@ griddata_commondata.register_CFunction_griddata_free(
 )
 
 if enable_simd:
-    simd.copy_simd_intrinsics_h(project_dir=project_dir)
+    copy_files(
+        package="nrpy.helpers",
+        filenames_list=["simd_intrinsics.h"],
+        project_dir=project_dir,
+        subdirectory="simd",
+    )
 
 Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
