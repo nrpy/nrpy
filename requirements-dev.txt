@@ -1,11 +1,11 @@
 appdirs
 black==24.4.2
-clang-format==18.1.7
+clang-format==18.1.8
 darglint
 ipython
 isort
 multiprocess
-mypy==1.10.0
+mypy==1.11.0
 nrpypn
 nrpylatex
 py-cpuinfo

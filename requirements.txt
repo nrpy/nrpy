@@ -1,4 +1,5 @@
 appdirs
+clang-format==18.1.8
 importlib_resources
 multiprocess
 nrpypn
