@@ -802,7 +802,7 @@ def copy_simd_intrinsics_h(project_dir: str) -> None:
         # Only Python 3.9+ has importlib.resources.files()
         if sys.version_info >= (3, 9):
             import importlib.resources  # pylint: disable=E1101,C0415
-            from importlib.abc import Traversable  # pylint: disable=C0415,W4904
+            from importlib.abc import Traversable  # pylint: disable=E0012,C0415,W4904
 
             source_path: Traversable = (
                 importlib.resources.files("nrpy.helpers") / "simd_intrinsics.h"

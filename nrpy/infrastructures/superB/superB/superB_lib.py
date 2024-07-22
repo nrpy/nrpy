@@ -25,7 +25,7 @@ def copy_superB_header_files(superB_Path: Path) -> None:
         # Only Python 3.9+ has importlib.resources.files()
         if sys.version_info >= (3, 9):
             import importlib.resources  # pylint: disable=E1101,C0415
-            from importlib.abc import Traversable  # pylint: disable=C0415,W4904
+            from importlib.abc import Traversable  # pylint: disable=E0012,C0415,W4904
 
             for header_file in ["superB.h"]:
                 source_path: Traversable = (
