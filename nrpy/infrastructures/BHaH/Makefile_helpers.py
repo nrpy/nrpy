@@ -191,6 +191,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
 
     # Below code is responsible for either writing a Makefile or a backup shell script depending on the conditions
     Makefile_str = f"""CC ?= {CC}  # assigns the value CC to {CC} only if environment variable CC is not already set
+ENABLE_VALGRIND ?= no
 {CFLAGS_str}
 {INCLUDEDIRS_str}
 {LDFLAGS_str}
