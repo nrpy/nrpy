@@ -93,7 +93,7 @@ def register_CFunction_griddata_free(
 except perhaps non_y_n_gfs (e.g., after a regrid, in which non_y_n_gfs are freed first)."""
     cfunc_type = "void"
     name = "griddata_free"
-    params = "const commondata_struct *restrict commondata, griddata_struct *restrict griddata, const bool enable_free_non_y_n_gfs"
+    params = "const commondata_struct *restrict commondata, griddata_struct *restrict griddata, const bool free_non_y_n_gfs_and_core_griddata_pointers"
     body = r"""for(int grid=0;grid<commondata->NUMGRIDS;grid++) {
 """
     if enable_rfm_precompute:
@@ -106,11 +106,12 @@ except perhaps non_y_n_gfs (e.g., after a regrid, in which non_y_n_gfs are freed
     body += r"""
 
   MoL_free_memory_y_n_gfs(&griddata[grid].gridfuncs);
-  if(enable_free_non_y_n_gfs)
+  if(free_non_y_n_gfs_and_core_griddata_pointers)
+      MoL_free_memory_non_y_n_gfs(&griddata[grid].gridfuncs);
   for(int i=0;i<3;i++) free(griddata[grid].xx[i]);
 } // END for(int grid=0;grid<commondata->NUMGRIDS;grid++)
 """
-    body += "free(griddata);\n"
+    body += "if(free_non_y_n_gfs_and_core_griddata_pointers) free(griddata);\n"
     cfc.register_CFunction(
         includes=["BHaH_defines.h", "BHaH_function_prototypes.h"],
         desc=desc,

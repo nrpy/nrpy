@@ -183,8 +183,8 @@ while(commondata.time < commondata.t_final) { // Main loop to progress forward i
 
 // Step 6: Free all allocated memory
 {
-  const bool enable_free_non_y_n_gfs=true;
-  griddata_free(&commondata, griddata, enable_free_non_y_n_gfs);
+  const bool free_non_y_n_gfs_and_core_griddata_pointers=true;
+  griddata_free(&commondata, griddata, free_non_y_n_gfs_and_core_griddata_pointers);
 }
 return 0;
 """
