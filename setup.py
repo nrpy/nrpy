@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 from typing import List
 
-from setuptools import find_packages, setup  # type: ignore
+from setuptools import find_packages, setup
 
 # pylint: disable=consider-using-f-string
 
