@@ -13,8 +13,6 @@ import subprocess
 from pathlib import Path
 from typing import List, Optional
 
-import cpuinfo  # type: ignore
-
 from nrpy.c_function import CFunction_dict
 from nrpy.helpers.generic import clang_format
 
@@ -146,58 +144,12 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         raise FileNotFoundError(f"{CC} C compiler is not found")
 
     CFLAGS_dict = {
-        "default": "-O2 -march=native -g -Wall -Wno-unused-variable",
+        "default": "-std=gnu99 -O2 -march=native -g -Wall -Wno-unused-variable",
         # FASTCFLAGS: -O3 causes AVX-2+ SIMD optimizations to be used on MoL update loops. -O2 drops to SSE2
-        "fast": "-O3 -funroll-loops -march=native -g -Wall -Wno-unused-variable -std=gnu99",
+        "fast": "-std=gnu99 -O3 -funroll-loops -march=native -g -Wall -Wno-unused-variable",
         # DEBUGCFLAGS: OpenMP requires -fopenmp, and when disabling -fopenmp, unknown pragma warnings appear. -Wunknown-pragmas silences these warnings
-        "debug": "-O2 -g -Wall -Wno-unused-variable -Wno-unknown-pragmas",
+        "debug": "-std=gnu99 -O2 -g -Wall -Wno-unused-variable -Wno-unknown-pragmas",
     }
-
-    if CC == "gcc":
-        cpu_info = cpuinfo.get_cpu_info()
-        if "flags" in cpu_info:
-            if any("avx512" in flag for flag in cpu_info["flags"]):
-                # Experiment:
-                # if cpu_info.get("l2_cache_size"):
-                #     try:
-                #         l2_cache_size_KB = int(
-                #             int(cpu_info.get("l2_cache_size")) / 1024
-                #         )
-                #         for key, value in CFLAGS_dict.items():
-                #             CFLAGS_dict[
-                #                 key
-                #             ] += f" --param l2-cache-size={l2_cache_size_KB}"
-                #     except ValueError:
-                #         # Sometimes cpu_info.get("l2_cache_size") returns a value that has explicit units, like 2.5MiB,
-                #         #  ignore these cases
-                #         pass
-
-                # -march=native hangs when using GCC on
-                avx512_features = [
-                    "avx512f",
-                    "avx512pf",
-                    "avx512er",
-                    "avx512cd",
-                    "avx512vl",
-                    "avx512bw",
-                    "avx512dq",
-                    "avx512ifma",
-                    "avx512vbmi",
-                ]
-                # manually add the avx-512 featureset
-                avx512_compileflags = ""
-                for feature in avx512_features:
-                    if any(
-                        flag.replace("_", "") == feature for flag in cpu_info["flags"]
-                    ):
-                        avx512_compileflags += f"-m{feature} "
-                for key, value in CFLAGS_dict.items():
-                    CFLAGS_dict[key] = CFLAGS_dict[key].replace(
-                        "-march=native", avx512_compileflags
-                    )
-
-        for key in CFLAGS_dict:
-            CFLAGS_dict[key] += " -std=gnu99"
 
     if addl_CFLAGS is not None:
         if not isinstance(addl_CFLAGS, list):
@@ -223,9 +175,9 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     LDFLAGS_str += " -lm"
 
     CFLAGS_str = f"CFLAGS = {CFLAGS_dict[compiler_opt_option]}\n"
-    del CFLAGS_dict[compiler_opt_option]
-    for value in CFLAGS_dict.values():
-        CFLAGS_str += f"#CFLAGS = {value}\n"
+    for key, value in CFLAGS_dict.items():
+        if key != compiler_opt_option:
+            CFLAGS_str += f"#CFLAGS = {value}\n"
 
     INCLUDEDIRS_str = "INCLUDEDIRS ="
     if include_dirs is not None:
@@ -243,13 +195,18 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
 {INCLUDEDIRS_str}
 {LDFLAGS_str}
 
-# Check for OpenMP support
-OPENMP_FLAG = -fopenmp
-COMPILER_SUPPORTS_OPENMP := $(shell echo | $(CC) $(OPENMP_FLAG) -E - >/dev/null 2>&1 && echo YES || echo NO)
+# Set valgrind-friendly CFLAGS if ENABLE_VALGRIND
+ifeq ($(ENABLE_VALGRIND),yes)
+    CFLAGS = {CFLAGS_dict['default']}
+else
+    # Check for OpenMP support
+    OPENMP_FLAG = -fopenmp
+    COMPILER_SUPPORTS_OPENMP := $(shell echo | $(CC) $(OPENMP_FLAG) -E - >/dev/null 2>&1 && echo YES || echo NO)
 
-ifeq ($(COMPILER_SUPPORTS_OPENMP), YES)
-    CFLAGS += $(OPENMP_FLAG)
-    LDFLAGS += $(OPENMP_FLAG)  # -lgomp does not work with clang in termux
+    ifeq ($(COMPILER_SUPPORTS_OPENMP), YES)
+        CFLAGS += $(OPENMP_FLAG)
+        LDFLAGS += $(OPENMP_FLAG)  # -lgomp does not work with clang in termux
+    endif
 endif
 
 {OBJ_FILES_str}

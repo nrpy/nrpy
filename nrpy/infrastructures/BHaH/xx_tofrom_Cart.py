@@ -42,8 +42,11 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
 
     rfm = refmetric.reference_metric[CoordSystem]
     prefunc = ""
-    desc = """Given Cartesian point (x,y,z), this function outputs the corresponding
-  (xx0,xx1,xx2) and the "closest" (i0,i1,i2) for the given grid"""
+    desc = "Given Cartesian point (x,y,z), this function "
+    if gridding_approach == "multipatch":
+        desc += "does stuff needed for multipatch, and then "
+    desc += """unshifts the grid back to the origin to output the corresponding
+            (xx0,xx1,xx2) and the "closest" (i0,i1,i2) for the given grid"""
 
     namesuffix = f"_{relative_to}" if relative_to == "global_grid_center" else ""
     name = f"Cart_to_xx_and_nearest_i0i1i2{namesuffix}"
