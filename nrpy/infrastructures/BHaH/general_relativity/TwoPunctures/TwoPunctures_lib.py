@@ -10,11 +10,12 @@ Author: Zachariah B. Etienne
 import shutil
 from pathlib import Path
 
-# Attempt to determine the correct files function to use based on Python version
+# Try to import the 'files' function from 'importlib.resources' for Python 3.9 and newer versions.
+# This provides a consistent API for accessing package resources.
 try:
     from importlib.resources import files as resource_files  # Python 3.9 and newer
 except ImportError:
-    # Fallback for older Python versions: use the backport
+    # Fallback to 'importlib_resources' for older Python versions (pre-3.9) to maintain compatibility.
     from importlib_resources import files as resource_files
 
 from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import (

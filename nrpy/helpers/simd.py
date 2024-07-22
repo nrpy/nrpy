@@ -37,6 +37,14 @@ from sympy import (
     var,
 )
 
+# Try to import the 'files' function from 'importlib.resources' for Python 3.9 and newer versions.
+# This provides a consistent API for accessing package resources.
+try:
+    from importlib.resources import files as resource_files  # Python 3.9 and newer
+except ImportError:
+    # Fallback to 'importlib_resources' for older Python versions (pre-3.9) to maintain compatibility.
+    from importlib_resources import files as resource_files
+
 from nrpy.helpers.cse_preprocess_postprocess import cse_preprocess
 from nrpy.helpers.expr_tree import ExprTree
 
@@ -790,37 +798,19 @@ def copy_simd_intrinsics_h(project_dir: str) -> None:
     """
     Copy simd_intrinsics.h into the specified project directory.
 
+    This function copies the simd_intrinsics.h file from the 'nrpy.helpers' package to a specified path.
+
     :param project_dir: The path of the project directory where the file will be copied.
-    :raises ImportError: If the importlib.resources module is not found, indicating
-                         a Python version earlier than 3.7 where this module was introduced,
-                         or if pkg_resources is not available.
     """
     simd_path = Path(project_dir) / "simd"
     simd_path.mkdir(parents=True, exist_ok=True)
 
-    try:
-        # Only Python 3.9+ has importlib.resources.files()
-        if sys.version_info >= (3, 9):
-            import importlib.resources  # pylint: disable=E1101,C0415
-            from importlib.abc import Traversable  # pylint: disable=E0012,C0415,W4904
+    package = "nrpy.helpers"
+    header_file = "simd_intrinsics.h"
 
-            source_path: Traversable = (
-                importlib.resources.files("nrpy.helpers") / "simd_intrinsics.h"
-            )
-            shutil.copy(str(source_path), str(simd_path))
-        else:
-            raise ImportError("Using fallback for importlib.resources")
-    except (ImportError, AttributeError):
-        # Fallback for versions without importlib.resources or importlib.resources.files()
-        try:
-            from pkg_resources import resource_filename  # pylint: disable=C0415
-
-            source_path_str: str = resource_filename(
-                "nrpy.helpers", "simd_intrinsics.h"
-            )
-            shutil.copy(source_path_str, str(simd_path))
-        except ImportError as e:
-            raise ImportError("pkg_resources is not available") from e
+    # Use the previously determined files function for resource access
+    source_path = resource_files(package) / header_file
+    shutil.copy(str(source_path), str(simd_path / header_file))
 
 
 if __name__ == "__main__":
