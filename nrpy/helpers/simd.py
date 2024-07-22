@@ -791,13 +791,9 @@ def copy_simd_intrinsics_h(project_dir: str) -> None:
     Copy simd_intrinsics.h into the specified project directory.
 
     :param project_dir: The path of the project directory where the file will be copied.
-
-    :raise ImportError: If the importlib.resources module is not found, indicating
-                         a Python version earlier than 3.7 where this module was introduced.
-    :raise FileNotFoundError: If the simd_intrinsics.h source file is not found within
-                               the package resources.
-    :raise AttributeError: If the files method is not found in importlib.resources,
-                            indicating a Python version earlier than 3.9.
+    :raises ImportError: If the importlib.resources module is not found, indicating
+                         a Python version earlier than 3.7 where this module was introduced,
+                         or if pkg_resources is not available.
     """
     simd_path = Path(project_dir) / "simd"
     simd_path.mkdir(parents=True, exist_ok=True)
@@ -806,7 +802,7 @@ def copy_simd_intrinsics_h(project_dir: str) -> None:
         # Only Python 3.9+ has importlib.resources.files()
         if sys.version_info >= (3, 9):
             import importlib.resources  # pylint: disable=E1101,C0415
-            from importlib.abc import Traversable
+            from importlib.abc import Traversable  # pylint: disable=C0415,W4904
 
             source_path: Traversable = (
                 importlib.resources.files("nrpy.helpers") / "simd_intrinsics.h"
@@ -817,7 +813,7 @@ def copy_simd_intrinsics_h(project_dir: str) -> None:
     except (ImportError, AttributeError):
         # Fallback for versions without importlib.resources or importlib.resources.files()
         try:
-            from pkg_resources import resource_filename
+            from pkg_resources import resource_filename  # pylint: disable=C0415
 
             source_path_str: str = resource_filename(
                 "nrpy.helpers", "simd_intrinsics.h"
