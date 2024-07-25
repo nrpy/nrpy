@@ -134,8 +134,9 @@ def register_CFunction_xx_to_Cart(
         )
 
     # Description of the conversion process
-    desc = """Compute Cartesian coordinates given local grid coordinates (xx0,xx1,xx2),
-              accounting for the possibility that the origin of this grid is off-center."""
+    desc = """Compute Cartesian coordinates {x, y, z} = {xCart[0], xCart[1], xCart[2]} in terms of
+              local grid coordinates {xx[0][i0], xx[1][i1], xx[2][i2]} = {xx0, xx1, xx2},
+              taking into account the possibility that the origin of this grid is off-center."""
 
     cfunc_type = "void"
     name = "xx_to_Cart"
