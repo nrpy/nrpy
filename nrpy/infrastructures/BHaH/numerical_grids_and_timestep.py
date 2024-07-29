@@ -59,7 +59,8 @@ def register_CFunction_numerical_grid_params_Nxx_dxx_xx(
 
 Inputs:
 - Nx[] inputs: Specifies new grid dimensions, if needed.
-- convergence_factor (set to 1.0 by default): Factor by which grid resolution is increased; set to 1.0 by default.
+- params.convergence_factor (set to 1.0 by default): Factor by which grid resolution is increased; set to 1.0 by default.
+- set_xxmin_xxmax_to_defaults: Whether to set xxmin[3], xxmax[3] to default values set in reference_metric.py.
 
 Parameter outputs:
 - Nxx: Number of grid points in each direction.
@@ -72,7 +73,7 @@ Grid setup output:
 """
     cfunc_type = "void"
     name = "numerical_grid_params_Nxx_dxx_xx"
-    params = "const commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3], const int Nx[3]"
+    params = "const commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3], const int Nx[3], const bool set_xxmin_xxmax_to_defaults"
     body = "// Set default values for the grid resolution in each dimension.\n"
     for dirn in range(3):
         body += f"params->Nxx{dirn} = {Nxx_dict[CoordSystem][dirn]};\n"
@@ -121,9 +122,9 @@ params->Nxx_plus_2NGHOSTS2 = params->Nxx2 + 2*NGHOSTS;
         body += "}\n"
 
     # Set minimum and maximum values of xx[][] for each grid.
-    body += """{
+    body += """if (set_xxmin_xxmax_to_defaults) {
 #include "../set_CodeParameters.h"
-// Set {xxmin[], xxmax[]} to functions of other rfm parameters (set in set_CodeParameters.h above):
+// Set {xxmin[], xxmax[]} to default values, which could be functions of other rfm params (set in set_CodeParameters.h above):
 """
     for minmax in ["min", "max"]:
         for dirn in range(3):
@@ -261,6 +262,7 @@ def register_CFunction_numerical_grids_and_timestep(
         body += """
   {
     // Step 1.c: For each grid, set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx based on grid_physical_size
+    const bool set_xxmin_xxmax_to_defaults = true;
     int grid=0;
 """
         for which_CoordSystem, CoordSystem in enumerate(list_of_CoordSystems):
@@ -268,7 +270,7 @@ def register_CFunction_numerical_grids_and_timestep(
                 f"  griddata[grid].params.CoordSystem_hash = {CoordSystem.upper()};\n"
             )
             body += f"  griddata[grid].params.grid_physical_size = {list_of_grid_physical_sizes[which_CoordSystem]};\n"
-            body += "  numerical_grid_params_Nxx_dxx_xx(commondata, &griddata[grid].params, griddata[grid].xx, Nx);\n"
+            body += "  numerical_grid_params_Nxx_dxx_xx(commondata, &griddata[grid].params, griddata[grid].xx, Nx, set_xxmin_xxmax_to_defaults);\n"
             body += "  grid++;\n\n"
         body += "}\n"
     elif gridding_approach == "multipatch":
