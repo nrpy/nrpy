@@ -41,10 +41,10 @@ par.register_CodeParameters(
         "dHreal_dr",
         "dHreal_dprstar",
         "dHreal_dpphi",
-	"dHreal_dr_dr"
-	"dHreal_dr_dpphi",
-	"dHreal_dr_circ",
-	"dHreal_dpphi_circ",
+        "dHreal_dr_dr",
+        "dHreal_dr_dpphi",
+        "dHreal_dr_circ",
+        "dHreal_dpphi_circ",
         "Hreal",
         "xi",
     ],
@@ -162,6 +162,7 @@ printf("xi = %.15e\n", commondata->xi);
         body=body,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
 
 def register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_derivs() -> (
     Union[None, pcg.NRPyEnv_type]
