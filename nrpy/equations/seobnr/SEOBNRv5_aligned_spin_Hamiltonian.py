@@ -27,7 +27,10 @@ class SEOBNRv5_aligned_spin_Hamiltonian_quantities:
         calculations.
 
         Inputs: 'm1', 'm2', 'r', 'prstar', 'pphi', 'chi1', 'chi2', 'a6', and 'dSO'
-        Outputs: 'xi' and 'Hreal'
+        Outputs: 'xi', 'Hreal',
+                 'dHreal_dr', 'dHreal_dprstar', 'dHreal_dpphi',
+                 'dHreal_dr_dr', 'dHreal_dr_dpphi' ,
+                 'dHreal_dr_circ' , and 'dHreal_dpphi_circ'
         """
         m1, m2, self.r, self.prstar, self.pphi, chi1, chi2, a6, dSO = sp.symbols(
             "m1 m2 r prstar pphi chi1 chi2 a6 dSO", real=True
@@ -374,50 +377,12 @@ class SEOBNRv5_aligned_spin_Hamiltonian_quantities:
         )
         Heff = Hodd + Heven
         self.Hreal = sp.sqrt(1 + 2 * self.nu * (Heff - 1))
-
-    def diff1(self) -> None:
-        """
-        Compute and sets the first derivatives of the SEOBNRv5 aligned-spin Hamiltonian.
-
-        This function calculates the partial derivatives of the Hamiltonian (Hreal)
-        with respect to r, prstar, and pphi, and sets the corresponding attributes
-        dHreal_dr, dHreal_dprstar, and dHreal_dpphi.
-
-        Inputs: 'Hreal', 'r', 'prstar', 'pphi'
-        Outputs: 'dHreal_dr', 'dHreal_dprstar', 'dHreal_dpphi'
-        """
+        # compute the derivatives
         self.dHreal_dr = sp.diff(self.Hreal, self.r) / self.nu
         self.dHreal_dprstar = sp.diff(self.Hreal, self.prstar) / self.nu
         self.dHreal_dpphi = sp.diff(self.Hreal, self.pphi) / self.nu
-
-    def diff2(self) -> None:
-        """
-        Compute and sets the second derivatives of the SEOBNRv5 aligned-spin Hamiltonian.
-
-        This function calculates the second partial derivatives of the Hamiltonian (Hreal)
-        with respect to (r, r) and (r, pphi), and sets the corresponding attributes
-        dHreal_dr_dr, and dHreal_dr_dpphi. These are the specific second derivatives needed
-        to calculate the dissipative initial conditions.
-
-        Inputs: 'dHreal_dr', 'r', 'prstar', 'pphi'
-        Outputs: 'dHreal_dr_dr', 'dHreal_dr_dpphi'
-        """
         self.dHreal_dr_dr = sp.diff(self.dHreal_dr, self.r) / self.nu
         self.dHreal_dr_dpphi = sp.diff(self.dHreal_dr, self.pphi) / self.nu
-
-    def diff1_circ(self) -> None:
-        """
-        Compute and sets the circular first derivatives of the SEOBNRv5 aligned-spin Hamiltonian.
-
-        This function calculates the partial derivatives of the circular Hamiltonian
-        (Hreal_circ), i.e, when the radial momentum 'prstar' vanishes,
-        with respect to r, and pphi, and sets the corresponding attributes
-        dHreal_dr_circ, dHreal_dpphi_circ. These are the specific derivatives needed
-        to calculate the conservative initial conditions.
-
-        Inputs: 'Hreal', 'r', 'pphi'
-        Outputs: 'dHreal_dr_circ', 'dHreal_dpphi_circ'
-        """
         Hreal_circ = self.Hreal.subs(self.prstar, 0)
         self.dHreal_dr_circ = sp.diff(Hreal_circ, self.r) / self.nu
         self.dHreal_dpphi_circ = sp.diff(Hreal_circ, self.pphi) / self.nu

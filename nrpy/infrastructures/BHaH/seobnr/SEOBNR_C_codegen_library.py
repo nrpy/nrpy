@@ -123,7 +123,6 @@ def register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_and_derivs() -> (
     name = "SEOBNRv5_aligned_spin_Hamiltonian_and_derivs"
     params = "commondata_struct *restrict commondata"
     Hq = SEOBNRv5_Ham.SEOBNRv5_aligned_spin_Hamiltonian_quantities()
-    Hq.diff1()
     dHreal_dr = Hq.dHreal_dr
     dHreal_dprstar = Hq.dHreal_dprstar
     dHreal_dpphi = Hq.dHreal_dpphi
@@ -182,7 +181,6 @@ def register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_derivs() -> (
     name = "SEOBNRv5_aligned_spin_Hamiltonian_circular_derivs"
     params = "commondata_struct *restrict commondata"
     Hq = SEOBNRv5_Ham.SEOBNRv5_aligned_spin_Hamiltonian_quantities()
-    Hq.diff1_circ()
     dHreal_dr_circ = Hq.dHreal_dr_circ
     dHreal_dpphi_circ = Hq.dHreal_dpphi_circ
     body = ccg.c_codegen(
