@@ -57,6 +57,8 @@ SEOBNRv5_aligned_spin_Hamiltonian(&commondata);
 // Step 3: Compute SEOBNRv5 Hamiltonian AND derivatives.
 SEOBNRv5_aligned_spin_Hamiltonian_and_derivs(&commondata);
 
+// Step 4: Compute SEOBNRv5 Hamiltonian's circular derivatives.
+SEOBNRv5_aligned_spin_Hamiltonian_circular_derivs(&commondata);
 return 0;
 """
     cfc.register_CFunction(
@@ -71,6 +73,7 @@ return 0;
 
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_and_derivs()
+seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_derivs()
 
 #########################################################
 # STEP 3: Generate header files, register C functions and
