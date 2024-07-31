@@ -13,6 +13,34 @@ import sympy as sp
 thismodule = __name__
 
 
+def f2r(input_float: float) -> sp.Rational:
+    """
+    Convert a floating-point number to a high-precision rational number.
+
+    This function takes a floating-point number, converts it to a string,
+    and appends 60 zeros to increase the precision of the conversion to a rational number.
+
+    :param input_float: The floating-point number to convert.
+    :return: A sympy Rational number with high precision.
+
+    >>> f2r(0.1)
+    1/10
+    >>> f2r(1.5)
+    3/2
+    >>> f2r(2.0)
+    2
+    """
+    # Convert the input float to a string
+    float_as_string = str(input_float)
+
+    # Ensure the string has a decimal point
+    if "." not in float_as_string:
+        float_as_string = f"{float_as_string}."
+
+    # Append 60 zeros after the decimal of the floating point number to increase precision
+    return sp.Rational(float_as_string + "0" * 60)
+
+
 class SEOBNRv5_aligned_spin_Hamiltonian_quantities:
     """Class for computing the SEOBNRv5 aligned-spin Hamiltonian and associated quantities."""
 
@@ -88,65 +116,57 @@ class SEOBNRv5_aligned_spin_Hamiltonian_quantities:
         am = (m1 * chi1 - m2 * chi2) / M
         Qnos = (
             (
-                sp.Rational(0.121954868780449) * self.nu * self.prstar**8 / self.r
+                f2r(0.121954868780449) * self.nu * self.prstar**8 / self.r
                 + self.prstar**6
                 * (
                     6 * self.nu**3
-                    - sp.Rational(5.4) * self.nu**2
-                    - sp.Rational(2.78300763695006) * self.nu
+                    - f2r(5.4) * self.nu**2
+                    - f2r(2.78300763695006) * self.nu
                 )
                 / self.r**2
                 + self.prstar**4
-                * (
-                    10 * self.nu**3
-                    - 131 * self.nu**2
-                    + sp.Rational(92.7110442849544) * self.nu
-                )
+                * (10 * self.nu**3 - 131 * self.nu**2 + f2r(92.7110442849544) * self.nu)
                 / self.r**3
             )
             + (
                 self.prstar**8
                 * (
                     -6 * self.nu**4
-                    + sp.Rational(3.42857142857143) * self.nu**3
-                    + sp.Rational(3.33842023648322) * self.nu**2
-                    + sp.Rational(1.38977750996128) * self.nu
+                    + f2r(3.42857142857143) * self.nu**3
+                    + f2r(3.33842023648322) * self.nu**2
+                    + f2r(1.38977750996128) * self.nu
                 )
                 / self.r**2
                 + self.prstar**6
                 * (
                     -14 * self.nu**4
                     + 188 * self.nu**3
-                    - sp.Rational(89.5298327361234) * self.nu**2
-                    - sp.Rational(33.9782122170436) * self.nu
+                    - f2r(89.5298327361234) * self.nu**2
+                    - f2r(33.9782122170436) * self.nu
                 )
                 / self.r**3
                 + self.prstar**4
                 * (
-                    sp.Rational(602.318540416564) * self.nu**3
-                    + self.nu**2
-                    * (118.4 * sp.log(self.r) - sp.Rational(1796.13660498019))
+                    f2r(602.318540416564) * self.nu**3
+                    + self.nu**2 * (118.4 * sp.log(self.r) - f2r(1796.13660498019))
                     + self.nu
-                    * (
-                        sp.Rational(452.542166996693)
-                        - sp.Rational(51.6952380952381) * sp.log(self.r)
-                    )
+                    * (f2r(452.542166996693) - f2r(51.6952380952381) * sp.log(self.r))
                 )
                 / self.r**4
             )
             + (
-                sp.Rational(1.48275342024365)
+                f2r(1.48275342024365)
                 * self.nu
                 * self.prstar**8
-                / self.r ** sp.Rational(2 * 2 + 1, 2)
-                - sp.Rational(11.3175085791863)
+                / self.r ** sp.Rational(5, 2)
+                - f2r(11.3175085791863)
                 * self.nu
                 * self.prstar**6
-                / self.r ** sp.Rational(2 * 3 + 1, 2)
+                / self.r ** sp.Rational(7, 2)
                 + sp.Rational(147.443752990146)
                 * self.nu
                 * self.prstar**4
-                / self.r ** sp.Rational(2 * 4 + 1, 2)
+                / self.r ** sp.Rational(9, 2)
             )
             + self.prstar**4 * (-6 * self.nu**2 + 8 * self.nu) / self.r**2
         )
@@ -154,22 +174,22 @@ class SEOBNRv5_aligned_spin_Hamiltonian_quantities:
         Dnons = (
             self.r
             * (
-                sp.Rational(6730497718123.02) * self.nu**3
+                f2r(6730497718123.02) * self.nu**3
                 + 22295347200 * self.nu**2 * d5
                 + 133772083200 * self.nu**2 * self.r**2
-                + sp.Rational(1822680546449.21) * self.nu**2 * self.r
-                + sp.Rational(80059249540278.2) * self.nu**2
+                + f2r(1822680546449.21) * self.nu**2 * self.r
+                + f2r(80059249540278.2) * self.nu**2
                 + 22295347200 * self.nu * d5 * self.r
                 - 193226342400 * self.nu * d5
-                + sp.Rational(2589101062873.81) * self.nu * self.r**2
-                + sp.Rational(10611661054566.2) * self.nu * self.r
-                - sp.Rational(12049908701745.2) * self.nu
-                + sp.Rational(5107745331375.71) * self.r**2
-                - sp.Rational(326837426.241486) * self.r * (14700 * self.nu + 42911)
-                - sp.Rational(39476764256925.6) * self.r
+                + f2r(2589101062873.81) * self.nu * self.r**2
+                + f2r(10611661054566.2) * self.nu * self.r
+                - f2r(12049908701745.2) * self.nu
+                + f2r(5107745331375.71) * self.r**2
+                - f2r(326837426.241486) * self.r * (14700 * self.nu + 42911)
+                - f2r(39476764256925.6) * self.r
                 - (
                     -5041721180160 * self.nu**2
-                    - sp.Rational(25392914995744.3) * self.nu
+                    - f2r(25392914995744.3) * self.nu
                     - 879923036160 * self.r**2
                     - 283115520 * self.r * (14700 * self.nu + 42911)
                     + 104186110149937
@@ -183,35 +203,34 @@ class SEOBNRv5_aligned_spin_Hamiltonian_quantities:
                 * self.nu
                 * (
                     14515200 * self.nu**3
-                    - sp.Rational(42636451.6032331) * self.nu**2
-                    - 7680 * self.nu * (315 * d5 + sp.Rational(890888.810272497))
-                    + sp.Rational(4331361844.61149) * self.nu
-                    + sp.Rational(1002013764.01019)
+                    - f2r(42636451.6032331) * self.nu**2
+                    - 7680 * self.nu * (315 * d5 + f2r(890888.810272497))
+                    + f2r(4331361844.61149) * self.nu
+                    + f2r(1002013764.01019)
                 )
                 - 967680
                 * self.r**3
                 * (
                     -138240 * self.nu**2
-                    - sp.Rational(2675575.66847905) * self.nu
-                    - sp.Rational(5278341.3229329)
+                    - f2r(2675575.66847905) * self.nu
+                    - f2r(5278341.3229329)
                 )
                 - 9216
                 * self.r**2
                 * (
-                    -sp.Rational(197773496.793534) * self.nu**2
-                    - 7680 * self.nu * (315 * d5 + sp.Rational(405152.309729121))
-                    + sp.Rational(2481453539.84635) * self.nu
-                    + sp.Rational(5805304367.87913)
+                    -f2r(197773496.793534) * self.nu**2
+                    - 7680 * self.nu * (315 * d5 + f2r(405152.309729121))
+                    + f2r(2481453539.84635) * self.nu
+                    + f2r(5805304367.87913)
                 )
                 + self.r
                 * (
-                    sp.Rational(5927865218923.02) * self.nu**3
-                    + 70778880 * self.nu**2 * (315 * d5 + sp.Rational(2561145.80918574))
+                    f2r(5927865218923.02) * self.nu**3
+                    + 70778880 * self.nu**2 * (315 * d5 + f2r(2561145.80918574))
                     - 138141470005001 * self.nu**2
-                    - 4718592 * self.nu * (40950 * d5 + sp.Rational(86207832.4415642))
+                    - 4718592 * self.nu * (40950 * d5 + f2r(86207832.4415642))
                     + 450172889755120 * self.nu
-                    + sp.Rational(86618264430493.3)
-                    * (1 - 0.496948781616935 * self.nu) ** 2
+                    + f2r(86618264430493.3) * (1 - 0.496948781616935 * self.nu) ** 2
                     + 188440788778196
                 )
                 + 5787938193408 * self.r * sp.log(self.r) ** 2
@@ -223,8 +242,8 @@ class SEOBNRv5_aligned_spin_Hamiltonian_quantities:
                     * self.r
                     * (
                         102574080 * self.nu**2
-                        + sp.Rational(409207698.136075) * self.nu
-                        - sp.Rational(2119671837.36038)
+                        + f2r(409207698.136075) * self.nu
+                        - f2r(2119671837.36038)
                     )
                 )
                 * sp.log(self.r)
@@ -234,38 +253,38 @@ class SEOBNRv5_aligned_spin_Hamiltonian_quantities:
             7680
             * self.r**4
             * (
-                -sp.Rational(5416406.59541186) * self.nu**2
-                + 28 * self.nu * (1920 * a6 + sp.Rational(733955.307463037))
+                -f2r(5416406.59541186) * self.nu**2
+                + 28 * self.nu * (1920 * a6 + f2r(733955.307463037))
                 + 2048 * self.nu * (756 * self.nu + 336 * self.r + 407) * sp.log(self.r)
                 - 7
                 * self.r
                 * (
-                    -sp.Rational(185763.092693281) * self.nu**2
-                    + sp.Rational(938918.400156317) * self.nu
+                    -f2r(185763.092693281) * self.nu**2
+                    + f2r(938918.400156317) * self.nu
                     - 245760
                 )
                 - 3440640
             )
             / (
-                sp.Rational(241555486248.807) * self.nu**4
+                f2r(241555486248.807) * self.nu**4
                 + 1120
                 * self.nu**3
                 * (
-                    -sp.Rational(17833256.898555) * self.r**2
-                    - sp.Rational(163683964.822551) * self.r
-                    - sp.Rational(1188987459.03162)
+                    -f2r(17833256.898555) * self.r**2
+                    - f2r(163683964.822551) * self.r
+                    - f2r(1188987459.03162)
                 )
                 + 7
                 * self.nu**2
                 * (
                     -39321600 * a6 * (3 * self.r + 59)
-                    + sp.Rational(745857848.115604) * a6
-                    + sp.Rational(1426660551.8844) * self.r**5
-                    - sp.Rational(3089250703.76879) * self.r**4
-                    - sp.Rational(6178501407.53758) * self.r**3
-                    + sp.Rational(2064783811.32587) * self.r**2
-                    + sp.Rational(122635399361.987) * self.r
-                    + sp.Rational(276057889687.011)
+                    + f2r(745857848.115604) * a6
+                    + f2r(1426660551.8844) * self.r**5
+                    - f2r(3089250703.76879) * self.r**4
+                    - f2r(6178501407.53758) * self.r**3
+                    + f2r(2064783811.32587) * self.r**2
+                    + f2r(122635399361.987) * self.r
+                    + f2r(276057889687.011)
                 )
                 + 67645734912 * self.nu**2 * sp.log(self.r) ** 2
                 + 53760
@@ -277,16 +296,16 @@ class SEOBNRv5_aligned_spin_Hamiltonian_quantities:
                     + 128
                     * self.r
                     * (
-                        -sp.Rational(6852.34813868015) * self.r**4
-                        + sp.Rational(4264.6962773603) * self.r**3
-                        + sp.Rational(8529.39255472061) * self.r**2
-                        + sp.Rational(13218.7851094412) * self.r
-                        - sp.Rational(33722.4297811176)
+                        -f2r(6852.34813868015) * self.r**4
+                        + f2r(4264.6962773603) * self.r**3
+                        + f2r(8529.39255472061) * self.r**2
+                        + f2r(13218.7851094412) * self.r
+                        - f2r(33722.4297811176)
                     )
-                    + sp.Rational(113485.217444961)
+                    + f2r(113485.217444961)
                     * self.r
                     * (-self.r**4 + 2 * self.r**3 + 4 * self.r**2 + 8 * self.r + 16)
-                    + sp.Rational(148.04406601634)
+                    + f2r(148.04406601634)
                     * self.r
                     * (
                         349 * self.r**4
@@ -299,19 +318,15 @@ class SEOBNRv5_aligned_spin_Hamiltonian_quantities:
                 + 32768
                 * self.nu
                 * (
-                    -sp.Rational(1882456.23663972) * self.nu**2
-                    - sp.Rational(38842241.4769507) * self.nu
+                    -f2r(1882456.23663972) * self.nu**2
+                    - f2r(38842241.4769507) * self.nu
                     + 161280 * self.r**5
                     + 480 * self.r**4 * (756 * self.nu + 1079)
                     + 960 * self.r**3 * (756 * self.nu + 1079)
                     + 1920 * self.r**2 * (588 * self.nu + 1079)
                     + 240
                     * self.r
-                    * (
-                        -3024 * self.nu**2
-                        - sp.Rational(7466.27061066206) * self.nu
-                        + 17264
-                    )
+                    * (-3024 * self.nu**2 - f2r(7466.27061066206) * self.nu + 17264)
                     + 13447680
                 )
                 * sp.log(self.r)
