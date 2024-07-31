@@ -8,7 +8,6 @@ License: BSD 2-Clause
 
 # Step P1: Import needed modules:
 import sympy as sp
-from mpmath import mpf
 
 # The name of this module ("WaveEquation") is given by __name__:
 thismodule = __name__
@@ -89,234 +88,234 @@ class SEOBNRv5_aligned_spin_Hamiltonian_quantities:
         am = (m1 * chi1 - m2 * chi2) / M
         Qnos = (
             (
-                mpf(0.121954868780449) * self.nu * self.prstar**8 / self.r
+                sp.Rational(0.121954868780449) * self.nu * self.prstar**8 / self.r
                 + self.prstar**6
                 * (
-                    mpf(6.0) * self.nu**3
-                    - mpf(5.4) * self.nu**2
-                    - mpf(2.78300763695006) * self.nu
+                    6 * self.nu**3
+                    - sp.Rational(5.4) * self.nu**2
+                    - sp.Rational(2.78300763695006) * self.nu
                 )
                 / self.r**2
                 + self.prstar**4
                 * (
-                    mpf(10.0) * self.nu**3
-                    - mpf(131.0) * self.nu**2
-                    + mpf(92.7110442849544) * self.nu
+                    10 * self.nu**3
+                    - 131 * self.nu**2
+                    + sp.Rational(92.7110442849544) * self.nu
                 )
                 / self.r**3
             )
             + (
                 self.prstar**8
                 * (
-                    -mpf(6.0) * self.nu**4
-                    + mpf(3.42857142857143) * self.nu**3
-                    + mpf(3.33842023648322) * self.nu**2
-                    + mpf(1.38977750996128) * self.nu
+                    -6 * self.nu**4
+                    + sp.Rational(3.42857142857143) * self.nu**3
+                    + sp.Rational(3.33842023648322) * self.nu**2
+                    + sp.Rational(1.38977750996128) * self.nu
                 )
                 / self.r**2
                 + self.prstar**6
                 * (
-                    -mpf(14.0) * self.nu**4
-                    + mpf(188.0) * self.nu**3
-                    - mpf(89.5298327361234) * self.nu**2
-                    - mpf(33.9782122170436) * self.nu
+                    -14 * self.nu**4
+                    + 188 * self.nu**3
+                    - sp.Rational(89.5298327361234) * self.nu**2
+                    - sp.Rational(33.9782122170436) * self.nu
                 )
                 / self.r**3
                 + self.prstar**4
                 * (
-                    mpf(602.318540416564) * self.nu**3
-                    + self.nu**2 * (mpf(118.4) * sp.log(self.r) - mpf(1796.13660498019))
+                    sp.Rational(602.318540416564) * self.nu**3
+                    + self.nu**2
+                    * (118.4 * sp.log(self.r) - sp.Rational(1796.13660498019))
                     + self.nu
-                    * (mpf(452.542166996693) - mpf(51.6952380952381) * sp.log(self.r))
+                    * (
+                        sp.Rational(452.542166996693)
+                        - sp.Rational(51.6952380952381) * sp.log(self.r)
+                    )
                 )
                 / self.r**4
             )
             + (
-                mpf(1.48275342024365) * self.nu * self.prstar**8 / self.r**2.5
-                - mpf(11.3175085791863) * self.nu * self.prstar**6 / self.r**3.5
-                + mpf(147.443752990146) * self.nu * self.prstar**4 / self.r**4.5
+                sp.Rational(1.48275342024365)
+                * self.nu
+                * self.prstar**8
+                / self.r ** sp.Rational(2 * 2 + 1, 2)
+                - sp.Rational(11.3175085791863)
+                * self.nu
+                * self.prstar**6
+                / self.r ** sp.Rational(2 * 3 + 1, 2)
+                + sp.Rational(147.443752990146)
+                * self.nu
+                * self.prstar**4
+                / self.r ** sp.Rational(2 * 4 + 1, 2)
             )
-            + self.prstar**4 * (-mpf(6.0) * self.nu**2 + mpf(8.0) * self.nu) / self.r**2
+            + self.prstar**4 * (-6 * self.nu**2 + 8 * self.nu) / self.r**2
         )
         d5 = 0
         Dnons = (
             self.r
             * (
-                mpf(6730497718123.02) * self.nu**3
-                + mpf(22295347200.0) * self.nu**2 * d5
-                + mpf(133772083200.0) * self.nu**2 * self.r**2
-                + mpf(1822680546449.21) * self.nu**2 * self.r
-                + mpf(80059249540278.2) * self.nu**2
-                + mpf(22295347200.0) * self.nu * d5 * self.r
-                - mpf(193226342400.0) * self.nu * d5
-                + mpf(2589101062873.81) * self.nu * self.r**2
-                + mpf(10611661054566.2) * self.nu * self.r
-                - mpf(12049908701745.2) * self.nu
-                + mpf(5107745331375.71) * self.r**2
-                - mpf(326837426.241486) * self.r * (14700.0 * self.nu + 42911.0)
-                - mpf(39476764256925.6) * self.r
+                sp.Rational(6730497718123.02) * self.nu**3
+                + 22295347200 * self.nu**2 * d5
+                + 133772083200 * self.nu**2 * self.r**2
+                + sp.Rational(1822680546449.21) * self.nu**2 * self.r
+                + sp.Rational(80059249540278.2) * self.nu**2
+                + 22295347200 * self.nu * d5 * self.r
+                - 193226342400 * self.nu * d5
+                + sp.Rational(2589101062873.81) * self.nu * self.r**2
+                + sp.Rational(10611661054566.2) * self.nu * self.r
+                - sp.Rational(12049908701745.2) * self.nu
+                + sp.Rational(5107745331375.71) * self.r**2
+                - sp.Rational(326837426.241486) * self.r * (14700 * self.nu + 42911)
+                - sp.Rational(39476764256925.6) * self.r
                 - (
-                    -mpf(5041721180160.0) * self.nu**2
-                    - mpf(25392914995744.3) * self.nu
-                    - mpf(879923036160.0) * self.r**2
-                    - mpf(283115520.0) * self.r * (14700.0 * self.nu + 42911.0)
-                    + mpf(104186110149937.0)
+                    -5041721180160 * self.nu**2
+                    - sp.Rational(25392914995744.3) * self.nu
+                    - 879923036160 * self.r**2
+                    - 283115520 * self.r * (14700 * self.nu + 42911)
+                    + 104186110149937
                 )
                 * sp.log(self.r)
-                + mpf(5787938193408.0) * sp.log(self.r) ** 2
-                + mpf(275059053208689.0)
+                + 5787938193408 * sp.log(self.r) ** 2
+                + 275059053208689
             )
             / (
-                mpf(55296.0)
+                55296
                 * self.nu
                 * (
-                    mpf(14515200.0) * self.nu**3
-                    - mpf(42636451.6032331) * self.nu**2
-                    - mpf(7680.0) * self.nu * (315.0 * d5 + mpf(890888.810272497))
-                    + mpf(4331361844.61149) * self.nu
-                    + mpf(1002013764.01019)
+                    14515200 * self.nu**3
+                    - sp.Rational(42636451.6032331) * self.nu**2
+                    - 7680 * self.nu * (315 * d5 + sp.Rational(890888.810272497))
+                    + sp.Rational(4331361844.61149) * self.nu
+                    + sp.Rational(1002013764.01019)
                 )
-                - mpf(967680.0)
+                - 967680
                 * self.r**3
                 * (
-                    -mpf(138240.0) * self.nu**2
-                    - mpf(2675575.66847905) * self.nu
-                    - mpf(5278341.3229329)
+                    -138240 * self.nu**2
+                    - sp.Rational(2675575.66847905) * self.nu
+                    - sp.Rational(5278341.3229329)
                 )
-                - mpf(9216.0)
+                - 9216
                 * self.r**2
                 * (
-                    -mpf(197773496.793534) * self.nu**2
-                    - mpf(7680.0) * self.nu * (315.0 * d5 + mpf(405152.309729121))
-                    + mpf(2481453539.84635) * self.nu
-                    + mpf(5805304367.87913)
+                    -sp.Rational(197773496.793534) * self.nu**2
+                    - 7680 * self.nu * (315 * d5 + sp.Rational(405152.309729121))
+                    + sp.Rational(2481453539.84635) * self.nu
+                    + sp.Rational(5805304367.87913)
                 )
                 + self.r
                 * (
-                    mpf(5927865218923.02) * self.nu**3
-                    + mpf(70778880.0)
-                    * self.nu**2
-                    * (315.0 * d5 + mpf(2561145.80918574))
-                    - mpf(138141470005001.0) * self.nu**2
-                    - mpf(4718592.0) * self.nu * (40950.0 * d5 + mpf(86207832.4415642))
-                    + mpf(450172889755120.0) * self.nu
-                    + mpf(86618264430493.3)
-                    * (1 - mpf(0.496948781616935) * self.nu) ** 2
-                    + mpf(188440788778196.0)
+                    sp.Rational(5927865218923.02) * self.nu**3
+                    + 70778880 * self.nu**2 * (315 * d5 + sp.Rational(2561145.80918574))
+                    - 138141470005001 * self.nu**2
+                    - 4718592 * self.nu * (40950 * d5 + sp.Rational(86207832.4415642))
+                    + 450172889755120 * self.nu
+                    + sp.Rational(86618264430493.3)
+                    * (1 - 0.496948781616935 * self.nu) ** 2
+                    + 188440788778196
                 )
-                + mpf(5787938193408.0) * self.r * sp.log(self.r) ** 2
+                + 5787938193408 * self.r * sp.log(self.r) ** 2
                 + (
-                    -mpf(1698693120.0) * self.nu * (11592.0 * self.nu + 69847.0)
-                    + mpf(879923036160.0) * self.r**3
-                    + mpf(283115520.0) * self.r**2 * (14700.0 * self.nu + 42911.0)
-                    + mpf(49152.0)
+                    -1698693120 * self.nu * (11592 * self.nu + 69847)
+                    + 879923036160 * self.r**3
+                    + 283115520 * self.r**2 * (14700 * self.nu + 42911)
+                    + 49152
                     * self.r
                     * (
-                        mpf(102574080.0) * self.nu**2
-                        + mpf(409207698.136075) * self.nu
-                        - mpf(2119671837.36038)
+                        102574080 * self.nu**2
+                        + sp.Rational(409207698.136075) * self.nu
+                        - sp.Rational(2119671837.36038)
                     )
                 )
                 * sp.log(self.r)
             )
         )
         Anons = (
-            7680.0
+            7680
             * self.r**4
             * (
-                -mpf(5416406.59541186) * self.nu**2
-                + 28.0 * self.nu * (1920.0 * a6 + mpf(733955.307463037))
-                + 2048.0
-                * self.nu
-                * (756.0 * self.nu + 336.0 * self.r + 407.0)
-                * sp.log(self.r)
-                - 7.0
+                -sp.Rational(5416406.59541186) * self.nu**2
+                + 28 * self.nu * (1920 * a6 + sp.Rational(733955.307463037))
+                + 2048 * self.nu * (756 * self.nu + 336 * self.r + 407) * sp.log(self.r)
+                - 7
                 * self.r
                 * (
-                    -mpf(185763.092693281) * self.nu**2
-                    + mpf(938918.400156317) * self.nu
-                    - 245760.0
+                    -sp.Rational(185763.092693281) * self.nu**2
+                    + sp.Rational(938918.400156317) * self.nu
+                    - 245760
                 )
-                - 3440640.0
+                - 3440640
             )
             / (
-                mpf(241555486248.807) * self.nu**4
-                + 1120.0
+                sp.Rational(241555486248.807) * self.nu**4
+                + 1120
                 * self.nu**3
                 * (
-                    -mpf(17833256.898555) * self.r**2
-                    - mpf(163683964.822551) * self.r
-                    - mpf(1188987459.03162)
+                    -sp.Rational(17833256.898555) * self.r**2
+                    - sp.Rational(163683964.822551) * self.r
+                    - sp.Rational(1188987459.03162)
                 )
-                + 7.0
+                + 7
                 * self.nu**2
                 * (
-                    -39321600.0 * a6 * (3.0 * self.r + 59.0)
-                    + mpf(745857848.115604) * a6
-                    + mpf(1426660551.8844) * self.r**5
-                    - mpf(3089250703.76879) * self.r**4
-                    - mpf(6178501407.53758) * self.r**3
-                    + mpf(2064783811.32587) * self.r**2
-                    + mpf(122635399361.987) * self.r
-                    + mpf(276057889687.011)
+                    -39321600 * a6 * (3 * self.r + 59)
+                    + sp.Rational(745857848.115604) * a6
+                    + sp.Rational(1426660551.8844) * self.r**5
+                    - sp.Rational(3089250703.76879) * self.r**4
+                    - sp.Rational(6178501407.53758) * self.r**3
+                    + sp.Rational(2064783811.32587) * self.r**2
+                    + sp.Rational(122635399361.987) * self.r
+                    + sp.Rational(276057889687.011)
                 )
-                + 67645734912.0 * self.nu**2 * sp.log(self.r) ** 2
-                + 53760.0
+                + 67645734912 * self.nu**2 * sp.log(self.r) ** 2
+                + 53760
                 * self.nu
                 * (
-                    7680.0
+                    7680
                     * a6
-                    * (
-                        self.r**4
-                        + 2.0 * self.r**3
-                        + 4.0 * self.r**2
-                        + 8.0 * self.r
-                        + 16.0
-                    )
-                    + 128.0
+                    * (self.r**4 + 2 * self.r**3 + 4 * self.r**2 + 8 * self.r + 16)
+                    + 128
                     * self.r
                     * (
-                        -mpf(6852.34813868015) * self.r**4
-                        + mpf(4264.6962773603) * self.r**3
-                        + mpf(8529.39255472061) * self.r**2
-                        + mpf(13218.7851094412) * self.r
-                        - mpf(33722.4297811176)
+                        -sp.Rational(6852.34813868015) * self.r**4
+                        + sp.Rational(4264.6962773603) * self.r**3
+                        + sp.Rational(8529.39255472061) * self.r**2
+                        + sp.Rational(13218.7851094412) * self.r
+                        - sp.Rational(33722.4297811176)
                     )
-                    + mpf(113485.217444961)
+                    + sp.Rational(113485.217444961)
+                    * self.r
+                    * (-self.r**4 + 2 * self.r**3 + 4 * self.r**2 + 8 * self.r + 16)
+                    + sp.Rational(148.04406601634)
                     * self.r
                     * (
-                        -self.r**4
-                        + 2.0 * self.r**3
-                        + 4.0 * self.r**2
-                        + 8.0 * self.r
-                        + 16.0
-                    )
-                    + mpf(148.04406601634)
-                    * self.r
-                    * (
-                        349.0 * self.r**4
-                        + 1926.0 * self.r**3
-                        + 3852.0 * self.r**2
-                        + 7704.0 * self.r
-                        + 36400.0
+                        349 * self.r**4
+                        + 1926 * self.r**3
+                        + 3852 * self.r**2
+                        + 7704 * self.r
+                        + 36400
                     )
                 )
-                + 32768.0
+                + 32768
                 * self.nu
                 * (
-                    -mpf(1882456.23663972) * self.nu**2
-                    - mpf(38842241.4769507) * self.nu
-                    + mpf(161280.0) * self.r**5
-                    + 480.0 * self.r**4 * (756.0 * self.nu + 1079.0)
-                    + 960.0 * self.r**3 * (756.0 * self.nu + 1079.0)
-                    + 1920.0 * self.r**2 * (588.0 * self.nu + 1079.0)
-                    + 240.0
+                    -sp.Rational(1882456.23663972) * self.nu**2
+                    - sp.Rational(38842241.4769507) * self.nu
+                    + 161280 * self.r**5
+                    + 480 * self.r**4 * (756 * self.nu + 1079)
+                    + 960 * self.r**3 * (756 * self.nu + 1079)
+                    + 1920 * self.r**2 * (588 * self.nu + 1079)
+                    + 240
                     * self.r
-                    * (-3024.0 * self.nu**2 - mpf(7466.27061066206) * self.nu + 17264.0)
-                    + 13447680.0
+                    * (
+                        -3024 * self.nu**2
+                        - sp.Rational(7466.27061066206) * self.nu
+                        + 17264
+                    )
+                    + 13447680
                 )
                 * sp.log(self.r)
-                + 13212057600.0 * self.r**5
+                + 13212057600 * self.r**5
             )
         )
         self.xi = sp.sqrt(Dnons) * (Anons + ap**2 * u * u) / (1 + ap**2 * u * u)
@@ -387,8 +386,6 @@ class SEOBNRv5_aligned_spin_Hamiltonian_quantities:
         )
         Heff = Hodd + Heven
         self.Hreal = sp.sqrt(1 + 2 * self.nu * (Heff - 1))
-
-        # define the derivatives
         self.dHreal_dr = sp.diff(self.Hreal, self.r) / self.nu
         self.dHreal_dprstar = sp.diff(self.Hreal, self.prstar) / self.nu
         self.dHreal_dpphi = sp.diff(self.Hreal, self.pphi) / self.nu
