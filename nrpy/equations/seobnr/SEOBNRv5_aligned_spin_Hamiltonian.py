@@ -163,7 +163,7 @@ class SEOBNRv5_aligned_spin_Hamiltonian_quantities:
                 * self.nu
                 * self.prstar**6
                 / self.r ** sp.Rational(7, 2)
-                + sp.Rational(147.443752990146)
+                + f2r(147.443752990146)
                 * self.nu
                 * self.prstar**4
                 / self.r ** sp.Rational(9, 2)
