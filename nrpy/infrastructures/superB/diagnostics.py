@@ -34,6 +34,7 @@ def register_CFunction_diagnostics(
         "CoordSystemName, convergence_factor, time",
     ),
     out_quantities_dict: Union[str, Dict[Tuple[str, str], str]] = "default",
+    enable_BSSN_diagnostics: bool = True,
     enable_psi4_diagnostics: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
@@ -45,6 +46,7 @@ def register_CFunction_diagnostics(
     :param axis_filename_tuple: Tuple containing filename and variables for axis output.
     :param plane_filename_tuple: Tuple containing filename and variables for plane output.
     :param out_quantities_dict: Dictionary or string specifying output quantities.
+    :param enable_BSSN_diagnostics: Whether or not to enable BSSN constraint violation diagnostics.
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
 
     :return: None if in registration phase, else the updated NRPy environment.
@@ -208,12 +210,18 @@ if (which_output == OUTPUT_PSI4) {
             (num_diagnostic_2d_yz_pts > 0);
 
   if (write_diagnostics) {
+"""
+    if enable_BSSN_diagnostics:
+        body += r"""
 
     // Constraint output
     {
       Ricci_eval(commondata, params_chare, &griddata_chare[grid].rfmstruct, y_n_gfs, auxevol_gfs);
       constraints_eval(commondata, params_chare, &griddata_chare[grid].rfmstruct, y_n_gfs, auxevol_gfs, diagnostic_output_gfs);
     }
+"""
+
+    body += r"""
 
     // // 0D, 1D and 2D outputs
     if (which_output == OUTPUT_0D) {

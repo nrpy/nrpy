@@ -426,17 +426,17 @@ Timestepping::Timestepping(CommondataObject &&inData) {
     numerical_grids_chare(&commondata, griddata, griddata_chare, thisIndex_arr);
   }
 
+  // Step 2: Initial data are set on y_n_gfs gridfunctions. Allocate storage for them first.
   for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
-    // Step 2: Initial data are set on y_n_gfs gridfunctions. Allocate storage for them first.
     MoL_malloc_y_n_gfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].gridfuncs);
   }
 
-  // Step 3: Finalize initialization: set up initial data, etc.
-  initial_data(&commondata, griddata_chare);
-
-  // Step 4: Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping
+  // Step 3: Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping
   for(int grid=0; grid<commondata.NUMGRIDS; grid++)
     MoL_malloc_non_y_n_gfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].gridfuncs);
+    
+  // Step 4: Finalize initialization: set up initial data, etc.
+  initial_data(&commondata, griddata_chare);
 """
     if post_non_y_n_auxevol_mallocs:
         file_output_str += (
