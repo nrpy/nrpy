@@ -144,6 +144,10 @@ def output_BHaH_defines_h(
 // These macros for MIN(), MAX(), and SQR() ensure that if the arguments inside
 //   are a function/complex expression, the function/expression is evaluated
 //   *only once* per argument. See https://lwn.net/Articles/983965/ for details.
+// They are improvements over the original implementations:
+// #define MIN(A, B) ( ((A) < (B)) ? (A) : (B) )
+// #define MAX(A, B) ( ((A) > (B)) ? (A) : (B) )
+// #define SQR(A) ((A) * (A))
 #define MIN(A, B) ({{ \
     __typeof__(A) _a = (A); \
     __typeof__(B) _b = (B); \
