@@ -141,9 +141,23 @@ def output_BHaH_defines_h(
             gen_BHd_str += f'#include "{include}"\n'
     gen_BHd_str += rf"""#define REAL {REAL_means}\
 
-#define MIN(A, B) ( ((A) < (B)) ? (A) : (B) )
-#define MAX(A, B) ( ((A) > (B)) ? (A) : (B) )
-#define SQR(A) ((A) * (A))
+// These macros for MIN(), MAX(), and SQR() ensure that if the arguments inside
+//   are a function/complex expression, the function/expression is evaluated
+//   *only once* per argument. See https://lwn.net/Articles/983965/ for details.
+#define MIN(A, B) ({{ \
+    __typeof__(A) _a = (A); \
+    __typeof__(B) _b = (B); \
+    _a < _b ? _a : _b; \
+}})
+#define MAX(A, B) ({{ \
+    __typeof__(A) _a = (A); \
+    __typeof__(B) _b = (B); \
+    _a > _b ? _a : _b; \
+}})
+#define SQR(A) ({{ \
+    __typeof__(A) _a = (A); \
+    _a * _a; \
+}})
 """
     code_params_includes_define_type = False
     for CPname, CodeParam in par.glb_code_params_dict.items():
