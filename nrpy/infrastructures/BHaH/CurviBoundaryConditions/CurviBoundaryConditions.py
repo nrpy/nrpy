@@ -1358,8 +1358,8 @@ def CurviBoundaryConditions_register_C_functions(
 // Documented in: Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb
 
 typedef struct __innerpt_bc_struct__ {
-  int dstpt;  // dstpt is the 3D grid index IDX3S(i0,i1,i2) of the inner boundary point (i0,i1,i2)
-  int srcpt;  // srcpt is the 3D grid index (a la IDX3S) to which the inner boundary point maps
+  int dstpt;  // dstpt is the 3D grid index IDX3(i0,i1,i2) of the inner boundary point (i0,i1,i2)
+  int srcpt;  // srcpt is the 3D grid index (a la IDX3) to which the inner boundary point maps
   int8_t parity[10];  // parity[10] is a calculation of dot products for the 10 independent parity types
 } innerpt_bc_struct;
 
