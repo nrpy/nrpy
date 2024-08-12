@@ -14,6 +14,7 @@ import sympy as sp
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.equations.seobnr.SEOBNRv5_aligned_spin_Hamiltonian as SEOBNRv5_Ham
+import nrpy.equations.seobnr.SEOBNRv5_aligned_spin_waveform_quantities as SEOBNRv5_wf
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 
@@ -23,6 +24,7 @@ par.register_CodeParameters(
     __name__,
     [
         "r",
+        "phi",
         "m1",
         "m2",
         "a6",
@@ -30,7 +32,7 @@ par.register_CodeParameters(
         "prstar",
         "pphi",
     ],
-    [10, 0.5, 0.5, 0.0, 0.0, 10, 0],  # m1, m2, a6, dSO, prstar, pphi
+    [10, 0, 0.5, 0.5, 0.0, 0.0, 10, 0],  # r, phi, m1, m2, a6, dSO, prstar, pphi
     commondata=True,
     add_to_parfile=False,
 )
@@ -47,6 +49,7 @@ par.register_CodeParameters(
         "dHreal_dpphi_circ",
         "Hreal",
         "xi",
+        "flux",
     ],
     commondata=True,
     add_to_parfile=False,
@@ -198,6 +201,48 @@ def register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_derivs() -> (
     body += r"""
 printf("dHreal_dr_circ = %.15e\n", commondata->dHreal_dr_circ);
 printf("dHreal_dpphi_circ = %.15e\n", commondata->dHreal_dpphi_circ);
+"""
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        include_CodeParameters_h=True,
+        body=body,
+    )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
+
+def register_CFunction_SEOBNRv5_aligned_spin_flux() -> Union[None, pcg.NRPyEnv_type]:
+    """
+    Register CFunction for evaluating SEOBNRv5 factorized resummed flux.
+
+    :return: None if in registration phase, else the updated NRPy environment.
+    """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+
+    includes = ["BHaH_defines.h"]
+    desc = """Evaluate SEOBNRv5 flux."""
+    cfunc_type = "void"
+    name = "SEOBNRv5_aligned_spin_flux"
+    params = "commondata_struct *restrict commondata"
+    wf = SEOBNRv5_wf.SEOBNRv5_aligned_spin_waveform_quantities()
+    flux = wf.flux()
+    body = ccg.c_codegen(
+        [
+            flux,
+        ],
+        [
+            "commondata->flux",
+        ],
+        verbose=False,
+        include_braces=False,
+    )
+    body += r"""
+printf("flux = %.15e\n", commondata->flux);
 """
     cfc.register_CFunction(
         includes=includes,
