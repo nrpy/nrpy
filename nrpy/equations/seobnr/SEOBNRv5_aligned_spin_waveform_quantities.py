@@ -7,6 +7,8 @@ License: BSD 2-Clause
 """
 
 # Step P1: Import needed modules:
+from typing import Dict
+
 import sympy as sp
 
 # The name of this module ("WaveEquation") is given by __name__:
@@ -1362,7 +1364,7 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
         factorized_flux *= -(sp.Rational(1, 8) * self.Omega / sp.pi)
         return factorized_flux
 
-    def strain(self) -> dict[str,sp.Mul]:
+    def strain(self) -> Dict[str, sp.core.Mul]:
         """
         Compute the SEOBNRv5 aligned-spin gravitational-wave strain.
 
