@@ -231,7 +231,11 @@ def register_CFunction_SEOBNRv5_aligned_spin_flux() -> Union[None, pcg.NRPyEnv_t
     params = "commondata_struct *restrict commondata"
     wf = SEOBNRv5_wf.SEOBNRv5_aligned_spin_waveform_quantities()
     flux = wf.flux()
-    body = ccg.c_codegen(
+    body = """
+REAL Omega = commondata->dHreal_dpphi;
+REAL Omega_circ = commondata->dHreal_dpphi_circ;
+"""
+    body += ccg.c_codegen(
         [
             flux,
         ],

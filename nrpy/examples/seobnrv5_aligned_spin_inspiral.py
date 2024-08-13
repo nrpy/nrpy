@@ -59,6 +59,9 @@ SEOBNRv5_aligned_spin_Hamiltonian_and_derivs(&commondata);
 
 // Step 4: Compute SEOBNRv5 Hamiltonian's circular derivatives.
 SEOBNRv5_aligned_spin_Hamiltonian_circular_derivs(&commondata);
+
+// Step 5: Compute SEOBNRv5's gravitational wave flux.
+SEOBNRv5_aligned_spin_flux(&commondata);
 return 0;
 """
     cfc.register_CFunction(
