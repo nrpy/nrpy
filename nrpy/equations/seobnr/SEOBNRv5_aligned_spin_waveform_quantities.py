@@ -1309,15 +1309,14 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
         self.effective_source.append(Heff)
         self.effective_source.append(self.vomega * self.pphi)
 
-    def flux(self) -> sp.Basic:
+    def flux(self) -> sp.Mul:
         """
         Compute the SEOBNRv5 aligned-spin flux.
 
         This function returns the symbolic expression for the factorized resummed flux
         in the SEOBNRv5 aligned spin approximant.
 
-        Inputs: 'self'{
-        Outputs: }'flux'
+        :return: The symbolic expression representing the flux.
         """
         factorized_flux = 0
         for l in range(2, 9):
@@ -1363,15 +1362,14 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
         factorized_flux *= -(sp.Rational(1, 8) * self.Omega / sp.pi)
         return factorized_flux
 
-    def strain(self) -> sp.Basic:
+    def strain(self) -> dict:
         """
         Compute the SEOBNRv5 aligned-spin gravitational-wave strain.
 
         This function returns the symbolic expression for the factorized resummed strains
         in the SEOBNRv5 aligned spin approximant.
 
-        Inputs: 'self'
-        Outputs: 'hlms'
+        :return: dictionary containing the symbolic expressions representing each mode of the strain
         """
         hlms = {}
         for l in range(2, 6):
