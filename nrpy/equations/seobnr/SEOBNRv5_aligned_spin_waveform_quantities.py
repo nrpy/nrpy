@@ -1362,7 +1362,7 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
         factorized_flux *= -(sp.Rational(1, 8) * self.Omega / sp.pi)
         return factorized_flux
 
-    def strain(self) -> dict:
+    def strain(self) -> dict[str,sp.Mul]:
         """
         Compute the SEOBNRv5 aligned-spin gravitational-wave strain.
 
