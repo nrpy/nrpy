@@ -59,6 +59,9 @@ SEOBNRv5_aligned_spin_Hamiltonian_and_derivs(&commondata);
 
 // Step 4: Compute SEOBNRv5 Hamiltonian's circular derivatives.
 SEOBNRv5_aligned_spin_Hamiltonian_circular_derivs(&commondata);
+
+// Step 5: Compute SEOBNRv5's gravitational wave flux.
+SEOBNRv5_aligned_spin_flux(&commondata);
 return 0;
 """
     cfc.register_CFunction(
@@ -74,7 +77,7 @@ return 0;
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_and_derivs()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_derivs()
-
+seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_flux()
 #########################################################
 # STEP 3: Generate header files, register C functions and
 #         command line parameters, set up boundary conditions,
