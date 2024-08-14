@@ -20,7 +20,6 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
-import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 import nrpy.infrastructures.BHaH.nrpyelliptic.conformally_flat_C_codegen_library as nrpyellClib
 import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
@@ -32,6 +31,7 @@ import nrpy.infrastructures.superB.MoL as superBMoL
 import nrpy.infrastructures.superB.nrpyelliptic.conformally_flat_C_codegen_library as superBnrpyellClib
 import nrpy.infrastructures.superB.numerical_grids as superBnumericalgrids
 import nrpy.infrastructures.superB.timestepping_chare as superBtimestepping
+import nrpy.infrastructures.superB.initial_data as superBinitialdata
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import (
@@ -225,12 +225,9 @@ nrpyellClib.register_CFunction_check_stop_conditions()
 if __name__ == "__main__" and parallel_codegen_enable:
     pcg.do_parallel_codegen()
 
-cbc.CurviBoundaryConditions_register_C_functions(
-    list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order
-)
 charecomm.chare_comm_register_C_functions(list_of_CoordSystems=[CoordSystem])
 superBcbc.CurviBoundaryConditions_register_C_functions(
-    list_of_CoordSystems=[CoordSystem]
+    list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order
 )
 
 rhs_string = """rhs_eval(commondata, params, rfmstruct,  auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);

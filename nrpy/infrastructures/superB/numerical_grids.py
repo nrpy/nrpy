@@ -159,7 +159,7 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
         body += r"""
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   charecommstruct_set_up(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, chare_index);
-  bcstruct_chare_set_up(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata_chare[grid].xx, &griddata[grid].bcstruct, &griddata_chare[grid].bcstruct, chare_index);
+  bcstruct_chare_set_up(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata_chare[grid].xx, &griddata[grid].bcstruct, &griddata_chare[grid].bcstruct, &griddata_chare[grid].nonlocalinnerbcstruct, chare_index);
   // 1D diagnostics set up
   diagnosticstruct_set_up_nearest_1d_y_axis(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index, &griddata_chare[grid].diagnosticstruct);
   diagnosticstruct_set_up_nearest_1d_z_axis(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index, &griddata_chare[grid].diagnosticstruct);

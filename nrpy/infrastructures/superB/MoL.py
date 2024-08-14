@@ -22,13 +22,14 @@ import sympy as sp  # Import SymPy, a computer algebra system written entirely i
 
 import nrpy.c_function as cfc
 import nrpy.params as par  # NRPy+: Parameter interface
+from nrpy.c_codegen import c_codegen
+from nrpy.helpers.generic import superfast_uniq
 from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
 from nrpy.infrastructures.BHaH.MoLtimestepping.MoL import (
     generate_gridfunction_names,
     is_diagonal_Butcher,
     register_CFunction_MoL_free_memory,
     register_CFunction_MoL_malloc,
-    single_RK_substep_input_symbolic,
 )
 from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import (
     generate_Butcher_tables,
@@ -43,6 +44,216 @@ _ = par.CodeParameter("REAL", __name__, "t_0", add_to_parfile=False, add_to_set_
 _ = par.CodeParameter("REAL", __name__, "time", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
 _ = par.CodeParameter("REAL", __name__, "t_final", 10.0, commondata=True)
 # fmt: on
+
+
+
+def split_post_rhs_string(post_rhs_string):
+    # Keywords to split and check
+    keyword1 = "apply_bcs_outerextrap_and_inner"
+    keyword2 = "enforce_detgammabar_equals_detgammahat"
+
+    # Check for the presence of keywords
+    if keyword1 not in post_rhs_string or keyword2 not in post_rhs_string:
+        raise ValueError("The post_rhs_string must contain both keywords.")
+
+    # Split the string based on the first keyword
+    parts = post_rhs_string.split(keyword1)
+
+    if len(parts) != 2:
+        raise ValueError("The post_rhs_string should be split into exactly two parts.")
+
+    # Define the strings
+    part1 = parts[0] + keyword1
+    part2 = keyword2 + parts[1].split(keyword2, 1)[1] if keyword2 in parts[1] else ""
+
+    return part1, part2
+
+
+
+
+# single_RK_substep_input_symbolic() performs necessary replacements to
+#   define C code for a single RK substep
+#   (e.g., computing k_1 and then updating the outer boundaries)
+def single_RK_substep_input_symbolic(
+    comment_block: str,
+    substep_time_offset_dt: Union[sp.Basic, int, str],
+    rhs_str: str,
+    rhs_input_expr: sp.Basic,
+    rhs_output_expr: sp.Basic,
+    RK_lhs_list: Union[sp.Basic, List[sp.Basic]],
+    RK_rhs_list: Union[sp.Basic, List[sp.Basic]],
+    post_rhs_list: Union[str, List[str]],
+    post_rhs_output_list: Union[sp.Basic, List[sp.Basic]],
+    enable_simd: bool = False,
+    gf_aliases: str = "",
+    post_post_rhs_string: str = "",
+    fp_type: str = "double",
+) -> str:
+    """
+    Generate C code for a given Runge-Kutta substep.
+
+    :param comment_block: Block of comments for the generated code.
+    :param substep_time_offset_dt: Time offset for the RK substep.
+    :param rhs_str: Right-hand side string of the C code.
+    :param rhs_input_expr: Input expression for the RHS.
+    :param rhs_output_expr: Output expression for the RHS.
+    :param RK_lhs_list: List of LHS expressions for RK.
+    :param RK_rhs_list: List of RHS expressions for RK.
+    :param post_rhs_list: List of post-RHS expressions.
+    :param post_rhs_output_list: List of outputs for post-RHS expressions.
+    :param enable_simd: Whether SIMD optimization is enabled.
+    :param gf_aliases: Additional aliases for grid functions.
+    :param post_post_rhs_string: String to be used after the post-RHS phase.
+    :param fp_type: Floating point type, e.g., "double".
+
+    :return: A string containing the generated C code.
+
+    :raises ValueError: If substep_time_offset_dt cannot be extracted from the Butcher table.
+    """
+    # Ensure all input lists are lists
+    RK_lhs_list = [RK_lhs_list] if not isinstance(RK_lhs_list, list) else RK_lhs_list
+    RK_rhs_list = [RK_rhs_list] if not isinstance(RK_rhs_list, list) else RK_rhs_list
+    post_rhs_list = (
+        [post_rhs_list] if not isinstance(post_rhs_list, list) else post_rhs_list
+    )
+    post_rhs_output_list = (
+        [post_rhs_output_list]
+        if not isinstance(post_rhs_output_list, list)
+        else post_rhs_output_list
+    )
+
+    return_str = f"{comment_block}\n"
+    if isinstance(substep_time_offset_dt, (int, sp.Rational, sp.Mul)):
+        substep_time_offset_str = f"{float(substep_time_offset_dt):.17e}"
+    else:
+        raise ValueError(
+            f"Could not extract substep_time_offset_dt={substep_time_offset_dt} from Butcher table"
+        )
+    return_str += "for(int grid=0; grid<commondata->NUMGRIDS; grid++) {\n"
+    return_str += (
+        f"commondata->time = time_start + {substep_time_offset_str} * commondata->dt;\n"
+    )
+    return_str += gf_aliases
+
+    return_str += """
+switch (which_MOL_part) {
+  case MOL_PART_1: {"""
+
+    # Part 1: RHS evaluation
+    updated_rhs_str = (
+        str(rhs_str)
+        .replace("RK_INPUT_GFS", str(rhs_input_expr).replace("gfsL", "gfs"))
+        .replace("RK_OUTPUT_GFS", str(rhs_output_expr).replace("gfsL", "gfs"))
+    )
+    return_str += updated_rhs_str + "\n"
+
+    return_str += """
+     break;
+  }
+  case MOL_PART_2: {"""
+
+    # Part 2: RK update
+    if enable_simd:
+        warnings.warn(
+            "enable_simd in MoL is not properly supported -- MoL update loops are not properly bounds checked."
+        )
+        return_str += "#pragma omp parallel for\n"
+        return_str += "for(int i=0;i<Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;i+=simd_width) {{\n"
+    else:
+        return_str += "LOOP_ALL_GFS_GPS(i) {\n"
+
+    var_type = "REAL_SIMD_ARRAY" if enable_simd else "REAL"
+
+    RK_lhs_str_list = [
+        (
+            f"const REAL_SIMD_ARRAY __rhs_exp_{i}"
+            if enable_simd
+            else f"{str(el).replace('gfsL', 'gfs[i]')}"
+        )
+        for i, el in enumerate(RK_lhs_list)
+    ]
+
+    read_list = [
+        read for el in RK_rhs_list for read in list(sp.ordered(el.free_symbols))
+    ]
+    read_list_unique = superfast_uniq(read_list)
+
+    for el in read_list_unique:
+        if str(el) != "commondata->dt":
+            if enable_simd:
+                simd_el = str(el).replace("gfsL", "gfs[i]")
+                return_str += f"const {var_type} {el} = ReadSIMD(&{simd_el});\n"
+            else:
+                return_str += (
+                    f"const {var_type} {el} = {str(el).replace('gfsL', 'gfs[i]')};\n"
+                )
+
+    if enable_simd:
+        return_str += "const REAL_SIMD_ARRAY DT = ConstSIMD(commondata->dt);\n"
+
+    kernel = c_codegen(
+        RK_rhs_list,
+        RK_lhs_str_list,
+        include_braces=False,
+        verbose=False,
+        enable_simd=enable_simd,
+        fp_type=fp_type,
+    )
+
+    if enable_simd:
+        return_str += kernel.replace("commondata->dt", "DT")
+        for i, el in enumerate(RK_lhs_list):
+            return_str += (
+                f"  WriteSIMD(&{str(el).replace('gfsL', 'gfs[i]')}, __rhs_exp_{i});\n"
+            )
+
+    else:
+        return_str += kernel
+
+    return_str += "}\n"
+    return_str += """
+    break;
+  }
+"""
+    return_str += """
+  case MOL_PART_3_APPLY_BCS: {
+"""
+    # Part 3: Call post-RHS functions
+    for post_rhs, post_rhs_output in zip(post_rhs_list, post_rhs_output_list):
+        parts = [part.strip() for part in post_rhs.split(';') if part.strip()]
+        part1 = parts[0] + ';'
+        return_str += part1.replace(
+            "RK_OUTPUT_GFS", str(post_rhs_output).replace("gfsL", "gfs")
+        )
+        return_str += "\n"
+
+    return_str += """
+    break;
+  }
+"""
+    return_str += """
+  case MOL_PART_3_AFTER_APPLY_BCS: {
+"""
+    for post_rhs, post_rhs_output in zip(post_rhs_list, post_rhs_output_list):
+        parts = [part.strip() for part in post_rhs.split(';') if part.strip()]
+        part2 = parts[1] + ';'
+        return_str += part2.replace(
+            "RK_OUTPUT_GFS", str(post_rhs_output).replace("gfsL", "gfs"))
+
+    for post_rhs, post_rhs_output in zip(post_rhs_list, post_rhs_output_list):
+        return_str += post_post_rhs_string.replace(
+            "RK_OUTPUT_GFS", str(post_rhs_output).replace("gfsL", "gfs")
+        )
+
+    return_str += """
+    break;
+  }
+}
+}
+"""
+
+    return return_str
+
 
 
 def generate_post_rhs_output_list(
@@ -101,6 +312,58 @@ def generate_post_rhs_output_list(
                     post_rhs = [rhs_output]
 
     return post_rhs  # Return the list of strings representing the post RHS output
+
+
+
+def generate_rhs_output_exprs(
+    Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
+    MoL_method: str,
+    rk_substep: int,
+) -> List[str]:
+    """
+    Generate rhs_output_exprs based on the Method of Lines (MoL) method and the current RK substep.
+
+    :param Butcher_dict: A dictionary containing the Butcher tableau and its order.
+    :param MoL_method: The method of lines method name.
+    :param rk_substep: The current Runge-Kutta substep (1-indexed).
+    :return: A list of sympy expressions representing the RHS output expressions.
+    """
+    num_steps = len(Butcher_dict[MoL_method][0]) - 1
+    s = rk_substep - 1  # Convert to 0-indexed
+    rhs_output_expr = []
+
+    if is_diagonal_Butcher(Butcher_dict, MoL_method) and "RK3" in MoL_method:
+        y_n_gfs = "Y_N_GFS"
+        k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs = (
+            "K1_OR_Y_NPLUS_A21_K1_OR_Y_NPLUS1_RUNNING_TOTAL_GFS"
+        )
+        k2_or_y_nplus_a32_k2_gfs = "K2_OR_Y_NPLUS_A32_K2_GFS"
+
+        if s == 0:
+            rhs_output_expr=[k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs]
+        elif s == 1:
+            rhs_output_expr=[k2_or_y_nplus_a32_k2_gfs]
+        elif s == 2:
+            rhs_output_expr=[y_n_gfs]
+    else:
+        y_n = "Y_N_GFS"
+        if not is_diagonal_Butcher(Butcher_dict, MoL_method):
+            rhs_output_expr = [f"K{rk_substep}_GFS"]
+        else:
+            if MoL_method == "Euler":
+                rhs_output_expr = ["Y_NPLUS1_RUNNING_TOTAL_GFS"]
+            else:
+                if s == 0:
+                    rhs_output_expr = ["K_ODD_GFS"]
+                # For the remaining steps the inputs and ouputs alternate between k_odd and k_even
+                elif s % 2 == 0:
+                    rhs_output_expr = ["K_ODD_GFS"]
+                else:
+                    rhs_output_expr = ["K_EVEN_GFS"]
+
+    return rhs_output_expr  # Return the list of strings representing the RHS output expr
+
+
 
 
 def register_CFunction_MoL_malloc_diagnostic_gfs() -> None:
@@ -230,7 +493,7 @@ def register_CFunction_MoL_step_forward_in_time(
     desc = f'Method of Lines (MoL) for "{MoL_method}" method: Step forward one full timestep.\n'
     cfunc_type = "void"
     name = "MoL_step_forward_in_time"
-    params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata, const REAL time_start, const int which_RK_substep"
+    params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata, const REAL time_start, const int which_RK_substep, const int which_MOL_part"
 
     # Code body
     body = f"""

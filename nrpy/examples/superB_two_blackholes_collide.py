@@ -27,7 +27,6 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
-import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 import nrpy.infrastructures.BHaH.general_relativity.BSSN_C_codegen_library as BCl
 import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
@@ -40,6 +39,7 @@ import nrpy.infrastructures.superB.Makefile_helpers as superBMakefile
 import nrpy.infrastructures.superB.MoL as superBMoL
 import nrpy.infrastructures.superB.numerical_grids as superBnumericalgrids
 import nrpy.infrastructures.superB.timestepping_chare as superBtimestepping
+import nrpy.infrastructures.superB.initial_data as superBinitialdata
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import rfm_precompute, rfm_wrapper_functions
@@ -66,7 +66,10 @@ default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.5
 default_BH2_z_posn = -0.5
 enable_rfm_precompute = True
-MoL_method = "RK4"
+# ~ MoL_method = "RK4"
+# ~ MoL_method = "RK3 Heun"
+# ~ MoL_method = "SSPRK3"
+MoL_method = "DP8"
 fd_order = 4
 radiation_BC_fd_order = 4
 enable_simd = True
@@ -75,7 +78,8 @@ parallel_codegen_enable = True
 enable_fd_functions = True
 enable_KreissOliger_dissipation = False
 enable_CAKO = True
-boundary_conditions_desc = "outgoing radiation"
+# ~ boundary_conditions_desc = "outgoing radiation"
+boundary_conditions_desc = "extrapolation"
 # Choosing number of chares, Nchare0, Nchare1, and Nchare2, in each direction:
 # 1. for spherical-like coordinates Nchare1 and Nchare2 cannot be greater than 1
 # 2. for cylindrical-like coordinates Nchare1 cannot be greater than 1
@@ -113,7 +117,7 @@ par.adjust_CodeParam_default("t_final", t_final)
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
-BCl.register_CFunction_initial_data(
+superBinitialdata.register_CFunction_initial_data(
     CoordSystem=CoordSystem,
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
@@ -191,12 +195,9 @@ BCl.register_CFunction_constraints(
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 
-cbc.CurviBoundaryConditions_register_C_functions(
-    list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order
-)
 charecomm.chare_comm_register_C_functions(list_of_CoordSystems=[CoordSystem])
 superBcbc.CurviBoundaryConditions_register_C_functions(
-    list_of_CoordSystems=[CoordSystem]
+    list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order
 )
 rhs_string = ""
 if separate_Ricci_and_BSSN_RHS:

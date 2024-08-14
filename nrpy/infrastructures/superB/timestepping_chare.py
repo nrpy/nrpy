@@ -20,20 +20,88 @@ from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary impor
     generate_Butcher_tables,
 )
 from nrpy.infrastructures.superB.MoL import generate_post_rhs_output_list
+from nrpy.infrastructures.superB.MoL import generate_rhs_output_exprs
 
 
-def generate_mol_step_forward_code(rk_substep: str) -> str:
+def generate_send_nonlocalinnerbc_data_code(which_gf: str) -> str:
+    """
+    Generate code for sending nonlocal inner bc data.
+
+    :param which_gf: Which grid function
+    :return: Code for sending nonlocal inner bc data
+    """
+    return f"""
+    if (griddata_chare[grid].nonlocalinnerbcstruct.tot_num_dst_chares > 0) {{
+        serial {{
+          send_nonlocalinnerbc_data({which_gf}, grid);
+        }}
+      }}
+    """
+
+def generate_process_nonlocalinnerbc_code() -> str:
+    """
+    Generate code for nonlocal inner bc processing.
+    """
+    return """
+      if (griddata_chare[grid].nonlocalinnerbcstruct.tot_num_src_chares > 0) {
+        for (iter = 0; iter < griddata_chare[grid].nonlocalinnerbcstruct.tot_num_src_chares; iter++) {
+          when receiv_nonlocalinnerbc_data(int src_chare_idx3, int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial {
+              set_tmpBuffer_innerbc_receiv(src_chare_idx3, len_tmpBuffer, tmpBuffer, grid);
+              type_gfs_nonlocal_innerbc = type_gfs;
+            }
+          }
+        }
+        serial {
+          process_nonlocalinnerbc(type_gfs_nonlocal_innerbc, grid);
+        }
+      }
+"""
+
+def generate_mol_step_forward_code(rk_substep: str, rhs_output_exprs_list: List[str], post_rhs_output_list: List[str]) -> str:
     """
     Generate code for MoL step forward in time.
 
     :param rk_substep: Runge-Kutta substep
     :return: Code for MoL step forward in time
     """
-    return f"""
+    return_str = f"""
     serial{{
-        MoL_step_forward_in_time(&commondata, griddata_chare, time_start, {rk_substep});
+        MoL_step_forward_in_time(&commondata, griddata_chare, time_start, {rk_substep},  MOL_PART_1);
     }}
-    """
+"""
+    return_str += """
+    if (strncmp(commondata.outer_bc_type, "radiation", 50) == 0) {
+"""
+    for rhs_output_exprs in rhs_output_exprs_list:
+        return_str += generate_send_nonlocalinnerbc_data_code(rhs_output_exprs)
+        return_str += generate_process_nonlocalinnerbc_code()
+
+    return_str += """
+    }
+"""
+    return_str += f"""
+    serial{{
+        MoL_step_forward_in_time(&commondata, griddata_chare, time_start, {rk_substep}, MOL_PART_2);
+        MoL_step_forward_in_time(&commondata, griddata_chare, time_start, {rk_substep}, MOL_PART_3_APPLY_BCS);
+    }}
+"""
+    return_str += """
+    if (strncmp(commondata.outer_bc_type, "extrapolation", 50) == 0) {
+"""
+    for post_rhs_output in post_rhs_output_list:
+        return_str += generate_send_nonlocalinnerbc_data_code(post_rhs_output)
+        return_str += generate_process_nonlocalinnerbc_code()
+
+    return_str += """
+    }
+"""
+    return_str += f"""
+    serial{{
+        MoL_step_forward_in_time(&commondata, griddata_chare, time_start, {rk_substep}, MOL_PART_3_AFTER_APPLY_BCS);
+    }}
+"""
+    return return_str
 
 
 def generate_send_neighbor_data_code(which_gf: str, neighbor_direction: str) -> str:
@@ -51,7 +119,7 @@ def generate_send_neighbor_data_code(which_gf: str, neighbor_direction: str) -> 
     """
 
 
-def generate_ghost_code(
+def generate_process_ghost_code(
     axis: str, pos_ghost_type: str, neg_ghost_type: str, nchare_var: str
 ) -> str:
     """
@@ -152,7 +220,7 @@ def register_CFunction_timestepping_malloc() -> None:
     desc = "Allocate memory for temporary buffers used to communicate face data"
     cfunc_type = "void"
     name = "timestepping_malloc_tmpBuffer"
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, tmpBuffers_struct *restrict tmpBuffers"
+    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const nonlocalinnerbc_struct *restrict nonlocalinnerbcstruct, tmpBuffers_struct *restrict tmpBuffers"
     body = """
 const int Nxx_plus_2NGHOSTS_face0 = Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
 const int Nxx_plus_2NGHOSTS_face1 = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS2;
@@ -161,6 +229,22 @@ const int Nxx_plus_2NGHOSTS_face2 = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1;
 tmpBuffers->tmpBuffer_EW = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * NGHOSTS * Nxx_plus_2NGHOSTS_face0);
 tmpBuffers->tmpBuffer_NS = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * NGHOSTS * Nxx_plus_2NGHOSTS_face1);
 tmpBuffers->tmpBuffer_TB = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * NGHOSTS * Nxx_plus_2NGHOSTS_face2);
+
+// Unpack nonlocalinnerbcstruct
+  const int tot_num_dst_chares = nonlocalinnerbcstruct->tot_num_dst_chares;
+  const int *restrict num_srcpts_tosend_each_chare = nonlocalinnerbcstruct->num_srcpts_tosend_each_chare;
+  const int tot_num_src_chares = nonlocalinnerbcstruct->tot_num_src_chares;
+  const int *restrict num_srcpts_each_chare = nonlocalinnerbcstruct->num_srcpts_each_chare;
+
+  tmpBuffers->tmpBuffer_innerbc_send = (REAL **)malloc(tot_num_dst_chares * sizeof(REAL *));
+  for (int which_chare = 0; which_chare < tot_num_dst_chares; which_chare++) {
+    tmpBuffers->tmpBuffer_innerbc_send[which_chare] = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * num_srcpts_tosend_each_chare[which_chare]);
+  }
+  tmpBuffers->tmpBuffer_innerbc_receiv = (REAL **)malloc(tot_num_src_chares * sizeof(REAL *));
+  for (int which_chare = 0; which_chare < tot_num_src_chares; which_chare++) {
+    tmpBuffers->tmpBuffer_innerbc_receiv[which_chare] = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * num_srcpts_each_chare[which_chare]);
+  }
+
 """
     cfc.register_CFunction(
         includes=includes,
@@ -183,11 +267,34 @@ def register_CFunction_timestepping_free_memory() -> None:
     desc = "Free memory for temporary buffers used to communicate face data"
     cfunc_type = "void"
     name = "timestepping_free_memory_tmpBuffer"
-    params = "tmpBuffers_struct *restrict tmpBuffers"
+    params = "const nonlocalinnerbc_struct *restrict nonlocalinnerbcstruct, tmpBuffers_struct *restrict tmpBuffers"
     body = """
 if (tmpBuffers->tmpBuffer_EW != NULL) free(tmpBuffers->tmpBuffer_EW);
 if (tmpBuffers->tmpBuffer_NS != NULL) free(tmpBuffers->tmpBuffer_NS);
 if (tmpBuffers->tmpBuffer_TB != NULL) free(tmpBuffers->tmpBuffer_TB);
+
+// Unpack nonlocalinnerbcstruct
+const int tot_num_dst_chares = nonlocalinnerbcstruct->tot_num_dst_chares;
+const int tot_num_src_chares = nonlocalinnerbcstruct->tot_num_src_chares;
+
+// Free tmpBuffer_innerbc_send
+if (tmpBuffers->tmpBuffer_innerbc_send != NULL) {
+  for (int which_chare = 0; which_chare < tot_num_dst_chares; which_chare++) {
+    if (tmpBuffers->tmpBuffer_innerbc_send[which_chare] != NULL) {
+      free(tmpBuffers->tmpBuffer_innerbc_send[which_chare]);
+    }
+  }
+  free(tmpBuffers->tmpBuffer_innerbc_send);
+}
+// Free tmpBuffer_innerbc_receiv
+if (tmpBuffers->tmpBuffer_innerbc_receiv != NULL) {
+  for (int which_chare = 0; which_chare < tot_num_src_chares; which_chare++) {
+    if (tmpBuffers->tmpBuffer_innerbc_receiv[which_chare] != NULL) {
+      free(tmpBuffers->tmpBuffer_innerbc_receiv[which_chare]);
+    }
+  }
+  free(tmpBuffers->tmpBuffer_innerbc_receiv);
+}
 """
     cfc.register_CFunction(
         includes=includes,
@@ -240,11 +347,19 @@ class Timestepping : public CBase_Timestepping {
     Ck::IO::File f_2d_yz;
     int count_filewritten = 0;
     const int expected_count_filewritten = 4;
+    int iter = 0;
+    int type_gfs_nonlocal_innerbc;
 
 
     /// Member Functions (private) ///
     void send_neighbor_data(const int type_gfs, const int dir, const int grid);
-    void process_ghost(const int type_ghost, const int type_gfs, const int len_tmpBuffer, const REAL *restrict tmpBuffer, const int grid);"""
+    void process_ghost(const int type_ghost, const int type_gfs, const int len_tmpBuffer, const REAL *restrict tmpBuffer, const int grid);
+    void send_nonlocalinnerbc_idx3srcpts_toreceiv();
+    void process_nonlocalinnerbc_idx3srcpt_tosend(int idx3_of_sendingchare, int num_srcpts, const int *restrict globalidx3_srcpts);
+    void send_nonlocalinnerbc_data(const int type_gfs, const int grid);
+    void set_tmpBuffer_innerbc_receiv(const int src_chare_idx3, const int len_tmpBuffer, const REAL *restrict vals, const int grid);
+    void process_nonlocalinnerbc(const int type_gfs, const int grid);
+"""
 
     if enable_residual_diagnostics:
         file_output_str += r"""
@@ -434,9 +549,6 @@ Timestepping::Timestepping(CommondataObject &&inData) {
   // Step 3: Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping
   for(int grid=0; grid<commondata.NUMGRIDS; grid++)
     MoL_malloc_non_y_n_gfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].gridfuncs);
-    
-  // Step 4: Finalize initialization: set up initial data, etc.
-  initial_data(&commondata, griddata_chare);
 """
     if post_non_y_n_auxevol_mallocs:
         file_output_str += (
@@ -452,7 +564,7 @@ Timestepping::Timestepping(CommondataObject &&inData) {
 
   // Allocate storage for temporary buffers, needed for communicating face data
   for(int grid=0; grid<commondata.NUMGRIDS; grid++)
-    timestepping_malloc_tmpBuffer(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].tmpBuffers);
+    timestepping_malloc_tmpBuffer(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].nonlocalinnerbcstruct, &griddata_chare[grid].tmpBuffers);
 
 """
     if initialize_constant_auxevol:
@@ -474,7 +586,7 @@ Timestepping::~Timestepping() {
     MoL_free_memory_y_n_gfs(&griddata_chare[grid].gridfuncs);
     MoL_free_memory_non_y_n_gfs(&griddata_chare[grid].gridfuncs);
     MoL_free_memory_diagnostic_gfs(&griddata_chare[grid].gridfuncs);
-    timestepping_free_memory_tmpBuffer(&griddata_chare[grid].tmpBuffers);"""
+    timestepping_free_memory_tmpBuffer(&griddata_chare[grid].nonlocalinnerbcstruct, &griddata_chare[grid].tmpBuffers);"""
     if enable_rfm_precompute:
         file_output_str += r"""
     rfm_precompute_free(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].rfmstruct);"""
@@ -482,6 +594,7 @@ Timestepping::~Timestepping() {
         file_output_str += r"""
     free(griddata[grid].bcstruct.inner_bc_array);
     free(griddata_chare[grid].bcstruct.inner_bc_array);
+    free(griddata_chare[grid].bcstruct.inner_bc_array_nonlocal);
     for(int ng=0;ng<NGHOSTS*3;ng++) {
      free(griddata[grid].bcstruct.pure_outer_bc_array[ng]);
      free(griddata_chare[grid].bcstruct.pure_outer_bc_array[ng]);
@@ -513,6 +626,24 @@ Timestepping::~Timestepping() {
     free(griddata_chare[grid].charecommstruct.globalidx3pt_to_chareidx3);
     free(griddata_chare[grid].charecommstruct.globalidx3pt_to_localidx3pt);
     free(griddata_chare[grid].charecommstruct.localidx3pt_to_globalidx3pt);
+    free(griddata_chare[grid].nonlocalinnerbcstruct.idx3_of_src_chares);
+    free(griddata_chare[grid].nonlocalinnerbcstruct.idx3chare_to_src_chare_id);
+    free(griddata_chare[grid].nonlocalinnerbcstruct.num_srcpts_each_chare);
+    for (int i = 0; i < griddata_chare[grid].nonlocalinnerbcstruct.tot_num_src_chares; i++) {
+      free(griddata_chare[grid].nonlocalinnerbcstruct.map_srcchare_and_srcpt_id_to_linear_id[i]);
+    }
+    free(griddata_chare[grid].nonlocalinnerbcstruct.map_srcchare_and_srcpt_id_to_linear_id);
+    for (int i = 0; i < griddata_chare[grid].nonlocalinnerbcstruct.tot_num_src_chares; i++) {
+      free(griddata_chare[grid].nonlocalinnerbcstruct.globalidx3_srcpts[i]);
+    }
+    free(griddata_chare[grid].nonlocalinnerbcstruct.globalidx3_srcpts);
+    free(griddata_chare[grid].nonlocalinnerbcstruct.idx3_of_dst_chares);
+    free(griddata_chare[grid].nonlocalinnerbcstruct.idx3chare_to_dst_chare_id);
+    free(griddata_chare[grid].nonlocalinnerbcstruct.num_srcpts_tosend_each_chare);
+    for (int i = 0; i < griddata_chare[grid].nonlocalinnerbcstruct.tot_num_dst_chares; i++) {
+      free(griddata_chare[grid].nonlocalinnerbcstruct.globalidx3_srcpts_tosend[i]);
+    }
+    free(griddata_chare[grid].nonlocalinnerbcstruct.globalidx3_srcpts_tosend);
   }
   free(griddata);
   free(griddata_chare);
@@ -749,11 +880,112 @@ void Timestepping::contribute_localsums_for_residualH(REAL localsums_for_residua
   CkCallback cb(CkIndex_Timestepping::report_sums_for_residualH(NULL), thisProxy);
   contribute(outdoubles, CkReduction::sum_double, cb);
 }
-    """
+"""
 
     file_output_str += r"""
+void Timestepping::send_nonlocalinnerbc_idx3srcpts_toreceiv() {
+  // Unpack griddata_chare[grid].nonlocalinnerbcstruct
+  int grid = 0;
+  const int tot_num_src_chares = griddata_chare[grid].nonlocalinnerbcstruct.tot_num_src_chares;
+  const int *restrict idx3_of_src_chares = griddata_chare[grid].nonlocalinnerbcstruct.idx3_of_src_chares;
+  int **restrict globalidx3_srcpts = griddata_chare[grid].nonlocalinnerbcstruct.globalidx3_srcpts;
+  const int *restrict num_srcpts_each_chare = griddata_chare[grid].nonlocalinnerbcstruct.num_srcpts_each_chare;
+
+  const int Nchare0 = commondata.Nchare0;
+  const int Nchare1 = commondata.Nchare1;
+  const int Nchare2 = commondata.Nchare2;
+  const int idx3_of_thischare = IDX3_OF_CHARE(thisIndex.x, thisIndex.y, thisIndex.z);
+
+  for (int src_chare_id = 0; src_chare_id < tot_num_src_chares; src_chare_id++) {
+    int idx3srcchare = idx3_of_src_chares[src_chare_id];
+    int src_chare_index0;
+    int src_chare_index1;
+    int src_chare_index2;
+    REVERSE_IDX3GENERAL(idx3srcchare, Nchare0, Nchare1, src_chare_index0, src_chare_index1, src_chare_index2);
+    int num_srcpts  = num_srcpts_each_chare[src_chare_id];
+    thisProxy[CkArrayIndex3D(src_chare_index0, src_chare_index1, src_chare_index2)].receiv_nonlocalinnerbc_idx3srcpt_tosend(idx3_of_thischare, num_srcpts, globalidx3_srcpts[src_chare_id]);
+  }
+}
+"""
+
+    file_output_str += r"""
+void Timestepping::process_nonlocalinnerbc_idx3srcpt_tosend(int idx3_of_sendingchare, int num_srcpts, const int *restrict globalidx3_srcpts) {
+  // Unpack griddata_chare[grid].nonlocalinnerbcstruct
+  int grid = 0;
+  const int *restrict idx3chare_to_dst_chare_id = griddata_chare[grid].nonlocalinnerbcstruct.idx3chare_to_dst_chare_id;
+  int **restrict globalidx3_srcpts_tosend = griddata_chare[grid].nonlocalinnerbcstruct.globalidx3_srcpts_tosend;
+
+  const int dst_chare_id_val = idx3chare_to_dst_chare_id[idx3_of_sendingchare];
+  for (int count = 0; count < num_srcpts; count++) {
+    globalidx3_srcpts_tosend[dst_chare_id_val][count] =  globalidx3_srcpts[count];
+  }
+}
+"""
+
+    file_output_str += r"""
+void Timestepping::send_nonlocalinnerbc_data(const int type_gfs, const int grid) {
+  const int Nchare0 = commondata.Nchare0;
+  const int Nchare1 = commondata.Nchare1;
+  const int Nchare2 = commondata.Nchare2;
+  const int Nxx_plus_2NGHOSTS0 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS0;
+  const int Nxx_plus_2NGHOSTS1 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS1;
+  const int Nxx_plus_2NGHOSTS2 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS2;
+
+  // Unpack nonlocalinnerbcstruct and charecommstruct
+  const int tot_num_dst_chares = griddata_chare[grid].nonlocalinnerbcstruct.tot_num_dst_chares;
+  const int *restrict idx3_of_dst_chares = griddata_chare[grid].nonlocalinnerbcstruct.idx3_of_dst_chares;
+  const int *restrict num_srcpts_tosend_each_chare = griddata_chare[grid].nonlocalinnerbcstruct.num_srcpts_tosend_each_chare;
+  int **restrict globalidx3_srcpts_tosend = griddata_chare[grid].nonlocalinnerbcstruct.globalidx3_srcpts_tosend;
+  const int *restrict globalidx3pt_to_localidx3pt = griddata_chare[grid].charecommstruct.globalidx3pt_to_localidx3pt;
+
+  const REAL *restrict gfs = nullptr;
+  """
+    file_output_str += switch_case_code
+    file_output_str += r"""
+  const int idx3_this_chare = IDX3_OF_CHARE(thisIndex.x, thisIndex.y, thisIndex.z);
+
+  for (int which_dst_chare = 0; which_dst_chare < tot_num_dst_chares; which_dst_chare++) {
+    REAL *restrict tmpBuffer_innerbc_send = griddata_chare[grid].tmpBuffers.tmpBuffer_innerbc_send[which_dst_chare];
+    for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
+      for (int which_srcpt = 0; which_srcpt < num_srcpts_tosend_each_chare[which_dst_chare]; which_srcpt++) {
+        const int globalidx3srcpt = globalidx3_srcpts_tosend[which_dst_chare][which_srcpt];
+        const int localidx3srcpt = globalidx3pt_to_localidx3pt[globalidx3srcpt];
+        const int idx2 = IDX2NONLOCALINNERBC(which_gf, which_srcpt, num_srcpts_tosend_each_chare[which_dst_chare]);
+        tmpBuffer_innerbc_send[idx2] = gfs[IDX4pt(which_gf, localidx3srcpt)];
+      }
+    }
+    int dst_chare_index0;
+    int dst_chare_index1;
+    int dst_chare_index2;
+    REVERSE_IDX3GENERAL(idx3_of_dst_chares[which_dst_chare], Nchare0, Nchare1, dst_chare_index0, dst_chare_index1, dst_chare_index2);
+    thisProxy[CkArrayIndex3D(dst_chare_index0, dst_chare_index1, dst_chare_index2)].receiv_nonlocalinnerbc_data(idx3_this_chare, type_gfs, NUM_EVOL_GFS * num_srcpts_tosend_each_chare[which_dst_chare], tmpBuffer_innerbc_send);
+	}
+}
+"""
+
+    file_output_str += r"""
+void Timestepping::set_tmpBuffer_innerbc_receiv(const int src_chare_idx3, const int len_tmpBuffer, const REAL *restrict vals, const int grid) {
+  const int src_chare_id = griddata_chare[grid].nonlocalinnerbcstruct.idx3chare_to_src_chare_id[src_chare_idx3];
+  REAL *restrict tmpBuffer_innerbc_receiv = griddata_chare[grid].tmpBuffers.tmpBuffer_innerbc_receiv[src_chare_id];
+
+  for (int i = 0; i < len_tmpBuffer; i++) {
+    tmpBuffer_innerbc_receiv[i] = vals[i];
+  }
+}
+"""
+
+    file_output_str += r"""
+void Timestepping::process_nonlocalinnerbc(const int type_gfs, const int grid) {
+  REAL *restrict gfs = nullptr;
+"""
+    file_output_str += switch_case_code
+    file_output_str += r"""
+  apply_bcs_inner_only_nonlocal(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].bcstruct, &griddata_chare[grid].nonlocalinnerbcstruct, gfs, griddata_chare[grid].tmpBuffers.tmpBuffer_innerbc_receiv);
+}
+"""
+    file_output_str += r"""
 #include "timestepping.def.h"
-    """
+"""
 
     timestepping_cpp_file = project_Path / "timestepping.cpp"
     with timestepping_cpp_file.open("w", encoding="utf-8") as file:
@@ -800,7 +1032,38 @@ def output_timestepping_ci(
     entry void ready_2d_yz(Ck::IO::FileReadyMsg *m);
     // Step 5: MAIN SIMULATION LOOP
     entry void start() {
+      if (griddata_chare[grid].nonlocalinnerbcstruct.tot_num_src_chares > 0) {
+        serial {
+          send_nonlocalinnerbc_idx3srcpts_toreceiv();
+        }
+      }
+      if (griddata_chare[grid].nonlocalinnerbcstruct.tot_num_dst_chares > 0) {
+        for (iter = 0; iter < griddata_chare[grid].nonlocalinnerbcstruct.tot_num_dst_chares; iter++) {
+          when receiv_nonlocalinnerbc_idx3srcpt_tosend(int idx3_of_sendingchare, int num_srcpts, int globalidx3_srcpts[num_srcpts]) {
+            serial {
+              process_nonlocalinnerbc_idx3srcpt_tosend(idx3_of_sendingchare, num_srcpts, globalidx3_srcpts);
+            }
+          }
+        }
+      }
+      serial {
+        initial_data(&commondata, griddata_chare, INITIALDATA_LOOPOVERALLGRIDPTS);
+        initial_data(&commondata, griddata_chare, INITIALDATA_APPLYBCSINNERONLY);
+      }
 """
+    file_output_str += generate_send_nonlocalinnerbc_data_code("Y_N_GFS")
+
+    file_output_str += generate_process_nonlocalinnerbc_code()
+
+    file_output_str += """
+      serial {
+        initial_data(&commondata, griddata_chare, INITIALDATA_LAMBDAUGRIDINTERIOR);
+        initial_data(&commondata, griddata_chare, INITIALDATA_APPLYBCSOUTEREXTRAPANDINNER);
+      }
+"""
+    file_output_str += generate_send_nonlocalinnerbc_data_code("Y_N_GFS")
+
+    file_output_str += generate_process_nonlocalinnerbc_code()
 
     for loop_direction in ["x", "y", "z"]:
         # Determine ghost types and configuration based on the current axis
@@ -823,7 +1086,7 @@ def output_timestepping_ci(
         file_output_str += generate_send_neighbor_data_code(
             "Y_N_GFS", grid_split_direction
         )
-        file_output_str += generate_ghost_code(
+        file_output_str += generate_process_ghost_code(
             loop_direction, pos_ghost_type, neg_ghost_type, nchare_var
         )
 
@@ -974,7 +1237,11 @@ def output_timestepping_ci(
 
     # Loop over RK substeps and loop directions.
     for s in range(num_steps):
-        file_output_str += generate_mol_step_forward_code(f"RK_SUBSTEP_K{s+1}")
+        rhs_output_exprs_list = generate_rhs_output_exprs(
+                Butcher_dict, MoL_method, s + 1)
+        post_rhs_output_list = generate_post_rhs_output_list(
+                Butcher_dict, MoL_method, s + 1)
+        file_output_str += generate_mol_step_forward_code(f"RK_SUBSTEP_K{s+1}", rhs_output_exprs_list, post_rhs_output_list)
         for loop_direction in ["x", "y", "z"]:
             # Determine ghost types and configuration based on the current axis
             if loop_direction == "x":
@@ -993,16 +1260,12 @@ def output_timestepping_ci(
                 nchare_var = "commondata.Nchare2"
                 grid_split_direction = "TOP_BOTTOM"
 
-            post_rhs_output_list = generate_post_rhs_output_list(
-                Butcher_dict, MoL_method, s + 1
-            )
-
             # Loop over each element in post_rhs_output_list
             for post_rhs_output in post_rhs_output_list:
                 file_output_str += generate_send_neighbor_data_code(
                     post_rhs_output, grid_split_direction
                 )
-                file_output_str += generate_ghost_code(
+                file_output_str += generate_process_ghost_code(
                     loop_direction, pos_ghost_type, neg_ghost_type, nchare_var
                 )
 
@@ -1070,6 +1333,8 @@ def output_timestepping_ci(
     entry void top_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
     entry void bottom_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
     entry void continue_timestepping();
+    entry void receiv_nonlocalinnerbc_idx3srcpt_tosend(int idx3_of_sendingchare, int num_srcpts, int globalidx3_srcpts[num_srcpts]);
+    entry void receiv_nonlocalinnerbc_data(int src_chare_idx3, int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
 """
     if enable_residual_diagnostics:
         file_output_str += r"""
