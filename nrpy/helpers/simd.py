@@ -338,16 +338,16 @@ def expr_convert_to_simd_intrins(
         if func == Pow:
             one = Symbol(prefix + "_Integer_1")
             exponent = lookup_rational(args[1])
-            if exponent in {Rational(1, 2), 0.5}:
+            if exponent in (Rational(1, 2), 0.5):
                 subtree.expr = SqrtSIMD(args[0])
                 subtree.children.pop(1)
-            elif exponent in {-Rational(1, 2), -0.5}:
+            elif exponent in (-Rational(1, 2), -0.5):
                 subtree.expr = DivSIMD(one, SqrtSIMD(args[0]))
                 tree.build(subtree)
-            elif exponent in {-Rational(3, 2), -1.5}:
+            elif exponent in (-Rational(3, 2), -1.5):
                 subtree.expr = DivSIMD(one, SqrtSIMD(args[0]) * args[0])
                 tree.build(subtree)
-            elif exponent in {-Rational(5, 2), -2.5}:
+            elif exponent in (-Rational(5, 2), -2.5):
                 subtree.expr = DivSIMD(one, SqrtSIMD(args[0]) * args[0] * args[0])
                 tree.build(subtree)
             elif exponent == Rational(1, 3):
