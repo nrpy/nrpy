@@ -642,6 +642,15 @@ Timestepping::~Timestepping() {
     free(griddata_chare[grid].diagnosticstruct.locali1_diagnostic_2d_yz_pt);
     free(griddata_chare[grid].diagnosticstruct.locali2_diagnostic_2d_yz_pt);
     free(griddata_chare[grid].diagnosticstruct.offset_diagnostic_2d_yz_pt);
+    if (griddata_chare[grid].diagnosticstruct.list_of_R_exts_chare != NULL) {
+      free(griddata_chare[grid].diagnosticstruct.list_of_R_exts_chare);
+    }
+    if (griddata_chare[grid].diagnosticstruct.localsums_for_psi4_decomp != NULL) {
+      free(griddata_chare[grid].diagnosticstruct.localsums_for_psi4_decomp);
+    }
+    if (griddata_chare[grid].diagnosticstruct.globalsums_for_psi4_decomp != NULL) {
+      free(griddata_chare[grid].diagnosticstruct.globalsums_for_psi4_decomp);
+    }
     free(griddata_chare[grid].charecommstruct.globalidx3pt_to_chareidx3);
     free(griddata_chare[grid].charecommstruct.globalidx3pt_to_localidx3pt);
     free(griddata_chare[grid].charecommstruct.localidx3pt_to_globalidx3pt);
