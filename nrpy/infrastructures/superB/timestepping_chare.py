@@ -347,7 +347,8 @@ class Timestepping : public CBase_Timestepping {
     /// Member Variables (Object State) ///"""
     if enable_psi4_diagnostics:
         file_output_str += r"""
-    CProxySection_Timestepping secProxy;"""
+    CProxySection_Timestepping secProxy;
+    CkSectionInfo cookie;"""
     file_output_str += r"""
     commondata_struct commondata;
     griddata_struct *griddata;
@@ -914,7 +915,6 @@ void Timestepping::contribute_localsums_for_psi4_decomp(sectionBcastMsg *msg, co
     outdoubles[i] = static_cast<double>(localsums_for_psi4_decomp[i]);
   }
 
-  CkSectionInfo cookie;
   CkGetSectionInfo(cookie, msg);
   CkCallback cb(CkIndex_Timestepping::report_sums_for_psi4_diagnostics(NULL), thisProxy[CkArrayIndex3D(thisIndex.x, 0, 0)]);
   CProxySection_Timestepping::contribute(outdoubles, CkReduction::sum_double, cookie, cb);
@@ -1065,9 +1065,9 @@ def output_timestepping_ci(
   include "commondata_object.h";
   include "ckio.h";
   """
-    if enable_psi4_diagnostics:	
+    if enable_psi4_diagnostics:
         file_output_str += r"""
-  message sectionBcastMsg;      
+  message sectionBcastMsg;
         """
     file_output_str += r"""
   array [3D] Timestepping {
@@ -1183,10 +1183,7 @@ def output_timestepping_ci(
               secProxy.recvMsg_to_contribute_localsums_for_psi4_decomp(msg);
             }
           }
-        } else {
-          serial { thisProxy.continue_timestepping(); }
         }
-        when continue_timestepping() { }
         """
     if enable_residual_diagnostics:
         filename_format = "commondata.nn"
@@ -1444,7 +1441,6 @@ def output_timestepping_ci(
         }
         psi4_spinweightm2_decomposition_file_write(&commondata, &griddata_chare[which_grid_diagnostics].diagnosticstruct);
         delete msg;
-        thisProxy.continue_timestepping();
       }
     }"""
 
