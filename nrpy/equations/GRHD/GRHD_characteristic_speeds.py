@@ -200,8 +200,8 @@ if __name__ == "__main__":
         cplus_tmp_test,
     ) = find_cp_cm(1, g4_faceUU, u4lU, cs2_r_test)
 
-    exprs_dict["cminus"] = cminus_tmp_test.subs(sp.Function("nrpyAbs"), sp.cos)
-    exprs_dict["cplus"] = cplus_tmp_test.subs(sp.Function("nrpyAbs"), sp.sin)
+    exprs_dict["cminus"] = cminus_tmp_test.subs(sp.Function("nrpyAbs"), sp.Abs)
+    exprs_dict["cplus"] = cplus_tmp_test.subs(sp.Function("nrpyAbs"), sp.Abs)
 
     (
         cmin_tmp_test,
@@ -217,8 +217,8 @@ if __name__ == "__main__":
         cs2_l_test,
     )
 
-    exprs_dict["cmin"] = cmin_tmp_test.subs(sp.Function("nrpyAbs"), sp.sin)
-    exprs_dict["cmax"] = cmax_tmp_test.subs(sp.Function("nrpyAbs"), sp.cos)
+    exprs_dict["cmin"] = cmin_tmp_test.subs(sp.Function("nrpyAbs"), sp.Abs)
+    exprs_dict["cmax"] = cmax_tmp_test.subs(sp.Function("nrpyAbs"), sp.Abs)
 
     results_dict = ve.process_dictionary_of_expressions(
         exprs_dict, fixed_mpfs_for_free_symbols=True

@@ -375,8 +375,8 @@ if __name__ == "__main__":
         cs2_l_test,
     )
 
-    cmin_test = cmin_test.subs(sp.Function("nrpyAbs"), sp.sin)
-    cmax_test = cmax_test.subs(sp.Function("nrpyAbs"), sp.cos)
+    cmin_test = cmin_test.subs(sp.Function("nrpyAbs"), sp.Abs)
+    cmax_test = cmax_test.subs(sp.Function("nrpyAbs"), sp.Abs)
 
     exprs_dict["HLL_test"] = HLL_solver(
         cmax_test,
@@ -413,22 +413,22 @@ if __name__ == "__main__":
     )
 
     exprs_dict["rho_star_HLL_flux"] = exprs_dict["rho_star_HLL_flux"].subs(
-        sp.Function("nrpyAbs"), sp.sin
+        sp.Function("nrpyAbs"), sp.Abs
     )
     exprs_dict["Ye_star_HLL_flux"] = exprs_dict["Ye_star_HLL_flux"].subs(
-        sp.Function("nrpyAbs"), sp.cos
+        sp.Function("nrpyAbs"), sp.Abs
     )
     exprs_dict["tau_tilde_HLL_flux"] = exprs_dict["tau_tilde_HLL_flux"].subs(
-        sp.Function("nrpyAbs"), sp.sin
+        sp.Function("nrpyAbs"), sp.Abs
     )
     exprs_dict["Stilde_flux_HLLD"][0] = exprs_dict["Stilde_flux_HLLD"][0].subs(
-        sp.Function("nrpyAbs"), sp.cos
+        sp.Function("nrpyAbs"), sp.Abs
     )
     exprs_dict["Stilde_flux_HLLD"][1] = exprs_dict["Stilde_flux_HLLD"][1].subs(
-        sp.Function("nrpyAbs"), sp.sin
+        sp.Function("nrpyAbs"), sp.Abs
     )
     exprs_dict["Stilde_flux_HLLD"][2] = exprs_dict["Stilde_flux_HLLD"][2].subs(
-        sp.Function("nrpyAbs"), sp.cos
+        sp.Function("nrpyAbs"), sp.Abs
     )
 
     results_dict = ve.process_dictionary_of_expressions(
