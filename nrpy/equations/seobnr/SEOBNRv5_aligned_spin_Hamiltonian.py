@@ -409,6 +409,42 @@ class SEOBNRv5_aligned_spin_Hamiltonian_quantities:
         Hreal_circ = self.Hreal.subs(self.prstar, 0)
         self.dHreal_dr_circ = sp.diff(Hreal_circ, self.r) / self.nu
         self.dHreal_dpphi_circ = sp.diff(Hreal_circ, self.pphi) / self.nu
+        par = [
+            f2r(4.17877875e01),
+            f2r(-3.02193382e03),
+            f2r(3.34144394e04),
+            f2r(-1.69019140e05),
+            f2r(3.29523262e05),
+        ]
+        self.pyseobnr_a6 = (
+            par[0]
+            + par[1] * self.nu
+            + par[2] * self.nu**2
+            + par[3] * self.nu**3
+            + par[4] * self.nu**4
+        )
+        self.pyseobnr_dSO = (
+            -f2r(7.71251231383957) * am**3
+            - f2r(17.2294679794015) * am**2 * ap
+            - f2r(238.430383378296) * am**2 * self.nu
+            + f2r(69.5461667822545) * am**2
+            - f2r(10.5225438990315) * am * ap**2
+            + f2r(362.767393298729) * am * ap * self.nu
+            - f2r(85.8036338010274) * am * ap
+            - f2r(1254.66845939312) * am * self.nu**2
+            + f2r(472.431937787377) * am * self.nu
+            - f2r(39.742317057316) * am
+            - f2r(7.58458103577458) * ap**3
+            - f2r(42.7601129678844) * ap**2 * self.nu
+            + f2r(18.1783435552183) * ap**2
+            - f2r(201.905934468847) * ap * self.nu**2
+            - f2r(90.5790079104259) * ap * self.nu
+            + f2r(49.6299175121658) * ap
+            + f2r(478.546231305475) * self.nu**3
+            + f2r(679.521769948995) * self.nu**2
+            - f2r(177.334831768076) * self.nu
+            - f2r(37.6897780220529)
+        )
 
 
 if __name__ == "__main__":

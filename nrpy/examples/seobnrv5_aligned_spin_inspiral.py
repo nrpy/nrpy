@@ -11,6 +11,7 @@ import os
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
 import shutil
+from pathlib import Path
 
 import nrpy.c_function as cfc
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
@@ -50,18 +51,16 @@ Step 2: Compute Hamiltonian and derivatives."""
 commondata_struct_set_to_default(&commondata);
 // Step 1.b: Overwrite default values to parfile values. Then overwrite parfile values with values set at cmd line.
 cmdline_input_and_parfile_parser(&commondata, argc, argv);
+// Step 1.c: Overwrite default values of m1, m2, a6, and dSO.
+SEOBNRv5_aligned_spin_Hamiltonian_coefficients(&commondata);
 
-// Step 2: Compute SEOBNRv5 Hamiltonian.
-SEOBNRv5_aligned_spin_Hamiltonian(&commondata);
+// Step 2: Compute SEOBNRv5 conservative initial conditions.
+SEOBNRv5_aligned_spin_initial_conditions_conservative(&commondata);
 
-// Step 3: Compute SEOBNRv5 Hamiltonian AND derivatives.
-SEOBNRv5_aligned_spin_Hamiltonian_and_derivs(&commondata);
+// Step 2.a: Print out the conservative initial conditions.
+printf("r = %.15e\n",commondata.r);
+printf("pphi = %.15e\n",commondata.pphi);
 
-// Step 4: Compute SEOBNRv5 Hamiltonian's circular derivatives.
-SEOBNRv5_aligned_spin_Hamiltonian_circular_derivs(&commondata);
-
-// Step 5: Compute SEOBNRv5's gravitational wave flux.
-SEOBNRv5_aligned_spin_flux(&commondata);
 return 0;
 """
     cfc.register_CFunction(
@@ -74,10 +73,12 @@ return 0;
     )
 
 
-seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian()
-seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_and_derivs()
-seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_derivs()
-seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_flux()
+# For now, only registering the functions needed for initial conditions.
+# seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian()
+# seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_and_derivs()
+seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_coefficients()
+seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit()
+seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conservative()
 #########################################################
 # STEP 3: Generate header files, register C functions and
 #         command line parameters, set up boundary conditions,
@@ -88,21 +89,24 @@ CPs.register_CFunctions_params_commondata_struct_set_to_default()
 cmdpar.generate_default_parfile(project_dir=project_dir, project_name=project_name)
 cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
     project_name=project_name,
-    cmdline_inputs=[
-        "initial_separation",
-        "mass_Msun",
-        "mass_ratio",
-        "chi1",
-        "chi2",
-    ],
+    cmdline_inputs=["mass_ratio", "chi1", "chi2", "initial_omega"],
 )
-Bdefines_h.output_BHaH_defines_h(project_dir=project_dir, enable_simd=False)
+Bdefines_h.output_BHaH_defines_h(
+    project_dir=project_dir,
+    additional_includes=[
+        str(Path("gsl") / Path("gsl_vector.h")),
+        str(Path("gsl") / Path("gsl_multiroots.h")),
+    ],
+    enable_simd=False,
+)
 register_CFunction_main_c()
 
 Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
     exec_or_library_name=project_name,
+    addl_CFLAGS=["$(shell gsl-config --cflags)"],
+    addl_libraries=["$(shell gsl-config --libs)"],
 )
 
 print(
