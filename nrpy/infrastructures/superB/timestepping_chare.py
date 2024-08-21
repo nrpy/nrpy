@@ -309,6 +309,7 @@ if (tmpBuffers->tmpBuffer_innerbc_receiv != NULL) {
 def output_timestepping_h(
     project_dir: str,
     enable_residual_diagnostics: bool = False,
+    enable_psi4_diagnostics: bool = False,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
     """
@@ -326,12 +327,28 @@ def output_timestepping_h(
 #include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
 #include "timestepping.decl.h"
-
+"""
+    if enable_psi4_diagnostics:
+        file_output_str += r"""
+struct sectionBcastMsg : public CkMcastBaseMsg, public CMessage_sectionBcastMsg {
+  int k;
+  sectionBcastMsg(int _k) : k(_k) {}
+  void pup(PUP::er &p) {
+    CMessage_sectionBcastMsg::pup(p);
+    p|k;
+  }
+};
+"""
+    file_output_str += r"""
 class Timestepping : public CBase_Timestepping {
   Timestepping_SDAG_CODE
 
   private:
-    /// Member Variables (Object State) ///
+    /// Member Variables (Object State) ///"""
+    if enable_psi4_diagnostics:
+        file_output_str += r"""
+    CProxySection_Timestepping secProxy;"""
+    file_output_str += r"""
     commondata_struct commondata;
     griddata_struct *griddata;
     griddata_struct *griddata_chare;
@@ -349,8 +366,8 @@ class Timestepping : public CBase_Timestepping {
     const int expected_count_filewritten = 4;
     int iter = 0;
     int type_gfs_nonlocal_innerbc;
-
-
+"""
+    file_output_str += r"""
     /// Member Functions (private) ///
     void send_neighbor_data(const int type_gfs, const int dir, const int grid);
     void process_ghost(const int type_ghost, const int type_gfs, const int len_tmpBuffer, const REAL *restrict tmpBuffer, const int grid);
@@ -358,14 +375,14 @@ class Timestepping : public CBase_Timestepping {
     void process_nonlocalinnerbc_idx3srcpt_tosend(int idx3_of_sendingchare, int num_srcpts, const int *restrict globalidx3_srcpts);
     void send_nonlocalinnerbc_data(const int type_gfs, const int grid);
     void set_tmpBuffer_innerbc_receiv(const int src_chare_idx3, const int len_tmpBuffer, const REAL *restrict vals, const int grid);
-    void process_nonlocalinnerbc(const int type_gfs, const int grid);
-"""
-
+    void process_nonlocalinnerbc(const int type_gfs, const int grid);"""
     if enable_residual_diagnostics:
         file_output_str += r"""
-  void contribute_localsums_for_residualH(REAL localsums_for_residualH[2]);
+    void contribute_localsums_for_residualH(REAL localsums_for_residualH[2]);"""
+    if enable_psi4_diagnostics:
+        file_output_str += r"""
+    void contribute_localsums_for_psi4_decomp(sectionBcastMsg *msg, const int grid);
 """
-
     file_output_str += r"""
   public:
     /// Constructors ///
@@ -441,6 +458,7 @@ def output_timestepping_cpp(
     enable_CurviBCs: bool = False,
     initialize_constant_auxevol: bool = False,
     enable_residual_diagnostics: bool = False,
+    enable_psi4_diagnostics: bool = False,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
     """
@@ -881,6 +899,28 @@ void Timestepping::contribute_localsums_for_residualH(REAL localsums_for_residua
   contribute(outdoubles, CkReduction::sum_double, cb);
 }
 """
+    if enable_psi4_diagnostics:
+        file_output_str += r"""
+void Timestepping::contribute_localsums_for_psi4_decomp(sectionBcastMsg *msg, const int grid) {
+  // Unpack diagnosticptoffset struct:
+  const int length_localsums_for_psi4_decomp = griddata_chare[grid].diagnosticstruct.length_localsums_for_psi4_decomp;
+  const REAL *restrict localsums_for_psi4_decomp = griddata_chare[grid].diagnosticstruct.localsums_for_psi4_decomp;
+
+  // Initialize outdoubles with the correct size
+  std::vector<double> outdoubles(length_localsums_for_psi4_decomp);
+
+  // Copy and convert data from localsums_for_psi4_decomp to outdoubles
+  for (int i = 0; i < length_localsums_for_psi4_decomp; ++i) {
+    outdoubles[i] = static_cast<double>(localsums_for_psi4_decomp[i]);
+  }
+
+  CkSectionInfo cookie;
+  CkGetSectionInfo(cookie, msg);
+  CkCallback cb(CkIndex_Timestepping::report_sums_for_psi4_diagnostics(NULL), thisProxy[CkArrayIndex3D(thisIndex.x, 0, 0)]);
+  CProxySection_Timestepping::contribute(outdoubles, CkReduction::sum_double, cookie, cb);
+  delete msg;
+}
+"""
 
     file_output_str += r"""
 void Timestepping::send_nonlocalinnerbc_idx3srcpts_toreceiv() {
@@ -1024,6 +1064,12 @@ def output_timestepping_ci(
   include "BHaH_function_prototypes.h";
   include "commondata_object.h";
   include "ckio.h";
+  """
+    if enable_psi4_diagnostics:	
+        file_output_str += r"""
+  message sectionBcastMsg;      
+        """
+    file_output_str += r"""
   array [3D] Timestepping {
     entry Timestepping(CommondataObject &inData);
     entry void ready_1d_y(Ck::IO::FileReadyMsg *m);
@@ -1031,7 +1077,14 @@ def output_timestepping_ci(
     entry void ready_2d_xy(Ck::IO::FileReadyMsg *m);
     entry void ready_2d_yz(Ck::IO::FileReadyMsg *m);
     // Step 5: MAIN SIMULATION LOOP
-    entry void start() {
+    entry void start() {"""
+
+    if enable_psi4_diagnostics:
+        file_output_str += r"""
+      serial {
+        secProxy = CProxySection_Timestepping::ckNew(thisProxy.ckGetArrayID(), thisIndex.x, thisIndex.x, 1, 0, commondata.Nchare1 - 1, 1, 0, commondata.Nchare2 - 1, 1);
+      }"""
+    file_output_str += r"""
       if (griddata_chare[grid].nonlocalinnerbcstruct.tot_num_src_chares > 0) {
         serial {
           send_nonlocalinnerbc_idx3srcpts_toreceiv();
@@ -1125,11 +1178,15 @@ def output_timestepping_ci(
         file_output_str += r"""
         if (write_diagnostics_this_step) {
           serial {
-            Ck::IO::Session token;  //pass a null token
-            const int thisIndex_arr[3] = {thisIndex.x, thisIndex.y, thisIndex.z};
-            diagnostics(&commondata, griddata_chare, griddata, token, OUTPUT_PSI4, which_grid_diagnostics, thisIndex_arr);
+            if(thisIndex.y == 0 && thisIndex.z == 0) {
+              sectionBcastMsg *msg = new sectionBcastMsg(1);
+              secProxy.recvMsg_to_contribute_localsums_for_psi4_decomp(msg);
+            }
           }
+        } else {
+          serial { thisProxy.continue_timestepping(); }
         }
+        when continue_timestepping() { }
         """
     if enable_residual_diagnostics:
         filename_format = "commondata.nn"
@@ -1295,6 +1352,8 @@ def output_timestepping_ci(
           commondata.nn++;
         }
       } // End main loop to progress forward in time.
+"""
+    file_output_str += r"""
       serial{
         mainProxy.done();
       }
@@ -1364,8 +1423,30 @@ def output_timestepping_ci(
         delete msg;
         thisProxy[CkArrayIndex3D(thisIndex.x, thisIndex.y, thisIndex.z)].continue_after_residual_H_done();
       }
+    }"""
+    if enable_psi4_diagnostics:
+        file_output_str += r"""
+    entry void recvMsg_to_contribute_localsums_for_psi4_decomp(sectionBcastMsg *msg){
+      serial {
+        Ck::IO::Session token; // pass a null token
+        const int thisIndex_arr[3] = {thisIndex.x, thisIndex.y, thisIndex.z};
+        diagnostics(&commondata, griddata_chare, griddata, token, OUTPUT_PSI4, which_grid_diagnostics, thisIndex_arr);
+        contribute_localsums_for_psi4_decomp(msg, which_grid_diagnostics);
+      }
     }
-        """
+    entry void report_sums_for_psi4_diagnostics(CkReductionMsg * msg) {
+      serial {
+        int reducedArrSize = msg->getSize() / sizeof(double);
+        double *output = (double *)msg->getData();
+        const int length_localsums_for_psi4_decomp = griddata_chare[which_grid_diagnostics].diagnosticstruct.length_localsums_for_psi4_decomp;
+        for (int i = 0; i < length_localsums_for_psi4_decomp; i++) {
+          griddata_chare[which_grid_diagnostics].diagnosticstruct.globalsums_for_psi4_decomp[i] = (REAL)output[i];
+        }
+        psi4_spinweightm2_decomposition_file_write(&commondata, &griddata_chare[which_grid_diagnostics].diagnosticstruct);
+        delete msg;
+        thisProxy.continue_timestepping();
+      }
+    }"""
 
     file_output_str += r"""
   };
@@ -1404,6 +1485,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
     output_timestepping_h(
         project_dir=project_dir,
         enable_residual_diagnostics=enable_residual_diagnostics,
+        enable_psi4_diagnostics=enable_psi4_diagnostics,
     )
 
     Butcher_dict = generate_Butcher_tables()
@@ -1416,6 +1498,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         MoL_method=MoL_method,
         post_non_y_n_auxevol_mallocs=post_non_y_n_auxevol_mallocs,
         enable_residual_diagnostics=enable_residual_diagnostics,
+        enable_psi4_diagnostics=enable_psi4_diagnostics,
     )
 
     output_timestepping_ci(

@@ -116,6 +116,7 @@ for (int j = 0; j < params_chare->Nxx_plus_2NGHOSTS2; j++)
 def register_CFunction_numerical_grids_chare(
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
+    enable_psi4_diagnostics: bool = False,
 ) -> None:
     """
     Register a C function to set up all numerical grids and timestep.
@@ -153,23 +154,34 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
 }
 """
     else:
-        body += "// (reference-metric precomputation disabled)\n"
-    body += "\n// Step 1.d: Set up curvilinear boundary condition struct (bcstruct)\n"
-    if enable_CurviBCs:
-        body += r"""
+        body += "// (reference-metric precomputation disabled)\n"    
+    body += r"""    
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   charecommstruct_set_up(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, chare_index);
+"""
+    body += "\n// Step 1.d: Set up curvilinear boundary condition struct (bcstruct)\n"    
+    if enable_CurviBCs:
+          body += r"""
   bcstruct_chare_set_up(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata_chare[grid].xx, &griddata[grid].bcstruct, &griddata_chare[grid].bcstruct, &griddata_chare[grid].nonlocalinnerbcstruct, chare_index);
+"""
+    else:
+          body += "// (curvilinear boundary conditions bcstruct disabled)\n"
+
+    body += r"""    
   // 1D diagnostics set up
   diagnosticstruct_set_up_nearest_1d_y_axis(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index, &griddata_chare[grid].diagnosticstruct);
   diagnosticstruct_set_up_nearest_1d_z_axis(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index, &griddata_chare[grid].diagnosticstruct);
   // 2D diagnostics set up
   diagnosticstruct_set_up_nearest_2d_xy_plane(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index, &griddata_chare[grid].diagnosticstruct);
   diagnosticstruct_set_up_nearest_2d_yz_plane(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index, &griddata_chare[grid].diagnosticstruct);
+    """    
+    if enable_psi4_diagnostics:
+        body += r"""
+  psi4_diagnostics_set_up(commondata, &griddata[grid].params, &griddata_chare[grid].params,
+                                                &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index,
+                                                &griddata_chare[grid].diagnosticstruct);     
 }
 """
-    else:
-        body += "// (curvilinear boundary conditions bcstruct disabled)\n"
 
     cfc.register_CFunction(
         includes=includes,
@@ -186,6 +198,7 @@ def register_CFunctions(
     list_of_CoordSystems: List[str],
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
+    enable_psi4_diagnostics: bool = False,
 ) -> None:
     """
     Register C functions related to coordinate systems and grid parameters.
@@ -201,4 +214,5 @@ def register_CFunctions(
     register_CFunction_numerical_grids_chare(
         enable_rfm_precompute=enable_rfm_precompute,
         enable_CurviBCs=enable_CurviBCs,
+        enable_psi4_diagnostics=enable_psi4_diagnostics,
     )

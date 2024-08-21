@@ -245,6 +245,7 @@ superBnumericalgrids.register_CFunctions(
     list_of_CoordSystems=[CoordSystem],
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
+    enable_psi4_diagnostics=True,
 )
 charecomm.chare_comm_register_C_functions(list_of_CoordSystems=[CoordSystem])
 superBcbc.CurviBoundaryConditions_register_C_functions(

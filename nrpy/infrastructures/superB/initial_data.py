@@ -364,7 +364,7 @@ griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_pers
       // Unpack griddata struct:
       params_struct *restrict params = &griddata[grid].params;
       initial_data_reader__convert_ADM_{IDCoordSystem}_to_BSSN(commondata, params, griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs,
-                                                         &ID_persist, BrillLindquist, initial_data_part);
+                                                         &ID_persist, {IDtype}, initial_data_part);
     }}
     break;
   }}

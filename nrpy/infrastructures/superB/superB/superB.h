@@ -41,6 +41,8 @@
 
 #define IDX2NONLOCALINNERBC(g, idx, Nidx) ((idx) + Nidx * (g))
 
+#define IDX4PSI4(R, l, m, r_i, Nl, Nm, Nr_i) ((r_i) + (Nr_i) * ((m) + (Nm) * ((l) + (Nl) * (R))))
+
 #define OUTPUT_0D 0
 #define OUTPUT_1D_Y 1
 #define OUTPUT_1D_Z 2
@@ -109,6 +111,12 @@ typedef struct __diagnostic_struct__ {
   char filename_1d_z[256];
   char filename_2d_xy[256];
   char filename_2d_yz[256];
+  int num_of_R_exts_chare;
+  int psi4_spinweightm2_sph_harmonics_max_l;
+  int length_localsums_for_psi4_decomp;
+  REAL *restrict list_of_R_exts_chare;
+  REAL *restrict localsums_for_psi4_decomp;
+  REAL *restrict globalsums_for_psi4_decomp;
 } diagnostic_struct;
 
 typedef struct __tmpBuffers_struct__ {
