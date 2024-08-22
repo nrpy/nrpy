@@ -154,12 +154,12 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
 }
 """
     else:
-        body += "// (reference-metric precomputation disabled)\n"    
-    body += r"""    
+        body += "// (reference-metric precomputation disabled)\n"
+    body += r"""
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   charecommstruct_set_up(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, chare_index);
 """
-    body += "\n// Step 1.d: Set up curvilinear boundary condition struct (bcstruct)\n"    
+    body += "\n// Step 1.d: Set up curvilinear boundary condition struct (bcstruct)\n"
     if enable_CurviBCs:
           body += r"""
   bcstruct_chare_set_up(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata_chare[grid].xx, &griddata[grid].bcstruct, &griddata_chare[grid].bcstruct, &griddata_chare[grid].nonlocalinnerbcstruct, chare_index);
@@ -167,21 +167,22 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
     else:
           body += "// (curvilinear boundary conditions bcstruct disabled)\n"
 
-    body += r"""    
+    body += r"""
   // 1D diagnostics set up
   diagnosticstruct_set_up_nearest_1d_y_axis(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index, &griddata_chare[grid].diagnosticstruct);
   diagnosticstruct_set_up_nearest_1d_z_axis(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index, &griddata_chare[grid].diagnosticstruct);
   // 2D diagnostics set up
   diagnosticstruct_set_up_nearest_2d_xy_plane(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index, &griddata_chare[grid].diagnosticstruct);
   diagnosticstruct_set_up_nearest_2d_yz_plane(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index, &griddata_chare[grid].diagnosticstruct);
-    """    
+    """
     if enable_psi4_diagnostics:
         body += r"""
   psi4_diagnostics_set_up(commondata, &griddata[grid].params, &griddata_chare[grid].params,
                                                 &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index,
-                                                &griddata_chare[grid].diagnosticstruct);     
-}
+                                                &griddata_chare[grid].diagnosticstruct);
 """
+    body += r"""
+}"""
 
     cfc.register_CFunction(
         includes=includes,

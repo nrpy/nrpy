@@ -236,9 +236,10 @@ switch (which_MOL_part) {
 """
     for post_rhs, post_rhs_output in zip(post_rhs_list, post_rhs_output_list):
         parts = [part.strip() for part in post_rhs.split(';') if part.strip()]
-        part2 = parts[1] + ';'
-        return_str += part2.replace(
-            "RK_OUTPUT_GFS", str(post_rhs_output).replace("gfsL", "gfs"))
+        if len(parts) > 1:
+          part2 = parts[1] + ';'
+          return_str += part2.replace(
+              "RK_OUTPUT_GFS", str(post_rhs_output).replace("gfsL", "gfs"))
 
     for post_rhs, post_rhs_output in zip(post_rhs_list, post_rhs_output_list):
         return_str += post_post_rhs_string.replace(
