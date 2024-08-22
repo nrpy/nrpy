@@ -11,8 +11,8 @@ from typing import Any, Dict, Sequence, Tuple
 import sympy as sp
 
 import nrpy.indexedexp as ixp
-from nrpy.equations.GRHD.GRHD_characteristic_speeds import find_cmax_cmin
-from nrpy.equations.GRHD.GRHD_equations import GRHD_Equations
+from nrpy.equations.grhd.GRHD_characteristic_speeds import find_cmax_cmin
+from nrpy.equations.grhd.GRHD_equations import GRHD_Equations
 
 
 def calculate_GRHD_Tmunu_and_contractions(
