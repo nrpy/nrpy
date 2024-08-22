@@ -437,7 +437,7 @@ class GRHD_Equations:
                 alpha * e6phi * (first_termD[i] + second_termD[i] + third_termD[i])
             )
 
-    def compute_all_equations(self) -> None:
+    def construct_all_equations(self) -> None:
         """Run all class functions, in the appropriate order, to define all quantities required for the GRHD evolution equations."""
         self.compute_T4UU()
         self.compute_T4UD()
@@ -489,7 +489,7 @@ if __name__ == "__main__":
     ]:
         enable_rfm_pre = "rfm_precompute" in Coord
         grhd_eqs = GRHD_Equations(Coord.replace("_rfm_precompute", "", enable_rfm_pre))
-        grhd_eqs.compute_all_equations()
+        grhd_eqs.construct_all_equations()
         results_dict = ve.process_dictionary_of_expressions(
             grhd_eqs.__dict__, fixed_mpfs_for_free_symbols=True
         )
