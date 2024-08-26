@@ -54,13 +54,18 @@ cmdline_input_and_parfile_parser(&commondata, argc, argv);
 // Step 1.c: Overwrite default values of m1, m2, a6, and dSO.
 SEOBNRv5_aligned_spin_Hamiltonian_coefficients(&commondata);
 
-// Step 2: Compute SEOBNRv5 conservative initial conditions.
+// Step 2.a: Compute SEOBNRv5 conservative initial conditions.
 SEOBNRv5_aligned_spin_initial_conditions_conservative(&commondata);
 
-// Step 2.a: Print out the conservative initial conditions.
+// Step 2.b: Print out the conservative initial conditions.
 printf("r = %.15e\n",commondata.r);
 printf("pphi = %.15e\n",commondata.pphi);
 
+// Step 3.a: Compute SEOBNRv5 dissipative initial conditions.
+SEOBNRv5_aligned_spin_initial_conditions_dissipative(&commondata);
+
+// Step 3.b: Print out the dissipative initial conditions.
+printf("prstar = %.15e\n",commondata.prstar);
 return 0;
 """
     cfc.register_CFunction(
@@ -78,7 +83,11 @@ return 0;
 # seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_and_derivs()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_coefficients()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit()
+seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_dRHS()
+seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_RHSdRHS()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conservative()
+seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_radial_momentum_condition()
+seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_dissipative()
 #########################################################
 # STEP 3: Generate header files, register C functions and
 #         command line parameters, set up boundary conditions,
@@ -96,6 +105,8 @@ Bdefines_h.output_BHaH_defines_h(
     additional_includes=[
         str(Path("gsl") / Path("gsl_vector.h")),
         str(Path("gsl") / Path("gsl_multiroots.h")),
+        str(Path("gsl") / Path("gsl_errno.h")),
+        str(Path("gsl") / Path("gsl_roots.h")),
     ],
     enable_simd=False,
 )

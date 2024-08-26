@@ -409,6 +409,12 @@ class SEOBNRv5_aligned_spin_Hamiltonian_quantities:
         Hreal_circ = self.Hreal.subs(self.prstar, 0)
         self.dHreal_dr_circ = sp.diff(Hreal_circ, self.r) / self.nu
         self.dHreal_dpphi_circ = sp.diff(Hreal_circ, self.pphi) / self.nu
+        self.dHreal_dr_dr_circ = sp.diff(self.dHreal_dr_circ, self.r) / self.nu
+        self.dHreal_dr_dpphi_circ = sp.diff(self.dHreal_dr_circ, self.pphi) / self.nu
+        self.dHreal_dpphi_dpphi_circ = (
+            sp.diff(self.dHreal_dpphi_circ, self.pphi) / self.nu
+        )
+
         par = [
             f2r(4.17877875e01),
             f2r(-3.02193382e03),

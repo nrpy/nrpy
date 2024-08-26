@@ -1323,8 +1323,11 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
         factorized_flux = 0
         for l in range(2, 9):
             for m in range(1, l + 1):
-                pn_contribution_f = self.noneqcond * self.rho[f"({l} , {m})"] ** l
+                pn_contribution_f = 0
+                if not((m) % 2):
+                    pn_contribution_f += self.rho[f"({l} , {m})"] ** l
                 if (m) % 2:
+                    pn_contribution_f += self.noneqcond * self.rho[f"({l} , {m})"] ** l
                     if (l < 5) or (l == 5 and m == 5):
                         pn_contribution_f += (
                             self.noneqcond * self.fspin[f"({l} , {m})"]
@@ -1376,8 +1379,11 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
         hlms = {}
         for l in range(2, 6):
             for m in range(l, min(l - 2, 4), -1):
-                pn_contribution_f = self.noneqcond * self.rho[f"({l} , {m})"] ** l
+                pn_contribution_f = 0
+                if not((m) % 2):
+                    pn_contribution_f += self.rho[f"({l} , {m})"] ** l
                 if (m) % 2:
+                    pn_contribution_f += self.noneqcond * self.rho[f"({l} , {m})"] ** l
                     pn_contribution_f += (
                         self.noneqcond * self.fspin[f"({l} , {m})"]
                         + self.eqcond * self.fspin_limit[f"({l} , {m})"]
