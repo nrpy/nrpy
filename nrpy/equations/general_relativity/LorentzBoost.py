@@ -56,9 +56,9 @@ class LorentzBoost:
         # Step 2.a: Compute LorentzMatrix[0][0]
         LorentzMatrix[0][0] = gamma_lorentz
 
-        # Step 2.b: Compute LorentzMatrix[i + 1][0]
+        # Step 2.b: Compute LorentzMatrix[0][i+1]
         for i in range(3):
-            LorentzMatrix[i + 1][0] = -gamma_lorentz * vBoost[i]
+            LorentzMatrix[0][i + 1] = -gamma_lorentz * vBoost[i]
 
         # Step 2.c: Compute LorentzMatrix[i + 1][j + 1]
         for i in range(3):
