@@ -15,6 +15,7 @@ import sympy as sp  # Import SymPy, a computer algebra system written entirely i
 import nrpy.c_function as cfc
 from nrpy.helpers.generic import clang_format
 from nrpy.infrastructures.BHaH import griddata_commondata
+import nrpy.params as par
 from nrpy.infrastructures.BHaH.MoLtimestepping.MoL import generate_gridfunction_names
 from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import (
     generate_Butcher_tables,
@@ -379,7 +380,8 @@ class Timestepping : public CBase_Timestepping {
     void process_nonlocalinnerbc(const int type_gfs, const int grid);"""
     if enable_residual_diagnostics:
         file_output_str += r"""
-    void contribute_localsums_for_residualH(REAL localsums_for_residualH[2]);"""
+    void contribute_localsums_for_residualH(REAL localsums_for_residualH[2]);
+    void send_wavespeed_at_outer_boundary(const int grid);"""
     if enable_psi4_diagnostics:
         file_output_str += r"""
     void contribute_localsums_for_psi4_decomp(sectionBcastMsg *msg, const int grid);
@@ -468,7 +470,6 @@ def output_timestepping_cpp(
     :param project_dir: Directory where the project C code is output.
     :param Butcher_dict: Dictionary containing Butcher tableau for the MoL method.
     :param MoL_method: Method of Lines (MoL) method name.
-    :param post_non_y_n_auxevol_mallocs: Additional allocations needed post non-y_n gridfunctions.
     :param initial_data_desc: Description for initial data, default is an empty string.
     :param enable_rfm_precompute: Enable rfm precomputation, default is False.
     :param enable_CurviBCs: Enable CurviBCs, default is False.
@@ -569,14 +570,8 @@ Timestepping::Timestepping(CommondataObject &&inData) {
   for(int grid=0; grid<commondata.NUMGRIDS; grid++)
     MoL_malloc_non_y_n_gfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].gridfuncs);
 """
-    if post_non_y_n_auxevol_mallocs:
-        file_output_str += (
-            """// Step 4.a: Functions called after memory for non-y_n and auxevol gridfunctions is allocated.
-"""
-            + post_non_y_n_auxevol_mallocs
-        )
-    file_output_str += """
 
+    file_output_str += """
   // Allocate storage for diagnostic gridfunctions
   for(int grid=0; grid<commondata.NUMGRIDS; grid++)
     MoL_malloc_diagnostic_gfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].gridfuncs);
@@ -908,6 +903,35 @@ void Timestepping::contribute_localsums_for_residualH(REAL localsums_for_residua
   CkCallback cb(CkIndex_Timestepping::report_sums_for_residualH(NULL), thisProxy);
   contribute(outdoubles, CkReduction::sum_double, cb);
 }
+
+void Timestepping::send_wavespeed_at_outer_boundary(const int grid) {
+  const int Nchare0 = commondata.Nchare0;
+  const int Nchare1 = commondata.Nchare1;
+  const int Nchare2 = commondata.Nchare2;
+  const int Nxx_plus_2NGHOSTS0 = griddata[grid].params.Nxx_plus_2NGHOSTS0;
+  const int Nxx_plus_2NGHOSTS1 = griddata[grid].params.Nxx_plus_2NGHOSTS1;
+  const int Nxx_plus_2NGHOSTS2 = griddata[grid].params.Nxx_plus_2NGHOSTS2;
+  const int Nxx0chare = griddata_chare[grid].params.Nxx0;
+  const int Nxx1chare = griddata_chare[grid].params.Nxx1;
+  const int Nxx2chare = griddata_chare[grid].params.Nxx2;
+  const int Nxx_plus_2NGHOSTS0chare = griddata_chare[grid].params.Nxx_plus_2NGHOSTS0;
+  const int Nxx_plus_2NGHOSTS1chare = griddata_chare[grid].params.Nxx_plus_2NGHOSTS1;
+  const int Nxx_plus_2NGHOSTS2chare = griddata_chare[grid].params.Nxx_plus_2NGHOSTS2;
+
+  const int pt_at_outer_boundary_i0 = Nxx_plus_2NGHOSTS0 - NGHOSTS - 1;
+  const int pt_at_outer_boundary_i1 = NGHOSTS;
+  const int pt_at_outer_boundary_i2 = Nxx_plus_2NGHOSTS2 / 2 ;
+  const int pt_at_outer_boundary_idx3 =  IDX3(pt_at_outer_boundary_i0, pt_at_outer_boundary_i1, pt_at_outer_boundary_i2);
+  const int idx3_this_chare = IDX3_OF_CHARE(thisIndex.x, thisIndex.y, thisIndex.z);
+
+  if (griddata_chare[grid].charecommstruct.globalidx3pt_to_chareidx3[pt_at_outer_boundary_idx3] == idx3_this_chare) {
+    const int locali0 = MAP_GLOBAL_TO_LOCAL_IDX0(thisIndex.x, pt_at_outer_boundary_i0, Nxx0chare);
+    const int locali1 = MAP_GLOBAL_TO_LOCAL_IDX1(thisIndex.y, pt_at_outer_boundary_i1, Nxx1chare);
+    const int locali2 = MAP_GLOBAL_TO_LOCAL_IDX2(thisIndex.z, pt_at_outer_boundary_i2, Nxx2chare);
+    const REAL wavespeed_at_outer_boundary = griddata_chare[grid].gridfuncs.auxevol_gfs[IDX4GENERAL(VARIABLE_WAVESPEEDGF, locali0, locali1, locali2, Nxx_plus_2NGHOSTS0chare, Nxx_plus_2NGHOSTS1chare, Nxx_plus_2NGHOSTS2chare)];
+    thisProxy.receiv_wavespeed_at_outer_boundary(wavespeed_at_outer_boundary);
+  }
+}
 """
     if enable_psi4_diagnostics:
         file_output_str += r"""
@@ -1047,6 +1071,7 @@ def output_timestepping_ci(
     project_dir: str,
     Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
     MoL_method: str,
+    post_non_y_n_auxevol_mallocs: str,
     pre_MoL_step_forward_in_time: str = "",
     post_MoL_step_forward_in_time: str = "",
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
@@ -1107,25 +1132,46 @@ def output_timestepping_ci(
             }
           }
         }
-      }
+      }"""
+
+
+    if not enable_residual_diagnostics:
+        # If anything other than NRPy elliptic
+        file_output_str += """
       serial {
         initial_data(&commondata, griddata_chare, INITIALDATA_LOOPOVERALLGRIDPTS);
         initial_data(&commondata, griddata_chare, INITIALDATA_APPLYBCSINNERONLY);
-      }
-"""
-    file_output_str += generate_send_nonlocalinnerbc_data_code("Y_N_GFS")
-
-    file_output_str += generate_process_nonlocalinnerbc_code()
-
-    file_output_str += """
+      }"""
+        file_output_str += generate_send_nonlocalinnerbc_data_code("Y_N_GFS")
+        file_output_str += generate_process_nonlocalinnerbc_code()
+        file_output_str += """
       serial {
         initial_data(&commondata, griddata_chare, INITIALDATA_LAMBDAUGRIDINTERIOR);
         initial_data(&commondata, griddata_chare, INITIALDATA_APPLYBCSOUTEREXTRAPANDINNER);
+      }"""
+        file_output_str += generate_send_nonlocalinnerbc_data_code("Y_N_GFS")
+        file_output_str += generate_process_nonlocalinnerbc_code()
+    else:
+        # If NRPy elliptic
+        file_output_str += """
+      serial {
+        initial_data(&commondata, griddata_chare);
+"""
+        if post_non_y_n_auxevol_mallocs:
+            file_output_str += (
+"""   // Step 4.a: Functions called after memory for non-y_n and auxevol gridfunctions is allocated.
+"""
+            + post_non_y_n_auxevol_mallocs
+        )
+        file_output_str += """
+        send_wavespeed_at_outer_boundary(grid);
+      }
+      when receiv_wavespeed_at_outer_boundary(REAL wavespeed_at_outer_boundary) {
+        serial {
+          griddata_chare[grid].params.wavespeed_at_outer_boundary = wavespeed_at_outer_boundary;
+        }
       }
 """
-    file_output_str += generate_send_nonlocalinnerbc_data_code("Y_N_GFS")
-
-    file_output_str += generate_process_nonlocalinnerbc_code()
 
     for loop_direction in ["x", "y", "z"]:
         # Determine ghost types and configuration based on the current axis
@@ -1382,12 +1428,10 @@ def output_timestepping_ci(
     if enable_residual_diagnostics:
         file_output_str += r"""
         REAL unused_var[2];
-        diagnostics(&commondata, griddata_chare, griddata, token, which_output, which_grid_diagnostics, thisIndex_arr, unused_var);
-"""
+        diagnostics(&commondata, griddata_chare, griddata, token, which_output, which_grid_diagnostics, thisIndex_arr, unused_var);"""
     else:
         file_output_str += r"""
-        diagnostics(&commondata, griddata_chare, griddata, token, which_output, which_grid_diagnostics, thisIndex_arr);
-"""
+        diagnostics(&commondata, griddata_chare, griddata, token, which_output, which_grid_diagnostics, thisIndex_arr);"""
     file_output_str += r"""
       }
     }
@@ -1399,8 +1443,7 @@ def output_timestepping_ci(
     entry void bottom_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
     entry void continue_timestepping();
     entry void receiv_nonlocalinnerbc_idx3srcpt_tosend(int idx3_of_sendingchare, int num_srcpts, int globalidx3_srcpts[num_srcpts]);
-    entry void receiv_nonlocalinnerbc_data(int src_chare_idx3, int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
-"""
+    entry void receiv_nonlocalinnerbc_data(int src_chare_idx3, int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);"""
     if enable_residual_diagnostics:
         file_output_str += r"""
     entry void continue_after_residual_H_done();
@@ -1429,7 +1472,8 @@ def output_timestepping_ci(
         delete msg;
         thisProxy[CkArrayIndex3D(thisIndex.x, thisIndex.y, thisIndex.z)].continue_after_residual_H_done();
       }
-    }"""
+    }
+    entry void receiv_wavespeed_at_outer_boundary(REAL wavespeed_at_outer_boundary);"""
     if enable_psi4_diagnostics:
         file_output_str += r"""
     entry void recvMsg_to_contribute_localsums_for_psi4_decomp(sectionBcastMsg *msg){
@@ -1487,6 +1531,12 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     :param enable_residual_diagnostics: Whether or not to enable residual diagnostics.
     """
+    # For NRPy elliptic: register parameter wavespeed at outer boundary
+    if enable_residual_diagnostics:
+        _wavespeed_at_outer_boundary = par.register_CodeParameter(
+            "REAL", __name__, "wavespeed_at_outer_boundary", 0.0, commondata=False
+        )
+
     output_timestepping_h(
         project_dir=project_dir,
         enable_residual_diagnostics=enable_residual_diagnostics,
@@ -1501,19 +1551,19 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         enable_CurviBCs=True,
         Butcher_dict=Butcher_dict,
         MoL_method=MoL_method,
-        post_non_y_n_auxevol_mallocs=post_non_y_n_auxevol_mallocs,
         enable_residual_diagnostics=enable_residual_diagnostics,
         enable_psi4_diagnostics=enable_psi4_diagnostics,
     )
 
     output_timestepping_ci(
         project_dir=project_dir,
+        MoL_method=MoL_method,
+        post_non_y_n_auxevol_mallocs=post_non_y_n_auxevol_mallocs,
         pre_MoL_step_forward_in_time=pre_MoL_step_forward_in_time,
         post_MoL_step_forward_in_time=post_MoL_step_forward_in_time,
         enable_psi4_diagnostics=enable_psi4_diagnostics,
         enable_residual_diagnostics=enable_residual_diagnostics,
         Butcher_dict=Butcher_dict,
-        MoL_method=MoL_method,
     )
 
     register_CFunction_timestepping_malloc()
