@@ -66,10 +66,7 @@ default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.5
 default_BH2_z_posn = -0.5
 enable_rfm_precompute = True
-# ~ MoL_method = "RK4"
-# ~ MoL_method = "RK3 Heun"
-# ~ MoL_method = "SSPRK3"
-MoL_method = "DP8"
+MoL_method = "RK4"
 fd_order = 4
 radiation_BC_fd_order = 4
 enable_simd = True
@@ -78,16 +75,17 @@ parallel_codegen_enable = True
 enable_fd_functions = True
 enable_KreissOliger_dissipation = False
 enable_CAKO = True
-# ~ boundary_conditions_desc = "outgoing radiation"
-boundary_conditions_desc = "extrapolation"
-# Choosing number of chares, Nchare0, Nchare1, and Nchare2, in each direction:
-# 1. for spherical-like coordinates Nchare1 and Nchare2 cannot be greater than 1
-# 2. for cylindrical-like coordinates Nchare1 cannot be greater than 1
-# 3. Nxx0/Nchare0, Nxx1/Nchare1, Nxx2/Nchare2 should be an integer greater than NGHOSTS
+boundary_conditions_desc = "outgoing radiation"
+# Number of chares, Nchare0, Nchare1, and Nchare2, in each direction,
+# should be chosen such that Nxx0/Nchare0, Nxx1/Nchare1, Nxx2/Nchare2 are integers greater than NGHOSTS,
+# NGHOSTS is fd_order/2
 if "Spherical" in CoordSystem:
     par.adjust_CodeParam_default("Nchare0", 18)
+    par.adjust_CodeParam_default("Nchare1", 2)
+    par.adjust_CodeParam_default("Nchare2", 1)
 if "Cylindrical" in CoordSystem:
     par.adjust_CodeParam_default("Nchare0", 18)
+    par.adjust_CodeParam_default("Nchare1", 2)
     par.adjust_CodeParam_default("Nchare2", 1)
 if "Cartesian" in CoordSystem:
     par.adjust_CodeParam_default("Nchare0", 16)

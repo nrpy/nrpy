@@ -98,12 +98,13 @@ separate_Ricci_and_BSSN_RHS = True
 parallel_codegen_enable = True
 enable_fd_functions = True
 boundary_conditions_desc = "outgoing radiation"
-# Choosing number of chares, Nchare0, Nchare1, and Nchare2, in each direction:
-# 1. for spherical-like coordinates Nchare1 and Nchare2 cannot be greater than 1
-# 2. for cylindrical-like coordinates Nchare1 cannot be greater than 1
-# 3. Nxx0/Nchare0, Nxx1/Nchare1, Nxx2/Nchare2 should be an integer greater than NGHOSTS
+# Number of chares, Nchare0, Nchare1, and Nchare2, in each direction,
+# should be chosen such that Nxx0/Nchare0, Nxx1/Nchare1, Nxx2/Nchare2 are integers greater than NGHOSTS,
+# NGHOSTS is fd_order/2
 if "Spherical" in CoordSystem:
     par.adjust_CodeParam_default("Nchare0", 20)
+    par.adjust_CodeParam_default("Nchare1", 2)
+    par.adjust_CodeParam_default("Nchare2", 1)
 
 OMP_collapse = 1
 if "Spherical" in CoordSystem:
