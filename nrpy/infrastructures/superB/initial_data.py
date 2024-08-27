@@ -9,10 +9,10 @@ Author: Zachariah B. Etienne
 
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import List, Union, cast, Optional
+from typing import List, Optional, Union, cast
 
-import nrpy.helpers.parallel_codegen as pcg
 import nrpy.c_function as cfc
+import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter as admid
 from nrpy.equations.general_relativity.InitialData_Cartesian import (
     InitialData_Cartesian,

@@ -17,7 +17,6 @@ superB changes/additions to nrpy.infrastructures.BHaH.MoLtimestepping.MoL.py:
 
 import os  # Standard Python module for multiplatform OS-level functions
 import warnings
-
 from typing import Dict, List, Tuple, Union
 
 import sympy as sp  # Import SymPy, a computer algebra system written entirely in Python

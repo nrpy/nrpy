@@ -14,11 +14,11 @@ from typing import List
 import nrpy.c_function as cfc
 from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
 from nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions import (
-    register_CFunction_bcstruct_set_up,
-    register_CFunction_apply_bcs_outerradiation_and_inner,
+    BHaH_defines_set_gridfunction_defines_with_parity_types,
     register_CFunction_apply_bcs_inner_only,
     register_CFunction_apply_bcs_outerextrap_and_inner,
-    BHaH_defines_set_gridfunction_defines_with_parity_types,
+    register_CFunction_apply_bcs_outerradiation_and_inner,
+    register_CFunction_bcstruct_set_up,
 )
 
 
