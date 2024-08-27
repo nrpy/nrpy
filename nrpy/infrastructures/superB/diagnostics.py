@@ -342,7 +342,6 @@ if (which_output == OUTPUT_PSI4) {
 
 def register_CFunction_psi4_spinweightm2_decomposition_on_sphlike_grids() -> None:
     """Register C function for decomposing psi4 into spin-weighted spherical harmonics."""
-
     register_CFunction_psi4_spinweightm2_decomposition_file_write()
 
     prefunc = r"""
