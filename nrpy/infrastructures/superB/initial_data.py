@@ -7,33 +7,13 @@ Author: Zachariah B. Etienne
         njadoo **at** uidaho **dot* edu
 """
 
-from collections import OrderedDict as ODict
 from inspect import currentframe as cfr
-from pathlib import Path
 from types import FrameType as FT
-from typing import Dict, List, Tuple, Union, cast, Optional, Sequence
+from typing import List, Union, cast, Optional
 
-import sympy as sp
-from mpmath import mpc, mpf  # type: ignore
-
-import nrpy.c_codegen as ccg
-import nrpy.c_function as cfc
-import nrpy.equations.general_relativity.psi4 as psifour
-import nrpy.equations.general_relativity.psi4_tetrads as psifourtet
-import nrpy.finite_difference as fin
-import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.indexedexp as ixp
-import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices as out012d
+import nrpy.c_function as cfc
 import nrpy.infrastructures.BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter as admid
-import nrpy.infrastructures.BHaH.simple_loop as lp
-import nrpy.params as par
-import nrpy.reference_metric as refmetric
-import nrpy.validate_expressions.validate_expressions as ve
-from nrpy.equations.general_relativity.BSSN_constraints import BSSN_constraints
-from nrpy.equations.general_relativity.BSSN_gauge_RHSs import BSSN_gauge_RHSs
-from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
-from nrpy.equations.general_relativity.BSSN_RHSs import BSSN_RHSs
 from nrpy.equations.general_relativity.InitialData_Cartesian import (
     InitialData_Cartesian,
 )
@@ -387,37 +367,3 @@ griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_pers
         body=body,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
-
-
-if __name__ == "__main__":
-    import os
-
-    Coord = "SinhSpherical"
-    LapseEvolOption = "OnePlusLog"
-    ShiftEvolOption = "GammaDriving2ndOrder_Covariant"
-    for Rbar_gfs in [True, False]:
-        for T4munu_enable in [True, False]:
-            for enable_Improvements in [True, False]:
-                results_dict = register_CFunction_rhs_eval(
-                    CoordSystem=Coord,
-                    enable_rfm_precompute=True,
-                    enable_RbarDD_gridfunctions=Rbar_gfs,
-                    enable_T4munu=T4munu_enable,
-                    enable_simd=False,
-                    enable_fd_functions=False,
-                    enable_KreissOliger_dissipation=True,
-                    LapseEvolutionOption=LapseEvolOption,
-                    ShiftEvolutionOption=ShiftEvolOption,
-                    enable_CAKO=enable_Improvements,
-                    enable_CAHD=enable_Improvements,
-                    enable_SSL=enable_Improvements,
-                    validate_expressions=True,
-                )
-                ve.compare_or_generate_trusted_results(
-                    os.path.abspath(__file__),
-                    os.getcwd(),
-                    # File basename. If this is set to "trusted_module_test1", then
-                    #   trusted results_dict will be stored in tests/trusted_module_test1.py
-                    f"{os.path.splitext(os.path.basename(__file__))[0]}_{LapseEvolOption}_{ShiftEvolOption}_{Coord}_Rbargfs{Rbar_gfs}_T4munu{T4munu_enable}_Improvements{enable_Improvements}",
-                    cast(Dict[str, Union[mpf, mpc]], results_dict),
-                )

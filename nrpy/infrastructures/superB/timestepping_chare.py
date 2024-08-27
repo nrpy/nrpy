@@ -43,6 +43,8 @@ def generate_send_nonlocalinnerbc_data_code(which_gf: str) -> str:
 def generate_process_nonlocalinnerbc_code() -> str:
     """
     Generate code for nonlocal inner bc processing.
+
+    :return: Code for nonlocal inner bc processing.
     """
     return """
       if (griddata_chare[grid].nonlocalinnerbcstruct.tot_num_src_chares > 0) {
@@ -67,8 +69,10 @@ def generate_mol_step_forward_code(
     """
     Generate code for MoL step forward in time.
 
-    :param rk_substep: Runge-Kutta substep
-    :return: Code for MoL step forward in time
+    :param rk_substep: Runge-Kutta substep.
+    :param rhs_output_exprs_list: List of output expression for the RHS.
+    :param post_rhs_output_list: List of outputs for post-RHS expressions.
+    :return: Code for MoL step forward in time.
     """
     return_str = f"""
     serial{{
@@ -322,6 +326,7 @@ def output_timestepping_h(
 
     :param project_dir: Directory where the project C code is output.
     :param enable_residual_diagnostics: Flag to enable residual diagnostics, default is False.
+    :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
     """
     project_Path = Path(project_dir)
@@ -459,7 +464,6 @@ def output_timestepping_cpp(
     project_dir: str,
     Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
     MoL_method: str,
-    post_non_y_n_auxevol_mallocs: str,
     initial_data_desc: str = "",
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
@@ -479,6 +483,7 @@ def output_timestepping_cpp(
     :param enable_CurviBCs: Enable CurviBCs, default is False.
     :param initialize_constant_auxevol: If set to True, `initialize_constant_auxevol` function will be called during the simulation initialization phase to set these constants. Default is False.
     :param enable_residual_diagnostics: Enable residual diagnostics, default is False.
+    :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
     :raises ValueError: Raised if any required function is not registered.
     """
@@ -1088,6 +1093,7 @@ def output_timestepping_ci(
     :param project_dir: Directory where the project C code is output.
     :param Butcher_dict: Dictionary containing Butcher tableau for the MoL method.
     :param MoL_method: Method of Lines (MoL) method name.
+    :param post_non_y_n_auxevol_mallocs: Function calls after memory is allocated for non y_n and auxevol gridfunctions, default is an empty string.
     :param pre_MoL_step_forward_in_time: Code for handling pre-right-hand-side operations, default is an empty string.
     :param post_MoL_step_forward_in_time: Code for handling post-right-hand-side operations, default is an empty string.
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".

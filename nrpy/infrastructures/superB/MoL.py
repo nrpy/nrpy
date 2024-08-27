@@ -16,6 +16,8 @@ superB changes/additions to nrpy.infrastructures.BHaH.MoLtimestepping.MoL.py:
 """
 
 import os  # Standard Python module for multiplatform OS-level functions
+import warnings
+
 from typing import Dict, List, Tuple, Union
 
 import sympy as sp  # Import SymPy, a computer algebra system written entirely in Python
@@ -44,29 +46,6 @@ _ = par.CodeParameter("REAL", __name__, "t_0", add_to_parfile=False, add_to_set_
 _ = par.CodeParameter("REAL", __name__, "time", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
 _ = par.CodeParameter("REAL", __name__, "t_final", 10.0, commondata=True)
 # fmt: on
-
-
-def split_post_rhs_string(post_rhs_string):
-    # Keywords to split and check
-    keyword1 = "apply_bcs_outerextrap_and_inner"
-    keyword2 = "enforce_detgammabar_equals_detgammahat"
-
-    # Check for the presence of keywords
-    if keyword1 not in post_rhs_string or keyword2 not in post_rhs_string:
-        raise ValueError("The post_rhs_string must contain both keywords.")
-
-    # Split the string based on the first keyword
-    parts = post_rhs_string.split(keyword1)
-
-    if len(parts) != 2:
-        raise ValueError("The post_rhs_string should be split into exactly two parts.")
-
-    # Define the strings
-    part1 = parts[0] + keyword1
-    part2 = keyword2 + parts[1].split(keyword2, 1)[1] if keyword2 in parts[1] else ""
-
-    return part1, part2
-
 
 # single_RK_substep_input_symbolic() performs necessary replacements to
 #   define C code for a single RK substep
@@ -325,7 +304,6 @@ def generate_rhs_output_exprs(
     :param rk_substep: The current Runge-Kutta substep (1-indexed).
     :return: A list of sympy expressions representing the RHS output expressions.
     """
-    num_steps = len(Butcher_dict[MoL_method][0]) - 1
     s = rk_substep - 1  # Convert to 0-indexed
     rhs_output_expr = []
 
@@ -343,7 +321,6 @@ def generate_rhs_output_exprs(
         elif s == 2:
             rhs_output_expr = [y_n_gfs]
     else:
-        y_n = "Y_N_GFS"
         if not is_diagonal_Butcher(Butcher_dict, MoL_method):
             rhs_output_expr = [f"K{rk_substep}_GFS"]
         else:

@@ -20,7 +20,9 @@ from nrpy.infrastructures.BHaH import griddata_commondata
 
 def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type]:
     r"""
-    Register C function for setting up diagnostic struct
+    Register C function for setting up diagnostic struct.
+
+    :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -28,9 +30,9 @@ def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
-    desc = f"Setup psi4_diagnostics."
+    desc = "Setup psi4_diagnostics."
     cfunc_type = "void"
-    name = f"psi4_diagnostics_set_up"
+    name = "psi4_diagnostics_set_up"
     params = "commondata_struct *restrict commondata, const params_struct *restrict params, const params_struct *restrict params_chare, const charecomm_struct *restrict charecommstruct, REAL *restrict xx[3], const int chare_index[3], diagnostic_struct *restrict diagnosticstruct"
 
     body = r"""

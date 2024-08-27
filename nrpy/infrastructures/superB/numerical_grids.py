@@ -127,6 +127,7 @@ def register_CFunction_numerical_grids_chare(
 
     :param enable_rfm_precompute: Whether to enable reference metric precomputation (default: False).
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions (default: False).
+    :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "Set up a cell-centered grids of size grid_physical_size."
@@ -207,6 +208,7 @@ def register_CFunctions(
     :param list_of_CoordSystems: List of CoordSystems
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions.
+    :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     """
     for CoordSystem in list_of_CoordSystems:
         register_CFunction_numerical_grid_params_Nxx_dxx_xx_chare(
