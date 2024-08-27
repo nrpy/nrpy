@@ -23,6 +23,7 @@ import sympy as sp  # Import SymPy, a computer algebra system written entirely i
 
 import nrpy.c_function as cfc
 import nrpy.params as par  # NRPy+: Parameter interface
+import nrpy.grid as grid
 from nrpy.c_codegen import c_codegen
 from nrpy.helpers.generic import superfast_uniq
 from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
@@ -849,6 +850,65 @@ def create_rk_substep_constants(num_steps: int) -> str:
     return "\n".join(f"#define RK_SUBSTEP_K{s+1} {s+1}" for s in range(num_steps))
 
 
+def register_CFunction_MoL_sync_data_defines() -> Tuple[int, int]:
+    """
+    Register the CFunction 'MoL_sync_data_defines'.
+    This function sets up data required for communicating gfs between chares.
+    :raises RuntimeError: If an error occurs while registering the CFunction
+    :return None
+    """
+    includes: List[str] = ["BHaH_defines.h"]
+    desc: str = "Define data needed for syncing data across chares"
+    cfunc_type: str = "void"
+    name: str = "MoL_sync_data_defines"
+    params: str = (
+        "MoL_gridfunctions_struct *restrict gridfuncs"
+    )
+    sync_evol_list: List[str] = []
+    num_sync_evol_gfs: int = 0
+
+    sync_auxevol_list: List[str] = []
+    num_sync_auxevol_gfs: int = 0
+
+    for gf, gf_class_obj in grid.glb_gridfcs_dict.items():
+        gf_name = gf.upper()
+
+        if gf_class_obj.sync_gf_in_superB == True:
+            if gf_class_obj.group == "EVOL":
+                num_sync_evol_gfs += 1
+                sync_evol_list.append(gf_name)
+            elif gf_class_obj.group == "AUXEVOL":
+                num_sync_auxevol_gfs += 1
+                sync_auxevol_list.append(gf_name)
+
+    body: str = f"""
+gridfuncs->num_evol_gfs_to_sync = {num_sync_evol_gfs};
+gridfuncs->num_auxevol_gfs_to_sync = {num_sync_auxevol_gfs};
+"""
+
+    for i, gf in enumerate(sync_evol_list):
+        body += f"gridfuncs->evol_gfs_to_sync[{i}] = {gf.upper()}GF;\n"
+
+    if num_sync_auxevol_gfs != 0:
+        for i, gf in enumerate(sync_auxevol_list):
+            body += f"gridfuncs->auxevol_gfs_to_sync[{i}] = {gf.upper()}GF;\n"
+    
+    try:
+        cfc.register_CFunction(
+            includes=includes,
+            desc=desc,
+            cfunc_type=cfunc_type,
+            name=name,
+            params=params,
+            body=body,
+        )
+        return num_sync_evol_gfs, num_sync_auxevol_gfs
+    except Exception as e:
+        raise RuntimeError(
+            f"Error registering CFunction 'MoL_malloc_diagnostic_gfs': {str(e)}"
+        ) from e
+
+
 # Register all the CFunctions and NRPy basic defines
 def register_CFunctions(
     MoL_method: str = "RK4",
@@ -895,6 +955,11 @@ def register_CFunctions(
     register_CFunction_MoL_malloc_diagnostic_gfs()
     register_CFunction_MoL_free_memory_diagnostic_gfs()
 
+    (
+        num_evol_gfs_to_sync, 
+        num_auxevol_gfs_to_sync
+    ) = register_CFunction_MoL_sync_data_defines()
+
     if register_MoL_step_forward_in_time:
         register_CFunction_MoL_step_forward_in_time(
             Butcher_dict,
@@ -935,6 +1000,10 @@ def register_CFunctions(
     BHaH_defines_h.register_BHaH_defines(
         "nrpy.infrastructures.BHaH.MoLtimestepping.MoL",
         f"typedef struct __MoL_gridfunctions_struct__ {{\n"
+        f"""int num_evol_gfs_to_sync;
+        int num_auxevol_gfs_to_sync;
+        int evol_gfs_to_sync[{num_evol_gfs_to_sync}];
+        int auxevol_gfs_to_sync[{num_auxevol_gfs_to_sync}];\n"""
         f"REAL *restrict {y_n_gridfunctions};\n"
         + "".join(f"REAL *restrict {gfs};\n" for gfs in non_y_n_gridfunctions_list)
         + r"""REAL *restrict diagnostic_output_gfs;

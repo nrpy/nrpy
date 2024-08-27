@@ -231,15 +231,17 @@ def register_CFunction_timestepping_malloc() -> None:
     desc = "Allocate memory for temporary buffers used to communicate face data"
     cfunc_type = "void"
     name = "timestepping_malloc_tmpBuffer"
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const nonlocalinnerbc_struct *restrict nonlocalinnerbcstruct, tmpBuffers_struct *restrict tmpBuffers"
+    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const MoL_gridfunctions_struct *restrict gridfuncs, const nonlocalinnerbc_struct *restrict nonlocalinnerbcstruct, tmpBuffers_struct *restrict tmpBuffers"
     body = """
 const int Nxx_plus_2NGHOSTS_face0 = Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
 const int Nxx_plus_2NGHOSTS_face1 = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS2;
 const int Nxx_plus_2NGHOSTS_face2 = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1;
 
-tmpBuffers->tmpBuffer_EW = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * NGHOSTS * Nxx_plus_2NGHOSTS_face0);
-tmpBuffers->tmpBuffer_NS = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * NGHOSTS * Nxx_plus_2NGHOSTS_face1);
-tmpBuffers->tmpBuffer_TB = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * NGHOSTS * Nxx_plus_2NGHOSTS_face2);
+const int max_sync_gfs = MAX(gridfuncs->num_evol_gfs_to_sync, gridfuncs->num_auxevol_gfs_to_sync);
+
+tmpBuffers->tmpBuffer_EW = (REAL *restrict)malloc(sizeof(REAL) * max_sync_gfs * NGHOSTS * Nxx_plus_2NGHOSTS_face0);
+tmpBuffers->tmpBuffer_NS = (REAL *restrict)malloc(sizeof(REAL) * max_sync_gfs * NGHOSTS * Nxx_plus_2NGHOSTS_face1);
+tmpBuffers->tmpBuffer_TB = (REAL *restrict)malloc(sizeof(REAL) * max_sync_gfs * NGHOSTS * Nxx_plus_2NGHOSTS_face2);
 
 // Unpack nonlocalinnerbcstruct
   const int tot_num_dst_chares = nonlocalinnerbcstruct->tot_num_dst_chares;
@@ -249,11 +251,11 @@ tmpBuffers->tmpBuffer_TB = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * 
 
   tmpBuffers->tmpBuffer_innerbc_send = (REAL **)malloc(tot_num_dst_chares * sizeof(REAL *));
   for (int which_chare = 0; which_chare < tot_num_dst_chares; which_chare++) {
-    tmpBuffers->tmpBuffer_innerbc_send[which_chare] = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * num_srcpts_tosend_each_chare[which_chare]);
+    tmpBuffers->tmpBuffer_innerbc_send[which_chare] = (REAL *restrict)malloc(sizeof(REAL) * max_sync_gfs * num_srcpts_tosend_each_chare[which_chare]);
   }
   tmpBuffers->tmpBuffer_innerbc_receiv = (REAL **)malloc(tot_num_src_chares * sizeof(REAL *));
   for (int which_chare = 0; which_chare < tot_num_src_chares; which_chare++) {
-    tmpBuffers->tmpBuffer_innerbc_receiv[which_chare] = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * num_srcpts_each_chare[which_chare]);
+    tmpBuffers->tmpBuffer_innerbc_receiv[which_chare] = (REAL *restrict)malloc(sizeof(REAL) * max_sync_gfs * num_srcpts_each_chare[which_chare]);
   }
 
 """
@@ -575,6 +577,8 @@ Timestepping::Timestepping(CommondataObject &&inData) {
   // Step 2: Initial data are set on y_n_gfs gridfunctions. Allocate storage for them first.
   for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
     MoL_malloc_y_n_gfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].gridfuncs);
+    // Define data needed for syncing gfs across chares
+    MoL_sync_data_defines(&griddata_chare[grid].gridfuncs);
   }
 
   // Step 3: Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping
@@ -589,7 +593,7 @@ Timestepping::Timestepping(CommondataObject &&inData) {
 
   // Allocate storage for temporary buffers, needed for communicating face data
   for(int grid=0; grid<commondata.NUMGRIDS; grid++)
-    timestepping_malloc_tmpBuffer(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].nonlocalinnerbcstruct, &griddata_chare[grid].tmpBuffers);
+    timestepping_malloc_tmpBuffer(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].gridfuncs, &griddata_chare[grid].nonlocalinnerbcstruct, &griddata_chare[grid].tmpBuffers);
 
 """
     if initialize_constant_auxevol:

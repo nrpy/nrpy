@@ -274,6 +274,7 @@ class BHaHGridFunction(GridFunction):
         wavespeed: float = 1.0,
         is_basename: bool = True,
         gf_array_name: str = "use_in_gfs_for_EVOL_auxevol_gfs_for_AUXEVOL_etc",
+        sync_gf_in_superB: Optional[bool] = None,
     ) -> None:
         super().__init__(
             name, group, rank, dimension, "REAL", f_infinity, wavespeed, is_basename
@@ -288,6 +289,11 @@ class BHaHGridFunction(GridFunction):
                 self.gf_array_name = "aux_gfs"
         else:
             self.gf_array_name = gf_array_name
+
+        self.sync_gf_in_superB = sync_gf_in_superB
+        if sync_gf_in_superB == None:
+            if group == "EVOL":
+                self.sync_gf_in_superB = True
 
     def verify_gridfunction_group_is_valid(self) -> None:
         """
