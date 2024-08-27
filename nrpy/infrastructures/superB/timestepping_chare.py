@@ -39,6 +39,7 @@ def generate_send_nonlocalinnerbc_data_code(which_gf: str) -> str:
       }}
     """
 
+
 def generate_process_nonlocalinnerbc_code() -> str:
     """
     Generate code for nonlocal inner bc processing.
@@ -59,7 +60,10 @@ def generate_process_nonlocalinnerbc_code() -> str:
       }
 """
 
-def generate_mol_step_forward_code(rk_substep: str, rhs_output_exprs_list: List[str], post_rhs_output_list: List[str]) -> str:
+
+def generate_mol_step_forward_code(
+    rk_substep: str, rhs_output_exprs_list: List[str], post_rhs_output_list: List[str]
+) -> str:
     """
     Generate code for MoL step forward in time.
 
@@ -1134,7 +1138,6 @@ def output_timestepping_ci(
         }
       }"""
 
-
     if not enable_residual_diagnostics:
         # If anything other than NRPy elliptic
         file_output_str += """
@@ -1159,10 +1162,10 @@ def output_timestepping_ci(
 """
         if post_non_y_n_auxevol_mallocs:
             file_output_str += (
-"""   // Step 4.a: Functions called after memory for non-y_n and auxevol gridfunctions is allocated.
+                """   // Step 4.a: Functions called after memory for non-y_n and auxevol gridfunctions is allocated.
 """
-            + post_non_y_n_auxevol_mallocs
-        )
+                + post_non_y_n_auxevol_mallocs
+            )
         file_output_str += """
         send_wavespeed_at_outer_boundary(grid);
       }
@@ -1347,10 +1350,14 @@ def output_timestepping_ci(
     # Loop over RK substeps and loop directions.
     for s in range(num_steps):
         rhs_output_exprs_list = generate_rhs_output_exprs(
-                Butcher_dict, MoL_method, s + 1)
+            Butcher_dict, MoL_method, s + 1
+        )
         post_rhs_output_list = generate_post_rhs_output_list(
-                Butcher_dict, MoL_method, s + 1)
-        file_output_str += generate_mol_step_forward_code(f"RK_SUBSTEP_K{s+1}", rhs_output_exprs_list, post_rhs_output_list)
+            Butcher_dict, MoL_method, s + 1
+        )
+        file_output_str += generate_mol_step_forward_code(
+            f"RK_SUBSTEP_K{s+1}", rhs_output_exprs_list, post_rhs_output_list
+        )
         for loop_direction in ["x", "y", "z"]:
             # Determine ghost types and configuration based on the current axis
             if loop_direction == "x":

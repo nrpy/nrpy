@@ -18,8 +18,7 @@ import nrpy.params as par
 from nrpy.infrastructures.BHaH import griddata_commondata
 
 
-def register_CFunction_psi4_diagnostics_set_up(
-) -> Union[None, pcg.NRPyEnv_type]:
+def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type]:
     r"""
     Register C function for setting up diagnostic struct
     """
@@ -524,6 +523,7 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
         include_CodeParameters_h=True,
         body=body,
     )
+
 
 def register_CFunction_psi4_spinweightm2_decomposition_file_write() -> None:
     """Register C function for file write of psi4 decomposition into spin-weighted spherical harmonics."""

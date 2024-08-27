@@ -21,6 +21,7 @@ from nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions i
     BHaH_defines_set_gridfunction_defines_with_parity_types,
 )
 
+
 def register_CFunction_apply_bcs_inner_only_nonlocal() -> None:
     """Register C function for filling inner boundary points on the computational grid, as prescribed by bcstruct."""
     includes = ["BHaH_defines.h"]
@@ -65,6 +66,7 @@ boundary points ("inner maps to outer").
         include_CodeParameters_h=True,
         body=body,
     )
+
 
 def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
     """
@@ -408,13 +410,14 @@ typedef struct __bc_struct__ {
         verbose=True,
     )
     # ~ BHaH_defines_h.register_BHaH_defines(__name__, CBC_BHd_str)
-    BHaH_defines_h.register_BHaH_defines("nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions", CBC_BHd_str)
-
+    BHaH_defines_h.register_BHaH_defines(
+        "nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions",
+        CBC_BHd_str,
+    )
 
     for CoordSystem in list_of_CoordSystems:
         # Register C function to set up the boundary condition struct for local chare grid.
         register_CFunction_bcstruct_chare_set_up(CoordSystem=CoordSystem)
-
 
     # Register temporary buffers for face data communication to griddata_struct:
     griddata_commondata.register_griddata_commondata(
@@ -422,7 +425,6 @@ typedef struct __bc_struct__ {
         "nonlocalinnerbc_struct nonlocalinnerbcstruct",
         "for communication of non-local inner boundary data across chares",
     )
-
 
 
 if __name__ == "__main__":

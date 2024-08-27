@@ -42,6 +42,7 @@ from nrpy.equations.general_relativity.InitialData_Spherical import (
 )
 from nrpy.infrastructures.BHaH import BHaH_defines_h
 
+
 def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     CoordSystem: str,
     addl_includes: Optional[List[str]] = None,
@@ -329,9 +330,7 @@ def register_CFunction_initial_data(
     desc = "Set initial data."
     cfunc_type = "void"
     name = "initial_data"
-    params = (
-        "commondata_struct *restrict commondata, griddata_struct *restrict griddata, const int initial_data_part"
-    )
+    params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata, const int initial_data_part"
 
     body = ""
     if enable_checkpointing:
@@ -354,7 +353,7 @@ switch (initial_data_part) {
 griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_persist, {IDtype}, initial_data_part);
     }}"""
     if free_ID_persist_struct_str:
-          body += free_ID_persist_struct_str
+        body += free_ID_persist_struct_str
     body += rf"""
     break;
   }}
@@ -388,7 +387,6 @@ griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_pers
         body=body,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
-
 
 
 if __name__ == "__main__":

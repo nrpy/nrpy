@@ -46,7 +46,6 @@ _ = par.CodeParameter("REAL", __name__, "t_final", 10.0, commondata=True)
 # fmt: on
 
 
-
 def split_post_rhs_string(post_rhs_string):
     # Keywords to split and check
     keyword1 = "apply_bcs_outerextrap_and_inner"
@@ -67,8 +66,6 @@ def split_post_rhs_string(post_rhs_string):
     part2 = keyword2 + parts[1].split(keyword2, 1)[1] if keyword2 in parts[1] else ""
 
     return part1, part2
-
-
 
 
 # single_RK_substep_input_symbolic() performs necessary replacements to
@@ -220,8 +217,8 @@ switch (which_MOL_part) {
 """
     # Part 3: Call post-RHS functions
     for post_rhs, post_rhs_output in zip(post_rhs_list, post_rhs_output_list):
-        parts = [part.strip() for part in post_rhs.split(';') if part.strip()]
-        part1 = parts[0] + ';'
+        parts = [part.strip() for part in post_rhs.split(";") if part.strip()]
+        part1 = parts[0] + ";"
         return_str += part1.replace(
             "RK_OUTPUT_GFS", str(post_rhs_output).replace("gfsL", "gfs")
         )
@@ -235,11 +232,12 @@ switch (which_MOL_part) {
   case MOL_PART_3_AFTER_APPLY_BCS: {
 """
     for post_rhs, post_rhs_output in zip(post_rhs_list, post_rhs_output_list):
-        parts = [part.strip() for part in post_rhs.split(';') if part.strip()]
+        parts = [part.strip() for part in post_rhs.split(";") if part.strip()]
         if len(parts) > 1:
-          part2 = parts[1] + ';'
-          return_str += part2.replace(
-              "RK_OUTPUT_GFS", str(post_rhs_output).replace("gfsL", "gfs"))
+            part2 = parts[1] + ";"
+            return_str += part2.replace(
+                "RK_OUTPUT_GFS", str(post_rhs_output).replace("gfsL", "gfs")
+            )
 
     for post_rhs, post_rhs_output in zip(post_rhs_list, post_rhs_output_list):
         return_str += post_post_rhs_string.replace(
@@ -254,7 +252,6 @@ switch (which_MOL_part) {
 """
 
     return return_str
-
 
 
 def generate_post_rhs_output_list(
@@ -315,7 +312,6 @@ def generate_post_rhs_output_list(
     return post_rhs  # Return the list of strings representing the post RHS output
 
 
-
 def generate_rhs_output_exprs(
     Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
     MoL_method: str,
@@ -341,11 +337,11 @@ def generate_rhs_output_exprs(
         k2_or_y_nplus_a32_k2_gfs = "K2_OR_Y_NPLUS_A32_K2_GFS"
 
         if s == 0:
-            rhs_output_expr=[k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs]
+            rhs_output_expr = [k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs]
         elif s == 1:
-            rhs_output_expr=[k2_or_y_nplus_a32_k2_gfs]
+            rhs_output_expr = [k2_or_y_nplus_a32_k2_gfs]
         elif s == 2:
-            rhs_output_expr=[y_n_gfs]
+            rhs_output_expr = [y_n_gfs]
     else:
         y_n = "Y_N_GFS"
         if not is_diagonal_Butcher(Butcher_dict, MoL_method):
@@ -362,9 +358,9 @@ def generate_rhs_output_exprs(
                 else:
                     rhs_output_expr = ["K_EVEN_GFS"]
 
-    return rhs_output_expr  # Return the list of strings representing the RHS output expr
-
-
+    return (
+        rhs_output_expr  # Return the list of strings representing the RHS output expr
+    )
 
 
 def register_CFunction_MoL_malloc_diagnostic_gfs() -> None:

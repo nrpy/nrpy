@@ -161,11 +161,11 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
 """
     body += "\n// Step 1.d: Set up curvilinear boundary condition struct (bcstruct)\n"
     if enable_CurviBCs:
-          body += r"""
+        body += r"""
   bcstruct_chare_set_up(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata_chare[grid].xx, &griddata[grid].bcstruct, &griddata_chare[grid].bcstruct, &griddata_chare[grid].nonlocalinnerbcstruct, chare_index);
 """
     else:
-          body += "// (curvilinear boundary conditions bcstruct disabled)\n"
+        body += "// (curvilinear boundary conditions bcstruct disabled)\n"
 
     body += r"""
   // 1D diagnostics set up
