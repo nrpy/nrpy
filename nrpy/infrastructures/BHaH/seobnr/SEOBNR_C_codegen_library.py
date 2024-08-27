@@ -234,8 +234,8 @@ def register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conservative() -
     name = "SEOBNRv5_aligned_spin_initial_conditions_conservative"
     params = "commondata_struct *restrict commondata"
     body = """
-const gsl_multiroot_fdfsolver_type *T;
-gsl_multiroot_fdfsolver *s;
+const gsl_multiroot_fdfsolver_type *restrict T;
+gsl_multiroot_fdfsolver *restrict s;
 int status;
 size_t i , iter = 0;
 const size_t n = 2;
@@ -245,7 +245,7 @@ gsl_multiroot_function_fdf f = {&SEOBNRv5_aligned_spin_Hamiltonian_circular_orbi
                                 &SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_RHSdRHS,
                                 n,
                                 commondata};
-gsl_vector *x = gsl_vector_alloc(n);
+gsl_vector *restrict x = gsl_vector_alloc(n);
 REAL omega = commondata->initial_omega;
 REAL pphi = pow(omega,-1./3.);
 REAL r = pphi*pphi;
@@ -303,20 +303,20 @@ def register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit() -> (
     desc = """Evaluate SEOBNRv5 Hamiltonian's circular orbit conditions to compute conservative initial conditions."""
     cfunc_type = "int"
     name = "SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit"
-    params = "const gsl_vector * x , void *params , gsl_vector * f"  # This convention is from the gsl multi-dimensional root finder example
+    params = "const gsl_vector *restrict x , void *restrict params , gsl_vector *restrict f"  # This convention is from the gsl multi-dimensional root finder example
     Hq = SEOBNRv5_Ham.SEOBNRv5_aligned_spin_Hamiltonian_quantities()
     dHreal_dr_circ = Hq.dHreal_dr_circ
     dHreal_dpphi_circ = Hq.dHreal_dpphi_circ
     body = r"""
 const REAL r = gsl_vector_get(x , 0);
 const REAL pphi = gsl_vector_get(x , 1);
-const REAL m1 = ((commondata_struct *) params)->m1;
-const REAL m2 = ((commondata_struct *) params)->m2;
-const REAL chi1 = ((commondata_struct *) params)->chi1;
-const REAL chi2 = ((commondata_struct *) params)->chi2;
-const REAL a6 = ((commondata_struct *) params)->a6;
-const REAL dSO = ((commondata_struct *) params)->dSO;
-const REAL initial_omega = ((commondata_struct *) params)->initial_omega;
+const REAL m1 = ((commondata_struct *restrict) params)->m1;
+const REAL m2 = ((commondata_struct *restrict) params)->m2;
+const REAL chi1 = ((commondata_struct *restrict) params)->chi1;
+const REAL chi2 = ((commondata_struct *restrict) params)->chi2;
+const REAL a6 = ((commondata_struct *restrict) params)->a6;
+const REAL dSO = ((commondata_struct *restrict) params)->dSO;
+const REAL initial_omega = ((commondata_struct *restrict) params)->initial_omega;
 """
     body += ccg.c_codegen(
         [
@@ -369,7 +369,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_dRHS() -
     desc = """Evaluate SEOBNRv5 Hamiltonian's circular orbit conditions' derivative to compute conservative initial conditions."""
     cfunc_type = "int"
     name = "SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_dRHS"
-    params = "const gsl_vector * x, void *params, gsl_matrix * J"  # This convention is from the gsl multi-dimensional root finder example
+    params = "const gsl_vector *restrict x, void *restrict params, gsl_matrix *restrict J"  # This convention is from the gsl multi-dimensional root finder example
     Hq = SEOBNRv5_Ham.SEOBNRv5_aligned_spin_Hamiltonian_quantities()
     dHreal_dr_dr_circ = Hq.dHreal_dr_dr_circ
     dHreal_dr_dpphi_circ = Hq.dHreal_dr_dpphi_circ
@@ -377,12 +377,12 @@ def register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_dRHS() -
     body = r"""
 const REAL r = gsl_vector_get(x , 0);
 const REAL pphi = gsl_vector_get(x , 1);
-const REAL m1 = ((commondata_struct *) params)->m1;
-const REAL m2 = ((commondata_struct *) params)->m2;
-const REAL chi1 = ((commondata_struct *) params)->chi1;
-const REAL chi2 = ((commondata_struct *) params)->chi2;
-const REAL a6 = ((commondata_struct *) params)->a6;
-const REAL dSO = ((commondata_struct *) params)->dSO;
+const REAL m1 = ((commondata_struct *restrict) params)->m1;
+const REAL m2 = ((commondata_struct *restrict) params)->m2;
+const REAL chi1 = ((commondata_struct *restrict) params)->chi1;
+const REAL chi2 = ((commondata_struct *restrict) params)->chi2;
+const REAL a6 = ((commondata_struct *restrict) params)->a6;
+const REAL dSO = ((commondata_struct *restrict) params)->dSO;
 """
     body += ccg.c_codegen(
         [dHreal_dr_dr_circ, dHreal_dr_dpphi_circ, dHreal_dpphi_dpphi_circ],
@@ -435,7 +435,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_RHSdRHS(
     desc = """Evaluate SEOBNRv5 Hamiltonian's circular orbit and derivative conditions to compute conservative initial conditions."""
     cfunc_type = "int"
     name = "SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_RHSdRHS"
-    params = "const gsl_vector * x, void *params, gsl_vector * f, gsl_matrix * J"  # This convention is from the gsl multi-dimensional root finder example
+    params = "const gsl_vector *restrict x, void *restrict params, gsl_vector *restrict f, gsl_matrix *restrict J"  # This convention is from the gsl multi-dimensional root finder example
     body = r"""
 SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit(x , params , f) ;
 SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_dRHS(x , params , J) ;
@@ -533,16 +533,16 @@ def register_CFunction_SEOBNRv5_aligned_spin_radial_momentum_condition() -> (
     desc = """Evaluate SEOBNRv5 radial momentum condition."""
     cfunc_type = "REAL"
     name = "SEOBNRv5_aligned_spin_radial_momentum_conditions"
-    params = "REAL x, void * params"
+    params = "REAL x, void *restrict params"
     body = """
-REAL m1 = ((commondata_struct *) params)->m1;
-REAL m2 = ((commondata_struct *) params)->m2;
-REAL chi1 = ((commondata_struct *) params)->chi1;
-REAL chi2 = ((commondata_struct *) params)->chi2;
-REAL a6 = ((commondata_struct *) params)->a6;
-REAL dSO = ((commondata_struct *) params)->dSO; 
-REAL r = ((commondata_struct *) params)->r; 
-REAL pphi = ((commondata_struct *) params)->pphi; 
+REAL m1 = ((commondata_struct *restrict) params)->m1;
+REAL m2 = ((commondata_struct *restrict) params)->m2;
+REAL chi1 = ((commondata_struct *restrict) params)->chi1;
+REAL chi2 = ((commondata_struct *restrict) params)->chi2;
+REAL a6 = ((commondata_struct *restrict) params)->a6;
+REAL dSO = ((commondata_struct *restrict) params)->dSO; 
+REAL r = ((commondata_struct *restrict) params)->r; 
+REAL pphi = ((commondata_struct *restrict) params)->pphi; 
 REAL prstar = x; 
 """
     H = SEOBNRv5_Ham.SEOBNRv5_aligned_spin_Hamiltonian_quantities()
