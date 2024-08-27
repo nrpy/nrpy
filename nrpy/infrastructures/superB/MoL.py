@@ -46,6 +46,7 @@ _ = par.CodeParameter("REAL", __name__, "time", add_to_parfile=False, add_to_set
 _ = par.CodeParameter("REAL", __name__, "t_final", 10.0, commondata=True)
 # fmt: on
 
+
 # single_RK_substep_input_symbolic() performs necessary replacements to
 #   define C code for a single RK substep
 #   (e.g., computing k_1 and then updating the outer boundaries)
