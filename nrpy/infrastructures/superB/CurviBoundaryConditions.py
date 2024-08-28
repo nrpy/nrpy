@@ -35,7 +35,7 @@ boundary points ("inner maps to outer").
 """
     cfunc_type = "void"
     name = "apply_bcs_inner_only_nonlocal"
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const bc_struct *restrict bcstruct, const nonlocalinnerbc_struct *restrict nonlocalinnerbcstruct, REAL *restrict gfs, REAL **restrict tmpBuffer_innerbc_receiv"
+    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const bc_struct *restrict bcstruct, const nonlocalinnerbc_struct *restrict nonlocalinnerbcstruct, const int NUM_GFS, REAL *restrict gfs, const int8_t* gf_parity_types, REAL **restrict tmpBuffer_innerbc_receiv"
     body = r"""
   // Unpack bc_info from bcstruct
   const bc_info_struct *bc_info = &bcstruct->bc_info;
@@ -47,12 +47,12 @@ boundary points ("inner maps to outer").
 
   for (int which_chare = 0; which_chare < tot_num_src_chares; which_chare++) {
     const REAL *restrict tmpBuffer = tmpBuffer_innerbc_receiv[which_chare];
-    for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
+    for (int which_gf = 0; which_gf < NUM_GFS; which_gf++) {
       for (int which_srcpt = 0; which_srcpt < num_srcpts_each_chare[which_chare]; which_srcpt++) {
         const int linear_id = map_srcchare_and_srcpt_id_to_linear_id[which_chare][which_srcpt];
         const int dstpt = bcstruct->inner_bc_array_nonlocal[linear_id].dstpt;
         const int idx2 = IDX2NONLOCALINNERBC(which_gf, which_srcpt, num_srcpts_each_chare[which_chare]);
-        gfs[IDX4pt(which_gf, dstpt)] = bcstruct->inner_bc_array_nonlocal[linear_id].parity[evol_gf_parity[which_gf]] * tmpBuffer[idx2];
+        gfs[IDX4pt(which_gf, dstpt)] = bcstruct->inner_bc_array_nonlocal[linear_id].parity[gf_parity_types[which_gf]] * tmpBuffer[idx2];
       }
     }
   }
@@ -325,7 +325,6 @@ def CurviBoundaryConditions_register_C_functions(
     list_of_CoordSystems: List[str],
     radiation_BC_fd_order: int = 2,
     set_parity_on_aux: bool = False,
-    set_parity_on_auxevol: bool = False,
     fp_type: str = "double",
 ) -> None:
     """
@@ -404,9 +403,10 @@ typedef struct __bc_struct__ {
   //                          bounds and parallelizing over as many boundary points as possible.
 } bc_struct;
 """
+    # inter-chare communication assumes auxevol parity types are set
     CBC_BHd_str += BHaH_defines_set_gridfunction_defines_with_parity_types(
         set_parity_on_aux=set_parity_on_aux,
-        set_parity_on_auxevol=set_parity_on_auxevol,
+        set_parity_on_auxevol=True,
         verbose=True,
     )
     # ~ BHaH_defines_h.register_BHaH_defines(__name__, CBC_BHd_str)

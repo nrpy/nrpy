@@ -884,6 +884,7 @@ def register_CFunction_MoL_sync_data_defines() -> Tuple[int, int]:
     body: str = f"""
 gridfuncs->num_evol_gfs_to_sync = {num_sync_evol_gfs};
 gridfuncs->num_auxevol_gfs_to_sync = {num_sync_auxevol_gfs};
+gridfuncs->max_sync_gfs = MAX(gridfuncs->num_evol_gfs_to_sync, gridfuncs->num_auxevol_gfs_to_sync);
 """
 
     for i, gf in enumerate(sync_evol_list):
@@ -1002,6 +1003,7 @@ def register_CFunctions(
         f"typedef struct __MoL_gridfunctions_struct__ {{\n"
         f"""int num_evol_gfs_to_sync;
         int num_auxevol_gfs_to_sync;
+        int max_sync_gfs;
         int evol_gfs_to_sync[{num_evol_gfs_to_sync}];
         int auxevol_gfs_to_sync[{num_auxevol_gfs_to_sync}];\n"""
         f"REAL *restrict {y_n_gridfunctions};\n"

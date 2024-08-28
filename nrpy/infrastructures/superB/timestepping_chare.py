@@ -103,6 +103,9 @@ def generate_mol_step_forward_code(
     for post_rhs_output in post_rhs_output_list:
         return_str += generate_send_nonlocalinnerbc_data_code(post_rhs_output)
         return_str += generate_process_nonlocalinnerbc_code()
+    
+    return_str += generate_send_nonlocalinnerbc_data_code("AUXEVOL_GFS")
+    return_str += generate_process_nonlocalinnerbc_code()
 
     return_str += """
     }
@@ -237,7 +240,7 @@ const int Nxx_plus_2NGHOSTS_face0 = Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
 const int Nxx_plus_2NGHOSTS_face1 = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS2;
 const int Nxx_plus_2NGHOSTS_face2 = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1;
 
-const int max_sync_gfs = MAX(gridfuncs->num_evol_gfs_to_sync, gridfuncs->num_auxevol_gfs_to_sync);
+const int max_sync_gfs = gridfuncs->max_sync_gfs;
 
 tmpBuffers->tmpBuffer_EW = (REAL *restrict)malloc(sizeof(REAL) * max_sync_gfs * NGHOSTS * Nxx_plus_2NGHOSTS_face0);
 tmpBuffers->tmpBuffer_NS = (REAL *restrict)malloc(sizeof(REAL) * max_sync_gfs * NGHOSTS * Nxx_plus_2NGHOSTS_face1);
@@ -422,12 +425,14 @@ class Timestepping : public CBase_Timestepping {
 def generate_switch_statement_for_gf_types(
     Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
     MoL_method: str,
+    set_parity_types: bool = False,
 ) -> str:
     """
     Generate the switch statement for grid function types based on the given Method of Lines (MoL) method.
 
     :param Butcher_dict: Dictionary containing Butcher tableau data.
     :param MoL_method: Method of Lines (MoL) method name.
+    :param set_parity_types: whether to set parity types in switch statements.
     :return: A string representing the switch statement for the grid function types.
     """
     # Generating gridfunction names based on the given MoL method
@@ -450,7 +455,18 @@ switch (type_gfs) {
     switch_cases = []
     for gf in gf_list:
         switch_cases.append(f"  case {gf.upper()}:")
-        switch_cases.append(f"    gfs = griddata_chare[grid].gridfuncs.{gf.lower()};")
+        if gf!="auxevol_gfs":
+            switch_cases.append(f"    gfs = griddata_chare[grid].gridfuncs.{gf.lower()};")
+            switch_cases.append(f"    NUM_GFS = griddata_chare[grid].gridfuncs.num_evol_gfs_to_sync;")
+            switch_cases.append(f"    gfs_to_sync = griddata_chare[grid].gridfuncs.evol_gfs_to_sync;")
+            if set_parity_types:
+                switch_cases.append(f"    gf_parity_types = evol_gf_parity;")
+        else:
+            switch_cases.append(f"    gfs = griddata_chare[grid].gridfuncs.{gf.lower()};")
+            switch_cases.append(f"    NUM_GFS = griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync;")
+            switch_cases.append(f"    gfs_to_sync = griddata_chare[grid].gridfuncs.auxevol_gfs_to_sync;")
+            if set_parity_types:
+                switch_cases.append(f"    gf_parity_types = auxevol_gf_parity;")
         switch_cases.append("    break;")
     switch_cases.append(
         """
@@ -706,6 +722,8 @@ void Timestepping::send_neighbor_data(const int type_gfs, const int dir, const i
   REAL *restrict tmpBuffer_NS = griddata_chare[grid].tmpBuffers.tmpBuffer_NS;
   REAL *restrict tmpBuffer_TB = griddata_chare[grid].tmpBuffers.tmpBuffer_TB;
   const REAL *restrict gfs = nullptr;
+  int NUM_GFS;
+  const int* gfs_to_sync = nullptr;
   """
     file_output_str += switch_case_code
     file_output_str += r"""
@@ -713,97 +731,97 @@ void Timestepping::send_neighbor_data(const int type_gfs, const int dir, const i
     case EAST_WEST:
       //send to west
       if (thisIndex.x > 0) {
-        for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
+        for (int which_gf = 0; which_gf < NUM_GFS; which_gf++) {
           int i0 = 2*NGHOSTS - 1;
           for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
             for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
               for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++) {
-                tmpBuffer_EW[IDXFACES0(which_gf, which_inner, i1, i2)] = gfs[IDX4(which_gf, i0, i1, i2)];
+                tmpBuffer_EW[IDXFACES0(which_gf, which_inner, i1, i2)] = gfs[IDX4(gfs_to_sync[which_gf], i0, i1, i2)];
               }
             }
             i0--;
           }
         }
-        thisProxy[CkArrayIndex3D(thisIndex.x - 1, thisIndex.y, thisIndex.z)].east_ghost(type_gfs, NUM_EVOL_GFS*NGHOSTS*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2, tmpBuffer_EW);
+        thisProxy[CkArrayIndex3D(thisIndex.x - 1, thisIndex.y, thisIndex.z)].east_ghost(type_gfs, NUM_GFS*NGHOSTS*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2, tmpBuffer_EW);
       }
       //send to east
       if (thisIndex.x < Nchare0 - 1) {
-        for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
+        for (int which_gf = 0; which_gf < NUM_GFS; which_gf++) {
           int i0 = Nxx0;
           for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
             for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
               for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++) {
-                tmpBuffer_EW[IDXFACES0(which_gf, which_inner, i1, i2)] = gfs[IDX4(which_gf, i0, i1, i2)];
+                tmpBuffer_EW[IDXFACES0(which_gf, which_inner, i1, i2)] = gfs[IDX4(gfs_to_sync[which_gf], i0, i1, i2)];
               }
             }
             i0++;
           }
         }
-        thisProxy[CkArrayIndex3D(thisIndex.x + 1, thisIndex.y, thisIndex.z)].west_ghost(type_gfs, NUM_EVOL_GFS*NGHOSTS*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2, tmpBuffer_EW);
+        thisProxy[CkArrayIndex3D(thisIndex.x + 1, thisIndex.y, thisIndex.z)].west_ghost(type_gfs, NUM_GFS*NGHOSTS*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2, tmpBuffer_EW);
       }
       break;
     case NORTH_SOUTH:
       //send to south
       if (thisIndex.y > 0) {
-        for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
+        for (int which_gf = 0; which_gf < NUM_GFS; which_gf++) {
           int i1 = 2*NGHOSTS - 1;
           for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
             for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
               for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++) {
-                tmpBuffer_NS[IDXFACES1(which_gf, which_inner, i0, i2)] = gfs[IDX4(which_gf, i0, i1, i2)];
+                tmpBuffer_NS[IDXFACES1(which_gf, which_inner, i0, i2)] = gfs[IDX4(gfs_to_sync[which_gf], i0, i1, i2)];
               }
             }
             i1--;
           }
         }
-        thisProxy[CkArrayIndex3D(thisIndex.x, thisIndex.y - 1, thisIndex.z)].north_ghost(type_gfs, NUM_EVOL_GFS*NGHOSTS*Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS2, tmpBuffer_NS);
+        thisProxy[CkArrayIndex3D(thisIndex.x, thisIndex.y - 1, thisIndex.z)].north_ghost(type_gfs, NUM_GFS*NGHOSTS*Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS2, tmpBuffer_NS);
       }
       //send to north
       if (thisIndex.y < Nchare1 - 1) {
-        for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
+        for (int which_gf = 0; which_gf < NUM_GFS; which_gf++) {
           int i1 = Nxx1;
           for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
             for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
               for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++) {
-                tmpBuffer_NS[IDXFACES1(which_gf, which_inner, i0, i2)] = gfs[IDX4(which_gf, i0, i1, i2)];
+                tmpBuffer_NS[IDXFACES1(which_gf, which_inner, i0, i2)] = gfs[IDX4(gfs_to_sync[which_gf], i0, i1, i2)];
               }
             }
             i1++;
           }
         }
-        thisProxy[CkArrayIndex3D(thisIndex.x, thisIndex.y + 1, thisIndex.z)].south_ghost(type_gfs, NUM_EVOL_GFS*NGHOSTS*Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS2, tmpBuffer_NS);
+        thisProxy[CkArrayIndex3D(thisIndex.x, thisIndex.y + 1, thisIndex.z)].south_ghost(type_gfs, NUM_GFS*NGHOSTS*Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS2, tmpBuffer_NS);
       }
       break;
     case TOP_BOTTOM:
       //send to bottom
       if (thisIndex.z > 0) {
-        for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
+        for (int which_gf = 0; which_gf < NUM_GFS; which_gf++) {
           int i2 = 2*NGHOSTS - 1;
           for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
             for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++) {
               for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++) {
-                tmpBuffer_TB[IDXFACES2(which_gf, which_inner, i0, i1)] = gfs[IDX4(which_gf, i0, i1, i2)];
+                tmpBuffer_TB[IDXFACES2(which_gf, which_inner, i0, i1)] = gfs[IDX4(gfs_to_sync[which_gf], i0, i1, i2)];
               }
             }
             i2--;
           }
         }
-        thisProxy[CkArrayIndex3D(thisIndex.x, thisIndex.y, thisIndex.z - 1)].top_ghost(type_gfs, NUM_EVOL_GFS*NGHOSTS*Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1, tmpBuffer_TB);
+        thisProxy[CkArrayIndex3D(thisIndex.x, thisIndex.y, thisIndex.z - 1)].top_ghost(type_gfs, NUM_GFS*NGHOSTS*Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1, tmpBuffer_TB);
       }
       //send to top
       if (thisIndex.z < Nchare2 - 1) {
-        for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
+        for (int which_gf = 0; which_gf < NUM_GFS; which_gf++) {
           int i2 = Nxx2;
           for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
             for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++) {
               for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++) {
-                tmpBuffer_TB[IDXFACES2(which_gf, which_inner, i0, i1)] = gfs[IDX4(which_gf, i0, i1, i2)];
+                tmpBuffer_TB[IDXFACES2(which_gf, which_inner, i0, i1)] = gfs[IDX4(gfs_to_sync[which_gf], i0, i1, i2)];
               }
             }
             i2++;
           }
         }
-        thisProxy[CkArrayIndex3D(thisIndex.x, thisIndex.y, thisIndex.z + 1)].bottom_ghost(type_gfs, NUM_EVOL_GFS*NGHOSTS*Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1, tmpBuffer_TB);
+        thisProxy[CkArrayIndex3D(thisIndex.x, thisIndex.y, thisIndex.z + 1)].bottom_ghost(type_gfs, NUM_GFS*NGHOSTS*Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1, tmpBuffer_TB);
       }
       break;
     default:
@@ -822,18 +840,20 @@ void Timestepping::process_ghost(const int type_ghost, const int type_gfs, const
   const int Nxx_plus_2NGHOSTS2 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS2;
 
   REAL *restrict gfs = nullptr;
+  int NUM_GFS;
+  const int* gfs_to_sync = nullptr;
 """
     switch_case_code = generate_switch_statement_for_gf_types(Butcher_dict, MoL_method)
     file_output_str += switch_case_code
     file_output_str += r"""
   switch (type_ghost) {
     case EAST_GHOST:
-      for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
+      for (int which_gf = 0; which_gf < NUM_GFS; which_gf++) {
         int i0 = Nxx0 + (2 * NGHOSTS) - 1;
         for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
           for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
             for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++) {
-              gfs[IDX4(which_gf, i0, i1, i2)] = vals[IDXFACES0(which_gf, which_inner, i1, i2)];
+              gfs[IDX4(gfs_to_sync[which_gf], i0, i1, i2)] = vals[IDXFACES0(which_gf, which_inner, i1, i2)];
             }
           }
           i0--;
@@ -841,12 +861,12 @@ void Timestepping::process_ghost(const int type_ghost, const int type_gfs, const
       }
       break;
     case WEST_GHOST:
-      for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
+      for (int which_gf = 0; which_gf < NUM_GFS; which_gf++) {
         int i0 = 0;
         for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
           for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
             for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++) {
-              gfs[IDX4(which_gf, i0, i1, i2)] = vals[IDXFACES0(which_gf, which_inner, i1, i2)];
+              gfs[IDX4(gfs_to_sync[which_gf], i0, i1, i2)] = vals[IDXFACES0(which_gf, which_inner, i1, i2)];
             }
           }
           i0++;
@@ -854,12 +874,12 @@ void Timestepping::process_ghost(const int type_ghost, const int type_gfs, const
       }
       break;
     case NORTH_GHOST:
-      for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
+      for (int which_gf = 0; which_gf < NUM_GFS; which_gf++) {
         int i1 = Nxx1 + (2 * NGHOSTS) - 1;
         for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
           for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
             for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++) {
-              gfs[IDX4(which_gf, i0, i1, i2)] = vals[IDXFACES1(which_gf, which_inner, i0, i2)];
+              gfs[IDX4(gfs_to_sync[which_gf], i0, i1, i2)] = vals[IDXFACES1(which_gf, which_inner, i0, i2)];
             }
           }
           i1--;
@@ -867,12 +887,12 @@ void Timestepping::process_ghost(const int type_ghost, const int type_gfs, const
       }
       break;
     case SOUTH_GHOST:
-      for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
+      for (int which_gf = 0; which_gf < NUM_GFS; which_gf++) {
         int i1 = 0;
         for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
           for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
             for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++) {
-              gfs[IDX4(which_gf, i0, i1, i2)] = vals[IDXFACES1(which_gf, which_inner, i0, i2)];
+              gfs[IDX4(gfs_to_sync[which_gf], i0, i1, i2)] = vals[IDXFACES1(which_gf, which_inner, i0, i2)];
             }
           }
           i1++;
@@ -880,12 +900,12 @@ void Timestepping::process_ghost(const int type_ghost, const int type_gfs, const
       }
       break;
     case TOP_GHOST:
-      for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
+      for (int which_gf = 0; which_gf < NUM_GFS; which_gf++) {
         int i2 = Nxx2 + (2 * NGHOSTS) - 1;
         for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
           for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++) {
             for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++) {
-              gfs[IDX4(which_gf, i0, i1, i2)] = vals[IDXFACES2(which_gf, which_inner, i0, i1)];
+              gfs[IDX4(gfs_to_sync[which_gf], i0, i1, i2)] = vals[IDXFACES2(which_gf, which_inner, i0, i1)];
             }
           }
           i2--;
@@ -893,12 +913,12 @@ void Timestepping::process_ghost(const int type_ghost, const int type_gfs, const
       }
       break;
     case BOTTOM_GHOST:
-      for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
+      for (int which_gf = 0; which_gf < NUM_GFS; which_gf++) {
         int i2 = 0;
         for (int which_inner = 0; which_inner < NGHOSTS; which_inner++) {
           for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++) {
             for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++) {
-              gfs[IDX4(which_gf, i0, i1, i2)] = vals[IDXFACES2(which_gf, which_inner, i0, i1)];
+              gfs[IDX4(gfs_to_sync[which_gf], i0, i1, i2)] = vals[IDXFACES2(which_gf, which_inner, i0, i1)];
             }
           }
           i2++;
@@ -1027,6 +1047,8 @@ void Timestepping::send_nonlocalinnerbc_data(const int type_gfs, const int grid)
   const int *restrict globalidx3pt_to_localidx3pt = griddata_chare[grid].charecommstruct.globalidx3pt_to_localidx3pt;
 
   const REAL *restrict gfs = nullptr;
+  int NUM_GFS;
+  const int* gfs_to_sync = nullptr;
   """
     file_output_str += switch_case_code
     file_output_str += r"""
@@ -1034,7 +1056,7 @@ void Timestepping::send_nonlocalinnerbc_data(const int type_gfs, const int grid)
 
   for (int which_dst_chare = 0; which_dst_chare < tot_num_dst_chares; which_dst_chare++) {
     REAL *restrict tmpBuffer_innerbc_send = griddata_chare[grid].tmpBuffers.tmpBuffer_innerbc_send[which_dst_chare];
-    for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
+    for (int which_gf = 0; which_gf < NUM_GFS; which_gf++) {
       for (int which_srcpt = 0; which_srcpt < num_srcpts_tosend_each_chare[which_dst_chare]; which_srcpt++) {
         const int globalidx3srcpt = globalidx3_srcpts_tosend[which_dst_chare][which_srcpt];
         const int localidx3srcpt = globalidx3pt_to_localidx3pt[globalidx3srcpt];
@@ -1046,7 +1068,7 @@ void Timestepping::send_nonlocalinnerbc_data(const int type_gfs, const int grid)
     int dst_chare_index1;
     int dst_chare_index2;
     REVERSE_IDX3GENERAL(idx3_of_dst_chares[which_dst_chare], Nchare0, Nchare1, dst_chare_index0, dst_chare_index1, dst_chare_index2);
-    thisProxy[CkArrayIndex3D(dst_chare_index0, dst_chare_index1, dst_chare_index2)].receiv_nonlocalinnerbc_data(idx3_this_chare, type_gfs, NUM_EVOL_GFS * num_srcpts_tosend_each_chare[which_dst_chare], tmpBuffer_innerbc_send);
+    thisProxy[CkArrayIndex3D(dst_chare_index0, dst_chare_index1, dst_chare_index2)].receiv_nonlocalinnerbc_data(idx3_this_chare, type_gfs, NUM_GFS * num_srcpts_tosend_each_chare[which_dst_chare], tmpBuffer_innerbc_send);
 	}
 }
 """
@@ -1065,10 +1087,13 @@ void Timestepping::set_tmpBuffer_innerbc_receiv(const int src_chare_idx3, const 
     file_output_str += r"""
 void Timestepping::process_nonlocalinnerbc(const int type_gfs, const int grid) {
   REAL *restrict gfs = nullptr;
+  int NUM_GFS;
+  const int* gfs_to_sync = nullptr;
+  const int8_t* gf_parity_types = nullptr;
 """
-    file_output_str += switch_case_code
+    file_output_str += generate_switch_statement_for_gf_types(Butcher_dict, MoL_method, set_parity_types=True)
     file_output_str += r"""
-  apply_bcs_inner_only_nonlocal(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].bcstruct, &griddata_chare[grid].nonlocalinnerbcstruct, gfs, griddata_chare[grid].tmpBuffers.tmpBuffer_innerbc_receiv);
+  apply_bcs_inner_only_nonlocal(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].bcstruct, &griddata_chare[grid].nonlocalinnerbcstruct, NUM_GFS, gfs, gf_parity_types, griddata_chare[grid].tmpBuffers.tmpBuffer_innerbc_receiv);
 }
 """
     file_output_str += r"""
@@ -1159,12 +1184,16 @@ def output_timestepping_ci(
       }"""
         file_output_str += generate_send_nonlocalinnerbc_data_code("Y_N_GFS")
         file_output_str += generate_process_nonlocalinnerbc_code()
+        file_output_str += generate_send_nonlocalinnerbc_data_code("AUXEVOL_GFS")
+        file_output_str += generate_process_nonlocalinnerbc_code()
         file_output_str += """
       serial {
         initial_data(&commondata, griddata_chare, INITIALDATA_LAMBDAUGRIDINTERIOR);
         initial_data(&commondata, griddata_chare, INITIALDATA_APPLYBCSOUTEREXTRAPANDINNER);
       }"""
         file_output_str += generate_send_nonlocalinnerbc_data_code("Y_N_GFS")
+        file_output_str += generate_process_nonlocalinnerbc_code()
+        file_output_str += generate_send_nonlocalinnerbc_data_code("AUXEVOL_GFS")
         file_output_str += generate_process_nonlocalinnerbc_code()
     else:
         # If NRPy elliptic
@@ -1208,6 +1237,13 @@ def output_timestepping_ci(
 
         file_output_str += generate_send_neighbor_data_code(
             "Y_N_GFS", grid_split_direction
+        )
+        file_output_str += generate_process_ghost_code(
+            loop_direction, pos_ghost_type, neg_ghost_type, nchare_var
+        )
+
+        file_output_str += generate_send_neighbor_data_code(
+            "AUXEVOL_GFS", grid_split_direction
         )
         file_output_str += generate_process_ghost_code(
             loop_direction, pos_ghost_type, neg_ghost_type, nchare_var
@@ -1396,6 +1432,13 @@ def output_timestepping_ci(
                 file_output_str += generate_process_ghost_code(
                     loop_direction, pos_ghost_type, neg_ghost_type, nchare_var
                 )
+            
+            file_output_str += generate_send_neighbor_data_code(
+                    "AUXEVOL_GFS", grid_split_direction
+            )
+            file_output_str += generate_process_ghost_code(
+                loop_direction, pos_ghost_type, neg_ghost_type, nchare_var
+            )
 
     file_output_str += r"""
         """
