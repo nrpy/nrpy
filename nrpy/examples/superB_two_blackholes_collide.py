@@ -27,7 +27,6 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
-import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 import nrpy.infrastructures.BHaH.general_relativity.BSSN_C_codegen_library as BCl
 import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
@@ -35,6 +34,7 @@ import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xxCartxx
 import nrpy.infrastructures.superB.chare_communication_maps as charecomm
 import nrpy.infrastructures.superB.CurviBoundaryConditions as superBcbc
 import nrpy.infrastructures.superB.diagnostics as superBdiagnostics
+import nrpy.infrastructures.superB.initial_data as superBinitialdata
 import nrpy.infrastructures.superB.main_chare as superBmain
 import nrpy.infrastructures.superB.Makefile_helpers as superBMakefile
 import nrpy.infrastructures.superB.MoL as superBMoL
@@ -76,14 +76,16 @@ enable_fd_functions = True
 enable_KreissOliger_dissipation = False
 enable_CAKO = True
 boundary_conditions_desc = "outgoing radiation"
-# Choosing number of chares, Nchare0, Nchare1, and Nchare2, in each direction:
-# 1. for spherical-like coordinates Nchare1 and Nchare2 cannot be greater than 1
-# 2. for cylindrical-like coordinates Nchare1 cannot be greater than 1
-# 3. Nxx0/Nchare0, Nxx1/Nchare1, Nxx2/Nchare2 should be an integer greater than NGHOSTS
+# Number of chares, Nchare0, Nchare1, and Nchare2, in each direction,
+# should be chosen such that Nxx0/Nchare0, Nxx1/Nchare1, Nxx2/Nchare2 are integers greater than NGHOSTS,
+# NGHOSTS is fd_order/2
 if "Spherical" in CoordSystem:
     par.adjust_CodeParam_default("Nchare0", 18)
+    par.adjust_CodeParam_default("Nchare1", 2)
+    par.adjust_CodeParam_default("Nchare2", 1)
 if "Cylindrical" in CoordSystem:
     par.adjust_CodeParam_default("Nchare0", 18)
+    par.adjust_CodeParam_default("Nchare1", 2)
     par.adjust_CodeParam_default("Nchare2", 1)
 if "Cartesian" in CoordSystem:
     par.adjust_CodeParam_default("Nchare0", 16)
@@ -113,7 +115,7 @@ par.adjust_CodeParam_default("t_final", t_final)
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
-BCl.register_CFunction_initial_data(
+superBinitialdata.register_CFunction_initial_data(
     CoordSystem=CoordSystem,
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
@@ -191,12 +193,9 @@ BCl.register_CFunction_constraints(
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 
-cbc.CurviBoundaryConditions_register_C_functions(
-    list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order
-)
 charecomm.chare_comm_register_C_functions(list_of_CoordSystems=[CoordSystem])
 superBcbc.CurviBoundaryConditions_register_C_functions(
-    list_of_CoordSystems=[CoordSystem]
+    list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order
 )
 rhs_string = ""
 if separate_Ricci_and_BSSN_RHS:

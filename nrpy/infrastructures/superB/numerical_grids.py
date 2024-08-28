@@ -116,6 +116,7 @@ for (int j = 0; j < params_chare->Nxx_plus_2NGHOSTS2; j++)
 def register_CFunction_numerical_grids_chare(
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
+    enable_psi4_diagnostics: bool = False,
 ) -> None:
     """
     Register a C function to set up all numerical grids and timestep.
@@ -126,6 +127,7 @@ def register_CFunction_numerical_grids_chare(
 
     :param enable_rfm_precompute: Whether to enable reference metric precomputation (default: False).
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions (default: False).
+    :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "Set up a cell-centered grids of size grid_physical_size."
@@ -154,22 +156,34 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
 """
     else:
         body += "// (reference-metric precomputation disabled)\n"
+    body += r"""
+for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
+  charecommstruct_set_up(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, chare_index);
+"""
     body += "\n// Step 1.d: Set up curvilinear boundary condition struct (bcstruct)\n"
     if enable_CurviBCs:
         body += r"""
-for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
-  charecommstruct_set_up(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, chare_index);
-  bcstruct_chare_set_up(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata_chare[grid].xx, &griddata[grid].bcstruct, &griddata_chare[grid].bcstruct, chare_index);
+  bcstruct_chare_set_up(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata_chare[grid].xx, &griddata[grid].bcstruct, &griddata_chare[grid].bcstruct, &griddata_chare[grid].nonlocalinnerbcstruct, chare_index);
+"""
+    else:
+        body += "// (curvilinear boundary conditions bcstruct disabled)\n"
+
+    body += r"""
   // 1D diagnostics set up
   diagnosticstruct_set_up_nearest_1d_y_axis(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index, &griddata_chare[grid].diagnosticstruct);
   diagnosticstruct_set_up_nearest_1d_z_axis(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index, &griddata_chare[grid].diagnosticstruct);
   // 2D diagnostics set up
   diagnosticstruct_set_up_nearest_2d_xy_plane(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index, &griddata_chare[grid].diagnosticstruct);
   diagnosticstruct_set_up_nearest_2d_yz_plane(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index, &griddata_chare[grid].diagnosticstruct);
-}
+    """
+    if enable_psi4_diagnostics:
+        body += r"""
+  psi4_diagnostics_set_up(commondata, &griddata[grid].params, &griddata_chare[grid].params,
+                                                &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index,
+                                                &griddata_chare[grid].diagnosticstruct);
 """
-    else:
-        body += "// (curvilinear boundary conditions bcstruct disabled)\n"
+    body += r"""
+}"""
 
     cfc.register_CFunction(
         includes=includes,
@@ -186,6 +200,7 @@ def register_CFunctions(
     list_of_CoordSystems: List[str],
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
+    enable_psi4_diagnostics: bool = False,
 ) -> None:
     """
     Register C functions related to coordinate systems and grid parameters.
@@ -193,6 +208,7 @@ def register_CFunctions(
     :param list_of_CoordSystems: List of CoordSystems
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions.
+    :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     """
     for CoordSystem in list_of_CoordSystems:
         register_CFunction_numerical_grid_params_Nxx_dxx_xx_chare(
@@ -201,4 +217,5 @@ def register_CFunctions(
     register_CFunction_numerical_grids_chare(
         enable_rfm_precompute=enable_rfm_precompute,
         enable_CurviBCs=enable_CurviBCs,
+        enable_psi4_diagnostics=enable_psi4_diagnostics,
     )
