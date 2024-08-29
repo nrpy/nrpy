@@ -66,6 +66,9 @@ SEOBNRv5_aligned_spin_initial_conditions_dissipative(&commondata);
 
 // Step 3.b: Print out the dissipative initial conditions.
 printf("prstar = %.15e\n",commondata.prstar);
+
+// Step 4: Run and print the ODE integration.
+SEOBNRv5_aligned_spin_ode_integration(&commondata);
 return 0;
 """
     cfc.register_CFunction(
@@ -88,6 +91,8 @@ seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_R
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conservative()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_radial_momentum_condition()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_dissipative()
+seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_right_hand_sides()
+seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_ode_integration()
 #########################################################
 # STEP 3: Generate header files, register C functions and
 #         command line parameters, set up boundary conditions,
@@ -107,6 +112,8 @@ Bdefines_h.output_BHaH_defines_h(
         str(Path("gsl") / Path("gsl_multiroots.h")),
         str(Path("gsl") / Path("gsl_errno.h")),
         str(Path("gsl") / Path("gsl_roots.h")),
+        str(Path("gsl") / Path("gsl_matrix.h")),
+        str(Path("gsl") / Path("gsl_odeiv2.h")),
     ],
     enable_simd=False,
 )
