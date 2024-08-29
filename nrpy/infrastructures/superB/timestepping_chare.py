@@ -78,7 +78,7 @@ def generate_mol_step_forward_code(
     """
     return_str = f"""
     serial{{
-        MoL_step_forward_in_time(&commondata, griddata_chare, time_start, {rk_substep},  MOL_PART_1);
+        MoL_step_forward_in_time(&commondata, griddata_chare, time_start, {rk_substep},  PRE_RK_UPDATE);
     }}
 """
     return_str += """
@@ -93,8 +93,8 @@ def generate_mol_step_forward_code(
 """
     return_str += f"""
     serial{{
-        MoL_step_forward_in_time(&commondata, griddata_chare, time_start, {rk_substep}, MOL_PART_2);
-        MoL_step_forward_in_time(&commondata, griddata_chare, time_start, {rk_substep}, MOL_PART_3_APPLY_BCS);
+        MoL_step_forward_in_time(&commondata, griddata_chare, time_start, {rk_substep}, RK_UPDATE);
+        MoL_step_forward_in_time(&commondata, griddata_chare, time_start, {rk_substep}, RK_UPDATE_APPLY_BCS);
     }}
 """
     return_str += """
@@ -112,7 +112,7 @@ def generate_mol_step_forward_code(
 """
     return_str += f"""
     serial{{
-        MoL_step_forward_in_time(&commondata, griddata_chare, time_start, {rk_substep}, MOL_PART_3_AFTER_APPLY_BCS);
+        MoL_step_forward_in_time(&commondata, griddata_chare, time_start, {rk_substep}, POST_RK_UPDATE);
     }}
 """
     return return_str

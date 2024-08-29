@@ -114,7 +114,7 @@ def single_RK_substep_input_symbolic(
 
     return_str += """
 switch (which_MOL_part) {
-  case MOL_PART_1: {"""
+  case PRE_RK_UPDATE: {"""
 
     # Part 1: RHS evaluation
     updated_rhs_str = (
@@ -127,7 +127,7 @@ switch (which_MOL_part) {
     return_str += """
      break;
   }
-  case MOL_PART_2: {"""
+  case RK_UPDATE: {"""
 
     # Part 2: RK update
     if enable_simd:
@@ -193,7 +193,7 @@ switch (which_MOL_part) {
   }
 """
     return_str += """
-  case MOL_PART_3_APPLY_BCS: {
+  case RK_UPDATE_APPLY_BCS: {
 """
     # Part 3: Call post-RHS functions
     for post_rhs, post_rhs_output in zip(post_rhs_list, post_rhs_output_list):
@@ -209,7 +209,7 @@ switch (which_MOL_part) {
   }
 """
     return_str += """
-  case MOL_PART_3_AFTER_APPLY_BCS: {
+  case POST_RK_UPDATE: {
 """
     for post_rhs, post_rhs_output in zip(post_rhs_list, post_rhs_output_list):
         parts = [part.strip() for part in post_rhs.split(";") if part.strip()]
