@@ -177,14 +177,14 @@ def register_CFunction_SEOBNRv5_aligned_spin_ode_integration() -> (
     name = "SEOBNRv5_aligned_spin_ode_integration"
     params = "commondata_struct *restrict commondata"
     body = """
-const gsl_odeiv2_step_type * T
+const gsl_odeiv2_step_type *restrict T
 = gsl_odeiv2_step_rk8pd;
 
-gsl_odeiv2_step * s
+gsl_odeiv2_step *restrict s
 = gsl_odeiv2_step_alloc (T, 4);
-gsl_odeiv2_control * c
+gsl_odeiv2_control *restrict c
 = gsl_odeiv2_control_standard_new(1e-12, 1e-11, 1.0, 1.0);
-gsl_odeiv2_evolve * e
+gsl_odeiv2_evolve *restrict e
 = gsl_odeiv2_evolve_alloc (4);
 
 gsl_odeiv2_system sys = {SEOBNRv5_aligned_spin_right_hand_sides, NULL, 4, commondata};
