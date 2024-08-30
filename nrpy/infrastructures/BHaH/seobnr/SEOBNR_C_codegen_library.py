@@ -154,11 +154,80 @@ const REAL chi2 = commondata->chi2;
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
-def register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_and_derivs() -> (
+def register_CFunction_SEOBNRv5_aligned_spin_ode_integration() -> (
     Union[None, pcg.NRPyEnv_type]
 ):
     """
-    Register CFunction for evaluating SEOBNRv5 Hamiltonian and derivatives.
+    Register CFunction for integrating the SEOBNRv5 equations of motion using GSL.
+
+    :return: None if in registration phase, else the updated NRPy environment.
+    """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    prefunc = """
+#include <gsl/gsl_errno.h>
+#include <gsl/gsl_matrix.h>
+#include <gsl/gsl_odeiv2.h>
+"""
+    desc = """Integrate the SEOBNRv5 equations of motion."""
+    cfunc_type = "int"
+    name = "SEOBNRv5_aligned_spin_ode_integration"
+    params = "commondata_struct *restrict commondata"
+    body = """
+const gsl_odeiv2_step_type *restrict T
+= gsl_odeiv2_step_rk8pd;
+
+gsl_odeiv2_step *restrict s
+= gsl_odeiv2_step_alloc (T, 4);
+gsl_odeiv2_control *restrict c
+= gsl_odeiv2_control_standard_new(1e-12, 1e-11, 1.0, 1.0);
+gsl_odeiv2_evolve *restrict e
+= gsl_odeiv2_evolve_alloc (4);
+
+gsl_odeiv2_system sys = {SEOBNRv5_aligned_spin_right_hand_sides, NULL, 4, commondata};
+
+double t = 0.0;
+const double t1 = 1e6;
+double h = 1e-6;
+double y[4];
+y[0] = commondata->r;
+y[1] = commondata->phi;
+y[2] = commondata->prstar;
+y[3] = commondata->pphi;
+
+
+while (t < t1)
+{
+    int status = gsl_odeiv2_evolve_apply (e, c, s, &sys, &t, t1, &h, y);
+    printf ("%.15e %.15e %.15e %.15e %.15e\\n", t, y[0], y[1], y[2], y[3]);
+}
+
+gsl_odeiv2_evolve_free (e);
+gsl_odeiv2_control_free (c);
+gsl_odeiv2_step_free (s);
+return 0;
+"""
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        prefunc=prefunc,
+        include_CodeParameters_h=False,
+        body=body,
+    )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
+
+def register_CFunction_SEOBNRv5_aligned_spin_right_hand_sides() -> (
+    Union[None, pcg.NRPyEnv_type]
+):
+    """
+    Register CFunction for evaluating the right hand sides for the SEOBNRv5 equations of motion.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -168,37 +237,52 @@ def register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_and_derivs() -> (
 
     includes = ["BHaH_defines.h"]
     desc = """Evaluate SEOBNRv5 Hamiltonian and needed derivatives to compute binary dynamics."""
-    cfunc_type = "void"
-    name = "SEOBNRv5_aligned_spin_Hamiltonian_and_derivs"
-    params = "commondata_struct *restrict commondata"
+    cfunc_type = "int"
+    name = "SEOBNRv5_aligned_spin_right_hand_sides"
+    params = (
+        "double t, const double *restrict y, double *restrict f, void *restrict params"
+    )
     Hq = SEOBNRv5_Ham.SEOBNRv5_aligned_spin_Hamiltonian_quantities()
-    dHreal_dr = Hq.dHreal_dr
-    dHreal_dprstar = Hq.dHreal_dprstar
-    dHreal_dpphi = Hq.dHreal_dpphi
-    body = ccg.c_codegen(
+    wf = SEOBNRv5_wf.SEOBNRv5_aligned_spin_waveform_quantities()
+    flux = wf.flux()
+    flux = (
+        flux.subs(wf.Hreal, Hq.Hreal)
+        .subs(wf.Omega, Hq.dHreal_dpphi)
+        .subs(wf.Omega_circ, Hq.dHreal_dpphi_circ)
+    )
+    r_dot = Hq.xi * Hq.dHreal_dprstar
+    phi_dot = Hq.dHreal_dpphi
+    pphi_dot = flux / Hq.nu
+    prstar_dot = -Hq.xi * Hq.dHreal_dr + Hq.prstar * pphi_dot / Hq.pphi
+    body = """
+const REAL m1 = ((commondata_struct *restrict) params)->m1;
+const REAL m2 = ((commondata_struct *restrict) params)->m2;
+const REAL chi1 = ((commondata_struct *restrict) params)->chi1;
+const REAL chi2 = ((commondata_struct *restrict) params)->chi2;
+const REAL a6 = ((commondata_struct *restrict) params)->a6;
+const REAL dSO = ((commondata_struct *restrict) params)->dSO;
+const REAL r = y[0];
+const REAL phi = y[1];
+const REAL prstar = y[2];
+const REAL pphi = y[3];
+"""
+    body += ccg.c_codegen(
+        [r_dot, phi_dot, prstar_dot, pphi_dot],
         [
-            dHreal_dr,
-            dHreal_dprstar,
-            dHreal_dpphi,
-            Hq.Hreal,
-            Hq.xi,
-        ],
-        [
-            "commondata->dHreal_dr",
-            "commondata->dHreal_dprstar",
-            "commondata->dHreal_dpphi",
-            "commondata->Hreal",
-            "commondata->xi",
+            "const REAL rdot",
+            "const REAL phidot",
+            "const REAL prstardot",
+            "const REAL pphidot",
         ],
         verbose=False,
         include_braces=False,
     )
     body += r"""
-printf("dHreal_dr = %.15e\n", commondata->dHreal_dr);
-printf("dHreal_dprstar = %.15e\n", commondata->dHreal_dprstar);
-printf("dHreal_dpphi = %.15e\n", commondata->dHreal_dpphi);
-printf("Hreal = %.15e\n", commondata->Hreal);
-printf("xi = %.15e\n", commondata->xi);
+f[0] = rdot;
+f[1] = phidot;
+f[2] = prstardot;
+f[3] = pphidot;
+return GSL_SUCCESS;
 """
     cfc.register_CFunction(
         includes=includes,
@@ -206,7 +290,7 @@ printf("xi = %.15e\n", commondata->xi);
         cfunc_type=cfunc_type,
         name=name,
         params=params,
-        include_CodeParameters_h=True,
+        include_CodeParameters_h=False,
         body=body,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())

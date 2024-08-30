@@ -109,11 +109,12 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
         self.vphi = self.Omega * (self.Omega_circ ** (-sp.Rational(2, 3)))
         self.vh3 = self.Omega * self.Hreal
         Heff = (self.Hreal**2 - 1) / (2 * self.nu) + 1
+        EulerGamma = f2r(0.577215664901532860606512090082402431)
         eulerlog = [
             0,
         ]
         for m in range(1, 9):
-            eulerlog.append(sp.EulerGamma + sp.log(2 * m * self.vomega))
+            eulerlog.append(EulerGamma + sp.log(2 * m * self.vomega))
         self.khat = []
         for m in range(9):
             self.khat.append(m * self.Omega * self.Hreal)
