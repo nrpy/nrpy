@@ -66,7 +66,10 @@ def generate_process_nonlocalinnerbc_code() -> str:
 
 
 def generate_mol_step_forward_code(
-    rk_substep: str, rhs_output_exprs_list: List[str], post_rhs_output_list: List[str]
+    rk_substep: str, 
+    rhs_output_exprs_list: List[str], 
+    post_rhs_output_list: List[str],
+    outer_bcs_type: str = "radiation",
 ) -> str:
     """
     Generate code for MoL step forward in time.
@@ -81,40 +84,34 @@ def generate_mol_step_forward_code(
         MoL_step_forward_in_time(&commondata, griddata_chare, time_start, {rk_substep},  PRE_RK_UPDATE);
     }}
 """
-    return_str += """
-    if (strncmp(commondata.outer_bc_type, "radiation", 50) == 0) {
-"""
-    for rhs_output_exprs in rhs_output_exprs_list:
-        return_str += generate_send_nonlocalinnerbc_data_code(rhs_output_exprs)
-        return_str += generate_process_nonlocalinnerbc_code()
+    if outer_bcs_type=="radiation":
+        for rhs_output_exprs in rhs_output_exprs_list:
+            return_str += generate_send_nonlocalinnerbc_data_code(rhs_output_exprs)
+            return_str += generate_process_nonlocalinnerbc_code()
 
-    return_str += """
-    }
-"""
     return_str += f"""
     serial{{
         MoL_step_forward_in_time(&commondata, griddata_chare, time_start, {rk_substep}, RK_UPDATE);
-        MoL_step_forward_in_time(&commondata, griddata_chare, time_start, {rk_substep}, RK_UPDATE_APPLY_BCS);
     }}
 """
-    return_str += """
-    if (strncmp(commondata.outer_bc_type, "extrapolation", 50) == 0) {
+    if outer_bcs_type=="extrapolation":
+        return_str += f"""
+    serial{{
+        MoL_step_forward_in_time(&commondata, griddata_chare, time_start, {rk_substep}, POST_RK_UPDATE_APPLY_BCS);
+    }}
 """
-    for post_rhs_output in post_rhs_output_list:
-        return_str += generate_send_nonlocalinnerbc_data_code(post_rhs_output)
-        return_str += generate_process_nonlocalinnerbc_code()
-    
-    return_str += generate_send_nonlocalinnerbc_data_code("AUXEVOL_GFS")
-    return_str += generate_process_nonlocalinnerbc_code()
+        for post_rhs_output in post_rhs_output_list:
+            return_str += generate_send_nonlocalinnerbc_data_code(post_rhs_output)
+            return_str += generate_process_nonlocalinnerbc_code()
 
-    return_str += """
-    }
-"""
     return_str += f"""
     serial{{
         MoL_step_forward_in_time(&commondata, griddata_chare, time_start, {rk_substep}, POST_RK_UPDATE);
     }}
 """
+    return_str += generate_send_nonlocalinnerbc_data_code("AUXEVOL_GFS")
+    return_str += generate_process_nonlocalinnerbc_code()
+    
     return return_str
 
 
@@ -1114,6 +1111,7 @@ def output_timestepping_ci(
     post_non_y_n_auxevol_mallocs: str,
     pre_MoL_step_forward_in_time: str = "",
     post_MoL_step_forward_in_time: str = "",
+    outer_bcs_type: str = "radiation",
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
     enable_psi4_diagnostics: bool = False,
     enable_residual_diagnostics: bool = False,
@@ -1404,7 +1402,7 @@ def output_timestepping_ci(
             Butcher_dict, MoL_method, s + 1
         )
         file_output_str += generate_mol_step_forward_code(
-            f"RK_SUBSTEP_K{s+1}", rhs_output_exprs_list, post_rhs_output_list
+            f"RK_SUBSTEP_K{s+1}", rhs_output_exprs_list, post_rhs_output_list, outer_bcs_type=outer_bcs_type,
         )
         for loop_direction in ["x", "y", "z"]:
             # Determine ghost types and configuration based on the current axis
@@ -1578,6 +1576,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
     post_non_y_n_auxevol_mallocs: str = "",
     pre_MoL_step_forward_in_time: str = "",
     post_MoL_step_forward_in_time: str = "",
+    outer_bcs_type: str = "radiation",
     enable_psi4_diagnostics: bool = False,
     enable_residual_diagnostics: bool = False,
 ) -> None:
@@ -1623,6 +1622,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         post_non_y_n_auxevol_mallocs=post_non_y_n_auxevol_mallocs,
         pre_MoL_step_forward_in_time=pre_MoL_step_forward_in_time,
         post_MoL_step_forward_in_time=post_MoL_step_forward_in_time,
+        outer_bcs_type=outer_bcs_type,
         enable_psi4_diagnostics=enable_psi4_diagnostics,
         enable_residual_diagnostics=enable_residual_diagnostics,
         Butcher_dict=Butcher_dict,

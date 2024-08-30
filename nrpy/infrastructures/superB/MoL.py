@@ -59,11 +59,11 @@ def single_RK_substep_input_symbolic(
     rhs_output_expr: sp.Basic,
     RK_lhs_list: Union[sp.Basic, List[sp.Basic]],
     RK_rhs_list: Union[sp.Basic, List[sp.Basic]],
-    post_rhs_list: Union[str, List[str]],
     post_rhs_output_list: Union[sp.Basic, List[sp.Basic]],
     enable_simd: bool = False,
     gf_aliases: str = "",
-    post_post_rhs_string: str = "",
+    post_rhs_bcs_str: str = "",
+    post_rhs_string: str = "",
     fp_type: str = "double",
 ) -> str:
     """
@@ -76,11 +76,11 @@ def single_RK_substep_input_symbolic(
     :param rhs_output_expr: Output expression for the RHS.
     :param RK_lhs_list: List of LHS expressions for RK.
     :param RK_rhs_list: List of RHS expressions for RK.
-    :param post_rhs_list: List of post-RHS expressions.
     :param post_rhs_output_list: List of outputs for post-RHS expressions.
     :param enable_simd: Whether SIMD optimization is enabled.
     :param gf_aliases: Additional aliases for grid functions.
-    :param post_post_rhs_string: String to be used after the post-RHS phase.
+    :param post_rhs_bcs_str: str to apply bcs immediately after RK update
+    :param post_rhs_string: String to be used after the post-RHS phase.
     :param fp_type: Floating point type, e.g., "double".
 
     :return: A string containing the generated C code.
@@ -90,9 +90,7 @@ def single_RK_substep_input_symbolic(
     # Ensure all input lists are lists
     RK_lhs_list = [RK_lhs_list] if not isinstance(RK_lhs_list, list) else RK_lhs_list
     RK_rhs_list = [RK_rhs_list] if not isinstance(RK_rhs_list, list) else RK_rhs_list
-    post_rhs_list = (
-        [post_rhs_list] if not isinstance(post_rhs_list, list) else post_rhs_list
-    )
+    
     post_rhs_output_list = (
         [post_rhs_output_list]
         if not isinstance(post_rhs_output_list, list)
@@ -192,35 +190,27 @@ switch (which_MOL_part) {
     break;
   }
 """
-    return_str += """
-  case RK_UPDATE_APPLY_BCS: {
+    
+    if post_rhs_bcs_str!="":
+        return_str += """
+  case POST_RK_UPDATE_APPLY_BCS: {
 """
-    # Part 3: Call post-RHS functions
-    for post_rhs, post_rhs_output in zip(post_rhs_list, post_rhs_output_list):
-        parts = [part.strip() for part in post_rhs.split(";") if part.strip()]
-        part1 = parts[0] + ";"
-        return_str += part1.replace(
-            "RK_OUTPUT_GFS", str(post_rhs_output).replace("gfsL", "gfs")
-        )
-        return_str += "\n"
+        # Part 3: Call post-RHS functions
+        for post_rhs_output in post_rhs_output_list:
+            return_str += post_rhs_bcs_str.replace(
+                "RK_OUTPUT_GFS", str(post_rhs_output).replace("gfsL", "gfs")
+            )
+            return_str += "\n"
 
-    return_str += """
+        return_str += """
     break;
   }
 """
     return_str += """
   case POST_RK_UPDATE: {
 """
-    for post_rhs, post_rhs_output in zip(post_rhs_list, post_rhs_output_list):
-        parts = [part.strip() for part in post_rhs.split(";") if part.strip()]
-        if len(parts) > 1:
-            part2 = parts[1] + ";"
-            return_str += part2.replace(
-                "RK_OUTPUT_GFS", str(post_rhs_output).replace("gfsL", "gfs")
-            )
-
-    for post_rhs, post_rhs_output in zip(post_rhs_list, post_rhs_output_list):
-        return_str += post_post_rhs_string.replace(
+    for post_rhs_output in post_rhs_output_list:
+        return_str += post_rhs_string.replace(
             "RK_OUTPUT_GFS", str(post_rhs_output).replace("gfsL", "gfs")
         )
 
@@ -438,8 +428,8 @@ def register_CFunction_MoL_step_forward_in_time(
     Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
     MoL_method: str,
     rhs_string: str = "",
+    post_rhs_bcs_str: str = "",
     post_rhs_string: str = "",
-    post_post_rhs_string: str = "",
     enable_rfm_precompute: bool = False,
     enable_curviBCs: bool = False,
     enable_simd: bool = False,
@@ -451,7 +441,7 @@ def register_CFunction_MoL_step_forward_in_time(
     :param MoL_method: The method of lines (MoL) used for time-stepping.
     :param rhs_string: Right-hand side string of the C code.
     :param post_rhs_string: Input string for post-RHS phase in the C code.
-    :param post_post_rhs_string: String to be used after the post-RHS phase.
+    :param post_rhs_string: String to be used after the post-RHS phase.
     :param enable_rfm_precompute: Flag to enable reference metric functionality.
     :param enable_curviBCs: Flag to enable curvilinear boundary conditions.
     :param enable_simd: Flag to enable SIMD functionality.
@@ -556,13 +546,13 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                     * dt
                     + y_n_gfs
                 ],
-                post_rhs_list=[post_rhs_string],
+                post_rhs_bcs_str=post_rhs_bcs_str,
                 post_rhs_output_list=[
                     k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs
                 ],
                 enable_simd=enable_simd,
                 gf_aliases=gf_aliases,
-                post_post_rhs_string=post_post_rhs_string,
+                post_rhs_string=post_rhs_string,
             )
             + "// -={ END k1 substep }=-\n\n"
         )
@@ -607,7 +597,7 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                 ],
                 enable_simd=enable_simd,
                 gf_aliases=gf_aliases,
-                post_post_rhs_string=post_post_rhs_string,
+                post_rhs_string=post_rhs_string,
             )
             + "// -={ END k2 substep }=-\n\n"
         )
@@ -637,11 +627,11 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                     k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs
                     + Butcher[3][3] * y_n_gfs * dt
                 ],
-                post_rhs_list=[post_rhs_string],
+                post_rhs_bcs_str=post_rhs_bcs_str,
                 post_rhs_output_list=[y_n_gfs],
                 enable_simd=enable_simd,
                 gf_aliases=gf_aliases,
-                post_post_rhs_string=post_post_rhs_string,
+                post_rhs_string=post_rhs_string,
             )
             + "// -={ END k3 substep }=-\n\n"
         )
@@ -702,7 +692,7 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                     post_rhs_output_list=[post_rhs_output],
                     enable_simd=enable_simd,
                     gf_aliases=gf_aliases,
-                    post_post_rhs_string=post_post_rhs_string,
+                    post_rhs_string=post_rhs_string,
                 )}// -={{ END k{str(s + 1)} substep }}=-\n\n"""
                 body += """
           break;
@@ -722,11 +712,11 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                     rhs_output_expr=y_nplus1_running_total,
                     RK_lhs_list=[y_n],
                     RK_rhs_list=[y_n + y_nplus1_running_total * dt],
-                    post_rhs_list=[post_rhs_string],
+                    post_rhs_bcs_str=post_rhs_bcs_str,
                     post_rhs_output_list=[y_n],
                     enable_simd=enable_simd,
                     gf_aliases=gf_aliases,
-                    post_post_rhs_string=post_post_rhs_string,
+                    post_rhs_string=post_rhs_string,
                 )
             else:
                 for s in range(num_steps):
@@ -803,11 +793,11 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                             rhs_output_expr=rhs_output,
                             RK_lhs_list=RK_lhs_list,
                             RK_rhs_list=RK_rhs_list,
-                            post_rhs_list=[post_rhs_string],
+                            post_rhs_bcs_str=post_rhs_bcs_str,
                             post_rhs_output_list=[post_rhs_output],
                             enable_simd=enable_simd,
                             gf_aliases=gf_aliases,
-                            post_post_rhs_string=post_post_rhs_string,
+                            post_rhs_string=post_rhs_string,
                         )
                         + f"// -={{ END k{s + 1} substep }}=-\n\n"
                     )
@@ -914,8 +904,8 @@ gridfuncs->max_sync_gfs = MAX(gridfuncs->num_evol_gfs_to_sync, gridfuncs->num_au
 def register_CFunctions(
     MoL_method: str = "RK4",
     rhs_string: str = "rhs_eval(Nxx, Nxx_plus_2NGHOSTS, dxx, RK_INPUT_GFS, RK_OUTPUT_GFS);",
+    post_rhs_bcs_str: str = "",
     post_rhs_string: str = "apply_bcs(Nxx, Nxx_plus_2NGHOSTS, RK_OUTPUT_GFS);",
-    post_post_rhs_string: str = "",
     enable_rfm_precompute: bool = False,
     enable_curviBCs: bool = False,
     enable_simd: bool = False,
@@ -927,7 +917,7 @@ def register_CFunctions(
     :param MoL_method: The method to be used for MoL. Default is 'RK4'.
     :param rhs_string: RHS function call as string. Default is "rhs_eval(Nxx, Nxx_plus_2NGHOSTS, dxx, RK_INPUT_GFS, RK_OUTPUT_GFS);"
     :param post_rhs_string: Post-RHS function call as string. Default is "apply_bcs(Nxx, Nxx_plus_2NGHOSTS, RK_OUTPUT_GFS);"
-    :param post_post_rhs_string: Post-post-RHS function call as string. Default is an empty string.
+    :param post_rhs_string: Post-post-RHS function call as string. Default is an empty string.
     :param enable_rfm_precompute: Enable reference metric support. Default is False.
     :param enable_curviBCs: Enable curvilinear boundary conditions. Default is False.
     :param enable_simd: Enable Single Instruction, Multiple Data (SIMD). Default is False.
@@ -966,8 +956,8 @@ def register_CFunctions(
             Butcher_dict,
             MoL_method,
             rhs_string,
+            post_rhs_bcs_str,
             post_rhs_string,
-            post_post_rhs_string,
             enable_rfm_precompute=enable_rfm_precompute,
             enable_curviBCs=enable_curviBCs,
             enable_simd=enable_simd,
