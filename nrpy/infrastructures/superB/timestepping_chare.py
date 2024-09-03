@@ -1189,6 +1189,16 @@ def output_timestepping_ci(
         initial_data(&commondata, griddata_chare, INITIALDATA_BIN_TWO);
         initial_data(&commondata, griddata_chare, INITIALDATA_APPLYBCS_OUTEREXTRAPANDINNER);
       }"""
+        if post_non_y_n_auxevol_mallocs:
+            file_output_str += (
+                """   // Step 4.a: Functions called after memory for non-y_n and auxevol gridfunctions is allocated.
+      serial {
+"""
+            + post_non_y_n_auxevol_mallocs + """
+      }
+"""
+            )
+
         file_output_str += generate_send_nonlocalinnerbc_data_code("Y_N_GFS")
         file_output_str += generate_process_nonlocalinnerbc_code()
         file_output_str += generate_send_nonlocalinnerbc_data_code("AUXEVOL_GFS")
