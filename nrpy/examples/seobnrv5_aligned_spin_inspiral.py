@@ -67,8 +67,17 @@ SEOBNRv5_aligned_spin_initial_conditions_dissipative(&commondata);
 // Step 3.b: Print out the dissipative initial conditions.
 printf("prstar = %.15e\n",commondata.prstar);
 
-// Step 4: Run and print the ODE integration.
+// Step 4.a: Run the ODE integration.
 SEOBNRv5_aligned_spin_ode_integration(&commondata);
+
+// Step 4.b: Print the resulting trajectory.
+size_t i;
+
+for (i = 0; i < commondata.nsteps_low; i++) {
+    printf("%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n", commondata.dynamics[8 * i + 0], commondata.dynamics[8 * i + 1],
+           commondata.dynamics[8 * i + 2], commondata.dynamics[8 * i + 3], commondata.dynamics[8 * i + 4], commondata.dynamics[8 * i + 5], commondata.dynamics[8 * i + 6], commondata.dynamics[8 * i + 7]);
+}
+
 return 0;
 """
     cfc.register_CFunction(
@@ -85,6 +94,7 @@ return 0;
 # seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian()
 # seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_and_derivs()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_coefficients()
+seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_augments()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_dRHS()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_RHSdRHS()
