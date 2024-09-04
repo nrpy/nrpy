@@ -34,6 +34,25 @@ par.register_CodeParameters(
     commondata=True,
     add_to_parfile=False,
 )
+
+par.register_CodeParameter(
+    "REAL",
+    __name__,
+    "* dynamics",
+    commondata=True,
+    add_to_parfile=False,
+    add_to_set_CodeParameters_h=False,
+)
+
+par.register_CodeParameter(
+    "size_t",
+    __name__,
+    "nsteps_low",
+    commondata=True,
+    add_to_parfile=False,
+    add_to_set_CodeParameters_h=False,
+)
+
 par.register_CodeParameters(
     "REAL",
     __name__,
@@ -48,6 +67,7 @@ par.register_CodeParameters(
         "Hreal",
         "xi",
         "flux",
+        "Omega_circ",
     ],
     commondata=True,
     add_to_parfile=False,
@@ -69,11 +89,11 @@ par.register_CodeParameters(
 )
 
 
-def register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian() -> (
+def register_CFunction_SEOBNRv5_aligned_spin_augments() -> (
     Union[None, pcg.NRPyEnv_type]
 ):
     """
-    Register CFunction for evaluating SEOBNRv5 Hamiltonian by itself.
+    Register CFunction for evaluating SEOBNRv5 Hamiltonian and circular derivatives.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -82,17 +102,17 @@ def register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian() -> (
         return None
 
     includes = ["BHaH_defines.h"]
-    desc = """Evaluate SEOBNRv5 Hamiltonian by itself."""
+    desc = """Evaluate SEOBNRv5 Hamiltonian and circular derivatives."""
     cfunc_type = "void"
-    name = "SEOBNRv5_aligned_spin_Hamiltonian"
+    name = "SEOBNRv5_aligned_spin_augments"
     params = "commondata_struct *restrict commondata"
     H = SEOBNRv5_Ham.SEOBNRv5_aligned_spin_Hamiltonian_quantities()
     body = ccg.c_codegen(
-        H.Hreal, "commondata->Hreal", verbose=False, include_braces=False
+        [H.Hreal, H.dHreal_dpphi_circ],
+        ["commondata->Hreal", "commondata->Omega_circ"],
+        verbose=False,
+        include_braces=False,
     )
-    body += r"""
-printf("Hreal = %.15e\n", commondata->Hreal);
-"""
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
@@ -184,31 +204,100 @@ gsl_odeiv2_step *restrict s
 = gsl_odeiv2_step_alloc (T, 4);
 gsl_odeiv2_control *restrict c
 = gsl_odeiv2_control_standard_new(1e-12, 1e-11, 1.0, 1.0);
-gsl_odeiv2_evolve *restrict e
-= gsl_odeiv2_evolve_alloc (4);
-
 gsl_odeiv2_system sys = {SEOBNRv5_aligned_spin_right_hand_sides, NULL, 4, commondata};
 
-double t = 0.0;
-const double t1 = 1e6;
-double h = 1e-6;
-double y[4];
+REAL t = 0.0;
+REAL t_new;
+const REAL t1 = 2e9;
+const int dyn_size = 8; //t,r,phi,prstar,pphi,Hreal, Omega, Omega_circ
+REAL y[4],yerr[4],dydt_in[4],dydt_out[4];
+int status = 0;
+int i;
+int stop = 0;
 y[0] = commondata->r;
 y[1] = commondata->phi;
 y[2] = commondata->prstar;
 y[3] = commondata->pphi;
+status = SEOBNRv5_aligned_spin_right_hand_sides(t,y,dydt_in,commondata);
+SEOBNRv5_aligned_spin_augments(commondata);
+REAL h = 2.0*M_PI/dydt_in[1]/5.0;
+size_t bufferlength = (size_t)(t1/h); // runs up to 0.01x maximum time (we should not ideally run that long) 
+commondata->dynamics = (REAL *)calloc(bufferlength*(dyn_size),sizeof(REAL));
+commondata->nsteps_low = 0;
+
+//store
+commondata->dynamics[dyn_size*commondata->nsteps_low] = t;
+for (i = 0; i < 4; i++){
+  commondata->dynamics[dyn_size*commondata->nsteps_low + 1 + i] = y[i];
+}
+commondata->dynamics[dyn_size*commondata->nsteps_low + 5] = commondata->Hreal;
+commondata->dynamics[dyn_size*commondata->nsteps_low + 6] = dydt_in[1];
+commondata->dynamics[dyn_size*commondata->nsteps_low + 7] = commondata->Omega_circ;
+commondata->nsteps_low++;
 
 
-while (t < t1)
-{
-    int status = gsl_odeiv2_evolve_apply (e, c, s, &sys, &t, t1, &h, y);
-    printf ("%.15e %.15e %.15e %.15e %.15e\\n", t, y[0], y[1], y[2], y[3]);
+while(stop == 0) {
+  //integrate
+  status = gsl_odeiv2_step_apply (s, t, h, y, yerr, dydt_in, dydt_out, &sys);
+  if (status != GSL_SUCCESS){
+    printf("Error in step_apply!\\n");
+    return status;
+  }
+  t_new = t + h;
+  status = gsl_odeiv2_control_hadjust(c, s, y, yerr, dydt_out, &h);
+  commondata->r = y[0];
+  commondata->phi = y[1];
+  commondata->prstar = y[2];
+  commondata->pphi = y[3];
+  SEOBNRv5_aligned_spin_augments(commondata);
+
+  //buffercheck
+  if (commondata->nsteps_low >= bufferlength){
+    bufferlength = 2*bufferlength;
+    commondata->dynamics = (REAL *)realloc(commondata->dynamics,bufferlength*(dyn_size)*sizeof(REAL));
+  }
+
+  //update
+  t = t_new;
+  memcpy(dydt_in,dydt_out,4*sizeof(REAL));
+  //store
+  commondata->dynamics[dyn_size*commondata->nsteps_low] = t;
+  for (i = 0; i < 4; i++){
+    commondata->dynamics[dyn_size*commondata->nsteps_low + 1 + i] = y[i];
+  }
+  commondata->dynamics[dyn_size*commondata->nsteps_low + 5] = commondata->Hreal;
+  commondata->dynamics[dyn_size*commondata->nsteps_low + 6] = dydt_out[1];
+  commondata->dynamics[dyn_size*commondata->nsteps_low + 7] = commondata->Omega_circ;
+  commondata->nsteps_low++;
+
+  //stopcheck
+  if (commondata->r < 6.0){
+    //decrease in frequency
+    if (dydt_out[1] < dydt_in[1]){
+      stop = 1;
+      break;
+    }
+    //outspiral dR
+    if (dydt_out[0] > 0.0){
+      stop = 2;
+      break;
+    }
+    //outspiral dPR
+    if (dydt_out[2] > 0.0){
+      stop = 3;
+      break;
+    }
+    //unphysical frequency
+    if (commondata->r < 3.0 && commondata->Omega_circ > 1.0){
+      stop = 4;
+      break;
+    }
+  }  
 }
 
-gsl_odeiv2_evolve_free (e);
 gsl_odeiv2_control_free (c);
 gsl_odeiv2_step_free (s);
-return 0;
+return GSL_SUCCESS;
 """
     cfc.register_CFunction(
         includes=includes,
@@ -239,9 +328,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_right_hand_sides() -> (
     desc = """Evaluate SEOBNRv5 Hamiltonian and needed derivatives to compute binary dynamics."""
     cfunc_type = "int"
     name = "SEOBNRv5_aligned_spin_right_hand_sides"
-    params = (
-        "double t, const double *restrict y, double *restrict f, void *restrict params"
-    )
+    params = "REAL t, const REAL *restrict y, REAL *restrict f, void *restrict params"
     Hq = SEOBNRv5_Ham.SEOBNRv5_aligned_spin_Hamiltonian_quantities()
     wf = SEOBNRv5_wf.SEOBNRv5_aligned_spin_waveform_quantities()
     flux = wf.flux()
