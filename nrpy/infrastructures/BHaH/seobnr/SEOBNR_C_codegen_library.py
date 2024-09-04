@@ -243,8 +243,8 @@ while(stop == 0) {
     printf("Error in step_apply!\\n");
     return status;
   }
-  t_new = t + h;
   status = gsl_odeiv2_control_hadjust(c, s, y, yerr, dydt_out, &h);
+  t_new = t + h;
   commondata->r = y[0];
   commondata->phi = y[1];
   commondata->prstar = y[2];
