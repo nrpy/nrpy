@@ -317,11 +317,11 @@ def register_CFunction_initial_data(
         body += """// Attempt to read checkpoint file. If it doesn't exist, then continue. Otherwise return.
 if( read_checkpoint(commondata, griddata) ) return;
 """
-    body += "ID_persist_struct ID_persist;\n"
 
     body += """
 switch (initial_data_part) {
   case INITIALDATA_LOOPOVERALLGRIDPTS: {"""
+    body += "ID_persist_struct ID_persist;\n"
     if populate_ID_persist_struct_str:
         body += populate_ID_persist_struct_str
     body += """
@@ -343,7 +343,7 @@ griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_pers
       // Unpack griddata struct:
       params_struct *restrict params = &griddata[grid].params;
       initial_data_reader__convert_ADM_{IDCoordSystem}_to_BSSN(commondata, params, griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs,
-                                                         &ID_persist, {IDtype}, initial_data_part);
+                                                         NULL, {IDtype}, initial_data_part);
     }}
     break;
   }}
