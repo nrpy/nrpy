@@ -310,6 +310,7 @@ if( read_checkpoint(commondata, griddata) ) return;
 switch (initial_data_part) {
   case INITIALDATA_BIN_ONE: {"""
     if populate_ID_persist_struct_str:
+        body += "ID_persist_struct ID_persist;\n"
         body += populate_ID_persist_struct_str
     body += """
     for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
