@@ -1,19 +1,14 @@
 """
-Neutron star initial data example.
+Sets up a complete C code project for evolving a TOV solution in a dynamical spacetime with a static fluid ("hydro without hydro").
 
-This example sets up a complete C code for setting up and
-  validating initial data for a neutron star, using the
-  TOVola initial data solver, written by David Boyer.
-
-Author: Zachariah B. Etienne
-        zachetie **at** gmail **dot* com
+Author: Leonardo Rosa Werneck
+        wernecklr **at** gmail **dot* com
 """
-
-import os
 
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
+import os
 import shutil
 
 import nrpy.helpers.parallel_codegen as pcg
@@ -43,37 +38,40 @@ from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
 par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Code-generation-time parameters:
-project_name = "tovola_neutron_star"
-CoordSystem = "SinhSpherical"
+project_name = "hydro_without_hydro"
 IDtype = "TOVola_interp"
-IDCoordSystem = "Spherical"
-
-grid_physical_size = 10.0
-sinh_width = 0.0785
-t_final = 0.0001
-diagnostics_output_every = 0.5
+CoordSystem = "Spherical"
+LapseEvolutionOption = "HarmonicSlicing"
+ShiftEvolutionOption = "Frozen"
+fp_type = "double"
+grid_physical_size = 7.5
+diagnostics_output_every = 0.25
 default_checkpoint_every = 2.0
+t_final = 1.0 * grid_physical_size
 Nxx_dict = {
-    "SinhSpherical": [64, 16, 2],
+    "Spherical": [72, 12, 2],
+    # "SinhSpherical": [72, 12, 2],
+    # "Cartesian": [64, 64, 64],
 }
 enable_rfm_precompute = True
+MoL_method = "RK4"
 fd_order = 4
 radiation_BC_fd_order = 4
 enable_simd = True
+separate_Ricci_and_BSSN_RHS = True
 parallel_codegen_enable = True
 enable_fd_functions = True
-separately_compute_Ricci = False
+enable_KreissOliger_dissipation = False
+enable_CAKO = True
+enable_T4munu = True
+boundary_conditions_desc = "outgoing radiation"
 
 OMP_collapse = 1
 if "Spherical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "2")
-    par.adjust_CodeParam_default("CFL_FACTOR", 1.0)
     OMP_collapse = 2  # about 2x faster
-    if CoordSystem == "SinhSpherical":
-        sinh_width = 0.2
 if "Cylindrical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "1")
-    par.adjust_CodeParam_default("CFL_FACTOR", 1.0)
     OMP_collapse = 2  # might be slightly faster
 
 project_dir = os.path.join("project", project_name)
@@ -81,22 +79,21 @@ project_dir = os.path.join("project", project_name)
 # First clean the project directory, if it exists.
 shutil.rmtree(project_dir, ignore_errors=True)
 
-# Set NRPy parameters that steer the code generation
 par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 par.set_parval_from_str("fd_order", fd_order)
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
+par.adjust_CodeParam_default("t_final", t_final)
 
 
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
-
 TOVinterp.register_CFunction_TOVola_interp()
 TOVsolve.register_CFunction_TOVola_solve()
 BCl.register_CFunction_initial_data(
     CoordSystem=CoordSystem,
     IDtype=IDtype,
-    IDCoordSystem=IDCoordSystem,
+    IDCoordSystem="Spherical",
     enable_checkpointing=True,
     ID_persist_struct_str=IDps.ID_persist_str(),
     populate_ID_persist_struct_str=r"""
@@ -116,78 +113,123 @@ TOVola_solve(commondata, &ID_persist);
 """,
     enable_T4munu=True,
 )
-BCl.register_CFunction_diagnostics(
-    list_of_CoordSystems=[CoordSystem],
-    default_diagnostics_out_every=diagnostics_output_every,
-    enable_psi4_diagnostics=False,
-    use_Ricci_eval_func=False,
-    grid_center_filename_tuple=("out0d-conv_factor%.2f.txt", "convergence_factor"),
-    axis_filename_tuple=(
-        "out1d-AXIS-conv_factor%.2f-t%08.2f.txt",
-        "convergence_factor, time",
-    ),
-    plane_filename_tuple=(
-        "out2d-PLANE-conv_factor%.2f-t%08.2f.txt",
-        "convergence_factor, time",
-    ),
-    out_quantities_dict="default",
-)
-if enable_rfm_precompute:
-    rfm_precompute.register_CFunctions_rfm_precompute(
-        list_of_CoordSystems=[CoordSystem]
-    )
-BCl.register_CFunction_constraints(
-    CoordSystem=CoordSystem,
-    enable_rfm_precompute=enable_rfm_precompute,
-    enable_RbarDD_gridfunctions=False,
-    enable_T4munu=True,
-    enable_simd=enable_simd,
-    enable_fd_functions=enable_fd_functions,
-    OMP_collapse=OMP_collapse,
-)
 
-if __name__ == "__main__":
-    pcg.do_parallel_codegen()
-# Does not need to be parallelized.
 numericalgrids.register_CFunctions(
     list_of_CoordSystems=[CoordSystem],
     list_of_grid_physical_sizes=[grid_physical_size],
     Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
+    fp_type=fp_type,
 )
+
+BCl.register_CFunction_diagnostics(
+    list_of_CoordSystems=[CoordSystem],
+    default_diagnostics_out_every=diagnostics_output_every,
+    enable_psi4_diagnostics=False,
+    grid_center_filename_tuple=("out0d-conv_factor%.2f.txt", "convergence_factor"),
+    axis_filename_tuple=(
+        "out1d-AXIS-conv_factor%.2f-t%08.4f.txt",
+        "convergence_factor, time",
+    ),
+    plane_filename_tuple=(
+        "out2d-PLANE-conv_factor%.2f-t%08.4f.txt",
+        "convergence_factor, time",
+    ),
+    out_quantities_dict="default",
+)
+if enable_rfm_precompute:
+    rfm_precompute.register_CFunctions_rfm_precompute(
+        list_of_CoordSystems=[CoordSystem],
+        fp_type=fp_type,
+    )
+BCl.register_CFunction_rhs_eval(
+    CoordSystem=CoordSystem,
+    enable_rfm_precompute=enable_rfm_precompute,
+    enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
+    enable_T4munu=enable_T4munu,
+    enable_simd=enable_simd,
+    enable_fd_functions=enable_fd_functions,
+    LapseEvolutionOption=LapseEvolutionOption,
+    ShiftEvolutionOption=ShiftEvolutionOption,
+    enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
+    enable_CAKO=enable_CAKO,
+    OMP_collapse=OMP_collapse,
+    fp_type=fp_type,
+)
+if separate_Ricci_and_BSSN_RHS:
+    BCl.register_CFunction_Ricci_eval(
+        CoordSystem=CoordSystem,
+        enable_rfm_precompute=enable_rfm_precompute,
+        enable_simd=enable_simd,
+        enable_fd_functions=enable_fd_functions,
+        OMP_collapse=OMP_collapse,
+        fp_type=fp_type,
+    )
+BCl.register_CFunction_enforce_detgammabar_equals_detgammahat(
+    CoordSystem=CoordSystem,
+    enable_rfm_precompute=enable_rfm_precompute,
+    enable_fd_functions=enable_fd_functions,
+    OMP_collapse=OMP_collapse,
+    fp_type=fp_type,
+)
+BCl.register_CFunction_constraints(
+    CoordSystem=CoordSystem,
+    enable_rfm_precompute=enable_rfm_precompute,
+    enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
+    enable_T4munu=enable_T4munu,
+    enable_simd=enable_simd,
+    enable_fd_functions=enable_fd_functions,
+    OMP_collapse=OMP_collapse,
+    fp_type=fp_type,
+)
+
+if __name__ == "__main__":
+    pcg.do_parallel_codegen()
 
 cbc.CurviBoundaryConditions_register_C_functions(
-    list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order
+    list_of_CoordSystems=[CoordSystem],
+    radiation_BC_fd_order=radiation_BC_fd_order,
+    fp_type=fp_type,
 )
-
 rhs_string = ""
+if separate_Ricci_and_BSSN_RHS:
+    rhs_string += (
+        "Ricci_eval(commondata, params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
+    )
+rhs_string += """
+rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
+if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
+  apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].xx,
+                                     gridfunctions_wavespeed,gridfunctions_f_infinity,
+                                     RK_INPUT_GFS, RK_OUTPUT_GFS);"""
+if not enable_rfm_precompute:
+    rhs_string = rhs_string.replace("rfmstruct", "xx")
+
 MoL.register_CFunctions(
-    MoL_method="RK4",
+    MoL_method=MoL_method,
     rhs_string=rhs_string,
-    post_rhs_string="",
+    post_rhs_string="""if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
+  apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);
+  enforce_detgammabar_equals_detgammahat(commondata, params, rfmstruct, RK_OUTPUT_GFS);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
+    fp_type=fp_type,
 )
-
-xxCartxx.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
-xxCartxx.register_CFunction_xx_to_Cart(CoordSystem)
+xxCartxx.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem, fp_type=fp_type)
+xxCartxx.register_CFunction_xx_to_Cart(CoordSystem, fp_type=fp_type)
 chkpt.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
 progress.register_CFunction_progress_indicator()
 rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
-
-# Reset CodeParameter defaults according to variables set above.
-# Coord system parameters
-if CoordSystem == "SinhSpherical":
-    par.adjust_CodeParam_default("SINHW", sinh_width)
-par.adjust_CodeParam_default("t_final", t_final)
-
 
 #########################################################
 # STEP 3: Generate header files, register C functions and
 #         command line parameters, set up boundary conditions,
 #         and create a Makefile for this project.
 #         Project is output to project/[project_name]/
+if CoordSystem == "SinhSpherical":
+    par.adjust_CodeParam_default("SINHW", 0.4)
+
 CPs.write_CodeParameters_h_files(project_dir=project_dir)
 CPs.register_CFunctions_params_commondata_struct_set_to_default()
 cmdpar.generate_default_parfile(project_dir=project_dir, project_name=project_name)
@@ -199,15 +241,14 @@ Bdefines_h.output_BHaH_defines_h(
     enable_simd=enable_simd,
     enable_rfm_precompute=enable_rfm_precompute,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
+    REAL_means=fp_type,
 )
-post_non_y_n_auxevol_mallocs = ""
+
 main.register_CFunction_main_c(
-    MoL_method="",
     initial_data_desc=IDtype,
+    MoL_method=MoL_method,
+    boundary_conditions_desc=boundary_conditions_desc,
     set_initial_data_after_auxevol_malloc=True,
-    boundary_conditions_desc="No BCs",
-    post_non_y_n_auxevol_mallocs=post_non_y_n_auxevol_mallocs,
-    pre_MoL_step_forward_in_time="",
 )
 griddata_commondata.register_CFunction_griddata_free(
     enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True
@@ -220,7 +261,6 @@ if enable_simd:
         project_dir=project_dir,
         subdirectory="simd",
     )
-
 Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
@@ -233,9 +273,3 @@ print(
     f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
 )
 print(f"    Parameter file can be found in {project_name}.par")
-
-# print(cfc.CFunction_dict["initial_data"].full_function)
-# print(cfc.CFunction_dict["rhs_eval"].full_function)
-# print(cfc.CFunction_dict["apply_bcs"].full_function)
-# print(cfc.CFunction_dict["parameter_file_read_and_parse"].full_function)
-# print(cfc.CFunction_dict["main"].full_function)
