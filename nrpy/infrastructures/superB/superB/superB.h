@@ -66,10 +66,10 @@
 #define POST_RK_UPDATE_APPLY_BCS 2
 #define POST_RK_UPDATE 3
 
-#define INITIALDATA_LOOPOVERALLGRIDPTS 0
-#define INITIALDATA_APPLYBCSINNERONLY 1
-#define INITIALDATA_LAMBDAUGRIDINTERIOR 2
-#define INITIALDATA_APPLYBCSOUTEREXTRAPANDINNER 3
+#define INITIALDATA_BIN_ONE 0
+#define INITIALDATA_APPLYBCS_INNERONLY 1
+#define INITIALDATA_BIN_TWO 2
+#define INITIALDATA_APPLYBCS_OUTEREXTRAPANDINNER 3
 
 typedef struct __charecomm_struct__ {
   int *restrict globalidx3pt_to_chareidx3;    // which chare is evolving or applying bcs to grid point

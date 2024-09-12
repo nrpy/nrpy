@@ -1177,8 +1177,8 @@ def output_timestepping_ci(
         # If anything other than NRPy elliptic
         file_output_str += """
       serial {
-        initial_data(&commondata, griddata_chare, INITIALDATA_LOOPOVERALLGRIDPTS);
-        initial_data(&commondata, griddata_chare, INITIALDATA_APPLYBCSINNERONLY);
+        initial_data(&commondata, griddata_chare, INITIALDATA_BIN_ONE);
+        initial_data(&commondata, griddata_chare, INITIALDATA_APPLYBCS_INNERONLY);
       }"""
         file_output_str += generate_send_nonlocalinnerbc_data_code("Y_N_GFS")
         file_output_str += generate_process_nonlocalinnerbc_code()
@@ -1186,8 +1186,8 @@ def output_timestepping_ci(
         file_output_str += generate_process_nonlocalinnerbc_code()
         file_output_str += """
       serial {
-        initial_data(&commondata, griddata_chare, INITIALDATA_LAMBDAUGRIDINTERIOR);
-        initial_data(&commondata, griddata_chare, INITIALDATA_APPLYBCSOUTEREXTRAPANDINNER);
+        initial_data(&commondata, griddata_chare, INITIALDATA_BIN_TWO);
+        initial_data(&commondata, griddata_chare, INITIALDATA_APPLYBCS_OUTEREXTRAPANDINNER);
       }"""
         file_output_str += generate_send_nonlocalinnerbc_data_code("Y_N_GFS")
         file_output_str += generate_process_nonlocalinnerbc_code()
