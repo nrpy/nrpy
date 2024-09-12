@@ -904,8 +904,8 @@ gridfuncs->max_sync_gfs = MAX(gridfuncs->num_evol_gfs_to_sync, gridfuncs->num_au
 def register_CFunctions(
     MoL_method: str = "RK4",
     rhs_string: str = "rhs_eval(Nxx, Nxx_plus_2NGHOSTS, dxx, RK_INPUT_GFS, RK_OUTPUT_GFS);",
-    post_rhs_bcs_str: str = "",
-    post_rhs_string: str = "apply_bcs(Nxx, Nxx_plus_2NGHOSTS, RK_OUTPUT_GFS);",
+    post_rhs_bcs_str: str = "apply_bcs(Nxx, Nxx_plus_2NGHOSTS, RK_OUTPUT_GFS);",
+    post_rhs_string: str = "",
     enable_rfm_precompute: bool = False,
     enable_curviBCs: bool = False,
     enable_simd: bool = False,
