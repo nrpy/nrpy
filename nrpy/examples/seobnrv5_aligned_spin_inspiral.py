@@ -19,6 +19,8 @@ import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 import nrpy.infrastructures.BHaH.seobnr.SEOBNR_C_codegen_library as seobnr_CCL
+import nrpy.infrastructures.BHaH.seobnr.SEOBNR_dynamics_C_codegen_library as seobnr_dyn_CCL
+import nrpy.infrastructures.BHaH.seobnr.SEOBNR_initial_conditions_C_codegen_library as seobnr_ic_CCL
 import nrpy.params as par
 
 par.set_parval_from_str("Infrastructure", "BHaH")
@@ -73,9 +75,9 @@ SEOBNRv5_aligned_spin_ode_integration(&commondata);
 // Step 4.b: Print the resulting trajectory.
 size_t i;
 
-for (i = 0; i < commondata.nsteps_low; i++) {
-    printf("%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n", commondata.dynamics[8 * i + 0], commondata.dynamics[8 * i + 1],
-           commondata.dynamics[8 * i + 2], commondata.dynamics[8 * i + 3], commondata.dynamics[8 * i + 4], commondata.dynamics[8 * i + 5], commondata.dynamics[8 * i + 6], commondata.dynamics[8 * i + 7]);
+for (i = 0; i < commondata.nsteps_combined; i++) {
+    printf("%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n", commondata.dynamics_combined[8 * i + 0], commondata.dynamics_combined[8 * i + 1],
+           commondata.dynamics_combined[8 * i + 2], commondata.dynamics_combined[8 * i + 3], commondata.dynamics_combined[8 * i + 4], commondata.dynamics_combined[8 * i + 5], commondata.dynamics_combined[8 * i + 6], commondata.dynamics_combined[8 * i + 7]);
 }
 
 return 0;
@@ -93,16 +95,19 @@ return 0;
 # For now, only registering the functions needed for initial conditions.
 # seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian()
 # seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_and_derivs()
-seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_coefficients()
-seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_augments()
-seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit()
-seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_dRHS()
-seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_RHSdRHS()
-seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conservative()
-seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_radial_momentum_condition()
-seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_dissipative()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_right_hand_sides()
-seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_ode_integration()
+seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_coefficients()
+seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit()
+seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_dRHS()
+seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_RHSdRHS()
+seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conservative()
+seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_radial_momentum_condition()
+seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_dissipative()
+seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_augments()
+seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_find_peak()
+seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_iterative_refinement()
+seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_intepolate_dynamics()
+seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_ode_integration()
 #########################################################
 # STEP 3: Generate header files, register C functions and
 #         command line parameters, set up boundary conditions,
@@ -124,6 +129,8 @@ Bdefines_h.output_BHaH_defines_h(
         str(Path("gsl") / Path("gsl_roots.h")),
         str(Path("gsl") / Path("gsl_matrix.h")),
         str(Path("gsl") / Path("gsl_odeiv2.h")),
+        str(Path("gsl") / Path("gsl_spline.h")),
+        str(Path("gsl") / Path("gsl_interp.h")),
     ],
     enable_simd=False,
 )
