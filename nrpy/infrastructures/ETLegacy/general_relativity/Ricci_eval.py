@@ -114,7 +114,9 @@ if(FD_order == {fd_order}) {{
         cfunc_type="void",
         name=name,
         params="CCTK_ARGUMENTS",
-        prefunc=fin.construct_FD_functions_prefunc(),
+        prefunc=fin.construct_FD_functions_prefunc().replace(
+            "NO_INLINE", "CCTK_ATTRIBUTE_NOINLINE"
+        ),  # This prevents a hang when compiling higher-order FD kernels with certain versions of GCC. I'd prefer not adjusting construct_FD_functions_prefunc() for just this infrastructure.
         body=body,
         ET_thorn_name=thorn_name,
         ET_schedule_bins_entries=[("MoL_CalcRHS", schedule)],

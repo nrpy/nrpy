@@ -309,6 +309,8 @@ if( read_checkpoint(commondata, griddata) ) return;
     body += """
 switch (initial_data_part) {
   case INITIALDATA_BIN_ONE: {"""
+    body += "ID_persist_struct ID_persist;\n"
+
     if populate_ID_persist_struct_str:
         body += "ID_persist_struct ID_persist;\n"
         body += populate_ID_persist_struct_str
