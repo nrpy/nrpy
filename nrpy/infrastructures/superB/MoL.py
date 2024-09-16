@@ -23,7 +23,7 @@ import sympy as sp  # Import SymPy, a computer algebra system written entirely i
 
 import nrpy.c_function as cfc
 import nrpy.params as par  # NRPy+: Parameter interface
-import nrpy.grid as grid
+from nrpy.grid import glb_gridfcs_dict
 from nrpy.c_codegen import c_codegen
 from nrpy.helpers.generic import superfast_uniq
 from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
@@ -90,7 +90,7 @@ def single_RK_substep_input_symbolic(
     # Ensure all input lists are lists
     RK_lhs_list = [RK_lhs_list] if not isinstance(RK_lhs_list, list) else RK_lhs_list
     RK_rhs_list = [RK_rhs_list] if not isinstance(RK_rhs_list, list) else RK_rhs_list
-    
+
     post_rhs_output_list = (
         [post_rhs_output_list]
         if not isinstance(post_rhs_output_list, list)
@@ -190,7 +190,7 @@ switch (which_MOL_part) {
     break;
   }
 """
-    
+
     if post_rhs_bcs_str!="":
         return_str += """
   case MOL_POST_RK_UPDATE_APPLY_BCS: {
@@ -590,7 +590,6 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                     + Butcher[3][2] * k2_or_y_nplus_a32_k2_gfs * dt,
                     Butcher[2][2] * k2_or_y_nplus_a32_k2_gfs * dt + y_n_gfs,
                 ],
-                post_rhs_list=[post_rhs_string, post_rhs_string],
                 post_rhs_output_list=[
                     k2_or_y_nplus_a32_k2_gfs,
                     k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs,
@@ -666,7 +665,6 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                         else:
                             RK_rhs += dt * k_mp1_gfs
 
-                post_rhs = post_rhs_string
                 if s == num_steps - 1:  # If on final step:
                     post_rhs_output = y_n
                 else:  # If on anything but the final step:
@@ -688,7 +686,6 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                     rhs_output_expr=rhs_output,
                     RK_lhs_list=[RK_lhs],
                     RK_rhs_list=[RK_rhs],
-                    post_rhs_list=[post_rhs],
                     post_rhs_output_list=[post_rhs_output],
                     enable_simd=enable_simd,
                     gf_aliases=gf_aliases,
@@ -860,10 +857,10 @@ def register_CFunction_MoL_sync_data_defines() -> Tuple[int, int]:
     sync_auxevol_list: List[str] = []
     num_sync_auxevol_gfs: int = 0
 
-    for gf, gf_class_obj in grid.glb_gridfcs_dict.items():
+    for gf, gf_class_obj in glb_gridfcs_dict.items():
         gf_name = gf.upper()
 
-        if gf_class_obj.sync_gf_in_superB == True:
+        if gf_class_obj.sync_gf_in_superB:
             if gf_class_obj.group == "EVOL":
                 num_sync_evol_gfs += 1
                 sync_evol_list.append(gf_name)
@@ -883,7 +880,7 @@ gridfuncs->max_sync_gfs = MAX(gridfuncs->num_evol_gfs_to_sync, gridfuncs->num_au
     if num_sync_auxevol_gfs != 0:
         for i, gf in enumerate(sync_auxevol_list):
             body += f"gridfuncs->auxevol_gfs_to_sync[{i}] = {gf.upper()}GF;\n"
-    
+
     try:
         cfc.register_CFunction(
             includes=includes,
@@ -947,7 +944,7 @@ def register_CFunctions(
     register_CFunction_MoL_free_memory_diagnostic_gfs()
 
     (
-        num_evol_gfs_to_sync, 
+        num_evol_gfs_to_sync,
         num_auxevol_gfs_to_sync
     ) = register_CFunction_MoL_sync_data_defines()
 
