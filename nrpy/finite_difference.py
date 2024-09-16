@@ -897,7 +897,7 @@ class FDFunction:
         return cfc.CFunction(
             includes=includes,
             desc=f"Finite difference function for operator {self.operator}, with FD accuracy order {self.fd_order}.",
-            cfunc_type=f"static {self.modifiers} {fp_type_alias}",
+            cfunc_type=f"static NO_INLINE {self.modifiers} {fp_type_alias}",
             name=name,
             params=params,
             body=body,
