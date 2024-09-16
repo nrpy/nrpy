@@ -66,8 +66,8 @@ def generate_process_nonlocalinnerbc_code() -> str:
 
 
 def generate_mol_step_forward_code(
-    rk_substep: str, 
-    rhs_output_exprs_list: List[str], 
+    rk_substep: str,
+    rhs_output_exprs_list: List[str],
     post_rhs_output_list: List[str],
     outer_bcs_type: str = "radiation",
 ) -> str:
@@ -77,27 +77,28 @@ def generate_mol_step_forward_code(
     :param rk_substep: Runge-Kutta substep.
     :param rhs_output_exprs_list: List of output expression for the RHS.
     :param post_rhs_output_list: List of outputs for post-RHS expressions.
+    :param outer_bcs_type: type of outer boundary BCs to apply. Only options are radiation or extrapolation in superB.
     :return: Code for MoL step forward in time.
     """
     return_str = f"""
     serial{{
-        MoL_step_forward_in_time(&commondata, griddata_chare, time_start, {rk_substep},  PRE_RK_UPDATE);
+        MoL_step_forward_in_time(&commondata, griddata_chare, time_start, {rk_substep},  MOL_PRE_RK_UPDATE);
     }}
 """
-    if outer_bcs_type=="radiation":
+    if outer_bcs_type == "radiation":
         for rhs_output_exprs in rhs_output_exprs_list:
             return_str += generate_send_nonlocalinnerbc_data_code(rhs_output_exprs)
             return_str += generate_process_nonlocalinnerbc_code()
 
     return_str += f"""
     serial{{
-        MoL_step_forward_in_time(&commondata, griddata_chare, time_start, {rk_substep}, RK_UPDATE);
+        MoL_step_forward_in_time(&commondata, griddata_chare, time_start, {rk_substep}, MOL_RK_UPDATE);
     }}
 """
-    if outer_bcs_type=="extrapolation":
+    if outer_bcs_type == "extrapolation":
         return_str += f"""
     serial{{
-        MoL_step_forward_in_time(&commondata, griddata_chare, time_start, {rk_substep}, POST_RK_UPDATE_APPLY_BCS);
+        MoL_step_forward_in_time(&commondata, griddata_chare, time_start, {rk_substep}, MOL_POST_RK_UPDATE_APPLY_BCS);
     }}
 """
         for post_rhs_output in post_rhs_output_list:
@@ -106,12 +107,12 @@ def generate_mol_step_forward_code(
 
     return_str += f"""
     serial{{
-        MoL_step_forward_in_time(&commondata, griddata_chare, time_start, {rk_substep}, POST_RK_UPDATE);
+        MoL_step_forward_in_time(&commondata, griddata_chare, time_start, {rk_substep}, MOL_POST_RK_UPDATE);
     }}
 """
     return_str += generate_send_nonlocalinnerbc_data_code("AUXEVOL_GFS")
     return_str += generate_process_nonlocalinnerbc_code()
-    
+
     return return_str
 
 
@@ -452,18 +453,30 @@ switch (type_gfs) {
     switch_cases = []
     for gf in gf_list:
         switch_cases.append(f"  case {gf.upper()}:")
-        if gf!="auxevol_gfs":
-            switch_cases.append(f"    gfs = griddata_chare[grid].gridfuncs.{gf.lower()};")
-            switch_cases.append(f"    NUM_GFS = griddata_chare[grid].gridfuncs.num_evol_gfs_to_sync;")
-            switch_cases.append(f"    gfs_to_sync = griddata_chare[grid].gridfuncs.evol_gfs_to_sync;")
+        if gf != "auxevol_gfs":
+            switch_cases.append(
+                f"    gfs = griddata_chare[grid].gridfuncs.{gf.lower()};"
+            )
+            switch_cases.append(
+                "    NUM_GFS = griddata_chare[grid].gridfuncs.num_evol_gfs_to_sync;"
+            )
+            switch_cases.append(
+                "    gfs_to_sync = griddata_chare[grid].gridfuncs.evol_gfs_to_sync;"
+            )
             if set_parity_types:
-                switch_cases.append(f"    gf_parity_types = evol_gf_parity;")
+                switch_cases.append("    gf_parity_types = evol_gf_parity;")
         else:
-            switch_cases.append(f"    gfs = griddata_chare[grid].gridfuncs.{gf.lower()};")
-            switch_cases.append(f"    NUM_GFS = griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync;")
-            switch_cases.append(f"    gfs_to_sync = griddata_chare[grid].gridfuncs.auxevol_gfs_to_sync;")
+            switch_cases.append(
+                f"    gfs = griddata_chare[grid].gridfuncs.{gf.lower()};"
+            )
+            switch_cases.append(
+                "    NUM_GFS = griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync;"
+            )
+            switch_cases.append(
+                "    gfs_to_sync = griddata_chare[grid].gridfuncs.auxevol_gfs_to_sync;"
+            )
             if set_parity_types:
-                switch_cases.append(f"    gf_parity_types = auxevol_gf_parity;")
+                switch_cases.append("    gf_parity_types = auxevol_gf_parity;")
         switch_cases.append("    break;")
     switch_cases.append(
         """
@@ -1088,7 +1101,9 @@ void Timestepping::process_nonlocalinnerbc(const int type_gfs, const int grid) {
   const int* gfs_to_sync = nullptr;
   const int8_t* gf_parity_types = nullptr;
 """
-    file_output_str += generate_switch_statement_for_gf_types(Butcher_dict, MoL_method, set_parity_types=True)
+    file_output_str += generate_switch_statement_for_gf_types(
+        Butcher_dict, MoL_method, set_parity_types=True
+    )
     file_output_str += r"""
   apply_bcs_inner_only_nonlocal(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].bcstruct, &griddata_chare[grid].nonlocalinnerbcstruct, NUM_GFS, gfs, gf_parity_types, griddata_chare[grid].tmpBuffers.tmpBuffer_innerbc_receiv);
 }
@@ -1125,6 +1140,7 @@ def output_timestepping_ci(
     :param post_non_y_n_auxevol_mallocs: Function calls after memory is allocated for non y_n and auxevol gridfunctions, default is an empty string.
     :param pre_MoL_step_forward_in_time: Code for handling pre-right-hand-side operations, default is an empty string.
     :param post_MoL_step_forward_in_time: Code for handling post-right-hand-side operations, default is an empty string.
+    :param outer_bcs_type: type of outer boundary BCs to apply. Only options are radiation or extrapolation in superB.
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     :param enable_residual_diagnostics: Whether or not to enable residual diagnostics.
@@ -1194,7 +1210,8 @@ def output_timestepping_ci(
                 """   // Step 4.a: Functions called after memory for non-y_n and auxevol gridfunctions is allocated.
       serial {
 """
-            + post_non_y_n_auxevol_mallocs + """
+                + post_non_y_n_auxevol_mallocs
+                + """
       }
 """
             )
@@ -1412,7 +1429,10 @@ def output_timestepping_ci(
             Butcher_dict, MoL_method, s + 1
         )
         file_output_str += generate_mol_step_forward_code(
-            f"RK_SUBSTEP_K{s+1}", rhs_output_exprs_list, post_rhs_output_list, outer_bcs_type=outer_bcs_type,
+            f"RK_SUBSTEP_K{s+1}",
+            rhs_output_exprs_list,
+            post_rhs_output_list,
+            outer_bcs_type=outer_bcs_type,
         )
         for loop_direction in ["x", "y", "z"]:
             # Determine ghost types and configuration based on the current axis
@@ -1440,9 +1460,9 @@ def output_timestepping_ci(
                 file_output_str += generate_process_ghost_code(
                     loop_direction, pos_ghost_type, neg_ghost_type, nchare_var
                 )
-            
+
             file_output_str += generate_send_neighbor_data_code(
-                    "AUXEVOL_GFS", grid_split_direction
+                "AUXEVOL_GFS", grid_split_direction
             )
             file_output_str += generate_process_ghost_code(
                 loop_direction, pos_ghost_type, neg_ghost_type, nchare_var
@@ -1599,6 +1619,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
     :param post_non_y_n_auxevol_mallocs: Function calls after memory is allocated for non y_n and auxevol gridfunctions, default is an empty string.
     :param pre_MoL_step_forward_in_time: Code for handling pre-right-hand-side operations, default is an empty string.
     :param post_MoL_step_forward_in_time: Code for handling post-right-hand-side operations, default is an empty string.
+    :param outer_bcs_type: type of outer boundary BCs to apply. Only options are radiation or extrapolation in superB.
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     :param enable_residual_diagnostics: Whether or not to enable residual diagnostics.
     """

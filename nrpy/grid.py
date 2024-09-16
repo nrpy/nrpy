@@ -814,6 +814,7 @@ def register_gridfunctions(
     wavespeed 1.0
     is_basename True
     gf_array_name in_gfs
+    sync_gf_in_superB True
     >>> par.set_parval_from_str("Infrastructure", "ETLegacy")
     >>> gridfunc1, gridfunc2 = register_gridfunctions(['gridfunc1', 'gridfunc2'], f_infinity=[1.0, 4.0], is_basename=False)
     >>> for key, value in glb_gridfcs_dict["gridfunc1"].__dict__.items():

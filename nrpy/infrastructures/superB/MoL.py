@@ -112,7 +112,7 @@ def single_RK_substep_input_symbolic(
 
     return_str += """
 switch (which_MOL_part) {
-  case PRE_RK_UPDATE: {"""
+  case MOL_PRE_RK_UPDATE: {"""
 
     # Part 1: RHS evaluation
     updated_rhs_str = (
@@ -125,7 +125,7 @@ switch (which_MOL_part) {
     return_str += """
      break;
   }
-  case RK_UPDATE: {"""
+  case MOL_RK_UPDATE: {"""
 
     # Part 2: RK update
     if enable_simd:
@@ -193,7 +193,7 @@ switch (which_MOL_part) {
     
     if post_rhs_bcs_str!="":
         return_str += """
-  case POST_RK_UPDATE_APPLY_BCS: {
+  case MOL_POST_RK_UPDATE_APPLY_BCS: {
 """
         # Part 3: Call post-RHS functions
         for post_rhs_output in post_rhs_output_list:
@@ -207,7 +207,7 @@ switch (which_MOL_part) {
   }
 """
     return_str += """
-  case POST_RK_UPDATE: {
+  case MOL_POST_RK_UPDATE: {
 """
     for post_rhs_output in post_rhs_output_list:
         return_str += post_rhs_string.replace(
@@ -440,7 +440,7 @@ def register_CFunction_MoL_step_forward_in_time(
     :param Butcher_dict: A dictionary containing the Butcher tables for various RK-like methods.
     :param MoL_method: The method of lines (MoL) used for time-stepping.
     :param rhs_string: Right-hand side string of the C code.
-    :param post_rhs_string: Input string for post-RHS phase in the C code.
+    :param post_rhs_bcs_str: str to apply bcs immediately after RK update
     :param post_rhs_string: String to be used after the post-RHS phase.
     :param enable_rfm_precompute: Flag to enable reference metric functionality.
     :param enable_curviBCs: Flag to enable curvilinear boundary conditions.
@@ -845,7 +845,7 @@ def register_CFunction_MoL_sync_data_defines() -> Tuple[int, int]:
     Register the CFunction 'MoL_sync_data_defines'.
     This function sets up data required for communicating gfs between chares.
     :raises RuntimeError: If an error occurs while registering the CFunction
-    :return None
+    :return: None
     """
     includes: List[str] = ["BHaH_defines.h"]
     desc: str = "Define data needed for syncing data across chares"
@@ -916,7 +916,7 @@ def register_CFunctions(
 
     :param MoL_method: The method to be used for MoL. Default is 'RK4'.
     :param rhs_string: RHS function call as string. Default is "rhs_eval(Nxx, Nxx_plus_2NGHOSTS, dxx, RK_INPUT_GFS, RK_OUTPUT_GFS);"
-    :param post_rhs_string: Post-RHS function call as string. Default is "apply_bcs(Nxx, Nxx_plus_2NGHOSTS, RK_OUTPUT_GFS);"
+    :param post_rhs_bcs_str: str to apply bcs immediately after RK update
     :param post_rhs_string: Post-post-RHS function call as string. Default is an empty string.
     :param enable_rfm_precompute: Enable reference metric support. Default is False.
     :param enable_curviBCs: Enable curvilinear boundary conditions. Default is False.

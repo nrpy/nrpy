@@ -126,7 +126,7 @@ def simple_loop(
     elif loop_region == "interior":
         i2i1i0_mins = ["NGHOSTS", "NGHOSTS", "NGHOSTS"]
         i2i1i0_maxs = ["NGHOSTS+Nxx2", "NGHOSTS+Nxx1", "NGHOSTS+Nxx0"]
-    #offset upper bounds by 1
+    # offset upper bounds by 1
     elif loop_region == "interior plus one upper":
         i2i1i0_mins = ["NGHOSTS", "NGHOSTS", "NGHOSTS"]
         i2i1i0_maxs = ["NGHOSTS+Nxx2+1", "NGHOSTS+Nxx1+1", "NGHOSTS+Nxx0+1"]

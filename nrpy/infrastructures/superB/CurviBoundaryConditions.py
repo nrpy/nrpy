@@ -333,7 +333,6 @@ def CurviBoundaryConditions_register_C_functions(
     :param list_of_CoordSystems: List of coordinate systems to use.
     :param radiation_BC_fd_order: Finite differencing order for the radiation boundary conditions. Default is 2.
     :param set_parity_on_aux: If True, set parity on auxiliary grid functions.
-    :param set_parity_on_auxevol: If True, set parity on auxiliary evolution grid functions.
     :param fp_type: Floating point type, e.g., "double".
     """
     for CoordSystem in list_of_CoordSystems:
