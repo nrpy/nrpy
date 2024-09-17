@@ -69,15 +69,22 @@ SEOBNRv5_aligned_spin_initial_conditions_dissipative(&commondata);
 // Step 3.b: Print out the dissipative initial conditions.
 printf("prstar = %.15e\n",commondata.prstar);
 
-// Step 4.a: Run the ODE integration.
+// Step 4: Run the ODE integration.
 SEOBNRv5_aligned_spin_ode_integration(&commondata);
 
-// Step 4.b: Print the resulting trajectory.
+// Step 5.a. Generate the waveform.
+SEOBNRv5_aligned_spin_waveform_from_dynamics(&commondata);
+
+// Step 5.b: Print the resulting waveform.
 size_t i;
 
-for (i = 0; i < commondata.nsteps_combined; i++) {
-    printf("%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n", commondata.dynamics_combined[8 * i + 0], commondata.dynamics_combined[8 * i + 1],
-           commondata.dynamics_combined[8 * i + 2], commondata.dynamics_combined[8 * i + 3], commondata.dynamics_combined[8 * i + 4], commondata.dynamics_combined[8 * i + 5], commondata.dynamics_combined[8 * i + 6], commondata.dynamics_combined[8 * i + 7]);
+for (i = 0; i < commondata.nsteps_low; i++) {
+    printf("%.15e %.15e %.15e\n", commondata.waveform_low[IDX_WF(i,TIME)]
+    , commondata.waveform_low[IDX_WF(i,HPLUS)], commondata.waveform_low[IDX_WF(i,HCROSS)]);
+}
+for (i = 0; i < commondata.nsteps_fine; i++) {
+    printf("%.15e %.15e %.15e\n", commondata.waveform_fine[IDX_WF(i,TIME)]
+    , commondata.waveform_fine[IDX_WF(i,HPLUS)], commondata.waveform_fine[IDX_WF(i,HCROSS)]);
 }
 
 return 0;
@@ -108,6 +115,8 @@ seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_find_peak()
 seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_iterative_refinement()
 seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_intepolate_dynamics()
 seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_ode_integration()
+seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper()
+seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics()
 #########################################################
 # STEP 3: Generate header files, register C functions and
 #         command line parameters, set up boundary conditions,
@@ -131,7 +140,28 @@ Bdefines_h.output_BHaH_defines_h(
         str(Path("gsl") / Path("gsl_odeiv2.h")),
         str(Path("gsl") / Path("gsl_spline.h")),
         str(Path("gsl") / Path("gsl_interp.h")),
+        str(Path("gsl") / Path("gsl_sf_gamma.h")),
     ],
+    supplemental_defines_dict={
+        "SEOBNR": """
+#include<complex.h>
+#define COMPLEX complex
+#define NUMVARS 8
+#define TIME 0
+#define R 1
+#define PHI 2
+#define PRSTAR 3
+#define PPHI 4
+#define H 5
+#define OMEGA 6
+#define OMEGA_CIRC 7
+#define IDX(idx, var) ((idx)*NUMVARS + (var))
+#define NUMMODES 3
+#define HPLUS 1
+#define HCROSS 2
+#define IDX_WF(idx,var) ((idx)*NUMMODES + (var))
+"""
+    },
     enable_simd=False,
 )
 register_CFunction_main_c()

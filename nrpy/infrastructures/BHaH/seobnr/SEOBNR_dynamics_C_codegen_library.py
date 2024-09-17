@@ -116,7 +116,7 @@ REAL right_refined = right;
 REAL dt = 0.1;
 int status;
 int iter = 2;
-size_t result_idx;
+size_t result_idx = 0;
 while (iter > 0) {
   dt = dt * 0.1;
   status = SEOBNRv5_aligned_spin_find_peak(spline, acc, left_refined, right_refined, dt, result_idx, t_ext);
@@ -161,20 +161,14 @@ def register_CFunction_SEOBNRv5_aligned_spin_intepolate_dynamics() -> (
     name = "SEOBNRv5_aligned_spin_interpolate_dynamics"
     params = "commondata_struct *restrict commondata, REAL *restrict times, REAL *restrict dynamics_RK, const size_t nsteps, const REAL t_max, const REAL t_stepback"
     body = """
-int i;
-
+int i,j;
 // Store the low sampled dynamics.
 commondata->nsteps_low = gsl_interp_bsearch(times, t_stepback, 0, nsteps - 1);
-commondata->dynamics_low = calloc(8 * commondata->nsteps_low, sizeof(REAL));
+commondata->dynamics_low = calloc(NUMVARS * commondata->nsteps_low, sizeof(REAL));
 for (i = 0; i < commondata->nsteps_low; i++) {
-  commondata->dynamics_low[8 * i + 0] = dynamics_RK[8 * i + 0];
-  commondata->dynamics_low[8 * i + 1] = dynamics_RK[8 * i + 1];
-  commondata->dynamics_low[8 * i + 2] = dynamics_RK[8 * i + 2];
-  commondata->dynamics_low[8 * i + 3] = dynamics_RK[8 * i + 3];
-  commondata->dynamics_low[8 * i + 4] = dynamics_RK[8 * i + 4];
-  commondata->dynamics_low[8 * i + 5] = dynamics_RK[8 * i + 5];
-  commondata->dynamics_low[8 * i + 6] = dynamics_RK[8 * i + 6];
-  commondata->dynamics_low[8 * i + 7] = dynamics_RK[8 * i + 7];
+  for (j = 0; j < NUMVARS; j++){
+    commondata->dynamics_low[IDX(i,j)] = dynamics_RK[IDX(i,j)];
+  }
 }
 
 // Intepolate the high sampled dynamics for NQCs.
@@ -188,14 +182,14 @@ for (i = 0; i < commondata->nsteps_fine; i++) {
   times_fine[i] = t_stepback + i * dt;
 }
 for (i = 0; i < len_dynamics_fine; i++) {
-  ts[i] = dynamics_RK[8 * (i + commondata->nsteps_low) + 0];
-  rs[i] = dynamics_RK[8 * (i + commondata->nsteps_low) + 1];
-  phis[i] = dynamics_RK[8 * (i + commondata->nsteps_low) + 2];
-  prs[i] = dynamics_RK[8 * (i + commondata->nsteps_low) + 3];
-  pphis[i] = dynamics_RK[8 * (i + commondata->nsteps_low) + 4];
-  Hs[i] = dynamics_RK[8 * (i + commondata->nsteps_low) + 5];
-  Omegas[i] = dynamics_RK[8 * (i + commondata->nsteps_low) + 6];
-  Omega_circs[i] = dynamics_RK[8 * (i + commondata->nsteps_low) + 7];
+  ts[i] = dynamics_RK[IDX(i + commondata->nsteps_low,TIME)];
+  rs[i] = dynamics_RK[IDX(i + commondata->nsteps_low,R)];
+  phis[i] = dynamics_RK[IDX(i + commondata->nsteps_low,PHI)];
+  prs[i] = dynamics_RK[IDX(i + commondata->nsteps_low,PRSTAR)];
+  pphis[i] = dynamics_RK[IDX(i + commondata->nsteps_low,PPHI)];
+  Hs[i] = dynamics_RK[IDX(i + commondata->nsteps_low,H)];
+  Omegas[i] = dynamics_RK[IDX(i + commondata->nsteps_low,OMEGA)];
+  Omega_circs[i] = dynamics_RK[IDX(i + commondata->nsteps_low,OMEGA_CIRC)];
 }
 gsl_interp_accel *restrict r_acc = gsl_interp_accel_alloc();
 gsl_spline *restrict r_spline = gsl_spline_alloc(gsl_interp_cspline, len_dynamics_fine);
@@ -221,14 +215,14 @@ gsl_spline_init(Omega_circ_spline, ts, Omega_circs, len_dynamics_fine);
 
 commondata->dynamics_fine = (REAL *)calloc(8 * commondata->nsteps_fine, sizeof(REAL));
 for (i = 0; i < commondata->nsteps_fine; i++) {
-  commondata->dynamics_fine[8 * i + 0] = times_fine[i];
-  commondata->dynamics_fine[8 * i + 1] = gsl_spline_eval(r_spline, times_fine[i], r_acc);
-  commondata->dynamics_fine[8 * i + 2] = gsl_spline_eval(phi_spline, times_fine[i], phi_acc);
-  commondata->dynamics_fine[8 * i + 3] = gsl_spline_eval(pr_spline, times_fine[i], pr_acc);
-  commondata->dynamics_fine[8 * i + 4] = gsl_spline_eval(pphi_spline, times_fine[i], pphi_acc);
-  commondata->dynamics_fine[8 * i + 5] = gsl_spline_eval(H_spline, times_fine[i], H_acc);
-  commondata->dynamics_fine[8 * i + 6] = gsl_spline_eval(Omega_spline, times_fine[i], Omega_acc);
-  commondata->dynamics_fine[8 * i + 7] = gsl_spline_eval(Omega_circ_spline, times_fine[i], Omega_circ_acc);
+  commondata->dynamics_fine[IDX(i , TIME)] = times_fine[i];
+  commondata->dynamics_fine[IDX(i , R)] = gsl_spline_eval(r_spline, times_fine[i], r_acc);
+  commondata->dynamics_fine[IDX(i , PHI)] = gsl_spline_eval(phi_spline, times_fine[i], phi_acc);
+  commondata->dynamics_fine[IDX(i , PRSTAR)] = gsl_spline_eval(pr_spline, times_fine[i], pr_acc);
+  commondata->dynamics_fine[IDX(i , PPHI)] = gsl_spline_eval(pphi_spline, times_fine[i], pphi_acc);
+  commondata->dynamics_fine[IDX(i , H)] = gsl_spline_eval(H_spline, times_fine[i], H_acc);
+  commondata->dynamics_fine[IDX(i , OMEGA)] = gsl_spline_eval(Omega_spline, times_fine[i], Omega_acc);
+  commondata->dynamics_fine[IDX(i , OMEGA_CIRC)] = gsl_spline_eval(Omega_circ_spline, times_fine[i], Omega_circ_acc);
 }
 
 gsl_spline_free(r_spline);
@@ -250,11 +244,12 @@ gsl_interp_accel_free(Omega_circ_acc);
 
 commondata->nsteps_combined = commondata->nsteps_fine + commondata->nsteps_low;
 commondata->dynamics_combined = calloc(8 * commondata->nsteps_combined, sizeof(REAL));
-for (i = 0; i < 8 * commondata->nsteps_low; i++) {
+for (i = 0; i < NUMVARS * commondata->nsteps_low; i++) {
   commondata->dynamics_combined[i] = commondata->dynamics_low[i];
 }
-for (i = 0; i < 8 * (commondata->nsteps_fine); i++) {
-  commondata->dynamics_combined[8 * commondata->nsteps_low + i] = commondata->dynamics_fine[i];
+int i_start_fine = NUMVARS*commondata->nsteps_low;
+for (i = i_start_fine; i < NUMVARS * (commondata->nsteps_combined); i++) {
+  commondata->dynamics_combined[i] = commondata->dynamics_fine[i - i_start_fine];
 }
 
 return GSL_SUCCESS;
@@ -303,7 +298,6 @@ gsl_odeiv2_system sys = {SEOBNRv5_aligned_spin_right_hand_sides, NULL, 4, common
 REAL t = 0.0;
 REAL t_new;
 const REAL t1 = 2e9;
-const int dyn_size = 8; // t,r,phi,prstar,pphi,Hreal, Omega, Omega_circ
 REAL y[4], yerr[4], dydt_in[4], dydt_out[4];
 int status = 0;
 int i;
@@ -316,17 +310,17 @@ status = SEOBNRv5_aligned_spin_right_hand_sides(t, y, dydt_in, commondata);
 SEOBNRv5_aligned_spin_augments(commondata);
 REAL h = 2.0 * M_PI / dydt_in[1] / 5.0;
 size_t bufferlength = (size_t)(t1 / h); // runs up to 0.01x maximum time (we should not ideally run that long)
-REAL *restrict dynamics_RK = (REAL *)calloc(bufferlength * (dyn_size), sizeof(REAL));
+REAL *restrict dynamics_RK = (REAL *)calloc(bufferlength * (NUMVARS), sizeof(REAL));
 size_t nsteps = 0;
 
 // store
-dynamics_RK[dyn_size * nsteps] = t;
-for (i = 0; i < 4; i++) {
-  dynamics_RK[dyn_size * nsteps + 1 + i] = y[i];
+dynamics_RK[IDX(nsteps,TIME)] = t;
+for (i = 1; i < 5; i++) {
+  dynamics_RK[IDX(nsteps,i)] = y[i - 1];
 }
-dynamics_RK[dyn_size * nsteps + 5] = commondata->Hreal;
-dynamics_RK[dyn_size * nsteps + 6] = dydt_in[1];
-dynamics_RK[dyn_size * nsteps + 7] = commondata->Omega_circ;
+dynamics_RK[IDX(nsteps,H)] = commondata->Hreal;
+dynamics_RK[IDX(nsteps,OMEGA)] = dydt_in[1];
+dynamics_RK[IDX(nsteps,OMEGA_CIRC)] = commondata->Omega_circ;
 nsteps++;
 
 while (stop == 0) {
@@ -347,32 +341,32 @@ while (stop == 0) {
   // buffercheck
   if (nsteps >= bufferlength) {
     bufferlength = 2 * bufferlength;
-    dynamics_RK = (REAL *)realloc(dynamics_RK, bufferlength * (dyn_size) * sizeof(REAL));
+    dynamics_RK = (REAL *)realloc(dynamics_RK, bufferlength * (NUMVARS) * sizeof(REAL));
   }
 
   // update
   t = t_new;
   memcpy(dydt_in, dydt_out, 4 * sizeof(REAL));
   // store
-  dynamics_RK[dyn_size * nsteps] = t;
-  for (i = 0; i < 4; i++) {
-    dynamics_RK[dyn_size * nsteps + 1 + i] = y[i];
+  dynamics_RK[IDX(nsteps,TIME)] = t;
+  for (i = 1; i < 5; i++) {
+    dynamics_RK[IDX(nsteps,i)] = y[i-1];
   }
-  dynamics_RK[dyn_size * nsteps + 5] = commondata->Hreal;
-  dynamics_RK[dyn_size * nsteps + 6] = dydt_out[1];
-  dynamics_RK[dyn_size * nsteps + 7] = commondata->Omega_circ;
+  dynamics_RK[IDX(nsteps,H)] = commondata->Hreal;
+  dynamics_RK[IDX(nsteps,OMEGA)] = dydt_out[1];
+  dynamics_RK[IDX(nsteps,OMEGA_CIRC)] = commondata->Omega_circ;
   nsteps++;
 
   // stopcheck
   if (commondata->r < 6.0) {
     // decrease in frequency: Omega peak stop = index of omega
     if (dydt_out[1] < dydt_in[1]) {
-      stop = 6;
+      stop = OMEGA;
       break;
     }
     // outspiral dPR: PR peak stop = index of pr
     if (dydt_out[2] > 0.0) {
-      stop = 3;
+      stop = PRSTAR;
       break;
     }
     // outspiral dR
@@ -395,7 +389,7 @@ gsl_odeiv2_step_free(s);
 
 REAL times[nsteps];
 for (i = 0; i < nsteps; i++) {
-  times[i] = dynamics_RK[dyn_size * i + 0];
+  times[i] = dynamics_RK[IDX(i,TIME)];
 }
 REAL t_stepback = times[nsteps - 1] - commondata->t_stepback;
 size_t idx_stepback = gsl_interp_bsearch(times, t_stepback, 0, nsteps - 1);

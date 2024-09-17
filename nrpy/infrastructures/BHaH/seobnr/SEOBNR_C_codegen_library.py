@@ -107,6 +107,44 @@ par.register_CodeParameters(
 )
 
 
+def register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper() -> (
+    Union[None, pcg.NRPyEnv_type]
+):
+    """
+    Register CFunction for evaluating the complex gamma function using GSL.
+
+    :return: None if in registration phase, else the updated NRPy environment.
+    """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+
+    includes = ["BHaH_defines.h"]
+    desc = """Evaluate the gamma function using GSL."""
+    cfunc_type = "int"
+    name = "SEOBNRv5_aligned_spin_gamma_wrapper"
+    params = "const REAL z_real, const REAL z_imag, REAL *restrict gamma_z"
+    body = """
+gsl_sf_result lnr, arg;
+int status = gsl_sf_lngamma_complex_e(z_real, z_imag, &lnr, &arg);
+const REAL gamma_amp = exp(lnr.val);
+const REAL gamma_phase = arg.val;
+gamma_z[0] =  gamma_amp*cos(gamma_phase);
+gamma_z[0] =  gamma_amp*sin(gamma_phase);
+return GSL_SUCCESS;
+"""
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        include_CodeParameters_h=False,
+        body=body,
+    )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
+
 def register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics() -> (
     Union[None, pcg.NRPyEnv_type]
 ):
@@ -124,14 +162,20 @@ def register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics() -> (
     h22 = hlms["(2 , 2)"]
     # We are going to be doing this twice;
     # once for the fine dynamics and once for the coarse.
-    # It makes sense to save the
     h22_code = ccg.c_codegen(
-        [h22],
+        h22,
+        ["const REAL h22_real", "const REAL h22_imag"],
+        verbose=False,
+        include_braces=False,
+    )
+    khat2_code = ccg.c_codegen(
+        [wf.khat[2]],
         [
-            "h22",
+            "const REAL khat2",
         ],
         verbose=False,
         include_braces=False,
+        cse_varprefix="khat",
     )
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
@@ -150,52 +194,66 @@ const REAL chi2 = commondata->chi2;
 const REAL a6 = commondata->a6;
 const REAL dSO = commondata->dSO;
 REAL t , r , phi , prstar, pphi , Hreal , Omega , Omega_circ;
-commondata->waveform_low = (REAL *)calloc(commondata->nsteps_low*3,sizeof(REAL)); //t , h_+ , h_x
-commondata->waveform_high = (REAL *)calloc(commondata->nsteps_high*3,sizeof(REAL)); //t , h_+ , h_x
+REAL gamma_real_22 , gamma_imag_22;
+REAL gamma_22[2];
+commondata->waveform_low = (REAL *)calloc(commondata->nsteps_low*NUMMODES,sizeof(REAL)); //t , h_+ , h_x
+commondata->waveform_fine = (REAL *)calloc(commondata->nsteps_fine*NUMMODES,sizeof(REAL)); //t , h_+ , h_x
 
 //low sampling
 for (i = 0; i < commondata->nsteps_low; i++) {
   //assign
-  t = commondata->dynamics_low[8*i + 0];
-  r = commondata->dynamics_low[8*i + 1];
-  phi = commondata->dynamics_low[8*i + 2];
-  prstar = commondata->dynamics_low[8*i + 3];
-  pphi = commondata->dynamics_low[8*i + 4];
-  Hreal = commondata->dynamics_low[8*i + 5];
-  Omega = commondata->dynamics_low[8*i + 6];
-  Omega_circ = commondata->dynamics_low[8*i + 7];
+  t = commondata->dynamics_low[IDX(i,TIME)];
+  r = commondata->dynamics_low[IDX(i,R)];
+  phi = commondata->dynamics_low[IDX(i,PHI)];
+  prstar = commondata->dynamics_low[IDX(i,PRSTAR)];
+  pphi = commondata->dynamics_low[IDX(i,PPHI)];
+  Hreal = commondata->dynamics_low[IDX(i,H)];
+  Omega = commondata->dynamics_low[IDX(i,OMEGA)];
+  Omega_circ = commondata->dynamics_low[IDX(i,OMEGA_CIRC)];
   
   //compute
+"""
+    body += khat2_code
+    body += """
+  status = SEOBNRv5_aligned_spin_gamma_wrapper(3.,-2.*khat2,gamma_22);
+  gamma_real_22 = gamma_22[0];
+  gamma_imag_22 = gamma_22[1];
 """
     body += h22_code
     body += """
   //store
-  commondata->waveform_low[3*i + 0] = t;
-  commondata->waveform_low[3*i + 1] = (REAL)creal(h22);
-  commondata->waveform_low[3*i + 1] = -1*(REAL)cimag(h22); // polarizations are described as h = h_+ - I*h_x
+  commondata->waveform_low[IDX_WF(i,TIME)] = t;
+  commondata->waveform_low[IDX_WF(i,HPLUS)] = h22_real;
+  commondata->waveform_low[IDX_WF(i,HCROSS)] = -1*h22_imag; // polarizations are described as h = h_+ - I*h_x
 }
 """
     body += """
 //high sampling
-for (i = 0; i < commondata->nsteps_high; i++) {
+for (i = 0; i < commondata->nsteps_fine; i++) {
   //assign
-  t = commondata->dynamics_high[8*i + 0];
-  r = commondata->dynamics_high[8*i + 1];
-  phi = commondata->dynamics_high[8*i + 2];
-  prstar = commondata->dynamics_high[8*i + 3];
-  pphi = commondata->dynamics_high[8*i + 4];
-  Hreal = commondata->dynamics_high[8*i + 5];
-  Omega = commondata->dynamics_high[8*i + 6];
-  Omega_circ = commondata->dynamics_high[8*i + 7];
-  
+  t = commondata->dynamics_fine[IDX(i,TIME)];
+  r = commondata->dynamics_fine[IDX(i,R)];
+  phi = commondata->dynamics_fine[IDX(i,PHI)];
+  prstar = commondata->dynamics_fine[IDX(i,PRSTAR)];
+  pphi = commondata->dynamics_fine[IDX(i,PPHI)];
+  Hreal = commondata->dynamics_fine[IDX(i,H)];
+  Omega = commondata->dynamics_fine[IDX(i,OMEGA)];
+  Omega_circ = commondata->dynamics_fine[IDX(i,OMEGA_CIRC)];
+
   //compute
+"""
+    body += khat2_code
+    body += """
+  status = SEOBNRv5_aligned_spin_gamma_wrapper(3.,-2.*khat2,gamma_22);
+  gamma_real_22 = gamma_22[0];
+  gamma_imag_22 = gamma_22[1];
 """
     body += h22_code
     body += """
   //store
-  commondata->waveform_high[3*i + 0] = t;
-  commondata->waveform_high[3*i + 1] = (REAL)creal(h22);
-  commondata->waveform_high[3*i + 1] = -1*(REAL)cimag(h22); // polarizations are described as h = h_+ - I*h_x
+  commondata->waveform_fine[IDX_WF(i,TIME)] = t;
+  commondata->waveform_fine[IDX_WF(i,HPLUS)] = h22_real;
+  commondata->waveform_fine[IDX_WF(i,HCROSS)] = -1*h22_imag; // polarizations are described as h = h_+ - I*h_x
 }
 """
     body += """
