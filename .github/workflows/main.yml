@@ -162,7 +162,9 @@ jobs:
           export PYTHONPATH=.:\$PYTHONPATH
           python3 --version && isympy --version
           export NRPYDIR=/home/runner/work/nrpy/nrpy
+          echo $NRPYDIR
           cd $NRPYDIR
+          pwd
           git log | head
           python3 -u nrpy/examples/carpet_wavetoy_thorns.py
           python3 -u nrpy/examples/carpet_baikal_thorns.py
