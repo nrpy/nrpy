@@ -23,8 +23,8 @@ import sympy as sp  # Import SymPy, a computer algebra system written entirely i
 
 import nrpy.c_function as cfc
 import nrpy.params as par  # NRPy+: Parameter interface
-from nrpy.grid import glb_gridfcs_dict
 from nrpy.c_codegen import c_codegen
+from nrpy.grid import BHaHGridFunction, glb_gridfcs_dict
 from nrpy.helpers.generic import superfast_uniq
 from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
 from nrpy.infrastructures.BHaH.MoLtimestepping.MoL import (
@@ -191,7 +191,7 @@ switch (which_MOL_part) {
   }
 """
 
-    if post_rhs_bcs_str!="":
+    if post_rhs_bcs_str != "":
         return_str += """
   case MOL_POST_RK_UPDATE_APPLY_BCS: {
 """
@@ -848,9 +848,7 @@ def register_CFunction_MoL_sync_data_defines() -> Tuple[int, int]:
     desc: str = "Define data needed for syncing data across chares"
     cfunc_type: str = "void"
     name: str = "MoL_sync_data_defines"
-    params: str = (
-        "MoL_gridfunctions_struct *restrict gridfuncs"
-    )
+    params: str = "MoL_gridfunctions_struct *restrict gridfuncs"
     sync_evol_list: List[str] = []
     num_sync_evol_gfs: int = 0
 
@@ -860,7 +858,10 @@ def register_CFunction_MoL_sync_data_defines() -> Tuple[int, int]:
     for gf, gf_class_obj in glb_gridfcs_dict.items():
         gf_name = gf.upper()
 
-        if gf_class_obj.sync_gf_in_superB:
+        if (
+            isinstance(gf_class_obj, (BHaHGridFunction))
+            and gf_class_obj.sync_gf_in_superB
+        ):
             if gf_class_obj.group == "EVOL":
                 num_sync_evol_gfs += 1
                 sync_evol_list.append(gf_name)
@@ -943,10 +944,9 @@ def register_CFunctions(
     register_CFunction_MoL_malloc_diagnostic_gfs()
     register_CFunction_MoL_free_memory_diagnostic_gfs()
 
-    (
-        num_evol_gfs_to_sync,
-        num_auxevol_gfs_to_sync
-    ) = register_CFunction_MoL_sync_data_defines()
+    (num_evol_gfs_to_sync, num_auxevol_gfs_to_sync) = (
+        register_CFunction_MoL_sync_data_defines()
+    )
 
     if register_MoL_step_forward_in_time:
         register_CFunction_MoL_step_forward_in_time(

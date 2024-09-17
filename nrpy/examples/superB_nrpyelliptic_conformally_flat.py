@@ -234,7 +234,7 @@ superBcbc.CurviBoundaryConditions_register_C_functions(
 )
 
 rhs_string = "rhs_eval(commondata, params, rfmstruct,  auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);"
-if outer_bcs_type=="radiation":
+if outer_bcs_type == "radiation":
     rhs_string += """
 const REAL wavespeed_at_outer_boundary = griddata[grid].params.wavespeed_at_outer_boundary;
 const REAL custom_gridfunctions_wavespeed[2] = {wavespeed_at_outer_boundary, wavespeed_at_outer_boundary};
@@ -245,7 +245,7 @@ if not enable_rfm_precompute:
     rhs_string = rhs_string.replace("rfmstruct", "xx")
 
 post_rhs_bcs_str = ""
-if outer_bcs_type!="radiation":
+if outer_bcs_type != "radiation":
     post_rhs_bcs_str += """
 apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);"""
 

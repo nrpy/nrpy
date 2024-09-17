@@ -203,7 +203,7 @@ if separate_Ricci_and_BSSN_RHS:
     rhs_string += (
         "Ricci_eval(commondata, params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
     )
-if outer_bcs_type=="radiation":
+if outer_bcs_type == "radiation":
     rhs_string += """
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
 apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].xx,
@@ -217,7 +217,7 @@ if not enable_rfm_precompute:
     rhs_string = rhs_string.replace("rfmstruct", "xx")
 
 post_rhs_bcs_str = ""
-if outer_bcs_type!="radiation":
+if outer_bcs_type != "radiation":
     post_rhs_bcs_str += """
 apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);"""
 
