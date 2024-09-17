@@ -38,7 +38,6 @@ def complex_mult(z1: List[Any], z2: List[Any]) -> List[Any]:
     >>> complex_mult(z1,z2)
     [x1*x2 - y1*y2, x1*y2 + x2*y1]
     """
-
     # complex multiplication
     # z1 = x1 + I*y1
     # z2 = x2 + I*y2
