@@ -83,6 +83,7 @@ fd_order = 10
 radiation_BC_fd_order = 6
 enable_simd = True
 parallel_codegen_enable = True
+outer_bcs_type = "radiation"
 boundary_conditions_desc = "outgoing radiation"
 # fmt: off
 initial_data_type = "gw150914"  # choices are: "gw150914", "axisymmetric", and "single_puncture"
@@ -232,22 +233,26 @@ superBcbc.CurviBoundaryConditions_register_C_functions(
     list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order
 )
 
-rhs_string = """rhs_eval(commondata, params, rfmstruct,  auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
-if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0){
-  const REAL wavespeed_at_outer_boundary = griddata[grid].params.wavespeed_at_outer_boundary;
-  const REAL custom_gridfunctions_wavespeed[2] = {wavespeed_at_outer_boundary, wavespeed_at_outer_boundary};
-  apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata->xx,
-                                     custom_gridfunctions_wavespeed, gridfunctions_f_infinity,
-                                     RK_INPUT_GFS, RK_OUTPUT_GFS);
-}"""
+rhs_string = "rhs_eval(commondata, params, rfmstruct,  auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);"
+if outer_bcs_type == "radiation":
+    rhs_string += """
+const REAL wavespeed_at_outer_boundary = griddata[grid].params.wavespeed_at_outer_boundary;
+const REAL custom_gridfunctions_wavespeed[2] = {wavespeed_at_outer_boundary, wavespeed_at_outer_boundary};
+apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata->xx,
+                                    custom_gridfunctions_wavespeed, gridfunctions_f_infinity,
+                                    RK_INPUT_GFS, RK_OUTPUT_GFS);"""
 if not enable_rfm_precompute:
     rhs_string = rhs_string.replace("rfmstruct", "xx")
+
+post_rhs_bcs_str = ""
+if outer_bcs_type != "radiation":
+    post_rhs_bcs_str += """
+apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);"""
 
 superBMoL.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,
-    post_rhs_string="""if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
-  apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);""",
+    post_rhs_bcs_str=post_rhs_bcs_str,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
 )
@@ -362,6 +367,7 @@ superBmain.output_commondata_object_h_and_main_h_cpp_ci(
 superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
     project_dir=project_dir,
     MoL_method=MoL_method,
+    outer_bcs_type=outer_bcs_type,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_psi4_diagnostics=False,
     enable_residual_diagnostics=True,

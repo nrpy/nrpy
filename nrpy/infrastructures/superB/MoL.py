@@ -24,6 +24,7 @@ import sympy as sp  # Import SymPy, a computer algebra system written entirely i
 import nrpy.c_function as cfc
 import nrpy.params as par  # NRPy+: Parameter interface
 from nrpy.c_codegen import c_codegen
+from nrpy.grid import BHaHGridFunction, glb_gridfcs_dict
 from nrpy.helpers.generic import superfast_uniq
 from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
 from nrpy.infrastructures.BHaH.MoLtimestepping.MoL import (
@@ -58,11 +59,11 @@ def single_RK_substep_input_symbolic(
     rhs_output_expr: sp.Basic,
     RK_lhs_list: Union[sp.Basic, List[sp.Basic]],
     RK_rhs_list: Union[sp.Basic, List[sp.Basic]],
-    post_rhs_list: Union[str, List[str]],
     post_rhs_output_list: Union[sp.Basic, List[sp.Basic]],
     enable_simd: bool = False,
     gf_aliases: str = "",
-    post_post_rhs_string: str = "",
+    post_rhs_bcs_str: str = "",
+    post_rhs_string: str = "",
     fp_type: str = "double",
 ) -> str:
     """
@@ -75,11 +76,11 @@ def single_RK_substep_input_symbolic(
     :param rhs_output_expr: Output expression for the RHS.
     :param RK_lhs_list: List of LHS expressions for RK.
     :param RK_rhs_list: List of RHS expressions for RK.
-    :param post_rhs_list: List of post-RHS expressions.
     :param post_rhs_output_list: List of outputs for post-RHS expressions.
     :param enable_simd: Whether SIMD optimization is enabled.
     :param gf_aliases: Additional aliases for grid functions.
-    :param post_post_rhs_string: String to be used after the post-RHS phase.
+    :param post_rhs_bcs_str: str to apply bcs immediately after RK update
+    :param post_rhs_string: String to be used after the post-RHS phase.
     :param fp_type: Floating point type, e.g., "double".
 
     :return: A string containing the generated C code.
@@ -89,9 +90,7 @@ def single_RK_substep_input_symbolic(
     # Ensure all input lists are lists
     RK_lhs_list = [RK_lhs_list] if not isinstance(RK_lhs_list, list) else RK_lhs_list
     RK_rhs_list = [RK_rhs_list] if not isinstance(RK_rhs_list, list) else RK_rhs_list
-    post_rhs_list = (
-        [post_rhs_list] if not isinstance(post_rhs_list, list) else post_rhs_list
-    )
+
     post_rhs_output_list = (
         [post_rhs_output_list]
         if not isinstance(post_rhs_output_list, list)
@@ -113,7 +112,7 @@ def single_RK_substep_input_symbolic(
 
     return_str += """
 switch (which_MOL_part) {
-  case MOL_PART_1: {"""
+  case MOL_PRE_RK_UPDATE: {"""
 
     # Part 1: RHS evaluation
     updated_rhs_str = (
@@ -126,7 +125,7 @@ switch (which_MOL_part) {
     return_str += """
      break;
   }
-  case MOL_PART_2: {"""
+  case MOL_RK_UPDATE: {"""
 
     # Part 2: RK update
     if enable_simd:
@@ -191,35 +190,27 @@ switch (which_MOL_part) {
     break;
   }
 """
-    return_str += """
-  case MOL_PART_3_APPLY_BCS: {
-"""
-    # Part 3: Call post-RHS functions
-    for post_rhs, post_rhs_output in zip(post_rhs_list, post_rhs_output_list):
-        parts = [part.strip() for part in post_rhs.split(";") if part.strip()]
-        part1 = parts[0] + ";"
-        return_str += part1.replace(
-            "RK_OUTPUT_GFS", str(post_rhs_output).replace("gfsL", "gfs")
-        )
-        return_str += "\n"
 
-    return_str += """
+    if post_rhs_bcs_str != "":
+        return_str += """
+  case MOL_POST_RK_UPDATE_APPLY_BCS: {
+"""
+        # Part 3: Call post-RHS functions
+        for post_rhs_output in post_rhs_output_list:
+            return_str += post_rhs_bcs_str.replace(
+                "RK_OUTPUT_GFS", str(post_rhs_output).replace("gfsL", "gfs")
+            )
+            return_str += "\n"
+
+        return_str += """
     break;
   }
 """
     return_str += """
-  case MOL_PART_3_AFTER_APPLY_BCS: {
+  case MOL_POST_RK_UPDATE: {
 """
-    for post_rhs, post_rhs_output in zip(post_rhs_list, post_rhs_output_list):
-        parts = [part.strip() for part in post_rhs.split(";") if part.strip()]
-        if len(parts) > 1:
-            part2 = parts[1] + ";"
-            return_str += part2.replace(
-                "RK_OUTPUT_GFS", str(post_rhs_output).replace("gfsL", "gfs")
-            )
-
-    for post_rhs, post_rhs_output in zip(post_rhs_list, post_rhs_output_list):
-        return_str += post_post_rhs_string.replace(
+    for post_rhs_output in post_rhs_output_list:
+        return_str += post_rhs_string.replace(
             "RK_OUTPUT_GFS", str(post_rhs_output).replace("gfsL", "gfs")
         )
 
@@ -437,8 +428,8 @@ def register_CFunction_MoL_step_forward_in_time(
     Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
     MoL_method: str,
     rhs_string: str = "",
+    post_rhs_bcs_str: str = "",
     post_rhs_string: str = "",
-    post_post_rhs_string: str = "",
     enable_rfm_precompute: bool = False,
     enable_curviBCs: bool = False,
     enable_simd: bool = False,
@@ -449,8 +440,8 @@ def register_CFunction_MoL_step_forward_in_time(
     :param Butcher_dict: A dictionary containing the Butcher tables for various RK-like methods.
     :param MoL_method: The method of lines (MoL) used for time-stepping.
     :param rhs_string: Right-hand side string of the C code.
-    :param post_rhs_string: Input string for post-RHS phase in the C code.
-    :param post_post_rhs_string: String to be used after the post-RHS phase.
+    :param post_rhs_bcs_str: str to apply bcs immediately after RK update
+    :param post_rhs_string: String to be used after the post-RHS phase.
     :param enable_rfm_precompute: Flag to enable reference metric functionality.
     :param enable_curviBCs: Flag to enable curvilinear boundary conditions.
     :param enable_simd: Flag to enable SIMD functionality.
@@ -555,13 +546,13 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                     * dt
                     + y_n_gfs
                 ],
-                post_rhs_list=[post_rhs_string],
+                post_rhs_bcs_str=post_rhs_bcs_str,
                 post_rhs_output_list=[
                     k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs
                 ],
                 enable_simd=enable_simd,
                 gf_aliases=gf_aliases,
-                post_post_rhs_string=post_post_rhs_string,
+                post_rhs_string=post_rhs_string,
             )
             + "// -={ END k1 substep }=-\n\n"
         )
@@ -599,14 +590,13 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                     + Butcher[3][2] * k2_or_y_nplus_a32_k2_gfs * dt,
                     Butcher[2][2] * k2_or_y_nplus_a32_k2_gfs * dt + y_n_gfs,
                 ],
-                post_rhs_list=[post_rhs_string, post_rhs_string],
                 post_rhs_output_list=[
                     k2_or_y_nplus_a32_k2_gfs,
                     k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs,
                 ],
                 enable_simd=enable_simd,
                 gf_aliases=gf_aliases,
-                post_post_rhs_string=post_post_rhs_string,
+                post_rhs_string=post_rhs_string,
             )
             + "// -={ END k2 substep }=-\n\n"
         )
@@ -636,11 +626,11 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                     k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs
                     + Butcher[3][3] * y_n_gfs * dt
                 ],
-                post_rhs_list=[post_rhs_string],
+                post_rhs_bcs_str=post_rhs_bcs_str,
                 post_rhs_output_list=[y_n_gfs],
                 enable_simd=enable_simd,
                 gf_aliases=gf_aliases,
-                post_post_rhs_string=post_post_rhs_string,
+                post_rhs_string=post_rhs_string,
             )
             + "// -={ END k3 substep }=-\n\n"
         )
@@ -675,7 +665,6 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                         else:
                             RK_rhs += dt * k_mp1_gfs
 
-                post_rhs = post_rhs_string
                 if s == num_steps - 1:  # If on final step:
                     post_rhs_output = y_n
                 else:  # If on anything but the final step:
@@ -697,11 +686,10 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                     rhs_output_expr=rhs_output,
                     RK_lhs_list=[RK_lhs],
                     RK_rhs_list=[RK_rhs],
-                    post_rhs_list=[post_rhs],
                     post_rhs_output_list=[post_rhs_output],
                     enable_simd=enable_simd,
                     gf_aliases=gf_aliases,
-                    post_post_rhs_string=post_post_rhs_string,
+                    post_rhs_string=post_rhs_string,
                 )}// -={{ END k{str(s + 1)} substep }}=-\n\n"""
                 body += """
           break;
@@ -721,11 +709,11 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                     rhs_output_expr=y_nplus1_running_total,
                     RK_lhs_list=[y_n],
                     RK_rhs_list=[y_n + y_nplus1_running_total * dt],
-                    post_rhs_list=[post_rhs_string],
+                    post_rhs_bcs_str=post_rhs_bcs_str,
                     post_rhs_output_list=[y_n],
                     enable_simd=enable_simd,
                     gf_aliases=gf_aliases,
-                    post_post_rhs_string=post_post_rhs_string,
+                    post_rhs_string=post_rhs_string,
                 )
             else:
                 for s in range(num_steps):
@@ -802,11 +790,11 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                             rhs_output_expr=rhs_output,
                             RK_lhs_list=RK_lhs_list,
                             RK_rhs_list=RK_rhs_list,
-                            post_rhs_list=[post_rhs_string],
+                            post_rhs_bcs_str=post_rhs_bcs_str,
                             post_rhs_output_list=[post_rhs_output],
                             enable_simd=enable_simd,
                             gf_aliases=gf_aliases,
-                            post_post_rhs_string=post_post_rhs_string,
+                            post_rhs_string=post_rhs_string,
                         )
                         + f"// -={{ END k{s + 1} substep }}=-\n\n"
                     )
@@ -849,12 +837,73 @@ def create_rk_substep_constants(num_steps: int) -> str:
     return "\n".join(f"#define RK_SUBSTEP_K{s+1} {s+1}" for s in range(num_steps))
 
 
+def register_CFunction_MoL_sync_data_defines() -> Tuple[int, int]:
+    """
+    Register the CFunction 'MoL_sync_data_defines'.
+    This function sets up data required for communicating gfs between chares.
+    :raises RuntimeError: If an error occurs while registering the CFunction
+    :return: None
+    """
+    includes: List[str] = ["BHaH_defines.h"]
+    desc: str = "Define data needed for syncing data across chares"
+    cfunc_type: str = "void"
+    name: str = "MoL_sync_data_defines"
+    params: str = "MoL_gridfunctions_struct *restrict gridfuncs"
+    sync_evol_list: List[str] = []
+    num_sync_evol_gfs: int = 0
+
+    sync_auxevol_list: List[str] = []
+    num_sync_auxevol_gfs: int = 0
+
+    for gf, gf_class_obj in glb_gridfcs_dict.items():
+        gf_name = gf.upper()
+
+        if (
+            isinstance(gf_class_obj, (BHaHGridFunction))
+            and gf_class_obj.sync_gf_in_superB
+        ):
+            if gf_class_obj.group == "EVOL":
+                num_sync_evol_gfs += 1
+                sync_evol_list.append(gf_name)
+            elif gf_class_obj.group == "AUXEVOL":
+                num_sync_auxevol_gfs += 1
+                sync_auxevol_list.append(gf_name)
+
+    body: str = f"""
+gridfuncs->num_evol_gfs_to_sync = {num_sync_evol_gfs};
+gridfuncs->num_auxevol_gfs_to_sync = {num_sync_auxevol_gfs};
+gridfuncs->max_sync_gfs = MAX(gridfuncs->num_evol_gfs_to_sync, gridfuncs->num_auxevol_gfs_to_sync);
+"""
+
+    for i, gf in enumerate(sync_evol_list):
+        body += f"gridfuncs->evol_gfs_to_sync[{i}] = {gf.upper()}GF;\n"
+
+    if num_sync_auxevol_gfs != 0:
+        for i, gf in enumerate(sync_auxevol_list):
+            body += f"gridfuncs->auxevol_gfs_to_sync[{i}] = {gf.upper()}GF;\n"
+
+    try:
+        cfc.register_CFunction(
+            includes=includes,
+            desc=desc,
+            cfunc_type=cfunc_type,
+            name=name,
+            params=params,
+            body=body,
+        )
+        return num_sync_evol_gfs, num_sync_auxevol_gfs
+    except Exception as e:
+        raise RuntimeError(
+            f"Error registering CFunction 'MoL_malloc_diagnostic_gfs': {str(e)}"
+        ) from e
+
+
 # Register all the CFunctions and NRPy basic defines
 def register_CFunctions(
     MoL_method: str = "RK4",
     rhs_string: str = "rhs_eval(Nxx, Nxx_plus_2NGHOSTS, dxx, RK_INPUT_GFS, RK_OUTPUT_GFS);",
-    post_rhs_string: str = "apply_bcs(Nxx, Nxx_plus_2NGHOSTS, RK_OUTPUT_GFS);",
-    post_post_rhs_string: str = "",
+    post_rhs_bcs_str: str = "apply_bcs(Nxx, Nxx_plus_2NGHOSTS, RK_OUTPUT_GFS);",
+    post_rhs_string: str = "",
     enable_rfm_precompute: bool = False,
     enable_curviBCs: bool = False,
     enable_simd: bool = False,
@@ -865,8 +914,8 @@ def register_CFunctions(
 
     :param MoL_method: The method to be used for MoL. Default is 'RK4'.
     :param rhs_string: RHS function call as string. Default is "rhs_eval(Nxx, Nxx_plus_2NGHOSTS, dxx, RK_INPUT_GFS, RK_OUTPUT_GFS);"
-    :param post_rhs_string: Post-RHS function call as string. Default is "apply_bcs(Nxx, Nxx_plus_2NGHOSTS, RK_OUTPUT_GFS);"
-    :param post_post_rhs_string: Post-post-RHS function call as string. Default is an empty string.
+    :param post_rhs_bcs_str: str to apply bcs immediately after RK update
+    :param post_rhs_string: Post-post-RHS function call as string. Default is an empty string.
     :param enable_rfm_precompute: Enable reference metric support. Default is False.
     :param enable_curviBCs: Enable curvilinear boundary conditions. Default is False.
     :param enable_simd: Enable Single Instruction, Multiple Data (SIMD). Default is False.
@@ -878,7 +927,7 @@ def register_CFunctions(
     >>> from nrpy.helpers.generic import compress_string_to_base64, decompress_base64_to_string, diff_strings
     >>> cfc.CFunction_dict.clear()
     >>> register_CFunctions()
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4B/RA7ddABGaScZHDxOiAHcc/CXr2duHb+UiUyv83OVALtvJ+o7uK/PoSVGe7rPuvil8asOnzsX/43MrS1REEi/tau4rRkS3klwMCWne6D351BIv83jxwuBwBgfb9aLOiuMaxdzlpat7M5Zzy6cqD3qxMNABQOc2xVV5NC/sFWryHJK7NLtTQZSJAkfrM9dF6qg6pG5p6oN+o9MOcVuOHCVrZ0lCxYx6wuKz2IJ/mMdvxb9kpOoc+n71ZJsMV7tA14+9i8TawSx62Kef1R0clKDrO9YH+vibd56jTMWlJJj7qwA4ejblO0802o+9UA00dZsIZRIq9k/LjwpM473QxNNtZt03nkrs/BShBdq2ZyQpIOcw4mZH+AJkh40wl5nKuTRIlLFG4Q6NBh276EAjeZ2AuRBWcD9KjPiSnm6E53GBzACBbVbUxEVCiFzWJsjBwNoZj+o2133GqXbzjLmvBUd7vlc8BVGk7x7yQAmajdQHpOKiPAu1g1Ch753e50ASUNrK27jpZmaGBGoIomk+YaSm9q5qS+kEx597LllKKlVnGRwinxSiP2AGfto3ST6yNHdH81ISIrL/6a3I7xZbc5mqdhbzNABxa3Z5BMbWcIHHuS3FVQ06uehvm7rSoMNgfYFRVPZSR6oO1KdJkTKVK1HF1Di7riialwoMpPoP9hkaRNko3+VQsXDfD8zZD6wI3dyRjWxc7mvzHBwx0cY3LMQdzaJUI5wPMv+zt67Ss3boY3mmwDorWTZPgtpO1oIklYhzAPfebO0fc+Za54sKFZl2yiHAsfuQAcLorBWaWP0LvYxFo6Xd0JOxuCjnuDMO+UIBcHHjtaxxErecmOOKXpIHLh7gQVgj/S7iSe1t8omN0Hf5S6JxQQuBAX9xr5LyU6E5INDGSciZhysRx+RWycRTsZ+QYOWVDM2oYdjcKxz8DXe7E24kj2bL7y17VdoQa76t8IALsAt8p2krjxFZsRwiCk9o/xmuCoNLDNsMWXktDEOEv5Rvra2g6gxG7enKHHQkXggrnH8gRIPuk6miLu3g8v9Maua5um7sJGBXaHr9QjfEN/pToqqo+vLQnBqP/vukzhmNo7GkL9x5cPiZ5pbngo9cm1+bad3DG0EwUmGCmeFRIbPZpOcRoM9+RDz+uKcGc5ICRRe0H7yvOxhpwK7YU1WLWlfUA7NO56FenA6xc54N6mW+Ot/tRgF6w4kzANqpGGwkRoP0g2h+ufyLNzmzE50KK0kib3HI0fqOBnNUFp0dF6Df57M9OaQAAAAAA6HVu59NvyUAAdMH0j8AAPO1tUaxxGf7AgAAAAAEWVo=")
+    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4B/5A7tdABGaScZHDxOiAHcc/CXr2duHb+UiUyv83OVALtvJ+o7uK/PoSVGe7rPuvil8asOnzsX/43MrS1REEi/tau4rRkS3klwMCWne6D351BIv83jxwuBwBgfb9aLOiuMaxdzlpat7M5Zzy6cqD3qxMNABQOc2xVV5NC/sFWryHJK7NLtTQZSJAkfrM9dF6qg6pG5p6oN+o9MOcVuOHCVrZ0lCxYx6wuKz2IJ/mMdvxb9kpOoc+n71ZJsMV7tA14+9i8TawSx62Kef1R0clKDrO9YH+vibd56jTMWlJJj7qwA4ejblO0802o+9UA00dZsIZRIq9k/LjwpM473QxNNtZt03nkrs/BShBdq2ZyQpIOcw4mZH+AJkh40wl5nKuTRIlLFG4Q6NBh276EAjeZ2AuRBWcD9KjPiSnm6E53GBzACBbVbUxEVCiFzWJsjBwNoZj+o2133GqXbzjLmvBUd7vlc8BVGk7x7yQAmajdQHpOKiPAu1g1Ch753e50ASUNrK27jpZmaGBGoIomk+YaSm9q5qS+kEx597LllKKlVnGRwinxSiP2AGfto3ST6yNHdH81ISIrL/6a3I7xZbc5mqdhbzNABxa3Z5BMbWcIHHuS3FVQ06uehvm7rSoMNgfYFRVPZSR6oO1KdJkTKVK1HF1Di7riialwoMpPoP9hkaRNko3+VQsXDfD8zZD6wI3dyRjWxc7mvzHBwx0cY3LMQdzaJUI5wPMv+zt67Ss3boY3mmwDorWTZPgtpO1oIklYhzAPfebO0fc+Za54sKFZl2yiHAsfuQAcLorBWaWP0LvYxFo6Xd0JOxuCjnuDMO+UIGipZRFdNhHWqwaJJ0L/ezdlRgK9eWS0T/LyPVYPlBpSVT//O2hN2TqXwIQJYWjZxslQNtZdC3QGGe8RUFF65i/WOH+veVyq/f43FVVpSbXY1/m8ZOew3o4wVFF7Y4x1wwx3JiP7f6OOiCxvwXEvudRqceHzGEQ9jL2X2rKimsOua8dUtbyVqQdkhxV5UzM8qxv05h6BEBwxv55GP6CmKoEVBlFZVuasXUIbiUWV43S3BhBJQRGJhRQKnS8HjaYsv9y1nGYzzmU9NiAsDp5edFCGG3EHhBzHDjTugM+d9xq/AZJQkViE2faLafZX00Yfqu+wygzcnj8DdtuDw0dOcQB7MoT+NUcPmMjmCJlx6PuyHoX+e6Tf/dMiwtrwbfVUxJUJUus4f6zsc8pR+JqZmqWPG72zKCZ1Cq0fT3XfWZ7+K7jn/eX4g2MJ/U1Rak2SAAAFHLajR6idzKAAHXB/o/AAA0cKK4scRn+wIAAAAABFla")
     >>> returned_string = cfc.CFunction_dict["MoL_step_forward_in_time"].full_function
     >>> if returned_string != expected_string:
     ...    compressed_str = compress_string_to_base64(returned_string)
@@ -895,13 +944,17 @@ def register_CFunctions(
     register_CFunction_MoL_malloc_diagnostic_gfs()
     register_CFunction_MoL_free_memory_diagnostic_gfs()
 
+    (num_evol_gfs_to_sync, num_auxevol_gfs_to_sync) = (
+        register_CFunction_MoL_sync_data_defines()
+    )
+
     if register_MoL_step_forward_in_time:
         register_CFunction_MoL_step_forward_in_time(
             Butcher_dict,
             MoL_method,
             rhs_string,
+            post_rhs_bcs_str,
             post_rhs_string,
-            post_post_rhs_string,
             enable_rfm_precompute=enable_rfm_precompute,
             enable_curviBCs=enable_curviBCs,
             enable_simd=enable_simd,
@@ -935,6 +988,11 @@ def register_CFunctions(
     BHaH_defines_h.register_BHaH_defines(
         "nrpy.infrastructures.BHaH.MoLtimestepping.MoL",
         f"typedef struct __MoL_gridfunctions_struct__ {{\n"
+        f"""int num_evol_gfs_to_sync;
+        int num_auxevol_gfs_to_sync;
+        int max_sync_gfs;
+        int evol_gfs_to_sync[{num_evol_gfs_to_sync}];
+        int auxevol_gfs_to_sync[{num_auxevol_gfs_to_sync}];\n"""
         f"REAL *restrict {y_n_gridfunctions};\n"
         + "".join(f"REAL *restrict {gfs};\n" for gfs in non_y_n_gridfunctions_list)
         + r"""REAL *restrict diagnostic_output_gfs;
