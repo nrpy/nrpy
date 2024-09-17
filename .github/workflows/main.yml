@@ -162,17 +162,17 @@ jobs:
           export PYTHONPATH=.:\$PYTHONPATH
           python3 --version && isympy --version
           export NRPYDIR=/home/runner/work/nrpy/nrpy
-          echo $NRPYDIR
-          cd $NRPYDIR
+          echo \$NRPYDIR
+          cd \$NRPYDIR
           pwd
           git log | head
           python3 -u nrpy/examples/carpet_wavetoy_thorns.py
           python3 -u nrpy/examples/carpet_baikal_thorns.py
           cd /opt/ET_2024_06_beta/arrangements/WVUThorns/
           rm Baikal*
-          ln -s $NRPYDIR/project/et_baikal/Baikal* .
-          ln -s $NRPYDIR/project/et_wavetoy/* .
-          ln -s $NRPYDIR/nrpy/examples/et_WaveToyfiles/test WaveToyNRPy/
+          ln -s \$NRPYDIR/project/et_baikal/Baikal* .
+          ln -s \$NRPYDIR/project/et_wavetoy/* .
+          ln -s \$NRPYDIR/nrpy/examples/et_WaveToyfiles/test WaveToyNRPy/
           cp -r /opt/ET_2024_06_beta/repos/wvuthorns/Baikal/tes* Baikal/
           cp -r /opt/ET_2024_06_beta/repos/wvuthorns/BaikalVacuum/tes* BaikalVacuum/
           cd /opt/ET_2024_06_beta/
@@ -219,16 +219,16 @@ jobs:
           export CPLUS_INCLUDE_PATH=/opt/charm-8.0.0/include:\$CPLUS_INCLUDE_PATH
           python3 --version && isympy --version
           export NRPYDIR=/home/runner/work/nrpy/nrpy
-          cd $NRPYDIR
+          cd \$NRPYDIR
           git log | head
           python3 -u nrpy/examples/superB_nrpyelliptic_conformally_flat.py
           cd project/superB_nrpyelliptic_conformally_flat/
           make -j2
-          cd $NRPYDIR
+          cd \$NRPYDIR
           python3 -u nrpy/examples/superB_blackhole_spectroscopy.py
           cd project/superB_blackhole_spectroscopy/
           make -j2
-          cd $NRPYDIR
+          cd \$NRPYDIR
           python3 -u nrpy/examples/superB_two_blackholes_collide.py
           cd project/superB_two_blackholes_collide/
           make -j2
