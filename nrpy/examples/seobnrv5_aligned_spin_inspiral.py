@@ -19,6 +19,8 @@ import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 import nrpy.infrastructures.BHaH.seobnr.SEOBNR_C_codegen_library as seobnr_CCL
+import nrpy.infrastructures.BHaH.seobnr.SEOBNR_dynamics_C_codegen_library as seobnr_dyn_CCL
+import nrpy.infrastructures.BHaH.seobnr.SEOBNR_initial_conditions_C_codegen_library as seobnr_ic_CCL
 import nrpy.params as par
 
 par.set_parval_from_str("Infrastructure", "BHaH")
@@ -67,15 +69,22 @@ SEOBNRv5_aligned_spin_initial_conditions_dissipative(&commondata);
 // Step 3.b: Print out the dissipative initial conditions.
 printf("prstar = %.15e\n",commondata.prstar);
 
-// Step 4.a: Run the ODE integration.
+// Step 4: Run the ODE integration.
 SEOBNRv5_aligned_spin_ode_integration(&commondata);
 
-// Step 4.b: Print the resulting trajectory.
+// Step 5.a. Generate the waveform.
+SEOBNRv5_aligned_spin_waveform_from_dynamics(&commondata);
+
+// Step 5.b: Print the resulting waveform.
 size_t i;
 
 for (i = 0; i < commondata.nsteps_low; i++) {
-    printf("%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n", commondata.dynamics[8 * i + 0], commondata.dynamics[8 * i + 1],
-           commondata.dynamics[8 * i + 2], commondata.dynamics[8 * i + 3], commondata.dynamics[8 * i + 4], commondata.dynamics[8 * i + 5], commondata.dynamics[8 * i + 6], commondata.dynamics[8 * i + 7]);
+    printf("%.15e %.15e %.15e\n", commondata.waveform_low[IDX_WF(i,TIME)]
+    , commondata.waveform_low[IDX_WF(i,HPLUS)], commondata.waveform_low[IDX_WF(i,HCROSS)]);
+}
+for (i = 0; i < commondata.nsteps_fine; i++) {
+    printf("%.15e %.15e %.15e\n", commondata.waveform_fine[IDX_WF(i,TIME)]
+    , commondata.waveform_fine[IDX_WF(i,HPLUS)], commondata.waveform_fine[IDX_WF(i,HCROSS)]);
 }
 
 return 0;
@@ -93,16 +102,21 @@ return 0;
 # For now, only registering the functions needed for initial conditions.
 # seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian()
 # seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_and_derivs()
-seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_coefficients()
-seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_augments()
-seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit()
-seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_dRHS()
-seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_RHSdRHS()
-seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conservative()
-seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_radial_momentum_condition()
-seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_dissipative()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_right_hand_sides()
-seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_ode_integration()
+seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_coefficients()
+seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit()
+seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_dRHS()
+seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_RHSdRHS()
+seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conservative()
+seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_radial_momentum_condition()
+seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_dissipative()
+seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_augments()
+seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_find_peak()
+seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_iterative_refinement()
+seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_intepolate_dynamics()
+seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_ode_integration()
+seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper()
+seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics()
 #########################################################
 # STEP 3: Generate header files, register C functions and
 #         command line parameters, set up boundary conditions,
@@ -124,7 +138,30 @@ Bdefines_h.output_BHaH_defines_h(
         str(Path("gsl") / Path("gsl_roots.h")),
         str(Path("gsl") / Path("gsl_matrix.h")),
         str(Path("gsl") / Path("gsl_odeiv2.h")),
+        str(Path("gsl") / Path("gsl_spline.h")),
+        str(Path("gsl") / Path("gsl_interp.h")),
+        str(Path("gsl") / Path("gsl_sf_gamma.h")),
     ],
+    supplemental_defines_dict={
+        "SEOBNR": """
+#include<complex.h>
+#define COMPLEX complex
+#define NUMVARS 8
+#define TIME 0
+#define R 1
+#define PHI 2
+#define PRSTAR 3
+#define PPHI 4
+#define H 5
+#define OMEGA 6
+#define OMEGA_CIRC 7
+#define IDX(idx, var) ((idx)*NUMVARS + (var))
+#define NUMMODES 3
+#define HPLUS 1
+#define HCROSS 2
+#define IDX_WF(idx,var) ((idx)*NUMMODES + (var))
+"""
+    },
     enable_simd=False,
 )
 register_CFunction_main_c()

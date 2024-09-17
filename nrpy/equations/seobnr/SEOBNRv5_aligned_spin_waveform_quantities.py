@@ -7,12 +7,43 @@ License: BSD 2-Clause
 """
 
 # Step P1: Import needed modules:
-from typing import Dict
+from typing import Any, Dict, List
 
 import sympy as sp
 
 # The name of this module ("WaveEquation") is given by __name__:
 thismodule = __name__
+
+
+def complex_mult(z1: List[Any], z2: List[Any]) -> List[Any]:
+    """
+    Multiply two complex numbers given as list of real and imaginary parts.
+
+    This functions takes two lists containing the real and imaginary part of a complex number
+    and returns a list with the real and imaginary part of the resulting multiple.
+
+    :param z1: Complex number 1 as list [Real(z1),Imag(z1)]
+    :param z2: Complex number 2 as list [Real(z2),Imag(z2)]
+    :return: Complex number z1 x z2 as list [Real(z1*z2),Imag(z1*z2)]
+
+    >>> z1 = [1,2]
+    >>> z2 = [3,5]
+    >>> complex_mult(z1,z2)
+    [-7, 11]
+
+    >>> import sympy as sp
+    >>> x1 , y1 , x2 , y2 = sp.symbols('x1 y1 x2 y2',real = True)
+    >>> z1 = [x1,y1]
+    >>> z2 = [x2,y2]
+    >>> complex_mult(z1,z2)
+    [x1*x2 - y1*y2, x1*y2 + x2*y1]
+    """
+    # complex multiplication
+    # z1 = x1 + I*y1
+    # z2 = x2 + I*y2
+    # z1*z2 = x1*x2 - y1*y2 + I*(x1*y2 + x2*y1)
+
+    return [z1[0] * z2[0] - z1[1] * z2[1], z1[0] * z2[1] + z1[1] * z2[0]]
 
 
 def f2r(input_float: float) -> sp.Rational:
@@ -330,15 +361,11 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             * self.vomega**6
         )
         self.fspinimag = (
-            sp.I
-            * (
-                (sp.Rational(7339, 540) * self.nu - sp.Rational(81, 20))
-                * self.chi_A
-                * self.deltainv
-                + (sp.Rational(593, 108) * self.nu - sp.Rational(81, 20)) * self.chi_S
-            )
-            * self.vh3**2
-        )
+            (sp.Rational(7339, 540) * self.nu - sp.Rational(81, 20))
+            * self.chi_A
+            * self.deltainv
+            + (sp.Rational(593, 108) * self.nu - sp.Rational(81, 20)) * self.chi_S
+        ) * self.vh3**2
         self.fspin_limit["(3 , 3)"] = (
             ((sp.Rational(19, 2) * self.nu - 2) * self.chi_A) * self.vomega**3
             + ((3 - 12 * self.nu) * (self.chi_A * self.chi_S)) * self.vomega**4
@@ -358,8 +385,7 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             * self.vomega**6
         )
         self.fspinimag_limit = (
-            sp.I
-            * self.chi_A
+            self.chi_A
             * (sp.Rational(7339, 540) * self.nu - sp.Rational(81, 20))
             * self.vh3**2
         )
@@ -1380,29 +1406,33 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
         hlms = {}
         for l in range(2, 6):
             for m in range(l, min(l - 2, 4), -1):
-                pn_contribution_f = 0
+                pn_contribution_f_real = 0
+                pn_contribution_f_imag = 0
                 if not m % 2:
-                    pn_contribution_f += self.rho[f"({l} , {m})"] ** l
+                    pn_contribution_f_real += self.rho[f"({l} , {m})"] ** l
                 if m % 2:
-                    pn_contribution_f += self.noneqcond * self.rho[f"({l} , {m})"] ** l
-                    pn_contribution_f += (
+                    pn_contribution_f_real += (
+                        self.noneqcond * self.rho[f"({l} , {m})"] ** l
+                    )
+                    pn_contribution_f_real += (
                         self.noneqcond * self.fspin[f"({l} , {m})"]
                         + self.eqcond * self.fspin_limit[f"({l} , {m})"]
                     )
                 if l == 3 and m == 3:
-                    pn_contribution_f += (
+                    pn_contribution_f_imag += (
                         self.noneqcond * self.fspinimag
                         + self.eqcond * self.fspinimag_limit
                     )
-                n = (1 - (l + m) % 2) * (
+                pn_contribution_f = [pn_contribution_f_real, pn_contribution_f_imag]
+                n_real = (1 - (l + m) % 2) * (
                     (sp.Rational(8, sp.factorial2(2 * l + 1)))
                     * sp.pi
-                    * (sp.I * m) ** l
+                    * sp.re((sp.I * m) ** l)
                     * sp.sqrt(sp.Rational((l + 1) * (l + 2), l * (l - 1)))
                 ) + ((l + m) % 2) * (
                     (sp.Rational(-16, sp.factorial2(2 * l + 1)))
                     * sp.pi
-                    * (sp.I * m) ** l
+                    * sp.re((sp.I * m) ** l)
                     * sp.sqrt(
                         sp.Rational(
                             (l**2 - m**2) * (l + 2) * (2 * l + 1),
@@ -1410,29 +1440,68 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
                         )
                     )
                 )
-                tail_term = (
-                    sp.gamma(l + 1 - 2 * sp.I * self.khat[m])
-                    * sp.exp(
-                        self.khat[m]
-                        * (sp.pi + 2 * sp.I * sp.log(2 * m * self.Omega * self.r0))
+                n_imag = (1 - (l + m) % 2) * (
+                    (sp.Rational(8, sp.factorial2(2 * l + 1)))
+                    * sp.pi
+                    * sp.im((sp.I * m) ** l)
+                    * sp.sqrt(sp.Rational((l + 1) * (l + 2), l * (l - 1)))
+                ) + ((l + m) % 2) * (
+                    (sp.Rational(-16, sp.factorial2(2 * l + 1)))
+                    * sp.pi
+                    * sp.im((sp.I * m) ** l)
+                    * sp.sqrt(
+                        sp.Rational(
+                            (l**2 - m**2) * (l + 2) * (2 * l + 1),
+                            (2 * l - 1) * (l + 1) * l * (l - 1),
+                        )
                     )
-                    / sp.factorial(l)
                 )
-                newtonian_strain = (
+                n = [n_real, n_imag]
+                gamma_real, gamma_imag = sp.symbols(
+                    f"gamma_real_{l}{m} gamma_imag_{l}{m}", real=True
+                )
+                gamma_term = [gamma_real, gamma_imag]
+                tail_prefactor = [
+                    sp.exp(self.khat[m] * (sp.pi))
+                    * sp.cos(self.khat[m] * (2 * sp.log(2 * m * self.Omega * self.r0)))
+                    / sp.factorial(l),
+                    sp.exp(self.khat[m] * (sp.pi))
+                    * sp.sin(self.khat[m] * (2 * sp.log(2 * m * self.Omega * self.r0)))
+                    / sp.factorial(l),
+                ]
+                tail_term = complex_mult(gamma_term, tail_prefactor)
+                newtonian_strain_real = (
                     self.nu
-                    * n
                     * self.c[f"{l + (l + m) % 2}"]
                     * (self.vphi ** (l + (l + m) % 2))
                     * self.Y[m][l - (l + m) % 2]
-                    * sp.exp(-sp.I * m * self.phi)
+                    * sp.cos(-m * self.phi)
                 )
-                hlms[f"({l} , {m})"] = (
-                    newtonian_strain
-                    * self.effective_source[(l + m) % 2]
-                    * tail_term
-                    * pn_contribution_f
-                    * self.deltalm[f"({l} , {m})"]
+                newtonian_strain_imag = (
+                    self.nu
+                    * self.c[f"{l + (l + m) % 2}"]
+                    * (self.vphi ** (l + (l + m) % 2))
+                    * self.Y[m][l - (l + m) % 2]
+                    * sp.sin(-m * self.phi)
                 )
+                newtonian_strain = complex_mult(
+                    [newtonian_strain_real, newtonian_strain_imag], n
+                )
+                hlms_complex_component = complex_mult(
+                    newtonian_strain, complex_mult(tail_term, pn_contribution_f)
+                )
+                hlms[f"({l} , {m})"] = [
+                    (
+                        hlms_complex_component[0]
+                        * self.deltalm[f"({l} , {m})"]
+                        * self.effective_source[(l + m) % 2]
+                    ),
+                    (
+                        hlms_complex_component[1]
+                        * self.deltalm[f"({l} , {m})"]
+                        * self.effective_source[(l + m) % 2]
+                    ),
+                ]
         return hlms
 
 
