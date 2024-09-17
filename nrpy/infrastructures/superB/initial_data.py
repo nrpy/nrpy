@@ -312,7 +312,6 @@ switch (initial_data_part) {
     body += "ID_persist_struct ID_persist;\n"
 
     if populate_ID_persist_struct_str:
-        body += "ID_persist_struct ID_persist;\n"
         body += populate_ID_persist_struct_str
     body += """
     for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
