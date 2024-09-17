@@ -1,5 +1,5 @@
 """
-Generic helper functions used throughout NRPy+.
+Generic helper functions used throughout NRPy.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -9,26 +9,18 @@ Author: Zachariah B. Etienne
 import base64
 import hashlib
 import lzma
-import shutil
+import pkgutil
 import subprocess
 from difflib import ndiff
 from pathlib import Path
 from typing import Any, List, cast
-
-# Try to import the 'files' function from 'importlib.resources' for Python 3.9 and newer versions.
-# This provides a consistent API for accessing package resources.
-try:
-    from importlib.resources import files as resource_files  # Python 3.9 and newer
-except ImportError:
-    # Fallback to 'importlib_resources' for older Python versions (pre-3.9) to maintain compatibility.
-    from importlib_resources import files as resource_files
 
 from nrpy.helpers.cached_functions import is_cached, read_cached, write_cached
 
 
 def superfast_uniq(seq: List[Any]) -> List[Any]:
     """
-    Super fast 'uniq' function that preserves order.
+    Remove duplicate elements from a list while preserving their original order.
 
     :param seq: List of elements.
     :return: List with unique elements in the order they first appear in the original list.
@@ -43,7 +35,9 @@ def superfast_uniq(seq: List[Any]) -> List[Any]:
 # Used within c_function to create multi-line comments.
 def prefix_with_star(input_string: str) -> str:
     r"""
-    Prefix every line in the input string with "* ".
+    Prefix every line in the input string with "   * ".
+
+    Useful for formatting multi-line comments or documentation blocks by adding a consistent prefix to each line.
 
     :param input_string: The input multi-line string to be prefixed.
     :return: The modified string with "* " prefixed on every line.
@@ -68,6 +62,9 @@ def clang_format(
 ) -> str:
     r"""
     Format a given C code string using clang-format.
+
+    Leverages the clang-format tool to automatically format C code according to specified style options.
+    Ensures consistent code formatting across the project.
 
     :param c_code_str: The C code string to be formatted.
     :param clang_format_options: Formatting options for clang-format.
@@ -107,7 +104,10 @@ def clang_format(
 
 def diff_strings(str1: str, str2: str) -> str:
     r"""
-    Generate a side-by-side diff between two strings excluding intra-line details.
+    Generate a side-by-side diff between two strings, highlighting only added or removed lines.
+
+    Compares two multi-line strings and indicates lines that are removed or added, ignoring changes within lines
+    for a cleaner overview of differences.
 
     :param str1: First string for comparison.
     :param str2: Second string for comparison.
@@ -138,6 +138,11 @@ def hash_to_signed_32bit(s: str) -> int:
     """
     Compute the SHA-256 hash of a string and convert it to a signed 32-bit integer.
 
+    Generates a consistent 32-bit integer hash from an input string by:
+    1. Computing the SHA-256 hash.
+    2. Reducing the hash to a 32-bit unsigned integer.
+    3. Converting it to a signed integer by interpreting the highest bit as the sign bit.
+
     :param s: Input string.
     :return: Signed 32-bit integer representation of the hash.
 
@@ -160,7 +165,10 @@ def hash_to_signed_32bit(s: str) -> int:
 
 def compress_string_to_base64(input_string: str) -> str:
     """
-    Compress the input string and return as Base64 encoded string.
+    Compress the input string and return it as a Base64 encoded string.
+
+    Uses LZMA compression to reduce the size of the input string and encodes the compressed data using Base64
+    for safe transport or storage.
 
     :param input_string: String to be compressed.
     :return: Base64 encoded compressed string.
@@ -182,7 +190,9 @@ def compress_string_to_base64(input_string: str) -> str:
 
 def decompress_base64_to_string(input_base64: str) -> str:
     """
-    Decompress a Base64 encoded string to its original form.
+    Decompress a Base64 encoded string back to its original form.
+
+    Decodes the Base64 string to obtain the compressed binary data and decompresses it using LZMA to retrieve the original string.
 
     :param input_base64: Base64 encoded compressed string.
     :return: Original decompressed string.
@@ -207,26 +217,34 @@ def copy_files(
     package: str, filenames_list: List[str], project_dir: str, subdirectory: str
 ) -> None:
     """
-    Copy specified files into a specified subdirectory of the project directory.
+    Copy specified files into a designated subdirectory within the project directory.
 
-    This function copies the given files from the specified package to the specified
-    subdirectory within the project directory.
+    Retrieves the specified files from a given Python package and copies them into a specified subdirectory
+    inside the project directory. Ensures that the target subdirectory exists, creating it if necessary.
 
-    :param package: The package path where the files are located.
+    :param package: The package name where the files are located.
     :param filenames_list: A list of filenames to be copied.
     :param project_dir: The path of the project directory where the files will be copied.
     :param subdirectory: The name of the subdirectory within the project directory.
+    :raises FileNotFoundError: If a specified file is not found within the package.
     """
     # Ensure the subdirectory exists or create it if necessary
     target_subdir = Path(project_dir) / subdirectory
     target_subdir.mkdir(parents=True, exist_ok=True)
 
     for filename in filenames_list:
-        # Get the source path of the file within the package
-        source_path = resource_files(package) / filename
+        # Retrieve the file data from the package
+        data = pkgutil.get_data(package, filename)
 
-        # Copy the file to the specified subdirectory
-        shutil.copy(str(source_path), str(target_subdir / filename))
+        if data is not None:
+            target_file = target_subdir / filename
+            # Write the data to the target file in binary mode
+            with open(target_file, "wb") as f:
+                f.write(data)
+        else:
+            raise FileNotFoundError(
+                f"Cannot find file '{filename}' in package '{package}'"
+            )
 
 
 if __name__ == "__main__":
