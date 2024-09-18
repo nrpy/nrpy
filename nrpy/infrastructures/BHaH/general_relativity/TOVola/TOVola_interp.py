@@ -22,16 +22,16 @@ def register_CFunction_TOVola_Interp() -> None:
     desc = "Provide high-order interpolation from TOVola grids onto an arbitrary point xCart[3] = {x,y,z} in the Spherical basis."
     prefunc = r"""
 /* Bisection index finder using binary search */
-static int TOVola_bisection_idx_finder(const REAL rrbar, const int numlines_in_file, const REAL *restrict rbar_arr) {
+static int TOVola_bisection_idx_finder(const REAL rrbar, const int numpoints_arr, const REAL *restrict rbar_arr) {
   int x1 = 0;
-  int x2 = numlines_in_file - 1;
+  int x2 = numpoints_arr - 1;
   REAL y1 = rrbar - rbar_arr[x1];
   REAL y2 = rrbar - rbar_arr[x2];
   if (y1 * y2 > 0) {
-    fprintf(stderr, "INTERPOLATION BRACKETING ERROR\n");
+    fprintf(stderr, "INTERPOLATION BRACKETING ERROR: rbar_min = %e ?<= rbar = %.15e ?<= %e = rbar_max\n", rbar_arr[0], rrbar, rbar_arr[numpoints_arr-1]);
     exit(EXIT_FAILURE);
   }
-  for (int i = 0; i < numlines_in_file; i++) {
+  for (int i = 0; i < numpoints_arr; i++) {
     int x_midpoint = (x1 + x2) / 2;
     REAL y_midpoint = rrbar - rbar_arr[x_midpoint];
     if (y_midpoint * y1 <= 0) {
@@ -50,90 +50,94 @@ static int TOVola_bisection_idx_finder(const REAL rrbar, const int numlines_in_f
       return x2;
     }
   }
-  fprintf(stderr, "INTERPOLATION BRACKETING ERROR: DID NOT CONVERGE.\n");
+  fprintf(stderr, "INTERPOLATION BRACKETING ERROR: rbar_min = %e ?<= rbar = %.15e ?<= %e = rbar_max\n", rbar_arr[0], rrbar, rbar_arr[numpoints_arr-1]);
   exit(EXIT_FAILURE);
 }
 
 /* Interpolation Function using Lagrange Polynomial */
-static void TOVola_TOV_interpolate_1D(REAL rrbar, const commondata_struct *restrict commondata, const REAL Rbar, const int Rbar_idx, const int interpolation_stencil_size,
-                                      const int numlines_in_file, const REAL *restrict r_Schw_arr, const REAL *restrict rho_energy_arr,
-                                      const REAL *restrict rho_baryon_arr, const REAL *restrict P_arr, const REAL *restrict M_arr,
-                                      const REAL *restrict expnu_arr, const REAL *restrict exp4phi_arr, const REAL *restrict rbar_arr,
-                                      REAL *restrict rho_energy, REAL *restrict rho_baryon, REAL *restrict P, REAL *restrict M, REAL *restrict expnu,
-                                      REAL *restrict exp4phi) {
-  // For this case, we know that for all functions, f(r) = f(-r)
-  if (rrbar < 0)
-    rrbar = -rrbar;
+static void TOVola_TOV_interpolate_1D(REAL rrbar, const commondata_struct *restrict commondata, const REAL Rbar, const int Rbar_idx,
+                                      const int interpolation_stencil_size, const int numpoints_arr, const REAL *restrict r_Schw_arr,
+                                      const REAL *restrict rho_energy_arr, const REAL *restrict rho_baryon_arr, const REAL *restrict P_arr,
+                                      const REAL *restrict M_arr, const REAL *restrict expnu_arr, const REAL *restrict exp4phi_arr,
+                                      const REAL *restrict rbar_arr, REAL *restrict rho_energy, REAL *restrict rho_baryon, REAL *restrict P,
+                                      REAL *restrict M, REAL *restrict expnu, REAL *restrict exp4phi) {
+  const REAL M_star = M_arr[numpoints_arr - 1];
+  const REAL rbar_max_inside_star = rbar_arr[numpoints_arr - 1];
+  if (rrbar < rbar_max_inside_star){ //If we are INSIDE the star, we need to interpollate the data to the grid.
+    // For this case, we know that for all functions, f(r) = f(-r)
+    if (rrbar < 0)
+      rrbar = -rrbar;
 
-  // First find the central interpolation stencil index:
-  int idx = TOVola_bisection_idx_finder(rrbar, numlines_in_file, rbar_arr);
+    // First find the central interpolation stencil index:
+    int idx = TOVola_bisection_idx_finder(rrbar, numpoints_arr, rbar_arr);
 
-  /* Use standard library functions instead of redefining macros */
-  int idxmin = fmax(0, idx - commondata->interpolation_stencil_size / 2 - 1);
+    /* Use standard library functions instead of redefining macros */
+    int idxmin = fmax(0, idx - commondata->interpolation_stencil_size / 2 - 1);
 
-  // -= Do not allow the interpolation stencil to cross the star's surface =-
-  // max index is when idxmin + (commondata->interpolation_stencil_size-1) = Rbar_idx
-  //  -> idxmin at most can be Rbar_idx - commondata->interpolation_stencil_size + 1
-  if (rrbar < Rbar) {
-    idxmin = fmin(idxmin, Rbar_idx - commondata->interpolation_stencil_size + 1);
-  } else {
-    idxmin = fmax(idxmin, Rbar_idx + 1);
-    idxmin = fmin(idxmin, numlines_in_file - commondata->interpolation_stencil_size + 1);
-  }
-
-  // Ensure that commondata->interpolation_stencil_size does not exceed the maximum
-  if (commondata->interpolation_stencil_size > commondata->max_interpolation_stencil_size) {
-    fprintf(stderr, "Interpolation stencil size exceeds maximum allowed.\n");
-    exit(EXIT_FAILURE);
-  }
-
-  // Now perform the Lagrange polynomial interpolation:
-
-  // First set the interpolation coefficients:
-  REAL rbar_sample[commondata->max_interpolation_stencil_size];
-  for (int i = idxmin; i < idxmin + commondata->interpolation_stencil_size; i++) {
-    rbar_sample[i - idxmin] = rbar_arr[i];
-  }
-  REAL l_i_of_r[commondata->max_interpolation_stencil_size];
-  for (int i = 0; i < commondata->interpolation_stencil_size; i++) {
-    REAL numer = 1.0;
-    REAL denom = 1.0;
-    for (int j = 0; j < commondata->interpolation_stencil_size; j++) {
-      if (j != i) {
-        numer *= (rrbar - rbar_sample[j]);
-        denom *= (rbar_sample[i] - rbar_sample[j]);
-      }
+    // -= Do not allow the interpolation stencil to cross the star's surface =-
+    // max index is when idxmin + (commondata->interpolation_stencil_size-1) = Rbar_idx
+    //  -> idxmin at most can be Rbar_idx - commondata->interpolation_stencil_size + 1
+    if (rrbar < Rbar) {
+      idxmin = fmin(idxmin, Rbar_idx - commondata->interpolation_stencil_size + 1);
+    } else {
+      idxmin = fmax(idxmin, Rbar_idx + 1);
+      idxmin = fmin(idxmin, numpoints_arr - commondata->interpolation_stencil_size + 1);
     }
-    l_i_of_r[i] = numer / denom;
-  }
 
-  // Then perform the interpolation:
-  *rho_energy = 0.0;
-  *rho_baryon = 0.0;
-  *P = 0.0;
-  *M = 0.0;
-  *expnu = 0.0;
-  *exp4phi = 0.0;
+    // Ensure that commondata->interpolation_stencil_size does not exceed the maximum
+    if (commondata->interpolation_stencil_size > commondata->max_interpolation_stencil_size) {
+      fprintf(stderr, "Interpolation stencil size exceeds maximum allowed.\n");
+      exit(EXIT_FAILURE);
+    }
 
-  REAL r_Schw = 0.0;
-  for (int i = idxmin; i < idxmin + commondata->interpolation_stencil_size; i++) {
-    r_Schw += l_i_of_r[i - idxmin] * r_Schw_arr[i];
-    *rho_energy += l_i_of_r[i - idxmin] * rho_energy_arr[i];
-    *rho_baryon += l_i_of_r[i - idxmin] * rho_baryon_arr[i];
-    *P += l_i_of_r[i - idxmin] * P_arr[i];
-    *M += l_i_of_r[i - idxmin] * M_arr[i];
-    *expnu += l_i_of_r[i - idxmin] * expnu_arr[i];
-    *exp4phi += l_i_of_r[i - idxmin] * exp4phi_arr[i];
-  }
+    // Now perform the Lagrange polynomial interpolation:
 
-  // Just in case we are at the surface point.
-  if (rrbar > Rbar) {
+    // First set the interpolation coefficients:
+    REAL rbar_sample[commondata->max_interpolation_stencil_size];
+    for (int i = idxmin; i < idxmin + commondata->interpolation_stencil_size; i++) {
+      rbar_sample[i - idxmin] = rbar_arr[i];
+    }
+    REAL l_i_of_r[commondata->max_interpolation_stencil_size];
+    for (int i = 0; i < commondata->interpolation_stencil_size; i++) {
+      REAL numer = 1.0;
+      REAL denom = 1.0;
+      for (int j = 0; j < commondata->interpolation_stencil_size; j++) {
+        if (j != i) {
+          numer *= (rrbar - rbar_sample[j]);
+          denom *= (rbar_sample[i] - rbar_sample[j]);
+        }
+      }
+      l_i_of_r[i] = numer / denom;
+    }
+
+    // Then perform the interpolation:
+    *rho_energy = 0.0;
+    *rho_baryon = 0.0;
+    *P = 0.0;
+    *M = 0.0;
+    *expnu = 0.0;
+    *exp4phi = 0.0;
+
+    REAL r_Schw = 0.0;
+    for (int i = idxmin; i < idxmin + commondata->interpolation_stencil_size; i++) {
+      r_Schw += l_i_of_r[i - idxmin] * r_Schw_arr[i];
+      *rho_energy += l_i_of_r[i - idxmin] * rho_energy_arr[i];
+      *rho_baryon += l_i_of_r[i - idxmin] * rho_baryon_arr[i];
+      *P += l_i_of_r[i - idxmin] * P_arr[i];
+      *M += l_i_of_r[i - idxmin] * M_arr[i];
+      *expnu += l_i_of_r[i - idxmin] * expnu_arr[i];
+      *exp4phi += l_i_of_r[i - idxmin] * exp4phi_arr[i];
+    }
+
+  } else {
+    //If we are OUTSIDE the star, the solution is just Schwarzschild.
+    REAL rSchw_outside = (rrbar+M_star) + M_star*M_star/(4.0*rrbar); //Need to know what rSchw is at our current grid location.
     *rho_energy = 0;
     *rho_baryon = 0;
     *P = 0;
     *M = M_arr[Rbar_idx + 1];
-    *expnu = 1. - 2.0 * (*M) / r_Schw;
-    *exp4phi = pow(r_Schw / rrbar, 2.0);
+    *expnu = 1. - 2.0 * (*M) / rSchw_outside;
+    *exp4phi = (rSchw_outside * rSchw_outside) / (rrbar * rrbar);
   }
 }
 """
