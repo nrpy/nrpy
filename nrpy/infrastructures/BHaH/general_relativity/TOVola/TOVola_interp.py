@@ -12,9 +12,9 @@ Authors: David Boyer
 import nrpy.c_function as cfc
 
 
-def register_CFunction_TOVola_Interp() -> None:
+def register_CFunction_TOVola_interp() -> None:
     """
-    Register C function TOVola_Interp().
+    Register C function TOVola_interp().
 
     Provides spectral interpolator to provide data at arbitrary point x,y,z in Cartesian basis.
     """
@@ -141,7 +141,7 @@ static void TOVola_TOV_interpolate_1D(REAL rrbar, const commondata_struct *restr
   }
 }
 """
-    name = "TOVola_Interp"
+    name = "TOVola_interp"
     params = """const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xCart[3],
      const ID_persist_struct *restrict ID_persist, initial_data_struct *restrict initial_data"""
     body = r"""

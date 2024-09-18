@@ -46,7 +46,7 @@ par.set_parval_from_str("Infrastructure", "BHaH")
 # Code-generation-time parameters:
 project_name = "neutron_star_initial_data_TOVola"
 CoordSystem = "SinhSpherical"
-IDtype = "TOVola_Interp"
+IDtype = "TOVola_interp"
 IDCoordSystem = "Spherical"
 
 grid_physical_size = 300.0
@@ -91,7 +91,7 @@ par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
 
-TOVinterp.register_CFunction_TOVola_Interp()
+TOVinterp.register_CFunction_TOVola_interp()
 TOVsolve.register_CFunction_TOVola_solve()
 BCl.register_CFunction_initial_data(
     CoordSystem=CoordSystem,
