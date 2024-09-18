@@ -209,6 +209,7 @@ post_non_y_n_auxevol_mallocs = ""
 main.register_CFunction_main_c(
     MoL_method="",
     initial_data_desc=IDtype,
+    set_initial_data_after_auxevol_malloc=True,
     boundary_conditions_desc="No BCs",
     post_non_y_n_auxevol_mallocs=post_non_y_n_auxevol_mallocs,
     pre_MoL_step_forward_in_time="",
