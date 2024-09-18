@@ -35,7 +35,7 @@ typedef struct {
   REAL *restrict nu_arr;
   REAL *restrict Iso_r_arr;
   int numels_alloced_TOV_arr;
-  
+
   int numpoints_actually_saved;
 
   const commondata_struct *restrict commondata;
@@ -272,17 +272,17 @@ static void free_tovola_data(TOVola_data_struct *TOVdata) {
 /* Normalize and set data */
 void TOVola_Normalize_and_set_data_integrated(TOVola_data_struct *TOVdata, REAL *restrict r_Schw, REAL *restrict rho_energy,
                                               REAL *restrict rho_baryon, REAL *restrict P, REAL *restrict M, REAL *restrict expnu,
-                                              REAL *restrict exp4phi, REAL *restrict rbar, int numpoints_actually_saved) {
+                                              REAL *restrict exp4phi, REAL *restrict rbar) {
   printf("TOVola Normalizing raw TOV data...\n");
 
   /* Check if there are enough points to normalize */
-  if (numpoints_actually_saved < 2) {
+  if (TOVdata->numpoints_actually_saved < 2) {
     fprintf(stderr, "Not enough data points to normalize.\n");
     exit(EXIT_FAILURE);
   }
 
   /* Copy raw data to normalized arrays */
-  for (int i = 0; i < numpoints_actually_saved; i++) {
+  for (int i = 0; i < TOVdata->numpoints_actually_saved; i++) {
     r_Schw[i] = TOVdata->rSchw_arr[i];
     rho_energy[i] = TOVdata->rho_energy_arr[i];
     rho_baryon[i] = TOVdata->rho_baryon_arr[i];
@@ -293,15 +293,15 @@ void TOVola_Normalize_and_set_data_integrated(TOVola_data_struct *TOVdata, REAL 
   }
 
   /* Surface values for normalization */
-  const REAL R_Schw_surface = r_Schw[numpoints_actually_saved - 1];
-  const REAL M_surface = M[numpoints_actually_saved - 1];
-  const REAL Rbar_surface = rbar[numpoints_actually_saved - 1];
-  const REAL nu_surface = expnu[numpoints_actually_saved - 1];
+  const REAL R_Schw_surface = r_Schw[TOVdata->numpoints_actually_saved - 1];
+  const REAL M_surface = M[TOVdata->numpoints_actually_saved - 1];
+  const REAL Rbar_surface = rbar[TOVdata->numpoints_actually_saved - 1];
+  const REAL nu_surface = expnu[TOVdata->numpoints_actually_saved - 1];
 
   const REAL normalize = 0.5 * (sqrt(R_Schw_surface * (R_Schw_surface - 2.0 * M_surface)) + R_Schw_surface - M_surface) / Rbar_surface;
 
   /* Normalize rbar and calculate expnu and exp4phi */
-  for (int i = 0; i < numpoints_actually_saved; i++) {
+  for (int i = 0; i < TOVdata->numpoints_actually_saved; i++) {
     rbar[i] *= normalize;
     expnu[i] = exp(expnu[i] - nu_surface + log(1.0 - 2.0 * M_surface / R_Schw_surface));
     exp4phi[i] = (r_Schw[i] / rbar[i]) * (r_Schw[i] / rbar[i]);
@@ -331,6 +331,7 @@ void TOVola_Normalize_and_set_data_integrated(TOVola_data_struct *TOVdata, REAL 
   gsl_odeiv2_system system;
   gsl_odeiv2_driver *driver;
   TOVdata->commondata = commondata;
+  TOVdata->numpoints_actually_saved = 0;
   if (setup_ode_system(ode_method, &system, &driver, TOVdata) != 0) {
     fprintf(stderr, "Failed to set up ODE system.\n");
     exit(EXIT_FAILURE);
@@ -384,7 +385,8 @@ void TOVola_Normalize_and_set_data_integrated(TOVola_data_struct *TOVdata, REAL 
         TOVdata->nu_arr = realloc(TOVdata->nu_arr, sizeof(REAL) * new_arr_size);
         TOVdata->Iso_r_arr = realloc(TOVdata->Iso_r_arr, sizeof(REAL) * new_arr_size);
 
-        if (!TOVdata->rSchw_arr || !TOVdata->rho_energy_arr || !TOVdata->rho_baryon_arr || !TOVdata->P_arr || !TOVdata->M_arr || !TOVdata->nu_arr || !TOVdata->Iso_r_arr) {
+        if (!TOVdata->rSchw_arr || !TOVdata->rho_energy_arr || !TOVdata->rho_baryon_arr || !TOVdata->P_arr || !TOVdata->M_arr || !TOVdata->nu_arr ||
+            !TOVdata->Iso_r_arr) {
           fprintf(stderr, "Memory reallocation failed during integration.\n");
           gsl_odeiv2_driver_free(driver);
           exit(EXIT_FAILURE);
@@ -434,8 +436,7 @@ void TOVola_Normalize_and_set_data_integrated(TOVola_data_struct *TOVdata, REAL 
 
   /* Normalize and set data */
   TOVola_Normalize_and_set_data_integrated(TOVdata, ID_persist->r_Schw_arr, ID_persist->rho_energy_arr, ID_persist->rho_baryon_arr, ID_persist->P_arr,
-                                           ID_persist->M_arr, ID_persist->expnu_arr, ID_persist->exp4phi_arr, ID_persist->rbar_arr,
-                                           TOVdata->numpoints_actually_saved);
+                                           ID_persist->M_arr, ID_persist->expnu_arr, ID_persist->exp4phi_arr, ID_persist->rbar_arr);
 
   /* Free raw data as it's no longer needed */
   free_tovola_data(TOVdata);
