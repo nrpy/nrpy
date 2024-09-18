@@ -198,7 +198,7 @@ ENABLE_VALGRIND ?= no
 
 # Set valgrind-friendly CFLAGS if ENABLE_VALGRIND
 ifeq ($(ENABLE_VALGRIND),yes)
-    CFLAGS = {CFLAGS_dict['default']}
+    CFLAGS = {CFLAGS_dict['debug']}
 else
     # Check for OpenMP support
     OPENMP_FLAG = -fopenmp
