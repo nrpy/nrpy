@@ -21,7 +21,7 @@ par.register_CodeParameters(
         "initial_central_density",
         "uniform_sampling_dr",
     ],
-    [100.0, 2.0, 0.125, 1e-5, 1e-10, 1.0, 1e-6, 0.125, 1e-3],
+    [100.0, 2.0, 0.125, 1e-5, 1e-10, 1.0, 1e-6, 0.125, 1e-4],
     commondata=True,
 )
 par.register_CodeParameters(
@@ -32,7 +32,7 @@ par.register_CodeParameters(
         "interpolation_stencil_size",
         "max_interpolation_stencil_size",
     ],
-    [10000, 11, 13],
+    [5000000, 11, 13],
     commondata=True,
 )
 

@@ -130,21 +130,20 @@ int TOVola_ODE(REAL r, const REAL y[], REAL dydr[], void *params) {
     rho_energy = 0.0;
   }
 
-  // At the center (r == 0)
+  {
+    // TOV Equations
+    dydr[TOVOLA_PRESSURE] = -((rho_energy+y[TOVOLA_PRESSURE])*( (2.0*y[2])/(r) + 8.0*M_PI*r*r*y[TOVOLA_PRESSURE] ))/(r*2.0*(1.0 - (2.0*y[2])/(r)));
+    dydr[TOVOLA_NU] =  ((2.0*y[TOVOLA_MASS])/(r) + 8.0*M_PI*r*r*y[TOVOLA_PRESSURE])/(r*(1.0 - (2.0*y[TOVOLA_MASS])/(r)));
+    dydr[TOVOLA_MASS] = 4.0*M_PI*r*r*rho_energy;
+    // isotropic radius:
+    dydr[TOVOLA_RBAR] = (y[TOVOLA_RBAR])/(r*sqrt(1.0-(2.0*y[TOVOLA_MASS])/r));
+  }
   if (r == 0.0) {
+    // At the center (r == 0)
     dydr[TOVOLA_PRESSURE] = 0.0; // dP/dr
     dydr[TOVOLA_NU] = 0.0;       // dnu/dr
     dydr[TOVOLA_MASS] = 0.0;     // dM/dr
     dydr[TOVOLA_RBAR] = 1.0;     // drbar/dr
-  }
-  // TOV Equations
-  else {
-    REAL mass_term = (2.0 * y[TOVOLA_MASS]) / r;
-    REAL denominator = 1.0 - mass_term;
-    dydr[TOVOLA_PRESSURE] = -((rho_energy + y[TOVOLA_PRESSURE]) * (mass_term / 2.0 + 8.0 * M_PI * r * r * y[TOVOLA_PRESSURE])) / (r * denominator);
-    dydr[TOVOLA_NU] = ((mass_term) + 8.0 * M_PI * r * r * y[TOVOLA_PRESSURE]) / (r * denominator);
-    dydr[TOVOLA_MASS] = 4.0 * M_PI * r * r * rho_energy;              // dM/dr
-    dydr[TOVOLA_RBAR] = y[TOVOLA_RBAR] / (r * sqrt(1.0 - mass_term)); // drbar/dr
   }
 
   return GSL_SUCCESS;
@@ -371,38 +370,39 @@ void TOVola_Normalize_and_set_data_integrated(TOVola_data_struct *TOVdata, REAL 
     TOVola_evaluate_rho_and_eps(current_position, y, TOVdata);
     TOVola_assign_constants(c, TOVdata);
 
-    {
-      /* Check if reallocation is needed */
-      if (TOVdata->numpoints_actually_saved >= TOVdata->numels_alloced_TOV_arr) {
-        // Update arr_size instead of modifying the macro
-        const int new_arr_size = 1.5 * TOVdata->numels_alloced_TOV_arr;
-        TOVdata->numels_alloced_TOV_arr = new_arr_size;
-        TOVdata->rSchw_arr = realloc(TOVdata->rSchw_arr, sizeof(REAL) * new_arr_size);
-        TOVdata->rho_energy_arr = realloc(TOVdata->rho_energy_arr, sizeof(REAL) * new_arr_size);
-        TOVdata->rho_baryon_arr = realloc(TOVdata->rho_baryon_arr, sizeof(REAL) * new_arr_size);
-        TOVdata->P_arr = realloc(TOVdata->P_arr, sizeof(REAL) * new_arr_size);
-        TOVdata->M_arr = realloc(TOVdata->M_arr, sizeof(REAL) * new_arr_size);
-        TOVdata->nu_arr = realloc(TOVdata->nu_arr, sizeof(REAL) * new_arr_size);
-        TOVdata->Iso_r_arr = realloc(TOVdata->Iso_r_arr, sizeof(REAL) * new_arr_size);
+    /* Check if reallocation is needed */
+    if (TOVdata->numpoints_actually_saved >= TOVdata->numels_alloced_TOV_arr) {
+      // Update arr_size instead of modifying the macro
+      const int new_arr_size = 1.5 * TOVdata->numels_alloced_TOV_arr;
+      TOVdata->numels_alloced_TOV_arr = new_arr_size;
+      TOVdata->rSchw_arr = realloc(TOVdata->rSchw_arr, sizeof(REAL) * new_arr_size);
+      TOVdata->rho_energy_arr = realloc(TOVdata->rho_energy_arr, sizeof(REAL) * new_arr_size);
+      TOVdata->rho_baryon_arr = realloc(TOVdata->rho_baryon_arr, sizeof(REAL) * new_arr_size);
+      TOVdata->P_arr = realloc(TOVdata->P_arr, sizeof(REAL) * new_arr_size);
+      TOVdata->M_arr = realloc(TOVdata->M_arr, sizeof(REAL) * new_arr_size);
+      TOVdata->nu_arr = realloc(TOVdata->nu_arr, sizeof(REAL) * new_arr_size);
+      TOVdata->Iso_r_arr = realloc(TOVdata->Iso_r_arr, sizeof(REAL) * new_arr_size);
 
-        if (!TOVdata->rSchw_arr || !TOVdata->rho_energy_arr || !TOVdata->rho_baryon_arr || !TOVdata->P_arr || !TOVdata->M_arr || !TOVdata->nu_arr ||
-            !TOVdata->Iso_r_arr) {
-          fprintf(stderr, "Memory reallocation failed during integration.\n");
-          gsl_odeiv2_driver_free(driver);
-          exit(EXIT_FAILURE);
-        }
+      if (!TOVdata->rSchw_arr || !TOVdata->rho_energy_arr || !TOVdata->rho_baryon_arr || !TOVdata->P_arr || !TOVdata->M_arr || !TOVdata->nu_arr ||
+          !TOVdata->Iso_r_arr) {
+        fprintf(stderr, "Memory reallocation failed during integration.\n");
+        gsl_odeiv2_driver_free(driver);
+        exit(EXIT_FAILURE);
       }
-
-      /* Store data */
-      TOVdata->rSchw_arr[TOVdata->numpoints_actually_saved] = current_position;
-      TOVdata->rho_energy_arr[TOVdata->numpoints_actually_saved] = c[0];
-      TOVdata->rho_baryon_arr[TOVdata->numpoints_actually_saved] = c[1];
-      TOVdata->P_arr[TOVdata->numpoints_actually_saved] = y[TOVOLA_PRESSURE];
-      TOVdata->M_arr[TOVdata->numpoints_actually_saved] = y[TOVOLA_MASS];
-      TOVdata->nu_arr[TOVdata->numpoints_actually_saved] = y[TOVOLA_NU];
-      TOVdata->Iso_r_arr[TOVdata->numpoints_actually_saved] = y[TOVOLA_RBAR];
-      TOVdata->numpoints_actually_saved++;
     }
+
+    /* Store data */
+    TOVdata->rSchw_arr[TOVdata->numpoints_actually_saved] = current_position;
+    TOVdata->rho_energy_arr[TOVdata->numpoints_actually_saved] = c[0];
+    TOVdata->rho_baryon_arr[TOVdata->numpoints_actually_saved] = c[1];
+    TOVdata->P_arr[TOVdata->numpoints_actually_saved] = y[TOVOLA_PRESSURE];
+    TOVdata->M_arr[TOVdata->numpoints_actually_saved] = y[TOVOLA_MASS];
+    TOVdata->nu_arr[TOVdata->numpoints_actually_saved] = y[TOVOLA_NU];
+    TOVdata->Iso_r_arr[TOVdata->numpoints_actually_saved] = y[TOVOLA_RBAR];
+    TOVdata->numpoints_actually_saved++;
+
+    // r_SchwArr_np,rhoArr_np,rho_baryonArr_np,PArr_np,mArr_np,exp2phiArr_np,confFactor_exp4phi_np,rbarArr_np),
+    // printf("%.15e %.15e %.15e %.15e %.15e %.15e soln\n", current_position, c[0], c[1], y[TOVOLA_PRESSURE], y[TOVOLA_MASS], y[TOVOLA_NU]);
 
     /* Termination condition */
     if (TOVola_do_we_terminate(current_position, y, TOVdata)) {
