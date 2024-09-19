@@ -51,7 +51,7 @@ IDCoordSystem = "Spherical"
 
 grid_physical_size = 300.0
 sinh_width = 0.0785
-t_final = 0.0
+t_final = 0.0001
 diagnostics_output_every = 0.5
 default_checkpoint_every = 2.0
 Nxx_dict = {
@@ -195,14 +195,7 @@ cmdpar.generate_default_parfile(project_dir=project_dir, project_name=project_na
 cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
     project_name=project_name, cmdline_inputs=["convergence_factor"]
 )
-copy_files(
-    package="nrpy.infrastructures.BHaH.general_relativity.TwoPunctures",
-    filenames_list=["TwoPunctures.h", "TP_utilities.h"],
-    project_dir=project_dir,
-    subdirectory="TwoPunctures",
-)
 Bdefines_h.output_BHaH_defines_h(
-    additional_includes=[str(Path("TwoPunctures") / Path("TwoPunctures.h"))],
     project_dir=project_dir,
     enable_simd=enable_simd,
     enable_rfm_precompute=enable_rfm_precompute,
