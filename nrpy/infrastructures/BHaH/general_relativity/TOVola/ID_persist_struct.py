@@ -18,9 +18,8 @@ par.register_CodeParameters(
         "min_step_size",
         "max_step_size",
         "ode_error_limit",
-        "uniform_sampling_dr",
     ],
-    [0.125, 1.0, 2.0, 1e-7, 1e-10, 1.0, 1e-6, 0.001],
+    [0.125, 1.0, 2.0, 1e-20, 1e-20, 1.0, 1e-6],
     commondata=True,
 )
 par.register_CodeParameters(

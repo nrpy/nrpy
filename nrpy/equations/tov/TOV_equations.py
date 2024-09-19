@@ -18,9 +18,18 @@ class TOV_Equations:
         self,
     ) -> None:
         """Set up the right-hand-sides for all four TOV ordinary differential equations, storing them within the class object."""
-        r_Schw, r_iso, rho_energy, P, M, M_PI = sp.symbols(
-            "r_Schw r_iso rho_energy y[TOVOLA_PRESSURE] y[TOVOLA_MASS] M_PI", real=True
+        self.r_Schw, self.r_iso, self.rho_energy, self.P, self.M, self.M_PI = (
+            sp.symbols(
+                "r_Schw y[TOVOLA_R_ISO] rho_energy y[TOVOLA_PRESSURE] y[TOVOLA_MASS] M_PI",
+                real=True,
+            )
         )
+        r_Schw = self.r_Schw
+        r_iso = self.r_iso
+        rho_energy = self.rho_energy
+        P = self.P
+        M = self.M
+        M_PI = self.M_PI
         self.dP_dr = -(
             (rho_energy + P) * ((2.0 * M) / (r_Schw) + 8.0 * M_PI * r_Schw * r_Schw * P)
         ) / (r_Schw * 2.0 * (1.0 - (2.0 * M) / (r_Schw)))

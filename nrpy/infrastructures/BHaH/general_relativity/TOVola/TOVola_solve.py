@@ -10,12 +10,15 @@ Authors: David Boyer
 """
 
 import nrpy.c_function as cfc
+import nrpy.c_codegen as ccg
+import nrpy.equations.tov.TOV_equations as tov_eqs
 
 
 def register_CFunction_TOVola_solve() -> None:
     """Register C function TP_solve(), main driver function for pseudospectral solve."""
     includes = ["BHaH_defines.h", "gsl/gsl_errno.h", "gsl/gsl_odeiv2.h"]
     prefunc = r"""
+#define ODE_SOLVER_DIM 4
 #define TOVOLA_PRESSURE 0
 #define TOVOLA_NU 1
 #define TOVOLA_MASS 2
@@ -26,6 +29,7 @@ typedef struct {
   // Current state variables
   REAL rho_baryon;
   REAL rho_energy;
+  REAL r_lengthscale;
 
   REAL *restrict rSchw_arr;
   REAL *restrict rho_energy_arr;
@@ -130,23 +134,32 @@ int TOVola_ODE(REAL r_Schw, const REAL y[], REAL dydr_Schw[], void *params) {
     rho_energy = 0.0;
   }
 
-  {
-    // TOV Equations
-    dydr_Schw[TOVOLA_PRESSURE] =
-        -((rho_energy + y[TOVOLA_PRESSURE]) * ((2.0 * y[TOVOLA_MASS]) / (r_Schw) + 8.0 * M_PI * r_Schw * r_Schw * y[TOVOLA_PRESSURE])) /
-        (r_Schw * 2.0 * (1.0 - (2.0 * y[TOVOLA_MASS]) / (r_Schw)));
-    dydr_Schw[TOVOLA_NU] = ((2.0 * y[TOVOLA_MASS]) / (r_Schw) + 8.0 * M_PI * r_Schw * r_Schw * y[TOVOLA_PRESSURE]) /
-                           (r_Schw * (1.0 - (2.0 * y[TOVOLA_MASS]) / (r_Schw)));
-    dydr_Schw[TOVOLA_MASS] = 4.0 * M_PI * r_Schw * r_Schw * rho_energy;
-    // TOVOLA_R_ISO = isotropic radius:
-    dydr_Schw[TOVOLA_R_ISO] = (y[TOVOLA_R_ISO]) / (r_Schw * sqrt(1.0 - (2.0 * y[TOVOLA_MASS]) / r_Schw));
-  }
-  if (r_Schw == 0.0) {
-    // At the center (r == 0)
+  // At the center of the star (r_Schw == 0), the TOV equations diverge, so we set reasonable values here.
+  if (r_Schw == 0) {
     dydr_Schw[TOVOLA_PRESSURE] = 0.0; // dP/dr
     dydr_Schw[TOVOLA_NU] = 0.0;       // dnu/dr
     dydr_Schw[TOVOLA_MASS] = 0.0;     // dM/dr
-    dydr_Schw[TOVOLA_R_ISO] = 1.0;     // dr_iso/dr
+    dydr_Schw[TOVOLA_R_ISO] = 1.0;    // dr_iso/dr
+    return GSL_SUCCESS;
+  }
+
+  {
+    // TOV Equations
+"""
+    tov = tov_eqs.TOV_Equations()
+    prefunc += ccg.c_codegen(
+        [tov.dP_dr, tov.dnu_dr, tov.dM_dr, tov.dr_iso_dr],
+        [
+            "dydr_Schw[TOVOLA_PRESSURE]",
+            "dydr_Schw[TOVOLA_NU]",
+            "dydr_Schw[TOVOLA_MASS]",
+            "dydr_Schw[TOVOLA_R_ISO]",
+        ],
+    )
+    prefunc += r"""
+  }
+  if (y[TOVOLA_R_ISO] > 0 && fabs(dydr_Schw[TOVOLA_R_ISO]) > 0) {
+    TOVdata->r_lengthscale = fabs(y[TOVOLA_R_ISO] / dydr_Schw[TOVOLA_R_ISO]);
   }
 
   return GSL_SUCCESS;
@@ -171,7 +184,7 @@ void TOVola_get_initial_condition(REAL y[], TOVola_data_struct *TOVdata) {
   y[TOVOLA_PRESSURE] = aK * pow(rhoC_baryon, aGamma); // Pressure
   y[TOVOLA_NU] = 0.0;                                 // nu
   y[TOVOLA_MASS] = 0.0;                               // Mass
-  y[TOVOLA_R_ISO] = 0.0;                               // r_iso
+  y[TOVOLA_R_ISO] = 0.0;                              // r_iso
 
   // Assign initial conditions
   TOVdata->rho_baryon = rhoC_baryon;
@@ -319,7 +332,7 @@ void TOVola_Normalize_and_set_data_integrated(TOVola_data_struct *TOVdata, REAL 
     body = r"""
   printf("Starting TOV Integration using GSL for TOVola...\n");
 
-  REAL current_position = 0.0;
+  REAL current_position = 0;
   const char *ode_method = "ADP8"; // Choose between "ARKF" and "ADP8"
 
   /* Set up ODE system and driver */
@@ -335,7 +348,7 @@ void TOVola_Normalize_and_set_data_integrated(TOVola_data_struct *TOVdata, REAL 
   }
 
   /* Initialize ODE variables */
-  REAL y[4];
+  REAL y[ODE_SOLVER_DIM];
   REAL c[2];
   TOVola_get_initial_condition(y, TOVdata);
   TOVola_assign_constants(c, TOVdata);
@@ -349,11 +362,12 @@ void TOVola_Normalize_and_set_data_integrated(TOVola_data_struct *TOVdata, REAL 
   }
 
   /* Integration loop */
+  TOVdata->r_lengthscale = TOVdata->commondata->initial_ode_step_size; // initialize dr to a crazy small value in double precision.
   for (int i = 0; i < TOVdata->commondata->ode_max_steps; i++) {
-    REAL dr = commondata->uniform_sampling_dr;
-    if (TOVdata->rho_baryon < 0.00001 * TOVdata->commondata->initial_central_density) {
+    REAL dr = 0.01 * TOVdata->r_lengthscale;
+    if (TOVdata->rho_baryon < 0.05 * TOVdata->commondata->initial_central_density) {
       // To get a super-accurate mass, reduce the dr sampling near the surface of the star.
-      dr = commondata->uniform_sampling_dr * 0.001;
+      dr = 1e-6 * TOVdata->r_lengthscale;
     }
     /* Exception handling */
     TOVola_exception_handler(current_position, y);
@@ -405,7 +419,7 @@ void TOVola_Normalize_and_set_data_integrated(TOVola_data_struct *TOVdata, REAL 
     TOVdata->numpoints_actually_saved++;
 
     // r_SchwArr_np,rhoArr_np,rho_baryonArr_np,PArr_np,mArr_np,exp2phiArr_np,confFactor_exp4phi_np,r_isoArr_np),
-    //printf("%.15e %.15e %.15e %.15e %.15e %.15e soln\n", current_position, c[0], c[1], y[TOVOLA_PRESSURE], y[TOVOLA_MASS], y[TOVOLA_NU]);
+    // printf("%.15e %.15e %.15e %.15e %.15e %.15e %.15e soln\n", current_position, dr, c[0], c[1], y[TOVOLA_PRESSURE], y[TOVOLA_MASS], y[TOVOLA_NU]);
 
     /* Termination condition */
     if (TOVola_do_we_terminate(current_position, y, TOVdata)) {
