@@ -132,9 +132,11 @@ int TOVola_ODE(REAL r_Schw, const REAL y[], REAL dydr_Schw[], void *params) {
 
   {
     // TOV Equations
-    dydr_Schw[TOVOLA_PRESSURE] = -((rho_energy + y[TOVOLA_PRESSURE]) * ((2.0 * y[2]) / (r_Schw) + 8.0 * M_PI * r_Schw * r_Schw * y[TOVOLA_PRESSURE])) /
-                            (r_Schw * 2.0 * (1.0 - (2.0 * y[2]) / (r_Schw)));
-    dydr_Schw[TOVOLA_NU] = ((2.0 * y[TOVOLA_MASS]) / (r_Schw) + 8.0 * M_PI * r_Schw * r_Schw * y[TOVOLA_PRESSURE]) / (r_Schw * (1.0 - (2.0 * y[TOVOLA_MASS]) / (r_Schw)));
+    dydr_Schw[TOVOLA_PRESSURE] =
+        -((rho_energy + y[TOVOLA_PRESSURE]) * ((2.0 * y[2]) / (r_Schw) + 8.0 * M_PI * r_Schw * r_Schw * y[TOVOLA_PRESSURE])) /
+        (r_Schw * 2.0 * (1.0 - (2.0 * y[2]) / (r_Schw)));
+    dydr_Schw[TOVOLA_NU] = ((2.0 * y[TOVOLA_MASS]) / (r_Schw) + 8.0 * M_PI * r_Schw * r_Schw * y[TOVOLA_PRESSURE]) /
+                           (r_Schw * (1.0 - (2.0 * y[TOVOLA_MASS]) / (r_Schw)));
     dydr_Schw[TOVOLA_MASS] = 4.0 * M_PI * r_Schw * r_Schw * rho_energy;
     // TOVOLA_RBAR = isotropic radius:
     dydr_Schw[TOVOLA_RBAR] = (y[TOVOLA_RBAR]) / (r_Schw * sqrt(1.0 - (2.0 * y[TOVOLA_MASS]) / r_Schw));
@@ -349,7 +351,7 @@ void TOVola_Normalize_and_set_data_integrated(TOVola_data_struct *TOVdata, REAL 
   /* Integration loop */
   for (int i = 0; i < TOVdata->commondata->ode_max_steps; i++) {
     REAL dr = commondata->uniform_sampling_dr;
-    if(TOVdata->rho_baryon < 0.001 * TOVdata->commondata->initial_central_density) {
+    if (TOVdata->rho_baryon < 0.00001 * TOVdata->commondata->initial_central_density) {
       // To get a super-accurate mass, reduce the dr sampling near the surface of the star.
       dr = commondata->uniform_sampling_dr * 0.001;
     }
@@ -403,7 +405,7 @@ void TOVola_Normalize_and_set_data_integrated(TOVola_data_struct *TOVdata, REAL 
     TOVdata->numpoints_actually_saved++;
 
     // r_SchwArr_np,rhoArr_np,rho_baryonArr_np,PArr_np,mArr_np,exp2phiArr_np,confFactor_exp4phi_np,rbarArr_np),
-    // printf("%.15e %.15e %.15e %.15e %.15e %.15e soln\n", current_position, c[0], c[1], y[TOVOLA_PRESSURE], y[TOVOLA_MASS], y[TOVOLA_NU]);
+    //printf("%.15e %.15e %.15e %.15e %.15e %.15e soln\n", current_position, c[0], c[1], y[TOVOLA_PRESSURE], y[TOVOLA_MASS], y[TOVOLA_NU]);
 
     /* Termination condition */
     if (TOVola_do_we_terminate(current_position, y, TOVdata)) {
