@@ -9,8 +9,8 @@ Authors: David Boyer
          zachetie **at** gmail **dot* com
 """
 
-import nrpy.c_function as cfc
 import nrpy.c_codegen as ccg
+import nrpy.c_function as cfc
 import nrpy.equations.tov.TOV_equations as tov_eqs
 
 
