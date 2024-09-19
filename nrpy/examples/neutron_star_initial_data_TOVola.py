@@ -51,6 +51,7 @@ IDCoordSystem = "Spherical"
 
 grid_physical_size = 300.0
 sinh_width = 0.0785
+t_final = 0.0
 diagnostics_output_every = 0.5
 default_checkpoint_every = 2.0
 Nxx_dict = {
@@ -180,6 +181,8 @@ rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 # Coord system parameters
 if CoordSystem == "SinhSpherical":
     par.adjust_CodeParam_default("SINHW", sinh_width)
+par.adjust_CodeParam_default("t_final", t_final)
+
 
 #########################################################
 # STEP 3: Generate header files, register C functions and

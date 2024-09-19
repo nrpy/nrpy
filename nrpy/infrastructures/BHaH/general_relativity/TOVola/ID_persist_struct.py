@@ -11,17 +11,16 @@ par.register_CodeParameters(
     "REAL",
     "TOVola",
     [
+        "initial_central_density",
         "poly_eos_K",
         "poly_eos_Gamma",
-        "central_density",
         "initial_ode_step_size",
         "min_step_size",
         "max_step_size",
         "ode_error_limit",
-        "initial_central_density",
         "uniform_sampling_dr",
     ],
-    [100.0, 2.0, 0.125, 1e-5, 1e-10, 1.0, 1e-6, 0.125, 1e-4],
+    [0.125, 100.0, 2.0, 1e-7, 1e-10, 1.0, 1e-6, 0.001],
     commondata=True,
 )
 par.register_CodeParameters(

@@ -114,12 +114,12 @@ void TOVola_evaluate_rho_and_eps(REAL r, const REAL y[], TOVola_data_struct *TOV
 }
 
 /* The main ODE function for GSL */
-int TOVola_ODE(REAL r, const REAL y[], REAL dydr[], void *params) {
+int TOVola_ODE(REAL r_Schw, const REAL y[], REAL dydr_Schw[], void *params) {
   // Cast params to TOVdata_struct
   TOVola_data_struct *TOVdata = (TOVola_data_struct *)params;
 
   // Evaluate rho_baryon and rho_energy based on current state
-  TOVola_evaluate_rho_and_eps(r, y, TOVdata);
+  TOVola_evaluate_rho_and_eps(r_Schw, y, TOVdata);
 
   // Dereference the struct to use rho_energy
   REAL rho_energy = TOVdata->rho_energy;
@@ -132,18 +132,19 @@ int TOVola_ODE(REAL r, const REAL y[], REAL dydr[], void *params) {
 
   {
     // TOV Equations
-    dydr[TOVOLA_PRESSURE] = -((rho_energy+y[TOVOLA_PRESSURE])*( (2.0*y[2])/(r) + 8.0*M_PI*r*r*y[TOVOLA_PRESSURE] ))/(r*2.0*(1.0 - (2.0*y[2])/(r)));
-    dydr[TOVOLA_NU] =  ((2.0*y[TOVOLA_MASS])/(r) + 8.0*M_PI*r*r*y[TOVOLA_PRESSURE])/(r*(1.0 - (2.0*y[TOVOLA_MASS])/(r)));
-    dydr[TOVOLA_MASS] = 4.0*M_PI*r*r*rho_energy;
-    // isotropic radius:
-    dydr[TOVOLA_RBAR] = (y[TOVOLA_RBAR])/(r*sqrt(1.0-(2.0*y[TOVOLA_MASS])/r));
+    dydr_Schw[TOVOLA_PRESSURE] = -((rho_energy + y[TOVOLA_PRESSURE]) * ((2.0 * y[2]) / (r_Schw) + 8.0 * M_PI * r_Schw * r_Schw * y[TOVOLA_PRESSURE])) /
+                            (r_Schw * 2.0 * (1.0 - (2.0 * y[2]) / (r_Schw)));
+    dydr_Schw[TOVOLA_NU] = ((2.0 * y[TOVOLA_MASS]) / (r_Schw) + 8.0 * M_PI * r_Schw * r_Schw * y[TOVOLA_PRESSURE]) / (r_Schw * (1.0 - (2.0 * y[TOVOLA_MASS]) / (r_Schw)));
+    dydr_Schw[TOVOLA_MASS] = 4.0 * M_PI * r_Schw * r_Schw * rho_energy;
+    // TOVOLA_RBAR = isotropic radius:
+    dydr_Schw[TOVOLA_RBAR] = (y[TOVOLA_RBAR]) / (r_Schw * sqrt(1.0 - (2.0 * y[TOVOLA_MASS]) / r_Schw));
   }
-  if (r == 0.0) {
+  if (r_Schw == 0.0) {
     // At the center (r == 0)
-    dydr[TOVOLA_PRESSURE] = 0.0; // dP/dr
-    dydr[TOVOLA_NU] = 0.0;       // dnu/dr
-    dydr[TOVOLA_MASS] = 0.0;     // dM/dr
-    dydr[TOVOLA_RBAR] = 1.0;     // drbar/dr
+    dydr_Schw[TOVOLA_PRESSURE] = 0.0; // dP/dr
+    dydr_Schw[TOVOLA_NU] = 0.0;       // dnu/dr
+    dydr_Schw[TOVOLA_MASS] = 0.0;     // dM/dr
+    dydr_Schw[TOVOLA_RBAR] = 1.0;     // drbar/dr
   }
 
   return GSL_SUCCESS;
@@ -305,11 +306,6 @@ void TOVola_Normalize_and_set_data_integrated(TOVola_data_struct *TOVdata, REAL 
     expnu[i] = exp(expnu[i] - nu_surface + log(1.0 - 2.0 * M_surface / R_Schw_surface));
     exp4phi[i] = (r_Schw[i] / rbar[i]) * (r_Schw[i] / rbar[i]);
   }
-  // Prevent
-  printf("exp4phi[0] = %.15e\n", exp4phi[0]);
-  printf("exp4phi[1] = %.15e\n", exp4phi[1]);
-  exp4phi[0] = exp4phi[1];
-
   printf("Normalization of raw data complete!\n");
 }
 """
@@ -322,7 +318,7 @@ void TOVola_Normalize_and_set_data_integrated(TOVola_data_struct *TOVdata, REAL 
   printf("Starting TOV Integration using GSL for TOVola...\n");
 
   REAL current_position = 0.0;
-  const char *ode_method = "ARKF"; // Choose between "ARKF" and "ADP8"
+  const char *ode_method = "ADP8"; // Choose between "ARKF" and "ADP8"
 
   /* Set up ODE system and driver */
   TOVola_data_struct TOVdata_tmp; // allocates memory for the pointer below.
@@ -352,11 +348,16 @@ void TOVola_Normalize_and_set_data_integrated(TOVola_data_struct *TOVdata, REAL 
 
   /* Integration loop */
   for (int i = 0; i < TOVdata->commondata->ode_max_steps; i++) {
+    REAL dr = commondata->uniform_sampling_dr;
+    if(TOVdata->rho_baryon < 0.001 * TOVdata->commondata->initial_central_density) {
+      // To get a super-accurate mass, reduce the dr sampling near the surface of the star.
+      dr = commondata->uniform_sampling_dr * 0.001;
+    }
     /* Exception handling */
     TOVola_exception_handler(current_position, y);
 
     /* Apply ODE step */
-    int status = gsl_odeiv2_driver_apply(driver, &current_position, current_position + commondata->uniform_sampling_dr, y);
+    int status = gsl_odeiv2_driver_apply(driver, &current_position, current_position + dr, y);
     if (status != GSL_SUCCESS) {
       fprintf(stderr, "GSL ODE solver failed with status %d.\n", status);
       gsl_odeiv2_driver_free(driver);
