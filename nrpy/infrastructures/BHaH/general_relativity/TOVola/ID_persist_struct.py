@@ -51,6 +51,6 @@ def ID_persist_str() -> str:
   REAL *restrict M_arr;  // Integrated rest mass
   REAL *restrict expnu_arr;    // Metric quantity
   REAL *restrict exp4phi_arr;  // Metric quantity
-  REAL *restrict rbar_arr;  // Rbar coordinate
+  REAL *restrict r_iso_arr;  // Isotropic radial coordinate, in literature, sometimes called rbar
   int numpoints_arr; // Number of radii stored in the arrays
 """

@@ -22,19 +22,19 @@ def register_CFunction_TOVola_interp() -> None:
     desc = "Provide high-order interpolation from TOVola grids onto an arbitrary point xCart[3] = {x,y,z} in the Spherical basis."
     prefunc = r"""
 /* Bisection index finder using binary search */
-static int TOVola_bisection_idx_finder(const REAL rrbar, const int numpoints_arr, const REAL *restrict rbar_arr) {
+static int TOVola_bisection_idx_finder(const REAL rr_iso, const int numpoints_arr, const REAL *restrict r_iso_arr) {
   int x1 = 0;
   int x2 = numpoints_arr - 1;
-  REAL y1 = rrbar - rbar_arr[x1];
-  REAL y2 = rrbar - rbar_arr[x2];
+  REAL y1 = rr_iso - r_iso_arr[x1];
+  REAL y2 = rr_iso - r_iso_arr[x2];
   if (y1 * y2 > 0) {
-    fprintf(stderr, "INTERPOLATION BRACKETING ERROR: rbar_min = %e ?<= rbar = %.15e ?<= %e = rbar_max\n", rbar_arr[0], rrbar,
-            rbar_arr[numpoints_arr - 1]);
+    fprintf(stderr, "INTERPOLATION BRACKETING ERROR: r_iso_min = %e ?<= r_iso = %.15e ?<= %e = r_iso_max\n", r_iso_arr[0], rr_iso,
+            r_iso_arr[numpoints_arr - 1]);
     exit(EXIT_FAILURE);
   }
   for (int i = 0; i < numpoints_arr; i++) {
     int x_midpoint = (x1 + x2) / 2;
-    REAL y_midpoint = rrbar - rbar_arr[x_midpoint];
+    REAL y_midpoint = rr_iso - r_iso_arr[x_midpoint];
     if (y_midpoint * y1 <= 0) {
       x2 = x_midpoint;
       y2 = y_midpoint;
@@ -43,37 +43,37 @@ static int TOVola_bisection_idx_finder(const REAL rrbar, const int numpoints_arr
       y1 = y_midpoint;
     }
     if (abs(x2 - x1) == 1) {
-      // If rbar_arr[x1] is closer to rrbar than rbar_arr[x2] then return x1:
-      if (fabs(rrbar - rbar_arr[x1]) < fabs(rrbar - rbar_arr[x2])) {
+      // If r_iso_arr[x1] is closer to rr_iso than r_iso_arr[x2] then return x1:
+      if (fabs(rr_iso - r_iso_arr[x1]) < fabs(rr_iso - r_iso_arr[x2])) {
         return x1;
       }
       // Otherwise return x2:
       return x2;
     }
   }
-  fprintf(stderr, "INTERPOLATION BRACKETING ERROR: rbar_min = %e ?<= rbar = %.15e ?<= %e = rbar_max\n", rbar_arr[0], rrbar,
-          rbar_arr[numpoints_arr - 1]);
+  fprintf(stderr, "INTERPOLATION BRACKETING ERROR: r_iso_min = %e ?<= r_iso = %.15e ?<= %e = r_iso_max\n", r_iso_arr[0], rr_iso,
+          r_iso_arr[numpoints_arr - 1]);
   exit(EXIT_FAILURE);
 }
 
 /* Interpolation Function using Lagrange Polynomial */
-static void TOVola_TOV_interpolate_1D(REAL rrbar, const commondata_struct *restrict commondata,
+static void TOVola_TOV_interpolate_1D(REAL rr_iso, const commondata_struct *restrict commondata,
                                       const int interpolation_stencil_size, const int numpoints_arr, const REAL *restrict r_Schw_arr,
                                       const REAL *restrict rho_energy_arr, const REAL *restrict rho_baryon_arr, const REAL *restrict P_arr,
                                       const REAL *restrict M_arr, const REAL *restrict expnu_arr, const REAL *restrict exp4phi_arr,
-                                      const REAL *restrict rbar_arr, REAL *restrict rho_energy, REAL *restrict rho_baryon, REAL *restrict P,
+                                      const REAL *restrict r_iso_arr, REAL *restrict rho_energy, REAL *restrict rho_baryon, REAL *restrict P,
                                       REAL *restrict M, REAL *restrict expnu, REAL *restrict exp4phi) {
   const int R_idx = numpoints_arr - 1;
   const REAL M_star = M_arr[R_idx];
-  const REAL rbar_max_inside_star = rbar_arr[R_idx];
+  const REAL r_iso_max_inside_star = r_iso_arr[R_idx];
   REAL r_Schw = 0.0;
-  if (rrbar < rbar_max_inside_star) { // If we are INSIDE the star, we need to interpollate the data to the grid.
+  if (rr_iso < r_iso_max_inside_star) { // If we are INSIDE the star, we need to interpollate the data to the grid.
     // For this case, we know that for all functions, f(r) = f(-r)
-    if (rrbar < 0)
-      rrbar = -rrbar;
+    if (rr_iso < 0)
+      rr_iso = -rr_iso;
 
     // First find the central interpolation stencil index:
-    int idx_mid = TOVola_bisection_idx_finder(rrbar, numpoints_arr, rbar_arr);
+    int idx_mid = TOVola_bisection_idx_finder(rr_iso, numpoints_arr, r_iso_arr);
 
     /* Use standard library functions instead of redefining macros */
     int idxmin = MAX(0, idx_mid - commondata->interpolation_stencil_size / 2 - 1);
@@ -92,10 +92,10 @@ static void TOVola_TOV_interpolate_1D(REAL rrbar, const commondata_struct *restr
     // Now perform the Lagrange polynomial interpolation:
 
     // First compute the interpolation coefficients:
-    REAL rbar_sample[commondata->max_interpolation_stencil_size];
+    REAL r_iso_sample[commondata->max_interpolation_stencil_size];
     for (int i = idxmin; i < idxmin + commondata->interpolation_stencil_size; i++) {
       //if(i < 0 || i >= R_idx-1) { fprintf(stderr, "ERROR!\n"); exit(1); }
-      rbar_sample[i - idxmin] = rbar_arr[i];
+      r_iso_sample[i - idxmin] = r_iso_arr[i];
     }
     REAL l_i_of_r[commondata->max_interpolation_stencil_size];
     for (int i = 0; i < commondata->interpolation_stencil_size; i++) {
@@ -103,8 +103,8 @@ static void TOVola_TOV_interpolate_1D(REAL rrbar, const commondata_struct *restr
       REAL denom = 1.0;
       for (int j = 0; j < commondata->interpolation_stencil_size; j++) {
         if (j != i) {
-          numer *= (rrbar - rbar_sample[j]);
-          denom *= (rbar_sample[i] - rbar_sample[j]);
+          numer *= (rr_iso - r_iso_sample[j]);
+          denom *= (r_iso_sample[i] - r_iso_sample[j]);
         }
       }
       l_i_of_r[i] = numer / denom;
@@ -130,15 +130,15 @@ static void TOVola_TOV_interpolate_1D(REAL rrbar, const commondata_struct *restr
 
   } else {
     // If we are OUTSIDE the star, the solution is just Schwarzschild.
-    r_Schw = (rrbar + M_star) + M_star * M_star / (4.0 * rrbar); // Need to know what r_Schw is at our current grid location.
+    r_Schw = (rr_iso + M_star) + M_star * M_star / (4.0 * rr_iso); // Need to know what r_Schw is at our current grid location.
     *rho_energy = 0;
     *rho_baryon = 0;
     *P = 0;
     *M = M_star;
     *expnu = 1. - 2.0 * (M_star) / r_Schw;
-    *exp4phi = (r_Schw * r_Schw) / (rrbar * rrbar);
+    *exp4phi = (r_Schw * r_Schw) / (rr_iso * rr_iso);
   }
-  //printf("%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e hhhh\n", rrbar, r_Schw, *rho_energy, *rho_baryon, *P, *M, *expnu, *exp4phi);
+  //printf("%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e hhhh\n", rr_iso, r_Schw, *rho_energy, *rho_baryon, *P, *M, *expnu, *exp4phi);
 }
 """
     name = "TOVola_interp"
@@ -148,15 +148,15 @@ static void TOVola_TOV_interpolate_1D(REAL rrbar, const commondata_struct *restr
   const REAL x = xCart[0];
   const REAL y = xCart[1];
   const REAL z = xCart[2];
-  const REAL rbar = sqrt(x * x + y * y + z * z);
+  const REAL r_iso = sqrt(x * x + y * y + z * z);
   // self.xxSph[1] = sp.acos(self.xx[2] / self.xxSph[0])
-  const REAL theta = acos(z / rbar);
+  const REAL theta = acos(z / r_iso);
 
   // Perform pointwise interpolation to radius r using ID_persist data
   REAL rho_energy_val, rho_baryon_val, P_val, M_val, expnu_val, exp4phi_val;
-  TOVola_TOV_interpolate_1D(rbar, commondata, commondata->max_interpolation_stencil_size, ID_persist->numpoints_arr,
+  TOVola_TOV_interpolate_1D(r_iso, commondata, commondata->max_interpolation_stencil_size, ID_persist->numpoints_arr,
                             ID_persist->r_Schw_arr, ID_persist->rho_energy_arr, ID_persist->rho_baryon_arr, ID_persist->P_arr, ID_persist->M_arr,
-                            ID_persist->expnu_arr, ID_persist->exp4phi_arr, ID_persist->rbar_arr, &rho_energy_val, &rho_baryon_val, &P_val, &M_val,
+                            ID_persist->expnu_arr, ID_persist->exp4phi_arr, ID_persist->r_iso_arr, &rho_energy_val, &rho_baryon_val, &P_val, &M_val,
                             &expnu_val, &exp4phi_val);
 
   // Assign interpolated values to initial_data_struct
@@ -174,9 +174,9 @@ static void TOVola_TOV_interpolate_1D(REAL rrbar, const commondata_struct *restr
   initial_data->gammaSphorCartDD00 = exp4phi_val;
   initial_data->gammaSphorCartDD01 = 0.0;
   initial_data->gammaSphorCartDD02 = 0.0;
-  initial_data->gammaSphorCartDD11 = exp4phi_val * rbar * rbar;
+  initial_data->gammaSphorCartDD11 = exp4phi_val * r_iso * r_iso;
   initial_data->gammaSphorCartDD12 = 0.0;
-  initial_data->gammaSphorCartDD22 = exp4phi_val * rbar * rbar * sin(theta) * sin(theta);
+  initial_data->gammaSphorCartDD22 = exp4phi_val * r_iso * r_iso * sin(theta) * sin(theta);
 
   // Extrinsic curvature components set to zero
   initial_data->KSphorCartDD00 = 0.0;
@@ -193,9 +193,9 @@ static void TOVola_TOV_interpolate_1D(REAL rrbar, const commondata_struct *restr
   initial_data->T4SphorCartUU11 = P_val / exp4phi_val;
   initial_data->T4SphorCartUU12 = 0.0;
   initial_data->T4SphorCartUU13 = 0.0;
-  initial_data->T4SphorCartUU22 = P_val / (exp4phi_val * rbar * rbar);
+  initial_data->T4SphorCartUU22 = P_val / (exp4phi_val * r_iso * r_iso);
   initial_data->T4SphorCartUU23 = 0.0;
-  initial_data->T4SphorCartUU33 = P_val / (exp4phi_val * rbar * rbar * sin(theta) * sin(theta));
+  initial_data->T4SphorCartUU33 = P_val / (exp4phi_val * r_iso * r_iso * sin(theta) * sin(theta));
 """
 
     cfc.register_CFunction(

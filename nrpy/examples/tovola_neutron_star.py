@@ -112,7 +112,7 @@ TOVola_solve(commondata, &ID_persist);
   free(ID_persist.M_arr);
   free(ID_persist.expnu_arr);
   free(ID_persist.exp4phi_arr);
-  free(ID_persist.rbar_arr);
+  free(ID_persist.r_iso_arr);
 }
 """,
     include_T4UU=True,

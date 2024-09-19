@@ -19,7 +19,7 @@ def register_CFunction_TOVola_solve() -> None:
 #define TOVOLA_PRESSURE 0
 #define TOVOLA_NU 1
 #define TOVOLA_MASS 2
-#define TOVOLA_RBAR 3
+#define TOVOLA_R_ISO 3
 
 /* Structure to hold raw TOV data */
 typedef struct {
@@ -133,20 +133,20 @@ int TOVola_ODE(REAL r_Schw, const REAL y[], REAL dydr_Schw[], void *params) {
   {
     // TOV Equations
     dydr_Schw[TOVOLA_PRESSURE] =
-        -((rho_energy + y[TOVOLA_PRESSURE]) * ((2.0 * y[2]) / (r_Schw) + 8.0 * M_PI * r_Schw * r_Schw * y[TOVOLA_PRESSURE])) /
-        (r_Schw * 2.0 * (1.0 - (2.0 * y[2]) / (r_Schw)));
+        -((rho_energy + y[TOVOLA_PRESSURE]) * ((2.0 * y[TOVOLA_MASS]) / (r_Schw) + 8.0 * M_PI * r_Schw * r_Schw * y[TOVOLA_PRESSURE])) /
+        (r_Schw * 2.0 * (1.0 - (2.0 * y[TOVOLA_MASS]) / (r_Schw)));
     dydr_Schw[TOVOLA_NU] = ((2.0 * y[TOVOLA_MASS]) / (r_Schw) + 8.0 * M_PI * r_Schw * r_Schw * y[TOVOLA_PRESSURE]) /
                            (r_Schw * (1.0 - (2.0 * y[TOVOLA_MASS]) / (r_Schw)));
     dydr_Schw[TOVOLA_MASS] = 4.0 * M_PI * r_Schw * r_Schw * rho_energy;
-    // TOVOLA_RBAR = isotropic radius:
-    dydr_Schw[TOVOLA_RBAR] = (y[TOVOLA_RBAR]) / (r_Schw * sqrt(1.0 - (2.0 * y[TOVOLA_MASS]) / r_Schw));
+    // TOVOLA_R_ISO = isotropic radius:
+    dydr_Schw[TOVOLA_R_ISO] = (y[TOVOLA_R_ISO]) / (r_Schw * sqrt(1.0 - (2.0 * y[TOVOLA_MASS]) / r_Schw));
   }
   if (r_Schw == 0.0) {
     // At the center (r == 0)
     dydr_Schw[TOVOLA_PRESSURE] = 0.0; // dP/dr
     dydr_Schw[TOVOLA_NU] = 0.0;       // dnu/dr
     dydr_Schw[TOVOLA_MASS] = 0.0;     // dM/dr
-    dydr_Schw[TOVOLA_RBAR] = 1.0;     // drbar/dr
+    dydr_Schw[TOVOLA_R_ISO] = 1.0;     // dr_iso/dr
   }
 
   return GSL_SUCCESS;
@@ -171,7 +171,7 @@ void TOVola_get_initial_condition(REAL y[], TOVola_data_struct *TOVdata) {
   y[TOVOLA_PRESSURE] = aK * pow(rhoC_baryon, aGamma); // Pressure
   y[TOVOLA_NU] = 0.0;                                 // nu
   y[TOVOLA_MASS] = 0.0;                               // Mass
-  y[TOVOLA_RBAR] = 0.0;                               // rbar
+  y[TOVOLA_R_ISO] = 0.0;                               // r_iso
 
   // Assign initial conditions
   TOVdata->rho_baryon = rhoC_baryon;
@@ -195,7 +195,7 @@ void TOVola_get_initial_condition(REAL y[], TOVola_data_struct *TOVdata) {
   }
   */
 
-  printf("Initial Conditions Set: P = %.6e, nu = %.6e, M = %.6e, rbar = %.6e\n", y[TOVOLA_PRESSURE], y[TOVOLA_NU], y[TOVOLA_MASS], y[TOVOLA_RBAR]);
+  printf("Initial Conditions Set: P = %.6e, nu = %.6e, M = %.6e, r_iso = %.6e\n", y[TOVOLA_PRESSURE], y[TOVOLA_NU], y[TOVOLA_MASS], y[TOVOLA_R_ISO]);
 }
 
 /* Assign constants after each integration step */
@@ -274,7 +274,7 @@ static void free_tovola_data(TOVola_data_struct *TOVdata) {
 /* Normalize and set data */
 void TOVola_Normalize_and_set_data_integrated(TOVola_data_struct *TOVdata, REAL *restrict r_Schw, REAL *restrict rho_energy,
                                               REAL *restrict rho_baryon, REAL *restrict P, REAL *restrict M, REAL *restrict expnu,
-                                              REAL *restrict exp4phi, REAL *restrict rbar) {
+                                              REAL *restrict exp4phi, REAL *restrict r_iso) {
   printf("TOVola Normalizing raw TOV data...\n");
 
   /* Check if there are enough points to normalize */
@@ -291,22 +291,22 @@ void TOVola_Normalize_and_set_data_integrated(TOVola_data_struct *TOVdata, REAL 
     P[i] = TOVdata->P_arr[i];
     M[i] = TOVdata->M_arr[i];
     expnu[i] = TOVdata->nu_arr[i];
-    rbar[i] = TOVdata->Iso_r_arr[i];
+    r_iso[i] = TOVdata->Iso_r_arr[i];
   }
 
   /* Surface values for normalization */
   const REAL R_Schw_surface = r_Schw[TOVdata->numpoints_actually_saved - 1];
   const REAL M_surface = M[TOVdata->numpoints_actually_saved - 1];
-  const REAL Rbar_surface = rbar[TOVdata->numpoints_actually_saved - 1];
+  const REAL r_iso_surface = r_iso[TOVdata->numpoints_actually_saved - 1];
   const REAL nu_surface = expnu[TOVdata->numpoints_actually_saved - 1];
 
-  const REAL normalize = 0.5 * (sqrt(R_Schw_surface * (R_Schw_surface - 2.0 * M_surface)) + R_Schw_surface - M_surface) / Rbar_surface;
+  const REAL normalize = 0.5 * (sqrt(R_Schw_surface * (R_Schw_surface - 2.0 * M_surface)) + R_Schw_surface - M_surface) / r_iso_surface;
 
-  /* Normalize rbar and calculate expnu and exp4phi */
+  /* Normalize r_iso and calculate expnu and exp4phi */
   for (int i = 0; i < TOVdata->numpoints_actually_saved; i++) {
-    rbar[i] *= normalize;
+    r_iso[i] *= normalize;
     expnu[i] = exp(expnu[i] - nu_surface + log(1.0 - 2.0 * M_surface / R_Schw_surface));
-    exp4phi[i] = (r_Schw[i] / rbar[i]) * (r_Schw[i] / rbar[i]);
+    exp4phi[i] = (r_Schw[i] / r_iso[i]) * (r_Schw[i] / r_iso[i]);
   }
   printf("Normalization of raw data complete!\n");
 }
@@ -401,10 +401,10 @@ void TOVola_Normalize_and_set_data_integrated(TOVola_data_struct *TOVdata, REAL 
     TOVdata->P_arr[TOVdata->numpoints_actually_saved] = y[TOVOLA_PRESSURE];
     TOVdata->M_arr[TOVdata->numpoints_actually_saved] = y[TOVOLA_MASS];
     TOVdata->nu_arr[TOVdata->numpoints_actually_saved] = y[TOVOLA_NU];
-    TOVdata->Iso_r_arr[TOVdata->numpoints_actually_saved] = y[TOVOLA_RBAR];
+    TOVdata->Iso_r_arr[TOVdata->numpoints_actually_saved] = y[TOVOLA_R_ISO];
     TOVdata->numpoints_actually_saved++;
 
-    // r_SchwArr_np,rhoArr_np,rho_baryonArr_np,PArr_np,mArr_np,exp2phiArr_np,confFactor_exp4phi_np,rbarArr_np),
+    // r_SchwArr_np,rhoArr_np,rho_baryonArr_np,PArr_np,mArr_np,exp2phiArr_np,confFactor_exp4phi_np,r_isoArr_np),
     //printf("%.15e %.15e %.15e %.15e %.15e %.15e soln\n", current_position, c[0], c[1], y[TOVOLA_PRESSURE], y[TOVOLA_MASS], y[TOVOLA_NU]);
 
     /* Termination condition */
@@ -426,10 +426,10 @@ void TOVola_Normalize_and_set_data_integrated(TOVola_data_struct *TOVdata, REAL 
   ID_persist->M_arr = (REAL *restrict)malloc(sizeof(REAL) * TOVdata->numpoints_actually_saved);
   ID_persist->expnu_arr = (REAL *restrict)malloc(sizeof(REAL) * TOVdata->numpoints_actually_saved);
   ID_persist->exp4phi_arr = (REAL *restrict)malloc(sizeof(REAL) * TOVdata->numpoints_actually_saved);
-  ID_persist->rbar_arr = (REAL *restrict)malloc(sizeof(REAL) * TOVdata->numpoints_actually_saved);
+  ID_persist->r_iso_arr = (REAL *restrict)malloc(sizeof(REAL) * TOVdata->numpoints_actually_saved);
 
   if (!ID_persist->r_Schw_arr || !ID_persist->rho_energy_arr || !ID_persist->rho_baryon_arr || !ID_persist->P_arr || !ID_persist->M_arr ||
-      !ID_persist->expnu_arr || !ID_persist->exp4phi_arr || !ID_persist->rbar_arr) {
+      !ID_persist->expnu_arr || !ID_persist->exp4phi_arr || !ID_persist->r_iso_arr) {
     free_tovola_data(TOVdata);
     fprintf(stderr, "Memory allocation failed for ID_persist_struct arrays.\n");
     exit(EXIT_FAILURE);
@@ -439,7 +439,7 @@ void TOVola_Normalize_and_set_data_integrated(TOVola_data_struct *TOVdata, REAL 
 
   /* Normalize and set data */
   TOVola_Normalize_and_set_data_integrated(TOVdata, ID_persist->r_Schw_arr, ID_persist->rho_energy_arr, ID_persist->rho_baryon_arr, ID_persist->P_arr,
-                                           ID_persist->M_arr, ID_persist->expnu_arr, ID_persist->exp4phi_arr, ID_persist->rbar_arr);
+                                           ID_persist->M_arr, ID_persist->expnu_arr, ID_persist->exp4phi_arr, ID_persist->r_iso_arr);
 
   /* Free raw data as it's no longer needed */
   free_tovola_data(TOVdata);
