@@ -115,6 +115,7 @@ example_scripts=(
   "nrpy/examples/seobnrv5_aligned_spin_inspiral.py project/seobnrv5_aligned_spin_inspiral"
   "nrpy/examples/superB_two_blackholes_collide.py project/superB_two_blackholes_collide"
   "nrpy/examples/superB_blackhole_spectroscopy.py project/superB_blackhole_spectroscopy"
+  "nrpy/examples/tovola_neutron_star.py project/tovola_neutron_star"
 )
 
 for script in "${example_scripts[@]}"; do

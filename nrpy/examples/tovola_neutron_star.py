@@ -44,7 +44,7 @@ from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
 par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Code-generation-time parameters:
-project_name = "neutron_star_initial_data_TOVola"
+project_name = "tovola_neutron_star"
 CoordSystem = "SinhSpherical"
 IDtype = "TOVola_interp"
 IDCoordSystem = "Spherical"
