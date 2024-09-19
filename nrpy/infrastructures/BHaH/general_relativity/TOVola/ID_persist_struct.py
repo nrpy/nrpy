@@ -20,7 +20,7 @@ par.register_CodeParameters(
         "ode_error_limit",
         "uniform_sampling_dr",
     ],
-    [0.125, 100.0, 2.0, 1e-7, 1e-10, 1.0, 1e-6, 0.001],
+    [0.125, 1.0, 2.0, 1e-7, 1e-10, 1.0, 1e-6, 0.001],
     commondata=True,
 )
 par.register_CodeParameters(

@@ -49,16 +49,16 @@ CoordSystem = "SinhSpherical"
 IDtype = "TOVola_interp"
 IDCoordSystem = "Spherical"
 
-grid_physical_size = 300.0
+grid_physical_size = 10.0
 sinh_width = 0.0785
 t_final = 0.0001
 diagnostics_output_every = 0.5
 default_checkpoint_every = 2.0
 Nxx_dict = {
-    "SinhSpherical": [800, 16, 2],
+    "SinhSpherical": [64, 16, 2],
 }
 enable_rfm_precompute = True
-fd_order = 8
+fd_order = 4
 radiation_BC_fd_order = 4
 enable_simd = True
 parallel_codegen_enable = True

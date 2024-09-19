@@ -174,9 +174,9 @@ static void TOVola_TOV_interpolate_1D(REAL rrbar, const commondata_struct *restr
   initial_data->gammaSphorCartDD00 = exp4phi_val;
   initial_data->gammaSphorCartDD01 = 0.0;
   initial_data->gammaSphorCartDD02 = 0.0;
-  initial_data->gammaSphorCartDD11 = exp4phi_val;
+  initial_data->gammaSphorCartDD11 = exp4phi_val * rbar * rbar;
   initial_data->gammaSphorCartDD12 = 0.0;
-  initial_data->gammaSphorCartDD22 = exp4phi_val;
+  initial_data->gammaSphorCartDD22 = exp4phi_val * rbar * rbar * sin(theta) * sin(theta);
 
   // Extrinsic curvature components set to zero
   initial_data->KSphorCartDD00 = 0.0;
