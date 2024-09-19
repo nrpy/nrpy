@@ -17,9 +17,7 @@ class TOV_Equations:
     def __init__(
         self,
     ) -> None:
-        """
-        Set up the right-hand-sides for all four TOV ordinary differential equations, storing them within the class object.
-        """
+        """Set up the right-hand-sides for all four TOV ordinary differential equations, storing them within the class object."""
         r_Schw, r_iso, rho_energy, P, M, M_PI = sp.symbols(
             "r_Schw r_iso rho_energy y[TOVOLA_PRESSURE] y[TOVOLA_MASS] M_PI", real=True
         )
