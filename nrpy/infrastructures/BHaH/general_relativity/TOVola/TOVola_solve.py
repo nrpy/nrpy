@@ -24,6 +24,8 @@ def register_CFunction_TOVola_solve() -> None:
 #define TOVOLA_MASS 2
 #define TOVOLA_R_ISO 3
 
+#define NEGATIVE_R_INTERP_BUFFER 11
+
 /* Structure to hold raw TOV data */
 typedef struct {
   // Current state variables
@@ -31,13 +33,13 @@ typedef struct {
   REAL rho_energy;
   REAL r_lengthscale;
 
-  REAL *restrict rSchw_arr;
+  REAL *restrict r_Schw_arr;
   REAL *restrict rho_energy_arr;
   REAL *restrict rho_baryon_arr;
   REAL *restrict P_arr;
   REAL *restrict M_arr;
   REAL *restrict nu_arr;
-  REAL *restrict Iso_r_arr;
+  REAL *restrict r_iso_arr;
   int numels_alloced_TOV_arr;
 
   int numpoints_actually_saved;
@@ -256,16 +258,16 @@ static int setup_ode_system(const char *ode_method, gsl_odeiv2_system *system, g
 
 /* Initialize TOVola_data_struct structure with initial allocation */
 static int initialize_tovola_data(TOVola_data_struct *TOVdata) {
-  TOVdata->rSchw_arr = (REAL *restrict)malloc(sizeof(REAL) * TOVdata->numels_alloced_TOV_arr);
+  TOVdata->r_Schw_arr = (REAL *restrict)malloc(sizeof(REAL) * TOVdata->numels_alloced_TOV_arr);
   TOVdata->rho_energy_arr = (REAL *restrict)malloc(sizeof(REAL) * TOVdata->numels_alloced_TOV_arr);
   TOVdata->rho_baryon_arr = (REAL *restrict)malloc(sizeof(REAL) * TOVdata->numels_alloced_TOV_arr);
   TOVdata->P_arr = (REAL *restrict)malloc(sizeof(REAL) * TOVdata->numels_alloced_TOV_arr);
   TOVdata->M_arr = (REAL *restrict)malloc(sizeof(REAL) * TOVdata->numels_alloced_TOV_arr);
   TOVdata->nu_arr = (REAL *restrict)malloc(sizeof(REAL) * TOVdata->numels_alloced_TOV_arr);
-  TOVdata->Iso_r_arr = (REAL *restrict)malloc(sizeof(REAL) * TOVdata->numels_alloced_TOV_arr);
+  TOVdata->r_iso_arr = (REAL *restrict)malloc(sizeof(REAL) * TOVdata->numels_alloced_TOV_arr);
 
-  if (!TOVdata->rSchw_arr || !TOVdata->rho_energy_arr || !TOVdata->rho_baryon_arr || !TOVdata->P_arr || !TOVdata->M_arr || !TOVdata->nu_arr ||
-      !TOVdata->Iso_r_arr) {
+  if (!TOVdata->r_Schw_arr || !TOVdata->rho_energy_arr || !TOVdata->rho_baryon_arr || !TOVdata->P_arr || !TOVdata->M_arr || !TOVdata->nu_arr ||
+      !TOVdata->r_iso_arr) {
     fprintf(stderr, "Memory allocation failed for TOVola_data_struct.\n");
     return -1;
   }
@@ -274,13 +276,13 @@ static int initialize_tovola_data(TOVola_data_struct *TOVdata) {
 
 /* Free TOVola_data_struct structure */
 static void free_tovola_data(TOVola_data_struct *TOVdata) {
-  free(TOVdata->rSchw_arr);
+  free(TOVdata->r_Schw_arr);
   free(TOVdata->rho_energy_arr);
   free(TOVdata->rho_baryon_arr);
   free(TOVdata->P_arr);
   free(TOVdata->M_arr);
   free(TOVdata->nu_arr);
-  free(TOVdata->Iso_r_arr);
+  free(TOVdata->r_iso_arr);
   TOVdata->numels_alloced_TOV_arr = 0;
 }
 
@@ -298,13 +300,13 @@ void TOVola_Normalize_and_set_data_integrated(TOVola_data_struct *TOVdata, REAL 
 
   /* Copy raw data to normalized arrays */
   for (int i = 0; i < TOVdata->numpoints_actually_saved; i++) {
-    r_Schw[i] = TOVdata->rSchw_arr[i];
+    r_Schw[i] = TOVdata->r_Schw_arr[i];
     rho_energy[i] = TOVdata->rho_energy_arr[i];
     rho_baryon[i] = TOVdata->rho_baryon_arr[i];
     P[i] = TOVdata->P_arr[i];
     M[i] = TOVdata->M_arr[i];
     expnu[i] = TOVdata->nu_arr[i];
-    r_iso[i] = TOVdata->Iso_r_arr[i];
+    r_iso[i] = TOVdata->r_iso_arr[i];
   }
 
   /* Surface values for normalization */
@@ -322,6 +324,13 @@ void TOVola_Normalize_and_set_data_integrated(TOVola_data_struct *TOVdata, REAL 
     exp4phi[i] = (r_Schw[i] / r_iso[i]) * (r_Schw[i] / r_iso[i]);
   }
   printf("Normalization of raw data complete!\n");
+}
+
+/* Extend data to r<0, to ensure we can interpolate to r=0 */
+void extend_to_negative_r(REAL *restrict arr, const REAL parity, REAL *restrict tmp, const TOVola_data_struct *restrict TOVdata) {
+  for(int i=0;i<NEGATIVE_R_INTERP_BUFFER; i++) tmp[i] = parity * arr[NEGATIVE_R_INTERP_BUFFER - i - 1];
+  for(int i=0;i<TOVdata->numpoints_actually_saved; i++) tmp[i+NEGATIVE_R_INTERP_BUFFER] = arr[i];
+  memcpy(arr, tmp, sizeof(REAL) * (TOVdata->numpoints_actually_saved+NEGATIVE_R_INTERP_BUFFER));
 }
 """
     desc = "Driver routine for TOV solve."
@@ -386,22 +395,21 @@ void TOVola_Normalize_and_set_data_integrated(TOVola_data_struct *TOVdata, REAL 
     /* Evaluate densities */
     TOVola_evaluate_rho_and_eps(current_position, y, TOVdata);
     TOVola_assign_constants(c, TOVdata);
-
     /* Check if reallocation is needed */
-    if (TOVdata->numpoints_actually_saved >= TOVdata->numels_alloced_TOV_arr) {
+    if (TOVdata->numpoints_actually_saved + NEGATIVE_R_INTERP_BUFFER + 1 >= TOVdata->numels_alloced_TOV_arr) {
       // Update arr_size instead of modifying the macro
       const int new_arr_size = 1.5 * TOVdata->numels_alloced_TOV_arr;
       TOVdata->numels_alloced_TOV_arr = new_arr_size;
-      TOVdata->rSchw_arr = realloc(TOVdata->rSchw_arr, sizeof(REAL) * new_arr_size);
+      TOVdata->r_Schw_arr = realloc(TOVdata->r_Schw_arr, sizeof(REAL) * new_arr_size);
       TOVdata->rho_energy_arr = realloc(TOVdata->rho_energy_arr, sizeof(REAL) * new_arr_size);
       TOVdata->rho_baryon_arr = realloc(TOVdata->rho_baryon_arr, sizeof(REAL) * new_arr_size);
       TOVdata->P_arr = realloc(TOVdata->P_arr, sizeof(REAL) * new_arr_size);
       TOVdata->M_arr = realloc(TOVdata->M_arr, sizeof(REAL) * new_arr_size);
       TOVdata->nu_arr = realloc(TOVdata->nu_arr, sizeof(REAL) * new_arr_size);
-      TOVdata->Iso_r_arr = realloc(TOVdata->Iso_r_arr, sizeof(REAL) * new_arr_size);
+      TOVdata->r_iso_arr = realloc(TOVdata->r_iso_arr, sizeof(REAL) * new_arr_size);
 
-      if (!TOVdata->rSchw_arr || !TOVdata->rho_energy_arr || !TOVdata->rho_baryon_arr || !TOVdata->P_arr || !TOVdata->M_arr || !TOVdata->nu_arr ||
-          !TOVdata->Iso_r_arr) {
+      if (!TOVdata->r_Schw_arr || !TOVdata->rho_energy_arr || !TOVdata->rho_baryon_arr || !TOVdata->P_arr || !TOVdata->M_arr || !TOVdata->nu_arr ||
+          !TOVdata->r_iso_arr) {
         fprintf(stderr, "Memory reallocation failed during integration.\n");
         gsl_odeiv2_driver_free(driver);
         exit(EXIT_FAILURE);
@@ -409,13 +417,13 @@ void TOVola_Normalize_and_set_data_integrated(TOVola_data_struct *TOVdata, REAL 
     }
 
     /* Store data */
-    TOVdata->rSchw_arr[TOVdata->numpoints_actually_saved] = current_position;
+    TOVdata->r_Schw_arr[TOVdata->numpoints_actually_saved] = current_position;
     TOVdata->rho_energy_arr[TOVdata->numpoints_actually_saved] = c[0];
     TOVdata->rho_baryon_arr[TOVdata->numpoints_actually_saved] = c[1];
     TOVdata->P_arr[TOVdata->numpoints_actually_saved] = y[TOVOLA_PRESSURE];
     TOVdata->M_arr[TOVdata->numpoints_actually_saved] = y[TOVOLA_MASS];
     TOVdata->nu_arr[TOVdata->numpoints_actually_saved] = y[TOVOLA_NU];
-    TOVdata->Iso_r_arr[TOVdata->numpoints_actually_saved] = y[TOVOLA_R_ISO];
+    TOVdata->r_iso_arr[TOVdata->numpoints_actually_saved] = y[TOVOLA_R_ISO];
     TOVdata->numpoints_actually_saved++;
 
     // r_SchwArr_np,rhoArr_np,rho_baryonArr_np,PArr_np,mArr_np,exp2phiArr_np,confFactor_exp4phi_np,r_isoArr_np),
@@ -431,6 +439,29 @@ void TOVola_Normalize_and_set_data_integrated(TOVola_data_struct *TOVdata, REAL 
   /* Cleanup */
   gsl_odeiv2_driver_free(driver);
   printf("ODE Solver using GSL for TOVola Shutting Down...\n");
+
+  {
+    // Data in TOVdata->*_arr are stored at r=TOVdata->commondata->initial_ode_step_size > 0 up to the stellar surface.
+    // However, we may need data at r=0, which would require extrapolation.
+    // To prevent that, we copy INTERP_BUFFER data points from r>0 to r<0 so that we can always interpolate.
+    REAL *restrict tmp = malloc(sizeof(REAL) * (TOVdata->numpoints_actually_saved + NEGATIVE_R_INTERP_BUFFER));
+
+    //printf("Rbefor = %.15e\n", TOVdata->r_Schw_arr[TOVdata->numpoints_actually_saved-1]);
+
+    extend_to_negative_r(TOVdata->r_Schw_arr, -1.0, tmp, TOVdata);
+    extend_to_negative_r(TOVdata->rho_energy_arr, +1.0, tmp, TOVdata);
+    extend_to_negative_r(TOVdata->rho_baryon_arr, +1.0, tmp, TOVdata);
+    extend_to_negative_r(TOVdata->P_arr, +1.0, tmp, TOVdata);
+    extend_to_negative_r(TOVdata->M_arr, +1.0, tmp, TOVdata);
+    extend_to_negative_r(TOVdata->nu_arr, +1.0, tmp, TOVdata);
+    extend_to_negative_r(TOVdata->r_iso_arr, -1.0, tmp, TOVdata);
+
+    free(tmp);
+    TOVdata->numpoints_actually_saved += NEGATIVE_R_INTERP_BUFFER;
+
+    //printf("Rafter = %.15e\n", TOVdata->r_Schw_arr[TOVdata->numpoints_actually_saved-1]);
+    //for(int i=0;i<TOVdata->numpoints_actually_saved; i++) printf("%e %e %e iiii\n", TOVdata->r_Schw_arr[i], TOVdata->r_iso_arr[i], TOVdata->rho_energy_arr[i]);;
+  }
 
   /* Allocate and populate ID_persist_struct arrays */
   ID_persist->r_Schw_arr = (REAL *restrict)malloc(sizeof(REAL) * TOVdata->numpoints_actually_saved);

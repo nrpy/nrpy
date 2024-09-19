@@ -68,10 +68,6 @@ static void TOVola_TOV_interpolate_1D(REAL rr_iso, const commondata_struct *rest
   const REAL r_iso_max_inside_star = r_iso_arr[R_idx];
   REAL r_Schw = 0.0;
   if (rr_iso < r_iso_max_inside_star) { // If we are INSIDE the star, we need to interpollate the data to the grid.
-    // For this case, we know that for all functions, f(r) = f(-r)
-    if (rr_iso < 0)
-      rr_iso = -rr_iso;
-
     // First find the central interpolation stencil index:
     int idx_mid = TOVola_bisection_idx_finder(rr_iso, numpoints_arr, r_iso_arr);
 
@@ -154,10 +150,10 @@ static void TOVola_TOV_interpolate_1D(REAL rr_iso, const commondata_struct *rest
 
   // Perform pointwise interpolation to radius r using ID_persist data
   REAL rho_energy_val, rho_baryon_val, P_val, M_val, expnu_val, exp4phi_val;
-  TOVola_TOV_interpolate_1D(r_iso, commondata, commondata->max_interpolation_stencil_size, ID_persist->numpoints_arr,
-                            ID_persist->r_Schw_arr, ID_persist->rho_energy_arr, ID_persist->rho_baryon_arr, ID_persist->P_arr, ID_persist->M_arr,
-                            ID_persist->expnu_arr, ID_persist->exp4phi_arr, ID_persist->r_iso_arr, &rho_energy_val, &rho_baryon_val, &P_val, &M_val,
-                            &expnu_val, &exp4phi_val);
+  TOVola_TOV_interpolate_1D(r_iso, commondata, commondata->max_interpolation_stencil_size, ID_persist->numpoints_arr, ID_persist->r_Schw_arr,
+                            ID_persist->rho_energy_arr, ID_persist->rho_baryon_arr, ID_persist->P_arr, ID_persist->M_arr, ID_persist->expnu_arr,
+                            ID_persist->exp4phi_arr, ID_persist->r_iso_arr, &rho_energy_val, &rho_baryon_val, &P_val, &M_val, &expnu_val,
+                            &exp4phi_val);
 
   // Assign interpolated values to initial_data_struct
   initial_data->alpha = sqrt(expnu_val);
