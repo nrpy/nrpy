@@ -141,4 +141,12 @@ if __name__ == "__main__":
         url="https://github.com/nrpy/nrpy",
         author="Zachariah Etienne",
         install_requires=requirements,
+        entry_points={
+            "console_scripts": [
+                "nrpyinline=bin.nrpyinline:main",
+            ],
+        },
+        # Ensure your scripts are included in packages
+        include_package_data=True,
+        zip_safe=False,
     )
