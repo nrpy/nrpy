@@ -10,6 +10,7 @@ Email: zachetie *at** gmail **dot * com
 import argparse
 import doctest
 import sys
+import textwrap
 from typing import Any, Dict, List
 
 
@@ -33,12 +34,12 @@ def run_script_from_file(file_path: str) -> None:
     # Example 1: File with two NRPYSTART/NRPYEND code blocks
     >>> file_content = '''Some random text...
     ...    NRPYSTART
-    ... print("Hello from script 1")
-    ... NRPYEND
+    ...     print("Hello from script 1")
+    ...    NRPYEND
     ... Some more text...
-    ... NRPYSTART
-    ... for i in range(2):
-    ...     print(f"Loop iteration {i}")
+    ...    NRPYSTART
+    ...     for i in range(2):
+    ...         print(f"Loop iteration {i}")
     ...    NRPYEND
     ... Even more text...'''
     >>> m = mock_open(read_data=file_content)
@@ -110,6 +111,7 @@ def run_script_from_file(file_path: str) -> None:
                     )
                 # Execute the captured script
                 script_code = "".join(script_lines)
+                script_code = textwrap.dedent(script_code)  # Remove common indentation
                 try:
                     # Warning: this will exec the Python script.
                     exec(script_code, namespace)  # pylint: disable=exec-used
