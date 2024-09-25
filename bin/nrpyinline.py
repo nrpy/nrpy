@@ -132,7 +132,9 @@ def run_script_from_file(file_path: str) -> None:
     """
     script_lines: List[str] = []
     capturing: bool = False
-    namespace: Dict[str, Any] = {}  # Separate namespace for executed scripts
+    namespace: Dict[str, Any] = {
+        "__builtins__": __builtins__
+    }  # Include built-ins for exec()
 
     with open(file_path, "r", encoding="utf-8") as file:
         for line_number, line in enumerate(file, 1):
