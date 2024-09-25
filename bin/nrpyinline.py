@@ -13,6 +13,7 @@ import argparse
 import doctest
 import sys
 import textwrap
+import traceback
 from typing import Any, Dict, List
 
 
@@ -173,9 +174,9 @@ def run_script_from_file(file_path: str) -> None:
                     # Warning: this will exec the Python script.
                     exec(script_code, namespace)  # pylint: disable=exec-used
                 except Exception as e:  # pylint: disable=broad-except
-                    # Catching Exception is acceptable here because we want to handle any error from exec
+                    # Print the entire traceback along with the error message
                     print(
-                        f"Error executing script ending at line {line_number}: {e}",
+                        f"Error executing script ending at line {line_number}:\n{traceback.format_exc()}",
                         file=sys.stderr,
                     )
                     raise
