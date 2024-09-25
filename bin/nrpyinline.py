@@ -4,7 +4,7 @@ Extract and execute Python code from a text file marked by 'NRPYSTART' and 'NRPY
 Example usage is provided in the `run_script_from_file` function's docstring.
 
 Author: Zachariah Etienne
-Email: zachetie@gmail.com
+Email: zachetie *at** gmail **dot * com
 """
 
 import argparse
@@ -23,6 +23,7 @@ def run_script_from_file(file_path: str) -> None:
     :param file_path: The path to the text file containing the Python scripts.
     :raises ValueError: If 'NRPYEND' is encountered without a preceding 'NRPYSTART' or
                         if 'NRPYSTART' is encountered while already capturing a script block.
+    :raises Exception: Any exception raised during the execution of the extracted script.
 
     Example usage:
     >>> from unittest.mock import mock_open, patch
