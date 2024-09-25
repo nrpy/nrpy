@@ -9,7 +9,9 @@ Email: zachetie *at** gmail **dot * com
 
 import argparse
 import doctest
+import io
 import sys
+from contextlib import redirect_stderr, redirect_stdout
 from typing import Any, Dict, List
 
 
@@ -27,6 +29,8 @@ def run_script_from_file(file_path: str) -> None:
 
     Example usage:
     >>> from unittest.mock import mock_open, patch
+    >>> import io
+    >>> from contextlib import redirect_stdout
 
     # Example 1: File with two NRPYSTART/NRPYEND code blocks
     >>> file_content = '''Some random text...
@@ -40,8 +44,10 @@ def run_script_from_file(file_path: str) -> None:
     ...    NRPYEND
     ... Even more text...'''
     >>> m = mock_open(read_data=file_content)
-    >>> with patch('builtins.open', m):
+    >>> f = io.StringIO()
+    >>> with patch('builtins.open', m), redirect_stdout(f):
     ...     run_script_from_file('dummy_path.txt')
+    >>> print(f.getvalue(), end='')
     Hello from script 1
     Loop iteration 0
     Loop iteration 1
@@ -50,30 +56,33 @@ def run_script_from_file(file_path: str) -> None:
     >>> file_content = '''Some text...
     ... NRPYEND'''
     >>> m = mock_open(read_data=file_content)
-    >>> with patch('builtins.open', m):
-    ...     run_script_from_file('dummy_path.txt')
-    Traceback (most recent call last):
-    ...
+    >>> try:
+    ...     with patch('builtins.open', m):
+    ...         run_script_from_file('dummy_path.txt')
+    ... except ValueError as e:
+    ...     print(f"ValueError: {e}")
     ValueError: Found 'NRPYEND' without encountering 'NRPYSTART'.
 
     # Example 3: 'NRPYSTART' appears twice without 'NRPYEND'
     >>> file_content = '''NRPYSTART
     ... NRPYSTART'''
     >>> m = mock_open(read_data=file_content)
-    >>> with patch('builtins.open', m):
-    ...     run_script_from_file('dummy_path.txt')
-    Traceback (most recent call last):
-    ...
+    >>> try:
+    ...     with patch('builtins.open', m):
+    ...         run_script_from_file('dummy_path.txt')
+    ... except ValueError as e:
+    ...     print(f"ValueError: {e}")
     ValueError: Found 'NRPYSTART' while already capturing a script block.
 
     # Example 4: Missing 'NRPYEND' at the end of the file
     >>> file_content = '''NRPYSTART
     ... print("This script never ends")'''
     >>> m = mock_open(read_data=file_content)
-    >>> with patch('builtins.open', m):
-    ...     run_script_from_file('dummy_path.txt')
-    Traceback (most recent call last):
-    ...
+    >>> try:
+    ...     with patch('builtins.open', m):
+    ...         run_script_from_file('dummy_path.txt')
+    ... except ValueError as e:
+    ...     print(f"ValueError: {e}")
     ValueError: File ended while still capturing a script block. Missing 'NRPYEND'.
     """
     script_lines: List[str] = []
@@ -152,7 +161,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    results = doctest.testmod()
+    results = doctest.testmod(
+        optionflags=doctest.NORMALIZE_WHITESPACE | doctest.ELLIPSIS
+    )
 
     if results.failed > 0:
         print(
