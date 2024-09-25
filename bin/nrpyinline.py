@@ -1,6 +1,8 @@
 """
 Extract and execute Python code from a text file marked by 'NRPYSTART' and 'NRPYEND'.
 
+This version ignores leading //, *, /*, and trailing */ along with any whitespace before or after these comment markers.
+
 Example usage is provided in the `run_script_from_file` function's docstring.
 
 Author: Zachariah Etienne
@@ -14,12 +16,41 @@ import textwrap
 from typing import Any, Dict, List
 
 
+def strip_comment_markers(line: str) -> str:
+    """
+    Remove leading //, *, /*, and trailing */ from a line, preserving code indentation.
+
+    :param line: The line of text to process.
+    :return: The line with comment markers removed.
+    """
+    # Remove leading whitespace to find comment markers
+    stripped_line = line.lstrip()
+    leading_spaces = line[: len(line) - len(stripped_line)]
+
+    # Remove leading comment markers
+    if stripped_line.startswith("//"):
+        stripped_line = stripped_line[2:].lstrip()
+    elif stripped_line.startswith("/*"):
+        stripped_line = stripped_line[2:].lstrip()
+    elif stripped_line.startswith("*"):
+        stripped_line = stripped_line[1:].lstrip()
+
+    # Remove trailing comment markers
+    if stripped_line.rstrip().endswith("*/"):
+        stripped_line = stripped_line.rstrip()[:-2].rstrip()
+
+    # Return the line with original leading spaces and processed content
+    return leading_spaces + stripped_line
+
+
 def run_script_from_file(file_path: str) -> None:
     """
     Extract and execute Python code between 'NRPYSTART' and 'NRPYEND' markers.
 
     Read a text file line by line, extract Python code between 'NRPYSTART' and 'NRPYEND' markers,
     and execute each script found between these markers.
+
+    The script ignores leading //, *, /*, and trailing */ along with any whitespace before or after these comment markers.
 
     :param file_path: The path to the text file containing the Python scripts.
     :raises ValueError: If 'NRPYEND' is encountered without a preceding 'NRPYSTART' or
@@ -31,17 +62,29 @@ def run_script_from_file(file_path: str) -> None:
     >>> import io
     >>> from contextlib import redirect_stdout
 
-    # Example 1: File with two NRPYSTART/NRPYEND code blocks
+    # Example 1: File with code blocks inside comments
     >>> file_content = '''Some random text...
-    ...    NRPYSTART
-    ...     print("Hello from script 1")
-    ...    NRPYEND
+    ...    // NRPYSTART
+    ...    //     print("Hello from script 1")
+    ...    // NRPYEND
     ... Some more text...
-    ...    NRPYSTART
-    ...     for i in range(2):
-    ...         print(f"Loop iteration {i}")
-    ...    NRPYEND
-    ... Even more text...'''
+    ...    /* NRPYSTART */
+    ...    /*     for i in range(2): */
+    ...    /*         print(f"Loop iteration {i}") */
+    ...    /* NRPYEND */
+    ... Even more text...
+    ... Some more text...
+    ...    /* NRPYSTART
+    ...    *     for i in range(2): */
+    ...    *         print(f"Loop2 iteration {i}")
+    ...    NRPYEND */
+    ... Even more text...
+    ... /*
+    ...   NRPYSTART
+    ... print("hello3")
+    ... NRPYEND
+    ... */
+    ... this text should also be ignored /**/ //'''
     >>> m = mock_open(read_data=file_content)
     >>> f = io.StringIO()
     >>> with patch('builtins.open', m), redirect_stdout(f):
@@ -50,6 +93,9 @@ def run_script_from_file(file_path: str) -> None:
     Hello from script 1
     Loop iteration 0
     Loop iteration 1
+    Loop2 iteration 0
+    Loop2 iteration 1
+    hello3
 
     # Example 2: 'NRPYEND' appears without 'NRPYSTART'
     >>> file_content = '''Some text...
@@ -90,11 +136,11 @@ def run_script_from_file(file_path: str) -> None:
 
     with open(file_path, "r", encoding="utf-8") as file:
         for line_number, line in enumerate(file, 1):
-            # Strip leading and trailing whitespace
-            stripped_line = line.strip()
+            # Process the line to strip comment markers
+            processed_line = strip_comment_markers(line)
 
             # Check for the start marker
-            if stripped_line == "NRPYSTART":
+            if processed_line.strip() == "NRPYSTART":
                 if capturing:
                     raise ValueError(
                         "Found 'NRPYSTART' while already capturing a script block."
@@ -104,7 +150,7 @@ def run_script_from_file(file_path: str) -> None:
                 continue  # Move to the next line
 
             # Check for the end marker
-            if stripped_line == "NRPYEND":
+            if processed_line.strip() == "NRPYEND":
                 if not capturing:
                     raise ValueError(
                         "Found 'NRPYEND' without encountering 'NRPYSTART'."
@@ -127,7 +173,9 @@ def run_script_from_file(file_path: str) -> None:
 
             # Capture lines if within a script block
             if capturing:
-                script_lines.append(line)
+                # Strip comment markers from the line before adding to script_lines
+                processed_line = strip_comment_markers(line)
+                script_lines.append(processed_line)
 
     # After file processing, check if a script was left unclosed
     if capturing:
