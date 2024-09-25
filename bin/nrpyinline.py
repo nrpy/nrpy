@@ -58,9 +58,11 @@ def run_script_from_file(file_path: str) -> None:
     :raises Exception: Any exception raised during the execution of the extracted script.
 
     Example usage:
-    >>> from unittest.mock import mock_open, patch
-    >>> import io
-    >>> from contextlib import redirect_stdout
+    >>> import os
+    >>> from appdirs import user_cache_dir
+    >>> cache_dir = user_cache_dir('run_script_from_file')
+    >>> os.makedirs(cache_dir, exist_ok=True)
+    >>> file_path = os.path.join(cache_dir, 'dummy_path.txt')
 
     # Example 1: File with code blocks inside comments
     >>> file_content = '''Some random text...
@@ -85,50 +87,57 @@ def run_script_from_file(file_path: str) -> None:
     ... NRPYEND
     ... */
     ... this text should also be ignored /**/ //'''
-    >>> m = mock_open(read_data=file_content)
-    >>> f = io.StringIO()
-    >>> with patch('builtins.open', m), redirect_stdout(f):
-    ...     run_script_from_file('dummy_path.txt')
-    >>> print(f.getvalue(), end='')
+    >>> with open(file_path, 'w', encoding='utf-8') as f:
+    ...     _ = f.write(file_content)
+    >>> from io import StringIO
+    >>> from contextlib import redirect_stdout
+    >>> f_output = StringIO()
+    >>> with redirect_stdout(f_output):
+    ...     run_script_from_file(file_path)
+    >>> print(f_output.getvalue(), end='')
     Hello from script 1
     Loop iteration 0
     Loop iteration 1
     Loop2 iteration 0
     Loop2 iteration 1
     hello3
+    >>> os.remove(file_path)
 
     # Example 2: 'NRPYEND' appears without 'NRPYSTART'
     >>> file_content = '''Some text...
     ... NRPYEND'''
-    >>> m = mock_open(read_data=file_content)
+    >>> with open(file_path, 'w', encoding='utf-8') as f:
+    ...     _ = f.write(file_content)
     >>> try:
-    ...     with patch('builtins.open', m):
-    ...         run_script_from_file('dummy_path.txt')
+    ...     run_script_from_file(file_path)
     ... except ValueError as e:
     ...     print(f"ValueError: {e}")
     ValueError: Found 'NRPYEND' without encountering 'NRPYSTART'.
+    >>> os.remove(file_path)
 
     # Example 3: 'NRPYSTART' appears twice without 'NRPYEND'
     >>> file_content = '''NRPYSTART
     ... NRPYSTART'''
-    >>> m = mock_open(read_data=file_content)
+    >>> with open(file_path, 'w', encoding='utf-8') as f:
+    ...     _ = f.write(file_content)
     >>> try:
-    ...     with patch('builtins.open', m):
-    ...         run_script_from_file('dummy_path.txt')
+    ...     run_script_from_file(file_path)
     ... except ValueError as e:
     ...     print(f"ValueError: {e}")
     ValueError: Found 'NRPYSTART' while already capturing a script block.
+    >>> os.remove(file_path)
 
     # Example 4: Missing 'NRPYEND' at the end of the file
     >>> file_content = '''NRPYSTART
     ... print("This script never ends")'''
-    >>> m = mock_open(read_data=file_content)
+    >>> with open(file_path, 'w', encoding='utf-8') as f:
+    ...     _ = f.write(file_content)
     >>> try:
-    ...     with patch('builtins.open', m):
-    ...         run_script_from_file('dummy_path.txt')
+    ...     run_script_from_file(file_path)
     ... except ValueError as e:
     ...     print(f"ValueError: {e}")
     ValueError: File ended while still capturing a script block. Missing 'NRPYEND'.
+    >>> os.remove(file_path)
     """
     script_lines: List[str] = []
     capturing: bool = False
