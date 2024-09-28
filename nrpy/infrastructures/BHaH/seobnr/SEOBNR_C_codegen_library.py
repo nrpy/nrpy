@@ -47,6 +47,42 @@ par.register_CodeParameters(
 )
 
 par.register_CodeParameters(
+    "REAL",
+    __name__,
+    [
+        "Delta_t",
+        "omega_qnm",
+        "tau_qnm",
+        "a_f",
+        "M_f",
+        "a_1_NQC",
+        "a_2_NQC",
+        "a_3_NQC",
+        "b_1_NQC",
+        "b_2_NQC",
+        "r_stop",
+        "r_ISCO",
+    ],
+    [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+    ],
+    commondata=True,
+    add_to_parfile=False,
+)
+
+
+par.register_CodeParameters(
     "REAL *restrict",
     __name__,
     [

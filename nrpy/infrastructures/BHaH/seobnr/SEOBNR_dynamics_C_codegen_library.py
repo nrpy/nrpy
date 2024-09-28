@@ -373,6 +373,10 @@ while (stop == 0) {
     if (dydt_out[0] > 0.0) {
       break;
     }
+    // Stopping radius
+    if (commondata->r < commondata->r_stop){
+      break;
+    }
     // unphysical frequency
     if (commondata->r < 3.0 && commondata->Omega_circ > 1.0) {
       break;
