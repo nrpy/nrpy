@@ -154,6 +154,7 @@ def register_CFunction_diagnostics(
     default_diagnostics_out_every: float,
     enable_psi4_diagnostics: bool = False,
     enable_progress_indicator: bool = True,
+    use_Ricci_eval_func: bool = True,
     grid_center_filename_tuple: Tuple[str, str] = (
         "out0d-conv_factor%.2f.txt",
         "convergence_factor",
@@ -175,6 +176,7 @@ def register_CFunction_diagnostics(
     :param default_diagnostics_out_every: Specifies the default diagnostics output frequency.
     :param enable_psi4_diagnostics: Whether to enable psi4 diagnostics.
     :param enable_progress_indicator: Whether to enable the progress indicator.
+    :param use_Ricci_eval_func: Whether to call Ricci_eval() before computing constraints.
     :param grid_center_filename_tuple: Tuple containing filename and variables for grid center output.
     :param axis_filename_tuple: Tuple containing filename and variables for axis output.
     :param plane_filename_tuple: Tuple containing filename and variables for plane output.
@@ -259,7 +261,10 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {
 
     // Constraint output
     {
-      Ricci_eval(commondata, params, &griddata[grid].rfmstruct, y_n_gfs, auxevol_gfs);
+"""
+    if use_Ricci_eval_func:
+        body += "Ricci_eval(commondata, params, &griddata[grid].rfmstruct, y_n_gfs, auxevol_gfs);\n"
+    body += r"""
       constraints_eval(commondata, params, &griddata[grid].rfmstruct, y_n_gfs, auxevol_gfs, diagnostic_output_gfs);
     }
 

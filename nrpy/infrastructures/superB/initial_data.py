@@ -161,7 +161,7 @@ typedef struct __rescaled_BSSN_rfm_basis_struct__ {
 
     body = r"""
   switch (initial_data_part) {
-    case INITIALDATA_LOOPOVERALLGRIDPTS: {
+    case INITIALDATA_BIN_ONE: {
     const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
     const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
     const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
@@ -208,19 +208,7 @@ typedef struct __rescaled_BSSN_rfm_basis_struct__ {
     }
 """
     body += """
-    case INITIALDATA_APPLYBCSINNERONLY: {
-  // Now we've set all but lambda^i, which will be computed via a finite-difference of hDD.
-  //    However, hDD is not correctly set in inner boundary points so we apply inner bcs first.
-
-  // Apply inner bcs to get correct values of all tensor quantities across symmetry boundaries;
-  //    BSSN_Cart_to_rescaled_BSSN_rfm() converts each xCart->xx, which guarantees a mapping
-  //    to the grid interior. It therefore does not account for parity conditions across
-  //    symmetry boundaries being correct.
-      apply_bcs_inner_only(commondata, params, bcstruct, gridfuncs->y_n_gfs);
-      break;
-    }
-
-    case INITIALDATA_LAMBDAUGRIDINTERIOR: {
+    case INITIALDATA_BIN_TWO: {
       initial_data_lambdaU_grid_interior(commondata, params, xx, gridfuncs->y_n_gfs);
       break;
     }
@@ -317,11 +305,12 @@ def register_CFunction_initial_data(
         body += """// Attempt to read checkpoint file. If it doesn't exist, then continue. Otherwise return.
 if( read_checkpoint(commondata, griddata) ) return;
 """
-    body += "ID_persist_struct ID_persist;\n"
 
     body += """
 switch (initial_data_part) {
-  case INITIALDATA_LOOPOVERALLGRIDPTS: {"""
+  case INITIALDATA_BIN_ONE: {"""
+    body += "ID_persist_struct ID_persist;\n"
+
     if populate_ID_persist_struct_str:
         body += populate_ID_persist_struct_str
     body += """
@@ -337,17 +326,24 @@ griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_pers
     body += rf"""
     break;
   }}
-  case INITIALDATA_APPLYBCSINNERONLY:
-  case INITIALDATA_LAMBDAUGRIDINTERIOR: {{
+  case INITIALDATA_APPLYBCS_INNERONLY: {{
+    for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {{
+      // Unpack griddata struct:
+      params_struct *restrict params = &griddata[grid].params;
+      apply_bcs_inner_only(commondata, params, &griddata[grid].bcstruct, griddata[grid].gridfuncs.y_n_gfs);
+    }}
+    break;
+  }}
+  case INITIALDATA_BIN_TWO: {{
     for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {{
       // Unpack griddata struct:
       params_struct *restrict params = &griddata[grid].params;
       initial_data_reader__convert_ADM_{IDCoordSystem}_to_BSSN(commondata, params, griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs,
-                                                         &ID_persist, {IDtype}, initial_data_part);
+                                                         NULL, {IDtype}, initial_data_part);
     }}
     break;
   }}
-  case INITIALDATA_APPLYBCSOUTEREXTRAPANDINNER: {{
+  case INITIALDATA_APPLYBCS_OUTEREXTRAPANDINNER: {{
     for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {{
       // Unpack griddata struct:
       params_struct *restrict params = &griddata[grid].params;

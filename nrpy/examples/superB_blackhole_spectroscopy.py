@@ -97,6 +97,7 @@ enable_simd = True
 separate_Ricci_and_BSSN_RHS = True
 parallel_codegen_enable = True
 enable_fd_functions = True
+outer_bcs_type = "radiation"
 boundary_conditions_desc = "outgoing radiation"
 # Number of chares, Nchare0, Nchare1, and Nchare2, in each direction,
 # should be chosen such that Nxx0/Nchare0, Nxx1/Nchare1, Nxx2/Nchare2 are integers greater than NGHOSTS,
@@ -258,21 +259,29 @@ if separate_Ricci_and_BSSN_RHS:
     rhs_string += (
         "Ricci_eval(commondata, params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
     )
-rhs_string += """
+if outer_bcs_type == "radiation":
+    rhs_string += """
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
-if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
-  apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].xx,
-                                     gridfunctions_wavespeed,gridfunctions_f_infinity,
-                                     RK_INPUT_GFS, RK_OUTPUT_GFS);"""
+apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].xx,
+                                   gridfunctions_wavespeed,gridfunctions_f_infinity,
+                                   RK_INPUT_GFS, RK_OUTPUT_GFS);"""
+else:
+    rhs_string += """
+rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);"""
+
 if not enable_rfm_precompute:
     rhs_string = rhs_string.replace("rfmstruct", "xx")
+
+post_rhs_bcs_str = ""
+if outer_bcs_type != "radiation":
+    post_rhs_bcs_str += """
+apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);"""
 
 superBMoL.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,
-    post_rhs_string="""if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
-  apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);
-  enforce_detgammabar_equals_detgammahat(commondata, params, rfmstruct, RK_OUTPUT_GFS);""",
+    post_rhs_bcs_str=post_rhs_bcs_str,
+    post_rhs_string="""enforce_detgammabar_equals_detgammahat(commondata, params, rfmstruct, RK_OUTPUT_GFS);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
 )
@@ -331,6 +340,7 @@ superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
     project_dir=project_dir,
     MoL_method=MoL_method,
     enable_rfm_precompute=enable_rfm_precompute,
+    outer_bcs_type=outer_bcs_type,
     enable_psi4_diagnostics=True,
 )
 
