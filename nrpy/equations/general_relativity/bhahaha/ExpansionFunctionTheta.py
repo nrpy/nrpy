@@ -36,7 +36,7 @@ import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 
 
-class ThetaCalculator:
+class ExpansionFunctionThetaClass:
     """Compute and store the Expansion Function Theta in Spherical coordinates."""
 
     def __init__(
@@ -162,7 +162,7 @@ class ThetaCalculator:
 
         # Step 6: Compute the derivative of \lambda, i.e., \partial_i \lambda
         # \partial_i \lambda = \frac{1}{2\lambda} (gammabar^{km} \partial_k F \partial_m F \partial_i gammabar^{km} + 2 gammabar^{km} \partial_m F \partial_i \partial_k F)
-        lamb_dD = cast(List[sp.Expr], ixp.declarerank1("lamb_dD"))
+        lamb_dD = ixp.zerorank1()
         for i in range(3):
             for k in range(3):
                 for m in range(3):
@@ -220,19 +220,19 @@ class ThetaCalculator:
         return Theta
 
 
-class ThetaCalculator_dict(Dict[str, ThetaCalculator]):
-    """Custom dictionary for storing ThetaCalculator objects."""
+class ExpansionFunctionThetaClass_dict(Dict[str, ExpansionFunctionThetaClass]):
+    """Custom dictionary for storing ExpansionFunctionThetaClass objects."""
 
-    def __getitem__(self, key: str) -> ThetaCalculator:
+    def __getitem__(self, key: str) -> ExpansionFunctionThetaClass:
         """
-        Retrieve a ThetaCalculator object based on the provided key.
+        Retrieve a ExpansionFunctionThetaClass object based on the provided key.
 
         Supported keys:
         - "Spherical": Spherical coordinates without reference-metric precomputation.
         - "Spherical_rfm_precompute": Spherical coordinates with reference-metric precomputation enabled.
 
         :param key: The key representing the desired configuration.
-        :return: The corresponding ThetaCalculator object.
+        :return: The corresponding ExpansionFunctionThetaClass object.
         :raises KeyError: If an unsupported key is provided.
         """
         if key not in self:
@@ -246,24 +246,24 @@ class ThetaCalculator_dict(Dict[str, ThetaCalculator]):
                     f"Unsupported key: '{key}'. Supported keys are 'Spherical' and 'Spherical_rfm_precompute'."
                 )
 
-            print(f"Setting up ThetaCalculator[{key}]...")
+            print(f"Setting up ExpansionFunctionThetaClass[{key}]...")
             self.__setitem__(
                 key,
-                ThetaCalculator(
+                ExpansionFunctionThetaClass(
                     CoordSystem="Spherical",
                     enable_rfm_precompute=enable_rfm_precompute,
                 ),
             )
         return dict.__getitem__(self, key)
 
-    def __setitem__(self, key: str, value: ThetaCalculator) -> None:
+    def __setitem__(self, key: str, value: ExpansionFunctionThetaClass) -> None:
         """
-        Set a ThetaCalculator object with the provided key.
+        Set a ExpansionFunctionThetaClass object with the provided key.
 
         Only "Spherical" and "Spherical_rfm_precompute" are supported.
 
         :param key: The key representing the desired configuration.
-        :param value: The ThetaCalculator object to store.
+        :param value: The ExpansionFunctionThetaClass object to store.
         :raises KeyError: If an unsupported key is provided.
         """
         if key not in ["Spherical", "Spherical_rfm_precompute"]:
@@ -274,15 +274,15 @@ class ThetaCalculator_dict(Dict[str, ThetaCalculator]):
 
     def __delitem__(self, key: str) -> None:
         """
-        Delete a ThetaCalculator object based on the provided key.
+        Delete a ExpansionFunctionThetaClass object based on the provided key.
 
         :param key: The key representing the configuration to delete.
         """
         dict.__delitem__(self, key)
 
 
-# Instantiate the custom dictionary for ThetaCalculator objects
-Theta_Calculators = ThetaCalculator_dict()
+# Instantiate the custom dictionary for ExpansionFunctionThetaClass objects
+ExpansionFunctionTheta = ExpansionFunctionThetaClass_dict()
 
 if __name__ == "__main__":
     import doctest
@@ -301,7 +301,7 @@ if __name__ == "__main__":
 
     # Validate expressions for the two specialized cases
     for validation_key in ["Spherical", "Spherical_rfm_precompute"]:
-        theta_calc = Theta_Calculators[validation_key]
+        theta_calc = ExpansionFunctionTheta[validation_key]
         results_dict = ve.process_dictionary_of_expressions(
             theta_calc.__dict__, fixed_mpfs_for_free_symbols=True
         )
