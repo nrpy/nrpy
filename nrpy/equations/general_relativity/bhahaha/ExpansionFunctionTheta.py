@@ -109,7 +109,10 @@ class ExpansionFunctionThetaClass:
             )
         else:
             self.h = sp.symbols("hh", real=True)
-            self.gammabarDDdD = ixp.declarerank3("gammabarDDdD", symmetry="sym01")
+            self.gammabarDDdD = cast(
+                List[List[List[sp.Expr]]],
+                ixp.declarerank3("gammabarDDdD", symmetry="sym01"),
+            )
             self.KDD = ixp.declarerank2("KDD", symmetry="sym01")
 
         # Step 1: Define the level-set function F and its derivatives
