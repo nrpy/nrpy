@@ -29,7 +29,6 @@ from collections import OrderedDict
 from typing import Dict, cast, List
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
-from sympy import symmetrize
 
 import nrpy.grid as gri
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression support
