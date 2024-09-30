@@ -26,7 +26,7 @@ Author: Zachariah B. Etienne
 """
 
 from collections import OrderedDict
-from typing import Dict, cast, List
+from typing import Dict, List, cast
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
 
