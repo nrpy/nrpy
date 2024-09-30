@@ -173,10 +173,14 @@ gsl_multiroot_fdfsolver_set(s , &f , x);
 do {
   iter++;
   status = gsl_multiroot_fdfsolver_iterate (s);
-  if (status){
-    break;
-  }
+  int fdf_solver_status[1] = {GSL_SUCCESS};
+  char fdfsolver_name[] = "gsl_multiroot_fdfsolver_iterate";
+  handle_gsl_return_status(status,fdf_solver_status,1,fdfsolver_name);
   status = gsl_multiroot_test_residual (s->f, 6e-12);
+  int test_residual_status[2] = {GSL_SUCCESS,GSL_CONTINUE};
+  char residual_name[] = "gsl_multiroot_test_residual";
+  handle_gsl_return_status(status,test_residual_status,2,residual_name);
+  
 }
 while(status == GSL_CONTINUE && iter < maxiter);
 commondata->r = gsl_vector_get(s->x , 0);
@@ -409,10 +413,18 @@ gsl_root_fsolver_set(s, &F, x_lo, x_hi);
 do {
   iter++;
   status = gsl_root_fsolver_iterate(s);
+  int fsolver_status[1] = {GSL_SUCCESS};
+  char fsolver_name[] = "gsl_root_fsolver_iterate";
+  handle_gsl_return_status(status,fsolver_status,1,fsolver_name);
   prstar = gsl_root_fsolver_root(s);
+
   x_lo = gsl_root_fsolver_x_lower(s);
   x_hi = gsl_root_fsolver_x_upper(s);
   status = gsl_root_test_interval(x_lo, x_hi, xtol, rtol);
+  int test_interval_status[2] = {GSL_SUCCESS,GSL_CONTINUE};
+  char root_test_name[] = "gsl_root_test_interval";
+  handle_gsl_return_status(status,test_interval_status,2,root_test_name);
+
 
 }
 while (status == GSL_CONTINUE && iter < max_iter);

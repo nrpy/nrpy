@@ -307,6 +307,10 @@ y[1] = commondata->phi;
 y[2] = commondata->prstar;
 y[3] = commondata->pphi;
 status = SEOBNRv5_aligned_spin_right_hand_sides(t, y, dydt_in, commondata);
+int rhs_status[1] = {GSL_SUCCESS};
+char rhs_name[] = "gsl_odeiv2_step_apply";
+int hadjust_status[3] = {GSL_ODEIV_HADJ_DEC,GSL_ODEIV_HADJ_INC,GSL_ODEIV_HADJ_NIL};
+char hadjust_name[] = "gsl_odeiv2_control_hadjust";
 SEOBNRv5_aligned_spin_augments(commondata);
 REAL h = 2.0 * M_PI / dydt_in[1] / 5.0;
 size_t bufferlength = (size_t)(t1 / h); // runs up to 0.01x maximum time (we should not ideally run that long)
@@ -326,11 +330,9 @@ nsteps++;
 while (stop == 0) {
   // integrate
   status = gsl_odeiv2_step_apply(s, t, h, y, yerr, dydt_in, dydt_out, &sys);
-  if (status != GSL_SUCCESS) {
-    printf("Error in step_apply!\\n");
-    return status;
-  }
+  handle_gsl_return_status(status,rhs_status,1,rhs_name);
   status = gsl_odeiv2_control_hadjust(c, s, y, yerr, dydt_out, &h);
+  handle_gsl_return_status(status,hadjust_status,3,hadjust_name);
   t_new = t + h;
   commondata->r = y[0];
   commondata->phi = y[1];

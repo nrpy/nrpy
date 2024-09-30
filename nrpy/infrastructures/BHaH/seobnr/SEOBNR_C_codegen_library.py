@@ -143,6 +143,45 @@ par.register_CodeParameters(
 )
 
 
+def register_CFunction_handle_gsl_return_status() -> Union[None, pcg.NRPyEnv_type]:
+    """
+    Register CFunction for handling error statuses returned by GSL calls.
+
+    :return: None if in registration phase, else the updated NRPy environment.
+    """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+
+    includes = ["BHaH_defines.h"]
+    desc = """Handle GSL return status."""
+    cfunc_type = "void"
+    name = "handle_gsl_return_status"
+    params = "int status, int status_desired[], int num_desired, const char *restrict function_name"
+    body = """
+int count = 0;
+for (int i = 0; i < num_desired; i++){
+  if (status == status_desired[i]){
+    count++;
+  }
+}
+if (count == 0){
+  printf ("In function %s, gsl returned error: %s\\nAborted", function_name, gsl_strerror(status));
+  exit(EXIT_FAILURE);
+}
+"""
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        include_CodeParameters_h=False,
+        body=body,
+    )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
+
 def register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper() -> (
     Union[None, pcg.NRPyEnv_type]
 ):
@@ -155,7 +194,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper() -> (
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    includes = ["BHaH_defines.h"]
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """Evaluate the gamma function using GSL."""
     cfunc_type = "int"
     name = "SEOBNRv5_aligned_spin_gamma_wrapper"
@@ -163,6 +202,9 @@ def register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper() -> (
     body = """
 gsl_sf_result lnr, arg;
 int status = gsl_sf_lngamma_complex_e(z_real, z_imag, &lnr, &arg);
+int status_desired[1] = {GSL_SUCCESS};
+char lngamma_name[] = "gsl_sf_lngamma_complex_e";
+handle_gsl_return_status(status,status_desired,1,lngamma_name);
 const REAL gamma_amp = exp(lnr.val);
 const REAL gamma_phase = arg.val;
 gamma_z[0] =  gamma_amp*cos(gamma_phase);

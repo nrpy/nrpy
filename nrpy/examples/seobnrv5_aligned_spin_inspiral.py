@@ -102,6 +102,7 @@ return 0;
 # For now, only registering the functions needed for initial conditions.
 # seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian()
 # seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_and_derivs()
+seobnr_CCL.register_CFunction_handle_gsl_return_status()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_right_hand_sides()
 seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_coefficients()
 seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit()
