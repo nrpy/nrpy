@@ -14,6 +14,7 @@ import shutil
 from pathlib import Path
 
 import nrpy.c_function as cfc
+import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
@@ -29,10 +30,14 @@ par.set_parval_from_str("Infrastructure", "BHaH")
 # Code-generation-time parameters:
 project_name = "seobnrv5_aligned_spin_inspiral"
 
+parallel_codegen_enable = True
+
 project_dir = os.path.join("project", project_name)
 
 # First clean the project directory, if it exists.
 shutil.rmtree(project_dir, ignore_errors=True)
+
+par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 
 
 #########################################################
@@ -87,6 +92,13 @@ for (i = 0; i < commondata.nsteps_combined; i++) {
     , commondata.waveform_combined[IDX_WF(i,HPLUS)], commondata.waveform_combined[IDX_WF(i,HCROSS)]);
 }
 
+free(commondata.dynamics_low);
+free(commondata.dynamics_fine);
+free(commondata.dynamics_combined);
+free(commondata.waveform_low);
+free(commondata.waveform_fine);
+free(commondata.waveform_combined);
+
 return 0;
 """
     cfc.register_CFunction(
@@ -102,6 +114,7 @@ return 0;
 # For now, only registering the functions needed for initial conditions.
 # seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian()
 # seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_and_derivs()
+
 seobnr_CCL.register_CFunction_handle_gsl_return_status()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_right_hand_sides()
 seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_coefficients()
@@ -119,6 +132,9 @@ seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_ode_integration()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics()
 seobnr_wf_CCL.register_CFunction_SEOBNRv5_NQC_corrections()
+
+if __name__ == "__main__":
+    pcg.do_parallel_codegen()
 #########################################################
 # STEP 3: Generate header files, register C functions and
 #         command line parameters, set up boundary conditions,

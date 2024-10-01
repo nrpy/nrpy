@@ -72,13 +72,14 @@ Used to refine the location of the maximum in frequency or momentum."""
     body = """
 size_t n = (size_t) (right - left)/dt;
 REAL x;
-REAL dx[n];
+REAL *restrict dx = (REAL *)calloc(n,sizeof(REAL));
 for (size_t i = 0; i < n; i++){
   x = left + i*dt;
   dx[i] = gsl_spline_eval_deriv(spline, x, acc);
 }
 result_idx = gsl_interp_bsearch(dx, 0.0, 0, n);
 result = dx[result_idx];
+free(dx);
 return GSL_SUCCESS;
 """
     cfc.register_CFunction(
@@ -175,9 +176,15 @@ for (i = 0; i < commondata->nsteps_low; i++) {
 const REAL dt = 0.1;
 commondata->nsteps_fine = (size_t)(t_max - t_stepback) / dt;
 size_t len_dynamics_fine = nsteps - commondata->nsteps_low;
-REAL times_fine[commondata->nsteps_fine];
-REAL ts[len_dynamics_fine], rs[len_dynamics_fine], phis[len_dynamics_fine], prs[len_dynamics_fine], pphis[len_dynamics_fine], Hs[len_dynamics_fine],
-    Omegas[len_dynamics_fine], Omega_circs[len_dynamics_fine];
+REAL *restrict times_fine = (REAL *)calloc(commondata->nsteps_fine,sizeof(REAL));
+REAL *restrict ts = (REAL *)calloc(len_dynamics_fine,sizeof(REAL));
+REAL *restrict rs = (REAL *)calloc(len_dynamics_fine,sizeof(REAL));
+REAL *restrict phis = (REAL *)calloc(len_dynamics_fine,sizeof(REAL));
+REAL *restrict prs = (REAL *)calloc(len_dynamics_fine,sizeof(REAL));
+REAL *restrict pphis = (REAL *)calloc(len_dynamics_fine,sizeof(REAL));
+REAL *restrict Hs = (REAL *)calloc(len_dynamics_fine,sizeof(REAL));
+REAL *restrict Omegas = (REAL *)calloc(len_dynamics_fine,sizeof(REAL));
+REAL *restrict Omega_circs= (REAL *)calloc(len_dynamics_fine,sizeof(REAL));
 for (i = 0; i < commondata->nsteps_fine; i++) {
   times_fine[i] = t_stepback + i * dt;
 }
@@ -239,6 +246,16 @@ gsl_spline_free(Omega_spline);
 gsl_interp_accel_free(Omega_acc);
 gsl_spline_free(Omega_circ_spline);
 gsl_interp_accel_free(Omega_circ_acc);
+
+free(times_fine);
+free(ts);
+free(rs);
+free(phis);
+free(prs);
+free(pphis);
+free(Hs);
+free(Omegas);
+free(Omega_circs);
 
 // Populate the combined dynamics
 
@@ -393,7 +410,7 @@ gsl_odeiv2_step_free(s);
 // High sampling.
 // Get an estimate of the stepback time.
 
-REAL times[nsteps];
+REAL *restrict times = (calloc)(nsteps,sizeof(REAL));
 for (i = 0; i < nsteps; i++) {
   times[i] = dynamics_RK[IDX(i,TIME)];
 }
@@ -422,6 +439,7 @@ if (stop != 0) {
 t_stepback = t_max - commondata->t_stepback;
 status = SEOBNRv5_aligned_spin_interpolate_dynamics(commondata, times, dynamics_RK, nsteps, t_max, t_stepback);
 // free the dynamics_RK pointer as it is no longer needed
+free(times);
 free(dynamics_RK);
 return GSL_SUCCESS;
 """

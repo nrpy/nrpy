@@ -33,8 +33,16 @@ def register_CFunction_SEOBNRv5_NQC_corrections() -> Union[None, pcg.NRPyEnv_typ
     bob_wf = BOB.BOB_aligned_spin_waveform_quantities()
 
     body = """
-REAL times[commondata->nsteps_fine], Q1[commondata->nsteps_fine], Q2[commondata->nsteps_fine], Q3[commondata->nsteps_fine], P1[commondata->nsteps_fine], P2[commondata->nsteps_fine];
-REAL r[commondata->nsteps_fine], hamp[commondata->nsteps_fine], phase[commondata->nsteps_fine], phase_unwrapped[commondata->nsteps_fine];
+REAL *restrict times = (REAL *)calloc(commondata->nsteps_fine,sizeof(REAL));
+REAL *restrict Q1 = (REAL *)calloc(commondata->nsteps_fine,sizeof(REAL));
+REAL *restrict Q2 = (REAL *)calloc(commondata->nsteps_fine,sizeof(REAL));
+REAL *restrict Q3 = (REAL *)calloc(commondata->nsteps_fine,sizeof(REAL));
+REAL *restrict P1 = (REAL *)calloc(commondata->nsteps_fine,sizeof(REAL));
+REAL *restrict P2 = (REAL *)calloc(commondata->nsteps_fine,sizeof(REAL));
+REAL *restrict r = (REAL *)calloc(commondata->nsteps_fine,sizeof(REAL));
+REAL *restrict hamp = (REAL *)calloc(commondata->nsteps_fine,sizeof(REAL));
+REAL *restrict phase = (REAL *)calloc(commondata->nsteps_fine,sizeof(REAL));
+REAL *restrict phase_unwrapped = (REAL *)calloc(commondata->nsteps_fine,sizeof(REAL));
 REAL radius, prstar,Omega; 
 size_t i;
 
@@ -205,6 +213,17 @@ commondata->b_2_NQC = gsl_vector_get(b,1);
 gsl_vector_free (b);
 gsl_vector_free(O);
 gsl_matrix_free(P);
+
+free(times);
+free(Q1);
+free(Q2);
+free(Q3);
+free(P1);
+free(P2);
+free(r);
+free(hamp);
+free(phase);
+free(phase_unwrapped);
 
 // apply the nqc correction
 commondata->nsteps_combined = commondata->nsteps_low + commondata->nsteps_fine;
