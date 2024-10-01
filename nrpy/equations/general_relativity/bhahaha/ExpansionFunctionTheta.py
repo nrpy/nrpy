@@ -167,49 +167,60 @@ class ExpansionFunctionThetaClass:
 
         # Step 6: Compute the derivative of \lambda, i.e., \partial_i \lambda
         # \partial_i \lambda = \frac{1}{2\lambda} (gammabar^{km} \partial_k F \partial_m F \partial_i gammabar^{km} + 2 gammabar^{km} \partial_m F \partial_i \partial_k F)
+        #                      ^^^ PREFACTOR ^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^ TERM 1 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^    ^^^^^^^^^^^^^^^^^^^^^^^^ TERM 2 ^^^^^^^^^^^^^^^^^^^^
         lamb_dD = ixp.zerorank1()
+        # TERM 1:
         for i in range(3):
             for k in range(3):
                 for m in range(3):
                     lamb_dD[i] += F_dD[k] * F_dD[m] * gammabarUU_dD[k][m][i]
+        # TERM 2:
         for i in range(3):
             for k in range(3):
                 for m in range(3):
                     lamb_dD[i] += 2 * self.Bq.gammabarUU[k][m] * F_dD[m] * F_dDD[i][k]
+        # PREFACTOR
         for i in range(3):
             lamb_dD[i] *= 1 / (2 * lamb)
 
         # Step 7: Compute the divergence of the unit normal vector \partial_i s^i
         # \partial_i s^i = \frac{1}{\lambda} (\partial_j F \partial_i gammabar^{ij} + gammabar^{ij} \partial_i \partial_j F) - \frac{1}{\lambda^2} \partial_i \lambda gammabar^{ij} \partial_j F
+        #                  ^^ PREFACTOR 1 ^^ ^^^^ FIRST PARENTHETICAL TERM ^^^^^^^^   ^^^^ SECOND PARENTHETICAL TERM ^^^^^^  ^^^^ PREFACTOR 2 ^^^  ^^^^^^^^^ TERM AFTER PARENTHETICAL ^^^^^^^^^^
         partial_i_si_parenthetical_term = sp.sympify(0)
+        # FIRST PARENTHETICAL TERM
         for i in range(3):
             for j in range(3):
                 partial_i_si_parenthetical_term += F_dD[j] * gammabarUU_dD[i][j][i]
+        # SECOND PARENTHETICAL TERM
         for i in range(3):
             for j in range(3):
                 partial_i_si_parenthetical_term += (
                     self.Bq.gammabarUU[i][j] * F_dDD[i][j]
                 )
+        # PREFACTOR 1
         partial_i_si_parenthetical_term /= lamb
 
         partial_i_si_term_after_parenthetical = sp.sympify(0)
+        # TERM AFTER PARENTHETICAL
         for i in range(3):
             for j in range(3):
                 partial_i_si_term_after_parenthetical += (
                     lamb_dD[i] * self.Bq.gammabarUU[i][j] * F_dD[j]
                 )
+        # PREFACTOR 2
         partial_i_si_term_after_parenthetical /= -lamb * lamb
 
+        # OVERALL SUM:
         partial_i_si = (
             partial_i_si_parenthetical_term + partial_i_si_term_after_parenthetical
         )
 
         # Step 8: Compute the covariant divergence of s^i
-        # Dbar_i s^i = \frac{1}{2gammabar} s^i \partial_i gammabar + \partial_i s^i
+        # Dbar_i s^i = \frac{1}{2 gammabar} s^i \partial_i gammabar + \partial_i s^i
         covariant_divergence_of_s_i = sp.sympify(0)
         for i in range(3):
             covariant_divergence_of_s_i += sU[i] * self.Bq.detgammabar_dD[i]
-        covariant_divergence_of_s_i *= sp.Rational(1, 2) * 1 / self.Bq.detgammabar
+        covariant_divergence_of_s_i *= 1 / (2 * self.Bq.detgammabar)
         covariant_divergence_of_s_i += partial_i_si
 
         # Step 9: Assemble the final expression for Theta
