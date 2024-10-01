@@ -14,6 +14,7 @@ import shutil
 from pathlib import Path
 
 import nrpy.c_function as cfc
+import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
@@ -21,6 +22,7 @@ import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 import nrpy.infrastructures.BHaH.seobnr.SEOBNR_C_codegen_library as seobnr_CCL
 import nrpy.infrastructures.BHaH.seobnr.SEOBNR_dynamics_C_codegen_library as seobnr_dyn_CCL
 import nrpy.infrastructures.BHaH.seobnr.SEOBNR_initial_conditions_C_codegen_library as seobnr_ic_CCL
+import nrpy.infrastructures.BHaH.seobnr.SEOBNR_waveform_C_codegen_library as seobnr_wf_CCL
 import nrpy.params as par
 
 par.set_parval_from_str("Infrastructure", "BHaH")
@@ -28,10 +30,14 @@ par.set_parval_from_str("Infrastructure", "BHaH")
 # Code-generation-time parameters:
 project_name = "seobnrv5_aligned_spin_inspiral"
 
+parallel_codegen_enable = True
+
 project_dir = os.path.join("project", project_name)
 
 # First clean the project directory, if it exists.
 shutil.rmtree(project_dir, ignore_errors=True)
+
+par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 
 
 #########################################################
@@ -54,7 +60,7 @@ commondata_struct_set_to_default(&commondata);
 // Step 1.b: Overwrite default values to parfile values. Then overwrite parfile values with values set at cmd line.
 cmdline_input_and_parfile_parser(&commondata, argc, argv);
 // Step 1.c: Overwrite default values of m1, m2, a6, and dSO.
-SEOBNRv5_aligned_spin_Hamiltonian_coefficients(&commondata);
+SEOBNRv5_aligned_spin_coefficients(&commondata);
 
 // Step 2.a: Compute SEOBNRv5 conservative initial conditions.
 SEOBNRv5_aligned_spin_initial_conditions_conservative(&commondata);
@@ -72,20 +78,26 @@ printf("prstar = %.15e\n",commondata.prstar);
 // Step 4: Run the ODE integration.
 SEOBNRv5_aligned_spin_ode_integration(&commondata);
 
-// Step 5.a. Generate the waveform.
+// Step 5. Generate the waveform.
 SEOBNRv5_aligned_spin_waveform_from_dynamics(&commondata);
 
-// Step 5.b: Print the resulting waveform.
+// Step 6.a. Compute and apply the NQC corrections
+SEOBNRv5_aligned_spin_NQC_corrections(&commondata);
+
+// Step 6.b: Print the resulting waveform.
 size_t i;
 
-for (i = 0; i < commondata.nsteps_low; i++) {
-    printf("%.15e %.15e %.15e\n", commondata.waveform_low[IDX_WF(i,TIME)]
-    , commondata.waveform_low[IDX_WF(i,HPLUS)], commondata.waveform_low[IDX_WF(i,HCROSS)]);
+for (i = 0; i < commondata.nsteps_combined; i++) {
+    printf("%.15e %.15e %.15e\n", commondata.waveform_combined[IDX_WF(i,TIME)]
+    , commondata.waveform_combined[IDX_WF(i,HPLUS)], commondata.waveform_combined[IDX_WF(i,HCROSS)]);
 }
-for (i = 0; i < commondata.nsteps_fine; i++) {
-    printf("%.15e %.15e %.15e\n", commondata.waveform_fine[IDX_WF(i,TIME)]
-    , commondata.waveform_fine[IDX_WF(i,HPLUS)], commondata.waveform_fine[IDX_WF(i,HCROSS)]);
-}
+
+free(commondata.dynamics_low);
+free(commondata.dynamics_fine);
+free(commondata.dynamics_combined);
+free(commondata.waveform_low);
+free(commondata.waveform_fine);
+free(commondata.waveform_combined);
 
 return 0;
 """
@@ -102,8 +114,10 @@ return 0;
 # For now, only registering the functions needed for initial conditions.
 # seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian()
 # seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_and_derivs()
+
+seobnr_CCL.register_CFunction_handle_gsl_return_status()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_right_hand_sides()
-seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_coefficients()
+seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_coefficients()
 seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit()
 seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_dRHS()
 seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_RHSdRHS()
@@ -117,6 +131,10 @@ seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_intepolate_dynamics()
 seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_ode_integration()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics()
+seobnr_wf_CCL.register_CFunction_SEOBNRv5_NQC_corrections()
+
+if __name__ == "__main__":
+    pcg.do_parallel_codegen()
 #########################################################
 # STEP 3: Generate header files, register C functions and
 #         command line parameters, set up boundary conditions,
@@ -141,6 +159,7 @@ Bdefines_h.output_BHaH_defines_h(
         str(Path("gsl") / Path("gsl_spline.h")),
         str(Path("gsl") / Path("gsl_interp.h")),
         str(Path("gsl") / Path("gsl_sf_gamma.h")),
+        str(Path("gsl") / Path("gsl_linalg.h")),
     ],
     supplemental_defines_dict={
         "SEOBNR": """
