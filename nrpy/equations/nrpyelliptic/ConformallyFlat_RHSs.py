@@ -78,7 +78,7 @@ class HyperbolicRelaxationCurvilinearRHSs:
         if "variable_wavespeed" not in gri.glb_gridfcs_dict:
             variable_wavespeed = gri.register_gridfunctions(
                 ["variable_wavespeed"], group="AUXEVOL", gf_array_name="auxevol_gfs"
-            )
+            )[0]
         else:
             variable_wavespeed = sp.Symbol("variable_wavespeed", real=True)
 
@@ -98,7 +98,7 @@ class HyperbolicRelaxationCurvilinearRHSs:
         if "residual_H" not in gri.glb_gridfcs_dict:
             _residual_H = gri.register_gridfunctions(
                 ["residual_H"], group="AUX", gf_array_name="aux_gfs"
-            )
+            )[0]
 
         # Step 6: Define right-hand sides for the evolution.
         # Step 6a: uu_rhs = vv - eta_damping*uu:
