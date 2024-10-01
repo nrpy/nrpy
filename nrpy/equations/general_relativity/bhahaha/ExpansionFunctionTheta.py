@@ -100,12 +100,14 @@ class ExpansionFunctionThetaClass:
         #   KDD (extrinsic curvature tensor K_ij), if not already registered. Otherwise
         #   just declare the variables.
         if "hh" not in gri.glb_gridfcs_dict:
-            self.h = gri.register_gridfunctions("hh")
+            self.h = gri.register_gridfunctions(
+                "hh", gf_array_name="evol_gfs", wavespeed=1.0
+            )
             self.gammabarDDdD = gri.register_gridfunctions_for_single_rankN(
-                "gammabarDDdD", rank=3, symmetry="sym01"
+                "gammabarDDdD", rank=3, symmetry="sym01", gf_array_name="auxevol_gfs"
             )
             self.KDD = gri.register_gridfunctions_for_single_rank2(
-                "KDD", symmetry="sym01"
+                "KDD", symmetry="sym01", gf_array_name="auxevol_gfs"
             )
         else:
             self.h = sp.symbols("hh", real=True)
