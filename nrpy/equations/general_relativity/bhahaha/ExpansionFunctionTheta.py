@@ -103,19 +103,36 @@ class ExpansionFunctionThetaClass:
             self.h = gri.register_gridfunctions(
                 "hh", gf_array_name="evol_gfs", wavespeed=1.0
             )
-            self.gammabarDDdD = gri.register_gridfunctions_for_single_rankN(
-                "gammabarDDdD", rank=3, symmetry="sym01", gf_array_name="auxevol_gfs"
+            self.partialrhDD = gri.register_gridfunctions_for_single_rank2(
+                "partialrhDD", symmetry="sym01", gf_array_name="auxevol_gfs"
             )
             self.KDD = gri.register_gridfunctions_for_single_rank2(
                 "KDD", symmetry="sym01", gf_array_name="auxevol_gfs"
             )
         else:
             self.h = sp.symbols("hh", real=True)
-            self.gammabarDDdD = cast(
-                List[List[List[sp.Expr]]],
-                ixp.declarerank3("gammabarDDdD", symmetry="sym01"),
-            )
+            self.partialrhDD = ixp.declarerank2("partialrhDD", symmetry="sym01")
             self.KDD = ixp.declarerank2("KDD", symmetry="sym01")
+
+        hDD_dD = cast(
+            List[List[List[sp.Expr]]], ixp.declarerank3("hDD_dD", symmetry="sym01")
+        )
+        # Overwrite what hDD_dD[i][j][0] means:
+        for i in range(3):
+            for j in range(3):
+                # MYPY ERROR HERE:
+                hDD_dD[i][j][0] = self.partialrhDD[i][j]
+
+        # Stolen from BSSN_quantities.py:
+        self.gammabarDDdD = ixp.zerorank3()
+        for i in range(3):
+            for j in range(3):
+                for k in range(3):
+                    self.gammabarDDdD[i][j][k] = (
+                        self.rfm.ghatDDdD[i][j][k]
+                        + hDD_dD[i][j][k] * self.rfm.ReDD[i][j]
+                        + self.Bq.hDD[i][j] * self.rfm.ReDDdD[i][j][k]
+                    )
 
         # Step 1: Define the level-set function F and its derivatives
         # Declare variables that will be computed from finite differencing.
