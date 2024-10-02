@@ -257,16 +257,16 @@ free(Hs);
 free(Omegas);
 free(Omega_circs);
 
-// Populate the combined dynamics
+// Populate the combined inspiral dynamics
 
-commondata->nsteps_combined = commondata->nsteps_fine + commondata->nsteps_low;
-commondata->dynamics_combined = calloc(8 * commondata->nsteps_combined, sizeof(REAL));
+commondata->nsteps_inspiral = commondata->nsteps_fine + commondata->nsteps_low;
+commondata->dynamics_inspiral = calloc(8 * commondata->nsteps_inspiral, sizeof(REAL));
 for (i = 0; i < NUMVARS * commondata->nsteps_low; i++) {
-  commondata->dynamics_combined[i] = commondata->dynamics_low[i];
+  commondata->dynamics_inspiral[i] = commondata->dynamics_low[i];
 }
 int i_start_fine = NUMVARS*commondata->nsteps_low;
-for (i = i_start_fine; i < NUMVARS * (commondata->nsteps_combined); i++) {
-  commondata->dynamics_combined[i] = commondata->dynamics_fine[i - i_start_fine];
+for (i = i_start_fine; i < NUMVARS * (commondata->nsteps_inspiral); i++) {
+  commondata->dynamics_inspiral[i] = commondata->dynamics_fine[i - i_start_fine];
 }
 
 return GSL_SUCCESS;

@@ -81,23 +81,27 @@ SEOBNRv5_aligned_spin_ode_integration(&commondata);
 // Step 5. Generate the waveform.
 SEOBNRv5_aligned_spin_waveform_from_dynamics(&commondata);
 
-// Step 6.a. Compute and apply the NQC corrections
+// Step 6. Compute and apply the NQC corrections
 SEOBNRv5_aligned_spin_NQC_corrections(&commondata);
+
+// Step 7.a Cmopute the IMR waveform
+SEOBNRv5_aligned_spin_IMR_waveform(&commondata);
 
 // Step 6.b: Print the resulting waveform.
 size_t i;
 
-for (i = 0; i < commondata.nsteps_combined; i++) {
-    printf("%.15e %.15e %.15e\n", commondata.waveform_combined[IDX_WF(i,TIME)]
-    , commondata.waveform_combined[IDX_WF(i,HPLUS)], commondata.waveform_combined[IDX_WF(i,HCROSS)]);
+for (i = 0; i < commondata.nsteps_IMR; i++) {
+    printf("%.15e %.15e %.15e\n", commondata.waveform_IMR[IDX_WF(i,TIME)]
+    , commondata.waveform_IMR[IDX_WF(i,HPLUS)], commondata.waveform_IMR[IDX_WF(i,HCROSS)]);
 }
 
 free(commondata.dynamics_low);
 free(commondata.dynamics_fine);
-free(commondata.dynamics_combined);
+free(commondata.dynamics_inspiral);
 free(commondata.waveform_low);
 free(commondata.waveform_fine);
-free(commondata.waveform_combined);
+free(commondata.waveform_inspiral);
+free(commondata.waveform_IMR);
 
 return 0;
 """
@@ -132,6 +136,7 @@ seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_ode_integration()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics()
 seobnr_wf_CCL.register_CFunction_SEOBNRv5_NQC_corrections()
+seobnr_wf_CCL.register_CFunction_SEOBNRv5_aligned_spin_IMR_waveform()
 
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
@@ -178,6 +183,8 @@ Bdefines_h.output_BHaH_defines_h(
 #define NUMMODES 3
 #define HPLUS 1
 #define HCROSS 2
+#define HAMP 1
+#define HPHASE 2
 #define IDX_WF(idx,var) ((idx)*NUMMODES + (var))
 """
     },
