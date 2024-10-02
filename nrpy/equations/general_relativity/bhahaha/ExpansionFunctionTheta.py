@@ -13,8 +13,8 @@ where:
 
 At a marginally trapped surface, Theta = 0.
 
-Note that only the definition of F(r,theta,phi) is in Spherical coordinates; adjusting only
-this should make the construction of Theta fully covariant.
+Note that only the definition of F(r,theta,phi) and derivatives of hDD are in Spherical coordinates; adjusting
+these should make the construction of Theta fully covariant.
 
 This implementation follows the notation and methodology primarily from:
 - Thornburg (https://arxiv.org/pdf/gr-qc/9508014)
@@ -25,7 +25,6 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from collections import OrderedDict
 from typing import Dict, List, cast
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
@@ -76,10 +75,6 @@ class ExpansionFunctionThetaClass:
         # Compute the Expansion Function Theta
         self.Theta = self._compute_theta()
 
-        # Store the result in an ordered dictionary for easy access and extension
-        self.Theta_varname_to_expr_dict: Dict[str, sp.Expr] = OrderedDict()
-        self.Theta_varname_to_expr_dict["Theta"] = self.Theta
-
     def _compute_theta(self) -> sp.Expr:
         """
         Compute the Expansion Function Theta based on the defined equations.
@@ -104,22 +99,30 @@ class ExpansionFunctionThetaClass:
             self.partialrhDD = gri.register_gridfunctions_for_single_rank2(
                 "partialrhDD", symmetry="sym01", gf_array_name="auxevol_gfs"
             )
+            self.partialthetahDD = gri.register_gridfunctions_for_single_rank2(
+                "partialthetahDD", symmetry="sym01", gf_array_name="auxevol_gfs"
+            )
+            self.partialphihDD = gri.register_gridfunctions_for_single_rank2(
+                "partialphihDD", symmetry="sym01", gf_array_name="auxevol_gfs"
+            )
             self.KDD = gri.register_gridfunctions_for_single_rank2(
                 "KDD", symmetry="sym01", gf_array_name="auxevol_gfs"
             )
         else:
             self.h = sp.symbols("hh", real=True)
             self.partialrhDD = ixp.declarerank2("partialrhDD", symmetry="sym01")
+            self.partialthetahDD = ixp.declarerank2("partialthetahDD", symmetry="sym01")
+            self.partialphihDD = ixp.declarerank2("partialphihDD", symmetry="sym01")
             self.KDD = ixp.declarerank2("KDD", symmetry="sym01")
 
         hDD_dD = cast(
             List[List[List[sp.Expr]]], ixp.declarerank3("hDD_dD", symmetry="sym01")
         )
-        # Overwrite what hDD_dD[i][j][0] means:
         for i in range(3):
             for j in range(3):
-                # MYPY ERROR HERE:
                 hDD_dD[i][j][0] = self.partialrhDD[i][j]
+                hDD_dD[i][j][1] = self.partialthetahDD[i][j]
+                hDD_dD[i][j][2] = self.partialphihDD[i][j]
 
         # Stolen from BSSN_quantities.py:
         self.gammabarDDdD = ixp.zerorank3()
