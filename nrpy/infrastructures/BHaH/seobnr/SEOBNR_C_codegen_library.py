@@ -51,6 +51,7 @@ par.register_CodeParameters(
     __name__,
     [
         "Delta_t",
+        "t_ISCO",
         "omega_qnm",
         "tau_qnm",
         "a_f",
@@ -76,6 +77,7 @@ par.register_CodeParameters(
         0.0,
         0.0,
         0.0,
+        0.0,
     ],
     commondata=True,
     add_to_parfile=False,
@@ -88,10 +90,11 @@ par.register_CodeParameters(
     [
         "dynamics_low",
         "dynamics_fine",
-        "dynamics_combined",
+        "dynamics_inspiral",
         "waveform_low",
         "waveform_fine",
-        "waveform_combined",
+        "waveform_inspiral",
+        "waveform_IMR",
     ],
     commondata=True,
     add_to_parfile=False,
@@ -101,7 +104,7 @@ par.register_CodeParameters(
 par.register_CodeParameters(
     "size_t",
     __name__,
-    ["nsteps_low", "nsteps_fine", "nsteps_combined"],
+    ["nsteps_low", "nsteps_fine", "nsteps_inspiral", "nsteps_IMR"],
     commondata=True,
     add_to_parfile=False,
     add_to_set_CodeParameters_h=False,
@@ -131,12 +134,14 @@ par.register_CodeParameters(
 par.register_CodeParameters(
     "REAL",
     __name__,
-    ["mass_ratio", "chi1", "chi2", "initial_omega"],
+    ["mass_ratio", "chi1", "chi2", "initial_omega", "total_mass", "dt"],
     [
         1,
         0.4,
         -0.3,
         0.01118,
+        50,
+        2.4627455127717882e-05,
     ],  # mass_ratio convention is m_greater/m_lesser, initial_omega chosen for r ~ 20M
     commondata=True,
     add_to_parfile=True,
@@ -274,8 +279,8 @@ const REAL dSO = commondata->dSO;
 REAL t , r , phi , prstar, pphi , Hreal , Omega , Omega_circ;
 REAL gamma_real_22 , gamma_imag_22;
 REAL gamma_22[2];
-commondata->waveform_low = (REAL *)calloc(commondata->nsteps_low*NUMMODES,sizeof(REAL)); //t , h_+ , h_x
-commondata->waveform_fine = (REAL *)calloc(commondata->nsteps_fine*NUMMODES,sizeof(REAL)); //t , h_+ , h_x
+commondata->waveform_low = (REAL *)malloc(commondata->nsteps_low*NUMMODES*sizeof(REAL)); //t , h_+ , h_x
+commondata->waveform_fine = (REAL *)malloc(commondata->nsteps_fine*NUMMODES*sizeof(REAL)); //t , h_+ , h_x
 
 //low sampling
 for (i = 0; i < commondata->nsteps_low; i++) {

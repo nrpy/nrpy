@@ -317,16 +317,14 @@ class BOB_aligned_spin_waveform_quantities:
         arctan_p = (
             kappa_p * tau_qnm * (sp.atan2(Omega, kappa_p) - sp.atan2(Omega_0, kappa_p))
         )
-        h = (Ap / 4 / (Omega**2)) * (1 / sp.cosh((t - t_p) / tau_qnm))
+        self.h = (Ap / 4 / (Omega**2)) * (1 / sp.cosh((t - t_p) / tau_qnm))
         Phi = arctan_p + arctanh_p - arctan_m - arctanh_m
-        phi = 2 * Phi
-        self.hplus = h * sp.cos(phi)
-        self.hcross = h * sp.cos(-phi)
+        self.phi = 2 * Phi
         # mostly trivial
         t_attach = t_0
         self.h_t_attach = h22NR
         self.hdot_t_attach = sp.sympify(0)
-        self.hddot_t_attach = sp.diff(sp.diff(h, t), t).subs(t, t_attach)
+        self.hddot_t_attach = sp.diff(sp.diff(self.h, t), t).subs(t, t_attach)
         self.w_t_attach = omega22NR
         tanht0 = (Omega_0**4 - Omega_qnm**4) / (Omega_0**4 + Omega_qnm**4)
         self.wdot_t_attach = -omega22NR * tanht0 / (2 * tau_qnm)
