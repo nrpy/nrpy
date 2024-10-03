@@ -72,7 +72,7 @@ Used to refine the location of the maximum in frequency or momentum."""
     body = """
 size_t n = (size_t) (right - left)/dt;
 REAL x;
-REAL *restrict dx = (REAL *)calloc(n,sizeof(REAL));
+REAL *restrict dx = (REAL *)malloc(n*sizeof(REAL));
 for (size_t i = 0; i < n; i++){
   x = left + i*dt;
   dx[i] = gsl_spline_eval_deriv(spline, x, acc);
@@ -165,7 +165,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_intepolate_dynamics() -> (
 int i,j;
 // Store the low sampled dynamics.
 commondata->nsteps_low = gsl_interp_bsearch(times, t_stepback, 0, nsteps - 1);
-commondata->dynamics_low = calloc(NUMVARS * commondata->nsteps_low, sizeof(REAL));
+commondata->dynamics_low = malloc(NUMVARS * commondata->nsteps_low*sizeof(REAL));
 for (i = 0; i < commondata->nsteps_low; i++) {
   for (j = 0; j < NUMVARS; j++){
     commondata->dynamics_low[IDX(i,j)] = dynamics_RK[IDX(i,j)];
@@ -176,15 +176,15 @@ for (i = 0; i < commondata->nsteps_low; i++) {
 const REAL dt = 0.1;
 commondata->nsteps_fine = (size_t)(t_max - t_stepback) / dt;
 size_t len_dynamics_fine = nsteps - commondata->nsteps_low;
-REAL *restrict times_fine = (REAL *)calloc(commondata->nsteps_fine,sizeof(REAL));
-REAL *restrict ts = (REAL *)calloc(len_dynamics_fine,sizeof(REAL));
-REAL *restrict rs = (REAL *)calloc(len_dynamics_fine,sizeof(REAL));
-REAL *restrict phis = (REAL *)calloc(len_dynamics_fine,sizeof(REAL));
-REAL *restrict prs = (REAL *)calloc(len_dynamics_fine,sizeof(REAL));
-REAL *restrict pphis = (REAL *)calloc(len_dynamics_fine,sizeof(REAL));
-REAL *restrict Hs = (REAL *)calloc(len_dynamics_fine,sizeof(REAL));
-REAL *restrict Omegas = (REAL *)calloc(len_dynamics_fine,sizeof(REAL));
-REAL *restrict Omega_circs= (REAL *)calloc(len_dynamics_fine,sizeof(REAL));
+REAL *restrict times_fine = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
+REAL *restrict ts = (REAL *)malloc(len_dynamics_fine*sizeof(REAL));
+REAL *restrict rs = (REAL *)malloc(len_dynamics_fine*sizeof(REAL));
+REAL *restrict phis = (REAL *)malloc(len_dynamics_fine*sizeof(REAL));
+REAL *restrict prs = (REAL *)malloc(len_dynamics_fine*sizeof(REAL));
+REAL *restrict pphis = (REAL *)malloc(len_dynamics_fine*sizeof(REAL));
+REAL *restrict Hs = (REAL *)malloc(len_dynamics_fine*sizeof(REAL));
+REAL *restrict Omegas = (REAL *)malloc(len_dynamics_fine*sizeof(REAL));
+REAL *restrict Omega_circs= (REAL *)malloc(len_dynamics_fine*sizeof(REAL));
 for (i = 0; i < commondata->nsteps_fine; i++) {
   times_fine[i] = t_stepback + i * dt;
 }
@@ -220,7 +220,7 @@ gsl_interp_accel *restrict Omega_circ_acc = gsl_interp_accel_alloc();
 gsl_spline *restrict Omega_circ_spline = gsl_spline_alloc(gsl_interp_cspline, len_dynamics_fine);
 gsl_spline_init(Omega_circ_spline, ts, Omega_circs, len_dynamics_fine);
 
-commondata->dynamics_fine = (REAL *)calloc(8 * commondata->nsteps_fine, sizeof(REAL));
+commondata->dynamics_fine = (REAL *)malloc(8 * commondata->nsteps_fine*sizeof(REAL));
 for (i = 0; i < commondata->nsteps_fine; i++) {
   commondata->dynamics_fine[IDX(i , TIME)] = times_fine[i];
   commondata->dynamics_fine[IDX(i , R)] = gsl_spline_eval(r_spline, times_fine[i], r_acc);
@@ -260,7 +260,7 @@ free(Omega_circs);
 // Populate the combined inspiral dynamics
 
 commondata->nsteps_inspiral = commondata->nsteps_fine + commondata->nsteps_low;
-commondata->dynamics_inspiral = calloc(8 * commondata->nsteps_inspiral, sizeof(REAL));
+commondata->dynamics_inspiral = malloc(8 * commondata->nsteps_inspiral*sizeof(REAL));
 for (i = 0; i < NUMVARS * commondata->nsteps_low; i++) {
   commondata->dynamics_inspiral[i] = commondata->dynamics_low[i];
 }
@@ -331,7 +331,7 @@ char hadjust_name[] = "gsl_odeiv2_control_hadjust";
 SEOBNRv5_aligned_spin_augments(commondata);
 REAL h = 2.0 * M_PI / dydt_in[1] / 5.0;
 size_t bufferlength = (size_t)(t1 / h); // runs up to 0.01x maximum time (we should not ideally run that long)
-REAL *restrict dynamics_RK = (REAL *)calloc(bufferlength * (NUMVARS), sizeof(REAL));
+REAL *restrict dynamics_RK = (REAL *)malloc(bufferlength * (NUMVARS)*sizeof(REAL));
 size_t nsteps = 0;
 
 // store
@@ -410,7 +410,7 @@ gsl_odeiv2_step_free(s);
 // High sampling.
 // Get an estimate of the stepback time.
 
-REAL *restrict times = (calloc)(nsteps,sizeof(REAL));
+REAL *restrict times = (REAL *)malloc(nsteps*sizeof(REAL));
 for (i = 0; i < nsteps; i++) {
   times[i] = dynamics_RK[IDX(i,TIME)];
 }
@@ -422,8 +422,8 @@ size_t idx_stepback = gsl_interp_bsearch(times, t_stepback, 0, nsteps - 1);
 REAL t_max = times[nsteps - 1];
 if (stop != 0) {
   size_t len_dynamics_fine = nsteps - idx_stepback;
-  REAL *restrict fpeak_fine = (REAL *)calloc(len_dynamics_fine, sizeof(REAL));
-  REAL *restrict times_fine = (REAL *)calloc(len_dynamics_fine, sizeof(REAL));
+  REAL *restrict fpeak_fine = (REAL *)malloc(len_dynamics_fine*sizeof(REAL));
+  REAL *restrict times_fine = (REAL *)malloc(len_dynamics_fine*sizeof(REAL));
   for (i = 0; i < len_dynamics_fine; i++) {
     times_fine[i] = times[i + idx_stepback];
     fpeak_fine[i] = dynamics_RK[8 * (i + idx_stepback) + stop];

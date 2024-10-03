@@ -33,16 +33,16 @@ def register_CFunction_SEOBNRv5_NQC_corrections() -> Union[None, pcg.NRPyEnv_typ
     bob_wf = BOB.BOB_aligned_spin_waveform_quantities()
 
     body = """
-REAL *restrict times = (REAL *)calloc(commondata->nsteps_fine,sizeof(REAL));
-REAL *restrict Q1 = (REAL *)calloc(commondata->nsteps_fine,sizeof(REAL));
-REAL *restrict Q2 = (REAL *)calloc(commondata->nsteps_fine,sizeof(REAL));
-REAL *restrict Q3 = (REAL *)calloc(commondata->nsteps_fine,sizeof(REAL));
-REAL *restrict P1 = (REAL *)calloc(commondata->nsteps_fine,sizeof(REAL));
-REAL *restrict P2 = (REAL *)calloc(commondata->nsteps_fine,sizeof(REAL));
-REAL *restrict r = (REAL *)calloc(commondata->nsteps_fine,sizeof(REAL));
-REAL *restrict hamp = (REAL *)calloc(commondata->nsteps_fine,sizeof(REAL));
-REAL *restrict phase = (REAL *)calloc(commondata->nsteps_fine,sizeof(REAL));
-REAL *restrict phase_unwrapped = (REAL *)calloc(commondata->nsteps_fine,sizeof(REAL));
+REAL *restrict times = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
+REAL *restrict Q1 = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
+REAL *restrict Q2 = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
+REAL *restrict Q3 = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
+REAL *restrict P1 = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
+REAL *restrict P2 = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
+REAL *restrict r = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
+REAL *restrict hamp = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
+REAL *restrict phase = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
+REAL *restrict phase_unwrapped = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 REAL radius, prstar,Omega; 
 size_t i;
 
@@ -227,7 +227,7 @@ free(phase);
 free(phase_unwrapped);
 
 // apply the nqc correction
-commondata->waveform_inspiral = (REAL *)calloc(commondata->nsteps_inspiral*NUMMODES, sizeof(REAL));
+commondata->waveform_inspiral = (REAL *)malloc(commondata->nsteps_inspiral*NUMMODES*sizeof(REAL));
 REAL nqc_amp, nqc_phase, q1, q2, q3,p1, p2;
 for (i = 0; i < commondata->nsteps_low; i++){
   prstar = commondata->dynamics_low[IDX(i,PRSTAR)];
@@ -294,12 +294,12 @@ def register_CFunction_SEOBNRv5_aligned_spin_IMR_waveform() -> (
     bob_wf = BOB.BOB_aligned_spin_waveform_quantities()
     body = """
 int i;
-REAL *restrict times_old = (REAL *)calloc(commondata->nsteps_inspiral,sizeof(REAL));
-REAL *restrict h22_amp_old = (REAL *)calloc(commondata->nsteps_inspiral,sizeof(REAL));
-REAL *restrict h22_phase_old = (REAL *)calloc(commondata->nsteps_inspiral,sizeof(REAL));
-REAL *restrict orbital_phase_old = (REAL *)calloc(commondata->nsteps_inspiral,sizeof(REAL));
-REAL *restrict h22_phase_unwrapped_old = (REAL *)calloc(commondata->nsteps_inspiral,sizeof(REAL));
-REAL *restrict h22_phase_unmodulated_old = (REAL *)calloc(commondata->nsteps_inspiral,sizeof(REAL));
+REAL *restrict times_old = (REAL *)malloc(commondata->nsteps_inspiral*sizeof(REAL));
+REAL *restrict h22_amp_old = (REAL *)malloc(commondata->nsteps_inspiral*sizeof(REAL));
+REAL *restrict h22_phase_old = (REAL *)malloc(commondata->nsteps_inspiral*sizeof(REAL));
+REAL *restrict orbital_phase_old = (REAL *)malloc(commondata->nsteps_inspiral*sizeof(REAL));
+REAL *restrict h22_phase_unwrapped_old = (REAL *)malloc(commondata->nsteps_inspiral*sizeof(REAL));
+REAL *restrict h22_phase_unmodulated_old = (REAL *)malloc(commondata->nsteps_inspiral*sizeof(REAL));
 REAL hplus,hcross;
 for (i = 0; i < commondata->nsteps_inspiral; i++){
   hplus = commondata->waveform_inspiral[IDX_WF(i,HPLUS)];
@@ -332,9 +332,9 @@ gsl_spline_init(spline_phase_orb,times_old,orbital_phase_old, commondata->nsteps
 
 const REAL dT = commondata->dt/(commondata->total_mass*4.925490947641266978197229498498379006e-6);
 const size_t nsteps_insp_plunge = (size_t) commondata->dynamics_inspiral[IDX(commondata->nsteps_inspiral - 1,TIME)] / dT;
-REAL *restrict times_new = calloc(nsteps_insp_plunge,sizeof(REAL));
-REAL *restrict h22_amp_new = (REAL *)calloc(nsteps_insp_plunge,sizeof(REAL));
-REAL *restrict h22_phase_new = (REAL *)calloc(nsteps_insp_plunge,sizeof(REAL));
+REAL *restrict times_new = malloc(nsteps_insp_plunge*sizeof(REAL));
+REAL *restrict h22_amp_new = (REAL *)malloc(nsteps_insp_plunge*sizeof(REAL));
+REAL *restrict h22_phase_new = (REAL *)malloc(nsteps_insp_plunge*sizeof(REAL));
 for(i = 0; i < nsteps_insp_plunge; i++){
   times_new[i] = i * dT;
   h22_amp_new[i] = gsl_spline_eval(spline_amp,times_new[i],acc_amp);
@@ -366,8 +366,8 @@ else{
 }
 const REAL t_attach = times_new[idx_attach];
 const size_t ringdown_time = 15 * (size_t) (commondata->tau_qnm / dT);
-REAL *restrict ringdown_waveform_amp_phase = (REAL *)calloc(NUMMODES*ringdown_time, sizeof(REAL));
-REAL *restrict ringdown_phase_wrapped = (REAL *)calloc(ringdown_time,sizeof(REAL));
+REAL *restrict ringdown_waveform_amp_phase = (REAL *)malloc(NUMMODES*ringdown_time*sizeof(REAL));
+REAL *restrict ringdown_phase_wrapped = (REAL *)malloc(ringdown_time*sizeof(REAL));
 
 const REAL m1 = commondata->m1;
 const REAL m2 = commondata->m2;
@@ -409,7 +409,7 @@ for (i = 1; i < ringdown_time; i++){
 free(ringdown_phase_wrapped);
 
 commondata->nsteps_IMR = idx_attach + ringdown_time;
-commondata->waveform_IMR = calloc(NUMMODES * commondata->nsteps_IMR, sizeof(REAL));
+commondata->waveform_IMR = malloc(NUMMODES * commondata->nsteps_IMR*sizeof(REAL));
 for (i = 0; i < idx_attach + 1; i++){
   commondata->waveform_IMR[IDX_WF(i,TIME)] = times_new[i];
   commondata->waveform_IMR[IDX_WF(i,HPLUS)] = h22_amp_new[i] * cos(h22_phase_new[i]);

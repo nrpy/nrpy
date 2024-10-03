@@ -279,8 +279,8 @@ const REAL dSO = commondata->dSO;
 REAL t , r , phi , prstar, pphi , Hreal , Omega , Omega_circ;
 REAL gamma_real_22 , gamma_imag_22;
 REAL gamma_22[2];
-commondata->waveform_low = (REAL *)calloc(commondata->nsteps_low*NUMMODES,sizeof(REAL)); //t , h_+ , h_x
-commondata->waveform_fine = (REAL *)calloc(commondata->nsteps_fine*NUMMODES,sizeof(REAL)); //t , h_+ , h_x
+commondata->waveform_low = (REAL *)malloc(commondata->nsteps_low*NUMMODES*sizeof(REAL)); //t , h_+ , h_x
+commondata->waveform_fine = (REAL *)malloc(commondata->nsteps_fine*NUMMODES*sizeof(REAL)); //t , h_+ , h_x
 
 //low sampling
 for (i = 0; i < commondata->nsteps_low; i++) {
