@@ -19,13 +19,14 @@ class CFunction:
     :param subdirectory: Path from the root source directory to this C function. Defaults to the current directory.
     :param enable_simd: Boolean to enable SIMD. Default is False.
     :param includes: A list of strings representing include files.
-    :param prefunc: A string representing a pre-function code. Defaults to an empty string.
+    :param prefunc: A string containing code above the core function declaration. Defaults to an empty string.
     :param desc: A description of the function.
     :param cfunc_type: The C type of the function (e.g., void, int). Default is "void".
     :param name: The name of the function.
     :param params: A string representing the function's input parameters. Defaults to an empty string.
     :param include_CodeParameters_h: Boolean to enable C parameters. Default is False.
     :param body: The body of the function.
+    :param postfunc: A string containing code below the core function definition. Defaults to an empty string.
     :param CoordSystem_for_wrapper_func: (BHaH only) Coordinate system for the wrapper function. E.g., if set to Cartesian -> create subdirectory/name() wrapper function and subdirectory/Cartesian/name__rfm__Cartesian(). Defaults to an empty string.
     :param ET_thorn_name: (ET only) Thorn home for this function.
     :param ET_schedule_bins_entries: (ET only) List of (schedule bin, schedule entry) tuples for Einstein Toolkit schedule.ccl.
@@ -61,6 +62,7 @@ class CFunction:
         params: str = "",
         include_CodeParameters_h: bool = False,
         body: str = "",
+        postfunc: str = "",
         CoordSystem_for_wrapper_func: str = "",
         ET_thorn_name: str = "",
         ET_schedule_bins_entries: Optional[List[Tuple[str, str]]] = None,
@@ -90,6 +92,7 @@ class CFunction:
         self.params = params
         self.include_CodeParameters_h = include_CodeParameters_h
         self.body = body
+        self.postfunc = postfunc
         self.CoordSystem_for_wrapper_func = CoordSystem_for_wrapper_func
         self.ET_thorn_name = ET_thorn_name
         self.ET_schedule_bins_entries = ET_schedule_bins_entries
@@ -212,6 +215,8 @@ class CFunction:
 
         complete_func += f"{self.function_prototype.replace(';', '')} {{\n{include_Cparams_str}{self.body}}}\n"
 
+        complete_func += f"{self.postfunc}\n"
+
         return complete_func, clang_format(
             complete_func, clang_format_options=self.clang_format_options
         )
@@ -254,6 +259,7 @@ def register_CFunction(
     params: str = "",
     include_CodeParameters_h: bool = False,
     body: str = "",
+    postfunc: str = "",
     CoordSystem_for_wrapper_func: str = "",
     ET_thorn_name: str = "",
     ET_schedule_bins_entries: Optional[List[Tuple[str, str]]] = None,
@@ -267,13 +273,14 @@ def register_CFunction(
     :param subdirectory: Path from the root source directory to this C function. Defaults to the current directory.
     :param enable_simd: Boolean to enable SIMD. Default is False.
     :param includes: A list of strings representing include files.
-    :param prefunc: A string representing a pre-function code. Defaults to an empty string.
+    :param prefunc: A string containing code above the core function declaration. Defaults to an empty string.
     :param desc: A description of the function.
     :param cfunc_type: The C/C++ type of the function (e.g., void, int). Default is "void".
     :param name: The name of the function.
     :param params: A string representing the function's input parameters. Defaults to an empty string.
     :param include_CodeParameters_h: Boolean to enable C parameters. Default is False.
     :param body: The body of the function.
+    :param postfunc: A string containing code after the core function declaration. Defaults to an empty string.
     :param CoordSystem_for_wrapper_func: (BHaH only) Coordinate system for the wrapper function. E.g., if set to Cartesian -> create subdirectory/name() wrapper function and subdirectory/Cartesian/name__rfm__Cartesian(). Defaults to an empty string.
     :param ET_thorn_name: (ET only) Thorn home for this function.
     :param ET_schedule_bins_entries: (ET only) List of tuples for Einstein Toolkit schedule.
@@ -299,6 +306,7 @@ def register_CFunction(
         params=params,
         include_CodeParameters_h=include_CodeParameters_h,
         body=body,
+        postfunc=postfunc,
         CoordSystem_for_wrapper_func=CoordSystem_for_wrapper_func,
         ET_thorn_name=ET_thorn_name,
         ET_schedule_bins_entries=ET_schedule_bins_entries,

@@ -122,7 +122,9 @@ def inject_mpfs_into_cse_expression(
     reduced_expr = reduced[0]
 
     for lhs, rhs in replaced:
-        free_symbols_dict[lhs] = rhs.xreplace(free_symbols_dict)
+        # Using .evalf(n=mp.dps) at the end ensures that purely numerical expressions are simplified
+        # while maintaining the desired precision. This significantly speeds up the validation algorithm.
+        free_symbols_dict[lhs] = rhs.xreplace(free_symbols_dict).evalf(n=mp.dps)
 
     reduced_expr = reduced_expr.xreplace(free_symbols_dict)
 
