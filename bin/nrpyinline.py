@@ -173,7 +173,7 @@ def run_script_from_file(file_path: str) -> None:
                 try:
                     # Warning: this will exec the Python script.
                     exec(script_code, namespace)  # pylint: disable=exec-used
-                except Exception as e:  # pylint: disable=broad-except
+                except Exception:  # Removed 'as e' since it's unused
                     # Print the entire traceback along with the error message
                     print(
                         f"Error executing script ending at line {line_number}:\n{traceback.format_exc()}",
