@@ -97,16 +97,25 @@ class ExpansionFunctionThetaClass:
         if "hh" not in gri.glb_gridfcs_dict:
             self.h = gri.register_gridfunctions("hh", wavespeed=1.0)
             self.partialrhDD = gri.register_gridfunctions_for_single_rank2(
-                "partialrhDD", symmetry="sym01", gf_array_name="auxevol_gfs"
+                "partialrhDD",
+                symmetry="sym01",
+                group="AUXEVOL",
+                gf_array_name="auxevol_gfs",
             )
             self.partialthetahDD = gri.register_gridfunctions_for_single_rank2(
-                "partialthetahDD", symmetry="sym01", gf_array_name="auxevol_gfs"
+                "partialthetahDD",
+                symmetry="sym01",
+                group="AUXEVOL",
+                gf_array_name="auxevol_gfs",
             )
             self.partialphihDD = gri.register_gridfunctions_for_single_rank2(
-                "partialphihDD", symmetry="sym01", gf_array_name="auxevol_gfs"
+                "partialphihDD",
+                symmetry="sym01",
+                group="AUXEVOL",
+                gf_array_name="auxevol_gfs",
             )
             self.KDD = gri.register_gridfunctions_for_single_rank2(
-                "KDD", symmetry="sym01", gf_array_name="auxevol_gfs"
+                "KDD", symmetry="sym01", group="AUXEVOL", gf_array_name="auxevol_gfs"
             )
         else:
             self.h = sp.symbols("hh", real=True)
