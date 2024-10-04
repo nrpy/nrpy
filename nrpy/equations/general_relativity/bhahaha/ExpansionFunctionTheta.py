@@ -97,19 +97,19 @@ class ExpansionFunctionThetaClass:
         if "hh" not in gri.glb_gridfcs_dict:
             self.h = gri.register_gridfunctions("hh", wavespeed=1.0)
             self.partialrhDD = gri.register_gridfunctions_for_single_rank2(
-                "partialrhDD",
+                "partial_r_hDD",
                 symmetry="sym01",
                 group="AUXEVOL",
                 gf_array_name="auxevol_gfs",
             )
-            self.partialthetahDD = gri.register_gridfunctions_for_single_rank2(
-                "partialthetahDD",
+            self.partialthhDD = gri.register_gridfunctions_for_single_rank2(
+                "partial_theta_hDD",
                 symmetry="sym01",
                 group="AUXEVOL",
                 gf_array_name="auxevol_gfs",
             )
-            self.partialphihDD = gri.register_gridfunctions_for_single_rank2(
-                "partialphihDD",
+            self.partialphhDD = gri.register_gridfunctions_for_single_rank2(
+                "partial_phi_hDD",
                 symmetry="sym01",
                 group="AUXEVOL",
                 gf_array_name="auxevol_gfs",
@@ -119,9 +119,9 @@ class ExpansionFunctionThetaClass:
             )
         else:
             self.h = sp.symbols("hh", real=True)
-            self.partialrhDD = ixp.declarerank2("partialrhDD", symmetry="sym01")
-            self.partialthetahDD = ixp.declarerank2("partialthetahDD", symmetry="sym01")
-            self.partialphihDD = ixp.declarerank2("partialphihDD", symmetry="sym01")
+            self.partialrhDD = ixp.declarerank2("partial_r_hDD", symmetry="sym01")
+            self.partialthhDD = ixp.declarerank2("partial_theta_hDD", symmetry="sym01")
+            self.partialphhDD = ixp.declarerank2("partial_phi_hDD", symmetry="sym01")
             self.KDD = ixp.declarerank2("KDD", symmetry="sym01")
 
         hDD_dD = cast(
@@ -130,8 +130,8 @@ class ExpansionFunctionThetaClass:
         for i in range(3):
             for j in range(3):
                 hDD_dD[i][j][0] = self.partialrhDD[i][j]
-                hDD_dD[i][j][1] = self.partialthetahDD[i][j]
-                hDD_dD[i][j][2] = self.partialphihDD[i][j]
+                hDD_dD[i][j][1] = self.partialthhDD[i][j]
+                hDD_dD[i][j][2] = self.partialphhDD[i][j]
 
         # Stolen from BSSN_quantities.py:
         self.gammabarDDdD = ixp.zerorank3()
