@@ -29,7 +29,6 @@ from typing import Dict, List, cast
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
-import nrpy.grid as gri
 import nrpy.indexedexp as ixp  # NRPy: Symbolic indexed expression support
 import nrpy.reference_metric as refmetric  # NRPy: Reference metric support
 
@@ -95,48 +94,22 @@ class ExpansionFunctionThetaClass:
         """
         # Step 0: Register h, h_{ij}, h_{ij,k}, W, W_{,k}, and K_{ij} as gridfunctions, if not already
         #         registered. If already registered, just declare as NRPy indexed expressions.
-        if "hh" not in gri.glb_gridfcs_dict:
-            self.h = gri.register_gridfunctions("hh", wavespeed=1.0)[0]
-            self.W = gri.register_gridfunctions(
-                "WW", group="AUXEVOL", gf_array_name="auxevol_gfs"
-            )[0]
-            self.WdD = gri.register_gridfunctions_for_single_rank1(
-                "partial_D_WW", group="AUXEVOL", gf_array_name="auxevol_gfs"
-            )
-            self.hDDdD = gri.register_gridfunctions_for_single_rankN(
-                "partial_D_hDD",
-                rank=3,
-                symmetry="sym12",
-                group="AUXEVOL",
-                gf_array_name="auxevol_gfs",
-            )
-            self.KDD = gri.register_gridfunctions_for_single_rank2(
-                "KDD", symmetry="sym01", group="AUXEVOL", gf_array_name="auxevol_gfs"
-            )
-        else:
-            self.h, self.W = sp.symbols("hh WW", real=True)
-            self.WdD = ixp.declarerank1("partial_D_WW")
-            self.hDDdD = cast(
-                List[List[List[sp.Expr]]],
-                ixp.declarerank3("partial_D_hDD", symmetry="sym12"),
-            )
-            self.KDD = ixp.declarerank2("KDD", symmetry="sym01")
 
         # Step 1: Define the level-set function F and its derivatives
         # Declare variables that will be computed from finite differencing.
-        self.h_dD = ixp.declarerank1("hh_dD")
-        self.h_dDD = ixp.declarerank2("hh_dDD", symmetry="sym01")
+        h_dD = ixp.declarerank1("hh_dD")
+        h_dDD = ixp.declarerank2("hh_dDD", symmetry="sym01")
         # F(r, theta, phi) = r - h(theta, phi)
         # Partial derivatives of F with respect to coordinates: F_dD = [1, -h_theta, -h_phi]
-        F_dD = [sp.sympify(1), -self.h_dD[1], -self.h_dD[2]]  # Partial derivatives of F
+        F_dD = [sp.sympify(1), -h_dD[1], -h_dD[2]]  # Partial derivatives of F
         F_dDD = ixp.zerorank2()  # Second partial derivatives of F
         # F_dDD[i][j] = second derivative of F with respect to coordinates i and j
         F_dDD[0][0] = sp.sympify(0)
         F_dDD[0][1] = F_dDD[1][0] = sp.sympify(0)
         F_dDD[0][2] = F_dDD[2][0] = sp.sympify(0)
-        F_dDD[1][1] = -self.h_dDD[1][1]
-        F_dDD[1][2] = F_dDD[2][1] = -self.h_dDD[1][2]
-        F_dDD[2][2] = -self.h_dDD[2][2]
+        F_dDD[1][1] = -h_dDD[1][1]
+        F_dDD[1][2] = F_dDD[2][1] = -h_dDD[1][2]
+        F_dDD[2][2] = -h_dDD[2][2]
 
         # Step 2: Next compute needed metric quantities
         # Stolen from BSSN_quantities.py:
@@ -151,37 +124,45 @@ class ExpansionFunctionThetaClass:
         # W = e^{4 phi}
         # -> gamma_{ij} = 1/W^2 gammabar_{ij}
         gammaDD = ixp.zerorank2()
+        W = sp.symbols("WW", real=True)
         for i in range(3):
             for j in range(3):
-                gammaDD[i][j] = 1 / self.W**2 * gammabarDD[i][j]
+                gammaDD[i][j] = 1 / W**2 * gammabarDD[i][j]
         gammabarDDdD = ixp.zerorank3()
+        hDDdD = cast(
+            List[List[List[sp.Expr]]],
+            ixp.declarerank3("partial_D_hDD", symmetry="sym12"),
+        )
         for i in range(3):
             for j in range(3):
                 for k in range(3):
+                    # Stolen from BSSN_quantities.py:
+                    # gammabar_{ij,k} = gammahat_{ij,k} + h_{ij,k} ReDD[i][j] + h_{ij} ReDDdD[i][j][k]
                     gammabarDDdD[i][j][k] = (
                         self.rfm.ghatDDdD[i][j][k]
-                        + self.hDDdD[i][j][k] * self.rfm.ReDD[i][j]
+                        + hDDdD[i][j][k] * self.rfm.ReDD[i][j]
                         + hDD[i][j] * self.rfm.ReDDdD[i][j][k]
                     )
         # W = e^{4 phi}
         # -> gamma_{ij} = 1/W^2 gammabar_{ij}
         # -> gamma_{ij,k} = -2 1/W^3 gammabar_{ij} W_{,k} + 1/W^2 gammabar_{ij,k}
         gammaDDdD = ixp.zerorank3()
+        WdD = ixp.declarerank1("partial_D_WW")
         for i in range(3):
             for j in range(3):
                 for k in range(3):
                     gammaDDdD[i][j][k] = (
-                        -2 / self.W**3 * gammabarDD[i][j] * self.WdD[k]
-                        + gammabarDDdD[i][j][k] / self.W**2
+                        -2 / W**3 * gammabarDD[i][j] * WdD[k]
+                        + gammabarDDdD[i][j][k] / W**2
                     )
         # Compute derivatives of det(gamma) using Jacobi's formula:
         # detgamma_{,k} = detgamma * gamma^{ij} gamma_{ij,k}
         gammaUU, detgamma = ixp.symm_matrix_inverter3x3(gammaDD)
-        detgamma_dD = ixp.zerorank1()
+        self.detgamma_dD = ixp.zerorank1()
         for k in range(3):
             for j in range(3):
                 for i in range(3):
-                    detgamma_dD[k] += detgamma * gammaUU[i][j] * gammaDDdD[i][j][k]
+                    self.detgamma_dD[k] += detgamma * gammaUU[i][j] * gammaDDdD[i][j][k]
 
         # Step 3: Compute derivatives of the inverse 3-metric gamma^{ij}
         # Using the identity: gamma^{ij}_{,k} = -gamma^{im} gamma^{jn} gamma_{mn,k}
@@ -212,9 +193,9 @@ class ExpansionFunctionThetaClass:
         lamb = sp.sqrt(lambda_squared)
 
         # Step 6: Compute the unit normal vector s^i = (gamma^{ij} partial_j F) / (lambda)
-        sU = ixp.zerorank1()
+        self.sU = ixp.zerorank1()
         for i in range(3):
-            sU[i] = unnormalized_sU[i] / lamb
+            self.sU[i] = unnormalized_sU[i] / lamb
 
         # Step 7: Compute the derivative of lambda, i.e., partial_i lambda
         # partial_i lambda = (1/2 lambda) [partial_k F partial_m F partial_i gamma^{km} + 2 gamma^{km} partial_m F partial_i partial_k F]
@@ -274,25 +255,26 @@ class ExpansionFunctionThetaClass:
 
         # Step 9: Compute the covariant divergence of s^i
         # D_i s^i = 1/(2 detgamma) s^i partial_i detgamma + partial_i s^i
-        covariant_divergence_of_s_i = sp.sympify(0)
+        self.covariant_divergence_of_s_i = sp.sympify(0)
         for i in range(3):
-            covariant_divergence_of_s_i += sU[i] * detgamma_dD[i]
-        covariant_divergence_of_s_i *= 1 / (2 * detgamma)
-        covariant_divergence_of_s_i += partial_i_si
+            self.covariant_divergence_of_s_i += self.sU[i] * self.detgamma_dD[i]
+        self.covariant_divergence_of_s_i *= 1 / (2 * detgamma)
+        self.covariant_divergence_of_s_i += partial_i_si
 
         # Step 10: Assemble the final expression for Theta
         # Theta = D_i s^i - K + s^i s^j K_{ij}
-        Theta = covariant_divergence_of_s_i
+        Theta = self.covariant_divergence_of_s_i
         # Subtract the trace of the extrinsic curvature K = gamma^{ij} K_{ij}
-        K_trace = sp.sympify(0)
+        self.K_trace = sp.sympify(0)
+        KDD = ixp.declarerank2("KDD", symmetry="sym01")
         for i in range(3):
             for j in range(3):
-                K_trace += gammaUU[i][j] * self.KDD[i][j]
-        Theta -= K_trace
+                self.K_trace += gammaUU[i][j] * KDD[i][j]
+        Theta -= self.K_trace
         # Add s^i s^j K_{ij}
         for i in range(3):
             for j in range(3):
-                Theta += sU[i] * sU[j] * self.KDD[i][j]
+                Theta += self.sU[i] * self.sU[j] * KDD[i][j]
 
         return Theta
 
