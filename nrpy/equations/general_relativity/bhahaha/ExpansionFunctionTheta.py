@@ -3,12 +3,12 @@ Compute the Expansion Function Theta in Spherical Coordinates.
 
 This module calculates the Expansion Function Theta, defined as:
 
-Theta = Dbar_i s^i - K + s^i s^j K_ij,
+Theta = D_i s^i - K + s^i s^j K_ij,
 
 where:
-- Dbar_i is the covariant derivative associated with the physical 3-metric gammabar_jk,
+- D_i is the covariant derivative associated with the physical 3-metric gamma_jk,
 - K_ij is the extrinsic curvature,
-- K = gammabar^jk K_jk is the trace of the extrinsic curvature,
+- K = gamma^jk K_jk is the trace of the extrinsic curvature,
 - s^i is the unit normal to the horizon surface defined by the level-set function F(r, theta, phi) = r - h(theta, phi) = 0.
 
 At a marginally trapped surface, Theta = 0.
@@ -27,12 +27,11 @@ Author: Zachariah B. Etienne
 
 from typing import Dict, List, cast
 
-import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
+import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
 import nrpy.grid as gri
-import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression support
-import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
-from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
+import nrpy.indexedexp as ixp  # NRPy: Symbolic indexed expression support
+import nrpy.reference_metric as refmetric  # NRPy: Reference metric support
 
 
 class ExpansionFunctionThetaClass:
@@ -67,11 +66,6 @@ class ExpansionFunctionThetaClass:
             )
         ]
 
-        # Import BSSN quantities specific to the coordinate system and precompute flag
-        self.Bq = BSSN_quantities[
-            self.CoordSystem + ("_rfm_precompute" if enable_rfm_precompute else "")
-        ]
-
         # Compute the Expansion Function Theta
         self.Theta = self._compute_theta()
 
@@ -80,22 +74,35 @@ class ExpansionFunctionThetaClass:
         Compute the Expansion Function Theta based on the defined equations.
 
         The computation follows these steps:
-        0. Classify h, gammabarDDdD, and KDD as gridfunctions.
+        0. Register as gridfunctions:
+           * h ("hh")
+           * h_{ij} ("hDD")
+           * W conformal factor ("WW"), W_{,k} ("partial_D_WW")
+           * h_{ij,k} ("partial_D_hDD"), and
+           * K_{ij} ("KDD").
         1. Define the level-set function F and its first and second derivatives.
-        2. Compute the derivatives of the inverse 3-metric gammabar^{ij}.
-        3. Compute the unnormalized normal vector s_i and normalize it to obtain s^i.
-        4. Compute the derivative of the normalization factor lambda.
-        5. Compute the divergence of the unit normal vector s^i.
-        6. Assemble the final expression for Theta.
+        2. Compute needed metric quantities, including gamma_{ij}, gamma^{ij}, and their derivatives.
+        3. Compute derivatives of the inverse 3-metric gamma^{ij}.
+        4. Compute the unnormalized normal vector s^i = gamma^{ij} partial_j F.
+        5. Compute the normalization factor lambda = sqrt(gamma^{ij} partial_i F partial_j F).
+        6. Normalize the normal vector s^i by dividing by lambda.
+        7. Compute the derivative of lambda, i.e., partial_i lambda.
+        8. Compute the divergence of the unit normal vector partial_i s^i.
+        9. Compute the covariant divergence of s^i.
+        10. Assemble the final expression for Theta.
 
         :return: The symbolic expression for Theta.
         """
-        # Step 0: Classify h, gammabarDDdD, and KDD as gridfunctions.
-        # Register gridfunctions for 'hh', 'gammabarDDdD' (partial_k gammabar_mn), and
-        #   KDD (extrinsic curvature tensor K_ij), if not already registered. Otherwise
-        #   just declare the variables.
+        # Step 0: Register h, h_{ij}, h_{ij,k}, W, W_{,k}, and K_{ij} as gridfunctions, if not already
+        #         registered. If already registered, just declare as NRPy indexed expressions.
         if "hh" not in gri.glb_gridfcs_dict:
-            self.h = gri.register_gridfunctions("hh", wavespeed=1.0)
+            self.h = gri.register_gridfunctions("hh", wavespeed=1.0)[0]
+            self.W = gri.register_gridfunctions(
+                "WW", group="AUXEVOL", gf_array_name="auxevol_gfs"
+            )[0]
+            self.WdD = gri.register_gridfunctions_for_single_rank1(
+                "partial_D_WW", group="AUXEVOL", gf_array_name="auxevol_gfs"
+            )
             self.hDDdD = gri.register_gridfunctions_for_single_rankN(
                 "partial_D_hDD",
                 rank=3,
@@ -107,23 +114,13 @@ class ExpansionFunctionThetaClass:
                 "KDD", symmetry="sym01", group="AUXEVOL", gf_array_name="auxevol_gfs"
             )
         else:
-            self.h = sp.symbols("hh", real=True)
+            self.h, self.W = sp.symbols("hh WW", real=True)
+            self.WdD = ixp.declarerank1("partial_D_WW")
             self.hDDdD = cast(
                 List[List[List[sp.Expr]]],
                 ixp.declarerank3("partial_D_hDD", symmetry="sym12"),
             )
             self.KDD = ixp.declarerank2("KDD", symmetry="sym01")
-
-        # Stolen from BSSN_quantities.py:
-        self.gammabarDDdD = ixp.zerorank3()
-        for i in range(3):
-            for j in range(3):
-                for k in range(3):
-                    self.gammabarDDdD[i][j][k] = (
-                        self.rfm.ghatDDdD[i][j][k]
-                        + self.hDDdD[i][j][k] * self.rfm.ReDD[i][j]
-                        + self.Bq.hDD[i][j] * self.rfm.ReDDdD[i][j][k]
-                    )
 
         # Step 1: Define the level-set function F and its derivatives
         # Declare variables that will be computed from finite differencing.
@@ -141,104 +138,158 @@ class ExpansionFunctionThetaClass:
         F_dDD[1][2] = F_dDD[2][1] = -self.h_dDD[1][2]
         F_dDD[2][2] = -self.h_dDD[2][2]
 
-        # Step 2: Compute derivatives of the inverse 3-metric gammabar^{ij}
-        # Using the identity: gammabar^{ij}_{,k} = -gammabar^{im} gammabar^{jn} gammabar_{mn,k}
-        gammabarUU_dD = ixp.zerorank3()
+        # Step 2: Next compute needed metric quantities
+        # Stolen from BSSN_quantities.py:
+        # gammabar_{ij}  = h_{ij}*ReDD[i][j] + gammahat_{ij}
+        gammabarDD = ixp.zerorank2()
+        hDD = ixp.declarerank2("hDD", symmetry="sym01")
+        for i in range(3):
+            for j in range(3):
+                gammabarDD[i][j] = (
+                    hDD[i][j] * self.rfm.ReDD[i][j] + self.rfm.ghatDD[i][j]
+                )
+        # W = e^{4 phi}
+        # -> gamma_{ij} = 1/W^2 gammabar_{ij}
+        gammaDD = ixp.zerorank2()
+        for i in range(3):
+            for j in range(3):
+                gammaDD[i][j] = 1 / self.W**2 * gammabarDD[i][j]
+        gammabarDDdD = ixp.zerorank3()
+        for i in range(3):
+            for j in range(3):
+                for k in range(3):
+                    gammabarDDdD[i][j][k] = (
+                        self.rfm.ghatDDdD[i][j][k]
+                        + self.hDDdD[i][j][k] * self.rfm.ReDD[i][j]
+                        + hDD[i][j] * self.rfm.ReDDdD[i][j][k]
+                    )
+        # W = e^{4 phi}
+        # -> gamma_{ij} = 1/W^2 gammabar_{ij}
+        # -> gamma_{ij,k} = -2 1/W^3 gammabar_{ij} W_{,k} + 1/W^2 gammabar_{ij,k}
+        gammaDDdD = ixp.zerorank3()
+        for i in range(3):
+            for j in range(3):
+                for k in range(3):
+                    gammaDDdD[i][j][k] = (
+                        -2 / self.W**3 * gammabarDD[i][j] * self.WdD[k]
+                        + gammabarDDdD[i][j][k] / self.W**2
+                    )
+        # Compute derivatives of det(gamma) using Jacobi's formula:
+        # detgamma_{,k} = detgamma * gamma^{ij} gamma_{ij,k}
+        gammaUU, detgamma = ixp.symm_matrix_inverter3x3(gammaDD)
+        detgamma_dD = ixp.zerorank1()
+        for k in range(3):
+            for j in range(3):
+                for i in range(3):
+                    detgamma_dD[k] += detgamma * gammaUU[i][j] * gammaDDdD[i][j][k]
+
+        # Step 3: Compute derivatives of the inverse 3-metric gamma^{ij}
+        # Using the identity: gamma^{ij}_{,k} = -gamma^{im} gamma^{jn} gamma_{mn,k}
+        gammaUUdD = ixp.zerorank3()
         for i in range(3):
             for j in range(3):
                 for k in range(3):
                     for m in range(3):
                         for n in range(3):
-                            gammabarUU_dD[i][j][k] += (
-                                -self.Bq.gammabarUU[i][m]
-                                * self.Bq.gammabarUU[j][n]
-                                * self.gammabarDDdD[m][n][k]
+                            gammaUUdD[i][j][k] += (
+                                -gammaUU[i][m] * gammaUU[j][n] * gammaDDdD[m][n][k]
                             )
 
-        # Step 3: Compute the unnormalized normal vector s_i = Dbar_i F
-        # Given F = r - h(theta, phi), we have Dbar_i F = [1, -h_theta, -h_phi]
-        # Compute s^i = gammabar^{ij} F_j
+        # Step 4: Compute the unnormalized normal vector s_i = D_i F
+        # Given F = r - h(theta, phi), we have D_i F = [1, -h_theta, -h_phi]
+        # Compute s^i = gamma^{ij} F_j
         unnormalized_sU = ixp.zerorank1()
         for i in range(3):
             for j in range(3):
-                unnormalized_sU[i] += self.Bq.gammabarUU[i][j] * F_dD[j]
+                unnormalized_sU[i] += gammaUU[i][j] * F_dD[j]
 
-        # Step 4: Compute the normalization factor \lambda = (gammabar^{ij} \partial_i F\, \partial_j F)^{1/2}
+        # Step 5: Compute the normalization factor lambda = (gamma^{ij} partial_i F partial_j F)^{1/2}
         lambda_squared = sp.sympify(0)
         for i in range(3):
             for j in range(3):
-                lambda_squared += self.Bq.gammabarUU[i][j] * F_dD[i] * F_dD[j]
+                #                 gamma^{ij}    partial_i F partial_j F
+                lambda_squared += gammaUU[i][j] * F_dD[i] * F_dD[j]
         lamb = sp.sqrt(lambda_squared)
 
-        # Step 5: Compute the unit normal vector s^i = \frac{gammabar^{ij} \partial_j F}{\lambda}
+        # Step 6: Compute the unit normal vector s^i = (gamma^{ij} partial_j F) / (lambda)
         sU = ixp.zerorank1()
         for i in range(3):
             sU[i] = unnormalized_sU[i] / lamb
 
-        # Step 6: Compute the derivative of \lambda, i.e., \partial_i \lambda
-        # \partial_i \lambda = \frac{1}{2\lambda} (gammabar^{km} \partial_k F \partial_m F \partial_i gammabar^{km} + 2 gammabar^{km} \partial_m F \partial_i \partial_k F)
-        #                      ^^^ PREFACTOR ^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^ TERM 1 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^    ^^^^^^^^^^^^^^^^^^^^^^^^ TERM 2 ^^^^^^^^^^^^^^^^^^^^
+        # Step 7: Compute the derivative of lambda, i.e., partial_i lambda
+        # partial_i lambda = (1/2 lambda) [partial_k F partial_m F partial_i gamma^{km} + 2 gamma^{km} partial_m F partial_i partial_k F]
+        #                      PREFACTOR    ^^^^^^^^^^^^^^^^^^ TERM 1 ^^^^^^^^^^^^^^^^^^   ^^^^^^^^^^^^^^^^^^^ TERM 2 ^^^^^^^^^^^^^^^^^^^
         lamb_dD = ixp.zerorank1()
         # TERM 1:
         for i in range(3):
             for k in range(3):
                 for m in range(3):
-                    lamb_dD[i] += F_dD[k] * F_dD[m] * gammabarUU_dD[k][m][i]
+                    #           partial_k F partial_m F partial_i gamma^{km}
+                    lamb_dD[i] += F_dD[k] * F_dD[m] * gammaUUdD[k][m][i]
         # TERM 2:
         for i in range(3):
             for k in range(3):
                 for m in range(3):
-                    lamb_dD[i] += 2 * self.Bq.gammabarUU[k][m] * F_dD[m] * F_dDD[i][k]
+                    #             2    gamma^{km} partial_m F partial_i partial_k F
+                    lamb_dD[i] += 2 * gammaUU[k][m] * F_dD[m] * F_dDD[i][k]
         # PREFACTOR
         for i in range(3):
+            #              1/2   lambda
             lamb_dD[i] *= 1 / (2 * lamb)
 
-        # Step 7: Compute the divergence of the unit normal vector \partial_i s^i
-        # \partial_i s^i = \frac{1}{\lambda} (\partial_j F \partial_i gammabar^{ij} + gammabar^{ij} \partial_i \partial_j F) - \frac{1}{\lambda^2} \partial_i \lambda gammabar^{ij} \partial_j F
-        #                  ^^ PREFACTOR 1 ^^ ^^^^ FIRST PARENTHETICAL TERM ^^^^^^^^   ^^^^ SECOND PARENTHETICAL TERM ^^^^^^  ^^^^ PREFACTOR 2 ^^^  ^^^^^^^^^ TERM AFTER PARENTHETICAL ^^^^^^^^^^
+        # Step 8: Compute the divergence of the unit normal vector partial_i s^i
+        # partial_i s^i = (1 / lambda) (partial_j F partial_i gamma^{ij} + gamma^{ij} partial_i partial_j F) - (1/ lambda^2) partial_i lambda gamma^{ij} partial_j F
+        #                  PREFACTOR 1   ^^^ FIRST PARENTHETICAL TERM ^^^   ^^ SECOND PARENTHETICAL TERM ^^^     PREFACTOR 2  ^^^^^^^ TERM AFTER PARENTHETICAL ^^^^^^
         partial_i_si_parenthetical_term = sp.sympify(0)
         # FIRST PARENTHETICAL TERM
         for i in range(3):
             for j in range(3):
-                partial_i_si_parenthetical_term += F_dD[j] * gammabarUU_dD[i][j][i]
+                #                              partial_j F partial_i gamma^{ij}
+                partial_i_si_parenthetical_term += F_dD[j] * gammaUUdD[i][j][i]
         # SECOND PARENTHETICAL TERM
         for i in range(3):
             for j in range(3):
-                partial_i_si_parenthetical_term += (
-                    self.Bq.gammabarUU[i][j] * F_dDD[i][j]
-                )
+                #                                    gamma^{ij} partial_i partial_j F
+                partial_i_si_parenthetical_term += gammaUU[i][j] * F_dDD[i][j]
         # PREFACTOR 1
+        #                             (1 / lambda)
         partial_i_si_parenthetical_term /= lamb
 
         partial_i_si_term_after_parenthetical = sp.sympify(0)
         # TERM AFTER PARENTHETICAL
         for i in range(3):
             for j in range(3):
+                # partial_i lambda gamma^{ij} partial_j F
                 partial_i_si_term_after_parenthetical += (
-                    lamb_dD[i] * self.Bq.gammabarUU[i][j] * F_dD[j]
+                    lamb_dD[i] * gammaUU[i][j] * F_dD[j]
                 )
         # PREFACTOR 2
+        #                                     - (1/ lambda^2)
         partial_i_si_term_after_parenthetical /= -lamb * lamb
 
-        # OVERALL SUM:
+        # OVERALL SUM
         partial_i_si = (
             partial_i_si_parenthetical_term + partial_i_si_term_after_parenthetical
         )
 
-        # Step 8: Compute the covariant divergence of s^i
-        # Dbar_i s^i = \frac{1}{2 gammabar} s^i \partial_i gammabar + \partial_i s^i
+        # Step 9: Compute the covariant divergence of s^i
+        # D_i s^i = 1/(2 detgamma) s^i partial_i detgamma + partial_i s^i
         covariant_divergence_of_s_i = sp.sympify(0)
         for i in range(3):
-            covariant_divergence_of_s_i += sU[i] * self.Bq.detgammabar_dD[i]
-        covariant_divergence_of_s_i *= 1 / (2 * self.Bq.detgammabar)
+            covariant_divergence_of_s_i += sU[i] * detgamma_dD[i]
+        covariant_divergence_of_s_i *= 1 / (2 * detgamma)
         covariant_divergence_of_s_i += partial_i_si
 
-        # Step 9: Assemble the final expression for Theta
-        # Theta = Dbar_i s^i - K + s^i s^j K_{ij}
+        # Step 10: Assemble the final expression for Theta
+        # Theta = D_i s^i - K + s^i s^j K_{ij}
         Theta = covariant_divergence_of_s_i
+        # Subtract the trace of the extrinsic curvature K = gamma^{ij} K_{ij}
+        K_trace = sp.sympify(0)
         for i in range(3):
             for j in range(3):
-                Theta += -self.Bq.gammabarUU[i][j] * self.KDD[i][j]
+                K_trace += gammaUU[i][j] * self.KDD[i][j]
+        Theta -= K_trace
+        # Add s^i s^j K_{ij}
         for i in range(3):
             for j in range(3):
                 Theta += sU[i] * sU[j] * self.KDD[i][j]
