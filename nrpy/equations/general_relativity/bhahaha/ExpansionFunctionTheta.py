@@ -129,7 +129,7 @@ class ExpansionFunctionThetaClass:
             for j in range(3):
                 self.gammaDD[i][j] = 1 / W**2 * gammabarDD[i][j]
         gammabarDDdD = ixp.zerorank3()
-        hDDdD = cast(
+        partial_D_hDD = cast(
             List[List[List[sp.Expr]]],
             ixp.declarerank3("partial_D_hDD", symmetry="sym12"),
         )
@@ -140,7 +140,7 @@ class ExpansionFunctionThetaClass:
                     # gammabar_{ij,k} = gammahat_{ij,k} + h_{ij,k} ReDD[i][j] + h_{ij} ReDDdD[i][j][k]
                     gammabarDDdD[i][j][k] = (
                         self.rfm.ghatDDdD[i][j][k]
-                        + hDDdD[i][j][k] * self.rfm.ReDD[i][j]
+                        + partial_D_hDD[k][i][j] * self.rfm.ReDD[i][j]
                         + hDD[i][j] * self.rfm.ReDDdD[i][j][k]
                     )
         # W = e^{4 phi}
@@ -155,6 +155,7 @@ class ExpansionFunctionThetaClass:
                         -2 / W**3 * gammabarDD[i][j] * WdD[k]
                         + gammabarDDdD[i][j][k] / W**2
                     )
+
         # Compute derivatives of det(gamma) using Jacobi's formula:
         # detgamma_{,k} = detgamma * gamma^{ij} gamma_{ij,k}
         self.gammaUU, self.detgamma = ixp.symm_matrix_inverter3x3(self.gammaDD)
