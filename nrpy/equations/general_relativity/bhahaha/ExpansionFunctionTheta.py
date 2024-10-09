@@ -143,6 +143,7 @@ class ExpansionFunctionThetaClass:
                         + partial_D_hDD[k][i][j] * self.rfm.ReDD[i][j]
                         + hDD[i][j] * self.rfm.ReDDdD[i][j][k]
                     )
+
         # W = e^{4 phi}
         # -> gamma_{ij} = 1/W^2 gammabar_{ij}
         # -> gamma_{ij,k} = -2 1/W^3 gammabar_{ij} W_{,k} + 1/W^2 gammabar_{ij,k}
@@ -203,8 +204,8 @@ class ExpansionFunctionThetaClass:
             self.sU[i] = unnormalized_sU[i] / lamb
 
         # Step 7: Compute the derivative of lambda, i.e., partial_i lambda
-        # partial_i lambda = (1/2 lambda) [partial_k F partial_m F partial_i gamma^{km} + 2 gamma^{km} partial_m F partial_i partial_k F]
-        #                      PREFACTOR    ^^^^^^^^^^^^^^^^^^ TERM 1 ^^^^^^^^^^^^^^^^^^   ^^^^^^^^^^^^^^^^^^^ TERM 2 ^^^^^^^^^^^^^^^^^^^
+        # partial_i lambda = 1/(2 lambda) [partial_k F partial_m F partial_i gamma^{km} + 2 gamma^{km} partial_m F partial_i partial_k F]
+        #                      PREFACTOR   ^^^^^^^^^^^^^^^^^^ TERM 1 ^^^^^^^^^^^^^^^^^^   ^^^^^^^^^^^^^^^^^^^ TERM 2 ^^^^^^^^^^^^^^^^^^^
         lamb_dD = ixp.zerorank1()
         # TERM 1:
         for i in range(3):
@@ -220,7 +221,7 @@ class ExpansionFunctionThetaClass:
                     lamb_dD[i] += 2 * self.gammaUU[k][m] * F_dD[m] * F_dDD[i][k]
         # PREFACTOR
         for i in range(3):
-            #              1/2   lambda
+            #              1/(2 lambda)
             lamb_dD[i] *= 1 / (2 * lamb)
 
         # Step 8: Compute the divergence of the unit normal vector partial_i s^i
