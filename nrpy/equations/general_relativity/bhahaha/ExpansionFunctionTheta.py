@@ -121,7 +121,8 @@ class ExpansionFunctionThetaClass:
                 gammabarDD[i][j] = (
                     hDD[i][j] * self.rfm.ReDD[i][j] + self.rfm.ghatDD[i][j]
                 )
-        # W = e^{4 phi}
+        # gamma_{ij} = e^{4 phi} gammabar_{ij}, but
+        #   W = e^{-2 phi}
         # -> gamma_{ij} = 1/W^2 gammabar_{ij}
         self.gammaDD = ixp.zerorank2()
         W = sp.symbols("WW", real=True)
