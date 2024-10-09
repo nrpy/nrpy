@@ -123,11 +123,11 @@ class ExpansionFunctionThetaClass:
                 )
         # W = e^{4 phi}
         # -> gamma_{ij} = 1/W^2 gammabar_{ij}
-        gammaDD = ixp.zerorank2()
+        self.gammaDD = ixp.zerorank2()
         W = sp.symbols("WW", real=True)
         for i in range(3):
             for j in range(3):
-                gammaDD[i][j] = 1 / W**2 * gammabarDD[i][j]
+                self.gammaDD[i][j] = 1 / W**2 * gammabarDD[i][j]
         gammabarDDdD = ixp.zerorank3()
         hDDdD = cast(
             List[List[List[sp.Expr]]],
@@ -157,12 +157,14 @@ class ExpansionFunctionThetaClass:
                     )
         # Compute derivatives of det(gamma) using Jacobi's formula:
         # detgamma_{,k} = detgamma * gamma^{ij} gamma_{ij,k}
-        gammaUU, detgamma = ixp.symm_matrix_inverter3x3(gammaDD)
+        self.gammaUU, self.detgamma = ixp.symm_matrix_inverter3x3(self.gammaDD)
         self.detgamma_dD = ixp.zerorank1()
         for k in range(3):
             for j in range(3):
                 for i in range(3):
-                    self.detgamma_dD[k] += detgamma * gammaUU[i][j] * gammaDDdD[i][j][k]
+                    self.detgamma_dD[k] += (
+                        self.detgamma * self.gammaUU[i][j] * gammaDDdD[i][j][k]
+                    )
 
         # Step 3: Compute derivatives of the inverse 3-metric gamma^{ij}
         # Using the identity: gamma^{ij}_{,k} = -gamma^{im} gamma^{jn} gamma_{mn,k}
@@ -173,7 +175,9 @@ class ExpansionFunctionThetaClass:
                     for m in range(3):
                         for n in range(3):
                             gammaUUdD[i][j][k] += (
-                                -gammaUU[i][m] * gammaUU[j][n] * gammaDDdD[m][n][k]
+                                -self.gammaUU[i][m]
+                                * self.gammaUU[j][n]
+                                * gammaDDdD[m][n][k]
                             )
 
         # Step 4: Compute the unnormalized normal vector s_i = D_i F
@@ -182,14 +186,14 @@ class ExpansionFunctionThetaClass:
         unnormalized_sU = ixp.zerorank1()
         for i in range(3):
             for j in range(3):
-                unnormalized_sU[i] += gammaUU[i][j] * F_dD[j]
+                unnormalized_sU[i] += self.gammaUU[i][j] * F_dD[j]
 
         # Step 5: Compute the normalization factor lambda = (gamma^{ij} partial_i F partial_j F)^{1/2}
         lambda_squared = sp.sympify(0)
         for i in range(3):
             for j in range(3):
                 #                 gamma^{ij}    partial_i F partial_j F
-                lambda_squared += gammaUU[i][j] * F_dD[i] * F_dD[j]
+                lambda_squared += self.gammaUU[i][j] * F_dD[i] * F_dD[j]
         lamb = sp.sqrt(lambda_squared)
 
         # Step 6: Compute the unit normal vector s^i = (gamma^{ij} partial_j F) / (lambda)
@@ -212,7 +216,7 @@ class ExpansionFunctionThetaClass:
             for k in range(3):
                 for m in range(3):
                     #             2    gamma^{km} partial_m F partial_i partial_k F
-                    lamb_dD[i] += 2 * gammaUU[k][m] * F_dD[m] * F_dDD[i][k]
+                    lamb_dD[i] += 2 * self.gammaUU[k][m] * F_dD[m] * F_dDD[i][k]
         # PREFACTOR
         for i in range(3):
             #              1/2   lambda
@@ -231,7 +235,7 @@ class ExpansionFunctionThetaClass:
         for i in range(3):
             for j in range(3):
                 #                                    gamma^{ij} partial_i partial_j F
-                partial_i_si_parenthetical_term += gammaUU[i][j] * F_dDD[i][j]
+                partial_i_si_parenthetical_term += self.gammaUU[i][j] * F_dDD[i][j]
         # PREFACTOR 1
         #                             (1 / lambda)
         partial_i_si_parenthetical_term /= lamb
@@ -242,7 +246,7 @@ class ExpansionFunctionThetaClass:
             for j in range(3):
                 # partial_i lambda gamma^{ij} partial_j F
                 partial_i_si_term_after_parenthetical += (
-                    lamb_dD[i] * gammaUU[i][j] * F_dD[j]
+                    lamb_dD[i] * self.gammaUU[i][j] * F_dD[j]
                 )
         # PREFACTOR 2
         #                                     - (1/ lambda^2)
@@ -258,7 +262,7 @@ class ExpansionFunctionThetaClass:
         self.covariant_divergence_of_s_i = sp.sympify(0)
         for i in range(3):
             self.covariant_divergence_of_s_i += self.sU[i] * self.detgamma_dD[i]
-        self.covariant_divergence_of_s_i *= 1 / (2 * detgamma)
+        self.covariant_divergence_of_s_i *= 1 / (2 * self.detgamma)
         self.covariant_divergence_of_s_i += partial_i_si
 
         # Step 10: Assemble the final expression for Theta
@@ -269,7 +273,7 @@ class ExpansionFunctionThetaClass:
         KDD = ixp.declarerank2("KDD", symmetry="sym01")
         for i in range(3):
             for j in range(3):
-                self.K_trace += gammaUU[i][j] * KDD[i][j]
+                self.K_trace += self.gammaUU[i][j] * KDD[i][j]
         Theta -= self.K_trace
         # Add s^i s^j K_{ij}
         for i in range(3):
