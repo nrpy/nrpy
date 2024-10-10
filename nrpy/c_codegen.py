@@ -86,6 +86,7 @@ class CCodeGen:
         symbol_to_Rational_dict: Optional[Dict[sp.Basic, sp.Rational]] = None,
         clang_format_enable: bool = False,
         clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+        rational_const_alias: str = "const",
     ) -> None:
         """
         Initialize the CCodeGen class with provided options for generating C code.
@@ -118,6 +119,7 @@ class CCodeGen:
         :param symbol_to_Rational_dict: Dictionary mapping sympy symbols to their corresponding sympy Rationals.
         :param clang_format_enable: Boolean to enable clang formatting.
         :param clang_format_options: Options for clang formatting.
+        :param rational_const_alias: Override default alias for specifying rational constness
 
         :raises ValueError: If 'fp_type' is not recognized as a valid floating-point type.
         :raises ValueError: If SIMD optimizations are enabled but the floating-point type is not 'double'.
@@ -181,6 +183,7 @@ class CCodeGen:
         self.symbol_to_Rational_dict = symbol_to_Rational_dict
         self.clang_format_enable = clang_format_enable
         self.clang_format_options = clang_format_options
+        self.rational_const_alias = rational_const_alias
 
         self.fd_order = par.parval_from_str("finite_difference::fd_order")
 
@@ -299,9 +302,9 @@ def c_codegen(
     ...     print(c_codegen(1/x**2 + 1/sp.sqrt(y) - 1/sp.sin(x*z), f"{fp_type} blah", include_braces=False, verbose=False, fp_type=fp_type))
     double blah = -1/sin(x*z) + (1.0/sqrt(y)) + (1.0/((x)*(x)));
     <BLANKLINE>
-    float blah = -1/sinf(x*z) + (1.0/sqrtf(y)) + (1.0/((x)*(x)));
+    float blah = -1/sinf(x*z) + (1.0f/sqrtf(y)) + (1.0f/((x)*(x)));
     <BLANKLINE>
-    long double blah = -1/sinl(x*z) + (1.0/sqrtl(y)) + (1.0/((x)*(x)));
+    long double blah = -1/sinl(x*z) + (1.0l/sqrtl(y)) + (1.0l/((x)*(x)));
     <BLANKLINE>
     >>> print(c_codegen(1.0 * sp.sin(x * sp.pi), "float blah", include_braces=False, fp_type="float", verbose=False))
     float blah = 1.0F*sinf(M_PI*x);
@@ -432,6 +435,7 @@ def c_codegen(
             enable_simd=CCGParams.enable_simd,
             enable_GoldenKernels=CCGParams.enable_GoldenKernels,
             fp_type=CCGParams.fp_type,
+            rational_const_alias=CCGParams.rational_const_alias,
         )
 
     # Step 4: If CCGParams.verbose, then output the original SymPy
@@ -500,7 +504,7 @@ def c_codegen(
                     CCGParams.symbol_to_Rational_dict[v].q
                 )
                 if not CCGParams.enable_simd:
-                    RATIONAL_assignment = f"const {CCGParams.fp_type_alias} {str(v)}"
+                    RATIONAL_assignment = f"{CCGParams.rational_const_alias} {CCGParams.fp_type_alias} {str(v)}"
                     RATIONAL_expr = sp.Rational(p, q)
                     RATIONAL_decls += sp.ccode(
                         RATIONAL_expr,
