@@ -542,7 +542,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
     >>> from nrpy.helpers.generic import decompress_base64_to_string, diff_strings
     >>> from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import generate_Butcher_tables
     >>> Butcher_dict = generate_Butcher_tables()
-    >>> with open("nrpy/infrastructures/BHaH/MoLtimestepping/tests/DOCTEST-base_register_CFunction_MoL_step_forward_in_time.json",'r') as f:
+    >>> with open("nrpy/infrastructures/gpu/MoLtimestepping/tests/DOCTEST-base_register_CFunction_MoL_step_forward_in_time.json",'r') as f:
     ...     expected_str_dict = json.load(f)
     >>> rhs_string = "rhs_eval(commondata, params, rfmstruct,  auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);"
     >>> post_rhs_string=(
@@ -563,7 +563,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
     ...     )
     ...     MoLclass.setup_gf_aliases()
     ...     MoLclass.generate_RK_steps()
-    ...     MoLclass.register_final_code()
+    ...     MoLclass.register()
     ...     diag_gc = cfc.CFunction_dict["MoL_step_forward_in_time"].full_function
     ...     expected_str = decompress_base64_to_string(expected_str_dict[k])
     ...     if diag_gc != expected_str:

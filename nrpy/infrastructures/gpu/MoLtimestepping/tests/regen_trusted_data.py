@@ -54,8 +54,18 @@ def regen__cuda__register_CFunction_MoL_step_forward_in_time():
         cfc.CFunction_dict.clear()
         MoL_Functions_dict.clear()
 
-        _MoLclass = register_CFunction_MoL_step_forward_in_time(Butcher_dict, k, rhs_string="rhs_eval(commondata, params, rfmstruct,  auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);", post_rhs_string="""if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
-    apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);""")
+        rhs_string = "rhs_eval(commondata, params, rfmstruct,  auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);"
+        post_rhs_string=(
+            "if (strncmp(commondata->outer_bc_type, \"extrapolation\", 50) == 0)\n"
+            "  apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);"
+        )
+
+        _MoLclass = register_CFunction_MoL_step_forward_in_time(
+            Butcher_dict,
+            k,
+            rhs_string=rhs_string,
+            post_rhs_string=post_rhs_string
+        )
 
         expected_str_dict[k] = compress_string_to_base64(
             cfc.CFunction_dict["MoL_step_forward_in_time"].full_function
