@@ -130,6 +130,7 @@ class ExpansionFunctionThetaClass:
             for j in range(3):
                 self.gammaDD[i][j] = 1 / W**2 * gammabarDD[i][j]
         gammabarDDdD = ixp.zerorank3()
+        # IMPORTANT: partial_D_hDD[i][j][k] = h_{jk,i}, so sym12 is correct here:
         partial_D_hDD = cast(
             List[List[List[sp.Expr]]],
             ixp.declarerank3("partial_D_hDD", symmetry="sym12"),
@@ -145,7 +146,7 @@ class ExpansionFunctionThetaClass:
                         + hDD[i][j] * self.rfm.ReDDdD[i][j][k]
                     )
 
-        # W = e^{4 phi}
+        # W = e^{-2 phi}
         # -> gamma_{ij} = 1/W^2 gammabar_{ij}
         # -> gamma_{ij,k} = -2 1/W^3 gammabar_{ij} W_{,k} + 1/W^2 gammabar_{ij,k}
         gammaDDdD = ixp.zerorank3()
