@@ -97,6 +97,7 @@ class ExpansionFunctionThetaClass:
 
         # Step 1: Define the level-set function F and its derivatives
         # Declare variables that will be computed from finite differencing.
+        h = sp.Symbol("hh", real=True)
         h_dD = ixp.declarerank1("hh_dD")
         h_dDD = ixp.declarerank2("hh_dDD", symmetry="sym01")
         # F(r, theta, phi) = r - h(theta, phi)
@@ -284,7 +285,7 @@ class ExpansionFunctionThetaClass:
             for j in range(3):
                 Theta += self.sU[i] * self.sU[j] * KDD[i][j]
 
-        return Theta
+        return Theta.subs(self.rfm.xx[0], h).subs(sp.sympify("f0_of_xx0"), h)
 
 
 # Class to manage different configurations of ExpansionFunctionThetaClass
