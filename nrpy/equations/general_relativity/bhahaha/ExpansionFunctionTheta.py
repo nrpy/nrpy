@@ -172,13 +172,13 @@ class ExpansionFunctionThetaClass:
 
         # Step 3: Compute derivatives of the inverse 3-metric gamma^{ij}
         # Using the identity: gamma^{ij}_{,k} = -gamma^{im} gamma^{jn} gamma_{mn,k}
-        gammaUUdD = ixp.zerorank3()
+        self.gammaUUdD = ixp.zerorank3()
         for i in range(3):
             for j in range(3):
                 for k in range(3):
                     for m in range(3):
                         for n in range(3):
-                            gammaUUdD[i][j][k] += (
+                            self.gammaUUdD[i][j][k] += (
                                 -self.gammaUU[i][m]
                                 * self.gammaUU[j][n]
                                 * gammaDDdD[m][n][k]
@@ -214,7 +214,7 @@ class ExpansionFunctionThetaClass:
             for k in range(3):
                 for m in range(3):
                     #           partial_k F partial_m F partial_i gamma^{km}
-                    lamb_dD[i] += F_dD[k] * F_dD[m] * gammaUUdD[k][m][i]
+                    lamb_dD[i] += F_dD[k] * F_dD[m] * self.gammaUUdD[k][m][i]
         # TERM 2:
         for i in range(3):
             for k in range(3):
@@ -234,7 +234,7 @@ class ExpansionFunctionThetaClass:
         for i in range(3):
             for j in range(3):
                 #                              partial_j F partial_i gamma^{ij}
-                partial_i_si_parenthetical_term += F_dD[j] * gammaUUdD[i][j][i]
+                partial_i_si_parenthetical_term += F_dD[j] * self.gammaUUdD[i][j][i]
         # SECOND PARENTHETICAL TERM
         for i in range(3):
             for j in range(3):
