@@ -126,6 +126,7 @@ def write_CodeParameters_h_files(
     project_dir: str,
     set_commondata_only: bool = False,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+    decorator: str = "",
 ) -> None:
     r"""
     Generate C code to set C parameter constants and writes them to files.
@@ -134,6 +135,7 @@ def write_CodeParameters_h_files(
     :param set_commondata_only: If True, generate code parameters only if `commondata=True`.
                                 Useful for BHaH projects without grids, like SEOBNR.
     :param clang_format_options: Options for clang_format.
+    :param decorator: Optional decorators for definitions to supress warnings (e.g. [[maybe_unused]])
 
     Doctests:
     >>> project_dir = Path("/tmp/tmp_project/")
@@ -171,7 +173,7 @@ def write_CodeParameters_h_files(
     # Create output directory if it doesn't already exist
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
-
+    decorator = decorator if decorator == "" else f"{decorator} "
     # Step 4: Generate C code to set C parameter constants
     #         output to filename "set_CodeParameters.h" if enable_simd==False
     #         or "set_CodeParameters-simd.h" if enable_simd==True
@@ -205,7 +207,7 @@ def write_CodeParameters_h_files(
                     if "char" in CPtype and "[" in CPtype and "]" in CPtype:
                         # Handle char array C type
                         CPsize = int(CPtype.split("[")[1].split("]")[0])
-                        Coutput = rf"""char {CPname}[{CPsize}]; {comment}
+                        Coutput = rf"""{decorator}char {CPname}[{CPsize}]; {comment}
 {{
   // Copy up to {CPsize-1} characters from {struct}{pointer}{CPname} to {CPname}
   strncpy({CPname}, {struct}{pointer}{CPname}, {CPsize}-1);
@@ -214,7 +216,7 @@ def write_CodeParameters_h_files(
 }}"""
                     else:
                         # Handle all other C types
-                        Coutput = f"const {CPtype} {CPname} = {struct}{pointer}{CPname};{comment}\n"
+                        Coutput = f"{decorator}const {CPtype} {CPname} = {struct}{pointer}{CPname};{comment}\n"
 
                     returnstring += Coutput
 
