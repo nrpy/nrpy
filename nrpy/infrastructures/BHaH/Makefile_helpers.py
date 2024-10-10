@@ -28,6 +28,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     create_lib: bool = False,
     include_dirs: Optional[List[str]] = None,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+    code_ext: str = "c",
 ) -> None:
     """
     Output C functions registered to CFunction_dict and construct a Makefile for compiling C code.
@@ -42,6 +43,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     :param create_lib: Whether to create a library. Defaults to False.
     :param include_dirs: List of include directories. Must be a list.
     :param clang_format_options: Options for the clang-format tool. Defaults to "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
+    :param code_ext: set what the file extension is for each code file.
 
     :raises SystemExit: Exits if errors are encountered.
     :raises FileNotFoundError: If the specified C compiler is not found.
@@ -111,14 +113,14 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
             subdir_Path = Path(CFunction.subdirectory)
             (project_Path / subdir_Path).mkdir(parents=True, exist_ok=True)
             with open(
-                add_to_Makefile(project_Path, subdir_Path, f"{name}.c"),
+                add_to_Makefile(project_Path, subdir_Path, f"{name}.{code_ext}"),
                 "w",
                 encoding="utf-8",
             ) as file:
                 file.write(CFunction.full_function)
         else:
             with open(
-                add_to_Makefile(project_Path, Path("."), f"{name}.c"),
+                add_to_Makefile(project_Path, Path("."), f"{name}.{code_ext}"),
                 "w",
                 encoding="utf-8",
             ) as file:
@@ -149,6 +151,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         "fast": "-std=gnu99 -O3 -funroll-loops -march=native -g -Wall -Wno-unused-variable",
         # DEBUGCFLAGS: OpenMP requires -fopenmp, and when disabling -fopenmp, unknown pragma warnings appear. -Wunknown-pragmas silences these warnings
         "debug": "-std=gnu99 -O2 -g -Wall -Wno-unused-variable -Wno-unknown-pragmas",
+        "nvcc": "-Xcompiler -fopenmp -Xcompiler -g -O2 -arch=native -O2 -Xcompiler=-march=native -Xcompiler -Wall --forward-unknown-to-host-compiler --Werror cross-execution-space-call --relocatable-device-code=true -allow-unsupported-compiler",
     }
 
     if addl_CFLAGS is not None:
@@ -162,7 +165,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
 
     OBJ_FILES_str = "OBJ_FILES ="
     for c_file in sorted(Makefile_list_of_files):
-        OBJ_FILES_str += " " + c_file.replace(".c", ".o")
+        OBJ_FILES_str += " " + c_file.replace(f".{code_ext}", ".o")
 
     LDFLAGS_str = "LDFLAGS ="
     if addl_libraries is not None:
@@ -190,12 +193,20 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         )
 
     # Below code is responsible for either writing a Makefile or a backup shell script depending on the conditions
-    Makefile_str = f"""CC ?= {CC}  # assigns the value CC to {CC} only if environment variable CC is not already set
+    Makefile_str = (
+        rf"CC = {CC}  # Locally overwrites CC to {CC}\n"
+        if CC == "nvcc"
+        else f"CC ?= {CC}  # assigns the value CC to {CC} only if environment variable CC is not already set\n"
+    )
+
+    Makefile_str += f"""
 ENABLE_VALGRIND ?= no
 {CFLAGS_str}
 {INCLUDEDIRS_str}
 {LDFLAGS_str}
-
+"""
+    if not CC == "nvcc":
+        Makefile_str += f"""
 # Set valgrind-friendly CFLAGS if ENABLE_VALGRIND
 ifeq ($(ENABLE_VALGRIND),yes)
     CFLAGS = {CFLAGS_dict['debug']}
@@ -209,16 +220,23 @@ else
         LDFLAGS += $(OPENMP_FLAG)  # -lgomp does not work with clang in termux
     endif
 endif
-
+"""
+    else:
+        Makefile_str += """
+OPENMP_FLAG = -fopenmp
+CFLAGS += $(OPENMP_FLAG)
+LDFLAGS += $(OPENMP_FLAG)
+"""
+    Makefile_str += f"""
 {OBJ_FILES_str}
 
 all: {exec_or_library_name}
 
-%.o: %.c $(COMMON_HEADERS)
+%.o: %.{code_ext} $(COMMON_HEADERS)
 	$(CC) $(CFLAGS) $(INCLUDEDIRS) -c $< -o $@
 
 {exec_or_library_name}: $(OBJ_FILES)
-	$(CC) $^ -o $@ $(LDFLAGS)
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
 # Use $(RM) to be cross-platform compatible.
 clean:
