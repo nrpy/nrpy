@@ -22,6 +22,18 @@ class register_CFunction_read_checkpoint(
     Register read_checkpoint CFunction for reading checkpoints.
 
     :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
+
+    DOCTEST:
+    >>> import nrpy.c_function as cfc, json
+    >>> from nrpy.helpers.generic import decompress_base64_to_string, diff_strings
+    >>> with open("nrpy/infrastructures/gpu/checkpoints/tests/DOCTEST-cuda__register_CFunction_read_checkpoint.json",'r') as f:
+    ...     expected_str_dict = json.load(f)
+    >>> key = "default"
+    >>> _ = register_CFunction_read_checkpoint()
+    >>> registered_str = cfc.CFunction_dict["read_checkpoint"].full_function
+    >>> expected_str = decompress_base64_to_string(expected_str_dict[key])
+    >>> if registered_str != expected_str:
+    ...     raise ValueError(f"{key}: {diff_strings(expected_str, registered_str)}")
     """
 
     def __init__(
@@ -94,6 +106,18 @@ class register_CFunction_write_checkpoint(
 
     :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
     :param default_checkpoint_every: The default checkpoint interval in physical time units.
+
+    DOCTEST:
+    >>> import nrpy.c_function as cfc, json
+    >>> from nrpy.helpers.generic import decompress_base64_to_string, diff_strings
+    >>> with open("nrpy/infrastructures/gpu/checkpoints/tests/DOCTEST-cuda__register_CFunction_write_checkpoint.json",'r') as f:
+    ...     expected_str_dict = json.load(f)
+    >>> key = "default"
+    >>> _ = register_CFunction_write_checkpoint()
+    >>> registered_str = cfc.CFunction_dict["write_checkpoint"].full_function
+    >>> expected_str = decompress_base64_to_string(expected_str_dict[key])
+    >>> if registered_str != expected_str:
+    ...     raise ValueError(f"\\n{key}: {diff_strings(expected_str, registered_str)}")
     """
 
     def __init__(
