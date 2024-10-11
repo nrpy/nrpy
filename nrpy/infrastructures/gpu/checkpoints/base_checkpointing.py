@@ -11,8 +11,8 @@ Author: Zachariah B. Etienne
 
 from typing import Tuple
 
-import nrpy.params as par
 import nrpy.c_function as cfc
+import nrpy.params as par
 
 
 class base_register_CFunction_read_checkpoint:
@@ -87,8 +87,9 @@ class base_register_CFunction_read_checkpoint:
   commondata->t_0 = commondata->time;
   commondata->nn_0 = commondata->nn;
 """
+
     def register(self) -> None:
-        "Register function."
+        """Register function."""
         self.body += self.loop_body
         self.body += rf"""  }}
   {self.post_loop_body}
@@ -104,6 +105,7 @@ class base_register_CFunction_read_checkpoint:
             include_CodeParameters_h=False,
             body=self.body,
         )
+
 
 class base_register_CFunction_write_checkpoint:
     """
@@ -149,7 +151,7 @@ if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {{
         self.loop_body = ""
 
     def register(self) -> None:
-        "Register function."
+        """Register function."""
         self.body += self.loop_body
         self.body += r"""  }
   fclose(cp_file);

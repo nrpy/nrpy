@@ -11,7 +11,6 @@ Author: Zachariah B. Etienne
 
 from typing import Tuple
 
-import nrpy.c_function as cfc
 import nrpy.infrastructures.gpu.checkpoints.base_checkpointing as base_chkpt
 
 
@@ -98,10 +97,11 @@ cudaDeviceSynchronize();
 """
         self.register()
 
+
 class register_CFunction_write_checkpoint(
     base_chkpt.base_register_CFunction_write_checkpoint
 ):
-    """
+    r"""
     Register write_checkpoint CFunction for writing checkpoints.
 
     :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
