@@ -117,4 +117,4 @@ class register_CFunctions_rfm_precompute(base_register_CFunctions_rfm_precompute
                     "prefunc": prefunc,
                     "include_CodeParameters_h": True,
                 }
-        self.register_CFunction()
+        self.register()

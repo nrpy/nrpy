@@ -79,8 +79,8 @@ class base_register_CFunctions_rfm_precompute:
         BHaH_defines += "\n} rfm_struct;\n"
         register_BHaH_defines("reference_metric", BHaH_defines)
 
-    def register_CFunction(self) -> None:
-        """Register rfm_precompute CFunctions."""
+    def register(self) -> None:
+        """Register CFunctions."""
         self.populate_BHaH_defines()
         for name, val_dict in self.function_dict.items():
             include_CP = val_dict["include_CodeParameters_h"]
