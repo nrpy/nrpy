@@ -88,7 +88,8 @@ class ExpansionFunctionThetaClass:
         7. Compute the derivative of lambda, i.e., partial_i lambda.
         8. Compute the divergence of the unit normal vector partial_i s^i.
         9. Compute the covariant divergence of s^i.
-        10. Assemble the final expression for Theta.
+        10. Compute K_{ij} from a_{ij} and trK
+        11. Assemble the final expression for Theta.
 
         :return: The symbolic expression for Theta.
         """
@@ -270,20 +271,32 @@ class ExpansionFunctionThetaClass:
         self.covariant_divergence_of_s_i *= 1 / (2 * self.detgamma)
         self.covariant_divergence_of_s_i += partial_i_si
 
-        # Step 10: Assemble the final expression for Theta
+        # Step 10: Compute K_{ij} from a_{ij} and trK
+        aDD = ixp.declarerank2("aDD", symmetry="sym01")
+        trK = sp.symbols("trK", real=True)
+        self.AbarDD = ixp.zerorank2()
+        for i in range(3):
+            for j in range(3):
+                # Abar_{ij}      = a_{ij}*ReDD[i][j]
+                self.AbarDD[i][j] = aDD[i][j] * self.rfm.ReDD[i][j]
+        self.KDD = ixp.zerorank2()
+        exp4phi = 1 / W**2
+        for i in range(3):
+            for j in range(3):
+                self.KDD[i][j] = (
+                    exp4phi * self.AbarDD[i][j]
+                    + sp.Rational(1, 3) * self.gammaDD[i][j] * trK
+                )
+
+        # Step 11: Assemble the final expression for Theta
         # Theta = D_i s^i - K + s^i s^j K_{ij}
         Theta = self.covariant_divergence_of_s_i
         # Subtract the trace of the extrinsic curvature K = gamma^{ij} K_{ij}
-        self.K_trace = sp.sympify(0)
-        KDD = ixp.declarerank2("KDD", symmetry="sym01")
-        for i in range(3):
-            for j in range(3):
-                self.K_trace += self.gammaUU[i][j] * KDD[i][j]
-        Theta -= self.K_trace
+        Theta -= trK
         # Add s^i s^j K_{ij}
         for i in range(3):
             for j in range(3):
-                Theta += self.sU[i] * self.sU[j] * KDD[i][j]
+                Theta += self.sU[i] * self.sU[j] * self.KDD[i][j]
 
         return Theta.subs(self.rfm.xx[0], h).subs(sp.sympify("f0_of_xx0"), h)
 
