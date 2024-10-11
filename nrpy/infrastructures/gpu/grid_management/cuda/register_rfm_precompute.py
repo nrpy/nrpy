@@ -8,6 +8,7 @@ Authors: Samuel D. Tootle
 """
 
 from typing import List
+
 import nrpy.helpers.gpu_kernels.kernel_base as gputils
 from nrpy.helpers.expr_tree import get_unique_expression_symbols
 from nrpy.infrastructures.gpu.grid_management.base_register_rfm_precompute import (
@@ -16,6 +17,7 @@ from nrpy.infrastructures.gpu.grid_management.base_register_rfm_precompute impor
 from nrpy.infrastructures.gpu.grid_management.cuda.rfm_precompute import (
     ReferenceMetricPrecompute,
 )
+
 
 class register_CFunctions_rfm_precompute(base_register_CFunctions_rfm_precompute):
     """

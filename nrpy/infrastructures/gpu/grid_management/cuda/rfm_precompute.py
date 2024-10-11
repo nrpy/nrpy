@@ -8,7 +8,8 @@ Author: Zachariah B. Etienne
         sdtootle **at** gmail **dot** com
 """
 
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
 import sympy as sp
 import sympy.codegen.ast as sp_ast
 
