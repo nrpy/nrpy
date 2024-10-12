@@ -178,7 +178,7 @@ def register_CFunction_cfl_limited_timestep(
     :param fp_type: Floating point type, e.g., "double".
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = f"Output minimum gridspacing ds_min on a {CoordSystem} numerical grid."
+    desc = f"Compute minimum timestep dt = CFL_FACTOR * ds_min on a {CoordSystem} numerical grid."
     cfunc_type = "void"
     name = "cfl_limited_timestep"
     params = "commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3]"
@@ -227,6 +227,7 @@ def register_CFunction_numerical_grids_and_timestep(
     gridding_approach: str = "independent grid(s)",
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
+    enable_set_cfl_timestep: bool = True,
 ) -> None:
     """
     Register a C function to set up all numerical grids and timestep.
@@ -240,6 +241,7 @@ def register_CFunction_numerical_grids_and_timestep(
     :param gridding_approach: Choices: "independent grid(s)" (default) or "multipatch".
     :param enable_rfm_precompute: Whether to enable reference metric precomputation (default: False).
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions (default: False).
+    :param enable_set_cfl_timestep: Whether to enable computation of dt, the CFL timestep. A custom version can be implemented in initial_data().
 
     :raises ValueError: If invalid gridding_approach selected.
     """
@@ -331,13 +333,14 @@ def register_CFunction_numerical_grids_and_timestep(
 """
     else:
         body += "// (curvilinear boundary conditions bcstruct disabled)\n"
-    body += r"""
+    if enable_set_cfl_timestep:
+        body += r"""
 // Step 1.f: Set timestep based on minimum spacing between neighboring gridpoints.
 commondata->dt = 1e30;
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   cfl_limited_timestep(commondata, &griddata[grid].params, griddata[grid].xx);
-}
-
+}"""
+    body += r"""
 // Step 1.g: Initialize timestepping parameters to zero if this is the first time this function is called.
 if(calling_for_first_time) {
   commondata->nn = 0;
@@ -364,6 +367,7 @@ def register_CFunctions(
     gridding_approach: str = "independent grid(s)",
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
+    enable_set_cfl_timestep: bool = True,
     fp_type: str = "double",
 ) -> None:
     """
@@ -375,6 +379,7 @@ def register_CFunctions(
     :param gridding_approach: Choices: "independent grid(s)" (default) or "multipatch".
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions.
+    :param enable_set_cfl_timestep: Whether to enable computation of dt, the CFL timestep. A custom version can be implemented in initial_data().
     :param fp_type: Floating point type, e.g., "double".
     """
     for CoordSystem in list_of_CoordSystems:
@@ -382,9 +387,11 @@ def register_CFunctions(
             CoordSystem=CoordSystem,
             Nxx_dict=Nxx_dict,
         )
-        register_CFunction_cfl_limited_timestep(
-            CoordSystem=CoordSystem, fp_type=fp_type
-        )
+        if enable_set_cfl_timestep:
+            register_CFunction_cfl_limited_timestep(
+                CoordSystem=CoordSystem,
+                fp_type=fp_type,
+            )
     register_CFunction_numerical_grids_and_timestep(
         list_of_CoordSystems=list_of_CoordSystems,
         list_of_grid_physical_sizes=list_of_grid_physical_sizes,
