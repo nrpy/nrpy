@@ -1,7 +1,7 @@
 """
 Compute the Expansion Function Theta in Spherical Coordinates.
 
-This module calculates the Expansion Function Theta, defined as:
+Calculates the Expansion Function Theta, defined as:
 
 Theta = D_i s^i - K + s^i s^j K_ij,
 
@@ -16,7 +16,7 @@ At a marginally trapped surface, Theta = 0.
 Note that only the definition of F(r,theta,phi) and derivatives of hDD are in Spherical coordinates; adjusting
 these should make the construction of Theta fully covariant.
 
-This implementation follows the notation and methodology primarily from:
+Follows the notation and methodology primarily from:
 - Thornburg (https://arxiv.org/pdf/gr-qc/9508014)
 - Gundlach (https://arxiv.org/pdf/gr-qc/9707050)
 - Hui & Lin (https://arxiv.org/pdf/2404.16511)
@@ -49,7 +49,6 @@ class ExpansionFunctionThetaClass:
 
         :raises ValueError: If CoordSystem is not set to "Spherical".
         """
-        # Validate CoordSystem
         if CoordSystem != "Spherical":
             raise ValueError(
                 f"Unsupported CoordSystem '{CoordSystem}'. Currently, only 'Spherical' is supported."
@@ -88,7 +87,7 @@ class ExpansionFunctionThetaClass:
         7. Compute the derivative of lambda, i.e., partial_i lambda.
         8. Compute the divergence of the unit normal vector partial_i s^i.
         9. Compute the covariant divergence of s^i.
-        10. Compute K_{ij} from a_{ij} and trK
+        10. Compute K_{ij} from a_{ij} and trK.
         11. Assemble the final expression for Theta.
 
         :return: The symbolic expression for Theta.
