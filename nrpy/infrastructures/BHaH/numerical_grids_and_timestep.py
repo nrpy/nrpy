@@ -241,7 +241,7 @@ def register_CFunction_numerical_grids_and_timestep(
     :param gridding_approach: Choices: "independent grid(s)" (default) or "multipatch".
     :param enable_rfm_precompute: Whether to enable reference metric precomputation (default: False).
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions (default: False).
-    :param enable_set_cfl_timestep: Whether to enable computation of dt, the CFL timestep. A custom version can be implemented in initial_data().
+    :param enable_set_cfl_timestep: Whether to enable computation of dt, the CFL timestep. A custom version can be implemented later.
 
     :raises ValueError: If invalid gridding_approach selected.
     """
@@ -379,7 +379,7 @@ def register_CFunctions(
     :param gridding_approach: Choices: "independent grid(s)" (default) or "multipatch".
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions.
-    :param enable_set_cfl_timestep: Whether to enable computation of dt, the CFL timestep. A custom version can be implemented in initial_data().
+    :param enable_set_cfl_timestep: Whether to enable computation of dt, the CFL timestep. A custom version can be implemented later.
     :param fp_type: Floating point type, e.g., "double".
     """
     for CoordSystem in list_of_CoordSystems:
@@ -398,6 +398,7 @@ def register_CFunctions(
         gridding_approach=gridding_approach,
         enable_rfm_precompute=enable_rfm_precompute,
         enable_CurviBCs=enable_CurviBCs,
+        enable_set_cfl_timestep=enable_set_cfl_timestep,
     )
 
     if gridding_approach == "multipatch":
