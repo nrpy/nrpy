@@ -839,10 +839,9 @@ class FDFunction:
         self.enable_simd = enable_simd
         self.c_function_name = "SIMD_" if enable_simd else ""
         self.c_function_name += f"fd_function_{self.operator}_fdorder{self.fd_order}"
+        self.modifiers = "NO_INLINE "
         if par.parval_from_str("Infrastructure") == "CarpetX":
-            self.modifiers = "CCTK_DEVICE CCTK_HOST"
-        else:
-            self.modifiers = ""
+            self.modifiers += "CCTK_DEVICE CCTK_HOST"
 
         self.CFunction: cfc.CFunction
 
@@ -897,7 +896,7 @@ class FDFunction:
         return cfc.CFunction(
             includes=includes,
             desc=f"Finite difference function for operator {self.operator}, with FD accuracy order {self.fd_order}.",
-            cfunc_type=f"static NO_INLINE {self.modifiers} {fp_type_alias}",
+            cfunc_type=f"static {self.modifiers} {fp_type_alias}",
             name=name,
             params=params,
             body=body,
