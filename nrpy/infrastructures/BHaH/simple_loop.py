@@ -472,10 +472,12 @@ def max_numpts__i012_pts__numpts_2D(
         elif (
             "Spherical" in CoordSystem
             or "SymTP" in CoordSystem
-            or "Cylindrical" in CoordSystem
         ):
             # xy-plane == { theta_mid }, where theta index is i1
             i1_pts += [Nxx_plus_2NGHOSTS[1] / 2]
+        elif "Cylindrical" in CoordSystem:
+            # xy-plane == { z_mid }, where z index is i2
+            i2_pts += [Nxx_plus_2NGHOSTS[2] / 2]
         elif "Wedge" in CoordSystem:
             # UWedgeHSinhSph: same as Spherical except x_new = -z_old, y_new = y_old, z_new = x_old
             # Thus the xy plane here is the same as the -z,y plane in Spherical-like.
