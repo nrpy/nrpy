@@ -450,7 +450,7 @@ def max_numpts__i012_pts__numpts_2D(
     SinhCartesian ([Nxx0, Nxx1, Nxx2], [[], [], [Nxx_plus_2NGHOSTS2/2]], [Nxx0, Nxx1, 1])
     HoleySinhSpherical ([Nxx0, Nxx1, Nxx2], [[], [Nxx_plus_2NGHOSTS1/2], []], [Nxx0, 1, Nxx2])
     Wedge ([Nxx0, Nxx1, Nxx2], [[], [], [NGHOSTS + Nxx2/4 - 1/2, NGHOSTS + 3*Nxx2/4 - 1/2]], [Nxx0, Nxx1, 2])
-    SinhCylindrical ([Nxx0, Nxx1, Nxx2], [[], [Nxx_plus_2NGHOSTS1/2], []], [Nxx0, 1, Nxx2])
+    SinhCylindrical ([Nxx0, Nxx1, Nxx2], [[], [], [Nxx_plus_2NGHOSTS2/2]], [Nxx0, Nxx1, 1])
     """
     if plane not in ["xy", "yz"]:
         raise ValueError(
@@ -466,14 +466,10 @@ def max_numpts__i012_pts__numpts_2D(
     i2_pts: List[sp.Expr] = []
 
     if plane == "xy":
-        if "Cartesian" in CoordSystem:
+        if "Cartesian" in CoordSystem or "Cylindrical" in CoordSystem:
             # xy-plane == { z_mid }, where z index is i2
             i2_pts += [Nxx_plus_2NGHOSTS[2] / 2]
-        elif (
-            "Spherical" in CoordSystem
-            or "SymTP" in CoordSystem
-            or "Cylindrical" in CoordSystem
-        ):
+        elif "Spherical" in CoordSystem or "SymTP" in CoordSystem:
             # xy-plane == { theta_mid }, where theta index is i1
             i1_pts += [Nxx_plus_2NGHOSTS[1] / 2]
         elif "Wedge" in CoordSystem:
