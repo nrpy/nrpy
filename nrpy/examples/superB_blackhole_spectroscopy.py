@@ -51,6 +51,7 @@ import nrpy.infrastructures.superB.timestepping_chare as superBtimestepping
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import rfm_precompute, rfm_wrapper_functions
+import nrpy.infrastructures.superB.superB.superB_pup as superBpup
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -138,6 +139,10 @@ par.set_parval_from_str(
 #         cfc.CFunction_dict["function_name"]
 NRPyPNqm.register_CFunction_NRPyPN_quasicircular_momenta()
 TPl.register_C_functions()
+superBpup.register_CFunction_superB_pup_routines(
+    list_of_CoordSystems=[CoordSystem],
+    MoL_method=MoL_method,
+)
 superBinitialdata.register_CFunction_initial_data(
     CoordSystem=CoordSystem,
     IDtype=IDtype,
@@ -346,7 +351,7 @@ superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
 
 copy_files(
     package="nrpy.infrastructures.superB.superB",
-    filenames_list=["superB.h"],
+    filenames_list=["superB.h", "superB_pup_function_prototypes.h"],
     project_dir=project_dir,
     subdirectory="superB",
 )
