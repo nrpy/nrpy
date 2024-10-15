@@ -119,14 +119,14 @@ def register_CFunction_exact_ADM_ID_function(
 
 def Cfunction_ADM_SphorCart_to_Cart(
     IDCoordSystem: str = "Spherical",
-    include_T4UU: bool = False,
+    enable_T4munu: bool = False,
     fp_type: str = "double",
 ) -> str:
     """
     Convert ADM variables from the spherical or Cartesian basis to the Cartesian basis.
 
     :param IDCoordSystem: The input coordinate system. Defaults to "Spherical".
-    :param include_T4UU: Whether to include the stress-energy tensor. Defaults to False.
+    :param enable_T4munu: Whether to include the stress-energy tensor. Defaults to False.
     :param fp_type: Floating point type, e.g., "double".
 
     :return: The name of the generated C function.
@@ -150,7 +150,7 @@ def Cfunction_ADM_SphorCart_to_Cart(
                 body += f"  const REAL {var}{j}{k} = initial_data->{var}{j}{k};\n"
         body += "\n"
     # Read stress-energy tensor in spherical or Cartesian basis if desired.
-    if include_T4UU:
+    if enable_T4munu:
         for mu in range(4):
             for nu in range(mu, 4):
                 body += f"const REAL T4SphorCartUU{mu}{nu} = initial_data->T4SphorCartUU{mu}{nu};\n"
@@ -201,7 +201,7 @@ def Cfunction_ADM_SphorCart_to_Cart(
         IDCoordSystem, BSphorCartU
     )
     T4CartUU = cast(Sequence[Sequence[sp.Expr]], ixp.zerorank2(dimension=4))
-    if include_T4UU:
+    if enable_T4munu:
         T4CartUU = jac.basis_transform_4tensorUU_from_time_indep_rfmbasis_to_Cartesian(
             IDCoordSystem, T4SphorCartUU
         )
@@ -219,7 +219,7 @@ def Cfunction_ADM_SphorCart_to_Cart(
             list_of_output_varnames += [f"ADM_Cart_basis->gammaDD{i}{j}"]
             list_of_output_exprs += [KCartDD[i][j]]
             list_of_output_varnames += [f"ADM_Cart_basis->KDD{i}{j}"]
-    if include_T4UU:
+    if enable_T4munu:
         for mu in range(4):
             for nu in range(mu, 4):
                 list_of_output_exprs += [T4CartUU[mu][nu]]
@@ -252,12 +252,12 @@ def Cfunction_ADM_SphorCart_to_Cart(
 
 
 def Cfunction_ADM_Cart_to_BSSN_Cart(
-    include_T4UU: bool = False, fp_type: str = "double"
+    enable_T4munu: bool = False, fp_type: str = "double"
 ) -> str:
     """
     Convert ADM variables in the Cartesian basis to BSSN variables in the Cartesian basis.
 
-    :param include_T4UU: Boolean flag to indicate whether to include T4UU or not.
+    :param enable_T4munu: Boolean flag to indicate whether to include T4UU or not.
     :param fp_type: Floating point type, e.g., "double".
 
     :return: A string representing the full C function.
@@ -295,7 +295,7 @@ def Cfunction_ADM_Cart_to_BSSN_Cart(
             list_of_output_varnames += [f"BSSN_Cart_basis->gammabarDD{i}{j}"]
             list_of_output_exprs += [adm2bssn.AbarDD[i][j]]
             list_of_output_varnames += [f"BSSN_Cart_basis->AbarDD{i}{j}"]
-    if include_T4UU:
+    if enable_T4munu:
         T4CartUU = ixp.declarerank2(
             "ADM_Cart_basis->T4UU", symmetry="sym01", dimension=4
         )
@@ -329,14 +329,14 @@ def Cfunction_ADM_Cart_to_BSSN_Cart(
 
 def Cfunction_BSSN_Cart_to_rescaled_BSSN_rfm(
     CoordSystem: str,
-    include_T4UU: bool = False,
+    enable_T4munu: bool = False,
     fp_type: str = "double",
 ) -> str:
     """
     Convert Cartesian-basis BSSN vectors/tensors (except lambda^i) to CoordSystem basis, then rescale these BSSN quantities.
 
     :param CoordSystem: Coordinate system to which the variables are to be transformed.
-    :param include_T4UU: Whether to include T4UU tensor in the transformation.
+    :param enable_T4munu: Whether to include T4UU tensor in the transformation.
     :param fp_type: Floating point type, e.g., "double".
     :return: Returns the generated C code as a string.
     """
@@ -377,7 +377,7 @@ After the basis transform, all BSSN quantities are rescaled."""
         CoordSystem, betaCartU
     )
     BU = jac.basis_transform_vectorU_from_Cartesian_to_rfmbasis(CoordSystem, BCartU)
-    if include_T4UU:
+    if enable_T4munu:
         T4CartUU = ixp.declarerank2(
             "BSSN_Cart_basis->T4UU", symmetry="sym01", dimension=4
         )
@@ -418,7 +418,7 @@ After the basis transform, all BSSN quantities are rescaled."""
             list_of_output_varnames += [f"rescaled_BSSN_rfm_basis->hDD{i}{j}"]
             list_of_output_exprs += [aDD[i][j]]
             list_of_output_varnames += [f"rescaled_BSSN_rfm_basis->aDD{i}{j}"]
-    if include_T4UU:
+    if enable_T4munu:
         for mu in range(4):
             for nu in range(mu, 4):
                 # T4UU IS ASSUMED NOT RESCALED; RESCALINGS ARE HANDLED WITHIN BSSN RHSs, etc.
@@ -529,7 +529,7 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     CoordSystem: str,
     addl_includes: Optional[List[str]] = None,
     IDCoordSystem: str = "Spherical",
-    include_T4UU: bool = False,
+    enable_T4munu: bool = False,
     enable_fd_functions: bool = False,
     ID_persist_struct_str: str = "",
     fp_type: str = "double",
@@ -540,7 +540,7 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     :param CoordSystem: Coordinate system for output BSSN variables.
     :param addl_includes: Additional header files to include.
     :param IDCoordSystem: Coordinate system for input ADM variables. Defaults to "Spherical".
-    :param include_T4UU: Whether to include stress-energy tensor components.
+    :param enable_T4munu: Whether to include stress-energy tensor components.
     :param enable_fd_functions: Whether to enable finite-difference functions.
     :param ID_persist_struct_str: String for persistent ID structure.
     :param fp_type: Floating point type, e.g., "double".
@@ -560,7 +560,7 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
   REAL KSphorCartDD00, KSphorCartDD01, KSphorCartDD02;
   REAL KSphorCartDD11, KSphorCartDD12, KSphorCartDD22;
 """
-    if include_T4UU:
+    if enable_T4munu:
         BHd += """
   REAL T4SphorCartUU00,T4SphorCartUU01,T4SphorCartUU02,T4SphorCartUU03;
   REAL                 T4SphorCartUU11,T4SphorCartUU12,T4SphorCartUU13;
@@ -605,7 +605,7 @@ typedef struct __ADM_Cart_basis_struct__ {
   REAL gammaDD00,gammaDD01,gammaDD02,gammaDD11,gammaDD12,gammaDD22;
   REAL KDD00,KDD01,KDD02,KDD11,KDD12,KDD22;
 """
-    if include_T4UU:
+    if enable_T4munu:
         prefunc += T4UU_prettyprint()
     prefunc += "} ADM_Cart_basis_struct;\n"
     ##############
@@ -617,7 +617,7 @@ typedef struct __BSSN_Cart_basis_struct__ {
   REAL gammabarDD00,gammabarDD01,gammabarDD02,gammabarDD11,gammabarDD12,gammabarDD22;
   REAL AbarDD00,AbarDD01,AbarDD02,AbarDD11,AbarDD12,AbarDD22;
 """
-    if include_T4UU:
+    if enable_T4munu:
         prefunc += T4UU_prettyprint()
     prefunc += "} BSSN_Cart_basis_struct;\n"
     ##############
@@ -629,22 +629,22 @@ typedef struct __rescaled_BSSN_rfm_basis_struct__ {
   REAL hDD00,hDD01,hDD02,hDD11,hDD12,hDD22;
   REAL aDD00,aDD01,aDD02,aDD11,aDD12,aDD22;
 """
-    if include_T4UU:
+    if enable_T4munu:
         prefunc += T4UU_prettyprint()
     prefunc += "} rescaled_BSSN_rfm_basis_struct;\n"
     ##############
     ##############
     prefunc += Cfunction_ADM_SphorCart_to_Cart(
         IDCoordSystem=IDCoordSystem,
-        include_T4UU=include_T4UU,
+        enable_T4munu=enable_T4munu,
         fp_type=fp_type,
     )
     prefunc += Cfunction_ADM_Cart_to_BSSN_Cart(
-        include_T4UU=include_T4UU, fp_type=fp_type
+        enable_T4munu=enable_T4munu, fp_type=fp_type
     )
     prefunc += Cfunction_BSSN_Cart_to_rescaled_BSSN_rfm(
         CoordSystem=CoordSystem,
-        include_T4UU=include_T4UU,
+        enable_T4munu=enable_T4munu,
         fp_type=fp_type,
     )
     prefunc += Cfunction_initial_data_lambdaU_grid_interior(
@@ -693,7 +693,7 @@ typedef struct __rescaled_BSSN_rfm_basis_struct__ {
             gf_list += [f"hDD{i}{j}", f"aDD{i}{j}"]
     for gf in sorted(gf_list):
         body += f"gridfuncs->y_n_gfs[IDX4pt({gf.upper()}GF, idx3)] = rescaled_BSSN_rfm_basis.{gf};\n"
-    if include_T4UU:
+    if enable_T4munu:
         for mu in range(4):
             for nu in range(mu, 4):
                 gf = f"T4UU{mu}{nu}"
