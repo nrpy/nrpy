@@ -153,18 +153,13 @@ class ReferenceMetricPrecompute:
 
 
 def register_CFunctions_rfm_precompute(
-    list_of_CoordSystems: List[str],
-    enable_wrapper_func: bool = True,
-    fp_type: str = "double",
+    list_of_CoordSystems: List[str], fp_type: str = "double"
 ) -> None:
     """
     Register C functions for reference metric precomputed lookup arrays.
 
     :param list_of_CoordSystems: List of coordinate systems to register the C functions.
-    :param enable_wrapper_func: Whether to enable wrapper function; only allowed if len(list_of_CoordSystems) == 1.
     :param fp_type: Floating point type, e.g., "double".
-
-    :raises ValueError: If 'enable_wrapper_func=False' and len(list_of_CoordSystems) != 1.
     """
     combined_BHaH_defines_list = []
     for CoordSystem in list_of_CoordSystems:
@@ -189,18 +184,11 @@ def register_CFunctions_rfm_precompute(
             body += func[1]
 
             combined_BHaH_defines_list.extend(rfm_precompute.BHaH_defines_list)
-            CoordSystem_for_wrapper_func = ""
-            if enable_wrapper_func:
-                CoordSystem_for_wrapper_func = CoordSystem
-                if len(list_of_CoordSystems) != 1:
-                    raise ValueError(
-                        "reference metric wrapper function is required if len(list_of_CoordSystems) > 1."
-                    )
             cfc.register_CFunction(
                 includes=includes,
                 desc=desc,
                 cfunc_type=cfunc_type,
-                CoordSystem_for_wrapper_func=CoordSystem_for_wrapper_func,
+                CoordSystem_for_wrapper_func=CoordSystem,
                 name=name,
                 params=params,
                 include_CodeParameters_h=include_CodeParameters_h,
