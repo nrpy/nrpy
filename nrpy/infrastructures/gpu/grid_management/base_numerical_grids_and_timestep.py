@@ -74,7 +74,7 @@ Grid setup output:
 """
         self.cfunc_type = "void"
         self.name = "numerical_grid_params_Nxx_dxx_xx"
-        self.params = "const commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3], const int Nx[3], const bool set_xxmin_xxmax_to_defaults"
+        self.params = "const commondata_struct *restrict commondata, params_struct *restrict params, REAL * xx[3], const int Nx[3], const bool set_xxmin_xxmax_to_defaults"
         self.body = "// Set default values for the grid resolution in each dimension.\n"
         for dirn in range(3):
             self.body += (
@@ -146,6 +146,7 @@ params->dxx2 = (params->xxmax2 - params->xxmin2) / ((REAL)params->Nxx2);
 params->invdxx0 = ((REAL)params->Nxx0) / (params->xxmax0 - params->xxmin0);
 params->invdxx1 = ((REAL)params->Nxx1) / (params->xxmax1 - params->xxmin1);
 params->invdxx2 = ((REAL)params->Nxx2) / (params->xxmax2 - params->xxmin2);
+#include "../set_CodeParameters.h"
 """
 
     def register(self) -> None:

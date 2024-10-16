@@ -55,7 +55,6 @@ class register_CFunction_numerical_grid_params_Nxx_dxx_xx(
         super().__init__(CoordSystem, Nxx_dict)
 
         self.params.replace("REAL *restrict xx[3]", "REAL * xx[3]")
-        self.params = "const commondata_struct *restrict commondata, params_struct *restrict params, REAL * xx[3], const int Nx[3], const bool grid_is_resized"
         self.prefunc = ""
         self.body += """
     // Allocate device storage
@@ -194,6 +193,7 @@ const int Nxx_tot = (Nxx_plus_2NGHOSTS0)*(Nxx_plus_2NGHOSTS1)*(Nxx_plus_2NGHOSTS
 """
 
         self.prefunc = self.device_kernel.CFunction.full_function
+        self.register()
 
 
 class register_CFunction_numerical_grids_and_timestep(
