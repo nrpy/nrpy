@@ -127,3 +127,5 @@ class register_CFunction_xx_to_Cart(base_xx_classes.base_register_CFunction_xx_t
         for sym in self.unique_symbols:
             kernel_body += f"const REAL {sym} = params->{sym};\n"
         self.body = kernel_body + self.body
+
+        self.register()
