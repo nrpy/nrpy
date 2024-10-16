@@ -25,7 +25,7 @@ import nrpy.params as par  # NRPy+: Parameter interface
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 from nrpy.helpers.expr_tree import get_unique_expression_symbols
 from nrpy.validate_expressions.validate_expressions import check_zero
-from nrpy.infrastructures.BHaH.CurviBoundaryConditions import (
+from nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions import (
     BHaH_defines_set_gridfunction_defines_with_parity_types,
     Cfunction__EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt,
     Cfunction__set_parity_for_inner_boundary_single_pt,
@@ -123,6 +123,19 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
         self.name = "bcstruct_set_up"
         self.params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], bc_struct *restrict bcstruct"
 
+    def register(self) -> None:
+        """Register CFunction."""
+        cfc.register_CFunction(
+            prefunc=self.prefunc,
+            includes=self.includes,
+            desc=self.desc,
+            cfunc_type=self.cfunc_type,
+            CoordSystem_for_wrapper_func=self.CoordSystem,
+            name=self.name,
+            params=self.params,
+            include_CodeParameters_h=True,
+            body=self.body,
+        )
 
 ###############################
 ## apply_bcs_inner_only(): Apply inner boundary conditions.
