@@ -101,7 +101,7 @@ def setup_FD_matrix__return_inverse_lowlevel(
 
     :return: Inverse of the finite difference matrix.
 
-    Doctest:
+    DocTests:
     >>> setup_FD_matrix__return_inverse_lowlevel(3, 0)
     Matrix([
     [0, -1/2, 1/2],
@@ -140,6 +140,13 @@ class Matrix_dict(Dict[Tuple[int, int], sp.Matrix]):
     """
 
     def __getitem__(self, key: Tuple[int, int]) -> sp.Matrix:
+        """
+        Retrieve the matrix associated with the given key.
+
+        :param key: A tuple (stencil_width, UPDOWNWIND_stencil_shift).
+
+        :return: The sympy Matrix corresponding to the provided key.
+        """
         if key not in self:
             stencil_width = key[0]
             UPDOWNWIND_stencil_shift = key[1]
@@ -153,6 +160,12 @@ class Matrix_dict(Dict[Tuple[int, int], sp.Matrix]):
         return dict.__getitem__(self, key)
 
     def __setitem__(self, key: Tuple[int, int], value: sp.Matrix) -> None:
+        """
+        Set the matrix associated with the given key.
+
+        :param key: A tuple (stencil_width, UPDOWNWIND_stencil_shift).
+        :param value: The sympy Matrix to associate with the key.
+        """
         dict.__setitem__(self, key, value)
 
 
@@ -164,6 +177,7 @@ def setup_FD_matrix__return_inverse(
 ) -> Any:
     """
     Set up finite difference matrix and return its inverse.
+
     If the inputs have already been processed through
     setup_FD_matrix__return_inverse_lowlevel() (i.e., the matrix has already
     been inverted), this function will simply return the inverse matrix stored within
@@ -172,9 +186,10 @@ def setup_FD_matrix__return_inverse(
 
     :param stencil_width: Width of the stencil.
     :param UPDOWNWIND_stencil_shift: Shift in the stencil for upwind or downwind.
+
     :return: Inverse of the finite difference matrix.
 
-    Doctest:
+    DocTests:
     >>> setup_FD_matrix__return_inverse(3, 0)
     Matrix([
     [0, -1/2, 1/2],
@@ -327,9 +342,9 @@ def symbol_is_gridfunction_Cparameter_or_other(var: sp.Basic) -> str:
 
     :return: A string indicating the type of the variable. Can be 'gridfunction', 'Cparameter', or 'other'.
 
-    :raises ValueError: If the variable is both a gridfunction and a Cparameter, or if it is neither and
-                        cannot be identified.
+    :raises ValueError: If the variable is both a gridfunction and a Cparameter.
 
+    DocTests:
     >>> vetU = gri.register_gridfunctions_for_single_rank1("vetU")
     >>> symbol_is_gridfunction_Cparameter_or_other(vetU[0])
     'gridfunction'
@@ -374,7 +389,7 @@ def extract_list_of_deriv_var_strings_from_sympyexpr_list(
 
     :returns: List of derivative variables, creating _ddnD in case upwinding is enabled with control vector.
 
-    Doctest:
+    DocTests:
     >>> import nrpy.indexedexp as ixp
     >>> from typing import cast
     >>> gri.glb_gridfcs_dict.clear()
@@ -441,6 +456,7 @@ def fd_temp_variable_name(
 
     :raises ValueError: If the gf_basename is not provided.
 
+    DocTests:
     >>> fd_temp_variable_name("hDD00", -2, 0, -1)
     'hDD00_i0m2_i2m1'
     >>> fd_temp_variable_name("hDD00", 0, 4, 3)
@@ -461,9 +477,9 @@ def fd_temp_variable_name(
     suffix_list = []
     for i in range(3):
         if offsets[i] < 0:
-            suffix_list.append(suffixes[i] + "m" + str(abs(offsets[i])))
+            suffix_list.append(f"{suffixes[i]}m{abs(offsets[i])}")
         elif offsets[i] > 0:
-            suffix_list.append(suffixes[i] + "p" + str(offsets[i]))
+            suffix_list.append(f"{suffixes[i]}p{offsets[i]}")
 
     if len(suffix_list) == 0:  # All offsets are 0
         return gf_basename
@@ -486,7 +502,7 @@ def extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars(
     :raises TypeError: If the number of integers appearing in the suffix of a variable name
                        does not match the number of U's + D's in the variable name.
 
-    Doctest:
+    DocTests:
     >>> import nrpy.indexedexp as ixp
     >>> c_dD = ixp.declarerank1("c_dD")
     >>> aDD_dD = ixp.declarerank3("aDD_dD")
@@ -582,6 +598,7 @@ def read_gfs_from_memory(
     :raises ValueError: If the SIMD infrastructure is not correctly specified for the current setup,
                         indicating a mismatch or unsupported configuration for SIMD optimizations.
 
+    DocTests:
     >>> import nrpy.indexedexp as ixp
     >>> gri.glb_gridfcs_dict.clear()
     >>> par.set_parval_from_str("Infrastructure", "BHaH")
@@ -700,12 +717,12 @@ def read_gfs_from_memory(
         size = 100  # Assumed size in each direction. Do not modify.
 
         if mem_alloc_style == "210":
-            return (
-                idx3[0] + offset + size * (idx3[1] + offset + size * idx3[2] + offset)
+            return (idx3[0] + offset) + size * (
+                (idx3[1] + offset) + size * (idx3[2] + offset)
             )
         if mem_alloc_style == "012":
-            return (
-                idx3[2] + offset + size * (idx3[1] + offset + size * idx3[0] + offset)
+            return (idx3[2] + offset) + size * (
+                (idx3[1] + offset) + size * (idx3[0] + offset)
             )
         raise ValueError(f"Error: mem_alloc_style = {mem_alloc_style} is unsupported.")
 
@@ -839,10 +856,9 @@ class FDFunction:
         self.enable_simd = enable_simd
         self.c_function_name = "SIMD_" if enable_simd else ""
         self.c_function_name += f"fd_function_{self.operator}_fdorder{self.fd_order}"
+        self.modifiers = "NO_INLINE "
         if par.parval_from_str("Infrastructure") == "CarpetX":
-            self.modifiers = "CCTK_DEVICE CCTK_HOST"
-        else:
-            self.modifiers = ""
+            self.modifiers += "CCTK_DEVICE CCTK_HOST"
 
         self.CFunction: cfc.CFunction
 
@@ -897,7 +913,7 @@ class FDFunction:
         return cfc.CFunction(
             includes=includes,
             desc=f"Finite difference function for operator {self.operator}, with FD accuracy order {self.fd_order}.",
-            cfunc_type=f"static NO_INLINE {self.modifiers} {fp_type_alias}",
+            cfunc_type=f"static {self.modifiers} {fp_type_alias}",
             name=name,
             params=params,
             body=body,
