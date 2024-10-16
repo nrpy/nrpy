@@ -14,6 +14,7 @@ import nrpy.c_function as cfc
 import nrpy.params as par  # NRPy+: Parameter interface
 from nrpy.infrastructures.BHaH import griddata_commondata
 from nrpy.infrastructures.BHaH import BHaH_defines_h
+import nrpy.infrastructures.gpu.header_definitions.base_output_BHaH_defines_h as BHaH_defines_overload
 import nrpy.infrastructures.gpu.CurviBoundaryConditions.base_CurviBoundaryConditions as base_cbc_classes
 import nrpy.helpers.gpu_kernels.kernel_base as gputils
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
@@ -24,9 +25,9 @@ _ = par.CodeParameter(
 )
 
 # Update core_modules to use correct key for ordering
-for idx, key in enumerate(BHaH_defines_h.core_modules_list):
+for idx, key in enumerate(BHaH_defines_overload.core_modules_list):
     if "nrpy.infrastructures.BHaH.CurviBoundaryConditions" in key:
-        BHaH_defines_h.core_modules_list[idx] = str(__name__)
+        BHaH_defines_overload.core_modules_list[idx] = str(__name__)
 
 
 class setup_Cfunction_FD1_arbitrary_upwind(
@@ -365,7 +366,6 @@ static void cpy_pure_outer_bc_array(bc_struct *restrict bcstruct_h, bc_struct *r
             + self.prefunc
         )
         self.register()
-
 
 ###############################
 ## apply_bcs_inner_only(): Apply inner boundary conditions.
