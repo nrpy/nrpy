@@ -945,7 +945,7 @@ def setup_Cfunction_r_and_partial_xi_partial_r_derivs(
 #   for \partial_i f with arbitrary upwinding:
 def get_arb_offset_FD_coeffs_indices(
     FDORDER: int, offset: int, deriv: int
-) -> Tuple[List[float], List[int]]:
+) -> Tuple[List[sp.Number], List[int]]:
     """
     Generate finite-difference coefficients for partial derivatives with arbitrary upwinding.
 
