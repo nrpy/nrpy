@@ -4,7 +4,8 @@ Module that provides the utilities for generating GPU Kernels.
 Authors: Samuel D. Tootle; sdtootle **at** gmail **dot** com
 """
 
-from typing import Union, Dict, Any
+from typing import Any, Dict, Union
+
 import nrpy.c_function as cfc
 
 
@@ -190,6 +191,7 @@ dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);"""
         c_function_call += f"{msg};\n"
 
         return c_function_call
+
 
 if __name__ == "__main__":
     import doctest

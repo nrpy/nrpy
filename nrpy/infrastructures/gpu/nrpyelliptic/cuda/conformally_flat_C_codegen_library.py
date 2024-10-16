@@ -7,22 +7,21 @@ Authors: Samuel D. Tootle; sdtootle **at** gmail **dot** com
          Zachariah B. Etienne; zachetie **at** gmail **dot* com
 """
 
-from typing import Union, cast, Tuple, Dict, Any
-from types import FrameType as FT
-from pathlib import Path
 from inspect import currentframe as cf
+from pathlib import Path
+from types import FrameType as FT
+from typing import Any, Dict, Tuple, Union, cast
 
 import sympy as sp
-import nrpy.grid as gri
+
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-
-import nrpy.helpers.parallel_codegen as pcg
+import nrpy.grid as gri
 import nrpy.helpers.gpu_kernels.kernel_base as gputils
-import nrpy.infrastructures.gpu.nrpyelliptic.base_conformally_flat_C_codegen_library as base_npe_classes
-
-import nrpy.infrastructures.gpu.loop_utilities.cuda.simple_loop as lp
+import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices as out012d
+import nrpy.infrastructures.gpu.loop_utilities.cuda.simple_loop as lp
+import nrpy.infrastructures.gpu.nrpyelliptic.base_conformally_flat_C_codegen_library as base_npe_classes
 
 
 # Define functions to set up initial guess
@@ -120,7 +119,6 @@ class gpu_register_CFunction_initial_guess_all_points(
             comments="GPU Kernel to initialize all grid points.",
         )
 
-        # FIXME should be +=
         self.body = r"""for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   // Unpack griddata struct:
   params_struct *restrict params = &griddata[grid].params;
@@ -188,7 +186,7 @@ class gpu_register_CFunction_auxevol_gfs_single_point(
         self.cfunc_type = """__device__ void"""
         self.params = r"""const REAL xx0, const REAL xx1, const REAL xx2, REAL *restrict psi_background, REAL *restrict ADD_times_AUU
 """
-        # FIXME Is there a better way to do this?
+        # Is there a better way to do this?
         commondata_refs = [
             "zPunc",
             "P0_x",
@@ -308,7 +306,7 @@ class gpu_register_CFunction_auxevol_gfs_all_points(
         self.body += f"{self.device_kernel.c_function_call()}"
         self.body += "}\n"
         self.prefunc = self.device_kernel.CFunction.full_function
-        self.include_CodeParameters_h=False
+        self.include_CodeParameters_h = False
 
         self.register()
 
@@ -626,7 +624,7 @@ class gpu_register_CFunction_diagnostics(
                 out_quantities_dict=self.out_quantities_dict,
                 filename_tuple=axis_filename_tuple,
                 axis=axis,
-                pointer_decorator="[[maybe_unused]] "
+                pointer_decorator="[[maybe_unused]] ",
             )
         for plane in ["xy", "yz"]:
             out012d.register_CFunction_diagnostics_nearest_2d_plane(
@@ -634,7 +632,7 @@ class gpu_register_CFunction_diagnostics(
                 out_quantities_dict=self.out_quantities_dict,
                 filename_tuple=plane_filename_tuple,
                 plane=plane,
-                pointer_decorator="[[maybe_unused]] "
+                pointer_decorator="[[maybe_unused]] ",
             )
 
         self.body = r"""  // Output progress to stderr
@@ -936,7 +934,6 @@ class gpu_register_CFunction_compute_residual_all_points(
         CoordSystem: str,
         enable_rfm_precompute: bool,
         enable_simd: bool,
-        OMP_collapse: int,
         fp_type: str = "double",
     ) -> None:
         super().__init__(
@@ -1012,7 +1009,6 @@ def register_CFunction_compute_residual_all_points(
     CoordSystem: str,
     enable_rfm_precompute: bool,
     enable_simd: bool,
-    OMP_collapse: int,
     fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
@@ -1023,7 +1019,6 @@ def register_CFunction_compute_residual_all_points(
     :param CoordSystem: The coordinate system.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param enable_simd: Whether to enable SIMD.
-    :param OMP_collapse: Level of GPU loop collapsing.
     :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
@@ -1032,7 +1027,7 @@ def register_CFunction_compute_residual_all_points(
         pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
         return None
     gpu_register_CFunction_compute_residual_all_points(
-        CoordSystem, enable_rfm_precompute, enable_simd, OMP_collapse, fp_type=fp_type
+        CoordSystem, enable_rfm_precompute, enable_simd, fp_type=fp_type
     )
 
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())

@@ -1,6 +1,6 @@
 """
-Module for producing C codes related to MoL timestepping within the BHaH
-infrastructure. This includes implementation details and functions for
+Module for producing C codes related to MoL timestepping within the BHaH infrastructure.
+This includes implementation details and functions for
 allocating and deallocating the necessary memory. This modular is
 specifically focused on utilizing CUDA parallelization when generating
 code
@@ -10,19 +10,20 @@ Authors: Brandon Clark
          com Samuel D. Tootle sdtootle **at** gmail **dot** com
 """
 
-from typing import List, Union, Dict, Tuple
 import os  # Standard Python module for multiplatform OS-level functions
+from typing import Dict, List, Tuple, Union
+
 import sympy as sp  # Import SymPy, a computer algebra system written entirely in Python
-import nrpy.params as par  # NRPy+: Parameter interface
+
 import nrpy.c_function as cfc
-from nrpy.infrastructures.gpu.MoLtimestepping import base_MoL
-from nrpy.infrastructures.BHaH import griddata_commondata
-from nrpy.infrastructures.BHaH import BHaH_defines_h
-from nrpy.infrastructures.gpu.header_definitions.base_output_BHaH_defines_h import core_modules_list
 import nrpy.helpers.gpu_kernels.kernel_base as gputils
-from nrpy.helpers.generic import (
-    superfast_uniq,
+import nrpy.params as par  # NRPy+: Parameter interface
+from nrpy.helpers.generic import superfast_uniq
+from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
+from nrpy.infrastructures.gpu.header_definitions.base_output_BHaH_defines_h import (
+    core_modules_list,
 )
+from nrpy.infrastructures.gpu.MoLtimestepping import base_MoL
 
 # fmt: off
 _ = par.CodeParameter("int", __name__, "nn_0", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)

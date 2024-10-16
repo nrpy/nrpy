@@ -1,7 +1,6 @@
 """
-Module holding base classes and utility codes to facilitate generating C
-codes related to MoL timestepping within the BHaH infrastructure. This
-includes implementation details and functions for allocating and
+Module holding base classes and utility codes to facilitate generating C codes related to MoL timestepping within the BHaH infrastructure.
+This includes implementation details and functions for allocating and
 deallocating the necessary memory.
 
 Authors: Brandon Clark
@@ -102,7 +101,7 @@ class RKFunction:
         self.body = ""
         likwid_profiling = False
         if likwid_profiling:
-            self.body = f"LIKWID_MARKER_START(\"{self.name}\");\n\n"
+            self.body = f'LIKWID_MARKER_START("{self.name}");\n\n'
 
         for i in ["0", "1", "2"]:
             self.body += (
@@ -154,7 +153,7 @@ class RKFunction:
 
         self.body += "}\n"
         if likwid_profiling:
-            self.body += f"LIKWID_MARKER_STOP(\"{self.name}\");\n\n"
+            self.body += f'LIKWID_MARKER_STOP("{self.name}");\n\n'
         # Store CFunction
         self.CFunction = cfc.CFunction(
             includes=self.includes,
@@ -317,9 +316,7 @@ def generate_gridfunction_names(
 
 class base_register_CFunction_MoL_malloc:
     """
-    Base class to generate MoL_malloc_y_n_gfs() and
-    MoL_malloc_non_y_n_gfs(), allocating memory for the gridfunctions
-    indicated.
+    Base class to generate MoL_malloc_y_n_gfs() and MoL_malloc_non_y_n_gfs(), allocating memory for the gridfunctions indicated.
 
     :param Butcher_dict: Dictionary of Butcher tables for the MoL method.
     :param MoL_method: Method for the Method of Lines.
@@ -379,6 +376,7 @@ class base_register_CFunction_MoL_malloc:
             include_CodeParameters_h=True,
             body=self.body,
         )
+
 
 # single_RK_substep_input_symbolic() performs necessary replacements to
 #   define C code for a single RK substep

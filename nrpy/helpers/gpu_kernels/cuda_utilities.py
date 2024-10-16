@@ -7,6 +7,7 @@ Authors: Samuel D. Tootle; sdtootle **at** gmail **dot** com
 import nrpy.c_function as cfc
 from nrpy.helpers.gpu_kernels.kernel_base import GPU_Kernel
 
+
 # Define functions to copy params to device
 def register_CFunction_cpyHosttoDevice_params__constant() -> None:
     """
@@ -265,6 +266,7 @@ def register_CFunction_CUDA__malloc_host_gfs() -> None:
         subdirectory="CUDA_utils",
     )
 
+
 def register_CFunction_CUDA__free_host_gfs() -> None:
     """
     Register C function for allocating sufficient Host storage for diagnostics GFs.
@@ -302,6 +304,7 @@ def register_CFunction_CUDA__free_host_gfs() -> None:
         body=body,
         subdirectory="CUDA_utils",
     )
+
 
 def register_CFunction_cpyDevicetoHost__gf() -> None:
     """
@@ -366,6 +369,7 @@ def register_CFunction_cpyDevicetoHost__gf() -> None:
         subdirectory="CUDA_utils",
     )
 
+
 def register_CFunction_cpyHosttoDevice__gf() -> None:
     """
     Register C function for asynchronously copying data from host to device.
@@ -428,6 +432,7 @@ def register_CFunction_cpyHosttoDevice__gf() -> None:
         body=body,
         subdirectory="CUDA_utils",
     )
+
 
 def register_CFunctions_HostDevice__operations() -> None:
     """Generate all of the Host to/from Device specific functions."""

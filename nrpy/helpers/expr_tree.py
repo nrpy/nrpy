@@ -199,7 +199,8 @@ def get_unique_expression_symbols(
     :param expr: Sympy expression
     :param exclude: List of symbol names to exclude
     :returns: List of unique symbols from the expression
-    Example:
+
+    DOCTEST:
     >>> from sympy.abc import a, b
     >>> from sympy import cos, sin
     >>> xx0 = sp.Symbol('xx0')

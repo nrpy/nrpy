@@ -55,7 +55,10 @@ class ReferenceMetricPrecompute:
                 list(x)
                 for x in zip(
                     *sorted(
-                        zip(self.rfm.freevars_uniq_xx_indep, self.rfm.freevars_uniq_vals), key=str
+                        zip(
+                            self.rfm.freevars_uniq_xx_indep, self.rfm.freevars_uniq_vals
+                        ),
+                        key=str,
                     )
                 )
             )

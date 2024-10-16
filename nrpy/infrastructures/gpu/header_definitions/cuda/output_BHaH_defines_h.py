@@ -7,8 +7,7 @@ Author: Samuel D. Tootle
 
 import sys
 from pathlib import Path
-from typing import Optional, Dict, List, Union, Any
-
+from typing import Any, Dict, List, Optional, Union
 
 import nrpy.grid as gri
 from nrpy.helpers.generic import clang_format

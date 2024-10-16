@@ -9,15 +9,15 @@ Authors: Samuel D. Tootle
 """
 
 # Step P1: Import needed NRPy+ core modules:
-from typing import List
+from typing import Any, List
+
 import nrpy.c_function as cfc
-import nrpy.params as par  # NRPy+: Parameter interface
-from nrpy.infrastructures.BHaH import griddata_commondata
-from nrpy.infrastructures.BHaH import BHaH_defines_h
-import nrpy.infrastructures.gpu.header_definitions.base_output_BHaH_defines_h as BHaH_defines_overload
-import nrpy.infrastructures.gpu.CurviBoundaryConditions.base_CurviBoundaryConditions as base_cbc_classes
 import nrpy.helpers.gpu_kernels.kernel_base as gputils
+import nrpy.infrastructures.gpu.CurviBoundaryConditions.base_CurviBoundaryConditions as base_cbc_classes
+import nrpy.infrastructures.gpu.header_definitions.base_output_BHaH_defines_h as BHaH_defines_overload
+import nrpy.params as par  # NRPy+: Parameter interface
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
+from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
 from nrpy.validate_expressions.validate_expressions import check_zero
 
 _ = par.CodeParameter(
@@ -42,6 +42,7 @@ class setup_Cfunction_FD1_arbitrary_upwind(
     :param radiation_BC_fd_order: Finite difference order for radiation boundary condition.
                                   If -1, will use default finite difference order.
     :param fp_type: Floating point type, e.g., "double".
+    :param rational_const_alias: Set constant alias for
     """
 
     def __init__(
@@ -49,9 +50,13 @@ class setup_Cfunction_FD1_arbitrary_upwind(
         dirn: int,
         radiation_BC_fd_order: int = -1,
         fp_type: str = "double",
+        rational_const_alias: str = "const",
     ) -> None:
         super().__init__(
-            dirn, radiation_BC_fd_order=radiation_BC_fd_order, fp_type=fp_type
+            dirn,
+            radiation_BC_fd_order=radiation_BC_fd_order,
+            fp_type=fp_type,
+            rational_const_alias=rational_const_alias,
         )
         self.include_CodeParameters_h = False
         self.cfunc_decorators = "__device__"
@@ -366,6 +371,7 @@ static void cpy_pure_outer_bc_array(bc_struct *restrict bcstruct_h, bc_struct *r
             + self.prefunc
         )
         self.register()
+
 
 ###############################
 ## apply_bcs_inner_only(): Apply inner boundary conditions.
@@ -695,7 +701,7 @@ class setup_Cfunction_radiation_bcs(base_cbc_classes.setup_Cfunction_radiation_b
         const int dest_i0,const int dest_i1,const int dest_i2,
         const short FACEi0,const short FACEi1,const short FACEi2"""
 
-        self.upwind_setup_func = setup_Cfunction_FD1_arbitrary_upwind
+        self.upwind_setup_func: Any = setup_Cfunction_FD1_arbitrary_upwind
         self.r_and_partial_xi_partial_r_derivs_prefunc_setup_func = (
             setup_Cfunction_r_and_partial_xi_partial_r_derivs
         )

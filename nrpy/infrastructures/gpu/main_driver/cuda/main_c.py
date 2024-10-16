@@ -7,7 +7,6 @@ Author: Samuel D. Tootle
         zachetie **at** gmail **dot** com
 """
 
-import nrpy.c_function as cfc
 import nrpy.infrastructures.gpu.main_driver.base_main_c as base_main
 
 

@@ -44,11 +44,13 @@ class base_register_CFunction_main_c:
     ) -> None:
         self.MoL_method = MoL_method
         self.initial_data_desc = initial_data_desc
-        self.set_initial_data_after_auxevol_malloc=set_initial_data_after_auxevol_malloc
+        self.set_initial_data_after_auxevol_malloc = (
+            set_initial_data_after_auxevol_malloc
+        )
         self.boundary_conditions_desc = boundary_conditions_desc
         self.prefunc = prefunc
         self.post_non_y_n_auxevol_mallocs = post_non_y_n_auxevol_mallocs
-        self.pre_diagnostics=pre_diagnostics
+        self.pre_diagnostics = pre_diagnostics
         self.pre_MoL_step_forward_in_time = pre_MoL_step_forward_in_time
         self.post_MoL_step_forward_in_time = post_MoL_step_forward_in_time
         self.clang_format_options = clang_format_options
@@ -117,8 +119,7 @@ Step 6: Free all allocated memory."""
         self.params = "int argc, const char *argv[]"
         self.body = ""
 
-
-    def register(self):
+    def register(self) -> None:
         """Register CFunction."""
         cfc.register_CFunction(
             prefunc=self.prefunc,

@@ -45,10 +45,10 @@ class base_register_CFunction_initial_guess_single_point:
         self.params = r"""const commondata_struct *restrict commondata, const params_struct *restrict params,
         const REAL xx0, const REAL xx1, const REAL xx2,  REAL *restrict uu_ID, REAL *restrict vv_ID
 """
-        self.body=""
+        self.body = ""
         self.include_CodeParameters_h = False
 
-    def register(self):
+    def register(self) -> None:
         """Register CFunction."""
         cfc.register_CFunction(
             includes=self.includes,
@@ -57,7 +57,7 @@ class base_register_CFunction_initial_guess_single_point:
             CoordSystem_for_wrapper_func="",
             name=self.name,
             params=self.params,
-            include_CodeParameters_h = self.include_CodeParameters_h,
+            include_CodeParameters_h=self.include_CodeParameters_h,
             body=self.body,
         )
 
@@ -93,7 +93,7 @@ if( read_checkpoint(commondata, griddata) ) return;
         self.prefunc = ""
         self.include_CodeParameters_h = False
 
-    def register(self):
+    def register(self) -> None:
         """Register CFunction."""
         cfc.register_CFunction(
             prefunc=self.prefunc,
@@ -102,7 +102,7 @@ if( read_checkpoint(commondata, griddata) ) return;
             cfunc_type=self.cfunc_type,
             name=self.name,
             params=self.params,
-            include_CodeParameters_h = self.include_CodeParameters_h,
+            include_CodeParameters_h=self.include_CodeParameters_h,
             body=self.body,
         )
 
@@ -143,8 +143,9 @@ class base_register_CFunction_auxevol_gfs_single_point:
     const REAL xx0, const REAL xx1, const REAL xx2,  REAL *restrict psi_background, REAL *restrict ADD_times_AUU
 """
         self.include_CodeParameters_h = False
+        self.body = ""
 
-    def register(self):
+    def register(self) -> None:
         """Register CFunction."""
         cfc.register_CFunction(
             includes=self.includes,
@@ -183,10 +184,11 @@ class base_register_CFunction_auxevol_gfs_all_points:
         )
         self.psi_background_memaccess = gri.BHaHGridFunction.access_gf("psi_background")
         self.ADD_times_AUU_memaccess = gri.BHaHGridFunction.access_gf("ADD_times_AUU")
-        self.include_CodeParameters_h=False
+        self.include_CodeParameters_h = False
         self.prefunc = ""
+        self.body = ""
 
-    def register(self):
+    def register(self) -> None:
         """Register CFunction."""
         cfc.register_CFunction(
             prefunc=self.prefunc,
@@ -195,7 +197,7 @@ class base_register_CFunction_auxevol_gfs_all_points:
             cfunc_type=self.cfunc_type,
             name=self.name,
             params=self.params,
-            include_CodeParameters_h = self.include_CodeParameters_h,
+            include_CodeParameters_h=self.include_CodeParameters_h,
             body=self.body,
         )
 
@@ -230,6 +232,7 @@ class base_register_CFunction_variable_wavespeed_gfs_all_points:
         )
         self.prefunc = ""
         self.include_CodeParameters_h = False
+        self.body = ""
 
         self.rfm = refmetric.reference_metric[self.CoordSystem]
         dxx0, dxx1, dxx2 = sp.symbols("dxx0 dxx1 dxx2", real=True)
@@ -259,7 +262,7 @@ class base_register_CFunction_variable_wavespeed_gfs_all_points:
         self.dsmin_computation_str += f"""\n// Set local wavespeed
             {variable_wavespeed_memaccess} = MINIMUM_GLOBAL_WAVESPEED * MIN(dsmin0, MIN(dsmin1, dsmin2)) / dt;\n"""
 
-    def register(self):
+    def register(self) -> None:
         """Register CFunction."""
         cfc.register_CFunction(
             prefunc=self.prefunc,
@@ -272,6 +275,7 @@ class base_register_CFunction_variable_wavespeed_gfs_all_points:
             include_CodeParameters_h=self.include_CodeParameters_h,  # set_CodeParameters.h is manually included after the declaration of params_struct *restrict params
             body=self.body,
         )
+
 
 class base_register_CFunction_initialize_constant_auxevol:
     """
@@ -298,7 +302,7 @@ class base_register_CFunction_initialize_constant_auxevol:
         auxevol_gfs_all_points(commondata, griddata);
         """
 
-    def register(self):
+    def register(self) -> None:
         """Register CFunction."""
         cfc.register_CFunction(
             includes=self.includes,
@@ -310,6 +314,7 @@ class base_register_CFunction_initialize_constant_auxevol:
             include_CodeParameters_h=self.include_CodeParameters_h,
             body=self.body,
         )
+
 
 # Define function to compute the l^2 of a gridfunction
 class base_register_CFunction_compute_L2_norm_of_gridfunction:

@@ -5,35 +5,36 @@ Authors: Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
          Zachariah B. Etienne; zachetie **at** gmail **dot* com
 """
 
+import os
+
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
 import shutil
-import os
 from math import sqrt
 from typing import Any, Dict
+
 import nrpypn.eval_p_t_and_p_r as bbhp
 
-import nrpy.params as par
-from nrpy.helpers import simd
-import nrpy.helpers.parallel_codegen as pcg
 import nrpy.helpers.gpu_kernels.cuda_utilities as gputils
-
+import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
-from nrpy.infrastructures.BHaH import rfm_wrapper_functions
-import nrpy.infrastructures.gpu.header_definitions.cuda.output_BHaH_defines_h as Bdefines_h
 import nrpy.infrastructures.gpu.checkpoints.cuda.checkpointing as chkpt
-import nrpy.infrastructures.gpu.grid_management.cuda.griddata_free as griddata_commondata
-import nrpy.infrastructures.gpu.main_driver.cuda.main_c as main
-from nrpy.infrastructures.gpu.MoLtimestepping.cuda import MoL
 import nrpy.infrastructures.gpu.CurviBoundaryConditions.cuda.CurviBoundaryConditions as cbc
-import nrpy.infrastructures.gpu.nrpyelliptic.cuda.conformally_flat_C_codegen_library as nrpyellClib
+import nrpy.infrastructures.gpu.grid_management.cuda.griddata_free as griddata_commondata
 import nrpy.infrastructures.gpu.grid_management.cuda.numerical_grids_and_timestep as numericalgrids
 import nrpy.infrastructures.gpu.grid_management.cuda.register_rfm_precompute as rfm_precompute
+import nrpy.infrastructures.gpu.header_definitions.cuda.output_BHaH_defines_h as Bdefines_h
+import nrpy.infrastructures.gpu.main_driver.cuda.main_c as main
+import nrpy.infrastructures.gpu.nrpyelliptic.cuda.conformally_flat_C_codegen_library as nrpyellClib
+import nrpy.params as par
+from nrpy.helpers.generic import copy_files
+from nrpy.infrastructures.BHaH import rfm_wrapper_functions
 from nrpy.infrastructures.gpu.grid_management.cuda import xx_tofrom_Cart
+from nrpy.infrastructures.gpu.MoLtimestepping.cuda import MoL
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -45,6 +46,7 @@ t_final = grid_physical_size  # This parameter is effectively not used in NRPyEl
 nn_max = 10000  # Sets the maximum number of relaxation steps
 Q = 5
 R = 128
+
 
 def get_log10_residual_tolerance(fp_type_str: str = "double") -> float:
     """
@@ -473,7 +475,12 @@ griddata_commondata.register_CFunction_griddata_free(
 )
 
 if enable_simd:
-    simd.copy_simd_intrinsics_h(project_dir=project_dir)
+    copy_files(
+        package="nrpy.helpers",
+        filenames_list=["simd_intrinsics.h"],
+        project_dir=project_dir,
+        subdirectory="simd",
+    )
 
 Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,

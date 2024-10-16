@@ -11,26 +11,24 @@ Authors: Zachariah B. Etienne
 """
 
 # Step P1: Import needed NRPy+ core modules:
-from typing import List, Tuple
+from typing import List
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
 import sympy.codegen.ast as sp_ast
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-import nrpy.finite_difference as fin  # NRPy+: Finite-difference module
-import nrpy.grid as gri  # NRPy+: Functions having to do with numerical grids
-import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 import nrpy.params as par  # NRPy+: Parameter interface
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 from nrpy.helpers.expr_tree import get_unique_expression_symbols
-from nrpy.validate_expressions.validate_expressions import check_zero
 from nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions import (
     BHaH_defines_set_gridfunction_defines_with_parity_types,
     Cfunction__EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt,
     Cfunction__set_parity_for_inner_boundary_single_pt,
-    get_arb_offset_FD_coeffs_indices
+    get_arb_offset_FD_coeffs_indices,
 )
+from nrpy.validate_expressions.validate_expressions import check_zero
+
 
 # bcstruct_set_up():
 #      This function is documented in desc= and body= fields below.
@@ -122,6 +120,7 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
         self.cfunc_type = "void"
         self.name = "bcstruct_set_up"
         self.params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], bc_struct *restrict bcstruct"
+        self.body = ""
 
     def register(self) -> None:
         """Register CFunction."""
@@ -136,6 +135,7 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
             include_CodeParameters_h=True,
             body=self.body,
         )
+
 
 ###############################
 ## apply_bcs_inner_only(): Apply inner boundary conditions.
@@ -163,6 +163,7 @@ class base_register_CFunction_apply_bcs_inner_only:
         self.prefunc = ""
 
     def register(self) -> None:
+        """Register CFunction."""
         cfc.register_CFunction(
             prefunc=self.prefunc,
             includes=self.includes,
@@ -199,6 +200,7 @@ class base_register_CFunction_apply_bcs_outerextrap_and_inner:
         self.prefunc = ""
 
     def register(self) -> None:
+        """Register CFunction."""
         cfc.register_CFunction(
             prefunc=self.prefunc,
             includes=self.includes,
@@ -209,6 +211,7 @@ class base_register_CFunction_apply_bcs_outerextrap_and_inner:
             include_CodeParameters_h=False,
             body=self.body,
         )
+
 
 ###############################
 ## RADIATION (NewRad-like) BOUNDARY CONDITIONS.
@@ -347,7 +350,7 @@ class setup_Cfunction_FD1_arbitrary_upwind:
 
             # Build dictionary of coefficients to enable strong typing
             # and assignment to Rational declarations.
-            rational_dict = dict()
+            rational_dict = {}
             for i, coeff in enumerate(coeffs):
                 if coeff == 0:
                     continue
@@ -612,6 +615,7 @@ return partial_t_f_outgoing_wave + k * rinv*rinv*rinv;
                     dirn=i,
                     radiation_BC_fd_order=self.radiation_BC_fd_order,
                     fp_type=self.fp_type,
+                    rational_const_alias="static constexpr",
                 ).CFunction.full_function
 
     def generate_r_and_partial_xi_partial_r_derivs_prefunc(self) -> None:
@@ -704,6 +708,7 @@ applies BCs to the inner boundary points, which may map either to the grid inter
         self.body = ""
 
     def register(self) -> None:
+        """Register CFunction."""
         cfc.register_CFunction(
             includes=self.includes,
             prefunc=self.prefunc,
@@ -715,6 +720,7 @@ applies BCs to the inner boundary points, which may map either to the grid inter
             include_CodeParameters_h=False,
             body=self.body,
         )
+
 
 class base_CurviBoundaryConditions_register_C_functions:
     """
