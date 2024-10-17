@@ -164,6 +164,7 @@ def output_main_cpp(
 #include "timestepping.decl.h"
 
 /* readonly */ CProxy_Main mainProxy;
+/* readonly */ CProxy_Timestepping timesteppingArray;
 
 /*
  * -={ main() function }=-
