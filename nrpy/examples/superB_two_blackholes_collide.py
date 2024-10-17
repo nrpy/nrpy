@@ -39,11 +39,11 @@ import nrpy.infrastructures.superB.main_chare as superBmain
 import nrpy.infrastructures.superB.Makefile_helpers as superBMakefile
 import nrpy.infrastructures.superB.MoL as superBMoL
 import nrpy.infrastructures.superB.numerical_grids as superBnumericalgrids
+import nrpy.infrastructures.superB.superB.superB_pup as superBpup
 import nrpy.infrastructures.superB.timestepping_chare as superBtimestepping
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import rfm_precompute, rfm_wrapper_functions
-import nrpy.infrastructures.superB.superB.superB_pup as superBpup
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 

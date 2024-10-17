@@ -47,11 +47,11 @@ import nrpy.infrastructures.superB.main_chare as superBmain
 import nrpy.infrastructures.superB.Makefile_helpers as superBMakefile
 import nrpy.infrastructures.superB.MoL as superBMoL
 import nrpy.infrastructures.superB.numerical_grids as superBnumericalgrids
+import nrpy.infrastructures.superB.superB.superB_pup as superBpup
 import nrpy.infrastructures.superB.timestepping_chare as superBtimestepping
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import rfm_precompute, rfm_wrapper_functions
-import nrpy.infrastructures.superB.superB.superB_pup as superBpup
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -391,9 +391,7 @@ superBMakefile.output_CFunctions_function_prototypes_and_construct_Makefile(
 print(
     f"Finished! Now go into project/{project_name} and type `make` to build, then ./charmrun +p4 ./{project_name} to run with 4 processors, for example."
 )
-print(
-    f"To restart from checkpoint, run ./charmrun +p4 ./{project_name} +restart log"
-)
+print(f"To restart from checkpoint, run ./charmrun +p4 ./{project_name} +restart log")
 print(f"    Parameter file can be found in {project_name}.par")
 
 # print(cfc.CFunction_dict["initial_data"].full_function)

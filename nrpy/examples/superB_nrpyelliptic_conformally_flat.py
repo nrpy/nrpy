@@ -31,8 +31,8 @@ import nrpy.infrastructures.superB.Makefile_helpers as superBMakefile
 import nrpy.infrastructures.superB.MoL as superBMoL
 import nrpy.infrastructures.superB.nrpyelliptic.conformally_flat_C_codegen_library as superBnrpyellClib
 import nrpy.infrastructures.superB.numerical_grids as superBnumericalgrids
-import nrpy.infrastructures.superB.timestepping_chare as superBtimestepping
 import nrpy.infrastructures.superB.superB.superB_pup as superBpup
+import nrpy.infrastructures.superB.timestepping_chare as superBtimestepping
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import (
