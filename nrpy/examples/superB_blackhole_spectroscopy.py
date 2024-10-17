@@ -391,6 +391,9 @@ superBMakefile.output_CFunctions_function_prototypes_and_construct_Makefile(
 print(
     f"Finished! Now go into project/{project_name} and type `make` to build, then ./charmrun +p4 ./{project_name} to run with 4 processors, for example."
 )
+print(
+    f"To restart from checkpoint, run ./charmrun +p4 ./{project_name} +restart log"
+)
 print(f"    Parameter file can be found in {project_name}.par")
 
 # print(cfc.CFunction_dict["initial_data"].full_function)
