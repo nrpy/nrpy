@@ -215,6 +215,7 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
     (
         y_n_gridfunctions,
         non_y_n_gridfunctions_list,
+        diagnostic_gridfunctions_point_to,
         diagnostic_gridfunctions2_point_to,
     ) = generate_gridfunction_names(Butcher_dict, MoL_method=MoL_method)
     # Combine y_n_gfs and non_y_n_gfs into a single list
