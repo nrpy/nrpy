@@ -47,6 +47,7 @@ import nrpy.infrastructures.superB.main_chare as superBmain
 import nrpy.infrastructures.superB.Makefile_helpers as superBMakefile
 import nrpy.infrastructures.superB.MoL as superBMoL
 import nrpy.infrastructures.superB.numerical_grids as superBnumericalgrids
+import nrpy.infrastructures.superB.superB.superB_pup as superBpup
 import nrpy.infrastructures.superB.timestepping_chare as superBtimestepping
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
@@ -79,7 +80,8 @@ ShiftEvolutionOption = "GammaDriving2ndOrder_Covariant"
 GammaDriving_eta = 2.0
 grid_physical_size = 300.0
 diagnostics_output_every = 0.5
-default_checkpoint_every = 1000000000000.0
+enable_charm_checkpointing = True
+default_checkpoint_every = 2.0
 t_final = 1.5 * grid_physical_size
 swm2sh_maximum_l_mode_generated = 8
 swm2sh_maximum_l_mode_to_compute = 2  # for consistency with NRPy 1.0 version.
@@ -142,7 +144,7 @@ superBinitialdata.register_CFunction_initial_data(
     CoordSystem=CoordSystem,
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
-    enable_checkpointing=True,
+    enable_checkpointing=False,
     ID_persist_struct_str=IDps.ID_persist_str(),
     populate_ID_persist_struct_str=r"""
 initialize_ID_persist_struct(commondata, &ID_persist);
@@ -335,6 +337,7 @@ copy_files(
 
 superBmain.output_commondata_object_h_and_main_h_cpp_ci(
     project_dir=project_dir,
+    enable_charm_checkpointing=enable_charm_checkpointing,
 )
 superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
     project_dir=project_dir,
@@ -342,11 +345,16 @@ superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     outer_bcs_type=outer_bcs_type,
     enable_psi4_diagnostics=True,
+    enable_charm_checkpointing=enable_charm_checkpointing,
 )
 
+superBpup.register_CFunction_superB_pup_routines(
+    list_of_CoordSystems=[CoordSystem],
+    MoL_method=MoL_method,
+)
 copy_files(
     package="nrpy.infrastructures.superB.superB",
-    filenames_list=["superB.h"],
+    filenames_list=["superB.h", "superB_pup_function_prototypes.h"],
     project_dir=project_dir,
     subdirectory="superB",
 )
@@ -383,6 +391,7 @@ superBMakefile.output_CFunctions_function_prototypes_and_construct_Makefile(
 print(
     f"Finished! Now go into project/{project_name} and type `make` to build, then ./charmrun +p4 ./{project_name} to run with 4 processors, for example."
 )
+print(f"To restart from checkpoint, run ./charmrun +p4 ./{project_name} +restart log")
 print(f"    Parameter file can be found in {project_name}.par")
 
 # print(cfc.CFunction_dict["initial_data"].full_function)

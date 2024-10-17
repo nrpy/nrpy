@@ -11,6 +11,7 @@
 #define __SUPERB_H__
 
 #include "ckio.h"
+#include "pup.h"
 #ifndef REAL
 #define REAL double // for the REALs below
 #endif

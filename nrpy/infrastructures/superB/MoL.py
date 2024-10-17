@@ -837,6 +837,28 @@ def create_rk_substep_constants(num_steps: int) -> str:
     return "\n".join(f"#define RK_SUBSTEP_K{s+1} {s+1}" for s in range(num_steps))
 
 
+def get_num_sync_gfs() -> Tuple[int, int]:
+    """
+    Calculate the number of evolution and auxiliary evolution grid functions that need to be synchronized across chares.
+
+    :return: A tuple containing (num_sync_evol_gfs, num_sync_auxevol_gfs)
+    """
+    num_sync_evol_gfs = 0
+    num_sync_auxevol_gfs = 0
+
+    for gf_class_obj in glb_gridfcs_dict.items():
+        if (
+            isinstance(gf_class_obj, BHaHGridFunction)
+            and gf_class_obj.sync_gf_in_superB
+        ):
+            if gf_class_obj.group == "EVOL":
+                num_sync_evol_gfs += 1
+            elif gf_class_obj.group == "AUXEVOL":
+                num_sync_auxevol_gfs += 1
+
+    return num_sync_evol_gfs, num_sync_auxevol_gfs
+
+
 def register_CFunction_MoL_sync_data_defines() -> Tuple[int, int]:
     """
     Register the CFunction 'MoL_sync_data_defines'.
@@ -855,19 +877,7 @@ def register_CFunction_MoL_sync_data_defines() -> Tuple[int, int]:
     sync_auxevol_list: List[str] = []
     num_sync_auxevol_gfs: int = 0
 
-    for gf, gf_class_obj in glb_gridfcs_dict.items():
-        gf_name = gf.upper()
-
-        if (
-            isinstance(gf_class_obj, (BHaHGridFunction))
-            and gf_class_obj.sync_gf_in_superB
-        ):
-            if gf_class_obj.group == "EVOL":
-                num_sync_evol_gfs += 1
-                sync_evol_list.append(gf_name)
-            elif gf_class_obj.group == "AUXEVOL":
-                num_sync_auxevol_gfs += 1
-                sync_auxevol_list.append(gf_name)
+    num_sync_evol_gfs, num_sync_auxevol_gfs = get_num_sync_gfs()
 
     body: str = f"""
 gridfuncs->num_evol_gfs_to_sync = {num_sync_evol_gfs};

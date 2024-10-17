@@ -39,6 +39,7 @@ import nrpy.infrastructures.superB.main_chare as superBmain
 import nrpy.infrastructures.superB.Makefile_helpers as superBMakefile
 import nrpy.infrastructures.superB.MoL as superBMoL
 import nrpy.infrastructures.superB.numerical_grids as superBnumericalgrids
+import nrpy.infrastructures.superB.superB.superB_pup as superBpup
 import nrpy.infrastructures.superB.timestepping_chare as superBtimestepping
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
@@ -255,9 +256,13 @@ cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
     project_name=project_name, cmdline_inputs=["convergence_factor"]
 )
 
+superBpup.register_CFunction_superB_pup_routines(
+    list_of_CoordSystems=[CoordSystem],
+    MoL_method=MoL_method,
+)
 copy_files(
     package="nrpy.infrastructures.superB.superB",
-    filenames_list=["superB.h"],
+    filenames_list=["superB.h", "superB_pup_function_prototypes.h"],
     project_dir=project_dir,
     subdirectory="superB",
 )
