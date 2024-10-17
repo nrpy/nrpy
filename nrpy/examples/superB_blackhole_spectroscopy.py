@@ -80,12 +80,13 @@ ShiftEvolutionOption = "GammaDriving2ndOrder_Covariant"
 GammaDriving_eta = 2.0
 grid_physical_size = 300.0
 diagnostics_output_every = 0.5
-default_checkpoint_every = 1000000000000.0
+enable_charm_checkpointing = True
+default_checkpoint_every = 2.0
 t_final = 1.5 * grid_physical_size
 swm2sh_maximum_l_mode_generated = 8
 swm2sh_maximum_l_mode_to_compute = 2  # for consistency with NRPy 1.0 version.
 Nxx_dict = {
-    "SinhSpherical": [800, 16, 2],
+    "SinhSpherical": [800, 16, 4],
 }
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.25
@@ -110,7 +111,7 @@ if "Spherical" in CoordSystem:
 
 OMP_collapse = 1
 if "Spherical" in CoordSystem:
-    par.set_parval_from_str("symmetry_axes", "2")
+    #par.set_parval_from_str("symmetry_axes", "2")
     par.adjust_CodeParam_default("CFL_FACTOR", 1.0)
     OMP_collapse = 2  # about 2x faster
     if CoordSystem == "SinhSpherical":
@@ -139,15 +140,11 @@ par.set_parval_from_str(
 #         cfc.CFunction_dict["function_name"]
 NRPyPNqm.register_CFunction_NRPyPN_quasicircular_momenta()
 TPl.register_C_functions()
-superBpup.register_CFunction_superB_pup_routines(
-    list_of_CoordSystems=[CoordSystem],
-    MoL_method=MoL_method,
-)
 superBinitialdata.register_CFunction_initial_data(
     CoordSystem=CoordSystem,
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
-    enable_checkpointing=True,
+    enable_checkpointing=False,
     ID_persist_struct_str=IDps.ID_persist_str(),
     populate_ID_persist_struct_str=r"""
 initialize_ID_persist_struct(commondata, &ID_persist);
@@ -340,6 +337,7 @@ copy_files(
 
 superBmain.output_commondata_object_h_and_main_h_cpp_ci(
     project_dir=project_dir,
+    enable_charm_checkpointing=enable_charm_checkpointing,
 )
 superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
     project_dir=project_dir,
@@ -347,8 +345,13 @@ superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     outer_bcs_type=outer_bcs_type,
     enable_psi4_diagnostics=True,
+    enable_charm_checkpointing=enable_charm_checkpointing,
 )
 
+superBpup.register_CFunction_superB_pup_routines(
+    list_of_CoordSystems=[CoordSystem],
+    MoL_method=MoL_method,
+)
 copy_files(
     package="nrpy.infrastructures.superB.superB",
     filenames_list=["superB.h", "superB_pup_function_prototypes.h"],

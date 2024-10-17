@@ -77,11 +77,13 @@ class CommondataObject {
 def output_main_h(
     project_dir: str,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+    enable_charm_checkpointing: bool = False,
 ) -> None:
     """
     Generate main.h.
     :param project_dir: Directory where the project C code is output
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
+    :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     """
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
@@ -89,6 +91,7 @@ def output_main_h(
     file_output_str = """#ifndef __MAIN_H__
 #define __MAIN_H__
 
+#include "pup.h"
 #include "main.decl.h"
 #include "timestepping.decl.h"
 
@@ -106,7 +109,12 @@ class Main : public CBase_Main {
   /// Constructors ///
   Main(CkArgMsg* msg);
   Main(CkMigrateMessage* msg);
-
+"""
+    if enable_charm_checkpointing:
+        file_output_str += r"""
+  void pup(PUP::er &p);
+"""
+    file_output_str += r"""
   /// Entry Methods ///
   void done();
 };
@@ -123,11 +131,13 @@ class Main : public CBase_Main {
 def output_main_cpp(
     project_dir: str,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+    enable_charm_checkpointing: bool = False,
 ) -> None:
     """
     Generate the "generic" C main() function for all simulation codes in the superB infrastructure.
     :param project_dir: Directory where the project C code is output
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
+    :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     :raises ValueError: Raised if any required function for superB main() is not registered.
     """
     # Make sure all required C functions are registered
@@ -191,7 +201,15 @@ void Main::done() {
   CkPrintf("\nTotal wall clock time = %f s.\n", CkWallTimer() - start_time);
   CkExit();
 }
-
+"""
+    if enable_charm_checkpointing:
+        file_output_str += r"""
+// PUP routine for checkpointing
+void Main::pup(PUP::er &p) {
+  CBase_Main::pup(p);
+}
+"""
+    file_output_str += r"""
 #include "main.def.h"
 """
     main_cpp_file = project_Path / "main.cpp"
@@ -210,6 +228,7 @@ def output_main_ci(
 
     :param project_dir: Directory where the project C code is output
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
+    :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     """
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
@@ -217,6 +236,7 @@ def output_main_ci(
     file_output_str = """mainmodule main {
 
   include "commondata_object.h";
+  include "pup_stl.h";
 
   readonly CProxy_Main mainProxy;
 
@@ -238,10 +258,12 @@ def output_main_ci(
 
 def output_commondata_object_h_and_main_h_cpp_ci(
     project_dir: str,
+    enable_charm_checkpointing: bool = False,
 ) -> None:
     """
     Generate commondata_object.h, main.h, main.cpp and main.ci.
-    :param project_dir: Directory where the project C code is output
+    :param project_dir: Directory where the project C code is output.
+    :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     """
     output_commondata_object_h(
         project_dir=project_dir,
@@ -249,10 +271,12 @@ def output_commondata_object_h_and_main_h_cpp_ci(
 
     output_main_h(
         project_dir=project_dir,
+        enable_charm_checkpointing=enable_charm_checkpointing,
     )
 
     output_main_cpp(
         project_dir=project_dir,
+        enable_charm_checkpointing=enable_charm_checkpointing,
     )
 
     output_main_ci(
