@@ -9,15 +9,12 @@ from typing import List
 
 import nrpy.c_function as cfc
 import nrpy.params as par
-from nrpy.helpers.generic import superfast_uniq
-from nrpy.infrastructures.BHaH.rfm_precompute import ReferenceMetricPrecompute
 from nrpy.infrastructures.BHaH.MoLtimestepping.MoL import generate_gridfunction_names
 from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import (
     generate_Butcher_tables,
 )
-from nrpy.infrastructures.superB.MoL import (
-    get_num_sync_gfs,
-)
+from nrpy.infrastructures.BHaH.rfm_precompute import ReferenceMetricPrecompute
+from nrpy.infrastructures.superB.MoL import get_num_sync_gfs
 
 
 def register_CFunction_superB_pup_routines(
@@ -109,10 +106,6 @@ void pup_rfm_struct(PUP::er &p, rfm_struct &rfm, const params_struct *restrict p
         for define in rfm_precompute.BHaH_defines_list:
             # Extract variable names from the define strings
             var_name = define.split()[2].strip(";")
-            if "__" in var_name:
-                base_var = var_name.split("__")[0]
-            else:
-                base_var = var_name
             # Assuming all variables have the same allocation size, adjust as necessary
             if "xx0" in var_name:
                 size = "Nxx_plus_2NGHOSTS0"
@@ -221,7 +214,6 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
     (
         y_n_gridfunctions,
         non_y_n_gridfunctions_list,
-        diagnostic_gridfunctions_point_to,
         diagnostic_gridfunctions2_point_to,
     ) = generate_gridfunction_names(Butcher_dict, MoL_method=MoL_method)
     # Combine y_n_gfs and non_y_n_gfs into a single list

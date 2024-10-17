@@ -847,7 +847,7 @@ def get_num_sync_gfs() -> Tuple[int, int]:
     num_sync_evol_gfs = 0
     num_sync_auxevol_gfs = 0
 
-    for gf, gf_class_obj in glb_gridfcs_dict.items():
+    for gf_class_obj in glb_gridfcs_dict.items():
         if (
             isinstance(gf_class_obj, BHaHGridFunction)
             and gf_class_obj.sync_gf_in_superB
