@@ -86,7 +86,7 @@ t_final = 1.5 * grid_physical_size
 swm2sh_maximum_l_mode_generated = 8
 swm2sh_maximum_l_mode_to_compute = 2  # for consistency with NRPy 1.0 version.
 Nxx_dict = {
-    "SinhSpherical": [800, 16, 4],
+    "SinhSpherical": [800, 16, 2],
 }
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.25
@@ -111,7 +111,7 @@ if "Spherical" in CoordSystem:
 
 OMP_collapse = 1
 if "Spherical" in CoordSystem:
-    #par.set_parval_from_str("symmetry_axes", "2")
+    par.set_parval_from_str("symmetry_axes", "2")
     par.adjust_CodeParam_default("CFL_FACTOR", 1.0)
     OMP_collapse = 2  # about 2x faster
     if CoordSystem == "SinhSpherical":
