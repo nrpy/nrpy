@@ -11,15 +11,14 @@ import nrpy.c_function as cfc
 import nrpy.params as par
 from nrpy.helpers.generic import superfast_uniq
 from nrpy.infrastructures.BHaH.rfm_precompute import ReferenceMetricPrecompute
-from nrpy.infrastructures.BHaH.MoLtimestepping.MoL import (
-    generate_gridfunction_names
-)
+from nrpy.infrastructures.BHaH.MoLtimestepping.MoL import generate_gridfunction_names
 from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import (
     generate_Butcher_tables,
 )
 from nrpy.infrastructures.superB.MoL import (
     get_num_sync_gfs,
 )
+
 
 def register_CFunction_superB_pup_routines(
     list_of_CoordSystems: List[str],
@@ -38,7 +37,7 @@ def register_CFunction_superB_pup_routines(
     prefunc += r"""/* superB:  File  "superB_pup_routines.cpp"*/
 #include "../BHaH_defines.h"
 """
-    prefunc +="""
+    prefunc += """
 // PUP routine for struct commondata_struct
 void pup_commondata_struct(PUP::er &p, commondata_struct &commondata) {
 """
@@ -62,10 +61,10 @@ void pup_commondata_struct(PUP::er &p, commondata_struct &commondata) {
     # Sort the lines alphabetically and join them with line breaks
     prefunc += "// PUP commondata struct\n"
     prefunc += "".join(sorted(struct_list))
-    prefunc +="""
+    prefunc += """
 }"""
 
-    prefunc +="""
+    prefunc += """
 // PUP routine for struct params_struct
 void pup_params_struct(PUP::er &p, params_struct &params) {
 """
@@ -89,9 +88,8 @@ void pup_params_struct(PUP::er &p, params_struct &params) {
     # Sort the lines alphabetically and join them with line breaks
     prefunc += "// PUP paramss struct\n"
     prefunc += "".join(sorted(struct_list))
-    prefunc +="""
+    prefunc += """
 }"""
-
 
     prefunc += """
 // PUP routine for struct rfm_struct
@@ -110,7 +108,7 @@ void pup_rfm_struct(PUP::er &p, rfm_struct &rfm, const params_struct *restrict p
         # Add PUParray calls
         for define in rfm_precompute.BHaH_defines_list:
             # Extract variable names from the define strings
-            var_name = define.split()[2].strip(';')
+            var_name = define.split()[2].strip(";")
             if "__" in var_name:
                 base_var = var_name.split("__")[0]
             else:
@@ -127,7 +125,7 @@ void pup_rfm_struct(PUP::er &p, rfm_struct &rfm, const params_struct *restrict p
 }
 """
 
-    prefunc +="""
+    prefunc += """
 // PUP routine for struct innerpt_bc_struct
 void pup_innerpt_bc_struct(PUP::er &p, innerpt_bc_struct &ibc) {
   p | ibc.dstpt;
@@ -202,12 +200,12 @@ void pup_bc_struct(PUP::er &p, bc_struct &bc) {
 }
 """
 
-    prefunc +="""
+    prefunc += """
 // PUP routine for struct MoL_gridfunctions_struct
 void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfuncs, const params_struct &params) {"""
 
     num_sync_evol_gfs, num_sync_auxevol_gfs = get_num_sync_gfs()
-    prefunc +=rf"""
+    prefunc += rf"""
   p | gridfuncs.num_evol_gfs_to_sync;
   p | gridfuncs.num_auxevol_gfs_to_sync;
   p | gridfuncs.max_sync_gfs;
@@ -215,7 +213,7 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
   PUParray(p, gridfuncs.evol_gfs_to_sync, {num_sync_auxevol_gfs});
 """
 
-    prefunc +="""
+    prefunc += """
   const int Nxx_plus_2NGHOSTS_tot = params.Nxx_plus_2NGHOSTS0 * params.Nxx_plus_2NGHOSTS1 * params.Nxx_plus_2NGHOSTS2;
   if (p.isUnpacking()) {
 """
@@ -251,15 +249,13 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
         # Don't malloc a zero-sized array.
         if num_gfs == "NUM_AUXEVOL_GFS":
             prefunc += "  if(NUM_AUXEVOL_GFS > 0) "
-        prefunc += (
-            f"PUParray(p, gridfuncs.{gridfunctions}, NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);\n"
-        )
+        prefunc += f"PUParray(p, gridfuncs.{gridfunctions}, NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);\n"
     prefunc += "PUParray(p, gridfuncs.diagnostic_output_gfs, NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);\n"
     prefunc += """
 }
 """
 
-    prefunc +="""
+    prefunc += """
 // PUP routine for struct charecomm_struct
 void pup_charecomm_struct(PUP::er &p, charecomm_struct &cc, const params_struct &params, const params_struct &params_chare) {
   const int ntot = params.Nxx_plus_2NGHOSTS0 * params.Nxx_plus_2NGHOSTS1 * params.Nxx_plus_2NGHOSTS2;

@@ -221,6 +221,7 @@ def generate_diagnostics_code(
     """
     return code
 
+
 def generate_PUP_code(
     enable_psi4_diagnostics: bool = False,
 ) -> str:
@@ -264,13 +265,13 @@ void Timestepping::pup(PUP::er &p) {
   p | const_cast<int&>(expected_count_filewritten);
 """
     if enable_psi4_diagnostics:
-        code +=r"""
+        code += r"""
   if (p.isUnpacking()) {
       // Recreate the section proxy after restart
       create_section();
   }
 """
-    code +=r"""
+    code += r"""
 }
 """
     return code

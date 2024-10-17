@@ -837,7 +837,6 @@ def create_rk_substep_constants(num_steps: int) -> str:
     return "\n".join(f"#define RK_SUBSTEP_K{s+1} {s+1}" for s in range(num_steps))
 
 
-
 def get_num_sync_gfs() -> Tuple[int, int]:
     """
     Calculate the number of evolution and auxiliary evolution grid functions
@@ -859,7 +858,6 @@ def get_num_sync_gfs() -> Tuple[int, int]:
                 num_sync_auxevol_gfs += 1
 
     return num_sync_evol_gfs, num_sync_auxevol_gfs
-
 
 
 def register_CFunction_MoL_sync_data_defines() -> Tuple[int, int]:
