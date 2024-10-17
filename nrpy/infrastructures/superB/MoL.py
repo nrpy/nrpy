@@ -839,8 +839,7 @@ def create_rk_substep_constants(num_steps: int) -> str:
 
 def get_num_sync_gfs() -> Tuple[int, int]:
     """
-    Calculate the number of evolution and auxiliary evolution grid functions
-    that need to be synchronized across chares.
+    Calculate the number of evolution and auxiliary evolution grid functions that need to be synchronized across chares.
 
     :return: A tuple containing (num_sync_evol_gfs, num_sync_auxevol_gfs)
     """

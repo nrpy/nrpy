@@ -229,6 +229,7 @@ def generate_PUP_code(
     Generate code for PUP routine for Timestepping class.
 
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
+    :return: A string representing the PUP routine for Timestepping class.
     """
     code = r"""
 // PUP routine for class Timestepping

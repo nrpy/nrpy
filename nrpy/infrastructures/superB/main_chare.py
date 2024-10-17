@@ -230,7 +230,6 @@ def output_main_ci(
 
     :param project_dir: Directory where the project C code is output
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
-    :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     """
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)

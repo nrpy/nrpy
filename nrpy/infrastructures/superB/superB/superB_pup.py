@@ -22,7 +22,8 @@ def register_CFunction_superB_pup_routines(
     fp_type: str = "double",
     MoL_method: str = "RK4",
 ) -> None:
-    """Register C function superB_pup_routines(), a collection of Pack Un-Pack (PUP) for structs. PUP routines are used for checkpointing and load balancing in Charm++.
+    """
+    Register C function superB_pup_routines(), a collection of Pack Un-Pack (PUP) for structs. PUP routines are used for checkpointing and load balancing in Charm++.
 
     :param list_of_CoordSystems: List of coordinate systems to register the C functions.
     :param fp_type: Floating point type, e.g., "double".
