@@ -618,7 +618,9 @@ def output_timestepping_cpp(
 #include "timestepping.h"
 #include "main.h"
 
-extern /* readonly */ CProxy_Main mainProxy;
+/* readonly */ CProxy_Main mainProxy;
+/* readonly */ CProxy_Timestepping timesteppingArray;
+
 
 /*
 *Step 1.c: Allocate NUMGRIDS griddata arrays, each containing data specific to an individual grid.

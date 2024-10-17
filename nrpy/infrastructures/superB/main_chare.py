@@ -99,7 +99,6 @@ class Main : public CBase_Main {
 
   private:
     /// Member Variables (Object State) ///
-    CProxy_Timestepping timesteppingArray;
     REAL start_time;
 
     /// Private Member Functions ///
