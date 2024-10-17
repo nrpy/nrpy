@@ -17,8 +17,9 @@ from nrpy.infrastructures.BHaH.MoLtimestepping.MoL import (
 from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import (
     generate_Butcher_tables,
 )
-
-
+from nrpy.infrastructures.superB.MoL import (
+    get_num_sync_gfs,
+)
 
 def register_CFunction_superB_pup_routines(
     list_of_CoordSystems: List[str],
@@ -203,7 +204,18 @@ void pup_bc_struct(PUP::er &p, bc_struct &bc) {
 
     prefunc +="""
 // PUP routine for struct MoL_gridfunctions_struct
-void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfuncs, const params_struct &params) {
+void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfuncs, const params_struct &params) {"""
+
+    num_sync_evol_gfs, num_sync_auxevol_gfs = get_num_sync_gfs()
+    prefunc +=rf"""
+  p | gridfuncs.num_evol_gfs_to_sync;
+  p | gridfuncs.num_auxevol_gfs_to_sync;
+  p | gridfuncs.max_sync_gfs;
+  PUParray(p, gridfuncs.evol_gfs_to_sync, {num_sync_evol_gfs});
+  PUParray(p, gridfuncs.evol_gfs_to_sync, {num_sync_auxevol_gfs});
+"""
+
+    prefunc +="""
   const int Nxx_plus_2NGHOSTS_tot = params.Nxx_plus_2NGHOSTS0 * params.Nxx_plus_2NGHOSTS1 * params.Nxx_plus_2NGHOSTS2;
   if (p.isUnpacking()) {
 """
