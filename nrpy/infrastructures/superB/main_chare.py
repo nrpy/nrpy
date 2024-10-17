@@ -194,7 +194,9 @@ Main::Main(CkArgMsg* msg) {
   timesteppingArray.start();
 }
 
-Main::Main(CkMigrateMessage* msg) { }
+Main::Main(CkMigrateMessage* msg) {
+  mainProxy = thisProxy;
+}
 
 void Main::done() {
   CkPrintf("\nTotal wall clock time = %f s.\n", CkWallTimer() - start_time);
@@ -238,6 +240,8 @@ def output_main_ci(
   include "pup_stl.h";
 
   readonly CProxy_Main mainProxy;
+  readonly CProxy_Timestepping timesteppingArray;
+
 
   extern module timestepping;
 

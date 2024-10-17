@@ -700,7 +700,8 @@ Timestepping::Timestepping(CommondataObject &&inData) {
 """
     file_output_str += r"""
 // migration constructor
-Timestepping::Timestepping(CkMigrateMessage *msg) { }
+Timestepping::Timestepping(CkMigrateMessage *msg): CBase_Timestepping(msg) { }
+
 
 // destructor
 Timestepping::~Timestepping() {
