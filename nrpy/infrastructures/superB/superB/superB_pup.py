@@ -66,7 +66,7 @@ void pup_commondata_struct(PUP::er &p, commondata_struct &commondata) {
 // PUP routine for struct params_struct
 void pup_params_struct(PUP::er &p, params_struct &params) {
 """
-    struct_list: List[str] = []  # List to store individual struct elements
+    params_struct_list: List[str] = []  # List to store individual struct elements
     for parname, CodeParam in par.glb_code_params_dict.items():
         CPtype = CodeParam.cparam_type
         if not CodeParam.commondata and CPtype != "#define":
@@ -82,10 +82,10 @@ void pup_params_struct(PUP::er &p, params_struct &params) {
                 c_output += f"p|{struct}.{parname}.tv_nsec;{comment}\n"
             else:
                 c_output = f"p|{struct}.{parname};{comment}\n"
-            struct_list.append(c_output)
+            params_struct_list.append(c_output)
     # Sort the lines alphabetically and join them with line breaks
-    prefunc += "// PUP paramss struct\n"
-    prefunc += "".join(sorted(struct_list))
+    prefunc += "// PUP params struct\n"
+    prefunc += "".join(sorted(params_struct_list))
     prefunc += """
 }"""
 
@@ -215,7 +215,7 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
     (
         y_n_gridfunctions,
         non_y_n_gridfunctions_list,
-        diagnostic_gridfunctions_point_to,
+        _,
         diagnostic_gridfunctions2_point_to,
     ) = generate_gridfunction_names(Butcher_dict, MoL_method=MoL_method)
     # Combine y_n_gfs and non_y_n_gfs into a single list
