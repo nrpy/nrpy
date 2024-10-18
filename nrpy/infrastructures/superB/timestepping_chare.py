@@ -222,6 +222,62 @@ def generate_diagnostics_code(
     return code
 
 
+def generate_PUP_code(
+    enable_psi4_diagnostics: bool = False,
+) -> str:
+    """
+    Generate code for PUP routine for Timestepping class.
+
+    :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
+    :return: A string representing the PUP routine for Timestepping class.
+    """
+    code = r"""
+// PUP routine for class Timestepping
+// Note that the user can choose what to PUP, for example not all structs in griddata are PUP'ed
+// gridddata has to be unpacked first since it is needed to unpack griddata_chare(for the size of certain arrays)
+void Timestepping::pup(PUP::er &p) {
+  CBase_Timestepping::pup(p);
+  __sdag_pup(p);
+  pup_commondata_struct(p, commondata);
+  if (p.isUnpacking()) {
+    griddata = (griddata_struct *restrict)malloc(sizeof(griddata_struct) * commondata.NUMGRIDS);
+  }
+  for (int i = 0; i < commondata.NUMGRIDS; i++) {
+    pup_griddata(p, griddata[i]);
+  }
+  if (p.isUnpacking()) {
+    griddata_chare = (griddata_struct *restrict)malloc(sizeof(griddata_struct) * commondata.NUMGRIDS);
+  }
+  for (int i = 0; i < commondata.NUMGRIDS; i++) {
+    pup_griddata_chare(p, griddata_chare[i], griddata[i].params);
+  }
+  p | is_boundarychare;
+  p | time_start;
+  p | count_filewritten;
+  p | iter;
+  p | type_gfs_nonlocal_innerbc;
+  p | write_diagnostics_this_step;
+  p | f_1d_y;
+  p | f_1d_z;
+  p | f_2d_xy;
+  p | f_2d_yz;
+  p | const_cast<int&>(grid);
+  p | const_cast<int&>(which_grid_diagnostics);
+  p | const_cast<int&>(expected_count_filewritten);
+"""
+    if enable_psi4_diagnostics:
+        code += r"""
+  if (p.isUnpacking()) {
+      // Recreate the section proxy after restart
+      create_section();
+  }
+"""
+    code += r"""
+}
+"""
+    return code
+
+
 def register_CFunction_timestepping_malloc() -> None:
     """
     Register a C function for timestepping malloc.
@@ -325,6 +381,7 @@ def output_timestepping_h(
     enable_residual_diagnostics: bool = False,
     enable_psi4_diagnostics: bool = False,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+    enable_charm_checkpointing: bool = False,
 ) -> None:
     """
     Generate timestepping.h.
@@ -333,6 +390,7 @@ def output_timestepping_h(
     :param enable_residual_diagnostics: Flag to enable residual diagnostics, default is False.
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
+    :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     """
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
@@ -341,6 +399,7 @@ def output_timestepping_h(
 #define __TIMESTEPPING_H__
 #include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
+#include "superB/superB_pup_function_prototypes.h"
 #include "timestepping.decl.h"
 """
     if enable_psi4_diagnostics:
@@ -373,7 +432,11 @@ class Timestepping : public CBase_Timestepping {
     //bool contains_gridcenter;
     const int grid = 0;
     const int which_grid_diagnostics = 0;
-    bool write_diagnostics_this_step;
+    bool write_diagnostics_this_step;"""
+    if enable_charm_checkpointing:
+        file_output_str += r"""
+    bool write_chckpt_this_step;"""
+    file_output_str += r"""
     Ck::IO::File f_1d_y;
     Ck::IO::File f_1d_z;
     Ck::IO::File f_2d_xy;
@@ -399,6 +462,7 @@ class Timestepping : public CBase_Timestepping {
     if enable_psi4_diagnostics:
         file_output_str += r"""
     void contribute_localsums_for_psi4_decomp(sectionBcastMsg *msg, const int grid);
+    void create_section();
 """
     file_output_str += r"""
   public:
@@ -406,9 +470,11 @@ class Timestepping : public CBase_Timestepping {
     Timestepping(CommondataObject &&inData);
     Timestepping(CkMigrateMessage* msg);
     /// Destructor ///
-    ~Timestepping();
-
-    /// Entry Methods ///
+    ~Timestepping();"""
+    if enable_charm_checkpointing:
+        file_output_str += r"""
+    void pup(PUP::er &p);"""
+    file_output_str += r"""
 };
 
 #endif //__TIMESTEPPING_H__
@@ -501,6 +567,7 @@ def output_timestepping_cpp(
     enable_residual_diagnostics: bool = False,
     enable_psi4_diagnostics: bool = False,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+    enable_charm_checkpointing: bool = False,
 ) -> None:
     """
     Generate timestepping.cpp.
@@ -515,6 +582,7 @@ def output_timestepping_cpp(
     :param enable_residual_diagnostics: Enable residual diagnostics, default is False.
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
+    :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     :raises ValueError: Raised if any required function is not registered.
     """
     initial_data_desc += " "
@@ -632,7 +700,8 @@ Timestepping::Timestepping(CommondataObject &&inData) {
 """
     file_output_str += r"""
 // migration constructor
-Timestepping::Timestepping(CkMigrateMessage *msg) { }
+Timestepping::Timestepping(CkMigrateMessage *msg): CBase_Timestepping(msg) { }
+
 
 // destructor
 Timestepping::~Timestepping() {
@@ -998,6 +1067,12 @@ void Timestepping::contribute_localsums_for_psi4_decomp(sectionBcastMsg *msg, co
   CProxySection_Timestepping::contribute(outdoubles, CkReduction::sum_double, cookie, cb);
   delete msg;
 }
+
+// section creation for reduction along section of chares for psi4 integration along theta and phi
+void Timestepping::create_section() {
+  secProxy = CProxySection_Timestepping::ckNew(thisProxy.ckGetArrayID(), thisIndex.x, thisIndex.x, 1, 0, commondata.Nchare1 - 1, 1, 0,
+                                                     commondata.Nchare2 - 1, 1);
+}
 """
 
     file_output_str += r"""
@@ -1108,6 +1183,10 @@ void Timestepping::process_nonlocalinnerbc(const int type_gfs, const int grid) {
   apply_bcs_inner_only_nonlocal(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].bcstruct, &griddata_chare[grid].nonlocalinnerbcstruct, NUM_GFS, gfs, gf_parity_types, griddata_chare[grid].tmpBuffers.tmpBuffer_innerbc_receiv);
 }
 """
+
+    if enable_charm_checkpointing:
+        file_output_str += generate_PUP_code(enable_psi4_diagnostics)
+
     file_output_str += r"""
 #include "timestepping.def.h"
 """
@@ -1130,6 +1209,7 @@ def output_timestepping_ci(
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
     enable_psi4_diagnostics: bool = False,
     enable_residual_diagnostics: bool = False,
+    enable_charm_checkpointing: bool = False,
 ) -> None:
     """
     Generate timestepping.ci.
@@ -1144,6 +1224,7 @@ def output_timestepping_ci(
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     :param enable_residual_diagnostics: Whether or not to enable residual diagnostics.
+    :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     """
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
@@ -1153,6 +1234,7 @@ def output_timestepping_ci(
   include "BHaH_function_prototypes.h";
   include "commondata_object.h";
   include "ckio.h";
+  include "pup_stl.h";
   """
     if enable_psi4_diagnostics:
         file_output_str += r"""
@@ -1171,7 +1253,7 @@ def output_timestepping_ci(
     if enable_psi4_diagnostics:
         file_output_str += r"""
       serial {
-        secProxy = CProxySection_Timestepping::ckNew(thisProxy.ckGetArrayID(), thisIndex.x, thisIndex.x, 1, 0, commondata.Nchare1 - 1, 1, 0, commondata.Nchare2 - 1, 1);
+        create_section();
       }"""
     file_output_str += r"""
       if (griddata_chare[grid].nonlocalinnerbcstruct.tot_num_src_chares > 0) {
@@ -1289,7 +1371,7 @@ def output_timestepping_ci(
           diagnostics(&commondata, griddata_chare, griddata, token, OUTPUT_RESIDUAL, which_grid_diagnostics, thisIndex_arr, localsums_for_residualH);
           contribute_localsums_for_residualH(localsums_for_residualH);
         }
-        when continue_after_residual_H_done() {
+        when continue_after_residual_H_done() { }
         """
     if enable_residual_diagnostics:
         file_output_str += r"""
@@ -1303,8 +1385,13 @@ def output_timestepping_ci(
         file_output_str += r"""
             serial {
               write_diagnostics_this_step = fabs(round(commondata.time / commondata.diagnostics_output_every) * commondata.diagnostics_output_every - commondata.time) < 0.5 * commondata.dt;
-            }
-            """
+              """
+        if enable_charm_checkpointing:
+            file_output_str += r"""
+              write_chckpt_this_step = fabs(round(commondata.time / commondata.checkpoint_every) * commondata.checkpoint_every -
+                                             commondata.time) < 0.5 * commondata.dt;"""
+        file_output_str += r"""
+            }"""
     if enable_psi4_diagnostics:
         file_output_str += r"""
         if (write_diagnostics_this_step) {
@@ -1408,8 +1495,29 @@ def output_timestepping_ci(
             serial {thisProxy.continue_timestepping(); }
           }
         }
-        when continue_timestepping() {
+        when continue_timestepping() { }
 """
+    if enable_charm_checkpointing:
+        file_output_str += r"""
+        // periodically checkpointing
+        if (write_chckpt_this_step) {
+          serial {
+            // coordinate to start checkpointing
+            if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
+              CkPrintf("[%d] CHECKPOINT at step %d\n", CkMyPe(), commondata.nn);
+            }
+            contribute(CkCallback(CkReductionTarget(Timestepping, startCheckpoint), thisProxy(0, 0, 0)));
+          }
+          if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
+            when startCheckpoint() serial {
+              CkCallback cb(CkIndex_Timestepping::recvCheckPointDone(), thisProxy);
+              CkStartCheckpoint("log", cb);
+            }
+          }
+          when recvCheckPointDone() { }
+        }
+"""
+
     if pre_MoL_step_forward_in_time != "":
         file_output_str += pre_MoL_step_forward_in_time
     else:
@@ -1475,15 +1583,6 @@ def output_timestepping_ci(
         file_output_str += post_MoL_step_forward_in_time
     else:
         file_output_str += "  // (nothing here; specify by setting post_MoL_step_forward_in_time string in register_CFunction_main_c().)\n"
-
-    if enable_residual_diagnostics:
-        file_output_str += r"""
-      }
-        """
-
-    file_output_str += r"""
-        }
-    """
 
     file_output_str += r"""
         serial {
@@ -1587,6 +1686,11 @@ def output_timestepping_ci(
       }
     }"""
 
+    if enable_charm_checkpointing:
+        file_output_str += r"""
+    entry [reductiontarget] void startCheckpoint(); //reduction to start checkpointing
+    entry void recvCheckPointDone();  //checkpointing done, resume application
+    """
     file_output_str += r"""
   };
 };
@@ -1609,6 +1713,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
     outer_bcs_type: str = "radiation",
     enable_psi4_diagnostics: bool = False,
     enable_residual_diagnostics: bool = False,
+    enable_charm_checkpointing: bool = False,
 ) -> None:
     """
     Output timestepping h, cpp, and ci files and register C functions.
@@ -1622,6 +1727,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
     :param outer_bcs_type: type of outer boundary BCs to apply. Only options are radiation or extrapolation in superB.
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     :param enable_residual_diagnostics: Whether or not to enable residual diagnostics.
+    :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     """
     # For NRPy elliptic: register parameter wavespeed at outer boundary
     if enable_residual_diagnostics:
@@ -1633,6 +1739,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         project_dir=project_dir,
         enable_residual_diagnostics=enable_residual_diagnostics,
         enable_psi4_diagnostics=enable_psi4_diagnostics,
+        enable_charm_checkpointing=enable_charm_checkpointing,
     )
 
     Butcher_dict = generate_Butcher_tables()
@@ -1645,6 +1752,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         MoL_method=MoL_method,
         enable_residual_diagnostics=enable_residual_diagnostics,
         enable_psi4_diagnostics=enable_psi4_diagnostics,
+        enable_charm_checkpointing=enable_charm_checkpointing,
     )
 
     output_timestepping_ci(
@@ -1657,6 +1765,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         enable_psi4_diagnostics=enable_psi4_diagnostics,
         enable_residual_diagnostics=enable_residual_diagnostics,
         Butcher_dict=Butcher_dict,
+        enable_charm_checkpointing=enable_charm_checkpointing,
     )
 
     register_CFunction_timestepping_malloc()
