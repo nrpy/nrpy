@@ -25,6 +25,7 @@ class simple_loop(base_sl.base_simple_loop):
     :param OMP_custom_pragma: Enable loop parallelization using OpenMP with custom pragma
     :param OMP_collapse: Specifies the number of nested loops to collapse
     :param fp_type: Floating point type, e.g., "double".
+    :param enable_intrinsics: Toggle using CUDA intrinsics for calculations.
     :raises ValueError: If `loop_region` is unsupported or if `read_xxs` and `enable_rfm_precompute` are both enabled.
 
     Doctests:
@@ -107,6 +108,7 @@ class simple_loop(base_sl.base_simple_loop):
         CoordSystem: str = "Cartesian",
         enable_rfm_precompute: bool = False,
         fp_type: str = "double",
+        enable_intrinsics: bool = False,
         **_: Any,
     ) -> None:
         super().__init__(
@@ -128,11 +130,18 @@ class simple_loop(base_sl.base_simple_loop):
             self.rfmp = rfm_precompute.ReferenceMetricPrecompute(
                 self.CoordSystem, fp_type=fp_type
             )
-            self.read_rfm_xx_arrays = [
-                self.rfmp.readvr_str[0],
-                self.rfmp.readvr_str[1],
-                self.rfmp.readvr_str[2],
-            ]
+            if enable_intrinsics:
+                self.read_rfm_xx_arrays = [
+                    self.rfmp.readvr_SIMD_inner_str[0],
+                    self.rfmp.readvr_SIMD_outer_str[1],
+                    self.rfmp.readvr_SIMD_outer_str[2],
+                ]
+            else:
+                self.read_rfm_xx_arrays = [
+                    self.rfmp.readvr_str[0],
+                    self.rfmp.readvr_str[1],
+                    self.rfmp.readvr_str[2],
+                ]
         self.initialize_based_on__read_rfm_xx_arrays()
 
         self.increment = ["stride2", "stride1", "stride0"]

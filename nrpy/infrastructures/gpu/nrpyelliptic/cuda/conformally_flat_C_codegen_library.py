@@ -798,6 +798,7 @@ class gpu_register_CFunction_rhs_eval(
     :param enable_simd: Whether to enable SIMD.
     :param OMP_collapse: Level of GPU loop collapsing.
     :param fp_type: Floating point type, e.g., "double".
+    :param enable_intrinsics: Toggle using CUDA intrinsics for calculations.
 
     :return: None.
     """
@@ -807,6 +808,7 @@ class gpu_register_CFunction_rhs_eval(
         CoordSystem: str,
         enable_rfm_precompute: bool,
         fp_type: str = "double",
+        enable_intrinsics: bool = False,
     ) -> None:
 
         super().__init__(CoordSystem, enable_rfm_precompute)
@@ -821,12 +823,14 @@ class gpu_register_CFunction_rhs_eval(
                 enable_fd_codegen=True,
                 fp_type=fp_type,
                 rational_const_alias="static constexpr",
+                enable_simd=enable_intrinsics,
             ),
             loop_region="interior",
             CoordSystem=CoordSystem,
             enable_rfm_precompute=enable_rfm_precompute,
             read_xxs=not enable_rfm_precompute,
             fp_type=fp_type,
+            enable_intrinsics=enable_intrinsics,
         )
         self.loop_body = self.simple_loop.full_loop_body.replace(
             "const REAL f", "[[maybe_unused]] const REAL f"
@@ -886,6 +890,7 @@ def register_CFunction_rhs_eval(
     CoordSystem: str,
     enable_rfm_precompute: bool,
     fp_type: str = "double",
+    enable_intrinsics: bool = False,
     **_kwargs: Any,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
@@ -897,6 +902,7 @@ def register_CFunction_rhs_eval(
     :param CoordSystem: The coordinate system.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param fp_type: Floating point type, e.g., "double".
+    :param enable_intrinsics: Toogle using CUDA intrinsics for calculations.
     :param _kwargs: capture unused arguments from openmp-like calls
 
     :return: None if in registration phase, else the updated NRPy environment.
@@ -904,7 +910,7 @@ def register_CFunction_rhs_eval(
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
         return None
-    gpu_register_CFunction_rhs_eval(CoordSystem, enable_rfm_precompute, fp_type=fp_type)
+    gpu_register_CFunction_rhs_eval(CoordSystem, enable_rfm_precompute, fp_type=fp_type, enable_intrinsics=enable_intrinsics)
 
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 

@@ -100,7 +100,7 @@ enable_rfm_precompute = True
 MoL_method = "RK4"
 fd_order = 10
 radiation_BC_fd_order = 6
-enable_simd = False
+enable_intrinsics = True
 parallel_codegen_enable = True
 boundary_conditions_desc = "outgoing radiation"
 # fmt: off
@@ -309,7 +309,7 @@ if enable_rfm_precompute:
 nrpyellClib.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
-    enable_simd=enable_simd,
+    enable_intrinsics=enable_intrinsics,
     OMP_collapse=OMP_collapse,
     fp_type=fp_type,
 )
@@ -318,7 +318,7 @@ nrpyellClib.register_CFunction_rhs_eval(
 nrpyellClib.register_CFunction_compute_residual_all_points(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
-    enable_simd=enable_simd,
+    enable_simd=enable_intrinsics,
     OMP_collapse=OMP_collapse,
     fp_type=fp_type,
 )
@@ -443,7 +443,7 @@ cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
 )
 Bdefines_h.output_BHaH_defines_h(
     project_dir=project_dir,
-    enable_simd=enable_simd,
+    enable_simd=enable_intrinsics,
     REAL_means=fp_type,
     supplemental_defines_dict={
         "ADDITIONAL GPU DIAGNOSTICS": "#define L2_DVGF 0\n"
@@ -474,7 +474,7 @@ griddata_commondata.register_CFunction_griddata_free(
     enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True
 )
 
-if enable_simd:
+if enable_intrinsics:
     copy_files(
         package="nrpy.helpers",
         filenames_list=["simd_intrinsics.h"],
