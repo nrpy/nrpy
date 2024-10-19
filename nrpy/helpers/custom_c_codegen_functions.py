@@ -23,13 +23,10 @@ custom_functions_for_SymPy_ccode = {
             (lambda b, e: e == -0.5, lambda b, e: f"(1.0/sqrt({b}))"),
             (lambda b, e: e == sp.S.One / 3, lambda b, e: f"cbrt({b})"),
             (lambda b, e: e == -sp.S.One / 3, lambda b, e: f"(1.0/cbrt({b}))"),
-            (
-                lambda b, e: e == sp.Rational(1, 6),
-                lambda b, e: f"(cbrt({b})*cbrt({b}))",
-            ),
+            (lambda b, e: e == sp.Rational(1, 6), lambda b, e: f"(sqrt(cbrt({b})))"),
             (
                 lambda b, e: e == -sp.Rational(1, 6),
-                lambda b, e: f"(1.0/(cbrt({b})*cbrt({b})))",
+                lambda b, e: f"(1.0/(sqrt(cbrt({b}))))",
             ),
             (lambda b, e: e == 2, lambda b, e: f"(({b})*({b}))"),
             (lambda b, e: e == 3, lambda b, e: f"(({b})*({b})*({b}))"),
