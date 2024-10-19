@@ -90,6 +90,15 @@ class ReferenceMetricPrecompute(rfm_precompute.ReferenceMetricPrecompute):
                         self.readvr_str[
                             dirn
                         ] += f"const REAL {self.freevars_uniq_xx_indep[which_freevar]} = rfm_{self.freevars_uniq_xx_indep[which_freevar]}[i{dirn}];\n"
+                        self.readvr_SIMD_outer_str[
+                            dirn
+                        ] += f"const double NOSIMD{self.freevars_uniq_xx_indep[which_freevar]} = rfm_{self.freevars_uniq_xx_indep[which_freevar]}[i{dirn}]; "
+                        self.readvr_SIMD_outer_str[
+                            dirn
+                        ] += f"const REAL_SIMD_ARRAY {self.freevars_uniq_xx_indep[which_freevar]} = ConstSIMD(NOSIMD{self.freevars_uniq_xx_indep[which_freevar]});\n"
+                        self.readvr_SIMD_inner_str[
+                            dirn
+                        ] += f"const REAL_SIMD_ARRAY {self.freevars_uniq_xx_indep[which_freevar]} = ReadSIMD(&rfm_{self.freevars_uniq_xx_indep[which_freevar]}[i{dirn}]);\n"
                         output_define_and_readvr = True
                 if (
                     (not output_define_and_readvr)

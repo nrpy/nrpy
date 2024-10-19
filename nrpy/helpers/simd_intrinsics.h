@@ -1,3 +1,4 @@
+// Check for CUDA first to avoid using CPU intrinisics
 #ifdef __NVCC__
 // If SIMD instructions are unavailable:
 #define REAL_SIMD_ARRAY REAL
@@ -13,9 +14,9 @@
 
 // Fused Multiply-Add/Subtract Operations (Scalar)
 #define FusedMulAddSIMD(a, b, c) __fma_rn((a), (b), (c))
-#define FusedMulSubSIMD(a, b, c) __fma_rn((a), (b), MulSIMD((-1.0), c))
-#define NegFusedMulAddSIMD(a, b, c) MulSIMD((-1.0),(__fma_rn((a), (b), (c))))
-#define NegFusedMulSubSIMD(a, b, c) FusedMulAddSIMD(MulSIMD((-1.0),a), b, c)
+#define FusedMulSubSIMD(a, b, c) FusedMulAddSIMD((a), (b), MulSIMD((FDPart1_NegativeOne_), c))
+#define NegFusedMulAddSIMD(a, b, c) SubSIMD((c), MulSIMD((a), (b)))
+#define NegFusedMulSubSIMD(a, b, c) MulSIMD((FDPart1_NegativeOne_),(FusedMulAddSIMD((a), (b), (c))))
 
 // Mathematical Functions (Scalar)
 #define SqrtSIMD(a) (__dsqrt_rn((a)))
@@ -26,12 +27,6 @@
 // Load and Store Operations (Scalar)
 #define WriteSIMD(a, b) *(a) = (b)
 #define ReadSIMD(a) __ldg(a)
-
-// Upwind Algorithm (Scalar Version)
-// *NOTE*: This upwinding is reversed from usual upwinding algorithms,
-// because the upwinding control vector in BSSN (the shift)
-// acts like a *negative* velocity.
-#define UPWIND_ALG(UpwindVecU) ((UpwindVecU) > 0.0 ? 1.0 : 0.0)
 
 // If compiled with AVX512F SIMD instructions enabled:
 #elif __AVX512F__

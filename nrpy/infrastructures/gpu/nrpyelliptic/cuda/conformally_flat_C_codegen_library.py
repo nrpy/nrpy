@@ -813,6 +813,9 @@ class gpu_register_CFunction_rhs_eval(
 
         super().__init__(CoordSystem, enable_rfm_precompute)
 
+        if enable_intrinsics:
+            self.includes += [str(Path("simd") / "simd_intrinsics.h")]
+
         self.simple_loop = lp.simple_loop(
             loop_body=ccg.c_codegen(
                 [self.rhs.uu_rhs, self.rhs.vv_rhs],
@@ -834,6 +837,12 @@ class gpu_register_CFunction_rhs_eval(
         )
         self.loop_body = self.simple_loop.full_loop_body.replace(
             "const REAL f", "[[maybe_unused]] const REAL f"
+        )
+        self.loop_body = self.loop_body.replace(
+            "const REAL_SIMD_ARRAY f", "[[maybe_unused]] const REAL_SIMD_ARRAY f"
+        )
+        self.loop_body = self.loop_body.replace(
+            "const double dbl", "static constexpr double dbl"
         )
         self.kernel_comments = "GPU Kernel to evaluate RHS on the interior."
         self.params_dict_coord = {f"x{i}": "const REAL *restrict" for i in range(3)}
