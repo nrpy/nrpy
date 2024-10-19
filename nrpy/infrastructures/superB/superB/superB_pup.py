@@ -14,7 +14,6 @@ from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary impor
     generate_Butcher_tables,
 )
 from nrpy.infrastructures.BHaH.rfm_precompute import ReferenceMetricPrecompute
-from nrpy.infrastructures.superB.MoL import get_num_sync_gfs
 
 
 def register_CFunction_superB_pup_routines(
@@ -198,13 +197,12 @@ void pup_bc_struct(PUP::er &p, bc_struct &bc) {
 // PUP routine for struct MoL_gridfunctions_struct
 void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfuncs, const params_struct &params) {"""
 
-    num_sync_evol_gfs, num_sync_auxevol_gfs = get_num_sync_gfs()
     prefunc += rf"""
   p | gridfuncs.num_evol_gfs_to_sync;
   p | gridfuncs.num_auxevol_gfs_to_sync;
   p | gridfuncs.max_sync_gfs;
-  PUParray(p, gridfuncs.evol_gfs_to_sync, {num_sync_evol_gfs});
-  PUParray(p, gridfuncs.evol_gfs_to_sync, {num_sync_auxevol_gfs});
+  PUParray(p, gridfuncs.evol_gfs_to_sync, gridfuncs.num_evol_gfs_to_sync);
+  PUParray(p, gridfuncs.auxevol_gfs_to_sync, gridfuncs.num_auxevol_gfs_to_sync);
 """
 
     prefunc += """
