@@ -919,7 +919,12 @@ def register_CFunction_rhs_eval(
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
         return None
-    gpu_register_CFunction_rhs_eval(CoordSystem, enable_rfm_precompute, fp_type=fp_type, enable_intrinsics=enable_intrinsics)
+    gpu_register_CFunction_rhs_eval(
+        CoordSystem,
+        enable_rfm_precompute,
+        fp_type=fp_type,
+        enable_intrinsics=enable_intrinsics,
+    )
 
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
@@ -937,7 +942,7 @@ class gpu_register_CFunction_compute_residual_all_points(
 
     :param CoordSystem: The coordinate system.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
-    :param enable_simd: Whether to enable SIMD.
+    :param enable_intrinsicsv: Whether to enable cuda intrinsics.
     :param OMP_collapse: Level of GPU loop collapsing.
     :param fp_type: Floating point type, e.g., "double".
 
@@ -948,14 +953,14 @@ class gpu_register_CFunction_compute_residual_all_points(
         self,
         CoordSystem: str,
         enable_rfm_precompute: bool,
-        enable_simd: bool,
+        enable_intrinsics: bool,
         fp_type: str = "double",
     ) -> None:
         super().__init__(
             CoordSystem=CoordSystem, enable_rfm_precompute=enable_rfm_precompute
         )
         self.body = ""
-        if enable_simd:
+        if enable_intrinsics:
             self.includes += [str(Path("simd") / "simd_intrinsics.h")]
 
         self.simple_loop = lp.simple_loop(
@@ -967,11 +972,11 @@ class gpu_register_CFunction_compute_residual_all_points(
                     ),
                 ],
                 enable_fd_codegen=True,
-                enable_simd=enable_simd,
+                enable_simd=enable_intrinsics,
                 fp_type=fp_type,
             ),
             loop_region="interior",
-            enable_simd=enable_simd,
+            enable_intrinsics=enable_intrinsics,
             CoordSystem=CoordSystem,
             enable_rfm_precompute=enable_rfm_precompute,
             read_xxs=not enable_rfm_precompute,
@@ -988,6 +993,12 @@ class gpu_register_CFunction_compute_residual_all_points(
         params_dict["aux_gfs"] = "REAL *restrict"
         self.kernel_body = self.kernel_body.replace(
             "const REAL f", "[[maybe_unused]] const REAL f"
+        )
+        self.kernel_body = self.kernel_body.replace(
+            "const REAL_SIMD_ARRAY f", "[[maybe_unused]] const REAL_SIMD_ARRAY f"
+        )
+        self.kernel_body = self.kernel_body.replace(
+            "const double dbl", "static constexpr double dbl"
         )
         self.device_kernel = gputils.GPU_Kernel(
             self.kernel_body,
@@ -1016,7 +1027,6 @@ class gpu_register_CFunction_compute_residual_all_points(
             name=self.name,
             params=self.params,
             body=self.body,
-            enable_simd=enable_simd,
         )
 
 
