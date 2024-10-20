@@ -214,7 +214,7 @@ def output_BHaH_defines_h(
                 chararray_size = CPtype.split("[")[1].replace("]", "")
                 c_output = f"char {CPname}[{chararray_size}];{comment}\n"
 
-            # Append c_output to the appropriate list
+            # Append c_output to the appropriate structure: commondata or params
             if CodeParam.commondata:
                 CCodelines_commondata_struct.append(c_output)
             else:
@@ -283,7 +283,7 @@ def output_BHaH_defines_h(
 //   "k" are separated by Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1 in memory, etc.
 #define IDX4(gf,i,j,k)                                                  \
   ( (i) + Nxx_plus_2NGHOSTS0 * ( (j) + Nxx_plus_2NGHOSTS1 * ( (k) + Nxx_plus_2NGHOSTS2 * (gf) ) ) )
-#define IDX4pt(g,idx) ( (idx) + (Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2) * (gf) )
+#define IDX4pt(gf,idx) ( (idx) + (Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2) * (gf) )
 #define IDX3(i,j,k) ( (i) + Nxx_plus_2NGHOSTS0 * ( (j) + Nxx_plus_2NGHOSTS1 * ( (k) ) ) )
 #define LOOP_REGION(i0min,i0max, i1min,i1max, i2min,i2max)              \
   for(int i2=i2min;i2<i2max;i2++) for(int i1=i1min;i1<i1max;i1++) for(int i0=i0min;i0<i0max;i0++)
