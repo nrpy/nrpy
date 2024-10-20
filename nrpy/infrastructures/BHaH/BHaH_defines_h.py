@@ -214,7 +214,7 @@ def output_BHaH_defines_h(
                 chararray_size = CPtype.split("[")[1].replace("]", "")
                 c_output = f"char {CPname}[{chararray_size}];{comment}\n"
 
-            # Concatenate module and CPname for the comment
+            # Append c_output to the appropriate list
             if CodeParam.commondata:
                 CCodelines_commondata_struct.append(c_output)
             else:
@@ -303,6 +303,14 @@ _Pragma(__OMP_PRAGMA__)  \
     register_BHaH_defines("grid", gri_BHd_str)
 
     def output_key(key_name: str, item_name: str) -> str:
+        """
+        Format a string for outputting the definitions for a specific module.
+
+        :param key_name: The name of the module or key.
+        :param item_name: The definitions or content associated with the module.
+        :return: A formatted string containing the module name and its content.
+
+        """
         return f"""
 //********************************************
 // Basic definitions for module {key_name}:\n{item_name}"""
