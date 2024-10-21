@@ -11,10 +11,11 @@ from typing import Union, cast
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-import nrpy.equations.seobnr.BOB_aligned_spin_waveform_quantities as BOB_wf
+import nrpy.equations.seobnr.SEOBNRv5_aligned_spin_constants as SEOBNRv5_const
 import nrpy.equations.seobnr.SEOBNRv5_aligned_spin_Hamiltonian as SEOBNRv5_Ham
 import nrpy.equations.seobnr.SEOBNRv5_aligned_spin_waveform_quantities as SEOBNRv5_wf
 import nrpy.helpers.parallel_codegen as pcg
+import sympy as sp
 
 
 def register_CFunction_SEOBNRv5_aligned_spin_coefficients() -> (
@@ -38,9 +39,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients() -> (
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_coefficients"
     params = "commondata_struct *restrict commondata"
-    H = SEOBNRv5_Ham.SEOBNRv5_aligned_spin_Hamiltonian_quantities()
-    BOB = BOB_wf.BOB_aligned_spin_waveform_quantities()
-
+    v5_const = SEOBNRv5_const.SEOBNR_aligned_spin_constants()
     body = """
 const REAL q = commondata->mass_ratio;
 commondata->m1 = q / (1.0 + q);
@@ -49,16 +48,17 @@ const REAL m1 = commondata->m1;
 const REAL m2 = commondata->m2;
 const REAL chi1 = commondata->chi1;
 const REAL chi2 = commondata->chi2;
+commondata->dT = commondata->dt / commondata->total_mass / 4.925490947641266978197229498498379006e-6;
 """
     body += ccg.c_codegen(
         [
-            H.pyseobnr_a6,
-            H.pyseobnr_dSO,
-            BOB.Delta_t,
-            BOB.M_f,
-            BOB.a_f,
-            BOB.rISCO,
-            BOB.rstop,
+            v5_const.pyseobnr_a6,
+            v5_const.pyseobnr_dSO,
+            v5_const.Delta_t,
+            v5_const.M_f,
+            v5_const.a_f,
+            v5_const.rISCO,
+            v5_const.rstop,
         ],
         [
             "commondata->a6",
@@ -104,14 +104,17 @@ const REAL imomegaqnm22[107] = { 0.0880269,0.0880272,0.0880274,0.088028,0.088028
   0.0354677,0.033659,0.0316517,0.0293904,0.0268082,0.0238377,0.0221857,0.0204114,0.0185063,0.0175021,0.016462,0.015385,0.0151651,
   0.0149437,0.0147207,0.0144962,0.0142701,0.0138132,0.0133501,0.0131161,0.0128806 
   };
+
 gsl_spline *spline = gsl_spline_alloc(gsl_interp_cspline, 107);
 gsl_interp_accel *acc = gsl_interp_accel_alloc();
+
 gsl_spline_init(spline, afinallist, reomegaqnm22, 107);
 commondata->omega_qnm = gsl_spline_eval(spline, commondata->a_f, acc) / commondata->M_f;
 
 gsl_spline_init(spline, afinallist, imomegaqnm22, 107);
 gsl_interp_accel_reset(acc);
 commondata->tau_qnm = 1./(gsl_spline_eval(spline, commondata->a_f, acc) / commondata->M_f) ;
+
 gsl_spline_free(spline);
 gsl_interp_accel_free(acc);
 """
@@ -150,43 +153,97 @@ def register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conservative() -
     name = "SEOBNRv5_aligned_spin_initial_conditions_conservative"
     params = "commondata_struct *restrict commondata"
     body = """
-const gsl_multiroot_fdfsolver_type *restrict T;
-gsl_multiroot_fdfsolver *restrict s;
 int status;
-size_t i , iter = 0;
 const size_t n = 2;
-const int maxiter = 100;
 gsl_multiroot_function_fdf f = {&SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit,
                                 &SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_dRHS,
                                 &SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_RHSdRHS,
                                 n,
                                 commondata};
-gsl_vector *restrict x = gsl_vector_alloc(n);
 REAL omega = commondata->initial_omega;
 REAL pphi = pow(omega,-1./3.);
 REAL r = pphi*pphi;
-gsl_vector_set(x , 0 , r);
-gsl_vector_set(x , 1 , pphi);
-T = gsl_multiroot_fdfsolver_hybridsj;
-s = gsl_multiroot_fdfsolver_alloc(T , n);
-gsl_multiroot_fdfsolver_set(s , &f , x);
+const REAL x_guess[2] = {r,pphi};
+REAL *restrict x_result = malloc(2*sizeof(REAL));
+status = SEOBNRv5_aligned_multidimensional_root_wrapper(f,x_guess,n,x_result);
+commondata->r = x_result[0];
+commondata->pphi = x_result[1];
+free(x_result);
+return GSL_SUCCESS;
+"""
+    cfc.register_CFunction(
+        includes=includes,
+        prefunc=prefunc,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        include_CodeParameters_h=False,
+        body=body,
+    )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
+def register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conservative_nodf() -> (
+    Union[None, pcg.NRPyEnv_type]
+):
+    """
+    Register CFunction for evaluating SEOBNRv5's conservative initial conditions using GSL.
+
+    :return: None if in registration phase, else the updated NRPy environment.
+    """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    prefunc = """
+#include <gsl/gsl_vector.h>
+#include <gsl/gsl_multiroots.h>
+"""
+    desc = """Evaluate the SEOBNRv5 conservative initial conditions."""
+    cfunc_type = "int"
+    name = "SEOBNRv5_aligned_spin_initial_conditions_conservative"
+    params = "commondata_struct *restrict commondata"
+    body = """
+const size_t n = 2;
+gsl_multiroot_function f = {&SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit,
+                                n,
+                                commondata};
+REAL omega = commondata->initial_omega;
+REAL pphi = pow(omega,-1./3.);
+REAL r = pphi*pphi;
+const REAL x_guess[2] = {r,pphi};
+REAL *restrict x_result = malloc(2*sizeof(REAL));
+const gsl_multiroot_fsolver_type *restrict T = gsl_multiroot_fsolver_hybrids;
+gsl_multiroot_fsolver *restrict s = gsl_multiroot_fsolver_alloc(T , n);
+gsl_vector *restrict x = gsl_vector_alloc(n);
+size_t i , iter = 0;
+int status;
+const int maxiter = 100;
+for (i = 0; i < n; i++){
+gsl_vector_set(x , i , x_guess[i]);
+}
+gsl_multiroot_fsolver_set(s , &f , x);
 do {
   iter++;
-  status = gsl_multiroot_fdfsolver_iterate (s);
-  int fdf_solver_status[1] = {GSL_SUCCESS};
-  char fdfsolver_name[] = "gsl_multiroot_fdfsolver_iterate";
-  handle_gsl_return_status(status,fdf_solver_status,1,fdfsolver_name);
+  status = gsl_multiroot_fsolver_iterate (s);
+  int f_solver_status[1] = {GSL_SUCCESS};
+  char fsolver_name[] = "gsl_multiroot_fsolver_iterate";
+  handle_gsl_return_status(status,f_solver_status,1,fsolver_name);
   status = gsl_multiroot_test_residual (s->f, 6e-12);
   int test_residual_status[2] = {GSL_SUCCESS,GSL_CONTINUE};
   char residual_name[] = "gsl_multiroot_test_residual";
   handle_gsl_return_status(status,test_residual_status,2,residual_name);
-  
 }
 while(status == GSL_CONTINUE && iter < maxiter);
-commondata->r = gsl_vector_get(s->x , 0);
-commondata->pphi = gsl_vector_get(s->x, 1);
-gsl_multiroot_fdfsolver_free (s);
+for (i = 0; i < n; i++){
+x_result[i] = gsl_vector_get(s->x , i);
+}
+gsl_multiroot_fsolver_free (s);
 gsl_vector_free (x);
+commondata->r = x_result[0];
+commondata->pphi = x_result[1];
+free(x_result);
 return GSL_SUCCESS;
 """
     cfc.register_CFunction(
@@ -230,6 +287,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit() -> (
     body = r"""
 const REAL r = gsl_vector_get(x , 0);
 const REAL pphi = gsl_vector_get(x , 1);
+const REAL prstar = 0;
 const REAL m1 = ((commondata_struct *restrict) params)->m1;
 const REAL m2 = ((commondata_struct *restrict) params)->m2;
 const REAL chi1 = ((commondata_struct *restrict) params)->chi1;
@@ -457,41 +515,38 @@ def register_CFunction_SEOBNRv5_aligned_spin_radial_momentum_condition() -> (
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    includes = ["BHaH_defines.h"]
+    includes = ["BHaH_defines.h","BHaH_function_prototypes.h"]
     desc = """Evaluate SEOBNRv5 radial momentum condition."""
     cfunc_type = "REAL"
     name = "SEOBNRv5_aligned_spin_radial_momentum_conditions"
     params = "REAL x, void *restrict params"
     body = """
-REAL m1 = ((commondata_struct *restrict) params)->m1;
-REAL m2 = ((commondata_struct *restrict) params)->m2;
-REAL chi1 = ((commondata_struct *restrict) params)->chi1;
-REAL chi2 = ((commondata_struct *restrict) params)->chi2;
-REAL a6 = ((commondata_struct *restrict) params)->a6;
-REAL dSO = ((commondata_struct *restrict) params)->dSO; 
-REAL r = ((commondata_struct *restrict) params)->r; 
-REAL pphi = ((commondata_struct *restrict) params)->pphi; 
+const REAL m1 = ((commondata_struct *restrict) params)->m1;
+const REAL m2 = ((commondata_struct *restrict) params)->m2;
+const REAL chi1 = ((commondata_struct *restrict) params)->chi1;
+const REAL chi2 = ((commondata_struct *restrict) params)->chi2;
+const REAL a6 = ((commondata_struct *restrict) params)->a6;
+const REAL dSO = ((commondata_struct *restrict) params)->dSO; 
+const REAL r = ((commondata_struct *restrict) params)->r; 
+const REAL pphi = ((commondata_struct *restrict) params)->pphi; 
 REAL prstar = x; 
 """
     H = SEOBNRv5_Ham.SEOBNRv5_aligned_spin_Hamiltonian_quantities()
-    wf = SEOBNRv5_wf.SEOBNRv5_aligned_spin_waveform_quantities()
-    flux = wf.flux()
-    flux = (
-        flux.subs(wf.Hreal, H.Hreal)
-        .subs(wf.Omega, H.dHreal_dpphi)
-        .subs(wf.Omega_circ, H.dHreal_dpphi_circ)
-    )
-    dLdr = -H.dHreal_dr_dr / H.dHreal_dr_dpphi
-    dLdt = flux / H.nu
-    rdot_rad = dLdt / dLdr
-    rdot_dyn = H.xi * H.dHreal_dprstar
     body += ccg.c_codegen(
-        [rdot_dyn - rdot_rad],
-        ["REAL prstar_condition"],
+        [H.dHreal_dr_dr,H.dHreal_dr_dpphi,H.xi,H.dHreal_dprstar,H.Hreal,H.dHreal_dpphi,H.dHreal_dpphi_circ],
+        ["const REAL dHreal_dr_dr","const REAL dHreal_dr_dpphi","const REAL xi","const REAL dHreal_dprstar","const REAL Hreal","const REAL Omega","const REAL Omega_circ"],
         verbose=False,
         include_braces=False,
     )
-    body += r"""
+    body += """
+const REAL dLdr = - dHreal_dr_dr / dHreal_dr_dpphi;
+const REAL rdot_dyn = xi * dHreal_dprstar;
+REAL flux[2];
+const REAL y[4] = {r , 0. , prstar , pphi};
+SEOBNRv5_aligned_spin_flux(y,Hreal,Omega,Omega_circ,flux,params);
+const REAL dLdt = flux[1];
+const REAL rdot_rad = dLdt / dLdr;
+const REAL prstar_condition = rdot_dyn - rdot_rad;    
 return prstar_condition;
 """
     cfc.register_CFunction(

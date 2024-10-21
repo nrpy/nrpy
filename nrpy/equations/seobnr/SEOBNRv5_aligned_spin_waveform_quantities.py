@@ -8,7 +8,7 @@ License: BSD 2-Clause
 
 # Step P1: Import needed modules:
 from typing import Any, Dict, List
-
+from nrpy.equations.grhd.Min_Max_and_Piecewise_Expressions import coord_greater_bound
 import sympy as sp
 
 # The name of this module ("WaveEquation") is given by __name__:
@@ -42,8 +42,9 @@ def complex_mult(z1: List[Any], z2: List[Any]) -> List[Any]:
     # z1 = x1 + I*y1
     # z2 = x2 + I*y2
     # z1*z2 = x1*x2 - y1*y2 + I*(x1*y2 + x2*y1)
-
-    return [z1[0] * z2[0] - z1[1] * z2[1], z1[0] * z2[1] + z1[1] * z2[0]]
+    RE = 0
+    IM = 1
+    return [z1[RE] * z2[RE] - z1[IM] * z2[IM], z1[RE] * z2[IM] + z1[IM] * z2[RE]]
 
 
 def f2r(input_float: float) -> sp.Rational:
@@ -118,20 +119,9 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
                 self.fspin_limit.update({f"({l} , {m})": 0})
         M = m1 + m2
         self.nu = m1 * m2 / (M**2)
-        TINYDOUBLE = 1e-100
         self.delta = (m1 - m2) / M
-        min_delta_1em14 = sp.Rational(1, 2) * (
-            self.delta - 1e-14 + 0 - sp.Abs(self.delta - 1e-14 - 0)
-        )
-        max_delta_1em14 = sp.Rational(1, 2) * (
-            self.delta
-            - 1e-14
-            + TINYDOUBLE
-            + 0
-            + sp.Abs(self.delta - 1e-14 + TINYDOUBLE - 0)
-        )
-        self.noneqcond = max_delta_1em14 / (self.delta - 1e-14 + TINYDOUBLE)
-        self.eqcond = min_delta_1em14 / (self.delta - 1e-14 - TINYDOUBLE)
+        self.noneqcond = coord_greater_bound(self.delta, sp.sympify(1e-14))
+        self.eqcond = 1 - self.noneqcond
         self.deltainvertible = self.delta * self.noneqcond + 1 * self.eqcond
         self.deltainv = 1 / self.deltainvertible
         self.chi_A = sp.Rational(1, 2) * (chi1 - chi2)
@@ -141,68 +131,66 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
         self.vh3 = self.Omega * self.Hreal
         Heff = (self.Hreal**2 - 1) / (2 * self.nu) + 1
         EulerGamma = f2r(0.577215664901532860606512090082402431)
-        eulerlog = [
-            0,
-        ]
+        eulerlog = sp.zeros(9)
         for m in range(1, 9):
-            eulerlog.append(EulerGamma + sp.log(2 * m * self.vomega))
-        self.khat = []
+            eulerlog[m] = EulerGamma + sp.log(2 * m * self.vomega)
+        self.khat = sp.zeros(9)
         for m in range(9):
-            self.khat.append(m * self.Omega * self.Hreal)
+            self.khat[m] = m * self.Omega * self.Hreal
         self.deltalm["(5 , 5)"] = (
-            self.vh3
-            * (sp.Rational(96875, 131250) + sp.Rational(857528, 131250) * self.nu)
+            (sp.Rational(96875, 131250) + sp.Rational(857528, 131250) * self.nu)
+            * (self.vh3)
             / (1 - 2 * self.nu)
-            + self.vh3**2 * sp.Rational(3865, 429) * sp.pi
-            + self.vh3**3
-            * (
-                sp.Rational(-7686949127, 31783752)
-                + sp.Rational(954500400, 31783752) * sp.pi**2
+            + sp.Rational(3865, 429) * sp.pi * (self.vh3) ** 2
+            + (
+                (
+                    sp.Rational(-7686949127, 31783752)
+                    + sp.Rational(954500400, 31783752) * sp.pi**2
+                )
+                * (self.vh3) ** 3
             )
         )
         self.deltalm["(4 , 4)"] = (
-            self.vh3
-            * (sp.Rational(112, 120) + sp.Rational(219, 120) * self.nu)
-            / (1 - 3 * self.nu)
-            + self.vh3**2 * sp.Rational(25136, 3465) * sp.pi
-            + self.vh3**3
-            * (sp.Rational(201088, 10395) * sp.pi**2 - sp.Rational(55144, 375))
+            (sp.Rational(112, 120) + sp.Rational(219, 120) * self.nu) * (self.vh3)
+            + sp.Rational(25136, 3465) * (self.vh3) ** 2
+            + (sp.Rational(201088, 10395) * sp.pi**2 - sp.Rational(55144, 375))
+            * (self.vh3) ** 3
         )
         self.deltalm["(4 , 3)"] = (
-            self.vh3
-            * (sp.Rational(4961, 810) * self.nu + sp.Rational(3, 5))
-            / (1 - 2 * self.nu)
-            + self.vh3**2 * sp.Rational(1571, 385) * sp.pi
-        )
+            (sp.Rational(4961, 810) * self.nu + sp.Rational(3, 5)) * (self.vh3)
+        ) / (1 - 2 * self.nu) + sp.Rational(1571, 385) * sp.pi * (self.vh3) ** 2
         self.deltalm["(3 , 3)"] = (
-            sp.Rational(13, 10) * self.vh3
-            + self.vh3**2 * sp.Rational(39, 7)
-            + self.vh3**3 * (-sp.Rational(227827, 3000) + sp.Rational(78, 7) * sp.pi**2)
-            + self.vomega**5 * (-sp.Rational(80897, 2430) * self.nu)
+            sp.Rational(13, 10) * (self.vh3)
+            + sp.Rational(39, 7) * (self.vh3) ** 2
+            + (-sp.Rational(227827, 3000) + sp.Rational(78, 7) * sp.pi**2)
+            * (self.vh3) ** 3
+            - sp.Rational(80897, 2430) * self.nu * self.vomega**5
         )
         self.deltalm["(3 , 2)"] = (
-            self.vh3
-            * (sp.Rational(11, 5) * self.nu + sp.Rational(2, 3))
+            ((sp.Rational(11, 5) * self.nu + sp.Rational(2, 3)) * (self.vh3))
             / (1 - 3 * self.nu)
-            + self.vh3**2 * sp.Rational(52, 21) * sp.pi
-            + self.vh3**3 * (sp.Rational(208, 63) * sp.pi**2 - sp.Rational(9112, 405))
+            + sp.Rational(52, 21) * sp.pi * (self.vh3) ** 2
+            + ((sp.Rational(208, 63) * sp.pi**2) - sp.Rational(9112, 405))
+            * (self.vh3) ** 3
         )
         self.deltalm["(2 , 2)"] = (
-            self.vh3 * sp.Rational(7, 3)
-            + self.vh3**2
+            sp.Rational(7, 3) * self.vh3
+            + (self.vh3) ** 2
             * (
-                (sp.Rational(8, 3) * self.nu - sp.Rational(4, 3)) * self.chi_S
-                - sp.Rational(4, 3) * self.delta * self.chi_A
+                ((sp.Rational(8, 3) * self.nu - sp.Rational(4, 3)) * self.chi_S)
+                - (sp.Rational(4, 3) * self.delta * self.chi_A)
                 + (sp.Rational(428, 105) * sp.pi)
             )
-            + self.vh3**3 * (sp.Rational(1712, 315) * sp.pi**2 - sp.Rational(2203, 81))
-            - self.vomega**5 * 24 * self.nu
+            + (self.vh3) ** 3
+            * ((sp.Rational(1712, 315) * sp.pi**2) - (sp.Rational(2203, 81)))
+            - 24 * self.nu * self.vomega**5
         )
         self.deltalm["(2 , 1)"] = (
-            self.vh3 * sp.Rational(2, 3)
-            + self.vh3**2 * sp.Rational(107, 105) * sp.pi
-            + self.vh3**3 * (sp.Rational(214, 315) * sp.pi**2 - sp.Rational(272, 81))
-            - self.vomega**5 * sp.Rational(25, 2) * self.nu
+            sp.Rational(2, 3) * self.vh3
+            + (sp.Rational(107, 105) * sp.pi) * (self.vh3) ** 2
+            + ((sp.Rational(214, 315) * sp.pi**2) - (sp.Rational(272, 81)))
+            * (self.vh3) ** 3
+            - (sp.Rational(25, 2) * self.nu * self.vomega**5)
         )
         self.fspin["(5 , 5)"] = (
             (
@@ -234,7 +222,6 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             )
             * self.chi_A**2
         ) * self.vomega**4
-
         self.fspin_limit["(5 , 5)"] = (
             (
                 sp.Rational(-70, 3) * self.nu / ((-1 + 2 * self.nu))
@@ -298,7 +285,6 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
                 * self.chi_S**2
             )
         )
-
         self.fspin_limit["(4 , 3)"] = (
             self.vomega
             / (1 - 2 * self.nu)
@@ -318,39 +304,48 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             )
         )
         self.fspin["(3 , 1)"] = (
-            self.chi_A * self.deltainv * (-2 + sp.Rational(11, 2) * self.nu)
-            + self.chi_S * (-2 + sp.Rational(13, 2) * self.nu)
-        ) * self.vomega**3
+            self.vomega**3
+            * (
+                self.chi_A * self.deltainv * (-4 + 11 * self.nu)
+                + self.chi_S * (-4 + 13 * self.nu)
+            )
+            / (2)
+        )
         self.fspin_limit["(3 , 1)"] = -self.chi_A * sp.Rational(5, 8) * self.vomega**3
         self.fspin["(3 , 3)"] = (
-            (
-                (sp.Rational(19, 2) * self.nu - 2) * self.chi_A * self.deltainv
-                + (sp.Rational(5, 2) * self.nu - 2) * self.chi_S
+            self.vomega**3
+            * (
+                ((sp.Rational(19, 2) * self.nu - 2) * self.chi_A * self.deltainv)
+                + ((sp.Rational(5, 2) * self.nu - 2) * self.chi_S)
             )
-            * self.vomega**3
-            + (
+            + self.vomega**4
+            * (
                 (sp.Rational(3, 2) - 6 * self.nu) * self.chi_A**2
                 + (3 - 12 * self.nu) * (self.chi_A * self.chi_S * self.deltainv)
                 + sp.Rational(3, 2) * self.chi_S**2
             )
-            * self.vomega**4
-            + (
+            + self.vomega**5
+            * (
                 (
-                    sp.Rational(407, 30) * self.nu**2
-                    - sp.Rational(593, 60) * self.nu
-                    + sp.Rational(2, 3)
+                    (
+                        sp.Rational(407, 30) * self.nu**2
+                        - sp.Rational(593, 60) * self.nu
+                        + sp.Rational(2, 3)
+                    )
+                    * self.chi_A
+                    * self.deltainv
                 )
-                * self.chi_A
-                * self.deltainv
                 + (
-                    sp.Rational(241, 30) * self.nu**2
-                    + sp.Rational(11, 20) * self.nu
-                    + sp.Rational(2, 3)
+                    (
+                        sp.Rational(241, 30) * self.nu**2
+                        + sp.Rational(11, 20) * self.nu
+                        + sp.Rational(2, 3)
+                    )
+                    * self.chi_S
                 )
-                * self.chi_S
             )
-            * self.vomega**5
-            + (
+            + self.vomega**6
+            * (
                 (-12 * self.nu**2 + sp.Rational(11, 2) * self.nu - sp.Rational(7, 4))
                 * self.chi_A**2
                 + (44 * self.nu**2 - self.nu - sp.Rational(7, 2))
@@ -358,18 +353,17 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
                 + (6 * self.nu**2 - sp.Rational(27, 2) * self.nu - sp.Rational(7, 4))
                 * self.chi_S**2
             )
-            * self.vomega**6
         )
-        self.fspinimag = (
-            (sp.Rational(7339, 540) * self.nu - sp.Rational(81, 20))
-            * self.chi_A
-            * self.deltainv
-            + (sp.Rational(593, 108) * self.nu - sp.Rational(81, 20)) * self.chi_S
-        ) * self.vh3**2
+        self.fspinimag = (self.vh3) ** 2 * (
+            sp.Rational(7339, 540) * self.nu - sp.Rational(81, 20)
+        ) * self.chi_A * self.deltainv + (
+            sp.Rational(593, 108) * self.nu - sp.Rational(81, 20)
+        ) * self.chi_S
         self.fspin_limit["(3 , 3)"] = (
-            ((sp.Rational(19, 2) * self.nu - 2) * self.chi_A) * self.vomega**3
-            + ((3 - 12 * self.nu) * (self.chi_A * self.chi_S)) * self.vomega**4
-            + (
+            self.vomega**3 * ((sp.Rational(19, 2) * self.nu - 2) * self.chi_A)
+            + self.vomega**4 * ((3 - 12 * self.nu) * (self.chi_A * self.chi_S))
+            + self.vomega**5
+            * (
                 (
                     sp.Rational(407, 30) * self.nu**2
                     - sp.Rational(593, 60) * self.nu
@@ -377,34 +371,34 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
                 )
                 * self.chi_A
             )
-            * self.vomega**5
-            + (
+            + self.vomega**6
+            * (
                 (44 * self.nu**2 - self.nu - sp.Rational(7, 2))
                 * (self.chi_A * self.chi_S)
             )
-            * self.vomega**6
         )
         self.fspinimag_limit = (
-            self.chi_A
+            (self.vh3) ** 2
             * (sp.Rational(7339, 540) * self.nu - sp.Rational(81, 20))
-            * self.vh3**2
+            * self.chi_A
         )
         self.fspin["(2 , 1)"] = (
-            -sp.Rational(3, 2) * (self.chi_A * self.deltainv + self.chi_S) * self.vomega
-            + (
+            -sp.Rational(3, 2) * self.vomega * (self.chi_A * self.deltainv + self.chi_S)
+            + self.vomega**3
+            * (
                 (sp.Rational(131, 84) * self.nu + sp.Rational(61, 12))
                 * (self.chi_A * self.deltainv)
                 + (sp.Rational(79, 84) * self.nu + sp.Rational(61, 12)) * self.chi_S
             )
-            * self.vomega**3
-            + (
+            + self.vomega**4
+            * (
                 (-2 * self.nu - 3) * self.chi_A**2
                 + (sp.Rational(21, 2) * self.nu - 6)
                 * (self.chi_A * self.chi_S * self.deltainv)
                 + (sp.Rational(1, 2) * self.nu - 3) * self.chi_S**2
             )
-            * self.vomega**4
-            + (
+            + self.vomega**5
+            * (
                 (
                     sp.Rational(-703, 112) * self.nu**2
                     + sp.Rational(8797, 1008) * self.nu
@@ -423,8 +417,8 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
                 + (sp.Rational(9, 4) - 3 * self.nu) * (self.chi_A**2 * self.chi_S)
                 + sp.Rational(3, 4) * self.chi_S**3
             )
-            * self.vomega**5
-            + (
+            + self.vomega**6
+            * (
                 (
                     sp.Rational(5, 7) * self.nu**2
                     - sp.Rational(9287, 1008) * self.nu
@@ -444,15 +438,15 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
                 )
                 * (self.chi_A * self.chi_S * self.deltainv)
             )
-            * self.vomega**6
         )
         self.fspin_limit["(2 , 1)"] = (
-            -sp.Rational(3, 2) * (self.chi_A) * self.vomega
-            + ((sp.Rational(131, 84) * self.nu + sp.Rational(61, 12)) * (self.chi_A))
-            * self.vomega**2
-            + ((sp.Rational(21, 2) * self.nu - 6) * (self.chi_A * self.chi_S))
-            * self.vomega**3
-            + (
+            -sp.Rational(3, 2) * self.vomega * (self.chi_A)
+            + self.vomega**3
+            * ((sp.Rational(131, 84) * self.nu + sp.Rational(61, 12)) * (self.chi_A))
+            + self.vomega**4
+            * (+(sp.Rational(21, 2) * self.nu - 6) * (self.chi_A * self.chi_S))
+            + self.vomega**5
+            * (
                 (
                     sp.Rational(-703, 112) * self.nu**2
                     + sp.Rational(8797, 1008) * self.nu
@@ -462,8 +456,8 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
                 + (sp.Rational(3, 4) - 3 * self.nu) * (self.chi_A**3)
                 + (sp.Rational(9, 4) - 6 * self.nu) * (self.chi_A * self.chi_S**2)
             )
-            * self.vomega**5
-            + (
+            + self.vomega**6
+            * (
                 (
                     sp.Rational(9487, 504) * self.nu**2
                     - sp.Rational(1636, 21) * self.nu
@@ -471,7 +465,6 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
                 )
                 * (self.chi_A * self.chi_S)
             )
-            * self.vomega**6
         )
         self.rho["(8 , 8)"] = (
             1
@@ -487,7 +480,6 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             )
             * self.vomega**2
         )
-
         self.rho["(8 , 7)"] = (
             1
             + (
@@ -502,7 +494,6 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             )
             * self.vomega**2
         )
-
         self.rho["(8 , 6)"] = (
             1
             + (
@@ -517,7 +508,6 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             )
             * self.vomega**2
         )
-
         self.rho["(8 , 5)"] = (
             1
             + (
@@ -532,7 +522,6 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             )
             * self.vomega**2
         )
-
         self.rho["(8 , 4)"] = (
             1
             + (
@@ -547,7 +536,6 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             )
             * self.vomega**2
         )
-
         self.rho["(8 , 3)"] = (
             1
             + (
@@ -562,7 +550,6 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             )
             * self.vomega**2
         )
-
         self.rho["(8 , 2)"] = (
             1
             + (
@@ -577,7 +564,6 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             )
             * self.vomega**2
         )
-
         self.rho["(8 , 1)"] = (
             1
             + (
@@ -600,7 +586,6 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             )
             * self.vomega**2
         )
-
         self.rho["(7 , 6)"] = (
             1
             + (
@@ -615,7 +600,6 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             )
             * self.vomega**2
         )
-
         self.rho["(7 , 5)"] = (
             1
             + (
@@ -624,7 +608,6 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             )
             * self.vomega**2
         )
-
         self.rho["(7 , 4)"] = (
             1
             + (
@@ -639,7 +622,6 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             )
             * self.vomega**2
         )
-
         self.rho["(7 , 3)"] = (
             1
             + (
@@ -648,7 +630,6 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             )
             * self.vomega**2
         )
-
         self.rho["(7 , 2)"] = (
             1
             + (
@@ -663,7 +644,6 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             )
             * self.vomega**2
         )
-
         self.rho["(7 , 1)"] = (
             1
             + (
@@ -681,7 +661,6 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             * self.vomega**2
             - sp.Rational(1025435, 659736) * self.vomega**4
         )
-
         self.rho["(6 , 5)"] = (
             1
             + (
@@ -690,7 +669,6 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             )
             * self.vomega**2
         )
-
         self.rho["(6 , 4)"] = (
             1
             + self.vomega**2
@@ -700,7 +678,6 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             )
             - sp.Rational(476887, 659736) * self.vomega**4
         )
-
         self.rho["(6 , 3)"] = (
             1
             + (
@@ -709,7 +686,6 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             )
             * self.vomega**2
         )
-
         self.rho["(6 , 2)"] = (
             1
             + (
@@ -719,7 +695,6 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             * self.vomega**2
             - sp.Rational(817991, 3298680) * self.vomega**4
         )
-
         self.rho["(6 , 1)"] = (
             1
             + (
@@ -727,40 +702,6 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
                 / (144 * (3 * self.nu**2 - 4 * self.nu + 1))
             )
             * self.vomega**2
-        )
-        self.rho["(5 , 4)"] = (
-            1
-            + (
-                (33320 * self.nu**3 - 127610 * self.nu**2 + 96019 * self.nu - 17448)
-                / (13650 * (5 * self.nu**2 - 5 * self.nu + 1))
-            )
-            * self.vomega**2
-            - sp.Rational(16213384, 15526875) * self.vomega**4
-        )
-
-        self.rho["(5 , 3)"] = (
-            1
-            + ((176 * self.nu**2 - 850 * self.nu + 375) / (390 * (2 * self.nu - 1)))
-            * self.vomega**2
-            - sp.Rational(410833, 709800) * self.vomega**4
-        )
-
-        self.rho["(5 , 2)"] = (
-            1
-            + (
-                (21980 * self.nu**3 - 104930 * self.nu**2 + 84679 * self.nu - 15828)
-                / (13650 * (5 * self.nu**2 - 5 * self.nu + 1))
-            )
-            * self.vomega**2
-            - sp.Rational(7187914, 15526875) * self.vomega**4
-        )
-
-        self.rho["(5 , 1)"] = (
-            1
-            + (8 * self.nu**2 - 626 * self.nu + 319)
-            / (390 * (2 * self.nu - 1))
-            * self.vomega**2
-            - sp.Rational(31877, 304200) * self.vomega**4
         )
         self.rho["(5 , 5)"] = (
             1
@@ -793,16 +734,39 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
                 + -f2r(35.7) * self.vomega**8
             )
         )
-        self.rho["(4 , 1)"] = (
+        self.rho["(5 , 4)"] = (
             1
             + (
-                (
-                    sp.Rational(288, 528) * self.nu**2
-                    - sp.Rational(1385, 528) * self.nu
-                    + sp.Rational(602, 528)
-                )
-                / (2 * self.nu - 1)
+                (33320 * self.nu**3 - 127610 * self.nu**2 + 96019 * self.nu - 17448)
+                / (13650 * (5 * self.nu**2 - 5 * self.nu + 1))
             )
+            * self.vomega**2
+            - sp.Rational(16213384, 15526875) * self.vomega**4
+        )
+        self.rho["(5 , 3)"] = (
+            1
+            + ((176 * self.nu**2 - 850 * self.nu + 375) / (390 * (2 * self.nu - 1)))
+            * self.vomega**2
+            - sp.Rational(410833, 709800) * self.vomega**4
+        )
+        self.rho["(5 , 2)"] = (
+            1
+            + (
+                (21980 * self.nu**3 - 104930 * self.nu**2 + 84679 * self.nu - 15828)
+                / (13650 * (5 * self.nu**2 - 5 * self.nu + 1))
+            )
+            * self.vomega**2
+            - sp.Rational(7187914, 15526875) * self.vomega**4
+        )
+        self.rho["(5 , 1)"] = (
+            1
+            + ((8 * self.nu**2 - 626 * self.nu + 319) / (390 * (2 * self.nu - 1)))
+            * self.vomega**2
+            - sp.Rational(31877, 304200) * self.vomega**4
+        )
+        self.rho["(4 , 1)"] = (
+            1
+            + ((288 * self.nu**2 - 1385 * self.nu + 602) / (528 * (2 * self.nu - 1)))
             * self.vomega**2
             - (sp.Rational(7775491, 21141120)) * self.vomega**4
             + (
@@ -814,45 +778,28 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
         self.rho["(4 , 2)"] = (
             1
             + self.vomega**2
-            * (
-                (
-                    sp.Rational(1146, 1320)
-                    - sp.Rational(3530, 1320) * self.nu
-                    + sp.Rational(285, 1320) * self.nu**2
-                )
-                / (-1 + 3 * self.nu)
-            )
+            * ((1146 - 3530 * self.nu + 285 * self.nu**2) / (1320 * (-1 + 3 * self.nu)))
             + self.vomega**3
             * (
                 (
-                    self.chi_A
-                    * (sp.Rational(10, 15) - sp.Rational(21, 15) * self.nu)
-                    * self.delta
-                    + self.chi_S
-                    * (
-                        sp.Rational(10, 15)
-                        - sp.Rational(59, 15) * self.nu
-                        + sp.Rational(78, 15) * self.nu**2
-                    )
+                    self.chi_A * (10 - 21 * self.nu) * self.delta
+                    + self.chi_S * (10 - 59 * self.nu + 78 * self.nu**2)
                 )
-                / (-1 + 3 * self.nu)
+                / (15 * (-1 + 3 * self.nu))
             )
             + self.vomega**4
             * (
                 (
-                    -sp.Rational(114859044, 317116800)
-                    + sp.Rational(295834536, 317116800) * self.nu
-                    + sp.Rational(1204388696, 317116800) * self.nu**2
-                    - sp.Rational(3047981160, 317116800) * self.nu**3
-                    - sp.Rational(379526805, 317116800) * self.nu**4
+                    -114859044
+                    + 295834536 * self.nu
+                    + 1204388696 * self.nu**2
+                    - 3047981160 * self.nu**3
+                    - 379526805 * self.nu**4
                 )
-                / ((-1 + 3 * self.nu) ** 2)
+                / (317116800 * (-1 + 3 * self.nu) ** 2)
             )
             + self.vomega**6
-            * (
-                sp.Rational(848238724511, 219761942400)
-                - sp.Rational(3142, 3465) * eulerlog[2]
-            )
+            * (848238724511 / 219761942400 - (3142 / 3465) * eulerlog[2])
         )
         self.rho["(4 , 3)"] = (
             1
@@ -885,58 +832,44 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             1
             + self.vomega**2
             * (
-                (
-                    sp.Rational(1614, 1320)
-                    - sp.Rational(5870, 1320) * self.nu
-                    + sp.Rational(2625, 1320) * self.nu**2
-                )
-                / (-1 + 3 * self.nu)
+                (1614 - 5870 * self.nu + 2625 * self.nu**2)
+                / (1320 * (-1 + 3 * self.nu))
             )
             + self.vomega**3
             * (
-                self.chi_A
-                * (sp.Rational(2, 3) - sp.Rational(13, 5) * self.nu)
-                * self.delta
-                + self.chi_S
-                * (
-                    sp.Rational(2, 3)
-                    - sp.Rational(41, 15) * self.nu
-                    + sp.Rational(14, 5) * self.nu**2
-                )
+                self.chi_A * (10 - 39 * self.nu) * self.delta
+                + self.chi_S * (10 - 41 * self.nu + 42 * self.nu**2)
             )
-            / (-1 + 3 * self.nu)
+            / (15 * (-1 + 3 * self.nu))
             + self.vomega**4
             * (
-                -sp.Rational(14210377, 8808800) / (1 - 3 * self.nu) ** 2
-                + sp.Rational(32485357, 4404400) * self.nu / (1 - 3 * self.nu) ** 2
-                - sp.Rational(1401149, 1415700) * self.nu**2 / (1 - 3 * self.nu) ** 2
-                - sp.Rational(801565, 37752) * self.nu**3 / (1 - 3 * self.nu) ** 2
-                + sp.Rational(3976393, 1006720) * self.nu**4 / (1 - 3 * self.nu) ** 2
-                + sp.Rational(1, 2) * self.chi_A**2
-                - 2 * self.nu * self.chi_A**2
-                + self.delta * self.chi_A * self.chi_S
-                + sp.Rational(1, 2) * self.chi_S**2
+                (
+                    -511573572
+                    + 2338945704 * self.nu
+                    - 313857376 * self.nu**2
+                    - 6733146000 * self.nu**3
+                    + 1252563795 * self.nu**4
+                )
+                / (317116800 * (-1 + 3 * self.nu) ** 2)
+                + self.chi_S**2 / 2
+                + self.delta * self.chi_S * self.chi_A
+                + self.delta**2 * self.chi_A**2 / 2
             )
             + self.vomega**5
             * (
-                (
-                    -sp.Rational(69, 55)
-                    + sp.Rational(16571, 1650) * self.nu
-                    - sp.Rational(2673, 100) * self.nu**2
-                    + sp.Rational(8539, 440) * self.nu**3
-                    + sp.Rational(591, 44) * self.nu**4
-                )
-                * (1 / (1 - 3 * self.nu) ** 2)
-                * self.chi_S
-                + self.delta
+                self.chi_A
+                * self.delta
+                * (-8280 + 42716 * self.nu - 57990 * self.nu**2 + 8955 * self.nu**3)
+                / (6600 * (-1 + 3 * self.nu) ** 2)
+                + self.chi_S
                 * (
-                    -sp.Rational(69, 55)
-                    + sp.Rational(10679, 1650) * self.nu
-                    - sp.Rational(1933, 220) * self.nu**2
-                    + sp.Rational(597, 440) * self.nu**3
+                    -8280
+                    + 66284 * self.nu
+                    - 176418 * self.nu**2
+                    + 128085 * self.nu**3
+                    + 88650 * self.nu**2 * self.nu**2
                 )
-                * self.chi_A
-                / ((1 - 3 * self.nu) ** 2)
+                / (6600 * (-1 + 3 * self.nu) ** 2)
             )
             + self.vomega**6
             * (
@@ -1125,45 +1058,11 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             )
             + self.nu * (12 * self.vomega**8 + -215 * self.vomega**10)
         )
-        self.rho["(2 , 1)"] = (
-            1
-            + self.vomega**2 * (sp.Rational(23, 84) * self.nu - sp.Rational(59, 56))
-            + self.vomega**4
-            * (
-                sp.Rational(617, 4704) * self.nu**2
-                - sp.Rational(10993, 14112) * self.nu
-                - sp.Rational(47009, 56448)
-            )
-            + self.vomega**6
-            * (
-                sp.Rational(7613184941, 2607897600)
-                - sp.Rational(107, 105) * eulerlog[1]
-            )
-            + self.vomega**8
-            * (
-                -sp.Rational(1168617463883, 911303737344)
-                + sp.Rational(6313, 5880) * eulerlog[1]
-            )
-            + self.vomega**10
-            * (
-                -sp.Rational(63735873771463, 16569158860800)
-                + sp.Rational(5029963, 5927040) * eulerlog[1]
-            )
-            + self.nu
-            * (
-                f2r(1.65) * self.vomega**6
-                + f2r(26.5) * self.vomega**8
-                + 80 * self.vomega**10
-            )
-        )
         self.rho["(2 , 2)"] = (
             1
             + self.vomega**2 * (sp.Rational(55, 84) * self.nu - sp.Rational(43, 42))
             + self.vomega**3
-            * (
-                (-2 * (self.chi_S + self.chi_A * self.delta - self.chi_S * self.nu))
-                / 3.0
-            )
+            * ((-2 * (self.chi_S + self.chi_A * self.delta - self.chi_S * self.nu)) / 3)
             + self.vomega**4
             * (
                 sp.Rational(19583, 42336) * self.nu**2
@@ -1249,7 +1148,38 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
                 sp.Rational(439877, 55566) * eulerlog[2]
                 - sp.Rational(16094530514677, 533967033600)
             )
-            + self.nu * (21.2 * self.vomega**8 + -411 * self.vomega**10)
+            + self.nu * (f2r(21.2) * self.vomega**8 + -411 * self.vomega**10)
+        )
+        self.rho["(2 , 1)"] = (
+            1
+            + self.vomega**2 * (sp.Rational(23, 84) * self.nu - sp.Rational(59, 56))
+            + self.vomega**4
+            * (
+                sp.Rational(617, 4704) * self.nu**2
+                - sp.Rational(10993, 14112) * self.nu
+                - sp.Rational(47009, 56448)
+            )
+            + self.vomega**6
+            * (
+                sp.Rational(7613184941, 2607897600)
+                - sp.Rational(107, 105) * eulerlog[1]
+            )
+            + self.vomega**8
+            * (
+                -sp.Rational(1168617463883, 911303737344)
+                + sp.Rational(6313, 5880) * eulerlog[1]
+            )
+            + self.vomega**10
+            * (
+                -sp.Rational(63735873771463, 16569158860800)
+                + sp.Rational(5029963, 5927040) * eulerlog[1]
+            )
+            + self.nu
+            * (
+                f2r(1.65) * self.vomega**6
+                + f2r(26.5) * self.vomega**8
+                + 80 * self.vomega**10
+            )
         )
         self.Y = [
             [0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -1312,18 +1242,18 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             [0, 0, 0, 0, 0, 0, 0, f2r(0.5000395635705508), 0],
             [0, 0, 0, 0, 0, 0, 0, 0, f2r(0.5154289843972844)],
         ]
-        self.c = {}
+        self.c = sp.zeros(10)
         for k in range(2, 10):
-            self.c[f"{k}"] = (m1 / M) ** (k - 1) + ((-1) ** k) * ((m2 / M) ** (k - 1))
-        self.c["3"] += -1 * self.eqcond
-        self.c["5"] += sp.Rational(-1, 2) * self.eqcond
+            self.c[k] = (m1 / M) ** (k - 1) + ((-1) ** k) * ((m2 / M) ** (k - 1))
+        self.c[3] *= self.noneqcond
+        self.c[3] += -1 * self.eqcond
+        self.c[5] *= self.noneqcond
+        self.c[5] += sp.Rational(-1, 2) * self.eqcond
         self.r0 = 2 / sp.sqrt(sp.E)
-
-        self.Tlm = {}
+        self.Tlm = sp.zeros(9, 9)
         tlmprod_fac = 1
         for m in range(1, 9):
-            k = m * self.Omega
-            hathatk = self.Hreal * k
+            hathatk = self.khat[m]
             hathatksq4 = 4 * hathatk * hathatk
             hathatk4pi = 4 * sp.pi * hathatk
             tlmprod_fac = 1
@@ -1333,10 +1263,8 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
                 tlmprod_fac *= hathatksq4 + j**2
                 if m > j:
                     continue
-                self.Tlm.update({f"({j} , {m})": tlmprefac * sp.sqrt(tlmprod_fac) / z2})
-        self.effective_source = []
-        self.effective_source.append(Heff)
-        self.effective_source.append(self.vomega * self.pphi)
+                self.Tlm[j, m] = tlmprefac * sp.sqrt(tlmprod_fac) / z2
+        self.effective_source = [Heff, self.vomega * self.pphi]
 
     def flux(self) -> sp.Mul:
         """
@@ -1347,40 +1275,42 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
 
         :return: The symbolic expression representing the flux.
         """
-        factorized_flux = 0
+        factorized_flux = sp.sympify(0)
         for l in range(2, 9):
             for m in range(1, l + 1):
+                if not (l + m) % 2:
+                    n_complex = (
+                        8 * sp.pi * (sp.I * m) ** l / sp.factorial2(2 * l + 1)
+                    ) * sp.sqrt(((l + 1) * (l + 2)) / ((l) * (l - 1)))
+                    n_abs = sp.Abs(n_complex)
+                else:
+                    n_complex = (
+                        -16 * sp.I * sp.pi * (sp.I * m) ** l / sp.factorial2(2 * l + 1)
+                    ) * sp.sqrt(
+                        ((2 * l + 1) * (l + 2) * (l**2 - m**2))
+                        / ((2 * l - 1) * (l + 1) * (l) * (l - 1))
+                    )
+                    n_abs = sp.Abs(n_complex)
                 pn_contribution_f = 0
                 if not m % 2:
                     pn_contribution_f += self.rho[f"({l} , {m})"] ** l
                 if m % 2:
-                    pn_contribution_f += self.noneqcond * self.rho[f"({l} , {m})"] ** l
+                    pn_contribution_f += self.rho[f"({l} , {m})"] ** l
                     if (l < 5) or (l == 5 and m == 5):
-                        pn_contribution_f += (
-                            self.noneqcond * self.fspin[f"({l} , {m})"]
+                        pn_contribution_f = (
+                            self.noneqcond
+                            * (
+                                self.rho[f"({l} , {m})"] ** l
+                                + self.fspin[f"({l} , {m})"]
+                            )
                             + self.eqcond * self.fspin_limit[f"({l} , {m})"]
                         )
-                n_abs = (1 - (l + m) % 2) * (
-                    (sp.Rational(8, sp.factorial2(2 * l + 1)))
-                    * sp.pi
-                    * (m) ** l
-                    * sp.sqrt(sp.Rational((l + 1) * (l + 2), l * (l - 1)))
-                ) + ((l + m) % 2) * (
-                    (sp.Rational(16, sp.factorial2(2 * l + 1)))
-                    * sp.pi
-                    * (m) ** l
-                    * sp.sqrt(
-                        sp.Rational(
-                            (l**2 - m**2) * (l + 2) * (2 * l + 1),
-                            (2 * l - 1) * (l + 1) * l * (l - 1),
-                        )
-                    )
-                )
-                tail_term = self.Tlm[f"({l} , {m})"]
+
+                tail_term = self.Tlm[l, m]
                 newtonian_strain_amplitude = (
                     self.nu
                     * n_abs
-                    * self.c[f"{l + (l + m) % 2}"]
+                    * self.c[l + (l + m) % 2]
                     * (self.vphi ** (l + (l + m) % 2))
                     * self.Y[m][l - (l + m) % 2]
                 )
@@ -1391,8 +1321,8 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
                     * pn_contribution_f
                 )
                 factorized_flux += m * m * strain_amplitude**2
-        factorized_flux *= -(sp.Rational(1, 8) * self.Omega / sp.pi)
-        return factorized_flux
+        factorized_flux *= -(sp.Rational(1, 8) * self.Omega**2 / sp.pi)
+        return factorized_flux / self.nu
 
     def strain(self) -> Dict[str, sp.core.Mul]:
         """
@@ -1404,104 +1334,81 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
         :return: dictionary containing the symbolic expressions representing each mode of the strain
         """
         hlms = {}
-        for l in range(2, 6):
-            for m in range(l, min(l - 2, 4), -1):
-                pn_contribution_f_real = 0
-                pn_contribution_f_imag = 0
-                if not m % 2:
-                    pn_contribution_f_real += self.rho[f"({l} , {m})"] ** l
-                if m % 2:
-                    pn_contribution_f_real += (
-                        self.noneqcond * self.rho[f"({l} , {m})"] ** l
-                    )
-                    pn_contribution_f_real += (
-                        self.noneqcond * self.fspin[f"({l} , {m})"]
-                        + self.eqcond * self.fspin_limit[f"({l} , {m})"]
-                    )
-                if l == 3 and m == 3:
-                    pn_contribution_f_imag += (
-                        self.noneqcond * self.fspinimag
-                        + self.eqcond * self.fspinimag_limit
-                    )
-                pn_contribution_f = [pn_contribution_f_real, pn_contribution_f_imag]
-                n_real = (1 - (l + m) % 2) * (
-                    (sp.Rational(8, sp.factorial2(2 * l + 1)))
-                    * sp.pi
-                    * sp.re((sp.I * m) ** l)
-                    * sp.sqrt(sp.Rational((l + 1) * (l + 2), l * (l - 1)))
-                ) + ((l + m) % 2) * (
-                    (sp.Rational(-16, sp.factorial2(2 * l + 1)))
-                    * sp.pi
-                    * sp.re((sp.I * m) ** l)
-                    * sp.sqrt(
-                        sp.Rational(
-                            (l**2 - m**2) * (l + 2) * (2 * l + 1),
-                            (2 * l - 1) * (l + 1) * l * (l - 1),
-                        )
-                    )
+        modes = [(2,2)]
+        for mode in modes:
+            l , m = mode
+            pn_contribution_f_real = 0
+            pn_contribution_f_imag = 0
+            if not m % 2:
+                pn_contribution_f_real += self.rho[f"({l} , {m})"] ** l
+            if m % 2:
+                pn_contribution_f_real += (
+                    self.noneqcond * self.rho[f"({l} , {m})"] ** l
                 )
-                n_imag = (1 - (l + m) % 2) * (
-                    (sp.Rational(8, sp.factorial2(2 * l + 1)))
-                    * sp.pi
-                    * sp.im((sp.I * m) ** l)
-                    * sp.sqrt(sp.Rational((l + 1) * (l + 2), l * (l - 1)))
-                ) + ((l + m) % 2) * (
-                    (sp.Rational(-16, sp.factorial2(2 * l + 1)))
-                    * sp.pi
-                    * sp.im((sp.I * m) ** l)
-                    * sp.sqrt(
-                        sp.Rational(
-                            (l**2 - m**2) * (l + 2) * (2 * l + 1),
-                            (2 * l - 1) * (l + 1) * l * (l - 1),
-                        )
-                    )
+                pn_contribution_f_real += (
+                    self.noneqcond * self.fspin[f"({l} , {m})"]
+                    + self.eqcond * self.fspin_limit[f"({l} , {m})"]
                 )
-                n = [n_real, n_imag]
-                gamma_real, gamma_imag = sp.symbols(
-                    f"gamma_real_{l}{m} gamma_imag_{l}{m}", real=True
+            if l == 3 and m == 3:
+                pn_contribution_f_imag += (
+                    self.noneqcond * self.fspinimag
+                    + self.eqcond * self.fspinimag_limit
                 )
-                gamma_term = [gamma_real, gamma_imag]
-                tail_prefactor = [
-                    sp.exp(self.khat[m] * (sp.pi))
-                    * sp.cos(self.khat[m] * (2 * sp.log(2 * m * self.Omega * self.r0)))
-                    / sp.factorial(l),
-                    sp.exp(self.khat[m] * (sp.pi))
-                    * sp.sin(self.khat[m] * (2 * sp.log(2 * m * self.Omega * self.r0)))
-                    / sp.factorial(l),
-                ]
-                tail_term = complex_mult(gamma_term, tail_prefactor)
-                newtonian_strain_real = (
-                    self.nu
-                    * self.c[f"{l + (l + m) % 2}"]
-                    * (self.vphi ** (l + (l + m) % 2))
-                    * self.Y[m][l - (l + m) % 2]
-                    * sp.cos(-m * self.phi)
+            pn_contribution_f = [pn_contribution_f_real, pn_contribution_f_imag]
+            pn_contribution_delta = [
+                sp.cos(self.deltalm[f"({l} , {m})"]),
+                sp.sin(self.deltalm[f"({l} , {m})"]),
+            ]
+            pn_contribution = complex_mult(pn_contribution_f,pn_contribution_delta)
+            gamma_real, gamma_imag = sp.symbols(
+                f"gamma_real_{l}{m} gamma_imag_{l}{m}", real=True
+            )
+            gamma_term = [gamma_real, gamma_imag]
+            tail_prefactor = [
+                sp.exp(self.khat[m] * (sp.pi))
+                * sp.cos(self.khat[m] * (2 * sp.log(2 * m * self.Omega * self.r0)))
+                / sp.factorial(l),
+                sp.exp(self.khat[m] * (sp.pi))
+                * sp.sin(self.khat[m] * (2 * sp.log(2 * m * self.Omega * self.r0)))
+                / sp.factorial(l),
+            ]
+            tail_term = complex_mult(gamma_term, tail_prefactor)
+            non_newtonian_contribution = complex_mult(tail_term,pn_contribution)
+            newtonian_strain_real_no_n = (
+                self.nu
+                * self.c[l + (l + m) % 2]
+                * (self.vphi ** (l + (l + m) % 2))
+                * self.Y[m][l - (l + m) % 2]
+                * sp.cos(-m * self.phi)
+            )
+            newtonian_strain_imag_no_n = (
+                self.nu
+                * self.c[l + (l + m) % 2]
+                * (self.vphi ** (l + (l + m) % 2))
+                * self.Y[m][l - (l + m) % 2]
+                * sp.sin(-m * self.phi)
+            )
+            newtonian_strain_no_n = [newtonian_strain_real_no_n, newtonian_strain_imag_no_n]
+            if not (l + m) % 2:
+                n_complex = (
+                    8 * sp.pi * (sp.I * m) ** l / sp.factorial2(2 * l + 1)
+                ) * sp.sqrt(((l + 1) * (l + 2)) / ((l) * (l - 1)))
+            else:
+                n_complex = (
+                    -16 * sp.I * sp.pi * (sp.I * m) ** l / sp.factorial2(2 * l + 1)
+                ) * sp.sqrt(
+                    ((2 * l + 1) * (l + 2) * (l**2 - m**2))
+                    / ((2 * l - 1) * (l + 1) * (l) * (l - 1))
                 )
-                newtonian_strain_imag = (
-                    self.nu
-                    * self.c[f"{l + (l + m) % 2}"]
-                    * (self.vphi ** (l + (l + m) % 2))
-                    * self.Y[m][l - (l + m) % 2]
-                    * sp.sin(-m * self.phi)
-                )
-                newtonian_strain = complex_mult(
-                    [newtonian_strain_real, newtonian_strain_imag], n
-                )
-                hlms_complex_component = complex_mult(
-                    newtonian_strain, complex_mult(tail_term, pn_contribution_f)
-                )
-                hlms[f"({l} , {m})"] = [
-                    (
-                        hlms_complex_component[0]
-                        * self.deltalm[f"({l} , {m})"]
-                        * self.effective_source[(l + m) % 2]
-                    ),
-                    (
-                        hlms_complex_component[1]
-                        * self.deltalm[f"({l} , {m})"]
-                        * self.effective_source[(l + m) % 2]
-                    ),
-                ]
+            n = [sp.re(n_complex), sp.im(n_complex)]
+            newtonian_strain = complex_mult( newtonian_strain_no_n , n)
+            hlms_no_source = complex_mult(
+                newtonian_strain, non_newtonian_contribution
+            )
+            hlms[f"({l} , {m})"] = [
+                (hlms_no_source[0] * self.effective_source[(l + m) % 2]),
+                (hlms_no_source[1] * self.effective_source[(l + m) % 2]),
+            ]
         return hlms
 
 

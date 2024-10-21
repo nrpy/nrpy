@@ -34,8 +34,8 @@ def register_CFunction_SEOBNRv5_aligned_spin_augments() -> (
     params = "commondata_struct *restrict commondata"
     H = SEOBNRv5_Ham.SEOBNRv5_aligned_spin_Hamiltonian_quantities()
     body = ccg.c_codegen(
-        [H.Hreal, H.dHreal_dpphi_circ],
-        ["commondata->Hreal", "commondata->Omega_circ"],
+        [H.Hreal, H.dHreal_dpphi, H.dHreal_dpphi_circ],
+        ["commondata->Hreal", "commondata->dHreal_dpphi", "commondata->Omega_circ"],
         verbose=False,
         include_braces=False,
     )
@@ -307,15 +307,14 @@ def register_CFunction_SEOBNRv5_aligned_spin_ode_integration() -> (
     params = "commondata_struct *restrict commondata"
     body = """
 const gsl_odeiv2_step_type *restrict T = gsl_odeiv2_step_rk8pd;
-
 gsl_odeiv2_step *restrict s = gsl_odeiv2_step_alloc(T, 4);
 gsl_odeiv2_control *restrict c = gsl_odeiv2_control_standard_new(1e-12, 1e-11, 1.0, 1.0);
 gsl_odeiv2_system sys = {SEOBNRv5_aligned_spin_right_hand_sides, NULL, 4, commondata};
+gsl_odeiv2_evolve *restrict e = gsl_odeiv2_evolve_alloc (4);
 
 REAL t = 0.0;
-REAL t_new;
-const REAL t1 = 2e9;
-REAL y[4], yerr[4], dydt_in[4], dydt_out[4];
+const REAL tmax = 2e9;
+REAL y[4], dydt[4];
 int status = 0;
 int i;
 int stop = 0;
@@ -323,14 +322,11 @@ y[0] = commondata->r;
 y[1] = commondata->phi;
 y[2] = commondata->prstar;
 y[3] = commondata->pphi;
-status = SEOBNRv5_aligned_spin_right_hand_sides(t, y, dydt_in, commondata);
+status = SEOBNRv5_aligned_spin_right_hand_sides(t, y, dydt, commondata);
 int rhs_status[1] = {GSL_SUCCESS};
-char rhs_name[] = "gsl_odeiv2_step_apply";
-int hadjust_status[3] = {GSL_ODEIV_HADJ_DEC,GSL_ODEIV_HADJ_INC,GSL_ODEIV_HADJ_NIL};
-char hadjust_name[] = "gsl_odeiv2_control_hadjust";
-SEOBNRv5_aligned_spin_augments(commondata);
-REAL h = 2.0 * M_PI / dydt_in[1] / 5.0;
-size_t bufferlength = (size_t)(t1 / h); // runs up to 0.01x maximum time (we should not ideally run that long)
+char rhs_name[] = "gsl_odeiv2_evolve_apply";
+REAL h = 2.0 * M_PI / dydt[1] / 5.0;
+size_t bufferlength = (size_t)(tmax / h); // runs up to 0.01x maximum time (we should not ideally run that long)
 REAL *restrict dynamics_RK = (REAL *)malloc(bufferlength * (NUMVARS)*sizeof(REAL));
 size_t nsteps = 0;
 
@@ -339,18 +335,17 @@ dynamics_RK[IDX(nsteps,TIME)] = t;
 for (i = 1; i < 5; i++) {
   dynamics_RK[IDX(nsteps,i)] = y[i - 1];
 }
+SEOBNRv5_aligned_spin_augments(commondata);
 dynamics_RK[IDX(nsteps,H)] = commondata->Hreal;
-dynamics_RK[IDX(nsteps,OMEGA)] = dydt_in[1];
+dynamics_RK[IDX(nsteps,OMEGA)] = commondata->dHreal_dpphi;
 dynamics_RK[IDX(nsteps,OMEGA_CIRC)] = commondata->Omega_circ;
 nsteps++;
+REAL Omega_previous = commondata->initial_omega;
 
-while (stop == 0) {
+while (t < tmax && stop == 0) {
   // integrate
-  status = gsl_odeiv2_step_apply(s, t, h, y, yerr, dydt_in, dydt_out, &sys);
+  status = gsl_odeiv2_evolve_apply(e, c, s, &sys, &t, tmax, &h, y);
   handle_gsl_return_status(status,rhs_status,1,rhs_name);
-  status = gsl_odeiv2_control_hadjust(c, s, y, yerr, dydt_out, &h);
-  handle_gsl_return_status(status,hadjust_status,3,hadjust_name);
-  t_new = t + h;
   commondata->r = y[0];
   commondata->phi = y[1];
   commondata->prstar = y[2];
@@ -364,32 +359,31 @@ while (stop == 0) {
   }
 
   // update
-  t = t_new;
-  memcpy(dydt_in, dydt_out, 4 * sizeof(REAL));
   // store
   dynamics_RK[IDX(nsteps,TIME)] = t;
   for (i = 1; i < 5; i++) {
     dynamics_RK[IDX(nsteps,i)] = y[i-1];
   }
   dynamics_RK[IDX(nsteps,H)] = commondata->Hreal;
-  dynamics_RK[IDX(nsteps,OMEGA)] = dydt_out[1];
+  dynamics_RK[IDX(nsteps,OMEGA)] = commondata->dHreal_dpphi;
   dynamics_RK[IDX(nsteps,OMEGA_CIRC)] = commondata->Omega_circ;
   nsteps++;
 
   // stopcheck
   if (commondata->r < 6.0) {
     // decrease in frequency: Omega peak stop = index of omega
-    if (dydt_out[1] < dydt_in[1]) {
+    if (commondata->dHreal_dpphi < Omega_previous) {
       stop = OMEGA;
       break;
     }
+    SEOBNRv5_aligned_spin_right_hand_sides(t, y, dydt, commondata);
     // outspiral dPR: PR peak stop = index of pr
-    if (dydt_out[2] > 0.0) {
+    if (dydt[2] > 0.0) {
       stop = PRSTAR;
       break;
     }
     // outspiral dR
-    if (dydt_out[0] > 0.0) {
+    if (dydt[0] > 0.0) {
       break;
     }
     // Stopping radius
@@ -401,11 +395,13 @@ while (stop == 0) {
       break;
     }
   }
+  Omega_previous = commondata->dHreal_dpphi;
 }
 
 // free up gsl ode solver
 gsl_odeiv2_control_free(c);
 gsl_odeiv2_step_free(s);
+gsl_odeiv2_evolve_free(e);
 
 // High sampling.
 // Get an estimate of the stepback time.
@@ -415,6 +411,9 @@ for (i = 0; i < nsteps; i++) {
   times[i] = dynamics_RK[IDX(i,TIME)];
 }
 REAL t_stepback = times[nsteps - 1] - commondata->t_stepback;
+if (stop == OMEGA){
+  t_stepback -= 50.0;
+}
 size_t idx_stepback = gsl_interp_bsearch(times, t_stepback, 0, nsteps - 1);
 
 // Get the time of peak Omega or pr if peak was detected.
@@ -426,7 +425,7 @@ if (stop != 0) {
   REAL *restrict times_fine = (REAL *)malloc(len_dynamics_fine*sizeof(REAL));
   for (i = 0; i < len_dynamics_fine; i++) {
     times_fine[i] = times[i + idx_stepback];
-    fpeak_fine[i] = dynamics_RK[8 * (i + idx_stepback) + stop];
+    fpeak_fine[i] = dynamics_RK[IDX(i + idx_stepback, stop)];
   }
   gsl_interp_accel *restrict acc = gsl_interp_accel_alloc();
   REAL t_left = times_fine[0] * (1 - stop % 2) + (stop % 2) * (times[nsteps - 1] - 10); // t_stepback if stop == 6 and t_end - 10M if stop == 3
@@ -435,6 +434,8 @@ if (stop != 0) {
   status = SEOBNRv5_aligned_spin_iterative_refinement(spline, acc, stop, t_left, dynamics_RK[8 * (nsteps - 1) + 0], t_max);
   gsl_spline_free(spline);
   gsl_interp_accel_free(acc);
+  free(times_fine);
+  free(fpeak_fine);
 }
 t_stepback = t_max - commondata->t_stepback;
 status = SEOBNRv5_aligned_spin_interpolate_dynamics(commondata, times, dynamics_RK, nsteps, t_max, t_stepback);
