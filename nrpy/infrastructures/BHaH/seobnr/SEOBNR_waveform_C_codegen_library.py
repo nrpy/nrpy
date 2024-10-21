@@ -40,24 +40,27 @@ REAL *restrict Q3 = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 REAL *restrict P1 = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 REAL *restrict P2 = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 REAL *restrict r = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
+REAL *restrict Omega = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 REAL *restrict hamp = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 REAL *restrict phase = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 REAL *restrict phase_unwrapped = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
-REAL radius, prstar,Omega; 
+REAL radius, omega, prstar, hplus, hcross; 
 size_t i;
 
 for (i = 0; i < commondata->nsteps_fine; i++){
   prstar = commondata->dynamics_fine[IDX(i,PRSTAR)];
   r[i] = commondata->dynamics_fine[IDX(i,R)];
-  Omega = commondata->dynamics_fine[IDX(i,OMEGA)];
-  hamp[i] = sqrt(commondata->waveform_fine[IDX_WF(i,HPLUS)]*commondata->waveform_fine[IDX_WF(i,HPLUS)] + commondata->waveform_fine[IDX_WF(i,HCROSS)]*commondata->waveform_fine[IDX_WF(i,HCROSS)] );
-  phase[i] = atan2(-commondata->waveform_fine[IDX_WF(i,HCROSS)],commondata->waveform_fine[IDX_WF(i,HPLUS)]);
+  Omega[i] = commondata->dynamics_fine[IDX(i,OMEGA)];
+  hplus = commondata->waveform_fine[IDX_WF(i,HPLUS)];
+  hcross = commondata->waveform_fine[IDX_WF(i,HCROSS)];
+  hamp[i] = sqrt(hplus * hplus + hcross * hcross);
+  phase[i] = atan2(-hcross,hplus);
   times[i] = commondata->dynamics_fine[IDX(i,TIME)];
-  Q1[i] = hamp[i] * prstar * prstar / (r[i] * r[i] * Omega * Omega);
+  Q1[i] = hamp[i] * prstar * prstar / (r[i] * r[i] * Omega[i] * Omega[i]);
   Q2[i] = Q1[i] / r[i];
   Q3[i] = Q2[i] / sqrt(r[i]);
-  P1[i] = prstar / Omega;
-  P2[i] = P1[i] * prstar * prstar;
+  P1[i] = -prstar / r[i] /Omega[i];
+  P2[i] = -P1[i] * prstar * prstar;
 }
 REAL diff;
 int wrap = 0;
@@ -70,20 +73,42 @@ for (i = 1; i < commondata->nsteps_fine; i++){
 
 // Find t_ISCO:
 
-size_t ISCO_idx = gsl_interp_bsearch(r, commondata->r_ISCO, 0, commondata->nsteps_fine);
-commondata->t_ISCO = times[ISCO_idx];
+if (commondata->r_ISCO < r[commondata->nsteps_fine - 1]){
+  commondata->t_ISCO = times[commondata->nsteps_fine - 1];
+}
+else{
+  const REAL dt_ISCO = 0.001;
+  const size_t N_zoom = (size_t) ((times[commondata->nsteps_fine - 1] - times[0]) / dt_ISCO);  
+  REAL *restrict t_zoom = (REAL *) malloc(N_zoom * sizeof(REAL));
+  REAL *restrict minus_r_zoom = (REAL *) malloc(N_zoom * sizeof(REAL));
+  gsl_interp_accel *restrict acc_r = gsl_interp_accel_alloc();
+  gsl_spline *restrict spline_r = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
+  gsl_spline_init(spline_r,times,r,commondata->nsteps_fine);
+  for (i = 0; i < N_zoom; i++){
+    t_zoom[i] = times[0] + i * dt_ISCO;
+
+    minus_r_zoom[i] = -1.0*gsl_spline_eval(spline_r,t_zoom[i],acc_r);
+  }  
+  const size_t ISCO_zoom_idx = gsl_interp_bsearch(minus_r_zoom, -commondata->r_ISCO, 0 , N_zoom);
+  commondata->t_ISCO = t_zoom[ISCO_zoom_idx];
+  
+  gsl_interp_accel_free(acc_r);
+  gsl_spline_free(spline_r);
+  free(t_zoom);
+  free(minus_r_zoom);
+}
+
 REAL t_peak = commondata->t_ISCO - commondata->Delta_t;
 if (t_peak > times[commondata->nsteps_fine - 1]){
   t_peak = times[commondata->nsteps_fine - 1];
 }
 size_t peak_idx = gsl_interp_bsearch(times, t_peak, 0, commondata->nsteps_fine);
 
-
 size_t N = 5;
 size_t left = (peak_idx - N + abs(peak_idx - N))/2;
 size_t right = (peak_idx + N + commondata->nsteps_fine - abs(peak_idx + N - commondata->nsteps_fine))/2;
 REAL Q_cropped1[right - left], Q_cropped2[right - left], Q_cropped3[right - left], P_cropped1[right - left], P_cropped2[right - left];
-REAL t_cropped[right-left], phase_cropped[right-left], amp_cropped[right-left];
+REAL t_cropped[right-left], phase_cropped[right - left], amp_cropped[right-left];
 for (i = left; i < right; i++){
   t_cropped[i - left] = times[i];
   phase_cropped[i - left] = phase_unwrapped[i];
@@ -119,13 +144,13 @@ gsl_matrix_set(Q,2,2,gsl_spline_eval_deriv2(spline, t_peak, acc));
 
 gsl_spline_init(spline,t_cropped, P_cropped1,right-left);
 gsl_interp_accel_reset(acc);
-gsl_matrix_set(P,0,0,gsl_spline_eval(spline, t_peak, acc));
-gsl_matrix_set(P,1,0,gsl_spline_eval_deriv(spline, t_peak, acc));
+gsl_matrix_set(P,0,0,-gsl_spline_eval(spline, t_peak, acc));
+gsl_matrix_set(P,1,0,-gsl_spline_eval_deriv(spline, t_peak, acc));
 
 gsl_spline_init(spline,t_cropped, P_cropped2,right-left);
 gsl_interp_accel_reset(acc);
-gsl_matrix_set(P,0,1,gsl_spline_eval(spline, t_peak, acc));
-gsl_matrix_set(P,1,1,gsl_spline_eval_deriv(spline, t_peak, acc));
+gsl_matrix_set(P,0,1,-gsl_spline_eval(spline, t_peak, acc));
+gsl_matrix_set(P,1,1,-gsl_spline_eval_deriv(spline, t_peak, acc));
 
 gsl_vector *restrict A = gsl_vector_alloc(3);
 gsl_vector *restrict O = gsl_vector_alloc(2);
@@ -133,9 +158,9 @@ gsl_vector *restrict O = gsl_vector_alloc(2);
 
 gsl_spline_init(spline,t_cropped, amp_cropped,right-left);
 gsl_interp_accel_reset(acc);
-const REAL amp_insp = -1.*gsl_spline_eval(spline, t_peak, acc);
-const REAL ampdot_insp = -1.*gsl_spline_eval_deriv(spline, t_peak, acc);
-const REAL ampddot_insp = -1.*gsl_spline_eval_deriv2(spline, t_peak, acc);
+const REAL amp_insp = gsl_spline_eval(spline, t_peak, acc);
+const REAL ampdot_insp = gsl_spline_eval_deriv(spline, t_peak, acc);
+const REAL ampddot_insp = gsl_spline_eval_deriv2(spline, t_peak, acc);
 
 gsl_spline_init(spline,t_cropped, phase_cropped,right-left);
 gsl_interp_accel_reset(acc);
@@ -160,6 +185,8 @@ const REAL chi1 = commondata->chi1;
 const REAL chi2 = commondata->chi2;
 const REAL omega_qnm = commondata->omega_qnm;
 const REAL tau_qnm = commondata->tau_qnm;
+const REAL t = t_peak;
+const REAL t_0 = t_peak;
 """
     body += ccg.c_codegen(
         [
@@ -182,7 +209,7 @@ const REAL tau_qnm = commondata->tau_qnm;
     body += """
 gsl_vector_set(A , 0 , h_t_attach - amp_insp);
 gsl_vector_set(A , 1 , hdot_t_attach - ampdot_insp);
-gsl_vector_set(A , 2 , hddot_t_attach - ampdot_insp);
+gsl_vector_set(A , 2 , hddot_t_attach - ampddot_insp);
 gsl_vector_set(O , 0 , w_t_attach - omega_insp);
 gsl_vector_set(O , 1 , wdot_t_attach - omegadot_insp);
 
@@ -232,14 +259,14 @@ REAL nqc_amp, nqc_phase, q1, q2, q3,p1, p2;
 for (i = 0; i < commondata->nsteps_low; i++){
   prstar = commondata->dynamics_low[IDX(i,PRSTAR)];
   radius = commondata->dynamics_low[IDX(i,R)];
-  Omega = commondata->dynamics_low[IDX(i,OMEGA)];
-  q1 = prstar * prstar / (radius * radius * Omega * Omega);
+  omega = commondata->dynamics_low[IDX(i,OMEGA)];
+  q1 = prstar * prstar / (radius * radius * omega * omega);
   q2 = q1 / radius;
   q3 = q2 / sqrt(radius);
-  p1 = prstar / Omega;
-  p2 = p1 * prstar * prstar;
+  p1 = -prstar / radius /omega;
+  p2 = -p1 * prstar * prstar;
   nqc_amp = 1 + commondata->a_1_NQC*q1 + commondata->a_2_NQC*q2 + commondata->a_3_NQC*q3;
-  nqc_phase =  1 + commondata->b_1_NQC*p1 + commondata->b_2_NQC*p2;
+  nqc_phase =  commondata->b_1_NQC*p1 + commondata->b_2_NQC*p2;
   commondata->waveform_inspiral[IDX_WF(i,TIME)] = commondata->dynamics_low[IDX(i,TIME)];
   commondata->waveform_inspiral[IDX_WF(i,HPLUS)] = nqc_amp * (commondata->waveform_low[IDX_WF(i,HPLUS)]*cos(nqc_phase) + commondata->waveform_low[IDX_WF(i,HCROSS)]*sin(nqc_phase));
   commondata->waveform_inspiral[IDX_WF(i,HCROSS)] = nqc_amp * (commondata->waveform_low[IDX_WF(i,HCROSS)]*cos(nqc_phase) - commondata->waveform_low[IDX_WF(i,HPLUS)]*sin(nqc_phase));
@@ -247,14 +274,14 @@ for (i = 0; i < commondata->nsteps_low; i++){
 for (i = 0; i< commondata->nsteps_fine; i++){
   prstar = commondata->dynamics_fine[IDX(i,PRSTAR)];
   radius = commondata->dynamics_fine[IDX(i,R)];
-  Omega = commondata->dynamics_fine[IDX(i,OMEGA)];
-  q1 = prstar * prstar / (radius * radius * Omega * Omega);
+  omega = commondata->dynamics_fine[IDX(i,OMEGA)];
+  q1 = prstar * prstar / (radius * radius * omega * omega);
   q2 = q1 / radius;
   q3 = q2 / sqrt(radius);
-  p1 = prstar / Omega;
-  p2 = p1 * prstar * prstar;
+  p1 = -prstar / radius /omega;
+  p2 = -p1 * prstar * prstar;
   nqc_amp = 1 + commondata->a_1_NQC*q1 + commondata->a_2_NQC*q2 + commondata->a_3_NQC*q3;
-  nqc_phase =  1 + commondata->b_1_NQC*p1 + commondata->b_2_NQC*p2;
+  nqc_phase =  commondata->b_1_NQC*p1 + commondata->b_2_NQC*p2;
   commondata->waveform_inspiral[IDX_WF(i+commondata->nsteps_low,TIME)] = commondata->dynamics_fine[IDX(i,TIME)];
   commondata->waveform_inspiral[IDX_WF(i+commondata->nsteps_low,HPLUS)] = nqc_amp * (commondata->waveform_fine[IDX_WF(i,HPLUS)]*cos(nqc_phase) + commondata->waveform_fine[IDX_WF(i,HCROSS)]*sin(nqc_phase));
   commondata->waveform_inspiral[IDX_WF(i+commondata->nsteps_low,HCROSS)] = nqc_amp * (commondata->waveform_fine[IDX_WF(i,HCROSS)]*cos(nqc_phase) - commondata->waveform_fine[IDX_WF(i,HPLUS)]*sin(nqc_phase));

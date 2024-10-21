@@ -20,8 +20,9 @@ import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 import nrpy.infrastructures.BHaH.seobnr.SEOBNR_C_codegen_library as seobnr_CCL
+import nrpy.infrastructures.BHaH.seobnr.SEOBNR_C_gsl_routines_library as seobnr_gsl
 import nrpy.infrastructures.BHaH.seobnr.SEOBNR_dynamics_C_codegen_library as seobnr_dyn_CCL
-import nrpy.infrastructures.BHaH.seobnr.SEOBNR_initial_conditions_C_codegen_library as seobnr_ic_CCL
+import nrpy.infrastructures.BHaH.seobnr.SEOBNR_C_initial_conditions_codegen_library as seobnr_ic_CCL
 import nrpy.infrastructures.BHaH.seobnr.SEOBNR_waveform_C_codegen_library as seobnr_wf_CCL
 import nrpy.params as par
 
@@ -54,46 +55,48 @@ Step 2: Compute Hamiltonian and derivatives."""
     name = "main"
     params = "int argc, const char *argv[]"
     body = r"""  commondata_struct commondata; // commondata contains parameters common to all grids.
-
+//Step 0: Initialize a loop parameter for outputs
+size_t i;
 // Step 1.a: Set each commondata CodeParameter to default.
 commondata_struct_set_to_default(&commondata);
 // Step 1.b: Overwrite default values to parfile values. Then overwrite parfile values with values set at cmd line.
 cmdline_input_and_parfile_parser(&commondata, argc, argv);
 // Step 1.c: Overwrite default values of m1, m2, a6, and dSO.
 SEOBNRv5_aligned_spin_coefficients(&commondata);
-
 // Step 2.a: Compute SEOBNRv5 conservative initial conditions.
 SEOBNRv5_aligned_spin_initial_conditions_conservative(&commondata);
-
 // Step 2.b: Print out the conservative initial conditions.
-printf("r = %.15e\n",commondata.r);
-printf("pphi = %.15e\n",commondata.pphi);
-
+//printf("r = %.15e\n",commondata.r);
+//printf("pphi = %.15e\n",commondata.pphi);
 // Step 3.a: Compute SEOBNRv5 dissipative initial conditions.
 SEOBNRv5_aligned_spin_initial_conditions_dissipative(&commondata);
-
 // Step 3.b: Print out the dissipative initial conditions.
-printf("prstar = %.15e\n",commondata.prstar);
-
+//printf("prstar = %.15e\n",commondata.prstar);
 // Step 4: Run the ODE integration.
 SEOBNRv5_aligned_spin_ode_integration(&commondata);
-
 // Step 5. Generate the waveform.
 SEOBNRv5_aligned_spin_waveform_from_dynamics(&commondata);
 
+for (i = 0; i < commondata.nsteps_low; i++) {
+    printf("%.15e %.15e %.15e\n", commondata.waveform_low[IDX_WF(i,TIME)]
+    , commondata.waveform_low[IDX_WF(i,HPLUS)], commondata.waveform_low[IDX_WF(i,HCROSS)]);
+}
+for (i = 0; i < commondata.nsteps_fine; i++) {
+    printf("%.15e %.15e %.15e\n", commondata.waveform_fine[IDX_WF(i,TIME)]
+    , commondata.waveform_fine[IDX_WF(i,HPLUS)], commondata.waveform_fine[IDX_WF(i,HCROSS)]);
+}
+
 // Step 6. Compute and apply the NQC corrections
 SEOBNRv5_aligned_spin_NQC_corrections(&commondata);
-
 // Step 7.a Cmopute the IMR waveform
 SEOBNRv5_aligned_spin_IMR_waveform(&commondata);
-
 // Step 6.b: Print the resulting waveform.
-size_t i;
-
+/*
 for (i = 0; i < commondata.nsteps_IMR; i++) {
     printf("%.15e %.15e %.15e\n", commondata.waveform_IMR[IDX_WF(i,TIME)]
     , commondata.waveform_IMR[IDX_WF(i,HPLUS)], commondata.waveform_IMR[IDX_WF(i,HCROSS)]);
 }
+*/
 
 free(commondata.dynamics_low);
 free(commondata.dynamics_fine);
@@ -119,7 +122,9 @@ return 0;
 # seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian()
 # seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_and_derivs()
 
-seobnr_CCL.register_CFunction_handle_gsl_return_status()
+seobnr_gsl.register_CFunction_handle_gsl_return_status()
+seobnr_gsl.register_CFunction_SEOBNRv5_multidimensional_root_wrapper()
+seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_flux()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_right_hand_sides()
 seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_coefficients()
 seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit()
@@ -133,7 +138,8 @@ seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_find_peak()
 seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_iterative_refinement()
 seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_intepolate_dynamics()
 seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_ode_integration()
-seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper()
+seobnr_gsl.register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper()
+seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_waveform()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics()
 seobnr_wf_CCL.register_CFunction_SEOBNRv5_NQC_corrections()
 seobnr_wf_CCL.register_CFunction_SEOBNRv5_aligned_spin_IMR_waveform()
