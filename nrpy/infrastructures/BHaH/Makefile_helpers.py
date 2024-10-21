@@ -1,5 +1,5 @@
 """
-Construct Makefile for BHaH C-code project, based on CFunctions registered in the c_function NRPy+ module.
+Construct Makefile for BHaH C-code project, based on CFunctions registered in the c_function NRPy module.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -26,6 +26,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     addl_libraries: Optional[List[str]] = None,
     CC: str = "autodetect",
     create_lib: bool = False,
+    lib_function_prefix: str = "",
     include_dirs: Optional[List[str]] = None,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
@@ -34,22 +35,36 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
 
     :param project_dir: The root directory of the C project.
     :param project_name: Name of the C project.
-    :param exec_or_library_name: The name of the executable. If set to empty string, same as project_name.
-    :param compiler_opt_option: Compiler optimization option. Defaults to "default". Other options: "fast" and "debug"
+    :param exec_or_library_name: The name of the executable. If empty, same as project_name.
+    :param compiler_opt_option: Compiler optimization option. Defaults to "default".
     :param addl_CFLAGS: Additional compiler flags. Must be a list.
     :param addl_libraries: Additional libraries to link. Must be a list.
-    :param CC: C compiler to use. Defaults to "autodetect" (clang if using Darwin, gcc otherwise)
+    :param CC: C compiler to use. Defaults to "autodetect".
     :param create_lib: Whether to create a library. Defaults to False.
+    :param lib_function_prefix: Prefix to add to library function names.
     :param include_dirs: List of include directories. Must be a list.
-    :param clang_format_options: Options for the clang-format tool. Defaults to "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
+    :param clang_format_options: Options for the clang-format tool.
 
-    :raises SystemExit: Exits if errors are encountered.
+    :raises ValueError: If the main() function is not defined in CFunction_dict.
     :raises FileNotFoundError: If the specified C compiler is not found.
     :raises TypeError: If addl_CFLAGS or include_dirs are not lists.
-    :raises ValueError: If addl_CFLAGS or addl_libraries are specified incorrectly, or if OS unsupported.
+    :raises ValueError: If addl_CFLAGS or addl_libraries are specified incorrectly or OS is unsupported.
+
+    DocTests:
+        >>> from nrpy.c_function import register_CFunction
+        >>> CFunction_dict.clear()
+        >>> register_CFunction(
+        ...     subdirectory="",
+        ...     desc='Main function',
+        ...     name='main',
+        ...     cfunc_type='int',
+        ...     params='int argc, char *argv[]',
+        ...     body='return 0;',
+        ... )
+        >>> output_CFunctions_function_prototypes_and_construct_Makefile('/tmp/nrpy_BHaH_Makefile_doctest1', 'project_name')
     """
     if not create_lib and "main" not in CFunction_dict:
-        raise SystemExit(
+        raise ValueError(
             "output_CFunctions_function_prototypes_and_construct_Makefile() error: C codes will not compile if main() function not defined!\n"
             '    Make sure that the main() function registered to CFunction_dict has name "main".'
         )
@@ -73,12 +88,15 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
 
         def add_flag(flag_list: Optional[List[str]], flag: str) -> List[str]:
             """
-            Check if a flag is in the list, add it if not.
+            Check if a flag is in the list; add it if not.
 
             :param flag_list: The list to which the flag should be added.
             :param flag: The flag to add to the list.
+            :return: The updated list with the flag added.
 
-            :return: The updated list with the flag added, if it was not already present.
+            DocTests:
+                >>> add_flag(['-fPIC'], '-shared')
+                ['-fPIC', '-shared']
             """
             if not flag_list:
                 flag_list = []
@@ -99,14 +117,27 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         :param project_Path: The Path of the project.
         :param subdir_Path: The subdirectory path within the project.
         :param file_name: The filename.
-        :return: Destination Path for the generated code, including project & subdirectory paths: e.g., path/to/code.c.
+        :return: Destination Path for the generated code.
+
+        DocTests:
+            >>> add_to_Makefile(Path('/project'), Path('src'), 'code.c')
+            PosixPath('/project/src/code.c')
         """
         Makefile_list_of_files.append(str(subdir_Path / file_name))
         return project_Path / subdir_Path / file_name
 
-    # Output all CFunctions to file. Keep track of all functions being output for the Makefile.
     list_of_uniq_functions: List[str] = []
     for name, CFunction in CFunction_dict.items():
+        if lib_function_prefix != "":
+            CFunction.name = f"{lib_function_prefix}{name}"
+            CFunction.function_prototype = (
+                f"{CFunction.cfunc_type} {CFunction.name}({CFunction.params});"
+            )
+            CFunction.function_prototype, _, CFunction.full_function = (
+                CFunction.generate_full_function()
+            )
+            name = CFunction.name
+
         if CFunction.subdirectory:
             subdir_Path = Path(CFunction.subdirectory)
             (project_Path / subdir_Path).mkdir(parents=True, exist_ok=True)
@@ -145,9 +176,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
 
     CFLAGS_dict = {
         "default": "-std=gnu99 -O2 -march=native -g -Wall -Wno-unused-variable",
-        # FASTCFLAGS: -O3 causes AVX-2+ SIMD optimizations to be used on MoL update loops. -O2 drops to SSE2
         "fast": "-std=gnu99 -O3 -funroll-loops -march=native -g -Wall -Wno-unused-variable",
-        # DEBUGCFLAGS: OpenMP requires -fopenmp, and when disabling -fopenmp, unknown pragma warnings appear. -Wunknown-pragmas silences these warnings
         "debug": "-std=gnu99 -O2 -g -Wall -Wno-unused-variable -Wno-unknown-pragmas",
     }
 
@@ -189,7 +218,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
             f"-I{include_dir}" for include_dir in include_dirs
         )
 
-    # Below code is responsible for either writing a Makefile or a backup shell script depending on the conditions
+    # Below code is responsible for writing the Makefile
     Makefile_str = f"""CC ?= {CC}  # assigns the value CC to {CC} only if environment variable CC is not already set
 ENABLE_VALGRIND ?= no
 {CFLAGS_str}
@@ -224,7 +253,7 @@ all: {exec_or_library_name}
 clean:
 	$(RM) *.o */*.o *~ */*~ ./#* *.txt *.dat *.avi *.png {exec_or_library_name}
 """
-    makefile_path = Path(project_Path) / "Makefile"
+    makefile_path = project_Path / "Makefile"
     with makefile_path.open("w", encoding="utf-8") as Makefile:
         Makefile.write(Makefile_str)
 
@@ -252,7 +281,19 @@ def compile_Makefile(
     :param attempt: Compilation attempt number (default: 1).
 
     :raises FileNotFoundError: If the C compiler or make is not found.
-    :raises SystemExit: If compilation fails after two attempts.
+    :raises Exception: If compilation fails after two attempts.
+
+    DocTests:
+        >>> from nrpy.c_function import register_CFunction
+        >>> CFunction_dict.clear()
+        >>> register_CFunction(
+        ...     name='main',
+        ...     desc='Main function',
+        ...     cfunc_type='int',
+        ...     params='int argc, char *argv[]',
+        ...     body='return 0;',
+        ... )
+        >>> compile_Makefile('/tmp/nrpy_BHaH_Makefile_doctest2/', 'project_name', 'executable')
     """
     if CC == "autodetect":
         os_name = platform.system()
@@ -267,7 +308,6 @@ def compile_Makefile(
     if shutil.which("make") is None:
         raise FileNotFoundError("make is not found")
 
-    # Assuming output_CFunctions_function_prototypes_and_construct_Makefile is defined elsewhere
     output_CFunctions_function_prototypes_and_construct_Makefile(
         project_dir=project_dir,
         project_name=project_name,
@@ -292,10 +332,6 @@ def compile_Makefile(
 
     exec_path = Path(project_dir).joinpath(exec_or_library_name)
     if not exec_path.is_file() and attempt == 1:
-        print(
-            "Optimized compilation FAILED. Removing optimizations (including OpenMP) and retrying with debug enabled..."
-        )
-
         # First clean up object files.
         for obj_file in Path(project_dir).glob("*.o"):
             obj_file.unlink()
@@ -312,5 +348,17 @@ def compile_Makefile(
             attempt=2,
         )
     if not exec_path.is_file() and attempt == 2:
-        raise SystemExit("Compilation failed")
-    print("Finished compilation.")
+        raise Exception("Compilation failed")
+
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

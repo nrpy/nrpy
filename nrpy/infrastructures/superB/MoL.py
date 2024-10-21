@@ -857,7 +857,6 @@ def register_CFunction_MoL_sync_data_defines() -> Tuple[int, int]:
 
     for gf, gf_class_obj in glb_gridfcs_dict.items():
         gf_name = gf.upper()
-
         if (
             isinstance(gf_class_obj, (BHaHGridFunction))
             and gf_class_obj.sync_gf_in_superB

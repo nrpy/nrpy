@@ -1,5 +1,5 @@
 """
-C function management and registration classes/functions.
+Provide classes and functions for managing and registering C functions.
 
 Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
          Ken Sible; ksible **at** outlook **dot* com
@@ -100,8 +100,9 @@ class CFunction:
         self.ET_other_thorn_CodeParams_used = ET_other_thorn_CodeParams_used
         self.clang_format_options = clang_format_options
 
-        self.function_prototype = f"{self.cfunc_type} {self.name}({self.params});"
-        self.raw_function, self.full_function = self.generate_full_function()
+        self.function_prototype, self.raw_function, self.full_function = (
+            self.generate_full_function()
+        )
 
     @staticmethod
     def subdirectory_depth(subdirectory: str) -> int:
@@ -130,24 +131,16 @@ class CFunction:
             >>> CFunction.subdirectory_depth('./folder1//folder2///')
             2
         """
-        # Remove the leading "./" if present
-        if subdirectory.startswith("./"):
-            subdirectory = subdirectory[2:]
+        subdirectory = os.path.normpath(subdirectory)
 
-        # Remove the trailing slash if present
-        if subdirectory.endswith("/"):
-            subdirectory = subdirectory[:-1]
-
-        # If subdirectory is a single period, return 0
         if subdirectory == ".":
             return 0
 
-        # Split by slashes and filter out any empty strings
-        folders = [folder for folder in subdirectory.split("/") if folder]
+        folders = [folder for folder in subdirectory.split(os.sep) if folder]
 
         return len(folders)
 
-    def generate_full_function(self) -> Tuple[str, str]:
+    def generate_full_function(self) -> Tuple[str, str, str]:
         """
         Construct a full C function from a class instance.
 
@@ -155,12 +148,6 @@ class CFunction:
         pre-function definitions, function description, function prototype, and body,
         into a single, formatted C function string. It also optionally applies clang-format
         to the generated C function string based on the instance's clang format options.
-
-        The generated C function string includes necessary includes for CodeParameters,
-        infrastructure-specific handling for includes, and any pre-function definitions provided.
-        It formats the description as a C comment block and constructs the function body with
-        proper indentation and formatting. If enabled, clang-format is applied to the generated
-        string using the instance's specified formatting options.
 
         :return: A tuple containing two strings: the raw C function string and the clang-formatted C function string.
 
@@ -195,7 +182,6 @@ class CFunction:
                     complete_func += f"#include {inc}\n"
                 else:
                     if par.parval_from_str("Infrastructure") == "BHaH":
-                        # BHaH-specific:
                         if any(
                             x in inc
                             for x in [
@@ -213,16 +199,18 @@ class CFunction:
         if self.desc:
             complete_func += f"/*\n{prefix_with_star(self.desc)}\n*/\n"
 
-        complete_func += f"{self.function_prototype.replace(';', '')} {{\n{include_Cparams_str}{self.body}}}\n"
+        function_prototype = f"{self.cfunc_type} {self.name}({self.params});"
+        complete_func += f"{function_prototype.replace(';', '')} {{\n{include_Cparams_str}{self.body}}}\n"
 
         complete_func += f"{self.postfunc}\n"
 
-        return complete_func, clang_format(
-            complete_func, clang_format_options=self.clang_format_options
+        return (
+            function_prototype,
+            complete_func,
+            clang_format(complete_func, clang_format_options=self.clang_format_options),
         )
 
 
-# Contains a dictionary of CFunction objects
 CFunction_dict: Dict[str, CFunction] = {}
 
 
@@ -237,8 +225,9 @@ def function_name_and_subdir_with_CoordSystem(
     :param CoordSystem_for_wrapper_func: The coordinate system subdirectory string.
     :return: The coordinate-specific subdirectory and function name.
 
-    >>> function_name_and_subdir_with_CoordSystem(os.path.join("."), "xx_to_Cart", "SinhSpherical")
-    ('./SinhSpherical', 'xx_to_Cart__rfm__SinhSpherical')
+    DocTests:
+        >>> function_name_and_subdir_with_CoordSystem(os.path.join("."), "xx_to_Cart", "SinhSpherical")
+        ('./SinhSpherical', 'xx_to_Cart__rfm__SinhSpherical')
     """
     if CoordSystem_for_wrapper_func:
         return (
@@ -289,6 +278,11 @@ def register_CFunction(
     :param clang_format_options: Options for the clang-format tool. Defaults to "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
 
     :raises ValueError: If the name is already registered in CFunction_dict.
+
+    DocTests:
+        >>> register_CFunction(name="test_func", desc="test", body="return;")
+        >>> "test_func" in CFunction_dict
+        True
     """
     actual_subdirectory, actual_name = function_name_and_subdir_with_CoordSystem(
         subdirectory, name, CoordSystem_for_wrapper_func

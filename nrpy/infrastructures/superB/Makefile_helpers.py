@@ -223,6 +223,7 @@ main.decl.h main.def.h: main.ci
 # Use $(RM) to be cross-platform compatible.
 clean:
 	$(RM) *.o */*.o *~ */*~ ./#* *.txt *.dat *.avi *.png {exec_or_library_name} *.decl.h *.def.h charmrun
+	$(RM) -r log
 """
     makefile_path = Path(project_Path) / "Makefile"
     with makefile_path.open("w", encoding="utf-8") as Makefile:
