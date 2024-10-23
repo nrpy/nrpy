@@ -1,5 +1,5 @@
 """
-Construct Makefile for BHaH C-code project, based on CFunctions registered in the c_function NRPy module.
+Constructs a Makefile for a BHaH C-code project based on CFunctions registered in the c_function NRPy module.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -37,12 +37,12 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     :param project_name: Name of the C project.
     :param exec_or_library_name: The name of the executable. If empty, same as project_name.
     :param compiler_opt_option: Compiler optimization option. Defaults to "default".
-    :param addl_CFLAGS: Additional compiler flags. Must be a list.
-    :param addl_libraries: Additional libraries to link. Must be a list.
+    :param addl_CFLAGS: Additional compiler flags.
+    :param addl_libraries: Additional libraries to link.
     :param CC: C compiler to use. Defaults to "autodetect".
     :param create_lib: Whether to create a library. Defaults to False.
     :param lib_function_prefix: Prefix to add to library function names.
-    :param include_dirs: List of include directories. Must be a list.
+    :param include_dirs: List of include directories.
     :param clang_format_options: Options for the clang-format tool.
 
     :raises ValueError: If the main() function is not defined in CFunction_dict.
@@ -105,8 +105,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
             return flag_list
 
         addl_CFLAGS = add_flag(addl_CFLAGS, "-fPIC")
-        addl_libraries = add_flag(addl_libraries, "-fPIC")
-        addl_libraries = add_flag(addl_libraries, "-shared")
+        addl_CFLAGS = add_flag(addl_CFLAGS, "-shared")
 
     Makefile_list_of_files: List[str] = []
 
@@ -182,7 +181,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
 
     if addl_CFLAGS is not None:
         if not isinstance(addl_CFLAGS, list):
-            raise ValueError(
+            raise TypeError(
                 "Error: output_CFunctions_function_prototypes_and_construct_Makefile(): addl_CFLAGS must be a list!"
             )
         for FLAG in addl_CFLAGS:
@@ -196,7 +195,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     LDFLAGS_str = "LDFLAGS ="
     if addl_libraries is not None:
         if not isinstance(addl_libraries, list):
-            raise ValueError(
+            raise TypeError(
                 "Error: output_CFunctions_function_prototypes_and_construct_Makefile(): addl_libraries must be a list!"
             )
         for lib in addl_libraries:
@@ -220,23 +219,18 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
 
     # Below code is responsible for writing the Makefile
     Makefile_str = f"""CC ?= {CC}  # assigns the value CC to {CC} only if environment variable CC is not already set
-ENABLE_VALGRIND ?= no
+
 {CFLAGS_str}
 {INCLUDEDIRS_str}
 {LDFLAGS_str}
 
-# Set valgrind-friendly CFLAGS if ENABLE_VALGRIND
-ifeq ($(ENABLE_VALGRIND),yes)
-    CFLAGS = {CFLAGS_dict['debug']}
-else
-    # Check for OpenMP support
-    OPENMP_FLAG = -fopenmp
-    COMPILER_SUPPORTS_OPENMP := $(shell echo | $(CC) $(OPENMP_FLAG) -E - >/dev/null 2>&1 && echo YES || echo NO)
+# Check for OpenMP support
+OPENMP_FLAG = -fopenmp
+COMPILER_SUPPORTS_OPENMP := $(shell echo | $(CC) $(OPENMP_FLAG) -E - >/dev/null 2>&1 && echo YES || echo NO)
 
-    ifeq ($(COMPILER_SUPPORTS_OPENMP), YES)
-        CFLAGS += $(OPENMP_FLAG)
-        LDFLAGS += $(OPENMP_FLAG)  # -lgomp does not work with clang in termux
-    endif
+ifeq ($(COMPILER_SUPPORTS_OPENMP), YES)
+    CFLAGS += $(OPENMP_FLAG)
+    LDFLAGS += $(OPENMP_FLAG)
 endif
 
 {OBJ_FILES_str}
@@ -244,14 +238,18 @@ endif
 all: {exec_or_library_name}
 
 %.o: %.c $(COMMON_HEADERS)
-	$(CC) $(CFLAGS) $(INCLUDEDIRS) -c $< -o $@
+\t$(CC) $(CFLAGS) $(INCLUDEDIRS) -c $< -o $@
 
 {exec_or_library_name}: $(OBJ_FILES)
-	$(CC) $^ -o $@ $(LDFLAGS)
+\t$(CC) $^ -o $@ $(LDFLAGS)
+
+valgrind: clean
+\t$(MAKE) CFLAGS='{CFLAGS_dict['debug']}' all
+\tvalgrind --track-origins=yes ./{exec_or_library_name}
 
 # Use $(RM) to be cross-platform compatible.
 clean:
-	$(RM) *.o */*.o *~ */*~ ./#* *.txt *.dat *.avi *.png {exec_or_library_name}
+\t$(RM) *.o */*.o *~ */*~ ./#* *.txt *.dat *.avi *.png {exec_or_library_name}
 """
     makefile_path = project_Path / "Makefile"
     with makefile_path.open("w", encoding="utf-8") as Makefile:
@@ -274,11 +272,11 @@ def compile_Makefile(
     :param project_dir: Root directory for C code.
     :param project_name: Name of the project.
     :param exec_or_library_name: Name of the executable.
-    :param compiler_opt_option: Compiler optimization option (default: "fast").
-    :param addl_CFLAGS: Additional CFLAGS (default: None).
-    :param addl_libraries: Additional libraries (default: None).
-    :param CC: C compiler (default: "autodetect").
-    :param attempt: Compilation attempt number (default: 1).
+    :param compiler_opt_option: Compiler optimization option.
+    :param addl_CFLAGS: Additional CFLAGS.
+    :param addl_libraries: Additional libraries.
+    :param CC: C compiler.
+    :param attempt: Compilation attempt number.
 
     :raises FileNotFoundError: If the C compiler or make is not found.
     :raises Exception: If compilation fails after two attempts.
