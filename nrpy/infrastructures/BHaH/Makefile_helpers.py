@@ -221,6 +221,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     Makefile_str = f"""CC ?= {CC}  # assigns the value CC to {CC} only if environment variable CC is not already set
 
 {CFLAGS_str}
+VALGRIND_CFLAGS = {CFLAGS_dict["debug"]}
 {INCLUDEDIRS_str}
 {LDFLAGS_str}
 
@@ -241,12 +242,14 @@ all: {exec_or_library_name}
 \t$(CC) $(CFLAGS) $(INCLUDEDIRS) -c $< -o $@
 
 {exec_or_library_name}: $(OBJ_FILES)
-\t$(CC) $^ -o $@ $(LDFLAGS)
+\t$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 valgrind: clean
-\t$(MAKE) CFLAGS='{CFLAGS_dict['debug']}' all
-\tvalgrind --track-origins=yes ./{exec_or_library_name}
-
+\t$(MAKE) CFLAGS="$(VALGRIND_CFLAGS)" all
+"""
+    if not create_lib:
+        Makefile_str += f"""\tvalgrind --track-origins=yes ./{exec_or_library_name}\n"""
+    Makefile_str += f"""
 # Use $(RM) to be cross-platform compatible.
 clean:
 \t$(RM) *.o */*.o *~ */*~ ./#* *.txt *.dat *.avi *.png {exec_or_library_name}
