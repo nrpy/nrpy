@@ -70,7 +70,7 @@ class ReferenceMetricPrecompute(rfm_precompute.ReferenceMetricPrecompute):
                     ):
                         key = self.freevars_uniq_xx_indep[which_freevar]
                         kernel_body = (
-                            f"const int Nxx_plus_2NGHOSTS{dirn} = d_params.Nxx_plus_2NGHOSTS{dirn};\n\n"
+                            f"const int Nxx_plus_2NGHOSTS{dirn} = d_params[streamid].Nxx_plus_2NGHOSTS{dirn};\n\n"
                             "// Kernel thread/stride setup\n"
                             "const int tid0 = threadIdx.x + blockIdx.x*blockDim.x;\n"
                             "const int stride0 = blockDim.x * gridDim.x;\n\n"

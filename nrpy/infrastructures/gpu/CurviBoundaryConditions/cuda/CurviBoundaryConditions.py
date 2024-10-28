@@ -60,15 +60,34 @@ class setup_Cfunction_FD1_arbitrary_upwind(
         )
         self.include_CodeParameters_h = False
         self.cfunc_decorators = "__device__"
-        self.params = """const REAL *restrict gf,  const int i0,const int i1,const int i2, const int offset"""
+        self.params = """const size_t streamid, const REAL *restrict gf,  const int i0,const int i1,const int i2, const int offset"""
+        self.device_kernel : Any = None,
 
         new_header = ""
         for i in range(3):
-            new_header += f"[[maybe_unused]] int const Nxx_plus_2NGHOSTS{i} = d_params.Nxx_plus_2NGHOSTS{i};\n"
-        new_header += f"REAL const invdxx{dirn} = d_params.invdxx{dirn};\n"
+            new_header += f"[[maybe_unused]] int const Nxx_plus_2NGHOSTS{i} = d_params[streamid].Nxx_plus_2NGHOSTS{i};\n"
+        new_header += f"REAL const invdxx{dirn} = d_params[streamid].invdxx{dirn};\n"
         self.body = new_header + self.body
         self.generate_CFunction()
 
+    # def generate_CFunction(self) -> None:
+    #     self.device_kernel = gputils.GPU_Kernel(
+    #         self.body,
+    #         {
+    #             "gf": "const REAL *restrict",
+    #             "i0": "const int",
+    #             "i1": "const int",
+    #             "i2": "const int",
+    #             "offset": "const int",
+    #         },
+    #         f"{self.name}",
+    #         fp_type=self.fp_type,
+    #         comments=self.desc,
+    #         decorators=self.cfunc_decorators,
+    #         cfunc_type="static REAL",
+    #     )
+
+    #     self.CFunction = self.device_kernel.CFunction
 
 # bcstruct_set_up():
 #      This function is documented in desc= and body= fields below.
@@ -393,7 +412,7 @@ class register_CFunction_apply_bcs_inner_only(
         # Specify kernel launch body
         kernel_body = ""
         for i in range(3):
-            kernel_body += f"[[maybe_unused]] int const Nxx_plus_2NGHOSTS{i} = d_params.Nxx_plus_2NGHOSTS{i};\n"
+            kernel_body += f"[[maybe_unused]] int const Nxx_plus_2NGHOSTS{i} = d_params[streamid].Nxx_plus_2NGHOSTS{i};\n"
         kernel_body += """
 // Thread indices
 // Global data index - expecting a 1D dataset
@@ -510,7 +529,7 @@ const bc_info_struct *bc_info = &bcstruct->bc_info;
         # Specify kernel launch body
         kernel_body = ""
         for i in range(3):
-            kernel_body += f"[[maybe_unused]] int const Nxx_plus_2NGHOSTS{i} = d_params.Nxx_plus_2NGHOSTS{i};\n"
+            kernel_body += f"[[maybe_unused]] int const Nxx_plus_2NGHOSTS{i} = d_params[streamid].Nxx_plus_2NGHOSTS{i};\n"
         kernel_body += """
 // Thread indices
 // Global data index - expecting a 1D dataset
@@ -607,12 +626,12 @@ class setup_Cfunction_r_and_partial_xi_partial_r_derivs(
         self.desc = "Compute r(xx0,xx1,xx2) and partial_r x^i."
         self.cfunc_type = "static inline void"
         self.name = "r_and_partial_xi_partial_r_derivs"
-        self.params = """const REAL xx0,const REAL xx1,const REAL xx2, REAL *r,
+        self.params = """const size_t streamid, const REAL xx0,const REAL xx1,const REAL xx2, REAL *r,
         REAL *partial_x0_partial_r,REAL *partial_x1_partial_r,REAL *partial_x2_partial_r"""
 
         new_header = ""
         for param_sym in self.unique_symbols:
-            new_header += f"const REAL {param_sym} = d_params.{param_sym};\n"
+            new_header += f"const REAL {param_sym} = d_params[streamid].{param_sym};\n"
         self.body = new_header + "\n" + self.body
         self.generate_CFunction()
 
@@ -635,7 +654,7 @@ class setup_Cfunction_compute_partial_r_f(
         self.desc = "Compute \\partial_r f"
         self.cfunc_type = "static inline REAL"
         self.name = "compute_partial_r_f"
-        self.params = """REAL *restrict xx[3], const REAL *restrict gfs,
+        self.params = """const size_t streamid, REAL *restrict xx[3], const REAL *restrict gfs,
 const int which_gf, const int dest_i0,const int dest_i1,const int dest_i2,
 const int FACEi0,const int FACEi1,const int FACEi2,
 const REAL partial_x0_partial_r, const REAL partial_x1_partial_r, const REAL partial_x2_partial_r"""
@@ -652,7 +671,7 @@ const REAL partial_x0_partial_r, const REAL partial_x1_partial_r, const REAL par
   const int FD1_stencil_radius = {self.FD1_stencil_radius};
   """
         for i in range(3):
-            self.tmp_definitions += f"[[maybe_unused]] int const Nxx_plus_2NGHOSTS{i} = d_params.Nxx_plus_2NGHOSTS{i};\n"
+            self.tmp_definitions += f"[[maybe_unused]] int const Nxx_plus_2NGHOSTS{i} = d_params[streamid].Nxx_plus_2NGHOSTS{i};\n"
         self.tmp_definitions += "const int ntot = Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2;\n"
         self.generate_CFunction()
 
@@ -670,7 +689,7 @@ const REAL partial_x0_partial_r, const REAL partial_x1_partial_r, const REAL par
                     f"  // Next adjust i{si}_offset so that FD stencil never goes out of bounds.\n"
                     f"  if(dest_i{si} < FD1_stencil_radius) i{si}_offset = FD1_stencil_radius-dest_i{si};\n"
                     f"  else if(dest_i{si} > (Nxx_plus_2NGHOSTS{si}-FD1_stencil_radius-1)) i{si}_offset = (Nxx_plus_2NGHOSTS{si}-FD1_stencil_radius-1) - dest_i{si};\n"
-                    f"  const REAL partial_x{si}_f=FD1_arbitrary_upwind_x{si}_dirn(&gfs[which_gf*ntot],dest_i0,dest_i1,dest_i2,i{si}_offset);\n"
+                    f"  const REAL partial_x{si}_f=FD1_arbitrary_upwind_x{si}_dirn(streamid, &gfs[which_gf*ntot],dest_i0,dest_i1,dest_i2,i{si}_offset);\n"
                 )
         self.body += "  return partial_x0_partial_r*partial_x0_f + partial_x1_partial_r*partial_x1_f + partial_x2_partial_r*partial_x2_f;\n"
 
@@ -695,7 +714,7 @@ class setup_Cfunction_radiation_bcs(base_cbc_classes.setup_Cfunction_radiation_b
         )
         self.cfunc_decorators = "__device__"
         self.include_CodeParameters_h = False
-        self.params = """REAL *restrict xx[3],
+        self.params = """const size_t streamid, REAL *restrict xx[3],
         const REAL *restrict gfs, REAL *restrict gfs_rhss,
         const int which_gf, const REAL gf_wavespeed, const REAL gf_f_infinity,
         const int dest_i0,const int dest_i1,const int dest_i2,
@@ -708,20 +727,20 @@ class setup_Cfunction_radiation_bcs(base_cbc_classes.setup_Cfunction_radiation_b
         self.compute_partial_r_f_setup_func = setup_Cfunction_compute_partial_r_f
 
         self.function_calls = """
-r_and_partial_xi_partial_r_derivs(xx[0][dest_i0],xx[1][dest_i1],xx[2][dest_i2],
+r_and_partial_xi_partial_r_derivs(streamid, xx[0][dest_i0],xx[1][dest_i1],xx[2][dest_i2],
                                   &r, &partial_x0_partial_r, &partial_x1_partial_r,  &partial_x2_partial_r);
-r_and_partial_xi_partial_r_derivs(xx[0][dest_i0_int], xx[1][dest_i1_int], xx[2][dest_i2_int],
+r_and_partial_xi_partial_r_derivs(streamid, xx[0][dest_i0_int], xx[1][dest_i1_int], xx[2][dest_i2_int],
                                   &r_int, &partial_x0_partial_r_int, &partial_x1_partial_r_int, &partial_x2_partial_r_int);
-const REAL partial_r_f     = compute_partial_r_f(xx,gfs, which_gf,dest_i0,    dest_i1,    dest_i2,
+const REAL partial_r_f     = compute_partial_r_f(streamid, xx,gfs, which_gf,dest_i0,    dest_i1,    dest_i2,
                                                  FACEi0,FACEi1,FACEi2,
                                                  partial_x0_partial_r    ,partial_x1_partial_r    ,partial_x2_partial_r);
-const REAL partial_r_f_int = compute_partial_r_f(xx,gfs, which_gf,dest_i0_int,dest_i1_int,dest_i2_int,
+const REAL partial_r_f_int = compute_partial_r_f(streamid, xx,gfs, which_gf,dest_i0_int,dest_i1_int,dest_i2_int,
                                                  FACEi0,FACEi1,FACEi2,
                                                  partial_x0_partial_r_int,partial_x1_partial_r_int,partial_x2_partial_r_int);
 """
         Nxx_definitions = ""
         for i in range(3):
-            Nxx_definitions += f"[[maybe_unused]] int const Nxx_plus_2NGHOSTS{i} = d_params.Nxx_plus_2NGHOSTS{i};\n"
+            Nxx_definitions += f"[[maybe_unused]] int const Nxx_plus_2NGHOSTS{i} = d_params[streamid].Nxx_plus_2NGHOSTS{i};\n"
         self.variable_defs += Nxx_definitions
         self.generate_CFunction()
 
@@ -823,7 +842,7 @@ REAL *restrict x2 = xx[2];
         # Specify kernel launch body
         kernel_body = ""
         for i in range(3):
-            kernel_body += f"[[maybe_unused]] int const Nxx_plus_2NGHOSTS{i} = d_params.Nxx_plus_2NGHOSTS{i};\n"
+            kernel_body += f"[[maybe_unused]] int const Nxx_plus_2NGHOSTS{i} = d_params[streamid].Nxx_plus_2NGHOSTS{i};\n"
         kernel_body += """
 // Thread indices
 // Global data index - expecting a 1D dataset
@@ -843,7 +862,7 @@ for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {
     REAL* xx[3] = {x0, x1, x2};
     for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
         // *** Apply radiation BCs to all outer boundary points. ***
-        rhs_gfs[IDX4pt(which_gf, idx3)] = radiation_bcs(xx, gfs, rhs_gfs, which_gf,
+        rhs_gfs[IDX4pt(which_gf, idx3)] = radiation_bcs(streamid, xx, gfs, rhs_gfs, which_gf,
                                                         d_gridfunctions_wavespeed[which_gf], d_gridfunctions_f_infinity[which_gf],
                                                         i0,i1,i2, FACEX0,FACEX1,FACEX2);
     }

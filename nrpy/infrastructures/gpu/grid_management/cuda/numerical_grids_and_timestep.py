@@ -65,7 +65,8 @@ class register_CFunction_numerical_grid_params_Nxx_dxx_xx(
     cudaMalloc(&xx[2], sizeof(REAL) * Nxx_plus_2NGHOSTS2);
     cudaCheckErrors(malloc, "Malloc failed");
 
-    cpyHosttoDevice_params__constant(params);
+    size_t param_streamid = params->grid_idx % nstreams;
+    cpyHosttoDevice_params__constant(params, param_streamid);
 
     dim3 block_threads, grid_blocks;
     auto set_grid_block = [&block_threads, &grid_blocks](auto Nx) {
@@ -74,19 +75,19 @@ class register_CFunction_numerical_grid_params_Nxx_dxx_xx(
         grid_blocks = dim3((Nx + threads_in_x_dir - 1)/threads_in_x_dir, 1, 1);
     };
 
-    size_t streamid = params->grid_idx % nstreams;
+    size_t streamid = param_streamid;
     set_grid_block(Nxx_plus_2NGHOSTS0);
-    initialize_grid_xx0_gpu<<<grid_blocks, block_threads, 0, streams[streamid]>>>(xx[0]);
+    initialize_grid_xx0_gpu<<<grid_blocks, block_threads, 0, streams[streamid]>>>(param_streamid, xx[0]);
     cudaCheckErrors(initialize_grid_xx0_gpu, "kernel failed");
 
     streamid = (params->grid_idx + 1) % nstreams;
     set_grid_block(Nxx_plus_2NGHOSTS1);
-    initialize_grid_xx1_gpu<<<grid_blocks, block_threads, 0, streams[streamid]>>>(xx[1]);
+    initialize_grid_xx1_gpu<<<grid_blocks, block_threads, 0, streams[streamid]>>>(param_streamid, xx[1]);
     cudaCheckErrors(initialize_grid_xx1_gpu, "kernel failed");
 
     streamid = (params->grid_idx + 2) % nstreams;
     set_grid_block(Nxx_plus_2NGHOSTS2);
-    initialize_grid_xx2_gpu<<<grid_blocks, block_threads, 0, streams[streamid]>>>(xx[2]);
+    initialize_grid_xx2_gpu<<<grid_blocks, block_threads, 0, streams[streamid]>>>(param_streamid, xx[2]);
     cudaCheckErrors(initialize_grid_xx2_gpu, "kernel failed");
     """
         for i in range(3):
@@ -94,11 +95,11 @@ class register_CFunction_numerical_grid_params_Nxx_dxx_xx(
   const int index  = blockIdx.x * blockDim.x + threadIdx.x;
   const int stride = blockDim.x * gridDim.x;
 
-  REAL const xxmin{i} = d_params.xxmin{i};
+  REAL const xxmin{i} = d_params[streamid].xxmin{i};
 
-  REAL const dxx{i} = d_params.dxx{i};
+  REAL const dxx{i} = d_params[streamid].dxx{i};
 
-  REAL const Nxx_plus_2NGHOSTS{i} = d_params.Nxx_plus_2NGHOSTS{i};
+  REAL const Nxx_plus_2NGHOSTS{i} = d_params[streamid].Nxx_plus_2NGHOSTS{i};
 
   static constexpr REAL onehalf = 1.0 / 2.0;
 
@@ -156,7 +157,7 @@ const int Nxx_tot = (Nxx_plus_2NGHOSTS0)*(Nxx_plus_2NGHOSTS1)*(Nxx_plus_2NGHOSTS
 """
         self.loop_body = ""
         for param_sym in self.unique_symbols:
-            self.loop_body += f"const REAL {param_sym} = d_params.{param_sym};\n"
+            self.loop_body += f"const REAL {param_sym} = d_params[streamid].{param_sym};\n"
         self.loop_body += lp.simple_loop(
             loop_body=lp_body,
             read_xxs=True,
@@ -238,7 +239,7 @@ class register_CFunction_numerical_grids_and_timestep(
             self.body += r"""
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   rfm_precompute_malloc(commondata, &griddata[grid].params, &griddata[grid].rfmstruct);
-  cpyHosttoDevice_params__constant(&griddata[grid].params);
+  cpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % nstreams);
   rfm_precompute_defines(commondata, &griddata[grid].params, &griddata[grid].rfmstruct, griddata[grid].xx);
 }
   cpyDevicetoHost__grid(commondata, griddata_host, griddata);
@@ -253,7 +254,7 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
         if self.enable_CurviBCs:
             self.body += r"""
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
-  cpyHosttoDevice_params__constant(&griddata[grid].params);
+  cpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % nstreams);
   bcstruct_set_up(commondata, &griddata[grid].params, griddata_host[grid].xx, &griddata[grid].bcstruct);
 }
 """
@@ -264,7 +265,7 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
 // Step 1.e: Set timestep based on minimum spacing between neighboring gridpoints.
 commondata->dt = 1e30;
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
-  cpyHosttoDevice_params__constant(&griddata[grid].params);
+  cpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % nstreams);
   cfl_limited_timestep(commondata, &griddata[grid].params, griddata[grid].xx);
 }
 

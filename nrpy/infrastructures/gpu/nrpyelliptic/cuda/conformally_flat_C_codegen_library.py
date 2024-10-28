@@ -184,7 +184,7 @@ class gpu_register_CFunction_auxevol_gfs_single_point(
         super().__init__(CoordSystem, fp_type=fp_type)
 
         self.cfunc_type = """__device__ void"""
-        self.params = r"""const REAL xx0, const REAL xx1, const REAL xx2, REAL *restrict psi_background, REAL *restrict ADD_times_AUU
+        self.params = r"""const size_t streamid, const REAL xx0, const REAL xx1, const REAL xx2, REAL *restrict psi_background, REAL *restrict ADD_times_AUU
 """
         # Is there a better way to do this?
         commondata_refs = [
@@ -208,7 +208,7 @@ class gpu_register_CFunction_auxevol_gfs_single_point(
         self.body = "// Temporary variables to needed parameters and commondata.\n"
         for p in self.unique_symbols:
             if p not in commondata_refs:
-                self.body += f"const REAL {p} = d_params.{p};\n"
+                self.body += f"const REAL {p} = d_params[streamid].{p};\n"
         for cd in commondata_refs:
             self.body += f"const REAL {cd} = d_commondata.{cd};\n"
         self.body += "\n\n"
@@ -265,7 +265,7 @@ class gpu_register_CFunction_auxevol_gfs_all_points(
     ) -> None:
         super().__init__(fp_type=fp_type)
         self.loop_body = lp.simple_loop(
-            loop_body="auxevol_gfs_single_point(xx0,xx1,xx2,"
+            loop_body="auxevol_gfs_single_point(streamid, xx0,xx1,xx2,"
             f"&{self.psi_background_memaccess},"
             f"&{self.ADD_times_AUU_memaccess});",
             read_xxs=True,
@@ -370,7 +370,7 @@ class gpu_register_CFunction_variable_wavespeed_gfs_all_points(
         ).full_loop_body
         kernel_body = "// Temporary parameters\n"
         for sym in self.unique_symbols:
-            kernel_body += f"const REAL {sym} = d_params.{sym};\n"
+            kernel_body += f"const REAL {sym} = d_params[streamid].{sym};\n"
         # Put loop_body into a device kernel
         self.device_kernel = gputils.GPU_Kernel(
             kernel_body + self.loop_body,
@@ -531,7 +531,7 @@ if(r < integration_radius) {{
         # Add symbols that are hard coded into reduction_loop_body
         self.unique_symbols += [f"dxx{i}" for i in range(3)]
         for sym in self.unique_symbols:
-            kernel_body += f"const REAL {sym} = d_params.{sym};\n"
+            kernel_body += f"const REAL {sym} = d_params[streamid].{sym};\n"
 
         # Put loop_body into a device kernel
         self.device_kernel = gputils.GPU_Kernel(

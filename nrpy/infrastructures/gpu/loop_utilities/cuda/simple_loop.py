@@ -32,13 +32,13 @@ class simple_loop(base_sl.base_simple_loop):
     >>> from nrpy.helpers.generic import clang_format
     >>> print(clang_format(simple_loop('// <INTERIOR>', loop_region="all points").full_loop_body))
     <BLANKLINE>
-    const int Nxx_plus_2NGHOSTS0 = d_params.Nxx_plus_2NGHOSTS0;
-    const int Nxx_plus_2NGHOSTS1 = d_params.Nxx_plus_2NGHOSTS1;
-    const int Nxx_plus_2NGHOSTS2 = d_params.Nxx_plus_2NGHOSTS2;
+    const int Nxx_plus_2NGHOSTS0 = d_params[streamid].Nxx_plus_2NGHOSTS0;
+    const int Nxx_plus_2NGHOSTS1 = d_params[streamid].Nxx_plus_2NGHOSTS1;
+    const int Nxx_plus_2NGHOSTS2 = d_params[streamid].Nxx_plus_2NGHOSTS2;
     <BLANKLINE>
-    [[maybe_unused]] const REAL invdxx0 = d_params.invdxx0;
-    [[maybe_unused]] const REAL invdxx1 = d_params.invdxx1;
-    [[maybe_unused]] const REAL invdxx2 = d_params.invdxx2;
+    [[maybe_unused]] const REAL invdxx0 = d_params[streamid].invdxx0;
+    [[maybe_unused]] const REAL invdxx1 = d_params[streamid].invdxx1;
+    [[maybe_unused]] const REAL invdxx2 = d_params[streamid].invdxx2;
     <BLANKLINE>
     const int tid0 = blockIdx.x * blockDim.x + threadIdx.x;
     const int tid1 = blockIdx.y * blockDim.y + threadIdx.y;
@@ -60,13 +60,13 @@ class simple_loop(base_sl.base_simple_loop):
     ...       CoordSystem="SinhSymTP", enable_rfm_precompute=True).full_loop_body))
     Setting up reference_metric[SinhSymTP_rfm_precompute]...
     <BLANKLINE>
-    const int Nxx_plus_2NGHOSTS0 = d_params.Nxx_plus_2NGHOSTS0;
-    const int Nxx_plus_2NGHOSTS1 = d_params.Nxx_plus_2NGHOSTS1;
-    const int Nxx_plus_2NGHOSTS2 = d_params.Nxx_plus_2NGHOSTS2;
+    const int Nxx_plus_2NGHOSTS0 = d_params[streamid].Nxx_plus_2NGHOSTS0;
+    const int Nxx_plus_2NGHOSTS1 = d_params[streamid].Nxx_plus_2NGHOSTS1;
+    const int Nxx_plus_2NGHOSTS2 = d_params[streamid].Nxx_plus_2NGHOSTS2;
     <BLANKLINE>
-    [[maybe_unused]] const REAL invdxx0 = d_params.invdxx0;
-    [[maybe_unused]] const REAL invdxx1 = d_params.invdxx1;
-    [[maybe_unused]] const REAL invdxx2 = d_params.invdxx2;
+    [[maybe_unused]] const REAL invdxx0 = d_params[streamid].invdxx0;
+    [[maybe_unused]] const REAL invdxx1 = d_params[streamid].invdxx1;
+    [[maybe_unused]] const REAL invdxx2 = d_params[streamid].invdxx2;
     <BLANKLINE>
     const int tid0 = blockIdx.x * blockDim.x + threadIdx.x;
     const int tid1 = blockIdx.y * blockDim.y + threadIdx.y;
@@ -147,13 +147,13 @@ class simple_loop(base_sl.base_simple_loop):
         self.increment = ["stride2", "stride1", "stride0"]
         self.gen_loop_body()
         self.full_loop_body = f"""
-  const int Nxx_plus_2NGHOSTS0 = d_params.Nxx_plus_2NGHOSTS0;
-  const int Nxx_plus_2NGHOSTS1 = d_params.Nxx_plus_2NGHOSTS1;
-  const int Nxx_plus_2NGHOSTS2 = d_params.Nxx_plus_2NGHOSTS2;
+  const int Nxx_plus_2NGHOSTS0 = d_params[streamid].Nxx_plus_2NGHOSTS0;
+  const int Nxx_plus_2NGHOSTS1 = d_params[streamid].Nxx_plus_2NGHOSTS1;
+  const int Nxx_plus_2NGHOSTS2 = d_params[streamid].Nxx_plus_2NGHOSTS2;
 
-  [[maybe_unused]] const REAL invdxx0 = d_params.invdxx0;
-  [[maybe_unused]] const REAL invdxx1 = d_params.invdxx1;
-  [[maybe_unused]] const REAL invdxx2 = d_params.invdxx2;
+  [[maybe_unused]] const REAL invdxx0 = d_params[streamid].invdxx0;
+  [[maybe_unused]] const REAL invdxx1 = d_params[streamid].invdxx1;
+  [[maybe_unused]] const REAL invdxx2 = d_params[streamid].invdxx2;
 
   const int tid0  = blockIdx.x * blockDim.x + threadIdx.x;
   const int tid1  = blockIdx.y * blockDim.y + threadIdx.y;

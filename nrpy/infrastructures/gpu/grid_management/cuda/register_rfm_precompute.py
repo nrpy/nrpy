@@ -85,7 +85,7 @@ class register_CFunctions_rfm_precompute(base_register_CFunctions_rfm_precompute
                     kernel_body = ""
                     kernel_body += "// Temporary parameters\n"
                     for sym in unique_symbols:
-                        kernel_body += f"const REAL {sym} = d_params.{sym};\n"
+                        kernel_body += f"const REAL {sym} = d_params[streamid].{sym};\n"
                     kernel_body += kernel_dict["body"]
                     device_kernel = gputils.GPU_Kernel(
                         kernel_body,

@@ -85,10 +85,12 @@ class GPU_Kernel:
         launch_dict: Union[Dict[str, Any], None] = None,
     ) -> None:
         self.body = body
+        self.decorators = decorators
         self.params_dict = params_dict
+        if self.decorators != "__host__":
+            self.params_dict = {'streamid' : 'const size_t', **params_dict}
         self.name = c_function_name
         self.cfunc_type = f"{decorators} {cfunc_type}"
-        self.decorators = decorators
         self.fp_type = fp_type
 
         self.CFunction: cfc.CFunction
@@ -182,7 +184,12 @@ dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);"""
 
         :return: The C function call as a string.
         """
-        c_function_call: str = self.name + self.launch_settings
+        c_function_call: str = self.name
+        if self.decorators == '__global__':
+            c_function_call += self.launch_settings
+        else:
+            c_function_call += '('
+
         for p in self.params_dict:
             c_function_call += f"{p}, "
         c_function_call = c_function_call[:-2] + ");\n"

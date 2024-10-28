@@ -131,7 +131,7 @@ class RKFunction(base_MoL.RKFunction):
         N_str = ""
         for i in ["0", "1", "2"]:
             kernel_body += (
-                f"const int Nxx_plus_2NGHOSTS{i} = d_params.Nxx_plus_2NGHOSTS{i};\n"
+                f"const int Nxx_plus_2NGHOSTS{i} = d_params[streamid].Nxx_plus_2NGHOSTS{i};\n"
             )
             N_str += f"Nxx_plus_2NGHOSTS{i} *"
         kernel_body += "const int Ntot = Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;\n\n"
