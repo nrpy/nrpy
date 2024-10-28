@@ -117,7 +117,7 @@ class output_BHaH_gpu_defines_h:
         standard_decl_dict = {
             "d_params": {
                 "type": "__constant__ params_struct",
-                "suffix": "",
+                "suffix": "[nstreams]",
                 "comment": "// Device storage for grid parameters\n",
             },
             "d_commondata": {

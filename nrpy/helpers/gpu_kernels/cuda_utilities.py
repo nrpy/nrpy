@@ -29,8 +29,8 @@ def register_CFunction_cpyHosttoDevice_params__constant() -> None:
     desc = r"""Copy parameters to GPU __constant__."""
     cfunc_type = "__host__ void"
     name = "cpyHosttoDevice_params__constant"
-    params = r"""const params_struct *restrict params"""
-    body = "cudaMemcpyToSymbol(d_params, params, sizeof(params_struct));"
+    params = r"""const params_struct *restrict params, const int streamid"""
+    body = "cudaMemcpyToSymbol(&d_params[streamid], params, sizeof(params_struct));"
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
