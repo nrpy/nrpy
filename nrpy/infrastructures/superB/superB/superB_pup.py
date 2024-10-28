@@ -341,13 +341,14 @@ void pup_diagnostic_struct(PUP::er &p, diagnostic_struct &ds) {
 }
 
 // PUP routine for struct tmpBuffers_struct
-void pup_tmpBuffers_struct(PUP::er &p, tmpBuffers_struct &tmpBuffers, const params_struct &params, const nonlocalinnerbc_struct &nonlocalinnerbc) {
+void pup_tmpBuffers_struct(PUP::er &p, tmpBuffers_struct &tmpBuffers, const params_struct &params, const nonlocalinnerbc_struct &nonlocalinnerbc, const MoL_gridfunctions_struct &gridfuncs) {
   const int Nxx_plus_2NGHOSTS_face0 = params.Nxx_plus_2NGHOSTS1 * params.Nxx_plus_2NGHOSTS2;
   const int Nxx_plus_2NGHOSTS_face1 = params.Nxx_plus_2NGHOSTS0 * params.Nxx_plus_2NGHOSTS2;
   const int Nxx_plus_2NGHOSTS_face2 = params.Nxx_plus_2NGHOSTS0 * params.Nxx_plus_2NGHOSTS1;
-  const int size_EW = NUM_EVOL_GFS * NGHOSTS * Nxx_plus_2NGHOSTS_face0;
-  const int size_NS = NUM_EVOL_GFS * NGHOSTS * Nxx_plus_2NGHOSTS_face1;
-  const int size_TB = NUM_EVOL_GFS * NGHOSTS * Nxx_plus_2NGHOSTS_face2;
+  const int max_sync_gfs = gridfuncs.max_sync_gfs;
+  size_t size_EW = static_cast<size_t>(max_sync_gfs) * NGHOSTS * Nxx_plus_2NGHOSTS_face0;
+  size_t size_NS = static_cast<size_t>(max_sync_gfs) * NGHOSTS * Nxx_plus_2NGHOSTS_face1;
+  size_t size_TB = static_cast<size_t>(max_sync_gfs) * NGHOSTS * Nxx_plus_2NGHOSTS_face2;
   if (p.isUnpacking()) {
     tmpBuffers.tmpBuffer_EW = (REAL *restrict)malloc(sizeof(REAL) * size_EW);
     tmpBuffers.tmpBuffer_NS = (REAL *restrict)malloc(sizeof(REAL) * size_NS);
@@ -363,18 +364,18 @@ void pup_tmpBuffers_struct(PUP::er &p, tmpBuffers_struct &tmpBuffers, const para
   if (p.isUnpacking()) {
     tmpBuffers.tmpBuffer_innerbc_send = (REAL **)malloc(tot_num_dst_chares * sizeof(REAL *));
     for (int which_chare = 0; which_chare < tot_num_dst_chares; which_chare++) {
-      tmpBuffers.tmpBuffer_innerbc_send[which_chare] = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * num_srcpts_tosend_each_chare[which_chare]);
+      tmpBuffers.tmpBuffer_innerbc_send[which_chare] = (REAL *restrict)malloc(sizeof(REAL) * max_sync_gfs * num_srcpts_tosend_each_chare[which_chare]);
     }
     tmpBuffers.tmpBuffer_innerbc_receiv = (REAL **)malloc(tot_num_src_chares * sizeof(REAL *));
     for (int which_chare = 0; which_chare < tot_num_src_chares; which_chare++) {
-      tmpBuffers.tmpBuffer_innerbc_receiv[which_chare] = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * num_srcpts_each_chare[which_chare]);
+      tmpBuffers.tmpBuffer_innerbc_receiv[which_chare] = (REAL *restrict)malloc(sizeof(REAL) * max_sync_gfs * num_srcpts_each_chare[which_chare]);
     }
   }
   for (int which_chare = 0; which_chare < tot_num_dst_chares; which_chare++) {
-    PUParray(p, tmpBuffers.tmpBuffer_innerbc_send[which_chare], NUM_EVOL_GFS * num_srcpts_tosend_each_chare[which_chare]);
+    PUParray(p, tmpBuffers.tmpBuffer_innerbc_send[which_chare], max_sync_gfs * num_srcpts_tosend_each_chare[which_chare]);
   }
   for (int which_chare = 0; which_chare < tot_num_src_chares; which_chare++) {
-    PUParray(p, tmpBuffers.tmpBuffer_innerbc_receiv[which_chare], NUM_EVOL_GFS * num_srcpts_each_chare[which_chare]);
+    PUParray(p, tmpBuffers.tmpBuffer_innerbc_receiv[which_chare], max_sync_gfs * num_srcpts_each_chare[which_chare]);
   }
 }
 
@@ -462,7 +463,7 @@ void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const params_struct &pa
 
   pup_MoL_gridfunctions_struct(p, gd.gridfuncs, gd.params);
 
-  pup_tmpBuffers_struct(p, gd.tmpBuffers, gd.params, gd.nonlocalinnerbcstruct);
+  pup_tmpBuffers_struct(p, gd.tmpBuffers, gd.params, gd.nonlocalinnerbcstruct, gd.gridfuncs);
 
   PUParray(p, gd.CoordSystemname, 100);
   PUParray(p, gd.gridname, 100);
