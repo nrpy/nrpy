@@ -39,7 +39,7 @@ from nrpy.infrastructures.gpu.MoLtimestepping.cuda import MoL
 par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Code-generation-time parameters:
-project_name = "nrpyelliptic_conformally_flat_cuda"
+project_name = "nrpyelliptic_conformally_flat_cuda-mg"
 fp_type = "double"
 grid_physical_size = 1.0e6
 t_final = grid_physical_size  # This parameter is effectively not used in NRPyElliptic
@@ -319,7 +319,6 @@ nrpyellClib.register_CFunction_compute_residual_all_points(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_simd=enable_intrinsics,
-    OMP_collapse=OMP_collapse,
     fp_type=fp_type,
 )
 
