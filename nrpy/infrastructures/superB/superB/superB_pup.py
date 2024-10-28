@@ -241,7 +241,7 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
         # Don't malloc a zero-sized array.
         if num_gfs == "NUM_AUXEVOL_GFS":
             prefunc += "  if(NUM_AUXEVOL_GFS > 0) "
-        prefunc += f"PUParray(p, gridfuncs.{gridfunctions}, NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);\n"
+        prefunc += f"PUParray(p, gridfuncs.{gridfunctions}, {num_gfs} * Nxx_plus_2NGHOSTS_tot);\n"
     prefunc += "PUParray(p, gridfuncs.diagnostic_output_gfs, NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);\n"
     prefunc += """
 }
