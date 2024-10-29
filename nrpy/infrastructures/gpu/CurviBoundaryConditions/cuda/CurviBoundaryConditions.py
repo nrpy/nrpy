@@ -61,7 +61,7 @@ class setup_Cfunction_FD1_arbitrary_upwind(
         self.include_CodeParameters_h = False
         self.cfunc_decorators = "__device__"
         self.params = """const size_t streamid, const REAL *restrict gf,  const int i0,const int i1,const int i2, const int offset"""
-        self.device_kernel : Any = None,
+        self.device_kernel: Any = (None,)
 
         new_header = ""
         for i in range(3):
@@ -88,6 +88,7 @@ class setup_Cfunction_FD1_arbitrary_upwind(
     #     )
 
     #     self.CFunction = self.device_kernel.CFunction
+
 
 # bcstruct_set_up():
 #      This function is documented in desc= and body= fields below.

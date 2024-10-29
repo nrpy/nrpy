@@ -157,7 +157,9 @@ const int Nxx_tot = (Nxx_plus_2NGHOSTS0)*(Nxx_plus_2NGHOSTS1)*(Nxx_plus_2NGHOSTS
 """
         self.loop_body = ""
         for param_sym in self.unique_symbols:
-            self.loop_body += f"const REAL {param_sym} = d_params[streamid].{param_sym};\n"
+            self.loop_body += (
+                f"const REAL {param_sym} = d_params[streamid].{param_sym};\n"
+            )
         self.loop_body += lp.simple_loop(
             loop_body=lp_body,
             read_xxs=True,

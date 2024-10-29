@@ -21,7 +21,9 @@ def register_CFunction_cpyHosttoDevice_params__constant() -> None:
     /*
      * Copy parameters to GPU __constant__.
      */
-    __host__ void cpyHosttoDevice_params__constant(const params_struct *restrict params) { cudaMemcpyToSymbol(d_params, params, sizeof(params_struct)); }
+    __host__ void cpyHosttoDevice_params__constant(const params_struct *restrict params, const int streamid) {
+      cudaMemcpyToSymbol(d_params, params, sizeof(params_struct), streamid * sizeof(params_struct), cudaMemcpyHostToDevice);
+    }
     <BLANKLINE>
     """
     includes = ["BHaH_defines.h"]
@@ -214,14 +216,14 @@ def register_CFunction_CUDA__malloc_host_gfs() -> None:
 
     DOCTEST:
     >>> import nrpy.c_function as cfc
-    >>> register_CFunction_cpyDevicetoHost__malloc_host_gfs()
+    >>> register_CFunction_CUDA__malloc_host_gfs()
     >>> print(cfc.CFunction_dict['CUDA__malloc_host_gfs'].full_function)
     #include "../BHaH_defines.h"
     /*
      * Allocate Host storage for diagnostics GFs.
      */
     __host__ void CUDA__malloc_host_gfs(const commondata_struct *restrict commondata, const params_struct *restrict params,
-                                                        MoL_gridfunctions_struct *restrict gridfuncs) {
+                                        MoL_gridfunctions_struct *restrict gridfuncs) {
     <BLANKLINE>
       int const &Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
       int const &Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
@@ -279,8 +281,14 @@ def register_CFunction_CUDA__free_host_gfs() -> None:
     /*
      * Free Host storage for diagnostics GFs.
      */
-    __host__ void CUDA__free_host_gfs(const commondata_struct *restrict commondata, const params_struct *restrict params,
-                                                        MoL_gridfunctions_struct *restrict gridfuncs) {
+    __host__ void CUDA__free_host_gfs(MoL_gridfunctions_struct *gridfuncs) {
+    <BLANKLINE>
+      cudaFreeHost(gridfuncs->y_n_gfs);
+      cudaCheckErrors(free, "Host-ynFree failed");
+      cudaFreeHost(gridfuncs->diagnostic_output_gfs);
+      cudaCheckErrors(free, "Host-non-ynFree failed");
+    }
+    <BLANKLINE>
     """
     includes = ["BHaH_defines.h"]
     desc = r"""Free Host storage for diagnostics GFs."""
@@ -376,11 +384,11 @@ def register_CFunction_cpyHosttoDevice__gf() -> None:
 
     DOCTEST:
     >>> import nrpy.c_function as cfc
-    >>> register_CFunction_cpyDevicetoHost__gf()
+    >>> register_CFunction_cpyHosttoDevice__gf()
     >>> print(cfc.CFunction_dict['cpyDevicetoHost__gf'].full_function)
     #include "../BHaH_defines.h"
     /*
-     * Asynchronously copying a grid function from host to device.
+     * Asynchronously copying a grid function from device to host.
      */
     __host__ size_t cpyDevicetoHost__gf(const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *gf_host,
                                         const REAL *gf_gpu, const int host_GF_IDX, const int gpu_GF_IDX) {
