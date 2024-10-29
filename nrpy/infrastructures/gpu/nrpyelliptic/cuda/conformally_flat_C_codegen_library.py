@@ -640,7 +640,7 @@ class gpu_register_CFunction_diagnostics(
   // Grid data output
   const int n_step = commondata->nn, outevery = commondata->diagnostics_output_every;
 
-  REAL global_norm = 0.0;
+  REAL global_norm = -1e9;
   for(int grid = 0; grid < commondata->NUMGRIDS; ++grid) {
 
   // Set gridfunctions aliases

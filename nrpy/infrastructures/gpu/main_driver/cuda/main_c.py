@@ -88,18 +88,10 @@ for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
   // Step 2.b: Allocate host storage for diagnostics
   CUDA__malloc_host_gfs(&commondata, &griddata[grid].params, &griddata_host[grid].gridfuncs);
 }
-
-// Step 3: Finalize initialization: set up initial data, etc.
-if (!read_checkpoint(&commondata, griddata_host, griddata))
-  initial_data(&commondata, griddata);
-
-// Step 4: Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping
-for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
-  MoL_malloc_non_y_n_gfs(&commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
-}
 """
         setup_initial_data_code = """Set up initial data.
-initial_data(&commondata, griddata);
+if (!read_checkpoint(&commondata, griddata_host, griddata))
+  initial_data(&commondata, griddata);
 """
         allocate_storage_code = """Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping.
 for(int grid=0; grid<commondata.NUMGRIDS; grid++)

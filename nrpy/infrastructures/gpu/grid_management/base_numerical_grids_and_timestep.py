@@ -10,9 +10,10 @@ Author: Zachariah B. Etienne
         sdtootle **at** gmail **dot* com
 """
 
+import os
 from typing import Dict, List
 
-import sympy as sp, os
+import sympy as sp
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc

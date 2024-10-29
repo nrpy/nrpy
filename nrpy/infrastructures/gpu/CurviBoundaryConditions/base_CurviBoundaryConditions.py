@@ -10,11 +10,13 @@ Authors: Zachariah B. Etienne
          sdtootle **at** gmail **dot** com
 """
 
+import os
+
 # Step P1: Import needed NRPy+ core modules:
 from typing import List
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
-import sympy.codegen.ast as sp_ast, os
+import sympy.codegen.ast as sp_ast
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
