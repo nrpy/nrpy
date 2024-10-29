@@ -500,16 +500,14 @@ if(r < integration_radius) {{
         if fp_type == "float":
             reduction_loop_body = reduction_loop_body.replace("REAL", "double")
         self.body += r"""
-  // Unpack grid parameters assuming a single grid
-  const int grid = 0;
-  params_struct *restrict params = &griddata[grid].params;
+  params_struct *restrict params = &griddata->params;
 #include "set_CodeParameters.h"
   const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
-  REAL *restrict x0 = griddata[grid].xx[0];
-  REAL *restrict x1 = griddata[grid].xx[1];
-  REAL *restrict x2 = griddata[grid].xx[2];
-  REAL *restrict in_gfs = griddata[grid].gridfuncs.diagnostic_output_gfs;
-  REAL *restrict aux_gfs = griddata[grid].gridfuncs.diagnostic_output_gfs2;
+  REAL *restrict x0 = griddata->xx[0];
+  REAL *restrict x1 = griddata->xx[1];
+  REAL *restrict x2 = griddata->xx[2];
+  REAL *restrict in_gfs = griddata->gridfuncs.diagnostic_output_gfs;
+  REAL *restrict aux_gfs = griddata->gridfuncs.diagnostic_output_gfs2;
 
   // Since we're performing sums, make sure arrays are zero'd
   cudaMemset(aux_gfs, 0, sizeof(REAL) * NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);
@@ -561,7 +559,8 @@ if(r < integration_radius) {{
   REAL squared_sum = find_global__sum(&aux_gfs[IDX4(L2_SQUARED_DVGF, 0, 0, 0)], Nxx_plus_2NGHOSTS_tot);
   REAL volume_sum = find_global__sum(&aux_gfs[IDX4(L2_DVGF, 0, 0, 0)], Nxx_plus_2NGHOSTS_tot);
   // Compute and output the log of the l2-norm.
-  return log10(1e-16 + sqrt(squared_sum / volume_sum));  // 1e-16 + ... avoids log10(0)
+  REAL local_norm = log10(1e-16 + sqrt(squared_sum / volume_sum));  // 1e-16 + ... avoids log10(0)
+  return local_norm;
 """
 
         cfc.register_CFunction(
@@ -641,8 +640,8 @@ class gpu_register_CFunction_diagnostics(
   // Grid data output
   const int n_step = commondata->nn, outevery = commondata->diagnostics_output_every;
 
-  // Since this version of NRPyElliptic is unigrid, we simply set the grid index to 0
-  const int grid = 0;
+  REAL global_norm = 0.0;
+  for(int grid = 0; grid < commondata->NUMGRIDS; ++grid) {
 
   // Set gridfunctions aliases
   REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
@@ -670,13 +669,18 @@ class gpu_register_CFunction_diagnostics(
   const REAL integration_radius = 1000;
 
   // Compute l2-norm of Hamiltonian constraint violation
-  const REAL residual_H = compute_L2_norm_of_gridfunction(commondata, griddata, integration_radius, RESIDUAL_HGF, diagnostic_output_gfs);
-
+  const REAL residual_H = compute_L2_norm_of_gridfunction(commondata, &griddata[grid], integration_radius, RESIDUAL_HGF, diagnostic_output_gfs);
+  global_norm = MAX(global_norm, residual_H);
+  }
   // Update residual to be used in stop condition
-  commondata->log10_current_residual = residual_H;
+  commondata->log10_current_residual = global_norm;
 
   // Output l2-norm of Hamiltonian constraint violation to file
   {
+    // Only consider a single grid for now.
+    const int grid = 0;
+    params_struct *restrict params = &griddata[grid].params;
+#include "set_CodeParameters.h"
     char filename[256];
     sprintf(filename, "residual_l2_norm.txt");
     FILE *outfile = (nn == 0) ? fopen(filename, "w") : fopen(filename, "a");
@@ -684,12 +688,16 @@ class gpu_register_CFunction_diagnostics(
       fprintf(stderr, "Error: Cannot open file %s for writing.\n", filename);
       exit(1);
     }
-    fprintf(outfile, "%6d %10.4e %.17e\n", nn, time, residual_H);
+    fprintf(outfile, "%6d %10.4e %.17e\n", nn, time, global_norm);
     fclose(outfile);
   }
 
 
   if (n_step % outevery == 0) {
+    // Only consider a single grid for now.
+    const int grid = 0;
+    params_struct *restrict params = &griddata[grid].params;
+#include "set_CodeParameters.h"
     // Set reference metric grid xx
     REAL *restrict xx[3];
     for (int ww = 0; ww < 3; ww++)
