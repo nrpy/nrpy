@@ -5,6 +5,7 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
+import os
 from typing import List
 
 import sympy as sp
@@ -187,16 +188,20 @@ def register_CFunctions_rfm_precompute(
             body += func[1]
 
             combined_BHaH_defines_list.extend(rfm_precompute.BHaH_defines_list)
-            cfc.register_CFunction(
-                includes=includes,
-                desc=desc,
-                cfunc_type=cfunc_type,
-                CoordSystem_for_wrapper_func=CoordSystem,
-                name=name,
-                params=params,
-                include_CodeParameters_h=include_CodeParameters_h,
-                body=body,
+            _, actual_name = cfc.function_name_and_subdir_with_CoordSystem(
+                os.path.join("."), name, CoordSystem
             )
+            if not actual_name in cfc.CFunction_dict:
+                cfc.register_CFunction(
+                    includes=includes,
+                    desc=desc,
+                    cfunc_type=cfunc_type,
+                    CoordSystem_for_wrapper_func=CoordSystem,
+                    name=name,
+                    params=params,
+                    include_CodeParameters_h=include_CodeParameters_h,
+                    body=body,
+                )
 
     BHaH_defines = "typedef struct __rfmstruct__ {\n"
     BHaH_defines += "\n".join(sorted(superfast_uniq(combined_BHaH_defines_list)))

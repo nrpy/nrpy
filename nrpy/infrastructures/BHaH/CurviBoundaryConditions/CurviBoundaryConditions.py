@@ -8,6 +8,8 @@ Authors: Zachariah B. Etienne
          Terrence Pierre Jacques
 """
 
+import os
+
 # Step P1: Import needed NRPy+ core modules:
 from typing import List, Tuple
 
@@ -438,7 +440,12 @@ for all 10 tensor types supported by NRPy+."""
                 const REAL xx0,const REAL xx1,const REAL xx2,  const REAL x0x1x2_inbounds[3], const int idx,
                 innerpt_bc_struct *restrict innerpt_bc_arr"""
     type_alias = "double" if fp_type == "float" else "REAL"
-    body = r"""
+    if fp_type == "float":
+        body = r"""
+#define EPS_REL 1e-6
+"""
+    else:
+        body = r"""
 #define EPS_REL 1e-8
 """
     body += f"""
@@ -740,17 +747,22 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
       bcstruct->bc_info.num_pure_outer_boundary_points[which_gz][dirn] = idx2d;
     }
 """
-    cfc.register_CFunction(
-        includes=includes,
-        prefunc=prefunc,
-        desc=desc,
-        cfunc_type=cfunc_type,
-        CoordSystem_for_wrapper_func=CoordSystem,
-        name=name,
-        params=params,
-        include_CodeParameters_h=True,
-        body=body,
+    """Register CFunction."""
+    _, actual_name = cfc.function_name_and_subdir_with_CoordSystem(
+        os.path.join("."), name, CoordSystem
     )
+    if not actual_name in cfc.CFunction_dict:
+        cfc.register_CFunction(
+            includes=includes,
+            prefunc=prefunc,
+            desc=desc,
+            cfunc_type=cfunc_type,
+            CoordSystem_for_wrapper_func=CoordSystem,
+            name=name,
+            params=params,
+            include_CodeParameters_h=True,
+            body=body,
+        )
 
 
 ###############################
@@ -1310,17 +1322,21 @@ applies BCs to the inner boundary points, which may map either to the grid inter
   //              STEP 2 OF 2.
   apply_bcs_inner_only(commondata, params, bcstruct, rhs_gfs); // <- apply inner BCs to RHS gfs only
 """
-    cfc.register_CFunction(
-        includes=includes,
-        prefunc=prefunc,
-        desc=desc,
-        cfunc_type=cfunc_type,
-        CoordSystem_for_wrapper_func=CoordSystem,
-        name=name,
-        params=params,
-        include_CodeParameters_h=True,
-        body=body,
+    _, actual_name = cfc.function_name_and_subdir_with_CoordSystem(
+        os.path.join("."), name, CoordSystem
     )
+    if not actual_name in cfc.CFunction_dict:
+        cfc.register_CFunction(
+            includes=includes,
+            prefunc=prefunc,
+            desc=desc,
+            cfunc_type=cfunc_type,
+            CoordSystem_for_wrapper_func=CoordSystem,
+            name=name,
+            params=params,
+            include_CodeParameters_h=True,
+            body=body,
+        )
 
 
 def register_griddata_commondata() -> None:
