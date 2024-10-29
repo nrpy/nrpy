@@ -97,7 +97,7 @@ class register_CFunctions_rfm_precompute(base_register_CFunctions_rfm_precompute
                         launch_dict={
                             "blocks_per_grid": [],
                             "threads_per_block": ["32"],
-                            "stream": f"{i} % nstreams",
+                            "stream": f"(param_streamid + {i}) % nstreams",
                         },
                         fp_type=self.fp_type,
                         comments=f"GPU Kernel to precompute metric quantity {key_sym}.",
@@ -105,8 +105,9 @@ class register_CFunctions_rfm_precompute(base_register_CFunctions_rfm_precompute
                     prefunc += device_kernel.CFunction.full_function
                     body += "{\n"
                     body += f"REAL *restrict {key_sym} = rfmstruct->{key_sym};\n"
+                    body += "const size_t param_streamid = params->grid_idx % nstreams;\n"
                     body += device_kernel.launch_block
-                    body += device_kernel.c_function_call()
+                    body += device_kernel.c_function_call().replace("(streamid", "(param_streamid")
                     body += "}\n"
                 body = prefunc_defs + body
 
