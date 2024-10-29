@@ -14,7 +14,7 @@ Authors: Zachariah B. Etienne
 from typing import List
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
-import sympy.codegen.ast as sp_ast
+import sympy.codegen.ast as sp_ast, os
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
@@ -124,17 +124,21 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
 
     def register(self) -> None:
         """Register CFunction."""
-        cfc.register_CFunction(
-            prefunc=self.prefunc,
-            includes=self.includes,
-            desc=self.desc,
-            cfunc_type=self.cfunc_type,
-            CoordSystem_for_wrapper_func=self.CoordSystem,
-            name=self.name,
-            params=self.params,
-            include_CodeParameters_h=True,
-            body=self.body,
+        _, actual_name = cfc.function_name_and_subdir_with_CoordSystem(
+            os.path.join("."), self.name, self.CoordSystem
         )
+        if not actual_name in cfc.CFunction_dict:
+            cfc.register_CFunction(
+                prefunc=self.prefunc,
+                includes=self.includes,
+                desc=self.desc,
+                cfunc_type=self.cfunc_type,
+                CoordSystem_for_wrapper_func=self.CoordSystem,
+                name=self.name,
+                params=self.params,
+                include_CodeParameters_h=True,
+                body=self.body,
+            )
 
 
 ###############################
@@ -709,17 +713,21 @@ applies BCs to the inner boundary points, which may map either to the grid inter
 
     def register(self) -> None:
         """Register CFunction."""
-        cfc.register_CFunction(
-            includes=self.includes,
-            prefunc=self.prefunc,
-            desc=self.desc,
-            cfunc_type=self.cfunc_type,
-            CoordSystem_for_wrapper_func=self.CoordSystem,
-            name=self.name,
-            params=self.params,
-            include_CodeParameters_h=False,
-            body=self.body,
+        _, actual_name = cfc.function_name_and_subdir_with_CoordSystem(
+            os.path.join("."), self.name, self.CoordSystem
         )
+        if not actual_name in cfc.CFunction_dict:
+            cfc.register_CFunction(
+                includes=self.includes,
+                prefunc=self.prefunc,
+                desc=self.desc,
+                cfunc_type=self.cfunc_type,
+                CoordSystem_for_wrapper_func=self.CoordSystem,
+                name=self.name,
+                params=self.params,
+                include_CodeParameters_h=False,
+                body=self.body,
+            )
 
 
 class base_CurviBoundaryConditions_register_C_functions:

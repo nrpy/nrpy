@@ -12,7 +12,7 @@ Author: Zachariah B. Etienne
 
 from typing import Dict, List
 
-import sympy as sp
+import sympy as sp, os
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
@@ -37,7 +37,6 @@ class base_register_CFunction_numerical_grid_params_Nxx_dxx_xx:
         CoordSystem: str,
         Nxx_dict: Dict[str, List[int]],
     ) -> None:
-
         self.prefunc = ""
         self.CoordSystem = CoordSystem
         self.Nxx_dict = Nxx_dict
@@ -151,17 +150,21 @@ params->invdxx2 = ((REAL)params->Nxx2) / (params->xxmax2 - params->xxmin2);
 
     def register(self) -> None:
         """Register CFunction."""
-        cfc.register_CFunction(
-            prefunc=self.prefunc,
-            includes=self.includes,
-            desc=self.desc,
-            cfunc_type=self.cfunc_type,
-            CoordSystem_for_wrapper_func=self.CoordSystem,
-            name=self.name,
-            params=self.params,
-            include_CodeParameters_h=False,  # keep this False or regret having to debug the mess.
-            body=self.body,
+        _, actual_name = cfc.function_name_and_subdir_with_CoordSystem(
+            os.path.join("."), self.name, self.CoordSystem
         )
+        if not actual_name in cfc.CFunction_dict:
+            cfc.register_CFunction(
+                prefunc=self.prefunc,
+                includes=self.includes,
+                desc=self.desc,
+                cfunc_type=self.cfunc_type,
+                CoordSystem_for_wrapper_func=self.CoordSystem,
+                name=self.name,
+                params=self.params,
+                include_CodeParameters_h=False,  # keep this False or regret having to debug the mess.
+                body=self.body,
+            )
 
 
 class base_register_CFunction_cfl_limited_timestep:
@@ -223,17 +226,21 @@ commondata->dt = MIN(commondata->dt, ds_min * commondata->CFL_FACTOR);
 
     def register(self) -> None:
         """Register CFunction."""
-        cfc.register_CFunction(
-            prefunc=self.prefunc,
-            includes=self.includes,
-            desc=self.desc,
-            cfunc_type=self.cfunc_type,
-            CoordSystem_for_wrapper_func=self.CoordSystem,
-            name=self.name,
-            params=self.params,
-            include_CodeParameters_h=True,
-            body=self.body,
+        _, actual_name = cfc.function_name_and_subdir_with_CoordSystem(
+            os.path.join("."), self.name, self.CoordSystem
         )
+        if not actual_name in cfc.CFunction_dict:
+            cfc.register_CFunction(
+                prefunc=self.prefunc,
+                includes=self.includes,
+                desc=self.desc,
+                cfunc_type=self.cfunc_type,
+                CoordSystem_for_wrapper_func=self.CoordSystem,
+                name=self.name,
+                params=self.params,
+                include_CodeParameters_h=True,
+                body=self.body,
+            )
 
 
 class base_register_CFunction_numerical_grids_and_timestep:
