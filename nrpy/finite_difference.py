@@ -597,6 +597,7 @@ def read_gfs_from_memory(
 
     :raises ValueError: If the SIMD infrastructure is not correctly specified for the current setup,
                         indicating a mismatch or unsupported configuration for SIMD optimizations.
+    :raises RuntimeError: If no gridfunctions are registered.
 
     DocTests:
     >>> import nrpy.indexedexp as ixp
