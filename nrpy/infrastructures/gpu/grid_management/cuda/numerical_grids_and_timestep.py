@@ -214,6 +214,7 @@ class register_CFunction_numerical_grids_and_timestep(
     :param gridding_approach: Choices: "independent grid(s)" (default) or "multipatch".
     :param enable_rfm_precompute: Whether to enable reference metric precomputation (default: False).
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions (default: False).
+    :param enable_set_cfl_timestep: Whether to enable computation of dt, the CFL timestep. A custom version can be implemented later.
 
     :raises ValueError: If invalid gridding_approach selected.
     """
@@ -225,12 +226,14 @@ class register_CFunction_numerical_grids_and_timestep(
         gridding_approach: str = "independent grid(s)",
         enable_rfm_precompute: bool = False,
         enable_CurviBCs: bool = False,
+        enable_set_cfl_timestep: bool = True,
     ) -> None:
         super().__init__(
             list_of_CoordSystems,
             list_of_grid_physical_sizes,
             enable_rfm_precompute=enable_rfm_precompute,
             enable_CurviBCs=enable_CurviBCs,
+            gridding_approach=gridding_approach,
         )
         self.params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata, "
         self.params += (
@@ -262,8 +265,8 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
 """
         else:
             self.body += "// (curvilinear boundary conditions bcstruct disabled)\n"
-
-        self.body += r"""
+        if enable_set_cfl_timestep:
+            self.body += r"""
 // Step 1.e: Set timestep based on minimum spacing between neighboring gridpoints.
 commondata->dt = 1e30;
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
