@@ -60,7 +60,7 @@ def get_log10_residual_tolerance(fp_type_str: str = "double") -> float:
     if fp_type_str == "double":
         res = -15.8
     elif fp_type_str == "float":
-        res = -10
+        res = -10.0
     else:
         raise ValueError(f"residual tolerence not defined for {fp_type_str} precision")
     return res
@@ -291,7 +291,7 @@ nrpyellClib.register_CFunction_initialize_constant_auxevol()
 
 numericalgrids.register_CFunctions(
     list_of_CoordSystems=list_of_CoordSystems,
-    list_of_grid_physical_sizes=[grid_physical_size, grid_physical_size],
+    list_of_grid_physical_sizes=[grid_physical_size for c in list_of_CoordSystems],
     Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
