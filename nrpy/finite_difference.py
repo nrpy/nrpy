@@ -792,6 +792,14 @@ def read_gfs_from_memory(
     name_sorted_gfs = list(gri.glb_gridfcs_dict.keys())
     name_sorted_gfs_idxs = list(range(len(name_sorted_gfs)))
 
+    if len(name_sorted_gfs) == 0:
+        unique_gfs = set(list_of_base_gridfunction_names_in_derivs)
+        raise RuntimeError(
+            "Found expression with derivative(s) of "
+            f"{list(unique_gfs)}, but no grid functions have been registered "
+            "(gri.glb_gridfcs_dict is empty); check upstream initialization."
+        )
+
     # Pair each name with its corresponding index
     pairs = list(zip(name_sorted_gfs, name_sorted_gfs_idxs))
 
