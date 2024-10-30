@@ -73,9 +73,9 @@ class CodeParameter:
     ...     param_array = CodeParameter(cparam_type='REAL[5]', module='module3', name='param_array', commondata=False, add_to_set_CodeParameters_h=True, add_to_parfile=False)
     ... except ValueError as e:
     ...     print(e)
-    Parameter 'param_array' of type 'REAL[5]': For REAL or int array parameters, commondata must be True and add_to_set_CodeParameters_h must be False.
+    Parameter 'param_array' of type 'REAL[5]': For REAL or int array parameters, commondata must be True, add_to_set_CodeParameters_h must be False, and add_to_parfile must be True.
     >>> # Correct usage with commondata=True and add_to_set_CodeParameters_h=False
-    >>> param_array_correct = CodeParameter(cparam_type='REAL[5]', module='module3', name='param_array_correct', commondata=True, add_to_set_CodeParameters_h=False, add_to_parfile=False)
+    >>> param_array_correct = CodeParameter(cparam_type='REAL[5]', module='module3', name='param_array_correct', defaultvalue=-10.1, commondata=True, add_to_set_CodeParameters_h=False, add_to_parfile=True)
     >>> param_array_correct.name in glb_code_params_dict
     True
     """
@@ -126,11 +126,15 @@ class CodeParameter:
             and "[" in self.cparam_type
             and "]" in self.cparam_type
         ):
-            if not (self.commondata and not self.add_to_set_CodeParameters_h):
+            if not (
+                self.commondata
+                and not self.add_to_set_CodeParameters_h
+                and self.add_to_parfile
+            ):
                 raise ValueError(
                     f"Parameter '{self.name}' of type '{self.cparam_type}': "
-                    "For REAL or int array parameters, commondata must be True "
-                    "and add_to_set_CodeParameters_h must be False."
+                    "For REAL or int array parameters, commondata must be True, "
+                    "add_to_set_CodeParameters_h must be False, and add_to_parfile must be True."
                 )
 
         if cparam_type == "#define":
@@ -378,6 +382,7 @@ def register_CodeParameter(
     Traceback (most recent call last):
       ...
     ValueError: Parameter a2: Must set a default value for all parameters with add_to_parfile=True
+    >>> a3 = register_CodeParameter(cparam_type="REAL", module=__name__, name="a2", add_to_parfile=False)
     """
     if not isinstance(name, str):
         raise TypeError(
