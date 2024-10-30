@@ -7,7 +7,7 @@ Author: Zachariah B. Etienne
 
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Union, Optional
 
 import nrpy.c_function as cfc
 import nrpy.params as par
@@ -355,45 +355,99 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
     :param project_name: The name of the project.
 
     Doctest:
+    >>> import shutil
+    >>> from pathlib import Path
+    >>> # Clear existing parameters
+    >>> par.glb_code_params_dict.clear()
+    >>> # Register scalar REAL parameters
     >>> _, __ = par.register_CodeParameters("REAL", "CodeParameters_c_files", ["a", "pi_three_sigfigs"], [1.0, 3.14], commondata=True)
+    >>> # Register a #define parameter
     >>> ___ = par.register_CodeParameter("#define", "CodeParameters_c_files", "b", 0)
+    >>> # Register parameters that should be excluded from the parfile
     >>> _leaveitbe = par.register_CodeParameter("REAL", "CodeParameters_c_files", "leaveitbe", add_to_parfile=False, add_to_set_CodeParameters_h=False)
     >>> _leaveitoutofparfile = par.register_CodeParameter("REAL", "CodeParameters_c_files", "leaveitoutofparfile", add_to_parfile=False)
+    >>> # Register a char array parameter
     >>> _str = par.register_CodeParameter("char", "CodeParameters_c_files", "string[100]", "cheese", commondata=True)
+    >>> # Register an int parameter
     >>> _int = par.register_CodeParameter("int", "CodeParameters_c_files", "blahint", -1, commondata=True, add_to_parfile=True, add_to_set_CodeParameters_h=False)
+    >>> # Register a bool parameter
     >>> _bool = par.register_CodeParameter("bool", "CodeParameters_c_files", "BHaH_is_amazing", "true")
+    >>> # Register a REAL array parameter
+    >>> _real_array = par.register_CodeParameter(cparam_type="REAL[3]", module="CodeParameters_c_files", name="bah_initial_x_center", defaultvalue=0.0, commondata=True, add_to_parfile=True, add_to_set_CodeParameters_h=False)
+    >>> # Register an int array parameter
+    >>> _int_array = par.register_CodeParameter(cparam_type="int[2]", module="CodeParameters_c_files", name="initial_levels", defaultvalue=4, commondata=True, add_to_parfile=True, add_to_set_CodeParameters_h=False)
+    >>> # Clear any existing CFunction_dict if necessary
     >>> cfc.CFunction_dict.clear()
+    >>> # Setup project directory
     >>> project_dir = Path("/tmp/tmp_BHaH_parfile")
+    >>> if project_dir.exists():
+    ...     shutil.rmtree(project_dir)
     >>> project_dir.mkdir(parents=True, exist_ok=True)
-    >>> generate_default_parfile(project_dir, "example_project")
+    >>> # Generate the parfile
+    >>> generate_default_parfile(str(project_dir), "example_project")
+    >>> # Read and print the generated parfile
     >>> print((project_dir / 'example_project.par').read_text())
     #### example_project BH@H parameter file. NOTE: only commondata CodeParameters appear here ###
     ###########################
     ###########################
     ### Module: CodeParameters_c_files
-    a = 1.0                  # (type: REAL)
-    blahint = -1             # (type: int)
-    pi_three_sigfigs = 3.14  # (type: REAL)
-    string = "cheese"        # (type: char array)
+    a = 1.0                                   # (REAL)
+    bah_initial_x_center = { 0.0, 0.0, 0.0 }  # (REAL[3])
+    blahint = -1                              # (int)
+    initial_levels = { 4, 4 }                 # (int[2])
+    pi_three_sigfigs = 3.14                   # (REAL)
+    string[100] = cheese                      # (char)
     <BLANKLINE>
     """
     parfile_output_dict: Dict[str, List[str]] = defaultdict(list)
+
+    # Function to parse array types without using regex
+    def parse_array_type(cparam_type: str) -> Union[None, Dict[str, Any]]:
+        if "[" in cparam_type and "]" in cparam_type:
+            base_type = cparam_type[: cparam_type.find("[")]
+            size_str = cparam_type[cparam_type.find("[") + 1 : cparam_type.find("]")]
+            if size_str.isdigit():
+                size = int(size_str)
+                return {"base_type": base_type, "size": size}
+        return None
 
     # Sorting by module name
     for parname, CodeParam in sorted(
         par.glb_code_params_dict.items(), key=lambda x: x[1].module
     ):
-        if CodeParam.commondata:
+        if CodeParam.commondata and CodeParam.add_to_parfile:
             CPtype = CodeParam.cparam_type
-            if CodeParam.add_to_parfile:
-                if CPtype == "char":
-                    chararray_name = parname.split("[")[0]
+            array_info = parse_array_type(CPtype)
+            if array_info:
+                base_type = array_info["base_type"]
+                size = array_info["size"]
+                default_val = CodeParam.defaultvalue
+                # Generate a list with the default value repeated 'size' times
+                if base_type.lower() in ["real", "int"]:
+                    # Format based on base type
+                    if base_type.lower() == "real":
+                        default_vals = ", ".join([f"{float(default_val)}"] * size)
+                    else:  # int
+                        default_vals = ", ".join([str(int(default_val))] * size)
                     parfile_output_dict[CodeParam.module].append(
-                        f'{chararray_name} = "{CodeParam.defaultvalue}"  # (type: char array)\n'
+                        f"{parname} = {{ {default_vals} }}  # ({CPtype})\n"
                     )
                 else:
+                    # Handle other array types if necessary
                     parfile_output_dict[CodeParam.module].append(
-                        f"{parname} = {CodeParam.defaultvalue}  # (type: {CPtype})\n"
+                        f"{parname} = {{ {default_val} }}  # ({CPtype})\n"
+                    )
+            else:
+                if CPtype.startswith("char") and "[" in CPtype and "]" in CPtype:
+                    # Handle char arrays
+                    chararray_name = parname.split("[")[0]
+                    parfile_output_dict[CodeParam.module].append(
+                        f'{chararray_name} = "{CodeParam.defaultvalue}"  # (char array)\n'
+                    )
+                else:
+                    # Handle scalar parameters
+                    parfile_output_dict[CodeParam.module].append(
+                        f"{parname} = {CodeParam.defaultvalue}  # ({CPtype})\n"
                     )
 
     # Sorting the parameters within each module
@@ -410,15 +464,23 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
     def align_by_hash(original_string: str) -> str:
         lines = original_string.split("\n")
         max_length = max(
-            line.find("#") for line in lines if "#" in line and line.strip()[0] != "#"
+            (
+                line.find("#")
+                for line in lines
+                if "#" in line and not line.strip().startswith("#")
+            ),
+            default=0,
         )
 
         adjusted_lines = []
         for line in lines:
-            if "#" in line and line.strip()[0] != "#":
+            if "#" in line and not line.strip().startswith("#"):
                 index = line.find("#")
                 spaces_needed = max_length - index
-                adjusted_line = line[:index] + " " * spaces_needed + line[index:]
+                if spaces_needed > 0:
+                    adjusted_line = line[:index] + " " * spaces_needed + line[index:]
+                else:
+                    adjusted_line = line
                 adjusted_lines.append(adjusted_line)
             else:
                 adjusted_lines.append(line)
