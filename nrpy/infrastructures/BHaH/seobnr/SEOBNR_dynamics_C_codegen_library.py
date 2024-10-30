@@ -51,11 +51,11 @@ def register_CFunction_SEOBNRv5_aligned_spin_augments() -> (
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
-def register_CFunction_SEOBNRv5_aligned_spin_find_peak() -> (
+def register_CFunction_SEOBNRv5_aligned_spin_argrelmin() -> (
     Union[None, pcg.NRPyEnv_type]
 ):
     """
-    Register CFunction taking a 1-D interpolant of Omega or pr and returning the location of its peak.
+    Register CFunction that performs scipy.argrelmin with order = 3.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -64,23 +64,30 @@ def register_CFunction_SEOBNRv5_aligned_spin_find_peak() -> (
         return None
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Find the peak of Omega or pr.
-Used to refine the location of the maximum in frequency or momentum."""
-    cfunc_type = "int"
-    name = "SEOBNRv5_aligned_spin_find_peak"
-    params = "gsl_spline *restrict spline, gsl_interp_accel *restrict acc, const REAL left, const REAL right, const REAL dt, size_t result_idx, REAL result"
+    desc = """C function to perform scipy.argrelmin for order = 3."""
+    cfunc_type = "size_t"
+    name = "SEOBNRv5_aligned_spin_argrelmin"
+    params = "REAL *restrict arr , size_t nsteps_arr"
     body = """
-size_t n = (size_t) (right - left)/dt;
-REAL x;
-REAL *restrict dx = (REAL *)malloc(n*sizeof(REAL));
-for (size_t i = 0; i < n; i++){
-  x = left + i*dt;
-  dx[i] = gsl_spline_eval_deriv(spline, x, acc);
+size_t order = 3;
+size_t minima_count_or_idx = 0;
+// Loop through the array with bounds of `order` on each side
+for (size_t i = order; i < nsteps_arr - order; i++) {
+  int isMinimum = 1;
+
+  // Check `order` elements to the left and right
+  for (int j = 1; j <= order; j++) {
+    if (arr[i] >= arr[i - j] || arr[i] >= arr[i + j]) {
+      isMinimum = 0;
+      break;
+    }
+  }
+  if (isMinimum) {
+    minima_count_or_idx = i;
+    break;
+  }
 }
-result_idx = gsl_interp_bsearch(dx, 0.0, 0, n);
-result = dx[result_idx];
-free(dx);
-return GSL_SUCCESS;
+return minima_count_or_idx;
 """
     cfc.register_CFunction(
         includes=includes,
@@ -108,29 +115,44 @@ def register_CFunction_SEOBNRv5_aligned_spin_iterative_refinement() -> (
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """Evaluate the peak in frequency or momentum in SEOBNRv5"""
-    cfunc_type = "int"
+    cfunc_type = "REAL"
     name = "SEOBNRv5_aligned_spin_iterative_refinement"
-    params = "gsl_spline *restrict spline, gsl_interp_accel *restrict acc, const int stop, const REAL left, const REAL right, REAL t_ext"
+    params = "gsl_spline *restrict spline, gsl_interp_accel *restrict acc, const REAL left, const REAL right, const int stop"
     body = """
 REAL left_refined = left;
 REAL right_refined = right;
-REAL dt = 0.1;
-int status;
-int iter = 2;
-size_t result_idx = 0;
-while (iter > 0) {
+REAL dt = 0.1 , result;
+REAL *restrict abs_F_dots , *restrict Ts;
+size_t nsteps_Ts , i;
+size_t minimaIDX;
+for(int iter = 0; iter < 2; iter++) {
   dt = dt * 0.1;
-  status = SEOBNRv5_aligned_spin_find_peak(spline, acc, left_refined, right_refined, dt, result_idx, t_ext);
-  if (result_idx == 0 || result_idx == (size_t)(right_refined - left_refined) / dt) {
-    // no actual extremum detected
-    t_ext = (0.5 * (left_refined + right_refined)) * (1 - stop % 2) + (stop % 2) * (right_refined);
-    break;
+  nsteps_Ts = (size_t) ((right - left) / dt );
+  Ts = (REAL *)malloc(nsteps_Ts * sizeof(REAL));
+  abs_F_dots = (REAL *)malloc(nsteps_Ts * sizeof(REAL));
+  for (i = 0 ; i < nsteps_Ts; i++){
+    Ts[i] = left + i * dt;
+    abs_F_dots[i] = fabs(gsl_spline_eval_deriv(spline,Ts[i],acc));
   }
-  left_refined = 0.5 * (t_ext - 10. + left + fabs(t_ext - 10. - left));
-  right_refined = 0.5 * (t_ext + 10. + right - fabs(t_ext + 10 - right));
-  iter--;
+  minimaIDX = SEOBNRv5_aligned_spin_argrelmin(abs_F_dots,nsteps_Ts);
+  result = Ts[minimaIDX];
+  free(Ts);
+  free(abs_F_dots);
+  if (minimaIDX > 0){
+    left_refined = MAX(left_refined,result - 10.);
+    right_refined = MIN(right_refined,result + 10.);
+  }
+  else{
+    if (stop == PRSTAR){
+      return right_refined;
+    }
+    else{
+      result = (left_refined + right_refined) * 0.5;
+      return result;
+    }
+  } 
 }
-return GSL_SUCCESS;
+return result;
 """
     cfc.register_CFunction(
         includes=includes,
@@ -160,76 +182,61 @@ def register_CFunction_SEOBNRv5_aligned_spin_intepolate_dynamics() -> (
     desc = """Evaluate the peak in frequency or momentum in SEOBNRv5"""
     cfunc_type = "int"
     name = "SEOBNRv5_aligned_spin_interpolate_dynamics"
-    params = "commondata_struct *restrict commondata, REAL *restrict times, REAL *restrict dynamics_RK, const size_t nsteps, const REAL t_max, const REAL t_stepback"
+    params = "commondata_struct *restrict commondata, REAL *restrict dynamics_fine_prelim, const size_t nsteps_fine_prelim, const REAL t_peak, const int stop"
     body = """
-int i,j;
-// Store the low sampled dynamics.
-commondata->nsteps_low = gsl_interp_bsearch(times, t_stepback, 0, nsteps - 1);
-commondata->dynamics_low = malloc(NUMVARS * commondata->nsteps_low*sizeof(REAL));
-for (i = 0; i < commondata->nsteps_low; i++) {
-  for (j = 0; j < NUMVARS; j++){
-    commondata->dynamics_low[IDX(i,j)] = dynamics_RK[IDX(i,j)];
-  }
+int i;
+// Intepolate the high sampled dynamics for NQCs.
+REAL time_start = dynamics_fine_prelim[IDX(0,TIME)];
+REAL time_end = dynamics_fine_prelim[IDX(nsteps_fine_prelim-1,TIME)];
+if (stop != 0){
+  time_start = MAX(t_peak - commondata->t_stepback,dynamics_fine_prelim[IDX(0,TIME)]);
+  time_end = MIN(t_peak , time_end);
 }
 
-// Intepolate the high sampled dynamics for NQCs.
-const REAL dt = 0.1;
-commondata->nsteps_fine = (size_t)(t_max - t_stepback) / dt;
-size_t len_dynamics_fine = nsteps - commondata->nsteps_low;
-REAL *restrict times_fine = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
-REAL *restrict ts = (REAL *)malloc(len_dynamics_fine*sizeof(REAL));
-REAL *restrict rs = (REAL *)malloc(len_dynamics_fine*sizeof(REAL));
-REAL *restrict phis = (REAL *)malloc(len_dynamics_fine*sizeof(REAL));
-REAL *restrict prs = (REAL *)malloc(len_dynamics_fine*sizeof(REAL));
-REAL *restrict pphis = (REAL *)malloc(len_dynamics_fine*sizeof(REAL));
-REAL *restrict Hs = (REAL *)malloc(len_dynamics_fine*sizeof(REAL));
-REAL *restrict Omegas = (REAL *)malloc(len_dynamics_fine*sizeof(REAL));
-REAL *restrict Omega_circs= (REAL *)malloc(len_dynamics_fine*sizeof(REAL));
-for (i = 0; i < commondata->nsteps_fine; i++) {
-  times_fine[i] = t_stepback + i * dt;
-}
-for (i = 0; i < len_dynamics_fine; i++) {
-  ts[i] = dynamics_RK[IDX(i + commondata->nsteps_low,TIME)];
-  rs[i] = dynamics_RK[IDX(i + commondata->nsteps_low,R)];
-  phis[i] = dynamics_RK[IDX(i + commondata->nsteps_low,PHI)];
-  prs[i] = dynamics_RK[IDX(i + commondata->nsteps_low,PRSTAR)];
-  pphis[i] = dynamics_RK[IDX(i + commondata->nsteps_low,PPHI)];
-  Hs[i] = dynamics_RK[IDX(i + commondata->nsteps_low,H)];
-  Omegas[i] = dynamics_RK[IDX(i + commondata->nsteps_low,OMEGA)];
-  Omega_circs[i] = dynamics_RK[IDX(i + commondata->nsteps_low,OMEGA_CIRC)];
+REAL *restrict ts = (REAL *)malloc(nsteps_fine_prelim*sizeof(REAL));
+REAL *restrict rs = (REAL *)malloc(nsteps_fine_prelim*sizeof(REAL));
+REAL *restrict phis = (REAL *)malloc(nsteps_fine_prelim*sizeof(REAL));
+REAL *restrict prs = (REAL *)malloc(nsteps_fine_prelim*sizeof(REAL));
+REAL *restrict pphis = (REAL *)malloc(nsteps_fine_prelim*sizeof(REAL));
+for (i = 0; i < nsteps_fine_prelim; i++) {
+  ts[i] = dynamics_fine_prelim[IDX(i,TIME)];
+  rs[i] = dynamics_fine_prelim[IDX(i,R)];
+  phis[i] = dynamics_fine_prelim[IDX(i,PHI)];
+  prs[i] = dynamics_fine_prelim[IDX(i,PRSTAR)];
+  pphis[i] = dynamics_fine_prelim[IDX(i,PPHI)];
 }
 gsl_interp_accel *restrict r_acc = gsl_interp_accel_alloc();
-gsl_spline *restrict r_spline = gsl_spline_alloc(gsl_interp_cspline, len_dynamics_fine);
-gsl_spline_init(r_spline, ts, rs, len_dynamics_fine);
+gsl_spline *restrict r_spline = gsl_spline_alloc(gsl_interp_cspline, nsteps_fine_prelim);
+gsl_spline_init(r_spline, ts, rs, nsteps_fine_prelim);
 gsl_interp_accel *restrict phi_acc = gsl_interp_accel_alloc();
-gsl_spline *restrict phi_spline = gsl_spline_alloc(gsl_interp_cspline, len_dynamics_fine);
-gsl_spline_init(phi_spline, ts, phis, len_dynamics_fine);
+gsl_spline *restrict phi_spline = gsl_spline_alloc(gsl_interp_cspline, nsteps_fine_prelim);
+gsl_spline_init(phi_spline, ts, phis, nsteps_fine_prelim);
 gsl_interp_accel *restrict pr_acc = gsl_interp_accel_alloc();
-gsl_spline *restrict pr_spline = gsl_spline_alloc(gsl_interp_cspline, len_dynamics_fine);
-gsl_spline_init(pr_spline, ts, prs, len_dynamics_fine);
+gsl_spline *restrict pr_spline = gsl_spline_alloc(gsl_interp_cspline, nsteps_fine_prelim);
+gsl_spline_init(pr_spline, ts, prs, nsteps_fine_prelim);
 gsl_interp_accel *restrict pphi_acc = gsl_interp_accel_alloc();
-gsl_spline *restrict pphi_spline = gsl_spline_alloc(gsl_interp_cspline, len_dynamics_fine);
-gsl_spline_init(pphi_spline, ts, pphis, len_dynamics_fine);
-gsl_interp_accel *restrict H_acc = gsl_interp_accel_alloc();
-gsl_spline *restrict H_spline = gsl_spline_alloc(gsl_interp_cspline, len_dynamics_fine);
-gsl_spline_init(H_spline, ts, Hs, len_dynamics_fine);
-gsl_interp_accel *restrict Omega_acc = gsl_interp_accel_alloc();
-gsl_spline *restrict Omega_spline = gsl_spline_alloc(gsl_interp_cspline, len_dynamics_fine);
-gsl_spline_init(Omega_spline, ts, Omegas, len_dynamics_fine);
-gsl_interp_accel *restrict Omega_circ_acc = gsl_interp_accel_alloc();
-gsl_spline *restrict Omega_circ_spline = gsl_spline_alloc(gsl_interp_cspline, len_dynamics_fine);
-gsl_spline_init(Omega_circ_spline, ts, Omega_circs, len_dynamics_fine);
+gsl_spline *restrict pphi_spline = gsl_spline_alloc(gsl_interp_cspline, nsteps_fine_prelim);
+gsl_spline_init(pphi_spline, ts, pphis, nsteps_fine_prelim);
 
-commondata->dynamics_fine = (REAL *)malloc(8 * commondata->nsteps_fine*sizeof(REAL));
+const REAL dt = 0.1;
+commondata->nsteps_fine = (size_t)(time_end - time_start) / dt;
+commondata->dynamics_fine = (REAL *)malloc(NUMVARS * commondata->nsteps_fine * sizeof(REAL));
+REAL t;
 for (i = 0; i < commondata->nsteps_fine; i++) {
-  commondata->dynamics_fine[IDX(i , TIME)] = times_fine[i];
-  commondata->dynamics_fine[IDX(i , R)] = gsl_spline_eval(r_spline, times_fine[i], r_acc);
-  commondata->dynamics_fine[IDX(i , PHI)] = gsl_spline_eval(phi_spline, times_fine[i], phi_acc);
-  commondata->dynamics_fine[IDX(i , PRSTAR)] = gsl_spline_eval(pr_spline, times_fine[i], pr_acc);
-  commondata->dynamics_fine[IDX(i , PPHI)] = gsl_spline_eval(pphi_spline, times_fine[i], pphi_acc);
-  commondata->dynamics_fine[IDX(i , H)] = gsl_spline_eval(H_spline, times_fine[i], H_acc);
-  commondata->dynamics_fine[IDX(i , OMEGA)] = gsl_spline_eval(Omega_spline, times_fine[i], Omega_acc);
-  commondata->dynamics_fine[IDX(i , OMEGA_CIRC)] = gsl_spline_eval(Omega_circ_spline, times_fine[i], Omega_circ_acc);
+  t = time_start + i * dt;
+  commondata->dynamics_fine[IDX(i , TIME)] = t;
+  commondata->dynamics_fine[IDX(i , R)] = gsl_spline_eval(r_spline, t, r_acc);
+  commondata->dynamics_fine[IDX(i , PHI)] = gsl_spline_eval(phi_spline, t, phi_acc);
+  commondata->dynamics_fine[IDX(i , PRSTAR)] = gsl_spline_eval(pr_spline, t, pr_acc);
+  commondata->dynamics_fine[IDX(i , PPHI)] = gsl_spline_eval(pphi_spline, t, pphi_acc);
+  commondata->r = commondata->dynamics_fine[IDX(i , R)];
+  commondata->phi = commondata->dynamics_fine[IDX(i , PHI)];
+  commondata->prstar = commondata->dynamics_fine[IDX(i , PRSTAR)];
+  commondata->pphi = commondata->dynamics_fine[IDX(i , PPHI)];
+  SEOBNRv5_aligned_spin_augments(commondata);
+  commondata->dynamics_fine[IDX(i , H)] = commondata->Hreal;
+  commondata->dynamics_fine[IDX(i , OMEGA)] = commondata->dHreal_dpphi;
+  commondata->dynamics_fine[IDX(i , OMEGA_CIRC)] = commondata->Omega_circ;
 }
 
 gsl_spline_free(r_spline);
@@ -240,35 +247,12 @@ gsl_spline_free(pr_spline);
 gsl_interp_accel_free(pr_acc);
 gsl_spline_free(pphi_spline);
 gsl_interp_accel_free(pphi_acc);
-gsl_spline_free(H_spline);
-gsl_interp_accel_free(H_acc);
-gsl_spline_free(Omega_spline);
-gsl_interp_accel_free(Omega_acc);
-gsl_spline_free(Omega_circ_spline);
-gsl_interp_accel_free(Omega_circ_acc);
 
-free(times_fine);
 free(ts);
 free(rs);
 free(phis);
 free(prs);
 free(pphis);
-free(Hs);
-free(Omegas);
-free(Omega_circs);
-
-// Populate the combined inspiral dynamics
-
-commondata->nsteps_inspiral = commondata->nsteps_fine + commondata->nsteps_low;
-commondata->dynamics_inspiral = malloc(8 * commondata->nsteps_inspiral*sizeof(REAL));
-for (i = 0; i < NUMVARS * commondata->nsteps_low; i++) {
-  commondata->dynamics_inspiral[i] = commondata->dynamics_low[i];
-}
-int i_start_fine = NUMVARS*commondata->nsteps_low;
-for (i = i_start_fine; i < NUMVARS * (commondata->nsteps_inspiral); i++) {
-  commondata->dynamics_inspiral[i] = commondata->dynamics_fine[i - i_start_fine];
-}
-
 return GSL_SUCCESS;
 """
     cfc.register_CFunction(
@@ -403,45 +387,83 @@ gsl_odeiv2_control_free(c);
 gsl_odeiv2_step_free(s);
 gsl_odeiv2_evolve_free(e);
 
-// High sampling.
-// Get an estimate of the stepback time.
-
-REAL *restrict times = (REAL *)malloc(nsteps*sizeof(REAL));
-for (i = 0; i < nsteps; i++) {
+// save the times as a separate array
+REAL *restrict times = malloc(nsteps * sizeof(REAL));
+for (i = 0; i < nsteps; i++){
   times[i] = dynamics_RK[IDX(i,TIME)];
 }
-REAL t_stepback = times[nsteps - 1] - commondata->t_stepback;
+
+// find the coarse-fine separation index
+REAL t_desired;
 if (stop == OMEGA){
-  t_stepback -= 50.0;
+  t_desired = times[nsteps-1] - commondata->t_stepback - 50.;
 }
-size_t idx_stepback = gsl_interp_bsearch(times, t_stepback, 0, nsteps - 1);
+else{
+  t_desired = times[nsteps-1] - commondata->t_stepback;
+}
+size_t coarse_fine_separation_idx = gsl_interp_bsearch(times,t_desired,0,nsteps-1);
+commondata->dynamics_low = (REAL *)malloc(NUMVARS * coarse_fine_separation_idx * sizeof(REAL));
+commondata->nsteps_low = coarse_fine_separation_idx;
+for (i = 0; i < commondata->nsteps_low; i++){
+  commondata->dynamics_low[IDX(i,TIME)] = dynamics_RK[IDX(i,TIME)];
+  commondata->dynamics_low[IDX(i,R)] = dynamics_RK[IDX(i,R)];
+  commondata->dynamics_low[IDX(i,PHI)] = dynamics_RK[IDX(i,PHI)];
+  commondata->dynamics_low[IDX(i,PRSTAR)] = dynamics_RK[IDX(i,PRSTAR)];
+  commondata->dynamics_low[IDX(i,PPHI)] = dynamics_RK[IDX(i,PPHI)];
+  commondata->dynamics_low[IDX(i,H)] = dynamics_RK[IDX(i,H)];
+  commondata->dynamics_low[IDX(i,OMEGA)] = dynamics_RK[IDX(i,OMEGA)];
+  commondata->dynamics_low[IDX(i,OMEGA_CIRC)] = dynamics_RK[IDX(i,OMEGA_CIRC)];
+}
 
-// Get the time of peak Omega or pr if peak was detected.
+size_t nsteps_fine_prelim = nsteps - coarse_fine_separation_idx;
+REAL *restrict dynamics_fine_prelim = (REAL *)malloc(NUMVARS * nsteps_fine_prelim * sizeof(REAL));
+REAL *restrict times_fine_prelim = (REAL *)malloc(nsteps_fine_prelim * sizeof(REAL));
+for (i = 0; i < nsteps_fine_prelim; i++){
+  dynamics_fine_prelim[IDX(i,TIME)] = dynamics_RK[IDX(i + coarse_fine_separation_idx,TIME)];
+  times_fine_prelim[i] = dynamics_fine_prelim[IDX(i,TIME)];
+  dynamics_fine_prelim[IDX(i,R)] = dynamics_RK[IDX(i + coarse_fine_separation_idx,R)];
+  dynamics_fine_prelim[IDX(i,PHI)] = dynamics_RK[IDX(i + coarse_fine_separation_idx,PHI)];
+  dynamics_fine_prelim[IDX(i,PRSTAR)] = dynamics_RK[IDX(i + coarse_fine_separation_idx,PRSTAR)];
+  dynamics_fine_prelim[IDX(i,PPHI)] = dynamics_RK[IDX(i + coarse_fine_separation_idx,PPHI)];
+  dynamics_fine_prelim[IDX(i,H)] = dynamics_RK[IDX(i + coarse_fine_separation_idx,H)];
+  dynamics_fine_prelim[IDX(i,OMEGA)] = dynamics_RK[IDX(i + coarse_fine_separation_idx,OMEGA)];
+  dynamics_fine_prelim[IDX(i,OMEGA_CIRC)] = dynamics_RK[IDX(i + coarse_fine_separation_idx,OMEGA_CIRC)];
+}
 
-REAL t_max = times[nsteps - 1];
-if (stop != 0) {
-  size_t len_dynamics_fine = nsteps - idx_stepback;
-  REAL *restrict fpeak_fine = (REAL *)malloc(len_dynamics_fine*sizeof(REAL));
-  REAL *restrict times_fine = (REAL *)malloc(len_dynamics_fine*sizeof(REAL));
-  for (i = 0; i < len_dynamics_fine; i++) {
-    times_fine[i] = times[i + idx_stepback];
-    fpeak_fine[i] = dynamics_RK[IDX(i + idx_stepback, stop)];
+free(dynamics_RK);
+
+// perform iterative refinement to find the true peak of the dynamics
+// t_peak = dynamics[-1] if there is no peak
+
+REAL t_peak = times_fine_prelim[nsteps_fine_prelim - 1];
+
+if (stop != 0){
+  REAL *restrict fpeak_fine = (REAL *)malloc(nsteps_fine_prelim * sizeof(REAL));
+  for (i = 0; i < nsteps_fine_prelim;i++){
+    fpeak_fine[i] = dynamics_fine_prelim[IDX(i,stop)];
   }
-  gsl_interp_accel *restrict acc = gsl_interp_accel_alloc();
-  REAL t_left = times_fine[0] * (1 - stop % 2) + (stop % 2) * (times[nsteps - 1] - 10); // t_stepback if stop == 6 and t_end - 10M if stop == 3
-  gsl_spline *restrict spline = gsl_spline_alloc(gsl_interp_cspline, len_dynamics_fine);
-  gsl_spline_init(spline, times_fine, fpeak_fine, len_dynamics_fine);
-  status = SEOBNRv5_aligned_spin_iterative_refinement(spline, acc, stop, t_left, dynamics_RK[8 * (nsteps - 1) + 0], t_max);
-  gsl_spline_free(spline);
-  gsl_interp_accel_free(acc);
-  free(times_fine);
+  gsl_interp_accel *acc
+      = gsl_interp_accel_alloc ();
+  gsl_spline *spline
+      = gsl_spline_alloc (gsl_interp_cspline, nsteps_fine_prelim);
+  gsl_spline_init(spline,times_fine_prelim,fpeak_fine,nsteps_fine_prelim);
+  REAL right = times_fine_prelim[nsteps_fine_prelim - 1];
+  REAL left = times_fine_prelim[0];
+  if (stop == PRSTAR){
+    left = times_fine_prelim[nsteps_fine_prelim - 1] - 10.;
+  }
+  t_peak = SEOBNRv5_aligned_spin_iterative_refinement(spline,acc,left,right,stop);
+  gsl_spline_free (spline);
+  gsl_interp_accel_free (acc);
   free(fpeak_fine);
 }
-t_stepback = t_max - commondata->t_stepback;
-status = SEOBNRv5_aligned_spin_interpolate_dynamics(commondata, times, dynamics_RK, nsteps, t_max, t_stepback);
-// free the dynamics_RK pointer as it is no longer needed
+printf("Iterative refinement performed succesfully!\\n");
+// interpolate the dynamics
+
+status = SEOBNRv5_aligned_spin_interpolate_dynamics(commondata,dynamics_fine_prelim,nsteps_fine_prelim,t_peak,stop);
+free(dynamics_fine_prelim);
+free(times_fine_prelim);
 free(times);
-free(dynamics_RK);
 return GSL_SUCCESS;
 """
     cfc.register_CFunction(

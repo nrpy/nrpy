@@ -74,6 +74,18 @@ SEOBNRv5_aligned_spin_initial_conditions_dissipative(&commondata);
 //printf("prstar = %.15e\n",commondata.prstar);
 // Step 4: Run the ODE integration.
 SEOBNRv5_aligned_spin_ode_integration(&commondata);
+/*
+for (i = 0; i < commondata.nsteps_low; i++) {
+    printf("%.15e %.15e\n", commondata.dynamics_low[IDX(i,TIME)]
+    , commondata.dynamics_low[IDX(i,R)]);
+}
+printf("low sampled waveform printed successfully\n");
+for (i = 0; i < commondata.nsteps_fine; i++) {
+    printf("%.15e %.15e\n", commondata.dynamics_fine[IDX(i,TIME)]
+    , commondata.dynamics_fine[IDX(i,R)]);
+}
+*/
+
 // Step 5. Generate the waveform.
 SEOBNRv5_aligned_spin_waveform_from_dynamics(&commondata);
 
@@ -81,31 +93,31 @@ for (i = 0; i < commondata.nsteps_low; i++) {
     printf("%.15e %.15e %.15e\n", commondata.waveform_low[IDX_WF(i,TIME)]
     , commondata.waveform_low[IDX_WF(i,HPLUS)], commondata.waveform_low[IDX_WF(i,HCROSS)]);
 }
+printf("low sampled waveform printed successfully\n");
 for (i = 0; i < commondata.nsteps_fine; i++) {
     printf("%.15e %.15e %.15e\n", commondata.waveform_fine[IDX_WF(i,TIME)]
     , commondata.waveform_fine[IDX_WF(i,HPLUS)], commondata.waveform_fine[IDX_WF(i,HCROSS)]);
 }
+/*
 
 // Step 6. Compute and apply the NQC corrections
 SEOBNRv5_aligned_spin_NQC_corrections(&commondata);
 // Step 7.a Cmopute the IMR waveform
 SEOBNRv5_aligned_spin_IMR_waveform(&commondata);
 // Step 6.b: Print the resulting waveform.
-/*
+
 for (i = 0; i < commondata.nsteps_IMR; i++) {
     printf("%.15e %.15e %.15e\n", commondata.waveform_IMR[IDX_WF(i,TIME)]
     , commondata.waveform_IMR[IDX_WF(i,HPLUS)], commondata.waveform_IMR[IDX_WF(i,HCROSS)]);
 }
-*/
+
 
 free(commondata.dynamics_low);
 free(commondata.dynamics_fine);
-free(commondata.dynamics_inspiral);
 free(commondata.waveform_low);
 free(commondata.waveform_fine);
-free(commondata.waveform_inspiral);
 free(commondata.waveform_IMR);
-
+*/
 return 0;
 """
     cfc.register_CFunction(
@@ -134,7 +146,7 @@ seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conser
 seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_radial_momentum_condition()
 seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_dissipative()
 seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_augments()
-seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_find_peak()
+seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_argrelmin()
 seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_iterative_refinement()
 seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_intepolate_dynamics()
 seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_ode_integration()
