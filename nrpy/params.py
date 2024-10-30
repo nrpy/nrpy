@@ -1,5 +1,5 @@
 """
-Core NRPy+ module for initializing, storing, and recalling parameters.
+Initialize, store, and recall parameters for NRPy+.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -15,17 +15,22 @@ very_verbose = False
 
 class NRPyParameter:
     """
-    Represents an NRPyParameter object.
+    Represent an NRPyParameter object.
 
-    Doctest:
-    >>> param = NRPyParameter(py_type=str, module='module1', name='param0', value='defaultval1')
+    DocTests:
+    >>> param = NRPyParameter(py_type=str, module='module1', name='param0', value='defaultval1', description='Test parameter.')
     >>> param.name in glb_params_dict
     True
     >>> print(glb_params_dict[param.name].__dict__)
-    {'py_type': <class 'str'>, 'module': 'module1', 'name': 'param0', 'value': 'defaultval1'}
+    {'py_type': <class 'str'>, 'module': 'module1', 'name': 'param0', 'value': 'defaultval1', 'description': 'Test parameter.'}
+    >>> param_no_desc = NRPyParameter(py_type=int, module='module1', name='param_no_desc', value=42)
+    >>> print(glb_params_dict[param_no_desc.name].__dict__)
+    {'py_type': <class 'int'>, 'module': 'module1', 'name': 'param_no_desc', 'value': 42, 'description': ''}
     """
 
-    def __init__(self, py_type: Any, module: str, name: str, value: Any):
+    def __init__(
+        self, py_type: Any, module: str, name: str, value: Any, description: str = ""
+    ):
         """
         Initialize an NRPyParameter object with given properties.
 
@@ -33,12 +38,14 @@ class NRPyParameter:
         :param module: Name of the module the parameter belongs to.
         :param name: Name of the parameter.
         :param value: The default value of the parameter.
+        :param description: Description of the parameter.
         :raises ValueError: If the py_type is not one of the valid types.
         """
         self.py_type = py_type
         self.module = module
         self.name = name
         self.value = value
+        self.description = description
 
         if self.py_type not in (bool, int, float, str):
             raise ValueError("NRPy parameters must have the type int, float, or str")
@@ -53,11 +60,23 @@ class NRPyParameter:
 
 class CodeParameter:
     """
-    Class for handling code parameters.
+    Represent a code parameter.
 
-    Doctest:
-    >>> param = CodeParameter(cparam_type='int', module='module2', name='param1', defaultvalue='defaultval2')
+    DocTests:
+    >>> param = CodeParameter(cparam_type='int', module='module2', name='param1', defaultvalue='defaultval2', description='A code parameter.')
     >>> param.name in glb_code_params_dict
+    True
+    >>> param_no_desc = CodeParameter(cparam_type='float', module='module2', name='param_no_desc', defaultvalue=3.14)
+    >>> print(glb_code_params_dict[param_no_desc.name].__dict__)
+    {'cparam_type': 'float', 'module': 'module2', 'name': 'param_no_desc', 'defaultvalue': 3.14, 'assumption': 'Real', 'add_to_parfile': True, 'add_to_set_CodeParameters_h': True, 'commondata': False, 'add_to_glb_code_params_dict': True, 'description': '', 'symbol': param_no_desc}
+    >>> try:
+    ...     param_array = CodeParameter(cparam_type='REAL[5]', module='module3', name='param_array', commondata=False, add_to_set_CodeParameters_h=True, add_to_parfile=False)
+    ... except ValueError as e:
+    ...     print(e)
+    Parameter 'param_array' of type 'REAL[5]': For REAL or int array parameters, commondata must be True and add_to_set_CodeParameters_h must be False.
+    >>> # Correct usage with commondata=True and add_to_set_CodeParameters_h=False
+    >>> param_array_correct = CodeParameter(cparam_type='REAL[5]', module='module3', name='param_array_correct', commondata=True, add_to_set_CodeParameters_h=False, add_to_parfile=False)
+    >>> param_array_correct.name in glb_code_params_dict
     True
     """
 
@@ -72,6 +91,7 @@ class CodeParameter:
         add_to_parfile: bool = True,
         add_to_set_CodeParameters_h: bool = True,
         add_to_glb_code_params_dict: bool = True,
+        description: str = "",
     ) -> None:
         """
         Initialize a CodeParameter with various properties and assumptions.
@@ -85,6 +105,7 @@ class CodeParameter:
         :param add_to_parfile: If True, include this parameter in parameter files. Default is True.
         :param add_to_set_CodeParameters_h: If True, add to set_CodeParameters*.h, applicable for BHaH. Default is True.
         :param add_to_glb_code_params_dict: If True, add to global code parameters dictionary. Default is True.
+        :param description: Description of the parameter.
         :raises ValueError: If `defaultvalue` is "unset" for a parameter intended for a parfile, or if an unsupported
                             assumption is specified.
         """
@@ -97,6 +118,20 @@ class CodeParameter:
         self.add_to_set_CodeParameters_h = add_to_set_CodeParameters_h
         self.commondata = commondata
         self.add_to_glb_code_params_dict = add_to_glb_code_params_dict
+        self.description = description
+
+        # Check if cparam_type is a REAL or int array
+        if (
+            (self.cparam_type.startswith("REAL") or self.cparam_type.startswith("int"))
+            and "[" in self.cparam_type
+            and "]" in self.cparam_type
+        ):
+            if not (self.commondata and not self.add_to_set_CodeParameters_h):
+                raise ValueError(
+                    f"Parameter '{self.name}' of type '{self.cparam_type}': "
+                    "For REAL or int array parameters, commondata must be True "
+                    "and add_to_set_CodeParameters_h must be False."
+                )
 
         if cparam_type == "#define":
             self.add_to_parfile = False
@@ -129,11 +164,13 @@ class CodeParameter:
 glb_params_dict: Dict[str, NRPyParameter] = {}
 # Where we store C runtime parameters and default values of parameters.
 glb_code_params_dict: Dict[str, CodeParameter] = {}
-# Where we dictionaries of dictionaries
+# Where we store dictionaries of dictionaries
 glb_extras_dict: Dict[str, Dict[str, Any]] = {}
 
 
-def register_param(py_type: Any, module: str, name: str, value: Any) -> None:
+def register_param(
+    py_type: Any, module: str, name: str, value: Any, description: str = ""
+) -> None:
     """
     Initialize a parameter and add it to the global parameters list if not already present.
 
@@ -141,16 +178,22 @@ def register_param(py_type: Any, module: str, name: str, value: Any) -> None:
     :param module: Name of the module the parameter belongs to.
     :param name: Name of the parameter.
     :param value: The default value of the parameter.
+    :param description: Description of the parameter.
 
-    Doctest:
+    DocTests:
     >>> parname = "param1"
-    >>> register_param(py_type=str, module='module1', name=parname, value='defaultval1')
+    >>> register_param(py_type=str, module='module1', name=parname, value='defaultval1', description='Test parameter.')
     >>> parname in glb_params_dict
     True
     >>> print(glb_params_dict[parname].__dict__)
-    {'py_type': <class 'str'>, 'module': 'module1', 'name': 'param1', 'value': 'defaultval1'}
+    {'py_type': <class 'str'>, 'module': 'module1', 'name': 'param1', 'value': 'defaultval1', 'description': 'Test parameter.'}
+    >>> register_param(py_type=int, module='module1', name='param_no_desc', value=42)
+    >>> print(glb_params_dict['param_no_desc'].__dict__)
+    {'py_type': <class 'int'>, 'module': 'module1', 'name': 'param_no_desc', 'value': 42, 'description': ''}
     """
-    NRPyParameter(py_type=py_type, module=module, name=name, value=value)
+    NRPyParameter(
+        py_type=py_type, module=module, name=name, value=value, description=description
+    )
 
 
 def parval_from_str(parameter_name: str) -> Any:
@@ -159,12 +202,14 @@ def parval_from_str(parameter_name: str) -> Any:
 
     :param parameter_name: The name of the parameter. If the parameter name includes a module prefix ('module::name'),
                            only the part after '::' is considered.
-    :return: The value of the parameter. The type of the return value depends on the parameter's stored value.
+    :return: The value of the parameter.
     :raises ValueError: If the specified parameter name does not exist in the global parameter dictionary.
 
-    Doctest:
-    >>> try: parval_from_str('non_existent_param')
-    ... except ValueError: print("test passes!")
+    DocTests:
+    >>> try:
+    ...     parval_from_str('non_existent_param')
+    ... except ValueError:
+    ...     print("test passes!")
     test passes!
     >>> register_param(py_type=int, module='blah', name='pvalfromstrtest', value=4)
     >>> print(parval_from_str('pvalfromstrtest'))
@@ -172,7 +217,6 @@ def parval_from_str(parameter_name: str) -> Any:
     >>> print(parval_from_str('blah::pvalfromstrtest'))
     4
     """
-    # Splitting the parameter_name by '::' and using the last part if '::' is present
     actual_param_name = parameter_name.split("::")[-1]
 
     if actual_param_name in glb_params_dict:
@@ -192,12 +236,13 @@ def set_parval_from_str(parameter_name: str, new_value: Any) -> None:
 
     :param parameter_name: Name of the parameter to update.
     :param new_value: New value to be assigned to the parameter.
-
     :raises ValueError: If the parameter name is not found in the global parameters list.
 
-    Doctest:
-    >>> try: set_parval_from_str('non_existent_param', -100)
-    ... except ValueError: print("Test passes!")
+    DocTests:
+    >>> try:
+    ...     set_parval_from_str('non_existent_param', -100)
+    ... except ValueError:
+    ...     print("Test passes!")
     Test passes!
     """
     if parameter_name in glb_params_dict:
@@ -218,6 +263,7 @@ def register_CodeParameters(
     add_to_parfile: bool = True,
     add_to_set_CodeParameters_h: bool = True,
     add_to_glb_code_params_dict: bool = True,
+    description: str = "",
 ) -> List[sp.Symbol]:
     """
     Initialize CodeParameters and return their symbolic representation.
@@ -231,15 +277,15 @@ def register_CodeParameters(
     :param add_to_parfile: Allow parameter to be set within a parameter file (default: True).
     :param add_to_set_CodeParameters_h: Add parameter to set_CodeParameters*.h (default: True). Only applies for BHaH.
     :param add_to_glb_code_params_dict: Whether to add the parameter to the global code parameters dictionary (default: True).
-
-    :return: A list of the symbolic parameters. If there's only one parameter, it directly returns the symbol.
+    :param description: Description of the parameter.
+    :return: A list of the symbolic parameters.
 
     :raises ValueError: If the assumption is not supported, or if the lengths of names and defaultvalues do not match.
 
-    Doctest:
+    DocTests:
     >>> glb_code_params_dict.clear()
-    >>> a0,a1,b,c = register_CodeParameters(cparam_type="REAL", module=__name__, names=["a0", "a1", "b", "c"], defaultvalues=1)
-    >>> print(a0,a1,b,c)
+    >>> a0, a1, b, c = register_CodeParameters(cparam_type="REAL", module=__name__, names=["a0", "a1", "b", "c"], defaultvalues=1)
+    >>> print(a0, a1, b, c)
     a0 a1 b c
     >>> outstr = ""
     >>> outstr += " ".join(param.name for _, param in glb_code_params_dict.items())
@@ -276,6 +322,7 @@ def register_CodeParameters(
             add_to_parfile=add_to_parfile,
             add_to_set_CodeParameters_h=add_to_set_CodeParameters_h,
             add_to_glb_code_params_dict=add_to_glb_code_params_dict,
+            description=description,
         )
         symbols.append(CP.symbol)
 
@@ -286,12 +333,13 @@ def register_CodeParameter(
     cparam_type: str,
     module: str,
     name: str,
-    defaultvalue: Union[str, int, float] = "unset",
+    defaultvalue: Union[str, int, float, List[Any]] = "unset",
     assumption: str = "Real",
     commondata: bool = False,
     add_to_parfile: bool = True,
     add_to_set_CodeParameters_h: bool = True,
     add_to_glb_code_params_dict: bool = True,
+    description: str = "",
 ) -> sp.Symbol:
     """
     Initialize a CodeParameter and return its symbolic representation.
@@ -305,14 +353,14 @@ def register_CodeParameter(
     :param add_to_parfile: Allow parameter to be set within a parameter file (default: True).
     :param add_to_set_CodeParameters_h: Add parameter to set_CodeParameters*.h (default: True). Only applies for BHaH.
     :param add_to_glb_code_params_dict: Whether to add the parameter to the global code parameters dictionary (default: True).
-
+    :param description: Description of the parameter.
     :return: A symbolic parameter.
 
     :raises TypeError: If the name is not a simple string.
 
-    Doctest:
+    DocTests:
     >>> glb_code_params_dict.clear()
-    >>> a0 = register_CodeParameter(cparam_type="REAL", module=__name__, name="a0", add_to_parfile=False, assumption="Real")
+    >>> a0 = register_CodeParameter(cparam_type="REAL", module=__name__, name="a0", add_to_parfile=False, assumption="Real", description='Test parameter.')
     >>> print(a0)
     a0
     >>> outstr = ""
@@ -323,10 +371,13 @@ def register_CodeParameter(
     >>> outstr += " ".join(str(param.defaultvalue) for _, param in glb_code_params_dict.items())
     >>> print(outstr)
     unset
-    >>> a1 = register_CodeParameter(cparam_type="REAL", module=__name__, name="a1", assumption="Real")
+    >>> a1 = register_CodeParameter(cparam_type="REAL", module=__name__, name="a1", defaultvalue=0.0)
+    >>> print(a1)
+    a1
+    >>> a2 = register_CodeParameter(cparam_type="REAL", module=__name__, name="a2", assumption="Real")
     Traceback (most recent call last):
       ...
-    ValueError: Parameter a1: Must set a default value for all parameters with add_to_parfile=True
+    ValueError: Parameter a2: Must set a default value for all parameters with add_to_parfile=True
     """
     if not isinstance(name, str):
         raise TypeError(
@@ -343,6 +394,7 @@ def register_CodeParameter(
         add_to_parfile=add_to_parfile,
         add_to_set_CodeParameters_h=add_to_set_CodeParameters_h,
         add_to_glb_code_params_dict=add_to_glb_code_params_dict,
+        description=description,
     )
     return CP.symbol
 
@@ -353,9 +405,9 @@ def adjust_CodeParam_default(CodeParameter_name: str, new_default: Any) -> None:
 
     :param CodeParameter_name: The name of the code parameter to be adjusted.
     :param new_default: The new default value for the code parameter.
-
     :raises ValueError: If the given CodeParameter_name does not exist in glb_code_params_dict.
 
+    DocTests:
     >>> _ = register_CodeParameter("REAL", __name__, "dummy", 1.0)
     >>> glb_code_params_dict["dummy"].defaultvalue
     1.0

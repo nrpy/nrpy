@@ -22,14 +22,22 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
         generated C code.
 
     DocTests:
+    >>> _real_array = par.register_CodeParameter("REAL[5]", "CodeParameters_c_files", "bad_real_array", 0.0, commondata=True, add_to_set_CodeParameters_h=True)
+    Traceback (most recent call last):
+    ...
+    ValueError: Parameter 'bad_real_array' of type 'REAL[5]': For REAL or int array parameters, commondata must be True and add_to_set_CodeParameters_h must be False.
+    >>> _int_array = par.register_CodeParameter("int[3]", "CodeParameters_c_files", "bad_int_array", 42, commondata=False, add_to_set_CodeParameters_h=False)
+    Traceback (most recent call last):
+    ...
+    ValueError: Parameter 'bad_int_array' of type 'int[3]': For REAL or int array parameters, commondata must be True and add_to_set_CodeParameters_h must be False.
     >>> _, __ = par.register_CodeParameters("REAL", "CodeParameters_c_files", ["a", "pi_three_sigfigs"], [1, 3.14], commondata=True)
     >>> ___ = par.register_CodeParameter("#define", "CodeParameters_c_files", "b", 0)
     >>> _leaveitbe = par.register_CodeParameter("REAL", "CodeParameters_c_files", "leaveitbe", add_to_parfile=False, add_to_set_CodeParameters_h=False)
     >>> _int = par.register_CodeParameter("int", "CodeParameters_c_files", "blah_int", 1, commondata=True, add_to_parfile=True, add_to_set_CodeParameters_h=False)
     >>> _str = par.register_CodeParameter("char[100]", "CodeParameters_c_files", "some_string", "cheese")
     >>> _bool = par.register_CodeParameter("bool", "CodeParameters_c_files", "BHaH_is_amazing", True, add_to_set_CodeParameters_h=True)
-    >>> _real_array = par.register_CodeParameter("REAL[5]", "CodeParameters_c_files", "real_array", 0.0, commondata=True)
-    >>> _int_array = par.register_CodeParameter("int[3]", "CodeParameters_c_files", "int_array", 42)
+    >>> _real_array = par.register_CodeParameter("REAL[5]", "CodeParameters_c_files", "real_array", 0.0, commondata=True, add_to_set_CodeParameters_h=False)
+    >>> _int_array = par.register_CodeParameter("int[3]", "CodeParameters_c_files", "int_array", 42, commondata=True, add_to_set_CodeParameters_h=False)
     >>> cfc.CFunction_dict.clear()
     >>> register_CFunctions_params_commondata_struct_set_to_default()
     >>> print(cfc.CFunction_dict["params_struct_set_to_default"].full_function)
@@ -42,9 +50,6 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
       for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
         params_struct *restrict params = &griddata[grid].params;
         // Set params_struct variables to default
-        for (int i = 0; i < 3; i++) {
-          params->int_array[i] = 42;
-        }                                             // CodeParameters_c_files::int_array
         params->BHaH_is_amazing = true;               // CodeParameters_c_files::BHaH_is_amazing
         snprintf(params->some_string, 100, "cheese"); // CodeParameters_c_files::some_string
       }
@@ -61,6 +66,9 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
       commondata->a = 1;                   // CodeParameters_c_files::a
       commondata->blah_int = 1;            // CodeParameters_c_files::blah_int
       commondata->pi_three_sigfigs = 3.14; // CodeParameters_c_files::pi_three_sigfigs
+      for (int i = 0; i < 3; i++) {
+        commondata->int_array[i] = 42;
+      } // CodeParameters_c_files::int_array
       for (int i = 0; i < 5; i++) {
         commondata->real_array[i] = 0.0;
       } // CodeParameters_c_files::real_array
@@ -149,24 +157,10 @@ def write_CodeParameters_h_files(
     >>> project_dir = Path("/tmp/tmp_project/")
     >>> write_CodeParameters_h_files(str(project_dir))
     >>> print((project_dir / 'set_CodeParameters.h').read_text())
-    const REAL a = commondata->a;                         // CodeParameters_c_files::a
-    const bool BHaH_is_amazing = params->BHaH_is_amazing; // CodeParameters_c_files::BHaH_is_amazing
-    int int_array[3];                                     // CodeParameters_c_files::int_array
-    {
-      // Copy 3 elements from params->int_array to int_array
-      for (int i = 0; i < 3; i++) {
-        int_array[i] = params->int_array[i];
-      }
-    }
+    const REAL a = commondata->a;                               // CodeParameters_c_files::a
+    const bool BHaH_is_amazing = params->BHaH_is_amazing;       // CodeParameters_c_files::BHaH_is_amazing
     const REAL pi_three_sigfigs = commondata->pi_three_sigfigs; // CodeParameters_c_files::pi_three_sigfigs
-    REAL real_array[5];                                         // CodeParameters_c_files::real_array
-    {
-      // Copy 5 elements from commondata->real_array to real_array
-      for (int i = 0; i < 5; i++) {
-        real_array[i] = commondata->real_array[i];
-      }
-    }
-    char some_string[100]; // CodeParameters_c_files::some_string
+    char some_string[100];                                      // CodeParameters_c_files::some_string
     {
       // Copy up to 99 characters from params->some_string to some_string
       strncpy(some_string, params->some_string, 100 - 1);
@@ -174,24 +168,10 @@ def write_CodeParameters_h_files(
       some_string[100 - 1] = '\0'; // Properly null terminate char array.
     }
     >>> print((project_dir / 'set_CodeParameters-nopointer.h').read_text())
-    const REAL a = commondata.a;                         // CodeParameters_c_files::a
-    const bool BHaH_is_amazing = params.BHaH_is_amazing; // CodeParameters_c_files::BHaH_is_amazing
-    int int_array[3];                                    // CodeParameters_c_files::int_array
-    {
-      // Copy 3 elements from params.int_array to int_array
-      for (int i = 0; i < 3; i++) {
-        int_array[i] = params.int_array[i];
-      }
-    }
+    const REAL a = commondata.a;                               // CodeParameters_c_files::a
+    const bool BHaH_is_amazing = params.BHaH_is_amazing;       // CodeParameters_c_files::BHaH_is_amazing
     const REAL pi_three_sigfigs = commondata.pi_three_sigfigs; // CodeParameters_c_files::pi_three_sigfigs
-    REAL real_array[5];                                        // CodeParameters_c_files::real_array
-    {
-      // Copy 5 elements from commondata.real_array to real_array
-      for (int i = 0; i < 5; i++) {
-        real_array[i] = commondata.real_array[i];
-      }
-    }
-    char some_string[100]; // CodeParameters_c_files::some_string
+    char some_string[100];                                     // CodeParameters_c_files::some_string
     {
       // Copy up to 99 characters from params.some_string to some_string
       strncpy(some_string, params.some_string, 100 - 1);
@@ -210,11 +190,11 @@ def write_CodeParameters_h_files(
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
 
-    # Step 4: Generate C code to set C parameter constants
-    #         output to filename "set_CodeParameters.h" if enable_simd==False
-    #         or "set_CodeParameters-simd.h" if enable_simd==True
+    # Generate C code to set C parameter constants
+    # output to filename "set_CodeParameters.h" if enable_simd==False
+    # or "set_CodeParameters-simd.h" if enable_simd==True
 
-    # Step 4.a: Output non-SIMD version, set_CodeParameters.h
+    # Output non-SIMD version, set_CodeParameters.h
     def gen_set_CodeParameters(pointerEnable: bool = True) -> str:
         """
         Generate content for set_CodeParameters*.h based on the pointerEnable flag.
