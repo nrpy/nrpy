@@ -197,7 +197,7 @@ void pup_bc_struct(PUP::er &p, bc_struct &bc) {
 // PUP routine for struct MoL_gridfunctions_struct
 void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfuncs, const params_struct &params) {"""
 
-    prefunc += rf"""
+    prefunc += r"""
   p | gridfuncs.num_evol_gfs_to_sync;
   p | gridfuncs.num_auxevol_gfs_to_sync;
   p | gridfuncs.max_sync_gfs;
