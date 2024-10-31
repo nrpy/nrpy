@@ -177,9 +177,11 @@ def output_BHaH_defines_h(
     _a * _a; \
 }})
 """
+
     code_params_includes_define_type = False
     for CPname, CodeParam in par.glb_code_params_dict.items():
-        if CodeParam.cparam_type == "#define":
+        CPtype = CodeParam.cparam_type
+        if CPtype == "#define":
             if not code_params_includes_define_type:
                 code_params_includes_define_type = True
                 gen_BHd_str += "// START: CodeParameters declared as #define.\n"
@@ -203,29 +205,64 @@ def output_BHaH_defines_h(
     CCodelines_params_struct: List[str] = []
     CCodelines_commondata_struct: List[str] = []
 
+    # Helper function to format C declarations without using regex
+    def format_c_declaration(
+        cp_type: str, var_name: str, module: str, description: str
+    ) -> str:
+        """
+        Given a CodeParameter type, variable name, module, and description, return the correct C declaration string.
+        Handles both scalar and array types using simple string operations.
+
+        :param cp_type: The type of the C parameter (e.g., "REAL" or "int[8]").
+        :param var_name: The name of the variable.
+        :param module: The module name to be included in the comment.
+        :param description: A description of the parameter to be appended to the comment.
+                            If empty, only the module and variable name are included in the comment.
+
+        :return: A formatted C declaration string with an inline comment.
+        """
+        if "[" in cp_type and "]" in cp_type:
+            base_type, size_with_bracket = cp_type.split("[", 1)
+            size = size_with_bracket.split("]", 1)[0]
+            base_type = base_type.strip()
+            size = size.strip()
+            if base_type.startswith("char"):
+                # Handle char arrays
+                decl = f"  char {var_name}[{size}];"
+            else:
+                decl = f"  {base_type} {var_name}[{size}];"
+        else:
+            decl = f"  {cp_type} {var_name};"
+
+        # Conditional comment based on description
+        if description:
+            comment = f" // {module}::{var_name} {description}"
+        else:
+            comment = f" // {module}::{var_name}"
+
+        return decl + comment + "\n"
+
     # Add all CodeParameters
     # Iterate through the global code parameters dictionary
     for CPname, CodeParam in par.glb_code_params_dict.items():
         CPtype = CodeParam.cparam_type
         if CPtype != "#define":
-            comment = f"  // {CodeParam.module}::{CPname}"
-            c_output = f"  {CPtype} {CPname};{comment}\n"
-            if "char" in CPtype and "[" in CPtype and "]" in CPtype:
-                chararray_size = CPtype.split("[")[1].replace("]", "")
-                c_output = f"char {CPname}[{chararray_size}];{comment}\n"
-
-            # Append c_output to the appropriate structure: commondata or params
+            # All CodeParams have a description field
+            description = CodeParam.description.strip()
+            module = CodeParam.module
+            c_declaration = format_c_declaration(CPtype, CPname, module, description)
+            # Append c_declaration to the appropriate structure: commondata or params
             if CodeParam.commondata:
-                CCodelines_commondata_struct.append(c_output)
+                CCodelines_commondata_struct.append(c_declaration)
             else:
-                CCodelines_params_struct.append(c_output)
+                CCodelines_params_struct.append(c_declaration)
 
     if "commondata_struct" in par.glb_extras_dict:
         for module, item_list in par.glb_extras_dict["commondata_struct"].items():
             for item in item_list:
                 c_code_line = f"  {item.c_declaration};"
                 if item.description != "":
-                    c_code_line += f"// <- {module}: {item.description}"
+                    c_code_line += f" // <- {module}: {item.description}"
                 CCodelines_commondata_struct.append(c_code_line + "\n")
 
     # Sort CCodelines_params_struct and append them to the par_BHd_str
@@ -267,7 +304,8 @@ def output_BHaH_defines_h(
         if not enable_simd:
             fin_BHd_str += """
 // When enable_simd = False, this is the UPWIND_ALG() macro:
-#define UPWIND_ALG(UpwindVecU) UpwindVecU > 0.0 ? 1.0 : 0.0\n"""
+#define UPWIND_ALG(UpwindVecU) UpwindVecU > 0.0 ? 1.0 : 0.0
+"""
         register_BHaH_defines("finite_difference", fin_BHd_str)
 
     ###############################
@@ -309,7 +347,6 @@ _Pragma(__OMP_PRAGMA__)  \
         :param key_name: The name of the module or key.
         :param item_name: The definitions or content associated with the module.
         :return: A formatted string containing the module name and its content.
-
         """
         return f"""
 //********************************************
