@@ -95,7 +95,7 @@ static void safe_copy(char *dest, const char *src, size_t size) {
 
     # Generate the usage instructions string
     list_of_steerable_params_str = " ".join(cmdline_inputs)
-    prefunc += rf"""\
+    prefunc += rf"""
 // Function to print usage instructions
 static void print_usage() {{
   fprintf(stderr, "Usage option 0: ./{project_name} [--help or -h] - Outputs this usage command\n");
