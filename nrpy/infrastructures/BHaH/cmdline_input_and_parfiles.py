@@ -7,7 +7,7 @@ Author: Zachariah B. Etienne
 
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Dict, List, Union, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import nrpy.c_function as cfc
 import nrpy.params as par
@@ -391,12 +391,12 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
     ###########################
     ###########################
     ### Module: CodeParameters_c_files
-    a = 1.0                                   # (REAL)
-    bah_initial_x_center = { 0.0, 0.0, 0.0 }  # (REAL[3])
-    blahint = -1                              # (int)
-    initial_levels = { 4, 4 }                 # (int[2])
-    pi_three_sigfigs = 3.14                   # (REAL)
-    string[100] = cheese                      # (char)
+    a = 1.0                                      # (REAL)
+    bah_initial_x_center[3] = { 0.0, 0.0, 0.0 }  # (REAL[3])
+    blahint = -1                                 # (int)
+    initial_levels[2] = { 4, 4 }                 # (int[2])
+    pi_three_sigfigs = 3.14                      # (REAL)
+    string[100] = cheese                         # (char)
     <BLANKLINE>
     """
     parfile_output_dict: Dict[str, List[str]] = defaultdict(list)
@@ -429,8 +429,9 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
                         default_vals = ", ".join([f"{float(default_val)}"] * size)
                     else:  # int
                         default_vals = ", ".join([str(int(default_val))] * size)
+                    # **Append the size to the variable name**
                     parfile_output_dict[CodeParam.module].append(
-                        f"{parname} = {{ {default_vals} }}  # ({CPtype})\n"
+                        f"{parname}[{size}] = {{ {default_vals} }}  # ({CPtype})\n"
                     )
                 else:
                     # Handle other array types if necessary
