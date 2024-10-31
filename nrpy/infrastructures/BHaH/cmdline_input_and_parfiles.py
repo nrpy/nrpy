@@ -47,7 +47,15 @@ def register_CFunction_cmdline_input_and_parfile_parser(
 #define LINE_SIZE 1024 // Define the max size of a line
 #define PARAM_SIZE 128 // Define the max param string size
 
-// Trim leading and trailing spaces
+/**
+ * Trims leading and trailing whitespace from a string.
+ *
+ * @param str - The input string to be trimmed.
+ * @return - A pointer to the trimmed string.
+ *
+ * This function removes any leading and trailing whitespace characters from the input string.
+ * It modifies the original string by inserting a null terminator after the last non-space character.
+ */
 static char *trim_space(char *str) {
   char *end;
 
@@ -69,7 +77,17 @@ static char *trim_space(char *str) {
   return str;
 }
 
-// Safe copy function to prevent buffer overflows
+/**
+ * Safely copies a source string to a destination buffer, preventing buffer overflows.
+ *
+ * @param dest - The destination buffer where the string will be copied.
+ * @param src - The source string to be copied.
+ * @param size - The size of the destination buffer.
+ *
+ * This function ensures that the source string fits within the destination buffer.
+ * It checks for NULL pointers and verifies that the source string does not exceed the buffer size.
+ * If any of these conditions fail, the function prints an error message and terminates the program.
+ */
 static void safe_copy(char *dest, const char *src, size_t size) {
   if (src == NULL) {
     fprintf(stderr, "Error: Source string is NULL.\n");
@@ -96,7 +114,13 @@ static void safe_copy(char *dest, const char *src, size_t size) {
     # Generate the usage instructions string
     list_of_steerable_params_str = " ".join(cmdline_inputs)
     prefunc += rf"""
-// Function to print usage instructions
+/**
+ * Prints usage instructions for the program.
+ *
+ * This function outputs the different usage options available for running the
+ * blackhole_spectroscopy executable. It guides users on how to provide parameter
+ * files and convergence factors through command-line arguments.
+ */
 static void print_usage() {{
   fprintf(stderr, "Usage option 0: ./{project_name} [--help or -h] - Outputs this usage command\n");
   fprintf(stderr, "Usage option 1: ./{project_name} - Reads in parameter file {project_name}.par\n");
@@ -190,8 +214,16 @@ typedef struct {
 
     # Define the functions to find parameter descriptors and parse parameters
     prefunc += r"""
-// Function to find parameter descriptor by name
-param_descriptor *find_param_descriptor(const char *param_name) {
+/**
+ * Searches for a parameter descriptor by its name.
+ *
+ * @param param_name - The name of the parameter to search for.
+ * @return - A pointer to the corresponding param_descriptor if found; otherwise, NULL.
+ *
+ * This function iterates through the param_table to find a descriptor that matches the given
+ * parameter name. It facilitates parameter validation and assignment during parsing.
+ */
+ param_descriptor *find_param_descriptor(const char *param_name) {
   for (int i = 0; i < NUM_PARAMS; i++) {
     if (strcmp(param_table[i].name, param_name) == 0) {
       return &param_table[i];
@@ -200,8 +232,19 @@ param_descriptor *find_param_descriptor(const char *param_name) {
   return NULL;
 }
 
-// Function to parse parameter name and array size
-static void parse_param(const char *param_str, char *param_name, int *array_size) {
+/**
+ * Parses a parameter string to extract the parameter name and array size if applicable.
+ *
+ * @param param_str - The input parameter string, potentially containing array notation.
+ * @param param_name - Buffer to store the extracted parameter name.
+ * @param array_size - Pointer to store the extracted array size; set to 0 for scalar parameters.
+ *
+ * This function analyzes the parameter string to determine if it represents an array. If array
+ * notation (e.g., param[10]) is detected, it extracts the base parameter name and the specified
+ * array size. For scalar parameters, it copies the parameter name directly and sets the array
+ * size to zero.
+ */
+ static void parse_param(const char *param_str, char *param_name, int *array_size) {
   const char *bracket_start = strchr(param_str, '[');
   if (bracket_start != NULL) {
     // It's an array parameter
@@ -360,7 +403,7 @@ static void read_boolean(const char *value, bool *result, const char *param_name
   if (argc == 2 && (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)) {{
     print_usage();
     exit(0);
-  }}
+  }}  // END IF: Checking for help option.
 
   // Determine the usage option based on argc
   if (argc == 1) {{
@@ -395,29 +438,32 @@ static void read_boolean(const char *value, bool *result, const char *param_name
     fprintf(stderr, "Error: Invalid number of arguments\n");
     print_usage();
     exit(1);
-  }}
+  }}  // END IF-ELSE: Determining usage option.
 
   // fprintf(stderr, "Using option %d\n", option);
 
+  // Determine the filename based on the selected option.
   const char *filename = (option == 1 || option == 3) ? "{project_name}.par" : argv[1];
   FILE *file = fopen(filename, "r");
   if (file == NULL) {{
     print_usage();
     exit(1);
-  }}
+  }}  // END IF: Checking if the parameter file opened successfully.
 
   char line[LINE_SIZE];
   char param[PARAM_SIZE];
   char value[PARAM_SIZE];
-  int params_set[NUM_PARAMETERS] = {{0}}; // Record of parameters set
+  int params_set[NUM_PARAMETERS] = {{0}}; // Track which parameters have been set.
 
+  // Iterate through each line of the parameter file.
   while (fgets(line, sizeof(line), file)) {{
-    // Removing comments from the line
+    // Remove comments from the line.
     char *comment_start = strchr(line, '#');
     if (comment_start != NULL) {{
       *comment_start = '\0';
     }}
 
+    // Split the line into parameter and value based on '=' delimiter.
     char *p = strtok(line, "=");
     if (p) {{
       safe_copy(param, trim_space(p), sizeof(param));
@@ -429,7 +475,7 @@ static void read_boolean(const char *value, bool *result, const char *param_name
         int array_size = 0;
         parse_param(param, param_name, &array_size);
 
-        // Check for invalid characters in parameter name
+        // Validate characters in the parameter name.
         for (int i = 0; param_name[i]; i++) {{
           if (!isalnum(param_name[i]) && param_name[i] != '_') {{
             fprintf(stderr, "Error: Invalid parameter name %s.\n", param_name);
@@ -437,26 +483,26 @@ static void read_boolean(const char *value, bool *result, const char *param_name
           }}
         }}
 
-        // Parse value
+        // Parse the value string into individual values.
         char values_array[MAX_ARRAY_SIZE][PARAM_SIZE];
         int value_count = 0;
         parse_value(value, values_array, &value_count);
 
-        // Lookup parameter descriptor
+        // Lookup the parameter descriptor.
         param_descriptor *param_desc = find_param_descriptor(param_name);
         if (param_desc == NULL) {{
           fprintf(stderr, "Warning: Unrecognized parameter %s.\n", param_name);
           continue; // Decide whether to exit or ignore
         }}
 
-        // Check for duplicate parameters
+        // Check for duplicate parameter definitions.
         if (params_set[param_desc->index] == 1) {{
           fprintf(stderr, "Error: Duplicate parameter %s.\n", param_name);
           exit(1);
         }}
         params_set[param_desc->index] = 1;
 
-        // Check array size
+        // Validate array size if applicable.
         if (param_desc->array_size > 0) {{
           // It's an array parameter
           if (array_size != param_desc->array_size) {{
@@ -479,7 +525,7 @@ static void read_boolean(const char *value, bool *result, const char *param_name
           }}
         }}
 
-        // Now, assign values
+        // Assign the parsed values to the corresponding fields in commondata.
 """
 
     # Build assignment code
@@ -559,7 +605,7 @@ static void read_boolean(const char *value, bool *result, const char *param_name
     body += """
     } // END IF (option == 3 || option == 4)
   } // END WHILE LOOP over all lines in the file
-  fclose(file);
+  fclose(file); // Close the parameter file.
 """
 
     # Register the C function with the constructed components
@@ -572,20 +618,19 @@ static void read_boolean(const char *value, bool *result, const char *param_name
             "<stdbool.h>",
         ],
         prefunc=prefunc,
-        desc=r"""AUTOMATICALLY GENERATED BY parameter_file_read_and_parse.py
-parameter_file_read_and_parse() function:
-Reads and parses a parameter file to populate commondata_struct commondata.
+        desc=r"""AUTOMATICALLY GENERATED BY cmdline_input_and_parfiles.py
 
-This function takes in the command-line arguments and a pointer to a commondata_struct.
-It reads the provided file and extracts the parameters defined in the file, populating
-the commondata_struct with the values. The file is expected to contain key-value pairs
-separated by an equals sign (=), and it may include comments starting with a hash (#).
-The function handles errors such as file opening failure, duplicate parameters, and
-invalid parameter names.
+Reads and parses a parameter file to populate the commondata_struct.
 
-@param commondata: Pointer to the commondata struct to be populated.
-@param argc: The argument count from the command-line input.
-@param argv: The argument vector containing command-line arguments.""",
+This function processes command-line arguments and reads parameters from a specified
+parameter file or a default file. It supports various usage options, including displaying
+help information, reading different parameter files, and overwriting steerable parameters
+with provided convergence factors. The function ensures that all parameters are valid,
+correctly formatted, and not duplicated.
+
+@param commondata - Pointer to the commondata_struct to be populated.
+@param argc - The argument count from the command-line input.
+@param argv - The argument vector containing command-line arguments.""",
         cfunc_type=cfunc_type,
         name=name,
         params=params_str,
