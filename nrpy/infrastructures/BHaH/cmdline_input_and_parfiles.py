@@ -202,13 +202,13 @@ param_descriptor *find_param_descriptor(const char *param_name) {
 
 // Function to parse parameter name and array size
 static void parse_param(const char *param_str, char *param_name, int *array_size) {
-  char *bracket_start = strchr(param_str, '[');
+  const char *bracket_start = strchr(param_str, '[');
   if (bracket_start != NULL) {
     // It's an array parameter
     size_t name_len = bracket_start - param_str;
     strncpy(param_name, param_str, name_len);
     param_name[name_len] = '\0';
-    char *bracket_end = strchr(bracket_start + 1, ']');
+    const char *bracket_end = strchr(bracket_start + 1, ']');
     if (bracket_end == NULL) {
       fprintf(stderr, "Error: Missing closing bracket in parameter %s.\n", param_str);
       exit(1);
