@@ -541,7 +541,6 @@ static void read_boolean(const char *value, bool *result, const char *param_name
             }
         }
 
-        fclose(file);
         // Handling options 3 and 4: Overwriting steerable parameters
         if (option == 3 || option == 4) {
             // For options 3 and 4, we extract the last arguments as steerable parameters
@@ -557,8 +556,11 @@ static void read_boolean(const char *value, bool *result, const char *param_name
             elif CodeParam.cparam_type == "REAL":
                 steerable_body += f'            read_REAL(argv[argc - number_of_steerable_parameters + {i}], &commondata->{key}, "{key}");\n'
     body += steerable_body
-    body += "        }\n"  # Close the if (option == 3 || option == 4) block
-    body += "}\n"  # Close the main function
+    body += """
+    } // END IF (option == 3 || option == 4)
+  } // END WHILE LOOP over all lines in the file
+  fclose(file);
+"""
 
     # Register the C function with the constructed components
     cfc.register_CFunction(
