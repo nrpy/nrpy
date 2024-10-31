@@ -118,8 +118,8 @@ static void safe_copy(char *dest, const char *src, size_t size) {
  * Prints usage instructions for the program.
  *
  * This function outputs the different usage options available for running the
- * blackhole_spectroscopy executable. It guides users on how to provide parameter
- * files and convergence factors through command-line arguments.
+ * {project_name} executable. It guides users on how to provide parameter
+ * files and overwrite steerable parameters through command-line arguments.
  */
 static void print_usage() {{
   fprintf(stderr, "Usage option 0: ./{project_name} [--help or -h] - Outputs this usage command\n");
@@ -141,12 +141,12 @@ typedef struct {
     const char *name;
     int index;
     param_type type;
-    int array_size; // For array parameters
+    int array_size;    // For array parameters
+    size_t buffer_size; // For char arrays
 } param_descriptor;
 
-// param_table[] is a list of parameter descriptors, each containing the parameter's name, unique index, type, and array size.
-// This table is used to lookup and manage parameters during parsing, ensuring that each parameter is correctly identified
-// and assigned the appropriate value in the common data structure.
+// param_table[] is a list of parameter descriptors, each containing the parameter's name, unique index, type, array size, and buffer size.
+param_descriptor param_table[] = {
 """
 
     # Define the parameter table entries
@@ -164,6 +164,8 @@ typedef struct {
             param_name = key
             cparam_type = CodeParam.cparam_type.strip()
             array_size = 0
+            buffer_size = 0  # Default buffer_size
+
             if "int[" in cparam_type or "int [" in cparam_type:
                 param_type = "PARAM_INT_ARRAY"
                 array_size = int(cparam_type.split("[")[1].split("]")[0])
@@ -180,7 +182,8 @@ typedef struct {
                 found_REAL = True
             elif "char" in cparam_type and "[" in cparam_type and "]" in cparam_type:
                 param_type = "PARAM_CHARARRAY"
-                array_size = int(cparam_type.split("[")[1].split("]")[0])
+                buffer_size = int(cparam_type.split("[")[1].split("]")[0])
+                array_size = 0  # Set array_size to 0 for char arrays
                 found_chararray = True
             else:
                 continue  # Skip unsupported types
@@ -192,20 +195,17 @@ typedef struct {
                     "name": param_name,
                     "type": param_type,
                     "array_size": array_size,
+                    "buffer_size": buffer_size,
                 }
             )
             # Append to param_table_entries
             param_table_entries.append(
-                f'    {{"{param_name}", {param_index}, {param_type}, {array_size}}}'
+                f'    {{"{param_name}", {param_index}, {param_type}, {array_size}, {buffer_size}}}'
             )
             param_index += 1
 
     # Generate the param_table and NUM_PARAMS
-    param_table_str = (
-        "param_descriptor param_table[] = {\n"
-        + ",\n".join(param_table_entries)
-        + "\n};\n"
-    )
+    param_table_str = ",\n".join(param_table_entries) + "\n};\n"
     param_table_str += (
         "#define NUM_PARAMS (sizeof(param_table) / sizeof(param_descriptor))\n\n"
     )
@@ -223,7 +223,7 @@ typedef struct {
  * This function iterates through the param_table to find a descriptor that matches the given
  * parameter name. It facilitates parameter validation and assignment during parsing.
  */
- param_descriptor *find_param_descriptor(const char *param_name) {
+param_descriptor *find_param_descriptor(const char *param_name) {
   for (int i = 0; i < NUM_PARAMS; i++) {
     if (strcmp(param_table[i].name, param_name) == 0) {
       return &param_table[i];
@@ -244,7 +244,7 @@ typedef struct {
  * array size. For scalar parameters, it copies the parameter name directly and sets the array
  * size to zero.
  */
- static void parse_param(const char *param_str, char *param_name, int *array_size) {
+static void parse_param(const char *param_str, char *param_name, int *array_size) {
   const char *bracket_start = strchr(param_str, '[');
   if (bracket_start != NULL) {
     // It's an array parameter
@@ -350,11 +350,25 @@ static void read_REAL(const char *value, REAL *result, const char *param_name) {
         prefunc += r"""
 // Function to read a character array
 static void read_chararray(const char *value, char *result, const char *param_name, size_t size) {
-  if (strlen(value) >= size) {
+  // Remove surrounding quotes if present
+  size_t len = strlen(value);
+  char trimmed_value[PARAM_SIZE];
+  if (value[0] == '"' && value[len - 1] == '"') {
+    if (len - 2 >= size) {
+      fprintf(stderr, "Error: Buffer overflow detected for %s.\n", param_name);
+      exit(1);
+    }
+    strncpy(trimmed_value, value + 1, len - 2);
+    trimmed_value[len - 2] = '\0';
+  } else {
+    safe_copy(trimmed_value, value, PARAM_SIZE);
+  }
+
+  if (strlen(trimmed_value) >= size) {
     fprintf(stderr, "Error: Buffer overflow detected for %s.\n", param_name);
     exit(1);
   }
-  safe_copy(result, value, size);
+  safe_copy(result, trimmed_value, size);
 }
 """
 
@@ -503,7 +517,7 @@ static void read_boolean(const char *value, bool *result, const char *param_name
         params_set[param_desc->index] = 1;
 
         // Validate array size if applicable.
-        if (param_desc->array_size > 0) {{
+        if (param_desc->type != PARAM_CHARARRAY && param_desc->array_size > 0) {{
           // It's an array parameter
           if (array_size != param_desc->array_size) {{
             fprintf(stderr, "Error: Array size mismatch for parameter %s.\n", param_name);
@@ -514,7 +528,7 @@ static void read_boolean(const char *value, bool *result, const char *param_name
             exit(1);
           }}
         }} else {{
-          // It's a scalar parameter
+          // It's a scalar parameter, including PARAM_CHARARRAY
           if (array_size > 0) {{
             fprintf(stderr, "Error: Unexpected array size for scalar parameter %s.\n", param_name);
             exit(1);
@@ -536,6 +550,7 @@ static void read_boolean(const char *value, bool *result, const char *param_name
         param_name = param["name"]
         param_type = param["type"]
         array_size = param["array_size"]
+        buffer_size = param["buffer_size"]
         if first_param:
             prefix = "if"
             first_param = False
@@ -543,64 +558,69 @@ static void read_boolean(const char *value, bool *result, const char *param_name
             prefix = "else if"
         if param_type == "PARAM_REAL":
             assignment_code += (
-                f"                {prefix} (param_desc->index == {index}) {{\n"
-                f'                    read_REAL(values_array[0], &commondata->{param_name}, "{param_name}");\n'
-                f"                }}\n"
+                f"        {prefix} (param_desc->index == {index}) {{\n"
+                f'            read_REAL(values_array[0], &commondata->{param_name}, "{param_name}");\n'
+                f"        }}\n"
             )
         elif param_type == "PARAM_INT":
             assignment_code += (
-                f"                {prefix} (param_desc->index == {index}) {{\n"
-                f'                    read_integer(values_array[0], &commondata->{param_name}, "{param_name}");\n'
-                f"                }}\n"
+                f"        {prefix} (param_desc->index == {index}) {{\n"
+                f'            read_integer(values_array[0], &commondata->{param_name}, "{param_name}");\n'
+                f"        }}\n"
             )
         elif param_type == "PARAM_CHARARRAY":
-            # Assuming size from array_size
-            size = array_size
+            # buffer_size is used instead of array_size
             assignment_code += (
-                f"                {prefix} (param_desc->index == {index}) {{\n"
-                f'                    read_chararray(values_array[0], commondata->{param_name}, "{param_name}", {size});\n'
-                f"                }}\n"
+                f"        {prefix} (param_desc->index == {index}) {{\n"
+                f'            read_chararray(values_array[0], commondata->{param_name}, "{param_name}", {buffer_size});\n'
+                f"        }}\n"
             )
         elif param_type == "PARAM_REAL_ARRAY":
             assignment_code += (
-                f"                {prefix} (param_desc->index == {index}) {{\n"
-                f"                    for (int i = 0; i < {array_size}; i++) {{\n"
-                f'                        read_REAL(values_array[i], &commondata->{param_name}[i], "{param_name}");\n'
-                f"                    }}\n"
-                f"                }}\n"
+                f"        {prefix} (param_desc->index == {index}) {{\n"
+                f"            for (int i = 0; i < {array_size}; i++) {{\n"
+                f'                read_REAL(values_array[i], &commondata->{param_name}[i], "{param_name}");\n'
+                f"            }}\n"
+                f"        }}\n"
             )
         elif param_type == "PARAM_INT_ARRAY":
             assignment_code += (
-                f"                {prefix} (param_desc->index == {index}) {{\n"
-                f"                    for (int i = 0; i < {array_size}; i++) {{\n"
-                f'                        read_integer(values_array[i], &commondata->{param_name}[i], "{param_name}");\n'
-                f"                    }}\n"
-                f"                }}\n"
+                f"        {prefix} (param_desc->index == {index}) {{\n"
+                f"            for (int i = 0; i < {array_size}; i++) {{\n"
+                f'                read_integer(values_array[i], &commondata->{param_name}[i], "{param_name}");\n'
+                f"            }}\n"
+                f"        }}\n"
             )
 
     # Add the assignment code and the else block
     body += assignment_code
-    body += r"""                else {
-                    fprintf(stderr, "Error: Unknown parameter index for %s.\n", param_name);
-                    exit(1);
-                }
-            }
+    body += r"""        else {
+            fprintf(stderr, "Error: Unknown parameter index for %s.\n", param_name);
+            exit(1);
         }
+    }
+}
 
-        // Handling options 3 and 4: Overwriting steerable parameters
-        if (option == 3 || option == 4) {
-            // For options 3 and 4, we extract the last arguments as steerable parameters
+    // Handling options 3 and 4: Overwriting steerable parameters
+    if (option == 3 || option == 4) {
+        // For options 3 and 4, we extract the last arguments as steerable parameters
 """
-
     # Handle steerable parameters overwriting
     steerable_body = ""
     for i, key in enumerate(cmdline_inputs):
         CodeParam = par.glb_code_params_dict[key]
         if CodeParam.add_to_parfile and CodeParam.commondata:
-            if CodeParam.cparam_type == "int":
-                steerable_body += f'            read_integer(argv[argc - number_of_steerable_parameters + {i}], &commondata->{key}, "{key}");\n'
-            elif CodeParam.cparam_type == "REAL":
-                steerable_body += f'            read_REAL(argv[argc - number_of_steerable_parameters + {i}], &commondata->{key}, "{key}");\n'
+            cparam_type = CodeParam.cparam_type.strip()
+            if "char" in cparam_type:
+                # For char arrays, handle similarly to other parameters
+                buffer_size = int(cparam_type.split("[")[1].split("]")[0])
+                steerable_body += f'        read_chararray(argv[argc - number_of_steerable_parameters + {i}], commondata->{key}, "{key}", {buffer_size});\n'
+            elif cparam_type == "int":
+                steerable_body += f'        read_integer(argv[argc - number_of_steerable_parameters + {i}], &commondata->{key}, "{key}");\n'
+            elif cparam_type == "REAL":
+                steerable_body += f'        read_REAL(argv[argc - number_of_steerable_parameters + {i}], &commondata->{key}, "{key}");\n'
+            elif "bool" in cparam_type:
+                steerable_body += f'        read_boolean(argv[argc - number_of_steerable_parameters + {i}], &commondata->{key}, "{key}");\n'
     body += steerable_body
     body += """
     } // END IF (option == 3 || option == 4)
