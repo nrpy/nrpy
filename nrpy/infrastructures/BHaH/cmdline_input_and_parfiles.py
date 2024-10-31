@@ -662,8 +662,10 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
     """
     Generate a default parameter file with sorted modules and parameters.
 
-    :param project_dir: The parameter file will be stored in project_dir.
+    :param project_dir: The directory where the parameter file will be stored.
     :param project_name: The name of the project.
+    :raises ValueError: If an array type is not 'char', 'int', or 'REAL', or if a 'char' type parameter
+                        does not have a string as its default value.
 
     Doctest:
     >>> import shutil
@@ -693,7 +695,7 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
     ... )
     >>> # Register a char array parameter
     >>> _str = par.register_CodeParameter(
-    ...     "char", "CodeParameters_c_files", "string[100]",
+    ...     "char[100]", "CodeParameters_c_files", "string",
     ...     "cheese", commondata=True, description="A string parameter"
     ... )
     >>> # Register an int parameter
@@ -721,6 +723,13 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
     ...     commondata=True, add_to_parfile=True, add_to_set_CodeParameters_h=False,
     ...     description=""
     ... )
+    >>> # Register an unsupported array type parameter
+    >>> _unsupported_array = par.register_CodeParameter(
+    ...     cparam_type="double[5]", module="CodeParameters_c_files",
+    ...     name="unsupported_param", defaultvalue=1.0,
+    ...     commondata=True, add_to_parfile=True, add_to_set_CodeParameters_h=False,
+    ...     description="Unsupported array type"
+    ... )
     >>> # Clear any existing CFunction_dict if necessary
     >>> cfc.CFunction_dict.clear()
     >>> # Setup project directory
@@ -728,7 +737,13 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
     >>> if project_dir.exists():
     ...     shutil.rmtree(project_dir)
     >>> project_dir.mkdir(parents=True, exist_ok=True)
-    >>> # Generate the parfile
+    >>> # Attempt to generate the parfile (should raise ValueError)
+    >>> generate_default_parfile(str(project_dir), "example_project")
+    Traceback (most recent call last):
+    ...
+    ValueError: Unsupported array base type 'double' for parameter 'unsupported_param'. Only 'char', 'int', and 'REAL' are supported.
+    >>> # Now remove the unsupported parameter and generate the parfile successfully
+    >>> del par.glb_code_params_dict["unsupported_param"]
     >>> generate_default_parfile(str(project_dir), "example_project")
     >>> # Read and print the generated parfile
     >>> print((project_dir / 'example_project.par').read_text())
@@ -741,7 +756,7 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
     blahint = -1                                 # (int) An integer parameter
     initial_levels[2] = { 4, 4 }                 # (int[2])
     pi_three_sigfigs = 3.14                      # (REAL) Pi to three significant figures
-    string[100] = cheese                         # (char) A string parameter
+    string = "cheese"                            # (char[100]) A string parameter
     <BLANKLINE>
     """
     parfile_output_dict: Dict[str, List[str]] = defaultdict(list)
@@ -766,31 +781,59 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
             description = CodeParam.description.strip()
             description_suffix = f" {description}" if description else ""
             if array_info:
-                base_type = array_info["base_type"]
+                base_type = array_info["base_type"].lower()
                 size = array_info["size"]
-                default_val = CodeParam.defaultvalue
-                # Generate a list with the default value repeated 'size' times
-                if base_type.lower() in ["real", "int"]:
-                    # Format based on base type
-                    if base_type.lower() == "real":
-                        default_vals = ", ".join([f"{float(default_val)}"] * size)
-                    else:  # int
-                        default_vals = ", ".join([str(int(default_val))] * size)
-                    # **Append the size to the variable name**
-                    parfile_output_dict[CodeParam.module].append(
-                        f"{parname}[{size}] = {{ {default_vals} }}  # ({CPtype}){description_suffix}\n"
+
+                # Raise exception for unsupported array types
+                if base_type not in ["real", "int", "char"]:
+                    raise ValueError(
+                        f"Unsupported array base type '{base_type}' for parameter '{parname}'. Only 'char', 'int', and 'REAL' are supported."
                     )
-                else:
-                    # Handle other array types if necessary
+
+                default_val = CodeParam.defaultvalue
+                if base_type == "real":
+                    # Format based on REAL type
+                    default_vals = ", ".join([f"{float(default_val)}"] * size)
+                    display_type = "REAL"
+                elif base_type == "int":
+                    # Format based on int type
+                    default_vals = ", ".join([str(int(default_val))] * size)
+                    display_type = "int"
+                elif base_type == "char":
+                    # Ensure default_val is string
+                    if not isinstance(default_val, str):
+                        raise ValueError(
+                            f"Default value for char array parameter '{parname}' must be a string."
+                        )
+                    # Escape double quotes in the default value
+                    escaped_default_val = default_val.replace('"', '\\"')
+                    # Wrap the default value in quotes
+                    default_val_formatted = f'"{escaped_default_val}"'
+                    display_type = "char"
+
+                # Append to module's parameters
+                if base_type in ["real", "int"]:
                     parfile_output_dict[CodeParam.module].append(
-                        f"{parname} = {{ {default_val} }}  # ({CPtype}){description_suffix}\n"
+                        f"{parname}[{size}] = {{ {default_vals} }}  # ({display_type}[{size}]){description_suffix}\n"
+                    )
+                elif base_type == "char":
+                    parfile_output_dict[CodeParam.module].append(
+                        f"{parname} = {default_val_formatted}  # ({display_type}[{size}]){description_suffix}\n"
                     )
             else:
+                # Handle scalar parameters
                 if CPtype.startswith("char") and "[" in CPtype and "]" in CPtype:
-                    # Handle char arrays
+                    # Handle char arrays (redundant, since arrays are handled above)
                     chararray_name = parname.split("[")[0]
+                    if not isinstance(CodeParam.defaultvalue, str):
+                        raise ValueError(
+                            f"Default value for char array parameter '{parname}' must be a string."
+                        )
+                    # Escape double quotes in the default value
+                    escaped_default_val = CodeParam.defaultvalue.replace('"', '\\"')
+                    # Wrap the default value in quotes
                     parfile_output_dict[CodeParam.module].append(
-                        f'{chararray_name} = "{CodeParam.defaultvalue}"  # (char array){description_suffix}\n'
+                        f'{chararray_name} = "{escaped_default_val}"  # (char array){description_suffix}\n'
                     )
                 else:
                     # Handle scalar parameters
