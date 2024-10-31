@@ -716,15 +716,15 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
     ... )
     >>> # Register a REAL array parameter
     >>> _real_array = par.register_CodeParameter(
-    ...     cparam_type="REAL", module="CodeParameters_c_files",
-    ...     name="bah_initial_x_center[3]", defaultvalue=0.0,
+    ...     cparam_type="REAL[3]", module="CodeParameters_c_files",
+    ...     name="bah_initial_x_center", defaultvalue=0.0,
     ...     commondata=True, add_to_parfile=True, add_to_set_CodeParameters_h=False,
     ...     description="Initial X centers"
     ... )
     >>> # Register an int array parameter
     >>> _int_array = par.register_CodeParameter(
-    ...     cparam_type="int", module="CodeParameters_c_files",
-    ...     name="initial_levels[2]", defaultvalue=4,
+    ...     cparam_type="int[2]", module="CodeParameters_c_files",
+    ...     name="initial_levels", defaultvalue=4,
     ...     commondata=True, add_to_parfile=True, add_to_set_CodeParameters_h=False,
     ...     description=""
     ... )
@@ -758,41 +758,30 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
     ###########################
     ###########################
     ### Module: CodeParameters_c_files
-    a = 1.0                                      # (REAL) The value of a
-    bah_initial_x_center[3] = { 0.0, 0.0, 0.0 }  # (REAL[3]) Initial X centers
-    blahint = -1                                 # (int) An integer parameter
-    initial_levels[2] = { 4, 4 }                 # (int[2])
-    outer_bc_type = "radiation"                  # (char[50]) A bc string parameter
-    pi_three_sigfigs = 3.14                      # (REAL) Pi to three significant figures
-    string = "cheese"                            # (char[100]) A string parameter
+    a = 1.0                                   # (REAL) The value of a
+    bah_initial_x_center = { 0.0, 0.0, 0.0 }  # (REAL[3]) Initial X centers
+    blahint = -1                              # (int) An integer parameter
+    initial_levels = { 4, 4 }                 # (int[2])
+    outer_bc_type = "radiation"               # (char[50]) A bc string parameter
+    pi_three_sigfigs = 3.14                   # (REAL) Pi to three significant figures
+    string = "cheese"                         # (char[100]) A string parameter
     <BLANKLINE>
     """
     parfile_output_dict: Dict[str, List[str]] = defaultdict(list)
 
-    # Function to parse array types from parameter name and type
-    def parse_array_type(parname: str, cparam_type: str) -> Union[None, Dict[str, Any]]:
+    # Function to parse array types from type only
+    def parse_array_type(cparam_type: str) -> Union[None, Dict[str, Any]]:
         array_info = None
-        # Check if array info is in the name
-        if "[" in parname and "]" in parname:
-            size_str = parname[parname.find("[") + 1 : parname.find("]")]
-            if size_str.isdigit():
-                size = int(size_str)
-                base_type = cparam_type.split("[")[0]  # Extract base type without array
-                array_info = {
-                    "base_type": base_type,
-                    "size": size,
-                    "from_parname": True,
-                }
-        # If not found in name, check in cparam_type
-        if not array_info and "[" in cparam_type and "]" in cparam_type:
-            base_type = cparam_type[: cparam_type.find("[")]
+        # Check if array info is in cparam_type
+        if "[" in cparam_type and "]" in cparam_type:
+            base_type = cparam_type.split("[")[0]
             size_str = cparam_type[cparam_type.find("[") + 1 : cparam_type.find("]")]
             if size_str.isdigit():
                 size = int(size_str)
                 array_info = {
                     "base_type": base_type,
                     "size": size,
-                    "from_parname": False,
+                    "from_parname": False,  # Since we no longer parse from name
                 }
         return array_info
 
@@ -802,7 +791,7 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
     ):
         if CodeParam.commondata and CodeParam.add_to_parfile:
             CPtype = CodeParam.cparam_type
-            array_info = parse_array_type(parname, CPtype)
+            array_info = parse_array_type(CPtype)
             description = CodeParam.description.strip()
             description_suffix = f" {description}" if description else ""
             if array_info:
@@ -817,18 +806,14 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
 
                 default_val = CodeParam.defaultvalue
 
-                if base_type == "real":
-                    # Format based on REAL type
-                    default_vals = ", ".join([f"{float(default_val)}"] * size)
-                    display_type = "REAL"
-                    # Append to module's parameters
-                    parfile_output_dict[CodeParam.module].append(
-                        f"{parname} = {{ {default_vals} }}  # ({display_type}[{size}]){description_suffix}\n"
-                    )
-                elif base_type == "int":
-                    # Format based on int type
-                    default_vals = ", ".join([str(int(default_val))] * size)
-                    display_type = "int"
+                if base_type in ["real", "int"]:
+                    if base_type == "real":
+                        default_vals = ", ".join([f"{float(default_val)}"] * size)
+                        display_type = "REAL"
+                    else:
+                        default_vals = ", ".join([str(int(default_val))] * size)
+                        display_type = "int"
+
                     # Append to module's parameters
                     parfile_output_dict[CodeParam.module].append(
                         f"{parname} = {{ {default_vals} }}  # ({display_type}[{size}]){description_suffix}\n"
@@ -844,14 +829,9 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
                     # Wrap the default value in quotes
                     default_val_formatted = f'"{escaped_default_val}"'
                     display_type = "char"
-                    # Remove [size] from parname only if array info was found in parname
-                    if array_info["from_parname"]:
-                        parname_clean = parname[: parname.find("[")]
-                    else:
-                        parname_clean = parname
                     # Append to module's parameters
                     parfile_output_dict[CodeParam.module].append(
-                        f"{parname_clean} = {default_val_formatted}  # ({display_type}[{size}]){description_suffix}\n"
+                        f"{parname} = {default_val_formatted}  # ({display_type}[{size}]){description_suffix}\n"
                     )
             else:
                 # Handle scalar parameters
