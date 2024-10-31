@@ -360,22 +360,56 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
     >>> # Clear existing parameters
     >>> par.glb_code_params_dict.clear()
     >>> # Register scalar REAL parameters
-    >>> _, __ = par.register_CodeParameters("REAL", "CodeParameters_c_files", ["a", "pi_three_sigfigs"], [1.0, 3.14], commondata=True)
+    >>> _, __ = par.register_CodeParameters(
+    ...     "REAL", "CodeParameters_c_files",
+    ...     ["a", "pi_three_sigfigs"],
+    ...     [1.0, 3.14],
+    ...     commondata=True,
+    ...     descriptions=["The value of a", "Pi to three significant figures"]
+    ... )
     >>> # Register a #define parameter
-    >>> ___ = par.register_CodeParameter("#define", "CodeParameters_c_files", "b", 0)
+    >>> ___ = par.register_CodeParameter(
+    ...     "#define", "CodeParameters_c_files", "b", 0, description="A define parameter"
+    ... )
     >>> # Register parameters that should be excluded from the parfile
-    >>> _leaveitbe = par.register_CodeParameter("REAL", "CodeParameters_c_files", "leaveitbe", add_to_parfile=False, add_to_set_CodeParameters_h=False)
-    >>> _leaveitoutofparfile = par.register_CodeParameter("REAL", "CodeParameters_c_files", "leaveitoutofparfile", add_to_parfile=False)
+    >>> _leaveitbe = par.register_CodeParameter(
+    ...     "REAL", "CodeParameters_c_files", "leaveitbe",
+    ...     add_to_parfile=False, add_to_set_CodeParameters_h=False
+    ... )
+    >>> _leaveitoutofparfile = par.register_CodeParameter(
+    ...     "REAL", "CodeParameters_c_files", "leaveitoutofparfile",
+    ...     add_to_parfile=False
+    ... )
     >>> # Register a char array parameter
-    >>> _str = par.register_CodeParameter("char", "CodeParameters_c_files", "string[100]", "cheese", commondata=True)
+    >>> _str = par.register_CodeParameter(
+    ...     "char", "CodeParameters_c_files", "string[100]",
+    ...     "cheese", commondata=True, description="A string parameter"
+    ... )
     >>> # Register an int parameter
-    >>> _int = par.register_CodeParameter("int", "CodeParameters_c_files", "blahint", -1, commondata=True, add_to_parfile=True, add_to_set_CodeParameters_h=False)
+    >>> _int = par.register_CodeParameter(
+    ...     "int", "CodeParameters_c_files", "blahint", -1,
+    ...     commondata=True, add_to_parfile=True, add_to_set_CodeParameters_h=False,
+    ...     description="An integer parameter"
+    ... )
     >>> # Register a bool parameter
-    >>> _bool = par.register_CodeParameter("bool", "CodeParameters_c_files", "BHaH_is_amazing", "true")
+    >>> _bool = par.register_CodeParameter(
+    ...     "bool", "CodeParameters_c_files", "BHaH_is_amazing",
+    ...     "true", description="A boolean parameter"
+    ... )
     >>> # Register a REAL array parameter
-    >>> _real_array = par.register_CodeParameter(cparam_type="REAL[3]", module="CodeParameters_c_files", name="bah_initial_x_center", defaultvalue=0.0, commondata=True, add_to_parfile=True, add_to_set_CodeParameters_h=False)
+    >>> _real_array = par.register_CodeParameter(
+    ...     cparam_type="REAL[3]", module="CodeParameters_c_files",
+    ...     name="bah_initial_x_center", defaultvalue=0.0,
+    ...     commondata=True, add_to_parfile=True, add_to_set_CodeParameters_h=False,
+    ...     description="Initial X centers"
+    ... )
     >>> # Register an int array parameter
-    >>> _int_array = par.register_CodeParameter(cparam_type="int[2]", module="CodeParameters_c_files", name="initial_levels", defaultvalue=4, commondata=True, add_to_parfile=True, add_to_set_CodeParameters_h=False)
+    >>> _int_array = par.register_CodeParameter(
+    ...     cparam_type="int[2]", module="CodeParameters_c_files",
+    ...     name="initial_levels", defaultvalue=4,
+    ...     commondata=True, add_to_parfile=True, add_to_set_CodeParameters_h=False,
+    ...     description=""
+    ... )
     >>> # Clear any existing CFunction_dict if necessary
     >>> cfc.CFunction_dict.clear()
     >>> # Setup project directory
@@ -391,12 +425,12 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
     ###########################
     ###########################
     ### Module: CodeParameters_c_files
-    a = 1.0                                      # (REAL)
-    bah_initial_x_center[3] = { 0.0, 0.0, 0.0 }  # (REAL[3])
-    blahint = -1                                 # (int)
+    a = 1.0                                      # (REAL) The value of a
+    bah_initial_x_center[3] = { 0.0, 0.0, 0.0 }  # (REAL[3]) Initial X centers
+    blahint = -1                                 # (int) An integer parameter
     initial_levels[2] = { 4, 4 }                 # (int[2])
-    pi_three_sigfigs = 3.14                      # (REAL)
-    string[100] = cheese                         # (char)
+    pi_three_sigfigs = 3.14                      # (REAL) Pi to three significant figures
+    string[100] = cheese                         # (char) A string parameter
     <BLANKLINE>
     """
     parfile_output_dict: Dict[str, List[str]] = defaultdict(list)
@@ -418,6 +452,8 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
         if CodeParam.commondata and CodeParam.add_to_parfile:
             CPtype = CodeParam.cparam_type
             array_info = parse_array_type(CPtype)
+            description = CodeParam.description.strip()
+            description_suffix = f" {description}" if description else ""
             if array_info:
                 base_type = array_info["base_type"]
                 size = array_info["size"]
@@ -431,24 +467,24 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
                         default_vals = ", ".join([str(int(default_val))] * size)
                     # **Append the size to the variable name**
                     parfile_output_dict[CodeParam.module].append(
-                        f"{parname}[{size}] = {{ {default_vals} }}  # ({CPtype})\n"
+                        f"{parname}[{size}] = {{ {default_vals} }}  # ({CPtype}){description_suffix}\n"
                     )
                 else:
                     # Handle other array types if necessary
                     parfile_output_dict[CodeParam.module].append(
-                        f"{parname} = {{ {default_val} }}  # ({CPtype})\n"
+                        f"{parname} = {{ {default_val} }}  # ({CPtype}){description_suffix}\n"
                     )
             else:
                 if CPtype.startswith("char") and "[" in CPtype and "]" in CPtype:
                     # Handle char arrays
                     chararray_name = parname.split("[")[0]
                     parfile_output_dict[CodeParam.module].append(
-                        f'{chararray_name} = "{CodeParam.defaultvalue}"  # (char array)\n'
+                        f'{chararray_name} = "{CodeParam.defaultvalue}"  # (char array){description_suffix}\n'
                     )
                 else:
                     # Handle scalar parameters
                     parfile_output_dict[CodeParam.module].append(
-                        f"{parname} = {CodeParam.defaultvalue}  # ({CPtype})\n"
+                        f"{parname} = {CodeParam.defaultvalue}  # ({CPtype}){description_suffix}\n"
                     )
 
     # Sorting the parameters within each module

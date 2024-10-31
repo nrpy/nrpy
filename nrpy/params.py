@@ -263,7 +263,7 @@ def register_CodeParameters(
     add_to_parfile: bool = True,
     add_to_set_CodeParameters_h: bool = True,
     add_to_glb_code_params_dict: bool = True,
-    description: str = "",
+    descriptions: Union[str, List[str]] = "",
 ) -> List[sp.Symbol]:
     """
     Initialize CodeParameters and return their symbolic representation.
@@ -277,30 +277,85 @@ def register_CodeParameters(
     :param add_to_parfile: Allow parameter to be set within a parameter file (default: True).
     :param add_to_set_CodeParameters_h: Add parameter to set_CodeParameters*.h (default: True). Only applies for BHaH.
     :param add_to_glb_code_params_dict: Whether to add the parameter to the global code parameters dictionary (default: True).
-    :param description: Description of the parameter.
+    :param descriptions: Either an empty string or a list of descriptions corresponding to each parameter.
     :return: A list of the symbolic parameters.
 
-    :raises ValueError: If the assumption is not supported, or if the lengths of names and defaultvalues do not match.
+    :raises ValueError: If the assumption is not supported, if the lengths of names and defaultvalues do not match, or if descriptions are improperly provided.
+    :raises TypeError: If descriptions are not a string or a list.
 
     DocTests:
     >>> glb_code_params_dict.clear()
-    >>> a0, a1, b, c = register_CodeParameters(cparam_type="REAL", module=__name__, names=["a0", "a1", "b", "c"], defaultvalues=1)
+    >>> # Register parameters without descriptions
+    >>> a0, a1, b, c = register_CodeParameters(
+    ...     cparam_type="REAL",
+    ...     module=__name__,
+    ...     names=["a0", "a1", "b", "c"],
+    ...     defaultvalues=1
+    ... )
     >>> print(a0, a1, b, c)
     a0 a1 b c
-    >>> outstr = ""
-    >>> outstr += " ".join(param.name for _, param in glb_code_params_dict.items())
+    >>> outstr = " ".join(param.name for param in glb_code_params_dict.values())
     >>> print(outstr)
     a0 a1 b c
-    >>> outstr = ""
-    >>> outstr += " ".join(str(param.defaultvalue) for _, param in glb_code_params_dict.items())
+    >>> outstr = " ".join(str(param.defaultvalue) for param in glb_code_params_dict.values())
     >>> print(outstr)
     1 1 1 1
+
+    >>> glb_code_params_dict.clear()
+    >>> # Register parameters with descriptions
+    >>> descs = ["First parameter", "Second parameter", "Third parameter", "Fourth parameter"]
+    >>> a0, a1, b, c = register_CodeParameters(
+    ...     cparam_type="int",
+    ...     module=__name__,
+    ...     names=["a0", "a1", "b", "c"],
+    ...     defaultvalues=[10, 20, 30, 40],
+    ...     descriptions=descs
+    ... )
+    >>> print(a0, a1, b, c)
+    a0 a1 b c
+    >>> outstr = " ".join(param.name for param in glb_code_params_dict.values())
+    >>> print(outstr)
+    a0 a1 b c
+    >>> outstr = " ".join(str(param.defaultvalue) for param in glb_code_params_dict.values())
+    >>> print(outstr)
+    10 20 30 40
+    >>> outstr = " ".join(param.description for param in glb_code_params_dict.values())
+    >>> print(outstr)
+    First parameter Second parameter Third parameter Fourth parameter
+
+    >>> glb_code_params_dict.clear()
+    >>> # Register parameters with mismatched descriptions
+    >>> try:
+    ...     register_CodeParameters(
+    ...         cparam_type="bool",
+    ...         module=__name__,
+    ...         names=["flag1", "flag2"],
+    ...         defaultvalues=[True, False],
+    ...         descriptions=["Enable feature"]
+    ... )
+    ... except ValueError as e:
+    ...     print(e)
+    The length of descriptions (1) does not match the number of names (2).
+    >>> glb_code_params_dict.clear()
+    >>> # Register parameters with non-empty single string description (should raise error)
+    >>> try:
+    ...     register_CodeParameters(
+    ...         cparam_type="char",
+    ...         module=__name__,
+    ...         names=["char1", "char2"],
+    ...         defaultvalues=["a", "b"],
+    ...         descriptions="Single description"
+    ... )
+    ... except ValueError as e:
+    ...     print(e)
+    Description must be an empty string or a list of descriptions matching the number of parameters.
     """
-    if not isinstance(names, list) or len(names) == 1:
+    if not isinstance(names, list) or len(names) < 1:
         raise ValueError(
-            "register_CodeParameters() expects a list of MULTIPLE code parameter names."
+            "register_CodeParameters() expects a list of one or more code parameter names."
         )
 
+    # Handle defaultvalues
     if not isinstance(defaultvalues, list):
         default_val_list = [defaultvalues] * len(names)
     elif len(defaultvalues) != len(names):
@@ -310,8 +365,26 @@ def register_CodeParameters(
     else:
         default_val_list = defaultvalues
 
+    # Handle descriptions
+    if isinstance(descriptions, list):
+        if len(descriptions) != len(names):
+            raise ValueError(
+                f"The length of descriptions ({len(descriptions)}) does not match the number of names ({len(names)})."
+            )
+        description_list = descriptions
+    elif isinstance(descriptions, str):
+        if descriptions != "":
+            raise ValueError(
+                "Description must be an empty string or a list of descriptions matching the number of parameters."
+            )
+        description_list = [""] * len(names)
+    else:
+        raise TypeError(
+            "Description must be either an empty string or a list of description strings."
+        )
+
     symbols = []
-    for name, default_val in zip(names, default_val_list):
+    for name, default_val, desc in zip(names, default_val_list, description_list):
         CP = CodeParameter(
             cparam_type=cparam_type,
             module=module,
@@ -322,9 +395,12 @@ def register_CodeParameters(
             add_to_parfile=add_to_parfile,
             add_to_set_CodeParameters_h=add_to_set_CodeParameters_h,
             add_to_glb_code_params_dict=add_to_glb_code_params_dict,
-            description=description,
+            description=desc,
         )
         symbols.append(CP.symbol)
+
+        if add_to_glb_code_params_dict:
+            glb_code_params_dict[name] = CP
 
     return symbols
 
