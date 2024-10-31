@@ -7,17 +7,10 @@ Author: Zachariah B. Etienne
 
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional, TypedDict, Union
+from typing import Any, Dict, List, Optional, Union
 
 import nrpy.c_function as cfc
 import nrpy.params as par
-
-
-class _ParamDescriptor(TypedDict):
-    index: int
-    name: str
-    type: str
-    array_size: int
 
 
 def register_CFunction_cmdline_input_and_parfile_parser(
@@ -55,58 +48,61 @@ def register_CFunction_cmdline_input_and_parfile_parser(
 #define PARAM_SIZE 128 // Define the max param string size
 
 // Trim leading and trailing spaces
-static char* trim_space(char *str) {
-    char *end;
+static char *trim_space(char *str) {
+  char *end;
 
-    // Trim leading spaces
-    while (isspace((unsigned char)*str)) str++;
+  // Trim leading spaces
+  while (isspace((unsigned char)*str))
+    str++;
 
-    if (*str == 0)  // All spaces?
-        return str;
-
-    // Trim trailing spaces
-    end = str + strlen(str) - 1;
-    while (end > str && isspace((unsigned char)*end)) end--;
-
-    // Write new null terminator
-    *(end + 1) = '\0';
-
+  if (*str == 0) // All spaces?
     return str;
+
+  // Trim trailing spaces
+  end = str + strlen(str) - 1;
+  while (end > str && isspace((unsigned char)*end))
+    end--;
+
+  // Write new null terminator
+  *(end + 1) = '\0';
+
+  return str;
 }
 
 // Safe copy function to prevent buffer overflows
 static void safe_copy(char *dest, const char *src, size_t size) {
-    if (src == NULL) {
-        fprintf(stderr, "Error: Source string is NULL.\n");
-        exit(1);
-    }
-    if (dest == NULL) {
-        fprintf(stderr, "Error: Destination string is NULL.\n");
-        exit(1);
-    }
-    if (size == 0) {
-        fprintf(stderr, "Error: Size is zero.\n");
-        exit(1);
-    }
-    size_t src_len = strlen(src);
-    if (src_len >= size) {
-        fprintf(stderr, "Error: Buffer overflow detected.\n");
-        exit(1);
-    }
-    strncpy(dest, src, size - 1);
-    dest[size - 1] = '\0';
+  if (src == NULL) {
+    fprintf(stderr, "Error: Source string is NULL.\n");
+    exit(1);
+  }
+  if (dest == NULL) {
+    fprintf(stderr, "Error: Destination string is NULL.\n");
+    exit(1);
+  }
+  if (size == 0) {
+    fprintf(stderr, "Error: Size is zero.\n");
+    exit(1);
+  }
+  size_t src_len = strlen(src);
+  if (src_len >= size) {
+    fprintf(stderr, "Error: Buffer overflow detected.\n");
+    exit(1);
+  }
+  strncpy(dest, src, size - 1);
+  dest[size - 1] = '\0';
 }
 """
 
     # Generate the usage instructions string
     list_of_steerable_params_str = " ".join(cmdline_inputs)
-    prefunc += rf"""// Function to print usage instructions
+    prefunc += rf"""\
+// Function to print usage instructions
 static void print_usage() {{
-    fprintf(stderr, "Usage option 0: ./{project_name} [--help or -h] - Outputs this usage command\n");
-    fprintf(stderr, "Usage option 1: ./{project_name} - Reads in parameter file {project_name}.par\n");
-    fprintf(stderr, "Usage option 2: ./{project_name} [parfile] - Reads in parameter file [parfile]\n");
-    fprintf(stderr, "Usage option 3: ./{project_name} [{list_of_steerable_params_str}] - Overwrites parameters in list after reading in {project_name}.par\n");
-    fprintf(stderr, "Usage option 4: ./{project_name} [parfile] [{list_of_steerable_params_str}] - Overwrites list of steerable parameters after reading in [parfile]\n");
+  fprintf(stderr, "Usage option 0: ./{project_name} [--help or -h] - Outputs this usage command\n");
+  fprintf(stderr, "Usage option 1: ./{project_name} - Reads in parameter file {project_name}.par\n");
+  fprintf(stderr, "Usage option 2: ./{project_name} [parfile] - Reads in parameter file [parfile]\n");
+  fprintf(stderr, "Usage option 3: ./{project_name} [{list_of_steerable_params_str}] - Overwrites parameters in list after reading in {project_name}.par\n");
+  fprintf(stderr, "Usage option 4: ./{project_name} [parfile] [{list_of_steerable_params_str}] - Overwrites list of steerable parameters after reading in [parfile]\n");
 }}"""
 
     # Define parameter types and descriptor struct
@@ -123,10 +119,14 @@ typedef struct {
     param_type type;
     int array_size; // For array parameters
 } param_descriptor;
+
+// param_table[] is a list of parameter descriptors, each containing the parameter's name, unique index, type, and array size.
+// This table is used to lookup and manage parameters during parsing, ensuring that each parameter is correctly identified
+// and assigned the appropriate value in the common data structure.
 """
 
     # Define the parameter table entries
-    parameters_list: List[_ParamDescriptor] = []
+    parameters_list: List[Dict[str, Any]] = []
     param_table_entries = []
     param_index = 0
     found_integer = False
@@ -192,79 +192,79 @@ typedef struct {
     prefunc += r"""
 // Function to find parameter descriptor by name
 param_descriptor *find_param_descriptor(const char *param_name) {
-    for (int i = 0; i < NUM_PARAMS; i++) {
-        if (strcmp(param_table[i].name, param_name) == 0) {
-            return &param_table[i];
-        }
+  for (int i = 0; i < NUM_PARAMS; i++) {
+    if (strcmp(param_table[i].name, param_name) == 0) {
+      return &param_table[i];
     }
-    return NULL;
+  }
+  return NULL;
 }
 
 // Function to parse parameter name and array size
 static void parse_param(const char *param_str, char *param_name, int *array_size) {
-    char *bracket_start = strchr(param_str, '[');
-    if (bracket_start != NULL) {
-        // It's an array parameter
-        size_t name_len = bracket_start - param_str;
-        strncpy(param_name, param_str, name_len);
-        param_name[name_len] = '\0';
-        char *bracket_end = strchr(bracket_start + 1, ']');
-        if (bracket_end == NULL) {
-            fprintf(stderr, "Error: Missing closing bracket in parameter %s.\n", param_str);
-            exit(1);
-        }
-        char size_str[16];
-        size_t size_len = bracket_end - bracket_start - 1;
-        strncpy(size_str, bracket_start + 1, size_len);
-        size_str[size_len] = '\0';
-        *array_size = atoi(size_str);
-        if (*array_size <= 0) {
-            fprintf(stderr, "Error: Invalid array size in parameter %s.\n", param_name);
-            exit(1);
-        }
-    } else {
-        // Scalar parameter
-        safe_copy(param_name, param_str, PARAM_SIZE);
-        *array_size = 0;
+  char *bracket_start = strchr(param_str, '[');
+  if (bracket_start != NULL) {
+    // It's an array parameter
+    size_t name_len = bracket_start - param_str;
+    strncpy(param_name, param_str, name_len);
+    param_name[name_len] = '\0';
+    char *bracket_end = strchr(bracket_start + 1, ']');
+    if (bracket_end == NULL) {
+      fprintf(stderr, "Error: Missing closing bracket in parameter %s.\n", param_str);
+      exit(1);
     }
+    char size_str[16];
+    size_t size_len = bracket_end - bracket_start - 1;
+    strncpy(size_str, bracket_start + 1, size_len);
+    size_str[size_len] = '\0';
+    *array_size = atoi(size_str);
+    if (*array_size <= 0) {
+      fprintf(stderr, "Error: Invalid array size in parameter %s.\n", param_name);
+      exit(1);
+    }
+  } else {
+    // Scalar parameter
+    safe_copy(param_name, param_str, PARAM_SIZE);
+    *array_size = 0;
+  }
 }
 
 // Function to parse value string into array of values
 static void parse_value(const char *value_str, char values[][PARAM_SIZE], int *value_count) {
-    if (value_str[0] == '{') {
-        // Array value
-        size_t len = strlen(value_str);
-        if (value_str[len - 1] != '}') {
-            fprintf(stderr, "Error: Missing closing brace in value %s.\n", value_str);
-            exit(1);
-        }
-        // Extract the values inside the braces
-        char value_copy[LINE_SIZE];
-        safe_copy(value_copy, value_str + 1, LINE_SIZE); // Skip the opening brace
-        value_copy[len - 2] = '\0'; // Remove the closing brace
-        // Now split value_copy by ','
-        char *val_token;
-        int count = 0;
-        char *saveptr;
-        val_token = strtok_r(value_copy, ",", &saveptr);
-        while (val_token != NULL) {
-            safe_copy(values[count], trim_space(val_token), PARAM_SIZE);
-            count++;
-            if (count > MAX_ARRAY_SIZE) {
-                fprintf(stderr, "Error: Array size exceeds maximum allowed.\n");
-                exit(1);
-            }
-            val_token = strtok_r(NULL, ",", &saveptr);
-        }
-        *value_count = count;
-    } else {
-        // Scalar value
-        char mutable_value[PARAM_SIZE];
-        safe_copy(mutable_value, value_str, PARAM_SIZE);
-        char *trimmed = trim_space(mutable_value);
-        safe_copy(values[0], trimmed, PARAM_SIZE);
-        *value_count = 1;
+  if (value_str[0] == '{') {
+    // Array value
+    size_t len = strlen(value_str);
+    if (value_str[len - 1] != '}') {
+      fprintf(stderr, "Error: Missing closing brace in value %s.\n", value_str);
+      exit(1);
     }
+    // Extract the values inside the braces
+    char value_copy[LINE_SIZE];
+    safe_copy(value_copy, value_str + 1, LINE_SIZE); // Skip the opening brace
+    value_copy[len - 2] = '\0';                      // Remove the closing brace
+    // Now split value_copy by ','
+    char *val_token;
+    int count = 0;
+    char *saveptr;
+    val_token = strtok_r(value_copy, ",", &saveptr);
+    while (val_token != NULL) {
+      safe_copy(values[count], trim_space(val_token), PARAM_SIZE);
+      count++;
+      if (count > MAX_ARRAY_SIZE) {
+        fprintf(stderr, "Error: Array size exceeds maximum allowed.\n");
+        exit(1);
+      }
+      val_token = strtok_r(NULL, ",", &saveptr);
+    }
+    *value_count = count;
+  } else {
+    // Scalar value
+    char mutable_value[PARAM_SIZE];
+    safe_copy(mutable_value, value_str, PARAM_SIZE);
+    char *trimmed = trim_space(mutable_value);
+    safe_copy(values[0], trimmed, PARAM_SIZE);
+    *value_count = 1;
+  }
 }
 """
 
@@ -273,16 +273,16 @@ static void parse_value(const char *value_str, char values[][PARAM_SIZE], int *v
         prefunc += r"""
 // Function to read an integer value
 static void read_integer(const char *value, int *result, const char *param_name) {
-    char *endptr;
-    errno = 0; // To detect overflow
-    long int_val = strtol(value, &endptr, 10);
+  char *endptr;
+  errno = 0; // To detect overflow
+  long int_val = strtol(value, &endptr, 10);
 
-    if (endptr == value || *endptr != '\0' || errno == ERANGE) {
-        fprintf(stderr, "Error: Invalid integer value for %s: %s.\n", param_name, value);
-        exit(1);
-    }
+  if (endptr == value || *endptr != '\0' || errno == ERANGE) {
+    fprintf(stderr, "Error: Invalid integer value for %s: %s.\n", param_name, value);
+    exit(1);
+  }
 
-    *result = (int)int_val;
+  *result = (int)int_val;
 }
 """
 
@@ -290,16 +290,16 @@ static void read_integer(const char *value, int *result, const char *param_name)
         prefunc += r"""
 // Function to read a REAL (double) value
 static void read_REAL(const char *value, REAL *result, const char *param_name) {
-    char *endptr;
-    errno = 0; // To detect overflow
-    double double_val = strtod(value, &endptr);
+  char *endptr;
+  errno = 0; // To detect overflow
+  double double_val = strtod(value, &endptr);
 
-    if (endptr == value || *endptr != '\0' || errno == ERANGE) {
-        fprintf(stderr, "Error: Invalid double value for %s: %s.\n", param_name, value);
-        exit(1);
-    }
+  if (endptr == value || *endptr != '\0' || errno == ERANGE) {
+    fprintf(stderr, "Error: Invalid double value for %s: %s.\n", param_name, value);
+    exit(1);
+  }
 
-    *result = (REAL) double_val;
+  *result = (REAL)double_val;
 }
 """
 
@@ -307,11 +307,11 @@ static void read_REAL(const char *value, REAL *result, const char *param_name) {
         prefunc += r"""
 // Function to read a character array
 static void read_chararray(const char *value, char *result, const char *param_name, size_t size) {
-    if (strlen(value) >= size) {
-        fprintf(stderr, "Error: Buffer overflow detected for %s.\n", param_name);
-        exit(1);
-    }
-    safe_copy(result, value, size);
+  if (strlen(value) >= size) {
+    fprintf(stderr, "Error: Buffer overflow detected for %s.\n", param_name);
+    exit(1);
+  }
+  safe_copy(result, value, size);
 }
 """
 
@@ -319,29 +319,29 @@ static void read_chararray(const char *value, char *result, const char *param_na
         prefunc += r"""
 // Function to read a boolean value
 static void read_boolean(const char *value, bool *result, const char *param_name) {
-    // To allow case-insensitive comparison
-    char *lower_value = strdup(value);
-    if (lower_value == NULL) {
-        fprintf(stderr, "Error: Memory allocation failed for boolean value of %s.\n", param_name);
-        exit(1);
-    }
-    for (char *p = lower_value; *p != '\0'; p++) {
-        *p = tolower((unsigned char)*p);
-    }
+  // To allow case-insensitive comparison
+  char *lower_value = strdup(value);
+  if (lower_value == NULL) {
+    fprintf(stderr, "Error: Memory allocation failed for boolean value of %s.\n", param_name);
+    exit(1);
+  }
+  for (char *p = lower_value; *p != '\0'; p++) {
+    *p = tolower((unsigned char)*p);
+  }
 
-    // Check if the input is "true", "false", "0", or "1"
-    if (strcmp(lower_value, "true") == 0 || strcmp(lower_value, "1") == 0) {
-        *result = true;
-    } else if (strcmp(lower_value, "false") == 0 || strcmp(lower_value, "0") == 0) {
-        *result = false;
-    } else {
-        fprintf(stderr, "Error: Invalid boolean value for %s: %s.\n", param_name, value);
-        free(lower_value);
-        exit(1);
-    }
-
-    // Free the allocated memory for the lowercase copy of the value
+  // Check if the input is "true", "false", "0", or "1"
+  if (strcmp(lower_value, "true") == 0 || strcmp(lower_value, "1") == 0) {
+    *result = true;
+  } else if (strcmp(lower_value, "false") == 0 || strcmp(lower_value, "0") == 0) {
+    *result = false;
+  } else {
+    fprintf(stderr, "Error: Invalid boolean value for %s: %s.\n", param_name, value);
     free(lower_value);
+    exit(1);
+  }
+
+  // Free the allocated memory for the lowercase copy of the value
+  free(lower_value);
 }
 """
 
@@ -352,135 +352,135 @@ static void read_boolean(const char *value, bool *result, const char *param_name
 
     # Generate the main function body
     body = rf"""
-    const int number_of_steerable_parameters = {len(cmdline_inputs)};
+  const int number_of_steerable_parameters = {len(cmdline_inputs)};
 
-    int option;
+  int option;
 
-    // Check for "-h" or "--help" options
-    if (argc == 2 && (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)) {{
-        print_usage();
-        exit(0);
-    }}
+  // Check for "-h" or "--help" options
+  if (argc == 2 && (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)) {{
+    print_usage();
+    exit(0);
+  }}
 
-    // Determine the usage option based on argc
-    if (argc == 1) {{
-        option = 1; // Usage option 1: Process default parameter file "{project_name}.par"
-    }} else if (argc == 2) {{
-        // Check if the argument is a file
-        FILE *file_check = fopen(argv[1], "r");
-        if (file_check != NULL) {{
-            fclose(file_check);
-            option = 2; // Usage option 2: Process parameter file provided in argv[1]
-        }} else if (argc == 1 + number_of_steerable_parameters) {{
-            option = 3;
-        }} else {{
-            fprintf(stderr, "Error: Invalid number of arguments or file cannot be opened.\n");
-            print_usage();
-            exit(1);
-        }}
+  // Determine the usage option based on argc
+  if (argc == 1) {{
+    option = 1; // Usage option 1: Process default parameter file "{project_name}.par"
+  }} else if (argc == 2) {{
+    // Check if the argument is a file
+    FILE *file_check = fopen(argv[1], "r");
+    if (file_check != NULL) {{
+      fclose(file_check);
+      option = 2; // Usage option 2: Process parameter file provided in argv[1]
     }} else if (argc == 1 + number_of_steerable_parameters) {{
-        option = 3; // Usage option 3: Overwrite steerable parameters after processing "{project_name}.par"
-    }} else if (argc == 2 + number_of_steerable_parameters) {{
-        // Check if the first argument is a file
-        FILE *file_check = fopen(argv[1], "r");
-        if (file_check != NULL) {{
-            fclose(file_check);
-            option = 4; // Usage option 4: Overwrite steerable parameters after processing parameter file provided in argv[1]
-        }} else {{
-            fprintf(stderr, "Error: File cannot be opened for option 4.\n");
-            print_usage();
-            exit(1);
-        }}
+      option = 3;
     }} else {{
-        fprintf(stderr, "Error: Invalid number of arguments\n");
-        print_usage();
-        exit(1);
+      fprintf(stderr, "Error: Invalid number of arguments or file cannot be opened.\n");
+      print_usage();
+      exit(1);
+    }}
+  }} else if (argc == 1 + number_of_steerable_parameters) {{
+    option = 3; // Usage option 3: Overwrite steerable parameters after processing "{project_name}.par"
+  }} else if (argc == 2 + number_of_steerable_parameters) {{
+    // Check if the first argument is a file
+    FILE *file_check = fopen(argv[1], "r");
+    if (file_check != NULL) {{
+      fclose(file_check);
+      option = 4; // Usage option 4: Overwrite steerable parameters after processing parameter file provided in argv[1]
+    }} else {{
+      fprintf(stderr, "Error: File cannot be opened for option 4.\n");
+      print_usage();
+      exit(1);
+    }}
+  }} else {{
+    fprintf(stderr, "Error: Invalid number of arguments\n");
+    print_usage();
+    exit(1);
+  }}
+
+  // fprintf(stderr, "Using option %d\n", option);
+
+  const char *filename = (option == 1 || option == 3) ? "{project_name}.par" : argv[1];
+  FILE *file = fopen(filename, "r");
+  if (file == NULL) {{
+    print_usage();
+    exit(1);
+  }}
+
+  char line[LINE_SIZE];
+  char param[PARAM_SIZE];
+  char value[PARAM_SIZE];
+  int params_set[NUM_PARAMETERS] = {{0}}; // Record of parameters set
+
+  while (fgets(line, sizeof(line), file)) {{
+    // Removing comments from the line
+    char *comment_start = strchr(line, '#');
+    if (comment_start != NULL) {{
+      *comment_start = '\0';
     }}
 
-    // fprintf(stderr, "Using option %d\n", option);
+    char *p = strtok(line, "=");
+    if (p) {{
+      safe_copy(param, trim_space(p), sizeof(param));
+      p = strtok(NULL, "=");
+      if (p) {{
+        safe_copy(value, trim_space(p), sizeof(value));
 
-    const char *filename = (option == 1 || option == 3) ? "{project_name}.par" : argv[1];
-    FILE *file = fopen(filename, "r");
-    if (file == NULL) {{
-        print_usage();
-        exit(1);
-    }}
+        char param_name[PARAM_SIZE];
+        int array_size = 0;
+        parse_param(param, param_name, &array_size);
 
-    char line[LINE_SIZE];
-    char param[PARAM_SIZE];
-    char value[PARAM_SIZE];
-    int params_set[NUM_PARAMETERS] = {{0}}; // Record of parameters set
-
-    while (fgets(line, sizeof(line), file)) {{
-        // Removing comments from the line
-        char *comment_start = strchr(line, '#');
-        if (comment_start != NULL) {{
-            *comment_start = '\0';
+        // Check for invalid characters in parameter name
+        for (int i = 0; param_name[i]; i++) {{
+          if (!isalnum(param_name[i]) && param_name[i] != '_') {{
+            fprintf(stderr, "Error: Invalid parameter name %s.\n", param_name);
+            exit(1);
+          }}
         }}
 
-        char *p = strtok(line, "=");
-        if (p) {{
-            safe_copy(param, trim_space(p), sizeof(param));
-            p = strtok(NULL, "=");
-            if (p) {{
-                safe_copy(value, trim_space(p), sizeof(value));
+        // Parse value
+        char values_array[MAX_ARRAY_SIZE][PARAM_SIZE];
+        int value_count = 0;
+        parse_value(value, values_array, &value_count);
 
-                char param_name[PARAM_SIZE];
-                int array_size = 0;
-                parse_param(param, param_name, &array_size);
+        // Lookup parameter descriptor
+        param_descriptor *param_desc = find_param_descriptor(param_name);
+        if (param_desc == NULL) {{
+          fprintf(stderr, "Warning: Unrecognized parameter %s.\n", param_name);
+          continue; // Decide whether to exit or ignore
+        }}
 
-                // Check for invalid characters in parameter name
-                for (int i = 0; param_name[i]; i++) {{
-                    if (!isalnum(param_name[i]) && param_name[i] != '_') {{
-                        fprintf(stderr, "Error: Invalid parameter name %s.\n", param_name);
-                        exit(1);
-                    }}
-                }}
+        // Check for duplicate parameters
+        if (params_set[param_desc->index] == 1) {{
+          fprintf(stderr, "Error: Duplicate parameter %s.\n", param_name);
+          exit(1);
+        }}
+        params_set[param_desc->index] = 1;
 
-                // Parse value
-                char values_array[MAX_ARRAY_SIZE][PARAM_SIZE];
-                int value_count = 0;
-                parse_value(value, values_array, &value_count);
+        // Check array size
+        if (param_desc->array_size > 0) {{
+          // It's an array parameter
+          if (array_size != param_desc->array_size) {{
+            fprintf(stderr, "Error: Array size mismatch for parameter %s.\n", param_name);
+            exit(1);
+          }}
+          if (value_count != param_desc->array_size) {{
+            fprintf(stderr, "Error: Number of values does not match array size for parameter %s.\n", param_name);
+            exit(1);
+          }}
+        }} else {{
+          // It's a scalar parameter
+          if (array_size > 0) {{
+            fprintf(stderr, "Error: Unexpected array size for scalar parameter %s.\n", param_name);
+            exit(1);
+          }}
+          if (value_count != 1) {{
+            fprintf(stderr, "Error: Expected a single value for parameter %s.\n", param_name);
+            exit(1);
+          }}
+        }}
 
-                // Lookup parameter descriptor
-                param_descriptor *param_desc = find_param_descriptor(param_name);
-                if (param_desc == NULL) {{
-                    fprintf(stderr, "Warning: Unrecognized parameter %s.\n", param_name);
-                    continue; // Decide whether to exit or ignore
-                }}
-
-                // Check for duplicate parameters
-                if (params_set[param_desc->index] == 1) {{
-                    fprintf(stderr, "Error: Duplicate parameter %s.\n", param_name);
-                    exit(1);
-                }}
-                params_set[param_desc->index] = 1;
-
-                // Check array size
-                if (param_desc->array_size > 0) {{
-                    // It's an array parameter
-                    if (array_size != param_desc->array_size) {{
-                        fprintf(stderr, "Error: Array size mismatch for parameter %s.\n", param_name);
-                        exit(1);
-                    }}
-                    if (value_count != param_desc->array_size) {{
-                        fprintf(stderr, "Error: Number of values does not match array size for parameter %s.\n", param_name);
-                        exit(1);
-                    }}
-                }} else {{
-                    // It's a scalar parameter
-                    if (array_size > 0) {{
-                        fprintf(stderr, "Error: Unexpected array size for scalar parameter %s.\n", param_name);
-                        exit(1);
-                    }}
-                    if (value_count != 1) {{
-                        fprintf(stderr, "Error: Expected a single value for parameter %s.\n", param_name);
-                        exit(1);
-                    }}
-                }}
-
-                // Now, assign values
-    """
+        // Now, assign values
+"""
 
     # Build assignment code
     assignment_code = ""
@@ -545,7 +545,7 @@ static void read_boolean(const char *value, bool *result, const char *param_name
         // Handling options 3 and 4: Overwriting steerable parameters
         if (option == 3 || option == 4) {
             // For options 3 and 4, we extract the last arguments as steerable parameters
-    """
+"""
 
     # Handle steerable parameters overwriting
     steerable_body = ""
