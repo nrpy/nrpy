@@ -48,7 +48,7 @@ def register_CFunction_initial_data(
     enable_checkpointing: bool = False,
     populate_ID_persist_struct_str: str = "",
     free_ID_persist_struct_str: str = "",
-    include_T4UU: bool = False,
+    enable_T4munu: bool = False,
     fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
@@ -66,7 +66,7 @@ def register_CFunction_initial_data(
     :param ID_persist_struct_str: A string representing the persistent structure for the initial data.
     :param populate_ID_persist_struct_str: Optional string to populate the persistent structure for initial data.
     :param free_ID_persist_struct_str: Optional string to free the persistent structure for initial data.
-    :param include_T4UU: Whether to include the stress-energy tensor. Defaults to False.
+    :param enable_T4munu: Whether to include the stress-energy tensor. Defaults to False.
     :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
@@ -104,7 +104,7 @@ def register_CFunction_initial_data(
         CoordSystem,
         IDCoordSystem=IDCoordSystem,
         ID_persist_struct_str=ID_persist_struct_str,
-        include_T4UU=include_T4UU,
+        enable_T4munu=enable_T4munu,
         fp_type=fp_type,
     )
 
