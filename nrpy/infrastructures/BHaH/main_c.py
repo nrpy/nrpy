@@ -74,7 +74,7 @@ def register_CFunction_main_c(
         step3desc = allocate_auxevol_desc
         step4desc = set_initial_data_desc
     desc = f"""-={{ main() function }}=-
-Step 1.a: Initialize each CodeParameter in the commondata struc to its default value.
+Step 1.a: Initialize each CodeParameter in the commondata struct to its default value.
 Step 1.b: Overwrite the default values with those from the parameter file.
           Then overwrite the parameter file values with those provided via command line arguments.
 Step 1.c: Allocate memory for MAXNUMGRIDS griddata structs,
@@ -101,7 +101,7 @@ Step 6: Free all allocated memory."""
     body = r"""  commondata_struct commondata; // commondata contains parameters common to all grids.
   griddata_struct *restrict griddata; // griddata contains data specific to an individual grid.
 
-// Step 1.a: Initialize each CodeParameter in the commondata struc to its default value.
+// Step 1.a: Initialize each CodeParameter in the commondata struct to its default value.
 commondata_struct_set_to_default(&commondata);
 
 // Step 1.b: Overwrite the default values with those from the parameter file.
@@ -118,7 +118,7 @@ params_struct_set_to_default(&commondata, griddata);
 // Step 1.e: Set up numerical grids, including parameters such as NUMGRIDS, xx[3], masks, Nxx, dxx, invdxx,
 //           bcstruct, rfm_precompute, timestep, and others.
 {
-  // If this function is being called for the first time, initialize commondata time, nn, t_0, and nn_0 to 0.
+  // If this function is being called for the first time, initialize commondata.time, nn, t_0, and nn_0 to 0.
   const bool calling_for_first_time = true;
   numerical_grids_and_timestep(&commondata, griddata, calling_for_first_time);
 }

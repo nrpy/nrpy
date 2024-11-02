@@ -27,7 +27,7 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     CoordSystem: str,
     addl_includes: Optional[List[str]] = None,
     IDCoordSystem: str = "Spherical",
-    include_T4UU: bool = False,
+    enable_T4munu: bool = False,
     enable_fd_functions: bool = False,
     ID_persist_struct_str: str = "",
     fp_type: str = "double",
@@ -38,7 +38,7 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     :param CoordSystem: Coordinate system for output BSSN variables.
     :param addl_includes: Additional header files to include.
     :param IDCoordSystem: Coordinate system for input ADM variables. Defaults to "Spherical".
-    :param include_T4UU: Whether to include stress-energy tensor components.
+    :param enable_T4munu: Whether to include stress-energy tensor components.
     :param enable_fd_functions: Whether to enable finite-difference functions.
     :param ID_persist_struct_str: String for persistent ID structure.
     :param fp_type: Floating point type, e.g., "double".
@@ -58,7 +58,7 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
   REAL KSphorCartDD00, KSphorCartDD01, KSphorCartDD02;
   REAL KSphorCartDD11, KSphorCartDD12, KSphorCartDD22;
 """
-    if include_T4UU:
+    if enable_T4munu:
         BHd += """
   REAL T4SphorCartUU00,T4SphorCartUU01,T4SphorCartUU02,T4SphorCartUU03;
   REAL                 T4SphorCartUU11,T4SphorCartUU12,T4SphorCartUU13;
@@ -103,7 +103,7 @@ typedef struct __ADM_Cart_basis_struct__ {
   REAL gammaDD00,gammaDD01,gammaDD02,gammaDD11,gammaDD12,gammaDD22;
   REAL KDD00,KDD01,KDD02,KDD11,KDD12,KDD22;
 """
-    if include_T4UU:
+    if enable_T4munu:
         prefunc += T4UU_prettyprint()
     prefunc += "} ADM_Cart_basis_struct;\n"
     ##############
@@ -115,7 +115,7 @@ typedef struct __BSSN_Cart_basis_struct__ {
   REAL gammabarDD00,gammabarDD01,gammabarDD02,gammabarDD11,gammabarDD12,gammabarDD22;
   REAL AbarDD00,AbarDD01,AbarDD02,AbarDD11,AbarDD12,AbarDD22;
 """
-    if include_T4UU:
+    if enable_T4munu:
         prefunc += T4UU_prettyprint()
     prefunc += "} BSSN_Cart_basis_struct;\n"
     ##############
@@ -127,22 +127,22 @@ typedef struct __rescaled_BSSN_rfm_basis_struct__ {
   REAL hDD00,hDD01,hDD02,hDD11,hDD12,hDD22;
   REAL aDD00,aDD01,aDD02,aDD11,aDD12,aDD22;
 """
-    if include_T4UU:
+    if enable_T4munu:
         prefunc += T4UU_prettyprint()
     prefunc += "} rescaled_BSSN_rfm_basis_struct;\n"
     ##############
     ##############
     prefunc += admid.Cfunction_ADM_SphorCart_to_Cart(
         IDCoordSystem=IDCoordSystem,
-        include_T4UU=include_T4UU,
+        enable_T4munu=enable_T4munu,
         fp_type=fp_type,
     )
     prefunc += admid.Cfunction_ADM_Cart_to_BSSN_Cart(
-        include_T4UU=include_T4UU, fp_type=fp_type
+        enable_T4munu=enable_T4munu, fp_type=fp_type
     )
     prefunc += admid.Cfunction_BSSN_Cart_to_rescaled_BSSN_rfm(
         CoordSystem=CoordSystem,
-        include_T4UU=include_T4UU,
+        enable_T4munu=enable_T4munu,
         fp_type=fp_type,
     )
     prefunc += admid.Cfunction_initial_data_lambdaU_grid_interior(
@@ -193,7 +193,7 @@ typedef struct __rescaled_BSSN_rfm_basis_struct__ {
             gf_list += [f"hDD{i}{j}", f"aDD{i}{j}"]
     for gf in sorted(gf_list):
         body += f"gridfuncs->y_n_gfs[IDX4pt({gf.upper()}GF, idx3)] = rescaled_BSSN_rfm_basis.{gf};\n"
-    if include_T4UU:
+    if enable_T4munu:
         for mu in range(4):
             for nu in range(mu, 4):
                 gf = f"T4UU{mu}{nu}"
@@ -235,7 +235,7 @@ def register_CFunction_initial_data(
     enable_checkpointing: bool = False,
     populate_ID_persist_struct_str: str = "",
     free_ID_persist_struct_str: str = "",
-    include_T4UU: bool = False,
+    enable_T4munu: bool = False,
     fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
@@ -253,7 +253,7 @@ def register_CFunction_initial_data(
     :param ID_persist_struct_str: A string representing the persistent structure for the initial data.
     :param populate_ID_persist_struct_str: Optional string to populate the persistent structure for initial data.
     :param free_ID_persist_struct_str: Optional string to free the persistent structure for initial data.
-    :param include_T4UU: Whether to include the stress-energy tensor. Defaults to False.
+    :param enable_T4munu: Whether to include the stress-energy tensor. Defaults to False.
     :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
@@ -291,7 +291,7 @@ def register_CFunction_initial_data(
         CoordSystem,
         IDCoordSystem=IDCoordSystem,
         ID_persist_struct_str=ID_persist_struct_str,
-        include_T4UU=include_T4UU,
+        enable_T4munu=enable_T4munu,
         fp_type=fp_type,
     )
 

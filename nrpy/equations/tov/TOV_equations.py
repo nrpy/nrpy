@@ -31,14 +31,14 @@ class TOV_Equations:
         M = self.M
         M_PI = self.M_PI
         self.dP_dr = -(
-            (rho_energy + P) * ((2.0 * M) / (r_Schw) + 8.0 * M_PI * r_Schw * r_Schw * P)
-        ) / (r_Schw * 2.0 * (1.0 - (2.0 * M) / (r_Schw)))
-        self.dnu_dr = ((2.0 * M) / (r_Schw) + 8.0 * M_PI * r_Schw * r_Schw * P) / (
-            r_Schw * (1.0 - (2.0 * M) / (r_Schw))
+            (rho_energy + P) * ((2 * M) / (r_Schw) + 8 * M_PI * r_Schw * r_Schw * P)
+        ) / (r_Schw * 2 * (1 - (2 * M) / (r_Schw)))
+        self.dnu_dr = ((2 * M) / (r_Schw) + 8 * M_PI * r_Schw * r_Schw * P) / (
+            r_Schw * (1 - (2 * M) / (r_Schw))
         )
-        self.dM_dr = 4.0 * M_PI * r_Schw * r_Schw * rho_energy
+        self.dM_dr = 4 * M_PI * r_Schw * r_Schw * rho_energy
         # r_iso == isotropic radius, sometimes called rbar.
-        self.dr_iso_dr = (r_iso) / (r_Schw * sp.sqrt(1.0 - (2.0 * M) / r_Schw))
+        self.dr_iso_dr = (r_iso) / (r_Schw * sp.sqrt(1 - (2 * M) / r_Schw))
 
 
 if __name__ == "__main__":
