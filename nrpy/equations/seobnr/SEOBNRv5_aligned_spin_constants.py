@@ -92,9 +92,7 @@ class SEOBNR_aligned_spin_constants:
         various coefficients required for the waveforms's amplitude and phase.
         :return None:
         """
-        (m1, m2, chi1, chi2) = sp.symbols(
-            "m1 m2 chi1 chi2", real=True
-        )
+        (m1, m2, chi1, chi2) = sp.symbols("m1 m2 chi1 chi2", real=True)
 
         # Delta_t computation
         M = m1 + m2
@@ -109,11 +107,7 @@ class SEOBNR_aligned_spin_constants:
             f2r(3.29523262e05),
         ]
         self.pyseobnr_a6 = (
-            par[0]
-            + par[1] * nu
-            + par[2] * nu**2
-            + par[3] * nu**3
-            + par[4] * nu**4
+            par[0] + par[1] * nu + par[2] * nu**2 + par[3] * nu**3 + par[4] * nu**4
         )
         self.pyseobnr_dSO = (
             -f2r(7.71251231383957) * am**3
@@ -227,7 +221,6 @@ class SEOBNR_aligned_spin_constants:
         Shat = (m1 * m1 * chi1 + m2 * m2 * chi2) / (m1 * m1 + m2 * m2)
         Shat2 = Shat * Shat
         Shat3 = Shat2 * Shat
-        Shat4 = Shat3 * Shat
         nu2 = nu * nu
         nu3 = nu2 * nu
         nu4 = nu3 * nu
@@ -280,6 +273,7 @@ class SEOBNR_aligned_spin_constants:
             A_1 * Deltachi + A_2 * Deltachi2 + A_3 * Deltachi * Shat
         )
         self.M_f = 1 - (Erad_nu_Shat + DeltaErad_nu_Shat_Deltachi)
+
 
 if __name__ == "__main__":
     import doctest

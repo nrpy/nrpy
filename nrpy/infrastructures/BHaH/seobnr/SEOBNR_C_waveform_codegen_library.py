@@ -9,10 +9,45 @@ from inspect import currentframe as cfr
 from types import FrameType as FT
 from typing import Union, cast
 
-import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-import nrpy.equations.seobnr.BOB_aligned_spin_waveform_quantities as BOB
 import nrpy.helpers.parallel_codegen as pcg
+
+
+def register_CFunction_SEOBNRv5_aligned_spin_unwrap() -> Union[None, pcg.NRPyEnv_type]:
+    """
+    Register CFunction that performs numpy.unwrap on a given array.
+
+    :return: None if in registration phase, else the updated NRPy environment.
+    """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    desc = """C function to perform numpy.unwrap."""
+    cfunc_type = "int"
+    name = "SEOBNRv5_aligned_spin_unwrap"
+    params = "REAL *restrict angles_in , REAL *restrict angles_out, size_t nsteps_arr"
+    body = """
+angles_out[0] = angles_in[0];
+REAL diff;
+for (size_t i = 0; i < nsteps_arr; i++){
+  diff = angles_in[i] - angles_in[i-1];
+  diff = fabs(diff) > M_PI ? (diff < - M_PI ? diff + 2 * M_PI : diff - 2 * M_PI) : diff;
+  angles_out[i] = angles_out[i - 1] + diff;
+}
+return GSL_SUCCESS;
+"""
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        include_CodeParameters_h=False,
+        body=body,
+    )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
 def register_CFunction_SEOBNRv5_NQC_corrections() -> Union[None, pcg.NRPyEnv_type]:
@@ -30,8 +65,6 @@ def register_CFunction_SEOBNRv5_NQC_corrections() -> Union[None, pcg.NRPyEnv_typ
     cfunc_type = "int"
     name = "SEOBNRv5_aligned_spin_NQC_corrections"
     params = "commondata_struct *restrict commondata"
-    bob_wf = BOB.BOB_aligned_spin_waveform_quantities()
-
     body = """
 REAL *restrict times = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 REAL *restrict Q1 = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
@@ -45,7 +78,9 @@ REAL *restrict hamp = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 REAL *restrict phase = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 REAL *restrict phase_unwrapped = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 REAL radius, omega, prstar, hplus, hcross; 
+double complex h22;
 size_t i;
+int status;
 
 for (i = 0; i < commondata->nsteps_fine; i++){
   prstar = commondata->dynamics_fine[IDX(i,PRSTAR)];
@@ -53,8 +88,9 @@ for (i = 0; i < commondata->nsteps_fine; i++){
   Omega[i] = commondata->dynamics_fine[IDX(i,OMEGA)];
   hplus = commondata->waveform_fine[IDX_WF(i,HPLUS)];
   hcross = commondata->waveform_fine[IDX_WF(i,HCROSS)];
-  hamp[i] = sqrt(hplus * hplus + hcross * hcross);
-  phase[i] = atan2(-hcross,hplus);
+  h22 = hplus - I * hcross;
+  hamp[i] = cabs(h22);
+  phase[i] = carg(h22);
   times[i] = commondata->dynamics_fine[IDX(i,TIME)];
   Q1[i] = hamp[i] * prstar * prstar / (r[i] * r[i] * Omega[i] * Omega[i]);
   Q2[i] = Q1[i] / r[i];
@@ -62,15 +98,7 @@ for (i = 0; i < commondata->nsteps_fine; i++){
   P1[i] = -prstar / r[i] /Omega[i];
   P2[i] = -P1[i] * prstar * prstar;
 }
-REAL diff;
-int wrap = 0;
-phase_unwrapped[0] = phase[0];
-for (i = 1; i < commondata->nsteps_fine; i++){
-  diff = phase[i] - phase[i-1];
-  wrap += (diff < -M_PI) - (diff > M_PI);
-  phase_unwrapped[i] = phase[i] + wrap * 2 * M_PI;
-}
-
+status = SEOBNRv5_aligned_spin_unwrap(phase,phase_unwrapped,commondata->nsteps_fine);
 // Find t_ISCO:
 
 if (commondata->r_ISCO < r[commondata->nsteps_fine - 1]){
@@ -86,7 +114,6 @@ else{
   gsl_spline_init(spline_r,times,r,commondata->nsteps_fine);
   for (i = 0; i < N_zoom; i++){
     t_zoom[i] = times[0] + i * dt_ISCO;
-
     minus_r_zoom[i] = -1.0*gsl_spline_eval(spline_r,t_zoom[i],acc_r);
   }  
   const size_t ISCO_zoom_idx = gsl_interp_bsearch(minus_r_zoom, -commondata->r_ISCO, 0 , N_zoom);
@@ -99,14 +126,18 @@ else{
 }
 
 REAL t_peak = commondata->t_ISCO - commondata->Delta_t;
+size_t peak_idx;
 if (t_peak > times[commondata->nsteps_fine - 1]){
   t_peak = times[commondata->nsteps_fine - 1];
+  peak_idx = commondata->nsteps_fine - 1;
 }
-size_t peak_idx = gsl_interp_bsearch(times, t_peak, 0, commondata->nsteps_fine);
-
+else{
+  peak_idx = gsl_interp_bsearch(times, t_peak, 0, commondata->nsteps_fine);
+}
+commondata->t_attach = t_peak;
 size_t N = 5;
-size_t left = (peak_idx - N + abs(peak_idx - N))/2;
-size_t right = (peak_idx + N + commondata->nsteps_fine - abs(peak_idx + N - commondata->nsteps_fine))/2;
+size_t left = MAX(peak_idx - N, 0);
+size_t right = MIN(peak_idx + N , commondata->nsteps_fine);
 REAL Q_cropped1[right - left], Q_cropped2[right - left], Q_cropped3[right - left], P_cropped1[right - left], P_cropped2[right - left];
 REAL t_cropped[right-left], phase_cropped[right - left], amp_cropped[right-left];
 for (i = left; i < right; i++){
@@ -144,13 +175,13 @@ gsl_matrix_set(Q,2,2,gsl_spline_eval_deriv2(spline, t_peak, acc));
 
 gsl_spline_init(spline,t_cropped, P_cropped1,right-left);
 gsl_interp_accel_reset(acc);
-gsl_matrix_set(P,0,0,-gsl_spline_eval(spline, t_peak, acc));
-gsl_matrix_set(P,1,0,-gsl_spline_eval_deriv(spline, t_peak, acc));
+gsl_matrix_set(P,0,0,-gsl_spline_eval_deriv(spline, t_peak, acc));
+gsl_matrix_set(P,1,0,-gsl_spline_eval_deriv2(spline, t_peak, acc));
 
 gsl_spline_init(spline,t_cropped, P_cropped2,right-left);
 gsl_interp_accel_reset(acc);
-gsl_matrix_set(P,0,1,-gsl_spline_eval(spline, t_peak, acc));
-gsl_matrix_set(P,1,1,-gsl_spline_eval_deriv(spline, t_peak, acc));
+gsl_matrix_set(P,0,1,-gsl_spline_eval_deriv(spline, t_peak, acc));
+gsl_matrix_set(P,1,1,-gsl_spline_eval_deriv2(spline, t_peak, acc));
 
 gsl_vector *restrict A = gsl_vector_alloc(3);
 gsl_vector *restrict O = gsl_vector_alloc(2);
@@ -179,39 +210,13 @@ else{
   omegadot_insp = -fabs(omegadot_insp);
 }
 
-const REAL m1 = commondata->m1;
-const REAL m2 = commondata->m2;
-const REAL chi1 = commondata->chi1;
-const REAL chi2 = commondata->chi2;
-const REAL omega_qnm = commondata->omega_qnm;
-const REAL tau_qnm = commondata->tau_qnm;
-const REAL t = t_peak;
-const REAL t_0 = t_peak;
-"""
-    body += ccg.c_codegen(
-        [
-            bob_wf.h_t_attach,
-            bob_wf.hdot_t_attach,
-            bob_wf.hddot_t_attach,
-            bob_wf.w_t_attach,
-            bob_wf.wdot_t_attach,
-        ],
-        [
-            "const REAL h_t_attach",
-            "const REAL hdot_t_attach",
-            "const REAL hddot_t_attach",
-            "const REAL w_t_attach",
-            "const REAL wdot_t_attach",
-        ],
-        verbose=False,
-        include_braces=False,
-    )
-    body += """
-gsl_vector_set(A , 0 , h_t_attach - amp_insp);
-gsl_vector_set(A , 1 , hdot_t_attach - ampdot_insp);
-gsl_vector_set(A , 2 , hddot_t_attach - ampddot_insp);
-gsl_vector_set(O , 0 , w_t_attach - omega_insp);
-gsl_vector_set(O , 1 , wdot_t_attach - omegadot_insp);
+REAL omegas[2] , amps[3];
+status = BOB_aligned_spin_NQC_rhs(commondata,amps,omegas);
+gsl_vector_set(A , 0 , amps[0] - amp_insp);
+gsl_vector_set(A , 1 , amps[1] - ampdot_insp);
+gsl_vector_set(A , 2 , amps[2] - ampddot_insp);
+gsl_vector_set(O , 0 , omegas[0] - omega_insp);
+gsl_vector_set(O , 1 , omegas[1] - omegadot_insp);
 
 gsl_vector *restrict a = gsl_vector_alloc (3);
 
@@ -254,6 +259,7 @@ free(phase);
 free(phase_unwrapped);
 
 // apply the nqc correction
+commondata->nsteps_inspiral = commondata->nsteps_low + commondata->nsteps_fine;
 commondata->waveform_inspiral = (REAL *)malloc(commondata->nsteps_inspiral*NUMMODES*sizeof(REAL));
 REAL nqc_amp, nqc_phase, q1, q2, q3,p1, p2;
 for (i = 0; i < commondata->nsteps_low; i++){
@@ -301,6 +307,97 @@ return GSL_SUCCESS;
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
+def register_CFunction_SEOBNRv5_aligned_spin_interpolate_modes() -> (
+    Union[None, pcg.NRPyEnv_type]
+):
+    """
+    Register CFunction for interpolating the (2,2) inspiral mode for the SEOBNRv5 waveform.
+
+    :return: None if in registration phase, else the updated NRPy environment.
+    """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    desc = """Interpolate the SEOBNRv5 (2,2) inspiral mode."""
+    cfunc_type = "int"
+    name = "SEOBNRv5_aligned_spin_interpolate_modes"
+    params = "commondata_struct *restrict commondata, const REAL dT"
+    body = """
+size_t i;
+const size_t nsteps_inspiral_old = commondata->nsteps_inspiral;
+const size_t nsteps_new = (size_t) (commondata->waveform_inspiral[IDX_WF(commondata->nsteps_inspiral - 1,TIME)] - commondata->waveform_inspiral[IDX_WF(0,TIME)]) / dT;
+// build the complex inspiral modes
+REAL *restrict times_old = (REAL *)malloc(nsteps_inspiral_old * sizeof(REAL));
+REAL *restrict orbital_phases = (REAL *)malloc(nsteps_inspiral_old * sizeof(REAL));
+REAL *restrict h22_nophase_real = (REAL *)malloc(nsteps_inspiral_old * sizeof(REAL));
+REAL *restrict h22_nophase_imag = (REAL *)malloc(nsteps_inspiral_old * sizeof(REAL));
+double complex h22_nophase , h22_rescaled;
+for (i = 0; i < commondata->nsteps_low; i++){
+  times_old[i] = commondata->waveform_inspiral[IDX_WF(i,TIME)];
+  orbital_phases[i] = commondata->dynamics_low[IDX(i,PHI)];
+  h22_nophase = cexp(2 * I * orbital_phases[i])*(commondata->waveform_inspiral[IDX_WF(i,HPLUS)] - I * commondata->waveform_inspiral[IDX_WF(i,HCROSS)]);
+  h22_nophase_real[i] = creal(h22_nophase);
+  h22_nophase_imag[i] = cimag(h22_nophase);
+}
+for (i = 0; i < commondata->nsteps_fine; i++){
+  times_old[i + commondata->nsteps_low] = commondata->waveform_inspiral[IDX_WF(i + commondata->nsteps_low,TIME)];
+  orbital_phases[i + commondata->nsteps_low] = commondata->dynamics_fine[IDX(i,PHI)];
+  h22_nophase = cexp(2 * I * orbital_phases[i + commondata->nsteps_low])*(commondata->waveform_inspiral[IDX_WF(i + commondata->nsteps_low,HPLUS)] - I * commondata->waveform_inspiral[IDX_WF(i + commondata->nsteps_low,HCROSS)]);
+  h22_nophase_real[i + commondata->nsteps_low] = creal(h22_nophase);
+  h22_nophase_imag[i + commondata->nsteps_low] = cimag(h22_nophase);
+}
+
+//interpolate and set the inspiral modes
+REAL orbital_phase, h22_real , h22_imag, time;
+const REAL tstart = commondata->waveform_inspiral[IDX_WF(0,TIME)];
+gsl_interp_accel *restrict acc_real = gsl_interp_accel_alloc();
+gsl_interp_accel *restrict acc_imag = gsl_interp_accel_alloc();
+gsl_interp_accel *restrict acc = gsl_interp_accel_alloc();
+gsl_spline *restrict spline_real = gsl_spline_alloc(gsl_interp_cspline, nsteps_inspiral_old);
+gsl_spline *restrict spline_imag = gsl_spline_alloc(gsl_interp_cspline, nsteps_inspiral_old);
+gsl_spline *restrict spline = gsl_spline_alloc(gsl_interp_cspline, nsteps_inspiral_old);
+gsl_spline_init(spline,times_old,orbital_phases, nsteps_inspiral_old);
+gsl_spline_init(spline_real,times_old,h22_nophase_real, nsteps_inspiral_old);
+gsl_spline_init(spline_imag,times_old,h22_nophase_imag, nsteps_inspiral_old);
+//realloc the amount of memory needed to store the interpolated modes
+commondata->nsteps_inspiral = nsteps_new;
+commondata->waveform_inspiral = (REAL *)realloc(commondata->waveform_inspiral,commondata->nsteps_inspiral * NUMMODES * sizeof(REAL));
+for (i = 0; i < commondata->nsteps_inspiral; i++){
+  time = tstart + i * dT;
+  commondata->waveform_inspiral[IDX_WF(i,TIME)] = time;
+  orbital_phase = gsl_spline_eval(spline,time,acc);
+  h22_real = gsl_spline_eval(spline_real,time,acc_real);
+  h22_imag = gsl_spline_eval(spline_imag,time,acc_imag);
+  h22_rescaled = cexp(-2. * I * orbital_phase) * (h22_real + I * h22_imag);
+  commondata->waveform_inspiral[IDX_WF(i,HPLUS)] = creal(h22_rescaled);
+  commondata->waveform_inspiral[IDX_WF(i,HCROSS)] = -1. * cimag(h22_rescaled);
+}
+gsl_interp_accel_free(acc);
+gsl_interp_accel_free(acc_real);
+gsl_interp_accel_free(acc_imag);
+gsl_spline_free(spline_real);
+gsl_spline_free(spline_imag);
+gsl_spline_free(spline);
+free(times_old);
+free(orbital_phases);
+free(h22_nophase_real);
+free(h22_nophase_imag);
+return GSL_SUCCESS;
+"""
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        include_CodeParameters_h=False,
+        body=body,
+    )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
+
 def register_CFunction_SEOBNRv5_aligned_spin_IMR_waveform() -> (
     Union[None, pcg.NRPyEnv_type]
 ):
@@ -318,141 +415,66 @@ def register_CFunction_SEOBNRv5_aligned_spin_IMR_waveform() -> (
     cfunc_type = "int"
     name = "SEOBNRv5_aligned_spin_IMR_waveform"
     params = "commondata_struct *restrict commondata"
-    bob_wf = BOB.BOB_aligned_spin_waveform_quantities()
     body = """
-int i;
-REAL *restrict times_old = (REAL *)malloc(commondata->nsteps_inspiral*sizeof(REAL));
-REAL *restrict h22_amp_old = (REAL *)malloc(commondata->nsteps_inspiral*sizeof(REAL));
-REAL *restrict h22_phase_old = (REAL *)malloc(commondata->nsteps_inspiral*sizeof(REAL));
-REAL *restrict orbital_phase_old = (REAL *)malloc(commondata->nsteps_inspiral*sizeof(REAL));
-REAL *restrict h22_phase_unwrapped_old = (REAL *)malloc(commondata->nsteps_inspiral*sizeof(REAL));
-REAL *restrict h22_phase_unmodulated_old = (REAL *)malloc(commondata->nsteps_inspiral*sizeof(REAL));
-REAL hplus,hcross;
-for (i = 0; i < commondata->nsteps_inspiral; i++){
-  hplus = commondata->waveform_inspiral[IDX_WF(i,HPLUS)];
-  hcross = commondata->waveform_inspiral[IDX_WF(i,HCROSS)];
-  times_old[i] = commondata->waveform_inspiral[IDX_WF(i,TIME)];
-  orbital_phase_old[i] = commondata->dynamics_inspiral[IDX(i,PHI)];
-  h22_amp_old[i] = hplus*hplus + hcross*hcross;
-  h22_phase_old[i] = atan2(-hcross,hplus);
-}
-int wrap = 0;
-REAL diff;
-h22_phase_unmodulated_old[0] = h22_phase_old[0] + 2 * orbital_phase_old[0];
-h22_phase_unwrapped_old[0] = h22_phase_old[0];
-for (i = 1; i < commondata->nsteps_inspiral; i++){
-  diff = h22_phase_old[i] - h22_phase_old[i-1];
-  wrap += (diff < -M_PI) - (diff > M_PI);
-  h22_phase_unwrapped_old[i] = h22_phase_old[i] + wrap * 2 * M_PI;
-  h22_phase_unmodulated_old[i] = h22_phase_unwrapped_old[i] + 2 * orbital_phase_old[i];
-}
-free(h22_phase_old);
-gsl_interp_accel *restrict acc_amp = gsl_interp_accel_alloc();
-gsl_spline *restrict spline_amp = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_inspiral);
-gsl_spline_init(spline_amp,times_old,h22_amp_old, commondata->nsteps_inspiral);
-gsl_interp_accel *restrict acc_phase = gsl_interp_accel_alloc();
-gsl_spline *restrict spline_phase = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_inspiral);
-gsl_spline_init(spline_phase,times_old,h22_phase_unmodulated_old, commondata->nsteps_inspiral);
-gsl_interp_accel *restrict acc_phase_orb = gsl_interp_accel_alloc();
-gsl_spline *restrict spline_phase_orb = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_inspiral);
-gsl_spline_init(spline_phase_orb,times_old,orbital_phase_old, commondata->nsteps_inspiral);
-
+size_t i;
+int status;
 const REAL dT = commondata->dt/(commondata->total_mass*4.925490947641266978197229498498379006e-6);
-const size_t nsteps_insp_plunge = (size_t) commondata->dynamics_inspiral[IDX(commondata->nsteps_inspiral - 1,TIME)] / dT;
-REAL *restrict times_new = malloc(nsteps_insp_plunge*sizeof(REAL));
-REAL *restrict h22_amp_new = (REAL *)malloc(nsteps_insp_plunge*sizeof(REAL));
-REAL *restrict h22_phase_new = (REAL *)malloc(nsteps_insp_plunge*sizeof(REAL));
-for(i = 0; i < nsteps_insp_plunge; i++){
-  times_new[i] = i * dT;
-  h22_amp_new[i] = gsl_spline_eval(spline_amp,times_new[i],acc_amp);
-  h22_phase_new[i] = gsl_spline_eval(spline_phase,times_new[i],acc_phase) - 2*gsl_spline_eval(spline_phase_orb,times_new[i],acc_phase_orb);
+status = SEOBNRv5_aligned_spin_interpolate_modes(commondata , dT);
+double complex h22;
+REAL *restrict times_new = malloc(commondata->nsteps_inspiral*sizeof(REAL));
+REAL *restrict h22_amp_new = (REAL *)malloc(commondata->nsteps_inspiral*sizeof(REAL));
+REAL *restrict h22_phase_new = (REAL *)malloc(commondata->nsteps_inspiral*sizeof(REAL));
+REAL *restrict h22_wrapped_phase_new = (REAL *)malloc(commondata->nsteps_inspiral*sizeof(REAL));
+for(i = 0; i < commondata->nsteps_inspiral; i++){
+  times_new[i] = commondata->waveform_inspiral[IDX_WF(i,TIME)];
+  h22 = commondata->waveform_inspiral[IDX_WF(i,HPLUS)] - I * commondata->waveform_inspiral[IDX_WF(i,HCROSS)];
+  h22_amp_new[i] = cabs(h22);
+  h22_wrapped_phase_new[i] = carg(h22);
 }
-
-free(h22_amp_old);
-free(times_old);
-free(h22_phase_unwrapped_old);
-free(h22_phase_unmodulated_old);
-free(orbital_phase_old);
-gsl_spline_free(spline_amp);
-gsl_interp_accel_free(acc_amp);
-gsl_spline_free(spline_phase);
-gsl_interp_accel_free(acc_phase);
-gsl_spline_free(spline_phase_orb);
-gsl_interp_accel_free(acc_phase_orb);
-REAL t_peak = commondata->t_ISCO - commondata->Delta_t;
-size_t idx_attach;
-if (t_peak > times_new[nsteps_insp_plunge - 1]){
-  t_peak = times_new[nsteps_insp_plunge - 1];
-  idx_attach = nsteps_insp_plunge - 2;
+status = SEOBNRv5_aligned_spin_unwrap(h22_wrapped_phase_new,h22_phase_new,commondata->nsteps_inspiral);
+free(h22_wrapped_phase_new);
+size_t idx_match = gsl_interp_bsearch(times_new,commondata->t_attach,0, commondata->nsteps_inspiral);
+if (times_new[idx_match] > commondata->t_attach){
+  idx_match--;
 }
-else{
-  idx_attach = gsl_interp_bsearch(times_new, t_peak, 0, nsteps_insp_plunge);
-  if (times_new[idx_attach] > t_peak){
-    idx_attach--;
-  }
+if (idx_match == commondata->nsteps_inspiral - 1){
+  idx_match--;
 }
-const REAL t_attach = times_new[idx_attach];
-const size_t ringdown_time = 15 * (size_t) (commondata->tau_qnm / dT);
-REAL *restrict ringdown_waveform_amp_phase = (REAL *)malloc(NUMMODES*ringdown_time*sizeof(REAL));
-REAL *restrict ringdown_phase_wrapped = (REAL *)malloc(ringdown_time*sizeof(REAL));
-
-const REAL m1 = commondata->m1;
-const REAL m2 = commondata->m2;
-const REAL chi1 = commondata->chi1;
-const REAL chi2 = commondata->chi2;
-const REAL omega_qnm = commondata->omega_qnm;
-const REAL tau_qnm = commondata->tau_qnm;
-const REAL t_0 = t_peak;
-REAL t, phase_before_sign;
-REAL true_sign = copysign(1.0,h22_phase_new[idx_attach]);
-const REAL phase_to_be_matched = h22_phase_new[idx_attach + 1];
-for (i = 0; i < ringdown_time; i++){
-  t = (i + 1) * dT + t_attach;
-  ringdown_waveform_amp_phase[IDX_WF(i,TIME)] = t;
-"""
-    body += ccg.c_codegen(
-        [
-            bob_wf.h,
-            bob_wf.phi,
-        ],
-        [
-            "ringdown_waveform_amp_phase[IDX_WF(i,HAMP)]",
-            "phase_before_sign",
-        ],
-        verbose=False,
-        include_braces=False,
-    )
-    body += """
-  ringdown_phase_wrapped[i] = true_sign * fabs(phase_before_sign);
-  ringdown_phase_wrapped[i] += phase_to_be_matched - ringdown_phase_wrapped[0];
+const REAL t_match = times_new[idx_match];
+const REAL phase_match = h22_phase_new[idx_match + 1];
+const size_t nsteps_ringdown = 15 * (size_t) (commondata->tau_qnm / dT);
+REAL *restrict ringdown_time = (REAL *)malloc(nsteps_ringdown*sizeof(REAL)); 
+REAL *restrict ringdown_amp = (REAL *)malloc(nsteps_ringdown*sizeof(REAL));
+REAL *restrict ringdown_phase = (REAL *)malloc(nsteps_ringdown*sizeof(REAL));
+for(i = 0; i < nsteps_ringdown; i++){
+  ringdown_time[i] = t_match + (i + 1) * dT;
 }
-ringdown_waveform_amp_phase[IDX_WF(0,HPHASE)] = ringdown_phase_wrapped[0];
-wrap = 0;
-for (i = 1; i < ringdown_time; i++){
-  diff = ringdown_phase_wrapped[i] - ringdown_phase_wrapped[i-1];
-  wrap += (diff < -M_PI) - (diff > M_PI);
-  ringdown_waveform_amp_phase[IDX_WF(0,HPHASE)] = ringdown_phase_wrapped[i] + wrap * 2 * M_PI;
+status = BOB_aligned_spin_waveform_from_times(ringdown_time,ringdown_amp,ringdown_phase,nsteps_ringdown,commondata);
+const REAL true_sign = phase_match /  fabs(phase_match);
+for(i = 0; i < nsteps_ringdown; i++){
+  ringdown_phase[i] = true_sign * fabs(ringdown_phase[i] - ringdown_phase[0]) + phase_match;
 }
-free(ringdown_phase_wrapped);
-
-commondata->nsteps_IMR = idx_attach + ringdown_time;
+commondata->nsteps_IMR = idx_match + 1 + nsteps_ringdown;
 commondata->waveform_IMR = malloc(NUMMODES * commondata->nsteps_IMR*sizeof(REAL));
-for (i = 0; i < idx_attach + 1; i++){
+for (i = 0; i <= idx_match; i++){
   commondata->waveform_IMR[IDX_WF(i,TIME)] = times_new[i];
-  commondata->waveform_IMR[IDX_WF(i,HPLUS)] = h22_amp_new[i] * cos(h22_phase_new[i]);
-  commondata->waveform_IMR[IDX_WF(i,HCROSS)] = h22_amp_new[i] * sin(-1. * h22_phase_new[i]);
+  h22 = h22_amp_new[i] * cexp(I * h22_phase_new[i]);
+  commondata->waveform_IMR[IDX_WF(i,HPLUS)] = creal(h22);
+  commondata->waveform_IMR[IDX_WF(i,HCROSS)] = -1. * cimag(h22);
 }
 free(h22_amp_new);
 free(h22_phase_new);
 free(times_new);
 
-for(i = 0; i < ringdown_time; i++){
-  commondata->waveform_IMR[IDX_WF(i + 1 + idx_attach,TIME)] = ringdown_waveform_amp_phase[IDX_WF(i,TIME)];
-  commondata->waveform_IMR[IDX_WF(i + 1 + idx_attach,HPLUS)] = ringdown_waveform_amp_phase[IDX_WF(i,HAMP)] * cos(ringdown_waveform_amp_phase[IDX_WF(i,HPHASE)]);
-  commondata->waveform_IMR[IDX_WF(i + 1 + idx_attach,HCROSS)] = ringdown_waveform_amp_phase[IDX_WF(i,HAMP)] * sin(-1. * ringdown_waveform_amp_phase[IDX_WF(i,HPHASE)]);
+for(i = 0; i < nsteps_ringdown; i++){
+  commondata->waveform_IMR[IDX_WF(i + 1 + idx_match,TIME)] = ringdown_time[i];
+  h22 = ringdown_amp[i] * cexp(I * ringdown_phase[i]);
+  commondata->waveform_IMR[IDX_WF(i + 1 + idx_match,HPLUS)] = creal(h22);
+  commondata->waveform_IMR[IDX_WF(i + 1 + idx_match,HCROSS)] = -1. * cimag(h22);
 }
-
-free(ringdown_waveform_amp_phase);
+free(ringdown_time);
+free(ringdown_phase);
+free(ringdown_amp);
 return GSL_SUCCESS;
 """
     cfc.register_CFunction(

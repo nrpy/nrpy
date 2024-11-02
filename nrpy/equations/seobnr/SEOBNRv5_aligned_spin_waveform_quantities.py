@@ -8,8 +8,10 @@ License: BSD 2-Clause
 
 # Step P1: Import needed modules:
 from typing import Any, Dict, List
-from nrpy.equations.grhd.Min_Max_and_Piecewise_Expressions import coord_greater_bound
+
 import sympy as sp
+
+from nrpy.equations.grhd.Min_Max_and_Piecewise_Expressions import coord_greater_bound
 
 # The name of this module ("WaveEquation") is given by __name__:
 thismodule = __name__
@@ -120,7 +122,9 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
         M = m1 + m2
         self.nu = m1 * m2 / (M**2)
         self.delta = (m1 - m2) / M
-        self.noneqcond = coord_greater_bound(self.delta, sp.sympify(1e-14))
+        self.noneqcond = coord_greater_bound(self.delta, sp.sympify(1e-14)).subs(
+            sp.Function("nrpyAbs"), sp.Abs
+        )
         self.eqcond = 1 - self.noneqcond
         self.deltainvertible = self.delta * self.noneqcond + 1 * self.eqcond
         self.deltainv = 1 / self.deltainvertible
@@ -1334,81 +1338,36 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
         :return: dictionary containing the symbolic expressions representing each mode of the strain
         """
         hlms = {}
-        modes = [(2,2)]
-        for mode in modes:
-            l , m = mode
-            pn_contribution_f_real = 0
-            pn_contribution_f_imag = 0
-            if not m % 2:
-                pn_contribution_f_real += self.rho[f"({l} , {m})"] ** l
-            if m % 2:
-                pn_contribution_f_real += (
-                    self.noneqcond * self.rho[f"({l} , {m})"] ** l
-                )
-                pn_contribution_f_real += (
-                    self.noneqcond * self.fspin[f"({l} , {m})"]
-                    + self.eqcond * self.fspin_limit[f"({l} , {m})"]
-                )
-            if l == 3 and m == 3:
-                pn_contribution_f_imag += (
-                    self.noneqcond * self.fspinimag
-                    + self.eqcond * self.fspinimag_limit
-                )
-            pn_contribution_f = [pn_contribution_f_real, pn_contribution_f_imag]
-            pn_contribution_delta = [
-                sp.cos(self.deltalm[f"({l} , {m})"]),
-                sp.sin(self.deltalm[f"({l} , {m})"]),
-            ]
-            pn_contribution = complex_mult(pn_contribution_f,pn_contribution_delta)
-            gamma_real, gamma_imag = sp.symbols(
-                f"gamma_real_{l}{m} gamma_imag_{l}{m}", real=True
-            )
-            gamma_term = [gamma_real, gamma_imag]
-            tail_prefactor = [
-                sp.exp(self.khat[m] * (sp.pi))
-                * sp.cos(self.khat[m] * (2 * sp.log(2 * m * self.Omega * self.r0)))
-                / sp.factorial(l),
-                sp.exp(self.khat[m] * (sp.pi))
-                * sp.sin(self.khat[m] * (2 * sp.log(2 * m * self.Omega * self.r0)))
-                / sp.factorial(l),
-            ]
-            tail_term = complex_mult(gamma_term, tail_prefactor)
-            non_newtonian_contribution = complex_mult(tail_term,pn_contribution)
-            newtonian_strain_real_no_n = (
-                self.nu
-                * self.c[l + (l + m) % 2]
-                * (self.vphi ** (l + (l + m) % 2))
-                * self.Y[m][l - (l + m) % 2]
-                * sp.cos(-m * self.phi)
-            )
-            newtonian_strain_imag_no_n = (
-                self.nu
-                * self.c[l + (l + m) % 2]
-                * (self.vphi ** (l + (l + m) % 2))
-                * self.Y[m][l - (l + m) % 2]
-                * sp.sin(-m * self.phi)
-            )
-            newtonian_strain_no_n = [newtonian_strain_real_no_n, newtonian_strain_imag_no_n]
-            if not (l + m) % 2:
-                n_complex = (
-                    8 * sp.pi * (sp.I * m) ** l / sp.factorial2(2 * l + 1)
-                ) * sp.sqrt(((l + 1) * (l + 2)) / ((l) * (l - 1)))
-            else:
-                n_complex = (
-                    -16 * sp.I * sp.pi * (sp.I * m) ** l / sp.factorial2(2 * l + 1)
-                ) * sp.sqrt(
-                    ((2 * l + 1) * (l + 2) * (l**2 - m**2))
-                    / ((2 * l - 1) * (l + 1) * (l) * (l - 1))
-                )
-            n = [sp.re(n_complex), sp.im(n_complex)]
-            newtonian_strain = complex_mult( newtonian_strain_no_n , n)
-            hlms_no_source = complex_mult(
-                newtonian_strain, non_newtonian_contribution
-            )
-            hlms[f"({l} , {m})"] = [
-                (hlms_no_source[0] * self.effective_source[(l + m) % 2]),
-                (hlms_no_source[1] * self.effective_source[(l + m) % 2]),
-            ]
+        # modes = [(2, 2)]
+        l, m = 2, 2
+        pn_contribution_f = self.rho["(2 , 2)"] ** l
+        pn_contribution_delta = sp.exp(sp.I * self.deltalm["(2 , 2)"])
+        pn_contribution = pn_contribution_f * pn_contribution_delta
+        gamma_real, gamma_imag = sp.symbols(
+            f"gamma_real_{l}{m} gamma_imag_{l}{m}", real=True
+        )
+        gamma_term = gamma_real + sp.I * gamma_imag
+        khat2 = self.khat[2]
+        tail_prefactor = (
+            sp.exp(sp.pi * khat2)
+            * (sp.exp(2 * sp.I * khat2 * sp.log(2 * 2 * self.Omega * self.r0)))
+            / sp.factorial(2)
+        )
+        tail_term = gamma_term * tail_prefactor
+        non_newtonian_contribution = tail_term * pn_contribution
+        n = (8 * sp.I * sp.pi * (sp.I * 2) ** 2 / sp.factorial2(2 * 2 + 1)) * sp.sqrt(
+            ((2 + 1) * (2 + 2)) / ((2) * (2 - 1))
+        )
+        newtonian_strain = (
+            self.nu
+            * n
+            * self.c[2]
+            * self.vphi**2
+            * self.Y[2][2]
+            * sp.exp(-2 * sp.I * self.phi)
+        )
+        hlms_no_source = newtonian_strain * non_newtonian_contribution
+        hlms[f"({l} , {m})"] = hlms_no_source * self.effective_source[0]
         return hlms
 
 

@@ -19,10 +19,11 @@ import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
+import nrpy.infrastructures.BHaH.seobnr.BOB_C_codegen_library as BOB_CCL
 import nrpy.infrastructures.BHaH.seobnr.SEOBNR_C_codegen_library as seobnr_CCL
 import nrpy.infrastructures.BHaH.seobnr.SEOBNR_C_gsl_routines_library as seobnr_gsl
-import nrpy.infrastructures.BHaH.seobnr.SEOBNR_dynamics_C_codegen_library as seobnr_dyn_CCL
 import nrpy.infrastructures.BHaH.seobnr.SEOBNR_C_initial_conditions_codegen_library as seobnr_ic_CCL
+import nrpy.infrastructures.BHaH.seobnr.SEOBNR_dynamics_C_codegen_library as seobnr_dyn_CCL
 import nrpy.infrastructures.BHaH.seobnr.SEOBNR_waveform_C_codegen_library as seobnr_wf_CCL
 import nrpy.params as par
 
@@ -74,35 +75,11 @@ SEOBNRv5_aligned_spin_initial_conditions_dissipative(&commondata);
 //printf("prstar = %.15e\n",commondata.prstar);
 // Step 4: Run the ODE integration.
 SEOBNRv5_aligned_spin_ode_integration(&commondata);
-/*
-for (i = 0; i < commondata.nsteps_low; i++) {
-    printf("%.15e %.15e\n", commondata.dynamics_low[IDX(i,TIME)]
-    , commondata.dynamics_low[IDX(i,R)]);
-}
-printf("low sampled waveform printed successfully\n");
-for (i = 0; i < commondata.nsteps_fine; i++) {
-    printf("%.15e %.15e\n", commondata.dynamics_fine[IDX(i,TIME)]
-    , commondata.dynamics_fine[IDX(i,R)]);
-}
-*/
-
 // Step 5. Generate the waveform.
 SEOBNRv5_aligned_spin_waveform_from_dynamics(&commondata);
-
-for (i = 0; i < commondata.nsteps_low; i++) {
-    printf("%.15e %.15e %.15e\n", commondata.waveform_low[IDX_WF(i,TIME)]
-    , commondata.waveform_low[IDX_WF(i,HPLUS)], commondata.waveform_low[IDX_WF(i,HCROSS)]);
-}
-printf("low sampled waveform printed successfully\n");
-for (i = 0; i < commondata.nsteps_fine; i++) {
-    printf("%.15e %.15e %.15e\n", commondata.waveform_fine[IDX_WF(i,TIME)]
-    , commondata.waveform_fine[IDX_WF(i,HPLUS)], commondata.waveform_fine[IDX_WF(i,HCROSS)]);
-}
-/*
-
 // Step 6. Compute and apply the NQC corrections
 SEOBNRv5_aligned_spin_NQC_corrections(&commondata);
-// Step 7.a Cmopute the IMR waveform
+// Step 7.a Compute the IMR waveform
 SEOBNRv5_aligned_spin_IMR_waveform(&commondata);
 // Step 6.b: Print the resulting waveform.
 
@@ -116,8 +93,8 @@ free(commondata.dynamics_low);
 free(commondata.dynamics_fine);
 free(commondata.waveform_low);
 free(commondata.waveform_fine);
+free(commondata.waveform_inspiral);
 free(commondata.waveform_IMR);
-*/
 return 0;
 """
     cfc.register_CFunction(
@@ -153,7 +130,12 @@ seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_ode_integration()
 seobnr_gsl.register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_waveform()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics()
+seobnr_wf_CCL.register_CFunction_SEOBNRv5_aligned_spin_unwrap()
+seobnr_wf_CCL.register_CFunction_SEOBNRv5_aligned_spin_interpolate_modes()
 seobnr_wf_CCL.register_CFunction_SEOBNRv5_NQC_corrections()
+BOB_CCL.register_CFunction_BOB_aligned_spin_waveform()
+BOB_CCL.register_CFunction_BOB_aligned_spin_waveform_from_times()
+BOB_CCL.register_CFunction_BOB_aligned_spin_NQC_rhs()
 seobnr_wf_CCL.register_CFunction_SEOBNRv5_aligned_spin_IMR_waveform()
 
 if __name__ == "__main__":
@@ -183,11 +165,12 @@ Bdefines_h.output_BHaH_defines_h(
         str(Path("gsl") / Path("gsl_interp.h")),
         str(Path("gsl") / Path("gsl_sf_gamma.h")),
         str(Path("gsl") / Path("gsl_linalg.h")),
+        "complex.h",
     ],
     supplemental_defines_dict={
         "SEOBNR": """
 #include<complex.h>
-#define COMPLEX complex
+#define COMPLEX double complex
 #define NUMVARS 8
 #define TIME 0
 #define R 1
@@ -201,8 +184,8 @@ Bdefines_h.output_BHaH_defines_h(
 #define NUMMODES 3
 #define HPLUS 1
 #define HCROSS 2
-#define HAMP 1
-#define HPHASE 2
+#define RE 1
+#define IM 2
 #define IDX_WF(idx,var) ((idx)*NUMMODES + (var))
 """
     },

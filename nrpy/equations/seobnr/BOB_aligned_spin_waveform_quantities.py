@@ -11,11 +11,6 @@ from typing import Any, List
 
 import sympy as sp
 
-from nrpy.equations.grhd.Min_Max_and_Piecewise_Expressions import (
-    coord_greater_bound,
-    coord_less_bound,
-)
-
 # The name of this module ("WaveEquation") is given by __name__:
 thismodule = __name__
 
@@ -182,13 +177,16 @@ class BOB_aligned_spin_waveform_quantities:
         self.h = (Ap / 4 / (Omega**2)) * (1 / sp.cosh((t - t_p) / tau_qnm))
         Phi = arctan_p + arctanh_p - arctan_m - arctanh_m
         self.phi = 2 * Phi
-        # ok maybe not mostly trivial
-        #t_attach = t_0
-        self.h_t_attach = self.h
-        self.hdot_t_attach = sp.diff(self.h_t_attach,t)
-        self.hddot_t_attach = sp.diff(self.hdot_t_attach,t)
-        self.w_t_attach = 2 * Omega
-        self.wdot_t_attach = sp.diff(self.w_t_attach,t)
+        # mostly trivial
+        # t_attach = t_0
+        self.h_t_attach = h22NR
+        self.hdot_t_attach = 0
+        hddot = sp.diff(sp.diff(self.h, t), t)
+        self.hddot_t_attach = hddot.subs(t, t_0)
+        self.w_t_attach = omega22NR
+        Omegadot = sp.diff(Omega, t)
+        self.wdot_t_attach = 2 * Omegadot.subs(t, t_0)
+
 
 if __name__ == "__main__":
     import doctest

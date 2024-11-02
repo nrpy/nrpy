@@ -415,6 +415,7 @@ class SEOBNRv5_aligned_spin_Hamiltonian_quantities:
             sp.diff(self.dHreal_dpphi_circ, self.pphi) / self.nu
         )
 
+
 if __name__ == "__main__":
     import doctest
     import os

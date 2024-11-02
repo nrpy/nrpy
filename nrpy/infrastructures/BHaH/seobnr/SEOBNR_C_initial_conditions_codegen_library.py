@@ -13,9 +13,7 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.equations.seobnr.SEOBNRv5_aligned_spin_constants as SEOBNRv5_const
 import nrpy.equations.seobnr.SEOBNRv5_aligned_spin_Hamiltonian as SEOBNRv5_Ham
-import nrpy.equations.seobnr.SEOBNRv5_aligned_spin_waveform_quantities as SEOBNRv5_wf
 import nrpy.helpers.parallel_codegen as pcg
-import sympy as sp
 
 
 def register_CFunction_SEOBNRv5_aligned_spin_coefficients() -> (
@@ -182,6 +180,7 @@ return GSL_SUCCESS;
         body=body,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
 
 def register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conservative_nodf() -> (
     Union[None, pcg.NRPyEnv_type]
@@ -515,7 +514,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_radial_momentum_condition() -> (
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    includes = ["BHaH_defines.h","BHaH_function_prototypes.h"]
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """Evaluate SEOBNRv5 radial momentum condition."""
     cfunc_type = "REAL"
     name = "SEOBNRv5_aligned_spin_radial_momentum_conditions"
@@ -533,8 +532,24 @@ REAL prstar = x;
 """
     H = SEOBNRv5_Ham.SEOBNRv5_aligned_spin_Hamiltonian_quantities()
     body += ccg.c_codegen(
-        [H.dHreal_dr_dr,H.dHreal_dr_dpphi,H.xi,H.dHreal_dprstar,H.Hreal,H.dHreal_dpphi,H.dHreal_dpphi_circ],
-        ["const REAL dHreal_dr_dr","const REAL dHreal_dr_dpphi","const REAL xi","const REAL dHreal_dprstar","const REAL Hreal","const REAL Omega","const REAL Omega_circ"],
+        [
+            H.dHreal_dr_dr,
+            H.dHreal_dr_dpphi,
+            H.xi,
+            H.dHreal_dprstar,
+            H.Hreal,
+            H.dHreal_dpphi,
+            H.dHreal_dpphi_circ,
+        ],
+        [
+            "const REAL dHreal_dr_dr",
+            "const REAL dHreal_dr_dpphi",
+            "const REAL xi",
+            "const REAL dHreal_dprstar",
+            "const REAL Hreal",
+            "const REAL Omega",
+            "const REAL Omega_circ",
+        ],
         verbose=False,
         include_braces=False,
     )

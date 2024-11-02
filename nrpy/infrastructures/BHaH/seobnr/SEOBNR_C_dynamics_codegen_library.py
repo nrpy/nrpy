@@ -457,7 +457,6 @@ if (stop != 0){
   gsl_interp_accel_free (acc);
   free(fpeak_fine);
 }
-printf("Iterative refinement performed succesfully!\\n");
 // interpolate the dynamics
 
 status = SEOBNRv5_aligned_spin_interpolate_dynamics(commondata,dynamics_fine_prelim,nsteps_fine_prelim,t_peak,stop);

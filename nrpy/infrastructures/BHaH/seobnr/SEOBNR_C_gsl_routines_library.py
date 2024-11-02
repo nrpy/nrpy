@@ -9,11 +9,9 @@ from inspect import currentframe as cfr
 from types import FrameType as FT
 from typing import Union, cast
 
-import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-import nrpy.equations.seobnr.SEOBNRv5_aligned_spin_Hamiltonian as SEOBNRv5_Ham
-import nrpy.equations.seobnr.SEOBNRv5_aligned_spin_waveform_quantities as SEOBNRv5_wf
 import nrpy.helpers.parallel_codegen as pcg
+
 
 def register_CFunction_handle_gsl_return_status() -> Union[None, pcg.NRPyEnv_type]:
     """
@@ -52,6 +50,7 @@ if (count == 0){
         body=body,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
 
 def register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper_complex_out() -> (
     Union[None, pcg.NRPyEnv_type]
@@ -132,6 +131,7 @@ return GSL_SUCCESS;
         body=body,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
 
 def register_CFunction_SEOBNRv5_multidimensional_root_wrapper() -> (
     Union[None, pcg.NRPyEnv_type]

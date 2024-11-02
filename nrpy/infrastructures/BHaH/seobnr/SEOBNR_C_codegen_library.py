@@ -53,6 +53,7 @@ par.register_CodeParameters(
         "Delta_t",
         "dT",
         "t_ISCO",
+        "t_attach",
         "omega_qnm",
         "tau_qnm",
         "a_f",
@@ -80,6 +81,7 @@ par.register_CodeParameters(
         0.0,
         0.0,
         0.0,
+        0.0,
     ],
     commondata=True,
     add_to_parfile=False,
@@ -92,7 +94,6 @@ par.register_CodeParameters(
     [
         "dynamics_low",
         "dynamics_fine",
-        "dynamics_inspiral",
         "waveform_low",
         "waveform_fine",
         "waveform_inspiral",
@@ -102,6 +103,7 @@ par.register_CodeParameters(
     add_to_parfile=False,
     add_to_set_CodeParameters_h=False,
 )
+
 
 par.register_CodeParameters(
     "size_t",
@@ -149,6 +151,7 @@ par.register_CodeParameters(
     add_to_parfile=True,
 )
 
+
 def register_CFunction_SEOBNRv5_aligned_spin_waveform() -> (
     Union[None, pcg.NRPyEnv_type]
 ):
@@ -166,11 +169,15 @@ def register_CFunction_SEOBNRv5_aligned_spin_waveform() -> (
     h22 = hlms["(2 , 2)"]
     # We are going to be doing this twice;
     # once for the fine dynamics and once for the coarse.
-    h22_code = ccg.c_codegen(
-        h22,
-        ["waveform[0]","waveform[1]"],
-        verbose=False,
-        include_braces=False,
+    h22_code = (
+        ccg.c_codegen(
+            h22,
+            ["const double complex h22"],
+            verbose=False,
+            include_braces=False,
+        )
+        .replace("REAL", "double complex")
+        .replace("exp", "cexp")
     )
     khat2_code = ccg.c_codegen(
         [wf.khat[2]],
@@ -218,6 +225,8 @@ const REAL Omega_circ = dynamics[OMEGA_CIRC];
 """
     body += h22_code
     body += """
+waveform[0] = (REAL) creal(h22);
+waveform[1] = (REAL) cimag(h22);
 return GSL_SUCCESS;
 """
     cfc.register_CFunction(
@@ -314,9 +323,8 @@ return GSL_SUCCESS;
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
-def register_CFunction_SEOBNRv5_aligned_spin_flux() -> (
-    Union[None, pcg.NRPyEnv_type]
-):
+
+def register_CFunction_SEOBNRv5_aligned_spin_flux() -> Union[None, pcg.NRPyEnv_type]:
     """
     Register CFunction for evaluating the SEOBNRv5 aligned spin flux.
 
@@ -368,6 +376,7 @@ return GSL_SUCCESS;
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
+
 def register_CFunction_SEOBNRv5_aligned_spin_right_hand_sides() -> (
     Union[None, pcg.NRPyEnv_type]
 ):
@@ -380,7 +389,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_right_hand_sides() -> (
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    includes = ["BHaH_defines.h","BHaH_function_prototypes.h"]
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """Evaluate SEOBNRv5 Hamiltonian and needed derivatives to compute binary dynamics."""
     cfunc_type = "int"
     name = "SEOBNRv5_aligned_spin_right_hand_sides"
@@ -399,14 +408,21 @@ const REAL prstar = y[2];
 const REAL pphi = y[3];
 """
     body += ccg.c_codegen(
-        [Hq.Hreal, Hq.xi, Hq.dHreal_dr, Hq.dHreal_dprstar, Hq.dHreal_dpphi, Hq.dHreal_dpphi_circ],
+        [
+            Hq.Hreal,
+            Hq.xi,
+            Hq.dHreal_dr,
+            Hq.dHreal_dprstar,
+            Hq.dHreal_dpphi,
+            Hq.dHreal_dpphi_circ,
+        ],
         [
             "const REAL Hreal",
             "const REAL xi",
             "const REAL dHreal_dr",
             "const REAL dHreal_dprstar",
             "const REAL dHreal_dpphi",
-            "const REAL dHreal_dpphi_circ"
+            "const REAL dHreal_dpphi_circ",
         ],
         verbose=False,
         include_braces=False,
