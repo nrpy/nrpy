@@ -1,7 +1,9 @@
 """
 Set up a complete C code project for setting 3.5PN quasicircular momenta for binary black holes, using NRPyPN.
 
-Author: Zachariah B. Etienne
+Authors: Siddharth Mahesh
+        sm0193 **at** mix **dot** wvu **dot** edu
+        Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
@@ -19,10 +21,12 @@ import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
+import nrpy.infrastructures.BHaH.seobnr.BOB_C_codegen_library as BOB_CCL
+import nrpy.infrastructures.BHaH.seobnr.SEOBNR_BOB_C_waveform_codegen_library as seobnr_wf_CCL
 import nrpy.infrastructures.BHaH.seobnr.SEOBNR_C_codegen_library as seobnr_CCL
-import nrpy.infrastructures.BHaH.seobnr.SEOBNR_dynamics_C_codegen_library as seobnr_dyn_CCL
-import nrpy.infrastructures.BHaH.seobnr.SEOBNR_initial_conditions_C_codegen_library as seobnr_ic_CCL
-import nrpy.infrastructures.BHaH.seobnr.SEOBNR_waveform_C_codegen_library as seobnr_wf_CCL
+import nrpy.infrastructures.BHaH.seobnr.SEOBNR_C_dynamics_codegen_library as seobnr_dyn_CCL
+import nrpy.infrastructures.BHaH.seobnr.SEOBNR_C_gsl_routines_library as seobnr_gsl
+import nrpy.infrastructures.BHaH.seobnr.SEOBNR_C_initial_conditions_codegen_library as seobnr_ic_CCL
 import nrpy.params as par
 
 par.set_parval_from_str("Infrastructure", "BHaH")
@@ -54,55 +58,45 @@ Step 2: Compute Hamiltonian and derivatives."""
     name = "main"
     params = "int argc, const char *argv[]"
     body = r"""  commondata_struct commondata; // commondata contains parameters common to all grids.
-
+//Step 0: Initialize a loop parameter for outputs
+size_t i;
 // Step 1.a: Set each commondata CodeParameter to default.
 commondata_struct_set_to_default(&commondata);
 // Step 1.b: Overwrite default values to parfile values. Then overwrite parfile values with values set at cmd line.
 cmdline_input_and_parfile_parser(&commondata, argc, argv);
 // Step 1.c: Overwrite default values of m1, m2, a6, and dSO.
 SEOBNRv5_aligned_spin_coefficients(&commondata);
-
 // Step 2.a: Compute SEOBNRv5 conservative initial conditions.
 SEOBNRv5_aligned_spin_initial_conditions_conservative(&commondata);
-
 // Step 2.b: Print out the conservative initial conditions.
-printf("r = %.15e\n",commondata.r);
-printf("pphi = %.15e\n",commondata.pphi);
-
+//printf("r = %.15e\n",commondata.r);
+//printf("pphi = %.15e\n",commondata.pphi);
 // Step 3.a: Compute SEOBNRv5 dissipative initial conditions.
 SEOBNRv5_aligned_spin_initial_conditions_dissipative(&commondata);
-
 // Step 3.b: Print out the dissipative initial conditions.
-printf("prstar = %.15e\n",commondata.prstar);
-
+//printf("prstar = %.15e\n",commondata.prstar);
 // Step 4: Run the ODE integration.
 SEOBNRv5_aligned_spin_ode_integration(&commondata);
-
 // Step 5. Generate the waveform.
 SEOBNRv5_aligned_spin_waveform_from_dynamics(&commondata);
-
 // Step 6. Compute and apply the NQC corrections
 SEOBNRv5_aligned_spin_NQC_corrections(&commondata);
-
-// Step 7.a Cmopute the IMR waveform
+// Step 7.a Compute the IMR waveform
 SEOBNRv5_aligned_spin_IMR_waveform(&commondata);
-
 // Step 6.b: Print the resulting waveform.
-size_t i;
 
 for (i = 0; i < commondata.nsteps_IMR; i++) {
     printf("%.15e %.15e %.15e\n", commondata.waveform_IMR[IDX_WF(i,TIME)]
     , commondata.waveform_IMR[IDX_WF(i,HPLUS)], commondata.waveform_IMR[IDX_WF(i,HCROSS)]);
 }
 
+
 free(commondata.dynamics_low);
 free(commondata.dynamics_fine);
-free(commondata.dynamics_inspiral);
 free(commondata.waveform_low);
 free(commondata.waveform_fine);
 free(commondata.waveform_inspiral);
 free(commondata.waveform_IMR);
-
 return 0;
 """
     cfc.register_CFunction(
@@ -119,7 +113,9 @@ return 0;
 # seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian()
 # seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_and_derivs()
 
-seobnr_CCL.register_CFunction_handle_gsl_return_status()
+seobnr_gsl.register_CFunction_handle_gsl_return_status()
+seobnr_gsl.register_CFunction_SEOBNRv5_multidimensional_root_wrapper()
+seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_flux()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_right_hand_sides()
 seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_coefficients()
 seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit()
@@ -129,13 +125,19 @@ seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conser
 seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_radial_momentum_condition()
 seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_dissipative()
 seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_augments()
-seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_find_peak()
+seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_argrelmin()
 seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_iterative_refinement()
 seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_intepolate_dynamics()
 seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_ode_integration()
-seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper()
+seobnr_gsl.register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper()
+seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_waveform()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics()
+seobnr_wf_CCL.register_CFunction_SEOBNRv5_aligned_spin_unwrap()
+seobnr_wf_CCL.register_CFunction_SEOBNRv5_aligned_spin_interpolate_modes()
 seobnr_wf_CCL.register_CFunction_SEOBNRv5_NQC_corrections()
+BOB_CCL.register_CFunction_BOB_aligned_spin_waveform()
+BOB_CCL.register_CFunction_BOB_aligned_spin_waveform_from_times()
+BOB_CCL.register_CFunction_BOB_aligned_spin_NQC_rhs()
 seobnr_wf_CCL.register_CFunction_SEOBNRv5_aligned_spin_IMR_waveform()
 
 if __name__ == "__main__":
@@ -165,11 +167,12 @@ Bdefines_h.output_BHaH_defines_h(
         str(Path("gsl") / Path("gsl_interp.h")),
         str(Path("gsl") / Path("gsl_sf_gamma.h")),
         str(Path("gsl") / Path("gsl_linalg.h")),
+        "complex.h",
     ],
     supplemental_defines_dict={
         "SEOBNR": """
 #include<complex.h>
-#define COMPLEX complex
+#define COMPLEX double complex
 #define NUMVARS 8
 #define TIME 0
 #define R 1
@@ -183,8 +186,8 @@ Bdefines_h.output_BHaH_defines_h(
 #define NUMMODES 3
 #define HPLUS 1
 #define HCROSS 2
-#define HAMP 1
-#define HPHASE 2
+#define RE 1
+#define IM 2
 #define IDX_WF(idx,var) ((idx)*NUMMODES + (var))
 """
     },
