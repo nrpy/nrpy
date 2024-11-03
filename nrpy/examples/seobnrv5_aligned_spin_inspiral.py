@@ -1,7 +1,9 @@
 """
 Set up a complete C code project for setting 3.5PN quasicircular momenta for binary black holes, using NRPyPN.
 
-Author: Zachariah B. Etienne
+Authors: Siddharth Mahesh
+        sm0193 **at** mix **dot** wvu **dot** edu
+        Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 

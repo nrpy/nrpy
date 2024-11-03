@@ -1,7 +1,9 @@
 """
 Set up C function library for SEOBNR inspiral integrations.
 
-Author: Zachariah B. Etienne
+Authors: Siddharth Mahesh
+        sm0193 **at** mix **dot** wvu **dot** edu
+        Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 

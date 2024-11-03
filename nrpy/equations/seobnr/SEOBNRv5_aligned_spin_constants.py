@@ -1,7 +1,10 @@
 """
 Construct symbolic expression for the SEOBNRv5 aligned-spin constants.
 
-Author: Siddharth Mahesh
+Authors: Siddharth Mahesh
+        sm0193 **at** mix **dot** wvu **dot** edu
+        Zachariah B. Etienne
+        zachetie **at** gmail **dot* com
 
 License: BSD 2-Clause
 """
