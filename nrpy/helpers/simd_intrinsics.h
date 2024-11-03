@@ -35,6 +35,11 @@
 // Absolute Value
 #define AbsSIMD(a) _mm512_and_pd((a), _mm512_castsi512_pd(_mm512_set1_epi64(0x7FFFFFFFFFFFFFFF)))
 
+// Initialize vector to zero (output is REAL_SIMD_ARRAY)
+#define SetZeroSIMD _mm512_setzero_pd()
+// Horizontal addition (output is a double)
+#define HorizAddSIMD(vec_sum) _mm512_reduce_add_pd(vec_sum)
+
 // Upwind Algorithm for Conditional Selection
 // The result of this comparison is: result[i] = (a OP b) ? 1 : 0, stored in an 8-bit mask array.
 // If result == 1, set upwind = 0 + 1; if result == 0, set upwind = 0
@@ -97,6 +102,18 @@
 #define NegFusedMulSubSIMD(a, b, c) _mm256_sub_pd((c), _mm256_add_pd((c), _mm256_add_pd(_mm256_mul_pd((a), (b)), (c))))
 #endif
 
+// Initialize vector to zero (output is REAL_SIMD_ARRAY)
+#define SetZeroSIMD _mm256_setzero_pd()
+// Horizontal addition (output is a double)
+#define HorizAddSIMD(vec_sum)                                                                                                                        \
+  ({                                                                                                                                                 \
+    __m128d low = _mm256_castpd256_pd128(vec_sum);    /* Extract the lower 128 bits */                                                               \
+    __m128d high = _mm256_extractf128_pd(vec_sum, 1); /* Extract the upper 128 bits */                                                               \
+    __m128d sum_128 = _mm_add_pd(low, high);          /* Add lower and upper parts */                                                                \
+    sum_128 = _mm_hadd_pd(sum_128, sum_128);          /* Perform horizontal addition */                                                              \
+    _mm_cvtsd_f64(sum_128);                           /* Extract final scalar sum */                                                                 \
+  })
+
 // If compiled with SSE2 SIMD instructions enabled:
 #elif __SSE2__
 #include <emmintrin.h>
@@ -149,6 +166,28 @@
 #define NegFusedMulSubSIMD(a, b, c) _mm_sub_pd((c), _mm_add_pd((c), _mm_add_pd(_mm_mul_pd((a), (b)), (c))))
 #endif
 
+// Initialize vector to zero (output is REAL_SIMD_ARRAY)
+#define SetZeroSIMD _mm_setzero_pd()
+// Horizontal addition (output is a double)
+#ifdef __SSE3__
+#include <pmmintrin.h>
+// SSE3-enabled horizontal addition
+#define HorizAddSIMD(vec_sum)                                                                                                                        \
+  ({                                                                                                                                                 \
+    __m128d sum_128 = _mm_hadd_pd(vec_sum, vec_sum); /* Perform horizontal addition */                                                               \
+    _mm_cvtsd_f64(sum_128);                          /* Extract final scalar sum */                                                                  \
+  })
+
+#else
+// Pure SSE2 horizontal addition (without SSE3)
+#define HorizAddSIMD(vec_sum)                                                                                                                        \
+  ({                                                                                                                                                 \
+    __m128d temp = _mm_shuffle_pd(vec_sum, vec_sum, 0x1); /* Swap the two 64-bit lanes */                                                            \
+    __m128d sum_128 = _mm_add_pd(vec_sum, temp);          /* Add the swapped lanes */                                                                \
+    _mm_cvtsd_f64(sum_128);                               /* Extract final scalar sum */                                                             \
+  })
+#endif // __SSE3__
+
 #else
 // If SIMD instructions are unavailable:
 #define REAL_SIMD_ARRAY REAL
@@ -183,5 +222,10 @@
 // because the upwinding control vector in BSSN (the shift)
 // acts like a *negative* velocity.
 #define UPWIND_ALG(UpwindVecU) ((UpwindVecU) > 0.0 ? 1.0 : 0.0)
+
+// Initialize vector (of size one) to zero (output is REAL_SIMD_ARRAY)
+#define SetZeroSIMD 0.0
+// Horizontal addition (output is a double)
+#define HorizAddSIMD(a) (a) // For scalar fallback, no horizontal addition needed
 
 #endif
