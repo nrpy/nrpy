@@ -180,7 +180,7 @@ class BOB_aligned_spin_waveform_quantities:
         # mostly trivial
         # t_attach = t_0
         self.h_t_attach = h22NR
-        self.hdot_t_attach = 0
+        self.hdot_t_attach = sp.sympify(0)
         hddot = sp.diff(sp.diff(self.h, t), t)
         self.hddot_t_attach = hddot.subs(t, t_0)
         self.w_t_attach = omega22NR
