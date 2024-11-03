@@ -1,5 +1,5 @@
 """
-Set up C function library for SEOBNR inspiral integrations.
+Set up C function library for BOB related routines.
 
 Authors: Siddharth Mahesh
         sm0193 **at** mix **dot** wvu **dot** edu

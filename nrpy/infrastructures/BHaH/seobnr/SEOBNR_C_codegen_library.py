@@ -1,5 +1,5 @@
 """
-Set up C function library for SEOBNR inspiral integrations.
+Set up C function library for the SEOBNR aligned spin expressions.
 
 Authors: Siddharth Mahesh
         sm0193 **at** mix **dot** wvu **dot** edu
