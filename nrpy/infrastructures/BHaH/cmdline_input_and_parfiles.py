@@ -816,7 +816,7 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
 
                     # Append to module's parameters
                     parfile_output_dict[CodeParam.module].append(
-                        f"{parname} = {{ {default_vals} }}  # ({display_type}[{size}]){description_suffix}\n"
+                        f"{parname}[{size}] = {{ {default_vals} }}  # ({display_type}){description_suffix}\n"
                     )
                 elif base_type == "char":
                     # Ensure default_val is string
