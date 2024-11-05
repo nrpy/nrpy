@@ -252,7 +252,7 @@ valgrind: clean
     Makefile_str += f"""
 # Use $(RM) to be cross-platform compatible.
 clean:
-\t$(RM) *.o */*.o *~ */*~ ./#* *.txt *.dat *.avi *.png {exec_or_library_name}
+\t$(RM) *.o */*.o *~ */*~ ./#* *.txt *.gp *.dat *.avi *.png {exec_or_library_name}
 """
     makefile_path = project_Path / "Makefile"
     with makefile_path.open("w", encoding="utf-8") as Makefile:
