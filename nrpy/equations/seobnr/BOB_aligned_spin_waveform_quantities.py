@@ -1,7 +1,10 @@
 """
 Construct symbolic expression for the BOB aligned-spin gravitational-wave strain and NQC corrections.
 
-Author: Siddharth Mahesh
+Authors: Siddharth Mahesh
+        sm0193 **at** mix **dot** wvu **dot** edu
+        Zachariah B. Etienne
+        zachetie **at** gmail **dot* com
 
 License: BSD 2-Clause
 """
@@ -10,11 +13,6 @@ License: BSD 2-Clause
 from typing import Any, List
 
 import sympy as sp
-
-from nrpy.equations.grhd.Min_Max_and_Piecewise_Expressions import (
-    coord_greater_bound,
-    coord_less_bound,
-)
 
 # The name of this module ("WaveEquation") is given by __name__:
 thismodule = __name__
@@ -99,95 +97,6 @@ class BOB_aligned_spin_waveform_quantities:
         # Delta_t computation
         M = m1 + m2
         nu = m1 * m2 / M**2
-        ap = (m1 * chi1 + m2 * chi2) / M**2
-        am = (m2 * chi1 - m2 * chi2) / M**2
-        Delta_t_S = nu ** (sp.Rational(-1, 5) + 0 * nu) * (
-            f2r(8.39238879807543) * am**2 * ap
-            - f2r(16.9056858928167) * am**2 * nu
-            + f2r(7.23410583477034) * am**2
-            + f2r(6.38975598319936) * am * ap**2
-            + f2r(179.569824846781) * am * ap * nu
-            - f2r(40.6063653476775) * am * ap
-            + f2r(144.253395844761) * am * nu**2
-            - f2r(90.1929138487509) * am * nu
-            + f2r(14.2203101910927) * am
-            - f2r(6.78913884987037) * ap**4
-            + f2r(5.39962303470497) * ap**3
-            - f2r(132.224950777226) * ap**2 * nu
-            + f2r(49.8016443361381) * ap**2
-            + f2r(384.201018794943) * ap * nu**2
-            - f2r(141.253181790353) * ap * nu
-            + f2r(17.5710132409988) * ap
-        )
-        par = [
-            f2r(1.00513217e01),
-            -f2r(5.96231800e01),
-            -f2r(1.05687385e03),
-            -f2r(9.79317619e03),
-            f2r(5.55652392e04),
-        ]
-        Delta_t_NS = nu ** (sp.Rational(-1, 5) + par[0] * nu) * (
-            par[1] + par[2] * nu + par[3] * nu**2 + par[4] * nu**3
-        )
-        self.Delta_t = Delta_t_NS + Delta_t_S
-
-        # Final mass and spin computation
-        atot = m1 * m1 * chi1 + m2 * m2 * chi2
-        aeff = atot + f2r(0.474046) * nu * (chi1 + chi2)
-        aeff_max1 = aeff + 1 - sp.Abs(aeff - 1)
-        Z1eff = 1 + (sp.cbrt(1 - aeff_max1 * aeff_max1)) * (
-            sp.cbrt(1 + aeff_max1) + sp.cbrt(1 - aeff_max1)
-        )
-        Z2eff = sp.sqrt(3 * aeff_max1 * aeff_max1 + Z1eff * Z1eff)
-        rISCOeff = (
-            3 + Z2eff - sp.sign(aeff_max1) * sp.sqrt((3 - Z1eff) * (3 + Z1eff + Z2eff))
-        )
-        LISCOeff = (sp.Rational(2, 3) / sp.sqrt(3)) * (
-            1 + 2 * sp.sqrt(3 * rISCOeff - 2)
-        )
-        EISCOeff = sp.sqrt(1 - 2 / (3 * rISCOeff))
-        k = sp.zeros(4, 5)
-        k[0, 0] = -f2r(5.97723)
-        k[0, 1] = f2r(3.39221)
-        k[0, 2] = f2r(4.48865)
-        k[0, 3] = -f2r(5.77101)
-        k[0, 4] = -f2r(13.0459)
-        k[1, 0] = f2r(35.1278)
-        k[1, 1] = -f2r(72.9336)
-        k[1, 2] = -f2r(86.0036)
-        k[1, 3] = f2r(93.7371)
-        k[1, 4] = f2r(200.975)
-        k[2, 0] = -f2r(146.822)
-        k[2, 1] = f2r(387.184)
-        k[2, 2] = f2r(447.009)
-        k[2, 3] = -f2r(467.383)
-        k[2, 4] = -f2r(884.339)
-        k[3, 0] = f2r(223.911)
-        k[3, 1] = -f2r(648.502)
-        k[3, 2] = -f2r(697.177)
-        k[3, 3] = f2r(753.738)
-        k[3, 4] = f2r(1166.89)
-
-        NRfactor = 0
-        nu_i = 1
-        for i in range(4):
-            aeff_j = 1
-            for j in range(5):
-                NRfactor += k[i, j] * nu_i * aeff_j
-                aeff_j *= aeff
-            nu_i *= nu
-        ell = sp.Abs(LISCOeff - 2 * atot * (EISCOeff - 1) + nu * NRfactor)
-        self.a_f = atot + nu * ell
-        Z1f = 1 + (sp.cbrt(1 - self.a_f * self.a_f)) * (
-            sp.cbrt(1 + self.a_f) + sp.cbrt(1 - self.a_f)
-        )
-        Z2f = sp.sqrt(3 * self.a_f * self.a_f + Z1f * Z1f)
-        self.rISCO = 3 + Z2f - sp.sign(self.a_f) * sp.sqrt((3 - Z1f) * (3 + Z1f + Z2f))
-        self.rstop = -1 * coord_less_bound(self.Delta_t, 0).subs(
-            sp.Function("nrpyAbs"), sp.Abs
-        ) + f2r(0.98) * self.rISCO * coord_greater_bound(self.Delta_t, 0).subs(
-            sp.Function("nrpyAbs"), sp.Abs
-        )
         Shat = (m1 * m1 * chi1 + m2 * m2 * chi2) / (m1 * m1 + m2 * m2)
         Shat2 = Shat * Shat
         Shat3 = Shat2 * Shat
@@ -195,55 +104,6 @@ class BOB_aligned_spin_waveform_quantities:
         nu2 = nu * nu
         nu3 = nu2 * nu
         nu4 = nu3 * nu
-        sqrt1m4nu = sp.sqrt(1 - 4 * nu)
-        Deltachi = chi1 - chi2
-        Deltachi2 = Deltachi * Deltachi
-        a2 = f2r(0.5609904135313374)
-        a3 = -f2r(0.84667563764404)
-        a4 = f2r(3.145145224278187)
-        Erad_nu_0 = (
-            a4 * nu4 + a3 * nu3 + a2 * nu2 + (1 - sp.Rational(2, 3) * sp.sqrt(2)) * nu
-        )
-        b1 = -f2r(0.2091189048177395)
-        b2 = -f2r(0.19709136361080587)
-        b3 = -f2r(0.1588185739358418)
-        b5 = f2r(2.9852925538232014)
-        f20 = f2r(4.271313308472851)
-        f30 = f2r(31.08987570280556)
-        f50 = f2r(1.5673498395263061)
-        f10 = f2r(1.8083565298668276)
-        f21 = 0
-        d10 = -f2r(0.09803730445895877)
-        d11 = -f2r(3.2283713377939134)
-        d20 = f2r(0.01118530335431078)
-        d30 = -f2r(0.01978238971523653)
-        d31 = -f2r(4.91667749015812)
-        f11 = f2r(15.738082204419655)
-        f31 = -f2r(243.6299258830685)
-        f51 = -f2r(0.5808669012986468)
-        bfin1 = b1 * (f10 + f11 * nu + (16 - 16 * f10 - 4 * f11) * nu2)
-        bfin2 = b2 * (f20 + f21 * nu + (16 - 16 * f20 - 4 * f21) * nu2)
-        bfin3 = b3 * (f30 + f31 * nu + (16 - 16 * f30 - 4 * f31) * nu2)
-        bfin5 = b5 * (f50 + f51 * nu + (16 - 16 * f50 - 4 * f51) * nu2)
-        Erad_eq_Shat = (
-            f2r(0.128) * bfin3 * Shat3
-            + f2r(0.211) * bfin2 * Shat2
-            + f2r(0.346) * bfin1 * Shat
-            + 1
-        ) / (1 - f2r(0.212) * bfin5 * Shat)
-        Erad_nu_Shat = Erad_nu_0 * Erad_eq_Shat
-        d10 = -f2r(0.09803730445895877)
-        d11 = -f2r(3.2283713377939134)
-        d20 = f2r(0.01118530335431078)
-        d30 = -f2r(0.01978238971523653)
-        d31 = -f2r(4.91667749015812)
-        A_1 = d10 * sqrt1m4nu * nu2 * (d11 * nu + 1)
-        A_2 = d20 * nu3
-        A_3 = d30 * sqrt1m4nu * nu * (d31 * nu + 1)
-        DeltaErad_nu_Shat_Deltachi = (
-            A_1 * Deltachi + A_2 * Deltachi2 + A_3 * Deltachi * Shat
-        )
-        self.M_f = 1 - (Erad_nu_Shat + DeltaErad_nu_Shat_Deltachi)
         h22NR = nu * sp.Abs(
             f2r(71.97969776036882194603) * nu4
             - f2r(13.35761402231352157344) * nu3 * Shat
@@ -321,13 +181,14 @@ class BOB_aligned_spin_waveform_quantities:
         Phi = arctan_p + arctanh_p - arctan_m - arctanh_m
         self.phi = 2 * Phi
         # mostly trivial
-        t_attach = t_0
+        # t_attach = t_0
         self.h_t_attach = h22NR
         self.hdot_t_attach = sp.sympify(0)
-        self.hddot_t_attach = sp.diff(sp.diff(self.h, t), t).subs(t, t_attach)
+        hddot = sp.diff(sp.diff(self.h, t), t)
+        self.hddot_t_attach = hddot.subs(t, t_0)
         self.w_t_attach = omega22NR
-        tanht0 = (Omega_0**4 - Omega_qnm**4) / (Omega_0**4 + Omega_qnm**4)
-        self.wdot_t_attach = -omega22NR * tanht0 / (2 * tau_qnm)
+        Omegadot = sp.diff(Omega, t)
+        self.wdot_t_attach = 2 * Omegadot.subs(t, t_0)
 
 
 if __name__ == "__main__":

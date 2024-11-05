@@ -114,7 +114,7 @@ TOVola_solve(commondata, &ID_persist);
   free(ID_persist.r_iso_arr);
 }
 """,
-    include_T4UU=True,
+    enable_T4munu=True,
 )
 BCl.register_CFunction_diagnostics(
     list_of_CoordSystems=[CoordSystem],

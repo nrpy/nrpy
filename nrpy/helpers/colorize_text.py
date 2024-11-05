@@ -1,10 +1,9 @@
 """
 Colorize text output in terminal or Jupyter notebooks.
 
-This module provides functionality to colorize text output to the terminal or Jupyter notebooks,
-offering a choice among six basic colors: red, green, yellow, blue, magenta, and cyan. It
-automatically disables colorization when the output is not directed to a terminal or a Jupyter
-notebook to ensure compatibility across different environments.
+Offer a choice among six basic colors: red, green, yellow, blue, magenta, and cyan.
+
+Automatically disable colorization when the output is not directed to a terminal or a Jupyter notebook to ensure compatibility across different environments.
 
 Author: Steven Brandt
 """
@@ -39,6 +38,7 @@ def leave_text_alone(arg: Any, c: ColorNames) -> str:  # pylint: disable=unused-
     :param c: A valid color name, unused here but kept for interface consistency.
     :return: A stringified and uncolored version of `arg`.
 
+    DocTests:
     >>> leave_text_alone('fish', 'blue')
     'fish'
     >>> leave_text_alone('fish', 'green')
@@ -58,6 +58,7 @@ def apply_colorization(arg: Any, c: ColorNames) -> str:
     :return: A stringified and colored version of `arg`.
     :raises AssertionError: If `c` is not a string or not a valid color name.
 
+    DocTests:
     >>> import re
     >>> re.sub(r'\033\[', 'ESC', apply_colorization('fish', 'blue'))
     'ESC34mfishESC0m'
