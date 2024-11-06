@@ -26,6 +26,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     addl_libraries: Optional[List[str]] = None,
     CC: str = "autodetect",
     create_lib: bool = False,
+    static_lib: bool = False,
     lib_function_prefix: str = "",
     include_dirs: Optional[List[str]] = None,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
@@ -41,6 +42,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     :param addl_libraries: Additional libraries to link.
     :param CC: C compiler to use. Defaults to "autodetect".
     :param create_lib: Whether to create a library. Defaults to False.
+    :param static_lib: Whether the library created should be a static library. Defaults to False.
     :param lib_function_prefix: Prefix to add to library function names.
     :param include_dirs: List of include directories.
     :param clang_format_options: Options for the clang-format tool.
@@ -68,6 +70,10 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
             "output_CFunctions_function_prototypes_and_construct_Makefile() error: C codes will not compile if main() function not defined!\n"
             '    Make sure that the main() function registered to CFunction_dict has name "main".'
         )
+    if static_lib and not create_lib:
+        raise ValueError(
+            "`static_lib` set to True, but `create_lib` set to False. Both must be set to True to create a static library"
+        )
 
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
@@ -77,35 +83,40 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
 
     os_name = platform.system()
     if create_lib:
-        if os_name == "Linux":
-            ext = ".so"
-        elif os_name == "Darwin":
-            ext = ".dylib"
+        if static_lib:
+            ext = ".a"
         else:
-            raise ValueError(f"Sorry, {os_name} operating system not supported.")
+            if os_name == "Linux":
+                ext = ".so"
+            elif os_name == "Darwin":
+                ext = ".dylib"
+            else:
+                raise ValueError(f"Sorry, {os_name} operating system not supported.")
         if not exec_or_library_name.endswith(ext):
             exec_or_library_name += ext
 
-        def add_flag(flag_list: Optional[List[str]], flag: str) -> List[str]:
-            """
-            Check if a flag is in the list; add it if not.
+        if not static_lib:
+            # For shared libraries, we need -fPIC and -shared
+            def add_flag(flag_list: Optional[List[str]], flag: str) -> List[str]:
+                """
+                Check if a flag is in the list; add it if not.
 
-            :param flag_list: The list to which the flag should be added.
-            :param flag: The flag to add to the list.
-            :return: The updated list with the flag added.
+                :param flag_list: The list to which the flag should be added.
+                :param flag: The flag to add to the list.
+                :return: The updated list with the flag added.
 
-            DocTests:
-                >>> add_flag(['-fPIC'], '-shared')
-                ['-fPIC', '-shared']
-            """
-            if not flag_list:
-                flag_list = []
-            if flag not in flag_list:
-                flag_list += [flag]
-            return flag_list
+                DocTests:
+                    >>> add_flag(['-fPIC'], '-shared')
+                    ['-fPIC', '-shared']
+                """
+                if not flag_list:
+                    flag_list = []
+                if flag not in flag_list:
+                    flag_list += [flag]
+                return flag_list
 
-        addl_CFLAGS = add_flag(addl_CFLAGS, "-fPIC")
-        addl_CFLAGS = add_flag(addl_CFLAGS, "-shared")
+            addl_CFLAGS = add_flag(addl_CFLAGS, "-fPIC")
+            addl_CFLAGS = add_flag(addl_CFLAGS, "-shared")
 
     Makefile_list_of_files: List[str] = []
 
@@ -217,7 +228,27 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
             f"-I{include_dir}" for include_dir in include_dirs
         )
 
-    # Below code is responsible for writing the Makefile
+    # Prepare the target rule based on whether we're building an executable, a shared library, or a static library
+    if create_lib:
+        if static_lib:
+            # Static library
+            target_rule = f"""{exec_or_library_name}: $(OBJ_FILES)
+\tar rcs $@ $^
+
+"""
+        else:
+            # Shared library
+            target_rule = f"""{exec_or_library_name}: $(OBJ_FILES)
+\t$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+"""
+    else:
+        # Executable
+        target_rule = f"""{exec_or_library_name}: $(OBJ_FILES)
+\t$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+"""
+
     Makefile_str = f"""CC ?= {CC}  # assigns the value CC to {CC} only if environment variable CC is not already set
 
 {CFLAGS_str}
@@ -241,19 +272,21 @@ all: {exec_or_library_name}
 %.o: %.c $(COMMON_HEADERS)
 \t$(CC) $(CFLAGS) $(INCLUDEDIRS) -c $< -o $@
 
-{exec_or_library_name}: $(OBJ_FILES)
-\t$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
-
-valgrind: clean
-\t$(MAKE) CFLAGS="$(VALGRIND_CFLAGS)" all
+{target_rule}
 """
+
     if not create_lib:
-        Makefile_str += f"""\tvalgrind --track-origins=yes ./{exec_or_library_name}\n"""
-    Makefile_str += f"""
-# Use $(RM) to be cross-platform compatible.
+        Makefile_str += f"""valgrind: clean
+\t$(MAKE) CFLAGS="$(VALGRIND_CFLAGS)" all
+\tvalgrind --track-origins=yes ./{exec_or_library_name}
+
+"""
+
+    Makefile_str += f"""# Use $(RM) to be cross-platform compatible.
 clean:
 \t$(RM) *.o */*.o *~ */*~ ./#* *.txt *.gp *.dat *.avi *.png {exec_or_library_name}
 """
+
     makefile_path = project_Path / "Makefile"
     with makefile_path.open("w", encoding="utf-8") as Makefile:
         Makefile.write(Makefile_str)
