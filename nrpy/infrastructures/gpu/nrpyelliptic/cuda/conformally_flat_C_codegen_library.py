@@ -660,8 +660,8 @@ class gpu_register_CFunction_diagnostics(
 
   // Compute Hamiltonian constraint violation and store it at diagnostic_output_gfs
   compute_residual_all_points(commondata, params, rfmstruct, auxevol_gfs, y_n_gfs, diagnostic_output_gfs);
-  cudaDeviceSynchronize();
   if (n_step % outevery == 0) {
+    cudaDeviceSynchronize();
     size_t streamid = cpyDevicetoHost__gf(commondata, params, host_diag_gfs, diagnostic_output_gfs, RESIDUAL_HGF, RESIDUAL_HGF);
   }
 
