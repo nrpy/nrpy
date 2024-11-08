@@ -82,19 +82,28 @@ def register_griddata_commondata(
 def register_CFunction_griddata_free(
     enable_rfm_precompute: bool,
     enable_CurviBCs: bool,
+    enable_bhahaha: bool = False,
 ) -> None:
     """
     Register the C function griddata_free() to free all memory within the griddata struct.
 
     :param enable_rfm_precompute: A flag to enable/disable rfm_precompute_free within the C function body.
-    :param enable_CurviBCs: A flag to enable/disable freeing CurviBCs within the C function body.
+    :param enable_CurviBCs: Whether to free CurviBCs within the C function body.
+    :param enable_bhahaha: Whether to enable freeing of BHaHAHA memory.
     """
     desc = """Free all memory within the griddata struct,
 except perhaps non_y_n_gfs (e.g., after a regrid, in which non_y_n_gfs are freed first)."""
     cfunc_type = "void"
     name = "griddata_free"
     params = "const commondata_struct *restrict commondata, griddata_struct *restrict griddata, const bool free_non_y_n_gfs_and_core_griddata_pointers"
-    body = r"""for(int grid=0;grid<commondata->NUMGRIDS;grid++) {
+    body = ""
+    if enable_bhahaha:
+        body += r"""  // Free BHaHAHA memory
+  for (int which_horizon = 0; which_horizon < commondata->bah_num_horizons; which_horizon++)
+    free(commondata->bhahaha_params_and_data[which_horizon].prev_horizon);
+"""
+    body += r"""  // Free memory allocated inside griddata[].
+  for(int grid=0;grid<commondata->NUMGRIDS;grid++) {
 """
     if enable_rfm_precompute:
         body += "  rfm_precompute_free(commondata, &griddata[grid].params, &griddata[grid].rfmstruct);\n"
