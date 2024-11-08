@@ -204,14 +204,10 @@ def simple_loop_2D(
     i2_pts: List[sp.Expr] = []
 
     if plane == "xy":
-        if "Cartesian" in CoordSystem:
+        if "Cartesian" in CoordSystem or "Cylindrical" in CoordSystem:
             # xy-plane == { z_mid }, where z index is i2
             i2_pts += [Nxx_plus_2NGHOSTS[2] / 2]
-        elif (
-            "Spherical" in CoordSystem
-            or "SymTP" in CoordSystem
-            or "Cylindrical" in CoordSystem
-        ):
+        elif "Spherical" in CoordSystem or "SymTP" in CoordSystem:
             # xy-plane == { theta_mid }, where theta index is i1
             i1_pts += [Nxx_plus_2NGHOSTS[1] / 2]
         else:

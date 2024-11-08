@@ -1146,7 +1146,7 @@ void Timestepping::send_nonlocalinnerbc_data(const int type_gfs, const int grid)
         const int globalidx3srcpt = globalidx3_srcpts_tosend[which_dst_chare][which_srcpt];
         const int localidx3srcpt = globalidx3pt_to_localidx3pt[globalidx3srcpt];
         const int idx2 = IDX2NONLOCALINNERBC(which_gf, which_srcpt, num_srcpts_tosend_each_chare[which_dst_chare]);
-        tmpBuffer_innerbc_send[idx2] = gfs[IDX4pt(which_gf, localidx3srcpt)];
+        tmpBuffer_innerbc_send[idx2] = gfs[IDX4pt(gfs_to_sync[which_gf], localidx3srcpt)];
       }
     }
     int dst_chare_index0;
@@ -1180,7 +1180,7 @@ void Timestepping::process_nonlocalinnerbc(const int type_gfs, const int grid) {
         Butcher_dict, MoL_method, set_parity_types=True
     )
     file_output_str += r"""
-  apply_bcs_inner_only_nonlocal(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].bcstruct, &griddata_chare[grid].nonlocalinnerbcstruct, NUM_GFS, gfs, gf_parity_types, griddata_chare[grid].tmpBuffers.tmpBuffer_innerbc_receiv);
+  apply_bcs_inner_only_nonlocal(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].bcstruct, &griddata_chare[grid].nonlocalinnerbcstruct, NUM_GFS, gfs, gfs_to_sync, gf_parity_types, griddata_chare[grid].tmpBuffers.tmpBuffer_innerbc_receiv);
 }
 """
 
