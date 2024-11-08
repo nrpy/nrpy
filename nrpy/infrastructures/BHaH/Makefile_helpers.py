@@ -150,8 +150,9 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
             CFLAGS_dict[key] += " " + " ".join(addl_CFLAGS)
 
     # Object files
-    OBJ_FILES_str = "OBJ_FILES =" + " ".join(
-        c_file.replace(".c", ".o") for c_file in sorted(Makefile_list_of_files)
+    OBJ_FILES_str = "OBJ_FILES = " + " ".join(
+        c_file.replace(".c", ".o")
+        for c_file in sorted(Makefile_list_of_files, key=str.lower)
     )
 
     # Linker flags

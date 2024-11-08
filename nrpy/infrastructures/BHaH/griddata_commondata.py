@@ -98,7 +98,7 @@ except perhaps non_y_n_gfs (e.g., after a regrid, in which non_y_n_gfs are freed
     params = "const commondata_struct *restrict commondata, griddata_struct *restrict griddata, const bool free_non_y_n_gfs_and_core_griddata_pointers"
     body = ""
     if enable_bhahaha:
-        body += r"""  // Free BHaHAHA memory
+        body += r"""  // Free BHaHAHA memory.
   for (int which_horizon = 0; which_horizon < commondata->bah_num_horizons; which_horizon++)
     free(commondata->bhahaha_params_and_data[which_horizon].prev_horizon);
 """
