@@ -126,7 +126,8 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         project_Path / "BHaH_function_prototypes.h", "w", encoding="utf-8"
     ) as file:
         outstr = "\n".join(
-            CFunction.function_prototype for CFunction in CFunction_dict.values()
+            CFunction_dict[key].function_prototype
+            for key in sorted(CFunction_dict, key=str.lower)
         )
         file.write(clang_format(outstr, clang_format_options=clang_format_options))
 
