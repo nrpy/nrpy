@@ -52,6 +52,7 @@ def register_CFunction_rhs_eval(
     enable_SSL: bool = False,
     fp_type: str = "double",
     validate_expressions: bool = False,
+    return_validation_dict: bool = False,
 ) -> Union[None, Dict[str, Union[mpf, mpc]], pcg.NRPyEnv_type]:
     """
     Register the right-hand side evaluation function for the BSSN equations.
@@ -72,6 +73,7 @@ def register_CFunction_rhs_eval(
     :param enable_SSL: Whether to enable slow-start lapse.
     :param fp_type: Floating point type, e.g., "double".
     :param validate_expressions: Whether to validate generated sympy expressions against trusted values.
+    :param return_validation_dict: Whether to return dictionary of symbolic expressions for validation against trusted values.
 
     :raises ValueError: If EvolvedConformalFactor_cf not set to a supported value: {phi, chi, W}.
 
@@ -355,19 +357,20 @@ def register_CFunction_rhs_eval(
         betaU[i] = vetU[i] * rfm.ReU[i]
 
     # Perform validation of BSSN_RHSs against trusted version.
-    results_dictionary = ve.process_dictionary_of_expressions(
-        local_BSSN_RHSs_varname_to_expr_dict, fixed_mpfs_for_free_symbols=True
-    )
     if validate_expressions:
-        return results_dictionary
-    ve.compare_or_generate_trusted_results(
-        os.path.abspath(__file__),
-        os.getcwd(),
-        # File basename. If this is set to "trusted_module_test1", then
-        #   trusted results_dict will be stored in tests/trusted_module_test1.py
-        f"{os.path.splitext(os.path.basename(__file__))[0]}_{LapseEvolutionOption}_{ShiftEvolutionOption}_{CoordSystem}_T4munu{enable_T4munu}_KO{enable_KreissOliger_dissipation}_improvements{enable_SSL}",
-        results_dictionary,
-    )
+        results_dictionary = ve.process_dictionary_of_expressions(
+            local_BSSN_RHSs_varname_to_expr_dict, fixed_mpfs_for_free_symbols=True
+        )
+        if return_validation_dict:
+            return results_dictionary
+        ve.compare_or_generate_trusted_results(
+            os.path.abspath(__file__),
+            os.getcwd(),
+            # File basename. If this is set to "trusted_module_test1", then
+            #   trusted results_dict will be stored in tests/trusted_module_test1.py
+            f"{os.path.splitext(os.path.basename(__file__))[0]}_{LapseEvolutionOption}_{ShiftEvolutionOption}_{CoordSystem}_T4munu{enable_T4munu}_KO{enable_KreissOliger_dissipation}_improvements{enable_SSL}",
+            results_dictionary,
+        )
 
     body += lp.simple_loop(
         loop_body=ccg.c_codegen(
@@ -453,6 +456,7 @@ if __name__ == "__main__":
                 enable_CAHD=improvements_enable,
                 enable_SSL=improvements_enable,
                 validate_expressions=True,
+                return_validation_dict=True,
             )
             ve.compare_or_generate_trusted_results(
                 os.path.abspath(__file__),
