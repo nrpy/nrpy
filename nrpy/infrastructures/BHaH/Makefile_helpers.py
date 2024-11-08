@@ -67,18 +67,18 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     """
     if not create_lib and "main" not in CFunction_dict:
         raise ValueError(
-            "output_CFunctions_function_prototypes_and_construct_Makefile() error: C codes will not compile if main() function not defined!\n"
-            '    Make sure that the main() function registered to CFunction_dict has name "main".'
+            "Error: C codes will not compile if main() function not defined!\n"
+            'Make sure that the main() function registered to CFunction_dict has name "main".'
         )
     if static_lib and not create_lib:
         raise ValueError(
-            "`static_lib` set to True, but `create_lib` set to False. Both must be set to True to create a static library"
+            "`static_lib` set to True, but `create_lib` set to False. Both must be set to True to create a static library."
         )
 
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
 
-    if exec_or_library_name == "":
+    if not exec_or_library_name:
         exec_or_library_name = project_name
 
     os_name = platform.system()
@@ -86,59 +86,25 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         if static_lib:
             ext = ".a"
         else:
-            if os_name == "Linux":
-                ext = ".so"
-            elif os_name == "Darwin":
-                ext = ".dylib"
-            else:
-                raise ValueError(f"Sorry, {os_name} operating system not supported.")
+            ext = ".so" if os_name == "Linux" else ".dylib"
         if not exec_or_library_name.endswith(ext):
             exec_or_library_name += ext
 
+        # For shared libraries, we need -fPIC and -shared
         if not static_lib:
-            # For shared libraries, we need -fPIC and -shared
-            def add_flag(flag_list: Optional[List[str]], flag: str) -> List[str]:
-                """
-                Check if a flag is in the list; add it if not.
-
-                :param flag_list: The list to which the flag should be added.
-                :param flag: The flag to add to the list.
-                :return: The updated list with the flag added.
-
-                DocTests:
-                    >>> add_flag(['-fPIC'], '-shared')
-                    ['-fPIC', '-shared']
-                """
-                if not flag_list:
-                    flag_list = []
-                if flag not in flag_list:
-                    flag_list += [flag]
-                return flag_list
-
-            addl_CFLAGS = add_flag(addl_CFLAGS, "-fPIC")
-            addl_CFLAGS = add_flag(addl_CFLAGS, "-shared")
+            if addl_CFLAGS is None:
+                addl_CFLAGS = []
+            for flag in ["-fPIC", "-shared"]:
+                if flag not in addl_CFLAGS:
+                    addl_CFLAGS.append(flag)
+    else:
+        if os_name not in ["Linux", "Darwin"]:
+            raise ValueError(f"Unsupported operating system: {os_name}")
 
     Makefile_list_of_files: List[str] = []
 
-    def add_to_Makefile(project_Path: Path, subdir_Path: Path, file_name: str) -> Path:
-        """
-        Add the given path and file to the Makefile list of files and return the joined path.
-
-        :param project_Path: The Path of the project.
-        :param subdir_Path: The subdirectory path within the project.
-        :param file_name: The filename.
-        :return: Destination Path for the generated code.
-
-        DocTests:
-            >>> add_to_Makefile(Path('/project'), Path('src'), 'code.c')
-            PosixPath('/project/src/code.c')
-        """
-        Makefile_list_of_files.append(str(subdir_Path / file_name))
-        return project_Path / subdir_Path / file_name
-
-    list_of_uniq_functions: List[str] = []
     for name, CFunction in CFunction_dict.items():
-        if lib_function_prefix != "":
+        if lib_function_prefix:
             CFunction.name = f"{lib_function_prefix}{name}"
             CFunction.function_prototype = (
                 f"{CFunction.cfunc_type} {CFunction.name}({CFunction.params});"
@@ -148,87 +114,61 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
             )
             name = CFunction.name
 
-        if CFunction.subdirectory:
-            subdir_Path = Path(CFunction.subdirectory)
-            (project_Path / subdir_Path).mkdir(parents=True, exist_ok=True)
-            with open(
-                add_to_Makefile(project_Path, subdir_Path, f"{name}.c"),
-                "w",
-                encoding="utf-8",
-            ) as file:
-                file.write(CFunction.full_function)
-        else:
-            with open(
-                add_to_Makefile(project_Path, Path("."), f"{name}.c"),
-                "w",
-                encoding="utf-8",
-            ) as file:
-                file.write(CFunction.full_function)
-        list_of_uniq_functions += [name]
+        subdir_Path = Path(CFunction.subdirectory or ".")
+        (project_Path / subdir_Path).mkdir(parents=True, exist_ok=True)
+        c_file_path = project_Path / subdir_Path / f"{name}.c"
+        with open(c_file_path, "w", encoding="utf-8") as file:
+            file.write(CFunction.full_function)
+        Makefile_list_of_files.append(str(subdir_Path / f"{name}.c"))
 
     # Output BHaH_function_prototypes.h
     with open(
         project_Path / "BHaH_function_prototypes.h", "w", encoding="utf-8"
     ) as file:
-        outstr = ""
-        for key in sorted(CFunction_dict.keys()):
-            outstr += f"{CFunction_dict[key].function_prototype}\n"
+        outstr = "\n".join(
+            CFunction.function_prototype for CFunction in CFunction_dict.values()
+        )
         file.write(clang_format(outstr, clang_format_options=clang_format_options))
 
+    # Set compiler
     if CC == "autodetect":
-        if os_name == "Darwin":
-            CC = "clang"
-        else:
-            CC = "gcc"
-
+        CC = "clang" if os_name == "Darwin" else "gcc"
     if shutil.which(CC) is None:
         raise FileNotFoundError(f"{CC} C compiler is not found")
 
+    # Compiler flags
     CFLAGS_dict = {
         "default": "-std=gnu99 -O2 -march=native -g -Wall -Wno-unused-variable",
         "fast": "-std=gnu99 -O3 -funroll-loops -march=native -g -Wall -Wno-unused-variable",
         "debug": "-std=gnu99 -O2 -g -Wall -Wno-unused-variable -Wno-unknown-pragmas",
     }
-
-    if addl_CFLAGS is not None:
+    if addl_CFLAGS:
         if not isinstance(addl_CFLAGS, list):
-            raise TypeError(
-                "Error: output_CFunctions_function_prototypes_and_construct_Makefile(): addl_CFLAGS must be a list!"
-            )
-        for FLAG in addl_CFLAGS:
-            for key in CFLAGS_dict:
-                CFLAGS_dict[key] += f" {FLAG}"
+            raise TypeError("addl_CFLAGS must be a list!")
+        for key in CFLAGS_dict:
+            CFLAGS_dict[key] += " " + " ".join(addl_CFLAGS)
 
-    OBJ_FILES_str = "OBJ_FILES ="
-    for c_file in sorted(Makefile_list_of_files):
-        OBJ_FILES_str += " " + c_file.replace(".c", ".o")
+    # Object files
+    OBJ_FILES_str = "OBJ_FILES =" + " ".join(
+        c_file.replace(".c", ".o") for c_file in sorted(Makefile_list_of_files)
+    )
 
+    # Linker flags
     LDFLAGS_str = "LDFLAGS ="
-    if addl_libraries is not None:
+    if addl_libraries:
         if not isinstance(addl_libraries, list):
-            raise TypeError(
-                "Error: output_CFunctions_function_prototypes_and_construct_Makefile(): addl_libraries must be a list!"
-            )
-        for lib in addl_libraries:
-            LDFLAGS_str += f" {lib}"
+            raise TypeError("addl_libraries must be a list!")
+        LDFLAGS_str += " " + " ".join(addl_libraries)
     LDFLAGS_str += " -lm"
 
-    CFLAGS_str = f"CFLAGS = {CFLAGS_dict[compiler_opt_option]}\n"
-    for key, value in CFLAGS_dict.items():
-        if key != compiler_opt_option:
-            CFLAGS_str += f"#CFLAGS = {value}\n"
-
+    # Include directories
     INCLUDEDIRS_str = "INCLUDEDIRS ="
-    if include_dirs is not None:
+    if include_dirs:
         if not isinstance(include_dirs, list):
-            raise TypeError(
-                "Error: output_CFunctions_function_prototypes_and_construct_Makefile(): include_dirs must be a list!"
-            )
-        INCLUDEDIRS_str += " " + " ".join(
-            f"-I{include_dir}" for include_dir in include_dirs
-        )
+            raise TypeError("include_dirs must be a list!")
+        INCLUDEDIRS_str += " " + " ".join(f"-I{dir}" for dir in include_dirs)
 
-    # Prepare the target rule based on whether we're building an executable, a shared library, or a static library
+    # Prepare the target rule
     if create_lib:
         if static_lib:
             # Static library
@@ -249,9 +189,10 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
 
 """
 
-    Makefile_str = f"""CC ?= {CC}  # assigns the value CC to {CC} only if environment variable CC is not already set
+    # Construct the Makefile string
+    Makefile_str = f"""CC ?= {CC}
 
-{CFLAGS_str}
+CFLAGS = {CFLAGS_dict[compiler_opt_option]}
 VALGRIND_CFLAGS = {CFLAGS_dict["debug"]}
 {INCLUDEDIRS_str}
 {LDFLAGS_str}
@@ -275,18 +216,22 @@ all: {exec_or_library_name}
 {target_rule}
 """
 
-    if not create_lib:
-        Makefile_str += f"""valgrind: clean
+    # Add the valgrind target
+    Makefile_str += """valgrind: clean
 \t$(MAKE) CFLAGS="$(VALGRIND_CFLAGS)" all
-\tvalgrind --track-origins=yes ./{exec_or_library_name}
+"""
+    if not create_lib:
+        Makefile_str += f"""\tvalgrind --track-origins=yes ./{exec_or_library_name}
 
 """
 
+    # Clean target
     Makefile_str += f"""# Use $(RM) to be cross-platform compatible.
 clean:
 \t$(RM) *.o */*.o *~ */*~ ./#* *.txt *.gp *.dat *.avi *.png {exec_or_library_name}
 """
 
+    # Write the Makefile
     makefile_path = project_Path / "Makefile"
     with makefile_path.open("w", encoding="utf-8") as Makefile:
         Makefile.write(Makefile_str)
@@ -315,7 +260,7 @@ def compile_Makefile(
     :param attempt: Compilation attempt number.
 
     :raises FileNotFoundError: If the C compiler or make is not found.
-    :raises Exception: If compilation fails after two attempts.
+    :raises RuntimeError: If compilation fails after two attempts.
 
     DocTests:
         >>> from nrpy.c_function import register_CFunction
@@ -382,7 +327,7 @@ def compile_Makefile(
             attempt=2,
         )
     if not exec_path.is_file() and attempt == 2:
-        raise Exception("Compilation failed")
+        raise RuntimeError("Compilation failed")
 
 
 if __name__ == "__main__":
