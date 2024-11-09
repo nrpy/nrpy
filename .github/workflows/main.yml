@@ -39,9 +39,8 @@ jobs:
         if [[ "${{ matrix.python-version }}" != "3.6.7" && "${{ matrix.python-version }}" != "3.7.13"  && "${{ matrix.python-version }}" != "3.8.18" ]]; then
           pip install -U -r requirements-dev.txt
         else
-          # Install packages from requirements-dev.txt except those with a fixed version.
-          cat requirements-dev.txt | grep -v '==' | xargs pip install -U
-          pip install -U clang-format
+          # Install packages from requirements-dev.txt without fixed versions; i.e., install the latest version compatible with this Python version.
+          sed 's/==.*//' requirements-dev.txt | xargs pip install -U
         fi
         if [[ "${{ matrix.python-version }}" == "3.8.18" ]]; then
           pip install pylint==3.2.0  # pylint 3.2.4+ is broken in 3.8.18.
