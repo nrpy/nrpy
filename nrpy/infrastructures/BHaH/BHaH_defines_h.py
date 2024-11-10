@@ -99,6 +99,7 @@ def output_BHaH_defines_h(
     additional_includes: Optional[List[str]] = None,
     REAL_means: str = "double",
     enable_simd: bool = True,
+    define_no_simd_UPWIND_ALG: bool = True,
     enable_rfm_precompute: bool = True,
     fin_NGHOSTS_add_one_for_upwinding_or_KO: bool = False,
     supplemental_defines_dict: Optional[Dict[str, str]] = None,
@@ -111,6 +112,7 @@ def output_BHaH_defines_h(
     :param additional_includes: Additional header files to be included in the output
     :param REAL_means: The floating-point type to be used in the C code (default is "double")
     :param enable_simd: Flag to enable Single Instruction Multiple Data (SIMD) optimizations
+    :param define_no_simd_UPWIND_ALG: Flag to #define a SIMD-less UPWIND_ALG. No need to define this if UPWIND_ALG() unused.
     :param enable_rfm_precompute: A boolean value reflecting whether reference metric precomputation is enabled.
     :param fin_NGHOSTS_add_one_for_upwinding_or_KO: Option to add one extra ghost zone for upwinding
     :param supplemental_defines_dict: Additional key-value pairs to be included in the output file
@@ -301,7 +303,7 @@ def output_BHaH_defines_h(
     #define NO_INLINE // Fallback for unknown compilers
 #endif
 """
-        if not enable_simd:
+        if not enable_simd and define_no_simd_UPWIND_ALG:
             fin_BHd_str += """
 // When enable_simd = False, this is the UPWIND_ALG() macro:
 #define UPWIND_ALG(UpwindVecU) UpwindVecU > 0.0 ? 1.0 : 0.0
