@@ -28,6 +28,17 @@
 #define WriteSIMD(a, b) *(a) = (b)
 #define ReadSIMD(a) __ldg(a)
 
+// Upwind Algorithm (Scalar Version)
+// *NOTE*: This upwinding is reversed from usual upwinding algorithms,
+// because the upwinding control vector in BSSN (the shift)
+// acts like a *negative* velocity.
+#define UPWIND_ALG(UpwindVecU) ((UpwindVecU) > 0.0 ? 1.0 : 0.0)
+
+// Initialize vector (of size one) to zero (output is REAL_SIMD_ARRAY)
+#define SetZeroSIMD 0.0
+// Horizontal addition (output is a double)
+#define HorizAddSIMD(a) (a) // For scalar fallback, no horizontal addition needed
+
 // If compiled with AVX512F SIMD instructions enabled:
 #elif __AVX512F__
 #include <immintrin.h>
