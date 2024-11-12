@@ -204,7 +204,9 @@ class CFunction:
         if self.desc:
             complete_func += f"/**\n{prefix_with_star(self.desc)}\n*/\n"
 
-        function_prototype = f"{self.cfunc_decorators}{self.cfunc_type} {self.name}({self.params});"
+        function_prototype = (
+            f"{self.cfunc_decorators}{self.cfunc_type} {self.name}({self.params});"
+        )
         complete_func += f"{function_prototype.replace(';', '')} {{\n{include_Cparams_str}{self.body}}}\n"
 
         complete_func += f"{self.postfunc}\n"

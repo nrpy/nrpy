@@ -385,7 +385,7 @@ class register_CFunction_MoL_step_forward_in_time(
     ...     diag_gc = cfc.CFunction_dict["MoL_step_forward_in_time"].full_function
     ...     expected_str = decompress_base64_to_string(expected_str_dict[k])
     ...     if diag_gc != expected_str:
-    ...         raise ValueError(f"\\n{k}: {diff_strings(expected_string, diag_gc)}")
+    ...         raise ValueError(f"\\n{k}: {diff_strings(expected_str, diag_gc)}")
     >>> cfc.CFunction_dict.clear()
     >>> MoL_Functions_dict.clear()
     >>> try:
@@ -485,7 +485,7 @@ class register_CFunctions(base_MoL.base_register_CFunctions):
     >>> from nrpy.helpers.generic import compress_string_to_base64, decompress_base64_to_string, diff_strings
     >>> cfc.CFunction_dict.clear()
     >>> _ = register_CFunctions()
-    >>> expected_string = decompress_base64_to_string("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")
+    >>> expected_string = decompress_base64_to_string("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")
     >>> returned_string = cfc.CFunction_dict["MoL_step_forward_in_time"].full_function
     >>> if returned_string != expected_string:
     ...    compressed_str = compress_string_to_base64(returned_string)
@@ -497,7 +497,7 @@ class register_CFunctions(base_MoL.base_register_CFunctions):
     >>> print(cfc.CFunction_dict["MoL_free_memory_non_y_n_gfs"].full_function)
     #include "BHaH_defines.h"
     #include "BHaH_function_prototypes.h"
-    /*
+    /**
      * Method of Lines (MoL) for "RK4" method: Free memory for "non_y_n_gfs" gridfunctions
      * - y_n_gfs are used to store data for the vector of gridfunctions y_i at t_n, at the start of each MoL timestep
      * - non_y_n_gfs are needed for intermediate (e.g., k_i) storage in chosen MoL method
@@ -514,7 +514,7 @@ class register_CFunctions(base_MoL.base_register_CFunctions):
     >>> print(cfc.CFunction_dict["MoL_malloc_non_y_n_gfs"].full_function)
     #include "BHaH_defines.h"
     #include "BHaH_function_prototypes.h"
-    /*
+    /**
      * Method of Lines (MoL) for "RK4" method: Allocate memory for "non_y_n_gfs" gridfunctions
      * - y_n_gfs are used to store data for the vector of gridfunctions y_i at t_n, at the start of each MoL timestep
      * - non_y_n_gfs are needed for intermediate (e.g., k_i) storage in chosen MoL method

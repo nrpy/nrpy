@@ -747,11 +747,10 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
       bcstruct->bc_info.num_pure_outer_boundary_points[which_gz][dirn] = idx2d;
     }
 """
-    """Register CFunction."""
     _, actual_name = cfc.function_name_and_subdir_with_CoordSystem(
         os.path.join("."), name, CoordSystem
     )
-    if not actual_name in cfc.CFunction_dict:
+    if actual_name not in cfc.CFunction_dict:
         cfc.register_CFunction(
             includes=includes,
             prefunc=prefunc,
@@ -1325,7 +1324,7 @@ applies BCs to the inner boundary points, which may map either to the grid inter
     _, actual_name = cfc.function_name_and_subdir_with_CoordSystem(
         os.path.join("."), name, CoordSystem
     )
-    if not actual_name in cfc.CFunction_dict:
+    if actual_name not in cfc.CFunction_dict:
         cfc.register_CFunction(
             includes=includes,
             prefunc=prefunc,

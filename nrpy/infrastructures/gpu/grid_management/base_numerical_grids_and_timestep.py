@@ -154,7 +154,7 @@ params->invdxx2 = ((REAL)params->Nxx2) / (params->xxmax2 - params->xxmin2);
         _, actual_name = cfc.function_name_and_subdir_with_CoordSystem(
             os.path.join("."), self.name, self.CoordSystem
         )
-        if not actual_name in cfc.CFunction_dict:
+        if actual_name not in cfc.CFunction_dict:
             cfc.register_CFunction(
                 prefunc=self.prefunc,
                 includes=self.includes,
@@ -230,7 +230,7 @@ commondata->dt = MIN(commondata->dt, ds_min * commondata->CFL_FACTOR);
         _, actual_name = cfc.function_name_and_subdir_with_CoordSystem(
             os.path.join("."), self.name, self.CoordSystem
         )
-        if not actual_name in cfc.CFunction_dict:
+        if actual_name not in cfc.CFunction_dict:
             cfc.register_CFunction(
                 prefunc=self.prefunc,
                 includes=self.includes,

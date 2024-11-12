@@ -37,7 +37,7 @@ class GPU_Kernel:
     cudaCheckErrors(cudaKernel, "basic_assignment_gpu failure");
     <BLANKLINE>
     >>> print(kernel.CFunction.full_function)
-    /*
+    /**
      * GPU Kernel: basic_assignment_gpu.
      *
      */

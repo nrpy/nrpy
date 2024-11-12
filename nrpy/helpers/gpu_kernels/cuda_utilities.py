@@ -18,7 +18,7 @@ def register_CFunction_cpyHosttoDevice_params__constant() -> None:
     >>> register_CFunction_cpyHosttoDevice_params__constant()
     >>> print(cfc.CFunction_dict['cpyHosttoDevice_params__constant'].full_function)
     #include "../BHaH_defines.h"
-    /*
+    /**
      * Copy parameters to GPU __constant__.
      */
     __host__ void cpyHosttoDevice_params__constant(const params_struct *restrict params, const int streamid) {
@@ -56,7 +56,7 @@ def register_CFunction_cpyHosttoDevice_commondata__constant() -> None:
     >>> register_CFunction_cpyHosttoDevice_commondata__constant()
     >>> print(cfc.CFunction_dict['cpyHosttoDevice_commondata__constant'].full_function)
     #include "../BHaH_defines.h"
-    /*
+    /**
      * Copy parameters to GPU __constant__.
      */
     __host__ void cpyHosttoDevice_commondata__constant(const commondata_struct *restrict commondata) {
@@ -92,7 +92,7 @@ def generate_CFunction_mallocHostgrid() -> str:
     DOCTEST:
     >>> kernel = generate_CFunction_mallocHostgrid()
     >>> print(kernel)
-    /*
+    /**
      * GPU Kernel: mallocHostgrid.
      * Allocate griddata_struct[grid].xx for host.
      */
@@ -141,7 +141,7 @@ def register_CFunction_cpyDevicetoHost__grid() -> None:
     >>> register_CFunction_cpyDevicetoHost__grid()
     >>> print(cfc.CFunction_dict['cpyDevicetoHost__grid'].full_function)
     #include "../BHaH_defines.h"
-    /*
+    /**
      * GPU Kernel: mallocHostgrid.
      * Allocate griddata_struct[grid].xx for host.
      */
@@ -158,7 +158,7 @@ def register_CFunction_cpyDevicetoHost__grid() -> None:
       gd_host->xx[2] = (REAL *)malloc(sizeof(REAL) * Nxx_plus_2NGHOSTS2);
     }
     <BLANKLINE>
-    /*
+    /**
      * Copy griddata_struct[grid].xx from GPU to host.
      */
     __host__ void cpyDevicetoHost__grid(const commondata_struct *restrict commondata, griddata_struct *restrict gd_host,
@@ -219,7 +219,7 @@ def register_CFunction_CUDA__malloc_host_gfs() -> None:
     >>> register_CFunction_CUDA__malloc_host_gfs()
     >>> print(cfc.CFunction_dict['CUDA__malloc_host_gfs'].full_function)
     #include "../BHaH_defines.h"
-    /*
+    /**
      * Allocate Host storage for diagnostics GFs.
      */
     __host__ void CUDA__malloc_host_gfs(const commondata_struct *restrict commondata, const params_struct *restrict params,
@@ -278,7 +278,7 @@ def register_CFunction_CUDA__free_host_gfs() -> None:
     >>> register_CFunction_CUDA__free_host_gfs()
     >>> print(cfc.CFunction_dict['CUDA__free_host_gfs'].full_function)
     #include "../BHaH_defines.h"
-    /*
+    /**
      * Free Host storage for diagnostics GFs.
      */
     __host__ void CUDA__free_host_gfs(MoL_gridfunctions_struct *gridfuncs) {
@@ -323,7 +323,7 @@ def register_CFunction_cpyDevicetoHost__gf() -> None:
     >>> register_CFunction_cpyDevicetoHost__gf()
     >>> print(cfc.CFunction_dict['cpyDevicetoHost__gf'].full_function)
     #include "../BHaH_defines.h"
-    /*
+    /**
      * Asynchronously copying a grid function from device to host.
      */
     __host__ size_t cpyDevicetoHost__gf(const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *gf_host,
@@ -387,7 +387,7 @@ def register_CFunction_cpyHosttoDevice__gf() -> None:
     >>> register_CFunction_cpyHosttoDevice__gf()
     >>> print(cfc.CFunction_dict['cpyDevicetoHost__gf'].full_function)
     #include "../BHaH_defines.h"
-    /*
+    /**
      * Asynchronously copying a grid function from device to host.
      */
     __host__ size_t cpyDevicetoHost__gf(const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *gf_host,
