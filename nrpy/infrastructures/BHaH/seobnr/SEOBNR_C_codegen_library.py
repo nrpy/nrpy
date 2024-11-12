@@ -1,7 +1,9 @@
 """
-Set up C function library for SEOBNR inspiral integrations.
+Set up C function library for the SEOBNR aligned spin expressions.
 
-Author: Zachariah B. Etienne
+Authors: Siddharth Mahesh
+        sm0193 **at** mix **dot** wvu **dot** edu
+        Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
@@ -51,7 +53,9 @@ par.register_CodeParameters(
     __name__,
     [
         "Delta_t",
+        "dT",
         "t_ISCO",
+        "t_attach",
         "omega_qnm",
         "tau_qnm",
         "a_f",
@@ -78,6 +82,8 @@ par.register_CodeParameters(
         0.0,
         0.0,
         0.0,
+        0.0,
+        0.0,
     ],
     commondata=True,
     add_to_parfile=False,
@@ -90,7 +96,6 @@ par.register_CodeParameters(
     [
         "dynamics_low",
         "dynamics_fine",
-        "dynamics_inspiral",
         "waveform_low",
         "waveform_fine",
         "waveform_inspiral",
@@ -100,6 +105,7 @@ par.register_CodeParameters(
     add_to_parfile=False,
     add_to_set_CodeParameters_h=False,
 )
+
 
 par.register_CodeParameters(
     "size_t",
@@ -148,87 +154,7 @@ par.register_CodeParameters(
 )
 
 
-def register_CFunction_handle_gsl_return_status() -> Union[None, pcg.NRPyEnv_type]:
-    """
-    Register CFunction for handling error statuses returned by GSL calls.
-
-    :return: None if in registration phase, else the updated NRPy environment.
-    """
-    if pcg.pcg_registration_phase():
-        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
-        return None
-
-    includes = ["BHaH_defines.h"]
-    desc = """Handle GSL return status."""
-    cfunc_type = "void"
-    name = "handle_gsl_return_status"
-    params = "int status, int status_desired[], int num_desired, const char *restrict function_name"
-    body = """
-int count = 0;
-for (int i = 0; i < num_desired; i++){
-  if (status == status_desired[i]){
-    count++;
-  }
-}
-if (count == 0){
-  printf ("In function %s, gsl returned error: %s\\nAborted", function_name, gsl_strerror(status));
-  exit(EXIT_FAILURE);
-}
-"""
-    cfc.register_CFunction(
-        includes=includes,
-        desc=desc,
-        cfunc_type=cfunc_type,
-        name=name,
-        params=params,
-        include_CodeParameters_h=False,
-        body=body,
-    )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
-
-
-def register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper() -> (
-    Union[None, pcg.NRPyEnv_type]
-):
-    """
-    Register CFunction for evaluating the complex gamma function using GSL.
-
-    :return: None if in registration phase, else the updated NRPy environment.
-    """
-    if pcg.pcg_registration_phase():
-        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
-        return None
-
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Evaluate the gamma function using GSL."""
-    cfunc_type = "int"
-    name = "SEOBNRv5_aligned_spin_gamma_wrapper"
-    params = "const REAL z_real, const REAL z_imag, REAL *restrict gamma_z"
-    body = """
-gsl_sf_result lnr, arg;
-int status = gsl_sf_lngamma_complex_e(z_real, z_imag, &lnr, &arg);
-int status_desired[1] = {GSL_SUCCESS};
-char lngamma_name[] = "gsl_sf_lngamma_complex_e";
-handle_gsl_return_status(status,status_desired,1,lngamma_name);
-const REAL gamma_amp = exp(lnr.val);
-const REAL gamma_phase = arg.val;
-gamma_z[0] =  gamma_amp*cos(gamma_phase);
-gamma_z[0] =  gamma_amp*sin(gamma_phase);
-return GSL_SUCCESS;
-"""
-    cfc.register_CFunction(
-        includes=includes,
-        desc=desc,
-        cfunc_type=cfunc_type,
-        name=name,
-        params=params,
-        include_CodeParameters_h=False,
-        body=body,
-    )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
-
-
-def register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics() -> (
+def register_CFunction_SEOBNRv5_aligned_spin_waveform() -> (
     Union[None, pcg.NRPyEnv_type]
 ):
     """
@@ -245,11 +171,15 @@ def register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics() -> (
     h22 = hlms["(2 , 2)"]
     # We are going to be doing this twice;
     # once for the fine dynamics and once for the coarse.
-    h22_code = ccg.c_codegen(
-        h22,
-        ["const REAL h22_real", "const REAL h22_imag"],
-        verbose=False,
-        include_braces=False,
+    h22_code = (
+        ccg.c_codegen(
+            h22,
+            ["const double complex h22"],
+            verbose=False,
+            include_braces=False,
+        )
+        .replace("REAL", "double complex")
+        .replace("exp", "cexp")
     )
     khat2_code = ccg.c_codegen(
         [wf.khat[2]],
@@ -264,10 +194,74 @@ def register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics() -> (
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """Calculate the SEOBNRv5 22 mode."""
     cfunc_type = "int"
+    prefunc = "#include<complex.h>"
+    name = "SEOBNRv5_aligned_spin_waveform"
+    params = "REAL *restrict dynamics, REAL *restrict waveform, commondata_struct *restrict commondata"
+    body = """
+const int dyn_size = 8; //t,r,phi,prstar,pphi,Hreal, Omega, Omega_circ
+int status = 0;
+int i;
+REAL gamma_real_22 , gamma_imag_22;
+REAL gamma_22[2];
+const REAL m1 = commondata->m1;
+const REAL m2 = commondata->m2;
+const REAL chi1 = commondata->chi1;
+const REAL chi2 = commondata->chi2;
+const REAL a6 = commondata->a6;
+const REAL dSO = commondata->dSO;
+const REAL t = dynamics[TIME];
+const REAL r = dynamics[R];
+const REAL phi = dynamics[PHI];
+const REAL prstar = dynamics[PRSTAR];
+const REAL pphi = dynamics[PPHI];
+const REAL Hreal = dynamics[H];
+const REAL Omega = dynamics[OMEGA];
+const REAL Omega_circ = dynamics[OMEGA_CIRC];
+//compute
+"""
+    body += khat2_code
+    body += """
+  status = SEOBNRv5_aligned_spin_gamma_wrapper(3.,-2.*khat2,gamma_22);
+  gamma_real_22 = gamma_22[0];
+  gamma_imag_22 = gamma_22[1];
+"""
+    body += h22_code
+    body += """
+waveform[0] = (REAL) creal(h22);
+waveform[1] = (REAL) cimag(h22);
+return GSL_SUCCESS;
+"""
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        prefunc=prefunc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        include_CodeParameters_h=False,
+        body=body,
+    )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
+
+def register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics() -> (
+    Union[None, pcg.NRPyEnv_type]
+):
+    """
+    Register CFunction for computing the (2,2) mode of SEOBNRv5 given the dynamics.
+
+    :return: None if in registration phase, else the updated NRPy environment.
+    """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    desc = """Calculate the SEOBNRv5 22 mode."""
+    cfunc_type = "int"
     name = "SEOBNRv5_aligned_spin_waveform_from_dynamics"
     params = "commondata_struct *restrict commondata"
     body = """
-const int dyn_size = 8; //t,r,phi,prstar,pphi,Hreal, Omega, Omega_circ
 int status = 0;
 int i;
 const REAL m1 = commondata->m1;
@@ -276,70 +270,101 @@ const REAL chi1 = commondata->chi1;
 const REAL chi2 = commondata->chi2;
 const REAL a6 = commondata->a6;
 const REAL dSO = commondata->dSO;
-REAL t , r , phi , prstar, pphi , Hreal , Omega , Omega_circ;
-REAL gamma_real_22 , gamma_imag_22;
-REAL gamma_22[2];
+REAL dynamics[NUMVARS] , waveform[2];
 commondata->waveform_low = (REAL *)malloc(commondata->nsteps_low*NUMMODES*sizeof(REAL)); //t , h_+ , h_x
 commondata->waveform_fine = (REAL *)malloc(commondata->nsteps_fine*NUMMODES*sizeof(REAL)); //t , h_+ , h_x
 
 //low sampling
 for (i = 0; i < commondata->nsteps_low; i++) {
   //assign
-  t = commondata->dynamics_low[IDX(i,TIME)];
-  r = commondata->dynamics_low[IDX(i,R)];
-  phi = commondata->dynamics_low[IDX(i,PHI)];
-  prstar = commondata->dynamics_low[IDX(i,PRSTAR)];
-  pphi = commondata->dynamics_low[IDX(i,PPHI)];
-  Hreal = commondata->dynamics_low[IDX(i,H)];
-  Omega = commondata->dynamics_low[IDX(i,OMEGA)];
-  Omega_circ = commondata->dynamics_low[IDX(i,OMEGA_CIRC)];
+  dynamics[TIME] = commondata->dynamics_low[IDX(i,TIME)];
+  dynamics[R] = commondata->dynamics_low[IDX(i,R)];
+  dynamics[PHI] = commondata->dynamics_low[IDX(i,PHI)];
+  dynamics[PRSTAR] = commondata->dynamics_low[IDX(i,PRSTAR)];
+  dynamics[PPHI] = commondata->dynamics_low[IDX(i,PPHI)];
+  dynamics[H] = commondata->dynamics_low[IDX(i,H)];
+  dynamics[OMEGA] = commondata->dynamics_low[IDX(i,OMEGA)];
+  dynamics[OMEGA_CIRC] = commondata->dynamics_low[IDX(i,OMEGA_CIRC)];
   
   //compute
-"""
-    body += khat2_code
-    body += """
-  status = SEOBNRv5_aligned_spin_gamma_wrapper(3.,-2.*khat2,gamma_22);
-  gamma_real_22 = gamma_22[0];
-  gamma_imag_22 = gamma_22[1];
-"""
-    body += h22_code
-    body += """
+  status = SEOBNRv5_aligned_spin_waveform(dynamics, waveform, commondata);
   //store
-  commondata->waveform_low[IDX_WF(i,TIME)] = t;
-  commondata->waveform_low[IDX_WF(i,HPLUS)] = h22_real;
-  commondata->waveform_low[IDX_WF(i,HCROSS)] = -1*h22_imag; // polarizations are described as h = h_+ - I*h_x
+  commondata->waveform_low[IDX_WF(i,TIME)] = dynamics[TIME];
+  commondata->waveform_low[IDX_WF(i,HPLUS)] = waveform[0];
+  commondata->waveform_low[IDX_WF(i,HCROSS)] = -1.0*waveform[1]; // polarizations are described as h = h_+ - I*h_x
 }
-"""
-    body += """
 //high sampling
 for (i = 0; i < commondata->nsteps_fine; i++) {
   //assign
-  t = commondata->dynamics_fine[IDX(i,TIME)];
-  r = commondata->dynamics_fine[IDX(i,R)];
-  phi = commondata->dynamics_fine[IDX(i,PHI)];
-  prstar = commondata->dynamics_fine[IDX(i,PRSTAR)];
-  pphi = commondata->dynamics_fine[IDX(i,PPHI)];
-  Hreal = commondata->dynamics_fine[IDX(i,H)];
-  Omega = commondata->dynamics_fine[IDX(i,OMEGA)];
-  Omega_circ = commondata->dynamics_fine[IDX(i,OMEGA_CIRC)];
-
+  dynamics[TIME] = commondata->dynamics_fine[IDX(i,TIME)];
+  dynamics[R] = commondata->dynamics_fine[IDX(i,R)];
+  dynamics[PHI] = commondata->dynamics_fine[IDX(i,PHI)];
+  dynamics[PRSTAR] = commondata->dynamics_fine[IDX(i,PRSTAR)];
+  dynamics[PPHI] = commondata->dynamics_fine[IDX(i,PPHI)];
+  dynamics[H] = commondata->dynamics_fine[IDX(i,H)];
+  dynamics[OMEGA] = commondata->dynamics_fine[IDX(i,OMEGA)];
+  dynamics[OMEGA_CIRC] = commondata->dynamics_fine[IDX(i,OMEGA_CIRC)];
+  
   //compute
-"""
-    body += khat2_code
-    body += """
-  status = SEOBNRv5_aligned_spin_gamma_wrapper(3.,-2.*khat2,gamma_22);
-  gamma_real_22 = gamma_22[0];
-  gamma_imag_22 = gamma_22[1];
-"""
-    body += h22_code
-    body += """
+  status = SEOBNRv5_aligned_spin_waveform(dynamics, waveform, commondata);
   //store
-  commondata->waveform_fine[IDX_WF(i,TIME)] = t;
-  commondata->waveform_fine[IDX_WF(i,HPLUS)] = h22_real;
-  commondata->waveform_fine[IDX_WF(i,HCROSS)] = -1*h22_imag; // polarizations are described as h = h_+ - I*h_x
+  commondata->waveform_fine[IDX_WF(i,TIME)] = dynamics[TIME];
+  commondata->waveform_fine[IDX_WF(i,HPLUS)] = waveform[0];
+  commondata->waveform_fine[IDX_WF(i,HCROSS)] = -1.0*waveform[1]; // polarizations are described as h = h_+ - I*h_x
 }
+return GSL_SUCCESS;
 """
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        include_CodeParameters_h=False,
+        body=body,
+    )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
+
+def register_CFunction_SEOBNRv5_aligned_spin_flux() -> Union[None, pcg.NRPyEnv_type]:
+    """
+    Register CFunction for evaluating the SEOBNRv5 aligned spin flux.
+
+    :return: None if in registration phase, else the updated NRPy environment.
+    """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+
+    includes = ["BHaH_defines.h"]
+    desc = """Evaluate the SEOBNRv5 aligned spin flux."""
+    cfunc_type = "int"
+    name = "SEOBNRv5_aligned_spin_flux"
+    params = "const REAL *restrict y, const REAL Hreal, const REAL Omega, const REAL Omega_circ, REAL *restrict f, void *restrict params"
+    wf = SEOBNRv5_wf.SEOBNRv5_aligned_spin_waveform_quantities()
+    flux = wf.flux()
+    body = """
+const REAL m1 = ((commondata_struct *restrict) params)->m1;
+const REAL m2 = ((commondata_struct *restrict) params)->m2;
+const REAL chi1 = ((commondata_struct *restrict) params)->chi1;
+const REAL chi2 = ((commondata_struct *restrict) params)->chi2;
+const REAL r = y[0];
+const REAL phi = y[1];
+const REAL prstar = y[2];
+const REAL pphi = y[3];
+"""
+    body += ccg.c_codegen(
+        [flux],
+        [
+            "const REAL flux",
+        ],
+        verbose=False,
+        include_braces=False,
+    )
     body += """
+const REAL flux_over_omega = flux / Omega;
+f[0] = prstar * flux_over_omega / pphi;
+f[1] = flux_over_omega;
 return GSL_SUCCESS;
 """
     cfc.register_CFunction(
@@ -366,23 +391,12 @@ def register_CFunction_SEOBNRv5_aligned_spin_right_hand_sides() -> (
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    includes = ["BHaH_defines.h"]
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """Evaluate SEOBNRv5 Hamiltonian and needed derivatives to compute binary dynamics."""
     cfunc_type = "int"
     name = "SEOBNRv5_aligned_spin_right_hand_sides"
     params = "REAL t, const REAL *restrict y, REAL *restrict f, void *restrict params"
     Hq = SEOBNRv5_Ham.SEOBNRv5_aligned_spin_Hamiltonian_quantities()
-    wf = SEOBNRv5_wf.SEOBNRv5_aligned_spin_waveform_quantities()
-    flux = wf.flux()
-    flux = (
-        flux.subs(wf.Hreal, Hq.Hreal)
-        .subs(wf.Omega, Hq.dHreal_dpphi)
-        .subs(wf.Omega_circ, Hq.dHreal_dpphi_circ)
-    )
-    r_dot = Hq.xi * Hq.dHreal_dprstar
-    phi_dot = Hq.dHreal_dpphi
-    pphi_dot = flux / Hq.nu
-    prstar_dot = -Hq.xi * Hq.dHreal_dr + Hq.prstar * pphi_dot / Hq.pphi
     body = """
 const REAL m1 = ((commondata_struct *restrict) params)->m1;
 const REAL m2 = ((commondata_struct *restrict) params)->m2;
@@ -396,21 +410,32 @@ const REAL prstar = y[2];
 const REAL pphi = y[3];
 """
     body += ccg.c_codegen(
-        [r_dot, phi_dot, prstar_dot, pphi_dot],
         [
-            "const REAL rdot",
-            "const REAL phidot",
-            "const REAL prstardot",
-            "const REAL pphidot",
+            Hq.Hreal,
+            Hq.xi,
+            Hq.dHreal_dr,
+            Hq.dHreal_dprstar,
+            Hq.dHreal_dpphi,
+            Hq.dHreal_dpphi_circ,
+        ],
+        [
+            "const REAL Hreal",
+            "const REAL xi",
+            "const REAL dHreal_dr",
+            "const REAL dHreal_dprstar",
+            "const REAL dHreal_dpphi",
+            "const REAL dHreal_dpphi_circ",
         ],
         verbose=False,
         include_braces=False,
     )
-    body += r"""
-f[0] = rdot;
-f[1] = phidot;
-f[2] = prstardot;
-f[3] = pphidot;
+    body += """
+REAL flux[2];
+SEOBNRv5_aligned_spin_flux(y,Hreal,dHreal_dpphi,dHreal_dpphi_circ,flux,params);
+f[0] = xi * dHreal_dprstar;
+f[1] = dHreal_dpphi;
+f[2] = -xi * dHreal_dr + flux[0];
+f[3] = flux[1];
 return GSL_SUCCESS;
 """
     cfc.register_CFunction(

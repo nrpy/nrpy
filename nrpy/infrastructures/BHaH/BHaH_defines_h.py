@@ -19,11 +19,16 @@ def register_griddata_struct_and_return_griddata_struct_str(
     enable_rfm_precompute: bool = True,
 ) -> str:
     """
-    Register contributions to the griddata struct from different modules and constructs the griddata_struct string.
+    Register contributions to the griddata struct from different modules and construct the griddata_struct string.
 
     :param enable_rfm_precompute: A boolean value reflecting whether reference metric precomputation is enabled.
     :return: A string representing the typedef structure for grid data, including contributions from BHaH modules,
              reference_metric, CurviBoundaryConditions, and masking, if applicable.
+
+    DocTests:
+    >>> result = register_griddata_struct_and_return_griddata_struct_str()
+    >>> isinstance(result, str)
+    True
     """
     # Step 1: Register griddata_struct contributions from all BHaH modules:
     griddata_commondata.register_griddata_commondata(
@@ -69,16 +74,24 @@ typedef struct __griddata__ {
 
 def register_BHaH_defines(module: str, BHaH_defines: str) -> None:
     """
-    Register to par.glb_extras_dict["BHaH_defines"] contributions from a given module to BHaH_defines.h.
+    Register contributions from a given module to par.glb_extras_dict["BHaH_defines"] for BHaH_defines.h.
 
     :param module: The name of the module for which the defines are being registered.
     :param BHaH_defines: The contribution (string) to BHaH_defines.h.
+
+    DocTests:
+    >>> par.glb_extras_dict = {}
+    >>> register_BHaH_defines('test_module', '#define TEST_MACRO 1')
+    >>> 'test_module' in par.glb_extras_dict['BHaH_defines']
+    True
     """
     if "BHaH_defines" not in par.glb_extras_dict:
         par.glb_extras_dict["BHaH_defines"] = {}
 
     if module not in par.glb_extras_dict["BHaH_defines"].keys():
         par.glb_extras_dict["BHaH_defines"][module] = BHaH_defines
+    else:
+        par.glb_extras_dict["BHaH_defines"][module] += BHaH_defines
 
 
 def output_BHaH_defines_h(
@@ -86,6 +99,7 @@ def output_BHaH_defines_h(
     additional_includes: Optional[List[str]] = None,
     REAL_means: str = "double",
     enable_simd: bool = True,
+    define_no_simd_UPWIND_ALG: bool = True,
     enable_rfm_precompute: bool = True,
     fin_NGHOSTS_add_one_for_upwinding_or_KO: bool = False,
     supplemental_defines_dict: Optional[Dict[str, str]] = None,
@@ -98,11 +112,13 @@ def output_BHaH_defines_h(
     :param additional_includes: Additional header files to be included in the output
     :param REAL_means: The floating-point type to be used in the C code (default is "double")
     :param enable_simd: Flag to enable Single Instruction Multiple Data (SIMD) optimizations
+    :param define_no_simd_UPWIND_ALG: Flag to #define a SIMD-less UPWIND_ALG. No need to define this if UPWIND_ALG() unused.
     :param enable_rfm_precompute: A boolean value reflecting whether reference metric precomputation is enabled.
     :param fin_NGHOSTS_add_one_for_upwinding_or_KO: Option to add one extra ghost zone for upwinding
     :param supplemental_defines_dict: Additional key-value pairs to be included in the output file
     :param clang_format_options: Options for clang formatting.
 
+    DocTests:
     >>> from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
     >>> import nrpy.finite_difference as fin
     >>> from nrpy.helpers.generic import compress_string_to_base64, decompress_base64_to_string, diff_strings
@@ -110,7 +126,7 @@ def output_BHaH_defines_h(
     >>> project_dir = Path("/tmp", "tmp_BHaH_defines_h")
     >>> project_dir.mkdir(parents=True, exist_ok=True)
     >>> output_BHaH_defines_h(project_dir=str(project_dir))
-    >>> expected_string = decompress_base64_to_string("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")
+    >>> expected_string = decompress_base64_to_string("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")
     >>> returned_string = (project_dir / "BHaH_defines.h").read_text()
     >>> if returned_string != expected_string:
     ...    compressed_str = compress_string_to_base64(returned_string)
@@ -139,7 +155,7 @@ def output_BHaH_defines_h(
     if additional_includes:
         for include in additional_includes:
             gen_BHd_str += f'#include "{include}"\n'
-    gen_BHd_str += rf"""#define REAL {REAL_means}\
+    gen_BHd_str += f"""#define REAL {REAL_means}
 
 // These macros for MIN(), MAX(), and SQR() ensure that if the arguments inside
 //   are a function/complex expression, the function/expression is evaluated
@@ -163,9 +179,11 @@ def output_BHaH_defines_h(
     _a * _a; \
 }})
 """
+
     code_params_includes_define_type = False
     for CPname, CodeParam in par.glb_code_params_dict.items():
-        if CodeParam.cparam_type == "#define":
+        CPtype = CodeParam.cparam_type
+        if CPtype == "#define":
             if not code_params_includes_define_type:
                 code_params_includes_define_type = True
                 gen_BHd_str += "// START: CodeParameters declared as #define.\n"
@@ -189,29 +207,64 @@ def output_BHaH_defines_h(
     CCodelines_params_struct: List[str] = []
     CCodelines_commondata_struct: List[str] = []
 
+    # Helper function to format C declarations without using regex
+    def format_c_declaration(
+        cp_type: str, var_name: str, module: str, description: str
+    ) -> str:
+        """
+        Given a CodeParameter type, variable name, module, and description, return the correct C declaration string.
+        Handles both scalar and array types using simple string operations.
+
+        :param cp_type: The type of the C parameter (e.g., "REAL" or "int[8]").
+        :param var_name: The name of the variable.
+        :param module: The module name to be included in the comment.
+        :param description: A description of the parameter to be appended to the comment.
+                            If empty, only the module and variable name are included in the comment.
+
+        :return: A formatted C declaration string with an inline comment.
+        """
+        if "[" in cp_type and "]" in cp_type:
+            base_type, size_with_bracket = cp_type.split("[", 1)
+            size = size_with_bracket.split("]", 1)[0]
+            base_type = base_type.strip()
+            size = size.strip()
+            if base_type.startswith("char"):
+                # Handle char arrays
+                decl = f"  char {var_name}[{size}];"
+            else:
+                decl = f"  {base_type} {var_name}[{size}];"
+        else:
+            decl = f"  {cp_type} {var_name};"
+
+        # Conditional comment based on description
+        if description:
+            comment = f" // {description} ({module})"
+        else:
+            comment = f" // ({module})"
+
+        return decl + comment + "\n"
+
     # Add all CodeParameters
     # Iterate through the global code parameters dictionary
     for CPname, CodeParam in par.glb_code_params_dict.items():
         CPtype = CodeParam.cparam_type
         if CPtype != "#define":
-            comment = f"  // {CodeParam.module}::{CPname}"
-            c_output = f"  {CPtype} {CPname};{comment}\n"
-            if "char" in CPtype and "[" in CPtype and "]" in CPtype:
-                chararray_size = CPtype.split("[")[1].replace("]", "")
-                c_output = f"char {CPname}[{chararray_size}];{comment}\n"
-
-            # Concatenate module and CPname for the comment
+            # All CodeParams have a description field
+            description = CodeParam.description.strip()
+            module = CodeParam.module
+            c_declaration = format_c_declaration(CPtype, CPname, module, description)
+            # Append c_declaration to the appropriate structure: commondata or params
             if CodeParam.commondata:
-                CCodelines_commondata_struct.append(c_output)
+                CCodelines_commondata_struct.append(c_declaration)
             else:
-                CCodelines_params_struct.append(c_output)
+                CCodelines_params_struct.append(c_declaration)
 
     if "commondata_struct" in par.glb_extras_dict:
         for module, item_list in par.glb_extras_dict["commondata_struct"].items():
             for item in item_list:
                 c_code_line = f"  {item.c_declaration};"
                 if item.description != "":
-                    c_code_line += f"// <- {module}: {item.description}"
+                    c_code_line += f" // <- {module}: {item.description}"
                 CCodelines_commondata_struct.append(c_code_line + "\n")
 
     # Sort CCodelines_params_struct and append them to the par_BHd_str
@@ -250,10 +303,11 @@ def output_BHaH_defines_h(
     #define NO_INLINE // Fallback for unknown compilers
 #endif
 """
-        if not enable_simd:
+        if not enable_simd and define_no_simd_UPWIND_ALG:
             fin_BHd_str += """
 // When enable_simd = False, this is the UPWIND_ALG() macro:
-#define UPWIND_ALG(UpwindVecU) UpwindVecU > 0.0 ? 1.0 : 0.0\n"""
+#define UPWIND_ALG(UpwindVecU) UpwindVecU > 0.0 ? 1.0 : 0.0
+"""
         register_BHaH_defines("finite_difference", fin_BHd_str)
 
     ###############################
@@ -267,9 +321,9 @@ def output_BHaH_defines_h(
 //   consecutive values of "j" (fixing all other indices) are separated by
 //   Nxx_plus_2NGHOSTS0 elements in memory. Similarly, consecutive values of
 //   "k" are separated by Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1 in memory, etc.
-#define IDX4(g,i,j,k)                                                  \
-  ( (i) + Nxx_plus_2NGHOSTS0 * ( (j) + Nxx_plus_2NGHOSTS1 * ( (k) + Nxx_plus_2NGHOSTS2 * (g) ) ) )
-#define IDX4pt(g,idx) ( (idx) + (Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2) * (g) )
+#define IDX4(gf,i,j,k)                                                  \
+  ( (i) + Nxx_plus_2NGHOSTS0 * ( (j) + Nxx_plus_2NGHOSTS1 * ( (k) + Nxx_plus_2NGHOSTS2 * (gf) ) ) )
+#define IDX4pt(gf,idx) ( (idx) + (Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2) * (gf) )
 #define IDX3(i,j,k) ( (i) + Nxx_plus_2NGHOSTS0 * ( (j) + Nxx_plus_2NGHOSTS1 * ( (k) ) ) )
 #define LOOP_REGION(i0min,i0max, i1min,i1max, i2min,i2max)              \
   for(int i2=i2min;i2<i2max;i2++) for(int i1=i1min;i1<i1max;i1++) for(int i0=i0min;i0<i0max;i0++)
@@ -289,6 +343,13 @@ _Pragma(__OMP_PRAGMA__)  \
     register_BHaH_defines("grid", gri_BHd_str)
 
     def output_key(key_name: str, item_name: str) -> str:
+        """
+        Format a string for outputting the definitions for a specific module.
+
+        :param key_name: The name of the module or key.
+        :param item_name: The definitions or content associated with the module.
+        :return: A formatted string containing the module name and its content.
+        """
         return f"""
 //********************************************
 // Basic definitions for module {key_name}:\n{item_name}"""
@@ -300,6 +361,7 @@ _Pragma(__OMP_PRAGMA__)  \
     # The ordering here is based largely on data structure dependencies. E.g., griddata_struct contains bc_struct.
     core_modules_list = [
         "general",
+        "after_general",
         "nrpy.infrastructures.BHaH.diagnostics.progress_indicator",
         "commondata_struct",
         "params_struct",

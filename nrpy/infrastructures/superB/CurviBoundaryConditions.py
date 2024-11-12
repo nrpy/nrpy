@@ -35,7 +35,7 @@ boundary points ("inner maps to outer").
 """
     cfunc_type = "void"
     name = "apply_bcs_inner_only_nonlocal"
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const bc_struct *restrict bcstruct, const nonlocalinnerbc_struct *restrict nonlocalinnerbcstruct, const int NUM_GFS, REAL *restrict gfs, const int8_t* gf_parity_types, REAL **restrict tmpBuffer_innerbc_receiv"
+    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const bc_struct *restrict bcstruct, const nonlocalinnerbc_struct *restrict nonlocalinnerbcstruct, const int NUM_GFS, REAL *restrict gfs, const int *gfs_to_sync, const int8_t* gf_parity_types, REAL **restrict tmpBuffer_innerbc_receiv"
     body = r"""
   // Unpack bc_info from bcstruct
   const bc_info_struct *bc_info = &bcstruct->bc_info;
@@ -52,7 +52,7 @@ boundary points ("inner maps to outer").
         const int linear_id = map_srcchare_and_srcpt_id_to_linear_id[which_chare][which_srcpt];
         const int dstpt = bcstruct->inner_bc_array_nonlocal[linear_id].dstpt;
         const int idx2 = IDX2NONLOCALINNERBC(which_gf, which_srcpt, num_srcpts_each_chare[which_chare]);
-        gfs[IDX4pt(which_gf, dstpt)] = bcstruct->inner_bc_array_nonlocal[linear_id].parity[gf_parity_types[which_gf]] * tmpBuffer[idx2];
+        gfs[IDX4pt(gfs_to_sync[which_gf], dstpt)] = bcstruct->inner_bc_array_nonlocal[linear_id].parity[gf_parity_types[gfs_to_sync[which_gf]]] * tmpBuffer[idx2];
       }
     }
   }

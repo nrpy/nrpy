@@ -861,7 +861,7 @@ def register_CFunctions(
     >>> from nrpy.helpers.generic import compress_string_to_base64, decompress_base64_to_string, diff_strings
     >>> cfc.CFunction_dict.clear()
     >>> register_CFunctions()
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4BqrA7pdABGaScZHDxOiAHcc/CXr2duHb+UiUyv83OVALtvJ+o7uK/PoSVGe7rPuvil8asOnzsX/43MrS1REEi/tau4rRkS3klwMCWne6D351BIv83jxwuBwBgfb9aLOiuMaxdzlpat7M5Zzy6cqD3qxMNABQOc2xVV5NC/sFWryHJK7NLtTQZSJAkfrM9dF6qg6pG5p6oN+o9MOcVuOHCVrZ0lCxYx6wuKz2IJ/mMdvxXHVGkgQhirxUUEBl62cNh4PSL0+MhkGfI16jrcBnECahxa7QWuvNWwm0wjfXTw392qOizx3AZQeZ/5+eNZqi0kpkBkrvymrzIOqG75TdKqbx/pe1fDjWE/O6Z7oQp5oYUE4dA9PZ3jI8wRP1bZhpauAV7CdlcP2h+0XENf8YcZZsN3IVAMLbUtntwfptu8rRmhQDU3vhO9j4B445lTNOYKmDfabJbduDZF8MlL0IYahsG2SwFnA9kbaZyfby/eh/Nb3tl5hVPEcfxdU3N9es06Sq3BXXWqfdKl6OXPM67oKzXRNVh3Ws2ksls6tzbpEDfQYmf/wqDs4NX0QeW86/hQXn8mfjHXYDoNQNqVLgTuNHFs8oIvC35e9YZ4424yDAPwz2lebc6OXe/N7PREh1TZP1N95J009AF+dYLT2ZnWq/qJON/p195BRcJ7LiludhhK0xmrF+eMj3vFLwBYBWuATm2EMPuSHLpS2/n+AfbhxopUmOl4AX/KEkIzeYN3p+9Mb/QwGJxCnfpLOPT3kutJ61/Hh23VakghoJDuBRAgCFnl9nCB4P6/iP7CcjdCf88e5FkIdCQipIXgsoAM1Tq6i1yDazQ3sKh+Pz0U1xSmLrchB4EUuGd1OGkyg+3QCWlQIaRev73BAHOCfK4iP3fx9yiwwOTl6xCJyI9yC3TVEn+yIQ4hRj9wqStvka/A9yyeBnEOPHxaUM8o6NUdBjQmim31kuu6pYwfAMJirBB6UCxAIl4zYMnmJmtO2JNDO0HRacYdRxpe9fHQcXvHXbf/wGSpG9O7sY1joaDRJNEdd6YR45z0hiS/TSaO3U/pR34XG179xTQdhvQ4YZwLrAVWnpvFRSWGY8BEMtbwHl3CSdnYZOq7mvLvZOaUZVA4k6bJkm+7XVaWH4XR+ksFRPBVrW8/DgHi7RULpQ6DBIcByuxOHi/eeWO33KcC/9/ANmnCSvQ8S655kReZCDTUQJkx2Hp8AnaD7VuyS57qmxvWHjMUT0WI3hc6JqAO7d7diNCeJyzbK/7JQ9ltnGl1doAAAAGJidfWEfeQ2AAHWB6w1AAA5dg+QscRn+wIAAAAABFla")
+    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4BqsA7tdABGaScZHDxOiAHcc/CXr2duHb+UiUyv83OVALtvJ+o7uK/PoSVGe7rPuvil8asOnzsX/5aNqzgQh3F7K147eoVkvuX5XqBlwQ4pLa1z+qz4R8cbeO2C3kSzRL/nx5WTsauHKk/IcKH3IGIYRqchbd6UjUXwbc8LP9RI22Bn0O94AqK7TSUZ1L0DbWFZwSXS0hV4BRn8ykOLwxf6oeTUUR5JemW81WXtk31MDlCGj9O1lAtBFR3q8rop0mhU/UFumRk4eUzWbJdO1T8XWdYD5kZMBXhysFYEQ0prk34IbkR2cbNS4yyT5/B6KO6ExvWjYBgtQ3yqFBaOh2aroKMobVG0rC02Y8vYQwbRW5dml8hwDs+hyGMwHp+Mc1xhLyaRVjIUw/fMm84U39RrY9M3Kgq990ryvV6pqNh6xRNxSvU/pr4mbfiAzQgCrGwdAzvdk0XfgLNhxMkqJ8tuSHoOsNuktfxouhLGetmjK1xZSrBpA673c9L4EQ4iAI40cW3EeKOZAMAlX7dG14ydIU4ONZ74tNI3B7Rs9eQdOCLNsNbSsbVwjwwXVMm64V0Vs+M2fs3S26rGgD9iPBDy2M/YoCZb811h4Q4OQORwk+MEVR/h1ppFAcsWoM2DkhQWRH66aCm7NYcE4cyLPGR4kSvH3IBtCkeit30P3FWmHSPty+G12ThHwo11rOHrAVhF5Ff9zlfAA5D1RAm9+40mUfpEEQSgVyyS4saQQacvgpC0p19zEDexyfVnVQMy4YoD45GQHyWE9tR+3odBDQkrWwd5HiM0PDtMHLumzzI4HP126H1aCz/Y3U+V6AiSbO55C049BCHh6RAiOJZ9naNwXX5pdRQ8CKEmP1VEhw4YQZYrBv3dfuzZr7Abc2N+oKV0OYJ+TsO0XkNz5ZmIS8hcJWvt7IY741zfP0K0yUXVaev8ZySdbnpA8FzB5fSIAD8LK4NI50LwdtVzrZZskjku2WLLzuMVIik185a1A9hv8WUZS4LcHgyKirSW0ImSFt5a23vguz5Fn+gEZWl5W6dzkRt3Kgv/GfYouAIGb3G+jP3In/pvf5JANdvxiN1VXr+aS3NBkeLNHpCxVX476yU94rDImVj7Ns3AmsXKpJ8oCAFFmvai2gO+gl5j1kuHkN4mkl86iTJSNOJedEAMJz85cZyikiNasM5bNUE0hrF9usG3dm5Z5q2wfBXlV23x/FoE2ZPOlRaPj6xwLKDI3yyzBVqda5KSuXTebHmx4Nj1bw5HdDdYZXYsEDojsR7gQcQAAAK2wzQneM82xAAHXB601AAD5wu/jscRn+wIAAAAABFla")
     >>> returned_string = cfc.CFunction_dict["MoL_step_forward_in_time"].full_function
     >>> if returned_string != expected_string:
     ...    compressed_str = compress_string_to_base64(returned_string)
@@ -873,7 +873,7 @@ def register_CFunctions(
     >>> print(cfc.CFunction_dict["MoL_free_memory_non_y_n_gfs"].full_function)
     #include "BHaH_defines.h"
     #include "BHaH_function_prototypes.h"
-    /*
+    /**
      * Method of Lines (MoL) for "RK4" method: Free memory for "non_y_n_gfs" gridfunctions
      * - y_n_gfs are used to store data for the vector of gridfunctions y_i at t_n, at the start of each MoL timestep
      * - non_y_n_gfs are needed for intermediate (e.g., k_i) storage in chosen MoL method
@@ -890,7 +890,7 @@ def register_CFunctions(
     >>> print(cfc.CFunction_dict["MoL_malloc_non_y_n_gfs"].full_function)
     #include "BHaH_defines.h"
     #include "BHaH_function_prototypes.h"
-    /*
+    /**
      * Method of Lines (MoL) for "RK4" method: Allocate memory for "non_y_n_gfs" gridfunctions
      * - y_n_gfs are used to store data for the vector of gridfunctions y_i at t_n, at the start of each MoL timestep
      * - non_y_n_gfs are needed for intermediate (e.g., k_i) storage in chosen MoL method

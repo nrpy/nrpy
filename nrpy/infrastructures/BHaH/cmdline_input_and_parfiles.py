@@ -7,7 +7,7 @@ Author: Zachariah B. Etienne
 
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import nrpy.c_function as cfc
 import nrpy.params as par
@@ -31,94 +31,393 @@ def register_CFunction_cmdline_input_and_parfile_parser(
     :param cmdline_inputs: Optional list of command-line inputs that can be used to overwrite specific
                            parameters defined in the parameter file.
     """
-    num_commondata_params = 0
-    for CodeParam in par.glb_code_params_dict.values():
-        if CodeParam.commondata and CodeParam.add_to_parfile:
-            num_commondata_params += 1
-    prefunc = f"#define NUM_PARAMETERS {num_commondata_params} // Define the number of parameters"
+    if cmdline_inputs is None:
+        cmdline_inputs = []
+
+    # Count the number of parameters to be included
+    num_commondata_params = sum(
+        1
+        for CodeParam in par.glb_code_params_dict.values()
+        if CodeParam.commondata and CodeParam.add_to_parfile
+    )
+
+    # Initialize the preamble for the C code
+    prefunc = f"#define NUM_PARAMETERS {num_commondata_params} // Define the number of parameters\n\n"
     prefunc += r"""
 #define LINE_SIZE 1024 // Define the max size of a line
 #define PARAM_SIZE 128 // Define the max param string size
 
-static char* trim_space(char *str) {
-    char *end;
+/**
+ * Trims leading and trailing whitespace from a string.
+ *
+ * @param str - The input string to be trimmed.
+ * @return - A pointer to the trimmed string.
+ *
+ * This function removes any leading and trailing whitespace characters from the input string.
+ * It modifies the original string by inserting a null terminator after the last non-space character.
+ */
+static char *trim_space(char *str) {
+  char *end;
 
-    // Trim leading spaces
-    while (isspace((unsigned char)*str)) str++;
+  // Trim leading spaces
+  while (isspace((unsigned char)*str))
+    str++;
 
-    // Trim trailing spaces
-    end = str + strlen(str) - 1;
-    while (end > str && isspace((unsigned char)*end)) end--;
-
-    *(end + 1) = '\0';
-
+  if (*str == 0) // All spaces?
     return str;
+
+  // Trim trailing spaces
+  end = str + strlen(str) - 1;
+  while (end > str && isspace((unsigned char)*end))
+    end--;
+
+  // Write new null terminator
+  *(end + 1) = '\0';
+
+  return str;
 }
 
+/**
+ * Safely copies a source string to a destination buffer, preventing buffer overflows.
+ *
+ * @param dest - The destination buffer where the string will be copied.
+ * @param src - The source string to be copied.
+ * @param size - The size of the destination buffer.
+ *
+ * This function ensures that the source string fits within the destination buffer.
+ * It checks for NULL pointers and verifies that the source string does not exceed the buffer size.
+ * If any of these conditions fail, the function prints an error message and terminates the program.
+ */
 static void safe_copy(char *dest, const char *src, size_t size) {
-    if (src == NULL) {
-        fprintf(stderr, "Error: Source string is NULL.\n");
-        exit(1);
-    }
-    if (dest == NULL) {
-        fprintf(stderr, "Error: Destination string is NULL.\n");
-        exit(1);
-    }
-    if (size == 0) {
-        fprintf(stderr, "Error: Size is zero.\n");
-        exit(1);
-    }
-    size_t src_len = strlen(src);
-    if (src_len >= size) {
-        fprintf(stderr, "Error: Buffer overflow detected.\n");
-        exit(1);
-    }
-    strncpy(dest, src, size - 1);
-    dest[size - 1] = '\0';
+  if (src == NULL) {
+    fprintf(stderr, "Error: Source string is NULL.\n");
+    exit(1);
+  }
+  if (dest == NULL) {
+    fprintf(stderr, "Error: Destination string is NULL.\n");
+    exit(1);
+  }
+  if (size == 0) {
+    fprintf(stderr, "Error: Size is zero.\n");
+    exit(1);
+  }
+  size_t src_len = strlen(src);
+  if (src_len >= size) {
+    fprintf(stderr, "Error: Buffer overflow detected.\n");
+    exit(1);
+  }
+  strncpy(dest, src, size - 1);
+  dest[size - 1] = '\0';
 }
 """
 
-    if cmdline_inputs is None:
-        cmdline_inputs = []
-    list_of_steerable_params_str = "  ".join(cmdline_inputs)
-    prefunc += rf"""// Function to print usage instructions
+    # Generate the usage instructions string
+    list_of_steerable_params_str = " ".join(cmdline_inputs)
+    prefunc += rf"""
+/**
+ * Prints usage instructions for the program.
+ *
+ * This function outputs the different usage options available for running the
+ * {project_name} executable. It guides users on how to provide parameter
+ * files and overwrite steerable parameters through command-line arguments.
+ */
 static void print_usage() {{
-  fprintf(stderr, "Usage option 0: ./{project_name} [--help or -h] <- Outputs this usage command\n");
-  fprintf(stderr, "Usage option 1: ./{project_name} <- reads in parameter file {project_name}.par\n");
-  fprintf(stderr, "Usage option 2: ./{project_name} [parfile] <- reads in parameter file [parfile]\n");
-  fprintf(stderr, "Usage option 3: ./{project_name} [{list_of_steerable_params_str}] <- overwrites parameters in list after reading in {project_name}.par\n");
-  fprintf(stderr, "Usage option 4: ./{project_name} [parfile] [{list_of_steerable_params_str}] <- overwrites list of steerable parameters after reading in [parfile]\n");
+  fprintf(stderr, "Usage option 0: ./{project_name} [--help or -h] - Outputs this usage command\n");
+  fprintf(stderr, "Usage option 1: ./{project_name} - Reads in parameter file {project_name}.par\n");
+  fprintf(stderr, "Usage option 2: ./{project_name} [parfile] - Reads in parameter file [parfile]\n");
+  fprintf(stderr, "Usage option 3: ./{project_name} [{list_of_steerable_params_str}] - Overwrites parameters in list after reading in {project_name}.par\n");
+  fprintf(stderr, "Usage option 4: ./{project_name} [parfile] [{list_of_steerable_params_str}] - Overwrites list of steerable parameters after reading in [parfile]\n");
 }}"""
-    includes = ["BHaH_defines.h", "<string.h>", "<ctype.h>", "<errno.h>"]
-    desc = r"""AUTOMATICALLY GENERATED BY parameter_file_read_and_parse.py
-parameter_file_read_and_parse() function:
-Reads and parses a parameter file to populate commondata_struct commondata.
 
-This function takes in the command-line arguments and a pointer to a commondata_struct.
-It reads the provided file and extracts the parameters defined in the file, populating
-the commondata_struct with the values. The file is expected to contain key-value pairs
-separated by an equals sign (=), and it may include comments starting with a hash (#).
-The function handles errors such as file opening failure, duplicate parameters, and
-invalid parameter names.
+    # Define parameter types and descriptor struct
+    prefunc += """
+#define MAX_ARRAY_SIZE 100 // Adjust as needed
 
-@param griddata_params: Pointer to the commondata struct to be populated.
-@param argc: The argument count from the command-line input.
-@param argv: The argument vector containing command-line arguments."""
+// Parameter types
+typedef enum { PARAM_REAL, PARAM_INT, PARAM_CHARARRAY, PARAM_REAL_ARRAY, PARAM_INT_ARRAY } param_type;
 
+// Parameter descriptor struct
+typedef struct {
+    const char *name;
+    int index;
+    param_type type;
+    int array_size;    // For array parameters
+    size_t buffer_size; // For char arrays
+} param_descriptor;
+
+// param_table[] is a list of parameter descriptors, each containing the parameter's name, unique index, type, array size, and buffer size.
+param_descriptor param_table[] = {
+"""
+
+    # Define the parameter table entries
+    parameters_list: List[Dict[str, Any]] = []
+    param_table_entries = []
+    param_index = 0
+    found_integer = False
+    found_REAL = False
+    found_chararray = False
+    found_boolean = False
+
+    for key in sorted(par.glb_code_params_dict.keys()):
+        CodeParam = par.glb_code_params_dict[key]
+        if CodeParam.add_to_parfile and CodeParam.commondata:
+            param_name = key
+            cparam_type = CodeParam.cparam_type.strip()
+            array_size = 0
+            buffer_size = 0  # Default buffer_size
+
+            if "int[" in cparam_type or "int [" in cparam_type:
+                param_type = "PARAM_INT_ARRAY"
+                array_size = int(cparam_type.split("[")[1].split("]")[0])
+                found_integer = True
+            elif "REAL[" in cparam_type or "REAL [" in cparam_type:
+                param_type = "PARAM_REAL_ARRAY"
+                array_size = int(cparam_type.split("[")[1].split("]")[0])
+                found_REAL = True
+            elif cparam_type == "int":
+                param_type = "PARAM_INT"
+                found_integer = True
+            elif cparam_type == "REAL":
+                param_type = "PARAM_REAL"
+                found_REAL = True
+            elif "char" in cparam_type and "[" in cparam_type and "]" in cparam_type:
+                param_type = "PARAM_CHARARRAY"
+                buffer_size = int(cparam_type.split("[")[1].split("]")[0])
+                array_size = 0  # Set array_size to 0 for char arrays
+                found_chararray = True
+            else:
+                continue  # Skip unsupported types
+
+            # Append to parameters_list
+            parameters_list.append(
+                {
+                    "index": param_index,
+                    "name": param_name,
+                    "type": param_type,
+                    "array_size": array_size,
+                    "buffer_size": buffer_size,
+                }
+            )
+            # Append to param_table_entries
+            param_table_entries.append(
+                f'    {{"{param_name}", {param_index}, {param_type}, {array_size}, {buffer_size}}}'
+            )
+            param_index += 1
+
+    # Generate the param_table and NUM_PARAMS
+    param_table_str = ",\n".join(param_table_entries) + "\n};\n"
+    param_table_str += (
+        "#define NUM_PARAMS (sizeof(param_table) / sizeof(param_descriptor))\n\n"
+    )
+
+    prefunc += param_table_str
+
+    # Define the functions to find parameter descriptors and parse parameters
+    prefunc += r"""
+/**
+ * Searches for a parameter descriptor by its name.
+ *
+ * @param param_name - The name of the parameter to search for.
+ * @return - A pointer to the corresponding param_descriptor if found; otherwise, NULL.
+ *
+ * This function iterates through the param_table to find a descriptor that matches the given
+ * parameter name. It facilitates parameter validation and assignment during parsing.
+ */
+param_descriptor *find_param_descriptor(const char *param_name) {
+  for (int i = 0; i < NUM_PARAMS; i++) {
+    if (strcmp(param_table[i].name, param_name) == 0) {
+      return &param_table[i];
+    }
+  }
+  return NULL;
+}
+
+/**
+ * Parses a parameter string to extract the parameter name and array size if applicable.
+ *
+ * @param param_str - The input parameter string, potentially containing array notation.
+ * @param param_name - Buffer to store the extracted parameter name.
+ * @param array_size - Pointer to store the extracted array size; set to 0 for scalar parameters.
+ *
+ * This function analyzes the parameter string to determine if it represents an array. If array
+ * notation (e.g., param[10]) is detected, it extracts the base parameter name and the specified
+ * array size. For scalar parameters, it copies the parameter name directly and sets the array
+ * size to zero.
+ */
+static void parse_param(const char *param_str, char *param_name, int *array_size) {
+  const char *bracket_start = strchr(param_str, '[');
+  if (bracket_start != NULL) {
+    // It's an array parameter
+    size_t name_len = bracket_start - param_str;
+    strncpy(param_name, param_str, name_len);
+    param_name[name_len] = '\0';
+    const char *bracket_end = strchr(bracket_start + 1, ']');
+    if (bracket_end == NULL) {
+      fprintf(stderr, "Error: Missing closing bracket in parameter %s.\n", param_str);
+      exit(1);
+    }
+    char size_str[16];
+    size_t size_len = bracket_end - bracket_start - 1;
+    strncpy(size_str, bracket_start + 1, size_len);
+    size_str[size_len] = '\0';
+    *array_size = atoi(size_str);
+    if (*array_size <= 0) {
+      fprintf(stderr, "Error: Invalid array size in parameter %s.\n", param_name);
+      exit(1);
+    }
+  } else {
+    // Scalar parameter
+    safe_copy(param_name, param_str, PARAM_SIZE);
+    *array_size = 0;
+  }
+}
+
+// Function to parse value string into array of values
+static void parse_value(const char *value_str, char values[][PARAM_SIZE], int *value_count) {
+  if (value_str[0] == '{') {
+    // Array value
+    size_t len = strlen(value_str);
+    if (value_str[len - 1] != '}') {
+      fprintf(stderr, "Error: Missing closing brace in value %s.\n", value_str);
+      exit(1);
+    }
+    // Extract the values inside the braces
+    char value_copy[LINE_SIZE];
+    safe_copy(value_copy, value_str + 1, LINE_SIZE); // Skip the opening brace
+    value_copy[len - 2] = '\0';                      // Remove the closing brace
+    // Now split value_copy by ','
+    char *val_token;
+    int count = 0;
+    char *saveptr;
+    val_token = strtok_r(value_copy, ",", &saveptr);
+    while (val_token != NULL) {
+      safe_copy(values[count], trim_space(val_token), PARAM_SIZE);
+      count++;
+      if (count > MAX_ARRAY_SIZE) {
+        fprintf(stderr, "Error: Array size exceeds maximum allowed.\n");
+        exit(1);
+      }
+      val_token = strtok_r(NULL, ",", &saveptr);
+    }
+    *value_count = count;
+  } else {
+    // Scalar value
+    char mutable_value[PARAM_SIZE];
+    safe_copy(mutable_value, value_str, PARAM_SIZE);
+    char *trimmed = trim_space(mutable_value);
+    safe_copy(values[0], trimmed, PARAM_SIZE);
+    *value_count = 1;
+  }
+}
+"""
+
+    # Add reading functions if needed
+    if found_integer:
+        prefunc += r"""
+// Function to read an integer value
+static void read_integer(const char *value, int *result, const char *param_name) {
+  char *endptr;
+  errno = 0; // To detect overflow
+  long int_val = strtol(value, &endptr, 10);
+
+  if (endptr == value || *endptr != '\0' || errno == ERANGE) {
+    fprintf(stderr, "Error: Invalid integer value for %s: %s.\n", param_name, value);
+    exit(1);
+  }
+
+  *result = (int)int_val;
+}
+"""
+
+    if found_REAL:
+        prefunc += r"""
+// Function to read a REAL (double) value
+static void read_REAL(const char *value, REAL *result, const char *param_name) {
+  char *endptr;
+  errno = 0; // To detect overflow
+  double double_val = strtod(value, &endptr);
+
+  if (endptr == value || *endptr != '\0' || errno == ERANGE) {
+    fprintf(stderr, "Error: Invalid double value for %s: %s.\n", param_name, value);
+    exit(1);
+  }
+
+  *result = (REAL)double_val;
+}
+"""
+
+    if found_chararray:
+        prefunc += r"""
+// Function to read a character array
+static void read_chararray(const char *value, char *result, const char *param_name, size_t size) {
+  // Remove surrounding quotes if present
+  size_t len = strlen(value);
+  char trimmed_value[PARAM_SIZE];
+  if (value[0] == '"' && value[len - 1] == '"') {
+    if (len - 2 >= size) {
+      fprintf(stderr, "Error: Buffer overflow detected for %s.\n", param_name);
+      exit(1);
+    }
+    strncpy(trimmed_value, value + 1, len - 2);
+    trimmed_value[len - 2] = '\0';
+  } else {
+    safe_copy(trimmed_value, value, PARAM_SIZE);
+  }
+
+  if (strlen(trimmed_value) >= size) {
+    fprintf(stderr, "Error: Buffer overflow detected for %s.\n", param_name);
+    exit(1);
+  }
+  safe_copy(result, trimmed_value, size);
+}
+"""
+
+    if found_boolean:
+        prefunc += r"""
+// Function to read a boolean value
+static void read_boolean(const char *value, bool *result, const char *param_name) {
+  // To allow case-insensitive comparison
+  char *lower_value = strdup(value);
+  if (lower_value == NULL) {
+    fprintf(stderr, "Error: Memory allocation failed for boolean value of %s.\n", param_name);
+    exit(1);
+  }
+  for (char *p = lower_value; *p != '\0'; p++) {
+    *p = tolower((unsigned char)*p);
+  }
+
+  // Check if the input is "true", "false", "0", or "1"
+  if (strcmp(lower_value, "true") == 0 || strcmp(lower_value, "1") == 0) {
+    *result = true;
+  } else if (strcmp(lower_value, "false") == 0 || strcmp(lower_value, "0") == 0) {
+    *result = false;
+  } else {
+    fprintf(stderr, "Error: Invalid boolean value for %s: %s.\n", param_name, value);
+    free(lower_value);
+    exit(1);
+  }
+
+  // Free the allocated memory for the lowercase copy of the value
+  free(lower_value);
+}
+"""
+
+    # Start building the function body
     cfunc_type = "void"
     name = "cmdline_input_and_parfile_parser"
-    params = "commondata_struct *restrict commondata, int argc, const char *argv[]"
-    if cmdline_inputs is None:
-        cmdline_inputs = []
-    body = f"const int number_of_steerable_parameters = {len(cmdline_inputs)};\n"
-    body += rf"""
+    params_str = "commondata_struct *restrict commondata, int argc, const char *argv[]"
+
+    # Generate the main function body
+    body = rf"""
+  const int number_of_steerable_parameters = {len(cmdline_inputs)};
+
   int option;
 
   // Check for "-h" or "--help" options
   if (argc == 2 && (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)) {{
     print_usage();
     exit(0);
-  }}
+  }}  // END IF: Checking for help option.
 
   // Determine the usage option based on argc
   if (argc == 1) {{
@@ -153,196 +452,208 @@ invalid parameter names.
     fprintf(stderr, "Error: Invalid number of arguments\n");
     print_usage();
     exit(1);
-  }}
+  }}  // END IF-ELSE: Determining usage option.
 
   // fprintf(stderr, "Using option %d\n", option);
 
+  // Determine the filename based on the selected option.
   const char *filename = (option == 1 || option == 3) ? "{project_name}.par" : argv[1];
   FILE *file = fopen(filename, "r");
   if (file == NULL) {{
     print_usage();
     exit(1);
-  }}
-"""
-    body += r"""
+  }}  // END IF: Checking if the parameter file opened successfully.
+
   char line[LINE_SIZE];
   char param[PARAM_SIZE];
   char value[PARAM_SIZE];
-  int params_set[NUM_PARAMETERS] = {0}; // Record of parameters set (one for each parameter in the struct)
+  int params_set[NUM_PARAMETERS] = {{0}}; // Track which parameters have been set.
 
-  while (fgets(line, sizeof(line), file)) {
-    // Removing comments from the line
+  // Iterate through each line of the parameter file.
+  while (fgets(line, sizeof(line), file)) {{
+    // Remove comments from the line.
     char *comment_start = strchr(line, '#');
-    if (comment_start != NULL) {
+    if (comment_start != NULL) {{
       *comment_start = '\0';
-    }
+    }}
 
+    // Split the line into parameter and value based on '=' delimiter.
     char *p = strtok(line, "=");
-    if (p) {
+    if (p) {{
       safe_copy(param, trim_space(p), sizeof(param));
       p = strtok(NULL, "=");
-      if (p) {
+      if (p) {{
         safe_copy(value, trim_space(p), sizeof(value));
 
-        // Check for naming convention violations
-        for (int i = 0; param[i]; i++) {
-          if (!isalnum(param[i]) && param[i] != '_') {
-            fprintf(stderr, "Error: Invalid parameter name %s.\n", param);
+        char param_name[PARAM_SIZE];
+        int array_size = 0;
+        parse_param(param, param_name, &array_size);
+
+        // Validate characters in the parameter name.
+        for (int i = 0; param_name[i]; i++) {{
+          if (!isalnum(param_name[i]) && param_name[i] != '_') {{
+            fprintf(stderr, "Error: Invalid parameter name %s.\n", param_name);
             exit(1);
-          }
-        }
+          }}
+        }}
 
-        int param_index = -1;
-        if (1 == 0) param_index = -2;
-"""
-    i = 0
-    for key in sorted(par.glb_code_params_dict.keys()):
-        CodeParam = par.glb_code_params_dict[key]
-        if (
-            CodeParam.add_to_parfile
-            and CodeParam.commondata
-            and (
-                CodeParam.cparam_type in ("int", "REAL", "bool")
-                or "char" in CodeParam.cparam_type
-            )
-        ):
-            body += f'else if (strcmp(param, "{key}") == 0) param_index = {i};\n'
-            i += 1
-    body += r"""else fprintf(stderr, "Warning: Unrecognized parameter %s.\n", param);
+        // Parse the value string into individual values.
+        char values_array[MAX_ARRAY_SIZE][PARAM_SIZE];
+        int value_count = 0;
+        parse_value(value, values_array, &value_count);
 
-        // Check for duplicates
-        if (param_index != -1 && params_set[param_index] == 1) {
-          fprintf(stderr, "Error: Duplicate parameter %s.\n", param);
+        // Lookup the parameter descriptor.
+        param_descriptor *param_desc = find_param_descriptor(param_name);
+        if (param_desc == NULL) {{
+          fprintf(stderr, "Warning: Unrecognized parameter %s.\n", param_name);
+          continue; // Decide whether to exit or ignore
+        }}
+
+        // Check for duplicate parameter definitions.
+        if (params_set[param_desc->index] == 1) {{
+          fprintf(stderr, "Error: Duplicate parameter %s.\n", param_name);
           exit(1);
-        }
-        if (param_index != -1) params_set[param_index] = 1;
+        }}
+        params_set[param_desc->index] = 1;
 
-        // Assign values
-        if (param_index == -2) exit(1); // impossible.
+        // Validate array size if applicable.
+        if (param_desc->type != PARAM_CHARARRAY && param_desc->array_size > 0) {{
+          // It's an array parameter
+          if (array_size != param_desc->array_size) {{
+            fprintf(stderr, "Error: Array size mismatch for parameter %s.\n", param_name);
+            exit(1);
+          }}
+          if (value_count != param_desc->array_size) {{
+            fprintf(stderr, "Error: Number of values does not match array size for parameter %s.\n", param_name);
+            exit(1);
+          }}
+        }} else {{
+          // It's a scalar parameter, including PARAM_CHARARRAY
+          if (array_size > 0) {{
+            fprintf(stderr, "Error: Unexpected array size for scalar parameter %s.\n", param_name);
+            exit(1);
+          }}
+          if (value_count != 1) {{
+            fprintf(stderr, "Error: Expected a single value for parameter %s.\n", param_name);
+            exit(1);
+          }}
+        }}
+
+        // Assign the parsed values to the corresponding fields in commondata.
 """
-    found_integer = found_REAL = found_chararray = found_boolean = False
-    i = 0
-    for key in sorted(par.glb_code_params_dict.keys()):
-        CodeParam = par.glb_code_params_dict[key]
-        if CodeParam.add_to_parfile and CodeParam.commondata:
-            if CodeParam.cparam_type == "int":
-                body += f'else if(param_index == {i}) read_integer(value, &commondata->{key}, "{key}");\n'
-                found_integer = True
-                i += 1
-            elif CodeParam.cparam_type == "REAL":
-                body += f'else if(param_index == {i}) read_REAL(value, &commondata->{key}, "{key}");\n'
-                found_REAL = True
-                i += 1
-            elif CodeParam.cparam_type == "bool":
-                body += f'else if(param_index == {i}) read_boolean(value, &commondata->{key}, "{key}");\n'
-                found_boolean = True
-                i += 1
-            elif (
-                "char" in CodeParam.cparam_type
-                and "[" in CodeParam.cparam_type
-                and "]" in CodeParam.cparam_type
-            ):
-                CPsize = CodeParam.cparam_type.split("[")[1].split("]")[0]
-                body += f'else if(param_index == {i}) read_chararray(value, commondata->{key}, "{key}", {CPsize});\n'
-                found_chararray = True
-                i += 1
+
+    # Build assignment code
+    assignment_code = ""
+    first_param = True
+    for param in parameters_list:
+        index = param["index"]
+        param_name = param["name"]
+        param_type = param["type"]
+        array_size = param["array_size"]
+        buffer_size = param["buffer_size"]
+        if first_param:
+            prefix = "if"
+            first_param = False
+        else:
+            prefix = "else if"
+        if param_type == "PARAM_REAL":
+            assignment_code += (
+                f"        {prefix} (param_desc->index == {index}) {{\n"
+                f'            read_REAL(values_array[0], &commondata->{param_name}, "{param_name}");\n'
+                f"        }}\n"
+            )
+        elif param_type == "PARAM_INT":
+            assignment_code += (
+                f"        {prefix} (param_desc->index == {index}) {{\n"
+                f'            read_integer(values_array[0], &commondata->{param_name}, "{param_name}");\n'
+                f"        }}\n"
+            )
+        elif param_type == "PARAM_CHARARRAY":
+            # buffer_size is used instead of array_size
+            assignment_code += (
+                f"        {prefix} (param_desc->index == {index}) {{\n"
+                f'            read_chararray(values_array[0], commondata->{param_name}, "{param_name}", {buffer_size});\n'
+                f"        }}\n"
+            )
+        elif param_type == "PARAM_REAL_ARRAY":
+            assignment_code += (
+                f"        {prefix} (param_desc->index == {index}) {{\n"
+                f"            for (int i = 0; i < {array_size}; i++) {{\n"
+                f'                read_REAL(values_array[i], &commondata->{param_name}[i], "{param_name}");\n'
+                f"            }}\n"
+                f"        }}\n"
+            )
+        elif param_type == "PARAM_INT_ARRAY":
+            assignment_code += (
+                f"        {prefix} (param_desc->index == {index}) {{\n"
+                f"            for (int i = 0; i < {array_size}; i++) {{\n"
+                f'                read_integer(values_array[i], &commondata->{param_name}[i], "{param_name}");\n'
+                f"            }}\n"
+                f"        }}\n"
+            )
+
+    # Add the assignment code and the else block
+    body += assignment_code
     body += r"""        else {
-          fprintf(stderr, "Error: Unrecognized parameter %s.\n", param);
-          exit(1); // Exit on unrecognized parameter
+            fprintf(stderr, "Error: Unknown parameter index for %s.\n", param_name);
+            exit(1);
         }
-      }
     }
-  }
+}
 
-  fclose(file);
-  // Handling options 3 and 4: Overwriting steerable parameters
-  if (option == 3 || option == 4) {
-    // For options 3 and 4, we extract the last three arguments as steerable parameters
+    // Handling options 3 and 4: Overwriting steerable parameters
+    if (option == 3 || option == 4) {
+        // For options 3 and 4, we extract the last arguments as steerable parameters
 """
-    i = 0
-    for key in cmdline_inputs:
+    # Handle steerable parameters overwriting
+    steerable_body = ""
+    for i, key in enumerate(cmdline_inputs):
         CodeParam = par.glb_code_params_dict[key]
         if CodeParam.add_to_parfile and CodeParam.commondata:
-            if CodeParam.cparam_type == "int":
-                body += f'read_integer(argv[argc - number_of_steerable_parameters + {i}], &commondata->{key}, "{key}");\n'
-                i += 1
-            elif CodeParam.cparam_type == "REAL":
-                body += f'read_REAL(argv[argc - number_of_steerable_parameters + {i}], &commondata->{key}, "{key}");\n'
-                i += 1
-    body += "}\n"
-
-    if found_integer:
-        prefunc += r"""
-static void read_integer(const char *value, int *result, const char *param_name) {
-  char *endptr;
-  errno = 0; // To detect overflow
-  long int_val = strtol(value, &endptr, 10);
-
-  if (endptr == value || *endptr != '\0' || errno == ERANGE) {
-    fprintf(stderr, "Error: Invalid integer value for %s: %s.\n", param_name, value);
-    exit(1);
-  }
-
-  *result = (int)int_val;
-}
-"""
-    if found_REAL:
-        prefunc += r"""
-static void read_REAL(const char *value, REAL *result, const char *param_name) {
-  char *endptr;
-  errno = 0; // To detect overflow
-  double double_val = strtod(value, &endptr);
-
-  if (endptr == value || *endptr != '\0' || errno == ERANGE) {
-    fprintf(stderr, "Error: Invalid double value for %s: %s.\n", param_name, value);
-    exit(1);
-  }
-
-  *result = (REAL) double_val;
-}
-"""
-    if found_chararray:
-        prefunc += r"""
-static void read_chararray(const char *value, char *result, const char *param_name, size_t size) {
-  if (strlen(value) >= size) {
-    fprintf(stderr, "Error: Buffer overflow detected for %s.\n", param_name);
-    exit(1);
-  }
-  safe_copy(result, value, size);
-}
-"""
-    if found_boolean:
-        prefunc += r"""
-static void read_boolean(const char *value, bool *result, const char *param_name) {
-  // To allow case-insensitive comparison
-  char *lower_value = strdup(value);
-  for (char *p = lower_value; *p != '\0'; p++) {
-    *p = tolower(*p);
-  }
-
-  // Check if the input is "true", "false", "0", or "1"
-  if (strcmp(lower_value, "true") == 0 || strcmp(lower_value, "1") == 0) {
-    *result = true;
-  } else if (strcmp(lower_value, "false") == 0 || strcmp(lower_value, "0") == 0) {
-    *result = false;
-  } else {
-    fprintf(stderr, "Error: Invalid boolean value for %s: %s.\n", param_name, value);
-    free(lower_value);
-    exit(1);
-  }
-
-  // Free the allocated memory for the lowercase copy of the value
-  free(lower_value);
-}
+            cparam_type = CodeParam.cparam_type.strip()
+            if "char" in cparam_type:
+                # For char arrays, handle similarly to other parameters
+                buffer_size = int(cparam_type.split("[")[1].split("]")[0])
+                steerable_body += f'        read_chararray(argv[argc - number_of_steerable_parameters + {i}], commondata->{key}, "{key}", {buffer_size});\n'
+            elif cparam_type == "int":
+                steerable_body += f'        read_integer(argv[argc - number_of_steerable_parameters + {i}], &commondata->{key}, "{key}");\n'
+            elif cparam_type == "REAL":
+                steerable_body += f'        read_REAL(argv[argc - number_of_steerable_parameters + {i}], &commondata->{key}, "{key}");\n'
+            elif "bool" in cparam_type:
+                steerable_body += f'        read_boolean(argv[argc - number_of_steerable_parameters + {i}], &commondata->{key}, "{key}");\n'
+    body += steerable_body
+    body += """
+    } // END IF (option == 3 || option == 4)
+  } // END WHILE LOOP over all lines in the file
+  fclose(file); // Close the parameter file.
 """
 
+    # Register the C function with the constructed components
     cfc.register_CFunction(
-        includes=includes,
+        includes=[
+            "BHaH_defines.h",
+            "<string.h>",
+            "<ctype.h>",
+            "<errno.h>",
+            "<stdbool.h>",
+        ],
         prefunc=prefunc,
-        desc=desc,
+        desc=r"""AUTOMATICALLY GENERATED BY cmdline_input_and_parfiles.py
+
+Reads and parses a parameter file to populate the commondata_struct.
+
+This function processes command-line arguments and reads parameters from a specified
+parameter file or a default file. It supports various usage options, including displaying
+help information, reading different parameter files, and overwriting steerable parameters
+with provided convergence factors. The function ensures that all parameters are valid,
+correctly formatted, and not duplicated.
+
+@param commondata - Pointer to the commondata_struct to be populated.
+@param argc - The argument count from the command-line input.
+@param argv - The argument vector containing command-line arguments.""",
         cfunc_type=cfunc_type,
         name=name,
-        params=params,
+        params=params_str,
         body=body,
     )
 
@@ -351,49 +662,196 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
     """
     Generate a default parameter file with sorted modules and parameters.
 
-    :param project_dir: The parameter file will be stored in project_dir.
+    :param project_dir: The directory where the parameter file will be stored.
     :param project_name: The name of the project.
+    :raises ValueError: If an array type is not 'char', 'int', or 'REAL', or if a 'char' type parameter
+                        does not have a string as its default value.
 
     Doctest:
-    >>> _, __ = par.register_CodeParameters("REAL", "CodeParameters_c_files", ["a", "pi_three_sigfigs"], [1.0, 3.14], commondata=True)
-    >>> ___ = par.register_CodeParameter("#define", "CodeParameters_c_files", "b", 0)
-    >>> _leaveitbe = par.register_CodeParameter("REAL", "CodeParameters_c_files", "leaveitbe", add_to_parfile=False, add_to_set_CodeParameters_h=False)
-    >>> _leaveitoutofparfile = par.register_CodeParameter("REAL", "CodeParameters_c_files", "leaveitoutofparfile", add_to_parfile=False)
-    >>> _str = par.register_CodeParameter("char", "CodeParameters_c_files", "string[100]", "cheese", commondata=True)
-    >>> _int = par.register_CodeParameter("int", "CodeParameters_c_files", "blahint", -1, commondata=True, add_to_parfile=True, add_to_set_CodeParameters_h=False)
-    >>> _bool = par.register_CodeParameter("bool", "CodeParameters_c_files", "BHaH_is_amazing", "true")
+    >>> import shutil
+    >>> from pathlib import Path
+    >>> # Clear existing parameters
+    >>> par.glb_code_params_dict.clear()
+    >>> # Register scalar REAL parameters
+    >>> _, __ = par.register_CodeParameters(
+    ...     "REAL", "CodeParameters_c_files",
+    ...     ["a", "pi_three_sigfigs"],
+    ...     [1.0, 3.14],
+    ...     commondata=True,
+    ...     descriptions=["The value of a", "Pi to three significant figures"]
+    ... )
+    >>> # Register a #define parameter
+    >>> ___ = par.register_CodeParameter(
+    ...     "#define", "CodeParameters_c_files", "b", 0, description="A define parameter"
+    ... )
+    >>> # Register parameters that should be excluded from the parfile
+    >>> _leaveitbe = par.register_CodeParameter(
+    ...     "REAL", "CodeParameters_c_files", "leaveitbe",
+    ...     add_to_parfile=False, add_to_set_CodeParameters_h=False
+    ... )
+    >>> _leaveitoutofparfile = par.register_CodeParameter(
+    ...     "REAL", "CodeParameters_c_files", "leaveitoutofparfile",
+    ...     add_to_parfile=False
+    ... )
+    >>> # Register a char array parameter
+    >>> _str = par.register_CodeParameter(
+    ...     "char[100]", "CodeParameters_c_files", "string",
+    ...     "cheese", commondata=True, description="A string parameter"
+    ... )
+    >>> # Register another char array parameter
+    >>> _str2 = par.register_CodeParameter(
+    ...     "char[50]", "CodeParameters_c_files", "outer_bc_type",
+    ...     "radiation", commondata=True, description="A bc string parameter"
+    ... )
+    >>> # Register an int parameter
+    >>> _int = par.register_CodeParameter(
+    ...     "int", "CodeParameters_c_files", "blahint", -1,
+    ...     commondata=True, add_to_parfile=True, add_to_set_CodeParameters_h=False,
+    ...     description="An integer parameter"
+    ... )
+    >>> # Register a bool parameter
+    >>> _bool = par.register_CodeParameter(
+    ...     "bool", "CodeParameters_c_files", "BHaH_is_amazing",
+    ...     "true", description="A boolean parameter"
+    ... )
+    >>> # Register a REAL array parameter
+    >>> _real_array = par.register_CodeParameter(
+    ...     cparam_type="REAL[3]", module="CodeParameters_c_files",
+    ...     name="bah_initial_x_center", defaultvalue=0.0,
+    ...     commondata=True, add_to_parfile=True, add_to_set_CodeParameters_h=False,
+    ...     description="Initial X centers"
+    ... )
+    >>> # Register an int array parameter
+    >>> _int_array = par.register_CodeParameter(
+    ...     cparam_type="int[2]", module="CodeParameters_c_files",
+    ...     name="initial_levels", defaultvalue=4,
+    ...     commondata=True, add_to_parfile=True, add_to_set_CodeParameters_h=False,
+    ...     description=""
+    ... )
+
+    >>> # Clear any existing CFunction_dict if necessary
     >>> cfc.CFunction_dict.clear()
+    >>> # Setup project directory
     >>> project_dir = Path("/tmp/tmp_BHaH_parfile")
+    >>> if project_dir.exists():
+    ...     shutil.rmtree(project_dir)
     >>> project_dir.mkdir(parents=True, exist_ok=True)
-    >>> generate_default_parfile(project_dir, "example_project")
+    >>> # Register an unsupported array type parameter
+    >>> _unsupported_array = par.register_CodeParameter(
+    ...     cparam_type="double[5]", module="CodeParameters_c_files",
+    ...     name="unsupported_param", defaultvalue=1.0,
+    ...     commondata=True, add_to_parfile=True, add_to_set_CodeParameters_h=False,
+    ...     description="Unsupported array type"
+    ... )
+    >>> # Generate the parfile
+    >>> generate_default_parfile(str(project_dir), "example_project")
+    Traceback (most recent call last):
+    ...
+    ValueError: Unsupported array base type 'double' for parameter 'unsupported_param'. Only 'char', 'int', and 'REAL' are supported.
+    >>> # Now remove the unsupported parameter and generate the parfile successfully
+    >>> del par.glb_code_params_dict["unsupported_param"]
+    >>> # Generate the parfile
+    >>> generate_default_parfile(str(project_dir), "example_project")
+    >>> # Read and print the generated parfile
     >>> print((project_dir / 'example_project.par').read_text())
     #### example_project BH@H parameter file. NOTE: only commondata CodeParameters appear here ###
     ###########################
     ###########################
     ### Module: CodeParameters_c_files
-    a = 1.0                  # (type: REAL)
-    blahint = -1             # (type: int)
-    pi_three_sigfigs = 3.14  # (type: REAL)
-    string = "cheese"        # (type: char array)
+    a = 1.0                                      # (REAL) The value of a
+    bah_initial_x_center[3] = { 0.0, 0.0, 0.0 }  # (REAL) Initial X centers
+    blahint = -1                                 # (int) An integer parameter
+    initial_levels[2] = { 4, 4 }                 # (int)
+    outer_bc_type = "radiation"                  # (char[50]) A bc string parameter
+    pi_three_sigfigs = 3.14                      # (REAL) Pi to three significant figures
+    string = "cheese"                            # (char[100]) A string parameter
     <BLANKLINE>
     """
     parfile_output_dict: Dict[str, List[str]] = defaultdict(list)
+
+    # Function to parse array types from type only
+    def parse_array_type(cparam_type: str) -> Union[None, Dict[str, Any]]:
+        array_info = None
+        # Check if array info is in cparam_type
+        if "[" in cparam_type and "]" in cparam_type:
+            base_type = cparam_type.split("[")[0]
+            size_str = cparam_type[cparam_type.find("[") + 1 : cparam_type.find("]")]
+            if size_str.isdigit():
+                size = int(size_str)
+                array_info = {
+                    "base_type": base_type,
+                    "size": size,
+                    "from_parname": False,  # Since we no longer parse from name
+                }
+        return array_info
 
     # Sorting by module name
     for parname, CodeParam in sorted(
         par.glb_code_params_dict.items(), key=lambda x: x[1].module
     ):
-        if CodeParam.commondata:
+        if CodeParam.commondata and CodeParam.add_to_parfile:
             CPtype = CodeParam.cparam_type
-            if CodeParam.add_to_parfile:
-                if CPtype == "char":
-                    chararray_name = parname.split("[")[0]
+            array_info = parse_array_type(CPtype)
+            description = CodeParam.description.strip()
+            description_suffix = f" {description}" if description else ""
+            if array_info:
+                base_type = array_info["base_type"].lower()
+                size = array_info["size"]
+
+                # Raise exception for unsupported array types
+                if base_type not in ["real", "int", "char"]:
+                    raise ValueError(
+                        f"Unsupported array base type '{base_type}' for parameter '{parname}'. Only 'char', 'int', and 'REAL' are supported."
+                    )
+
+                default_val = CodeParam.defaultvalue
+
+                if base_type in ["real", "int"]:
+                    if base_type == "real":
+                        default_vals = ", ".join([f"{float(default_val)}"] * size)
+                        display_type = "REAL"
+                    else:
+                        default_vals = ", ".join([str(int(default_val))] * size)
+                        display_type = "int"
+
+                    # Append to module's parameters
                     parfile_output_dict[CodeParam.module].append(
-                        f'{chararray_name} = "{CodeParam.defaultvalue}"  # (type: char array)\n'
+                        f"{parname}[{size}] = {{ {default_vals} }}  # ({display_type}){description_suffix}\n"
+                    )
+                elif base_type == "char":
+                    # Ensure default_val is string
+                    if not isinstance(default_val, str):
+                        raise ValueError(
+                            f"Default value for char array parameter '{parname}' must be a string."
+                        )
+                    # Escape double quotes in the default value
+                    escaped_default_val = default_val.replace('"', '\\"')
+                    # Wrap the default value in quotes
+                    default_val_formatted = f'"{escaped_default_val}"'
+                    display_type = "char"
+                    # Append to module's parameters
+                    parfile_output_dict[CodeParam.module].append(
+                        f"{parname} = {default_val_formatted}  # ({display_type}[{size}]){description_suffix}\n"
+                    )
+            else:
+                # Handle scalar parameters
+                if CPtype.lower().startswith("char"):
+                    # Ensure default_val is string
+                    if not isinstance(CodeParam.defaultvalue, str):
+                        raise ValueError(
+                            f"Default value for char parameter '{parname}' must be a string."
+                        )
+                    # Escape double quotes in the default value
+                    escaped_default_val = CodeParam.defaultvalue.replace('"', '\\"')
+                    # Wrap the default value in quotes
+                    default_val_formatted = f'"{escaped_default_val}"'
+                    parfile_output_dict[CodeParam.module].append(
+                        f"{parname} = {default_val_formatted}  # ({CPtype}){description_suffix}\n"
                     )
                 else:
+                    # For non-char scalar types
                     parfile_output_dict[CodeParam.module].append(
-                        f"{parname} = {CodeParam.defaultvalue}  # (type: {CPtype})\n"
+                        f"{parname} = {CodeParam.defaultvalue}  # ({CPtype}){description_suffix}\n"
                     )
 
     # Sorting the parameters within each module
@@ -410,15 +868,23 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
     def align_by_hash(original_string: str) -> str:
         lines = original_string.split("\n")
         max_length = max(
-            line.find("#") for line in lines if "#" in line and line.strip()[0] != "#"
+            (
+                line.find("#")
+                for line in lines
+                if "#" in line and not line.strip().startswith("#")
+            ),
+            default=0,
         )
 
         adjusted_lines = []
         for line in lines:
-            if "#" in line and line.strip()[0] != "#":
+            if "#" in line and not line.strip().startswith("#"):
                 index = line.find("#")
                 spaces_needed = max_length - index
-                adjusted_line = line[:index] + " " * spaces_needed + line[index:]
+                if spaces_needed > 0:
+                    adjusted_line = line[:index] + " " * spaces_needed + line[index:]
+                else:
+                    adjusted_line = line
                 adjusted_lines.append(adjusted_line)
             else:
                 adjusted_lines.append(line)

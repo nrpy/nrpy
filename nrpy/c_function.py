@@ -38,7 +38,7 @@ class CFunction:
     DocTests:
     >>> func = CFunction(desc="just a test... testing 1,2,3", name="main", params="", body="return 0;")
     >>> print(func.full_function)
-    /*
+    /**
      * just a test... testing 1,2,3
      */
     void main() { return 0; }
@@ -202,7 +202,7 @@ class CFunction:
             complete_func += f"{self.prefunc}\n"
 
         if self.desc:
-            complete_func += f"/*\n{prefix_with_star(self.desc)}\n*/\n"
+            complete_func += f"/**\n{prefix_with_star(self.desc)}\n*/\n"
 
         function_prototype = f"{self.cfunc_decorators}{self.cfunc_type} {self.name}({self.params});"
         complete_func += f"{function_prototype.replace(';', '')} {{\n{include_Cparams_str}{self.body}}}\n"
