@@ -378,6 +378,7 @@ class output_BHaH_defines_h(base_output_BHaH_defines_h):
     :param project_dir: Directory where the project C code is output
     :param additional_includes: Additional header files to be included in the output
     :param REAL_means: The floating-point type to be used in the C code (default is "double")
+    :param enable_intrinsics: Flag to enable hardware intrinsics
     :param enable_rfm_precompute: A boolean value reflecting whether reference metric precomputation is enabled.
     :param fin_NGHOSTS_add_one_for_upwinding_or_KO: Option to add one extra ghost zone for upwinding
     :param supplemental_defines_dict: Additional key-value pairs to be included in the output file
@@ -413,13 +414,14 @@ class output_BHaH_defines_h(base_output_BHaH_defines_h):
         fin_NGHOSTS_add_one_for_upwinding_or_KO: bool = False,
         supplemental_defines_dict: Optional[Dict[str, str]] = None,
         clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+        enable_intrinsics: bool = True,
         **kwargs: Any,
     ) -> None:
         super().__init__(
             project_dir,
             additional_includes=additional_includes,
             REAL_means=REAL_means,
-            enable_simd=False,
+            enable_intrinsics=enable_intrinsics,
             enable_rfm_precompute=enable_rfm_precompute,
             fin_NGHOSTS_add_one_for_upwinding_or_KO=fin_NGHOSTS_add_one_for_upwinding_or_KO,
             supplemental_defines_dict=supplemental_defines_dict,

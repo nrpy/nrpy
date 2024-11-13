@@ -42,7 +42,7 @@ class base_output_BHaH_defines_h:
     :param project_dir: Directory where the project C code is output
     :param additional_includes: Additional header files to be included in the output
     :param REAL_means: The floating-point type to be used in the C code (default is "double")
-    :param enable_simd: Flag to enable Single Instruction Multiple Data (SIMD) optimizations
+    :param enable_intrinsics: Flag to enable hardware intrinsics
     :param enable_rfm_precompute: A boolean value reflecting whether reference metric precomputation is enabled.
     :param fin_NGHOSTS_add_one_for_upwinding_or_KO: Option to add one extra ghost zone for upwinding
     :param supplemental_defines_dict: Additional key-value pairs to be included in the output file
@@ -55,7 +55,7 @@ class base_output_BHaH_defines_h:
         project_dir: str,
         additional_includes: Optional[List[str]] = None,
         REAL_means: str = "double",
-        enable_simd: bool = True,
+        enable_intrinsics: bool = True,
         enable_rfm_precompute: bool = True,
         fin_NGHOSTS_add_one_for_upwinding_or_KO: bool = False,
         supplemental_defines_dict: Optional[Dict[str, str]] = None,
@@ -64,7 +64,7 @@ class base_output_BHaH_defines_h:
         self.project_dir = project_dir
         self.additional_includes = additional_includes
         self.REAL_means = REAL_means
-        self.enable_simd = enable_simd
+        self.enable_intrinsics = enable_intrinsics
         self.enable_rfm_precompute = enable_rfm_precompute
         self.fin_NGHOSTS_add_one_for_upwinding_or_KO = (
             fin_NGHOSTS_add_one_for_upwinding_or_KO
@@ -88,8 +88,8 @@ class base_output_BHaH_defines_h:
 #include <string.h>  // String handling functions, such as strlen, strcmp, etc.
 #include <time.h>    // Time-related functions and types, such as time(), clock(),
 """
-        if enable_simd:
-            self.BHd_include_str += "// output_BHaH_defines_h(...,enable_simd=True) was called so we #include SIMD intrinsics:\n"
+        if enable_intrinsics:
+            self.BHd_include_str += "// output_BHaH_defines_h(...,enable_intrinsics=True) was called so we #include SIMD intrinsics:\n"
             self.BHd_include_str += """#include "simd/simd_intrinsics.h"\n"""
         if additional_includes:
             for include in additional_includes:
@@ -197,9 +197,9 @@ class base_output_BHaH_defines_h:
 #define NGHOSTS {self.NGHOSTS}
 #define NO_INLINE // Account for cases where NO_INLINE might appear in codegen
 """
-            if not enable_simd:
+            if not enable_intrinsics:
                 self.fin_BHd_str += """
-// When enable_simd = False, this is the UPWIND_ALG() macro:
+// When enable_intrinsics = False, this is the UPWIND_ALG() macro:
 #define UPWIND_ALG(UpwindVecU) UpwindVecU > 0.0 ? 1.0 : 0.0\n"""
 
         ###############################

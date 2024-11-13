@@ -356,7 +356,7 @@ cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
 )
 Bdefines_h.output_BHaH_defines_h(
     project_dir=project_dir,
-    enable_simd=enable_intrinsics,
+    enable_intrinsics=enable_intrinsics,
     REAL_means=fp_type,
     supplemental_defines_dict={
         "ADDITIONAL GPU DIAGNOSTICS": "#define L2_DVGF 0\n"
