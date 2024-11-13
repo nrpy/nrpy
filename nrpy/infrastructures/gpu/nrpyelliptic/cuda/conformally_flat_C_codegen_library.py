@@ -803,7 +803,6 @@ class gpu_register_CFunction_rhs_eval(
 
     :param CoordSystem: The coordinate system.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
-    :param enable_simd: Whether to enable SIMD.
     :param OMP_collapse: Level of GPU loop collapsing.
     :param fp_type: Floating point type, e.g., "double".
     :param enable_intrinsics: Toggle using CUDA intrinsics for calculations.
@@ -822,7 +821,7 @@ class gpu_register_CFunction_rhs_eval(
         super().__init__(CoordSystem, enable_rfm_precompute)
 
         if enable_intrinsics:
-            self.includes += [str(Path("simd") / "simd_intrinsics.h")]
+            self.includes += [str(Path("intrinsics") / "cuda_intrinsics.h")]
 
         self.simple_loop = lp.simple_loop(
             loop_body=ccg.c_codegen(
@@ -835,7 +834,7 @@ class gpu_register_CFunction_rhs_eval(
                 fp_type=fp_type,
                 rational_const_alias="static constexpr",
                 enable_simd=enable_intrinsics,
-            ),
+            ).replace("SIMD", "CUDA"),
             loop_region="interior",
             CoordSystem=CoordSystem,
             enable_rfm_precompute=enable_rfm_precompute,
@@ -847,7 +846,7 @@ class gpu_register_CFunction_rhs_eval(
             "const REAL f", "[[maybe_unused]] const REAL f"
         )
         self.loop_body = self.loop_body.replace(
-            "const REAL_SIMD_ARRAY f", "[[maybe_unused]] const REAL_SIMD_ARRAY f"
+            "const REAL_CUDA_ARRAY f", "[[maybe_unused]] const REAL_CUDA_ARRAY f"
         )
         self.loop_body = self.loop_body.replace(
             "const double dbl", "static constexpr double dbl"
@@ -969,7 +968,7 @@ class gpu_register_CFunction_compute_residual_all_points(
         )
         self.body = ""
         if enable_intrinsics:
-            self.includes += [str(Path("simd") / "simd_intrinsics.h")]
+            self.includes += [str(Path("intrinsics") / "cuda_intrinsics.h")]
 
         self.simple_loop = lp.simple_loop(
             loop_body=ccg.c_codegen(
@@ -982,7 +981,7 @@ class gpu_register_CFunction_compute_residual_all_points(
                 enable_fd_codegen=True,
                 enable_simd=enable_intrinsics,
                 fp_type=fp_type,
-            ),
+            ).replace("SIMD", "CUDA"),
             loop_region="interior",
             enable_intrinsics=enable_intrinsics,
             CoordSystem=CoordSystem,
@@ -1003,7 +1002,7 @@ class gpu_register_CFunction_compute_residual_all_points(
             "const REAL f", "[[maybe_unused]] const REAL f"
         )
         self.kernel_body = self.kernel_body.replace(
-            "const REAL_SIMD_ARRAY f", "[[maybe_unused]] const REAL_SIMD_ARRAY f"
+            "const REAL_CUDA_ARRAY f", "[[maybe_unused]] const REAL_CUDA_ARRAY f"
         )
         self.kernel_body = self.kernel_body.replace(
             "const double dbl", "static constexpr double dbl"
@@ -1041,7 +1040,7 @@ class gpu_register_CFunction_compute_residual_all_points(
 def register_CFunction_compute_residual_all_points(
     CoordSystem: str,
     enable_rfm_precompute: bool,
-    enable_simd: bool,
+    enable_intrinsics: bool,
     fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
@@ -1051,7 +1050,7 @@ def register_CFunction_compute_residual_all_points(
 
     :param CoordSystem: The coordinate system.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
-    :param enable_simd: Whether to enable SIMD.
+    :param enable_intrinsics: Whether to enable CUDA intrinsics.
     :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
@@ -1060,7 +1059,7 @@ def register_CFunction_compute_residual_all_points(
         pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
         return None
     gpu_register_CFunction_compute_residual_all_points(
-        CoordSystem, enable_rfm_precompute, enable_simd, fp_type=fp_type
+        CoordSystem, enable_rfm_precompute, enable_intrinsics, fp_type=fp_type
     )
 
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())

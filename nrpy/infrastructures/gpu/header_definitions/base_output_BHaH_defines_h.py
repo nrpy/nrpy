@@ -60,6 +60,7 @@ class base_output_BHaH_defines_h:
         fin_NGHOSTS_add_one_for_upwinding_or_KO: bool = False,
         supplemental_defines_dict: Optional[Dict[str, str]] = None,
         clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+        intrinsics_header: str = "cuda_intrinsics.h"
     ) -> None:
         self.project_dir = project_dir
         self.additional_includes = additional_includes
@@ -89,8 +90,8 @@ class base_output_BHaH_defines_h:
 #include <time.h>    // Time-related functions and types, such as time(), clock(),
 """
         if enable_intrinsics:
-            self.BHd_include_str += "// output_BHaH_defines_h(...,enable_intrinsics=True) was called so we #include SIMD intrinsics:\n"
-            self.BHd_include_str += """#include "simd/simd_intrinsics.h"\n"""
+            self.BHd_include_str += "// output_BHaH_defines_h(...,enable_intrinsics=True) was called so we #include the intrinsics header:\n"
+            self.BHd_include_str += f"""#include "intrinsics/{intrinsics_header}"\n"""
         if additional_includes:
             for include in additional_includes:
                 self.BHd_include_str += f'#include "{include}"\n'

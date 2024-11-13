@@ -24,7 +24,7 @@ class ReferenceMetricPrecompute(rfm_precompute.ReferenceMetricPrecompute):
 
     This class stores contributions to BHaH_defines.h, as well as functions for memory allocation,
     definition, and freeing of rfm precomputation data. It also provides strings for reading rfm
-    precompute quantities within loops for both SIMD-ized and non-SIMD loops.
+    precompute quantities within loops with and without intrinsics.
     """
 
     def __init__(self, CoordSystem: str, fp_type: str = "double"):
@@ -36,8 +36,8 @@ class ReferenceMetricPrecompute(rfm_precompute.ReferenceMetricPrecompute):
 
         # readvr_str reads the arrays from memory as needed
         self.readvr_str = ["", "", ""]
-        self.readvr_SIMD_outer_str = ["", "", ""]
-        self.readvr_SIMD_inner_str = ["", "", ""]
+        self.readvr_intrinsics_outer_str = ["", "", ""]
+        self.readvr_intrinsics_inner_str = ["", "", ""]
         self.rfm_struct__define_kernel_dict = {}
 
         which_freevar: int = 0
@@ -90,15 +90,15 @@ class ReferenceMetricPrecompute(rfm_precompute.ReferenceMetricPrecompute):
                         self.readvr_str[
                             dirn
                         ] += f"const REAL {self.freevars_uniq_xx_indep[which_freevar]} = rfm_{self.freevars_uniq_xx_indep[which_freevar]}[i{dirn}];\n"
-                        self.readvr_SIMD_outer_str[
+                        self.readvr_intrinsics_outer_str[
                             dirn
-                        ] += f"const double NOSIMD{self.freevars_uniq_xx_indep[which_freevar]} = rfm_{self.freevars_uniq_xx_indep[which_freevar]}[i{dirn}]; "
-                        self.readvr_SIMD_outer_str[
+                        ] += f"const double NOCUDA{self.freevars_uniq_xx_indep[which_freevar]} = rfm_{self.freevars_uniq_xx_indep[which_freevar]}[i{dirn}]; "
+                        self.readvr_intrinsics_outer_str[
                             dirn
-                        ] += f"const REAL_SIMD_ARRAY {self.freevars_uniq_xx_indep[which_freevar]} = ConstSIMD(NOSIMD{self.freevars_uniq_xx_indep[which_freevar]});\n"
-                        self.readvr_SIMD_inner_str[
+                        ] += f"const REAL_CUDA_ARRAY {self.freevars_uniq_xx_indep[which_freevar]} = ConstCUDA(NOCUDA{self.freevars_uniq_xx_indep[which_freevar]});\n"
+                        self.readvr_intrinsics_inner_str[
                             dirn
-                        ] += f"const REAL_SIMD_ARRAY {self.freevars_uniq_xx_indep[which_freevar]} = ReadSIMD(&rfm_{self.freevars_uniq_xx_indep[which_freevar]}[i{dirn}]);\n"
+                        ] += f"const REAL_CUDA_ARRAY {self.freevars_uniq_xx_indep[which_freevar]} = ReadCUDA(&rfm_{self.freevars_uniq_xx_indep[which_freevar]}[i{dirn}]);\n"
                         output_define_and_readvr = True
                 if (
                     (not output_define_and_readvr)

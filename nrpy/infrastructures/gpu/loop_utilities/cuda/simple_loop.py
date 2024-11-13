@@ -16,14 +16,10 @@ class simple_loop(base_sl.base_simple_loop):
     Generate a simple loop in C (for use inside of a function).
 
     :param loop_body: Loop body
-    :param enable_simd: Enable SIMD support
     :param loop_region: Loop over all points on a numerical grid or just the interior
     :param read_xxs: Read the xx[3][:] 1D coordinate arrays if interior dependency exists
     :param CoordSystem: Coordinate system, e.g., "Cartesian"
     :param enable_rfm_precompute: Enable pre-computation of reference metric
-    :param enable_OpenMP: Enable loop parallelization using OpenMP
-    :param OMP_custom_pragma: Enable loop parallelization using OpenMP with custom pragma
-    :param OMP_collapse: Specifies the number of nested loops to collapse
     :param fp_type: Floating point type, e.g., "double".
     :param enable_intrinsics: Toggle using CUDA intrinsics for calculations.
     :raises ValueError: If `loop_region` is unsupported or if `read_xxs` and `enable_rfm_precompute` are both enabled.
@@ -132,9 +128,9 @@ class simple_loop(base_sl.base_simple_loop):
             )
             if enable_intrinsics:
                 self.read_rfm_xx_arrays = [
-                    self.rfmp.readvr_SIMD_inner_str[0],
-                    self.rfmp.readvr_SIMD_outer_str[1],
-                    self.rfmp.readvr_SIMD_outer_str[2],
+                    self.rfmp.readvr_intrinsics_inner_str[0],
+                    self.rfmp.readvr_intrinsics_outer_str[1],
+                    self.rfmp.readvr_intrinsics_outer_str[2],
                 ]
             else:
                 self.read_rfm_xx_arrays = [

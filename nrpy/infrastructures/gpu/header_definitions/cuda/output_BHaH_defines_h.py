@@ -426,6 +426,7 @@ class output_BHaH_defines_h(base_output_BHaH_defines_h):
             fin_NGHOSTS_add_one_for_upwinding_or_KO=fin_NGHOSTS_add_one_for_upwinding_or_KO,
             supplemental_defines_dict=supplemental_defines_dict,
             clang_format_options=clang_format_options,
+            intrinsics_header="cuda_intrinsics.h"
         )
         self.BHd_definitions_str += "\n#define restrict __restrict__\n"
         # Generate and write BHaH_gpu_defines.h to file

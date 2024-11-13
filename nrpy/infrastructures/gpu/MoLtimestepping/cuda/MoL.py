@@ -93,7 +93,7 @@ class RKFunction(base_MoL.RKFunction):
     :param operator: The operator with respect to which the derivative is taken.
     :param RK_lhs_list: List of LHS expressions for RK substep.
     :param RK_rhs_list: List of RHS expressions for RK substep.
-    :param enable_simd: A flag to specify if SIMD instructions should be used.
+    :param enable_intrinsics: A flag to specify if hardware intrinsics should be used.
     :param cfunc_type: decorators and return type for the RK substep function
     :param rk_step: current step (> 0).  Default (None) assumes Euler step
     :param fp_type: Floating point type, e.g., "double".
@@ -105,7 +105,7 @@ class RKFunction(base_MoL.RKFunction):
         fp_type_alias: str,
         RK_lhs_list: List[sp.Basic],
         RK_rhs_list: List[sp.Basic],
-        enable_simd: bool = False,
+        enable_intrinsics: bool = False,
         cfunc_type: str = "static void",
         rk_step: Union[int, None] = None,
         fp_type: str = "double",
@@ -115,11 +115,12 @@ class RKFunction(base_MoL.RKFunction):
             fp_type_alias,
             RK_lhs_list,
             RK_rhs_list,
-            enable_simd=enable_simd,
+            enable_intrinsics=enable_intrinsics,
             cfunc_type=cfunc_type,
             rk_step=rk_step,
             fp_type=fp_type,
             rational_const_alias=rational_const_alias,
+            intrinsics_str="CUDA"
         )
         self.device_kernel: gputils.GPU_Kernel
 
@@ -178,13 +179,6 @@ class RKFunction(base_MoL.RKFunction):
         )
         prefunc = self.device_kernel.CFunction.full_function
 
-        # if self.enable_simd:
-        #     self.body += self.loop_body.replace("commondata->dt", "DT")
-        #     for j, el in enumerate(self.RK_lhs_list):
-        #         self.body += f"  WriteSIMD(&{str(el).replace('gfsL', 'gfs[i]')}, __rhs_exp_{j});\n"
-        # else:
-        #     self.body += self.loop_body.replace("commondata->dt", "dt")
-        # self.body += "}\n"
         # Store CFunction
         for j in range(3):
             self.body += (
@@ -217,7 +211,7 @@ def single_RK_substep_input_symbolic(
     post_rhs_list: Union[str, List[str]],
     post_rhs_output_list: Union[sp.Basic, List[sp.Basic]],
     rk_step: Union[int, None] = None,
-    enable_simd: bool = False,
+    enable_intrinsics: bool = False,
     gf_aliases: str = "",
     post_post_rhs_string: str = "",
     fp_type: str = "double",
@@ -236,7 +230,7 @@ def single_RK_substep_input_symbolic(
     :param post_rhs_list: List of post-RHS expressions.
     :param post_rhs_output_list: List of outputs for post-RHS expressions.
     :param rk_step: Optional integer representing the current RK step.
-    :param enable_simd: Whether SIMD optimization is enabled.
+    :param enable_intrinsics: Whether hardware intrinsics are enabled.
     :param gf_aliases: Additional aliases for grid functions.
     :param post_post_rhs_string: String to be used after the post-RHS phase.
     :param fp_type: Floating point type, e.g., "double".
@@ -292,7 +286,7 @@ def single_RK_substep_input_symbolic(
         RK_lhs_list,
         RK_rhs_list,
         rk_step=rk_step,
-        enable_simd=enable_simd,
+        enable_intrinsics=enable_intrinsics,
         fp_type=fp_type,
         rational_const_alias=rational_const_alias,
     )
@@ -354,7 +348,7 @@ class register_CFunction_MoL_step_forward_in_time(
     :param post_post_rhs_string: String to be used after the post-RHS phase.
     :param enable_rfm_precompute: Flag to enable reference metric functionality.
     :param enable_curviBCs: Flag to enable curvilinear boundary conditions.
-    :param enable_simd: Flag to enable SIMD functionality.
+    :param enable_intrinsics: Whether hardware intrinsics are enabled.
     :param fp_type: Floating point type, e.g., "double".
 
     DOCTEST:
@@ -404,7 +398,7 @@ class register_CFunction_MoL_step_forward_in_time(
         post_post_rhs_string: str = "",
         enable_rfm_precompute: bool = False,
         enable_curviBCs: bool = False,
-        enable_simd: bool = False,
+        enable_intrinsics: bool = False,
         fp_type: str = "double",
         rational_const_alias: str = "static constexpr",
     ) -> None:
@@ -417,12 +411,12 @@ class register_CFunction_MoL_step_forward_in_time(
             post_post_rhs_string=post_post_rhs_string,
             enable_rfm_precompute=enable_rfm_precompute,
             enable_curviBCs=enable_curviBCs,
-            enable_simd=enable_simd,
+            enable_intrinsics=enable_intrinsics,
             fp_type=fp_type,
             rational_const_alias=rational_const_alias,
         )
-        if enable_simd:
-            self.includes += [os.path.join("SIMD", "SIMD_intrinsics.h")]
+        if self.enable_intrinsics:
+            self.includes += [os.path.join("intrinsics", "cuda_intrinsics.h")]
         self.single_RK_substep_input_symbolic = single_RK_substep_input_symbolic
         self.gf_alias_prefix = "[[maybe_unused]]"
         self.setup_gf_aliases()
@@ -477,7 +471,7 @@ class register_CFunctions(base_MoL.base_register_CFunctions):
     :param post_post_rhs_string: Post-post-RHS function call as string. Default is an empty string.
     :param enable_rfm_precompute: Enable reference metric support. Default is False.
     :param enable_curviBCs: Enable curvilinear boundary conditions. Default is False.
-    :param enable_simd: Enable Single Instruction, Multiple Data (SIMD). Default is False.
+    :param enable_intrinsics: Whether hardware intrinsics are enabled. Default is False.
     :param register_MoL_step_forward_in_time: Whether to register the MoL step forward function. Default is True.
     :param fp_type: Floating point type, e.g., "double".
 
@@ -547,7 +541,7 @@ class register_CFunctions(base_MoL.base_register_CFunctions):
         post_post_rhs_string: str = "",
         enable_rfm_precompute: bool = False,
         enable_curviBCs: bool = False,
-        enable_simd: bool = False,
+        enable_intrinsics: bool = False,
         register_MoL_step_forward_in_time: bool = True,
         fp_type: str = "double",
     ) -> None:
@@ -573,7 +567,7 @@ class register_CFunctions(base_MoL.base_register_CFunctions):
                 post_post_rhs_string=post_post_rhs_string,
                 enable_rfm_precompute=self.enable_rfm_precompute,
                 enable_curviBCs=self.enable_curviBCs,
-                enable_simd=enable_simd,
+                enable_intrinsics=enable_intrinsics,
                 fp_type=self.fp_type,
             )
 

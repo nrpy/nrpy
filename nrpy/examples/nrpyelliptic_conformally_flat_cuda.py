@@ -224,7 +224,7 @@ nrpyellClib.register_CFunction_rhs_eval(
 nrpyellClib.register_CFunction_compute_residual_all_points(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
-    enable_simd=enable_intrinsics,
+    enable_intrinsics=enable_intrinsics,
     fp_type=fp_type,
 )
 
@@ -389,9 +389,9 @@ griddata_commondata.register_CFunction_griddata_free(
 if enable_intrinsics:
     copy_files(
         package="nrpy.helpers",
-        filenames_list=["simd_intrinsics.h"],
+        filenames_list=["cuda_intrinsics.h"],
         project_dir=project_dir,
-        subdirectory="simd",
+        subdirectory="intrinsics",
     )
 
 Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
