@@ -849,7 +849,7 @@ class gpu_register_CFunction_rhs_eval(
             "const REAL_CUDA_ARRAY f", "[[maybe_unused]] const REAL_CUDA_ARRAY f"
         )
         self.loop_body = self.loop_body.replace(
-            "const double dbl", "static constexpr double dbl"
+            "const double dbl", "static constexpr REAL dbl"
         )
         self.kernel_comments = "GPU Kernel to evaluate RHS on the interior."
         self.params_dict_coord = {f"x{i}": "const REAL *restrict" for i in range(3)}
@@ -1005,7 +1005,7 @@ class gpu_register_CFunction_compute_residual_all_points(
             "const REAL_CUDA_ARRAY f", "[[maybe_unused]] const REAL_CUDA_ARRAY f"
         )
         self.kernel_body = self.kernel_body.replace(
-            "const double dbl", "static constexpr double dbl"
+            "const double dbl", "static constexpr REAL dbl"
         )
         self.device_kernel = gputils.GPU_Kernel(
             self.kernel_body,
