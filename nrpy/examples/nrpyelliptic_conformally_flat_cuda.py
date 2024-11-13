@@ -147,9 +147,7 @@ single_puncture_params = {
 }
 # fmt: on
 # project_name += f"-q{Q}-R{R}"
-project_name = (
-    f"nrpyelliptic_conformally_flat_cuda"
-)
+project_name = f"nrpyelliptic_conformally_flat_cuda"
 
 project_dir = os.path.join("project", project_name)
 

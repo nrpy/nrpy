@@ -157,7 +157,7 @@ for (int j = 0; j < params->Nxx_plus_2NGHOSTS2; j++) xx[2][j] = params->xxmin2 +
     _, actual_name = cfc.function_name_and_subdir_with_CoordSystem(
         os.path.join("."), name, CoordSystem
     )
-    if not actual_name in cfc.CFunction_dict:
+    if actual_name not in cfc.CFunction_dict:
         cfc.register_CFunction(
             includes=includes,
             desc=desc,
@@ -217,7 +217,7 @@ commondata->dt = MIN(commondata->dt, ds_min * commondata->CFL_FACTOR);
     _, actual_name = cfc.function_name_and_subdir_with_CoordSystem(
         os.path.join("."), name, CoordSystem
     )
-    if not actual_name in cfc.CFunction_dict:
+    if actual_name not in cfc.CFunction_dict:
         cfc.register_CFunction(
             includes=includes,
             desc=desc,
