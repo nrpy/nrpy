@@ -33,6 +33,7 @@ class CFunction:
     :param ET_current_thorn_CodeParams_used: (ET only) List of CodeParameter names this function uses, for *this thorn's* param.ccl.
     :param ET_other_thorn_CodeParams_used: (ET only) List of CodeParameter names this function uses, for *other thorn's* param.ccl.
     :param clang_format_options: Options for the clang-format tool. Defaults to "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
+    :param cfunc_decorators: Optional decorators for CFunctions, e.g. CUDA identifiers, templates
 
     DocTests:
     >>> func = CFunction(desc="just a test... testing 1,2,3", name="main", params="", body="return 0;")
@@ -69,6 +70,7 @@ class CFunction:
         ET_current_thorn_CodeParams_used: Optional[List[str]] = None,
         ET_other_thorn_CodeParams_used: Optional[List[str]] = None,
         clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+        cfunc_decorators: str = "",
     ) -> None:
         for attribute in [(name, "name"), (desc, "desc"), (body, "body")]:
             if not attribute[0]:
@@ -99,6 +101,9 @@ class CFunction:
         self.ET_current_thorn_CodeParams_used = ET_current_thorn_CodeParams_used
         self.ET_other_thorn_CodeParams_used = ET_other_thorn_CodeParams_used
         self.clang_format_options = clang_format_options
+        self.cfunc_decorators = (
+            f"{cfunc_decorators} " if cfunc_decorators != "" else cfunc_decorators
+        )
 
         self.function_prototype, self.raw_function, self.full_function = (
             self.generate_full_function()
@@ -199,7 +204,9 @@ class CFunction:
         if self.desc:
             complete_func += f"/**\n{prefix_with_star(self.desc)}\n*/\n"
 
-        function_prototype = f"{self.cfunc_type} {self.name}({self.params});"
+        function_prototype = (
+            f"{self.cfunc_decorators}{self.cfunc_type} {self.name}({self.params});"
+        )
         complete_func += f"{function_prototype.replace(';', '')} {{\n{include_Cparams_str}{self.body}}}\n"
 
         complete_func += f"{self.postfunc}\n"
@@ -255,6 +262,7 @@ def register_CFunction(
     ET_current_thorn_CodeParams_used: Optional[List[str]] = None,
     ET_other_thorn_CodeParams_used: Optional[List[str]] = None,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+    cfunc_decorators: str = "",
 ) -> None:
     """
     Add a C function to a dictionary called CFunction_dict, using the provided parameters.
@@ -276,6 +284,7 @@ def register_CFunction(
     :param ET_current_thorn_CodeParams_used: (ET only) List of CodeParameter names this function uses, for *this thorn's* param.ccl.
     :param ET_other_thorn_CodeParams_used: (ET only) List of CodeParameter names this function uses, for *other thorn's* param.ccl.
     :param clang_format_options: Options for the clang-format tool. Defaults to "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
+    :param cfunc_decorators: Optional decorators for CFunctions, e.g. CUDA identifiers, templates
 
     :raises ValueError: If the name is already registered in CFunction_dict.
 
@@ -307,6 +316,7 @@ def register_CFunction(
         ET_current_thorn_CodeParams_used=ET_current_thorn_CodeParams_used,
         ET_other_thorn_CodeParams_used=ET_other_thorn_CodeParams_used,
         clang_format_options=clang_format_options,
+        cfunc_decorators=cfunc_decorators,
     )
 
 
