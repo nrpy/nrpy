@@ -747,21 +747,17 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
       bcstruct->bc_info.num_pure_outer_boundary_points[which_gz][dirn] = idx2d;
     }
 """
-    _, actual_name = cfc.function_name_and_subdir_with_CoordSystem(
-        os.path.join("."), name, CoordSystem
+    cfc.register_CFunction(
+        includes=includes,
+        prefunc=prefunc,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        CoordSystem_for_wrapper_func=CoordSystem,
+        name=name,
+        params=params,
+        include_CodeParameters_h=True,
+        body=body,
     )
-    if actual_name not in cfc.CFunction_dict:
-        cfc.register_CFunction(
-            includes=includes,
-            prefunc=prefunc,
-            desc=desc,
-            cfunc_type=cfunc_type,
-            CoordSystem_for_wrapper_func=CoordSystem,
-            name=name,
-            params=params,
-            include_CodeParameters_h=True,
-            body=body,
-        )
 
 
 ###############################
@@ -1321,21 +1317,17 @@ applies BCs to the inner boundary points, which may map either to the grid inter
   //              STEP 2 OF 2.
   apply_bcs_inner_only(commondata, params, bcstruct, rhs_gfs); // <- apply inner BCs to RHS gfs only
 """
-    _, actual_name = cfc.function_name_and_subdir_with_CoordSystem(
-        os.path.join("."), name, CoordSystem
+    cfc.register_CFunction(
+        includes=includes,
+        prefunc=prefunc,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        CoordSystem_for_wrapper_func=CoordSystem,
+        name=name,
+        params=params,
+        include_CodeParameters_h=True,
+        body=body,
     )
-    if actual_name not in cfc.CFunction_dict:
-        cfc.register_CFunction(
-            includes=includes,
-            prefunc=prefunc,
-            desc=desc,
-            cfunc_type=cfunc_type,
-            CoordSystem_for_wrapper_func=CoordSystem,
-            name=name,
-            params=params,
-            include_CodeParameters_h=True,
-            body=body,
-        )
 
 
 def register_griddata_commondata() -> None:
