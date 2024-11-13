@@ -204,7 +204,7 @@ def get_unique_expression_symbols(
     >>> from sympy.abc import a, b
     >>> from sympy import cos, sin
     >>> xx0 = sp.Symbol('xx0')
-    >>> x = cos(a + b)**2 ++ xx0
+    >>> x = cos(a + b)**2 + xx0
     >>> get_unique_expression_symbols(x, ["xx0"])
     ['a', 'b']
     """
