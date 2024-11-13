@@ -98,7 +98,7 @@ radiation_BC_fd_order = 6
 enable_simd = True
 parallel_codegen_enable = True
 boundary_conditions_desc = "outgoing radiation"
-list_of_CoordSystems = [CoordSystem]
+list_of_CoordSystems = [CoordSystem, CoordSystem]
 NUMGRIDS = len(list_of_CoordSystems)
 par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
 # fmt: off
@@ -189,7 +189,7 @@ nrpyellClib.register_CFunction_auxevol_gfs_all_points(
 nrpyellClib.register_CFunction_initialize_constant_auxevol()
 
 numericalgrids.register_CFunctions(
-    list_of_CoordSystems=list_of_CoordSystems,
+    list_of_CoordSystems=list(set(list_of_CoordSystems)),
     list_of_grid_physical_sizes=[grid_physical_size for c in list_of_CoordSystems],
     Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
@@ -205,7 +205,7 @@ nrpyellClib.register_CFunction_diagnostics(
 
 if enable_rfm_precompute:
     rfm_precompute.register_CFunctions_rfm_precompute(
-        list_of_CoordSystems=list_of_CoordSystems, fp_type=fp_type
+        list_of_CoordSystems=list(set(list_of_CoordSystems)), fp_type=fp_type
     )
 
 # Generate function to compute RHSs
@@ -238,7 +238,7 @@ if __name__ == "__main__" and parallel_codegen_enable:
     pcg.do_parallel_codegen()
 
 cbc.CurviBoundaryConditions_register_C_functions(
-    list_of_CoordSystems=list_of_CoordSystems,
+    list_of_CoordSystems=list(set(list_of_CoordSystems)),
     radiation_BC_fd_order=radiation_BC_fd_order,
     fp_type=fp_type,
 )
