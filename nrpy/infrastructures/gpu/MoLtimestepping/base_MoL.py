@@ -8,7 +8,6 @@ Authors: Brandon Clark
          Samuel D. Tootle sdtootle **at** gmail **dot** com
 """
 
-import warnings
 from typing import Dict, List, Tuple, Union
 
 import sympy as sp  # Import SymPy, a computer algebra system written entirely in Python
@@ -46,7 +45,7 @@ class RKFunction:
         rk_step: Union[int, None] = None,
         fp_type: str = "double",
         rational_const_alias: str = "const",
-        intrinsics_str: str = "CUDA"
+        intrinsics_str: str = "CUDA",
     ) -> None:
         self.fp_type_alias = fp_type_alias
         self.rk_step = rk_step
@@ -111,7 +110,9 @@ class RKFunction:
                 f"const int Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n"
             )
 
-        var_type = f"REAL_{self.intrinsics_str}_ARRAY" if self.enable_intrinsics else "REAL"
+        var_type = (
+            f"REAL_{self.intrinsics_str}_ARRAY" if self.enable_intrinsics else "REAL"
+        )
 
         read_list = [
             read
@@ -558,7 +559,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
     ...     diag_gc = cfc.CFunction_dict["MoL_step_forward_in_time"].full_function
     ...     expected_str = decompress_base64_to_string(expected_str_dict[k])
     ...     if diag_gc != expected_str:
-    ...         raise ValueError(f"\\n{k}: {diff_strings(expected_string, diag_gc)}")
+    ...         raise ValueError(f"\\n{k}: {diff_strings(expected_str, diag_gc)}")
     >>> cfc.CFunction_dict.clear()
     >>> MoL_Functions_dict.clear()
     >>> try:
@@ -630,7 +631,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
 
         if not self.Butcher[-1][0] == "":
             raise ValueError(
-                f"Adaptive order Butcher tables are currently not supported in MoL."
+                "Adaptive order Butcher tables are currently not supported in MoL."
             )
 
     def setup_gf_aliases(self) -> None:
@@ -1092,7 +1093,7 @@ class base_register_CFunctions:
 
         # Step 3.b: Create MoL_timestepping struct:
         self.BHaH_MoL_body = (
-            f"typedef struct __MoL_gridfunctions_struct__ {{\n"
+            "typedef struct __MoL_gridfunctions_struct__ {\n"
             + f"REAL *restrict {self.y_n_gridfunctions};\n"
             + "".join(
                 f"REAL *restrict {gfs};\n" for gfs in self.non_y_n_gridfunctions_list

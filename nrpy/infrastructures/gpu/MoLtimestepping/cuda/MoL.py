@@ -120,7 +120,7 @@ class RKFunction(base_MoL.RKFunction):
             rk_step=rk_step,
             fp_type=fp_type,
             rational_const_alias=rational_const_alias,
-            intrinsics_str="CUDA"
+            intrinsics_str="CUDA",
         )
         self.device_kernel: gputils.GPU_Kernel
 

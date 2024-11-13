@@ -191,7 +191,7 @@ def register_CFunctions_rfm_precompute(
             _, actual_name = cfc.function_name_and_subdir_with_CoordSystem(
                 os.path.join("."), name, CoordSystem
             )
-            if not actual_name in cfc.CFunction_dict:
+            if actual_name not in cfc.CFunction_dict:
                 cfc.register_CFunction(
                     includes=includes,
                     desc=desc,

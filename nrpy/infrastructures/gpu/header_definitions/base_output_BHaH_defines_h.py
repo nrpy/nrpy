@@ -60,7 +60,7 @@ class base_output_BHaH_defines_h:
         fin_NGHOSTS_add_one_for_upwinding_or_KO: bool = False,
         supplemental_defines_dict: Optional[Dict[str, str]] = None,
         clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
-        intrinsics_header: str = "cuda_intrinsics.h"
+        intrinsics_header: str = "cuda_intrinsics.h",
     ) -> None:
         self.project_dir = project_dir
         self.additional_includes = additional_includes
