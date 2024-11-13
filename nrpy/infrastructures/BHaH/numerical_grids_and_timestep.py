@@ -7,6 +7,7 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
+import os
 from typing import Dict, List
 
 import sympy as sp
@@ -153,16 +154,20 @@ for (int j = 0; j < params->Nxx_plus_2NGHOSTS0; j++) xx[0][j] = params->xxmin0 +
 for (int j = 0; j < params->Nxx_plus_2NGHOSTS1; j++) xx[1][j] = params->xxmin1 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * params->dxx1;
 for (int j = 0; j < params->Nxx_plus_2NGHOSTS2; j++) xx[2][j] = params->xxmin2 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * params->dxx2;
 """
-    cfc.register_CFunction(
-        includes=includes,
-        desc=desc,
-        cfunc_type=cfunc_type,
-        CoordSystem_for_wrapper_func=CoordSystem,
-        name=name,
-        params=params,
-        include_CodeParameters_h=False,  # keep this False or regret having to debug the mess.
-        body=body,
+    _, actual_name = cfc.function_name_and_subdir_with_CoordSystem(
+        os.path.join("."), name, CoordSystem
     )
+    if actual_name not in cfc.CFunction_dict:
+        cfc.register_CFunction(
+            includes=includes,
+            desc=desc,
+            cfunc_type=cfunc_type,
+            CoordSystem_for_wrapper_func=CoordSystem,
+            name=name,
+            params=params,
+            include_CodeParameters_h=False,  # keep this False or regret having to debug the mess.
+            body=body,
+        )
 
 
 def register_CFunction_cfl_limited_timestep(
@@ -209,16 +214,20 @@ LOOP_NOOMP(i0, 0, Nxx_plus_2NGHOSTS0,
 }
 commondata->dt = MIN(commondata->dt, ds_min * commondata->CFL_FACTOR);
 """
-    cfc.register_CFunction(
-        includes=includes,
-        desc=desc,
-        cfunc_type=cfunc_type,
-        CoordSystem_for_wrapper_func=CoordSystem,
-        name=name,
-        params=params,
-        include_CodeParameters_h=True,
-        body=body,
+    _, actual_name = cfc.function_name_and_subdir_with_CoordSystem(
+        os.path.join("."), name, CoordSystem
     )
+    if actual_name not in cfc.CFunction_dict:
+        cfc.register_CFunction(
+            includes=includes,
+            desc=desc,
+            cfunc_type=cfunc_type,
+            CoordSystem_for_wrapper_func=CoordSystem,
+            name=name,
+            params=params,
+            include_CodeParameters_h=True,
+            body=body,
+        )
 
 
 def register_CFunction_numerical_grids_and_timestep(
