@@ -8,8 +8,6 @@ Authors: Zachariah B. Etienne
          Terrence Pierre Jacques
 """
 
-import os
-
 # Step P1: Import needed NRPy+ core modules:
 from typing import List, Tuple
 
