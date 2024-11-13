@@ -1,46 +1,5 @@
-// Check for CUDA first to avoid using CPU intrinisics
-#ifdef __NVCC__
-// If SIMD instructions are unavailable:
-#define REAL_SIMD_ARRAY REAL
-#define simd_width 1 // 1 double per loop iteration
-
-// Basic Operations (Scalar)
-#define ConstSIMD(a) ((a))
-#define AbsSIMD(a) (fabs(a))
-#define AddSIMD(a, b) __dadd_rn((a), (b))
-#define SubSIMD(a, b) __dsub_rn((a), (b))
-#define MulSIMD(a, b) __dmul_rn((a), (b))
-#define DivSIMD(a, b) __ddiv_rn((a), (b))
-
-// Fused Multiply-Add/Subtract Operations (Scalar)
-#define FusedMulAddSIMD(a, b, c) __fma_rn((a), (b), (c))
-#define FusedMulSubSIMD(a, b, c) FusedMulAddSIMD((a), (b), MulSIMD((FDPart1_NegativeOne_), c))
-#define NegFusedMulAddSIMD(a, b, c) SubSIMD((c), MulSIMD((a), (b)))
-#define NegFusedMulSubSIMD(a, b, c) MulSIMD((FDPart1_NegativeOne_),(FusedMulAddSIMD((a), (b), (c))))
-
-// Mathematical Functions (Scalar)
-#define SqrtSIMD(a) (__dsqrt_rn((a)))
-#define ExpSIMD(a) (exp(a))
-#define SinSIMD(a) (sin(a))
-#define CosSIMD(a) (cos(a))
-
-// Load and Store Operations (Scalar)
-#define WriteSIMD(a, b) *(a) = (b)
-#define ReadSIMD(a) __ldg(a)
-
-// Upwind Algorithm (Scalar Version)
-// *NOTE*: This upwinding is reversed from usual upwinding algorithms,
-// because the upwinding control vector in BSSN (the shift)
-// acts like a *negative* velocity.
-#define UPWIND_ALG(UpwindVecU) ((UpwindVecU) > 0.0 ? 1.0 : 0.0)
-
-// Initialize vector (of size one) to zero (output is REAL_SIMD_ARRAY)
-#define SetZeroSIMD 0.0
-// Horizontal addition (output is a double)
-#define HorizAddSIMD(a) (a) // For scalar fallback, no horizontal addition needed
-
 // If compiled with AVX512F SIMD instructions enabled:
-#elif __AVX512F__
+#ifdef __AVX512F__
 #include <immintrin.h>
 
 // SIMD type and width definitions
