@@ -204,23 +204,15 @@ def get_unique_expression_symbols(
     >>> from sympy.abc import a, b
     >>> from sympy import cos, sin
     >>> xx0 = sp.Symbol('xx0')
-    >>> x = cos(a + b)**2 + xx0
+    >>> x = cos(a + b)**2 ++ xx0
     >>> get_unique_expression_symbols(x, ["xx0"])
     ['a', 'b']
     """
     if exclude is None:
         exclude = []
 
-    def get_expression_symbols__recursive(this_expr: sp.Basic) -> List[str]:
-        this_symbol_list = []
-        for arg in this_expr.args:
-            if isinstance(arg, sp.Symbol):
-                this_symbol_list += [str(arg)]
-            this_symbol_list += get_expression_symbols__recursive(arg)
-        return this_symbol_list
-
-    symbols = get_expression_symbols__recursive(expr)
-    return sorted([sym for sym in set(symbols) if not sym in exclude])
+    symbols = {str(sym) for sym in expr.free_symbols}
+    return sorted([sym for sym in symbols if not sym in exclude])
 
 
 if __name__ == "__main__":
