@@ -156,8 +156,8 @@ class RKFunction(base_MoL.RKFunction):
                 self.param_vars.append(gfs_el[:-3])
                 self.params += f"{var_type} *restrict {gfs_el[:-3]},"
                 kernel_body += f"const {var_type} {el} = {gfs_el};\n"
-        for el in self.RK_lhs_str_list:
-            lhs_var = el[:-3]
+        for el in self.RK_lhs_list:
+            lhs_var = str(el).replace("_gfsL", "_gfs")
             if not lhs_var in self.params:
                 self.param_vars.append(lhs_var)
                 self.params += f"{var_type} *restrict {lhs_var},"
@@ -279,6 +279,7 @@ def single_RK_substep_input_symbolic(
         .replace("RK_OUTPUT_GFS", str(rhs_output_expr).replace("gfsL", "gfs"))
     )
     body += updated_rhs_str + "\n"
+
     # Part 2: RK update
     RK_key = f"RK_STEP{rk_step}"
     base_MoL.MoL_Functions_dict[RK_key] = RKFunction(

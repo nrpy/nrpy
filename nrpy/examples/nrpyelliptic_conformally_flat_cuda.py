@@ -262,6 +262,7 @@ MoL.register_CFunctions(
   apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
+    enable_intrinsics=enable_intrinsics,
     fp_type=fp_type,
 )
 chkpt.register_CFunctions(default_checkpoint_every=default_checkpoint_every)

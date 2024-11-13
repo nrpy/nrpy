@@ -29,7 +29,7 @@ class RKFunction:
     :param operator: The operator with respect to which the derivative is taken.
     :param RK_lhs_list: List of LHS expressions for RK substep.
     :param RK_rhs_list: List of RHS expressions for RK substep.
-    :param enable_simd: A flag to specify if SIMD instructions should be used.
+    :param enable_intrinsics: A flag to specify if hardware instructions should be used.
     :param cfunc_type: decorators and return type for the RK substep function
     :param rk_step: current step (> 0).  Default (None) assumes Euler step
     :param fp_type: Floating point type, e.g., "double".
@@ -41,15 +41,17 @@ class RKFunction:
         fp_type_alias: str,
         RK_lhs_list: List[sp.Basic],
         RK_rhs_list: List[sp.Basic],
-        enable_simd: bool = False,
+        enable_intrinsics: bool = False,
         cfunc_type: str = "static void",
         rk_step: Union[int, None] = None,
         fp_type: str = "double",
         rational_const_alias: str = "const",
+        intrinsics_str: str = "CUDA"
     ) -> None:
         self.fp_type_alias = fp_type_alias
         self.rk_step = rk_step
-        self.enable_simd = enable_simd
+        self.enable_intrinsics = enable_intrinsics
+        self.intrinsics_str = intrinsics_str
         self.RK_rhs_list = RK_rhs_list
         self.RK_lhs_list = RK_lhs_list
         self.fp_type = fp_type
@@ -70,8 +72,8 @@ class RKFunction:
 
         self.RK_lhs_str_list = [
             (
-                f"const REAL_SIMD_ARRAY __rhs_exp_{i}"
-                if self.enable_simd
+                f"const REAL_{self.intrinsics_str}_ARRAY __rk_exp_{i}"
+                if self.enable_intrinsics
                 else f"{str(el).replace('gfsL', 'gfs[i]')}"
             )
             for i, el in enumerate(self.RK_lhs_list)
@@ -82,15 +84,19 @@ class RKFunction:
             self.RK_lhs_str_list,
             include_braces=False,
             verbose=False,
-            enable_simd=self.enable_simd,
+            enable_simd=self.enable_intrinsics,
             fp_type=self.fp_type,
             enable_cse_preprocess=True,
             rational_const_alias=self.rational_const_alias,
-        )
+        ).replace("SIMD", self.intrinsics_str)
         # Give rationals a better name
         self.loop_body = self.loop_body.replace("_Rational", "RK_Rational")
 
-        self.name = "SIMD_" if self.enable_simd else ""
+        if enable_intrinsics:
+            for i, el in enumerate(self.RK_lhs_list):
+                self.loop_body += f"Write{self.intrinsics_str}(&{str(el).replace('gfsL', 'gfs[i]')}, __rk_exp_{i});\n"
+
+        self.name = f"{self.intrinsics_str}_" if self.enable_intrinsics else ""
         self.name += f"rk_substep_{self.rk_step}"
 
         # Populate build and populate self.CFunction
@@ -99,25 +105,13 @@ class RKFunction:
     def CFunction_RK_substep_function(self) -> None:
         """Generate a C function based on the given RK substep expression lists."""
         self.body = ""
-        likwid_profiling = False
-        if likwid_profiling:
-            self.body = f'LIKWID_MARKER_START("{self.name}");\n\n'
 
         for i in ["0", "1", "2"]:
             self.body += (
                 f"const int Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n"
             )
-        if self.enable_simd:
-            warnings.warn(
-                "enable_simd in MoL is not properly supported -- MoL update loops are not properly bounds checked."
-            )
-            self.body += "const REAL_SIMD_ARRAY DT = ConstSIMD(dt);\n"
-            self.body += "#pragma omp parallel for\n"
-            self.body += "for(int i=0;i<Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;i+=simd_width) {{\n"
-        else:
-            self.body += "LOOP_ALL_GFS_GPS(i) {\n"
 
-        var_type = "REAL_SIMD_ARRAY" if self.enable_simd else "REAL"
+        var_type = f"REAL_{self.intrinsics_str}_ARRAY" if self.enable_intrinsics else "REAL"
 
         read_list = [
             read
@@ -129,10 +123,10 @@ class RKFunction:
         for el in read_list_unique:
             if str(el) != "commondata->dt":
                 gfs_el = str(el).replace("gfsL", "gfs[i]")
-                if self.enable_simd:
+                if self.enable_intrinsics:
                     self.param_vars.append(gfs_el[:-3])
                     self.params += f"{var_type} *restrict {self.param_vars[-1]},"
-                    self.body += f"const {var_type} {el} = ReadSIMD(&{gfs_el});\n"
+                    self.body += f"const {var_type} {el} = Read{self.intrinsics_str}(&{gfs_el});\n"
                 else:
                     self.param_vars.append(gfs_el[:-3])
                     self.params += f"{var_type} *restrict {self.param_vars[-1]},"
@@ -144,16 +138,15 @@ class RKFunction:
                 self.params += f"{var_type} *restrict {self.param_vars[-1]},"
         self.params += f"const {var_type} dt"
 
-        if self.enable_simd:
+        if self.enable_intrinsics:
             self.body += self.loop_body.replace("commondata->dt", "DT")
             for j, el in enumerate(self.RK_lhs_list):
-                self.body += f"  WriteSIMD(&{str(el).replace('gfsL', 'gfs[i]')}, __rhs_exp_{j});\n"
+                self.body += f"  Write{self.intrinsics_str}(&{str(el).replace('gfsL', 'gfs[i]')}, __rhs_exp_{j});\n"
         else:
             self.body += self.loop_body.replace("commondata->dt", "dt")
 
         self.body += "}\n"
-        if likwid_profiling:
-            self.body += f'LIKWID_MARKER_STOP("{self.name}");\n\n'
+
         # Store CFunction
         self.CFunction = cfc.CFunction(
             includes=self.includes,
@@ -391,7 +384,7 @@ def single_RK_substep_input_symbolic(
     post_rhs_list: Union[str, List[str]],
     post_rhs_output_list: Union[sp.Basic, List[sp.Basic]],
     rk_step: Union[int, None] = None,
-    enable_simd: bool = False,
+    enable_intrinsics: bool = False,
     gf_aliases: str = "",
     post_post_rhs_string: str = "",
     fp_type: str = "double",
@@ -410,7 +403,7 @@ def single_RK_substep_input_symbolic(
     :param post_rhs_list: List of post-RHS expressions.
     :param post_rhs_output_list: List of outputs for post-RHS expressions.
     :param rk_step: Optional integer representing the current RK step.
-    :param enable_simd: Whether SIMD optimization is enabled.
+    :param enable_intrinsics: Whether hardware optimization is enabled.
     :param gf_aliases: Additional aliases for grid functions.
     :param post_post_rhs_string: String to be used after the post-RHS phase.
     :param fp_type: Floating point type, e.g., "double".
@@ -468,7 +461,7 @@ def single_RK_substep_input_symbolic(
                 RK_lhs_list,
                 RK_rhs_list,
                 rk_step=rk_step,
-                enable_simd=enable_simd,
+                enable_intrinsics=enable_intrinsics,
                 fp_type=fp_type,
                 rational_const_alias=rational_const_alias,
             )
@@ -531,7 +524,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
     :param post_post_rhs_string: String to be used after the post-RHS phase.
     :param enable_rfm_precompute: Flag to enable reference metric functionality.
     :param enable_curviBCs: Flag to enable curvilinear boundary conditions.
-    :param enable_simd: Flag to enable SIMD functionality.
+    :param enable_intrinsics: Flag to enable hardware intrinsics
     :param fp_type: Floating point type, e.g., "double".
     :raises ValueError: If unsupported Butcher table specified since adaptive RK steps are not implemented in MoL.
 
@@ -584,7 +577,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
         post_post_rhs_string: str = "",
         enable_rfm_precompute: bool = False,
         enable_curviBCs: bool = False,
-        enable_simd: bool = False,
+        enable_intrinsics: bool = False,
         fp_type: str = "double",
         rational_const_alias: str = "const",
     ) -> None:
@@ -601,12 +594,9 @@ class base_register_CFunction_MoL_step_forward_in_time:
         self.single_RK_substep_input_symbolic = single_RK_substep_input_symbolic
         self.rk_step_body_dict: Dict[str, str] = {}
 
-        self.enable_simd = enable_simd
+        self.enable_intrinsics = enable_intrinsics
 
         self.includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-        likwid_profiling = False
-        if likwid_profiling:
-            self.includes += ["likwid.h"]
 
         self.desc = f'Method of Lines (MoL) for "{self.MoL_method}" method: Step forward one full timestep.\n'
         self.cfunc_type = "void"
@@ -722,7 +712,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
                     post_rhs_output_list=[
                         k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs
                     ],
-                    enable_simd=self.enable_simd,
+                    enable_intrinsics=self.enable_intrinsics,
                     gf_aliases=self.gf_aliases,
                     post_post_rhs_string=self.post_post_rhs_string,
                     fp_type=self.fp_type,
@@ -763,7 +753,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
                         k2_or_y_nplus_a32_k2_gfs,
                         k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs,
                     ],
-                    enable_simd=self.enable_simd,
+                    enable_intrinsics=self.enable_intrinsics,
                     gf_aliases=self.gf_aliases,
                     post_post_rhs_string=self.post_post_rhs_string,
                     fp_type=self.fp_type,
@@ -792,7 +782,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
                     rk_step=3,
                     post_rhs_list=[self.post_rhs_string],
                     post_rhs_output_list=[y_n_gfs],
-                    enable_simd=self.enable_simd,
+                    enable_intrinsics=self.enable_intrinsics,
                     gf_aliases=self.gf_aliases,
                     post_post_rhs_string=self.post_post_rhs_string,
                     fp_type=self.fp_type,
@@ -844,7 +834,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
                         rk_step=s+1,
                         post_rhs_list=[post_rhs],
                         post_rhs_output_list=[post_rhs_output],
-                        enable_simd=self.enable_simd,
+                        enable_intrinsics=self.enable_intrinsics,
                         gf_aliases=self.gf_aliases,
                         post_post_rhs_string=self.post_post_rhs_string,
                         fp_type=self.fp_type,
@@ -869,7 +859,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
                             RK_rhs_list=[y_n + y_nplus1_running_total * dt],
                             post_rhs_list=[self.post_rhs_string],
                             post_rhs_output_list=[y_n],
-                            enable_simd=self.enable_simd,
+                            enable_intrinsics=self.enable_intrinsics,
                             gf_aliases=self.gf_aliases,
                             post_post_rhs_string=self.post_post_rhs_string,
                             fp_type=self.fp_type,
@@ -957,7 +947,7 @@ class base_register_CFunction_MoL_step_forward_in_time:
                                 rk_step=s + 1,
                                 post_rhs_list=[self.post_rhs_string],
                                 post_rhs_output_list=[post_rhs_output],
-                                enable_simd=self.enable_simd,
+                                enable_intrinsics=self.enable_intrinsics,
                                 gf_aliases=self.gf_aliases,
                                 post_post_rhs_string=self.post_post_rhs_string,
                                 fp_type=self.fp_type,
@@ -1065,7 +1055,6 @@ class base_register_CFunctions:
     :param post_post_rhs_string: Post-post-RHS function call as string. Default is an empty string.
     :param enable_rfm_precompute: Enable reference metric support. Default is False.
     :param enable_curviBCs: Enable curvilinear boundary conditions. Default is False.
-    :param enable_simd: Enable Single Instruction, Multiple Data (SIMD). Default is False.
     :param register_MoL_step_forward_in_time: Whether to register the MoL step forward function. Default is True.
     :param fp_type: Floating point type, e.g., "double".
     """
