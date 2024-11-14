@@ -46,8 +46,8 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     :param static_lib: Whether the library created should be a static library. Defaults to False.
     :param lib_function_prefix: Prefix to add to library function names.
     :param include_dirs: List of include directories.
-    :param clang_format_options: Options for the clang-format tool.
     :param src_code_file_ext: set what the file extension is for each code file.
+    :param clang_format_options: Options for the clang-format tool.
 
     :raises ValueError: If the main() function is not defined in CFunction_dict.
     :raises FileNotFoundError: If the specified C compiler is not found.
