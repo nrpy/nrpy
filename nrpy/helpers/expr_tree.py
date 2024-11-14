@@ -23,7 +23,7 @@ Email:  ksible *at* outlook *dot* com
 """
 
 import sys  # Standard Python module for multiplatform OS-level functions
-from typing import Generator, List, Optional, Union
+from typing import Generator, List, Optional
 
 import sympy as sp
 
@@ -188,6 +188,7 @@ class ExprTree:
         return "ExprTree(" + str(self.root.expr) + ")"
 
     __str__ = __repr__
+
 
 if __name__ == "__main__":
     import doctest
