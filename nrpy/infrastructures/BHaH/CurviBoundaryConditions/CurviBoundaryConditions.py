@@ -87,14 +87,14 @@ NRPy+ Curvilinear Boundary Conditions: Unit vector dot products for all
 Documented in: Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb
 */
 """
-    calculation = ccg.c_codegen(
-        parity, lhs_strings, fp_type="double" if fp_type == "float" else fp_type
-    )
 
     # We enforce double or higher precision to avoid issues in finding
     # the inner/outer BC indicies
-    if fp_type == "float":
-        calculation = calculation.replace("REAL ", "double ")
+    type_alias = "double" if fp_type == "float" else "REAL"
+    calculation = ccg.c_codegen(
+        parity, lhs_strings, fp_type="double" if fp_type == "float" else fp_type
+    ).replace("REAL ", f"{type_alias} ")
+
     return outstr + calculation
 
 
