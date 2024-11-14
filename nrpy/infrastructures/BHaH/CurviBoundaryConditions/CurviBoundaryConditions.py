@@ -290,13 +290,11 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
         )
     # Step 2.b: Output C code for the Eigen-Coordinate mapping from Cartesian->xx:
     body += f"  // Cart_to_xx for EigenCoordinate {rfm.CoordSystem} (orig coord = {rfm_orig.CoordSystem});\n"
-    tmp_str = ccg.c_codegen(
+    body += ccg.c_codegen(
         [rfm.Cart_to_xx[0], rfm.Cart_to_xx[1], rfm.Cart_to_xx[2]],
         ["Cart_to_xx0_inbounds", "Cart_to_xx1_inbounds", "Cart_to_xx2_inbounds"],
         fp_type=fp_type,
-    )
-    tmp_str = tmp_str.replace("REAL", type_alias)
-    body += tmp_str
+    ).replace("REAL", type_alias)
     body += rf"""
   // Next compute xxmin[i]. By definition,
   //    xx[i][j] = xxmin[i] + (({type_alias})(j-NGHOSTS) + (1.0/2.0))*dxxi;
@@ -330,14 +328,12 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
     {type_alias} xx1 = xx[1][i1];
     {type_alias} xx2 = xx[2][i2];
 """
-    tmp_str = ccg.c_codegen(
+    body += ccg.c_codegen(
         [rfm_orig.xx_to_Cart[0], rfm_orig.xx_to_Cart[1], rfm_orig.xx_to_Cart[2]],
         ["xCart_from_xx", "yCart_from_xx", "zCart_from_xx"],
         include_braces=False,
         fp_type=fp_type,
-    )
-    tmp_str = tmp_str.replace("REAL", type_alias)
-    body += tmp_str
+    ).replace("REAL", type_alias)
 
     body += f"""  }}
 
@@ -350,14 +346,12 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
     {type_alias} xx1 = xx[1][i1_inbounds];
     {type_alias} xx2 = xx[2][i2_inbounds];
 """
-    tmp_str = ccg.c_codegen(
+    body += ccg.c_codegen(
         [rfm_orig.xx_to_Cart[0], rfm_orig.xx_to_Cart[1], rfm_orig.xx_to_Cart[2]],
         ["xCart_from_xx_inbounds", "yCart_from_xx_inbounds", "zCart_from_xx_inbounds"],
         include_braces=False,
         fp_type=fp_type,
-    )
-    tmp_str = tmp_str.replace("REAL", type_alias)
-    body += tmp_str
+    ).replace("REAL", type_alias)
 
     body += r"""  }
 
