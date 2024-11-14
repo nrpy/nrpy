@@ -394,8 +394,7 @@ def register_CFunction_compute_L2_norm_of_gridfunction(
         ],
         include_braces=False,
         fp_type=fp_type,
-    )
-    loop_body = loop_body.replace("const REAL", f"const {type_alias}")
+    ).replace("const REAL", f"const {type_alias}")
 
     loop_body += rf"""
 if(r < integration_radius) {{
