@@ -1,4 +1,5 @@
-"""Utilities for Parsing or manipulating symbolic expressions.
+"""
+Utilities for Parsing or manipulating symbolic expressions.
 
 Author: Samuel Tootle
 Email:  sdtootle *at* gmail *dot* com
