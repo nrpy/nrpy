@@ -21,6 +21,7 @@ class CFunction:
     :param includes: A list of strings representing include files.
     :param prefunc: A string containing code above the core function declaration. Defaults to an empty string.
     :param desc: A description of the function.
+    :param cfunc_decorators: Optional decorators for CFunctions, e.g. CUDA identifiers, templates
     :param cfunc_type: The C type of the function (e.g., void, int). Default is "void".
     :param name: The name of the function.
     :param params: A string representing the function's input parameters. Defaults to an empty string.
@@ -32,7 +33,6 @@ class CFunction:
     :param ET_schedule_bins_entries: (ET only) List of (schedule bin, schedule entry) tuples for Einstein Toolkit schedule.ccl.
     :param ET_current_thorn_CodeParams_used: (ET only) List of CodeParameter names this function uses, for *this thorn's* param.ccl.
     :param ET_other_thorn_CodeParams_used: (ET only) List of CodeParameter names this function uses, for *other thorn's* param.ccl.
-    :param cfunc_decorators: Optional decorators for CFunctions, e.g. CUDA identifiers, templates
     :param clang_format_options: Options for the clang-format tool. Defaults to "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
 
     DocTests:
@@ -58,6 +58,7 @@ class CFunction:
         includes: Optional[List[str]] = None,
         prefunc: str = "",
         desc: str = "",
+        cfunc_decorators: str = "",
         cfunc_type: str = "void",
         name: str = "",
         params: str = "",
@@ -69,7 +70,6 @@ class CFunction:
         ET_schedule_bins_entries: Optional[List[Tuple[str, str]]] = None,
         ET_current_thorn_CodeParams_used: Optional[List[str]] = None,
         ET_other_thorn_CodeParams_used: Optional[List[str]] = None,
-        cfunc_decorators: str = "",
         clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
     ) -> None:
         for attribute in [(name, "name"), (desc, "desc"), (body, "body")]:
@@ -250,6 +250,7 @@ def register_CFunction(
     includes: Optional[List[str]] = None,
     prefunc: str = "",
     desc: str = "",
+    cfunc_decorators: str = "",
     cfunc_type: str = "void",
     name: str = "",
     params: str = "",
@@ -261,7 +262,6 @@ def register_CFunction(
     ET_schedule_bins_entries: Optional[List[Tuple[str, str]]] = None,
     ET_current_thorn_CodeParams_used: Optional[List[str]] = None,
     ET_other_thorn_CodeParams_used: Optional[List[str]] = None,
-    cfunc_decorators: str = "",
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
     """
@@ -272,6 +272,7 @@ def register_CFunction(
     :param includes: A list of strings representing include files.
     :param prefunc: A string containing code above the core function declaration. Defaults to an empty string.
     :param desc: A description of the function.
+    :param cfunc_decorators: Optional decorators for CFunctions, e.g. CUDA identifiers, templates
     :param cfunc_type: The C/C++ type of the function (e.g., void, int). Default is "void".
     :param name: The name of the function.
     :param params: A string representing the function's input parameters. Defaults to an empty string.
@@ -283,7 +284,6 @@ def register_CFunction(
     :param ET_schedule_bins_entries: (ET only) List of tuples for Einstein Toolkit schedule.
     :param ET_current_thorn_CodeParams_used: (ET only) List of CodeParameter names this function uses, for *this thorn's* param.ccl.
     :param ET_other_thorn_CodeParams_used: (ET only) List of CodeParameter names this function uses, for *other thorn's* param.ccl.
-    :param cfunc_decorators: Optional decorators for CFunctions, e.g. CUDA identifiers, templates
     :param clang_format_options: Options for the clang-format tool. Defaults to "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
 
     :raises ValueError: If the name is already registered in CFunction_dict.
