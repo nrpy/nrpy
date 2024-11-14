@@ -152,8 +152,8 @@ def write_CodeParameters_h_files(
     :param project_dir: The path of the project directory.
     :param set_commondata_only: If True, generate code parameters only if `commondata=True`.
         Useful for BHaH projects without grids, like SEOBNR.
-    :param clang_format_options: Options for clang_format.
     :param decorator: Optional decorators for definitions to supress warnings (e.g. [[maybe_unused]])
+    :param clang_format_options: Options for clang_format.
 
     DocTests:
     >>> project_dir = Path("/tmp/tmp_project/")
