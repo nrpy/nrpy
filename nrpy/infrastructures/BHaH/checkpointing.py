@@ -75,7 +75,6 @@ def register_CFunction_read_checkpoint(
     FREAD(compact_out_data, sizeof(REAL), count * NUM_EVOL_GFS, cp_file);
 
     MoL_malloc_y_n_gfs(commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
-    int which_el = 0;
 #pragma omp parallel for
     for (int i = 0; i < count; i++) {
       for (int gf = 0; gf < NUM_EVOL_GFS; gf++) {

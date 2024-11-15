@@ -931,7 +931,7 @@ def register_CFunction_psi4_part(
 """
         loop_prefix = """
 REAL mre4U0,mre4U1,mre4U2,mre4U3,mim4U0,mim4U1,mim4U2,mim4U3,n4U0,n4U1,n4U2,n4U3;
-REAL xx0,xx1,xx2;
+MAYBE_UNUSED REAL xx0,xx1,xx2;
 const int idx3 = IDX3(i0, i1, i2);
 psi4_tetrad(commondata, params,
     in_gfs[IDX4pt(CFGF, idx3)],
