@@ -518,7 +518,7 @@ class CUDA_reductions:
     DOCTEST:
     >>> import json
     >>> from nrpy.helpers.generic import decompress_base64_to_string, diff_strings
-    >>> with open("nrpy/tests/DOCTEST-gpu_kernel__CUDA_reductions.json", 'r') as f:
+    >>> with open("nrpy/tests/DOCTEST-gpu__cuda_utilities.json", 'r') as f:
     ...     expected_str_dict = json.load(f)
     >>> for fp_type in ['float', 'double']:
     ...     for reduction_type, _reduction_func in implemented_reduction_dict.items():
