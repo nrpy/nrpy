@@ -307,11 +307,11 @@ def c_codegen(
     float blah = 1.0F*sinf(M_PI*x);
     <BLANKLINE>
     >>> print(c_codegen(x**5 + x**3 + x - 1/x, "REAL_SIMD_ARRAY blah", include_braces=False, verbose=False, enable_simd=True))
-    const double dbl_Integer_1 = 1.0;
+    static const double dbl_Integer_1 = 1.0;
     const REAL_SIMD_ARRAY _Integer_1 = ConstSIMD(dbl_Integer_1);
     <BLANKLINE>
-    const double dbl_NegativeOne_ = -1.0;
-    const REAL_SIMD_ARRAY _NegativeOne_ = ConstSIMD(dbl_NegativeOne_);
+    static const double dbl_NegativeOne_ = -1.0;
+    const MAYBE_UNUSED REAL_SIMD_ARRAY _NegativeOne_ = ConstSIMD(dbl_NegativeOne_);
     <BLANKLINE>
     REAL_SIMD_ARRAY blah = FusedMulAddSIMD(MulSIMD(x, x), x, FusedMulAddSIMD(MulSIMD(MulSIMD(MulSIMD(x, x), x), x), x, SubSIMD(x, DivSIMD(_Integer_1, x))));
     <BLANKLINE>
@@ -822,9 +822,9 @@ def gridfunction_management_and_FD_codegen(
     const REAL hDD02_i2p1 = in_gfs[IDX4(HDD02GF, i0, i1, i2+1)];
     const REAL hDD02_i2p2 = in_gfs[IDX4(HDD02GF, i0, i1, i2+2)];
     const REAL vU1 = in_gfs[IDX4(VU1GF, i0, i1, i2)];
-    const REAL FDPart1_Rational_1_2 = 1.0/2.0;
-    const REAL FDPart1_Integer_2 = 2;
-    const REAL FDPart1_Rational_3_2 = 3.0/2.0;
+    static const REAL FDPart1_Rational_1_2 = 1.0/2.0;
+    static const REAL FDPart1_Integer_2 = 2;
+    static const REAL FDPart1_Rational_3_2 = 3.0/2.0;
     const REAL FDPart1tmp0 = FDPart1_Rational_3_2*hDD02;
     const REAL UpwindAlgInputhDD_ddnD020 = invdxx0*(-FDPart1_Integer_2*hDD02_i0m1 + FDPart1_Rational_1_2*hDD02_i0m2 + FDPart1tmp0);
     const REAL UpwindAlgInputhDD_ddnD022 = invdxx2*(-FDPart1_Integer_2*hDD02_i2m1 + FDPart1_Rational_1_2*hDD02_i2m2 + FDPart1tmp0);
