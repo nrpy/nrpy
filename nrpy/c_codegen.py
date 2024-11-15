@@ -84,6 +84,7 @@ class CCodeGen:
         mem_alloc_style: Literal["210", "012"] = "210",
         upwind_control_vec: Union[List[sp.Symbol], sp.Symbol] = sp.Symbol("unset"),
         symbol_to_Rational_dict: Optional[Dict[sp.Basic, sp.Rational]] = None,
+        rational_const_alias: str = "static const",
         clang_format_enable: bool = False,
         clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
     ) -> None:
@@ -116,6 +117,7 @@ class CCodeGen:
         :param mem_alloc_style: Memory allocation style.
         :param upwind_control_vec: Upwind control vector as a symbol or list of symbols.
         :param symbol_to_Rational_dict: Dictionary mapping sympy symbols to their corresponding sympy Rationals.
+        :param rational_const_alias: Override default alias for specifying rational constness
         :param clang_format_enable: Boolean to enable clang formatting.
         :param clang_format_options: Options for clang formatting.
 
@@ -179,6 +181,7 @@ class CCodeGen:
         self.mem_alloc_style = mem_alloc_style
         self.upwind_control_vec = upwind_control_vec
         self.symbol_to_Rational_dict = symbol_to_Rational_dict
+        self.rational_const_alias = rational_const_alias
         self.clang_format_enable = clang_format_enable
         self.clang_format_options = clang_format_options
 
@@ -432,6 +435,7 @@ def c_codegen(
             enable_simd=CCGParams.enable_simd,
             enable_GoldenKernels=CCGParams.enable_GoldenKernels,
             fp_type=CCGParams.fp_type,
+            rational_const_alias=CCGParams.rational_const_alias,
         )
 
     # Step 4: If CCGParams.verbose, then output the original SymPy
@@ -500,9 +504,7 @@ def c_codegen(
                     CCGParams.symbol_to_Rational_dict[v].q
                 )
                 if not CCGParams.enable_simd:
-                    RATIONAL_assignment = (
-                        f"static const {CCGParams.fp_type_alias} {str(v)}"
-                    )
+                    RATIONAL_assignment = f"{CCGParams.rational_const_alias} {CCGParams.fp_type_alias} {str(v)}"
                     RATIONAL_expr = sp.Rational(p, q)
                     RATIONAL_decls += sp.ccode(
                         RATIONAL_expr,
