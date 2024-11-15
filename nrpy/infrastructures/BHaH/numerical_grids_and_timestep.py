@@ -188,9 +188,9 @@ REAL ds_min = 1e38;
 LOOP_NOOMP(i0, 0, Nxx_plus_2NGHOSTS0,
            i1, 0, Nxx_plus_2NGHOSTS1,
            i2, 0, Nxx_plus_2NGHOSTS2) {
-    const REAL xx0 = xx[0][i0];
-    const REAL xx1 = xx[1][i1];
-    const REAL xx2 = xx[2][i2];
+    const MAYBE_UNUSED REAL xx0 = xx[0][i0];
+    const MAYBE_UNUSED REAL xx1 = xx[1][i1];
+    const MAYBE_UNUSED REAL xx2 = xx[2][i2];
     REAL dsmin0, dsmin1, dsmin2;
 """
     rfm = refmetric.reference_metric[CoordSystem]

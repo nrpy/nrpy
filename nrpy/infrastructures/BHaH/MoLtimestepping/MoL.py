@@ -463,10 +463,10 @@ const REAL time_start = commondata->time;
 
     gf_aliases = f"""// Set gridfunction aliases from gridfuncs struct
 // y_n gridfunctions
-REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
+REAL MAYBE_UNUSED *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
 // Temporary timelevel & AUXEVOL gridfunctions:\n"""
     for gf in non_y_n_gridfunctions_list:
-        gf_aliases += f"REAL *restrict {gf} = {gf_prefix}{gf};\n"
+        gf_aliases += f"REAL MAYBE_UNUSED *restrict {gf} = {gf_prefix}{gf};\n"
 
     gf_aliases += "params_struct *restrict params = &griddata[grid].params;\n"
     if enable_rfm_precompute:
@@ -861,7 +861,7 @@ def register_CFunctions(
     >>> from nrpy.helpers.generic import compress_string_to_base64, decompress_base64_to_string, diff_strings
     >>> cfc.CFunction_dict.clear()
     >>> register_CFunctions()
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4BqsA7tdABGaScZHDxOiAHcc/CXr2duHb+UiUyv83OVALtvJ+o7uK/PoSVGe7rPuvil8asOnzsX/5aNqzgQh3F7K147eoVkvuX5XqBlwQ4pLa1z+qz4R8cbeO2C3kSzRL/nx5WTsauHKk/IcKH3IGIYRqchbd6UjUXwbc8LP9RI22Bn0O94AqK7TSUZ1L0DbWFZwSXS0hV4BRn8ykOLwxf6oeTUUR5JemW81WXtk31MDlCGj9O1lAtBFR3q8rop0mhU/UFumRk4eUzWbJdO1T8XWdYD5kZMBXhysFYEQ0prk34IbkR2cbNS4yyT5/B6KO6ExvWjYBgtQ3yqFBaOh2aroKMobVG0rC02Y8vYQwbRW5dml8hwDs+hyGMwHp+Mc1xhLyaRVjIUw/fMm84U39RrY9M3Kgq990ryvV6pqNh6xRNxSvU/pr4mbfiAzQgCrGwdAzvdk0XfgLNhxMkqJ8tuSHoOsNuktfxouhLGetmjK1xZSrBpA673c9L4EQ4iAI40cW3EeKOZAMAlX7dG14ydIU4ONZ74tNI3B7Rs9eQdOCLNsNbSsbVwjwwXVMm64V0Vs+M2fs3S26rGgD9iPBDy2M/YoCZb811h4Q4OQORwk+MEVR/h1ppFAcsWoM2DkhQWRH66aCm7NYcE4cyLPGR4kSvH3IBtCkeit30P3FWmHSPty+G12ThHwo11rOHrAVhF5Ff9zlfAA5D1RAm9+40mUfpEEQSgVyyS4saQQacvgpC0p19zEDexyfVnVQMy4YoD45GQHyWE9tR+3odBDQkrWwd5HiM0PDtMHLumzzI4HP126H1aCz/Y3U+V6AiSbO55C049BCHh6RAiOJZ9naNwXX5pdRQ8CKEmP1VEhw4YQZYrBv3dfuzZr7Abc2N+oKV0OYJ+TsO0XkNz5ZmIS8hcJWvt7IY741zfP0K0yUXVaev8ZySdbnpA8FzB5fSIAD8LK4NI50LwdtVzrZZskjku2WLLzuMVIik185a1A9hv8WUZS4LcHgyKirSW0ImSFt5a23vguz5Fn+gEZWl5W6dzkRt3Kgv/GfYouAIGb3G+jP3In/pvf5JANdvxiN1VXr+aS3NBkeLNHpCxVX476yU94rDImVj7Ns3AmsXKpJ8oCAFFmvai2gO+gl5j1kuHkN4mkl86iTJSNOJedEAMJz85cZyikiNasM5bNUE0hrF9usG3dm5Z5q2wfBXlV23x/FoE2ZPOlRaPj6xwLKDI3yyzBVqda5KSuXTebHmx4Nj1bw5HdDdYZXYsEDojsR7gQcQAAAK2wzQneM82xAAHXB601AAD5wu/jscRn+wIAAAAABFla")
+    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4BuwA8xdABGaScZHDxOiAHcc/CXr2duHb+UiUyv83OVALtvJ+o7uK/PoSVGe7rPuvil8asOnzsX/5aNqzgQh3F7K147eoVkvuX5XqBlwQ4pLa1z+qz4R8cbeO2C3kSzRL/nx5WTsauHKk/IcKH3IGIYRqchbd6UjUXwbc8LP9RI22Bn0O94AqK7TSUZ1L0DbWFZwSXS0hV4BRn8ykOLwxf6oeTUUR5JemW81WXtk31MDlCGj9O1lAtBFR3q8rop0mhU/UFumRk4eUzWbJdO1T8XWdYD5kZMBXhysFYEQ0prk34IbkR2cbNS4yyT5/B6KO6ExvWjYBgtQ3yqFBaOh2aroKMobVG0rC02Y8vYQwbRW5dml8hwDs+hyGMwHp+Mc1xhLyaRVjIUw/fMm84U39RrY9M3Kgq990ryvV6pqNh6xRNxSvU/pr4mbfiAzQgCrGwdAzvdk0XfgLNhxMkqJ8tuSHoOsNuktfxouhLGetmjK1xZSrBpA673c9LOhu76wkunIN0SX4T7WEGaUiGMMq3IjEVIjt2YRv3k0+gXVe78IP1NWCDxIsQ81XEwYK1xXnLWfxRHYQ1aacoszkdboUo5thgI5SGZvvSr5mBU9flXQE/zC2oyaCpTlLqUGhZlt1KZUrDsxzJVGNWTc6sCKh3fqoVVYMVAPfZe2XXlBJftGa6dsZ5wsNjuMxydk+bUuGbThiO0YAtCoKZuPaAGDsILSCR/MahWq2qQLfs7dCS5fztK5VS1KGp4z7WlGnokS0i0bxwskfHTNoIhvRal51sTbJRn6JAPSYiNa0NFCznHAqrI0AfZ6se8aG4IfgpO7xE7/zB7LcagRK5gFO+iEatNxzbaO7LAs1SLtSbqmXE+3cBTCHnjnuvhez7BcsCEsePZ3/0GcgfgHkYIuf2wl6jiR19YuDDyF8tf7sWPryh8ewttidNs6P6kaNj1SdJBrnwuZI2mlVnfoJ/RNpBSEh1tim1gRRGNTe+e3KgyArj4rG6u2zLmIWPPYDmC4LZIhjhNH8MDMKxBwrrvsdHUi58eGg3jteSJgUBIGSSslqPImP/BWOPjLyDgzWMmyj3w1JCrLdlchWj5z+AIJ90BRBi8pev11dlosnnZhxfgPVdVWjTsLKQTjFaKkRdvw0Uajs3KkFB+ii9KJVrqXzunKTxWvcxoboWjwzL6WN5KjQhwuG4PKBeeECX1lsw19rGz2J2Ce5ps0Bn3snYscmfDtKqgZ9kxiiu0n0l0WvGHBu6BbP5TADW9NkhaxMbZ4UhVPit4gQtk0Mz8Lphn1DRBtWasgAAATlmgP1hMqcwAB6AexNwAAyEuID7HEZ/sCAAAAAARZWg==")
     >>> returned_string = cfc.CFunction_dict["MoL_step_forward_in_time"].full_function
     >>> if returned_string != expected_string:
     ...    compressed_str = compress_string_to_base64(returned_string)

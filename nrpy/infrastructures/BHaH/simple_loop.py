@@ -72,19 +72,19 @@ def simple_loop(
     for (int i2 = NGHOSTS; i2 < NGHOSTS + Nxx2; i2++) {
       for (int i1 = NGHOSTS; i1 < NGHOSTS + Nxx1; i1++) {
         for (int i0 = NGHOSTS; i0 < NGHOSTS + Nxx0; i0++) {
-          const REAL f1_of_xx1 = rfmstruct->f1_of_xx1[i1];
-          const REAL f1_of_xx1__D1 = rfmstruct->f1_of_xx1__D1[i1];
-          const REAL f1_of_xx1__DD11 = rfmstruct->f1_of_xx1__DD11[i1];
-          const REAL f4_of_xx1 = rfmstruct->f4_of_xx1[i1];
-          const REAL f4_of_xx1__D1 = rfmstruct->f4_of_xx1__D1[i1];
-          const REAL f4_of_xx1__DD11 = rfmstruct->f4_of_xx1__DD11[i1];
-          const REAL f0_of_xx0 = rfmstruct->f0_of_xx0[i0];
-          const REAL f0_of_xx0__D0 = rfmstruct->f0_of_xx0__D0[i0];
-          const REAL f0_of_xx0__DD00 = rfmstruct->f0_of_xx0__DD00[i0];
-          const REAL f0_of_xx0__DDD000 = rfmstruct->f0_of_xx0__DDD000[i0];
-          const REAL f2_of_xx0 = rfmstruct->f2_of_xx0[i0];
-          const REAL f2_of_xx0__D0 = rfmstruct->f2_of_xx0__D0[i0];
-          const REAL f2_of_xx0__DD00 = rfmstruct->f2_of_xx0__DD00[i0];
+          const MAYBE_UNUSED REAL f1_of_xx1 = rfmstruct->f1_of_xx1[i1];
+          const MAYBE_UNUSED REAL f1_of_xx1__D1 = rfmstruct->f1_of_xx1__D1[i1];
+          const MAYBE_UNUSED REAL f1_of_xx1__DD11 = rfmstruct->f1_of_xx1__DD11[i1];
+          const MAYBE_UNUSED REAL f4_of_xx1 = rfmstruct->f4_of_xx1[i1];
+          const MAYBE_UNUSED REAL f4_of_xx1__D1 = rfmstruct->f4_of_xx1__D1[i1];
+          const MAYBE_UNUSED REAL f4_of_xx1__DD11 = rfmstruct->f4_of_xx1__DD11[i1];
+          const MAYBE_UNUSED REAL f0_of_xx0 = rfmstruct->f0_of_xx0[i0];
+          const MAYBE_UNUSED REAL f0_of_xx0__D0 = rfmstruct->f0_of_xx0__D0[i0];
+          const MAYBE_UNUSED REAL f0_of_xx0__DD00 = rfmstruct->f0_of_xx0__DD00[i0];
+          const MAYBE_UNUSED REAL f0_of_xx0__DDD000 = rfmstruct->f0_of_xx0__DDD000[i0];
+          const MAYBE_UNUSED REAL f2_of_xx0 = rfmstruct->f2_of_xx0[i0];
+          const MAYBE_UNUSED REAL f2_of_xx0__D0 = rfmstruct->f2_of_xx0__D0[i0];
+          const MAYBE_UNUSED REAL f2_of_xx0__DD00 = rfmstruct->f2_of_xx0__DD00[i0];
           // <INTERIOR>
         } // END LOOP: for (int i0 = NGHOSTS; i0 < NGHOSTS+Nxx0; i0++)
       } // END LOOP: for (int i1 = NGHOSTS; i1 < NGHOSTS+Nxx1; i1++)
@@ -95,21 +95,21 @@ def simple_loop(
     #pragma omp parallel for collapse(2)
     for (int i2 = NGHOSTS; i2 < NGHOSTS + Nxx2; i2++) {
       for (int i1 = NGHOSTS; i1 < NGHOSTS + Nxx1; i1++) {
-        const REAL f1_of_xx1 = rfmstruct->f1_of_xx1[i1];
-        const REAL f1_of_xx1__D1 = rfmstruct->f1_of_xx1__D1[i1];
-        const REAL f1_of_xx1__DD11 = rfmstruct->f1_of_xx1__DD11[i1];
-        const REAL f4_of_xx1 = rfmstruct->f4_of_xx1[i1];
-        const REAL f4_of_xx1__D1 = rfmstruct->f4_of_xx1__D1[i1];
-        const REAL f4_of_xx1__DD11 = rfmstruct->f4_of_xx1__DD11[i1];
+        const MAYBE_UNUSED REAL f1_of_xx1 = rfmstruct->f1_of_xx1[i1];
+        const MAYBE_UNUSED REAL f1_of_xx1__D1 = rfmstruct->f1_of_xx1__D1[i1];
+        const MAYBE_UNUSED REAL f1_of_xx1__DD11 = rfmstruct->f1_of_xx1__DD11[i1];
+        const MAYBE_UNUSED REAL f4_of_xx1 = rfmstruct->f4_of_xx1[i1];
+        const MAYBE_UNUSED REAL f4_of_xx1__D1 = rfmstruct->f4_of_xx1__D1[i1];
+        const MAYBE_UNUSED REAL f4_of_xx1__DD11 = rfmstruct->f4_of_xx1__DD11[i1];
     <BLANKLINE>
         for (int i0 = NGHOSTS; i0 < NGHOSTS + Nxx0; i0++) {
-          const REAL f0_of_xx0 = rfmstruct->f0_of_xx0[i0];
-          const REAL f0_of_xx0__D0 = rfmstruct->f0_of_xx0__D0[i0];
-          const REAL f0_of_xx0__DD00 = rfmstruct->f0_of_xx0__DD00[i0];
-          const REAL f0_of_xx0__DDD000 = rfmstruct->f0_of_xx0__DDD000[i0];
-          const REAL f2_of_xx0 = rfmstruct->f2_of_xx0[i0];
-          const REAL f2_of_xx0__D0 = rfmstruct->f2_of_xx0__D0[i0];
-          const REAL f2_of_xx0__DD00 = rfmstruct->f2_of_xx0__DD00[i0];
+          const MAYBE_UNUSED REAL f0_of_xx0 = rfmstruct->f0_of_xx0[i0];
+          const MAYBE_UNUSED REAL f0_of_xx0__D0 = rfmstruct->f0_of_xx0__D0[i0];
+          const MAYBE_UNUSED REAL f0_of_xx0__DD00 = rfmstruct->f0_of_xx0__DD00[i0];
+          const MAYBE_UNUSED REAL f0_of_xx0__DDD000 = rfmstruct->f0_of_xx0__DDD000[i0];
+          const MAYBE_UNUSED REAL f2_of_xx0 = rfmstruct->f2_of_xx0[i0];
+          const MAYBE_UNUSED REAL f2_of_xx0__D0 = rfmstruct->f2_of_xx0__D0[i0];
+          const MAYBE_UNUSED REAL f2_of_xx0__DD00 = rfmstruct->f2_of_xx0__DD00[i0];
           // <INTERIOR>
         } // END LOOP: for (int i0 = NGHOSTS; i0 < NGHOSTS+Nxx0; i0++)
       } // END LOOP: for (int i1 = NGHOSTS; i1 < NGHOSTS+Nxx1; i1++)
@@ -140,9 +140,9 @@ def simple_loop(
     if read_xxs:
         if not enable_simd:
             read_rfm_xx_arrays = [
-                "const REAL xx0 = xx[0][i0];",
-                "const REAL xx1 = xx[1][i1];",
-                "const REAL xx2 = xx[2][i2];",
+                "const MAYBE_UNUSED REAL xx0 = xx[0][i0];",
+                "const MAYBE_UNUSED REAL xx1 = xx[1][i1];",
+                "const MAYBE_UNUSED REAL xx2 = xx[2][i2];",
             ]
         else:
             raise ValueError("no innerSIMD support for Read_xxs (currently).")

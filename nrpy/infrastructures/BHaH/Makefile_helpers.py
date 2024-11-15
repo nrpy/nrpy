@@ -141,9 +141,9 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
 
     # Compiler flags
     CFLAGS_dict = {
-        "default": "-std=gnu99 -O2 -march=native -g -Wall -Wno-unused-variable",
-        "fast": "-std=gnu99 -O3 -funroll-loops -march=native -g -Wall -Wno-unused-variable",
-        "debug": "-std=gnu99 -O2 -g -Wall -Wno-unused-variable -Wno-unknown-pragmas",
+        "default": "-std=gnu99 -O2 -march=native -g -Wall",
+        "fast": "-std=gnu99 -O3 -funroll-loops -march=native -g -Wall",
+        "debug": "-std=gnu99 -O2 -g -Wall -Wno-unknown-pragmas",
         "nvcc": "-Xcompiler -fopenmp -Xcompiler -g -O2 -arch=native -O2 -Xcompiler=-march=native -Xcompiler -Wall --forward-unknown-to-host-compiler --Werror cross-execution-space-call --relocatable-device-code=true -allow-unsupported-compiler",
     }
     if addl_CFLAGS:
