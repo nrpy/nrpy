@@ -85,7 +85,7 @@ jobs:
 
           if [[ ! $python_file =~ nrpy/examples/.* ]]; then
             echo "-={ Step $step_counter: Doctests/run Python module }=-"
-            DOCTEST_MODE=1 PYTHONPATH=.:$PYTHONPATH python $python_file || { failed_tests+=("doctest in $python_file"); break; }
+            PYTHONPATH=.:$PYTHONPATH python $python_file || { failed_tests+=("doctest in $python_file"); break; }
             ((step_counter++))
           fi
 
