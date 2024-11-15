@@ -79,7 +79,7 @@ while IFS= read -r python_file; do
 
   # Run Doctests if not in ./ (root directory) or nrpy/examples/
   if [[ ! $python_file =~ ^./[^/]*\.py && ! $python_file =~ nrpy/examples/.* ]]; then
-    run_test_step "Doctests" "python \"$python_file\"" "doctests"
+    run_test_step "Doctests" "PYTHONPATH=.:$PYTHONPATH python \"$python_file\"" "doctests"
   fi
 
 

@@ -129,7 +129,7 @@ jobs:
 
           # Run Doctests if not in nrpy/examples/ and not in root directory
           if [[ ! $python_file =~ nrpy/examples/.* && ! $python_file =~ ^\./[^/]+\.py$ ]]; then
-            run_test_step "Doctests" "python \"$python_file\"" "doctests"
+            run_test_step "Doctests" "PYTHONPATH=.:$PYTHONPATH python \"$python_file\"" "doctests"
           fi
 
           # Turns out that black in Python 3.6 & 3.7 has a heart attack when parsing equations/general_relativity/BSSN_quantities.py:
