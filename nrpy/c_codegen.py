@@ -500,7 +500,9 @@ def c_codegen(
                     CCGParams.symbol_to_Rational_dict[v].q
                 )
                 if not CCGParams.enable_simd:
-                    RATIONAL_assignment = f"const {CCGParams.fp_type_alias} {str(v)}"
+                    RATIONAL_assignment = (
+                        f"static const {CCGParams.fp_type_alias} {str(v)}"
+                    )
                     RATIONAL_expr = sp.Rational(p, q)
                     RATIONAL_decls += sp.ccode(
                         RATIONAL_expr,
@@ -664,11 +666,13 @@ def c_codegen(
 
             for i, varname in enumerate(simd_const_varnms):
                 simd_RATIONAL_decls += (
-                    f"const double dbl{varname} = {simd_const_values[i]};\n"
+                    f"static const double dbl{varname} = {simd_const_values[i]};\n"
                 )
-                simd_RATIONAL_decls += (
-                    f"const REAL_SIMD_ARRAY {varname} = ConstSIMD(dbl{varname});\n"
-                )
+                # Workaround for possibly unused NegativeOne SIMD variables.
+                maybe_unused = " "
+                if varname.endswith("NegativeOne_"):
+                    maybe_unused = " MAYBE_UNUSED "
+                simd_RATIONAL_decls += f"const{maybe_unused}REAL_SIMD_ARRAY {varname} = ConstSIMD(dbl{varname});\n"
                 simd_RATIONAL_decls += "\n"
 
     # Step 6: Construct final output string
@@ -909,7 +913,6 @@ def gridfunction_management_and_FD_codegen(
                         str(symb).replace("FDPROTO", gf_name)
                     )
             FDexprs += [proto_FDexprs[proto_idx].xreplace(replace_dict)]
-
         return symbol_to_Rational_dict, FDexprs, FDlhsvarnames
 
     (
@@ -1018,7 +1021,6 @@ def gridfunction_management_and_FD_codegen(
                 "symbol_to_Rational_dict": symbol_to_Rational_dict,
             }
         )
-
         if CCGParams.enable_fd_functions:
             Coutput += read_from_memory_Ccode
             func_call_list = []

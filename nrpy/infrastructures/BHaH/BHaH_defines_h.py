@@ -178,11 +178,13 @@ def output_BHaH_defines_h(
     __typeof__(A) _a = (A); \
     _a * _a; \
 }})
+#ifndef MAYBE_UNUSED
 #if defined(__GNUC__) || defined(__clang__) || defined(__NVCC__)
-    #define MAYBE_UNUSED __attribute__((unused))
+#define MAYBE_UNUSED __attribute__((unused))
 #else
-    #define MAYBE_UNUSED
-#endif
+#define MAYBE_UNUSED
+#endif // END check for GCC, Clang, or NVCC
+#endif // END MAYBE_UNUSED
 """
 
     code_params_includes_define_type = False

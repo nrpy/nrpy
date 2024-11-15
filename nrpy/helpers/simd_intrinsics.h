@@ -1,3 +1,10 @@
+#ifndef MAYBE_UNUSED
+#if defined(__GNUC__) || defined(__clang__) || defined(__NVCC__)
+#define MAYBE_UNUSED __attribute__((unused))
+#else
+#define MAYBE_UNUSED
+#endif // END check for GCC, Clang, or NVCC
+#endif // END MAYBE_UNUSED
 
 // If compiled with AVX512F SIMD instructions enabled:
 #ifdef __AVX512F__
