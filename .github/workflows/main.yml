@@ -129,16 +129,7 @@ jobs:
 
           # Run Doctests if not in nrpy/examples/ and not in root directory
           if [[ ! $python_file =~ nrpy/examples/.* && ! $python_file =~ ^\./[^/]+\.py$ ]]; then
-            echo "-={ Step $step_counter: Doctests }=-"
-            # Capture the output of the doctest run
-            doctest_output=$(python "$python_file" 2>&1)
-            doctest_exit_code=$?
-            echo "$doctest_output"
-
-            if [ $doctest_exit_code -ne 0 ]; then
-              failed_tests+=("doctests in $python_file")
-            fi
-            ((step_counter++))
+            run_test_step "Doctests" "python \"$python_file\"" "doctests"
           fi
 
           # Turns out that black in Python 3.6 & 3.7 has a heart attack when parsing equations/general_relativity/BSSN_quantities.py:
