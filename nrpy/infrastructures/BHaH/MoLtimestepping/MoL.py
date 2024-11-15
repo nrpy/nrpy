@@ -474,7 +474,7 @@ REAL MAYBE_UNUSED *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
             "const rfm_struct *restrict rfmstruct = &griddata[grid].rfmstruct;\n"
         )
     else:
-        gf_aliases += "REAL *restrict xx[3]; for(int ww=0;ww<3;ww++) xx[ww] = griddata[grid].xx[ww];\n"
+        gf_aliases += "REAL MAYBE_UNUSED *restrict xx[3]; for(int ww=0;ww<3;ww++) xx[ww] = griddata[grid].xx[ww];\n"
 
     if enable_curviBCs:
         gf_aliases += "const bc_struct *restrict bcstruct = &griddata[grid].bcstruct;\n"
