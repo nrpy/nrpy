@@ -77,19 +77,11 @@ while IFS= read -r python_file; do
 
   echo "-={ $python_file : file $file_counter of $total_files for static analysis }=-"
 
-  # Run Doctests if not in nrpy/examples/
-  if [[ ! $python_file =~ nrpy/examples/.* ]]; then
-    echo "-={ Step $step_counter: Doctests }=-"
-    # Capture the output of the doctest run
-    doctest_output=$(python "$python_file" 2>&1)
-    doctest_exit_code=$?
-    echo "$doctest_output"
-
-    if [ $doctest_exit_code -ne 0 ]; then
-      failed_tests+=("doctests in $python_file")
-    fi
-    ((step_counter++))
+  # Run Doctests if not in ./ (root directory) or nrpy/examples/
+  if [[ ! $python_file =~ ^./[^/]*\.py && ! $python_file =~ nrpy/examples/.* ]]; then
+    run_test_step "Doctests" "python \"$python_file\"" "doctests"
   fi
+
 
   # Conditional static analysis for specific Python versions
   if [[ "$python_version" != *"3.6.7"* && "$python_version" != *"3.7.13"* && "$python_version" != *"3.8.18"* ]]; then
