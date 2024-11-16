@@ -9,15 +9,12 @@ from inspect import currentframe as cfr
 from types import FrameType as FT
 from typing import Union, cast
 
-from mpmath import mpc, mpf  # type: ignore
-
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.finite_difference as fin
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.simple_loop as lp
-import nrpy.reference_metric as refmetric
 from nrpy.equations.general_relativity import psi4, psi4_tetrads
 
 
@@ -42,8 +39,8 @@ def register_CFunction_psi4(
     # Set up the C function for psi4
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
-    desc = f"Compute psi4 at all interior gridpoints"
-    name = f"psi4"
+    desc = "Compute psi4 at all interior gridpoints"
+    name = "psi4"
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], const REAL *restrict in_gfs, REAL *restrict diagnostic_output_gfs"
 
     gri.register_gridfunctions(["psi4_re", "psi4_im"], group="AUX")
@@ -56,7 +53,6 @@ def register_CFunction_psi4(
 }
 """
 
-    rfm = refmetric.reference_metric[CoordSystem]
     loop_prefix = rf"""
 REAL xx0, xx1, xx2;
 {{
@@ -103,11 +99,11 @@ MAYBE_UNUSED REAL {psi4_class.metric_deriv_var_list_str};
             [psi4_class.psi4_re, psi4_class.psi4_im],
             [
                 gri.BHaHGridFunction.access_gf(
-                    f"psi4_re",
+                    "psi4_re",
                     gf_array_name="diagnostic_output_gfs",
                 ),
                 gri.BHaHGridFunction.access_gf(
-                    f"psi4_im",
+                    "psi4_im",
                     gf_array_name="diagnostic_output_gfs",
                 ),
             ],
@@ -162,7 +158,7 @@ def register_CFunction_psi4_metric_deriv_quantities(
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "Compute metric derivative quantities gamma_{ij,kl}, Gamma^i_{jk}, and K_{ij,k} needed for psi4."
     name = "psi4_metric_deriv_quantities"
-    params = f"""const commondata_struct *restrict commondata, const params_struct *restrict params,
+    params = """const commondata_struct *restrict commondata, const params_struct *restrict params,
     const REAL *restrict in_gfs, const REAL xx0, const REAL xx1, const REAL xx2, const int i0, const int i1, const int i2, REAL arr_gammaDDdDD[81], REAL arr_GammaUDD[27], REAL arr_KDDdD[27]"""
 
     body = ccg.c_codegen(
