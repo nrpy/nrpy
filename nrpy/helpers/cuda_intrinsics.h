@@ -14,9 +14,9 @@
 
 // Fused Multiply-Add/Subtract Operations (Scalar)
 #define FusedMulAddCUDA(a, b, c) __fma_rn((a), (b), (c))
-#define FusedMulSubCUDA(a, b, c) FusedMulAddCUDA((a), (b), MulCUDA((FDPart1_NegativeOne_), c))
+#define FusedMulSubCUDA(a, b, c) FusedMulAddCUDA((a), (b), MulCUDA((-1.0), c))
 #define NegFusedMulAddCUDA(a, b, c) SubCUDA((c), MulCUDA((a), (b)))
-#define NegFusedMulSubCUDA(a, b, c) MulCUDA((FDPart1_NegativeOne_),(FusedMulAddCUDA((a), (b), (c))))
+#define NegFusedMulSubCUDA(a, b, c) MulCUDA((-1.0),(FusedMulAddCUDA((a), (b), (c))))
 
 // Mathematical Functions (Scalar)
 #define SqrtCUDA(a) (__dsqrt_rn((a)))
