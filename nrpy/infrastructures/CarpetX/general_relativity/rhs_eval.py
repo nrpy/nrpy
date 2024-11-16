@@ -84,7 +84,7 @@ def register_CFunction_rhs_eval(
 
     includes = define_standard_includes()
     if enable_simd:
-        includes += [("./simd/simd_intrinsics.h")]
+        includes += [("./intrinsics/simd_intrinsics.h")]
     desc = r"""Set RHSs for the BSSN evolution equations."""
     name = f"{thorn_name}_rhs_eval_order_{fd_order}"
     body = f"""  DECLARE_CCTK_ARGUMENTSX_{name};

@@ -49,7 +49,7 @@ def register_CFunction_Ricci_eval(
 
     includes = define_standard_includes()
     if enable_simd:
-        includes += [("./simd/simd_intrinsics.h")]
+        includes += [("./intrinsics/simd_intrinsics.h")]
     desc = r"""Compute Ricci tensor for the BSSN evolution equations."""
     name = f"{thorn_name}_Ricci_eval_order_{fd_order}"
     body = f"""  DECLARE_CCTK_ARGUMENTSX_{name};

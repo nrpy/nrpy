@@ -37,10 +37,32 @@ par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Code-generation-time parameters:
 project_name = "nrpyelliptic_conformally_flat"
+fp_type = "double"
 grid_physical_size = 1.0e6
 t_final = grid_physical_size  # This parameter is effectively not used in NRPyElliptic
 nn_max = 10000  # Sets the maximum number of relaxation steps
-log10_residual_tolerance = -15.8  # Set tolerance for log10(residual) to stop relaxation
+
+
+def get_log10_residual_tolerance(fp_type_str: str = "double") -> float:
+    """
+    Determine the residual tolerance based on the fp_precision.
+
+    :param fp_type_str: string representing the floating point type.
+    :return: float of the residual tolerance based on fp_type.
+    :raises ValueError: If the input fp_type_str branch is not defined.
+    """
+    res: float = -1.0
+    if fp_type_str == "double":
+        res = -15.8
+    elif fp_type_str == "float":
+        res = -10.0
+    else:
+        raise ValueError(f"residual tolerence not defined for {fp_type_str} precision")
+    return res
+
+
+# Set tolerance for log10(residual) to stop relaxation
+log10_residual_tolerance = get_log10_residual_tolerance(fp_type_str=fp_type)
 default_diagnostics_output_every = 100
 default_checkpoint_every = 50.0
 eta_damping = 11.0
@@ -76,6 +98,9 @@ radiation_BC_fd_order = 6
 enable_simd = True
 parallel_codegen_enable = True
 boundary_conditions_desc = "outgoing radiation"
+list_of_CoordSystems = [CoordSystem]
+NUMGRIDS = len(list_of_CoordSystems)
+par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
 # fmt: off
 initial_data_type = "gw150914"  # choices are: "gw150914", "axisymmetric", and "single_puncture"
 
@@ -121,6 +146,7 @@ single_puncture_params = {
     "S0_z": 0.2,
 }
 # fmt: on
+project_name = f"nrpyelliptic_conformally_flat"
 
 project_dir = os.path.join("project", project_name)
 
@@ -139,31 +165,38 @@ par.adjust_CodeParam_default("t_final", t_final)
 
 
 # Generate functions to set initial guess
-nrpyellClib.register_CFunction_initial_guess_single_point()
+nrpyellClib.register_CFunction_initial_guess_single_point(fp_type=fp_type)
 nrpyellClib.register_CFunction_initial_guess_all_points(
-    OMP_collapse=OMP_collapse, enable_checkpointing=enable_checkpointing
+    OMP_collapse=OMP_collapse,
+    enable_checkpointing=enable_checkpointing,
+    fp_type=fp_type,
 )
 
 # Generate function to set variable wavespeed
 nrpyellClib.register_CFunction_variable_wavespeed_gfs_all_points(
-    CoordSystem=CoordSystem
+    CoordSystem=CoordSystem, fp_type=fp_type
 )
 
 # Generate functions to set AUXEVOL gridfunctions
-nrpyellClib.register_CFunction_auxevol_gfs_single_point(CoordSystem=CoordSystem)
-nrpyellClib.register_CFunction_auxevol_gfs_all_points(OMP_collapse=OMP_collapse)
+nrpyellClib.register_CFunction_auxevol_gfs_single_point(
+    CoordSystem=CoordSystem, fp_type=fp_type
+)
+nrpyellClib.register_CFunction_auxevol_gfs_all_points(
+    OMP_collapse=OMP_collapse, fp_type=fp_type
+)
 
 # Generate function that calls functions to set variable wavespeed and all other AUXEVOL gridfunctions
 nrpyellClib.register_CFunction_initialize_constant_auxevol()
 
 numericalgrids.register_CFunctions(
-    list_of_CoordSystems=[CoordSystem],
-    list_of_grid_physical_sizes=[grid_physical_size],
+    list_of_CoordSystems=list_of_CoordSystems,
+    list_of_grid_physical_sizes=[grid_physical_size for c in list_of_CoordSystems],
     Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
+    fp_type=fp_type,
 )
-xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
+xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem, fp_type=fp_type)
 
 nrpyellClib.register_CFunction_diagnostics(
     CoordSystem=CoordSystem,
@@ -172,7 +205,7 @@ nrpyellClib.register_CFunction_diagnostics(
 
 if enable_rfm_precompute:
     rfm_precompute.register_CFunctions_rfm_precompute(
-        list_of_CoordSystems=[CoordSystem]
+        list_of_CoordSystems=list_of_CoordSystems, fp_type=fp_type
     )
 
 # Generate function to compute RHSs
@@ -181,6 +214,7 @@ nrpyellClib.register_CFunction_rhs_eval(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_simd=enable_simd,
     OMP_collapse=OMP_collapse,
+    fp_type=fp_type,
 )
 
 # Generate function to compute residuals
@@ -189,10 +223,13 @@ nrpyellClib.register_CFunction_compute_residual_all_points(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_simd=enable_simd,
     OMP_collapse=OMP_collapse,
+    fp_type=fp_type,
 )
 
 # Generate diagnostics functions
-nrpyellClib.register_CFunction_compute_L2_norm_of_gridfunction(CoordSystem=CoordSystem)
+nrpyellClib.register_CFunction_compute_L2_norm_of_gridfunction(
+    CoordSystem=CoordSystem, fp_type=fp_type
+)
 
 # Register function to check for stop conditions
 nrpyellClib.register_CFunction_check_stop_conditions()
@@ -201,7 +238,9 @@ if __name__ == "__main__" and parallel_codegen_enable:
     pcg.do_parallel_codegen()
 
 cbc.CurviBoundaryConditions_register_C_functions(
-    list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order
+    list_of_CoordSystems=list_of_CoordSystems,
+    radiation_BC_fd_order=radiation_BC_fd_order,
+    fp_type=fp_type,
 )
 rhs_string = """rhs_eval(commondata, params, rfmstruct,  auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
 if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0){
@@ -220,6 +259,7 @@ MoL.register_CFunctions(
   apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
+    fp_type=fp_type,
 )
 chkpt.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
 
@@ -311,7 +351,8 @@ cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
 )
 Bdefines_h.output_BHaH_defines_h(
     project_dir=project_dir,
-    enable_simd=enable_simd,
+    enable_intrinsics=enable_simd,
+    REAL_means=fp_type,
 )
 # Define post_MoL_step_forward_in_time string for main function
 post_MoL_step_forward_in_time = r"""    check_stop_conditions(&commondata, griddata);
@@ -339,7 +380,7 @@ if enable_simd:
         package="nrpy.helpers",
         filenames_list=["simd_intrinsics.h"],
         project_dir=project_dir,
-        subdirectory="simd",
+        subdirectory="intrinsics",
     )
 
 Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
