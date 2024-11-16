@@ -46,6 +46,7 @@ fp_type_to_sympy_type = {
     "double": sp_ast.float64,
     "float": sp_ast.float32,
     "long double": sp_ast.float80,
+    "set by NRPyParameter par.parval_from_str('fp_type')": sp_ast.float64,
     # Unsupported types by sympy ccode generator
     # "std::bfloat16_t": sp_ast.float16,
     # "std::float16_t" : sp_ast.float16,
@@ -131,11 +132,12 @@ class CCodeGen:
         >>> c = CCodeGen(fp_type="double")
         >>> c.fp_type
         'double'
+        >>> print(tuple(fp_type_to_sympy_type.keys()))
+        ('double', 'float', 'long double', "set by NRPyParameter par.parval_from_str('fp_type')")
         >>> CCodeGen(fp_type="foo")
         Traceback (most recent call last):
           ...
         ValueError: In function '__init__': parameter 'fp_type' has value: 'foo', which is not in the allowed_values set: ('double', 'float', 'long double', "set by NRPyParameter par.parval_from_str('fp_type')")
-
         """
         validate_literal_arguments()
         self.prestring = prestring
