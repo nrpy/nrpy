@@ -114,7 +114,6 @@ def register_BHaH_defines(module: str, BHaH_defines: str) -> None:
 def output_BHaH_defines_h(
     project_dir: str,
     additional_includes: Optional[List[str]] = None,
-    REAL_means: str = "double",
     restrict_pointer_type: str = "*restrict",
     enable_intrinsics: bool = True,
     intrinsics_header_lst: List[str] = ["simd_intrinsics.h"],
@@ -129,7 +128,6 @@ def output_BHaH_defines_h(
 
     :param project_dir: Directory where the project C code is output
     :param additional_includes: Additional header files to be included in the output
-    :param REAL_means: The floating-point type to be used in the C code (default is "double")
     :param restrict_pointer_type: Allow modifications of restrict pointer type.  Default is *restrict
     :param enable_intrinsics: Flag to enable hardware intrinsics
     :param intrinsics_header_lst: List of intrinsics header files
