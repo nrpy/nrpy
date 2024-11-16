@@ -64,7 +64,6 @@ def single_RK_substep_input_symbolic(
     gf_aliases: str = "",
     post_rhs_bcs_str: str = "",
     post_rhs_string: str = "",
-    fp_type: str = "double",
 ) -> str:
     """
     Generate C code for a given Runge-Kutta substep.
@@ -81,7 +80,6 @@ def single_RK_substep_input_symbolic(
     :param gf_aliases: Additional aliases for grid functions.
     :param post_rhs_bcs_str: str to apply bcs immediately after RK update
     :param post_rhs_string: String to be used after the post-RHS phase.
-    :param fp_type: Floating point type, e.g., "double".
 
     :return: A string containing the generated C code.
 
@@ -172,7 +170,6 @@ switch (which_MOL_part) {
         include_braces=False,
         verbose=False,
         enable_simd=enable_simd,
-        fp_type=fp_type,
     )
 
     if enable_simd:

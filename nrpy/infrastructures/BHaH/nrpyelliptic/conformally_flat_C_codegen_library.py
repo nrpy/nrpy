@@ -30,13 +30,9 @@ from nrpy.equations.nrpyelliptic.ConformallyFlat_SourceTerms import (
 # Define functions to set up initial guess
 
 
-def register_CFunction_initial_guess_single_point(
-    fp_type: str = "double",
-) -> Union[None, pcg.NRPyEnv_type]:
+def register_CFunction_initial_guess_single_point() -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the C function for initial guess of solution at a single point.
-
-    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -57,7 +53,6 @@ def register_CFunction_initial_guess_single_point(
         ["*uu_ID", "*vv_ID"],
         verbose=False,
         include_braces=False,
-        fp_type=fp_type,
     )
     cfc.register_CFunction(
         includes=includes,
@@ -73,14 +68,14 @@ def register_CFunction_initial_guess_single_point(
 
 
 def register_CFunction_initial_guess_all_points(
-    OMP_collapse: int, enable_checkpointing: bool = False, fp_type: str = "double"
+    OMP_collapse: int,
+    enable_checkpointing: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the initial guess function for the hyperbolic relaxation equation.
 
     :param enable_checkpointing: Attempt to read from a checkpoint file before generating initial guess.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
-    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -118,7 +113,6 @@ if( read_checkpoint(commondata, griddata) ) return;
         read_xxs=True,
         loop_region="all points",
         OMP_collapse=OMP_collapse,
-        fp_type=fp_type,
     )
     body += "}\n"
     cfc.register_CFunction(
@@ -138,13 +132,11 @@ if( read_checkpoint(commondata, griddata) ) return;
 
 def register_CFunction_auxevol_gfs_single_point(
     CoordSystem: str,
-    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the C function for the AUXEVOL grid functions at a single point.
 
     :param CoordSystem: The coordinate system to use in setting up the AUXEVOL gridfunctions.
-    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -170,7 +162,6 @@ def register_CFunction_auxevol_gfs_single_point(
         ["*psi_background", "*ADD_times_AUU"],
         verbose=False,
         include_braces=False,
-        fp_type=fp_type,
     )
     cfc.register_CFunction(
         includes=includes,
@@ -187,13 +178,11 @@ def register_CFunction_auxevol_gfs_single_point(
 
 def register_CFunction_auxevol_gfs_all_points(
     OMP_collapse: int,
-    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the C function for the AUXEVOL grid functions at all points.
 
     :param OMP_collapse: Degree of OpenMP loop collapsing.
-    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -228,7 +217,6 @@ def register_CFunction_auxevol_gfs_all_points(
         read_xxs=True,
         loop_region="all points",
         OMP_collapse=OMP_collapse,
-        fp_type=fp_type,
     )
     body += "}\n"
     cfc.register_CFunction(
@@ -245,13 +233,11 @@ def register_CFunction_auxevol_gfs_all_points(
 
 def register_CFunction_variable_wavespeed_gfs_all_points(
     CoordSystem: str,
-    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register function to compute variable wavespeed based on local grid spacing for a single coordinate system.
 
     :param CoordSystem: The coordinate system to use in the hyperbolic relaxation.
-    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -276,7 +262,6 @@ def register_CFunction_variable_wavespeed_gfs_all_points(
         ],
         ["const REAL dsmin0", "const REAL dsmin1", "const REAL dsmin2"],
         include_braces=False,
-        fp_type=fp_type,
     )
 
     variable_wavespeed_memaccess = gri.BHaHGridFunction.access_gf("variable_wavespeed")
@@ -298,7 +283,6 @@ def register_CFunction_variable_wavespeed_gfs_all_points(
         loop_body="\n" + dsmin_computation_str,
         read_xxs=True,
         loop_region="interior",
-        fp_type=fp_type,
     )
 
     # We must close the loop that was opened in the line 'for(int grid=0; grid<commondata->NUMGRIDS; grid++) {'
@@ -361,7 +345,6 @@ def register_CFunction_initialize_constant_auxevol() -> Union[None, pcg.NRPyEnv_
 # Define function to compute the l^2 of a gridfunction
 def register_CFunction_compute_L2_norm_of_gridfunction(
     CoordSystem: str,
-    fp_type: str = "double",
 ) -> None:
     """
     Register function to compute l2-norm of a gridfunction assuming a single grid.
@@ -370,7 +353,6 @@ def register_CFunction_compute_L2_norm_of_gridfunction(
     multiprocess race condition on Python 3.6.7
 
     :param CoordSystem: the rfm coordinate system.
-    :param fp_type: Floating point type, e.g., "double".
     """
     includes = ["BHaH_defines.h"]
     desc = "Compute l2-norm of a gridfunction assuming a single grid."
@@ -381,6 +363,7 @@ def register_CFunction_compute_L2_norm_of_gridfunction(
 
     rfm = refmetric.reference_metric[CoordSystem]
 
+    fp_type = par.parval_from_str("fp_type")
     type_alias = "double" if fp_type == "float" else "REAL"
 
     loop_body = ccg.c_codegen(
@@ -393,7 +376,6 @@ def register_CFunction_compute_L2_norm_of_gridfunction(
             f"const {type_alias} sqrtdetgamma",
         ],
         include_braces=False,
-        fp_type=fp_type,
     ).replace("const REAL", f"const {type_alias}")
 
     loop_body += rf"""
@@ -426,7 +408,6 @@ if(r < integration_radius) {{
         read_xxs=True,
         loop_region="interior",
         OMP_custom_pragma=r"#pragma omp parallel for reduction(+:squared_sum,volume_sum)",
-        fp_type=fp_type,
     )
 
     body += r"""
@@ -666,7 +647,6 @@ def register_CFunction_rhs_eval(
     enable_rfm_precompute: bool,
     enable_simd: bool,
     OMP_collapse: int,
-    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the right-hand side (RHS) evaluation function for the hyperbolic relaxation equation.
@@ -678,7 +658,6 @@ def register_CFunction_rhs_eval(
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param enable_simd: Whether to enable SIMD.
     :param OMP_collapse: Level of OpenMP loop collapsing.
-    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -708,7 +687,6 @@ def register_CFunction_rhs_eval(
             ],
             enable_fd_codegen=True,
             enable_simd=enable_simd,
-            fp_type=fp_type,
         ),
         loop_region="interior",
         enable_simd=enable_simd,
@@ -716,7 +694,6 @@ def register_CFunction_rhs_eval(
         enable_rfm_precompute=enable_rfm_precompute,
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
-        fp_type=fp_type,
     )
 
     cfc.register_CFunction(
@@ -739,7 +716,6 @@ def register_CFunction_compute_residual_all_points(
     enable_rfm_precompute: bool,
     enable_simd: bool,
     OMP_collapse: int,
-    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the residual evaluation function.
@@ -752,7 +728,6 @@ def register_CFunction_compute_residual_all_points(
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param enable_simd: Whether to enable SIMD.
     :param OMP_collapse: Level of OpenMP loop collapsing.
-    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -783,7 +758,6 @@ def register_CFunction_compute_residual_all_points(
             ],
             enable_fd_codegen=True,
             enable_simd=enable_simd,
-            fp_type=fp_type,
         ),
         loop_region="interior",
         enable_simd=enable_simd,
@@ -791,7 +765,6 @@ def register_CFunction_compute_residual_all_points(
         enable_rfm_precompute=enable_rfm_precompute,
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
-        fp_type=fp_type,
     )
 
     cfc.register_CFunction(

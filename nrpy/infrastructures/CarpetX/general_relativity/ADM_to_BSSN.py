@@ -24,7 +24,9 @@ from nrpy.infrastructures.CarpetX.CarpetX_include_header import define_standard_
 
 
 def register_CFunction_ADM_to_BSSN(
-    thorn_name: str, CoordSystem: str, fd_order: int, fp_type: str = "double"
+    thorn_name: str,
+    CoordSystem: str,
+    fd_order: int,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Convert ADM variables in the Cartesian basis to BSSN variables in the Cartesian basis.
@@ -32,7 +34,6 @@ def register_CFunction_ADM_to_BSSN(
     :param thorn_name: The Einstein Toolkit thorn name.
     :param CoordSystem: The coordinate system to be used.
     :param fd_order: Order of finite difference method
-    :param fp_type: Floating point type, e.g., "double".
 
     :return: A string representing the full C function.
     """
@@ -123,7 +124,6 @@ as initial data are given in terms of ADM quantities, and {thorn_name} evolves t
         list_of_output_varnames,
         verbose=False,
         include_braces=False,
-        fp_type=fp_type,
     )
     loop_body = loop_body.rstrip()
 
@@ -167,7 +167,6 @@ as initial data are given in terms of ADM quantities, and {thorn_name} evolves t
             verbose=False,
             include_braces=False,
             enable_fd_codegen=True,
-            fp_type=fp_type,
         ),
         loop_region="interior",
     )

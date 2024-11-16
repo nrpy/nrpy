@@ -291,6 +291,18 @@ def cse_postprocess(
     >>> from sympy.abc import x, y
     >>> from sympy import cse, cos, sin
 
+    >>> x0 = sp.Symbol("x0")
+    >>> cse_postprocess(([(x0, 0)], [x0 + cos(x0)]))
+    ([], [1])
+
+    >>> x0, x1 = sp.symbols("x0 x1")
+    >>> cse_postprocess(([(x0, 0), (x1, x0**2)], [x1 + cos(x0)**2]))
+    ([], [1])
+
+    >>> x0, x1 = sp.symbols("x0 x1")
+    >>> cse_postprocess(([(x0, 5), (x1, x0**2)], [cos(x0)**2]))
+    ([], [cos(5)**2])
+
     >>> cse_out = cse(3 + x + cos(3 + x))
     >>> cse_postprocess(cse_out)
     ([], [x + cos(x + 3) + 3])
@@ -339,6 +351,27 @@ def cse_postprocess(
         else:
             reduced2 += [element]
     reduced = reduced2
+
+    # Remove and Substitute Constant Replacements
+    while True:
+        constant_repls = [
+            (sym, expr)
+            for sym, expr in replaced
+            if not getattr(expr, "free_symbols", set())
+        ]
+        if not constant_repls:
+            break  # No more constant replacements to process
+        for sym, expr in constant_repls:
+            # Substitute the constant into other replacements
+            new_replaced = []
+            for s, e in replaced:
+                if s != sym:
+                    new_e = e.xreplace({sym: expr})
+                    new_replaced.append((s, new_e))
+                # Else, this replacement is to be removed
+            replaced = new_replaced
+            # Substitute the constant into reduced expressions
+            reduced = [r.xreplace({sym: expr}) for r in reduced]
 
     # Sort the replaced expressions
     # so that none are evaluated before
@@ -436,6 +469,29 @@ def cse_postprocess(
                 replaced.pop(i)
                 i -= 1
         i += 1
+
+    # Remove Unused Symbolic Replacements
+    if replaced:
+        # Initialize the set of symbols that are used in reduced expressions
+        used_symbols = set()
+        for expr in reduced:
+            used_symbols.update(expr.free_symbols)
+
+        # Initialize a list to hold the final replacements
+        final_replaced = []
+
+        # Iterate through replacements in reverse order to handle dependencies
+        for sym, expr in reversed(replaced):
+            if sym in used_symbols:
+                final_replaced.append((sym, expr))
+                # Add symbols used in this expression to the used_symbols set
+                used_symbols.update(expr.free_symbols)
+        # Reverse to maintain original order
+        final_replaced = list(reversed(final_replaced))
+
+        # Update the replaced list
+        replaced = final_replaced
+
     # Return the final processed replaced and reduced expressions
     return replaced, reduced
 

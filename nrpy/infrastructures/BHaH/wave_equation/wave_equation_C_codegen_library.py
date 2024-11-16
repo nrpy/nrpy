@@ -33,7 +33,6 @@ def register_CFunction_exact_solution_single_Cartesian_point(
     default_k0: float = 1.0,
     default_k1: float = 1.0,
     default_k2: float = 1.0,
-    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the C function for the exact solution at a single point.
@@ -43,7 +42,6 @@ def register_CFunction_exact_solution_single_Cartesian_point(
     :param default_k0: The default value for the plane wave wavenumber k in the x-direction.
     :param default_k1: The default value for the plane wave wavenumber k in the y-direction.
     :param default_k2: The default value for the plane wave wavenumber k in the z-direction.
-    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -73,7 +71,6 @@ def register_CFunction_exact_solution_single_Cartesian_point(
         ["*exact_soln_UUGF", "*exact_soln_VVGF"],
         verbose=False,
         include_braces=False,
-        fp_type=fp_type,
     )
     cfc.register_CFunction(
         includes=includes,
@@ -88,14 +85,14 @@ def register_CFunction_exact_solution_single_Cartesian_point(
 
 
 def register_CFunction_initial_data(
-    OMP_collapse: int, enable_checkpointing: bool = False, fp_type: str = "double"
+    OMP_collapse: int,
+    enable_checkpointing: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the initial data function for the wave equation with specific parameters.
 
     :param OMP_collapse: Degree of OpenMP loop collapsing.
     :param enable_checkpointing: Attempt to read from a checkpoint file before generating initial data.
-    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -134,7 +131,6 @@ if( read_checkpoint(commondata, griddata) ) return;
         read_xxs=True,
         loop_region="all points",
         OMP_collapse=OMP_collapse,
-        fp_type=fp_type,
     )
     body += "}\n"
     cfc.register_CFunction(
@@ -254,7 +250,7 @@ def register_CFunction_diagnostics(
   if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {
     for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
       // Unpack griddata struct:
-      const REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
+      const MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
       REAL *restrict diagnostic_output_gfs = griddata[grid].gridfuncs.diagnostic_output_gfs;
       REAL *restrict xx[3];
       for (int ww = 0; ww < 3; ww++)
@@ -307,7 +303,6 @@ def register_CFunction_rhs_eval(
     enable_simd: bool,
     enable_KreissOliger_dissipation: bool,
     OMP_collapse: int,
-    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the right-hand side (RHS) evaluation function for the wave equation.
@@ -320,7 +315,6 @@ def register_CFunction_rhs_eval(
     :param enable_simd: Whether to enable SIMD.
     :param enable_KreissOliger_dissipation: Whether to enable Kreiss-Oliger dissipation, to damp high-frequency noise.
     :param OMP_collapse: Level of OpenMP loop collapsing.
-    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -370,7 +364,6 @@ def register_CFunction_rhs_eval(
             ],
             enable_fd_codegen=True,
             enable_simd=enable_simd,
-            fp_type=fp_type,
         ),
         loop_region="interior",
         enable_simd=enable_simd,
@@ -378,7 +371,6 @@ def register_CFunction_rhs_eval(
         enable_rfm_precompute=enable_rfm_precompute,
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
-        fp_type=fp_type,
     )
 
     cfc.register_CFunction(

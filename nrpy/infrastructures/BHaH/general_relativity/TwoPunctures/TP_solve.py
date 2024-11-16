@@ -30,7 +30,6 @@ def register_CFunction_TP_solve() -> None:
 
   int const nvar = 1, n1 = par->npoints_A, n2 = par->npoints_B, n3 = par->npoints_phi;
 
-  int imin[3], imax[3];
   int const ntotal = n1 * n2 * n3 * nvar;
 #if 0
   int percent10 = 0;
@@ -91,7 +90,6 @@ def register_CFunction_TP_solve() -> None:
        guesses given by par->par_m_plus and par->par_m_minus. */
     if (!(par->give_bare_mass)) {
       REAL tmp, mp_adm_err, mm_adm_err;
-      char valbuf[100];
 
       REAL M_p = par->target_M_plus;
       REAL M_m = par->target_M_minus;

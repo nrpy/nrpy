@@ -30,7 +30,6 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     enable_T4munu: bool = False,
     enable_fd_functions: bool = False,
     ID_persist_struct_str: str = "",
-    fp_type: str = "double",
 ) -> None:
     """
     Register the CFunction for converting initial ADM data to BSSN variables.
@@ -41,7 +40,6 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     :param enable_T4munu: Whether to include stress-energy tensor components.
     :param enable_fd_functions: Whether to enable finite-difference functions.
     :param ID_persist_struct_str: String for persistent ID structure.
-    :param fp_type: Floating point type, e.g., "double".
 
     :raises ValueError: If `addl_includes` is provided but is not a list, ensuring that additional includes are correctly formatted for inclusion.
     """
@@ -135,18 +133,14 @@ typedef struct __rescaled_BSSN_rfm_basis_struct__ {
     prefunc += admid.Cfunction_ADM_SphorCart_to_Cart(
         IDCoordSystem=IDCoordSystem,
         enable_T4munu=enable_T4munu,
-        fp_type=fp_type,
     )
-    prefunc += admid.Cfunction_ADM_Cart_to_BSSN_Cart(
-        enable_T4munu=enable_T4munu, fp_type=fp_type
-    )
+    prefunc += admid.Cfunction_ADM_Cart_to_BSSN_Cart(enable_T4munu=enable_T4munu)
     prefunc += admid.Cfunction_BSSN_Cart_to_rescaled_BSSN_rfm(
         CoordSystem=CoordSystem,
         enable_T4munu=enable_T4munu,
-        fp_type=fp_type,
     )
     prefunc += admid.Cfunction_initial_data_lambdaU_grid_interior(
-        CoordSystem=CoordSystem, fp_type=fp_type
+        CoordSystem=CoordSystem
     )
 
     desc = f"Read ADM data in the {IDCoordSystem} basis, and output rescaled BSSN data in the {CoordSystem} basis"
@@ -236,7 +230,6 @@ def register_CFunction_initial_data(
     populate_ID_persist_struct_str: str = "",
     free_ID_persist_struct_str: str = "",
     enable_T4munu: bool = False,
-    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register C functions for converting ADM initial data to BSSN variables and applying boundary conditions.
@@ -254,7 +247,6 @@ def register_CFunction_initial_data(
     :param populate_ID_persist_struct_str: Optional string to populate the persistent structure for initial data.
     :param free_ID_persist_struct_str: Optional string to free the persistent structure for initial data.
     :param enable_T4munu: Whether to include the stress-energy tensor. Defaults to False.
-    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -279,7 +271,6 @@ def register_CFunction_initial_data(
             ID.BU,
             ID.gammaDD,
             ID.KDD,
-            fp_type=fp_type,
         )
     except (ValueError, RuntimeError):
         print(
@@ -292,7 +283,6 @@ def register_CFunction_initial_data(
         IDCoordSystem=IDCoordSystem,
         ID_persist_struct_str=ID_persist_struct_str,
         enable_T4munu=enable_T4munu,
-        fp_type=fp_type,
     )
 
     desc = "Set initial data."

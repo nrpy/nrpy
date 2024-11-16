@@ -25,7 +25,6 @@ def simple_loop(
     enable_OpenMP: bool = True,
     OMP_custom_pragma: str = "",
     OMP_collapse: int = 1,
-    fp_type: str = "double",
 ) -> str:
     """
     Generate a simple loop in C (for use inside of a function).
@@ -39,7 +38,6 @@ def simple_loop(
     :param enable_OpenMP: Enable loop parallelization using OpenMP
     :param OMP_custom_pragma: Enable loop parallelization using OpenMP with custom pragma
     :param OMP_collapse: Specifies the number of nested loops to collapse
-    :param fp_type: Floating point type, e.g., "double".
     :return: The complete loop code as a string.
     :raises ValueError: If `loop_region` is unsupported or if `read_xxs` and `enable_rfm_precompute` are both enabled.
 
@@ -72,19 +70,19 @@ def simple_loop(
     for (int i2 = NGHOSTS; i2 < NGHOSTS + Nxx2; i2++) {
       for (int i1 = NGHOSTS; i1 < NGHOSTS + Nxx1; i1++) {
         for (int i0 = NGHOSTS; i0 < NGHOSTS + Nxx0; i0++) {
-          const REAL f1_of_xx1 = rfmstruct->f1_of_xx1[i1];
-          const REAL f1_of_xx1__D1 = rfmstruct->f1_of_xx1__D1[i1];
-          const REAL f1_of_xx1__DD11 = rfmstruct->f1_of_xx1__DD11[i1];
-          const REAL f4_of_xx1 = rfmstruct->f4_of_xx1[i1];
-          const REAL f4_of_xx1__D1 = rfmstruct->f4_of_xx1__D1[i1];
-          const REAL f4_of_xx1__DD11 = rfmstruct->f4_of_xx1__DD11[i1];
-          const REAL f0_of_xx0 = rfmstruct->f0_of_xx0[i0];
-          const REAL f0_of_xx0__D0 = rfmstruct->f0_of_xx0__D0[i0];
-          const REAL f0_of_xx0__DD00 = rfmstruct->f0_of_xx0__DD00[i0];
-          const REAL f0_of_xx0__DDD000 = rfmstruct->f0_of_xx0__DDD000[i0];
-          const REAL f2_of_xx0 = rfmstruct->f2_of_xx0[i0];
-          const REAL f2_of_xx0__D0 = rfmstruct->f2_of_xx0__D0[i0];
-          const REAL f2_of_xx0__DD00 = rfmstruct->f2_of_xx0__DD00[i0];
+          const MAYBE_UNUSED REAL f1_of_xx1 = rfmstruct->f1_of_xx1[i1];
+          const MAYBE_UNUSED REAL f1_of_xx1__D1 = rfmstruct->f1_of_xx1__D1[i1];
+          const MAYBE_UNUSED REAL f1_of_xx1__DD11 = rfmstruct->f1_of_xx1__DD11[i1];
+          const MAYBE_UNUSED REAL f4_of_xx1 = rfmstruct->f4_of_xx1[i1];
+          const MAYBE_UNUSED REAL f4_of_xx1__D1 = rfmstruct->f4_of_xx1__D1[i1];
+          const MAYBE_UNUSED REAL f4_of_xx1__DD11 = rfmstruct->f4_of_xx1__DD11[i1];
+          const MAYBE_UNUSED REAL f0_of_xx0 = rfmstruct->f0_of_xx0[i0];
+          const MAYBE_UNUSED REAL f0_of_xx0__D0 = rfmstruct->f0_of_xx0__D0[i0];
+          const MAYBE_UNUSED REAL f0_of_xx0__DD00 = rfmstruct->f0_of_xx0__DD00[i0];
+          const MAYBE_UNUSED REAL f0_of_xx0__DDD000 = rfmstruct->f0_of_xx0__DDD000[i0];
+          const MAYBE_UNUSED REAL f2_of_xx0 = rfmstruct->f2_of_xx0[i0];
+          const MAYBE_UNUSED REAL f2_of_xx0__D0 = rfmstruct->f2_of_xx0__D0[i0];
+          const MAYBE_UNUSED REAL f2_of_xx0__DD00 = rfmstruct->f2_of_xx0__DD00[i0];
           // <INTERIOR>
         } // END LOOP: for (int i0 = NGHOSTS; i0 < NGHOSTS+Nxx0; i0++)
       } // END LOOP: for (int i1 = NGHOSTS; i1 < NGHOSTS+Nxx1; i1++)
@@ -95,21 +93,21 @@ def simple_loop(
     #pragma omp parallel for collapse(2)
     for (int i2 = NGHOSTS; i2 < NGHOSTS + Nxx2; i2++) {
       for (int i1 = NGHOSTS; i1 < NGHOSTS + Nxx1; i1++) {
-        const REAL f1_of_xx1 = rfmstruct->f1_of_xx1[i1];
-        const REAL f1_of_xx1__D1 = rfmstruct->f1_of_xx1__D1[i1];
-        const REAL f1_of_xx1__DD11 = rfmstruct->f1_of_xx1__DD11[i1];
-        const REAL f4_of_xx1 = rfmstruct->f4_of_xx1[i1];
-        const REAL f4_of_xx1__D1 = rfmstruct->f4_of_xx1__D1[i1];
-        const REAL f4_of_xx1__DD11 = rfmstruct->f4_of_xx1__DD11[i1];
+        const MAYBE_UNUSED REAL f1_of_xx1 = rfmstruct->f1_of_xx1[i1];
+        const MAYBE_UNUSED REAL f1_of_xx1__D1 = rfmstruct->f1_of_xx1__D1[i1];
+        const MAYBE_UNUSED REAL f1_of_xx1__DD11 = rfmstruct->f1_of_xx1__DD11[i1];
+        const MAYBE_UNUSED REAL f4_of_xx1 = rfmstruct->f4_of_xx1[i1];
+        const MAYBE_UNUSED REAL f4_of_xx1__D1 = rfmstruct->f4_of_xx1__D1[i1];
+        const MAYBE_UNUSED REAL f4_of_xx1__DD11 = rfmstruct->f4_of_xx1__DD11[i1];
     <BLANKLINE>
         for (int i0 = NGHOSTS; i0 < NGHOSTS + Nxx0; i0++) {
-          const REAL f0_of_xx0 = rfmstruct->f0_of_xx0[i0];
-          const REAL f0_of_xx0__D0 = rfmstruct->f0_of_xx0__D0[i0];
-          const REAL f0_of_xx0__DD00 = rfmstruct->f0_of_xx0__DD00[i0];
-          const REAL f0_of_xx0__DDD000 = rfmstruct->f0_of_xx0__DDD000[i0];
-          const REAL f2_of_xx0 = rfmstruct->f2_of_xx0[i0];
-          const REAL f2_of_xx0__D0 = rfmstruct->f2_of_xx0__D0[i0];
-          const REAL f2_of_xx0__DD00 = rfmstruct->f2_of_xx0__DD00[i0];
+          const MAYBE_UNUSED REAL f0_of_xx0 = rfmstruct->f0_of_xx0[i0];
+          const MAYBE_UNUSED REAL f0_of_xx0__D0 = rfmstruct->f0_of_xx0__D0[i0];
+          const MAYBE_UNUSED REAL f0_of_xx0__DD00 = rfmstruct->f0_of_xx0__DD00[i0];
+          const MAYBE_UNUSED REAL f0_of_xx0__DDD000 = rfmstruct->f0_of_xx0__DDD000[i0];
+          const MAYBE_UNUSED REAL f2_of_xx0 = rfmstruct->f2_of_xx0[i0];
+          const MAYBE_UNUSED REAL f2_of_xx0__D0 = rfmstruct->f2_of_xx0__D0[i0];
+          const MAYBE_UNUSED REAL f2_of_xx0__DD00 = rfmstruct->f2_of_xx0__DD00[i0];
           // <INTERIOR>
         } // END LOOP: for (int i0 = NGHOSTS; i0 < NGHOSTS+Nxx0; i0++)
       } // END LOOP: for (int i1 = NGHOSTS; i1 < NGHOSTS+Nxx1; i1++)
@@ -140,9 +138,9 @@ def simple_loop(
     if read_xxs:
         if not enable_simd:
             read_rfm_xx_arrays = [
-                "const REAL xx0 = xx[0][i0];",
-                "const REAL xx1 = xx[1][i1];",
-                "const REAL xx2 = xx[2][i2];",
+                "const MAYBE_UNUSED REAL xx0 = xx[0][i0];",
+                "const MAYBE_UNUSED REAL xx1 = xx[1][i1];",
+                "const MAYBE_UNUSED REAL xx2 = xx[2][i2];",
             ]
         else:
             raise ValueError("no innerSIMD support for Read_xxs (currently).")
@@ -155,7 +153,7 @@ def simple_loop(
         # pylint: disable=C0415
         from nrpy.infrastructures.BHaH import rfm_precompute
 
-        rfmp = rfm_precompute.ReferenceMetricPrecompute(CoordSystem, fp_type=fp_type)
+        rfmp = rfm_precompute.ReferenceMetricPrecompute(CoordSystem)
         if enable_simd:
             read_rfm_xx_arrays = [
                 rfmp.readvr_SIMD_inner_str[0],

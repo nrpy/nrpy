@@ -157,10 +157,10 @@ def write_CodeParameters_h_files(
     >>> project_dir = Path("/tmp/tmp_project/")
     >>> write_CodeParameters_h_files(str(project_dir))
     >>> print((project_dir / 'set_CodeParameters.h').read_text())
-    const REAL a = commondata->a;                               // CodeParameters_c_files::a
-    const bool BHaH_is_amazing = params->BHaH_is_amazing;       // CodeParameters_c_files::BHaH_is_amazing
-    const REAL pi_three_sigfigs = commondata->pi_three_sigfigs; // CodeParameters_c_files::pi_three_sigfigs
-    char some_string[100];                                      // CodeParameters_c_files::some_string
+    const MAYBE_UNUSED REAL a = commondata->a;                               // CodeParameters_c_files::a
+    const MAYBE_UNUSED bool BHaH_is_amazing = params->BHaH_is_amazing;       // CodeParameters_c_files::BHaH_is_amazing
+    const MAYBE_UNUSED REAL pi_three_sigfigs = commondata->pi_three_sigfigs; // CodeParameters_c_files::pi_three_sigfigs
+    char some_string[100];                                                   // CodeParameters_c_files::some_string
     {
       // Copy up to 99 characters from params->some_string to some_string
       strncpy(some_string, params->some_string, 100 - 1);
@@ -168,10 +168,10 @@ def write_CodeParameters_h_files(
       some_string[100 - 1] = '\0'; // Properly null terminate char array.
     }
     >>> print((project_dir / 'set_CodeParameters-nopointer.h').read_text())
-    const REAL a = commondata.a;                               // CodeParameters_c_files::a
-    const bool BHaH_is_amazing = params.BHaH_is_amazing;       // CodeParameters_c_files::BHaH_is_amazing
-    const REAL pi_three_sigfigs = commondata.pi_three_sigfigs; // CodeParameters_c_files::pi_three_sigfigs
-    char some_string[100];                                     // CodeParameters_c_files::some_string
+    const MAYBE_UNUSED REAL a = commondata.a;                               // CodeParameters_c_files::a
+    const MAYBE_UNUSED bool BHaH_is_amazing = params.BHaH_is_amazing;       // CodeParameters_c_files::BHaH_is_amazing
+    const MAYBE_UNUSED REAL pi_three_sigfigs = commondata.pi_three_sigfigs; // CodeParameters_c_files::pi_three_sigfigs
+    char some_string[100];                                                  // CodeParameters_c_files::some_string
     {
       // Copy up to 99 characters from params.some_string to some_string
       strncpy(some_string, params.some_string, 100 - 1);
@@ -179,17 +179,16 @@ def write_CodeParameters_h_files(
       some_string[100 - 1] = '\0'; // Properly null terminate char array.
     }
     >>> print((project_dir / 'set_CodeParameters-simd.h').read_text())
-    const REAL NOSIMDa = commondata->a;                                         // CodeParameters_c_files::a
-    const REAL_SIMD_ARRAY a = ConstSIMD(NOSIMDa);                               // CodeParameters_c_files::a
-    const bool BHaH_is_amazing = params->BHaH_is_amazing;                       // CodeParameters_c_files::BHaH_is_amazing
-    const REAL NOSIMDpi_three_sigfigs = commondata->pi_three_sigfigs;           // CodeParameters_c_files::pi_three_sigfigs
-    const REAL_SIMD_ARRAY pi_three_sigfigs = ConstSIMD(NOSIMDpi_three_sigfigs); // CodeParameters_c_files::pi_three_sigfigs
+    const REAL NOSIMDa = commondata->a;                                                      // CodeParameters_c_files::a
+    const MAYBE_UNUSED REAL_SIMD_ARRAY a = ConstSIMD(NOSIMDa);                               // CodeParameters_c_files::a
+    const MAYBE_UNUSED bool BHaH_is_amazing = params->BHaH_is_amazing;                       // CodeParameters_c_files::BHaH_is_amazing
+    const REAL NOSIMDpi_three_sigfigs = commondata->pi_three_sigfigs;                        // CodeParameters_c_files::pi_three_sigfigs
+    const MAYBE_UNUSED REAL_SIMD_ARRAY pi_three_sigfigs = ConstSIMD(NOSIMDpi_three_sigfigs); // CodeParameters_c_files::pi_three_sigfigs
     <BLANKLINE>
     """
     # Create output directory if it doesn't already exist
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
-
     # Generate C code to set C parameter constants
     # output to filename "set_CodeParameters.h" if enable_simd==False
     # or "set_CodeParameters-simd.h" if enable_simd==True
@@ -218,6 +217,7 @@ def write_CodeParameters_h_files(
                     if "char" in CPtype and "[" in CPtype and "]" in CPtype:
                         # Handle char array C type
                         CPsize = int(CPtype.split("[")[1].split("]")[0])
+                        # Char arrays are never unused; we use them below.
                         Coutput = rf"""char {CPname}[{CPsize}]; {comment}
 {{
   // Copy up to {CPsize-1} characters from {struct}{pointer}{CPname} to {CPname}
@@ -237,8 +237,9 @@ def write_CodeParameters_h_files(
   }}
 }}"""
                     else:
-                        # Handle all other C types
-                        Coutput = f"const {CPtype} {CPname} = {struct}{pointer}{CPname};{comment}\n"
+                        # Handle all other C types.
+                        # MAYBE_UNUSED is used to avoid compiler warnings about unused variables from including set_CodeParameters_simd.h.
+                        Coutput = f"const MAYBE_UNUSED {CPtype} {CPname} = {struct}{pointer}{CPname};{comment}\n"
 
                     returnstring += Coutput
 
@@ -282,12 +283,11 @@ def write_CodeParameters_h_files(
                     c_output = (
                         f"const REAL NOSIMD{CPname} = {struct}->{CPname};{comment}\n"
                     )
-                    c_output += f"const REAL_SIMD_ARRAY {CPname} = ConstSIMD(NOSIMD{CPname});{comment}\n"
+                    c_output += f"const MAYBE_UNUSED REAL_SIMD_ARRAY {CPname} = ConstSIMD(NOSIMD{CPname});{comment}\n"
                     set_CodeParameters_SIMD_str += c_output
                 else:
-                    c_output = (
-                        f"const {CPtype} {CPname} = {struct}->{CPname};{comment}\n"
-                    )
+                    # MAYBE_UNUSED is used to avoid compiler warnings about unused variables from including set_CodeParameters_simd.h.
+                    c_output = f"const MAYBE_UNUSED {CPtype} {CPname} = {struct}->{CPname};{comment}\n"
                     set_CodeParameters_SIMD_str += c_output
 
     header_file_simd_path = project_Path / "set_CodeParameters-simd.h"

@@ -22,14 +22,12 @@ from nrpy.infrastructures.CarpetX.CarpetX_include_header import define_standard_
 def register_CFunction_BSSN_to_ADM(
     thorn_name: str,
     CoordSystem: str,
-    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Convert BSSN variables in the Cartesian basis to ADM variables in the Cartesian basis.
 
     :param thorn_name: The Einstein Toolkit thorn name.
     :param CoordSystem: The coordinate system to be used.
-    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -114,7 +112,6 @@ def register_CFunction_BSSN_to_ADM(
         verbose=False,
         include_braces=False,
         enable_simd=False,
-        fp_type=fp_type,
     )
     loop_body = loop_body.rstrip()
 
