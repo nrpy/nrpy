@@ -387,7 +387,7 @@ griddata_commondata.register_CFunction_griddata_free(
 Bdefines_h.output_BHaH_defines_h(
     additional_includes=[str(Path("superB") / Path("superB.h"))],
     project_dir=project_dir,
-    enable_simd=enable_simd,
+    enable_intrinsics=enable_simd,
 )
 
 if enable_simd:

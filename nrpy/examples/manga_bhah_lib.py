@@ -224,7 +224,7 @@ CPs.write_CodeParameters_h_files(project_dir=project_dir)
 CPs.register_CFunctions_params_commondata_struct_set_to_default()
 Bdefines_h.output_BHaH_defines_h(
     project_dir=project_dir,
-    enable_simd=enable_simd,
+    enable_intrinsics=enable_simd,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
     supplemental_defines_dict={
         "BHaH Lib": """
