@@ -167,7 +167,7 @@ par.adjust_CodeParam_default("t_final", t_final)
 
 
 # Generate functions to set initial guess
-nrpyellClib.register_CFunction_initial_guess_single_point(fp_type=fp_type)
+nrpyellClib.register_CFunction_initial_guess_single_point()
 nrpyellClib.register_CFunction_initial_guess_all_points(
     OMP_collapse=OMP_collapse,
     enable_checkpointing=enable_checkpointing,
@@ -175,16 +175,12 @@ nrpyellClib.register_CFunction_initial_guess_all_points(
 
 # Generate function to set variable wavespeed
 nrpyellClib.register_CFunction_variable_wavespeed_gfs_all_points(
-    CoordSystem=CoordSystem, fp_type=fp_type
+    CoordSystem=CoordSystem
 )
 
 # Generate functions to set AUXEVOL gridfunctions
-nrpyellClib.register_CFunction_auxevol_gfs_single_point(
-    CoordSystem=CoordSystem, fp_type=fp_type
-)
-nrpyellClib.register_CFunction_auxevol_gfs_all_points(
-    OMP_collapse=OMP_collapse, fp_type=fp_type
-)
+nrpyellClib.register_CFunction_auxevol_gfs_single_point(CoordSystem=CoordSystem)
+nrpyellClib.register_CFunction_auxevol_gfs_all_points(OMP_collapse=OMP_collapse)
 
 # Generate function that calls functions to set variable wavespeed and all other AUXEVOL gridfunctions
 nrpyellClib.register_CFunction_initialize_constant_auxevol()
@@ -195,9 +191,8 @@ numericalgrids.register_CFunctions(
     Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
-    fp_type=fp_type,
 )
-xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem, fp_type=fp_type)
+xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
 
 nrpyellClib.register_CFunction_diagnostics(
     CoordSystem=CoordSystem,
@@ -215,7 +210,6 @@ nrpyellClib.register_CFunction_rhs_eval(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_simd=enable_simd,
     OMP_collapse=OMP_collapse,
-    fp_type=fp_type,
 )
 
 # Generate function to compute residuals
@@ -224,13 +218,10 @@ nrpyellClib.register_CFunction_compute_residual_all_points(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_simd=enable_simd,
     OMP_collapse=OMP_collapse,
-    fp_type=fp_type,
 )
 
 # Generate diagnostics functions
-nrpyellClib.register_CFunction_compute_L2_norm_of_gridfunction(
-    CoordSystem=CoordSystem, fp_type=fp_type
-)
+nrpyellClib.register_CFunction_compute_L2_norm_of_gridfunction(CoordSystem=CoordSystem)
 
 # Register function to check for stop conditions
 nrpyellClib.register_CFunction_check_stop_conditions()
@@ -259,7 +250,6 @@ MoL.register_CFunctions(
   apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
-    fp_type=fp_type,
 )
 chkpt.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
 
@@ -352,7 +342,6 @@ cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
 Bdefines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     enable_intrinsics=enable_simd,
-    REAL_means=fp_type,
 )
 # Define post_MoL_step_forward_in_time string for main function
 post_MoL_step_forward_in_time = r"""    check_stop_conditions(&commondata, griddata);
