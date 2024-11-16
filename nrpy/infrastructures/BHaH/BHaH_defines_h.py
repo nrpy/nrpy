@@ -97,7 +97,6 @@ def register_BHaH_defines(module: str, BHaH_defines: str) -> None:
 def output_BHaH_defines_h(
     project_dir: str,
     additional_includes: Optional[List[str]] = None,
-    REAL_means: str = "double",
     enable_simd: bool = True,
     define_no_simd_UPWIND_ALG: bool = True,
     enable_rfm_precompute: bool = True,
@@ -110,7 +109,6 @@ def output_BHaH_defines_h(
 
     :param project_dir: Directory where the project C code is output
     :param additional_includes: Additional header files to be included in the output
-    :param REAL_means: The floating-point type to be used in the C code (default is "double")
     :param enable_simd: Flag to enable Single Instruction Multiple Data (SIMD) optimizations
     :param define_no_simd_UPWIND_ALG: Flag to #define a SIMD-less UPWIND_ALG. No need to define this if UPWIND_ALG() unused.
     :param enable_rfm_precompute: A boolean value reflecting whether reference metric precomputation is enabled.
@@ -155,6 +153,7 @@ def output_BHaH_defines_h(
     if additional_includes:
         for include in additional_includes:
             gen_BHd_str += f'#include "{include}"\n'
+    REAL_means = par.parval_from_str("fp_type")
     gen_BHd_str += f"""#define REAL {REAL_means}
 
 // These macros for MIN(), MAX(), and SQR() ensure that if the arguments inside

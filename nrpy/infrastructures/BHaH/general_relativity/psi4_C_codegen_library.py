@@ -109,7 +109,6 @@ MAYBE_UNUSED REAL {psi4_class.metric_deriv_var_list_str};
             ],
             enable_fd_codegen=True,
             enable_fd_functions=enable_fd_functions,
-            # fp_type=fp_type,
         ),
         loop_region="interior",
         enable_simd=False,
@@ -117,7 +116,6 @@ MAYBE_UNUSED REAL {psi4_class.metric_deriv_var_list_str};
         enable_rfm_precompute=False,
         read_xxs=False,
         OMP_collapse=OMP_collapse,
-        # fp_type=fp_type,
     )
 
     cfc.register_CFunction(
@@ -169,7 +167,6 @@ def register_CFunction_psi4_metric_deriv_quantities(
         include_braces=False,
         enable_fd_codegen=True,
         enable_fd_functions=enable_fd_functions,
-        # fp_type=fp_type,
     )
 
     cfc.register_CFunction(
@@ -254,7 +251,6 @@ def register_CFunction_psi4_tetrad(
         verbose=False,
         enable_cse=True,
         include_braces=False,
-        # fp_type=fp_type,
     )
 
     cfc.register_CFunction(

@@ -24,7 +24,6 @@ from nrpy.infrastructures.BHaH import griddata_commondata
 # Define function to compute the l^2 of a gridfunction
 def register_CFunction_compute_L2_norm_of_gridfunction(
     CoordSystem: str,
-    fp_type: str = "double",
 ) -> None:
     """
     Register function to compute l2-norm of a gridfunction assuming a single grid.
@@ -33,7 +32,6 @@ def register_CFunction_compute_L2_norm_of_gridfunction(
     multiprocess race condition on Python 3.6.7
 
     :param CoordSystem: the rfm coordinate system.
-    :param fp_type: Floating point type, e.g., "double".
     """
     includes = ["BHaH_defines.h"]
     desc = "Compute l2-norm of a gridfunction assuming a single grid."
@@ -54,7 +52,6 @@ def register_CFunction_compute_L2_norm_of_gridfunction(
             "const REAL sqrtdetgamma",
         ],
         include_braces=False,
-        fp_type=fp_type,
     )
 
     loop_body += r"""
@@ -87,7 +84,6 @@ if(r < integration_radius) {
         read_xxs=True,
         loop_region="interior",
         OMP_custom_pragma=r"#pragma omp parallel for reduction(+:squared_sum,volume_sum)",
-        fp_type=fp_type,
     )
 
     body += r"""

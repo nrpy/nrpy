@@ -236,7 +236,6 @@ def single_RK_substep_input_symbolic(
     enable_simd: bool = False,
     gf_aliases: str = "",
     post_post_rhs_string: str = "",
-    fp_type: str = "double",
 ) -> str:
     """
     Generate C code for a given Runge-Kutta substep.
@@ -253,7 +252,6 @@ def single_RK_substep_input_symbolic(
     :param enable_simd: Whether SIMD optimization is enabled.
     :param gf_aliases: Additional aliases for grid functions.
     :param post_post_rhs_string: String to be used after the post-RHS phase.
-    :param fp_type: Floating point type, e.g., "double".
 
     :return: A string containing the generated C code.
 
@@ -337,7 +335,6 @@ def single_RK_substep_input_symbolic(
         include_braces=False,
         verbose=False,
         enable_simd=enable_simd,
-        fp_type=fp_type,
     )
 
     if enable_simd:
@@ -403,7 +400,6 @@ def register_CFunction_MoL_step_forward_in_time(
     enable_rfm_precompute: bool = False,
     enable_curviBCs: bool = False,
     enable_simd: bool = False,
-    fp_type: str = "double",
 ) -> None:
     """
     Register MoL_step_forward_in_time() C function, which is the core driver for time evolution in BHaH codes.
@@ -416,7 +412,6 @@ def register_CFunction_MoL_step_forward_in_time(
     :param enable_rfm_precompute: Flag to enable reference metric functionality.
     :param enable_curviBCs: Flag to enable curvilinear boundary conditions.
     :param enable_simd: Flag to enable SIMD functionality.
-    :param fp_type: Floating point type, e.g., "double".
     :raises ValueError: If unsupported Butcher table specified since adaptive RK steps are not implemented in MoL.
 
     Doctest:
@@ -536,7 +531,6 @@ REAL MAYBE_UNUSED *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
                 enable_simd=enable_simd,
                 gf_aliases=gf_aliases,
                 post_post_rhs_string=post_post_rhs_string,
-                fp_type=fp_type,
             )
             + "// -={ END k1 substep }=-\n\n"
         )
@@ -575,7 +569,6 @@ REAL MAYBE_UNUSED *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
                 enable_simd=enable_simd,
                 gf_aliases=gf_aliases,
                 post_post_rhs_string=post_post_rhs_string,
-                fp_type=fp_type,
             )
             + "// -={ END k2 substep }=-\n\n"
         )
@@ -602,7 +595,6 @@ REAL MAYBE_UNUSED *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
                 enable_simd=enable_simd,
                 gf_aliases=gf_aliases,
                 post_post_rhs_string=post_post_rhs_string,
-                fp_type=fp_type,
             )
             + "// -={ END k3 substep }=-\n\n"
         )
@@ -651,7 +643,6 @@ REAL MAYBE_UNUSED *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
                     enable_simd=enable_simd,
                     gf_aliases=gf_aliases,
                     post_post_rhs_string=post_post_rhs_string,
-                    fp_type=fp_type,
                 )}// -={{ END k{str(s + 1)} substep }}=-\n\n"""
 
         else:
@@ -673,7 +664,6 @@ REAL MAYBE_UNUSED *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
                     enable_simd=enable_simd,
                     gf_aliases=gf_aliases,
                     post_post_rhs_string=post_post_rhs_string,
-                    fp_type=fp_type,
                 )
             else:
                 for s in range(num_steps):
@@ -751,7 +741,6 @@ REAL MAYBE_UNUSED *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
                             enable_simd=enable_simd,
                             gf_aliases=gf_aliases,
                             post_post_rhs_string=post_post_rhs_string,
-                            fp_type=fp_type,
                         )
                         + f"// -={{ END k{s + 1} substep }}=-\n\n"
                     )
@@ -842,7 +831,6 @@ def register_CFunctions(
     enable_curviBCs: bool = False,
     enable_simd: bool = False,
     register_MoL_step_forward_in_time: bool = True,
-    fp_type: str = "double",
 ) -> None:
     r"""
     Register all MoL C functions and NRPy basic defines.
@@ -855,7 +843,6 @@ def register_CFunctions(
     :param enable_curviBCs: Enable curvilinear boundary conditions. Default is False.
     :param enable_simd: Enable Single Instruction, Multiple Data (SIMD). Default is False.
     :param register_MoL_step_forward_in_time: Whether to register the MoL step forward function. Default is True.
-    :param fp_type: Floating point type, e.g., "double".
 
     Doctests:
     >>> from nrpy.helpers.generic import compress_string_to_base64, decompress_base64_to_string, diff_strings
@@ -925,7 +912,6 @@ def register_CFunctions(
             enable_rfm_precompute=enable_rfm_precompute,
             enable_curviBCs=enable_curviBCs,
             enable_simd=enable_simd,
-            fp_type=fp_type,
         )
 
     griddata_commondata.register_griddata_commondata(

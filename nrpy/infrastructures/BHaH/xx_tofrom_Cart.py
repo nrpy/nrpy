@@ -17,7 +17,6 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     CoordSystem: str,
     relative_to: str = "local_grid_center",
     gridding_approach: str = "independent grid(s)",
-    fp_type: str = "double",
 ) -> None:
     """
     Construct and register a C function that maps Cartesian coordinates to xx and finds the nearest grid indices.
@@ -31,7 +30,6 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     :param relative_to: Whether the computation is relative to the "local_grid_center"
                         (default) or "global_grid_center".
     :param gridding_approach: Choices: "independent grid(s)" (default) or "multipatch".
-    :param fp_type: Floating point type, e.g., "double".
     :raises ValueError: When the value of `gridding_approach` is not "independent grid(s)"
                         or "multipatch".
     """
@@ -73,7 +71,6 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
             [rfm.Cart_to_xx[0], rfm.Cart_to_xx[1], rfm.Cart_to_xx[2]],
             ["xx[0]", "const REAL target_th", "xx[2]"],
             include_braces=False,
-            fp_type=fp_type,
         )
         body += "xx[1] = NewtonRaphson_get_xx1_from_th(params, target_th);\n"
     else:
@@ -81,7 +78,6 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
             [rfm.Cart_to_xx[0], rfm.Cart_to_xx[1], rfm.Cart_to_xx[2]],
             ["xx[0]", "xx[1]", "xx[2]"],
             include_braces=False,
-            fp_type=fp_type,
         )
 
     body += """
@@ -117,14 +113,12 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
 def register_CFunction_xx_to_Cart(
     CoordSystem: str,
     gridding_approach: str = "independent grid(s)",
-    fp_type: str = "double",
 ) -> None:
     """
     Convert uniform-grid coordinate (xx[0], xx[1], xx[2]) to the corresponding Cartesian coordinate.
 
     :param CoordSystem: The coordinate system name as a string.
     :param gridding_approach: Choices: "independent grid(s)" (default) or "multipatch".
-    :param fp_type: Floating point type, e.g., "double".
 
     :raises ValueError: If an invalid gridding_approach is provided.
     """
@@ -159,7 +153,6 @@ const REAL xx2 = xx[2][i2];
             rfm.xx_to_Cart[2] + gri.Cart_origin[2],
         ],
         ["xCart[0]", "xCart[1]", "xCart[2]"],
-        fp_type=fp_type,
     )
 
     # Register the C function with the provided details

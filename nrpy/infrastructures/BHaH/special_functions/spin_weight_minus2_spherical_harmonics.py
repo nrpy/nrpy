@@ -28,14 +28,12 @@ par.register_CodeParameter(
 )
 
 
-def register_CFunction_spin_weight_minus2_sph_harmonics(
-    fp_type: str = "double",
-) -> Union[None, pcg.NRPyEnv_type]:
+def register_CFunction_spin_weight_minus2_sph_harmonics() -> (
+    Union[None, pcg.NRPyEnv_type]
+):
     """
     Register C function for computing arbitrary spin-weight -2 spherical harmonics.
     These spherical harmonics are computed at any (l, m) pair at a specific point (theta, phi).
-
-    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in the PCG registration phase, otherwise an NRPy environment object.
     """
@@ -76,7 +74,6 @@ def register_CFunction_spin_weight_minus2_sph_harmonics(
                 ["*reYlmswm2_l_m", "*imYlmswm2_l_m"],
                 verbose=False,
                 include_braces=False,
-                fp_type=fp_type,
             )
             body += "       }\n"
             body += "      return;\n"

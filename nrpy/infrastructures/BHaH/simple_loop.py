@@ -25,7 +25,6 @@ def simple_loop(
     enable_OpenMP: bool = True,
     OMP_custom_pragma: str = "",
     OMP_collapse: int = 1,
-    fp_type: str = "double",
 ) -> str:
     """
     Generate a simple loop in C (for use inside of a function).
@@ -39,7 +38,6 @@ def simple_loop(
     :param enable_OpenMP: Enable loop parallelization using OpenMP
     :param OMP_custom_pragma: Enable loop parallelization using OpenMP with custom pragma
     :param OMP_collapse: Specifies the number of nested loops to collapse
-    :param fp_type: Floating point type, e.g., "double".
     :return: The complete loop code as a string.
     :raises ValueError: If `loop_region` is unsupported or if `read_xxs` and `enable_rfm_precompute` are both enabled.
 
@@ -155,7 +153,7 @@ def simple_loop(
         # pylint: disable=C0415
         from nrpy.infrastructures.BHaH import rfm_precompute
 
-        rfmp = rfm_precompute.ReferenceMetricPrecompute(CoordSystem, fp_type=fp_type)
+        rfmp = rfm_precompute.ReferenceMetricPrecompute(CoordSystem)
         if enable_simd:
             read_rfm_xx_arrays = [
                 rfmp.readvr_SIMD_inner_str[0],

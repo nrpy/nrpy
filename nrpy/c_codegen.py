@@ -33,6 +33,7 @@ fp_type_list = Literal[
     "double",
     "float",
     "long double",
+    "set by NRPyParameter par.parval_from_str('fp_type')",
     # Unsupported types by sympy ccode generator
     # "std::bfloat16_t",
     # "std::float16_t",
@@ -61,7 +62,7 @@ class CCodeGen:
         prestring: str = "",
         poststring: str = "",
         include_braces: bool = True,
-        fp_type: fp_type_list = "double",
+        fp_type: fp_type_list = "set by NRPyParameter par.parval_from_str('fp_type')",
         fp_type_alias: str = "",
         verbose: bool = True,
         enable_cse: bool = True,
@@ -133,7 +134,7 @@ class CCodeGen:
         >>> CCodeGen(fp_type="foo")
         Traceback (most recent call last):
           ...
-        ValueError: In function '__init__': parameter 'fp_type' has value: 'foo', which is not in the allowed_values set: ('double', 'float', 'long double')
+        ValueError: In function '__init__': parameter 'fp_type' has value: 'foo', which is not in the allowed_values set: ('double', 'float', 'long double', "set by NRPyParameter par.parval_from_str('fp_type')")
 
         """
         validate_literal_arguments()
@@ -141,6 +142,8 @@ class CCodeGen:
         self.poststring = poststring
         self.include_braces = include_braces
         # Validate fp_type before attempting to access fp_type_to_sympy_type
+        if fp_type == "set by NRPyParameter par.parval_from_str('fp_type')":
+            fp_type = par.parval_from_str("fp_type")
         if fp_type not in fp_type_to_sympy_type:
             allowed_values = tuple(fp_type_to_sympy_type.keys())
             raise ValueError(
