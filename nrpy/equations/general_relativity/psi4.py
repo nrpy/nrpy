@@ -57,9 +57,13 @@ class Psi4:
             n4U = BP4t.n4U
 
         # Step 2: Construct the (rank-4) Riemann curvature tensor associated with the ADM 3-metric:
-        RDDDD = ixp.zerorank4()
-        gammaDDdDD = BtoA.gammaDDdDD
 
+        # First, we declare gammaDDdDD and GammaUDD (used just below) symbolic, to prevent R_{iklm} from getting
+        #   too large. Without doing this, psi4 easily becomes the largest expression in all of NRPy, slowing both
+        #   codegen and creating slow compilations.
+        gammaDDdDD = ixp.declarerank4("gammaDDdDD", symmetry="sym01_sym23")
+        GammaUDD = ixp.declarerank3("GammaUDD", symmetry="sym12")
+        RDDDD = ixp.zerorank4()
         for i in range(3):
             for k in range(3):
                 for l in range(3):
@@ -73,8 +77,6 @@ class Psi4:
 
         # ... then we add the term on the right:
         gammaDD = BtoA.gammaDD
-        GammaUDD = BtoA.GammaUDD
-
         for i in range(3):
             for k in range(3):
                 for l in range(3):
@@ -104,8 +106,7 @@ class Psi4:
         # Step 4: Construct the (rank-3) tensor in term 2 of psi_4 (referring to Eq 5.1 in
         #   Baker, Campanelli, Lousto (2001); https://arxiv.org/pdf/gr-qc/0104063.pdf
         rank3term2DDD = ixp.zerorank3()
-        KDDdD = BtoA.KDDdD
-
+        KDDdD = ixp.declarerank3("KDDdD", symmetry="sym01")
         for j in range(3):
             for k in range(3):
                 for l in range(3):
@@ -203,29 +204,28 @@ class Psi4:
             )
 
         # We split psi_4 into three pieces, to expedite & possibly parallelize C code generation.
-        self.psi4_re_pt = [sp.sympify(0), sp.sympify(0), sp.sympify(0)]
-        self.psi4_im_pt = [sp.sympify(0), sp.sympify(0), sp.sympify(0)]
-        # First term:
+        self.psi4_re = self.psi4_im = sp.sympify(0)
+        # First piece:
         for i in range(3):
             for j in range(3):
                 for k in range(3):
                     for l in range(3):
-                        self.psi4_re_pt[0] += rank4term1DDDD[i][j][k][
+                        self.psi4_re += rank4term1DDDD[i][j][k][
                             l
                         ] * tetrad_product__Real_psi4(
                             n4U, mre4U, mim4U, i + 1, j + 1, k + 1, l + 1
                         )
-                        self.psi4_im_pt[0] += rank4term1DDDD[i][j][k][
+                        self.psi4_im += rank4term1DDDD[i][j][k][
                             l
                         ] * tetrad_product__Imag_psi4(
                             n4U, mre4U, mim4U, i + 1, j + 1, k + 1, l + 1
                         )
 
-        # Second term:
+        # Second piece:
         for j in range(3):
             for k in range(3):
                 for l in range(3):
-                    self.psi4_re_pt[1] += (
+                    self.psi4_re += (
                         rank3term2DDD[j][k][l]
                         * sp.Rational(1, 2)
                         * (
@@ -237,7 +237,7 @@ class Psi4:
                             )
                         )
                     )
-                    self.psi4_im_pt[1] += (
+                    self.psi4_im += (
                         rank3term2DDD[j][k][l]
                         * sp.Rational(1, 2)
                         * (
@@ -249,10 +249,10 @@ class Psi4:
                             )
                         )
                     )
-        # Third term:
+        # Third piece:
         for j in range(3):
             for l in range(3):
-                self.psi4_re_pt[2] += rank2term3DD[j][l] * (
+                self.psi4_re += rank2term3DD[j][l] * (
                     sp.Rational(1, 4)
                     * (
                         +tetrad_product__Real_psi4(
@@ -269,7 +269,7 @@ class Psi4:
                         )
                     )
                 )
-                self.psi4_im_pt[2] += rank2term3DD[j][l] * (
+                self.psi4_im += rank2term3DD[j][l] * (
                     sp.Rational(1, 4)
                     * (
                         +tetrad_product__Imag_psi4(
@@ -286,6 +286,65 @@ class Psi4:
                         )
                     )
                 )
+        # Next we construct linkages useful for generating C codes for psi4.
+        #   Computing psi4 will consist of three C functions:
+        #   1. A function that computes the tetrad m^mu and n^mu at some gridpoint i0, i1, i2.
+        #   2. A function that computes metric derivatives gamma_ij,kl, K_ij,k, and Gamma^i_jk (contains derivs).
+        #   3. A driver function for computing psi4 that represents the above quantities as unset variables.
+        #      It calls the above two functions to get numerical values for these quantities and, in
+        #      addition to reading other non-derivative metric variables from memory, performs the remaining
+        #      calculations needed to compute psi4.
+
+        # For each of the needed metric derivatives gamma_ij,kl, K_ij,k, and Christoffels, we need to
+        # 1. Create list of variable names for
+        #    a. creating the parameter list for the pointwise function
+        #    b. setting the variables in the pointwise function
+        #    c. declaring the variables inside the psi4 loop and calling the pointwise function
+        # 2. Create their symbolic expressions for the pointwise function.
+
+        # First gammaDDdDD:
+        self.metric_derivs_varname_arr_list: List[str] = []
+        self.metric_derivs_varname_list: List[str] = []
+        self.metric_derivs_expr_list: List[sp.Expr] = []
+        for i in range(3):
+            for j in range(i, 3):
+                for k in range(3):
+                    for l in range(k, 3):
+                        self.metric_derivs_varname_list += [f"gammaDDdDD{i}{j}{k}{l}"]
+                        self.metric_derivs_varname_arr_list += [
+                            f"arr_gammaDDdDD[{l + 3*(k + 3*(j + 3*i))}]"
+                        ]
+                        self.metric_derivs_expr_list += [BtoA.gammaDDdDD[i][j][k][l]]
+        # Next GammaUDD
+        for i in range(3):
+            for j in range(3):
+                for k in range(j, 3):
+                    self.metric_derivs_varname_list += [f"GammaUDD{i}{j}{k}"]
+                    self.metric_derivs_varname_arr_list += [
+                        f"arr_GammaUDD[{k + 3*(j + 3*i)}]"
+                    ]
+                    self.metric_derivs_expr_list += [BtoA.GammaUDD[i][j][k]]
+        # Finally, K_ij,k
+        for i in range(3):
+            for j in range(i, 3):
+                for k in range(3):
+                    self.metric_derivs_varname_list += [f"KDDdD{i}{j}{k}"]
+                    self.metric_derivs_varname_arr_list += [
+                        f"arr_KDDdD[{k + 3*(j + 3*i)}]"
+                    ]
+                    self.metric_derivs_expr_list += [BtoA.KDDdD[i][j][k]]
+        self.metric_deriv_var_list_str = ", ".join(self.metric_derivs_varname_list)
+        self.metric_deriv_var_addr_list_str = ", ".join(
+            f"&{var}" for var in self.metric_derivs_varname_list
+        )
+        self.metric_deriv_var_decl_pointer_list_str = ", ".join(
+            f"REAL *restrict {var}" for var in self.metric_derivs_varname_list
+        )
+        self.metric_deriv_unpack_arrays = ""
+        for idx, var in enumerate(self.metric_derivs_varname_list):
+            self.metric_deriv_unpack_arrays += (
+                f"{var} = {self.metric_derivs_varname_arr_list[idx]};\n"
+            )
 
 
 if __name__ == "__main__":

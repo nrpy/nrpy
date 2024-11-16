@@ -22,17 +22,17 @@ from pathlib import Path
 
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
-import nrpy.infrastructures.BHaH.checkpointing as chkpt
-import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
+import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
+import nrpy.infrastructures.BHaH.checkpointing as chkpt
+import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 import nrpy.infrastructures.BHaH.general_relativity.BSSN_C_codegen_library as BCl
 import nrpy.infrastructures.BHaH.general_relativity.NRPyPN_quasicircular_momenta as NRPyPNqm
 import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.ID_persist_struct as IDps
 import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.TwoPunctures_lib as TPl
 import nrpy.infrastructures.BHaH.main_c as main
-import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
 import nrpy.infrastructures.BHaH.special_functions.spin_weight_minus2_spherical_harmonics as swm2sh
 import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xxCartxx
@@ -44,6 +44,7 @@ from nrpy.infrastructures.BHaH import (
     rfm_wrapper_functions,
 )
 from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
+from nrpy.infrastructures.BHaH.general_relativity import psi4_C_codegen_library
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -205,20 +206,19 @@ BCl.register_CFunction_constraints(
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
-swm2sh.register_CFunction_spin_weight_minus2_sph_harmonics()
 
-for which_part in range(3):
-    BCl.register_CFunction_psi4_part(
-        CoordSystem=CoordSystem,
-        which_part=which_part,
-        enable_fd_functions=enable_fd_functions,
-        OMP_collapse=OMP_collapse,
-        output_empty_function=False,
-    )
-BCl.register_CFunction_psi4_tetrad(
+psi4_C_codegen_library.register_CFunction_psi4(
     CoordSystem=CoordSystem,
-    output_empty_function=False,
+    enable_fd_functions=enable_fd_functions,
+    OMP_collapse=OMP_collapse,
 )
+psi4_C_codegen_library.register_CFunction_psi4_metric_deriv_quantities(
+    CoordSystem=CoordSystem, enable_fd_functions=enable_fd_functions
+)
+psi4_C_codegen_library.register_CFunction_psi4_tetrad(
+    CoordSystem=CoordSystem,
+)
+swm2sh.register_CFunction_spin_weight_minus2_sph_harmonics()
 
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
