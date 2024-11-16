@@ -38,6 +38,8 @@ par.set_parval_from_str("Infrastructure", "BHaH")
 # Code-generation-time parameters:
 project_name = "nrpyelliptic_conformally_flat"
 fp_type = "double"
+par.set_parval_from_str("fp_type", fp_type)
+
 grid_physical_size = 1.0e6
 t_final = grid_physical_size  # This parameter is effectively not used in NRPyElliptic
 nn_max = 10000  # Sets the maximum number of relaxation steps
@@ -169,7 +171,6 @@ nrpyellClib.register_CFunction_initial_guess_single_point(fp_type=fp_type)
 nrpyellClib.register_CFunction_initial_guess_all_points(
     OMP_collapse=OMP_collapse,
     enable_checkpointing=enable_checkpointing,
-    fp_type=fp_type,
 )
 
 # Generate function to set variable wavespeed
@@ -189,7 +190,7 @@ nrpyellClib.register_CFunction_auxevol_gfs_all_points(
 nrpyellClib.register_CFunction_initialize_constant_auxevol()
 
 numericalgrids.register_CFunctions(
-    list_of_CoordSystems=list_of_CoordSystems,
+    list_of_CoordSystems=list(set(list_of_CoordSystems)),
     list_of_grid_physical_sizes=[grid_physical_size for c in list_of_CoordSystems],
     Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
@@ -205,7 +206,7 @@ nrpyellClib.register_CFunction_diagnostics(
 
 if enable_rfm_precompute:
     rfm_precompute.register_CFunctions_rfm_precompute(
-        list_of_CoordSystems=list_of_CoordSystems, fp_type=fp_type
+        list_of_CoordSystems=list(set(list_of_CoordSystems))
     )
 
 # Generate function to compute RHSs
@@ -238,9 +239,8 @@ if __name__ == "__main__" and parallel_codegen_enable:
     pcg.do_parallel_codegen()
 
 cbc.CurviBoundaryConditions_register_C_functions(
-    list_of_CoordSystems=list_of_CoordSystems,
+    list_of_CoordSystems=list(set(list_of_CoordSystems)),
     radiation_BC_fd_order=radiation_BC_fd_order,
-    fp_type=fp_type,
 )
 rhs_string = """rhs_eval(commondata, params, rfmstruct,  auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
 if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0){

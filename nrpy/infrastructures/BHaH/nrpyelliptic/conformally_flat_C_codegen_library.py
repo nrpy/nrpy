@@ -363,6 +363,7 @@ def register_CFunction_compute_L2_norm_of_gridfunction(
 
     rfm = refmetric.reference_metric[CoordSystem]
 
+    fp_type = par.parval_from_str("fp_type")
     type_alias = "double" if fp_type == "float" else "REAL"
 
     loop_body = ccg.c_codegen(
@@ -375,8 +376,7 @@ def register_CFunction_compute_L2_norm_of_gridfunction(
             f"const {type_alias} sqrtdetgamma",
         ],
         include_braces=False,
-    )
-    loop_body = loop_body.replace("const REAL", f"const {type_alias}")
+    ).replace("const REAL", f"const {type_alias}")
 
     loop_body += rf"""
 if(r < integration_radius) {{
