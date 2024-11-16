@@ -253,9 +253,7 @@ if (which_output == OUTPUT_PSI4) {
   if (strstr(params_chare->CoordSystemName, "Spherical") != NULL) {
     if (diagnosticstruct->num_of_R_exts_chare > 0) {
     // Set psi4.
-    psi4_part0(commondata, params_chare, xx_chare, y_n_gfs, diagnostic_output_gfs);
-    psi4_part1(commondata, params_chare, xx_chare, y_n_gfs, diagnostic_output_gfs);
-    psi4_part2(commondata, params_chare, xx_chare, y_n_gfs, diagnostic_output_gfs);
+    psi4(commondata, params_chare, xx_chare, y_n_gfs, diagnostic_output_gfs);
     // Decompose psi4 into spin-weight -2  spherical harmonics & output to files.
     psi4_spinweightm2_decomposition_on_sphlike_grids(
             commondata, params, params_chare, diagnostic_output_gfs, diagnosticstruct->list_of_R_exts_chare, diagnosticstruct->num_of_R_exts_chare,
@@ -477,21 +475,10 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
             const int locali1 = i1;
             const int locali2 = i2;
 
-            sum_psi4r += (diagnostic_output_gfs[IDX4GENERAL(PSI4_PART0REGF, locali0, locali1, locali2, Nxx_plus_2NGHOSTS0chare,
-                                                            Nxx_plus_2NGHOSTS1chare, Nxx_plus_2NGHOSTS2chare)] +
-                          diagnostic_output_gfs[IDX4GENERAL(PSI4_PART1REGF, locali0, locali1, locali2, Nxx_plus_2NGHOSTS0chare,
-                                                            Nxx_plus_2NGHOSTS1chare, Nxx_plus_2NGHOSTS2chare)] +
-                          diagnostic_output_gfs[IDX4GENERAL(PSI4_PART2REGF, locali0, locali1, locali2, Nxx_plus_2NGHOSTS0chare,
-                                                            Nxx_plus_2NGHOSTS1chare, Nxx_plus_2NGHOSTS2chare)]) *
-                         l0i__times__w0i_inv[i];
-            sum_psi4i += (diagnostic_output_gfs[IDX4GENERAL(PSI4_PART0IMGF, locali0, locali1, locali2, Nxx_plus_2NGHOSTS0chare,
-                                                            Nxx_plus_2NGHOSTS1chare, Nxx_plus_2NGHOSTS2chare)] +
-                          diagnostic_output_gfs[IDX4GENERAL(PSI4_PART1IMGF, locali0, locali1, locali2, Nxx_plus_2NGHOSTS0chare,
-                                                            Nxx_plus_2NGHOSTS1chare, Nxx_plus_2NGHOSTS2chare)] +
-                          diagnostic_output_gfs[IDX4GENERAL(PSI4_PART2IMGF, locali0, locali1, locali2, Nxx_plus_2NGHOSTS0chare,
-                                                            Nxx_plus_2NGHOSTS1chare, Nxx_plus_2NGHOSTS2chare)]) *
-                         l0i__times__w0i_inv[i];
-
+            sum_psi4r += diagnostic_output_gfs[IDX4GENERAL(PSI4_REGF, locali0, locali1, locali2, Nxx_plus_2NGHOSTS0chare,
+                                                           Nxx_plus_2NGHOSTS1chare, Nxx_plus_2NGHOSTS2chare)] * l0i__times__w0i_inv[i];
+            sum_psi4i += diagnostic_output_gfs[IDX4GENERAL(PSI4_IMGF, locali0, locali1, locali2, Nxx_plus_2NGHOSTS0chare,
+                                                           Nxx_plus_2NGHOSTS1chare, Nxx_plus_2NGHOSTS2chare)] * l0i__times__w0i_inv[i];
           }
           // Store result to "2D" array (actually 1D array with 2D storage):
           const int idx2d = (i1 - NGHOSTS) * (Nxx_plus_2NGHOSTS2chare - 2 * NGHOSTS) + (i2 - NGHOSTS);
