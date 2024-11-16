@@ -352,6 +352,27 @@ def cse_postprocess(
             reduced2 += [element]
     reduced = reduced2
 
+    # Remove and Substitute Constant Replacements
+    while True:
+        constant_repls = [
+            (sym, expr)
+            for sym, expr in replaced
+            if not getattr(expr, "free_symbols", set())
+        ]
+        if not constant_repls:
+            break  # No more constant replacements to process
+        for sym, expr in constant_repls:
+            # Substitute the constant into other replacements
+            new_replaced = []
+            for s, e in replaced:
+                if s != sym:
+                    new_e = e.xreplace({sym: expr})
+                    new_replaced.append((s, new_e))
+                # Else, this replacement is to be removed
+            replaced = new_replaced
+            # Substitute the constant into reduced expressions
+            reduced = [r.xreplace({sym: expr}) for r in reduced]
+
     # Sort the replaced expressions
     # so that none are evaluated before
     # they are set.
@@ -449,27 +470,7 @@ def cse_postprocess(
                 i -= 1
         i += 1
 
-    # Step 1: Remove and Substitute Constant Replacements
-    # Continuously substitute and remove replacements that are constants
-    while True:
-        constant_repls = [
-            (sym, expr) for sym, expr in replaced if not expr.free_symbols
-        ]
-        if not constant_repls:
-            break  # No more constant replacements to process
-        for sym, expr in constant_repls:
-            # Substitute the constant into other replacements
-            new_replaced = []
-            for s, e in replaced:
-                if s != sym:
-                    new_e = e.xreplace({sym: expr})
-                    new_replaced.append((s, new_e))
-                # Else, this replacement is to be removed
-            replaced = new_replaced
-            # Substitute the constant into reduced expressions
-            reduced = [r.xreplace({sym: expr}) for r in reduced]
-
-    # Step 2: Remove Unused Symbolic Replacements
+    # Remove Unused Symbolic Replacements
     if replaced:
         # Initialize the set of symbols that are used in reduced expressions
         used_symbols = set()
