@@ -920,16 +920,10 @@ def register_CFunctions(
     :return None
 
     Doctests:
-    >>> from nrpy.helpers.generic import compress_string_to_base64, decompress_base64_to_string, diff_strings
+    >>> from nrpy.helpers.generic import validate_strings
     >>> cfc.CFunction_dict.clear()
     >>> register_CFunctions()
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4B/6A7tdABGaScZHDxOiAHcc/CXr2duHb+UiUyv83OVALtvJ+o7uK/PoSVGe7rPuvil8asOnzsX/5aNqzgQh3F7K147eoVkvuX5XqBlwQ4pLa1z+qz4R8cbeO2C3kSzRL/nx5WTsauHKk/IcKH3IGIYRqchbd6UjUXwbc8LP9RI22Bn0O94AqK7TSUZ1L0DbWFZwSXS0hV4BRn8ykOLwxf6oeTUUR5JemW81WXtk31MDlCKcg66lHwTF4IUD8JHoCOie79tLkewR0XTtx8bsAqXJg+XEDtOe1wilZdMoKsDoTrVCtfc7rVh3jG+FxSyOm71xYxeJpQmGmFeCb4wDdknZ6jgMDdyDLuqIzerAVmrbxKwqUnr2pgq0gvHOGnCof4hJC3UtrzTIh9S8te4WqsNES+J1ZKrIbb2A9++wNjbH3CaWYBKvUpjMqrMJLMWZMW6uIjzGBIVnX7yIH09jxztmNVhX7hKXAOSfN7wCRISo6bmYI5U/d8Nx5/JR/pHrPy94pYPEzpRIlD+E5NF9NXcXpeEJHeZc7NzTOzTry27wtaRcn8bkuMh7ic9Hr16dno210TjWeguLGpZe2rERUlWwcrl2+/QAOSEJ7hWrI39xmt6dfZPN6WZsInhGiRfq6a/+eM7RXTEAmgPXGHLvCBLSMQv5bKRIVIKUobEVmb5kUzSZJayWYI7d+mmF12ES+Vz8EhSB6MhI5xri5lNDuEiCIDtOUZ+S6uSVSlI3ONa/q6+EGU7kM31s+Ru2maB8z80nmnt9Uy2zVk0y49ExFY91QhsjliyCkdAwAiAgK7CNHt+7ZHldl6yN/AqH4hm3i6B43Kr9FzxtJC0LagQ4JgNqjjzWTgJPBVbS4KUAigOtMKIhWOD4XHxGtm/aLM20/sM+AQcJymzvaCuGGtf9g2yWv8upA/oW6ZmtXQcYzHEl43QPU0uDQhCT+V7g/zDpywVbCVXUIlJdMkk5sqaiUPGSJToHkYDrliXibOrn2qZYMEC9lsh1zfDAsTqrOo2FSRFxY6itVAtYpYIzO15gUuGpRX4e9OFuRB5OznawizpbUtGzBjSEituvCT5WqsZg4HKbPYuWReiAVNBNiRoPPjskDHWeP6gN7204PCvTcQDK9kp5UcUQug8KEBY2h8MmAem0SmbSqAaH2COQ2USwv2roeZEUJxmi4ZaVcTw1biO+b2ajfKn2vordfNnkMEVfFBOsOHgxAgG1MTJqxTh4wTVhmd9FhMQHYp6zY+BbVf2kEWEzNcACd7DZpQ60BRlT/gAAAG4gJ3qV1Ov8AAHXB/s/AABRFx4AscRn+wIAAAAABFla")
-    >>> returned_string = cfc.CFunction_dict["MoL_step_forward_in_time"].full_function
-    >>> if returned_string != expected_string:
-    ...    compressed_str = compress_string_to_base64(returned_string)
-    ...    error_message = "Trusted MoL_step_forward_in_time.full_function string changed!\n Here's the diff:\n"
-    ...    error_message += "Here's the diff:\n" + diff_strings(expected_string, returned_string) + "\n"
-    ...    raise ValueError(error_message + f"base64-encoded output: {compressed_str}")
+    >>> validate_strings(cfc.CFunction_dict["MoL_step_forward_in_time"].full_function, "superB_MoL")
     """
     Butcher_dict = generate_Butcher_tables()
 
