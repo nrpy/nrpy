@@ -107,22 +107,21 @@ def validate_strings(
     string_desc: str,
 ) -> None:
     """
-    Validate a string against an expected trusted value stored in a C file and manages trusted file storage.
+    Validate a string against a trusted value stored in a .c file; manage trusted file creation if file not found.
 
-    Compare the provided string to a trusted value stored in a C file associated with the caller's
-    function or script. If the trusted file is missing, creates it with the provided string.
-    Reports mismatches with detailed differences and provides instructions for updating the file.
+    Compare the provided string to a trusted value stored in
+    [caller module's directory]/tests/[caller module]_{string_desc}.c. Create the file with the provided string if
+    it is missing. Report mismatches with detailed differences and provide instructions for updating the trusted file.
 
-    :param to_check: The string to validate, representing the expected output or value.
-    :param string_desc: A short, descriptive label for the string. Must not be empty or contain whitespace,
-                        as it is used in the trusted file's naming convention.
-    :raises ValueError: If:
-                        - `string_desc` is empty or contains whitespace.
-                        - The caller's frame or filename cannot be identified.
-                        - The provided string does not match the trusted value stored in the file.
-    :raises RuntimeError: If:
-                          - The caller's frame lacks code information, preventing proper file determination.
-                          - A system or environment error occurs while creating or accessing the trusted file.
+    :param to_check: Specify the string to validate, representing the expected value or output.
+    :param string_desc: Provide a short, non-empty, whitespace-free label to use in the trusted file's name.
+    :raises ValueError: Raise if:
+        - `string_desc` is empty or contains whitespace.
+        - The caller's frame or filename cannot be identified.
+        - The provided string does not match the trusted value.
+    :raises RuntimeError: Raise if:
+        - The caller's frame lacks code information, preventing file determination.
+        - System or environment errors occur during file creation or access.
     """
     if not string_desc or " " in string_desc:
         raise ValueError(
