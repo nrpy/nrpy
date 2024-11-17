@@ -107,14 +107,22 @@ def validate_strings(
     string_desc: str,
 ) -> None:
     """
-    Validate the string output against a trusted version stored in a file.
-    If the trusted file does not exist, create it with the provided string.
-    If it exists, compare the contents and raise an error with a detailed message if they differ.
+    Validate a string against an expected trusted value stored in a C file and manages trusted file storage.
 
-    :param to_check: The string to validate.
-    :param string_desc: Description for the string; cannot be blank or contain whitespace.
-    :raises ValueError: If string_desc is blank or the strings do not match, with the detailed error message.
-    :raises RuntimeError: If the caller frame or filename cannot be determined.
+    Compare the provided string to a trusted value stored in a C file associated with the caller's
+    function or script. If the trusted file is missing, creates it with the provided string.
+    Reports mismatches with detailed differences and provides instructions for updating the file.
+
+    :param to_check: The string to validate, representing the expected output or value.
+    :param string_desc: A short, descriptive label for the string. Must not be empty or contain whitespace,
+                        as it is used in the trusted file's naming convention.
+    :raises ValueError: If:
+                        - `string_desc` is empty or contains whitespace.
+                        - The caller's frame or filename cannot be identified.
+                        - The provided string does not match the trusted value stored in the file.
+    :raises RuntimeError: If:
+                          - The caller's frame lacks code information, preventing proper file determination.
+                          - A system or environment error occurs while creating or accessing the trusted file.
     """
     if not string_desc or " " in string_desc:
         raise ValueError(
