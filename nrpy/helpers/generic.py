@@ -9,9 +9,11 @@ Author: Zachariah B. Etienne
 import inspect
 import pkgutil
 import subprocess
+import sys
 from difflib import ndiff
 from pathlib import Path
-from typing import Any, List, cast
+from types import FrameType, ModuleType
+from typing import Any, List, Optional, cast
 
 from nrpy.helpers.cached_functions import is_cached, read_cached, write_cached
 
@@ -112,6 +114,7 @@ def validate_strings(
     :param to_check: The string to validate.
     :param string_desc: Description for the string; cannot be blank or contain whitespace.
     :raises ValueError: If string_desc is blank or the strings do not match, with the detailed error message.
+    :raises RuntimeError: If the caller frame or filename cannot be determined.
     """
     if not string_desc or " " in string_desc:
         raise ValueError(
@@ -119,21 +122,24 @@ def validate_strings(
         )
 
     # Get the caller's frame
-    caller_frame = inspect.currentframe().f_back
+    caller_frame: Optional[FrameType] = inspect.currentframe()
+    if caller_frame is None or caller_frame.f_back is None:
+        raise RuntimeError("Unable to retrieve caller frame.")
+    caller_frame = caller_frame.f_back
 
     # Get the caller's filename
-    caller_filename = inspect.getfile(caller_frame)
+    try:
+        caller_filename: str = inspect.getfile(caller_frame)
+    except TypeError as exc:
+        raise RuntimeError("Unable to determine the caller's filename.") from exc
 
     # Handle the case when called from a doctest
     if caller_filename.startswith("<doctest"):
-        # Attempt to get the module's filename
-        module = inspect.getmodule(caller_frame)
-        if module and hasattr(module, "__file__"):
+        module: Optional[ModuleType] = inspect.getmodule(caller_frame)
+        if module and hasattr(module, "__file__") and module.__file__:
             caller_filename = module.__file__
         else:
             # Fallback to sys.argv[0] if module filename is not available
-            import sys
-
             caller_filename = sys.argv[0]
 
     caller_directory = Path(caller_filename).parent
@@ -144,7 +150,9 @@ def validate_strings(
     outdir.mkdir(parents=True, exist_ok=True)
 
     # Get the function name or script name
-    function_name = caller_frame.f_code.co_name
+    if caller_frame.f_code is None:
+        raise RuntimeError("Caller frame does not have code information.")
+    function_name: str = caller_frame.f_code.co_name
 
     if function_name.startswith("<"):
         # Use the script's filename if function name is not meaningful
@@ -244,7 +252,6 @@ def copy_files(
 
 if __name__ == "__main__":
     import doctest
-    import sys
 
     results = doctest.testmod()
 
