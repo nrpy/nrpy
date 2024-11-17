@@ -109,7 +109,7 @@ def validate_strings(
     """
     Validate a string against a trusted value stored in a .c file; manage trusted file creation if file not found.
 
-    Compare the provided string to a trusted value stored in
+    Compare the provided string "to_check" to a trusted value stored in
     [caller module's directory]/tests/[caller module]_{string_desc}.c. Create the file with the provided string if
     it is missing. Report mismatches with detailed differences and provide instructions for updating the trusted file.
 
