@@ -101,6 +101,7 @@ def output_BHaH_defines_h(
     define_no_simd_UPWIND_ALG: bool = True,
     enable_rfm_precompute: bool = True,
     fin_NGHOSTS_add_one_for_upwinding_or_KO: bool = False,
+    DOUBLE_means: str = "REAL",
     supplemental_defines_dict: Optional[Dict[str, str]] = None,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
@@ -113,6 +114,7 @@ def output_BHaH_defines_h(
     :param define_no_simd_UPWIND_ALG: Flag to #define a SIMD-less UPWIND_ALG. No need to define this if UPWIND_ALG() unused.
     :param enable_rfm_precompute: A boolean value reflecting whether reference metric precomputation is enabled.
     :param fin_NGHOSTS_add_one_for_upwinding_or_KO: Option to add one extra ghost zone for upwinding
+    :param DOUBLE_means: Overload DOUBLE macro type for specific calculations that require higher than single precision
     :param supplemental_defines_dict: Additional key-value pairs to be included in the output file
     :param clang_format_options: Options for clang formatting.
 
@@ -149,6 +151,7 @@ def output_BHaH_defines_h(
             gen_BHd_str += f'#include "{include}"\n'
     REAL_means = par.parval_from_str("fp_type")
     gen_BHd_str += f"""#define REAL {REAL_means}
+#define DOUBLE {DOUBLE_means}
 
 // These macros for MIN(), MAX(), and SQR() ensure that if the arguments inside
 //   are a function/complex expression, the function/expression is evaluated
