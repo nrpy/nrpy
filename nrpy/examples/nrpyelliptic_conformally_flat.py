@@ -342,7 +342,7 @@ cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
 Bdefines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     enable_simd=enable_simd,
-    supplemental_defines_dict={"Define Double": "#define DOUBLE double"},
+    DOUBLE_means="double" if fp_type == "float" else "REAL",
 )
 # Define post_MoL_step_forward_in_time string for main function
 post_MoL_step_forward_in_time = r"""    check_stop_conditions(&commondata, griddata);
