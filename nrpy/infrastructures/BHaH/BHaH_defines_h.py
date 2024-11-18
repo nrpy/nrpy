@@ -101,7 +101,7 @@ def output_BHaH_defines_h(
     define_no_simd_UPWIND_ALG: bool = True,
     enable_rfm_precompute: bool = True,
     fin_NGHOSTS_add_one_for_upwinding_or_KO: bool = False,
-    DOUBLE_means: str = "REAL",
+    DOUBLE_means: str = "double",
     supplemental_defines_dict: Optional[Dict[str, str]] = None,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
