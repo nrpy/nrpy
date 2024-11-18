@@ -210,15 +210,17 @@ class CCodeGen:
             else:
                 raise ValueError("FIXME: Please specify the fp_type for SIMD")
         else:
-            if Infrastructure == "NRPy":
-                self.fp_type_alias = self.fp_type
-            elif Infrastructure == "BHaH":
-                self.fp_type_alias = "REAL"
-            elif Infrastructure in ("ETLegacy", "CarpetX"):
-                self.fp_type_alias = "CCTK_REAL"
+            if fp_type_alias == "":
+                if Infrastructure == "NRPy":
+                    self.fp_type_alias = self.fp_type
+                elif Infrastructure == "BHaH":
+                    self.fp_type_alias = "REAL"
+                elif Infrastructure in ("ETLegacy", "CarpetX"):
+                    self.fp_type_alias = "CCTK_REAL"
+                else:
+                    self.fp_type_alias = ""
             else:
-                self.fp_type_alias = ""
-
+                self.fp_type_alias = fp_type_alias
         if self.enable_GoldenKernels:
             self.enable_cse_preprocess = True
             self.simd_find_more_subs = True
