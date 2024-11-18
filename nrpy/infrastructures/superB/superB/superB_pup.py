@@ -18,14 +18,12 @@ from nrpy.infrastructures.BHaH.rfm_precompute import ReferenceMetricPrecompute
 
 def register_CFunction_superB_pup_routines(
     list_of_CoordSystems: List[str],
-    fp_type: str = "double",
     MoL_method: str = "RK4",
 ) -> None:
     """
     Register C function superB_pup_routines(), a collection of Pack Un-Pack (PUP) for structs. PUP routines are used for checkpointing and load balancing in Charm++.
 
     :param list_of_CoordSystems: List of coordinate systems to register the C functions.
-    :param fp_type: Floating point type, e.g., "double".
     :param MoL_method: The method to be used for MoL. Default is 'RK4'.
     """
     desc = "superB_pup_routines.cpp from superB. Note that this cpp file is just a collection of PUP functions. superB_pup_routines() is unused."
@@ -97,7 +95,7 @@ void pup_rfm_struct(PUP::er &p, rfm_struct &rfm, const params_struct *restrict p
   if (p.isUnpacking()) {
 """
     for CoordSystem in list_of_CoordSystems:
-        rfm_precompute = ReferenceMetricPrecompute(CoordSystem, fp_type=fp_type)
+        rfm_precompute = ReferenceMetricPrecompute(CoordSystem)
         # Add memory allocation code
         prefunc += rfm_precompute.rfm_struct__malloc.replace("rfmstruct->", "rfm.")
         prefunc += """}

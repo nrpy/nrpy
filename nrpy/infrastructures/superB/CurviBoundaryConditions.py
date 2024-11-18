@@ -325,7 +325,6 @@ def CurviBoundaryConditions_register_C_functions(
     list_of_CoordSystems: List[str],
     radiation_BC_fd_order: int = 2,
     set_parity_on_aux: bool = False,
-    fp_type: str = "double",
 ) -> None:
     """
     Register various C functions responsible for handling boundary conditions.
@@ -333,17 +332,15 @@ def CurviBoundaryConditions_register_C_functions(
     :param list_of_CoordSystems: List of coordinate systems to use.
     :param radiation_BC_fd_order: Finite differencing order for the radiation boundary conditions. Default is 2.
     :param set_parity_on_aux: If True, set parity on auxiliary grid functions.
-    :param fp_type: Floating point type, e.g., "double".
     """
     for CoordSystem in list_of_CoordSystems:
         # Register C function to set up the boundary condition struct.
-        register_CFunction_bcstruct_set_up(CoordSystem=CoordSystem, fp_type=fp_type)
+        register_CFunction_bcstruct_set_up(CoordSystem=CoordSystem)
 
         # Register C function to apply boundary conditions to both pure outer and inner boundary points.
         register_CFunction_apply_bcs_outerradiation_and_inner(
             CoordSystem=CoordSystem,
             radiation_BC_fd_order=radiation_BC_fd_order,
-            fp_type=fp_type,
         )
 
     # Register C function to apply boundary conditions to inner-only boundary points.

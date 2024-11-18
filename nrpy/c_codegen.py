@@ -33,6 +33,7 @@ fp_type_list = Literal[
     "double",
     "float",
     "long double",
+    "set by NRPyParameter par.parval_from_str('fp_type')",
     # Unsupported types by sympy ccode generator
     # "std::bfloat16_t",
     # "std::float16_t",
@@ -45,6 +46,7 @@ fp_type_to_sympy_type = {
     "double": sp_ast.float64,
     "float": sp_ast.float32,
     "long double": sp_ast.float80,
+    "set by NRPyParameter par.parval_from_str('fp_type')": sp_ast.float64,
     # Unsupported types by sympy ccode generator
     # "std::bfloat16_t": sp_ast.float16,
     # "std::float16_t" : sp_ast.float16,
@@ -61,7 +63,7 @@ class CCodeGen:
         prestring: str = "",
         poststring: str = "",
         include_braces: bool = True,
-        fp_type: fp_type_list = "double",
+        fp_type: fp_type_list = "set by NRPyParameter par.parval_from_str('fp_type')",
         fp_type_alias: str = "",
         verbose: bool = True,
         enable_cse: bool = True,
@@ -84,6 +86,7 @@ class CCodeGen:
         mem_alloc_style: Literal["210", "012"] = "210",
         upwind_control_vec: Union[List[sp.Symbol], sp.Symbol] = sp.Symbol("unset"),
         symbol_to_Rational_dict: Optional[Dict[sp.Basic, sp.Rational]] = None,
+        rational_const_alias: str = "static const",
         clang_format_enable: bool = False,
         clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
     ) -> None:
@@ -116,6 +119,7 @@ class CCodeGen:
         :param mem_alloc_style: Memory allocation style.
         :param upwind_control_vec: Upwind control vector as a symbol or list of symbols.
         :param symbol_to_Rational_dict: Dictionary mapping sympy symbols to their corresponding sympy Rationals.
+        :param rational_const_alias: Override default alias for specifying rational constness
         :param clang_format_enable: Boolean to enable clang formatting.
         :param clang_format_options: Options for clang formatting.
 
@@ -128,17 +132,20 @@ class CCodeGen:
         >>> c = CCodeGen(fp_type="double")
         >>> c.fp_type
         'double'
+        >>> print(tuple(fp_type_to_sympy_type.keys()))
+        ('double', 'float', 'long double', "set by NRPyParameter par.parval_from_str('fp_type')")
         >>> CCodeGen(fp_type="foo")
         Traceback (most recent call last):
           ...
-        ValueError: In function '__init__': parameter 'fp_type' has value: 'foo', which is not in the allowed_values set: ('double', 'float', 'long double')
-
+        ValueError: In function '__init__': parameter 'fp_type' has value: 'foo', which is not in the allowed_values set: ('double', 'float', 'long double', "set by NRPyParameter par.parval_from_str('fp_type')")
         """
         validate_literal_arguments()
         self.prestring = prestring
         self.poststring = poststring
         self.include_braces = include_braces
         # Validate fp_type before attempting to access fp_type_to_sympy_type
+        if fp_type == "set by NRPyParameter par.parval_from_str('fp_type')":
+            fp_type = par.parval_from_str("fp_type")
         if fp_type not in fp_type_to_sympy_type:
             allowed_values = tuple(fp_type_to_sympy_type.keys())
             raise ValueError(
@@ -179,6 +186,7 @@ class CCodeGen:
         self.mem_alloc_style = mem_alloc_style
         self.upwind_control_vec = upwind_control_vec
         self.symbol_to_Rational_dict = symbol_to_Rational_dict
+        self.rational_const_alias = rational_const_alias
         self.clang_format_enable = clang_format_enable
         self.clang_format_options = clang_format_options
 
@@ -202,15 +210,17 @@ class CCodeGen:
             else:
                 raise ValueError("FIXME: Please specify the fp_type for SIMD")
         else:
-            if Infrastructure == "NRPy":
-                self.fp_type_alias = self.fp_type
-            elif Infrastructure == "BHaH":
-                self.fp_type_alias = "REAL"
-            elif Infrastructure in ("ETLegacy", "CarpetX"):
-                self.fp_type_alias = "CCTK_REAL"
+            if fp_type_alias == "":
+                if Infrastructure == "NRPy":
+                    self.fp_type_alias = self.fp_type
+                elif Infrastructure == "BHaH":
+                    self.fp_type_alias = "REAL"
+                elif Infrastructure in ("ETLegacy", "CarpetX"):
+                    self.fp_type_alias = "CCTK_REAL"
+                else:
+                    self.fp_type_alias = ""
             else:
-                self.fp_type_alias = ""
-
+                self.fp_type_alias = fp_type_alias
         if self.enable_GoldenKernels:
             self.enable_cse_preprocess = True
             self.simd_find_more_subs = True
@@ -432,6 +442,7 @@ def c_codegen(
             enable_simd=CCGParams.enable_simd,
             enable_GoldenKernels=CCGParams.enable_GoldenKernels,
             fp_type=CCGParams.fp_type,
+            rational_const_alias=CCGParams.rational_const_alias,
         )
 
     # Step 4: If CCGParams.verbose, then output the original SymPy
@@ -500,9 +511,7 @@ def c_codegen(
                     CCGParams.symbol_to_Rational_dict[v].q
                 )
                 if not CCGParams.enable_simd:
-                    RATIONAL_assignment = (
-                        f"static const {CCGParams.fp_type_alias} {str(v)}"
-                    )
+                    RATIONAL_assignment = f"{CCGParams.rational_const_alias} {CCGParams.fp_type_alias} {str(v)}"
                     RATIONAL_expr = sp.Rational(p, q)
                     RATIONAL_decls += sp.ccode(
                         RATIONAL_expr,
