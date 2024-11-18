@@ -516,18 +516,13 @@ class CUDA_reductions:
     :param fp_type: Floating point precision of the data
 
     DOCTEST:
-    >>> import json
-    >>> from nrpy.helpers.generic import decompress_base64_to_string, diff_strings
-    >>> with open("nrpy/tests/DOCTEST-gpu__cuda_utilities.json", 'r') as f:
-    ...     expected_str_dict = json.load(f)
+    >>> from nrpy.helpers.generic import validate_strings
     >>> for fp_type in ['float', 'double']:
     ...     for reduction_type, _reduction_func in implemented_reduction_dict.items():
     ...         reduction = CUDA_reductions(reduction_type=reduction_type, fp_type=fp_type)
     ...         reduction.generate_CFunction()
     ...         generated_str = reduction.CFunction.full_function
-    ...         expected_str = decompress_base64_to_string(expected_str_dict[fp_type][reduction_type])
-    ...         if generated_str != expected_str:
-    ...             raise ValueError(f"\\n{fp_type} - {reduction_type}: {diff_strings(expected_str, generated_str)}")
+    ...         validate_strings(generated_str, f"CUDA_reductions_{fp_type}__{reduction_type}")
     """
 
     def __init__(
