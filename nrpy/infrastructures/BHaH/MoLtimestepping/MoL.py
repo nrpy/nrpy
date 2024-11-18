@@ -420,7 +420,6 @@ def register_CFunction_MoL_step_forward_in_time(
     >>> from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import (
     ...     generate_Butcher_tables,
     ... )
-    >>> from nrpy.helpers.generic import compress_string_to_base64
     >>> Butcher_dict = generate_Butcher_tables()
     >>> expected_str_dict=dict()
     >>> try:
@@ -845,16 +844,10 @@ def register_CFunctions(
     :param register_MoL_step_forward_in_time: Whether to register the MoL step forward function. Default is True.
 
     Doctests:
-    >>> from nrpy.helpers.generic import compress_string_to_base64, decompress_base64_to_string, diff_strings
+    >>> from nrpy.helpers.generic import validate_strings
     >>> cfc.CFunction_dict.clear()
     >>> register_CFunctions()
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4BvkA8ldABGaScZHDxOiAHcc/CXr2duHb+UiUyv83OVALtvJ+o7uK/PoSVGe7rPuvil8asOnzsX/5aNqzgQh3F7K147eoVkvuX5XqBlwQ4pLa1z+qz4R8cbeO2C3kSzRL/nx5WTsauHKk/IcKH3IGIYRqchbd6UjUXwbc8LP9RI22Bn0O94AqK7TSUZ1L0DbWFZwSXS0hV4BRn8ykOLwxf6oeTUUR5JemW81WXtk31MDlCGj9O1lAtBFR3q8rop0mhU/UFumRk4eUzWbJdO1T8XWdYD5kZMBXhysFYEQ0prk34IbkR2cbNS4yyT5/B6KO6ExvWjYBgtQ3yqFBaOh2aroKMobVG0rC02Y8vYQwbRW5dml8hwDs+hyGMwHp+Mc1xhLyaRVjIUw/fMm84U39RrY9M3Kgq990ryvV6pqNh6xRNxSvU/pr4mbfiAzQgCrGwdAzvdk0XfgLNhxMkqJ8tuSHoOsNuktfxouhLGetmjK1xZSrBpA673c9LOhu76wkunIN0SX4T7WEGaUiGMMq3IjEVIjt2YRv3k0+gXVe78IP1NWCDxIsQ81XEwYK1xXnLWfxRHYQ1aacoszkdboUo5thgI5SGZvvSr5mBU9flXQE/zC2oyaCpTlLqUGhZlt1KZUrDsxzJVGNWTc6sCKh3fqoVVYMVAPfZe2XXlBJfuUpPtKdLevCj4jwnBr9cqhO/4vNKmOFQ0QGzfV1sILkeMLaplReepXpcilfXYSNewH+Yh7k6c2pKAR5HC5ORjw5iZ3uhGujrk5xQFxTXrSgz4cGmsmdRWuSyImUYV6eZ3DwjCouP+fZoKMT8Cpb9Ph90XzpCvMJBMl1kwji4Nx6qQZsNCcqxBS0HnJS5yGTlk8N8DZ4rltE+kVGUZgcNXIk2bCSji37x/UXKIebEB2c78WFE+cvT4mzG3CDTMbP3EXHwuJCHlN9+BvvXRFqKJwByT5OJVYFicK6lxR1WHRkZ/bGzTU2csama3ank6RBOY62lnKGGXXybID5qaKOPBjKQTeGWAapyintBsJoDKrAK2Pf10N//AxEU/uqXcL72CJMxFCex4KPf60crYI1dVrsp/Vsx01kc1vRC6q5Pnh0NSe0bBYqf6dBLjx5ndxabr9xfSYRVTFm67a7O1/Khsy/AUhBSQ8oW4k4D2coGocNSwrLBFJMZFC5X0q3ZyK1VKV4/ffNKmFC7+79Rea1YRW9Cv2D2rblUssLzHRB5CKeQmQY94Py4XDMp5rgXLWMLZIsihQp8ULo5+Jn4bOJadsYEzih7BYxb+5ZFismApTQAAAAABU6mTeACftwgAB5QflNwAA48B597HEZ/sCAAAAAARZWg==")
-    >>> returned_string = cfc.CFunction_dict["MoL_step_forward_in_time"].full_function
-    >>> if returned_string != expected_string:
-    ...    compressed_str = compress_string_to_base64(returned_string)
-    ...    error_message = "Trusted MoL_step_forward_in_time.full_function string changed!\n Here's the diff:\n"
-    ...    error_message += "Here's the diff:\n" + diff_strings(expected_string, returned_string) + "\n"
-    ...    raise ValueError(error_message + f"base64-encoded output: {compressed_str}")
+    >>> validate_strings(cfc.CFunction_dict["MoL_step_forward_in_time"].full_function, "MoL_step_forward_in_time")
     >>> sorted(cfc.CFunction_dict.keys())
     ['MoL_free_memory_non_y_n_gfs', 'MoL_free_memory_y_n_gfs', 'MoL_malloc_non_y_n_gfs', 'MoL_malloc_y_n_gfs', 'MoL_step_forward_in_time']
     >>> print(cfc.CFunction_dict["MoL_free_memory_non_y_n_gfs"].full_function)
