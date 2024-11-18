@@ -144,10 +144,8 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
 
     CFLAGS_dict = {
         "default": "-O2 -march=native -g",
-        # FASTCFLAGS: -O3 causes AVX-2+ SIMD optimizations to be used on MoL update loops. -O2 drops to SSE2
-        "fast": "-O3 -funroll-loops -march=native -g -Wall -Wno-unused-variable -std=gnu99",
-        # DEBUGCFLAGS: OpenMP requires -fopenmp, and when disabling -fopenmp, unknown pragma warnings appear. -Wunknown-pragmas silences these warnings
-        "debug": "-O2 -g -Wall -Wno-unused-variable -Wno-unknown-pragmas",
+        "fast": "-O3 -funroll-loops -march=native -g -Wall",
+        "debug": "-O2 -g -Wall -Wno-unknown-pragmas",
     }
 
     if addl_CFLAGS is not None:
@@ -191,6 +189,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     # Below code is responsible for either writing a Makefile or a backup shell script depending on the conditions
     Makefile_str = f"""CC = {CC}
 {CFLAGS_str}
+VALGRIND_CFLAGS = {CFLAGS_dict["debug"]}
 {INCLUDEDIRS_str}
 {LDFLAGS_str}
 
@@ -224,6 +223,14 @@ main.decl.h main.def.h: main.ci
 clean:
 	$(RM) *.o */*.o *~ */*~ ./#* *.txt *.dat *.avi *.png {exec_or_library_name} *.decl.h *.def.h charmrun
 	$(RM) -r log
+"""
+    # Add the valgrind target
+    Makefile_str += """valgrind: clean
+\t$(MAKE) CFLAGS="$(VALGRIND_CFLAGS)" all
+"""
+    if not create_lib:
+        Makefile_str += f"""\tvalgrind --track-origins=yes --leak-check=full -s ./{exec_or_library_name}
+
 """
     makefile_path = Path(project_Path) / "Makefile"
     with makefile_path.open("w", encoding="utf-8") as Makefile:
