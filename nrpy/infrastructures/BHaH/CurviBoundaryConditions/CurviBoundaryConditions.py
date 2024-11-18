@@ -246,36 +246,37 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
 
     # Step 1: Output C code for the Eigen-Coordinate mapping from xx->Cartesian':
     body += (
-        f"""
+        """
 // Step 1: Convert the (curvilinear) coordinate (x0,x1,x2) to Cartesian coordinates
-{fp_type_alias} xCart[3];  // where (x,y,z) is output
-{{
+DOUBLE xCart[3];  // where (x,y,z) is output
+{
 // xx_to_Cart for EigenCoordinate {rfm.CoordSystem} (orig coord = {rfm_orig.CoordSystem}):
-{fp_type_alias} xx0 = xx[0][i0];
-{fp_type_alias} xx1 = xx[1][i1];
-{fp_type_alias} xx2 = xx[2][i2];
+DOUBLE xx0 = xx[0][i0];
+DOUBLE xx1 = xx[1][i1];
+DOUBLE xx2 = xx[2][i2];
 """
         + ccg.c_codegen(
             [rfm.xx_to_Cart[0], rfm.xx_to_Cart[1], rfm.xx_to_Cart[2]],
             ["xCart[0]", "xCart[1]", "xCart[2]"],
+            fp_type_alias=fp_type_alias,
         )
         + "}\n"
     )
-    body += rf"""
-{fp_type_alias} Cartx = xCart[0];
-{fp_type_alias} Carty = xCart[1];
-{fp_type_alias} Cartz = xCart[2];
+    body += r"""
+DOUBLE Cartx = xCart[0];
+DOUBLE Carty = xCart[1];
+DOUBLE Cartz = xCart[2];
 """
 
     # Step 2: Output C code for the Eigen-Coordinate mapping from Cartesian->xx':
-    body += rf"""
+    body += r"""
   // Step 2: Find the (i0_inbounds,i1_inbounds,i2_inbounds) corresponding to the above Cartesian coordinate.
   //   If (i0_inbounds,i1_inbounds,i2_inbounds) is in a ghost zone, then it must equal (i0,i1,i2), and
   //      the point is an outer boundary point.
   //   Otherwise (i0_inbounds,i1_inbounds,i2_inbounds) is in the grid interior, and data at (i0,i1,i2)
   //      must be replaced with data at (i0_inbounds,i1_inbounds,i2_inbounds), but multiplied by the
   //      appropriate parity condition (+/- 1).
-  {fp_type_alias} Cart_to_xx0_inbounds,Cart_to_xx1_inbounds,Cart_to_xx2_inbounds;
+  DOUBLE Cart_to_xx0_inbounds,Cart_to_xx1_inbounds,Cart_to_xx2_inbounds;
 """
     # Step 2.a: Sanity check: First make sure that rfm.Cart_to_xx has been set. Error out if not!
     if rfm.Cart_to_xx[0] == 0 or rfm.Cart_to_xx[1] == 0 or rfm.Cart_to_xx[2] == 0:
@@ -291,19 +292,19 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
         ["Cart_to_xx0_inbounds", "Cart_to_xx1_inbounds", "Cart_to_xx2_inbounds"],
         fp_type_alias=fp_type_alias,
     )
-    body += rf"""
+    body += r"""
   // Next compute xxmin[i]. By definition,
-  //    xx[i][j] = xxmin[i] + (({fp_type_alias})(j-NGHOSTS) + (1.0/2.0))*dxxi;
-  // -> xxmin[i] = xx[i][0] - (({fp_type_alias})(0-NGHOSTS) + (1.0/2.0))*dxxi
-  const {fp_type_alias} xxmin[3] = {{
-    xx[0][0] - (({fp_type_alias})(0-NGHOSTS) + (1.0/2.0))*dxx0,
-    xx[1][0] - (({fp_type_alias})(0-NGHOSTS) + (1.0/2.0))*dxx1,
-    xx[2][0] - (({fp_type_alias})(0-NGHOSTS) + (1.0/2.0))*dxx2 }};
+  //    xx[i][j] = xxmin[i] + ((DOUBLE)(j-NGHOSTS) + (1.0/2.0))*dxxi;
+  // -> xxmin[i] = xx[i][0] - ((DOUBLE)(0-NGHOSTS) + (1.0/2.0))*dxxi
+  const DOUBLE xxmin[3] = {
+    xx[0][0] - ((DOUBLE)(0-NGHOSTS) + (1.0/2.0))*dxx0,
+    xx[1][0] - ((DOUBLE)(0-NGHOSTS) + (1.0/2.0))*dxx1,
+    xx[2][0] - ((DOUBLE)(0-NGHOSTS) + (1.0/2.0))*dxx2 };
 
   // Finally compute i{{0,1,2}}_inbounds (add 0.5 to account for rounding down)
-  const int i0_inbounds = (int)( (Cart_to_xx0_inbounds - xxmin[0] - (1.0/2.0)*dxx0 + (({fp_type_alias})NGHOSTS)*dxx0)/dxx0 + 0.5 );
-  const int i1_inbounds = (int)( (Cart_to_xx1_inbounds - xxmin[1] - (1.0/2.0)*dxx1 + (({fp_type_alias})NGHOSTS)*dxx1)/dxx1 + 0.5 );
-  const int i2_inbounds = (int)( (Cart_to_xx2_inbounds - xxmin[2] - (1.0/2.0)*dxx2 + (({fp_type_alias})NGHOSTS)*dxx2)/dxx2 + 0.5 );
+  const int i0_inbounds = (int)( (Cart_to_xx0_inbounds - xxmin[0] - (1.0/2.0)*dxx0 + ((DOUBLE)NGHOSTS)*dxx0)/dxx0 + 0.5 );
+  const int i1_inbounds = (int)( (Cart_to_xx1_inbounds - xxmin[1] - (1.0/2.0)*dxx1 + ((DOUBLE)NGHOSTS)*dxx1)/dxx1 + 0.5 );
+  const int i2_inbounds = (int)( (Cart_to_xx2_inbounds - xxmin[2] - (1.0/2.0)*dxx2 + ((DOUBLE)NGHOSTS)*dxx2)/dxx2 + 0.5 );
 """
 
     # Restore reference_metric::CoordSystem back to the original CoordSystem
@@ -317,12 +318,12 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
 
   // Step 3.a: Compute {{x,y,z}}Cart_from_xx, as a
   //           function of i0,i1,i2
-  {fp_type_alias} xCart_from_xx, yCart_from_xx, zCart_from_xx;
+  DOUBLE xCart_from_xx, yCart_from_xx, zCart_from_xx;
   {{
     // xx_to_Cart for Coordinate {rfm_orig.CoordSystem}):
-    {fp_type_alias} xx0 = xx[0][i0];
-    {fp_type_alias} xx1 = xx[1][i1];
-    {fp_type_alias} xx2 = xx[2][i2];
+    DOUBLE xx0 = xx[0][i0];
+    DOUBLE xx1 = xx[1][i1];
+    DOUBLE xx2 = xx[2][i2];
 """
     body += ccg.c_codegen(
         [rfm_orig.xx_to_Cart[0], rfm_orig.xx_to_Cart[1], rfm_orig.xx_to_Cart[2]],
@@ -335,12 +336,12 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
 
   // Step 3.b: Compute {{x,y,z}}Cart_from_xx_inbounds, as a
   //           function of i0_inbounds,i1_inbounds,i2_inbounds
-  {fp_type_alias} xCart_from_xx_inbounds, yCart_from_xx_inbounds, zCart_from_xx_inbounds;
+  DOUBLE xCart_from_xx_inbounds, yCart_from_xx_inbounds, zCart_from_xx_inbounds;
   {{
     // xx_to_Cart_inbounds for Coordinate {rfm_orig.CoordSystem}):
-    {fp_type_alias} xx0 = xx[0][i0_inbounds];
-    {fp_type_alias} xx1 = xx[1][i1_inbounds];
-    {fp_type_alias} xx2 = xx[2][i2_inbounds];
+    DOUBLE xx0 = xx[0][i0_inbounds];
+    DOUBLE xx1 = xx[1][i1_inbounds];
+    DOUBLE xx2 = xx[2][i2_inbounds];
 """
     body += ccg.c_codegen(
         [rfm_orig.xx_to_Cart[0], rfm_orig.xx_to_Cart[1], rfm_orig.xx_to_Cart[2]],
@@ -363,21 +364,21 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
 #define EPS_REL 1e-8
 """
     body += (
-        rf"""
-  const {fp_type_alias} norm_factor = sqrt(xCart_from_xx*xCart_from_xx + yCart_from_xx*yCart_from_xx + zCart_from_xx*zCart_from_xx) + 1e-15;
-  if(fabs( ({fp_type_alias})(xCart_from_xx - xCart_from_xx_inbounds) ) > EPS_REL * norm_factor ||
-     fabs( ({fp_type_alias})(yCart_from_xx - yCart_from_xx_inbounds) ) > EPS_REL * norm_factor ||
-     fabs( ({fp_type_alias})(zCart_from_xx - zCart_from_xx_inbounds) ) > EPS_REL * norm_factor) {{
+        r"""
+  const DOUBLE norm_factor = sqrt(xCart_from_xx*xCart_from_xx + yCart_from_xx*yCart_from_xx + zCart_from_xx*zCart_from_xx) + 1e-15;
+  if(fabs( (DOUBLE)(xCart_from_xx - xCart_from_xx_inbounds) ) > EPS_REL * norm_factor ||
+     fabs( (DOUBLE)(yCart_from_xx - yCart_from_xx_inbounds) ) > EPS_REL * norm_factor ||
+     fabs( (DOUBLE)(zCart_from_xx - zCart_from_xx_inbounds) ) > EPS_REL * norm_factor) {
     fprintf(stderr,"Error in """
         + rfm_orig.CoordSystem
-        + rf""" coordinate system: Inner boundary point does not map to grid interior point: ( %.15e %.15e %.15e ) != ( %.15e %.15e %.15e ) | xx: %e %e %e -> %e %e %e | %d %d %d\n",
-            ({fp_type_alias})xCart_from_xx,({fp_type_alias})yCart_from_xx,({fp_type_alias})zCart_from_xx,
-            ({fp_type_alias})xCart_from_xx_inbounds,({fp_type_alias})yCart_from_xx_inbounds,({fp_type_alias})zCart_from_xx_inbounds,
+        + r""" coordinate system: Inner boundary point does not map to grid interior point: ( %.15e %.15e %.15e ) != ( %.15e %.15e %.15e ) | xx: %e %e %e -> %e %e %e | %d %d %d\n",
+            (DOUBLE)xCart_from_xx,(DOUBLE)yCart_from_xx,(DOUBLE)zCart_from_xx,
+            (DOUBLE)xCart_from_xx_inbounds,(DOUBLE)yCart_from_xx_inbounds,(DOUBLE)zCart_from_xx_inbounds,
             xx[0][i0],xx[1][i1],xx[2][i2],
             xx[0][i0_inbounds],xx[1][i1_inbounds],xx[2][i2_inbounds],
             Nxx_plus_2NGHOSTS0,Nxx_plus_2NGHOSTS1,Nxx_plus_2NGHOSTS2);
     exit(1);
-  }}
+  }
 
   // Step 4: Set output arrays.
   x0x1x2_inbounds[0] = xx[0][i0_inbounds];
@@ -427,7 +428,6 @@ for all 10 tensor types supported by NRPy+."""
                 const REAL xx0,const REAL xx1,const REAL xx2,  const REAL x0x1x2_inbounds[3], const int idx,
                 innerpt_bc_struct *restrict innerpt_bc_arr"""
     fp_type = par.parval_from_str("fp_type")
-    fp_type_alias = "double" if fp_type == "float" else "REAL"
     if fp_type == "float":
         body = r"""
 #define EPS_REL 1e-6
@@ -437,11 +437,11 @@ for all 10 tensor types supported by NRPy+."""
 #define EPS_REL 1e-8
 """
     body += f"""
-const {fp_type_alias} xx0_inbounds = x0x1x2_inbounds[0];
-const {fp_type_alias} xx1_inbounds = x0x1x2_inbounds[1];
-const {fp_type_alias} xx2_inbounds = x0x1x2_inbounds[2];
+const DOUBLE xx0_inbounds = x0x1x2_inbounds[0];
+const DOUBLE xx1_inbounds = x0x1x2_inbounds[1];
+const DOUBLE xx2_inbounds = x0x1x2_inbounds[2];
 
-{fp_type_alias} REAL_parity_array[10];
+DOUBLE REAL_parity_array[10];
 {{
     // Evaluate dot products needed for setting parity
     //     conditions at a given point (xx0,xx1,xx2),
