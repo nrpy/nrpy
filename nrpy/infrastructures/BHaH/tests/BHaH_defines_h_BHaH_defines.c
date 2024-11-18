@@ -17,6 +17,7 @@
 // output_BHaH_defines_h(...,enable_simd=True) was called so we #include SIMD intrinsics:
 #include "simd/simd_intrinsics.h"
 #define REAL double
+#define DOUBLE double
 
 // These macros for MIN(), MAX(), and SQR() ensure that if the arguments inside
 //   are a function/complex expression, the function/expression is evaluated
