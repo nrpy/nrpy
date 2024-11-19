@@ -6,14 +6,14 @@ Author: Zachariah B. Etienne
         Dave Kirby (super-fast uniq function)
 """
 
-import base64
-import hashlib
-import lzma
+import inspect
 import pkgutil
 import subprocess
+import sys
 from difflib import ndiff
 from pathlib import Path
-from typing import Any, List, cast
+from types import FrameType, ModuleType
+from typing import Any, List, Optional, cast
 
 from nrpy.helpers.cached_functions import is_cached, read_cached, write_cached
 
@@ -102,6 +102,95 @@ def clang_format(
         raise RuntimeError(f"Error using clang-format: {stderr.decode()}")
 
 
+def validate_strings(
+    to_check: str,
+    string_desc: str,
+) -> None:
+    """
+    Validate a string against a trusted value stored in a .c file; manage trusted file creation if file not found.
+
+    Compare the provided string "to_check" to a trusted value stored in
+    [caller module's directory]/tests/[caller module]_{string_desc}.c. Create the file with the provided string if
+    it is missing. Report mismatches with detailed differences and provide instructions for updating the trusted file.
+
+    :param to_check: Specify the string to validate, representing the expected value or output.
+    :param string_desc: Provide a short, non-empty, whitespace-free label to use in the trusted file's name.
+    :raises ValueError: Raise if:
+        - `string_desc` is empty or contains whitespace.
+        - The caller's frame or filename cannot be identified.
+        - The provided string does not match the trusted value.
+    :raises RuntimeError: Raise if:
+        - The caller's frame lacks code information, preventing file determination.
+        - System or environment errors occur during file creation or access.
+    """
+    if not string_desc or " " in string_desc:
+        raise ValueError(
+            "String description cannot be blank or have whitespace inside."
+        )
+
+    # Get the caller's frame
+    caller_frame: Optional[FrameType] = inspect.currentframe()
+    if caller_frame is None or caller_frame.f_back is None:
+        raise RuntimeError("Unable to retrieve caller frame.")
+    caller_frame = caller_frame.f_back
+
+    # Get the caller's filename
+    try:
+        caller_filename: str = inspect.getfile(caller_frame)
+    except TypeError as exc:
+        raise RuntimeError("Unable to determine the caller's filename.") from exc
+
+    # Handle the case when called from a doctest
+    if caller_filename.startswith("<doctest"):
+        module: Optional[ModuleType] = inspect.getmodule(caller_frame)
+        if module and hasattr(module, "__file__") and module.__file__:
+            caller_filename = module.__file__
+        else:
+            # Fallback to sys.argv[0] if module filename is not available
+            caller_filename = sys.argv[0]
+
+    caller_directory = Path(caller_filename).parent
+
+    outdir = caller_directory / "tests"
+
+    # Determine the output directory and create it if it doesn't exist
+    outdir.mkdir(parents=True, exist_ok=True)
+
+    # Get the function name or script name
+    if caller_frame.f_code is None:
+        raise RuntimeError("Caller frame does not have code information.")
+    function_name: str = caller_frame.f_code.co_name
+
+    if function_name.startswith("<"):
+        # Use the script's filename if function name is not meaningful
+        function_name = Path(caller_filename).stem
+
+    outfile_path = outdir / f"{function_name}_{string_desc}.c"
+
+    if outfile_path.exists():
+        trusted_string = outfile_path.read_text(encoding="utf-8")
+        if trusted_string != to_check:
+            raise ValueError(
+                f"""\
+*** FAILURE ***
+****{string_desc}**** mismatch in {outfile_path.name}!
+Computed result differs from trusted value in file {outfile_path}
+String output does not match the trusted version.
+Differences:
+
+{diff_strings(trusted_string, to_check)}
+
+If you trust the new version, then delete {outfile_path} and rerun to generate a new version.
+BE SURE TO INDICATE THE REASON FOR UPDATING THE TRUSTED FILE IN THE COMMIT MESSAGE.
+***************
+"""
+            )
+    else:
+        # Write the trusted string to the file
+        outfile_path.write_text(to_check, encoding="utf-8")
+        print(f"Trusted file '{outfile_path}' created with the provided string.")
+
+
 def diff_strings(str1: str, str2: str) -> str:
     r"""
     Generate a side-by-side diff between two strings, highlighting only added or removed lines.
@@ -132,85 +221,6 @@ def diff_strings(str1: str, str2: str) -> str:
     ]
 
     return "\n".join(clean_diff)
-
-
-def hash_to_signed_32bit(s: str) -> int:
-    """
-    Compute the SHA-256 hash of a string and convert it to a signed 32-bit integer.
-
-    Generates a consistent 32-bit integer hash from an input string by:
-    1. Computing the SHA-256 hash.
-    2. Reducing the hash to a 32-bit unsigned integer.
-    3. Converting it to a signed integer by interpreting the highest bit as the sign bit.
-
-    :param s: Input string.
-    :return: Signed 32-bit integer representation of the hash.
-
-    >>> hash_to_signed_32bit("Hello")
-    641210729
-    """
-    sha256 = hashlib.sha256()
-    sha256.update(s.encode())
-    hash_value = int(sha256.hexdigest(), 16)
-
-    # Reduce the hash to a 32-bit unsigned integer
-    reduced_hash = hash_value % (2**32)
-
-    # Interpret the high bit as the sign bit to convert to a signed integer
-    if reduced_hash >= 2**31:
-        reduced_hash -= 2**32
-
-    return reduced_hash
-
-
-def compress_string_to_base64(input_string: str) -> str:
-    """
-    Compress the input string and return it as a Base64 encoded string.
-
-    Uses LZMA compression to reduce the size of the input string and encodes the compressed data using Base64
-    for safe transport or storage.
-
-    :param input_string: String to be compressed.
-    :return: Base64 encoded compressed string.
-
-    Doctests:
-    >>> original_string = "This is a test string that will be compressed."
-    >>> compressed_string = compress_string_to_base64(original_string)
-    >>> print(compressed_string)  # Output will be a Base64 encoded compressed string with line breaks
-    /Td6WFoAAATm1rRGAgAhARwAAAAQz1jMAQAtVGhpcyBpcyBhIHRlc3Qgc3RyaW5nIHRoYXQgd2lsbCBiZSBjb21wcmVzc2VkLgAAAMZJbwnhOK2qAAFGLmdQc1oftvN9AQAAAAAEWVo=
-    """
-    # Compress the input string using LZMA with maximum compression
-    compressed_data = lzma.compress(input_string.encode(), preset=9)
-
-    # Encode the compressed data as Base64
-    base64_encoded = base64.b64encode(compressed_data)
-
-    return base64_encoded.decode()
-
-
-def decompress_base64_to_string(input_base64: str) -> str:
-    """
-    Decompress a Base64 encoded string back to its original form.
-
-    Decodes the Base64 string to obtain the compressed binary data and decompresses it using LZMA to retrieve the original string.
-
-    :param input_base64: Base64 encoded compressed string.
-    :return: Original decompressed string.
-
-    Doctests:
-    >>> original_string = "This is a test string that will be compressed."
-    >>> compressed_string = compress_string_to_base64(original_string)
-    >>> decompressed_string = decompress_base64_to_string(compressed_string)
-    >>> decompressed_string == original_string
-    True
-    """
-    # Decode the Base64 encoded string
-    base64_decoded = base64.b64decode(input_base64)
-
-    # Decompress the data using LZMA
-    decompressed_data = lzma.decompress(base64_decoded)
-
-    return decompressed_data.decode()
 
 
 def copy_files(
@@ -249,7 +259,6 @@ def copy_files(
 
 if __name__ == "__main__":
     import doctest
-    import sys
 
     results = doctest.testmod()
 

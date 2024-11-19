@@ -364,24 +364,24 @@ def register_CFunction_compute_L2_norm_of_gridfunction(
     rfm = refmetric.reference_metric[CoordSystem]
 
     fp_type = par.parval_from_str("fp_type")
-    type_alias = "double" if fp_type == "float" else "REAL"
-
+    fp_type_alias = "DOUBLE" if fp_type == "float" else "REAL"
     loop_body = ccg.c_codegen(
         [
             rfm.xxSph[0],
             rfm.detgammahat,
         ],
         [
-            f"const {type_alias} r",
-            f"const {type_alias} sqrtdetgamma",
+            "const DOUBLE r",
+            "const DOUBLE sqrtdetgamma",
         ],
         include_braces=False,
-    ).replace("const REAL", f"const {type_alias}")
+        fp_type_alias=fp_type_alias,
+    )
 
-    loop_body += rf"""
-if(r < integration_radius) {{
-  const {type_alias} gf_of_x = in_gf[IDX4(gf_index, i0, i1, i2)];
-  const {type_alias} dV = sqrtdetgamma * dxx0 * dxx1 * dxx2;
+    loop_body += r"""
+if(r < integration_radius) {
+  const DOUBLE gf_of_x = in_gf[IDX4(gf_index, i0, i1, i2)];
+  const DOUBLE dV = sqrtdetgamma * dxx0 * dxx1 * dxx2;
   squared_sum += gf_of_x * gf_of_x * dV;
   volume_sum  += dV;
 }} // END if(r < integration_radius)
@@ -398,9 +398,8 @@ if(r < integration_radius) {{
     xx[ww] = griddata[grid].xx[ww];
 
   // Set summation variables to compute l2-norm
-  {type_alias} squared_sum = 0.0;
-  {type_alias} volume_sum  = 0.0;
-
+  DOUBLE squared_sum = 0.0;
+  DOUBLE volume_sum  = 0.0;
 """
 
     body += lp.simple_loop(

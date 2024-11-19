@@ -120,6 +120,7 @@ def output_BHaH_defines_h(
     define_no_simd_UPWIND_ALG: bool = True,
     enable_rfm_precompute: bool = True,
     fin_NGHOSTS_add_one_for_upwinding_or_KO: bool = False,
+    DOUBLE_means: str = "double",
     supplemental_defines_dict: Optional[Dict[str, str]] = None,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
@@ -134,24 +135,19 @@ def output_BHaH_defines_h(
     :param define_no_simd_UPWIND_ALG: Flag to #define a SIMD-less UPWIND_ALG. No need to define this if UPWIND_ALG() unused.
     :param enable_rfm_precompute: A boolean value reflecting whether reference metric precomputation is enabled.
     :param fin_NGHOSTS_add_one_for_upwinding_or_KO: Option to add one extra ghost zone for upwinding
+    :param DOUBLE_means: Overload DOUBLE macro type for specific calculations that require higher than single precision
     :param supplemental_defines_dict: Additional key-value pairs to be included in the output file
     :param clang_format_options: Options for clang formatting.
 
     DocTests:
     >>> from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
     >>> import nrpy.finite_difference as fin
-    >>> from nrpy.helpers.generic import compress_string_to_base64, decompress_base64_to_string, diff_strings
+    >>> from nrpy.helpers.generic import validate_strings
     >>> MoL.register_CFunctions(register_MoL_step_forward_in_time=False)
     >>> project_dir = Path("/tmp", "tmp_BHaH_defines_h")
     >>> project_dir.mkdir(parents=True, exist_ok=True)
     >>> output_BHaH_defines_h(project_dir=str(project_dir))
-    >>> expected_string = decompress_base64_to_string("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")
-    >>> returned_string = (project_dir / "BHaH_defines.h").read_text()
-    >>> if returned_string != expected_string:
-    ...    compressed_str = compress_string_to_base64(returned_string)
-    ...    error_message = "Trusted BHaH_defines.h string changed!\n"
-    ...    error_message += "Here's the diff:\n" + diff_strings(expected_string, returned_string) + "\n"
-    ...    raise ValueError(error_message + f"base64-encoded output: {compressed_str}")
+    >>> validate_strings((project_dir / "BHaH_defines.h").read_text(), "BHaH_defines")
     """
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
@@ -177,6 +173,7 @@ def output_BHaH_defines_h(
             gen_BHd_str += f'#include "{include}"\n'
     REAL_means = par.parval_from_str("fp_type")
     gen_BHd_str += f"""#define REAL {REAL_means}
+#define DOUBLE {DOUBLE_means}
 
 // These macros for MIN(), MAX(), and SQR() ensure that if the arguments inside
 //   are a function/complex expression, the function/expression is evaluated
