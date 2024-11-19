@@ -246,10 +246,10 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
 
     # Step 1: Output C code for the Eigen-Coordinate mapping from xx->Cartesian':
     body += (
-        """
+        f"""
 // Step 1: Convert the (curvilinear) coordinate (x0,x1,x2) to Cartesian coordinates
 DOUBLE xCart[3];  // where (x,y,z) is output
-{
+{{
 // xx_to_Cart for EigenCoordinate {rfm.CoordSystem} (orig coord = {rfm_orig.CoordSystem}):
 DOUBLE xx0 = xx[0][i0];
 DOUBLE xx1 = xx[1][i1];
