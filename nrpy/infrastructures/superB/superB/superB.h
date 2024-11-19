@@ -17,6 +17,14 @@
 #endif
 
 #define restrict __restrict__
+#define MAX3(A, B, C)                                                                                                                                    \
+  ({                                                                                                                                                     \
+    __typeof__(A) _a = (A);                                                                                                                              \
+    __typeof__(B) _b = (B);                                                                                                                              \
+    __typeof__(C) _c = (C);                                                                                                                              \
+    __typeof__(A) _max = (_a > _b) ? _a : _b;                                                                                                           \
+    _max > _c ? _max : _c;                                                                                                                               \
+  })
 
 #define IDX3_OF_CHARE(i, j, k) ((i) + Nchare0 * ((j) + Nchare1 * ((k))))
 #define IDX3GENERAL(i, j, k, Ni, Nj) ((i) + (Ni) * ((j) + (Nj) * (k)))
