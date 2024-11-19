@@ -14,8 +14,8 @@
 #include <stdlib.h>  // malloc/free, etc.
 #include <string.h>  // String handling functions, such as strlen, strcmp, etc.
 #include <time.h>    // Time-related functions and types, such as time(), clock(),
-// output_BHaH_defines_h(...,enable_simd=True) was called so we #include SIMD intrinsics:
-#include "simd/simd_intrinsics.h"
+// output_BHaH_defines_h(...,enable_intrinsics=True) was called so we intrinsics headers:
+#include "intrinsics/simd_intrinsics.h"
 #define REAL double
 #define DOUBLE double
 
