@@ -402,7 +402,7 @@ copy_files(
     package="nrpy.helpers",
     filenames_list=["simd_intrinsics.h"],
     project_dir=str(Path(project_dir) / evol_thorn_name / "src"),
-    subdirectory="intrinsics",
+    subdirectory="simd",
 )
 
 simd_name = str(
