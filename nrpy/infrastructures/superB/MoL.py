@@ -846,11 +846,15 @@ def register_CFunction_MoL_sync_data_defines() -> Tuple[int, int]:
     cfunc_type: str = "void"
     name: str = "MoL_sync_data_defines"
     params: str = "MoL_gridfunctions_struct *restrict gridfuncs"
+
     sync_evol_list: List[str] = []
     num_sync_evol_gfs: int = 0
 
     sync_auxevol_list: List[str] = []
     num_sync_auxevol_gfs: int = 0
+
+    sync_aux_list: List[str] = []
+    num_sync_aux_gfs: int = 0
 
     for gf, gf_class_obj in glb_gridfcs_dict.items():
         gf_name = gf.upper()
@@ -864,11 +868,16 @@ def register_CFunction_MoL_sync_data_defines() -> Tuple[int, int]:
             elif gf_class_obj.group == "AUXEVOL":
                 num_sync_auxevol_gfs += 1
                 sync_auxevol_list.append(gf_name)
+            # sync of psi4 is needed for cylindrical-like coords
+            elif gf_class_obj.group == "AUX" and gf_name in ["PSI4_RE", "PSI4_IM"]:
+                num_sync_aux_gfs += 1
+                sync_aux_list.append(gf_name)
 
     body: str = f"""
 gridfuncs->num_evol_gfs_to_sync = {num_sync_evol_gfs};
 gridfuncs->num_auxevol_gfs_to_sync = {num_sync_auxevol_gfs};
-gridfuncs->max_sync_gfs = MAX(gridfuncs->num_evol_gfs_to_sync, gridfuncs->num_auxevol_gfs_to_sync);
+gridfuncs->num_aux_gfs_to_sync = {num_sync_aux_gfs};
+gridfuncs->max_sync_gfs = MAX3(gridfuncs->num_evol_gfs_to_sync, gridfuncs->num_auxevol_gfs_to_sync, gridfuncs->num_aux_gfs_to_sync);
 """
 
     for i, gf in enumerate(sync_evol_list):
@@ -877,6 +886,10 @@ gridfuncs->max_sync_gfs = MAX(gridfuncs->num_evol_gfs_to_sync, gridfuncs->num_au
     if num_sync_auxevol_gfs != 0:
         for i, gf in enumerate(sync_auxevol_list):
             body += f"gridfuncs->auxevol_gfs_to_sync[{i}] = {gf.upper()}GF;\n"
+
+    if num_sync_aux_gfs != 0:
+        for i, gf in enumerate(sync_aux_list):
+            body += f"gridfuncs->aux_gfs_to_sync[{i}] = {gf.upper()}GF;\n"
 
     try:
         cfc.register_CFunction(
@@ -887,7 +900,7 @@ gridfuncs->max_sync_gfs = MAX(gridfuncs->num_evol_gfs_to_sync, gridfuncs->num_au
             params=params,
             body=body,
         )
-        return num_sync_evol_gfs, num_sync_auxevol_gfs
+        return num_sync_evol_gfs, num_sync_auxevol_gfs, num_sync_aux_gfs
     except Exception as e:
         raise RuntimeError(
             f"Error registering CFunction 'MoL_malloc_diagnostic_gfs': {str(e)}"
@@ -934,7 +947,7 @@ def register_CFunctions(
     register_CFunction_MoL_malloc_diagnostic_gfs()
     register_CFunction_MoL_free_memory_diagnostic_gfs()
 
-    (num_evol_gfs_to_sync, num_auxevol_gfs_to_sync) = (
+    (num_evol_gfs_to_sync, num_auxevol_gfs_to_sync, num_aux_gfs_to_sync) = (
         register_CFunction_MoL_sync_data_defines()
     )
 
@@ -980,9 +993,11 @@ def register_CFunctions(
         f"typedef struct __MoL_gridfunctions_struct__ {{\n"
         f"""int num_evol_gfs_to_sync;
         int num_auxevol_gfs_to_sync;
+        int num_aux_gfs_to_sync;
         int max_sync_gfs;
         int evol_gfs_to_sync[{num_evol_gfs_to_sync}];
-        int auxevol_gfs_to_sync[{num_auxevol_gfs_to_sync}];\n"""
+        int auxevol_gfs_to_sync[{num_auxevol_gfs_to_sync}];
+        int aux_gfs_to_sync[{num_aux_gfs_to_sync}];\n"""
         f"REAL *restrict {y_n_gridfunctions};\n"
         + "".join(f"REAL *restrict {gfs};\n" for gfs in non_y_n_gridfunctions_list)
         + r"""REAL *restrict diagnostic_output_gfs;
