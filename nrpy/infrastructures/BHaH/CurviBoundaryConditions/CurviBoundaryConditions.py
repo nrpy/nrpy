@@ -301,7 +301,7 @@ DOUBLE Cartz = xCart[2];
     xx[1][0] - ((DOUBLE)(0-NGHOSTS) + (1.0/2.0))*dxx1,
     xx[2][0] - ((DOUBLE)(0-NGHOSTS) + (1.0/2.0))*dxx2 };
 
-  // Finally compute i{{0,1,2}}_inbounds (add 0.5 to account for rounding down)
+  // Finally compute i{0,1,2}_inbounds (add 0.5 to account for rounding down)
   const int i0_inbounds = (int)( (Cart_to_xx0_inbounds - xxmin[0] - (1.0/2.0)*dxx0 + ((DOUBLE)NGHOSTS)*dxx0)/dxx0 + 0.5 );
   const int i1_inbounds = (int)( (Cart_to_xx1_inbounds - xxmin[1] - (1.0/2.0)*dxx1 + ((DOUBLE)NGHOSTS)*dxx1)/dxx1 + 0.5 );
   const int i2_inbounds = (int)( (Cart_to_xx2_inbounds - xxmin[2] - (1.0/2.0)*dxx2 + ((DOUBLE)NGHOSTS)*dxx2)/dxx2 + 0.5 );
