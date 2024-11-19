@@ -384,7 +384,7 @@ if(r < integration_radius) {
   const DOUBLE dV = sqrtdetgamma * dxx0 * dxx1 * dxx2;
   squared_sum += gf_of_x * gf_of_x * dV;
   volume_sum  += dV;
-}} // END if(r < integration_radius)
+} // END if(r < integration_radius)
 """
     body = rf"""
   // Unpack grid parameters assuming a single grid
