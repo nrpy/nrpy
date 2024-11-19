@@ -55,7 +55,7 @@ def register_CFunction_BSSN_constraints(
 
     includes = define_standard_includes()
     if enable_simd:
-        includes += [("./intrinsics/simd_intrinsics.h")]
+        includes += [("./simd/simd_intrinsics.h")]
     desc = r"""Evaluate BSSN constraints."""
     name = f"{thorn_name}_BSSN_constraints_order_{fd_order}"
     body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
