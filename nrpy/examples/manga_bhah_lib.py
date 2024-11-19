@@ -240,7 +240,7 @@ if enable_simd:
         package="nrpy.helpers",
         filenames_list=["simd_intrinsics.h"],
         project_dir=project_dir,
-        subdirectory="simd",
+        subdirectory="intrinsics",
     )
 
 lib.register_CFunctions_bhah_lib()

@@ -395,7 +395,7 @@ if enable_simd:
         package="nrpy.helpers",
         filenames_list=["simd_intrinsics.h"],
         project_dir=project_dir,
-        subdirectory="simd",
+        subdirectory="intrinsics",
     )
 
 superBMakefile.output_CFunctions_function_prototypes_and_construct_Makefile(
