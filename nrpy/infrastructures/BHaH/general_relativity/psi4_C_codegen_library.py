@@ -20,14 +20,12 @@ from nrpy.equations.general_relativity import psi4, psi4_tetrads
 
 def register_CFunction_psi4(
     CoordSystem: str,
-    enable_fd_functions: bool,
     OMP_collapse: int,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Add psi4 to Cfunction dictionary.
 
     :param CoordSystem: Coordinate system to be used.
-    :param enable_fd_functions: Flag to enable or disable the finite difference functions.
     :param OMP_collapse: OpenMP collapse clause integer value.
 
     :return: None if in registration phase, else the updated NRPy environment.
@@ -108,7 +106,6 @@ MAYBE_UNUSED REAL {psi4_class.metric_deriv_var_list_str};
                 ),
             ],
             enable_fd_codegen=True,
-            enable_fd_functions=enable_fd_functions,
         ),
         loop_region="interior",
         enable_simd=False,
@@ -120,7 +117,6 @@ MAYBE_UNUSED REAL {psi4_class.metric_deriv_var_list_str};
 
     cfc.register_CFunction(
         includes=includes,
-        prefunc=fin.construct_FD_functions_prefunc() if enable_fd_functions else "",
         desc=desc,
         CoordSystem_for_wrapper_func=CoordSystem,
         name=name,

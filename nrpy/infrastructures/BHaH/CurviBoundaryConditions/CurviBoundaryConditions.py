@@ -172,15 +172,23 @@ def Cfunction__EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(
     CoordSystem: str,
 ) -> str:
     """
-    Map points between different coordinate systems.
+    Identify and map ghost zone grid points to their corresponding inner boundary points.
 
-    This function performs mapping between eigencoordinate form (x0,x1,x2) and its
-    Cartesian equivalent (Cartx, Carty, Cartz), with the assumption of the same grid boundaries
-    for both original and eigencoordinate systems. After mapping to Cartesian, it converts
-    these coordinates back to an 'interior' point in eigencoordinate form. For cell-centered
-    grids, this point aligns with a point on the numerical grid within round-off error.
-    Finally, a check is done to ensure the conversion back to Cartesian matches the original
-    values; a runtime error is thrown if not.
+    Map a reference metric grid point index (i0, i1, i2) in a ghost zone to an interior point index (i0, i1, i2)':
+    (i0, i1, i2) -> (i0, i1, i2)',
+    if it is an inner boundary point. If the grid point maps to itself; i.e.,
+    (i0, i1, i2) -> (i0, i1, i2),
+    it should have been marked as an outer boundary point. This process involves the following double-map:
+    (x0, x1, x2) -> (Cartx, Carty, Cartz) -> (x0, x1, x2)'
+    However, the second map from Cartesian to the reference metric does not always have a closed-form expression,
+    and this simple algorithm will fail. To address this, we exploit the fact that an arbitrary reference metric and
+    its "eigencoordinate" share the exact same index mapping:
+    (i0, i1, i2) -> (i0, i1, i2)'
+    Therefore, while the mapping
+    (Cartx, Carty, Cartz) -> (x0, x1, x2)'
+    may not be closed-form for the chosen CoordSystem, the eigencoordinate mapping
+    (Cartx, Carty, Cartz) -> (x0, x1, x2)'
+    will be, for all reference metrics in NRPy.
 
     :param CoordSystem: The coordinate system for mapping.
 
@@ -188,28 +196,41 @@ def Cfunction__EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(
 
     :raises RuntimeError: If the conversion back to Cartesian coordinates does not match the original coordinates, indicating an error in the mapping process.
     """
-    desc = """EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt():
-  A coordinate system's "eigencoordinate" is the simplest member
-  of its family; all spherical-like coordinate systems have
-  Spherical as their eigencoordinate. The same is true for
-  cylindrical-like (Cylindrical is eigencoordinate),
-  Cartesian-like (Cartesian is the eigencoordinate), and
-  SymTP-like (SymTP is the eigencoordinate) coordinates.
+    desc = """Map a reference metric grid point index (i0, i1, i2) in a ghost zone to an interior point index (i0, i1, i2)':
+(i0, i1, i2) -> (i0, i1, i2)',
+if it is an inner boundary point. If the grid point maps to itself; i.e.,
+(i0, i1, i2) -> (i0, i1, i2),
+it should have been marked as an outer boundary point. This process involves the following double-map:
+(x0, x1, x2) -> (Cartx, Carty, Cartz) -> (x0, x1, x2)'
+However, the second map from Cartesian to the reference metric does not always have a closed-form expression,
+and this simple algorithm will fail. To address this, we exploit the fact that an arbitrary reference metric and
+its "eigencoordinate" share the exact same index mapping:
+(i0, i1, i2) -> (i0, i1, i2)'
+Therefore, while the mapping
+(Cartx, Carty, Cartz) -> (x0, x1, x2)'
+may not be closed-form for the chosen CoordSystem, the eigencoordinate mapping
+(Cartx, Carty, Cartz) -> (x0, x1, x2)'
+will be, for all reference metrics in NRPy.
 
-  For a given gridpoint (i0,i1,i2) and corresponding coordinate
-  (x0,x1,x2), this function performs the dual mapping
-  (x0,x1,x2) -> (Cartx,Carty,Cartz) -> (x0,x1,x2)'
-  Note that (x0,x1,x2) IS NOT ALWAYS equal to (x0,x1,x2)';
-  For example consider in Spherical coordinates
-  (x0,x1,x2)=(r,theta,phi)=(-0.1,pi/4,pi/4).
-  This point will map to (x0,x1,x2)', in which x0>0,
-  because the inversion r=sqrt(Cartx^2+Carty^2+Cartz^2)
-  is always positive. In this case, (x0,x1,x2) is considered
-  an *inner* boundary point, and on a cell-centered grid
-  is guaranteed to map to a grid point in the grid interior;
-  filling in this point requires copying data, and possibly
-  multiplying by a +/- 1 if the data is from a gridfunction
-  storing tensors/vectors.
+Definition of Eigencoordinate:
+
+A coordinate system's "eigencoordinate" is the simplest member of its family:
+- Spherical-like: Spherical
+- Cylindrical-like: Cylindrical
+- Cartesian-like: Cartesian
+- SymTP-like: SymTP
+
+Key Steps:
+1. Convert to Cartesian Coordinates:
+   - Transform (x0, x1, x2) from eigencoordinates to Cartesian (Cartx, Carty, Cartz).
+2. Map Back to Eigencoordinates:
+   - Convert (Cartx, Carty, Cartz) back to eigencoordinates (x0', x1', x2').
+3. Sanity Check and Data Handling:
+   - If (x0, x1, x2) != (x0', x1', x2'), the point is an inner boundary point.
+     - For example, in Spherical coordinates, a negative radius becomes positive.
+   - On a cell-centered grid, the mapped point lies within the grid interior.
+     - Update the data at (i0, i1, i2) by copying from (i0_inbounds, i1_inbounds, i2_inbounds).
+     - Apply a sign change (+1 or -1) if the data represents tensors or vectors.
 """
     cfunc_type = "static void"
     name = "EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt"
@@ -218,64 +239,46 @@ const int i0, const int i1, const int i2,
 REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
     fp_type = par.parval_from_str("fp_type")
     fp_type_alias = "DOUBLE" if fp_type == "float" else "REAL"
-    body = r"""
-  // This is a 3-step algorithm:
-  // Step 1: (x0,x1,x2) -> (Cartx,Carty,Cartz)
-  //         Find the Cartesian coordinate that (x0,x1,x2)
-  //         maps to, assuming (x0,x1,x2) is the eigen-
-  //         coordinate. Note that we assume (x0,x1,x2)
-  //         has the same grid boundaries in both the
-  //         original coordinate and the eigencoordinate.
-  // Step 2: (Cartx,Carty,Cartz) -> (x0,x1,x2)'
-  //         Find the interior eigencoordinate point
-  //         (x0,x1,x2)' to which (Cartx,Carty,Cartz)
-  //         maps, as well as the corresponding
-  //         gridpoint integer index (i0,i1,i2). For
-  //         cell-centered grids, (x0,x1,x2) will always
-  //         overlap exactly (to roundoff error) a point
-  //         on the numerical grid.
-  // Step 3: Sanity check
-  //         Convert x0(i0_inbounds),x1(i1_inbounds),x2(i2_inbounds) -> (Cartx,Carty,Cartz),
-  //         and check that
-  //         (Cartx,Carty,Cartz) == (Cartx(x0(i0)),Cartx(x1(i1)),Cartx(x2(i2)))
-  //         If not, error out!
-"""
     # Load up the EigenCoordinate corresponding to reference_metric::CoordSystem
     rfm_orig = refmetric.reference_metric[CoordSystem]
     rfm = refmetric.reference_metric[rfm_orig.EigenCoord]
 
     # Step 1: Output C code for the Eigen-Coordinate mapping from xx->Cartesian':
-    body += (
-        """
-// Step 1: Convert the (curvilinear) coordinate (x0,x1,x2) to Cartesian coordinates
-DOUBLE xCart[3];  // where (x,y,z) is output
-{
-// xx_to_Cart for EigenCoordinate {rfm.CoordSystem} (orig coord = {rfm_orig.CoordSystem}):
-DOUBLE xx0 = xx[0][i0];
-DOUBLE xx1 = xx[1][i1];
-DOUBLE xx2 = xx[2][i2];
-"""
-        + ccg.c_codegen(
-            [rfm.xx_to_Cart[0], rfm.xx_to_Cart[1], rfm.xx_to_Cart[2]],
-            ["xCart[0]", "xCart[1]", "xCart[2]"],
-            fp_type_alias=fp_type_alias,
-        )
-        + "}\n"
-    )
-    body += r"""
-DOUBLE Cartx = xCart[0];
-DOUBLE Carty = xCart[1];
-DOUBLE Cartz = xCart[2];
-"""
+    body = rf"""
+  // Step 1: Convert the (curvilinear) coordinate (x0,x1,x2) to Cartesian coordinates:
+  //         (x0,x1,x2) -> (Cartx,Carty,Cartz)
+  //         Find the Cartesian coordinate that (x0,x1,x2)
+  //         maps to, assuming (x0,x1,x2) is the eigen-
+  //         coordinate. Note that we assume (x0,x1,x2)
+  //         has the same grid boundaries in both the
+  //         original coordinate and the eigencoordinate.
+  DOUBLE xCart[3];  // where (x,y,z) is output
+  {{
+    // xx_to_Cart for EigenCoordinate {rfm.CoordSystem} (orig coord = {rfm_orig.CoordSystem}):
+    DOUBLE xx0 = xx[0][i0];
+    DOUBLE xx1 = xx[1][i1];
+    DOUBLE xx2 = xx[2][i2];
+    {ccg.c_codegen([rfm.xx_to_Cart[0], rfm.xx_to_Cart[1], rfm.xx_to_Cart[2]],
+                   ["xCart[0]", "xCart[1]", "xCart[2]"],
+                   fp_type_alias=fp_type_alias)}
+  }}
+  DOUBLE Cartx = xCart[0];
+  DOUBLE Carty = xCart[1];
+  DOUBLE Cartz = xCart[2];
 
-    # Step 2: Output C code for the Eigen-Coordinate mapping from Cartesian->xx':
-    body += rf"""
-  // Step 2: Find the (i0_inbounds,i1_inbounds,i2_inbounds) corresponding to the above Cartesian coordinate.
-  //   If (i0_inbounds,i1_inbounds,i2_inbounds) is in a ghost zone, then it must equal (i0,i1,i2), and
-  //      the point is an outer boundary point.
-  //   Otherwise (i0_inbounds,i1_inbounds,i2_inbounds) is in the grid interior, and data at (i0,i1,i2)
-  //      must be replaced with data at (i0_inbounds,i1_inbounds,i2_inbounds), but multiplied by the
-  //      appropriate parity condition (+/- 1).
+  // Step 2: Convert Cartesian coordinates (Cartx, Carty, Cartz) to eigencoordinates (x0, x1, x2)
+  //         and determine the corresponding gridpoint indices (i0, i1, i2).
+  //         - For cell-centered grids, (x0, x1, x2) will exactly (within roundoff error) align
+  //           with a numerical grid point.
+  //         - Identify the in-bounds indices (i0_inbounds, i1_inbounds, i2_inbounds) that
+  //           correspond to the eigencoordinates.
+  //         - Check the location of (i0_inbounds, i1_inbounds, i2_inbounds):
+  //             - If it resides within a ghost zone:
+  //                 - It must be equal to (i0, i1, i2), indicating that the point is an outer boundary point.
+  //             - Otherwise:
+  //                 - The indices are within the grid interior.
+  //                 - Replace the data at (i0, i1, i2) with the data from (i0_inbounds, i1_inbounds, i2_inbounds),
+  //                   multiplied by the appropriate parity condition (+1 or -1).
   DOUBLE Cart_to_xx0_inbounds,Cart_to_xx1_inbounds,Cart_to_xx2_inbounds;
 """
     # Step 2.a: Sanity check: First make sure that rfm.Cart_to_xx has been set. Error out if not!
@@ -286,53 +289,47 @@ DOUBLE Cartz = xCart[2];
             "Boundary conditions in curvilinear coordinates REQUiRE this be set."
         )
     # Step 2.b: Output C code for the Eigen-Coordinate mapping from Cartesian->xx:
-    body += f"  // Cart_to_xx for EigenCoordinate {rfm.CoordSystem} (orig coord = {rfm_orig.CoordSystem});\n"
-    body += ccg.c_codegen(
-        [rfm.Cart_to_xx[0], rfm.Cart_to_xx[1], rfm.Cart_to_xx[2]],
-        ["Cart_to_xx0_inbounds", "Cart_to_xx1_inbounds", "Cart_to_xx2_inbounds"],
-        fp_type_alias=fp_type_alias,
-    )
-    body += r"""
+    body += rf"""
+  // Cart_to_xx for EigenCoordinate {rfm.CoordSystem} (orig coord = {rfm_orig.CoordSystem})
+  {ccg.c_codegen(
+      [rfm.Cart_to_xx[0], rfm.Cart_to_xx[1], rfm.Cart_to_xx[2]],
+      ['Cart_to_xx0_inbounds', 'Cart_to_xx1_inbounds', 'Cart_to_xx2_inbounds'],
+      fp_type_alias=fp_type_alias,
+  )}
   // Next compute xxmin[i]. By definition,
   //    xx[i][j] = xxmin[i] + ((DOUBLE)(j-NGHOSTS) + (1.0/2.0))*dxxi;
   // -> xxmin[i] = xx[i][0] - ((DOUBLE)(0-NGHOSTS) + (1.0/2.0))*dxxi
-  const DOUBLE xxmin[3] = {
+  const DOUBLE xxmin[3] = {{
     xx[0][0] - ((DOUBLE)(0-NGHOSTS) + (1.0/2.0))*dxx0,
     xx[1][0] - ((DOUBLE)(0-NGHOSTS) + (1.0/2.0))*dxx1,
-    xx[2][0] - ((DOUBLE)(0-NGHOSTS) + (1.0/2.0))*dxx2 };
+    xx[2][0] - ((DOUBLE)(0-NGHOSTS) + (1.0/2.0))*dxx2 }};
 
   // Finally compute i{{0,1,2}}_inbounds (add 0.5 to account for rounding down)
   const int i0_inbounds = (int)( (Cart_to_xx0_inbounds - xxmin[0] - (1.0/2.0)*dxx0 + ((DOUBLE)NGHOSTS)*dxx0)/dxx0 + 0.5 );
   const int i1_inbounds = (int)( (Cart_to_xx1_inbounds - xxmin[1] - (1.0/2.0)*dxx1 + ((DOUBLE)NGHOSTS)*dxx1)/dxx1 + 0.5 );
   const int i2_inbounds = (int)( (Cart_to_xx2_inbounds - xxmin[2] - (1.0/2.0)*dxx2 + ((DOUBLE)NGHOSTS)*dxx2)/dxx2 + 0.5 );
-"""
 
-    # Restore reference_metric::CoordSystem back to the original CoordSystem
+  // Step 3: Sanity Check
+  //         - Convert eigencoordinates x0(i0_inbounds), x1(i1_inbounds), x2(i2_inbounds)
+  //           to Cartesian coordinates (Cartx, Carty, Cartz).
+  //         - Verify that the converted coordinates match the original mapping:
+  //               (Cartx, Carty, Cartz) == (Cartx(x0(i0)), Carty(x1(i1)), Cartz(x2(i2))).
+  //         - If the coordinates do not match, trigger an error.
 
-    # Step 3:
-    body += f"""
-  // Step 3: Convert x0(i0_inbounds),x1(i1_inbounds),x2(i2_inbounds) -> (Cartx,Carty,Cartz),
-  //         and check that
-  //         (Cartx,Carty,Cartz) == (Cartx(x0(i0)),Cartx(x1(i1)),Cartx(x2(i2)))
-  //         If not, error out!
-
-  // Step 3.a: Compute {{x,y,z}}Cart_from_xx, as a
-  //           function of i0,i1,i2
+  // Step 3.a: Compute {{x,y,z}}Cart_from_xx, as a function of i0,i1,i2
   DOUBLE xCart_from_xx, yCart_from_xx, zCart_from_xx;
   {{
     // xx_to_Cart for Coordinate {rfm_orig.CoordSystem}):
     DOUBLE xx0 = xx[0][i0];
     DOUBLE xx1 = xx[1][i1];
     DOUBLE xx2 = xx[2][i2];
-"""
-    body += ccg.c_codegen(
+    {ccg.c_codegen(
         [rfm_orig.xx_to_Cart[0], rfm_orig.xx_to_Cart[1], rfm_orig.xx_to_Cart[2]],
-        ["xCart_from_xx", "yCart_from_xx", "zCart_from_xx"],
+        ['xCart_from_xx', 'yCart_from_xx', 'zCart_from_xx'],
         include_braces=False,
         fp_type_alias=fp_type_alias,
-    )
-
-    body += f"""  }}
+    )}
+  }}
 
   // Step 3.b: Compute {{x,y,z}}Cart_from_xx_inbounds, as a
   //           function of i0_inbounds,i1_inbounds,i2_inbounds
@@ -342,36 +339,22 @@ DOUBLE Cartz = xCart[2];
     DOUBLE xx0 = xx[0][i0_inbounds];
     DOUBLE xx1 = xx[1][i1_inbounds];
     DOUBLE xx2 = xx[2][i2_inbounds];
-"""
-    body += ccg.c_codegen(
+    {ccg.c_codegen(
         [rfm_orig.xx_to_Cart[0], rfm_orig.xx_to_Cart[1], rfm_orig.xx_to_Cart[2]],
-        ["xCart_from_xx_inbounds", "yCart_from_xx_inbounds", "zCart_from_xx_inbounds"],
+        ['xCart_from_xx_inbounds', 'yCart_from_xx_inbounds', 'zCart_from_xx_inbounds'],
         include_braces=False,
         fp_type_alias=fp_type_alias,
-    )
-
-    body += r"""  }
+    )}
+  }}
 
   // Step 3.c: Compare xCart_from_xx to xCart_from_xx_inbounds;
   //           they should be identical!!!
-"""
-    if fp_type == "float":
-        body += r"""
-#define EPS_REL 1e-6
-"""
-    else:
-        body += r"""
-#define EPS_REL 1e-8
-"""
-    body += (
-        r"""
+#define EPS_REL {"1e-6" if fp_type == "float" else "1e-8"}
   const DOUBLE norm_factor = sqrt(xCart_from_xx*xCart_from_xx + yCart_from_xx*yCart_from_xx + zCart_from_xx*zCart_from_xx) + 1e-15;
   if(fabs( (DOUBLE)(xCart_from_xx - xCart_from_xx_inbounds) ) > EPS_REL * norm_factor ||
      fabs( (DOUBLE)(yCart_from_xx - yCart_from_xx_inbounds) ) > EPS_REL * norm_factor ||
-     fabs( (DOUBLE)(zCart_from_xx - zCart_from_xx_inbounds) ) > EPS_REL * norm_factor) {
-    fprintf(stderr,"Error in """
-        + rfm_orig.CoordSystem
-        + r""" coordinate system: Inner boundary point does not map to grid interior point: ( %.15e %.15e %.15e ) != ( %.15e %.15e %.15e ) | xx: %e %e %e -> %e %e %e | %d %d %d\n",
+     fabs( (DOUBLE)(zCart_from_xx - zCart_from_xx_inbounds) ) > EPS_REL * norm_factor) {{
+    fprintf(stderr,"Error in {rfm_orig.CoordSystem} coordinate system: Inner boundary point does not map to grid interior point: ( %.15e %.15e %.15e ) != ( %.15e %.15e %.15e ) | xx: %e %e %e -> %e %e %e | %d %d %d\n",
             (DOUBLE)xCart_from_xx,(DOUBLE)yCart_from_xx,(DOUBLE)zCart_from_xx,
             (DOUBLE)xCart_from_xx_inbounds,(DOUBLE)yCart_from_xx_inbounds,(DOUBLE)zCart_from_xx_inbounds,
             xx[0][i0],xx[1][i1],xx[2][i2],
@@ -379,6 +362,7 @@ DOUBLE Cartz = xCart[2];
             Nxx_plus_2NGHOSTS0,Nxx_plus_2NGHOSTS1,Nxx_plus_2NGHOSTS2);
     exit(1);
   }}
+#undef EPS_REL
 
   // Step 4: Set output arrays.
   x0x1x2_inbounds[0] = xx[0][i0_inbounds];
@@ -387,10 +371,8 @@ DOUBLE Cartz = xCart[2];
   i0i1i2_inbounds[0] = i0_inbounds;
   i0i1i2_inbounds[1] = i1_inbounds;
   i0i1i2_inbounds[2] = i2_inbounds;
-#undef EPS_REL
 """
-    )
-    cf = cfc.CFunction(
+    return cfc.CFunction(
         subdirectory=CoordSystem,
         desc=desc,
         cfunc_type=cfunc_type,
@@ -398,8 +380,7 @@ DOUBLE Cartz = xCart[2];
         params=params,
         include_CodeParameters_h=True,
         body=body,
-    )
-    return cf.full_function
+    ).full_function
 
 
 # set_parity_for_inner_boundary_single_pt():

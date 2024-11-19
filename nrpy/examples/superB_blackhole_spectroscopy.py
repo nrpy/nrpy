@@ -225,7 +225,6 @@ swm2sh.register_CFunction_spin_weight_minus2_sph_harmonics()
 
 psi4_C_codegen_library.register_CFunction_psi4(
     CoordSystem=CoordSystem,
-    enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
 psi4_C_codegen_library.register_CFunction_psi4_metric_deriv_quantities(
