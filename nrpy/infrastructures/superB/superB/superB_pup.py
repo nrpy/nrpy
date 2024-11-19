@@ -198,9 +198,11 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
     prefunc += r"""
   p | gridfuncs.num_evol_gfs_to_sync;
   p | gridfuncs.num_auxevol_gfs_to_sync;
+  p | gridfuncs.num_aux_gfs_to_sync;
   p | gridfuncs.max_sync_gfs;
   PUParray(p, gridfuncs.evol_gfs_to_sync, gridfuncs.num_evol_gfs_to_sync);
   PUParray(p, gridfuncs.auxevol_gfs_to_sync, gridfuncs.num_auxevol_gfs_to_sync);
+  PUParray(p, gridfuncs.aux_gfs_to_sync, gridfuncs.num_aux_gfs_to_sync);
 """
 
     prefunc += """
