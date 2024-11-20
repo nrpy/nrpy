@@ -771,6 +771,33 @@ Timestepping::~Timestepping() {
     if (griddata_chare[grid].diagnosticstruct.globalsums_for_psi4_decomp != NULL) {
       free(griddata_chare[grid].diagnosticstruct.globalsums_for_psi4_decomp);
     }
+    if (griddata_chare[grid].diagnosticstruct.xx_shell_chare != NULL) {
+      for (int i = 0; i < griddata_chare[grid].diagnosticstruct.num_of_R_exts; i++) {
+        if (griddata_chare[grid].diagnosticstruct.xx_shell_chare[i] != NULL) {
+          for (int j = 0; j < griddata_chare[grid].diagnosticstruct.N_shell_pts_chare[i]; j++) {
+            if (griddata_chare[grid].diagnosticstruct.xx_shell_chare[i][j] != NULL) {
+              free(griddata_chare[grid].diagnosticstruct.xx_shell_chare[i][j]);
+            }
+          }
+          free(griddata_chare[grid].diagnosticstruct.xx_shell_chare[i]);
+        }
+      }
+      free(griddata_chare[grid].diagnosticstruct.xx_shell_chare);
+    }
+    if (griddata_chare[grid].diagnosticstruct.theta_shell_chare != NULL) {
+      for (int i = 0; i < griddata_chare[grid].diagnosticstruct.num_of_R_exts; i++) {
+        if (griddata_chare[grid].diagnosticstruct.theta_shell_chare[i] != NULL) {
+          free(griddata_chare[grid].diagnosticstruct.theta_shell_chare[i]);
+        }
+      }
+      free(griddata_chare[grid].diagnosticstruct.theta_shell_chare);
+    }
+    if (griddata_chare[grid].diagnosticstruct.N_shell_pts_chare != NULL) {
+      free(griddata_chare[grid].diagnosticstruct.N_shell_pts_chare);
+    }
+    if (griddata_chare[grid].diagnosticstruct.N_theta_shell_chare != NULL) {
+      free(griddata_chare[grid].diagnosticstruct.N_theta_shell_chare);
+    }
     free(griddata_chare[grid].charecommstruct.globalidx3pt_to_chareidx3);
     free(griddata_chare[grid].charecommstruct.globalidx3pt_to_localidx3pt);
     free(griddata_chare[grid].charecommstruct.localidx3pt_to_globalidx3pt);
