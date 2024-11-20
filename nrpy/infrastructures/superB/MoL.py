@@ -980,6 +980,9 @@ def register_CFunctions(
         [y_n_gridfunctions] if isinstance(y_n_gridfunctions, str) else y_n_gridfunctions
     )
     gf_list.extend(non_y_n_gridfunctions_list)
+    
+    # Define constants for diagnostic gfs also since they do not point to other gfs in superB
+    gf_list.append("diagnostic_output_gfs")
 
     gf_constants = create_gf_constants(gf_list)
 

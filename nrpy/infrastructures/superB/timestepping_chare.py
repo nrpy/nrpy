@@ -512,6 +512,9 @@ def generate_switch_statement_for_gf_types(
         [y_n_gridfunctions] if isinstance(y_n_gridfunctions, str) else y_n_gridfunctions
     )
     gf_list.extend(non_y_n_gridfunctions_list)
+    
+    # Also add case for diagnostic output gfs, they are allocated separate memory for superB and do not to other gfs 
+    gf_list.append("diagnostic_output_gfs")
 
     switch_statement = """
 switch (type_gfs) {
@@ -519,7 +522,7 @@ switch (type_gfs) {
     switch_cases = []
     for gf in gf_list:
         switch_cases.append(f"  case {gf.upper()}:")
-        if gf != "auxevol_gfs":
+        if gf != "auxevol_gfs" and gf != "diagnostic_output_gfs":
             switch_cases.append(
                 f"    gfs = griddata_chare[grid].gridfuncs.{gf.lower()};"
             )
@@ -531,7 +534,7 @@ switch (type_gfs) {
             )
             if set_parity_types:
                 switch_cases.append("    gf_parity_types = evol_gf_parity;")
-        else:
+        elif gf == "auxevol_gfs":
             switch_cases.append(
                 f"    gfs = griddata_chare[grid].gridfuncs.{gf.lower()};"
             )
@@ -543,6 +546,18 @@ switch (type_gfs) {
             )
             if set_parity_types:
                 switch_cases.append("    gf_parity_types = auxevol_gf_parity;")
+        elif gf == "diagnostic_output_gfs":
+            switch_cases.append(
+                f"    gfs = griddata_chare[grid].gridfuncs.{gf.lower()};"
+            )
+            switch_cases.append(
+                "    NUM_GFS = griddata_chare[grid].gridfuncs.num_aux_gfs_to_sync;"
+            )
+            switch_cases.append(
+                "    gfs_to_sync = griddata_chare[grid].gridfuncs.aux_gfs_to_sync;"
+            )
+            if set_parity_types:
+                switch_cases.append("    gf_parity_types = aux_gf_parity;")
         switch_cases.append("    break;")
     switch_cases.append(
         """
@@ -1392,13 +1407,54 @@ def output_timestepping_ci(
                                              commondata.time) < 0.5 * commondata.dt;"""
         file_output_str += r"""
             }"""
+    file_output_str +="""// Step 5.a: Main loop, part 1: Output diagnostics"""
     if enable_psi4_diagnostics:
         file_output_str += r"""
+        // psi4 diagnostics
         if (write_diagnostics_this_step) {
-          serial {
-            if(thisIndex.y == 0 && thisIndex.z == 0) {
-              sectionBcastMsg *msg = new sectionBcastMsg(1);
-              secProxy.recvMsg_to_contribute_localsums_for_psi4_decomp(msg);
+          if (strstr(griddata_chare[grid].params.CoordSystemName, "Spherical") != NULL || strstr(griddata_chare[grid].params.CoordSystemName, "Cylindrical") != NULL) {
+            // Need to sync psi4 across chares for cylindrical-like coordinates
+            if (strstr(griddata_chare[grid].params.CoordSystemName, "Cylindrical") != NULL) {
+              serial {
+                // Set psi4.
+                psi4(&commondata, &griddata_chare[grid].params, griddata_chare[grid].xx, griddata_chare[grid].gridfuncs.y_n_gfs, griddata_chare[grid].gridfuncs.diagnostic_output_gfs);
+                // Apply outer and inner bcs to psi4
+                apply_bcs_outerextrap_and_inner_specific_gfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].bcstruct, griddata_chare[grid].gridfuncs.num_aux_gfs_to_sync, griddata_chare[grid].gridfuncs.diagnostic_output_gfs, griddata_chare[grid].gridfuncs.aux_gfs_to_sync);
+              }"""
+                
+        file_output_str += generate_send_nonlocalinnerbc_data_code("DIAGNOSTIC_OUTPUT_GFS")
+        file_output_str += generate_process_nonlocalinnerbc_code()
+        for loop_direction in ["x", "y", "z"]:
+            # Determine ghost types and configuration based on the current axis
+            if loop_direction == "x":
+                pos_ghost_type = x_pos_ghost_type
+                neg_ghost_type = x_neg_ghost_type
+                nchare_var = "commondata.Nchare0"
+                grid_split_direction = "EAST_WEST"
+            elif loop_direction == "y":
+                pos_ghost_type = y_pos_ghost_type
+                neg_ghost_type = y_neg_ghost_type
+                nchare_var = "commondata.Nchare1"
+                grid_split_direction = "NORTH_SOUTH"
+            else:  # loop_direction == "z"
+                pos_ghost_type = z_pos_ghost_type
+                neg_ghost_type = z_neg_ghost_type
+                nchare_var = "commondata.Nchare2"
+                grid_split_direction = "TOP_BOTTOM"
+        file_output_str += generate_send_neighbor_data_code(
+            "DIAGNOSTIC_OUTPUT_GFS", grid_split_direction
+        )
+        file_output_str += generate_process_ghost_code(
+            loop_direction, pos_ghost_type, neg_ghost_type, nchare_var
+        )
+        
+        file_output_str += """
+            }
+            serial {
+              if(thisIndex.y == 0 && thisIndex.z == 0) {
+                sectionBcastMsg *msg = new sectionBcastMsg(1);
+                secProxy.recvMsg_to_contribute_localsums_for_psi4_decomp(msg);
+              }
             }
           }
         }
@@ -1409,7 +1465,7 @@ def output_timestepping_ci(
         filename_format = "commondata.convergence_factor, commondata.time"
 
     file_output_str += rf"""
-        // Step 5.a: Main loop, part 1: Output diagnostics
+        // 0D and 2D output diagnostics
         //serial {{
         //  if (write_diagnostics_this_step && contains_gridcenter) {{
         //    diagnostics(&commondata, griddata_chare, Ck::IO::Session(), OUTPUT_0D, which_grid_diagnostics);
