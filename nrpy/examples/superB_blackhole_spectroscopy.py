@@ -239,6 +239,8 @@ if __name__ == "__main__":
     pcg.do_parallel_codegen()
 # Does not need to be parallelized.
 superBdiagnostics.register_CFunction_psi4_spinweightm2_decomposition_on_sphlike_grids()
+superBdiagnostics.register_CFunction_psi4_spinweightm2_decomposition_on_cylindlike_grids()
+superBdiagnostics.register_CFunction_psi4_spinweightm2_decomposition_file_write()
 
 numericalgrids.register_CFunctions(
     list_of_CoordSystems=[CoordSystem],
