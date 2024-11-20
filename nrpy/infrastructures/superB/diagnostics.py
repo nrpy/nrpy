@@ -45,8 +45,8 @@ def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type
   const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
   
   const int psi4_spinweightm2_sph_harmonics_max_l = commondata->swm2sh_maximum_l_mode_to_compute;
-#define num_of_R_exts 24
-  const REAL list_of_R_exts[num_of_R_exts] = {10.0, 20.0, 21.0, 22.0, 23.0, 24.0, 25.0, 26.0, 27.0, 28.0, 29.0,  30.0,
+#define NUM_OF_R_EXTS 24
+  const REAL list_of_R_exts[NUM_OF_R_EXTS] = {10.0, 20.0, 21.0, 22.0, 23.0, 24.0, 25.0, 26.0, 27.0, 28.0, 29.0,  30.0,
                                                 31.0, 32.0, 33.0, 35.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0, 150.0};
 
   //
@@ -56,7 +56,7 @@ def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type
 
     // Find which R_exts lie in the chares's grid
     int count_num_of_R_exts_chare = 0;
-    for (int which_R_ext = 0; which_R_ext < num_of_R_exts; which_R_ext++) {
+    for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {
       const REAL R_ext = list_of_R_exts[which_R_ext];
       const REAL xCart_R_ext[3] = {R_ext, 0.0, 0.0};
       int Cart_to_i0i1i2[3];
@@ -82,7 +82,7 @@ def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type
     diagnosticstruct->psi4_spinweightm2_sph_harmonics_max_l = psi4_spinweightm2_sph_harmonics_max_l;
 
     count_num_of_R_exts_chare = 0; // Reset the counter
-    for (int which_R_ext = 0; which_R_ext < num_of_R_exts; which_R_ext++) {
+    for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {
       const REAL R_ext = list_of_R_exts[which_R_ext];
       const REAL xCart_R_ext[3] = {R_ext, 0.0, 0.0};
       int Cart_to_i0i1i2[3];
@@ -114,8 +114,6 @@ def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type
     // Case cylindrical-like grid
     //
   } else if(strstr(params_chare->CoordSystemName, "Cylindrical") != NULL) {
-
-    diagnosticstruct->num_of_R_exts = NUM_OF_R_EXTS;
 
     // Set up uniform 2d grid in theta and phi at R_ext (2d shells at different R_ext)
     // phi values need to be exactly the same as phi values of the cylindrical-like grid
@@ -872,19 +870,11 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
             // i index is rho index
             // j index is z index
             int idx = i + src_Nxx_plus_2NGHOSTS0 * j;
-            src_gf_psi4r[idx] = diagnostic_output_gfs[IDX4GENERAL(PSI4_PART0REGF, i, i1, j, Nxx_plus_2NGHOSTS0chare,
-                                  Nxx_plus_2NGHOSTS1chare, Nxx_plus_2NGHOSTS2chare)] +
-                      diagnostic_output_gfs[IDX4GENERAL(PSI4_PART1REGF, i, i1, j, Nxx_plus_2NGHOSTS0chare,
-                                  Nxx_plus_2NGHOSTS1chare, Nxx_plus_2NGHOSTS2chare)] +
-                      diagnostic_output_gfs[IDX4GENERAL(PSI4_PART2REGF, i, i1, j, Nxx_plus_2NGHOSTS0chare,
-                                  Nxx_plus_2NGHOSTS1chare, Nxx_plus_2NGHOSTS2chare)];
+            src_gf_psi4r[idx] = diagnostic_output_gfs[IDX4GENERAL(PSI4_REGF, i, i1, j, Nxx_plus_2NGHOSTS0chare, Nxx_plus_2NGHOSTS1chare,
+                                                                  Nxx_plus_2NGHOSTS2chare)];
 
-            src_gf_psi4i[idx] = diagnostic_output_gfs[IDX4GENERAL(PSI4_PART0IMGF, i, i1, j, Nxx_plus_2NGHOSTS0chare,
-                                  Nxx_plus_2NGHOSTS1chare, Nxx_plus_2NGHOSTS2chare)] +
-                      diagnostic_output_gfs[IDX4GENERAL(PSI4_PART1IMGF, i, i1, j, Nxx_plus_2NGHOSTS0chare,
-                                  Nxx_plus_2NGHOSTS1chare, Nxx_plus_2NGHOSTS2chare)] +
-                      diagnostic_output_gfs[IDX4GENERAL(PSI4_PART2IMGF, i, i1, j, Nxx_plus_2NGHOSTS0chare,
-                                  Nxx_plus_2NGHOSTS1chare, Nxx_plus_2NGHOSTS2chare)];														
+            src_gf_psi4i[idx] = diagnostic_output_gfs[IDX4GENERAL(PSI4_IMGF, i, i1, j, Nxx_plus_2NGHOSTS0chare, Nxx_plus_2NGHOSTS1chare,
+                                                                  Nxx_plus_2NGHOSTS2chare)];
                                   
           }
         }
