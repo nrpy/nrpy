@@ -699,11 +699,18 @@ Timestepping::Timestepping(CommondataObject &&inData) {
   // Allocate storage for diagnostic gridfunctions
   for(int grid=0; grid<commondata.NUMGRIDS; grid++)
     MoL_malloc_diagnostic_gfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].gridfuncs);
-
+"""
+    
+    file_output_str += """
+  // Initialize y n and non-y n gfs to NAN to avoid uninitialized memory errors
+  for(int grid=0; grid<commondata.NUMGRIDS; grid++)
+    initialize_yn_and_non_yn_gfs_to_nan(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].gridfuncs);
+"""
+    
+    file_output_str += """
   // Allocate storage for temporary buffers, needed for communicating face data
   for(int grid=0; grid<commondata.NUMGRIDS; grid++)
     timestepping_malloc_tmpBuffer(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].gridfuncs, &griddata_chare[grid].nonlocalinnerbcstruct, &griddata_chare[grid].tmpBuffers);
-
 """
     if initialize_constant_auxevol:
         file_output_str += r"""

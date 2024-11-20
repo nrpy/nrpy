@@ -395,6 +395,66 @@ def register_CFunction_MoL_free_memory_diagnostic_gfs() -> None:
         ) from e
 
 
+def register_CFunction_initialize_yn_and_non_yn_gfs_to_nan(
+    Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
+    MoL_method: str
+) -> None:
+    """
+    Register the CFunction 'initialize_yn_and_non_yn_gfs_to_nan'.
+    This function initializes yn and non yn gfs to nan to avoid uninitialized memory errors.
+    
+    :param Butcher_dict: Dictionary containing Butcher tableau data.
+    :param MoL_method: Method of Lines (MoL) method name.
+    :raises RuntimeError: If an error occurs while registering the CFunction
+    :return None
+    """
+    includes: List[str] = ["BHaH_defines.h"]
+    desc: str = "Initialize yn and non-yn gfs to nan"
+    cfunc_type: str = "void"
+    name: str = "initialize_yn_and_non_yn_gfs_to_nan"
+    params: str = (
+        "const commondata_struct *restrict commondata, const params_struct *restrict params, MoL_gridfunctions_struct *restrict gridfuncs"
+    )
+    body: str = """
+const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
+for (int i = 0; i < NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot; i++) {"""
+    # Generating gridfunction names based on the given MoL method
+    (
+        y_n_gridfunctions,
+        non_y_n_gridfunctions_list,
+        _diagnostic_gridfunctions_point_to,
+        _diagnostic_gridfunctions2_point_to,
+    ) = generate_gridfunction_names(Butcher_dict, MoL_method=MoL_method)
+    # Convert y_n_gridfunctions to a list if it's a string
+    gf_list = (
+        [y_n_gridfunctions] if isinstance(y_n_gridfunctions, str) else y_n_gridfunctions
+    )
+    gf_list.extend(non_y_n_gridfunctions_list)
+    for gf in gf_list:
+        if gf != "auxevol_gfs" and gf != "diagnostic_output_gfs":
+            body+= f"gridfuncs->{gf.lower()}[i] = NAN;"
+    body += """
+}"""
+
+
+    try:
+        cfc.register_CFunction(
+            includes=includes,
+            desc=desc,
+            cfunc_type=cfunc_type,
+            name=name,
+            params=params,
+            include_CodeParameters_h=True,
+            body=body,
+        )
+    except Exception as e:
+        raise RuntimeError(
+            f"Error registering CFunction 'initialize_yn_and_non_yn_gfs_to_nan': {str(e)}"
+        ) from e
+
+
+
+
 ########################################################################################################################
 # EXAMPLE
 # ODE: y' = f(t,y), y(t_0) = y_0
@@ -943,6 +1003,8 @@ def register_CFunctions(
     for which_gfs in ["y_n_gfs", "non_y_n_gfs"]:
         register_CFunction_MoL_malloc(Butcher_dict, MoL_method, which_gfs)
         register_CFunction_MoL_free_memory(Butcher_dict, MoL_method, which_gfs)
+        
+    register_CFunction_initialize_yn_and_non_yn_gfs_to_nan(Butcher_dict, MoL_method)
 
     register_CFunction_MoL_malloc_diagnostic_gfs()
     register_CFunction_MoL_free_memory_diagnostic_gfs()
