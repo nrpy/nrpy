@@ -21,6 +21,7 @@ class CFunction:
     :param includes: A list of strings representing include files.
     :param prefunc: A string containing code above the core function declaration. Defaults to an empty string.
     :param desc: A description of the function.
+    :param cfunc_decorators: Optional decorators for CFunctions, e.g. CUDA identifiers, templates
     :param cfunc_type: The C type of the function (e.g., void, int). Default is "void".
     :param name: The name of the function.
     :param params: A string representing the function's input parameters. Defaults to an empty string.
@@ -37,7 +38,7 @@ class CFunction:
     DocTests:
     >>> func = CFunction(desc="just a test... testing 1,2,3", name="main", params="", body="return 0;")
     >>> print(func.full_function)
-    /*
+    /**
      * just a test... testing 1,2,3
      */
     void main() { return 0; }
@@ -57,6 +58,7 @@ class CFunction:
         includes: Optional[List[str]] = None,
         prefunc: str = "",
         desc: str = "",
+        cfunc_decorators: str = "",
         cfunc_type: str = "void",
         name: str = "",
         params: str = "",
@@ -98,6 +100,9 @@ class CFunction:
         self.ET_schedule_bins_entries = ET_schedule_bins_entries
         self.ET_current_thorn_CodeParams_used = ET_current_thorn_CodeParams_used
         self.ET_other_thorn_CodeParams_used = ET_other_thorn_CodeParams_used
+        self.cfunc_decorators = (
+            f"{cfunc_decorators} " if cfunc_decorators != "" else cfunc_decorators
+        )
         self.clang_format_options = clang_format_options
 
         self.function_prototype, self.raw_function, self.full_function = (
@@ -197,9 +202,11 @@ class CFunction:
             complete_func += f"{self.prefunc}\n"
 
         if self.desc:
-            complete_func += f"/*\n{prefix_with_star(self.desc)}\n*/\n"
+            complete_func += f"/**\n{prefix_with_star(self.desc)}\n*/\n"
 
-        function_prototype = f"{self.cfunc_type} {self.name}({self.params});"
+        function_prototype = (
+            f"{self.cfunc_decorators}{self.cfunc_type} {self.name}({self.params});"
+        )
         complete_func += f"{function_prototype.replace(';', '')} {{\n{include_Cparams_str}{self.body}}}\n"
 
         complete_func += f"{self.postfunc}\n"
@@ -243,6 +250,7 @@ def register_CFunction(
     includes: Optional[List[str]] = None,
     prefunc: str = "",
     desc: str = "",
+    cfunc_decorators: str = "",
     cfunc_type: str = "void",
     name: str = "",
     params: str = "",
@@ -264,6 +272,7 @@ def register_CFunction(
     :param includes: A list of strings representing include files.
     :param prefunc: A string containing code above the core function declaration. Defaults to an empty string.
     :param desc: A description of the function.
+    :param cfunc_decorators: Optional decorators for CFunctions, e.g. CUDA identifiers, templates
     :param cfunc_type: The C/C++ type of the function (e.g., void, int). Default is "void".
     :param name: The name of the function.
     :param params: A string representing the function's input parameters. Defaults to an empty string.
@@ -306,6 +315,7 @@ def register_CFunction(
         ET_schedule_bins_entries=ET_schedule_bins_entries,
         ET_current_thorn_CodeParams_used=ET_current_thorn_CodeParams_used,
         ET_other_thorn_CodeParams_used=ET_other_thorn_CodeParams_used,
+        cfunc_decorators=cfunc_decorators,
         clang_format_options=clang_format_options,
     )
 

@@ -81,6 +81,7 @@ shutil.rmtree(project_dir, ignore_errors=True)
 
 par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 par.set_parval_from_str("fd_order", fd_order)
+par.set_parval_from_str("fp_type", fp_type)
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 par.adjust_CodeParam_default("t_final", t_final)
 
@@ -120,7 +121,6 @@ numericalgrids.register_CFunctions(
     Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
-    fp_type=fp_type,
 )
 
 BCl.register_CFunction_diagnostics(
@@ -141,7 +141,6 @@ BCl.register_CFunction_diagnostics(
 if enable_rfm_precompute:
     rfm_precompute.register_CFunctions_rfm_precompute(
         list_of_CoordSystems=[CoordSystem],
-        fp_type=fp_type,
     )
 BCl.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
@@ -155,7 +154,6 @@ BCl.register_CFunction_rhs_eval(
     enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
     enable_CAKO=enable_CAKO,
     OMP_collapse=OMP_collapse,
-    fp_type=fp_type,
 )
 if separate_Ricci_and_BSSN_RHS:
     BCl.register_CFunction_Ricci_eval(
@@ -164,14 +162,12 @@ if separate_Ricci_and_BSSN_RHS:
         enable_simd=enable_simd,
         enable_fd_functions=enable_fd_functions,
         OMP_collapse=OMP_collapse,
-        fp_type=fp_type,
     )
 BCl.register_CFunction_enforce_detgammabar_equals_detgammahat(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
-    fp_type=fp_type,
 )
 BCl.register_CFunction_constraints(
     CoordSystem=CoordSystem,
@@ -181,7 +177,6 @@ BCl.register_CFunction_constraints(
     enable_simd=enable_simd,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
-    fp_type=fp_type,
 )
 
 if __name__ == "__main__":
@@ -190,7 +185,6 @@ if __name__ == "__main__":
 cbc.CurviBoundaryConditions_register_C_functions(
     list_of_CoordSystems=[CoordSystem],
     radiation_BC_fd_order=radiation_BC_fd_order,
-    fp_type=fp_type,
 )
 rhs_string = ""
 if separate_Ricci_and_BSSN_RHS:
@@ -214,10 +208,9 @@ MoL.register_CFunctions(
   enforce_detgammabar_equals_detgammahat(commondata, params, rfmstruct, RK_OUTPUT_GFS);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
-    fp_type=fp_type,
 )
-xxCartxx.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem, fp_type=fp_type)
-xxCartxx.register_CFunction_xx_to_Cart(CoordSystem, fp_type=fp_type)
+xxCartxx.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
+xxCartxx.register_CFunction_xx_to_Cart(CoordSystem)
 chkpt.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
 progress.register_CFunction_progress_indicator()
 rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
@@ -241,7 +234,6 @@ Bdefines_h.output_BHaH_defines_h(
     enable_simd=enable_simd,
     enable_rfm_precompute=enable_rfm_precompute,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
-    REAL_means=fp_type,
 )
 
 main.register_CFunction_main_c(

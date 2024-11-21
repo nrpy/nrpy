@@ -97,10 +97,11 @@ def register_BHaH_defines(module: str, BHaH_defines: str) -> None:
 def output_BHaH_defines_h(
     project_dir: str,
     additional_includes: Optional[List[str]] = None,
-    REAL_means: str = "double",
     enable_simd: bool = True,
+    define_no_simd_UPWIND_ALG: bool = True,
     enable_rfm_precompute: bool = True,
     fin_NGHOSTS_add_one_for_upwinding_or_KO: bool = False,
+    DOUBLE_means: str = "double",
     supplemental_defines_dict: Optional[Dict[str, str]] = None,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
@@ -109,28 +110,23 @@ def output_BHaH_defines_h(
 
     :param project_dir: Directory where the project C code is output
     :param additional_includes: Additional header files to be included in the output
-    :param REAL_means: The floating-point type to be used in the C code (default is "double")
     :param enable_simd: Flag to enable Single Instruction Multiple Data (SIMD) optimizations
+    :param define_no_simd_UPWIND_ALG: Flag to #define a SIMD-less UPWIND_ALG. No need to define this if UPWIND_ALG() unused.
     :param enable_rfm_precompute: A boolean value reflecting whether reference metric precomputation is enabled.
     :param fin_NGHOSTS_add_one_for_upwinding_or_KO: Option to add one extra ghost zone for upwinding
+    :param DOUBLE_means: Overload DOUBLE macro type for specific calculations that require higher than single precision
     :param supplemental_defines_dict: Additional key-value pairs to be included in the output file
     :param clang_format_options: Options for clang formatting.
 
     DocTests:
     >>> from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
     >>> import nrpy.finite_difference as fin
-    >>> from nrpy.helpers.generic import compress_string_to_base64, decompress_base64_to_string, diff_strings
+    >>> from nrpy.helpers.generic import validate_strings
     >>> MoL.register_CFunctions(register_MoL_step_forward_in_time=False)
     >>> project_dir = Path("/tmp", "tmp_BHaH_defines_h")
     >>> project_dir.mkdir(parents=True, exist_ok=True)
     >>> output_BHaH_defines_h(project_dir=str(project_dir))
-    >>> expected_string = decompress_base64_to_string("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")
-    >>> returned_string = (project_dir / "BHaH_defines.h").read_text()
-    >>> if returned_string != expected_string:
-    ...    compressed_str = compress_string_to_base64(returned_string)
-    ...    error_message = "Trusted BHaH_defines.h string changed!\n"
-    ...    error_message += "Here's the diff:\n" + diff_strings(expected_string, returned_string) + "\n"
-    ...    raise ValueError(error_message + f"base64-encoded output: {compressed_str}")
+    >>> validate_strings((project_dir / "BHaH_defines.h").read_text(), "BHaH_defines")
     """
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
@@ -153,7 +149,9 @@ def output_BHaH_defines_h(
     if additional_includes:
         for include in additional_includes:
             gen_BHd_str += f'#include "{include}"\n'
+    REAL_means = par.parval_from_str("fp_type")
     gen_BHd_str += f"""#define REAL {REAL_means}
+#define DOUBLE {DOUBLE_means}
 
 // These macros for MIN(), MAX(), and SQR() ensure that if the arguments inside
 //   are a function/complex expression, the function/expression is evaluated
@@ -176,6 +174,13 @@ def output_BHaH_defines_h(
     __typeof__(A) _a = (A); \
     _a * _a; \
 }})
+#ifndef MAYBE_UNUSED
+#if defined(__GNUC__) || defined(__clang__) || defined(__NVCC__)
+#define MAYBE_UNUSED __attribute__((unused))
+#else
+#define MAYBE_UNUSED
+#endif // END check for GCC, Clang, or NVCC
+#endif // END MAYBE_UNUSED
 """
 
     code_params_includes_define_type = False
@@ -301,7 +306,7 @@ def output_BHaH_defines_h(
     #define NO_INLINE // Fallback for unknown compilers
 #endif
 """
-        if not enable_simd:
+        if not enable_simd and define_no_simd_UPWIND_ALG:
             fin_BHd_str += """
 // When enable_simd = False, this is the UPWIND_ALG() macro:
 #define UPWIND_ALG(UpwindVecU) UpwindVecU > 0.0 ? 1.0 : 0.0

@@ -758,13 +758,13 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
     ###########################
     ###########################
     ### Module: CodeParameters_c_files
-    a = 1.0                                   # (REAL) The value of a
-    bah_initial_x_center = { 0.0, 0.0, 0.0 }  # (REAL[3]) Initial X centers
-    blahint = -1                              # (int) An integer parameter
-    initial_levels = { 4, 4 }                 # (int[2])
-    outer_bc_type = "radiation"               # (char[50]) A bc string parameter
-    pi_three_sigfigs = 3.14                   # (REAL) Pi to three significant figures
-    string = "cheese"                         # (char[100]) A string parameter
+    a = 1.0                                      # (REAL) The value of a
+    bah_initial_x_center[3] = { 0.0, 0.0, 0.0 }  # (REAL) Initial X centers
+    blahint = -1                                 # (int) An integer parameter
+    initial_levels[2] = { 4, 4 }                 # (int)
+    outer_bc_type = "radiation"                  # (char[50]) A bc string parameter
+    pi_three_sigfigs = 3.14                      # (REAL) Pi to three significant figures
+    string = "cheese"                            # (char[100]) A string parameter
     <BLANKLINE>
     """
     parfile_output_dict: Dict[str, List[str]] = defaultdict(list)
@@ -816,7 +816,7 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
 
                     # Append to module's parameters
                     parfile_output_dict[CodeParam.module].append(
-                        f"{parname} = {{ {default_vals} }}  # ({display_type}[{size}]){description_suffix}\n"
+                        f"{parname}[{size}] = {{ {default_vals} }}  # ({display_type}){description_suffix}\n"
                     )
                 elif base_type == "char":
                     # Ensure default_val is string

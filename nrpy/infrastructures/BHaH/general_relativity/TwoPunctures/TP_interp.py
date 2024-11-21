@@ -52,7 +52,7 @@ static inline void swap(REAL *restrict const a, REAL *restrict const b) {
   const REAL z = xCart[2];
 
   int const nvar = 1, n1 = ID_persist->npoints_A, n2 = ID_persist->npoints_B, n3 = ID_persist->npoints_phi;
-  int const ntotal = n1 * n2 * n3 * nvar;
+  // int const ntotal = n1 * n2 * n3 * nvar;
 
   int antisymmetric_lapse, averaged_lapse, pmn_lapse, brownsville_lapse;
 

@@ -12,6 +12,7 @@ import sympy.codegen.ast as sp_ast
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
+import nrpy.params as par
 import nrpy.reference_metric as refmetric
 from nrpy.helpers.generic import superfast_uniq
 from nrpy.infrastructures.BHaH.BHaH_defines_h import register_BHaH_defines
@@ -26,7 +27,7 @@ class ReferenceMetricPrecompute:
     precompute quantities within loops for both SIMD-ized and non-SIMD loops.
     """
 
-    def __init__(self, CoordSystem: str, fp_type: str = "double"):
+    def __init__(self, CoordSystem: str):
         rfm = refmetric.reference_metric[CoordSystem + "_rfm_precompute"]
         # Step 7: Construct needed C code for declaring rfmstruct, allocating storage for
         #         rfmstruct arrays, defining each element in each array, reading the
@@ -67,7 +68,7 @@ class ReferenceMetricPrecompute:
             sp.Symbol("Nxx_plus_2NGHOSTS2", real=True),
         ]
         which_freevar: int = 0
-        fp_ccg_type = ccg.fp_type_to_sympy_type[fp_type]
+        fp_ccg_type = ccg.fp_type_to_sympy_type[par.parval_from_str("fp_type")]
         sp_type_alias = {sp_ast.real: fp_ccg_type}
         for expr in freevars_uniq_vals:
             if "_of_xx" in str(freevars_uniq_xx_indep[which_freevar]):
@@ -102,16 +103,16 @@ class ReferenceMetricPrecompute:
                         self.rfm_struct__define += "}\n\n"
                         self.readvr_str[
                             dirn
-                        ] += f"const REAL {freevars_uniq_xx_indep[which_freevar]} = rfmstruct->{freevars_uniq_xx_indep[which_freevar]}[i{dirn}];\n"
+                        ] += f"const MAYBE_UNUSED REAL {freevars_uniq_xx_indep[which_freevar]} = rfmstruct->{freevars_uniq_xx_indep[which_freevar]}[i{dirn}];\n"
                         self.readvr_SIMD_outer_str[
                             dirn
                         ] += f"const double NOSIMD{freevars_uniq_xx_indep[which_freevar]} = rfmstruct->{freevars_uniq_xx_indep[which_freevar]}[i{dirn}]; "
                         self.readvr_SIMD_outer_str[
                             dirn
-                        ] += f"const REAL_SIMD_ARRAY {freevars_uniq_xx_indep[which_freevar]} = ConstSIMD(NOSIMD{freevars_uniq_xx_indep[which_freevar]});\n"
+                        ] += f"const MAYBE_UNUSED REAL_SIMD_ARRAY {freevars_uniq_xx_indep[which_freevar]} = ConstSIMD(NOSIMD{freevars_uniq_xx_indep[which_freevar]});\n"
                         self.readvr_SIMD_inner_str[
                             dirn
-                        ] += f"const REAL_SIMD_ARRAY {freevars_uniq_xx_indep[which_freevar]} = ReadSIMD(&rfmstruct->{freevars_uniq_xx_indep[which_freevar]}[i{dirn}]);\n"
+                        ] += f"const MAYBE_UNUSED REAL_SIMD_ARRAY {freevars_uniq_xx_indep[which_freevar]} = ReadSIMD(&rfmstruct->{freevars_uniq_xx_indep[which_freevar]}[i{dirn}]);\n"
                         output_define_and_readvr = True
 
                 if (
@@ -127,16 +128,16 @@ class ReferenceMetricPrecompute:
                 }}\n\n"""
                     self.readvr_str[
                         0
-                    ] += f"const REAL {freevars_uniq_xx_indep[which_freevar]} = rfmstruct->{freevars_uniq_xx_indep[which_freevar]}[i0 + Nxx_plus_2NGHOSTS0*i1];\n"
+                    ] += f"const MAYBE_UNUSED REAL {freevars_uniq_xx_indep[which_freevar]} = rfmstruct->{freevars_uniq_xx_indep[which_freevar]}[i0 + Nxx_plus_2NGHOSTS0*i1];\n"
                     self.readvr_SIMD_outer_str[
                         0
                     ] += f"const double NOSIMD{freevars_uniq_xx_indep[which_freevar]} = rfmstruct->{freevars_uniq_xx_indep[which_freevar]}[i0 + Nxx_plus_2NGHOSTS0*i1]; "
                     self.readvr_SIMD_outer_str[
                         0
-                    ] += f"const REAL_SIMD_ARRAY {freevars_uniq_xx_indep[which_freevar]} = ConstSIMD(NOSIMD{freevars_uniq_xx_indep[which_freevar]});\n"
+                    ] += f"const MAYBE_UNUSED REAL_SIMD_ARRAY {freevars_uniq_xx_indep[which_freevar]} = ConstSIMD(NOSIMD{freevars_uniq_xx_indep[which_freevar]});\n"
                     self.readvr_SIMD_inner_str[
                         0
-                    ] += f"const REAL_SIMD_ARRAY {freevars_uniq_xx_indep[which_freevar]} = ReadSIMD(&rfmstruct->{freevars_uniq_xx_indep[which_freevar]}[i0 + Nxx_plus_2NGHOSTS0*i1]);\n"
+                    ] += f"const MAYBE_UNUSED REAL_SIMD_ARRAY {freevars_uniq_xx_indep[which_freevar]} = ReadSIMD(&rfmstruct->{freevars_uniq_xx_indep[which_freevar]}[i0 + Nxx_plus_2NGHOSTS0*i1]);\n"
                     output_define_and_readvr = True
 
                 if not output_define_and_readvr:
@@ -153,17 +154,16 @@ class ReferenceMetricPrecompute:
 
 
 def register_CFunctions_rfm_precompute(
-    list_of_CoordSystems: List[str], fp_type: str = "double"
+    list_of_CoordSystems: List[str],
 ) -> None:
     """
     Register C functions for reference metric precomputed lookup arrays.
 
     :param list_of_CoordSystems: List of coordinate systems to register the C functions.
-    :param fp_type: Floating point type, e.g., "double".
     """
     combined_BHaH_defines_list = []
     for CoordSystem in list_of_CoordSystems:
-        rfm_precompute = ReferenceMetricPrecompute(CoordSystem, fp_type=fp_type)
+        rfm_precompute = ReferenceMetricPrecompute(CoordSystem)
 
         for func in [
             ("malloc", rfm_precompute.rfm_struct__malloc),

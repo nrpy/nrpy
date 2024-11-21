@@ -18,15 +18,17 @@ def register_CFunction_read_checkpoint(
         r"checkpoint-conv_factor%.2f.dat",
         "commondata->convergence_factor",
     ),
+    enable_bhahaha: bool = False,
 ) -> None:
     """
     Register read_checkpoint CFunction for reading checkpoints.
 
     :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
+    :param enable_bhahaha: Whether to enable BHaHAHA.
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "unistd.h"]
     prefunc = r"""
-#define FREAD(ptr, size, nmemb, stream) { const int numitems=fread((ptr), (size), (nmemb), (stream)); }
+#define FREAD(ptr, size, nmemb, stream) { const MAYBE_UNUSED int numitems=fread((ptr), (size), (nmemb), (stream)); }
 """
     desc = "Read a checkpoint file"
     cfunc_type = "int"
@@ -45,6 +47,16 @@ def register_CFunction_read_checkpoint(
   FILE *cp_file = fopen(filename, "r");
   FREAD(commondata, sizeof(commondata_struct), 1, cp_file);
   fprintf(stderr, "cd struct size = %ld time=%e\n", sizeof(commondata_struct), commondata->time);
+"""
+    if enable_bhahaha:
+        body += r"""
+  for (int i = 0; i < commondata->bah_num_horizons; i++) {
+    FREAD(&commondata->bhahaha_params_and_data[i], sizeof(bhahaha_params_and_data_struct), 1, cp_file);
+    commondata->bhahaha_params_and_data[i].prev_horizon = malloc(sizeof(REAL) * 64 * 32);
+    FREAD(commondata->bhahaha_params_and_data[i].prev_horizon, sizeof(REAL), 64 * 32, cp_file);
+  }
+"""
+    body += r"""
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     FREAD(&griddata[grid].params, sizeof(params_struct), 1, cp_file);
 
@@ -63,7 +75,6 @@ def register_CFunction_read_checkpoint(
     FREAD(compact_out_data, sizeof(REAL), count * NUM_EVOL_GFS, cp_file);
 
     MoL_malloc_y_n_gfs(commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
-    int which_el = 0;
 #pragma omp parallel for
     for (int i = 0; i < count; i++) {
       for (int gf = 0; gf < NUM_EVOL_GFS; gf++) {
@@ -100,12 +111,14 @@ def register_CFunction_write_checkpoint(
         "checkpoint-conv_factor%.2f.dat",
         "commondata->convergence_factor",
     ),
+    enable_bhahaha: bool = False,
 ) -> None:
     """
     Register write_checkpoint CFunction for writing checkpoints.
 
     :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
     :param default_checkpoint_every: The default checkpoint interval in physical time units.
+    :param enable_bhahaha: Whether to enable BHaHAHA.
     """
     par.register_CodeParameter(
         "REAL", __name__, "checkpoint_every", default_checkpoint_every, commondata=True
@@ -129,6 +142,15 @@ if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {
   FILE *cp_file = fopen(filename, "w+");
   fwrite(commondata, sizeof(commondata_struct), 1, cp_file);
   fprintf(stderr, "WRITING CHECKPOINT: cd struct size = %ld time=%e\n", sizeof(commondata_struct), commondata->time);
+"""
+    if enable_bhahaha:
+        body += r"""
+  for (int i = 0; i < commondata->bah_num_horizons; i++) {
+    fwrite(&commondata->bhahaha_params_and_data[i], sizeof(bhahaha_params_and_data_struct), 1, cp_file);
+    fwrite(commondata->bhahaha_params_and_data[i].prev_horizon, sizeof(REAL), 64 * 32, cp_file);
+  }
+"""
+    body += r"""
   for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
     fwrite(&griddata[grid].params, sizeof(params_struct), 1, cp_file);
     const int ntot = ( griddata[grid].params.Nxx_plus_2NGHOSTS0*
@@ -187,14 +209,20 @@ def register_CFunctions(
         "commondata->convergence_factor",
     ),
     default_checkpoint_every: float = 2.0,
+    enable_bhahaha: bool = False,
 ) -> None:
     """
     Register CFunctions for checkpointing.
 
     :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
     :param default_checkpoint_every: The default checkpoint interval in physical time units.
+    :param enable_bhahaha: Whether to enable BHaHAHA.
     """
-    register_CFunction_read_checkpoint(filename_tuple=filename_tuple)
+    register_CFunction_read_checkpoint(
+        filename_tuple=filename_tuple, enable_bhahaha=enable_bhahaha
+    )
     register_CFunction_write_checkpoint(
-        filename_tuple=filename_tuple, default_checkpoint_every=default_checkpoint_every
+        filename_tuple=filename_tuple,
+        default_checkpoint_every=default_checkpoint_every,
+        enable_bhahaha=enable_bhahaha,
     )

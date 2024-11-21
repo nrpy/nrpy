@@ -236,7 +236,6 @@ def single_RK_substep_input_symbolic(
     enable_simd: bool = False,
     gf_aliases: str = "",
     post_post_rhs_string: str = "",
-    fp_type: str = "double",
 ) -> str:
     """
     Generate C code for a given Runge-Kutta substep.
@@ -253,7 +252,6 @@ def single_RK_substep_input_symbolic(
     :param enable_simd: Whether SIMD optimization is enabled.
     :param gf_aliases: Additional aliases for grid functions.
     :param post_post_rhs_string: String to be used after the post-RHS phase.
-    :param fp_type: Floating point type, e.g., "double".
 
     :return: A string containing the generated C code.
 
@@ -337,7 +335,6 @@ def single_RK_substep_input_symbolic(
         include_braces=False,
         verbose=False,
         enable_simd=enable_simd,
-        fp_type=fp_type,
     )
 
     if enable_simd:
@@ -403,7 +400,6 @@ def register_CFunction_MoL_step_forward_in_time(
     enable_rfm_precompute: bool = False,
     enable_curviBCs: bool = False,
     enable_simd: bool = False,
-    fp_type: str = "double",
 ) -> None:
     """
     Register MoL_step_forward_in_time() C function, which is the core driver for time evolution in BHaH codes.
@@ -416,7 +412,6 @@ def register_CFunction_MoL_step_forward_in_time(
     :param enable_rfm_precompute: Flag to enable reference metric functionality.
     :param enable_curviBCs: Flag to enable curvilinear boundary conditions.
     :param enable_simd: Flag to enable SIMD functionality.
-    :param fp_type: Floating point type, e.g., "double".
     :raises ValueError: If unsupported Butcher table specified since adaptive RK steps are not implemented in MoL.
 
     Doctest:
@@ -425,7 +420,6 @@ def register_CFunction_MoL_step_forward_in_time(
     >>> from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import (
     ...     generate_Butcher_tables,
     ... )
-    >>> from nrpy.helpers.generic import compress_string_to_base64
     >>> Butcher_dict = generate_Butcher_tables()
     >>> expected_str_dict=dict()
     >>> try:
@@ -463,10 +457,10 @@ const REAL time_start = commondata->time;
 
     gf_aliases = f"""// Set gridfunction aliases from gridfuncs struct
 // y_n gridfunctions
-REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
+REAL MAYBE_UNUSED *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
 // Temporary timelevel & AUXEVOL gridfunctions:\n"""
     for gf in non_y_n_gridfunctions_list:
-        gf_aliases += f"REAL *restrict {gf} = {gf_prefix}{gf};\n"
+        gf_aliases += f"REAL MAYBE_UNUSED *restrict {gf} = {gf_prefix}{gf};\n"
 
     gf_aliases += "params_struct *restrict params = &griddata[grid].params;\n"
     if enable_rfm_precompute:
@@ -474,7 +468,7 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
             "const rfm_struct *restrict rfmstruct = &griddata[grid].rfmstruct;\n"
         )
     else:
-        gf_aliases += "REAL *restrict xx[3]; for(int ww=0;ww<3;ww++) xx[ww] = griddata[grid].xx[ww];\n"
+        gf_aliases += "REAL MAYBE_UNUSED *restrict xx[3]; for(int ww=0;ww<3;ww++) xx[ww] = griddata[grid].xx[ww];\n"
 
     if enable_curviBCs:
         gf_aliases += "const bc_struct *restrict bcstruct = &griddata[grid].bcstruct;\n"
@@ -536,7 +530,6 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                 enable_simd=enable_simd,
                 gf_aliases=gf_aliases,
                 post_post_rhs_string=post_post_rhs_string,
-                fp_type=fp_type,
             )
             + "// -={ END k1 substep }=-\n\n"
         )
@@ -575,7 +568,6 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                 enable_simd=enable_simd,
                 gf_aliases=gf_aliases,
                 post_post_rhs_string=post_post_rhs_string,
-                fp_type=fp_type,
             )
             + "// -={ END k2 substep }=-\n\n"
         )
@@ -602,7 +594,6 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                 enable_simd=enable_simd,
                 gf_aliases=gf_aliases,
                 post_post_rhs_string=post_post_rhs_string,
-                fp_type=fp_type,
             )
             + "// -={ END k3 substep }=-\n\n"
         )
@@ -651,7 +642,6 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                     enable_simd=enable_simd,
                     gf_aliases=gf_aliases,
                     post_post_rhs_string=post_post_rhs_string,
-                    fp_type=fp_type,
                 )}// -={{ END k{str(s + 1)} substep }}=-\n\n"""
 
         else:
@@ -673,7 +663,6 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                     enable_simd=enable_simd,
                     gf_aliases=gf_aliases,
                     post_post_rhs_string=post_post_rhs_string,
-                    fp_type=fp_type,
                 )
             else:
                 for s in range(num_steps):
@@ -751,7 +740,6 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
                             enable_simd=enable_simd,
                             gf_aliases=gf_aliases,
                             post_post_rhs_string=post_post_rhs_string,
-                            fp_type=fp_type,
                         )
                         + f"// -={{ END k{s + 1} substep }}=-\n\n"
                     )
@@ -842,7 +830,6 @@ def register_CFunctions(
     enable_curviBCs: bool = False,
     enable_simd: bool = False,
     register_MoL_step_forward_in_time: bool = True,
-    fp_type: str = "double",
 ) -> None:
     r"""
     Register all MoL C functions and NRPy basic defines.
@@ -855,25 +842,18 @@ def register_CFunctions(
     :param enable_curviBCs: Enable curvilinear boundary conditions. Default is False.
     :param enable_simd: Enable Single Instruction, Multiple Data (SIMD). Default is False.
     :param register_MoL_step_forward_in_time: Whether to register the MoL step forward function. Default is True.
-    :param fp_type: Floating point type, e.g., "double".
 
     Doctests:
-    >>> from nrpy.helpers.generic import compress_string_to_base64, decompress_base64_to_string, diff_strings
+    >>> from nrpy.helpers.generic import validate_strings
     >>> cfc.CFunction_dict.clear()
     >>> register_CFunctions()
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4BqrA7pdABGaScZHDxOiAHcc/CXr2duHb+UiUyv83OVALtvJ+o7uK/PoSVGe7rPuvil8asOnzsX/43MrS1REEi/tau4rRkS3klwMCWne6D351BIv83jxwuBwBgfb9aLOiuMaxdzlpat7M5Zzy6cqD3qxMNABQOc2xVV5NC/sFWryHJK7NLtTQZSJAkfrM9dF6qg6pG5p6oN+o9MOcVuOHCVrZ0lCxYx6wuKz2IJ/mMdvxXHVGkgQhirxUUEBl62cNh4PSL0+MhkGfI16jrcBnECahxa7QWuvNWwm0wjfXTw392qOizx3AZQeZ/5+eNZqi0kpkBkrvymrzIOqG75TdKqbx/pe1fDjWE/O6Z7oQp5oYUE4dA9PZ3jI8wRP1bZhpauAV7CdlcP2h+0XENf8YcZZsN3IVAMLbUtntwfptu8rRmhQDU3vhO9j4B445lTNOYKmDfabJbduDZF8MlL0IYahsG2SwFnA9kbaZyfby/eh/Nb3tl5hVPEcfxdU3N9es06Sq3BXXWqfdKl6OXPM67oKzXRNVh3Ws2ksls6tzbpEDfQYmf/wqDs4NX0QeW86/hQXn8mfjHXYDoNQNqVLgTuNHFs8oIvC35e9YZ4424yDAPwz2lebc6OXe/N7PREh1TZP1N95J009AF+dYLT2ZnWq/qJON/p195BRcJ7LiludhhK0xmrF+eMj3vFLwBYBWuATm2EMPuSHLpS2/n+AfbhxopUmOl4AX/KEkIzeYN3p+9Mb/QwGJxCnfpLOPT3kutJ61/Hh23VakghoJDuBRAgCFnl9nCB4P6/iP7CcjdCf88e5FkIdCQipIXgsoAM1Tq6i1yDazQ3sKh+Pz0U1xSmLrchB4EUuGd1OGkyg+3QCWlQIaRev73BAHOCfK4iP3fx9yiwwOTl6xCJyI9yC3TVEn+yIQ4hRj9wqStvka/A9yyeBnEOPHxaUM8o6NUdBjQmim31kuu6pYwfAMJirBB6UCxAIl4zYMnmJmtO2JNDO0HRacYdRxpe9fHQcXvHXbf/wGSpG9O7sY1joaDRJNEdd6YR45z0hiS/TSaO3U/pR34XG179xTQdhvQ4YZwLrAVWnpvFRSWGY8BEMtbwHl3CSdnYZOq7mvLvZOaUZVA4k6bJkm+7XVaWH4XR+ksFRPBVrW8/DgHi7RULpQ6DBIcByuxOHi/eeWO33KcC/9/ANmnCSvQ8S655kReZCDTUQJkx2Hp8AnaD7VuyS57qmxvWHjMUT0WI3hc6JqAO7d7diNCeJyzbK/7JQ9ltnGl1doAAAAGJidfWEfeQ2AAHWB6w1AAA5dg+QscRn+wIAAAAABFla")
-    >>> returned_string = cfc.CFunction_dict["MoL_step_forward_in_time"].full_function
-    >>> if returned_string != expected_string:
-    ...    compressed_str = compress_string_to_base64(returned_string)
-    ...    error_message = "Trusted MoL_step_forward_in_time.full_function string changed!\n Here's the diff:\n"
-    ...    error_message += "Here's the diff:\n" + diff_strings(expected_string, returned_string) + "\n"
-    ...    raise ValueError(error_message + f"base64-encoded output: {compressed_str}")
+    >>> validate_strings(cfc.CFunction_dict["MoL_step_forward_in_time"].full_function, "MoL_step_forward_in_time")
     >>> sorted(cfc.CFunction_dict.keys())
     ['MoL_free_memory_non_y_n_gfs', 'MoL_free_memory_y_n_gfs', 'MoL_malloc_non_y_n_gfs', 'MoL_malloc_y_n_gfs', 'MoL_step_forward_in_time']
     >>> print(cfc.CFunction_dict["MoL_free_memory_non_y_n_gfs"].full_function)
     #include "BHaH_defines.h"
     #include "BHaH_function_prototypes.h"
-    /*
+    /**
      * Method of Lines (MoL) for "RK4" method: Free memory for "non_y_n_gfs" gridfunctions
      * - y_n_gfs are used to store data for the vector of gridfunctions y_i at t_n, at the start of each MoL timestep
      * - non_y_n_gfs are needed for intermediate (e.g., k_i) storage in chosen MoL method
@@ -890,7 +870,7 @@ def register_CFunctions(
     >>> print(cfc.CFunction_dict["MoL_malloc_non_y_n_gfs"].full_function)
     #include "BHaH_defines.h"
     #include "BHaH_function_prototypes.h"
-    /*
+    /**
      * Method of Lines (MoL) for "RK4" method: Allocate memory for "non_y_n_gfs" gridfunctions
      * - y_n_gfs are used to store data for the vector of gridfunctions y_i at t_n, at the start of each MoL timestep
      * - non_y_n_gfs are needed for intermediate (e.g., k_i) storage in chosen MoL method
@@ -925,7 +905,6 @@ def register_CFunctions(
             enable_rfm_precompute=enable_rfm_precompute,
             enable_curviBCs=enable_curviBCs,
             enable_simd=enable_simd,
-            fp_type=fp_type,
         )
 
     griddata_commondata.register_griddata_commondata(

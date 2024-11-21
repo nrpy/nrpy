@@ -32,7 +32,6 @@ import nrpy.infrastructures.BHaH.checkpointing as chkpt
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
-import nrpy.infrastructures.BHaH.general_relativity.BSSN_C_codegen_library as BCl
 import nrpy.infrastructures.BHaH.general_relativity.NRPyPN_quasicircular_momenta as NRPyPNqm
 import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.ID_persist_struct as IDps
 import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.TwoPunctures_lib as TPl
@@ -52,6 +51,10 @@ import nrpy.infrastructures.superB.timestepping_chare as superBtimestepping
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import rfm_precompute, rfm_wrapper_functions
+from nrpy.infrastructures.BHaH.general_relativity import (
+    BSSN_C_codegen_library,
+    psi4_C_codegen_library,
+)
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -180,7 +183,7 @@ if enable_rfm_precompute:
     rfm_precompute.register_CFunctions_rfm_precompute(
         list_of_CoordSystems=[CoordSystem]
     )
-BCl.register_CFunction_rhs_eval(
+BSSN_C_codegen_library.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
@@ -196,20 +199,20 @@ BCl.register_CFunction_rhs_eval(
     OMP_collapse=OMP_collapse,
 )
 if separate_Ricci_and_BSSN_RHS:
-    BCl.register_CFunction_Ricci_eval(
+    BSSN_C_codegen_library.register_CFunction_Ricci_eval(
         CoordSystem=CoordSystem,
         enable_rfm_precompute=enable_rfm_precompute,
         enable_simd=enable_simd,
         enable_fd_functions=enable_fd_functions,
         OMP_collapse=OMP_collapse,
     )
-BCl.register_CFunction_enforce_detgammabar_equals_detgammahat(
+BSSN_C_codegen_library.register_CFunction_enforce_detgammabar_equals_detgammahat(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
-BCl.register_CFunction_constraints(
+BSSN_C_codegen_library.register_CFunction_constraints(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
@@ -220,17 +223,16 @@ BCl.register_CFunction_constraints(
 )
 swm2sh.register_CFunction_spin_weight_minus2_sph_harmonics()
 
-for which_part in range(3):
-    BCl.register_CFunction_psi4_part(
-        CoordSystem=CoordSystem,
-        which_part=which_part,
-        enable_fd_functions=enable_fd_functions,
-        OMP_collapse=OMP_collapse,
-        output_empty_function=False,
-    )
-BCl.register_CFunction_psi4_tetrad(
+psi4_C_codegen_library.register_CFunction_psi4(
     CoordSystem=CoordSystem,
-    output_empty_function=False,
+    OMP_collapse=OMP_collapse,
+)
+psi4_C_codegen_library.register_CFunction_psi4_metric_deriv_quantities(
+    CoordSystem=CoordSystem,
+    enable_fd_functions=enable_fd_functions,
+)
+psi4_C_codegen_library.register_CFunction_psi4_tetrad(
+    CoordSystem=CoordSystem,
 )
 
 if __name__ == "__main__":

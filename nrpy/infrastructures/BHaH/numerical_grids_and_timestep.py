@@ -166,7 +166,7 @@ for (int j = 0; j < params->Nxx_plus_2NGHOSTS2; j++) xx[2][j] = params->xxmin2 +
 
 
 def register_CFunction_cfl_limited_timestep(
-    CoordSystem: str, fp_type: str = "double"
+    CoordSystem: str,
 ) -> None:
     """
     Register a C function to find the CFL-limited timestep dt on a numerical grid.
@@ -175,7 +175,6 @@ def register_CFunction_cfl_limited_timestep(
     is the minimum spacing between neighboring gridpoints on a numerical grid.
 
     :param CoordSystem: The coordinate system used for the simulation.
-    :param fp_type: Floating point type, e.g., "double".
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = f"Compute minimum timestep dt = CFL_FACTOR * ds_min on a {CoordSystem} numerical grid."
@@ -188,9 +187,9 @@ REAL ds_min = 1e38;
 LOOP_NOOMP(i0, 0, Nxx_plus_2NGHOSTS0,
            i1, 0, Nxx_plus_2NGHOSTS1,
            i2, 0, Nxx_plus_2NGHOSTS2) {
-    const REAL xx0 = xx[0][i0];
-    const REAL xx1 = xx[1][i1];
-    const REAL xx2 = xx[2][i2];
+    const MAYBE_UNUSED REAL xx0 = xx[0][i0];
+    const MAYBE_UNUSED REAL xx1 = xx[1][i1];
+    const MAYBE_UNUSED REAL xx2 = xx[2][i2];
     REAL dsmin0, dsmin1, dsmin2;
 """
     rfm = refmetric.reference_metric[CoordSystem]
@@ -203,7 +202,6 @@ LOOP_NOOMP(i0, 0, Nxx_plus_2NGHOSTS0,
         ],
         ["dsmin0", "dsmin1", "dsmin2"],
         include_braces=False,
-        fp_type=fp_type,
     )
     body += """ds_min = MIN(ds_min, MIN(dsmin0, MIN(dsmin1, dsmin2)));
 }
@@ -368,7 +366,6 @@ def register_CFunctions(
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
     enable_set_cfl_timestep: bool = True,
-    fp_type: str = "double",
 ) -> None:
     """
     Register C functions related to coordinate systems and grid parameters.
@@ -380,7 +377,6 @@ def register_CFunctions(
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions.
     :param enable_set_cfl_timestep: Whether to enable computation of dt, the CFL timestep. A custom version can be implemented later.
-    :param fp_type: Floating point type, e.g., "double".
     """
     for CoordSystem in list_of_CoordSystems:
         register_CFunction_numerical_grid_params_Nxx_dxx_xx(
@@ -390,7 +386,6 @@ def register_CFunctions(
         if enable_set_cfl_timestep:
             register_CFunction_cfl_limited_timestep(
                 CoordSystem=CoordSystem,
-                fp_type=fp_type,
             )
     register_CFunction_numerical_grids_and_timestep(
         list_of_CoordSystems=list_of_CoordSystems,

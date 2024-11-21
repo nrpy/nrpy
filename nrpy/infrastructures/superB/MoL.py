@@ -64,7 +64,6 @@ def single_RK_substep_input_symbolic(
     gf_aliases: str = "",
     post_rhs_bcs_str: str = "",
     post_rhs_string: str = "",
-    fp_type: str = "double",
 ) -> str:
     """
     Generate C code for a given Runge-Kutta substep.
@@ -81,7 +80,6 @@ def single_RK_substep_input_symbolic(
     :param gf_aliases: Additional aliases for grid functions.
     :param post_rhs_bcs_str: str to apply bcs immediately after RK update
     :param post_rhs_string: String to be used after the post-RHS phase.
-    :param fp_type: Floating point type, e.g., "double".
 
     :return: A string containing the generated C code.
 
@@ -172,7 +170,6 @@ switch (which_MOL_part) {
         include_braces=False,
         verbose=False,
         enable_simd=enable_simd,
-        fp_type=fp_type,
     )
 
     if enable_simd:
@@ -923,16 +920,10 @@ def register_CFunctions(
     :return None
 
     Doctests:
-    >>> from nrpy.helpers.generic import compress_string_to_base64, decompress_base64_to_string, diff_strings
+    >>> from nrpy.helpers.generic import validate_strings
     >>> cfc.CFunction_dict.clear()
     >>> register_CFunctions()
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4B/5A7tdABGaScZHDxOiAHcc/CXr2duHb+UiUyv83OVALtvJ+o7uK/PoSVGe7rPuvil8asOnzsX/43MrS1REEi/tau4rRkS3klwMCWne6D351BIv83jxwuBwBgfb9aLOiuMaxdzlpat7M5Zzy6cqD3qxMNABQOc2xVV5NC/sFWryHJK7NLtTQZSJAkfrM9dF6qg6pG5p6oN+o9MOcVuOHCVrZ0lCxYx6wuKz2IJ/mMdvxb9kpOoc+n71ZJsMV7tA14+9i8TawSx62Kef1R0clKDrO9YH+vibd56jTMWlJJj7qwA4ejblO0802o+9UA00dZsIZRIq9k/LjwpM473QxNNtZt03nkrs/BShBdq2ZyQpIOcw4mZH+AJkh40wl5nKuTRIlLFG4Q6NBh276EAjeZ2AuRBWcD9KjPiSnm6E53GBzACBbVbUxEVCiFzWJsjBwNoZj+o2133GqXbzjLmvBUd7vlc8BVGk7x7yQAmajdQHpOKiPAu1g1Ch753e50ASUNrK27jpZmaGBGoIomk+YaSm9q5qS+kEx597LllKKlVnGRwinxSiP2AGfto3ST6yNHdH81ISIrL/6a3I7xZbc5mqdhbzNABxa3Z5BMbWcIHHuS3FVQ06uehvm7rSoMNgfYFRVPZSR6oO1KdJkTKVK1HF1Di7riialwoMpPoP9hkaRNko3+VQsXDfD8zZD6wI3dyRjWxc7mvzHBwx0cY3LMQdzaJUI5wPMv+zt67Ss3boY3mmwDorWTZPgtpO1oIklYhzAPfebO0fc+Za54sKFZl2yiHAsfuQAcLorBWaWP0LvYxFo6Xd0JOxuCjnuDMO+UIGipZRFdNhHWqwaJJ0L/ezdlRgK9eWS0T/LyPVYPlBpSVT//O2hN2TqXwIQJYWjZxslQNtZdC3QGGe8RUFF65i/WOH+veVyq/f43FVVpSbXY1/m8ZOew3o4wVFF7Y4x1wwx3JiP7f6OOiCxvwXEvudRqceHzGEQ9jL2X2rKimsOua8dUtbyVqQdkhxV5UzM8qxv05h6BEBwxv55GP6CmKoEVBlFZVuasXUIbiUWV43S3BhBJQRGJhRQKnS8HjaYsv9y1nGYzzmU9NiAsDp5edFCGG3EHhBzHDjTugM+d9xq/AZJQkViE2faLafZX00Yfqu+wygzcnj8DdtuDw0dOcQB7MoT+NUcPmMjmCJlx6PuyHoX+e6Tf/dMiwtrwbfVUxJUJUus4f6zsc8pR+JqZmqWPG72zKCZ1Cq0fT3XfWZ7+K7jn/eX4g2MJ/U1Rak2SAAAFHLajR6idzKAAHXB/o/AAA0cKK4scRn+wIAAAAABFla")
-    >>> returned_string = cfc.CFunction_dict["MoL_step_forward_in_time"].full_function
-    >>> if returned_string != expected_string:
-    ...    compressed_str = compress_string_to_base64(returned_string)
-    ...    error_message = "Trusted MoL_step_forward_in_time.full_function string changed!\n Here's the diff:\n"
-    ...    error_message += "Here's the diff:\n" + diff_strings(expected_string, returned_string) + "\n"
-    ...    raise ValueError(error_message + f"base64-encoded output: {compressed_str}")
+    >>> validate_strings(cfc.CFunction_dict["MoL_step_forward_in_time"].full_function, "superB_MoL")
     """
     Butcher_dict = generate_Butcher_tables()
 

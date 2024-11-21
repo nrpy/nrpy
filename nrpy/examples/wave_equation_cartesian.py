@@ -52,6 +52,7 @@ project_dir = os.path.join("project", project_name)
 shutil.rmtree(project_dir, ignore_errors=True)
 
 par.set_parval_from_str("fd_order", fd_order)
+par.set_parval_from_str("fp_type", fp_type)
 par.adjust_CodeParam_default("t_final", t_final)
 
 
@@ -182,7 +183,6 @@ def register_CFunction_exact_solution_single_Cartesian_point(
         ["*exact_soln_UUGF", "*exact_soln_VVGF"],
         verbose=False,
         include_braces=False,
-        fp_type=fp_type,
     )
     cfc.register_CFunction(
         includes=includes,
@@ -354,7 +354,6 @@ def register_CFunction_rhs_eval() -> None:
             ],
             enable_fd_codegen=True,
             enable_simd=enable_simd,
-            fp_type=fp_type,
         ),
         loop_region="interior",
         enable_simd=enable_simd,
@@ -462,7 +461,6 @@ Bdefines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     enable_simd=enable_simd,
     enable_rfm_precompute=False,
-    REAL_means=fp_type,
 )
 main.register_CFunction_main_c(
     MoL_method=MoL_method,

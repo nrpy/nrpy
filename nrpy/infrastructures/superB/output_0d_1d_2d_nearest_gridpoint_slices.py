@@ -64,14 +64,10 @@ def register_CFunction_diagnostics_nearest_grid_center(
     :raises ValueError: If an unsupported coordinate system is specified, ensuring that diagnostics are only generated for coordinate systems with a defined grid center.
 
     Doctests:
-    >>> from nrpy.helpers.generic import clang_format, compress_string_to_base64, decompress_base64_to_string, diff_strings
+    >>> from nrpy.helpers.generic import clang_format, validate_strings
     >>> Coord = "SinhCylindrical"
-    >>> axis = "y"
     >>> _ = register_CFunction_diagnostics_nearest_grid_center(Coord, out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"})
-    >>> diag_gc = cfc.CFunction_dict[f"diagnostics_nearest_grid_center__rfm__{Coord}"].full_function
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4Aa+AuRdABGaScZHDxOiAHcc747vJCBLAVaWVRAnpWHX/kkr6QysfzLfXhoCqwdlhv59jJtBxk7nXnUIwIlIQLEtn60ZvFpp58iRzPO8zL7jj2RkmJNOOz7kLOZ5pcKkv0uEf85zfc7uGHClgRs9RiDAbyNwyZiAZlTl/jf5X1BOhD4i/CNHqvMIASlwDFj3mV52zX1ZUDkoYG52BfOdNFZacCi5oHsDHgM7+ghHg469486fkW6QU/5PkBfqLgwrfD2kD9IC2/fjze4k4cO8FgwxirbR6/LauUHbkFJsFCBAZ83EfkAW5j/GtzV6YUHdBv/xEzPtaol2zX0IFQZZ7cwWXYpqvP1SvRMe/up5H/J9l0ysvNaZ7yv3AENv9B8I5DngpH9vEjcbljHUyG3agNS4mCDUiZ07JBgndzOv9CCMg55ByQV5EjBaIXbxsNVZeZ5BceUiRGM+NlZYB/FUEfiEUeOfpMCu6CAEr+oelS8jeJZ201U24vYd7Lw+3SHXmHlS9JJiXbWoTYNK20XfM69UZQzvbXqqTHOpGiSDDbBRs/bNc+aDPCbWNhqGxvY1FE8iTCXMFlwYbxpYTRdObzQ490084YvkKIUvwc5wZ0yyydPoLfrTdRmCptnib3BjSvZhDfq1lg3SJ8RBiuucho+lHgKIHk3BQEM4mUjmrbasqcQIvCHHv0azE3u8VA5J4StrwgrwV0MXwgLzePSgKyTDl6g36mnSTgXrkHJwkrzvhs6mtGayfw+J8WsZFqm4QlLgMh0tdyUatAFMb5MGOduOGQrL0oD8FWwnBjdb1ElrWL4XBheNoh5uvv/GYYv4GoW6rIZcyEz1WpXvhyMG9lk7uKBJpnNcoaUb9w5j6cyhLdtMERjJIDfxiemqqYn55zw0oxY69wxeTQAN3LCbDPXOx1URfkcuXxqQXNNXEOPkkDLO62vcRulZp0xWhRKYWy8mEwql4t94UXahNPSuyuyXrkne0Pef1AoAAJLfEC1BJxBOAAGABr8NAAA6+GwfscRn+wIAAAAABFla")
-    >>> if diag_gc != expected_string:
-    ...     raise ValueError(f"\n{diff_strings(expected_string, diag_gc)}\n base64-encoded output: {compress_string_to_base64(diag_gc)}")
+    >>> validate_strings(cfc.CFunction_dict[f"diagnostics_nearest_grid_center__rfm__{Coord}"].full_function, "grid_center")
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())

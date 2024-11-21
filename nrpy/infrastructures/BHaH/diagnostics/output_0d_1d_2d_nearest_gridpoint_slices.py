@@ -56,14 +56,10 @@ def register_CFunction_diagnostics_nearest_grid_center(
     :raises ValueError: If an unsupported coordinate system is specified, ensuring that diagnostics are only generated for coordinate systems with a defined grid center.
 
     Doctests:
-    >>> from nrpy.helpers.generic import clang_format, compress_string_to_base64, decompress_base64_to_string, diff_strings
+    >>> from nrpy.helpers.generic import clang_format, validate_strings
     >>> Coord = "SinhCylindrical"
-    >>> axis = "y"
     >>> _ = register_CFunction_diagnostics_nearest_grid_center(Coord, out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"})
-    >>> diag_gc = cfc.CFunction_dict[f"diagnostics_nearest_grid_center__rfm__{Coord}"].full_function
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4AbZAvFdABGaScZHDxOiAHcc747vJCBLAVaWVRAnpWHX/kkr6QysfzLfXhoCqwdlhv59jJtBxk7nXnUIwIlIQLEtn60ZvFpp58iRzPO8zL7jj2RkmJNOOz7kLOZ5pcKkv0uEf85zfc7uGHClgRs9RiDAbyNwyZiAZlTl/jf5X1BOhD4i/CNHqvMIASlwDFj3mV52zX1ZUDkoYG52BfOdNFZacCi5oHsDHgM7+ghHg469486fkW6QU/5PkBfqLgwrfD2kD9IC2/fjze4k4cO8FgwxirbR6/LauUHbkFJsFCBAZ83EfkAW5j/GtzV6YUHdBv/xEzPtaol2zX0IFQZZ7cwWXYpqvP1SvRMe/up5H/J9l0ysvNaZ7yv3AENv9B8I5DngpH9vEjcbljHUyG3agNS4mCDUiZ07JBgndzOv9CCMg55ByQV5EjBaIXbxsNVZeZ5BceUiRGM+NlZYB/FUD3wzHj2FI8Tb0C2VcIooTKZ+Ql8sC/0uQVoaOXDqr//0g/oC9jlCeSVCNCr0KbdquKAuMhn5udBlHnrpPPWnsQfO+9MlpS2+wWUwqRTT1DbieX322/WBs8OcqXc3hUWj3Ge5ix8r8DYX2EirrnEQ/+/kyG9DFqPrePpQslc+mnjcRNSO/7HTOGgF+DSywHadHneQFmNLLOKf4ifRUfd+Gdjoi/OeP2NC/MkHXX9J4TF7pEHiNUgYrf3Itr8XfzcYl1W1EtnjnTVqA8svob8wAAfmLOAa7uMW6FSXSLvPdZ8YYBaCVE5Liw3lsKpPGOwKAKry7gWwPPFGDaLShoi98sqFoUK0Txxy1ZbPgNS8IXwknsjq/HPOqBJm/l3qT/gbqcolAx51ND+irqSJ9qFfIBTPMUFHdKoJfhMMHoWNMgAGBZtcIxfphteQeZ0a8YGLCWmva1Wlo0ZOjXHPhK4zm33skfijZeziJFQx9GsCXNQPvkCm/+/EEBmrmU9MV/1XfkcaDaCX+h9XLyyr5e0+dtfpZsJGHi8SgAAAAADl0tNlRAGGwQABjQbaDQAA1ewKr7HEZ/sCAAAAAARZWg==")
-    >>> if diag_gc != expected_string:
-    ...     raise ValueError(f"\n{diff_strings(expected_string, diag_gc)}\n base64-encoded output: {compress_string_to_base64(diag_gc)}")
+    >>> validate_strings(cfc.CFunction_dict[f"diagnostics_nearest_grid_center__rfm__{Coord}"].full_function, "grid_center")
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -115,7 +111,7 @@ In SinhSymTP, this will be at i0_min,i1_mid,i2_mid (i2 == phi doesn't matter).""
     body = rf"""
 // Unpack grid function pointers from gridfuncs struct
 const REAL *restrict y_n_gfs = gridfuncs->y_n_gfs;
-const REAL *restrict auxevol_gfs = gridfuncs->auxevol_gfs;
+const MAYBE_UNUSED REAL *restrict auxevol_gfs = gridfuncs->auxevol_gfs;
 const REAL *restrict diagnostic_output_gfs = gridfuncs->diagnostic_output_gfs;
 
 // Output to file diagnostic quantities at grid's *physical* center.
@@ -171,14 +167,11 @@ def register_CFunction_diagnostics_nearest_1d_axis(
     :raises ValueError: If the specified axis is not supported.
 
     Doctests:
-    >>> from nrpy.helpers.generic import clang_format, compress_string_to_base64, decompress_base64_to_string, diff_strings
+    >>> from nrpy.helpers.generic import clang_format, validate_strings
     >>> Coord = "SinhSpherical"
     >>> axis = "y"
     >>> _ = register_CFunction_diagnostics_nearest_1d_axis(Coord, out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, axis=axis)
-    >>> diag1d = cfc.CFunction_dict[f"diagnostics_nearest_1d_{axis}_axis__rfm__{Coord}"].full_function
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4Ar+BKhdABGaScZHDxOiAHcc747vJCBLAVaWVRAnpWHX/kkr6QysfzLfXhoCqwdlhv59jJtBxk7nXnUIzLaV4Uh8eHMdkFke5ZEWqOrJB8gRVzpSQFQuNk6de9OlmLCKH/0/3hkEO+FpHWMRaKtUzxXmXROgszzTA582kYrIga+g7jqdNJxR8QmVOk3X41Z00Qr8cTShS0e4Ve/Rsfwz7AFvRk7u+g/DHsZZvuk1HMz/N+rflpetPQKKDsLx7wMAnJcaXnErnfc94NuhxGxcaLALyAW85ZpxXG+WHqDC6eXJKplcJ6yp1Ceh1tAXGQuwOP1JDjAbnb4He5ORH1qAjrPi5jbGJIaH2deJL06PMfVo0d8qpj7PrzdCzlupzrMfx9khZaPsE3OJxc2abXt+RClEd9+CSY5CPD7xMp4LoGM8YJxBNcjcCzB+ZJmUlbNi0tl4l3B+wj3BSaec3ts8ni77sbO9NA3OUODUPoVweEeC15HkEJgPuD1buhdoJvJrpX7fT9rRAwD2ZemKVcaf2LEtT/x/W9rvA2sN/dXnhlFxjnmkQwFHJ2QE2UKxzv46Y7bzpk63uag7KaxiKbzcBk6Ze691SMfQMafk3TNVI1zSfWnBtrcxpIQS1AVL5eN5P1BCU/+aPIPuapn41pqDfwuj6fv0/B7QhGgm7Q2bQSIiBrXoL1xCXAE4MachV1wbm5shIvuCiZV5HVAgkLTAFe3DkK2VcqzYYNS55sPUevoChWFMbr8EPBsXXiOl7cr7nCNUr8h7lwlE2fSEr/IZfOMlbmpCDOTRJqTzCcLb8wLOFe2bz6JFPPtDYY7UmNPrGaMdjTdctE5aZ24SeDOKnKucyhEFsADzBnEz5eWv+xg16jWH6t01zDhC+o1dNfiUC8rzmvSNFlLbVo0y/w7Pwgp/eDlOTpRtpHFHQihHwBCnpy3h5s3YUD+c+2o0oKRWVG5xbyZXj9hiChbAP7PV7d+FTFV8fiXT1GiiajndMMTAW/7fk2rV4GG2eWm604agNcKdsrGUtPJ+ZavYKiewIjZjGXLvOX8hcUcgISDaXhKcSEuLOcNPBI4Qsiv0PXH6Lj6WnyeYEdWajcBCczlvSzygS4ypXcTfd6IfELhwN/pl1YlH2mnNu/R9mUW/cH0j5d7VlMwHRr00ix8BgZ88K7wlGg5SqnKQ6mgFLf0YzuM1j6QoXx049omsorweG9v4i31GKvlNZ8a94tkXa+xCb7jBvIyXe3koejEdaE+HSzTNpxku24WV/eEgEPuA6jQWy0AKylTE6Vm0LDnzn5LyjnwKbUzHvT1Mjg3LTu3P/Oba1+Ahxelns3nh308Fn6S7QJki/QxA5Smp9J5ER24msk+4XRCNs4GY5XECTbf22KM26qj5sL74HlQhhrkCdEGdZQlVL5DBB7pR0st+dziPCKoGc3Lbr5crxC+vfIUaFkDC5Nx33wqXZlUJUix6qI1+Z7JXJ9LryYZrxFfup2sNgV9c/vodp3q56bORCD1Rf9mruUdUIGMW4aBTSXfSzmT9firvg5BOZsv6z7Nub0PkJ8dBAXZrENdelj5wj2oPbgiLrSr1EGA0W9qV1j0wkwAALlviG3fOResAAcQJ/xUAAGSN1ICxxGf7AgAAAAAEWVo=")
-    >>> if diag1d != expected_string:
-    ...     raise ValueError(f"\n{diff_strings(expected_string, diag1d)}\n base64-encoded output: {compress_string_to_base64(diag1d)}")
+    >>> validate_strings(cfc.CFunction_dict[f"diagnostics_nearest_1d_{axis}_axis__rfm__{Coord}"].full_function, "SinhSpherical_y_axis")
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -205,7 +198,7 @@ def register_CFunction_diagnostics_nearest_1d_axis(
     body = rf"""
 // Unpack grid function pointers from gridfuncs struct
 const REAL *restrict y_n_gfs = gridfuncs->y_n_gfs;
-const REAL *restrict auxevol_gfs = gridfuncs->auxevol_gfs;
+const MAYBE_UNUSED REAL *restrict auxevol_gfs = gridfuncs->auxevol_gfs;
 const REAL *restrict diagnostic_output_gfs = gridfuncs->diagnostic_output_gfs;
 
 // Prepare output filename based on 1D axis
@@ -255,15 +248,11 @@ def register_CFunction_diagnostics_nearest_2d_plane(
     :raises ValueError: If the specified plane is not supported.
 
     Doctests:
-    >>> from nrpy.helpers.generic import clang_format, compress_string_to_base64, decompress_base64_to_string, diff_strings
+    >>> from nrpy.helpers.generic import clang_format, validate_strings
     >>> Coord = "SinhSymTP"
     >>> plane = "yz"
     >>> _ = register_CFunction_diagnostics_nearest_2d_plane("SinhSymTP", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, plane=plane)
-    >>> diag2d = cfc.CFunction_dict[f"diagnostics_nearest_2d_{plane}_plane__rfm__{Coord}"].full_function
-    >>> expected_string = decompress_base64_to_string("/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4AhtA8JdABGaScZHDxOiAHcc747vJCBLAVaWVRAnpWHX/kkr6QysfzLfXhoCqwdlhv59jJtBxk7nXnUIwIlIQLEtn60ZvFpp58iRzPO8zL7jj2RkmJNOOz7kLOZ5pcKkv92RfBBV6XfvVRqJRIbNiOKE+HSFEwb7csuCUsf9zB0qgLo0SytFxhnW14mQi8WOzQtPby0lBoglttpysw/m7b1NSy56Jyd6v3ORQjM5XKs0j68j0X0IJzMCVR8Dl2FigSsCDy+t+cywlHWLwgbGz8o84kiEsQNi8vwXaFG0ILHJU4KOQHes11bMeMB40iuY3xBqqX6NPdu9FpyfZ66JRRjS85AfYWbHO9hol/CuH+D8Cp9SnpsenErAIgWBfkALisnuCPwn4W6SKOTgP9GrrVAb21KWhviWsb2Yd9el+R7wJOZTJKboiziPVI0fOtkOCmlDdGq3yKY2JcjGQMRZQDeowHkCPrImcerFP1FdFoVZ/Yo0clabNbpjyfpvhAbs4fG0yR7BDmpms5jfTDauLw5ltym/rTTrUK8VBBdawh0N4KhUt1IwsW5/aaqTjVZxCzCEQ7+FIGuJv+z/YJKs5DR3RYD0Mc1ADVFsvJIbemQ4E+mXX3o9NHmihcuOcMk2NsAkyM4W3b1q+lwr57pO4V7Jy8vw0XqFxQdR1CdOZmgrHBPm+vVObPmkQ/qFb9hxZBgF/5IrhXHrq694uEWdaqMSYF1SHEDeqjhFicfIfZ5CFbQfyhgsakceL4/ARNIZn+LbPCRQHPExJhFmqW459u4HoDpYQyGwOkNkUaByKJK6QncNLo/WsqQx/zxVHGCMN/lIUJ9Olh0yLsKxQ60bhJrZK55QJjtjkkeATjYBBY+zieZ1K/IOe7zh0jPNy505LuKmaoQu2aBwNiV9By2gDdvYMtXw/LPIiPGCM9Y4QVKgKjKHW/8sFEUAaYTXJuJtNSexr087UwiRY95KsZzF66dDfPC/wn6eSQBFMcPDLIy0aOZpLdxf5WALw8/htdEi7SUEcWrqabIl8OrQ6/rx2AwS26BykvURplN9327ShuEfNVllO3c3kbPpX02wOWSESzuiC4GZEg8WXypNapMIy22h2h3+fgiULWTjUtu56iqUGMDciv39XjqOTyFT+YPOL/6FrvsiwkAymiHXEerfUsno63HRCMG5sFuJKOWea2uPyfYn1+wZ5icQOc3rwHBNK1p8cqOA7mjynpE8GoQ3ZUiTCpxGzL74MOZBY8AA8o9dQNd9AStL4uLxJZCrVVBbAjyLHlMvh1/gAAAA8b2eOSp3QZoAAd4H7hAAAOngx3OxxGf7AgAAAAAEWVo=")
-    >>> if diag2d != expected_string:
-    ...     error_message = diff_strings(expected_string, diag2d)
-    ...     raise ValueError(f"\n{error_message}\n base64-encoded output: {compress_string_to_base64(diag2d)}")
+    >>> validate_strings(cfc.CFunction_dict[f"diagnostics_nearest_2d_{plane}_plane__rfm__{Coord}"].full_function, "SinhSymTP_yz_plane")
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -290,7 +279,7 @@ def register_CFunction_diagnostics_nearest_2d_plane(
     body = rf"""
 // Unpack grid function pointers from gridfuncs struct
 const REAL *restrict y_n_gfs = gridfuncs->y_n_gfs;
-const REAL *restrict auxevol_gfs = gridfuncs->auxevol_gfs;
+const MAYBE_UNUSED REAL *restrict auxevol_gfs = gridfuncs->auxevol_gfs;
 const REAL *restrict diagnostic_output_gfs = gridfuncs->diagnostic_output_gfs;
 
 // Prepare output filename based on 2D plane

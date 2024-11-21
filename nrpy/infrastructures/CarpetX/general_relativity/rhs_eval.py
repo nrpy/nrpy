@@ -48,7 +48,6 @@ def register_CFunction_rhs_eval(
     enable_CAKO: bool = False,
     enable_CAHD: bool = False,
     enable_SSL: bool = False,
-    fp_type: str = "double",
     validate_expressions: bool = False,
 ) -> Union[None, Dict[str, Union[mpf, mpc]], pcg.NRPyEnv_type]:
     """
@@ -68,7 +67,6 @@ def register_CFunction_rhs_eval(
     :param enable_CAKO: Whether to enable curvature-aware Kreiss-Oliger dissipation (multiply strength by W).
     :param enable_CAHD: Whether to enable curvature-aware Hamiltonian-constraint damping.
     :param enable_SSL: Whether to enable slow-start lapse.
-    :param fp_type: Floating point type, e.g., "double".
     :param validate_expressions: Whether to validate generated sympy expressions against trusted values.
 
     :raises ValueError: If EvolvedConformalFactor_cf not set to a supported value: {phi, chi, W}.
@@ -349,7 +347,6 @@ def register_CFunction_rhs_eval(
             upwind_control_vec=betaU,
             enable_fd_functions=True,
             enable_GoldenKernels=True,
-            fp_type=fp_type,
         ),
         loop_region="interior",
         enable_simd=enable_simd,

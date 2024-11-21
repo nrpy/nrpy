@@ -16,8 +16,6 @@ from mpmath import mpc, mpf  # type: ignore
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-import nrpy.equations.general_relativity.psi4 as psifour
-import nrpy.equations.general_relativity.psi4_tetrads as psifourtet
 import nrpy.finite_difference as fin
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
@@ -49,7 +47,6 @@ def register_CFunction_initial_data(
     populate_ID_persist_struct_str: str = "",
     free_ID_persist_struct_str: str = "",
     enable_T4munu: bool = False,
-    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register C functions for converting ADM initial data to BSSN variables and applying boundary conditions.
@@ -67,7 +64,6 @@ def register_CFunction_initial_data(
     :param populate_ID_persist_struct_str: Optional string to populate the persistent structure for initial data.
     :param free_ID_persist_struct_str: Optional string to free the persistent structure for initial data.
     :param enable_T4munu: Whether to include the stress-energy tensor. Defaults to False.
-    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -92,7 +88,6 @@ def register_CFunction_initial_data(
             ID.BU,
             ID.gammaDD,
             ID.KDD,
-            fp_type=fp_type,
         )
     except (ValueError, RuntimeError):
         print(
@@ -105,7 +100,6 @@ def register_CFunction_initial_data(
         IDCoordSystem=IDCoordSystem,
         ID_persist_struct_str=ID_persist_struct_str,
         enable_T4munu=enable_T4munu,
-        fp_type=fp_type,
     )
 
     desc = "Set initial data."
@@ -294,9 +288,7 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {
           80.0, 90.0, 100.0, 150.0 };
 
         // Set psi4.
-        psi4_part0(commondata, params, xx, y_n_gfs, diagnostic_output_gfs);
-        psi4_part1(commondata, params, xx, y_n_gfs, diagnostic_output_gfs);
-        psi4_part2(commondata, params, xx, y_n_gfs, diagnostic_output_gfs);
+        psi4(commondata, params, xx, y_n_gfs, diagnostic_output_gfs);
         // Decompose psi4 into spin-weight -2  spherical harmonics & output to files.
         psi4_spinweightm2_decomposition_on_sphlike_grids(commondata, params, diagnostic_output_gfs, list_of_R_exts, num_of_R_exts, psi4_spinweightm2_sph_harmonics_max_l, xx);
       }
@@ -339,7 +331,6 @@ def register_CFunction_rhs_eval(
     enable_CAHD: bool = False,
     enable_SSL: bool = False,
     OMP_collapse: int = 1,
-    fp_type: str = "double",
     validate_expressions: bool = False,
 ) -> Union[None, Dict[str, Union[mpf, mpc]], pcg.NRPyEnv_type]:
     """
@@ -360,7 +351,6 @@ def register_CFunction_rhs_eval(
     :param enable_CAHD: Whether to enable curvature-aware Hamiltonian-constraint damping.
     :param enable_SSL: Whether to enable slow-start lapse.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
-    :param fp_type: Floating point type, e.g., "double".
     :param validate_expressions: Whether to validate generated sympy expressions against trusted values.
 
     :raises ValueError: If EvolvedConformalFactor_cf not set to a supported value: {phi, chi, W}.
@@ -584,7 +574,6 @@ def register_CFunction_rhs_eval(
             enable_simd=enable_simd,
             upwind_control_vec=betaU,
             enable_fd_functions=enable_fd_functions,
-            fp_type=fp_type,
         ),
         loop_region="interior",
         enable_simd=enable_simd,
@@ -592,7 +581,6 @@ def register_CFunction_rhs_eval(
         enable_rfm_precompute=enable_rfm_precompute,
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
-        fp_type=fp_type,
     )
     cfc.register_CFunction(
         include_CodeParameters_h=True,
@@ -615,7 +603,6 @@ def register_CFunction_Ricci_eval(
     enable_simd: bool,
     enable_fd_functions: bool,
     OMP_collapse: int,
-    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the Ricci evaluation function.
@@ -625,7 +612,6 @@ def register_CFunction_Ricci_eval(
     :param enable_simd: Whether to enable SIMD instructions.
     :param enable_fd_functions: Whether to enable finite difference functions.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
-    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -661,7 +647,6 @@ def register_CFunction_Ricci_eval(
             enable_fd_codegen=True,
             enable_simd=enable_simd,
             enable_fd_functions=enable_fd_functions,
-            fp_type=fp_type,
         ),
         loop_region="interior",
         enable_simd=enable_simd,
@@ -669,7 +654,6 @@ def register_CFunction_Ricci_eval(
         enable_rfm_precompute=enable_rfm_precompute,
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
-        fp_type=fp_type,
     )
 
     cfc.register_CFunction(
@@ -695,7 +679,6 @@ def register_CFunction_constraints(
     enable_simd: bool,
     enable_fd_functions: bool,
     OMP_collapse: int,
-    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the BSSN constraints evaluation function.
@@ -707,7 +690,6 @@ def register_CFunction_constraints(
     :param enable_simd: Whether to enable SIMD instructions.
     :param enable_fd_functions: Whether to enable finite difference functions.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
-    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -747,7 +729,6 @@ def register_CFunction_constraints(
             enable_fd_codegen=True,
             enable_simd=enable_simd,
             enable_fd_functions=enable_fd_functions,
-            fp_type=fp_type,
         ),
         loop_region="interior",
         enable_simd=enable_simd,
@@ -755,7 +736,6 @@ def register_CFunction_constraints(
         enable_rfm_precompute=enable_rfm_precompute,
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
-        fp_type=fp_type,
     )
 
     cfc.register_CFunction(
@@ -778,7 +758,6 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
     enable_rfm_precompute: bool,
     enable_fd_functions: bool,
     OMP_collapse: int,
-    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the function that enforces the det(gammabar) = det(gammahat) constraint.
@@ -787,7 +766,6 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param enable_fd_functions: Whether to enable finite difference functions.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
-    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -854,7 +832,6 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
             enable_fd_codegen=True,
             enable_simd=False,
             enable_fd_functions=enable_fd_functions,
-            fp_type=fp_type,
         ),
         loop_region="all points",
         enable_simd=False,
@@ -862,7 +839,6 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
         enable_rfm_precompute=enable_rfm_precompute,
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
-        fp_type=fp_type,
     )
 
     cfc.register_CFunction(
@@ -876,228 +852,6 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
         params=params,
         body=body,
         enable_simd=False,
-    )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
-
-
-def register_CFunction_psi4_part(
-    CoordSystem: str,
-    which_part: int,
-    enable_fd_functions: bool,
-    OMP_collapse: int,
-    output_empty_function: bool = False,
-    fp_type: str = "double",
-) -> Union[None, pcg.NRPyEnv_type]:
-    """
-    Add psi4 to Cfunction dictionary.
-
-    psi4 is a really huge expression, so we output it in 3 parts:
-      psi4_part0, psi4_part1, and psi4_part2.
-
-    :param CoordSystem: Coordinate system to be used.
-    :param which_part: Specifies which part of psi4 to compute.
-    :param enable_fd_functions: Flag to enable or disable the finite difference functions.
-    :param OMP_collapse: OpenMP collapse clause integer value.
-    :param output_empty_function: If True, psi4 will be set to zero.
-    :param fp_type: Floating point type, e.g., "double".
-
-    :return: None if in registration phase, else the updated NRPy environment.
-    """
-    if pcg.pcg_registration_phase():
-        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
-        return None
-
-    # Set up the C function for psi4
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-
-    desc = f"Compute psi4 at all interior gridpoints, part {which_part}"
-    name = f"psi4_part{which_part}"
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], const REAL *restrict in_gfs, REAL *restrict diagnostic_output_gfs"
-
-    gri.register_gridfunctions(
-        [f"psi4_part{which_part}re", f"psi4_part{which_part}im"], group="AUX"
-    )
-
-    if output_empty_function:
-        body = " "
-        enable_fd_functions = False
-    else:
-        psi4 = psifour.Psi4(CoordSystem=CoordSystem, enable_rfm_precompute=False)
-        body = r"""if(! (Cart_originx == 0 &&Cart_originy == 0 &&Cart_originz == 0) ) {
-  fprintf(stderr, "Error: psi4 output assumes that the grid is centered on the origin.\n");
-  fprintf(stderr, "       Good news: check out the C code for proposed modifications.\n");
-  exit(1);
-}
-"""
-        loop_prefix = """
-REAL mre4U0,mre4U1,mre4U2,mre4U3,mim4U0,mim4U1,mim4U2,mim4U3,n4U0,n4U1,n4U2,n4U3;
-REAL xx0,xx1,xx2;
-const int idx3 = IDX3(i0, i1, i2);
-psi4_tetrad(commondata, params,
-    in_gfs[IDX4pt(CFGF, idx3)],
-    in_gfs[IDX4pt(HDD00GF, idx3)],
-    in_gfs[IDX4pt(HDD01GF, idx3)],
-    in_gfs[IDX4pt(HDD02GF, idx3)],
-    in_gfs[IDX4pt(HDD11GF, idx3)],
-    in_gfs[IDX4pt(HDD12GF, idx3)],
-    in_gfs[IDX4pt(HDD22GF, idx3)],
-    &mre4U0,&mre4U1,&mre4U2,&mre4U3,&mim4U0,&mim4U1,&mim4U2,&mim4U3,&n4U0,&n4U1,&n4U2,&n4U3,
-    xx, i0,i1,i2);
-{
-"""
-        rfm = refmetric.reference_metric[CoordSystem]
-        found_xx = [False] * 3
-        for i in range(3):
-            for expr in [psi4.psi4_re_pt[which_part], psi4.psi4_im_pt[which_part]]:
-                if rfm.xx[i] in expr.free_symbols:
-                    found_xx[i] = True
-                    break
-        for i in range(3):
-            if found_xx[i]:
-                loop_prefix += f"    xx{i} = xx[{i}][i{i}];\n"
-        loop_prefix += r"""
-    /* PROPOSED MODIFICATIONS FOR COMPUTING PSI4 ON GRIDS NOT CENTERED ON THE ORIGIN
-        REAL xCart_rel_to_globalgrid_center[3];
-        xx_to_Cart(commondata, params, xx, i0, i1, i2,  xCart_rel_to_globalgrid_center);
-        int ignore_Cart_to_i0i1i2[3];  REAL xx_rel_to_globalgridorigin[3];
-        Cart_to_xx_and_nearest_i0i1i2_global_grid_center(commondata, params, xCart_rel_to_globalgrid_center,xx_rel_to_globalgridorigin,ignore_Cart_to_i0i1i2);
-        xx0=xx_rel_to_globalgridorigin[0];
-        xx1=xx_rel_to_globalgridorigin[1];
-        xx2=xx_rel_to_globalgridorigin[2];
-    */
-}
-"""
-        body += lp.simple_loop(
-            loop_body=loop_prefix
-            + ccg.c_codegen(
-                [psi4.psi4_re_pt[which_part], psi4.psi4_im_pt[which_part]],
-                [
-                    gri.BHaHGridFunction.access_gf(
-                        f"psi4_part{which_part}re",
-                        gf_array_name="diagnostic_output_gfs",
-                    ),
-                    gri.BHaHGridFunction.access_gf(
-                        f"psi4_part{which_part}im",
-                        gf_array_name="diagnostic_output_gfs",
-                    ),
-                ],
-                enable_fd_codegen=True,
-                enable_fd_functions=enable_fd_functions,
-                fp_type=fp_type,
-            ),
-            loop_region="interior",
-            enable_simd=False,
-            CoordSystem=CoordSystem,
-            enable_rfm_precompute=False,
-            read_xxs=False,
-            OMP_collapse=OMP_collapse,
-            fp_type=fp_type,
-        )
-
-    cfc.register_CFunction(
-        includes=includes,
-        prefunc=fin.construct_FD_functions_prefunc() if enable_fd_functions else "",
-        desc=desc,
-        CoordSystem_for_wrapper_func=CoordSystem,
-        name=name,
-        params=params,
-        include_CodeParameters_h=True,
-        body=body,
-    )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
-
-
-def register_CFunction_psi4_tetrad(
-    CoordSystem: str,
-    tetrad: str = "quasiKinnersley",
-    use_metric_to_construct_unit_normal: bool = False,
-    output_empty_function: bool = False,
-    fp_type: str = "double",
-) -> Union[None, pcg.NRPyEnv_type]:
-    """
-    Register C function for psi4 tetrad computations.
-
-    :param CoordSystem: The coordinate system to be used.
-    :param tetrad: The type of tetrad. Defaults to "quasiKinnersley".
-    :param use_metric_to_construct_unit_normal: Whether to use the metric to construct the unit normal. Defaults to False.
-    :param output_empty_function: If True, output an empty function body. Defaults to False.
-    :param fp_type: Floating point type, e.g., "double".
-
-    :return: None if in registration phase, else the updated NRPy environment.
-    """
-    if pcg.pcg_registration_phase():
-        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
-        return None
-
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = f"Compute {tetrad} tetrad for psi4, with use_metric_to_construct_unit_normal={use_metric_to_construct_unit_normal}"
-    name = "psi4_tetrad"
-
-    # Initialize psi4 tetrad
-    psi4tet = psifourtet.Psi4Tetrads(
-        CoordSystem,
-        enable_rfm_precompute=False,
-        tetrad=tetrad,
-        use_metric_to_construct_unit_normal=use_metric_to_construct_unit_normal,
-    )
-    list_of_vrnms = []
-    list_of_exprs = []
-
-    for i in range(4):
-        list_of_vrnms.append("*mre4U" + str(i))
-        list_of_exprs.append(psi4tet.mre4U[i])
-    for i in range(4):
-        list_of_vrnms.append("*mim4U" + str(i))
-        list_of_exprs.append(psi4tet.mim4U[i])
-    for i in range(4):
-        list_of_vrnms.append("*n4U" + str(i))
-        list_of_exprs.append(psi4tet.n4U[i])
-
-    # for i in range(4):
-    #     list_of_varnames.extend([f"*mre4U{i}", f"*mim4U{i}", f"*n4U{i}"])
-    #     list_of_symbvars.extend([psi4tet.mre4U[i], psi4tet.mim4U[i], psi4tet.n4U[i]])
-    #     print(i, sp.count_ops(psi4tet.mre4U[i]))
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params,"
-    list_of_metricvarnames = ["cf"] + [
-        f"hDD{i}{j}" for i in range(3) for j in range(i, 3)
-    ]
-    params += ", ".join([f"const REAL {var}" for var in list_of_metricvarnames])
-    params += ", " + ", ".join([f"REAL {var}" for var in list_of_vrnms])
-    params += ", REAL *restrict xx[3], const int i0, const int i1, const int i2"
-
-    body = ""
-
-    if output_empty_function:
-        body += " "
-    else:
-        for i in range(3):
-            body += f"  const REAL xx{i} = xx[{i}][i{i}];\n"
-        body += "  // Compute tetrads:\n"
-
-        # Sort the lhss list alphabetically, and rhss to match:
-        lhss, rhss = [
-            list(x)
-            for x in zip(
-                *sorted(zip(list_of_vrnms, list_of_exprs), key=lambda pair: pair[0])
-            )
-        ]
-        body += ccg.c_codegen(
-            rhss,
-            lhss,
-            verbose=False,
-            enable_cse=True,
-            include_braces=False,
-            fp_type=fp_type,
-        )
-
-    cfc.register_CFunction(
-        includes=includes,
-        desc=desc,
-        CoordSystem_for_wrapper_func=CoordSystem,
-        name=name,
-        params=params,
-        include_CodeParameters_h=True,
-        body=body,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
@@ -1227,12 +981,8 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
           for(int i=0;i<=N0;i++) {
             // psi4r and psi4i in fixed frame have been stored to diagnostic_output_gfs.
             //  Here we interpolate to specific radius.
-            sum_psi4r += ( diagnostic_output_gfs[IDX4(PSI4_PART0REGF, i + closest_i0 - N0/2, i1, i2)] +
-                           diagnostic_output_gfs[IDX4(PSI4_PART1REGF, i + closest_i0 - N0/2, i1, i2)] +
-                           diagnostic_output_gfs[IDX4(PSI4_PART2REGF, i + closest_i0 - N0/2, i1, i2)] ) * l0i__times__w0i_inv[i];
-            sum_psi4i += ( diagnostic_output_gfs[IDX4(PSI4_PART0IMGF, i + closest_i0 - N0/2, i1, i2)] +
-                           diagnostic_output_gfs[IDX4(PSI4_PART1IMGF, i + closest_i0 - N0/2, i1, i2)] +
-                           diagnostic_output_gfs[IDX4(PSI4_PART2IMGF, i + closest_i0 - N0/2, i1, i2)] ) * l0i__times__w0i_inv[i];
+            sum_psi4r += diagnostic_output_gfs[IDX4(PSI4_REGF, i + closest_i0 - N0/2, i1, i2)] * l0i__times__w0i_inv[i];
+            sum_psi4i += diagnostic_output_gfs[IDX4(PSI4_IMGF, i + closest_i0 - N0/2, i1, i2)] * l0i__times__w0i_inv[i];
           }
           // Store result to "2D" array (actually 1D array with 2D storage):
           const int idx2d = (i1-NGHOSTS)*(Nxx_plus_2NGHOSTS2-2*NGHOSTS)+(i2-NGHOSTS);
@@ -1265,13 +1015,11 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
 
 def register_CFunction_cahdprefactor_auxevol_gridfunction(
     list_of_CoordSystems: List[str],
-    fp_type: str = "double",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Add function that sets cahdprefactor gridfunction = C_CAHD * CFL_FACTOR * dsmin to Cfunction dictionary.
 
     :param list_of_CoordSystems: Coordinate systems used.
-    :param fp_type: Floating point type, e.g., "double".
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -1297,7 +1045,6 @@ REAL dsmin0, dsmin1, dsmin2;
             ],
             ["dsmin0", "dsmin1", "dsmin2"],
             include_braces=False,
-            fp_type=fp_type,
         )
         loop_body += """auxevol_gfs[IDX4(CAHDPREFACTORGF, i0, i1, i2)] = C_CAHD * CFL_FACTOR * MIN(dsmin0, MIN(dsmin1, dsmin2));"""
 
@@ -1311,7 +1058,6 @@ REAL dsmin0, dsmin1, dsmin2;
                 loop_body=loop_body,
                 loop_region="all points",
                 read_xxs=True,
-                fp_type=fp_type,
             ),
             CoordSystem_for_wrapper_func=CoordSystem,
         )
