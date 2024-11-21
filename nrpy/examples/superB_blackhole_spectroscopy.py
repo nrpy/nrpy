@@ -390,7 +390,7 @@ superBMakefile.output_CFunctions_function_prototypes_and_construct_Makefile(
     exec_or_library_name=project_name,
     compiler_opt_option="default",
     addl_CFLAGS=["$(shell gsl-config --cflags)", "-fpermissive "],
-    addl_libraries=["$(shell gsl-config --libs)", "-module CkIO"],
+    addl_libraries=["$(shell gsl-config --libs)", "-module CkIO", "$(USER_LIB_PATH) -lBHaHAHA"],
     CC="charmc",
 )
 print(
