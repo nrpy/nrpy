@@ -512,8 +512,8 @@ def generate_switch_statement_for_gf_types(
         [y_n_gridfunctions] if isinstance(y_n_gridfunctions, str) else y_n_gridfunctions
     )
     gf_list.extend(non_y_n_gridfunctions_list)
-    
-    # Also add case for diagnostic output gfs, they are allocated separate memory for superB and do not to other gfs 
+
+    # Also add case for diagnostic output gfs, they are allocated separate memory for superB and do not to other gfs
     gf_list.append("diagnostic_output_gfs")
 
     switch_statement = """
@@ -700,13 +700,13 @@ Timestepping::Timestepping(CommondataObject &&inData) {
   for(int grid=0; grid<commondata.NUMGRIDS; grid++)
     MoL_malloc_diagnostic_gfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].gridfuncs);
 """
-    
+
     file_output_str += """
   // Initialize y n and non-y n gfs to NAN to avoid uninitialized memory errors
   for(int grid=0; grid<commondata.NUMGRIDS; grid++)
     initialize_yn_and_non_yn_gfs_to_nan(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].gridfuncs);
 """
-    
+
     file_output_str += """
   // Allocate storage for temporary buffers, needed for communicating face data
   for(int grid=0; grid<commondata.NUMGRIDS; grid++)
@@ -1441,7 +1441,7 @@ def output_timestepping_ci(
                                              commondata.time) < 0.5 * commondata.dt;"""
         file_output_str += r"""
             }"""
-    file_output_str +="""// Step 5.a: Main loop, part 1: Output diagnostics"""
+    file_output_str += """// Step 5.a: Main loop, part 1: Output diagnostics"""
     if enable_psi4_diagnostics:
         file_output_str += r"""
         // psi4 diagnostics
@@ -1455,8 +1455,10 @@ def output_timestepping_ci(
                 // Apply outer and inner bcs to psi4
                 apply_bcs_outerextrap_and_inner_specific_gfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].bcstruct, griddata_chare[grid].gridfuncs.num_aux_gfs_to_sync, griddata_chare[grid].gridfuncs.diagnostic_output_gfs, griddata_chare[grid].gridfuncs.aux_gfs_to_sync);
               }"""
-                
-        file_output_str += generate_send_nonlocalinnerbc_data_code("DIAGNOSTIC_OUTPUT_GFS")
+
+        file_output_str += generate_send_nonlocalinnerbc_data_code(
+            "DIAGNOSTIC_OUTPUT_GFS"
+        )
         file_output_str += generate_process_nonlocalinnerbc_code()
         for loop_direction in ["x", "y", "z"]:
             # Determine ghost types and configuration based on the current axis
@@ -1481,7 +1483,7 @@ def output_timestepping_ci(
         file_output_str += generate_process_ghost_code(
             loop_direction, pos_ghost_type, neg_ghost_type, nchare_var
         )
-        
+
         file_output_str += """
             }
             serial {

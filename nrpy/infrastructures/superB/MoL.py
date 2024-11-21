@@ -397,12 +397,12 @@ def register_CFunction_MoL_free_memory_diagnostic_gfs() -> None:
 
 def register_CFunction_initialize_yn_and_non_yn_gfs_to_nan(
     Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
-    MoL_method: str
+    MoL_method: str,
 ) -> None:
     """
     Register the CFunction 'initialize_yn_and_non_yn_gfs_to_nan'.
     This function initializes yn and non yn gfs to nan to avoid uninitialized memory errors.
-    
+
     :param Butcher_dict: Dictionary containing Butcher tableau data.
     :param MoL_method: Method of Lines (MoL) method name.
     :raises RuntimeError: If an error occurs while registering the CFunction
@@ -432,10 +432,9 @@ for (int i = 0; i < NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot; i++) {"""
     gf_list.extend(non_y_n_gridfunctions_list)
     for gf in gf_list:
         if gf != "auxevol_gfs" and gf != "diagnostic_output_gfs":
-            body+= f"gridfuncs->{gf.lower()}[i] = NAN;"
+            body += f"gridfuncs->{gf.lower()}[i] = NAN;"
     body += """
 }"""
-
 
     try:
         cfc.register_CFunction(
@@ -451,8 +450,6 @@ for (int i = 0; i < NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot; i++) {"""
         raise RuntimeError(
             f"Error registering CFunction 'initialize_yn_and_non_yn_gfs_to_nan': {str(e)}"
         ) from e
-
-
 
 
 ########################################################################################################################
@@ -1003,7 +1000,7 @@ def register_CFunctions(
     for which_gfs in ["y_n_gfs", "non_y_n_gfs"]:
         register_CFunction_MoL_malloc(Butcher_dict, MoL_method, which_gfs)
         register_CFunction_MoL_free_memory(Butcher_dict, MoL_method, which_gfs)
-        
+
     register_CFunction_initialize_yn_and_non_yn_gfs_to_nan(Butcher_dict, MoL_method)
 
     register_CFunction_MoL_malloc_diagnostic_gfs()
@@ -1042,7 +1039,7 @@ def register_CFunctions(
         [y_n_gridfunctions] if isinstance(y_n_gridfunctions, str) else y_n_gridfunctions
     )
     gf_list.extend(non_y_n_gridfunctions_list)
-    
+
     # Define constants for diagnostic gfs also since they do not point to other gfs in superB
     gf_list.append("diagnostic_output_gfs")
 
