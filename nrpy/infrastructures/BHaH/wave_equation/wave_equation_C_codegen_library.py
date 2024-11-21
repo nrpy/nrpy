@@ -324,7 +324,7 @@ def register_CFunction_rhs_eval(
 
     includes = ["BHaH_defines.h"]
     if enable_simd:
-        includes += [str(Path("simd") / "simd_intrinsics.h")]
+        includes += [str(Path("intrinsics") / "simd_intrinsics.h")]
     desc = r"""Set RHSs for wave equation."""
     cfunc_type = "void"
     name = "rhs_eval"

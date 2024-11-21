@@ -92,7 +92,7 @@ cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
         "bbhxy_BH_m_chiz",
     ],
 )
-Bdefines_h.output_BHaH_defines_h(project_dir=project_dir, enable_simd=False)
+Bdefines_h.output_BHaH_defines_h(project_dir=project_dir, enable_intrinsics=False)
 register_CFunction_main_c()
 
 Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
