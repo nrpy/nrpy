@@ -152,7 +152,7 @@ CPs.register_CFunctions_params_commondata_struct_set_to_default()
 cmdpar.generate_default_parfile(project_dir=project_dir, project_name=project_name)
 cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
     project_name=project_name,
-    cmdline_inputs=["mass_ratio", "chi1", "chi2", "initial_omega"],
+    cmdline_inputs=["mass_ratio", "chi1", "chi2", "initial_omega", "total_mass", "dt"],
 )
 Bdefines_h.output_BHaH_defines_h(
     project_dir=project_dir,
