@@ -431,7 +431,7 @@ for (int i = 0; i < NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot; i++) {"""
     )
     gf_list.extend(non_y_n_gridfunctions_list)
     for gf in gf_list:
-        if gf != "auxevol_gfs" and gf != "diagnostic_output_gfs":
+        if gf not in ('auxevol_gfs', 'diagnostic_output_gfs'):
             body += f"gridfuncs->{gf.lower()}[i] = NAN;"
     body += """
 }"""
