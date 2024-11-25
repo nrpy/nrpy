@@ -21,6 +21,7 @@ from nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions i
     register_CFunction_bcstruct_set_up,
 )
 
+
 ###############################
 ## Modify apply_bcs_inner_only(): to apply the bcs to specific gridfunctions instead of all evolved gridfunctions.
 ##
@@ -482,7 +483,7 @@ def CurviBoundaryConditions_register_C_functions(
 
     # Register C function to apply boundary conditions to outer-extrapolated and inner boundary points.
     register_CFunction_apply_bcs_outerextrap_and_inner()
-    
+
     # Register C function to apply boundary conditions to outer-extrapolated and inner boundary points for specific gfs.
     register_CFunction_apply_bcs_outerextrap_and_inner_specific_gfs()
 
