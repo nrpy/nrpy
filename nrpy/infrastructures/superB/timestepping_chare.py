@@ -1485,7 +1485,7 @@ def output_timestepping_ci(
                 neg_ghost_type = z_neg_ghost_type
                 nchare_var = "commondata.Nchare2"
                 grid_split_direction = "TOP_BOTTOM"
-                
+
             file_output_str += generate_send_neighbor_data_code(
                 "DIAGNOSTIC_OUTPUT_GFS", grid_split_direction
             )
