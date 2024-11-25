@@ -522,7 +522,7 @@ switch (type_gfs) {
     switch_cases = []
     for gf in gf_list:
         switch_cases.append(f"  case {gf.upper()}:")
-        if gf not in ('auxevol_gfs', 'diagnostic_output_gfs'):
+        if gf not in ("auxevol_gfs", "diagnostic_output_gfs"):
             switch_cases.append(
                 f"    gfs = griddata_chare[grid].gridfuncs.{gf.lower()};"
             )
