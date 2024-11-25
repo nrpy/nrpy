@@ -78,7 +78,10 @@ params_chare->Nxx_plus_2NGHOSTS2 = params_chare->Nxx2 + 2*NGHOSTS;
     for minmax in ["min", "max"]:
         for dirn in range(3):
             param_dir = f"params_chare->xx{minmax}{dirn}"
-            body += f"{param_dir} = params->xx{minmax}{dirn} + (params->dxx{dirn} * (REAL)(params_chare->Nxx{dirn} * chare_index[{dirn}]));\n"
+            if minmax == "min":
+                body += f"{param_dir} = params->xx{minmax}{dirn} + (params->dxx{dirn} * (REAL)(params_chare->Nxx{dirn} * chare_index[{dirn}]));\n"
+            else:
+                body += f"{param_dir} = params->xx{minmax}{dirn} - (params->dxx{dirn} * (REAL)(params_chare->Nxx{dirn} * (Nchare{dirn} - 1 - chare_index[{dirn}])));\n"
 
     body += r"""
 
