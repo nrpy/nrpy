@@ -1117,10 +1117,18 @@ void Timestepping::contribute_localsums_for_psi4_decomp(sectionBcastMsg *msg, co
   delete msg;
 }
 
-// section creation for reduction along section of chares for psi4 integration along theta and phi
+
 void Timestepping::create_section() {
-  secProxy = CProxySection_Timestepping::ckNew(thisProxy.ckGetArrayID(), thisIndex.x, thisIndex.x, 1, 0, commondata.Nchare1 - 1, 1, 0,
+  const int grid = 0;
+  if (strstr(griddata_chare[grid].params.CoordSystemName, "Spherical") != NULL) {
+    // section creation for reduction along section of chares for psi4 integration along theta and phi for spherical-like coords
+    secProxy = CProxySection_Timestepping::ckNew(thisProxy.ckGetArrayID(), thisIndex.x, thisIndex.x, 1, 0, commondata.Nchare1 - 1, 1, 0,
                                                      commondata.Nchare2 - 1, 1);
+  } else {
+    // for cylindrical-like coords, the reduction is over all chares
+    secProxy = CProxySection_Timestepping::ckNew(thisProxy.ckGetArrayID(), 0, commondata.Nchare0 - 1, 1, 0, commondata.Nchare1 - 1, 1, 0,
+                                               commondata.Nchare2 - 1, 1);
+  }
 }
 """
 
