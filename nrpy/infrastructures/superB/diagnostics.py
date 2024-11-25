@@ -829,13 +829,13 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
   const REAL src_dxx1 = params_chare->dxx2;
   const int src_Nxx_plus_2NGHOSTS0 = Nxx_plus_2NGHOSTS0chare;
   const int src_Nxx_plus_2NGHOSTS1 = Nxx_plus_2NGHOSTS2chare;
-  REAL *restrict src_x0x1[2];
-  src_x0x1[0] = (REAL *restrict)malloc(sizeof(REAL) * src_Nxx_plus_2NGHOSTS0);
-  src_x0x1[1] = (REAL *restrict)malloc(sizeof(REAL) * src_Nxx_plus_2NGHOSTS1);
+  REAL *restrict src_x0x1[3];
+  src_x0x1[1] = (REAL *restrict)malloc(sizeof(REAL) * src_Nxx_plus_2NGHOSTS0);
+  src_x0x1[2] = (REAL *restrict)malloc(sizeof(REAL) * src_Nxx_plus_2NGHOSTS1);
   for (int j = 0; j < Nxx_plus_2NGHOSTS0chare; j++)
-    src_x0x1[0][j] = xx_chare[0][j];
+    src_x0x1[1][j] = xx_chare[0][j];
   for (int j = 0; j < Nxx_plus_2NGHOSTS2chare; j++)
-    src_x0x1[1][j] = xx_chare[2][j];
+    src_x0x1[2][j] = xx_chare[2][j];
   const int total_size = src_Nxx_plus_2NGHOSTS0 * src_Nxx_plus_2NGHOSTS1;
   REAL *restrict src_gf_psi4r  = (REAL *)malloc(sizeof(REAL) * total_size); //with shape [src_Nxx_plus_2NGHOSTS0 * src_Nxx_plus_2NGHOSTS1]
   REAL *restrict src_gf_psi4i  = (REAL *)malloc(sizeof(REAL) * total_size); //with shape [src_Nxx_plus_2NGHOSTS0 * src_Nxx_plus_2NGHOSTS1]
@@ -932,8 +932,8 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
   } // end for loop over all R_ext
   free(src_gf_psi4r);
   free(src_gf_psi4i);
-  free(src_x0x1[0]);
   free(src_x0x1[1]);
+  free(src_x0x1[2]);
 """
 
     cfc.register_CFunction(
