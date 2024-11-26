@@ -318,10 +318,10 @@ def c_codegen(
     <BLANKLINE>
     >>> print(c_codegen(x**5 + x**3 + x - 1/x, "REAL_SIMD_ARRAY blah", include_braces=False, verbose=False, enable_simd=True))
     static const double dbl_Integer_1 = 1.0;
-    const MAYBE_UNUSED REAL_SIMD_ARRAY _Integer_1 = ConstSIMD(dbl_Integer_1);
+    MAYBE_UNUSED const REAL_SIMD_ARRAY _Integer_1 = ConstSIMD(dbl_Integer_1);
     <BLANKLINE>
     static const double dbl_NegativeOne_ = -1.0;
-    const MAYBE_UNUSED REAL_SIMD_ARRAY _NegativeOne_ = ConstSIMD(dbl_NegativeOne_);
+    MAYBE_UNUSED const REAL_SIMD_ARRAY _NegativeOne_ = ConstSIMD(dbl_NegativeOne_);
     <BLANKLINE>
     REAL_SIMD_ARRAY blah = FusedMulAddSIMD(MulSIMD(x, x), x, FusedMulAddSIMD(MulSIMD(MulSIMD(MulSIMD(x, x), x), x), x, SubSIMD(x, DivSIMD(_Integer_1, x))));
     <BLANKLINE>
