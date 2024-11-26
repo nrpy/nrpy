@@ -680,8 +680,8 @@ def c_codegen(
                 # Workaround for possibly unused NegativeOne SIMD variables.
                 maybe_unused = " "
                 if varname.endswith("NegativeOne_") or varname.endswith("Integer_1"):
-                    maybe_unused = " MAYBE_UNUSED "
-                simd_RATIONAL_decls += f"const{maybe_unused}REAL_SIMD_ARRAY {varname} = ConstSIMD(dbl{varname});\n"
+                    maybe_unused = "MAYBE_UNUSED "
+                simd_RATIONAL_decls += f"{maybe_unused}const REAL_SIMD_ARRAY {varname} = ConstSIMD(dbl{varname});\n"
                 simd_RATIONAL_decls += "\n"
 
     # Step 6: Construct final output string
