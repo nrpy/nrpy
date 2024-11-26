@@ -257,7 +257,8 @@ superBnumericalgrids.register_CFunctions(
 )
 charecomm.chare_comm_register_C_functions(list_of_CoordSystems=[CoordSystem])
 superBcbc.CurviBoundaryConditions_register_C_functions(
-    list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order,
+    list_of_CoordSystems=[CoordSystem],
+    radiation_BC_fd_order=radiation_BC_fd_order,
     set_parity_on_aux=True,
 )
 
@@ -390,7 +391,11 @@ superBMakefile.output_CFunctions_function_prototypes_and_construct_Makefile(
     exec_or_library_name=project_name,
     compiler_opt_option="default",
     addl_CFLAGS=["$(shell gsl-config --cflags)", "-fpermissive "],
-    addl_libraries=["$(shell gsl-config --libs)", "-module CkIO", "$(USER_LIB_PATH) -lBHaHAHA"],
+    addl_libraries=[
+        "$(shell gsl-config --libs)",
+        "-module CkIO",
+        "$(USER_LIB_PATH) -lBHaHAHA",
+    ],
     CC="charmc",
 )
 print(
