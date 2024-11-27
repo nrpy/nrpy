@@ -891,7 +891,7 @@ def create_rk_substep_constants(num_steps: int) -> str:
     return "\n".join(f"#define RK_SUBSTEP_K{s+1} {s+1}" for s in range(num_steps))
 
 
-def register_CFunction_MoL_sync_data_defines() -> Tuple[int, int]:
+def register_CFunction_MoL_sync_data_defines() -> Tuple[int, int, int]:
     """
     Register the CFunction 'MoL_sync_data_defines'.
     This function sets up data required for communicating gfs between chares.
