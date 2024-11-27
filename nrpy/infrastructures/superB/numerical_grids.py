@@ -172,6 +172,8 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
         body += "// (curvilinear boundary conditions bcstruct disabled)\n"
 
     body += r"""
+  // Initialize the diagnostics struct with zero
+  griddata_chare[grid].diagnosticstruct = (diagnostic_struct){0};
   // 1D diagnostics set up
   diagnosticstruct_set_up_nearest_1d_y_axis(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index, &griddata_chare[grid].diagnosticstruct);
   diagnosticstruct_set_up_nearest_1d_z_axis(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index, &griddata_chare[grid].diagnosticstruct);
