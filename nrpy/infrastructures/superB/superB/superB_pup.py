@@ -309,33 +309,37 @@ void pup_diagnostic_struct(PUP::er &p, diagnostic_struct &ds) {
 
   p | ds.tot_N_shell_pts_chare;
   p | ds.dtheta;
-  if (p.isUnpacking()) {
-    ds.N_shell_pts_chare = (int *restrict)malloc(sizeof(int) * ds.num_of_R_exts_chare);
-    ds.N_theta_shell_chare = (int *restrict)malloc(sizeof(int) * ds.num_of_R_exts_chare);
+  if (ds.N_shell_pts_chare != NULL) {
+    PUParray(p, ds.N_shell_pts_chare, ds.num_of_R_exts_chare);
   }
-  PUParray(p, ds.N_shell_pts_chare, ds.num_of_R_exts_chare);
-  PUParray(p, ds.N_theta_shell_chare, ds.num_of_R_exts_chare);
+  if (ds.N_theta_shell_chare != NULL) {
+    PUParray(p, ds.N_theta_shell_chare, ds.num_of_R_exts_chare);
+  }
   if (p.isUnpacking()) {
-    ds.theta_shell_chare = (REAL **restrict)malloc(sizeof(REAL *) * ds.num_of_R_exts_chare);
+    ds.theta_shell_chare = (REAL * *restrict)malloc(sizeof(REAL *) * ds.num_of_R_exts_chare);
     for (int i = 0; i < ds.num_of_R_exts_chare; i++) {
       ds.theta_shell_chare[i] = (REAL *restrict)malloc(sizeof(REAL) * ds.N_theta_shell_chare[i]);
     }
   }
-  for (int i = 0; i < ds.num_of_R_exts_chare; i++) {
-    PUParray(p, ds.theta_shell_chare[i], ds.N_theta_shell_chare[i]);
+  if (ds.theta_shell_chare != NULL) {
+    for (int i = 0; i < ds.num_of_R_exts_chare; i++) {
+      PUParray(p, ds.theta_shell_chare[i], ds.N_theta_shell_chare[i]);
+    }
   }
   if (p.isUnpacking()) {
-    ds.xx_shell_chare = (REAL ***restrict)malloc(sizeof(REAL **) * ds.num_of_R_exts_chare);
+    ds.xx_shell_chare = (REAL * **restrict)malloc(sizeof(REAL **) * ds.num_of_R_exts_chare);
     for (int i = 0; i < ds.num_of_R_exts_chare; i++) {
-      ds.xx_shell_chare[i] = (REAL **restrict)malloc(sizeof(REAL *) * ds.N_shell_pts_chare[i]);
+      ds.xx_shell_chare[i] = (REAL * *restrict)malloc(sizeof(REAL *) * ds.N_shell_pts_chare[i]);
       for (int j = 0; j < ds.N_shell_pts_chare[i]; j++) {
         ds.xx_shell_chare[i][j] = (REAL *restrict)malloc(sizeof(REAL) * 3);
       }
     }
   }
-  for (int i = 0; i < ds.num_of_R_exts_chare; i++) {
-    for (int j = 0; j < ds.N_shell_pts_chare[i]; j++) {
-      PUParray(p, ds.xx_shell_chare[i][j], 3);
+  if (ds.xx_shell_chare != NULL) {
+    for (int i = 0; i < ds.num_of_R_exts_chare; i++) {
+      for (int j = 0; j < ds.N_shell_pts_chare[i]; j++) {
+        PUParray(p, ds.xx_shell_chare[i][j], 3);
+      }
     }
   }
 
