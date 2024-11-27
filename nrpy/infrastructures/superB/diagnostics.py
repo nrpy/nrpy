@@ -568,7 +568,6 @@ if (which_output == OUTPUT_PSI4) {
 
 def register_CFunction_psi4_spinweightm2_decomposition_on_sphlike_grids() -> None:
     """Register C function for decomposing psi4 into spin-weighted spherical harmonics."""
-
     prefunc = r"""
 static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1, const int Nxx_plus_2NGHOSTS2, const REAL dxx1, const REAL dxx2,
                                                     const int swm2sh_maximum_l_mode_to_compute, const REAL curr_time, const REAL R_ext,
@@ -742,7 +741,6 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
 
 def register_CFunction_psi4_spinweightm2_decomposition_on_cylindlike_grids() -> None:
     """Register C function for decomposing psi4 into spin-weighted spherical harmonics."""
-
     prefunc = r"""
 extern "C" {
 int bah_interpolation_2d_general__uniform_src_grid(const int N_interp_GHOSTS, const REAL src_dxx0, const REAL src_dxx1,
