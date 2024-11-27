@@ -111,7 +111,7 @@ In SinhSymTP, this will be at i0_min,i1_mid,i2_mid (i2 == phi doesn't matter).""
     body = rf"""
 // Unpack grid function pointers from gridfuncs struct
 const REAL *restrict y_n_gfs = gridfuncs->y_n_gfs;
-const MAYBE_UNUSED REAL *restrict auxevol_gfs = gridfuncs->auxevol_gfs;
+MAYBE_UNUSED const REAL *restrict auxevol_gfs = gridfuncs->auxevol_gfs;
 const REAL *restrict diagnostic_output_gfs = gridfuncs->diagnostic_output_gfs;
 
 // Output to file diagnostic quantities at grid's *physical* center.
@@ -198,7 +198,7 @@ def register_CFunction_diagnostics_nearest_1d_axis(
     body = rf"""
 // Unpack grid function pointers from gridfuncs struct
 const REAL *restrict y_n_gfs = gridfuncs->y_n_gfs;
-const MAYBE_UNUSED REAL *restrict auxevol_gfs = gridfuncs->auxevol_gfs;
+MAYBE_UNUSED const REAL *restrict auxevol_gfs = gridfuncs->auxevol_gfs;
 const REAL *restrict diagnostic_output_gfs = gridfuncs->diagnostic_output_gfs;
 
 // Prepare output filename based on 1D axis
@@ -279,7 +279,7 @@ def register_CFunction_diagnostics_nearest_2d_plane(
     body = rf"""
 // Unpack grid function pointers from gridfuncs struct
 const REAL *restrict y_n_gfs = gridfuncs->y_n_gfs;
-const MAYBE_UNUSED REAL *restrict auxevol_gfs = gridfuncs->auxevol_gfs;
+MAYBE_UNUSED const REAL *restrict auxevol_gfs = gridfuncs->auxevol_gfs;
 const REAL *restrict diagnostic_output_gfs = gridfuncs->diagnostic_output_gfs;
 
 // Prepare output filename based on 2D plane

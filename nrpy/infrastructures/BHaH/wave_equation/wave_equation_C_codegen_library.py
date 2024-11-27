@@ -250,7 +250,7 @@ def register_CFunction_diagnostics(
   if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {
     for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
       // Unpack griddata struct:
-      const MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
+      MAYBE_UNUSED const REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
       REAL *restrict diagnostic_output_gfs = griddata[grid].gridfuncs.diagnostic_output_gfs;
       REAL *restrict xx[3];
       for (int ww = 0; ww < 3; ww++)

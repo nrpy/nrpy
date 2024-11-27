@@ -28,7 +28,7 @@ def register_CFunction_read_checkpoint(
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "unistd.h"]
     prefunc = r"""
-#define FREAD(ptr, size, nmemb, stream) { const MAYBE_UNUSED int numitems=fread((ptr), (size), (nmemb), (stream)); }
+#define FREAD(ptr, size, nmemb, stream) { MAYBE_UNUSED const int numitems=fread((ptr), (size), (nmemb), (stream)); }
 """
     desc = "Read a checkpoint file"
     cfunc_type = "int"

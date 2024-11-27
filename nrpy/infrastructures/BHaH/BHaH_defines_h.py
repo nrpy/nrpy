@@ -197,7 +197,9 @@ def output_BHaH_defines_h(
     _a * _a; \
 }})
 #ifndef MAYBE_UNUSED
-#if defined(__GNUC__) || defined(__clang__) || defined(__NVCC__)
+#if __cplusplus >= 201703L
+#define MAYBE_UNUSED [[maybe_unused]]
+#elif defined(__GNUC__) || defined(__clang__) || defined(__NVCC__)
 #define MAYBE_UNUSED __attribute__((unused))
 #else
 #define MAYBE_UNUSED
