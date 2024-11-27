@@ -1112,7 +1112,14 @@ void Timestepping::contribute_localsums_for_psi4_decomp(sectionBcastMsg *msg, co
   }
 
   CkGetSectionInfo(cookie, msg);
-  CkCallback cb(CkIndex_Timestepping::report_sums_for_psi4_diagnostics(NULL), thisProxy[CkArrayIndex3D(thisIndex.x, 0, 0)]);
+  CkCallback cb;
+  if (strstr(griddata_chare[grid].params.CoordSystemName, "Spherical") != NULL) {
+    // for spherical-like coords, cb to chare thisindex.x, 0, 0
+    cb = CkCallback(CkIndex_Timestepping::report_sums_for_psi4_diagnostics(NULL), thisProxy[CkArrayIndex3D(thisIndex.x, 0, 0)]);
+  } else {
+    // for cylindrical-like coords, cb to chare 0, 0, 0
+    cb = CkCallback(CkIndex_Timestepping::report_sums_for_psi4_diagnostics(NULL), thisProxy[CkArrayIndex3D(0, 0, 0)]);
+  }
   CProxySection_Timestepping::contribute(outdoubles, CkReduction::sum_double, cookie, cb);
   delete msg;
 }
