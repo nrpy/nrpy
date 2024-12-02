@@ -1456,7 +1456,8 @@ def output_timestepping_ci(
                                              commondata.time) < 0.5 * commondata.dt;"""
         file_output_str += r"""
             }"""
-    file_output_str += """// Step 5.a: Main loop, part 1: Output diagnostics"""
+    file_output_str += """
+         // Step 5.a: Main loop, part 1: Output diagnostics"""
     if enable_psi4_diagnostics:
         file_output_str += r"""
         // psi4 diagnostics
@@ -1501,11 +1502,20 @@ def output_timestepping_ci(
             )
 
         file_output_str += """
-            }
-            serial {
-              if(thisIndex.y == 0 && thisIndex.z == 0) {
-                sectionBcastMsg *msg = new sectionBcastMsg(1);
-                secProxy.recvMsg_to_contribute_localsums_for_psi4_decomp(msg);
+              // chare 0, 0, 0 sends msg to contribute to section reduction
+              serial {
+                if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
+                  sectionBcastMsg *msg = new sectionBcastMsg(1);
+                  secProxy.recvMsg_to_contribute_localsums_for_psi4_decomp(msg);
+                }
+              }
+            } else {
+              // chare thisindex.x, 0, 0 sends msg to contribute to section reduction
+              serial {
+                if (thisIndex.y == 0 && thisIndex.z == 0) {
+                  sectionBcastMsg *msg = new sectionBcastMsg(1);
+                  secProxy.recvMsg_to_contribute_localsums_for_psi4_decomp(msg);
+                }
               }
             }
           }
