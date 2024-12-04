@@ -744,7 +744,8 @@ Timestepping::~Timestepping() {
     for(int ng=0;ng<NGHOSTS*3;ng++) {
      free(griddata[grid].bcstruct.pure_outer_bc_array[ng]);
      free(griddata_chare[grid].bcstruct.pure_outer_bc_array[ng]);
-    }
+    }"""
+    file_output_str += r"""
     for(int i=0;i<3;i++) {
       free(griddata[grid].xx[i]);
       free(griddata_chare[grid].xx[i]);
@@ -768,17 +769,14 @@ Timestepping::~Timestepping() {
     free(griddata_chare[grid].diagnosticstruct.locali0_diagnostic_2d_yz_pt);
     free(griddata_chare[grid].diagnosticstruct.locali1_diagnostic_2d_yz_pt);
     free(griddata_chare[grid].diagnosticstruct.locali2_diagnostic_2d_yz_pt);
-    free(griddata_chare[grid].diagnosticstruct.offset_diagnostic_2d_yz_pt);
-    if (griddata_chare[grid].diagnosticstruct.list_of_R_exts_chare != NULL) {
-      free(griddata_chare[grid].diagnosticstruct.list_of_R_exts_chare);
-    }
-    if (griddata_chare[grid].diagnosticstruct.localsums_for_psi4_decomp != NULL) {
-      free(griddata_chare[grid].diagnosticstruct.localsums_for_psi4_decomp);
-    }
-    if (griddata_chare[grid].diagnosticstruct.globalsums_for_psi4_decomp != NULL) {
-      free(griddata_chare[grid].diagnosticstruct.globalsums_for_psi4_decomp);
-    }
-    if (griddata_chare[grid].diagnosticstruct.xx_shell_chare != NULL) {
+    free(griddata_chare[grid].diagnosticstruct.offset_diagnostic_2d_yz_pt);"""
+    if enable_psi4_diagnostics:
+        file_output_str += r"""
+    free(griddata_chare[grid].diagnosticstruct.list_of_R_exts_chare);
+    free(griddata_chare[grid].diagnosticstruct.localsums_for_psi4_decomp);
+    free(griddata_chare[grid].diagnosticstruct.globalsums_for_psi4_decomp);
+    
+    if (strstr(griddata_chare[grid].params.CoordSystemName, "Cylindrical") != NULL) {
       for (int i = 0; i < griddata_chare[grid].diagnosticstruct.num_of_R_exts_chare; i++) {
         if (griddata_chare[grid].diagnosticstruct.xx_shell_chare[i] != NULL) {
           for (int j = 0; j < griddata_chare[grid].diagnosticstruct.N_shell_pts_chare[i]; j++) {
@@ -790,21 +788,17 @@ Timestepping::~Timestepping() {
         }
       }
       free(griddata_chare[grid].diagnosticstruct.xx_shell_chare);
-    }
-    if (griddata_chare[grid].diagnosticstruct.theta_shell_chare != NULL) {
       for (int i = 0; i < griddata_chare[grid].diagnosticstruct.num_of_R_exts_chare; i++) {
         if (griddata_chare[grid].diagnosticstruct.theta_shell_chare[i] != NULL) {
           free(griddata_chare[grid].diagnosticstruct.theta_shell_chare[i]);
         }
       }
       free(griddata_chare[grid].diagnosticstruct.theta_shell_chare);
-    }
-    if (griddata_chare[grid].diagnosticstruct.N_shell_pts_chare != NULL) {
       free(griddata_chare[grid].diagnosticstruct.N_shell_pts_chare);
-    }
-    if (griddata_chare[grid].diagnosticstruct.N_theta_shell_chare != NULL) {
       free(griddata_chare[grid].diagnosticstruct.N_theta_shell_chare);
-    }
+    }        
+    """
+    file_output_str += r"""
     free(griddata_chare[grid].charecommstruct.globalidx3pt_to_chareidx3);
     free(griddata_chare[grid].charecommstruct.globalidx3pt_to_localidx3pt);
     free(griddata_chare[grid].charecommstruct.localidx3pt_to_globalidx3pt);
