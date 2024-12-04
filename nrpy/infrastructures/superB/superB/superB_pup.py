@@ -19,12 +19,14 @@ from nrpy.infrastructures.BHaH.rfm_precompute import ReferenceMetricPrecompute
 def register_CFunction_superB_pup_routines(
     list_of_CoordSystems: List[str],
     MoL_method: str = "RK4",
+    enable_psi4_diagnostics: bool = False,
 ) -> None:
     """
     Register C function superB_pup_routines(), a collection of Pack Un-Pack (PUP) for structs. PUP routines are used for checkpointing and load balancing in Charm++.
 
     :param list_of_CoordSystems: List of coordinate systems to register the C functions.
     :param MoL_method: The method to be used for MoL. Default is 'RK4'.
+    :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     """
     desc = "superB_pup_routines.cpp from superB. Note that this cpp file is just a collection of PUP functions. superB_pup_routines() is unused."
     # prefunc contains most of the source code
@@ -260,10 +262,11 @@ void pup_charecomm_struct(PUP::er &p, charecomm_struct &cc, const params_struct 
   PUParray(p, cc.globalidx3pt_to_chareidx3, ntot);
   PUParray(p, cc.globalidx3pt_to_localidx3pt, ntot);
   PUParray(p, cc.localidx3pt_to_globalidx3pt, ntotchare);
-}
+}"""
 
+    prefunc += """
 // PUP routine for struct diagnostic_struct
-void pup_diagnostic_struct(PUP::er &p, diagnostic_struct &ds) {
+void pup_diagnostic_struct(PUP::er &p, diagnostic_struct &ds, const params_struct &params_chare) {
   p | ds.num_output_quantities;
   p | ds.tot_num_diagnostic_1d_y_pts;
   p | ds.tot_num_diagnostic_1d_z_pts;
@@ -273,10 +276,7 @@ void pup_diagnostic_struct(PUP::er &p, diagnostic_struct &ds) {
   p | ds.num_diagnostic_1d_z_pts;
   p | ds.num_diagnostic_2d_xy_pts;
   p | ds.num_diagnostic_2d_yz_pts;
-  p | ds.num_of_R_exts_chare;
-  p | ds.psi4_spinweightm2_sph_harmonics_max_l;
-  p | ds.length_localsums_for_psi4_decomp;
-
+  
   if (p.isUnpacking()) {
     ds.localidx3_diagnostic_1d_y_pt = (int *restrict)malloc(sizeof(int) * ds.num_diagnostic_1d_y_pts);
     ds.locali0_diagnostic_1d_y_pt = (int *restrict)malloc(sizeof(int) * ds.num_diagnostic_1d_y_pts);
@@ -301,46 +301,6 @@ void pup_diagnostic_struct(PUP::er &p, diagnostic_struct &ds) {
     ds.locali1_diagnostic_2d_yz_pt = (int *restrict)malloc(sizeof(int) * ds.num_diagnostic_2d_yz_pts);
     ds.locali2_diagnostic_2d_yz_pt = (int *restrict)malloc(sizeof(int) * ds.num_diagnostic_2d_yz_pts);
     ds.offset_diagnostic_2d_yz_pt = (int *restrict)malloc(sizeof(int) * ds.num_diagnostic_2d_yz_pts);
-
-    ds.list_of_R_exts_chare = (REAL *restrict)malloc(sizeof(REAL) * ds.num_of_R_exts_chare);
-    ds.localsums_for_psi4_decomp = (REAL *restrict)malloc(sizeof(REAL) * ds.length_localsums_for_psi4_decomp);
-    ds.globalsums_for_psi4_decomp = (REAL *restrict)malloc(sizeof(REAL) * ds.length_localsums_for_psi4_decomp);
-  }
-
-  p | ds.tot_N_shell_pts_chare;
-  p | ds.dtheta;
-  if (ds.N_shell_pts_chare != NULL) {
-    PUParray(p, ds.N_shell_pts_chare, ds.num_of_R_exts_chare);
-  }
-  if (ds.N_theta_shell_chare != NULL) {
-    PUParray(p, ds.N_theta_shell_chare, ds.num_of_R_exts_chare);
-  }
-  if (p.isUnpacking()) {
-    ds.theta_shell_chare = (REAL * *restrict)malloc(sizeof(REAL *) * ds.num_of_R_exts_chare);
-    for (int i = 0; i < ds.num_of_R_exts_chare; i++) {
-      ds.theta_shell_chare[i] = (REAL *restrict)malloc(sizeof(REAL) * ds.N_theta_shell_chare[i]);
-    }
-  }
-  if (ds.theta_shell_chare != NULL) {
-    for (int i = 0; i < ds.num_of_R_exts_chare; i++) {
-      PUParray(p, ds.theta_shell_chare[i], ds.N_theta_shell_chare[i]);
-    }
-  }
-  if (p.isUnpacking()) {
-    ds.xx_shell_chare = (REAL * **restrict)malloc(sizeof(REAL **) * ds.num_of_R_exts_chare);
-    for (int i = 0; i < ds.num_of_R_exts_chare; i++) {
-      ds.xx_shell_chare[i] = (REAL * *restrict)malloc(sizeof(REAL *) * ds.N_shell_pts_chare[i]);
-      for (int j = 0; j < ds.N_shell_pts_chare[i]; j++) {
-        ds.xx_shell_chare[i][j] = (REAL *restrict)malloc(sizeof(REAL) * 3);
-      }
-    }
-  }
-  if (ds.xx_shell_chare != NULL) {
-    for (int i = 0; i < ds.num_of_R_exts_chare; i++) {
-      for (int j = 0; j < ds.N_shell_pts_chare[i]; j++) {
-        PUParray(p, ds.xx_shell_chare[i][j], 3);
-      }
-    }
   }
 
   PUParray(p, ds.localidx3_diagnostic_1d_y_pt, ds.num_diagnostic_1d_y_pts);
@@ -366,17 +326,63 @@ void pup_diagnostic_struct(PUP::er &p, diagnostic_struct &ds) {
   PUParray(p, ds.locali1_diagnostic_2d_yz_pt, ds.num_diagnostic_2d_yz_pts);
   PUParray(p, ds.locali2_diagnostic_2d_yz_pt, ds.num_diagnostic_2d_yz_pts);
   PUParray(p, ds.offset_diagnostic_2d_yz_pt, ds.num_diagnostic_2d_yz_pts);
-
-  PUParray(p, ds.list_of_R_exts_chare, ds.num_of_R_exts_chare);
-  PUParray(p, ds.localsums_for_psi4_decomp, ds.length_localsums_for_psi4_decomp);
-  PUParray(p, ds.globalsums_for_psi4_decomp, ds.length_localsums_for_psi4_decomp);
-
+  
   PUParray(p, ds.filename_1d_y, 256);
   PUParray(p, ds.filename_1d_z, 256);
   PUParray(p, ds.filename_2d_xy, 256);
   PUParray(p, ds.filename_2d_yz, 256);
-}
+"""
+  
+    if enable_psi4_diagnostics:
+        prefunc += r"""
+  p | ds.num_of_R_exts_chare;
+  p | ds.psi4_spinweightm2_sph_harmonics_max_l;
+  p | ds.length_localsums_for_psi4_decomp;
+  
+  if (p.isUnpacking()) {  
+    ds.list_of_R_exts_chare = (REAL *restrict)malloc(sizeof(REAL) * ds.num_of_R_exts_chare);
+    ds.localsums_for_psi4_decomp = (REAL *restrict)malloc(sizeof(REAL) * ds.length_localsums_for_psi4_decomp);
+    ds.globalsums_for_psi4_decomp = (REAL *restrict)malloc(sizeof(REAL) * ds.length_localsums_for_psi4_decomp);
+  }
+  PUParray(p, ds.list_of_R_exts_chare, ds.num_of_R_exts_chare);
+  
+  if (strstr(params_chare.CoordSystemName, "Cylindrical") != NULL) {    
+    p | ds.tot_N_shell_pts_chare;
+    p | ds.dtheta;
+    if (p.isUnpacking()) {  
+      ds.N_shell_pts_chare = (int *restrict)malloc(sizeof(int) * ds.num_of_R_exts_chare);
+      ds.N_theta_shell_chare = (int *restrict)malloc(sizeof(int) * ds.num_of_R_exts_chare);
+      ds.xx_shell_chare = (REAL ***restrict)malloc(ds.num_of_R_exts_chare * sizeof(REAL **));
+      ds.theta_shell_chare = (REAL **restrict)malloc(ds.num_of_R_exts_chare * sizeof(REAL *));
+    }    
+    PUParray(p, ds.N_shell_pts_chare, ds.num_of_R_exts_chare);
+    PUParray(p, ds.N_theta_shell_chare, ds.num_of_R_exts_chare);
+    if (p.isUnpacking()) {
+      ds.theta_shell_chare = (REAL * *restrict)malloc(sizeof(REAL *) * ds.num_of_R_exts_chare);
+      for (int i = 0; i < ds.num_of_R_exts_chare; i++) {
+        ds.theta_shell_chare[i] = (REAL *restrict)malloc(sizeof(REAL) * ds.N_theta_shell_chare[i]);
+      }
+      ds.xx_shell_chare = (REAL * **restrict)malloc(sizeof(REAL **) * ds.num_of_R_exts_chare);
+      for (int i = 0; i < ds.num_of_R_exts_chare; i++) {
+        ds.xx_shell_chare[i] = (REAL * *restrict)malloc(sizeof(REAL *) * ds.N_shell_pts_chare[i]);
+        for (int j = 0; j < ds.N_shell_pts_chare[i]; j++) {
+          ds.xx_shell_chare[i][j] = (REAL *restrict)malloc(sizeof(REAL) * 3);
+        }
+      }
+    }
+    for (int i = 0; i < ds.num_of_R_exts_chare; i++) {
+      for (int j = 0; j < ds.N_shell_pts_chare[i]; j++) {
+        PUParray(p, ds.xx_shell_chare[i][j], 3);
+      }
+    }
+     for (int i = 0; i < ds.num_of_R_exts_chare; i++) {
+      PUParray(p, ds.theta_shell_chare[i], ds.N_theta_shell_chare[i]);
+    }
+  }"""
+    prefunc += r"""
+}"""
 
+    prefunc += """
 // PUP routine for struct tmpBuffers_struct
 void pup_tmpBuffers_struct(PUP::er &p, tmpBuffers_struct &tmpBuffers, const params_struct &params, const nonlocalinnerbc_struct &nonlocalinnerbc, const MoL_gridfunctions_struct &gridfuncs) {
   const int Nxx_plus_2NGHOSTS_face0 = params.Nxx_plus_2NGHOSTS1 * params.Nxx_plus_2NGHOSTS2;
@@ -490,7 +496,7 @@ void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const params_struct &pa
   PUParray(p, gd.xx[1], gd.params.Nxx_plus_2NGHOSTS1);
   PUParray(p, gd.xx[2], gd.params.Nxx_plus_2NGHOSTS2);
 
-  pup_diagnostic_struct(p, gd.diagnosticstruct);
+  pup_diagnostic_struct(p, gd.diagnosticstruct, gd.params);
 
   pup_charecomm_struct(p, gd.charecommstruct, params, gd.params);
 
