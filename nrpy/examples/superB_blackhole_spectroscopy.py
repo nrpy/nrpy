@@ -125,7 +125,7 @@ if "Spherical" in CoordSystem:
     if CoordSystem == "SinhSpherical":
         sinh_width = 0.2
 if "Cylindrical" in CoordSystem:
-    par.set_parval_from_str("symmetry_axes", "1")    
+    par.set_parval_from_str("symmetry_axes", "1")
     par.adjust_CodeParam_default("CFL_FACTOR", 0.5)
     OMP_collapse = 2  # might be slightly faster
     if CoordSystem == "SinhCylindrical":
