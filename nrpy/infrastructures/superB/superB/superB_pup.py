@@ -243,8 +243,12 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
         # Don't malloc a zero-sized array.
         if num_gfs == "NUM_AUXEVOL_GFS":
             prefunc += "  if(NUM_AUXEVOL_GFS > 0) "
-        prefunc += f"PUParray(p, gridfuncs.{gridfunctions}, {num_gfs} * Nxx_plus_2NGHOSTS_tot);\n"
-    prefunc += "PUParray(p, gridfuncs.diagnostic_output_gfs, NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);\n"
+        if gridfunctions in ["y_n_gfs", "auxevol_gfs"]:
+            prefunc += f"PUParray(p, gridfuncs.{gridfunctions}, {num_gfs} * Nxx_plus_2NGHOSTS_tot);\n"
+        else:
+            prefunc += f"//PUParray(p, gridfuncs.{gridfunctions}, {num_gfs} * Nxx_plus_2NGHOSTS_tot);\n"
+
+    prefunc += "//PUParray(p, gridfuncs.diagnostic_output_gfs, NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);\n"
     prefunc += """
 }
 """
@@ -332,7 +336,7 @@ void pup_diagnostic_struct(PUP::er &p, diagnostic_struct &ds, const params_struc
   PUParray(p, ds.filename_2d_xy, 256);
   PUParray(p, ds.filename_2d_yz, 256);
 """
-  
+
     if enable_psi4_diagnostics:
         prefunc += r"""
   p | ds.num_of_R_exts_chare;
@@ -397,9 +401,9 @@ void pup_tmpBuffers_struct(PUP::er &p, tmpBuffers_struct &tmpBuffers, const para
     tmpBuffers.tmpBuffer_NS = (REAL *restrict)malloc(sizeof(REAL) * size_NS);
     tmpBuffers.tmpBuffer_TB = (REAL *restrict)malloc(sizeof(REAL) * size_TB);
   }
-  PUParray(p, tmpBuffers.tmpBuffer_EW, size_EW);
-  PUParray(p, tmpBuffers.tmpBuffer_NS, size_NS);
-  PUParray(p, tmpBuffers.tmpBuffer_TB, size_TB);
+  //PUParray(p, tmpBuffers.tmpBuffer_EW, size_EW);
+  //PUParray(p, tmpBuffers.tmpBuffer_NS, size_NS);
+  //PUParray(p, tmpBuffers.tmpBuffer_TB, size_TB);
   const int tot_num_dst_chares = nonlocalinnerbc.tot_num_dst_chares;
   const int tot_num_src_chares = nonlocalinnerbc.tot_num_src_chares;
   const int *num_srcpts_tosend_each_chare = nonlocalinnerbc.num_srcpts_tosend_each_chare;
@@ -414,12 +418,12 @@ void pup_tmpBuffers_struct(PUP::er &p, tmpBuffers_struct &tmpBuffers, const para
       tmpBuffers.tmpBuffer_innerbc_receiv[which_chare] = (REAL *restrict)malloc(sizeof(REAL) * max_sync_gfs * num_srcpts_each_chare[which_chare]);
     }
   }
-  for (int which_chare = 0; which_chare < tot_num_dst_chares; which_chare++) {
-    PUParray(p, tmpBuffers.tmpBuffer_innerbc_send[which_chare], max_sync_gfs * num_srcpts_tosend_each_chare[which_chare]);
-  }
-  for (int which_chare = 0; which_chare < tot_num_src_chares; which_chare++) {
-    PUParray(p, tmpBuffers.tmpBuffer_innerbc_receiv[which_chare], max_sync_gfs * num_srcpts_each_chare[which_chare]);
-  }
+  //for (int which_chare = 0; which_chare < tot_num_dst_chares; which_chare++) {
+  //  PUParray(p, tmpBuffers.tmpBuffer_innerbc_send[which_chare], max_sync_gfs * num_srcpts_tosend_each_chare[which_chare]);
+  //}
+  //for (int which_chare = 0; which_chare < tot_num_src_chares; which_chare++) {
+  //  PUParray(p, tmpBuffers.tmpBuffer_innerbc_receiv[which_chare], max_sync_gfs * num_srcpts_each_chare[which_chare]);
+  //}
 }
 
 // PUP routine for struct nonlocalinnerbc_struct
