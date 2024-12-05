@@ -395,6 +395,63 @@ def register_CFunction_MoL_free_memory_diagnostic_gfs() -> None:
         ) from e
 
 
+def register_CFunction_initialize_yn_and_non_yn_gfs_to_nan(
+    Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
+    MoL_method: str,
+) -> None:
+    """
+    Register the CFunction 'initialize_yn_and_non_yn_gfs_to_nan'.
+    This function initializes yn and non yn gfs to nan to avoid uninitialized memory errors.
+
+    :param Butcher_dict: Dictionary containing Butcher tableau data.
+    :param MoL_method: Method of Lines (MoL) method name.
+    :raises RuntimeError: If an error occurs while registering the CFunction
+    :return None
+    """
+    includes: List[str] = ["BHaH_defines.h"]
+    desc: str = "Initialize yn and non-yn gfs to nan"
+    cfunc_type: str = "void"
+    name: str = "initialize_yn_and_non_yn_gfs_to_nan"
+    params: str = (
+        "const commondata_struct *restrict commondata, const params_struct *restrict params, MoL_gridfunctions_struct *restrict gridfuncs"
+    )
+    body: str = """
+const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
+for (int i = 0; i < NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot; i++) {"""
+    # Generating gridfunction names based on the given MoL method
+    (
+        y_n_gridfunctions,
+        non_y_n_gridfunctions_list,
+        _diagnostic_gridfunctions_point_to,
+        _diagnostic_gridfunctions2_point_to,
+    ) = generate_gridfunction_names(Butcher_dict, MoL_method=MoL_method)
+    # Convert y_n_gridfunctions to a list if it's a string
+    gf_list = (
+        [y_n_gridfunctions] if isinstance(y_n_gridfunctions, str) else y_n_gridfunctions
+    )
+    gf_list.extend(non_y_n_gridfunctions_list)
+    for gf in gf_list:
+        if gf not in ("auxevol_gfs", "diagnostic_output_gfs"):
+            body += f"gridfuncs->{gf.lower()}[i] = NAN;"
+    body += """
+}"""
+
+    try:
+        cfc.register_CFunction(
+            includes=includes,
+            desc=desc,
+            cfunc_type=cfunc_type,
+            name=name,
+            params=params,
+            include_CodeParameters_h=True,
+            body=body,
+        )
+    except Exception as e:
+        raise RuntimeError(
+            f"Error registering CFunction 'initialize_yn_and_non_yn_gfs_to_nan': {str(e)}"
+        ) from e
+
+
 ########################################################################################################################
 # EXAMPLE
 # ODE: y' = f(t,y), y(t_0) = y_0
@@ -834,7 +891,7 @@ def create_rk_substep_constants(num_steps: int) -> str:
     return "\n".join(f"#define RK_SUBSTEP_K{s+1} {s+1}" for s in range(num_steps))
 
 
-def register_CFunction_MoL_sync_data_defines() -> Tuple[int, int]:
+def register_CFunction_MoL_sync_data_defines() -> Tuple[int, int, int]:
     """
     Register the CFunction 'MoL_sync_data_defines'.
     This function sets up data required for communicating gfs between chares.
@@ -846,11 +903,15 @@ def register_CFunction_MoL_sync_data_defines() -> Tuple[int, int]:
     cfunc_type: str = "void"
     name: str = "MoL_sync_data_defines"
     params: str = "MoL_gridfunctions_struct *restrict gridfuncs"
+
     sync_evol_list: List[str] = []
     num_sync_evol_gfs: int = 0
 
     sync_auxevol_list: List[str] = []
     num_sync_auxevol_gfs: int = 0
+
+    sync_aux_list: List[str] = []
+    num_sync_aux_gfs: int = 0
 
     for gf, gf_class_obj in glb_gridfcs_dict.items():
         gf_name = gf.upper()
@@ -864,11 +925,16 @@ def register_CFunction_MoL_sync_data_defines() -> Tuple[int, int]:
             elif gf_class_obj.group == "AUXEVOL":
                 num_sync_auxevol_gfs += 1
                 sync_auxevol_list.append(gf_name)
+            # sync of psi4 is needed for cylindrical-like coords
+            elif gf_class_obj.group == "AUX" and gf_name in ["PSI4_RE", "PSI4_IM"]:
+                num_sync_aux_gfs += 1
+                sync_aux_list.append(gf_name)
 
     body: str = f"""
 gridfuncs->num_evol_gfs_to_sync = {num_sync_evol_gfs};
 gridfuncs->num_auxevol_gfs_to_sync = {num_sync_auxevol_gfs};
-gridfuncs->max_sync_gfs = MAX(gridfuncs->num_evol_gfs_to_sync, gridfuncs->num_auxevol_gfs_to_sync);
+gridfuncs->num_aux_gfs_to_sync = {num_sync_aux_gfs};
+gridfuncs->max_sync_gfs = MAX3(gridfuncs->num_evol_gfs_to_sync, gridfuncs->num_auxevol_gfs_to_sync, gridfuncs->num_aux_gfs_to_sync);
 """
 
     for i, gf in enumerate(sync_evol_list):
@@ -877,6 +943,10 @@ gridfuncs->max_sync_gfs = MAX(gridfuncs->num_evol_gfs_to_sync, gridfuncs->num_au
     if num_sync_auxevol_gfs != 0:
         for i, gf in enumerate(sync_auxevol_list):
             body += f"gridfuncs->auxevol_gfs_to_sync[{i}] = {gf.upper()}GF;\n"
+
+    if num_sync_aux_gfs != 0:
+        for i, gf in enumerate(sync_aux_list):
+            body += f"gridfuncs->aux_gfs_to_sync[{i}] = {gf.upper()}GF;\n"
 
     try:
         cfc.register_CFunction(
@@ -887,7 +957,7 @@ gridfuncs->max_sync_gfs = MAX(gridfuncs->num_evol_gfs_to_sync, gridfuncs->num_au
             params=params,
             body=body,
         )
-        return num_sync_evol_gfs, num_sync_auxevol_gfs
+        return num_sync_evol_gfs, num_sync_auxevol_gfs, num_sync_aux_gfs
     except Exception as e:
         raise RuntimeError(
             f"Error registering CFunction 'MoL_malloc_diagnostic_gfs': {str(e)}"
@@ -931,10 +1001,12 @@ def register_CFunctions(
         register_CFunction_MoL_malloc(Butcher_dict, MoL_method, which_gfs)
         register_CFunction_MoL_free_memory(Butcher_dict, MoL_method, which_gfs)
 
+    register_CFunction_initialize_yn_and_non_yn_gfs_to_nan(Butcher_dict, MoL_method)
+
     register_CFunction_MoL_malloc_diagnostic_gfs()
     register_CFunction_MoL_free_memory_diagnostic_gfs()
 
-    (num_evol_gfs_to_sync, num_auxevol_gfs_to_sync) = (
+    (num_evol_gfs_to_sync, num_auxevol_gfs_to_sync, num_aux_gfs_to_sync) = (
         register_CFunction_MoL_sync_data_defines()
     )
 
@@ -968,6 +1040,9 @@ def register_CFunctions(
     )
     gf_list.extend(non_y_n_gridfunctions_list)
 
+    # Define constants for diagnostic gfs also since they do not point to other gfs in superB
+    gf_list.append("diagnostic_output_gfs")
+
     gf_constants = create_gf_constants(gf_list)
 
     rk_substep_constants = create_rk_substep_constants(
@@ -980,9 +1055,11 @@ def register_CFunctions(
         f"typedef struct __MoL_gridfunctions_struct__ {{\n"
         f"""int num_evol_gfs_to_sync;
         int num_auxevol_gfs_to_sync;
+        int num_aux_gfs_to_sync;
         int max_sync_gfs;
         int evol_gfs_to_sync[{num_evol_gfs_to_sync}];
-        int auxevol_gfs_to_sync[{num_auxevol_gfs_to_sync}];\n"""
+        int auxevol_gfs_to_sync[{num_auxevol_gfs_to_sync}];
+        int aux_gfs_to_sync[{num_aux_gfs_to_sync}];\n"""
         f"REAL *restrict {y_n_gridfunctions};\n"
         + "".join(f"REAL *restrict {gfs};\n" for gfs in non_y_n_gridfunctions_list)
         + r"""REAL *restrict diagnostic_output_gfs;

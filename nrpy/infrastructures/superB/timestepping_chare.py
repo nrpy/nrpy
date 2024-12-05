@@ -513,13 +513,16 @@ def generate_switch_statement_for_gf_types(
     )
     gf_list.extend(non_y_n_gridfunctions_list)
 
+    # Also add case for diagnostic output gfs, they are allocated separate memory for superB and do not to other gfs
+    gf_list.append("diagnostic_output_gfs")
+
     switch_statement = """
 switch (type_gfs) {
 """
     switch_cases = []
     for gf in gf_list:
         switch_cases.append(f"  case {gf.upper()}:")
-        if gf != "auxevol_gfs":
+        if gf not in ("auxevol_gfs", "diagnostic_output_gfs"):
             switch_cases.append(
                 f"    gfs = griddata_chare[grid].gridfuncs.{gf.lower()};"
             )
@@ -531,7 +534,7 @@ switch (type_gfs) {
             )
             if set_parity_types:
                 switch_cases.append("    gf_parity_types = evol_gf_parity;")
-        else:
+        elif gf == "auxevol_gfs":
             switch_cases.append(
                 f"    gfs = griddata_chare[grid].gridfuncs.{gf.lower()};"
             )
@@ -543,6 +546,18 @@ switch (type_gfs) {
             )
             if set_parity_types:
                 switch_cases.append("    gf_parity_types = auxevol_gf_parity;")
+        elif gf == "diagnostic_output_gfs":
+            switch_cases.append(
+                f"    gfs = griddata_chare[grid].gridfuncs.{gf.lower()};"
+            )
+            switch_cases.append(
+                "    NUM_GFS = griddata_chare[grid].gridfuncs.num_aux_gfs_to_sync;"
+            )
+            switch_cases.append(
+                "    gfs_to_sync = griddata_chare[grid].gridfuncs.aux_gfs_to_sync;"
+            )
+            if set_parity_types:
+                switch_cases.append("    gf_parity_types = aux_gf_parity;")
         switch_cases.append("    break;")
     switch_cases.append(
         """
@@ -684,11 +699,18 @@ Timestepping::Timestepping(CommondataObject &&inData) {
   // Allocate storage for diagnostic gridfunctions
   for(int grid=0; grid<commondata.NUMGRIDS; grid++)
     MoL_malloc_diagnostic_gfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].gridfuncs);
+"""
 
+    file_output_str += """
+  // Initialize y n and non-y n gfs to NAN to avoid uninitialized memory errors
+  for(int grid=0; grid<commondata.NUMGRIDS; grid++)
+    initialize_yn_and_non_yn_gfs_to_nan(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].gridfuncs);
+"""
+
+    file_output_str += """
   // Allocate storage for temporary buffers, needed for communicating face data
   for(int grid=0; grid<commondata.NUMGRIDS; grid++)
     timestepping_malloc_tmpBuffer(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].gridfuncs, &griddata_chare[grid].nonlocalinnerbcstruct, &griddata_chare[grid].tmpBuffers);
-
 """
     if initialize_constant_auxevol:
         file_output_str += r"""
@@ -722,7 +744,8 @@ Timestepping::~Timestepping() {
     for(int ng=0;ng<NGHOSTS*3;ng++) {
      free(griddata[grid].bcstruct.pure_outer_bc_array[ng]);
      free(griddata_chare[grid].bcstruct.pure_outer_bc_array[ng]);
-    }
+    }"""
+    file_output_str += r"""
     for(int i=0;i<3;i++) {
       free(griddata[grid].xx[i]);
       free(griddata_chare[grid].xx[i]);
@@ -746,16 +769,36 @@ Timestepping::~Timestepping() {
     free(griddata_chare[grid].diagnosticstruct.locali0_diagnostic_2d_yz_pt);
     free(griddata_chare[grid].diagnosticstruct.locali1_diagnostic_2d_yz_pt);
     free(griddata_chare[grid].diagnosticstruct.locali2_diagnostic_2d_yz_pt);
-    free(griddata_chare[grid].diagnosticstruct.offset_diagnostic_2d_yz_pt);
-    if (griddata_chare[grid].diagnosticstruct.list_of_R_exts_chare != NULL) {
-      free(griddata_chare[grid].diagnosticstruct.list_of_R_exts_chare);
-    }
-    if (griddata_chare[grid].diagnosticstruct.localsums_for_psi4_decomp != NULL) {
-      free(griddata_chare[grid].diagnosticstruct.localsums_for_psi4_decomp);
-    }
-    if (griddata_chare[grid].diagnosticstruct.globalsums_for_psi4_decomp != NULL) {
-      free(griddata_chare[grid].diagnosticstruct.globalsums_for_psi4_decomp);
-    }
+    free(griddata_chare[grid].diagnosticstruct.offset_diagnostic_2d_yz_pt);"""
+    if enable_psi4_diagnostics:
+        file_output_str += r"""
+    free(griddata_chare[grid].diagnosticstruct.list_of_R_exts_chare);
+    free(griddata_chare[grid].diagnosticstruct.localsums_for_psi4_decomp);
+    free(griddata_chare[grid].diagnosticstruct.globalsums_for_psi4_decomp);
+    
+    if (strstr(griddata_chare[grid].params.CoordSystemName, "Cylindrical") != NULL) {
+      for (int i = 0; i < griddata_chare[grid].diagnosticstruct.num_of_R_exts_chare; i++) {
+        if (griddata_chare[grid].diagnosticstruct.xx_shell_chare[i] != NULL) {
+          for (int j = 0; j < griddata_chare[grid].diagnosticstruct.N_shell_pts_chare[i]; j++) {
+            if (griddata_chare[grid].diagnosticstruct.xx_shell_chare[i][j] != NULL) {
+              free(griddata_chare[grid].diagnosticstruct.xx_shell_chare[i][j]);
+            }
+          }
+          free(griddata_chare[grid].diagnosticstruct.xx_shell_chare[i]);
+        }
+      }
+      free(griddata_chare[grid].diagnosticstruct.xx_shell_chare);
+      for (int i = 0; i < griddata_chare[grid].diagnosticstruct.num_of_R_exts_chare; i++) {
+        if (griddata_chare[grid].diagnosticstruct.theta_shell_chare[i] != NULL) {
+          free(griddata_chare[grid].diagnosticstruct.theta_shell_chare[i]);
+        }
+      }
+      free(griddata_chare[grid].diagnosticstruct.theta_shell_chare);
+      free(griddata_chare[grid].diagnosticstruct.N_shell_pts_chare);
+      free(griddata_chare[grid].diagnosticstruct.N_theta_shell_chare);
+    }        
+    """
+    file_output_str += r"""
     free(griddata_chare[grid].charecommstruct.globalidx3pt_to_chareidx3);
     free(griddata_chare[grid].charecommstruct.globalidx3pt_to_localidx3pt);
     free(griddata_chare[grid].charecommstruct.localidx3pt_to_globalidx3pt);
@@ -1063,15 +1106,30 @@ void Timestepping::contribute_localsums_for_psi4_decomp(sectionBcastMsg *msg, co
   }
 
   CkGetSectionInfo(cookie, msg);
-  CkCallback cb(CkIndex_Timestepping::report_sums_for_psi4_diagnostics(NULL), thisProxy[CkArrayIndex3D(thisIndex.x, 0, 0)]);
+  CkCallback cb;
+  if (strstr(griddata_chare[grid].params.CoordSystemName, "Spherical") != NULL) {
+    // for spherical-like coords, cb to chare thisindex.x, 0, 0
+    cb = CkCallback(CkIndex_Timestepping::report_sums_for_psi4_diagnostics(NULL), thisProxy[CkArrayIndex3D(thisIndex.x, 0, 0)]);
+  } else {
+    // for cylindrical-like coords, cb to chare 0, 0, 0
+    cb = CkCallback(CkIndex_Timestepping::report_sums_for_psi4_diagnostics(NULL), thisProxy[CkArrayIndex3D(0, 0, 0)]);
+  }
   CProxySection_Timestepping::contribute(outdoubles, CkReduction::sum_double, cookie, cb);
   delete msg;
 }
 
-// section creation for reduction along section of chares for psi4 integration along theta and phi
+
 void Timestepping::create_section() {
-  secProxy = CProxySection_Timestepping::ckNew(thisProxy.ckGetArrayID(), thisIndex.x, thisIndex.x, 1, 0, commondata.Nchare1 - 1, 1, 0,
+  const int grid = 0;
+  if (strstr(griddata_chare[grid].params.CoordSystemName, "Spherical") != NULL) {
+    // section creation for reduction along section of chares for psi4 integration along theta and phi for spherical-like coords
+    secProxy = CProxySection_Timestepping::ckNew(thisProxy.ckGetArrayID(), thisIndex.x, thisIndex.x, 1, 0, commondata.Nchare1 - 1, 1, 0,
                                                      commondata.Nchare2 - 1, 1);
+  } else {
+    // for cylindrical-like coords, the reduction is over all chares
+    secProxy = CProxySection_Timestepping::ckNew(thisProxy.ckGetArrayID(), 0, commondata.Nchare0 - 1, 1, 0, commondata.Nchare1 - 1, 1, 0,
+                                               commondata.Nchare2 - 1, 1);
+  }
 }
 """
 
@@ -1392,13 +1450,67 @@ def output_timestepping_ci(
                                              commondata.time) < 0.5 * commondata.dt;"""
         file_output_str += r"""
             }"""
+    file_output_str += """
+         // Step 5.a: Main loop, part 1: Output diagnostics"""
     if enable_psi4_diagnostics:
         file_output_str += r"""
+        // psi4 diagnostics
         if (write_diagnostics_this_step) {
-          serial {
-            if(thisIndex.y == 0 && thisIndex.z == 0) {
-              sectionBcastMsg *msg = new sectionBcastMsg(1);
-              secProxy.recvMsg_to_contribute_localsums_for_psi4_decomp(msg);
+          if (strstr(griddata_chare[grid].params.CoordSystemName, "Spherical") != NULL || strstr(griddata_chare[grid].params.CoordSystemName, "Cylindrical") != NULL) {
+            // Need to sync psi4 across chares for cylindrical-like coordinates
+            if (strstr(griddata_chare[grid].params.CoordSystemName, "Cylindrical") != NULL) {
+              serial {
+                // Set psi4.
+                psi4(&commondata, &griddata_chare[grid].params, griddata_chare[grid].xx, griddata_chare[grid].gridfuncs.y_n_gfs, griddata_chare[grid].gridfuncs.diagnostic_output_gfs);
+                // Apply outer and inner bcs to psi4
+                apply_bcs_outerextrap_and_inner_specific_gfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].bcstruct, griddata_chare[grid].gridfuncs.num_aux_gfs_to_sync, griddata_chare[grid].gridfuncs.diagnostic_output_gfs, griddata_chare[grid].gridfuncs.aux_gfs_to_sync, aux_gf_parity);
+              }"""
+
+        file_output_str += generate_send_nonlocalinnerbc_data_code(
+            "DIAGNOSTIC_OUTPUT_GFS"
+        )
+        file_output_str += generate_process_nonlocalinnerbc_code()
+        for loop_direction in ["x", "y", "z"]:
+            # Determine ghost types and configuration based on the current axis
+            if loop_direction == "x":
+                pos_ghost_type = x_pos_ghost_type
+                neg_ghost_type = x_neg_ghost_type
+                nchare_var = "commondata.Nchare0"
+                grid_split_direction = "EAST_WEST"
+            elif loop_direction == "y":
+                pos_ghost_type = y_pos_ghost_type
+                neg_ghost_type = y_neg_ghost_type
+                nchare_var = "commondata.Nchare1"
+                grid_split_direction = "NORTH_SOUTH"
+            else:  # loop_direction == "z"
+                pos_ghost_type = z_pos_ghost_type
+                neg_ghost_type = z_neg_ghost_type
+                nchare_var = "commondata.Nchare2"
+                grid_split_direction = "TOP_BOTTOM"
+
+            file_output_str += generate_send_neighbor_data_code(
+                "DIAGNOSTIC_OUTPUT_GFS", grid_split_direction
+            )
+            file_output_str += generate_process_ghost_code(
+                loop_direction, pos_ghost_type, neg_ghost_type, nchare_var
+            )
+
+        file_output_str += """
+              // chare 0, 0, 0 sends msg to contribute to section reduction
+              serial {
+                if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
+                  sectionBcastMsg *msg = new sectionBcastMsg(1);
+                  secProxy.recvMsg_to_contribute_localsums_for_psi4_decomp(msg);
+                }
+              }
+            } else {
+              // chare thisindex.x, 0, 0 sends msg to contribute to section reduction
+              serial {
+                if (thisIndex.y == 0 && thisIndex.z == 0) {
+                  sectionBcastMsg *msg = new sectionBcastMsg(1);
+                  secProxy.recvMsg_to_contribute_localsums_for_psi4_decomp(msg);
+                }
+              }
             }
           }
         }
@@ -1409,7 +1521,7 @@ def output_timestepping_ci(
         filename_format = "commondata.convergence_factor, commondata.time"
 
     file_output_str += rf"""
-        // Step 5.a: Main loop, part 1: Output diagnostics
+        // 0D and 2D output diagnostics
         //serial {{
         //  if (write_diagnostics_this_step && contains_gridcenter) {{
         //    diagnostics(&commondata, griddata_chare, Ck::IO::Session(), OUTPUT_0D, which_grid_diagnostics);

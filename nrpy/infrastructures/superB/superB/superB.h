@@ -17,7 +17,20 @@
 #endif
 
 #define restrict __restrict__
-
+#define MAX3(A, B, C)                                                                                                                                    \
+  ({                                                                                                                                                     \
+    __typeof__(A) _a = (A);                                                                                                                              \
+    __typeof__(B) _b = (B);                                                                                                                              \
+    __typeof__(C) _c = (C);                                                                                                                              \
+    __typeof__(A) _max = (_a > _b) ? _a : _b;                                                                                                           \
+    _max > _c ? _max : _c;                                                                                                                               \
+  })
+#define IDX2GENERAL(i, j, Ni) ((i) + (Ni) * (j))
+#define REVERSE_IDX2GENERAL(index, Ni, i, j) \
+{ \
+    j = (index) / (Ni); \
+    i = (index) % (Ni); \
+}
 #define IDX3_OF_CHARE(i, j, k) ((i) + Nchare0 * ((j) + Nchare1 * ((k))))
 #define IDX3GENERAL(i, j, k, Ni, Nj) ((i) + (Ni) * ((j) + (Nj) * (k)))
 #define REVERSE_IDX3GENERAL(index, Ni, Nj, i, j, k) \
@@ -112,12 +125,20 @@ typedef struct __diagnostic_struct__ {
   char filename_1d_z[256];
   char filename_2d_xy[256];
   char filename_2d_yz[256];
+  // psi4:
   int num_of_R_exts_chare;
   int psi4_spinweightm2_sph_harmonics_max_l;
   int length_localsums_for_psi4_decomp;
   REAL *restrict list_of_R_exts_chare;
   REAL *restrict localsums_for_psi4_decomp;
   REAL *restrict globalsums_for_psi4_decomp;
+  // psi4 cylindrical-like coords only:
+  int tot_N_shell_pts_chare;
+  REAL dtheta;
+  int *restrict N_shell_pts_chare; // of shape int [num_of_R_exts_chare]
+  int *restrict N_theta_shell_chare; // of shape int [num_of_R_exts_chare]
+  REAL ***restrict xx_shell_chare; // of shape [num_of_R_exts_chare][N_shell_pts_chare][3]
+  REAL **restrict theta_shell_chare; // of shape [num_of_R_exts_chare][N_theta_shell_chare]
 } diagnostic_struct;
 
 typedef struct __tmpBuffers_struct__ {
@@ -135,13 +156,13 @@ typedef struct __nonlocalinnerbc_struct__ {
   int *restrict idx3chare_to_src_chare_id;
   int *restrict num_srcpts_each_chare;
   int **restrict map_srcchare_and_srcpt_id_to_linear_id;
-  int **restrict globalidx3_srcpts; // of size [tot_num_src_chares][num_srcpts_each_chare]
+  int **restrict globalidx3_srcpts; // of shape [tot_num_src_chares][num_srcpts_each_chare]
   // variables for this chare having the src pt but not the dst pt
   int tot_num_dst_chares;
   int *restrict idx3_of_dst_chares;
   int *restrict idx3chare_to_dst_chare_id;
   int *restrict num_srcpts_tosend_each_chare;
-  int **restrict globalidx3_srcpts_tosend; // of size [tot_num_dst_chares][num_srcpts_tosend_each_chare]
+  int **restrict globalidx3_srcpts_tosend; // of shape [tot_num_dst_chares][num_srcpts_tosend_each_chare]
 } nonlocalinnerbc_struct;
 
 #endif // #ifndef __SUPERB_H__
