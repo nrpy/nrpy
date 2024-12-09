@@ -318,10 +318,10 @@ def c_codegen(
     <BLANKLINE>
     >>> print(c_codegen(x**5 + x**3 + x - 1/x, "REAL_SIMD_ARRAY blah", include_braces=False, verbose=False, enable_simd=True))
     static const double dbl_Integer_1 = 1.0;
-    const MAYBE_UNUSED REAL_SIMD_ARRAY _Integer_1 = ConstSIMD(dbl_Integer_1);
+    MAYBE_UNUSED const REAL_SIMD_ARRAY _Integer_1 = ConstSIMD(dbl_Integer_1);
     <BLANKLINE>
     static const double dbl_NegativeOne_ = -1.0;
-    const MAYBE_UNUSED REAL_SIMD_ARRAY _NegativeOne_ = ConstSIMD(dbl_NegativeOne_);
+    MAYBE_UNUSED const REAL_SIMD_ARRAY _NegativeOne_ = ConstSIMD(dbl_NegativeOne_);
     <BLANKLINE>
     REAL_SIMD_ARRAY blah = FusedMulAddSIMD(MulSIMD(x, x), x, FusedMulAddSIMD(MulSIMD(MulSIMD(MulSIMD(x, x), x), x), x, SubSIMD(x, DivSIMD(_Integer_1, x))));
     <BLANKLINE>
@@ -680,8 +680,8 @@ def c_codegen(
                 # Workaround for possibly unused NegativeOne SIMD variables.
                 maybe_unused = " "
                 if varname.endswith("NegativeOne_") or varname.endswith("Integer_1"):
-                    maybe_unused = " MAYBE_UNUSED "
-                simd_RATIONAL_decls += f"const{maybe_unused}REAL_SIMD_ARRAY {varname} = ConstSIMD(dbl{varname});\n"
+                    maybe_unused = "MAYBE_UNUSED "
+                simd_RATIONAL_decls += f"{maybe_unused}const REAL_SIMD_ARRAY {varname} = ConstSIMD(dbl{varname});\n"
                 simd_RATIONAL_decls += "\n"
 
     # Step 6: Construct final output string

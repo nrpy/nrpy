@@ -100,7 +100,7 @@ radiation_BC_fd_order = 6
 enable_simd = True
 parallel_codegen_enable = True
 boundary_conditions_desc = "outgoing radiation"
-list_of_CoordSystems = [CoordSystem, CoordSystem]
+list_of_CoordSystems = [CoordSystem]
 NUMGRIDS = len(list_of_CoordSystems)
 par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
 # fmt: off
@@ -341,7 +341,7 @@ cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
 )
 Bdefines_h.output_BHaH_defines_h(
     project_dir=project_dir,
-    enable_simd=enable_simd,
+    enable_intrinsics=enable_simd,
     DOUBLE_means="double" if fp_type == "float" else "REAL",
 )
 # Define post_MoL_step_forward_in_time string for main function
@@ -370,7 +370,7 @@ if enable_simd:
         package="nrpy.helpers",
         filenames_list=["simd_intrinsics.h"],
         project_dir=project_dir,
-        subdirectory="simd",
+        subdirectory="intrinsics",
     )
 
 Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(

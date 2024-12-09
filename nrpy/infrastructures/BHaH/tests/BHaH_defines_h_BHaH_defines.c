@@ -14,8 +14,8 @@
 #include <stdlib.h>  // malloc/free, etc.
 #include <string.h>  // String handling functions, such as strlen, strcmp, etc.
 #include <time.h>    // Time-related functions and types, such as time(), clock(),
-// output_BHaH_defines_h(...,enable_simd=True) was called so we #include SIMD intrinsics:
-#include "simd/simd_intrinsics.h"
+// output_BHaH_defines_h(...,enable_intrinsics=True) was called so we intrinsics headers:
+#include "intrinsics/simd_intrinsics.h"
 #define REAL double
 #define DOUBLE double
 
@@ -44,7 +44,9 @@
     _a *_a;                                                                                                                                          \
   })
 #ifndef MAYBE_UNUSED
-#if defined(__GNUC__) || defined(__clang__) || defined(__NVCC__)
+#if __cplusplus >= 201703L
+#define MAYBE_UNUSED [[maybe_unused]]
+#elif defined(__GNUC__) || defined(__clang__) || defined(__NVCC__)
 #define MAYBE_UNUSED __attribute__((unused))
 #else
 #define MAYBE_UNUSED

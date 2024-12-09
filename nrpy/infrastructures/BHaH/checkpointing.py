@@ -28,7 +28,7 @@ def register_CFunction_read_checkpoint(
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "unistd.h"]
     prefunc = r"""
-#define FREAD(ptr, size, nmemb, stream) { const MAYBE_UNUSED int numitems=fread((ptr), (size), (nmemb), (stream)); }
+#define FREAD(ptr, size, nmemb, stream) { MAYBE_UNUSED const int numitems=fread((ptr), (size), (nmemb), (stream)); }
 """
     desc = "Read a checkpoint file"
     cfunc_type = "int"
@@ -52,8 +52,12 @@ def register_CFunction_read_checkpoint(
         body += r"""
   for (int i = 0; i < commondata->bah_num_horizons; i++) {
     FREAD(&commondata->bhahaha_params_and_data[i], sizeof(bhahaha_params_and_data_struct), 1, cp_file);
-    commondata->bhahaha_params_and_data[i].prev_horizon = malloc(sizeof(REAL) * 64 * 32);
-    FREAD(commondata->bhahaha_params_and_data[i].prev_horizon, sizeof(REAL), 64 * 32, cp_file);
+    commondata->bhahaha_params_and_data[i].prev_horizon_m1 = malloc(sizeof(REAL) * 64 * 32);
+    commondata->bhahaha_params_and_data[i].prev_horizon_m2 = malloc(sizeof(REAL) * 64 * 32);
+    commondata->bhahaha_params_and_data[i].prev_horizon_m3 = malloc(sizeof(REAL) * 64 * 32);
+    FREAD(commondata->bhahaha_params_and_data[i].prev_horizon_m1, sizeof(REAL), 64 * 32, cp_file);
+    FREAD(commondata->bhahaha_params_and_data[i].prev_horizon_m2, sizeof(REAL), 64 * 32, cp_file);
+    FREAD(commondata->bhahaha_params_and_data[i].prev_horizon_m3, sizeof(REAL), 64 * 32, cp_file);
   }
 """
     body += r"""
@@ -147,7 +151,9 @@ if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {
         body += r"""
   for (int i = 0; i < commondata->bah_num_horizons; i++) {
     fwrite(&commondata->bhahaha_params_and_data[i], sizeof(bhahaha_params_and_data_struct), 1, cp_file);
-    fwrite(commondata->bhahaha_params_and_data[i].prev_horizon, sizeof(REAL), 64 * 32, cp_file);
+    fwrite(commondata->bhahaha_params_and_data[i].prev_horizon_m1, sizeof(REAL), 64 * 32, cp_file);
+    fwrite(commondata->bhahaha_params_and_data[i].prev_horizon_m2, sizeof(REAL), 64 * 32, cp_file);
+    fwrite(commondata->bhahaha_params_and_data[i].prev_horizon_m3, sizeof(REAL), 64 * 32, cp_file);
   }
 """
     body += r"""

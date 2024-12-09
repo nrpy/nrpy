@@ -191,7 +191,7 @@ Bdefines_h.output_BHaH_defines_h(
 #define IDX_WF(idx,var) ((idx)*NUMMODES + (var))
 """
     },
-    enable_simd=False,
+    enable_intrinsics=False,
 )
 register_CFunction_main_c()
 

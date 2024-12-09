@@ -323,7 +323,7 @@ def register_CFunction_rhs_eval() -> None:
     """Register the right-hand side evaluation function for the wave equation with specific parameters."""
     includes = ["BHaH_defines.h"]
     if enable_simd:
-        includes += [os.path.join("simd", "simd_intrinsics.h")]
+        includes += [os.path.join("intrinsics", "simd_intrinsics.h")]
     desc = r"""Set RHSs for wave equation."""
     cfunc_type = "void"
     name = "rhs_eval"
@@ -459,7 +459,7 @@ cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
 )
 Bdefines_h.output_BHaH_defines_h(
     project_dir=project_dir,
-    enable_simd=enable_simd,
+    enable_intrinsics=enable_simd,
     enable_rfm_precompute=False,
 )
 main.register_CFunction_main_c(
@@ -477,7 +477,7 @@ if enable_simd:
         package="nrpy.helpers",
         filenames_list=["simd_intrinsics.h"],
         project_dir=project_dir,
-        subdirectory="simd",
+        subdirectory="intrinsics",
     )
 
 
