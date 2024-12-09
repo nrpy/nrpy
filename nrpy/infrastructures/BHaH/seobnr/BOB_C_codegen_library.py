@@ -50,7 +50,7 @@ def register_CFunction_BOB_aligned_spin_NQC_rhs() -> Union[None, pcg.NRPyEnv_typ
     )
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """Calculate the BOB informed NQC amplitudes and phases."""
-    cfunc_type = "int"
+    cfunc_type = "void"
     name = "BOB_aligned_spin_NQC_rhs"
     params = "commondata_struct *restrict commondata , REAL *restrict amps , REAL *restrict omegas"
     body = """
@@ -60,7 +60,6 @@ const REAL chi1 = commondata->chi1;
 const REAL chi2 = commondata->chi2;
 const REAL omega_qnm = commondata->omega_qnm;
 const REAL tau_qnm = commondata->tau_qnm;
-const REAL t_0 = commondata->t_attach;
 //compute
 """
     body += BOB_code
@@ -70,7 +69,6 @@ amps[1] = hdot_t_attach;
 amps[2] = hddot_t_attach;
 omegas[0] = w_t_attach;
 omegas[1] = wdot_t_attach;
-return GSL_SUCCESS;
 """
     cfc.register_CFunction(
         includes=includes,
@@ -105,7 +103,7 @@ def register_CFunction_BOB_aligned_spin_waveform() -> Union[None, pcg.NRPyEnv_ty
     )
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """Calculate the BOB 22 mode."""
-    cfunc_type = "int"
+    cfunc_type = "void"
     name = "BOB_aligned_spin_waveform"
     params = "const REAL t , commondata_struct *restrict commondata , REAL *restrict waveform"
     body = """
@@ -122,7 +120,6 @@ const REAL t_0 = commondata->t_attach;
     body += """
 waveform[0] = h;
 waveform[1] = phi;
-return GSL_SUCCESS;
 """
     cfc.register_CFunction(
         includes=includes,
@@ -150,25 +147,23 @@ def register_CFunction_BOB_aligned_spin_waveform_from_times() -> (
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """Calculate the BOB 22 mode."""
-    cfunc_type = "int"
+    cfunc_type = "void"
     name = "BOB_aligned_spin_waveform_from_times"
     params = "REAL *restrict times , REAL *restrict amps , REAL *restrict phases , const size_t nsteps_BOB , commondata_struct *restrict commondata"
     body = """
-int status;
 size_t i;
 REAL *restrict wrapped_phases = (REAL *)malloc(nsteps_BOB*sizeof(REAL));
 REAL waveform[2];
 for (i = 0; i < nsteps_BOB; i++) {
   //compute
-  status = BOB_aligned_spin_waveform(times[i], commondata , waveform);
+  BOB_aligned_spin_waveform(times[i], commondata , waveform);
   //store
   amps[i] = waveform[0];
   wrapped_phases[i] = waveform[1];
 }
 //unwrap the phase
-status = SEOBNRv5_aligned_spin_unwrap(wrapped_phases,phases,nsteps_BOB);
+SEOBNRv5_aligned_spin_unwrap(wrapped_phases,phases,nsteps_BOB);
 free(wrapped_phases);
-return GSL_SUCCESS;
 """
     cfc.register_CFunction(
         includes=includes,

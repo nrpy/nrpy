@@ -193,27 +193,18 @@ def register_CFunction_SEOBNRv5_aligned_spin_waveform() -> (
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """Calculate the SEOBNRv5 22 mode."""
-    cfunc_type = "int"
+    cfunc_type = "void"
     prefunc = "#include<complex.h>"
     name = "SEOBNRv5_aligned_spin_waveform"
     params = "REAL *restrict dynamics, REAL *restrict waveform, commondata_struct *restrict commondata"
     body = """
-const int dyn_size = 8; //t,r,phi,prstar,pphi,Hreal, Omega, Omega_circ
-int status = 0;
-int i;
 REAL gamma_real_22 , gamma_imag_22;
 REAL gamma_22[2];
 const REAL m1 = commondata->m1;
 const REAL m2 = commondata->m2;
 const REAL chi1 = commondata->chi1;
 const REAL chi2 = commondata->chi2;
-const REAL a6 = commondata->a6;
-const REAL dSO = commondata->dSO;
-const REAL t = dynamics[TIME];
-const REAL r = dynamics[R];
 const REAL phi = dynamics[PHI];
-const REAL prstar = dynamics[PRSTAR];
-const REAL pphi = dynamics[PPHI];
 const REAL Hreal = dynamics[H];
 const REAL Omega = dynamics[OMEGA];
 const REAL Omega_circ = dynamics[OMEGA_CIRC];
@@ -221,7 +212,7 @@ const REAL Omega_circ = dynamics[OMEGA_CIRC];
 """
     body += khat2_code
     body += """
-  status = SEOBNRv5_aligned_spin_gamma_wrapper(3.,-2.*khat2,gamma_22);
+  SEOBNRv5_aligned_spin_gamma_wrapper(3.,-2.*khat2,gamma_22);
   gamma_real_22 = gamma_22[0];
   gamma_imag_22 = gamma_22[1];
 """
@@ -229,7 +220,6 @@ const REAL Omega_circ = dynamics[OMEGA_CIRC];
     body += """
 waveform[0] = (REAL) creal(h22);
 waveform[1] = (REAL) cimag(h22);
-return GSL_SUCCESS;
 """
     cfc.register_CFunction(
         includes=includes,
@@ -262,14 +252,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics() -> (
     name = "SEOBNRv5_aligned_spin_waveform_from_dynamics"
     params = "commondata_struct *restrict commondata"
     body = """
-int status = 0;
 int i;
-const REAL m1 = commondata->m1;
-const REAL m2 = commondata->m2;
-const REAL chi1 = commondata->chi1;
-const REAL chi2 = commondata->chi2;
-const REAL a6 = commondata->a6;
-const REAL dSO = commondata->dSO;
 REAL dynamics[NUMVARS] , waveform[2];
 commondata->waveform_low = (REAL *)malloc(commondata->nsteps_low*NUMMODES*sizeof(REAL)); //t , h_+ , h_x
 commondata->waveform_fine = (REAL *)malloc(commondata->nsteps_fine*NUMMODES*sizeof(REAL)); //t , h_+ , h_x
@@ -287,7 +270,7 @@ for (i = 0; i < commondata->nsteps_low; i++) {
   dynamics[OMEGA_CIRC] = commondata->dynamics_low[IDX(i,OMEGA_CIRC)];
   
   //compute
-  status = SEOBNRv5_aligned_spin_waveform(dynamics, waveform, commondata);
+  SEOBNRv5_aligned_spin_waveform(dynamics, waveform, commondata);
   //store
   commondata->waveform_low[IDX_WF(i,TIME)] = dynamics[TIME];
   commondata->waveform_low[IDX_WF(i,HPLUS)] = waveform[0];
@@ -306,7 +289,7 @@ for (i = 0; i < commondata->nsteps_fine; i++) {
   dynamics[OMEGA_CIRC] = commondata->dynamics_fine[IDX(i,OMEGA_CIRC)];
   
   //compute
-  status = SEOBNRv5_aligned_spin_waveform(dynamics, waveform, commondata);
+  SEOBNRv5_aligned_spin_waveform(dynamics, waveform, commondata);
   //store
   commondata->waveform_fine[IDX_WF(i,TIME)] = dynamics[TIME];
   commondata->waveform_fine[IDX_WF(i,HPLUS)] = waveform[0];
@@ -348,8 +331,6 @@ const REAL m1 = ((commondata_struct *restrict) params)->m1;
 const REAL m2 = ((commondata_struct *restrict) params)->m2;
 const REAL chi1 = ((commondata_struct *restrict) params)->chi1;
 const REAL chi2 = ((commondata_struct *restrict) params)->chi2;
-const REAL r = y[0];
-const REAL phi = y[1];
 const REAL prstar = y[2];
 const REAL pphi = y[3];
 """
@@ -405,7 +386,6 @@ const REAL chi2 = ((commondata_struct *restrict) params)->chi2;
 const REAL a6 = ((commondata_struct *restrict) params)->a6;
 const REAL dSO = ((commondata_struct *restrict) params)->dSO;
 const REAL r = y[0];
-const REAL phi = y[1];
 const REAL prstar = y[2];
 const REAL pphi = y[3];
 """
