@@ -1346,10 +1346,7 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
         pn_contribution_f = self.rho["(2 , 2)"] ** l
         pn_contribution_delta = sp.exp(sp.I * self.deltalm["(2 , 2)"])
         pn_contribution = pn_contribution_f * pn_contribution_delta
-        gamma_real, gamma_imag = sp.symbols(
-            f"gamma_real_{l}{m} gamma_imag_{l}{m}", real=True
-        )
-        gamma_term = gamma_real + sp.I * gamma_imag
+        gamma_term = sp.Symbol(f"gamma_{l}{m}")
         khat2 = self.khat[2]
         tail_prefactor = (
             sp.exp(sp.pi * khat2)

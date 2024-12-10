@@ -78,7 +78,7 @@ REAL *restrict Omega = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 REAL *restrict hamp = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 REAL *restrict phase = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 REAL *restrict phase_unwrapped = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
-REAL radius, omega, prstar, hplus, hcross; 
+REAL radius, omega, prstar; 
 double complex h22;
 size_t i;
 
@@ -86,9 +86,7 @@ for (i = 0; i < commondata->nsteps_fine; i++){
   prstar = commondata->dynamics_fine[IDX(i,PRSTAR)];
   r[i] = commondata->dynamics_fine[IDX(i,R)];
   Omega[i] = commondata->dynamics_fine[IDX(i,OMEGA)];
-  hplus = commondata->waveform_fine[IDX_WF(i,HPLUS)];
-  hcross = commondata->waveform_fine[IDX_WF(i,HCROSS)];
-  h22 = hplus - I * hcross;
+  h22 = commondata->waveform_fine[IDX_WF(i,STRAIN)];
   hamp[i] = cabs(h22);
   phase[i] = carg(h22);
   times[i] = commondata->dynamics_fine[IDX(i,TIME)];
@@ -260,7 +258,7 @@ free(phase_unwrapped);
 
 // apply the nqc correction
 commondata->nsteps_inspiral = commondata->nsteps_low + commondata->nsteps_fine;
-commondata->waveform_inspiral = (REAL *)malloc(commondata->nsteps_inspiral*NUMMODES*sizeof(REAL));
+commondata->waveform_inspiral = (double complex *)malloc(commondata->nsteps_inspiral*NUMMODES*sizeof(double complex));
 REAL nqc_amp, nqc_phase, q1, q2, q3,p1, p2;
 for (i = 0; i < commondata->nsteps_low; i++){
   prstar = commondata->dynamics_low[IDX(i,PRSTAR)];
@@ -274,8 +272,7 @@ for (i = 0; i < commondata->nsteps_low; i++){
   nqc_amp = 1 + commondata->a_1_NQC*q1 + commondata->a_2_NQC*q2 + commondata->a_3_NQC*q3;
   nqc_phase =  commondata->b_1_NQC*p1 + commondata->b_2_NQC*p2;
   commondata->waveform_inspiral[IDX_WF(i,TIME)] = commondata->dynamics_low[IDX(i,TIME)];
-  commondata->waveform_inspiral[IDX_WF(i,HPLUS)] = nqc_amp * (commondata->waveform_low[IDX_WF(i,HPLUS)]*cos(nqc_phase) + commondata->waveform_low[IDX_WF(i,HCROSS)]*sin(nqc_phase));
-  commondata->waveform_inspiral[IDX_WF(i,HCROSS)] = nqc_amp * (commondata->waveform_low[IDX_WF(i,HCROSS)]*cos(nqc_phase) - commondata->waveform_low[IDX_WF(i,HPLUS)]*sin(nqc_phase));
+  commondata->waveform_inspiral[IDX_WF(i,STRAIN)] = nqc_amp * commondata->waveform_low[IDX_WF(i,STRAIN)] *cexp(I * nqc_phase);
 }
 for (i = 0; i< commondata->nsteps_fine; i++){
   prstar = commondata->dynamics_fine[IDX(i,PRSTAR)];
@@ -289,8 +286,7 @@ for (i = 0; i< commondata->nsteps_fine; i++){
   nqc_amp = 1 + commondata->a_1_NQC*q1 + commondata->a_2_NQC*q2 + commondata->a_3_NQC*q3;
   nqc_phase =  commondata->b_1_NQC*p1 + commondata->b_2_NQC*p2;
   commondata->waveform_inspiral[IDX_WF(i+commondata->nsteps_low,TIME)] = commondata->dynamics_fine[IDX(i,TIME)];
-  commondata->waveform_inspiral[IDX_WF(i+commondata->nsteps_low,HPLUS)] = nqc_amp * (commondata->waveform_fine[IDX_WF(i,HPLUS)]*cos(nqc_phase) + commondata->waveform_fine[IDX_WF(i,HCROSS)]*sin(nqc_phase));
-  commondata->waveform_inspiral[IDX_WF(i+commondata->nsteps_low,HCROSS)] = nqc_amp * (commondata->waveform_fine[IDX_WF(i,HCROSS)]*cos(nqc_phase) - commondata->waveform_fine[IDX_WF(i,HPLUS)]*sin(nqc_phase));
+  commondata->waveform_inspiral[IDX_WF(i+commondata->nsteps_low,STRAIN)] = nqc_amp * commondata->waveform_fine[IDX_WF(i,STRAIN)] * cexp(I * nqc_phase);
 }
 
 return GSL_SUCCESS;
@@ -337,14 +333,14 @@ double complex h22_nophase , h22_rescaled;
 for (i = 0; i < commondata->nsteps_low; i++){
   times_old[i] = commondata->waveform_inspiral[IDX_WF(i,TIME)];
   orbital_phases[i] = commondata->dynamics_low[IDX(i,PHI)];
-  h22_nophase = cexp(2 * I * orbital_phases[i])*(commondata->waveform_inspiral[IDX_WF(i,HPLUS)] - I * commondata->waveform_inspiral[IDX_WF(i,HCROSS)]);
+  h22_nophase = cexp(2 * I * orbital_phases[i])*(commondata->waveform_inspiral[IDX_WF(i,STRAIN)]);
   h22_nophase_real[i] = creal(h22_nophase);
   h22_nophase_imag[i] = cimag(h22_nophase);
 }
 for (i = 0; i < commondata->nsteps_fine; i++){
   times_old[i + commondata->nsteps_low] = commondata->waveform_inspiral[IDX_WF(i + commondata->nsteps_low,TIME)];
   orbital_phases[i + commondata->nsteps_low] = commondata->dynamics_fine[IDX(i,PHI)];
-  h22_nophase = cexp(2 * I * orbital_phases[i + commondata->nsteps_low])*(commondata->waveform_inspiral[IDX_WF(i + commondata->nsteps_low,HPLUS)] - I * commondata->waveform_inspiral[IDX_WF(i + commondata->nsteps_low,HCROSS)]);
+  h22_nophase = cexp(2 * I * orbital_phases[i + commondata->nsteps_low])*(commondata->waveform_inspiral[IDX_WF(i + commondata->nsteps_low,STRAIN)]);
   h22_nophase_real[i + commondata->nsteps_low] = creal(h22_nophase);
   h22_nophase_imag[i + commondata->nsteps_low] = cimag(h22_nophase);
 }
@@ -363,7 +359,7 @@ gsl_spline_init(spline_real,times_old,h22_nophase_real, nsteps_inspiral_old);
 gsl_spline_init(spline_imag,times_old,h22_nophase_imag, nsteps_inspiral_old);
 //realloc the amount of memory needed to store the interpolated modes
 commondata->nsteps_inspiral = nsteps_new;
-commondata->waveform_inspiral = (REAL *)realloc(commondata->waveform_inspiral,commondata->nsteps_inspiral * NUMMODES * sizeof(REAL));
+commondata->waveform_inspiral = (double complex *)realloc(commondata->waveform_inspiral,commondata->nsteps_inspiral * NUMMODES * sizeof(double complex));
 for (i = 0; i < commondata->nsteps_inspiral; i++){
   time = tstart + i * dT;
   commondata->waveform_inspiral[IDX_WF(i,TIME)] = time;
@@ -371,8 +367,7 @@ for (i = 0; i < commondata->nsteps_inspiral; i++){
   h22_real = gsl_spline_eval(spline_real,time,acc_real);
   h22_imag = gsl_spline_eval(spline_imag,time,acc_imag);
   h22_rescaled = cexp(-2. * I * orbital_phase) * (h22_real + I * h22_imag);
-  commondata->waveform_inspiral[IDX_WF(i,HPLUS)] = creal(h22_rescaled);
-  commondata->waveform_inspiral[IDX_WF(i,HCROSS)] = -1. * cimag(h22_rescaled);
+  commondata->waveform_inspiral[IDX_WF(i,STRAIN)] = h22_rescaled;
 }
 gsl_interp_accel_free(acc);
 gsl_interp_accel_free(acc_real);
@@ -425,7 +420,7 @@ REAL *restrict h22_phase_new = (REAL *)malloc(commondata->nsteps_inspiral*sizeof
 REAL *restrict h22_wrapped_phase_new = (REAL *)malloc(commondata->nsteps_inspiral*sizeof(REAL));
 for(i = 0; i < commondata->nsteps_inspiral; i++){
   times_new[i] = commondata->waveform_inspiral[IDX_WF(i,TIME)];
-  h22 = commondata->waveform_inspiral[IDX_WF(i,HPLUS)] - I * commondata->waveform_inspiral[IDX_WF(i,HCROSS)];
+  h22 = commondata->waveform_inspiral[IDX_WF(i,STRAIN)];
   h22_amp_new[i] = cabs(h22);
   h22_wrapped_phase_new[i] = carg(h22);
 }
@@ -453,12 +448,11 @@ for(i = 0; i < nsteps_ringdown; i++){
   ringdown_phase[i] = true_sign * fabs(ringdown_phase[i] - ringdown_phase[0]) + phase_match;
 }
 commondata->nsteps_IMR = idx_match + 1 + nsteps_ringdown;
-commondata->waveform_IMR = malloc(NUMMODES * commondata->nsteps_IMR*sizeof(REAL));
+commondata->waveform_IMR = (double complex *)malloc(NUMMODES * commondata->nsteps_IMR*sizeof(double complex));
 for (i = 0; i <= idx_match; i++){
   commondata->waveform_IMR[IDX_WF(i,TIME)] = times_new[i];
   h22 = h22_amp_new[i] * cexp(I * h22_phase_new[i]);
-  commondata->waveform_IMR[IDX_WF(i,HPLUS)] = creal(h22);
-  commondata->waveform_IMR[IDX_WF(i,HCROSS)] = -1. * cimag(h22);
+  commondata->waveform_IMR[IDX_WF(i,STRAIN)] = h22;
 }
 free(h22_amp_new);
 free(h22_phase_new);
@@ -467,8 +461,7 @@ free(times_new);
 for(i = 0; i < nsteps_ringdown; i++){
   commondata->waveform_IMR[IDX_WF(i + 1 + idx_match,TIME)] = ringdown_time[i];
   h22 = ringdown_amp[i] * cexp(I * ringdown_phase[i]);
-  commondata->waveform_IMR[IDX_WF(i + 1 + idx_match,HPLUS)] = creal(h22);
-  commondata->waveform_IMR[IDX_WF(i + 1 + idx_match,HCROSS)] = -1. * cimag(h22);
+  commondata->waveform_IMR[IDX_WF(i + 1 + idx_match,STRAIN)] = h22;
 }
 free(ringdown_time);
 free(ringdown_phase);

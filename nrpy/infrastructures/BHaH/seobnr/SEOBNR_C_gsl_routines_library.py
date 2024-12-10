@@ -108,19 +108,16 @@ def register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper() -> (
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """Evaluate the gamma function using GSL."""
-    cfunc_type = "void"
+    cfunc_type = "double complex"
     name = "SEOBNRv5_aligned_spin_gamma_wrapper"
-    params = "const REAL z_real, const REAL z_imag, REAL *restrict gamma_z"
+    params = "const REAL z_real, const REAL z_imag"
     body = """
 gsl_sf_result lnr, arg;
 int status = gsl_sf_lngamma_complex_e(z_real, z_imag, &lnr, &arg);
 int status_desired[1] = {GSL_SUCCESS};
 char lngamma_name[] = "gsl_sf_lngamma_complex_e";
 handle_gsl_return_status(status,status_desired,1,lngamma_name);
-const REAL gamma_amp = exp(lnr.val);
-const REAL gamma_phase = arg.val;
-gamma_z[0] =  gamma_amp*cos(gamma_phase);
-gamma_z[1] =  gamma_amp*sin(gamma_phase);
+return cexp(lnr.val + I*arg.val);
 """
     cfc.register_CFunction(
         includes=includes,
