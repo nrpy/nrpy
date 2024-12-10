@@ -78,6 +78,7 @@ disable=
     too-many-instance-attributes,   # ADDED: dumb class warning.
     too-few-public-methods,         # ADDED: dumb class warning.
     too-many-positional-arguments,  # ADDED: no sane alternative to many arguments sometimes.
+    assignment-from-no-return,      # ADDED: false positives with sympy .subs() command.
     raw-checker-failed,
     bad-inline-option,
     locally-disabled,
