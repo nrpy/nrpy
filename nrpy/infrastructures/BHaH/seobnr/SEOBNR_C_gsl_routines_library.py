@@ -108,7 +108,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper() -> (
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """Evaluate the gamma function using GSL."""
-    cfunc_type = "int"
+    cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_gamma_wrapper"
     params = "const REAL z_real, const REAL z_imag, REAL *restrict gamma_z"
     body = """
@@ -121,7 +121,6 @@ const REAL gamma_amp = exp(lnr.val);
 const REAL gamma_phase = arg.val;
 gamma_z[0] =  gamma_amp*cos(gamma_phase);
 gamma_z[1] =  gamma_amp*sin(gamma_phase);
-return GSL_SUCCESS;
 """
     cfc.register_CFunction(
         includes=includes,
@@ -149,9 +148,9 @@ def register_CFunction_SEOBNRv5_multidimensional_root_wrapper() -> (
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """Multidimensional root finder using GSL."""
-    cfunc_type = "int"
+    cfunc_type = "void"
     name = "SEOBNRv5_aligned_multidimensional_root_wrapper"
-    params = "gsl_multiroot_function_fdf f, REAL *restrict x_guess, const size_t n, REAL *restrict x_result"
+    params = "gsl_multiroot_function_fdf f, const REAL *restrict x_guess, const size_t n, REAL *restrict x_result"
     body = """
 size_t i , iter = 0;
 const int maxiter = 100;
@@ -180,7 +179,6 @@ x_result[i] = gsl_vector_get(s->x , i);
 }
 gsl_multiroot_fdfsolver_free (s);
 gsl_vector_free (x);
-return GSL_SUCCESS;
 """
     cfc.register_CFunction(
         includes=includes,

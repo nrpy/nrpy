@@ -27,18 +27,17 @@ def register_CFunction_SEOBNRv5_aligned_spin_unwrap() -> Union[None, pcg.NRPyEnv
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """C function to perform numpy.unwrap."""
-    cfunc_type = "int"
+    cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_unwrap"
     params = "REAL *restrict angles_in , REAL *restrict angles_out, size_t nsteps_arr"
     body = """
 angles_out[0] = angles_in[0];
 REAL diff;
-for (size_t i = 0; i < nsteps_arr; i++){
+for (size_t i = 1; i < nsteps_arr; i++){
   diff = angles_in[i] - angles_in[i-1];
   diff = fabs(diff) > M_PI ? (diff < - M_PI ? diff + 2 * M_PI : diff - 2 * M_PI) : diff;
   angles_out[i] = angles_out[i - 1] + diff;
 }
-return GSL_SUCCESS;
 """
     cfc.register_CFunction(
         includes=includes,
@@ -82,7 +81,6 @@ REAL *restrict phase_unwrapped = (REAL *)malloc(commondata->nsteps_fine*sizeof(R
 REAL radius, omega, prstar, hplus, hcross; 
 double complex h22;
 size_t i;
-int status;
 
 for (i = 0; i < commondata->nsteps_fine; i++){
   prstar = commondata->dynamics_fine[IDX(i,PRSTAR)];
@@ -100,7 +98,7 @@ for (i = 0; i < commondata->nsteps_fine; i++){
   P1[i] = -prstar / r[i] /Omega[i];
   P2[i] = -P1[i] * prstar * prstar;
 }
-status = SEOBNRv5_aligned_spin_unwrap(phase,phase_unwrapped,commondata->nsteps_fine);
+SEOBNRv5_aligned_spin_unwrap(phase,phase_unwrapped,commondata->nsteps_fine);
 // Find t_ISCO:
 
 if (commondata->r_ISCO < r[commondata->nsteps_fine - 1]){
@@ -213,7 +211,7 @@ else{
 }
 
 REAL omegas[2] , amps[3];
-status = BOB_aligned_spin_NQC_rhs(commondata,amps,omegas);
+BOB_aligned_spin_NQC_rhs(commondata,amps,omegas);
 gsl_vector_set(A , 0 , amps[0] - amp_insp);
 gsl_vector_set(A , 1 , amps[1] - ampdot_insp);
 gsl_vector_set(A , 2 , amps[2] - ampddot_insp);
@@ -323,7 +321,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_interpolate_modes() -> (
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """Interpolate the SEOBNRv5 (2,2) inspiral mode."""
-    cfunc_type = "int"
+    cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_interpolate_modes"
     params = "commondata_struct *restrict commondata, const REAL dT"
     body = """
@@ -386,7 +384,6 @@ free(times_old);
 free(orbital_phases);
 free(h22_nophase_real);
 free(h22_nophase_imag);
-return GSL_SUCCESS;
 """
     cfc.register_CFunction(
         includes=includes,
@@ -419,9 +416,8 @@ def register_CFunction_SEOBNRv5_aligned_spin_IMR_waveform() -> (
     params = "commondata_struct *restrict commondata"
     body = """
 size_t i;
-int status;
 const REAL dT = commondata->dt/(commondata->total_mass*4.925490947641266978197229498498379006e-6);
-status = SEOBNRv5_aligned_spin_interpolate_modes(commondata , dT);
+SEOBNRv5_aligned_spin_interpolate_modes(commondata , dT);
 double complex h22;
 REAL *restrict times_new = malloc(commondata->nsteps_inspiral*sizeof(REAL));
 REAL *restrict h22_amp_new = (REAL *)malloc(commondata->nsteps_inspiral*sizeof(REAL));
@@ -433,7 +429,7 @@ for(i = 0; i < commondata->nsteps_inspiral; i++){
   h22_amp_new[i] = cabs(h22);
   h22_wrapped_phase_new[i] = carg(h22);
 }
-status = SEOBNRv5_aligned_spin_unwrap(h22_wrapped_phase_new,h22_phase_new,commondata->nsteps_inspiral);
+SEOBNRv5_aligned_spin_unwrap(h22_wrapped_phase_new,h22_phase_new,commondata->nsteps_inspiral);
 free(h22_wrapped_phase_new);
 size_t idx_match = gsl_interp_bsearch(times_new,commondata->t_attach,0, commondata->nsteps_inspiral);
 if (times_new[idx_match] > commondata->t_attach){
@@ -451,7 +447,7 @@ REAL *restrict ringdown_phase = (REAL *)malloc(nsteps_ringdown*sizeof(REAL));
 for(i = 0; i < nsteps_ringdown; i++){
   ringdown_time[i] = t_match + (i + 1) * dT;
 }
-status = BOB_aligned_spin_waveform_from_times(ringdown_time,ringdown_amp,ringdown_phase,nsteps_ringdown,commondata);
+BOB_aligned_spin_waveform_from_times(ringdown_time,ringdown_amp,ringdown_phase,nsteps_ringdown,commondata);
 const REAL true_sign = phase_match /  fabs(phase_match);
 for(i = 0; i < nsteps_ringdown; i++){
   ringdown_phase[i] = true_sign * fabs(ringdown_phase[i] - ringdown_phase[0]) + phase_match;
