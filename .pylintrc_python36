@@ -76,7 +76,6 @@ disable=
     use-maxsplit-arg,               # ADDED: suggestion just clutters the code.
     too-many-instance-attributes,   # ADDED: dumb class warning.
     too-few-public-methods,         # ADDED: dumb class warning.
-    no-self-use,                    # ADDED: lots of false positives with Python 3.6ish.
     unsubscriptable-object,         # ADDED: pylint errors on typehints like OrderedDict[str, sp.Expr], but only for some cases!
     raw-checker-failed,
     bad-inline-option,
