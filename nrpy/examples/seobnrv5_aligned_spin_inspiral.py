@@ -86,8 +86,8 @@ SEOBNRv5_aligned_spin_IMR_waveform(&commondata);
 // Step 6.b: Print the resulting waveform.
 
 for (i = 0; i < commondata.nsteps_IMR; i++) {
-    printf("%.15e %.15e %.15e\n", commondata.waveform_IMR[IDX_WF(i,TIME)]
-    , commondata.waveform_IMR[IDX_WF(i,HPLUS)], commondata.waveform_IMR[IDX_WF(i,HCROSS)]);
+    printf("%.15e %.15e %.15e\n", creal(commondata.waveform_IMR[IDX_WF(i,TIME)])
+    , creal(commondata.waveform_IMR[IDX_WF(i,STRAIN)]), cimag(commondata.waveform_IMR[IDX_WF(i,STRAIN)]));
 }
 
 
@@ -183,11 +183,8 @@ Bdefines_h.output_BHaH_defines_h(
 #define OMEGA 6
 #define OMEGA_CIRC 7
 #define IDX(idx, var) ((idx)*NUMVARS + (var))
-#define NUMMODES 3
-#define HPLUS 1
-#define HCROSS 2
-#define RE 1
-#define IM 2
+#define NUMMODES 2
+#define STRAIN 1
 #define IDX_WF(idx,var) ((idx)*NUMMODES + (var))
 """
     },

@@ -153,7 +153,6 @@ def register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conservative() -
     name = "SEOBNRv5_aligned_spin_initial_conditions_conservative"
     params = "commondata_struct *restrict commondata"
     body = """
-int status;
 const size_t n = 2;
 gsl_multiroot_function_fdf f = {&SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit,
                                 &SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_dRHS,
@@ -165,7 +164,7 @@ REAL pphi = pow(omega,-1./3.);
 REAL r = pphi*pphi;
 const REAL x_guess[2] = {r,pphi};
 REAL *restrict x_result = malloc(2*sizeof(REAL));
-status = SEOBNRv5_aligned_multidimensional_root_wrapper(f,x_guess,n,x_result);
+SEOBNRv5_aligned_multidimensional_root_wrapper(f,x_guess,n,x_result);
 commondata->r = x_result[0];
 commondata->pphi = x_result[1];
 free(x_result);
@@ -288,7 +287,6 @@ def register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit() -> (
     body = r"""
 const REAL r = gsl_vector_get(x , 0);
 const REAL pphi = gsl_vector_get(x , 1);
-const REAL prstar = 0;
 const REAL m1 = ((commondata_struct *restrict) params)->m1;
 const REAL m2 = ((commondata_struct *restrict) params)->m2;
 const REAL chi1 = ((commondata_struct *restrict) params)->chi1;
