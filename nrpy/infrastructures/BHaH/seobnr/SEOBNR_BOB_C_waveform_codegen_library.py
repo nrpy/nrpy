@@ -252,6 +252,7 @@ free(Q3);
 free(P1);
 free(P2);
 free(r);
+free(Omega);
 free(hamp);
 free(phase);
 free(phase_unwrapped);
