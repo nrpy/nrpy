@@ -147,7 +147,7 @@ jobs:
 
           # Step: pylint
           echo "-={ Step $step_counter: pylint }=-"
-          if [[ "$python_version" == *"3.6.7"* || "$python_version" == *"3.7.13"* ]]; then
+          if [[ "$python_version" == *"3.6.7"* || "$python_version" == *"3.7.13"* || "$python_version" == *"3.8.18"* ]]; then
             pylint_rcfile=".pylintrc_python36"
           else
             pylint_rcfile=".pylintrc"
