@@ -1,9 +1,8 @@
 from mpmath import mpf  # type: ignore
 
 trusted_dict = {
-    "Cart_to_xx_0": mpf("0.0"),
-    "Cart_to_xx_1": mpf("0.0"),
-    "Cart_to_xx_2": mpf("0.0"),
+    "Cart_to_xx_1": mpf("1.10685304642936859912503384510848"),
+    "Cart_to_xx_2": mpf("0.104277269822046439469449849362747"),
     "Cartx": mpf("0.449832882742496220629391245893203"),
     "Carty": mpf("0.0470781072226313934692143448046409"),
     "Cartz": mpf("0.226312034922729443664479731523897"),
@@ -151,6 +150,9 @@ trusted_dict = {
     "Jac_dUrfm_dDSphUD_6": mpf("0.0"),
     "Jac_dUrfm_dDSphUD_7": mpf("0.0"),
     "Jac_dUrfm_dDSphUD_8": mpf("1.0"),
+    "NewtonRaphson_f_of_xx_0": mpf("-0.339758383193697021164650683056213"),
+    "NewtonRaphson_f_of_xx_1": mpf("0.0"),
+    "NewtonRaphson_f_of_xx_2": mpf("0.0"),
     "ReD_0": mpf("0.403468685791882482273053187529016"),
     "ReD_1": mpf("0.165991661519060907063353746439271"),
     "ReD_2": mpf("0.0741167345052444261545950299591627"),
