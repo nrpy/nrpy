@@ -332,7 +332,7 @@ def Cfunction_BSSN_Cart_to_rescaled_BSSN_rfm(
 After the basis transform, all BSSN quantities are rescaled."""
     cfunc_type = "static void"
     name = "BSSN_Cart_to_rescaled_BSSN_rfm"
-    params = """const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xCart[3],
+    params = """const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xxL[3],
                                            const BSSN_Cart_basis_struct *restrict BSSN_Cart_basis,
                                            rescaled_BSSN_rfm_basis_struct *restrict rescaled_BSSN_rfm_basis"""
 
@@ -341,10 +341,7 @@ After the basis transform, all BSSN quantities are rescaled."""
         body += r"""
   REAL xx0,xx1,xx2 __attribute__((unused));  // xx2 might be unused in the case of axisymmetric initial data.
   {
-    int unused_Cart_to_i0i1i2[3];
-    REAL xx[3];
-    Cart_to_xx_and_nearest_i0i1i2(commondata, params, xCart, xx, unused_Cart_to_i0i1i2);
-    xx0=xx[0];  xx1=xx[1];  xx2=xx[2];
+    xx0=xxL[0];  xx1=xxL[1];  xx2=xxL[2];
   }
 """
 
@@ -657,8 +654,14 @@ typedef struct __rescaled_BSSN_rfm_basis_struct__ {
     BSSN_Cart_basis_struct BSSN_Cart_basis;
     ADM_Cart_to_BSSN_Cart(commondata, params, xCart, &ADM_Cart_basis, &BSSN_Cart_basis);
 
+    REAL xxL[3];
+    // xxL are the local coordinates on the destination grid, associated with the Cartesian coordinates xCart
+    xxL[0] = xx[0][i0];
+    xxL[1] = xx[1][i1];
+    xxL[2] = xx[2][i2];
+
     rescaled_BSSN_rfm_basis_struct rescaled_BSSN_rfm_basis;
-    BSSN_Cart_to_rescaled_BSSN_rfm(commondata, params, xCart, &BSSN_Cart_basis, &rescaled_BSSN_rfm_basis);
+    BSSN_Cart_to_rescaled_BSSN_rfm(commondata, params, xxL, &BSSN_Cart_basis, &rescaled_BSSN_rfm_basis);
 
     const int idx3 = IDX3(i0, i1, i2);
 """
