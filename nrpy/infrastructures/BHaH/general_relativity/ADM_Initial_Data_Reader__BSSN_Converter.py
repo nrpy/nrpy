@@ -339,10 +339,7 @@ After the basis transform, all BSSN quantities are rescaled."""
     body = ""
     if CoordSystem != "Cartesian":
         body += r"""
-  REAL xx0,xx1,xx2 __attribute__((unused));  // xx2 might be unused in the case of axisymmetric initial data.
-  {
-    xx0=xxL[0];  xx1=xxL[1];  xx2=xxL[2];
-  }
+  const REAL xx0=xxL[0], xx1=xxL[1], xx2=xxL[2];
 """
 
     # Define the input variables:
@@ -640,6 +637,9 @@ typedef struct __rescaled_BSSN_rfm_basis_struct__ {
   const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
 
   LOOP_OMP("omp parallel for", i0, 0, Nxx_plus_2NGHOSTS0, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
+    // xxL are the local coordinates on the destination grid
+    REAL xxL[3] = { xx[0][i0], xx[1][i1], xx[2][i2] };
+
     // xCart is the global Cartesian coordinate, which accounts for any grid offsets from the origin.
     REAL xCart[3];
     xx_to_Cart(commondata, params, xx, i0, i1, i2, xCart);
@@ -653,12 +653,6 @@ typedef struct __rescaled_BSSN_rfm_basis_struct__ {
 
     BSSN_Cart_basis_struct BSSN_Cart_basis;
     ADM_Cart_to_BSSN_Cart(commondata, params, xCart, &ADM_Cart_basis, &BSSN_Cart_basis);
-
-    REAL xxL[3];
-    // xxL are the local coordinates on the destination grid, associated with the Cartesian coordinates xCart
-    xxL[0] = xx[0][i0];
-    xxL[1] = xx[1][i1];
-    xxL[2] = xx[2][i2];
 
     rescaled_BSSN_rfm_basis_struct rescaled_BSSN_rfm_basis;
     BSSN_Cart_to_rescaled_BSSN_rfm(commondata, params, xxL, &BSSN_Cart_basis, &rescaled_BSSN_rfm_basis);
