@@ -65,7 +65,7 @@ def register_CFunction_exact_ADM_ID_function(
             verbose=False,
             include_braces=True,
         )
-        body += "const REAL xx0=r, xx1=th, xx2=ph;\n"
+        body += "MAYBE_UNUSED const REAL xx0=r, xx1=th, xx2=ph;\n"
     elif IDCoordSystem == "Cartesian":
         body += r"""  const REAL x=xCart[0], y=xCart[1], z=xCart[2];
 """
@@ -638,7 +638,7 @@ typedef struct __rescaled_BSSN_rfm_basis_struct__ {
 
   LOOP_OMP("omp parallel for", i0, 0, Nxx_plus_2NGHOSTS0, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
     // xxL are the local coordinates on the destination grid
-    REAL xxL[3] = { xx[0][i0], xx[1][i1], xx[2][i2] };
+    const REAL xxL[3] = { xx[0][i0], xx[1][i1], xx[2][i2] };
 
     // xCart is the global Cartesian coordinate, which accounts for any grid offsets from the origin.
     REAL xCart[3];
