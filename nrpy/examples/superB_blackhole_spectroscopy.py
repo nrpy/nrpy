@@ -55,6 +55,7 @@ from nrpy.infrastructures.BHaH.general_relativity import (
     BSSN_C_codegen_library,
     psi4_C_codegen_library,
 )
+import nrpy.infrastructures.BHaH.interpolation_2d_general__uniform_src_grid as interpolation2d
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -170,7 +171,10 @@ TP_solve(&ID_persist);
 }
 """,
 )
-
+interpolation2d.register_CFunction_interpolation_2d_general__uniform_src_grid(
+    enable_simd=enable_simd,
+    project_dir=project_dir    
+)
 superBdiagnostics.register_CFunction_diagnostics(
     list_of_CoordSystems=[CoordSystem],
     default_diagnostics_out_every=diagnostics_output_every,
@@ -407,7 +411,6 @@ superBMakefile.output_CFunctions_function_prototypes_and_construct_Makefile(
     addl_libraries=[
         "$(shell gsl-config --libs)",
         "-module CkIO",
-        "$(USER_LIB_PATH) -lBHaHAHA",
     ],
     CC="charmc",
 )
