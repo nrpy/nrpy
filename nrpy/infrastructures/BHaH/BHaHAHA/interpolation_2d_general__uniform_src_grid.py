@@ -12,7 +12,6 @@ from typing import Union, cast
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 from nrpy.helpers.generic import copy_files
-
 from nrpy.infrastructures.BHaH.BHaHAHA import error_message
 
 
@@ -43,7 +42,13 @@ def register_CFunction_interpolation_2d_general__uniform_src_grid(
             subdirectory="simd",
         )
 
-    includes = ["math.h", "simd/simd_intrinsics.h", "stdio.h", "stdlib.h", "BHaH_defines.h"]
+    includes = [
+        "math.h",
+        "simd/simd_intrinsics.h",
+        "stdio.h",
+        "stdlib.h",
+        "BHaH_defines.h",
+    ]
 
     prefunc = """
 #ifndef REAL
