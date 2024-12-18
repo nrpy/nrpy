@@ -40,7 +40,7 @@ def register_CFunction_interpolation_2d_general__uniform_src_grid(
             filenames_list=["simd_intrinsics.h"],
             project_dir=project_dir,
             subdirectory="intrinsics",
-        )        
+        )
 
     includes = [
         "math.h",
