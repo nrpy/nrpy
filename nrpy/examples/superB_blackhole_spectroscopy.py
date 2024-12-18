@@ -28,6 +28,7 @@ from pathlib import Path
 
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
+import nrpy.infrastructures.BHaH.BHaHAHA.interpolation_2d_general__uniform_src_grid as interpolation2d
 import nrpy.infrastructures.BHaH.checkpointing as chkpt
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
@@ -55,7 +56,6 @@ from nrpy.infrastructures.BHaH.general_relativity import (
     BSSN_C_codegen_library,
     psi4_C_codegen_library,
 )
-import nrpy.infrastructures.BHaH.BHaHAHA.interpolation_2d_general__uniform_src_grid as interpolation2d
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
