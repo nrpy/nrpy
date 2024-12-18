@@ -39,12 +39,12 @@ def register_CFunction_interpolation_2d_general__uniform_src_grid(
             package="nrpy.helpers",
             filenames_list=["simd_intrinsics.h"],
             project_dir=project_dir,
-            subdirectory="simd",
-        )
+            subdirectory="intrinsics",
+        )        
 
     includes = [
         "math.h",
-        "simd/simd_intrinsics.h",
+        "intrinsics/simd_intrinsics.h",
         "stdio.h",
         "stdlib.h",
         "BHaH_defines.h",
