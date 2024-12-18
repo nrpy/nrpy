@@ -173,8 +173,7 @@ TP_solve(&ID_persist);
 """,
 )
 interpolation2d.register_CFunction_interpolation_2d_general__uniform_src_grid(
-    enable_simd=enable_simd,
-    project_dir=project_dir    
+    enable_simd=enable_simd, project_dir=project_dir
 )
 superBdiagnostics.register_CFunction_diagnostics(
     list_of_CoordSystems=[CoordSystem],
