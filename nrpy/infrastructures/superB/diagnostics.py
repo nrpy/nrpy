@@ -878,7 +878,7 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
           }
         }
         // Call the interpolation function
-        int error_code1 = bah_interpolation_2d_general__uniform_src_grid(N_interp_GHOSTS, src_dxx0, src_dxx1,
+        int error_code1 = interpolation_2d_general__uniform_src_grid(N_interp_GHOSTS, src_dxx0, src_dxx1,
                                         src_Nxx_plus_2NGHOSTS0, src_Nxx_plus_2NGHOSTS1,
                                         src_x0x1, src_gf_psi4r, num_dst_pts,
                                         dst_pts, dst_data_psi4r);
@@ -887,7 +887,7 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
           CkPrintf("Interpolation error code: %d\n", error_code1);
         }
 
-        int error_code2 = bah_interpolation_2d_general__uniform_src_grid(N_interp_GHOSTS, src_dxx0, src_dxx1,
+        int error_code2 = interpolation_2d_general__uniform_src_grid(N_interp_GHOSTS, src_dxx0, src_dxx1,
                                         src_Nxx_plus_2NGHOSTS0, src_Nxx_plus_2NGHOSTS1,
                                         src_x0x1, src_gf_psi4i, num_dst_pts,
                                         dst_pts, dst_data_psi4i);

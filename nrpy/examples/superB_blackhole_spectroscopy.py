@@ -55,14 +55,15 @@ from nrpy.infrastructures.BHaH.general_relativity import (
     BSSN_C_codegen_library,
     psi4_C_codegen_library,
 )
-import nrpy.infrastructures.BHaH.interpolation_2d_general__uniform_src_grid as interpolation2d
+import nrpy.infrastructures.BHaH.BHaHAHA.interpolation_2d_general__uniform_src_grid as interpolation2d
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
 
 # Code-generation-time parameters:
 project_name = "superB_blackhole_spectroscopy"
-CoordSystem = "SinhSpherical"
+# CoordSystem = "SinhSpherical"
+CoordSystem = "SinhCylindrical"
 IDtype = "TP_Interp"
 IDCoordSystem = "Cartesian"
 
@@ -91,7 +92,7 @@ swm2sh_maximum_l_mode_generated = 8
 swm2sh_maximum_l_mode_to_compute = 2  # for consistency with NRPy 1.0 version.
 Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
-    "SinhCylindrical": [400, 2, 800],
+    "SinhCylindrical": [64, 2, 200],
 }
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.25
@@ -114,9 +115,9 @@ if "Spherical" in CoordSystem:
     par.adjust_CodeParam_default("Nchare1", 2)
     par.adjust_CodeParam_default("Nchare2", 1)
 if "Cylindrical" in CoordSystem:
-    par.adjust_CodeParam_default("Nchare0", 10)
+    par.adjust_CodeParam_default("Nchare0", 4)
     par.adjust_CodeParam_default("Nchare1", 1)
-    par.adjust_CodeParam_default("Nchare2", 20)
+    par.adjust_CodeParam_default("Nchare2", 10)
 
 OMP_collapse = 1
 if "Spherical" in CoordSystem:
