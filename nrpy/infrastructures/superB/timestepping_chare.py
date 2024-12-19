@@ -382,6 +382,7 @@ def output_timestepping_h(
     enable_psi4_diagnostics: bool = False,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
     enable_charm_checkpointing: bool = False,
+    enable_L2norm_BSSN_constraints_diagnostics: bool = False,
 ) -> None:
     """
     Generate timestepping.h.
@@ -391,6 +392,7 @@ def output_timestepping_h(
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
+    :param enable_L2norm_BSSN_constraints_diagnostics: Whether or not to enable L2norm of BSSN_constraints diagnostics.
     """
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
@@ -459,6 +461,9 @@ class Timestepping : public CBase_Timestepping {
         file_output_str += r"""
     void contribute_localsums_for_residualH(REAL localsums_for_residualH[2]);
     void send_wavespeed_at_outer_boundary(const int grid);"""
+    if enable_L2norm_BSSN_constraints_diagnostics:
+        file_output_str += r"""
+    void contribute_localsums_for_L2norm_BSSN_constraints(REAL localsums[4]);"""
     if enable_psi4_diagnostics:
         file_output_str += r"""
     void contribute_localsums_for_psi4_decomp(sectionBcastMsg *msg, const int grid);
@@ -583,6 +588,7 @@ def output_timestepping_cpp(
     enable_psi4_diagnostics: bool = False,
     clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
     enable_charm_checkpointing: bool = False,
+    enable_L2norm_BSSN_constraints_diagnostics: bool = False,
 ) -> None:
     """
     Generate timestepping.cpp.
@@ -598,6 +604,7 @@ def output_timestepping_cpp(
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
+    enable_L2norm_BSSN_constraints_diagnostics: bool = False,
     :raises ValueError: Raised if any required function is not registered.
     """
     initial_data_desc += " "
@@ -1090,6 +1097,18 @@ void Timestepping::send_wavespeed_at_outer_boundary(const int grid) {
   }
 }
 """
+    if enable_L2norm_BSSN_constraints_diagnostics:
+        file_output_str += r"""
+void Timestepping::contribute_localsums_for_L2norm_BSSN_constraints(REAL localsums[4]) {
+  std::vector<double> outdoubles(4);
+  outdoubles[0] = localsums[0];
+  outdoubles[1] = localsums[1];
+  outdoubles[2] = localsums[2];
+  outdoubles[3] = localsums[3];
+  CkCallback cb(CkIndex_Timestepping::report_sums_for_L2norm_BSSN_constraints(NULL), thisProxy[CkArrayIndex3D(0, 0, 0)]);
+  contribute(outdoubles, CkReduction::sum_double, cb);
+}
+"""
     if enable_psi4_diagnostics:
         file_output_str += r"""
 void Timestepping::contribute_localsums_for_psi4_decomp(sectionBcastMsg *msg, const int grid) {
@@ -1268,6 +1287,7 @@ def output_timestepping_ci(
     enable_psi4_diagnostics: bool = False,
     enable_residual_diagnostics: bool = False,
     enable_charm_checkpointing: bool = False,
+    enable_L2norm_BSSN_constraints_diagnostics: bool = False,
 ) -> None:
     """
     Generate timestepping.ci.
@@ -1283,6 +1303,7 @@ def output_timestepping_ci(
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     :param enable_residual_diagnostics: Whether or not to enable residual diagnostics.
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
+    :param enable_L2norm_BSSN_constraints_diagnostics: Whether or not to enable L2norm of BSSN_constraints diagnostics.
     """
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
@@ -1609,6 +1630,21 @@ def output_timestepping_ci(
         }
         when continue_timestepping() { }
 """
+
+
+    if enable_L2norm_BSSN_constraints_diagnostics:
+        file_output_str += r"""
+        if (write_diagnostics_this_step) {
+          serial {
+            Ck::IO::Session token;  //pass a null token
+            const int thisIndex_arr[3] = {thisIndex.x, thisIndex.y, thisIndex.z};
+            REAL localsums[4];
+            diagnostics(&commondata, griddata_chare, griddata, token, OUTPUT_L2NORM_BSSN_CONSTRAINTS, which_grid_diagnostics, thisIndex_arr, localsums);
+            contribute_localsums_for_L2norm_BSSN_constraints(localsums);
+          }
+        }    
+        """
+
     if enable_charm_checkpointing:
         file_output_str += r"""
         // periodically checkpointing
@@ -1732,7 +1768,7 @@ def output_timestepping_ci(
         diagnostics(&commondata, griddata_chare, griddata, token, which_output, which_grid_diagnostics, thisIndex_arr, unused_var);"""
     else:
         file_output_str += r"""
-        diagnostics(&commondata, griddata_chare, griddata, token, which_output, which_grid_diagnostics, thisIndex_arr);"""
+        diagnostics(&commondata, griddata_chare, griddata, token, which_output, which_grid_diagnostics, thisIndex_arr, NULL);"""
     file_output_str += r"""
       }
     }
@@ -1775,13 +1811,38 @@ def output_timestepping_ci(
       }
     }
     entry void receiv_wavespeed_at_outer_boundary(REAL wavespeed_at_outer_boundary);"""
+    if enable_L2norm_BSSN_constraints_diagnostics:
+        file_output_str += r"""    
+    entry void report_sums_for_L2norm_BSSN_constraints(CkReductionMsg *msg) {
+      serial {
+        int reducedArrSize = msg->getSize() / sizeof(REAL);
+        CkAssert(reducedArrSize == 4);
+        REAL *output = (REAL *)msg->getData();
+        REAL log10_H = log10(1e-16 + sqrt(output[0] / output[1])); // 1e-16 + ... avoids log10(0)
+        REAL log10_M = log10(1e-16 + pow((output[2] / output[3]), 0.25)); // 1e-16 + ... avoids log10(0)
+        
+        // Output l2-norm of BSSN constraints to file
+        char filename[256];
+        sprintf(filename, "l2_norm_BSSN_constraints.txt");
+        const int nn = commondata.nn;
+        const REAL time = commondata.time;          
+        FILE *outfile = (nn == 0) ? fopen(filename, "w") : fopen(filename, "a");
+        if (!outfile) {
+          fprintf(stderr, "Error: Cannot open file %s for writing.\n", filename);
+          exit(1);
+        }
+        fprintf(outfile, "%6d %10.4e %.17e %.17e\n", nn, time, log10_H, log10_M);
+        fclose(outfile);        
+        delete msg;        
+      }
+    }"""
     if enable_psi4_diagnostics:
         file_output_str += r"""
     entry void recvMsg_to_contribute_localsums_for_psi4_decomp(sectionBcastMsg *msg){
       serial {
         Ck::IO::Session token; // pass a null token
         const int thisIndex_arr[3] = {thisIndex.x, thisIndex.y, thisIndex.z};
-        diagnostics(&commondata, griddata_chare, griddata, token, OUTPUT_PSI4, which_grid_diagnostics, thisIndex_arr);
+        diagnostics(&commondata, griddata_chare, griddata, token, OUTPUT_PSI4, which_grid_diagnostics, thisIndex_arr, NULL);
         contribute_localsums_for_psi4_decomp(msg, which_grid_diagnostics);
       }
     }
@@ -1826,6 +1887,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
     enable_psi4_diagnostics: bool = False,
     enable_residual_diagnostics: bool = False,
     enable_charm_checkpointing: bool = False,
+    enable_L2norm_BSSN_constraints_diagnostics: bool = False,
 ) -> None:
     """
     Output timestepping h, cpp, and ci files and register C functions.
@@ -1840,6 +1902,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     :param enable_residual_diagnostics: Whether or not to enable residual diagnostics.
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
+    :param enable_L2norm_BSSN_constraints_diagnostics: Whether or not to enable L2norm of BSSN_constraints diagnostics.
     """
     # For NRPy elliptic: register parameter wavespeed at outer boundary
     if enable_residual_diagnostics:
@@ -1852,6 +1915,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         enable_residual_diagnostics=enable_residual_diagnostics,
         enable_psi4_diagnostics=enable_psi4_diagnostics,
         enable_charm_checkpointing=enable_charm_checkpointing,
+        enable_L2norm_BSSN_constraints_diagnostics=enable_L2norm_BSSN_constraints_diagnostics,
     )
 
     Butcher_dict = generate_Butcher_tables()
@@ -1865,6 +1929,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         enable_residual_diagnostics=enable_residual_diagnostics,
         enable_psi4_diagnostics=enable_psi4_diagnostics,
         enable_charm_checkpointing=enable_charm_checkpointing,
+        enable_L2norm_BSSN_constraints_diagnostics=enable_L2norm_BSSN_constraints_diagnostics,
     )
 
     output_timestepping_ci(
@@ -1878,6 +1943,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         enable_residual_diagnostics=enable_residual_diagnostics,
         Butcher_dict=Butcher_dict,
         enable_charm_checkpointing=enable_charm_checkpointing,
+        enable_L2norm_BSSN_constraints_diagnostics=enable_L2norm_BSSN_constraints_diagnostics,
     )
 
     register_CFunction_timestepping_malloc()
