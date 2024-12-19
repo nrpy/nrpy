@@ -16,6 +16,9 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.superB.output_0d_1d_2d_nearest_gridpoint_slices as out012d
 import nrpy.params as par
 from nrpy.infrastructures.BHaH import griddata_commondata
+from nrpy.infrastructures.superB.nrpyelliptic.conformally_flat_C_codegen_library import (
+    register_CFunction_compute_L2_norm_of_gridfunction_between_r1_r2,
+)
 
 
 def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type]:
@@ -349,6 +352,7 @@ def register_CFunction_diagnostics(
     out_quantities_dict: Union[str, Dict[Tuple[str, str], str]] = "default",
     enable_BSSN_diagnostics: bool = True,
     enable_psi4_diagnostics: bool = False,
+    enable_L2norm_BSSN_constraints_diagnostics: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register C function for simulation diagnostics.
@@ -361,6 +365,7 @@ def register_CFunction_diagnostics(
     :param out_quantities_dict: Dictionary or string specifying output quantities.
     :param enable_BSSN_diagnostics: Whether or not to enable BSSN constraint violation diagnostics.
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
+    :param enable_L2norm_BSSN_constraints_diagnostics: Whether or not to enable L2norm of BSSN_constraints diagnostics.
 
     :return: None if in registration phase, else the updated NRPy environment.
     :raises TypeError: If `out_quantities_dict` is not a dictionary and not set to "default".
@@ -426,10 +431,15 @@ def register_CFunction_diagnostics(
     if enable_psi4_diagnostics:
         register_CFunction_psi4_diagnostics_set_up()
 
+    if enable_L2norm_BSSN_constraints_diagnostics:
+        register_CFunction_compute_L2_norm_of_gridfunction_between_r1_r2(
+            CoordSystem=CoordSystem
+        )
+
     desc = r"""Diagnostics."""
     cfunc_type = "void"
     name = "diagnostics"
-    params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata_chare, griddata_struct *restrict griddata, Ck::IO::Session token, const int which_output, const int grid, const int chare_index[3]"
+    params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata_chare, griddata_struct *restrict griddata, Ck::IO::Session token, const int which_output, const int grid, const int chare_index[3], REAL localsums[4]"
     body = r"""
 
   // Unpack griddata and griddata_chare
@@ -457,9 +467,12 @@ const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
 const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
 const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
 """
+    body += r"""
+switch (which_output) {  
+    """
     if enable_psi4_diagnostics:
         body += r"""
-if (which_output == OUTPUT_PSI4) {
+case OUTPUT_PSI4: {
    // Do psi4 output, but only if the grid is spherical-like.
   if (strstr(params_chare->CoordSystemName, "Spherical") != NULL) {
     if (diagnosticstruct->num_of_R_exts_chare > 0) {
@@ -489,10 +502,31 @@ if (which_output == OUTPUT_PSI4) {
         diagnosticstruct->localsums_for_psi4_decomp,
         diagnosticstruct->length_localsums_for_psi4_decomp);
   }
-} else {
+  break;
+}"""
+    if enable_L2norm_BSSN_constraints_diagnostics:
+        body += r"""
+case OUTPUT_L2NORM_BSSN_CONSTRAINTS: {              
+  const REAL integration_radius1 = 2;
+  const REAL integration_radius2 = 1000;
+  // Compute local sums for l2-norm of the Hamiltonian and momentum constraints        
+  REAL localsums_HGF[2];    
+  compute_L2_norm_of_gridfunction_between_r1_r2(commondata, griddata_chare, integration_radius1, integration_radius2, HGF, diagnostic_output_gfs,
+                                                localsums_HGF);
+                                                
+  REAL localsums_MSQUAREDGF[2];                                                                                                      
+  compute_L2_norm_of_gridfunction_between_r1_r2(commondata, griddata_chare, integration_radius1, integration_radius2, MSQUAREDGF,
+                                                diagnostic_output_gfs, localsums_MSQUAREDGF);
+                                                
+  localsums[0] = localsums_HGF[0];
+  localsums[1] = localsums_HGF[1];
+  localsums[2] = localsums_MSQUAREDGF[0];
+  localsums[3] = localsums_MSQUAREDGF[1];
+  break;
+}
 """
     body += r"""
-
+default: {
   const int num_diagnostic_1d_y_pts = griddata_chare[grid].diagnosticstruct.num_diagnostic_1d_y_pts;
   const int num_diagnostic_1d_z_pts = griddata_chare[grid].diagnosticstruct.num_diagnostic_1d_z_pts;
   const int num_diagnostic_2d_xy_pts = griddata_chare[grid].diagnosticstruct.num_diagnostic_2d_xy_pts;
@@ -504,22 +538,16 @@ if (which_output == OUTPUT_PSI4) {
             (num_diagnostic_1d_z_pts > 0) ||
             (num_diagnostic_2d_xy_pts > 0) ||
             (num_diagnostic_2d_yz_pts > 0);
-
+            
+  // Compute constraints even if this chare does not contain any points on x or y axes or xy or yz plane
+  // Contraints on the whole chare grid is used to compute l2-norm
+  {
+    Ricci_eval(commondata, params_chare, &griddata_chare[grid].rfmstruct, y_n_gfs, auxevol_gfs);
+    constraints_eval(commondata, params_chare, &griddata_chare[grid].rfmstruct, y_n_gfs, auxevol_gfs, diagnostic_output_gfs);
+  }
   if (write_diagnostics) {
-"""
-    if enable_BSSN_diagnostics:
-        body += r"""
-
-    // Constraint output
-    {
-      Ricci_eval(commondata, params_chare, &griddata_chare[grid].rfmstruct, y_n_gfs, auxevol_gfs);
-      constraints_eval(commondata, params_chare, &griddata_chare[grid].rfmstruct, y_n_gfs, auxevol_gfs, diagnostic_output_gfs);
-    }
-"""
-
-    body += r"""
-
-    // // 0D, 1D and 2D outputs
+  
+    //  0D, 1D and 2D outputs
     if (which_output == OUTPUT_0D) {
         diagnostics_nearest_grid_center(commondata, params_chare, &griddata_chare[grid].gridfuncs);
     } else if (which_output == OUTPUT_1D_Y) {
@@ -540,9 +568,8 @@ if (which_output == OUTPUT_PSI4) {
       }
     }
   }
-"""
-    if enable_psi4_diagnostics:
-        body += r"""
+  break;
+}
 }
 """
 
