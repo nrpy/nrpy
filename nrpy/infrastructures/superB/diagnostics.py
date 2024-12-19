@@ -571,7 +571,7 @@ default: {
   break;
 }
 }
-"""    
+"""
 
     cfc.register_CFunction(
         includes=includes,
