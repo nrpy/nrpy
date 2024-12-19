@@ -62,8 +62,8 @@ par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Code-generation-time parameters:
 project_name = "superB_blackhole_spectroscopy"
-# CoordSystem = "SinhSpherical"
-CoordSystem = "SinhCylindrical"
+CoordSystem = "SinhSpherical"
+# CoordSystem = "SinhCylindrical"
 IDtype = "TP_Interp"
 IDCoordSystem = "Cartesian"
 
@@ -189,6 +189,7 @@ superBdiagnostics.register_CFunction_diagnostics(
     ),
     out_quantities_dict="default",
     enable_psi4_diagnostics=True,
+    enable_L2norm_BSSN_constraints_diagnostics=True,
 )
 if enable_rfm_precompute:
     rfm_precompute.register_CFunctions_rfm_precompute(
@@ -368,6 +369,7 @@ superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
     outer_bcs_type=outer_bcs_type,
     enable_psi4_diagnostics=True,
     enable_charm_checkpointing=enable_charm_checkpointing,
+    enable_L2norm_BSSN_constraints_diagnostics=True,
 )
 
 superBpup.register_CFunction_superB_pup_routines(
