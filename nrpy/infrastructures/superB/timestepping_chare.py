@@ -604,7 +604,7 @@ def output_timestepping_cpp(
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
-    enable_L2norm_BSSN_constraints_diagnostics: bool = False,
+    :param enable_L2norm_BSSN_constraints_diagnostics: Enable diagnostics for the L2 norm of BSSN constraint violations.
     :raises ValueError: Raised if any required function is not registered.
     """
     initial_data_desc += " "
@@ -1630,7 +1630,6 @@ def output_timestepping_ci(
         }
         when continue_timestepping() { }
 """
-
 
     if enable_L2norm_BSSN_constraints_diagnostics:
         file_output_str += r"""

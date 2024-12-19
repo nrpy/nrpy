@@ -101,7 +101,8 @@ if(r < integration_radius) {
         include_CodeParameters_h=False,  # set_CodeParameters.h is manually included after the declaration of params_struct *restrict params
         body=body,
     )
-    
+
+
 # Define function to compute the l^2 of a gridfunction between 2 radii
 def register_CFunction_compute_L2_norm_of_gridfunction_between_r1_r2(
     CoordSystem: str,
