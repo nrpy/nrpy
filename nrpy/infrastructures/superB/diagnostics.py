@@ -467,9 +467,12 @@ const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
 const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
 const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
 """
+    body += r"""
+switch (which_output) {  
+    """
     if enable_psi4_diagnostics:
         body += r"""
-if (which_output == OUTPUT_PSI4) {
+case OUTPUT_PSI4: {
    // Do psi4 output, but only if the grid is spherical-like.
   if (strstr(params_chare->CoordSystemName, "Spherical") != NULL) {
     if (diagnosticstruct->num_of_R_exts_chare > 0) {
@@ -499,10 +502,11 @@ if (which_output == OUTPUT_PSI4) {
         diagnosticstruct->localsums_for_psi4_decomp,
         diagnosticstruct->length_localsums_for_psi4_decomp);
   }
+  break;
 }"""
     if enable_L2norm_BSSN_constraints_diagnostics:
-        body += r"""else if (which_output == OUTPUT_L2NORM_BSSN_CONSTRAINTS) {
-              
+        body += r"""
+case OUTPUT_L2NORM_BSSN_CONSTRAINTS: {              
   const REAL integration_radius1 = 2;
   const REAL integration_radius2 = 1000;
   // Compute local sums for l2-norm of the Hamiltonian and momentum constraints        
@@ -518,9 +522,11 @@ if (which_output == OUTPUT_PSI4) {
   localsums[1] = localsums_HGF[1];
   localsums[2] = localsums_MSQUAREDGF[0];
   localsums[3] = localsums_MSQUAREDGF[1];
+  break;
 }
 """
-    body += r"""else {
+    body += r"""
+default: {
   const int num_diagnostic_1d_y_pts = griddata_chare[grid].diagnosticstruct.num_diagnostic_1d_y_pts;
   const int num_diagnostic_1d_z_pts = griddata_chare[grid].diagnosticstruct.num_diagnostic_1d_z_pts;
   const int num_diagnostic_2d_xy_pts = griddata_chare[grid].diagnosticstruct.num_diagnostic_2d_xy_pts;
@@ -562,11 +568,10 @@ if (which_output == OUTPUT_PSI4) {
       }
     }
   }
-"""
-    if enable_psi4_diagnostics:
-        body += r"""
+  break;
 }
-"""
+}
+"""    
 
     cfc.register_CFunction(
         includes=includes,
