@@ -557,40 +557,39 @@ static void read_boolean(const char *value, bool *result, const char *param_name
         else:
             prefix = "else if"
         if param_type == "PARAM_REAL":
-            assignment_code += (
-                f"        {prefix} (param_desc->index == {index}) {{\n"
-                f'            read_REAL(values_array[0], &commondata->{param_name}, "{param_name}");\n'
-                f"        }}\n"
-            )
+            assignment_code += f"""
+    {prefix} (param_desc->index == {index}) {{
+        read_REAL(values_array[0], &commondata->{param_name}, "{param_name}");
+    }}
+"""
         elif param_type == "PARAM_INT":
-            assignment_code += (
-                f"        {prefix} (param_desc->index == {index}) {{\n"
-                f'            read_integer(values_array[0], &commondata->{param_name}, "{param_name}");\n'
-                f"        }}\n"
-            )
+            assignment_code += f"""
+    {prefix} (param_desc->index == {index}) {{
+        read_integer(values_array[0], &commondata->{param_name}, "{param_name}");
+    }}
+"""
         elif param_type == "PARAM_CHARARRAY":
-            # buffer_size is used instead of array_size
-            assignment_code += (
-                f"        {prefix} (param_desc->index == {index}) {{\n"
-                f'            read_chararray(values_array[0], commondata->{param_name}, "{param_name}", {buffer_size});\n'
-                f"        }}\n"
-            )
+            assignment_code += f"""
+    {prefix} (param_desc->index == {index}) {{
+        read_chararray(values_array[0], commondata->{param_name}, "{param_name}", {buffer_size});
+    }}
+"""
         elif param_type == "PARAM_REAL_ARRAY":
-            assignment_code += (
-                f"        {prefix} (param_desc->index == {index}) {{\n"
-                f"            for (int i = 0; i < {array_size}; i++) {{\n"
-                f'                read_REAL(values_array[i], &commondata->{param_name}[i], "{param_name}");\n'
-                f"            }}\n"
-                f"        }}\n"
-            )
+            assignment_code += f"""
+    {prefix} (param_desc->index == {index}) {{
+        for (int i = 0; i < {array_size}; i++) {{
+            read_REAL(values_array[i], &commondata->{param_name}[i], "{param_name}");
+        }}
+    }}
+"""
         elif param_type == "PARAM_INT_ARRAY":
-            assignment_code += (
-                f"        {prefix} (param_desc->index == {index}) {{\n"
-                f"            for (int i = 0; i < {array_size}; i++) {{\n"
-                f'                read_integer(values_array[i], &commondata->{param_name}[i], "{param_name}");\n'
-                f"            }}\n"
-                f"        }}\n"
-            )
+            assignment_code += f"""
+    {prefix} (param_desc->index == {index}) {{
+        for (int i = 0; i < {array_size}; i++) {{
+            read_integer(values_array[i], &commondata->{param_name}[i], "{param_name}");
+        }}
+    }}
+"""
 
     # Add the assignment code and the else block
     body += assignment_code
@@ -724,7 +723,7 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
     >>> # Register an int array parameter
     >>> _int_array = par.register_CodeParameter(
     ...     cparam_type="int[2]", module="CodeParameters_c_files",
-    ...     name="initial_levels", defaultvalue=4,
+    ...     name="initial_levels", defaultvalue=[4, 2],
     ...     commondata=True, add_to_parfile=True, add_to_set_CodeParameters_h=False,
     ...     description=""
     ... )
@@ -761,7 +760,7 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
     a = 1.0                                      # (REAL) The value of a
     bah_initial_x_center[3] = { 0.0, 0.0, 0.0 }  # (REAL) Initial X centers
     blahint = -1                                 # (int) An integer parameter
-    initial_levels[2] = { 4, 4 }                 # (int)
+    initial_levels[2] = { 4, 2 }                 # (int)
     outer_bc_type = "radiation"                  # (char[50]) A bc string parameter
     pi_three_sigfigs = 3.14                      # (REAL) Pi to three significant figures
     string = "cheese"                            # (char[100]) A string parameter
@@ -807,14 +806,22 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
                 default_val = CodeParam.defaultvalue
 
                 if base_type in ["real", "int"]:
-                    if base_type == "real":
-                        default_vals = ", ".join([f"{float(default_val)}"] * size)
-                        display_type = "REAL"
-                    else:
-                        default_vals = ", ".join([str(int(default_val))] * size)
-                        display_type = "int"
+                    display_type = "REAL" if base_type == "real" else "int"
 
-                    # Append to module's parameters
+                    if isinstance(default_val, list):
+                        if len(default_val) != size:
+                            raise ValueError(
+                                f"Length of default values list {len(default_val)} != size = {size}."
+                            )
+                        default_vals = ", ".join(str(x) for x in default_val)
+                    else:
+                        cast_val = (
+                            float(default_val)
+                            if base_type == "real"
+                            else int(default_val)
+                        )
+                        default_vals = ", ".join(str(cast_val) for _ in range(size))
+
                     parfile_output_dict[CodeParam.module].append(
                         f"{parname}[{size}] = {{ {default_vals} }}  # ({display_type}){description_suffix}\n"
                     )

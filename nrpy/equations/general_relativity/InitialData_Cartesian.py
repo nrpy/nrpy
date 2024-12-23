@@ -82,13 +82,28 @@ class InitialData_Cartesian:
         :return: Tuple containing gammaDD and KDD.
         """
         BH1_posn_x, BH1_posn_y, BH1_posn_z = par.register_CodeParameters(
-            "REAL", __name__, ["BH1_posn_x", "BH1_posn_y", "BH1_posn_z"], [0.0, 0.0, +0.5], commondata=True
+            "REAL", __name__, ["BH1_posn_x", "BH1_posn_y", "BH1_posn_z"], [0.0, 0.0, +0.5], commondata=True, add_to_parfile=False
         )
-        BH1_mass = par.register_CodeParameter("REAL", __name__, "BH1_mass", 0.5, commondata=True)
+        BH1_mass = par.register_CodeParameter("REAL", __name__, "BH1_mass", 1.0, commondata=True)
         BH2_posn_x, BH2_posn_y, BH2_posn_z = par.register_CodeParameters(
-            "REAL", __name__, ["BH2_posn_x", "BH2_posn_y", "BH2_posn_z"], [0.0, 0.0, -0.5], commondata=True
+            "REAL", __name__, ["BH2_posn_x", "BH2_posn_y", "BH2_posn_z"], [0.0, 0.0, -0.5], commondata=True, add_to_parfile=False
         )
-        BH2_mass = par.register_CodeParameter("REAL", __name__, "BH2_mass", 0.5, commondata=True)
+        BH2_mass = par.register_CodeParameter("REAL", __name__, "BH2_mass", 1.0, commondata=True)
+        BH3_posn_x, BH3_posn_y, BH3_posn_z = par.register_CodeParameters(
+            "REAL", __name__, ["BH3_posn_x", "BH3_posn_y", "BH3_posn_z"], [0.0, 0.0, -0.5], commondata=True, add_to_parfile=False
+        )
+        BH3_mass = par.register_CodeParameter("REAL", __name__, "BH3_mass", 1.0, commondata=True)
+
+        Rcrit = par.register_CodeParameter("REAL", __name__, "Rcrit", 1.19549953, commondata=True)
+
+        pi = sp.Symbol("M_PI")
+        BH1_posn_x = BH2_posn_x = BH3_posn_x = sp.sympify(0)
+        BH1_posn_y = sp.sympify(0)
+        BH2_posn_y = Rcrit * sp.sin(pi/3)
+        BH3_posn_y = -Rcrit * sp.sin(pi/3)
+        BH1_posn_z = Rcrit
+        BH2_posn_z = -Rcrit * sp.cos(pi/3)
+        BH3_posn_z = -Rcrit * sp.cos(pi/3)
 
         x = self.x
         y = self.y
@@ -98,6 +113,7 @@ class InitialData_Cartesian:
         psi = sp.sympify(1)
         psi += BH1_mass / ( 2 * sp.sqrt((x-BH1_posn_x)**2 + (y-BH1_posn_y)**2 + (z-BH1_posn_z)**2) )
         psi += BH2_mass / ( 2 * sp.sqrt((x-BH2_posn_x)**2 + (y-BH2_posn_y)**2 + (z-BH2_posn_z)**2) )
+        psi += BH3_mass / ( 2 * sp.sqrt((x-BH3_posn_x)**2 + (y-BH3_posn_y)**2 + (z-BH3_posn_z)**2) )
 
         # Step 2.c: Set all needed ADM variables in Cartesian coordinates
         gammaDD = ixp.zerorank2()
