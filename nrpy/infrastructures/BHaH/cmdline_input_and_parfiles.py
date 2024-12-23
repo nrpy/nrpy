@@ -811,7 +811,7 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
                     if isinstance(default_val, list):
                         if len(default_val) != size:
                             raise ValueError(
-                                f"Length of default values list {len(default_val)} != size = {size}."
+                                f"{parname}[{size}]: Length of default values list {len(default_val)} != size = {size}."
                             )
                         default_vals = ", ".join(str(x) for x in default_val)
                     else:
