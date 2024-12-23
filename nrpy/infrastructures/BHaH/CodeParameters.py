@@ -65,11 +65,15 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
       // Set commondata_struct variables to default
       commondata->a = 1;                   // CodeParameters_c_files::a
       commondata->blah_int = 1;            // CodeParameters_c_files::blah_int
-      commondata->int_array = {4, 2};      // CodeParameters_c_files::int_array
       commondata->pi_three_sigfigs = 3.14; // CodeParameters_c_files::pi_three_sigfigs
-      for (int i = 0; i < 5; i++) {
-        commondata->real_array[i] = 0.0;
+      {
+        REAL temp_val_array[] = {0.0, 0.0, 0.0, 0.0, 0.0};
+        memcpy(commondata->real_array, temp_val_array, sizeof(temp_val_array));
       } // CodeParameters_c_files::real_array
+      {
+        int temp_val_array[] = {4, 2};
+        memcpy(commondata->int_array, temp_val_array, sizeof(temp_val_array));
+      } // CodeParameters_c_files::int_array
     }
     <BLANKLINE>
     """
@@ -106,10 +110,15 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
                                 raise ValueError(
                                     f"{struct}->{parname}: Length of default values list {len(defaultval)} != size = {array_size}."
                                 )
-                            c_output = f"{struct}->{parname} = {{ {str(defaultval).replace("[","").replace("]", "")} }}; {comment}\n"
                         else:
-                            # Handle REAL[N] and int[N] arrays
-                            c_output = f"for(int i=0; i<{array_size}; i++) {{ {struct}->{parname}[i] = {str(defaultval).lower()}; }}{comment}\n"
+                            defaultval = [
+                                str(defaultval).replace("[", "").replace("]", "")
+                            ] * int(array_size)
+                        c_output = "{\n"
+                        c_output += f"  {CPtype.split('[')[0]} temp_val_array[] = {{ {', '.join(str(x) for x in defaultval)} }};\n"
+                        # Handle REAL[N] and int[N] arrays
+                        c_output += f"  memcpy({struct}->{parname}, temp_val_array, sizeof(temp_val_array));\n"
+                        c_output += f"}} {comment}\n"
                     elif isinstance(defaultval, (bool, int, float)) or (
                         CPtype == "REAL" and isinstance(defaultval, str)
                     ):
