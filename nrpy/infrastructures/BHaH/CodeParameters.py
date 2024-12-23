@@ -104,6 +104,7 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
                         chararray_size = CPtype.split("[")[1].replace("]", "")
                         c_output = f'snprintf({struct}->{parname}, {chararray_size}, "{defaultval}");{comment}\n'
                     elif "[" in CPtype and "]" in CPtype:
+                        # Handle REAL[N] and int[N] arrays
                         array_size = CPtype.split("[")[1].split("]")[0]
                         if isinstance(defaultval, list):
                             if int(array_size) != len(defaultval):
@@ -116,7 +117,6 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
                             ] * int(array_size)
                         c_output = "{\n"
                         c_output += f"  {CPtype.split('[')[0]} temp_val_array[] = {{ {', '.join(str(x) for x in defaultval)} }};\n"
-                        # Handle REAL[N] and int[N] arrays
                         c_output += f"  memcpy({struct}->{parname}, temp_val_array, sizeof(temp_val_array));\n"
                         c_output += f"}} {comment}\n"
                     elif isinstance(defaultval, (bool, int, float)) or (
