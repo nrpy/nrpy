@@ -809,10 +809,6 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
                     display_type = "REAL" if base_type == "real" else "int"
 
                     if isinstance(default_val, list):
-                        if len(default_val) != size:
-                            raise ValueError(
-                                f"{parname}[{size}]: Length of default values list {len(default_val)} != size = {size}."
-                            )
                         default_vals = ", ".join(str(x) for x in default_val)
                     else:
                         cast_val = (
