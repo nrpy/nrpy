@@ -150,6 +150,7 @@ superBdiagnostics.register_CFunction_diagnostics(
     ),
     out_quantities_dict="default",
     enable_psi4_diagnostics=False,
+    enable_L2norm_BSSN_constraints_diagnostics=True,
 )
 
 if enable_rfm_precompute:
@@ -278,6 +279,7 @@ superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
     outer_bcs_type=outer_bcs_type,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_psi4_diagnostics=False,
+    enable_L2norm_BSSN_constraints_diagnostics=True,
 )
 
 Bdefines_h.output_BHaH_defines_h(
