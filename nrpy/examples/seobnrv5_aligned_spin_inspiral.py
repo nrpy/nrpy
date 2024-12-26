@@ -47,6 +47,11 @@ par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
+
+APPLY_FD = True
+PRINT_WAVEFORM = True
+
+
 def register_CFunction_main_c() -> None:
     """Generate a simplified C main() function for computing SEOBNRv5 Hamiltonian and its derivatives."""
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
@@ -59,7 +64,6 @@ Step 2: Compute Hamiltonian and derivatives."""
     params = "int argc, const char *argv[]"
     body = r"""  commondata_struct commondata; // commondata contains parameters common to all grids.
 //Step 0: Initialize a loop parameter for outputs
-size_t i;
 // Step 1.a: Set each commondata CodeParameter to default.
 commondata_struct_set_to_default(&commondata);
 // Step 1.b: Overwrite default values to parfile values. Then overwrite parfile values with values set at cmd line.
@@ -83,20 +87,40 @@ SEOBNRv5_aligned_spin_waveform_from_dynamics(&commondata);
 SEOBNRv5_aligned_spin_NQC_corrections(&commondata);
 // Step 7.a Compute the IMR waveform
 SEOBNRv5_aligned_spin_IMR_waveform(&commondata);
+"""
+    if APPLY_FD:
+        body += r"""
+// Step 7.b Compute the FFT-ed IMR waveform
+// Specify wisdom file
+const char *wisdom_file = "fftw_wisdom.dat";
+SEOBNRv5_aligned_spin_FD_waveform(wisdom_file, &commondata);
+"""
+    if PRINT_WAVEFORM:
+        if APPLY_FD:
+            body += r"""
 // Step 6.b: Print the resulting waveform.
-
-for (i = 0; i < commondata.nsteps_IMR; i++) {
+for (size_t i = 0; i < commondata.nsteps_IMR_FD; i++) {
+    printf("%.15e %.15e %.15e\n", creal(commondata.waveform_IMR_FD[IDX_WF(i,FREQ)])
+    , creal(commondata.waveform_IMR_FD[IDX_WF(i,STRAIN)]), cimag(commondata.waveform_IMR_FD[IDX_WF(i,STRAIN)]));
+}
+"""
+        else:
+            body += r"""
+// Step 6.b: Print the resulting waveform.
+for (size_t i = 0; i < commondata.nsteps_IMR; i++) {
     printf("%.15e %.15e %.15e\n", creal(commondata.waveform_IMR[IDX_WF(i,TIME)])
     , creal(commondata.waveform_IMR[IDX_WF(i,STRAIN)]), cimag(commondata.waveform_IMR[IDX_WF(i,STRAIN)]));
 }
+"""
 
-
+    body += r"""
 free(commondata.dynamics_low);
 free(commondata.dynamics_fine);
 free(commondata.waveform_low);
 free(commondata.waveform_fine);
 free(commondata.waveform_inspiral);
 free(commondata.waveform_IMR);
+free(commondata.waveform_IMR_FD);
 return 0;
 """
     cfc.register_CFunction(
@@ -139,6 +163,8 @@ BOB_CCL.register_CFunction_BOB_aligned_spin_waveform()
 BOB_CCL.register_CFunction_BOB_aligned_spin_waveform_from_times()
 BOB_CCL.register_CFunction_BOB_aligned_spin_NQC_rhs()
 seobnr_wf_CCL.register_CFunction_SEOBNRv5_aligned_spin_IMR_waveform()
+if APPLY_FD:
+    seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_FD_waveform()
 
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
@@ -167,6 +193,7 @@ Bdefines_h.output_BHaH_defines_h(
         str(Path("gsl") / Path("gsl_interp.h")),
         str(Path("gsl") / Path("gsl_sf_gamma.h")),
         str(Path("gsl") / Path("gsl_linalg.h")),
+        "fftw3.h",
         "complex.h",
     ],
     supplemental_defines_dict={
@@ -175,6 +202,7 @@ Bdefines_h.output_BHaH_defines_h(
 #define COMPLEX double complex
 #define NUMVARS 8
 #define TIME 0
+#define FREQ 0
 #define R 1
 #define PHI 2
 #define PRSTAR 3
@@ -196,7 +224,7 @@ Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
     exec_or_library_name=project_name,
-    addl_CFLAGS=["$(shell gsl-config --cflags)"],
+    addl_CFLAGS=["$(shell gsl-config --cflags)", "-lfftw3 -lm"],
     addl_libraries=["$(shell gsl-config --libs)"],
 )
 
