@@ -37,7 +37,7 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
     >>> _str = par.register_CodeParameter("char[100]", "CodeParameters_c_files", "some_string", "cheese")
     >>> _bool = par.register_CodeParameter("bool", "CodeParameters_c_files", "BHaH_is_amazing", True, add_to_set_CodeParameters_h=True)
     >>> _real_array = par.register_CodeParameter("REAL[5]", "CodeParameters_c_files", "real_array", 0.0, commondata=True, add_to_set_CodeParameters_h=False)
-    >>> _int_array = par.register_CodeParameter("int[3]", "CodeParameters_c_files", "int_array", 42, commondata=True, add_to_set_CodeParameters_h=False)
+    >>> _int_array = par.register_CodeParameter("int[2]", "CodeParameters_c_files", "int_array", [4, 2], commondata=True, add_to_set_CodeParameters_h=False)
     >>> cfc.CFunction_dict.clear()
     >>> register_CFunctions_params_commondata_struct_set_to_default()
     >>> print(cfc.CFunction_dict["params_struct_set_to_default"].full_function)
@@ -66,12 +66,14 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
       commondata->a = 1;                   // CodeParameters_c_files::a
       commondata->blah_int = 1;            // CodeParameters_c_files::blah_int
       commondata->pi_three_sigfigs = 3.14; // CodeParameters_c_files::pi_three_sigfigs
-      for (int i = 0; i < 3; i++) {
-        commondata->int_array[i] = 42;
-      } // CodeParameters_c_files::int_array
-      for (int i = 0; i < 5; i++) {
-        commondata->real_array[i] = 0.0;
+      {
+        REAL temp_val_array[] = {0.0, 0.0, 0.0, 0.0, 0.0};
+        memcpy(commondata->real_array, temp_val_array, sizeof(temp_val_array));
       } // CodeParameters_c_files::real_array
+      {
+        int temp_val_array[] = {4, 2};
+        memcpy(commondata->int_array, temp_val_array, sizeof(temp_val_array));
+      } // CodeParameters_c_files::int_array
     }
     <BLANKLINE>
     """
@@ -103,8 +105,10 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
                         c_output = f'snprintf({struct}->{parname}, {chararray_size}, "{defaultval}");{comment}\n'
                     elif "[" in CPtype and "]" in CPtype:
                         # Handle REAL[N] and int[N] arrays
-                        array_size = CPtype.split("[")[1].split("]")[0]
-                        c_output = f"for(int i=0; i<{array_size}; i++) {{ {struct}->{parname}[i] = {str(defaultval).lower()}; }}{comment}\n"
+                        c_output = "{\n"
+                        c_output += f"  {CPtype.split('[')[0]} temp_val_array[] = {{ {', '.join(str(x) for x in defaultval)} }};\n"
+                        c_output += f"  memcpy({struct}->{parname}, temp_val_array, sizeof(temp_val_array));\n"
+                        c_output += f"}} {comment}\n"
                     elif isinstance(defaultval, (bool, int, float)) or (
                         CPtype == "REAL" and isinstance(defaultval, str)
                     ):

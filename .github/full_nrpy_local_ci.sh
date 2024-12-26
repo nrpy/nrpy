@@ -42,7 +42,7 @@ echo "Dependencies installed."
 
 # Install NRPyLaTeX and additional dependencies
 echo "Installing NRPyLaTeX and additional dependencies..."
-pip install -U git+https://github.com/nrpy/nrpylatex.git
+pip install -U nrpylatex
 pip install -U ipython setuptools
 echo "NRPyLaTeX and additional dependencies installed."
 

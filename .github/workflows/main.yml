@@ -46,7 +46,7 @@ jobs:
           pip install pylint==3.2.0  # pylint 3.2.4+ is broken in 3.8.18.
         fi
         # FIXME: until NRPyLaTeX is updated in pypi.
-        pip install -U git+https://github.com/nrpy/nrpylatex.git
+        pip install -U nrpylatex
         pip install -U ipython setuptools
         sudo apt-get -y install libgsl-dev
 

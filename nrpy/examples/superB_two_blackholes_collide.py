@@ -150,6 +150,7 @@ superBdiagnostics.register_CFunction_diagnostics(
     ),
     out_quantities_dict="default",
     enable_psi4_diagnostics=False,
+    enable_L2norm_BSSN_constraints_diagnostics=True,
 )
 
 if enable_rfm_precompute:
@@ -197,7 +198,9 @@ if __name__ == "__main__":
 
 charecomm.chare_comm_register_C_functions(list_of_CoordSystems=[CoordSystem])
 superBcbc.CurviBoundaryConditions_register_C_functions(
-    list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order
+    list_of_CoordSystems=[CoordSystem],
+    radiation_BC_fd_order=radiation_BC_fd_order,
+    set_parity_on_aux=True,
 )
 rhs_string = ""
 if separate_Ricci_and_BSSN_RHS:
@@ -276,6 +279,7 @@ superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
     outer_bcs_type=outer_bcs_type,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_psi4_diagnostics=False,
+    enable_L2norm_BSSN_constraints_diagnostics=True,
 )
 
 Bdefines_h.output_BHaH_defines_h(

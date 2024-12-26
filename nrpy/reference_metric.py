@@ -109,6 +109,8 @@ class ReferenceMetric:
             self.CoordSystem
             == par.parval_from_str("CoordSystem_to_register_CodeParameters")
         ) or (par.parval_from_str("CoordSystem_to_register_CodeParameters") == "All")
+        self.requires_NewtonRaphson_for_Cart_to_xx = False
+        self.NewtonRaphson_f_of_xx = [sp.sympify(0)] * 3
 
         # START: RFM PRECOMPUTE STUFF
         # Must be set in terms of generic functions of xx[]s
@@ -1017,6 +1019,7 @@ class ReferenceMetric:
         # -> dr ~ r_slope dx0
         # -> Deltar ~ r_slope * Deltax0 ~ r_slope * AMPL/Nx0
         elif self.CoordSystem.startswith("SinhSphericalv2n"):
+            self.requires_NewtonRaphson_for_Cart_to_xx = True
 
             AMPL = par.register_CodeParameter(
                 "REAL",
@@ -1048,9 +1051,14 @@ class ReferenceMetric:
             ph = self.xx[2]
 
             # NO CLOSED-FORM EXPRESSION FOR RADIAL INVERSION.
-            # self.Cart_to_xx[0] = "NewtonRaphson"
-            # self.Cart_to_xx[1] = sp.acos(Cartz / sp.sqrt(Cartx ** 2 + Carty ** 2 + Cartz ** 2))
-            # self.Cart_to_xx[2] = sp.atan2(Carty, Cartx)
+            self.Cart_to_xx[0] = "NewtonRaphson"
+            self.NewtonRaphson_f_of_xx[0] = r - sp.sqrt(
+                self.Cartx**2 + self.Carty**2 + self.Cartz**2
+            )
+            self.Cart_to_xx[1] = sp.acos(
+                self.Cartz / sp.sqrt(self.Cartx**2 + self.Carty**2 + self.Cartz**2)
+            )
+            self.Cart_to_xx[2] = sp.atan2(self.Carty, self.Cartx)
         else:
             raise ValueError(
                 f"Spherical-like CoordSystem == {self.CoordSystem} unrecognized"
@@ -1366,7 +1374,9 @@ class ReferenceMetric:
         # drho/dx0 \approx rho_slope
         # -> dr ~ rho_slope dx0
         # -> Deltarho ~ rho_slope * Deltax0 ~ rho_slope * AMPLRHO/Nx0
-        elif self.CoordSystem.startswith("SinhCylindricalv2"):
+        elif self.CoordSystem.startswith("SinhCylindricalv2n"):
+            self.requires_NewtonRaphson_for_Cart_to_xx = True
+
             AMPLRHO, AMPLZ = par.register_CodeParameters(
                 "REAL",
                 self.CodeParam_modulename,
@@ -1401,9 +1411,15 @@ class ReferenceMetric:
             ZCYL = self.Sinhv2(self.xx[2], AMPLZ, SINHWZ, z_slope)
 
             # NO CLOSED-FORM EXPRESSION FOR RADIAL OR Z INVERSION.
-            # Cart_to_xx[0] = "NewtonRaphson"
-            # Cart_to_xx[1] = sp.atan2(Carty, Cartx)
-            # Cart_to_xx[2] = "NewtonRaphson"
+            self.Cart_to_xx[0] = "NewtonRaphson"
+            self.NewtonRaphson_f_of_xx[0] = RHOCYL - sp.sqrt(
+                self.Cartx**2 + self.Carty**2
+            )
+            self.Cart_to_xx[1] = sp.atan2(
+                sp.Symbol("Carty", real=True), sp.Symbol("Cartx", real=True)
+            )
+            self.Cart_to_xx[2] = "NewtonRaphson"
+            self.NewtonRaphson_f_of_xx[2] = ZCYL - self.Cartz
         else:
             raise ValueError(
                 f"Cylindrical-like CoordSystem == {self.CoordSystem} unrecognized"
