@@ -5,7 +5,7 @@ darglint
 ipython
 isort
 multiprocess
-mypy==1.13.0
+mypy==1.14.0
 nrpypn
 nrpylatex
 py-cpuinfo

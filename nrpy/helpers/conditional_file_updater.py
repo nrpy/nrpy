@@ -8,6 +8,7 @@ import io
 import os
 import sys
 from difflib import context_diff
+from io import StringIO
 from pathlib import Path
 from typing import Any, Optional, Union
 
@@ -52,11 +53,11 @@ class ConditionalFileUpdater:
         do_format: bool = False,
     ) -> None:
         self.fname = os.path.abspath(str(fname))
-        self.fd: io.StringIO
+        self.fd: StringIO
         self.do_format = do_format
         self.encoding = encoding
 
-    def __enter__(self) -> io.TextIOWrapper:
+    def __enter__(self) -> StringIO:
         """
         Create a StringIO proxy for the file.
         We will store the output
