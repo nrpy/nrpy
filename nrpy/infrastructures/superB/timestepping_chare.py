@@ -115,8 +115,6 @@ def generate_mol_step_forward_code(
     if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {"""
     return_str += generate_send_nonlocalinnerbc_data_code("AUXEVOL_GFS")
     return_str += generate_process_nonlocalinnerbc_code("AUXEVOL_GFS")
-    return_str += """}
-    """
 
     return return_str
 
@@ -613,18 +611,13 @@ def generate_switch_statement_for_gf_types_for_entry_method(
     # Also add case for diagnostic output gfs, they are allocated separate memory for superB and do not to other gfs
     gf_list.append("diagnostic_output_gfs")
 
-    # Keep synching of y n gfs during initial data distinct to prevent mismatch of messages
-    gf_list.append("y_n_gfs_initialdata_part1")
-    gf_list.append("y_n_gfs_initialdata_part2")
-
     switch_statement = """
 switch (type_gfs) {
 """
     switch_cases = []
     for gf in gf_list:
         switch_cases.append(f"  case {gf.upper()}:")
-        switch_cases.append(
-            f"    thisProxy[CkArrayIndex3D(dst_chare_index0, dst_chare_index1, dst_chare_index2)].receiv_nonlocalinnerbc_data_{gf.lower()}(idx3_this_chare, type_gfs, NUM_GFS * num_srcpts_tosend_each_chare[which_dst_chare], tmpBuffer_innerbc_send);"
+        switch_cases.append(f"    thisProxy[CkArrayIndex3D(dst_chare_index0, dst_chare_index1, dst_chare_index2)].receiv_nonlocalinnerbc_data_{gf.lower()}(idx3_this_chare, type_gfs, NUM_GFS * num_srcpts_tosend_each_chare[which_dst_chare], tmpBuffer_innerbc_send);"
         )
         switch_cases.append("    break;")
     switch_cases.append(
@@ -642,8 +635,6 @@ def generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
     Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
     MoL_method: str,
     outer_bcs_type: str = "radiation",
-    enable_psi4_diagnostics: bool = False,
-    enable_residual_diagnostics: bool = False,
 ) -> str:
     """
     Generate entry method declarations based on grid function types.
@@ -651,8 +642,6 @@ def generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
     :param Butcher_dict: Dictionary containing Butcher tableau data.
     :param MoL_method: Method of Lines (MoL) method name.
     :param outer_bcs_type: type of outer boundary BCs to apply. Only options are radiation or extrapolation in superB.
-    :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
-    :param enable_residual_diagnostics: Enable residual diagnostics, default is False.
     :return: A string containing entry method declarations separated by newlines.
     """
     # Generate gridfunction names based on the given MoL method
@@ -665,18 +654,12 @@ def generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
 
     # Convert y_n_gridfunctions to a list if it's a string
     gf_list: List[str] = (
-        [y_n_gridfunctions]
-        if isinstance(y_n_gridfunctions, str)
-        else list(y_n_gridfunctions)
+        [y_n_gridfunctions] if isinstance(y_n_gridfunctions, str) else list(y_n_gridfunctions)
     )
     gf_list.extend(non_y_n_gridfunctions_list)
 
     # Also add case for diagnostic output gfs, they are allocated separate memory for superB and do not to other gfs
     gf_list.append("diagnostic_output_gfs")
-
-    # need separate entry methods of y n gf during initial data set up to prevent mismatch of messages
-    gf_list.append("Y_N_GFS_INITIALDATA_PART1")
-    gf_list.append("Y_N_GFS_INITIALDATA_PART2")
 
     # Find the list of all gfs to which inner bc synching is performed in the .ci file
     # for gf not in the list above, finish entry method by "{}" instead of ";"
@@ -693,25 +676,17 @@ def generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
         rhs_output_exprs_list_all.extend(rhs_output_exprs_list)
         post_rhs_output_list_all.extend(post_rhs_output_list)
     if outer_bcs_type == "radiation":
+        rhs_output_exprs_list_all.extend(["Y_N_GFS", "AUXEVOL_GFS", "DIAGNOSTIC_OUTPUT_GFS"])
         inner_bc_synching_gfs = rhs_output_exprs_list_all
     if outer_bcs_type == "extrapolation":
+        post_rhs_output_list_all.extend(["Y_N_GFS", "AUXEVOL_GFS", "DIAGNOSTIC_OUTPUT_GFS"])
         inner_bc_synching_gfs = post_rhs_output_list_all
-
-    inner_bc_synching_gfs.append("AUXEVOL_GFS")
-    if enable_psi4_diagnostics:
-        inner_bc_synching_gfs.append("DIAGNOSTIC_OUTPUT_GFS")
-
-    # If anything other than NRPy elliptic, in NRPy elliptic initial data is set up differently
-    if not enable_residual_diagnostics:
-        inner_bc_synching_gfs.append("Y_N_GFS_INITIALDATA_PART1")
-        inner_bc_synching_gfs.append("Y_N_GFS_INITIALDATA_PART2")
-
     entry_method_for_gf_types: List[str] = []
     for gf in gf_list:
-        if gf.upper() in inner_bc_synching_gfs:
-            entry_method = f"entry void receiv_nonlocalinnerbc_data_{gf.lower()}(int src_chare_idx3, int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);"
+        if (gf.upper() in inner_bc_synching_gfs):
+            entry_method = (f"entry void receiv_nonlocalinnerbc_data_{gf.lower()}(int src_chare_idx3, int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);")
         else:
-            entry_method = f"entry void receiv_nonlocalinnerbc_data_{gf.lower()}(int src_chare_idx3, int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]){{}}"
+            entry_method = (f"entry void receiv_nonlocalinnerbc_data_{gf.lower()}(int src_chare_idx3, int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]){{}}")
         entry_method_for_gf_types.append(entry_method)
 
     # Return the concatenated string
@@ -1373,13 +1348,9 @@ void Timestepping::send_nonlocalinnerbc_data(const int type_gfs, const int grid)
     int dst_chare_index2;
     REVERSE_IDX3GENERAL(idx3_of_dst_chares[which_dst_chare], Nchare0, Nchare1, dst_chare_index0, dst_chare_index1, dst_chare_index2);"""
 
-    switch_case_code_for_entry_method = (
-        generate_switch_statement_for_gf_types_for_entry_method(
-            Butcher_dict, MoL_method
-        )
-    )
+    switch_case_code_for_entry_method = generate_switch_statement_for_gf_types_for_entry_method(Butcher_dict, MoL_method)
     file_output_str += switch_case_code_for_entry_method
-    file_output_str += """
+    file_output_str +="""
 	}
 }
 """
@@ -1506,15 +1477,9 @@ def output_timestepping_ci(
         initial_data(&commondata, griddata_chare, INITIALDATA_BIN_ONE);
         initial_data(&commondata, griddata_chare, INITIALDATA_APPLYBCS_INNERONLY);
       }"""
-        file_output_str += generate_send_nonlocalinnerbc_data_code(
-            "Y_N_GFS_INITIALDATA_PART1"
-        )
-        file_output_str += generate_process_nonlocalinnerbc_code(
-            "Y_N_GFS_INITIALDATA_PART1"
-        )
-        file_output_str += (
-            """if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {"""
-        )
+        file_output_str += generate_send_nonlocalinnerbc_data_code("Y_N_GFS")
+        file_output_str += generate_process_nonlocalinnerbc_code("Y_N_GFS")
+        file_output_str += """if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {"""
         file_output_str += generate_send_nonlocalinnerbc_data_code("AUXEVOL_GFS")
         file_output_str += generate_process_nonlocalinnerbc_code("AUXEVOL_GFS")
         file_output_str += """}"""
@@ -1534,19 +1499,12 @@ def output_timestepping_ci(
 """
             )
 
-        file_output_str += generate_send_nonlocalinnerbc_data_code(
-            "Y_N_GFS_INITIALDATA_PART2"
-        )
-        file_output_str += generate_process_nonlocalinnerbc_code(
-            "Y_N_GFS_INITIALDATA_PART2"
-        )
-        file_output_str += (
-            """if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {"""
-        )
+        file_output_str += generate_send_nonlocalinnerbc_data_code("Y_N_GFS")
+        file_output_str += generate_process_nonlocalinnerbc_code("Y_N_GFS")
+        file_output_str += """if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {"""
         file_output_str += generate_send_nonlocalinnerbc_data_code("AUXEVOL_GFS")
         file_output_str += generate_process_nonlocalinnerbc_code("AUXEVOL_GFS")
         file_output_str += """}"""
-    # If NRPy elliptic
     else:
         file_output_str += """
       serial {
@@ -1592,9 +1550,7 @@ def output_timestepping_ci(
         file_output_str += generate_process_ghost_code(
             loop_direction, pos_ghost_type, neg_ghost_type, nchare_var
         )
-        file_output_str += (
-            """if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {"""
-        )
+        file_output_str += """if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {"""
         file_output_str += generate_send_neighbor_data_code(
             "AUXEVOL_GFS", grid_split_direction
         )
@@ -1658,9 +1614,7 @@ def output_timestepping_ci(
         file_output_str += generate_send_nonlocalinnerbc_data_code(
             "DIAGNOSTIC_OUTPUT_GFS"
         )
-        file_output_str += generate_process_nonlocalinnerbc_code(
-            "DIAGNOSTIC_OUTPUT_GFS"
-        )
+        file_output_str += generate_process_nonlocalinnerbc_code("DIAGNOSTIC_OUTPUT_GFS")
         for loop_direction in ["x", "y", "z"]:
             # Determine ghost types and configuration based on the current axis
             if loop_direction == "x":
@@ -1885,9 +1839,7 @@ def output_timestepping_ci(
                 file_output_str += generate_process_ghost_code(
                     loop_direction, pos_ghost_type, neg_ghost_type, nchare_var
                 )
-            file_output_str += (
-                """if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {"""
-            )
+            file_output_str += """if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {"""
             file_output_str += generate_send_neighbor_data_code(
                 "AUXEVOL_GFS", grid_split_direction
             )
@@ -1952,13 +1904,7 @@ def output_timestepping_ci(
     entry void bottom_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
     entry void continue_timestepping();
     entry void receiv_nonlocalinnerbc_idx3srcpt_tosend(int idx3_of_sendingchare, int num_srcpts, int globalidx3_srcpts[num_srcpts]);"""
-    file_output_str += generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
-        Butcher_dict,
-        MoL_method,
-        outer_bcs_type,
-        enable_psi4_diagnostics,
-        enable_residual_diagnostics,
-    )
+    file_output_str += generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(Butcher_dict, MoL_method, outer_bcs_type)
     if enable_residual_diagnostics:
         file_output_str += r"""
     entry void continue_after_residual_H_done();
