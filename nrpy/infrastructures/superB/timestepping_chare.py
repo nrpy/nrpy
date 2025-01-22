@@ -111,8 +111,12 @@ def generate_mol_step_forward_code(
         MoL_step_forward_in_time(&commondata, griddata_chare, time_start, {rk_substep}, MOL_POST_RK_UPDATE);
     }}
 """
+    return_str += """
+    if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {"""
     return_str += generate_send_nonlocalinnerbc_data_code("AUXEVOL_GFS")
     return_str += generate_process_nonlocalinnerbc_code("AUXEVOL_GFS")
+    return_str += """}
+    """
 
     return return_str
 
