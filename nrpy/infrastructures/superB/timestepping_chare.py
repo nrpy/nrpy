@@ -115,6 +115,8 @@ def generate_mol_step_forward_code(
     if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {"""
     return_str += generate_send_nonlocalinnerbc_data_code("AUXEVOL_GFS")
     return_str += generate_process_nonlocalinnerbc_code("AUXEVOL_GFS")
+    return_str += """}
+    """
 
     return return_str
 
