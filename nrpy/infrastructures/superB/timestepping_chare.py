@@ -1953,7 +1953,11 @@ def output_timestepping_ci(
     entry void continue_timestepping();
     entry void receiv_nonlocalinnerbc_idx3srcpt_tosend(int idx3_of_sendingchare, int num_srcpts, int globalidx3_srcpts[num_srcpts]);"""
     file_output_str += generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
-        Butcher_dict, MoL_method, outer_bcs_type, enable_psi4_diagnostics, enable_residual_diagnostics
+        Butcher_dict,
+        MoL_method,
+        outer_bcs_type,
+        enable_psi4_diagnostics,
+        enable_residual_diagnostics,
     )
     if enable_residual_diagnostics:
         file_output_str += r"""
