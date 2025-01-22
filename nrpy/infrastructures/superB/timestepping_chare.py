@@ -643,6 +643,7 @@ def generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
     MoL_method: str,
     outer_bcs_type: str = "radiation",
     enable_psi4_diagnostics: bool = False,
+    enable_residual_diagnostics: bool = False,
 ) -> str:
     """
     Generate entry method declarations based on grid function types.
@@ -651,6 +652,7 @@ def generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
     :param MoL_method: Method of Lines (MoL) method name.
     :param outer_bcs_type: type of outer boundary BCs to apply. Only options are radiation or extrapolation in superB.
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
+    :param enable_residual_diagnostics: Enable residual diagnostics, default is False.
     :return: A string containing entry method declarations separated by newlines.
     """
     # Generate gridfunction names based on the given MoL method
@@ -698,8 +700,11 @@ def generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
     inner_bc_synching_gfs.append("AUXEVOL_GFS")
     if enable_psi4_diagnostics:
         inner_bc_synching_gfs.append("DIAGNOSTIC_OUTPUT_GFS")
-    inner_bc_synching_gfs.append("Y_N_GFS_INITIALDATA_PART1")
-    inner_bc_synching_gfs.append("Y_N_GFS_INITIALDATA_PART2")
+
+    # If anything other than NRPy elliptic, in NRPy elliptic initial data is set up differently
+    if not enable_residual_diagnostics:
+        inner_bc_synching_gfs.append("Y_N_GFS_INITIALDATA_PART1")
+        inner_bc_synching_gfs.append("Y_N_GFS_INITIALDATA_PART2")
 
     entry_method_for_gf_types: List[str] = []
     for gf in gf_list:
@@ -1494,8 +1499,8 @@ def output_timestepping_ci(
         }
       }"""
 
+    # If anything other than NRPy elliptic
     if not enable_residual_diagnostics:
-        # If anything other than NRPy elliptic
         file_output_str += """
       serial {
         initial_data(&commondata, griddata_chare, INITIALDATA_BIN_ONE);
@@ -1541,8 +1546,8 @@ def output_timestepping_ci(
         file_output_str += generate_send_nonlocalinnerbc_data_code("AUXEVOL_GFS")
         file_output_str += generate_process_nonlocalinnerbc_code("AUXEVOL_GFS")
         file_output_str += """}"""
+    # If NRPy elliptic
     else:
-        # If NRPy elliptic
         file_output_str += """
       serial {
         initial_data(&commondata, griddata_chare);
@@ -1948,7 +1953,7 @@ def output_timestepping_ci(
     entry void continue_timestepping();
     entry void receiv_nonlocalinnerbc_idx3srcpt_tosend(int idx3_of_sendingchare, int num_srcpts, int globalidx3_srcpts[num_srcpts]);"""
     file_output_str += generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
-        Butcher_dict, MoL_method, outer_bcs_type, enable_psi4_diagnostics
+        Butcher_dict, MoL_method, outer_bcs_type, enable_psi4_diagnostics, enable_residual_diagnostics
     )
     if enable_residual_diagnostics:
         file_output_str += r"""
