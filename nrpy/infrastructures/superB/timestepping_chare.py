@@ -533,8 +533,8 @@ switch (type_gfs) {
     for gf in gf_list:
         switch_cases.append(f"  case {gf.upper()}:")
         if gf == "y_n_gfs":
-          switch_cases.append("  case Y_N_GFS_INITIALDATA_PART1:")
-          switch_cases.append("  case Y_N_GFS_INITIALDATA_PART2:")
+            switch_cases.append("  case Y_N_GFS_INITIALDATA_PART1:")
+            switch_cases.append("  case Y_N_GFS_INITIALDATA_PART2:")
         if gf not in ("auxevol_gfs", "diagnostic_output_gfs"):
             switch_cases.append(
                 f"    gfs = griddata_chare[grid].gridfuncs.{gf.lower()};"
@@ -1501,8 +1501,12 @@ def output_timestepping_ci(
         initial_data(&commondata, griddata_chare, INITIALDATA_BIN_ONE);
         initial_data(&commondata, griddata_chare, INITIALDATA_APPLYBCS_INNERONLY);
       }"""
-        file_output_str += generate_send_nonlocalinnerbc_data_code("Y_N_GFS_INITIALDATA_PART1")
-        file_output_str += generate_process_nonlocalinnerbc_code("Y_N_GFS_INITIALDATA_PART1")
+        file_output_str += generate_send_nonlocalinnerbc_data_code(
+            "Y_N_GFS_INITIALDATA_PART1"
+        )
+        file_output_str += generate_process_nonlocalinnerbc_code(
+            "Y_N_GFS_INITIALDATA_PART1"
+        )
         file_output_str += (
             """if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {"""
         )
@@ -1525,8 +1529,12 @@ def output_timestepping_ci(
 """
             )
 
-        file_output_str += generate_send_nonlocalinnerbc_data_code("Y_N_GFS_INITIALDATA_PART2")
-        file_output_str += generate_process_nonlocalinnerbc_code("Y_N_GFS_INITIALDATA_PART2")
+        file_output_str += generate_send_nonlocalinnerbc_data_code(
+            "Y_N_GFS_INITIALDATA_PART2"
+        )
+        file_output_str += generate_process_nonlocalinnerbc_code(
+            "Y_N_GFS_INITIALDATA_PART2"
+        )
         file_output_str += (
             """if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {"""
         )
