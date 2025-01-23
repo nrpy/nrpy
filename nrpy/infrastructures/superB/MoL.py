@@ -1043,6 +1043,10 @@ def register_CFunctions(
     # Define constants for diagnostic gfs also since they do not point to other gfs in superB
     gf_list.append("diagnostic_output_gfs")
 
+    # Define constants to keep synching of y n gfs during initial data distinct
+    gf_list.append("y_n_gfs_initialdata_part1")
+    gf_list.append("y_n_gfs_initialdata_part2")
+
     gf_constants = create_gf_constants(gf_list)
 
     rk_substep_constants = create_rk_substep_constants(
