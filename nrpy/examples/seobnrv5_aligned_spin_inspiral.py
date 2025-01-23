@@ -48,7 +48,7 @@ par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
 
-APPLY_FD = True
+APPLY_FD = False
 PRINT_WAVEFORM = True
 
 
@@ -120,7 +120,12 @@ free(commondata.waveform_low);
 free(commondata.waveform_fine);
 free(commondata.waveform_inspiral);
 free(commondata.waveform_IMR);
+"""
+    if APPLY_FD:
+        body += r"""
 free(commondata.waveform_IMR_FD);
+"""
+    body += r"""
 return 0;
 """
     cfc.register_CFunction(
@@ -180,22 +185,25 @@ cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
     project_name=project_name,
     cmdline_inputs=["mass_ratio", "chi1", "chi2", "initial_omega", "total_mass", "dt"],
 )
+
+additional_includes = [
+    str(Path("gsl") / Path("gsl_vector.h")),
+    str(Path("gsl") / Path("gsl_multiroots.h")),
+    str(Path("gsl") / Path("gsl_errno.h")),
+    str(Path("gsl") / Path("gsl_roots.h")),
+    str(Path("gsl") / Path("gsl_matrix.h")),
+    str(Path("gsl") / Path("gsl_odeiv2.h")),
+    str(Path("gsl") / Path("gsl_spline.h")),
+    str(Path("gsl") / Path("gsl_interp.h")),
+    str(Path("gsl") / Path("gsl_sf_gamma.h")),
+    str(Path("gsl") / Path("gsl_linalg.h")),
+    "complex.h",
+]
+if APPLY_FD:
+    additional_includes.append(str(Path("fftw3.h")))
 Bdefines_h.output_BHaH_defines_h(
     project_dir=project_dir,
-    additional_includes=[
-        str(Path("gsl") / Path("gsl_vector.h")),
-        str(Path("gsl") / Path("gsl_multiroots.h")),
-        str(Path("gsl") / Path("gsl_errno.h")),
-        str(Path("gsl") / Path("gsl_roots.h")),
-        str(Path("gsl") / Path("gsl_matrix.h")),
-        str(Path("gsl") / Path("gsl_odeiv2.h")),
-        str(Path("gsl") / Path("gsl_spline.h")),
-        str(Path("gsl") / Path("gsl_interp.h")),
-        str(Path("gsl") / Path("gsl_sf_gamma.h")),
-        str(Path("gsl") / Path("gsl_linalg.h")),
-        "fftw3.h",
-        "complex.h",
-    ],
+    additional_includes=additional_includes,
     supplemental_defines_dict={
         "SEOBNR": """
 #include<complex.h>
@@ -220,11 +228,14 @@ Bdefines_h.output_BHaH_defines_h(
 )
 register_CFunction_main_c()
 
+addl_cflags = ["$(shell gsl-config --cflags)"]
+if APPLY_FD:
+    addl_cflags.append("-lfftw3 -lm")
 Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
     exec_or_library_name=project_name,
-    addl_CFLAGS=["$(shell gsl-config --cflags)", "-lfftw3 -lm"],
+    addl_CFLAGS=addl_cflags,
     addl_libraries=["$(shell gsl-config --libs)"],
 )
 
