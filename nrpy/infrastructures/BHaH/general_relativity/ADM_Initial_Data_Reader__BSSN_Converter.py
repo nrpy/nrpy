@@ -65,7 +65,7 @@ def register_CFunction_exact_ADM_ID_function(
             verbose=False,
             include_braces=True,
         )
-        body += "const REAL xx0=r, xx1=th, xx2=ph;\n"
+        body += "MAYBE_UNUSED const REAL xx0=r, xx1=th, xx2=ph;\n"
     elif IDCoordSystem == "Cartesian":
         body += r"""  const REAL x=xCart[0], y=xCart[1], z=xCart[2];
 """
@@ -332,20 +332,14 @@ def Cfunction_BSSN_Cart_to_rescaled_BSSN_rfm(
 After the basis transform, all BSSN quantities are rescaled."""
     cfunc_type = "static void"
     name = "BSSN_Cart_to_rescaled_BSSN_rfm"
-    params = """const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xCart[3],
+    params = """const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xxL[3],
                                            const BSSN_Cart_basis_struct *restrict BSSN_Cart_basis,
                                            rescaled_BSSN_rfm_basis_struct *restrict rescaled_BSSN_rfm_basis"""
 
     body = ""
     if CoordSystem != "Cartesian":
         body += r"""
-  REAL xx0,xx1,xx2 __attribute__((unused));  // xx2 might be unused in the case of axisymmetric initial data.
-  {
-    int unused_Cart_to_i0i1i2[3];
-    REAL xx[3];
-    Cart_to_xx_and_nearest_i0i1i2(commondata, params, xCart, xx, unused_Cart_to_i0i1i2);
-    xx0=xx[0];  xx1=xx[1];  xx2=xx[2];
-  }
+  const REAL xx0=xxL[0], xx1=xxL[1], xx2=xxL[2];
 """
 
     # Define the input variables:
@@ -643,6 +637,9 @@ typedef struct __rescaled_BSSN_rfm_basis_struct__ {
   const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
 
   LOOP_OMP("omp parallel for", i0, 0, Nxx_plus_2NGHOSTS0, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
+    // xxL are the local coordinates on the destination grid
+    const REAL xxL[3] = { xx[0][i0], xx[1][i1], xx[2][i2] };
+
     // xCart is the global Cartesian coordinate, which accounts for any grid offsets from the origin.
     REAL xCart[3];
     xx_to_Cart(commondata, params, xx, i0, i1, i2, xCart);
@@ -658,7 +655,7 @@ typedef struct __rescaled_BSSN_rfm_basis_struct__ {
     ADM_Cart_to_BSSN_Cart(commondata, params, xCart, &ADM_Cart_basis, &BSSN_Cart_basis);
 
     rescaled_BSSN_rfm_basis_struct rescaled_BSSN_rfm_basis;
-    BSSN_Cart_to_rescaled_BSSN_rfm(commondata, params, xCart, &BSSN_Cart_basis, &rescaled_BSSN_rfm_basis);
+    BSSN_Cart_to_rescaled_BSSN_rfm(commondata, params, xxL, &BSSN_Cart_basis, &rescaled_BSSN_rfm_basis);
 
     const int idx3 = IDX3(i0, i1, i2);
 """

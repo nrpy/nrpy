@@ -106,8 +106,8 @@ class CodeParameter:
         :param add_to_set_CodeParameters_h: If True, add to set_CodeParameters*.h, applicable for BHaH. Default is True.
         :param add_to_glb_code_params_dict: If True, add to global code parameters dictionary. Default is True.
         :param description: Description of the parameter.
-        :raises ValueError: If `defaultvalue` is "unset" for a parameter intended for a parfile, or if an unsupported
-                            assumption is specified.
+        :raises ValueError: If `defaultvalue` is "unset" for a parameter intended for a parfile, if an unsupported
+                            assumption is specified, or if defaultvalues array size is inconsistent with array size.
         """
         self.cparam_type = cparam_type
         self.module = module
@@ -132,6 +132,14 @@ class CodeParameter:
                     "For REAL or int array parameters, commondata must be True, "
                     "and add_to_set_CodeParameters_h must be False."
                 )
+            arr_size = int(self.cparam_type.split("[")[1].split("]")[0])
+            if isinstance(self.defaultvalue, list):
+                if arr_size != len(self.defaultvalue):
+                    raise ValueError(
+                        f"{module}::{name}: Length of default values list {len(self.defaultvalue)} != size = {arr_size}."
+                    )
+            else:
+                self.defaultvalue = [self.defaultvalue] * arr_size
 
         if cparam_type == "#define":
             self.add_to_parfile = False
@@ -494,13 +502,35 @@ def adjust_CodeParam_default(CodeParameter_name: str, new_default: Any) -> None:
     >>> adjust_CodeParam_default('param3', 'blah')
     Traceback (most recent call last):
     ...
-    ValueError: Cannot adjust "param3" default value, as it does not appear in glb_code_params_dict
+    ValueError: Cannot adjust "param3" default value, as it does not appear in glb_code_params_dict: ['dummy', 'param1', 'param_array_correct', 'param_no_desc']
+    >>> _ = register_CodeParameter("REAL[2]", __name__, "dummy_arr", [1.0, 2.5], commondata=True, add_to_set_CodeParameters_h=False)
+    >>> glb_code_params_dict["dummy_arr"].defaultvalue
+    [1.0, 2.5]
+    >>> adjust_CodeParam_default("dummy_arr[0]", -1.0)
+    >>> glb_code_params_dict["dummy_arr"].defaultvalue
+    [-1.0, 2.5]
+    >>> _ = register_CodeParameter("REAL[3]", __name__, "dummy_arr2", 0.25, commondata=True, add_to_set_CodeParameters_h=False)
+    >>> glb_code_params_dict["dummy_arr2"].defaultvalue
+    [0.25, 0.25, 0.25]
+    >>> adjust_CodeParam_default("dummy_arr2[2]", -12.5)
+    >>> glb_code_params_dict["dummy_arr2"].defaultvalue
+    [0.25, 0.25, -12.5]
     """
-    if CodeParameter_name in glb_code_params_dict:
+    found_parameter = False
+    if "[" in CodeParameter_name:
+        for CPname, CPvalue in glb_code_params_dict.items():
+            if CPname.split("[")[0] == CodeParameter_name.split("[")[0]:
+                index = int(CodeParameter_name.split("[")[1].split("]")[0])
+                CPvalue.defaultvalue[index] = new_default
+                found_parameter = True
+                break
+    elif CodeParameter_name in glb_code_params_dict:
         glb_code_params_dict[CodeParameter_name].defaultvalue = new_default
-    else:
+        found_parameter = True
+
+    if not found_parameter:
         raise ValueError(
-            f'Cannot adjust "{CodeParameter_name}" default value, as it does not appear in glb_code_params_dict'
+            f'Cannot adjust "{CodeParameter_name}" default value, as it does not appear in glb_code_params_dict: {sorted(glb_code_params_dict.keys())}'
         )
 
 

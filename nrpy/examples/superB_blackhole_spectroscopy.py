@@ -28,6 +28,7 @@ from pathlib import Path
 
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
+import nrpy.infrastructures.BHaH.BHaHAHA.interpolation_2d_general__uniform_src_grid as interpolation2d
 import nrpy.infrastructures.BHaH.checkpointing as chkpt
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
@@ -61,7 +62,8 @@ par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Code-generation-time parameters:
 project_name = "superB_blackhole_spectroscopy"
-CoordSystem = "SinhSpherical"
+# CoordSystem = "SinhSpherical"
+CoordSystem = "SinhCylindrical"
 IDtype = "TP_Interp"
 IDCoordSystem = "Cartesian"
 
@@ -90,6 +92,7 @@ swm2sh_maximum_l_mode_generated = 8
 swm2sh_maximum_l_mode_to_compute = 2  # for consistency with NRPy 1.0 version.
 Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
+    "SinhCylindrical": [64, 2, 200],
 }
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.25
@@ -111,6 +114,10 @@ if "Spherical" in CoordSystem:
     par.adjust_CodeParam_default("Nchare0", 20)
     par.adjust_CodeParam_default("Nchare1", 2)
     par.adjust_CodeParam_default("Nchare2", 1)
+if "Cylindrical" in CoordSystem:
+    par.adjust_CodeParam_default("Nchare0", 4)
+    par.adjust_CodeParam_default("Nchare1", 1)
+    par.adjust_CodeParam_default("Nchare2", 10)
 
 OMP_collapse = 1
 if "Spherical" in CoordSystem:
@@ -121,8 +128,10 @@ if "Spherical" in CoordSystem:
         sinh_width = 0.2
 if "Cylindrical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "1")
-    par.adjust_CodeParam_default("CFL_FACTOR", 1.0)
+    par.adjust_CodeParam_default("CFL_FACTOR", 0.5)
     OMP_collapse = 2  # might be slightly faster
+    if CoordSystem == "SinhCylindrical":
+        sinh_width = 0.2
 
 project_dir = os.path.join("project", project_name)
 
@@ -163,7 +172,9 @@ TP_solve(&ID_persist);
 }
 """,
 )
-
+interpolation2d.register_CFunction_interpolation_2d_general__uniform_src_grid(
+    enable_simd=enable_simd, project_dir=project_dir
+)
 superBdiagnostics.register_CFunction_diagnostics(
     list_of_CoordSystems=[CoordSystem],
     default_diagnostics_out_every=diagnostics_output_every,
@@ -178,6 +189,7 @@ superBdiagnostics.register_CFunction_diagnostics(
     ),
     out_quantities_dict="default",
     enable_psi4_diagnostics=True,
+    enable_L2norm_BSSN_constraints_diagnostics=True,
 )
 if enable_rfm_precompute:
     rfm_precompute.register_CFunctions_rfm_precompute(
@@ -239,6 +251,8 @@ if __name__ == "__main__":
     pcg.do_parallel_codegen()
 # Does not need to be parallelized.
 superBdiagnostics.register_CFunction_psi4_spinweightm2_decomposition_on_sphlike_grids()
+superBdiagnostics.register_CFunction_psi4_spinweightm2_decomposition_on_cylindlike_grids()
+superBdiagnostics.register_CFunction_psi4_spinweightm2_decomposition_file_write()
 
 numericalgrids.register_CFunctions(
     list_of_CoordSystems=[CoordSystem],
@@ -255,7 +269,9 @@ superBnumericalgrids.register_CFunctions(
 )
 charecomm.chare_comm_register_C_functions(list_of_CoordSystems=[CoordSystem])
 superBcbc.CurviBoundaryConditions_register_C_functions(
-    list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order
+    list_of_CoordSystems=[CoordSystem],
+    radiation_BC_fd_order=radiation_BC_fd_order,
+    set_parity_on_aux=True,
 )
 
 rhs_string = ""
@@ -299,6 +315,11 @@ rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 # Coord system parameters
 if CoordSystem == "SinhSpherical":
     par.adjust_CodeParam_default("SINHW", sinh_width)
+if CoordSystem == "SinhCylindrical":
+    par.adjust_CodeParam_default("AMPLRHO", grid_physical_size)
+    par.adjust_CodeParam_default("AMPLZ", grid_physical_size)
+    par.adjust_CodeParam_default("SINHWRHO", sinh_width)
+    par.adjust_CodeParam_default("SINHWZ", sinh_width)
 par.adjust_CodeParam_default("t_final", t_final)
 # Initial data parameters
 par.adjust_CodeParam_default("initial_sep", initial_sep)
@@ -348,11 +369,13 @@ superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
     outer_bcs_type=outer_bcs_type,
     enable_psi4_diagnostics=True,
     enable_charm_checkpointing=enable_charm_checkpointing,
+    enable_L2norm_BSSN_constraints_diagnostics=True,
 )
 
 superBpup.register_CFunction_superB_pup_routines(
     list_of_CoordSystems=[CoordSystem],
     MoL_method=MoL_method,
+    enable_psi4_diagnostics=True,
 )
 copy_files(
     package="nrpy.infrastructures.superB.superB",
@@ -387,7 +410,10 @@ superBMakefile.output_CFunctions_function_prototypes_and_construct_Makefile(
     exec_or_library_name=project_name,
     compiler_opt_option="default",
     addl_CFLAGS=["$(shell gsl-config --cflags)", "-fpermissive "],
-    addl_libraries=["$(shell gsl-config --libs)", "-module CkIO"],
+    addl_libraries=[
+        "$(shell gsl-config --libs)",
+        "-module CkIO",
+    ],
     CC="charmc",
 )
 print(

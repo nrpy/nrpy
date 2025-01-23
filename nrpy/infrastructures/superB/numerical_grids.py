@@ -78,7 +78,10 @@ params_chare->Nxx_plus_2NGHOSTS2 = params_chare->Nxx2 + 2*NGHOSTS;
     for minmax in ["min", "max"]:
         for dirn in range(3):
             param_dir = f"params_chare->xx{minmax}{dirn}"
-            body += f"{param_dir} = params->xx{minmax}{dirn} + (params->dxx{dirn} * (REAL)(params_chare->Nxx{dirn} * chare_index[{dirn}]));\n"
+            if minmax == "min":
+                body += f"{param_dir} = params->xx{minmax}{dirn} + (params->dxx{dirn} * (REAL)(params_chare->Nxx{dirn} * chare_index[{dirn}]));\n"
+            else:
+                body += f"{param_dir} = params->xx{minmax}{dirn} - (params->dxx{dirn} * (REAL)(params_chare->Nxx{dirn} * (Nchare{dirn} - 1 - chare_index[{dirn}])));\n"
 
     body += r"""
 
@@ -169,6 +172,8 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
         body += "// (curvilinear boundary conditions bcstruct disabled)\n"
 
     body += r"""
+  // Initialize the diagnostics struct with zero
+  griddata_chare[grid].diagnosticstruct = (diagnostic_struct){0};
   // 1D diagnostics set up
   diagnosticstruct_set_up_nearest_1d_y_axis(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index, &griddata_chare[grid].diagnosticstruct);
   diagnosticstruct_set_up_nearest_1d_z_axis(commondata, &griddata[grid].params, &griddata_chare[grid].params, &griddata_chare[grid].charecommstruct, griddata[grid].xx, chare_index, &griddata_chare[grid].diagnosticstruct);

@@ -292,7 +292,7 @@ class BHaHGridFunction(GridFunction):
 
         self.sync_gf_in_superB = sync_gf_in_superB
         if sync_gf_in_superB == None:
-            if group == "EVOL":
+            if group == "EVOL" or group == "AUX":
                 self.sync_gf_in_superB = True
 
     def verify_gridfunction_group_is_valid(self) -> None:
