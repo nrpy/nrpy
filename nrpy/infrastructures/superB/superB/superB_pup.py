@@ -33,6 +33,7 @@ def register_CFunction_superB_pup_routines(
     prefunc = "// " + desc + "\n\n"
     prefunc += r"""/* superB:  File  "superB_pup_routines.cpp"*/
 #include "../BHaH_defines.h"
+#include "../BHaH_function_prototypes.h"
 """
     prefunc += """
 // PUP routine for struct commondata_struct
@@ -195,7 +196,7 @@ void pup_bc_struct(PUP::er &p, bc_struct &bc) {
 
     prefunc += """
 // PUP routine for struct MoL_gridfunctions_struct
-void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfuncs, const params_struct &params) {"""
+void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfuncs, const params_struct &params, const commondata_struct &commondata) {"""
 
     prefunc += r"""
   p | gridfuncs.num_evol_gfs_to_sync;
@@ -235,6 +236,7 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
     prefunc += "gridfuncs.diagnostic_output_gfs  = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);\n"
     prefunc += f"gridfuncs.diagnostic_output_gfs2 = gridfuncs.{diagnostic_gridfunctions2_point_to};\n"
     prefunc += """
+    initialize_yn_and_non_yn_gfs_to_nan(&commondata, &params, &gridfuncs);
   }"""
     for gridfunctions in gridfunctions_list:
         num_gfs = (
@@ -280,7 +282,7 @@ void pup_diagnostic_struct(PUP::er &p, diagnostic_struct &ds, const params_struc
   p | ds.num_diagnostic_1d_z_pts;
   p | ds.num_diagnostic_2d_xy_pts;
   p | ds.num_diagnostic_2d_yz_pts;
-  
+
   if (p.isUnpacking()) {
     ds.localidx3_diagnostic_1d_y_pt = (int *restrict)malloc(sizeof(int) * ds.num_diagnostic_1d_y_pts);
     ds.locali0_diagnostic_1d_y_pt = (int *restrict)malloc(sizeof(int) * ds.num_diagnostic_1d_y_pts);
@@ -330,7 +332,7 @@ void pup_diagnostic_struct(PUP::er &p, diagnostic_struct &ds, const params_struc
   PUParray(p, ds.locali1_diagnostic_2d_yz_pt, ds.num_diagnostic_2d_yz_pts);
   PUParray(p, ds.locali2_diagnostic_2d_yz_pt, ds.num_diagnostic_2d_yz_pts);
   PUParray(p, ds.offset_diagnostic_2d_yz_pt, ds.num_diagnostic_2d_yz_pts);
-  
+
   PUParray(p, ds.filename_1d_y, 256);
   PUParray(p, ds.filename_1d_z, 256);
   PUParray(p, ds.filename_2d_xy, 256);
@@ -342,23 +344,23 @@ void pup_diagnostic_struct(PUP::er &p, diagnostic_struct &ds, const params_struc
   p | ds.num_of_R_exts_chare;
   p | ds.psi4_spinweightm2_sph_harmonics_max_l;
   p | ds.length_localsums_for_psi4_decomp;
-  
-  if (p.isUnpacking()) {  
+
+  if (p.isUnpacking()) {
     ds.list_of_R_exts_chare = (REAL *restrict)malloc(sizeof(REAL) * ds.num_of_R_exts_chare);
     ds.localsums_for_psi4_decomp = (REAL *restrict)malloc(sizeof(REAL) * ds.length_localsums_for_psi4_decomp);
     ds.globalsums_for_psi4_decomp = (REAL *restrict)malloc(sizeof(REAL) * ds.length_localsums_for_psi4_decomp);
   }
   PUParray(p, ds.list_of_R_exts_chare, ds.num_of_R_exts_chare);
-  
-  if (strstr(params_chare.CoordSystemName, "Cylindrical") != NULL) {    
+
+  if (strstr(params_chare.CoordSystemName, "Cylindrical") != NULL) {
     p | ds.tot_N_shell_pts_chare;
     p | ds.dtheta;
-    if (p.isUnpacking()) {  
+    if (p.isUnpacking()) {
       ds.N_shell_pts_chare = (int *restrict)malloc(sizeof(int) * ds.num_of_R_exts_chare);
       ds.N_theta_shell_chare = (int *restrict)malloc(sizeof(int) * ds.num_of_R_exts_chare);
       ds.xx_shell_chare = (REAL ***restrict)malloc(ds.num_of_R_exts_chare * sizeof(REAL **));
       ds.theta_shell_chare = (REAL **restrict)malloc(ds.num_of_R_exts_chare * sizeof(REAL *));
-    }    
+    }
     PUParray(p, ds.N_shell_pts_chare, ds.num_of_R_exts_chare);
     PUParray(p, ds.N_theta_shell_chare, ds.num_of_R_exts_chare);
     if (p.isUnpacking()) {
@@ -427,12 +429,17 @@ void pup_tmpBuffers_struct(PUP::er &p, tmpBuffers_struct &tmpBuffers, const para
 }
 
 // PUP routine for struct nonlocalinnerbc_struct
-void pup_nonlocalinnerbc_struct(PUP::er &p, nonlocalinnerbc_struct &nonlocal) {
+void pup_nonlocalinnerbc_struct(PUP::er &p, nonlocalinnerbc_struct &nonlocal, const commondata_struct &commondata) {
+  const int Nchare0 = commondata.Nchare0;
+  const int Nchare1 = commondata.Nchare1;
+  const int Nchare2 = commondata.Nchare2;
+  const int tot_num_chares = Nchare0 * Nchare1 * Nchare2;
+
   p | nonlocal.tot_num_src_chares;
   p | nonlocal.tot_num_dst_chares;
   if (p.isUnpacking()) {
     nonlocal.idx3_of_src_chares = (int *restrict)malloc(sizeof(int) * nonlocal.tot_num_src_chares);
-    nonlocal.idx3chare_to_src_chare_id = (int *restrict)malloc(sizeof(int) * nonlocal.tot_num_src_chares);
+    nonlocal.idx3chare_to_src_chare_id = (int *restrict)malloc(sizeof(int) * tot_num_chares);
     nonlocal.num_srcpts_each_chare = (int *restrict)malloc(sizeof(int) * nonlocal.tot_num_src_chares);
 
     nonlocal.idx3_of_dst_chares = (int *restrict)malloc(sizeof(int) * nonlocal.tot_num_dst_chares);
@@ -445,7 +452,7 @@ void pup_nonlocalinnerbc_struct(PUP::er &p, nonlocalinnerbc_struct &nonlocal) {
     nonlocal.globalidx3_srcpts_tosend = (int **)malloc(sizeof(int *) * nonlocal.tot_num_dst_chares);
   }
   PUParray(p, nonlocal.idx3_of_src_chares, nonlocal.tot_num_src_chares);
-  PUParray(p, nonlocal.idx3chare_to_src_chare_id, nonlocal.tot_num_src_chares);
+  PUParray(p, nonlocal.idx3chare_to_src_chare_id, tot_num_chares);
   PUParray(p, nonlocal.num_srcpts_each_chare, nonlocal.tot_num_src_chares);
 
   PUParray(p, nonlocal.idx3_of_dst_chares, nonlocal.tot_num_dst_chares);
@@ -487,7 +494,7 @@ void pup_griddata(PUP::er &p, griddata_struct &gd) {
 
 // PUP routine for struct griddata_chare
 // For unpacking order is important, unpacked structs are used for unpacking the subsequent structs
-void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const params_struct &params) {
+void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const params_struct &params, const commondata_struct &commondata) {
 
   pup_params_struct(p, gd.params);
 
@@ -506,9 +513,9 @@ void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const params_struct &pa
 
   pup_bc_struct(p, gd.bcstruct);
 
-  pup_nonlocalinnerbc_struct(p, gd.nonlocalinnerbcstruct);
+  pup_nonlocalinnerbc_struct(p, gd.nonlocalinnerbcstruct, commondata);
 
-  pup_MoL_gridfunctions_struct(p, gd.gridfuncs, gd.params);
+  pup_MoL_gridfunctions_struct(p, gd.gridfuncs, gd.params, commondata);
 
   pup_tmpBuffers_struct(p, gd.tmpBuffers, gd.params, gd.nonlocalinnerbcstruct, gd.gridfuncs);
 
