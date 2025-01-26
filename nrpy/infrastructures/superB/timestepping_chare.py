@@ -651,9 +651,10 @@ def generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
     :param Butcher_dict: Dictionary containing Butcher tableau data.
     :param MoL_method: Method of Lines (MoL) method name.
     :param outer_bcs_type: type of outer boundary BCs to apply. Only options are radiation or extrapolation in superB.
-    :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
+    :param enable_psi4_diagnostics: Whether to enable psi4 diagnostics.
     :param enable_residual_diagnostics: Enable residual diagnostics, default is False.
     :return: A string containing entry method declarations separated by newlines.
+    :raises: ValueError: If `outer_bcs_type` is not set to either 'radiation' or 'extrapolation'.
     """
     # Generate gridfunction names based on the given MoL method
     (
@@ -694,8 +695,13 @@ def generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
         post_rhs_output_list_all.extend(post_rhs_output_list)
     if outer_bcs_type == "radiation":
         inner_bc_synching_gfs = rhs_output_exprs_list_all
-    if outer_bcs_type == "extrapolation":
+    elif outer_bcs_type == "extrapolation":
         inner_bc_synching_gfs = post_rhs_output_list_all
+    else:
+        raise ValueError(
+            f"Invalid value for 'outer_bcs_type': '{outer_bcs_type}'. "
+            "Expected 'radiation' or 'extrapolation'. Please provide a valid boundary condition type."
+        )
 
     inner_bc_synching_gfs.append("AUXEVOL_GFS")
     if enable_psi4_diagnostics:
