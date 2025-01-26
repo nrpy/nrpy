@@ -654,7 +654,7 @@ def generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
     :param enable_psi4_diagnostics: Whether to enable psi4 diagnostics.
     :param enable_residual_diagnostics: Enable residual diagnostics, default is False.
     :return: A string containing entry method declarations separated by newlines.
-    :raises: ValueError: If `outer_bcs_type` is not set to either 'radiation' or 'extrapolation'.
+    :raises ValueError: If `outer_bcs_type` is not set to either 'radiation' or 'extrapolation'.
     """
     # Generate gridfunction names based on the given MoL method
     (
