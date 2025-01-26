@@ -226,4 +226,4 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     break;
   }
   }
-}
+} // END FUNCTION MoL_step_forward_in_time

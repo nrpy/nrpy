@@ -865,7 +865,7 @@ def register_CFunctions(
       free(gridfuncs->k_even_gfs);
       if (NUM_AUXEVOL_GFS > 0)
         free(gridfuncs->auxevol_gfs);
-    }
+    } // END FUNCTION MoL_free_memory_non_y_n_gfs
     <BLANKLINE>
     >>> print(cfc.CFunction_dict["MoL_malloc_non_y_n_gfs"].full_function)
     #include "BHaH_defines.h"
@@ -887,7 +887,7 @@ def register_CFunctions(
     <BLANKLINE>
       gridfuncs->diagnostic_output_gfs = gridfuncs->y_nplus1_running_total_gfs;
       gridfuncs->diagnostic_output_gfs2 = gridfuncs->k_odd_gfs;
-    }
+    } // END FUNCTION MoL_malloc_non_y_n_gfs
     <BLANKLINE>
     """
     Butcher_dict = generate_Butcher_tables()

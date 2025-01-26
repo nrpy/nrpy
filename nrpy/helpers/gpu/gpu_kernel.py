@@ -47,7 +47,7 @@ class GPU_Kernel:
      * GPU Kernel: basic_assignment_gpu.
      *
      */
-    __global__ static void basic_assignment_gpu(REAL *restrict x, const REAL in) { *x = in; }
+    __global__ static void basic_assignment_gpu(REAL *restrict x, const REAL in) { *x = in; } // END FUNCTION basic_assignment_gpu
     <BLANKLINE>
     >>> print(kernel.launch_block)
     <BLANKLINE>

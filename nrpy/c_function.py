@@ -41,7 +41,7 @@ class CFunction:
     /**
      * just a test... testing 1,2,3
      */
-    void main() { return 0; }
+    void main() { return 0; } // END FUNCTION main
     <BLANKLINE>
     >>> print(func.function_prototype)
     void main();
@@ -207,7 +207,7 @@ class CFunction:
         function_prototype = (
             f"{self.cfunc_decorators}{self.cfunc_type} {self.name}({self.params});"
         )
-        complete_func += f"{function_prototype.replace(';', '')} {{\n{include_Cparams_str}{self.body}}}\n"
+        complete_func += f"{function_prototype.replace(';', '')} {{\n{include_Cparams_str}{self.body}}} // END FUNCTION {self.name}\n"
 
         complete_func += f"{self.postfunc}\n"
 
