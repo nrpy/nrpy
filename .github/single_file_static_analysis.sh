@@ -73,7 +73,7 @@ run_test_step "pydocstyle" "pydocstyle \"$python_file\"" "pydocstyle"
 run_test_step "darglint" "darglint -v 2 \"$python_file\"" "darglint"
 
 # Step 7: doctests
-run_test_step "doctests" "python3 -m doctest -v \"$python_file\"" "doctests"
+run_test_step "doctests" "python3 \"$python_file\"" "doctests"
 
 # Exit with failure if any tests failed
 if [ ${#failed_tests[@]} -ne 0 ]; then
