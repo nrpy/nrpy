@@ -36,4 +36,4 @@ void diagnostics_nearest_grid_center__rfm__SinhCylindrical(commondata_struct *re
     fprintf(outfile, "%e %.15e\n", time, log10HL);
   }
   fclose(outfile);
-}
+} // END FUNCTION diagnostics_nearest_grid_center__rfm__SinhCylindrical

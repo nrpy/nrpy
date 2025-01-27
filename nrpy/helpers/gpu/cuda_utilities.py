@@ -23,7 +23,7 @@ def register_CFunction_cpyHosttoDevice_params__constant() -> None:
      */
     __host__ void cpyHosttoDevice_params__constant(const params_struct *restrict params, const int streamid) {
       cudaMemcpyToSymbol(d_params, params, sizeof(params_struct), streamid * sizeof(params_struct), cudaMemcpyHostToDevice);
-    }
+    } // END FUNCTION cpyHosttoDevice_params__constant
     <BLANKLINE>
     """
     includes = ["BHaH_defines.h"]
@@ -61,7 +61,7 @@ def register_CFunction_cpyHosttoDevice_commondata__constant() -> None:
      */
     __host__ void cpyHosttoDevice_commondata__constant(const commondata_struct *restrict commondata) {
       cudaMemcpyToSymbol(d_commondata, commondata, sizeof(commondata_struct));
-    }
+    } // END FUNCTION cpyHosttoDevice_commondata__constant
     <BLANKLINE>
     """
     includes = ["BHaH_defines.h"]
@@ -107,7 +107,7 @@ def generate_CFunction_mallocHostgrid() -> str:
       gd_host->xx[0] = (REAL *)malloc(sizeof(REAL) * Nxx_plus_2NGHOSTS0);
       gd_host->xx[1] = (REAL *)malloc(sizeof(REAL) * Nxx_plus_2NGHOSTS1);
       gd_host->xx[2] = (REAL *)malloc(sizeof(REAL) * Nxx_plus_2NGHOSTS2);
-    }
+    } // END FUNCTION mallocHostgrid
     <BLANKLINE>
     """
     desc = r"""Allocate griddata_struct[grid].xx for host."""
@@ -156,7 +156,7 @@ def register_CFunction_cpyDevicetoHost__grid() -> None:
       gd_host->xx[0] = (REAL *)malloc(sizeof(REAL) * Nxx_plus_2NGHOSTS0);
       gd_host->xx[1] = (REAL *)malloc(sizeof(REAL) * Nxx_plus_2NGHOSTS1);
       gd_host->xx[2] = (REAL *)malloc(sizeof(REAL) * Nxx_plus_2NGHOSTS2);
-    }
+    } // END FUNCTION mallocHostgrid
     <BLANKLINE>
     /**
      * Copy griddata_struct[grid].xx from GPU to host.
@@ -173,8 +173,8 @@ def register_CFunction_cpyDevicetoHost__grid() -> None:
         cudaMemcpy(gd_host[grid].xx[0], gd_gpu[grid].xx[0], sizeof(REAL) * Nxx_plus_2NGHOSTS0, cudaMemcpyDeviceToHost);
         cudaMemcpy(gd_host[grid].xx[1], gd_gpu[grid].xx[1], sizeof(REAL) * Nxx_plus_2NGHOSTS1, cudaMemcpyDeviceToHost);
         cudaMemcpy(gd_host[grid].xx[2], gd_gpu[grid].xx[2], sizeof(REAL) * Nxx_plus_2NGHOSTS2, cudaMemcpyDeviceToHost);
-      }
-    }
+      } // END LOOP over grids
+    } // END FUNCTION cpyDevicetoHost__grid
     <BLANKLINE>
     """
     includes = ["BHaH_defines.h"]
@@ -194,7 +194,7 @@ def register_CFunction_cpyDevicetoHost__grid() -> None:
   cudaMemcpy(gd_host[grid].xx[0], gd_gpu[grid].xx[0], sizeof(REAL) * Nxx_plus_2NGHOSTS0, cudaMemcpyDeviceToHost);
   cudaMemcpy(gd_host[grid].xx[1], gd_gpu[grid].xx[1], sizeof(REAL) * Nxx_plus_2NGHOSTS1, cudaMemcpyDeviceToHost);
   cudaMemcpy(gd_host[grid].xx[2], gd_gpu[grid].xx[2], sizeof(REAL) * Nxx_plus_2NGHOSTS2, cudaMemcpyDeviceToHost);
-}
+} // END LOOP over grids
 """
     cfc.register_CFunction(
         prefunc=prefunc,
@@ -235,7 +235,7 @@ def register_CFunction_CUDA__malloc_host_gfs() -> None:
     <BLANKLINE>
       cudaMallocHost((void **)&gridfuncs->diagnostic_output_gfs, sizeof(REAL) * Nxx_plus_2NGHOSTS_tot * NUM_AUX_GFS);
       cudaCheckErrors(cudaMallocHost, "Malloc diagnostic GFs failed.")
-    }
+    } // END FUNCTION CUDA__malloc_host_gfs
     <BLANKLINE>
     """
     includes = ["BHaH_defines.h"]
@@ -287,7 +287,7 @@ def register_CFunction_CUDA__free_host_gfs() -> None:
       cudaCheckErrors(free, "Host-ynFree failed");
       cudaFreeHost(gridfuncs->diagnostic_output_gfs);
       cudaCheckErrors(free, "Host-non-ynFree failed");
-    }
+    } // END FUNCTION CUDA__free_host_gfs
     <BLANKLINE>
     """
     includes = ["BHaH_defines.h"]
@@ -340,7 +340,7 @@ def register_CFunction_cpyDevicetoHost__gf() -> None:
       cudaMemcpyAsync(&gf_host[offset_host], &gf_gpu[offset_gpu], sizeof(REAL) * Nxx_plus_2NGHOSTS_tot, cudaMemcpyDeviceToHost, streams[streamid]);
       cudaCheckErrors(cudaMemcpyAsync, "Copy of gf data failed");
       return streamid;
-    }
+    } // END FUNCTION cpyDevicetoHost__gf
     <BLANKLINE>
     """
     includes = ["BHaH_defines.h"]
@@ -404,7 +404,7 @@ def register_CFunction_cpyHosttoDevice__gf() -> None:
       cudaMemcpyAsync(&gf_host[offset_host], &gf_gpu[offset_gpu], sizeof(REAL) * Nxx_plus_2NGHOSTS_tot, cudaMemcpyDeviceToHost, streams[streamid]);
       cudaCheckErrors(cudaMemcpyAsync, "Copy of gf data failed");
       return streamid;
-    }
+    } // END FUNCTION cpyDevicetoHost__gf
     <BLANKLINE>
     """
     includes = ["BHaH_defines.h"]

@@ -350,7 +350,6 @@ def register_CFunction_diagnostics(
         "CoordSystemName, convergence_factor, time",
     ),
     out_quantities_dict: Union[str, Dict[Tuple[str, str], str]] = "default",
-    enable_BSSN_diagnostics: bool = True,
     enable_psi4_diagnostics: bool = False,
     enable_L2norm_BSSN_constraints_diagnostics: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
@@ -363,7 +362,6 @@ def register_CFunction_diagnostics(
     :param axis_filename_tuple: Tuple containing filename and variables for axis output.
     :param plane_filename_tuple: Tuple containing filename and variables for plane output.
     :param out_quantities_dict: Dictionary or string specifying output quantities.
-    :param enable_BSSN_diagnostics: Whether or not to enable BSSN constraint violation diagnostics.
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     :param enable_L2norm_BSSN_constraints_diagnostics: Whether or not to enable L2norm of BSSN_constraints diagnostics.
 
@@ -428,13 +426,13 @@ def register_CFunction_diagnostics(
                 plane=plane,
             )
 
+        if enable_L2norm_BSSN_constraints_diagnostics:
+            register_CFunction_compute_L2_norm_of_gridfunction_between_r1_r2(
+                CoordSystem=CoordSystem
+            )
+
     if enable_psi4_diagnostics:
         register_CFunction_psi4_diagnostics_set_up()
-
-    if enable_L2norm_BSSN_constraints_diagnostics:
-        register_CFunction_compute_L2_norm_of_gridfunction_between_r1_r2(
-            CoordSystem=CoordSystem
-        )
 
     desc = r"""Diagnostics."""
     cfunc_type = "void"

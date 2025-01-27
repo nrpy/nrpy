@@ -70,4 +70,4 @@ void diagnostics_nearest_1d_y_axis__rfm__SinhSpherical(commondata_struct *restri
   }
 
   fclose(outfile);
-}
+} // END FUNCTION diagnostics_nearest_1d_y_axis__rfm__SinhSpherical

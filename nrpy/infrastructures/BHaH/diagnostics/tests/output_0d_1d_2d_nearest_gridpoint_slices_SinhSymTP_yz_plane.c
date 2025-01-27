@@ -46,4 +46,4 @@ void diagnostics_nearest_2d_yz_plane__rfm__SinhSymTP(commondata_struct *restrict
   }
 
   fclose(outfile);
-}
+} // END FUNCTION diagnostics_nearest_2d_yz_plane__rfm__SinhSymTP

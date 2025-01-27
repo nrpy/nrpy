@@ -18,19 +18,16 @@ import nrpy.reference_metric as refmetric
 
 # fmt: off
 for i in range(3):
+    _ = par.CodeParameter("int", __name__, f"Nxx_plus_2NGHOSTS{i}", add_to_parfile=False, add_to_set_CodeParameters_h=True)
     _ = par.CodeParameter("int", __name__, f"Nxx{i}", 64)
-_ = par.CodeParameter("REAL", __name__, "convergence_factor", 1.0, commondata=True)
-for i in range(3):
-    _ = par.CodeParameter("int", __name__, f"Nxx_plus_2NGHOSTS{i}", add_to_parfile=False,
-                          add_to_set_CodeParameters_h=True)
     # reference_metric sets xxmin and xxmax below.
     _ = par.CodeParameter("REAL", __name__, f"xxmin{i}", -10.0, add_to_parfile=False, add_to_set_CodeParameters_h=True)
     _ = par.CodeParameter("REAL", __name__, f"xxmax{i}", 10.0, add_to_parfile=False, add_to_set_CodeParameters_h=True)
     _ = par.CodeParameter("REAL", __name__, f"invdxx{i}", add_to_parfile=False, add_to_set_CodeParameters_h=True)
     _ = par.CodeParameter("REAL", __name__, f"dxx{i}", add_to_parfile=False, add_to_set_CodeParameters_h=True)
+_ = par.CodeParameter("REAL", __name__, "convergence_factor", 1.0, commondata=True)
 _ = par.CodeParameter("int", __name__, "CoordSystem_hash", commondata=False, add_to_parfile=False)
-
-
+_ = par.CodeParameter("int", __name__, "grid_idx", commondata=False, add_to_parfile=False)
 # fmt: on
 
 
@@ -345,6 +342,11 @@ if(calling_for_first_time) {
   commondata->nn_0 = 0;
   commondata->t_0 = 0.0;
   commondata->time = 0.0;
+}
+
+// Step 1.h: Set grid_idx for each grid.
+for(int grid=0;grid<commondata->NUMGRIDS;grid++) {
+   griddata[grid].params.grid_idx = grid;
 }
 """
     cfc.register_CFunction(
