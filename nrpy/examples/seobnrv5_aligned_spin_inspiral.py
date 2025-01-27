@@ -53,7 +53,7 @@ par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 APPLY_FD = False
 
 #Flag to print the SEOBNR waveform. Mark as False for performance tests.
-PRINT_WAVEFORM = False
+PRINT_WAVEFORM = True
 
 #Flag to refine the orbital frequency peak.
 PERFORM_ITERATIVE_REFINEMENT = False

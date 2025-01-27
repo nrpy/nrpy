@@ -446,7 +446,7 @@ for(i = 0; i < nsteps_ringdown; i++){
 BOB_aligned_spin_waveform_from_times(ringdown_time,ringdown_amp,ringdown_phase,nsteps_ringdown,commondata);
 const REAL true_sign = copysign(phase_match,1.);
 for(i = 0; i < nsteps_ringdown; i++){
-  ringdown_phase[i] = true_sign*ringdown_phase + phase_match;
+  ringdown_phase[i] = true_sign*ringdown_phase[i] + phase_match;
 }
 commondata->nsteps_IMR = idx_match + 1 + nsteps_ringdown;
 commondata->waveform_IMR = (double complex *)malloc(NUMMODES * commondata->nsteps_IMR*sizeof(double complex));
