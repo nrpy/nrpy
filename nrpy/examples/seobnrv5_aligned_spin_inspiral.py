@@ -48,9 +48,15 @@ par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
 
+#Flag to compute the SEOBNR waveform in the frequency domain.
+#Ensure that the flag is the same as in line 131 of nrpy/infrastructure/BHaH/seobnr/SEOBNR_C_codegen_library.py
 APPLY_FD = False
-PRINT_WAVEFORM = True
 
+#Flag to print the SEOBNR waveform. Mark as False for performance tests.
+PRINT_WAVEFORM = False
+
+#Flag to refine the orbital frequency peak.
+PERFORM_ITERATIVE_REFINEMENT = False
 
 def register_CFunction_main_c() -> None:
     """Generate a simplified C main() function for computing SEOBNRv5 Hamiltonian and its derivatives."""
@@ -157,7 +163,7 @@ seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_augments()
 seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_argrelmin()
 seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_iterative_refinement()
 seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_intepolate_dynamics()
-seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_ode_integration()
+seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_ode_integration(PERFORM_ITERATIVE_REFINEMENT)
 seobnr_gsl.register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_waveform()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics()
