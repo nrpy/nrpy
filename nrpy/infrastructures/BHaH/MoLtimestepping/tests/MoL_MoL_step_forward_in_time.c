@@ -1,6 +1,118 @@
 #include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
 /**
+ * Runge-Kutta function for substep 1.
+ */
+static void rk_substep_1(params_struct *restrict params, REAL *restrict k_odd_gfs, REAL *restrict y_n_gfs, REAL *restrict y_nplus1_running_total_gfs,
+                         const REAL dt) {
+  const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
+  const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
+  const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
+  const int Ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;
+
+  LOOP_ALL_GFS_GPS(i) {
+    const REAL k_odd_gfsL = k_odd_gfs[i];
+    const REAL y_n_gfsL = y_n_gfs[i];
+    const REAL RK_Rational_1_6 = 1.0 / 6.0;
+    const REAL RK_Rational_1_2 = 1.0 / 2.0;
+    y_nplus1_running_total_gfs[i] = RK_Rational_1_6 * dt * k_odd_gfsL;
+    k_odd_gfs[i] = RK_Rational_1_2 * dt * k_odd_gfsL + y_n_gfsL;
+  }
+} // END FUNCTION rk_substep_1
+
+/**
+ * Runge-Kutta function for substep 1.
+ */
+static void rk_substep_1__launcher(params_struct *restrict params, REAL *restrict k_odd_gfs, REAL *restrict y_n_gfs,
+                                   REAL *restrict y_nplus1_running_total_gfs, const REAL dt) {
+  rk_substep_1(params, k_odd_gfs, y_n_gfs, y_nplus1_running_total_gfs, dt);
+} // END FUNCTION rk_substep_1__launcher
+
+/**
+ * Runge-Kutta function for substep 2.
+ */
+static void rk_substep_2(params_struct *restrict params, REAL *restrict k_even_gfs, REAL *restrict y_nplus1_running_total_gfs, REAL *restrict y_n_gfs,
+                         const REAL dt) {
+  const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
+  const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
+  const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
+  const int Ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;
+
+  LOOP_ALL_GFS_GPS(i) {
+    const REAL k_even_gfsL = k_even_gfs[i];
+    const REAL y_nplus1_running_total_gfsL = y_nplus1_running_total_gfs[i];
+    const REAL y_n_gfsL = y_n_gfs[i];
+    const REAL RK_Rational_1_3 = 1.0 / 3.0;
+    const REAL RK_Rational_1_2 = 1.0 / 2.0;
+    y_nplus1_running_total_gfs[i] = RK_Rational_1_3 * dt * k_even_gfsL + y_nplus1_running_total_gfsL;
+    k_even_gfs[i] = RK_Rational_1_2 * dt * k_even_gfsL + y_n_gfsL;
+  }
+} // END FUNCTION rk_substep_2
+
+/**
+ * Runge-Kutta function for substep 2.
+ */
+static void rk_substep_2__launcher(params_struct *restrict params, REAL *restrict k_even_gfs, REAL *restrict y_nplus1_running_total_gfs,
+                                   REAL *restrict y_n_gfs, const REAL dt) {
+  rk_substep_2(params, k_even_gfs, y_nplus1_running_total_gfs, y_n_gfs, dt);
+} // END FUNCTION rk_substep_2__launcher
+
+/**
+ * Runge-Kutta function for substep 3.
+ */
+static void rk_substep_3(params_struct *restrict params, REAL *restrict k_odd_gfs, REAL *restrict y_nplus1_running_total_gfs, REAL *restrict y_n_gfs,
+                         const REAL dt) {
+  const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
+  const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
+  const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
+  const int Ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;
+
+  LOOP_ALL_GFS_GPS(i) {
+    const REAL k_odd_gfsL = k_odd_gfs[i];
+    const REAL y_nplus1_running_total_gfsL = y_nplus1_running_total_gfs[i];
+    const REAL y_n_gfsL = y_n_gfs[i];
+    const REAL RK_Rational_1_3 = 1.0 / 3.0;
+    y_nplus1_running_total_gfs[i] = RK_Rational_1_3 * dt * k_odd_gfsL + y_nplus1_running_total_gfsL;
+    k_odd_gfs[i] = dt * k_odd_gfsL + y_n_gfsL;
+  }
+} // END FUNCTION rk_substep_3
+
+/**
+ * Runge-Kutta function for substep 3.
+ */
+static void rk_substep_3__launcher(params_struct *restrict params, REAL *restrict k_odd_gfs, REAL *restrict y_nplus1_running_total_gfs,
+                                   REAL *restrict y_n_gfs, const REAL dt) {
+  rk_substep_3(params, k_odd_gfs, y_nplus1_running_total_gfs, y_n_gfs, dt);
+} // END FUNCTION rk_substep_3__launcher
+
+/**
+ * Runge-Kutta function for substep 4.
+ */
+static void rk_substep_4(params_struct *restrict params, REAL *restrict k_even_gfs, REAL *restrict y_n_gfs, REAL *restrict y_nplus1_running_total_gfs,
+                         const REAL dt) {
+  const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
+  const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
+  const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
+  const int Ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;
+
+  LOOP_ALL_GFS_GPS(i) {
+    const REAL k_even_gfsL = k_even_gfs[i];
+    const REAL y_n_gfsL = y_n_gfs[i];
+    const REAL y_nplus1_running_total_gfsL = y_nplus1_running_total_gfs[i];
+    const REAL RK_Rational_1_6 = 1.0 / 6.0;
+    y_n_gfs[i] = RK_Rational_1_6 * dt * k_even_gfsL + y_n_gfsL + y_nplus1_running_total_gfsL;
+  }
+} // END FUNCTION rk_substep_4
+
+/**
+ * Runge-Kutta function for substep 4.
+ */
+static void rk_substep_4__launcher(params_struct *restrict params, REAL *restrict k_even_gfs, REAL *restrict y_n_gfs,
+                                   REAL *restrict y_nplus1_running_total_gfs, const REAL dt) {
+  rk_substep_4(params, k_even_gfs, y_n_gfs, y_nplus1_running_total_gfs, dt);
+} // END FUNCTION rk_substep_4__launcher
+
+/**
  * Method of Lines (MoL) for "RK4" method: Step forward one full timestep.
  *
  */
@@ -15,26 +127,21 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     commondata->time = time_start + 0.00000000000000000e+00 * commondata->dt;
     // Set gridfunction aliases from gridfuncs struct
     // y_n gridfunctions
-    REAL MAYBE_UNUSED *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
+    MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
     // Temporary timelevel & AUXEVOL gridfunctions:
-    REAL MAYBE_UNUSED *restrict y_nplus1_running_total_gfs = griddata[grid].gridfuncs.y_nplus1_running_total_gfs;
-    REAL MAYBE_UNUSED *restrict k_odd_gfs = griddata[grid].gridfuncs.k_odd_gfs;
-    REAL MAYBE_UNUSED *restrict k_even_gfs = griddata[grid].gridfuncs.k_even_gfs;
-    REAL MAYBE_UNUSED *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
-    params_struct *restrict params = &griddata[grid].params;
-    REAL MAYBE_UNUSED *restrict xx[3];
+    MAYBE_UNUSED REAL *restrict y_nplus1_running_total_gfs = griddata[grid].gridfuncs.y_nplus1_running_total_gfs;
+    MAYBE_UNUSED REAL *restrict k_odd_gfs = griddata[grid].gridfuncs.k_odd_gfs;
+    MAYBE_UNUSED REAL *restrict k_even_gfs = griddata[grid].gridfuncs.k_even_gfs;
+    MAYBE_UNUSED REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
+    MAYBE_UNUSED params_struct *restrict params = &griddata[grid].params;
+    MAYBE_UNUSED REAL *restrict xx[3];
     for (int ww = 0; ww < 3; ww++)
       xx[ww] = griddata[grid].xx[ww];
-    const int Nxx_plus_2NGHOSTS0 = griddata[grid].params.Nxx_plus_2NGHOSTS0;
-    const int Nxx_plus_2NGHOSTS1 = griddata[grid].params.Nxx_plus_2NGHOSTS1;
-    const int Nxx_plus_2NGHOSTS2 = griddata[grid].params.Nxx_plus_2NGHOSTS2;
+    MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = griddata[grid].params.Nxx_plus_2NGHOSTS0;
+    MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = griddata[grid].params.Nxx_plus_2NGHOSTS1;
+    MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = griddata[grid].params.Nxx_plus_2NGHOSTS2;
     rhs_eval(Nxx, Nxx_plus_2NGHOSTS, dxx, y_n_gfs, k_odd_gfs);
-    LOOP_ALL_GFS_GPS(i) {
-      const REAL k_odd_gfsL = k_odd_gfs[i];
-      const REAL y_n_gfsL = y_n_gfs[i];
-      y_nplus1_running_total_gfs[i] = (1.0 / 6.0) * commondata->dt * k_odd_gfsL;
-      k_odd_gfs[i] = (1.0 / 2.0) * commondata->dt * k_odd_gfsL + y_n_gfsL;
-    }
+    rk_substep_1__launcher(params, k_odd_gfs, y_n_gfs, y_nplus1_running_total_gfs, commondata->dt);
     apply_bcs(Nxx, Nxx_plus_2NGHOSTS, k_odd_gfs);
   }
   // -={ END k1 substep }=-
@@ -44,27 +151,21 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     commondata->time = time_start + 5.00000000000000000e-01 * commondata->dt;
     // Set gridfunction aliases from gridfuncs struct
     // y_n gridfunctions
-    REAL MAYBE_UNUSED *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
+    MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
     // Temporary timelevel & AUXEVOL gridfunctions:
-    REAL MAYBE_UNUSED *restrict y_nplus1_running_total_gfs = griddata[grid].gridfuncs.y_nplus1_running_total_gfs;
-    REAL MAYBE_UNUSED *restrict k_odd_gfs = griddata[grid].gridfuncs.k_odd_gfs;
-    REAL MAYBE_UNUSED *restrict k_even_gfs = griddata[grid].gridfuncs.k_even_gfs;
-    REAL MAYBE_UNUSED *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
-    params_struct *restrict params = &griddata[grid].params;
-    REAL MAYBE_UNUSED *restrict xx[3];
+    MAYBE_UNUSED REAL *restrict y_nplus1_running_total_gfs = griddata[grid].gridfuncs.y_nplus1_running_total_gfs;
+    MAYBE_UNUSED REAL *restrict k_odd_gfs = griddata[grid].gridfuncs.k_odd_gfs;
+    MAYBE_UNUSED REAL *restrict k_even_gfs = griddata[grid].gridfuncs.k_even_gfs;
+    MAYBE_UNUSED REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
+    MAYBE_UNUSED params_struct *restrict params = &griddata[grid].params;
+    MAYBE_UNUSED REAL *restrict xx[3];
     for (int ww = 0; ww < 3; ww++)
       xx[ww] = griddata[grid].xx[ww];
-    const int Nxx_plus_2NGHOSTS0 = griddata[grid].params.Nxx_plus_2NGHOSTS0;
-    const int Nxx_plus_2NGHOSTS1 = griddata[grid].params.Nxx_plus_2NGHOSTS1;
-    const int Nxx_plus_2NGHOSTS2 = griddata[grid].params.Nxx_plus_2NGHOSTS2;
+    MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = griddata[grid].params.Nxx_plus_2NGHOSTS0;
+    MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = griddata[grid].params.Nxx_plus_2NGHOSTS1;
+    MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = griddata[grid].params.Nxx_plus_2NGHOSTS2;
     rhs_eval(Nxx, Nxx_plus_2NGHOSTS, dxx, k_odd_gfs, k_even_gfs);
-    LOOP_ALL_GFS_GPS(i) {
-      const REAL k_even_gfsL = k_even_gfs[i];
-      const REAL y_nplus1_running_total_gfsL = y_nplus1_running_total_gfs[i];
-      const REAL y_n_gfsL = y_n_gfs[i];
-      y_nplus1_running_total_gfs[i] = (1.0 / 3.0) * commondata->dt * k_even_gfsL + y_nplus1_running_total_gfsL;
-      k_even_gfs[i] = (1.0 / 2.0) * commondata->dt * k_even_gfsL + y_n_gfsL;
-    }
+    rk_substep_2__launcher(params, k_even_gfs, y_nplus1_running_total_gfs, y_n_gfs, commondata->dt);
     apply_bcs(Nxx, Nxx_plus_2NGHOSTS, k_even_gfs);
   }
   // -={ END k2 substep }=-
@@ -74,27 +175,21 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     commondata->time = time_start + 5.00000000000000000e-01 * commondata->dt;
     // Set gridfunction aliases from gridfuncs struct
     // y_n gridfunctions
-    REAL MAYBE_UNUSED *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
+    MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
     // Temporary timelevel & AUXEVOL gridfunctions:
-    REAL MAYBE_UNUSED *restrict y_nplus1_running_total_gfs = griddata[grid].gridfuncs.y_nplus1_running_total_gfs;
-    REAL MAYBE_UNUSED *restrict k_odd_gfs = griddata[grid].gridfuncs.k_odd_gfs;
-    REAL MAYBE_UNUSED *restrict k_even_gfs = griddata[grid].gridfuncs.k_even_gfs;
-    REAL MAYBE_UNUSED *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
-    params_struct *restrict params = &griddata[grid].params;
-    REAL MAYBE_UNUSED *restrict xx[3];
+    MAYBE_UNUSED REAL *restrict y_nplus1_running_total_gfs = griddata[grid].gridfuncs.y_nplus1_running_total_gfs;
+    MAYBE_UNUSED REAL *restrict k_odd_gfs = griddata[grid].gridfuncs.k_odd_gfs;
+    MAYBE_UNUSED REAL *restrict k_even_gfs = griddata[grid].gridfuncs.k_even_gfs;
+    MAYBE_UNUSED REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
+    MAYBE_UNUSED params_struct *restrict params = &griddata[grid].params;
+    MAYBE_UNUSED REAL *restrict xx[3];
     for (int ww = 0; ww < 3; ww++)
       xx[ww] = griddata[grid].xx[ww];
-    const int Nxx_plus_2NGHOSTS0 = griddata[grid].params.Nxx_plus_2NGHOSTS0;
-    const int Nxx_plus_2NGHOSTS1 = griddata[grid].params.Nxx_plus_2NGHOSTS1;
-    const int Nxx_plus_2NGHOSTS2 = griddata[grid].params.Nxx_plus_2NGHOSTS2;
+    MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = griddata[grid].params.Nxx_plus_2NGHOSTS0;
+    MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = griddata[grid].params.Nxx_plus_2NGHOSTS1;
+    MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = griddata[grid].params.Nxx_plus_2NGHOSTS2;
     rhs_eval(Nxx, Nxx_plus_2NGHOSTS, dxx, k_even_gfs, k_odd_gfs);
-    LOOP_ALL_GFS_GPS(i) {
-      const REAL k_odd_gfsL = k_odd_gfs[i];
-      const REAL y_nplus1_running_total_gfsL = y_nplus1_running_total_gfs[i];
-      const REAL y_n_gfsL = y_n_gfs[i];
-      y_nplus1_running_total_gfs[i] = (1.0 / 3.0) * commondata->dt * k_odd_gfsL + y_nplus1_running_total_gfsL;
-      k_odd_gfs[i] = commondata->dt * k_odd_gfsL + y_n_gfsL;
-    }
+    rk_substep_3__launcher(params, k_odd_gfs, y_nplus1_running_total_gfs, y_n_gfs, commondata->dt);
     apply_bcs(Nxx, Nxx_plus_2NGHOSTS, k_odd_gfs);
   }
   // -={ END k3 substep }=-
@@ -104,26 +199,21 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     commondata->time = time_start + 1.00000000000000000e+00 * commondata->dt;
     // Set gridfunction aliases from gridfuncs struct
     // y_n gridfunctions
-    REAL MAYBE_UNUSED *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
+    MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
     // Temporary timelevel & AUXEVOL gridfunctions:
-    REAL MAYBE_UNUSED *restrict y_nplus1_running_total_gfs = griddata[grid].gridfuncs.y_nplus1_running_total_gfs;
-    REAL MAYBE_UNUSED *restrict k_odd_gfs = griddata[grid].gridfuncs.k_odd_gfs;
-    REAL MAYBE_UNUSED *restrict k_even_gfs = griddata[grid].gridfuncs.k_even_gfs;
-    REAL MAYBE_UNUSED *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
-    params_struct *restrict params = &griddata[grid].params;
-    REAL MAYBE_UNUSED *restrict xx[3];
+    MAYBE_UNUSED REAL *restrict y_nplus1_running_total_gfs = griddata[grid].gridfuncs.y_nplus1_running_total_gfs;
+    MAYBE_UNUSED REAL *restrict k_odd_gfs = griddata[grid].gridfuncs.k_odd_gfs;
+    MAYBE_UNUSED REAL *restrict k_even_gfs = griddata[grid].gridfuncs.k_even_gfs;
+    MAYBE_UNUSED REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
+    MAYBE_UNUSED params_struct *restrict params = &griddata[grid].params;
+    MAYBE_UNUSED REAL *restrict xx[3];
     for (int ww = 0; ww < 3; ww++)
       xx[ww] = griddata[grid].xx[ww];
-    const int Nxx_plus_2NGHOSTS0 = griddata[grid].params.Nxx_plus_2NGHOSTS0;
-    const int Nxx_plus_2NGHOSTS1 = griddata[grid].params.Nxx_plus_2NGHOSTS1;
-    const int Nxx_plus_2NGHOSTS2 = griddata[grid].params.Nxx_plus_2NGHOSTS2;
+    MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = griddata[grid].params.Nxx_plus_2NGHOSTS0;
+    MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = griddata[grid].params.Nxx_plus_2NGHOSTS1;
+    MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = griddata[grid].params.Nxx_plus_2NGHOSTS2;
     rhs_eval(Nxx, Nxx_plus_2NGHOSTS, dxx, k_odd_gfs, k_even_gfs);
-    LOOP_ALL_GFS_GPS(i) {
-      const REAL k_even_gfsL = k_even_gfs[i];
-      const REAL y_n_gfsL = y_n_gfs[i];
-      const REAL y_nplus1_running_total_gfsL = y_nplus1_running_total_gfs[i];
-      y_n_gfs[i] = (1.0 / 6.0) * commondata->dt * k_even_gfsL + y_n_gfsL + y_nplus1_running_total_gfsL;
-    }
+    rk_substep_4__launcher(params, k_even_gfs, y_n_gfs, y_nplus1_running_total_gfs, commondata->dt);
     apply_bcs(Nxx, Nxx_plus_2NGHOSTS, y_n_gfs);
   }
   // -={ END k4 substep }=-
