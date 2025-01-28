@@ -106,9 +106,10 @@ class RKFunction:
         self.name = f"rk_substep_{self.rk_step}"
 
         # Populate build and populate self.CFunction
-
         kernel_body: str = ""
         self.kernel_params = {}
+        self.kernel_params["params"] = "params_struct *restrict"
+
         if parallelization == "cuda":
             for X in ["0", "1", "2"]:
                 self.body += f"MAYBE_UNUSED const int Nxx_plus_2NGHOSTS{X} = params->Nxx_plus_2NGHOSTS{X};\n"
@@ -123,7 +124,7 @@ class RKFunction:
                 "for(int i=tid0;i<Ntot;i+=stride0) {\n"
             )
         elif parallelization == "openmp":
-            self.kernel_params["params"] = "params_struct *restrict"
+
             for X in ["0", "1", "2"]:
                 kernel_body += (
                     f"const int Nxx_plus_2NGHOSTS{X} = params->Nxx_plus_2NGHOSTS{X};\n"
@@ -153,37 +154,31 @@ class RKFunction:
             if str(el) != "commondata->dt":
                 gfs_el = str(el).replace("gfsL", "gfs[i]")
                 key = gfs_el[:-3]
-                if self.enable_intrinsics:
-                    # self.param_vars.append(gfs_el[:-3])
-                    self.kernel_params[key] = f"REAL_{self.intrinsics_str}_ARRAY"
+                if self.enable_intrinsics and parallelization == "openmp":
+                    self.kernel_params[key] = "REAL *restrict"
                     self.params += f"{var_type} *restrict {key},"
                     kernel_body += f"const {var_type} {el} = Read{self.intrinsics_str}(&{gfs_el});\n"
                 else:
-                    # self.param_vars.append(gfs_el[:-3])
                     self.kernel_params[key] = "REAL *restrict"
                     self.params += f"{var_type} *restrict {key},"
                     kernel_body += f"const {var_type} {el} = {gfs_el};\n"
-        for el in self.RK_lhs_str_list:
-            lhs_var = el[:-3]
+        for el in self.RK_lhs_list:
+            lhs_var = str(el).replace("_gfsL", "_gfs")
             if not lhs_var in self.params:
                 self.kernel_params[lhs_var] = "REAL *restrict"
-                # self.param_vars.append(lhs_var)
                 self.params += f"{var_type} *restrict {lhs_var},"
         self.params += f"const {var_type} dt"
-
-        # self.kernel_params = {k: "REAL *restrict" for k in self.param_vars}
         self.kernel_params["dt"] = "const REAL"
 
         kernel_body += self.loop_body.replace("commondata->dt", "dt") + "\n}\n"
-        if self.enable_intrinsics:
-            for j, el in enumerate(self.RK_lhs_list):
-                kernel_body += f"  Write{self.intrinsics_str}(&{str(el).replace('gfsL', 'gfs[i]')}, __rhs_exp_{j});\n"
         self.kernel_params_lst = [f"{v} {k}" for k, v in self.kernel_params.items()]
 
         if parallelization == "cuda":
+            gpu_kernel_params = self.kernel_params.copy()
+            gpu_kernel_params.pop("params")
             device_kernel = gputils.GPU_Kernel(
                 kernel_body,
-                self.kernel_params,
+                gpu_kernel_params,
                 f"{self.name}_gpu",
                 launch_dict={
                     "blocks_per_grid": [
@@ -636,9 +631,9 @@ def register_CFunction_MoL_step_forward_in_time(
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     if enable_intrinsics and parallelization == "cuda":
-        includes += [os.path.join("intrinsics", "CUDA_intrinsics.h")]
+        includes += [os.path.join("intrinsics", "cuda_intrinsics.h")]
     elif enable_intrinsics:
-        includes += [os.path.join("intrinsics", "SIMD_intrinsics.h")]
+        includes += [os.path.join("intrinsics", "simd_intrinsics.h")]
 
     desc = f'Method of Lines (MoL) for "{MoL_method}" method: Step forward one full timestep.\n'
     cfunc_type = "void"
