@@ -14,6 +14,7 @@ from typing import Dict, List, Tuple, Union
 import sympy as sp  # Import SymPy, a computer algebra system written entirely in Python
 
 import nrpy.c_function as cfc
+import nrpy.helpers.gpu.gpu_kernel as gputils
 import nrpy.params as par  # NRPy+: Parameter interface
 from nrpy.c_codegen import c_codegen
 from nrpy.helpers.generic import superfast_uniq
@@ -179,24 +180,42 @@ class RKFunction:
                 kernel_body += f"  Write{self.intrinsics_str}(&{str(el).replace('gfsL', 'gfs[i]')}, __rhs_exp_{j});\n"
         self.kernel_params_lst = [f"{v} {k}" for k, v in self.kernel_params.items()]
 
-        rk_substep_prefunc = cfc.CFunction(
-            desc=self.desc,
-            cfunc_type=self.cfunc_type,
-            name=self.name,
-            params=",".join(self.kernel_params_lst),
-            body=kernel_body,
-        )
-        c_function_call: str = f"{self.name}("
-        for p in self.kernel_params:
-            c_function_call += f"{p}, "
-        c_function_call = c_function_call[:-2] + ")"
-        self.body += f"{c_function_call};\n"
-        # self.body += "}\n"
+        if parallelization == "cuda":
+            device_kernel = gputils.GPU_Kernel(
+                kernel_body,
+                self.kernel_params,
+                f"{self.name}_gpu",
+                launch_dict={
+                    "blocks_per_grid": [
+                        "(Ntot + threads_in_x_dir - 1) / threads_in_x_dir"
+                    ],
+                    "threads_per_block": ["32"],
+                    "stream": "params->grid_idx % NUM_STREAMS",
+                },
+                comments=f"GPU Kernel to compute RK substep {self.rk_step}.",
+            )
+            self.body += device_kernel.launch_block
+            self.body += device_kernel.c_function_call()
+            prefunc = device_kernel.CFunction.full_function
+        else:
+            rk_substep_prefunc = cfc.CFunction(
+                desc=self.desc,
+                cfunc_type=self.cfunc_type,
+                name=self.name,
+                params=",".join(self.kernel_params_lst),
+                body=kernel_body,
+            )
+            c_function_call: str = f"{self.name}("
+            for p in self.kernel_params:
+                c_function_call += f"{p}, "
+            c_function_call = c_function_call[:-2] + ")"
+            prefunc = rk_substep_prefunc.full_function
+            self.body += f"{c_function_call};\n"
 
         # Store CFunction
         self.name += "__launcher"
         self.CFunction = cfc.CFunction(
-            prefunc=rk_substep_prefunc.full_function,
+            prefunc=prefunc,
             includes=self.includes,
             desc=self.desc,
             cfunc_type=self.cfunc_type,
