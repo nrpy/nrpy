@@ -379,6 +379,7 @@ def register_CFunction_MoL_malloc(
     Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
     MoL_method: str,
     which_gfs: str,
+    parallelization: str = "openmp",
 ) -> None:
     """
     Register MoL_malloc_y_n_gfs() and MoL_malloc_non_y_n_gfs(), allocating memory for the gridfunctions indicated.
@@ -386,6 +387,7 @@ def register_CFunction_MoL_malloc(
     :param Butcher_dict: Dictionary of Butcher tables for the MoL method.
     :param MoL_method: Method for the Method of Lines.
     :param which_gfs: Specifies which gridfunctions to consider ("y_n_gfs" or "non_y_n_gfs").
+    :param parallelization: Parameter to specify parallelization (openmp or cuda).
 
     :raises ValueError: If the which_gfs parameter is neither "y_n_gfs" nor "non_y_n_gfs".
 
@@ -428,10 +430,17 @@ def register_CFunction_MoL_malloc(
         # Don't malloc a zero-sized array.
         if num_gfs == "NUM_AUXEVOL_GFS":
             body += "  if(NUM_AUXEVOL_GFS > 0) "
-        body += (
-            f"gridfuncs->{gridfunctions} = (REAL *restrict)malloc(sizeof(REAL) * {num_gfs} * "
-            "Nxx_plus_2NGHOSTS_tot);\n"
-        )
+        if parallelization == "cuda":
+            body += (
+                f"cudaMalloc(&gridfuncs->{gridfunctions}, sizeof(REAL) * {num_gfs} * "
+                "Nxx_plus_2NGHOSTS_tot);\n"
+                'cudaCheckErrors(malloc, "Malloc failed");\n'
+            )
+        else:
+            body += (
+                f"gridfuncs->{gridfunctions} = (REAL *restrict)malloc(sizeof(REAL) * {num_gfs} * "
+                "Nxx_plus_2NGHOSTS_tot);\n"
+            )
 
     body += f"\ngridfuncs->diagnostic_output_gfs  = gridfuncs->{diagnostic_gridfunctions_point_to};\n"
     body += f"gridfuncs->diagnostic_output_gfs2 = gridfuncs->{diagnostic_gridfunctions2_point_to};\n"
@@ -465,6 +474,7 @@ def single_RK_substep_input_symbolic(
     post_post_rhs_string: str = "",
     rational_const_alias: str = "const",
     rk_step: Union[int, None] = None,
+    parallelization: str = "openmp",
 ) -> str:
     """
     Generate C code for a given Runge-Kutta substep.
@@ -483,6 +493,7 @@ def single_RK_substep_input_symbolic(
     :param gf_aliases: Additional aliases for grid functions.
     :param rational_const_alias: Provide additional/alternative alias to const for rational definitions
     :param rk_step: Optional integer representing the current RK step.
+    :param parallelization: Parameter to specify parallelization (openmp or cuda).
 
     :return: A string containing the generated C code.
 
@@ -535,6 +546,7 @@ def single_RK_substep_input_symbolic(
         rk_step=rk_step,
         enable_intrinsics=enable_intrinsics,
         rational_const_alias=rational_const_alias,
+        parallelization=parallelization,
     )
 
     body += MoL_Functions_dict[RK_key].c_function_call()
@@ -589,8 +601,8 @@ def register_CFunction_MoL_step_forward_in_time(
     post_post_rhs_string: str = "",
     enable_rfm_precompute: bool = False,
     enable_curviBCs: bool = False,
-    enable_simd: bool = False,
-    enable_cuda_intrinsics: bool = False,
+    enable_intrinsics: bool = False,
+    parallelization: str = "openmp",
     rational_const_alias: str = "const",
 ) -> None:
     """
@@ -603,8 +615,8 @@ def register_CFunction_MoL_step_forward_in_time(
     :param post_post_rhs_string: String to be used after the post-RHS phase.
     :param enable_rfm_precompute: Flag to enable reference metric functionality.
     :param enable_curviBCs: Flag to enable curvilinear boundary conditions.
-    :param enable_simd: Flag to enable SIMD functionality.
-    :param enable_cuda_intrinsics: Flag to enable CUDA intrinsics functionality.
+    :param enable_intrinsics: Flag to enable hardware intrinsics.
+    :param parallelization: Parameter to specify parallelization (openmp or cuda).
     :param rational_const_alias: Overload const specifier for Rational definitions
     :raises ValueError: If unsupported Butcher table specified since adaptive RK steps are not implemented in MoL.
 
@@ -623,10 +635,10 @@ def register_CFunction_MoL_step_forward_in_time(
     ValueError: Adaptive order Butcher tables are currently not supported in MoL.
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    if enable_simd:
-        includes += [os.path.join("intrinsics", "SIMD_intrinsics.h")]
-    elif enable_cuda_intrinsics:
+    if enable_intrinsics and parallelization == "cuda":
         includes += [os.path.join("intrinsics", "CUDA_intrinsics.h")]
+    elif enable_intrinsics:
+        includes += [os.path.join("intrinsics", "SIMD_intrinsics.h")]
 
     desc = f'Method of Lines (MoL) for "{MoL_method}" method: Step forward one full timestep.\n'
     cfunc_type = "void"
@@ -688,7 +700,6 @@ MAYBE_UNUSED REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
     )  # Specify the number of required steps to update solution
 
     dt = sp.Symbol("commondata->dt", real=True)
-    enable_intrinsics = enable_simd or enable_cuda_intrinsics
 
     if is_diagonal_Butcher(Butcher_dict, MoL_method) and "RK3" in MoL_method:
         # Diagonal RK3 only!!!
@@ -730,6 +741,7 @@ MAYBE_UNUSED REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
                 gf_aliases=gf_aliases,
                 post_post_rhs_string=post_post_rhs_string,
                 rational_const_alias=rational_const_alias,
+                parallelization=parallelization,
             )
             + "// -={ END k1 substep }=-\n\n"
         )
@@ -770,6 +782,7 @@ MAYBE_UNUSED REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
                 gf_aliases=gf_aliases,
                 post_post_rhs_string=post_post_rhs_string,
                 rational_const_alias=rational_const_alias,
+                parallelization=parallelization,
             )
             + "// -={ END k2 substep }=-\n\n"
         )
@@ -798,6 +811,7 @@ MAYBE_UNUSED REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
                 gf_aliases=gf_aliases,
                 post_post_rhs_string=post_post_rhs_string,
                 rational_const_alias=rational_const_alias,
+                parallelization=parallelization,
             )
             + "// -={ END k3 substep }=-\n\n"
         )
@@ -849,6 +863,7 @@ MAYBE_UNUSED REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
                     gf_aliases=gf_aliases,
                     post_post_rhs_string=post_post_rhs_string,
                     rational_const_alias=rational_const_alias,
+                    parallelization=parallelization
                 )}// -={{ END k{str(s + 1)} substep }}=-\n\n"""
 
         else:
@@ -871,6 +886,7 @@ MAYBE_UNUSED REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
                     gf_aliases=gf_aliases,
                     post_post_rhs_string=post_post_rhs_string,
                     rational_const_alias=rational_const_alias,
+                    parallelization=parallelization,
                 )
             else:
                 for s in range(num_steps):
@@ -949,6 +965,7 @@ MAYBE_UNUSED REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
                             gf_aliases=gf_aliases,
                             post_post_rhs_string=post_post_rhs_string,
                             rational_const_alias=rational_const_alias,
+                            parallelization=parallelization,
                         )
                         + f"// -={{ END k{s + 1} substep }}=-\n\n"
                     )
@@ -985,6 +1002,7 @@ def register_CFunction_MoL_free_memory(
     Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
     MoL_method: str,
     which_gfs: str,
+    parallelization: str = "openmp",
 ) -> None:
     """
     Free memory for the specified Method of Lines (MoL) gridfunctions, given an MoL_method.
@@ -992,6 +1010,7 @@ def register_CFunction_MoL_free_memory(
     :param Butcher_dict: Dictionary containing Butcher tableau for MoL methods.
     :param MoL_method: The Method of Lines method.
     :param which_gfs: The gridfunctions to be freed, either 'y_n_gfs' or 'non_y_n_gfs'.
+    :param parallelization: Parameter to specify parallelization (openmp or cuda).
 
     :raises ValueError: If the 'which_gfs' argument is unrecognized.
     """
@@ -1000,6 +1019,7 @@ def register_CFunction_MoL_free_memory(
     desc += "   - y_n_gfs are used to store data for the vector of gridfunctions y_i at t_n, at the start of each MoL timestep\n"
     desc += "   - non_y_n_gfs are needed for intermediate (e.g., k_i) storage in chosen MoL method\n"
     cfunc_type = "void"
+    mem_free_func = "free" if parallelization != "cuda" else "cudaFree"
 
     (
         y_n_gridfunctions,
@@ -1021,9 +1041,11 @@ def register_CFunction_MoL_free_memory(
     for gridfunction in gridfunctions_list:
         # Don't free a zero-sized array.
         if gridfunction == "auxevol_gfs":
-            body += f"  if(NUM_AUXEVOL_GFS > 0) free(gridfuncs->{gridfunction});"
+            body += (
+                f"  if(NUM_AUXEVOL_GFS > 0) {mem_free_func}(gridfuncs->{gridfunction});"
+            )
         else:
-            body += f"  free(gridfuncs->{gridfunction});"
+            body += f"  {mem_free_func}(gridfuncs->{gridfunction});"
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
@@ -1118,7 +1140,7 @@ def register_CFunctions(
             post_post_rhs_string,
             enable_rfm_precompute=enable_rfm_precompute,
             enable_curviBCs=enable_curviBCs,
-            enable_simd=enable_simd,
+            enable_intrinsics=enable_simd,
         )
 
     griddata_commondata.register_griddata_commondata(
