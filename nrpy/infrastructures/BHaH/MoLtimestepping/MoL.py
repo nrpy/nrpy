@@ -1126,7 +1126,7 @@ REAL *restrict diagnostic_output_gfs2;
 
 #define LOOP_ALL_GFS_GPS(ii) \
 _Pragma("omp parallel for") \
-  for(int (ii)=0;(ii)<Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;(ii)++)
+  for(int (ii)=0;(ii)<Ntot;(ii)++)
 """,
     )
 
