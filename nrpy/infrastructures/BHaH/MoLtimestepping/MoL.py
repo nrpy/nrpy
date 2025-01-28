@@ -32,6 +32,7 @@ _ = par.CodeParameter("REAL", __name__, "time", add_to_parfile=False, add_to_set
 _ = par.CodeParameter("REAL", __name__, "t_final", 10.0, commondata=True)
 # fmt: on
 
+
 class RKFunction:
     """
     A class to represent Runge-Kutte (RK) substep functions in C/C++.
@@ -108,11 +109,9 @@ class RKFunction:
         kernel_body: str = ""
         self.kernel_params = {}
         if parallelization == "cuda":
-            for i in ["0", "1", "2"]:
-                self.body += (
-                    f"MAYBE_UNUSED const int Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n"
-                )
-                kernel_body += f"MAYBE_UNUSED const int Nxx_plus_2NGHOSTS{i} = d_params[streamid].Nxx_plus_2NGHOSTS{i};\n"
+            for X in ["0", "1", "2"]:
+                self.body += f"MAYBE_UNUSED const int Nxx_plus_2NGHOSTS{X} = params->Nxx_plus_2NGHOSTS{X};\n"
+                kernel_body += f"MAYBE_UNUSED const int Nxx_plus_2NGHOSTS{X} = d_params[streamid].Nxx_plus_2NGHOSTS{X};\n"
             kernel_body += "MAYBE_UNUSED const int Ntot = Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;\n\n"
             self.body += "MAYBE_UNUSED const int Ntot = Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;\n\n"
 
@@ -124,8 +123,10 @@ class RKFunction:
             )
         elif parallelization == "openmp":
             self.kernel_params["params"] = "params_struct *restrict"
-            for i in ["0", "1", "2"]:
-                kernel_body += f"const int Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n"
+            for X in ["0", "1", "2"]:
+                kernel_body += (
+                    f"const int Nxx_plus_2NGHOSTS{X} = params->Nxx_plus_2NGHOSTS{X};\n"
+                )
             kernel_body += "const int Ntot = Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;\n\n"
             if enable_intrinsics:
                 warnings.warn(
@@ -178,18 +179,17 @@ class RKFunction:
                 kernel_body += f"  Write{self.intrinsics_str}(&{str(el).replace('gfsL', 'gfs[i]')}, __rhs_exp_{j});\n"
         self.kernel_params_lst = [f"{v} {k}" for k, v in self.kernel_params.items()]
 
-        if parallelization == "openmp":
-            rk_substep_prefunc = cfc.CFunction(
-                desc=self.desc,
-                cfunc_type=self.cfunc_type,
-                name=self.name,
-                params=",".join(self.kernel_params_lst),
-                body=kernel_body,
-            )
-            c_function_call: str = f"{self.name}("
-            for p in self.kernel_params:
-                c_function_call += f"{p}, "
-            c_function_call = c_function_call[:-2] + ")"
+        rk_substep_prefunc = cfc.CFunction(
+            desc=self.desc,
+            cfunc_type=self.cfunc_type,
+            name=self.name,
+            params=",".join(self.kernel_params_lst),
+            body=kernel_body,
+        )
+        c_function_call: str = f"{self.name}("
+        for p in self.kernel_params:
+            c_function_call += f"{p}, "
+        c_function_call = c_function_call[:-2] + ")"
         self.body += f"{c_function_call};\n"
         # self.body += "}\n"
 
@@ -239,6 +239,7 @@ def construct_RK_functions_prefunc() -> str:
     for fd_func in MoL_Functions_dict.values():
         prefunc += fd_func.CFunction.full_function + "\n\n"
     return prefunc
+
 
 def is_diagonal_Butcher(
     Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
@@ -439,12 +440,12 @@ def single_RK_substep_input_symbolic(
     RK_rhs_list: Union[sp.Basic, List[sp.Basic]],
     post_rhs_list: Union[str, List[str]],
     post_rhs_output_list: Union[sp.Basic, List[sp.Basic]],
-    rk_step: Union[int, None] = None,
+    additional_comments: str = "",
     enable_intrinsics: bool = False,
     gf_aliases: str = "",
     post_post_rhs_string: str = "",
-    additional_comments: str = "",
     rational_const_alias: str = "const",
+    rk_step: Union[int, None] = None,
 ) -> str:
     """
     Generate C code for a given Runge-Kutta substep.
@@ -457,12 +458,12 @@ def single_RK_substep_input_symbolic(
     :param RK_rhs_list: List of RHS expressions for RK.
     :param post_rhs_list: List of post-RHS expressions.
     :param post_rhs_output_list: List of outputs for post-RHS expressions.
-    :param rk_step: Optional integer representing the current RK step.
-    :param enable_intrinsics: Whether hardware intrinsics are enabled.
-    :param gf_aliases: Additional aliases for grid functions.
     :param post_post_rhs_string: String to be used after the post-RHS phase.
     :param additional_comments: additional comments to append to auto-generated comment block.
+    :param enable_intrinsics: Whether hardware intrinsics are enabled.
+    :param gf_aliases: Additional aliases for grid functions.
     :param rational_const_alias: Provide additional/alternative alias to const for rational definitions
+    :param rk_step: Optional integer representing the current RK step.
 
     :return: A string containing the generated C code.
 
@@ -513,7 +514,7 @@ def single_RK_substep_input_symbolic(
         RK_lhs_list,
         RK_rhs_list,
         rk_step=rk_step,
-        enable_intrinsics=False,
+        enable_intrinsics=enable_intrinsics,
         rational_const_alias=rational_const_alias,
     )
 
@@ -585,6 +586,7 @@ def register_CFunction_MoL_step_forward_in_time(
     :param enable_curviBCs: Flag to enable curvilinear boundary conditions.
     :param enable_simd: Flag to enable SIMD functionality.
     :param enable_cuda_intrinsics: Flag to enable CUDA intrinsics functionality.
+    :param rational_const_alias: Overload const specifier for Rational definitions
     :raises ValueError: If unsupported Butcher table specified since adaptive RK steps are not implemented in MoL.
 
     Doctest:
@@ -637,11 +639,11 @@ MAYBE_UNUSED REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
     for gf in non_y_n_gridfunctions_list:
         gf_aliases += f"MAYBE_UNUSED REAL *restrict {gf} = {gf_prefix}{gf};\n"
 
-    gf_aliases += "MAYBE_UNUSED params_struct *restrict params = &griddata[grid].params;\n"
+    gf_aliases += (
+        "MAYBE_UNUSED params_struct *restrict params = &griddata[grid].params;\n"
+    )
     if enable_rfm_precompute:
-        gf_aliases += (
-            "MAYBE_UNUSED const rfm_struct *restrict rfmstruct = &griddata[grid].rfmstruct;\n"
-        )
+        gf_aliases += "MAYBE_UNUSED const rfm_struct *restrict rfmstruct = &griddata[grid].rfmstruct;\n"
     else:
         gf_aliases += "MAYBE_UNUSED REAL *restrict xx[3]; for(int ww=0;ww<3;ww++) xx[ww] = griddata[grid].xx[ww];\n"
 
@@ -667,6 +669,7 @@ MAYBE_UNUSED REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
     )  # Specify the number of required steps to update solution
 
     dt = sp.Symbol("commondata->dt", real=True)
+    enable_intrinsics = enable_simd or enable_cuda_intrinsics
 
     if is_diagonal_Butcher(Butcher_dict, MoL_method) and "RK3" in MoL_method:
         # Diagonal RK3 only!!!
@@ -682,7 +685,7 @@ MAYBE_UNUSED REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
 // Using y_n_gfs as input, k1 and apply boundary conditions\n"""
         rk_step_body_dict["RK_SUBSTEP_K1"] = (
             single_RK_substep_input_symbolic(
-                additional_comments="""// -={ START k1 substep }=-
+                additional_comments="""
 // RHS evaluation:
 //  1. We will store k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs now as
 //     ...  the update for the next rhs evaluation y_n + a21*k1*dt
@@ -704,6 +707,7 @@ MAYBE_UNUSED REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
                 post_rhs_output_list=[
                     k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs
                 ],
+                enable_intrinsics=enable_intrinsics,
                 gf_aliases=gf_aliases,
                 post_post_rhs_string=post_post_rhs_string,
                 rational_const_alias=rational_const_alias,
@@ -714,7 +718,7 @@ MAYBE_UNUSED REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
         # k_2
         rk_step_body_dict["RK_SUBSTEP_K2"] = (
             single_RK_substep_input_symbolic(
-                additional_comments="""// -={ START k2 substep }=-
+                additional_comments="""
 // RHS evaluation:
 //    1. Reassign k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs to be the running total y_{n+1}; a32*k2*dt to the running total
 //    2. Store k2_or_y_nplus_a32_k2_gfs now as y_n + a32*k2*dt
@@ -743,6 +747,7 @@ MAYBE_UNUSED REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
                     k2_or_y_nplus_a32_k2_gfs,
                     k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs,
                 ],
+                enable_intrinsics=enable_intrinsics,
                 gf_aliases=gf_aliases,
                 post_post_rhs_string=post_post_rhs_string,
                 rational_const_alias=rational_const_alias,
@@ -753,7 +758,7 @@ MAYBE_UNUSED REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
         # k_3
         rk_step_body_dict["RK_SUBSTEP_K3"] = (
             single_RK_substep_input_symbolic(
-                comment_block="""// -={ START k3 substep }=-
+                additional_comments="""
 // RHS evaluation:
 //    1. Add k3 to the running total and save to y_n
 // Post-RHS evaluation:
@@ -770,6 +775,7 @@ MAYBE_UNUSED REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
                 rk_step=3,
                 post_rhs_list=[post_rhs_string],
                 post_rhs_output_list=[y_n_gfs],
+                enable_intrinsics=enable_intrinsics,
                 gf_aliases=gf_aliases,
                 post_post_rhs_string=post_post_rhs_string,
                 rational_const_alias=rational_const_alias,
@@ -808,7 +814,9 @@ MAYBE_UNUSED REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
                 else:  # If on anything but the final step:
                     post_rhs_output = next_y_input
 
-                rk_step_body_dict[f"RK_SUBSTEP_K{s+1}"] = f"""{single_RK_substep_input_symbolic(
+                rk_step_body_dict[
+                    f"RK_SUBSTEP_K{s+1}"
+                ] = f"""{single_RK_substep_input_symbolic(
                     substep_time_offset_dt=Butcher[s][0],
                     rhs_str=rhs_string,
                     rhs_input_expr=rhs_input,
@@ -818,6 +826,7 @@ MAYBE_UNUSED REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
                     rk_step=s+1,
                     post_rhs_list=[post_rhs],
                     post_rhs_output_list=[post_rhs_output],
+                    enable_intrinsics=enable_intrinsics,
                     gf_aliases=gf_aliases,
                     post_post_rhs_string=post_post_rhs_string,
                     rational_const_alias=rational_const_alias,
@@ -839,6 +848,7 @@ MAYBE_UNUSED REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
                     RK_rhs_list=[y_n + y_nplus1_running_total * dt],
                     post_rhs_list=[post_rhs_string],
                     post_rhs_output_list=[y_n],
+                    enable_intrinsics=enable_intrinsics,
                     gf_aliases=gf_aliases,
                     post_post_rhs_string=post_post_rhs_string,
                     rational_const_alias=rational_const_alias,
@@ -915,7 +925,8 @@ MAYBE_UNUSED REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
                             RK_rhs_list=RK_rhs_list,
                             post_rhs_list=[post_rhs_string],
                             post_rhs_output_list=[post_rhs_output],
-                            rk_step=s+1,
+                            rk_step=s + 1,
+                            enable_intrinsics=enable_intrinsics,
                             gf_aliases=gf_aliases,
                             post_post_rhs_string=post_post_rhs_string,
                             rational_const_alias=rational_const_alias,
@@ -943,7 +954,7 @@ commondata->nn++;
         params=params,
         include_CodeParameters_h=False,
         body=body,
-        prefunc=prefunc
+        prefunc=prefunc,
     )
 
 
