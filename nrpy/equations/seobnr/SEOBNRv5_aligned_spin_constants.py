@@ -102,7 +102,7 @@ class SEOBNR_aligned_spin_constants:
         nu = m1 * m2 / M**2
         ap = (m1 * chi1 + m2 * chi2) / M**2
         am = (m1 * chi1 - m2 * chi2) / M**2
-        par = [
+        par_a6 = [
             f2r(4.17877875e01),
             f2r(-3.02193382e03),
             f2r(3.34144394e04),
@@ -110,7 +110,11 @@ class SEOBNR_aligned_spin_constants:
             f2r(3.29523262e05),
         ]
         self.pyseobnr_a6 = (
-            par[0] + par[1] * nu + par[2] * nu**2 + par[3] * nu**3 + par[4] * nu**4
+            par_a6[0]
+            + par_a6[1] * nu
+            + par_a6[2] * nu**2
+            + par_a6[3] * nu**3
+            + par_a6[4] * nu**4
         )
         self.pyseobnr_dSO = (
             -f2r(7.71251231383957) * am**3
@@ -152,15 +156,15 @@ class SEOBNR_aligned_spin_constants:
             - f2r(141.253181790353) * ap * nu
             + f2r(17.5710132409988) * ap
         )
-        par = [
+        par_dtns = [
             f2r(1.00513217e01),
             -f2r(5.96231800e01),
             -f2r(1.05687385e03),
             -f2r(9.79317619e03),
             f2r(5.55652392e04),
         ]
-        Delta_t_NS = nu ** (sp.Rational(-1, 5) + par[0] * nu) * (
-            par[1] + par[2] * nu + par[3] * nu**2 + par[4] * nu**3
+        Delta_t_NS = nu ** (sp.Rational(-1, 5) + par_dtns[0] * nu) * (
+            par_dtns[1] + par_dtns[2] * nu + par_dtns[3] * nu**2 + par_dtns[4] * nu**3
         )
         self.Delta_t = Delta_t_NS + Delta_t_S
 
