@@ -45,6 +45,7 @@ class RKFunction:
     :param cfunc_type: decorators and return type for the RK substep function
     :param rk_step: current step (> 0).  Default (None) assumes Euler step
     :param rational_const_alias: Overload const specifier for Rational definitions
+    :param parallelization: Parameter to specify parallelization (openmp or cuda).
     """
 
     def __init__(
@@ -55,12 +56,11 @@ class RKFunction:
         cfunc_type: str = "static void",
         rk_step: Union[int, None] = None,
         rational_const_alias: str = "const",
-        intrinsics_str: str = "SIMD",
         parallelization: str = "openmp",
     ) -> None:
         self.rk_step = rk_step
         self.enable_intrinsics = enable_intrinsics
-        self.intrinsics_str = intrinsics_str
+        self.intrinsics_str = "CUDA" if parallelization == "cuda" else "SIMD"
         self.RK_rhs_list = RK_rhs_list
         self.RK_lhs_list = RK_lhs_list
         self.name: str = ""
@@ -489,7 +489,7 @@ def single_RK_substep_input_symbolic(
     :param post_rhs_output_list: List of outputs for post-RHS expressions.
     :param post_post_rhs_string: String to be used after the post-RHS phase.
     :param additional_comments: additional comments to append to auto-generated comment block.
-    :param enable_intrinsics: Whether hardware intrinsics are enabled.
+    :param enable_intrinsics: A flag to specify if hardware instructions should be used.
     :param gf_aliases: Additional aliases for grid functions.
     :param rational_const_alias: Provide additional/alternative alias to const for rational definitions
     :param rk_step: Optional integer representing the current RK step.
@@ -615,7 +615,7 @@ def register_CFunction_MoL_step_forward_in_time(
     :param post_post_rhs_string: String to be used after the post-RHS phase.
     :param enable_rfm_precompute: Flag to enable reference metric functionality.
     :param enable_curviBCs: Flag to enable curvilinear boundary conditions.
-    :param enable_intrinsics: Flag to enable hardware intrinsics.
+    :param enable_intrinsics: A flag to specify if hardware instructions should be used.
     :param parallelization: Parameter to specify parallelization (openmp or cuda).
     :param rational_const_alias: Overload const specifier for Rational definitions
     :raises ValueError: If unsupported Butcher table specified since adaptive RK steps are not implemented in MoL.
@@ -1064,8 +1064,10 @@ def register_CFunctions(
     post_post_rhs_string: str = "",
     enable_rfm_precompute: bool = False,
     enable_curviBCs: bool = False,
-    enable_simd: bool = False,
+    enable_intrinsics: bool = False,
     register_MoL_step_forward_in_time: bool = True,
+    parallelization: str = "openmp",
+    rational_const_alias: str = "const",
 ) -> None:
     r"""
     Register all MoL C functions and NRPy basic defines.
@@ -1076,8 +1078,10 @@ def register_CFunctions(
     :param post_post_rhs_string: Post-post-RHS function call as string. Default is an empty string.
     :param enable_rfm_precompute: Enable reference metric support. Default is False.
     :param enable_curviBCs: Enable curvilinear boundary conditions. Default is False.
-    :param enable_simd: Enable Single Instruction, Multiple Data (SIMD). Default is False.
+    :param enable_intrinsics: A flag to specify if hardware instructions should be used.
     :param register_MoL_step_forward_in_time: Whether to register the MoL step forward function. Default is True.
+    :param parallelization: Parameter to specify parallelization (openmp or cuda).
+    :param rational_const_alias: Overload const specifier for Rational definitions
 
     Doctests:
     >>> from nrpy.helpers.generic import validate_strings
@@ -1129,8 +1133,12 @@ def register_CFunctions(
     Butcher_dict = generate_Butcher_tables()
 
     for which_gfs in ["y_n_gfs", "non_y_n_gfs"]:
-        register_CFunction_MoL_malloc(Butcher_dict, MoL_method, which_gfs)
-        register_CFunction_MoL_free_memory(Butcher_dict, MoL_method, which_gfs)
+        register_CFunction_MoL_malloc(
+            Butcher_dict, MoL_method, which_gfs, parallelization=parallelization
+        )
+        register_CFunction_MoL_free_memory(
+            Butcher_dict, MoL_method, which_gfs, parallelization=parallelization
+        )
     if register_MoL_step_forward_in_time:
         register_CFunction_MoL_step_forward_in_time(
             Butcher_dict,
@@ -1140,7 +1148,9 @@ def register_CFunctions(
             post_post_rhs_string,
             enable_rfm_precompute=enable_rfm_precompute,
             enable_curviBCs=enable_curviBCs,
-            enable_intrinsics=enable_simd,
+            enable_intrinsics=enable_intrinsics,
+            parallelization=parallelization,
+            rational_const_alias=rational_const_alias,
         )
 
     griddata_commondata.register_griddata_commondata(
@@ -1156,10 +1166,9 @@ def register_CFunctions(
     ) = generate_gridfunction_names(Butcher_dict, MoL_method=MoL_method)
 
     # Step 3.b: Create MoL_timestepping struct:
-    BHaH_defines_h.register_BHaH_defines(
-        __name__,
-        f"typedef struct __MoL_gridfunctions_struct__ {{\n"
-        f"REAL *restrict {y_n_gridfunctions};\n"
+    BHaH_MoL_body: str = (
+        "typedef struct __MoL_gridfunctions_struct__ {\n"
+        + f"REAL *restrict {y_n_gridfunctions};\n"
         + "".join(f"REAL *restrict {gfs};\n" for gfs in non_y_n_gridfunctions_list)
         + r"""REAL *restrict diagnostic_output_gfs;
 REAL *restrict diagnostic_output_gfs2;
@@ -1168,8 +1177,12 @@ REAL *restrict diagnostic_output_gfs2;
 #define LOOP_ALL_GFS_GPS(ii) \
 _Pragma("omp parallel for") \
   for(int (ii)=0;(ii)<Ntot;(ii)++)
-""",
+"""
     )
+
+    if parallelization != "openmp":
+        BHaH_MoL_body = BHaH_MoL_body.replace("REAL *restrict ", "REAL * ")
+    BHaH_defines_h.register_BHaH_defines(__name__, BHaH_MoL_body)
 
 
 if __name__ == "__main__":
