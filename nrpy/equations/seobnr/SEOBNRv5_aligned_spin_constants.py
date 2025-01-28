@@ -110,7 +110,11 @@ class SEOBNR_aligned_spin_constants:
             f2r(3.29523262e05),
         ]
         self.pyseobnr_a6 = (
-            par_a6[0] + par_a6[1] * nu + par_a6[2] * nu**2 + par_a6[3] * nu**3 + par_a6[4] * nu**4
+            par_a6[0]
+            + par_a6[1] * nu
+            + par_a6[2] * nu**2
+            + par_a6[3] * nu**3
+            + par_a6[4] * nu**4
         )
         self.pyseobnr_dSO = (
             -f2r(7.71251231383957) * am**3
