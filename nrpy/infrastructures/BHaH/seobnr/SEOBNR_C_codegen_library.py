@@ -126,29 +126,6 @@ par.register_CodeParameters(
     add_to_set_CodeParameters_h=False,
 )
 
-# Flag to register extra parameters to capture frequency domain version of waveform, if required.
-# Make sure that this is the same as in line 53 of nrpy/examples/seobnrv5_aligned_spin_inspiral.py
-APPLY_FD = False
-
-if APPLY_FD:
-    par.register_CodeParameter(
-        "double complex *restrict",
-        __name__,
-        "waveform_IMR_FD",
-        commondata=True,
-        add_to_parfile=False,
-        add_to_set_CodeParameters_h=False,
-    )
-    par.register_CodeParameter(
-        "size_t",
-        __name__,
-        "nsteps_IMR_FD",
-        commondata=True,
-        add_to_parfile=False,
-        add_to_set_CodeParameters_h=False,
-    )
-
-
 par.register_CodeParameters(
     "REAL",
     __name__,

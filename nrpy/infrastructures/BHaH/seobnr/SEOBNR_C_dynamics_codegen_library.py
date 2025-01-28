@@ -270,12 +270,12 @@ return GSL_SUCCESS;
 
 
 def register_CFunction_SEOBNRv5_aligned_spin_ode_integration(
-    PERFORM_ITERATIVE_REFINEMENT: bool,
+    perform_iterative_refinement: bool,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register CFunction for integrating the SEOBNRv5 equations of motion using GSL.
 
-    :param PERFORM_ITERATIVE_REFINEMENT: True/False if using iterative refinement to find the frequency peak.
+    :param perform_iterative_refinement: True/False if using iterative refinement to find the frequency peak.
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
@@ -439,7 +439,7 @@ free(dynamics_RK);
 
 REAL t_peak = times_fine_prelim[nsteps_fine_prelim - 1];
 """
-    if PERFORM_ITERATIVE_REFINEMENT:
+    if perform_iterative_refinement:
         body += """
 // perform iterative refinement to find the true peak of the dynamics
 if (stop != 0){
