@@ -124,13 +124,24 @@ class RKFunction:
         self.kernel_params = {}
         self.kernel_params["params"] = "params_struct *restrict"
 
+        # Add points for looping over gridpoints within the rk_substep kernel
         if parallelization == "cuda":
-            for X in ["0", "1", "2"]:
-                self.body += f"MAYBE_UNUSED const int Nxx_plus_2NGHOSTS{X} = params->Nxx_plus_2NGHOSTS{X};\n"
-                kernel_body += f"MAYBE_UNUSED const int Nxx_plus_2NGHOSTS{X} = d_params[streamid].Nxx_plus_2NGHOSTS{X};\n"
+            # Pull points from __constant__ memory
+            kernel_body += "\n".join(
+                f"MAYBE_UNUSED const int Nxx_plus_2NGHOSTS{X} = d_params[streamid].Nxx_plus_2NGHOSTS{X};"
+                for X in ["0", "1", "2"]
+            ) + "\n"
             kernel_body += "MAYBE_UNUSED const int Ntot = Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;\n\n"
+
+        if parallelization == "cuda":
+            # Add points in launcher body to compute Block/Grid kernel launch parameters
+            self.body += "\n".join(
+                f"const int Nxx_plus_2NGHOSTS{X} = params->Nxx_plus_2NGHOSTS{X};"
+                for X in ["0", "1", "2"]
+            ) + "\n"
             self.body += "MAYBE_UNUSED const int Ntot = Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;\n\n"
 
+            # Add loop header to kernel body
             kernel_body += (
                 "// Kernel thread/stride setup\n"
                 "const int tid0 = threadIdx.x + blockIdx.x*blockDim.x;\n"
@@ -138,20 +149,7 @@ class RKFunction:
                 "for(int i=tid0;i<Ntot;i+=stride0) {\n"
             )
         elif parallelization == "openmp":
-
-            for X in ["0", "1", "2"]:
-                kernel_body += (
-                    f"const int Nxx_plus_2NGHOSTS{X} = params->Nxx_plus_2NGHOSTS{X};\n"
-                )
-            kernel_body += "const int Ntot = Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;\n\n"
-            if enable_intrinsics:
-                warnings.warn(
-                    "SIMD intrinsics in MoL is not properly supported -- MoL update loops are not properly bounds checked."
-                )
-                kernel_body += "#pragma omp parallel for\n"
-                kernel_body += "for(int i=0;i<Ntot;i+=simd_width) {{\n"
-            else:
-                kernel_body += "LOOP_ALL_GFS_GPS(i) {\n"
+            kernel_body += "LOOP_ALL_GFS_GPS(i) {\n"
 
         var_type = "REAL"
 
@@ -216,7 +214,17 @@ class RKFunction:
             for p in self.kernel_params:
                 c_function_call += f"{p}, "
             c_function_call = c_function_call[:-2] + ")"
-            prefunc = rk_substep_prefunc.full_function
+            prefunc = """
+#define LOOP_ALL_GFS_GPS(ii) \
+_Pragma("omp parallel for") \
+  for(int (ii)=0;(ii)<params->Nxx_plus_2NGHOSTS0*params->Nxx_plus_2NGHOSTS1*params->Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;(ii)++)
+"""
+            if enable_intrinsics and parallelization == "openmp":
+                warnings.warn(
+                    "SIMD intrinsics in MoL is not properly supported -- MoL update loops are not properly bounds checked."
+                )
+                prefunc = prefunc.replace("(ii)++", "(ii) += (simd_width)")
+            prefunc += rk_substep_prefunc.full_function
             self.body += f"{c_function_call};\n"
 
         # Store CFunction
@@ -1185,10 +1193,6 @@ def register_CFunctions(
         + r"""REAL *restrict diagnostic_output_gfs;
 REAL *restrict diagnostic_output_gfs2;
 } MoL_gridfunctions_struct;
-
-#define LOOP_ALL_GFS_GPS(ii) \
-_Pragma("omp parallel for") \
-  for(int (ii)=0;(ii)<Ntot;(ii)++)
 """
     )
 
