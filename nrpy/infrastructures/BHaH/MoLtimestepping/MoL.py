@@ -124,15 +124,6 @@ class RKFunction:
         self.kernel_params = {}
         self.kernel_params["params"] = "params_struct *restrict"
 
-        # Add points for looping over gridpoints within the rk_substep kernel
-        if parallelization == "cuda":
-            # Pull points from __constant__ memory
-            kernel_body += "\n".join(
-                f"MAYBE_UNUSED const int Nxx_plus_2NGHOSTS{X} = d_params[streamid].Nxx_plus_2NGHOSTS{X};"
-                for X in ["0", "1", "2"]
-            ) + "\n"
-            kernel_body += "MAYBE_UNUSED const int Ntot = Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;\n\n"
-
         if parallelization == "cuda":
             # Add points in launcher body to compute Block/Grid kernel launch parameters
             self.body += "\n".join(
@@ -141,17 +132,8 @@ class RKFunction:
             ) + "\n"
             self.body += "MAYBE_UNUSED const int Ntot = Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;\n\n"
 
-            # Add loop header to kernel body
-            kernel_body += (
-                "// Kernel thread/stride setup\n"
-                "const int tid0 = threadIdx.x + blockIdx.x*blockDim.x;\n"
-                "const int stride0 = blockDim.x * gridDim.x;\n\n"
-                "for(int i=tid0;i<Ntot;i+=stride0) {\n"
-            )
         elif parallelization == "openmp":
             kernel_body += "LOOP_ALL_GFS_GPS(i) {\n"
-
-        var_type = "REAL"
 
         read_list = [
             read
@@ -166,18 +148,18 @@ class RKFunction:
                 key = gfs_el[:-3]
                 if self.enable_intrinsics and parallelization == "openmp":
                     self.kernel_params[key] = "REAL *restrict"
-                    self.params += f"{var_type} *restrict {key},"
+                    self.params += f"REAL *restrict {key},"
                     kernel_body += f"const REAL_SIMD_ARRAY {el} = Read{self.intrinsics_str}(&{gfs_el});\n"
                 else:
                     self.kernel_params[key] = "REAL *restrict"
-                    self.params += f"{var_type} *restrict {key},"
-                    kernel_body += f"const {var_type} {el} = {gfs_el};\n"
+                    self.params += f"REAL *restrict {key},"
+                    kernel_body += f"const REAL {el} = {gfs_el};\n"
         for el in self.RK_lhs_list:
             lhs_var = str(el).replace("_gfsL", "_gfs")
             if not lhs_var in self.params:
                 self.kernel_params[lhs_var] = "REAL *restrict"
-                self.params += f"{var_type} *restrict {lhs_var},"
-        self.params += f"const {var_type} dt"
+                self.params += f"REAL *restrict {lhs_var},"
+        self.params += f"const REAL dt"
         self.kernel_params["dt"] = "const REAL"
 
         kernel_body += self.loop_body.replace("commondata->dt", "dt") + "\n}\n"
@@ -201,7 +183,14 @@ class RKFunction:
             )
             self.body += device_kernel.launch_block
             self.body += device_kernel.c_function_call()
-            prefunc = device_kernel.CFunction.full_function
+            prefunc = """
+#define LOOP_ALL_GFS_GPS(ii) \
+// Kernel thread/stride setup \
+const int tid0 = threadIdx.x + blockIdx.x*blockDim.x; \
+const int stride0 = blockDim.x * gridDim.x; \
+  for(int (ii)=(tid0);(ii)<d_params[streamid].Nxx_plus_2NGHOSTS0*d_params[streamid].Nxx_plus_2NGHOSTS1*d_params[streamid].Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;(ii)+=(stride0))
+"""
+            prefunc += device_kernel.CFunction.full_function
         else:
             if self.enable_intrinsics:
                 kernel_body = kernel_body.replace("dt", "DT")
