@@ -43,6 +43,7 @@ def check_supported_parallelization(
     """
     Check if the given parallelization is supported.
 
+    :param function_name: Name of the function where the check is performed.
     :param parallelization: Parameter to specify parallelization (openmp or cuda).
     :raises ValueError: If the parallelization is not supported.
     """
@@ -606,7 +607,7 @@ def register_CFunction_MoL_step_forward_in_time(
     parallelization: str = "openmp",
     rational_const_alias: str = "const",
 ) -> None:
-    """
+    r"""
     Register MoL_step_forward_in_time() C function, which is the core driver for time evolution in BHaH codes.
 
     :param Butcher_dict: A dictionary containing the Butcher tables for various RK-like methods.
@@ -624,11 +625,38 @@ def register_CFunction_MoL_step_forward_in_time(
     Doctest:
     >>> import nrpy.c_function as cfc
     >>> from nrpy.infrastructures.BHaH.MoLtimestepping.MoL import register_CFunction_MoL_step_forward_in_time
+    >>> from nrpy.infrastructures.BHaH.MoLtimestepping.MoL import MoL_Functions_dict
+    >>> from nrpy.helpers.generic import validate_strings
     >>> from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import (
     ...     generate_Butcher_tables,
     ... )
     >>> Butcher_dict = generate_Butcher_tables()
     >>> expected_str_dict=dict()
+    >>> rhs_string = "rhs_eval(commondata, params, rfmstruct,  auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);"
+    >>> post_rhs_string=(
+    ... "if (strncmp(commondata->outer_bc_type, \"extrapolation\", 50) == 0)\n"
+    ... "  apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);"
+    ... )
+    >>> for k, v in Butcher_dict.items():
+    ...     Butcher = Butcher_dict[k][0]
+    ...     cfc.CFunction_dict.clear()
+    ...     MoL_Functions_dict.clear()
+    ...     if Butcher[-1][0] != "":
+    ...         continue
+    ...     register_CFunction_MoL_step_forward_in_time(
+    ...         Butcher_dict,
+    ...         k,
+    ...         rhs_string=rhs_string,
+    ...         post_rhs_string=post_rhs_string,
+    ...         enable_intrinsics=True,
+    ...         parallelization="cuda",
+    ...         rational_const_alias="static constexpr"
+    ...     )
+    ...     generated_str = cfc.CFunction_dict["MoL_step_forward_in_time"].full_function
+    ...     validation_desc = f"CUDA__MoL_step_forward_in_time__{k}".replace(" ", "_")
+    ...     validate_strings(generated_str, validation_desc)
+    >>> cfc.CFunction_dict.clear()
+    >>> MoL_Functions_dict.clear()
     >>> try:
     ...     register_CFunction_MoL_step_forward_in_time(Butcher_dict, "AHE")
     ... except ValueError as e:
