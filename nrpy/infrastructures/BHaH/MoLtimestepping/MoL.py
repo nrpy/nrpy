@@ -33,6 +33,19 @@ _ = par.CodeParameter("REAL", __name__, "time", add_to_parfile=False, add_to_set
 _ = par.CodeParameter("REAL", __name__, "t_final", 10.0, commondata=True)
 # fmt: on
 
+supported_parallelization = {"cuda", "openmp"}
+def check_supported_parallelization(function_name: str, parallelization: str,
+) -> None:
+    """
+    Check if the given parallelization is supported.
+
+    :param parallelization: Parameter to specify parallelization (openmp or cuda).
+    :raises ValueError: If the parallelization is not supported.
+    """
+    if parallelization not in supported_parallelization:
+        raise ValueError(
+            f"ERROR ({function_name}): {parallelization} is not supported."
+        )
 
 class RKFunction:
     """
@@ -58,6 +71,7 @@ class RKFunction:
         rational_const_alias: str = "const",
         parallelization: str = "openmp",
     ) -> None:
+        check_supported_parallelization("RKFunction", parallelization)
         self.rk_step = rk_step
         self.enable_intrinsics = enable_intrinsics
         self.intrinsics_str = "CUDA" if parallelization == "cuda" else "SIMD"
@@ -138,8 +152,6 @@ class RKFunction:
                 kernel_body += "for(int i=0;i<Ntot;i+=simd_width) {{\n"
             else:
                 kernel_body += "LOOP_ALL_GFS_GPS(i) {\n"
-        else:
-            raise ValueError("ERROR (RKFunction): parallelization not recognized.")
 
         var_type = "REAL"
 
@@ -389,6 +401,7 @@ def register_CFunction_MoL_malloc(
     Doctest: FIXME
     # >>> register_CFunction_MoL_malloc("Euler", "y_n_gfs")
     """
+    check_supported_parallelization("register_CFunction_MoL_malloc", parallelization)
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
     # Create a description for the function
@@ -494,6 +507,7 @@ def single_RK_substep_input_symbolic(
 
     :raises ValueError: If substep_time_offset_dt cannot be extracted from the Butcher table.
     """
+    check_supported_parallelization("single_RK_substep_input_symbolic", parallelization)
     # Ensure all input lists are lists
     RK_lhs_list = [RK_lhs_list] if not isinstance(RK_lhs_list, list) else RK_lhs_list
     RK_rhs_list = [RK_rhs_list] if not isinstance(RK_rhs_list, list) else RK_rhs_list
@@ -629,6 +643,7 @@ def register_CFunction_MoL_step_forward_in_time(
     ...     print(f"ValueError: {e.args[0]}")
     ValueError: Adaptive order Butcher tables are currently not supported in MoL.
     """
+    check_supported_parallelization("register_CFunction_MoL_step_forward_in_time", parallelization)
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     if enable_intrinsics and parallelization == "cuda":
         includes += [os.path.join("intrinsics", "cuda_intrinsics.h")]
@@ -1009,6 +1024,7 @@ def register_CFunction_MoL_free_memory(
 
     :raises ValueError: If the 'which_gfs' argument is unrecognized.
     """
+    check_supported_parallelization("register_CFunction_MoL_free_memory", parallelization)
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = f'Method of Lines (MoL) for "{MoL_method}" method: Free memory for "{which_gfs}" gridfunctions\n'
     desc += "   - y_n_gfs are used to store data for the vector of gridfunctions y_i at t_n, at the start of each MoL timestep\n"
@@ -1125,6 +1141,7 @@ def register_CFunctions(
     } // END FUNCTION MoL_malloc_non_y_n_gfs
     <BLANKLINE>
     """
+    check_supported_parallelization("register_CFunctions", parallelization)
     Butcher_dict = generate_Butcher_tables()
 
     for which_gfs in ["y_n_gfs", "non_y_n_gfs"]:
