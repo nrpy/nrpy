@@ -654,7 +654,7 @@ def register_CFunction_MoL_step_forward_in_time(
     ...     )
     ...     generated_str = cfc.CFunction_dict["MoL_step_forward_in_time"].full_function
     ...     validation_desc = f"CUDA__MoL_step_forward_in_time__{k}".replace(" ", "_")
-    ...     validate_strings(generated_str, validation_desc)
+    ...     validate_strings(generated_str, validation_desc, file_ext="cu")
     >>> cfc.CFunction_dict.clear()
     >>> MoL_Functions_dict.clear()
     >>> try:
