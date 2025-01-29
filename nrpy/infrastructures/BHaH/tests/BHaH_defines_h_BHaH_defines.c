@@ -108,8 +108,6 @@ typedef struct __MoL_gridfunctions_struct__ {
   REAL *restrict diagnostic_output_gfs2;
 } MoL_gridfunctions_struct;
 
-#define LOOP_ALL_GFS_GPS(ii) _Pragma("omp parallel for") for (int(ii) = 0; (ii) < Ntot; (ii)++)
-
 //********************************************
 // Basic definitions for module grid:
 

@@ -34,7 +34,11 @@ _ = par.CodeParameter("REAL", __name__, "t_final", 10.0, commondata=True)
 # fmt: on
 
 supported_parallelization = {"cuda", "openmp"}
-def check_supported_parallelization(function_name: str, parallelization: str,
+
+
+def check_supported_parallelization(
+    function_name: str,
+    parallelization: str,
 ) -> None:
     """
     Check if the given parallelization is supported.
@@ -46,6 +50,7 @@ def check_supported_parallelization(function_name: str, parallelization: str,
         raise ValueError(
             f"ERROR ({function_name}): {parallelization} is not supported."
         )
+
 
 class RKFunction:
     """
@@ -126,10 +131,13 @@ class RKFunction:
 
         if parallelization == "cuda":
             # Add points in launcher body to compute Block/Grid kernel launch parameters
-            self.body += "\n".join(
-                f"const int Nxx_plus_2NGHOSTS{X} = params->Nxx_plus_2NGHOSTS{X};"
-                for X in ["0", "1", "2"]
-            ) + "\n"
+            self.body += (
+                "\n".join(
+                    f"const int Nxx_plus_2NGHOSTS{X} = params->Nxx_plus_2NGHOSTS{X};"
+                    for X in ["0", "1", "2"]
+                )
+                + "\n"
+            )
             self.body += "MAYBE_UNUSED const int Ntot = Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;\n\n"
 
         kernel_body += "LOOP_ALL_GFS_GPS(i) {\n"
@@ -186,7 +194,9 @@ class RKFunction:
         else:
             if self.enable_intrinsics:
                 kernel_body = kernel_body.replace("dt", "DT")
-                kernel_body = "const REAL_SIMD_ARRAY DT = ConstSIMD(dt);\n" + kernel_body
+                kernel_body = (
+                    "const REAL_SIMD_ARRAY DT = ConstSIMD(dt);\n" + kernel_body
+                )
             rk_substep_prefunc = cfc.CFunction(
                 desc=self.desc,
                 cfunc_type=self.cfunc_type,
@@ -625,7 +635,9 @@ def register_CFunction_MoL_step_forward_in_time(
     ...     print(f"ValueError: {e.args[0]}")
     ValueError: Adaptive order Butcher tables are currently not supported in MoL.
     """
-    check_supported_parallelization("register_CFunction_MoL_step_forward_in_time", parallelization)
+    check_supported_parallelization(
+        "register_CFunction_MoL_step_forward_in_time", parallelization
+    )
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     if enable_intrinsics and parallelization == "cuda":
         includes += [os.path.join("intrinsics", "cuda_intrinsics.h")]
@@ -672,8 +684,6 @@ MAYBE_UNUSED REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
 
     if enable_curviBCs:
         gf_aliases += "MAYBE_UNUSED const bc_struct *restrict bcstruct = &griddata[grid].bcstruct;\n"
-    for i in ["0", "1", "2"]:
-        gf_aliases += f"MAYBE_UNUSED const int Nxx_plus_2NGHOSTS{i} = griddata[grid].params.Nxx_plus_2NGHOSTS{i};\n"
 
     # Implement Method of Lines (MoL) Timestepping
     rk_step_body_dict: Dict[str, str] = {}
@@ -1024,7 +1034,9 @@ def register_CFunction_MoL_free_memory(
 
     :raises ValueError: If the 'which_gfs' argument is unrecognized.
     """
-    check_supported_parallelization("register_CFunction_MoL_free_memory", parallelization)
+    check_supported_parallelization(
+        "register_CFunction_MoL_free_memory", parallelization
+    )
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = f'Method of Lines (MoL) for "{MoL_method}" method: Free memory for "{which_gfs}" gridfunctions\n'
     desc += "   - y_n_gfs are used to store data for the vector of gridfunctions y_i at t_n, at the start of each MoL timestep\n"
@@ -1051,9 +1063,7 @@ def register_CFunction_MoL_free_memory(
     for gridfunction in gridfunctions_list:
         # Don't free a zero-sized array.
         if gridfunction == "auxevol_gfs":
-            body += (
-                f"  if(NUM_AUXEVOL_GFS > 0)"
-            )
+            body += f"  if(NUM_AUXEVOL_GFS > 0)"
         body += f" {'cudaFree' if parallelization == 'cuda' else 'free'}(gridfuncs->{gridfunction});\n"
     cfc.register_CFunction(
         includes=includes,

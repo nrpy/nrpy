@@ -1,15 +1,15 @@
 #include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
+
+#define LOOP_ALL_GFS_GPS(ii)                                                                                                                         \
+  _Pragma("omp parallel for") for (int(ii) = 0;                                                                                                      \
+                                   (ii) < params->Nxx_plus_2NGHOSTS0 * params->Nxx_plus_2NGHOSTS1 * params->Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;       \
+                                   (ii)++)
 /**
  * Runge-Kutta function for substep 1.
  */
 static void rk_substep_1(params_struct *restrict params, REAL *restrict k_odd_gfs, REAL *restrict y_n_gfs, REAL *restrict y_nplus1_running_total_gfs,
                          const REAL dt) {
-  const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
-  const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
-  const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
-  const int Ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;
-
   LOOP_ALL_GFS_GPS(i) {
     const REAL k_odd_gfsL = k_odd_gfs[i];
     const REAL y_n_gfsL = y_n_gfs[i];
@@ -33,11 +33,6 @@ static void rk_substep_1__launcher(params_struct *restrict params, REAL *restric
  */
 static void rk_substep_2(params_struct *restrict params, REAL *restrict k_even_gfs, REAL *restrict y_nplus1_running_total_gfs, REAL *restrict y_n_gfs,
                          const REAL dt) {
-  const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
-  const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
-  const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
-  const int Ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;
-
   LOOP_ALL_GFS_GPS(i) {
     const REAL k_even_gfsL = k_even_gfs[i];
     const REAL y_nplus1_running_total_gfsL = y_nplus1_running_total_gfs[i];
@@ -62,11 +57,6 @@ static void rk_substep_2__launcher(params_struct *restrict params, REAL *restric
  */
 static void rk_substep_3(params_struct *restrict params, REAL *restrict k_odd_gfs, REAL *restrict y_nplus1_running_total_gfs, REAL *restrict y_n_gfs,
                          const REAL dt) {
-  const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
-  const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
-  const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
-  const int Ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;
-
   LOOP_ALL_GFS_GPS(i) {
     const REAL k_odd_gfsL = k_odd_gfs[i];
     const REAL y_nplus1_running_total_gfsL = y_nplus1_running_total_gfs[i];
@@ -90,11 +80,6 @@ static void rk_substep_3__launcher(params_struct *restrict params, REAL *restric
  */
 static void rk_substep_4(params_struct *restrict params, REAL *restrict k_even_gfs, REAL *restrict y_n_gfs, REAL *restrict y_nplus1_running_total_gfs,
                          const REAL dt) {
-  const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
-  const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
-  const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
-  const int Ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;
-
   LOOP_ALL_GFS_GPS(i) {
     const REAL k_even_gfsL = k_even_gfs[i];
     const REAL y_n_gfsL = y_n_gfs[i];
@@ -137,9 +122,6 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     MAYBE_UNUSED REAL *restrict xx[3];
     for (int ww = 0; ww < 3; ww++)
       xx[ww] = griddata[grid].xx[ww];
-    MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = griddata[grid].params.Nxx_plus_2NGHOSTS0;
-    MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = griddata[grid].params.Nxx_plus_2NGHOSTS1;
-    MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = griddata[grid].params.Nxx_plus_2NGHOSTS2;
     rhs_eval(Nxx, Nxx_plus_2NGHOSTS, dxx, y_n_gfs, k_odd_gfs);
     rk_substep_1__launcher(params, k_odd_gfs, y_n_gfs, y_nplus1_running_total_gfs, commondata->dt);
     apply_bcs(Nxx, Nxx_plus_2NGHOSTS, k_odd_gfs);
@@ -161,9 +143,6 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     MAYBE_UNUSED REAL *restrict xx[3];
     for (int ww = 0; ww < 3; ww++)
       xx[ww] = griddata[grid].xx[ww];
-    MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = griddata[grid].params.Nxx_plus_2NGHOSTS0;
-    MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = griddata[grid].params.Nxx_plus_2NGHOSTS1;
-    MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = griddata[grid].params.Nxx_plus_2NGHOSTS2;
     rhs_eval(Nxx, Nxx_plus_2NGHOSTS, dxx, k_odd_gfs, k_even_gfs);
     rk_substep_2__launcher(params, k_even_gfs, y_nplus1_running_total_gfs, y_n_gfs, commondata->dt);
     apply_bcs(Nxx, Nxx_plus_2NGHOSTS, k_even_gfs);
@@ -185,9 +164,6 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     MAYBE_UNUSED REAL *restrict xx[3];
     for (int ww = 0; ww < 3; ww++)
       xx[ww] = griddata[grid].xx[ww];
-    MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = griddata[grid].params.Nxx_plus_2NGHOSTS0;
-    MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = griddata[grid].params.Nxx_plus_2NGHOSTS1;
-    MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = griddata[grid].params.Nxx_plus_2NGHOSTS2;
     rhs_eval(Nxx, Nxx_plus_2NGHOSTS, dxx, k_even_gfs, k_odd_gfs);
     rk_substep_3__launcher(params, k_odd_gfs, y_nplus1_running_total_gfs, y_n_gfs, commondata->dt);
     apply_bcs(Nxx, Nxx_plus_2NGHOSTS, k_odd_gfs);
@@ -209,9 +185,6 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     MAYBE_UNUSED REAL *restrict xx[3];
     for (int ww = 0; ww < 3; ww++)
       xx[ww] = griddata[grid].xx[ww];
-    MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = griddata[grid].params.Nxx_plus_2NGHOSTS0;
-    MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = griddata[grid].params.Nxx_plus_2NGHOSTS1;
-    MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = griddata[grid].params.Nxx_plus_2NGHOSTS2;
     rhs_eval(Nxx, Nxx_plus_2NGHOSTS, dxx, k_odd_gfs, k_even_gfs);
     rk_substep_4__launcher(params, k_even_gfs, y_n_gfs, y_nplus1_running_total_gfs, commondata->dt);
     apply_bcs(Nxx, Nxx_plus_2NGHOSTS, y_n_gfs);
