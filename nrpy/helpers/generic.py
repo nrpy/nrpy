@@ -116,6 +116,7 @@ def validate_strings(
 
     :param to_check: Specify the string to validate, representing the expected value or output.
     :param string_desc: Provide a short, non-empty, whitespace-free label to use in the trusted file's name.
+    :param file_ext: Specify the file extension for the trusted file, defaulting to "c".
     :raises ValueError: Raise if:
         - `string_desc` is empty or contains whitespace.
         - The caller's frame or filename cannot be identified.
