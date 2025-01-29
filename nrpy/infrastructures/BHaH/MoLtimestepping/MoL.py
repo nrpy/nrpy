@@ -1030,7 +1030,6 @@ def register_CFunction_MoL_free_memory(
     desc += "   - y_n_gfs are used to store data for the vector of gridfunctions y_i at t_n, at the start of each MoL timestep\n"
     desc += "   - non_y_n_gfs are needed for intermediate (e.g., k_i) storage in chosen MoL method\n"
     cfunc_type = "void"
-    mem_free_func = "free" if parallelization != "cuda" else "cudaFree"
 
     (
         y_n_gridfunctions,
@@ -1053,10 +1052,9 @@ def register_CFunction_MoL_free_memory(
         # Don't free a zero-sized array.
         if gridfunction == "auxevol_gfs":
             body += (
-                f"  if(NUM_AUXEVOL_GFS > 0) {mem_free_func}(gridfuncs->{gridfunction});"
+                f"  if(NUM_AUXEVOL_GFS > 0)"
             )
-        else:
-            body += f"  {mem_free_func}(gridfuncs->{gridfunction});"
+        body += f" {'cudaFree' if parallelization == 'cuda' else 'free'}(gridfuncs->{gridfunction});\n"
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
