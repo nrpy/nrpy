@@ -132,8 +132,7 @@ class RKFunction:
             ) + "\n"
             self.body += "MAYBE_UNUSED const int Ntot = Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;\n\n"
 
-        elif parallelization == "openmp":
-            kernel_body += "LOOP_ALL_GFS_GPS(i) {\n"
+        kernel_body += "LOOP_ALL_GFS_GPS(i) {\n"
 
         read_list = [
             read
@@ -183,14 +182,7 @@ class RKFunction:
             )
             self.body += device_kernel.launch_block
             self.body += device_kernel.c_function_call()
-            prefunc = """
-#define LOOP_ALL_GFS_GPS(ii) \
-// Kernel thread/stride setup \
-const int tid0 = threadIdx.x + blockIdx.x*blockDim.x; \
-const int stride0 = blockDim.x * gridDim.x; \
-  for(int (ii)=(tid0);(ii)<d_params[streamid].Nxx_plus_2NGHOSTS0*d_params[streamid].Nxx_plus_2NGHOSTS1*d_params[streamid].Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;(ii)+=(stride0))
-"""
-            prefunc += device_kernel.CFunction.full_function
+            prefunc = device_kernel.CFunction.full_function
         else:
             if self.enable_intrinsics:
                 kernel_body = kernel_body.replace("dt", "DT")
@@ -206,17 +198,7 @@ const int stride0 = blockDim.x * gridDim.x; \
             for p in self.kernel_params:
                 c_function_call += f"{p}, "
             c_function_call = c_function_call[:-2] + ")"
-            prefunc = """
-#define LOOP_ALL_GFS_GPS(ii) \
-_Pragma("omp parallel for") \
-  for(int (ii)=0;(ii)<params->Nxx_plus_2NGHOSTS0*params->Nxx_plus_2NGHOSTS1*params->Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;(ii)++)
-"""
-            if enable_intrinsics and parallelization == "openmp":
-                warnings.warn(
-                    "SIMD intrinsics in MoL is not properly supported -- MoL update loops are not properly bounds checked."
-                )
-                prefunc = prefunc.replace("(ii)++", "(ii) += (simd_width)")
-            prefunc += rk_substep_prefunc.full_function
+            prefunc = rk_substep_prefunc.full_function
             self.body += f"{c_function_call};\n"
 
         # Store CFunction
@@ -980,7 +962,25 @@ MAYBE_UNUSED REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
                         + f"// -={{ END k{s + 1} substep }}=-\n\n"
                     )
 
-    prefunc = construct_RK_functions_prefunc()
+    if parallelization == "cuda":
+        prefunc = """
+#define LOOP_ALL_GFS_GPS(ii) \
+const int tid0 = threadIdx.x + blockIdx.x*blockDim.x; \
+const int stride0 = blockDim.x * gridDim.x; \
+  for(int (ii)=(tid0);(ii)<d_params[streamid].Nxx_plus_2NGHOSTS0*d_params[streamid].Nxx_plus_2NGHOSTS1*d_params[streamid].Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;(ii)+=(stride0))
+"""
+    else:
+        prefunc = """
+#define LOOP_ALL_GFS_GPS(ii) \
+_Pragma("omp parallel for") \
+  for(int (ii)=0;(ii)<params->Nxx_plus_2NGHOSTS0*params->Nxx_plus_2NGHOSTS1*params->Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;(ii)++)
+"""
+        if enable_intrinsics:
+            warnings.warn(
+                "SIMD intrinsics in MoL is not properly supported -- MoL update loops are not properly bounds checked."
+            )
+            prefunc = prefunc.replace("(ii)++", "(ii) += (simd_width)")
+    prefunc += construct_RK_functions_prefunc()
 
     for _, v in rk_step_body_dict.items():
         body += v
