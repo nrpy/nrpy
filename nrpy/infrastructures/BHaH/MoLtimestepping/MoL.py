@@ -167,7 +167,7 @@ class RKFunction:
                 if self.enable_intrinsics and parallelization == "openmp":
                     self.kernel_params[key] = "REAL *restrict"
                     self.params += f"{var_type} *restrict {key},"
-                    kernel_body += f"const {var_type} {el} = Read{self.intrinsics_str}(&{gfs_el});\n"
+                    kernel_body += f"const REAL_SIMD_ARRAY {el} = Read{self.intrinsics_str}(&{gfs_el});\n"
                 else:
                     self.kernel_params[key] = "REAL *restrict"
                     self.params += f"{var_type} *restrict {key},"
@@ -203,6 +203,9 @@ class RKFunction:
             self.body += device_kernel.c_function_call()
             prefunc = device_kernel.CFunction.full_function
         else:
+            if self.enable_intrinsics:
+                kernel_body = kernel_body.replace("dt", "DT")
+                kernel_body = "const REAL_SIMD_ARRAY DT = ConstSIMD(dt);\n" + kernel_body
             rk_substep_prefunc = cfc.CFunction(
                 desc=self.desc,
                 cfunc_type=self.cfunc_type,
