@@ -14,6 +14,7 @@ from typing import Dict, List, Tuple, Union
 import sympy as sp  # Import SymPy, a computer algebra system written entirely in Python
 
 import nrpy.c_function as cfc
+import nrpy.helpers.gpu.gpu_kernel as gputils
 import nrpy.params as par  # NRPy+: Parameter interface
 from nrpy.c_codegen import c_codegen
 from nrpy.helpers.generic import superfast_uniq
@@ -31,6 +32,232 @@ _ = par.CodeParameter("REAL", __name__, "t_0", add_to_parfile=False, add_to_set_
 _ = par.CodeParameter("REAL", __name__, "time", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
 _ = par.CodeParameter("REAL", __name__, "t_final", 10.0, commondata=True)
 # fmt: on
+
+supported_parallelization = {"cuda", "openmp"}
+
+
+def check_supported_parallelization(
+    function_name: str,
+    parallelization: str,
+) -> None:
+    """
+    Check if the given parallelization is supported.
+
+    :param function_name: Name of the function where the check is performed.
+    :param parallelization: Parameter to specify parallelization (openmp or cuda).
+    :raises ValueError: If the parallelization is not supported.
+    """
+    if parallelization not in supported_parallelization:
+        raise ValueError(
+            f"ERROR ({function_name}): {parallelization} is not supported."
+        )
+
+
+class RKFunction:
+    """
+    A class to represent Runge-Kutte (RK) substep functions in C/C++.
+
+    :param operator: The operator with respect to which the derivative is taken.
+    :param RK_lhs_list: List of LHS expressions for RK substep.
+    :param RK_rhs_list: List of RHS expressions for RK substep.
+    :param enable_intrinsics: A flag to specify if hardware instructions should be used.
+    :param cfunc_type: decorators and return type for the RK substep function
+    :param rk_step: current step (> 0).  Default (None) assumes Euler step
+    :param rational_const_alias: Overload const specifier for Rational definitions
+    :param parallelization: Parameter to specify parallelization (openmp or cuda).
+    """
+
+    def __init__(
+        self,
+        RK_lhs_list: List[sp.Basic],
+        RK_rhs_list: List[sp.Basic],
+        enable_intrinsics: bool = False,
+        cfunc_type: str = "static void",
+        rk_step: Union[int, None] = None,
+        rational_const_alias: str = "const",
+        parallelization: str = "openmp",
+    ) -> None:
+        check_supported_parallelization("RKFunction", parallelization)
+        self.rk_step = rk_step
+        self.enable_intrinsics = enable_intrinsics
+        self.intrinsics_str = "CUDA" if parallelization == "cuda" else "SIMD"
+        self.RK_rhs_list = RK_rhs_list
+        self.RK_lhs_list = RK_lhs_list
+        self.name: str = ""
+        self.params: str = "params_struct *restrict params, "
+        self.body: str = ""
+
+        self.cfunc_type = cfunc_type
+        self.rational_const_alias = rational_const_alias
+
+        self.CFunction: cfc.CFunction
+        self.desc = f"Runge-Kutta function for substep {self.rk_step}."
+
+        # Save variables that appear in function arguments to be used
+        # to generate a function call
+        self.param_vars: List[str] = []
+        self.includes: List[str] = []
+
+        self.RK_lhs_str_list = [
+            (
+                f"const REAL_{self.intrinsics_str}_ARRAY __rk_exp_{i}"
+                if self.enable_intrinsics
+                else f"{str(el).replace('gfsL', 'gfs[i]')}"
+            )
+            for i, el in enumerate(self.RK_lhs_list)
+        ]
+
+        self.loop_body = c_codegen(
+            self.RK_rhs_list,
+            self.RK_lhs_str_list,
+            include_braces=False,
+            verbose=False,
+            enable_simd=self.enable_intrinsics,
+            enable_cse_preprocess=True,
+            rational_const_alias=self.rational_const_alias,
+        ).replace("SIMD", self.intrinsics_str)
+        # Give rationals a better name
+        self.loop_body = self.loop_body.replace("_Rational", "RK_Rational")
+
+        if enable_intrinsics:
+            for i, el in enumerate(self.RK_lhs_list):
+                self.loop_body += f"Write{self.intrinsics_str}(&{str(el).replace('gfsL', 'gfs[i]')}, __rk_exp_{i});\n"
+
+        self.name = f"rk_substep_{self.rk_step}"
+
+        # Populate build and populate self.CFunction
+        kernel_body: str = ""
+        self.kernel_params = {}
+        self.kernel_params["params"] = "params_struct *restrict"
+
+        if parallelization == "cuda":
+            # Add points in launcher body to compute Block/Grid kernel launch parameters
+            self.body += (
+                "\n".join(
+                    f"const int Nxx_plus_2NGHOSTS{X} = params->Nxx_plus_2NGHOSTS{X};"
+                    for X in ["0", "1", "2"]
+                )
+                + "\n"
+            )
+            self.body += "MAYBE_UNUSED const int Ntot = Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;\n\n"
+
+        kernel_body += "LOOP_ALL_GFS_GPS(i) {\n"
+
+        read_list = [
+            read
+            for el in self.RK_rhs_list
+            for read in list(sp.ordered(el.free_symbols))
+        ]
+        read_list_unique = superfast_uniq(read_list)
+
+        for el in read_list_unique:
+            if str(el) != "commondata->dt":
+                gfs_el = str(el).replace("gfsL", "gfs[i]")
+                key = gfs_el[:-3]
+                if self.enable_intrinsics and parallelization == "openmp":
+                    self.kernel_params[key] = "REAL *restrict"
+                    self.params += f"REAL *restrict {key},"
+                    kernel_body += f"const REAL_SIMD_ARRAY {el} = Read{self.intrinsics_str}(&{gfs_el});\n"
+                else:
+                    self.kernel_params[key] = "REAL *restrict"
+                    self.params += f"REAL *restrict {key},"
+                    kernel_body += f"const REAL {el} = {gfs_el};\n"
+        for el in self.RK_lhs_list:
+            lhs_var = str(el).replace("_gfsL", "_gfs")
+            if not lhs_var in self.params:
+                self.kernel_params[lhs_var] = "REAL *restrict"
+                self.params += f"REAL *restrict {lhs_var},"
+        self.params += f"const REAL dt"
+        self.kernel_params["dt"] = "const REAL"
+
+        kernel_body += self.loop_body.replace("commondata->dt", "dt") + "\n}\n"
+        self.kernel_params_lst = [f"{v} {k}" for k, v in self.kernel_params.items()]
+
+        if parallelization == "cuda":
+            gpu_kernel_params = self.kernel_params.copy()
+            gpu_kernel_params.pop("params")
+            device_kernel = gputils.GPU_Kernel(
+                kernel_body,
+                gpu_kernel_params,
+                f"{self.name}_gpu",
+                launch_dict={
+                    "blocks_per_grid": [
+                        "(Ntot + threads_in_x_dir - 1) / threads_in_x_dir"
+                    ],
+                    "threads_per_block": ["32"],
+                    "stream": "params->grid_idx % NUM_STREAMS",
+                },
+                comments=f"GPU Kernel to compute RK substep {self.rk_step}.",
+            )
+            self.body += device_kernel.launch_block
+            self.body += device_kernel.c_function_call()
+            prefunc = device_kernel.CFunction.full_function
+        else:
+            if self.enable_intrinsics:
+                kernel_body = kernel_body.replace("dt", "DT")
+                kernel_body = (
+                    "const REAL_SIMD_ARRAY DT = ConstSIMD(dt);\n" + kernel_body
+                )
+            rk_substep_prefunc = cfc.CFunction(
+                desc=self.desc,
+                cfunc_type=self.cfunc_type,
+                name=self.name,
+                params=",".join(self.kernel_params_lst),
+                body=kernel_body,
+            )
+            c_function_call: str = f"{self.name}("
+            for p in self.kernel_params:
+                c_function_call += f"{p}, "
+            c_function_call = c_function_call[:-2] + ")"
+            prefunc = rk_substep_prefunc.full_function
+            self.body += f"{c_function_call};\n"
+
+        # Store CFunction
+        self.name += "__launcher"
+        self.CFunction = cfc.CFunction(
+            prefunc=prefunc,
+            includes=self.includes,
+            desc=self.desc,
+            cfunc_type=self.cfunc_type,
+            name=self.name,
+            params=self.params,
+            body=self.body,
+        )
+
+    def c_function_call(self) -> str:
+        """
+        Generate the C function call for a given RK substep.
+
+        :return: The C function call as a string.
+        """
+        c_function_call: str = self.name + "("
+        for p in self.kernel_params:
+            if p != "dt":
+                c_function_call += f"{p}, "
+
+        c_function_call += "commondata->dt);\n"
+
+        return c_function_call
+
+
+# Store RK substeps as RKFunctions
+MoL_Functions_dict: Dict[str, RKFunction] = {}
+
+
+def construct_RK_functions_prefunc() -> str:
+    """
+    Construct the prefunc (CFunction) strings for all RK functions stored in MoL_Functions_dict.
+
+    :return: The concatenated prefunc (CFunction) strings as a single string.
+    :raises ValueError: If the MoL_Functions_dict is empty
+    """
+    if len(MoL_Functions_dict.values()) == 0:
+        raise ValueError("ERROR: MoL_Functions_dict is empty")
+
+    prefunc = ""
+    for fd_func in MoL_Functions_dict.values():
+        prefunc += fd_func.CFunction.full_function + "\n\n"
+    return prefunc
 
 
 def is_diagonal_Butcher(
@@ -152,6 +379,7 @@ def register_CFunction_MoL_malloc(
     Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
     MoL_method: str,
     which_gfs: str,
+    parallelization: str = "openmp",
 ) -> None:
     """
     Register MoL_malloc_y_n_gfs() and MoL_malloc_non_y_n_gfs(), allocating memory for the gridfunctions indicated.
@@ -159,12 +387,14 @@ def register_CFunction_MoL_malloc(
     :param Butcher_dict: Dictionary of Butcher tables for the MoL method.
     :param MoL_method: Method for the Method of Lines.
     :param which_gfs: Specifies which gridfunctions to consider ("y_n_gfs" or "non_y_n_gfs").
+    :param parallelization: Parameter to specify parallelization (openmp or cuda).
 
     :raises ValueError: If the which_gfs parameter is neither "y_n_gfs" nor "non_y_n_gfs".
 
     Doctest: FIXME
     # >>> register_CFunction_MoL_malloc("Euler", "y_n_gfs")
     """
+    check_supported_parallelization("register_CFunction_MoL_malloc", parallelization)
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
     # Create a description for the function
@@ -201,10 +431,17 @@ def register_CFunction_MoL_malloc(
         # Don't malloc a zero-sized array.
         if num_gfs == "NUM_AUXEVOL_GFS":
             body += "  if(NUM_AUXEVOL_GFS > 0) "
-        body += (
-            f"gridfuncs->{gridfunctions} = (REAL *restrict)malloc(sizeof(REAL) * {num_gfs} * "
-            "Nxx_plus_2NGHOSTS_tot);\n"
-        )
+        if parallelization == "cuda":
+            body += (
+                f"cudaMalloc(&gridfuncs->{gridfunctions}, sizeof(REAL) * {num_gfs} * "
+                "Nxx_plus_2NGHOSTS_tot);\n"
+                'cudaCheckErrors(malloc, "Malloc failed");\n'
+            )
+        else:
+            body += (
+                f"gridfuncs->{gridfunctions} = (REAL *restrict)malloc(sizeof(REAL) * {num_gfs} * "
+                "Nxx_plus_2NGHOSTS_tot);\n"
+            )
 
     body += f"\ngridfuncs->diagnostic_output_gfs  = gridfuncs->{diagnostic_gridfunctions_point_to};\n"
     body += f"gridfuncs->diagnostic_output_gfs2 = gridfuncs->{diagnostic_gridfunctions2_point_to};\n"
@@ -224,7 +461,6 @@ def register_CFunction_MoL_malloc(
 #   define C code for a single RK substep
 #   (e.g., computing k_1 and then updating the outer boundaries)
 def single_RK_substep_input_symbolic(
-    comment_block: str,
     substep_time_offset_dt: Union[sp.Basic, int, str],
     rhs_str: str,
     rhs_input_expr: sp.Basic,
@@ -233,14 +469,17 @@ def single_RK_substep_input_symbolic(
     RK_rhs_list: Union[sp.Basic, List[sp.Basic]],
     post_rhs_list: Union[str, List[str]],
     post_rhs_output_list: Union[sp.Basic, List[sp.Basic]],
-    enable_simd: bool = False,
+    additional_comments: str = "",
+    enable_intrinsics: bool = False,
     gf_aliases: str = "",
     post_post_rhs_string: str = "",
+    rational_const_alias: str = "const",
+    rk_step: Union[int, None] = None,
+    parallelization: str = "openmp",
 ) -> str:
     """
     Generate C code for a given Runge-Kutta substep.
 
-    :param comment_block: Block of comments for the generated code.
     :param substep_time_offset_dt: Time offset for the RK substep.
     :param rhs_str: Right-hand side string of the C code.
     :param rhs_input_expr: Input expression for the RHS.
@@ -249,14 +488,19 @@ def single_RK_substep_input_symbolic(
     :param RK_rhs_list: List of RHS expressions for RK.
     :param post_rhs_list: List of post-RHS expressions.
     :param post_rhs_output_list: List of outputs for post-RHS expressions.
-    :param enable_simd: Whether SIMD optimization is enabled.
-    :param gf_aliases: Additional aliases for grid functions.
     :param post_post_rhs_string: String to be used after the post-RHS phase.
+    :param additional_comments: additional comments to append to auto-generated comment block.
+    :param enable_intrinsics: A flag to specify if hardware instructions should be used.
+    :param gf_aliases: Additional aliases for grid functions.
+    :param rational_const_alias: Provide additional/alternative alias to const for rational definitions
+    :param rk_step: Optional integer representing the current RK step.
+    :param parallelization: Parameter to specify parallelization (openmp or cuda).
 
     :return: A string containing the generated C code.
 
     :raises ValueError: If substep_time_offset_dt cannot be extracted from the Butcher table.
     """
+    check_supported_parallelization("single_RK_substep_input_symbolic", parallelization)
     # Ensure all input lists are lists
     RK_lhs_list = [RK_lhs_list] if not isinstance(RK_lhs_list, list) else RK_lhs_list
     RK_rhs_list = [RK_rhs_list] if not isinstance(RK_rhs_list, list) else RK_rhs_list
@@ -268,19 +512,25 @@ def single_RK_substep_input_symbolic(
         if not isinstance(post_rhs_output_list, list)
         else post_rhs_output_list
     )
+    comment_block = (
+        "// ***Euler timestepping only requires one RHS evaluation***"
+        if rk_step is None
+        else f"// -={{ START k{rk_step} substep }}=-"
+    )
+    comment_block += additional_comments
+    body = f"{comment_block}\n"
 
-    return_str = f"{comment_block}\n"
     if isinstance(substep_time_offset_dt, (int, sp.Rational, sp.Mul)):
         substep_time_offset_str = f"{float(substep_time_offset_dt):.17e}"
     else:
         raise ValueError(
             f"Could not extract substep_time_offset_dt={substep_time_offset_dt} from Butcher table"
         )
-    return_str += "for(int grid=0; grid<commondata->NUMGRIDS; grid++) {\n"
-    return_str += (
+    body += "for(int grid=0; grid<commondata->NUMGRIDS; grid++) {\n"
+    body += (
         f"commondata->time = time_start + {substep_time_offset_str} * commondata->dt;\n"
     )
-    return_str += gf_aliases
+    body += gf_aliases
 
     # Part 1: RHS evaluation
     updated_rhs_str = (
@@ -288,81 +538,35 @@ def single_RK_substep_input_symbolic(
         .replace("RK_INPUT_GFS", str(rhs_input_expr).replace("gfsL", "gfs"))
         .replace("RK_OUTPUT_GFS", str(rhs_output_expr).replace("gfsL", "gfs"))
     )
-    return_str += updated_rhs_str + "\n"
+    body += updated_rhs_str + "\n"
 
     # Part 2: RK update
-    if enable_simd:
-        warnings.warn(
-            "enable_simd in MoL is not properly supported -- MoL update loops are not properly bounds checked."
-        )
-        return_str += "#pragma omp parallel for\n"
-        return_str += "for(int i=0;i<Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;i+=simd_width) {{\n"
-    else:
-        return_str += "LOOP_ALL_GFS_GPS(i) {\n"
-
-    var_type = "REAL_SIMD_ARRAY" if enable_simd else "REAL"
-
-    RK_lhs_str_list = [
-        (
-            f"const REAL_SIMD_ARRAY __rhs_exp_{i}"
-            if enable_simd
-            else f"{str(el).replace('gfsL', 'gfs[i]')}"
-        )
-        for i, el in enumerate(RK_lhs_list)
-    ]
-
-    read_list = [
-        read for el in RK_rhs_list for read in list(sp.ordered(el.free_symbols))
-    ]
-    read_list_unique = superfast_uniq(read_list)
-
-    for el in read_list_unique:
-        if str(el) != "commondata->dt":
-            if enable_simd:
-                simd_el = str(el).replace("gfsL", "gfs[i]")
-                return_str += f"const {var_type} {el} = ReadSIMD(&{simd_el});\n"
-            else:
-                return_str += (
-                    f"const {var_type} {el} = {str(el).replace('gfsL', 'gfs[i]')};\n"
-                )
-
-    if enable_simd:
-        return_str += "const REAL_SIMD_ARRAY DT = ConstSIMD(commondata->dt);\n"
-
-    kernel = c_codegen(
+    RK_key = f"RK_STEP{rk_step}"
+    MoL_Functions_dict[RK_key] = RKFunction(
+        RK_lhs_list,
         RK_rhs_list,
-        RK_lhs_str_list,
-        include_braces=False,
-        verbose=False,
-        enable_simd=enable_simd,
+        rk_step=rk_step,
+        enable_intrinsics=enable_intrinsics,
+        rational_const_alias=rational_const_alias,
+        parallelization=parallelization,
     )
 
-    if enable_simd:
-        return_str += kernel.replace("commondata->dt", "DT")
-        for i, el in enumerate(RK_lhs_list):
-            return_str += (
-                f"  WriteSIMD(&{str(el).replace('gfsL', 'gfs[i]')}, __rhs_exp_{i});\n"
-            )
-
-    else:
-        return_str += kernel
-
-    return_str += "}\n"
+    body += MoL_Functions_dict[RK_key].c_function_call()
 
     # Part 3: Call post-RHS functions
     for post_rhs, post_rhs_output in zip(post_rhs_list, post_rhs_output_list):
-        return_str += post_rhs.replace(
+        body += post_rhs.replace(
             "RK_OUTPUT_GFS", str(post_rhs_output).replace("gfsL", "gfs")
         )
 
-    return_str += "}\n"
+    body += "}\n"
 
     for post_rhs, post_rhs_output in zip(post_rhs_list, post_rhs_output_list):
-        return_str += post_post_rhs_string.replace(
+        body += post_post_rhs_string.replace(
             "RK_OUTPUT_GFS", str(post_rhs_output).replace("gfsL", "gfs")
         )
 
-    return return_str
+    return body
 
 
 ########################################################################################################################
@@ -399,9 +603,11 @@ def register_CFunction_MoL_step_forward_in_time(
     post_post_rhs_string: str = "",
     enable_rfm_precompute: bool = False,
     enable_curviBCs: bool = False,
-    enable_simd: bool = False,
+    enable_intrinsics: bool = False,
+    parallelization: str = "openmp",
+    rational_const_alias: str = "const",
 ) -> None:
-    """
+    r"""
     Register MoL_step_forward_in_time() C function, which is the core driver for time evolution in BHaH codes.
 
     :param Butcher_dict: A dictionary containing the Butcher tables for various RK-like methods.
@@ -411,26 +617,60 @@ def register_CFunction_MoL_step_forward_in_time(
     :param post_post_rhs_string: String to be used after the post-RHS phase.
     :param enable_rfm_precompute: Flag to enable reference metric functionality.
     :param enable_curviBCs: Flag to enable curvilinear boundary conditions.
-    :param enable_simd: Flag to enable SIMD functionality.
+    :param enable_intrinsics: A flag to specify if hardware instructions should be used.
+    :param parallelization: Parameter to specify parallelization (openmp or cuda).
+    :param rational_const_alias: Overload const specifier for Rational definitions
     :raises ValueError: If unsupported Butcher table specified since adaptive RK steps are not implemented in MoL.
 
     Doctest:
     >>> import nrpy.c_function as cfc
     >>> from nrpy.infrastructures.BHaH.MoLtimestepping.MoL import register_CFunction_MoL_step_forward_in_time
+    >>> from nrpy.infrastructures.BHaH.MoLtimestepping.MoL import MoL_Functions_dict
+    >>> from nrpy.helpers.generic import validate_strings
     >>> from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import (
     ...     generate_Butcher_tables,
     ... )
     >>> Butcher_dict = generate_Butcher_tables()
     >>> expected_str_dict=dict()
+    >>> rhs_string = "rhs_eval(commondata, params, rfmstruct,  auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);"
+    >>> post_rhs_string=(
+    ... "if (strncmp(commondata->outer_bc_type, \"extrapolation\", 50) == 0)\n"
+    ... "  apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);"
+    ... )
+    >>> for k, v in Butcher_dict.items():
+    ...     Butcher = Butcher_dict[k][0]
+    ...     cfc.CFunction_dict.clear()
+    ...     MoL_Functions_dict.clear()
+    ...     if Butcher[-1][0] != "":
+    ...         continue
+    ...     register_CFunction_MoL_step_forward_in_time(
+    ...         Butcher_dict,
+    ...         k,
+    ...         rhs_string=rhs_string,
+    ...         post_rhs_string=post_rhs_string,
+    ...         enable_intrinsics=True,
+    ...         parallelization="cuda",
+    ...         rational_const_alias="static constexpr"
+    ...     )
+    ...     generated_str = cfc.CFunction_dict["MoL_step_forward_in_time"].full_function
+    ...     validation_desc = f"CUDA__MoL_step_forward_in_time__{k}".replace(" ", "_")
+    ...     validate_strings(generated_str, validation_desc, file_ext="cu")
+    >>> cfc.CFunction_dict.clear()
+    >>> MoL_Functions_dict.clear()
     >>> try:
     ...     register_CFunction_MoL_step_forward_in_time(Butcher_dict, "AHE")
     ... except ValueError as e:
     ...     print(f"ValueError: {e.args[0]}")
     ValueError: Adaptive order Butcher tables are currently not supported in MoL.
     """
+    check_supported_parallelization(
+        "register_CFunction_MoL_step_forward_in_time", parallelization
+    )
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    if enable_simd:
-        includes += [os.path.join("SIMD", "SIMD_intrinsics.h")]
+    if enable_intrinsics and parallelization == "cuda":
+        includes += [os.path.join("intrinsics", "cuda_intrinsics.h")]
+    elif enable_intrinsics:
+        includes += [os.path.join("intrinsics", "simd_intrinsics.h")]
 
     desc = f'Method of Lines (MoL) for "{MoL_method}" method: Step forward one full timestep.\n'
     cfunc_type = "void"
@@ -457,25 +697,24 @@ const REAL time_start = commondata->time;
 
     gf_aliases = f"""// Set gridfunction aliases from gridfuncs struct
 // y_n gridfunctions
-REAL MAYBE_UNUSED *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
+MAYBE_UNUSED REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
 // Temporary timelevel & AUXEVOL gridfunctions:\n"""
     for gf in non_y_n_gridfunctions_list:
-        gf_aliases += f"REAL MAYBE_UNUSED *restrict {gf} = {gf_prefix}{gf};\n"
+        gf_aliases += f"MAYBE_UNUSED REAL *restrict {gf} = {gf_prefix}{gf};\n"
 
-    gf_aliases += "params_struct *restrict params = &griddata[grid].params;\n"
+    gf_aliases += (
+        "MAYBE_UNUSED params_struct *restrict params = &griddata[grid].params;\n"
+    )
     if enable_rfm_precompute:
-        gf_aliases += (
-            "const rfm_struct *restrict rfmstruct = &griddata[grid].rfmstruct;\n"
-        )
+        gf_aliases += "MAYBE_UNUSED const rfm_struct *restrict rfmstruct = &griddata[grid].rfmstruct;\n"
     else:
-        gf_aliases += "REAL MAYBE_UNUSED *restrict xx[3]; for(int ww=0;ww<3;ww++) xx[ww] = griddata[grid].xx[ww];\n"
+        gf_aliases += "MAYBE_UNUSED REAL *restrict xx[3]; for(int ww=0;ww<3;ww++) xx[ww] = griddata[grid].xx[ww];\n"
 
     if enable_curviBCs:
-        gf_aliases += "const bc_struct *restrict bcstruct = &griddata[grid].bcstruct;\n"
-    for i in ["0", "1", "2"]:
-        gf_aliases += f"const int Nxx_plus_2NGHOSTS{i} = griddata[grid].params.Nxx_plus_2NGHOSTS{i};\n"
+        gf_aliases += "MAYBE_UNUSED const bc_struct *restrict bcstruct = &griddata[grid].bcstruct;\n"
 
     # Implement Method of Lines (MoL) Timestepping
+    rk_step_body_dict: Dict[str, str] = {}
     Butcher = Butcher_dict[MoL_method][
         0
     ]  # Get the desired Butcher table from the dictionary
@@ -504,9 +743,9 @@ REAL MAYBE_UNUSED *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
         body += """
 // In a diagonal RK3 method like this one, only 3 gridfunctions need be defined. Below implements this approach.
 // Using y_n_gfs as input, k1 and apply boundary conditions\n"""
-        body += (
+        rk_step_body_dict["RK_SUBSTEP_K1"] = (
             single_RK_substep_input_symbolic(
-                comment_block="""// -={ START k1 substep }=-
+                additional_comments="""
 // RHS evaluation:
 //  1. We will store k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs now as
 //     ...  the update for the next rhs evaluation y_n + a21*k1*dt
@@ -523,21 +762,24 @@ REAL MAYBE_UNUSED *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
                     * dt
                     + y_n_gfs
                 ],
+                rk_step=1,
                 post_rhs_list=[post_rhs_string],
                 post_rhs_output_list=[
                     k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs
                 ],
-                enable_simd=enable_simd,
+                enable_intrinsics=enable_intrinsics,
                 gf_aliases=gf_aliases,
                 post_post_rhs_string=post_post_rhs_string,
+                rational_const_alias=rational_const_alias,
+                parallelization=parallelization,
             )
             + "// -={ END k1 substep }=-\n\n"
         )
 
         # k_2
-        body += (
+        rk_step_body_dict["RK_SUBSTEP_K2"] = (
             single_RK_substep_input_symbolic(
-                comment_block="""// -={ START k2 substep }=-
+                additional_comments="""
 // RHS evaluation:
 //    1. Reassign k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs to be the running total y_{n+1}; a32*k2*dt to the running total
 //    2. Store k2_or_y_nplus_a32_k2_gfs now as y_n + a32*k2*dt
@@ -560,22 +802,25 @@ REAL MAYBE_UNUSED *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
                     + Butcher[3][2] * k2_or_y_nplus_a32_k2_gfs * dt,
                     Butcher[2][2] * k2_or_y_nplus_a32_k2_gfs * dt + y_n_gfs,
                 ],
+                rk_step=2,
                 post_rhs_list=[post_rhs_string, post_rhs_string],
                 post_rhs_output_list=[
                     k2_or_y_nplus_a32_k2_gfs,
                     k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs,
                 ],
-                enable_simd=enable_simd,
+                enable_intrinsics=enable_intrinsics,
                 gf_aliases=gf_aliases,
                 post_post_rhs_string=post_post_rhs_string,
+                rational_const_alias=rational_const_alias,
+                parallelization=parallelization,
             )
             + "// -={ END k2 substep }=-\n\n"
         )
 
         # k_3
-        body += (
+        rk_step_body_dict["RK_SUBSTEP_K3"] = (
             single_RK_substep_input_symbolic(
-                comment_block="""// -={ START k3 substep }=-
+                additional_comments="""
 // RHS evaluation:
 //    1. Add k3 to the running total and save to y_n
 // Post-RHS evaluation:
@@ -589,11 +834,14 @@ REAL MAYBE_UNUSED *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
                     k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs
                     + Butcher[3][3] * y_n_gfs * dt
                 ],
+                rk_step=3,
                 post_rhs_list=[post_rhs_string],
                 post_rhs_output_list=[y_n_gfs],
-                enable_simd=enable_simd,
+                enable_intrinsics=enable_intrinsics,
                 gf_aliases=gf_aliases,
                 post_post_rhs_string=post_post_rhs_string,
+                rational_const_alias=rational_const_alias,
+                parallelization=parallelization,
             )
             + "// -={ END k3 substep }=-\n\n"
         )
@@ -629,19 +877,23 @@ REAL MAYBE_UNUSED *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
                 else:  # If on anything but the final step:
                     post_rhs_output = next_y_input
 
-                body += f"""{single_RK_substep_input_symbolic(
-                    comment_block=f"// -={{ START k{str(s + 1)} substep }}=-",
+                rk_step_body_dict[
+                    f"RK_SUBSTEP_K{s+1}"
+                ] = f"""{single_RK_substep_input_symbolic(
                     substep_time_offset_dt=Butcher[s][0],
                     rhs_str=rhs_string,
                     rhs_input_expr=rhs_input,
                     rhs_output_expr=rhs_output,
                     RK_lhs_list=[RK_lhs],
                     RK_rhs_list=[RK_rhs],
+                    rk_step=s+1,
                     post_rhs_list=[post_rhs],
                     post_rhs_output_list=[post_rhs_output],
-                    enable_simd=enable_simd,
+                    enable_intrinsics=enable_intrinsics,
                     gf_aliases=gf_aliases,
                     post_post_rhs_string=post_post_rhs_string,
+                    rational_const_alias=rational_const_alias,
+                    parallelization=parallelization
                 )}// -={{ END k{str(s + 1)} substep }}=-\n\n"""
 
         else:
@@ -650,8 +902,8 @@ REAL MAYBE_UNUSED *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
             if (
                 MoL_method == "Euler"
             ):  # Euler's method doesn't require any k_i, and gets its own unique algorithm
-                body += single_RK_substep_input_symbolic(
-                    comment_block="// ***Euler timestepping only requires one RHS evaluation***",
+                rk_step_body_dict[f"{MoL_method}"] = single_RK_substep_input_symbolic(
+                    additional_comments="// ***Euler timestepping only requires one RHS evaluation***",
                     substep_time_offset_dt=Butcher[0][0],
                     rhs_str=rhs_string,
                     rhs_input_expr=y_n,
@@ -660,9 +912,11 @@ REAL MAYBE_UNUSED *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
                     RK_rhs_list=[y_n + y_nplus1_running_total * dt],
                     post_rhs_list=[post_rhs_string],
                     post_rhs_output_list=[y_n],
-                    enable_simd=enable_simd,
+                    enable_intrinsics=enable_intrinsics,
                     gf_aliases=gf_aliases,
                     post_post_rhs_string=post_post_rhs_string,
+                    rational_const_alias=rational_const_alias,
+                    parallelization=parallelization,
                 )
             else:
                 for s in range(num_steps):
@@ -726,9 +980,8 @@ REAL MAYBE_UNUSED *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
                                     y_n + y_nplus1_running_total + rhs_output * dt
                                 )
                         post_rhs_output = y_n
-                    body += (
+                    rk_step_body_dict[f"RK_SUBSTEP_K{s+1}"] = (
                         single_RK_substep_input_symbolic(
-                            comment_block=f"// -={{ START k{s + 1} substep }}=-",
                             substep_time_offset_dt=Butcher[s][0],
                             rhs_str=rhs_string,
                             rhs_input_expr=rhs_input,
@@ -737,13 +990,38 @@ REAL MAYBE_UNUSED *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions}
                             RK_rhs_list=RK_rhs_list,
                             post_rhs_list=[post_rhs_string],
                             post_rhs_output_list=[post_rhs_output],
-                            enable_simd=enable_simd,
+                            rk_step=s + 1,
+                            enable_intrinsics=enable_intrinsics,
                             gf_aliases=gf_aliases,
                             post_post_rhs_string=post_post_rhs_string,
+                            rational_const_alias=rational_const_alias,
+                            parallelization=parallelization,
                         )
                         + f"// -={{ END k{s + 1} substep }}=-\n\n"
                     )
 
+    if parallelization == "cuda":
+        prefunc = """
+#define LOOP_ALL_GFS_GPS(ii) \
+const int tid0 = threadIdx.x + blockIdx.x*blockDim.x; \
+const int stride0 = blockDim.x * gridDim.x; \
+  for(int (ii)=(tid0);(ii)<d_params[streamid].Nxx_plus_2NGHOSTS0*d_params[streamid].Nxx_plus_2NGHOSTS1*d_params[streamid].Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;(ii)+=(stride0))
+"""
+    else:
+        prefunc = """
+#define LOOP_ALL_GFS_GPS(ii) \
+_Pragma("omp parallel for") \
+  for(int (ii)=0;(ii)<params->Nxx_plus_2NGHOSTS0*params->Nxx_plus_2NGHOSTS1*params->Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;(ii)++)
+"""
+        if enable_intrinsics:
+            warnings.warn(
+                "SIMD intrinsics in MoL is not properly supported -- MoL update loops are not properly bounds checked."
+            )
+            prefunc = prefunc.replace("(ii)++", "(ii) += (simd_width)")
+    prefunc += construct_RK_functions_prefunc()
+
+    for _, v in rk_step_body_dict.items():
+        body += v
     body += """
 // Adding dt to commondata->time many times will induce roundoff error,
 //   so here we set time based on the iteration number.
@@ -760,6 +1038,7 @@ commondata->nn++;
         params=params,
         include_CodeParameters_h=False,
         body=body,
+        prefunc=prefunc,
     )
 
 
@@ -771,6 +1050,7 @@ def register_CFunction_MoL_free_memory(
     Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
     MoL_method: str,
     which_gfs: str,
+    parallelization: str = "openmp",
 ) -> None:
     """
     Free memory for the specified Method of Lines (MoL) gridfunctions, given an MoL_method.
@@ -778,9 +1058,13 @@ def register_CFunction_MoL_free_memory(
     :param Butcher_dict: Dictionary containing Butcher tableau for MoL methods.
     :param MoL_method: The Method of Lines method.
     :param which_gfs: The gridfunctions to be freed, either 'y_n_gfs' or 'non_y_n_gfs'.
+    :param parallelization: Parameter to specify parallelization (openmp or cuda).
 
     :raises ValueError: If the 'which_gfs' argument is unrecognized.
     """
+    check_supported_parallelization(
+        "register_CFunction_MoL_free_memory", parallelization
+    )
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = f'Method of Lines (MoL) for "{MoL_method}" method: Free memory for "{which_gfs}" gridfunctions\n'
     desc += "   - y_n_gfs are used to store data for the vector of gridfunctions y_i at t_n, at the start of each MoL timestep\n"
@@ -807,9 +1091,8 @@ def register_CFunction_MoL_free_memory(
     for gridfunction in gridfunctions_list:
         # Don't free a zero-sized array.
         if gridfunction == "auxevol_gfs":
-            body += f"  if(NUM_AUXEVOL_GFS > 0) free(gridfuncs->{gridfunction});"
-        else:
-            body += f"  free(gridfuncs->{gridfunction});"
+            body += f"  if(NUM_AUXEVOL_GFS > 0)"
+        body += f" {'cudaFree' if parallelization == 'cuda' else 'free'}(gridfuncs->{gridfunction});\n"
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
@@ -828,8 +1111,10 @@ def register_CFunctions(
     post_post_rhs_string: str = "",
     enable_rfm_precompute: bool = False,
     enable_curviBCs: bool = False,
-    enable_simd: bool = False,
+    enable_intrinsics: bool = False,
     register_MoL_step_forward_in_time: bool = True,
+    parallelization: str = "openmp",
+    rational_const_alias: str = "const",
 ) -> None:
     r"""
     Register all MoL C functions and NRPy basic defines.
@@ -840,8 +1125,10 @@ def register_CFunctions(
     :param post_post_rhs_string: Post-post-RHS function call as string. Default is an empty string.
     :param enable_rfm_precompute: Enable reference metric support. Default is False.
     :param enable_curviBCs: Enable curvilinear boundary conditions. Default is False.
-    :param enable_simd: Enable Single Instruction, Multiple Data (SIMD). Default is False.
+    :param enable_intrinsics: A flag to specify if hardware instructions should be used.
     :param register_MoL_step_forward_in_time: Whether to register the MoL step forward function. Default is True.
+    :param parallelization: Parameter to specify parallelization (openmp or cuda).
+    :param rational_const_alias: Overload const specifier for Rational definitions
 
     Doctests:
     >>> from nrpy.helpers.generic import validate_strings
@@ -890,11 +1177,16 @@ def register_CFunctions(
     } // END FUNCTION MoL_malloc_non_y_n_gfs
     <BLANKLINE>
     """
+    check_supported_parallelization("register_CFunctions", parallelization)
     Butcher_dict = generate_Butcher_tables()
 
     for which_gfs in ["y_n_gfs", "non_y_n_gfs"]:
-        register_CFunction_MoL_malloc(Butcher_dict, MoL_method, which_gfs)
-        register_CFunction_MoL_free_memory(Butcher_dict, MoL_method, which_gfs)
+        register_CFunction_MoL_malloc(
+            Butcher_dict, MoL_method, which_gfs, parallelization=parallelization
+        )
+        register_CFunction_MoL_free_memory(
+            Butcher_dict, MoL_method, which_gfs, parallelization=parallelization
+        )
     if register_MoL_step_forward_in_time:
         register_CFunction_MoL_step_forward_in_time(
             Butcher_dict,
@@ -904,7 +1196,9 @@ def register_CFunctions(
             post_post_rhs_string,
             enable_rfm_precompute=enable_rfm_precompute,
             enable_curviBCs=enable_curviBCs,
-            enable_simd=enable_simd,
+            enable_intrinsics=enable_intrinsics,
+            parallelization=parallelization,
+            rational_const_alias=rational_const_alias,
         )
 
     griddata_commondata.register_griddata_commondata(
@@ -920,20 +1214,19 @@ def register_CFunctions(
     ) = generate_gridfunction_names(Butcher_dict, MoL_method=MoL_method)
 
     # Step 3.b: Create MoL_timestepping struct:
-    BHaH_defines_h.register_BHaH_defines(
-        __name__,
-        f"typedef struct __MoL_gridfunctions_struct__ {{\n"
-        f"REAL *restrict {y_n_gridfunctions};\n"
+    BHaH_MoL_body: str = (
+        "typedef struct __MoL_gridfunctions_struct__ {\n"
+        + f"REAL *restrict {y_n_gridfunctions};\n"
         + "".join(f"REAL *restrict {gfs};\n" for gfs in non_y_n_gridfunctions_list)
         + r"""REAL *restrict diagnostic_output_gfs;
 REAL *restrict diagnostic_output_gfs2;
 } MoL_gridfunctions_struct;
-
-#define LOOP_ALL_GFS_GPS(ii) \
-_Pragma("omp parallel for") \
-  for(int (ii)=0;(ii)<Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;(ii)++)
-""",
+"""
     )
+
+    if parallelization != "openmp":
+        BHaH_MoL_body = BHaH_MoL_body.replace("REAL *restrict ", "REAL * ")
+    BHaH_defines_h.register_BHaH_defines(__name__, BHaH_MoL_body)
 
 
 if __name__ == "__main__":

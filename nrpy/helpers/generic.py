@@ -105,6 +105,7 @@ def clang_format(
 def validate_strings(
     to_check: str,
     string_desc: str,
+    file_ext: str = "c",
 ) -> None:
     """
     Validate a string against a trusted value stored in a .c file; manage trusted file creation if file not found.
@@ -115,6 +116,7 @@ def validate_strings(
 
     :param to_check: Specify the string to validate, representing the expected value or output.
     :param string_desc: Provide a short, non-empty, whitespace-free label to use in the trusted file's name.
+    :param file_ext: Specify the file extension for the trusted file, defaulting to "c".
     :raises ValueError: Raise if:
         - `string_desc` is empty or contains whitespace.
         - The caller's frame or filename cannot be identified.
@@ -165,7 +167,7 @@ def validate_strings(
         # Use the script's filename if function name is not meaningful
         function_name = Path(caller_filename).stem
 
-    outfile_path = outdir / f"{function_name}_{string_desc}.c"
+    outfile_path = outdir / f"{function_name}_{string_desc}.{file_ext}"
 
     if outfile_path.exists():
         trusted_string = outfile_path.read_text(encoding="utf-8")
