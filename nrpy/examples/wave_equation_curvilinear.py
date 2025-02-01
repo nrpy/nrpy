@@ -31,7 +31,7 @@ from nrpy.infrastructures.BHaH import (
     rfm_wrapper_functions,
     xx_tofrom_Cart,
 )
-from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
+from nrpy.infrastructures.BHaH.MoLtimestepping import MoL_register_all
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -139,7 +139,7 @@ if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
                                      RK_INPUT_GFS, RK_OUTPUT_GFS);"""
 if not enable_rfm_precompute:
     rhs_string = rhs_string.replace("rfmstruct", "xx")
-MoL.register_CFunctions(
+MoL_register_all.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,
     post_rhs_string="""if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)

@@ -27,11 +27,13 @@ from nrpy.c_codegen import c_codegen
 from nrpy.grid import BHaHGridFunction, glb_gridfcs_dict
 from nrpy.helpers.generic import superfast_uniq
 from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
-from nrpy.infrastructures.BHaH.MoLtimestepping.MoL import (
-    generate_gridfunction_names,
-    is_diagonal_Butcher,
+from nrpy.infrastructures.BHaH.MoLtimestepping.MoL_allocators import (
     register_CFunction_MoL_free_memory,
     register_CFunction_MoL_malloc,
+)
+from nrpy.infrastructures.BHaH.MoLtimestepping.MoL_gridfunction_names import (
+    generate_gridfunction_names,
+    is_diagonal_Butcher,
 )
 from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import (
     generate_Butcher_tables,

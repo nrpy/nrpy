@@ -26,7 +26,7 @@ core_modules_list = [
     "finite_difference",
     "reference_metric",
     "nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions",
-    "nrpy.infrastructures.BHaH.MoLtimestepping.MoL",
+    "nrpy.infrastructures.BHaH.MoLtimestepping.MoL_register_all",
     "nrpy.infrastructures.BHaH.interpolation.interpolation",
     "grid",
 ]
@@ -140,10 +140,10 @@ def output_BHaH_defines_h(
     :param clang_format_options: Options for clang formatting.
 
     DocTests:
-    >>> from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
+    >>> from nrpy.infrastructures.BHaH.MoLtimestepping import MoL_register_all
     >>> import nrpy.finite_difference as fin
     >>> from nrpy.helpers.generic import validate_strings
-    >>> MoL.register_CFunctions(register_MoL_step_forward_in_time=False)
+    >>> MoL_register_all.register_CFunctions(register_MoL_step_forward_in_time=False)
     >>> project_dir = Path("/tmp", "tmp_BHaH_defines_h")
     >>> project_dir.mkdir(parents=True, exist_ok=True)
     >>> output_BHaH_defines_h(project_dir=str(project_dir))

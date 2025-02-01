@@ -17,14 +17,14 @@ __global__ static void rk_substep_1_gpu(const size_t streamid, REAL *restrict k_
   LOOP_ALL_GFS_GPS(i) {
     const REAL k_odd_gfsL = k_odd_gfs[i];
     const REAL y_n_gfsL = y_n_gfs[i];
-    static const double dbl_Integer_0 = 0.0;
-    const REAL_CUDA_ARRAY _Integer_0 = ConstCUDA(dbl_Integer_0);
+    static const double dblRK_Rational_1_4 = 1.0 / 4.0;
+    const REAL_CUDA_ARRAY RK_Rational_1_4 = ConstCUDA(dblRK_Rational_1_4);
 
-    static const double dblRK_Rational_1_2 = 1.0 / 2.0;
-    const REAL_CUDA_ARRAY RK_Rational_1_2 = ConstCUDA(dblRK_Rational_1_2);
+    static const double dblRK_Rational_2_3 = 2.0 / 3.0;
+    const REAL_CUDA_ARRAY RK_Rational_2_3 = ConstCUDA(dblRK_Rational_2_3);
 
-    const REAL_CUDA_ARRAY __rk_exp_0 = _Integer_0;
-    const REAL_CUDA_ARRAY __rk_exp_1 = FusedMulAddCUDA(RK_Rational_1_2, MulCUDA(dt, k_odd_gfsL), y_n_gfsL);
+    const REAL_CUDA_ARRAY __rk_exp_0 = MulCUDA(RK_Rational_1_4, MulCUDA(dt, k_odd_gfsL));
+    const REAL_CUDA_ARRAY __rk_exp_1 = FusedMulAddCUDA(RK_Rational_2_3, MulCUDA(dt, k_odd_gfsL), y_n_gfsL);
     WriteCUDA(&y_nplus1_running_total_gfs[i], __rk_exp_0);
     WriteCUDA(&k_odd_gfs[i], __rk_exp_1);
   }
@@ -61,7 +61,10 @@ __global__ static void rk_substep_2_gpu(const size_t streamid, REAL *restrict k_
     const REAL k_even_gfsL = k_even_gfs[i];
     const REAL y_n_gfsL = y_n_gfs[i];
     const REAL y_nplus1_running_total_gfsL = y_nplus1_running_total_gfs[i];
-    const REAL_CUDA_ARRAY __rk_exp_0 = AddCUDA(y_n_gfsL, FusedMulAddCUDA(dt, k_even_gfsL, y_nplus1_running_total_gfsL));
+    static const double dblRK_Rational_3_4 = 3.0 / 4.0;
+    const REAL_CUDA_ARRAY RK_Rational_3_4 = ConstCUDA(dblRK_Rational_3_4);
+
+    const REAL_CUDA_ARRAY __rk_exp_0 = AddCUDA(y_n_gfsL, FusedMulAddCUDA(RK_Rational_3_4, MulCUDA(dt, k_even_gfsL), y_nplus1_running_total_gfsL));
     WriteCUDA(&y_n_gfs[i], __rk_exp_0);
   }
 } // END FUNCTION rk_substep_2_gpu
@@ -88,12 +91,12 @@ static void rk_substep_2__launcher(params_struct *restrict params, REAL *restric
 } // END FUNCTION rk_substep_2__launcher
 
 /**
- * Method of Lines (MoL) for "RK2 MP" method: Step forward one full timestep.
+ * Method of Lines (MoL) for "RK2 Ralston" method: Step forward one full timestep.
  *
  */
 void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_struct *restrict griddata) {
 
-  // C code implementation of -={ RK2 MP }=- Method of Lines timestepping.
+  // C code implementation of -={ RK2 Ralston }=- Method of Lines timestepping.
 
   // First set the initial time:
   const REAL time_start = commondata->time;
@@ -121,7 +124,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
 
   // -={ START k2 substep }=-
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
-    commondata->time = time_start + 5.00000000000000000e-01 * commondata->dt;
+    commondata->time = time_start + 6.66666666666666630e-01 * commondata->dt;
     // Set gridfunction aliases from gridfuncs struct
     // y_n gridfunctions
     MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
@@ -142,9 +145,9 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
   // -={ END k2 substep }=-
 
   // Adding dt to commondata->time many times will induce roundoff error,
-  //   so here we set time based on the iteration number.
+  // so here we set time based on the iteration number:
   commondata->time = (REAL)(commondata->nn + 1) * commondata->dt;
 
-  // Finally, increment the timestep n:
+  // Increment the timestep n:
   commondata->nn++;
 } // END FUNCTION MoL_step_forward_in_time

@@ -16,7 +16,9 @@ import nrpy.c_function as cfc
 import nrpy.params as par
 from nrpy.helpers.generic import clang_format
 from nrpy.infrastructures.BHaH import griddata_commondata
-from nrpy.infrastructures.BHaH.MoLtimestepping.MoL import generate_gridfunction_names
+from nrpy.infrastructures.BHaH.MoLtimestepping.MoL_gridfunction_names import (
+    generate_gridfunction_names,
+)
 from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import (
     generate_Butcher_tables,
 )

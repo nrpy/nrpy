@@ -151,14 +151,11 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
   // First set the initial time:
   const REAL time_start = commondata->time;
 
-  // In a diagonal RK3 method like this one, only 3 gridfunctions need be defined. Below implements this approach.
-  // Using y_n_gfs as input, k1 and apply boundary conditions
+  // In a diagonal RK3 method, we only need 3 gridfunctions (y_n, k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs, k2_or_y_nplus_a32_k2_gfs).
   // -={ START k1 substep }=-
   // RHS evaluation:
-  //  1. We will store k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs now as
-  //     ...  the update for the next rhs evaluation y_n + a21*k1*dt
-  // Post-RHS evaluation:
-  //  1. Apply post-RHS to y_n + a21*k1*dt
+  //  1. We will store k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs
+  // Post-RHS evaluation: apply boundaries
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     commondata->time = time_start + 0.00000000000000000e+00 * commondata->dt;
     // Set gridfunction aliases from gridfuncs struct
@@ -182,11 +179,9 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
 
   // -={ START k2 substep }=-
   // RHS evaluation:
-  //    1. Reassign k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs to be the running total y_{n+1}; a32*k2*dt to the running total
-  //    2. Store k2_or_y_nplus_a32_k2_gfs now as y_n + a32*k2*dt
+  //    1. Reassign k1_or_yrun to the running total
   // Post-RHS evaluation:
-  //    1. Apply post-RHS to both y_n + a32*k2 (stored in k2_or_y_nplus_a32_k2_gfs)
-  //       ... and the y_{n+1} running total, as they have not been applied yet to k2-related gridfunctions
+  //    1. Apply post-RHS
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     commondata->time = time_start + 5.00000000000000000e-01 * commondata->dt;
     // Set gridfunction aliases from gridfuncs struct
@@ -237,9 +232,9 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
   // -={ END k3 substep }=-
 
   // Adding dt to commondata->time many times will induce roundoff error,
-  //   so here we set time based on the iteration number.
+  // so here we set time based on the iteration number:
   commondata->time = (REAL)(commondata->nn + 1) * commondata->dt;
 
-  // Finally, increment the timestep n:
+  // Increment the timestep n:
   commondata->nn++;
 } // END FUNCTION MoL_step_forward_in_time

@@ -30,7 +30,7 @@ from nrpy.equations.wave_equation.WaveEquation_Solutions_InitialData import (
 )
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import griddata_commondata
-from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
+from nrpy.infrastructures.BHaH.MoLtimestepping import MoL_register_all
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -439,7 +439,7 @@ register_CFunction_numerical_grids_and_timestep_setup()
 register_CFunction_diagnostics()
 register_CFunction_rhs_eval()
 register_CFunction_apply_bcs()
-MoL.register_CFunctions(
+MoL_register_all.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string="rhs_eval(commondata, params,  RK_INPUT_GFS, RK_OUTPUT_GFS);",
     post_rhs_string="apply_bcs(commondata, params,  RK_OUTPUT_GFS);",

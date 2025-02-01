@@ -38,7 +38,7 @@ from nrpy.infrastructures.BHaH import (
     rfm_precompute,
     rfm_wrapper_functions,
 )
-from nrpy.infrastructures.BHaH.MoLtimestepping import MoL
+from nrpy.infrastructures.BHaH.MoLtimestepping import MoL_register_all
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -162,7 +162,7 @@ cbc.CurviBoundaryConditions_register_C_functions(
 )
 
 rhs_string = ""
-MoL.register_CFunctions(
+MoL_register_all.register_CFunctions(
     MoL_method="RK4",
     rhs_string=rhs_string,
     post_rhs_string="",
