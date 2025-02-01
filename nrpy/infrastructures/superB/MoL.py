@@ -1057,7 +1057,7 @@ def register_CFunctions(
 
     # Step 3.b: Create MoL_timestepping struct:
     BHaH_defines_h.register_BHaH_defines(
-        "nrpy.infrastructures.BHaH.MoLtimestepping.MoL",
+        "nrpy.infrastructures.BHaH.MoLtimestepping.MoL_register_all",
         f"typedef struct __MoL_gridfunctions_struct__ {{\n"
         f"""int num_evol_gfs_to_sync;
         int num_auxevol_gfs_to_sync;
