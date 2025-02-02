@@ -403,10 +403,15 @@ def output_BHaH_defines_h(
 
 // ----------------------------
 // Define griddata struct
-// ----------------------------
-""" + register_griddata_struct_and_return_griddata_struct_str(
+// ----------------------------"""
+    griddata_struct_def = register_griddata_struct_and_return_griddata_struct_str(
         enable_rfm_precompute=enable_rfm_precompute
     )
+    # Add a newline as needed:
+    if not griddata_struct_def.startswith("\n"):
+        griddata_struct_def = "\n" + griddata_struct_def
+    gri_BHd_str += griddata_struct_def
+
     register_BHaH_defines("grid", gri_BHd_str)
 
     def output_key(key_name: str, item_name: str) -> str:
@@ -418,8 +423,11 @@ def output_BHaH_defines_h(
         :return: A formatted string containing the module name and its content.
         """
         return f"""
-//********************************************
-// Basic definitions for module {key_name}:\n{item_name}"""
+// ----------------------------
+// Basic definitions for module
+// {key_name}:
+// ----------------------------
+{item_name}"""
 
     file_output_str = """#ifndef __BHAH_DEFINES_H__
 #define __BHAH_DEFINES_H__
