@@ -416,10 +416,8 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
   // -={ START k1 substep }=-
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     commondata->time = time_start + 0.00000000000000000e+00 * commondata->dt;
-    // Set gridfunction aliases from gridfuncs struct
-    // y_n gridfunctions
+    // Set gridfunction aliases, from griddata[].gridfuncs.
     MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
-    // Temporary timelevel & AUXEVOL gridfunctions:
     MAYBE_UNUSED REAL *restrict next_y_input_gfs = griddata[grid].gridfuncs.next_y_input_gfs;
     MAYBE_UNUSED REAL *restrict k1_gfs = griddata[grid].gridfuncs.k1_gfs;
     MAYBE_UNUSED REAL *restrict k2_gfs = griddata[grid].gridfuncs.k2_gfs;
@@ -429,6 +427,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     MAYBE_UNUSED REAL *restrict k6_gfs = griddata[grid].gridfuncs.k6_gfs;
     MAYBE_UNUSED REAL *restrict k7_gfs = griddata[grid].gridfuncs.k7_gfs;
     MAYBE_UNUSED REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
+    // Set pointers to this grid's params, rfm_struct/xx, bc_struct, etc.
     MAYBE_UNUSED params_struct *restrict params = &griddata[grid].params;
     MAYBE_UNUSED REAL *restrict xx[3];
     for (int ww = 0; ww < 3; ww++)
@@ -443,10 +442,8 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
   // -={ START k2 substep }=-
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     commondata->time = time_start + 1.00000000000000006e-01 * commondata->dt;
-    // Set gridfunction aliases from gridfuncs struct
-    // y_n gridfunctions
+    // Set gridfunction aliases, from griddata[].gridfuncs.
     MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
-    // Temporary timelevel & AUXEVOL gridfunctions:
     MAYBE_UNUSED REAL *restrict next_y_input_gfs = griddata[grid].gridfuncs.next_y_input_gfs;
     MAYBE_UNUSED REAL *restrict k1_gfs = griddata[grid].gridfuncs.k1_gfs;
     MAYBE_UNUSED REAL *restrict k2_gfs = griddata[grid].gridfuncs.k2_gfs;
@@ -456,6 +453,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     MAYBE_UNUSED REAL *restrict k6_gfs = griddata[grid].gridfuncs.k6_gfs;
     MAYBE_UNUSED REAL *restrict k7_gfs = griddata[grid].gridfuncs.k7_gfs;
     MAYBE_UNUSED REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
+    // Set pointers to this grid's params, rfm_struct/xx, bc_struct, etc.
     MAYBE_UNUSED params_struct *restrict params = &griddata[grid].params;
     MAYBE_UNUSED REAL *restrict xx[3];
     for (int ww = 0; ww < 3; ww++)
@@ -470,10 +468,8 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
   // -={ START k3 substep }=-
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     commondata->time = time_start + 2.22222222222222210e-01 * commondata->dt;
-    // Set gridfunction aliases from gridfuncs struct
-    // y_n gridfunctions
+    // Set gridfunction aliases, from griddata[].gridfuncs.
     MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
-    // Temporary timelevel & AUXEVOL gridfunctions:
     MAYBE_UNUSED REAL *restrict next_y_input_gfs = griddata[grid].gridfuncs.next_y_input_gfs;
     MAYBE_UNUSED REAL *restrict k1_gfs = griddata[grid].gridfuncs.k1_gfs;
     MAYBE_UNUSED REAL *restrict k2_gfs = griddata[grid].gridfuncs.k2_gfs;
@@ -483,6 +479,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     MAYBE_UNUSED REAL *restrict k6_gfs = griddata[grid].gridfuncs.k6_gfs;
     MAYBE_UNUSED REAL *restrict k7_gfs = griddata[grid].gridfuncs.k7_gfs;
     MAYBE_UNUSED REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
+    // Set pointers to this grid's params, rfm_struct/xx, bc_struct, etc.
     MAYBE_UNUSED params_struct *restrict params = &griddata[grid].params;
     MAYBE_UNUSED REAL *restrict xx[3];
     for (int ww = 0; ww < 3; ww++)
@@ -497,10 +494,8 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
   // -={ START k4 substep }=-
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     commondata->time = time_start + 4.28571428571428548e-01 * commondata->dt;
-    // Set gridfunction aliases from gridfuncs struct
-    // y_n gridfunctions
+    // Set gridfunction aliases, from griddata[].gridfuncs.
     MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
-    // Temporary timelevel & AUXEVOL gridfunctions:
     MAYBE_UNUSED REAL *restrict next_y_input_gfs = griddata[grid].gridfuncs.next_y_input_gfs;
     MAYBE_UNUSED REAL *restrict k1_gfs = griddata[grid].gridfuncs.k1_gfs;
     MAYBE_UNUSED REAL *restrict k2_gfs = griddata[grid].gridfuncs.k2_gfs;
@@ -510,6 +505,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     MAYBE_UNUSED REAL *restrict k6_gfs = griddata[grid].gridfuncs.k6_gfs;
     MAYBE_UNUSED REAL *restrict k7_gfs = griddata[grid].gridfuncs.k7_gfs;
     MAYBE_UNUSED REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
+    // Set pointers to this grid's params, rfm_struct/xx, bc_struct, etc.
     MAYBE_UNUSED params_struct *restrict params = &griddata[grid].params;
     MAYBE_UNUSED REAL *restrict xx[3];
     for (int ww = 0; ww < 3; ww++)
@@ -524,10 +520,8 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
   // -={ START k5 substep }=-
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     commondata->time = time_start + 5.99999999999999978e-01 * commondata->dt;
-    // Set gridfunction aliases from gridfuncs struct
-    // y_n gridfunctions
+    // Set gridfunction aliases, from griddata[].gridfuncs.
     MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
-    // Temporary timelevel & AUXEVOL gridfunctions:
     MAYBE_UNUSED REAL *restrict next_y_input_gfs = griddata[grid].gridfuncs.next_y_input_gfs;
     MAYBE_UNUSED REAL *restrict k1_gfs = griddata[grid].gridfuncs.k1_gfs;
     MAYBE_UNUSED REAL *restrict k2_gfs = griddata[grid].gridfuncs.k2_gfs;
@@ -537,6 +531,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     MAYBE_UNUSED REAL *restrict k6_gfs = griddata[grid].gridfuncs.k6_gfs;
     MAYBE_UNUSED REAL *restrict k7_gfs = griddata[grid].gridfuncs.k7_gfs;
     MAYBE_UNUSED REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
+    // Set pointers to this grid's params, rfm_struct/xx, bc_struct, etc.
     MAYBE_UNUSED params_struct *restrict params = &griddata[grid].params;
     MAYBE_UNUSED REAL *restrict xx[3];
     for (int ww = 0; ww < 3; ww++)
@@ -551,10 +546,8 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
   // -={ START k6 substep }=-
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     commondata->time = time_start + 8.00000000000000044e-01 * commondata->dt;
-    // Set gridfunction aliases from gridfuncs struct
-    // y_n gridfunctions
+    // Set gridfunction aliases, from griddata[].gridfuncs.
     MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
-    // Temporary timelevel & AUXEVOL gridfunctions:
     MAYBE_UNUSED REAL *restrict next_y_input_gfs = griddata[grid].gridfuncs.next_y_input_gfs;
     MAYBE_UNUSED REAL *restrict k1_gfs = griddata[grid].gridfuncs.k1_gfs;
     MAYBE_UNUSED REAL *restrict k2_gfs = griddata[grid].gridfuncs.k2_gfs;
@@ -564,6 +557,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     MAYBE_UNUSED REAL *restrict k6_gfs = griddata[grid].gridfuncs.k6_gfs;
     MAYBE_UNUSED REAL *restrict k7_gfs = griddata[grid].gridfuncs.k7_gfs;
     MAYBE_UNUSED REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
+    // Set pointers to this grid's params, rfm_struct/xx, bc_struct, etc.
     MAYBE_UNUSED params_struct *restrict params = &griddata[grid].params;
     MAYBE_UNUSED REAL *restrict xx[3];
     for (int ww = 0; ww < 3; ww++)
@@ -578,10 +572,8 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
   // -={ START k7 substep }=-
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     commondata->time = time_start + 1.00000000000000000e+00 * commondata->dt;
-    // Set gridfunction aliases from gridfuncs struct
-    // y_n gridfunctions
+    // Set gridfunction aliases, from griddata[].gridfuncs.
     MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
-    // Temporary timelevel & AUXEVOL gridfunctions:
     MAYBE_UNUSED REAL *restrict next_y_input_gfs = griddata[grid].gridfuncs.next_y_input_gfs;
     MAYBE_UNUSED REAL *restrict k1_gfs = griddata[grid].gridfuncs.k1_gfs;
     MAYBE_UNUSED REAL *restrict k2_gfs = griddata[grid].gridfuncs.k2_gfs;
@@ -591,6 +583,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     MAYBE_UNUSED REAL *restrict k6_gfs = griddata[grid].gridfuncs.k6_gfs;
     MAYBE_UNUSED REAL *restrict k7_gfs = griddata[grid].gridfuncs.k7_gfs;
     MAYBE_UNUSED REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
+    // Set pointers to this grid's params, rfm_struct/xx, bc_struct, etc.
     MAYBE_UNUSED params_struct *restrict params = &griddata[grid].params;
     MAYBE_UNUSED REAL *restrict xx[3];
     for (int ww = 0; ww < 3; ww++)

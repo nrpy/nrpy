@@ -234,11 +234,9 @@ cbc.CurviBoundaryConditions_register_C_functions(
     radiation_BC_fd_order=radiation_BC_fd_order,
 )
 rhs_string = """rhs_eval(commondata, params, rfmstruct,  auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
-if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0){
-  const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
-  const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
-  const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
-  const REAL wavespeed_at_outer_boundary = auxevol_gfs[IDX4(VARIABLE_WAVESPEEDGF, Nxx_plus_2NGHOSTS0-NGHOSTS-1, NGHOSTS, Nxx_plus_2NGHOSTS2/2)];
+if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0) {
+  const REAL wavespeed_at_outer_boundary =
+      auxevol_gfs[IDX4P(params, VARIABLE_WAVESPEEDGF, params->Nxx_plus_2NGHOSTS0 - NGHOSTS - 1, NGHOSTS, params->Nxx_plus_2NGHOSTS2 / 2)];
   const REAL custom_gridfunctions_wavespeed[2] = {wavespeed_at_outer_boundary, wavespeed_at_outer_boundary};
   apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata->xx,
                                      custom_gridfunctions_wavespeed, gridfunctions_f_infinity,

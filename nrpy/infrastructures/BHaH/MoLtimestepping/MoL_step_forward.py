@@ -117,17 +117,14 @@ def register_CFunction_MoL_step_forward_in_time(
 
     gf_prefix = "griddata[grid].gridfuncs."
 
-    gf_aliases = f"""// Set gridfunction aliases from gridfuncs struct
-// y_n gridfunctions
+    gf_aliases = f"""// Set gridfunction aliases, from griddata[].gridfuncs.
 MAYBE_UNUSED REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
-// Temporary timelevel & AUXEVOL gridfunctions:
 """
     for gf in non_y_n_gridfunctions_list:
         gf_aliases += f"MAYBE_UNUSED REAL *restrict {gf} = {gf_prefix}{gf};\n"
-
-    gf_aliases += (
-        "MAYBE_UNUSED params_struct *restrict params = &griddata[grid].params;\n"
-    )
+    gf_aliases += """// Set pointers to this grid's params, rfm_struct/xx, bc_struct, etc.
+MAYBE_UNUSED params_struct *restrict params = &griddata[grid].params;
+"""
     if enable_rfm_precompute:
         gf_aliases += "MAYBE_UNUSED const rfm_struct *restrict rfmstruct = &griddata[grid].rfmstruct;\n"
     else:
