@@ -342,33 +342,52 @@ def output_BHaH_defines_h(
     # Then set up the dictionary entry for grid in BHaH_defines
     gri_BHd_str = gri.BHaHGridFunction.gridfunction_defines()
     gri_BHd_str += r"""
-// The following macros convert multi-dimensional (3D/4D) grid indices into a 1D array index,
-// allowing grid data to be stored in contiguous memory while preserving multi-dimensional access.
-// In this scheme, consecutive values of "i" (with all other indices fixed) are adjacent in memory,
-// whereas consecutive values of "j" are separated by Nxx_plus_2NGHOSTS0 elements. Similarly,
-// consecutive values of "k" are spaced by Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 elements, and so on.
+// ----------------------------
+// Indexing macros
+// ----------------------------
+// IDX4: Converts 4D grid indices (gf, i, j, k) into a 1D array index using the strides
+//       Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, and Nxx_plus_2NGHOSTS2. This macro assumes
+//       that the "i" index varies fastest in memory.
 #define IDX4(gf, i, j, k) ((i) + Nxx_plus_2NGHOSTS0 * ((j) + Nxx_plus_2NGHOSTS1 * ((k) + Nxx_plus_2NGHOSTS2 * (gf))))
+// IDX4P: Similar to IDX4, but retrieves grid dimensions from the provided parameter structure
+//        "params" instead of using global variables.
 #define IDX4P(params, gf, i, j, k)                                                                                                                   \
   ((i) + (params)->Nxx_plus_2NGHOSTS0 * ((j) + (params)->Nxx_plus_2NGHOSTS1 * ((k) + (params)->Nxx_plus_2NGHOSTS2 * (gf))))
+// IDX4pt: Computes the 1D index offset for a given grid function index (gf) based on an existing index (idx)
+//         by using the total number of elements in one grid function, defined as the product of the grid strides.
 #define IDX4pt(gf, idx) ((idx) + (Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2) * (gf))
-// IDX3
+// IDX3: Converts 3D grid indices (i, j, k) into a 1D array index using the strides Nxx_plus_2NGHOSTS0
+//       and Nxx_plus_2NGHOSTS1. Like IDX4, this macro assumes the "i" index varies fastest.
 #define IDX3(i, j, k) ((i) + Nxx_plus_2NGHOSTS0 * ((j) + Nxx_plus_2NGHOSTS1 * ((k))))
+// IDX3P: Similar to IDX3, but retrieves grid dimensions from the provided parameter structure "params".
 #define IDX3P(params, i, j, k) ((i) + (params)->Nxx_plus_2NGHOSTS0 * ((j) + (params)->Nxx_plus_2NGHOSTS1 * ((k))))
+// END: Indexing macros
+
+// ----------------------------
+// Loop-related macros
+// ----------------------------
+// SET_NXX_PLUS_2NGHOSTS_VARS: Declares local constants for the grid dimensions (including ghost zones) by extracting
+// the values from griddata[whichgrid].params.
 #define SET_NXX_PLUS_2NGHOSTS_VARS(whichgrid)                                                                                                        \
   const int Nxx_plus_2NGHOSTS0 = griddata[whichgrid].params.Nxx_plus_2NGHOSTS0;                                                                      \
   const int Nxx_plus_2NGHOSTS1 = griddata[whichgrid].params.Nxx_plus_2NGHOSTS1;                                                                      \
   const int Nxx_plus_2NGHOSTS2 = griddata[whichgrid].params.Nxx_plus_2NGHOSTS2;
+// LOOP_REGION: Iterates over a 3D region defined by the inclusive lower bounds (i0min, i1min, i2min)
+// and exclusive upper bounds (i0max, i1max, i2max) for each dimension.
 #define LOOP_REGION(i0min, i0max, i1min, i1max, i2min, i2max)                                                                                        \
   for (int i2 = i2min; i2 < i2max; i2++)                                                                                                             \
     for (int i1 = i1min; i1 < i1max; i1++)                                                                                                           \
       for (int i0 = i0min; i0 < i0max; i0++)
+// LOOP_OMP: Similar to LOOP_REGION but inserts an OpenMP pragma (via __OMP_PRAGMA__) for parallelization.
 #define LOOP_OMP(__OMP_PRAGMA__, i0, i0min, i0max, i1, i1min, i1max, i2, i2min, i2max)                                                               \
   _Pragma(__OMP_PRAGMA__) for (int(i2) = (i2min); (i2) < (i2max); (i2)++) for (int(i1) = (i1min); (i1) < (i1max);                                    \
-                                                                               (i1)++) for (int(i0) = (i0min); (i0) < (i0max); (i0)++)
+                                                                              (i1)++) for (int(i0) = (i0min); (i0) < (i0max); (i0)++)
+// LOOP_NOOMP: A non-parallel version of the 3D loop, identical in structure to LOOP_REGION.
 #define LOOP_NOOMP(i0, i0min, i0max, i1, i1min, i1max, i2, i2min, i2max)                                                                             \
   for (int(i2) = (i2min); (i2) < (i2max); (i2)++)                                                                                                    \
     for (int(i1) = (i1min); (i1) < (i1max); (i1)++)                                                                                                  \
       for (int(i0) = (i0min); (i0) < (i0max); (i0)++)
+// LOOP_BREAKOUT: Forces an exit from the nested loops by setting the loop indices to their maximum values and executing a break.
 #define LOOP_BREAKOUT(i0, i1, i2, i0max, i1max, i2max)                                                                                               \
   {                                                                                                                                                  \
     i0 = (i0max);                                                                                                                                    \
@@ -376,9 +395,15 @@ def output_BHaH_defines_h(
     i2 = (i2max);                                                                                                                                    \
     break;                                                                                                                                           \
   }
+// IS_IN_GRID_INTERIOR: Checks whether the provided 3D index array (i0i1i2) lies within the grid interior,
+// defined as the region excluding NG ghost cells on each boundary.
 #define IS_IN_GRID_INTERIOR(i0i1i2, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, NG)                                                  \
   (i0i1i2[0] >= (NG) && i0i1i2[0] < (Nxx_plus_2NGHOSTS0) - (NG) && i0i1i2[1] >= (NG) && i0i1i2[1] < (Nxx_plus_2NGHOSTS1) - (NG) &&                   \
    i0i1i2[2] >= (NG) && i0i1i2[2] < (Nxx_plus_2NGHOSTS2) - (NG))
+
+// ----------------------------
+// Define griddata struct
+// ----------------------------
 """ + register_griddata_struct_and_return_griddata_struct_str(
         enable_rfm_precompute=enable_rfm_precompute
     )
