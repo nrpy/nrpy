@@ -153,6 +153,7 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
     if enable_rfm_precompute:
         body += r"""
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
+  griddata_chare[grid].rfmstruct = (rfm_struct *)malloc(sizeof(rfm_struct));
   rfm_precompute_malloc(commondata, &griddata_chare[grid].params, griddata_chare[grid].rfmstruct);
   rfm_precompute_defines(commondata, &griddata_chare[grid].params, griddata_chare[grid].rfmstruct, griddata_chare[grid].xx);
 }

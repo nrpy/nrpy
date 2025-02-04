@@ -116,7 +116,7 @@ void pup_rfm_struct(PUP::er &p, rfm_struct *restrict rfm, const params_struct *r
                 size = "Nxx_plus_2NGHOSTS1"
             else:
                 size = "Nxx_plus_2NGHOSTS2"
-            prefunc += f"  PUParray(p, rfm.{var_name}, {size});\n"
+            prefunc += f"  PUParray(p, rfm->{var_name}, {size});\n"
     prefunc += """
 }
 """
