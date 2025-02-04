@@ -252,6 +252,7 @@ python nrpy/example/seobnrv5_aligned_spin_inspiral.py --help
             add_to_set_CodeParameters_h=False,
         )
         seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_FD_waveform()
+        seobnr_gsl.register_CFunction_SEOBNRv5_aligned_spin_process_waveform()
 
     pcg.do_parallel_codegen()
 #########################################################

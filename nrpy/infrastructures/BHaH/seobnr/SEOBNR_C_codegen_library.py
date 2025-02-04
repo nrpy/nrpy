@@ -182,10 +182,12 @@ def register_CFunction_SEOBNRv5_aligned_spin_FD_waveform() -> (
     name = "SEOBNRv5_aligned_spin_FD_waveform"
     params = "const char *wisdom_file, commondata_struct *restrict commondata"
     body = r"""
-REAL dT = cabs(commondata->waveform_IMR[IDX_WF(0,TIME)] - commondata->waveform_IMR[IDX_WF(1,TIME)]);
-REAL dF = 1. / (commondata->nsteps_IMR * dT);
+// window and zero-pad the waveform
+SEOBNRv5_aligned_spin_process_waveform(commondata);
+
 size_t i;
 commondata->nsteps_IMR_FD = commondata->nsteps_IMR;
+const REAL dF = 1. / (commondata->nsteps_IMR_FD * commondata->dT);
 commondata->waveform_IMR_FD = (double complex *)malloc(commondata->nsteps_IMR_FD * NUMMODES * sizeof(double complex));
 
 fftw_complex *in = (fftw_complex *)fftw_malloc(sizeof(fftw_complex) * commondata->nsteps_IMR_FD);
@@ -196,8 +198,8 @@ if (!in || !out || !commondata->waveform_IMR_FD) {
   exit(EXIT_FAILURE);
 }
 
-// Copy the TD waveform to the FFTW input array
-for (i = 0; i < commondata->nsteps_IMR; i++){
+// Copy the processed TD waveform to the FFTW input array
+for (i = 0; i < commondata->nsteps_IMR_FD; i++){
   in[i] = commondata->waveform_IMR[IDX_WF(i,STRAIN)];
 }
 // Load FFTW wisdom if available
@@ -235,7 +237,7 @@ if (wisdom_file) {
   }
 }
 
-// Print the results (real and imaginary parts of the output)
+// Store the results (real and imaginary parts of the output)
 for (i = 0; i < commondata->nsteps_IMR_FD; i++) {
   if (i <= commondata->nsteps_IMR_FD/2){
     commondata->waveform_IMR_FD[IDX_WF(i,FREQ)] = i * dF;
