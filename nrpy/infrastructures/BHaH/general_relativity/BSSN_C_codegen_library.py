@@ -257,9 +257,9 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {
     {
 """
     if use_Ricci_eval_func:
-        body += "Ricci_eval(commondata, params, &griddata[grid].rfmstruct, y_n_gfs, auxevol_gfs);\n"
+        body += "Ricci_eval(commondata, params, griddata[grid].rfmstruct, y_n_gfs, auxevol_gfs);\n"
     body += r"""
-      constraints_eval(commondata, params, &griddata[grid].rfmstruct, y_n_gfs, auxevol_gfs, diagnostic_output_gfs);
+      constraints_eval(commondata, params, griddata[grid].rfmstruct, y_n_gfs, auxevol_gfs, diagnostic_output_gfs);
     }
 
     // 0D output
