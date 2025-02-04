@@ -51,10 +51,13 @@ for (size_t i = 1; i < nsteps_arr; i++){
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
-def register_CFunction_SEOBNRv5_NQC_corrections() -> Union[None, pcg.NRPyEnv_type]:
+def register_CFunction_SEOBNRv5_NQC_corrections(
+    use_numerical_relativity_nqc: bool,
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register CFunction for evaluating the Non Quasi-Circular (NQC) corrections for the SEOBNRv5 waveform.
 
+    :param use_numerical_relativity_nqc: Flag to specify if NQCs are informed by NR fits or BOB.
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
@@ -209,7 +212,16 @@ else{
 }
 
 REAL omegas[2] , amps[3];
+"""
+    if not use_numerical_relativity_nqc:
+        body += """
 BOB_aligned_spin_NQC_rhs(commondata,amps,omegas);
+"""
+    else:
+        body += """
+SEOBNRv5_aligned_spin_NQC_rhs(commondata,amps,omegas);
+"""
+    body += """
 gsl_vector_set(A , 0 , amps[0] - amp_insp);
 gsl_vector_set(A , 1 , amps[1] - ampdot_insp);
 gsl_vector_set(A , 2 , amps[2] - ampddot_insp);
@@ -393,12 +405,13 @@ free(h22_nophase_imag);
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
-def register_CFunction_SEOBNRv5_aligned_spin_IMR_waveform() -> (
-    Union[None, pcg.NRPyEnv_type]
-):
+def register_CFunction_SEOBNRv5_aligned_spin_IMR_waveform(
+    use_seobnrv5_merger_ringdown: bool,
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register CFunction for evaluating the (2,2) IMR mode for the SEOBNRv5 waveform.
 
+    :param use_seobnrv5_merger_ringdown: Flag to specify whether or not to use the native SEOBNRv5 merger ringdown model instead of BOB.
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
@@ -443,11 +456,20 @@ REAL *restrict ringdown_phase = (REAL *)malloc(nsteps_ringdown*sizeof(REAL));
 for(i = 0; i < nsteps_ringdown; i++){
   ringdown_time[i] = t_match + (i + 1) * dT;
 }
+"""
+    if use_seobnrv5_merger_ringdown:
+        body += """
+SEOBNRv5_aligned_spin_merger_waveform_from_times(ringdown_time,ringdown_amp,ringdown_phase,phase_match,nsteps_ringdown,commondata);
+"""
+    else:
+        body += """
 BOB_aligned_spin_waveform_from_times(ringdown_time,ringdown_amp,ringdown_phase,nsteps_ringdown,commondata);
 const REAL true_sign = copysign(phase_match,1.);
 for(i = 0; i < nsteps_ringdown; i++){
   ringdown_phase[i] = true_sign*ringdown_phase[i] + phase_match;
 }
+"""
+    body += """
 commondata->nsteps_IMR = idx_match + 1 + nsteps_ringdown;
 commondata->waveform_IMR = (double complex *)malloc(NUMMODES * commondata->nsteps_IMR*sizeof(double complex));
 for (i = 0; i <= idx_match; i++){
