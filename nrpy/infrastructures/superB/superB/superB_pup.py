@@ -93,7 +93,7 @@ void pup_params_struct(PUP::er &p, params_struct &params) {
 
     prefunc += """
 // PUP routine for struct rfm_struct
-void pup_rfm_struct(PUP::er &p, rfm_struct &rfm, const params_struct *restrict params) {
+void pup_rfm_struct(PUP::er &p, rfm_struct *restrict rfm, const params_struct *restrict params) {
   const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
   const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
   const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
@@ -102,7 +102,7 @@ void pup_rfm_struct(PUP::er &p, rfm_struct &rfm, const params_struct *restrict p
     for CoordSystem in list_of_CoordSystems:
         rfm_precompute = ReferenceMetricPrecompute(CoordSystem)
         # Add memory allocation code
-        prefunc += rfm_precompute.rfm_struct__malloc.replace("rfmstruct->", "rfm.")
+        prefunc += rfm_precompute.rfm_struct__malloc
         prefunc += """}
         """
         # Add PUParray calls

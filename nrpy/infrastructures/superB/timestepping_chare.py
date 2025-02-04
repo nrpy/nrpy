@@ -892,7 +892,7 @@ Timestepping::~Timestepping() {
     timestepping_free_memory_tmpBuffer(&griddata_chare[grid].nonlocalinnerbcstruct, &griddata_chare[grid].tmpBuffers);"""
     if enable_rfm_precompute:
         file_output_str += r"""
-    rfm_precompute_free(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].rfmstruct);"""
+    rfm_precompute_free(&commondata, &griddata_chare[grid].params, griddata_chare[grid].rfmstruct);"""
     if enable_CurviBCs:
         file_output_str += r"""
     free(griddata[grid].bcstruct.inner_bc_array);
