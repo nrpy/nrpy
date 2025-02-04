@@ -27,7 +27,10 @@ class ReferenceMetricPrecompute:
     precompute quantities within loops for both SIMD-ized and non-SIMD loops.
     """
 
-    def __init__(self, CoordSystem: str):
+    def __init__(
+        self,
+        CoordSystem: str,
+        parallelization: str = "openmp"):
         rfm = refmetric.reference_metric[CoordSystem + "_rfm_precompute"]
         # Step 7: Construct needed C code for declaring rfmstruct, allocating storage for
         #         rfmstruct arrays, defining each element in each array, reading the
@@ -84,8 +87,18 @@ class ReferenceMetricPrecompute:
                 self.BHaH_defines_list += [
                     f"REAL *restrict {freevars_uniq_xx_indep[which_freevar]};"
                 ]
-                self.rfm_struct__malloc += f"rfmstruct->{freevars_uniq_xx_indep[which_freevar]} = (REAL *)malloc(sizeof(REAL)*{malloc_size});\n"
+                self.rfm_struct__malloc += (
+                    f"""cudaMalloc(&rfmstruct->{freevars_uniq_xx_indep[which_freevar]}, sizeof(REAL)*{malloc_size});
+                        cudaCheckErrors(malloc, "Malloc failed");
+                    """
+                    if parallelization == "cuda"
+                    else
+                    f"rfmstruct->{freevars_uniq_xx_indep[which_freevar]} = (REAL *)malloc(sizeof(REAL)*{malloc_size});\n"
+                )
                 self.rfm_struct__freemem += (
+                    f"cudaFree(rfmstruct->{freevars_uniq_xx_indep[which_freevar]});\n"
+                    if parallelization == "cuda"
+                    else
                     f"free(rfmstruct->{freevars_uniq_xx_indep[which_freevar]});\n"
                 )
                 output_define_and_readvr = False
@@ -139,11 +152,6 @@ class ReferenceMetricPrecompute:
                         0
                     ] += f"MAYBE_UNUSED const REAL_SIMD_ARRAY {freevars_uniq_xx_indep[which_freevar]} = ReadSIMD(&rfmstruct->{freevars_uniq_xx_indep[which_freevar]}[i0 + Nxx_plus_2NGHOSTS0*i1]);\n"
                     output_define_and_readvr = True
-
-                if not output_define_and_readvr:
-                    raise RuntimeError(
-                        f"ERROR: Could not figure out the (xx0,xx1,xx2) dependency within the expression for {freevars_uniq_xx_indep[which_freevar]}: {freevars_uniq_vals[which_freevar]}"
-                    )
 
                 if not output_define_and_readvr:
                     raise RuntimeError(
