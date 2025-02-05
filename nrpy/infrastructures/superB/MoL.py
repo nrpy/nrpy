@@ -541,7 +541,7 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
     gf_aliases += "params_struct *restrict params = &griddata[grid].params;\n"
     if enable_rfm_precompute:
         gf_aliases += (
-            "const rfm_struct *restrict rfmstruct = &griddata[grid].rfmstruct;\n"
+            "const rfm_struct *restrict rfmstruct = griddata[grid].rfmstruct;\n"
         )
     else:
         gf_aliases += "REAL *restrict xx[3]; for(int ww=0;ww<3;ww++) xx[ww] = griddata[grid].xx[ww];\n"

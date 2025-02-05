@@ -314,8 +314,9 @@ def register_CFunction_numerical_grids_and_timestep(
     body += "\n// Step 1.d: Allocate memory for and define reference-metric precomputation lookup tables\n"
     if enable_rfm_precompute:
         body += r"""for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
-  rfm_precompute_malloc(commondata, &griddata[grid].params, &griddata[grid].rfmstruct);
-  rfm_precompute_defines(commondata, &griddata[grid].params, &griddata[grid].rfmstruct, griddata[grid].xx);
+  griddata[grid].rfmstruct = (rfm_struct *)malloc(sizeof(rfm_struct));
+  rfm_precompute_malloc(commondata, &griddata[grid].params, griddata[grid].rfmstruct);
+  rfm_precompute_defines(commondata, &griddata[grid].params, griddata[grid].rfmstruct, griddata[grid].xx);
 }
 """
     else:

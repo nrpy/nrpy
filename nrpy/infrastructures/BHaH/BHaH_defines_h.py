@@ -67,7 +67,7 @@ def register_griddata_struct_and_return_griddata_struct_str(
         if enable_rfm_precompute:
             griddata_commondata.register_griddata_commondata(
                 "reference_metric",
-                "rfm_struct rfmstruct",
+                "rfm_struct* rfmstruct",
                 "includes e.g., 1D arrays of reference metric quantities",
             )
 
