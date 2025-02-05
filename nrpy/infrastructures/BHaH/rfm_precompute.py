@@ -5,15 +5,17 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import List
+from typing import Any, Dict, List
 
 import sympy as sp
 import sympy.codegen.ast as sp_ast
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
+import nrpy.helpers.gpu.gpu_kernel as gputils
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
+from nrpy.helpers.expression_utils import get_unique_expression_symbols_as_strings
 from nrpy.helpers.generic import superfast_uniq
 from nrpy.infrastructures.BHaH.BHaH_defines_h import register_BHaH_defines
 
@@ -27,7 +29,7 @@ class ReferenceMetricPrecompute:
     precompute quantities within loops for both SIMD-ized and non-SIMD loops.
     """
 
-    def __init__(self, CoordSystem: str):
+    def __init__(self, CoordSystem: str, parallelization: str = "openmp"):
         rfm = refmetric.reference_metric[CoordSystem + "_rfm_precompute"]
         # Step 7: Construct needed C code for declaring rfmstruct, allocating storage for
         #         rfmstruct arrays, defining each element in each array, reading the
@@ -70,6 +72,7 @@ class ReferenceMetricPrecompute:
         which_freevar: int = 0
         fp_ccg_type = ccg.fp_type_to_sympy_type[par.parval_from_str("fp_type")]
         sp_type_alias = {sp_ast.real: fp_ccg_type}
+        self.rfm_struct__define_kernel_dict: Dict[sp.Expr, Any] = {}
         for expr in freevars_uniq_vals:
             if "_of_xx" in str(freevars_uniq_xx_indep[which_freevar]):
                 frees = list(expr.free_symbols)
@@ -84,10 +87,21 @@ class ReferenceMetricPrecompute:
                 self.BHaH_defines_list += [
                     f"REAL *restrict {freevars_uniq_xx_indep[which_freevar]};"
                 ]
-                self.rfm_struct__malloc += f"rfmstruct->{freevars_uniq_xx_indep[which_freevar]} = (REAL *)malloc(sizeof(REAL)*{malloc_size});\n"
-                self.rfm_struct__freemem += (
-                    f"free(rfmstruct->{freevars_uniq_xx_indep[which_freevar]});\n"
+                self.rfm_struct__malloc += (
+                    f"""cudaMalloc(&rfmstruct->{freevars_uniq_xx_indep[which_freevar]}, sizeof(REAL)*params->{malloc_size});
+                    cudaCheckErrors(malloc, "Malloc failed");
+                    """
+                    if parallelization == "cuda"
+                    else f"rfmstruct->{freevars_uniq_xx_indep[which_freevar]} = (REAL *)malloc(sizeof(REAL)*params->{malloc_size});\n"
                 )
+                self.rfm_struct__freemem += (
+                    f"""cudaFree(rfmstruct->{freevars_uniq_xx_indep[which_freevar]});
+                cudaCheckErrors(free, "cudaFree failed");
+                """
+                    if parallelization == "cuda"
+                    else f"free(rfmstruct->{freevars_uniq_xx_indep[which_freevar]});\n"
+                )
+
                 output_define_and_readvr = False
                 for dirn in range(3):
                     if (
@@ -95,12 +109,29 @@ class ReferenceMetricPrecompute:
                         and not (rfm.xx[(dirn + 1) % 3] in frees_uniq)
                         and not (rfm.xx[(dirn + 2) % 3] in frees_uniq)
                     ):
-                        self.rfm_struct__define += (
-                            f"for(int i{dirn}=0;i{dirn}<Nxx_plus_2NGHOSTS{dirn};i{dirn}++) {{\n"
-                            f"  const REAL xx{dirn} = xx[{dirn}][i{dirn}];\n"
-                            f"  rfmstruct->{freevars_uniq_xx_indep[which_freevar]}[i{dirn}] = {sp.ccode(freevars_uniq_vals[which_freevar], type_aliases=sp_type_alias)};\n"
+                        key = freevars_uniq_xx_indep[which_freevar]
+                        starting_idx = "tid0" if parallelization == "cuda" else "0"
+                        idx_increment = "stride0" if parallelization == "cuda" else "1"
+                        kernel_body = (
+                            f"const int Nxx_plus_2NGHOSTS{dirn} = d_params[streamid].Nxx_plus_2NGHOSTS{dirn};\n\n"
+                            "// Kernel thread/stride setup\n"
+                            "const int tid0 = threadIdx.x + blockIdx.x*blockDim.x;\n"
+                            "const int stride0 = blockDim.x * gridDim.x;\n\n"
+                            if parallelization == "cuda"
+                            else f"const int Nxx_plus_2NGHOSTS{dirn} = params->Nxx_plus_2NGHOSTS{dirn};\n\n"
                         )
-                        self.rfm_struct__define += "}\n\n"
+                        kernel_body += (
+                            f"for(int i{dirn}={starting_idx};i{dirn}<Nxx_plus_2NGHOSTS{dirn};i{dirn}+={idx_increment}) {{\n"
+                            f"  const REAL xx{dirn} = x{dirn}[i{dirn}];\n"
+                            f"  rfmstruct->{freevars_uniq_xx_indep[which_freevar]}[i{dirn}] = {sp.ccode(freevars_uniq_vals[which_freevar], type_aliases=sp_type_alias)};\n"
+                            "}"
+                        )
+                        # This is needed by register_CFunctions_rfm_precompute
+                        self.rfm_struct__define_kernel_dict[key] = {
+                            "body": kernel_body,
+                            "expr": freevars_uniq_vals[which_freevar],
+                            "coord": f"x{dirn}",
+                        }
                         self.readvr_str[
                             dirn
                         ] += f"MAYBE_UNUSED const REAL {freevars_uniq_xx_indep[which_freevar]} = rfmstruct->{freevars_uniq_xx_indep[which_freevar]}[i{dirn}];\n"
@@ -120,7 +151,7 @@ class ReferenceMetricPrecompute:
                     and (rfm.xx[0] in frees_uniq)
                     and (rfm.xx[1] in frees_uniq)
                 ):
-                    self.rfm_struct__define += f"""
+                    self.kernel_body = f"""
                 for(int i1=0;i1<Nxx_plus_2NGHOSTS1;i1++) for(int i0=0;i0<Nxx_plus_2NGHOSTS0;i0++) {{
                   const REAL xx0 = xx[0][i0];
                   const REAL xx1 = xx[1][i1];
@@ -144,47 +175,127 @@ class ReferenceMetricPrecompute:
                     raise RuntimeError(
                         f"ERROR: Could not figure out the (xx0,xx1,xx2) dependency within the expression for {freevars_uniq_xx_indep[which_freevar]}: {freevars_uniq_vals[which_freevar]}"
                     )
-
-                if not output_define_and_readvr:
-                    raise RuntimeError(
-                        f"ERROR: Could not figure out the (xx0,xx1,xx2) dependency within the expression for {freevars_uniq_xx_indep[which_freevar]}: {freevars_uniq_vals[which_freevar]}"
-                    )
+            if parallelization == "cuda":
+                self.readvr_SIMD_outer_str = [
+                    s.replace("SIMD", "CUDA") for s in self.readvr_SIMD_outer_str
+                ]
+                self.readvr_SIMD_inner_str = [
+                    s.replace("SIMD", "CUDA") for s in self.readvr_SIMD_inner_str
+                ]
 
             which_freevar += 1
 
 
 def register_CFunctions_rfm_precompute(
     list_of_CoordSystems: List[str],
+    parallelization: str = "openmp",
 ) -> None:
     """
     Register C functions for reference metric precomputed lookup arrays.
 
     :param list_of_CoordSystems: List of coordinate systems to register the C functions.
+    :param parallelization: Parallelization method to use.
     """
     combined_BHaH_defines_list = []
     for CoordSystem in list_of_CoordSystems:
-        rfm_precompute = ReferenceMetricPrecompute(CoordSystem)
+        rfm_precompute = ReferenceMetricPrecompute(
+            CoordSystem, parallelization=parallelization
+        )
 
+        includes = ["BHaH_defines.h"]
+        cfunc_type = "void"
+        func_name, kernel_dicts = (
+            "defines",
+            rfm_precompute.rfm_struct__define_kernel_dict,
+        )
+        body = ""
+        for i in range(3):
+            body += f"MAYBE_UNUSED const REAL *restrict x{i} = xx[{i}];\n"
+        prefunc = ""
+        for i, (key_sym, kernel_dict) in enumerate(kernel_dicts.items()):
+            # These should all be in paramstruct?
+            unique_symbols = get_unique_expression_symbols_as_strings(
+                kernel_dict["expr"], exclude=[f"xx{j}" for j in range(3)]
+            )
+            kernel_body = ""
+            kernel_body += "// Temporary parameters\n"
+            params_access = (
+                "d_params[streamid]." if parallelization == "cuda" else "params->"
+            )
+            for sym in unique_symbols:
+                kernel_body += f"const REAL {sym} = {params_access}{sym};\n"
+            kernel_body += kernel_dict["body"]
+            name = "rfm_precompute_" + func_name
+            if parallelization == "cuda":
+                device_kernel = gputils.GPU_Kernel(
+                    kernel_body,
+                    {
+                        "rfmstruct": "rfm_struct *restrict",
+                        f'{kernel_dict["coord"]}': "const REAL *restrict",
+                    },
+                    f"{name}__{key_sym}_gpu",
+                    launch_dict={
+                        "blocks_per_grid": [],
+                        "threads_per_block": ["32"],
+                        "stream": f"(param_streamid + {i}) % NUM_STREAMS",
+                    },
+                    comments=f"GPU Kernel to precompute metric quantity {key_sym}.",
+                )
+            else:
+                device_kernel = gputils.GPU_Kernel(
+                    kernel_body,
+                    {
+                        "params": "const params_struct *restrict",
+                        "rfmstruct": "rfm_struct *restrict",
+                        f'{kernel_dict["coord"]}': "const REAL *restrict",
+                    },
+                    f"{name}__{key_sym}_host",
+                    launch_dict=None,
+                    comments=f"Host Kernel to precompute metric quantity {key_sym}.",
+                    decorators="",
+                    cuda_check_error=False,
+                    streamid_param=False,
+                    cfunc_type="static void",
+                )
+            prefunc += device_kernel.CFunction.full_function
+            body += "{\n"
+            if parallelization == "cuda":
+                body += (
+                    "const size_t param_streamid = params->grid_idx % NUM_STREAMS;\n"
+                )
+                body += device_kernel.launch_block
+                body += device_kernel.c_function_call().replace(
+                    "(streamid", "(param_streamid"
+                )
+            else:
+                body += device_kernel.c_function_call()
+            body += "}\n"
+        rfm_precompute.rfm_struct__define = body
+        prefunc_dict = {"defines": prefunc}
         for func in [
             ("malloc", rfm_precompute.rfm_struct__malloc),
             ("defines", rfm_precompute.rfm_struct__define),
             ("free", rfm_precompute.rfm_struct__freemem),
         ]:
-            includes = ["BHaH_defines.h"]
 
             desc = f"rfm_precompute_{func[0]}: reference metric precomputed lookup arrays: {func[0]}"
-            cfunc_type = "void"
             name = "rfm_precompute_" + func[0]
             params = "const commondata_struct *restrict commondata, const params_struct *restrict params, rfm_struct *restrict rfmstruct"
-            include_CodeParameters_h = True
+            include_CodeParameters_h = False
             if func[0] == "defines":
                 params += ", REAL *restrict xx[3]"
 
             body = " "
             body += func[1]
 
-            combined_BHaH_defines_list.extend(rfm_precompute.BHaH_defines_list)
+            defines_list = [
+                s.replace("restrict", "") if parallelization == "cuda" else s
+                for s in rfm_precompute.BHaH_defines_list
+            ]
+            prefunc = prefunc_dict[func[0]] if func[0] in prefunc_dict else ""
+            combined_BHaH_defines_list.extend(defines_list)
             cfc.register_CFunction(
+                prefunc=prefunc,
                 includes=includes,
                 desc=desc,
                 cfunc_type=cfunc_type,
