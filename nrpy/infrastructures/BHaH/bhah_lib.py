@@ -46,7 +46,7 @@ numerical_grids_and_timestep(commondata, griddata, calling_for_first_time);
 
 // Step 1.f: Allocate memory for all gridfunctions
 for(int grid = 0; grid < n_grids; grid++) {
-  MoL_malloc_y_n_gfs(commondata, &griddata[grid].params, &griddata[grid].gridfuncs); 
+  MoL_malloc_y_n_gfs(commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
   MoL_malloc_non_y_n_gfs(commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
 }
 
@@ -87,7 +87,7 @@ def register_CFunction_bhah_finalize() -> None:
     for(int grid = 0; grid < commondata->NUMGRIDS; grid++) {
               MoL_free_memory_y_n_gfs(&griddata[grid].gridfuncs);
               MoL_free_memory_non_y_n_gfs(&griddata[grid].gridfuncs);
-      rfm_precompute_free(commondata, &griddata[grid].params, &griddata[grid].rfmstruct);
+      rfm_precompute_free(commondata, &griddata[grid].params, griddata[grid].rfmstruct);
     }
     free(bhah_struct->commondata);
     free(bhah_struct->griddata);
