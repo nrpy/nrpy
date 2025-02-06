@@ -5,7 +5,7 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 import sympy as sp
 import sympy.codegen.ast as sp_ast
@@ -87,19 +87,12 @@ class ReferenceMetricPrecompute:
                 self.BHaH_defines_list += [
                     f"REAL *restrict {freevars_uniq_xx_indep[which_freevar]};"
                 ]
-                self.rfm_struct__malloc += (
-                    f"""cudaMalloc(&rfmstruct->{freevars_uniq_xx_indep[which_freevar]}, sizeof(REAL)*params->{malloc_size});
-                    cudaCheckErrors(malloc, "Malloc failed");
-                    """
-                    if parallelization == "cuda"
-                    else f"rfmstruct->{freevars_uniq_xx_indep[which_freevar]} = (REAL *)malloc(sizeof(REAL)*params->{malloc_size});\n"
+                params_access = (
+                    "d_params[streamid]." if parallelization == "cuda" else "params->"
                 )
+                self.rfm_struct__malloc += f"rfmstruct->{freevars_uniq_xx_indep[which_freevar]} = (REAL *)malloc(sizeof(REAL)*{params_access}{malloc_size});\n"
                 self.rfm_struct__freemem += (
-                    f"""cudaFree(rfmstruct->{freevars_uniq_xx_indep[which_freevar]});
-                cudaCheckErrors(free, "cudaFree failed");
-                """
-                    if parallelization == "cuda"
-                    else f"free(rfmstruct->{freevars_uniq_xx_indep[which_freevar]});\n"
+                    f"free(rfmstruct->{freevars_uniq_xx_indep[which_freevar]});\n"
                 )
 
                 output_define_and_readvr = False
@@ -186,6 +179,193 @@ class ReferenceMetricPrecompute:
             which_freevar += 1
 
 
+def generate_rfmprecompute_defines(
+    rfm_precompute: ReferenceMetricPrecompute, parallelization: str = "openmp"
+) -> Tuple[str, str]:
+    """
+    Generate the body and prefunctions for the rfm precompute defines.
+
+    :param rfm_precompute: ReferenceMetricPrecompute object.
+    :param parallelization: Parallelization method to use.
+    :return: Prefunction and body strings.
+    """
+    prefunc = ""
+    body = ""
+    func_name, kernel_dicts = (
+        "defines",
+        rfm_precompute.rfm_struct__define_kernel_dict,
+    )
+    for i, (key_sym, kernel_dict) in enumerate(kernel_dicts.items()):
+        # These should all be in paramstruct?
+        unique_symbols = get_unique_expression_symbols_as_strings(
+            kernel_dict["expr"], exclude=[f"xx{j}" for j in range(3)]
+        )
+        kernel_body = ""
+        kernel_body += "// Temporary parameters\n"
+        params_access = (
+            "d_params[streamid]." if parallelization == "cuda" else "params->"
+        )
+        for sym in unique_symbols:
+            kernel_body += f"const REAL {sym} = {params_access}{sym};\n"
+        kernel_body += kernel_dict["body"]
+        name = "rfm_precompute_" + func_name
+        if parallelization == "cuda":
+            device_kernel = gputils.GPU_Kernel(
+                kernel_body,
+                {
+                    "rfmstruct": "rfm_struct *restrict",
+                    f'{kernel_dict["coord"]}': "const REAL *restrict",
+                },
+                f"{name}__{key_sym}_gpu",
+                launch_dict={
+                    "blocks_per_grid": [],
+                    "threads_per_block": ["32"],
+                    "stream": f"(param_streamid + {i}) % NUM_STREAMS",
+                },
+                comments=f"GPU Kernel to precompute metric quantity {key_sym}.",
+            )
+        else:
+            device_kernel = gputils.GPU_Kernel(
+                kernel_body,
+                {
+                    "params": "const params_struct *restrict",
+                    "rfmstruct": "rfm_struct *restrict",
+                    f'{kernel_dict["coord"]}': "const REAL *restrict",
+                },
+                f"{name}__{key_sym}_host",
+                launch_dict=None,
+                comments=f"Host Kernel to precompute metric quantity {key_sym}.",
+                decorators="",
+                cuda_check_error=False,
+                streamid_param=False,
+                cfunc_type="static void",
+            )
+        prefunc += device_kernel.CFunction.full_function
+        body += "{\n"
+        if parallelization == "cuda":
+            body += "const size_t param_streamid = params->grid_idx % NUM_STREAMS;\n"
+            body += device_kernel.launch_block
+            body += device_kernel.c_function_call().replace(
+                "(streamid", "(param_streamid"
+            )
+        else:
+            body += device_kernel.c_function_call()
+        body += "}\n"
+    return prefunc, body
+
+
+def generate_rfmprecompute_malloc(
+    rfm_precompute: ReferenceMetricPrecompute, parallelization: str = "openmp"
+) -> Tuple[str, str]:
+    """
+    Generate the body and prefunctions for allocating the rfmstruct arrays.
+
+    :param rfm_precompute: ReferenceMetricPrecompute object.
+    :param parallelization: Parallelization method to use.
+    :return: Prefunction and body strings.
+    """
+    prefunc = ""
+    body = ""
+    func_name = "malloc"
+
+    name = "rfm_precompute_" + func_name + "__allocate"
+
+    kernel_body = ""
+    kernel_body += "// Temporary parameters\n"
+    params_access = "d_params[streamid]." if parallelization == "cuda" else "params->"
+    for i in range(3):
+        kernel_body += f"MAYBE_UNUSED const int Nxx_plus_2NGHOSTS{i} = {params_access}Nxx_plus_2NGHOSTS{i};\n"
+    kernel_body += rfm_precompute.rfm_struct__malloc
+
+    if parallelization == "cuda":
+        device_kernel = gputils.GPU_Kernel(
+            kernel_body,
+            {
+                "rfmstruct": "rfm_struct *restrict",
+            },
+            f"{name}",
+            launch_dict={
+                "blocks_per_grid": ["1"],
+                "threads_per_block": ["1"],
+                "stream": "params->grid_idx % NUM_STREAMS",
+            },
+            comments="Kernel to allocate rfmstruct arrays.",
+        )
+    else:
+        device_kernel = gputils.GPU_Kernel(
+            kernel_body,
+            {
+                "params": "const params_struct *restrict",
+                "rfmstruct": "rfm_struct *restrict",
+            },
+            f"{name}",
+            launch_dict=None,
+            comments="Kernel to allocate rfmstruct arrays.",
+            decorators="",
+            cuda_check_error=False,
+            streamid_param=False,
+            cfunc_type="static void",
+        )
+    prefunc += device_kernel.CFunction.full_function
+    body += device_kernel.launch_block
+    body += device_kernel.c_function_call()
+    return prefunc, body
+
+
+def generate_rfmprecompute_free(
+    rfm_precompute: ReferenceMetricPrecompute, parallelization: str = "openmp"
+) -> Tuple[str, str]:
+    """
+    Generate the body and prefunctions for deallocating the rfmstruct arrays.
+
+    :param rfm_precompute: ReferenceMetricPrecompute object.
+    :param parallelization: Parallelization method to use.
+    :return: Prefunction and body strings.
+    """
+    prefunc = ""
+    body = ""
+    func_name = "free"
+
+    name = "rfm_precompute_" + func_name + "__deallocate"
+
+    kernel_body = ""
+    kernel_body += "// Temporary parameters\n"
+    kernel_body += rfm_precompute.rfm_struct__freemem
+
+    if parallelization == "cuda":
+        device_kernel = gputils.GPU_Kernel(
+            kernel_body,
+            {
+                "rfmstruct": "rfm_struct *restrict",
+            },
+            f"{name}",
+            launch_dict={
+                "blocks_per_grid": ["1"],
+                "threads_per_block": ["1"],
+            },
+            comments="Kernel to deallocate rfmstruct arrays.",
+            streamid_param=False,
+        )
+    else:
+        device_kernel = gputils.GPU_Kernel(
+            kernel_body,
+            {
+                "rfmstruct": "rfm_struct *restrict",
+            },
+            f"{name}",
+            launch_dict=None,
+            comments="Kernel to deallocate rfmstruct arrays.",
+            decorators="",
+            cuda_check_error=False,
+            streamid_param=False,
+            cfunc_type="static void",
+        )
+    prefunc += device_kernel.CFunction.full_function
+    body += device_kernel.launch_block
+    body += device_kernel.c_function_call()
+    return prefunc, body
+
+
 def register_CFunctions_rfm_precompute(
     list_of_CoordSystems: List[str],
     parallelization: str = "openmp",
@@ -204,74 +384,31 @@ def register_CFunctions_rfm_precompute(
 
         includes = ["BHaH_defines.h"]
         cfunc_type = "void"
-        func_name, kernel_dicts = (
-            "defines",
-            rfm_precompute.rfm_struct__define_kernel_dict,
-        )
+
         body = ""
         for i in range(3):
             body += f"MAYBE_UNUSED const REAL *restrict x{i} = xx[{i}];\n"
-        prefunc = ""
-        for i, (key_sym, kernel_dict) in enumerate(kernel_dicts.items()):
-            # These should all be in paramstruct?
-            unique_symbols = get_unique_expression_symbols_as_strings(
-                kernel_dict["expr"], exclude=[f"xx{j}" for j in range(3)]
-            )
-            kernel_body = ""
-            kernel_body += "// Temporary parameters\n"
-            params_access = (
-                "d_params[streamid]." if parallelization == "cuda" else "params->"
-            )
-            for sym in unique_symbols:
-                kernel_body += f"const REAL {sym} = {params_access}{sym};\n"
-            kernel_body += kernel_dict["body"]
-            name = "rfm_precompute_" + func_name
-            if parallelization == "cuda":
-                device_kernel = gputils.GPU_Kernel(
-                    kernel_body,
-                    {
-                        "rfmstruct": "rfm_struct *restrict",
-                        f'{kernel_dict["coord"]}': "const REAL *restrict",
-                    },
-                    f"{name}__{key_sym}_gpu",
-                    launch_dict={
-                        "blocks_per_grid": [],
-                        "threads_per_block": ["32"],
-                        "stream": f"(param_streamid + {i}) % NUM_STREAMS",
-                    },
-                    comments=f"GPU Kernel to precompute metric quantity {key_sym}.",
-                )
-            else:
-                device_kernel = gputils.GPU_Kernel(
-                    kernel_body,
-                    {
-                        "params": "const params_struct *restrict",
-                        "rfmstruct": "rfm_struct *restrict",
-                        f'{kernel_dict["coord"]}': "const REAL *restrict",
-                    },
-                    f"{name}__{key_sym}_host",
-                    launch_dict=None,
-                    comments=f"Host Kernel to precompute metric quantity {key_sym}.",
-                    decorators="",
-                    cuda_check_error=False,
-                    streamid_param=False,
-                    cfunc_type="static void",
-                )
-            prefunc += device_kernel.CFunction.full_function
-            body += "{\n"
-            if parallelization == "cuda":
-                body += (
-                    "const size_t param_streamid = params->grid_idx % NUM_STREAMS;\n"
-                )
-                body += device_kernel.launch_block
-                body += device_kernel.c_function_call().replace(
-                    "(streamid", "(param_streamid"
-                )
-            else:
-                body += device_kernel.c_function_call()
-            body += "}\n"
-        rfm_precompute.rfm_struct__define = body
-        prefunc_dict = {"defines": prefunc}
+            body += f"MAYBE_UNUSED const int Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n"
+
+        defines_prefunc, defines_body = generate_rfmprecompute_defines(
+            rfm_precompute, parallelization=parallelization
+        )
+        malloc_prefunc, malloc_body = generate_rfmprecompute_malloc(
+            rfm_precompute, parallelization=parallelization
+        )
+        free_prefunc, free_body = generate_rfmprecompute_free(
+            rfm_precompute, parallelization=parallelization
+        )
+
+        rfm_precompute.rfm_struct__define = body + defines_body
+        rfm_precompute.rfm_struct__malloc = malloc_body
+        rfm_precompute.rfm_struct__freemem = free_body
+
+        prefunc_dict = {
+            "malloc": malloc_prefunc,
+            "defines": defines_prefunc,
+            "free": free_prefunc,
+        }
         for func in [
             ("malloc", rfm_precompute.rfm_struct__malloc),
             ("defines", rfm_precompute.rfm_struct__define),
