@@ -94,7 +94,6 @@ class ReferenceMetricPrecompute:
                 self.rfm_struct__freemem += (
                     f"free(rfmstruct->{freevars_uniq_xx_indep[which_freevar]});\n"
                 )
-
                 output_define_and_readvr = False
                 for dirn in range(3):
                     if (
@@ -102,7 +101,6 @@ class ReferenceMetricPrecompute:
                         and not (rfm.xx[(dirn + 1) % 3] in frees_uniq)
                         and not (rfm.xx[(dirn + 2) % 3] in frees_uniq)
                     ):
-                        key = freevars_uniq_xx_indep[which_freevar]
                         starting_idx = "tid0" if parallelization == "cuda" else "0"
                         idx_increment = "stride0" if parallelization == "cuda" else "1"
                         kernel_body = (
@@ -120,7 +118,9 @@ class ReferenceMetricPrecompute:
                             "}"
                         )
                         # This is needed by register_CFunctions_rfm_precompute
-                        self.rfm_struct__define_kernel_dict[key] = {
+                        self.rfm_struct__define_kernel_dict[
+                            freevars_uniq_xx_indep[which_freevar]
+                        ] = {
                             "body": kernel_body,
                             "expr": freevars_uniq_vals[which_freevar],
                             "coord": f"x{dirn}",
@@ -196,7 +196,6 @@ def generate_rfmprecompute_defines(
         rfm_precompute.rfm_struct__define_kernel_dict,
     )
     for i, (key_sym, kernel_dict) in enumerate(kernel_dicts.items()):
-        # These should all be in paramstruct?
         unique_symbols = get_unique_expression_symbols_as_strings(
             kernel_dict["expr"], exclude=[f"xx{j}" for j in range(3)]
         )
