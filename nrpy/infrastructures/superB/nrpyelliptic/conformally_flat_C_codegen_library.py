@@ -267,7 +267,7 @@ def register_CFunction_diagnostics(
   const int nn = commondata->nn;
   const params_struct *restrict params = &griddata[grid].params;
   const params_struct *restrict params_chare = &griddata_chare[grid].params;
-  const rfm_struct *restrict rfmstruct_chare = &griddata_chare[grid].rfmstruct;
+  const rfm_struct *restrict rfmstruct_chare = griddata_chare[grid].rfmstruct;
   const charecomm_struct *restrict charecommstruct = &griddata_chare[grid].charecommstruct;
   const REAL *restrict y_n_gfs = griddata_chare[grid].gridfuncs.y_n_gfs;
   REAL *restrict auxevol_gfs = griddata_chare[grid].gridfuncs.auxevol_gfs;

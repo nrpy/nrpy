@@ -46,7 +46,7 @@ def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type
   const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
   const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
   const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
-  
+
   const int psi4_spinweightm2_sph_harmonics_max_l = commondata->swm2sh_maximum_l_mode_to_compute;
 #define NUM_OF_R_EXTS 24
   const REAL list_of_R_exts[NUM_OF_R_EXTS] = {10.0, 20.0, 21.0, 22.0, 23.0, 24.0, 25.0, 26.0, 27.0, 28.0, 29.0,  30.0,
@@ -112,7 +112,7 @@ def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type
     diagnosticstruct->localsums_for_psi4_decomp = (REAL *restrict)malloc(sizeof(REAL) * size_psi4_decomp);
     diagnosticstruct->globalsums_for_psi4_decomp = (REAL *restrict)malloc(sizeof(REAL) * size_psi4_decomp);
     diagnosticstruct->length_localsums_for_psi4_decomp = size_psi4_decomp;
-    
+
     //
     // Case cylindrical-like grid
     //
@@ -320,7 +320,7 @@ def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type
         free(xx_shell_Cart[which_R_ext]);
     }
     free(xx_shell_Cart);
-  } 
+  }
 """
     cfc.register_CFunction(
         includes=includes,
@@ -466,7 +466,7 @@ const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
 const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
 """
     body += r"""
-switch (which_output) {  
+switch (which_output) {
     """
     if enable_psi4_diagnostics:
         body += r"""
@@ -504,18 +504,18 @@ case OUTPUT_PSI4: {
 }"""
     if enable_L2norm_BSSN_constraints_diagnostics:
         body += r"""
-case OUTPUT_L2NORM_BSSN_CONSTRAINTS: {              
+case OUTPUT_L2NORM_BSSN_CONSTRAINTS: {
   const REAL integration_radius1 = 2;
   const REAL integration_radius2 = 1000;
-  // Compute local sums for l2-norm of the Hamiltonian and momentum constraints        
-  REAL localsums_HGF[2];    
+  // Compute local sums for l2-norm of the Hamiltonian and momentum constraints
+  REAL localsums_HGF[2];
   compute_L2_norm_of_gridfunction_between_r1_r2(commondata, griddata_chare, integration_radius1, integration_radius2, HGF, diagnostic_output_gfs,
                                                 localsums_HGF);
-                                                
-  REAL localsums_MSQUAREDGF[2];                                                                                                      
+
+  REAL localsums_MSQUAREDGF[2];
   compute_L2_norm_of_gridfunction_between_r1_r2(commondata, griddata_chare, integration_radius1, integration_radius2, MSQUAREDGF,
                                                 diagnostic_output_gfs, localsums_MSQUAREDGF);
-                                                
+
   localsums[0] = localsums_HGF[0];
   localsums[1] = localsums_HGF[1];
   localsums[2] = localsums_MSQUAREDGF[0];
@@ -536,15 +536,15 @@ default: {
             (num_diagnostic_1d_z_pts > 0) ||
             (num_diagnostic_2d_xy_pts > 0) ||
             (num_diagnostic_2d_yz_pts > 0);
-            
+
   // Compute constraints even if this chare does not contain any points on x or y axes or xy or yz plane
   // Contraints on the whole chare grid is used to compute l2-norm
   {
-    Ricci_eval(commondata, params_chare, &griddata_chare[grid].rfmstruct, y_n_gfs, auxevol_gfs);
-    constraints_eval(commondata, params_chare, &griddata_chare[grid].rfmstruct, y_n_gfs, auxevol_gfs, diagnostic_output_gfs);
+    Ricci_eval(commondata, params_chare, griddata_chare[grid].rfmstruct, y_n_gfs, auxevol_gfs);
+    constraints_eval(commondata, params_chare, griddata_chare[grid].rfmstruct, y_n_gfs, auxevol_gfs, diagnostic_output_gfs);
   }
   if (write_diagnostics) {
-  
+
     //  0D, 1D and 2D outputs
     if (which_output == OUTPUT_0D) {
         diagnostics_nearest_grid_center(commondata, params_chare, &griddata_chare[grid].gridfuncs);
@@ -899,7 +899,7 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
 
             src_gf_psi4i[idx] = diagnostic_output_gfs[IDX4GENERAL(PSI4_IMGF, i, i1, j, Nxx_plus_2NGHOSTS0chare, Nxx_plus_2NGHOSTS1chare,
                                                                   Nxx_plus_2NGHOSTS2chare)];
-                                  
+
           }
         }
         // Call the interpolation function

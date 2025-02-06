@@ -109,7 +109,8 @@ except perhaps non_y_n_gfs (e.g., after a regrid, in which non_y_n_gfs are freed
   for(int grid=0;grid<commondata->NUMGRIDS;grid++) {
 """
     if enable_rfm_precompute:
-        body += "  rfm_precompute_free(commondata, &griddata[grid].params, &griddata[grid].rfmstruct);\n"
+        body += "  rfm_precompute_free(commondata, &griddata[grid].params, griddata[grid].rfmstruct);\n"
+        body += "  free(griddata[grid].rfmstruct);\n"
     if enable_CurviBCs:
         body += r"""
   free(griddata[grid].bcstruct.inner_bc_array);
