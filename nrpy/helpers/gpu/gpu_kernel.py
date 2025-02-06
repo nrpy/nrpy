@@ -104,7 +104,7 @@ class GPU_Kernel:
         self.cuda_check_error = cuda_check_error
 
         self.CFunction: cfc.CFunction
-        self.desc: str = f"GPU Kernel: {self.name}.\n" + comments
+        self.desc: str = f"Kernel: {self.name}.\n" + comments
         self.launch_dict = launch_dict
         self.launch_block: str = ""
         self.launch_settings: str = "("
