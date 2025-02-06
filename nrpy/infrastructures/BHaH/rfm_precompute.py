@@ -45,8 +45,8 @@ class ReferenceMetricPrecompute:
 
         # readvr_str reads the arrays from memory as needed
         self.readvr_str = ["", "", ""]
-        self.readvr_SIMD_outer_str = ["", "", ""]
-        self.readvr_SIMD_inner_str = ["", "", ""]
+        self.readvr_intrinsics_outer_str = ["", "", ""]
+        self.readvr_intrinsics_inner_str = ["", "", ""]
 
         # Sort freevars_uniq_vals and freevars_uniq_xx_indep, according to alphabetized freevars_uniq_xx_indep.
         #    Without this step, the ordering of elements in rfmstruct would be random, and would change each time
@@ -135,13 +135,13 @@ class ReferenceMetricPrecompute:
                         self.readvr_str[
                             dirn
                         ] += f"MAYBE_UNUSED const REAL {freevars_uniq_xx_indep[which_freevar]} = rfmstruct->{freevars_uniq_xx_indep[which_freevar]}[i{dirn}];\n"
-                        self.readvr_SIMD_outer_str[
+                        self.readvr_intrinsics_outer_str[
                             dirn
                         ] += f"const double NOSIMD{freevars_uniq_xx_indep[which_freevar]} = rfmstruct->{freevars_uniq_xx_indep[which_freevar]}[i{dirn}]; "
-                        self.readvr_SIMD_outer_str[
+                        self.readvr_intrinsics_outer_str[
                             dirn
                         ] += f"MAYBE_UNUSED const REAL_SIMD_ARRAY {freevars_uniq_xx_indep[which_freevar]} = ConstSIMD(NOSIMD{freevars_uniq_xx_indep[which_freevar]});\n"
-                        self.readvr_SIMD_inner_str[
+                        self.readvr_intrinsics_inner_str[
                             dirn
                         ] += f"MAYBE_UNUSED const REAL_SIMD_ARRAY {freevars_uniq_xx_indep[which_freevar]} = ReadSIMD(&rfmstruct->{freevars_uniq_xx_indep[which_freevar]}[i{dirn}]);\n"
                         output_define_and_readvr = True
@@ -160,13 +160,13 @@ class ReferenceMetricPrecompute:
                     self.readvr_str[
                         0
                     ] += f"MAYBE_UNUSED const REAL {freevars_uniq_xx_indep[which_freevar]} = rfmstruct->{freevars_uniq_xx_indep[which_freevar]}[i0 + Nxx_plus_2NGHOSTS0*i1];\n"
-                    self.readvr_SIMD_outer_str[
+                    self.readvr_intrinsics_outer_str[
                         0
                     ] += f"const double NOSIMD{freevars_uniq_xx_indep[which_freevar]} = rfmstruct->{freevars_uniq_xx_indep[which_freevar]}[i0 + Nxx_plus_2NGHOSTS0*i1]; "
-                    self.readvr_SIMD_outer_str[
+                    self.readvr_intrinsics_outer_str[
                         0
                     ] += f"MAYBE_UNUSED const REAL_SIMD_ARRAY {freevars_uniq_xx_indep[which_freevar]} = ConstSIMD(NOSIMD{freevars_uniq_xx_indep[which_freevar]});\n"
-                    self.readvr_SIMD_inner_str[
+                    self.readvr_intrinsics_inner_str[
                         0
                     ] += f"MAYBE_UNUSED const REAL_SIMD_ARRAY {freevars_uniq_xx_indep[which_freevar]} = ReadSIMD(&rfmstruct->{freevars_uniq_xx_indep[which_freevar]}[i0 + Nxx_plus_2NGHOSTS0*i1]);\n"
                     output_define_and_readvr = True
@@ -176,11 +176,11 @@ class ReferenceMetricPrecompute:
                         f"ERROR: Could not figure out the (xx0,xx1,xx2) dependency within the expression for {freevars_uniq_xx_indep[which_freevar]}: {freevars_uniq_vals[which_freevar]}"
                     )
             if parallelization == "cuda":
-                self.readvr_SIMD_outer_str = [
-                    s.replace("SIMD", "CUDA") for s in self.readvr_SIMD_outer_str
+                self.readvr_intrinsics_outer_str = [
+                    s.replace("SIMD", "CUDA") for s in self.readvr_intrinsics_outer_str
                 ]
-                self.readvr_SIMD_inner_str = [
-                    s.replace("SIMD", "CUDA") for s in self.readvr_SIMD_inner_str
+                self.readvr_intrinsics_inner_str = [
+                    s.replace("SIMD", "CUDA") for s in self.readvr_intrinsics_inner_str
                 ]
 
             which_freevar += 1
