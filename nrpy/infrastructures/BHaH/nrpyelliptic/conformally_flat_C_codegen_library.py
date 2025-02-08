@@ -511,7 +511,7 @@ def register_CFunction_diagnostics(
 
   // Set params and rfm_struct
   params_struct *restrict params = &griddata[grid].params;
-  const rfm_struct *restrict rfmstruct = &griddata[grid].rfmstruct;
+  const rfm_struct *restrict rfmstruct = griddata[grid].rfmstruct;
 #include "set_CodeParameters.h"
 
   // Compute Hamiltonian constraint violation and store it at diagnostic_output_gfs
