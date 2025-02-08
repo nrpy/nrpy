@@ -239,6 +239,18 @@ python nrpy/example/seobnrv5_aligned_spin_inspiral.py --help
                 numerical_relativity_nqc_flag = arg.split("=")[1].lower() == "true"
             elif arg.startswith("--use_seobnrv5_merger_ringdown="):
                 seobnv5_merger_ringdown_flag = arg.split("=")[1].lower() == "true"
+            else:
+                print(
+                    f"""
+Unrecognized option {arg}
+For a full list of usage options see below or run:
+python nrpy/example/seobnrv5_aligned_spin_inspiral.py -h
+or 
+python nrpy/example/seobnrv5_aligned_spin_inspiral.py --help
+"""
+                )
+                print_help()
+                sys.exit(0)
 
     # Register some functions/code parameters based on input flags
     if frequency_domain_flag:
