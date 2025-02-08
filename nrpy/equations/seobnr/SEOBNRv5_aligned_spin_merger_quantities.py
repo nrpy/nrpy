@@ -90,12 +90,30 @@ class SEOBNRv5_aligned_spin_merger_quantities:
         various coefficients required for the waveforms's amplitude and phase.
         :return None:
         """
-        (m1, m2, chi1, chi2, omega_qnm, tau_qnm, t_0, phi_0, t) = sp.symbols(
-            "m1 m2 chi1 chi2 omega_qnm tau_qnm t_0 phi_0 t", real=True
+        (
+            m1,
+            m2,
+            chi1,
+            chi2,
+            omega_qnm,
+            tau_qnm,
+            t_0,
+            h_0,
+            hdot_0,
+            phi_0,
+            phidot_0,
+            t,
+        ) = sp.symbols(
+            "m1 m2 chi1 chi2 omega_qnm tau_qnm t_0 h_0 hdot_0 phi_0 phidot_0 t",
+            real=True,
         )
         M = m1 + m2
+        q = m1 / m2
         nu = m1 * m2 / M**2
-        Shat = (m1 * m1 * chi1 + m2 * m2 * chi2) / (m1 * m1 + m2 * m2)
+        dm = (q - 1) / (q + 1)
+        chiAS = (chi1 - chi2) / 2
+        chiS = (chi1 + chi2) / 2
+        Shat = chiS + chiAS * dm / (1 - 2 * nu)
         Shat2 = Shat * Shat
         Shat3 = Shat2 * Shat
         Shat4 = Shat3 * Shat
@@ -118,7 +136,7 @@ class SEOBNRv5_aligned_spin_merger_quantities:
             + f2r(0.18693991146784910695) * Shat
             + f2r(1.46709663479911811557)
         )
-        hddot22NR = (
+        hddot22NR = nu * (
             -f2r(0.00335300225882774906) * nu2
             + f2r(0.00358851415965951012) * nu * Shat
             - f2r(0.00561520957901851664) * nu
@@ -126,7 +144,7 @@ class SEOBNRv5_aligned_spin_merger_quantities:
             + f2r(0.00132564277249644174) * Shat
             - f2r(0.00245697909115198589)
         )
-        omega22NR = -(
+        omega22NR = (
             f2r(5.89352329617707670906) * nu4
             + f2r(3.75145580491965446868) * nu3 * Shat
             - f2r(3.34930536209472551334) * nu3
@@ -226,26 +244,17 @@ class SEOBNRv5_aligned_spin_merger_quantities:
             + f2r(0.56269034372727599891) * Shat
             + f2r(0.03570970180918431325)
         )
-
-        sigma_R = -1 / tau_qnm
-        sigma_I = -omega_qnm
-        hdot_0 = 0
         # require amplitude and amplitude derivative to match values at maximum
-        c1c = 1 / (c1f * nu) * (hdot_0 - sigma_R * h22NR) * sp.cosh(c2f) ** 2
-        c2c = h22NR / nu - 1 / (c1f * nu) * (hdot_0 - sigma_R * h22NR) * sp.cosh(
-            c2f
-        ) * sp.sinh(c2f)
+        c1c = 1 / (c1f) * (hdot_0 + h_0 / tau_qnm) * sp.cosh(c2f) ** 2
+        c2c = h22NR - 1 / (c1f) * (hdot_0 + h_0 / tau_qnm) * sp.cosh(c2f) * sp.sinh(c2f)
 
         # require frequency to match value at peak
-        d1c = (omega22NR - sigma_I) * (1 + d2f) / (d1f * d2f)
+        d1c = (phidot_0 + omega_qnm) * (1 + d2f) / (d1f * d2f)
 
         amp = c1c * sp.tanh(c1f * (t - t_0) + c2f) + c2c
-        phase = phi_0 - d1c * sp.log(
-            (1 + 2 * d2f * sp.exp(-d1f * (t - t_0))) / (1 + d2f)
-        )
-        omega = -omega_qnm - sp.I / tau_qnm
-        self.h = amp
-        self.phi = phase + omega * (t - t_0)
+        phase = phi_0 - d1c * sp.log((1 + d2f * sp.exp(-d1f * (t - t_0))) / (1 + d2f))
+        self.h = amp * sp.exp(-(t - t_0) / tau_qnm)
+        self.phi = phase - omega_qnm * (t - t_0)
         self.h_t_attach = h22NR
         self.hdot_t_attach = sp.sympify(0)
         self.hddot_t_attach = hddot22NR

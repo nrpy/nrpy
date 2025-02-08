@@ -206,7 +206,7 @@ if __name__ == "__main__":
     # SEOBNRv5 uses an iterative refinement routine to find the location of the peak of the orbital frequency.
     # This is not done in a robust manner and disabling it does not impact accuracy.
     # This flag helps enable/disable the routine at the codegen level so that we can assess the impact on performance and accuracy.
-    perform_iterative_refinement = False
+    perform_iterative_refinement = True
     seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_ode_integration(
         perform_iterative_refinement
     )

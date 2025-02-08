@@ -96,8 +96,8 @@ for (i = 0; i < commondata->nsteps_fine; i++){
   Q1[i] = hamp[i] * prstar * prstar / (r[i] * r[i] * Omega[i] * Omega[i]);
   Q2[i] = Q1[i] / r[i];
   Q3[i] = Q2[i] / sqrt(r[i]);
-  P1[i] = -prstar / r[i] /Omega[i];
-  P2[i] = -P1[i] * prstar * prstar;
+  P1[i] = prstar / r[i] /Omega[i];
+  P2[i] = P1[i] * prstar * prstar;
 }
 SEOBNRv5_aligned_spin_unwrap(phase,phase_unwrapped,commondata->nsteps_fine);
 // Find t_ISCO:
@@ -448,7 +448,6 @@ if (idx_match == commondata->nsteps_inspiral - 1){
   idx_match--;
 }
 const REAL t_match = times_new[idx_match];
-const REAL phase_match = h22_phase_new[idx_match + 1];
 const size_t nsteps_ringdown = 15 * (size_t) (commondata->tau_qnm / dT);
 REAL *restrict ringdown_time = (REAL *)malloc(nsteps_ringdown*sizeof(REAL)); 
 REAL *restrict ringdown_amp = (REAL *)malloc(nsteps_ringdown*sizeof(REAL));
@@ -459,10 +458,34 @@ for(i = 0; i < nsteps_ringdown; i++){
 """
     if use_seobnrv5_merger_ringdown:
         body += """
-SEOBNRv5_aligned_spin_merger_waveform_from_times(ringdown_time,ringdown_amp,ringdown_phase,phase_match,nsteps_ringdown,commondata);
+size_t left = MIN(0,idx_match - 5);
+size_t right = MAX(commondata->nsteps_inspiral,idx_match + 5);
+REAL times_cropped[right-left] , amps_cropped[right-left] , phases_cropped[right-left];
+for (i = left; i < right; i++){
+  times_cropped[i - left] = times_new[i];
+  amps_cropped[i - left] = h22_amp_new[i];
+  phases_cropped[i - left] = h22_phase_new[i];
+}
+gsl_interp_accel *restrict acc = gsl_interp_accel_alloc();
+gsl_spline *restrict spline = gsl_spline_alloc(gsl_interp_cspline, right - left);
+gsl_spline_init(spline,times_cropped, amps_cropped,right-left);
+const REAL h_0 = gsl_spline_eval(spline, commondata->t_attach, acc);
+const REAL hdot_0 = gsl_spline_eval_deriv(spline, commondata->t_attach, acc);
+
+gsl_spline_init(spline,times_cropped, phases_cropped,right-left);
+gsl_interp_accel_reset(acc);
+const REAL phi_0 = gsl_spline_eval(spline, commondata->t_attach, acc);
+const REAL phidot_0 = gsl_spline_eval_deriv(spline, commondata->t_attach, acc);
+
+gsl_spline_free(spline);
+gsl_interp_accel_free(acc);
+
+
+SEOBNRv5_aligned_spin_merger_waveform_from_times(ringdown_time,ringdown_amp,ringdown_phase,h_0,hdot_0,phi_0,phidot_0,nsteps_ringdown,commondata);
 """
     else:
         body += """
+const REAL phase_match = h22_phase_new[idx_match + 1];
 BOB_aligned_spin_waveform_from_times(ringdown_time,ringdown_amp,ringdown_phase,nsteps_ringdown,commondata);
 const REAL true_sign = copysign(phase_match,1.);
 for(i = 0; i < nsteps_ringdown; i++){
@@ -473,7 +496,7 @@ for(i = 0; i < nsteps_ringdown; i++){
 commondata->nsteps_IMR = idx_match + 1 + nsteps_ringdown;
 commondata->waveform_IMR = (double complex *)malloc(NUMMODES * commondata->nsteps_IMR*sizeof(double complex));
 for (i = 0; i <= idx_match; i++){
-  commondata->waveform_IMR[IDX_WF(i,TIME)] = times_new[i];
+  commondata->waveform_IMR[IDX_WF(i,TIME)] = times_new[i] - commondata->t_attach;
   h22 = h22_amp_new[i] * cexp(I * h22_phase_new[i]);
   commondata->waveform_IMR[IDX_WF(i,STRAIN)] = h22;
 }
@@ -482,7 +505,7 @@ free(h22_phase_new);
 free(times_new);
 
 for(i = 0; i < nsteps_ringdown; i++){
-  commondata->waveform_IMR[IDX_WF(i + 1 + idx_match,TIME)] = ringdown_time[i];
+  commondata->waveform_IMR[IDX_WF(i + 1 + idx_match,TIME)] = ringdown_time[i] - commondata->t_attach;
   h22 = ringdown_amp[i] * cexp(I * ringdown_phase[i]);
   commondata->waveform_IMR[IDX_WF(i + 1 + idx_match,STRAIN)] = h22;
 }
