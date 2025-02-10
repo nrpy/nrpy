@@ -138,49 +138,7 @@ class ReferenceMetric:
                 "f4_of_xx1",
             ],
             add_to_parfile=False,
-            add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
-        )
-
-        # return values of register_rfm_CodeParameters() in the following code block are unused, so we ignore them.
-        par.register_CodeParameters(
-            "REAL",
-            self.CodeParam_modulename,
-            ["f0_of_xx0__D0", "f0_of_xx0__DD00", "f0_of_xx0__DDD000"],
-            add_to_parfile=False,
-            add_to_set_CodeParameters_h=False,
-            add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
-        )
-        par.register_CodeParameters(
-            "REAL",
-            self.CodeParam_modulename,
-            ["f1_of_xx1__D1", "f1_of_xx1__DD11", "f1_of_xx1__DDD111"],
-            add_to_parfile=False,
-            add_to_set_CodeParameters_h=False,
-            add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
-        )
-        par.register_CodeParameters(
-            "REAL",
-            self.CodeParam_modulename,
-            ["f2_of_xx0__D0", "f2_of_xx0__DD00"],
-            add_to_parfile=False,
-            add_to_set_CodeParameters_h=False,
-            add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
-        )
-        par.register_CodeParameters(
-            "REAL",
-            self.CodeParam_modulename,
-            ["f3_of_xx2__D2", "f3_of_xx2__DD22"],
-            add_to_parfile=False,
-            add_to_set_CodeParameters_h=False,
-            add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
-        )
-        par.register_CodeParameters(
-            "REAL",
-            self.CodeParam_modulename,
-            ["f4_of_xx1__D1", "f4_of_xx1__DD11", "f4_of_xx1__DDD111"],
-            add_to_parfile=False,
-            add_to_set_CodeParameters_h=False,
-            add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
+            add_to_glb_code_params_dict=False,
         )
         # END: RFM PRECOMPUTE STUFF
 
