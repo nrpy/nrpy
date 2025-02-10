@@ -5,9 +5,7 @@
  */
 static void rfm_precompute_defines__f0_of_xx0_host(const params_struct *restrict params, rfm_struct *restrict rfmstruct, const REAL *restrict x0) {
   // Temporary parameters
-  const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
-
-  for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0 += 1) {
+  for (int i0 = 0; i0 < params->Nxx_plus_2NGHOSTS0; i0++) {
     const REAL xx0 = x0[i0];
     rfmstruct->f0_of_xx0[i0] = xx0;
   }

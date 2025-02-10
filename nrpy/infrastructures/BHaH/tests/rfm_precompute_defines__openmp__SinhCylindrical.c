@@ -7,9 +7,7 @@ static void rfm_precompute_defines__f0_of_xx0_host(const params_struct *restrict
   // Temporary parameters
   const REAL AMPLRHO = params->AMPLRHO;
   const REAL SINHWRHO = params->SINHWRHO;
-  const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
-
-  for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0 += 1) {
+  for (int i0 = 0; i0 < params->Nxx_plus_2NGHOSTS0; i0++) {
     const REAL xx0 = x0[i0];
     rfmstruct->f0_of_xx0[i0] = AMPLRHO * (expf(xx0 / SINHWRHO) - expf(-xx0 / SINHWRHO)) / (expf(1.0F / SINHWRHO) - expf(-1 / SINHWRHO));
   }
@@ -23,9 +21,7 @@ static void rfm_precompute_defines__f0_of_xx0__D0_host(const params_struct *rest
   // Temporary parameters
   const REAL AMPLRHO = params->AMPLRHO;
   const REAL SINHWRHO = params->SINHWRHO;
-  const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
-
-  for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0 += 1) {
+  for (int i0 = 0; i0 < params->Nxx_plus_2NGHOSTS0; i0++) {
     const REAL xx0 = x0[i0];
     rfmstruct->f0_of_xx0__D0[i0] =
         AMPLRHO * (expf(xx0 / SINHWRHO) / SINHWRHO + expf(-xx0 / SINHWRHO) / SINHWRHO) / (expf(1.0F / SINHWRHO) - expf(-1 / SINHWRHO));
@@ -40,9 +36,7 @@ static void rfm_precompute_defines__f0_of_xx0__DD00_host(const params_struct *re
   // Temporary parameters
   const REAL AMPLRHO = params->AMPLRHO;
   const REAL SINHWRHO = params->SINHWRHO;
-  const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
-
-  for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0 += 1) {
+  for (int i0 = 0; i0 < params->Nxx_plus_2NGHOSTS0; i0++) {
     const REAL xx0 = x0[i0];
     rfmstruct->f0_of_xx0__DD00[i0] = AMPLRHO * (expf(xx0 / SINHWRHO) / powf(SINHWRHO, 2) - expf(-xx0 / SINHWRHO) / powf(SINHWRHO, 2)) /
                                      (expf(1.0F / SINHWRHO) - expf(-1 / SINHWRHO));
@@ -57,9 +51,7 @@ static void rfm_precompute_defines__f0_of_xx0__DDD000_host(const params_struct *
   // Temporary parameters
   const REAL AMPLRHO = params->AMPLRHO;
   const REAL SINHWRHO = params->SINHWRHO;
-  const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
-
-  for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0 += 1) {
+  for (int i0 = 0; i0 < params->Nxx_plus_2NGHOSTS0; i0++) {
     const REAL xx0 = x0[i0];
     rfmstruct->f0_of_xx0__DDD000[i0] = AMPLRHO * (expf(xx0 / SINHWRHO) / powf(SINHWRHO, 3) + expf(-xx0 / SINHWRHO) / powf(SINHWRHO, 3)) /
                                        (expf(1.0F / SINHWRHO) - expf(-1 / SINHWRHO));
@@ -73,9 +65,7 @@ static void rfm_precompute_defines__f3_of_xx2_host(const params_struct *restrict
   // Temporary parameters
   const REAL AMPLZ = params->AMPLZ;
   const REAL SINHWZ = params->SINHWZ;
-  const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
-
-  for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2 += 1) {
+  for (int i2 = 0; i2 < params->Nxx_plus_2NGHOSTS2; i2++) {
     const REAL xx2 = x2[i2];
     rfmstruct->f3_of_xx2[i2] = AMPLZ * (expf(xx2 / SINHWZ) / SINHWZ + expf(-xx2 / SINHWZ) / SINHWZ) / (expf(1.0F / SINHWZ) - expf(-1 / SINHWZ));
   }
@@ -89,9 +79,7 @@ static void rfm_precompute_defines__f3_of_xx2__D2_host(const params_struct *rest
   // Temporary parameters
   const REAL AMPLZ = params->AMPLZ;
   const REAL SINHWZ = params->SINHWZ;
-  const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
-
-  for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2 += 1) {
+  for (int i2 = 0; i2 < params->Nxx_plus_2NGHOSTS2; i2++) {
     const REAL xx2 = x2[i2];
     rfmstruct->f3_of_xx2__D2[i2] =
         AMPLZ * (expf(xx2 / SINHWZ) / powf(SINHWZ, 2) - expf(-xx2 / SINHWZ) / powf(SINHWZ, 2)) / (expf(1.0F / SINHWZ) - expf(-1 / SINHWZ));
@@ -106,9 +94,7 @@ static void rfm_precompute_defines__f3_of_xx2__DD22_host(const params_struct *re
   // Temporary parameters
   const REAL AMPLZ = params->AMPLZ;
   const REAL SINHWZ = params->SINHWZ;
-  const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
-
-  for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2 += 1) {
+  for (int i2 = 0; i2 < params->Nxx_plus_2NGHOSTS2; i2++) {
     const REAL xx2 = x2[i2];
     rfmstruct->f3_of_xx2__DD22[i2] =
         AMPLZ * (expf(xx2 / SINHWZ) / powf(SINHWZ, 3) + expf(-xx2 / SINHWZ) / powf(SINHWZ, 3)) / (expf(1.0F / SINHWZ) - expf(-1 / SINHWZ));

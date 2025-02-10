@@ -7,13 +7,11 @@ __global__ static void rfm_precompute_defines__f0_of_xx0_gpu(const size_t stream
   // Temporary parameters
   const REAL AMPL = d_params[streamid].AMPL;
   const REAL SINHW = d_params[streamid].SINHW;
-  const int Nxx_plus_2NGHOSTS0 = d_params[streamid].Nxx_plus_2NGHOSTS0;
-
   // Kernel thread/stride setup
   const int tid0 = threadIdx.x + blockIdx.x * blockDim.x;
   const int stride0 = blockDim.x * gridDim.x;
 
-  for (int i0 = tid0; i0 < Nxx_plus_2NGHOSTS0; i0 += stride0) {
+  for (int i0 = tid0; i0 < d_params[streamid].Nxx_plus_2NGHOSTS0; i0 += stride0) {
     const REAL xx0 = x0[i0];
     rfmstruct->f0_of_xx0[i0] = AMPL * (expf(xx0 / SINHW) - expf(-xx0 / SINHW)) / (expf(1.0F / SINHW) - expf(-1 / SINHW));
   }
@@ -26,13 +24,11 @@ __global__ static void rfm_precompute_defines__f0_of_xx0__D0_gpu(const size_t st
   // Temporary parameters
   const REAL AMPL = d_params[streamid].AMPL;
   const REAL SINHW = d_params[streamid].SINHW;
-  const int Nxx_plus_2NGHOSTS0 = d_params[streamid].Nxx_plus_2NGHOSTS0;
-
   // Kernel thread/stride setup
   const int tid0 = threadIdx.x + blockIdx.x * blockDim.x;
   const int stride0 = blockDim.x * gridDim.x;
 
-  for (int i0 = tid0; i0 < Nxx_plus_2NGHOSTS0; i0 += stride0) {
+  for (int i0 = tid0; i0 < d_params[streamid].Nxx_plus_2NGHOSTS0; i0 += stride0) {
     const REAL xx0 = x0[i0];
     rfmstruct->f0_of_xx0__D0[i0] = AMPL * (expf(xx0 / SINHW) / SINHW + expf(-xx0 / SINHW) / SINHW) / (expf(1.0F / SINHW) - expf(-1 / SINHW));
   }
@@ -45,13 +41,11 @@ __global__ static void rfm_precompute_defines__f0_of_xx0__DD00_gpu(const size_t 
   // Temporary parameters
   const REAL AMPL = d_params[streamid].AMPL;
   const REAL SINHW = d_params[streamid].SINHW;
-  const int Nxx_plus_2NGHOSTS0 = d_params[streamid].Nxx_plus_2NGHOSTS0;
-
   // Kernel thread/stride setup
   const int tid0 = threadIdx.x + blockIdx.x * blockDim.x;
   const int stride0 = blockDim.x * gridDim.x;
 
-  for (int i0 = tid0; i0 < Nxx_plus_2NGHOSTS0; i0 += stride0) {
+  for (int i0 = tid0; i0 < d_params[streamid].Nxx_plus_2NGHOSTS0; i0 += stride0) {
     const REAL xx0 = x0[i0];
     rfmstruct->f0_of_xx0__DD00[i0] =
         AMPL * (expf(xx0 / SINHW) / powf(SINHW, 2) - expf(-xx0 / SINHW) / powf(SINHW, 2)) / (expf(1.0F / SINHW) - expf(-1 / SINHW));
@@ -65,13 +59,11 @@ __global__ static void rfm_precompute_defines__f0_of_xx0__DDD000_gpu(const size_
   // Temporary parameters
   const REAL AMPL = d_params[streamid].AMPL;
   const REAL SINHW = d_params[streamid].SINHW;
-  const int Nxx_plus_2NGHOSTS0 = d_params[streamid].Nxx_plus_2NGHOSTS0;
-
   // Kernel thread/stride setup
   const int tid0 = threadIdx.x + blockIdx.x * blockDim.x;
   const int stride0 = blockDim.x * gridDim.x;
 
-  for (int i0 = tid0; i0 < Nxx_plus_2NGHOSTS0; i0 += stride0) {
+  for (int i0 = tid0; i0 < d_params[streamid].Nxx_plus_2NGHOSTS0; i0 += stride0) {
     const REAL xx0 = x0[i0];
     rfmstruct->f0_of_xx0__DDD000[i0] =
         AMPL * (expf(xx0 / SINHW) / powf(SINHW, 3) + expf(-xx0 / SINHW) / powf(SINHW, 3)) / (expf(1.0F / SINHW) - expf(-1 / SINHW));
@@ -83,13 +75,11 @@ __global__ static void rfm_precompute_defines__f0_of_xx0__DDD000_gpu(const size_
  */
 __global__ static void rfm_precompute_defines__f1_of_xx1_gpu(const size_t streamid, rfm_struct *restrict rfmstruct, const REAL *restrict x1) {
   // Temporary parameters
-  const int Nxx_plus_2NGHOSTS1 = d_params[streamid].Nxx_plus_2NGHOSTS1;
-
   // Kernel thread/stride setup
   const int tid0 = threadIdx.x + blockIdx.x * blockDim.x;
   const int stride0 = blockDim.x * gridDim.x;
 
-  for (int i1 = tid0; i1 < Nxx_plus_2NGHOSTS1; i1 += stride0) {
+  for (int i1 = tid0; i1 < d_params[streamid].Nxx_plus_2NGHOSTS1; i1 += stride0) {
     const REAL xx1 = x1[i1];
     rfmstruct->f1_of_xx1[i1] = sinf(xx1);
   }
@@ -100,13 +90,11 @@ __global__ static void rfm_precompute_defines__f1_of_xx1_gpu(const size_t stream
  */
 __global__ static void rfm_precompute_defines__f1_of_xx1__D1_gpu(const size_t streamid, rfm_struct *restrict rfmstruct, const REAL *restrict x1) {
   // Temporary parameters
-  const int Nxx_plus_2NGHOSTS1 = d_params[streamid].Nxx_plus_2NGHOSTS1;
-
   // Kernel thread/stride setup
   const int tid0 = threadIdx.x + blockIdx.x * blockDim.x;
   const int stride0 = blockDim.x * gridDim.x;
 
-  for (int i1 = tid0; i1 < Nxx_plus_2NGHOSTS1; i1 += stride0) {
+  for (int i1 = tid0; i1 < d_params[streamid].Nxx_plus_2NGHOSTS1; i1 += stride0) {
     const REAL xx1 = x1[i1];
     rfmstruct->f1_of_xx1__D1[i1] = cosf(xx1);
   }
@@ -117,13 +105,11 @@ __global__ static void rfm_precompute_defines__f1_of_xx1__D1_gpu(const size_t st
  */
 __global__ static void rfm_precompute_defines__f1_of_xx1__DD11_gpu(const size_t streamid, rfm_struct *restrict rfmstruct, const REAL *restrict x1) {
   // Temporary parameters
-  const int Nxx_plus_2NGHOSTS1 = d_params[streamid].Nxx_plus_2NGHOSTS1;
-
   // Kernel thread/stride setup
   const int tid0 = threadIdx.x + blockIdx.x * blockDim.x;
   const int stride0 = blockDim.x * gridDim.x;
 
-  for (int i1 = tid0; i1 < Nxx_plus_2NGHOSTS1; i1 += stride0) {
+  for (int i1 = tid0; i1 < d_params[streamid].Nxx_plus_2NGHOSTS1; i1 += stride0) {
     const REAL xx1 = x1[i1];
     rfmstruct->f1_of_xx1__DD11[i1] = -sinf(xx1);
   }

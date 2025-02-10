@@ -5,13 +5,11 @@
  */
 __global__ static void rfm_precompute_defines__f0_of_xx0_gpu(const size_t streamid, rfm_struct *restrict rfmstruct, const REAL *restrict x0) {
   // Temporary parameters
-  const int Nxx_plus_2NGHOSTS0 = d_params[streamid].Nxx_plus_2NGHOSTS0;
-
   // Kernel thread/stride setup
   const int tid0 = threadIdx.x + blockIdx.x * blockDim.x;
   const int stride0 = blockDim.x * gridDim.x;
 
-  for (int i0 = tid0; i0 < Nxx_plus_2NGHOSTS0; i0 += stride0) {
+  for (int i0 = tid0; i0 < d_params[streamid].Nxx_plus_2NGHOSTS0; i0 += stride0) {
     const REAL xx0 = x0[i0];
     rfmstruct->f0_of_xx0[i0] = xx0;
   }

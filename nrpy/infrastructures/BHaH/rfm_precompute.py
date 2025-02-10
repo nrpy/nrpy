@@ -102,18 +102,15 @@ class ReferenceMetricPrecompute:
                         and not (rfm.xx[(dirn + 1) % 3] in frees_uniq)
                         and not (rfm.xx[(dirn + 2) % 3] in frees_uniq)
                     ):
-                        starting_idx = "tid0" if parallelization == "cuda" else "0"
-                        idx_increment = "stride0" if parallelization == "cuda" else "1"
                         defines_kernel_body = (
-                            f"const int Nxx_plus_2NGHOSTS{dirn} = d_params[streamid].Nxx_plus_2NGHOSTS{dirn};\n\n"
                             "// Kernel thread/stride setup\n"
                             "const int tid0 = threadIdx.x + blockIdx.x*blockDim.x;\n"
                             "const int stride0 = blockDim.x * gridDim.x;\n\n"
+                            f"for(int i{dirn}=tid0;i{dirn}<d_params[streamid].Nxx_plus_2NGHOSTS{dirn};i{dirn}+=stride0) {{\n"
                             if parallelization == "cuda"
-                            else f"const int Nxx_plus_2NGHOSTS{dirn} = params->Nxx_plus_2NGHOSTS{dirn};\n\n"
+                            else f"for(int i{dirn}=0;i{dirn}<params->Nxx_plus_2NGHOSTS{dirn};i{dirn}++) {{\n"
                         )
                         defines_kernel_body += (
-                            f"for(int i{dirn}={starting_idx};i{dirn}<Nxx_plus_2NGHOSTS{dirn};i{dirn}+={idx_increment}) {{\n"
                             f"  const REAL xx{dirn} = x{dirn}[i{dirn}];\n"
                             f"  rfmstruct->{freevars_uniq_xx_indep[which_freevar]}[i{dirn}] = {sp.ccode(freevars_uniq_vals[which_freevar], type_aliases=sp_type_alias)};\n"
                             "}"
