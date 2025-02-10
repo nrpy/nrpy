@@ -94,6 +94,7 @@ class ReferenceMetricPrecompute:
                 self.rfm_struct__freemem += (
                     f"free(rfmstruct->{freevars_uniq_xx_indep[which_freevar]});\n"
                 )
+
                 output_define_and_readvr = False
                 for dirn in range(3):
                     if (
@@ -101,18 +102,15 @@ class ReferenceMetricPrecompute:
                         and not (rfm.xx[(dirn + 1) % 3] in frees_uniq)
                         and not (rfm.xx[(dirn + 2) % 3] in frees_uniq)
                     ):
-                        starting_idx = "tid0" if parallelization == "cuda" else "0"
-                        idx_increment = "stride0" if parallelization == "cuda" else "1"
-                        kernel_body = (
-                            f"const int Nxx_plus_2NGHOSTS{dirn} = d_params[streamid].Nxx_plus_2NGHOSTS{dirn};\n\n"
+                        defines_kernel_body = (
                             "// Kernel thread/stride setup\n"
                             "const int tid0 = threadIdx.x + blockIdx.x*blockDim.x;\n"
                             "const int stride0 = blockDim.x * gridDim.x;\n\n"
+                            f"for(int i{dirn}=tid0;i{dirn}<d_params[streamid].Nxx_plus_2NGHOSTS{dirn};i{dirn}+=stride0) {{\n"
                             if parallelization == "cuda"
-                            else f"const int Nxx_plus_2NGHOSTS{dirn} = params->Nxx_plus_2NGHOSTS{dirn};\n\n"
+                            else f"for(int i{dirn}=0;i{dirn}<params->Nxx_plus_2NGHOSTS{dirn};i{dirn}++) {{\n"
                         )
-                        kernel_body += (
-                            f"for(int i{dirn}={starting_idx};i{dirn}<Nxx_plus_2NGHOSTS{dirn};i{dirn}+={idx_increment}) {{\n"
+                        defines_kernel_body += (
                             f"  const REAL xx{dirn} = x{dirn}[i{dirn}];\n"
                             f"  rfmstruct->{freevars_uniq_xx_indep[which_freevar]}[i{dirn}] = {sp.ccode(freevars_uniq_vals[which_freevar], type_aliases=sp_type_alias)};\n"
                             "}"
@@ -121,9 +119,9 @@ class ReferenceMetricPrecompute:
                         self.rfm_struct__define_kernel_dict[
                             freevars_uniq_xx_indep[which_freevar]
                         ] = {
-                            "body": kernel_body,
+                            "body": defines_kernel_body,
                             "expr": freevars_uniq_vals[which_freevar],
-                            "coord": f"x{dirn}",
+                            "coord": [f"x{dirn}"],
                         }
                         self.readvr_str[
                             dirn
@@ -144,12 +142,33 @@ class ReferenceMetricPrecompute:
                     and (rfm.xx[0] in frees_uniq)
                     and (rfm.xx[1] in frees_uniq)
                 ):
-                    self.kernel_body = f"""
-                for(int i1=0;i1<Nxx_plus_2NGHOSTS1;i1++) for(int i0=0;i0<Nxx_plus_2NGHOSTS0;i0++) {{
-                  const REAL xx0 = xx[0][i0];
-                  const REAL xx1 = xx[1][i1];
+                    defines_kernel_body = (
+                        "const int Nxx_plus_2NGHOSTS0 = d_params[streamid].Nxx_plus_2NGHOSTS0;\n"
+                        "const int Nxx_plus_2NGHOSTS1 = d_params[streamid].Nxx_plus_2NGHOSTS1;\n\n"
+                        "// Kernel thread/stride setup\n"
+                        "const int tid0 = threadIdx.x + blockIdx.x*blockDim.x;\n"
+                        "const int tid1 = blockIdx.y * blockDim.y + threadIdx.y;\n\n"
+                        "const int stride0 = blockDim.x * gridDim.x;\n"
+                        "const int stride1 = blockDim.y * gridDim.y;\n\n"
+                        "for(int i1=tid1;i1<Nxx_plus_2NGHOSTS1;i1+=stride1) for(int i0=tid0;i0<Nxx_plus_2NGHOSTS0;i0+=stride0) {"
+                        if parallelization == "cuda"
+                        else "const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;\n"
+                        "const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;\n\n"
+                        "for(int i1=0;i1<Nxx_plus_2NGHOSTS1;i1++) for(int i0=0;i0<Nxx_plus_2NGHOSTS0;i0++) {"
+                    )
+                    defines_kernel_body += f"""
+                  const REAL xx0 = x0[i0];
+                  const REAL xx1 = x1[i1];
                   rfmstruct->{freevars_uniq_xx_indep[which_freevar]}[i0 + Nxx_plus_2NGHOSTS0*i1] = {sp.ccode(freevars_uniq_vals[which_freevar], type_aliases=sp_type_alias)};
                 }}\n\n"""
+                    # This is needed by register_CFunctions_rfm_precompute
+                    self.rfm_struct__define_kernel_dict[
+                        freevars_uniq_xx_indep[which_freevar]
+                    ] = {
+                        "body": defines_kernel_body,
+                        "expr": freevars_uniq_vals[which_freevar],
+                        "coord": ["x0", "x1"],
+                    }
                     self.readvr_str[
                         0
                     ] += f"MAYBE_UNUSED const REAL {freevars_uniq_xx_indep[which_freevar]} = rfmstruct->{freevars_uniq_xx_indep[which_freevar]}[i0 + Nxx_plus_2NGHOSTS0*i1];\n"
@@ -196,6 +215,7 @@ def generate_rfmprecompute_defines(
         rfm_precompute.rfm_struct__define_kernel_dict,
     )
     for i, (key_sym, kernel_dict) in enumerate(kernel_dicts.items()):
+        # These should all be in paramstruct?
         unique_symbols = get_unique_expression_symbols_as_strings(
             kernel_dict["expr"], exclude=[f"xx{j}" for j in range(3)]
         )
@@ -213,7 +233,7 @@ def generate_rfmprecompute_defines(
                 kernel_body,
                 {
                     "rfmstruct": "rfm_struct *restrict",
-                    f'{kernel_dict["coord"]}': "const REAL *restrict",
+                    **{f"{x}": "const REAL *restrict" for x in kernel_dict["coord"]},
                 },
                 f"{name}__{key_sym}_gpu",
                 launch_dict={
@@ -229,7 +249,7 @@ def generate_rfmprecompute_defines(
                 {
                     "params": "const params_struct *restrict",
                     "rfmstruct": "rfm_struct *restrict",
-                    f'{kernel_dict["coord"]}': "const REAL *restrict",
+                    **{f"{x}": "const REAL *restrict" for x in kernel_dict["coord"]},
                 },
                 f"{name}__{key_sym}_host",
                 launch_dict=None,
@@ -374,6 +394,37 @@ def register_CFunctions_rfm_precompute(
 
     :param list_of_CoordSystems: List of coordinate systems to register the C functions.
     :param parallelization: Parallelization method to use.
+
+    Doctest:
+    >>> import nrpy.c_function as cfc
+    >>> from nrpy.infrastructures.BHaH import rfm_precompute
+    >>> from nrpy.reference_metric import supported_CoordSystems
+    >>> from nrpy.helpers.generic import validate_strings
+    >>> import nrpy.params as par
+    >>> par.set_parval_from_str("fp_type", "float")
+    >>> supported_Parallelizations = ["openmp", "cuda"]
+    >>> for parallelization in supported_Parallelizations:
+    ...    for CoordSystem in supported_CoordSystems:
+    ...       cfc.CFunction_dict.clear()
+    ...       rfm_precompute.register_CFunctions_rfm_precompute([CoordSystem], parallelization=parallelization)
+    ...       for rfm_base_function in ["malloc", "defines", "free"]:
+    ...          generated_str = cfc.CFunction_dict[f'rfm_precompute_{rfm_base_function}__rfm__{CoordSystem}'].full_function
+    ...          validation_desc = f"{rfm_base_function}__{parallelization}__{CoordSystem}".replace(" ", "_")
+    ...          validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
+    Setting up reference_metric[Spherical_rfm_precompute]...
+    Setting up reference_metric[SinhSpherical_rfm_precompute]...
+    Setting up reference_metric[SinhSphericalv2n2_rfm_precompute]...
+    Setting up reference_metric[Cartesian_rfm_precompute]...
+    Setting up reference_metric[SinhCartesian_rfm_precompute]...
+    Setting up reference_metric[Cylindrical_rfm_precompute]...
+    Setting up reference_metric[SinhCylindrical_rfm_precompute]...
+    Setting up reference_metric[SinhCylindricalv2n2_rfm_precompute]...
+    Setting up reference_metric[SymTP_rfm_precompute]...
+    Setting up reference_metric[SinhSymTP_rfm_precompute]...
+    Setting up reference_metric[LWedgeHSinhSph_rfm_precompute]...
+    Setting up reference_metric[UWedgeHSinhSph_rfm_precompute]...
+    Setting up reference_metric[RingHoleySinhSpherical_rfm_precompute]...
+    Setting up reference_metric[HoleySinhSpherical_rfm_precompute]...
     """
     combined_BHaH_defines_list = []
     for CoordSystem in list_of_CoordSystems:
@@ -446,3 +497,15 @@ def register_CFunctions_rfm_precompute(
     BHaH_defines += "\n".join(sorted(superfast_uniq(combined_BHaH_defines_list)))
     BHaH_defines += "\n} rfm_struct;\n"
     register_BHaH_defines("reference_metric", BHaH_defines)
+
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")
