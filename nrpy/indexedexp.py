@@ -666,7 +666,7 @@ class NonInvertibleMatrixError(ZeroDivisionError):
 
 # We use the following functions to evaluate 3-metric inverses
 def symm_matrix_inverter2x2(
-    a: List[List[Union[sp.Expr, sp.Symbol]]]
+    a: List[List[Union[sp.Expr, sp.Symbol]]],
 ) -> Tuple[List[List[Union[sp.Expr, sp.Symbol]]], Union[sp.Expr, sp.Symbol]]:
     """
     Calculate the inverse and determinant of a symmetric 2x2 matrix.
@@ -700,7 +700,7 @@ def symm_matrix_inverter2x2(
 
 
 def symm_matrix_inverter3x3(
-    a: Sequence[Sequence[Union[sp.Expr, sp.Symbol]]]
+    a: Sequence[Sequence[Union[sp.Expr, sp.Symbol]]],
 ) -> Tuple[List[List[Union[sp.Expr, sp.Symbol]]], Union[sp.Expr, sp.Symbol]]:
     """
     Calculate the inverse and determinant of a symmetric 3x3 matrix.
@@ -771,7 +771,7 @@ def symm_matrix_inverter3x3(
 #             print(check_zero(IsUnit[offdiag_i][offdiag_j]))
 # # ^^ all should output as True.
 def symm_matrix_inverter4x4(
-    a: List[List[Union[sp.Expr, sp.Symbol]]]
+    a: List[List[Union[sp.Expr, sp.Symbol]]],
 ) -> Tuple[List[List[Union[sp.Expr, sp.Symbol]]], Union[sp.Expr, sp.Symbol]]:
     """
     Calculate the inverse and determinant of a 4x4 symmetric matrix.
@@ -928,7 +928,7 @@ def symm_matrix_inverter4x4(
 # SymPy's generic matrix inverter takes a long time to invert 3x3 matrices, so here we have an optimized version.
 # We use the following functions to evaluate 3-metric inverses
 def generic_matrix_inverter2x2(
-    a: List[List[Union[sp.Expr, sp.Symbol]]]
+    a: List[List[Union[sp.Expr, sp.Symbol]]],
 ) -> Tuple[List[List[Union[sp.Expr, sp.Symbol]]], Union[sp.Expr, sp.Symbol]]:
     """
     Calculate the inverse and determinant of a general 2x2 matrix.
@@ -958,7 +958,7 @@ def generic_matrix_inverter2x2(
 
 
 def generic_matrix_inverter3x3(
-    a: List[List[Union[sp.Expr, sp.Symbol]]]
+    a: List[List[Union[sp.Expr, sp.Symbol]]],
 ) -> Tuple[List[List[Union[sp.Expr, sp.Symbol]]], Union[sp.Expr, sp.Symbol]]:
     """
     Calculate the inverse and determinant of a general 3x3 matrix.
@@ -1005,7 +1005,7 @@ def generic_matrix_inverter3x3(
 
 
 def generic_matrix_inverter4x4(
-    a: List[List[Union[sp.Expr, sp.Symbol]]]
+    a: List[List[Union[sp.Expr, sp.Symbol]]],
 ) -> Tuple[List[List[Union[sp.Expr, sp.Symbol]]], Union[sp.Expr, sp.Symbol]]:
     """
     Calculate the inverse and determinant of a general 4x4 matrix.
