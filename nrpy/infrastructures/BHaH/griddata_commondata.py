@@ -54,7 +54,7 @@ def register_griddata_commondata(
     """
 
     def register_griddata_or_commondata(
-        dictionary: Dict[str, List[GridCommonData]]
+        dictionary: Dict[str, List[GridCommonData]],
     ) -> None:
         if module in dictionary:
             if any(gd.c_declaration == c_declaration for gd in dictionary[module]):
