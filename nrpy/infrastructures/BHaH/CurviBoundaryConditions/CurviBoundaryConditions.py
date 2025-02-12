@@ -1561,7 +1561,6 @@ def setup_Cfunction_apply_bcs_pure_only(
 
     # Specify compute kernel body
     kernel_body = ""
-    custom_access = "d_gridfunctions" if parallelization == "cuda" else "custom"
     for i in range(3):
         kernel_body += (
             f"int const Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n".replace(
@@ -1596,7 +1595,7 @@ for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {
     for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {{
         // *** Apply radiation BCs to all outer boundary points. ***
         rhs_gfs[IDX4pt(which_gf, idx3)] = radiation_bcs(params, xx, gfs, rhs_gfs, which_gf,
-                                                        {custom_access}_wavespeed[which_gf], {custom_access}_f_infinity[which_gf],
+                                                        custom_wavespeed[which_gf], custom_f_infinity[which_gf],
                                                         i0,i1,i2, FACEX0,FACEX1,FACEX2);
     }}
   }}
