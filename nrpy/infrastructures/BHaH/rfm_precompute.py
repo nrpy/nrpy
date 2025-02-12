@@ -260,16 +260,16 @@ def generate_rfmprecompute_defines(
                 cfunc_type="static void",
             )
         prefunc += device_kernel.CFunction.full_function
-        body += "{\n"
         if parallelization == "cuda":
+            body += "{\n"
             body += "const size_t param_streamid = params->grid_idx % NUM_STREAMS;\n"
             body += device_kernel.launch_block
             body += device_kernel.c_function_call().replace(
                 "(streamid", "(param_streamid"
             )
+            body += "}\n"
         else:
             body += device_kernel.c_function_call()
-        body += "}\n"
     return prefunc, body
 
 
@@ -438,7 +438,11 @@ def register_CFunctions_rfm_precompute(
         body = ""
         for i in range(3):
             body += f"MAYBE_UNUSED const REAL *restrict x{i} = xx[{i}];\n"
-            body += f"MAYBE_UNUSED const int Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n"
+            body += (
+                f"MAYBE_UNUSED const int Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n"
+                if parallelization == "cuda"
+                else ""
+            )
 
         defines_prefunc, defines_body = generate_rfmprecompute_defines(
             rfm_precompute, parallelization=parallelization
