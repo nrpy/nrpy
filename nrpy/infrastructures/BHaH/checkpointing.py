@@ -50,7 +50,7 @@ def register_CFunction_read_checkpoint(
 """
     if enable_bhahaha:
         body += r"""
-  for (int i = 0; i < commondata->bah_num_horizons; i++) {
+  for (int i = 0; i < commondata->bah_max_num_horizons; i++) {
     FREAD(&commondata->bhahaha_params_and_data[i], sizeof(bhahaha_params_and_data_struct), 1, cp_file);
     commondata->bhahaha_params_and_data[i].prev_horizon_m1 = malloc(sizeof(REAL) * 64 * 32);
     commondata->bhahaha_params_and_data[i].prev_horizon_m2 = malloc(sizeof(REAL) * 64 * 32);
@@ -149,7 +149,7 @@ if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {
 """
     if enable_bhahaha:
         body += r"""
-  for (int i = 0; i < commondata->bah_num_horizons; i++) {
+  for (int i = 0; i < commondata->bah_max_num_horizons; i++) {
     fwrite(&commondata->bhahaha_params_and_data[i], sizeof(bhahaha_params_and_data_struct), 1, cp_file);
     fwrite(commondata->bhahaha_params_and_data[i].prev_horizon_m1, sizeof(REAL), 64 * 32, cp_file);
     fwrite(commondata->bhahaha_params_and_data[i].prev_horizon_m2, sizeof(REAL), 64 * 32, cp_file);

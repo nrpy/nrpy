@@ -323,7 +323,7 @@ def expr_convert_to_simd_intrins(
         return a
 
     def lookup_rational(
-        arg: Union[Expr, Symbol, Rational, Basic]
+        arg: Union[Expr, Symbol, Rational, Basic],
     ) -> Union[Expr, Symbol, Rational, Basic]:
         if arg.func == Symbol:
             try:

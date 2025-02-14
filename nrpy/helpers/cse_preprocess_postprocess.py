@@ -273,7 +273,7 @@ def cse_preprocess(
 
 
 def cse_postprocess(
-    cse_output: Tuple[List[Tuple[sp.Symbol, sp.Expr]], List[sp.Expr]]
+    cse_output: Tuple[List[Tuple[sp.Symbol, sp.Expr]], List[sp.Expr]],
 ) -> Tuple[List[Tuple[sp.Symbol, sp.Expr]], List[sp.Expr]]:
     """
     Perform post-processing on the output from SymPy's CSE algorithm.

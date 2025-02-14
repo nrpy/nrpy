@@ -95,7 +95,7 @@ def deep_update(d: Dict[Any, Any], u: Dict[Any, Any]) -> None:
 
 
 def unpack_NRPy_environment_dict(
-    NRPy_environment_dict: Dict[str, NRPyEnv_type]
+    NRPy_environment_dict: Dict[str, NRPyEnv_type],
 ) -> None:
     """
     Unpack the NRPy environment dictionaries.
