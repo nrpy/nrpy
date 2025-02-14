@@ -129,11 +129,11 @@ size_t nsteps_Ts , i;
 size_t minimaIDX;
 for(int iter = 0; iter < 2; iter++) {
   dt = dt * 0.1;
-  nsteps_Ts = (size_t) ((right - left) / dt );
+  nsteps_Ts = (size_t) ((right_refined - left_refined) / dt );
   Ts = (REAL *)malloc(nsteps_Ts * sizeof(REAL));
   abs_F_dots = (REAL *)malloc(nsteps_Ts * sizeof(REAL));
   for (i = 0 ; i < nsteps_Ts; i++){
-    Ts[i] = left + i * dt;
+    Ts[i] = left_refined + i * dt;
     abs_F_dots[i] = fabs(gsl_spline_eval_deriv(spline,Ts[i],acc));
   }
   minimaIDX = SEOBNRv5_aligned_spin_argrelmin(abs_F_dots,nsteps_Ts);

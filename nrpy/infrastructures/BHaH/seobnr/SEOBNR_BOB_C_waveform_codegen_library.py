@@ -96,8 +96,8 @@ for (i = 0; i < commondata->nsteps_fine; i++){
   Q1[i] = hamp[i] * prstar * prstar / (r[i] * r[i] * Omega[i] * Omega[i]);
   Q2[i] = Q1[i] / r[i];
   Q3[i] = Q2[i] / sqrt(r[i]);
-  P1[i] = prstar / r[i] /Omega[i];
-  P2[i] = P1[i] * prstar * prstar;
+  P1[i] = -prstar / r[i] /Omega[i];
+  P2[i] = -P1[i] * prstar * prstar;
 }
 SEOBNRv5_aligned_spin_unwrap(phase,phase_unwrapped,commondata->nsteps_fine);
 // Find t_ISCO:
@@ -137,7 +137,7 @@ else{
 }
 commondata->t_attach = t_peak;
 size_t N = 5;
-size_t left = MAX(peak_idx - N, 0);
+size_t left = MAX(peak_idx, N) - N;
 size_t right = MIN(peak_idx + N , commondata->nsteps_fine);
 REAL Q_cropped1[right - left], Q_cropped2[right - left], Q_cropped3[right - left], P_cropped1[right - left], P_cropped2[right - left];
 REAL t_cropped[right-left], phase_cropped[right - left], amp_cropped[right-left];
@@ -336,7 +336,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_interpolate_modes() -> (
     body = """
 size_t i;
 const size_t nsteps_inspiral_old = commondata->nsteps_inspiral;
-const size_t nsteps_new = (size_t) (commondata->waveform_inspiral[IDX_WF(commondata->nsteps_inspiral - 1,TIME)] - commondata->waveform_inspiral[IDX_WF(0,TIME)]) / dT;
+const size_t nsteps_new = (size_t) ((commondata->waveform_inspiral[IDX_WF(commondata->nsteps_inspiral - 1,TIME)] - commondata->waveform_inspiral[IDX_WF(0,TIME)]) / dT);
 // build the complex inspiral modes
 REAL *restrict times_old = (REAL *)malloc(nsteps_inspiral_old * sizeof(REAL));
 REAL *restrict orbital_phases = (REAL *)malloc(nsteps_inspiral_old * sizeof(REAL));
@@ -458,8 +458,8 @@ for(i = 0; i < nsteps_ringdown; i++){
 """
     if use_seobnrv5_merger_ringdown:
         body += """
-size_t left = MIN(0,idx_match - 5);
-size_t right = MAX(commondata->nsteps_inspiral,idx_match + 5);
+size_t left = MAX(5,idx_match) - 5;
+size_t right = MIN(commondata->nsteps_inspiral,idx_match + 5);
 REAL times_cropped[right-left] , amps_cropped[right-left] , phases_cropped[right-left];
 for (i = left; i < right; i++){
   times_cropped[i - left] = times_new[i];
@@ -487,7 +487,7 @@ SEOBNRv5_aligned_spin_merger_waveform_from_times(ringdown_time,ringdown_amp,ring
         body += """
 const REAL phase_match = h22_phase_new[idx_match + 1];
 BOB_aligned_spin_waveform_from_times(ringdown_time,ringdown_amp,ringdown_phase,nsteps_ringdown,commondata);
-const REAL true_sign = copysign(phase_match,1.);
+const REAL true_sign = copysign(1.,phase_match);
 for(i = 0; i < nsteps_ringdown; i++){
   ringdown_phase[i] = true_sign*ringdown_phase[i] + phase_match;
 }
