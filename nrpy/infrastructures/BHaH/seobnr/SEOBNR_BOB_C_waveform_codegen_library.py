@@ -128,9 +128,10 @@ else{
 
 REAL t_peak = commondata->t_ISCO - commondata->Delta_t;
 size_t peak_idx;
+// gsl doesn't calculate derivatives well at the edge so use nsteps - 2 for t_peak
 if (t_peak > times[commondata->nsteps_fine - 1]){
-  t_peak = times[commondata->nsteps_fine - 1];
-  peak_idx = commondata->nsteps_fine - 1;
+  t_peak = times[commondata->nsteps_fine - 2];
+  peak_idx = commondata->nsteps_fine - 2;
 }
 else{
   peak_idx = gsl_interp_bsearch(times, t_peak, 0, commondata->nsteps_fine);
