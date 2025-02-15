@@ -156,9 +156,9 @@ def simple_loop(
         rfmp = rfm_precompute.ReferenceMetricPrecompute(CoordSystem)
         if enable_simd:
             read_rfm_xx_arrays = [
-                rfmp.readvr_SIMD_inner_str[0],
-                rfmp.readvr_SIMD_outer_str[1],
-                rfmp.readvr_SIMD_outer_str[2],
+                rfmp.readvr_intrinsics_inner_str[0],
+                rfmp.readvr_intrinsics_outer_str[1],
+                rfmp.readvr_intrinsics_outer_str[2],
             ]
         else:
             read_rfm_xx_arrays = [

@@ -1517,6 +1517,23 @@ class rfm_dict(Dict[str, ReferenceMetric]):
 
 reference_metric = rfm_dict()
 
+supported_CoordSystems = [
+    "Spherical",
+    "SinhSpherical",
+    "SinhSphericalv2n2",
+    "Cartesian",
+    "SinhCartesian",
+    "Cylindrical",
+    "SinhCylindrical",
+    "SinhCylindricalv2n2",
+    "SymTP",
+    "SinhSymTP",
+    "LWedgeHSinhSph",
+    "UWedgeHSinhSph",
+    "RingHoleySinhSpherical",
+    "HoleySinhSpherical",
+]
+
 if __name__ == "__main__":
     import doctest
     import os
@@ -1531,22 +1548,7 @@ if __name__ == "__main__":
     else:
         print(f"Doctest passed: All {results.attempted} test(s) passed")
 
-    for Coord in [
-        "Spherical",
-        "SinhSpherical",
-        "SinhSphericalv2n2",
-        "Cartesian",
-        "SinhCartesian",
-        "Cylindrical",
-        "SinhCylindrical",
-        "SinhCylindricalv2n2",
-        "SymTP",
-        "SinhSymTP",
-        "LWedgeHSinhSph",
-        "UWedgeHSinhSph",
-        "RingHoleySinhSpherical",
-        "HoleySinhSpherical",
-    ]:
+    for Coord in supported_CoordSystems:
         rfm = reference_metric[Coord]
         results_dict = ve.process_dictionary_of_expressions(
             rfm.__dict__, fixed_mpfs_for_free_symbols=True
