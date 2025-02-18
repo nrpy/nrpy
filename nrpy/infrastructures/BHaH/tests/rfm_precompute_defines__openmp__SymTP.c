@@ -1,7 +1,7 @@
 #include "../BHaH_defines.h"
 /**
- * GPU Kernel: rfm_precompute_defines__f0_of_xx0_host.
- * Host Kernel to precompute metric quantity f0_of_xx0.
+ * Kernel: rfm_precompute_defines__f0_of_xx0_host.
+ * Kernel to precompute metric quantity f0_of_xx0.
  */
 static void rfm_precompute_defines__f0_of_xx0_host(const params_struct *restrict params, rfm_struct *restrict rfmstruct, const REAL *restrict x0) {
   // Temporary parameters
@@ -11,8 +11,8 @@ static void rfm_precompute_defines__f0_of_xx0_host(const params_struct *restrict
   }
 } // END FUNCTION rfm_precompute_defines__f0_of_xx0_host
 /**
- * GPU Kernel: rfm_precompute_defines__f1_of_xx1_host.
- * Host Kernel to precompute metric quantity f1_of_xx1.
+ * Kernel: rfm_precompute_defines__f1_of_xx1_host.
+ * Kernel to precompute metric quantity f1_of_xx1.
  */
 static void rfm_precompute_defines__f1_of_xx1_host(const params_struct *restrict params, rfm_struct *restrict rfmstruct, const REAL *restrict x1) {
   // Temporary parameters
@@ -22,8 +22,8 @@ static void rfm_precompute_defines__f1_of_xx1_host(const params_struct *restrict
   }
 } // END FUNCTION rfm_precompute_defines__f1_of_xx1_host
 /**
- * GPU Kernel: rfm_precompute_defines__f1_of_xx1__D1_host.
- * Host Kernel to precompute metric quantity f1_of_xx1__D1.
+ * Kernel: rfm_precompute_defines__f1_of_xx1__D1_host.
+ * Kernel to precompute metric quantity f1_of_xx1__D1.
  */
 static void rfm_precompute_defines__f1_of_xx1__D1_host(const params_struct *restrict params, rfm_struct *restrict rfmstruct,
                                                        const REAL *restrict x1) {
@@ -34,8 +34,8 @@ static void rfm_precompute_defines__f1_of_xx1__D1_host(const params_struct *rest
   }
 } // END FUNCTION rfm_precompute_defines__f1_of_xx1__D1_host
 /**
- * GPU Kernel: rfm_precompute_defines__f1_of_xx1__DD11_host.
- * Host Kernel to precompute metric quantity f1_of_xx1__DD11.
+ * Kernel: rfm_precompute_defines__f1_of_xx1__DD11_host.
+ * Kernel to precompute metric quantity f1_of_xx1__DD11.
  */
 static void rfm_precompute_defines__f1_of_xx1__DD11_host(const params_struct *restrict params, rfm_struct *restrict rfmstruct,
                                                          const REAL *restrict x1) {
@@ -46,8 +46,8 @@ static void rfm_precompute_defines__f1_of_xx1__DD11_host(const params_struct *re
   }
 } // END FUNCTION rfm_precompute_defines__f1_of_xx1__DD11_host
 /**
- * GPU Kernel: rfm_precompute_defines__f2_of_xx0_host.
- * Host Kernel to precompute metric quantity f2_of_xx0.
+ * Kernel: rfm_precompute_defines__f2_of_xx0_host.
+ * Kernel to precompute metric quantity f2_of_xx0.
  */
 static void rfm_precompute_defines__f2_of_xx0_host(const params_struct *restrict params, rfm_struct *restrict rfmstruct, const REAL *restrict x0) {
   // Temporary parameters
@@ -58,8 +58,8 @@ static void rfm_precompute_defines__f2_of_xx0_host(const params_struct *restrict
   }
 } // END FUNCTION rfm_precompute_defines__f2_of_xx0_host
 /**
- * GPU Kernel: rfm_precompute_defines__f2_of_xx0__D0_host.
- * Host Kernel to precompute metric quantity f2_of_xx0__D0.
+ * Kernel: rfm_precompute_defines__f2_of_xx0__D0_host.
+ * Kernel to precompute metric quantity f2_of_xx0__D0.
  */
 static void rfm_precompute_defines__f2_of_xx0__D0_host(const params_struct *restrict params, rfm_struct *restrict rfmstruct,
                                                        const REAL *restrict x0) {
@@ -71,8 +71,8 @@ static void rfm_precompute_defines__f2_of_xx0__D0_host(const params_struct *rest
   }
 } // END FUNCTION rfm_precompute_defines__f2_of_xx0__D0_host
 /**
- * GPU Kernel: rfm_precompute_defines__f2_of_xx0__DD00_host.
- * Host Kernel to precompute metric quantity f2_of_xx0__DD00.
+ * Kernel: rfm_precompute_defines__f2_of_xx0__DD00_host.
+ * Kernel to precompute metric quantity f2_of_xx0__DD00.
  */
 static void rfm_precompute_defines__f2_of_xx0__DD00_host(const params_struct *restrict params, rfm_struct *restrict rfmstruct,
                                                          const REAL *restrict x0) {
@@ -85,8 +85,8 @@ static void rfm_precompute_defines__f2_of_xx0__DD00_host(const params_struct *re
   }
 } // END FUNCTION rfm_precompute_defines__f2_of_xx0__DD00_host
 /**
- * GPU Kernel: rfm_precompute_defines__f4_of_xx1_host.
- * Host Kernel to precompute metric quantity f4_of_xx1.
+ * Kernel: rfm_precompute_defines__f4_of_xx1_host.
+ * Kernel to precompute metric quantity f4_of_xx1.
  */
 static void rfm_precompute_defines__f4_of_xx1_host(const params_struct *restrict params, rfm_struct *restrict rfmstruct, const REAL *restrict x1) {
   // Temporary parameters
@@ -97,8 +97,8 @@ static void rfm_precompute_defines__f4_of_xx1_host(const params_struct *restrict
   }
 } // END FUNCTION rfm_precompute_defines__f4_of_xx1_host
 /**
- * GPU Kernel: rfm_precompute_defines__f4_of_xx1__D1_host.
- * Host Kernel to precompute metric quantity f4_of_xx1__D1.
+ * Kernel: rfm_precompute_defines__f4_of_xx1__D1_host.
+ * Kernel to precompute metric quantity f4_of_xx1__D1.
  */
 static void rfm_precompute_defines__f4_of_xx1__D1_host(const params_struct *restrict params, rfm_struct *restrict rfmstruct,
                                                        const REAL *restrict x1) {
@@ -110,8 +110,8 @@ static void rfm_precompute_defines__f4_of_xx1__D1_host(const params_struct *rest
   }
 } // END FUNCTION rfm_precompute_defines__f4_of_xx1__D1_host
 /**
- * GPU Kernel: rfm_precompute_defines__f4_of_xx1__DD11_host.
- * Host Kernel to precompute metric quantity f4_of_xx1__DD11.
+ * Kernel: rfm_precompute_defines__f4_of_xx1__DD11_host.
+ * Kernel to precompute metric quantity f4_of_xx1__DD11.
  */
 static void rfm_precompute_defines__f4_of_xx1__DD11_host(const params_struct *restrict params, rfm_struct *restrict rfmstruct,
                                                          const REAL *restrict x1) {

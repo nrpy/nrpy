@@ -1,7 +1,7 @@
 #include "../BHaH_defines.h"
 /**
- * GPU Kernel: rfm_precompute_defines__f0_of_xx0_gpu.
- * GPU Kernel to precompute metric quantity f0_of_xx0.
+ * Kernel: rfm_precompute_defines__f0_of_xx0_gpu.
+ * Kernel to precompute metric quantity f0_of_xx0.
  */
 __global__ static void rfm_precompute_defines__f0_of_xx0_gpu(const size_t streamid, rfm_struct *restrict rfmstruct, const REAL *restrict x0) {
   // Temporary parameters
@@ -17,8 +17,8 @@ __global__ static void rfm_precompute_defines__f0_of_xx0_gpu(const size_t stream
   }
 } // END FUNCTION rfm_precompute_defines__f0_of_xx0_gpu
 /**
- * GPU Kernel: rfm_precompute_defines__f0_of_xx0__D0_gpu.
- * GPU Kernel to precompute metric quantity f0_of_xx0__D0.
+ * Kernel: rfm_precompute_defines__f0_of_xx0__D0_gpu.
+ * Kernel to precompute metric quantity f0_of_xx0__D0.
  */
 __global__ static void rfm_precompute_defines__f0_of_xx0__D0_gpu(const size_t streamid, rfm_struct *restrict rfmstruct, const REAL *restrict x0) {
   // Temporary parameters
@@ -35,8 +35,8 @@ __global__ static void rfm_precompute_defines__f0_of_xx0__D0_gpu(const size_t st
   }
 } // END FUNCTION rfm_precompute_defines__f0_of_xx0__D0_gpu
 /**
- * GPU Kernel: rfm_precompute_defines__f0_of_xx0__DD00_gpu.
- * GPU Kernel to precompute metric quantity f0_of_xx0__DD00.
+ * Kernel: rfm_precompute_defines__f0_of_xx0__DD00_gpu.
+ * Kernel to precompute metric quantity f0_of_xx0__DD00.
  */
 __global__ static void rfm_precompute_defines__f0_of_xx0__DD00_gpu(const size_t streamid, rfm_struct *restrict rfmstruct, const REAL *restrict x0) {
   // Temporary parameters
@@ -53,8 +53,8 @@ __global__ static void rfm_precompute_defines__f0_of_xx0__DD00_gpu(const size_t 
   }
 } // END FUNCTION rfm_precompute_defines__f0_of_xx0__DD00_gpu
 /**
- * GPU Kernel: rfm_precompute_defines__f0_of_xx0__DDD000_gpu.
- * GPU Kernel to precompute metric quantity f0_of_xx0__DDD000.
+ * Kernel: rfm_precompute_defines__f0_of_xx0__DDD000_gpu.
+ * Kernel to precompute metric quantity f0_of_xx0__DDD000.
  */
 __global__ static void rfm_precompute_defines__f0_of_xx0__DDD000_gpu(const size_t streamid, rfm_struct *restrict rfmstruct, const REAL *restrict x0) {
   // Temporary parameters
@@ -71,8 +71,8 @@ __global__ static void rfm_precompute_defines__f0_of_xx0__DDD000_gpu(const size_
   }
 } // END FUNCTION rfm_precompute_defines__f0_of_xx0__DDD000_gpu
 /**
- * GPU Kernel: rfm_precompute_defines__f3_of_xx2_gpu.
- * GPU Kernel to precompute metric quantity f3_of_xx2.
+ * Kernel: rfm_precompute_defines__f3_of_xx2_gpu.
+ * Kernel to precompute metric quantity f3_of_xx2.
  */
 __global__ static void rfm_precompute_defines__f3_of_xx2_gpu(const size_t streamid, rfm_struct *restrict rfmstruct, const REAL *restrict x2) {
   // Temporary parameters
@@ -88,8 +88,8 @@ __global__ static void rfm_precompute_defines__f3_of_xx2_gpu(const size_t stream
   }
 } // END FUNCTION rfm_precompute_defines__f3_of_xx2_gpu
 /**
- * GPU Kernel: rfm_precompute_defines__f3_of_xx2__D2_gpu.
- * GPU Kernel to precompute metric quantity f3_of_xx2__D2.
+ * Kernel: rfm_precompute_defines__f3_of_xx2__D2_gpu.
+ * Kernel to precompute metric quantity f3_of_xx2__D2.
  */
 __global__ static void rfm_precompute_defines__f3_of_xx2__D2_gpu(const size_t streamid, rfm_struct *restrict rfmstruct, const REAL *restrict x2) {
   // Temporary parameters
@@ -106,8 +106,8 @@ __global__ static void rfm_precompute_defines__f3_of_xx2__D2_gpu(const size_t st
   }
 } // END FUNCTION rfm_precompute_defines__f3_of_xx2__D2_gpu
 /**
- * GPU Kernel: rfm_precompute_defines__f3_of_xx2__DD22_gpu.
- * GPU Kernel to precompute metric quantity f3_of_xx2__DD22.
+ * Kernel: rfm_precompute_defines__f3_of_xx2__DD22_gpu.
+ * Kernel to precompute metric quantity f3_of_xx2__DD22.
  */
 __global__ static void rfm_precompute_defines__f3_of_xx2__DD22_gpu(const size_t streamid, rfm_struct *restrict rfmstruct, const REAL *restrict x2) {
   // Temporary parameters
@@ -136,7 +136,6 @@ void rfm_precompute_defines__rfm__SinhCylindrical(const commondata_struct *restr
   MAYBE_UNUSED const REAL *restrict x2 = xx[2];
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
   {
-    const size_t param_streamid = params->grid_idx % NUM_STREAMS;
 
     const size_t threads_in_x_dir = 32;
     const size_t threads_in_y_dir = 1;
@@ -146,12 +145,11 @@ void rfm_precompute_defines__rfm__SinhCylindrical(const commondata_struct *restr
                          (Nxx_plus_2NGHOSTS1 + threads_in_y_dir - 1) / threads_in_y_dir,
                          (Nxx_plus_2NGHOSTS2 + threads_in_z_dir - 1) / threads_in_z_dir);
     size_t sm = 0;
-    size_t streamid = (param_streamid + 0) % NUM_STREAMS;
-    rfm_precompute_defines__f0_of_xx0_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(param_streamid, rfmstruct, x0);
+    size_t streamid = params->grid_idx % NUM_STREAMS;
+    rfm_precompute_defines__f0_of_xx0_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, rfmstruct, x0);
     cudaCheckErrors(cudaKernel, "rfm_precompute_defines__f0_of_xx0_gpu failure");
   }
   {
-    const size_t param_streamid = params->grid_idx % NUM_STREAMS;
 
     const size_t threads_in_x_dir = 32;
     const size_t threads_in_y_dir = 1;
@@ -161,12 +159,11 @@ void rfm_precompute_defines__rfm__SinhCylindrical(const commondata_struct *restr
                          (Nxx_plus_2NGHOSTS1 + threads_in_y_dir - 1) / threads_in_y_dir,
                          (Nxx_plus_2NGHOSTS2 + threads_in_z_dir - 1) / threads_in_z_dir);
     size_t sm = 0;
-    size_t streamid = (param_streamid + 1) % NUM_STREAMS;
-    rfm_precompute_defines__f0_of_xx0__D0_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(param_streamid, rfmstruct, x0);
+    size_t streamid = params->grid_idx % NUM_STREAMS;
+    rfm_precompute_defines__f0_of_xx0__D0_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, rfmstruct, x0);
     cudaCheckErrors(cudaKernel, "rfm_precompute_defines__f0_of_xx0__D0_gpu failure");
   }
   {
-    const size_t param_streamid = params->grid_idx % NUM_STREAMS;
 
     const size_t threads_in_x_dir = 32;
     const size_t threads_in_y_dir = 1;
@@ -176,12 +173,11 @@ void rfm_precompute_defines__rfm__SinhCylindrical(const commondata_struct *restr
                          (Nxx_plus_2NGHOSTS1 + threads_in_y_dir - 1) / threads_in_y_dir,
                          (Nxx_plus_2NGHOSTS2 + threads_in_z_dir - 1) / threads_in_z_dir);
     size_t sm = 0;
-    size_t streamid = (param_streamid + 2) % NUM_STREAMS;
-    rfm_precompute_defines__f0_of_xx0__DD00_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(param_streamid, rfmstruct, x0);
+    size_t streamid = params->grid_idx % NUM_STREAMS;
+    rfm_precompute_defines__f0_of_xx0__DD00_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, rfmstruct, x0);
     cudaCheckErrors(cudaKernel, "rfm_precompute_defines__f0_of_xx0__DD00_gpu failure");
   }
   {
-    const size_t param_streamid = params->grid_idx % NUM_STREAMS;
 
     const size_t threads_in_x_dir = 32;
     const size_t threads_in_y_dir = 1;
@@ -191,12 +187,11 @@ void rfm_precompute_defines__rfm__SinhCylindrical(const commondata_struct *restr
                          (Nxx_plus_2NGHOSTS1 + threads_in_y_dir - 1) / threads_in_y_dir,
                          (Nxx_plus_2NGHOSTS2 + threads_in_z_dir - 1) / threads_in_z_dir);
     size_t sm = 0;
-    size_t streamid = (param_streamid + 3) % NUM_STREAMS;
-    rfm_precompute_defines__f0_of_xx0__DDD000_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(param_streamid, rfmstruct, x0);
+    size_t streamid = params->grid_idx % NUM_STREAMS;
+    rfm_precompute_defines__f0_of_xx0__DDD000_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, rfmstruct, x0);
     cudaCheckErrors(cudaKernel, "rfm_precompute_defines__f0_of_xx0__DDD000_gpu failure");
   }
   {
-    const size_t param_streamid = params->grid_idx % NUM_STREAMS;
 
     const size_t threads_in_x_dir = 32;
     const size_t threads_in_y_dir = 1;
@@ -206,12 +201,11 @@ void rfm_precompute_defines__rfm__SinhCylindrical(const commondata_struct *restr
                          (Nxx_plus_2NGHOSTS1 + threads_in_y_dir - 1) / threads_in_y_dir,
                          (Nxx_plus_2NGHOSTS2 + threads_in_z_dir - 1) / threads_in_z_dir);
     size_t sm = 0;
-    size_t streamid = (param_streamid + 4) % NUM_STREAMS;
-    rfm_precompute_defines__f3_of_xx2_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(param_streamid, rfmstruct, x2);
+    size_t streamid = params->grid_idx % NUM_STREAMS;
+    rfm_precompute_defines__f3_of_xx2_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, rfmstruct, x2);
     cudaCheckErrors(cudaKernel, "rfm_precompute_defines__f3_of_xx2_gpu failure");
   }
   {
-    const size_t param_streamid = params->grid_idx % NUM_STREAMS;
 
     const size_t threads_in_x_dir = 32;
     const size_t threads_in_y_dir = 1;
@@ -221,12 +215,11 @@ void rfm_precompute_defines__rfm__SinhCylindrical(const commondata_struct *restr
                          (Nxx_plus_2NGHOSTS1 + threads_in_y_dir - 1) / threads_in_y_dir,
                          (Nxx_plus_2NGHOSTS2 + threads_in_z_dir - 1) / threads_in_z_dir);
     size_t sm = 0;
-    size_t streamid = (param_streamid + 5) % NUM_STREAMS;
-    rfm_precompute_defines__f3_of_xx2__D2_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(param_streamid, rfmstruct, x2);
+    size_t streamid = params->grid_idx % NUM_STREAMS;
+    rfm_precompute_defines__f3_of_xx2__D2_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, rfmstruct, x2);
     cudaCheckErrors(cudaKernel, "rfm_precompute_defines__f3_of_xx2__D2_gpu failure");
   }
   {
-    const size_t param_streamid = params->grid_idx % NUM_STREAMS;
 
     const size_t threads_in_x_dir = 32;
     const size_t threads_in_y_dir = 1;
@@ -236,8 +229,8 @@ void rfm_precompute_defines__rfm__SinhCylindrical(const commondata_struct *restr
                          (Nxx_plus_2NGHOSTS1 + threads_in_y_dir - 1) / threads_in_y_dir,
                          (Nxx_plus_2NGHOSTS2 + threads_in_z_dir - 1) / threads_in_z_dir);
     size_t sm = 0;
-    size_t streamid = (param_streamid + 6) % NUM_STREAMS;
-    rfm_precompute_defines__f3_of_xx2__DD22_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(param_streamid, rfmstruct, x2);
+    size_t streamid = params->grid_idx % NUM_STREAMS;
+    rfm_precompute_defines__f3_of_xx2__DD22_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, rfmstruct, x2);
     cudaCheckErrors(cudaKernel, "rfm_precompute_defines__f3_of_xx2__DD22_gpu failure");
   }
 } // END FUNCTION rfm_precompute_defines__rfm__SinhCylindrical
