@@ -13,9 +13,9 @@ from typing import Dict, List, Union
 import sympy as sp
 
 import nrpy.c_function as cfc
-from nrpy.helpers.gpu.utilities import generate_kernel_and_launch_code
 from nrpy.c_codegen import c_codegen
 from nrpy.helpers.generic import superfast_uniq
+from nrpy.helpers.gpu.utilities import generate_kernel_and_launch_code
 
 ##############################################################################
 # Parallelization check and set:
@@ -162,15 +162,13 @@ class RKFunction:
         kernel_body += self.loop_body.replace("commondata->dt", "dt") + "\n}\n"
         self.kernel_params_lst = [f"{v} {k}" for k, v in self.kernel_params.items()]
 
-        comments=f"Compute RK substep {self.rk_step}."
+        comments = f"Compute RK substep {self.rk_step}."
         # Prepare the argument dicts
         arg_dict_cuda = self.kernel_params.copy()
         arg_dict_cuda.pop("params")
         if self.enable_intrinsics and parallelization == "openmp":
             kernel_body = kernel_body.replace("dt", "DT")
-            kernel_body = (
-                "const REAL_SIMD_ARRAY DT = ConstSIMD(dt);\n" + kernel_body
-            )
+            kernel_body = "const REAL_SIMD_ARRAY DT = ConstSIMD(dt);\n" + kernel_body
         prefunc, new_body = generate_kernel_and_launch_code(
             self.name,
             kernel_body,
@@ -179,12 +177,10 @@ class RKFunction:
             parallelization=parallelization,
             comments=comments,
             launch_dict={
-                "blocks_per_grid": [
-                    "(Ntot + threads_in_x_dir - 1) / threads_in_x_dir"
-                ],
+                "blocks_per_grid": ["(Ntot + threads_in_x_dir - 1) / threads_in_x_dir"],
                 "threads_per_block": ["32"],
                 "stream": "params->grid_idx % NUM_STREAMS",
-            }
+            },
         )
         self.body += new_body
 
