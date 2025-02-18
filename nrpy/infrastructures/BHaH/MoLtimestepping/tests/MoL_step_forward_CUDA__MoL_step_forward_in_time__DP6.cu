@@ -9,8 +9,8 @@
        (ii) < d_params[streamid].Nxx_plus_2NGHOSTS0 * d_params[streamid].Nxx_plus_2NGHOSTS1 * d_params[streamid].Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;  \
        (ii) += (stride0))
 /**
- * GPU Kernel: rk_substep_1_gpu.
- * GPU Kernel to compute RK substep 1.
+ * Kernel: rk_substep_1_gpu.
+ * Compute RK substep 1.
  */
 __global__ static void rk_substep_1_gpu(const size_t streamid, REAL *restrict k1_gfs, REAL *restrict y_n_gfs, REAL *restrict next_y_input_gfs,
                                         const REAL dt) {
@@ -35,20 +35,23 @@ static void rk_substep_1__launcher(params_struct *restrict params, REAL *restric
   const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
   MAYBE_UNUSED const int Ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;
 
-  const size_t threads_in_x_dir = 32;
-  const size_t threads_in_y_dir = 1;
-  const size_t threads_in_z_dir = 1;
-  dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
-  dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
-  size_t sm = 0;
-  size_t streamid = params->grid_idx % NUM_STREAMS;
-  rk_substep_1_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, y_n_gfs, next_y_input_gfs, dt);
-  cudaCheckErrors(cudaKernel, "rk_substep_1_gpu failure");
+  {
+
+    const size_t threads_in_x_dir = 32;
+    const size_t threads_in_y_dir = 1;
+    const size_t threads_in_z_dir = 1;
+    dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
+    dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
+    size_t sm = 0;
+    size_t streamid = params->grid_idx % NUM_STREAMS;
+    rk_substep_1_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, y_n_gfs, next_y_input_gfs, dt);
+    cudaCheckErrors(cudaKernel, "rk_substep_1_gpu failure");
+  }
 } // END FUNCTION rk_substep_1__launcher
 
 /**
- * GPU Kernel: rk_substep_2_gpu.
- * GPU Kernel to compute RK substep 2.
+ * Kernel: rk_substep_2_gpu.
+ * Compute RK substep 2.
  */
 __global__ static void rk_substep_2_gpu(const size_t streamid, REAL *restrict k1_gfs, REAL *restrict k2_gfs, REAL *restrict y_n_gfs,
                                         REAL *restrict next_y_input_gfs, const REAL dt) {
@@ -81,20 +84,23 @@ static void rk_substep_2__launcher(params_struct *restrict params, REAL *restric
   const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
   MAYBE_UNUSED const int Ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;
 
-  const size_t threads_in_x_dir = 32;
-  const size_t threads_in_y_dir = 1;
-  const size_t threads_in_z_dir = 1;
-  dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
-  dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
-  size_t sm = 0;
-  size_t streamid = params->grid_idx % NUM_STREAMS;
-  rk_substep_2_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, k2_gfs, y_n_gfs, next_y_input_gfs, dt);
-  cudaCheckErrors(cudaKernel, "rk_substep_2_gpu failure");
+  {
+
+    const size_t threads_in_x_dir = 32;
+    const size_t threads_in_y_dir = 1;
+    const size_t threads_in_z_dir = 1;
+    dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
+    dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
+    size_t sm = 0;
+    size_t streamid = params->grid_idx % NUM_STREAMS;
+    rk_substep_2_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, k2_gfs, y_n_gfs, next_y_input_gfs, dt);
+    cudaCheckErrors(cudaKernel, "rk_substep_2_gpu failure");
+  }
 } // END FUNCTION rk_substep_2__launcher
 
 /**
- * GPU Kernel: rk_substep_3_gpu.
- * GPU Kernel to compute RK substep 3.
+ * Kernel: rk_substep_3_gpu.
+ * Compute RK substep 3.
  */
 __global__ static void rk_substep_3_gpu(const size_t streamid, REAL *restrict k1_gfs, REAL *restrict k2_gfs, REAL *restrict k3_gfs,
                                         REAL *restrict y_n_gfs, REAL *restrict next_y_input_gfs, const REAL dt) {
@@ -132,20 +138,23 @@ static void rk_substep_3__launcher(params_struct *restrict params, REAL *restric
   const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
   MAYBE_UNUSED const int Ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;
 
-  const size_t threads_in_x_dir = 32;
-  const size_t threads_in_y_dir = 1;
-  const size_t threads_in_z_dir = 1;
-  dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
-  dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
-  size_t sm = 0;
-  size_t streamid = params->grid_idx % NUM_STREAMS;
-  rk_substep_3_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, k2_gfs, k3_gfs, y_n_gfs, next_y_input_gfs, dt);
-  cudaCheckErrors(cudaKernel, "rk_substep_3_gpu failure");
+  {
+
+    const size_t threads_in_x_dir = 32;
+    const size_t threads_in_y_dir = 1;
+    const size_t threads_in_z_dir = 1;
+    dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
+    dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
+    size_t sm = 0;
+    size_t streamid = params->grid_idx % NUM_STREAMS;
+    rk_substep_3_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, k2_gfs, k3_gfs, y_n_gfs, next_y_input_gfs, dt);
+    cudaCheckErrors(cudaKernel, "rk_substep_3_gpu failure");
+  }
 } // END FUNCTION rk_substep_3__launcher
 
 /**
- * GPU Kernel: rk_substep_4_gpu.
- * GPU Kernel to compute RK substep 4.
+ * Kernel: rk_substep_4_gpu.
+ * Compute RK substep 4.
  */
 __global__ static void rk_substep_4_gpu(const size_t streamid, REAL *restrict k1_gfs, REAL *restrict k2_gfs, REAL *restrict k3_gfs,
                                         REAL *restrict k4_gfs, REAL *restrict y_n_gfs, REAL *restrict next_y_input_gfs, const REAL dt) {
@@ -189,21 +198,24 @@ static void rk_substep_4__launcher(params_struct *restrict params, REAL *restric
   const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
   MAYBE_UNUSED const int Ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;
 
-  const size_t threads_in_x_dir = 32;
-  const size_t threads_in_y_dir = 1;
-  const size_t threads_in_z_dir = 1;
-  dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
-  dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
-  size_t sm = 0;
-  size_t streamid = params->grid_idx % NUM_STREAMS;
-  rk_substep_4_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, k2_gfs, k3_gfs, k4_gfs, y_n_gfs, next_y_input_gfs,
-                                                                                  dt);
-  cudaCheckErrors(cudaKernel, "rk_substep_4_gpu failure");
+  {
+
+    const size_t threads_in_x_dir = 32;
+    const size_t threads_in_y_dir = 1;
+    const size_t threads_in_z_dir = 1;
+    dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
+    dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
+    size_t sm = 0;
+    size_t streamid = params->grid_idx % NUM_STREAMS;
+    rk_substep_4_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, k2_gfs, k3_gfs, k4_gfs, y_n_gfs,
+                                                                                    next_y_input_gfs, dt);
+    cudaCheckErrors(cudaKernel, "rk_substep_4_gpu failure");
+  }
 } // END FUNCTION rk_substep_4__launcher
 
 /**
- * GPU Kernel: rk_substep_5_gpu.
- * GPU Kernel to compute RK substep 5.
+ * Kernel: rk_substep_5_gpu.
+ * Compute RK substep 5.
  */
 __global__ static void rk_substep_5_gpu(const size_t streamid, REAL *restrict k1_gfs, REAL *restrict k2_gfs, REAL *restrict k3_gfs,
                                         REAL *restrict k4_gfs, REAL *restrict k5_gfs, REAL *restrict y_n_gfs, REAL *restrict next_y_input_gfs,
@@ -254,21 +266,24 @@ static void rk_substep_5__launcher(params_struct *restrict params, REAL *restric
   const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
   MAYBE_UNUSED const int Ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;
 
-  const size_t threads_in_x_dir = 32;
-  const size_t threads_in_y_dir = 1;
-  const size_t threads_in_z_dir = 1;
-  dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
-  dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
-  size_t sm = 0;
-  size_t streamid = params->grid_idx % NUM_STREAMS;
-  rk_substep_5_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, k2_gfs, k3_gfs, k4_gfs, k5_gfs, y_n_gfs,
-                                                                                  next_y_input_gfs, dt);
-  cudaCheckErrors(cudaKernel, "rk_substep_5_gpu failure");
+  {
+
+    const size_t threads_in_x_dir = 32;
+    const size_t threads_in_y_dir = 1;
+    const size_t threads_in_z_dir = 1;
+    dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
+    dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
+    size_t sm = 0;
+    size_t streamid = params->grid_idx % NUM_STREAMS;
+    rk_substep_5_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, k2_gfs, k3_gfs, k4_gfs, k5_gfs, y_n_gfs,
+                                                                                    next_y_input_gfs, dt);
+    cudaCheckErrors(cudaKernel, "rk_substep_5_gpu failure");
+  }
 } // END FUNCTION rk_substep_5__launcher
 
 /**
- * GPU Kernel: rk_substep_6_gpu.
- * GPU Kernel to compute RK substep 6.
+ * Kernel: rk_substep_6_gpu.
+ * Compute RK substep 6.
  */
 __global__ static void rk_substep_6_gpu(const size_t streamid, REAL *restrict k1_gfs, REAL *restrict k2_gfs, REAL *restrict k3_gfs,
                                         REAL *restrict k4_gfs, REAL *restrict k5_gfs, REAL *restrict k6_gfs, REAL *restrict y_n_gfs,
@@ -325,21 +340,24 @@ static void rk_substep_6__launcher(params_struct *restrict params, REAL *restric
   const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
   MAYBE_UNUSED const int Ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;
 
-  const size_t threads_in_x_dir = 32;
-  const size_t threads_in_y_dir = 1;
-  const size_t threads_in_z_dir = 1;
-  dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
-  dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
-  size_t sm = 0;
-  size_t streamid = params->grid_idx % NUM_STREAMS;
-  rk_substep_6_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, k2_gfs, k3_gfs, k4_gfs, k5_gfs, k6_gfs, y_n_gfs,
-                                                                                  next_y_input_gfs, dt);
-  cudaCheckErrors(cudaKernel, "rk_substep_6_gpu failure");
+  {
+
+    const size_t threads_in_x_dir = 32;
+    const size_t threads_in_y_dir = 1;
+    const size_t threads_in_z_dir = 1;
+    dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
+    dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
+    size_t sm = 0;
+    size_t streamid = params->grid_idx % NUM_STREAMS;
+    rk_substep_6_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, k2_gfs, k3_gfs, k4_gfs, k5_gfs, k6_gfs, y_n_gfs,
+                                                                                    next_y_input_gfs, dt);
+    cudaCheckErrors(cudaKernel, "rk_substep_6_gpu failure");
+  }
 } // END FUNCTION rk_substep_6__launcher
 
 /**
- * GPU Kernel: rk_substep_7_gpu.
- * GPU Kernel to compute RK substep 7.
+ * Kernel: rk_substep_7_gpu.
+ * Compute RK substep 7.
  */
 __global__ static void rk_substep_7_gpu(const size_t streamid, REAL *restrict k1_gfs, REAL *restrict k2_gfs, REAL *restrict k3_gfs,
                                         REAL *restrict k4_gfs, REAL *restrict k5_gfs, REAL *restrict k6_gfs, REAL *restrict y_n_gfs,
@@ -396,21 +414,24 @@ static void rk_substep_7__launcher(params_struct *restrict params, REAL *restric
   const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
   MAYBE_UNUSED const int Ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;
 
-  const size_t threads_in_x_dir = 32;
-  const size_t threads_in_y_dir = 1;
-  const size_t threads_in_z_dir = 1;
-  dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
-  dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
-  size_t sm = 0;
-  size_t streamid = params->grid_idx % NUM_STREAMS;
-  rk_substep_7_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, k2_gfs, k3_gfs, k4_gfs, k5_gfs, k6_gfs, y_n_gfs,
-                                                                                  next_y_input_gfs, dt);
-  cudaCheckErrors(cudaKernel, "rk_substep_7_gpu failure");
+  {
+
+    const size_t threads_in_x_dir = 32;
+    const size_t threads_in_y_dir = 1;
+    const size_t threads_in_z_dir = 1;
+    dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
+    dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
+    size_t sm = 0;
+    size_t streamid = params->grid_idx % NUM_STREAMS;
+    rk_substep_7_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, k2_gfs, k3_gfs, k4_gfs, k5_gfs, k6_gfs, y_n_gfs,
+                                                                                    next_y_input_gfs, dt);
+    cudaCheckErrors(cudaKernel, "rk_substep_7_gpu failure");
+  }
 } // END FUNCTION rk_substep_7__launcher
 
 /**
- * GPU Kernel: rk_substep_8_gpu.
- * GPU Kernel to compute RK substep 8.
+ * Kernel: rk_substep_8_gpu.
+ * Compute RK substep 8.
  */
 __global__ static void rk_substep_8_gpu(const size_t streamid, REAL *restrict k1_gfs, REAL *restrict k3_gfs, REAL *restrict k4_gfs,
                                         REAL *restrict k5_gfs, REAL *restrict k6_gfs, REAL *restrict k7_gfs, REAL *restrict k8_gfs,
@@ -472,16 +493,19 @@ static void rk_substep_8__launcher(params_struct *restrict params, REAL *restric
   const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
   MAYBE_UNUSED const int Ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;
 
-  const size_t threads_in_x_dir = 32;
-  const size_t threads_in_y_dir = 1;
-  const size_t threads_in_z_dir = 1;
-  dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
-  dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
-  size_t sm = 0;
-  size_t streamid = params->grid_idx % NUM_STREAMS;
-  rk_substep_8_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, k3_gfs, k4_gfs, k5_gfs, k6_gfs, k7_gfs, k8_gfs,
-                                                                                  y_n_gfs, dt);
-  cudaCheckErrors(cudaKernel, "rk_substep_8_gpu failure");
+  {
+
+    const size_t threads_in_x_dir = 32;
+    const size_t threads_in_y_dir = 1;
+    const size_t threads_in_z_dir = 1;
+    dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
+    dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
+    size_t sm = 0;
+    size_t streamid = params->grid_idx % NUM_STREAMS;
+    rk_substep_8_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, k3_gfs, k4_gfs, k5_gfs, k6_gfs, k7_gfs, k8_gfs,
+                                                                                    y_n_gfs, dt);
+    cudaCheckErrors(cudaKernel, "rk_substep_8_gpu failure");
+  }
 } // END FUNCTION rk_substep_8__launcher
 
 /**
