@@ -785,6 +785,8 @@ boundary points ("inner maps to outer").
     kernel_body = "// Needed for IDX macros\n"
     for i in range(3):
         kernel_body += f"MAYBE_UNUSED int const Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n"
+        if parallelization == "cuda":
+            body += f"MAYBE_UNUSED int const Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n"
     kernel_body += (
         """
 // Thread indices
@@ -1441,12 +1443,7 @@ def setup_Cfunction_radiation_bcs(
 
     body = ""
     for i in range(3):
-        body += (
-            f"int const Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n".replace(
-                "params->",
-                "d_params[streamid]." if parallelization == "cuda" else "params->",
-            )
-        )
+        body += f"int const Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n"
     body += r"""// Nearest "interior" neighbor of this gridpoint, based on current face
 const int dest_i0_int=dest_i0+1*FACEi0, dest_i1_int=dest_i1+1*FACEi1, dest_i2_int=dest_i2+1*FACEi2;
 REAL r, partial_x0_partial_r,partial_x1_partial_r,partial_x2_partial_r;
@@ -1486,13 +1483,19 @@ return partial_t_f_outgoing_wave + k * rinv*rinv*rinv;
     cf = cfc.CFunction(
         subdirectory=CoordSystem,
         includes=includes,
-        prefunc=prefunc,
+        prefunc=prefunc.replace(
+            "params->",
+            "d_params[streamid]." if parallelization == "cuda" else "params->",
+        ),
         desc=desc,
         cfunc_type=cfunc_type,
         name=name,
         params=params,
         include_CodeParameters_h=False,
-        body=body,
+        body=body.replace(
+            "params->",
+            "d_params[streamid]." if parallelization == "cuda" else "params->",
+        ),
         cfunc_decorators=cfunc_decorators,
     )
     return cf.full_function
@@ -1566,6 +1569,8 @@ for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {
     }}
   }}
 """.replace(
+        "params,", "streamid," if parallelization == "cuda" else "params,"
+    ).replace(
         "custom_", "d_gridfunctions_" if parallelization == "cuda" else "custom_"
     )
     comments = "Apply BCs to pure points."
