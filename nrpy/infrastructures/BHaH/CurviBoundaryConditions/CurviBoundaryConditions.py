@@ -785,8 +785,6 @@ boundary points ("inner maps to outer").
     kernel_body = "// Needed for IDX macros\n"
     for i in range(3):
         kernel_body += f"MAYBE_UNUSED int const Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n"
-        if parallelization == "cuda":
-            body += f"MAYBE_UNUSED int const Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n"
     kernel_body += (
         """
 // Thread indices
@@ -839,6 +837,13 @@ for (int pt = tid0; pt < num_inner_boundary_points; pt+=stride0) {"""
         arg_dict_host,
         parallelization=parallelization,
         comments=comments,
+        launch_dict={
+            "blocks_per_grid": [
+                "(num_inner_boundary_points + threads_in_x_dir - 1) / threads_in_x_dir"
+            ],
+            "threads_per_block": ["32"],
+            "stream": "params->grid_idx % NUM_STREAMS",
+        },
     )
     body += new_body
     cfc.register_CFunction(
