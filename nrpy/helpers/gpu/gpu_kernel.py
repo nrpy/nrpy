@@ -96,7 +96,7 @@ class GPU_Kernel:
         self.body = body
         self.decorators = decorators
         self.params_dict = params_dict
-        if self.decorators != "__host__" and streamid_param:
+        if "__host__" not in self.decorators and streamid_param:
             self.params_dict = {"streamid": "const size_t", **params_dict}
         self.name = c_function_name
         self.cfunc_type = f"{decorators} {cfunc_type}"
@@ -156,7 +156,7 @@ dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);"""
                 self.launch_dict["stream"] == ""
                 or self.launch_dict["stream"] == "default"
             ):
-                stream_def_str = "size_t streamid = params->grid_idx % nstreams;"
+                stream_def_str = "size_t streamid = params->grid_idx % NUM_STREAMS;"
             else:
                 stream_def_str = f"size_t streamid = {self.launch_dict['stream']};"
 
@@ -208,6 +208,27 @@ dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);"""
             c_function_call += f"{msg};\n"
 
         return c_function_call
+
+
+# ------------------------------------------------------------------
+# 1) Helpers: get_params_access() and build_and_launch_kernel()
+# ------------------------------------------------------------------
+
+
+def get_params_access(parallelization: str) -> str:
+    """
+    Return the appropriate params_struct-access prefix for CUDA vs. non-CUDA.
+    E.g. 'd_params[streamid].' vs. 'params->' where 'd_params' is
+    allocated in __constant__ memory rather a pointer passed as a function argument.
+
+    :param parallelization: The parallelization method to use.
+    :returns: The appropriate prefix for accessing the params struct.
+    """
+    if parallelization == "cuda":
+        params_access = "d_params[streamid]."
+    else:
+        params_access = "params->"
+    return params_access
 
 
 if __name__ == "__main__":
