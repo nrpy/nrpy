@@ -44,7 +44,7 @@ class GPU_Kernel:
     <BLANKLINE>
     >>> print(kernel.CFunction.full_function)
     /**
-     * GPU Kernel: basic_assignment_gpu.
+     * Kernel: basic_assignment_gpu.
      *
      */
     __global__ static void basic_assignment_gpu(REAL *restrict x, const REAL in) { *x = in; } // END FUNCTION basic_assignment_gpu

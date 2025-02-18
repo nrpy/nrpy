@@ -106,7 +106,7 @@ def generate_CFunction_mallocHostgrid() -> str:
     >>> kernel = generate_CFunction_mallocHostgrid()
     >>> print(kernel)
     /**
-     * GPU Kernel: mallocHostgrid.
+     * Kernel: mallocHostgrid.
      * Allocate griddata_struct[grid].xx for host.
      */
     __host__ static void mallocHostgrid(const commondata_struct *restrict commondata, const params_struct *restrict params,
@@ -155,7 +155,7 @@ def register_CFunction_cpyDevicetoHost__grid() -> None:
     >>> print(cfc.CFunction_dict['cpyDevicetoHost__grid'].full_function)
     #include "../BHaH_defines.h"
     /**
-     * GPU Kernel: mallocHostgrid.
+     * Kernel: mallocHostgrid.
      * Allocate griddata_struct[grid].xx for host.
      */
     __host__ static void mallocHostgrid(const commondata_struct *restrict commondata, const params_struct *restrict params,
