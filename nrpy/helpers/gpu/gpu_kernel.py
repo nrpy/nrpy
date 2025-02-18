@@ -210,11 +210,6 @@ dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);"""
         return c_function_call
 
 
-# ------------------------------------------------------------------
-# 1) Helpers: get_params_access() and build_and_launch_kernel()
-# ------------------------------------------------------------------
-
-
 def get_params_access(parallelization: str) -> str:
     """
     Return the appropriate params_struct-access prefix for CUDA vs. non-CUDA.
