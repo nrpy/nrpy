@@ -26,6 +26,7 @@ import nrpy.params as par  # NRPy+: Parameter interface
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 from nrpy.helpers.expression_utils import get_unique_expression_symbols_as_strings
 from nrpy.helpers.gpu.cuda_utilities import register_CFunction_cpyHosttoDevice_bc_struct
+from nrpy.helpers.gpu.utilities import generate_kernel_and_launch_code
 from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
 from nrpy.validate_expressions.validate_expressions import check_zero
 
@@ -783,10 +784,7 @@ boundary points ("inner maps to outer").
     # Specify kernel launch body
     kernel_body = "// Needed for IDX macros\n"
     for i in range(3):
-        kernel_body += f"MAYBE_UNUSED int const Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n".replace(
-            "params->",
-            "d_params[streamid]." if parallelization == "cuda" else "params->",
-        )
+        kernel_body += f"MAYBE_UNUSED int const Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n"
     kernel_body += (
         """
 // Thread indices
@@ -821,44 +819,26 @@ for (int pt = tid0; pt < num_inner_boundary_points; pt+=stride0) {"""
         ),
     )
 
-    # Generate a compute Kernel
-    if parallelization == "cuda":
-        device_kernel = gputils.GPU_Kernel(
-            kernel_body,
-            {
-                "num_inner_boundary_points": "const int",
-                "inner_bc_array": "const innerpt_bc_struct *restrict",
-                "gfs": "REAL *restrict",
-            },
-            f"{name}_gpu",
-            launch_dict={
-                "blocks_per_grid": [
-                    "(num_inner_boundary_points + threads_in_x_dir - 1) / threads_in_x_dir"
-                ],
-                "threads_per_block": ["32"],
-                "stream": "params->grid_idx % NUM_STREAMS",
-            },
-            comments="GPU Kernel to applyBCs to inner boundary points only.",
-        )
-    else:
-        device_kernel = gputils.GPU_Kernel(
-            kernel_body,
-            {
-                "params": "const params_struct *restrict",
-                "num_inner_boundary_points": "const int",
-                "inner_bc_array": "const innerpt_bc_struct *restrict",
-                "gfs": "REAL *restrict",
-            },
-            f"{name}_host",
-            launch_dict=None,
-            comments="Host Kernel to apply BCs to pure points.",
-            decorators="",
-            cuda_check_error=False,
-            streamid_param=False,
-        )
-    prefunc = device_kernel.CFunction.full_function
-    body += device_kernel.launch_block + "\n\n"
-    body += device_kernel.c_function_call()
+    comments = "Apply BCs to inner boundary points only."
+    # Prepare the argument dicts
+    arg_dict_cuda = {
+        "num_inner_boundary_points": "const int",
+        "inner_bc_array": "const innerpt_bc_struct *restrict",
+        "gfs": "REAL *restrict",
+    }
+    arg_dict_host = {
+        "params": "const params_struct *restrict",
+        **arg_dict_cuda,
+    }
+    prefunc, new_body = generate_kernel_and_launch_code(
+        name,
+        kernel_body,
+        arg_dict_cuda,
+        arg_dict_host,
+        parallelization=parallelization,
+        comments=comments,
+    )
+    body += new_body
     cfc.register_CFunction(
         prefunc=prefunc,
         includes=includes,
@@ -946,49 +926,37 @@ for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
 }
 """
     # Generate compute Kernel
-    if parallelization == "cuda":
-        device_kernel = gputils.GPU_Kernel(
-            kernel_body,
-            {
-                "num_pure_outer_boundary_points": "const int",
-                "which_gz": "const int",
-                "dirn": "const int",
-                "pure_outer_bc_array": "const outerpt_bc_struct *restrict",
-                "gfs": "REAL *restrict",
-            },
-            name,
-            launch_dict={
-                "blocks_per_grid": [
-                    "(num_pure_outer_boundary_points + threads_in_x_dir -1) / threads_in_x_dir"
-                ],
-                "threads_per_block": ["32"],
-                "stream": "params->grid_idx % NUM_STREAMS",
-            },
-            comments="GPU Kernel to apply extrapolation BCs to pure points.",
-        )
-    else:
-        device_kernel = gputils.GPU_Kernel(
-            kernel_body,
-            {
-                "params": "const params_struct *restrict",
-                "num_pure_outer_boundary_points": "const int",
-                "which_gz": "const int",
-                "dirn": "const int",
-                "pure_outer_bc_array": "const outerpt_bc_struct *restrict",
-                "gfs": "REAL *restrict",
-            },
-            name,
-            launch_dict=None,
-            comments="Host Kernel to apply extrapolation BCs to pure points.",
-            decorators="",
-            cuda_check_error=False,
-            streamid_param=False,
-        )
-    # Add device Kernel to prefunc
-    prefunc += device_kernel.CFunction.full_function
+    comments = "Apply extrapolation BCs to pure points."
+    # Prepare the argument dicts
+    arg_dict_cuda = {
+        "num_pure_outer_boundary_points": "const int",
+        "which_gz": "const int",
+        "dirn": "const int",
+        "pure_outer_bc_array": "const outerpt_bc_struct *restrict",
+        "gfs": "REAL *restrict",
+    }
+    arg_dict_host = {
+        "params": "const params_struct *restrict",
+        **arg_dict_cuda,
+    }
+
+    prefunc, new_body = generate_kernel_and_launch_code(
+        name,
+        kernel_body,
+        arg_dict_cuda,
+        arg_dict_host,
+        parallelization=parallelization,
+        comments=comments,
+        launch_dict={
+            "blocks_per_grid": [
+                "(num_pure_outer_boundary_points + threads_in_x_dir -1) / threads_in_x_dir"
+            ],
+            "threads_per_block": ["32"],
+            "stream": "default",
+        },
+    )
     # Add launch configuration to Launch kernel body
-    kernel_launch_body += device_kernel.launch_block
-    kernel_launch_body += device_kernel.c_function_call()
+    kernel_launch_body += new_body
     # Close the launch kernel
     kernel_launch_body += """
     }
@@ -1124,9 +1092,8 @@ def setup_Cfunction_r_and_partial_xi_partial_r_derivs(
         unique_symbols += sub_list
     unique_symbols = sorted(list(set(unique_symbols)))
 
-    param_access = "d_params[streamid]." if parallelization == "cuda" else "params->"
     for param_sym in unique_symbols:
-        body += f"const REAL {param_sym} = {param_access}{param_sym};\n"
+        body += f"const REAL {param_sym} = params->{param_sym};\n"
     body += "\n"
     body += ccg.c_codegen(
         expr_list,
@@ -1223,10 +1190,9 @@ const REAL *restrict gf, const int i0,const int i1,const int i2, const int offse
     body = ""
     cfunc_decorators = "__device__" if parallelization == "cuda" else ""
 
-    param_access = "d_params[streamid]." if parallelization == "cuda" else "params->"
     for i in range(3):
-        body += f"MAYBE_UNUSED int const Nxx_plus_2NGHOSTS{i} = {param_access}Nxx_plus_2NGHOSTS{i};\n"
-    body += f"REAL const invdxx{dirn} = {param_access}invdxx{dirn};\n"
+        body += f"MAYBE_UNUSED int const Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n"
+    body += f"REAL const invdxx{dirn} = params->invdxx{dirn};\n"
     body += "switch(offset) {\n"
 
     tmp_list: List[int] = []
@@ -1600,59 +1566,43 @@ for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {
     }}
   }}
 """.replace(
-        "params,", "streamid," if parallelization == "cuda" else "params,"
-    ).replace(
         "custom_", "d_gridfunctions_" if parallelization == "cuda" else "custom_"
     )
-    if parallelization == "cuda":
-        device_kernel = gputils.GPU_Kernel(
-            kernel_body,
-            {
-                "num_pure_outer_boundary_points": "const int",
-                "which_gz": "const int",
-                "dirn": "const int",
-                "pure_outer_bc_array": "const outerpt_bc_struct *restrict",
-                "gfs": "REAL *restrict",
-                "rhs_gfs": "REAL *restrict",
-                "x0": "REAL *restrict",
-                "x1": "REAL *restrict",
-                "x2": "REAL *restrict",
-            },
-            f"{name}_gpu",
-            launch_dict={
-                "blocks_per_grid": [
-                    "(num_pure_outer_boundary_points + threads_in_x_dir -1) / threads_in_x_dir"
-                ],
-                "threads_per_block": ["32"],
-                "stream": "params->grid_idx % NUM_STREAMS",
-            },
-            comments="GPU Kernel to apply radiation BCs to pure points.",
-        )
-    else:
-        device_kernel = gputils.GPU_Kernel(
-            kernel_body,
-            {
-                "params": "const params_struct *restrict",
-                "num_pure_outer_boundary_points": "const int",
-                "which_gz": "const int",
-                "dirn": "const int",
-                "pure_outer_bc_array": "const outerpt_bc_struct *restrict",
-                "gfs": "REAL *restrict",
-                "rhs_gfs": "REAL *restrict",
-                "x0": "REAL *restrict",
-                "x1": "REAL *restrict",
-                "x2": "REAL *restrict",
-                "custom_wavespeed": "const REAL *",
-                "custom_f_infinity": "const REAL *",
-            },
-            f"{name}_host",
-            decorators="",
-            comments="Host Kernel to apply radiation BCs to pure points.",
-            cuda_check_error=False,
-            streamid_param=False,
-            cfunc_type=cfunc_type,
-        )
-    prefunc = device_kernel.CFunction.full_function
+    comments = "Apply BCs to pure points."
+    # Prepare the argument dicts
+    arg_dict_cuda = {
+        "num_pure_outer_boundary_points": "const int",
+        "which_gz": "const int",
+        "dirn": "const int",
+        "pure_outer_bc_array": "const outerpt_bc_struct *restrict",
+        "gfs": "REAL *restrict",
+        "rhs_gfs": "REAL *restrict",
+        "x0": "REAL *restrict",
+        "x1": "REAL *restrict",
+        "x2": "REAL *restrict",
+    }
+    arg_dict_host = {
+        "params": "const params_struct *restrict",
+        **arg_dict_cuda,
+        "custom_wavespeed": "const REAL *",
+        "custom_f_infinity": "const REAL *",
+    }
+    prefunc, new_body = generate_kernel_and_launch_code(
+        name,
+        kernel_body,
+        arg_dict_cuda,
+        arg_dict_host,
+        parallelization=parallelization,
+        comments=comments,
+        launch_dict={
+            "blocks_per_grid": [
+                "(num_pure_outer_boundary_points + threads_in_x_dir -1) / threads_in_x_dir"
+            ],
+            "threads_per_block": ["32"],
+            "stream": "params->grid_idx % NUM_STREAMS",
+        },
+        cfunc_type=cfunc_type,
+    )
 
     kernel_launch_body: str = ""
     # Specify the function body for the launch kernel
@@ -1669,8 +1619,7 @@ REAL *restrict x2 = xx[2];
         int num_pure_outer_boundary_points = bc_info->num_pure_outer_boundary_points[which_gz][dirn];
 """
     # Add launch configuration to Launch kernel body
-    kernel_launch_body += device_kernel.launch_block
-    kernel_launch_body += device_kernel.c_function_call()
+    kernel_launch_body += new_body
     # Close the launch kernel
     kernel_launch_body += """
       }
