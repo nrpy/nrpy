@@ -10,7 +10,7 @@ import nrpy.helpers.gpu.cuda_utilities as cuda_utils
 from nrpy.helpers.gpu.gpu_kernel import GPU_Kernel, get_params_access
 
 
-def build_and_launch_kernel(
+def generate_kernel_and_launch_code(
     kernel_name: str,
     kernel_body: str,
     # Argument dictionaries for GPU vs host code
