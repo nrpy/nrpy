@@ -51,7 +51,7 @@ def generate_kernel_and_launch_code(
         device_kernel = GPU_Kernel(
             kernel_body.replace("params->", params_access),
             arg_dict_cuda,
-            kernel_name,
+            f"{kernel_name}_gpu",
             launch_dict=launch_dict,
             comments=comments,
         )
@@ -69,7 +69,7 @@ def generate_kernel_and_launch_code(
         device_kernel = GPU_Kernel(
             kernel_body,
             arg_dict_host,
-            kernel_name,
+            f"{kernel_name}_host",
             launch_dict=None,
             comments=comments,
             decorators="",
