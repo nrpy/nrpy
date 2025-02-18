@@ -1,7 +1,7 @@
 #include "../BHaH_defines.h"
 /**
- * GPU Kernel: rfm_precompute_defines__f0_of_xx0_host.
- * Host Kernel to precompute metric quantity f0_of_xx0.
+ * Kernel: rfm_precompute_defines__f0_of_xx0_host.
+ * Kernel to precompute metric quantity f0_of_xx0.
  */
 static void rfm_precompute_defines__f0_of_xx0_host(const params_struct *restrict params, rfm_struct *restrict rfmstruct, const REAL *restrict x0) {
   // Temporary parameters
@@ -13,8 +13,8 @@ static void rfm_precompute_defines__f0_of_xx0_host(const params_struct *restrict
   }
 } // END FUNCTION rfm_precompute_defines__f0_of_xx0_host
 /**
- * GPU Kernel: rfm_precompute_defines__f0_of_xx0__D0_host.
- * Host Kernel to precompute metric quantity f0_of_xx0__D0.
+ * Kernel: rfm_precompute_defines__f0_of_xx0__D0_host.
+ * Kernel to precompute metric quantity f0_of_xx0__D0.
  */
 static void rfm_precompute_defines__f0_of_xx0__D0_host(const params_struct *restrict params, rfm_struct *restrict rfmstruct,
                                                        const REAL *restrict x0) {
@@ -28,8 +28,8 @@ static void rfm_precompute_defines__f0_of_xx0__D0_host(const params_struct *rest
   }
 } // END FUNCTION rfm_precompute_defines__f0_of_xx0__D0_host
 /**
- * GPU Kernel: rfm_precompute_defines__f0_of_xx0__DD00_host.
- * Host Kernel to precompute metric quantity f0_of_xx0__DD00.
+ * Kernel: rfm_precompute_defines__f0_of_xx0__DD00_host.
+ * Kernel to precompute metric quantity f0_of_xx0__DD00.
  */
 static void rfm_precompute_defines__f0_of_xx0__DD00_host(const params_struct *restrict params, rfm_struct *restrict rfmstruct,
                                                          const REAL *restrict x0) {
@@ -43,8 +43,8 @@ static void rfm_precompute_defines__f0_of_xx0__DD00_host(const params_struct *re
   }
 } // END FUNCTION rfm_precompute_defines__f0_of_xx0__DD00_host
 /**
- * GPU Kernel: rfm_precompute_defines__f0_of_xx0__DDD000_host.
- * Host Kernel to precompute metric quantity f0_of_xx0__DDD000.
+ * Kernel: rfm_precompute_defines__f0_of_xx0__DDD000_host.
+ * Kernel to precompute metric quantity f0_of_xx0__DDD000.
  */
 static void rfm_precompute_defines__f0_of_xx0__DDD000_host(const params_struct *restrict params, rfm_struct *restrict rfmstruct,
                                                            const REAL *restrict x0) {
@@ -58,8 +58,8 @@ static void rfm_precompute_defines__f0_of_xx0__DDD000_host(const params_struct *
   }
 } // END FUNCTION rfm_precompute_defines__f0_of_xx0__DDD000_host
 /**
- * GPU Kernel: rfm_precompute_defines__f3_of_xx2_host.
- * Host Kernel to precompute metric quantity f3_of_xx2.
+ * Kernel: rfm_precompute_defines__f3_of_xx2_host.
+ * Kernel to precompute metric quantity f3_of_xx2.
  */
 static void rfm_precompute_defines__f3_of_xx2_host(const params_struct *restrict params, rfm_struct *restrict rfmstruct, const REAL *restrict x2) {
   // Temporary parameters
@@ -71,8 +71,8 @@ static void rfm_precompute_defines__f3_of_xx2_host(const params_struct *restrict
   }
 } // END FUNCTION rfm_precompute_defines__f3_of_xx2_host
 /**
- * GPU Kernel: rfm_precompute_defines__f3_of_xx2__D2_host.
- * Host Kernel to precompute metric quantity f3_of_xx2__D2.
+ * Kernel: rfm_precompute_defines__f3_of_xx2__D2_host.
+ * Kernel to precompute metric quantity f3_of_xx2__D2.
  */
 static void rfm_precompute_defines__f3_of_xx2__D2_host(const params_struct *restrict params, rfm_struct *restrict rfmstruct,
                                                        const REAL *restrict x2) {
@@ -86,8 +86,8 @@ static void rfm_precompute_defines__f3_of_xx2__D2_host(const params_struct *rest
   }
 } // END FUNCTION rfm_precompute_defines__f3_of_xx2__D2_host
 /**
- * GPU Kernel: rfm_precompute_defines__f3_of_xx2__DD22_host.
- * Host Kernel to precompute metric quantity f3_of_xx2__DD22.
+ * Kernel: rfm_precompute_defines__f3_of_xx2__DD22_host.
+ * Kernel to precompute metric quantity f3_of_xx2__DD22.
  */
 static void rfm_precompute_defines__f3_of_xx2__DD22_host(const params_struct *restrict params, rfm_struct *restrict rfmstruct,
                                                          const REAL *restrict x2) {

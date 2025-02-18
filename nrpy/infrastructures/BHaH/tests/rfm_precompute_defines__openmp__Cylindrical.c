@@ -1,7 +1,7 @@
 #include "../BHaH_defines.h"
 /**
- * GPU Kernel: rfm_precompute_defines__f0_of_xx0_host.
- * Host Kernel to precompute metric quantity f0_of_xx0.
+ * Kernel: rfm_precompute_defines__f0_of_xx0_host.
+ * Kernel to precompute metric quantity f0_of_xx0.
  */
 static void rfm_precompute_defines__f0_of_xx0_host(const params_struct *restrict params, rfm_struct *restrict rfmstruct, const REAL *restrict x0) {
   // Temporary parameters

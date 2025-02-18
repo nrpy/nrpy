@@ -1,7 +1,7 @@
 #include "../BHaH_defines.h"
 /**
- * GPU Kernel: rfm_precompute_defines__f0_of_xx0_gpu.
- * GPU Kernel to precompute metric quantity f0_of_xx0.
+ * Kernel: rfm_precompute_defines__f0_of_xx0_gpu.
+ * Kernel to precompute metric quantity f0_of_xx0.
  */
 __global__ static void rfm_precompute_defines__f0_of_xx0_gpu(const size_t streamid, rfm_struct *restrict rfmstruct, const REAL *restrict x0) {
   // Temporary parameters
@@ -27,7 +27,6 @@ void rfm_precompute_defines__rfm__Cylindrical(const commondata_struct *restrict 
   MAYBE_UNUSED const REAL *restrict x2 = xx[2];
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
   {
-    const size_t param_streamid = params->grid_idx % NUM_STREAMS;
 
     const size_t threads_in_x_dir = 32;
     const size_t threads_in_y_dir = 1;
@@ -37,8 +36,8 @@ void rfm_precompute_defines__rfm__Cylindrical(const commondata_struct *restrict 
                          (Nxx_plus_2NGHOSTS1 + threads_in_y_dir - 1) / threads_in_y_dir,
                          (Nxx_plus_2NGHOSTS2 + threads_in_z_dir - 1) / threads_in_z_dir);
     size_t sm = 0;
-    size_t streamid = (param_streamid + 0) % NUM_STREAMS;
-    rfm_precompute_defines__f0_of_xx0_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(param_streamid, rfmstruct, x0);
+    size_t streamid = params->grid_idx % NUM_STREAMS;
+    rfm_precompute_defines__f0_of_xx0_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, rfmstruct, x0);
     cudaCheckErrors(cudaKernel, "rfm_precompute_defines__f0_of_xx0_gpu failure");
   }
 } // END FUNCTION rfm_precompute_defines__rfm__Cylindrical
