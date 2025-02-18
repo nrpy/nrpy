@@ -54,6 +54,7 @@ def generate_kernel_and_launch_code(
             f"{kernel_name}_gpu",
             launch_dict=launch_dict,
             comments=comments,
+            streamid_param="stream" in launch_dict,
         )
         # Build the function definition:
         prefunc += device_kernel.CFunction.full_function

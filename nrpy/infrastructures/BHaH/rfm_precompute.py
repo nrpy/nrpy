@@ -297,6 +297,7 @@ def generate_rfmprecompute_malloc(
         launch_dict={
             "blocks_per_grid": ["1"],
             "threads_per_block": ["1"],
+            "stream": "default",
         },
     )
     return prefunc, body
