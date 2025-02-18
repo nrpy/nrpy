@@ -6,10 +6,11 @@
                                    (ii) < params->Nxx_plus_2NGHOSTS0 * params->Nxx_plus_2NGHOSTS1 * params->Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;       \
                                    (ii)++)
 /**
- * Runge-Kutta function for substep 1.
+ * Kernel: rk_substep_1_host.
+ * Compute RK substep 1.
  */
-static void rk_substep_1(params_struct *restrict params, REAL *restrict k_odd_gfs, REAL *restrict y_n_gfs, REAL *restrict y_nplus1_running_total_gfs,
-                         const REAL dt) {
+static void rk_substep_1_host(params_struct *restrict params, REAL *restrict k_odd_gfs, REAL *restrict y_n_gfs,
+                              REAL *restrict y_nplus1_running_total_gfs, const REAL dt) {
   LOOP_ALL_GFS_GPS(i) {
     const REAL k_odd_gfsL = k_odd_gfs[i];
     const REAL y_n_gfsL = y_n_gfs[i];
@@ -18,21 +19,22 @@ static void rk_substep_1(params_struct *restrict params, REAL *restrict k_odd_gf
     y_nplus1_running_total_gfs[i] = RK_Rational_1_6 * dt * k_odd_gfsL;
     k_odd_gfs[i] = RK_Rational_1_2 * dt * k_odd_gfsL + y_n_gfsL;
   }
-} // END FUNCTION rk_substep_1
+} // END FUNCTION rk_substep_1_host
 
 /**
  * Runge-Kutta function for substep 1.
  */
 static void rk_substep_1__launcher(params_struct *restrict params, REAL *restrict k_odd_gfs, REAL *restrict y_n_gfs,
                                    REAL *restrict y_nplus1_running_total_gfs, const REAL dt) {
-  rk_substep_1(params, k_odd_gfs, y_n_gfs, y_nplus1_running_total_gfs, dt);
+  rk_substep_1_host(params, k_odd_gfs, y_n_gfs, y_nplus1_running_total_gfs, dt);
 } // END FUNCTION rk_substep_1__launcher
 
 /**
- * Runge-Kutta function for substep 2.
+ * Kernel: rk_substep_2_host.
+ * Compute RK substep 2.
  */
-static void rk_substep_2(params_struct *restrict params, REAL *restrict k_even_gfs, REAL *restrict y_nplus1_running_total_gfs, REAL *restrict y_n_gfs,
-                         const REAL dt) {
+static void rk_substep_2_host(params_struct *restrict params, REAL *restrict k_even_gfs, REAL *restrict y_nplus1_running_total_gfs,
+                              REAL *restrict y_n_gfs, const REAL dt) {
   LOOP_ALL_GFS_GPS(i) {
     const REAL k_even_gfsL = k_even_gfs[i];
     const REAL y_nplus1_running_total_gfsL = y_nplus1_running_total_gfs[i];
@@ -42,21 +44,22 @@ static void rk_substep_2(params_struct *restrict params, REAL *restrict k_even_g
     y_nplus1_running_total_gfs[i] = RK_Rational_1_3 * dt * k_even_gfsL + y_nplus1_running_total_gfsL;
     k_even_gfs[i] = RK_Rational_1_2 * dt * k_even_gfsL + y_n_gfsL;
   }
-} // END FUNCTION rk_substep_2
+} // END FUNCTION rk_substep_2_host
 
 /**
  * Runge-Kutta function for substep 2.
  */
 static void rk_substep_2__launcher(params_struct *restrict params, REAL *restrict k_even_gfs, REAL *restrict y_nplus1_running_total_gfs,
                                    REAL *restrict y_n_gfs, const REAL dt) {
-  rk_substep_2(params, k_even_gfs, y_nplus1_running_total_gfs, y_n_gfs, dt);
+  rk_substep_2_host(params, k_even_gfs, y_nplus1_running_total_gfs, y_n_gfs, dt);
 } // END FUNCTION rk_substep_2__launcher
 
 /**
- * Runge-Kutta function for substep 3.
+ * Kernel: rk_substep_3_host.
+ * Compute RK substep 3.
  */
-static void rk_substep_3(params_struct *restrict params, REAL *restrict k_odd_gfs, REAL *restrict y_nplus1_running_total_gfs, REAL *restrict y_n_gfs,
-                         const REAL dt) {
+static void rk_substep_3_host(params_struct *restrict params, REAL *restrict k_odd_gfs, REAL *restrict y_nplus1_running_total_gfs,
+                              REAL *restrict y_n_gfs, const REAL dt) {
   LOOP_ALL_GFS_GPS(i) {
     const REAL k_odd_gfsL = k_odd_gfs[i];
     const REAL y_nplus1_running_total_gfsL = y_nplus1_running_total_gfs[i];
@@ -65,21 +68,22 @@ static void rk_substep_3(params_struct *restrict params, REAL *restrict k_odd_gf
     y_nplus1_running_total_gfs[i] = RK_Rational_1_3 * dt * k_odd_gfsL + y_nplus1_running_total_gfsL;
     k_odd_gfs[i] = dt * k_odd_gfsL + y_n_gfsL;
   }
-} // END FUNCTION rk_substep_3
+} // END FUNCTION rk_substep_3_host
 
 /**
  * Runge-Kutta function for substep 3.
  */
 static void rk_substep_3__launcher(params_struct *restrict params, REAL *restrict k_odd_gfs, REAL *restrict y_nplus1_running_total_gfs,
                                    REAL *restrict y_n_gfs, const REAL dt) {
-  rk_substep_3(params, k_odd_gfs, y_nplus1_running_total_gfs, y_n_gfs, dt);
+  rk_substep_3_host(params, k_odd_gfs, y_nplus1_running_total_gfs, y_n_gfs, dt);
 } // END FUNCTION rk_substep_3__launcher
 
 /**
- * Runge-Kutta function for substep 4.
+ * Kernel: rk_substep_4_host.
+ * Compute RK substep 4.
  */
-static void rk_substep_4(params_struct *restrict params, REAL *restrict k_even_gfs, REAL *restrict y_n_gfs, REAL *restrict y_nplus1_running_total_gfs,
-                         const REAL dt) {
+static void rk_substep_4_host(params_struct *restrict params, REAL *restrict k_even_gfs, REAL *restrict y_n_gfs,
+                              REAL *restrict y_nplus1_running_total_gfs, const REAL dt) {
   LOOP_ALL_GFS_GPS(i) {
     const REAL k_even_gfsL = k_even_gfs[i];
     const REAL y_n_gfsL = y_n_gfs[i];
@@ -87,14 +91,14 @@ static void rk_substep_4(params_struct *restrict params, REAL *restrict k_even_g
     const REAL RK_Rational_1_6 = 1.0 / 6.0;
     y_n_gfs[i] = RK_Rational_1_6 * dt * k_even_gfsL + y_n_gfsL + y_nplus1_running_total_gfsL;
   }
-} // END FUNCTION rk_substep_4
+} // END FUNCTION rk_substep_4_host
 
 /**
  * Runge-Kutta function for substep 4.
  */
 static void rk_substep_4__launcher(params_struct *restrict params, REAL *restrict k_even_gfs, REAL *restrict y_n_gfs,
                                    REAL *restrict y_nplus1_running_total_gfs, const REAL dt) {
-  rk_substep_4(params, k_even_gfs, y_n_gfs, y_nplus1_running_total_gfs, dt);
+  rk_substep_4_host(params, k_even_gfs, y_n_gfs, y_nplus1_running_total_gfs, dt);
 } // END FUNCTION rk_substep_4__launcher
 
 /**
