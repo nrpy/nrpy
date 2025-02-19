@@ -7,6 +7,19 @@ Authors: Samuel D. Tootle; sdtootle **at** gmail **dot** com
 import nrpy.c_function as cfc
 from nrpy.helpers.gpu.gpu_kernel import GPU_Kernel
 
+"""
+    Define the default launch dictionary for CUDA kernels.
+
+    threads_per_block: Number of threads per block. Default is 32 in the x direction, 1 in the y and z directions.
+    blocks_per_grid: Number of blocks needed in the [x,y,z] direction.  Default is computed based on Nxx and threads_per_block.
+    stream: Stream ID for the kernel.  Empty string defaults to param_streamid % NUM_STREAMS. Exclude from dictionary to use null stream.
+"""
+default_launch_dictionary = {
+    "blocks_per_grid": [],
+    "threads_per_block": ["32"],
+    "stream": "",
+}
+
 
 # Define functions to copy params to device
 def register_CFunction_cpyHosttoDevice_params__constant() -> None:
@@ -93,7 +106,7 @@ def generate_CFunction_mallocHostgrid() -> str:
     >>> kernel = generate_CFunction_mallocHostgrid()
     >>> print(kernel)
     /**
-     * GPU Kernel: mallocHostgrid.
+     * Kernel: mallocHostgrid.
      * Allocate griddata_struct[grid].xx for host.
      */
     __host__ static void mallocHostgrid(const commondata_struct *restrict commondata, const params_struct *restrict params,
@@ -142,7 +155,7 @@ def register_CFunction_cpyDevicetoHost__grid() -> None:
     >>> print(cfc.CFunction_dict['cpyDevicetoHost__grid'].full_function)
     #include "../BHaH_defines.h"
     /**
-     * GPU Kernel: mallocHostgrid.
+     * Kernel: mallocHostgrid.
      * Allocate griddata_struct[grid].xx for host.
      */
     __host__ static void mallocHostgrid(const commondata_struct *restrict commondata, const params_struct *restrict params,

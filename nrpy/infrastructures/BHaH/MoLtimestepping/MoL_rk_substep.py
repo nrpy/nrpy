@@ -13,9 +13,9 @@ from typing import Dict, List, Union
 import sympy as sp
 
 import nrpy.c_function as cfc
-import nrpy.helpers.gpu.gpu_kernel as gputils
 from nrpy.c_codegen import c_codegen
 from nrpy.helpers.generic import superfast_uniq
+from nrpy.helpers.gpu.utilities import generate_kernel_and_launch_code
 
 ##############################################################################
 # Parallelization check and set:
@@ -162,44 +162,27 @@ class RKFunction:
         kernel_body += self.loop_body.replace("commondata->dt", "dt") + "\n}\n"
         self.kernel_params_lst = [f"{v} {k}" for k, v in self.kernel_params.items()]
 
-        if parallelization == "cuda":
-            gpu_kernel_params = self.kernel_params.copy()
-            gpu_kernel_params.pop("params")
-            device_kernel = gputils.GPU_Kernel(
-                kernel_body,
-                gpu_kernel_params,
-                f"{self.name}_gpu",
-                launch_dict={
-                    "blocks_per_grid": [
-                        "(Ntot + threads_in_x_dir - 1) / threads_in_x_dir"
-                    ],
-                    "threads_per_block": ["32"],
-                    "stream": "params->grid_idx % NUM_STREAMS",
-                },
-                comments=f"GPU Kernel to compute RK substep {self.rk_step}.",
-            )
-            self.body += device_kernel.launch_block
-            self.body += device_kernel.c_function_call()
-            prefunc = device_kernel.CFunction.full_function
-        else:
-            if self.enable_intrinsics:
-                kernel_body = kernel_body.replace("dt", "DT")
-                kernel_body = (
-                    "const REAL_SIMD_ARRAY DT = ConstSIMD(dt);\n" + kernel_body
-                )
-            rk_substep_prefunc = cfc.CFunction(
-                desc=self.desc,
-                cfunc_type=self.cfunc_type,
-                name=self.name,
-                params=",".join(self.kernel_params_lst),
-                body=kernel_body,
-            )
-            c_function_call: str = f"{self.name}("
-            for p in self.kernel_params:
-                c_function_call += f"{p}, "
-            c_function_call = c_function_call[:-2] + ")"
-            prefunc = rk_substep_prefunc.full_function
-            self.body += f"{c_function_call};\n"
+        comments = f"Compute RK substep {self.rk_step}."
+        # Prepare the argument dicts
+        arg_dict_cuda = self.kernel_params.copy()
+        arg_dict_cuda.pop("params")
+        if self.enable_intrinsics and parallelization == "openmp":
+            kernel_body = kernel_body.replace("dt", "DT")
+            kernel_body = "const REAL_SIMD_ARRAY DT = ConstSIMD(dt);\n" + kernel_body
+        prefunc, new_body = generate_kernel_and_launch_code(
+            self.name,
+            kernel_body,
+            arg_dict_cuda,
+            self.kernel_params,
+            parallelization=parallelization,
+            comments=comments,
+            launch_dict={
+                "blocks_per_grid": ["(Ntot + threads_in_x_dir - 1) / threads_in_x_dir"],
+                "threads_per_block": ["32"],
+                "stream": "params->grid_idx % NUM_STREAMS",
+            },
+        )
+        self.body += new_body
 
         self.name += "__launcher"
         self.CFunction = cfc.CFunction(

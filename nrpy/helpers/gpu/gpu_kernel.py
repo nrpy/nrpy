@@ -44,7 +44,7 @@ class GPU_Kernel:
     <BLANKLINE>
     >>> print(kernel.CFunction.full_function)
     /**
-     * GPU Kernel: basic_assignment_gpu.
+     * Kernel: basic_assignment_gpu.
      *
      */
     __global__ static void basic_assignment_gpu(REAL *restrict x, const REAL in) { *x = in; } // END FUNCTION basic_assignment_gpu
@@ -96,7 +96,7 @@ class GPU_Kernel:
         self.body = body
         self.decorators = decorators
         self.params_dict = params_dict
-        if self.decorators != "__host__" and streamid_param:
+        if "__host__" not in self.decorators and streamid_param:
             self.params_dict = {"streamid": "const size_t", **params_dict}
         self.name = c_function_name
         self.cfunc_type = f"{decorators} {cfunc_type}"
@@ -104,7 +104,7 @@ class GPU_Kernel:
         self.cuda_check_error = cuda_check_error
 
         self.CFunction: cfc.CFunction
-        self.desc: str = f"GPU Kernel: {self.name}.\n" + comments
+        self.desc: str = f"Kernel: {self.name}.\n" + comments
         self.launch_dict = launch_dict
         self.launch_block: str = ""
         self.launch_settings: str = "("
@@ -156,7 +156,7 @@ dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);"""
                 self.launch_dict["stream"] == ""
                 or self.launch_dict["stream"] == "default"
             ):
-                stream_def_str = "size_t streamid = params->grid_idx % nstreams;"
+                stream_def_str = "size_t streamid = params->grid_idx % NUM_STREAMS;"
             else:
                 stream_def_str = f"size_t streamid = {self.launch_dict['stream']};"
 
