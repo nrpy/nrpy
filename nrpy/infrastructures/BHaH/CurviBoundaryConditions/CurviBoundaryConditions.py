@@ -479,6 +479,20 @@ def register_CFunction_bcstruct_set_up(
 
     :param CoordSystem: The coordinate system for which to set up boundary conditions.
     :param parallelization: Parallelization method to use. Default is "openmp".
+
+    Doctests:
+    >>> from nrpy.helpers.generic import validate_strings
+    >>> import nrpy.c_function as cfc
+    >>> from nrpy.reference_metric import supported_CoordSystems
+    >>> supported_Parallelizations = ["openmp", "cuda"]
+    >>> name = "bcstruct_set_up__rfm"
+    >>> for parallelization in supported_Parallelizations:
+    ...    for CoordSystem in supported_CoordSystems:
+    ...       cfc.CFunction_dict.clear()
+    ...       register_CFunction_bcstruct_set_up(CoordSystem, parallelization=parallelization)  # doctest: +SKIP
+    ...       generated_str = cfc.CFunction_dict[f'{name}__{CoordSystem}'].full_function
+    ...       validation_desc = f"{name}__{parallelization}__{CoordSystem}"
+    ...       validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
     """
     includes = [
         "BHaH_defines.h",
@@ -762,6 +776,17 @@ def register_CFunction_apply_bcs_inner_only(parallelization: str = "openmp") -> 
     Register C function for filling inner boundary points on the computational grid, as prescribed by bcstruct.
 
     :param parallelization: Parallelization method to use. Default is "openmp".
+
+    Doctests:
+    >>> from nrpy.helpers.generic import validate_strings
+    >>> import nrpy.c_function as cfc
+    >>> supported_Parallelizations = ["openmp", "cuda"]
+    >>> for parallelization in supported_Parallelizations:
+    ...    cfc.CFunction_dict.clear()
+    ...    register_CFunction_apply_bcs_inner_only(parallelization=parallelization)
+    ...    generated_str = cfc.CFunction_dict[f'apply_bcs_inner_only'].full_function
+    ...    validation_desc = f"apply_bcs_inner_only__{parallelization}"
+    ...    validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
     """
     includes = ["BHaH_defines.h"]
     desc = r"""
@@ -995,6 +1020,18 @@ def register_CFunction_apply_bcs_outerextrap_and_inner(
     Register C function for filling boundary points with extrapolation and prescribed bcstruct.
 
     :param parallelization: Parallelization method to use. Default is "openmp".
+
+    Doctests:
+    >>> from nrpy.helpers.generic import validate_strings
+    >>> import nrpy.c_function as cfc
+    >>> supported_Parallelizations = ["openmp", "cuda"]
+    >>> name = "apply_bcs_outerextrap_and_inner"
+    >>> for parallelization in supported_Parallelizations:
+    ...    cfc.CFunction_dict.clear()
+    ...    register_CFunction_apply_bcs_outerextrap_and_inner(parallelization=parallelization)
+    ...    generated_str = cfc.CFunction_dict[f'{name}'].full_function
+    ...    validation_desc = f"{name}__{parallelization}"
+    ...    validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = r"""#Suppose the outer boundary point is at the i0=max(i0) face. Then we fit known data at i0-3, i0-2, and i0-1
@@ -1670,6 +1707,20 @@ def register_CFunction_apply_bcs_outerradiation_and_inner(
     :param parallelization: Parallelization method to use. Default is "openmp".
     :param radiation_BC_fd_order: Finite differencing order for the radiation boundary conditions. Default is 2.
     :param rational_const_alias: Alias for rational constants. Default is "static const".
+
+    Doctests:
+    >>> from nrpy.helpers.generic import validate_strings
+    >>> import nrpy.c_function as cfc
+    >>> from nrpy.reference_metric import supported_CoordSystems
+    >>> supported_Parallelizations = ["openmp", "cuda"]
+    >>> name = "apply_bcs_outerradiation_and_inner__rfm"
+    >>> for parallelization in supported_Parallelizations:
+    ...    for CoordSystem in supported_CoordSystems:
+    ...       cfc.CFunction_dict.clear()
+    ...       register_CFunction_apply_bcs_outerradiation_and_inner(CoordSystem, parallelization=parallelization) # doctest: +SKIP
+    ...       generated_str = cfc.CFunction_dict[f'{name}__{CoordSystem}'].full_function
+    ...       validation_desc = f"{name}__{parallelization}__{CoordSystem}"
+    ...       validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     prefunc = setup_Cfunction_radiation_bcs(
