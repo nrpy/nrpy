@@ -99,7 +99,7 @@ except perhaps non_y_n_gfs (e.g., after a regrid, in which non_y_n_gfs are freed
     body = ""
     if enable_bhahaha:
         body += r"""  // Free BHaHAHA memory.
-  for (int which_horizon = 0; which_horizon < commondata->bah_num_horizons; which_horizon++) {
+  for (int which_horizon = 0; which_horizon < commondata->bah_max_num_horizons; which_horizon++) {
     free(commondata->bhahaha_params_and_data[which_horizon].prev_horizon_m1);
     free(commondata->bhahaha_params_and_data[which_horizon].prev_horizon_m2);
     free(commondata->bhahaha_params_and_data[which_horizon].prev_horizon_m3);
