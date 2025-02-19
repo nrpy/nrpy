@@ -800,13 +800,8 @@ boundary points ("inner maps to outer").
     cfunc_type = "void"
     name = "apply_bcs_inner_only"
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const bc_struct *restrict bcstruct, REAL *restrict gfs"
-    body = r"""
-  // Unpack bc_info from bcstruct
-  const bc_info_struct *bc_info = &bcstruct->bc_info;
-  const innerpt_bc_struct *restrict inner_bc_array = bcstruct->inner_bc_array;
-  const int num_inner_boundary_points = bc_info->num_inner_boundary_points;
-"""
-    # Specify kernel launch body
+
+    # Specify kernel body
     kernel_body = "// Needed for IDX macros\n"
     for i in range(3):
         kernel_body += f"MAYBE_UNUSED int const Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n"
@@ -870,7 +865,12 @@ for (int pt = tid0; pt < num_inner_boundary_points; pt+=stride0) {"""
             "stream": "params->grid_idx % NUM_STREAMS",
         },
     )
-    body += new_body
+    kernel_launch_body = rf"""
+  // Unpack bc_info from bcstruct
+  const bc_info_struct *bc_info = &bcstruct->bc_info;
+  const innerpt_bc_struct *restrict inner_bc_array = bcstruct->inner_bc_array;
+  const int num_inner_boundary_points = bc_info->num_inner_boundary_points;
+  {new_body}"""
     cfc.register_CFunction(
         prefunc=prefunc,
         includes=includes,
@@ -879,7 +879,7 @@ for (int pt = tid0; pt < num_inner_boundary_points; pt+=stride0) {"""
         name=name,
         params=params,
         include_CodeParameters_h=False,
-        body=body,
+        body=kernel_launch_body,
     )
 
 
@@ -903,18 +903,7 @@ def generate_prefunc__apply_bcs_outerextrap_and_inner_only(
     return_str = ""
     prefunc = ""
 
-    # Start specifying the function body for launching the kernel
-    kernel_launch_body = """
-const bc_info_struct *bc_info = &bcstruct->bc_info;
-for (int which_gz = 0; which_gz < NGHOSTS; which_gz++) {
-for (int dirn = 0; dirn < 3; dirn++) {
-    if (bc_info->num_pure_outer_boundary_points[which_gz][dirn] > 0) {
-    size_t gz_idx = dirn + (3 * which_gz);
-    const outerpt_bc_struct *restrict pure_outer_bc_array = bcstruct->pure_outer_bc_array[gz_idx];
-    int num_pure_outer_boundary_points = bc_info->num_pure_outer_boundary_points[which_gz][dirn];
-    """
-
-    # Specify kernel launch body
+    # Specify kernel body
     kernel_body = ""
     for i in range(3):
         kernel_body += f"MAYBE_UNUSED int const Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n".replace(
@@ -987,13 +976,19 @@ for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
             "stream": "default",
         },
     )
-    # Add launch configuration to Launch kernel body
-    kernel_launch_body += new_body
-    # Close the launch kernel
-    kernel_launch_body += """
-    }
-}
-}
+    # Specify the function body for launching the kernel
+    kernel_launch_body = f"""
+const bc_info_struct *bc_info = &bcstruct->bc_info;
+for (int which_gz = 0; which_gz < NGHOSTS; which_gz++) {{
+for (int dirn = 0; dirn < 3; dirn++) {{
+    if (bc_info->num_pure_outer_boundary_points[which_gz][dirn] > 0) {{
+    size_t gz_idx = dirn + (3 * which_gz);
+    const outerpt_bc_struct *restrict pure_outer_bc_array = bcstruct->pure_outer_bc_array[gz_idx];
+    int num_pure_outer_boundary_points = bc_info->num_pure_outer_boundary_points[which_gz][dirn];
+    {new_body}
+    }}
+  }}
+}}
 """
     # Generate the Launch kernel CFunction
     kernel_launch_CFunction = cfc.CFunction(
@@ -1651,27 +1646,22 @@ for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {
         cfunc_type=cfunc_type,
     )
 
-    kernel_launch_body: str = ""
     # Specify the function body for the launch kernel
-    kernel_launch_body += """
+    kernel_launch_body = f"""
 const bc_info_struct *bc_info = &bcstruct->bc_info;
 REAL *restrict x0 = xx[0];
 REAL *restrict x1 = xx[1];
 REAL *restrict x2 = xx[2];
-  for (int which_gz = 0; which_gz < NGHOSTS; which_gz++) {
-    for (int dirn = 0; dirn < 3; dirn++) {
-      if (bc_info->num_pure_outer_boundary_points[which_gz][dirn] > 0) {
+  for (int which_gz = 0; which_gz < NGHOSTS; which_gz++) {{
+    for (int dirn = 0; dirn < 3; dirn++) {{
+      if (bc_info->num_pure_outer_boundary_points[which_gz][dirn] > 0) {{
         size_t gz_idx = dirn + (3 * which_gz);
         const outerpt_bc_struct *restrict pure_outer_bc_array = bcstruct->pure_outer_bc_array[gz_idx];
         int num_pure_outer_boundary_points = bc_info->num_pure_outer_boundary_points[which_gz][dirn];
-"""
-    # Add launch configuration to Launch kernel body
-    kernel_launch_body += new_body
-    # Close the launch kernel
-    kernel_launch_body += """
-      }
-    }
-  }
+        {new_body}
+      }}
+    }}
+  }}
 """
 
     launch_kernel = gputils.GPU_Kernel(
