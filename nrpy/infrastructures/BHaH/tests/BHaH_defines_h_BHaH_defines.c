@@ -148,7 +148,7 @@ typedef struct __MoL_gridfunctions_struct__ {
 #define IDX4pt(gf, idx) ((idx) + (Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2) * (gf))
 // IDX4ptP: Similar to IDX4pt, but retrieves grid dimensions from the provided parameter structure
 //        "params" instead of using global variables.
-#define IDX4ptP(params, gf, idx) ((idx) + ((params)->Nxx_plus_2NGHOSTS0 * (params)->Nxx_plus_2NGHOSTS1 * (params)->Nxx_plus_2NGHOSTS2) * (gf))
+#define IDX4Ppt(params, gf, idx) ((idx) + ((params)->Nxx_plus_2NGHOSTS0 * (params)->Nxx_plus_2NGHOSTS1 * (params)->Nxx_plus_2NGHOSTS2) * (gf))
 // IDX3: Converts 3D grid indices (i, j, k) into a 1D array index using the strides Nxx_plus_2NGHOSTS0
 //       and Nxx_plus_2NGHOSTS1. Like IDX4, this macro assumes the "i" index varies fastest.
 #define IDX3(i, j, k) ((i) + Nxx_plus_2NGHOSTS0 * ((j) + Nxx_plus_2NGHOSTS1 * ((k))))
