@@ -189,9 +189,9 @@ def simple_loop(
                 ]
                 if parallelization == "cuda"
                 else [
-                    "MAYBE_UNUSED const REAL xx0 = x0[i0];",
-                    "MAYBE_UNUSED const REAL xx1 = x1[i1];",
-                    "MAYBE_UNUSED const REAL xx2 = x2[i2];",
+                    "MAYBE_UNUSED const REAL xx0 = xx[0][i0];",
+                    "MAYBE_UNUSED const REAL xx1 = xx[1][i1];",
+                    "MAYBE_UNUSED const REAL xx2 = xx[2][i2];",
                 ]
             )
         else:
