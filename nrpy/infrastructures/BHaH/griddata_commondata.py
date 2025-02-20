@@ -9,6 +9,7 @@ from typing import Dict, List
 
 import nrpy.c_function as cfc
 import nrpy.params as par
+import nrpy.helpers.gpu.utilities as gpu_utils
 
 
 class GridCommonData:
@@ -83,6 +84,7 @@ def register_CFunction_griddata_free(
     enable_rfm_precompute: bool,
     enable_CurviBCs: bool,
     enable_bhahaha: bool = False,
+    parallelization: str = "openmp",
 ) -> None:
     """
     Register the C function griddata_free() to free all memory within the griddata struct.
@@ -90,41 +92,64 @@ def register_CFunction_griddata_free(
     :param enable_rfm_precompute: A flag to enable/disable rfm_precompute_free within the C function body.
     :param enable_CurviBCs: Whether to free CurviBCs within the C function body.
     :param enable_bhahaha: Whether to enable freeing of BHaHAHA memory.
+    :param parallelization: Parallelization method to use. Default is "openmp".
     """
     desc = """Free all memory within the griddata struct,
 except perhaps non_y_n_gfs (e.g., after a regrid, in which non_y_n_gfs are freed first)."""
     cfunc_type = "void"
     name = "griddata_free"
-    params = "const commondata_struct *restrict commondata, griddata_struct *restrict griddata, const bool free_non_y_n_gfs_and_core_griddata_pointers"
+    params = (
+        "const commondata_struct *restrict commondata, griddata_struct *restrict griddata, griddata_struct *restrict griddata_host, const bool free_non_y_n_gfs_and_core_griddata_pointers"
+        if parallelization == "cuda"
+        else
+        "const commondata_struct *restrict commondata, griddata_struct *restrict griddata, const bool free_non_y_n_gfs_and_core_griddata_pointers"
+    )
     body = ""
-    if enable_bhahaha:
+    free_func = gpu_utils.get_memory_free_function(parallelization)
+    if enable_bhahaha and parallelization == "openmp":
         body += r"""  // Free BHaHAHA memory.
   for (int which_horizon = 0; which_horizon < commondata->bah_max_num_horizons; which_horizon++) {
     free(commondata->bhahaha_params_and_data[which_horizon].prev_horizon_m1);
     free(commondata->bhahaha_params_and_data[which_horizon].prev_horizon_m2);
     free(commondata->bhahaha_params_and_data[which_horizon].prev_horizon_m3);
   }
-"""
+""".replace("free(", f"{free_func}(")
+    elif enable_bhahaha and parallelization != "openmp":
+      raise ValueError("BHaHAHA is not yet supported in parallelization mode: " + parallelization)
     body += r"""  // Free memory allocated inside griddata[].
   for(int grid=0;grid<commondata->NUMGRIDS;grid++) {
 """
     if enable_rfm_precompute:
         body += "  rfm_precompute_free(commondata, &griddata[grid].params, griddata[grid].rfmstruct);\n"
-        body += "  free(griddata[grid].rfmstruct);\n"
+        body += "  free(griddata[grid].rfmstruct);\n".replace("free(", f"{free_func}(")
+        body += f'  {gpu_utils.get_check_errors_str(parallelization, free_func, opt_msg="Free: rfmstruct failed")}'
     if enable_CurviBCs:
-        body += r"""
+        body += rf"""
   free(griddata[grid].bcstruct.inner_bc_array);
-  for(int ng=0;ng<NGHOSTS*3;ng++) free(griddata[grid].bcstruct.pure_outer_bc_array[ng]);
-"""
-    body += r"""
+  {gpu_utils.get_check_errors_str(parallelization, free_func, opt_msg="Free: bcstruct.inner_bc_array failed")}
+  for(int ng=0;ng<NGHOSTS*3;ng++) {{
+      free(griddata[grid].bcstruct.pure_outer_bc_array[ng]);
+      {gpu_utils.get_check_errors_str(parallelization, free_func, opt_msg="Free: bcstruct.pure_outer_bc_array failed")}
+}}
+""".replace("free(", f"{free_func}(")
+    body += rf"""
 
   MoL_free_memory_y_n_gfs(&griddata[grid].gridfuncs);
-  if(free_non_y_n_gfs_and_core_griddata_pointers)
-      MoL_free_memory_non_y_n_gfs(&griddata[grid].gridfuncs);
-  for(int i=0;i<3;i++) free(griddata[grid].xx[i]);
+  if(free_non_y_n_gfs_and_core_griddata_pointers) {{
+    MoL_free_memory_non_y_n_gfs(&griddata[grid].gridfuncs);
+  }}
+  for(int i=0;i<3;i++) {{
+    free(griddata[grid].xx[i]);
+    {gpu_utils.get_check_errors_str(parallelization, free_func, opt_msg="Free: grid.XX failed")}
+""".replace("free(", f"{free_func}(")
+    body += "free(griddata_host[grid].xx[i]);\n" if parallelization == "cuda" else ""
+    body += """}
 } // END for(int grid=0;grid<commondata->NUMGRIDS;grid++)
 """
-    body += "if(free_non_y_n_gfs_and_core_griddata_pointers) free(griddata);\n"
+    body += rf"""if(free_non_y_n_gfs_and_core_griddata_pointers) {{
+        free(griddata);
+        {"free(griddata_host);" if parallelization == "cuda" else ""}
+    }}"""
     cfc.register_CFunction(
         includes=["BHaH_defines.h", "BHaH_function_prototypes.h"],
         desc=desc,
