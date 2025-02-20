@@ -184,7 +184,7 @@ def simple_loop(
     read_rfm_xx_arrays = ["", "", ""]
     # 'Read_xxs': read the xx[3][:] 1D coordinate arrays, as some interior dependency exists
     if read_xxs:
-        if not enable_intrinsics:
+        if not enable_intrinsics or parallelization == "cuda":
             read_rfm_xx_arrays = (
                 [
                     "MAYBE_UNUSED const REAL xx0 = x0[i0];",
