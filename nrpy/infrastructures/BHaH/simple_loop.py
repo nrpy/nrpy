@@ -232,11 +232,11 @@ def simple_loop(
     else:
         pragma = ""
     increment = (
-        ["1", "1", "simd_width"]
-        if enable_intrinsics
+        ["stride2", "stride1", "stride0"]
+        if parallelization == "cuda"
         else (
-            ["stride2", "stride1", "stride0"]
-            if parallelization == "cuda"
+            ["1", "1", "simd_width"]
+            if enable_intrinsics
             else ["1", "1", "1"]
         )
     )
