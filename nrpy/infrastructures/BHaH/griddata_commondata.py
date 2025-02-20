@@ -8,8 +8,8 @@ Author: Zachariah B. Etienne
 from typing import Dict, List
 
 import nrpy.c_function as cfc
-import nrpy.params as par
 import nrpy.helpers.gpu.utilities as gpu_utils
+import nrpy.params as par
 
 
 class GridCommonData:
@@ -93,6 +93,7 @@ def register_CFunction_griddata_free(
     :param enable_CurviBCs: Whether to free CurviBCs within the C function body.
     :param enable_bhahaha: Whether to enable freeing of BHaHAHA memory.
     :param parallelization: Parallelization method to use. Default is "openmp".
+    :raises ValueError: If BHaHAHA is enabled and parallelization is not "openmp"
     """
     desc = """Free all memory within the griddata struct,
 except perhaps non_y_n_gfs (e.g., after a regrid, in which non_y_n_gfs are freed first)."""
@@ -101,8 +102,7 @@ except perhaps non_y_n_gfs (e.g., after a regrid, in which non_y_n_gfs are freed
     params = (
         "const commondata_struct *restrict commondata, griddata_struct *restrict griddata, griddata_struct *restrict griddata_host, const bool free_non_y_n_gfs_and_core_griddata_pointers"
         if parallelization == "cuda"
-        else
-        "const commondata_struct *restrict commondata, griddata_struct *restrict griddata, const bool free_non_y_n_gfs_and_core_griddata_pointers"
+        else "const commondata_struct *restrict commondata, griddata_struct *restrict griddata, const bool free_non_y_n_gfs_and_core_griddata_pointers"
     )
     body = ""
     free_func = gpu_utils.get_memory_free_function(parallelization)
@@ -113,9 +113,13 @@ except perhaps non_y_n_gfs (e.g., after a regrid, in which non_y_n_gfs are freed
     free(commondata->bhahaha_params_and_data[which_horizon].prev_horizon_m2);
     free(commondata->bhahaha_params_and_data[which_horizon].prev_horizon_m3);
   }
-""".replace("free(", f"{free_func}(")
+""".replace(
+            "free(", f"{free_func}("
+        )
     elif enable_bhahaha and parallelization != "openmp":
-      raise ValueError("BHaHAHA is not yet supported in parallelization mode: " + parallelization)
+        raise ValueError(
+            "BHaHAHA is not yet supported in parallelization mode: " + parallelization
+        )
     body += r"""  // Free memory allocated inside griddata[].
   for(int grid=0;grid<commondata->NUMGRIDS;grid++) {
 """
@@ -131,7 +135,9 @@ except perhaps non_y_n_gfs (e.g., after a regrid, in which non_y_n_gfs are freed
       free(griddata[grid].bcstruct.pure_outer_bc_array[ng]);
       {gpu_utils.get_check_errors_str(parallelization, free_func, opt_msg="Free: bcstruct.pure_outer_bc_array failed")}
 }}
-""".replace("free(", f"{free_func}(")
+""".replace(
+            "free(", f"{free_func}("
+        )
     body += rf"""
 
   MoL_free_memory_y_n_gfs(&griddata[grid].gridfuncs);
@@ -141,7 +147,9 @@ except perhaps non_y_n_gfs (e.g., after a regrid, in which non_y_n_gfs are freed
   for(int i=0;i<3;i++) {{
     free(griddata[grid].xx[i]);
     {gpu_utils.get_check_errors_str(parallelization, free_func, opt_msg="Free: grid.XX failed")}
-""".replace("free(", f"{free_func}(")
+""".replace(
+        "free(", f"{free_func}("
+    )
     body += "free(griddata_host[grid].xx[i]);\n" if parallelization == "cuda" else ""
     body += """}
 } // END for(int grid=0;grid<commondata->NUMGRIDS;grid++)
