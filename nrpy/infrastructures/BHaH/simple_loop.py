@@ -234,11 +234,7 @@ def simple_loop(
     increment = (
         ["stride2", "stride1", "stride0"]
         if parallelization == "cuda"
-        else (
-            ["1", "1", "simd_width"]
-            if enable_intrinsics
-            else ["1", "1", "1"]
-        )
+        else (["1", "1", "simd_width"] if enable_intrinsics else ["1", "1", "1"])
     )
 
     loop_body = read_rfm_xx_arrays[0] + loop_body
