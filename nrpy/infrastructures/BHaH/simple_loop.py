@@ -222,7 +222,7 @@ def simple_loop(
             ]
     # 'DisableOpenMP': disable loop parallelization using OpenMP
     if enable_OpenMP or OMP_custom_pragma != "":
-        if OMP_custom_pragma == "":
+        if OMP_custom_pragma == "" and parallelization == "openmp":
             pragma = "#pragma omp parallel for"
             if OMP_collapse > 1:
                 pragma = f"#pragma omp parallel for collapse({OMP_collapse})"
@@ -237,7 +237,7 @@ def simple_loop(
         else (["1", "1", "simd_width"] if enable_intrinsics else ["1", "1", "1"])
     )
 
-    loop_body = read_rfm_xx_arrays[0] + loop_body
+    loop_body = read_rfm_xx_arrays[0] + f"\n\n{loop_body}"
     prefix_loop_with = [pragma, read_rfm_xx_arrays[2], read_rfm_xx_arrays[1]]
     if parallelization != "cuda":
         if OMP_collapse == 2:
