@@ -26,6 +26,40 @@ def get_params_access(parallelization: str) -> str:
     return params_access
 
 
+def get_memory_free_function(parallelization: str) -> str:
+    """
+    Return the appropriate function to free memory.
+
+    :param parallelization: The parallelization method to use.
+    :returns: The appropriate function to free memory.
+    """
+    if parallelization == "cuda":
+        free_func = "cudaFree"
+    else:
+        free_func = "free"
+    return free_func
+
+
+def get_check_errors_str(
+    parallelization: str, kernel_name: str, opt_msg: str = ""
+) -> str:
+    """
+    Return the appropriate function to check for kernel errors.
+
+    :param parallelization: The parallelization method to use.
+    :param kernel_name: The name of the kernel function.
+    :param opt_msg: Optional custom message to throw.
+    :returns: The error checking string.
+    """
+    opt_msg = f"{kernel_name} failed." if opt_msg == "" else opt_msg
+
+    if parallelization == "cuda":
+        check_errors_str = f"cudaCheckErrors({kernel_name}, {opt_msg});\n"
+    else:
+        check_errors_str = ""
+    return check_errors_str
+
+
 def generate_kernel_and_launch_code(
     kernel_name: str,
     kernel_body: str,
