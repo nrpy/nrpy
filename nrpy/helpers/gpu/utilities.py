@@ -72,6 +72,7 @@ def generate_kernel_and_launch_code(
     comments: str = "",
     # If you need different block/thread dims, pass them in:
     launch_dict: Optional[Dict[str, Any]] = None,
+    launchblock_with_braces: bool = False,
 ) -> Tuple[str, str]:
     """
     Generate kernels as prefuncs and the necessary launch body.
@@ -91,7 +92,6 @@ def generate_kernel_and_launch_code(
     """
     # Prepare return strings
     prefunc = ""
-    body = ""
 
     if parallelization == "cuda":
         params_access = get_params_access(parallelization)
@@ -109,12 +109,6 @@ def generate_kernel_and_launch_code(
         # Build the function definition:
         prefunc += device_kernel.CFunction.full_function
 
-        # Build the launch call in `body`:
-        body += "{\n"
-        body += device_kernel.launch_block
-        body += device_kernel.c_function_call()
-        body += "}\n"
-
     else:
         # The "host" path
         device_kernel = GPU_Kernel(
@@ -131,8 +125,10 @@ def generate_kernel_and_launch_code(
         # Build the function definition:
         prefunc += device_kernel.CFunction.full_function
 
-        # Host call is more straightforward:
-        body += device_kernel.launch_block
-        body += device_kernel.c_function_call()
+    # Build the launch call in `body`:
+    body = device_kernel.launch_block + device_kernel.c_function_call()
+    if launchblock_with_braces:
+        body = f"""{{{body}
+        }}"""
 
     return prefunc, body
