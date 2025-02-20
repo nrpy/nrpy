@@ -54,7 +54,7 @@ def get_check_errors_str(
     opt_msg = f"{kernel_name} failed." if opt_msg == "" else opt_msg
 
     if parallelization == "cuda":
-        check_errors_str = f"cudaCheckErrors({kernel_name}, {opt_msg});\n"
+        check_errors_str = f"cudaCheckErrors({kernel_name}, \"{opt_msg}\");\n"
     else:
         check_errors_str = ""
     return check_errors_str
