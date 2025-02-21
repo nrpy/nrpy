@@ -22,7 +22,6 @@ class GPU_Kernel:
     :param c_function_name: Kernel function name
     :param cfunc_type: C Function return type
     :param decorators: Function decorators i.e. Kernel type, templates, etc
-    :param fp_type: Floating point type, i.e. double, float, long double
     :param comments: Additional comments to add to Function description
     :param launch_dict: Dictionary that stores kernel launch settings
     :param streamid_param: Toggle whether streamid is a kernel argument parameter
@@ -87,7 +86,6 @@ class GPU_Kernel:
         c_function_name: str,
         cfunc_type: str = "static void",
         decorators: str = "__global__",
-        fp_type: str = "double",
         comments: str = "",
         launch_dict: Union[Dict[str, Any], None] = None,
         streamid_param: bool = True,
@@ -100,7 +98,6 @@ class GPU_Kernel:
             self.params_dict = {"streamid": "const size_t", **params_dict}
         self.name = c_function_name
         self.cfunc_type = f"{decorators} {cfunc_type}"
-        self.fp_type = fp_type
         self.cuda_check_error = cuda_check_error
 
         self.CFunction: cfc.CFunction
