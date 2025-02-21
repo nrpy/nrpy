@@ -269,26 +269,7 @@ def simple_loop(
             loop_body=loop_body,
         )
     )
-    if parallelization == "cuda":
-        full_loop_body = f"""
-  const int Nxx_plus_2NGHOSTS0 = d_params[streamid].Nxx_plus_2NGHOSTS0;
-  const int Nxx_plus_2NGHOSTS1 = d_params[streamid].Nxx_plus_2NGHOSTS1;
-  const int Nxx_plus_2NGHOSTS2 = d_params[streamid].Nxx_plus_2NGHOSTS2;
 
-  MAYBE_UNUSED const REAL invdxx0 = d_params[streamid].invdxx0;
-  MAYBE_UNUSED const REAL invdxx1 = d_params[streamid].invdxx1;
-  MAYBE_UNUSED const REAL invdxx2 = d_params[streamid].invdxx2;
-
-  const int tid0  = blockIdx.x * blockDim.x + threadIdx.x;
-  const int tid1  = blockIdx.y * blockDim.y + threadIdx.y;
-  const int tid2  = blockIdx.z * blockDim.z + threadIdx.z;
-
-  const int stride0 = blockDim.x * gridDim.x;
-  const int stride1 = blockDim.y * gridDim.y;
-  const int stride2 = blockDim.z * gridDim.z;
-
-  {full_loop_body}
-"""
     return full_loop_body
 
 
