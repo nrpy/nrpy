@@ -54,7 +54,7 @@ def get_check_errors_str(
     opt_msg = f"{kernel_name} failed." if opt_msg == "" else opt_msg
 
     if parallelization == "cuda":
-        check_errors_str = f"cudaCheckErrors({kernel_name}, \"{opt_msg}\");\n"
+        check_errors_str = f'cudaCheckErrors({kernel_name}, "{opt_msg}");\n'
     else:
         check_errors_str = ""
     return check_errors_str
@@ -88,6 +88,8 @@ def generate_kernel_and_launch_code(
     :param cfunc_type: e.g. "static void"
     :param comments: Kernel docstring or extra comments
     :param launch_dict: Dictionary to overload CUDA launch settings.
+    :param launchblock_with_braces: If True, wrap the launch block in braces.
+
     :return: (prefunc, body) code strings.
     """
     # Prepare return strings
@@ -133,12 +135,16 @@ def generate_kernel_and_launch_code(
 
     return prefunc, body
 
-def get_loop_parameters(parallelization: str, dim=3, enable_intrinsics: bool = False)   -> str:
+
+def get_loop_parameters(
+    parallelization: str, dim: int = 3, enable_intrinsics: bool = False
+) -> str:
     """
     Return the appropriate loop parameters for CUDA vs. non-CUDA.
 
     :param parallelization: The parallelization method to use.
     :param dim: The number of dimensions to loop over.
+    :param enable_intrinsics: Whether to modify str based on hardware intrinsics.
     :returns: The appropriate loop parameters.
     """
     loop_params = ""
@@ -151,10 +157,9 @@ def get_loop_parameters(parallelization: str, dim=3, enable_intrinsics: bool = F
         loop_params += (
             f"MAYBE_UNUSED const REAL invdxx{i} = {param_access}invdxx{i};\n"
             if not enable_intrinsics
-            else
-            f"const REAL NOSIMDinvdxx{i} = {param_access}invdxx{i};\n"
+            else f"const REAL NOSIMDinvdxx{i} = {param_access}invdxx{i};\n"
             f"MAYBE_UNUSED const REAL_SIMD_ARRAY invdxx{i} = ConstSIMD(NOSIMDinvdxx{i});\n"
-            )
+        )
     loop_params += "\n"
 
     if parallelization == "cuda":
@@ -163,8 +168,10 @@ def get_loop_parameters(parallelization: str, dim=3, enable_intrinsics: bool = F
         loop_params += "\n"
 
         for i, coord in zip(range(dim), ["x", "y", "z"]):
-            loop_params += f"const int stride{i}  = blockDim.{coord} * gridDim.{coord};\n"
+            loop_params += (
+                f"const int stride{i}  = blockDim.{coord} * gridDim.{coord};\n"
+            )
         loop_params += "\n"
-        loop_params.replace("SIMD", "CUDA")
+        loop_params = loop_params.replace("SIMD", "CUDA")
 
     return loop_params
