@@ -70,6 +70,30 @@ def get_params_commondata_symbols_from_expr_list(
     return param_symbols, commondata_symbols
 
 
+def generate_definition_header(
+    str_list: List[str], enable_intrinsics: bool = False, var_access: str = "params->"
+) -> str:
+    """
+    Generate the string header for parameter definitions.
+
+    :param str_list: List of Symbol strings to include in the header
+    :param enable_intrinsics: Whether to modify str based on hardware intrinsics.
+    :param var_access: The variable access string
+    :returns: The definition string
+    """
+    return "\n".join(
+        [
+            (
+                f"const REAL {p} = {var_access}{p};"
+                if not enable_intrinsics
+                else f"const REAL NOSIMD{p} = {var_access}{p};\n"
+                f"MAYBE_UNUSED const REAL_SIMD_ARRAY {p} = ConstSIMD(NOSIMD{p});\n"
+            )
+            for p in str_list
+        ]
+    )
+
+
 if __name__ == "__main__":
     import doctest
 
