@@ -132,3 +132,39 @@ def generate_kernel_and_launch_code(
         }}"""
 
     return prefunc, body
+
+def get_loop_parameters(parallelization: str, dim=3, enable_intrinsics: bool = False)   -> str:
+    """
+    Return the appropriate loop parameters for CUDA vs. non-CUDA.
+
+    :param parallelization: The parallelization method to use.
+    :param dim: The number of dimensions to loop over.
+    :returns: The appropriate loop parameters.
+    """
+    loop_params = ""
+    param_access = get_params_access(parallelization)
+    for i in range(dim):
+        loop_params += f"MAYBE_UNUSED const int Nxx_plus_2NGHOSTS{i} = {param_access}Nxx_plus_2NGHOSTS{i};\n"
+    loop_params += "\n"
+
+    for i in range(dim):
+        loop_params += (
+            f"MAYBE_UNUSED const REAL invdxx{i} = {param_access}invdxx{i};\n"
+            if not enable_intrinsics
+            else
+            f"const REAL NOSIMDinvdxx{i} = {param_access}invdxx{i};\n"
+            f"MAYBE_UNUSED const REAL_SIMD_ARRAY invdxx{i} = ConstSIMD(NOSIMDinvdxx{i});\n"
+            )
+    loop_params += "\n"
+
+    if parallelization == "cuda":
+        for i, coord in zip(range(dim), ["x", "y", "z"]):
+            loop_params += f"const int tid{i}  = blockIdx.{coord} * blockDim.{coord} + threadIdx.{coord};\n"
+        loop_params += "\n"
+
+        for i, coord in zip(range(dim), ["x", "y", "z"]):
+            loop_params += f"const int stride{i}  = blockDim.{coord} * gridDim.{coord};\n"
+        loop_params += "\n"
+        loop_params.replace("SIMD", "CUDA")
+
+    return loop_params
