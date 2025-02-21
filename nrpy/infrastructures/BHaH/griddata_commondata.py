@@ -93,7 +93,8 @@ def register_CFunction_griddata_free(
     :param enable_CurviBCs: Whether to free CurviBCs within the C function body.
     :param enable_bhahaha: Whether to enable freeing of BHaHAHA memory.
     :param parallelization: Parallelization method to use. Default is "openmp".
-    :raises ValueError: If BHaHAHA is enabled and parallelization is not "openmp"
+
+    :raises ValueError: If BHaHAHA is not supported in the parallelization mode.
     """
     desc = """Free all memory within the griddata struct,
 except perhaps non_y_n_gfs (e.g., after a regrid, in which non_y_n_gfs are freed first)."""
