@@ -429,6 +429,7 @@ if(r < integration_radius) {
 # Define diagnostics function
 def register_CFunction_diagnostics(
     CoordSystem: str,
+    enable_rfm_precompute: bool,
     default_diagnostics_out_every: int,
     enable_progress_indicator: bool = False,
     axis_filename_tuple: Tuple[str, str] = (
@@ -445,6 +446,7 @@ def register_CFunction_diagnostics(
     Register C function for simulation diagnostics.
 
     :param CoordSystem: Coordinate system used.
+    :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param default_diagnostics_out_every: Specifies the default diagnostics output frequency.
     :param enable_progress_indicator: Whether to enable the progress indicator.
     :param axis_filename_tuple: Tuple containing filename and variables for axis output.
@@ -508,15 +510,29 @@ def register_CFunction_diagnostics(
   REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
   REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
   REAL *restrict diagnostic_output_gfs = griddata[grid].gridfuncs.diagnostic_output_gfs;
-
-  // Set params and rfm_struct
+  // Set params
   params_struct *restrict params = &griddata[grid].params;
-  const rfm_struct *restrict rfmstruct = griddata[grid].rfmstruct;
 #include "set_CodeParameters.h"
+"""
+    if enable_rfm_precompute:
+        body += r"""  // Set rfm_struct
+  const rfm_struct *restrict rfmstruct = griddata[grid].rfmstruct;
 
   // Compute Hamiltonian constraint violation and store it at diagnostic_output_gfs
   compute_residual_all_points(commondata, params, rfmstruct, auxevol_gfs, y_n_gfs, diagnostic_output_gfs);
+"""
+    else:
+        body += r"""
+  // Set xx
+  REAL *restrict xx[3];
+  for (int ww = 0; ww < 3; ww++)
+    xx[ww] = griddata[grid].xx[ww];
 
+  // Compute Hamiltonian constraint violation and store it at diagnostic_output_gfs
+  compute_residual_all_points(commondata, params, xx, auxevol_gfs, y_n_gfs, diagnostic_output_gfs);
+"""
+
+    body += r"""
   // Set integration radius for l2-norm computation
   const REAL integration_radius = 1000;
 

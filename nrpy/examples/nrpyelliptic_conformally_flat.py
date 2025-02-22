@@ -196,6 +196,7 @@ xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
 
 nrpyellClib.register_CFunction_diagnostics(
     CoordSystem=CoordSystem,
+    enable_rfm_precompute=enable_rfm_precompute,
     default_diagnostics_out_every=default_diagnostics_output_every,
 )
 
@@ -343,6 +344,7 @@ cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
 Bdefines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     enable_intrinsics=enable_simd,
+    enable_rfm_precompute=enable_rfm_precompute,
     DOUBLE_means="double" if fp_type == "float" else "REAL",
 )
 # Define post_MoL_step_forward_in_time string for main function
