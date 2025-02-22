@@ -356,7 +356,7 @@ def register_CFunction_rhs_eval() -> None:
             enable_simd=enable_simd,
         ),
         loop_region="interior",
-        enable_simd=enable_simd,
+        enable_intrinsics=enable_simd,
     )
 
     cfc.register_CFunction(

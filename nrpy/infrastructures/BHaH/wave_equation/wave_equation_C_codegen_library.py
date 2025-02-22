@@ -366,7 +366,7 @@ def register_CFunction_rhs_eval(
             enable_simd=enable_simd,
         ),
         loop_region="interior",
-        enable_simd=enable_simd,
+        enable_intrinsics=enable_simd,
         CoordSystem=CoordSystem,
         enable_rfm_precompute=enable_rfm_precompute,
         read_xxs=not enable_rfm_precompute,
