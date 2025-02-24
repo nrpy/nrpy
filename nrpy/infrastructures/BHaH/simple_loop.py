@@ -224,6 +224,7 @@ def simple_loop(
                 rfmp.readvr_str[1],
                 rfmp.readvr_str[2],
             ]
+    OMP_collapse = OMP_collapse if parallelization == "openmp" else 1
     # 'DisableOpenMP': disable loop parallelization using OpenMP
     if enable_OpenMP or OMP_custom_pragma != "":
         if OMP_custom_pragma == "" and parallelization == "openmp":
@@ -243,21 +244,21 @@ def simple_loop(
 
     loop_body = read_rfm_xx_arrays[0] + f"\n\n{loop_body}"
     prefix_loop_with = [pragma, read_rfm_xx_arrays[2], read_rfm_xx_arrays[1]]
-    if parallelization != "cuda":
-        if OMP_collapse == 2:
-            prefix_loop_with = [
-                pragma,
-                "",
-                read_rfm_xx_arrays[2] + read_rfm_xx_arrays[1],
-            ]
-        elif OMP_collapse == 3:
-            prefix_loop_with = [
-                pragma,
-                "",
-                "",
-            ]
-            # above: loop_body = read_rfm_xx_arrays[0] + loop_body -----v
-            loop_body = read_rfm_xx_arrays[2] + read_rfm_xx_arrays[1] + loop_body
+
+    if OMP_collapse == 2:
+        prefix_loop_with = [
+            pragma,
+            "",
+            read_rfm_xx_arrays[2] + read_rfm_xx_arrays[1],
+        ]
+    elif OMP_collapse == 3:
+        prefix_loop_with = [
+            pragma,
+            "",
+            "",
+        ]
+        # above: loop_body = read_rfm_xx_arrays[0] + loop_body -----v
+        loop_body = read_rfm_xx_arrays[2] + read_rfm_xx_arrays[1] + loop_body
 
     full_loop_body = str(
         lp.loop(
