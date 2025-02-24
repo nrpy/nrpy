@@ -182,24 +182,30 @@ def simple_loop(
     )
 
     read_rfm_xx_arrays = ["", "", ""]
+
+    # SIMD is used only if intrinsics are enabled and we're not, currently, using CUDA.
+    use_simd = enable_intrinsics and (parallelization != "cuda")
+
+    # Determine if a reset is needed since it is only relevant to openmp
+    OMP_collapse = OMP_collapse if parallelization == "openmp" else 1
+
     # 'Read_xxs': read the xx[3][:] 1D coordinate arrays, as some interior dependency exists
-    if read_xxs:
-        if not enable_intrinsics or parallelization == "cuda":
-            read_rfm_xx_arrays = (
-                [
-                    "MAYBE_UNUSED const REAL xx0 = x0[i0];",
-                    "MAYBE_UNUSED const REAL xx1 = x1[i1];",
-                    "MAYBE_UNUSED const REAL xx2 = x2[i2];",
-                ]
-                if parallelization == "cuda"
-                else [
-                    "MAYBE_UNUSED const REAL xx0 = xx[0][i0];",
-                    "MAYBE_UNUSED const REAL xx1 = xx[1][i1];",
-                    "MAYBE_UNUSED const REAL xx2 = xx[2][i2];",
-                ]
-            )
+    if not use_simd and read_xxs:
+        if parallelization == "cuda":
+            read_rfm_xx_arrays = [
+                "MAYBE_UNUSED const REAL xx0 = x0[i0];",
+                "MAYBE_UNUSED const REAL xx1 = x1[i1];",
+                "MAYBE_UNUSED const REAL xx2 = x2[i2];",
+            ]
         else:
-            raise ValueError("no innerSIMD support for Read_xxs (currently).")
+            read_rfm_xx_arrays = [
+                "MAYBE_UNUSED const REAL xx0 = xx[0][i0];",
+                "MAYBE_UNUSED const REAL xx1 = xx[1][i1];",
+                "MAYBE_UNUSED const REAL xx2 = xx[2][i2];",
+            ]
+    elif read_xxs and use_simd:
+        raise ValueError("no innerSIMD support for Read_xxs (currently).")
+
     # 'enable_rfm_precompute': enable pre-computation of reference metric
     if enable_rfm_precompute:
         if read_xxs:
@@ -224,7 +230,6 @@ def simple_loop(
                 rfmp.readvr_str[1],
                 rfmp.readvr_str[2],
             ]
-    OMP_collapse = OMP_collapse if parallelization == "openmp" else 1
     # 'DisableOpenMP': disable loop parallelization using OpenMP
     if enable_OpenMP or OMP_custom_pragma != "":
         if OMP_custom_pragma == "" and parallelization == "openmp":
