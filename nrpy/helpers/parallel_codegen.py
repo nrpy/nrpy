@@ -224,6 +224,8 @@ def wrapper_func(args: Tuple[Dict[str, Any], str, Any]) -> Any:
 
     try:
         result = parallel_function_call(value)
+        print(value)
+        print(result)
         shared_dict[key] = result
         elapsed_time = time.time() - start_time
         logging.info(
