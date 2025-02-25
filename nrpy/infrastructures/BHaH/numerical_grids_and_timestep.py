@@ -165,7 +165,49 @@ for (int j = 0; j < params->Nxx_plus_2NGHOSTS2; j++) xx[2][j] = params->xxmin2 +
     )
 
 
-def register_CFunction_dsmin_single_pt(
+def register_CFunction_ds_min_radial_like_dirns_single_pt(
+    CoordSystem: str,
+) -> None:
+    """
+    Register a C function to find the minimum grid spacing ds_min_radial_like_dirns, the ds_min in radial-like directions only.
+
+    ds_min_radial_like_dirns is the minimum spacing between neighboring gridpoints on a numerical grid.
+
+    :param CoordSystem: The coordinate system of the numerical grid.
+    """
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    desc = f"Examining all three directions at a given point on a {CoordSystem} numerical grid, find the minimum grid spacing ds_min."
+    cfunc_type = "void"
+    name = "ds_min_radial_like_dirns_single_pt"
+    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xx0, const REAL xx1, const REAL xx2, REAL *restrict ds_min_radial_like_dirns"
+    rfm = refmetric.reference_metric[CoordSystem]
+    # These are set in CodeParameters.h
+    dxx = sp.symbols("dxx0 dxx1 dxx2", real=True)
+    body = "MAYBE_UNUSED REAL ds0=1e38, ds1=1e38, ds2=1e38;\n"
+    ds_expr_list: List[sp.Expr] = []
+    ds_str_list: List[str] = []
+    for dirn in rfm.radial_like_dirns:
+        ds_expr_list += [sp.Abs(rfm.scalefactor_orthog[dirn] * dxx[dirn])]
+        ds_str_list += [f"ds{dirn}"]
+    body += ccg.c_codegen(
+        ds_expr_list,
+        ds_str_list,
+        include_braces=False,
+    )
+    body += "*ds_min_radial_like_dirns = MIN(ds0, MIN(ds1, ds2));\n"
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        CoordSystem_for_wrapper_func=CoordSystem,
+        name=name,
+        params=params,
+        include_CodeParameters_h=True,
+        body=body,
+    )
+
+
+def register_CFunction_ds_min_single_pt(
     CoordSystem: str,
 ) -> None:
     """
@@ -181,6 +223,7 @@ def register_CFunction_dsmin_single_pt(
     name = "ds_min_single_pt"
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xx0, const REAL xx1, const REAL xx2, REAL *restrict ds_min"
     rfm = refmetric.reference_metric[CoordSystem]
+    # These are set in CodeParameters.h
     dxx0, dxx1, dxx2 = sp.symbols("dxx0 dxx1 dxx2", real=True)
     body = ccg.c_codegen(
         [
@@ -188,10 +231,10 @@ def register_CFunction_dsmin_single_pt(
             sp.Abs(rfm.scalefactor_orthog[1] * dxx1),
             sp.Abs(rfm.scalefactor_orthog[2] * dxx2),
         ],
-        ["const REAL ds_min0", "const REAL ds_min1", "const REAL ds_min2"],
+        ["const REAL ds0", "const REAL ds1", "const REAL ds2"],
         include_braces=False,
     )
-    body += "*ds_min = MIN(ds_min0, MIN(ds_min1, ds_min2));\n"
+    body += "*ds_min = MIN(ds0, MIN(ds1, ds2));\n"
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
@@ -428,7 +471,11 @@ def register_CFunctions(
 
     if gridding_approach == "multipatch" or enable_set_cfl_timestep:
         for CoordSystem in list_of_CoordSystems:
-            register_CFunction_dsmin_single_pt(CoordSystem)
+            register_CFunction_ds_min_single_pt(CoordSystem)
+    if gridding_approach == "multipatch":
+        for CoordSystem in list_of_CoordSystems:
+            register_CFunction_ds_min_radial_like_dirns_single_pt(CoordSystem)
         # Register regrid & masking functions
+        pass
 
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
