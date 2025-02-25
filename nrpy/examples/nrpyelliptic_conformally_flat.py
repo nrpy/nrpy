@@ -70,7 +70,8 @@ default_checkpoint_every = 50.0
 eta_damping = 11.0
 MINIMUM_GLOBAL_WAVESPEED = 0.7
 CFL_FACTOR = 1.0  # NRPyElliptic wave speed prescription assumes this parameter is ALWAYS set to 1
-CoordSystem = "SinhSymTP"
+CoordSystem = "SinhSpherical"
+# CoordSystem = "SinhSymTP"
 Nxx_dict = {
     "SinhSymTP": [128, 128, 16],
     "SinhCylindricalv2": [128, 16, 256],
