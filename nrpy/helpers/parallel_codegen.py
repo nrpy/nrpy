@@ -7,6 +7,7 @@ Author: Zachariah B. Etienne
 
 import logging
 import time
+import traceback
 from importlib import import_module
 from typing import Any, Callable, Dict, Tuple, Union, cast
 
@@ -212,23 +213,33 @@ def wrapper_func(args: Tuple[Dict[str, Any], str, Any]) -> Any:
     """
     shared_dict, key, value = args
     start_time = time.time()
+
+    # Log entry with key and details about the task.
+    logging.debug(
+        "Starting task: key=%s, function=%s, args=%s",
+        key,
+        value.function_name,
+        value.function_args,
+    )
+
     try:
-        # logging.debug(f"Starting task with key: {key}")
         result = parallel_function_call(value)
-        # logging.debug(f"Task {key} completed: {result}")
         shared_dict[key] = result
-        funcname_args = value.function_name
         elapsed_time = time.time() - start_time
         logging.info(
-            "In %.3fs, worker completed task '%s'", elapsed_time, funcname_args
+            "In %.3fs, worker completed task '%s'", elapsed_time, value.function_name
         )
         return key, result
     except Exception as e:
-        logging.exception(
-            "An error occurred in the process associated with key '%s':", key
-        )
+        # Capture the full traceback.
+        full_trace = traceback.format_exc()
+
+        # Log detailed error information.
+        logging.error("Comprehensive error output for key '%s':\n%s", key, full_trace)
+
+        # Optionally, you can re-raise the exception with more context.
         raise RuntimeError(
-            f"An error occurred in the process associated with key '{key}':\n {e}"
+            f"An error occurred in the process associated with key '{key}':\n{e}\nFull traceback:\n{full_trace}"
         ) from e
 
 

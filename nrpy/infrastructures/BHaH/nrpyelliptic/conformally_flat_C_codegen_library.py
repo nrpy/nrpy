@@ -456,44 +456,8 @@ def register_CFunction_diagnostics(
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
-        # Make a shallow copy of locals()
-        function_args = dict(locals())
-
-        # 1) Define + run your picklability test
-        def is_picklable_with_dill(obj):
-            try:
-                dill.dumps(obj)
-                return True
-            except Exception:
-                return False
-
-        unpicklable_items = []
-        for key, val in function_args.items():
-            if not is_picklable_with_dill(val):
-                unpicklable_items.append((key, type(val)))
-        if unpicklable_items:
-            print("Unpicklable items found:")
-            for k, t in unpicklable_items:
-                print(f" - {k} of type {t}")
-
-        # 2) Remove these debugging references from the dict
-        #    so they won't appear as unexpected kwargs
-        for debug_key in [
-            "function_args",  # the dict itself
-            "is_picklable_with_dill",
-            "unpicklable_items",
-            # + anything else you defined for debugging
-        ]:
-            function_args.pop(debug_key, None)
-
-        # 3) Finally, call register_func_call with the sanitized dict
-        pcg.register_func_call(
-            f"{__name__}.register_CFunction_diagnostics", function_args
-        )
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
-    # if pcg.pcg_registration_phase():
-    #     pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
-    #     return None
 
     _ = par.CodeParameter(
         "int",
