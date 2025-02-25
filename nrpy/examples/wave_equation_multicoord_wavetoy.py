@@ -24,6 +24,7 @@ import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
 import nrpy.infrastructures.BHaH.wave_equation.wave_equation_C_codegen_library as wCl
 import nrpy.params as par
+import nrpy.reference_metric as refmetric
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import (
     griddata_commondata,
@@ -74,6 +75,8 @@ par.set_parval_from_str("fd_order", fd_order)
 par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
 par.adjust_CodeParam_default("t_final", t_final)
 
+for CoordSystem in set(list_of_CoordSystems):
+    _ = refmetric.reference_metric[CoordSystem]
 
 #########################################################
 # STEP 2: Declare core C functions & register each to

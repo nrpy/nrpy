@@ -186,7 +186,6 @@ nrpyellClib.register_CFunction_auxevol_gfs_all_points(OMP_collapse=OMP_collapse)
 
 # Generate function that calls functions to set variable wavespeed and all other AUXEVOL gridfunctions
 nrpyellClib.register_CFunction_initialize_constant_auxevol()
-
 numerical_grids_and_timestep.register_CFunctions(
     list_of_CoordSystems=list(set(list_of_CoordSystems)),
     list_of_grid_physical_sizes=[grid_physical_size for c in list_of_CoordSystems],
