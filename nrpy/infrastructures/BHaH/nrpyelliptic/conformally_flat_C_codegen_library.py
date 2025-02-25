@@ -8,8 +8,9 @@ Authors: Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
 from inspect import currentframe as cfr
 from pathlib import Path
 from types import FrameType as FT
-from typing import Dict, Tuple, Union, cast
+from typing import Any, Dict, Tuple, Union, cast
 
+import dill  # type: ignore
 import sympy as sp
 
 import nrpy.c_codegen as ccg
@@ -27,9 +28,8 @@ from nrpy.equations.nrpyelliptic.ConformallyFlat_SourceTerms import (
     compute_psi_background_and_ADD_times_AUU,
 )
 
+
 # Define functions to set up initial guess
-
-
 def register_CFunction_initial_guess_single_point() -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the C function for initial guess of solution at a single point.
@@ -440,13 +440,10 @@ def register_CFunction_diagnostics(
         "out2d-PLANE-n-%08d.txt",
         "nn",
     ),
-    # out_quantities_dict: Union[str, Dict[Tuple[str, str], str]] = "default",
+    out_quantities_dict: Union[str, Dict[Tuple[str, str], str]] = "default",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register C function for simulation diagnostics.
-
-    # :param out_quantities_dict: Dictionary or string specifying output quantities.
-    # :raises TypeError: If `out_quantities_dict` is not a dictionary and not set to "default".
 
     :param CoordSystem: Coordinate system used.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
@@ -454,8 +451,48 @@ def register_CFunction_diagnostics(
     :param enable_progress_indicator: Whether to enable the progress indicator.
     :param axis_filename_tuple: Tuple containing filename and variables for axis output.
     :param plane_filename_tuple: Tuple containing filename and variables for plane output.
+    :param out_quantities_dict: Dictionary or string specifying output quantities.
+    :raises TypeError: If `out_quantities_dict` is not a dictionary and not set to "default".
     :return: None if in registration phase, else the updated NRPy environment.
     """
+    if pcg.pcg_registration_phase():
+
+        def is_picklable_with_dill(obj: Any) -> bool:
+            try:
+                dill.dumps(obj)
+                return True
+            except Exception:
+                return False
+
+        # Make a shallow copy of locals() so we don't modify the real locals
+        debug_locals = dict(locals())
+
+        unpicklable_items = []
+        for key, val in debug_locals.items():
+            if not is_picklable_with_dill(val):
+                unpicklable_items.append((key, type(val)))
+
+        if unpicklable_items:
+            print("The following local variables are not picklable via dill:")
+            for k, t in unpicklable_items:
+                print(f" - {k} of type {t}")
+
+            # You can optionally raise an error or skip these unpicklable items:
+            # raise RuntimeError("Unpicklable locals detected!")
+            #
+            # Or just skip them:
+            # for k, _ in unpicklable_items:
+            #     debug_locals.pop(k, None)
+
+        # Then call register_func_call, using either:
+        #   (A) the original locals()
+        # or
+        #   (B) debug_locals if you want to skip the unpicklable items.
+        pcg.register_func_call(
+            f"{__name__}.{cast(FT, cfr()).f_code.co_name}",
+            locals(),  # or debug_locals if skipping
+        )
+        return None
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
@@ -477,13 +514,13 @@ def register_CFunction_diagnostics(
     )
 
     # fmt: off
-    # if out_quantities_dict == "default":
-    out_quantities_dict = {
-        ("REAL", "numUU"): "y_n_gfs[IDX4pt(UUGF, idx3)]",
-        ("REAL", "log10ResidualH"): "log10(fabs(diagnostic_output_gfs[IDX4pt(RESIDUAL_HGF, idx3)] + 1e-16))",
-    }
-    # if not isinstance(out_quantities_dict, dict):
-    #     raise TypeError(f"out_quantities_dict was initialized to {out_quantities_dict}, which is not a dictionary!")
+    if out_quantities_dict == "default":
+        out_quantities_dict = {
+            ("REAL", "numUU"): "y_n_gfs[IDX4pt(UUGF, idx3)]",
+            ("REAL", "log10ResidualH"): "log10(fabs(diagnostic_output_gfs[IDX4pt(RESIDUAL_HGF, idx3)] + 1e-16))",
+        }
+    if not isinstance(out_quantities_dict, dict):
+        raise TypeError(f"out_quantities_dict was initialized to {out_quantities_dict}, which is not a dictionary!")
     # fmt: on
 
     for axis in ["y", "z"]:
