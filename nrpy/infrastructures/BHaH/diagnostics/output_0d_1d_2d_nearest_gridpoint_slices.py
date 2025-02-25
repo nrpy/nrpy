@@ -177,6 +177,8 @@ def register_CFunction_diagnostics_nearest_1d_axis(
         out_quantities_dict=out_quantities_dict,
         axis=axis,
     )
+    print(prefunc)
+    print(loop_1d)
 
     desc = f"Output diagnostic quantities at gridpoints closest to {axis} axis."
     cfunc_type = "void"
