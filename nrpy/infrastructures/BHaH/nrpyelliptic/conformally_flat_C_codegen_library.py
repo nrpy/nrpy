@@ -386,7 +386,7 @@ if(r < integration_radius) {
   volume_sum  += dV;
 } // END if(r < integration_radius)
 """
-    body = rf"""
+    body = r"""
   // Unpack grid parameters assuming a single grid
   const int grid = 0;
   params_struct *restrict params = &griddata[grid].params;
