@@ -484,20 +484,20 @@ def register_CFunction_diagnostics(
     if not isinstance(out_quantities_dict, dict):
         raise TypeError(f"out_quantities_dict was initialized to {out_quantities_dict}, which is not a dictionary!")
     # fmt: on
-    # for axis in ["y", "z"]:
-    #     out012d.register_CFunction_diagnostics_nearest_1d_axis(
-    #         CoordSystem=CoordSystem,
-    #         out_quantities_dict=out_quantities_dict,
-    #         axis=axis,
-    #         filename_tuple=axis_filename_tuple,
-    #     )
-    for plane in ["xy", "yz"]:
-        out012d.register_CFunction_diagnostics_nearest_2d_plane(
+    for axis in ["y", "z"]:
+        out012d.register_CFunction_diagnostics_nearest_1d_axis(
             CoordSystem=CoordSystem,
             out_quantities_dict=out_quantities_dict,
-            plane=plane,
-            filename_tuple=plane_filename_tuple,
+            axis=axis,
+            filename_tuple=axis_filename_tuple,
         )
+    # for plane in ["xy", "yz"]:
+    #     out012d.register_CFunction_diagnostics_nearest_2d_plane(
+    #         CoordSystem=CoordSystem,
+    #         out_quantities_dict=out_quantities_dict,
+    #         plane=plane,
+    #         filename_tuple=plane_filename_tuple,
+    #     )
 
     body = r"""  // Output progress to stderr
   progress_indicator(commondata, griddata);
