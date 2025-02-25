@@ -491,13 +491,14 @@ def register_CFunction_diagnostics(
             axis=axis,
             filename_tuple=axis_filename_tuple,
         )
-    # for plane in ["xy", "yz"]:
-    #     out012d.register_CFunction_diagnostics_nearest_2d_plane(
-    #         CoordSystem=CoordSystem,
-    #         out_quantities_dict=out_quantities_dict,
-    #         plane=plane,
-    #         filename_tuple=plane_filename_tuple,
-    #     )
+    for plane in ["xy"]:
+        # for plane in ["xy", "yz"]:
+        out012d.register_CFunction_diagnostics_nearest_2d_plane(
+            CoordSystem=CoordSystem,
+            out_quantities_dict=out_quantities_dict,
+            plane=plane,
+            filename_tuple=plane_filename_tuple,
+        )
 
     body = r"""  // Output progress to stderr
   progress_indicator(commondata, griddata);
