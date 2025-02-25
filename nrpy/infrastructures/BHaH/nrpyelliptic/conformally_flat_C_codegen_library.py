@@ -491,7 +491,7 @@ def register_CFunction_diagnostics(
             axis=axis,
             filename_tuple=axis_filename_tuple,
         )
-    for plane in ["xy"]:
+    for plane in ["yz"]:
         # for plane in ["xy", "yz"]:
         out012d.register_CFunction_diagnostics_nearest_2d_plane(
             CoordSystem=CoordSystem,
