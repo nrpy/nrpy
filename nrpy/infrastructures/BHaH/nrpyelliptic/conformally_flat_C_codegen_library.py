@@ -440,10 +440,13 @@ def register_CFunction_diagnostics(
         "out2d-PLANE-n-%08d.txt",
         "nn",
     ),
-    out_quantities_dict: Union[str, Dict[Tuple[str, str], str]] = "default",
+    # out_quantities_dict: Union[str, Dict[Tuple[str, str], str]] = "default",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register C function for simulation diagnostics.
+
+    # :param out_quantities_dict: Dictionary or string specifying output quantities.
+    # :raises TypeError: If `out_quantities_dict` is not a dictionary and not set to "default".
 
     :param CoordSystem: Coordinate system used.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
@@ -451,9 +454,7 @@ def register_CFunction_diagnostics(
     :param enable_progress_indicator: Whether to enable the progress indicator.
     :param axis_filename_tuple: Tuple containing filename and variables for axis output.
     :param plane_filename_tuple: Tuple containing filename and variables for plane output.
-    :param out_quantities_dict: Dictionary or string specifying output quantities.
     :return: None if in registration phase, else the updated NRPy environment.
-    :raises TypeError: If `out_quantities_dict` is not a dictionary and not set to "default".
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -476,13 +477,13 @@ def register_CFunction_diagnostics(
     )
 
     # fmt: off
-    if out_quantities_dict == "default":
-        out_quantities_dict = {
-            ("REAL", "numUU"): "y_n_gfs[IDX4pt(UUGF, idx3)]",
-            ("REAL", "log10ResidualH"): "log10(fabs(diagnostic_output_gfs[IDX4pt(RESIDUAL_HGF, idx3)] + 1e-16))",
-        }
-    if not isinstance(out_quantities_dict, dict):
-        raise TypeError(f"out_quantities_dict was initialized to {out_quantities_dict}, which is not a dictionary!")
+    # if out_quantities_dict == "default":
+    out_quantities_dict = {
+        ("REAL", "numUU"): "y_n_gfs[IDX4pt(UUGF, idx3)]",
+        ("REAL", "log10ResidualH"): "log10(fabs(diagnostic_output_gfs[IDX4pt(RESIDUAL_HGF, idx3)] + 1e-16))",
+    }
+    # if not isinstance(out_quantities_dict, dict):
+    #     raise TypeError(f"out_quantities_dict was initialized to {out_quantities_dict}, which is not a dictionary!")
     # fmt: on
 
     for axis in ["y", "z"]:
