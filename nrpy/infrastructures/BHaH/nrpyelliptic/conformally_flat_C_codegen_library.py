@@ -492,23 +492,23 @@ def register_CFunction_diagnostics(
             filename_tuple=axis_filename_tuple,
         )
     for plane in ["xy", "yz"]:
-        cfc.register_CFunction(
-            includes=["BHaH_defines.h", "BHaH_function_prototypes.h"],
-            desc=desc,
-            cfunc_type="void",
-            CoordSystem_for_wrapper_func=CoordSystem,
-            name=f"diagnostics_nearest_2d_{plane}_plane",
-            params="commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], MoL_gridfunctions_struct *restrict gridfuncs",
-            include_CodeParameters_h=True,
-            body=r"""printf("hello\n");
-""",
-        )
-        # out012d.register_CFunction_diagnostics_nearest_2d_plane(
-        #     CoordSystem=CoordSystem,
-        #     out_quantities_dict=out_quantities_dict,
-        #     plane=plane,
-        #     filename_tuple=plane_filename_tuple,
+        # cfc.register_CFunction(
+        #     includes=["BHaH_defines.h", "BHaH_function_prototypes.h"],
+        #     desc=desc,
+        #     cfunc_type="void",
+        #     CoordSystem_for_wrapper_func=CoordSystem,
+        #     name=f"diagnostics_nearest_2d_{plane}_plane",
+        #     params="commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], MoL_gridfunctions_struct *restrict gridfuncs",
+        #     include_CodeParameters_h=True,
+        #     body=r"""printf("hello\n");
+        # """,
         # )
+        out012d.register_CFunction_diagnostics_nearest_2d_plane(
+            CoordSystem=CoordSystem,
+            out_quantities_dict=out_quantities_dict,
+            plane=plane,
+            filename_tuple=plane_filename_tuple,
+        )
 
     body = r"""  // Output progress to stderr
   progress_indicator(commondata, griddata);
