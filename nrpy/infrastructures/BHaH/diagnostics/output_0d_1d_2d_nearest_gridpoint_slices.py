@@ -49,9 +49,6 @@ def register_CFunction_diagnostics_nearest_grid_center(
         Example: {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}
     :param filename_tuple: Tuple specifying the filename and its corresponding string format.
         Default: ("out0d-conv_factor%.2f.txt", "convergence_factor")
-
-    :return: None if in registration phase, else the updated NRPy environment.
-
     :raises ValueError: If an unsupported coordinate system is specified, ensuring that diagnostics are only generated for coordinate systems with a defined grid center.
 
     Doctests:
@@ -159,7 +156,6 @@ def register_CFunction_diagnostics_nearest_1d_axis(
     :param out_quantities_dict: Dictionary of output quantities.
     :param axis: Specifies the axis ("x", "z") for the diagnostics.
     :param filename_tuple: Tuple containing the format for filename and the replacement arguments.
-    :return: None if in registration phase, else the updated NRPy environment.
     :raises ValueError: If the specified axis is not supported.
 
     Doctests:
@@ -169,7 +165,6 @@ def register_CFunction_diagnostics_nearest_1d_axis(
     >>> _ = register_CFunction_diagnostics_nearest_1d_axis(Coord, out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, axis=axis)
     >>> validate_strings(cfc.CFunction_dict[f"diagnostics_nearest_1d_{axis}_axis__rfm__{Coord}"].full_function, "SinhSpherical_y_axis")
     """
-
     if axis not in ["y", "z"]:
         raise ValueError(
             f"Output along {axis} axis not supported. Please choose x or z axis."
@@ -238,7 +233,6 @@ def register_CFunction_diagnostics_nearest_2d_plane(
     :param out_quantities_dict: Dictionary of output quantities.
     :param plane: Specifies the plane ("xy", "yz") for the diagnostics.
     :param filename_tuple: Tuple containing the format for filename and the replacement arguments.
-    :return: None if in registration phase, else the updated NRPy environment.
     :raises ValueError: If the specified plane is not supported.
 
     Doctests:
