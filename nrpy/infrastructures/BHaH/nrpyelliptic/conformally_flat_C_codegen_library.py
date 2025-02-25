@@ -456,46 +456,44 @@ def register_CFunction_diagnostics(
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
+        # Make a shallow copy of locals()
+        function_args = dict(locals())
 
-        def is_picklable_with_dill(obj: Any) -> bool:
+        # 1) Define + run your picklability test
+        def is_picklable_with_dill(obj):
             try:
                 dill.dumps(obj)
                 return True
             except Exception:
                 return False
 
-        # Make a shallow copy of locals() so we don't modify the real locals
-        debug_locals = dict(locals())
-
         unpicklable_items = []
-        for key, val in debug_locals.items():
+        for key, val in function_args.items():
             if not is_picklable_with_dill(val):
                 unpicklable_items.append((key, type(val)))
-
         if unpicklable_items:
-            print("The following local variables are not picklable via dill:")
+            print("Unpicklable items found:")
             for k, t in unpicklable_items:
                 print(f" - {k} of type {t}")
 
-            # You can optionally raise an error or skip these unpicklable items:
-            # raise RuntimeError("Unpicklable locals detected!")
-            #
-            # Or just skip them:
-            # for k, _ in unpicklable_items:
-            #     debug_locals.pop(k, None)
+        # 2) Remove these debugging references from the dict
+        #    so they won't appear as unexpected kwargs
+        for debug_key in [
+            "function_args",  # the dict itself
+            "is_picklable_with_dill",
+            "unpicklable_items",
+            # + anything else you defined for debugging
+        ]:
+            function_args.pop(debug_key, None)
 
-        # Then call register_func_call, using either:
-        #   (A) the original locals()
-        # or
-        #   (B) debug_locals if you want to skip the unpicklable items.
+        # 3) Finally, call register_func_call with the sanitized dict
         pcg.register_func_call(
-            f"{__name__}.{cast(FT, cfr()).f_code.co_name}",
-            locals(),  # or debug_locals if skipping
+            f"{__name__}.register_CFunction_diagnostics", function_args
         )
         return None
-    if pcg.pcg_registration_phase():
-        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
-        return None
+    # if pcg.pcg_registration_phase():
+    #     pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+    #     return None
 
     _ = par.CodeParameter(
         "int",
