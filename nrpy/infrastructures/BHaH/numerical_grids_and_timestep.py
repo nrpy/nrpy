@@ -255,7 +255,7 @@ def register_CFunction_cfl_limited_timestep() -> None:
     is the minimum spacing between neighboring gridpoints on a numerical grid.
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = f"Compute minimum timestep dt = CFL_FACTOR * ds_min."
+    desc = "Compute minimum timestep dt = CFL_FACTOR * ds_min."
     cfunc_type = "void"
     name = "cfl_limited_timestep"
     params = "commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3]"
@@ -473,9 +473,8 @@ def register_CFunctions(
         for CoordSystem in list_of_CoordSystems:
             register_CFunction_ds_min_single_pt(CoordSystem)
     if gridding_approach == "multipatch":
+        # Register regrid & masking functions
         for CoordSystem in list_of_CoordSystems:
             register_CFunction_ds_min_radial_like_dirns_single_pt(CoordSystem)
-        # Register regrid & masking functions
-        pass
 
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
