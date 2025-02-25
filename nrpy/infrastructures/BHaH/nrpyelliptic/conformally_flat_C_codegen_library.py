@@ -457,10 +457,10 @@ def register_CFunction_diagnostics(
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
-        print("RETURNING NONE")
         return None
-    print("PROCEEDING")
-
+    rfm = refmetric.reference_metric[
+        CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
+    ]
     _ = par.CodeParameter(
         "int",
         __name__,
@@ -468,7 +468,6 @@ def register_CFunction_diagnostics(
         default_diagnostics_out_every,
         commondata=True,
     )
-    print("PAST CODEPARAM")
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "Diagnostics."
@@ -487,9 +486,7 @@ def register_CFunction_diagnostics(
     if not isinstance(out_quantities_dict, dict):
         raise TypeError(f"out_quantities_dict was initialized to {out_quantities_dict}, which is not a dictionary!")
     # fmt: on
-    print("HEY there!")
     for axis in ["y", "z"]:
-        print(f"HEY there! {axis} axis")
         out012d.register_CFunction_diagnostics_nearest_1d_axis(
             CoordSystem=CoordSystem,
             out_quantities_dict=out_quantities_dict,
@@ -497,7 +494,6 @@ def register_CFunction_diagnostics(
             filename_tuple=axis_filename_tuple,
         )
     for plane in ["xy", "yz"]:
-        print(f"HEY there! {plane} plane")
         out012d.register_CFunction_diagnostics_nearest_2d_plane(
             CoordSystem=CoordSystem,
             out_quantities_dict=out_quantities_dict,
