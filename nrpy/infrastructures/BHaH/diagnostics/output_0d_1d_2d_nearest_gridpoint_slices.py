@@ -177,14 +177,11 @@ def register_CFunction_diagnostics_nearest_1d_axis(
         out_quantities_dict=out_quantities_dict,
         axis=axis,
     )
-    print(prefunc)
-    print(loop_1d)
 
     desc = f"Output diagnostic quantities at gridpoints closest to {axis} axis."
     cfunc_type = "void"
     name = f"diagnostics_nearest_1d_{axis}_axis"
     params = "commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], MoL_gridfunctions_struct *restrict gridfuncs"
-
     body = rf"""
 // Unpack grid function pointers from gridfuncs struct
 const REAL *restrict y_n_gfs = gridfuncs->y_n_gfs;
@@ -261,7 +258,6 @@ def register_CFunction_diagnostics_nearest_2d_plane(
     cfunc_type = "void"
     name = f"diagnostics_nearest_2d_{plane}_plane"
     params = "commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], MoL_gridfunctions_struct *restrict gridfuncs"
-
     body = rf"""
 // Unpack grid function pointers from gridfuncs struct
 const REAL *restrict y_n_gfs = gridfuncs->y_n_gfs;

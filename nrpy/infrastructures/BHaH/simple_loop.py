@@ -618,7 +618,7 @@ def simple_loop_2D(
     >>> diag2d = clang_format(simple_loop_2D(CoordSystem="SinhSpherical", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, plane="yz"))
     >>> validate_strings(diag2d, "SinhSpherical_yz_plane")
     >>> diag2d = clang_format(simple_loop_2D(CoordSystem="SinhSymTP", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, plane="xy"))
-    >>> validate_strings(diag2d, "SinhSpherical_xy_plane")
+    >>> validate_strings(diag2d, "SinhSymTP_xy_plane")
     """
     pragma = "#pragma omp parallel for\n"
     max_numpts, i012_pts, numpts = max_numpts__i012_pts__numpts_2D(CoordSystem, plane)
