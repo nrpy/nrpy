@@ -458,9 +458,10 @@ def register_CFunction_diagnostics(
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
-    rfm = refmetric.reference_metric[
+    _ = refmetric.reference_metric[
         CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
     ]
+    _ = refmetric.reference_metric[CoordSystem]
     _ = par.CodeParameter(
         "int",
         __name__,
