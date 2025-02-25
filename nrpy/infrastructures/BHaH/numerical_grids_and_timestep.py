@@ -7,12 +7,15 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import Dict, List
+from inspect import currentframe as cfr
+from types import FrameType as FT
+from typing import Dict, List, Union, cast
 
 import sympy as sp
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
+import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
 
@@ -162,48 +165,33 @@ for (int j = 0; j < params->Nxx_plus_2NGHOSTS2; j++) xx[2][j] = params->xxmin2 +
     )
 
 
-def register_CFunction_cfl_limited_timestep(
+def register_CFunction_dsmin_single_pt(
     CoordSystem: str,
 ) -> None:
     """
-    Register a C function to find the CFL-limited timestep dt on a numerical grid.
+    Register a C function to find the minimum grid spacing ds_min.
 
-    The timestep is determined by the relation dt = CFL_FACTOR * ds_min, where ds_min
-    is the minimum spacing between neighboring gridpoints on a numerical grid.
+    ds_min is the minimum spacing between neighboring gridpoints on a numerical grid.
 
-    :param CoordSystem: The coordinate system used for the simulation.
+    :param CoordSystem: The coordinate system of the numerical grid.
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = f"Compute minimum timestep dt = CFL_FACTOR * ds_min on a {CoordSystem} numerical grid."
+    desc = f"Examining all three directions at a given point on a {CoordSystem} numerical grid, find the minimum grid spacing ds_min."
     cfunc_type = "void"
-    name = "cfl_limited_timestep"
-    params = "commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3]"
-    body = r"""
-REAL ds_min = 1e38;
-#pragma omp parallel for reduction(min:ds_min)
-LOOP_NOOMP(i0, 0, Nxx_plus_2NGHOSTS0,
-           i1, 0, Nxx_plus_2NGHOSTS1,
-           i2, 0, Nxx_plus_2NGHOSTS2) {
-    MAYBE_UNUSED const REAL xx0 = xx[0][i0];
-    MAYBE_UNUSED const REAL xx1 = xx[1][i1];
-    MAYBE_UNUSED const REAL xx2 = xx[2][i2];
-    REAL dsmin0, dsmin1, dsmin2;
-"""
+    name = "ds_min_single_pt"
+    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xx0, const REAL xx1, const REAL xx2, REAL *restrict ds_min"
     rfm = refmetric.reference_metric[CoordSystem]
     dxx0, dxx1, dxx2 = sp.symbols("dxx0 dxx1 dxx2", real=True)
-    body += ccg.c_codegen(
+    body = ccg.c_codegen(
         [
             sp.Abs(rfm.scalefactor_orthog[0] * dxx0),
             sp.Abs(rfm.scalefactor_orthog[1] * dxx1),
             sp.Abs(rfm.scalefactor_orthog[2] * dxx2),
         ],
-        ["dsmin0", "dsmin1", "dsmin2"],
+        ["const REAL ds_min0", "const REAL ds_min1", "const REAL ds_min2"],
         include_braces=False,
     )
-    body += """ds_min = MIN(ds_min, MIN(dsmin0, MIN(dsmin1, dsmin2)));
-}
-commondata->dt = MIN(commondata->dt, ds_min * commondata->CFL_FACTOR);
-"""
+    body += "*ds_min = MIN(ds_min0, MIN(ds_min1, ds_min2));\n"
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
@@ -212,6 +200,40 @@ commondata->dt = MIN(commondata->dt, ds_min * commondata->CFL_FACTOR);
         name=name,
         params=params,
         include_CodeParameters_h=True,
+        body=body,
+    )
+
+
+def register_CFunction_cfl_limited_timestep() -> None:
+    """
+    Register a C function to find the CFL-limited timestep dt on a numerical grid.
+
+    The timestep is determined by the relation dt = CFL_FACTOR * ds_min, where ds_min
+    is the minimum spacing between neighboring gridpoints on a numerical grid.
+    """
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    desc = f"Compute minimum timestep dt = CFL_FACTOR * ds_min."
+    cfunc_type = "void"
+    name = "cfl_limited_timestep"
+    params = "commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3]"
+    body = r"""
+  REAL ds_min = 1e38;
+  LOOP_OMP("omp parallel for reduction(min:ds_min)", i0, 0, params->Nxx_plus_2NGHOSTS0,
+             i1, 0, params->Nxx_plus_2NGHOSTS1,
+             i2, 0, params->Nxx_plus_2NGHOSTS2) {
+    REAL local_ds_min;
+    ds_min_single_pt(commondata, params, xx[0][i0], xx[1][i1], xx[2][i2], &local_ds_min);
+    ds_min = MIN(ds_min, local_ds_min);
+  }
+  commondata->dt = MIN(commondata->dt, ds_min * commondata->CFL_FACTOR);
+"""
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        include_CodeParameters_h=False,
         body=body,
     )
 
@@ -369,7 +391,7 @@ def register_CFunctions(
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
     enable_set_cfl_timestep: bool = True,
-) -> None:
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register C functions related to coordinate systems and grid parameters.
 
@@ -380,16 +402,21 @@ def register_CFunctions(
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions.
     :param enable_set_cfl_timestep: Whether to enable computation of dt, the CFL timestep. A custom version can be implemented later.
+
+    :return: None if in registration phase, else the updated NRPy environment.
     """
+    # Parallel codegen support.
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+
     for CoordSystem in list_of_CoordSystems:
         register_CFunction_numerical_grid_params_Nxx_dxx_xx(
             CoordSystem=CoordSystem,
             Nxx_dict=Nxx_dict,
         )
-        if enable_set_cfl_timestep:
-            register_CFunction_cfl_limited_timestep(
-                CoordSystem=CoordSystem,
-            )
+    if enable_set_cfl_timestep:
+        register_CFunction_cfl_limited_timestep()
     register_CFunction_numerical_grids_and_timestep(
         list_of_CoordSystems=list_of_CoordSystems,
         list_of_grid_physical_sizes=list_of_grid_physical_sizes,
@@ -399,6 +426,9 @@ def register_CFunctions(
         enable_set_cfl_timestep=enable_set_cfl_timestep,
     )
 
-    if gridding_approach == "multipatch":
+    if gridding_approach == "multipatch" or enable_set_cfl_timestep:
+        for CoordSystem in list_of_CoordSystems:
+            register_CFunction_dsmin_single_pt(CoordSystem)
         # Register regrid & masking functions
-        pass
+
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
