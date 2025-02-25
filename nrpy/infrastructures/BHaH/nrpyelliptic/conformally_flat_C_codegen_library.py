@@ -500,7 +500,8 @@ def register_CFunction_diagnostics(
             name=f"diagnostics_nearest_2d_{plane}_plane",
             params="commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], MoL_gridfunctions_struct *restrict gridfuncs",
             include_CodeParameters_h=True,
-            body="",
+            body=r"""printf("hello\n");
+""",
         )
         # out012d.register_CFunction_diagnostics_nearest_2d_plane(
         #     CoordSystem=CoordSystem,
