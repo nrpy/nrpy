@@ -224,10 +224,8 @@ def write_CodeParameters_h_files(
                         # Char arrays are never unused; we use them below.
                         Coutput = rf"""char {CPname}[{CPsize}]; {comment}
 {{
-  // Copy up to {CPsize-1} characters from {struct}{pointer}{CPname} to {CPname}
-  strncpy({CPname}, {struct}{pointer}{CPname}, {CPsize}-1);
-  // Explicitly null-terminate {CPname} to ensure it is a valid C-string
-  {CPname}[{CPsize}-1]='\0'; // Properly null terminate char array.
+  // Safely copy string with snprintf, which guarantees null termination
+  snprintf({CPname}, sizeof({CPname}), "%s", {struct}{pointer}{CPname});
 }}"""
                     elif "[" in CPtype and "]" in CPtype:
                         # Handle REAL[N] and int[N] arrays
