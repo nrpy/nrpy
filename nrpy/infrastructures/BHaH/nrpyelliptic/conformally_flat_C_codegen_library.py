@@ -459,6 +459,7 @@ def register_CFunction_diagnostics(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         print("RETURNING NONE")
         return None
+    print("PROCEEDING")
 
     _ = par.CodeParameter(
         "int",
@@ -467,6 +468,7 @@ def register_CFunction_diagnostics(
         default_diagnostics_out_every,
         commondata=True,
     )
+    print("PAST CODEPARAM")
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "Diagnostics."
