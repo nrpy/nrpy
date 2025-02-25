@@ -433,11 +433,11 @@ def register_CFunction_diagnostics(
     default_diagnostics_out_every: int,
     enable_progress_indicator: bool = False,
     axis_filename_tuple: Tuple[str, str] = (
-        "out1d-AXIS-n-%08d.txt",
+        r"out1d-AXIS-n-%08d.txt",
         "nn",
     ),
     plane_filename_tuple: Tuple[str, str] = (
-        "out2d-PLANE-n-%08d.txt",
+        r"out2d-PLANE-n-%08d.txt",
         "nn",
     ),
     out_quantities_dict: Union[str, Dict[Tuple[str, str], str]] = "default",
@@ -485,20 +485,20 @@ def register_CFunction_diagnostics(
         raise TypeError(f"out_quantities_dict was initialized to {out_quantities_dict}, which is not a dictionary!")
     # fmt: on
 
-    for axis in ["y", "z"]:
-        out012d.register_CFunction_diagnostics_nearest_1d_axis(
-            CoordSystem=CoordSystem,
-            out_quantities_dict=out_quantities_dict,
-            filename_tuple=axis_filename_tuple,
-            axis=axis,
-        )
-    for plane in ["xy", "yz"]:
-        out012d.register_CFunction_diagnostics_nearest_2d_plane(
-            CoordSystem=CoordSystem,
-            out_quantities_dict=out_quantities_dict,
-            filename_tuple=plane_filename_tuple,
-            plane=plane,
-        )
+    # for axis in ["y", "z"]:
+    #     out012d.register_CFunction_diagnostics_nearest_1d_axis(
+    #         CoordSystem=CoordSystem,
+    #         out_quantities_dict=out_quantities_dict,
+    #         filename_tuple=axis_filename_tuple,
+    #         axis=axis,
+    #     )
+    # for plane in ["xy", "yz"]:
+    #     out012d.register_CFunction_diagnostics_nearest_2d_plane(
+    #         CoordSystem=CoordSystem,
+    #         out_quantities_dict=out_quantities_dict,
+    #         filename_tuple=plane_filename_tuple,
+    #         plane=plane,
+    #     )
 
     body = r"""  // Output progress to stderr
   progress_indicator(commondata, griddata);
