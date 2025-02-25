@@ -457,6 +457,7 @@ def register_CFunction_diagnostics(
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        print("RETURNING NONE")
         return None
 
     _ = par.CodeParameter(
