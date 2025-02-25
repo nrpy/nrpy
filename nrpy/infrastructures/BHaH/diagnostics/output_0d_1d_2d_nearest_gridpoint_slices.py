@@ -256,7 +256,6 @@ def register_CFunction_diagnostics_nearest_2d_plane(
         out_quantities_dict=out_quantities_dict,
         plane=plane,
     )
-    print(loop_2d)
 
     desc = f"Output diagnostic quantities at gridpoints closest to {plane} plane."
     cfunc_type = "void"
