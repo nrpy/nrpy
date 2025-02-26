@@ -139,7 +139,7 @@ def register_CFunction_charecommstruct_set_up(CoordSystem: str) -> None:
 
 
 def chare_comm_register_C_functions(
-    set_of_CoordSystems: set[str],
+    set_of_CoordSystems: Set[str],
 ) -> None:
     """
     Register C functions for chare communication.

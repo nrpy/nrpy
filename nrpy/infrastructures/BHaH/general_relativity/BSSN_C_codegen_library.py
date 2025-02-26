@@ -144,7 +144,7 @@ griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_pers
 
 
 def register_CFunction_diagnostics(
-    set_of_CoordSystems: set[str],
+    set_of_CoordSystems: Set[str],
     default_diagnostics_out_every: float,
     enable_psi4_diagnostics: bool = False,
     enable_progress_indicator: bool = True,
@@ -1014,7 +1014,7 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
 
 
 def register_CFunction_cahdprefactor_auxevol_gridfunction(
-    set_of_CoordSystems: set[str],
+    set_of_CoordSystems: Set[str],
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Add function that sets cahdprefactor gridfunction = C_CAHD * CFL_FACTOR * dsmin to Cfunction dictionary.

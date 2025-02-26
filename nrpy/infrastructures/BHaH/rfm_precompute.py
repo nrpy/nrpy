@@ -341,7 +341,7 @@ def generate_rfmprecompute_free(
 
 
 def register_CFunctions_rfm_precompute(
-    set_of_CoordSystems: set[str],
+    set_of_CoordSystems: Set[str],
     parallelization: str = "openmp",
 ) -> None:
     """

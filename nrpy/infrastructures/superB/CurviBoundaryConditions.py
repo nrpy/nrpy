@@ -451,7 +451,7 @@ def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
 
 
 def CurviBoundaryConditions_register_C_functions(
-    set_of_CoordSystems: set[str],
+    set_of_CoordSystems: Set[str],
     radiation_BC_fd_order: int = 2,
     set_parity_on_aux: bool = False,
 ) -> None:

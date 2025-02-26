@@ -203,7 +203,7 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
 
 
 def register_CFunctions(
-    set_of_CoordSystems: set[str],
+    set_of_CoordSystems: Set[str],
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
     enable_psi4_diagnostics: bool = False,

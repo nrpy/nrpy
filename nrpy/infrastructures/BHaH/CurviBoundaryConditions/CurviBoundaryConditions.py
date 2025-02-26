@@ -11,7 +11,7 @@ Authors: Zachariah B. Etienne
 """
 
 # Step P1: Import needed NRPy+ core modules:
-from typing import List, Tuple
+from typing import List, Set, Tuple
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
 import sympy.codegen.ast as sp_ast
@@ -1866,7 +1866,7 @@ def register_BHaH_defines_h(
 
 
 def CurviBoundaryConditions_register_C_functions(
-    set_of_CoordSystems: set[str],
+    set_of_CoordSystems: Set[str],
     parallelization: str = "openmp",
     radiation_BC_fd_order: int = 2,
     set_parity_on_aux: bool = False,

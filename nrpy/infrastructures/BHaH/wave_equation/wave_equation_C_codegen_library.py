@@ -146,7 +146,7 @@ if( read_checkpoint(commondata, griddata) ) return;
 
 
 def register_CFunction_diagnostics(
-    set_of_CoordSystems: set[str],
+    set_of_CoordSystems: Set[str],
     default_diagnostics_out_every: float,
     enable_progress_indicator: bool = True,
     grid_center_filename_tuple: Tuple[str, str] = (

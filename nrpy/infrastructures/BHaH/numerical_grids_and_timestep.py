@@ -281,7 +281,7 @@ def register_CFunction_cfl_limited_timestep() -> None:
 
 
 def register_CFunction_numerical_grids_and_timestep(
-    set_of_CoordSystems: set[str],
+    set_of_CoordSystems: Set[str],
     list_of_grid_physical_sizes: List[float],
     gridding_approach: str = "independent grid(s)",
     enable_rfm_precompute: bool = False,
@@ -426,7 +426,7 @@ for(int grid=0;grid<commondata->NUMGRIDS;grid++) {
 
 
 def register_CFunctions(
-    set_of_CoordSystems: set[str],
+    set_of_CoordSystems: Set[str],
     list_of_grid_physical_sizes: List[float],
     Nxx_dict: Dict[str, List[int]],
     gridding_approach: str = "independent grid(s)",

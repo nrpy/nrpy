@@ -6,7 +6,6 @@ Author: Zachariah B. Etienne
 """
 
 import os
-
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
@@ -43,7 +42,7 @@ grid_physical_size = 10.0
 t_final = 0.8 * grid_physical_size
 default_diagnostics_output_every = 0.2
 default_checkpoint_every = 2.0
-set_of_CoordSystems = ["Spherical", "SinhSpherical", "Cartesian", "SinhCartesian"]
+set_of_CoordSystems = {"Spherical", "SinhSpherical", "Cartesian", "SinhCartesian"}
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", "All")
 list_of_grid_physical_sizes = []
 for CoordSystem in set_of_CoordSystems:

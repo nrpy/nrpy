@@ -335,7 +335,7 @@ def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type
 
 
 def register_CFunction_diagnostics(
-    set_of_CoordSystems: set[str],
+    set_of_CoordSystems: Set[str],
     default_diagnostics_out_every: float,
     grid_center_filename_tuple: Tuple[str, str] = (
         "out0d-conv_factor%.2f.txt",

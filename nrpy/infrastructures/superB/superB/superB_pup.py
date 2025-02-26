@@ -19,7 +19,7 @@ from nrpy.infrastructures.BHaH.rfm_precompute import ReferenceMetricPrecompute
 
 
 def register_CFunction_superB_pup_routines(
-    set_of_CoordSystems: set[str],
+    set_of_CoordSystems: Set[str],
     MoL_method: str = "RK4",
     enable_psi4_diagnostics: bool = False,
 ) -> None:
