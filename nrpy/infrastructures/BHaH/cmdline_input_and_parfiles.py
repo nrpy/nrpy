@@ -403,9 +403,9 @@ static void read_boolean(const char *value, bool *result, const char *param_name
   *dst = '\0';
 
   // Check if the input is (case-insensitive) "true" or "false"; or "0" or "1"
-  if (strcmp(lower_value, "true") == 0 || strcmp(lower_value, "1") == 0) {
+  if (strcmp(lower_value, "true") == 0 || strcmp(lower_value, "yes") == 0 || strcmp(lower_value, "1") == 0) {
     *result = true;
-  } else if (strcmp(lower_value, "false") == 0 || strcmp(lower_value, "0") == 0) {
+  } else if (strcmp(lower_value, "false") == 0 || strcmp(lower_value, "no") == 0 || strcmp(lower_value, "0") == 0) {
     *result = false;
   } else {
     fprintf(stderr, "Error: Invalid boolean value for %s: %s.\n", param_name, value);
