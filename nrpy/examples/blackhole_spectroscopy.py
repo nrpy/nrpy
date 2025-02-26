@@ -180,7 +180,7 @@ BCl.register_CFunction_rhs_eval(
     OMP_collapse=OMP_collapse,
 )
 if enable_CAHD:
-    BCl.register_CFunction_cahdprefactor_auxevol_gridfunction([CoordSystem])
+    BCl.register_CFunction_cahdprefactor_auxevol_gridfunction({CoordSystem})
 if separate_Ricci_and_BSSN_RHS:
     BCl.register_CFunction_Ricci_eval(
         CoordSystem=CoordSystem,
