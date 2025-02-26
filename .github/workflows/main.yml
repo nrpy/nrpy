@@ -317,9 +317,9 @@ jobs:
         pip install -U pylint clang-format ipython setuptools
         sudo apt-get -y install libgsl-dev
 
-#    - name: Setup tmate session
-#      uses: mxschmitt/action-tmate@v3
-#      timeout-minutes: 15
+    - name: Setup tmate session
+      uses: mxschmitt/action-tmate@v3
+      timeout-minutes: 15
 
     - name: Check that pip installed nrpy creates valid, compilable C example projects
       run: |
