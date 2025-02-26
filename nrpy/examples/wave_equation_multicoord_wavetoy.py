@@ -6,6 +6,7 @@ Author: Zachariah B. Etienne
 """
 
 import os
+
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
@@ -42,12 +43,12 @@ grid_physical_size = 10.0
 t_final = 0.8 * grid_physical_size
 default_diagnostics_output_every = 0.2
 default_checkpoint_every = 2.0
-list_of_CoordSystems = ["Spherical", "SinhSpherical", "Cartesian", "SinhCartesian"]
+set_of_CoordSystems = ["Spherical", "SinhSpherical", "Cartesian", "SinhCartesian"]
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", "All")
 list_of_grid_physical_sizes = []
-for CoordSystem in list_of_CoordSystems:
+for CoordSystem in set_of_CoordSystems:
     list_of_grid_physical_sizes.append(grid_physical_size)
-NUMGRIDS = len(list_of_CoordSystems)
+NUMGRIDS = len(set_of_CoordSystems)
 Nxx_dict = {
     "Spherical": [64, 2, 2],
     "SinhSpherical": [64, 2, 2],
@@ -84,7 +85,7 @@ wCl.register_CFunction_initial_data(
 )
 
 numerical_grids_and_timestep.register_CFunctions(
-    list_of_CoordSystems=list_of_CoordSystems,
+    set_of_CoordSystems=set_of_CoordSystems,
     list_of_grid_physical_sizes=list_of_grid_physical_sizes,
     Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
@@ -93,7 +94,7 @@ numerical_grids_and_timestep.register_CFunctions(
 wCl.register_CFunction_exact_solution_single_Cartesian_point(
     WaveType=WaveType, default_sigma=default_sigma
 )
-for CoordSystem in list_of_CoordSystems:
+for CoordSystem in set_of_CoordSystems:
     wCl.register_CFunction_rhs_eval(
         CoordSystem=CoordSystem,
         enable_rfm_precompute=enable_rfm_precompute,
@@ -104,7 +105,7 @@ for CoordSystem in list_of_CoordSystems:
     xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
 
 wCl.register_CFunction_diagnostics(
-    list_of_CoordSystems=list_of_CoordSystems,
+    set_of_CoordSystems=set_of_CoordSystems,
     default_diagnostics_out_every=default_diagnostics_output_every,
     grid_center_filename_tuple=(
         "out0d-%s-conv_factor-%.2f.txt",
@@ -127,11 +128,11 @@ if __name__ == "__main__" and parallel_codegen_enable:
 
 if enable_rfm_precompute:
     rfm_precompute.register_CFunctions_rfm_precompute(
-        list_of_CoordSystems=list_of_CoordSystems
+        set_of_CoordSystems=set_of_CoordSystems
     )
 
 cbc.CurviBoundaryConditions_register_C_functions(
-    list_of_CoordSystems=list_of_CoordSystems,
+    set_of_CoordSystems=set_of_CoordSystems,
     radiation_BC_fd_order=radiation_BC_fd_order,
 )
 rhs_string = """rhs_eval(commondata, params, rfmstruct,  RK_INPUT_GFS, RK_OUTPUT_GFS);

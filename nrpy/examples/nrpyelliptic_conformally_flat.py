@@ -103,8 +103,8 @@ radiation_BC_fd_order = 6
 enable_simd = True
 parallel_codegen_enable = True
 boundary_conditions_desc = "outgoing radiation"
-list_of_CoordSystems = [CoordSystem]
-NUMGRIDS = len(list_of_CoordSystems)
+set_of_CoordSystems = {CoordSystem}
+NUMGRIDS = len(set_of_CoordSystems)
 par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
 # fmt: off
 initial_data_type = "gw150914"  # choices are: "gw150914", "axisymmetric", and "single_puncture"
@@ -187,8 +187,8 @@ nrpyellClib.register_CFunction_auxevol_gfs_all_points(OMP_collapse=OMP_collapse)
 # Generate function that calls functions to set variable wavespeed and all other AUXEVOL gridfunctions
 nrpyellClib.register_CFunction_initialize_constant_auxevol()
 numerical_grids_and_timestep.register_CFunctions(
-    list_of_CoordSystems=list(set(list_of_CoordSystems)),
-    list_of_grid_physical_sizes=[grid_physical_size for c in list_of_CoordSystems],
+    set_of_CoordSystems=set_of_CoordSystems,
+    list_of_grid_physical_sizes=[grid_physical_size for c in set_of_CoordSystems],
     Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
@@ -202,9 +202,7 @@ nrpyellClib.register_CFunction_diagnostics(
 )
 
 if enable_rfm_precompute:
-    rfm_precompute.register_CFunctions_rfm_precompute(
-        list_of_CoordSystems=list(set(list_of_CoordSystems))
-    )
+    rfm_precompute.register_CFunctions_rfm_precompute(set_of_CoordSystems)
 
 # Generate function to compute RHSs
 nrpyellClib.register_CFunction_rhs_eval(
@@ -232,7 +230,7 @@ if __name__ == "__main__" and parallel_codegen_enable:
     pcg.do_parallel_codegen()
 
 cbc.CurviBoundaryConditions_register_C_functions(
-    list_of_CoordSystems=list(set(list_of_CoordSystems)),
+    set_of_CoordSystems,
     radiation_BC_fd_order=radiation_BC_fd_order,
 )
 rhs_string = """rhs_eval(commondata, params, rfmstruct,  auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);

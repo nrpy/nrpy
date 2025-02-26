@@ -35,11 +35,11 @@ par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Basic project setup
 project_name = "bhah_lib"
-list_of_CoordSystems = [
+set_of_CoordSystems = [
     "Spherical",
     # "SinhCylindrical",
 ]
-NUMGRIDS = len(list_of_CoordSystems)
+NUMGRIDS = len(set_of_CoordSystems)
 LapseEvolutionOption = "OnePlusLog"
 ShiftEvolutionOption = "GammaDriving2ndOrder_Covariant"
 GammaDriving_eta = 1.0
@@ -79,7 +79,7 @@ chkpt.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
 progress.register_CFunction_progress_indicator()
 
 numericalgrids.register_CFunctions(
-    list_of_CoordSystems=list_of_CoordSystems,
+    set_of_CoordSystems=set_of_CoordSystems,
     list_of_grid_physical_sizes=[grid_physical_size],
     Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
@@ -87,7 +87,7 @@ numericalgrids.register_CFunctions(
 )
 
 BCl.register_CFunction_diagnostics(
-    list_of_CoordSystems=list_of_CoordSystems,
+    set_of_CoordSystems=set_of_CoordSystems,
     default_diagnostics_out_every=diagnostics_output_every,
     out_quantities_dict={
         (
@@ -112,7 +112,7 @@ BCl.register_CFunction_diagnostics(
 TOVinterp.register_CFunction_TOVola_interp()
 TOVsolve.register_CFunction_TOVola_solve()
 
-for CoordSystem in list_of_CoordSystems:
+for CoordSystem in set_of_CoordSystems:
     par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
     BCl.register_CFunction_initial_data(
         CoordSystem=CoordSystem,
@@ -176,14 +176,14 @@ TOVola_solve(commondata, &ID_persist);
 
 if enable_rfm_precompute:
     rfm_precompute.register_CFunctions_rfm_precompute(
-        list_of_CoordSystems=list_of_CoordSystems
+        set_of_CoordSystems=set_of_CoordSystems
     )
 
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 
 cbc.CurviBoundaryConditions_register_C_functions(
-    list_of_CoordSystems=list_of_CoordSystems,
+    set_of_CoordSystems=set_of_CoordSystems,
     radiation_BC_fd_order=radiation_BC_fd_order,
 )
 rhs_string = """
@@ -206,7 +206,7 @@ MoL_register_all.register_CFunctions(
     enable_curviBCs=True,
 )
 
-for CoordSystem in list_of_CoordSystems:
+for CoordSystem in set_of_CoordSystems:
     xxCartxx.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
     xxCartxx.register_CFunction_xx_to_Cart(CoordSystem)
 rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
@@ -216,7 +216,7 @@ rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 #         command line parameters, set up boundary conditions,
 #         and create a Makefile for this project.
 #         Project is output to project/[project_name]/
-if "SinhSpherical" in list_of_CoordSystems:
+if "SinhSpherical" in set_of_CoordSystems:
     par.adjust_CodeParam_default("SINHW", 0.4)
 par.adjust_CodeParam_default("eta", GammaDriving_eta)
 

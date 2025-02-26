@@ -341,13 +341,13 @@ def generate_rfmprecompute_free(
 
 
 def register_CFunctions_rfm_precompute(
-    list_of_CoordSystems: List[str],
+    set_of_CoordSystems: set[str],
     parallelization: str = "openmp",
 ) -> None:
     """
     Register C functions for reference metric precomputed lookup arrays.
 
-    :param list_of_CoordSystems: List of coordinate systems to register the C functions.
+    :param set_of_CoordSystems: Set of coordinate systems to register the C functions.
     :param parallelization: Parallelization method to use.
 
     Doctest:
@@ -368,7 +368,7 @@ def register_CFunctions_rfm_precompute(
     ...          validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
     """
     combined_BHaH_defines_list = []
-    for CoordSystem in list_of_CoordSystems:
+    for CoordSystem in set_of_CoordSystems:
         rfm_precompute = ReferenceMetricPrecompute(
             CoordSystem, parallelization=parallelization
         )

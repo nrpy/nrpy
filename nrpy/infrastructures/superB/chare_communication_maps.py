@@ -139,15 +139,15 @@ def register_CFunction_charecommstruct_set_up(CoordSystem: str) -> None:
 
 
 def chare_comm_register_C_functions(
-    list_of_CoordSystems: List[str],
+    set_of_CoordSystems: set[str],
 ) -> None:
     """
     Register C functions for chare communication.
 
-    :param list_of_CoordSystems: List of coordinate systems to use.
+    :param set_of_CoordSystems: Set of coordinate systems to use.
     :return None
     """
-    for CoordSystem in list_of_CoordSystems:
+    for CoordSystem in set_of_CoordSystems:
         # Register C function to set up the chare communication struct.
         register_CFunction_charecommstruct_set_up(CoordSystem=CoordSystem)
 

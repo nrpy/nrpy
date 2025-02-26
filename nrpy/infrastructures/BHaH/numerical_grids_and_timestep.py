@@ -281,7 +281,7 @@ def register_CFunction_cfl_limited_timestep() -> None:
 
 
 def register_CFunction_numerical_grids_and_timestep(
-    list_of_CoordSystems: List[str],
+    set_of_CoordSystems: set[str],
     list_of_grid_physical_sizes: List[float],
     gridding_approach: str = "independent grid(s)",
     enable_rfm_precompute: bool = False,
@@ -295,7 +295,7 @@ def register_CFunction_numerical_grids_and_timestep(
     focusing on the usage of reference metric precomputations and curvilinear boundary
     conditions.
 
-    :param list_of_CoordSystems: List of CoordSystems
+    :param set_of_CoordSystems: Set of CoordSystems
     :param list_of_grid_physical_sizes: List of grid_physical_size for each CoordSystem; needed for Independent grids.
     :param gridding_approach: Choices: "independent grid(s)" (default) or "multipatch".
     :param enable_rfm_precompute: Whether to enable reference metric precomputation (default: False).
@@ -317,7 +317,7 @@ def register_CFunction_numerical_grids_and_timestep(
   int Nx[3] = {{ -1, -1, -1 }};
 
   // Step 1.b: Set commondata->NUMGRIDS to number of CoordSystems we have
-  commondata->NUMGRIDS = {len(list_of_CoordSystems)};
+  commondata->NUMGRIDS = {len(set_of_CoordSystems)};
 """
     if gridding_approach == "independent grid(s)":
         body += """
@@ -326,7 +326,7 @@ def register_CFunction_numerical_grids_and_timestep(
     const bool set_xxmin_xxmax_to_defaults = true;
     int grid=0;
 """
-        for which_CoordSystem, CoordSystem in enumerate(list_of_CoordSystems):
+        for which_CoordSystem, CoordSystem in enumerate(set_of_CoordSystems):
             body += (
                 f"  griddata[grid].params.CoordSystem_hash = {CoordSystem.upper()};\n"
             )
@@ -426,7 +426,7 @@ for(int grid=0;grid<commondata->NUMGRIDS;grid++) {
 
 
 def register_CFunctions(
-    list_of_CoordSystems: List[str],
+    set_of_CoordSystems: set[str],
     list_of_grid_physical_sizes: List[float],
     Nxx_dict: Dict[str, List[int]],
     gridding_approach: str = "independent grid(s)",
@@ -437,7 +437,7 @@ def register_CFunctions(
     """
     Register C functions related to coordinate systems and grid parameters.
 
-    :param list_of_CoordSystems: List of CoordSystems
+    :param set_of_CoordSystems: Set of CoordSystems
     :param list_of_grid_physical_sizes: List of grid_physical_size for each CoordSystem; needed for Independent grids.
     :param Nxx_dict: Dictionary containing number of grid points.
     :param gridding_approach: Choices: "independent grid(s)" (default) or "multipatch".
@@ -452,7 +452,7 @@ def register_CFunctions(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    for CoordSystem in list_of_CoordSystems:
+    for CoordSystem in set_of_CoordSystems:
         register_CFunction_numerical_grid_params_Nxx_dxx_xx(
             CoordSystem=CoordSystem,
             Nxx_dict=Nxx_dict,
@@ -460,7 +460,7 @@ def register_CFunctions(
     if enable_set_cfl_timestep:
         register_CFunction_cfl_limited_timestep()
     register_CFunction_numerical_grids_and_timestep(
-        list_of_CoordSystems=list_of_CoordSystems,
+        set_of_CoordSystems=set_of_CoordSystems,
         list_of_grid_physical_sizes=list_of_grid_physical_sizes,
         gridding_approach=gridding_approach,
         enable_rfm_precompute=enable_rfm_precompute,
@@ -469,11 +469,11 @@ def register_CFunctions(
     )
 
     if gridding_approach == "multipatch" or enable_set_cfl_timestep:
-        for CoordSystem in list_of_CoordSystems:
+        for CoordSystem in set_of_CoordSystems:
             register_CFunction_ds_min_single_pt(CoordSystem)
     if gridding_approach == "multipatch":
         # Register regrid & masking functions
-        for CoordSystem in list_of_CoordSystems:
+        for CoordSystem in set_of_CoordSystems:
             register_CFunction_ds_min_radial_like_dirns_single_pt(CoordSystem)
 
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())

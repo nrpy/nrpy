@@ -1866,7 +1866,7 @@ def register_BHaH_defines_h(
 
 
 def CurviBoundaryConditions_register_C_functions(
-    list_of_CoordSystems: List[str],
+    set_of_CoordSystems: set[str],
     parallelization: str = "openmp",
     radiation_BC_fd_order: int = 2,
     set_parity_on_aux: bool = False,
@@ -1875,13 +1875,13 @@ def CurviBoundaryConditions_register_C_functions(
     """
     Register various C functions responsible for handling boundary conditions.
 
-    :param list_of_CoordSystems: List of coordinate systems to use.
+    :param set_of_CoordSystems: Set of coordinate systems to use.
     :param parallelization: Parallelization method to use. Default is "openmp".
     :param radiation_BC_fd_order: Finite differencing order for the radiation boundary conditions. Default is 2.
     :param set_parity_on_aux: If True, set parity on auxiliary grid functions.
     :param set_parity_on_auxevol: If True, set parity on auxiliary evolution grid functions.
     """
-    for CoordSystem in list_of_CoordSystems:
+    for CoordSystem in set_of_CoordSystems:
         # Register C function to set up the boundary condition struct.
         register_CFunction_bcstruct_set_up(
             CoordSystem=CoordSystem, parallelization=parallelization

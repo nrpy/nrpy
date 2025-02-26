@@ -90,7 +90,7 @@ wCl.register_CFunction_initial_data(
     enable_checkpointing=True, OMP_collapse=OMP_collapse
 )
 numericalgrids.register_CFunctions(
-    list_of_CoordSystems=[CoordSystem],
+    set_of_CoordSystems={CoordSystem},
     list_of_grid_physical_sizes=[grid_physical_size],
     Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
@@ -99,7 +99,7 @@ numericalgrids.register_CFunctions(
 xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
 
 wCl.register_CFunction_diagnostics(
-    list_of_CoordSystems=[CoordSystem],
+    set_of_CoordSystems={CoordSystem},
     default_diagnostics_out_every=default_diagnostics_output_every,
     grid_center_filename_tuple=("out0d-conv_factor%.2f.txt", "convergence_factor"),
     axis_filename_tuple=(
@@ -114,9 +114,7 @@ wCl.register_CFunction_diagnostics(
 )
 
 if enable_rfm_precompute:
-    rfm_precompute.register_CFunctions_rfm_precompute(
-        list_of_CoordSystems=[CoordSystem]
-    )
+    rfm_precompute.register_CFunctions_rfm_precompute(set_of_CoordSystems={CoordSystem})
 wCl.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
@@ -130,7 +128,7 @@ if __name__ == "__main__" and parallel_codegen_enable:
     pcg.do_parallel_codegen()
 
 cbc.CurviBoundaryConditions_register_C_functions(
-    list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order
+    set_of_CoordSystems={CoordSystem}, radiation_BC_fd_order=radiation_BC_fd_order
 )
 rhs_string = """rhs_eval(commondata, params, rfmstruct,  RK_INPUT_GFS, RK_OUTPUT_GFS);
 if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)

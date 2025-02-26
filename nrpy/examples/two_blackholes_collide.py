@@ -103,14 +103,14 @@ BCl.register_CFunction_initial_data(
 )
 
 numericalgrids.register_CFunctions(
-    list_of_CoordSystems=[CoordSystem],
+    set_of_CoordSystems={CoordSystem},
     list_of_grid_physical_sizes=[grid_physical_size],
     Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
 )
 BCl.register_CFunction_diagnostics(
-    list_of_CoordSystems=[CoordSystem],
+    set_of_CoordSystems={CoordSystem},
     default_diagnostics_out_every=diagnostics_output_every,
     enable_psi4_diagnostics=False,
     grid_center_filename_tuple=("out0d-conv_factor%.2f.txt", "convergence_factor"),
@@ -126,7 +126,7 @@ BCl.register_CFunction_diagnostics(
 )
 if enable_rfm_precompute:
     rfm_precompute.register_CFunctions_rfm_precompute(
-        list_of_CoordSystems=[CoordSystem],
+        set_of_CoordSystems={CoordSystem},
     )
 BCl.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
@@ -169,7 +169,7 @@ if __name__ == "__main__":
     pcg.do_parallel_codegen()
 
 cbc.CurviBoundaryConditions_register_C_functions(
-    list_of_CoordSystems=[CoordSystem],
+    set_of_CoordSystems={CoordSystem},
     radiation_BC_fd_order=radiation_BC_fd_order,
 )
 rhs_string = ""
