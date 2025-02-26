@@ -101,7 +101,6 @@ params->Nxx_plus_2NGHOSTS2 = params->Nxx2 + 2*NGHOSTS;
 
 """
     rfm = refmetric.reference_metric[CoordSystem]
-
     # Set grid_physical_size & grid_hole_radius
     body += """{
 #include "../set_CodeParameters.h"
