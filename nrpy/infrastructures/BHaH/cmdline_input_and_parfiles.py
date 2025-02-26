@@ -134,7 +134,7 @@ static void print_usage() {{
 #define MAX_ARRAY_SIZE 100 // Adjust as needed
 
 // Parameter types
-typedef enum { PARAM_REAL, PARAM_INT, PARAM_CHARARRAY, PARAM_REAL_ARRAY, PARAM_INT_ARRAY } param_type;
+typedef enum { PARAM_REAL, PARAM_INT, PARAM_BOOL, PARAM_CHARARRAY, PARAM_REAL_ARRAY, PARAM_INT_ARRAY } param_type;
 
 // Parameter descriptor struct
 typedef struct {
@@ -180,6 +180,9 @@ param_descriptor param_table[] = {
             elif cparam_type == "REAL":
                 param_type = "PARAM_REAL"
                 found_REAL = True
+            elif cparam_type == "bool":
+                param_type = "PARAM_BOOL"
+                found_boolean = True
             elif "char" in cparam_type and "[" in cparam_type and "]" in cparam_type:
                 param_type = "PARAM_CHARARRAY"
                 buffer_size = int(cparam_type.split("[")[1].split("]")[0])
@@ -386,7 +389,7 @@ static void read_boolean(const char *value, bool *result, const char *param_name
     *p = tolower((unsigned char)*p);
   }
 
-  // Check if the input is "true", "false", "0", or "1"
+  // Check if the input is (case-insensitive) "true" or "false"; or "0" or "1"
   if (strcmp(lower_value, "true") == 0 || strcmp(lower_value, "1") == 0) {
     *result = true;
   } else if (strcmp(lower_value, "false") == 0 || strcmp(lower_value, "0") == 0) {
@@ -566,6 +569,12 @@ static void read_boolean(const char *value, bool *result, const char *param_name
             assignment_code += f"""
     {prefix} (param_desc->index == {index}) {{
         read_integer(values_array[0], &commondata->{param_name}, "{param_name}");
+    }}
+"""
+        elif param_type == "PARAM_BOOL":
+            assignment_code += f"""
+    {prefix} (param_desc->index == {index}) {{
+        read_boolean(values_array[0], &commondata->{param_name}, "{param_name}");
     }}
 """
         elif param_type == "PARAM_CHARARRAY":
