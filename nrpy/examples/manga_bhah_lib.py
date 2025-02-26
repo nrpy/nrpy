@@ -6,6 +6,7 @@ Author: Leonardo Rosa Werneck
 """
 
 import os
+
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
@@ -13,16 +14,16 @@ import shutil
 
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
-import nrpy.infrastructures.BHaH.CodeParameters as CPs
-import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
-import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 import nrpy.infrastructures.BHaH.bhah_lib as lib
 import nrpy.infrastructures.BHaH.checkpointing as chkpt
+import nrpy.infrastructures.BHaH.CodeParameters as CPs
+import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 import nrpy.infrastructures.BHaH.general_relativity.BSSN_C_codegen_library as BCl
 import nrpy.infrastructures.BHaH.general_relativity.TOVola.ID_persist_struct as IDps
 import nrpy.infrastructures.BHaH.general_relativity.TOVola.TOVola_interp as TOVinterp
 import nrpy.infrastructures.BHaH.general_relativity.TOVola.TOVola_solve as TOVsolve
+import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
 import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xxCartxx
 import nrpy.params as par

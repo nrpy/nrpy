@@ -19,11 +19,11 @@ import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_s
 import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
-from nrpy.equations.wave_equation.WaveEquationCurvilinear_RHSs import (
-    WaveEquationCurvilinear_RHSs,
-)
 from nrpy.equations.wave_equation.WaveEquation_Solutions_InitialData import (
     WaveEquation_solution_Cartesian,
+)
+from nrpy.equations.wave_equation.WaveEquationCurvilinear_RHSs import (
+    WaveEquationCurvilinear_RHSs,
 )
 
 
