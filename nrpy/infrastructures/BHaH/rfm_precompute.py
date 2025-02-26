@@ -5,7 +5,7 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 import sympy as sp
 import sympy.codegen.ast as sp_ast
