@@ -7,7 +7,7 @@ Author: Zachariah B. Etienne
 
 import hashlib
 import re
-from typing import Dict, List
+from typing import Dict, List, Set
 
 import nrpy.c_function as cfc
 from nrpy.infrastructures.BHaH.BHaH_defines_h import register_BHaH_defines

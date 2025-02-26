@@ -9,7 +9,7 @@ Authors: Zachariah B. Etienne
 """
 
 # Step P1: Import needed NRPy+ core modules:
-from typing import List
+from typing import Set
 
 import nrpy.c_function as cfc
 from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata

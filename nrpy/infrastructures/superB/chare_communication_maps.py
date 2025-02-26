@@ -6,7 +6,7 @@ Authors: Nishita Jadoo
 """
 
 # Step P1: Import needed NRPy+ core modules:
-from typing import List
+from typing import Set
 
 import nrpy.c_function as cfc
 from nrpy.infrastructures.BHaH import griddata_commondata

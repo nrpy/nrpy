@@ -9,7 +9,7 @@ Author: Zachariah B. Etienne
 
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import Dict, List, Union, cast
+from typing import Dict, List, Set, Union, cast
 
 import sympy as sp
 

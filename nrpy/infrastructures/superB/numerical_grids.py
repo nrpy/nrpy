@@ -9,7 +9,7 @@ Author: Zachariah B. Etienne
         njadoo **at** uidaho **dot* edu
 """
 
-from typing import List
+from typing import Set
 
 import nrpy.c_function as cfc
 import nrpy.reference_metric as refmetric

@@ -5,7 +5,7 @@ Author: Nishita Jadoo
         njadoo **at** uidaho **dot* edu
 """
 
-from typing import List
+from typing import List, Set
 
 import nrpy.c_function as cfc
 import nrpy.params as par

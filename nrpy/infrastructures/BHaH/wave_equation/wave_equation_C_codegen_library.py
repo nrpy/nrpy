@@ -8,7 +8,7 @@ Author: Zachariah B. Etienne
 from inspect import currentframe as cfr
 from pathlib import Path
 from types import FrameType as FT
-from typing import Dict, List, Tuple, Union, cast
+from typing import Dict, Set, Tuple, Union, cast
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
@@ -19,11 +19,11 @@ import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_s
 import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
-from nrpy.equations.wave_equation.WaveEquation_Solutions_InitialData import (
-    WaveEquation_solution_Cartesian,
-)
 from nrpy.equations.wave_equation.WaveEquationCurvilinear_RHSs import (
     WaveEquationCurvilinear_RHSs,
+)
+from nrpy.equations.wave_equation.WaveEquation_Solutions_InitialData import (
+    WaveEquation_solution_Cartesian,
 )
 
 
