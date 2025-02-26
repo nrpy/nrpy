@@ -449,36 +449,33 @@ def register_CFunction_cpyDevicetoHost__gf() -> None:
     /**
      * Asynchronously copying a grid function from device to host.
      */
-    __host__ size_t cpyDevicetoHost__gf(const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *gf_host,
-                                        const REAL *gf_gpu, const int host_GF_IDX, const int gpu_GF_IDX) {
+    __host__ void cpyDevicetoHost__gf(const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *gf_host,
+                                      const REAL *gf_gpu, const int host_GF_IDX, const int gpu_GF_IDX, const size_t streamid) {
     <BLANKLINE>
       int const Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
       int const Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
       int const Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
       const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
     <BLANKLINE>
-      size_t streamid = (params->grid_idx + gpu_GF_IDX) % NUM_STREAMS;
       int offset_gpu = Nxx_plus_2NGHOSTS_tot * gpu_GF_IDX;
       int offset_host = Nxx_plus_2NGHOSTS_tot * host_GF_IDX;
       cudaMemcpyAsync(&gf_host[offset_host], &gf_gpu[offset_gpu], sizeof(REAL) * Nxx_plus_2NGHOSTS_tot, cudaMemcpyDeviceToHost, streams[streamid]);
       cudaCheckErrors(cudaMemcpyAsync, "Copy of gf data failed");
-      return streamid;
     } // END FUNCTION cpyDevicetoHost__gf
     <BLANKLINE>
     """
     includes = ["BHaH_defines.h"]
     desc = r"""Asynchronously copying a grid function from device to host."""
-    cfunc_type = "__host__ size_t"
+    cfunc_type = "__host__ void"
     name = "cpyDevicetoHost__gf"
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params, "
-    params += "REAL * gf_host, const REAL * gf_gpu, const int host_GF_IDX, const int gpu_GF_IDX"
+    params += "REAL * gf_host, const REAL * gf_gpu, const int host_GF_IDX, const int gpu_GF_IDX, const size_t streamid"
     body = """
   int const Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
   int const Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
   int const Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
   const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
 
-  size_t streamid = (params->grid_idx + gpu_GF_IDX) % NUM_STREAMS;
   int offset_gpu  = Nxx_plus_2NGHOSTS_tot * gpu_GF_IDX;
   int offset_host = Nxx_plus_2NGHOSTS_tot * host_GF_IDX;
   cudaMemcpyAsync(&gf_host[offset_host],
@@ -486,7 +483,6 @@ def register_CFunction_cpyDevicetoHost__gf() -> None:
                   sizeof(REAL) * Nxx_plus_2NGHOSTS_tot,
                   cudaMemcpyDeviceToHost, streams[streamid]);
   cudaCheckErrors(cudaMemcpyAsync, "Copy of gf data failed");
-  return streamid;
 """
     cfc.register_CFunction(
         includes=includes,
@@ -508,13 +504,13 @@ def register_CFunction_cpyHosttoDevice__gf() -> None:
     DOCTEST:
     >>> import nrpy.c_function as cfc
     >>> register_CFunction_cpyHosttoDevice__gf()
-    >>> print(cfc.CFunction_dict['cpyDevicetoHost__gf'].full_function)
+    >>> print(cfc.CFunction_dict['cpyHosttoDevice__gf'].full_function)
     #include "../BHaH_defines.h"
     /**
-     * Asynchronously copying a grid function from device to host.
+     * Asynchronously copying a grid function from host to device.
      */
-    __host__ size_t cpyDevicetoHost__gf(const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *gf_host,
-                                        const REAL *gf_gpu, const int host_GF_IDX, const int gpu_GF_IDX) {
+    __host__ size_t cpyHosttoDevice__gf(const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL *gf_host,
+                                        REAL *gf_gpu, const int host_GF_IDX, const int gpu_GF_IDX) {
     <BLANKLINE>
       int const Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
       int const Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
@@ -524,11 +520,12 @@ def register_CFunction_cpyHosttoDevice__gf() -> None:
       size_t streamid = (params->grid_idx + gpu_GF_IDX) % NUM_STREAMS;
       int offset_gpu = Nxx_plus_2NGHOSTS_tot * gpu_GF_IDX;
       int offset_host = Nxx_plus_2NGHOSTS_tot * host_GF_IDX;
-      cudaMemcpyAsync(&gf_host[offset_host], &gf_gpu[offset_gpu], sizeof(REAL) * Nxx_plus_2NGHOSTS_tot, cudaMemcpyDeviceToHost, streams[streamid]);
+      cudaMemcpyAsync(&gf_gpu[offset_host], &gf_host[offset_gpu], sizeof(REAL) * Nxx_plus_2NGHOSTS_tot, cudaMemcpyHostToDevice, streams[streamid]);
       cudaCheckErrors(cudaMemcpyAsync, "Copy of gf data failed");
       return streamid;
-    } // END FUNCTION cpyDevicetoHost__gf
+    } // END FUNCTION cpyHosttoDevice__gf
     <BLANKLINE>
+
     """
     includes = ["BHaH_defines.h"]
     desc = r"""Asynchronously copying a grid function from host to device."""
