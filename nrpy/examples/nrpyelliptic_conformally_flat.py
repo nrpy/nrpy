@@ -15,7 +15,6 @@ import shutil
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
-import nrpy.infrastructures.BHaH.nrpyelliptic.conformally_flat_C_codegen_library as nrpyellClib
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import (
@@ -26,6 +25,7 @@ from nrpy.infrastructures.BHaH import (
     cmdline_input_and_parfiles,
     griddata_commondata,
     main_c,
+    nrpyelliptic,
     numerical_grids_and_timestep,
     rfm_precompute,
     rfm_wrapper_functions,
@@ -169,23 +169,27 @@ par.adjust_CodeParam_default("t_final", t_final)
 
 
 # Generate functions to set initial guess
-nrpyellClib.register_CFunction_initial_guess_single_point()
-nrpyellClib.register_CFunction_initial_guess_all_points(
+nrpyelliptic.initial_data.register_CFunction_initial_guess_single_point()
+nrpyelliptic.initial_data.register_CFunction_initial_guess_all_points(
     OMP_collapse=OMP_collapse,
     enable_checkpointing=enable_checkpointing,
 )
 
 # Generate function to set variable wavespeed
-nrpyellClib.register_CFunction_variable_wavespeed_gfs_all_points(
+nrpyelliptic.variable_wavespeed_gfs.register_CFunction_variable_wavespeed_gfs_all_points(
     CoordSystem=CoordSystem
 )
 
 # Generate functions to set AUXEVOL gridfunctions
-nrpyellClib.register_CFunction_auxevol_gfs_single_point(CoordSystem=CoordSystem)
-nrpyellClib.register_CFunction_auxevol_gfs_all_points(OMP_collapse=OMP_collapse)
+nrpyelliptic.constant_source_terms_to_auxevol.register_CFunction_auxevol_gfs_single_point(
+    CoordSystem=CoordSystem
+)
+nrpyelliptic.constant_source_terms_to_auxevol.register_CFunction_auxevol_gfs_all_points(
+    OMP_collapse=OMP_collapse
+)
 
 # Generate function that calls functions to set variable wavespeed and all other AUXEVOL gridfunctions
-nrpyellClib.register_CFunction_initialize_constant_auxevol()
+nrpyelliptic.constant_source_terms_to_auxevol.register_CFunction_initialize_constant_auxevol()
 numerical_grids_and_timestep.register_CFunctions(
     set_of_CoordSystems=set_of_CoordSystems,
     list_of_grid_physical_sizes=[grid_physical_size for c in set_of_CoordSystems],
@@ -195,7 +199,7 @@ numerical_grids_and_timestep.register_CFunctions(
 )
 xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
 
-nrpyellClib.register_CFunction_diagnostics(
+nrpyelliptic.diagnostics.register_CFunction_diagnostics(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     default_diagnostics_out_every=default_diagnostics_output_every,
@@ -205,7 +209,7 @@ if enable_rfm_precompute:
     rfm_precompute.register_CFunctions_rfm_precompute(set_of_CoordSystems)
 
 # Generate function to compute RHSs
-nrpyellClib.register_CFunction_rhs_eval(
+nrpyelliptic.rhs_eval.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_simd=enable_simd,
@@ -213,7 +217,7 @@ nrpyellClib.register_CFunction_rhs_eval(
 )
 
 # Generate function to compute residuals
-nrpyellClib.register_CFunction_compute_residual_all_points(
+nrpyelliptic.diagnostics.register_CFunction_compute_residual_all_points(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_simd=enable_simd,
@@ -221,10 +225,12 @@ nrpyellClib.register_CFunction_compute_residual_all_points(
 )
 
 # Generate diagnostics functions
-nrpyellClib.register_CFunction_compute_L2_norm_of_gridfunction(CoordSystem=CoordSystem)
+nrpyelliptic.diagnostics.register_CFunction_compute_L2_norm_of_gridfunction(
+    CoordSystem=CoordSystem
+)
 
 # Register function to check for stop conditions
-nrpyellClib.register_CFunction_check_stop_conditions()
+nrpyelliptic.diagnostics.register_CFunction_check_stop_conditions()
 
 if __name__ == "__main__" and parallel_codegen_enable:
     pcg.do_parallel_codegen()
