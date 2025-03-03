@@ -166,20 +166,20 @@ nrpyelliptic.initial_data.register_CFunction_initial_guess_all_points(
 )
 
 # Generate function to set variable wavespeed
-nrpyelliptic.auxiliary.register_CFunction_variable_wavespeed_gfs_all_points(
+nrpyelliptic.variable_wavespeed_gfs.register_CFunction_variable_wavespeed_gfs_all_points(
     CoordSystem=CoordSystem
 )
 
 # Generate functions to set AUXEVOL gridfunctions
-nrpyelliptic.auxiliary.register_CFunction_auxevol_gfs_single_point(
+nrpyelliptic.constant_source_terms_to_auxevol.register_CFunction_auxevol_gfs_single_point(
     CoordSystem=CoordSystem
 )
-nrpyelliptic.auxiliary.register_CFunction_auxevol_gfs_all_points(
+nrpyelliptic.constant_source_terms_to_auxevol.register_CFunction_auxevol_gfs_all_points(
     OMP_collapse=OMP_collapse
 )
 
 # Generate function that calls functions to set variable wavespeed and all other AUXEVOL gridfunctions
-nrpyelliptic.auxiliary.register_CFunction_initialize_constant_auxevol()
+nrpyelliptic.constant_source_terms_to_auxevol.register_CFunction_initialize_constant_auxevol()
 
 numericalgrids.register_CFunctions(
     set_of_CoordSystems={CoordSystem},
