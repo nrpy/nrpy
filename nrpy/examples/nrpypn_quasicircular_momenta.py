@@ -13,12 +13,14 @@ import os
 import shutil
 
 import nrpy.c_function as cfc
-import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
-import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
-import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.general_relativity.NRPyPN_quasicircular_momenta as NRPyPNqm
-import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 import nrpy.params as par
+from nrpy.infrastructures.BHaH import (
+    BHaH_defines_h,
+    CodeParameters,
+    Makefile_helpers,
+    cmdline_input_and_parfiles,
+)
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -76,10 +78,14 @@ NRPyPNqm.register_CFunction_NRPyPN_quasicircular_momenta()
 #         command line parameters, set up boundary conditions,
 #         and create a Makefile for this project.
 #         Project is output to project/[project_name]/
-CPs.write_CodeParameters_h_files(set_commondata_only=True, project_dir=project_dir)
-CPs.register_CFunctions_params_commondata_struct_set_to_default()
-cmdpar.generate_default_parfile(project_dir=project_dir, project_name=project_name)
-cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
+CodeParameters.write_CodeParameters_h_files(
+    set_commondata_only=True, project_dir=project_dir
+)
+CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
+cmdline_input_and_parfiles.generate_default_parfile(
+    project_dir=project_dir, project_name=project_name
+)
+cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
     project_name=project_name,
     cmdline_inputs=[
         "initial_sep",
@@ -92,10 +98,10 @@ cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
         "bbhxy_BH_m_chiz",
     ],
 )
-Bdefines_h.output_BHaH_defines_h(project_dir=project_dir, enable_intrinsics=False)
+BHaH_defines_h.output_BHaH_defines_h(project_dir=project_dir, enable_intrinsics=False)
 register_CFunction_main_c()
 
-Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
+Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
     exec_or_library_name=project_name,

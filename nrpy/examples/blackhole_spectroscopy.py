@@ -21,27 +21,27 @@ import shutil
 from pathlib import Path
 
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
-import nrpy.infrastructures.BHaH.checkpointing as chkpt
-import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
-import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 import nrpy.infrastructures.BHaH.general_relativity.BSSN_C_codegen_library as BCl
 import nrpy.infrastructures.BHaH.general_relativity.NRPyPN_quasicircular_momenta as NRPyPNqm
 import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.ID_persist_struct as IDps
 import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.TwoPunctures_lib as TPl
-import nrpy.infrastructures.BHaH.main_c as main
-import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
-import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
 import nrpy.infrastructures.BHaH.special_functions.spin_weight_minus2_spherical_harmonics as swm2sh
-import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xxCartxx
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import (
+    BHaH_defines_h,
+    CodeParameters,
+    Makefile_helpers,
+    checkpointing,
+    cmdline_input_and_parfiles,
     griddata_commondata,
+    main_c,
+    numerical_grids_and_timestep,
     rfm_precompute,
     rfm_wrapper_functions,
+    xx_tofrom_Cart,
 )
 from nrpy.infrastructures.BHaH.general_relativity import psi4_C_codegen_library
 from nrpy.infrastructures.BHaH.MoLtimestepping import MoL_register_all
@@ -222,7 +222,7 @@ if __name__ == "__main__":
 # Does not need to be parallelized.
 BCl.register_CFunction_psi4_spinweightm2_decomposition_on_sphlike_grids()
 
-numericalgrids.register_CFunctions(
+numerical_grids_and_timestep.register_CFunctions(
     set_of_CoordSystems={CoordSystem},
     list_of_grid_physical_sizes=[grid_physical_size],
     Nxx_dict=Nxx_dict,
@@ -262,9 +262,9 @@ MoL_register_all.register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
 )
-xxCartxx.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
-xxCartxx.register_CFunction_xx_to_Cart(CoordSystem)
-chkpt.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
+xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
+xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
+checkpointing.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
 progress.register_CFunction_progress_indicator()
 rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
@@ -296,10 +296,12 @@ par.adjust_CodeParam_default(
 #         command line parameters, set up boundary conditions,
 #         and create a Makefile for this project.
 #         Project is output to project/[project_name]/
-CPs.write_CodeParameters_h_files(project_dir=project_dir)
-CPs.register_CFunctions_params_commondata_struct_set_to_default()
-cmdpar.generate_default_parfile(project_dir=project_dir, project_name=project_name)
-cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
+CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
+CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
+cmdline_input_and_parfiles.generate_default_parfile(
+    project_dir=project_dir, project_name=project_name
+)
+cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
     project_name=project_name, cmdline_inputs=["convergence_factor"]
 )
 copy_files(
@@ -308,7 +310,7 @@ copy_files(
     project_dir=project_dir,
     subdirectory="TwoPunctures",
 )
-Bdefines_h.output_BHaH_defines_h(
+BHaH_defines_h.output_BHaH_defines_h(
     additional_includes=[str(Path("TwoPunctures") / Path("TwoPunctures.h"))],
     project_dir=project_dir,
     enable_intrinsics=enable_simd,
@@ -320,7 +322,7 @@ if enable_CAHD:
     post_non_y_n_auxevol_mallocs = """for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
     cahdprefactor_auxevol_gridfunction(&commondata, &griddata[grid].params, griddata[grid].xx,  griddata[grid].gridfuncs.auxevol_gfs);
 }\n"""
-main.register_CFunction_main_c(
+main_c.register_CFunction_main_c(
     MoL_method=MoL_method,
     initial_data_desc=IDtype,
     boundary_conditions_desc=boundary_conditions_desc,
@@ -339,7 +341,7 @@ if enable_simd:
         subdirectory="intrinsics",
     )
 
-Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
+Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
     exec_or_library_name=project_name,

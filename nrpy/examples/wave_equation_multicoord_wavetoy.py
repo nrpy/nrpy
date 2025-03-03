@@ -13,7 +13,6 @@ import os
 import shutil
 
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 import nrpy.params as par
@@ -23,6 +22,7 @@ from nrpy.infrastructures.BHaH import (
     CodeParameters,
     Makefile_helpers,
     checkpointing,
+    cmdline_input_and_parfiles,
     griddata_commondata,
     main_c,
     numerical_grids_and_timestep,
@@ -162,8 +162,10 @@ rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 #         Project is output to project/[project_name]/
 CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
 CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
-cmdpar.generate_default_parfile(project_dir=project_dir, project_name=project_name)
-cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
+cmdline_input_and_parfiles.generate_default_parfile(
+    project_dir=project_dir, project_name=project_name
+)
+cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
     project_name=project_name, cmdline_inputs=["convergence_factor"]
 )
 BHaH_defines_h.output_BHaH_defines_h(

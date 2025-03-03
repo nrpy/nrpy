@@ -22,40 +22,12 @@ from nrpy.infrastructures.ETLegacy import (
     MoL_registration,
     Symmetry_registration,
     boundary_conditions,
+    general_relativity,
     interface_ccl,
     make_code_defn,
     param_ccl,
     schedule_ccl,
     zero_rhss,
-)
-
-# All needed functions can be imported from the ETLegacy infrastructure
-from nrpy.infrastructures.ETLegacy.general_relativity.ADM_to_BSSN import (
-    register_CFunction_ADM_to_BSSN,
-)
-from nrpy.infrastructures.ETLegacy.general_relativity.BSSN_constraints import (
-    register_CFunction_BSSN_constraints,
-)
-from nrpy.infrastructures.ETLegacy.general_relativity.BSSN_to_ADM import (
-    register_CFunction_BSSN_to_ADM,
-)
-from nrpy.infrastructures.ETLegacy.general_relativity.enforce_detgammahat_constraint import (
-    register_CFunction_enforce_detgammahat_constraint,
-)
-from nrpy.infrastructures.ETLegacy.general_relativity.floor_the_lapse import (
-    register_CFunction_floor_the_lapse,
-)
-from nrpy.infrastructures.ETLegacy.general_relativity.RegisterSlicing import (
-    register_CFunction_RegisterSlicing,
-)
-from nrpy.infrastructures.ETLegacy.general_relativity.rhs_eval import (
-    register_CFunction_rhs_eval,
-)
-from nrpy.infrastructures.ETLegacy.general_relativity.Ricci_eval import (
-    register_CFunction_Ricci_eval,
-)
-from nrpy.infrastructures.ETLegacy.general_relativity.T4DD_to_T4UU import (
-    register_CFunction_T4DD_to_T4UU,
 )
 
 # Code-generation-time parameters:
@@ -107,7 +79,7 @@ for evol_thorn_name in thorn_names:
     if evol_thorn_name == "Baikal":
         enable_T4munu = True
         fd_order_list = [2, 4]
-        register_CFunction_T4DD_to_T4UU(
+        general_relativity.T4DD_to_T4UU.register_CFunction_T4DD_to_T4UU(
             thorn_name=evol_thorn_name,
             CoordSystem=CoordSystem,
             enable_rfm_precompute=False,
@@ -115,19 +87,19 @@ for evol_thorn_name in thorn_names:
 
     for fd_order in fd_order_list:
         par.set_parval_from_str("fd_order", fd_order)
-        register_CFunction_ADM_to_BSSN(
+        general_relativity.ADM_to_BSSN.register_CFunction_ADM_to_BSSN(
             thorn_name=evol_thorn_name,
             CoordSystem=CoordSystem,
             fd_order=fd_order,
         )
-        register_CFunction_Ricci_eval(
+        general_relativity.Ricci_eval.register_CFunction_Ricci_eval(
             thorn_name=evol_thorn_name,
             CoordSystem="Cartesian",
             enable_rfm_precompute=False,
             enable_simd=enable_simd,
             fd_order=fd_order,
         )
-        register_CFunction_rhs_eval(
+        general_relativity.rhs_eval.register_CFunction_rhs_eval(
             thorn_name=evol_thorn_name,
             CoordSystem="Cartesian",
             enable_rfm_precompute=False,
@@ -141,7 +113,7 @@ for evol_thorn_name in thorn_names:
             enable_CAHD=enable_improvements,
             enable_SSL=enable_improvements,
         )
-        register_CFunction_BSSN_constraints(
+        general_relativity.BSSN_constraints.register_CFunction_BSSN_constraints(
             thorn_name=evol_thorn_name,
             CoordSystem="Cartesian",
             enable_rfm_precompute=False,
@@ -150,10 +122,16 @@ for evol_thorn_name in thorn_names:
             enable_simd=enable_simd,
         )
 
-    register_CFunction_RegisterSlicing(thorn_name=evol_thorn_name)
-    register_CFunction_BSSN_to_ADM(thorn_name=evol_thorn_name, CoordSystem="Cartesian")
-    register_CFunction_floor_the_lapse(thorn_name=evol_thorn_name)
-    register_CFunction_enforce_detgammahat_constraint(
+    general_relativity.RegisterSlicing.register_CFunction_RegisterSlicing(
+        thorn_name=evol_thorn_name
+    )
+    general_relativity.BSSN_to_ADM.register_CFunction_BSSN_to_ADM(
+        thorn_name=evol_thorn_name, CoordSystem="Cartesian"
+    )
+    general_relativity.floor_the_lapse.register_CFunction_floor_the_lapse(
+        thorn_name=evol_thorn_name
+    )
+    general_relativity.enforce_detgammahat_constraint.register_CFunction_enforce_detgammahat_constraint(
         thorn_name=evol_thorn_name, CoordSystem="Cartesian", enable_rfm_precompute=False
     )
 

@@ -13,22 +13,25 @@ import os
 import shutil
 
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
-import nrpy.infrastructures.BHaH.bhah_lib as lib
-import nrpy.infrastructures.BHaH.checkpointing as chkpt
-import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 import nrpy.infrastructures.BHaH.general_relativity.BSSN_C_codegen_library as BCl
 import nrpy.infrastructures.BHaH.general_relativity.TOVola.ID_persist_struct as IDps
 import nrpy.infrastructures.BHaH.general_relativity.TOVola.TOVola_interp as TOVinterp
 import nrpy.infrastructures.BHaH.general_relativity.TOVola.TOVola_solve as TOVsolve
-import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
-import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
-import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xxCartxx
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
-from nrpy.infrastructures.BHaH import rfm_precompute, rfm_wrapper_functions
+from nrpy.infrastructures.BHaH import (
+    BHaH_defines_h,
+    CodeParameters,
+    Makefile_helpers,
+    bhah_lib,
+    checkpointing,
+    numerical_grids_and_timestep,
+    rfm_precompute,
+    rfm_wrapper_functions,
+    xx_tofrom_Cart,
+)
 from nrpy.infrastructures.BHaH.MoLtimestepping import MoL_register_all
 
 par.set_parval_from_str("Infrastructure", "BHaH")
@@ -75,10 +78,10 @@ shutil.rmtree(project_dir, ignore_errors=True)
 par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 par.set_parval_from_str("fd_order", fd_order)
 par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
-chkpt.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
+checkpointing.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
 progress.register_CFunction_progress_indicator()
 
-numericalgrids.register_CFunctions(
+numerical_grids_and_timestep.register_CFunctions(
     set_of_CoordSystems=set_of_CoordSystems,
     list_of_grid_physical_sizes=[grid_physical_size],
     Nxx_dict=Nxx_dict,
@@ -207,8 +210,8 @@ MoL_register_all.register_CFunctions(
 )
 
 for CoordSystem in set_of_CoordSystems:
-    xxCartxx.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
-    xxCartxx.register_CFunction_xx_to_Cart(CoordSystem)
+    xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
+    xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
 rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
 #########################################################
@@ -220,9 +223,9 @@ if "SinhSpherical" in set_of_CoordSystems:
     par.adjust_CodeParam_default("SINHW", 0.4)
 par.adjust_CodeParam_default("eta", GammaDriving_eta)
 
-CPs.write_CodeParameters_h_files(project_dir=project_dir)
-CPs.register_CFunctions_params_commondata_struct_set_to_default()
-Bdefines_h.output_BHaH_defines_h(
+CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
+CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
+BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     enable_intrinsics=enable_simd,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
@@ -243,9 +246,9 @@ if enable_simd:
         subdirectory="intrinsics",
     )
 
-lib.register_CFunctions_bhah_lib()
+bhah_lib.register_CFunctions_bhah_lib()
 
-Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
+Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
     exec_or_library_name="lib" + project_name,
