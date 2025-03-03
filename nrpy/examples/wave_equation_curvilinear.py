@@ -22,13 +22,13 @@ import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 import nrpy.infrastructures.BHaH.main_c as main
 import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
-import nrpy.infrastructures.BHaH.wave_equation.wave_equation_C_codegen_library as wCl
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import (
     griddata_commondata,
     rfm_precompute,
     rfm_wrapper_functions,
+    wave_equation,
     xx_tofrom_Cart,
 )
 from nrpy.infrastructures.BHaH.MoLtimestepping import MoL_register_all
@@ -83,10 +83,10 @@ par.adjust_CodeParam_default("t_final", t_final)
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
-wCl.register_CFunction_exact_solution_single_Cartesian_point(
+wave_equation.initial_data_exact_soln.register_CFunction_exact_solution_single_Cartesian_point(
     WaveType=WaveType, default_sigma=default_sigma
 )
-wCl.register_CFunction_initial_data(
+wave_equation.initial_data_exact_soln.register_CFunction_initial_data(
     enable_checkpointing=True, OMP_collapse=OMP_collapse
 )
 numericalgrids.register_CFunctions(
@@ -98,7 +98,7 @@ numericalgrids.register_CFunctions(
 )
 xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
 
-wCl.register_CFunction_diagnostics(
+wave_equation.diagnostics.register_CFunction_diagnostics(
     set_of_CoordSystems={CoordSystem},
     default_diagnostics_out_every=default_diagnostics_output_every,
     grid_center_filename_tuple=("out0d-conv_factor%.2f.txt", "convergence_factor"),
@@ -115,7 +115,7 @@ wCl.register_CFunction_diagnostics(
 
 if enable_rfm_precompute:
     rfm_precompute.register_CFunctions_rfm_precompute(set_of_CoordSystems={CoordSystem})
-wCl.register_CFunction_rhs_eval(
+wave_equation.rhs_eval.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_simd=enable_simd,
