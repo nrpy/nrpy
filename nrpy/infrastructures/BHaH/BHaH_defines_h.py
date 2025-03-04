@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import nrpy.grid as gri
+import nrpy.helpers.gpu.utilities as gpu_utils
 import nrpy.params as par
 from nrpy.helpers.generic import clang_format
 from nrpy.infrastructures.BHaH import griddata_commondata
@@ -456,7 +457,27 @@ def output_BHaH_defines_h(
         for key in supplemental_defines_dict:
             file_output_str += output_key(key, supplemental_defines_dict[key])
 
+    parallelization = par.parval_from_str("parallelization")
+
+    if parallelization != "openmp":
+        file_output_str += f"""
+    #define NRPY_FREE_DEVICE(a) \
+    do {{ \
+        if (a) {{ \
+            {gpu_utils.get_memory_free_function(parallelization)}((void*)(a)); \
+            {gpu_utils.get_check_errors_str(parallelization, gpu_utils.get_memory_free_function(parallelization), opt_msg="Free: #a failed")} \
+            (a) = nullptr; \
+        }} \
+    }} while (0);
+"""
     file_output_str += """
+#define NRPY_FREE(a) \
+    do {{ \
+        if (a) {{ \
+            free((void*)(a)); \
+            (a) = nullptr; \
+        }} \
+    }} while (0);
 #endif
 """
 
