@@ -16,7 +16,7 @@ import sympy as sp
 import nrpy.helpers.loop as lp
 import nrpy.indexedexp as ixp
 
-implemented_loop_regions = ["", "all points", "interior"]
+implemented_loop_regions = ["", "all points", "interior", "interior plus one upper"]
 
 
 def implemented_loop_regions_err(loop_region: str) -> str:
@@ -53,17 +53,24 @@ def get_loop_region_ranges(
             i2i1i0_mins = ["0", "0", "0"]
         i2i1i0_maxs = ["Nxx_plus_2NGHOSTS2", "Nxx_plus_2NGHOSTS1", "Nxx_plus_2NGHOSTS0"]
     # 'InteriorPoints': loop over the interior of a numerical grid, i.e. exclude ghost zones
-    elif loop_region == "interior":
+    elif "interior" in loop_region:
         if not min_idx_prefix is None:
             i2i1i0_mins = [f"{min_idx_prefix}{i}+NGHOSTS" for i in reversed(range(3))]
         else:
             i2i1i0_mins = ["NGHOSTS", "NGHOSTS", "NGHOSTS"]
-        i2i1i0_maxs = [
-            "Nxx_plus_2NGHOSTS2 - NGHOSTS",
-            "Nxx_plus_2NGHOSTS1 - NGHOSTS",
-            "Nxx_plus_2NGHOSTS0 - NGHOSTS",
-        ]
 
+        if loop_region == "interior plus one upper":
+            i2i1i0_maxs = [
+                "Nxx_plus_2NGHOSTS2 - NGHOSTS + 1",
+                "Nxx_plus_2NGHOSTS1 - NGHOSTS + 1",
+                "Nxx_plus_2NGHOSTS0 - NGHOSTS + 1",
+            ]
+        else:
+            i2i1i0_maxs = [
+                "Nxx_plus_2NGHOSTS2 - NGHOSTS",
+                "Nxx_plus_2NGHOSTS1 - NGHOSTS",
+                "Nxx_plus_2NGHOSTS0 - NGHOSTS",
+            ]
     return i2i1i0_mins, i2i1i0_maxs
 
 
