@@ -5,13 +5,16 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import List
+from inspect import currentframe as cfr
+from types import FrameType as FT
+from typing import List, Union, cast
 
 import sympy as sp
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
+import nrpy.helpers.parallel_codegen as pcg
 import nrpy.reference_metric as refmetric
 
 
@@ -21,7 +24,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     CoordSystem: str,
     relative_to: str = "local_grid_center",
     gridding_approach: str = "independent grid(s)",
-) -> None:
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Construct and register a C function that maps Cartesian coordinates to xx and finds the nearest grid indices.
 
@@ -36,7 +39,12 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     :param gridding_approach: Choices: "independent grid(s)" (default) or "multipatch".
     :raises ValueError: When the value of `gridding_approach` is not "independent grid(s)"
                         or "multipatch".
+    :return: None if in registration phase, else the updated NRPy environment.
     """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+
     if gridding_approach not in {"independent grid(s)", "multipatch"}:
         raise ValueError(
             "Invalid value for 'gridding_approach'. Must be 'independent grid(s)' or 'multipatch'."
@@ -143,12 +151,13 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
         include_CodeParameters_h=True,
         body=body,
     )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
 def register_CFunction_xx_to_Cart(
     CoordSystem: str,
     gridding_approach: str = "independent grid(s)",
-) -> None:
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Convert uniform-grid coordinate (xx[0], xx[1], xx[2]) to the corresponding Cartesian coordinate.
 
@@ -156,7 +165,12 @@ def register_CFunction_xx_to_Cart(
     :param gridding_approach: Choices: "independent grid(s)" (default) or "multipatch".
 
     :raises ValueError: If an invalid gridding_approach is provided.
+    :return: None if in registration phase, else the updated NRPy environment.
     """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+
     if gridding_approach not in {"independent grid(s)", "multipatch"}:
         raise ValueError(
             "Invalid value for 'gridding_approach'. Must be 'independent grid(s)' or 'multipatch'."
@@ -201,3 +215,4 @@ const REAL xx2 = xx[2][i2];
         include_CodeParameters_h=True,
         body=body,
     )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())

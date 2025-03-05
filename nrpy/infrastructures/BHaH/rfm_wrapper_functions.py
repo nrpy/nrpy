@@ -7,7 +7,7 @@ Author: Zachariah B. Etienne
 
 import hashlib
 import re
-from typing import Dict, List
+from typing import Dict, List, Set
 
 import nrpy.c_function as cfc
 from nrpy.infrastructures.BHaH.BHaH_defines_h import register_BHaH_defines
@@ -55,7 +55,7 @@ def register_CFunctions_CoordSystem_wrapper_funcs() -> None:
     CoordSystem_hash_dict: Dict[str, int] = {}
     for i, wrapper_func_name in enumerate(wrapper_func_list):
         base_CFunc = base_CFunc_list[i]
-        list_of_CoordSystems: List[str] = []
+        set_of_CoordSystems: Set[str] = set()
         wrapper_subdir = ""
         for name, CFunc in cfc.CFunction_dict.items():
             if wrapper_func_name == name.replace(
@@ -63,7 +63,7 @@ def register_CFunctions_CoordSystem_wrapper_funcs() -> None:
             ):
                 CoordSystem = CFunc.CoordSystem_for_wrapper_func
                 CoordSystem_hash_dict[CoordSystem] = get_CoordSystem_hash(CoordSystem)
-                list_of_CoordSystems += [CoordSystem]
+                set_of_CoordSystems.add(CoordSystem)
                 wrapper_subdir = CFunc.subdirectory.replace(CoordSystem, "")
 
         # Construct function call:
@@ -86,7 +86,7 @@ def register_CFunctions_CoordSystem_wrapper_funcs() -> None:
             params += param.strip().split(" ")[-1] + ", "
 
         wrapper_body = "switch (params->CoordSystem_hash) {\n"
-        for CoordSystem in sorted(list_of_CoordSystems):
+        for CoordSystem in sorted(set_of_CoordSystems):
             wrapper_body += f"case {CoordSystem.upper()}:\n"
             wrapper_body += (
                 f"  {wrapper_func_name}__rfm__{CoordSystem}({params[:-2]});\n"

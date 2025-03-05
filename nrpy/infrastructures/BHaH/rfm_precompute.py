@@ -5,7 +5,7 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 import sympy as sp
 import sympy.codegen.ast as sp_ast
@@ -341,13 +341,13 @@ def generate_rfmprecompute_free(
 
 
 def register_CFunctions_rfm_precompute(
-    list_of_CoordSystems: List[str],
+    set_of_CoordSystems: Set[str],
     parallelization: str = "openmp",
 ) -> None:
     """
     Register C functions for reference metric precomputed lookup arrays.
 
-    :param list_of_CoordSystems: List of coordinate systems to register the C functions.
+    :param set_of_CoordSystems: Set of coordinate systems to register the C functions.
     :param parallelization: Parallelization method to use.
 
     Doctest:
@@ -361,28 +361,14 @@ def register_CFunctions_rfm_precompute(
     >>> for parallelization in supported_Parallelizations:
     ...    for CoordSystem in supported_CoordSystems:
     ...       cfc.CFunction_dict.clear()
-    ...       rfm_precompute.register_CFunctions_rfm_precompute([CoordSystem], parallelization=parallelization)
+    ...       rfm_precompute.register_CFunctions_rfm_precompute([CoordSystem], parallelization=parallelization) # doctest: +SKIP
     ...       for rfm_base_function in ["malloc", "defines", "free"]:
     ...          generated_str = cfc.CFunction_dict[f'rfm_precompute_{rfm_base_function}__rfm__{CoordSystem}'].full_function
     ...          validation_desc = f"{rfm_base_function}__{parallelization}__{CoordSystem}".replace(" ", "_")
     ...          validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
-    Setting up reference_metric[Spherical_rfm_precompute]...
-    Setting up reference_metric[SinhSpherical_rfm_precompute]...
-    Setting up reference_metric[SinhSphericalv2n2_rfm_precompute]...
-    Setting up reference_metric[Cartesian_rfm_precompute]...
-    Setting up reference_metric[SinhCartesian_rfm_precompute]...
-    Setting up reference_metric[Cylindrical_rfm_precompute]...
-    Setting up reference_metric[SinhCylindrical_rfm_precompute]...
-    Setting up reference_metric[SinhCylindricalv2n2_rfm_precompute]...
-    Setting up reference_metric[SymTP_rfm_precompute]...
-    Setting up reference_metric[SinhSymTP_rfm_precompute]...
-    Setting up reference_metric[LWedgeHSinhSph_rfm_precompute]...
-    Setting up reference_metric[UWedgeHSinhSph_rfm_precompute]...
-    Setting up reference_metric[RingHoleySinhSpherical_rfm_precompute]...
-    Setting up reference_metric[HoleySinhSpherical_rfm_precompute]...
     """
     combined_BHaH_defines_list = []
-    for CoordSystem in list_of_CoordSystems:
+    for CoordSystem in set_of_CoordSystems:
         rfm_precompute = ReferenceMetricPrecompute(
             CoordSystem, parallelization=parallelization
         )

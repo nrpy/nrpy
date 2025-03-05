@@ -134,7 +134,7 @@ static void print_usage() {{
 #define MAX_ARRAY_SIZE 100 // Adjust as needed
 
 // Parameter types
-typedef enum { PARAM_REAL, PARAM_INT, PARAM_CHARARRAY, PARAM_REAL_ARRAY, PARAM_INT_ARRAY } param_type;
+typedef enum { PARAM_REAL, PARAM_INT, PARAM_BOOL, PARAM_CHARARRAY, PARAM_REAL_ARRAY, PARAM_INT_ARRAY } param_type;
 
 // Parameter descriptor struct
 typedef struct {
@@ -180,6 +180,9 @@ param_descriptor param_table[] = {
             elif cparam_type == "REAL":
                 param_type = "PARAM_REAL"
                 found_REAL = True
+            elif cparam_type == "bool":
+                param_type = "PARAM_BOOL"
+                found_boolean = True
             elif "char" in cparam_type and "[" in cparam_type and "]" in cparam_type:
                 param_type = "PARAM_CHARARRAY"
                 buffer_size = int(cparam_type.split("[")[1].split("]")[0])
@@ -255,7 +258,7 @@ static void parse_param(const char *param_str, char *param_name, int *array_size
     if (bracket_end == NULL) {
       fprintf(stderr, "Error: Missing closing bracket in parameter %s.\n", param_str);
       exit(1);
-    }
+    } // END IF (bracket_end == NULL): Check for missing closing bracket in parameter
     char size_str[16];
     size_t size_len = bracket_end - bracket_start - 1;
     strncpy(size_str, bracket_start + 1, size_len);
@@ -264,13 +267,13 @@ static void parse_param(const char *param_str, char *param_name, int *array_size
     if (*array_size <= 0) {
       fprintf(stderr, "Error: Invalid array size in parameter %s.\n", param_name);
       exit(1);
-    }
+    } // END IF (*array_size <= 0): Validate that array size is positive
   } else {
     // Scalar parameter
     safe_copy(param_name, param_str, PARAM_SIZE);
     *array_size = 0;
-  }
-}
+  } // END IF (bracket_start != NULL): Distinguish between array and scalar parameter
+} // END FUNCTION parse_param
 
 // Function to parse value string into array of values
 static void parse_value(const char *value_str, char values[][PARAM_SIZE], int *value_count) {
@@ -280,7 +283,8 @@ static void parse_value(const char *value_str, char values[][PARAM_SIZE], int *v
     if (value_str[len - 1] != '}') {
       fprintf(stderr, "Error: Missing closing brace in value %s.\n", value_str);
       exit(1);
-    }
+    } // END IF (value_str[len - 1] != '}'): Check for missing closing brace
+
     // Extract the values inside the braces
     char value_copy[LINE_SIZE];
     safe_copy(value_copy, value_str + 1, LINE_SIZE); // Skip the opening brace
@@ -296,9 +300,9 @@ static void parse_value(const char *value_str, char values[][PARAM_SIZE], int *v
       if (count > MAX_ARRAY_SIZE) {
         fprintf(stderr, "Error: Array size exceeds maximum allowed.\n");
         exit(1);
-      }
+      } // END IF (count > MAX_ARRAY_SIZE): Check for exceeding maximum array size
       val_token = strtok_r(NULL, ",", &saveptr);
-    }
+    } // END while (val_token != NULL): Split value_copy into tokens using comma as delimiter
     *value_count = count;
   } else {
     // Scalar value
@@ -307,8 +311,8 @@ static void parse_value(const char *value_str, char values[][PARAM_SIZE], int *v
     char *trimmed = trim_space(mutable_value);
     safe_copy(values[0], trimmed, PARAM_SIZE);
     *value_count = 1;
-  }
-}
+  } // END IF (value_str[0] == '{'): Handle array and scalar values
+} // END FUNCTION parse_value
 """
 
     # Add reading functions if needed
@@ -323,10 +327,10 @@ static void read_integer(const char *value, int *result, const char *param_name)
   if (endptr == value || *endptr != '\0' || errno == ERANGE) {
     fprintf(stderr, "Error: Invalid integer value for %s: %s.\n", param_name, value);
     exit(1);
-  }
+  } // END IF (endptr == value || *endptr != '\0' || errno == ERANGE): Validate integer conversion and check for errors
 
   *result = (int)int_val;
-}
+} // END FUNCTION read_integer
 """
 
     if found_REAL:
@@ -340,10 +344,10 @@ static void read_REAL(const char *value, REAL *result, const char *param_name) {
   if (endptr == value || *endptr != '\0' || errno == ERANGE) {
     fprintf(stderr, "Error: Invalid double value for %s: %s.\n", param_name, value);
     exit(1);
-  }
+  } // END IF (endptr == value || *endptr != '\0' || errno == ERANGE): Validate double conversion and check for errors
 
   *result = (REAL)double_val;
-}
+} // END FUNCTION read_REAL
 """
 
     if found_chararray:
@@ -357,19 +361,19 @@ static void read_chararray(const char *value, char *result, const char *param_na
     if (len - 2 >= size) {
       fprintf(stderr, "Error: Buffer overflow detected for %s.\n", param_name);
       exit(1);
-    }
+    } // END IF (len - 2 >= size): Check for buffer overflow before trimming quotes
     strncpy(trimmed_value, value + 1, len - 2);
     trimmed_value[len - 2] = '\0';
   } else {
     safe_copy(trimmed_value, value, PARAM_SIZE);
-  }
+  } // END IF: Determine if surrounding quotes exist and handle accordingly
 
   if (strlen(trimmed_value) >= size) {
     fprintf(stderr, "Error: Buffer overflow detected for %s.\n", param_name);
     exit(1);
-  }
+  } // END IF (strlen(trimmed_value) >= size): Check for buffer overflow after trimming
   safe_copy(result, trimmed_value, size);
-}
+} // END FUNCTION read_chararray
 """
 
     if found_boolean:
@@ -381,25 +385,37 @@ static void read_boolean(const char *value, bool *result, const char *param_name
   if (lower_value == NULL) {
     fprintf(stderr, "Error: Memory allocation failed for boolean value of %s.\n", param_name);
     exit(1);
-  }
+  } // END memory allocation error check
+
+  // Convert the string to lowercase
   for (char *p = lower_value; *p != '\0'; p++) {
     *p = tolower((unsigned char)*p);
-  }
+  } // END lowercase conversion loop
 
-  // Check if the input is "true", "false", "0", or "1"
-  if (strcmp(lower_value, "true") == 0 || strcmp(lower_value, "1") == 0) {
+  // Strip out any single or double quotation marks
+  char *src = lower_value, *dst = lower_value;
+  while (*src != '\0') {
+    if (*src != '\"' && *src != '\'') {
+      *dst++ = *src;
+    } // END IF check for quotation marks
+    src++;
+  } // END while loop for stripping quotation marks
+  *dst = '\0';
+
+  // Check if the input is (case-insensitive) "true" or "false"; or "0" or "1"
+  if (strcmp(lower_value, "true") == 0 || strcmp(lower_value, "yes") == 0 || strcmp(lower_value, "1") == 0) {
     *result = true;
-  } else if (strcmp(lower_value, "false") == 0 || strcmp(lower_value, "0") == 0) {
+  } else if (strcmp(lower_value, "false") == 0 || strcmp(lower_value, "no") == 0 || strcmp(lower_value, "0") == 0) {
     *result = false;
   } else {
     fprintf(stderr, "Error: Invalid boolean value for %s: %s.\n", param_name, value);
     free(lower_value);
     exit(1);
-  }
+  } // END boolean value check (if-else chain)
 
   // Free the allocated memory for the lowercase copy of the value
   free(lower_value);
-}
+} // END FUNCTION read_boolean
 """
 
     # Start building the function body
@@ -566,6 +582,12 @@ static void read_boolean(const char *value, bool *result, const char *param_name
             assignment_code += f"""
     {prefix} (param_desc->index == {index}) {{
         read_integer(values_array[0], &commondata->{param_name}, "{param_name}");
+    }}
+"""
+        elif param_type == "PARAM_BOOL":
+            assignment_code += f"""
+    {prefix} (param_desc->index == {index}) {{
+        read_boolean(values_array[0], &commondata->{param_name}, "{param_name}");
     }}
 """
         elif param_type == "PARAM_CHARARRAY":

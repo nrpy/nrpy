@@ -108,7 +108,7 @@ MAYBE_UNUSED REAL {psi4_class.metric_deriv_var_list_str};
             enable_fd_codegen=True,
         ),
         loop_region="interior",
-        enable_simd=False,
+        enable_intrinsics=False,
         CoordSystem=CoordSystem,
         enable_rfm_precompute=False,
         read_xxs=False,

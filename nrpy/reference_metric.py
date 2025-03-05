@@ -102,6 +102,8 @@ class ReferenceMetric:
         self.scalefactor_orthog = [sp.sympify(0)] * 3
         # UnitVectors must be set as a function of (self.xx[0],xx[1],xx[2])
         self.UnitVectors = ixp.zerorank2(dimension=3)
+        # Non-angular coordinate directions
+        self.radial_like_dirns: List[int] = []
         # module name for CodeParameters
         self.CodeParam_modulename = f"{__name__}_{CoordSystem}"
         self.add_CodeParams_to_glb_code_params_dict = False
@@ -793,12 +795,14 @@ class ReferenceMetric:
             self.scalefactor_orthog_funcform[1] = self.f1_of_xx1_funcform
             self.scalefactor_orthog_funcform[2] = self.f3_of_xx2_funcform
 
-        # Set the transpose of the matrix of unit vectors
+        # Set the transpose of the matrix of unit vectors for all Cartesian-like coordinate systems.
         self.UnitVectors = [
             [sp.sympify(1), sp.sympify(0), sp.sympify(0)],
             [sp.sympify(0), sp.sympify(1), sp.sympify(0)],
             [sp.sympify(0), sp.sympify(0), sp.sympify(1)],
         ]
+        # All Cartesian directions are radial-like; none are angular-like:
+        self.radial_like_dirns = [0, 1, 2]
 
     def spherical_wedge_like(self) -> None:
         """Initialize class for Spherical wedge-like coordinate systems."""
@@ -836,6 +840,9 @@ class ReferenceMetric:
         self.xxSph[0] = self.Sinhv1(self.xx[0], AMPL, SINHW)
         self.xxSph[1] = self.xx[1]
         self.xxSph[2] = self.xx[2]
+
+        # In spherical-like coords, only the zeroth direction is radial-like; the rest are angular-like:
+        self.radial_like_dirns = [0]
 
         # Wedges take a chunk of a spherical grid and rotate it.
         #   Scale factors are invariant under such rotations.
@@ -1070,6 +1077,9 @@ class ReferenceMetric:
         self.xxSph[1] = th
         self.xxSph[2] = ph
 
+        # In spherical-like coords, only the zeroth direction is radial-like; the rest are angular-like:
+        self.radial_like_dirns = [0]
+
         # Now define xCart, yCart, and zCart in terms of x0,xx[1],xx[2].
         #   Note that the relation between r and x0 is not necessarily trivial in SinhSpherical coordinates. See above.
         self.xx_to_Cart[0] = (
@@ -1261,6 +1271,9 @@ class ReferenceMetric:
         self.scalefactor_orthog[1] = var1
         self.scalefactor_orthog[2] = AA * sp.sin(self.xx[1])
 
+        # In prolate-spheroidal-like coords, only the 2th coordinate direction is angular; the rest are radial-like:
+        self.radial_like_dirns = [0, 1]
+
         self.f0_of_xx0 = AA
         self.f1_of_xx1 = sp.sin(self.xx[1])
         self.f2_of_xx0 = var2
@@ -1431,6 +1444,9 @@ class ReferenceMetric:
         self.xx_to_Cart[0] = RHOCYL * sp.cos(PHICYL)
         self.xx_to_Cart[1] = RHOCYL * sp.sin(PHICYL)
         self.xx_to_Cart[2] = ZCYL
+
+        # In cylindrical-like coords, only the 1st coordinate direction is angular; the rest are radial-like:
+        self.radial_like_dirns = [0, 2]
 
         self.xxSph[0] = sp.sqrt(RHOCYL**2 + ZCYL**2)
         self.xxSph[1] = sp.acos(ZCYL / self.xxSph[0])

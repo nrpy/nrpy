@@ -166,10 +166,8 @@ def write_CodeParameters_h_files(
     MAYBE_UNUSED const REAL pi_three_sigfigs = commondata->pi_three_sigfigs; // CodeParameters_c_files::pi_three_sigfigs
     char some_string[100];                                                   // CodeParameters_c_files::some_string
     {
-      // Copy up to 99 characters from params->some_string to some_string
-      strncpy(some_string, params->some_string, 100 - 1);
-      // Explicitly null-terminate some_string to ensure it is a valid C-string
-      some_string[100 - 1] = '\0'; // Properly null terminate char array.
+      // Safely copy string with snprintf, which guarantees null termination
+      snprintf(some_string, sizeof(some_string), "%s", params->some_string);
     }
     >>> print((project_dir / 'set_CodeParameters-nopointer.h').read_text())
     MAYBE_UNUSED const REAL a = commondata.a;                               // CodeParameters_c_files::a
@@ -177,10 +175,8 @@ def write_CodeParameters_h_files(
     MAYBE_UNUSED const REAL pi_three_sigfigs = commondata.pi_three_sigfigs; // CodeParameters_c_files::pi_three_sigfigs
     char some_string[100];                                                  // CodeParameters_c_files::some_string
     {
-      // Copy up to 99 characters from params.some_string to some_string
-      strncpy(some_string, params.some_string, 100 - 1);
-      // Explicitly null-terminate some_string to ensure it is a valid C-string
-      some_string[100 - 1] = '\0'; // Properly null terminate char array.
+      // Safely copy string with snprintf, which guarantees null termination
+      snprintf(some_string, sizeof(some_string), "%s", params.some_string);
     }
     >>> print((project_dir / 'set_CodeParameters-simd.h').read_text())
     const REAL NOSIMDa = commondata->a;                                                      // CodeParameters_c_files::a
@@ -224,10 +220,8 @@ def write_CodeParameters_h_files(
                         # Char arrays are never unused; we use them below.
                         Coutput = rf"""char {CPname}[{CPsize}]; {comment}
 {{
-  // Copy up to {CPsize-1} characters from {struct}{pointer}{CPname} to {CPname}
-  strncpy({CPname}, {struct}{pointer}{CPname}, {CPsize}-1);
-  // Explicitly null-terminate {CPname} to ensure it is a valid C-string
-  {CPname}[{CPsize}-1]='\0'; // Properly null terminate char array.
+  // Safely copy string with snprintf, which guarantees null termination
+  snprintf({CPname}, sizeof({CPname}), "%s", {struct}{pointer}{CPname});
 }}"""
                     elif "[" in CPtype and "]" in CPtype:
                         # Handle REAL[N] and int[N] arrays

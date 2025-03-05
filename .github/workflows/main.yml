@@ -15,182 +15,182 @@ jobs:
 
     strategy:
       matrix:
-       os: ['ubuntu-20.04', 'ubuntu-22.04']
-       python-version: ['3.6.7', '3.7.13', '3.8.18', '3.9.19', '3.x']
-       exclude:
-         - os: 'ubuntu-22.04'
-           python-version: '3.6.7'
+        os: [ 'ubuntu-20.04', 'ubuntu-22.04' ]
+        python-version: [ '3.6.7', '3.7.13', '3.8.18', '3.9.19', '3.x' ]
+        exclude:
+          - os: 'ubuntu-22.04'
+            python-version: '3.6.7'
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
 
-    - name: Display Python version
-      run: python --version
+      - name: Display Python version
+        run: python --version
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -U -r requirements.txt
-        if [[ "${{ matrix.python-version }}" != "3.6.7" && "${{ matrix.python-version }}" != "3.7.13"  && "${{ matrix.python-version }}" != "3.8.18" ]]; then
-          pip install -U -r requirements-dev.txt
-        else
-          # Install packages from requirements-dev.txt without fixed versions; i.e., install the latest version compatible with this Python version.
-          sed 's/==.*//' requirements-dev.txt | xargs pip install -U
-        fi
-        if [[ "${{ matrix.python-version }}" == "3.8.18" ]]; then
-          pip install pylint==3.2.0  # pylint 3.2.4+ is broken in 3.8.18.
-        fi
-        # FIXME: until NRPyLaTeX is updated in pypi.
-        pip install -U nrpylatex
-        pip install -U ipython setuptools
-        sudo apt-get -y install libgsl-dev
-
-    - name: Install sympy or DEVELOPMENT sympy based on Python version
-      run: |
-        if [[ "${{ matrix.python-version }}" != "3.6.7" && "${{ matrix.python-version }}" != "3.7.13" ]]; then
-          pip install git+https://github.com/sympy/sympy.git
-        else
-          pip install sympy
-        fi
-
-    - name: Display sympy and clang-format versions
-      run: |
-        echo "Running CI tests with SymPy version = $(isympy --version)"
-        echo "Running CI tests with clang-format version = $(clang-format --version)"
-
-    - name: Check mypy and black versions when Python != 3.6.7 and != 3.7.13 chosen (they are too broken in those Python versions).
-      if: matrix.python-version != '3.6.7' && matrix.python-version != '3.7.13'
-      run: |
-        mypy --version
-        black --version
-
-    - name: Run static analysis on each file.
-      run: |
-        #!/bin/bash
-
-        # Exit immediately if a command exits with a non-zero status, except in specific cases
-        set -e
-
-        # Function to handle each test step
-        run_test_step() {
-          local step_name="$1"
-          local command="$2"
-          local failure_message="$3"
-
-          echo "-={ Step $step_counter: $step_name }=-"
-          eval "$command"
-          if [ $? -ne 0 ]; then
-            failed_tests+=("$failure_message in $python_file")
-          fi
-          ((step_counter++))
-        }
-
-        # Clear cache
-        echo "Clearing cache..."
-        rm -rf ~/.cache/nrpy
-        echo "Cache cleared."
-
-        # Get Python version
-        python_version=$(python --version 2>&1)
-        echo "Python version: $python_version"
-
-        # Initialize array to store failed tests
-        failed_tests=()
-
-        # Find all relevant Python files recursively and store them in a temporary file
-        echo "Locating Python files..."
-        find . -type f -name '*.py' \
-          ! -name '__init__.py' \
-          ! -path './project/*' \
-          ! -path './build/*' \
-          ! -path '*/tests/*' \
-          ! -path './nrpy/examples/visualization_scripts/*' > python_files.txt
-
-        # Count total number of Python files
-        total_files=$(wc -l < python_files.txt)
-        echo "Found $total_files Python file(s) to analyze."
-
-        # Initialize file counter
-        file_counter=1
-
-        # Loop through each Python file
-        while IFS= read -r python_file; do
-          echo ""
-
-          # Initialize step counter for each file
-          step_counter=1
-
-          echo "-={ $python_file : file $file_counter of $total_files for static analysis }=-"
-
-          # Run Doctests if not in nrpy/examples/ and not in root directory
-          if [[ ! $python_file =~ nrpy/examples/.* && ! $python_file =~ ^\./[^/]+\.py$ ]]; then
-            run_test_step "Doctests" "PYTHONPATH=.:$PYTHONPATH python \"$python_file\"" "doctests"
-          fi
-
-          # Turns out that black in Python 3.6 & 3.7 has a heart attack when parsing equations/general_relativity/BSSN_quantities.py:
-          # INTERNAL ERROR: Black produced code that is not equivalent to the source. Please report a bug on ....
-          if [[ "$python_version" != *"3.6.7"* && "$python_version" != *"3.7.13"* && "$python_version" != *"3.8.18"* ]]; then
-            # Step: black
-            run_test_step "black" "black --check \"$python_file\"" "black"
-
-            # Step: isort
-            run_test_step "isort" "isort --check-only \"$python_file\"" "isort"
-
-            # Step: mypy
-            run_test_step "mypy" "PYTHONPATH=.:$PYTHONPATH mypy --strict --pretty --allow-untyped-calls \"$python_file\"" "mypy"
-          fi
-
-          # Step: pylint
-          echo "-={ Step $step_counter: pylint }=-"
-          if [[ "$python_version" == *"3.6.7"* || "$python_version" == *"3.7.13"* || "$python_version" == *"3.8.18"* ]]; then
-            pylint_rcfile=".pylintrc_python36"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -U -r requirements.txt
+          if [[ "${{ matrix.python-version }}" != "3.6.7" && "${{ matrix.python-version }}" != "3.7.13"  && "${{ matrix.python-version }}" != "3.8.18" ]]; then
+            pip install -U -r requirements-dev.txt
           else
-            pylint_rcfile=".pylintrc"
+            # Install packages from requirements-dev.txt without fixed versions; i.e., install the latest version compatible with this Python version.
+            sed 's/==.*//' requirements-dev.txt | xargs pip install -U
+          fi
+          if [[ "${{ matrix.python-version }}" == "3.8.18" ]]; then
+            pip install pylint==3.2.0  # pylint 3.2.4+ is broken in 3.8.18.
+          fi
+          # FIXME: until NRPyLaTeX is updated in pypi.
+          pip install -U nrpylatex
+          pip install -U ipython setuptools
+          sudo apt-get -y install libgsl-dev
+
+      - name: Install sympy or DEVELOPMENT sympy based on Python version
+        run: |
+          if [[ "${{ matrix.python-version }}" != "3.6.7" && "${{ matrix.python-version }}" != "3.7.13" ]]; then
+            pip install git+https://github.com/sympy/sympy.git
+          else
+            pip install sympy
           fi
 
-          # Run pylint and capture the output, prevent 'set -e' from exiting on failure
-          pylint_output=$(PYTHONPATH=.:$PYTHONPATH pylint --rcfile="$pylint_rcfile" "$python_file" 2>&1 || true)
+      - name: Display sympy and clang-format versions
+        run: |
+          echo "Running CI tests with SymPy version = $(isympy --version)"
+          echo "Running CI tests with clang-format version = $(clang-format --version)"
 
-          # Extract the Pylint score by searching for "rated at" and extracting the number before "/10"
-          pylint_score=$(echo "$pylint_output" | grep "rated at" | grep -Eo '[0-9]+\.[0-9]+' | head -1 || echo "0")
+      - name: Check mypy and black versions when Python != 3.6.7 and != 3.7.13 chosen (they are too broken in those Python versions).
+        if: matrix.python-version != '3.6.7' && matrix.python-version != '3.7.13'
+        run: |
+          mypy --version
+          black --version
 
-          echo "Pylint score is $pylint_score"
-
-          if (( $(echo "$pylint_score < 9.5" | bc -l) )); then
-            echo "$pylint_output"
-            echo "Pylint score is below 9.5, failing..."
-            failed_tests+=("pylint in $python_file")
+      - name: Run static analysis on each file.
+        run: |
+          #!/bin/bash
+          
+          # Exit immediately if a command exits with a non-zero status, except in specific cases
+          set -e
+          
+          # Function to handle each test step
+          run_test_step() {
+            local step_name="$1"
+            local command="$2"
+            local failure_message="$3"
+          
+            echo "-={ Step $step_counter: $step_name }=-"
+            eval "$command"
+            if [ $? -ne 0 ]; then
+              failed_tests+=("$failure_message in $python_file")
+            fi
+            ((step_counter++))
+          }
+          
+          # Clear cache
+          echo "Clearing cache..."
+          rm -rf ~/.cache/nrpy
+          echo "Cache cleared."
+          
+          # Get Python version
+          python_version=$(python --version 2>&1)
+          echo "Python version: $python_version"
+          
+          # Initialize array to store failed tests
+          failed_tests=()
+          
+          # Find all relevant Python files recursively and store them in a temporary file
+          echo "Locating Python files..."
+          find . -type f -name '*.py' \
+            ! -name '__init__.py' \
+            ! -path './project/*' \
+            ! -path './build/*' \
+            ! -path '*/tests/*' \
+            ! -path './nrpy/examples/visualization_scripts/*' > python_files.txt
+          
+          # Count total number of Python files
+          total_files=$(wc -l < python_files.txt)
+          echo "Found $total_files Python file(s) to analyze."
+          
+          # Initialize file counter
+          file_counter=1
+          
+          # Loop through each Python file
+          while IFS= read -r python_file; do
+            echo ""
+          
+            # Initialize step counter for each file
+            step_counter=1
+          
+            echo "-={ $python_file : file $file_counter of $total_files for static analysis }=-"
+          
+            # Run Doctests if not in nrpy/examples/ and not in root directory
+            if [[ ! $python_file =~ nrpy/examples/.* && ! $python_file =~ ^\./[^/]+\.py$ ]]; then
+              run_test_step "Doctests" "PYTHONPATH=.:$PYTHONPATH python \"$python_file\"" "doctests"
+            fi
+          
+            # Turns out that black in Python 3.6 & 3.7 has a heart attack when parsing equations/general_relativity/BSSN_quantities.py:
+            # INTERNAL ERROR: Black produced code that is not equivalent to the source. Please report a bug on ....
+            if [[ "$python_version" != *"3.6.7"* && "$python_version" != *"3.7.13"* && "$python_version" != *"3.8.18"* ]]; then
+              # Step: black
+              run_test_step "black" "black --check \"$python_file\"" "black"
+          
+              # Step: isort
+              run_test_step "isort" "isort --check-only \"$python_file\"" "isort"
+          
+              # Step: mypy
+              run_test_step "mypy" "PYTHONPATH=.:$PYTHONPATH mypy --strict --pretty --allow-untyped-calls \"$python_file\"" "mypy"
+            fi
+          
+            # Step: pylint
+            echo "-={ Step $step_counter: pylint }=-"
+            if [[ "$python_version" == *"3.6.7"* || "$python_version" == *"3.7.13"* || "$python_version" == *"3.8.18"* ]]; then
+              pylint_rcfile=".pylintrc_python36"
+            else
+              pylint_rcfile=".pylintrc"
+            fi
+          
+            # Run pylint and capture the output, prevent 'set -e' from exiting on failure
+            pylint_output=$(PYTHONPATH=.:$PYTHONPATH pylint --rcfile="$pylint_rcfile" "$python_file" 2>&1 || true)
+          
+            # Extract the Pylint score by searching for "rated at" and extracting the number before "/10"
+            pylint_score=$(echo "$pylint_output" | grep "rated at" | grep -Eo '[0-9]+\.[0-9]+' | head -1 || echo "0")
+          
+            echo "Pylint score is $pylint_score"
+          
+            if (( $(echo "$pylint_score < 9.5" | bc -l) )); then
+              echo "$pylint_output"
+              echo "Pylint score is below 9.5, failing..."
+              failed_tests+=("pylint in $python_file")
+            fi
+            ((step_counter++))
+          
+            # Step: pydocstyle
+            run_test_step "pydocstyle" "pydocstyle \"$python_file\"" "pydocstyle"
+          
+            # Step: darglint
+            run_test_step "darglint" "darglint -v 2 \"$python_file\"" "darglint"
+          
+            # Increment file counter
+            ((file_counter++))
+          
+          done < python_files.txt
+          
+          # Remove temporary file
+          rm python_files.txt
+          
+          # Exit with failure if any tests failed
+          if [ ${#failed_tests[@]} -ne 0 ]; then
+            echo ""
+            echo "The following tests failed: ${failed_tests[*]}"
+            exit 1
           fi
-          ((step_counter++))
-
-          # Step: pydocstyle
-          run_test_step "pydocstyle" "pydocstyle \"$python_file\"" "pydocstyle"
-
-          # Step: darglint
-          run_test_step "darglint" "darglint -v 2 \"$python_file\"" "darglint"
-
-          # Increment file counter
-          ((file_counter++))
-
-        done < python_files.txt
-
-        # Remove temporary file
-        rm python_files.txt
-
-        # Exit with failure if any tests failed
-        if [ ${#failed_tests[@]} -ne 0 ]; then
+          
           echo ""
-          echo "The following tests failed: ${failed_tests[*]}"
-          exit 1
-        fi
-
-        echo ""
-        echo "All static analysis tests passed successfully."
+          echo "All static analysis tests passed successfully."
 
   einsteintoolkit-validation:
     runs-on: ubuntu-20.04
@@ -292,49 +292,53 @@ jobs:
 
     strategy:
       matrix:
-       os: ['ubuntu-20.04', 'ubuntu-22.04']
-       python-version: ['3.6.7', '3.7.13', '3.x']
-       exclude:
-         - os: 'ubuntu-22.04'
-           python-version: '3.6.7'
+        os: [ 'ubuntu-20.04', 'ubuntu-22.04' ]
+        python-version: [ '3.6.7', '3.7.13', '3.x' ]
+        exclude:
+          - os: 'ubuntu-22.04'
+            python-version: '3.6.7'
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
 
-    - name: Display Python version
-      run: python --version
+      - name: Display Python version
+        run: python --version
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        if [[ "${{ matrix.python-version }}" != "3.6.7" && "${{ matrix.python-version }}" != "3.7.13" ]]; then pip install -U mypy==1.8.0 black==24.1.1; fi
-        pip install -U pylint clang-format ipython setuptools
-        sudo apt-get -y install libgsl-dev
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [[ "${{ matrix.python-version }}" != "3.6.7" && "${{ matrix.python-version }}" != "3.7.13" ]]; then pip install -U mypy==1.8.0 black==24.1.1; fi
+          pip install -U pylint clang-format ipython setuptools
+          sudo apt-get -y install libgsl-dev
 
-    - name: Check that pip installed nrpy creates valid, compilable C example projects
-      run: |
-        pwd &&
-        pip install . &&
-        mkdir tmp &&
-        cd tmp &&
-        python -m nrpy.examples.wave_equation_cartesian   && (cd project/wavetoy && make && make clean) &&
-        python -m nrpy.examples.wave_equation_curvilinear && (cd project/curviwavetoy && make && make clean) &&
-        python -m nrpy.examples.nrpyelliptic_conformally_flat && (cd project/nrpyelliptic_conformally_flat && make && make clean) &&
-        python -m nrpy.examples.two_blackholes_collide    && (cd project/two_blackholes_collide && make && make clean) &&
-        python -m nrpy.examples.blackhole_spectroscopy    && (cd project/blackhole_spectroscopy && make && make clean) &&
-        python -m nrpy.examples.spinning_blackhole        && (cd project/spinning_blackhole && make && make clean) &&
-        python -m nrpy.examples.nrpypn_quasicircular_momenta && (cd project/nrpypn_quasicircular_momenta && make && make clean) &&
-        python -m nrpy.examples.wave_equation_multicoord_wavetoy && (cd project/multicoords_curviwavetoy && make && make clean) &&
-        python -m nrpy.examples.seobnrv5_aligned_spin_inspiral && (cd project/seobnrv5_aligned_spin_inspiral && make && make clean) &&
-        python -m nrpy.examples.tovola_neutron_star && (cd project/tovola_neutron_star && make && make clean) &&
-        python -m nrpy.examples.hydro_without_hydro && (cd project/hydro_without_hydro && make && make clean) &&
-        python -m nrpy.examples.manga_bhah_lib && (cd project/bhah_lib && make && make clean)
+      #    - name: Setup tmate session
+      #      uses: mxschmitt/action-tmate@v3
+      #      timeout-minutes: 15
+
+      - name: Check that pip installed nrpy creates valid, compilable C example projects
+        run: |
+          pwd &&
+          pip install . &&
+          mkdir tmp &&
+          cd tmp &&
+          python -m nrpy.examples.nrpyelliptic_conformally_flat && (cd project/nrpyelliptic_conformally_flat && make && make clean) &&
+          python -m nrpy.examples.wave_equation_cartesian   && (cd project/wavetoy && make && make clean) &&
+          python -m nrpy.examples.wave_equation_curvilinear && (cd project/curviwavetoy && make && make clean) &&
+          python -m nrpy.examples.two_blackholes_collide    && (cd project/two_blackholes_collide && make && make clean) &&
+          python -m nrpy.examples.blackhole_spectroscopy    && (cd project/blackhole_spectroscopy && make && make clean) &&
+          python -m nrpy.examples.spinning_blackhole        && (cd project/spinning_blackhole && make && make clean) &&
+          python -m nrpy.examples.nrpypn_quasicircular_momenta && (cd project/nrpypn_quasicircular_momenta && make && make clean) &&
+          python -m nrpy.examples.wave_equation_multicoord_wavetoy && (cd project/multicoords_curviwavetoy && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral && (cd project/seobnrv5_aligned_spin_inspiral && make && make clean) &&
+          python -m nrpy.examples.tovola_neutron_star && (cd project/tovola_neutron_star && make && make clean) &&
+          python -m nrpy.examples.hydro_without_hydro && (cd project/hydro_without_hydro && make && make clean) &&
+          python -m nrpy.examples.manga_bhah_lib && (cd project/bhah_lib && make && make clean)
 
   codegen-mac:
     runs-on: macos-13
@@ -344,39 +348,39 @@ jobs:
         python-version: [ '3.6.7', '3.7.13', '3.x' ]
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
 
-    - name: Display Python version
-      run: python --version
+      - name: Display Python version
+        run: python --version
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        if [[ "${{ matrix.python-version }}" != "3.6.7" && "${{ matrix.python-version }}" != "3.7.13" ]]; then pip install -U mypy==1.8.0 black==24.1.1; fi
-        pip install -U pylint clang-format ipython setuptools
-        brew install gsl
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [[ "${{ matrix.python-version }}" != "3.6.7" && "${{ matrix.python-version }}" != "3.7.13" ]]; then pip install -U mypy==1.8.0 black==24.1.1; fi
+          pip install -U pylint clang-format ipython setuptools
+          brew install gsl
 
-    - name: Check that pip installed nrpy creates valid, compilable C example projects
-      run: |
-        pwd &&
-        pip install . &&
-        mkdir tmp &&
-        cd tmp &&
-        python -m nrpy.examples.wave_equation_cartesian   && (cd project/wavetoy && make && make clean) &&
-        python -m nrpy.examples.wave_equation_curvilinear && (cd project/curviwavetoy && make && make clean) &&
-        python -m nrpy.examples.nrpyelliptic_conformally_flat && (cd project/nrpyelliptic_conformally_flat && make && make clean) &&
-        python -m nrpy.examples.two_blackholes_collide    && (cd project/two_blackholes_collide && make && make clean) &&
-        python -m nrpy.examples.blackhole_spectroscopy    && (cd project/blackhole_spectroscopy && make && make clean) &&
-        python -m nrpy.examples.spinning_blackhole        && (cd project/spinning_blackhole && make && make clean) &&
-        python -m nrpy.examples.nrpypn_quasicircular_momenta && (cd project/nrpypn_quasicircular_momenta && make && make clean) &&
-        python -m nrpy.examples.wave_equation_multicoord_wavetoy && (cd project/multicoords_curviwavetoy && make && make clean) &&
-        python -m nrpy.examples.seobnrv5_aligned_spin_inspiral && (cd project/seobnrv5_aligned_spin_inspiral && make && make clean) &&
-        python -m nrpy.examples.tovola_neutron_star && (cd project/tovola_neutron_star && make && make clean) &&
-        python -m nrpy.examples.hydro_without_hydro && (cd project/hydro_without_hydro && make && make clean) &&
-        python -m nrpy.examples.manga_bhah_lib && (cd project/bhah_lib && make && make clean)
+      - name: Check that pip installed nrpy creates valid, compilable C example projects
+        run: |
+          pwd &&
+          pip install . &&
+          mkdir tmp &&
+          cd tmp &&
+          python -m nrpy.examples.nrpyelliptic_conformally_flat && (cd project/nrpyelliptic_conformally_flat && make && make clean) &&
+          python -m nrpy.examples.wave_equation_cartesian   && (cd project/wavetoy && make && make clean) &&
+          python -m nrpy.examples.wave_equation_curvilinear && (cd project/curviwavetoy && make && make clean) &&
+          python -m nrpy.examples.two_blackholes_collide    && (cd project/two_blackholes_collide && make && make clean) &&
+          python -m nrpy.examples.blackhole_spectroscopy    && (cd project/blackhole_spectroscopy && make && make clean) &&
+          python -m nrpy.examples.spinning_blackhole        && (cd project/spinning_blackhole && make && make clean) &&
+          python -m nrpy.examples.nrpypn_quasicircular_momenta && (cd project/nrpypn_quasicircular_momenta && make && make clean) &&
+          python -m nrpy.examples.wave_equation_multicoord_wavetoy && (cd project/multicoords_curviwavetoy && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral && (cd project/seobnrv5_aligned_spin_inspiral && make && make clean) &&
+          python -m nrpy.examples.tovola_neutron_star && (cd project/tovola_neutron_star && make && make clean) &&
+          python -m nrpy.examples.hydro_without_hydro && (cd project/hydro_without_hydro && make && make clean) &&
+          python -m nrpy.examples.manga_bhah_lib && (cd project/bhah_lib && make && make clean)
