@@ -529,10 +529,8 @@ def register_CFunction_CUDA__free_host_gfs() -> None:
     name = "CUDA__free_host_gfs"
     params = "MoL_gridfunctions_struct * gridfuncs"
     body = """
-    cudaFreeHost(gridfuncs->y_n_gfs);
-    cudaCheckErrors(free, "Host-ynFree failed");
-    cudaFreeHost(gridfuncs->diagnostic_output_gfs);
-    cudaCheckErrors(free, "Host-non-ynFree failed");
+    NRPY_FREE_PINNED(gridfuncs->y_n_gfs);
+    NRPY_FREE_PINNED(gridfuncs->diagnostic_output_gfs);
 """
     cfc.register_CFunction(
         includes=includes,
