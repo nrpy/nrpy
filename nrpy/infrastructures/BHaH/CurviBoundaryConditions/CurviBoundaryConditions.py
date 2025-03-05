@@ -562,16 +562,14 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
     wasteful, but only in memory, not in CPU."""
     cfunc_type = "void"
     name = "bcstruct_set_up"
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], bc_struct *restrict bcstruct".replace(
-        "bcstruct", "bcstruct_gpu" if parallelization == "cuda" else "bcstruct"
-    )
+    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], bc_struct *restrict bcstruct"
+    params += ", bc_struct *restrict bcstruct_device" if parallelization in ["cuda"] else ""
 
     if parallelization == "cuda":
         register_CFunction_cpyHosttoDevice_bc_struct()
 
     # Setup host-side struct to populate before copying to device
-    body = "bc_struct *bcstruct = new bc_struct;" if parallelization == "cuda" else ""
-    body += r"""
+    body = r"""
   ////////////////////////////////////////
   // STEP 1: SET UP INNER BOUNDARY STRUCTS
   {
@@ -749,12 +747,8 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
     if parallelization == "cuda":
         body += """
         int streamid = params->grid_idx % NUM_STREAMS;
-        cpyHosttoDevice_bc_struct(bcstruct, bcstruct_gpu, streamid);
+        cpyHosttoDevice_bc_struct(bcstruct, bcstruct_device, streamid);
         cudaDeviceSynchronize();
-        free(bcstruct->inner_bc_array);
-        for (int i = 0; i < NGHOSTS * 3; ++i)
-            free(bcstruct->pure_outer_bc_array[i]);
-        delete bcstruct;
 """
     cfc.register_CFunction(
         includes=includes,
