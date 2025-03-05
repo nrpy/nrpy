@@ -563,7 +563,9 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
     cfunc_type = "void"
     name = "bcstruct_set_up"
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], bc_struct *restrict bcstruct"
-    params += ", bc_struct *restrict bcstruct_device" if parallelization in ["cuda"] else ""
+    params += (
+        ", bc_struct *restrict bcstruct_device" if parallelization in ["cuda"] else ""
+    )
 
     if parallelization == "cuda":
         register_CFunction_cpyHosttoDevice_bc_struct()
