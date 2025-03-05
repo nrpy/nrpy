@@ -14,8 +14,8 @@ import sympy as sp
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
-import nrpy.params as par
 import nrpy.helpers.parallel_codegen as pcg
+import nrpy.params as par
 import nrpy.reference_metric as refmetric
 from nrpy.helpers.expression_utils import get_unique_expression_symbols_as_strings
 
