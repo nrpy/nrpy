@@ -25,6 +25,7 @@ def get_params_access(parallelization: str) -> str:
         params_access = "params->"
     return params_access
 
+
 def get_memory_malloc_function(parallelization: str) -> str:
     """
     Return the appropriate function to allocate memory.
@@ -37,6 +38,7 @@ def get_memory_malloc_function(parallelization: str) -> str:
     else:
         malloc_func = "malloc"
     return malloc_func
+
 
 def get_memory_free_function(parallelization: str) -> str:
     """
