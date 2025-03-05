@@ -258,13 +258,11 @@ def generate_rfmprecompute_defines(
 
 def register_CFunctions_rfm_precompute(
     set_of_CoordSystems: Set[str],
-    parallelization: str = "openmp",
 ) -> None:
     """
     Register C functions for reference metric precomputed lookup arrays.
 
     :param set_of_CoordSystems: Set of coordinate systems to register the C functions.
-    :param parallelization: Parallelization method to use.
 
     Doctest:
     >>> import nrpy.c_function as cfc
@@ -278,7 +276,7 @@ def register_CFunctions_rfm_precompute(
     ...    par.set_parval_from_str("parallelization", parallelization)
     ...    for CoordSystem in supported_CoordSystems:
     ...       cfc.CFunction_dict.clear()
-    ...       rfm_precompute.register_CFunctions_rfm_precompute([CoordSystem], parallelization=parallelization) # doctest: +SKIP
+    ...       rfm_precompute.register_CFunctions_rfm_precompute({CoordSystem}) # doctest: +SKIP
     ...       for rfm_base_function in ["malloc", "defines", "free"]:
     ...          generated_str = cfc.CFunction_dict[f'rfm_precompute_{rfm_base_function}__rfm__{CoordSystem}'].full_function
     ...          validation_desc = f"{rfm_base_function}__{parallelization}__{CoordSystem}".replace(" ", "_")
