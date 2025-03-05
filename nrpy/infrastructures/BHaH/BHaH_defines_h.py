@@ -460,12 +460,12 @@ def output_BHaH_defines_h(
     parallelization = par.parval_from_str("parallelization")
 
     if parallelization != "openmp":
-        file_output_str += f"""
+        file_output_str += rf"""
     #define NRPY_FREE_DEVICE(a) \
     do {{ \
         if (a) {{ \
             {gpu_utils.get_memory_free_function(parallelization)}((void*)(a)); \
-            {gpu_utils.get_check_errors_str(parallelization, gpu_utils.get_memory_free_function(parallelization), opt_msg="Free: #a failed")} \
+            {gpu_utils.get_check_errors_str(parallelization, gpu_utils.get_memory_free_function(parallelization), opt_msg='Free: "#a" failed')} \
             (a) = nullptr; \
         }} \
     }} while (0);
