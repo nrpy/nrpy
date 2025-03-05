@@ -470,6 +470,17 @@ def output_BHaH_defines_h(
         }} \
     }} while (0);
 """
+    if parallelization == "cuda":
+        file_output_str += rf"""
+    #define NRPY_FREE_PINNED(a) \
+    do {{ \
+        if (a) {{ \
+            cudaFreeHost((void*)(a)); \
+            {gpu_utils.get_check_errors_str(parallelization, "cudaFreeHost", opt_msg='Free: "#a" failed')} \
+            (a) = nullptr; \
+        }} \
+    }} while (0);
+"""
     file_output_str += """
 #define NRPY_FREE(a) \
     do {{ \
