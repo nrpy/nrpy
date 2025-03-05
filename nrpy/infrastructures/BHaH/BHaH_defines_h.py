@@ -456,7 +456,16 @@ def output_BHaH_defines_h(
     if supplemental_defines_dict:
         for key in supplemental_defines_dict:
             file_output_str += output_key(key, supplemental_defines_dict[key])
-
+    file_output_str += """
+#define NRPY_FREE(a) \
+    do {{ \
+        if (a) {{ \
+            free((void*)(a)); \
+            (a) = NULL; \
+        }} \
+    }} while (0);
+#endif
+"""
     parallelization = par.parval_from_str("parallelization")
 
     if parallelization != "openmp":
@@ -480,16 +489,41 @@ def output_BHaH_defines_h(
             (a) = nullptr; \
         }} \
     }} while (0);
-"""
-    file_output_str += """
-#define NRPY_FREE(a) \
+    #define NRPY_MALLOC___PtrMember(a, b, sz) \
     do {{ \
         if (a) {{ \
-            free((void*)(a)); \
-            (a) = nullptr; \
+            decltype(a->b) tmp_ptr_##b = nullptr; \
+            {gpu_utils.get_memory_malloc_function(parallelization)}(&tmp_ptr_##b, sz); \
+            {gpu_utils.get_check_errors_str(parallelization, gpu_utils.get_memory_malloc_function(parallelization), opt_msg='Malloc: "#a" failed')} \
+            cudaMemcpy(&a->b, &tmp_ptr_##b, sizeof(void *), cudaMemcpyHostToDevice); \
         }} \
-    }} while (0);
-#endif
+    }} while(0);
+    #define NRPY_FREE___PtrMember(a, b) \
+    do {{ \
+        if (a) {{ \
+            decltype(a->b) tmp_ptr_##b = nullptr; \
+            cudaMemcpy(&tmp_ptr_##b, &a->b, sizeof(void *), cudaMemcpyDeviceToHost); \
+            if(tmp_ptr_##b) {{ \
+                NRPY_FREE_DEVICE(tmp_ptr_##b); \
+                cudaMemcpy(&a->b, &tmp_ptr_##b, sizeof(void *), cudaMemcpyHostToDevice); \
+            }}\
+        }} \
+    }} while(0);
+"""
+    else:
+        file_output_str += rf"""
+    #define NRPY_MALLOC___PtrMember(a, b, sz) \
+    do {{ \
+        if (a) {{ \
+            a->b = {gpu_utils.get_memory_malloc_function(parallelization)}(sz); \
+        }} \
+    }} while(0);
+    #define NRPY_FREE___PtrMember(a, b) \
+    do {{ \
+        if (a) {{ \
+            NRPY_FREE(a->b); \
+        }} \
+    }} while(0);
 """
 
     file_output_str = file_output_str.replace("*restrict", restrict_pointer_type)
