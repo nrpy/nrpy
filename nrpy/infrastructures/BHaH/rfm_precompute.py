@@ -88,10 +88,8 @@ class ReferenceMetricPrecompute:
                 self.BHaH_defines_list += [
                     f"REAL *restrict {freevars_uniq_xx_indep[which_freevar]};"
                 ]
-                self.rfm_struct__malloc += f"rfmstruct->{freevars_uniq_xx_indep[which_freevar]} = (REAL *)malloc(sizeof(REAL)*params->{malloc_size});\n"
-                self.rfm_struct__freemem += (
-                    f"free(rfmstruct->{freevars_uniq_xx_indep[which_freevar]});\n"
-                )
+                self.rfm_struct__malloc += f"NRPY_MALLOC___PtrMember(rfmstruct, {freevars_uniq_xx_indep[which_freevar]}, sizeof(REAL)*params->{malloc_size});"
+                self.rfm_struct__freemem += f"NRPY_FREE___PtrMember(rfmstruct, {freevars_uniq_xx_indep[which_freevar]});"
 
                 output_define_and_readvr = False
                 for dirn in range(3):
@@ -258,87 +256,6 @@ def generate_rfmprecompute_defines(
     return prefunc, body
 
 
-def generate_rfmprecompute_malloc(
-    rfm_precompute: ReferenceMetricPrecompute,
-) -> Tuple[str, str]:
-    """
-    Generate the body and prefunctions for allocating the rfmstruct arrays.
-
-    :param rfm_precompute: ReferenceMetricPrecompute object.
-    :return: Prefunction and body strings.
-    """
-    # Build the kernel body
-    kernel_body = "// Temporary parameters\n"
-    for i in range(3):
-        kernel_body += (
-            f"MAYBE_UNUSED const int Nxx_plus_2NGHOSTS{i} = "
-            f"params->Nxx_plus_2NGHOSTS{i};\n"
-        )
-    kernel_body += rfm_precompute.rfm_struct__malloc
-
-    kernel_name = "rfm_precompute_malloc__allocate"
-    comments = "Kernel to allocate rfmstruct arrays."
-
-    # Arg dict
-    arg_dict_cuda = {"rfmstruct": "rfm_struct *restrict"}
-    arg_dict_host = {
-        "params": "const params_struct *restrict",
-        "rfmstruct": "rfm_struct *restrict",
-    }
-
-    prefunc, body = generate_kernel_and_launch_code(
-        kernel_name,
-        kernel_body,
-        arg_dict_cuda,
-        arg_dict_host,
-        par.parval_from_str("parallelization"),
-        comments=comments,
-        # For "cudaMalloc", only a single thread is needed
-        launch_dict={
-            "blocks_per_grid": ["1"],
-            "threads_per_block": ["1"],
-            "stream": "default",
-        },
-    )
-    return prefunc, body
-
-
-def generate_rfmprecompute_free(
-    rfm_precompute: ReferenceMetricPrecompute,
-) -> Tuple[str, str]:
-    """
-    Generate the body and prefunctions for deallocating the rfmstruct arrays.
-
-    :param rfm_precompute: ReferenceMetricPrecompute object.
-    :return: Prefunction and body strings.
-    """
-    # Build the kernel body
-    kernel_body = "// Temporary parameters\n"
-    kernel_body += rfm_precompute.rfm_struct__freemem
-
-    kernel_name = "rfm_precompute_free__deallocate"
-    comments = "Kernel to deallocate rfmstruct arrays."
-
-    # Arg dict
-    arg_dict_cuda = {"rfmstruct": "rfm_struct *restrict"}
-    arg_dict_host = {"rfmstruct": "rfm_struct *restrict"}
-
-    prefunc, body = generate_kernel_and_launch_code(
-        kernel_name,
-        kernel_body,
-        arg_dict_cuda,
-        arg_dict_host,
-        par.parval_from_str("parallelization"),
-        comments=comments,
-        # For "cudaMalloc", only a single thread is needed
-        launch_dict={
-            "blocks_per_grid": ["1"],
-            "threads_per_block": ["1"],
-        },
-    )
-    return prefunc, body
-
-
 def register_CFunctions_rfm_precompute(
     set_of_CoordSystems: Set[str],
     parallelization: str = "openmp",
@@ -385,17 +302,11 @@ def register_CFunctions_rfm_precompute(
             )
 
         defines_prefunc, defines_body = generate_rfmprecompute_defines(rfm_precompute)
-        malloc_prefunc, malloc_body = generate_rfmprecompute_malloc(rfm_precompute)
-        free_prefunc, free_body = generate_rfmprecompute_free(rfm_precompute)
 
         rfm_precompute.rfm_struct__define = body + defines_body
-        rfm_precompute.rfm_struct__malloc = malloc_body
-        rfm_precompute.rfm_struct__freemem = free_body
 
         prefunc_dict = {
-            "malloc": malloc_prefunc,
             "defines": defines_prefunc,
-            "free": free_prefunc,
         }
         for func in [
             ("malloc", rfm_precompute.rfm_struct__malloc),
