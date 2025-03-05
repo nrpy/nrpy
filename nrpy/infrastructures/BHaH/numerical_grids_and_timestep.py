@@ -7,6 +7,7 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
+import os
 from inspect import currentframe as cfr
 from types import FrameType as FT
 from typing import Dict, List, Set, Union, cast
