@@ -25,6 +25,18 @@ def get_params_access(parallelization: str) -> str:
         params_access = "params->"
     return params_access
 
+def get_memory_malloc_function(parallelization: str) -> str:
+    """
+    Return the appropriate function to allocate memory.
+
+    :param parallelization: The parallelization method to use.
+    :returns: The appropriate function to allocate memory.
+    """
+    if parallelization == "cuda":
+        malloc_func = "cudaMalloc"
+    else:
+        malloc_func = "malloc"
+    return malloc_func
 
 def get_memory_free_function(parallelization: str) -> str:
     """
