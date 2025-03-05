@@ -14,8 +14,7 @@ LOOP_NOOMP(i0_pt, 0, numpts_i0, i1_pt, 0, numpts_i1, i2_pt, 0, numpts_i2) {
   const int i0 = i0_pts[i0_pt], i1 = i1_pts[i1_pt], i2 = i2_pts[i2_pt];
   const int idx3 = IDX3(i0, i1, i2);
   REAL xCart[3];
-  REAL xOrig[3] = {xx[0][i0], xx[1][i1], xx[2][i2]};
-  xx_to_Cart(params, xOrig, xCart);
+  xx_to_Cart(commondata, params, xx, i0, i1, i2, xCart);
 
   {
     // Store the data in the data_point_1d_struct
