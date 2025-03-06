@@ -457,14 +457,27 @@ def output_BHaH_defines_h(
         for key in supplemental_defines_dict:
             file_output_str += output_key(key, supplemental_defines_dict[key])
     file_output_str += """
-#define BHAH_FREE(a) \
-    do {{ \
-        if (a) {{ \
+    #define BHAH_MALLOC__PtrMember(a, b, sz) \
+    do { \
+        if (a) { \
+            a->b = free(sz); \
+        } \
+    } while(0);
+
+    #define BHAH_FREE(a) \
+    do { \
+        if (a) { \
             free((void*)(a)); \
             (a) = NULL; \
-        }} \
-    }} while (0);
-#endif
+        } \
+    } while (0);
+
+    #define BHAH_FREE__PtrMember(a, b) \
+    do { \
+        if (a) { \
+            BHAH_FREE(a->b); \
+        } \
+    } while(0);
 """
     parallelization = par.parval_from_str("parallelization")
 
@@ -489,16 +502,7 @@ def output_BHaH_defines_h(
             (a) = nullptr; \
         }} \
     }} while (0);
-    #define BHAH_MALLOC___PtrMember(a, b, sz) \
-    do {{ \
-        if (a) {{ \
-            decltype(a->b) tmp_ptr_##b = nullptr; \
-            {gpu_utils.get_memory_malloc_function(parallelization)}(&tmp_ptr_##b, sz); \
-            {gpu_utils.get_check_errors_str(parallelization, gpu_utils.get_memory_malloc_function(parallelization), opt_msg='Malloc: "#a" failed')} \
-            cudaMemcpy(&a->b, &tmp_ptr_##b, sizeof(void *), cudaMemcpyHostToDevice); \
-        }} \
-    }} while(0);
-    #define BHAH_FREE___PtrMember(a, b) \
+    #define BHAH_FREE_DEVICE__PtrMember(a, b) \
     do {{ \
         if (a) {{ \
             decltype(a->b) tmp_ptr_##b = nullptr; \
@@ -509,22 +513,17 @@ def output_BHaH_defines_h(
             }}\
         }} \
     }} while(0);
-"""
-    else:
-        file_output_str += rf"""
-    #define BHAH_MALLOC___PtrMember(a, b, sz) \
+    #define BHAH_MALLOC__PtrMember(a, b, sz) \
     do {{ \
         if (a) {{ \
-            a->b = {gpu_utils.get_memory_malloc_function(parallelization)}(sz); \
-        }} \
-    }} while(0);
-    #define BHAH_FREE___PtrMember(a, b) \
-    do {{ \
-        if (a) {{ \
-            BHAH_FREE(a->b); \
+            decltype(a->b) tmp_ptr_##b = nullptr; \
+            {gpu_utils.get_memory_malloc_function(parallelization)}(&tmp_ptr_##b, sz); \
+            {gpu_utils.get_check_errors_str(parallelization, gpu_utils.get_memory_malloc_function(parallelization), opt_msg='Malloc: "#a" failed')} \
+            cudaMemcpy(&a->b, &tmp_ptr_##b, sizeof(void *), cudaMemcpyHostToDevice); \
         }} \
     }} while(0);
 """
+    file_output_str += r"#endif"
 
     file_output_str = file_output_str.replace("*restrict", restrict_pointer_type)
 
