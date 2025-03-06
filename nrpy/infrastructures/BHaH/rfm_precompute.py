@@ -88,8 +88,22 @@ class ReferenceMetricPrecompute:
                 self.BHaH_defines_list += [
                     f"REAL *restrict {freevars_uniq_xx_indep[which_freevar]};"
                 ]
-                self.rfm_struct__malloc += f"BHAH_MALLOC___PtrMember(rfmstruct, {freevars_uniq_xx_indep[which_freevar]}, sizeof(REAL)*params->{malloc_size});"
-                self.rfm_struct__freemem += f"BHAH_FREE___PtrMember(rfmstruct, {freevars_uniq_xx_indep[which_freevar]});"
+                self.rfm_struct__malloc += f"BHAH_MALLOC__PtrMember(rfmstruct, {freevars_uniq_xx_indep[which_freevar]}, sizeof(REAL)*params->{malloc_size});".replace(
+                    "BHAH_MALLOC__PtrMember",
+                    (
+                        "BHAH_MALLOC_DEVICE__PtrMember"
+                        if parallelization in ["cuda"]
+                        else "BHAH_MALLOC__PtrMember"
+                    ),
+                )
+                self.rfm_struct__freemem += f"BHAH_FREE__PtrMember(rfmstruct, {freevars_uniq_xx_indep[which_freevar]});".replace(
+                    "BHAH_FREE__PtrMember",
+                    (
+                        "BHAH_FREE_DEVICE__PtrMember"
+                        if parallelization in ["cuda"]
+                        else "BHAH_FREE__PtrMember"
+                    ),
+                )
 
                 output_define_and_readvr = False
                 for dirn in range(3):
