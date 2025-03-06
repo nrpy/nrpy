@@ -68,17 +68,10 @@ def register_CFunction_MoL_malloc(
         )
         if num_gfs == "NUM_AUXEVOL_GFS":
             body += "  if(NUM_AUXEVOL_GFS > 0) "
-        if parallelization == "cuda":
-            body += (
-                f"cudaMalloc(&gridfuncs->{gridfunctions}, sizeof(REAL) * {num_gfs} * "
-                "Nxx_plus_2NGHOSTS_tot);\n"
-                'cudaCheckErrors(malloc, "Malloc failed");\n'
-            )
-        else:
-            body += (
-                f"gridfuncs->{gridfunctions} = (REAL *restrict)malloc(sizeof(REAL) * {num_gfs} * "
-                "Nxx_plus_2NGHOSTS_tot);\n"
-            )
+        body += f"BHAH_MALLOC(&gridfuncs->{gridfunctions}, sizeof(REAL) * {num_gfs} * Nxx_plus_2NGHOSTS_tot);\n".replace(
+            "BHAH_MALLOC",
+            "BHAH_MALLOC_DEVICE" if parallelization in ["cuda"] else "BHAH_MALLOC",
+        )
 
     body += f"\ngridfuncs->diagnostic_output_gfs  = gridfuncs->{diagnostic_gridfunctions_point_to};\n"
     body += f"gridfuncs->diagnostic_output_gfs2 = gridfuncs->{diagnostic_gridfunctions2_point_to};\n"
