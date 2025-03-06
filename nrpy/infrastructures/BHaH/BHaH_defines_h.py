@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import nrpy.grid as gri
-import nrpy.helpers.gpu.utilities as gpu_utils
+import nrpy.helpers.parallelization.utilities as gpu_utils
 import nrpy.params as par
 from nrpy.helpers.generic import clang_format
 from nrpy.infrastructures.BHaH import griddata_commondata

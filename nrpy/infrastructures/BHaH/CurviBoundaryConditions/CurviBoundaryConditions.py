@@ -20,13 +20,15 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.finite_difference as fin  # NRPy+: Finite-difference module
 import nrpy.grid as gri  # NRPy+: Functions having to do with numerical grids
-import nrpy.helpers.gpu.gpu_kernel as gputils
+import nrpy.helpers.parallelization.gpu_kernel as gputils
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 import nrpy.params as par  # NRPy+: Parameter interface
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 from nrpy.helpers.expression_utils import get_unique_expression_symbols_as_strings
-from nrpy.helpers.gpu.cuda_utilities import register_CFunction_cpyHosttoDevice_bc_struct
-from nrpy.helpers.gpu.utilities import generate_kernel_and_launch_code
+from nrpy.helpers.parallelization.cuda_utilities import (
+    register_CFunction_cpyHosttoDevice_bc_struct,
+)
+from nrpy.helpers.parallelization.utilities import generate_kernel_and_launch_code
 from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
 from nrpy.validate_expressions.validate_expressions import check_zero
 

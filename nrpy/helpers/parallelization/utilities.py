@@ -6,8 +6,8 @@ Authors: Samuel D. Tootle; sdtootle **at** gmail **dot** com
 
 from typing import Any, Dict, Optional, Tuple
 
-import nrpy.helpers.gpu.cuda_utilities as cuda_utils
-from nrpy.helpers.gpu.gpu_kernel import GPU_Kernel
+import nrpy.helpers.parallelization.cuda_utilities as cuda_utils
+from nrpy.helpers.parallelization.gpu_kernel import GPU_Kernel
 
 
 def get_params_access(parallelization: str) -> str:

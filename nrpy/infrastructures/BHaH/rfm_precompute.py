@@ -16,7 +16,7 @@ import nrpy.params as par
 import nrpy.reference_metric as refmetric
 from nrpy.helpers.expression_utils import get_unique_expression_symbols_as_strings
 from nrpy.helpers.generic import superfast_uniq
-from nrpy.helpers.gpu.utilities import generate_kernel_and_launch_code
+from nrpy.helpers.parallelization.utilities import generate_kernel_and_launch_code
 from nrpy.infrastructures.BHaH.BHaH_defines_h import register_BHaH_defines
 
 
