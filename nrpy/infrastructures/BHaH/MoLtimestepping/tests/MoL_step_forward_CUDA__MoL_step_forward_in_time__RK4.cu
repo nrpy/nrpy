@@ -17,10 +17,10 @@ __global__ static void rk_substep_1_gpu(const size_t streamid, REAL *restrict k_
   LOOP_ALL_GFS_GPS(i) {
     const REAL k_odd_gfsL = k_odd_gfs[i];
     const REAL y_n_gfsL = y_n_gfs[i];
-    static const double dblRK_Rational_1_2 = 1.0 / 2.0;
+    static constexpr double dblRK_Rational_1_2 = 1.0 / 2.0;
     const REAL_CUDA_ARRAY RK_Rational_1_2 = ConstCUDA(dblRK_Rational_1_2);
 
-    static const double dblRK_Rational_1_6 = 1.0 / 6.0;
+    static constexpr double dblRK_Rational_1_6 = 1.0 / 6.0;
     const REAL_CUDA_ARRAY RK_Rational_1_6 = ConstCUDA(dblRK_Rational_1_6);
 
     const REAL_CUDA_ARRAY __rk_exp_0 = MulCUDA(RK_Rational_1_6, MulCUDA(dt, k_odd_gfsL));
@@ -61,10 +61,10 @@ __global__ static void rk_substep_2_gpu(const size_t streamid, REAL *restrict k_
     const REAL k_even_gfsL = k_even_gfs[i];
     const REAL y_nplus1_running_total_gfsL = y_nplus1_running_total_gfs[i];
     const REAL y_n_gfsL = y_n_gfs[i];
-    static const double dblRK_Rational_1_2 = 1.0 / 2.0;
+    static constexpr double dblRK_Rational_1_2 = 1.0 / 2.0;
     const REAL_CUDA_ARRAY RK_Rational_1_2 = ConstCUDA(dblRK_Rational_1_2);
 
-    static const double dblRK_Rational_1_3 = 1.0 / 3.0;
+    static constexpr double dblRK_Rational_1_3 = 1.0 / 3.0;
     const REAL_CUDA_ARRAY RK_Rational_1_3 = ConstCUDA(dblRK_Rational_1_3);
 
     const REAL_CUDA_ARRAY __rk_exp_0 = FusedMulAddCUDA(RK_Rational_1_3, MulCUDA(dt, k_even_gfsL), y_nplus1_running_total_gfsL);
@@ -105,7 +105,7 @@ __global__ static void rk_substep_3_gpu(const size_t streamid, REAL *restrict k_
     const REAL k_odd_gfsL = k_odd_gfs[i];
     const REAL y_nplus1_running_total_gfsL = y_nplus1_running_total_gfs[i];
     const REAL y_n_gfsL = y_n_gfs[i];
-    static const double dblRK_Rational_1_3 = 1.0 / 3.0;
+    static constexpr double dblRK_Rational_1_3 = 1.0 / 3.0;
     const REAL_CUDA_ARRAY RK_Rational_1_3 = ConstCUDA(dblRK_Rational_1_3);
 
     const REAL_CUDA_ARRAY __rk_exp_0 = FusedMulAddCUDA(RK_Rational_1_3, MulCUDA(dt, k_odd_gfsL), y_nplus1_running_total_gfsL);
@@ -146,7 +146,7 @@ __global__ static void rk_substep_4_gpu(const size_t streamid, REAL *restrict k_
     const REAL k_even_gfsL = k_even_gfs[i];
     const REAL y_n_gfsL = y_n_gfs[i];
     const REAL y_nplus1_running_total_gfsL = y_nplus1_running_total_gfs[i];
-    static const double dblRK_Rational_1_6 = 1.0 / 6.0;
+    static constexpr double dblRK_Rational_1_6 = 1.0 / 6.0;
     const REAL_CUDA_ARRAY RK_Rational_1_6 = ConstCUDA(dblRK_Rational_1_6);
 
     const REAL_CUDA_ARRAY __rk_exp_0 = AddCUDA(y_n_gfsL, FusedMulAddCUDA(RK_Rational_1_6, MulCUDA(dt, k_even_gfsL), y_nplus1_running_total_gfsL));
