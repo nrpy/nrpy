@@ -457,13 +457,15 @@ def output_BHaH_defines_h(
         for key in supplemental_defines_dict:
             file_output_str += output_key(key, supplemental_defines_dict[key])
     file_output_str += """
-    #ifndef BHAH_TYPEOF \
+    #ifndef BHAH_TYPEOF
     #if __cplusplus >= 2000707L
-    #define BHAH_TYPEOF(a) decltype(a) \
-    #elif defined(__GNUC__) || defined(__clang__) || defined(__NVCC__) \
-    #define BHAH_TYPEOF(a) __typeof__(a) \
-    #else \
+    #define BHAH_TYPEOF(a) decltype(a)
+    #elif defined(__GNUC__) || defined(__clang__) || defined(__NVCC__)
+    #define BHAH_TYPEOF(a) __typeof__(a)
+    #else
     #define BHAH_TYPEOF(a)
+    #endif // END check for GCC, Clang, or C++
+    #endif // END BHAH_TYPEOF
 
     #define BHAH_MALLOC(a, b, sz) \
     do { \
