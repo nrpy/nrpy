@@ -406,8 +406,8 @@ def register_CFunction_CUDA__free_host_gfs() -> None:
      */
     __host__ void CUDA__free_host_gfs(MoL_gridfunctions_struct *gridfuncs) {
     <BLANKLINE>
-      NRPY_FREE_PINNED(gridfuncs->y_n_gfs);
-      NRPY_FREE_PINNED(gridfuncs->diagnostic_output_gfs);
+      BHAH_FREE_PINNED(gridfuncs->y_n_gfs);
+      BHAH_FREE_PINNED(gridfuncs->diagnostic_output_gfs);
     } // END FUNCTION CUDA__free_host_gfs
     <BLANKLINE>
     """
@@ -417,8 +417,8 @@ def register_CFunction_CUDA__free_host_gfs() -> None:
     name = "CUDA__free_host_gfs"
     params = "MoL_gridfunctions_struct * gridfuncs"
     body = """
-    NRPY_FREE_PINNED(gridfuncs->y_n_gfs);
-    NRPY_FREE_PINNED(gridfuncs->diagnostic_output_gfs);
+    BHAH_FREE_PINNED(gridfuncs->y_n_gfs);
+    BHAH_FREE_PINNED(gridfuncs->diagnostic_output_gfs);
 """
     cfc.register_CFunction(
         includes=includes,

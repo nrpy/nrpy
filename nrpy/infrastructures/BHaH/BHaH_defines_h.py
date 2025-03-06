@@ -457,7 +457,7 @@ def output_BHaH_defines_h(
         for key in supplemental_defines_dict:
             file_output_str += output_key(key, supplemental_defines_dict[key])
     file_output_str += """
-#define NRPY_FREE(a) \
+#define BHAH_FREE(a) \
     do {{ \
         if (a) {{ \
             free((void*)(a)); \
@@ -470,7 +470,7 @@ def output_BHaH_defines_h(
 
     if parallelization != "openmp":
         file_output_str += rf"""
-    #define NRPY_FREE_DEVICE(a) \
+    #define BHAH_FREE_DEVICE(a) \
     do {{ \
         if (a) {{ \
             {gpu_utils.get_memory_free_function(parallelization)}((void*)(a)); \
@@ -481,7 +481,7 @@ def output_BHaH_defines_h(
 """
     if parallelization == "cuda":
         file_output_str += rf"""
-    #define NRPY_FREE_PINNED(a) \
+    #define BHAH_FREE_PINNED(a) \
     do {{ \
         if (a) {{ \
             cudaFreeHost((void*)(a)); \
@@ -489,7 +489,7 @@ def output_BHaH_defines_h(
             (a) = nullptr; \
         }} \
     }} while (0);
-    #define NRPY_MALLOC___PtrMember(a, b, sz) \
+    #define BHAH_MALLOC___PtrMember(a, b, sz) \
     do {{ \
         if (a) {{ \
             decltype(a->b) tmp_ptr_##b = nullptr; \
@@ -498,13 +498,13 @@ def output_BHaH_defines_h(
             cudaMemcpy(&a->b, &tmp_ptr_##b, sizeof(void *), cudaMemcpyHostToDevice); \
         }} \
     }} while(0);
-    #define NRPY_FREE___PtrMember(a, b) \
+    #define BHAH_FREE___PtrMember(a, b) \
     do {{ \
         if (a) {{ \
             decltype(a->b) tmp_ptr_##b = nullptr; \
             cudaMemcpy(&tmp_ptr_##b, &a->b, sizeof(void *), cudaMemcpyDeviceToHost); \
             if(tmp_ptr_##b) {{ \
-                NRPY_FREE_DEVICE(tmp_ptr_##b); \
+                BHAH_FREE_DEVICE(tmp_ptr_##b); \
                 cudaMemcpy(&a->b, &tmp_ptr_##b, sizeof(void *), cudaMemcpyHostToDevice); \
             }}\
         }} \
@@ -512,16 +512,16 @@ def output_BHaH_defines_h(
 """
     else:
         file_output_str += rf"""
-    #define NRPY_MALLOC___PtrMember(a, b, sz) \
+    #define BHAH_MALLOC___PtrMember(a, b, sz) \
     do {{ \
         if (a) {{ \
             a->b = {gpu_utils.get_memory_malloc_function(parallelization)}(sz); \
         }} \
     }} while(0);
-    #define NRPY_FREE___PtrMember(a, b) \
+    #define BHAH_FREE___PtrMember(a, b) \
     do {{ \
         if (a) {{ \
-            NRPY_FREE(a->b); \
+            BHAH_FREE(a->b); \
         }} \
     }} while(0);
 """

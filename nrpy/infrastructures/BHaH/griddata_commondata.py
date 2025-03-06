@@ -111,12 +111,12 @@ except perhaps non_y_n_gfs (e.g., after a regrid, in which non_y_n_gfs are freed
 """
     if enable_rfm_precompute:
         body += "  rfm_precompute_free(commondata, &griddata[grid].params, griddata[grid].rfmstruct);\n"
-        body += "  NRPY_FREE_DEVICE(griddata[grid].rfmstruct);\n"
+        body += "  BHAH_FREE_DEVICE(griddata[grid].rfmstruct);\n"
     if enable_CurviBCs:
         body += r"""
-  NRPY_FREE_DEVICE(griddata[grid].bcstruct.inner_bc_array);
+  BHAH_FREE_DEVICE(griddata[grid].bcstruct.inner_bc_array);
   for(int ng=0;ng<NGHOSTS*3;ng++) {
-      NRPY_FREE_DEVICE(griddata[grid].bcstruct.pure_outer_bc_array[ng]);
+      BHAH_FREE_DEVICE(griddata[grid].bcstruct.pure_outer_bc_array[ng]);
 }
 """
     body += r"""
@@ -125,12 +125,12 @@ except perhaps non_y_n_gfs (e.g., after a regrid, in which non_y_n_gfs are freed
     MoL_free_memory_non_y_n_gfs(&griddata[grid].gridfuncs);
   }
   for(int i=0;i<3;i++) {
-    NRPY_FREE_DEVICE(griddata[grid].xx[i]);
+    BHAH_FREE_DEVICE(griddata[grid].xx[i]);
   }
 } // END for(int grid=0;grid<commondata->NUMGRIDS;grid++)
 """
     body += r"""if(free_non_y_n_gfs_and_core_griddata_pointers) {
-        NRPY_FREE(griddata);
+        BHAH_FREE(griddata);
     }"""
     cfc.register_CFunction(
         includes=["BHaH_defines.h", "BHaH_function_prototypes.h"],
@@ -169,9 +169,9 @@ except perhaps non_y_n_gfs (e.g., after a regrid, in which non_y_n_gfs are freed
     if enable_bhahaha and parallelization == "openmp":
         body += r"""  // Free BHaHAHA memory.
   for (int which_horizon = 0; which_horizon < commondata->bah_max_num_horizons; which_horizon++) {
-    NRPY_FREE(commondata->bhahaha_params_and_data[which_horizon].prev_horizon_m1);
-    NRPY_FREE(commondata->bhahaha_params_and_data[which_horizon].prev_horizon_m2);
-    NRPY_FREE(commondata->bhahaha_params_and_data[which_horizon].prev_horizon_m3);
+    BHAH_FREE(commondata->bhahaha_params_and_data[which_horizon].prev_horizon_m1);
+    BHAH_FREE(commondata->bhahaha_params_and_data[which_horizon].prev_horizon_m2);
+    BHAH_FREE(commondata->bhahaha_params_and_data[which_horizon].prev_horizon_m3);
   }
 """
     body += r"""  // Free memory allocated inside griddata[].
@@ -179,12 +179,12 @@ except perhaps non_y_n_gfs (e.g., after a regrid, in which non_y_n_gfs are freed
 """
     if enable_rfm_precompute:
         body += "  rfm_precompute_free(commondata, &griddata[grid].params, griddata[grid].rfmstruct);\n"
-        body += "  NRPY_FREE(griddata[grid].rfmstruct);\n"
+        body += "  BHAH_FREE(griddata[grid].rfmstruct);\n"
     if enable_CurviBCs:
         body += r"""
-  NRPY_FREE(griddata[grid].bcstruct.inner_bc_array);
+  BHAH_FREE(griddata[grid].bcstruct.inner_bc_array);
   for(int ng=0;ng<NGHOSTS*3;ng++) {
-      NRPY_FREE(griddata[grid].bcstruct.pure_outer_bc_array[ng]);
+      BHAH_FREE(griddata[grid].bcstruct.pure_outer_bc_array[ng]);
 }
 """
     if parallelization == "cuda":
@@ -198,12 +198,12 @@ except perhaps non_y_n_gfs (e.g., after a regrid, in which non_y_n_gfs are freed
   }"""
     body += """
   for(int i=0;i<3;i++) {
-    NRPY_FREE(griddata[grid].xx[i]);
+    BHAH_FREE(griddata[grid].xx[i]);
   }
 } // END for(int grid=0;grid<commondata->NUMGRIDS;grid++)
 """
     body += r"""if(free_non_y_n_gfs_and_core_griddata_pointers) {
-        NRPY_FREE(griddata);
+        BHAH_FREE(griddata);
     }"""
     cfc.register_CFunction(
         includes=["BHaH_defines.h", "BHaH_function_prototypes.h"],

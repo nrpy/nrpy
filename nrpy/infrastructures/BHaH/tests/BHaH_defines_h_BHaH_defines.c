@@ -207,7 +207,7 @@ typedef struct __griddata__ {
   params_struct params; // <- BHaH parameters, generated from NRPy+'s CodeParameters
 } griddata_struct;
 
-#define NRPY_FREE(a)                                                                                                                                 \
+#define BHAH_FREE(a)                                                                                                                                 \
   do {                                                                                                                                               \
     {                                                                                                                                                \
       if (a) {                                                                                                                                       \
@@ -220,15 +220,15 @@ typedef struct __griddata__ {
   } while (0);
 #endif
 
-#define NRPY_MALLOC___PtrMember(a, b, sz)                                                                                                            \
+#define BHAH_MALLOC___PtrMember(a, b, sz)                                                                                                            \
   do {                                                                                                                                               \
     if (a) {                                                                                                                                         \
       a->b = malloc(sz);                                                                                                                             \
     }                                                                                                                                                \
   } while (0);
-#define NRPY_FREE___PtrMember(a, b)                                                                                                                  \
+#define BHAH_FREE___PtrMember(a, b)                                                                                                                  \
   do {                                                                                                                                               \
     if (a) {                                                                                                                                         \
-      NRPY_FREE(a->b);                                                                                                                               \
+      BHAH_FREE(a->b);                                                                                                                               \
     }                                                                                                                                                \
   } while (0);

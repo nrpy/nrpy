@@ -88,8 +88,8 @@ class ReferenceMetricPrecompute:
                 self.BHaH_defines_list += [
                     f"REAL *restrict {freevars_uniq_xx_indep[which_freevar]};"
                 ]
-                self.rfm_struct__malloc += f"NRPY_MALLOC___PtrMember(rfmstruct, {freevars_uniq_xx_indep[which_freevar]}, sizeof(REAL)*params->{malloc_size});"
-                self.rfm_struct__freemem += f"NRPY_FREE___PtrMember(rfmstruct, {freevars_uniq_xx_indep[which_freevar]});"
+                self.rfm_struct__malloc += f"BHAH_MALLOC___PtrMember(rfmstruct, {freevars_uniq_xx_indep[which_freevar]}, sizeof(REAL)*params->{malloc_size});"
+                self.rfm_struct__freemem += f"BHAH_FREE___PtrMember(rfmstruct, {freevars_uniq_xx_indep[which_freevar]});"
 
                 output_define_and_readvr = False
                 for dirn in range(3):
