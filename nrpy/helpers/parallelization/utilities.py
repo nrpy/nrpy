@@ -182,9 +182,7 @@ def get_loop_parameters(
         loop_params += "\n"
 
         for i, coord in zip(range(dim), ["x", "y", "z"]):
-            loop_params += (
-                f"MAYBE_UNUSED const int stride{i}  = blockDim.{coord} * gridDim.{coord};\n"
-            )
+            loop_params += f"MAYBE_UNUSED const int stride{i}  = blockDim.{coord} * gridDim.{coord};\n"
         loop_params += "\n"
         loop_params = loop_params.replace("SIMD", "CUDA")
 

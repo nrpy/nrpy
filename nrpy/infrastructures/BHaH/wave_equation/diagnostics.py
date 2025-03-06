@@ -131,7 +131,7 @@ def register_CFunction_diagnostics(
 
       LOOP_OMP("omp parallel for", i0, NGHOSTS, Nxx0 + NGHOSTS, i1, NGHOSTS, Nxx1 + NGHOSTS, i2, NGHOSTS, Nxx2 + NGHOSTS) {
         REAL xCart[3];
-        REAL xOrig[3] = {{xx[0][i0], xx[1][i1], xx[2][i2]}};
+        REAL xOrig[3] = {xx[0][i0], xx[1][i1], xx[2][i2]};
         xx_to_Cart(params, xOrig, xCart);
         REAL *restrict uexact = &diagnostic_output_gfs[IDX4(UUEXACTGF, i0,i1,i2)];
         REAL *restrict vexact = &diagnostic_output_gfs[IDX4(VVEXACTGF, i0,i1,i2)];
