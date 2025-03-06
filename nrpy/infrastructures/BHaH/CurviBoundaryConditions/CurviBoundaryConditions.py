@@ -31,6 +31,7 @@ from nrpy.helpers.parallelization.cuda_utilities import (
 from nrpy.helpers.parallelization.utilities import generate_kernel_and_launch_code
 from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
 from nrpy.validate_expressions.validate_expressions import check_zero
+import nrpy.helpers.parallelization.utilities as gpu_utils
 
 _ = par.CodeParameter(
     "char[50]", __name__, "outer_bc_type", "radiation", commondata=True
@@ -803,17 +804,9 @@ boundary points ("inner maps to outer").
 
     # Specify kernel body
     kernel_body = "// Needed for IDX macros\n"
-    for i in range(3):
-        kernel_body += f"MAYBE_UNUSED int const Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n"
+    kernel_body += gpu_utils.get_loop_parameters(parallelization)
     kernel_body += (
         """
-// Thread indices
-// Global data index - expecting a 1D dataset
-const int tid0 = threadIdx.x + blockIdx.x*blockDim.x;
-
-// Thread strides
-const int stride0 = blockDim.x * gridDim.x;
-
 for(int which_gf=0;which_gf<NUM_EVOL_GFS;which_gf++) {
 for (int pt = tid0; pt < num_inner_boundary_points; pt+=stride0) {"""
         if parallelization == "cuda"
@@ -902,22 +895,10 @@ def generate_prefunc__apply_bcs_outerextrap_and_inner_only() -> str:
     parallelization = par.parval_from_str("parallelization")
 
     # Specify kernel body
-    kernel_body = ""
-    for i in range(3):
-        kernel_body += f"MAYBE_UNUSED int const Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n".replace(
-            "params->",
-            "d_params[streamid]." if parallelization == "cuda" else "params->",
-        )
+    kernel_body = f"{gpu_utils.get_loop_parameters(parallelization)}\n"
 
     kernel_body += (
         """
-// Thread indices
-// Global data index - expecting a 1D dataset
-const int tid0 = threadIdx.x + blockIdx.x*blockDim.x;
-
-// Thread strides
-const int stride0 = blockDim.x * gridDim.x;
-
 for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {"""
         if parallelization == "cuda"
         else """
@@ -1221,9 +1202,7 @@ const REAL *restrict gf, const int i0,const int i1,const int i2, const int offse
     body = ""
     cfunc_decorators = "__device__" if parallelization == "cuda" else ""
 
-    for i in range(3):
-        body += f"MAYBE_UNUSED int const Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n"
-    body += f"REAL const invdxx{dirn} = params->invdxx{dirn};\n"
+    body = f"{gpu_utils.get_loop_parameters(parallelization)}\n"
     body += "switch(offset) {\n"
 
     tmp_list: List[int] = []
@@ -1352,14 +1331,8 @@ const REAL partial_x0_partial_r, const REAL partial_x1_partial_r, const REAL par
   // FD1_stencil_radius = radiation_BC_fd_order/2 = {FD1_stencil_radius}
   const int FD1_stencil_radius = {FD1_stencil_radius};
 """
-    for i in range(3):
-        body += (
-            f"int const Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n".replace(
-                "params->",
-                "d_params[streamid]." if parallelization == "cuda" else "params->",
-            )
-        )
-    body += """const int ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
+    body += f"{gpu_utils.get_loop_parameters(parallelization)}\n"
+    body += """const int ntot = Nxx_plus_2NGHOSTS0_PADDED * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
 
   ///////////////////////////////////////////////////////////
   // Next we'll compute partial_xi f, using a maximally-centered stencil.
@@ -1465,9 +1438,9 @@ def setup_Cfunction_radiation_bcs(
     const short FACEi0,const short FACEi1,const short FACEi2"""
     )
 
+    param_access = gpu_utils.get_params_access(parallelization)
     body = ""
-    for i in range(3):
-        body += f"int const Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n"
+    body += f"{gpu_utils.get_loop_parameters(parallelization)}\n"
     body += r"""// Nearest "interior" neighbor of this gridpoint, based on current face
 const int dest_i0_int=dest_i0+1*FACEi0, dest_i1_int=dest_i1+1*FACEi1, dest_i2_int=dest_i2+1*FACEi2;
 REAL r, partial_x0_partial_r,partial_x1_partial_r,partial_x2_partial_r;
@@ -1509,7 +1482,7 @@ return partial_t_f_outgoing_wave + k * rinv*rinv*rinv;
         includes=includes,
         prefunc=prefunc.replace(
             "params->",
-            "d_params[streamid]." if parallelization == "cuda" else "params->",
+            param_access,
         ),
         desc=desc,
         cfunc_type=cfunc_type,
@@ -1518,7 +1491,7 @@ return partial_t_f_outgoing_wave + k * rinv*rinv*rinv;
         include_CodeParameters_h=False,
         body=body.replace(
             "params->",
-            "d_params[streamid]." if parallelization == "cuda" else "params->",
+            param_access,
         ),
         cfunc_decorators=cfunc_decorators,
     )
@@ -1551,23 +1524,10 @@ def setup_Cfunction_apply_bcs_pure_only() -> Tuple[str, str]:
     parallelization = par.parval_from_str("parallelization")
 
     # Specify compute kernel body
-    kernel_body = ""
-    for i in range(3):
-        kernel_body += (
-            f"int const Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n".replace(
-                "params->",
-                "d_params[streamid]." if parallelization == "cuda" else "params->",
-            )
-        )
+    kernel_body = f"{gpu_utils.get_loop_parameters(parallelization)}\n"
 
     if parallelization == "cuda":
         kernel_body += """
-// Thread indices
-// Global data index - expecting a 1D dataset
-const int tid0 = threadIdx.x + blockIdx.x*blockDim.x;
-
-// Thread strides
-const int stride0 = blockDim.x * gridDim.x;
 for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {
 """
     else:
