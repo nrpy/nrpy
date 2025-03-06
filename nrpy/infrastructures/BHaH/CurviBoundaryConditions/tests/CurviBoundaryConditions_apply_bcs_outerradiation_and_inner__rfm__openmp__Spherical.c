@@ -5,10 +5,14 @@
  */
 static inline REAL FD1_arbitrary_upwind_x0_dirn(const params_struct *restrict params, const REAL *restrict gf, const int i0, const int i1,
                                                 const int i2, const int offset) {
-  MAYBE_UNUSED int const Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
-  MAYBE_UNUSED int const Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
-  MAYBE_UNUSED int const Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
-  REAL const invdxx0 = params->invdxx0;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
+
+  MAYBE_UNUSED const REAL invdxx0 = params->invdxx0;
+  MAYBE_UNUSED const REAL invdxx1 = params->invdxx1;
+  MAYBE_UNUSED const REAL invdxx2 = params->invdxx2;
+
   switch (offset) {
   case 0: {
     static const REAL Rational_decl__1_2 = 1.0 / 2.0;
@@ -54,9 +58,14 @@ static inline REAL compute_partial_r_f(const params_struct *restrict params, REA
 
   // FD1_stencil_radius = radiation_BC_fd_order/2 = 1
   const int FD1_stencil_radius = 1;
-  int const Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
-  int const Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
-  int const Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
+
+  MAYBE_UNUSED const REAL invdxx0 = params->invdxx0;
+  MAYBE_UNUSED const REAL invdxx1 = params->invdxx1;
+  MAYBE_UNUSED const REAL invdxx2 = params->invdxx2;
+
   const int ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
 
   ///////////////////////////////////////////////////////////
@@ -92,9 +101,14 @@ static inline REAL compute_partial_r_f(const params_struct *restrict params, REA
 static inline REAL radiation_bcs(const params_struct *restrict params, REAL *restrict xx[3], const REAL *restrict gfs, REAL *restrict gfs_rhss,
                                  const int which_gf, const REAL gf_wavespeed, const REAL gf_f_infinity, const int dest_i0, const int dest_i1,
                                  const int dest_i2, const short FACEi0, const short FACEi1, const short FACEi2) {
-  int const Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
-  int const Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
-  int const Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
+
+  MAYBE_UNUSED const REAL invdxx0 = params->invdxx0;
+  MAYBE_UNUSED const REAL invdxx1 = params->invdxx1;
+  MAYBE_UNUSED const REAL invdxx2 = params->invdxx2;
+
   // Nearest "interior" neighbor of this gridpoint, based on current face
   const int dest_i0_int = dest_i0 + 1 * FACEi0, dest_i1_int = dest_i1 + 1 * FACEi1, dest_i2_int = dest_i2 + 1 * FACEi2;
   REAL r, partial_x0_partial_r, partial_x1_partial_r, partial_x2_partial_r;
@@ -134,9 +148,13 @@ static void apply_bcs_pure_only_host(const params_struct *restrict params, const
                                      const int dirn, const outerpt_bc_struct *restrict pure_outer_bc_array, REAL *restrict gfs,
                                      REAL *restrict rhs_gfs, REAL *restrict x0, REAL *restrict x1, REAL *restrict x2, const REAL *custom_wavespeed,
                                      const REAL *custom_f_infinity) {
-  int const Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
-  int const Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
-  int const Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
+
+  MAYBE_UNUSED const REAL invdxx0 = params->invdxx0;
+  MAYBE_UNUSED const REAL invdxx1 = params->invdxx1;
+  MAYBE_UNUSED const REAL invdxx2 = params->invdxx2;
 
 #pragma omp for // threads have been spawned; here we distribute across them
   for (int idx2d = 0; idx2d < num_pure_outer_boundary_points; idx2d++) {

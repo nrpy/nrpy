@@ -21,6 +21,7 @@ import nrpy.c_function as cfc
 import nrpy.finite_difference as fin  # NRPy+: Finite-difference module
 import nrpy.grid as gri  # NRPy+: Functions having to do with numerical grids
 import nrpy.helpers.parallelization.gpu_kernel as gputils
+import nrpy.helpers.parallelization.utilities as gpu_utils
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 import nrpy.params as par  # NRPy+: Parameter interface
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
@@ -31,7 +32,6 @@ from nrpy.helpers.parallelization.cuda_utilities import (
 from nrpy.helpers.parallelization.utilities import generate_kernel_and_launch_code
 from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
 from nrpy.validate_expressions.validate_expressions import check_zero
-import nrpy.helpers.parallelization.utilities as gpu_utils
 
 _ = par.CodeParameter(
     "char[50]", __name__, "outer_bc_type", "radiation", commondata=True
@@ -781,7 +781,7 @@ def register_CFunction_apply_bcs_inner_only() -> None:
     >>> import nrpy.params as par
     >>> supported_Parallelizations = ["openmp", "cuda"]
     >>> for parallelization in supported_Parallelizations:
-    ...    parallelization = par.parval_from_str("parallelization")
+    ...    par.set_parval_from_str("parallelization", parallelization)
     ...    cfc.CFunction_dict.clear()
     ...    register_CFunction_apply_bcs_inner_only()
     ...    generated_str = cfc.CFunction_dict[f'apply_bcs_inner_only'].full_function
@@ -998,7 +998,7 @@ def register_CFunction_apply_bcs_outerextrap_and_inner() -> None:
     >>> supported_Parallelizations = ["openmp", "cuda"]
     >>> name = "apply_bcs_outerextrap_and_inner"
     >>> for parallelization in supported_Parallelizations:
-    ...    parallelization = par.parval_from_str("parallelization")
+    ...    par.set_parval_from_str("parallelization", parallelization)
     ...    cfc.CFunction_dict.clear()
     ...    register_CFunction_apply_bcs_outerextrap_and_inner()
     ...    generated_str = cfc.CFunction_dict[f'{name}'].full_function
@@ -1646,16 +1646,31 @@ def register_CFunction_apply_bcs_outerradiation_and_inner(
     >>> import nrpy.c_function as cfc
     >>> import nrpy.params as par
     >>> from nrpy.reference_metric import supported_CoordSystems
+    >>> from nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions import register_CFunction_apply_bcs_outerradiation_and_inner
     >>> supported_Parallelizations = ["openmp", "cuda"]
     >>> name = "apply_bcs_outerradiation_and_inner__rfm"
     >>> for parallelization in supported_Parallelizations:
-    ...    parallelization = par.parval_from_str("parallelization")
+    ...    par.set_parval_from_str("parallelization", parallelization)
     ...    for CoordSystem in supported_CoordSystems:
     ...       cfc.CFunction_dict.clear()
-    ...       register_CFunction_apply_bcs_outerradiation_and_inner(CoordSystem, parallelization=parallelization) # doctest: +SKIP
+    ...       register_CFunction_apply_bcs_outerradiation_and_inner(CoordSystem)
     ...       generated_str = cfc.CFunction_dict[f'{name}__{CoordSystem}'].full_function
     ...       validation_desc = f"{name}__{parallelization}__{CoordSystem}"
     ...       validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
+    Setting up reference_metric[Spherical]...
+    Setting up reference_metric[SinhSpherical]...
+    Setting up reference_metric[SinhSphericalv2n2]...
+    Setting up reference_metric[Cartesian]...
+    Setting up reference_metric[SinhCartesian]...
+    Setting up reference_metric[Cylindrical]...
+    Setting up reference_metric[SinhCylindrical]...
+    Setting up reference_metric[SinhCylindricalv2n2]...
+    Setting up reference_metric[SymTP]...
+    Setting up reference_metric[SinhSymTP]...
+    Setting up reference_metric[LWedgeHSinhSph]...
+    Setting up reference_metric[UWedgeHSinhSph]...
+    Setting up reference_metric[RingHoleySinhSpherical]...
+    Setting up reference_metric[HoleySinhSpherical]...
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     prefunc = setup_Cfunction_radiation_bcs(
