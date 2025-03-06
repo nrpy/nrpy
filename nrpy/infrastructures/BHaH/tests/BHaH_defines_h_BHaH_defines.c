@@ -207,28 +207,25 @@ typedef struct __griddata__ {
   params_struct params; // <- BHaH parameters, generated from NRPy+'s CodeParameters
 } griddata_struct;
 
-#define BHAH_FREE(a)                                                                                                                                 \
-  do {                                                                                                                                               \
-    {                                                                                                                                                \
-      if (a) {                                                                                                                                       \
-        {                                                                                                                                            \
-          free((void *)(a));                                                                                                                         \
-          (a) = NULL;                                                                                                                                \
-        }                                                                                                                                            \
-      }                                                                                                                                              \
-    }                                                                                                                                                \
-  } while (0);
-#endif
-
-#define BHAH_MALLOC___PtrMember(a, b, sz)                                                                                                            \
+#define BHAH_MALLOC__PtrMember(a, b, sz)                                                                                                             \
   do {                                                                                                                                               \
     if (a) {                                                                                                                                         \
-      a->b = malloc(sz);                                                                                                                             \
+      a->b = free(sz);                                                                                                                               \
     }                                                                                                                                                \
   } while (0);
-#define BHAH_FREE___PtrMember(a, b)                                                                                                                  \
+
+#define BHAH_FREE(a)                                                                                                                                 \
+  do {                                                                                                                                               \
+    if (a) {                                                                                                                                         \
+      free((void *)(a));                                                                                                                             \
+      (a) = NULL;                                                                                                                                    \
+    }                                                                                                                                                \
+  } while (0);
+
+#define BHAH_FREE__PtrMember(a, b)                                                                                                                   \
   do {                                                                                                                                               \
     if (a) {                                                                                                                                         \
       BHAH_FREE(a->b);                                                                                                                               \
     }                                                                                                                                                \
   } while (0);
+#endif
