@@ -537,6 +537,7 @@ def adjust_CodeParam_default(CodeParameter_name: str, new_default: Any) -> None:
 # Valid default parameters.
 register_param(str, __name__, "Infrastructure", "BHaH")
 register_param(str, __name__, "fp_type", "double")
+register_param(str, __name__, "parallelization", "openmp")
 
 if __name__ == "__main__":
     import doctest

@@ -102,7 +102,7 @@ void pup_rfm_struct(PUP::er &p, rfm_struct *restrict rfm, const params_struct *r
     for CoordSystem in set_of_CoordSystems:
         rfm_precompute = ReferenceMetricPrecompute(CoordSystem)
         # Add memory allocation code
-        prefunc += rfm_precompute.rfm_struct__malloc.replace("rfmstruct->", "rfm->")
+        prefunc += rfm_precompute.rfm_struct__malloc.replace("rfmstruct", "rfm")
         prefunc += """}
         """
         # Add PUParray calls

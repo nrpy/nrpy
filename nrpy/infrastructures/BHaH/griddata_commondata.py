@@ -79,7 +79,7 @@ def register_griddata_commondata(
         register_griddata_or_commondata(par.glb_extras_dict["griddata_struct"])
 
 
-def register_CFunction_griddata_free(
+def register_CFunction_griddata_free__device(
     enable_rfm_precompute: bool,
     enable_CurviBCs: bool,
     enable_bhahaha: bool = False,
@@ -90,19 +90,88 @@ def register_CFunction_griddata_free(
     :param enable_rfm_precompute: A flag to enable/disable rfm_precompute_free within the C function body.
     :param enable_CurviBCs: Whether to free CurviBCs within the C function body.
     :param enable_bhahaha: Whether to enable freeing of BHaHAHA memory.
+
+    :raises ValueError: If BHaHAHA is not supported in the parallelization mode.
     """
+    parallelization = par.parval_from_str("parallelization")
+    if parallelization == "openmp":
+        return
+    desc = """Free all memory within the griddata struct,
+except perhaps non_y_n_gfs (e.g., after a regrid, in which non_y_n_gfs are freed first)."""
+    cfunc_type = "void"
+    name = "griddata_free_device"
+    params = "const commondata_struct *restrict commondata, griddata_struct *restrict griddata, const bool free_non_y_n_gfs_and_core_griddata_pointers"
+    body = ""
+    if enable_bhahaha:
+        raise ValueError(
+            "BHaHAHA is not yet supported in parallelization mode: " + parallelization
+        )
+    body += r"""  // Free memory allocated inside griddata[].
+  for(int grid=0;grid<commondata->NUMGRIDS;grid++) {
+"""
+    if enable_rfm_precompute:
+        body += "  rfm_precompute_free(commondata, &griddata[grid].params, griddata[grid].rfmstruct);\n"
+        body += "  BHAH_FREE_DEVICE(griddata[grid].rfmstruct);\n"
+    if enable_CurviBCs:
+        body += r"""
+  BHAH_FREE_DEVICE(griddata[grid].bcstruct.inner_bc_array);
+  for(int ng=0;ng<NGHOSTS*3;ng++) {
+      BHAH_FREE_DEVICE(griddata[grid].bcstruct.pure_outer_bc_array[ng]);
+}
+"""
+    body += r"""
+  MoL_free_memory_y_n_gfs(&griddata[grid].gridfuncs);
+  if(free_non_y_n_gfs_and_core_griddata_pointers) {
+    MoL_free_memory_non_y_n_gfs(&griddata[grid].gridfuncs);
+  }
+  for(int i=0;i<3;i++) {
+    BHAH_FREE_DEVICE(griddata[grid].xx[i]);
+  }
+} // END for(int grid=0;grid<commondata->NUMGRIDS;grid++)
+"""
+    body += r"""if(free_non_y_n_gfs_and_core_griddata_pointers) {
+        BHAH_FREE(griddata);
+    }"""
+    cfc.register_CFunction(
+        includes=["BHaH_defines.h", "BHaH_function_prototypes.h"],
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        body=body,
+    )
+
+
+def register_CFunction_griddata_free(
+    enable_rfm_precompute: bool,
+    enable_CurviBCs: bool,
+    enable_bhahaha: bool = False,
+) -> None:
+    """
+    Register the C function griddata_free() to free all memory within the griddata struct on Host.
+
+    :param enable_rfm_precompute: A flag to enable/disable rfm_precompute_free within the C function body.
+    :param enable_CurviBCs: Whether to free CurviBCs within the C function body.
+    :param enable_bhahaha: Whether to enable freeing of BHaHAHA memory.
+    """
+    parallelization = par.parval_from_str("parallelization")
     desc = """Free all memory within the griddata struct,
 except perhaps non_y_n_gfs (e.g., after a regrid, in which non_y_n_gfs are freed first)."""
     cfunc_type = "void"
     name = "griddata_free"
     params = "const commondata_struct *restrict commondata, griddata_struct *restrict griddata, const bool free_non_y_n_gfs_and_core_griddata_pointers"
+    if parallelization not in ["openmp"]:
+        register_CFunction_griddata_free__device(
+            enable_rfm_precompute, enable_CurviBCs, enable_bhahaha=enable_bhahaha
+        )
+
     body = ""
-    if enable_bhahaha:
+    if enable_bhahaha and parallelization == "openmp":
         body += r"""  // Free BHaHAHA memory.
   for (int which_horizon = 0; which_horizon < commondata->bah_max_num_horizons; which_horizon++) {
-    free(commondata->bhahaha_params_and_data[which_horizon].prev_horizon_m1);
-    free(commondata->bhahaha_params_and_data[which_horizon].prev_horizon_m2);
-    free(commondata->bhahaha_params_and_data[which_horizon].prev_horizon_m3);
+    BHAH_FREE(commondata->bhahaha_params_and_data[which_horizon].prev_horizon_m1);
+    BHAH_FREE(commondata->bhahaha_params_and_data[which_horizon].prev_horizon_m2);
+    BHAH_FREE(commondata->bhahaha_params_and_data[which_horizon].prev_horizon_m3);
   }
 """
     body += r"""  // Free memory allocated inside griddata[].
@@ -110,21 +179,32 @@ except perhaps non_y_n_gfs (e.g., after a regrid, in which non_y_n_gfs are freed
 """
     if enable_rfm_precompute:
         body += "  rfm_precompute_free(commondata, &griddata[grid].params, griddata[grid].rfmstruct);\n"
-        body += "  free(griddata[grid].rfmstruct);\n"
+        body += "  BHAH_FREE(griddata[grid].rfmstruct);\n"
     if enable_CurviBCs:
         body += r"""
-  free(griddata[grid].bcstruct.inner_bc_array);
-  for(int ng=0;ng<NGHOSTS*3;ng++) free(griddata[grid].bcstruct.pure_outer_bc_array[ng]);
+  BHAH_FREE(griddata[grid].bcstruct.inner_bc_array);
+  for(int ng=0;ng<NGHOSTS*3;ng++) {
+      BHAH_FREE(griddata[grid].bcstruct.pure_outer_bc_array[ng]);
+}
 """
-    body += r"""
+    if parallelization == "cuda":
+        body += "CUDA__free_host_gfs(&griddata[grid].gridfuncs);"
+    else:
+        body += r"""
 
   MoL_free_memory_y_n_gfs(&griddata[grid].gridfuncs);
-  if(free_non_y_n_gfs_and_core_griddata_pointers)
-      MoL_free_memory_non_y_n_gfs(&griddata[grid].gridfuncs);
-  for(int i=0;i<3;i++) free(griddata[grid].xx[i]);
+  if(free_non_y_n_gfs_and_core_griddata_pointers) {
+    MoL_free_memory_non_y_n_gfs(&griddata[grid].gridfuncs);
+  }"""
+    body += """
+  for(int i=0;i<3;i++) {
+    BHAH_FREE(griddata[grid].xx[i]);
+  }
 } // END for(int grid=0;grid<commondata->NUMGRIDS;grid++)
 """
-    body += "if(free_non_y_n_gfs_and_core_griddata_pointers) free(griddata);\n"
+    body += r"""if(free_non_y_n_gfs_and_core_griddata_pointers) {
+        BHAH_FREE(griddata);
+    }"""
     cfc.register_CFunction(
         includes=["BHaH_defines.h", "BHaH_function_prototypes.h"],
         desc=desc,

@@ -15,6 +15,7 @@ import sympy as sp
 
 import nrpy.helpers.loop as lp
 import nrpy.indexedexp as ixp
+import nrpy.params as par
 
 implemented_loop_regions = ["", "all points", "interior", "interior plus one upper"]
 
@@ -84,7 +85,6 @@ def simple_loop(
     enable_OpenMP: bool = True,
     OMP_custom_pragma: str = "",
     OMP_collapse: int = 1,
-    parallelization: str = "openmp",
 ) -> str:
     """
     Generate a simple loop in C (for use inside of a function).
@@ -98,7 +98,6 @@ def simple_loop(
     :param enable_OpenMP: Enable loop parallelization using OpenMP
     :param OMP_custom_pragma: Enable loop parallelization using OpenMP with custom pragma
     :param OMP_collapse: Specifies the number of nested loops to collapse
-    :param parallelization: Parallelization method to use. Default is "openmp".
     :return: The complete loop code as a string.
     :raises ValueError: If `loop_region` is unsupported or if `read_xxs` and `enable_rfm_precompute` are both enabled.
 
@@ -179,6 +178,7 @@ def simple_loop(
     } // END LOOP: for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++)
     <BLANKLINE>
     """
+    parallelization = par.parval_from_str("parallelization")
     # 'AllPoints': loop over all points on a numerical grid, including ghost zones
     if loop_region == "":
         return loop_body
@@ -222,9 +222,7 @@ def simple_loop(
         # pylint: disable=C0415
         from nrpy.infrastructures.BHaH import rfm_precompute
 
-        rfmp = rfm_precompute.ReferenceMetricPrecompute(
-            CoordSystem, parallelization=parallelization
-        )
+        rfmp = rfm_precompute.ReferenceMetricPrecompute(CoordSystem)
         if enable_intrinsics:
             read_rfm_xx_arrays = [
                 rfmp.readvr_intrinsics_inner_str[0],
