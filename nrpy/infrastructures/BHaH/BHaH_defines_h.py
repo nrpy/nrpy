@@ -467,14 +467,14 @@ def output_BHaH_defines_h(
     #endif // END check for GCC, Clang, or C++
     #endif // END BHAH_TYPEOF
 
-    #define BHAH_MALLOC(a, b, sz) \
+    #define BHAH_MALLOC(a, sz) \
     do { \
-        b = (BHAH_TYPEOF(b)) malloc(sz); \
+        a = (BHAH_TYPEOF(a)) malloc(sz); \
     } while(0);
     #define BHAH_MALLOC__PtrMember(a, b, sz) \
     do { \
         if (a) { \
-            a->b = BHAH_MALLOC(a->b, sz); \
+            BHAH_MALLOC(a->b, sz); \
         } \
     } while(0);
 
