@@ -15,10 +15,14 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
+import nrpy.helpers.parallelization.utilities as gpu_utils
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
-from nrpy.helpers.expression_utils import get_unique_expression_symbols_as_strings, get_params_commondata_symbols_from_expr_list, generate_definition_header
-import nrpy.helpers.parallelization.utilities as gpu_utils
+from nrpy.helpers.expression_utils import (
+    generate_definition_header,
+    get_params_commondata_symbols_from_expr_list,
+    get_unique_expression_symbols_as_strings,
+)
 
 
 # Construct Cart_to_xx_and_nearest_i0i1i2() C function for
@@ -100,8 +104,11 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
 """
         for i in range(3):
             if rfm.NewtonRaphson_f_of_xx[i] != sp.sympify(0):
-                NR1_expr = [rfm.NewtonRaphson_f_of_xx[i], sp.diff(rfm.NewtonRaphson_f_of_xx[i], rfm.xx[i])]
-                param_symbols, commondata_symbols = get_params_commondata_symbols_from_expr_list(
+                NR1_expr = [
+                    rfm.NewtonRaphson_f_of_xx[i],
+                    sp.diff(rfm.NewtonRaphson_f_of_xx[i], rfm.xx[i]),
+                ]
+                param_symbols, _ = get_params_commondata_symbols_from_expr_list(
                     NR1_expr, exclude=[f"xx{j}" for j in range(3)]
                 )
                 params_definitions = generate_definition_header(
