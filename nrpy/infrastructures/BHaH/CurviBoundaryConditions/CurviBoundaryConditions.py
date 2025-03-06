@@ -1332,7 +1332,7 @@ const REAL partial_x0_partial_r, const REAL partial_x1_partial_r, const REAL par
   const int FD1_stencil_radius = {FD1_stencil_radius};
 """
     body += f"{gpu_utils.get_loop_parameters(parallelization)}\n"
-    body += """const int ntot = Nxx_plus_2NGHOSTS0_PADDED * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
+    body += """const int ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
 
   ///////////////////////////////////////////////////////////
   // Next we'll compute partial_xi f, using a maximally-centered stencil.
