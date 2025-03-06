@@ -15,7 +15,10 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
+import nrpy.params as par
 import nrpy.reference_metric as refmetric
+from nrpy.helpers.expression_utils import get_unique_expression_symbols_as_strings, get_params_commondata_symbols_from_expr_list, generate_definition_header
+import nrpy.helpers.parallelization.utilities as gpu_utils
 
 
 # Construct Cart_to_xx_and_nearest_i0i1i2() C function for
@@ -45,6 +48,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
+    parallelization = par.parval_from_str("parallelization")
     if gridding_approach not in {"independent grid(s)", "multipatch"}:
         raise ValueError(
             "Invalid value for 'gridding_approach'. Must be 'independent grid(s)' or 'multipatch'."
@@ -59,7 +63,8 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
 
     namesuffix = f"_{relative_to}" if relative_to == "global_grid_center" else ""
     name = f"Cart_to_xx_and_nearest_i0i1i2{namesuffix}"
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xCart[3], REAL xx[3], int Cart_to_i0i1i2[3]"
+    params = "const params_struct *restrict params, const REAL xCart[3], REAL xx[3], int Cart_to_i0i1i2[3]"
+    cfunc_decorators = "__host__ __device__" if parallelization == "cuda" else ""
 
     body = """
   // Set (Cartx, Carty, Cartz) relative to the global (as opposed to local) grid.
@@ -72,9 +77,9 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     if relative_to == "local_grid_center":
         body += """
   // Set the origin, (Cartx, Carty, Cartz) = (0, 0, 0), to the center of the local grid patch.
-  Cartx -= Cart_originx;
-  Carty -= Cart_originy;
-  Cartz -= Cart_originz;
+  Cartx -= params->Cart_originx;
+  Carty -= params->Cart_originy;
+  Cartz -= params->Cart_originz;
   {
 """
     if rfm.requires_NewtonRaphson_for_Cart_to_xx:
@@ -95,13 +100,22 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
 """
         for i in range(3):
             if rfm.NewtonRaphson_f_of_xx[i] != sp.sympify(0):
-                body += f"""
+                NR1_expr = [rfm.NewtonRaphson_f_of_xx[i], sp.diff(rfm.NewtonRaphson_f_of_xx[i], rfm.xx[i])]
+                param_symbols, commondata_symbols = get_params_commondata_symbols_from_expr_list(
+                    NR1_expr, exclude=[f"xx{j}" for j in range(3)]
+                )
+                params_definitions = generate_definition_header(
+                    param_symbols,
+                    enable_intrinsics=False,
+                    var_access=gpu_utils.get_params_access("openmp"),
+                )
+                body += f"""{params_definitions}
   iter=0;
   REAL xx{i}  = 0.5 * (params->xxmin{i} + params->xxmax{i});
   while(iter < ITER_MAX && !tolerance_has_been_met) {{
     REAL f_of_xx{i}, fprime_of_xx{i};
 
-{ccg.c_codegen([rfm.NewtonRaphson_f_of_xx[i], sp.diff(rfm.NewtonRaphson_f_of_xx[i], rfm.xx[i])],
+{ccg.c_codegen(NR1_expr,
 [f'f_of_xx{i}', f'fprime_of_xx{i}'], include_braces=True, verbose=False)}
     const REAL xx{i}_np1 = xx{i} - f_of_xx{i} / fprime_of_xx{i};
 
@@ -112,14 +126,24 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     iter++;
   }} // END Newton-Raphson iterations to compute xx{i}
   if(iter >= ITER_MAX) {{
-    fprintf(stderr, "ERROR: Newton-Raphson failed for {CoordSystem}: xx{i}, x,y,z = %.15e %.15e %.15e\\n", Cartx,Carty,Cartz);
-    exit(1);
+    printf("ERROR: Newton-Raphson failed for {CoordSystem}: xx{i}, x,y,z = %.15e %.15e %.15e\\n", Cartx,Carty,Cartz);
   }}
   xx[{i}] = xx{i};
 """
     else:
+        expr_list = [rfm.Cart_to_xx[0], rfm.Cart_to_xx[1], rfm.Cart_to_xx[2]]
+        unique_symbols = []
+        for expr in expr_list:
+            unique_symbols += get_unique_expression_symbols_as_strings(
+                expr,
+                exclude=[f"xx{i}" for i in range(3)]
+                + [f"Cart{c}" for c in ["x", "y", "z"]],
+            )
+        unique_symbols = sorted(list(set(unique_symbols)))
+        for sym in unique_symbols:
+            body += f"const REAL {sym} = params->{sym};\n"
         body += ccg.c_codegen(
-            [rfm.Cart_to_xx[0], rfm.Cart_to_xx[1], rfm.Cart_to_xx[2]],
+            expr_list,
             ["xx[0]", "xx[1]", "xx[2]"],
             include_braces=False,
         )
@@ -148,8 +172,9 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
         CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,
-        include_CodeParameters_h=True,
+        include_CodeParameters_h=False,
         body=body,
+        cfunc_decorators=cfunc_decorators,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
@@ -171,6 +196,7 @@ def register_CFunction_xx_to_Cart(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
+    parallelization = par.parval_from_str("parallelization")
     if gridding_approach not in {"independent grid(s)", "multipatch"}:
         raise ValueError(
             "Invalid value for 'gridding_approach'. Must be 'independent grid(s)' or 'multipatch'."
@@ -183,24 +209,34 @@ def register_CFunction_xx_to_Cart(
 
     cfunc_type = "void"
     name = "xx_to_Cart"
-    params = """const commondata_struct *restrict commondata, const params_struct *restrict params,
-    REAL *restrict xx[3],const int i0,const int i1,const int i2, REAL xCart[3]"""
+    params = "const params_struct *restrict params, REAL xx[3], REAL xCart[3]"
+    body = ""
+    cfunc_decorators = "__host__ __device__" if parallelization == "cuda" else ""
 
     rfm = refmetric.reference_metric[CoordSystem]
+    expr_list = [
+        rfm.xx_to_Cart[0] + gri.Cart_origin[0],
+        rfm.xx_to_Cart[1] + gri.Cart_origin[1],
+        rfm.xx_to_Cart[2] + gri.Cart_origin[2],
+    ]
+    unique_symbols = []
+    for expr in expr_list:
+        unique_symbols += get_unique_expression_symbols_as_strings(
+            expr, exclude=[f"xx{i}" for i in range(3)]
+        )
+    unique_symbols = sorted(list(set(unique_symbols)))
+    for sym in unique_symbols:
+        body += f"const REAL {sym} = params->{sym};\n"
 
     # ** Code body for the conversion process **
     # Suppose grid origin is at (1,1,1). Then the Cartesian gridpoint at (1,2,3) will be (2,3,4);
     # hence the xx_to_Cart[i] + gri.Cart_origin[i] below:
-    body = """
-const REAL xx0 = xx[0][i0];
-const REAL xx1 = xx[1][i1];
-const REAL xx2 = xx[2][i2];
+    body += """
+const REAL xx0 = xx[0];
+const REAL xx1 = xx[1];
+const REAL xx2 = xx[2];
 """ + ccg.c_codegen(
-        [
-            rfm.xx_to_Cart[0] + gri.Cart_origin[0],
-            rfm.xx_to_Cart[1] + gri.Cart_origin[1],
-            rfm.xx_to_Cart[2] + gri.Cart_origin[2],
-        ],
+        expr_list,
         ["xCart[0]", "xCart[1]", "xCart[2]"],
     )
 
@@ -212,7 +248,8 @@ const REAL xx2 = xx[2][i2];
         CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,
-        include_CodeParameters_h=True,
+        include_CodeParameters_h=False,
         body=body,
+        cfunc_decorators=cfunc_decorators,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
