@@ -6,9 +6,13 @@
 static void apply_bcs_inner_only_host(const params_struct *restrict params, const int num_inner_boundary_points,
                                       const innerpt_bc_struct *restrict inner_bc_array, REAL *restrict gfs) {
   // Needed for IDX macros
-  MAYBE_UNUSED int const Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
-  MAYBE_UNUSED int const Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
-  MAYBE_UNUSED int const Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
+
+  MAYBE_UNUSED const REAL invdxx0 = params->invdxx0;
+  MAYBE_UNUSED const REAL invdxx1 = params->invdxx1;
+  MAYBE_UNUSED const REAL invdxx2 = params->invdxx2;
 
   // collapse(2) results in a nice speedup here, esp in 2D. Two_BHs_collide goes from
   //    5550 M/hr to 7264 M/hr on a Ryzen 9 5950X running on all 16 cores with core affinity.

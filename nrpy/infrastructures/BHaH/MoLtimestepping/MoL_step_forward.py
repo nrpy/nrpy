@@ -15,6 +15,7 @@ from typing import Dict, List, Tuple, Union
 import sympy as sp
 
 import nrpy.c_function as cfc
+import nrpy.params as par
 from nrpy.infrastructures.BHaH.MoLtimestepping.MoL_gridfunction_names import (
     generate_gridfunction_names,
     is_diagonal_Butcher,
@@ -35,7 +36,6 @@ def register_CFunction_MoL_step_forward_in_time(
     enable_rfm_precompute: bool = False,
     enable_curviBCs: bool = False,
     enable_intrinsics: bool = False,
-    parallelization: str = "openmp",
     rational_const_alias: str = "const",
 ) -> None:
     r"""
@@ -49,12 +49,12 @@ def register_CFunction_MoL_step_forward_in_time(
     :param enable_rfm_precompute: Flag to enable reference metric functionality.
     :param enable_curviBCs: Flag to enable curvilinear boundary conditions.
     :param enable_intrinsics: A flag to specify if hardware instructions should be used.
-    :param parallelization: Parameter to specify parallelization (openmp or cuda).
     :param rational_const_alias: Overload const specifier for Rational definitions
     :raises ValueError: If unsupported Butcher table specified since adaptive RK steps are not implemented in MoL.
 
     Doctest:
     >>> import nrpy.c_function as cfc
+    >>> import nrpy.params as par
     >>> from nrpy.infrastructures.BHaH.MoLtimestepping.MoL_step_forward import register_CFunction_MoL_step_forward_in_time
     >>> from nrpy.infrastructures.BHaH.MoLtimestepping.MoL_rk_substep import MoL_Functions_dict
     >>> from nrpy.helpers.generic import validate_strings
@@ -72,13 +72,13 @@ def register_CFunction_MoL_step_forward_in_time(
     ...     MoL_Functions_dict.clear()
     ...     if Butcher[-1][0] != "":
     ...         continue  # skip adaptive methods
+    ...     par.set_parval_from_str("parallelization", "cuda")
     ...     register_CFunction_MoL_step_forward_in_time(
     ...         Butcher_dict,
     ...         k,
     ...         rhs_string=rhs_string,
     ...         post_rhs_string=post_rhs_string,
     ...         enable_intrinsics=True,
-    ...         parallelization="cuda",
     ...         rational_const_alias="static constexpr"
     ...     )
     ...     generated_str = cfc.CFunction_dict["MoL_step_forward_in_time"].full_function
@@ -92,9 +92,8 @@ def register_CFunction_MoL_step_forward_in_time(
     ...     print(f"ValueError: {e.args[0]}")
     ValueError: Adaptive order Butcher tables are currently not supported in MoL.
     """
-    check_supported_parallelization(
-        "register_CFunction_MoL_step_forward_in_time", parallelization
-    )
+    parallelization = par.parval_from_str("parallelization")
+    check_supported_parallelization("register_CFunction_MoL_step_forward_in_time")
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     if enable_intrinsics and parallelization == "cuda":
         includes += [os.path.join("intrinsics", "cuda_intrinsics.h")]
@@ -183,7 +182,6 @@ const REAL time_start = commondata->time;
                 gf_aliases=gf_aliases,
                 post_post_rhs_string=post_post_rhs_string,
                 rational_const_alias=rational_const_alias,
-                parallelization=parallelization,
             )
             + "// -={ END k1 substep }=-\n\n"
         )
@@ -217,7 +215,6 @@ const REAL time_start = commondata->time;
                 gf_aliases=gf_aliases,
                 post_post_rhs_string=post_post_rhs_string,
                 rational_const_alias=rational_const_alias,
-                parallelization=parallelization,
             )
             + "// -={ END k2 substep }=-\n\n"
         )
@@ -246,7 +243,6 @@ const REAL time_start = commondata->time;
                 gf_aliases=gf_aliases,
                 post_post_rhs_string=post_post_rhs_string,
                 rational_const_alias=rational_const_alias,
-                parallelization=parallelization,
             )
             + "// -={ END k3 substep }=-\n\n"
         )
@@ -303,7 +299,6 @@ const REAL time_start = commondata->time;
                         gf_aliases=gf_aliases,
                         post_post_rhs_string=post_post_rhs_string,
                         rational_const_alias=rational_const_alias,
-                        parallelization=parallelization,
                     )
                     + f"// -={{ END k{str(s + 1)} substep }}=-\n\n"
                 )
@@ -329,7 +324,6 @@ const REAL time_start = commondata->time;
                     gf_aliases=gf_aliases,
                     post_post_rhs_string=post_post_rhs_string,
                     rational_const_alias=rational_const_alias,
-                    parallelization=parallelization,
                     rk_step=None,
                 )
             else:
@@ -431,7 +425,6 @@ const REAL time_start = commondata->time;
                             gf_aliases=gf_aliases,
                             post_post_rhs_string=post_post_rhs_string,
                             rational_const_alias=rational_const_alias,
-                            parallelization=parallelization,
                         )
                         + f"// -={{ END k{s + 1} substep }}=-\n\n"
                     )

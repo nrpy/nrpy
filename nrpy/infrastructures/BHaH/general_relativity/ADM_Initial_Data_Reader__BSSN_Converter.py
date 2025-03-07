@@ -642,7 +642,8 @@ typedef struct __rescaled_BSSN_rfm_basis_struct__ {
 
     // xCart is the global Cartesian coordinate, which accounts for any grid offsets from the origin.
     REAL xCart[3];
-    xx_to_Cart(commondata, params, xx, i0, i1, i2, xCart);
+    REAL xOrig[3] = {xx[0][i0], xx[1][i1], xx[2][i2]};
+    xx_to_Cart(params, xOrig, xCart);
 
     // Read or compute initial data at destination point xCart
     initial_data_struct initial_data;

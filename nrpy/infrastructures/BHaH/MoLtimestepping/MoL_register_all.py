@@ -48,7 +48,6 @@ def register_CFunctions(
     enable_curviBCs: bool = False,
     enable_intrinsics: bool = False,
     register_MoL_step_forward_in_time: bool = True,
-    parallelization: str = "openmp",
     rational_const_alias: str = "const",
 ) -> None:
     r"""
@@ -62,7 +61,6 @@ def register_CFunctions(
     :param enable_curviBCs: Enable curvilinear boundary conditions. Default is False.
     :param enable_intrinsics: A flag to specify if hardware instructions should be used.
     :param register_MoL_step_forward_in_time: Whether to register the MoL step-forward function. Default is True.
-    :param parallelization: Parameter to specify parallelization (openmp or cuda).
     :param rational_const_alias: Overload const specifier for rational definitions
 
     Doctests:
@@ -83,11 +81,11 @@ def register_CFunctions(
      *
      */
     void MoL_free_memory_non_y_n_gfs(MoL_gridfunctions_struct *restrict gridfuncs) {
-      free(gridfuncs->y_nplus1_running_total_gfs);
-      free(gridfuncs->k_odd_gfs);
-      free(gridfuncs->k_even_gfs);
+      BHAH_FREE(gridfuncs->y_nplus1_running_total_gfs);
+      BHAH_FREE(gridfuncs->k_odd_gfs);
+      BHAH_FREE(gridfuncs->k_even_gfs);
       if (NUM_AUXEVOL_GFS > 0)
-        free(gridfuncs->auxevol_gfs);
+        BHAH_FREE(gridfuncs->auxevol_gfs);
     } // END FUNCTION MoL_free_memory_non_y_n_gfs
     <BLANKLINE>
     >>> print(cfc.CFunction_dict["MoL_malloc_non_y_n_gfs"].full_function) # doctest: +ELLIPSIS
@@ -101,29 +99,26 @@ def register_CFunctions(
     void MoL_malloc_non_y_n_gfs(const commondata_struct *restrict commondata, const params_struct *restrict params,
                                 MoL_gridfunctions_struct *restrict gridfuncs) {
       const int Nxx_plus_2NGHOSTS_tot = params->Nxx_plus_2NGHOSTS0 * params->Nxx_plus_2NGHOSTS1 * params->Nxx_plus_2NGHOSTS2;
-      gridfuncs->y_nplus1_running_total_gfs = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);
-      gridfuncs->k_odd_gfs = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);
-      gridfuncs->k_even_gfs = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);
+      BHAH_MALLOC(gridfuncs->y_nplus1_running_total_gfs, sizeof(REAL) * NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);
+      BHAH_MALLOC(gridfuncs->k_odd_gfs, sizeof(REAL) * NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);
+      BHAH_MALLOC(gridfuncs->k_even_gfs, sizeof(REAL) * NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);
       if (NUM_AUXEVOL_GFS > 0)
-        gridfuncs->auxevol_gfs = (REAL *restrict)malloc(sizeof(REAL) * NUM_AUXEVOL_GFS * Nxx_plus_2NGHOSTS_tot);
+        BHAH_MALLOC(gridfuncs->auxevol_gfs, sizeof(REAL) * NUM_AUXEVOL_GFS * Nxx_plus_2NGHOSTS_tot);
     <BLANKLINE>
       gridfuncs->diagnostic_output_gfs = gridfuncs->y_nplus1_running_total_gfs;
       gridfuncs->diagnostic_output_gfs2 = gridfuncs->k_odd_gfs;
     } // END FUNCTION MoL_malloc_non_y_n_gfs
     <BLANKLINE>
     """
-    check_supported_parallelization("register_CFunctions", parallelization)
+    parallelization = par.parval_from_str("parallelization")
+    check_supported_parallelization("register_CFunctions")
 
     Butcher_dict = generate_Butcher_tables()
 
     # Step 1: Build all memory alloc and free:
     for which_gfs in ["y_n_gfs", "non_y_n_gfs"]:
-        register_CFunction_MoL_malloc(
-            Butcher_dict, MoL_method, which_gfs, parallelization=parallelization
-        )
-        register_CFunction_MoL_free_memory(
-            Butcher_dict, MoL_method, which_gfs, parallelization=parallelization
-        )
+        register_CFunction_MoL_malloc(Butcher_dict, MoL_method, which_gfs)
+        register_CFunction_MoL_free_memory(Butcher_dict, MoL_method, which_gfs)
 
     # Step 2: Possibly register the main stepping function:
     if register_MoL_step_forward_in_time:
@@ -136,7 +131,6 @@ def register_CFunctions(
             enable_rfm_precompute=enable_rfm_precompute,
             enable_curviBCs=enable_curviBCs,
             enable_intrinsics=enable_intrinsics,
-            parallelization=parallelization,
             rational_const_alias=rational_const_alias,
         )
 
