@@ -27,7 +27,6 @@ from nrpy.infrastructures.BHaH import (
     BHaH_defines_h,
     CodeParameters,
     Makefile_helpers,
-    checkpointing,
     cmdline_input_and_parfiles,
     griddata_commondata,
     main_c,
