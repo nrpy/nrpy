@@ -175,7 +175,7 @@ def register_CFunction_ds_min_radial_like_dirns_single_pt(
     :param CoordSystem: The coordinate system of the numerical grid.
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = f"Examining all three directions at a given point on a {CoordSystem} numerical grid, find the minimum grid spacing ds_min."
+    desc = f"Examining only radial-like (non-angular) directions at a given point on a numerical grid, find the minimum grid spacing ds_min."
     cfunc_type = "void"
     name = "ds_min_radial_like_dirns_single_pt"
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xx0, const REAL xx1, const REAL xx2, REAL *restrict ds_min_radial_like_dirns"
@@ -217,7 +217,7 @@ def register_CFunction_ds_min_single_pt(
     :param CoordSystem: The coordinate system of the numerical grid.
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = f"Examining all three directions at a given point on a {CoordSystem} numerical grid, find the minimum grid spacing ds_min."
+    desc = f"Examining all three directions at a given point on a numerical grid, find the minimum grid spacing ds_min."
     cfunc_type = "void"
     name = "ds_min_single_pt"
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xx0, const REAL xx1, const REAL xx2, REAL *restrict ds_min"
