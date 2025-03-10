@@ -344,7 +344,7 @@ def register_CFunction_numerical_grids_and_timestep(
             _ = par.register_CodeParameter(
                 "REAL[3]",
                 __name__,
-                f"rotation_{dirn}hatU",
+                f"cumulatively_rotated_{dirn}hatU",
                 unit_vector_dict[
                     dirn
                 ],  # Set below in C code when calling_for_first_time.
