@@ -338,35 +338,21 @@ def register_CFunction_numerical_grids_and_timestep(
         # fmt: off
         _ = par.CodeParameter("char[200]", __name__, "multipatch_choice", "", commondata=True, add_to_parfile=True)
         # fmt: on
+        unit_vector_dict = {"x": [1, 0, 0], "y": [0, 1, 0], "z": [0, 0, 1]}
         for dirn in ["x", "y", "z"]:
             # Direction of unit vectors relative to original, accounting for accumulation of regrids."
             _ = par.register_CodeParameter(
-                "REAL",
+                "REAL[3]",
                 __name__,
-                f"cumulative_regrid_{dirn}hatU[3]",
-                "unset",  # Set below in C code when calling_for_first_time.
-                commondata=True,
+                f"rotation_{dirn}hatU",
+                unit_vector_dict[
+                    dirn
+                ],  # Set below in C code when calling_for_first_time.
+                commondata=False,
                 add_to_parfile=False,
                 add_to_set_CodeParameters_h=False,
             )
         body += """
-  if(calling_for_first_time) {
-    // Initialize rotation unit vectors
-    // Set the x-hat unit vector (1, 0, 0)
-    commondata->cumulative_regrid_xhatU[0] = 1;
-    commondata->cumulative_regrid_xhatU[1] = 0;
-    commondata->cumulative_regrid_xhatU[2] = 0;
-
-    // Set the y-hat unit vector (0, 1, 0)
-    commondata->cumulative_regrid_yhatU[0] = 0;
-    commondata->cumulative_regrid_yhatU[1] = 1;
-    commondata->cumulative_regrid_yhatU[2] = 0;
-
-    // Set the z-hat unit vector (0, 0, 1)
-    commondata->cumulative_regrid_zhatU[0] = 0;
-    commondata->cumulative_regrid_zhatU[1] = 0;
-    commondata->cumulative_regrid_zhatU[2] = 1;
-  }
   // Step 1.c: Multipatch grid structures are set up algorithmically.
   multipatch_grids_set_up(commondata, griddata);
 """
