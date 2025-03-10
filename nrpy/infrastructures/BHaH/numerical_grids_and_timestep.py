@@ -313,15 +313,15 @@ def register_CFunction_numerical_grids_and_timestep(
   // Step 1.a: Set each CodeParameter in griddata.params to default, for MAXNUMGRIDS grids.
   params_struct_set_to_default(commondata, griddata);"""
     body += rf"""
-  // Independent grids
-  int Nx[3] = {{ -1, -1, -1 }};
-
   // Step 1.b: Set commondata->NUMGRIDS to number of CoordSystems we have
   commondata->NUMGRIDS = {len(set_of_CoordSystems)};
 """
     if gridding_approach == "independent grid(s)":
         body += """
   {
+    // Independent grids
+    int Nx[3] = { -1, -1, -1 };
+
     // Step 1.c: For each grid, set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx based on grid_physical_size
     const bool set_xxmin_xxmax_to_defaults = true;
     int grid=0;
