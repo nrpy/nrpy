@@ -55,16 +55,6 @@ def register_griddata_struct_and_return_griddata_struct_str(
         "BHaH parameters, generated from NRPy+'s CodeParameters",
     )
     if any("reference_metric" in key for key in sys.modules):
-        griddata_commondata.register_griddata_commondata(
-            "reference_metric",
-            "char CoordSystemname[100]",
-            "the name of the CoordSystem (from reference_metric)",
-        )
-        griddata_commondata.register_griddata_commondata(
-            "reference_metric",
-            "char gridname[100]",
-            "a user-defined alias for describing the grid",
-        )
         if enable_rfm_precompute:
             griddata_commondata.register_griddata_commondata(
                 "reference_metric",

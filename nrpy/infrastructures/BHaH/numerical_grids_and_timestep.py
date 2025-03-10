@@ -31,6 +31,7 @@ for i in range(3):
 _ = par.CodeParameter("REAL", __name__, "convergence_factor", 1.0, commondata=True)
 _ = par.CodeParameter("int", __name__, "CoordSystem_hash", commondata=False, add_to_parfile=False)
 _ = par.CodeParameter("int", __name__, "grid_idx", commondata=False, add_to_parfile=False)
+_ = par.CodeParameter("char[100]", __name__, "gridname", commondata=False, add_to_parfile=False)
 # fmt: on
 
 
@@ -50,10 +51,6 @@ def register_CFunction_numerical_grid_params_Nxx_dxx_xx(
         raise ValueError(
             f"{CoordSystem} is not in Nxx_dict = {Nxx_dict}. Please add it."
         )
-    for dirn in range(3):
-        par.adjust_CodeParam_default(f"Nxx{dirn}", Nxx_dict[CoordSystem][dirn])
-    par.adjust_CodeParam_default("CoordSystemName", CoordSystem)
-
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = f"""Initializes a cell-centered grid in {CoordSystem} coordinates based on physical dimensions (grid_physical_size).
 
@@ -317,16 +314,19 @@ def register_CFunction_numerical_grids_and_timestep(
   commondata->NUMGRIDS = {len(set_of_CoordSystems)};
 """
     if gridding_approach == "independent grid(s)":
-        body += """
-  {
+        body += f"""
+  {{
     // Independent grids
-    int Nx[3] = { -1, -1, -1 };
+    int Nx[3] = {{ -1, -1, -1 }};
 
     // Step 1.c: For each grid, set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx based on grid_physical_size
     const bool set_xxmin_xxmax_to_defaults = true;
     int grid=0;
 """
         for which_CoordSystem, CoordSystem in enumerate(set_of_CoordSystems):
+            body += f"""// In multipatch, gridname is a helpful alias indicating position of the patch. E.g., "lower {CoordSystem} patch"
+    snprintf(griddata[grid].params.gridname, 100, "grid_{CoordSystem}");
+"""
             body += (
                 f"  griddata[grid].params.CoordSystem_hash = {CoordSystem.upper()};\n"
             )
