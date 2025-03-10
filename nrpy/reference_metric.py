@@ -105,7 +105,8 @@ class ReferenceMetric:
         # Non-angular coordinate directions
         self.radial_like_dirns: List[int] = []
         # module name for CodeParameters
-        self.CodeParam_modulename = f"{__name__}_{CoordSystem}"
+        self.CodeParam_modulename = f"{__name__}"  # We don't add CoordSystem here,
+        #                                            since many CoordSystems share the same parameter; e.g., AMPL.
         self.add_CodeParams_to_glb_code_params_dict = False
         self.add_CodeParams_to_glb_code_params_dict = (
             self.CoordSystem
