@@ -81,7 +81,7 @@ if( Nx[0]!=-1 && Nx[1]!=-1 && Nx[2]!=-1 ) {
     for dirn in range(3):
         body += f"params->Nxx{dirn} = Nx[{dirn}];\n"
     body += f"""}}
-snprintf(params->CoordSystemName, 50, "{CoordSystem}");
+snprintf(params->CoordSystemName, 100, "{CoordSystem}");
 
 // Resize grid by convergence_factor; used for convergence testing.
 {{

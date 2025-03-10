@@ -37,7 +37,7 @@ par.register_CodeParameter(
     add_to_glb_code_params_dict=True,
 )
 par.register_CodeParameter(
-    "char[50]",
+    "char[100]",
     __name__,
     "CoordSystemName",
     "unset",
