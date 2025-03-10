@@ -193,6 +193,7 @@ class CFunction:
                                 "BHaH_defines.h",
                                 "BHaH_function_prototypes.h",
                                 "simd_intrinsics.h",
+                                "cuda_intrinsics.h",
                             ]
                         ):
                             inc = os.path.join(rel_path_to_root_directory, inc)

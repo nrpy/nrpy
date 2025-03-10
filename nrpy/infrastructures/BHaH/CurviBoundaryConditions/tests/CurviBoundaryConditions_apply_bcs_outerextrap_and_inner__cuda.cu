@@ -7,16 +7,21 @@
 __global__ static void apply_bcs_outerextrap_and_inner_only_gpu(const size_t streamid, const int num_pure_outer_boundary_points, const int which_gz,
                                                                 const int dirn, const outerpt_bc_struct *restrict pure_outer_bc_array,
                                                                 REAL *restrict gfs) {
-  MAYBE_UNUSED int const Nxx_plus_2NGHOSTS0 = d_params[streamid].Nxx_plus_2NGHOSTS0;
-  MAYBE_UNUSED int const Nxx_plus_2NGHOSTS1 = d_params[streamid].Nxx_plus_2NGHOSTS1;
-  MAYBE_UNUSED int const Nxx_plus_2NGHOSTS2 = d_params[streamid].Nxx_plus_2NGHOSTS2;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = d_params[streamid].Nxx_plus_2NGHOSTS0;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = d_params[streamid].Nxx_plus_2NGHOSTS1;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = d_params[streamid].Nxx_plus_2NGHOSTS2;
 
-  // Thread indices
-  // Global data index - expecting a 1D dataset
-  const int tid0 = threadIdx.x + blockIdx.x * blockDim.x;
+  MAYBE_UNUSED const REAL invdxx0 = d_params[streamid].invdxx0;
+  MAYBE_UNUSED const REAL invdxx1 = d_params[streamid].invdxx1;
+  MAYBE_UNUSED const REAL invdxx2 = d_params[streamid].invdxx2;
 
-  // Thread strides
-  const int stride0 = blockDim.x * gridDim.x;
+  MAYBE_UNUSED const int tid0 = blockIdx.x * blockDim.x + threadIdx.x;
+  MAYBE_UNUSED const int tid1 = blockIdx.y * blockDim.y + threadIdx.y;
+  MAYBE_UNUSED const int tid2 = blockIdx.z * blockDim.z + threadIdx.z;
+
+  MAYBE_UNUSED const int stride0 = blockDim.x * gridDim.x;
+  MAYBE_UNUSED const int stride1 = blockDim.y * gridDim.y;
+  MAYBE_UNUSED const int stride2 = blockDim.z * gridDim.z;
 
   for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d += stride0) {
     const short i0 = pure_outer_bc_array[idx2d].i0;
@@ -49,19 +54,17 @@ static void apply_bcs_outerextrap_and_inner_only__launcher(const params_struct *
         size_t gz_idx = dirn + (3 * which_gz);
         const outerpt_bc_struct *restrict pure_outer_bc_array = bcstruct->pure_outer_bc_array[gz_idx];
         int num_pure_outer_boundary_points = bc_info->num_pure_outer_boundary_points[which_gz][dirn];
-        {
 
-          const size_t threads_in_x_dir = 32;
-          const size_t threads_in_y_dir = 1;
-          const size_t threads_in_z_dir = 1;
-          dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
-          dim3 blocks_per_grid((num_pure_outer_boundary_points + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
-          size_t sm = 0;
-          size_t streamid = params->grid_idx % NUM_STREAMS;
-          apply_bcs_outerextrap_and_inner_only_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(
-              streamid, num_pure_outer_boundary_points, which_gz, dirn, pure_outer_bc_array, gfs);
-          cudaCheckErrors(cudaKernel, "apply_bcs_outerextrap_and_inner_only_gpu failure");
-        }
+        const size_t threads_in_x_dir = 32;
+        const size_t threads_in_y_dir = 1;
+        const size_t threads_in_z_dir = 1;
+        dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
+        dim3 blocks_per_grid((num_pure_outer_boundary_points + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
+        size_t sm = 0;
+        size_t streamid = params->grid_idx % NUM_STREAMS;
+        apply_bcs_outerextrap_and_inner_only_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(
+            streamid, num_pure_outer_boundary_points, which_gz, dirn, pure_outer_bc_array, gfs);
+        cudaCheckErrors(cudaKernel, "apply_bcs_outerextrap_and_inner_only_gpu failure");
       }
     }
   }
