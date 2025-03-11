@@ -60,7 +60,7 @@ REAL xx0, xx1, xx2;
 
 /* PROPOSED MODIFICATIONS FOR COMPUTING PSI4 ON GRIDS NOT CENTERED ON THE ORIGIN
     REAL xCart_rel_to_globalgrid_center[3];
-    xx_to_Cart(commondata, params, xx, i0, i1, i2,  xCart_rel_to_globalgrid_center);
+    xx_to_Cart(params, xx, i0, i1, i2,  xCart_rel_to_globalgrid_center);
     int ignore_Cart_to_i0i1i2[3];  REAL xx_rel_to_globalgridorigin[3];
     Cart_to_xx_and_nearest_i0i1i2_global_grid_center(commondata, params, xCart_rel_to_globalgrid_center,xx_rel_to_globalgridorigin,ignore_Cart_to_i0i1i2);
     xx0=xx_rel_to_globalgridorigin[0];

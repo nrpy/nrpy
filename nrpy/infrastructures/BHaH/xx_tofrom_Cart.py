@@ -72,9 +72,9 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     if relative_to == "local_grid_center":
         body += """
   // Set the origin, (Cartx, Carty, Cartz) = (0, 0, 0), to the center of the local grid patch.
-  Cartx -= Cart_originx;
-  Carty -= Cart_originy;
-  Cartz -= Cart_originz;
+  Cartx -= params->Cart_originx;
+  Carty -= params->Cart_originy;
+  Cartz -= params->Cart_originz;
   {
 """
     if rfm.requires_NewtonRaphson_for_Cart_to_xx:
@@ -183,24 +183,44 @@ def register_CFunction_xx_to_Cart(
 
     cfunc_type = "void"
     name = "xx_to_Cart"
-    params = """const commondata_struct *restrict commondata, const params_struct *restrict params,
+    params = """const params_struct *restrict params,
     REAL *restrict xx[3],const int i0,const int i1,const int i2, REAL xCart[3]"""
 
     rfm = refmetric.reference_metric[CoordSystem]
 
-    # ** Code body for the conversion process **
-    # Suppose grid origin is at (1,1,1). Then the Cartesian gridpoint at (1,2,3) will be (2,3,4);
-    # hence the xx_to_Cart[i] + gri.Cart_origin[i] below:
-    body = """
-const REAL xx0 = xx[0][i0];
-const REAL xx1 = xx[1][i1];
-const REAL xx2 = xx[2][i2];
-""" + ccg.c_codegen(
-        [
+    # ** Code body for the xx-to-Cart conversion process **
+    # For a grid with an origin at (1,1,1), adding the origin to a grid point such as (1,2,3)
+    # translates it to its actual Cartesian coordinates (2,3,4). This is why each expression is
+    # constructed as xx_to_Cart[i] + gri.Cart_origin[i] for i = 0, 1, 2.
+    #
+    # In the resulting expressions, we want to clearly mark all parameter symbols.
+    # Any free symbol that is not one of "xx0", "xx1", or "xx2" is considered a parameter.
+    # We rename these symbols by prefixing their names with "params->" (e.g., x becomes params->x)
+    # to differentiate them from other symbols.
+    #
+    # The list comprehension below constructs the new list of Cartesian expressions,
+    # applying the substitution to each coordinate expression.
+    xx_to_Cart_expr_list = [
+        expr.subs(
+            {
+                symbol: sp.symbols(f"params->{symbol.name}")
+                for symbol in expr.free_symbols
+                if symbol.name not in {"xx0", "xx1", "xx2"}
+            }
+        )
+        for expr in [
             rfm.xx_to_Cart[0] + gri.Cart_origin[0],
             rfm.xx_to_Cart[1] + gri.Cart_origin[1],
             rfm.xx_to_Cart[2] + gri.Cart_origin[2],
-        ],
+        ]
+    ]
+
+    body = """
+    const REAL xx0 = xx[0][i0];
+    const REAL xx1 = xx[1][i1];
+    const REAL xx2 = xx[2][i2];
+    """ + ccg.c_codegen(
+        xx_to_Cart_expr_list,
         ["xCart[0]", "xCart[1]", "xCart[2]"],
     )
 
@@ -212,7 +232,7 @@ const REAL xx2 = xx[2][i2];
         CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,
-        include_CodeParameters_h=True,
+        include_CodeParameters_h=False,
         body=body,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())

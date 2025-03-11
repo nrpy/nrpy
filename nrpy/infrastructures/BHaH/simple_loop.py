@@ -182,7 +182,7 @@ def simple_loop(
     # 'AllPoints': loop over all points on a numerical grid, including ghost zones
     if loop_region == "":
         return loop_body
-    elif loop_region not in implemented_loop_regions:
+    if loop_region not in implemented_loop_regions:
         raise ValueError(implemented_loop_regions_err(loop_region))
     i2i1i0_mins, i2i1i0_maxs = get_loop_region_ranges(
         loop_region, min_idx_prefix="tid" if parallelization == "cuda" else None
@@ -444,7 +444,7 @@ LOOP_NOOMP(i0_pt,0,numpts_i0, i1_pt,0,numpts_i1, i2_pt,0,numpts_i2) {{
   const int i0 = i0_pts[i0_pt], i1 = i1_pts[i1_pt], i2 = i2_pts[i2_pt];
   const int idx3 = IDX3(i0, i1, i2);
   REAL xCart[3];
-  xx_to_Cart(commondata, params, xx, i0, i1, i2, xCart);
+  xx_to_Cart(params, xx, i0, i1, i2, xCart);
 
   {loop_body_store_results}
 }}
@@ -644,7 +644,7 @@ LOOP_NOOMP(i0_pt,0,numpts_i0, i1_pt,0,numpts_i1, i2_pt,0,numpts_i2) {
   const int i0 = i0_pts[i0_pt], i1 = i1_pts[i1_pt], i2 = i2_pts[i2_pt];
   const int idx3 = IDX3(i0, i1, i2);
   REAL xCart[3];
-  xx_to_Cart(commondata, params, xx, i0, i1, i2, xCart);
+  xx_to_Cart(params, xx, i0, i1, i2, xCart);
 """
     out_string += "{\n"
     out_string += "// Collect diagnostic data\n"

@@ -172,7 +172,7 @@ def register_CFunction_ds_min_radial_like_dirns_single_pt(
     :param CoordSystem: The coordinate system of the numerical grid.
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = f"Examining only radial-like (non-angular) directions at a given point on a numerical grid, find the minimum grid spacing ds_min."
+    desc = "Examining only radial-like (non-angular) directions at a given point on a numerical grid, find the minimum grid spacing ds_min."
     cfunc_type = "void"
     name = "ds_min_radial_like_dirns_single_pt"
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xx0, const REAL xx1, const REAL xx2, REAL *restrict ds_min_radial_like_dirns"
@@ -214,7 +214,7 @@ def register_CFunction_ds_min_single_pt(
     :param CoordSystem: The coordinate system of the numerical grid.
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = f"Examining all three directions at a given point on a numerical grid, find the minimum grid spacing ds_min."
+    desc = "Examining all three directions at a given point on a numerical grid, find the minimum grid spacing ds_min."
     cfunc_type = "void"
     name = "ds_min_single_pt"
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xx0, const REAL xx1, const REAL xx2, REAL *restrict ds_min"
@@ -314,10 +314,10 @@ def register_CFunction_numerical_grids_and_timestep(
   commondata->NUMGRIDS = {len(set_of_CoordSystems)};
 """
     if gridding_approach == "independent grid(s)":
-        body += f"""
-  {{
+        body += """
+  {
     // Independent grids
-    int Nx[3] = {{ -1, -1, -1 }};
+    int Nx[3] = { -1, -1, -1 };
 
     // Step 1.c: For each grid, set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx based on grid_physical_size
     const bool set_xxmin_xxmax_to_defaults = true;
