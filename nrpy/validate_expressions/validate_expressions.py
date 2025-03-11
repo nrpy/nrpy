@@ -138,7 +138,9 @@ def inject_mpfs_into_cse_expression(
             res = mp.nan
             print(
                 "inject_mpfs_into_cse_expression warning: after making replacements, found NaN.\n"
-                "   Seems to happen in SymTP Jacobians: rfm.Jac_dUrfm_dDSphUD[i][0]"
+                "   Seems to happen in SymTP Jacobians: rfm.Jac_dUrfm_dDSphUD[i][0]\n",
+                replaced,
+                reduced,
             )
         else:
             res = mpc(sp.N(reduced_expr, mp.dps))
