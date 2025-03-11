@@ -4,7 +4,6 @@ clang-format==20.1.0
 darglint
 ipython
 isort
-multiprocess
 mypy==1.15.0
 nrpypn
 nrpylatex

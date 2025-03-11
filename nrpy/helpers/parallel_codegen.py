@@ -10,7 +10,7 @@ import time
 from importlib import import_module
 from typing import Any, Callable, Dict, Tuple, Union, cast
 
-from multiprocess import Manager, Pool  # type: ignore # pylint: disable=E0611
+from multiprocessing import Manager, Pool  # type: ignore # pylint: disable=E0611
 
 import nrpy.c_function as cfc
 import nrpy.grid as gri
