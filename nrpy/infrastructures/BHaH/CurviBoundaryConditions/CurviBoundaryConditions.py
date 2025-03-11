@@ -1377,7 +1377,7 @@ const REAL partial_x0_partial_r, const REAL partial_x1_partial_r, const REAL par
 """
     for i in range(3):
         si = str(i)
-        if check_zero(rfm.Jac_dUrfm_dDSphUD[i][0]):
+        if check_zero(rfm.Jac_dUrfm_dDSphUD[i][0], fixed_mpfs_for_free_symbols=True):
             body += f"  const REAL partial_x{si}_f=0.0;\n"
         else:
             body += (
@@ -1429,7 +1429,9 @@ def setup_Cfunction_radiation_bcs(
         cfunc_decorators += " __device__"
     for i in range(3):
         # Do not generate FD1_arbitrary_upwind_xj_dirn() if the symbolic expression for dxj/dr == 0!
-        if not check_zero(rfm.Jac_dUrfm_dDSphUD[i][0]):
+        if not check_zero(
+            rfm.Jac_dUrfm_dDSphUD[i][0], fixed_mpfs_for_free_symbols=True
+        ):
             prefunc += setup_Cfunction_FD1_arbitrary_upwind(
                 dirn=i,
                 cfunc_decorators=cfunc_decorators,

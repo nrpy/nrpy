@@ -6,6 +6,7 @@ Emails:  ksible *at* outlook *dot* com
          zachetie *at** gmail *dot** com
 """
 
+import copy
 import hashlib
 import importlib
 import random
@@ -120,16 +121,13 @@ def inject_mpfs_into_cse_expression(
     """
     # Original logic, assumes reduced list only has one element
     reduced_expr = reduced[0]
-
+    free_symbols_dict_orig = copy.deepcopy(free_symbols_dict)
     for lhs, rhs in replaced:
         # Using .evalf(n=mp.dps) at the end ensures that purely numerical expressions are simplified
         # while maintaining the desired precision. This significantly speeds up the validation algorithm.
         free_symbols_dict[lhs] = rhs.xreplace(free_symbols_dict).evalf(n=mp.dps)
 
     reduced_expr = reduced_expr.xreplace(free_symbols_dict)
-
-    # nrpyAbs = sp.Function("nrpyAbs")
-    # reduced_expr = reduced_expr.subs(nrpyAbs, sp.Abs)
 
     try:
         res = mpf(reduced_expr)
@@ -139,11 +137,11 @@ def inject_mpfs_into_cse_expression(
             print(
                 "inject_mpfs_into_cse_expression warning: after making replacements, found NaN.\n"
                 "   Seems to happen in SymTP Jacobians: rfm.Jac_dUrfm_dDSphUD[i][0]\n",
-                free_symbols_dict,
+                free_symbols_dict_orig,
                 replaced,
                 reduced,
             )
-            partial_env = {} # type: ignore
+            partial_env = {}  # type: ignore
             for lhs, rhs in replaced:
                 rhs_numeric = rhs.xreplace(partial_env).xreplace(free_symbols_dict)
                 print(lhs, "=", rhs_numeric, rhs_numeric.evalf())  # helpful debug print
