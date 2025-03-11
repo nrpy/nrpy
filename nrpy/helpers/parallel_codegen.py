@@ -8,9 +8,8 @@ Author: Zachariah B. Etienne
 import logging
 import time
 from importlib import import_module
+from multiprocessing import Manager, Pool, set_start_method
 from typing import Any, Callable, Dict, Tuple, Union, cast
-
-from multiprocessing import Manager, Pool  # type: ignore # pylint: disable=E0611
 
 import nrpy.c_function as cfc
 import nrpy.grid as gri
@@ -239,8 +238,9 @@ def do_parallel_codegen() -> None:
 
     par.set_parval_from_str("parallel_codegen_stage", "codegen")
 
+    set_start_method("fork", force=True)
     manager = Manager()
-    NRPy_environment_to_unpack: Dict[str, Any] = manager.dict()
+    NRPy_environment_to_unpack: Dict[str, Any] = manager.dict()  # type: ignore
 
     with Pool() as pool:  # Set Pool(processes=1) to disable parallel codegen.
         pool.map(
