@@ -15,11 +15,11 @@ jobs:
 
     strategy:
       matrix:
-        os: [ 'ubuntu-20.04', 'ubuntu-22.04' ]
-        python-version: [ '3.6.7', '3.7.13', '3.8.18', '3.9.19', '3.x' ]
+        os: [ 'ubuntu-22.04', 'ubuntu-24.04' ]
+        python-version: [ '3.7.13', '3.8.12', '3.9.19', '3.x' ]
         exclude:
-          - os: 'ubuntu-22.04'
-            python-version: '3.6.7'
+          - os: 'ubuntu-24.04'
+            python-version: '3.7.13'
 
     steps:
       - uses: actions/checkout@v4
@@ -36,14 +36,14 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -U -r requirements.txt
-          if [[ "${{ matrix.python-version }}" != "3.6.7" && "${{ matrix.python-version }}" != "3.7.13"  && "${{ matrix.python-version }}" != "3.8.18" ]]; then
+          if [[ "${{ matrix.python-version }}" != "3.7.13"  && "${{ matrix.python-version }}" != "3.8.12" ]]; then
             pip install -U -r requirements-dev.txt
           else
             # Install packages from requirements-dev.txt without fixed versions; i.e., install the latest version compatible with this Python version.
             sed 's/==.*//' requirements-dev.txt | xargs pip install -U
           fi
-          if [[ "${{ matrix.python-version }}" == "3.8.18" ]]; then
-            pip install pylint==3.2.0  # pylint 3.2.4+ is broken in 3.8.18.
+          if [[ "${{ matrix.python-version }}" == "3.8.12" ]]; then
+            pip install pylint==3.2.0  # pylint 3.2.4+ is broken in 3.8.12.
           fi
           # FIXME: until NRPyLaTeX is updated in pypi.
           pip install -U nrpylatex
@@ -52,7 +52,7 @@ jobs:
 
       - name: Install sympy or DEVELOPMENT sympy based on Python version
         run: |
-          if [[ "${{ matrix.python-version }}" != "3.6.7" && "${{ matrix.python-version }}" != "3.7.13" ]]; then
+          if [[ "${{ matrix.python-version }}" != "3.7.13" ]]; then
             pip install git+https://github.com/sympy/sympy.git
           else
             pip install sympy
@@ -63,8 +63,8 @@ jobs:
           echo "Running CI tests with SymPy version = $(isympy --version)"
           echo "Running CI tests with clang-format version = $(clang-format --version)"
 
-      - name: Check mypy and black versions when Python != 3.6.7 and != 3.7.13 chosen (they are too broken in those Python versions).
-        if: matrix.python-version != '3.6.7' && matrix.python-version != '3.7.13'
+      - name: Check mypy and black versions when Python != 3.7.13 chosen (they are too broken in those Python versions).
+        if: matrix.python-version != '3.7.13'
         run: |
           mypy --version
           black --version
@@ -132,9 +132,9 @@ jobs:
               run_test_step "Doctests" "PYTHONPATH=.:$PYTHONPATH python \"$python_file\"" "doctests"
             fi
           
-            # Turns out that black in Python 3.6 & 3.7 has a heart attack when parsing equations/general_relativity/BSSN_quantities.py:
+            # Turns out that black in Python 3.7 has a heart attack when parsing equations/general_relativity/BSSN_quantities.py:
             # INTERNAL ERROR: Black produced code that is not equivalent to the source. Please report a bug on ....
-            if [[ "$python_version" != *"3.6.7"* && "$python_version" != *"3.7.13"* && "$python_version" != *"3.8.18"* ]]; then
+            if [[ "$python_version" != *"3.7.13"* && "$python_version" != *"3.8.12"* ]]; then
               # Step: black
               run_test_step "black" "black --check \"$python_file\"" "black"
           
@@ -147,7 +147,7 @@ jobs:
           
             # Step: pylint
             echo "-={ Step $step_counter: pylint }=-"
-            if [[ "$python_version" == *"3.6.7"* || "$python_version" == *"3.7.13"* || "$python_version" == *"3.8.18"* ]]; then
+            if [[ "$python_version" == *"3.7.13"* || "$python_version" == *"3.8.12"* ]]; then
               pylint_rcfile=".pylintrc_python36"
             else
               pylint_rcfile=".pylintrc"
@@ -292,11 +292,11 @@ jobs:
 
     strategy:
       matrix:
-        os: [ 'ubuntu-20.04', 'ubuntu-22.04' ]
-        python-version: [ '3.6.7', '3.7.13', '3.x' ]
+        os: [ 'ubuntu-22.04', 'ubuntu-24.04' ]
+        python-version: [ '3.7.13', '3.x' ]
         exclude:
           - os: 'ubuntu-22.04'
-            python-version: '3.6.7'
+            python-version: '3.7.13'
 
     steps:
       - uses: actions/checkout@v4
@@ -313,7 +313,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          if [[ "${{ matrix.python-version }}" != "3.6.7" && "${{ matrix.python-version }}" != "3.7.13" ]]; then pip install -U mypy==1.8.0 black==24.1.1; fi
+          if [[ "${{ matrix.python-version }}" != "3.7.13" ]]; then pip install -U mypy==1.8.0 black==24.1.1; fi
           pip install -U pylint clang-format ipython setuptools
           sudo apt-get -y install libgsl-dev
 
