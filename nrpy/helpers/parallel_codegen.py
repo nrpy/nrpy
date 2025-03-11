@@ -238,6 +238,13 @@ def do_parallel_codegen() -> None:
 
     par.set_parval_from_str("parallel_codegen_stage", "codegen")
 
+    # By default, MacOS adopts the "spawn" method, which breaks the global environment.
+    #   Linux, on the other hand, uses the "fork" method, which preserves the environment.
+    #   Luckily MacOS does support "fork", though Apple advises against its use because fork
+    #   without an exec step can cause weird breakage on macOS with certain libraries.
+    #   Empirically, for NRPy, this seems to work fine.
+    # Note that prior to using multiprocessing, we used the `multiprocess` library,
+    #   which was very janky -- causing all sorts of race conditions.
     set_start_method("fork", force=True)
     manager = Manager()
     NRPy_environment_to_unpack: Dict[str, Any] = manager.dict()  # type: ignore
