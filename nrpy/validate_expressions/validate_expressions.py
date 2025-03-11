@@ -142,6 +142,11 @@ def inject_mpfs_into_cse_expression(
                 replaced,
                 reduced,
             )
+            partial_env = {}
+            for lhs, rhs in replaced:
+                rhs_numeric = rhs.xreplace(partial_env).xreplace(free_symbols_dict)
+                print(lhs, "=", rhs_numeric, rhs_numeric.evalf())  # helpful debug print
+                partial_env[lhs] = rhs_numeric.evalf(n=mp.dps)
         else:
             res = mpc(sp.N(reduced_expr, mp.dps))
     return res
