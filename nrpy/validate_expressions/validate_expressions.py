@@ -139,6 +139,7 @@ def inject_mpfs_into_cse_expression(
             print(
                 "inject_mpfs_into_cse_expression warning: after making replacements, found NaN.\n"
                 "   Seems to happen in SymTP Jacobians: rfm.Jac_dUrfm_dDSphUD[i][0]\n",
+                free_symbols_dict,
                 replaced,
                 reduced,
             )
