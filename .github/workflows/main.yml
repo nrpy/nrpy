@@ -295,7 +295,7 @@ jobs:
         os: [ 'ubuntu-22.04', 'ubuntu-24.04' ]
         python-version: [ '3.7.13', '3.x' ]
         exclude:
-          - os: 'ubuntu-22.04'
+          - os: 'ubuntu-24.04'
             python-version: '3.7.13'
 
     steps:
