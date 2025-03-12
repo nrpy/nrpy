@@ -20,16 +20,14 @@ __host__ __device__ void Cart_to_xx_and_nearest_i0i1i2__rfm__HoleySinhSpherical(
   {
     /*
      *  Original SymPy expressions:
-     *  "[xx[0] = params->AMPL*(exp(xx0/params->SINHW) - exp(-xx0/params->SINHW))*sin(xx1)*cos(xx2)/(exp(1/params->SINHW) - exp(-1/params->SINHW))]"
-     *  "[xx[1] = params->AMPL*(exp(xx0/params->SINHW) - exp(-xx0/params->SINHW))*sin(xx1)*sin(xx2)/(exp(1/params->SINHW) - exp(-1/params->SINHW))]"
-     *  "[xx[2] = params->AMPL*(exp(xx0/params->SINHW) - exp(-xx0/params->SINHW))*cos(xx1)/(exp(1/params->SINHW) - exp(-1/params->SINHW))]"
+     *  "[xx[0] = params->SINHW*asinh(sqrt(params->Cartx**2 + params->Carty**2 + params->Cartz**2)*sinh(1/params->SINHW)/params->AMPL)]"
+     *  "[xx[1] = acos(params->Cartz/sqrt(params->Cartx**2 + params->Carty**2 + params->Cartz**2))]"
+     *  "[xx[2] = atan2(params->Carty, params->Cartx)]"
      */
-    const REAL tmp0 = (1.0 / (params->SINHW));
-    const REAL tmp2 = params->AMPL * (exp(tmp0 * xx0) - exp(-tmp0 * xx0)) / (exp(tmp0) - exp(-tmp0));
-    const REAL tmp3 = tmp2 * sin(xx1);
-    xx[0] = tmp3 * cos(xx2);
-    xx[1] = tmp3 * sin(xx2);
-    xx[2] = tmp2 * cos(xx1);
+    const REAL tmp0 = sqrt(((params->Cartx) * (params->Cartx)) + ((params->Carty) * (params->Carty)) + ((params->Cartz) * (params->Cartz)));
+    xx[0] = params->SINHW * asinh(tmp0 * sinh((1.0 / (params->SINHW))) / params->AMPL);
+    xx[1] = acos(params->Cartz / tmp0);
+    xx[2] = atan2(params->Carty, params->Cartx);
 
     // Find the nearest grid indices (i0, i1, i2) for the given Cartesian coordinates (x, y, z).
     // Assuming a cell-centered grid, which follows the pattern:

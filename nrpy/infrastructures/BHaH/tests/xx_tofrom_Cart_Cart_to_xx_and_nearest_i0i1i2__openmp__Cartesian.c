@@ -19,13 +19,13 @@ void Cart_to_xx_and_nearest_i0i1i2__rfm__Cartesian(const params_struct *restrict
   {
     /*
      *  Original SymPy expressions:
-     *  "[xx[0] = xx0]"
-     *  "[xx[1] = xx1]"
-     *  "[xx[2] = xx2]"
+     *  "[xx[0] = params->Cartx]"
+     *  "[xx[1] = params->Carty]"
+     *  "[xx[2] = params->Cartz]"
      */
-    xx[0] = xx0;
-    xx[1] = xx1;
-    xx[2] = xx2;
+    xx[0] = params->Cartx;
+    xx[1] = params->Carty;
+    xx[2] = params->Cartz;
 
     // Find the nearest grid indices (i0, i1, i2) for the given Cartesian coordinates (x, y, z).
     // Assuming a cell-centered grid, which follows the pattern:
