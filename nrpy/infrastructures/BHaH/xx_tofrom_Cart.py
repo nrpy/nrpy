@@ -15,14 +15,8 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.helpers.parallelization.utilities as gpu_utils
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
-from nrpy.helpers.expression_utils import (
-    generate_definition_header,
-    get_params_commondata_symbols_from_expr_list,
-    get_unique_expression_symbols_as_strings,
-)
 
 
 # Construct Cart_to_xx_and_nearest_i0i1i2() C function for
@@ -47,6 +41,26 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     :raises ValueError: When the value of `gridding_approach` is not "independent grid(s)"
                         or "multipatch".
     :return: None if in registration phase, else the updated NRPy environment.
+
+    Doctests:
+    >>> from nrpy.helpers.generic import validate_strings, clang_format
+    >>> import nrpy.c_function as cfc
+    >>> import nrpy.params as par
+    >>> from nrpy.reference_metric import unittest_CoordSystems
+    >>> supported_Parallelizations = ["openmp", "cuda"]
+    >>> name = "Cart_to_xx_and_nearest_i0i1i2"
+    >>> for parallelization in supported_Parallelizations:
+    ...    par.set_parval_from_str("parallelization", parallelization)
+    ...    for CoordSystem in unittest_CoordSystems:
+    ...       cfc.CFunction_dict.clear()
+    ...       _ = register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
+    ...       generated_str = clang_format(cfc.CFunction_dict[f'{name}__rfm__{CoordSystem}'].full_function)
+    ...       validation_desc = f"{name}__{parallelization}__{CoordSystem}"
+    ...       validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
+    Setting up reference_metric[SinhSymTP]...
+    Setting up reference_metric[HoleySinhSpherical]...
+    Setting up reference_metric[Cartesian]...
+    Setting up reference_metric[SinhCylindricalv2n2]...
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -108,21 +122,24 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
                     rfm.NewtonRaphson_f_of_xx[i],
                     sp.diff(rfm.NewtonRaphson_f_of_xx[i], rfm.xx[i]),
                 ]
-                param_symbols, _ = get_params_commondata_symbols_from_expr_list(
-                    NR1_expr, exclude=[f"xx{j}" for j in range(3)]
-                )
-                params_definitions = generate_definition_header(
-                    param_symbols,
-                    enable_intrinsics=False,
-                    var_access=gpu_utils.get_params_access("openmp"),
-                )
-                body += f"""{params_definitions}
+
+                NR_expr_list = [
+                    expr.subs(
+                        {
+                            symbol: sp.symbols(f"params->{symbol.name}")
+                            for symbol in expr.free_symbols
+                            if symbol.name not in {"xx0", "xx1", "xx2"}
+                        }
+                    )
+                    for expr in NR1_expr
+                ]
+                body += f"""
   iter=0;
   REAL xx{i}  = 0.5 * (params->xxmin{i} + params->xxmax{i});
   while(iter < ITER_MAX && !tolerance_has_been_met) {{
     REAL f_of_xx{i}, fprime_of_xx{i};
 
-{ccg.c_codegen(NR1_expr,
+{ccg.c_codegen(NR_expr_list,
 [f'f_of_xx{i}', f'fprime_of_xx{i}'], include_braces=True, verbose=False)}
     const REAL xx{i}_np1 = xx{i} - f_of_xx{i} / fprime_of_xx{i};
 
@@ -138,19 +155,22 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
   xx[{i}] = xx{i};
 """
     else:
-        expr_list = [rfm.Cart_to_xx[0], rfm.Cart_to_xx[1], rfm.Cart_to_xx[2]]
-        unique_symbols = []
-        for expr in expr_list:
-            unique_symbols += get_unique_expression_symbols_as_strings(
-                expr,
-                exclude=[f"xx{i}" for i in range(3)]
-                + [f"Cart{c}" for c in ["x", "y", "z"]],
+        xx_to_Cart_expr_list = [
+            expr.subs(
+                {
+                    symbol: sp.symbols(f"params->{symbol.name}")
+                    for symbol in expr.free_symbols
+                    if symbol.name not in {"xx0", "xx1", "xx2"}
+                }
             )
-        unique_symbols = sorted(list(set(unique_symbols)))
-        for sym in unique_symbols:
-            body += f"const REAL {sym} = params->{sym};\n"
+            for expr in [
+                rfm.xx_to_Cart[0],
+                rfm.xx_to_Cart[1],
+                rfm.xx_to_Cart[2],
+            ]
+        ]
         body += ccg.c_codegen(
-            expr_list,
+            xx_to_Cart_expr_list,
             ["xx[0]", "xx[1]", "xx[2]"],
             include_braces=False,
         )
@@ -198,6 +218,22 @@ def register_CFunction_xx_to_Cart(
 
     :raises ValueError: If an invalid gridding_approach is provided.
     :return: None if in registration phase, else the updated NRPy environment.
+
+    Doctests:
+    >>> from nrpy.helpers.generic import validate_strings, clang_format
+    >>> import nrpy.c_function as cfc
+    >>> import nrpy.params as par
+    >>> from nrpy.reference_metric import unittest_CoordSystems
+    >>> supported_Parallelizations = ["openmp", "cuda"]
+    >>> name = "xx_to_Cart"
+    >>> for parallelization in supported_Parallelizations:
+    ...    par.set_parval_from_str("parallelization", parallelization)
+    ...    for CoordSystem in unittest_CoordSystems:
+    ...       cfc.CFunction_dict.clear()
+    ...       _ = register_CFunction_xx_to_Cart(CoordSystem)
+    ...       generated_str = clang_format(cfc.CFunction_dict[f'{name}__rfm__{CoordSystem}'].full_function)
+    ...       validation_desc = f"{name}__{parallelization}__{CoordSystem}"
+    ...       validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -221,19 +257,6 @@ def register_CFunction_xx_to_Cart(
     cfunc_decorators = "__host__ __device__" if parallelization == "cuda" else ""
 
     rfm = refmetric.reference_metric[CoordSystem]
-    expr_list = [
-        rfm.xx_to_Cart[0] + gri.Cart_origin[0],
-        rfm.xx_to_Cart[1] + gri.Cart_origin[1],
-        rfm.xx_to_Cart[2] + gri.Cart_origin[2],
-    ]
-    unique_symbols = []
-    for expr in expr_list:
-        unique_symbols += get_unique_expression_symbols_as_strings(
-            expr, exclude=[f"xx{i}" for i in range(3)]
-        )
-    unique_symbols = sorted(list(set(unique_symbols)))
-    for sym in unique_symbols:
-        body += f"const REAL {sym} = params->{sym};\n"
 
     # ** Code body for the xx-to-Cart conversion process **
     # For a grid with an origin at (1,1,1), adding the origin to a grid point such as (1,2,3)
@@ -284,3 +307,16 @@ def register_CFunction_xx_to_Cart(
         cfunc_decorators=cfunc_decorators,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")
