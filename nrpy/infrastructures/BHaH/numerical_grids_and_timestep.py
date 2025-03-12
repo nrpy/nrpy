@@ -308,7 +308,8 @@ def register_CFunction_numerical_grids_and_timestep(
     params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata, bool calling_for_first_time"
     body = r"""
   // Step 1.a: Set each CodeParameter in griddata.params to default, for MAXNUMGRIDS grids.
-  params_struct_set_to_default(commondata, griddata);"""
+  if(calling_for_first_time)
+    params_struct_set_to_default(commondata, griddata);"""
     body += rf"""
   // Step 1.b: Set commondata->NUMGRIDS to number of CoordSystems we have
   commondata->NUMGRIDS = {len(set_of_CoordSystems)};
