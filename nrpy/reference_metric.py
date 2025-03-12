@@ -1551,6 +1551,13 @@ supported_CoordSystems = [
     "HoleySinhSpherical",
 ]
 
+unittest_CoordSystems = [
+    "SinhSymTP",
+    "HoleySinhSpherical",
+    "Cartesian",
+    "SinhCylindricalv2n2"
+]
+
 if __name__ == "__main__":
     import doctest
     import os
