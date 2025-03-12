@@ -155,22 +155,18 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
   xx[{i}] = xx{i};
 """
     else:
-        xx_to_Cart_expr_list = [
+        Cart_to_xx_expr_list = [
             expr.subs(
                 {
                     symbol: sp.symbols(f"params->{symbol.name}")
                     for symbol in expr.free_symbols
-                    if symbol.name not in {"xx0", "xx1", "xx2"}
+                    if symbol.name not in {"xx0", "xx1", "xx2", "Cartx", "Carty", "Cartz"}
                 }
             )
-            for expr in [
-                rfm.xx_to_Cart[0],
-                rfm.xx_to_Cart[1],
-                rfm.xx_to_Cart[2],
-            ]
+            for expr in [rfm.Cart_to_xx[0], rfm.Cart_to_xx[1], rfm.Cart_to_xx[2]]
         ]
         body += ccg.c_codegen(
-            xx_to_Cart_expr_list,
+            Cart_to_xx_expr_list,
             ["xx[0]", "xx[1]", "xx[2]"],
             include_braces=False,
         )
