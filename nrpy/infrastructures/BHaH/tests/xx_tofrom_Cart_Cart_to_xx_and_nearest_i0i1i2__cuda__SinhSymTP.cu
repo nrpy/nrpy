@@ -20,22 +20,21 @@ __host__ __device__ void Cart_to_xx_and_nearest_i0i1i2__rfm__SinhSymTP(const par
   {
     /*
      *  Original SymPy expressions:
-     *  "[xx[0] = params->SQRT1_2*sqrt(params->Cartx**2 + params->Carty**2 + params->Cartz**2 - params->bScale**2 +
-     * sqrt(-4*params->Cartz**2*params->bScale**2 + params->bScale**4 + 2*params->bScale**2*(params->Cartx**2 + params->Carty**2 + params->Cartz**2) +
-     * (params->Cartx**2 + params->Carty**2 + params->Cartz**2)**2))]"
-     *  "[xx[1] = acos(params->SQRT1_2*sqrt(1 + (params->Cartx**2 + params->Carty**2 + params->Cartz**2)/params->bScale**2 -
-     * sqrt(-4*params->Cartz**2*params->bScale**2 + params->bScale**4 + 2*params->bScale**2*(params->Cartx**2 + params->Carty**2 + params->Cartz**2) +
-     * (params->Cartx**2 + params->Carty**2 + params->Cartz**2)**2)/params->bScale**2)*sign(params->Cartz))]"
-     *  "[xx[2] = atan2(params->Carty, params->Cartx)]"
+     *  "[xx[0] = params->SQRT1_2*sqrt(Cartx**2 + Carty**2 + Cartz**2 - params->bScale**2 + sqrt(-4*Cartz**2*params->bScale**2 + params->bScale**4 +
+     * 2*params->bScale**2*(Cartx**2 + Carty**2 + Cartz**2) + (Cartx**2 + Carty**2 + Cartz**2)**2))]"
+     *  "[xx[1] = acos(params->SQRT1_2*sqrt(1 + (Cartx**2 + Carty**2 + Cartz**2)/params->bScale**2 - sqrt(-4*Cartz**2*params->bScale**2 +
+     * params->bScale**4 + 2*params->bScale**2*(Cartx**2 + Carty**2 + Cartz**2) + (Cartx**2 + Carty**2 +
+     * Cartz**2)**2)/params->bScale**2)*sign(Cartz))]"
+     *  "[xx[2] = atan2(Carty, Cartx)]"
      */
     const REAL tmp1 = ((params->bScale) * (params->bScale));
-    const REAL tmp2 = ((params->Cartx) * (params->Cartx)) + ((params->Carty) * (params->Carty)) + ((params->Cartz) * (params->Cartz));
+    const REAL tmp2 = ((Cartx) * (Cartx)) + ((Carty) * (Carty)) + ((Cartz) * (Cartz));
     const REAL tmp4 = (1.0 / (tmp1));
-    const REAL tmp3 = sqrt(-4 * ((params->Cartz) * (params->Cartz)) * tmp1 +
-                           ((params->bScale) * (params->bScale) * (params->bScale) * (params->bScale)) + 2 * tmp1 * tmp2 + ((tmp2) * (tmp2)));
+    const REAL tmp3 = sqrt(-4 * ((Cartz) * (Cartz)) * tmp1 + ((params->bScale) * (params->bScale) * (params->bScale) * (params->bScale)) +
+                           2 * tmp1 * tmp2 + ((tmp2) * (tmp2)));
     xx[0] = params->SQRT1_2 * sqrt(-tmp1 + tmp2 + tmp3);
-    xx[1] = acos(params->SQRT1_2 * sqrt(tmp2 * tmp4 - tmp3 * tmp4 + 1) * (((params->Cartz) > 0) - ((params->Cartz) < 0)));
-    xx[2] = atan2(params->Carty, params->Cartx);
+    xx[1] = acos(params->SQRT1_2 * sqrt(tmp2 * tmp4 - tmp3 * tmp4 + 1) * (((Cartz) > 0) - ((Cartz) < 0)));
+    xx[2] = atan2(Carty, Cartx);
 
     // Find the nearest grid indices (i0, i1, i2) for the given Cartesian coordinates (x, y, z).
     // Assuming a cell-centered grid, which follows the pattern:

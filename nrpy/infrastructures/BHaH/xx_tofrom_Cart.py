@@ -160,7 +160,8 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
                 {
                     symbol: sp.symbols(f"params->{symbol.name}")
                     for symbol in expr.free_symbols
-                    if symbol.name not in {"xx0", "xx1", "xx2", "Cartx", "Carty", "Cartz"}
+                    if symbol.name
+                    not in {"xx0", "xx1", "xx2", "Cartx", "Carty", "Cartz"}
                 }
             )
             for expr in [rfm.Cart_to_xx[0], rfm.Cart_to_xx[1], rfm.Cart_to_xx[2]]
