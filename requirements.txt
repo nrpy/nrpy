@@ -1,6 +1,5 @@
 appdirs
 clang-format
-multiprocess
 nrpypn
 sympy
 typing-extensions

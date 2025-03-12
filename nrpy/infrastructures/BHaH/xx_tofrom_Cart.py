@@ -235,15 +235,39 @@ def register_CFunction_xx_to_Cart(
     for sym in unique_symbols:
         body += f"const REAL {sym} = params->{sym};\n"
 
-    # ** Code body for the conversion process **
-    # Suppose grid origin is at (1,1,1). Then the Cartesian gridpoint at (1,2,3) will be (2,3,4);
-    # hence the xx_to_Cart[i] + gri.Cart_origin[i] below:
-    body += """
-const REAL xx0 = xx[0];
-const REAL xx1 = xx[1];
-const REAL xx2 = xx[2];
-""" + ccg.c_codegen(
-        expr_list,
+    # ** Code body for the xx-to-Cart conversion process **
+    # For a grid with an origin at (1,1,1), adding the origin to a grid point such as (1,2,3)
+    # translates it to its actual Cartesian coordinates (2,3,4). This is why each expression is
+    # constructed as xx_to_Cart[i] + gri.Cart_origin[i] for i = 0, 1, 2.
+    #
+    # In the resulting expressions, we want to clearly mark all parameter symbols.
+    # Any free symbol that is not one of "xx0", "xx1", or "xx2" is considered a parameter.
+    # We rename these symbols by prefixing their names with "params->" (e.g., x becomes params->x)
+    # to differentiate them from other symbols.
+    #
+    # The list comprehension below constructs the new list of Cartesian expressions,
+    # applying the substitution to each coordinate expression.
+    xx_to_Cart_expr_list = [
+        expr.subs(
+            {
+                symbol: sp.symbols(f"params->{symbol.name}")
+                for symbol in expr.free_symbols
+                if symbol.name not in {"xx0", "xx1", "xx2"}
+            }
+        )
+        for expr in [
+            rfm.xx_to_Cart[0] + gri.Cart_origin[0],
+            rfm.xx_to_Cart[1] + gri.Cart_origin[1],
+            rfm.xx_to_Cart[2] + gri.Cart_origin[2],
+        ]
+    ]
+
+    body = """
+    const REAL xx0 = xx[0];
+    const REAL xx1 = xx[1];
+    const REAL xx2 = xx[2];
+    """ + ccg.c_codegen(
+        xx_to_Cart_expr_list,
         ["xCart[0]", "xCart[1]", "xCart[2]"],
     )
 

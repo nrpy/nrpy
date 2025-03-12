@@ -37,10 +37,10 @@ par.register_CodeParameter(
     add_to_glb_code_params_dict=True,
 )
 par.register_CodeParameter(
-    "char[50]",
+    "char[100]",
     __name__,
     "CoordSystemName",
-    "must set",
+    "unset",
     add_to_glb_code_params_dict=True,
     add_to_parfile=False,
     add_to_set_CodeParameters_h=True,
@@ -105,7 +105,8 @@ class ReferenceMetric:
         # Non-angular coordinate directions
         self.radial_like_dirns: List[int] = []
         # module name for CodeParameters
-        self.CodeParam_modulename = f"{__name__}_{CoordSystem}"
+        self.CodeParam_modulename = f"{__name__}"  # We don't add CoordSystem here,
+        #                                            since many CoordSystems share the same parameter; e.g., AMPL.
         self.add_CodeParams_to_glb_code_params_dict = False
         self.add_CodeParams_to_glb_code_params_dict = (
             self.CoordSystem

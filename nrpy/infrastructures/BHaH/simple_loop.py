@@ -182,7 +182,7 @@ def simple_loop(
     # 'AllPoints': loop over all points on a numerical grid, including ghost zones
     if loop_region == "":
         return loop_body
-    elif loop_region not in implemented_loop_regions:
+    if loop_region not in implemented_loop_regions:
         raise ValueError(implemented_loop_regions_err(loop_region))
     i2i1i0_mins, i2i1i0_maxs = get_loop_region_ranges(
         loop_region, min_idx_prefix="tid" if parallelization == "cuda" else None

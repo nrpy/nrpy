@@ -25,11 +25,11 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
     >>> _real_array = par.register_CodeParameter("REAL[5]", "CodeParameters_c_files", "bad_real_array", 0.0, commondata=True, add_to_set_CodeParameters_h=True)
     Traceback (most recent call last):
     ...
-    ValueError: Parameter 'bad_real_array' of type 'REAL[5]': For REAL or int array parameters, commondata must be True, and add_to_set_CodeParameters_h must be False.
-    >>> _int_array = par.register_CodeParameter("int[3]", "CodeParameters_c_files", "bad_int_array", 42, commondata=False, add_to_set_CodeParameters_h=False)
+    ValueError: Parameter 'bad_real_array' of type 'REAL[5]': For REAL or int array parameters, add_to_set_CodeParameters_h must be False.
+    >>> _int_array = par.register_CodeParameter("int[3]", "CodeParameters_c_files", "bad_int_array", 42, commondata=False, add_to_set_CodeParameters_h=True)
     Traceback (most recent call last):
     ...
-    ValueError: Parameter 'bad_int_array' of type 'int[3]': For REAL or int array parameters, commondata must be True, and add_to_set_CodeParameters_h must be False.
+    ValueError: Parameter 'bad_int_array' of type 'int[3]': For REAL or int array parameters, add_to_set_CodeParameters_h must be False.
     >>> _, __ = par.register_CodeParameters("REAL", "CodeParameters_c_files", ["a", "pi_three_sigfigs"], [1, 3.14], commondata=True)
     >>> ___ = par.register_CodeParameter("#define", "CodeParameters_c_files", "b", 0)
     >>> _leaveitbe = par.register_CodeParameter("REAL", "CodeParameters_c_files", "leaveitbe", add_to_parfile=False, add_to_set_CodeParameters_h=False)

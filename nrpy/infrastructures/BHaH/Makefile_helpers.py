@@ -239,7 +239,7 @@ all: {exec_or_library_name}
 \t$(MAKE) CFLAGS="$(VALGRIND_CFLAGS)" all
 """
     if not create_lib:
-        Makefile_str += f"""\tvalgrind --track-origins=yes --leak-check=full -s ./{exec_or_library_name}
+        Makefile_str += f"""\tvalgrind --track-origins=yes --leak-check=full --show-leak-kinds=all -s ./{exec_or_library_name}
 
 """
 

@@ -521,8 +521,9 @@ void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const params_struct &pa
 
   pup_tmpBuffers_struct(p, gd.tmpBuffers, gd.params, gd.nonlocalinnerbcstruct, gd.gridfuncs);
 
-  PUParray(p, gd.CoordSystemname, 100);
-  PUParray(p, gd.gridname, 100);
+  // ZACH SAYS: This doesn't seem to be correct anymore.
+  //PUParray(p, gd.CoordSystemname, 100);
+  //PUParray(p, gd.gridname, 100);
 
   pup_rfm_struct(p, gd.rfmstruct, &gd.params);
 }

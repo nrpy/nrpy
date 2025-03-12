@@ -31,6 +31,7 @@ for i in range(3):
 _ = par.CodeParameter("REAL", __name__, "convergence_factor", 1.0, commondata=True)
 _ = par.CodeParameter("int", __name__, "CoordSystem_hash", commondata=False, add_to_parfile=False)
 _ = par.CodeParameter("int", __name__, "grid_idx", commondata=False, add_to_parfile=False)
+_ = par.CodeParameter("char[100]", __name__, "gridname", commondata=False, add_to_parfile=False)
 # fmt: on
 
 
@@ -50,10 +51,6 @@ def register_CFunction_numerical_grid_params_Nxx_dxx_xx(
         raise ValueError(
             f"{CoordSystem} is not in Nxx_dict = {Nxx_dict}. Please add it."
         )
-    for dirn in range(3):
-        par.adjust_CodeParam_default(f"Nxx{dirn}", Nxx_dict[CoordSystem][dirn])
-    par.adjust_CodeParam_default("CoordSystemName", CoordSystem)
-
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = f"""Initializes a cell-centered grid in {CoordSystem} coordinates based on physical dimensions (grid_physical_size).
 
@@ -84,7 +81,7 @@ if( Nx[0]!=-1 && Nx[1]!=-1 && Nx[2]!=-1 ) {
     for dirn in range(3):
         body += f"params->Nxx{dirn} = Nx[{dirn}];\n"
     body += f"""}}
-snprintf(params->CoordSystemName, 50, "{CoordSystem}");
+snprintf(params->CoordSystemName, 100, "{CoordSystem}");
 
 // Resize grid by convergence_factor; used for convergence testing.
 {{
@@ -175,7 +172,7 @@ def register_CFunction_ds_min_radial_like_dirns_single_pt(
     :param CoordSystem: The coordinate system of the numerical grid.
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = f"Examining all three directions at a given point on a {CoordSystem} numerical grid, find the minimum grid spacing ds_min."
+    desc = "Examining only radial-like (non-angular) directions at a given point on a numerical grid, find the minimum grid spacing ds_min."
     cfunc_type = "void"
     name = "ds_min_radial_like_dirns_single_pt"
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xx0, const REAL xx1, const REAL xx2, REAL *restrict ds_min_radial_like_dirns"
@@ -217,7 +214,7 @@ def register_CFunction_ds_min_single_pt(
     :param CoordSystem: The coordinate system of the numerical grid.
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = f"Examining all three directions at a given point on a {CoordSystem} numerical grid, find the minimum grid spacing ds_min."
+    desc = "Examining all three directions at a given point on a numerical grid, find the minimum grid spacing ds_min."
     cfunc_type = "void"
     name = "ds_min_single_pt"
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xx0, const REAL xx1, const REAL xx2, REAL *restrict ds_min"
@@ -313,20 +310,23 @@ def register_CFunction_numerical_grids_and_timestep(
   // Step 1.a: Set each CodeParameter in griddata.params to default, for MAXNUMGRIDS grids.
   params_struct_set_to_default(commondata, griddata);"""
     body += rf"""
-  // Independent grids
-  int Nx[3] = {{ -1, -1, -1 }};
-
   // Step 1.b: Set commondata->NUMGRIDS to number of CoordSystems we have
   commondata->NUMGRIDS = {len(set_of_CoordSystems)};
 """
     if gridding_approach == "independent grid(s)":
         body += """
   {
+    // Independent grids
+    int Nx[3] = { -1, -1, -1 };
+
     // Step 1.c: For each grid, set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx based on grid_physical_size
     const bool set_xxmin_xxmax_to_defaults = true;
     int grid=0;
 """
         for which_CoordSystem, CoordSystem in enumerate(set_of_CoordSystems):
+            body += f"""// In multipatch, gridname is a helpful alias indicating position of the patch. E.g., "lower {CoordSystem} patch"
+    snprintf(griddata[grid].params.gridname, 100, "grid_{CoordSystem}");
+"""
             body += (
                 f"  griddata[grid].params.CoordSystem_hash = {CoordSystem.upper()};\n"
             )
@@ -338,35 +338,21 @@ def register_CFunction_numerical_grids_and_timestep(
         # fmt: off
         _ = par.CodeParameter("char[200]", __name__, "multipatch_choice", "", commondata=True, add_to_parfile=True)
         # fmt: on
+        unit_vector_dict = {"x": [1, 0, 0], "y": [0, 1, 0], "z": [0, 0, 1]}
         for dirn in ["x", "y", "z"]:
             # Direction of unit vectors relative to original, accounting for accumulation of regrids."
             _ = par.register_CodeParameter(
-                "REAL",
+                "REAL[3]",
                 __name__,
-                f"cumulative_regrid_{dirn}hatU[3]",
-                "unset",  # Set below in C code when calling_for_first_time.
-                commondata=True,
+                f"cumulatively_rotated_{dirn}hatU",
+                unit_vector_dict[
+                    dirn
+                ],  # Set below in C code when calling_for_first_time.
+                commondata=False,
                 add_to_parfile=False,
                 add_to_set_CodeParameters_h=False,
             )
         body += """
-  if(calling_for_first_time) {
-    // Initialize rotation unit vectors
-    // Set the x-hat unit vector (1, 0, 0)
-    commondata->cumulative_regrid_xhatU[0] = 1;
-    commondata->cumulative_regrid_xhatU[1] = 0;
-    commondata->cumulative_regrid_xhatU[2] = 0;
-
-    // Set the y-hat unit vector (0, 1, 0)
-    commondata->cumulative_regrid_yhatU[0] = 0;
-    commondata->cumulative_regrid_yhatU[1] = 1;
-    commondata->cumulative_regrid_yhatU[2] = 0;
-
-    // Set the z-hat unit vector (0, 0, 1)
-    commondata->cumulative_regrid_zhatU[0] = 0;
-    commondata->cumulative_regrid_zhatU[1] = 0;
-    commondata->cumulative_regrid_zhatU[2] = 1;
-  }
   // Step 1.c: Multipatch grid structures are set up algorithmically.
   multipatch_grids_set_up(commondata, griddata);
 """

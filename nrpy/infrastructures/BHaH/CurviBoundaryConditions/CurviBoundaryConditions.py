@@ -489,10 +489,9 @@ def register_CFunction_bcstruct_set_up(
     >>> supported_Parallelizations = ["openmp", "cuda"]
     >>> name = "bcstruct_set_up__rfm"
     >>> for parallelization in supported_Parallelizations:
-    ...    parallelization = par.parval_from_str("parallelization")
     ...    for CoordSystem in supported_CoordSystems:
     ...       cfc.CFunction_dict.clear()
-    ...       register_CFunction_bcstruct_set_up(CoordSystem)  # doctest: +SKIP
+    ...       register_CFunction_bcstruct_set_up(CoordSystem)
     ...       generated_str = cfc.CFunction_dict[f'{name}__{CoordSystem}'].full_function
     ...       validation_desc = f"{name}__{parallelization}__{CoordSystem}"
     ...       validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
@@ -1351,7 +1350,7 @@ const REAL partial_x0_partial_r, const REAL partial_x1_partial_r, const REAL par
 """
     for i in range(3):
         si = str(i)
-        if check_zero(rfm.Jac_dUrfm_dDSphUD[i][0]):
+        if check_zero(rfm.Jac_dUrfm_dDSphUD[i][0], fixed_mpfs_for_free_symbols=True):
             body += f"  const REAL partial_x{si}_f=0.0;\n"
         else:
             body += (
@@ -1403,7 +1402,9 @@ def setup_Cfunction_radiation_bcs(
         cfunc_decorators += " __device__"
     for i in range(3):
         # Do not generate FD1_arbitrary_upwind_xj_dirn() if the symbolic expression for dxj/dr == 0!
-        if not check_zero(rfm.Jac_dUrfm_dDSphUD[i][0]):
+        if not check_zero(
+            rfm.Jac_dUrfm_dDSphUD[i][0], fixed_mpfs_for_free_symbols=True
+        ):
             prefunc += setup_Cfunction_FD1_arbitrary_upwind(
                 dirn=i,
                 cfunc_decorators=cfunc_decorators,
