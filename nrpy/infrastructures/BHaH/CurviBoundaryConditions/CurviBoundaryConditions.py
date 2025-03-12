@@ -489,6 +489,7 @@ def register_CFunction_bcstruct_set_up(
     >>> supported_Parallelizations = ["openmp", "cuda"]
     >>> name = "bcstruct_set_up__rfm"
     >>> for parallelization in supported_Parallelizations:
+    ...    par.set_parval_from_str("parallelization", parallelization)
     ...    for CoordSystem in supported_CoordSystems:
     ...       cfc.CFunction_dict.clear()
     ...       register_CFunction_bcstruct_set_up(CoordSystem)

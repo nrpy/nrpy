@@ -335,7 +335,7 @@ static void set_parity_for_inner_boundary_single_pt(const commondata_struct *res
  * wasteful, but only in memory, not in CPU.
  */
 void bcstruct_set_up__rfm__UWedgeHSinhSph(const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3],
-                                          bc_struct *restrict bcstruct) {
+                                          bc_struct *restrict bcstruct, bc_struct *restrict bcstruct_device) {
 #include "../set_CodeParameters.h"
 
   ////////////////////////////////////////
@@ -362,7 +362,7 @@ void bcstruct_set_up__rfm__UWedgeHSinhSph(const commondata_struct *restrict comm
     bcstruct->bc_info.num_inner_boundary_points = num_inner;
 
     // Next allocate memory for inner_boundary_points:
-    bcstruct->inner_bc_array = (innerpt_bc_struct *restrict)malloc(sizeof(innerpt_bc_struct) * num_inner);
+    bcstruct->inner_bc_array = (innerpt_bc_struct *)malloc(sizeof(innerpt_bc_struct) * num_inner);
   }
 
   // Then set inner_bc_array:
@@ -415,7 +415,7 @@ void bcstruct_set_up__rfm__UWedgeHSinhSph(const commondata_struct *restrict comm
     // x0min and x0max faces: Allocate memory for outer_bc_array and set bc_loop_bounds:
     //                        Note that x0min and x0max faces have exactly the same size.
     //                   Also, note that face/2 --v   offsets this factor of 2 ------------------------------------------v
-    bcstruct->pure_outer_bc_array[3 * which_gz + face / 2] = (outerpt_bc_struct *restrict)malloc(
+    bcstruct->pure_outer_bc_array[3 * which_gz + face / 2] = (outerpt_bc_struct *)malloc(
         sizeof(outerpt_bc_struct) * 2 *
         ((x0min_face_range[1] - x0min_face_range[0]) * (x0min_face_range[3] - x0min_face_range[2]) * (x0min_face_range[5] - x0min_face_range[4])));
     // x0min face: Can't set bc_info->bc_loop_bounds[which_gz][face] = { i0min,i0max, ... } since it's not const :(
@@ -434,7 +434,7 @@ void bcstruct_set_up__rfm__UWedgeHSinhSph(const commondata_struct *restrict comm
     // x1min and x1max faces: Allocate memory for outer_bc_array and set bc_loop_bounds:
     //                        Note that x1min and x1max faces have exactly the same size.
     //                   Also, note that face/2 --v   offsets this factor of 2 ------------------------------------------v
-    bcstruct->pure_outer_bc_array[3 * which_gz + face / 2] = (outerpt_bc_struct *restrict)malloc(
+    bcstruct->pure_outer_bc_array[3 * which_gz + face / 2] = (outerpt_bc_struct *)malloc(
         sizeof(outerpt_bc_struct) * 2 *
         ((x1min_face_range[1] - x1min_face_range[0]) * (x1min_face_range[3] - x1min_face_range[2]) * (x1min_face_range[5] - x1min_face_range[4])));
     // x1min face: Can't set bc_info->bc_loop_bounds[which_gz][face] = { i0min,i0max, ... } since it's not const :(
@@ -453,7 +453,7 @@ void bcstruct_set_up__rfm__UWedgeHSinhSph(const commondata_struct *restrict comm
     // x2min and x2max faces: Allocate memory for outer_bc_array and set bc_loop_bounds:
     //                        Note that x2min and x2max faces have exactly the same size.
     //                   Also, note that face/2 --v   offsets this factor of 2 ------------------------------------------v
-    bcstruct->pure_outer_bc_array[3 * which_gz + face / 2] = (outerpt_bc_struct *restrict)malloc(
+    bcstruct->pure_outer_bc_array[3 * which_gz + face / 2] = (outerpt_bc_struct *)malloc(
         sizeof(outerpt_bc_struct) * 2 *
         ((x2min_face_range[1] - x2min_face_range[0]) * (x2min_face_range[3] - x2min_face_range[2]) * (x2min_face_range[5] - x2min_face_range[4])));
     // x2min face: Can't set bc_info->bc_loop_bounds[which_gz][face] = { i0min,i0max, ... } since it's not const :(
@@ -522,4 +522,8 @@ void bcstruct_set_up__rfm__UWedgeHSinhSph(const commondata_struct *restrict comm
       }
       bcstruct->bc_info.num_pure_outer_boundary_points[which_gz][dirn] = idx2d;
     }
+
+  int streamid = params->grid_idx % NUM_STREAMS;
+  cpyHosttoDevice_bc_struct(bcstruct, bcstruct_device, streamid);
+  cudaDeviceSynchronize();
 } // END FUNCTION bcstruct_set_up__rfm__UWedgeHSinhSph
