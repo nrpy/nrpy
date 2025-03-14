@@ -159,7 +159,7 @@ def register_CFunction_griddata_free(
 except perhaps non_y_n_gfs (e.g., after a regrid, in which non_y_n_gfs are freed first)."""
     cfunc_type = "void"
     name = "griddata_free"
-    params = "const commondata_struct *restrict commondata, griddata_struct *restrict griddata, const bool free_non_y_n_gfs_and_core_griddata_pointers"
+    params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata, const bool free_non_y_n_gfs_and_core_griddata_pointers"
     if parallelization not in ["openmp"]:
         register_CFunction_griddata_free__device(
             enable_rfm_precompute, enable_CurviBCs, enable_bhahaha=enable_bhahaha
