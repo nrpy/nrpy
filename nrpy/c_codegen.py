@@ -674,9 +674,7 @@ def c_codegen(
                 )
 
             for i, varname in enumerate(simd_const_varnms):
-                simd_RATIONAL_decls += (
-                    f"static const double dbl{varname} = {simd_const_values[i]};\n"
-                )
+                simd_RATIONAL_decls += f"{CCGParams.rational_const_alias} double dbl{varname} = {simd_const_values[i]};\n"
                 # Workaround for possibly unused NegativeOne SIMD variables.
                 maybe_unused = " "
                 if varname.endswith("NegativeOne_") or varname.endswith("Integer_1"):
@@ -1081,8 +1079,8 @@ def gridfunction_management_and_FD_codegen(
             NRPy_FD_StepNumber += 1
             if CCGParams.enable_simd:
                 for n in ["0", "1"]:
-                    Coutput += f"""const double tmp_upwind_Integer_{n} = {n}.000000000000000000000000000000000;\n
-const REAL_SIMD_ARRAY upwind_Integer_{n} = ConstSIMD(tmp_upwind_Integer_{n});
+                    Coutput += f"""MAYBE_UNUSED const double tmp_upwind_Integer_{n} = {n}.000000000000000000000000000000000;\n
+MAYBE_UNUSED const REAL_SIMD_ARRAY upwind_Integer_{n} = ConstSIMD(tmp_upwind_Integer_{n});
 """
             for dirn in upwind_directions:
                 Coutput += f"const {CCGParams.fp_type_alias} Upwind{dirn} = UPWIND_ALG(UpwindControlVectorU{dirn});\n"

@@ -17,7 +17,7 @@ __global__ static void rk_substep_1_gpu(const size_t streamid, REAL *restrict k1
   LOOP_ALL_GFS_GPS(i) {
     const REAL k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfsL = k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs[i];
     const REAL y_n_gfsL = y_n_gfs[i];
-    static const double dblRK_Rational_1_2 = 1.0 / 2.0;
+    static constexpr double dblRK_Rational_1_2 = 1.0 / 2.0;
     const REAL_CUDA_ARRAY RK_Rational_1_2 = ConstCUDA(dblRK_Rational_1_2);
 
     const REAL_CUDA_ARRAY __rk_exp_0 = FusedMulAddCUDA(RK_Rational_1_2, MulCUDA(dt, k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfsL), y_n_gfsL);
@@ -57,16 +57,16 @@ __global__ static void rk_substep_2_gpu(const size_t streamid, REAL *restrict k1
     const REAL k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfsL = k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs[i];
     const REAL k2_or_y_nplus_a32_k2_gfsL = k2_or_y_nplus_a32_k2_gfs[i];
     const REAL y_n_gfsL = y_n_gfs[i];
-    static const double dblRK_Rational_1_3 = 1.0 / 3.0;
+    static constexpr double dblRK_Rational_1_3 = 1.0 / 3.0;
     const REAL_CUDA_ARRAY RK_Rational_1_3 = ConstCUDA(dblRK_Rational_1_3);
 
-    static const double dblRK_Rational_3_4 = 3.0 / 4.0;
+    static constexpr double dblRK_Rational_3_4 = 3.0 / 4.0;
     const REAL_CUDA_ARRAY RK_Rational_3_4 = ConstCUDA(dblRK_Rational_3_4);
 
-    static const double dblRK_Rational_4_9 = 4.0 / 9.0;
+    static constexpr double dblRK_Rational_4_9 = 4.0 / 9.0;
     const REAL_CUDA_ARRAY RK_Rational_4_9 = ConstCUDA(dblRK_Rational_4_9);
 
-    static const double dblRK_Rational_5_9 = 5.0 / 9.0;
+    static constexpr double dblRK_Rational_5_9 = 5.0 / 9.0;
     const REAL_CUDA_ARRAY RK_Rational_5_9 = ConstCUDA(dblRK_Rational_5_9);
 
     const REAL_CUDA_ARRAY __rk_exp_0 =
@@ -110,7 +110,7 @@ __global__ static void rk_substep_3_gpu(const size_t streamid, REAL *restrict k1
   LOOP_ALL_GFS_GPS(i) {
     const REAL k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfsL = k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs[i];
     const REAL y_n_gfsL = y_n_gfs[i];
-    static const double dblRK_Rational_4_9 = 4.0 / 9.0;
+    static constexpr double dblRK_Rational_4_9 = 4.0 / 9.0;
     const REAL_CUDA_ARRAY RK_Rational_4_9 = ConstCUDA(dblRK_Rational_4_9);
 
     const REAL_CUDA_ARRAY __rk_exp_0 = FusedMulAddCUDA(RK_Rational_4_9, MulCUDA(dt, y_n_gfsL), k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfsL);
@@ -158,6 +158,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
   // Post-RHS evaluation: apply boundaries
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     commondata->time = time_start + 0.00000000000000000e+00 * commondata->dt;
+    cpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % NUM_STREAMS);
     // Set gridfunction aliases, from griddata[].gridfuncs.
     MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
     MAYBE_UNUSED REAL *restrict k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs =
@@ -183,6 +184,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
   //    1. Apply post-RHS
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     commondata->time = time_start + 5.00000000000000000e-01 * commondata->dt;
+    cpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % NUM_STREAMS);
     // Set gridfunction aliases, from griddata[].gridfuncs.
     MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
     MAYBE_UNUSED REAL *restrict k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs =
@@ -210,6 +212,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
   //    1. Apply post-RHS to y_n
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     commondata->time = time_start + 7.50000000000000000e-01 * commondata->dt;
+    cpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % NUM_STREAMS);
     // Set gridfunction aliases, from griddata[].gridfuncs.
     MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
     MAYBE_UNUSED REAL *restrict k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs =

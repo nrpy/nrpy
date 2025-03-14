@@ -7,9 +7,13 @@
 static void apply_bcs_outerextrap_and_inner_only_host(const params_struct *restrict params, const int num_pure_outer_boundary_points,
                                                       const int which_gz, const int dirn, const outerpt_bc_struct *restrict pure_outer_bc_array,
                                                       REAL *restrict gfs) {
-  MAYBE_UNUSED int const Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
-  MAYBE_UNUSED int const Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
-  MAYBE_UNUSED int const Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
+
+  MAYBE_UNUSED const REAL invdxx0 = params->invdxx0;
+  MAYBE_UNUSED const REAL invdxx1 = params->invdxx1;
+  MAYBE_UNUSED const REAL invdxx2 = params->invdxx2;
 
 #pragma omp parallel for
   for (int idx2d = 0; idx2d < num_pure_outer_boundary_points; idx2d++) {

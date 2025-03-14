@@ -51,7 +51,8 @@ void diagnostics_nearest_1d_y_axis__rfm__SinhSpherical(commondata_struct *restri
     const int i0 = i0_pts[i0_pt], i1 = i1_pts[i1_pt], i2 = i2_pts[i2_pt];
     const int idx3 = IDX3(i0, i1, i2);
     REAL xCart[3];
-    xx_to_Cart(params, xx, i0, i1, i2, xCart);
+    REAL xOrig[3] = {xx[0][i0], xx[1][i1], xx[2][i2]};
+    xx_to_Cart(params, xOrig, xCart);
 
     {
       // Store the data in the data_point_1d_struct
