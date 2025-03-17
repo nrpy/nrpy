@@ -25,6 +25,7 @@ import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 import nrpy.infrastructures.BHaH.seobnr.BOB_C_codegen_library as BOB_CCL
 import nrpy.infrastructures.BHaH.seobnr.SEOBNR_BOB_C_waveform_codegen_library as seobnr_wf_CCL
 import nrpy.infrastructures.BHaH.seobnr.SEOBNR_C_codegen_library as seobnr_CCL
+import nrpy.infrastructures.BHaH.seobnr.SEOBNR_C_codegen_library_precomputed as seobnr_CCL_precomp
 import nrpy.infrastructures.BHaH.seobnr.SEOBNR_C_dynamics_codegen_library as seobnr_dyn_CCL
 import nrpy.infrastructures.BHaH.seobnr.SEOBNR_C_gsl_routines_library as seobnr_gsl
 import nrpy.infrastructures.BHaH.seobnr.SEOBNR_C_initial_conditions_codegen_library as seobnr_ic_CCL
@@ -113,6 +114,8 @@ commondata_struct_set_to_default(&commondata);
 cmdline_input_and_parfile_parser(&commondata, argc, argv);
 // Step 1.c: Overwrite default values of m1, m2, a6, and dSO.
 SEOBNRv5_aligned_spin_coefficients(&commondata);
+// Step 1.d: Set the waveform coefficients
+SEOBNRv5_aligned_spin_waveform_coefficients(&commondata);
 // Step 2.a: Compute SEOBNRv5 conservative initial conditions.
 SEOBNRv5_aligned_spin_initial_conditions_conservative(&commondata);
 // Step 2.b: Print out the conservative initial conditions.
@@ -183,7 +186,6 @@ return 0;
 
 seobnr_gsl.register_CFunction_handle_gsl_return_status()
 seobnr_gsl.register_CFunction_SEOBNRv5_multidimensional_root_wrapper()
-seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_flux()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_right_hand_sides()
 seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_coefficients()
 seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit()
@@ -197,8 +199,17 @@ seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_argrelmin()
 seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_iterative_refinement()
 seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_intepolate_dynamics()
 seobnr_gsl.register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper()
-seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_waveform()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics()
+# Flag to precompute the waveform coefficients. Only works for aligned spins.
+# Once we have precession in place, we can make this more tunable
+precompute_waveform_coefficients = True
+if precompute_waveform_coefficients:
+    seobnr_CCL_precomp.register_CFunction_SEOBNRv5_aligned_spin_waveform_coefficients()
+    seobnr_CCL_precomp.register_CFunction_SEOBNRv5_aligned_spin_waveform()
+    seobnr_CCL_precomp.register_CFunction_SEOBNRv5_aligned_spin_flux()
+else:
+    seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_waveform()
+    seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_flux()
 seobnr_wf_CCL.register_CFunction_SEOBNRv5_aligned_spin_unwrap()
 seobnr_wf_CCL.register_CFunction_SEOBNRv5_aligned_spin_interpolate_modes()
 
