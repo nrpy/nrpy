@@ -20,8 +20,7 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.finite_difference as fin  # NRPy+: Finite-difference module
 import nrpy.grid as gri  # NRPy+: Functions having to do with numerical grids
-import nrpy.helpers.parallelization.gpu_kernel as gputils
-import nrpy.helpers.parallelization.utilities as gpu_utils
+import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 import nrpy.params as par  # NRPy+: Parameter interface
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
@@ -29,7 +28,7 @@ from nrpy.helpers.expression_utils import get_unique_expression_symbols_as_strin
 from nrpy.helpers.parallelization.cuda_utilities import (
     register_CFunction_cpyHosttoDevice_bc_struct,
 )
-from nrpy.helpers.parallelization.utilities import generate_kernel_and_launch_code
+from nrpy.helpers.parallelization.gpu_kernel import GPU_Kernel
 from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
 from nrpy.validate_expressions.validate_expressions import check_zero
 
@@ -804,7 +803,7 @@ boundary points ("inner maps to outer").
 
     # Specify kernel body
     kernel_body = "// Needed for IDX macros\n"
-    kernel_body += gpu_utils.get_loop_parameters(parallelization)
+    kernel_body += parallel_utils.get_loop_parameters(parallelization)
     kernel_body += (
         """
 for(int which_gf=0;which_gf<NUM_EVOL_GFS;which_gf++) {
@@ -843,7 +842,7 @@ for (int pt = tid0; pt < num_inner_boundary_points; pt+=stride0) {"""
         "params": "const params_struct *restrict",
         **arg_dict_cuda,
     }
-    prefunc, new_body = generate_kernel_and_launch_code(
+    prefunc, new_body = parallel_utils.generate_kernel_and_launch_code(
         name,
         kernel_body,
         arg_dict_cuda,
@@ -895,7 +894,7 @@ def generate_prefunc__apply_bcs_outerextrap_and_inner_only() -> str:
     parallelization = par.parval_from_str("parallelization")
 
     # Specify kernel body
-    kernel_body = f"{gpu_utils.get_loop_parameters(parallelization)}\n"
+    kernel_body = f"{parallel_utils.get_loop_parameters(parallelization)}\n"
 
     kernel_body += (
         """
@@ -940,7 +939,7 @@ for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
         **arg_dict_cuda,
     }
 
-    prefunc, new_body = generate_kernel_and_launch_code(
+    prefunc, new_body = parallel_utils.generate_kernel_and_launch_code(
         name,
         kernel_body,
         arg_dict_cuda,
@@ -1202,7 +1201,7 @@ const REAL *restrict gf, const int i0,const int i1,const int i2, const int offse
     body = ""
     cfunc_decorators = "__device__" if parallelization == "cuda" else ""
 
-    body = f"{gpu_utils.get_loop_parameters(parallelization)}\n"
+    body = f"{parallel_utils.get_loop_parameters(parallelization)}\n"
     body += "switch(offset) {\n"
 
     tmp_list: List[int] = []
@@ -1331,7 +1330,7 @@ const REAL partial_x0_partial_r, const REAL partial_x1_partial_r, const REAL par
   // FD1_stencil_radius = radiation_BC_fd_order/2 = {FD1_stencil_radius}
   const int FD1_stencil_radius = {FD1_stencil_radius};
 """
-    body += f"{gpu_utils.get_loop_parameters(parallelization)}\n"
+    body += f"{parallel_utils.get_loop_parameters(parallelization)}\n"
     body += """const int ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
 
   ///////////////////////////////////////////////////////////
@@ -1440,9 +1439,9 @@ def setup_Cfunction_radiation_bcs(
     const short FACEi0,const short FACEi1,const short FACEi2"""
     )
 
-    param_access = gpu_utils.get_params_access(parallelization)
+    param_access = parallel_utils.get_params_access(parallelization)
     body = ""
-    body += f"{gpu_utils.get_loop_parameters(parallelization)}\n"
+    body += f"{parallel_utils.get_loop_parameters(parallelization)}\n"
     body += r"""// Nearest "interior" neighbor of this gridpoint, based on current face
 const int dest_i0_int=dest_i0+1*FACEi0, dest_i1_int=dest_i1+1*FACEi1, dest_i2_int=dest_i2+1*FACEi2;
 REAL r, partial_x0_partial_r,partial_x1_partial_r,partial_x2_partial_r;
@@ -1526,7 +1525,7 @@ def setup_Cfunction_apply_bcs_pure_only() -> Tuple[str, str]:
     parallelization = par.parval_from_str("parallelization")
 
     # Specify compute kernel body
-    kernel_body = f"{gpu_utils.get_loop_parameters(parallelization)}\n"
+    kernel_body = f"{parallel_utils.get_loop_parameters(parallelization)}\n"
 
     if parallelization == "cuda":
         kernel_body += """
@@ -1576,7 +1575,7 @@ for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {
         "custom_wavespeed": "const REAL *",
         "custom_f_infinity": "const REAL *",
     }
-    prefunc, new_body = generate_kernel_and_launch_code(
+    prefunc, new_body = parallel_utils.generate_kernel_and_launch_code(
         name,
         kernel_body,
         arg_dict_cuda,
@@ -1611,7 +1610,7 @@ REAL *restrict x2 = xx[2];
   }}
 """
 
-    launch_kernel = gputils.GPU_Kernel(
+    launch_kernel = GPU_Kernel(
         kernel_launch_body,
         params_dict,
         f"{name}",
