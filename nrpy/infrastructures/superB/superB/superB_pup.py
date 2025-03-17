@@ -5,7 +5,7 @@ Author: Nishita Jadoo
         njadoo **at** uidaho **dot* edu
 """
 
-from typing import List
+from typing import List, Set
 
 import nrpy.c_function as cfc
 import nrpy.params as par
@@ -19,14 +19,14 @@ from nrpy.infrastructures.BHaH.rfm_precompute import ReferenceMetricPrecompute
 
 
 def register_CFunction_superB_pup_routines(
-    list_of_CoordSystems: List[str],
+    set_of_CoordSystems: Set[str],
     MoL_method: str = "RK4",
     enable_psi4_diagnostics: bool = False,
 ) -> None:
     """
     Register C function superB_pup_routines(), a collection of Pack Un-Pack (PUP) for structs. PUP routines are used for checkpointing and load balancing in Charm++.
 
-    :param list_of_CoordSystems: List of coordinate systems to register the C functions.
+    :param set_of_CoordSystems: Set of coordinate systems to register the C functions.
     :param MoL_method: The method to be used for MoL. Default is 'RK4'.
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     """
@@ -99,10 +99,10 @@ void pup_rfm_struct(PUP::er &p, rfm_struct *restrict rfm, const params_struct *r
   const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
   if (p.isUnpacking()) {
 """
-    for CoordSystem in list_of_CoordSystems:
+    for CoordSystem in set_of_CoordSystems:
         rfm_precompute = ReferenceMetricPrecompute(CoordSystem)
         # Add memory allocation code
-        prefunc += rfm_precompute.rfm_struct__malloc.replace("rfmstruct->", "rfm->")
+        prefunc += rfm_precompute.rfm_struct__malloc.replace("rfmstruct", "rfm")
         prefunc += """}
         """
         # Add PUParray calls
@@ -521,8 +521,9 @@ void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const params_struct &pa
 
   pup_tmpBuffers_struct(p, gd.tmpBuffers, gd.params, gd.nonlocalinnerbcstruct, gd.gridfuncs);
 
-  PUParray(p, gd.CoordSystemname, 100);
-  PUParray(p, gd.gridname, 100);
+  // ZACH SAYS: This doesn't seem to be correct anymore.
+  //PUParray(p, gd.CoordSystemname, 100);
+  //PUParray(p, gd.gridname, 100);
 
   pup_rfm_struct(p, gd.rfmstruct, &gd.params);
 }

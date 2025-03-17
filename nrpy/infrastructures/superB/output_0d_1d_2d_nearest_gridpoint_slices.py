@@ -202,7 +202,7 @@ for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {{
   const int i1 = i1_diagnostic_pt[which_pt];
   const int i2 = i2_diagnostic_pt[which_pt];
   REAL xCart[3];
-  xx_to_Cart(commondata, params, xx, i0, i1, i2, xCart);
+  xx_to_Cart(params, xx, i0, i1, i2, xCart);
   const REAL xCart_axis = {'xCart[1];' if axis == "y" else 'xCart[2];'}
   int sizeinbytes = 23 * (diagnosticstruct->num_output_quantities + 1);
   char out[sizeinbytes+1];
@@ -283,7 +283,7 @@ for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {{
   const int i1 = i1_diagnostic_pt[which_pt];
   const int i2 = i2_diagnostic_pt[which_pt];
   REAL xCart[3];
-  xx_to_Cart(commondata, params, xx, i0, i1, i2, xCart);
+  xx_to_Cart(params, xx, i0, i1, i2, xCart);
   int sizeinbytes = 23 * (diagnosticstruct->num_output_quantities + 2);
   char out[sizeinbytes+1];
   snprintf(out, sizeof(out),"""

@@ -146,6 +146,9 @@ typedef struct __MoL_gridfunctions_struct__ {
 // IDX4pt: Computes the 1D index offset for a given grid function index (gf) based on an existing index (idx)
 //         by using the total number of elements in one grid function, defined as the product of the grid strides.
 #define IDX4pt(gf, idx) ((idx) + (Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2) * (gf))
+// IDX4ptP: Similar to IDX4pt, but retrieves grid dimensions from the provided parameter structure
+//        "params" instead of using global variables.
+#define IDX4Ppt(params, gf, idx) ((idx) + ((params)->Nxx_plus_2NGHOSTS0 * (params)->Nxx_plus_2NGHOSTS1 * (params)->Nxx_plus_2NGHOSTS2) * (gf))
 // IDX3: Converts 3D grid indices (i, j, k) into a 1D array index using the strides Nxx_plus_2NGHOSTS0
 //       and Nxx_plus_2NGHOSTS1. Like IDX4, this macro assumes the "i" index varies fastest.
 #define IDX3(i, j, k) ((i) + Nxx_plus_2NGHOSTS0 * ((j) + Nxx_plus_2NGHOSTS1 * ((k))))
@@ -204,4 +207,38 @@ typedef struct __griddata__ {
   params_struct params; // <- BHaH parameters, generated from NRPy+'s CodeParameters
 } griddata_struct;
 
+#ifndef BHAH_TYPEOF
+#if __cplusplus >= 2000707L
+#define BHAH_TYPEOF(a) decltype(a)
+#elif defined(__GNUC__) || defined(__clang__) || defined(__NVCC__)
+#define BHAH_TYPEOF(a) __typeof__(a)
+#else
+#define BHAH_TYPEOF(a)
+#endif // END check for GCC, Clang, or C++
+#endif // END BHAH_TYPEOF
+
+#define BHAH_MALLOC(a, sz)                                                                                                                           \
+  do {                                                                                                                                               \
+    a = (BHAH_TYPEOF(a))malloc(sz);                                                                                                                  \
+  } while (0);
+#define BHAH_MALLOC__PtrMember(a, b, sz)                                                                                                             \
+  do {                                                                                                                                               \
+    if (a) {                                                                                                                                         \
+      BHAH_MALLOC(a->b, sz);                                                                                                                         \
+    }                                                                                                                                                \
+  } while (0);
+
+#define BHAH_FREE(a)                                                                                                                                 \
+  do {                                                                                                                                               \
+    if (a) {                                                                                                                                         \
+      free((void *)(a));                                                                                                                             \
+      (a) = NULL;                                                                                                                                    \
+    }                                                                                                                                                \
+  } while (0);
+#define BHAH_FREE__PtrMember(a, b)                                                                                                                   \
+  do {                                                                                                                                               \
+    if (a) {                                                                                                                                         \
+      BHAH_FREE(a->b);                                                                                                                               \
+    }                                                                                                                                                \
+  } while (0);
 #endif

@@ -125,19 +125,19 @@ superBinitialdata.register_CFunction_initial_data(
 )
 
 numericalgrids.register_CFunctions(
-    list_of_CoordSystems=[CoordSystem],
+    set_of_CoordSystems={CoordSystem},
     list_of_grid_physical_sizes=[grid_physical_size],
     Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
 )
 superBnumericalgrids.register_CFunctions(
-    list_of_CoordSystems=[CoordSystem],
+    set_of_CoordSystems={CoordSystem},
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
 )
 superBdiagnostics.register_CFunction_diagnostics(
-    list_of_CoordSystems=[CoordSystem],
+    set_of_CoordSystems={CoordSystem},
     default_diagnostics_out_every=diagnostics_output_every,
     grid_center_filename_tuple=("out0d-conv_factor%.2f.txt", "convergence_factor"),
     axis_filename_tuple=(
@@ -154,9 +154,7 @@ superBdiagnostics.register_CFunction_diagnostics(
 )
 
 if enable_rfm_precompute:
-    rfm_precompute.register_CFunctions_rfm_precompute(
-        list_of_CoordSystems=[CoordSystem]
-    )
+    rfm_precompute.register_CFunctions_rfm_precompute(set_of_CoordSystems={CoordSystem})
 BCl.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
@@ -196,9 +194,9 @@ BCl.register_CFunction_constraints(
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 
-charecomm.chare_comm_register_C_functions(list_of_CoordSystems=[CoordSystem])
+charecomm.chare_comm_register_C_functions(set_of_CoordSystems={CoordSystem})
 superBcbc.CurviBoundaryConditions_register_C_functions(
-    list_of_CoordSystems=[CoordSystem],
+    set_of_CoordSystems={CoordSystem},
     radiation_BC_fd_order=radiation_BC_fd_order,
     set_parity_on_aux=True,
 )
@@ -260,7 +258,7 @@ cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
 )
 
 superBpup.register_CFunction_superB_pup_routines(
-    list_of_CoordSystems=[CoordSystem],
+    set_of_CoordSystems={CoordSystem},
     MoL_method=MoL_method,
 )
 copy_files(

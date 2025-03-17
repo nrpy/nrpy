@@ -7,12 +7,15 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import Dict, List
+from inspect import currentframe as cfr
+from types import FrameType as FT
+from typing import Dict, List, Set, Union, cast
 
 import sympy as sp
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
+import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
 
@@ -28,6 +31,7 @@ for i in range(3):
 _ = par.CodeParameter("REAL", __name__, "convergence_factor", 1.0, commondata=True)
 _ = par.CodeParameter("int", __name__, "CoordSystem_hash", commondata=False, add_to_parfile=False)
 _ = par.CodeParameter("int", __name__, "grid_idx", commondata=False, add_to_parfile=False)
+_ = par.CodeParameter("char[100]", __name__, "gridname", commondata=False, add_to_parfile=False)
 # fmt: on
 
 
@@ -47,10 +51,6 @@ def register_CFunction_numerical_grid_params_Nxx_dxx_xx(
         raise ValueError(
             f"{CoordSystem} is not in Nxx_dict = {Nxx_dict}. Please add it."
         )
-    for dirn in range(3):
-        par.adjust_CodeParam_default(f"Nxx{dirn}", Nxx_dict[CoordSystem][dirn])
-    par.adjust_CodeParam_default("CoordSystemName", CoordSystem)
-
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = f"""Initializes a cell-centered grid in {CoordSystem} coordinates based on physical dimensions (grid_physical_size).
 
@@ -81,7 +81,7 @@ if( Nx[0]!=-1 && Nx[1]!=-1 && Nx[2]!=-1 ) {
     for dirn in range(3):
         body += f"params->Nxx{dirn} = Nx[{dirn}];\n"
     body += f"""}}
-snprintf(params->CoordSystemName, 50, "{CoordSystem}");
+snprintf(params->CoordSystemName, 100, "{CoordSystem}");
 
 // Resize grid by convergence_factor; used for convergence testing.
 {{
@@ -98,7 +98,6 @@ params->Nxx_plus_2NGHOSTS2 = params->Nxx2 + 2*NGHOSTS;
 
 """
     rfm = refmetric.reference_metric[CoordSystem]
-
     # Set grid_physical_size & grid_hole_radius
     body += """{
 #include "../set_CodeParameters.h"
@@ -162,48 +161,36 @@ for (int j = 0; j < params->Nxx_plus_2NGHOSTS2; j++) xx[2][j] = params->xxmin2 +
     )
 
 
-def register_CFunction_cfl_limited_timestep(
+def register_CFunction_ds_min_radial_like_dirns_single_pt(
     CoordSystem: str,
 ) -> None:
     """
-    Register a C function to find the CFL-limited timestep dt on a numerical grid.
+    Register a C function to find the minimum grid spacing ds_min_radial_like_dirns, the ds_min in radial-like directions only.
 
-    The timestep is determined by the relation dt = CFL_FACTOR * ds_min, where ds_min
-    is the minimum spacing between neighboring gridpoints on a numerical grid.
+    ds_min_radial_like_dirns is the minimum spacing between neighboring gridpoints on a numerical grid.
 
-    :param CoordSystem: The coordinate system used for the simulation.
+    :param CoordSystem: The coordinate system of the numerical grid.
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = f"Compute minimum timestep dt = CFL_FACTOR * ds_min on a {CoordSystem} numerical grid."
+    desc = "Examining only radial-like (non-angular) directions at a given point on a numerical grid, find the minimum grid spacing ds_min."
     cfunc_type = "void"
-    name = "cfl_limited_timestep"
-    params = "commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3]"
-    body = r"""
-REAL ds_min = 1e38;
-#pragma omp parallel for reduction(min:ds_min)
-LOOP_NOOMP(i0, 0, Nxx_plus_2NGHOSTS0,
-           i1, 0, Nxx_plus_2NGHOSTS1,
-           i2, 0, Nxx_plus_2NGHOSTS2) {
-    MAYBE_UNUSED const REAL xx0 = xx[0][i0];
-    MAYBE_UNUSED const REAL xx1 = xx[1][i1];
-    MAYBE_UNUSED const REAL xx2 = xx[2][i2];
-    REAL dsmin0, dsmin1, dsmin2;
-"""
+    name = "ds_min_radial_like_dirns_single_pt"
+    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xx0, const REAL xx1, const REAL xx2, REAL *restrict ds_min_radial_like_dirns"
     rfm = refmetric.reference_metric[CoordSystem]
-    dxx0, dxx1, dxx2 = sp.symbols("dxx0 dxx1 dxx2", real=True)
+    # These are set in CodeParameters.h
+    dxx = sp.symbols("dxx0 dxx1 dxx2", real=True)
+    body = "MAYBE_UNUSED REAL ds0=1e38, ds1=1e38, ds2=1e38;\n"
+    ds_expr_list: List[sp.Expr] = []
+    ds_str_list: List[str] = []
+    for dirn in rfm.radial_like_dirns:
+        ds_expr_list += [sp.Abs(rfm.scalefactor_orthog[dirn] * dxx[dirn])]
+        ds_str_list += [f"ds{dirn}"]
     body += ccg.c_codegen(
-        [
-            sp.Abs(rfm.scalefactor_orthog[0] * dxx0),
-            sp.Abs(rfm.scalefactor_orthog[1] * dxx1),
-            sp.Abs(rfm.scalefactor_orthog[2] * dxx2),
-        ],
-        ["dsmin0", "dsmin1", "dsmin2"],
+        ds_expr_list,
+        ds_str_list,
         include_braces=False,
     )
-    body += """ds_min = MIN(ds_min, MIN(dsmin0, MIN(dsmin1, dsmin2)));
-}
-commondata->dt = MIN(commondata->dt, ds_min * commondata->CFL_FACTOR);
-"""
+    body += "*ds_min_radial_like_dirns = MIN(ds0, MIN(ds1, ds2));\n"
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
@@ -216,8 +203,82 @@ commondata->dt = MIN(commondata->dt, ds_min * commondata->CFL_FACTOR);
     )
 
 
+def register_CFunction_ds_min_single_pt(
+    CoordSystem: str,
+) -> None:
+    """
+    Register a C function to find the minimum grid spacing ds_min.
+
+    ds_min is the minimum spacing between neighboring gridpoints on a numerical grid.
+
+    :param CoordSystem: The coordinate system of the numerical grid.
+    """
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    desc = "Examining all three directions at a given point on a numerical grid, find the minimum grid spacing ds_min."
+    cfunc_type = "void"
+    name = "ds_min_single_pt"
+    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xx0, const REAL xx1, const REAL xx2, REAL *restrict ds_min"
+    rfm = refmetric.reference_metric[CoordSystem]
+    # These are set in CodeParameters.h
+    dxx0, dxx1, dxx2 = sp.symbols("dxx0 dxx1 dxx2", real=True)
+    body = ccg.c_codegen(
+        [
+            sp.Abs(rfm.scalefactor_orthog[0] * dxx0),
+            sp.Abs(rfm.scalefactor_orthog[1] * dxx1),
+            sp.Abs(rfm.scalefactor_orthog[2] * dxx2),
+        ],
+        ["const REAL ds0", "const REAL ds1", "const REAL ds2"],
+        include_braces=False,
+    )
+    body += "*ds_min = MIN(ds0, MIN(ds1, ds2));\n"
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        CoordSystem_for_wrapper_func=CoordSystem,
+        name=name,
+        params=params,
+        include_CodeParameters_h=True,
+        body=body,
+    )
+
+
+def register_CFunction_cfl_limited_timestep() -> None:
+    """
+    Register a C function to find the CFL-limited timestep dt on a numerical grid.
+
+    The timestep is determined by the relation dt = CFL_FACTOR * ds_min, where ds_min
+    is the minimum spacing between neighboring gridpoints on a numerical grid.
+    """
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    desc = "Compute minimum timestep dt = CFL_FACTOR * ds_min."
+    cfunc_type = "void"
+    name = "cfl_limited_timestep"
+    params = "commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3]"
+    body = r"""
+  REAL ds_min = 1e38;
+  LOOP_OMP("omp parallel for reduction(min:ds_min)", i0, 0, params->Nxx_plus_2NGHOSTS0,
+             i1, 0, params->Nxx_plus_2NGHOSTS1,
+             i2, 0, params->Nxx_plus_2NGHOSTS2) {
+    REAL local_ds_min;
+    ds_min_single_pt(commondata, params, xx[0][i0], xx[1][i1], xx[2][i2], &local_ds_min);
+    ds_min = MIN(ds_min, local_ds_min);
+  }
+  commondata->dt = MIN(commondata->dt, ds_min * commondata->CFL_FACTOR);
+"""
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        include_CodeParameters_h=False,
+        body=body,
+    )
+
+
 def register_CFunction_numerical_grids_and_timestep(
-    list_of_CoordSystems: List[str],
+    set_of_CoordSystems: Set[str],
     list_of_grid_physical_sizes: List[float],
     gridding_approach: str = "independent grid(s)",
     enable_rfm_precompute: bool = False,
@@ -231,7 +292,7 @@ def register_CFunction_numerical_grids_and_timestep(
     focusing on the usage of reference metric precomputations and curvilinear boundary
     conditions.
 
-    :param list_of_CoordSystems: List of CoordSystems
+    :param set_of_CoordSystems: Set of CoordSystems
     :param list_of_grid_physical_sizes: List of grid_physical_size for each CoordSystem; needed for Independent grids.
     :param gridding_approach: Choices: "independent grid(s)" (default) or "multipatch".
     :param enable_rfm_precompute: Whether to enable reference metric precomputation (default: False).
@@ -247,22 +308,26 @@ def register_CFunction_numerical_grids_and_timestep(
     params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata, bool calling_for_first_time"
     body = r"""
   // Step 1.a: Set each CodeParameter in griddata.params to default, for MAXNUMGRIDS grids.
-  params_struct_set_to_default(commondata, griddata);"""
+  if(calling_for_first_time)
+    params_struct_set_to_default(commondata, griddata);"""
     body += rf"""
-  // Independent grids
-  int Nx[3] = {{ -1, -1, -1 }};
-
   // Step 1.b: Set commondata->NUMGRIDS to number of CoordSystems we have
-  commondata->NUMGRIDS = {len(list_of_CoordSystems)};
+  commondata->NUMGRIDS = {len(set_of_CoordSystems)};
 """
     if gridding_approach == "independent grid(s)":
         body += """
   {
+    // Independent grids
+    int Nx[3] = { -1, -1, -1 };
+
     // Step 1.c: For each grid, set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx based on grid_physical_size
     const bool set_xxmin_xxmax_to_defaults = true;
     int grid=0;
 """
-        for which_CoordSystem, CoordSystem in enumerate(list_of_CoordSystems):
+        for which_CoordSystem, CoordSystem in enumerate(set_of_CoordSystems):
+            body += f"""// In multipatch, gridname is a helpful alias indicating position of the patch. E.g., "lower {CoordSystem} patch"
+    snprintf(griddata[grid].params.gridname, 100, "grid_{CoordSystem}");
+"""
             body += (
                 f"  griddata[grid].params.CoordSystem_hash = {CoordSystem.upper()};\n"
             )
@@ -274,35 +339,21 @@ def register_CFunction_numerical_grids_and_timestep(
         # fmt: off
         _ = par.CodeParameter("char[200]", __name__, "multipatch_choice", "", commondata=True, add_to_parfile=True)
         # fmt: on
+        unit_vector_dict = {"x": [1, 0, 0], "y": [0, 1, 0], "z": [0, 0, 1]}
         for dirn in ["x", "y", "z"]:
             # Direction of unit vectors relative to original, accounting for accumulation of regrids."
             _ = par.register_CodeParameter(
-                "REAL",
+                "REAL[3]",
                 __name__,
-                f"cumulative_regrid_{dirn}hatU[3]",
-                "unset",  # Set below in C code when calling_for_first_time.
-                commondata=True,
+                f"cumulatively_rotated_{dirn}hatU",
+                unit_vector_dict[
+                    dirn
+                ],  # Set below in C code when calling_for_first_time.
+                commondata=False,
                 add_to_parfile=False,
                 add_to_set_CodeParameters_h=False,
             )
         body += """
-  if(calling_for_first_time) {
-    // Initialize rotation unit vectors
-    // Set the x-hat unit vector (1, 0, 0)
-    commondata->cumulative_regrid_xhatU[0] = 1;
-    commondata->cumulative_regrid_xhatU[1] = 0;
-    commondata->cumulative_regrid_xhatU[2] = 0;
-
-    // Set the y-hat unit vector (0, 1, 0)
-    commondata->cumulative_regrid_yhatU[0] = 0;
-    commondata->cumulative_regrid_yhatU[1] = 1;
-    commondata->cumulative_regrid_yhatU[2] = 0;
-
-    // Set the z-hat unit vector (0, 0, 1)
-    commondata->cumulative_regrid_zhatU[0] = 0;
-    commondata->cumulative_regrid_zhatU[1] = 0;
-    commondata->cumulative_regrid_zhatU[2] = 1;
-  }
   // Step 1.c: Multipatch grid structures are set up algorithmically.
   multipatch_grids_set_up(commondata, griddata);
 """
@@ -362,36 +413,41 @@ for(int grid=0;grid<commondata->NUMGRIDS;grid++) {
 
 
 def register_CFunctions(
-    list_of_CoordSystems: List[str],
+    set_of_CoordSystems: Set[str],
     list_of_grid_physical_sizes: List[float],
     Nxx_dict: Dict[str, List[int]],
     gridding_approach: str = "independent grid(s)",
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
     enable_set_cfl_timestep: bool = True,
-) -> None:
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register C functions related to coordinate systems and grid parameters.
 
-    :param list_of_CoordSystems: List of CoordSystems
+    :param set_of_CoordSystems: Set of CoordSystems
     :param list_of_grid_physical_sizes: List of grid_physical_size for each CoordSystem; needed for Independent grids.
     :param Nxx_dict: Dictionary containing number of grid points.
     :param gridding_approach: Choices: "independent grid(s)" (default) or "multipatch".
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions.
     :param enable_set_cfl_timestep: Whether to enable computation of dt, the CFL timestep. A custom version can be implemented later.
+
+    :return: None if in registration phase, else the updated NRPy environment.
     """
-    for CoordSystem in list_of_CoordSystems:
+    # Parallel codegen support.
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+
+    for CoordSystem in set_of_CoordSystems:
         register_CFunction_numerical_grid_params_Nxx_dxx_xx(
             CoordSystem=CoordSystem,
             Nxx_dict=Nxx_dict,
         )
-        if enable_set_cfl_timestep:
-            register_CFunction_cfl_limited_timestep(
-                CoordSystem=CoordSystem,
-            )
+    if enable_set_cfl_timestep:
+        register_CFunction_cfl_limited_timestep()
     register_CFunction_numerical_grids_and_timestep(
-        list_of_CoordSystems=list_of_CoordSystems,
+        set_of_CoordSystems=set_of_CoordSystems,
         list_of_grid_physical_sizes=list_of_grid_physical_sizes,
         gridding_approach=gridding_approach,
         enable_rfm_precompute=enable_rfm_precompute,
@@ -399,6 +455,12 @@ def register_CFunctions(
         enable_set_cfl_timestep=enable_set_cfl_timestep,
     )
 
+    if gridding_approach == "multipatch" or enable_set_cfl_timestep:
+        for CoordSystem in set_of_CoordSystems:
+            register_CFunction_ds_min_single_pt(CoordSystem)
     if gridding_approach == "multipatch":
         # Register regrid & masking functions
-        pass
+        for CoordSystem in set_of_CoordSystems:
+            register_CFunction_ds_min_radial_like_dirns_single_pt(CoordSystem)
+
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())

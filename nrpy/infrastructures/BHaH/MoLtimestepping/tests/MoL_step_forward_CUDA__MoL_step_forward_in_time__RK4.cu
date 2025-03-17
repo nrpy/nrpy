@@ -9,8 +9,8 @@
        (ii) < d_params[streamid].Nxx_plus_2NGHOSTS0 * d_params[streamid].Nxx_plus_2NGHOSTS1 * d_params[streamid].Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;  \
        (ii) += (stride0))
 /**
- * GPU Kernel: rk_substep_1_gpu.
- * GPU Kernel to compute RK substep 1.
+ * Kernel: rk_substep_1_gpu.
+ * Compute RK substep 1.
  */
 __global__ static void rk_substep_1_gpu(const size_t streamid, REAL *restrict k_odd_gfs, REAL *restrict y_n_gfs,
                                         REAL *restrict y_nplus1_running_total_gfs, const REAL dt) {
@@ -52,8 +52,8 @@ static void rk_substep_1__launcher(params_struct *restrict params, REAL *restric
 } // END FUNCTION rk_substep_1__launcher
 
 /**
- * GPU Kernel: rk_substep_2_gpu.
- * GPU Kernel to compute RK substep 2.
+ * Kernel: rk_substep_2_gpu.
+ * Compute RK substep 2.
  */
 __global__ static void rk_substep_2_gpu(const size_t streamid, REAL *restrict k_even_gfs, REAL *restrict y_nplus1_running_total_gfs,
                                         REAL *restrict y_n_gfs, const REAL dt) {
@@ -96,8 +96,8 @@ static void rk_substep_2__launcher(params_struct *restrict params, REAL *restric
 } // END FUNCTION rk_substep_2__launcher
 
 /**
- * GPU Kernel: rk_substep_3_gpu.
- * GPU Kernel to compute RK substep 3.
+ * Kernel: rk_substep_3_gpu.
+ * Compute RK substep 3.
  */
 __global__ static void rk_substep_3_gpu(const size_t streamid, REAL *restrict k_odd_gfs, REAL *restrict y_nplus1_running_total_gfs,
                                         REAL *restrict y_n_gfs, const REAL dt) {
@@ -137,8 +137,8 @@ static void rk_substep_3__launcher(params_struct *restrict params, REAL *restric
 } // END FUNCTION rk_substep_3__launcher
 
 /**
- * GPU Kernel: rk_substep_4_gpu.
- * GPU Kernel to compute RK substep 4.
+ * Kernel: rk_substep_4_gpu.
+ * Compute RK substep 4.
  */
 __global__ static void rk_substep_4_gpu(const size_t streamid, REAL *restrict k_even_gfs, REAL *restrict y_n_gfs,
                                         REAL *restrict y_nplus1_running_total_gfs, const REAL dt) {

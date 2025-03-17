@@ -9,7 +9,7 @@ from collections import OrderedDict as ODict
 from inspect import currentframe as cfr
 from pathlib import Path
 from types import FrameType as FT
-from typing import Dict, List, Tuple, Union, cast
+from typing import Dict, List, Set, Tuple, Union, cast
 
 import sympy as sp
 from mpmath import mpc, mpf  # type: ignore
@@ -144,7 +144,7 @@ griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_pers
 
 
 def register_CFunction_diagnostics(
-    list_of_CoordSystems: List[str],
+    set_of_CoordSystems: Set[str],
     default_diagnostics_out_every: float,
     enable_psi4_diagnostics: bool = False,
     enable_progress_indicator: bool = True,
@@ -166,7 +166,7 @@ def register_CFunction_diagnostics(
     """
     Register C function for simulation diagnostics.
 
-    :param list_of_CoordSystems: Lists of unique CoordSystems used.
+    :param set_of_CoordSystems: Sets of unique CoordSystems used.
     :param default_diagnostics_out_every: Specifies the default diagnostics output frequency.
     :param enable_psi4_diagnostics: Whether to enable psi4 diagnostics.
     :param enable_progress_indicator: Whether to enable the progress indicator.
@@ -205,7 +205,7 @@ def register_CFunction_diagnostics(
         raise TypeError(f"out_quantities_dict was initialized to {out_quantities_dict}, which is not a dictionary!")
     # fmt: on
 
-    for CoordSystem in list_of_CoordSystems:
+    for CoordSystem in set_of_CoordSystems:
         out012d.register_CFunction_diagnostics_nearest_grid_center(
             CoordSystem=CoordSystem,
             out_quantities_dict=out_quantities_dict,
@@ -576,7 +576,7 @@ def register_CFunction_rhs_eval(
             enable_fd_functions=enable_fd_functions,
         ),
         loop_region="interior",
-        enable_simd=enable_simd,
+        enable_intrinsics=enable_simd,
         CoordSystem=CoordSystem,
         enable_rfm_precompute=enable_rfm_precompute,
         read_xxs=not enable_rfm_precompute,
@@ -649,7 +649,7 @@ def register_CFunction_Ricci_eval(
             enable_fd_functions=enable_fd_functions,
         ),
         loop_region="interior",
-        enable_simd=enable_simd,
+        enable_intrinsics=enable_simd,
         CoordSystem=CoordSystem,
         enable_rfm_precompute=enable_rfm_precompute,
         read_xxs=not enable_rfm_precompute,
@@ -731,7 +731,7 @@ def register_CFunction_constraints(
             enable_fd_functions=enable_fd_functions,
         ),
         loop_region="interior",
-        enable_simd=enable_simd,
+        enable_intrinsics=enable_simd,
         CoordSystem=CoordSystem,
         enable_rfm_precompute=enable_rfm_precompute,
         read_xxs=not enable_rfm_precompute,
@@ -834,7 +834,7 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
             enable_fd_functions=enable_fd_functions,
         ),
         loop_region="all points",
-        enable_simd=False,
+        enable_intrinsics=False,
         CoordSystem=CoordSystem,
         enable_rfm_precompute=enable_rfm_precompute,
         read_xxs=not enable_rfm_precompute,
@@ -1014,12 +1014,12 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
 
 
 def register_CFunction_cahdprefactor_auxevol_gridfunction(
-    list_of_CoordSystems: List[str],
+    set_of_CoordSystems: Set[str],
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Add function that sets cahdprefactor gridfunction = C_CAHD * CFL_FACTOR * dsmin to Cfunction dictionary.
 
-    :param list_of_CoordSystems: Coordinate systems used.
+    :param set_of_CoordSystems: Coordinate systems used.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -1027,7 +1027,7 @@ def register_CFunction_cahdprefactor_auxevol_gridfunction(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    for CoordSystem in list_of_CoordSystems:
+    for CoordSystem in set_of_CoordSystems:
         desc = "cahdprefactor_auxevol_gridfunction(): Initialize CAHD prefactor (auxevol) gridfunction."
         name = "cahdprefactor_auxevol_gridfunction"
         params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], REAL *restrict auxevol_gfs"

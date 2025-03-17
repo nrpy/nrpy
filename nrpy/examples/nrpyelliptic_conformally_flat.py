@@ -13,20 +13,20 @@ import os
 import shutil
 
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
-import nrpy.infrastructures.BHaH.checkpointing as chkpt
-import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
-import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
-import nrpy.infrastructures.BHaH.main_c as main
-import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
-import nrpy.infrastructures.BHaH.nrpyelliptic.conformally_flat_C_codegen_library as nrpyellClib
-import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import (
+    BHaH_defines_h,
+    CodeParameters,
+    Makefile_helpers,
+    checkpointing,
+    cmdline_input_and_parfiles,
     griddata_commondata,
+    main_c,
+    nrpyelliptic,
+    numerical_grids_and_timestep,
     rfm_precompute,
     rfm_wrapper_functions,
     xx_tofrom_Cart,
@@ -70,8 +70,11 @@ default_checkpoint_every = 50.0
 eta_damping = 11.0
 MINIMUM_GLOBAL_WAVESPEED = 0.7
 CFL_FACTOR = 1.0  # NRPyElliptic wave speed prescription assumes this parameter is ALWAYS set to 1
+# CoordSystem = "SinhSpherical"
 CoordSystem = "SinhSymTP"
+# CoordSystem = "SymTP"
 Nxx_dict = {
+    "SymTP": [128, 128, 16],
     "SinhSymTP": [128, 128, 16],
     "SinhCylindricalv2": [128, 16, 256],
     "SinhSpherical": [128, 64, 16],
@@ -100,8 +103,8 @@ radiation_BC_fd_order = 6
 enable_simd = True
 parallel_codegen_enable = True
 boundary_conditions_desc = "outgoing radiation"
-list_of_CoordSystems = [CoordSystem]
-NUMGRIDS = len(list_of_CoordSystems)
+set_of_CoordSystems = {CoordSystem}
+NUMGRIDS = len(set_of_CoordSystems)
 par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
 # fmt: off
 initial_data_type = "gw150914"  # choices are: "gw150914", "axisymmetric", and "single_puncture"
@@ -148,7 +151,6 @@ single_puncture_params = {
     "S0_z": 0.2,
 }
 # fmt: on
-project_name = f"nrpyelliptic_conformally_flat"
 
 project_dir = os.path.join("project", project_name)
 
@@ -167,45 +169,47 @@ par.adjust_CodeParam_default("t_final", t_final)
 
 
 # Generate functions to set initial guess
-nrpyellClib.register_CFunction_initial_guess_single_point()
-nrpyellClib.register_CFunction_initial_guess_all_points(
+nrpyelliptic.initial_data.register_CFunction_initial_guess_single_point()
+nrpyelliptic.initial_data.register_CFunction_initial_guess_all_points(
     OMP_collapse=OMP_collapse,
     enable_checkpointing=enable_checkpointing,
 )
 
 # Generate function to set variable wavespeed
-nrpyellClib.register_CFunction_variable_wavespeed_gfs_all_points(
+nrpyelliptic.variable_wavespeed_gfs.register_CFunction_variable_wavespeed_gfs_all_points(
     CoordSystem=CoordSystem
 )
 
 # Generate functions to set AUXEVOL gridfunctions
-nrpyellClib.register_CFunction_auxevol_gfs_single_point(CoordSystem=CoordSystem)
-nrpyellClib.register_CFunction_auxevol_gfs_all_points(OMP_collapse=OMP_collapse)
+nrpyelliptic.constant_source_terms_to_auxevol.register_CFunction_auxevol_gfs_single_point(
+    CoordSystem=CoordSystem
+)
+nrpyelliptic.constant_source_terms_to_auxevol.register_CFunction_auxevol_gfs_all_points(
+    OMP_collapse=OMP_collapse
+)
 
 # Generate function that calls functions to set variable wavespeed and all other AUXEVOL gridfunctions
-nrpyellClib.register_CFunction_initialize_constant_auxevol()
-
-numericalgrids.register_CFunctions(
-    list_of_CoordSystems=list(set(list_of_CoordSystems)),
-    list_of_grid_physical_sizes=[grid_physical_size for c in list_of_CoordSystems],
+nrpyelliptic.constant_source_terms_to_auxevol.register_CFunction_initialize_constant_auxevol()
+numerical_grids_and_timestep.register_CFunctions(
+    set_of_CoordSystems=set_of_CoordSystems,
+    list_of_grid_physical_sizes=[grid_physical_size for c in set_of_CoordSystems],
     Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
 )
 xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
 
-nrpyellClib.register_CFunction_diagnostics(
+nrpyelliptic.diagnostics.register_CFunction_diagnostics(
     CoordSystem=CoordSystem,
+    enable_rfm_precompute=enable_rfm_precompute,
     default_diagnostics_out_every=default_diagnostics_output_every,
 )
 
 if enable_rfm_precompute:
-    rfm_precompute.register_CFunctions_rfm_precompute(
-        list_of_CoordSystems=list(set(list_of_CoordSystems))
-    )
+    rfm_precompute.register_CFunctions_rfm_precompute(set_of_CoordSystems)
 
 # Generate function to compute RHSs
-nrpyellClib.register_CFunction_rhs_eval(
+nrpyelliptic.rhs_eval.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_simd=enable_simd,
@@ -213,7 +217,7 @@ nrpyellClib.register_CFunction_rhs_eval(
 )
 
 # Generate function to compute residuals
-nrpyellClib.register_CFunction_compute_residual_all_points(
+nrpyelliptic.diagnostics.register_CFunction_compute_residual_all_points(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_simd=enable_simd,
@@ -221,16 +225,18 @@ nrpyellClib.register_CFunction_compute_residual_all_points(
 )
 
 # Generate diagnostics functions
-nrpyellClib.register_CFunction_compute_L2_norm_of_gridfunction(CoordSystem=CoordSystem)
+nrpyelliptic.diagnostics.register_CFunction_compute_L2_norm_of_gridfunction(
+    CoordSystem=CoordSystem
+)
 
 # Register function to check for stop conditions
-nrpyellClib.register_CFunction_check_stop_conditions()
+nrpyelliptic.diagnostics.register_CFunction_check_stop_conditions()
 
 if __name__ == "__main__" and parallel_codegen_enable:
     pcg.do_parallel_codegen()
 
 cbc.CurviBoundaryConditions_register_C_functions(
-    list_of_CoordSystems=list(set(list_of_CoordSystems)),
+    set_of_CoordSystems,
     radiation_BC_fd_order=radiation_BC_fd_order,
 )
 rhs_string = """rhs_eval(commondata, params, rfmstruct,  auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
@@ -252,7 +258,7 @@ MoL_register_all.register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
 )
-chkpt.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
+checkpointing.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
 
 # Define string with print statement for progress indicator
 progress_str = r"""
@@ -334,15 +340,18 @@ if initial_data_type == "axisymmetric":
 #         command line parameters, set up boundary conditions,
 #         and create a Makefile for this project.
 #         Project is output to project/[project_name]/
-CPs.write_CodeParameters_h_files(project_dir=project_dir)
-CPs.register_CFunctions_params_commondata_struct_set_to_default()
-cmdpar.generate_default_parfile(project_dir=project_dir, project_name=project_name)
-cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
+CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
+CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
+cmdline_input_and_parfiles.generate_default_parfile(
+    project_dir=project_dir, project_name=project_name
+)
+cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
     project_name=project_name, cmdline_inputs=["convergence_factor"]
 )
-Bdefines_h.output_BHaH_defines_h(
+BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     enable_intrinsics=enable_simd,
+    enable_rfm_precompute=enable_rfm_precompute,
     DOUBLE_means="double" if fp_type == "float" else "REAL",
 )
 # Define post_MoL_step_forward_in_time string for main function
@@ -354,7 +363,7 @@ post_MoL_step_forward_in_time = r"""    check_stop_conditions(&commondata, gridd
       break;
     }
 """
-main.register_CFunction_main_c(
+main_c.register_CFunction_main_c(
     MoL_method=MoL_method,
     initial_data_desc="",
     boundary_conditions_desc=boundary_conditions_desc,
@@ -374,7 +383,7 @@ if enable_simd:
         subdirectory="intrinsics",
     )
 
-Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
+Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
     exec_or_library_name=project_name,

@@ -9,7 +9,7 @@ Authors: Zachariah B. Etienne
 """
 
 # Step P1: Import needed NRPy+ core modules:
-from typing import List
+from typing import Set
 
 import nrpy.c_function as cfc
 from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
@@ -451,18 +451,18 @@ def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
 
 
 def CurviBoundaryConditions_register_C_functions(
-    list_of_CoordSystems: List[str],
+    set_of_CoordSystems: Set[str],
     radiation_BC_fd_order: int = 2,
     set_parity_on_aux: bool = False,
 ) -> None:
     """
     Register various C functions responsible for handling boundary conditions.
 
-    :param list_of_CoordSystems: List of coordinate systems to use.
+    :param set_of_CoordSystems: Set of coordinate systems to use.
     :param radiation_BC_fd_order: Finite differencing order for the radiation boundary conditions. Default is 2.
     :param set_parity_on_aux: If True, set parity on auxiliary grid functions.
     """
-    for CoordSystem in list_of_CoordSystems:
+    for CoordSystem in set_of_CoordSystems:
         # Register C function to set up the boundary condition struct.
         register_CFunction_bcstruct_set_up(CoordSystem=CoordSystem)
 
@@ -546,7 +546,7 @@ typedef struct __bc_struct__ {
         CBC_BHd_str,
     )
 
-    for CoordSystem in list_of_CoordSystems:
+    for CoordSystem in set_of_CoordSystems:
         # Register C function to set up the boundary condition struct for local chare grid.
         register_CFunction_bcstruct_chare_set_up(CoordSystem=CoordSystem)
 

@@ -9,7 +9,7 @@ Author: Zachariah B. Etienne
 
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import Dict, List, Tuple, Union, cast
+from typing import Dict, Set, Tuple, Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
@@ -335,7 +335,7 @@ def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type
 
 
 def register_CFunction_diagnostics(
-    list_of_CoordSystems: List[str],
+    set_of_CoordSystems: Set[str],
     default_diagnostics_out_every: float,
     grid_center_filename_tuple: Tuple[str, str] = (
         "out0d-conv_factor%.2f.txt",
@@ -356,7 +356,7 @@ def register_CFunction_diagnostics(
     """
     Register C function for simulation diagnostics.
 
-    :param list_of_CoordSystems: Lists of unique CoordSystems used.
+    :param set_of_CoordSystems: Sets of unique CoordSystems used.
     :param default_diagnostics_out_every: Specifies the default diagnostics output frequency.
     :param grid_center_filename_tuple: Tuple containing filename and variables for grid center output.
     :param axis_filename_tuple: Tuple containing filename and variables for axis output.
@@ -394,7 +394,7 @@ def register_CFunction_diagnostics(
         raise TypeError(f"out_quantities_dict was initialized to {out_quantities_dict}, which is not a dictionary!")
     # fmt: on
 
-    for CoordSystem in list_of_CoordSystems:
+    for CoordSystem in set_of_CoordSystems:
         out012d.register_CFunction_diagnostics_nearest_grid_center(
             CoordSystem=CoordSystem,
             out_quantities_dict=out_quantities_dict,

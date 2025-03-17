@@ -37,7 +37,7 @@ void diagnostics_nearest_2d_yz_plane__rfm__SinhSymTP(commondata_struct *restrict
     const int i0 = i0_pts[i0_pt], i1 = i1_pts[i1_pt], i2 = i2_pts[i2_pt];
     const int idx3 = IDX3(i0, i1, i2);
     REAL xCart[3];
-    xx_to_Cart(commondata, params, xx, i0, i1, i2, xCart);
+    xx_to_Cart(params, xx, i0, i1, i2, xCart);
     {
       // Collect diagnostic data
       const REAL log10HL = log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16));

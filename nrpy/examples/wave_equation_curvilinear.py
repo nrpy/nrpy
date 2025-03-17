@@ -13,22 +13,22 @@ import os
 import shutil
 
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
-import nrpy.infrastructures.BHaH.checkpointing as chkpt
-import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
-import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
-import nrpy.infrastructures.BHaH.main_c as main
-import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
-import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
-import nrpy.infrastructures.BHaH.wave_equation.wave_equation_C_codegen_library as wCl
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import (
+    BHaH_defines_h,
+    CodeParameters,
+    Makefile_helpers,
+    checkpointing,
+    cmdline_input_and_parfiles,
     griddata_commondata,
+    main_c,
+    numerical_grids_and_timestep,
     rfm_precompute,
     rfm_wrapper_functions,
+    wave_equation,
     xx_tofrom_Cart,
 )
 from nrpy.infrastructures.BHaH.MoLtimestepping import MoL_register_all
@@ -83,14 +83,14 @@ par.adjust_CodeParam_default("t_final", t_final)
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
-wCl.register_CFunction_exact_solution_single_Cartesian_point(
+wave_equation.initial_data_exact_soln.register_CFunction_exact_solution_single_Cartesian_point(
     WaveType=WaveType, default_sigma=default_sigma
 )
-wCl.register_CFunction_initial_data(
+wave_equation.initial_data_exact_soln.register_CFunction_initial_data(
     enable_checkpointing=True, OMP_collapse=OMP_collapse
 )
-numericalgrids.register_CFunctions(
-    list_of_CoordSystems=[CoordSystem],
+numerical_grids_and_timestep.register_CFunctions(
+    set_of_CoordSystems={CoordSystem},
     list_of_grid_physical_sizes=[grid_physical_size],
     Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
@@ -98,8 +98,8 @@ numericalgrids.register_CFunctions(
 )
 xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
 
-wCl.register_CFunction_diagnostics(
-    list_of_CoordSystems=[CoordSystem],
+wave_equation.diagnostics.register_CFunction_diagnostics(
+    set_of_CoordSystems={CoordSystem},
     default_diagnostics_out_every=default_diagnostics_output_every,
     grid_center_filename_tuple=("out0d-conv_factor%.2f.txt", "convergence_factor"),
     axis_filename_tuple=(
@@ -114,10 +114,8 @@ wCl.register_CFunction_diagnostics(
 )
 
 if enable_rfm_precompute:
-    rfm_precompute.register_CFunctions_rfm_precompute(
-        list_of_CoordSystems=[CoordSystem]
-    )
-wCl.register_CFunction_rhs_eval(
+    rfm_precompute.register_CFunctions_rfm_precompute(set_of_CoordSystems={CoordSystem})
+wave_equation.rhs_eval.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_simd=enable_simd,
@@ -130,7 +128,7 @@ if __name__ == "__main__" and parallel_codegen_enable:
     pcg.do_parallel_codegen()
 
 cbc.CurviBoundaryConditions_register_C_functions(
-    list_of_CoordSystems=[CoordSystem], radiation_BC_fd_order=radiation_BC_fd_order
+    set_of_CoordSystems={CoordSystem}, radiation_BC_fd_order=radiation_BC_fd_order
 )
 rhs_string = """rhs_eval(commondata, params, rfmstruct,  RK_INPUT_GFS, RK_OUTPUT_GFS);
 if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
@@ -147,7 +145,7 @@ MoL_register_all.register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
 )
-chkpt.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
+checkpointing.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
 
 progress.register_CFunction_progress_indicator()
 rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
@@ -157,19 +155,21 @@ rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 #         command line parameters, set up boundary conditions,
 #         and create a Makefile for this project.
 #         Project is output to project/[project_name]/
-CPs.write_CodeParameters_h_files(project_dir=project_dir)
-CPs.register_CFunctions_params_commondata_struct_set_to_default()
-cmdpar.generate_default_parfile(project_dir=project_dir, project_name=project_name)
-cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
+CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
+CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
+cmdline_input_and_parfiles.generate_default_parfile(
+    project_dir=project_dir, project_name=project_name
+)
+cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
     project_name=project_name, cmdline_inputs=["convergence_factor"]
 )
-Bdefines_h.output_BHaH_defines_h(
+BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     enable_intrinsics=enable_simd,
     enable_rfm_precompute=enable_rfm_precompute,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=enable_KreissOliger_dissipation,
 )
-main.register_CFunction_main_c(
+main_c.register_CFunction_main_c(
     initial_data_desc=WaveType,
     pre_MoL_step_forward_in_time="write_checkpoint(&commondata, griddata);\n",
     MoL_method=MoL_method,
@@ -187,7 +187,7 @@ if enable_simd:
         subdirectory="intrinsics",
     )
 
-Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
+Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
     exec_or_library_name=project_name,

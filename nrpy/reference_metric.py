@@ -37,10 +37,10 @@ par.register_CodeParameter(
     add_to_glb_code_params_dict=True,
 )
 par.register_CodeParameter(
-    "char[50]",
+    "char[100]",
     __name__,
     "CoordSystemName",
-    "must set",
+    "unset",
     add_to_glb_code_params_dict=True,
     add_to_parfile=False,
     add_to_set_CodeParameters_h=True,
@@ -102,8 +102,11 @@ class ReferenceMetric:
         self.scalefactor_orthog = [sp.sympify(0)] * 3
         # UnitVectors must be set as a function of (self.xx[0],xx[1],xx[2])
         self.UnitVectors = ixp.zerorank2(dimension=3)
+        # Non-angular coordinate directions
+        self.radial_like_dirns: List[int] = []
         # module name for CodeParameters
-        self.CodeParam_modulename = f"{__name__}_{CoordSystem}"
+        self.CodeParam_modulename = f"{__name__}"  # We don't add CoordSystem here,
+        #                                            since many CoordSystems share the same parameter; e.g., AMPL.
         self.add_CodeParams_to_glb_code_params_dict = False
         self.add_CodeParams_to_glb_code_params_dict = (
             self.CoordSystem
@@ -609,6 +612,50 @@ class ReferenceMetric:
         """
         Set the sinh transformation used by SinhSphericalv2*, SinhCylindricalv2, and SinhCartesianv2 (future).
 
+        Implements the Sinhv2* coordinate transformation.
+
+        This function computes a modified hyperbolic sine transformation used in several coordinate systems,
+        including Sinhv2*, SinhCylindricalv2, and (in the future) SinhCartesianv2. It builds upon
+        the base transformation defined in Sinhv1 (see the Sinhv1 function above), extending it by adding a
+        polynomial prefactor and a linear slope modifier. These adjustments are designed to:
+          - Suppress the linear term inherent in the sinh Taylor expansion for small x,
+          - Maintain the odd-function property (i.e. r(-x) = -r(x)) necessary for symmetric grid mappings,
+          - Ensure that r(1) exactly equals AMPL despite the addition of the slope term.
+
+        Transformation Definition:
+            r(x) = (AMPL - slope) * x^n * sinh(x / SINHW) / sinh(1 / SINHW) + slope * x
+
+        where:
+            - x:      The normalized coordinate, typically in the interval [0, 1].
+            - AMPL:   The amplitude of the transformation (ensuring that r(1) equals AMPL).
+            - SINHW:  The width parameter controlling the steepness of the hyperbolic sine.
+            - slope:  A small linear modifier added to adjust the transformation for small x.
+            - n:      An even integer (extracted from self.CoordSystem) that scales the sinh component by x^n.
+                      This polynomial factor delays the onset of nonlinearity, making the transformation
+                      approximate a simple linear behavior (slope * x) for small x.
+
+        Design and Rationale:
+            - The base transformation Sinhv1 is defined as:
+                  Sinhv1(x, AMPL, SINHW) = AMPL * (exp(x/SINHW) - exp(-x/SINHW)) /
+                                            (exp(1/SINHW) - exp(-1/SINHW))
+              which naturally satisfies r(1) = AMPL.
+            - Adding slope*x directly (i.e., the *original* sinhv2 approach) causes r(1) to become AMPL + slope.
+              To correct this, the amplitude of the sinh term is reduced to (AMPL - slope) so that:
+                  r(1) = (AMPL - slope) + slope = AMPL.
+            - The multiplication by x^n (with n an even integer) ensures that the overall function remains
+              odd and that for small x, the nonlinear sinh contribution is sufficiently suppressed.
+            - When n = 2 or 4, the transformation follows the linear behavior (slope * x) for a longer portion
+              of the domain before transitioning to the nonlinear sinh-dominated behavior.
+
+        Coordinate System Naming and Parameter Extraction:
+            This function uses the attribute 'self.CoordSystem', which must follow the naming convention:
+                "Sinh...v2n{even_integer}"
+            Specifically:
+                - The string must start with "Sinh" and contain "v2n".
+                - The suffix after "v2n" must be a digit representing an even integer (e.g., "2" or "4").
+                  This integer is parsed and used as the exponent n (referred to as power_n in the code).
+            If these conditions are not met, a ValueError is raised.
+
         :param x: The input symbol for the transformation.
         :param AMPL: The amplitude of the sinh transformation.
         :param SINHW: The width of the sinh transformation.
@@ -749,12 +796,14 @@ class ReferenceMetric:
             self.scalefactor_orthog_funcform[1] = self.f1_of_xx1_funcform
             self.scalefactor_orthog_funcform[2] = self.f3_of_xx2_funcform
 
-        # Set the transpose of the matrix of unit vectors
+        # Set the transpose of the matrix of unit vectors for all Cartesian-like coordinate systems.
         self.UnitVectors = [
             [sp.sympify(1), sp.sympify(0), sp.sympify(0)],
             [sp.sympify(0), sp.sympify(1), sp.sympify(0)],
             [sp.sympify(0), sp.sympify(0), sp.sympify(1)],
         ]
+        # All Cartesian directions are radial-like; none are angular-like:
+        self.radial_like_dirns = [0, 1, 2]
 
     def spherical_wedge_like(self) -> None:
         """Initialize class for Spherical wedge-like coordinate systems."""
@@ -792,6 +841,9 @@ class ReferenceMetric:
         self.xxSph[0] = self.Sinhv1(self.xx[0], AMPL, SINHW)
         self.xxSph[1] = self.xx[1]
         self.xxSph[2] = self.xx[2]
+
+        # In spherical-like coords, only the zeroth direction is radial-like; the rest are angular-like:
+        self.radial_like_dirns = [0]
 
         # Wedges take a chunk of a spherical grid and rotate it.
         #   Scale factors are invariant under such rotations.
@@ -1026,6 +1078,9 @@ class ReferenceMetric:
         self.xxSph[1] = th
         self.xxSph[2] = ph
 
+        # In spherical-like coords, only the zeroth direction is radial-like; the rest are angular-like:
+        self.radial_like_dirns = [0]
+
         # Now define xCart, yCart, and zCart in terms of x0,xx[1],xx[2].
         #   Note that the relation between r and x0 is not necessarily trivial in SinhSpherical coordinates. See above.
         self.xx_to_Cart[0] = (
@@ -1217,6 +1272,9 @@ class ReferenceMetric:
         self.scalefactor_orthog[1] = var1
         self.scalefactor_orthog[2] = AA * sp.sin(self.xx[1])
 
+        # In prolate-spheroidal-like coords, only the 2th coordinate direction is angular; the rest are radial-like:
+        self.radial_like_dirns = [0, 1]
+
         self.f0_of_xx0 = AA
         self.f1_of_xx1 = sp.sin(self.xx[1])
         self.f2_of_xx0 = var2
@@ -1388,6 +1446,9 @@ class ReferenceMetric:
         self.xx_to_Cart[1] = RHOCYL * sp.sin(PHICYL)
         self.xx_to_Cart[2] = ZCYL
 
+        # In cylindrical-like coords, only the 1st coordinate direction is angular; the rest are radial-like:
+        self.radial_like_dirns = [0, 2]
+
         self.xxSph[0] = sp.sqrt(RHOCYL**2 + ZCYL**2)
         self.xxSph[1] = sp.acos(ZCYL / self.xxSph[0])
         self.xxSph[2] = PHICYL
@@ -1473,6 +1534,23 @@ class rfm_dict(Dict[str, ReferenceMetric]):
 
 reference_metric = rfm_dict()
 
+supported_CoordSystems = [
+    "Spherical",
+    "SinhSpherical",
+    "SinhSphericalv2n2",
+    "Cartesian",
+    "SinhCartesian",
+    "Cylindrical",
+    "SinhCylindrical",
+    "SinhCylindricalv2n2",
+    "SymTP",
+    "SinhSymTP",
+    "LWedgeHSinhSph",
+    "UWedgeHSinhSph",
+    "RingHoleySinhSpherical",
+    "HoleySinhSpherical",
+]
+
 if __name__ == "__main__":
     import doctest
     import os
@@ -1487,22 +1565,7 @@ if __name__ == "__main__":
     else:
         print(f"Doctest passed: All {results.attempted} test(s) passed")
 
-    for Coord in [
-        "Spherical",
-        "SinhSpherical",
-        "SinhSphericalv2n2",
-        "Cartesian",
-        "SinhCartesian",
-        "Cylindrical",
-        "SinhCylindrical",
-        "SinhCylindricalv2n2",
-        "SymTP",
-        "SinhSymTP",
-        "LWedgeHSinhSph",
-        "UWedgeHSinhSph",
-        "RingHoleySinhSpherical",
-        "HoleySinhSpherical",
-    ]:
+    for Coord in supported_CoordSystems:
         rfm = reference_metric[Coord]
         results_dict = ve.process_dictionary_of_expressions(
             rfm.__dict__, fixed_mpfs_for_free_symbols=True

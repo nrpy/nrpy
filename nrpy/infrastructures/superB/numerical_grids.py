@@ -9,7 +9,7 @@ Author: Zachariah B. Etienne
         njadoo **at** uidaho **dot* edu
 """
 
-from typing import List
+from typing import Set
 
 import nrpy.c_function as cfc
 import nrpy.reference_metric as refmetric
@@ -62,7 +62,7 @@ if (Nchare2 > 1 && params->Nxx2 / Nchare2 < NGHOSTS) {
         body += f"params_chare->Nxx{dirn} = params->Nxx{dirn}/Nchare{dirn};\n"
     body += rf"""
 const REAL grid_physical_size = params_chare->grid_physical_size;
-snprintf(params_chare->CoordSystemName, 50, "{CoordSystem}");
+snprintf(params_chare->CoordSystemName, 100, "{CoordSystem}");
 
 params_chare->Nxx_plus_2NGHOSTS0 = params_chare->Nxx0 + 2*NGHOSTS;
 params_chare->Nxx_plus_2NGHOSTS1 = params_chare->Nxx1 + 2*NGHOSTS;
@@ -203,7 +203,7 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
 
 
 def register_CFunctions(
-    list_of_CoordSystems: List[str],
+    set_of_CoordSystems: Set[str],
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
     enable_psi4_diagnostics: bool = False,
@@ -211,12 +211,12 @@ def register_CFunctions(
     """
     Register C functions related to coordinate systems and grid parameters.
 
-    :param list_of_CoordSystems: List of CoordSystems
+    :param set_of_CoordSystems: Set of CoordSystems
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions.
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     """
-    for CoordSystem in list_of_CoordSystems:
+    for CoordSystem in set_of_CoordSystems:
         register_CFunction_numerical_grid_params_Nxx_dxx_xx_chare(
             CoordSystem=CoordSystem,
         )

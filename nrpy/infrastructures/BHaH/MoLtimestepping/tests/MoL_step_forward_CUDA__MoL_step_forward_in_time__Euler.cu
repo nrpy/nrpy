@@ -9,8 +9,8 @@
        (ii) < d_params[streamid].Nxx_plus_2NGHOSTS0 * d_params[streamid].Nxx_plus_2NGHOSTS1 * d_params[streamid].Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;  \
        (ii) += (stride0))
 /**
- * GPU Kernel: rk_substep_None_gpu.
- * GPU Kernel to compute RK substep None.
+ * Kernel: rk_substep_None_gpu.
+ * Compute RK substep None.
  */
 __global__ static void rk_substep_None_gpu(const size_t streamid, REAL *restrict y_n_gfs, REAL *restrict y_nplus1_running_total_gfs, const REAL dt) {
   LOOP_ALL_GFS_GPS(i) {
