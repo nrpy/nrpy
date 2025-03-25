@@ -247,13 +247,13 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
         # Don't malloc a zero-sized array.
         if num_gfs == "NUM_AUXEVOL_GFS":
             prefunc += "  if(NUM_AUXEVOL_GFS > 0) "
-            # Only y_n gfs need to be saved for superB projects for now
-            if gridfunctions == "y_n_gfs":
-                prefunc += f"PUParray(p, gridfuncs.y_n_gfs, {num_gfs} * Nxx_plus_2NGHOSTS_tot);\n"
-            elif gridfunctions == "auxevol_gfs":
-                prefunc += f"//PUParray(p, gridfuncs.auxevol_gfs, {num_gfs} * Nxx_plus_2NGHOSTS_tot);\n"
-            else:
-                prefunc += f"//PUParray(p, gridfuncs.{gridfunctions}, {num_gfs} * Nxx_plus_2NGHOSTS_tot);\n"
+        # Only y_n gfs need to be saved for superB projects for now
+        if gridfunctions == "y_n_gfs":
+            prefunc += f"PUParray(p, gridfuncs.y_n_gfs, {num_gfs} * Nxx_plus_2NGHOSTS_tot);\n"
+        elif gridfunctions == "auxevol_gfs":
+            prefunc += f"//PUParray(p, gridfuncs.auxevol_gfs, {num_gfs} * Nxx_plus_2NGHOSTS_tot);\n"
+        else:
+            prefunc += f"//PUParray(p, gridfuncs.{gridfunctions}, {num_gfs} * Nxx_plus_2NGHOSTS_tot);\n"
 
     prefunc += "//PUParray(p, gridfuncs.diagnostic_output_gfs, NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);\n"
     prefunc += """
