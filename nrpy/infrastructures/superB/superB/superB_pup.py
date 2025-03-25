@@ -249,7 +249,9 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
             prefunc += "  if(NUM_AUXEVOL_GFS > 0) "
         # Only y_n gfs need to be saved for superB projects for now
         if gridfunctions == "y_n_gfs":
-            prefunc += f"PUParray(p, gridfuncs.y_n_gfs, {num_gfs} * Nxx_plus_2NGHOSTS_tot);\n"
+            prefunc += (
+                f"PUParray(p, gridfuncs.y_n_gfs, {num_gfs} * Nxx_plus_2NGHOSTS_tot);\n"
+            )
         elif gridfunctions == "auxevol_gfs":
             prefunc += f"//PUParray(p, gridfuncs.auxevol_gfs, {num_gfs} * Nxx_plus_2NGHOSTS_tot);\n"
         else:
