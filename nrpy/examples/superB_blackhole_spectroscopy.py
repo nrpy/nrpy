@@ -387,6 +387,7 @@ superBmain.output_commondata_object_h_and_main_h_cpp_ci(
     enable_charm_checkpointing=enable_charm_checkpointing,
 )
 
+post_non_y_n_auxevol_mallocs = ""
 if enable_CAHD:
     post_non_y_n_auxevol_mallocs = """for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
     cahdprefactor_auxevol_gridfunction(&commondata, &griddata_chare[grid].params, griddata_chare[grid].xx,  griddata_chare[grid].gridfuncs.auxevol_gfs);
