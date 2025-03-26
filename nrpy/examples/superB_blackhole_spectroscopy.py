@@ -94,7 +94,6 @@ swm2sh_maximum_l_mode_to_compute = 2  # for consistency with NRPy 1.0 version.
 Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
     "SinhCylindrical": [400, 2, 1200],
-    "SinhCylindricalv2n2": [400, 2, 1200],
 }
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.25
@@ -134,11 +133,6 @@ if "Cylindrical" in CoordSystem:
     OMP_collapse = 2  # might be slightly faster
     if CoordSystem == "SinhCylindrical":
         sinh_width = 0.2
-    if CoordSystem == "SinhCylindricalv2n2":
-        sinh_width_rho = 0.35
-        rho_slope = 20
-        sinh_width_z = 0.15
-        z_slope = 22
 
 project_dir = os.path.join("project", project_name)
 
@@ -336,14 +330,6 @@ if CoordSystem == "SinhCylindrical":
     par.adjust_CodeParam_default("AMPLZ", grid_physical_size)
     par.adjust_CodeParam_default("SINHWRHO", sinh_width)
     par.adjust_CodeParam_default("SINHWZ", sinh_width)
-if CoordSystem == "SinhCylindricalv2n2":
-    par.adjust_CodeParam_default("AMPLRHO", grid_physical_size)
-    par.adjust_CodeParam_default("AMPLZ", grid_physical_size)
-    par.adjust_CodeParam_default("SINHWRHO", sinh_width_rho)
-    par.adjust_CodeParam_default("rho_slope", rho_slope)
-    par.adjust_CodeParam_default("SINHWZ", sinh_width_z)
-    par.adjust_CodeParam_default("z_slope", z_slope)
-
 
 par.adjust_CodeParam_default("t_final", t_final)
 # Initial data parameters
