@@ -94,6 +94,7 @@ swm2sh_maximum_l_mode_to_compute = 2  # for consistency with NRPy 1.0 version.
 Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
     "SinhCylindrical": [400, 2, 1200],
+    "SinhCylindricalv2n2": [400, 2, 1200],
 }
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.25
