@@ -22,6 +22,7 @@ def register_CFunction_superB_pup_routines(
     set_of_CoordSystems: Set[str],
     MoL_method: str = "RK4",
     enable_psi4_diagnostics: bool = False,
+    checkpoints_store_auxevol_gfs: bool = False,
 ) -> None:
     """
     Register C function superB_pup_routines(), a collection of Pack Un-Pack (PUP) for structs. PUP routines are used for checkpointing and load balancing in Charm++.
@@ -29,6 +30,7 @@ def register_CFunction_superB_pup_routines(
     :param set_of_CoordSystems: Set of coordinate systems to register the C functions.
     :param MoL_method: The method to be used for MoL. Default is 'RK4'.
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
+    :param checkpoints_store_auxevol_gfs: Whether or not to store aux_evol gfs in checkpoints.
     """
     desc = "superB_pup_routines.cpp from superB. Note that this cpp file is just a collection of PUP functions. superB_pup_routines() is unused."
     # prefunc contains most of the source code
@@ -244,20 +246,15 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
         num_gfs = (
             "NUM_EVOL_GFS" if gridfunctions != "auxevol_gfs" else "NUM_AUXEVOL_GFS"
         )
-        # Don't malloc a zero-sized array.
-        if num_gfs == "NUM_AUXEVOL_GFS":
-            prefunc += "  //if(NUM_AUXEVOL_GFS > 0)\n"
-        # Only y_n gfs need to be saved for superB projects for now
         if gridfunctions == "y_n_gfs":
             prefunc += (
                 f"PUParray(p, gridfuncs.y_n_gfs, {num_gfs} * Nxx_plus_2NGHOSTS_tot);\n"
             )
-        elif gridfunctions == "auxevol_gfs":
-            prefunc += f"//PUParray(p, gridfuncs.auxevol_gfs, {num_gfs} * Nxx_plus_2NGHOSTS_tot);\n"
-        else:
-            prefunc += f"//PUParray(p, gridfuncs.{gridfunctions}, {num_gfs} * Nxx_plus_2NGHOSTS_tot);\n"
-
-    prefunc += "//PUParray(p, gridfuncs.diagnostic_output_gfs, NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);\n"
+        elif gridfunctions == "auxevol_gfs" and checkpoints_store_auxevol_gfs:
+            prefunc += rf"""
+  if(NUM_AUXEVOL_GFS > 0) {{
+    PUParray(p, gridfuncs.auxevol_gfs, {num_gfs} * Nxx_plus_2NGHOSTS_tot);
+  }}"""
     prefunc += """
 }
 """
