@@ -13,6 +13,7 @@ from typing import Dict, List, Union
 import sympy as sp
 
 import nrpy.c_function as cfc
+import nrpy.params as par
 from nrpy.c_codegen import c_codegen
 from nrpy.helpers.generic import superfast_uniq
 from nrpy.helpers.parallelization.utilities import generate_kernel_and_launch_code
@@ -25,15 +26,14 @@ supported_parallelization = {"cuda", "openmp"}
 
 def check_supported_parallelization(
     function_name: str,
-    parallelization: str,
 ) -> None:
     """
     Check if the given parallelization is supported.
 
     :param function_name: Name of the function where the check is performed.
-    :param parallelization: Parameter to specify parallelization (openmp or cuda).
     :raises ValueError: If the parallelization is not supported.
     """
+    parallelization = par.parval_from_str("parallelization")
     if parallelization not in supported_parallelization:
         raise ValueError(
             f"ERROR ({function_name}): {parallelization} is not supported."
@@ -54,7 +54,6 @@ class RKFunction:
     :param cfunc_type: decorators and return type for the RK substep function
     :param rk_step: current step (> 0).  Default (None) assumes Euler step
     :param rational_const_alias: Overload const specifier for Rational definitions
-    :param parallelization: Parameter to specify parallelization (openmp or cuda).
     """
 
     def __init__(
@@ -65,9 +64,9 @@ class RKFunction:
         cfunc_type: str = "static void",
         rk_step: Union[int, None] = None,
         rational_const_alias: str = "const",
-        parallelization: str = "openmp",
     ) -> None:
-        check_supported_parallelization("RKFunction", parallelization)
+        parallelization = par.parval_from_str("parallelization")
+        check_supported_parallelization("RKFunction")
         self.rk_step = rk_step
         self.enable_intrinsics = enable_intrinsics
         self.intrinsics_str = "CUDA" if parallelization == "cuda" else "SIMD"
@@ -156,7 +155,7 @@ class RKFunction:
             if lhs_var not in self.params:
                 self.kernel_params[lhs_var] = "REAL *restrict"
                 self.params += f"REAL *restrict {lhs_var},"
-        self.params += f"const REAL dt"
+        self.params += "const REAL dt"
         self.kernel_params["dt"] = "const REAL"
 
         kernel_body += self.loop_body.replace("commondata->dt", "dt") + "\n}\n"
@@ -181,6 +180,7 @@ class RKFunction:
                 "threads_per_block": ["32"],
                 "stream": "params->grid_idx % NUM_STREAMS",
             },
+            launchblock_with_braces=False,
         )
         self.body += new_body
 
@@ -244,7 +244,6 @@ def single_RK_substep_input_symbolic(
     post_post_rhs_string: str = "",
     rational_const_alias: str = "const",
     rk_step: Union[int, None] = None,
-    parallelization: str = "openmp",
 ) -> str:
     """
     Generate C code for a given Runge-Kutta substep.
@@ -263,12 +262,12 @@ def single_RK_substep_input_symbolic(
     :param gf_aliases: Additional aliases for grid functions.
     :param rational_const_alias: Provide additional/alternative alias to const for rational definitions
     :param rk_step: Optional integer representing the current RK step.
-    :param parallelization: Parameter to specify parallelization (openmp or cuda).
 
     :return: A string containing the generated C code.
     :raises ValueError: If substep_time_offset_dt cannot be extracted from the Butcher table.
     """
-    check_supported_parallelization("single_RK_substep_input_symbolic", parallelization)
+    parallelization = par.parval_from_str("parallelization")
+    check_supported_parallelization("single_RK_substep_input_symbolic")
     # Ensure lists are lists
     if not isinstance(RK_lhs_list, list):
         RK_lhs_list = [RK_lhs_list]
@@ -298,6 +297,11 @@ def single_RK_substep_input_symbolic(
     body += (
         f"commondata->time = time_start + {substep_time_offset_str} * commondata->dt;\n"
     )
+    body += (
+        "cpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % NUM_STREAMS);\n"
+        if parallelization == "cuda"
+        else ""
+    )
     body += gf_aliases
 
     # (1) RHS
@@ -316,7 +320,6 @@ def single_RK_substep_input_symbolic(
         rk_step=rk_step,
         enable_intrinsics=enable_intrinsics,
         rational_const_alias=rational_const_alias,
-        parallelization=parallelization,
     )
     body += MoL_Functions_dict[RK_key].c_function_call()
 

@@ -116,7 +116,7 @@ if( read_checkpoint(commondata, griddata) ) return;
   REAL *restrict in_gfs = griddata[grid].gridfuncs.y_n_gfs;
 """
     body += lp.simple_loop(
-        loop_body="REAL xCart[3]; xx_to_Cart(params, xx, i0, i1, i2, xCart);\n"
+        loop_body="REAL xCart[3]; REAL xOrig[3] = {xx[0][i0], xx[1][i1], xx[2][i2]}; xx_to_Cart(params, xOrig, xCart);\n"
         "exact_solution_single_Cartesian_point(commondata, params, xCart[0], xCart[1], xCart[2],"
         f"&{uu_gf_memaccess},"
         f"&{vv_gf_memaccess});",

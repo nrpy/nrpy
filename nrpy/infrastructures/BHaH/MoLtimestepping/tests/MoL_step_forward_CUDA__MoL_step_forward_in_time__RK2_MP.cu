@@ -17,10 +17,10 @@ __global__ static void rk_substep_1_gpu(const size_t streamid, REAL *restrict k_
   LOOP_ALL_GFS_GPS(i) {
     const REAL k_odd_gfsL = k_odd_gfs[i];
     const REAL y_n_gfsL = y_n_gfs[i];
-    static const double dbl_Integer_0 = 0.0;
+    static constexpr double dbl_Integer_0 = 0.0;
     const REAL_CUDA_ARRAY _Integer_0 = ConstCUDA(dbl_Integer_0);
 
-    static const double dblRK_Rational_1_2 = 1.0 / 2.0;
+    static constexpr double dblRK_Rational_1_2 = 1.0 / 2.0;
     const REAL_CUDA_ARRAY RK_Rational_1_2 = ConstCUDA(dblRK_Rational_1_2);
 
     const REAL_CUDA_ARRAY __rk_exp_0 = _Integer_0;
@@ -100,6 +100,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
   // -={ START k1 substep }=-
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     commondata->time = time_start + 0.00000000000000000e+00 * commondata->dt;
+    cpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % NUM_STREAMS);
     // Set gridfunction aliases, from griddata[].gridfuncs.
     MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
     MAYBE_UNUSED REAL *restrict y_nplus1_running_total_gfs = griddata[grid].gridfuncs.y_nplus1_running_total_gfs;
@@ -121,6 +122,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
   // -={ START k2 substep }=-
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     commondata->time = time_start + 5.00000000000000000e-01 * commondata->dt;
+    cpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % NUM_STREAMS);
     // Set gridfunction aliases, from griddata[].gridfuncs.
     MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
     MAYBE_UNUSED REAL *restrict y_nplus1_running_total_gfs = griddata[grid].gridfuncs.y_nplus1_running_total_gfs;

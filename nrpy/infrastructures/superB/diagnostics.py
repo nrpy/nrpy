@@ -64,7 +64,7 @@ def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type
       const REAL xCart_R_ext[3] = {R_ext, 0.0, 0.0};
       int Cart_to_i0i1i2[3];
       REAL closest_xx[3];
-      Cart_to_xx_and_nearest_i0i1i2(commondata, params, xCart_R_ext, closest_xx, Cart_to_i0i1i2);
+      Cart_to_xx_and_nearest_i0i1i2(params, xCart_R_ext, closest_xx, Cart_to_i0i1i2);
 
       // To lie in this section only chare index 0 needs to be same as this chare
       const int globalidx3 = IDX3GENERAL(Cart_to_i0i1i2[0], Cart_to_i0i1i2[1], Cart_to_i0i1i2[2], Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1);
@@ -90,7 +90,7 @@ def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type
       const REAL xCart_R_ext[3] = {R_ext, 0.0, 0.0};
       int Cart_to_i0i1i2[3];
       REAL closest_xx[3];
-      Cart_to_xx_and_nearest_i0i1i2(commondata, params, xCart_R_ext, closest_xx, Cart_to_i0i1i2);
+      Cart_to_xx_and_nearest_i0i1i2(params, xCart_R_ext, closest_xx, Cart_to_i0i1i2);
       const int globalidx3 = IDX3GENERAL(Cart_to_i0i1i2[0], Cart_to_i0i1i2[1], Cart_to_i0i1i2[2], Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1);
 
       // To lie in this section only chare index 0 needs to be same as this chare
@@ -190,7 +190,7 @@ def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type
           const REAL xCart_pt_on_shell[3] = {xx_shell_Cart[which_R_ext][0][idx2], xx_shell_Cart[which_R_ext][1][idx2], xx_shell_Cart[which_R_ext][2][idx2]};
           int Cart_to_i0i1i2[3];
           REAL closest_xx[3];
-          Cart_to_xx_and_nearest_i0i1i2(commondata, params_chare, xCart_pt_on_shell, closest_xx, Cart_to_i0i1i2); // convert from Cart to xx
+          Cart_to_xx_and_nearest_i0i1i2(params_chare, xCart_pt_on_shell, closest_xx, Cart_to_i0i1i2); // convert from Cart to xx
           if (
             (params_chare->xxmin0 <= closest_xx[0] && closest_xx[0] <= params_chare->xxmax0) &&
             (params_chare->xxmin1 <= closest_xx[1] && closest_xx[1] <= params_chare->xxmax1) &&
@@ -252,7 +252,7 @@ def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type
           const REAL xCart_pt_on_shell[3] = {xx_shell_Cart[which_R_ext][0][idx2], xx_shell_Cart[which_R_ext][1][idx2], xx_shell_Cart[which_R_ext][2][idx2]};
           int Cart_to_i0i1i2[3];
           REAL closest_xx[3];
-          Cart_to_xx_and_nearest_i0i1i2(commondata, params_chare, xCart_pt_on_shell, closest_xx, Cart_to_i0i1i2);
+          Cart_to_xx_and_nearest_i0i1i2(params_chare, xCart_pt_on_shell, closest_xx, Cart_to_i0i1i2);
           if (
             (params_chare->xxmin0 <= closest_xx[0] && closest_xx[0] <= params_chare->xxmax0) &&
             (params_chare->xxmin1 <= closest_xx[1] && closest_xx[1] <= params_chare->xxmax1) &&
@@ -680,7 +680,7 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
 
     int Cart_to_i0i1i2[3];
     REAL closest_xx[3];
-    Cart_to_xx_and_nearest_i0i1i2(commondata, params, xCart_R_ext, closest_xx, Cart_to_i0i1i2);
+    Cart_to_xx_and_nearest_i0i1i2(params, xCart_R_ext, closest_xx, Cart_to_i0i1i2);
 
     const int closest_i0 = Cart_to_i0i1i2[0];
 

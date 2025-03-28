@@ -932,15 +932,19 @@ class FDFunction:
 FDFunctions_dict: Dict[str, FDFunction] = {}
 
 
-def construct_FD_functions_prefunc() -> str:
+def construct_FD_functions_prefunc(cfunc_decorators: str = "") -> str:
     """
     Construct the prefunc (CFunction) strings for all finite-difference functions stored in FDFunctions_dict.
+
+    :param cfunc_decorators: The C function decorators to be applied to the generated C functions.
 
     :return: The concatenated prefunc (CFunction) strings as a single string.
     """
     prefunc = ""
     for fd_func in FDFunctions_dict.values():
-        prefunc += fd_func.CFunction.full_function
+        fd_func.CFunction.cfunc_decorators = cfunc_decorators
+        _, _, full_function = fd_func.CFunction.generate_full_function()
+        prefunc += full_function
     return prefunc
 
 

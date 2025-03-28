@@ -5,10 +5,22 @@
  */
 __device__ static inline REAL FD1_arbitrary_upwind_x0_dirn(const size_t streamid, const REAL *restrict gf, const int i0, const int i1, const int i2,
                                                            const int offset) {
-  MAYBE_UNUSED int const Nxx_plus_2NGHOSTS0 = d_params[streamid].Nxx_plus_2NGHOSTS0;
-  MAYBE_UNUSED int const Nxx_plus_2NGHOSTS1 = d_params[streamid].Nxx_plus_2NGHOSTS1;
-  MAYBE_UNUSED int const Nxx_plus_2NGHOSTS2 = d_params[streamid].Nxx_plus_2NGHOSTS2;
-  REAL const invdxx0 = d_params[streamid].invdxx0;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = d_params[streamid].Nxx_plus_2NGHOSTS0;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = d_params[streamid].Nxx_plus_2NGHOSTS1;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = d_params[streamid].Nxx_plus_2NGHOSTS2;
+
+  MAYBE_UNUSED const REAL invdxx0 = d_params[streamid].invdxx0;
+  MAYBE_UNUSED const REAL invdxx1 = d_params[streamid].invdxx1;
+  MAYBE_UNUSED const REAL invdxx2 = d_params[streamid].invdxx2;
+
+  MAYBE_UNUSED const int tid0 = blockIdx.x * blockDim.x + threadIdx.x;
+  MAYBE_UNUSED const int tid1 = blockIdx.y * blockDim.y + threadIdx.y;
+  MAYBE_UNUSED const int tid2 = blockIdx.z * blockDim.z + threadIdx.z;
+
+  MAYBE_UNUSED const int stride0 = blockDim.x * gridDim.x;
+  MAYBE_UNUSED const int stride1 = blockDim.y * gridDim.y;
+  MAYBE_UNUSED const int stride2 = blockDim.z * gridDim.z;
+
   switch (offset) {
   case 0: {
     static const REAL Rational_decl__1_2 = 1.0 / 2.0;
@@ -38,10 +50,22 @@ __device__ static inline REAL FD1_arbitrary_upwind_x0_dirn(const size_t streamid
  */
 __device__ static inline REAL FD1_arbitrary_upwind_x2_dirn(const size_t streamid, const REAL *restrict gf, const int i0, const int i1, const int i2,
                                                            const int offset) {
-  MAYBE_UNUSED int const Nxx_plus_2NGHOSTS0 = d_params[streamid].Nxx_plus_2NGHOSTS0;
-  MAYBE_UNUSED int const Nxx_plus_2NGHOSTS1 = d_params[streamid].Nxx_plus_2NGHOSTS1;
-  MAYBE_UNUSED int const Nxx_plus_2NGHOSTS2 = d_params[streamid].Nxx_plus_2NGHOSTS2;
-  REAL const invdxx2 = d_params[streamid].invdxx2;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = d_params[streamid].Nxx_plus_2NGHOSTS0;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = d_params[streamid].Nxx_plus_2NGHOSTS1;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = d_params[streamid].Nxx_plus_2NGHOSTS2;
+
+  MAYBE_UNUSED const REAL invdxx0 = d_params[streamid].invdxx0;
+  MAYBE_UNUSED const REAL invdxx1 = d_params[streamid].invdxx1;
+  MAYBE_UNUSED const REAL invdxx2 = d_params[streamid].invdxx2;
+
+  MAYBE_UNUSED const int tid0 = blockIdx.x * blockDim.x + threadIdx.x;
+  MAYBE_UNUSED const int tid1 = blockIdx.y * blockDim.y + threadIdx.y;
+  MAYBE_UNUSED const int tid2 = blockIdx.z * blockDim.z + threadIdx.z;
+
+  MAYBE_UNUSED const int stride0 = blockDim.x * gridDim.x;
+  MAYBE_UNUSED const int stride1 = blockDim.y * gridDim.y;
+  MAYBE_UNUSED const int stride2 = blockDim.z * gridDim.z;
+
   switch (offset) {
   case 0: {
     static const REAL Rational_decl__1_2 = 1.0 / 2.0;
@@ -96,9 +120,22 @@ __device__ static inline REAL compute_partial_r_f(const size_t streamid, REAL *r
 
   // FD1_stencil_radius = radiation_BC_fd_order/2 = 1
   const int FD1_stencil_radius = 1;
-  int const Nxx_plus_2NGHOSTS0 = d_params[streamid].Nxx_plus_2NGHOSTS0;
-  int const Nxx_plus_2NGHOSTS1 = d_params[streamid].Nxx_plus_2NGHOSTS1;
-  int const Nxx_plus_2NGHOSTS2 = d_params[streamid].Nxx_plus_2NGHOSTS2;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = d_params[streamid].Nxx_plus_2NGHOSTS0;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = d_params[streamid].Nxx_plus_2NGHOSTS1;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = d_params[streamid].Nxx_plus_2NGHOSTS2;
+
+  MAYBE_UNUSED const REAL invdxx0 = d_params[streamid].invdxx0;
+  MAYBE_UNUSED const REAL invdxx1 = d_params[streamid].invdxx1;
+  MAYBE_UNUSED const REAL invdxx2 = d_params[streamid].invdxx2;
+
+  MAYBE_UNUSED const int tid0 = blockIdx.x * blockDim.x + threadIdx.x;
+  MAYBE_UNUSED const int tid1 = blockIdx.y * blockDim.y + threadIdx.y;
+  MAYBE_UNUSED const int tid2 = blockIdx.z * blockDim.z + threadIdx.z;
+
+  MAYBE_UNUSED const int stride0 = blockDim.x * gridDim.x;
+  MAYBE_UNUSED const int stride1 = blockDim.y * gridDim.y;
+  MAYBE_UNUSED const int stride2 = blockDim.z * gridDim.z;
+
   const int ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
 
   ///////////////////////////////////////////////////////////
@@ -140,9 +177,22 @@ __device__ static inline REAL compute_partial_r_f(const size_t streamid, REAL *r
 __device__ static inline REAL radiation_bcs(const size_t streamid, REAL *restrict xx[3], const REAL *restrict gfs, REAL *restrict gfs_rhss,
                                             const int which_gf, const REAL gf_wavespeed, const REAL gf_f_infinity, const int dest_i0,
                                             const int dest_i1, const int dest_i2, const short FACEi0, const short FACEi1, const short FACEi2) {
-  int const Nxx_plus_2NGHOSTS0 = d_params[streamid].Nxx_plus_2NGHOSTS0;
-  int const Nxx_plus_2NGHOSTS1 = d_params[streamid].Nxx_plus_2NGHOSTS1;
-  int const Nxx_plus_2NGHOSTS2 = d_params[streamid].Nxx_plus_2NGHOSTS2;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = d_params[streamid].Nxx_plus_2NGHOSTS0;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = d_params[streamid].Nxx_plus_2NGHOSTS1;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = d_params[streamid].Nxx_plus_2NGHOSTS2;
+
+  MAYBE_UNUSED const REAL invdxx0 = d_params[streamid].invdxx0;
+  MAYBE_UNUSED const REAL invdxx1 = d_params[streamid].invdxx1;
+  MAYBE_UNUSED const REAL invdxx2 = d_params[streamid].invdxx2;
+
+  MAYBE_UNUSED const int tid0 = blockIdx.x * blockDim.x + threadIdx.x;
+  MAYBE_UNUSED const int tid1 = blockIdx.y * blockDim.y + threadIdx.y;
+  MAYBE_UNUSED const int tid2 = blockIdx.z * blockDim.z + threadIdx.z;
+
+  MAYBE_UNUSED const int stride0 = blockDim.x * gridDim.x;
+  MAYBE_UNUSED const int stride1 = blockDim.y * gridDim.y;
+  MAYBE_UNUSED const int stride2 = blockDim.z * gridDim.z;
+
   // Nearest "interior" neighbor of this gridpoint, based on current face
   const int dest_i0_int = dest_i0 + 1 * FACEi0, dest_i1_int = dest_i1 + 1 * FACEi1, dest_i2_int = dest_i2 + 1 * FACEi2;
   REAL r, partial_x0_partial_r, partial_x1_partial_r, partial_x2_partial_r;
@@ -181,16 +231,22 @@ __device__ static inline REAL radiation_bcs(const size_t streamid, REAL *restric
 __global__ static void apply_bcs_pure_only_gpu(const size_t streamid, const int num_pure_outer_boundary_points, const int which_gz, const int dirn,
                                                const outerpt_bc_struct *restrict pure_outer_bc_array, REAL *restrict gfs, REAL *restrict rhs_gfs,
                                                REAL *restrict x0, REAL *restrict x1, REAL *restrict x2) {
-  int const Nxx_plus_2NGHOSTS0 = d_params[streamid].Nxx_plus_2NGHOSTS0;
-  int const Nxx_plus_2NGHOSTS1 = d_params[streamid].Nxx_plus_2NGHOSTS1;
-  int const Nxx_plus_2NGHOSTS2 = d_params[streamid].Nxx_plus_2NGHOSTS2;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = d_params[streamid].Nxx_plus_2NGHOSTS0;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = d_params[streamid].Nxx_plus_2NGHOSTS1;
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = d_params[streamid].Nxx_plus_2NGHOSTS2;
 
-  // Thread indices
-  // Global data index - expecting a 1D dataset
-  const int tid0 = threadIdx.x + blockIdx.x * blockDim.x;
+  MAYBE_UNUSED const REAL invdxx0 = d_params[streamid].invdxx0;
+  MAYBE_UNUSED const REAL invdxx1 = d_params[streamid].invdxx1;
+  MAYBE_UNUSED const REAL invdxx2 = d_params[streamid].invdxx2;
 
-  // Thread strides
-  const int stride0 = blockDim.x * gridDim.x;
+  MAYBE_UNUSED const int tid0 = blockIdx.x * blockDim.x + threadIdx.x;
+  MAYBE_UNUSED const int tid1 = blockIdx.y * blockDim.y + threadIdx.y;
+  MAYBE_UNUSED const int tid2 = blockIdx.z * blockDim.z + threadIdx.z;
+
+  MAYBE_UNUSED const int stride0 = blockDim.x * gridDim.x;
+  MAYBE_UNUSED const int stride1 = blockDim.y * gridDim.y;
+  MAYBE_UNUSED const int stride2 = blockDim.z * gridDim.z;
+
   for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d += stride0) {
     const short i0 = pure_outer_bc_array[idx2d].i0;
     const short i1 = pure_outer_bc_array[idx2d].i1;
@@ -224,19 +280,17 @@ static void apply_bcs_pure_only(const params_struct *restrict params, const bc_s
         size_t gz_idx = dirn + (3 * which_gz);
         const outerpt_bc_struct *restrict pure_outer_bc_array = bcstruct->pure_outer_bc_array[gz_idx];
         int num_pure_outer_boundary_points = bc_info->num_pure_outer_boundary_points[which_gz][dirn];
-        {
 
-          const size_t threads_in_x_dir = 32;
-          const size_t threads_in_y_dir = 1;
-          const size_t threads_in_z_dir = 1;
-          dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
-          dim3 blocks_per_grid((num_pure_outer_boundary_points + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
-          size_t sm = 0;
-          size_t streamid = params->grid_idx % NUM_STREAMS;
-          apply_bcs_pure_only_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, num_pure_outer_boundary_points, which_gz,
-                                                                                                 dirn, pure_outer_bc_array, gfs, rhs_gfs, x0, x1, x2);
-          cudaCheckErrors(cudaKernel, "apply_bcs_pure_only_gpu failure");
-        }
+        const size_t threads_in_x_dir = 32;
+        const size_t threads_in_y_dir = 1;
+        const size_t threads_in_z_dir = 1;
+        dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
+        dim3 blocks_per_grid((num_pure_outer_boundary_points + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
+        size_t sm = 0;
+        size_t streamid = params->grid_idx % NUM_STREAMS;
+        apply_bcs_pure_only_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, num_pure_outer_boundary_points, which_gz,
+                                                                                               dirn, pure_outer_bc_array, gfs, rhs_gfs, x0, x1, x2);
+        cudaCheckErrors(cudaKernel, "apply_bcs_pure_only_gpu failure");
       }
     }
   }

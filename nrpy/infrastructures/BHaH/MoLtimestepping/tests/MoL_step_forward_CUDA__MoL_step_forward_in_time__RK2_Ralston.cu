@@ -17,10 +17,10 @@ __global__ static void rk_substep_1_gpu(const size_t streamid, REAL *restrict k_
   LOOP_ALL_GFS_GPS(i) {
     const REAL k_odd_gfsL = k_odd_gfs[i];
     const REAL y_n_gfsL = y_n_gfs[i];
-    static const double dblRK_Rational_1_4 = 1.0 / 4.0;
+    static constexpr double dblRK_Rational_1_4 = 1.0 / 4.0;
     const REAL_CUDA_ARRAY RK_Rational_1_4 = ConstCUDA(dblRK_Rational_1_4);
 
-    static const double dblRK_Rational_2_3 = 2.0 / 3.0;
+    static constexpr double dblRK_Rational_2_3 = 2.0 / 3.0;
     const REAL_CUDA_ARRAY RK_Rational_2_3 = ConstCUDA(dblRK_Rational_2_3);
 
     const REAL_CUDA_ARRAY __rk_exp_0 = MulCUDA(RK_Rational_1_4, MulCUDA(dt, k_odd_gfsL));
@@ -61,7 +61,7 @@ __global__ static void rk_substep_2_gpu(const size_t streamid, REAL *restrict k_
     const REAL k_even_gfsL = k_even_gfs[i];
     const REAL y_n_gfsL = y_n_gfs[i];
     const REAL y_nplus1_running_total_gfsL = y_nplus1_running_total_gfs[i];
-    static const double dblRK_Rational_3_4 = 3.0 / 4.0;
+    static constexpr double dblRK_Rational_3_4 = 3.0 / 4.0;
     const REAL_CUDA_ARRAY RK_Rational_3_4 = ConstCUDA(dblRK_Rational_3_4);
 
     const REAL_CUDA_ARRAY __rk_exp_0 = AddCUDA(y_n_gfsL, FusedMulAddCUDA(RK_Rational_3_4, MulCUDA(dt, k_even_gfsL), y_nplus1_running_total_gfsL));
@@ -103,6 +103,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
   // -={ START k1 substep }=-
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     commondata->time = time_start + 0.00000000000000000e+00 * commondata->dt;
+    cpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % NUM_STREAMS);
     // Set gridfunction aliases, from griddata[].gridfuncs.
     MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
     MAYBE_UNUSED REAL *restrict y_nplus1_running_total_gfs = griddata[grid].gridfuncs.y_nplus1_running_total_gfs;
@@ -124,6 +125,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
   // -={ START k2 substep }=-
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     commondata->time = time_start + 6.66666666666666630e-01 * commondata->dt;
+    cpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % NUM_STREAMS);
     // Set gridfunction aliases, from griddata[].gridfuncs.
     MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
     MAYBE_UNUSED REAL *restrict y_nplus1_running_total_gfs = griddata[grid].gridfuncs.y_nplus1_running_total_gfs;

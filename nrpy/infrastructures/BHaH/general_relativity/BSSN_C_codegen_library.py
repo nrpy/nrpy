@@ -946,7 +946,7 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
     const REAL xCart_R_ext[3] = { R_ext, 0.0, 0.0 }; // just put a point on the x-axis.
 
     int Cart_to_i0i1i2[3]; REAL closest_xx[3];
-    Cart_to_xx_and_nearest_i0i1i2(commondata,params, xCart_R_ext, closest_xx, Cart_to_i0i1i2);
+    Cart_to_xx_and_nearest_i0i1i2(params, xCart_R_ext, closest_xx, Cart_to_i0i1i2);
 
     const int closest_i0=Cart_to_i0i1i2[0];
 

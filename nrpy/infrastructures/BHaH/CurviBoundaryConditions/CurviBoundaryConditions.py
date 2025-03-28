@@ -20,7 +20,7 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.finite_difference as fin  # NRPy+: Finite-difference module
 import nrpy.grid as gri  # NRPy+: Functions having to do with numerical grids
-import nrpy.helpers.parallelization.gpu_kernel as gputils
+import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 import nrpy.params as par  # NRPy+: Parameter interface
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
@@ -28,7 +28,7 @@ from nrpy.helpers.expression_utils import get_unique_expression_symbols_as_strin
 from nrpy.helpers.parallelization.cuda_utilities import (
     register_CFunction_cpyHosttoDevice_bc_struct,
 )
-from nrpy.helpers.parallelization.utilities import generate_kernel_and_launch_code
+from nrpy.helpers.parallelization.gpu_kernel import GPU_Kernel
 from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
 from nrpy.validate_expressions.validate_expressions import check_zero
 
@@ -488,6 +488,7 @@ def register_CFunction_bcstruct_set_up(
     >>> supported_Parallelizations = ["openmp", "cuda"]
     >>> name = "bcstruct_set_up__rfm"
     >>> for parallelization in supported_Parallelizations:
+    ...    par.set_parval_from_str("parallelization", parallelization)
     ...    for CoordSystem in supported_CoordSystems:
     ...       cfc.CFunction_dict.clear()
     ...       register_CFunction_bcstruct_set_up(CoordSystem)
@@ -779,7 +780,7 @@ def register_CFunction_apply_bcs_inner_only() -> None:
     >>> import nrpy.params as par
     >>> supported_Parallelizations = ["openmp", "cuda"]
     >>> for parallelization in supported_Parallelizations:
-    ...    parallelization = par.parval_from_str("parallelization")
+    ...    par.set_parval_from_str("parallelization", parallelization)
     ...    cfc.CFunction_dict.clear()
     ...    register_CFunction_apply_bcs_inner_only()
     ...    generated_str = cfc.CFunction_dict[f'apply_bcs_inner_only'].full_function
@@ -802,17 +803,9 @@ boundary points ("inner maps to outer").
 
     # Specify kernel body
     kernel_body = "// Needed for IDX macros\n"
-    for i in range(3):
-        kernel_body += f"MAYBE_UNUSED int const Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n"
+    kernel_body += parallel_utils.get_loop_parameters(parallelization)
     kernel_body += (
         """
-// Thread indices
-// Global data index - expecting a 1D dataset
-const int tid0 = threadIdx.x + blockIdx.x*blockDim.x;
-
-// Thread strides
-const int stride0 = blockDim.x * gridDim.x;
-
 for(int which_gf=0;which_gf<NUM_EVOL_GFS;which_gf++) {
 for (int pt = tid0; pt < num_inner_boundary_points; pt+=stride0) {"""
         if parallelization == "cuda"
@@ -849,7 +842,7 @@ for (int pt = tid0; pt < num_inner_boundary_points; pt+=stride0) {"""
         "params": "const params_struct *restrict",
         **arg_dict_cuda,
     }
-    prefunc, new_body = generate_kernel_and_launch_code(
+    prefunc, new_body = parallel_utils.generate_kernel_and_launch_code(
         name,
         kernel_body,
         arg_dict_cuda,
@@ -901,22 +894,10 @@ def generate_prefunc__apply_bcs_outerextrap_and_inner_only() -> str:
     parallelization = par.parval_from_str("parallelization")
 
     # Specify kernel body
-    kernel_body = ""
-    for i in range(3):
-        kernel_body += f"MAYBE_UNUSED int const Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n".replace(
-            "params->",
-            "d_params[streamid]." if parallelization == "cuda" else "params->",
-        )
+    kernel_body = f"{parallel_utils.get_loop_parameters(parallelization)}\n"
 
     kernel_body += (
         """
-// Thread indices
-// Global data index - expecting a 1D dataset
-const int tid0 = threadIdx.x + blockIdx.x*blockDim.x;
-
-// Thread strides
-const int stride0 = blockDim.x * gridDim.x;
-
 for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {"""
         if parallelization == "cuda"
         else """
@@ -958,7 +939,7 @@ for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
         **arg_dict_cuda,
     }
 
-    prefunc, new_body = generate_kernel_and_launch_code(
+    prefunc, new_body = parallel_utils.generate_kernel_and_launch_code(
         name,
         kernel_body,
         arg_dict_cuda,
@@ -1016,7 +997,7 @@ def register_CFunction_apply_bcs_outerextrap_and_inner() -> None:
     >>> supported_Parallelizations = ["openmp", "cuda"]
     >>> name = "apply_bcs_outerextrap_and_inner"
     >>> for parallelization in supported_Parallelizations:
-    ...    parallelization = par.parval_from_str("parallelization")
+    ...    par.set_parval_from_str("parallelization", parallelization)
     ...    cfc.CFunction_dict.clear()
     ...    register_CFunction_apply_bcs_outerextrap_and_inner()
     ...    generated_str = cfc.CFunction_dict[f'{name}'].full_function
@@ -1220,9 +1201,7 @@ const REAL *restrict gf, const int i0,const int i1,const int i2, const int offse
     body = ""
     cfunc_decorators = "__device__" if parallelization == "cuda" else ""
 
-    for i in range(3):
-        body += f"MAYBE_UNUSED int const Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n"
-    body += f"REAL const invdxx{dirn} = params->invdxx{dirn};\n"
+    body = f"{parallel_utils.get_loop_parameters(parallelization)}\n"
     body += "switch(offset) {\n"
 
     tmp_list: List[int] = []
@@ -1351,13 +1330,7 @@ const REAL partial_x0_partial_r, const REAL partial_x1_partial_r, const REAL par
   // FD1_stencil_radius = radiation_BC_fd_order/2 = {FD1_stencil_radius}
   const int FD1_stencil_radius = {FD1_stencil_radius};
 """
-    for i in range(3):
-        body += (
-            f"int const Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n".replace(
-                "params->",
-                "d_params[streamid]." if parallelization == "cuda" else "params->",
-            )
-        )
+    body += f"{parallel_utils.get_loop_parameters(parallelization)}\n"
     body += """const int ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
 
   ///////////////////////////////////////////////////////////
@@ -1466,9 +1439,9 @@ def setup_Cfunction_radiation_bcs(
     const short FACEi0,const short FACEi1,const short FACEi2"""
     )
 
+    param_access = parallel_utils.get_params_access(parallelization)
     body = ""
-    for i in range(3):
-        body += f"int const Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n"
+    body += f"{parallel_utils.get_loop_parameters(parallelization)}\n"
     body += r"""// Nearest "interior" neighbor of this gridpoint, based on current face
 const int dest_i0_int=dest_i0+1*FACEi0, dest_i1_int=dest_i1+1*FACEi1, dest_i2_int=dest_i2+1*FACEi2;
 REAL r, partial_x0_partial_r,partial_x1_partial_r,partial_x2_partial_r;
@@ -1510,7 +1483,7 @@ return partial_t_f_outgoing_wave + k * rinv*rinv*rinv;
         includes=includes,
         prefunc=prefunc.replace(
             "params->",
-            "d_params[streamid]." if parallelization == "cuda" else "params->",
+            param_access,
         ),
         desc=desc,
         cfunc_type=cfunc_type,
@@ -1519,7 +1492,7 @@ return partial_t_f_outgoing_wave + k * rinv*rinv*rinv;
         include_CodeParameters_h=False,
         body=body.replace(
             "params->",
-            "d_params[streamid]." if parallelization == "cuda" else "params->",
+            param_access,
         ),
         cfunc_decorators=cfunc_decorators,
     )
@@ -1552,23 +1525,10 @@ def setup_Cfunction_apply_bcs_pure_only() -> Tuple[str, str]:
     parallelization = par.parval_from_str("parallelization")
 
     # Specify compute kernel body
-    kernel_body = ""
-    for i in range(3):
-        kernel_body += (
-            f"int const Nxx_plus_2NGHOSTS{i} = params->Nxx_plus_2NGHOSTS{i};\n".replace(
-                "params->",
-                "d_params[streamid]." if parallelization == "cuda" else "params->",
-            )
-        )
+    kernel_body = f"{parallel_utils.get_loop_parameters(parallelization)}\n"
 
     if parallelization == "cuda":
         kernel_body += """
-// Thread indices
-// Global data index - expecting a 1D dataset
-const int tid0 = threadIdx.x + blockIdx.x*blockDim.x;
-
-// Thread strides
-const int stride0 = blockDim.x * gridDim.x;
 for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {
 """
     else:
@@ -1615,7 +1575,7 @@ for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {
         "custom_wavespeed": "const REAL *",
         "custom_f_infinity": "const REAL *",
     }
-    prefunc, new_body = generate_kernel_and_launch_code(
+    prefunc, new_body = parallel_utils.generate_kernel_and_launch_code(
         name,
         kernel_body,
         arg_dict_cuda,
@@ -1650,7 +1610,7 @@ REAL *restrict x2 = xx[2];
   }}
 """
 
-    launch_kernel = gputils.GPU_Kernel(
+    launch_kernel = GPU_Kernel(
         kernel_launch_body,
         params_dict,
         f"{name}",
@@ -1687,9 +1647,11 @@ def register_CFunction_apply_bcs_outerradiation_and_inner(
     >>> import nrpy.c_function as cfc
     >>> import nrpy.params as par
     >>> from nrpy.reference_metric import supported_CoordSystems
-    >>> supported_Parallelizations = ["openmp"]  # FIXME: add cuda.
+    >>> from nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions import register_CFunction_apply_bcs_outerradiation_and_inner
+    >>> supported_Parallelizations = ["openmp", "cuda"]
     >>> name = "apply_bcs_outerradiation_and_inner__rfm"
     >>> for parallelization in supported_Parallelizations:
+    ...    par.set_parval_from_str("parallelization", parallelization)
     ...    for CoordSystem in supported_CoordSystems:
     ...       cfc.CFunction_dict.clear()
     ...       register_CFunction_apply_bcs_outerradiation_and_inner(CoordSystem)

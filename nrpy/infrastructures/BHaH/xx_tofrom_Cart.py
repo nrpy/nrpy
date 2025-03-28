@@ -15,6 +15,7 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
+import nrpy.params as par
 import nrpy.reference_metric as refmetric
 
 
@@ -40,11 +41,32 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     :raises ValueError: When the value of `gridding_approach` is not "independent grid(s)"
                         or "multipatch".
     :return: None if in registration phase, else the updated NRPy environment.
+
+    Doctests:
+    >>> from nrpy.helpers.generic import validate_strings, clang_format
+    >>> import nrpy.c_function as cfc
+    >>> import nrpy.params as par
+    >>> from nrpy.reference_metric import unittest_CoordSystems
+    >>> supported_Parallelizations = ["openmp", "cuda"]
+    >>> name = "Cart_to_xx_and_nearest_i0i1i2"
+    >>> for parallelization in supported_Parallelizations:
+    ...    par.set_parval_from_str("parallelization", parallelization)
+    ...    for CoordSystem in unittest_CoordSystems:
+    ...       cfc.CFunction_dict.clear()
+    ...       _ = register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
+    ...       generated_str = clang_format(cfc.CFunction_dict[f'{name}__rfm__{CoordSystem}'].full_function)
+    ...       validation_desc = f"{name}__{parallelization}__{CoordSystem}"
+    ...       validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
+    Setting up reference_metric[SinhSymTP]...
+    Setting up reference_metric[HoleySinhSpherical]...
+    Setting up reference_metric[Cartesian]...
+    Setting up reference_metric[SinhCylindricalv2n2]...
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
+    parallelization = par.parval_from_str("parallelization")
     if gridding_approach not in {"independent grid(s)", "multipatch"}:
         raise ValueError(
             "Invalid value for 'gridding_approach'. Must be 'independent grid(s)' or 'multipatch'."
@@ -59,7 +81,8 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
 
     namesuffix = f"_{relative_to}" if relative_to == "global_grid_center" else ""
     name = f"Cart_to_xx_and_nearest_i0i1i2{namesuffix}"
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xCart[3], REAL xx[3], int Cart_to_i0i1i2[3]"
+    params = "const params_struct *restrict params, const REAL xCart[3], REAL xx[3], int Cart_to_i0i1i2[3]"
+    cfunc_decorators = "__host__ __device__" if parallelization == "cuda" else ""
 
     body = """
   // Set (Cartx, Carty, Cartz) relative to the global (as opposed to local) grid.
@@ -95,13 +118,28 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
 """
         for i in range(3):
             if rfm.NewtonRaphson_f_of_xx[i] != sp.sympify(0):
+                NR1_expr = [
+                    rfm.NewtonRaphson_f_of_xx[i],
+                    sp.diff(rfm.NewtonRaphson_f_of_xx[i], rfm.xx[i]),
+                ]
+
+                NR_expr_list = [
+                    expr.subs(
+                        {
+                            symbol: sp.symbols(f"params->{symbol.name}")
+                            for symbol in expr.free_symbols
+                            if symbol.name not in {"xx0", "xx1", "xx2"}
+                        }
+                    )
+                    for expr in NR1_expr
+                ]
                 body += f"""
   iter=0;
   REAL xx{i}  = 0.5 * (params->xxmin{i} + params->xxmax{i});
   while(iter < ITER_MAX && !tolerance_has_been_met) {{
     REAL f_of_xx{i}, fprime_of_xx{i};
 
-{ccg.c_codegen([rfm.NewtonRaphson_f_of_xx[i], sp.diff(rfm.NewtonRaphson_f_of_xx[i], rfm.xx[i])],
+{ccg.c_codegen(NR_expr_list,
 [f'f_of_xx{i}', f'fprime_of_xx{i}'], include_braces=True, verbose=False)}
     const REAL xx{i}_np1 = xx{i} - f_of_xx{i} / fprime_of_xx{i};
 
@@ -112,14 +150,24 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     iter++;
   }} // END Newton-Raphson iterations to compute xx{i}
   if(iter >= ITER_MAX) {{
-    fprintf(stderr, "ERROR: Newton-Raphson failed for {CoordSystem}: xx{i}, x,y,z = %.15e %.15e %.15e\\n", Cartx,Carty,Cartz);
-    exit(1);
+    printf("ERROR: Newton-Raphson failed for {CoordSystem}: xx{i}, x,y,z = %.15e %.15e %.15e\\n", Cartx,Carty,Cartz);
   }}
   xx[{i}] = xx{i};
 """
     else:
+        Cart_to_xx_expr_list = [
+            expr.subs(
+                {
+                    symbol: sp.symbols(f"params->{symbol.name}")
+                    for symbol in expr.free_symbols
+                    if symbol.name
+                    not in {"xx0", "xx1", "xx2", "Cartx", "Carty", "Cartz"}
+                }
+            )
+            for expr in [rfm.Cart_to_xx[0], rfm.Cart_to_xx[1], rfm.Cart_to_xx[2]]
+        ]
         body += ccg.c_codegen(
-            [rfm.Cart_to_xx[0], rfm.Cart_to_xx[1], rfm.Cart_to_xx[2]],
+            Cart_to_xx_expr_list,
             ["xx[0]", "xx[1]", "xx[2]"],
             include_braces=False,
         )
@@ -148,8 +196,9 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
         CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,
-        include_CodeParameters_h=True,
+        include_CodeParameters_h=False,
         body=body,
+        cfunc_decorators=cfunc_decorators,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
@@ -166,11 +215,28 @@ def register_CFunction_xx_to_Cart(
 
     :raises ValueError: If an invalid gridding_approach is provided.
     :return: None if in registration phase, else the updated NRPy environment.
+
+    Doctests:
+    >>> from nrpy.helpers.generic import validate_strings, clang_format
+    >>> import nrpy.c_function as cfc
+    >>> import nrpy.params as par
+    >>> from nrpy.reference_metric import unittest_CoordSystems
+    >>> supported_Parallelizations = ["openmp", "cuda"]
+    >>> name = "xx_to_Cart"
+    >>> for parallelization in supported_Parallelizations:
+    ...    par.set_parval_from_str("parallelization", parallelization)
+    ...    for CoordSystem in unittest_CoordSystems:
+    ...       cfc.CFunction_dict.clear()
+    ...       _ = register_CFunction_xx_to_Cart(CoordSystem)
+    ...       generated_str = clang_format(cfc.CFunction_dict[f'{name}__rfm__{CoordSystem}'].full_function)
+    ...       validation_desc = f"{name}__{parallelization}__{CoordSystem}"
+    ...       validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
+    parallelization = par.parval_from_str("parallelization")
     if gridding_approach not in {"independent grid(s)", "multipatch"}:
         raise ValueError(
             "Invalid value for 'gridding_approach'. Must be 'independent grid(s)' or 'multipatch'."
@@ -183,8 +249,9 @@ def register_CFunction_xx_to_Cart(
 
     cfunc_type = "void"
     name = "xx_to_Cart"
-    params = """const params_struct *restrict params,
-    REAL *restrict xx[3],const int i0,const int i1,const int i2, REAL xCart[3]"""
+    params = "const params_struct *restrict params, REAL xx[3], REAL xCart[3]"
+    body = ""
+    cfunc_decorators = "__host__ __device__" if parallelization == "cuda" else ""
 
     rfm = refmetric.reference_metric[CoordSystem]
 
@@ -216,9 +283,9 @@ def register_CFunction_xx_to_Cart(
     ]
 
     body = """
-    const REAL xx0 = xx[0][i0];
-    const REAL xx1 = xx[1][i1];
-    const REAL xx2 = xx[2][i2];
+    const REAL xx0 = xx[0];
+    const REAL xx1 = xx[1];
+    const REAL xx2 = xx[2];
     """ + ccg.c_codegen(
         xx_to_Cart_expr_list,
         ["xCart[0]", "xCart[1]", "xCart[2]"],
@@ -234,5 +301,19 @@ def register_CFunction_xx_to_Cart(
         params=params,
         include_CodeParameters_h=False,
         body=body,
+        cfunc_decorators=cfunc_decorators,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")
