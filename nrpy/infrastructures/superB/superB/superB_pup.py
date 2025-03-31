@@ -11,7 +11,7 @@ Author: Nishita Jadoo
         njadoo **at** uidaho **dot* edu
 """
 
-from typing import List, Set
+from typing import List
 
 import nrpy.c_function as cfc
 import nrpy.params as par
@@ -21,7 +21,6 @@ from nrpy.infrastructures.BHaH.MoLtimestepping.MoL_gridfunction_names import (
 from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import (
     generate_Butcher_tables,
 )
-from nrpy.infrastructures.BHaH.rfm_precompute import ReferenceMetricPrecompute
 
 
 def register_CFunction_superB_pup_routines(
