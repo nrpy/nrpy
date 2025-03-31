@@ -27,7 +27,6 @@ from nrpy.infrastructures.BHaH.rfm_precompute import ReferenceMetricPrecompute
 def register_CFunction_superB_pup_routines(
     MoL_method: str = "RK4",
     enable_psi4_diagnostics: bool = False,
-    checkpoints_store_auxevol_gfs: bool = False,
 ) -> None:
     """
     Register the C function "superB_pup_routines", which is a collection of
@@ -237,10 +236,12 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
             prefunc += (
                 f"PUParray(p, gridfuncs.y_n_gfs, {num_gfs} * Nxx_plus_2NGHOSTS_tot);\n"
             )
-        elif gridfunctions == "auxevol_gfs" and checkpoints_store_auxevol_gfs:
+        elif gridfunctions == "auxevol_gfs":
             prefunc += rf"""
-  if(NUM_AUXEVOL_GFS > 0) {{
-    PUParray(p, gridfuncs.auxevol_gfs, {num_gfs} * Nxx_plus_2NGHOSTS_tot);
+  if (strstr(params_chare.CoordSystemName, "Spherical") != NULL) {{
+    if(NUM_AUXEVOL_GFS > 0) {{
+      PUParray(p, gridfuncs.auxevol_gfs, {num_gfs} * Nxx_plus_2NGHOSTS_tot);
+    }}
   }}"""
     prefunc += """
 }
