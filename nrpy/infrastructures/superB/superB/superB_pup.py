@@ -59,7 +59,9 @@ This comprehensive set of routines is crucial for efficient data management and 
 // PUP routine for struct commondata_struct
 void pup_commondata_struct(PUP::er &p, commondata_struct &commondata) {
 """
-    struct_list: List[str] = []  # List to store individual struct elements for commondata_struct.
+    struct_list: List[str] = (
+        []
+    )  # List to store individual struct elements for commondata_struct.
     for parname, CodeParam in par.glb_code_params_dict.items():
         if CodeParam.commondata:
             struct = "commondata"
@@ -86,7 +88,9 @@ void pup_commondata_struct(PUP::er &p, commondata_struct &commondata) {
 // PUP routine for struct params_struct
 void pup_params_struct(PUP::er &p, params_struct &params) {
 """
-    params_struct_list: List[str] = []  # List to store individual struct elements for params_struct.
+    params_struct_list: List[str] = (
+        []
+    )  # List to store individual struct elements for params_struct.
     for parname, CodeParam in par.glb_code_params_dict.items():
         CPtype = CodeParam.cparam_type
         if not CodeParam.commondata and CPtype != "#define":
@@ -525,6 +529,7 @@ void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const params_struct &pa
         params=params,
         body=body,
     )
+
 
 if __name__ == "__main__":
     import doctest
