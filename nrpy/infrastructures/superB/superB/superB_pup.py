@@ -34,10 +34,9 @@ def register_CFunction_superB_pup_routines(
 
     :param MoL_method: The Method of Lines (MoL) method to be used (default is "RK4").
     :param enable_psi4_diagnostics: Flag to enable psi4 diagnostics.
-    :param checkpoints_store_auxevol_gfs: Flag to determine whether auxiliary evolution grid functions are stored in checkpoints.
 
     DocTests:
-        >>> register_CFunction_superB_pup_routines({"Cartesian", "Spherical"})
+        >>> register_CFunction_superB_pup_routines()
     """
     desc = """This file implements a collection of Pack-Unpack (PUP) routines used in Charm++ for checkpointing,
 and load balancing in the superB framework.
