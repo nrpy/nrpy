@@ -427,9 +427,6 @@ void pup_tmpBuffers_struct(PUP::er &p, tmpBuffers_struct &tmpBuffers, const para
     tmpBuffers.tmpBuffer_NS = (REAL *restrict)malloc(sizeof(REAL) * size_NS);
     tmpBuffers.tmpBuffer_TB = (REAL *restrict)malloc(sizeof(REAL) * size_TB);
   }
-  //PUParray(p, tmpBuffers.tmpBuffer_EW, size_EW);
-  //PUParray(p, tmpBuffers.tmpBuffer_NS, size_NS);
-  //PUParray(p, tmpBuffers.tmpBuffer_TB, size_TB);
   const int tot_num_dst_chares = nonlocalinnerbc.tot_num_dst_chares;
   const int tot_num_src_chares = nonlocalinnerbc.tot_num_src_chares;
   const int *num_srcpts_tosend_each_chare = nonlocalinnerbc.num_srcpts_tosend_each_chare;
@@ -444,12 +441,6 @@ void pup_tmpBuffers_struct(PUP::er &p, tmpBuffers_struct &tmpBuffers, const para
       tmpBuffers.tmpBuffer_innerbc_receiv[which_chare] = (REAL *restrict)malloc(sizeof(REAL) * max_sync_gfs * num_srcpts_each_chare[which_chare]);
     }
   }
-  //for (int which_chare = 0; which_chare < tot_num_dst_chares; which_chare++) {
-  //  PUParray(p, tmpBuffers.tmpBuffer_innerbc_send[which_chare], max_sync_gfs * num_srcpts_tosend_each_chare[which_chare]);
-  //}
-  //for (int which_chare = 0; which_chare < tot_num_src_chares; which_chare++) {
-  //  PUParray(p, tmpBuffers.tmpBuffer_innerbc_receiv[which_chare], max_sync_gfs * num_srcpts_each_chare[which_chare]);
-  //}
 }
 
 // PUP routine for struct nonlocalinnerbc_struct
@@ -542,10 +533,6 @@ void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const params_struct &pa
   pup_MoL_gridfunctions_struct(p, gd.gridfuncs, gd.params, commondata);
 
   pup_tmpBuffers_struct(p, gd.tmpBuffers, gd.params, gd.nonlocalinnerbcstruct, gd.gridfuncs);
-
-  // NOTE: The following lines appear to be outdated and have been commented out.
-  //PUParray(p, gd.CoordSystemname, 100);
-  //PUParray(p, gd.gridname, 100);
 
   pup_rfm_struct(p, gd.rfmstruct, &gd.params);
 }
