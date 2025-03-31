@@ -57,7 +57,6 @@ It includes routines for serializing and deserializing:
 This comprehensive set of routines is crucial for efficient data management and communication in high-performance, parallel simulations.
 """
     # prefunc contains most of the C++ source code for the PUP routines.
-    # ~ prefunc = "// " + desc + "\n\n"
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     prefunc = """
 // PUP routine for struct commondata_struct
@@ -124,15 +123,11 @@ void pup_rfm_struct(PUP::er &p, rfm_struct **restrict rfm, const params_struct *
 """
     for CoordSystem in set_of_CoordSystems:
         rfm_precompute = ReferenceMetricPrecompute(CoordSystem)
-        # Add memory allocation code for the rfm_struct.
         prefunc += rfm_precompute.rfm_struct__malloc.replace("rfmstruct", "(*rfm)")
         prefunc += """}
         """
-        # Add PUParray calls for each variable defined in the reference metric.
         for define in rfm_precompute.BHaH_defines_list:
-            # Extract variable name from the define string.
             var_name = define.split()[2].strip(";")
-            # Assume all variables have the same allocation size; adjust as necessary.
             if "xx0" in var_name:
                 size = "Nxx_plus_2NGHOSTS0"
             elif "xx1" in var_name:
