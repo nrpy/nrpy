@@ -25,7 +25,6 @@ from nrpy.infrastructures.BHaH.rfm_precompute import ReferenceMetricPrecompute
 
 
 def register_CFunction_superB_pup_routines(
-    set_of_CoordSystems: Set[str],
     MoL_method: str = "RK4",
     enable_psi4_diagnostics: bool = False,
     checkpoints_store_auxevol_gfs: bool = False,
@@ -35,7 +34,6 @@ def register_CFunction_superB_pup_routines(
     Pack-Unpack (PUP) routines for various structs. These routines are used for
     checkpointing and load balancing in Charm++.
 
-    :param set_of_CoordSystems: Set of coordinate system names for which the C functions are registered.
     :param MoL_method: The Method of Lines (MoL) method to be used (default is "RK4").
     :param enable_psi4_diagnostics: Flag to enable psi4 diagnostics.
     :param checkpoints_store_auxevol_gfs: Flag to determine whether auxiliary evolution grid functions are stored in checkpoints.
@@ -111,33 +109,6 @@ void pup_params_struct(PUP::er &p, params_struct &params) {
     prefunc += "".join(sorted(params_struct_list))
     prefunc += """
 }"""
-
-    prefunc += """
-// PUP routine for struct rfm_struct
-void pup_rfm_struct(PUP::er &p, rfm_struct **restrict rfm, const params_struct *restrict params) {
-  const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
-  const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
-  const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
-  if (p.isUnpacking()) {
-    *rfm = (rfm_struct *)malloc(sizeof(rfm_struct));
-"""
-    for CoordSystem in set_of_CoordSystems:
-        rfm_precompute = ReferenceMetricPrecompute(CoordSystem)
-        prefunc += rfm_precompute.rfm_struct__malloc.replace("rfmstruct", "(*rfm)")
-        prefunc += """}
-        """
-        for define in rfm_precompute.BHaH_defines_list:
-            var_name = define.split()[2].strip(";")
-            if "xx0" in var_name:
-                size = "Nxx_plus_2NGHOSTS0"
-            elif "xx1" in var_name:
-                size = "Nxx_plus_2NGHOSTS1"
-            else:
-                size = "Nxx_plus_2NGHOSTS2"
-            prefunc += f"  PUParray(p, (*rfm)->{var_name}, {size});\n"
-    prefunc += """
-}
-"""
 
     prefunc += """
 // PUP routine for struct innerpt_bc_struct
@@ -530,7 +501,11 @@ void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const params_struct &pa
 
   pup_tmpBuffers_struct(p, gd.tmpBuffers, gd.params, gd.nonlocalinnerbcstruct, gd.gridfuncs);
 
-  pup_rfm_struct(p, &gd.rfmstruct, &gd.params);
+  if (p.isUnpacking()) {
+    gd.rfmstruct = (rfm_struct *)malloc(sizeof(rfm_struct));
+    rfm_precompute_malloc(&commondata, &gd.params, gd.rfmstruct);
+    rfm_precompute_defines(&commondata, &gd.params, gd.rfmstruct, gd.xx);
+  }
 }
 """
 

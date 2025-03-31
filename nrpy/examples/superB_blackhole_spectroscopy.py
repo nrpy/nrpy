@@ -392,7 +392,6 @@ superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
 )
 
 superBpup.register_CFunction_superB_pup_routines(
-    set_of_CoordSystems={CoordSystem},
     MoL_method=MoL_method,
     enable_psi4_diagnostics=True,
 )
