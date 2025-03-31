@@ -1,5 +1,11 @@
 """
-Register superB_pup_routines.cpp.
+Register the superB PUP routines for Charm++ checkpointing and load balancing.
+
+This script registers the C function "superB_pup_routines" from the file
+"superB_pup_routines.cpp", which contains various Pack-Unpack (PUP) routines for
+structs used in checkpointing and load balancing in Charm++. These routines handle
+the packing and unpacking of data structures such as commondata, params, rfm, boundary
+conditions, MoL grid functions, and more.
 
 Author: Nishita Jadoo
         njadoo **at** uidaho **dot* edu
@@ -25,25 +31,39 @@ def register_CFunction_superB_pup_routines(
     checkpoints_store_auxevol_gfs: bool = False,
 ) -> None:
     """
-    Register C function superB_pup_routines(), a collection of Pack Un-Pack (PUP) for structs. PUP routines are used for checkpointing and load balancing in Charm++.
+    Register the C function "superB_pup_routines", which is a collection of
+    Pack-Unpack (PUP) routines for various structs. These routines are used for
+    checkpointing and load balancing in Charm++.
 
-    :param set_of_CoordSystems: Set of coordinate systems to register the C functions.
-    :param MoL_method: The method to be used for MoL. Default is 'RK4'.
-    :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
-    :param checkpoints_store_auxevol_gfs: Whether or not to store aux_evol gfs in checkpoints.
+    :param set_of_CoordSystems: Set of coordinate system names for which the C functions are registered.
+    :param MoL_method: The Method of Lines (MoL) method to be used (default is "RK4").
+    :param enable_psi4_diagnostics: Flag to enable psi4 diagnostics.
+    :param checkpoints_store_auxevol_gfs: Flag to determine whether auxiliary evolution grid functions are stored in checkpoints.
+
+    DocTests:
+        >>> register_CFunction_superB_pup_routines({"Cartesian", "Spherical"})
     """
-    desc = "superB_pup_routines.cpp from superB. Note that this cpp file is just a collection of PUP functions. superB_pup_routines() is unused."
-    # prefunc contains most of the source code
-    prefunc = "// " + desc + "\n\n"
-    prefunc += r"""/* superB:  File  "superB_pup_routines.cpp"*/
-#include "../BHaH_defines.h"
-#include "../BHaH_function_prototypes.h"
+    desc = """This file implements a collection of Pack-Unpack (PUP) routines used in Charm++ for checkpointing,
+and load balancing in the superB framework.
+It includes routines for serializing and deserializing:
+    - commondata_struct and params_struct,
+    - rfm_struct with reference metric precomputation and memory allocation,
+    - inner and outer boundary condition structures (innerpt_bc_struct, outerpt_bc_struct, bc_info_struct, bc_struct),
+    - MoL grid functions (MoL_gridfunctions_struct),
+    - chare communication structures (charecomm_struct),
+    - diagnostic information (diagnostic_struct),
+    - temporary buffers and nonlocal inner boundary conditions (tmpBuffers_struct, nonlocalinnerbc_struct),
+    - and grid data structures (griddata_struct, griddata_chare).
+This comprehensive set of routines is crucial for efficient data management and communication in high-performance, parallel simulations.
 """
-    prefunc += """
+    # prefunc contains most of the C++ source code for the PUP routines.
+    # ~ prefunc = "// " + desc + "\n\n"
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    prefunc = """
 // PUP routine for struct commondata_struct
 void pup_commondata_struct(PUP::er &p, commondata_struct &commondata) {
 """
-    struct_list: List[str] = []  # List to store individual struct elements
+    struct_list: List[str] = []  # List to store individual struct elements for commondata_struct.
     for parname, CodeParam in par.glb_code_params_dict.items():
         if CodeParam.commondata:
             struct = "commondata"
@@ -60,7 +80,7 @@ void pup_commondata_struct(PUP::er &p, commondata_struct &commondata) {
             else:
                 c_output = f"p|{struct}.{parname};{comment}\n"
             struct_list.append(c_output)
-    # Sort the lines alphabetically and join them with line breaks
+    # Sort the lines alphabetically and join them with line breaks.
     prefunc += "// PUP commondata struct\n"
     prefunc += "".join(sorted(struct_list))
     prefunc += """
@@ -70,7 +90,7 @@ void pup_commondata_struct(PUP::er &p, commondata_struct &commondata) {
 // PUP routine for struct params_struct
 void pup_params_struct(PUP::er &p, params_struct &params) {
 """
-    params_struct_list: List[str] = []  # List to store individual struct elements
+    params_struct_list: List[str] = []  # List to store individual struct elements for params_struct.
     for parname, CodeParam in par.glb_code_params_dict.items():
         CPtype = CodeParam.cparam_type
         if not CodeParam.commondata and CPtype != "#define":
@@ -87,7 +107,7 @@ void pup_params_struct(PUP::er &p, params_struct &params) {
             else:
                 c_output = f"p|{struct}.{parname};{comment}\n"
             params_struct_list.append(c_output)
-    # Sort the lines alphabetically and join them with line breaks
+    # Sort the lines alphabetically and join them with line breaks.
     prefunc += "// PUP params struct\n"
     prefunc += "".join(sorted(params_struct_list))
     prefunc += """
@@ -103,15 +123,15 @@ void pup_rfm_struct(PUP::er &p, rfm_struct *restrict rfm, const params_struct *r
 """
     for CoordSystem in set_of_CoordSystems:
         rfm_precompute = ReferenceMetricPrecompute(CoordSystem)
-        # Add memory allocation code
+        # Add memory allocation code for the rfm_struct.
         prefunc += rfm_precompute.rfm_struct__malloc.replace("rfmstruct", "rfm")
         prefunc += """}
         """
-        # Add PUParray calls
+        # Add PUParray calls for each variable defined in the reference metric.
         for define in rfm_precompute.BHaH_defines_list:
-            # Extract variable names from the define strings
+            # Extract variable name from the define string.
             var_name = define.split()[2].strip(";")
-            # Assuming all variables have the same allocation size, adjust as necessary
+            # Assume all variables have the same allocation size; adjust as necessary.
             if "xx0" in var_name:
                 size = "Nxx_plus_2NGHOSTS0"
             elif "xx1" in var_name:
@@ -223,20 +243,20 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
         _,
         diagnostic_gridfunctions2_point_to,
     ) = generate_gridfunction_names(Butcher_dict, MoL_method=MoL_method)
-    # Combine y_n_gfs and non_y_n_gfs into a single list
+    # Combine y_n_gfs and non_y_n_gfs into a single list.
     gridfunctions_list = [y_n_gridfunctions] + non_y_n_gridfunctions_list
     for gridfunctions in gridfunctions_list:
         num_gfs = (
             "NUM_EVOL_GFS" if gridfunctions != "auxevol_gfs" else "NUM_AUXEVOL_GFS"
         )
-        # Don't malloc a zero-sized array.
+        # Do not allocate a zero-sized array.
         if num_gfs == "NUM_AUXEVOL_GFS":
             prefunc += "  if(NUM_AUXEVOL_GFS > 0) "
         prefunc += (
             f"gridfuncs.{gridfunctions} = (REAL *restrict)malloc(sizeof(REAL) * {num_gfs} * "
             "Nxx_plus_2NGHOSTS_tot);\n"
         )
-    # In superB, allocate separate memory to diagnostic_output_gfs
+    # In superB, allocate separate memory for diagnostic_output_gfs.
     prefunc += "gridfuncs.diagnostic_output_gfs  = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);\n"
     prefunc += f"gridfuncs.diagnostic_output_gfs2 = gridfuncs.{diagnostic_gridfunctions2_point_to};\n"
     prefunc += """
@@ -483,7 +503,7 @@ void pup_nonlocalinnerbc_struct(PUP::er &p, nonlocalinnerbc_struct &nonlocal, co
 }
 
 // PUP routine for struct griddata
-// during time evolution, need params from griddata which is used to unpack charecomm_struct in griddata_chare and xx for diagnostics
+// During time evolution, need params from griddata which is used to unpack charecomm_struct in griddata_chare and xx for diagnostics.
 void pup_griddata(PUP::er &p, griddata_struct &gd) {
   pup_params_struct(p, gd.params);
   if (p.isUnpacking()) {
@@ -497,7 +517,7 @@ void pup_griddata(PUP::er &p, griddata_struct &gd) {
 }
 
 // PUP routine for struct griddata_chare
-// For unpacking order is important, unpacked structs are used for unpacking the subsequent structs
+// For unpacking order is important; unpacked structs are used for unpacking the subsequent structs.
 void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const params_struct &params, const commondata_struct &commondata) {
 
   pup_params_struct(p, gd.params);
@@ -523,7 +543,7 @@ void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const params_struct &pa
 
   pup_tmpBuffers_struct(p, gd.tmpBuffers, gd.params, gd.nonlocalinnerbcstruct, gd.gridfuncs);
 
-  // ZACH SAYS: This doesn't seem to be correct anymore.
+  // NOTE: The following lines appear to be outdated and have been commented out.
   //PUParray(p, gd.CoordSystemname, 100);
   //PUParray(p, gd.gridname, 100);
 
@@ -539,9 +559,22 @@ void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const params_struct &pa
 """
     cfc.register_CFunction(
         subdirectory="superB",
+        includes=includes,
         prefunc=prefunc,
         desc=desc,
         name=name,
         params=params,
         body=body,
     )
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")
