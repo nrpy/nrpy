@@ -238,7 +238,7 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
             )
         elif gridfunctions == "auxevol_gfs":
             prefunc += rf"""
-  if (strstr(params_chare.CoordSystemName, "Spherical") != NULL) {{
+  if (strstr(params.CoordSystemName, "Spherical") != NULL) {{
     if(NUM_AUXEVOL_GFS > 0) {{
       PUParray(p, gridfuncs.auxevol_gfs, {num_gfs} * Nxx_plus_2NGHOSTS_tot);
     }}
