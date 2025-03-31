@@ -115,16 +115,17 @@ void pup_params_struct(PUP::er &p, params_struct &params) {
 
     prefunc += """
 // PUP routine for struct rfm_struct
-void pup_rfm_struct(PUP::er &p, rfm_struct *restrict rfm, const params_struct *restrict params) {
+void pup_rfm_struct(PUP::er &p, rfm_struct **restrict rfm, const params_struct *restrict params) {
   const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
   const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
   const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
   if (p.isUnpacking()) {
+    *rfm = (rfm_struct *)malloc(sizeof(rfm_struct));
 """
     for CoordSystem in set_of_CoordSystems:
         rfm_precompute = ReferenceMetricPrecompute(CoordSystem)
         # Add memory allocation code for the rfm_struct.
-        prefunc += rfm_precompute.rfm_struct__malloc.replace("rfmstruct", "rfm")
+        prefunc += rfm_precompute.rfm_struct__malloc.replace("rfmstruct", "(*rfm)")
         prefunc += """}
         """
         # Add PUParray calls for each variable defined in the reference metric.
@@ -138,7 +139,7 @@ void pup_rfm_struct(PUP::er &p, rfm_struct *restrict rfm, const params_struct *r
                 size = "Nxx_plus_2NGHOSTS1"
             else:
                 size = "Nxx_plus_2NGHOSTS2"
-            prefunc += f"  PUParray(p, rfm->{var_name}, {size});\n"
+            prefunc += f"  PUParray(p, (*rfm)->{var_name}, {size});\n"
     prefunc += """
 }
 """
@@ -534,7 +535,7 @@ void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const params_struct &pa
 
   pup_tmpBuffers_struct(p, gd.tmpBuffers, gd.params, gd.nonlocalinnerbcstruct, gd.gridfuncs);
 
-  pup_rfm_struct(p, gd.rfmstruct, &gd.params);
+  pup_rfm_struct(p, &gd.rfmstruct, &gd.params);
 }
 """
 
