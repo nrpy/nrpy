@@ -9,7 +9,7 @@ Author: Zachariah B. Etienne
 
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import Dict, List, Set, Union, cast
+from typing import Dict, List, Set, Tuple, Union, cast
 
 import sympy as sp
 
@@ -17,18 +17,23 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.helpers.parallelization.utilities as parallel_utils
+import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
+from nrpy.helpers.expression_utils import (
+    generate_definition_header,
+    get_params_commondata_symbols_from_expr_list,
+)
 
 # fmt: off
-for i in range(3):
-    _ = par.CodeParameter("int", __name__, f"Nxx_plus_2NGHOSTS{i}", add_to_parfile=False, add_to_set_CodeParameters_h=True)
-    _ = par.CodeParameter("int", __name__, f"Nxx{i}", 64)
+for j in range(3):
+    _ = par.CodeParameter("int", __name__, f"Nxx_plus_2NGHOSTS{j}", add_to_parfile=False, add_to_set_CodeParameters_h=True)
+    _ = par.CodeParameter("int", __name__, f"Nxx{j}", 64)
     # reference_metric sets xxmin and xxmax below.
-    _ = par.CodeParameter("REAL", __name__, f"xxmin{i}", -10.0, add_to_parfile=False, add_to_set_CodeParameters_h=True)
-    _ = par.CodeParameter("REAL", __name__, f"xxmax{i}", 10.0, add_to_parfile=False, add_to_set_CodeParameters_h=True)
-    _ = par.CodeParameter("REAL", __name__, f"invdxx{i}", add_to_parfile=False, add_to_set_CodeParameters_h=True)
-    _ = par.CodeParameter("REAL", __name__, f"dxx{i}", add_to_parfile=False, add_to_set_CodeParameters_h=True)
+    _ = par.CodeParameter("REAL", __name__, f"xxmin{j}", -10.0, add_to_parfile=False, add_to_set_CodeParameters_h=True)
+    _ = par.CodeParameter("REAL", __name__, f"xxmax{j}", 10.0, add_to_parfile=False, add_to_set_CodeParameters_h=True)
+    _ = par.CodeParameter("REAL", __name__, f"invdxx{j}", add_to_parfile=False, add_to_set_CodeParameters_h=True)
+    _ = par.CodeParameter("REAL", __name__, f"dxx{j}", add_to_parfile=False, add_to_set_CodeParameters_h=True)
 _ = par.CodeParameter("REAL", __name__, "convergence_factor", 1.0, commondata=True)
 _ = par.CodeParameter("int", __name__, "CoordSystem_hash", commondata=False, add_to_parfile=False)
 _ = par.CodeParameter("int", __name__, "grid_idx", commondata=False, add_to_parfile=False)
@@ -272,20 +277,32 @@ def register_CFunction_ds_min_single_pt(
     desc = "Examining all three directions at a given point on a numerical grid, find the minimum grid spacing ds_min."
     cfunc_type = "void"
     name = "ds_min_single_pt"
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xx0, const REAL xx1, const REAL xx2, REAL *restrict ds_min"
+    params = "const params_struct *restrict params, const REAL xx0, const REAL xx1, const REAL xx2, REAL *restrict ds_min"
     rfm = refmetric.reference_metric[CoordSystem]
     # These are set in CodeParameters.h
     dxx0, dxx1, dxx2 = sp.symbols("dxx0 dxx1 dxx2", real=True)
+    expr_list = [
+        sp.Abs(rfm.scalefactor_orthog[0] * dxx0),
+        sp.Abs(rfm.scalefactor_orthog[1] * dxx1),
+        sp.Abs(rfm.scalefactor_orthog[2] * dxx2),
+    ]
     body = ccg.c_codegen(
-        [
-            sp.Abs(rfm.scalefactor_orthog[0] * dxx0),
-            sp.Abs(rfm.scalefactor_orthog[1] * dxx1),
-            sp.Abs(rfm.scalefactor_orthog[2] * dxx2),
-        ],
+        expr_list,
         ["const REAL ds0", "const REAL ds1", "const REAL ds2"],
         include_braces=False,
     )
     body += "*ds_min = MIN(ds0, MIN(ds1, ds2));\n"
+
+    parallelization = par.parval_from_str("parallelization")
+    param_symbols, _ = get_params_commondata_symbols_from_expr_list(expr_list)
+    params_definitions = generate_definition_header(
+        param_symbols,
+        enable_intrinsics=False,
+        var_access=parallel_utils.get_params_access(parallelization),
+    )
+
+    kernel_body = f"{params_definitions}\n{body}"
+    cfunc_decorators = "__host__ __device__" if parallelization == "cuda" else ""
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
@@ -293,9 +310,77 @@ def register_CFunction_ds_min_single_pt(
         CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,
-        include_CodeParameters_h=True,
-        body=body,
+        include_CodeParameters_h=False,
+        body=kernel_body,
+        cfunc_decorators=cfunc_decorators,
     )
+
+
+def generate_grid_minimum_gridspacing_prefunc() -> Tuple[str, str]:
+    """
+    Compute global minimum of grid spacing.
+
+    The timestep is determined by the relation dt = CFL_FACTOR * ds_min, where ds_min
+    is the minimum spacing between neighboring gridpoints on a numerical grid.
+
+    :return: Tuple of prefunc and function_launch code strings.
+    """
+    comments = "Kernel to find minimum grid spacing."
+    cfunc_type = "static void"
+    # Kernel name
+    name = "compute_ds_min"
+    params = "params_struct *restrict params"
+    parallelization = par.parval_from_str("parallelization")
+    for i in range(3):
+        params += f", REAL *restrict xx{i}"
+    loop_body = (
+        r"""REAL local_ds_min;
+    ds_min_single_pt(params, xx0[i0], xx1[i1], xx2[i2], &local_ds_min);
+    ds_min = MIN(ds_min, local_ds_min);
+    """
+        if parallelization not in ["cuda"]
+        else r"""ds_min_single_pt(params, xx0[i0], xx1[i1], xx2[i2], &ds_min[IDX3(i0, i1, i2)]);
+    """
+    )
+    body = parallel_utils.get_loop_parameters(parallelization)
+    OMP_custom_pragma: str = ""
+    if parallelization != "cuda":
+        body += "REAL ds_min = 1e38;\n"
+        OMP_custom_pragma = "#pragma omp parallel for reduction(min:ds_min)"
+    body += rf"""{lp.simple_loop(
+        loop_body,
+        loop_region="all points",
+        OMP_custom_pragma=OMP_custom_pragma)}
+"""
+    if parallelization != "cuda":
+        body += "*ds_min_result = ds_min;\n"
+
+    # Prepare the argument dicts
+    arg_dict_cuda = {
+        **{f"xx{i}": "REAL *restrict" for i in range(3)},
+        "ds_min": "REAL *restrict",
+    }
+    arg_dict_host = {
+        "params": "const params_struct *restrict",
+        **{f"xx{i}": "REAL *restrict" for i in range(3)},
+        "ds_min_result": "REAL *restrict",
+    }
+
+    prefunc, function_launch = parallel_utils.generate_kernel_and_launch_code(
+        name,
+        body,
+        arg_dict_cuda,
+        arg_dict_host,
+        par.parval_from_str("parallelization"),
+        cfunc_type=cfunc_type,
+        comments=comments,
+        launchblock_with_braces=False,
+    )
+
+    for i in range(3):
+        function_launch = function_launch.replace(f"xx{i}", f"xx[{i}]")
+    function_launch = function_launch.replace("ds_min_result", "ds_min")
+    return prefunc, function_launch
 
 
 def register_CFunction_cfl_limited_timestep() -> None:
@@ -310,18 +395,28 @@ def register_CFunction_cfl_limited_timestep() -> None:
     cfunc_type = "void"
     name = "cfl_limited_timestep"
     params = "commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3]"
-    body = r"""
-  REAL ds_min = 1e38;
-  LOOP_OMP("omp parallel for reduction(min:ds_min)", i0, 0, params->Nxx_plus_2NGHOSTS0,
-             i1, 0, params->Nxx_plus_2NGHOSTS1,
-             i2, 0, params->Nxx_plus_2NGHOSTS2) {
-    REAL local_ds_min;
-    ds_min_single_pt(commondata, params, xx[0][i0], xx[1][i1], xx[2][i2], &local_ds_min);
-    ds_min = MIN(ds_min, local_ds_min);
-  }
-  commondata->dt = MIN(commondata->dt, ds_min * commondata->CFL_FACTOR);
-"""
+    body = ""
+    ds_min_prefunc, ds_min_launch = generate_grid_minimum_gridspacing_prefunc()
+
+    if par.parval_from_str("parallelization") in ["cuda"]:
+        body += rf"""
+  // Allocate memory for ds_min on the device
+  const int Nxx_tot = params->Nxx_plus_2NGHOSTS0 * params->Nxx_plus_2NGHOSTS1 * params->Nxx_plus_2NGHOSTS2;
+  REAL *ds_min_device;
+  BHAH_MALLOC_DEVICE(ds_min_device, sizeof(REAL) * Nxx_tot);
+  {ds_min_launch}
+  REAL ds_min = find_global__minimum(ds_min_device, Nxx_tot);
+  """
+    else:
+        body += rf"""REAL ds_min = 1e38;
+        {ds_min_launch.replace(", ds_min", ", &ds_min")}
+    """
+    body += "commondata->dt = MIN(commondata->dt, ds_min * commondata->CFL_FACTOR);\n"
+
+    if par.parval_from_str("parallelization") in ["cuda"]:
+        body += "BHAH_FREE_DEVICE(ds_min_device);\n"
     cfc.register_CFunction(
+        prefunc=ds_min_prefunc,
         includes=includes,
         desc=desc,
         cfunc_type=cfunc_type,
