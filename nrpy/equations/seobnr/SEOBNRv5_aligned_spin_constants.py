@@ -169,20 +169,11 @@ class SEOBNR_aligned_spin_constants:
         self.Delta_t = Delta_t_NS + Delta_t_S
 
         # Final mass and spin computation
-        atot = m1 * m1 * chi1 + m2 * m2 * chi2
-        aeff = atot + f2r(0.474046) * nu * (chi1 + chi2)
-        aeff_max1 = (aeff + 1 - sp.Abs(aeff - 1)) / 2
-        Z1eff = 1 + (sp.cbrt(1 - aeff_max1 * aeff_max1)) * (
-            sp.cbrt(1 + aeff_max1) + sp.cbrt(1 - aeff_max1)
-        )
-        Z2eff = sp.sqrt(3 * aeff_max1 * aeff_max1 + Z1eff * Z1eff)
-        rISCOeff = (
-            3 + Z2eff - sp.sign(aeff_max1) * sp.sqrt((3 - Z1eff) * (3 + Z1eff + Z2eff))
-        )
-        LISCOeff = (sp.Rational(2, 3) / sp.sqrt(3)) * (
-            1 + 2 * sp.sqrt(3 * rISCOeff - 2)
-        )
-        EISCOeff = sp.sqrt(1 - 2 / (3 * rISCOeff))
+
+        # Final spin non-precessing HBR2016 version "M3J4"
+        # cf https://lscsoft.docs.ligo.org/lalsuite/lalinference/nrutils_8py_source.html
+        nM = 3
+        nJ = 4
         k = sp.zeros(4, 5)
         k[0, 0] = -f2r(5.97723)
         k[0, 1] = f2r(3.39221)
@@ -204,22 +195,27 @@ class SEOBNR_aligned_spin_constants:
         k[3, 2] = -f2r(697.177)
         k[3, 3] = f2r(753.738)
         k[3, 4] = f2r(1166.89)
-
-        NRfactor = 0
-        nu_i = 1
-        for i in range(4):
-            aeff_j = 1
-            for j in range(5):
-                NRfactor += k[i, j] * nu_i * aeff_j
-                aeff_j *= aeff
-            nu_i *= nu
-        ell = sp.Abs(LISCOeff - 2 * atot * (EISCOeff - 1) + nu * NRfactor)
-        self.a_f = atot + nu * ell
-        Z1f = 1 + (sp.cbrt(1 - self.a_f * self.a_f)) * (
-            sp.cbrt(1 + self.a_f) + sp.cbrt(1 - self.a_f)
+        xi = f2r(0.474046)
+        q = m2 / m1
+        chi1z = chi1
+        chi2z = chi2
+        atot = (chi1z + chi2z * q * q) / ((1 + q) * (1 + q))
+        aeff = atot + xi * nu * (chi1z + chi2z)
+        rISCOeff = self.Kerr_ISCO_radius(aeff)
+        LISCOeff = (sp.Rational(2, 3) / sp.sqrt(3)) * (
+            1 + 2 * sp.sqrt(3 * rISCOeff - 2)
         )
-        Z2f = sp.sqrt(3 * self.a_f * self.a_f + Z1f * Z1f)
-        self.rISCO = 3 + Z2f - sp.sign(self.a_f) * sp.sqrt((3 - Z1f) * (3 + Z1f + Z2f))
+        EISCOeff = sp.sqrt(1 - 2 / (3 * rISCOeff))
+        aeff_j = [1, aeff, aeff**2, aeff**3, aeff**4]
+        nu_i = [1, nu, nu**2, nu**3]
+        ksum = 0
+        for i in range(nM + 1):
+            for j in range(nJ + 1):
+                ksum += k[i, j] * nu_i[i] * aeff_j[j]
+
+        ell = sp.Abs(LISCOeff - 2 * atot * (EISCOeff - 1) + nu * ksum)
+        self.a_f = atot + ell / (1 / q + 2 + q)
+        self.rISCO = self.Kerr_ISCO_radius(self.a_f)
         self.rstop = -1 * coord_less_bound(self.Delta_t, 0).subs(
             sp.Function("nrpyAbs"), sp.Abs
         ) + f2r(0.98) * self.rISCO * coord_greater_bound(self.Delta_t, 0).subs(
@@ -280,6 +276,23 @@ class SEOBNR_aligned_spin_constants:
             A_1 * Deltachi + A_2 * Deltachi2 + A_3 * Deltachi * Shat
         )
         self.M_f = 1 - (Erad_nu_Shat + DeltaErad_nu_Shat_Deltachi)
+
+    def Kerr_ISCO_radius(self, a: sp.core.mul.Mul) -> sp.core.mul.Mul:
+        """
+        Compute the radius of the innermost stable circular orbit (ISCO) of a Kerr black hole.
+
+        :param a: dimensionless spin parameter of the Kerr black hole.
+        :return: radius of the ISCO in Boyer-Lindquist coordinates.
+        """
+        # restrict a to 1.
+        a_ceil_one = (a + 1 - sp.Abs(a - 1)) / 2
+        z1 = 1 + (1 - a_ceil_one**2) ** (sp.Rational(1, 3)) * (
+            (1 + a_ceil_one) ** (sp.Rational(1, 3))
+            + (1 - a_ceil_one) ** (sp.Rational(1, 3))
+        )
+        z2 = sp.sqrt(3 * a_ceil_one**2 + z1**2)
+        a_sign = sp.sign(a_ceil_one)
+        return 3 + z2 - sp.sqrt((3 - z1) * (3 + z1 + 2 * z2)) * a_sign
 
 
 if __name__ == "__main__":
