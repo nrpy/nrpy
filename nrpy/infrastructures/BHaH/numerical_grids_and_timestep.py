@@ -16,6 +16,7 @@ import sympy as sp
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
+import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
 
@@ -128,6 +129,8 @@ params->Nxx_plus_2NGHOSTS2 = params->Nxx2 + 2*NGHOSTS;
             body += f"params->xx{minmax}{dirn} = {rfm_value};\n"
     body += "}\n"
 
+    parallelization = par.parval_from_str("parallelization")
+
     # Set quantities that depend on Nxx and {xxmin, xxmax}, then set up coordinate arrays xx[3][Nxxi].
     body += """
 // Set quantities that depend on Nxx and {xxmin, xxmax}: dxx, invdxx.
@@ -142,14 +145,66 @@ params->invdxx2 = ((REAL)params->Nxx2) / (params->xxmax2 - params->xxmin2);
 // Set up uniform, cell-centered, topologically Cartesian numerical grid,
 //   centered at (xxmin[i] + xxmax[i])/2 in direction i, and store
 //   {xx[0], xx[1], xx[2]} arrays.
-xx[0] = (REAL *restrict)malloc(sizeof(REAL)*params->Nxx_plus_2NGHOSTS0);
-xx[1] = (REAL *restrict)malloc(sizeof(REAL)*params->Nxx_plus_2NGHOSTS1);
-xx[2] = (REAL *restrict)malloc(sizeof(REAL)*params->Nxx_plus_2NGHOSTS2);
-for (int j = 0; j < params->Nxx_plus_2NGHOSTS0; j++) xx[0][j] = params->xxmin0 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * params->dxx0;
-for (int j = 0; j < params->Nxx_plus_2NGHOSTS1; j++) xx[1][j] = params->xxmin1 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * params->dxx1;
-for (int j = 0; j < params->Nxx_plus_2NGHOSTS2; j++) xx[2][j] = params->xxmin2 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * params->dxx2;
-"""
+BHAH_MALLOC(xx[0], sizeof(REAL) * params->Nxx_plus_2NGHOSTS0);
+BHAH_MALLOC(xx[1], sizeof(REAL) * params->Nxx_plus_2NGHOSTS1);
+BHAH_MALLOC(xx[2], sizeof(REAL) * params->Nxx_plus_2NGHOSTS2);
+""".replace(
+        "BHAH_MALLOC",
+        "BHAH_MALLOC_DEVICE" if parallelization not in ["openmp"] else "BHAH_MALLOC",
+    )
+
+    prefunc = (
+        """
+        #define LOOP_OVER_XX(COORD_DIR) \
+        const int index  = blockIdx.x * blockDim.x + threadIdx.x; \
+        const int stride = blockDim.x * gridDim.x; \
+        static constexpr REAL onehalf = 1.0 / 2.0; \
+        for (int j = index; j < d_params[streamid].Nxx_plus_2NGHOSTS##COORD_DIR; j+=stride) { \
+            xx##COORD_DIR[j] = d_params[streamid].xxmin##COORD_DIR + ((REAL)(j - NGHOSTS) + onehalf) * d_params[streamid].dxx##COORD_DIR;\
+        }
+        """
+        if parallelization == "cuda"
+        else """
+        #define LOOP_OVER_XX(COORD_DIR) \
+        static const REAL onehalf = 1.0 / 2.0; \
+        for (int j = 0; j < params->Nxx_plus_2NGHOSTS##COORD_DIR; j+=1) { \
+            xx##COORD_DIR[j] = params->xxmin##COORD_DIR + ((REAL)(j - NGHOSTS) + onehalf) * params->dxx##COORD_DIR;\
+        }
+        """
+    )
+    for i in range(3):
+        kernel_body = f"LOOP_OVER_XX({i})"
+        # Kernel name
+        kernel_name: str = f"initialize_grid_xx{i}"
+        # Comments
+        comments = f"Kernel to compute xx{i} coordinates."
+
+        # Prepare the argument dicts
+        arg_dict_cuda = {
+            f"xx{i}": "REAL *restrict",
+        }
+        arg_dict_host = {
+            "params": "const params_struct *restrict",
+            **arg_dict_cuda,
+        }
+
+        # We replicate the original approach of computing param_streamid in the body for CUDA
+        # so define_param_streamid=True, which forces the helper to insert that line.
+        new_prefunc, new_body = parallel_utils.generate_kernel_and_launch_code(
+            kernel_name,
+            kernel_body,
+            arg_dict_cuda,
+            arg_dict_host,
+            par.parval_from_str("parallelization"),
+            cfunc_type="static void",
+            comments=comments,
+            launchblock_with_braces=False,
+        )
+        prefunc += new_prefunc
+        body += new_body.replace(f"xx{i})", f"xx[{i}])")
+
     cfc.register_CFunction(
+        prefunc=prefunc,
         includes=includes,
         desc=desc,
         cfunc_type=cfunc_type,
