@@ -104,7 +104,7 @@ class GPU_Kernel:
         self.desc: str = f"Kernel: {self.name}.\n" + comments
         self.launch_dict = launch_dict
         self.launch_block: str = ""
-        self.launch_settings: str = "("
+        self.launch_settings: str = ""
 
         if self.decorators == "__global__" and launch_dict is None:
             raise ValueError(f"Error: {self.decorators} requires a launch_dict")
@@ -184,7 +184,7 @@ dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);"""
             self.launch_settings += ",sm"
         if not stream_def_str is None:
             self.launch_settings += ",streams[streamid]"
-        self.launch_settings += ">>>("
+        self.launch_settings += ">>>"
 
     def c_function_call(self) -> str:
         """
@@ -192,8 +192,7 @@ dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);"""
 
         :return: The C function call as a string.
         """
-        c_function_call: str = self.name
-        c_function_call += self.launch_settings
+        c_function_call: str = f"{self.name}{self.launch_settings}("
 
         for p in self.params_dict:
             c_function_call += f"{p}, "
