@@ -56,16 +56,23 @@ def get_params_commondata_symbols_from_expr_list(
         )
     unique_symbols = list(set(unique_symbols))
 
-    param_symbols = list(
-        set(unique_symbols)
-        & set(
-            k if not v.commondata else "" for k, v in par.glb_code_params_dict.items()
+    param_symbols = sorted(
+        list(
+            set(unique_symbols)
+            & set(
+                k if not v.commondata else ""
+                for k, v in par.glb_code_params_dict.items()
+            )
         )
     )
 
-    commondata_symbols = list(
-        set(unique_symbols)
-        & set(k if v.commondata else "" for k, v in par.glb_code_params_dict.items())
+    commondata_symbols = sorted(
+        list(
+            set(unique_symbols)
+            & set(
+                k if v.commondata else "" for k, v in par.glb_code_params_dict.items()
+            )
+        )
     )
     return param_symbols, commondata_symbols
 
