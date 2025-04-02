@@ -407,6 +407,20 @@ def register_CFunction_cfl_limited_timestep() -> None:
 
     The timestep is determined by the relation dt = CFL_FACTOR * ds_min, where ds_min
     is the minimum spacing between neighboring gridpoints on a numerical grid.
+
+    Doctests:
+    >>> from nrpy.helpers.generic import validate_strings
+    >>> import nrpy.c_function as cfc
+    >>> import nrpy.params as par
+    >>> supported_Parallelizations = ["openmp", "cuda"]
+    >>> name = "cfl_limited_timestep"
+    >>> for parallelization in supported_Parallelizations:
+    ...    par.set_parval_from_str("parallelization", parallelization)
+    ...    cfc.CFunction_dict.clear()
+    ...    register_CFunction_cfl_limited_timestep()
+    ...    generated_str = cfc.CFunction_dict[f'{name}'].full_function
+    ...    validation_desc = f"{name}__{parallelization}"
+    ...    validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "Compute minimum timestep dt = CFL_FACTOR * ds_min."
