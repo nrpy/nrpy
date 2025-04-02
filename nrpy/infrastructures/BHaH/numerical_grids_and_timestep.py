@@ -36,7 +36,7 @@ for j in range(3):
     _ = par.CodeParameter("REAL", __name__, f"dxx{j}", add_to_parfile=False, add_to_set_CodeParameters_h=True)
 _ = par.CodeParameter("REAL", __name__, "convergence_factor", 1.0, commondata=True)
 _ = par.CodeParameter("int", __name__, "CoordSystem_hash", commondata=False, add_to_parfile=False)
-_ = par.CodeParameter("int", __name__, "grid_idx", commondata=False, add_to_parfile=False)
+_ = par.CodeParameter("int", __name__, "grid_idx", 0, commondata=False, add_to_parfile=False)
 _ = par.CodeParameter("char[100]", __name__, "gridname", commondata=False, add_to_parfile=False)
 # fmt: on
 
@@ -74,9 +74,13 @@ Parameter outputs:
 Grid setup output:
 - xx: Coordinate values for each (cell-centered) grid point.
 """
+    parallelization = par.parval_from_str("parallelization")
     cfunc_type = "void"
     name = "numerical_grid_params_Nxx_dxx_xx"
-    params = "const commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3], const int Nx[3], const bool set_xxmin_xxmax_to_defaults"
+    params = "const commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3], const int Nx[3], const bool set_xxmin_xxmax_to_defaults".replace(
+        "REAL *restrict xx[3]",
+        "REAL * xx[3]" if parallelization in ["cuda"] else "REAL *restrict xx[3]",
+    )
     body = "// Set default values for the grid resolution in each dimension.\n"
     for dirn in range(3):
         body += f"params->Nxx{dirn} = {Nxx_dict[CoordSystem][dirn]};\n"
@@ -134,8 +138,6 @@ params->Nxx_plus_2NGHOSTS2 = params->Nxx2 + 2*NGHOSTS;
             body += f"params->xx{minmax}{dirn} = {rfm_value};\n"
     body += "}\n"
 
-    parallelization = par.parval_from_str("parallelization")
-
     # Set quantities that depend on Nxx and {xxmin, xxmax}, then set up coordinate arrays xx[3][Nxxi].
     body += """
 // Set quantities that depend on Nxx and {xxmin, xxmax}: dxx, invdxx.
@@ -157,6 +159,11 @@ BHAH_MALLOC(xx[2], sizeof(REAL) * params->Nxx_plus_2NGHOSTS2);
         "BHAH_MALLOC",
         "BHAH_MALLOC_DEVICE" if parallelization not in ["openmp"] else "BHAH_MALLOC",
     )
+
+    if parallelization in ["cuda"]:
+        body += (
+            "cpyHosttoDevice_params__constant(params, params->grid_idx % NUM_STREAMS);"
+        )
 
     prefunc = (
         """
@@ -203,7 +210,14 @@ BHAH_MALLOC(xx[2], sizeof(REAL) * params->Nxx_plus_2NGHOSTS2);
             par.parval_from_str("parallelization"),
             cfunc_type="static void",
             comments=comments,
-            launchblock_with_braces=False,
+            launchblock_with_braces=True,
+            launch_dict={
+                "blocks_per_grid": [
+                    f"(params->Nxx_plus_2NGHOSTS{i} + threads_in_x_dir - 1) / threads_in_x_dir"
+                ],
+                "threads_per_block": ["32"],
+                "stream": "",
+            },
         )
         prefunc += new_prefunc
         body += new_body.replace(f"xx{i})", f"xx[{i}])")
@@ -298,7 +312,7 @@ def register_CFunction_ds_min_single_pt(
     params_definitions = generate_definition_header(
         param_symbols,
         enable_intrinsics=False,
-        var_access=parallel_utils.get_params_access(parallelization),
+        var_access=parallel_utils.get_params_access("openmp"),
     )
 
     kernel_body = f"{params_definitions}\n{body}"
@@ -357,6 +371,7 @@ def generate_grid_minimum_gridspacing_prefunc() -> Tuple[str, str]:
 
     # Prepare the argument dicts
     arg_dict_cuda = {
+        "params": "const params_struct *restrict",
         **{f"xx{i}": "REAL *restrict" for i in range(3)},
         "ds_min": "REAL *restrict",
     }
@@ -371,7 +386,7 @@ def generate_grid_minimum_gridspacing_prefunc() -> Tuple[str, str]:
         body,
         arg_dict_cuda,
         arg_dict_host,
-        par.parval_from_str("parallelization"),
+        parallelization,
         cfunc_type=cfunc_type,
         comments=comments,
         launchblock_with_braces=False,
@@ -379,7 +394,10 @@ def generate_grid_minimum_gridspacing_prefunc() -> Tuple[str, str]:
 
     for i in range(3):
         function_launch = function_launch.replace(f"xx{i}", f"xx[{i}]")
-    function_launch = function_launch.replace("ds_min_result", "ds_min")
+    # Fix call for device code
+    function_launch = function_launch.replace("ds_min)", "ds_min_device)")
+    # Fix call for host code
+    function_launch = function_launch.replace("ds_min_result)", "ds_min)")
     return prefunc, function_launch
 
 
@@ -404,7 +422,10 @@ def register_CFunction_cfl_limited_timestep() -> None:
   const int Nxx_tot = params->Nxx_plus_2NGHOSTS0 * params->Nxx_plus_2NGHOSTS1 * params->Nxx_plus_2NGHOSTS2;
   REAL *ds_min_device;
   BHAH_MALLOC_DEVICE(ds_min_device, sizeof(REAL) * Nxx_tot);
-  {ds_min_launch}
+  params_struct *device_params;
+  BHAH_MALLOC_DEVICE(device_params, sizeof(params_struct));
+  BHAH_MEMCPY_HOST_TO_DEVICE(device_params, params, sizeof(params_struct));
+  {ds_min_launch.replace("params,", "device_params,")}
   REAL ds_min = find_global__minimum(ds_min_device, Nxx_tot);
   """
     else:
@@ -455,7 +476,15 @@ def register_CFunction_numerical_grids_and_timestep(
     desc = "Set up numerical grids and timestep."
     cfunc_type = "void"
     name = "numerical_grids_and_timestep"
-    params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata, bool calling_for_first_time"
+    parallelization = par.parval_from_str("parallelization")
+    params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata, bool calling_for_first_time".replace(
+        "griddata,",
+        (
+            "griddata, griddata_struct *restrict griddata_host,"
+            if parallelization in ["cuda"]
+            else "griddata,"
+        ),
+    )
     body = r"""
   // Step 1.a: Set each CodeParameter in griddata.params to default, for MAXNUMGRIDS grids.
   if(calling_for_first_time)
@@ -483,6 +512,11 @@ def register_CFunction_numerical_grids_and_timestep(
             )
             body += f"  griddata[grid].params.grid_physical_size = {list_of_grid_physical_sizes[which_CoordSystem]};\n"
             body += "  numerical_grid_params_Nxx_dxx_xx(commondata, &griddata[grid].params, griddata[grid].xx, Nx, set_xxmin_xxmax_to_defaults);\n"
+            body += (
+                "  memcpy(&griddata_host[grid].params, &griddata[grid].params, sizeof(params_struct));\n"
+                if parallelization in ["cuda"]
+                else ""
+            )
             body += "  grid++;\n\n"
         body += "}\n"
     elif gridding_approach == "multipatch":
@@ -515,28 +549,52 @@ def register_CFunction_numerical_grids_and_timestep(
     body += "\n// Step 1.d: Allocate memory for and define reference-metric precomputation lookup tables\n"
     if enable_rfm_precompute:
         body += r"""for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
-  griddata[grid].rfmstruct = (rfm_struct *)malloc(sizeof(rfm_struct));
-  rfm_precompute_malloc(commondata, &griddata[grid].params, griddata[grid].rfmstruct);
-  rfm_precompute_defines(commondata, &griddata[grid].params, griddata[grid].rfmstruct, griddata[grid].xx);
-}
+  BHAH_MALLOC(griddata[grid].rfmstruct, sizeof(rfm_struct))
+"""
+        if parallelization in ["cuda"]:
+            body = body.replace("BHAH_MALLOC", "BHAH_MALLOC_DEVICE")
+            body += "\ncpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % NUM_STREAMS);"
+        body += r"""
+    rfm_precompute_malloc(commondata, &griddata[grid].params, griddata[grid].rfmstruct);
+    rfm_precompute_defines(commondata, &griddata[grid].params, griddata[grid].rfmstruct, griddata[grid].xx);
+    }
 """
     else:
         body += "// (reference-metric precomputation disabled)\n"
+
+    if parallelization in ["cuda"]:
+        body += """
+  cpyDevicetoHost__grid(commondata, griddata_host, griddata);
+  BHAH_DEVICE_SYNC();
+"""
     body += "\n// Step 1.e: Set up curvilinear boundary condition struct (bcstruct)\n"
     if enable_CurviBCs:
-        body += r"""for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
+        body += (
+            r"""for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
+  bcstruct_set_up(commondata, &griddata[grid].params, griddata_host[grid].xx, &griddata_host[grid].bcstruct, &griddata[grid].bcstruct);
+}
+"""
+            if parallelization in ["cuda"]
+            else r"""for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   bcstruct_set_up(commondata, &griddata[grid].params, griddata[grid].xx, &griddata[grid].bcstruct);
 }
 """
+        )
     else:
         body += "// (curvilinear boundary conditions bcstruct disabled)\n"
     if enable_set_cfl_timestep:
-        body += r"""
+        sync_params = (
+            "cpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % NUM_STREAMS);"
+            if parallelization in ["cuda"]
+            else ""
+        )
+        body += rf"""
 // Step 1.f: Set timestep based on minimum spacing between neighboring gridpoints.
 commondata->dt = 1e30;
-for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
+for(int grid=0; grid<commondata->NUMGRIDS; grid++) {{
+  {sync_params}
   cfl_limited_timestep(commondata, &griddata[grid].params, griddata[grid].xx);
-}"""
+}}"""
     body += r"""
 // Step 1.g: Initialize timestepping parameters to zero if this is the first time this function is called.
 if(calling_for_first_time) {
