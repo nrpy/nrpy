@@ -471,6 +471,21 @@ def register_CFunction_numerical_grids_and_timestep(
     :param enable_set_cfl_timestep: Whether to enable computation of dt, the CFL timestep. A custom version can be implemented later.
 
     :raises ValueError: If invalid gridding_approach selected.
+
+    Doctests:
+    >>> from nrpy.helpers.generic import validate_strings
+    >>> import nrpy.c_function as cfc
+    >>> import nrpy.params as par
+    >>> from nrpy.reference_metric import unittest_CoordSystems
+    >>> supported_Parallelizations = ["openmp", "cuda"]
+    >>> name = "numerical_grids_and_timestep"
+    >>> for parallelization in supported_Parallelizations:
+    ...    par.set_parval_from_str("parallelization", parallelization)
+    ...    cfc.CFunction_dict.clear()
+    ...    register_CFunction_numerical_grids_and_timestep({"Spherical"}, [10.0], gridding_approach="independent grid(s)", enable_rfm_precompute=True, enable_CurviBCs=True)
+    ...    generated_str = cfc.CFunction_dict[f'{name}'].full_function
+    ...    validation_desc = f"{name}__{parallelization}"
+    ...    validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "Set up numerical grids and timestep."
@@ -672,3 +687,16 @@ def register_CFunctions(
             register_CFunction_ds_min_radial_like_dirns_single_pt(CoordSystem)
 
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")
