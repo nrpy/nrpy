@@ -26,15 +26,40 @@ def register_CFunction_read_checkpoint(
     :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
     :param enable_bhahaha: Whether to enable BHaHAHA.
     """
+    parallelization = par.parval_from_str("parallelization")
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "unistd.h"]
     prefunc = r"""
 #define FREAD(ptr, size, nmemb, stream) { MAYBE_UNUSED const int numitems=fread((ptr), (size), (nmemb), (stream)); }
 """
+    prefunc += (
+        r"""
+    #define BHAH_HOST_MOL_GF_FREE(gf_ptr) { CUDA__free_host_gfs(gf_ptr); }
+    #define BHAH_HOST_MOL_GF_MALLOC(cd, params_ptr, gf_ptr) { CUDA__malloc_host_gfs(cd, params_ptr, gf_ptr); }
+    #define BHAH_DEVICE_MOL_GF_FREE(gf_ptr) { MoL_free_memory_y_n_gfs(gf_ptr); }
+    #define BHAH_DEVICE_MOL_GF_MALLOC(cd, params_ptr, gf_ptr) { MoL_malloc_y_n_gfs(cd, params_ptr, gf_ptr); }
+    #define BHAH_CPY_HOST_TO_DEVICE_PARAMS() { memcpy(&griddata_device[grid].params, &griddata[grid].params, sizeof(params_struct)); }
+    #define BHAH_CPY_HOST_TO_DEVICE_ALL_GFS() \
+    for (int gf = 0; gf < NUM_EVOL_GFS; ++gf) { \
+      cpyHosttoDevice__gf(commondata, &griddata[grid].params, griddata[grid].gridfuncs.y_n_gfs, griddata_device[grid].gridfuncs.y_n_gfs, gf, gf); \
+    }
+    """
+        if parallelization == "cuda"
+        else r"""
+    #define BHAH_HOST_MOL_GF_FREE(gf_ptr) { MoL_free_memory_y_n_gfs(gf_ptr); }
+    #define BHAH_HOST_MOL_GF_MALLOC(cd, params_ptr, gf_ptr) { MoL_malloc_y_n_gfs(cd, params_ptr, gf_ptr); }
+    #define BHAH_CPY_HOST_TO_DEVICE_ALL_GFS()
+    """
+    )
     desc = "Read a checkpoint file"
     cfunc_type = "int"
     name = "read_checkpoint"
     params = (
         "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
+    )
+    params += (
+        ", griddata_struct *restrict griddata_device"
+        if parallelization in ["cuda"]
+        else ""
     )
     body = rf"""
   char filename[256];
@@ -60,6 +85,7 @@ def register_CFunction_read_checkpoint(
     FREAD(commondata->bhahaha_params_and_data[i].prev_horizon_m3, sizeof(REAL), 64 * 32, cp_file);
   }
 """
+
     body += r"""
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     FREAD(&griddata[grid].params, sizeof(params_struct), 1, cp_file);
@@ -67,8 +93,8 @@ def register_CFunction_read_checkpoint(
     int count;
     FREAD(&count, sizeof(int), 1, cp_file);
 
-    int *restrict out_data_indices = (int *restrict)malloc(sizeof(int) * count);
-    REAL *restrict compact_out_data = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * count);
+    int * out_data_indices = (int *)malloc(sizeof(int) * count);
+    REAL * compact_out_data = (REAL *)malloc(sizeof(REAL) * NUM_EVOL_GFS * count);
 
     const int Nxx_plus_2NGHOSTS0 = griddata[grid].params.Nxx_plus_2NGHOSTS0;
     const int Nxx_plus_2NGHOSTS1 = griddata[grid].params.Nxx_plus_2NGHOSTS1;
@@ -77,8 +103,16 @@ def register_CFunction_read_checkpoint(
     fprintf(stderr, "Reading checkpoint: grid = %d | pts = %d / %d | %d\n", grid, count, ntot, Nxx_plus_2NGHOSTS2);
     FREAD(out_data_indices, sizeof(int), count, cp_file);
     FREAD(compact_out_data, sizeof(REAL), count * NUM_EVOL_GFS, cp_file);
-
-    MoL_malloc_y_n_gfs(commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
+"""
+    if parallelization in ["cuda"]:
+        body += r"""
+    BHAH_CPY_HOST_TO_DEVICE_PARAMS();
+    BHAH_DEVICE_MOL_GF_FREE(&griddata_device[grid].gridfuncs);
+    BHAH_DEVICE_MOL_GF_MALLOC(commondata, &griddata_device[grid].params, &griddata[grid].gridfuncs);
+"""
+    body += r"""
+    BHAH_HOST_MOL_GF_FREE(&griddata[grid].gridfuncs);
+    BHAH_HOST_MOL_GF_MALLOC(commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
 #pragma omp parallel for
     for (int i = 0; i < count; i++) {
       for (int gf = 0; gf < NUM_EVOL_GFS; gf++) {
@@ -87,6 +121,7 @@ def register_CFunction_read_checkpoint(
     }
     free(out_data_indices);
     free(compact_out_data);
+    BHAH_CPY_HOST_TO_DEVICE_ALL_GFS();
   }
   fclose(cp_file);
   fprintf(stderr, "FINISHED WITH READING\n");
@@ -94,7 +129,7 @@ def register_CFunction_read_checkpoint(
   // Next set t_0 and n_0
   commondata->t_0 = commondata->time;
   commondata->nn_0 = commondata->nn;
-
+  BHAH_DEVICE_SYNC();
   return 1;
 """
     cfc.register_CFunction(
