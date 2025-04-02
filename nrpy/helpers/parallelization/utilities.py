@@ -90,6 +90,20 @@ def get_check_errors_str(
     return check_errors_str
 
 
+def get_device_sync_function(parallelization: str) -> str:
+    """
+    Return the appropriate function to synchronize with a device.
+
+    :param parallelization: The parallelization method to use.
+    :returns: The appropriate function to free memory.
+    """
+    if parallelization == "cuda":
+        sync_func = "cudaDeviceSynchronize()"
+    else:
+        sync_func = ""
+    return sync_func
+
+
 def generate_kernel_and_launch_code(
     kernel_name: str,
     kernel_body: str,

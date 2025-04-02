@@ -241,4 +241,5 @@ typedef struct __griddata__ {
       BHAH_FREE(a->b);                                                                                                                               \
     }                                                                                                                                                \
   } while (0);
+#define BHAH_DEVICE_SYNC()
 #endif
