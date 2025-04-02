@@ -52,6 +52,23 @@ def register_CFunction_numerical_grid_params_Nxx_dxx_xx(
     :param Nxx_dict: A dictionary that maps coordinate systems to lists containing the number of grid points along each direction.
 
     :raises ValueError: If CoordSystem is not in Nxx_dict.
+
+    Doctests:
+    >>> from nrpy.helpers.generic import validate_strings
+    >>> import nrpy.c_function as cfc
+    >>> import nrpy.params as par
+    >>> from nrpy.reference_metric import unittest_CoordSystems
+    >>> supported_Parallelizations = ["openmp", "cuda"]
+    >>> name = "numerical_grid_params_Nxx_dxx_xx"
+    >>> Nxx_dict = { k : [72, 12, 8] for k in unittest_CoordSystems }
+    >>> for parallelization in supported_Parallelizations:
+    ...    par.set_parval_from_str("parallelization", parallelization)
+    ...    for CoordSystem in unittest_CoordSystems:
+    ...       cfc.CFunction_dict.clear()
+    ...       register_CFunction_numerical_grid_params_Nxx_dxx_xx(CoordSystem, Nxx_dict)
+    ...       generated_str = cfc.CFunction_dict[f'{name}__rfm__{CoordSystem}'].full_function
+    ...       validation_desc = f"{name}__{parallelization}__{CoordSystem}"
+    ...       validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
     """
     if CoordSystem not in Nxx_dict:
         raise ValueError(
@@ -185,7 +202,7 @@ BHAH_MALLOC(xx[2], sizeof(REAL) * params->Nxx_plus_2NGHOSTS2);
         """
     )
     for i in range(3):
-        kernel_body = f"LOOP_OVER_XX({i})"
+        kernel_body = f"LOOP_OVER_XX({i});"
         # Kernel name
         kernel_name: str = f"initialize_grid_xx{i}"
         # Comments
