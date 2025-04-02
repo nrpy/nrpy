@@ -108,13 +108,7 @@ void numerical_grid_params_Nxx_dxx_xx__rfm__SinhSymTP(const commondata_struct *r
   BHAH_MALLOC(xx[0], sizeof(REAL) * params->Nxx_plus_2NGHOSTS0);
   BHAH_MALLOC(xx[1], sizeof(REAL) * params->Nxx_plus_2NGHOSTS1);
   BHAH_MALLOC(xx[2], sizeof(REAL) * params->Nxx_plus_2NGHOSTS2);
-  {
-    initialize_grid_xx0_host(params, xx[0]);
-  }
-  {
-    initialize_grid_xx1_host(params, xx[1]);
-  }
-  {
-    initialize_grid_xx2_host(params, xx[2]);
-  }
+  initialize_grid_xx0_host(params, xx[0]);
+  initialize_grid_xx1_host(params, xx[1]);
+  initialize_grid_xx2_host(params, xx[2]);
 } // END FUNCTION numerical_grid_params_Nxx_dxx_xx__rfm__SinhSymTP
