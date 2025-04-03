@@ -33,14 +33,18 @@ def register_CFunction_read_checkpoint(
 """
     prefunc += (
         r"""
-    #define BHAH_HOST_MOL_GF_FREE(gf_ptr) { CUDA__free_host_gfs(gf_ptr); }
-    #define BHAH_HOST_MOL_GF_MALLOC(cd, params_ptr, gf_ptr) { CUDA__malloc_host_gfs(cd, params_ptr, gf_ptr); }
+    #define BHAH_HOST_MOL_GF_FREE(gf_ptr) \
+      CUDA__free_host_gfs(gf_ptr); \
+      CUDA__free_host_diagnostic_gfs(gf_ptr);
+    #define BHAH_HOST_MOL_GF_MALLOC(cd, params_ptr, gf_ptr) \
+      CUDA__malloc_host_gfs(cd, params_ptr, gf_ptr); \
+      CUDA__malloc_host_diagnostic_gfs(cd, params_ptr, gf_ptr);
     #define BHAH_DEVICE_MOL_GF_FREE(gf_ptr) { MoL_free_memory_y_n_gfs(gf_ptr); }
     #define BHAH_DEVICE_MOL_GF_MALLOC(cd, params_ptr, gf_ptr) { MoL_malloc_y_n_gfs(cd, params_ptr, gf_ptr); }
     #define BHAH_CPY_HOST_TO_DEVICE_PARAMS() { memcpy(&griddata_device[grid].params, &griddata[grid].params, sizeof(params_struct)); }
     #define BHAH_CPY_HOST_TO_DEVICE_ALL_GFS() \
     for (int gf = 0; gf < NUM_EVOL_GFS; ++gf) { \
-      cpyHosttoDevice__gf(commondata, &griddata[grid].params, griddata[grid].gridfuncs.y_n_gfs, griddata_device[grid].gridfuncs.y_n_gfs, gf, gf); \
+      cpyHosttoDevice__gf(commondata, &griddata[grid].params, griddata[grid].gridfuncs.y_n_gfs, griddata_device[grid].gridfuncs.y_n_gfs, gf, gf, griddata[grid].params.grid_idx % NUM_STREAMS); \
     }
     """
         if parallelization == "cuda"
@@ -162,12 +166,34 @@ def register_CFunction_write_checkpoint(
     par.register_CodeParameter(
         "REAL", __name__, "checkpoint_every", default_checkpoint_every, commondata=True
     )
+    parallelization = par.parval_from_str("parallelization")
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "Write a checkpoint file"
     cfunc_type = "void"
     name = "write_checkpoint"
     params = "const commondata_struct *restrict commondata, griddata_struct *restrict griddata"
-
+    params += (
+        ", griddata_struct *restrict griddata_device"
+        if parallelization in ["cuda"]
+        else ""
+    )
+    prefunc = (
+        r"""
+    #define BHAH_HOST_MOL_GF_FREE(gf_ptr) { CUDA__free_host_gfs(gf_ptr); }
+    #define BHAH_HOST_MOL_GF_MALLOC(cd, params_ptr, gf_ptr) { CUDA__malloc_host_gfs(cd, params_ptr, gf_ptr); }
+    #define BHAH_CPY_DEVICE_TO_HOST_PARAMS() { memcpy(&griddata[grid].params, &griddata_device[grid].params, sizeof(params_struct)); }
+    #define BHAH_CPY_DEVICE_TO_HOST_ALL_GFS() \
+    for (int gf = 0; gf < NUM_EVOL_GFS; ++gf) { \
+      size_t stream_id = griddata_device[grid].params.grid_idx % NUM_STREAMS; \
+      cpyDevicetoHost__gf(commondata, &griddata[grid].params, griddata[grid].gridfuncs.y_n_gfs, griddata_device[grid].gridfuncs.y_n_gfs, gf, gf, stream_id); \
+    }
+    """
+        if parallelization == "cuda"
+        else r"""
+    #define BHAH_HOST_MOL_GF_FREE(gf_ptr) { MoL_free_memory_y_n_gfs(gf_ptr); }
+    #define BHAH_HOST_MOL_GF_MALLOC(cd, params_ptr, gf_ptr) { MoL_malloc_y_n_gfs(cd, params_ptr, gf_ptr); }
+    """
+    )
     body = rf"""
   char filename[256];
   snprintf(filename, 256, "{filename_tuple[0]}", {filename_tuple[1]});
@@ -193,6 +219,13 @@ if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {
 """
     body += r"""
   for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
+"""
+    if parallelization in ["cuda"]:
+        body += r"""
+    BHAH_CPY_DEVICE_TO_HOST_PARAMS();
+    BHAH_CPY_DEVICE_TO_HOST_ALL_GFS();
+"""
+    body += r"""
     fwrite(&griddata[grid].params, sizeof(params_struct), 1, cp_file);
     const int ntot = ( griddata[grid].params.Nxx_plus_2NGHOSTS0*
                        griddata[grid].params.Nxx_plus_2NGHOSTS1*
@@ -200,7 +233,7 @@ if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {
     // First we free up memory so we can malloc more: copy y_n_gfs to diagnostic_output_gfs & then free y_n_gfs.
 #pragma omp parallel for
     for(int i=0;i<ntot*NUM_EVOL_GFS;i++) griddata[grid].gridfuncs.diagnostic_output_gfs[i] = griddata[grid].gridfuncs.y_n_gfs[i];
-    MoL_free_memory_y_n_gfs(&griddata[grid].gridfuncs);
+    BHAH_HOST_MOL_GF_FREE(&griddata[grid].gridfuncs);
 
     int count = 0;
     const int maskval = 1; // to be replaced with griddata[grid].mask[i].
@@ -210,9 +243,10 @@ if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {
     }
     fwrite(&count, sizeof(int), 1, cp_file);
 
-    int  *restrict out_data_indices = (int  *restrict)malloc(sizeof(int)                 * count);
-    REAL *restrict compact_out_data = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * count);
+    int  * out_data_indices = (int  *)malloc(sizeof(int)                 * count);
+    REAL * compact_out_data = (REAL *)malloc(sizeof(REAL) * NUM_EVOL_GFS * count);
     int which_el = 0;
+    BHAH_DEVICE_SYNC();
     for(int i=0;i<ntot;i++) {
       if(maskval >= +0) {
         out_data_indices[which_el] = i;
@@ -225,7 +259,7 @@ if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {
     fwrite(out_data_indices, sizeof(int) , count               , cp_file);
     fwrite(compact_out_data, sizeof(REAL), count * NUM_EVOL_GFS, cp_file);
     free(out_data_indices); free(compact_out_data);
-    MoL_malloc_y_n_gfs(commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
+    BHAH_HOST_MOL_GF_MALLOC(commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
 #pragma omp parallel for
     for(int i=0;i<ntot*NUM_EVOL_GFS;i++) griddata[grid].gridfuncs.y_n_gfs[i] = griddata[grid].gridfuncs.diagnostic_output_gfs[i];
   }
@@ -234,6 +268,7 @@ if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {
 }
 """
     cfc.register_CFunction(
+        prefunc=prefunc,
         includes=includes,
         desc=desc,
         cfunc_type=cfunc_type,
