@@ -352,16 +352,9 @@ def register_CFunction_CUDA__malloc_host_gfs() -> None:
     __host__ void CUDA__malloc_host_gfs(const commondata_struct *restrict commondata, const params_struct *restrict params,
                                         MoL_gridfunctions_struct *restrict gridfuncs) {
     <BLANKLINE>
-      int const &Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
-      int const &Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
-      int const &Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
-      const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
+      const int Nxx_plus_2NGHOSTS_tot = params->Nxx_plus_2NGHOSTS0 * params->Nxx_plus_2NGHOSTS1 * params->Nxx_plus_2NGHOSTS2;
     <BLANKLINE>
-      cudaMallocHost((void **)&gridfuncs->y_n_gfs, sizeof(REAL) * Nxx_plus_2NGHOSTS_tot * NUM_EVOL_GFS);
-      cudaCheckErrors(cudaMallocHost, "Malloc y_n diagnostic GFs failed.");
-    <BLANKLINE>
-      cudaMallocHost((void **)&gridfuncs->diagnostic_output_gfs, sizeof(REAL) * Nxx_plus_2NGHOSTS_tot * NUM_AUX_GFS);
-      cudaCheckErrors(cudaMallocHost, "Malloc diagnostic GFs failed.")
+      BHAH_MALLOC_PINNED(gridfuncs->y_n_gfs, sizeof(REAL) * Nxx_plus_2NGHOSTS_tot * NUM_EVOL_GFS);
     } // END FUNCTION CUDA__malloc_host_gfs
     <BLANKLINE>
     """
@@ -372,16 +365,93 @@ def register_CFunction_CUDA__malloc_host_gfs() -> None:
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params, "
     params += "MoL_gridfunctions_struct *restrict gridfuncs"
     body = """
-  int const& Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
-  int const& Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
-  int const& Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
-  const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
+  const int Nxx_plus_2NGHOSTS_tot = params->Nxx_plus_2NGHOSTS0 * params->Nxx_plus_2NGHOSTS1 * params->Nxx_plus_2NGHOSTS2;
 
-  cudaMallocHost((void**)&gridfuncs->y_n_gfs, sizeof(REAL) * Nxx_plus_2NGHOSTS_tot * NUM_EVOL_GFS);
-  cudaCheckErrors(cudaMallocHost, "Malloc y_n diagnostic GFs failed.");
+  BHAH_MALLOC_PINNED(gridfuncs->y_n_gfs, sizeof(REAL) * Nxx_plus_2NGHOSTS_tot * NUM_EVOL_GFS);
+"""
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        CoordSystem_for_wrapper_func="",
+        name=name,
+        params=params,
+        include_CodeParameters_h=False,
+        body=body,
+        subdirectory="CUDA_utils",
+    )
 
-  cudaMallocHost((void**)&gridfuncs->diagnostic_output_gfs, sizeof(REAL) * Nxx_plus_2NGHOSTS_tot * NUM_AUX_GFS);
-  cudaCheckErrors(cudaMallocHost, "Malloc diagnostic GFs failed.")
+
+def register_CFunction_CUDA__malloc_host_diagnostic_gfs() -> None:
+    """
+    Register C function for allocating sufficient Host storage for diagnostics GFs.
+
+    DOCTEST:
+    >>> import nrpy.c_function as cfc
+    >>> register_CFunction_CUDA__malloc_host_diagnostic_gfs()
+    >>> print(cfc.CFunction_dict['CUDA__malloc_host_diagnostic_gfs'].full_function)
+    #include "../BHaH_defines.h"
+    /**
+     * Allocate Host storage for diagnostics GFs.
+     */
+    __host__ void CUDA__malloc_host_diagnostic_gfs(const commondata_struct *restrict commondata, const params_struct *restrict params,
+                                                   MoL_gridfunctions_struct *restrict gridfuncs) {
+    <BLANKLINE>
+      const int Nxx_plus_2NGHOSTS_tot = params->Nxx_plus_2NGHOSTS0 * params->Nxx_plus_2NGHOSTS1 * params->Nxx_plus_2NGHOSTS2;
+    <BLANKLINE>
+      BHAH_MALLOC_PINNED(gridfuncs->diagnostic_output_gfs, sizeof(REAL) * Nxx_plus_2NGHOSTS_tot * NUM_EVOL_GFS);
+    } // END FUNCTION CUDA__malloc_host_diagnostic_gfs
+    <BLANKLINE>
+    """
+    includes = ["BHaH_defines.h"]
+    desc = r"""Allocate Host storage for diagnostics GFs."""
+    cfunc_type = "__host__ void"
+    name = "CUDA__malloc_host_diagnostic_gfs"
+    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, "
+    params += "MoL_gridfunctions_struct *restrict gridfuncs"
+    body = """
+  const int Nxx_plus_2NGHOSTS_tot = params->Nxx_plus_2NGHOSTS0 * params->Nxx_plus_2NGHOSTS1 * params->Nxx_plus_2NGHOSTS2;
+
+  BHAH_MALLOC_PINNED(gridfuncs->diagnostic_output_gfs, sizeof(REAL) * Nxx_plus_2NGHOSTS_tot * NUM_EVOL_GFS);
+"""
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        CoordSystem_for_wrapper_func="",
+        name=name,
+        params=params,
+        include_CodeParameters_h=False,
+        body=body,
+        subdirectory="CUDA_utils",
+    )
+
+
+def register_CFunction_CUDA__free_host_diagnostic_gfs() -> None:
+    """
+    Register C function for allocating sufficient Host storage for diagnostics GFs.
+
+    DOCTEST:
+    >>> import nrpy.c_function as cfc
+    >>> register_CFunction_CUDA__free_host_diagnostic_gfs()
+    >>> print(cfc.CFunction_dict['CUDA__free_host_diagnostic_gfs'].full_function)
+    #include "../BHaH_defines.h"
+    /**
+     * Free Host storage for additional diagnostics GFs.
+     */
+    __host__ void CUDA__free_host_diagnostic_gfs(MoL_gridfunctions_struct *gridfuncs) {
+    <BLANKLINE>
+      BHAH_FREE_PINNED(gridfuncs->diagnostic_output_gfs);
+    } // END FUNCTION CUDA__free_host_diagnostic_gfs
+    <BLANKLINE>
+    """
+    includes = ["BHaH_defines.h"]
+    desc = r"""Free Host storage for additional diagnostics GFs."""
+    cfunc_type = "__host__ void"
+    name = "CUDA__free_host_diagnostic_gfs"
+    params = "MoL_gridfunctions_struct * gridfuncs"
+    body = """
+    BHAH_FREE_PINNED(gridfuncs->diagnostic_output_gfs);
 """
     cfc.register_CFunction(
         includes=includes,
@@ -408,11 +478,7 @@ def register_CFunction_CUDA__free_host_gfs() -> None:
     /**
      * Free Host storage for diagnostics GFs.
      */
-    __host__ void CUDA__free_host_gfs(MoL_gridfunctions_struct *gridfuncs) {
-    <BLANKLINE>
-      BHAH_FREE_PINNED(gridfuncs->y_n_gfs);
-      BHAH_FREE_PINNED(gridfuncs->diagnostic_output_gfs);
-    } // END FUNCTION CUDA__free_host_gfs
+    __host__ void CUDA__free_host_gfs(MoL_gridfunctions_struct *gridfuncs) { BHAH_FREE_PINNED(gridfuncs->y_n_gfs); } // END FUNCTION CUDA__free_host_gfs
     <BLANKLINE>
     """
     includes = ["BHaH_defines.h"]
@@ -422,7 +488,6 @@ def register_CFunction_CUDA__free_host_gfs() -> None:
     params = "MoL_gridfunctions_struct * gridfuncs"
     body = """
     BHAH_FREE_PINNED(gridfuncs->y_n_gfs);
-    BHAH_FREE_PINNED(gridfuncs->diagnostic_output_gfs);
 """
     cfc.register_CFunction(
         includes=includes,
@@ -509,37 +574,33 @@ def register_CFunction_cpyHosttoDevice__gf() -> None:
     /**
      * Asynchronously copying a grid function from host to device.
      */
-    __host__ size_t cpyHosttoDevice__gf(const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL *gf_host,
-                                        REAL *gf_gpu, const int host_GF_IDX, const int gpu_GF_IDX) {
+    __host__ void cpyHosttoDevice__gf(const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL *gf_host,
+                                      REAL *gf_gpu, const int host_GF_IDX, const int gpu_GF_IDX, size_t streamid) {
     <BLANKLINE>
       int const Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
       int const Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
       int const Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
       const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
     <BLANKLINE>
-      size_t streamid = (params->grid_idx + gpu_GF_IDX) % NUM_STREAMS;
       int offset_gpu = Nxx_plus_2NGHOSTS_tot * gpu_GF_IDX;
       int offset_host = Nxx_plus_2NGHOSTS_tot * host_GF_IDX;
       cudaMemcpyAsync(&gf_gpu[offset_host], &gf_host[offset_gpu], sizeof(REAL) * Nxx_plus_2NGHOSTS_tot, cudaMemcpyHostToDevice, streams[streamid]);
       cudaCheckErrors(cudaMemcpyAsync, "Copy of gf data failed");
-      return streamid;
     } // END FUNCTION cpyHosttoDevice__gf
     <BLANKLINE>
-
     """
     includes = ["BHaH_defines.h"]
     desc = r"""Asynchronously copying a grid function from host to device."""
-    cfunc_type = "__host__ size_t"
+    cfunc_type = "__host__ void"
     name = "cpyHosttoDevice__gf"
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params, "
-    params += "const REAL * gf_host, REAL * gf_gpu, const int host_GF_IDX, const int gpu_GF_IDX"
+    params += "const REAL * gf_host, REAL * gf_gpu, const int host_GF_IDX, const int gpu_GF_IDX, size_t streamid"
     body = """
   int const Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
   int const Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
   int const Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
   const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
 
-  size_t streamid = (params->grid_idx + gpu_GF_IDX) % NUM_STREAMS;
   int offset_gpu  = Nxx_plus_2NGHOSTS_tot * gpu_GF_IDX;
   int offset_host = Nxx_plus_2NGHOSTS_tot * host_GF_IDX;
   cudaMemcpyAsync(&gf_gpu[offset_host],
@@ -547,7 +608,6 @@ def register_CFunction_cpyHosttoDevice__gf() -> None:
                   sizeof(REAL) * Nxx_plus_2NGHOSTS_tot,
                   cudaMemcpyHostToDevice, streams[streamid]);
   cudaCheckErrors(cudaMemcpyAsync, "Copy of gf data failed");
-  return streamid;
 """
     cfc.register_CFunction(
         includes=includes,
@@ -572,6 +632,8 @@ def register_CFunctions_HostDevice__operations() -> None:
     register_CFunction_cpyDevicetoHost__gf()
     register_CFunction_CUDA__malloc_host_gfs()
     register_CFunction_CUDA__free_host_gfs()
+    register_CFunction_CUDA__malloc_host_diagnostic_gfs()
+    register_CFunction_CUDA__free_host_diagnostic_gfs()
 
 
 # Define implemented reductions
