@@ -112,7 +112,7 @@ def register_CFunction_read_checkpoint(
         body += r"""
     BHAH_CPY_HOST_TO_DEVICE_PARAMS();
     BHAH_DEVICE_MOL_GF_FREE(&griddata_device[grid].gridfuncs);
-    BHAH_DEVICE_MOL_GF_MALLOC(commondata, &griddata_device[grid].params, &griddata[grid].gridfuncs);
+    BHAH_DEVICE_MOL_GF_MALLOC(commondata, &griddata_device[grid].params, &griddata_device[grid].gridfuncs);
 """
     body += r"""
     BHAH_HOST_MOL_GF_FREE(&griddata[grid].gridfuncs);
