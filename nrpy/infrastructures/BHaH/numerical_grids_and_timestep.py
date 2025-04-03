@@ -232,7 +232,6 @@ BHAH_MALLOC(xx[2], sizeof(REAL) * params->Nxx_plus_2NGHOSTS2);
                 "blocks_per_grid": [
                     f"(params->Nxx_plus_2NGHOSTS{i} + threads_in_x_dir - 1) / threads_in_x_dir"
                 ],
-                "threads_per_block": ["32"],
                 "stream": "",
             },
         )
