@@ -50,9 +50,9 @@ jobs:
           pip install -U ipython setuptools
           sudo apt-get -y install libgsl-dev
 
-      - name: Install sympy or DEVELOPMENT sympy based on Python version
+      - name: Install sympy or DEVELOPMENT sympy based on Python version. sympy-dev requires Python 3.9 or higher.
         run: |
-          if [[ "${{ matrix.python-version }}" != "3.7.13" ]]; then
+          if [[ "${{ matrix.python-version }}" != "3.7.13" && "${{ matrix.python-version }}" != "3.8.12" ]]; then
             pip install git+https://github.com/sympy/sympy.git
           else
             pip install sympy

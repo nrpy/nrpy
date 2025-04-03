@@ -258,7 +258,6 @@ cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
 )
 
 superBpup.register_CFunction_superB_pup_routines(
-    set_of_CoordSystems={CoordSystem},
     MoL_method=MoL_method,
 )
 copy_files(

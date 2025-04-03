@@ -360,7 +360,6 @@ serial {
 """
 
 superBpup.register_CFunction_superB_pup_routines(
-    set_of_CoordSystems={CoordSystem},
     MoL_method=MoL_method,
 )
 copy_files(
