@@ -17,7 +17,11 @@ from nrpy.helpers.parallelization.gpu_kernel import GPU_Kernel
 """
 default_launch_dictionary = {
     "blocks_per_grid": [],
-    "threads_per_block": ["32"],
+    "threads_per_block": [
+        "DEFAULT_THREADS_IN_X_DIR",
+        "DEFAULT_THREADS_IN_Y_DIR",
+        "DEFAULT_THREADS_IN_Z_DIR",
+    ],
     "stream": "",
 }
 
