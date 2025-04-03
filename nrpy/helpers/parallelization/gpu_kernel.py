@@ -124,7 +124,14 @@ class GPU_Kernel:
         """Generate preceding launch block definitions for kernel function call."""
         if self.launch_dict is None:
             return
-        threads_per_block = self.launch_dict["threads_per_block"]
+        if "threads_per_block" not in self.launch_dict:
+            threads_per_block = [
+                "DEFAULT_THREADS_IN_X_DIR",
+                "DEFAULT_THREADS_IN_Y_DIR",
+                "DEFAULT_THREADS_IN_Z_DIR",
+            ]
+        else:
+            threads_per_block = self.launch_dict["threads_per_block"]
         for _ in range(3 - len(threads_per_block)):
             threads_per_block += ["1"]
         block_def_str = f"""
