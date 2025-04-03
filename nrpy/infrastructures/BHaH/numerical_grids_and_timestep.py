@@ -184,7 +184,7 @@ BHAH_MALLOC(xx[2], sizeof(REAL) * params->Nxx_plus_2NGHOSTS2);
 
     prefunc = (
         """
-        #define LOOP_OVER_XX(COORD_DIR) \
+        #define SET_XX_CELL_CENTERED_COORDS(COORD_DIR) \
         const int index  = blockIdx.x * blockDim.x + threadIdx.x; \
         const int stride = blockDim.x * gridDim.x; \
         static constexpr REAL onehalf = 1.0 / 2.0; \
@@ -194,7 +194,7 @@ BHAH_MALLOC(xx[2], sizeof(REAL) * params->Nxx_plus_2NGHOSTS2);
         """
         if parallelization == "cuda"
         else """
-        #define LOOP_OVER_XX(COORD_DIR) \
+        #define SET_XX_CELL_CENTERED_COORDS(COORD_DIR) \
         static const REAL onehalf = 1.0 / 2.0; \
         for (int j = 0; j < params->Nxx_plus_2NGHOSTS##COORD_DIR; j+=1) { \
             xx##COORD_DIR[j] = params->xxmin##COORD_DIR + ((REAL)(j - NGHOSTS) + onehalf) * params->dxx##COORD_DIR;\
@@ -202,7 +202,7 @@ BHAH_MALLOC(xx[2], sizeof(REAL) * params->Nxx_plus_2NGHOSTS2);
         """
     )
     for i in range(3):
-        kernel_body = f"LOOP_OVER_XX({i});"
+        kernel_body = f"SET_XX_CELL_CENTERED_COORDS({i});"
         # Kernel name
         kernel_name: str = f"initialize_grid_xx{i}"
         # Comments

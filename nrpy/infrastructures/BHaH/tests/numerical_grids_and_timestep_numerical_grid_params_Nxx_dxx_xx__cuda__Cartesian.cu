@@ -1,7 +1,7 @@
 #include "../BHaH_defines.h"
 #include "../BHaH_function_prototypes.h"
 
-#define LOOP_OVER_XX(COORD_DIR)                                                                                                                      \
+#define SET_XX_CELL_CENTERED_COORDS(COORD_DIR)                                                                                                       \
   const int index = blockIdx.x * blockDim.x + threadIdx.x;                                                                                           \
   const int stride = blockDim.x * gridDim.x;                                                                                                         \
   static constexpr REAL onehalf = 1.0 / 2.0;                                                                                                         \
@@ -12,17 +12,23 @@
  * Kernel: initialize_grid_xx0_gpu.
  * Kernel to compute xx0 coordinates.
  */
-__global__ static void initialize_grid_xx0_gpu(const size_t streamid, REAL *restrict xx0) { LOOP_OVER_XX(0); } // END FUNCTION initialize_grid_xx0_gpu
+__global__ static void initialize_grid_xx0_gpu(const size_t streamid, REAL *restrict xx0) {
+  SET_XX_CELL_CENTERED_COORDS(0);
+} // END FUNCTION initialize_grid_xx0_gpu
 /**
  * Kernel: initialize_grid_xx1_gpu.
  * Kernel to compute xx1 coordinates.
  */
-__global__ static void initialize_grid_xx1_gpu(const size_t streamid, REAL *restrict xx1) { LOOP_OVER_XX(1); } // END FUNCTION initialize_grid_xx1_gpu
+__global__ static void initialize_grid_xx1_gpu(const size_t streamid, REAL *restrict xx1) {
+  SET_XX_CELL_CENTERED_COORDS(1);
+} // END FUNCTION initialize_grid_xx1_gpu
 /**
  * Kernel: initialize_grid_xx2_gpu.
  * Kernel to compute xx2 coordinates.
  */
-__global__ static void initialize_grid_xx2_gpu(const size_t streamid, REAL *restrict xx2) { LOOP_OVER_XX(2); } // END FUNCTION initialize_grid_xx2_gpu
+__global__ static void initialize_grid_xx2_gpu(const size_t streamid, REAL *restrict xx2) {
+  SET_XX_CELL_CENTERED_COORDS(2);
+} // END FUNCTION initialize_grid_xx2_gpu
 
 /**
  * Initializes a cell-centered grid in Cartesian coordinates based on physical dimensions (grid_physical_size).
