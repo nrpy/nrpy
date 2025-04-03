@@ -797,8 +797,9 @@ static void {self.kernel_name}(REAL * data, REAL * min, uint const data_length) 
     cudaCheckErrors(cudaFree, "cudaFree failure"); // error checking
 
     // Recast back to result pointer type
-    REAL * res = (REAL *) h_reduced;
-    return *res;
+    REAL res = *((REAL *) h_reduced);
+    free(h_reduced);
+    return res;
 """
         self.CFunction: cfc.CFunction
 

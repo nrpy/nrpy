@@ -618,6 +618,7 @@ def register_CFunction_numerical_grids_and_timestep(
 """
         if parallelization in ["cuda"]:
             body = body.replace("BHAH_MALLOC", "BHAH_MALLOC_DEVICE")
+            body += "griddata_host->rfmstruct = nullptr;\n"
             body += "\ncpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % NUM_STREAMS);"
         body += r"""
     rfm_precompute_malloc(commondata, &griddata[grid].params, griddata[grid].rfmstruct);

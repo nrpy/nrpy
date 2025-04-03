@@ -31,6 +31,7 @@ void numerical_grids_and_timestep(commondata_struct *restrict commondata, gridda
   // Step 1.d: Allocate memory for and define reference-metric precomputation lookup tables
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     BHAH_MALLOC_DEVICE(griddata[grid].rfmstruct, sizeof(rfm_struct))
+    griddata_host->rfmstruct = nullptr;
 
     cpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % NUM_STREAMS);
     rfm_precompute_malloc(commondata, &griddata[grid].params, griddata[grid].rfmstruct);
