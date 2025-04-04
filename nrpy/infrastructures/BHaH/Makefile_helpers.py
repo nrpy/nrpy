@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from nrpy.c_function import CFunction_dict
-from nrpy.helpers.generic import clang_format
+from nrpy.helpers.generic import clang_format, default_clang_format_options
 
 
 def output_CFunctions_function_prototypes_and_construct_Makefile(
@@ -30,7 +30,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     lib_function_prefix: str = "",
     include_dirs: Optional[List[str]] = None,
     src_code_file_ext: str = "c",
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+    clang_format_options: str = default_clang_format_options,
 ) -> None:
     """
     Output C functions registered to CFunction_dict and construct a Makefile for compiling C code.

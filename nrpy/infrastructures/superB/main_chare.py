@@ -12,7 +12,7 @@ from typing import List, Tuple
 
 import nrpy.c_function as cfc
 import nrpy.params as par
-from nrpy.helpers.generic import clang_format
+from nrpy.helpers.generic import clang_format, default_clang_format_options
 
 # fmt: off
 _ = par.CodeParameter("int", __name__, "Nchare0", 1, add_to_parfile=True, add_to_set_CodeParameters_h=True, commondata=True)
@@ -23,7 +23,7 @@ _ = par.CodeParameter("int", __name__, "Nchare2", 1, add_to_parfile=True, add_to
 
 def output_commondata_object_h(
     project_dir: str,
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+    clang_format_options: str = default_clang_format_options,
 ) -> None:
     r"""
     Output header file with definition for class CommondataObject.
@@ -76,7 +76,7 @@ class CommondataObject {
 
 def output_main_h(
     project_dir: str,
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+    clang_format_options: str = default_clang_format_options,
     enable_charm_checkpointing: bool = False,
 ) -> None:
     """
@@ -129,7 +129,7 @@ class Main : public CBase_Main {
 
 def output_main_cpp(
     project_dir: str,
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+    clang_format_options: str = default_clang_format_options,
     enable_charm_checkpointing: bool = False,
 ) -> None:
     """
@@ -223,7 +223,7 @@ void Main::pup(PUP::er &p) {
 
 def output_main_ci(
     project_dir: str,
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+    clang_format_options: str = default_clang_format_options,
 ) -> None:
     """
     Generate main.ci.

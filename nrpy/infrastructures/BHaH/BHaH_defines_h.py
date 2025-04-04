@@ -12,7 +12,7 @@ from typing import Dict, List, Optional
 import nrpy.grid as gri
 import nrpy.helpers.parallelization.utilities as gpu_utils
 import nrpy.params as par
-from nrpy.helpers.generic import clang_format
+from nrpy.helpers.generic import clang_format, default_clang_format_options
 from nrpy.infrastructures.BHaH import griddata_commondata
 
 # The ordering of core_modules_list is based largely on data structure dependencies.
@@ -113,7 +113,7 @@ def output_BHaH_defines_h(
     fin_NGHOSTS_add_one_for_upwinding_or_KO: bool = False,
     DOUBLE_means: str = "double",
     supplemental_defines_dict: Optional[Dict[str, str]] = None,
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+    clang_format_options: str = default_clang_format_options,
 ) -> None:
     r"""
     Output C code header file with macro definitions and other configurations for the project.

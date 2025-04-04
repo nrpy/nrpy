@@ -21,7 +21,11 @@ from nrpy.helpers.cse_preprocess_postprocess import (  # NRPy+: CSE preprocessin
     cse_preprocess,
 )
 from nrpy.helpers.custom_c_codegen_functions import custom_functions_for_SymPy_ccode
-from nrpy.helpers.generic import clang_format, superfast_uniq
+from nrpy.helpers.generic import (
+    clang_format,
+    default_clang_format_options,
+    superfast_uniq,
+)
 from nrpy.helpers.simd import expr_convert_to_simd_intrins
 from nrpy.helpers.type_annotation_utilities import (
     generate_class_representation,
@@ -88,7 +92,7 @@ class CCodeGen:
         symbol_to_Rational_dict: Optional[Dict[sp.Basic, sp.Rational]] = None,
         rational_const_alias: str = "static const",
         clang_format_enable: bool = False,
-        clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+        clang_format_options: str = default_clang_format_options,
     ) -> None:
         """
         Initialize the CCodeGen class with provided options for generating C code.

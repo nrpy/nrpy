@@ -10,7 +10,7 @@ from typing import List
 
 import nrpy.c_function as cfc
 import nrpy.params as par
-from nrpy.helpers.generic import clang_format
+from nrpy.helpers.generic import clang_format, default_clang_format_options
 
 
 def register_CFunctions_params_commondata_struct_set_to_default() -> None:
@@ -147,7 +147,7 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
 def write_CodeParameters_h_files(
     project_dir: str,
     set_commondata_only: bool = False,
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+    clang_format_options: str = default_clang_format_options,
 ) -> None:
     r"""
     Generate C code to set C parameter constants and write them to files.

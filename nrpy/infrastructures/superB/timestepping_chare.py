@@ -14,7 +14,7 @@ import sympy as sp  # Import SymPy, a computer algebra system written entirely i
 
 import nrpy.c_function as cfc
 import nrpy.params as par
-from nrpy.helpers.generic import clang_format
+from nrpy.helpers.generic import clang_format, default_clang_format_options
 from nrpy.infrastructures.BHaH import griddata_commondata
 from nrpy.infrastructures.BHaH.MoLtimestepping.MoL_gridfunction_names import (
     generate_gridfunction_names,
@@ -387,7 +387,7 @@ def output_timestepping_h(
     project_dir: str,
     enable_residual_diagnostics: bool = False,
     enable_psi4_diagnostics: bool = False,
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+    clang_format_options: str = default_clang_format_options,
     enable_charm_checkpointing: bool = False,
     enable_L2norm_BSSN_constraints_diagnostics: bool = False,
 ) -> None:
@@ -736,7 +736,7 @@ def output_timestepping_cpp(
     initialize_constant_auxevol: bool = False,
     enable_residual_diagnostics: bool = False,
     enable_psi4_diagnostics: bool = False,
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+    clang_format_options: str = default_clang_format_options,
     enable_charm_checkpointing: bool = False,
     enable_L2norm_BSSN_constraints_diagnostics: bool = False,
 ) -> None:
@@ -1441,7 +1441,7 @@ def output_timestepping_ci(
     pre_MoL_step_forward_in_time: str = "",
     post_MoL_step_forward_in_time: str = "",
     outer_bcs_type: str = "radiation",
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+    clang_format_options: str = default_clang_format_options,
     enable_psi4_diagnostics: bool = False,
     enable_residual_diagnostics: bool = False,
     enable_charm_checkpointing: bool = False,

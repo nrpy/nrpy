@@ -17,6 +17,10 @@ from typing import Any, List, Optional, cast
 
 from nrpy.helpers.cached_functions import is_cached, read_cached, write_cached
 
+default_clang_format_options = (
+    "-style={BasedOnStyle: LLVM, ColumnLimit: 150, SortIncludes: Never}"
+)
+
 
 def superfast_uniq(seq: List[Any]) -> List[Any]:
     """
@@ -58,7 +62,7 @@ def prefix_with_star(input_string: str) -> str:
 
 def clang_format(
     c_code_str: str,
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+    clang_format_options: str = default_clang_format_options,
 ) -> str:
     r"""
     Format a given C code string using clang-format.

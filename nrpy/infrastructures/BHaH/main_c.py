@@ -8,6 +8,7 @@ Author: Zachariah B. Etienne
 from typing import List, Tuple
 
 import nrpy.c_function as cfc
+from nrpy.helpers.generic import default_clang_format_options
 
 
 def register_CFunction_main_c(
@@ -20,7 +21,7 @@ def register_CFunction_main_c(
     pre_diagnostics: str = "",
     pre_MoL_step_forward_in_time: str = "",
     post_MoL_step_forward_in_time: str = "",
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+    clang_format_options: str = default_clang_format_options,
 ) -> None:
     """
     Generate the "generic" C main() function for all simulation codes in the BHaH infrastructure.

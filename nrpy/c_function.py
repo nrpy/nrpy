@@ -9,7 +9,11 @@ import os
 from typing import Dict, List, Optional, Tuple
 
 import nrpy.params as par
-from nrpy.helpers.generic import clang_format, prefix_with_star
+from nrpy.helpers.generic import (
+    clang_format,
+    default_clang_format_options,
+    prefix_with_star,
+)
 
 
 class CFunction:
@@ -70,7 +74,7 @@ class CFunction:
         ET_schedule_bins_entries: Optional[List[Tuple[str, str]]] = None,
         ET_current_thorn_CodeParams_used: Optional[List[str]] = None,
         ET_other_thorn_CodeParams_used: Optional[List[str]] = None,
-        clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+        clang_format_options: str = default_clang_format_options,
     ) -> None:
         for attribute in [(name, "name"), (desc, "desc"), (body, "body")]:
             if not attribute[0]:
@@ -263,7 +267,7 @@ def register_CFunction(
     ET_schedule_bins_entries: Optional[List[Tuple[str, str]]] = None,
     ET_current_thorn_CodeParams_used: Optional[List[str]] = None,
     ET_other_thorn_CodeParams_used: Optional[List[str]] = None,
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+    clang_format_options: str = default_clang_format_options,
 ) -> None:
     """
     Add a C function to a dictionary called CFunction_dict, using the provided parameters.
