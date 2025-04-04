@@ -177,7 +177,6 @@ class RKFunction:
             comments=comments,
             launch_dict={
                 "blocks_per_grid": ["(Ntot + threads_in_x_dir - 1) / threads_in_x_dir"],
-                "threads_per_block": ["32"],
                 "stream": "params->grid_idx % NUM_STREAMS",
             },
             launchblock_with_braces=False,

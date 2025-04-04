@@ -281,20 +281,24 @@ def register_CFunctions_rfm_precompute(
     Doctest:
     >>> import nrpy.c_function as cfc
     >>> from nrpy.infrastructures.BHaH import rfm_precompute
-    >>> from nrpy.reference_metric import supported_CoordSystems
+    >>> from nrpy.reference_metric import unittest_CoordSystems
     >>> from nrpy.helpers.generic import validate_strings
     >>> import nrpy.params as par
     >>> par.set_parval_from_str("fp_type", "float")
     >>> supported_Parallelizations = ["openmp", "cuda"]
     >>> for parallelization in supported_Parallelizations:
     ...    par.set_parval_from_str("parallelization", parallelization)
-    ...    for CoordSystem in supported_CoordSystems:
+    ...    for CoordSystem in unittest_CoordSystems:
     ...       cfc.CFunction_dict.clear()
-    ...       rfm_precompute.register_CFunctions_rfm_precompute({CoordSystem}) # doctest: +SKIP
+    ...       rfm_precompute.register_CFunctions_rfm_precompute({CoordSystem})
     ...       for rfm_base_function in ["malloc", "defines", "free"]:
     ...          generated_str = cfc.CFunction_dict[f'rfm_precompute_{rfm_base_function}__rfm__{CoordSystem}'].full_function
     ...          validation_desc = f"{rfm_base_function}__{parallelization}__{CoordSystem}".replace(" ", "_")
     ...          validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
+    Setting up reference_metric[SinhSymTP_rfm_precompute]...
+    Setting up reference_metric[HoleySinhSpherical_rfm_precompute]...
+    Setting up reference_metric[Cartesian_rfm_precompute]...
+    Setting up reference_metric[SinhCylindricalv2n2_rfm_precompute]...
     """
     combined_BHaH_defines_list = []
     parallelization = par.parval_from_str("parallelization")

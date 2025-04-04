@@ -17,7 +17,11 @@ from nrpy.helpers.parallelization.gpu_kernel import GPU_Kernel
 """
 default_launch_dictionary = {
     "blocks_per_grid": [],
-    "threads_per_block": ["32"],
+    "threads_per_block": [
+        "DEFAULT_THREADS_IN_X_DIR",
+        "DEFAULT_THREADS_IN_Y_DIR",
+        "DEFAULT_THREADS_IN_Z_DIR",
+    ],
     "stream": "",
 }
 
@@ -793,8 +797,9 @@ static void {self.kernel_name}(REAL * data, REAL * min, uint const data_length) 
     cudaCheckErrors(cudaFree, "cudaFree failure"); // error checking
 
     // Recast back to result pointer type
-    REAL * res = (REAL *) h_reduced;
-    return *res;
+    REAL res = *((REAL *) h_reduced);
+    free(h_reduced);
+    return res;
 """
         self.CFunction: cfc.CFunction
 

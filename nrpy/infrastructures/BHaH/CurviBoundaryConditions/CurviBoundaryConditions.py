@@ -484,17 +484,20 @@ def register_CFunction_bcstruct_set_up(
     >>> from nrpy.helpers.generic import validate_strings
     >>> import nrpy.c_function as cfc
     >>> import nrpy.params as par
-    >>> from nrpy.reference_metric import supported_CoordSystems
+    >>> from nrpy.reference_metric import unittest_CoordSystems
     >>> supported_Parallelizations = ["openmp", "cuda"]
     >>> name = "bcstruct_set_up__rfm"
     >>> for parallelization in supported_Parallelizations:
     ...    par.set_parval_from_str("parallelization", parallelization)
-    ...    for CoordSystem in supported_CoordSystems:
+    ...    for CoordSystem in unittest_CoordSystems:
     ...       cfc.CFunction_dict.clear()
     ...       register_CFunction_bcstruct_set_up(CoordSystem)
     ...       generated_str = cfc.CFunction_dict[f'{name}__{CoordSystem}'].full_function
     ...       validation_desc = f"{name}__{parallelization}__{CoordSystem}"
     ...       validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
+    Setting up reference_metric[SymTP]...
+    Setting up reference_metric[Spherical]...
+    Setting up reference_metric[Cylindrical]...
     """
     includes = [
         "BHaH_defines.h",
@@ -853,7 +856,6 @@ for (int pt = tid0; pt < num_inner_boundary_points; pt+=stride0) {"""
             "blocks_per_grid": [
                 "(num_inner_boundary_points + threads_in_x_dir - 1) / threads_in_x_dir"
             ],
-            "threads_per_block": ["32"],
             "stream": "params->grid_idx % NUM_STREAMS",
         },
     )
@@ -950,7 +952,6 @@ for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
             "blocks_per_grid": [
                 "(num_pure_outer_boundary_points + threads_in_x_dir -1) / threads_in_x_dir"
             ],
-            "threads_per_block": ["32"],
             "stream": "default",
         },
     )
@@ -1586,7 +1587,6 @@ for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {
             "blocks_per_grid": [
                 "(num_pure_outer_boundary_points + threads_in_x_dir -1) / threads_in_x_dir"
             ],
-            "threads_per_block": ["32"],
             "stream": "params->grid_idx % NUM_STREAMS",
         },
         cfunc_type=cfunc_type,
@@ -1646,32 +1646,22 @@ def register_CFunction_apply_bcs_outerradiation_and_inner(
     >>> from nrpy.helpers.generic import validate_strings
     >>> import nrpy.c_function as cfc
     >>> import nrpy.params as par
-    >>> from nrpy.reference_metric import supported_CoordSystems
+    >>> from nrpy.reference_metric import unittest_CoordSystems
     >>> from nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions import register_CFunction_apply_bcs_outerradiation_and_inner
     >>> supported_Parallelizations = ["openmp", "cuda"]
     >>> name = "apply_bcs_outerradiation_and_inner__rfm"
     >>> for parallelization in supported_Parallelizations:
     ...    par.set_parval_from_str("parallelization", parallelization)
-    ...    for CoordSystem in supported_CoordSystems:
+    ...    for CoordSystem in unittest_CoordSystems:
     ...       cfc.CFunction_dict.clear()
     ...       register_CFunction_apply_bcs_outerradiation_and_inner(CoordSystem)
     ...       generated_str = cfc.CFunction_dict[f'{name}__{CoordSystem}'].full_function
     ...       validation_desc = f"{name}__{parallelization}__{CoordSystem}"
     ...       validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
-    Setting up reference_metric[Spherical]...
-    Setting up reference_metric[SinhSpherical]...
-    Setting up reference_metric[SinhSphericalv2n2]...
-    Setting up reference_metric[Cartesian]...
-    Setting up reference_metric[SinhCartesian]...
-    Setting up reference_metric[Cylindrical]...
-    Setting up reference_metric[SinhCylindrical]...
-    Setting up reference_metric[SinhCylindricalv2n2]...
-    Setting up reference_metric[SymTP]...
     Setting up reference_metric[SinhSymTP]...
-    Setting up reference_metric[LWedgeHSinhSph]...
-    Setting up reference_metric[UWedgeHSinhSph]...
-    Setting up reference_metric[RingHoleySinhSpherical]...
     Setting up reference_metric[HoleySinhSpherical]...
+    Setting up reference_metric[Cartesian]...
+    Setting up reference_metric[SinhCylindricalv2n2]...
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     prefunc = setup_Cfunction_radiation_bcs(

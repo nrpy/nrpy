@@ -104,6 +104,7 @@ REAL find_global__sum(REAL *data, uint const data_length) {
   cudaCheckErrors(cudaFree, "cudaFree failure"); // error checking
 
   // Recast back to result pointer type
-  REAL *res = (REAL *)h_reduced;
-  return *res;
+  REAL res = *((REAL *)h_reduced);
+  free(h_reduced);
+  return res;
 } // END FUNCTION find_global__sum

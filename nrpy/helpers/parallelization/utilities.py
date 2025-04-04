@@ -143,7 +143,7 @@ def generate_kernel_and_launch_code(
 
     # Build the launch call in `body`:
     body = device_kernel.launch_block + device_kernel.c_function_call()
-    if launchblock_with_braces:
+    if launchblock_with_braces and len(body.splitlines()) > 1:
         body = f"""{{{body}
         }}"""
 
