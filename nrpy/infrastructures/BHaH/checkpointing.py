@@ -25,6 +25,20 @@ def register_CFunction_read_checkpoint(
 
     :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
     :param enable_bhahaha: Whether to enable BHaHAHA.
+
+    Doctest:
+    >>> import nrpy.c_function as cfc
+    >>> from nrpy.helpers.generic import validate_strings
+    >>> import nrpy.params as par
+    >>> supported_Parallelizations = ["openmp", "cuda"]
+    >>> name="read_checkpoint"
+    >>> for parallelization in supported_Parallelizations:
+    ...    par.set_parval_from_str("parallelization", parallelization)
+    ...    cfc.CFunction_dict.clear()
+    ...    register_CFunction_read_checkpoint()
+    ...    generated_str = cfc.CFunction_dict[name].full_function
+    ...    validation_desc = f"{name}__{parallelization}".replace(" ", "_")
+    ...    validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
     """
     parallelization = par.parval_from_str("parallelization")
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "unistd.h"]
@@ -33,25 +47,27 @@ def register_CFunction_read_checkpoint(
 """
     prefunc += (
         r"""
-    #define BHAH_HOST_MOL_GF_FREE(gf_ptr) \
+    #define BHAH_CHKPT_HOST_MOL_GF_FREE(gf_ptr) \
       CUDA__free_host_gfs(gf_ptr); \
       CUDA__free_host_diagnostic_gfs(gf_ptr);
-    #define BHAH_HOST_MOL_GF_MALLOC(cd, params_ptr, gf_ptr) \
+    #define BHAH_CHKPT_HOST_MOL_GF_MALLOC(cd, params_ptr, gf_ptr) \
       CUDA__malloc_host_gfs(cd, params_ptr, gf_ptr); \
       CUDA__malloc_host_diagnostic_gfs(cd, params_ptr, gf_ptr);
-    #define BHAH_DEVICE_MOL_GF_FREE(gf_ptr) { MoL_free_memory_y_n_gfs(gf_ptr); }
-    #define BHAH_DEVICE_MOL_GF_MALLOC(cd, params_ptr, gf_ptr) { MoL_malloc_y_n_gfs(cd, params_ptr, gf_ptr); }
-    #define BHAH_CPY_HOST_TO_DEVICE_PARAMS() { memcpy(&griddata_device[grid].params, &griddata[grid].params, sizeof(params_struct)); }
-    #define BHAH_CPY_HOST_TO_DEVICE_ALL_GFS() \
+    #define BHAH_CHKPT_DEVICE_MOL_GF_FREE(gf_ptr) \
+      MoL_free_memory_y_n_gfs(gf_ptr);
+    #define BHAH_CHKPT_DEVICE_MOL_GF_MALLOC(cd, params_ptr, gf_ptr) \
+      MoL_malloc_y_n_gfs(cd, params_ptr, gf_ptr);
+    #define BHAH_CHKPT_CPY_HOST_TO_DEVICE_PARAMS() \
+      memcpy(&griddata_device[grid].params, &griddata[grid].params, sizeof(params_struct));
+    #define BHAH_CHKPT_CPY_HOST_TO_DEVICE_ALL_GFS() \
     for (int gf = 0; gf < NUM_EVOL_GFS; ++gf) { \
       cpyHosttoDevice__gf(commondata, &griddata[grid].params, griddata[grid].gridfuncs.y_n_gfs, griddata_device[grid].gridfuncs.y_n_gfs, gf, gf, griddata[grid].params.grid_idx % NUM_STREAMS); \
     }
     """
         if parallelization == "cuda"
         else r"""
-    #define BHAH_HOST_MOL_GF_FREE(gf_ptr) { MoL_free_memory_y_n_gfs(gf_ptr); }
-    #define BHAH_HOST_MOL_GF_MALLOC(cd, params_ptr, gf_ptr) { MoL_malloc_y_n_gfs(cd, params_ptr, gf_ptr); }
-    #define BHAH_CPY_HOST_TO_DEVICE_ALL_GFS()
+    #define BHAH_CHKPT_HOST_MOL_GF_FREE(gf_ptr) { MoL_free_memory_y_n_gfs(gf_ptr); }
+    #define BHAH_CHKPT_HOST_MOL_GF_MALLOC(cd, params_ptr, gf_ptr) { MoL_malloc_y_n_gfs(cd, params_ptr, gf_ptr); }
     """
     )
     desc = "Read a checkpoint file"
@@ -110,13 +126,13 @@ def register_CFunction_read_checkpoint(
 """
     if parallelization in ["cuda"]:
         body += r"""
-    BHAH_CPY_HOST_TO_DEVICE_PARAMS();
-    BHAH_DEVICE_MOL_GF_FREE(&griddata_device[grid].gridfuncs);
-    BHAH_DEVICE_MOL_GF_MALLOC(commondata, &griddata_device[grid].params, &griddata_device[grid].gridfuncs);
+    BHAH_CHKPT_CPY_HOST_TO_DEVICE_PARAMS();
+    BHAH_CHKPT_DEVICE_MOL_GF_FREE(&griddata_device[grid].gridfuncs);
+    BHAH_CHKPT_DEVICE_MOL_GF_MALLOC(commondata, &griddata_device[grid].params, &griddata_device[grid].gridfuncs);
 """
     body += r"""
-    BHAH_HOST_MOL_GF_FREE(&griddata[grid].gridfuncs);
-    BHAH_HOST_MOL_GF_MALLOC(commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
+    BHAH_CHKPT_HOST_MOL_GF_FREE(&griddata[grid].gridfuncs);
+    BHAH_CHKPT_HOST_MOL_GF_MALLOC(commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
 #pragma omp parallel for
     for (int i = 0; i < count; i++) {
       for (int gf = 0; gf < NUM_EVOL_GFS; gf++) {
@@ -125,7 +141,7 @@ def register_CFunction_read_checkpoint(
     }
     free(out_data_indices);
     free(compact_out_data);
-    BHAH_CPY_HOST_TO_DEVICE_ALL_GFS();
+    BHAH_CHKPT_CPY_HOST_TO_DEVICE_ALL_GFS();
   }
   fclose(cp_file);
   fprintf(stderr, "FINISHED WITH READING\n");
@@ -135,7 +151,14 @@ def register_CFunction_read_checkpoint(
   commondata->nn_0 = commondata->nn;
   BHAH_DEVICE_SYNC();
   return 1;
-"""
+""".replace(
+        "BHAH_CHKPT_CPY_HOST_TO_DEVICE_ALL_GFS();",
+        (
+            ""
+            if parallelization not in ["cuda"]
+            else "BHAH_CHKPT_CPY_HOST_TO_DEVICE_ALL_GFS();"
+        ),
+    )
     cfc.register_CFunction(
         includes=includes,
         prefunc=prefunc,
@@ -162,6 +185,20 @@ def register_CFunction_write_checkpoint(
     :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
     :param default_checkpoint_every: The default checkpoint interval in physical time units.
     :param enable_bhahaha: Whether to enable BHaHAHA.
+
+    Doctest:
+    >>> import nrpy.c_function as cfc
+    >>> from nrpy.helpers.generic import validate_strings
+    >>> import nrpy.params as par
+    >>> supported_Parallelizations = ["openmp", "cuda"]
+    >>> name="write_checkpoint"
+    >>> for parallelization in supported_Parallelizations:
+    ...    par.set_parval_from_str("parallelization", parallelization)
+    ...    cfc.CFunction_dict.clear()
+    ...    register_CFunction_write_checkpoint()
+    ...    generated_str = cfc.CFunction_dict[name].full_function
+    ...    validation_desc = f"{name}__{parallelization}".replace(" ", "_")
+    ...    validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
     """
     par.register_CodeParameter(
         "REAL", __name__, "checkpoint_every", default_checkpoint_every, commondata=True
@@ -179,9 +216,12 @@ def register_CFunction_write_checkpoint(
     )
     prefunc = (
         r"""
-    #define BHAH_HOST_MOL_GF_FREE(gf_ptr) { CUDA__free_host_gfs(gf_ptr); }
-    #define BHAH_HOST_MOL_GF_MALLOC(cd, params_ptr, gf_ptr) { CUDA__malloc_host_gfs(cd, params_ptr, gf_ptr); }
-    #define BHAH_CPY_DEVICE_TO_HOST_PARAMS() { memcpy(&griddata[grid].params, &griddata_device[grid].params, sizeof(params_struct)); }
+    #define BHAH_CHKPT_HOST_MOL_GF_FREE(gf_ptr) \
+      CUDA__free_host_gfs(gf_ptr);
+    #define BHAH_CHKPT_HOST_MOL_GF_MALLOC(cd, params_ptr, gf_ptr) \
+      CUDA__malloc_host_gfs(cd, params_ptr, gf_ptr);
+    #define BHAH_CPY_DEVICE_TO_HOST_PARAMS()
+      memcpy(&griddata[grid].params, &griddata_device[grid].params, sizeof(params_struct));
     #define BHAH_CPY_DEVICE_TO_HOST_ALL_GFS() \
     for (int gf = 0; gf < NUM_EVOL_GFS; ++gf) { \
       size_t stream_id = griddata_device[grid].params.grid_idx % NUM_STREAMS; \
@@ -190,8 +230,10 @@ def register_CFunction_write_checkpoint(
     """
         if parallelization == "cuda"
         else r"""
-    #define BHAH_HOST_MOL_GF_FREE(gf_ptr) { MoL_free_memory_y_n_gfs(gf_ptr); }
-    #define BHAH_HOST_MOL_GF_MALLOC(cd, params_ptr, gf_ptr) { MoL_malloc_y_n_gfs(cd, params_ptr, gf_ptr); }
+    #define BHAH_CHKPT_HOST_MOL_GF_FREE(gf_ptr) \
+      MoL_free_memory_y_n_gfs(gf_ptr);
+    #define BHAH_CHKPT_HOST_MOL_GF_MALLOC(cd, params_ptr, gf_ptr)
+      MoL_malloc_y_n_gfs(cd, params_ptr, gf_ptr);
     """
     )
     body = rf"""
@@ -233,7 +275,7 @@ if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {
     // First we free up memory so we can malloc more: copy y_n_gfs to diagnostic_output_gfs & then free y_n_gfs.
 #pragma omp parallel for
     for(int i=0;i<ntot*NUM_EVOL_GFS;i++) griddata[grid].gridfuncs.diagnostic_output_gfs[i] = griddata[grid].gridfuncs.y_n_gfs[i];
-    BHAH_HOST_MOL_GF_FREE(&griddata[grid].gridfuncs);
+    BHAH_CHKPT_HOST_MOL_GF_FREE(&griddata[grid].gridfuncs);
 
     int count = 0;
     const int maskval = 1; // to be replaced with griddata[grid].mask[i].
@@ -259,7 +301,7 @@ if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {
     fwrite(out_data_indices, sizeof(int) , count               , cp_file);
     fwrite(compact_out_data, sizeof(REAL), count * NUM_EVOL_GFS, cp_file);
     free(out_data_indices); free(compact_out_data);
-    BHAH_HOST_MOL_GF_MALLOC(commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
+    BHAH_CHKPT_HOST_MOL_GF_MALLOC(commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
 #pragma omp parallel for
     for(int i=0;i<ntot*NUM_EVOL_GFS;i++) griddata[grid].gridfuncs.y_n_gfs[i] = griddata[grid].gridfuncs.diagnostic_output_gfs[i];
   }
@@ -302,3 +344,15 @@ def register_CFunctions(
         default_checkpoint_every=default_checkpoint_every,
         enable_bhahaha=enable_bhahaha,
     )
+
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")
