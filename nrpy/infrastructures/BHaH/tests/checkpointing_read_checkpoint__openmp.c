@@ -65,6 +65,5 @@ int read_checkpoint(commondata_struct *restrict commondata, griddata_struct *res
   // Next set t_0 and n_0
   commondata->t_0 = commondata->time;
   commondata->nn_0 = commondata->nn;
-  BHAH_DEVICE_SYNC();
   return 1;
 } // END FUNCTION read_checkpoint

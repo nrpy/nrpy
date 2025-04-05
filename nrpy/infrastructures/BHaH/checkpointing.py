@@ -149,8 +149,6 @@ def register_CFunction_read_checkpoint(
   // Next set t_0 and n_0
   commondata->t_0 = commondata->time;
   commondata->nn_0 = commondata->nn;
-  BHAH_DEVICE_SYNC();
-  return 1;
 """.replace(
         "BHAH_CHKPT_CPY_HOST_TO_DEVICE_ALL_GFS();",
         (
@@ -159,6 +157,9 @@ def register_CFunction_read_checkpoint(
             else "BHAH_CHKPT_CPY_HOST_TO_DEVICE_ALL_GFS();"
         ),
     )
+    if parallelization in ["cuda"]:
+        body += "BHAH_DEVICE_SYNC();\n"
+    body += "return 1;\n"
     cfc.register_CFunction(
         includes=includes,
         prefunc=prefunc,
