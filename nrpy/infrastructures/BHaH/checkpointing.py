@@ -220,7 +220,7 @@ def register_CFunction_write_checkpoint(
       CUDA__free_host_gfs(gf_ptr);
     #define BHAH_CHKPT_HOST_MOL_GF_MALLOC(cd, params_ptr, gf_ptr) \
       CUDA__malloc_host_gfs(cd, params_ptr, gf_ptr);
-    #define BHAH_CPY_DEVICE_TO_HOST_PARAMS()
+    #define BHAH_CPY_DEVICE_TO_HOST_PARAMS() \
       memcpy(&griddata[grid].params, &griddata_device[grid].params, sizeof(params_struct));
     #define BHAH_CPY_DEVICE_TO_HOST_ALL_GFS() \
     for (int gf = 0; gf < NUM_EVOL_GFS; ++gf) { \
