@@ -2,8 +2,7 @@
 #include "BHaH_function_prototypes.h"
 
 #define BHAH_CHKPT_HOST_MOL_GF_FREE(gf_ptr) MoL_free_memory_y_n_gfs(gf_ptr);
-#define BHAH_CHKPT_HOST_MOL_GF_MALLOC(cd, params_ptr, gf_ptr)
-MoL_malloc_y_n_gfs(cd, params_ptr, gf_ptr);
+#define BHAH_CHKPT_HOST_MOL_GF_MALLOC(cd, params_ptr, gf_ptr) MoL_malloc_y_n_gfs(cd, params_ptr, gf_ptr);
 
 /**
  * Write a checkpoint file
@@ -45,7 +44,7 @@ void write_checkpoint(const commondata_struct *restrict commondata, griddata_str
       int *out_data_indices = (int *)malloc(sizeof(int) * count);
       REAL *compact_out_data = (REAL *)malloc(sizeof(REAL) * NUM_EVOL_GFS * count);
       int which_el = 0;
-      BHAH_DEVICE_SYNC();
+
       for (int i = 0; i < ntot; i++) {
         if (maskval >= +0) {
           out_data_indices[which_el] = i;
