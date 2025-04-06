@@ -7,6 +7,7 @@ Authors: Samuel D. Tootle; sdtootle **at** gmail **dot** com
 from typing import Any, Dict, Union
 
 import nrpy.c_function as cfc
+import nrpy.params as par
 
 
 class GPU_Kernel:
@@ -26,7 +27,10 @@ class GPU_Kernel:
     :param launch_dict: Dictionary that stores kernel launch settings
     :param streamid_param: Toggle whether streamid is a kernel argument parameter
     :param cuda_check_error: Add CUDA error checking after kernel call. Default is True
+    :param thread_macro_prefix: Prefix for thread macros.
 
+    >>> import nrpy.params as par
+    >>> par.set_parval_from_str("Infrastructure", "None")
     >>> kernel = GPU_Kernel(
     ... "*x = in;",
     ... {'x' : 'REAL *restrict', 'in' : 'const REAL'},
@@ -90,6 +94,7 @@ class GPU_Kernel:
         launch_dict: Union[Dict[str, Any], None] = None,
         streamid_param: bool = True,
         cuda_check_error: bool = True,
+        thread_macro_prefix: str = "DEFAULT",
     ) -> None:
         self.body = body
         self.decorators = decorators
@@ -105,9 +110,54 @@ class GPU_Kernel:
         self.launch_dict = launch_dict
         self.launch_block: str = ""
         self.launch_settings: str = ""
+        self.thread_macro_prefix = thread_macro_prefix
+        self.threads_per_block: list[str] = []
 
         if self.decorators == "__global__" and launch_dict is None:
             raise ValueError(f"Error: {self.decorators} requires a launch_dict")
+
+        if self.launch_dict is not None:
+            if "threads_per_block" in self.launch_dict:
+                self.threads_per_block = self.launch_dict["threads_per_block"]
+                for _ in range(3 - len(self.threads_per_block)):
+                    self.threads_per_block += ["1"]
+            else:
+                # We set to a conservative default with a focus on data in the
+                # x-direction with one active warp per block
+                self.threads_per_block = ["32", "1", "1"]
+
+            if par.parval_from_str("Infrastructure") == "BHaH":
+                if "DEVICE_THREAD_MACROS" not in par.glb_extras_dict:
+                    par.glb_extras_dict["DEVICE_THREAD_MACROS"] = {}
+                # In BHaH, threads per block in each direction are defined using C macros
+                # so we need to define macros appropriately and ensure they are set correctly
+                # in the DEVICE_THREAD_MACROS dictionary
+                for i, thread_dir in enumerate(["X", "Y", "Z"]):
+                    thread_macro = (
+                        f"BHAH_{self.thread_macro_prefix}_THREADS_IN_{thread_dir}_DIR"
+                    )
+                    # In the case of DEFAULT, we don't check nor update the macro assigned value
+                    if self.thread_macro_prefix == "DEFAULT":
+                        break
+                    # If the macro exists, but there is a value mismatch, raise an error
+                    if (
+                        thread_macro in par.glb_extras_dict["DEVICE_THREAD_MACROS"]
+                        and par.glb_extras_dict["DEVICE_THREAD_MACROS"][thread_macro]
+                        != self.threads_per_block[i]
+                    ):
+                        raise ValueError(
+                            f"Error: {thread_macro} in DEVICE_THREAD_MACROS does not match threads_per_block"
+                        )
+                    par.glb_extras_dict["DEVICE_THREAD_MACROS"][thread_macro] = (
+                        self.threads_per_block[i]
+                    )
+
+                # Replace with macro names
+                self.threads_per_block = [
+                    f"BHAH_{self.thread_macro_prefix}_THREADS_IN_{thread_dir}_DIR"
+                    for thread_dir in ["X", "Y", "Z"]
+                ]
+
         self.generate_launch_block()
 
         self.param_list = [f"{v} {k}" for k, v in self.params_dict.items()]
@@ -124,20 +174,11 @@ class GPU_Kernel:
         """Generate preceding launch block definitions for kernel function call."""
         if self.launch_dict is None:
             return
-        if "threads_per_block" not in self.launch_dict:
-            threads_per_block = [
-                "DEFAULT_THREADS_IN_X_DIR",
-                "DEFAULT_THREADS_IN_Y_DIR",
-                "DEFAULT_THREADS_IN_Z_DIR",
-            ]
-        else:
-            threads_per_block = self.launch_dict["threads_per_block"]
-        for _ in range(3 - len(threads_per_block)):
-            threads_per_block += ["1"]
+
         block_def_str = f"""
-const size_t threads_in_x_dir = {threads_per_block[0]};
-const size_t threads_in_y_dir = {threads_per_block[1]};
-const size_t threads_in_z_dir = {threads_per_block[2]};
+const size_t threads_in_x_dir = {self.threads_per_block[0]};
+const size_t threads_in_y_dir = {self.threads_per_block[1]};
+const size_t threads_in_z_dir = {self.threads_per_block[2]};
 dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);"""
 
         blocks_per_grid = self.launch_dict["blocks_per_grid"]
