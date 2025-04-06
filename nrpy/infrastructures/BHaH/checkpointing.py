@@ -67,9 +67,9 @@ def register_CFunction_read_checkpoint(
     """
         if parallelization == "cuda"
         else r"""
-    #define BHAH_CHKPT_HOST_MOL_GF_FREE(gf_ptr)
+    #define BHAH_CHKPT_HOST_MOL_GF_FREE(gf_ptr) \
       MoL_free_memory_y_n_gfs(gf_ptr);
-    #define BHAH_CHKPT_HOST_MOL_GF_MALLOC(cd, params_ptr, gf_ptr)
+    #define BHAH_CHKPT_HOST_MOL_GF_MALLOC(cd, params_ptr, gf_ptr) \
       MoL_malloc_y_n_gfs(cd, params_ptr, gf_ptr);
     """
     )
