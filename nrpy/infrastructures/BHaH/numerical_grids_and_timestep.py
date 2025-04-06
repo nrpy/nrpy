@@ -234,6 +234,7 @@ BHAH_MALLOC(xx[2], sizeof(REAL) * params->Nxx_plus_2NGHOSTS2);
                 ],
                 "stream": "",
             },
+            thread_macro_prefix="DEFAULT"
         )
         prefunc += new_prefunc
         body += new_body.replace(f"xx{i})", f"xx[{i}])")
@@ -426,6 +427,7 @@ def generate_grid_minimum_gridspacing_prefunc() -> Tuple[str, str]:
         cfunc_type=cfunc_type,
         comments=comments,
         launchblock_with_braces=False,
+        thread_macro_prefix="DS_MIN"
     )
 
     for i in range(3):
