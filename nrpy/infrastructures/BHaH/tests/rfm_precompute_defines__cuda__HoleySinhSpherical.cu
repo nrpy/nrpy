@@ -127,9 +127,9 @@ void rfm_precompute_defines__rfm__HoleySinhSpherical(const commondata_struct *re
   MAYBE_UNUSED const REAL *restrict x2 = xx[2];
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
   {
-    const size_t threads_in_x_dir = DEFAULT_THREADS_IN_X_DIR;
-    const size_t threads_in_y_dir = DEFAULT_THREADS_IN_Y_DIR;
-    const size_t threads_in_z_dir = DEFAULT_THREADS_IN_Z_DIR;
+    const size_t threads_in_x_dir = BHAH_DEFAULT_THREADS_IN_X_DIR;
+    const size_t threads_in_y_dir = BHAH_DEFAULT_THREADS_IN_Y_DIR;
+    const size_t threads_in_z_dir = BHAH_DEFAULT_THREADS_IN_Z_DIR;
     dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
     dim3 blocks_per_grid((params->Nxx_plus_2NGHOSTS0 + threads_in_x_dir - 1) / threads_in_x_dir,
                          (params->Nxx_plus_2NGHOSTS1 + threads_in_y_dir - 1) / threads_in_y_dir,
@@ -140,9 +140,9 @@ void rfm_precompute_defines__rfm__HoleySinhSpherical(const commondata_struct *re
     cudaCheckErrors(cudaKernel, "rfm_precompute_defines__f0_of_xx0_gpu failure");
   }
   {
-    const size_t threads_in_x_dir = DEFAULT_THREADS_IN_X_DIR;
-    const size_t threads_in_y_dir = DEFAULT_THREADS_IN_Y_DIR;
-    const size_t threads_in_z_dir = DEFAULT_THREADS_IN_Z_DIR;
+    const size_t threads_in_x_dir = BHAH_DEFAULT_THREADS_IN_X_DIR;
+    const size_t threads_in_y_dir = BHAH_DEFAULT_THREADS_IN_Y_DIR;
+    const size_t threads_in_z_dir = BHAH_DEFAULT_THREADS_IN_Z_DIR;
     dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
     dim3 blocks_per_grid((params->Nxx_plus_2NGHOSTS0 + threads_in_x_dir - 1) / threads_in_x_dir,
                          (params->Nxx_plus_2NGHOSTS1 + threads_in_y_dir - 1) / threads_in_y_dir,
@@ -153,9 +153,9 @@ void rfm_precompute_defines__rfm__HoleySinhSpherical(const commondata_struct *re
     cudaCheckErrors(cudaKernel, "rfm_precompute_defines__f0_of_xx0__D0_gpu failure");
   }
   {
-    const size_t threads_in_x_dir = DEFAULT_THREADS_IN_X_DIR;
-    const size_t threads_in_y_dir = DEFAULT_THREADS_IN_Y_DIR;
-    const size_t threads_in_z_dir = DEFAULT_THREADS_IN_Z_DIR;
+    const size_t threads_in_x_dir = BHAH_DEFAULT_THREADS_IN_X_DIR;
+    const size_t threads_in_y_dir = BHAH_DEFAULT_THREADS_IN_Y_DIR;
+    const size_t threads_in_z_dir = BHAH_DEFAULT_THREADS_IN_Z_DIR;
     dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
     dim3 blocks_per_grid((params->Nxx_plus_2NGHOSTS0 + threads_in_x_dir - 1) / threads_in_x_dir,
                          (params->Nxx_plus_2NGHOSTS1 + threads_in_y_dir - 1) / threads_in_y_dir,
@@ -166,9 +166,9 @@ void rfm_precompute_defines__rfm__HoleySinhSpherical(const commondata_struct *re
     cudaCheckErrors(cudaKernel, "rfm_precompute_defines__f0_of_xx0__DD00_gpu failure");
   }
   {
-    const size_t threads_in_x_dir = DEFAULT_THREADS_IN_X_DIR;
-    const size_t threads_in_y_dir = DEFAULT_THREADS_IN_Y_DIR;
-    const size_t threads_in_z_dir = DEFAULT_THREADS_IN_Z_DIR;
+    const size_t threads_in_x_dir = BHAH_DEFAULT_THREADS_IN_X_DIR;
+    const size_t threads_in_y_dir = BHAH_DEFAULT_THREADS_IN_Y_DIR;
+    const size_t threads_in_z_dir = BHAH_DEFAULT_THREADS_IN_Z_DIR;
     dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
     dim3 blocks_per_grid((params->Nxx_plus_2NGHOSTS0 + threads_in_x_dir - 1) / threads_in_x_dir,
                          (params->Nxx_plus_2NGHOSTS1 + threads_in_y_dir - 1) / threads_in_y_dir,
@@ -179,9 +179,9 @@ void rfm_precompute_defines__rfm__HoleySinhSpherical(const commondata_struct *re
     cudaCheckErrors(cudaKernel, "rfm_precompute_defines__f0_of_xx0__DDD000_gpu failure");
   }
   {
-    const size_t threads_in_x_dir = DEFAULT_THREADS_IN_X_DIR;
-    const size_t threads_in_y_dir = DEFAULT_THREADS_IN_Y_DIR;
-    const size_t threads_in_z_dir = DEFAULT_THREADS_IN_Z_DIR;
+    const size_t threads_in_x_dir = BHAH_DEFAULT_THREADS_IN_X_DIR;
+    const size_t threads_in_y_dir = BHAH_DEFAULT_THREADS_IN_Y_DIR;
+    const size_t threads_in_z_dir = BHAH_DEFAULT_THREADS_IN_Z_DIR;
     dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
     dim3 blocks_per_grid((params->Nxx_plus_2NGHOSTS0 + threads_in_x_dir - 1) / threads_in_x_dir,
                          (params->Nxx_plus_2NGHOSTS1 + threads_in_y_dir - 1) / threads_in_y_dir,
@@ -192,9 +192,9 @@ void rfm_precompute_defines__rfm__HoleySinhSpherical(const commondata_struct *re
     cudaCheckErrors(cudaKernel, "rfm_precompute_defines__f1_of_xx1_gpu failure");
   }
   {
-    const size_t threads_in_x_dir = DEFAULT_THREADS_IN_X_DIR;
-    const size_t threads_in_y_dir = DEFAULT_THREADS_IN_Y_DIR;
-    const size_t threads_in_z_dir = DEFAULT_THREADS_IN_Z_DIR;
+    const size_t threads_in_x_dir = BHAH_DEFAULT_THREADS_IN_X_DIR;
+    const size_t threads_in_y_dir = BHAH_DEFAULT_THREADS_IN_Y_DIR;
+    const size_t threads_in_z_dir = BHAH_DEFAULT_THREADS_IN_Z_DIR;
     dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
     dim3 blocks_per_grid((params->Nxx_plus_2NGHOSTS0 + threads_in_x_dir - 1) / threads_in_x_dir,
                          (params->Nxx_plus_2NGHOSTS1 + threads_in_y_dir - 1) / threads_in_y_dir,
@@ -205,9 +205,9 @@ void rfm_precompute_defines__rfm__HoleySinhSpherical(const commondata_struct *re
     cudaCheckErrors(cudaKernel, "rfm_precompute_defines__f1_of_xx1__D1_gpu failure");
   }
   {
-    const size_t threads_in_x_dir = DEFAULT_THREADS_IN_X_DIR;
-    const size_t threads_in_y_dir = DEFAULT_THREADS_IN_Y_DIR;
-    const size_t threads_in_z_dir = DEFAULT_THREADS_IN_Z_DIR;
+    const size_t threads_in_x_dir = BHAH_DEFAULT_THREADS_IN_X_DIR;
+    const size_t threads_in_y_dir = BHAH_DEFAULT_THREADS_IN_Y_DIR;
+    const size_t threads_in_z_dir = BHAH_DEFAULT_THREADS_IN_Z_DIR;
     dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
     dim3 blocks_per_grid((params->Nxx_plus_2NGHOSTS0 + threads_in_x_dir - 1) / threads_in_x_dir,
                          (params->Nxx_plus_2NGHOSTS1 + threads_in_y_dir - 1) / threads_in_y_dir,
