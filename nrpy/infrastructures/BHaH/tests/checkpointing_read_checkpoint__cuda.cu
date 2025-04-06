@@ -2,7 +2,10 @@
 #include "BHaH_function_prototypes.h"
 #include "unistd.h"
 
-#define FREAD(ptr, size, nmemb, stream) MAYBE_UNUSED const int numitems = fread((ptr), (size), (nmemb), (stream));
+#define FREAD(ptr, size, nmemb, stream)                                                                                                              \
+  {                                                                                                                                                  \
+    MAYBE_UNUSED const int numitems = fread((ptr), (size), (nmemb), (stream));                                                                       \
+  }
 
 #define BHAH_CHKPT_HOST_MOL_GF_FREE(gf_ptr)                                                                                                          \
   CUDA__free_host_gfs(gf_ptr);                                                                                                                       \
