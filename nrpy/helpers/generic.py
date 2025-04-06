@@ -17,9 +17,7 @@ from typing import Any, List, Optional, cast
 
 from nrpy.helpers.cached_functions import is_cached, read_cached, write_cached
 
-default_clang_format_options = (
-    "-style={BasedOnStyle: LLVM, ColumnLimit: 150}"
-)
+default_clang_format_options = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}"
 
 
 def superfast_uniq(seq: List[Any]) -> List[Any]:
