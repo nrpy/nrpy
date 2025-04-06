@@ -13,7 +13,15 @@ import nrpy.grid as gri
 import nrpy.params as par
 from nrpy.helpers.generic import clang_format, default_clang_format_options
 
-thread_macro_dict = {"DEFAULT": [32, 1, 1]}
+if "DEVICE_THREAD_MACROS" not in par.glb_extras_dict:
+    par.glb_extras_dict["DEVICE_THREAD_MACROS"] = {}
+par.glb_extras_dict["DEVICE_THREAD_MACROS"].update(
+    {
+        "BHAH_DEFAULT_THREADS_IN_X_DIR": 32,
+        "BHAH_DEFAULT_THREADS_IN_Y_DIR": 1,
+        "BHAH_DEFAULT_THREADS_IN_Z_DIR": 1,
+    }
+)
 
 
 def generate_declaration_str(
@@ -50,7 +58,6 @@ class CUDA_BHaH_device_defines_h:
     >>> import nrpy.infrastructures.BHaH.MoLtimestepping.MoL_register_all as MoL
     >>> import nrpy.params as par
     >>> import nrpy.c_function as cfc
-    >>> par.glb_extras_dict.clear()
     >>> cfc.CFunction_dict.clear()
     >>> MoL.register_CFunctions(register_MoL_step_forward_in_time=False)
     >>> project_dir = Path("/tmp", "tmp_BHaH_defines_h")
@@ -93,9 +100,9 @@ class CUDA_BHaH_device_defines_h:
     <BLANKLINE>
     #define BHAH_MEMCPY_HOST_TO_DEVICE(dest_ptr, src_ptr, sz) cudaMemcpy(dest_ptr, src_ptr, sz, cudaMemcpyHostToDevice);
     <BLANKLINE>
-    #define DEFAULT_THREADS_IN_X_DIR 32
-    #define DEFAULT_THREADS_IN_Y_DIR 1
-    #define DEFAULT_THREADS_IN_Z_DIR 1
+    #define BHAH_DEFAULT_THREADS_IN_X_DIR 32
+    #define BHAH_DEFAULT_THREADS_IN_Y_DIR 1
+    #define BHAH_DEFAULT_THREADS_IN_Z_DIR 1
     <BLANKLINE>
     """
 
@@ -230,20 +237,11 @@ class CUDA_BHaH_device_defines_h:
 
 """
         )
-        for k, thread_list in thread_macro_dict.items():
-            self.file_output_str += (
-                f"#define {k.upper()}_THREADS_IN_X_DIR {thread_list[0]}\n"
-            )
-            self.file_output_str += (
-                f"#define {k.upper()}_THREADS_IN_Y_DIR {thread_list[1]}\n"
-            )
-            self.file_output_str += (
-                f"#define {k.upper()}_THREADS_IN_Z_DIR {thread_list[2]}\n"
-            )
+        for k, thread_cnt in par.glb_extras_dict["DEVICE_THREAD_MACROS"].items():
+            self.file_output_str += f"#define {k.upper()} {thread_cnt}\n"
         self.file_output_str = clang_format(
             self.file_output_str, clang_format_options=self.clang_format_options
         )
-        # self.write_to_file()
 
     def write_to_file(self) -> None:
         """Write file_output_str to header file."""
@@ -260,12 +258,6 @@ class BHaH_CUDA_global_init_h:
     :param declarations_dict: Dictionary storing declaration dictionaries
     :param clang_format_options: Options for clang formatting.
 
-    >>> import nrpy.infrastructures.BHaH.MoLtimestepping.MoL_register_all as MoL
-    >>> import nrpy.params as par
-    >>> import nrpy.c_function as cfc
-    >>> par.glb_extras_dict.clear()
-    >>> cfc.CFunction_dict.clear()
-    >>> MoL.register_CFunctions(register_MoL_step_forward_in_time=False)
     >>> project_dir = Path("/tmp", "tmp_BHaH_defines_h")
     >>> gpu_d = CUDA_BHaH_device_defines_h(project_dir)
     >>> gpu_init = BHaH_CUDA_global_init_h(project_dir,gpu_d.combined_decl_dict)
@@ -338,12 +330,6 @@ class BHaH_CUDA_global_defines_h:
     :param declarations_dict: Dictionary storing declaration dictionaries
     :param clang_format_options: Options for clang formatting.
 
-    >>> import nrpy.infrastructures.BHaH.MoLtimestepping.MoL_register_all as MoL
-    >>> import nrpy.params as par
-    >>> import nrpy.c_function as cfc
-    >>> par.glb_extras_dict.clear()
-    >>> cfc.CFunction_dict.clear()
-    >>> MoL.register_CFunctions(register_MoL_step_forward_in_time=False)
     >>> project_dir = Path("/tmp", "tmp_BHaH_defines_h")
     >>> gpu_d = CUDA_BHaH_device_defines_h(project_dir)
     >>> gpu_init = BHaH_CUDA_global_init_h(project_dir,gpu_d.combined_decl_dict)
