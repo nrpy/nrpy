@@ -117,9 +117,9 @@ void numerical_grid_params_Nxx_dxx_xx__rfm__Cartesian(const commondata_struct *r
   BHAH_MALLOC_DEVICE(xx[2], sizeof(REAL) * params->Nxx_plus_2NGHOSTS2);
   cpyHosttoDevice_params__constant(params, params->grid_idx % NUM_STREAMS);
   {
-    const size_t threads_in_x_dir = DEFAULT_THREADS_IN_X_DIR;
-    const size_t threads_in_y_dir = DEFAULT_THREADS_IN_Y_DIR;
-    const size_t threads_in_z_dir = DEFAULT_THREADS_IN_Z_DIR;
+    const size_t threads_in_x_dir = BHAH_DEFAULT_THREADS_IN_X_DIR;
+    const size_t threads_in_y_dir = BHAH_DEFAULT_THREADS_IN_Y_DIR;
+    const size_t threads_in_z_dir = BHAH_DEFAULT_THREADS_IN_Z_DIR;
     dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
     dim3 blocks_per_grid((params->Nxx_plus_2NGHOSTS0 + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
     size_t sm = 0;
@@ -128,9 +128,9 @@ void numerical_grid_params_Nxx_dxx_xx__rfm__Cartesian(const commondata_struct *r
     cudaCheckErrors(cudaKernel, "initialize_grid_xx0_gpu failure");
   }
   {
-    const size_t threads_in_x_dir = DEFAULT_THREADS_IN_X_DIR;
-    const size_t threads_in_y_dir = DEFAULT_THREADS_IN_Y_DIR;
-    const size_t threads_in_z_dir = DEFAULT_THREADS_IN_Z_DIR;
+    const size_t threads_in_x_dir = BHAH_DEFAULT_THREADS_IN_X_DIR;
+    const size_t threads_in_y_dir = BHAH_DEFAULT_THREADS_IN_Y_DIR;
+    const size_t threads_in_z_dir = BHAH_DEFAULT_THREADS_IN_Z_DIR;
     dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
     dim3 blocks_per_grid((params->Nxx_plus_2NGHOSTS1 + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
     size_t sm = 0;
@@ -139,9 +139,9 @@ void numerical_grid_params_Nxx_dxx_xx__rfm__Cartesian(const commondata_struct *r
     cudaCheckErrors(cudaKernel, "initialize_grid_xx1_gpu failure");
   }
   {
-    const size_t threads_in_x_dir = DEFAULT_THREADS_IN_X_DIR;
-    const size_t threads_in_y_dir = DEFAULT_THREADS_IN_Y_DIR;
-    const size_t threads_in_z_dir = DEFAULT_THREADS_IN_Z_DIR;
+    const size_t threads_in_x_dir = BHAH_DEFAULT_THREADS_IN_X_DIR;
+    const size_t threads_in_y_dir = BHAH_DEFAULT_THREADS_IN_Y_DIR;
+    const size_t threads_in_z_dir = BHAH_DEFAULT_THREADS_IN_Z_DIR;
     dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
     dim3 blocks_per_grid((params->Nxx_plus_2NGHOSTS2 + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
     size_t sm = 0;
