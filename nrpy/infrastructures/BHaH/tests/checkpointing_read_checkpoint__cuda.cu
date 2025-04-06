@@ -2,9 +2,12 @@
 #include "BHaH_function_prototypes.h"
 #include "unistd.h"
 
-#define CONCAT(a, b) a##b
-#define EXPAND_CONCAT(a, b) CONCAT(a, b)
-#define FREAD(ptr, size, nmemb, stream) MAYBE_UNUSED const int EXPAND_CONCAT(numitems, __COUNTER__) = fread((ptr), (size), (nmemb), (stream));
+// clang formatting disabled due to issues with brace placement:
+//   placing the opening brace on the same line and other times on a new line, which causes CI failures.
+// clang-format off
+#define FREAD(ptr, size, nmemb, stream) \
+  { MAYBE_UNUSED const int numitems=fread((ptr), (size), (nmemb), (stream)); }
+// clang-format on
 
 #define BHAH_CHKPT_HOST_MOL_GF_FREE(gf_ptr)                                                                                                          \
   CUDA__free_host_gfs(gf_ptr);                                                                                                                       \

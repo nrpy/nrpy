@@ -43,9 +43,12 @@ def register_CFunction_read_checkpoint(
     parallelization = par.parval_from_str("parallelization")
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "unistd.h"]
     prefunc = r"""
-#define CONCAT(a, b) a##b
-#define EXPAND_CONCAT(a, b) CONCAT(a, b)
-#define FREAD(ptr, size, nmemb, stream) MAYBE_UNUSED const int EXPAND_CONCAT(numitems,__COUNTER__)=fread((ptr), (size), (nmemb), (stream));
+// clang formatting disabled due to issues with brace placement:
+//   placing the opening brace on the same line and other times on a new line, which causes CI failures.
+// clang-format off
+#define FREAD(ptr, size, nmemb, stream) \
+  { MAYBE_UNUSED const int numitems=fread((ptr), (size), (nmemb), (stream)); }
+// clang-format on
 """
     prefunc += (
         r"""
