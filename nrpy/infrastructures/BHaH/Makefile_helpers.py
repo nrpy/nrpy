@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from nrpy.c_function import CFunction_dict
-from nrpy.helpers.generic import clang_format, default_clang_format_options
+from nrpy.helpers.generic import clang_format
 
 
 def output_CFunctions_function_prototypes_and_construct_Makefile(
@@ -30,7 +30,6 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     lib_function_prefix: str = "",
     include_dirs: Optional[List[str]] = None,
     src_code_file_ext: str = "c",
-    clang_format_options: str = default_clang_format_options,
 ) -> None:
     """
     Output C functions registered to CFunction_dict and construct a Makefile for compiling C code.
@@ -47,7 +46,6 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     :param lib_function_prefix: Prefix to add to library function names.
     :param include_dirs: List of include directories.
     :param src_code_file_ext: set what the file extension is for each code file.
-    :param clang_format_options: Options for the clang-format tool.
 
     :raises ValueError: If the main() function is not defined in CFunction_dict.
     :raises FileNotFoundError: If the specified C compiler is not found.
@@ -131,7 +129,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
             CFunction_dict[key].function_prototype
             for key in sorted(CFunction_dict, key=str.lower)
         )
-        file.write(clang_format(outstr, clang_format_options=clang_format_options))
+        file.write(clang_format(outstr))
 
     # Set compiler
     if CC == "autodetect":

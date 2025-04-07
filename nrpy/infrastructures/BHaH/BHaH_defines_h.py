@@ -12,7 +12,7 @@ from typing import Dict, List, Optional
 import nrpy.grid as gri
 import nrpy.helpers.parallelization.utilities as gpu_utils
 import nrpy.params as par
-from nrpy.helpers.generic import clang_format, default_clang_format_options
+from nrpy.helpers.generic import clang_format
 from nrpy.infrastructures.BHaH import griddata_commondata
 
 # The ordering of core_modules_list is based largely on data structure dependencies.
@@ -113,7 +113,6 @@ def output_BHaH_defines_h(
     fin_NGHOSTS_add_one_for_upwinding_or_KO: bool = False,
     DOUBLE_means: str = "double",
     supplemental_defines_dict: Optional[Dict[str, str]] = None,
-    clang_format_options: str = default_clang_format_options,
 ) -> None:
     r"""
     Output C code header file with macro definitions and other configurations for the project.
@@ -128,7 +127,6 @@ def output_BHaH_defines_h(
     :param fin_NGHOSTS_add_one_for_upwinding_or_KO: Option to add one extra ghost zone for upwinding
     :param DOUBLE_means: Overload DOUBLE macro type for specific calculations that require higher than single precision
     :param supplemental_defines_dict: Additional key-value pairs to be included in the output file
-    :param clang_format_options: Options for clang formatting.
 
     DocTests:
     >>> from nrpy.infrastructures.BHaH.MoLtimestepping import MoL_register_all
@@ -536,9 +534,7 @@ def output_BHaH_defines_h(
 
     bhah_defines_file = project_Path / "BHaH_defines.h"
     with bhah_defines_file.open("w", encoding="utf-8") as file:
-        file.write(
-            clang_format(file_output_str, clang_format_options=clang_format_options)
-        )
+        file.write(clang_format(file_output_str))
 
 
 if __name__ == "__main__":

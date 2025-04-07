@@ -12,7 +12,7 @@ from typing import List, Tuple
 
 import nrpy.c_function as cfc
 import nrpy.params as par
-from nrpy.helpers.generic import clang_format, default_clang_format_options
+from nrpy.helpers.generic import clang_format
 
 # fmt: off
 _ = par.CodeParameter("int", __name__, "Nchare0", 1, add_to_parfile=True, add_to_set_CodeParameters_h=True, commondata=True)
@@ -23,12 +23,10 @@ _ = par.CodeParameter("int", __name__, "Nchare2", 1, add_to_parfile=True, add_to
 
 def output_commondata_object_h(
     project_dir: str,
-    clang_format_options: str = default_clang_format_options,
 ) -> None:
     r"""
     Output header file with definition for class CommondataObject.
     :param project_dir: Directory where the project C code is output
-    :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
     """
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
@@ -69,20 +67,16 @@ class CommondataObject {
 """
     commondata_object_file = project_Path / "commondata_object.h"
     with commondata_object_file.open("w", encoding="utf-8") as file:
-        file.write(
-            clang_format(file_output_str, clang_format_options=clang_format_options)
-        )
+        file.write(clang_format(file_output_str))
 
 
 def output_main_h(
     project_dir: str,
-    clang_format_options: str = default_clang_format_options,
     enable_charm_checkpointing: bool = False,
 ) -> None:
     """
     Generate main.h.
     :param project_dir: Directory where the project C code is output
-    :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     """
     project_Path = Path(project_dir)
@@ -122,20 +116,16 @@ class Main : public CBase_Main {
 """
     main_h_file = project_Path / "main.h"
     with main_h_file.open("w", encoding="utf-8") as file:
-        file.write(
-            clang_format(file_output_str, clang_format_options=clang_format_options)
-        )
+        file.write(clang_format(file_output_str))
 
 
 def output_main_cpp(
     project_dir: str,
-    clang_format_options: str = default_clang_format_options,
     enable_charm_checkpointing: bool = False,
 ) -> None:
     """
     Generate the "generic" C main() function for all simulation codes in the superB infrastructure.
     :param project_dir: Directory where the project C code is output
-    :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     :raises ValueError: Raised if any required function for superB main() is not registered.
     """
@@ -216,20 +206,16 @@ void Main::pup(PUP::er &p) {
 """
     main_cpp_file = project_Path / "main.cpp"
     with main_cpp_file.open("w", encoding="utf-8") as file:
-        file.write(
-            clang_format(file_output_str, clang_format_options=clang_format_options)
-        )
+        file.write(clang_format(file_output_str))
 
 
 def output_main_ci(
     project_dir: str,
-    clang_format_options: str = default_clang_format_options,
 ) -> None:
     """
     Generate main.ci.
 
     :param project_dir: Directory where the project C code is output
-    :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
     """
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
@@ -254,9 +240,7 @@ def output_main_ci(
 """
     main_ci_file = project_Path / "main.ci"
     with main_ci_file.open("w", encoding="utf-8") as file:
-        file.write(
-            clang_format(file_output_str, clang_format_options=clang_format_options)
-        )
+        file.write(clang_format(file_output_str))
 
 
 def output_commondata_object_h_and_main_h_cpp_ci(

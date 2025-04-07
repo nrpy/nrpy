@@ -11,7 +11,7 @@ from typing import Any, Dict, Union
 
 import nrpy.grid as gri
 import nrpy.params as par
-from nrpy.helpers.generic import clang_format, default_clang_format_options
+from nrpy.helpers.generic import clang_format
 
 if "DEVICE_THREAD_MACROS" not in par.glb_extras_dict:
     par.glb_extras_dict["DEVICE_THREAD_MACROS"] = {}
@@ -51,7 +51,6 @@ class CUDA_BHaH_device_defines_h:
     :param project_dir: Location to write file to
     :param additional_declarations_dict: Dictionary storing additional declaration dictionaries
     :param additional_macros_str: Block string of additional macro definitions
-    :param clang_format_options: Options for clang formatting.
     :param num_streams: Number of CUDA streams to use
     :param nghosts: Number of ghost zones for the FD stencil
 
@@ -73,14 +72,12 @@ class CUDA_BHaH_device_defines_h:
         additional_macros_str: Union[str, None] = None,
         num_streams: int = 3,
         nghosts: Union[int, None] = None,
-        clang_format_options: str = default_clang_format_options,
     ) -> None:
         self.project_Path = Path(project_dir)
         self.project_Path.mkdir(parents=True, exist_ok=True)
         self.num_streams = num_streams
         self.additional_decl_dict = additional_declarations_dict
         self.additional_macros_str = additional_macros_str
-        self.clang_format_options = clang_format_options
         self.bhah_CUDA_defines_filename = "BHaH_device_defines.h"
         self.NGHOSTS = nghosts
 
@@ -199,9 +196,7 @@ class CUDA_BHaH_device_defines_h:
         )
         for k, thread_cnt in par.glb_extras_dict["DEVICE_THREAD_MACROS"].items():
             self.file_output_str += f"#define {k.upper()} {thread_cnt}\n"
-        self.file_output_str = clang_format(
-            self.file_output_str, clang_format_options=self.clang_format_options
-        )
+        self.file_output_str = clang_format(self.file_output_str)
 
     def write_to_file(self) -> None:
         """Write file_output_str to header file."""
@@ -216,7 +211,6 @@ class BHaH_CUDA_global_init_h:
 
     :param project_dir: Location to write file to
     :param declarations_dict: Dictionary storing declaration dictionaries
-    :param clang_format_options: Options for clang formatting.
 
     >>> project_dir = Path("/tmp", "tmp_BHaH_defines_h")
     >>> gpu_d = CUDA_BHaH_device_defines_h(project_dir)
@@ -239,12 +233,10 @@ class BHaH_CUDA_global_init_h:
         self,
         project_dir: str,
         declarations_dict: Dict[str, Dict[str, str]],
-        clang_format_options: str = default_clang_format_options,
     ) -> None:
         self.project_Path = Path(project_dir)
         self.project_Path.mkdir(parents=True, exist_ok=True)
         self.declarations_dict = declarations_dict
-        self.clang_format_options = clang_format_options
         self.filename = "BHaH_CUDA_global_init.h"
 
         self.file_output_str = """// BHaH core header file, automatically generated from cuda.output_BHaH_defines_h,
@@ -270,9 +262,7 @@ cudaMemcpyToSymbol(d_gridfunctions_f_infinity, gridfunctions_f_infinity, NUM_EVO
 cudaCheckErrors(copy, "Copy to d_gridfunctions_f_infinity failed");
 """
 
-        self.file_output_str = clang_format(
-            self.file_output_str, clang_format_options=self.clang_format_options
-        )
+        self.file_output_str = clang_format(self.file_output_str)
         self.write_to_file()
 
     def write_to_file(self) -> None:
@@ -288,7 +278,6 @@ class BHaH_CUDA_global_defines_h:
 
     :param project_dir: Location to write file to
     :param declarations_dict: Dictionary storing declaration dictionaries
-    :param clang_format_options: Options for clang formatting.
 
     >>> project_dir = Path("/tmp", "tmp_BHaH_defines_h")
     >>> gpu_d = CUDA_BHaH_device_defines_h(project_dir)
@@ -311,13 +300,11 @@ class BHaH_CUDA_global_defines_h:
         self,
         project_dir: str,
         declarations_dict: Dict[str, Dict[str, str]],
-        clang_format_options: str = default_clang_format_options,
         **_: Any,
     ) -> None:
         self.project_Path = Path(project_dir)
         self.project_Path.mkdir(parents=True, exist_ok=True)
         self.declarations_dict = declarations_dict
-        self.clang_format_options = clang_format_options
         self.filename = "BHaH_global_device_defines.h"
 
         self.file_output_str = """// BHaH core header file, automatically generated from cuda.output_BHaH_defines_h,
@@ -329,9 +316,7 @@ class BHaH_CUDA_global_defines_h:
         self.file_output_str += generate_declaration_str(self.declarations_dict)
 
         self.file_output_str += "#endif // __BHAH_GLOBAL_DEVICE_DEFINES_H__\n\n"
-        self.file_output_str = clang_format(
-            self.file_output_str, clang_format_options=self.clang_format_options
-        )
+        self.file_output_str = clang_format(self.file_output_str)
         self.write_to_file()
 
     def write_to_file(self) -> None:
@@ -347,7 +332,6 @@ def output_device_headers(
     additional_macros_str: Union[str, None] = None,
     num_streams: int = 3,
     nghosts: Union[int, None] = None,
-    clang_format_options: str = default_clang_format_options,
 ) -> str:
     """
     Generate device specific header files.
@@ -360,7 +344,6 @@ def output_device_headers(
     :param additional_macros_str: Block string of additional macro definitions
     :param num_streams: Number of CUDA streams to use
     :param nghosts: FD stencil radius
-    :param clang_format_options: Options for clang formatting.
     :returns: header filename
     """
     parallelization = par.parval_from_str("parallelization")
@@ -372,7 +355,6 @@ def output_device_headers(
             additional_macros_str=additional_macros_str,
             num_streams=num_streams,
             nghosts=nghosts,
-            clang_format_options=clang_format_options,
         )
 
         BHaH_CUDA_global_defines_h(

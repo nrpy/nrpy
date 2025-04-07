@@ -23,7 +23,6 @@ from nrpy.helpers.cse_preprocess_postprocess import (  # NRPy+: CSE preprocessin
 from nrpy.helpers.custom_c_codegen_functions import custom_functions_for_SymPy_ccode
 from nrpy.helpers.generic import (
     clang_format,
-    default_clang_format_options,
     superfast_uniq,
 )
 from nrpy.helpers.simd import expr_convert_to_simd_intrins
@@ -92,7 +91,6 @@ class CCodeGen:
         symbol_to_Rational_dict: Optional[Dict[sp.Basic, sp.Rational]] = None,
         rational_const_alias: str = "static const",
         clang_format_enable: bool = False,
-        clang_format_options: str = default_clang_format_options,
     ) -> None:
         """
         Initialize the CCodeGen class with provided options for generating C code.
@@ -125,7 +123,6 @@ class CCodeGen:
         :param symbol_to_Rational_dict: Dictionary mapping sympy symbols to their corresponding sympy Rationals.
         :param rational_const_alias: Override default alias for specifying rational constness
         :param clang_format_enable: Boolean to enable clang formatting.
-        :param clang_format_options: Options for clang formatting.
 
         :raises ValueError: If 'fp_type' is not recognized as a valid floating-point type.
         :raises ValueError: If SIMD optimizations are enabled but the floating-point type is not 'double'.
@@ -192,7 +189,7 @@ class CCodeGen:
         self.symbol_to_Rational_dict = symbol_to_Rational_dict
         self.rational_const_alias = rational_const_alias
         self.clang_format_enable = clang_format_enable
-        self.clang_format_options = clang_format_options
+        self.clang_format_options = par.parval_from_str("clang_format_options")
 
         self.fd_order = par.parval_from_str("finite_difference::fd_order")
 
@@ -1186,9 +1183,7 @@ MAYBE_UNUSED const REAL_SIMD_ARRAY upwind_Integer_{n} = ConstSIMD(tmp_upwind_Int
         Coutput += f"\n{write_to_mem_string}"
 
     if CCGParams.clang_format_enable:
-        Coutput = clang_format(
-            Coutput, clang_format_options=CCGParams.clang_format_options
-        )
+        Coutput = clang_format(Coutput)
 
     return Coutput
 
