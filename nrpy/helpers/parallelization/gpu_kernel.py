@@ -133,7 +133,7 @@ class GPU_Kernel:
                 # so we need to define macros appropriately and ensure they are set correctly
                 # in the DEVICE_THREAD_MACROS dictionary
                 for i, thread_dir in enumerate(["X", "Y", "Z"]):
-                    thread_macro = f"BHAH_{self.thread_tiling_macro_suffix}_THREADS_IN_{thread_dir}_DIR"
+                    thread_macro = f"BHAH_THREADS_IN_{thread_dir}_DIR_{self.thread_tiling_macro_suffix}"
                     # In the case of DEFAULT, we don't check nor update the macro assigned value
                     if self.thread_tiling_macro_suffix == "DEFAULT":
                         break
