@@ -27,7 +27,7 @@ class GPU_Kernel:
     :param launch_dict: Dictionary that stores kernel launch settings
     :param streamid_param: Toggle whether streamid is a kernel argument parameter
     :param cuda_check_error: Add CUDA error checking after kernel call. Default is True
-    :param thread_macro_prefix: Prefix for thread macros.
+    :param thread_tiling_macro_suffix: Suffix for thread macros.
 
     >>> import nrpy.params as par
     >>> par.set_parval_from_str("Infrastructure", "None")
@@ -94,7 +94,7 @@ class GPU_Kernel:
         launch_dict: Union[Dict[str, Any], None] = None,
         streamid_param: bool = True,
         cuda_check_error: bool = True,
-        thread_macro_prefix: str = "DEFAULT",
+        thread_tiling_macro_suffix: str = "DEFAULT",
     ) -> None:
         self.body = body
         self.decorators = decorators
@@ -110,7 +110,7 @@ class GPU_Kernel:
         self.launch_dict = launch_dict
         self.launch_block: str = ""
         self.launch_settings: str = ""
-        self.thread_macro_prefix = thread_macro_prefix
+        self.thread_tiling_macro_suffix = thread_tiling_macro_suffix
         self.threads_per_block: list[str] = []
 
         if self.decorators == "__global__" and launch_dict is None:
@@ -133,11 +133,9 @@ class GPU_Kernel:
                 # so we need to define macros appropriately and ensure they are set correctly
                 # in the DEVICE_THREAD_MACROS dictionary
                 for i, thread_dir in enumerate(["X", "Y", "Z"]):
-                    thread_macro = (
-                        f"BHAH_{self.thread_macro_prefix}_THREADS_IN_{thread_dir}_DIR"
-                    )
+                    thread_macro = f"BHAH_{self.thread_tiling_macro_suffix}_THREADS_IN_{thread_dir}_DIR"
                     # In the case of DEFAULT, we don't check nor update the macro assigned value
-                    if self.thread_macro_prefix == "DEFAULT":
+                    if self.thread_tiling_macro_suffix == "DEFAULT":
                         break
                     # If the macro exists, but there is a value mismatch, raise an error
                     if (
@@ -154,7 +152,7 @@ class GPU_Kernel:
 
                 # Replace with macro names
                 self.threads_per_block = [
-                    f"BHAH_{self.thread_macro_prefix}_THREADS_IN_{thread_dir}_DIR"
+                    f"BHAH_{self.thread_tiling_macro_suffix}_THREADS_IN_{thread_dir}_DIR"
                     for thread_dir in ["X", "Y", "Z"]
                 ]
 

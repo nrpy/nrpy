@@ -87,7 +87,7 @@ def generate_kernel_and_launch_code(
     # If you need different block/thread dims, pass them in:
     launch_dict: Optional[Dict[str, Any]] = None,
     launchblock_with_braces: bool = False,
-    thread_macro_prefix: str = "DEFAULT",
+    thread_tiling_macro_suffix: str = "DEFAULT",
 ) -> Tuple[str, str]:
     """
     Generate kernels as prefuncs and the necessary launch body.
@@ -104,7 +104,7 @@ def generate_kernel_and_launch_code(
     :param comments: Kernel docstring or extra comments
     :param launch_dict: Dictionary to overload CUDA launch settings.
     :param launchblock_with_braces: If True, wrap the launch block in braces.
-    :param thread_macro_prefix: Prefix for thread macros.
+    :param thread_tiling_macro_suffix: Suffix for thread macros.
 
     :return: (prefunc, body) code strings.
     """
@@ -123,7 +123,7 @@ def generate_kernel_and_launch_code(
             launch_dict=launch_dict,
             comments=comments,
             streamid_param="stream" in launch_dict,
-            thread_macro_prefix=thread_macro_prefix,
+            thread_tiling_macro_suffix=thread_tiling_macro_suffix,
         )
         # Build the function definition:
         prefunc += device_kernel.CFunction.full_function

@@ -263,7 +263,7 @@ def generate_rfmprecompute_defines(
             cfunc_type="static void",
             comments=comments,
             launchblock_with_braces=True,
-            thread_macro_prefix="DEFAULT",
+            thread_tiling_macro_suffix="DEFAULT",
         )
         prefunc += new_prefunc
         body += new_body
