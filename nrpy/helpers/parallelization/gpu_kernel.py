@@ -152,7 +152,7 @@ class GPU_Kernel:
 
                 # Replace with macro names
                 self.threads_per_block = [
-                    f"BHAH_{self.thread_tiling_macro_suffix}_THREADS_IN_{thread_dir}_DIR"
+                    f"BHAH_THREADS_IN_{thread_dir}_DIR_{self.thread_tiling_macro_suffix}"
                     for thread_dir in ["X", "Y", "Z"]
                 ]
 
