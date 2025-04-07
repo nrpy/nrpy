@@ -40,9 +40,9 @@ static void rk_substep_1__launcher(params_struct *restrict params, REAL *restric
   const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
   MAYBE_UNUSED const int Ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;
 
-  const size_t threads_in_x_dir = BHAH_MOL_SUBSTEP_THREADS_IN_X_DIR;
-  const size_t threads_in_y_dir = BHAH_MOL_SUBSTEP_THREADS_IN_Y_DIR;
-  const size_t threads_in_z_dir = BHAH_MOL_SUBSTEP_THREADS_IN_Z_DIR;
+  const size_t threads_in_x_dir = BHAH_THREADS_IN_X_DIR_MOL_SUBSTEP;
+  const size_t threads_in_y_dir = BHAH_THREADS_IN_Y_DIR_MOL_SUBSTEP;
+  const size_t threads_in_z_dir = BHAH_THREADS_IN_Z_DIR_MOL_SUBSTEP;
   dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
   dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
   size_t sm = 0;
@@ -84,9 +84,9 @@ static void rk_substep_2__launcher(params_struct *restrict params, REAL *restric
   const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
   MAYBE_UNUSED const int Ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;
 
-  const size_t threads_in_x_dir = BHAH_MOL_SUBSTEP_THREADS_IN_X_DIR;
-  const size_t threads_in_y_dir = BHAH_MOL_SUBSTEP_THREADS_IN_Y_DIR;
-  const size_t threads_in_z_dir = BHAH_MOL_SUBSTEP_THREADS_IN_Z_DIR;
+  const size_t threads_in_x_dir = BHAH_THREADS_IN_X_DIR_MOL_SUBSTEP;
+  const size_t threads_in_y_dir = BHAH_THREADS_IN_Y_DIR_MOL_SUBSTEP;
+  const size_t threads_in_z_dir = BHAH_THREADS_IN_Z_DIR_MOL_SUBSTEP;
   dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
   dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
   size_t sm = 0;
@@ -125,9 +125,9 @@ static void rk_substep_3__launcher(params_struct *restrict params, REAL *restric
   const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
   MAYBE_UNUSED const int Ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;
 
-  const size_t threads_in_x_dir = BHAH_MOL_SUBSTEP_THREADS_IN_X_DIR;
-  const size_t threads_in_y_dir = BHAH_MOL_SUBSTEP_THREADS_IN_Y_DIR;
-  const size_t threads_in_z_dir = BHAH_MOL_SUBSTEP_THREADS_IN_Z_DIR;
+  const size_t threads_in_x_dir = BHAH_THREADS_IN_X_DIR_MOL_SUBSTEP;
+  const size_t threads_in_y_dir = BHAH_THREADS_IN_Y_DIR_MOL_SUBSTEP;
+  const size_t threads_in_z_dir = BHAH_THREADS_IN_Z_DIR_MOL_SUBSTEP;
   dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
   dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
   size_t sm = 0;
@@ -164,9 +164,9 @@ static void rk_substep_4__launcher(params_struct *restrict params, REAL *restric
   const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
   MAYBE_UNUSED const int Ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;
 
-  const size_t threads_in_x_dir = BHAH_MOL_SUBSTEP_THREADS_IN_X_DIR;
-  const size_t threads_in_y_dir = BHAH_MOL_SUBSTEP_THREADS_IN_Y_DIR;
-  const size_t threads_in_z_dir = BHAH_MOL_SUBSTEP_THREADS_IN_Z_DIR;
+  const size_t threads_in_x_dir = BHAH_THREADS_IN_X_DIR_MOL_SUBSTEP;
+  const size_t threads_in_y_dir = BHAH_THREADS_IN_Y_DIR_MOL_SUBSTEP;
+  const size_t threads_in_z_dir = BHAH_THREADS_IN_Z_DIR_MOL_SUBSTEP;
   dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
   dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
   size_t sm = 0;

@@ -47,9 +47,9 @@ void cfl_limited_timestep(commondata_struct *restrict commondata, params_struct 
   BHAH_MALLOC_DEVICE(device_params, sizeof(params_struct));
   BHAH_MEMCPY_HOST_TO_DEVICE(device_params, params, sizeof(params_struct));
 
-  const size_t threads_in_x_dir = BHAH_DS_MIN_THREADS_IN_X_DIR;
-  const size_t threads_in_y_dir = BHAH_DS_MIN_THREADS_IN_Y_DIR;
-  const size_t threads_in_z_dir = BHAH_DS_MIN_THREADS_IN_Z_DIR;
+  const size_t threads_in_x_dir = BHAH_THREADS_IN_X_DIR_DS_MIN;
+  const size_t threads_in_y_dir = BHAH_THREADS_IN_Y_DIR_DS_MIN;
+  const size_t threads_in_z_dir = BHAH_THREADS_IN_Z_DIR_DS_MIN;
   dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
   dim3 blocks_per_grid((params->Nxx_plus_2NGHOSTS0 + threads_in_x_dir - 1) / threads_in_x_dir,
                        (params->Nxx_plus_2NGHOSTS1 + threads_in_y_dir - 1) / threads_in_y_dir,
