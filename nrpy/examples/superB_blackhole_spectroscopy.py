@@ -53,7 +53,7 @@ import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import rfm_precompute, rfm_wrapper_functions
 from nrpy.infrastructures.BHaH.general_relativity import (
-    BSSN_C_codegen_library,
+    BSSN,
     psi4_C_codegen_library,
 )
 
@@ -194,7 +194,7 @@ superBdiagnostics.register_CFunction_diagnostics(
 )
 if enable_rfm_precompute:
     rfm_precompute.register_CFunctions_rfm_precompute(set_of_CoordSystems={CoordSystem})
-BSSN_C_codegen_library.register_CFunction_rhs_eval(
+BSSN.rhs_eval.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
@@ -212,24 +212,24 @@ BSSN_C_codegen_library.register_CFunction_rhs_eval(
     OMP_collapse=OMP_collapse,
 )
 if enable_CAHD:
-    BSSN_C_codegen_library.register_CFunction_cahdprefactor_auxevol_gridfunction(
+    BSSN.cahdprefactor_gf.register_CFunction_cahdprefactor_auxevol_gridfunction(
         {CoordSystem}
     )
 if separate_Ricci_and_BSSN_RHS:
-    BSSN_C_codegen_library.register_CFunction_Ricci_eval(
+    BSSN.Ricci_eval.register_CFunction_Ricci_eval(
         CoordSystem=CoordSystem,
         enable_rfm_precompute=enable_rfm_precompute,
         enable_simd=enable_simd,
         enable_fd_functions=enable_fd_functions,
         OMP_collapse=OMP_collapse,
     )
-BSSN_C_codegen_library.register_CFunction_enforce_detgammabar_equals_detgammahat(
+BSSN.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
-BSSN_C_codegen_library.register_CFunction_constraints(
+BSSN.constraints.register_CFunction_constraints(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
