@@ -10,11 +10,10 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-import os
-
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
+import os
 import shutil
 
 import nrpy.helpers.parallel_codegen as pcg
