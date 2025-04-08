@@ -26,6 +26,21 @@ def get_params_access(parallelization: str) -> str:
     return params_access
 
 
+def get_commondata_access(parallelization: str) -> str:
+    """
+    Return the appropriate commondata_struct-access prefix for CUDA vs. non-CUDA.
+    E.g. 'd_commondata.' vs. 'commondata->' where 'd_commondata' is
+    allocated in __constant__ memory rather than a pointer passed as a function argument.
+
+    :param parallelization: The parallelization method to use.
+    :returns: The appropriate prefix for accessing the commondata struct.
+    """
+    if parallelization == "cuda":
+        cd_access = "d_commondata."
+    else:
+        cd_access = "commondata->"
+    return cd_access
+
 def get_memory_malloc_function(parallelization: str) -> str:
     """
     Return the appropriate function to allocate memory.
