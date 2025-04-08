@@ -1,6 +1,10 @@
 """
 Sets up a complete C code project for evolving a TOV solution in a dynamical spacetime with a static fluid ("hydro without hydro").
 
+Based on Baumgarte, Hughes, and Shapiro:
+Phys. Rev. D 60 087501 (1999)
+https://arxiv.org/abs/gr-qc/9902024
+
 Author: Leonardo Rosa Werneck
         wernecklr **at** gmail **dot* com
 """

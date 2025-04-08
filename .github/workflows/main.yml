@@ -193,7 +193,7 @@ jobs:
           echo "All static analysis tests passed successfully."
 
   einsteintoolkit-validation:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
@@ -205,6 +205,9 @@ jobs:
 
       - name: Download Apptainer image
         run: wget -q https://github.com/nrpy/einsteintoolkit_ci_images/releases/download/v1.0.3/custom_ubuntu.sif
+
+      - name: Disable AppArmor restriction on unprivileged user namespaces, needed for 24.04 compatibility.
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
       - name: Build Apptainer sandbox
         run: apptainer build --sandbox custom_ubuntu_sandbox custom_ubuntu.sif
@@ -244,7 +247,7 @@ jobs:
           "
 
   charmpp-validation:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
@@ -256,6 +259,9 @@ jobs:
 
       - name: Download Apptainer image
         run: wget -q https://github.com/nrpy/charmpp_barebones_ci_images/releases/download/v1.0.0/custom_ubuntu_charmpp.sif
+
+      - name: Disable AppArmor restriction on unprivileged user namespaces, needed for 24.04 compatibility.
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
       - name: Build Apptainer sandbox
         run: apptainer build --sandbox custom_ubuntu_charmpp_sandbox custom_ubuntu_charmpp.sif
