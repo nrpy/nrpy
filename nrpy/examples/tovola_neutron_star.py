@@ -19,7 +19,7 @@ import shutil
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
-import nrpy.infrastructures.BHaH.general_relativity.BSSN_C_codegen_library as BCl
+import nrpy.infrastructures.BHaH.general_relativity.BSSN as BCl
 import nrpy.infrastructures.BHaH.general_relativity.TOVola.ID_persist_struct as IDps
 import nrpy.infrastructures.BHaH.general_relativity.TOVola.TOVola_interp as TOVinterp
 import nrpy.infrastructures.BHaH.general_relativity.TOVola.TOVola_solve as TOVsolve
@@ -93,7 +93,7 @@ par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 
 TOVinterp.register_CFunction_TOVola_interp()
 TOVsolve.register_CFunction_TOVola_solve()
-BCl.register_CFunction_initial_data(
+BCl.initial_data.register_CFunction_initial_data(
     CoordSystem=CoordSystem,
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
@@ -116,7 +116,7 @@ TOVola_solve(commondata, &ID_persist);
 """,
     enable_T4munu=True,
 )
-BCl.register_CFunction_diagnostics(
+BCl.diagnostics.register_CFunction_diagnostics(
     set_of_CoordSystems={CoordSystem},
     default_diagnostics_out_every=diagnostics_output_every,
     enable_psi4_diagnostics=False,
@@ -134,7 +134,7 @@ BCl.register_CFunction_diagnostics(
 )
 if enable_rfm_precompute:
     rfm_precompute.register_CFunctions_rfm_precompute(set_of_CoordSystems={CoordSystem})
-BCl.register_CFunction_constraints(
+BCl.constraints.register_CFunction_constraints(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=False,

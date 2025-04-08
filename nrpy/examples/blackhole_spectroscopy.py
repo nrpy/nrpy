@@ -23,7 +23,7 @@ from pathlib import Path
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
-import nrpy.infrastructures.BHaH.general_relativity.BSSN_C_codegen_library as BCl
+import nrpy.infrastructures.BHaH.general_relativity.BSSN as BCl
 import nrpy.infrastructures.BHaH.general_relativity.NRPyPN_quasicircular_momenta as NRPyPNqm
 import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.ID_persist_struct as IDps
 import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.TwoPunctures_lib as TPl
@@ -125,7 +125,7 @@ par.set_parval_from_str(
 #         cfc.CFunction_dict["function_name"]
 NRPyPNqm.register_CFunction_NRPyPN_quasicircular_momenta()
 TPl.register_C_functions()
-BCl.register_CFunction_initial_data(
+BCl.initial_data.register_CFunction_initial_data(
     CoordSystem=CoordSystem,
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
@@ -145,7 +145,7 @@ TP_solve(&ID_persist);
 }
 """,
 )
-BCl.register_CFunction_diagnostics(
+BCl.diagnostics.register_CFunction_diagnostics(
     set_of_CoordSystems={CoordSystem},
     default_diagnostics_out_every=diagnostics_output_every,
     enable_psi4_diagnostics=True,
@@ -162,7 +162,7 @@ BCl.register_CFunction_diagnostics(
 )
 if enable_rfm_precompute:
     rfm_precompute.register_CFunctions_rfm_precompute(set_of_CoordSystems={CoordSystem})
-BCl.register_CFunction_rhs_eval(
+BCl.rhs_eval.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
@@ -180,22 +180,24 @@ BCl.register_CFunction_rhs_eval(
     OMP_collapse=OMP_collapse,
 )
 if enable_CAHD:
-    BCl.register_CFunction_cahdprefactor_auxevol_gridfunction({CoordSystem})
+    BCl.cahdprefactor_gf.register_CFunction_cahdprefactor_auxevol_gridfunction(
+        {CoordSystem}
+    )
 if separate_Ricci_and_BSSN_RHS:
-    BCl.register_CFunction_Ricci_eval(
+    BCl.Ricci_eval.register_CFunction_Ricci_eval(
         CoordSystem=CoordSystem,
         enable_rfm_precompute=enable_rfm_precompute,
         enable_simd=enable_simd,
         enable_fd_functions=enable_fd_functions,
         OMP_collapse=OMP_collapse,
     )
-BCl.register_CFunction_enforce_detgammabar_equals_detgammahat(
+BCl.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
-BCl.register_CFunction_constraints(
+BCl.constraints.register_CFunction_constraints(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
@@ -220,7 +222,7 @@ swm2sh.register_CFunction_spin_weight_minus2_sph_harmonics()
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 # Does not need to be parallelized.
-BCl.register_CFunction_psi4_spinweightm2_decomposition_on_sphlike_grids()
+BCl.psi4_decomposition.register_CFunction_psi4_spinweightm2_decomposition_on_sphlike_grids()
 
 numerical_grids_and_timestep.register_CFunctions(
     set_of_CoordSystems={CoordSystem},
