@@ -13,16 +13,13 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
+import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.params as par
 from nrpy.equations.nrpyelliptic.ConformallyFlat_SourceTerms import (
     compute_psi_background_and_ADD_times_AUU,
 )
 from nrpy.helpers.expression_utils import get_params_commondata_symbols_from_expr_list
-from nrpy.helpers.parallelization.utilities import (
-    get_commondata_access,
-    get_params_access,
-)
 
 
 # Define functions to set AUXEVOL gridfunctions
@@ -68,12 +65,10 @@ def register_CFunction_auxevol_gfs_single_point(
     )
     body += "// Load necessary parameters from params_struct\n"
     for param in params_symbols:
-        body += f"const REAL {param} = {get_params_access(parallelization)}{param};\n"
+        body += f"const REAL {param} = {parallel_utils.get_params_access(parallelization)}{param};\n"
     body += "\n// Load necessary parameters from commondata_struct\n"
     for param in commondata_symbols:
-        body += (
-            f"const REAL {param} = {get_commondata_access(parallelization)}{param};\n"
-        )
+        body += f"const REAL {param} = {parallel_utils.get_commondata_access(parallelization)}{param};\n"
     body += "\n"
     body += ccg.c_codegen(
         expr_list,
@@ -108,7 +103,7 @@ def register_CFunction_auxevol_gfs_all_points(
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
-
+    parallelization = par.parval_from_str("parallelization")
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
     desc = r"""Set AUXEVOL gridfunctions at all points."""
@@ -120,25 +115,70 @@ def register_CFunction_auxevol_gfs_all_points(
     psi_background_memaccess = gri.BHaHGridFunction.access_gf("psi_background")
     ADD_times_AUU_memaccess = gri.BHaHGridFunction.access_gf("ADD_times_AUU")
 
-    body = r"""for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
+    body = (
+        "cpyHosttoDevice_commondata__constant(commondata);\n"
+        if parallelization in ["cuda"]
+        else ""
+    )
+    body += r"""for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   // Unpack griddata struct:
   params_struct *restrict params = &griddata[grid].params;
-#include "set_CodeParameters.h"
-  REAL *restrict xx[3];
-  for (int ww = 0; ww < 3; ww++)
-    xx[ww] = griddata[grid].xx[ww];
+  REAL *restrict x0 = griddata[grid].xx[0];
+  REAL *restrict x1 = griddata[grid].xx[1];
+  REAL *restrict x2 = griddata[grid].xx[2];
   REAL *restrict in_gfs = griddata[grid].gridfuncs.auxevol_gfs;
 """
-    body += lp.simple_loop(
-        loop_body="auxevol_gfs_single_point(commondata, params, xx0,xx1,xx2,"
+
+    kernel_body = f"{parallel_utils.get_loop_parameters(parallelization)}\n"
+    function_call = (
+        "auxevol_gfs_single_point(streamid, xx0,xx1,xx2,"
+        if parallelization == "cuda"
+        else "auxevol_gfs_single_point(commondata, params, xx0,xx1,xx2,"
+    )
+    kernel_body += lp.simple_loop(
+        f"{function_call}"
         f"&{psi_background_memaccess},"
         f"&{ADD_times_AUU_memaccess});",
         read_xxs=True,
         loop_region="all points",
         OMP_collapse=OMP_collapse,
     )
+    for i in range(3):
+        kernel_body = kernel_body.replace(f"xx[{i}]", f"x{i}")
+
+    comments = "Kernel to initialize auxillary grid functions at all grid points."
+    # Prepare the argument dicts
+    arg_dict_cuda = {
+        "x0": "const REAL *restrict",
+        "x1": "const REAL *restrict",
+        "x2": "const REAL *restrict",
+        "in_gfs": "REAL *restrict",
+    }
+    arg_dict_host = {
+        "commondata": "const commondata_struct *restrict",
+        "params": "const params_struct *restrict",
+        **arg_dict_cuda,
+    }
+    prefunc, new_body = parallel_utils.generate_kernel_and_launch_code(
+        name,
+        kernel_body,
+        arg_dict_cuda,
+        arg_dict_host,
+        parallelization=parallelization,
+        comments=comments,
+        launch_dict={
+            "blocks_per_grid": [],
+            "threads_per_block": ["32", "NGHOSTS"],
+            "stream": "default",
+        },
+        thread_tiling_macro_suffix="NELL_AUXEVOL_ALLPTS",
+    )
+
+    body += f"{new_body}\n"
     body += "}\n"
+
     cfc.register_CFunction(
+        prefunc=prefunc,
         includes=includes,
         desc=desc,
         cfunc_type=cfunc_type,
