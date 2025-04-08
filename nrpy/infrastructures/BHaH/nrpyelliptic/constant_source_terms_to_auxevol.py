@@ -14,8 +14,14 @@ import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.simple_loop as lp
+import nrpy.params as par
 from nrpy.equations.nrpyelliptic.ConformallyFlat_SourceTerms import (
     compute_psi_background_and_ADD_times_AUU,
+)
+from nrpy.helpers.expression_utils import get_params_commondata_symbols_from_expr_list
+from nrpy.helpers.parallelization.utilities import (
+    get_commondata_access,
+    get_params_access,
 )
 
 
@@ -40,15 +46,37 @@ def register_CFunction_auxevol_gfs_single_point(
     )
 
     includes = ["BHaH_defines.h"]
+    parallelization = par.parval_from_str("parallelization")
 
     desc = r"""Compute AUXEVOL grid functions at a single point."""
     cfunc_type = "void"
     name = "auxevol_gfs_single_point"
     params = r"""const commondata_struct *restrict commondata, const params_struct *restrict params,
     const REAL xx0, const REAL xx1, const REAL xx2,  REAL *restrict psi_background, REAL *restrict ADD_times_AUU
-"""
-    body = ccg.c_codegen(
-        [psi_background, ADD_times_AUU],
+""".replace(
+        "const commondata_struct *restrict commondata, const params_struct *restrict params,",
+        (
+            "const size_t streamid,"
+            if parallelization in ["cuda"]
+            else "const commondata_struct *restrict commondata, const params_struct *restrict params,"
+        ),
+    )
+    body = ""
+    expr_list = [psi_background, ADD_times_AUU]
+    params_symbols, commondata_symbols = get_params_commondata_symbols_from_expr_list(
+        expr_list, exclude=[f"xx{i}" for i in range(3)]
+    )
+    body += "// Load necessary parameters from params_struct\n"
+    for param in params_symbols:
+        body += f"const REAL {param} = {get_params_access(parallelization)}{param};\n"
+    body += "\n// Load necessary parameters from commondata_struct\n"
+    for param in commondata_symbols:
+        body += (
+            f"const REAL {param} = {get_commondata_access(parallelization)}{param};\n"
+        )
+    body += "\n"
+    body += ccg.c_codegen(
+        expr_list,
         ["*psi_background", "*ADD_times_AUU"],
         verbose=False,
         include_braces=False,
@@ -57,10 +85,11 @@ def register_CFunction_auxevol_gfs_single_point(
         includes=includes,
         desc=desc,
         cfunc_type=cfunc_type,
+        cfunc_decorators="__device__" if parallelization in ["cuda"] else "",
         CoordSystem_for_wrapper_func="",
         name=name,
         params=params,
-        include_CodeParameters_h=True,
+        include_CodeParameters_h=False,
         body=body,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
