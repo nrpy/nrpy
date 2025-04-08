@@ -537,6 +537,12 @@ def adjust_CodeParam_default(CodeParameter_name: str, new_default: Any) -> None:
 register_param(str, __name__, "Infrastructure", "BHaH")
 register_param(str, __name__, "fp_type", "double")
 register_param(str, __name__, "parallelization", "openmp")
+register_param(
+    str,
+    __name__,
+    "clang_format_options",
+    "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+)
 
 if __name__ == "__main__":
     import doctest

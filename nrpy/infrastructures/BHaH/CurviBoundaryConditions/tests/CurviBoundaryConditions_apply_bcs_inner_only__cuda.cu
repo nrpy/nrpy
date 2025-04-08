@@ -49,9 +49,9 @@ void apply_bcs_inner_only(const commondata_struct *restrict commondata, const pa
   const innerpt_bc_struct *restrict inner_bc_array = bcstruct->inner_bc_array;
   const int num_inner_boundary_points = bc_info->num_inner_boundary_points;
 
-  const size_t threads_in_x_dir = DEFAULT_THREADS_IN_X_DIR;
-  const size_t threads_in_y_dir = DEFAULT_THREADS_IN_Y_DIR;
-  const size_t threads_in_z_dir = DEFAULT_THREADS_IN_Z_DIR;
+  const size_t threads_in_x_dir = BHAH_THREADS_IN_X_DIR_CURVIBC_INNER;
+  const size_t threads_in_y_dir = BHAH_THREADS_IN_Y_DIR_CURVIBC_INNER;
+  const size_t threads_in_z_dir = BHAH_THREADS_IN_Z_DIR_CURVIBC_INNER;
   dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
   dim3 blocks_per_grid((num_inner_boundary_points + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
   size_t sm = 0;

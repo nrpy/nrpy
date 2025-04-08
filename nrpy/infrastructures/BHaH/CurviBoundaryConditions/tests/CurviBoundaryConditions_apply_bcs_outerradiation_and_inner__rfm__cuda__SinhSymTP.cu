@@ -298,9 +298,9 @@ static void apply_bcs_pure_only(const params_struct *restrict params, const bc_s
         const outerpt_bc_struct *restrict pure_outer_bc_array = bcstruct->pure_outer_bc_array[gz_idx];
         int num_pure_outer_boundary_points = bc_info->num_pure_outer_boundary_points[which_gz][dirn];
 
-        const size_t threads_in_x_dir = DEFAULT_THREADS_IN_X_DIR;
-        const size_t threads_in_y_dir = DEFAULT_THREADS_IN_Y_DIR;
-        const size_t threads_in_z_dir = DEFAULT_THREADS_IN_Z_DIR;
+        const size_t threads_in_x_dir = BHAH_THREADS_IN_X_DIR_CURVIBC_RAD_PURE;
+        const size_t threads_in_y_dir = BHAH_THREADS_IN_Y_DIR_CURVIBC_RAD_PURE;
+        const size_t threads_in_z_dir = BHAH_THREADS_IN_Z_DIR_CURVIBC_RAD_PURE;
         dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
         dim3 blocks_per_grid((num_pure_outer_boundary_points + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
         size_t sm = 0;

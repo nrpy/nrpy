@@ -9,7 +9,10 @@ import os
 from typing import Dict, List, Optional, Tuple
 
 import nrpy.params as par
-from nrpy.helpers.generic import clang_format, prefix_with_star
+from nrpy.helpers.generic import (
+    clang_format,
+    prefix_with_star,
+)
 
 
 class CFunction:
@@ -33,7 +36,6 @@ class CFunction:
     :param ET_schedule_bins_entries: (ET only) List of (schedule bin, schedule entry) tuples for Einstein Toolkit schedule.ccl.
     :param ET_current_thorn_CodeParams_used: (ET only) List of CodeParameter names this function uses, for *this thorn's* param.ccl.
     :param ET_other_thorn_CodeParams_used: (ET only) List of CodeParameter names this function uses, for *other thorn's* param.ccl.
-    :param clang_format_options: Options for the clang-format tool. Defaults to "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
 
     DocTests:
     >>> func = CFunction(desc="just a test... testing 1,2,3", name="main", params="", body="return 0;")
@@ -70,7 +72,6 @@ class CFunction:
         ET_schedule_bins_entries: Optional[List[Tuple[str, str]]] = None,
         ET_current_thorn_CodeParams_used: Optional[List[str]] = None,
         ET_other_thorn_CodeParams_used: Optional[List[str]] = None,
-        clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
     ) -> None:
         for attribute in [(name, "name"), (desc, "desc"), (body, "body")]:
             if not attribute[0]:
@@ -103,7 +104,6 @@ class CFunction:
         self.cfunc_decorators = (
             f"{cfunc_decorators} " if cfunc_decorators != "" else cfunc_decorators
         )
-        self.clang_format_options = clang_format_options
 
         self.function_prototype, self.raw_function, self.full_function = (
             self.generate_full_function()
@@ -215,7 +215,7 @@ class CFunction:
         return (
             function_prototype,
             complete_func,
-            clang_format(complete_func, clang_format_options=self.clang_format_options),
+            clang_format(complete_func),
         )
 
 
@@ -263,7 +263,6 @@ def register_CFunction(
     ET_schedule_bins_entries: Optional[List[Tuple[str, str]]] = None,
     ET_current_thorn_CodeParams_used: Optional[List[str]] = None,
     ET_other_thorn_CodeParams_used: Optional[List[str]] = None,
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
     """
     Add a C function to a dictionary called CFunction_dict, using the provided parameters.
@@ -285,7 +284,6 @@ def register_CFunction(
     :param ET_schedule_bins_entries: (ET only) List of tuples for Einstein Toolkit schedule.
     :param ET_current_thorn_CodeParams_used: (ET only) List of CodeParameter names this function uses, for *this thorn's* param.ccl.
     :param ET_other_thorn_CodeParams_used: (ET only) List of CodeParameter names this function uses, for *other thorn's* param.ccl.
-    :param clang_format_options: Options for the clang-format tool. Defaults to "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
 
     :raises ValueError: If the name is already registered in CFunction_dict.
 
@@ -317,7 +315,6 @@ def register_CFunction(
         ET_current_thorn_CodeParams_used=ET_current_thorn_CodeParams_used,
         ET_other_thorn_CodeParams_used=ET_other_thorn_CodeParams_used,
         cfunc_decorators=cfunc_decorators,
-        clang_format_options=clang_format_options,
     )
 
 

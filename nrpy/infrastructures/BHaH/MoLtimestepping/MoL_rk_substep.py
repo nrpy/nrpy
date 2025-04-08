@@ -180,6 +180,7 @@ class RKFunction:
                 "stream": "params->grid_idx % NUM_STREAMS",
             },
             launchblock_with_braces=False,
+            thread_tiling_macro_suffix="MOL_SUBSTEP",
         )
         self.body += new_body
 

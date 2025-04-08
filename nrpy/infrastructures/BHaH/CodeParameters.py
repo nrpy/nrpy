@@ -147,7 +147,6 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
 def write_CodeParameters_h_files(
     project_dir: str,
     set_commondata_only: bool = False,
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
     r"""
     Generate C code to set C parameter constants and write them to files.
@@ -155,7 +154,6 @@ def write_CodeParameters_h_files(
     :param project_dir: The path of the project directory.
     :param set_commondata_only: If True, generate code parameters only if `commondata=True`.
         Useful for BHaH projects without grids, like SEOBNR.
-    :param clang_format_options: Options for clang_format.
 
     DocTests:
     >>> project_dir = Path("/tmp/tmp_project/")
@@ -249,7 +247,6 @@ def write_CodeParameters_h_files(
         file.write(
             clang_format(
                 gen_set_CodeParameters(pointerEnable=True),
-                clang_format_options=clang_format_options,
             )
         )
 
@@ -258,7 +255,6 @@ def write_CodeParameters_h_files(
         file.write(
             clang_format(
                 gen_set_CodeParameters(pointerEnable=False),
-                clang_format_options=clang_format_options,
             )
         )
 
@@ -293,7 +289,6 @@ def write_CodeParameters_h_files(
         file.write(
             clang_format(
                 set_CodeParameters_SIMD_str,
-                clang_format_options=clang_format_options,
             )
         )
 

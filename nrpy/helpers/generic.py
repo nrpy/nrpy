@@ -15,6 +15,7 @@ from pathlib import Path
 from types import FrameType, ModuleType
 from typing import Any, List, Optional, cast
 
+import nrpy.params as par
 from nrpy.helpers.cached_functions import is_cached, read_cached, write_cached
 
 
@@ -58,7 +59,6 @@ def prefix_with_star(input_string: str) -> str:
 
 def clang_format(
     c_code_str: str,
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> str:
     r"""
     Format a given C code string using clang-format.
@@ -67,7 +67,6 @@ def clang_format(
     Ensures consistent code formatting across the project.
 
     :param c_code_str: The C code string to be formatted.
-    :param clang_format_options: Formatting options for clang-format.
     :return: Formatted C code string.
     :raises RuntimeError: If clang-format encounters any error.
 
@@ -81,6 +80,7 @@ def clang_format(
       return 0;
     }
     """
+    clang_format_options = par.parval_from_str("clang_format_options")
     unique_id = __name__ + c_code_str + clang_format_options
     if is_cached(unique_id):
         return cast(str, read_cached(unique_id))

@@ -858,6 +858,7 @@ for (int pt = tid0; pt < num_inner_boundary_points; pt+=stride0) {"""
             ],
             "stream": "params->grid_idx % NUM_STREAMS",
         },
+        thread_tiling_macro_suffix="CURVIBC_INNER",
     )
     kernel_launch_body = rf"""
   // Unpack bc_info from bcstruct
@@ -954,6 +955,7 @@ for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
             ],
             "stream": "default",
         },
+        thread_tiling_macro_suffix="CURVIBC_EXTRAP",
     )
     # Specify the function body for launching the kernel
     kernel_launch_body = f"""
@@ -1590,6 +1592,7 @@ for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {
             "stream": "params->grid_idx % NUM_STREAMS",
         },
         cfunc_type=cfunc_type,
+        thread_tiling_macro_suffix="CURVIBC_RAD_PURE",
     )
 
     # Specify the function body for the launch kernel
