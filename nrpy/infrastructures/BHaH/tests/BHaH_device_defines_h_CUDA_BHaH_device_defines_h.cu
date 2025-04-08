@@ -34,6 +34,6 @@ extern size_t GPU_N_SMS;
 
 #define BHAH_MEMCPY_HOST_TO_DEVICE(dest_ptr, src_ptr, sz) cudaMemcpy(dest_ptr, src_ptr, sz, cudaMemcpyHostToDevice);
 
-#define BHAH_DEFAULT_THREADS_IN_X_DIR 32
-#define BHAH_DEFAULT_THREADS_IN_Y_DIR 1
-#define BHAH_DEFAULT_THREADS_IN_Z_DIR 1
+#define BHAH_THREADS_IN_X_DIR_DEFAULT 32
+#define BHAH_THREADS_IN_Y_DIR_DEFAULT 1
+#define BHAH_THREADS_IN_Z_DIR_DEFAULT 1

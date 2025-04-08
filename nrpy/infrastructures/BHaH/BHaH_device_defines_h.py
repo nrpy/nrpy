@@ -17,9 +17,9 @@ if "DEVICE_THREAD_MACROS" not in par.glb_extras_dict:
     par.glb_extras_dict["DEVICE_THREAD_MACROS"] = {}
 par.glb_extras_dict["DEVICE_THREAD_MACROS"].update(
     {
-        "BHAH_DEFAULT_THREADS_IN_X_DIR": 32,
-        "BHAH_DEFAULT_THREADS_IN_Y_DIR": 1,
-        "BHAH_DEFAULT_THREADS_IN_Z_DIR": 1,
+        "BHAH_THREADS_IN_X_DIR_DEFAULT": 32,
+        "BHAH_THREADS_IN_Y_DIR_DEFAULT": 1,
+        "BHAH_THREADS_IN_Z_DIR_DEFAULT": 1,
     }
 )
 
