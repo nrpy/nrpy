@@ -15,10 +15,6 @@ import shutil
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
-import nrpy.infrastructures.BHaH.general_relativity.BSSN as BCl
-import nrpy.infrastructures.BHaH.general_relativity.TOVola.ID_persist_struct as IDps
-import nrpy.infrastructures.BHaH.general_relativity.TOVola.TOVola_interp as TOVinterp
-import nrpy.infrastructures.BHaH.general_relativity.TOVola.TOVola_solve as TOVsolve
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import (
@@ -32,6 +28,7 @@ from nrpy.infrastructures.BHaH import (
     rfm_wrapper_functions,
     xx_tofrom_Cart,
 )
+from nrpy.infrastructures.BHaH.general_relativity import BSSN, TOVola
 from nrpy.infrastructures.BHaH.MoLtimestepping import MoL_register_all
 
 par.set_parval_from_str("Infrastructure", "BHaH")
@@ -89,7 +86,7 @@ numerical_grids_and_timestep.register_CFunctions(
     enable_CurviBCs=True,
 )
 
-BCl.diagnostics.register_CFunction_diagnostics(
+BSSN.diagnostics.register_CFunction_diagnostics(
     set_of_CoordSystems=set_of_CoordSystems,
     default_diagnostics_out_every=diagnostics_output_every,
     out_quantities_dict={
@@ -112,17 +109,17 @@ BCl.diagnostics.register_CFunction_diagnostics(
 # cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
 #     project_name=project_name, cmdline_inputs=["CFL_factor"]
 # )
-TOVinterp.register_CFunction_TOVola_interp()
-TOVsolve.register_CFunction_TOVola_solve()
+TOVola.TOVola_interp.register_CFunction_TOVola_interp()
+TOVola.TOVola_solve.register_CFunction_TOVola_solve()
 
 for CoordSystem in set_of_CoordSystems:
     par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
-    BCl.initial_data.register_CFunction_initial_data(
+    BSSN.initial_data.register_CFunction_initial_data(
         CoordSystem=CoordSystem,
         IDtype=IDtype,
         IDCoordSystem="Spherical",
         enable_checkpointing=True,
-        ID_persist_struct_str=IDps.ID_persist_str(),
+        ID_persist_struct_str=TOVola.ID_persist_struct.ID_persist_str(),
         populate_ID_persist_struct_str=r"""
 TOVola_solve(commondata, &ID_persist);
 """,
@@ -141,7 +138,7 @@ TOVola_solve(commondata, &ID_persist);
         enable_T4munu=True,
     )
 
-    BCl.rhs_eval.register_CFunction_rhs_eval(
+    BSSN.rhs_eval.register_CFunction_rhs_eval(
         CoordSystem=CoordSystem,
         enable_rfm_precompute=enable_rfm_precompute,
         enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
@@ -154,20 +151,20 @@ TOVola_solve(commondata, &ID_persist);
         OMP_collapse=OMP_collapse,
     )
     if separate_Ricci_and_BSSN_RHS:
-        BCl.Ricci_eval.register_CFunction_Ricci_eval(
+        BSSN.Ricci_eval.register_CFunction_Ricci_eval(
             CoordSystem=CoordSystem,
             enable_rfm_precompute=enable_rfm_precompute,
             enable_simd=enable_simd,
             enable_fd_functions=enable_fd_functions,
             OMP_collapse=OMP_collapse,
         )
-    BCl.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
+    BSSN.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
         CoordSystem=CoordSystem,
         enable_rfm_precompute=enable_rfm_precompute,
         enable_fd_functions=enable_fd_functions,
         OMP_collapse=OMP_collapse,
     )
-    BCl.constraints.register_CFunction_constraints(
+    BSSN.constraints.register_CFunction_constraints(
         CoordSystem=CoordSystem,
         enable_rfm_precompute=enable_rfm_precompute,
         enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,

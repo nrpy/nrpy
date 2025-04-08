@@ -33,9 +33,6 @@ import nrpy.infrastructures.BHaH.checkpointing as chkpt
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
-import nrpy.infrastructures.BHaH.general_relativity.NRPyPN_quasicircular_momenta as NRPyPNqm
-import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.ID_persist_struct as IDps
-import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.TwoPunctures_lib as TPl
 import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
 import nrpy.infrastructures.BHaH.special_functions.spin_weight_minus2_spherical_harmonics as swm2sh
 import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xxCartxx
@@ -54,6 +51,8 @@ from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import rfm_precompute, rfm_wrapper_functions
 from nrpy.infrastructures.BHaH.general_relativity import (
     BSSN,
+    NRPyPN_quasicircular_momenta,
+    TwoPunctures,
     psi4_C_codegen_library,
 )
 
@@ -151,14 +150,14 @@ par.set_parval_from_str(
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
-NRPyPNqm.register_CFunction_NRPyPN_quasicircular_momenta()
-TPl.register_C_functions()
+NRPyPN_quasicircular_momenta.register_CFunction_NRPyPN_quasicircular_momenta()
+TwoPunctures.TwoPunctures_lib.register_C_functions()
 superBinitialdata.register_CFunction_initial_data(
     CoordSystem=CoordSystem,
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
     enable_checkpointing=False,
-    ID_persist_struct_str=IDps.ID_persist_str(),
+    ID_persist_struct_str=TwoPunctures.ID_persist_struct.ID_persist_str(),
     populate_ID_persist_struct_str=r"""
 initialize_ID_persist_struct(commondata, &ID_persist);
 TP_solve(&ID_persist);
