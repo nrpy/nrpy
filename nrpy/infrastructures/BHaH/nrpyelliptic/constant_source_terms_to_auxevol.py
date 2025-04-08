@@ -171,7 +171,7 @@ def register_CFunction_auxevol_gfs_all_points(
             "threads_per_block": ["32", "NGHOSTS"],
             "stream": "default",
         },
-        thread_tiling_macro_suffix="NELL_AUXEVOL_ALLPTS",
+        thread_tiling_macro_suffix="NELL_AUX",
     )
 
     body += f"{new_body}\n"
