@@ -31,18 +31,15 @@ static void rk_substep_None__launcher(params_struct *restrict params, REAL *rest
   const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
   MAYBE_UNUSED const int Ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;
 
-  {
-
-    const size_t threads_in_x_dir = 32;
-    const size_t threads_in_y_dir = 1;
-    const size_t threads_in_z_dir = 1;
-    dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
-    dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
-    size_t sm = 0;
-    size_t streamid = params->grid_idx % NUM_STREAMS;
-    rk_substep_None_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, y_n_gfs, y_nplus1_running_total_gfs, dt);
-    cudaCheckErrors(cudaKernel, "rk_substep_None_gpu failure");
-  }
+  const size_t threads_in_x_dir = BHAH_THREADS_IN_X_DIR_MOL_SUBSTEP;
+  const size_t threads_in_y_dir = BHAH_THREADS_IN_Y_DIR_MOL_SUBSTEP;
+  const size_t threads_in_z_dir = BHAH_THREADS_IN_Z_DIR_MOL_SUBSTEP;
+  dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
+  dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
+  size_t sm = 0;
+  size_t streamid = params->grid_idx % NUM_STREAMS;
+  rk_substep_None_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, y_n_gfs, y_nplus1_running_total_gfs, dt);
+  cudaCheckErrors(cudaKernel, "rk_substep_None_gpu failure");
 } // END FUNCTION rk_substep_None__launcher
 
 /**
@@ -58,6 +55,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
   // ***Euler timestepping only requires one RHS evaluation***// ***Euler timestepping only requires one RHS evaluation***
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     commondata->time = time_start + 0.00000000000000000e+00 * commondata->dt;
+    cpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % NUM_STREAMS);
     // Set gridfunction aliases, from griddata[].gridfuncs.
     MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
     MAYBE_UNUSED REAL *restrict y_nplus1_running_total_gfs = griddata[grid].gridfuncs.y_nplus1_running_total_gfs;

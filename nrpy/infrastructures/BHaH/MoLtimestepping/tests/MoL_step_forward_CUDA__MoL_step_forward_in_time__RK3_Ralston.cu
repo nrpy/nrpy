@@ -17,7 +17,7 @@ __global__ static void rk_substep_1_gpu(const size_t streamid, REAL *restrict k1
   LOOP_ALL_GFS_GPS(i) {
     const REAL k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfsL = k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs[i];
     const REAL y_n_gfsL = y_n_gfs[i];
-    static const double dblRK_Rational_1_2 = 1.0 / 2.0;
+    static constexpr double dblRK_Rational_1_2 = 1.0 / 2.0;
     const REAL_CUDA_ARRAY RK_Rational_1_2 = ConstCUDA(dblRK_Rational_1_2);
 
     const REAL_CUDA_ARRAY __rk_exp_0 = FusedMulAddCUDA(RK_Rational_1_2, MulCUDA(dt, k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfsL), y_n_gfsL);
@@ -35,19 +35,16 @@ static void rk_substep_1__launcher(params_struct *restrict params, REAL *restric
   const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
   MAYBE_UNUSED const int Ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;
 
-  {
-
-    const size_t threads_in_x_dir = 32;
-    const size_t threads_in_y_dir = 1;
-    const size_t threads_in_z_dir = 1;
-    dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
-    dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
-    size_t sm = 0;
-    size_t streamid = params->grid_idx % NUM_STREAMS;
-    rk_substep_1_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs,
-                                                                                    y_n_gfs, dt);
-    cudaCheckErrors(cudaKernel, "rk_substep_1_gpu failure");
-  }
+  const size_t threads_in_x_dir = BHAH_THREADS_IN_X_DIR_MOL_SUBSTEP;
+  const size_t threads_in_y_dir = BHAH_THREADS_IN_Y_DIR_MOL_SUBSTEP;
+  const size_t threads_in_z_dir = BHAH_THREADS_IN_Z_DIR_MOL_SUBSTEP;
+  dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
+  dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
+  size_t sm = 0;
+  size_t streamid = params->grid_idx % NUM_STREAMS;
+  rk_substep_1_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs,
+                                                                                  y_n_gfs, dt);
+  cudaCheckErrors(cudaKernel, "rk_substep_1_gpu failure");
 } // END FUNCTION rk_substep_1__launcher
 
 /**
@@ -60,16 +57,16 @@ __global__ static void rk_substep_2_gpu(const size_t streamid, REAL *restrict k1
     const REAL k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfsL = k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs[i];
     const REAL k2_or_y_nplus_a32_k2_gfsL = k2_or_y_nplus_a32_k2_gfs[i];
     const REAL y_n_gfsL = y_n_gfs[i];
-    static const double dblRK_Rational_1_3 = 1.0 / 3.0;
+    static constexpr double dblRK_Rational_1_3 = 1.0 / 3.0;
     const REAL_CUDA_ARRAY RK_Rational_1_3 = ConstCUDA(dblRK_Rational_1_3);
 
-    static const double dblRK_Rational_3_4 = 3.0 / 4.0;
+    static constexpr double dblRK_Rational_3_4 = 3.0 / 4.0;
     const REAL_CUDA_ARRAY RK_Rational_3_4 = ConstCUDA(dblRK_Rational_3_4);
 
-    static const double dblRK_Rational_4_9 = 4.0 / 9.0;
+    static constexpr double dblRK_Rational_4_9 = 4.0 / 9.0;
     const REAL_CUDA_ARRAY RK_Rational_4_9 = ConstCUDA(dblRK_Rational_4_9);
 
-    static const double dblRK_Rational_5_9 = 5.0 / 9.0;
+    static constexpr double dblRK_Rational_5_9 = 5.0 / 9.0;
     const REAL_CUDA_ARRAY RK_Rational_5_9 = ConstCUDA(dblRK_Rational_5_9);
 
     const REAL_CUDA_ARRAY __rk_exp_0 =
@@ -92,19 +89,16 @@ static void rk_substep_2__launcher(params_struct *restrict params, REAL *restric
   const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
   MAYBE_UNUSED const int Ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;
 
-  {
-
-    const size_t threads_in_x_dir = 32;
-    const size_t threads_in_y_dir = 1;
-    const size_t threads_in_z_dir = 1;
-    dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
-    dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
-    size_t sm = 0;
-    size_t streamid = params->grid_idx % NUM_STREAMS;
-    rk_substep_2_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs,
-                                                                                    k2_or_y_nplus_a32_k2_gfs, y_n_gfs, dt);
-    cudaCheckErrors(cudaKernel, "rk_substep_2_gpu failure");
-  }
+  const size_t threads_in_x_dir = BHAH_THREADS_IN_X_DIR_MOL_SUBSTEP;
+  const size_t threads_in_y_dir = BHAH_THREADS_IN_Y_DIR_MOL_SUBSTEP;
+  const size_t threads_in_z_dir = BHAH_THREADS_IN_Z_DIR_MOL_SUBSTEP;
+  dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
+  dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
+  size_t sm = 0;
+  size_t streamid = params->grid_idx % NUM_STREAMS;
+  rk_substep_2_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs,
+                                                                                  k2_or_y_nplus_a32_k2_gfs, y_n_gfs, dt);
+  cudaCheckErrors(cudaKernel, "rk_substep_2_gpu failure");
 } // END FUNCTION rk_substep_2__launcher
 
 /**
@@ -116,7 +110,7 @@ __global__ static void rk_substep_3_gpu(const size_t streamid, REAL *restrict k1
   LOOP_ALL_GFS_GPS(i) {
     const REAL k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfsL = k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs[i];
     const REAL y_n_gfsL = y_n_gfs[i];
-    static const double dblRK_Rational_4_9 = 4.0 / 9.0;
+    static constexpr double dblRK_Rational_4_9 = 4.0 / 9.0;
     const REAL_CUDA_ARRAY RK_Rational_4_9 = ConstCUDA(dblRK_Rational_4_9);
 
     const REAL_CUDA_ARRAY __rk_exp_0 = FusedMulAddCUDA(RK_Rational_4_9, MulCUDA(dt, y_n_gfsL), k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfsL);
@@ -134,19 +128,16 @@ static void rk_substep_3__launcher(params_struct *restrict params, REAL *restric
   const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
   MAYBE_UNUSED const int Ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;
 
-  {
-
-    const size_t threads_in_x_dir = 32;
-    const size_t threads_in_y_dir = 1;
-    const size_t threads_in_z_dir = 1;
-    dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
-    dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
-    size_t sm = 0;
-    size_t streamid = params->grid_idx % NUM_STREAMS;
-    rk_substep_3_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs,
-                                                                                    y_n_gfs, dt);
-    cudaCheckErrors(cudaKernel, "rk_substep_3_gpu failure");
-  }
+  const size_t threads_in_x_dir = BHAH_THREADS_IN_X_DIR_MOL_SUBSTEP;
+  const size_t threads_in_y_dir = BHAH_THREADS_IN_Y_DIR_MOL_SUBSTEP;
+  const size_t threads_in_z_dir = BHAH_THREADS_IN_Z_DIR_MOL_SUBSTEP;
+  dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
+  dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
+  size_t sm = 0;
+  size_t streamid = params->grid_idx % NUM_STREAMS;
+  rk_substep_3_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs,
+                                                                                  y_n_gfs, dt);
+  cudaCheckErrors(cudaKernel, "rk_substep_3_gpu failure");
 } // END FUNCTION rk_substep_3__launcher
 
 /**
@@ -167,6 +158,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
   // Post-RHS evaluation: apply boundaries
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     commondata->time = time_start + 0.00000000000000000e+00 * commondata->dt;
+    cpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % NUM_STREAMS);
     // Set gridfunction aliases, from griddata[].gridfuncs.
     MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
     MAYBE_UNUSED REAL *restrict k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs =
@@ -192,6 +184,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
   //    1. Apply post-RHS
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     commondata->time = time_start + 5.00000000000000000e-01 * commondata->dt;
+    cpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % NUM_STREAMS);
     // Set gridfunction aliases, from griddata[].gridfuncs.
     MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
     MAYBE_UNUSED REAL *restrict k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs =
@@ -219,6 +212,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
   //    1. Apply post-RHS to y_n
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     commondata->time = time_start + 7.50000000000000000e-01 * commondata->dt;
+    cpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % NUM_STREAMS);
     // Set gridfunction aliases, from griddata[].gridfuncs.
     MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
     MAYBE_UNUSED REAL *restrict k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs =

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import nrpy.grid as gri
+import nrpy.helpers.parallelization.utilities as gpu_utils
 import nrpy.params as par
 from nrpy.helpers.generic import clang_format
 from nrpy.infrastructures.BHaH import griddata_commondata
@@ -54,16 +55,6 @@ def register_griddata_struct_and_return_griddata_struct_str(
         "BHaH parameters, generated from NRPy+'s CodeParameters",
     )
     if any("reference_metric" in key for key in sys.modules):
-        griddata_commondata.register_griddata_commondata(
-            "reference_metric",
-            "char CoordSystemname[100]",
-            "the name of the CoordSystem (from reference_metric)",
-        )
-        griddata_commondata.register_griddata_commondata(
-            "reference_metric",
-            "char gridname[100]",
-            "a user-defined alias for describing the grid",
-        )
         if enable_rfm_precompute:
             griddata_commondata.register_griddata_commondata(
                 "reference_metric",
@@ -122,7 +113,6 @@ def output_BHaH_defines_h(
     fin_NGHOSTS_add_one_for_upwinding_or_KO: bool = False,
     DOUBLE_means: str = "double",
     supplemental_defines_dict: Optional[Dict[str, str]] = None,
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
     r"""
     Output C code header file with macro definitions and other configurations for the project.
@@ -137,7 +127,6 @@ def output_BHaH_defines_h(
     :param fin_NGHOSTS_add_one_for_upwinding_or_KO: Option to add one extra ghost zone for upwinding
     :param DOUBLE_means: Overload DOUBLE macro type for specific calculations that require higher than single precision
     :param supplemental_defines_dict: Additional key-value pairs to be included in the output file
-    :param clang_format_options: Options for clang formatting.
 
     DocTests:
     >>> from nrpy.infrastructures.BHaH.MoLtimestepping import MoL_register_all
@@ -455,18 +444,97 @@ def output_BHaH_defines_h(
     if supplemental_defines_dict:
         for key in supplemental_defines_dict:
             file_output_str += output_key(key, supplemental_defines_dict[key])
-
     file_output_str += """
-#endif
+    #ifndef BHAH_TYPEOF
+    #if __cplusplus >= 2000707L
+    #define BHAH_TYPEOF(a) decltype(a)
+    #elif defined(__GNUC__) || defined(__clang__) || defined(__NVCC__)
+    #define BHAH_TYPEOF(a) __typeof__(a)
+    #else
+    #define BHAH_TYPEOF(a)
+    #endif // END check for GCC, Clang, or C++
+    #endif // END BHAH_TYPEOF
+
+    #define BHAH_MALLOC(a, sz) \
+    do { \
+        a = (BHAH_TYPEOF(a)) malloc(sz); \
+    } while(0);
+    #define BHAH_MALLOC__PtrMember(a, b, sz) \
+    do { \
+        if (a) { \
+            BHAH_MALLOC(a->b, sz); \
+        } \
+    } while(0);
+
+    #define BHAH_FREE(a) \
+    do { \
+        if (a) { \
+            free((void*)(a)); \
+            (a) = NULL; \
+        } \
+    } while (0);
+    #define BHAH_FREE__PtrMember(a, b) \
+    do { \
+        if (a) { \
+            BHAH_FREE(a->b); \
+        } \
+    } while(0);
 """
+    parallelization = par.parval_from_str("parallelization")
+
+    if parallelization != "openmp":
+        file_output_str += rf"""
+    #define BHAH_MALLOC_DEVICE(a, sz) \
+    do {{ \
+        {gpu_utils.get_memory_malloc_function(parallelization)}(&a, sz); \
+        {gpu_utils.get_check_errors_str(parallelization, gpu_utils.get_memory_malloc_function(parallelization), opt_msg='Malloc: "#a" failed')} \
+    }} while(0);
+    #define BHAH_FREE_DEVICE(a) \
+    do {{ \
+        if (a) {{ \
+            {gpu_utils.get_memory_free_function(parallelization)}((void*)(a)); \
+            {gpu_utils.get_check_errors_str(parallelization, gpu_utils.get_memory_free_function(parallelization), opt_msg='Free: "#a" failed')} \
+            (a) = nullptr; \
+        }} \
+    }} while (0);
+"""
+    if parallelization == "cuda":
+        file_output_str += rf"""
+    #define BHAH_FREE_PINNED(a) \
+    do {{ \
+        if (a) {{ \
+            cudaFreeHost((void*)(a)); \
+            {gpu_utils.get_check_errors_str(parallelization, "cudaFreeHost", opt_msg='Free: "#a" failed')} \
+            (a) = nullptr; \
+        }} \
+    }} while (0);
+    #define BHAH_FREE_DEVICE__PtrMember(a, b) \
+    do {{ \
+        if (a) {{ \
+            decltype(a->b) tmp_ptr_##b = nullptr; \
+            cudaMemcpy(&tmp_ptr_##b, &a->b, sizeof(void *), cudaMemcpyDeviceToHost); \
+            if(tmp_ptr_##b) {{ \
+                BHAH_FREE_DEVICE(tmp_ptr_##b); \
+                cudaMemcpy(&a->b, &tmp_ptr_##b, sizeof(void *), cudaMemcpyHostToDevice); \
+            }}\
+        }} \
+    }} while(0);
+    #define BHAH_MALLOC_DEVICE__PtrMember(a, b, sz) \
+    do {{ \
+        if (a) {{ \
+            decltype(a->b) tmp_ptr_##b = nullptr; \
+            BHAH_MALLOC_DEVICE(tmp_ptr_##b, sz); \
+            cudaMemcpy(&a->b, &tmp_ptr_##b, sizeof(void *), cudaMemcpyHostToDevice); \
+        }} \
+    }} while(0);
+"""
+    file_output_str += r"#endif"
 
     file_output_str = file_output_str.replace("*restrict", restrict_pointer_type)
 
     bhah_defines_file = project_Path / "BHaH_defines.h"
     with bhah_defines_file.open("w", encoding="utf-8") as file:
-        file.write(
-            clang_format(file_output_str, clang_format_options=clang_format_options)
-        )
+        file.write(clang_format(file_output_str))
 
 
 if __name__ == "__main__":

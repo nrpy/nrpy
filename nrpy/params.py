@@ -73,7 +73,7 @@ class CodeParameter:
     ...     param_array = CodeParameter(cparam_type='REAL[5]', module='module3', name='param_array', commondata=False, add_to_set_CodeParameters_h=True, add_to_parfile=False)
     ... except ValueError as e:
     ...     print(e)
-    Parameter 'param_array' of type 'REAL[5]': For REAL or int array parameters, commondata must be True, and add_to_set_CodeParameters_h must be False.
+    Parameter 'param_array' of type 'REAL[5]': For REAL or int array parameters, add_to_set_CodeParameters_h must be False.
     >>> # Correct usage with commondata=True and add_to_set_CodeParameters_h=False
     >>> param_array_correct = CodeParameter(cparam_type='REAL[5]', module='module3', name='param_array_correct', defaultvalue=-10.1, commondata=True, add_to_set_CodeParameters_h=False, add_to_parfile=True)
     >>> param_array_correct.name in glb_code_params_dict
@@ -126,11 +126,10 @@ class CodeParameter:
             and "[" in self.cparam_type
             and "]" in self.cparam_type
         ):
-            if not (self.commondata and not self.add_to_set_CodeParameters_h):
+            if self.add_to_set_CodeParameters_h:
                 raise ValueError(
                     f"Parameter '{self.name}' of type '{self.cparam_type}': "
-                    "For REAL or int array parameters, commondata must be True, "
-                    "and add_to_set_CodeParameters_h must be False."
+                    "For REAL or int array parameters, add_to_set_CodeParameters_h must be False."
                 )
             arr_size = int(self.cparam_type.split("[")[1].split("]")[0])
             if isinstance(self.defaultvalue, list):
@@ -537,6 +536,13 @@ def adjust_CodeParam_default(CodeParameter_name: str, new_default: Any) -> None:
 # Valid default parameters.
 register_param(str, __name__, "Infrastructure", "BHaH")
 register_param(str, __name__, "fp_type", "double")
+register_param(str, __name__, "parallelization", "openmp")
+register_param(
+    str,
+    __name__,
+    "clang_format_options",
+    "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
+)
 
 if __name__ == "__main__":
     import doctest

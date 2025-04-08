@@ -25,11 +25,11 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
     >>> _real_array = par.register_CodeParameter("REAL[5]", "CodeParameters_c_files", "bad_real_array", 0.0, commondata=True, add_to_set_CodeParameters_h=True)
     Traceback (most recent call last):
     ...
-    ValueError: Parameter 'bad_real_array' of type 'REAL[5]': For REAL or int array parameters, commondata must be True, and add_to_set_CodeParameters_h must be False.
-    >>> _int_array = par.register_CodeParameter("int[3]", "CodeParameters_c_files", "bad_int_array", 42, commondata=False, add_to_set_CodeParameters_h=False)
+    ValueError: Parameter 'bad_real_array' of type 'REAL[5]': For REAL or int array parameters, add_to_set_CodeParameters_h must be False.
+    >>> _int_array = par.register_CodeParameter("int[3]", "CodeParameters_c_files", "bad_int_array", 42, commondata=False, add_to_set_CodeParameters_h=True)
     Traceback (most recent call last):
     ...
-    ValueError: Parameter 'bad_int_array' of type 'int[3]': For REAL or int array parameters, commondata must be True, and add_to_set_CodeParameters_h must be False.
+    ValueError: Parameter 'bad_int_array' of type 'int[3]': For REAL or int array parameters, add_to_set_CodeParameters_h must be False.
     >>> _, __ = par.register_CodeParameters("REAL", "CodeParameters_c_files", ["a", "pi_three_sigfigs"], [1, 3.14], commondata=True)
     >>> ___ = par.register_CodeParameter("#define", "CodeParameters_c_files", "b", 0)
     >>> _leaveitbe = par.register_CodeParameter("REAL", "CodeParameters_c_files", "leaveitbe", add_to_parfile=False, add_to_set_CodeParameters_h=False)
@@ -147,7 +147,6 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
 def write_CodeParameters_h_files(
     project_dir: str,
     set_commondata_only: bool = False,
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
     r"""
     Generate C code to set C parameter constants and write them to files.
@@ -155,7 +154,6 @@ def write_CodeParameters_h_files(
     :param project_dir: The path of the project directory.
     :param set_commondata_only: If True, generate code parameters only if `commondata=True`.
         Useful for BHaH projects without grids, like SEOBNR.
-    :param clang_format_options: Options for clang_format.
 
     DocTests:
     >>> project_dir = Path("/tmp/tmp_project/")
@@ -249,7 +247,6 @@ def write_CodeParameters_h_files(
         file.write(
             clang_format(
                 gen_set_CodeParameters(pointerEnable=True),
-                clang_format_options=clang_format_options,
             )
         )
 
@@ -258,7 +255,6 @@ def write_CodeParameters_h_files(
         file.write(
             clang_format(
                 gen_set_CodeParameters(pointerEnable=False),
-                clang_format_options=clang_format_options,
             )
         )
 
@@ -293,7 +289,6 @@ def write_CodeParameters_h_files(
         file.write(
             clang_format(
                 set_CodeParameters_SIMD_str,
-                clang_format_options=clang_format_options,
             )
         )
 

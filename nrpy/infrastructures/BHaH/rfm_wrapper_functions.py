@@ -108,11 +108,12 @@ def register_CFunctions_CoordSystem_wrapper_funcs() -> None:
             params=base_CFunc.params,
             include_CodeParameters_h=False,
             body=wrapper_body,
-            clang_format_options=base_CFunc.clang_format_options,
         )
 
     BHd_str = ""
-    for key, item in CoordSystem_hash_dict.items():
+    for key, item in sorted(
+        CoordSystem_hash_dict.items(), key=lambda kv: kv[0].upper()
+    ):
         BHd_str += f"#define {key.upper()} {item}\n"
     register_BHaH_defines(__name__, BHd_str)
 

@@ -210,7 +210,7 @@ param_descriptor param_table[] = {
     # Generate the param_table and NUM_PARAMS
     param_table_str = ",\n".join(param_table_entries) + "\n};\n"
     param_table_str += (
-        "#define NUM_PARAMS (sizeof(param_table) / sizeof(param_descriptor))\n\n"
+        "#define NUM_PARAMS (int)(sizeof(param_table) / sizeof(param_descriptor))\n\n"
     )
 
     prefunc += param_table_str

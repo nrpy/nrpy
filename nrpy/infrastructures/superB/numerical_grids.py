@@ -62,7 +62,7 @@ if (Nchare2 > 1 && params->Nxx2 / Nchare2 < NGHOSTS) {
         body += f"params_chare->Nxx{dirn} = params->Nxx{dirn}/Nchare{dirn};\n"
     body += rf"""
 const REAL grid_physical_size = params_chare->grid_physical_size;
-snprintf(params_chare->CoordSystemName, 50, "{CoordSystem}");
+snprintf(params_chare->CoordSystemName, 100, "{CoordSystem}");
 
 params_chare->Nxx_plus_2NGHOSTS0 = params_chare->Nxx0 + 2*NGHOSTS;
 params_chare->Nxx_plus_2NGHOSTS1 = params_chare->Nxx1 + 2*NGHOSTS;

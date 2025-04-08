@@ -20,7 +20,6 @@ def register_CFunction_main_c(
     pre_diagnostics: str = "",
     pre_MoL_step_forward_in_time: str = "",
     post_MoL_step_forward_in_time: str = "",
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
     """
     Generate the "generic" C main() function for all simulation codes in the BHaH infrastructure.
@@ -34,7 +33,6 @@ def register_CFunction_main_c(
     :param pre_diagnostics: Function calls prior to diagnostics; e.g., regridding. Default is an empty string.
     :param pre_MoL_step_forward_in_time: Function calls AFTER diagnostics and prior to each right-hand-side update, default is an empty string.
     :param post_MoL_step_forward_in_time: Function calls after each right-hand-side update, default is an empty string.
-    :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
     :raises ValueError: Raised if any required function for BHaH main() is not registered.
     """
     # Make sure all required C functions are registered
@@ -196,5 +194,4 @@ return 0;
         name=name,
         params=params,
         body=body,
-        clang_format_options=clang_format_options,
     )

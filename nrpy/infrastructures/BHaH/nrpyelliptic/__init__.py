@@ -1,1 +1,7 @@
-from . import constant_source_terms_to_auxevol, diagnostics, initial_data, rhs_eval, variable_wavespeed_gfs
+from . import (
+    constant_source_terms_to_auxevol,
+    diagnostics,
+    initial_data,
+    rhs_eval,
+    variable_wavespeed_gfs,
+)

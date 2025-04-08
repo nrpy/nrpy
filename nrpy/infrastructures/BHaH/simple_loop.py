@@ -15,6 +15,7 @@ import sympy as sp
 
 import nrpy.helpers.loop as lp
 import nrpy.indexedexp as ixp
+import nrpy.params as par
 
 implemented_loop_regions = ["", "all points", "interior", "interior plus one upper"]
 
@@ -84,7 +85,6 @@ def simple_loop(
     enable_OpenMP: bool = True,
     OMP_custom_pragma: str = "",
     OMP_collapse: int = 1,
-    parallelization: str = "openmp",
 ) -> str:
     """
     Generate a simple loop in C (for use inside of a function).
@@ -98,7 +98,6 @@ def simple_loop(
     :param enable_OpenMP: Enable loop parallelization using OpenMP
     :param OMP_custom_pragma: Enable loop parallelization using OpenMP with custom pragma
     :param OMP_collapse: Specifies the number of nested loops to collapse
-    :param parallelization: Parallelization method to use. Default is "openmp".
     :return: The complete loop code as a string.
     :raises ValueError: If `loop_region` is unsupported or if `read_xxs` and `enable_rfm_precompute` are both enabled.
 
@@ -179,10 +178,11 @@ def simple_loop(
     } // END LOOP: for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++)
     <BLANKLINE>
     """
+    parallelization = par.parval_from_str("parallelization")
     # 'AllPoints': loop over all points on a numerical grid, including ghost zones
     if loop_region == "":
         return loop_body
-    elif loop_region not in implemented_loop_regions:
+    if loop_region not in implemented_loop_regions:
         raise ValueError(implemented_loop_regions_err(loop_region))
     i2i1i0_mins, i2i1i0_maxs = get_loop_region_ranges(
         loop_region, min_idx_prefix="tid" if parallelization == "cuda" else None
@@ -222,9 +222,7 @@ def simple_loop(
         # pylint: disable=C0415
         from nrpy.infrastructures.BHaH import rfm_precompute
 
-        rfmp = rfm_precompute.ReferenceMetricPrecompute(
-            CoordSystem, parallelization=parallelization
-        )
+        rfmp = rfm_precompute.ReferenceMetricPrecompute(CoordSystem)
         if enable_intrinsics:
             read_rfm_xx_arrays = [
                 rfmp.readvr_intrinsics_inner_str[0],
@@ -446,7 +444,8 @@ LOOP_NOOMP(i0_pt,0,numpts_i0, i1_pt,0,numpts_i1, i2_pt,0,numpts_i2) {{
   const int i0 = i0_pts[i0_pt], i1 = i1_pts[i1_pt], i2 = i2_pts[i2_pt];
   const int idx3 = IDX3(i0, i1, i2);
   REAL xCart[3];
-  xx_to_Cart(commondata, params, xx, i0, i1, i2, xCart);
+  REAL xOrig[3] = {{xx[0][i0], xx[1][i1], xx[2][i2]}};
+  xx_to_Cart(params, xOrig, xCart);
 
   {loop_body_store_results}
 }}
@@ -646,7 +645,8 @@ LOOP_NOOMP(i0_pt,0,numpts_i0, i1_pt,0,numpts_i1, i2_pt,0,numpts_i2) {
   const int i0 = i0_pts[i0_pt], i1 = i1_pts[i1_pt], i2 = i2_pts[i2_pt];
   const int idx3 = IDX3(i0, i1, i2);
   REAL xCart[3];
-  xx_to_Cart(commondata, params, xx, i0, i1, i2, xCart);
+  REAL xOrig[3] = {xx[0][i0], xx[1][i1], xx[2][i2]};
+  xx_to_Cart(params, xOrig, xCart);
 """
     out_string += "{\n"
     out_string += "// Collect diagnostic data\n"

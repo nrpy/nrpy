@@ -387,7 +387,6 @@ def output_timestepping_h(
     project_dir: str,
     enable_residual_diagnostics: bool = False,
     enable_psi4_diagnostics: bool = False,
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
     enable_charm_checkpointing: bool = False,
     enable_L2norm_BSSN_constraints_diagnostics: bool = False,
 ) -> None:
@@ -397,7 +396,6 @@ def output_timestepping_h(
     :param project_dir: Directory where the project C code is output.
     :param enable_residual_diagnostics: Flag to enable residual diagnostics, default is False.
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
-    :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     :param enable_L2norm_BSSN_constraints_diagnostics: Whether or not to enable L2norm of BSSN_constraints diagnostics.
     """
@@ -493,9 +491,7 @@ class Timestepping : public CBase_Timestepping {
 """
     timestepping_h_file = project_Path / "timestepping.h"
     with timestepping_h_file.open("w", encoding="utf-8") as file:
-        file.write(
-            clang_format(file_output_str, clang_format_options=clang_format_options)
-        )
+        file.write(clang_format(file_output_str))
 
 
 def generate_switch_statement_for_gf_types(
@@ -736,7 +732,6 @@ def output_timestepping_cpp(
     initialize_constant_auxevol: bool = False,
     enable_residual_diagnostics: bool = False,
     enable_psi4_diagnostics: bool = False,
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
     enable_charm_checkpointing: bool = False,
     enable_L2norm_BSSN_constraints_diagnostics: bool = False,
 ) -> None:
@@ -752,7 +747,6 @@ def output_timestepping_cpp(
     :param initialize_constant_auxevol: If set to True, `initialize_constant_auxevol` function will be called during the simulation initialization phase to set these constants. Default is False.
     :param enable_residual_diagnostics: Enable residual diagnostics, default is False.
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
-    :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     :param enable_L2norm_BSSN_constraints_diagnostics: Enable diagnostics for the L2 norm of BSSN constraint violations.
     :raises ValueError: Raised if any required function is not registered.
@@ -1428,9 +1422,7 @@ void Timestepping::process_nonlocalinnerbc(const int type_gfs, const int grid) {
 
     timestepping_cpp_file = project_Path / "timestepping.cpp"
     with timestepping_cpp_file.open("w", encoding="utf-8") as file:
-        file.write(
-            clang_format(file_output_str, clang_format_options=clang_format_options)
-        )
+        file.write(clang_format(file_output_str))
 
 
 def output_timestepping_ci(
@@ -1441,7 +1433,6 @@ def output_timestepping_ci(
     pre_MoL_step_forward_in_time: str = "",
     post_MoL_step_forward_in_time: str = "",
     outer_bcs_type: str = "radiation",
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
     enable_psi4_diagnostics: bool = False,
     enable_residual_diagnostics: bool = False,
     enable_charm_checkpointing: bool = False,
@@ -1457,7 +1448,6 @@ def output_timestepping_ci(
     :param pre_MoL_step_forward_in_time: Code for handling pre-right-hand-side operations, default is an empty string.
     :param post_MoL_step_forward_in_time: Code for handling post-right-hand-side operations, default is an empty string.
     :param outer_bcs_type: type of outer boundary BCs to apply. Only options are radiation or extrapolation in superB.
-    :param clang_format_options: Clang formatting options, default is "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     :param enable_residual_diagnostics: Whether or not to enable residual diagnostics.
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
@@ -2058,9 +2048,7 @@ def output_timestepping_ci(
 
     timestepping_ci_file = project_Path / "timestepping.ci"
     with timestepping_ci_file.open("w", encoding="utf-8") as file:
-        file.write(
-            clang_format(file_output_str, clang_format_options=clang_format_options)
-        )
+        file.write(clang_format(file_output_str))
 
 
 def output_timestepping_h_cpp_ci_register_CFunctions(
