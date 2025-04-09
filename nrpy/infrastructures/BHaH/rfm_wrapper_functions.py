@@ -108,6 +108,7 @@ def register_CFunctions_CoordSystem_wrapper_funcs() -> None:
             params=base_CFunc.params,
             include_CodeParameters_h=False,
             body=wrapper_body,
+            cfunc_decorators=base_CFunc.cfunc_decorators,
         )
 
     BHd_str = ""
