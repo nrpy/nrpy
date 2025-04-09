@@ -212,7 +212,7 @@ if enable_rfm_precompute:
 nrpyelliptic.rhs_eval.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
-    enable_simd=enable_simd,
+    enable_intrinsics=enable_simd,
     OMP_collapse=OMP_collapse,
 )
 
@@ -220,7 +220,7 @@ nrpyelliptic.rhs_eval.register_CFunction_rhs_eval(
 nrpyelliptic.diagnostics.register_CFunction_compute_residual_all_points(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
-    enable_simd=enable_simd,
+    enable_intrinsics=enable_simd,
     OMP_collapse=OMP_collapse,
 )
 
