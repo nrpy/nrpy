@@ -239,7 +239,7 @@ if(r < integration_radius) {
 def register_CFunction_compute_residual_all_points(
     CoordSystem: str,
     enable_rfm_precompute: bool,
-    enable_simd: bool,
+    enable_intrinsics: bool,
     OMP_collapse: int,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
@@ -251,7 +251,7 @@ def register_CFunction_compute_residual_all_points(
 
     :param CoordSystem: The coordinate system.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
-    :param enable_simd: Whether to enable SIMD.
+    :param enable_intrinsics: Whether to enable hardware intrinsics (e.g. simd).
     :param OMP_collapse: Level of OpenMP loop collapsing.
 
     :return: None if in registration phase, else the updated NRPy environment.
@@ -260,9 +260,14 @@ def register_CFunction_compute_residual_all_points(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
+    parallelization = par.parval_from_str("parallelization")
     includes = ["BHaH_defines.h"]
-    if enable_simd:
-        includes += [str(Path("intrinsics") / "simd_intrinsics.h")]
+    if enable_intrinsics:
+        includes += (
+            [str(Path("intrinsics") / "cuda_intrinsics.h")]
+            if parallelization in ["cuda"]
+            else [str(Path("intrinsics") / "simd_intrinsics.h")]
+        )
     desc = r"""Compute residual of the Hamiltonian constraint for the hyperbolic relaxation equation."""
     cfunc_type = "void"
     name = "compute_residual_all_points"
@@ -275,33 +280,84 @@ def register_CFunction_compute_residual_all_points(
         )
     # Populate residual_H
     rhs = HyperbolicRelaxationCurvilinearRHSs(CoordSystem, enable_rfm_precompute)
-    body = lp.simple_loop(
+    loop_body = lp.simple_loop(
         loop_body=ccg.c_codegen(
             [rhs.residual],
             [
                 gri.BHaHGridFunction.access_gf("residual_H", gf_array_name="aux_gfs"),
             ],
             enable_fd_codegen=True,
-            enable_simd=enable_simd,
-        ),
+            enable_simd=enable_intrinsics,
+        ).replace("SIMD", "CUDA" if parallelization == "cuda" else "SIMD"),
         loop_region="interior",
-        enable_intrinsics=enable_simd,
+        enable_intrinsics=enable_intrinsics,
         CoordSystem=CoordSystem,
         enable_rfm_precompute=enable_rfm_precompute,
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
     )
 
+    loop_params = parallel_utils.get_loop_parameters(
+        parallelization, enable_intrinsics=enable_intrinsics
+    )
+
+    params_symbols, _ = get_params_commondata_symbols_from_expr_list(
+        [rhs.residual], exclude=[f"xx{i}" for i in range(3)]
+    )
+    loop_params += "// Load necessary parameters from params_struct\n"
+    for param in params_symbols:
+        loop_params += f"const REAL {param} = {parallel_utils.get_params_access(parallelization)}{param};\n"
+    loop_params += "\n"
+
+    comments = "Kernel to compute the residual throughout the grid."
+
+    # Prepare the argument dicts
+    arg_dict_cuda = (
+        {"rfmstruct": "const rfm_struct *restrict"}
+        if enable_rfm_precompute
+        else {f"x{i}": "const REAL *restrict" for i in range(3)}
+    )
+    arg_dict_cuda.update(
+        {
+            "auxevol_gfs": "const REAL *restrict",
+            "in_gfs": "const REAL *restrict",
+            "aux_gfs": "REAL *restrict",
+        }
+    )
+    arg_dict_host = {
+        "params": "const params_struct *restrict",
+        **arg_dict_cuda,
+    }
+
+    kernel_body = f"{loop_params}\n{loop_body}"
+    prefunc, new_body = parallel_utils.generate_kernel_and_launch_code(
+        name,
+        kernel_body,
+        arg_dict_cuda,
+        arg_dict_host,
+        parallelization=parallelization,
+        comments=comments,
+        launch_dict={
+            "blocks_per_grid": [],
+            "threads_per_block": ["32", "NGHOSTS"],
+            "stream": "default",
+        },
+        thread_tiling_macro_suffix="NELL_H",
+    )
+
+    body = f"{new_body}\n"
+
     cfc.register_CFunction(
-        include_CodeParameters_h=True,
+        prefunc=prefunc,
+        include_CodeParameters_h=False,
         includes=includes,
         desc=desc,
         cfunc_type=cfunc_type,
-        CoordSystem_for_wrapper_func="",
+        CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,
         body=body,
-        enable_simd=enable_simd,
+        enable_simd=enable_intrinsics,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
