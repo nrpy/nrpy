@@ -307,6 +307,7 @@ def check_zero(
 
     :param expression: The SymPy expression to check.
     :param fixed_mpfs_for_free_symbols: Whether to fix mpf values for free symbols
+    :param hex_offset: Offset for random number; zero by default.
     :param verbose: Flag for additional output.
     :return: True if the expression evaluates to zero, else False.
 
