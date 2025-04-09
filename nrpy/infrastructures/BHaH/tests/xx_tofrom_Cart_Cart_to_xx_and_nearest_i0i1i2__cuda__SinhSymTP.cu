@@ -20,23 +20,22 @@ __host__ __device__ void Cart_to_xx_and_nearest_i0i1i2__rfm__SinhSymTP(const par
   {
     /*
      *  Original SymPy expressions:
-     *  "[xx[0] = params->SINHWAA*acsch(sqrt(2)*params->AMAX*csch(1/params->SINHWAA)/sqrt(Cartx**2 + Carty**2 + Cartz**2 - params->bScale**2 +
-     * sqrt((Cartx**2 + Carty**2 + (-Cartz + params->bScale)**2)*(Cartx**2 + Carty**2 + (Cartz + params->bScale)**2))))]"
+     *  "[xx[0] = params->SINHWAA*log(sqrt(1 + (Cartx**2 + Carty**2 + Cartz**2 - params->bScale**2 + sqrt((Cartx**2 + Carty**2 + (-Cartz +
+     * params->bScale)**2)*(Cartx**2 + Carty**2 + (Cartz + params->bScale)**2)))/(2*params->AMAX**2*csch(1/params->SINHWAA)**2)) +
+     * sqrt(2)*sqrt(Cartx**2 + Carty**2 + Cartz**2 - params->bScale**2 + sqrt((Cartx**2 + Carty**2 + (-Cartz + params->bScale)**2)*(Cartx**2 +
+     * Carty**2 + (Cartz + params->bScale)**2)))/(2*params->AMAX*csch(1/params->SINHWAA)))]"
      *  "[xx[1] = acos(sqrt(2)*Cartz/sqrt(Cartx**2 + Carty**2 + Cartz**2 + params->bScale**2 + sqrt((Cartx**2 + Carty**2 + (-Cartz +
      * params->bScale)**2)*(Cartx**2 + Carty**2 + (Cartz + params->bScale)**2))))]"
      *  "[xx[2] = atan2(Carty, Cartx)]"
      */
+    const REAL tmp0 = ((1.0 / ((1.0 / 2.0) * exp(exp(-log(params->SINHWAA))) - 1.0 / 2.0 * exp(-1 / params->SINHWAA))));
     const REAL tmp2 = ((Cartx) * (Cartx)) + ((Carty) * (Carty));
     const REAL tmp3 =
         ((Cartz) * (Cartz)) + tmp2 +
         sqrt((tmp2 + ((-Cartz + params->bScale) * (-Cartz + params->bScale))) * (tmp2 + ((Cartz + params->bScale) * (Cartz + params->bScale))));
-    xx[0] = params->SINHWAA *
-            (log(sqrt(1 + (1.0 / 2.0) * (-((params->bScale) * (params->bScale)) + tmp3) /
-                              (((params->AMAX) * (params->AMAX)) *
-                               ((((1.0 / ((1.0 / 2.0) * exp(exp(-log(params->SINHWAA))) - 1.0 / 2.0 * exp(-1 / params->SINHWAA))))) *
-                                (((1.0 / ((1.0 / 2.0) * exp(exp(-log(params->SINHWAA))) - 1.0 / 2.0 * exp(-1 / params->SINHWAA)))))))) +
-                 (1.0 / 2.0) * M_SQRT2 * sqrt(-((params->bScale) * (params->bScale)) + tmp3) /
-                     (params->AMAX * ((1.0 / ((1.0 / 2.0) * exp(exp(-log(params->SINHWAA))) - 1.0 / 2.0 * exp(-1 / params->SINHWAA)))))));
+    const REAL tmp4 = -((params->bScale) * (params->bScale)) + tmp3;
+    xx[0] = params->SINHWAA * log(sqrt(1 + (1.0 / 2.0) * tmp4 / (((params->AMAX) * (params->AMAX)) * ((tmp0) * (tmp0)))) +
+                                  (1.0 / 2.0) * M_SQRT2 * sqrt(tmp4) / (params->AMAX * tmp0));
     xx[1] = acos(M_SQRT2 * Cartz / sqrt(((params->bScale) * (params->bScale)) + tmp3));
     xx[2] = atan2(Carty, Cartx);
 

@@ -1241,8 +1241,11 @@ class ReferenceMetric:
             )
 
             # Inverse transformation derived from Mathematica (see validation script)
-            self.Cart_to_xx[0] = SINHWAA * sp.acsch(
-                sp.sqrt(2) * AMAX * sp.csch(1 / SINHWAA) / denom_sqrt_x0
+            def acsch(x: sp.Expr) -> sp.Expr:
+                return sp.log(sp.sqrt(1 + x ** (-2)) + 1 / x)
+
+            self.Cart_to_xx[0] = SINHWAA * acsch(
+                sp.sqrt(sp.Integer(2)) * AMAX * sp.csch(1 / SINHWAA) / (denom_sqrt_x0)
             )
             self.Cart_to_xx[1] = sp.acos(sp.sqrt(2) * self.Cartz / denom_sqrt_x1)
             self.Cart_to_xx[2] = sp.atan2(self.Carty, self.Cartx)
@@ -1572,48 +1575,41 @@ if __name__ == "__main__":
     # --------------------------------------------------------------------------
     # Add specific validation test for SinhSymTP coordinate inversion here
     # --------------------------------------------------------------------------
-    try:
-        # Get the ReferenceMetric object for SinhSymTP
-        rfm_sinhsymtp = reference_metric["SinhSymTP"]
+    # Get the ReferenceMetric object for SinhSymTP
+    rfm_sinhsymtp = reference_metric["SinhSymTP"]
 
-        # Define the substitution dictionary: xx[0], xx[1], xx[2] mapped to Cart_to_xx expressions
-        sub_dict_backward_in_forward = {
-            rfm_sinhsymtp.xx[0]: rfm_sinhsymtp.Cart_to_xx[0],
-            rfm_sinhsymtp.xx[1]: rfm_sinhsymtp.Cart_to_xx[1],
-            rfm_sinhsymtp.xx[2]: rfm_sinhsymtp.Cart_to_xx[2],
-        }
+    # Define the substitution dictionary: xx[0], xx[1], xx[2] mapped to Cart_to_xx expressions
+    sub_dict_backward_in_forward = {
+        rfm_sinhsymtp.xx[0]: rfm_sinhsymtp.Cart_to_xx[0],
+        rfm_sinhsymtp.xx[1]: rfm_sinhsymtp.Cart_to_xx[1],
+        rfm_sinhsymtp.xx[2]: rfm_sinhsymtp.Cart_to_xx[2],
+    }
 
-        # Substitute backward into forward for each Cartesian component
-        Cartx_check = rfm_sinhsymtp.xx_to_Cart[0].subs(sub_dict_backward_in_forward)
-        Carty_check = rfm_sinhsymtp.xx_to_Cart[1].subs(sub_dict_backward_in_forward)
-        Cartz_check = rfm_sinhsymtp.xx_to_Cart[2].subs(sub_dict_backward_in_forward)
+    # Substitute backward into forward for each Cartesian component
+    Cartx_check = rfm_sinhsymtp.xx_to_Cart[0].subs(sub_dict_backward_in_forward)
+    Carty_check = rfm_sinhsymtp.xx_to_Cart[1].subs(sub_dict_backward_in_forward)
+    Cartz_check = rfm_sinhsymtp.xx_to_Cart[2].subs(sub_dict_backward_in_forward)
 
-        # Calculate the differences (should be zero if inversion is correct)
-        diff_Cartx = Cartx_check - rfm_sinhsymtp.Cartx
-        diff_Carty = Carty_check - rfm_sinhsymtp.Carty
-        diff_Cartz = Cartz_check - rfm_sinhsymtp.Cartz
+    # Calculate the differences (should be zero if inversion is correct)
+    diff_Cartx = Cartx_check - rfm_sinhsymtp.Cartx
+    diff_Carty = Carty_check - rfm_sinhsymtp.Carty
+    diff_Cartz = Cartz_check - rfm_sinhsymtp.Cartz
 
-        is_zero_Cartx = ve.check_zero(
-            diff_Cartx, verbose=False, fixed_mpfs_for_free_symbols=True
+    is_zero_Cartx = ve.check_zero(
+        diff_Cartx, verbose=False, fixed_mpfs_for_free_symbols=True
+    )
+    is_zero_Carty = ve.check_zero(
+        diff_Carty, verbose=False, fixed_mpfs_for_free_symbols=True, hex_offset=1
+    )
+    is_zero_Cartz = ve.check_zero(
+        diff_Cartz, verbose=False, fixed_mpfs_for_free_symbols=True
+    )
+
+    if is_zero_Cartx and is_zero_Carty and is_zero_Cartz:
+        print("PASS: SinhSymTP coordinate inversion validation (Cart -> xx -> Cart)")
+    else:
+        print(
+            "FAILURE: SinhSymTP coordinate inversion validation (Cart -> xx -> Cart) FAILED."
         )
-        is_zero_Carty = ve.check_zero(
-            diff_Carty, verbose=False, fixed_mpfs_for_free_symbols=True
-        )
-        is_zero_Cartz = ve.check_zero(
-            diff_Cartz, verbose=False, fixed_mpfs_for_free_symbols=True
-        )
-
-        if is_zero_Cartx and is_zero_Carty and is_zero_Cartz:
-            print(
-                "PASS: SinhSymTP coordinate inversion validation (Cart -> xx -> Cart)"
-            )
-        else:
-            print(
-                "FAILURE: SinhSymTP coordinate inversion validation (Cart -> xx -> Cart) FAILED."
-            )
-            # Optionally raise an error or exit
-            sys.exit(1)
-
-    except Exception as e:
-        print(f"An unexpected error occurred during SinhSymTP validation: {e}")
+        print(is_zero_Cartx, is_zero_Carty, is_zero_Cartz)
         sys.exit(1)

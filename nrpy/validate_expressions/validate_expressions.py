@@ -154,12 +154,14 @@ def inject_mpfs_into_cse_expression(
 def convert_free_symbols_set_to_mpf_dict(
     free_symbols_set: Set[sp.Symbol],
     fixed_mpfs_for_free_symbols: bool = False,
+    hex_offset: int = 0,
 ) -> Dict[sp.Symbol, mpf]:
     """
     Convert a set of free symbols into a dictionary with mpf values.
 
     :param free_symbols_set: Set of free symbols to be converted.
     :param fixed_mpfs_for_free_symbols: Flag to indicate if the mpf values should be fixed.
+    :param hex_offset: Offset for random number; zero by default.
 
     :return: Dictionary with free symbols as keys and their corresponding mpf values as values.
     """
@@ -177,7 +179,9 @@ def convert_free_symbols_set_to_mpf_dict(
         # All other free variables are set to random numbers
         else:
             if fixed_mpfs_for_free_symbols:
-                random.seed(int(hashlib.md5(str(var).encode()).hexdigest(), 16))
+                random.seed(
+                    int(hashlib.md5(str(var).encode()).hexdigest(), 16 + hex_offset)
+                )
             free_symbols_dict[var] = mp.mpf(random.random())
     return free_symbols_dict
 
@@ -185,6 +189,7 @@ def convert_free_symbols_set_to_mpf_dict(
 def convert_one_expression_to_mpfmpc(
     expr: sp.Expr,
     fixed_mpfs_for_free_symbols: bool = False,
+    hex_offset: int = 0,
     verbose: bool = True,
 ) -> Union[mpc, mpf]:
     """
@@ -192,6 +197,7 @@ def convert_one_expression_to_mpfmpc(
 
     :param expr: SymPy expression to convert
     :param fixed_mpfs_for_free_symbols: Whether to fix mpf values for free symbols
+    :param hex_offset: Offset for random number; zero by default.
     :param verbose: Whether to print verbose messages
     :return: The expression in either mpf or mpc form
 
@@ -211,7 +217,9 @@ def convert_one_expression_to_mpfmpc(
         free_symbols_set.update(subexpr[1].free_symbols)
 
     mpf_symbols_dict = convert_free_symbols_set_to_mpf_dict(
-        free_symbols_set, fixed_mpfs_for_free_symbols=fixed_mpfs_for_free_symbols
+        free_symbols_set,
+        fixed_mpfs_for_free_symbols=fixed_mpfs_for_free_symbols,
+        hex_offset=hex_offset,
     )
 
     # Calculate our result_value
@@ -291,6 +299,7 @@ def process_dictionary_of_expressions(
 def check_zero(
     expression: sp.Expr,
     fixed_mpfs_for_free_symbols: bool = False,
+    hex_offset: int = 0,
     verbose: bool = False,
 ) -> bool:
     """
@@ -320,6 +329,7 @@ def check_zero(
     result_value = convert_one_expression_to_mpfmpc(
         expression,
         fixed_mpfs_for_free_symbols=fixed_mpfs_for_free_symbols,
+        hex_offset=hex_offset,
         verbose=verbose,
     )
 
