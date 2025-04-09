@@ -1244,8 +1244,11 @@ class ReferenceMetric:
             def acsch(x: sp.Expr) -> sp.Expr:
                 return sp.log(sp.sqrt(1 + x ** (-2)) + 1 / x)
 
+            def csch(x: sp.Expr) -> sp.Expr:
+                return 2 / (sp.exp(x) - sp.exp(-x))
+
             self.Cart_to_xx[0] = SINHWAA * acsch(
-                sp.sqrt(sp.Integer(2)) * AMAX * sp.csch(1 / SINHWAA) / (denom_sqrt_x0)
+                sp.sqrt(sp.Integer(2)) * AMAX * csch(1 / SINHWAA) / (denom_sqrt_x0)
             )
             self.Cart_to_xx[1] = sp.acos(sp.sqrt(2) * self.Cartz / denom_sqrt_x1)
             self.Cart_to_xx[2] = sp.atan2(self.Carty, self.Cartx)
@@ -1572,6 +1575,7 @@ if __name__ == "__main__":
             f"{os.path.splitext(os.path.basename(__file__))[0]}_{Coord}",
             results_dict,
         )
+
     # --------------------------------------------------------------------------
     # Add specific validation test for SinhSymTP coordinate inversion here
     # --------------------------------------------------------------------------
@@ -1596,13 +1600,13 @@ if __name__ == "__main__":
     diff_Cartz = Cartz_check - rfm_sinhsymtp.Cartz
 
     is_zero_Cartx = ve.check_zero(
-        diff_Cartx, verbose=False, fixed_mpfs_for_free_symbols=True
+        diff_Cartx, verbose=False, fixed_mpfs_for_free_symbols=True, hex_offset=1
     )
     is_zero_Carty = ve.check_zero(
-        diff_Carty, verbose=False, fixed_mpfs_for_free_symbols=True, hex_offset=1
+        diff_Carty, verbose=False, fixed_mpfs_for_free_symbols=True, hex_offset=0
     )
     is_zero_Cartz = ve.check_zero(
-        diff_Cartz, verbose=False, fixed_mpfs_for_free_symbols=True
+        diff_Cartz, verbose=False, fixed_mpfs_for_free_symbols=True, hex_offset=0
     )
 
     if is_zero_Cartx and is_zero_Carty and is_zero_Cartz:
