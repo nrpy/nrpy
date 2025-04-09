@@ -81,6 +81,9 @@ def register_CFunction_initial_guess_all_points(
     cfunc_type = "void"
     name = "initial_data"
     params = (
+        "commondata_struct *restrict commondata, griddata_struct *restrict griddata_host, griddata_struct *restrict griddata"
+        if parallelization in ["cuda"]
+        else
         "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
     )
     uu_gf_memaccess = gri.BHaHGridFunction.access_gf("uu")
