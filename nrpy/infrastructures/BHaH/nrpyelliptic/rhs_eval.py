@@ -77,7 +77,7 @@ def register_CFunction_rhs_eval(
             ],
             enable_fd_codegen=True,
             enable_simd=enable_intrinsics,
-        ),
+        ).replace("SIMD", "CUDA" if parallelization == "cuda" else "SIMD"),
         loop_region="interior",
         enable_intrinsics=enable_intrinsics,
         CoordSystem=CoordSystem,
