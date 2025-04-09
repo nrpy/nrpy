@@ -91,7 +91,7 @@ def register_CFunction_auxevol_gfs_single_point(
 
 
 def register_CFunction_auxevol_gfs_all_points(
-    OMP_collapse: int,
+    OMP_collapse: int = 1,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the C function for the AUXEVOL grid functions at all points.

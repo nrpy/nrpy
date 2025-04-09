@@ -38,7 +38,7 @@ def register_CFunction_compute_L2_norm_of_gridfunction(
     :param CoordSystem: the rfm coordinate system.
     """
     parallelization = par.parval_from_str("parallelization")
-    includes = ["BHaH_defines.h"]
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "Compute l2-norm of a gridfunction assuming a single grid."
     cfunc_type = "REAL"
     name = "compute_L2_norm_of_gridfunction"
@@ -179,6 +179,7 @@ if(r < integration_radius) {
     body = r"""
   params_struct *restrict params = &griddata->params;
 #include "set_CodeParameters.h"
+  MAYBE_UNUSED const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
   REAL *restrict x0 = griddata->xx[0];
   REAL *restrict x1 = griddata->xx[1];
   REAL *restrict x2 = griddata->xx[2];
@@ -240,7 +241,7 @@ def register_CFunction_compute_residual_all_points(
     CoordSystem: str,
     enable_rfm_precompute: bool,
     enable_intrinsics: bool,
-    OMP_collapse: int,
+    OMP_collapse: int = 1,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the residual evaluation function.
