@@ -15,8 +15,11 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
+import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.infrastructures.BHaH.simple_loop as lp
+import nrpy.params as par
 import nrpy.reference_metric as refmetric
+from nrpy.helpers.expression_utils import get_params_commondata_symbols_from_expr_list
 
 
 def register_CFunction_variable_wavespeed_gfs_all_points(
@@ -42,12 +45,13 @@ def register_CFunction_variable_wavespeed_gfs_all_points(
 
     rfm = refmetric.reference_metric[CoordSystem]
     dxx0, dxx1, dxx2 = sp.symbols("dxx0 dxx1 dxx2", real=True)
+    expr_list = [
+        rfm.scalefactor_orthog[0] * dxx0,
+        rfm.scalefactor_orthog[1] * dxx1,
+        rfm.scalefactor_orthog[2] * dxx2,
+    ]
     dsmin_computation_str = ccg.c_codegen(
-        [
-            rfm.scalefactor_orthog[0] * dxx0,
-            rfm.scalefactor_orthog[1] * dxx1,
-            rfm.scalefactor_orthog[2] * dxx2,
-        ],
+        expr_list,
         ["const REAL dsmin0", "const REAL dsmin1", "const REAL dsmin2"],
         include_braces=False,
     )
@@ -61,23 +65,77 @@ def register_CFunction_variable_wavespeed_gfs_all_points(
   // Unpack griddata struct:
   params_struct *restrict params = &griddata[grid].params;
 #include "set_CodeParameters.h"
-  REAL *restrict xx[3];
-  for (int ww = 0; ww < 3; ww++)
-    xx[ww] = griddata[grid].xx[ww];
+  REAL *restrict x0 = griddata[grid].xx[0];
+  REAL *restrict x1 = griddata[grid].xx[1];
+  REAL *restrict x2 = griddata[grid].xx[2];
   REAL *restrict in_gfs = griddata[grid].gridfuncs.auxevol_gfs;
 """
 
-    body += lp.simple_loop(
+    loop_body = lp.simple_loop(
         loop_body="\n" + dsmin_computation_str,
         read_xxs=True,
         loop_region="interior",
+        CoordSystem=CoordSystem,
     )
+    for i in range(3):
+        loop_body = loop_body.replace(f"xx[{i}]", f"x{i}")
+
+    parallelization = par.parval_from_str("parallelization")
+    loop_params = parallel_utils.get_loop_parameters(
+        parallelization,
+        enable_intrinsics=(parallelization in ["cuda"]),
+    )
+
+    params_symbols, _ = get_params_commondata_symbols_from_expr_list(
+        expr_list, exclude=[f"xx{i}" for i in range(3)]
+    )
+    loop_params += "// Load necessary parameters from params_struct\n"
+    for param in params_symbols:
+        loop_params += f"const REAL {param} = {parallel_utils.get_params_access(parallelization)}{param};\n"
+    loop_params += "\n"
+
+    comments = "Kernel to initialize auxillary grid functions at all grid points."
+    # Prepare the argument dicts
+    arg_dict_cuda = {
+        "x0": "const REAL *restrict",
+        "x1": "const REAL *restrict",
+        "x2": "const REAL *restrict",
+        "in_gfs": "REAL *restrict",
+        "dt": "const REAL",
+        "MINIMUM_GLOBAL_WAVESPEED": "const REAL",
+    }
+    arg_dict_host = {
+        # "commondata": "const commondata_struct *restrict",
+        "params": "const params_struct *restrict",
+        **arg_dict_cuda,
+    }
+    kernel_body = f"{loop_params}\n{loop_body}"
+    prefunc, new_body = parallel_utils.generate_kernel_and_launch_code(
+        name,
+        kernel_body,
+        arg_dict_cuda,
+        arg_dict_host,
+        parallelization=parallelization,
+        comments=comments,
+        launch_dict={
+            "blocks_per_grid": [],
+            "threads_per_block": ["32", "NGHOSTS"],
+            "stream": "default",
+        },
+        thread_tiling_macro_suffix="NELL_WAVESPEED",
+    )
+
+    body += f"{new_body}\n"
+    # for param in commondata_symbols:
+    #     body += f"const REAL {param} = {parallel_utils.get_commondata_access(parallelization)}{param};\n"
+    # body += "\n"
 
     # We must close the loop that was opened in the line 'for(int grid=0; grid<commondata->NUMGRIDS; grid++) {'
     body += r"""} // END LOOP for(int grid=0; grid<commondata->NUMGRIDS; grid++)
             """
 
     cfc.register_CFunction(
+        prefunc=prefunc,
         includes=includes,
         desc=desc,
         cfunc_type=cfunc_type,
