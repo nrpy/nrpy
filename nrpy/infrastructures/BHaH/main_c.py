@@ -98,7 +98,7 @@ Step 6: Free all allocated memory."""
     cfunc_type = "int"
     name = "main"
     params = "int argc, const char *argv[]"
-    body = "commondata_struct commondata; // commondata contains parameters common to all grids."
+    body = "commondata_struct commondata; // commondata contains parameters common to all grids.\n"
     griddata_declare = r"""griddata_struct *restrict griddata; // griddata contains data specific to an individual grid.
 """
     if parallelization in ["cuda"]:
@@ -232,8 +232,7 @@ cudaDeviceReset();
   griddata_free(&commondata, griddata, free_non_y_n_gfs_and_core_griddata_pointers);
 }
 """)
-    body += r"""
-return 0;
+    body += r"""return 0;
 """
     cfc.register_CFunction(
         includes=includes,
