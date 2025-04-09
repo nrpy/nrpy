@@ -66,6 +66,7 @@ def register_CFunction_main_c(
         raise ValueError(error_msg)
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    includes += ["BHaH_global_device_defines.h"] if parallelization in ["cuda"] else []
     allocate_auxevol_desc = "Allocate storage for non-y_n gridfunctions needed for the Runge-Kutta-like time-stepping."
     set_initial_data_desc = f"Set {initial_data_desc} initial data."
     step3desc = set_initial_data_desc
@@ -123,13 +124,15 @@ griddata = (griddata_struct *restrict)malloc(sizeof(griddata_struct)*MAXNUMGRIDS
 
     if parallelization in ["cuda"]:
         griddata_malloc = griddata_malloc.replace("griddata = ", "griddata_device = ")
-        griddata_malloc += "griddata_host = (griddata_struct *)malloc(sizeof(griddata_struct) * commondata.NUMGRIDS);\n"
+        griddata_malloc += "griddata_host = (griddata_struct *)malloc(sizeof(griddata_struct) * MAXNUMGRIDS);\n"
 
     body += griddata_malloc
     body += r"""
 // Step 1.d: Initialize each CodeParameter in griddata.params to its default value.
 params_struct_set_to_default(&commondata, griddata);
-""".replace("griddata", "griddata_device" if parallelization in ["cuda"] else "griddata")
+""".replace(
+        "griddata", "griddata_device" if parallelization in ["cuda"] else "griddata"
+    )
 
     body += r"""
 // Step 1.e: Set up numerical grids, including parameters such as NUMGRIDS, xx[3], masks, Nxx, dxx, invdxx,
@@ -139,13 +142,22 @@ params_struct_set_to_default(&commondata, griddata);
   const bool calling_for_first_time = true;
   numerical_grids_and_timestep(&commondata, griddata, calling_for_first_time);
 }
-""".replace("griddata,", "griddata_device, griddata_host" if parallelization in ["cuda"] else "griddata,")
+""".replace(
+        "griddata,",
+        (
+            "griddata_device, griddata_host,"
+            if parallelization in ["cuda"]
+            else "griddata,"
+        ),
+    )
     body += r"""
 for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
   // Step 2: Allocate storage for the initial data (y_n_gfs gridfunctions) on each grid.
   MoL_malloc_y_n_gfs(&commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
 }
-"""
+""".replace(
+        "griddata", "griddata_device" if parallelization in ["cuda"] else "griddata"
+    )
     if parallelization == "cuda":
         body += r"""
 for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
@@ -159,15 +171,16 @@ for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
 initial_data(&commondata, griddata_host, griddata_device);
 """
         if parallelization in ["cuda"]
-        else
-        """Set up initial data.
+        else """Set up initial data.
 initial_data(&commondata, griddata);
 """
-)
+    )
     allocate_storage_code = """Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping.
 for(int grid=0; grid<commondata.NUMGRIDS; grid++)
   MoL_malloc_non_y_n_gfs(&commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
-""".replace("griddata.", "griddata_device." if parallelization in ["cuda"] else "griddata.")
+""".replace(
+        "griddata", "griddata_device" if parallelization in ["cuda"] else "griddata"
+    )
     step3code = setup_initial_data_code
     step4code = allocate_storage_code
     if set_initial_data_after_auxevol_malloc:
@@ -195,7 +208,14 @@ while(commondata.time < commondata.t_final) { // Main loop to progress forward i
   diagnostics(&commondata, griddata);
 
   // Step 5.c: Main loop, part 3 (pre_MoL_step_forward_in_time): Prepare to step forward in time
-""".replace("griddata,", "griddata_device, griddata_host" if parallelization in ["cuda"] else "griddata,")
+""".replace(
+        "griddata",
+        (
+            "griddata_device, griddata_host"
+            if parallelization in ["cuda"]
+            else "griddata"
+        ),
+    )
     if pre_MoL_step_forward_in_time:
         body += pre_MoL_step_forward_in_time
     else:
@@ -206,7 +226,9 @@ while(commondata.time < commondata.t_final) { // Main loop to progress forward i
   MoL_step_forward_in_time(&commondata, griddata);
 
   // Step 5.e: Main loop, part 5 (post_MoL_step_forward_in_time): Finish up step in time
-""".replace("griddata", "griddata_device" if parallelization in ["cuda"] else "griddata")
+""".replace(
+        "griddata", "griddata_device" if parallelization in ["cuda"] else "griddata"
+    )
     if post_MoL_step_forward_in_time != "":
         body += post_MoL_step_forward_in_time
     else:
@@ -219,21 +241,25 @@ BHAH_DEVICE_SYNC();
     body += (
         r"""
   const bool free_non_y_n_gfs_and_core_griddata_pointers=true;
-  griddata_free_device(&commondata, griddata_device, enable_free_non_y_n_gfs);
-  griddata_free(&commondata, griddata_host, enable_free_non_y_n_gfs);
+  griddata_free_device(&commondata, griddata_device, free_non_y_n_gfs_and_core_griddata_pointers);
+  griddata_free(&commondata, griddata_host, free_non_y_n_gfs_and_core_griddata_pointers);
+}
+for (int i = 0; i < NUM_STREAMS; ++i) {
+  cudaStreamDestroy(streams[i]);
 }
 BHAH_DEVICE_SYNC();
 cudaDeviceReset();
 """
-    if parallelization in ["cuda"]
-    else
-        r"""
+        if parallelization in ["cuda"]
+        else r"""
   const bool free_non_y_n_gfs_and_core_griddata_pointers=true;
   griddata_free(&commondata, griddata, free_non_y_n_gfs_and_core_griddata_pointers);
 }
-""")
+"""
+    )
     body += r"""return 0;
 """
+    body = body.replace("*restrict", "*")
     cfc.register_CFunction(
         includes=includes,
         prefunc=prefunc,
