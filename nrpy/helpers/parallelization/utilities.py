@@ -41,6 +41,7 @@ def get_commondata_access(parallelization: str) -> str:
         cd_access = "commondata->"
     return cd_access
 
+
 def get_memory_malloc_function(parallelization: str) -> str:
     """
     Return the appropriate function to allocate memory.
