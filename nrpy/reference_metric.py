@@ -1576,32 +1576,44 @@ if __name__ == "__main__":
         # Get the ReferenceMetric object for SinhSymTP
         rfm_sinhsymtp = reference_metric["SinhSymTP"]
 
-        # Define the substitution dictionary: Cartx, Carty, Cartz mapped to xx_to_Cart expressions
-        sub_dict = {
-            rfm_sinhsymtp.Cartx: rfm_sinhsymtp.xx_to_Cart[0],
-            rfm_sinhsymtp.Carty: rfm_sinhsymtp.xx_to_Cart[1],
-            rfm_sinhsymtp.Cartz: rfm_sinhsymtp.xx_to_Cart[2],
+        # Define the substitution dictionary: xx[0], xx[1], xx[2] mapped to Cart_to_xx expressions
+        sub_dict_backward_in_forward = {
+            rfm_sinhsymtp.xx[0]: rfm_sinhsymtp.Cart_to_xx[0],
+            rfm_sinhsymtp.xx[1]: rfm_sinhsymtp.Cart_to_xx[1],
+            rfm_sinhsymtp.xx[2]: rfm_sinhsymtp.Cart_to_xx[2],
         }
 
-        # Substitute forward into backward for each coordinate component
-        xx0_check = rfm_sinhsymtp.Cart_to_xx[0].subs(sub_dict)
-        xx1_check = rfm_sinhsymtp.Cart_to_xx[1].subs(sub_dict)
-        xx2_check = rfm_sinhsymtp.Cart_to_xx[2].subs(sub_dict)
+        # Substitute backward into forward for each Cartesian component
+        Cartx_check = rfm_sinhsymtp.xx_to_Cart[0].subs(sub_dict_backward_in_forward)
+        Carty_check = rfm_sinhsymtp.xx_to_Cart[1].subs(sub_dict_backward_in_forward)
+        Cartz_check = rfm_sinhsymtp.xx_to_Cart[2].subs(sub_dict_backward_in_forward)
 
         # Calculate the differences (should be zero if inversion is correct)
-        diff0 = xx0_check - rfm_sinhsymtp.xx[0]
-        diff1 = xx1_check - rfm_sinhsymtp.xx[1]
-        diff2 = xx2_check - rfm_sinhsymtp.xx[2]
+        diff_Cartx = Cartx_check - rfm_sinhsymtp.Cartx
+        diff_Carty = Carty_check - rfm_sinhsymtp.Carty
+        diff_Cartz = Cartz_check - rfm_sinhsymtp.Cartz
 
-        is_zero0 = ve.check_zero(diff0, verbose=False)
-        is_zero1 = ve.check_zero(diff1, verbose=False)
-        is_zero2 = ve.check_zero(diff2, verbose=False)
-        if is_zero0 and is_zero1 and is_zero2:
-            print("PASS: SinhSymTP coordinate inversion validation")
+        is_zero_Cartx = ve.check_zero(
+            diff_Cartx, verbose=False, fixed_mpfs_for_free_symbols=True
+        )
+        is_zero_Carty = ve.check_zero(
+            diff_Carty, verbose=False, fixed_mpfs_for_free_symbols=True
+        )
+        is_zero_Cartz = ve.check_zero(
+            diff_Cartz, verbose=False, fixed_mpfs_for_free_symbols=True
+        )
+
+        if is_zero_Cartx and is_zero_Carty and is_zero_Cartz:
+            print(
+                "PASS: SinhSymTP coordinate inversion validation (Cart -> xx -> Cart)"
+            )
         else:
-            print("FAILURE: SinhSymTP coordinate inversion validation FAILED.")
+            print(
+                "FAILURE: SinhSymTP coordinate inversion validation (Cart -> xx -> Cart) FAILED."
+            )
             # Optionally raise an error or exit
             sys.exit(1)
+
     except Exception as e:
         print(f"An unexpected error occurred during SinhSymTP validation: {e}")
         sys.exit(1)

@@ -19,20 +19,24 @@ void Cart_to_xx_and_nearest_i0i1i2__rfm__SinhSymTP(const params_struct *restrict
   {
     /*
      *  Original SymPy expressions:
-     *  "[xx[0] = params->SQRT1_2*sqrt(Cartx**2 + Carty**2 + Cartz**2 - params->bScale**2 + sqrt(-4*Cartz**2*params->bScale**2 + params->bScale**4 +
-     * 2*params->bScale**2*(Cartx**2 + Carty**2 + Cartz**2) + (Cartx**2 + Carty**2 + Cartz**2)**2))]"
-     *  "[xx[1] = acos(params->SQRT1_2*sqrt(1 + (Cartx**2 + Carty**2 + Cartz**2)/params->bScale**2 - sqrt(-4*Cartz**2*params->bScale**2 +
-     * params->bScale**4 + 2*params->bScale**2*(Cartx**2 + Carty**2 + Cartz**2) + (Cartx**2 + Carty**2 +
-     * Cartz**2)**2)/params->bScale**2)*sign(Cartz))]"
+     *  "[xx[0] = params->SINHWAA*acsch(sqrt(2)*params->AMAX*csch(1/params->SINHWAA)/sqrt(Cartx**2 + Carty**2 + Cartz**2 - params->bScale**2 +
+     * sqrt((Cartx**2 + Carty**2 + (-Cartz + params->bScale)**2)*(Cartx**2 + Carty**2 + (Cartz + params->bScale)**2))))]"
+     *  "[xx[1] = acos(sqrt(2)*Cartz/sqrt(Cartx**2 + Carty**2 + Cartz**2 + params->bScale**2 + sqrt((Cartx**2 + Carty**2 + (-Cartz +
+     * params->bScale)**2)*(Cartx**2 + Carty**2 + (Cartz + params->bScale)**2))))]"
      *  "[xx[2] = atan2(Carty, Cartx)]"
      */
-    const REAL tmp1 = ((params->bScale) * (params->bScale));
-    const REAL tmp2 = ((Cartx) * (Cartx)) + ((Carty) * (Carty)) + ((Cartz) * (Cartz));
-    const REAL tmp4 = (1.0 / (tmp1));
-    const REAL tmp3 = sqrt(-4 * ((Cartz) * (Cartz)) * tmp1 + ((params->bScale) * (params->bScale) * (params->bScale) * (params->bScale)) +
-                           2 * tmp1 * tmp2 + ((tmp2) * (tmp2)));
-    xx[0] = params->SQRT1_2 * sqrt(-tmp1 + tmp2 + tmp3);
-    xx[1] = acos(params->SQRT1_2 * sqrt(tmp2 * tmp4 - tmp3 * tmp4 + 1) * (((Cartz) > 0) - ((Cartz) < 0)));
+    const REAL tmp2 = ((Cartx) * (Cartx)) + ((Carty) * (Carty));
+    const REAL tmp3 =
+        ((Cartz) * (Cartz)) + tmp2 +
+        sqrt((tmp2 + ((-Cartz + params->bScale) * (-Cartz + params->bScale))) * (tmp2 + ((Cartz + params->bScale) * (Cartz + params->bScale))));
+    xx[0] = params->SINHWAA *
+            (log(sqrt(1 + (1.0 / 2.0) * (-((params->bScale) * (params->bScale)) + tmp3) /
+                              (((params->AMAX) * (params->AMAX)) *
+                               ((((1.0 / ((1.0 / 2.0) * exp(exp(-log(params->SINHWAA))) - 1.0 / 2.0 * exp(-1 / params->SINHWAA))))) *
+                                (((1.0 / ((1.0 / 2.0) * exp(exp(-log(params->SINHWAA))) - 1.0 / 2.0 * exp(-1 / params->SINHWAA)))))))) +
+                 (1.0 / 2.0) * M_SQRT2 * sqrt(-((params->bScale) * (params->bScale)) + tmp3) /
+                     (params->AMAX * ((1.0 / ((1.0 / 2.0) * exp(exp(-log(params->SINHWAA))) - 1.0 / 2.0 * exp(-1 / params->SINHWAA)))))));
+    xx[1] = acos(M_SQRT2 * Cartz / sqrt(((params->bScale) * (params->bScale)) + tmp3));
     xx[2] = atan2(Carty, Cartx);
 
     // Find the nearest grid indices (i0, i1, i2) for the given Cartesian coordinates (x, y, z).
