@@ -14,6 +14,7 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
+import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices as out012d
 import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.params as par
@@ -21,6 +22,7 @@ import nrpy.reference_metric as refmetric
 from nrpy.equations.nrpyelliptic.ConformallyFlat_RHSs import (
     HyperbolicRelaxationCurvilinearRHSs,
 )
+from nrpy.helpers.expression_utils import get_params_commondata_symbols_from_expr_list
 
 
 # Define function to compute the l^2 of a gridfunction
@@ -35,6 +37,7 @@ def register_CFunction_compute_L2_norm_of_gridfunction(
 
     :param CoordSystem: the rfm coordinate system.
     """
+    parallelization = par.parval_from_str("parallelization")
     includes = ["BHaH_defines.h"]
     desc = "Compute l2-norm of a gridfunction assuming a single grid."
     cfunc_type = "REAL"
@@ -45,49 +48,173 @@ def register_CFunction_compute_L2_norm_of_gridfunction(
     rfm = refmetric.reference_metric[CoordSystem]
 
     fp_type = par.parval_from_str("fp_type")
+
+    # Enforce at least double precision since calcuations
+    # can go beyond single precision numerical limits for some
+    # coordinate systems
     fp_type_alias = "DOUBLE" if fp_type == "float" else "REAL"
-    loop_body = ccg.c_codegen(
-        [
-            rfm.xxSph[0],
-            rfm.detgammahat,
-        ],
+    ccg_fp_type = "double" if fp_type == "float" else fp_type
+    expr_list = [
+        rfm.xxSph[0],
+        rfm.detgammahat,
+    ]
+
+    # Define the norm calculations within the loop
+    reduction_loop_body = ccg.c_codegen(
+        expr_list,
         [
             "const DOUBLE r",
             "const DOUBLE sqrtdetgamma",
         ],
         include_braces=False,
+        fp_type=ccg_fp_type,
         fp_type_alias=fp_type_alias,
     )
 
-    loop_body += r"""
+    reduction_loop_body += r"""
 if(r < integration_radius) {
-  const DOUBLE gf_of_x = in_gf[IDX4(gf_index, i0, i1, i2)];
+  const DOUBLE gf_of_x = in_gfs[IDX4(gf_index, i0, i1, i2)];
   const DOUBLE dV = sqrtdetgamma * dxx0 * dxx1 * dxx2;
+"""
+    reduction_loop_body += (
+        r"""
+  aux_gfs[IDX4(L2_SQUARED_DVGF, i0, i1, i2)] = gf_of_x * gf_of_x * dV;
+  aux_gfs[IDX4(L2_DVGF, i0, i1, i2)] = dV;
+} // END if(r < integration_radius)
+"""
+        if parallelization in ["cuda"]
+        else r"""
   squared_sum += gf_of_x * gf_of_x * dV;
   volume_sum  += dV;
 } // END if(r < integration_radius)
 """
+    )
+    reduction_loop_body = reduction_loop_body.replace("REAL", fp_type_alias)
+
+    OMP_custom_pragma = (
+        r"#pragma omp parallel for reduction(+:squared_sum,volume_sum)"
+        if parallelization not in ["cuda"]
+        else ""
+    )
+
+    # Generate the loop for the reduction_loop_body
+    loop_body = lp.simple_loop(
+        loop_body="\n" + reduction_loop_body,
+        read_xxs=True,
+        loop_region="interior",
+        OMP_custom_pragma=OMP_custom_pragma,
+    )
+
+    # Device code computes the local L2 quantities which are reduced
+    # in a separate algorithm, find_global__sum.
+    # Host code uses OpenMP reduction #pragma to compute the
+    # L2 quantities and the global norms in a single kernel
+    comments = (
+        "Kernel to compute L2 quantities pointwise (not summed)."
+        if parallelization in ["cuda"]
+        else "Kernel to compute L2 quantities pointwise (summed)."
+    )
+    # Prepare the argument dictionaries
+    arg_dict_cuda = {
+        "x0": "const REAL *restrict",
+        "x1": "const REAL *restrict",
+        "x2": "const REAL *restrict",
+        "in_gfs": "const REAL *restrict",
+        "aux_gfs": "REAL *restrict",
+        "integration_radius": "const REAL",
+        "gf_index": "const int",
+    }
+    arg_dict_host = {
+        "params": "const params_struct *restrict",
+        "x0": "const REAL *restrict",
+        "x1": "const REAL *restrict",
+        "x2": "const REAL *restrict",
+        "in_gfs": "const REAL *restrict",
+        "squared_sum_final": "REAL *restrict",
+        "volume_sum_final": "REAL *restrict",
+        "integration_radius": "const REAL",
+        "gf_index": "const int",
+    }
+    loop_params = parallel_utils.get_loop_parameters(parallelization)
+    params_symbols, _ = get_params_commondata_symbols_from_expr_list(
+        expr_list, exclude=[f"xx{i}" for i in range(3)]
+    )
+    loop_params += "// Load necessary parameters from params_struct\n"
+    for param in params_symbols + [f"dxx{i}" for i in range(3)]:
+        loop_params += f"const REAL {param} = {parallel_utils.get_params_access(parallelization)}{param};\n"
+    loop_params += (
+        "\n"
+        if parallelization in ["cuda"]
+        else r"""
+  DOUBLE squared_sum = 0.0;
+  DOUBLE volume_sum  = 0.0;
+        """
+    )
+
+    kernel_body = f"{loop_params}\n{loop_body}"
+    for i in range(3):
+        kernel_body = kernel_body.replace(f"xx[{i}]", f"x{i}")
+
+    if parallelization not in ["cuda"]:
+        kernel_body += r"""*squared_sum_final = squared_sum;
+*volume_sum_final = volume_sum;
+        """
+
+    prefunc, new_body = parallel_utils.generate_kernel_and_launch_code(
+        name,
+        kernel_body,
+        arg_dict_cuda,
+        arg_dict_host,
+        parallelization=parallelization,
+        comments=comments,
+        launch_dict={
+            "blocks_per_grid": [],
+            "threads_per_block": ["32", "NGHOSTS"],
+            "stream": "default",
+        },
+        thread_tiling_macro_suffix="NELL_GRIDL2",
+    )
+
+    # Define launch kernel body
     body = r"""
-  // Unpack grid parameters assuming a single grid
-  const int grid = 0;
-  params_struct *restrict params = &griddata[grid].params;
+  params_struct *restrict params = &griddata->params;
 #include "set_CodeParameters.h"
+  REAL *restrict x0 = griddata->xx[0];
+  REAL *restrict x1 = griddata->xx[1];
+  REAL *restrict x2 = griddata->xx[2];
+  REAL *restrict in_gfs = griddata->gridfuncs.diagnostic_output_gfs;
+  MAYBE_UNUSED REAL *restrict aux_gfs = griddata->gridfuncs.diagnostic_output_gfs2;
+"""
 
-  // Define reference metric grid
-  REAL *restrict xx[3];
-  for (int ww = 0; ww < 3; ww++)
-    xx[ww] = griddata[grid].xx[ww];
-
+    body += (
+        r"""
+  // Since we're performing sums, make sure arrays are zero'd
+  cudaMemset(aux_gfs, 0, sizeof(REAL) * NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);
+"""
+        if parallelization in ["cuda"]
+        else r"""
   // Set summation variables to compute l2-norm
   DOUBLE squared_sum = 0.0;
   DOUBLE volume_sum  = 0.0;
 """
+    )
 
-    body += lp.simple_loop(
-        loop_body="\n" + loop_body,
-        read_xxs=True,
-        loop_region="interior",
-        OMP_custom_pragma=r"#pragma omp parallel for reduction(+:squared_sum,volume_sum)",
+    body += f"{new_body}\n"
+    body += (
+        r"""
+  // Set summation variables to compute l2-norm
+  REAL squared_sum = find_global__sum(&aux_gfs[IDX4(L2_SQUARED_DVGF, 0, 0, 0)], Nxx_plus_2NGHOSTS_tot);
+  REAL volume_sum = find_global__sum(&aux_gfs[IDX4(L2_DVGF, 0, 0, 0)], Nxx_plus_2NGHOSTS_tot);
+  // Compute and output the log of the l2-norm.
+  REAL local_norm = log10(1e-16 + sqrt(squared_sum / volume_sum));  // 1e-16 + ... avoids log10(0)
+"""
+        if parallelization in ["cuda"]
+        else ""
+    )
+
+    # For host reduction code.
+    body = body.replace("squared_sum_final", "&squared_sum").replace(
+        "volume_sum_final", "&volume_sum"
     )
 
     body += r"""
@@ -96,6 +223,7 @@ if(r < integration_radius) {
 """
 
     cfc.register_CFunction(
+        prefunc=prefunc,
         includes=includes,
         desc=desc,
         cfunc_type=cfunc_type,
