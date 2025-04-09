@@ -20,20 +20,25 @@ __host__ __device__ void Cart_to_xx_and_nearest_i0i1i2__rfm__SinhSymTP(const par
   {
     /*
      *  Original SymPy expressions:
-     *  "[xx[0] = params->SQRT1_2*sqrt(Cartx**2 + Carty**2 + Cartz**2 - params->bScale**2 + sqrt(-4*Cartz**2*params->bScale**2 + params->bScale**4 +
-     * 2*params->bScale**2*(Cartx**2 + Carty**2 + Cartz**2) + (Cartx**2 + Carty**2 + Cartz**2)**2))]"
-     *  "[xx[1] = acos(params->SQRT1_2*sqrt(1 + (Cartx**2 + Carty**2 + Cartz**2)/params->bScale**2 - sqrt(-4*Cartz**2*params->bScale**2 +
-     * params->bScale**4 + 2*params->bScale**2*(Cartx**2 + Carty**2 + Cartz**2) + (Cartx**2 + Carty**2 +
-     * Cartz**2)**2)/params->bScale**2)*sign(Cartz))]"
+     *  "[xx[0] = params->SINHWAA*log(sqrt(1 + (exp(1/params->SINHWAA) - exp(-1/params->SINHWAA))**2*(Cartx**2 + Carty**2 + Cartz**2 -
+     * params->bScale**2 + sqrt((Cartx**2 + Carty**2 + (-Cartz + params->bScale)**2)*(Cartx**2 + Carty**2 + (Cartz +
+     * params->bScale)**2)))/(8*params->AMAX**2)) + sqrt(2)*(exp(1/params->SINHWAA) - exp(-1/params->SINHWAA))*sqrt(Cartx**2 + Carty**2 + Cartz**2 -
+     * params->bScale**2 + sqrt((Cartx**2 + Carty**2 + (-Cartz + params->bScale)**2)*(Cartx**2 + Carty**2 + (Cartz +
+     * params->bScale)**2)))/(4*params->AMAX))]"
+     *  "[xx[1] = acos(sqrt(2)*Cartz/sqrt(Cartx**2 + Carty**2 + Cartz**2 + params->bScale**2 + sqrt((Cartx**2 + Carty**2 + (-Cartz +
+     * params->bScale)**2)*(Cartx**2 + Carty**2 + (Cartz + params->bScale)**2))))]"
      *  "[xx[2] = atan2(Carty, Cartx)]"
      */
-    const REAL tmp1 = ((params->bScale) * (params->bScale));
-    const REAL tmp2 = ((Cartx) * (Cartx)) + ((Carty) * (Carty)) + ((Cartz) * (Cartz));
-    const REAL tmp4 = (1.0 / (tmp1));
-    const REAL tmp3 = sqrt(-4 * ((Cartz) * (Cartz)) * tmp1 + ((params->bScale) * (params->bScale) * (params->bScale) * (params->bScale)) +
-                           2 * tmp1 * tmp2 + ((tmp2) * (tmp2)));
-    xx[0] = params->SQRT1_2 * sqrt(-tmp1 + tmp2 + tmp3);
-    xx[1] = acos(params->SQRT1_2 * sqrt(tmp2 * tmp4 - tmp3 * tmp4 + 1) * (((Cartz) > 0) - ((Cartz) < 0)));
+    const REAL tmp1 = (1.0 / (params->SINHWAA));
+    const REAL tmp4 = ((Cartx) * (Cartx)) + ((Carty) * (Carty));
+    const REAL tmp2 = exp(tmp1) - exp(-tmp1);
+    const REAL tmp5 =
+        ((Cartz) * (Cartz)) + tmp4 +
+        sqrt((tmp4 + ((-Cartz + params->bScale) * (-Cartz + params->bScale))) * (tmp4 + ((Cartz + params->bScale) * (Cartz + params->bScale))));
+    const REAL tmp6 = -((params->bScale) * (params->bScale)) + tmp5;
+    xx[0] = params->SINHWAA * log(sqrt(1 + (1.0 / 8.0) * ((tmp2) * (tmp2)) * tmp6 / ((params->AMAX) * (params->AMAX))) +
+                                  (1.0 / 4.0) * M_SQRT2 * tmp2 * sqrt(tmp6) / params->AMAX);
+    xx[1] = acos(M_SQRT2 * Cartz / sqrt(((params->bScale) * (params->bScale)) + tmp5));
     xx[2] = atan2(Carty, Cartx);
 
     // Find the nearest grid indices (i0, i1, i2) for the given Cartesian coordinates (x, y, z).
