@@ -346,17 +346,17 @@ def basis_transform_4tensorUU_from_Cartesian_to_time_indep_rfmbasis(
         for j in range(3):
             Jac4_dUrfm_dDCartUD[i + 1][j + 1] = rfm.Jac_dUrfm_dDCartUD[i][j]
 
-    Cart_dst_T4UU = ixp.zerorank2(dimension=4)
+    rfm_dst_T4UU = ixp.zerorank2(dimension=4)
     for mu in range(4):
         for nu in range(4):
             for delta in range(4):
                 for sigma in range(4):
-                    Cart_dst_T4UU[mu][nu] += (
+                    rfm_dst_T4UU[mu][nu] += (
                         Jac4_dUrfm_dDCartUD[mu][delta]
                         * Jac4_dUrfm_dDCartUD[nu][sigma]
                         * T4UU[delta][sigma]
                     )
-    return Cart_dst_T4UU
+    return rfm_dst_T4UU
 
 
 def basis_transform_4tensorUU_from_Spherical_to_time_indep_rfmbasis(
@@ -377,17 +377,17 @@ def basis_transform_4tensorUU_from_Spherical_to_time_indep_rfmbasis(
         for j in range(3):
             Jac4_dUrfm_dDSphUD[i + 1][j + 1] = rfm.Jac_dUrfm_dDSphUD[i][j]
 
-    Sph_dst_T4UU = ixp.zerorank2(dimension=4)
+    rfm_dst_T4UU = ixp.zerorank2(dimension=4)
     for mu in range(4):
         for nu in range(4):
             for delta in range(4):
                 for sigma in range(4):
-                    Sph_dst_T4UU[mu][nu] += (
+                    rfm_dst_T4UU[mu][nu] += (
                         Jac4_dUrfm_dDSphUD[mu][delta]
                         * Jac4_dUrfm_dDSphUD[nu][sigma]
                         * T4UU[delta][sigma]
                     )
-    return Sph_dst_T4UU
+    return rfm_dst_T4UU
 
 
 ##################################################
