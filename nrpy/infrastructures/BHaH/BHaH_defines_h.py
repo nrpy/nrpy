@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import nrpy.grid as gri
-import nrpy.helpers.parallelization.utilities as gpu_utils
+import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.params as par
 from nrpy.helpers.generic import clang_format
 from nrpy.infrastructures.BHaH import griddata_commondata
@@ -486,25 +486,31 @@ def output_BHaH_defines_h(
         file_output_str += rf"""
     #define BHAH_MALLOC_DEVICE(a, sz) \
     do {{ \
-        {gpu_utils.get_memory_malloc_function(parallelization)}(&a, sz); \
-        {gpu_utils.get_check_errors_str(parallelization, gpu_utils.get_memory_malloc_function(parallelization), opt_msg='Malloc: "#a" failed')} \
+        {parallel_utils.get_memory_malloc_function(parallelization)}(&a, sz); \
+        {parallel_utils.get_check_errors_str(parallelization, parallel_utils.get_memory_malloc_function(parallelization), opt_msg='Malloc: "#a" failed')} \
     }} while(0);
     #define BHAH_FREE_DEVICE(a) \
     do {{ \
         if (a) {{ \
-            {gpu_utils.get_memory_free_function(parallelization)}((void*)(a)); \
-            {gpu_utils.get_check_errors_str(parallelization, gpu_utils.get_memory_free_function(parallelization), opt_msg='Free: "#a" failed')} \
+            {parallel_utils.get_memory_free_function(parallelization)}((void*)(a)); \
+            {parallel_utils.get_check_errors_str(parallelization, parallel_utils.get_memory_free_function(parallelization), opt_msg='Free: "#a" failed')} \
             (a) = nullptr; \
         }} \
     }} while (0);
 """
     if parallelization == "cuda":
         file_output_str += rf"""
+    #define BHAH_MALLOC_PINNED(a, sz) \
+    do {{ \
+        cudaMallocHost((void**)&a, sz); \
+        {parallel_utils.get_check_errors_str(parallelization, "cudaMallocHost", opt_msg='Malloc: "#a" failed')} \
+    }} while (0);
+
     #define BHAH_FREE_PINNED(a) \
     do {{ \
         if (a) {{ \
             cudaFreeHost((void*)(a)); \
-            {gpu_utils.get_check_errors_str(parallelization, "cudaFreeHost", opt_msg='Free: "#a" failed')} \
+            {parallel_utils.get_check_errors_str(parallelization, "cudaFreeHost", opt_msg='Free: "#a" failed')} \
             (a) = nullptr; \
         }} \
     }} while (0);
@@ -528,6 +534,7 @@ def output_BHaH_defines_h(
         }} \
     }} while(0);
 """
+    file_output_str += f"#define BHAH_DEVICE_SYNC() {parallel_utils.get_device_sync_function(parallelization)}\n"
     file_output_str += r"#endif"
 
     file_output_str = file_output_str.replace("*restrict", restrict_pointer_type)
