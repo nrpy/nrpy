@@ -32,6 +32,26 @@ def register_CFunction_auxevol_gfs_single_point(
     :param CoordSystem: The coordinate system to use in setting up the AUXEVOL gridfunctions.
 
     :return: None if in registration phase, else the updated NRPy environment.
+
+    Doctest:
+    >>> import nrpy.c_function as cfc
+    >>> from nrpy.helpers.generic import validate_strings
+    >>> import nrpy.params as par
+    >>> from nrpy.reference_metric import unittest_CoordSystems
+    >>> supported_Parallelizations = ["openmp", "cuda"]
+    >>> name="auxevol_gfs_single_point"
+    >>> for parallelization in supported_Parallelizations:
+    ...    par.set_parval_from_str("parallelization", parallelization)
+    ...    for CoordSystem in unittest_CoordSystems:
+    ...       cfc.CFunction_dict.clear()
+    ...       _ = register_CFunction_auxevol_gfs_single_point(CoordSystem)
+    ...       generated_str = cfc.CFunction_dict[f'{name}__rfm__{CoordSystem}'].full_function
+    ...       validation_desc = f"{name}__{parallelization}__{CoordSystem}".replace(" ", "_")
+    ...       validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
+    Setting up reference_metric[SinhSymTP]...
+    Setting up reference_metric[HoleySinhSpherical]...
+    Setting up reference_metric[Cartesian]...
+    Setting up reference_metric[SinhCylindricalv2n2]...
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -81,7 +101,7 @@ def register_CFunction_auxevol_gfs_single_point(
         desc=desc,
         cfunc_type=cfunc_type,
         cfunc_decorators="__device__" if parallelization in ["cuda"] else "",
-        CoordSystem_for_wrapper_func="",
+        CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,
         include_CodeParameters_h=False,
@@ -99,6 +119,20 @@ def register_CFunction_auxevol_gfs_all_points(
     :param OMP_collapse: Degree of OpenMP loop collapsing.
 
     :return: None if in registration phase, else the updated NRPy environment.
+
+    Doctest:
+    >>> import nrpy.c_function as cfc
+    >>> from nrpy.helpers.generic import validate_strings
+    >>> import nrpy.params as par
+    >>> supported_Parallelizations = ["openmp", "cuda"]
+    >>> name="auxevol_gfs_all_points"
+    >>> for parallelization in supported_Parallelizations:
+    ...    par.set_parval_from_str("parallelization", parallelization)
+    ...    cfc.CFunction_dict.clear()
+    ...    _ = register_CFunction_auxevol_gfs_all_points()
+    ...    generated_str = cfc.CFunction_dict[f'{name}'].full_function
+    ...    validation_desc = f"{name}__{parallelization}".replace(" ", "_")
+    ...    validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -195,6 +229,20 @@ def register_CFunction_initialize_constant_auxevol() -> Union[None, pcg.NRPyEnv_
     Register function to call all functions that set up AUXEVOL gridfunctions.
 
     :return: None if in registration phase, else the updated NRPy environment.
+
+    Doctest:
+    >>> import nrpy.c_function as cfc
+    >>> from nrpy.helpers.generic import validate_strings
+    >>> import nrpy.params as par
+    >>> supported_Parallelizations = ["openmp", "cuda"]
+    >>> name="initialize_constant_auxevol"
+    >>> for parallelization in supported_Parallelizations:
+    ...    par.set_parval_from_str("parallelization", parallelization)
+    ...    cfc.CFunction_dict.clear()
+    ...    _ = register_CFunction_initialize_constant_auxevol()
+    ...    generated_str = cfc.CFunction_dict[f'{name}'].full_function
+    ...    validation_desc = f"{name}__{parallelization}".replace(" ", "_")
+    ...    validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -228,3 +276,16 @@ def register_CFunction_initialize_constant_auxevol() -> Union[None, pcg.NRPyEnv_
         body=body,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")
