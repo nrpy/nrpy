@@ -78,7 +78,7 @@ int main(int argc, const char *argv[]) {
     // (nothing here; specify by setting post_MoL_step_forward_in_time string in register_CFunction_main_c().)
 
   } // End main loop to progress forward in time.
-  BHAH_DEVICE_SYNC();
+
   // Step 6: Free all allocated memory
   {
     const bool free_non_y_n_gfs_and_core_griddata_pointers = true;

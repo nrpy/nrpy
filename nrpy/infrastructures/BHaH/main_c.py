@@ -64,7 +64,7 @@ def register_CFunction_main_c(
     ...    _ = initial_data_exact_soln.register_CFunction_initial_data(1)
     ...    register_CFunction_main_c("RK4")
     ...    generated_str = cfc.CFunction_dict["main"].full_function
-    ...    validation_desc = f"__{parallelization}".replace(" ", "_")
+    ...    validation_desc = f"_{parallelization}".replace(" ", "_")
     ...    validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
     Setting up reference_metric[Cartesian]...
     """
