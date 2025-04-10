@@ -269,7 +269,10 @@ while(commondata.time < commondata.t_final) { // Main loop to progress forward i
 } // End main loop to progress forward in time.
 BHAH_DEVICE_SYNC();
 // Step 6: Free all allocated memory
-{"""
+{""".replace(
+        "BHAH_DEVICE_SYNC();",
+        "" if parallelization not in ["cuda"] else "BHAH_DEVICE_SYNC();",
+    )
     body += (
         r"""
   const bool free_non_y_n_gfs_and_core_griddata_pointers=true;
