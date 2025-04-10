@@ -35,6 +35,38 @@ def register_CFunction_main_c(
     :param pre_MoL_step_forward_in_time: Function calls AFTER diagnostics and prior to each right-hand-side update, default is an empty string.
     :param post_MoL_step_forward_in_time: Function calls after each right-hand-side update, default is an empty string.
     :raises ValueError: Raised if any required function for BHaH main() is not registered.
+
+    Doctest:
+    >>> import nrpy.c_function as cfc
+    >>> from nrpy.helpers.generic import validate_strings
+    >>> import nrpy.params as par
+    >>> from nrpy.infrastructures.BHaH import (
+    ...     CodeParameters,
+    ...     cmdline_input_and_parfiles,
+    ...     numerical_grids_and_timestep,
+    ...     MoLtimestepping,
+    ... )
+    >>> # We need diagnostics and initial data functions to be registered, so we choose wave_equation for simplicity
+    >>> from nrpy.infrastructures.BHaH.wave_equation import diagnostics, initial_data_exact_soln
+    >>> supported_Parallelizations = ["openmp", "cuda"]
+    >>> set_of_coordsys = {"Cartesian"}
+    >>> project_name = "main_test"
+    >>> Nxx_dict = {"Cartesian" : [1, 1, 1]}
+    >>> for parallelization in supported_Parallelizations:
+    ...    par.glb_extras_dict.clear()
+    ...    cfc.CFunction_dict.clear()
+    ...    par.set_parval_from_str("parallelization", parallelization)
+    ...    CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
+    ...    cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(project_name)
+    ...    _ = diagnostics.register_CFunction_diagnostics(set_of_coordsys, 100)
+    ...    _ = numerical_grids_and_timestep.register_CFunctions(set_of_coordsys, [5], Nxx_dict)
+    ...    _ = MoLtimestepping.MoL_register_all.register_CFunctions()
+    ...    _ = initial_data_exact_soln.register_CFunction_initial_data(1)
+    ...    register_CFunction_main_c("RK4")
+    ...    generated_str = cfc.CFunction_dict["main"].full_function
+    ...    validation_desc = f"__{parallelization}".replace(" ", "_")
+    ...    validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
+    Setting up reference_metric[Cartesian]...
     """
     parallelization = par.parval_from_str("parallelization")
     # Make sure all required C functions are registered
@@ -269,3 +301,15 @@ cudaDeviceReset();
         params=params,
         body=body,
     )
+
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")
