@@ -155,7 +155,7 @@ def register_CFunction_rhs_eval(
         includes=includes,
         desc=desc,
         cfunc_type=cfunc_type,
-        CoordSystem_for_wrapper_func="",
+        CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,
         body=body,
