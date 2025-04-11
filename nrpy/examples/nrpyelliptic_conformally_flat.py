@@ -175,21 +175,10 @@ nrpyelliptic.initial_data.register_CFunction_initial_guess_all_points(
     enable_checkpointing=enable_checkpointing,
 )
 
-# Generate function to set variable wavespeed
-nrpyelliptic.variable_wavespeed_gfs.register_CFunction_variable_wavespeed_gfs_all_points(
-    CoordSystem=CoordSystem
-)
-
-# Generate functions to set AUXEVOL gridfunctions
-nrpyelliptic.constant_source_terms_to_auxevol.register_CFunction_auxevol_gfs_single_point(
-    CoordSystem=CoordSystem
-)
-nrpyelliptic.constant_source_terms_to_auxevol.register_CFunction_auxevol_gfs_all_points(
-    OMP_collapse=OMP_collapse
-)
-
 # Generate function that calls functions to set variable wavespeed and all other AUXEVOL gridfunctions
-nrpyelliptic.constant_source_terms_to_auxevol.register_CFunction_initialize_constant_auxevol()
+for CoordSystem in set_of_CoordSystems:
+    nrpyelliptic.constant_source_terms_to_auxevol.register_CFunction_initialize_constant_auxevol(CoordSystem, OMP_collapse=OMP_collapse)
+
 numerical_grids_and_timestep.register_CFunctions(
     set_of_CoordSystems=set_of_CoordSystems,
     list_of_grid_physical_sizes=[grid_physical_size for c in set_of_CoordSystems],
@@ -367,7 +356,8 @@ main_c.register_CFunction_main_c(
     MoL_method=MoL_method,
     initial_data_desc="",
     boundary_conditions_desc=boundary_conditions_desc,
-    post_non_y_n_auxevol_mallocs="initialize_constant_auxevol(&commondata, griddata);\n",
+    post_non_y_n_auxevol_mallocs="for (int grid = 0; grid < commondata.NUMGRIDS; grid++)\n"
+    "initialize_constant_auxevol(&commondata, &griddata[grid].params, &griddata[grid].xx, &griddata[grid].gridfuncs);\n",
     pre_MoL_step_forward_in_time="write_checkpoint(&commondata, griddata);\n",
     post_MoL_step_forward_in_time=post_MoL_step_forward_in_time,
 )
