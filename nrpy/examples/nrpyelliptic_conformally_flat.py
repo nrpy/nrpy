@@ -357,7 +357,7 @@ main_c.register_CFunction_main_c(
     initial_data_desc="",
     boundary_conditions_desc=boundary_conditions_desc,
     post_non_y_n_auxevol_mallocs="for (int grid = 0; grid < commondata.NUMGRIDS; grid++)\n"
-    "initialize_constant_auxevol(&commondata, &griddata[grid].params, &griddata[grid].xx, &griddata[grid].gridfuncs);\n",
+    "initialize_constant_auxevol(&commondata, &griddata[grid].params, griddata[grid].xx, &griddata[grid].gridfuncs);\n",
     pre_MoL_step_forward_in_time="write_checkpoint(&commondata, griddata);\n",
     post_MoL_step_forward_in_time=post_MoL_step_forward_in_time,
 )
