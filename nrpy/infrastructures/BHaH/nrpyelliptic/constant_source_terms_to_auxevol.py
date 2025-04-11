@@ -187,13 +187,7 @@ def generate_prefunc_auxevol_gfs_single_point(
         arg_dict_host,
         parallelization=parallelization,
         comments=comments,
-        launch_dict={
-            "blocks_per_grid": [
-                "(num_inner_boundary_points + threads_in_x_dir - 1) / threads_in_x_dir"
-            ],
-            "stream": "params->grid_idx % NUM_STREAMS",
-        },
-        thread_tiling_macro_suffix="CURVIBC_INNER",
+        launch_dict=None,
         cfunc_decorators="__device__",
     )
     return prefunc, new_body
@@ -319,6 +313,16 @@ def register_CFunction_initialize_constant_auxevol(
     )
     wavespeed_all_points_prefunc, wavespeed_all_points_launch = (
         generate_prefunc_variable_wavespeed_gfs_all_points(CoordSystem=CoordSystem)
+    )
+    auxevol_gfs_all_points_launch = (
+        f"{{{auxevol_gfs_all_points_launch}}}"
+        if parallelization in ["cuda"]
+        else auxevol_gfs_all_points_launch
+    )
+    wavespeed_all_points_launch = (
+        f"{{{wavespeed_all_points_launch}}}"
+        if parallelization in ["cuda"]
+        else wavespeed_all_points_launch
     )
     body += rf"""
     REAL *restrict auxevol_gfs = gridfuncs->auxevol_gfs;
