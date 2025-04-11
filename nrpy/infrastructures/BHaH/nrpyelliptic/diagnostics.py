@@ -36,6 +36,26 @@ def register_CFunction_compute_L2_norm_of_gridfunction(
     multiprocess race condition on Python 3.6.7
 
     :param CoordSystem: the rfm coordinate system.
+
+    Doctest:
+    >>> import nrpy.c_function as cfc
+    >>> from nrpy.helpers.generic import validate_strings
+    >>> import nrpy.params as par
+    >>> from nrpy.reference_metric import unittest_CoordSystems
+    >>> supported_Parallelizations = ["openmp", "cuda"]
+    >>> name="compute_L2_norm_of_gridfunction"
+    >>> for parallelization in supported_Parallelizations:
+    ...    par.set_parval_from_str("parallelization", parallelization)
+    ...    for CoordSystem in unittest_CoordSystems:
+    ...       cfc.CFunction_dict.clear()
+    ...       _ = register_CFunction_compute_L2_norm_of_gridfunction(CoordSystem)
+    ...       generated_str = cfc.CFunction_dict[f'{name}__rfm__{CoordSystem}'].full_function
+    ...       validation_desc = f"{name}__{parallelization}__{CoordSystem}".replace(" ", "_")
+    ...       validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
+    Setting up reference_metric[SinhSymTP]...
+    Setting up reference_metric[HoleySinhSpherical]...
+    Setting up reference_metric[Cartesian]...
+    Setting up reference_metric[SinhCylindricalv2n2]...
     """
     parallelization = par.parval_from_str("parallelization")
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
@@ -253,6 +273,22 @@ def register_CFunction_compute_residual_all_points(
     :param OMP_collapse: Level of OpenMP loop collapsing.
 
     :return: None if in registration phase, else the updated NRPy environment.
+
+    Doctest:
+    >>> import nrpy.c_function as cfc
+    >>> from nrpy.helpers.generic import validate_strings
+    >>> import nrpy.params as par
+    >>> from nrpy.reference_metric import unittest_CoordSystems
+    >>> supported_Parallelizations = ["openmp", "cuda"]
+    >>> name="compute_residual_all_points"
+    >>> for parallelization in supported_Parallelizations:
+    ...    par.set_parval_from_str("parallelization", parallelization)
+    ...    for CoordSystem in unittest_CoordSystems:
+    ...       cfc.CFunction_dict.clear()
+    ...       _ = register_CFunction_compute_residual_all_points(CoordSystem, True, True)
+    ...       generated_str = cfc.CFunction_dict[f'{name}__rfm__{CoordSystem}'].full_function
+    ...       validation_desc = f"{name}__{parallelization}__{CoordSystem}".replace(" ", "_")
+    ...       validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -388,6 +424,20 @@ def register_CFunction_diagnostics(
     :param out_quantities_dict: Dictionary or string specifying output quantities.
     :raises TypeError: If `out_quantities_dict` is not a dictionary and not set to "default".
     :return: None if in registration phase, else the updated NRPy environment.
+
+    Doctest:
+    >>> import nrpy.c_function as cfc
+    >>> from nrpy.helpers.generic import validate_strings
+    >>> import nrpy.params as par
+    >>> supported_Parallelizations = ["openmp", "cuda"]
+    >>> name="diagnostics"
+    >>> for parallelization in supported_Parallelizations:
+    ...    par.set_parval_from_str("parallelization", parallelization)
+    ...    cfc.CFunction_dict.clear()
+    ...    _ = register_CFunction_diagnostics("Cartesian", True, 100)
+    ...    generated_str = cfc.CFunction_dict[f'{name}'].full_function
+    ...    validation_desc = f"{name}__{parallelization}".replace(" ", "_")
+    ...    validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -632,3 +682,16 @@ def register_CFunction_check_stop_conditions() -> Union[None, pcg.NRPyEnv_type]:
         body=body,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")
