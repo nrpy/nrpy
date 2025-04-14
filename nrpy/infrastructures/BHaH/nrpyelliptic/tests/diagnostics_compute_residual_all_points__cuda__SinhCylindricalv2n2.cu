@@ -25,8 +25,6 @@ __global__ static void compute_residual_all_points_gpu(const size_t streamid, co
   MAYBE_UNUSED const int stride1 = blockDim.y * gridDim.y;
   MAYBE_UNUSED const int stride2 = blockDim.z * gridDim.z;
 
-  // Load necessary parameters from params_struct
-
   for (int i2 = tid2 + NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2 += stride2) {
     const double NOCUDAf3_of_xx2 = rfmstruct->f3_of_xx2[i2];
     MAYBE_UNUSED const REAL_CUDA_ARRAY f3_of_xx2 = ConstCUDA(NOCUDAf3_of_xx2);

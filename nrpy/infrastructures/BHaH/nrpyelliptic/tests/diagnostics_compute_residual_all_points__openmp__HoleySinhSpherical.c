@@ -17,8 +17,6 @@ static void compute_residual_all_points_host(const params_struct *restrict param
   const REAL NOSIMDinvdxx2 = params->invdxx2;
   MAYBE_UNUSED const REAL_SIMD_ARRAY invdxx2 = ConstSIMD(NOSIMDinvdxx2);
 
-  // Load necessary parameters from params_struct
-
 #pragma omp parallel for
   for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++) {
     for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++) {

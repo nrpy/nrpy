@@ -161,6 +161,9 @@ if(r < integration_radius) {
         expr_list, exclude=[f"xx{i}" for i in range(3)]
     )
     loop_params += "// Load necessary parameters from params_struct\n"
+    # We have to manually add dxx{i} here since they are not in the SymPy
+    # expression list, but, instead, are manually used in calculations
+    # in reduction_loop_body above
     for param in params_symbols + [f"dxx{i}" for i in range(3)]:
         loop_params += f"const REAL {param} = {parallel_utils.get_params_access(parallelization)}{param};\n"
     loop_params += (
@@ -338,10 +341,11 @@ def register_CFunction_compute_residual_all_points(
     params_symbols, _ = get_params_commondata_symbols_from_expr_list(
         [rhs.residual], exclude=[f"xx{i}" for i in range(3)]
     )
-    loop_params += "// Load necessary parameters from params_struct\n"
-    for param in params_symbols:
-        loop_params += f"const REAL {param} = {parallel_utils.get_params_access(parallelization)}{param};\n"
-    loop_params += "\n"
+    if len(params_symbols) > 0:
+        loop_params += "// Load necessary parameters from params_struct\n"
+        for param in params_symbols:
+            loop_params += f"const REAL {param} = {parallel_utils.get_params_access(parallelization)}{param};\n"
+        loop_params += "\n"
 
     comments = "Kernel to compute the residual throughout the grid."
 
