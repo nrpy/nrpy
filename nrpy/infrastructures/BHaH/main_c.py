@@ -254,9 +254,7 @@ while(commondata.time < commondata.t_final) { // Main loop to progress forward i
   MoL_step_forward_in_time(&commondata, {compute_griddata});
 
   // Step 5.e: Main loop, part 5 (post_MoL_step_forward_in_time): Finish up step in time
-""".replace(
-        "griddata", "griddata_device" if parallelization in ["cuda"] else "griddata"
-    )
+"""
     if post_MoL_step_forward_in_time != "":
         body += post_MoL_step_forward_in_time
     else:
