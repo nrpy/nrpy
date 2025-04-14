@@ -364,6 +364,9 @@ def register_CFunction_compute_residual_all_points(
     }
 
     kernel_body = f"{loop_params}\n{loop_body}"
+
+    for i in range(3):
+        kernel_body = kernel_body.replace(f"xx[{i}]", f"x{i}")
     prefunc, new_body = parallel_utils.generate_kernel_and_launch_code(
         name,
         kernel_body,
@@ -378,7 +381,8 @@ def register_CFunction_compute_residual_all_points(
         },
         thread_tiling_macro_suffix="NELL_H",
     )
-
+    for i in range(3):
+        new_body = new_body.replace(f"x{i}", f"xx[{i}]")
     body = f"{new_body}\n"
 
     cfc.register_CFunction(
