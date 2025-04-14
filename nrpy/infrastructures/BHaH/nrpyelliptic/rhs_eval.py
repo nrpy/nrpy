@@ -20,6 +20,7 @@ import nrpy.params as par
 from nrpy.equations.nrpyelliptic.ConformallyFlat_RHSs import (
     HyperbolicRelaxationCurvilinearRHSs,
 )
+from nrpy.helpers.expression_utils import get_params_commondata_symbols_from_expr_list
 
 
 # Define function to evaluate RHSs
@@ -100,12 +101,22 @@ def register_CFunction_rhs_eval(
     loop_params = parallel_utils.get_loop_parameters(
         parallelization, enable_intrinsics=enable_intrinsics
     )
+    params_symbols, _ = get_params_commondata_symbols_from_expr_list(
+        [rhs.residual], exclude=[f"xx{i}" for i in range(3)]
+    )
+    loop_params += "// Load necessary parameters from params_struct\n"
+    for param in params_symbols:
+        loop_params += f"const REAL {param} = {parallel_utils.get_params_access(parallelization)}{param};\n"
+
+    loop_params += "\n// Setup parameters from function arguments\n"
     loop_params += (
         "const REAL NOSIMDeta_dampening = eta_damping_in;\n"
         "MAYBE_UNUSED const REAL_SIMD_ARRAY eta_damping = ConstSIMD(NOSIMDeta_dampening);\n"
         if enable_intrinsics
         else "const REAL eta_damping = eta_damping_in;\n"
     )
+    loop_params += "\n"
+
     if parallelization == "cuda":
         loop_params = loop_params.replace("SIMD", "CUDA")
 
@@ -131,6 +142,8 @@ def register_CFunction_rhs_eval(
     }
 
     kernel_body = f"{loop_params}\n{loop_body}"
+    for i in range(3):
+        kernel_body = kernel_body.replace(f"xx[{i}]", f"x{i}")
     prefunc, new_body = parallel_utils.generate_kernel_and_launch_code(
         name,
         kernel_body,
@@ -147,6 +160,8 @@ def register_CFunction_rhs_eval(
     )
 
     new_body = new_body.replace("eta_damping_in", "eta_damping")
+    for i in range(3):
+        new_body = new_body.replace(f"x{i}", f"xx[{i}]")
     body = f"{new_body}\n"
 
     cfc.register_CFunction(
