@@ -42,7 +42,7 @@ parser = argparse.ArgumentParser(
 parser.add_argument(
     "--parallelization",
     type=str,
-    help="Parallelization strategy to use.",
+    help="Parallelization strategy to use (e.g. openmp, cuda).",
     default="openmp",
 )
 parser.add_argument(
@@ -66,10 +66,16 @@ parser.add_argument(
 args = parser.parse_args()
 
 # Code-generation-time parameters:
-fp_type = args.floating_point_precision
-parallelization = args.parallelization
+fp_type = args.floating_point_precision.lower()
+parallelization = args.parallelization.lower()
 enable_intrinsics = args.enable_intrinsics
 enable_rfm_precompute = args.enable_rfm_precompute
+
+if parallelization not in ["openmp", "cuda"]:
+    raise ValueError(
+        f"Invalid parallelization strategy: {parallelization}. "
+        "Choose 'openmp' or 'cuda'."
+    )
 
 project_name = f"nrpyelliptic_conformally_flat_{parallelization}"
 par.set_parval_from_str("fp_type", fp_type)
