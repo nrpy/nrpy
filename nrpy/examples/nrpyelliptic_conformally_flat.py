@@ -77,7 +77,7 @@ if parallelization not in ["openmp", "cuda"]:
         "Choose 'openmp' or 'cuda'."
     )
 
-project_name = f"nrpyelliptic_conformally_flat_{parallelization}"
+project_name = "nrpyelliptic_conformally_flat"
 par.set_parval_from_str("fp_type", fp_type)
 par.set_parval_from_str("parallelization", parallelization)
 par.set_parval_from_str("Infrastructure", "BHaH")
