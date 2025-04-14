@@ -13,12 +13,14 @@ import os
 import shutil
 
 import nrpy.helpers.parallel_codegen as pcg
+import nrpy.helpers.parallelization.cuda_utilities as cudautils
 import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import (
     BHaH_defines_h,
+    BHaH_device_defines_h,
     CodeParameters,
     Makefile_helpers,
     checkpointing,
@@ -33,12 +35,14 @@ from nrpy.infrastructures.BHaH import (
 )
 from nrpy.infrastructures.BHaH.MoLtimestepping import MoL_register_all
 
-par.set_parval_from_str("Infrastructure", "BHaH")
-
 # Code-generation-time parameters:
-project_name = "nrpyelliptic_conformally_flat"
 fp_type = "double"
+parallelization = "cuda"
+project_name = f"nrpyelliptic_conformally_flat_{parallelization}"
+
 par.set_parval_from_str("fp_type", fp_type)
+par.set_parval_from_str("parallelization", parallelization)
+par.set_parval_from_str("Infrastructure", "BHaH")
 
 grid_physical_size = 1.0e6
 t_final = grid_physical_size  # This parameter is effectively not used in NRPyElliptic
@@ -100,11 +104,12 @@ enable_rfm_precompute = True
 MoL_method = "RK4"
 fd_order = 10
 radiation_BC_fd_order = 6
-enable_simd = True
+enable_intrinsics = True
 parallel_codegen_enable = True
 boundary_conditions_desc = "outgoing radiation"
 set_of_CoordSystems = {CoordSystem}
 NUMGRIDS = len(set_of_CoordSystems)
+num_cuda_streams = NUMGRIDS
 par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
 # fmt: off
 initial_data_type = "gw150914"  # choices are: "gw150914", "axisymmetric", and "single_puncture"
@@ -167,6 +172,10 @@ par.adjust_CodeParam_default("t_final", t_final)
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
 
+if parallelization == "cuda":
+    cudautils.register_CFunctions_HostDevice__operations()
+    cudautils.register_CFunction_find_global_minimum()
+    cudautils.register_CFunction_find_global_sum()
 
 # Generate functions to set initial guess
 nrpyelliptic.initial_data.register_CFunction_initial_guess_single_point()
@@ -177,7 +186,9 @@ nrpyelliptic.initial_data.register_CFunction_initial_guess_all_points(
 
 # Generate function that calls functions to set variable wavespeed and all other AUXEVOL gridfunctions
 for CoordSystem in set_of_CoordSystems:
-    nrpyelliptic.constant_source_terms_to_auxevol.register_CFunction_initialize_constant_auxevol(CoordSystem, OMP_collapse=OMP_collapse)
+    nrpyelliptic.constant_source_terms_to_auxevol.register_CFunction_initialize_constant_auxevol(
+        CoordSystem, OMP_collapse=OMP_collapse
+    )
 
 numerical_grids_and_timestep.register_CFunctions(
     set_of_CoordSystems=set_of_CoordSystems,
@@ -201,7 +212,7 @@ if enable_rfm_precompute:
 nrpyelliptic.rhs_eval.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
-    enable_intrinsics=enable_simd,
+    enable_intrinsics=enable_intrinsics,
     OMP_collapse=OMP_collapse,
 )
 
@@ -209,7 +220,7 @@ nrpyelliptic.rhs_eval.register_CFunction_rhs_eval(
 nrpyelliptic.diagnostics.register_CFunction_compute_residual_all_points(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
-    enable_intrinsics=enable_simd,
+    enable_intrinsics=enable_intrinsics,
     OMP_collapse=OMP_collapse,
 )
 
@@ -228,15 +239,20 @@ cbc.CurviBoundaryConditions_register_C_functions(
     set_of_CoordSystems,
     radiation_BC_fd_order=radiation_BC_fd_order,
 )
-rhs_string = """rhs_eval(commondata, params, rfmstruct,  auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
-if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0) {
-  const REAL wavespeed_at_outer_boundary =
-      auxevol_gfs[IDX4P(params, VARIABLE_WAVESPEEDGF, params->Nxx_plus_2NGHOSTS0 - NGHOSTS - 1, NGHOSTS, params->Nxx_plus_2NGHOSTS2 / 2)];
-  const REAL custom_gridfunctions_wavespeed[2] = {wavespeed_at_outer_boundary, wavespeed_at_outer_boundary};
+wave_speed_assignment = (
+    "cudaMemcpy(&wavespeed_at_outer_boundary, &auxevol_gfs[IDX4P(params, VARIABLE_WAVESPEEDGF, params->Nxx_plus_2NGHOSTS0 - NGHOSTS - 1, NGHOSTS, params->Nxx_plus_2NGHOSTS2 / 2)], sizeof(REAL), cudaMemcpyDeviceToHost);"
+    if parallelization == "cuda"
+    else "wavespeed_at_outer_boundary = auxevol_gfs[IDX4P(params, VARIABLE_WAVESPEEDGF, params->Nxx_plus_2NGHOSTS0 - NGHOSTS - 1, NGHOSTS, params->Nxx_plus_2NGHOSTS2 / 2)];"
+)
+rhs_string = f"""rhs_eval(commondata, params, rfmstruct,  auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
+if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0) {{
+  REAL wavespeed_at_outer_boundary;
+  {wave_speed_assignment}
+  const REAL custom_gridfunctions_wavespeed[2] = {{wavespeed_at_outer_boundary, wavespeed_at_outer_boundary}};
   apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata->xx,
                                      custom_gridfunctions_wavespeed, gridfunctions_f_infinity,
                                      RK_INPUT_GFS, RK_OUTPUT_GFS);
-}"""
+}}"""
 if not enable_rfm_precompute:
     rhs_string = rhs_string.replace("rfmstruct", "xx")
 MoL_register_all.register_CFunctions(
@@ -246,6 +262,8 @@ MoL_register_all.register_CFunctions(
   apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
+    enable_intrinsics=enable_intrinsics,
+    rational_const_alias="static constexpr" if parallelization == "cuda" else "const",
 )
 checkpointing.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
 
@@ -337,47 +355,111 @@ cmdline_input_and_parfiles.generate_default_parfile(
 cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
     project_name=project_name, cmdline_inputs=["convergence_factor"]
 )
+gpu_defines_filename = BHaH_device_defines_h.output_device_headers(
+    project_dir, num_streams=num_cuda_streams
+)
 BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
-    enable_intrinsics=enable_simd,
+    enable_intrinsics=enable_intrinsics,
+    intrinsics_header_lst=(
+        ["cuda_intrinsics.h"] if parallelization == "cuda" else ["simd_intrinsics.h"]
+    ),
     enable_rfm_precompute=enable_rfm_precompute,
     DOUBLE_means="double" if fp_type == "float" else "REAL",
+    restrict_pointer_type="*" if parallelization == "cuda" else "*restrict",
+    supplemental_defines_dict=(
+        {
+            "ADDITIONAL GPU DIAGNOSTICS": """
+#define L2_DVGF 0
+#define L2_SQUARED_DVGF 1
+""",
+            "ADDITIONAL HOST DIAGNOSTICS": """
+#define HOST_RESIDUAL_HGF 0
+#define HOST_UUGF 1
+#define NUM_HOST_DIAG 2
+""",
+            "C++/CUDA safe restrict": "#define restrict __restrict__",
+            "GPU Header": f'#include "{gpu_defines_filename}"',
+        }
+        if parallelization == "cuda"
+        else {}
+    ),
 )
+
+# Set griddata struct used for calculations to griddata_device for certain parallelizations
+compute_griddata = "griddata_device" if parallelization in ["cuda"] else "griddata"
+
 # Define post_MoL_step_forward_in_time string for main function
-post_MoL_step_forward_in_time = r"""    check_stop_conditions(&commondata, griddata);
-    if (commondata.stop_relaxation) {
+write_checkpoint_call = f"write_checkpoint(&commondata, {compute_griddata});\n".replace(
+    compute_griddata,
+    (
+        f"griddata_host, {compute_griddata}"
+        if parallelization in ["cuda"]
+        else compute_griddata
+    ),
+)
+post_MoL_step_forward_in_time = rf"""    check_stop_conditions(&commondata, {compute_griddata});
+    if (commondata.stop_relaxation) {{
       // Force a checkpoint when stop condition is reached.
       commondata.checkpoint_every = 1e-4*commondata.dt;
-      write_checkpoint(&commondata, griddata);
+      {write_checkpoint_call}
       break;
-    }
+    }}
 """
+post_non_y_n_auxevol_mallocs = (
+    "for (int grid = 0; grid < commondata.NUMGRIDS; grid++)\n"
+    f"initialize_constant_auxevol(&commondata, &{compute_griddata}[grid].params, {compute_griddata}[grid].xx, &{compute_griddata}[grid].gridfuncs);\n"
+)
+pre_MoL_step_forward_in_time = f"{write_checkpoint_call}"
+print(pre_MoL_step_forward_in_time)
 main_c.register_CFunction_main_c(
     MoL_method=MoL_method,
     initial_data_desc="",
     boundary_conditions_desc=boundary_conditions_desc,
-    post_non_y_n_auxevol_mallocs="for (int grid = 0; grid < commondata.NUMGRIDS; grid++)\n"
-    "initialize_constant_auxevol(&commondata, &griddata[grid].params, griddata[grid].xx, &griddata[grid].gridfuncs);\n",
-    pre_MoL_step_forward_in_time="write_checkpoint(&commondata, griddata);\n",
+    post_non_y_n_auxevol_mallocs=post_non_y_n_auxevol_mallocs,
+    pre_MoL_step_forward_in_time=pre_MoL_step_forward_in_time,
     post_MoL_step_forward_in_time=post_MoL_step_forward_in_time,
 )
 griddata_commondata.register_CFunction_griddata_free(
     enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True
 )
 
-if enable_simd:
+if enable_intrinsics:
     copy_files(
         package="nrpy.helpers",
-        filenames_list=["simd_intrinsics.h"],
+        filenames_list=(
+            ["cuda_intrinsics.h"]
+            if parallelization == "cuda"
+            else ["simd_intrinsics.h"]
+        ),
         project_dir=project_dir,
         subdirectory="intrinsics",
     )
 
-Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
-    project_dir=project_dir,
-    project_name=project_name,
-    exec_or_library_name=project_name,
+cuda_makefiles_options = (
+    {
+        "CC": "nvcc",
+        "src_code_file_ext": "cu",
+        "compiler_opt_option": "nvcc",
+    }
+    if parallelization == "cuda"
+    else {}
 )
+if parallelization == "cuda":
+    Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
+        project_dir=project_dir,
+        project_name=project_name,
+        exec_or_library_name=project_name,
+        CC="nvcc",
+        src_code_file_ext="cu",
+        compiler_opt_option="nvcc",
+    )
+else:
+    Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
+        project_dir=project_dir,
+        project_name=project_name,
+        exec_or_library_name=project_name,
+    )
 print(
     f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
 )
