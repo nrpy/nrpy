@@ -132,10 +132,13 @@ Step 6: Free all allocated memory."""
     name = "main"
     params = "int argc, const char *argv[]"
     body = "commondata_struct commondata; // commondata contains parameters common to all grids.\n"
-    griddata_declare = r"""griddata_struct *restrict griddata; // griddata contains data specific to an individual grid.
+
+    # Set griddata struct used for calculations to griddata_device for certain parallelizations
+    compute_griddata = "griddata_device" if parallelization in ["cuda"] else "griddata"
+
+    griddata_declare = rf"""griddata_struct *restrict {compute_griddata}; // griddata contains data specific to an individual grid.
 """
     if parallelization in ["cuda"]:
-        griddata_declare = griddata_declare.replace("griddata;", "griddata_device;")
         griddata_declare += r"""griddata_struct *restrict griddata_host; // stores only the host data needed for diagnostics
 #include "BHaH_CUDA_global_init.h"
 """
@@ -148,71 +151,64 @@ commondata_struct_set_to_default(&commondata);
 //           Then overwrite the parameter file values with those provided via command line arguments.
 cmdline_input_and_parfile_parser(&commondata, argc, argv);
 """
-    griddata_malloc = r"""
+    griddata_malloc = rf"""
 // Step 1.c: Allocate memory for MAXNUMGRIDS griddata structs,
 //           where each structure contains data specific to an individual grid.
-griddata = (griddata_struct *restrict)malloc(sizeof(griddata_struct)*MAXNUMGRIDS);
+{compute_griddata} = (griddata_struct *restrict)malloc(sizeof(griddata_struct)*MAXNUMGRIDS);
 """
 
     if parallelization in ["cuda"]:
-        griddata_malloc = griddata_malloc.replace("griddata = ", "griddata_device = ")
         griddata_malloc += "griddata_host = (griddata_struct *)malloc(sizeof(griddata_struct) * MAXNUMGRIDS);\n"
 
     body += griddata_malloc
-    body += r"""
-// Step 1.d: Initialize each CodeParameter in griddata.params to its default value.
-params_struct_set_to_default(&commondata, griddata);
-""".replace(
-        "griddata", "griddata_device" if parallelization in ["cuda"] else "griddata"
-    )
+    body += rf"""
+// Step 1.d: Initialize each CodeParameter in {compute_griddata}.params to its default value.
+params_struct_set_to_default(&commondata, {compute_griddata});
+"""
 
-    body += r"""
+    body += rf"""
 // Step 1.e: Set up numerical grids, including parameters such as NUMGRIDS, xx[3], masks, Nxx, dxx, invdxx,
 //           bcstruct, rfm_precompute, timestep, and others.
-{
+{{
   // If this function is being called for the first time, initialize commondata.time, nn, t_0, and nn_0 to 0.
   const bool calling_for_first_time = true;
-  numerical_grids_and_timestep(&commondata, griddata, calling_for_first_time);
-}
+  numerical_grids_and_timestep(&commondata, {compute_griddata}, calling_for_first_time);
+}}
 """.replace(
-        "griddata,",
+        f"{compute_griddata},",
         (
-            "griddata_device, griddata_host,"
+            f"{compute_griddata}, griddata_host,"
             if parallelization in ["cuda"]
-            else "griddata,"
+            else f"{compute_griddata},"
         ),
     )
-    body += r"""
-for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
+    body += rf"""
+for(int grid=0; grid<commondata.NUMGRIDS; grid++) {{
   // Step 2: Allocate storage for the initial data (y_n_gfs gridfunctions) on each grid.
-  MoL_malloc_y_n_gfs(&commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
-}
-""".replace(
-        "griddata", "griddata_device" if parallelization in ["cuda"] else "griddata"
-    )
+  MoL_malloc_y_n_gfs(&commondata, &{compute_griddata}[grid].params, &{compute_griddata}[grid].gridfuncs);
+}}
+"""
     if parallelization == "cuda":
-        body += r"""
-for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
+        body += rf"""
+for(int grid=0; grid<commondata.NUMGRIDS; grid++) {{
   // Step 2.b: Allocate host storage for diagnostics
-  CUDA__malloc_host_gfs(&commondata, &griddata_device[grid].params, &griddata_host[grid].gridfuncs);
-  CUDA__malloc_host_diagnostic_gfs(&commondata, &griddata_device[grid].params, &griddata_host[grid].gridfuncs);
-}
+  CUDA__malloc_host_gfs(&commondata, &{compute_griddata}[grid].params, &griddata_host[grid].gridfuncs);
+  CUDA__malloc_host_diagnostic_gfs(&commondata, &{compute_griddata}[grid].params, &griddata_host[grid].gridfuncs);
+}}
 """
     setup_initial_data_code = (
-        """Set up initial data.
-initial_data(&commondata, griddata_host, griddata_device);
+        f"""Set up initial data.
+initial_data(&commondata, griddata_host, {compute_griddata});
 """
         if parallelization in ["cuda"]
-        else """Set up initial data.
-initial_data(&commondata, griddata);
+        else f"""Set up initial data.
+initial_data(&commondata, {compute_griddata});
 """
     )
-    allocate_storage_code = """Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping.
+    allocate_storage_code = f"""Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping.
 for(int grid=0; grid<commondata.NUMGRIDS; grid++)
-  MoL_malloc_non_y_n_gfs(&commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
-""".replace(
-        "griddata", "griddata_device" if parallelization in ["cuda"] else "griddata"
-    )
+  MoL_malloc_non_y_n_gfs(&commondata, &{compute_griddata}[grid].params, &{compute_griddata}[grid].gridfuncs);
+"""
     step3code = setup_initial_data_code
     step4code = allocate_storage_code
     if set_initial_data_after_auxevol_malloc:
@@ -235,17 +231,17 @@ while(commondata.time < commondata.t_final) { // Main loop to progress forward i
         body += pre_diagnostics
     else:
         body += "// (nothing here; specify by setting pre_diagnostics string in register_CFunction_main_c().)\n"
-    body += """
+    body += f"""
   // Step 5.b: Main loop, part 2: Output diagnostics
-  diagnostics(&commondata, griddata);
+  diagnostics(&commondata, {compute_griddata});
 
   // Step 5.c: Main loop, part 3 (pre_MoL_step_forward_in_time): Prepare to step forward in time
 """.replace(
-        "griddata",
+        compute_griddata,
         (
-            "griddata_device, griddata_host"
+            f"{compute_griddata}, griddata_host"
             if parallelization in ["cuda"]
-            else "griddata"
+            else compute_griddata
         ),
     )
     if pre_MoL_step_forward_in_time:
@@ -255,12 +251,10 @@ while(commondata.time < commondata.t_final) { // Main loop to progress forward i
     body += f"""
   // Step 5.d: Main loop, part 4: Step forward in time using Method of Lines with {MoL_method} algorithm,
   //           applying {boundary_conditions_desc} boundary conditions.
-  MoL_step_forward_in_time(&commondata, griddata);
+  MoL_step_forward_in_time(&commondata, {compute_griddata});
 
   // Step 5.e: Main loop, part 5 (post_MoL_step_forward_in_time): Finish up step in time
-""".replace(
-        "griddata", "griddata_device" if parallelization in ["cuda"] else "griddata"
-    )
+"""
     if post_MoL_step_forward_in_time != "":
         body += post_MoL_step_forward_in_time
     else:
@@ -274,22 +268,22 @@ BHAH_DEVICE_SYNC();
         "" if parallelization not in ["cuda"] else "BHAH_DEVICE_SYNC();",
     )
     body += (
-        r"""
+        rf"""
   const bool free_non_y_n_gfs_and_core_griddata_pointers=true;
-  griddata_free_device(&commondata, griddata_device, free_non_y_n_gfs_and_core_griddata_pointers);
+  griddata_free_device(&commondata, {compute_griddata}, free_non_y_n_gfs_and_core_griddata_pointers);
   griddata_free(&commondata, griddata_host, free_non_y_n_gfs_and_core_griddata_pointers);
-}
-for (int i = 0; i < NUM_STREAMS; ++i) {
+}}
+for (int i = 0; i < NUM_STREAMS; ++i) {{
   cudaStreamDestroy(streams[i]);
-}
+}}
 BHAH_DEVICE_SYNC();
 cudaDeviceReset();
 """
         if parallelization in ["cuda"]
-        else r"""
+        else rf"""
   const bool free_non_y_n_gfs_and_core_griddata_pointers=true;
-  griddata_free(&commondata, griddata, free_non_y_n_gfs_and_core_griddata_pointers);
-}
+  griddata_free(&commondata, {compute_griddata}, free_non_y_n_gfs_and_core_griddata_pointers);
+}}
 """
     )
     body += r"""return 0;
