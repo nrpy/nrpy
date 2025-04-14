@@ -104,9 +104,11 @@ def register_CFunction_rhs_eval(
     params_symbols, _ = get_params_commondata_symbols_from_expr_list(
         [rhs.residual], exclude=[f"xx{i}" for i in range(3)]
     )
-    loop_params += "// Load necessary parameters from params_struct\n"
-    for param in params_symbols:
-        loop_params += f"const REAL {param} = {parallel_utils.get_params_access(parallelization)}{param};\n"
+
+    if len(params_symbols) > 0:
+        loop_params += "// Load necessary parameters from params_struct\n"
+        for param in params_symbols:
+            loop_params += f"const REAL {param} = {parallel_utils.get_params_access(parallelization)}{param};\n"
 
     loop_params += "\n// Setup parameters from function arguments\n"
     loop_params += (
