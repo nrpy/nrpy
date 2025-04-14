@@ -165,7 +165,11 @@ def generate_kernel_and_launch_code(
         # The "host" path
 
         # Remove CUDA decorators from the function signature
-        host_cfunc_decorators = cfunc_decorators.replace("__global__", "").replace("__device__", "").replace("__host__", "")
+        host_cfunc_decorators = (
+            cfunc_decorators.replace("__global__", "")
+            .replace("__device__", "")
+            .replace("__host__", "")
+        )
         device_kernel = GPU_Kernel(
             kernel_body,
             arg_dict_host,
