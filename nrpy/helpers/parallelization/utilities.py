@@ -26,6 +26,22 @@ def get_params_access(parallelization: str) -> str:
     return params_access
 
 
+def get_commondata_access(parallelization: str) -> str:
+    """
+    Return the appropriate commondata_struct-access prefix for CUDA vs. non-CUDA.
+    E.g. 'd_commondata.' vs. 'commondata->' where 'd_commondata' is
+    allocated in __constant__ memory rather than a pointer passed as a function argument.
+
+    :param parallelization: The parallelization method to use.
+    :returns: The appropriate prefix for accessing the commondata struct.
+    """
+    if parallelization == "cuda":
+        cd_access = "d_commondata."
+    else:
+        cd_access = "commondata->"
+    return cd_access
+
+
 def get_memory_malloc_function(parallelization: str) -> str:
     """
     Return the appropriate function to allocate memory.
@@ -74,6 +90,20 @@ def get_check_errors_str(
     return check_errors_str
 
 
+def get_device_sync_function(parallelization: str) -> str:
+    """
+    Return the appropriate function to synchronize with a device.
+
+    :param parallelization: The parallelization method to use.
+    :returns: The appropriate function to free memory.
+    """
+    if parallelization == "cuda":
+        sync_func = "cudaDeviceSynchronize()"
+    else:
+        sync_func = ""
+    return sync_func
+
+
 def generate_kernel_and_launch_code(
     kernel_name: str,
     kernel_body: str,
@@ -88,6 +118,7 @@ def generate_kernel_and_launch_code(
     launch_dict: Optional[Dict[str, Any]] = None,
     launchblock_with_braces: bool = False,
     thread_tiling_macro_suffix: str = "DEFAULT",
+    cfunc_decorators: str = "__global__",
 ) -> Tuple[str, str]:
     """
     Generate kernels as prefuncs and the necessary launch body.
@@ -105,6 +136,7 @@ def generate_kernel_and_launch_code(
     :param launch_dict: Dictionary to overload CUDA launch settings.
     :param launchblock_with_braces: If True, wrap the launch block in braces.
     :param thread_tiling_macro_suffix: Suffix for thread macros.
+    :param cfunc_decorators: Function decorators i.e. kernel type, templates, etc
 
     :return: (prefunc, body) code strings.
     """
@@ -124,22 +156,30 @@ def generate_kernel_and_launch_code(
             comments=comments,
             streamid_param="stream" in launch_dict,
             thread_tiling_macro_suffix=thread_tiling_macro_suffix,
+            decorators=cfunc_decorators,
         )
         # Build the function definition:
         prefunc += device_kernel.CFunction.full_function
 
     else:
         # The "host" path
+
+        # Remove CUDA decorators from the function signature
+        host_cfunc_decorators = (
+            cfunc_decorators.replace("__global__", "")
+            .replace("__device__", "")
+            .replace("__host__", "")
+        )
         device_kernel = GPU_Kernel(
             kernel_body,
             arg_dict_host,
             f"{kernel_name}_host",
             launch_dict=None,
             comments=comments,
-            decorators="",
             cuda_check_error=False,
             streamid_param=False,
             cfunc_type=cfunc_type,
+            decorators=host_cfunc_decorators,
         )
         # Build the function definition:
         prefunc += device_kernel.CFunction.full_function

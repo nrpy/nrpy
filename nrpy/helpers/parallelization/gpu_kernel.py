@@ -170,7 +170,7 @@ class GPU_Kernel:
 
     def generate_launch_block(self) -> None:
         """Generate preceding launch block definitions for kernel function call."""
-        if self.launch_dict is None:
+        if self.launch_dict is None or "__global__" not in self.decorators:
             return
 
         block_def_str = f"""

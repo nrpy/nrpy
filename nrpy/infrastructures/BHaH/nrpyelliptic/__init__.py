@@ -3,5 +3,4 @@ from . import (
     diagnostics,
     initial_data,
     rhs_eval,
-    variable_wavespeed_gfs,
 )
