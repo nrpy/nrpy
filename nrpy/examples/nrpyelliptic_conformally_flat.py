@@ -223,7 +223,7 @@ nrpyelliptic.initial_data.register_CFunction_initial_guess_all_points(
 # Generate function that calls functions to set variable wavespeed and all other AUXEVOL gridfunctions
 for CoordSystem in set_of_CoordSystems:
     nrpyelliptic.constant_source_terms_to_auxevol.register_CFunction_initialize_constant_auxevol(
-        CoordSystem, OMP_collapse=OMP_collapse
+        CoordSystem, OMP_collapse=OMP_collapse, enable_intrinsics=enable_intrinsics
     )
 
 numerical_grids_and_timestep.register_CFunctions(
