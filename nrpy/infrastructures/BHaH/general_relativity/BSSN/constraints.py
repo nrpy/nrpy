@@ -106,12 +106,12 @@ def register_CFunction_constraints(
             expr_list,
             Constraints_access_gfs,
             enable_fd_codegen=True,
-            enable_intrinsics=enable_intrinsics,
+            enable_simd=enable_intrinsics,
             enable_fd_functions=enable_fd_functions,
             rational_const_alias=(
                 "static constexpr" if parallelization == "cuda" else "static const"
             ),
-        ),
+        ).replace("SIMD", "CUDA" if parallelization == "cuda" else "SIMD"),
         loop_region="interior",
         enable_intrinsics=enable_intrinsics,
         CoordSystem=CoordSystem,

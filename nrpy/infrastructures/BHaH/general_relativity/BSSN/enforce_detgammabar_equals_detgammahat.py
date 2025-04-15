@@ -121,7 +121,7 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
             hprimeDD_expr_list,
             hDD_access_gfs,
             enable_fd_codegen=True,
-            enable_intrinsics=False,
+            enable_simd=False,
             enable_fd_functions=enable_fd_functions,
         ),
         loop_region="all points",

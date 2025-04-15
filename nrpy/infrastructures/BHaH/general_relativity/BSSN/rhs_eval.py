@@ -338,13 +338,13 @@ def register_CFunction_rhs_eval(
             expr_list,
             BSSN_RHSs_access_gf,
             enable_fd_codegen=True,
-            enable_intrinsics=enable_intrinsics,
+            enable_simd=enable_intrinsics,
             upwind_control_vec=betaU,
             enable_fd_functions=enable_fd_functions,
             rational_const_alias=(
                 "static constexpr" if parallelization == "cuda" else "static const"
             ),
-        ),
+        ).replace("SIMD", "CUDA" if parallelization == "cuda" else "SIMD"),
         loop_region="interior",
         enable_intrinsics=enable_intrinsics,
         CoordSystem=CoordSystem,
