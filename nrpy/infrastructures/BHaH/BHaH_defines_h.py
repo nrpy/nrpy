@@ -534,7 +534,8 @@ def output_BHaH_defines_h(
         }} \
     }} while(0);
 """
-    file_output_str += f"#define BHAH_DEVICE_SYNC() {parallel_utils.get_device_sync_function(parallelization)}\n"
+    if parallelization in ["cuda"]:
+        file_output_str += f"#define BHAH_DEVICE_SYNC() {parallel_utils.get_device_sync_function(parallelization)}\n"
     file_output_str += r"#endif"
 
     file_output_str = file_output_str.replace("*restrict", restrict_pointer_type)
