@@ -101,7 +101,7 @@ enable_rfm_precompute = True
 MoL_method = "RK4"
 fd_order = 8
 radiation_BC_fd_order = 4
-enable_simd = True
+enable_intrinsics = True
 separate_Ricci_and_BSSN_RHS = True
 parallel_codegen_enable = True
 enable_fd_functions = True
@@ -173,7 +173,7 @@ TP_solve(&ID_persist);
 """,
 )
 interpolation2d.register_CFunction_interpolation_2d_general__uniform_src_grid(
-    enable_simd=enable_simd, project_dir=project_dir
+    enable_simd=enable_intrinsics, project_dir=project_dir
 )
 superBdiagnostics.register_CFunction_diagnostics(
     set_of_CoordSystems={CoordSystem},
@@ -198,7 +198,7 @@ BSSN.rhs_eval.register_CFunction_rhs_eval(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
     enable_T4munu=False,
-    enable_simd=enable_simd,
+    enable_intrinsics=enable_intrinsics,
     enable_fd_functions=enable_fd_functions,
     LapseEvolutionOption=LapseEvolutionOption,
     ShiftEvolutionOption=ShiftEvolutionOption,
@@ -218,7 +218,7 @@ if separate_Ricci_and_BSSN_RHS:
     BSSN.Ricci_eval.register_CFunction_Ricci_eval(
         CoordSystem=CoordSystem,
         enable_rfm_precompute=enable_rfm_precompute,
-        enable_simd=enable_simd,
+        enable_intrinsics=enable_intrinsics,
         enable_fd_functions=enable_fd_functions,
         OMP_collapse=OMP_collapse,
     )
@@ -233,7 +233,7 @@ BSSN.constraints.register_CFunction_constraints(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
     enable_T4munu=False,
-    enable_simd=enable_simd,
+    enable_intrinsics=enable_intrinsics,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
@@ -407,13 +407,13 @@ Bdefines_h.output_BHaH_defines_h(
         str(Path("superB") / Path("superB.h")),
     ],
     project_dir=project_dir,
-    enable_intrinsics=enable_simd,
+    enable_intrinsics=enable_intrinsics,
     enable_rfm_precompute=enable_rfm_precompute,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
 )
 
 
-if enable_simd:
+if enable_intrinsics:
     copy_files(
         package="nrpy.helpers",
         filenames_list=["simd_intrinsics.h"],

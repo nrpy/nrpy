@@ -132,7 +132,7 @@ BSSN.rhs_eval.register_CFunction_rhs_eval(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
     enable_T4munu=False,
-    enable_simd=enable_simd,
+    enable_intrinsics=enable_simd,
     enable_fd_functions=enable_fd_functions,
     LapseEvolutionOption=LapseEvolutionOption,
     ShiftEvolutionOption=ShiftEvolutionOption,
@@ -144,7 +144,7 @@ if separate_Ricci_and_BSSN_RHS:
     BSSN.Ricci_eval.register_CFunction_Ricci_eval(
         CoordSystem=CoordSystem,
         enable_rfm_precompute=enable_rfm_precompute,
-        enable_simd=enable_simd,
+        enable_intrinsics=enable_simd,
         enable_fd_functions=enable_fd_functions,
         OMP_collapse=OMP_collapse,
     )
@@ -159,7 +159,7 @@ BSSN.constraints.register_CFunction_constraints(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
     enable_T4munu=False,
-    enable_simd=enable_simd,
+    enable_intrinsics=enable_simd,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
@@ -173,9 +173,7 @@ cbc.CurviBoundaryConditions_register_C_functions(
 )
 rhs_string = ""
 if separate_Ricci_and_BSSN_RHS:
-    rhs_string += (
-        "Ricci_eval(commondata, params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
-    )
+    rhs_string += "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
 rhs_string += """
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
 if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
@@ -190,7 +188,7 @@ MoL_register_all.register_CFunctions(
     rhs_string=rhs_string,
     post_rhs_string="""if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
   apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);
-  enforce_detgammabar_equals_detgammahat(commondata, params, rfmstruct, RK_OUTPUT_GFS);""",
+  enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
 )
