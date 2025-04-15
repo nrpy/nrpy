@@ -589,25 +589,27 @@ def register_CFunction_diagnostics(
         ),
     )
 
-    body += r"""// Set reference metric grid xx
+    host_griddata = "griddata_host" if parallelization in ["cuda"] else "griddata"
+    body += rf"""// Set reference metric grid xx
     REAL *restrict xx[3];
     for (int ww = 0; ww < 3; ww++)
-        xx[ww] = griddata[grid].xx[ww];
-
+        xx[ww] = {host_griddata}[grid].xx[ww];
+"""
+    if parallelization in ["cuda"]:
+        body += r"""
     // Sync with device when relevant
     BHAH_DEVICE_SYNC();
-
+"""
+    body += rf"""
     // 1D output
-    diagnostics_nearest_1d_y_axis(commondata, params, xx, &griddata[grid].gridfuncs);
-    diagnostics_nearest_1d_z_axis(commondata, params, xx, &griddata[grid].gridfuncs);
+    diagnostics_nearest_1d_y_axis(commondata, params, xx, &{host_griddata}[grid].gridfuncs);
+    diagnostics_nearest_1d_z_axis(commondata, params, xx, &{host_griddata}[grid].gridfuncs);
 
     // 2D output
-    diagnostics_nearest_2d_xy_plane(commondata, params, xx, &griddata[grid].gridfuncs);
-    diagnostics_nearest_2d_yz_plane(commondata, params, xx, &griddata[grid].gridfuncs);
-  }
-""".replace(
-        "griddata", "griddata_host" if parallelization in ["cuda"] else "griddata"
-    )
+    diagnostics_nearest_2d_xy_plane(commondata, params, xx, &{host_griddata}[grid].gridfuncs);
+    diagnostics_nearest_2d_yz_plane(commondata, params, xx, &{host_griddata}[grid].gridfuncs);
+  }}
+"""
     if enable_progress_indicator:
         body += "progress_indicator(commondata, griddata);"
     body += r"""

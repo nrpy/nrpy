@@ -63,9 +63,6 @@ void diagnostics(commondata_struct *restrict commondata, griddata_struct *restri
     for (int ww = 0; ww < 3; ww++)
       xx[ww] = griddata[grid].xx[ww];
 
-    // Sync with device when relevant
-    BHAH_DEVICE_SYNC();
-
     // 1D output
     diagnostics_nearest_1d_y_axis(commondata, params, xx, &griddata[grid].gridfuncs);
     diagnostics_nearest_1d_z_axis(commondata, params, xx, &griddata[grid].gridfuncs);
