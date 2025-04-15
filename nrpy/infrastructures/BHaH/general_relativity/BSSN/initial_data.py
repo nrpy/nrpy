@@ -12,6 +12,7 @@ from typing import Union, cast
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter as admid
+import nrpy.params as par
 from nrpy.equations.general_relativity.InitialData_Cartesian import (
     InitialData_Cartesian,
 )
@@ -52,6 +53,7 @@ def register_CFunction_initial_data(
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
+    parallelization = par.parval_from_str("parallelization")
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
@@ -90,6 +92,9 @@ def register_CFunction_initial_data(
     params = (
         "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
     )
+    params += (
+        ", griddata_struct *restrict d_griddata" if parallelization in ["cuda"] else ""
+    )
 
     body = ""
     if enable_checkpointing:
@@ -105,11 +110,20 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   params_struct *restrict params = &griddata[grid].params;
 """
     body += f"""initial_data_reader__convert_ADM_{IDCoordSystem}_to_BSSN(commondata, params,
-griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_persist, {IDtype});"""
+(const REAL* *restrict) griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_persist, {IDtype});""".replace(
+        "(const REAL* *restrict) griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs,",
+        (
+            "(const REAL* *restrict) griddata[grid].xx, (const REAL* *restrict) d_griddata[grid].xx, &d_griddata[grid].bcstruct, &griddata[grid].gridfuncs,&d_griddata[grid].gridfuncs,"
+            if parallelization in ["cuda"]
+            else "(const REAL* *restrict) griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs,"
+        ),
+    )
     body += """
   apply_bcs_outerextrap_and_inner(commondata, params, &griddata[grid].bcstruct, griddata[grid].gridfuncs.y_n_gfs);
 }
-"""
+""".replace(
+        "griddata", "d_griddata" if parallelization == "cuda" else "griddata"
+    )
     if free_ID_persist_struct_str:
         body += free_ID_persist_struct_str
 
