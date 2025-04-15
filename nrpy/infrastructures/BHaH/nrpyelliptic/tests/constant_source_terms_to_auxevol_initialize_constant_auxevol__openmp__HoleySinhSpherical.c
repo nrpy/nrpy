@@ -146,7 +146,7 @@ static void auxevol_gfs_all_points_host(const commondata_struct *restrict common
 
 /**
  * Kernel: variable_wavespeed_gfs_all_points_host.
- * Kernel to initialize auxillary grid functions at all grid points.
+ * Kernel to compute variable wavespeed for all grids based on local grid spacing.
  */
 static void variable_wavespeed_gfs_all_points_host(const params_struct *restrict params, const REAL *restrict x0, const REAL *restrict x1,
                                                    const REAL *restrict x2, REAL *restrict in_gfs, const REAL dt,

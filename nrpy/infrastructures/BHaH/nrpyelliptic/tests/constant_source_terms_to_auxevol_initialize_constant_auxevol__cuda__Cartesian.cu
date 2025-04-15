@@ -136,7 +136,7 @@ __global__ static void auxevol_gfs_all_points_gpu(const size_t streamid, const R
 
 /**
  * Kernel: variable_wavespeed_gfs_all_points_gpu.
- * Kernel to initialize auxillary grid functions at all grid points.
+ * Kernel to compute variable wavespeed for all grids based on local grid spacing.
  */
 __global__ static void variable_wavespeed_gfs_all_points_gpu(const size_t streamid, const REAL *restrict x0, const REAL *restrict x1,
                                                              const REAL *restrict x2, REAL *restrict in_gfs, const REAL dt,

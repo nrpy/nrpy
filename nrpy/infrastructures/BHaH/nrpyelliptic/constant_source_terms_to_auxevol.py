@@ -40,11 +40,12 @@ def generate_prefunc_variable_wavespeed_gfs_all_points(
 
     # Prepare the argument dicts
     arg_dict_cuda = {
-        "xx0": "const REAL",
-        "xx1": "const REAL",
-        "xx2": "const REAL",
-        "psi_background": "REAL *restrict",
-        "ADD_times_AUU": "REAL *restrict",
+        "x0": "const REAL *restrict",
+        "x1": "const REAL *restrict",
+        "x2": "const REAL *restrict",
+        "in_gfs": "REAL *restrict",
+        "dt": "const REAL",
+        "MINIMUM_GLOBAL_WAVESPEED": "const REAL",
     }
     arg_dict_host = {
         "params": "const params_struct *restrict",
@@ -92,21 +93,6 @@ def generate_prefunc_variable_wavespeed_gfs_all_points(
         loop_params += f"const REAL {param} = {parallel_utils.get_params_access(parallelization)}{param};\n"
     loop_params += "\n"
 
-    comments = "Kernel to initialize auxillary grid functions at all grid points."
-    # Prepare the argument dicts
-    arg_dict_cuda = {
-        "x0": "const REAL *restrict",
-        "x1": "const REAL *restrict",
-        "x2": "const REAL *restrict",
-        "in_gfs": "REAL *restrict",
-        "dt": "const REAL",
-        "MINIMUM_GLOBAL_WAVESPEED": "const REAL",
-    }
-    arg_dict_host = {
-        # "commondata": "const commondata_struct *restrict",
-        "params": "const params_struct *restrict",
-        **arg_dict_cuda,
-    }
     kernel_body = f"{loop_params}\n{loop_body}"
     prefunc, new_body = parallel_utils.generate_kernel_and_launch_code(
         name,
