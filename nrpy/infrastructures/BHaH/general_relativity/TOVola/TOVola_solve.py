@@ -12,10 +12,12 @@ Authors: David Boyer
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.equations.tov.TOV_equations as tov_eqs
+import nrpy.params as par
 
 
 def register_CFunction_TOVola_solve() -> None:
     """Register C function TP_solve(), main driver function for pseudospectral solve."""
+    parallelization = par.parval_from_str("parallelization")
     includes = ["BHaH_defines.h", "gsl/gsl_errno.h", "gsl/gsl_odeiv2.h"]
     prefunc = r"""
 #define ODE_SOLVER_DIM 4
@@ -332,7 +334,10 @@ void extend_to_negative_r(REAL *restrict arr, const REAL parity, REAL *restrict 
   for(int i=0;i<TOVdata->numpoints_actually_saved; i++) tmp[i+NEGATIVE_R_INTERP_BUFFER] = arr[i];
   memcpy(arr, tmp, sizeof(REAL) * (TOVdata->numpoints_actually_saved+NEGATIVE_R_INTERP_BUFFER));
 }
-"""
+""".replace(
+        "(REAL *restrict)",
+        "(REAL *)" if parallelization in ["cuda"] else "(REAL *restrict)",
+    )
     desc = "Driver routine for TOV solve."
     name = "TOVola_solve"
     params = (
@@ -400,13 +405,13 @@ void extend_to_negative_r(REAL *restrict arr, const REAL parity, REAL *restrict 
       // Update arr_size instead of modifying the macro
       const int new_arr_size = 1.5 * TOVdata->numels_alloced_TOV_arr;
       TOVdata->numels_alloced_TOV_arr = new_arr_size;
-      TOVdata->r_Schw_arr = realloc(TOVdata->r_Schw_arr, sizeof(REAL) * new_arr_size);
-      TOVdata->rho_energy_arr = realloc(TOVdata->rho_energy_arr, sizeof(REAL) * new_arr_size);
-      TOVdata->rho_baryon_arr = realloc(TOVdata->rho_baryon_arr, sizeof(REAL) * new_arr_size);
-      TOVdata->P_arr = realloc(TOVdata->P_arr, sizeof(REAL) * new_arr_size);
-      TOVdata->M_arr = realloc(TOVdata->M_arr, sizeof(REAL) * new_arr_size);
-      TOVdata->nu_arr = realloc(TOVdata->nu_arr, sizeof(REAL) * new_arr_size);
-      TOVdata->r_iso_arr = realloc(TOVdata->r_iso_arr, sizeof(REAL) * new_arr_size);
+      TOVdata->r_Schw_arr = (REAL *restrict)realloc(TOVdata->r_Schw_arr, sizeof(REAL) * new_arr_size);
+      TOVdata->rho_energy_arr = (REAL *restrict)realloc(TOVdata->rho_energy_arr, sizeof(REAL) * new_arr_size);
+      TOVdata->rho_baryon_arr = (REAL *restrict)realloc(TOVdata->rho_baryon_arr, sizeof(REAL) * new_arr_size);
+      TOVdata->P_arr = (REAL *restrict)realloc(TOVdata->P_arr, sizeof(REAL) * new_arr_size);
+      TOVdata->M_arr = (REAL *restrict)realloc(TOVdata->M_arr, sizeof(REAL) * new_arr_size);
+      TOVdata->nu_arr = (REAL *restrict)realloc(TOVdata->nu_arr, sizeof(REAL) * new_arr_size);
+      TOVdata->r_iso_arr = (REAL *restrict)realloc(TOVdata->r_iso_arr, sizeof(REAL) * new_arr_size);
 
       if (!TOVdata->r_Schw_arr || !TOVdata->rho_energy_arr || !TOVdata->rho_baryon_arr || !TOVdata->P_arr || !TOVdata->M_arr || !TOVdata->nu_arr ||
           !TOVdata->r_iso_arr) {
@@ -444,7 +449,7 @@ void extend_to_negative_r(REAL *restrict arr, const REAL parity, REAL *restrict 
     // Data in TOVdata->*_arr are stored at r=TOVdata->commondata->initial_ode_step_size > 0 up to the stellar surface.
     // However, we may need data at r=0, which would require extrapolation.
     // To prevent that, we copy INTERP_BUFFER data points from r>0 to r<0 so that we can always interpolate.
-    REAL *restrict tmp = malloc(sizeof(REAL) * (TOVdata->numpoints_actually_saved + NEGATIVE_R_INTERP_BUFFER));
+    REAL *restrict tmp = (REAL *restrict)malloc(sizeof(REAL) * (TOVdata->numpoints_actually_saved + NEGATIVE_R_INTERP_BUFFER));
 
     //printf("Rbefor = %.15e\n", TOVdata->r_Schw_arr[TOVdata->numpoints_actually_saved-1]);
 
@@ -488,7 +493,10 @@ void extend_to_negative_r(REAL *restrict arr, const REAL parity, REAL *restrict 
 
   /* Free raw data as it's no longer needed */
   free_tovola_data(TOVdata);
-"""
+""".replace(
+        "(REAL *restrict)",
+        "(REAL *)" if parallelization in ["cuda"] else "(REAL *restrict)",
+    )
     cfc.register_CFunction(
         subdirectory="TOVola",
         includes=includes,

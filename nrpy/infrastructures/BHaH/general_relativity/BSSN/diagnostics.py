@@ -61,6 +61,7 @@ def register_CFunction_diagnostics(
         default_diagnostics_out_every,
         commondata=True,
     )
+    parallelization = par.parval_from_str("parallelization")
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
@@ -76,6 +77,16 @@ def register_CFunction_diagnostics(
     if not isinstance(out_quantities_dict, dict):
         raise TypeError(f"out_quantities_dict was initialized to {out_quantities_dict}, which is not a dictionary!")
     # fmt: on
+    out_quantities_gf_indexes_dict = {
+        tmp_str.replace(" ", "")
+        .split("[")[1]
+        .split(",")[0]
+        .replace("IDX4pt(", ""): gf_ptr
+        for gf_ptr in ["y_n_gfs", "diagnostic_output_gfs"]
+        for v in out_quantities_dict.values()
+        for tmp_str in v.split(gf_ptr)
+        if "IDX4pt" in tmp_str and tmp_str and tmp_str[0] == "["
+    }
 
     for CoordSystem in set_of_CoordSystems:
         out012d.register_CFunction_diagnostics_nearest_grid_center(
@@ -103,47 +114,74 @@ def register_CFunction_diagnostics(
     name = "diagnostics"
     params = (
         "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
+        + (
+            ", griddata_struct *restrict griddata_host"
+            if parallelization == "cuda"
+            else ""
+        )
     )
 
-    body = r"""
+    host_griddata = "griddata_host" if parallelization == "cuda" else "griddata"
+    body = rf"""
 const REAL currtime = commondata->time, currdt = commondata->dt, outevery = commondata->diagnostics_output_every;
 // Explanation of the if() below:
 // Step 1: round(currtime / outevery) rounds to the nearest integer multiple of currtime.
 // Step 2: Multiplying by outevery yields the exact time we should output again, t_out.
 // Step 3: If fabs(t_out - currtime) < 0.5 * currdt, then currtime is as close to t_out as possible!
-if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {
-  for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
+if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {{
+  for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {{
     // Unpack griddata struct:
     const REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
     REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
     REAL *restrict diagnostic_output_gfs = griddata[grid].gridfuncs.diagnostic_output_gfs;
     REAL *restrict xx[3];
-    {
+    {{
       for (int ww = 0; ww < 3; ww++)
-        xx[ww] = griddata[grid].xx[ww];
-    }
+        xx[ww] = {host_griddata}[grid].xx[ww];
+    }}
     const params_struct *restrict params = &griddata[grid].params;
 #include "set_CodeParameters.h"
-
+"""
+    if parallelization == "cuda":
+        body += r"""
+    // This does not leverage async memory transfers using multiple streams at the moment
+    // given the current intent is one cuda stream per grid. This could be leveraged
+    // in the future by increasing NUM_STREAMS such that a diagnostic stream is included per grid
+    size_t streamid = params->grid_idx % NUM_STREAMS;
+    cpyHosttoDevice_params__constant(&griddata[grid].params, streamid);
+    REAL *restrict host_y_n_gfs = griddata_host[grid].gridfuncs.y_n_gfs;
+    REAL *restrict host_diagnostic_output_gfs = griddata_host[grid].gridfuncs.diagnostic_output_gfs;
+"""
+        for idx, gf in out_quantities_gf_indexes_dict.items():
+            if "y_n_gfs" in gf:
+                body += f"    cpyDevicetoHost__gf(commondata, params, host_{gf}, {gf}, {idx}, {idx}, streamid);\n"
+    body += r"""
     // Constraint output
     {
 """
     if use_Ricci_eval_func:
-        body += "Ricci_eval(commondata, params, griddata[grid].rfmstruct, y_n_gfs, auxevol_gfs);\n"
+        body += "Ricci_eval(params, griddata[grid].rfmstruct, y_n_gfs, auxevol_gfs);\n"
     body += r"""
-      constraints_eval(commondata, params, griddata[grid].rfmstruct, y_n_gfs, auxevol_gfs, diagnostic_output_gfs);
-    }
+      constraints_eval(params, griddata[grid].rfmstruct, y_n_gfs, auxevol_gfs, diagnostic_output_gfs);
+    }"""
 
+    if parallelization == "cuda":
+        for idx, gf in out_quantities_gf_indexes_dict.items():
+            if "diagnostic_output_gfs" in gf:
+                body += f"    cpyDevicetoHost__gf(commondata, params, host_{gf}, {gf}, {idx}, {idx}, streamid);\n"
+            body += "cudaStreamSynchronize(streams[streamid]);"
+
+    body += f"""
     // 0D output
-    diagnostics_nearest_grid_center(commondata, params, &griddata[grid].gridfuncs);
+    diagnostics_nearest_grid_center(commondata, params, &{host_griddata}[grid].gridfuncs);
 
     // 1D output
-    diagnostics_nearest_1d_y_axis(commondata, params, xx, &griddata[grid].gridfuncs);
-    diagnostics_nearest_1d_z_axis(commondata, params, xx, &griddata[grid].gridfuncs);
+    diagnostics_nearest_1d_y_axis(commondata, params, xx, &{host_griddata}[grid].gridfuncs);
+    diagnostics_nearest_1d_z_axis(commondata, params, xx, &{host_griddata}[grid].gridfuncs);
 
     // 2D output
-    diagnostics_nearest_2d_xy_plane(commondata, params, xx, &griddata[grid].gridfuncs);
-    diagnostics_nearest_2d_yz_plane(commondata, params, xx, &griddata[grid].gridfuncs);
+    diagnostics_nearest_2d_xy_plane(commondata, params, xx, &{host_griddata}[grid].gridfuncs);
+    diagnostics_nearest_2d_yz_plane(commondata, params, xx, &{host_griddata}[grid].gridfuncs);
 """
     if enable_psi4_diagnostics:
         body += r"""      // Do psi4 output, but only if the grid is spherical-like.

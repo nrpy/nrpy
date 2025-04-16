@@ -40,7 +40,7 @@ def generate_prefunc_variable_wavespeed_gfs_all_points(
     comments = r"""Kernel to compute variable wavespeed for all grids based on local grid spacing."""
     name = "variable_wavespeed_gfs_all_points"
     parallelization = par.parval_from_str("parallelization")
-
+    enable_intrinsics = enable_intrinsics if parallelization == "cuda" else False
     # Prepare the argument dicts
     arg_dict_cuda = {
         "x0": "const REAL *restrict",
@@ -205,6 +205,7 @@ def generate_prefunc_auxevol_gfs_all_points(
     name = "auxevol_gfs_all_points"
     psi_background_memaccess = gri.BHaHGridFunction.access_gf("psi_background")
     ADD_times_AUU_memaccess = gri.BHaHGridFunction.access_gf("ADD_times_AUU")
+    enable_intrinsics = enable_intrinsics if parallelization == "cuda" else False
 
     kernel_body = f"{parallel_utils.get_loop_parameters(parallelization, enable_intrinsics=enable_intrinsics)}\n"
 

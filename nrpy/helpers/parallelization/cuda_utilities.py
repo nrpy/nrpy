@@ -355,6 +355,8 @@ def register_CFunction_CUDA__malloc_host_gfs() -> None:
       const int Nxx_plus_2NGHOSTS_tot = params->Nxx_plus_2NGHOSTS0 * params->Nxx_plus_2NGHOSTS1 * params->Nxx_plus_2NGHOSTS2;
     <BLANKLINE>
       BHAH_MALLOC_PINNED(gridfuncs->y_n_gfs, sizeof(REAL) * Nxx_plus_2NGHOSTS_tot * NUM_EVOL_GFS);
+      if (NUM_AUXEVOL_GFS > 0)
+        BHAH_MALLOC_PINNED(gridfuncs->auxevol_gfs, sizeof(REAL) * NUM_AUXEVOL_GFS * Nxx_plus_2NGHOSTS_tot);
     } // END FUNCTION CUDA__malloc_host_gfs
     <BLANKLINE>
     """
@@ -368,6 +370,8 @@ def register_CFunction_CUDA__malloc_host_gfs() -> None:
   const int Nxx_plus_2NGHOSTS_tot = params->Nxx_plus_2NGHOSTS0 * params->Nxx_plus_2NGHOSTS1 * params->Nxx_plus_2NGHOSTS2;
 
   BHAH_MALLOC_PINNED(gridfuncs->y_n_gfs, sizeof(REAL) * Nxx_plus_2NGHOSTS_tot * NUM_EVOL_GFS);
+  if (NUM_AUXEVOL_GFS > 0)
+    BHAH_MALLOC_PINNED(gridfuncs->auxevol_gfs, sizeof(REAL) * NUM_AUXEVOL_GFS * Nxx_plus_2NGHOSTS_tot);
 """
     cfc.register_CFunction(
         includes=includes,
@@ -478,7 +482,12 @@ def register_CFunction_CUDA__free_host_gfs() -> None:
     /**
      * Free Host storage for diagnostics GFs.
      */
-    __host__ void CUDA__free_host_gfs(MoL_gridfunctions_struct *gridfuncs) { BHAH_FREE_PINNED(gridfuncs->y_n_gfs); } // END FUNCTION CUDA__free_host_gfs
+    __host__ void CUDA__free_host_gfs(MoL_gridfunctions_struct *gridfuncs) {
+    <BLANKLINE>
+      BHAH_FREE_PINNED(gridfuncs->y_n_gfs);
+      if (NUM_AUXEVOL_GFS > 0)
+        BHAH_FREE_PINNED(gridfuncs->auxevol_gfs);
+    } // END FUNCTION CUDA__free_host_gfs
     <BLANKLINE>
     """
     includes = ["BHaH_defines.h"]
@@ -488,6 +497,8 @@ def register_CFunction_CUDA__free_host_gfs() -> None:
     params = "MoL_gridfunctions_struct * gridfuncs"
     body = """
     BHAH_FREE_PINNED(gridfuncs->y_n_gfs);
+    if (NUM_AUXEVOL_GFS > 0)
+        BHAH_FREE_PINNED(gridfuncs->auxevol_gfs);
 """
     cfc.register_CFunction(
         includes=includes,
