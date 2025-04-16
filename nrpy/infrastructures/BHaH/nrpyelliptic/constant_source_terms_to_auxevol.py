@@ -27,16 +27,19 @@ from nrpy.helpers.expression_utils import get_params_commondata_symbols_from_exp
 
 def generate_prefunc_variable_wavespeed_gfs_all_points(
     CoordSystem: str,
+    enable_intrinsics: bool = False,
 ) -> Tuple[str, str]:
     """
     Generate function to compute variable wavespeed based on local grid spacing for a single coordinate system.
 
     :param CoordSystem: The coordinate system to use in the hyperbolic relaxation.
+    :param enable_intrinsics: Whether to enable hardware intrinsics (default: False).
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
     comments = r"""Kernel to compute variable wavespeed for all grids based on local grid spacing."""
     name = "variable_wavespeed_gfs_all_points"
+    parallelization = par.parval_from_str("parallelization")
 
     # Prepare the argument dicts
     arg_dict_cuda = {
@@ -63,7 +66,8 @@ def generate_prefunc_variable_wavespeed_gfs_all_points(
         expr_list,
         ["const REAL dsmin0", "const REAL dsmin1", "const REAL dsmin2"],
         include_braces=False,
-    )
+        enable_simd=enable_intrinsics,
+    ).replace("SIMD", "CUDA" if parallelization == "cuda" else "SIMD")
 
     variable_wavespeed_memaccess = gri.BHaHGridFunction.access_gf("variable_wavespeed")
 
@@ -75,14 +79,14 @@ def generate_prefunc_variable_wavespeed_gfs_all_points(
         read_xxs=True,
         loop_region="interior",
         CoordSystem=CoordSystem,
+        enable_intrinsics=enable_intrinsics,
     )
     for i in range(3):
         loop_body = loop_body.replace(f"xx[{i}]", f"x{i}")
 
-    parallelization = par.parval_from_str("parallelization")
     loop_params = parallel_utils.get_loop_parameters(
         parallelization,
-        enable_intrinsics=(parallelization in ["cuda"]),
+        enable_intrinsics=enable_intrinsics,
     )
 
     params_symbols, _ = get_params_commondata_symbols_from_expr_list(
@@ -115,11 +119,13 @@ def generate_prefunc_variable_wavespeed_gfs_all_points(
 # Define functions to set AUXEVOL gridfunctions
 def generate_prefunc_auxevol_gfs_single_point(
     CoordSystem: str,
+    enable_intrinsics: bool = False,
 ) -> Tuple[str, str]:
     """
     Generate function for the AUXEVOL grid functions at a single point.
 
     :param CoordSystem: The coordinate system to use in setting up the AUXEVOL gridfunctions.
+    :param enable_intrinsics: Whether to enable hardware intrinsics (default: False).
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -164,7 +170,8 @@ def generate_prefunc_auxevol_gfs_single_point(
         ["*psi_background", "*ADD_times_AUU"],
         verbose=False,
         include_braces=False,
-    )
+        enable_simd=enable_intrinsics,
+    ).replace("SIMD", "CUDA" if parallelization == "cuda" else "SIMD")
 
     prefunc, new_body = parallel_utils.generate_kernel_and_launch_code(
         name,
@@ -182,12 +189,14 @@ def generate_prefunc_auxevol_gfs_single_point(
 def generate_prefunc_auxevol_gfs_all_points(
     CoordSystem: str,
     OMP_collapse: int = 1,
+    enable_intrinsics: bool = False,
 ) -> Tuple[str, str]:
     """
     Register the C function for the AUXEVOL grid functions at all points.
 
     :param OMP_collapse: Degree of OpenMP loop collapsing.
     :param CoordSystem: The coordinate system to use in setting up the AUXEVOL gridfunctions.
+    :param enable_intrinsics: Whether to enable hardware intrinsics (default: False).
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -197,7 +206,7 @@ def generate_prefunc_auxevol_gfs_all_points(
     psi_background_memaccess = gri.BHaHGridFunction.access_gf("psi_background")
     ADD_times_AUU_memaccess = gri.BHaHGridFunction.access_gf("ADD_times_AUU")
 
-    kernel_body = f"{parallel_utils.get_loop_parameters(parallelization)}\n"
+    kernel_body = f"{parallel_utils.get_loop_parameters(parallelization, enable_intrinsics=enable_intrinsics)}\n"
 
     single_point_prefunc, single_point_launch = (
         generate_prefunc_auxevol_gfs_single_point(CoordSystem)
@@ -210,6 +219,7 @@ def generate_prefunc_auxevol_gfs_all_points(
         read_xxs=True,
         loop_region="all points",
         OMP_collapse=OMP_collapse,
+        enable_intrinsics=enable_intrinsics,
     )
     for i in range(3):
         kernel_body = kernel_body.replace(f"xx[{i}]", f"x{i}")
@@ -246,13 +256,16 @@ def generate_prefunc_auxevol_gfs_all_points(
 
 
 def register_CFunction_initialize_constant_auxevol(
-    CoordSystem: str, OMP_collapse: int = 1
+    CoordSystem: str,
+    OMP_collapse: int = 1,
+    enable_intrinsics: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register function to call all functions that set up AUXEVOL gridfunctions.
 
     :param CoordSystem: The coordinate system to use in setting up the AUXEVOL gridfunctions.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
+    :param enable_intrinsics: Whether to enable hardware intrinsics (default: False).
     :return: None if in registration phase, else the updated NRPy environment.
 
     Doctest:
@@ -294,11 +307,15 @@ def register_CFunction_initialize_constant_auxevol(
 
     auxevol_gfs_all_points_prefunc, auxevol_gfs_all_points_launch = (
         generate_prefunc_auxevol_gfs_all_points(
-            CoordSystem=CoordSystem, OMP_collapse=OMP_collapse
+            CoordSystem=CoordSystem,
+            OMP_collapse=OMP_collapse,
+            enable_intrinsics=enable_intrinsics,
         )
     )
     wavespeed_all_points_prefunc, wavespeed_all_points_launch = (
-        generate_prefunc_variable_wavespeed_gfs_all_points(CoordSystem=CoordSystem)
+        generate_prefunc_variable_wavespeed_gfs_all_points(
+            CoordSystem=CoordSystem, enable_intrinsics=enable_intrinsics
+        )
     )
     auxevol_gfs_all_points_launch = (
         f"{{{auxevol_gfs_all_points_launch}}}"
