@@ -736,16 +736,20 @@ typedef struct __rescaled_BSSN_rfm_basis_struct__ {
             for nu in range(mu, 4):
                 gf = f"T4UU{mu}{nu}"
                 body += f"gridfuncs->auxevol_gfs[IDX4pt({gf.upper()}GF, idx3)] = rescaled_BSSN_rfm_basis.{gf};\n"
-    post_initial_data_call = (
-        """
+    post_initial_data_call: str = ""
+    if parallelization in ["cuda"]:
+        post_initial_data_call = """
     for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
         cpyHosttoDevice__gf(commondata, params, gridfuncs->y_n_gfs, d_gridfuncs->y_n_gfs, which_gf, which_gf, params->grid_idx % NUM_STREAMS);
+    }"""
+        if enable_T4munu:
+            post_initial_data_call += """
+    for (int which_gf = 0; which_gf < NUM_AUXEVOL_GFS; which_gf++) {
+        cpyHosttoDevice__gf(commondata, params, gridfuncs->auxevol_gfs, d_gridfuncs->auxevol_gfs, which_gf, which_gf, params->grid_idx % NUM_STREAMS);
     }
-    BHAH_DEVICE_SYNC();
     """
-        if parallelization == "cuda"
-        else ""
-    )
+        post_initial_data_call += "BHAH_DEVICE_SYNC();\n"
+
     body += f"""
     // Initialize lambdaU to zero
     gridfuncs->y_n_gfs[IDX4pt(LAMBDAU0GF, idx3)] = 0.0;
