@@ -90,17 +90,20 @@ def register_CFunction_initial_data(
     cfunc_type = "void"
     name = "initial_data"
     params = (
-        "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
-    )
-    params += (
-        ", griddata_struct *restrict d_griddata" if parallelization in ["cuda"] else ""
+        "commondata_struct *restrict commondata, griddata_struct *restrict griddata_host, griddata_struct *restrict griddata"
+        if parallelization in ["cuda"]
+        else "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
     )
 
     body = ""
+    host_griddata = "griddata_host" if parallelization in ["cuda"] else "griddata"
     if enable_checkpointing:
         body += """// Attempt to read checkpoint file. If it doesn't exist, then continue. Otherwise return.
 if( read_checkpoint(commondata, griddata) ) return;
-"""
+""".replace(
+            "griddata",
+            f"{host_griddata}, griddata" if parallelization in ["cuda"] else "griddata",
+        )
     body += "ID_persist_struct ID_persist;\n"
     if populate_ID_persist_struct_str:
         body += populate_ID_persist_struct_str
@@ -109,21 +112,19 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   // Unpack griddata struct:
   params_struct *restrict params = &griddata[grid].params;
 """
-    body += f"""initial_data_reader__convert_ADM_{IDCoordSystem}_to_BSSN(commondata, params,
-(const REAL* *restrict) griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_persist, {IDtype});""".replace(
-        "(const REAL* *restrict) griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs,",
-        (
-            "(const REAL* *restrict) griddata[grid].xx, (const REAL* *restrict) d_griddata[grid].xx, &d_griddata[grid].bcstruct, &griddata[grid].gridfuncs,&d_griddata[grid].gridfuncs,"
-            if parallelization in ["cuda"]
-            else "(const REAL* *restrict) griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs,"
-        ),
+    body += (
+        f"initial_data_reader__convert_ADM_{IDCoordSystem}_to_BSSN(commondata, params,"
+        f"(const REAL *restrict *) {host_griddata}[grid].xx, (const REAL *restrict *) griddata[grid].xx,"
+        f"&griddata[grid].bcstruct, &{host_griddata}[grid].gridfuncs, &griddata[grid].gridfuncs, &ID_persist, {IDtype});"
+        if parallelization in ["cuda"]
+        else
+        f"initial_data_reader__convert_ADM_{IDCoordSystem}_to_BSSN(commondata, params,"
+        f"(const REAL *restrict *) {host_griddata}[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_persist, {IDtype});"
     )
     body += """
   apply_bcs_outerextrap_and_inner(commondata, params, &griddata[grid].bcstruct, griddata[grid].gridfuncs.y_n_gfs);
 }
-""".replace(
-        "griddata", "d_griddata" if parallelization == "cuda" else "griddata"
-    )
+"""
     if free_ID_persist_struct_str:
         body += free_ID_persist_struct_str
 
