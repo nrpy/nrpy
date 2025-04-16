@@ -17,11 +17,11 @@ custom_functions_for_SymPy_ccode = {
     "double": {
         "nrpyAbs": [
             (lambda b: isinstance(b, sp.Integer), lambda b: f"abs({b})"),
-            (lambda b: True, lambda b: f"fabs({b})")
+            (lambda b: True, lambda b: f"fabs({b})"),
         ],
         "fabs": [
             (lambda b: isinstance(b, sp.Integer), lambda b: f"abs({b})"),
-            (lambda b: True, lambda b: f"fabs({b})")
+            (lambda b: True, lambda b: f"fabs({b})"),
         ],
         "Pow": [
             (lambda b, e: e == sp.Rational(1, 2), lambda b, e: f"sqrt({b})"),
@@ -53,11 +53,11 @@ custom_functions_for_SymPy_ccode = {
     "float": {
         "nrpyAbs": [
             (lambda b: isinstance(b, sp.Integer), lambda b: f"abs({b})"),
-            (lambda b: True, lambda b: f"fabsf({b})")
+            (lambda b: True, lambda b: f"fabsf({b})"),
         ],
         "fabs": [
             (lambda b: isinstance(b, sp.Integer), lambda b: f"abs({b})"),
-            (lambda b: True, lambda b: f"fabsf({b})")
+            (lambda b: True, lambda b: f"fabsf({b})"),
         ],
         "Pow": [
             (lambda b, e: e == sp.Rational(1, 2), lambda b, e: f"sqrtf({b})"),
@@ -84,11 +84,11 @@ custom_functions_for_SymPy_ccode = {
     "long double": {
         "nrpyAbs": [
             (lambda b: isinstance(b, sp.Integer), lambda b: f"abs({b})"),
-            (lambda b: True, lambda b: f"fabsl({b})")
+            (lambda b: True, lambda b: f"fabsl({b})"),
         ],
         "fabs": [
             (lambda b: isinstance(b, sp.Integer), lambda b: f"abs({b})"),
-            (lambda b: True, lambda b: f"fabsl({b})")
+            (lambda b: True, lambda b: f"fabsl({b})"),
         ],
         "Pow": [
             (lambda b, e: e == sp.Rational(1, 2), lambda b, e: f"sqrtl({b})"),

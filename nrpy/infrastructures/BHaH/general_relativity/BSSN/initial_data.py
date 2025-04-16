@@ -117,8 +117,7 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
         f"(const REAL *restrict *) {host_griddata}[grid].xx, (const REAL *restrict *) griddata[grid].xx,"
         f"&griddata[grid].bcstruct, &{host_griddata}[grid].gridfuncs, &griddata[grid].gridfuncs, &ID_persist, {IDtype});"
         if parallelization in ["cuda"]
-        else
-        f"initial_data_reader__convert_ADM_{IDCoordSystem}_to_BSSN(commondata, params,"
+        else f"initial_data_reader__convert_ADM_{IDCoordSystem}_to_BSSN(commondata, params,"
         f"(const REAL *restrict *) {host_griddata}[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_persist, {IDtype});"
     )
     body += """
