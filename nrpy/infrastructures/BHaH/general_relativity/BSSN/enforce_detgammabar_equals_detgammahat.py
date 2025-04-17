@@ -16,10 +16,16 @@ import nrpy.c_function as cfc
 import nrpy.finite_difference as fin
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
+import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.indexedexp as ixp
 import nrpy.infrastructures.BHaH.simple_loop as lp
+import nrpy.params as par
 import nrpy.reference_metric as refmetric
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
+from nrpy.helpers.expression_utils import (
+    generate_definition_header,
+    get_params_commondata_symbols_from_expr_list,
+)
 
 
 def register_CFunction_enforce_detgammabar_equals_detgammahat(
@@ -42,6 +48,7 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
+    parallelization = par.parval_from_str("parallelization")
     Bq = BSSN_quantities[
         CoordSystem + ("_rfm_precompute" if enable_rfm_precompute else "")
     ]
@@ -53,11 +60,26 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
     desc = r"""Enforce det(gammabar) = det(gammahat) constraint. Required for strong hyperbolicity."""
     cfunc_type = "void"
     name = "enforce_detgammabar_equals_detgammahat"
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], REAL *restrict in_gfs"
+    arg_dict_cuda = {
+        "in_gfs": "REAL *restrict",
+    }
     if enable_rfm_precompute:
-        params = params.replace(
-            "REAL *restrict xx[3]", "const rfm_struct *restrict rfmstruct"
-        )
+        arg_dict_cuda = {
+            "rfmstruct": "const rfm_struct *restrict",
+            **arg_dict_cuda,
+        }
+    else:
+        arg_dict_cuda = {
+            "x0": "const REAL *restrict",
+            "x1": "const REAL *restrict",
+            "x2": "const REAL *restrict",
+            **arg_dict_cuda,
+        }
+    arg_dict_host = {
+        "params": "const params_struct *restrict",
+        **arg_dict_cuda,
+    }
+    params = ",".join([f"{v} {k}" for k, v in arg_dict_host.items()])
 
     # First define the Kronecker delta:
     KroneckerDeltaDD = ixp.zerorank2()
@@ -94,7 +116,7 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
     #   Exercise to the reader: prove that for any reasonable grid,
     #   SIMD loops over grid interiors never write data out of bounds
     #   and are threadsafe for any reasonable number of threads.
-    body = lp.simple_loop(
+    kernel_body = lp.simple_loop(
         loop_body=ccg.c_codegen(
             hprimeDD_expr_list,
             hDD_access_gfs,
@@ -109,17 +131,47 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
     )
+    loop_params = parallel_utils.get_loop_parameters(
+        parallelization, enable_intrinsics=False
+    )
+    param_symbols, _ = get_params_commondata_symbols_from_expr_list(hprimeDD_expr_list)
+    params_definitions = generate_definition_header(
+        param_symbols,
+        enable_intrinsics=False,
+        var_access=parallel_utils.get_params_access(parallelization),
+    )
+    kernel_body = f"{loop_params}\n{params_definitions}\n{kernel_body}"
+
+    kernel, launch_body = parallel_utils.generate_kernel_and_launch_code(
+        name,
+        kernel_body,
+        arg_dict_cuda,
+        arg_dict_host,
+        parallelization=parallelization,
+        comments=desc,
+        cfunc_type=cfunc_type,
+        launchblock_with_braces=False,
+        thread_tiling_macro_suffix="DETGAMMA",
+    )
+
+    prefunc = ""
+    if parallelization == "cuda" and enable_fd_functions:
+        prefunc = fin.construct_FD_functions_prefunc(
+            cfunc_decorators="__device__ "
+        ).replace("SIMD", "CUDA")
+    elif enable_fd_functions:
+        prefunc = fin.construct_FD_functions_prefunc()
 
     cfc.register_CFunction(
-        include_CodeParameters_h=True,
-        prefunc=fin.construct_FD_functions_prefunc() if enable_fd_functions else "",
+        include_CodeParameters_h=False,
+        prefunc=prefunc + kernel,
         includes=includes,
         desc=desc,
         cfunc_type=cfunc_type,
         CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,
-        body=body,
+        body=launch_body,
         enable_simd=False,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())

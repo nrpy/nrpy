@@ -56,7 +56,7 @@ Nxx_dict = {
 enable_rfm_precompute = True
 fd_order = 4
 radiation_BC_fd_order = 4
-enable_simd = True
+enable_intrinsics = True
 parallel_codegen_enable = True
 enable_fd_functions = True
 separately_compute_Ricci = False
@@ -136,7 +136,7 @@ BSSN.constraints.register_CFunction_constraints(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=False,
     enable_T4munu=True,
-    enable_simd=enable_simd,
+    enable_intrinsics=enable_intrinsics,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
@@ -193,7 +193,7 @@ cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
 )
 BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
-    enable_intrinsics=enable_simd,
+    enable_intrinsics=enable_intrinsics,
     enable_rfm_precompute=enable_rfm_precompute,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
 )
@@ -210,7 +210,7 @@ griddata_commondata.register_CFunction_griddata_free(
     enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True
 )
 
-if enable_simd:
+if enable_intrinsics:
     copy_files(
         package="nrpy.helpers",
         filenames_list=["simd_intrinsics.h"],

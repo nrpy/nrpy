@@ -52,15 +52,15 @@ parser.add_argument(
     default="double",
 )
 parser.add_argument(
-    "--enable_intrinsics",
+    "--disable_intrinsics",
     action="store_true",
-    help="Flag to enable hardware intrinsics",
+    help="Flag to disable hardware intrinsics",
     default=False,
 )
 parser.add_argument(
-    "--enable_rfm_precompute",
+    "--disable_rfm_precompute",
     action="store_true",
-    help="Flag to enable RFM precomputation.",
+    help="Flag to disable RFM precomputation.",
     default=False,
 )
 args = parser.parse_args()
@@ -68,8 +68,8 @@ args = parser.parse_args()
 # Code-generation-time parameters:
 fp_type = args.floating_point_precision.lower()
 parallelization = args.parallelization.lower()
-enable_intrinsics = args.enable_intrinsics
-enable_rfm_precompute = args.enable_rfm_precompute
+enable_intrinsics = not args.disable_intrinsics
+enable_rfm_precompute = not args.disable_rfm_precompute
 
 if parallelization not in ["openmp", "cuda"]:
     raise ValueError(
@@ -223,7 +223,7 @@ nrpyelliptic.initial_data.register_CFunction_initial_guess_all_points(
 # Generate function that calls functions to set variable wavespeed and all other AUXEVOL gridfunctions
 for CoordSystem in set_of_CoordSystems:
     nrpyelliptic.constant_source_terms_to_auxevol.register_CFunction_initialize_constant_auxevol(
-        CoordSystem, OMP_collapse=OMP_collapse
+        CoordSystem, OMP_collapse=OMP_collapse, enable_intrinsics=enable_intrinsics
     )
 
 numerical_grids_and_timestep.register_CFunctions(

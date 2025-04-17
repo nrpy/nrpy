@@ -169,12 +169,9 @@ __global__ static void variable_wavespeed_gfs_all_points_gpu(const size_t stream
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = d_params[streamid].Nxx_plus_2NGHOSTS1;
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = d_params[streamid].Nxx_plus_2NGHOSTS2;
 
-  const REAL NOCUDAinvdxx0 = d_params[streamid].invdxx0;
-  MAYBE_UNUSED const REAL_CUDA_ARRAY invdxx0 = ConstCUDA(NOCUDAinvdxx0);
-  const REAL NOCUDAinvdxx1 = d_params[streamid].invdxx1;
-  MAYBE_UNUSED const REAL_CUDA_ARRAY invdxx1 = ConstCUDA(NOCUDAinvdxx1);
-  const REAL NOCUDAinvdxx2 = d_params[streamid].invdxx2;
-  MAYBE_UNUSED const REAL_CUDA_ARRAY invdxx2 = ConstCUDA(NOCUDAinvdxx2);
+  MAYBE_UNUSED const REAL invdxx0 = d_params[streamid].invdxx0;
+  MAYBE_UNUSED const REAL invdxx1 = d_params[streamid].invdxx1;
+  MAYBE_UNUSED const REAL invdxx2 = d_params[streamid].invdxx2;
 
   MAYBE_UNUSED const int tid0 = blockIdx.x * blockDim.x + threadIdx.x;
   MAYBE_UNUSED const int tid1 = blockIdx.y * blockDim.y + threadIdx.y;

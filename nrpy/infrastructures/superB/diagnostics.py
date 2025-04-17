@@ -540,8 +540,8 @@ default: {
   // Compute constraints even if this chare does not contain any points on x or y axes or xy or yz plane
   // Contraints on the whole chare grid is used to compute l2-norm
   {
-    Ricci_eval(commondata, params_chare, griddata_chare[grid].rfmstruct, y_n_gfs, auxevol_gfs);
-    constraints_eval(commondata, params_chare, griddata_chare[grid].rfmstruct, y_n_gfs, auxevol_gfs, diagnostic_output_gfs);
+    Ricci_eval(params_chare, griddata_chare[grid].rfmstruct, y_n_gfs, auxevol_gfs);
+    constraints_eval(params_chare, griddata_chare[grid].rfmstruct, y_n_gfs, auxevol_gfs, diagnostic_output_gfs);
   }
   if (write_diagnostics) {
 
