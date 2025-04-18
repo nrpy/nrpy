@@ -169,7 +169,7 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {{
         for idx, gf in out_quantities_gf_indexes_dict.items():
             if "diagnostic_output_gfs" in gf:
                 body += f"    cpyDevicetoHost__gf(commondata, params, host_{gf}, {gf}, {idx}, {idx}, streamid);\n"
-            body += "cudaStreamSynchronize(streams[streamid]);"
+        body += "cudaStreamSynchronize(streams[streamid]);"
 
     body += f"""
     // 0D output
