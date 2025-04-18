@@ -139,9 +139,10 @@ typedef struct __rescaled_BSSN_rfm_basis_struct__ {
         CoordSystem=CoordSystem,
         enable_T4munu=enable_T4munu,
     )
-    prefunc += admid.Cfunction_initial_data_lambdaU_grid_interior(
-        CoordSystem=CoordSystem
+    lambdaU_prefunc, lambdaU_launch = (
+        admid.Cfunction_initial_data_lambdaU_grid_interior(CoordSystem=CoordSystem)
     )
+    prefunc += lambdaU_prefunc
 
     desc = f"Read ADM data in the {IDCoordSystem} basis, and output rescaled BSSN data in the {CoordSystem} basis"
     cfunc_type = "void"
@@ -205,12 +206,12 @@ typedef struct __rescaled_BSSN_rfm_basis_struct__ {
       break;
     }
 """
-    body += """
-    case INITIALDATA_BIN_TWO: {
-      initial_data_lambdaU_grid_interior(commondata, params, xx, gridfuncs->y_n_gfs);
+    body += f"""
+    case INITIALDATA_BIN_TWO: {{
+      {lambdaU_launch}
       break;
-    }
-  }
+    }}
+  }}
 """
     cfc.register_CFunction(
         includes=includes,

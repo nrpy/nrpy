@@ -44,7 +44,7 @@ __host__ __device__ void Cart_to_xx_and_nearest_i0i1i2__rfm__SinhCylindricalv2n2
         const REAL tmp3 = exp(-tmp0 * xx0);
         const REAL tmp7 = tmp5 * tmp6 * ((xx0) * (xx0));
         const REAL tmp4 = tmp2 - tmp3;
-        f_of_xx0 = params->rho_slope * xx0 + tmp4 * tmp7 - sqrt(((params->Cartx) * (params->Cartx)) + ((params->Carty) * (params->Carty)));
+        f_of_xx0 = params->rho_slope * xx0 + tmp4 * tmp7 - sqrt(((Cartx) * (Cartx)) + ((Carty) * (Carty)));
         fprime_of_xx0 = params->rho_slope + 2 * tmp4 * tmp5 * tmp6 * xx0 + tmp7 * (tmp0 * tmp2 + tmp0 * tmp3);
       }
 
@@ -74,7 +74,7 @@ __host__ __device__ void Cart_to_xx_and_nearest_i0i1i2__rfm__SinhCylindricalv2n2
         const REAL tmp3 = exp(-tmp0 * xx2);
         const REAL tmp7 = tmp5 * tmp6 * ((xx2) * (xx2));
         const REAL tmp4 = tmp2 - tmp3;
-        f_of_xx2 = -params->Cartz + params->z_slope * xx2 + tmp4 * tmp7;
+        f_of_xx2 = -Cartz + params->z_slope * xx2 + tmp4 * tmp7;
         fprime_of_xx2 = params->z_slope + 2 * tmp4 * tmp5 * tmp6 * xx2 + tmp7 * (tmp0 * tmp2 + tmp0 * tmp3);
       }
 

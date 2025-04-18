@@ -45,7 +45,7 @@ ShiftEvolutionOption = "GammaDriving2ndOrder_Covariant"
 GammaDriving_eta = 1.0
 grid_physical_size = 1.6
 OMP_collapse = 1
-enable_simd = True
+enable_intrinsics = True
 Nxx_dict = {
     "Spherical": [96, 16, 2],
     # "SinhCylindrical": [144, 8, 24],
@@ -56,7 +56,7 @@ enable_rfm_precompute = True
 MoL_method = "RK4"
 fd_order = 4
 radiation_BC_fd_order = 4
-enable_simd = True
+enable_intrinsics = True
 separate_Ricci_and_BSSN_RHS = True
 parallel_codegen_enable = True
 enable_fd_functions = True
@@ -142,7 +142,7 @@ TOVola_solve(commondata, &ID_persist);
         CoordSystem=CoordSystem,
         enable_rfm_precompute=enable_rfm_precompute,
         enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
-        enable_simd=enable_simd,
+        enable_intrinsics=enable_intrinsics,
         enable_T4munu=enable_T4munu,
         enable_fd_functions=enable_fd_functions,
         enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
@@ -154,7 +154,7 @@ TOVola_solve(commondata, &ID_persist);
         BSSN.Ricci_eval.register_CFunction_Ricci_eval(
             CoordSystem=CoordSystem,
             enable_rfm_precompute=enable_rfm_precompute,
-            enable_simd=enable_simd,
+            enable_intrinsics=enable_intrinsics,
             enable_fd_functions=enable_fd_functions,
             OMP_collapse=OMP_collapse,
         )
@@ -169,7 +169,7 @@ TOVola_solve(commondata, &ID_persist);
         enable_rfm_precompute=enable_rfm_precompute,
         enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
         enable_T4munu=enable_T4munu,
-        enable_simd=enable_simd,
+        enable_intrinsics=enable_intrinsics,
         enable_fd_functions=enable_fd_functions,
         OMP_collapse=OMP_collapse,
     )
@@ -187,7 +187,7 @@ cbc.CurviBoundaryConditions_register_C_functions(
     radiation_BC_fd_order=radiation_BC_fd_order,
 )
 rhs_string = """
-Ricci_eval(commondata, params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);
+Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
 if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
   apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata->xx,
@@ -201,7 +201,7 @@ MoL_register_all.register_CFunctions(
     rhs_string=rhs_string,
     post_rhs_string="""if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
   apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);
-  enforce_detgammabar_equals_detgammahat(commondata, params, rfmstruct, RK_OUTPUT_GFS);""",
+  enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
 )
@@ -224,7 +224,7 @@ CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
 CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
 BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
-    enable_intrinsics=enable_simd,
+    enable_intrinsics=enable_intrinsics,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
     supplemental_defines_dict={
         "BHaH Lib": """
@@ -235,7 +235,7 @@ typedef struct BHaH_struct {
     },
 )
 
-if enable_simd:
+if enable_intrinsics:
     copy_files(
         package="nrpy.helpers",
         filenames_list=["simd_intrinsics.h"],
