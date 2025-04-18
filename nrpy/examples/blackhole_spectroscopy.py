@@ -43,7 +43,7 @@ from nrpy.infrastructures.BHaH.general_relativity import (
     BSSN,
     NRPyPN_quasicircular_momenta,
     TwoPunctures,
-    psi4_C_codegen_library,
+    PSI4
 )
 from nrpy.infrastructures.BHaH.MoLtimestepping import MoL_register_all
 
@@ -208,14 +208,14 @@ BSSN.constraints.register_CFunction_constraints(
     OMP_collapse=OMP_collapse,
 )
 
-psi4_C_codegen_library.register_CFunction_psi4(
+PSI4.compute_psi4.register_CFunction_psi4(
     CoordSystem=CoordSystem,
     OMP_collapse=OMP_collapse,
 )
-psi4_C_codegen_library.register_CFunction_psi4_metric_deriv_quantities(
+PSI4.compute_psi4_metric_deriv.register_CFunction_psi4_metric_deriv_quantities(
     CoordSystem=CoordSystem, enable_fd_functions=enable_fd_functions
 )
-psi4_C_codegen_library.register_CFunction_psi4_tetrad(
+PSI4.compute_psi4_tetrad.register_CFunction_psi4_tetrad(
     CoordSystem=CoordSystem,
 )
 swm2sh.register_CFunction_spin_weight_minus2_sph_harmonics()
