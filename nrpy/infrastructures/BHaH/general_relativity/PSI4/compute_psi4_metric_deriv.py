@@ -14,6 +14,12 @@ import nrpy.c_function as cfc
 import nrpy.finite_difference as fin
 import nrpy.helpers.parallel_codegen as pcg
 from nrpy.equations.general_relativity import psi4
+import nrpy.params as par
+import nrpy.helpers.parallelization.utilities as parallel_utils
+from nrpy.helpers.expression_utils import (
+    generate_definition_header,
+    get_params_commondata_symbols_from_expr_list,
+)
 
 def register_CFunction_psi4_metric_deriv_quantities(
     CoordSystem: str,
@@ -31,6 +37,7 @@ def register_CFunction_psi4_metric_deriv_quantities(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
+    parallelization = par.parval_from_str("parallelization")
     # Initialize psi4 tetrad
     psi4_class = psi4.Psi4(
         CoordSystem,
@@ -40,10 +47,24 @@ def register_CFunction_psi4_metric_deriv_quantities(
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "Compute metric derivative quantities gamma_{ij,kl}, Gamma^i_{jk}, and K_{ij,k} needed for psi4."
     name = "psi4_metric_deriv_quantities"
-    params = """const commondata_struct *restrict commondata, const params_struct *restrict params,
+    params = """const params_struct *restrict params,
     const REAL *restrict in_gfs, const REAL xx0, const REAL xx1, const REAL xx2, const int i0, const int i1, const int i2, REAL arr_gammaDDdDD[81], REAL arr_GammaUDD[27], REAL arr_KDDdD[27]"""
 
-    body = ccg.c_codegen(
+    # Find symbols stored in params
+    param_symbols, commondata_symbols = get_params_commondata_symbols_from_expr_list(
+        psi4_class.metric_derivs_expr_list, exclude=[f"xx{j}" for j in range(3)]
+    )
+    loop_params = parallel_utils.get_loop_parameters(
+        parallelization
+    )
+
+    params_definitions = generate_definition_header(
+        param_symbols,
+        var_access=parallel_utils.get_params_access(parallelization),
+    )
+    kernel_body = f"{loop_params}\n{params_definitions}\n"
+
+    body = kernel_body + ccg.c_codegen(
         psi4_class.metric_derivs_expr_list,
         psi4_class.metric_derivs_varname_arr_list,
         verbose=False,
@@ -60,7 +81,7 @@ def register_CFunction_psi4_metric_deriv_quantities(
         CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,
-        include_CodeParameters_h=True,
+        include_CodeParameters_h=False,
         body=body,
     )
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
