@@ -15,6 +15,236 @@ import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_s
 import nrpy.params as par
 from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
 
+def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type]:
+    r"""
+    Register C function for setting up diagnostic struct.
+
+    :return: None if in registration phase, else the updated NRPy environment.
+    """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+
+    desc = "Setup psi4_diagnostics."
+    cfunc_type = "void"
+    name = "psi4_diagnostics_set_up"
+    params = "commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], diagnostic_struct *restrict diagnosticstruct"
+
+    body = r"""
+const int psi4_spinweightm2_sph_harmonics_max_l = commondata->swm2sh_maximum_l_mode_to_compute;
+#define NUM_OF_R_EXTS 24
+  const REAL list_of_R_exts[NUM_OF_R_EXTS] = {10.0, 20.0, 21.0, 22.0, 23.0, 24.0, 25.0, 26.0, 27.0, 28.0, 29.0,  30.0,
+                                              31.0, 32.0, 33.0, 35.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0, 150.0};
+
+  if (strstr(params->CoordSystemName, "Cylindrical") != NULL) {
+
+    // Set up uniform 2d grid in theta and phi at R_ext (2d shells at different R_ext)
+    // phi values need to be exactly the same as phi values of the cylindrical-like grid
+    // # of pts in the theta direction can be chosen freely, here it set to the same as number of points in z of the global grid
+    const REAL PI = params->PI;
+    const REAL theta_min = 0.0;
+    REAL theta_max = PI;
+    REAL phi_min = -PI;
+    REAL phi_max = PI;
+    const int N_theta = params->Nxx2; // set # of points in theta same as # of pts in z for the cylindrical-like global grid
+    const int N_phi = params->Nxx1;   // set # of points in phi same as # of pts in phi for the cylindrical-like global grid
+    const int N_tot_shell = N_theta * N_phi;
+    REAL dtheta = (theta_max - theta_min) / N_theta;
+    diagnosticstruct->dtheta = dtheta;
+    const REAL dphi = (phi_max - phi_min) / N_phi;
+    REAL ***restrict xx_shell_sph = (REAL * **restrict)malloc(NUM_OF_R_EXTS * sizeof(REAL **));
+    for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {
+      xx_shell_sph[which_R_ext] = (REAL * *restrict)malloc(2 * sizeof(REAL *));
+      xx_shell_sph[which_R_ext][0] = (REAL *restrict)malloc(N_theta * sizeof(REAL));
+      xx_shell_sph[which_R_ext][1] = (REAL *restrict)malloc(N_phi * sizeof(REAL));
+    }
+    for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {
+      for (int j = 0; j < N_theta; j++) {
+        xx_shell_sph[which_R_ext][0][j] = theta_min + ((REAL)j + 0.5) * dtheta;
+      }
+      for (int j = 0; j < N_phi; j++) {
+        xx_shell_sph[which_R_ext][1][j] = phi_min + ((REAL)j + 0.5) * dphi;
+      }
+    }
+
+    // Convert points on shells to Cartesian coordinates
+    REAL ***restrict xx_shell_Cart = (REAL * **restrict)malloc(NUM_OF_R_EXTS * sizeof(REAL **));
+    for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {
+      xx_shell_Cart[which_R_ext] = (REAL * *restrict)malloc(3 * sizeof(REAL *));
+      xx_shell_Cart[which_R_ext][0] = (REAL *restrict)malloc(N_tot_shell * sizeof(REAL));
+      xx_shell_Cart[which_R_ext][1] = (REAL *restrict)malloc(N_tot_shell * sizeof(REAL));
+      xx_shell_Cart[which_R_ext][2] = (REAL *restrict)malloc(N_tot_shell * sizeof(REAL));
+    }
+    for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {
+      REAL r = list_of_R_exts[which_R_ext];
+      for (int i_ph = 0; i_ph < N_phi; i_ph++) {
+        REAL phi = xx_shell_sph[which_R_ext][1][i_ph];
+        for (int i_th = 0; i_th < N_theta; i_th++) {
+          REAL theta = xx_shell_sph[which_R_ext][0][i_th];
+          REAL x = r * sin(theta) * cos(phi);
+          REAL y = r * sin(theta) * sin(phi);
+          REAL z = r * cos(theta);
+          const int idx2 = IDX2GENERAL(i_th, i_ph, N_theta);
+          xx_shell_Cart[which_R_ext][0][idx2] = x;
+          xx_shell_Cart[which_R_ext][1][idx2] = y;
+          xx_shell_Cart[which_R_ext][2][idx2] = z;
+        }
+      }
+    }
+
+    // For each pt on each spherical shell at R_ext find if pt lies within the grid
+    //(it should for bhah single grids, but not for multipatch...!!)
+    // set N_shell_pts_grid and xx_shell_grid in diagnostic struct
+    diagnosticstruct->N_shell_pts_grid = (int *restrict)malloc(sizeof(int) * NUM_OF_R_EXTS);
+    diagnosticstruct->N_theta_shell_grid = (int *restrict)malloc(sizeof(int) * NUM_OF_R_EXTS);
+    diagnosticstruct->xx_shell_grid = (REAL * **restrict)malloc(NUM_OF_R_EXTS * sizeof(REAL **));
+    diagnosticstruct->theta_shell_grid = (REAL * *restrict)malloc(NUM_OF_R_EXTS * sizeof(REAL *));
+
+    // Count number of pts that lie within the extent of this grid
+    for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {
+      int count_pt_on_grid = 0;
+      bool b_theta_grid[N_theta];
+      bool b_phi_grid[N_phi];
+      for (int i = 0; i < N_theta; i++) {
+          b_theta_grid[i] = false;
+      }
+      for (int j = 0; j < N_phi; j++) {
+          b_phi_grid[j] = false;
+      }
+      for (int i_ph = 0; i_ph < N_phi; i_ph++) {
+        for (int i_th = 0; i_th < N_theta; i_th++) {
+          const int idx2 = IDX2GENERAL(i_th, i_ph, N_theta);
+          const REAL xCart_pt_on_shell[3] = {xx_shell_Cart[which_R_ext][0][idx2], xx_shell_Cart[which_R_ext][1][idx2],
+                                             xx_shell_Cart[which_R_ext][2][idx2]};
+          int Cart_to_i0i1i2[3];
+          REAL closest_xx[3];
+          Cart_to_xx_and_nearest_i0i1i2(params, xCart_pt_on_shell, closest_xx, Cart_to_i0i1i2); // convert from Cart to xx
+          if ((params->xxmin0 <= closest_xx[0] && closest_xx[0] <= params->xxmax0) &&
+              (params->xxmin1 <= closest_xx[1] && closest_xx[1] <= params->xxmax1) &&
+              (params->xxmin2 <= closest_xx[2] && closest_xx[2] <= params->xxmax2)) {
+            count_pt_on_grid++;
+            b_theta_grid[i_th] = true;
+            b_phi_grid[i_ph] = true;
+          }
+
+          if (((closest_xx[0] == params->xxmin0 || closest_xx[0] == params->xxmax0) &&
+               (params->xxmin1 <= closest_xx[1] && closest_xx[1] <= params->xxmax1) &&
+               (params->xxmin2 <= closest_xx[2] && closest_xx[2] <= params->xxmax2)) ||
+
+              ((params->xxmin0 <= closest_xx[0] && closest_xx[0] <= params->xxmax0) &&
+               (closest_xx[1] == params->xxmin1 || closest_xx[1] == params->xxmax1) &&
+               (params->xxmin2 <= closest_xx[2] && closest_xx[2] <= params->xxmax2)) ||
+
+              ((params->xxmin0 <= closest_xx[0] && closest_xx[0] <= params->xxmax0) &&
+               (params->xxmin1 <= closest_xx[1] && closest_xx[1] <= params->xxmax1) &&
+               (closest_xx[2] == params->xxmin2 || closest_xx[2] == params->xxmax2))) {
+            // The point lies on one of the boundaries.
+            printf("Error: point lies exactly on one of the grid boundaries\n");
+          }
+        }
+      }
+      // Count the number of unique theta values on grid
+      int count_theta_grid = 0;
+      for (int i = 0; i < N_theta; i++) {
+        if (b_theta_grid[i]) {
+          count_theta_grid++;
+        }
+      }
+      // Count the number of unique phi values on grid (should be the same as Nxx1)
+      int count_phi_grid = 0;
+      for (int i = 0; i < N_phi; i++) {
+        if (b_phi_grid[i]) {
+          count_phi_grid++;
+        }
+      }
+      // Set values in diagnosticstruct
+      diagnosticstruct->N_shell_pts_grid[which_R_ext] = count_pt_on_grid;
+      diagnosticstruct->N_theta_shell_grid[which_R_ext] = count_theta_grid;
+
+      // Allocate memory after counting
+      diagnosticstruct->xx_shell_grid[which_R_ext] = (REAL * *restrict)malloc(count_pt_on_grid * sizeof(REAL *));
+      diagnosticstruct->theta_shell_grid[which_R_ext] = (REAL *restrict)malloc(count_theta_grid * sizeof(REAL));
+      for (int i = 0; i < count_pt_on_grid; i++) {
+        diagnosticstruct->xx_shell_grid[which_R_ext][i] = (REAL *restrict)malloc(3 * sizeof(REAL));
+      }
+
+      // Now set them
+      int which_pt_on_grid = 0;
+      for (int i_ph = 0; i_ph < N_phi; i_ph++) {
+        for (int i_th = 0; i_th < N_theta; i_th++) {
+          const int idx2 = IDX2GENERAL(i_th, i_ph, N_theta);
+          const REAL xCart_pt_on_shell[3] = {xx_shell_Cart[which_R_ext][0][idx2], xx_shell_Cart[which_R_ext][1][idx2],
+                                             xx_shell_Cart[which_R_ext][2][idx2]};
+          int Cart_to_i0i1i2[3];
+          REAL closest_xx[3];
+          Cart_to_xx_and_nearest_i0i1i2(params, xCart_pt_on_shell, closest_xx, Cart_to_i0i1i2);
+          if ((params->xxmin0 <= closest_xx[0] && closest_xx[0] <= params->xxmax0) &&
+              (params->xxmin1 <= closest_xx[1] && closest_xx[1] <= params->xxmax1) &&
+              (params->xxmin2 <= closest_xx[2] && closest_xx[2] <= params->xxmax2)) {
+
+            diagnosticstruct->xx_shell_grid[which_R_ext][which_pt_on_grid][0] = closest_xx[0];
+            diagnosticstruct->xx_shell_grid[which_R_ext][which_pt_on_grid][1] = closest_xx[1];
+            diagnosticstruct->xx_shell_grid[which_R_ext][which_pt_on_grid][2] = closest_xx[2];
+            // also save theta values
+            int i_th_grid, i_ph_grid;
+            const int N_theta_shell_grid = diagnosticstruct->N_theta_shell_grid[which_R_ext];
+            REVERSE_IDX2GENERAL(which_pt_on_grid, N_theta_shell_grid, i_th_grid, i_ph_grid);
+            // check IDX2GENERAL(i_th_grid, i_ph_grid, N_theta_shell_grid) should be equal to which_pt_on_grid
+            int idx2general_result = IDX2GENERAL(i_th_grid, i_ph_grid, N_theta_shell_grid);
+            if (idx2general_result != which_pt_on_grid) {
+              printf("Mismatch: IDX2GENERAL(i_th_grid, i_ph_grid, N_theta_shell_grid) = %d, but which_pt_on_grid = %d\n", idx2general_result,
+                     which_pt_on_grid);
+            }
+            diagnosticstruct->theta_shell_grid[which_R_ext][i_th_grid] = xx_shell_sph[which_R_ext][0][i_th];
+            which_pt_on_grid++;
+          }
+        }
+      }
+    } // end loop over all R_ext
+
+    diagnosticstruct->num_of_R_exts_grid = NUM_OF_R_EXTS;
+    diagnosticstruct->list_of_R_exts_grid = (REAL *restrict)malloc(sizeof(REAL) * NUM_OF_R_EXTS);
+    for (int i = 0; i < NUM_OF_R_EXTS; i++) {
+      diagnosticstruct->list_of_R_exts_grid[i] = list_of_R_exts[i];
+    }
+    diagnosticstruct->psi4_spinweightm2_sph_harmonics_max_l = psi4_spinweightm2_sph_harmonics_max_l;
+    int sum = 0;
+    for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {
+      if (diagnosticstruct->N_shell_pts_grid[which_R_ext] > 0) {
+        sum += diagnosticstruct->N_shell_pts_grid[which_R_ext];
+      }
+    }
+    diagnosticstruct->tot_N_shell_pts_grid = sum;
+
+    // Free memory
+    for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {
+      free(xx_shell_sph[which_R_ext][0]);
+      free(xx_shell_sph[which_R_ext][1]);
+      free(xx_shell_sph[which_R_ext]);
+    }
+    free(xx_shell_sph);
+    for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {
+      free(xx_shell_Cart[which_R_ext][0]);
+      free(xx_shell_Cart[which_R_ext][1]);
+      free(xx_shell_Cart[which_R_ext][2]);
+      free(xx_shell_Cart[which_R_ext]);
+    }
+    free(xx_shell_Cart);
+  }
+"""
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        include_CodeParameters_h=False,
+        body=body,
+    )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
 
 def register_griddata() -> None:
     """
@@ -152,6 +382,11 @@ def register_CFunction_diagnostics(
 
     # Register diagnostic_struct's contribution to BHaH_defines.h:
     register_BHaH_defines_h()
+
+    # Register psi4_diagnostics_set_up needed for psi4 decomposition in cylindrical-like coordinates
+    if enable_psi4_diagnostics:
+        register_CFunction_psi4_diagnostics_set_up()
+
 
     desc = r"""Diagnostics."""
     cfunc_type = "void"
