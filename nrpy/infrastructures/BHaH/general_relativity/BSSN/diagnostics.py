@@ -13,6 +13,43 @@ import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices as out012d
 import nrpy.params as par
+from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
+
+
+def register_griddata() -> None:
+    """
+    Register the diagnostic_struct's contribution to the griddata_struct.
+    """
+    griddata_commondata.register_griddata_commondata(
+        __name__,
+        "diagnostic_struct diagnosticstruct",
+        "data needed to do psi4 decomposition in cylindrical-like coordinates",
+    )
+
+
+def register_BHaH_defines_h() -> None:
+    """
+    Register the diagnostic_struct's contribution to the BHaH_defines.h file.
+    """
+    BHd_str = r"""
+    // for psi4 decomposition in cylindrical-like coordinates
+    typedef struct __diagnostic_struct__ {
+      int num_of_R_exts_grid;
+      int psi4_spinweightm2_sph_harmonics_max_l;
+      REAL *restrict list_of_R_exts_grid;
+      int tot_N_shell_pts_grid;
+      REAL dtheta;
+      int *restrict N_shell_pts_grid; // of shape int [num_of_R_exts_grid]
+      int *restrict N_theta_shell_grid; // of shape int [num_of_R_exts_grid]
+      REAL ***restrict xx_shell_grid; // of shape [num_of_R_exts_grid][N_shell_pts_grid][3]
+      REAL **restrict theta_shell_grid; // of shape [num_of_R_exts_grid][N_theta_shell_grid]
+    } diagnostic_struct;
+    """
+
+    BHaH_defines_h.register_BHaH_defines(
+        __name__,
+        BHd_str,
+    )
 
 
 def register_CFunction_diagnostics(
@@ -108,6 +145,13 @@ def register_CFunction_diagnostics(
                 filename_tuple=plane_filename_tuple,
                 plane=plane,
             )
+
+
+    # Register diagnostic_struct's contribution to griddata_struct:
+    register_griddata()
+
+    # Register diagnostic_struct's contribution to BHaH_defines.h:
+    register_BHaH_defines_h()
 
     desc = r"""Diagnostics."""
     cfunc_type = "void"
