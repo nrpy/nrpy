@@ -3,6 +3,8 @@ Generate Psi4 decomposition on spherical like grids using spin-weighted spherica
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
+        Nishita Jadoo
+        njadoo **at** uidaho **dot* edu
 """
 
 import nrpy.c_function as cfc
@@ -152,6 +154,199 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
   // Step 4: Free all allocated memory:
   free(psi4r_at_R_ext); free(psi4i_at_R_ext);
   free(sinth_array); free(th_array); free(ph_array);
+"""
+
+    cfc.register_CFunction(
+        includes=["BHaH_defines.h", "BHaH_function_prototypes.h"],
+        prefunc=prefunc,
+        desc=desc,
+        name=name,
+        params=params,
+        include_CodeParameters_h=True,
+        body=body,
+    )
+
+def register_CFunction_psi4_spinweightm2_decomposition_on_cylindlike_grids() -> None:
+    """Register C function for decomposing psi4 into spin-weighted spherical harmonics for cylindrical-like coordinates."""
+    prefunc = r"""
+static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1, const REAL dxx1, const REAL dxx2,
+                                                    const int swm2sh_maximum_l_mode_to_compute, const REAL curr_time, const REAL R_ext,
+                                                    const REAL *restrict th_array, const REAL *restrict sinth_array, const REAL *restrict ph_array,
+                                                    const int N_theta, const REAL *restrict psi4r_at_R_ext, const REAL *restrict psi4i_at_R_ext) {
+  char filename[100];
+  FILE *outpsi4_l_m;
+  // Output header at t=0:
+  if (curr_time == 0) {
+    for (int l = 2; l <= swm2sh_maximum_l_mode_to_compute; l++) {
+      sprintf(filename, "Rpsi4_l%d-r%06.1f.txt", l, (double)R_ext);
+      outpsi4_l_m = fopen(filename, "w");
+      fprintf(outpsi4_l_m, "# column 1: t-R_ext = [retarded time]\n");
+      int col = 2;
+      for (int m = -l; m <= l; m++) {
+        fprintf(outpsi4_l_m, "# column %d: Re(psi4_{l=%d,m=%d}) * R_ext\n", col, l, m);
+        col++;
+        fprintf(outpsi4_l_m, "# column %d: Im(psi4_{l=%d,m=%d}) * R_ext\n", col, l, m);
+        col++;
+      }
+      fclose(outpsi4_l_m);
+    }
+  }
+
+  // Output one file per l mode; each column represents a unique complex component of l,m
+  for (int l = 2; l <= swm2sh_maximum_l_mode_to_compute; l++) {
+    sprintf(filename, "Rpsi4_l%d-r%06.1f.txt", l, (double)R_ext);
+    outpsi4_l_m = fopen(filename, "a");
+    char oneline[10000];
+    sprintf(oneline, "%e", (double)(curr_time - R_ext));
+    for (int m = -l; m <= l; m++) {
+      // Parallelize the integration loop:
+      REAL psi4r_l_m = 0.0;
+      REAL psi4i_l_m = 0.0;
+#pragma omp parallel for reduction(+ : psi4r_l_m, psi4i_l_m)
+      for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1 - 2 * NGHOSTS; i1++) {
+        const REAL ph = ph_array[i1];
+        for (int i2 = 0; i2 < N_theta; i2++) {
+          const REAL th = th_array[i2];
+          const REAL sinth = sinth_array[i2];
+          // Construct integrand for psi4 spin-weight s=-2 spherical harmonic
+          REAL ReY_sm2_l_m, ImY_sm2_l_m;
+          spin_weight_minus2_sph_harmonics(l, m, th, ph, &ReY_sm2_l_m, &ImY_sm2_l_m);
+
+          const int idx2d = i2 + N_theta * i1;
+          const REAL a = psi4r_at_R_ext[idx2d];
+          const REAL b = psi4i_at_R_ext[idx2d];
+          const REAL c = ReY_sm2_l_m;
+          const REAL d = ImY_sm2_l_m;
+          psi4r_l_m += (a * c + b * d) * dxx2 * sinth * dxx1;
+          psi4i_l_m += (b * c - a * d) * dxx2 * sinth * dxx1;
+        }
+      }
+      sprintf(oneline + strlen(oneline), " %.15e %.15e", (double)(R_ext * psi4r_l_m), (double)(R_ext * psi4i_l_m));
+    }
+    fprintf(outpsi4_l_m, "%s\n", oneline);
+    fclose(outpsi4_l_m);
+  }
+}
+"""
+
+    desc = "Decompose psi4 across all l,m modes from l=2 up to and including L_MAX (global variable) for cylindrical-like coordinates."
+    name = "psi4_spinweightm2_decomposition_on_cylindlike_grids"
+    params = r"""const commondata_struct *restrict commondata, const params_struct *restrict params,
+                                                         REAL *restrict diagnostic_output_gfs,
+                                                         const REAL *restrict list_of_R_exts, const int num_of_R_exts,
+                                                         const int psi4_spinweightm2_sph_harmonics_max_l, REAL *restrict xx[3],
+                                                         int *restrict N_shell_pts_grid, REAL ***restrict xx_shell_grid,
+                                                         int *restrict N_theta_shell_grid, REAL **restrict theta_shell_grid, REAL dtheta"""
+
+    body = r"""  // set parameters for interpolation
+  // src grid is the whole grid in rho and z
+  const int N_interp_GHOSTS = NGHOSTS;
+  const REAL src_dxx0 = params->dxx0;
+  const REAL src_dxx1 = params->dxx2;
+  const int src_Nxx_plus_2NGHOSTS0 = Nxx_plus_2NGHOSTS0;
+  const int src_Nxx_plus_2NGHOSTS1 = Nxx_plus_2NGHOSTS2;
+  REAL *restrict src_x0x1[3];
+  src_x0x1[1] = (REAL *restrict)malloc(sizeof(REAL) * src_Nxx_plus_2NGHOSTS0);
+  src_x0x1[2] = (REAL *restrict)malloc(sizeof(REAL) * src_Nxx_plus_2NGHOSTS1);
+  for (int j = 0; j < Nxx_plus_2NGHOSTS0; j++)
+    src_x0x1[1][j] = xx[0][j];
+  for (int j = 0; j < Nxx_plus_2NGHOSTS2; j++)
+    src_x0x1[2][j] = xx[2][j];
+  const int total_size = src_Nxx_plus_2NGHOSTS0 * src_Nxx_plus_2NGHOSTS1;
+  REAL *restrict src_gf_psi4r = (REAL *)malloc(sizeof(REAL) * total_size); // with shape [src_Nxx_plus_2NGHOSTS0 * src_Nxx_plus_2NGHOSTS1]
+  REAL *restrict src_gf_psi4i = (REAL *)malloc(sizeof(REAL) * total_size); // with shape [src_Nxx_plus_2NGHOSTS0 * src_Nxx_plus_2NGHOSTS1]
+
+  // Step 2: Loop over all extraction indices:
+  for (int which_R_ext = 0; which_R_ext < num_of_R_exts; which_R_ext++) {
+    // Step 2.a: Set the extraction radius R_ext based on the radial index R_ext_idx
+    const REAL R_ext = list_of_R_exts[which_R_ext];
+
+    const int num_dst_pts = N_shell_pts_grid[which_R_ext];
+    if (num_dst_pts > 0) {
+
+      REAL(*dst_pts)[2] = (REAL(*)[2])malloc(sizeof(REAL) * num_dst_pts * 2);
+      // Destination points
+      for (int i = 0; i < num_dst_pts; i++) {
+        dst_pts[i][0] = xx_shell_grid[which_R_ext][i][0]; // rho coord
+        dst_pts[i][1] = xx_shell_grid[which_R_ext][i][2]; // z coord
+      }
+      REAL *dst_data_psi4r = (REAL *)malloc(sizeof(REAL) * num_dst_pts);
+      REAL *dst_data_psi4i = (REAL *)malloc(sizeof(REAL) * num_dst_pts);
+
+      // Step 1: Allocate memory for 2D arrays used to store psi4, theta, sin(theta), and phi.
+      const int sizeof_2Darray = sizeof(REAL) * (Nxx_plus_2NGHOSTS1 - 2 * NGHOSTS) * N_theta_shell_grid[which_R_ext];
+      REAL *restrict psi4r_at_R_ext = (REAL *restrict)malloc(sizeof_2Darray);
+      REAL *restrict psi4i_at_R_ext = (REAL *restrict)malloc(sizeof_2Darray);
+      //         ... also store theta, sin(theta), and phi to corresponding 1D arrays.
+      REAL *restrict sinth_array = (REAL *restrict)malloc(sizeof(REAL) * N_theta_shell_grid[which_R_ext]);
+      REAL *restrict th_array = (REAL *restrict)malloc(sizeof(REAL) * N_theta_shell_grid[which_R_ext]);
+      REAL *restrict ph_array = (REAL *restrict)malloc(sizeof(REAL) * (Nxx_plus_2NGHOSTS1 - 2 * NGHOSTS));
+
+// Step 2.b: Compute psi_4 at this extraction radius and store to a local 2D array.
+#pragma omp parallel for
+      for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++) {
+        ph_array[i1 - NGHOSTS] = xx[1][i1];
+
+// Initialize src_gf
+#pragma omp parallel for
+        for (int j = 0; j < src_Nxx_plus_2NGHOSTS1; j++) {
+          for (int i = 0; i < src_Nxx_plus_2NGHOSTS0; i++) {
+            // i index is rho index
+            // j index is z index
+            int idx = i + src_Nxx_plus_2NGHOSTS0 * j;
+            src_gf_psi4r[idx] =
+                diagnostic_output_gfs[IDX4(PSI4_REGF, i, i1, j)];
+
+            src_gf_psi4i[idx] =
+                diagnostic_output_gfs[IDX4(PSI4_IMGF, i, i1, j)];
+          }
+        }
+        // Call the interpolation function
+        int error_code1 =
+            interpolation_2d_general__uniform_src_grid(N_interp_GHOSTS, src_dxx0, src_dxx1, src_Nxx_plus_2NGHOSTS0, src_Nxx_plus_2NGHOSTS1, src_x0x1,
+                                                       src_gf_psi4r, num_dst_pts, dst_pts, dst_data_psi4r);
+
+        if (error_code1 > 0) {
+          printf("Interpolation error code: %d\n", error_code1);
+        }
+
+        int error_code2 =
+            interpolation_2d_general__uniform_src_grid(N_interp_GHOSTS, src_dxx0, src_dxx1, src_Nxx_plus_2NGHOSTS0, src_Nxx_plus_2NGHOSTS1, src_x0x1,
+                                                       src_gf_psi4i, num_dst_pts, dst_pts, dst_data_psi4i);
+        if (error_code2 > 0) {
+          printf("Interpolation error code: %d\n", error_code2);
+        }
+
+        for (int i2 = 0; i2 < N_theta_shell_grid[which_R_ext]; i2++) {
+          th_array[i2] = theta_shell_grid[which_R_ext][i2];
+          sinth_array[i2] = sin(th_array[i2]);
+          // Store result to "2D" array (actually 1D array with 2D storage):
+          const int idx2d = i2 + N_theta_shell_grid[which_R_ext] * (i1 - NGHOSTS);
+          psi4r_at_R_ext[idx2d] = dst_data_psi4r[IDX2GENERAL(i2, i1 - NGHOSTS, N_theta_shell_grid[which_R_ext])];
+          psi4i_at_R_ext[idx2d] = dst_data_psi4i[IDX2GENERAL(i2, i1 - NGHOSTS, N_theta_shell_grid[which_R_ext])];
+        }
+      } // end loop over all phi values of grid
+
+      // Step 3: Perform integrations across all l,m modes from l=2 up to and including L_MAX (global variable):
+      lowlevel_decompose_psi4_into_swm2_modes(Nxx_plus_2NGHOSTS1, params->dxx1, dtheta, psi4_spinweightm2_sph_harmonics_max_l,
+                                              commondata->time, R_ext, th_array, sinth_array, ph_array, N_theta_shell_grid[which_R_ext],
+                                              psi4r_at_R_ext, psi4i_at_R_ext);
+
+      // Step 4: Free all allocated memory:
+      free(psi4r_at_R_ext);
+      free(psi4i_at_R_ext);
+      free(sinth_array);
+      free(th_array);
+      free(ph_array);
+      free(dst_pts);
+      free(dst_data_psi4r);
+      free(dst_data_psi4i);
+    } // end if num dst pts > 0
+  } // end for loop over all R_ext
+  free(src_gf_psi4r);
+  free(src_gf_psi4i);
+  free(src_x0x1[1]);
+  free(src_x0x1[2]);
 """
 
     cfc.register_CFunction(

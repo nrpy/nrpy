@@ -228,6 +228,7 @@ if __name__ == "__main__":
     pcg.do_parallel_codegen()
 # Does not need to be parallelized.
 BSSN.psi4_decomposition.register_CFunction_psi4_spinweightm2_decomposition_on_sphlike_grids()
+BSSN.psi4_decomposition.register_CFunction_psi4_spinweightm2_decomposition_on_cylindlike_grids()
 
 numerical_grids_and_timestep.register_CFunctions(
     set_of_CoordSystems={CoordSystem},
