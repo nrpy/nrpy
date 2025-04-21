@@ -463,24 +463,33 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {{
     diagnostics_nearest_2d_yz_plane(commondata, params, xx, &{host_griddata}[grid].gridfuncs);
 """
     if enable_psi4_diagnostics:
-        body += r"""      // Do psi4 output, but only if the grid is spherical-like.
-      if (strstr(CoordSystemName, "Spherical") != NULL) {
+        body += r"""      // Do psi4 output, but only if the grid is spherical- or cylindrical-like.
+    if (strstr(CoordSystemName, "Spherical") != NULL || strstr(CoordSystemName, "Cylindrical") != NULL) {
+
+      // Set psi4.
+      psi4(commondata, params, xx, y_n_gfs, diagnostic_output_gfs);
+
+      if (strstr(CoordSystemName, "Spherical")) {
 
         // Adjusted to match Tutorial-Start_to_Finish-BSSNCurvilinear-Two_BHs_Collide-Psi4.ipynb
         const int psi4_spinweightm2_sph_harmonics_max_l = 2;
 #define num_of_R_exts 24
-        const REAL list_of_R_exts[num_of_R_exts] =
-        { 10.0, 20.0, 21.0, 22.0, 23.0,
-          24.0, 25.0, 26.0, 27.0, 28.0,
-          29.0, 30.0, 31.0, 32.0, 33.0,
-          35.0, 40.0, 50.0, 60.0, 70.0,
-          80.0, 90.0, 100.0, 150.0 };
-
-        // Set psi4.
-        psi4(commondata, params, xx, y_n_gfs, diagnostic_output_gfs);
+        const REAL list_of_R_exts[num_of_R_exts] = {10.0, 20.0, 21.0, 22.0, 23.0, 24.0, 25.0, 26.0, 27.0, 28.0, 29.0,  30.0,
+                                                    31.0, 32.0, 33.0, 35.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0, 150.0};
         // Decompose psi4 into spin-weight -2  spherical harmonics & output to files.
-        psi4_spinweightm2_decomposition_on_sphlike_grids(commondata, params, diagnostic_output_gfs, list_of_R_exts, num_of_R_exts, psi4_spinweightm2_sph_harmonics_max_l, xx);
+        psi4_spinweightm2_decomposition_on_sphlike_grids(commondata, params, diagnostic_output_gfs, list_of_R_exts, num_of_R_exts,
+                                                         psi4_spinweightm2_sph_harmonics_max_l, xx);
+
+      } else if (strstr(CoordSystemName, "Cylindrical")) {
+
+        // Decompose psi4 into spin-weight -2  spherical harmonics & output to files.
+        diagnostic_struct *restrict diagnosticstruct = &griddata[grid].diagnosticstruct;
+
+        psi4_spinweightm2_decomposition_on_cylindlike_grids(commondata, params, diagnostic_output_gfs, diagnosticstruct->list_of_R_exts_grid, diagnosticstruct->num_of_R_exts_grid,
+        diagnosticstruct->psi4_spinweightm2_sph_harmonics_max_l, xx, diagnosticstruct->N_shell_pts_grid,
+        diagnosticstruct->xx_shell_grid, diagnosticstruct->N_theta_shell_grid, diagnosticstruct->theta_shell_grid, diagnosticstruct->dtheta);
       }
+    }
 """
     body += r"""
   }
