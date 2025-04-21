@@ -25,6 +25,7 @@ import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 import nrpy.infrastructures.BHaH.special_functions.spin_weight_minus2_spherical_harmonics as swm2sh
 import nrpy.params as par
+import nrpy.infrastructures.BHaH.BHaHAHA.interpolation_2d_general__uniform_src_grid as interpolation2d
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import (
     BHaH_defines_h,
@@ -145,6 +146,9 @@ TP_solve(&ID_persist);
   free_derivs (&ID_persist.cf_v, ID_persist.npoints_A * ID_persist.npoints_B * ID_persist.npoints_phi);
 }
 """,
+)
+interpolation2d.register_CFunction_interpolation_2d_general__uniform_src_grid(
+    enable_simd=enable_intrinsics, project_dir=project_dir
 )
 BSSN.diagnostics.register_CFunction_diagnostics(
     set_of_CoordSystems={CoordSystem},
