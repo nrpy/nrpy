@@ -47,7 +47,7 @@ int *ivector(long nl, long nh)
 {
   int *retval;
 
-  retval = malloc(sizeof(int) * (nh - nl + 1));
+  retval = (int *)malloc(sizeof(int) * (nh - nl + 1));
   if (retval == NULL) {
     fprintf(stderr, "allocation failure in ivector()");
     exit(1);
@@ -62,7 +62,7 @@ REAL *dvector(long nl, long nh)
 {
   REAL *retval;
 
-  retval = malloc(sizeof(REAL) * (nh - nl + 1));
+  retval = (REAL *)malloc(sizeof(REAL) * (nh - nl + 1));
   if (retval == NULL) {
     fprintf(stderr, "allocation failure in dvector()");
     exit(1);
@@ -77,14 +77,14 @@ int **imatrix(long nrl, long nrh, long ncl, long nch)
 {
   int **retval;
 
-  retval = malloc(sizeof(int *) * (nrh - nrl + 1));
+  retval = (int **)malloc(sizeof(int *) * (nrh - nrl + 1));
   if (retval == NULL) {
     fprintf(stderr, "allocation failure (1) in imatrix()");
     exit(1);
   }
 
   /* get all memory for the matrix in on chunk */
-  retval[0] = malloc(sizeof(int) * (nrh - nrl + 1) * (nch - ncl + 1));
+  retval[0] = (int *)malloc(sizeof(int) * (nrh - nrl + 1) * (nch - ncl + 1));
   if (retval[0] == NULL) {
     fprintf(stderr, "allocation failure (2) in imatrix()");
     exit(1);
@@ -109,14 +109,14 @@ REAL **dmatrix(long nrl, long nrh, long ncl, long nch)
 {
   REAL **retval;
 
-  retval = malloc(sizeof(REAL *) * (nrh - nrl + 1));
+  retval = (REAL **)malloc(sizeof(REAL *) * (nrh - nrl + 1));
   if (retval == NULL) {
     fprintf(stderr, "allocation failure (1) in dmatrix()");
     exit(1);
   }
 
   /* get all memory for the matrix in on chunk */
-  retval[0] = malloc(sizeof(REAL) * (nrh - nrl + 1) * (nch - ncl + 1));
+  retval[0] = (REAL *)malloc(sizeof(REAL) * (nrh - nrl + 1) * (nch - ncl + 1));
   if (retval[0] == NULL) {
     fprintf(stderr, "allocation failure (2) in dmatrix()");
     exit(1);
@@ -142,20 +142,20 @@ REAL ***d3tensor(long nrl, long nrh, long ncl, long nch, long ndl, long ndh)
   REAL ***retval;
 
   /* get memory for index structures */
-  retval = malloc(sizeof(REAL **) * (nrh - nrl + 1));
+  retval = (REAL ***)malloc(sizeof(REAL **) * (nrh - nrl + 1));
   if (retval == NULL) {
     fprintf(stderr, "allocation failure (1) in d3tensor()");
     exit(1);
   }
 
-  retval[0] = malloc(sizeof(REAL *) * (nrh - nrl + 1) * (nch - ncl + 1));
+  retval[0] = (REAL **)malloc(sizeof(REAL *) * (nrh - nrl + 1) * (nch - ncl + 1));
   if (retval[0] == NULL) {
     fprintf(stderr, "allocation failure (2) in d3tensor()");
     exit(1);
   }
 
   /* get all memory for the tensor in on chunk */
-  retval[0][0] = malloc(sizeof(REAL) * (nrh - nrl + 1) * (nch - ncl + 1) * (ndh - ndl + 1));
+  retval[0][0] = (REAL *)malloc(sizeof(REAL) * (nrh - nrl + 1) * (nch - ncl + 1) * (ndh - ndl + 1));
   if (retval[0][0] == NULL) {
     fprintf(stderr, "allocation failure (3) in d3tensor()");
     exit(1);
