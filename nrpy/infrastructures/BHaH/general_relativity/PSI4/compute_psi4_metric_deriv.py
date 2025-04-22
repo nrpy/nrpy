@@ -28,7 +28,7 @@ def generate_CFunction_psi4_metric_deriv_quantities(
     :param CoordSystem: The coordinate system to be used.
     :param enable_fd_functions: Flag to enable or disable the finite difference functions.
 
-    :return: None if in registration phase, else the updated NRPy environment.
+    :return: Tuple containing the prefunction and prefunction launch code.
     """
     parallelization = par.parval_from_str("parallelization")
     # Initialize psi4 tetrad
@@ -40,6 +40,7 @@ def generate_CFunction_psi4_metric_deriv_quantities(
     desc = "Compute metric derivative quantities gamma_{ij,kl}, Gamma^i_{jk}, and K_{ij,k} needed for psi4."
     name = "psi4_metric_deriv_quantities"
     cfunc_type = "void"
+    cfunc_decorators = "__device__" if parallelization == "cuda" else ""
 
     arg_dict_cuda = {
         "in_gfs": "const REAL *restrict",
@@ -98,7 +99,7 @@ def generate_CFunction_psi4_metric_deriv_quantities(
         comments=desc,
         cfunc_type=cfunc_type,
         launchblock_with_braces=False,
-        cfunc_decorators="__device__",
+        cfunc_decorators=cfunc_decorators,
     )
 
     for arg in ["arr_gammaDDdDD[81]", "arr_GammaUDD[27]", "arr_KDDdD[27]"]:
