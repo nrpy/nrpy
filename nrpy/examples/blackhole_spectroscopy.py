@@ -213,9 +213,6 @@ PSI4.compute_psi4.register_CFunction_psi4(
     OMP_collapse=OMP_collapse,
     enable_fd_functions=enable_fd_functions,
 )
-PSI4.compute_psi4_tetrad.register_CFunction_psi4_tetrad(
-    CoordSystem=CoordSystem,
-)
 swm2sh.register_CFunction_spin_weight_minus2_sph_harmonics()
 
 if __name__ == "__main__":

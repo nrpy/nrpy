@@ -24,12 +24,17 @@ from nrpy.helpers.expression_utils import (
 from nrpy.infrastructures.BHaH.general_relativity.PSI4.compute_psi4_metric_deriv import (
     generate_CFunction_psi4_metric_deriv_quantities,
 )
+from nrpy.infrastructures.BHaH.general_relativity.PSI4.compute_psi4_tetrad import (
+    generate_CFunction_psi4_tetrad,
+)
 
 
 def register_CFunction_psi4(
     CoordSystem: str,
     OMP_collapse: int,
     enable_fd_functions: bool,
+    tetrad: str = "quasiKinnersley",
+    use_metric_to_construct_unit_normal: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Add psi4 to Cfunction dictionary.
@@ -37,6 +42,8 @@ def register_CFunction_psi4(
     :param CoordSystem: Coordinate system to be used.
     :param OMP_collapse: OpenMP collapse clause integer value.
     :param enable_fd_functions: Flag to enable or disable the finite difference functions.
+    :param tetrad: The type of tetrad. Defaults to "quasiKinnersley".
+    :param use_metric_to_construct_unit_normal: Whether to use the metric to construct the unit normal. Defaults to False.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -100,6 +107,12 @@ def register_CFunction_psi4(
         )
     )
 
+    psi4_tetrad_kernel, psi4_tetrad_launch = generate_CFunction_psi4_tetrad(
+        CoordSystem=CoordSystem,
+        tetrad=tetrad,
+        use_metric_to_construct_unit_normal=use_metric_to_construct_unit_normal,
+    )
+
     # body += kernel_body
     loop_prefix = rf"""
 REAL xx0, xx1, xx2;
@@ -126,16 +139,7 @@ REAL arr_gammaDDdDD[3*3*3*3], arr_GammaUDD[3*3*3], arr_KDDdD[3*3*3];
 REAL mre4U0,mre4U1,mre4U2,mre4U3,mim4U0,mim4U1,mim4U2,mim4U3,n4U0,n4U1,n4U2,n4U3;
 const int idx3 = IDX3(i0, i1, i2);
 
-psi4_tetrad(params,
-    in_gfs[IDX4pt(CFGF, idx3)],
-    in_gfs[IDX4pt(HDD00GF, idx3)],
-    in_gfs[IDX4pt(HDD01GF, idx3)],
-    in_gfs[IDX4pt(HDD02GF, idx3)],
-    in_gfs[IDX4pt(HDD11GF, idx3)],
-    in_gfs[IDX4pt(HDD12GF, idx3)],
-    in_gfs[IDX4pt(HDD22GF, idx3)],
-    &mre4U0,&mre4U1,&mre4U2,&mre4U3,&mim4U0,&mim4U1,&mim4U2,&mim4U3,&n4U0,&n4U1,&n4U2,&n4U3,
-    xx0, xx1, xx2);
+{psi4_tetrad_launch}
 
 {psi4_metric_deriv_launch}
 // Next, unpack gammaDDdDD, GammaUDD, KDDdD from their arrays:
@@ -184,7 +188,7 @@ MAYBE_UNUSED REAL {psi4_class.metric_deriv_var_list_str};
     body += launch_body
 
     cfc.register_CFunction(
-        prefunc=psi4_metric_deriv_kernel + prefunc,
+        prefunc=psi4_metric_deriv_kernel + psi4_tetrad_kernel + prefunc,
         includes=includes,
         desc=desc,
         CoordSystem_for_wrapper_func=CoordSystem,
