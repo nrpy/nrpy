@@ -3,6 +3,8 @@ Generate C functions for computing BSSN diagnostics in curvilinear coordinates.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
+        Nishita Jadoo
+        njadoo **at** uidaho **dot* edu
 """
 
 from inspect import currentframe as cfr
@@ -14,6 +16,10 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices as out012d
 import nrpy.params as par
 from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
+from nrpy.infrastructures.superB.CurviBoundaryConditions import (
+    register_CFunction_apply_bcs_inner_only_specific_gfs,
+    register_CFunction_apply_bcs_outerextrap_and_inner_specific_gfs,
+)
 
 def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type]:
     r"""
@@ -383,9 +389,11 @@ def register_CFunction_diagnostics(
     # Register diagnostic_struct's contribution to BHaH_defines.h:
     register_BHaH_defines_h()
 
-    # Register psi4_diagnostics_set_up needed for psi4 decomposition in cylindrical-like coordinates
+    # Register psi4_diagnostics_set_up and other functions needed for psi4 decomposition in cylindrical-like coordinates
     if enable_psi4_diagnostics:
         register_CFunction_psi4_diagnostics_set_up()
+        register_CFunction_apply_bcs_inner_only_specific_gfs()
+        register_CFunction_apply_bcs_outerextrap_and_inner_specific_gfs()
 
 
     desc = r"""Diagnostics."""
@@ -481,6 +489,10 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {{
                                                          psi4_spinweightm2_sph_harmonics_max_l, xx);
 
       } else if (strstr(CoordSystemName, "Cylindrical")) {
+
+        // Apply outer and inner bcs to psi4 needed to do interpolation correctly
+        int aux_gfs_to_sync[2] = {PSI4_REGF, PSI4_IMGF};
+        apply_bcs_outerextrap_and_inner_specific_gfs(commondata, &griddata[grid].params, &griddata[grid].bcstruct, 2, griddata[grid].gridfuncs.diagnostic_output_gfs, aux_gfs_to_sync, aux_gf_parity);
 
         // Decompose psi4 into spin-weight -2  spherical harmonics & output to files.
         diagnostic_struct *restrict diagnosticstruct = &griddata[grid].diagnosticstruct;

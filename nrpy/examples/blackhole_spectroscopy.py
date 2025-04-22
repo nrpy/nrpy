@@ -82,6 +82,7 @@ swm2sh_maximum_l_mode_generated = 8
 swm2sh_maximum_l_mode_to_compute = 2  # for consistency with NRPy 1.0 version.
 Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
+    "Cylindrical": [400, 2, 1200],
 }
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.25
@@ -105,7 +106,7 @@ if "Spherical" in CoordSystem:
         sinh_width = 0.2
 if "Cylindrical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "1")
-    par.adjust_CodeParam_default("CFL_FACTOR", 1.0)
+    par.adjust_CodeParam_default("CFL_FACTOR", 0.5)
     OMP_collapse = 2  # might be slightly faster
 
 project_dir = os.path.join("project", project_name)
@@ -240,7 +241,8 @@ numerical_grids_and_timestep.register_CFunctions(
 )
 
 cbc.CurviBoundaryConditions_register_C_functions(
-    set_of_CoordSystems={CoordSystem}, radiation_BC_fd_order=radiation_BC_fd_order
+    set_of_CoordSystems={CoordSystem}, radiation_BC_fd_order=radiation_BC_fd_order,
+    set_parity_on_aux=True,
 )
 
 rhs_string = ""
