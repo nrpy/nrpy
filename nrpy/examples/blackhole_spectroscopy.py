@@ -41,9 +41,9 @@ from nrpy.infrastructures.BHaH import (
 )
 from nrpy.infrastructures.BHaH.general_relativity import (
     BSSN,
+    PSI4,
     NRPyPN_quasicircular_momenta,
     TwoPunctures,
-    PSI4
 )
 from nrpy.infrastructures.BHaH.MoLtimestepping import MoL_register_all
 
@@ -211,9 +211,7 @@ BSSN.constraints.register_CFunction_constraints(
 PSI4.compute_psi4.register_CFunction_psi4(
     CoordSystem=CoordSystem,
     OMP_collapse=OMP_collapse,
-)
-PSI4.compute_psi4_metric_deriv.register_CFunction_psi4_metric_deriv_quantities(
-    CoordSystem=CoordSystem, enable_fd_functions=enable_fd_functions
+    enable_fd_functions=enable_fd_functions,
 )
 PSI4.compute_psi4_tetrad.register_CFunction_psi4_tetrad(
     CoordSystem=CoordSystem,
