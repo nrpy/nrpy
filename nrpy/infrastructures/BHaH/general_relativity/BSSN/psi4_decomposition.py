@@ -6,10 +6,12 @@ Author: Zachariah B. Etienne
 """
 
 import nrpy.c_function as cfc
+import nrpy.params as par
 
 
 def register_CFunction_psi4_spinweightm2_decomposition_on_sphlike_grids() -> None:
     """Register C function for decomposing psi4 into spin-weighted spherical harmonics."""
+    parallelization = par.parval_from_str("parallelization")
     prefunc = r"""
 static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1,const int Nxx_plus_2NGHOSTS2,
                                                     const REAL dxx1, const REAL dxx2,
@@ -152,7 +154,7 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
   // Step 4: Free all allocated memory:
   free(psi4r_at_R_ext); free(psi4i_at_R_ext);
   free(sinth_array); free(th_array); free(ph_array);
-"""
+""".replace("(REAL *restrict)", "(REAL *)" if parallelization in ["cuda"] else "(REAL *restrict)")
 
     cfc.register_CFunction(
         includes=["BHaH_defines.h", "BHaH_function_prototypes.h"],
