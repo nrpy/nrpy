@@ -189,7 +189,7 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {{
         psi4(commondata, params, xx, y_n_gfs, diagnostic_output_gfs);
         {post_psi4_compute}
       }}
-"""
+""".replace("xx", "griddata[grid].xx" if parallelization in ["cuda"] else "xx")
 
     body += f"""
     // 0D output
@@ -226,7 +226,7 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {{
         // Decompose psi4 into spin-weight -2  spherical harmonics & output to files.
         psi4_spinweightm2_decomposition_on_sphlike_grids(commondata, params, diagnostic_output_gfs, list_of_R_exts, num_of_R_exts, psi4_spinweightm2_sph_harmonics_max_l, xx);
       }}
-"""
+""".replace("diagnostic_output_gfs", "host_diagnostic_output_gfs" if parallelization in ["cuda"] else "diagnostic_output_gfs")
     body += r"""
   }
 }
