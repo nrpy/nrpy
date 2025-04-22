@@ -59,6 +59,7 @@ int main(int argc, const char *argv[]) {
   for (int grid = 0; grid < commondata.NUMGRIDS; grid++) {
     // Step 2.b: Allocate host storage for diagnostics
     CUDA__malloc_host_gfs(&commondata, &griddata_device[grid].params, &griddata_host[grid].gridfuncs);
+    CUDA__malloc_host_aux_gfs(&commondata, &griddata_device[grid].params, &griddata_host[grid].gridfuncs);
     CUDA__malloc_host_diagnostic_gfs(&commondata, &griddata_device[grid].params, &griddata_host[grid].gridfuncs);
   }
 
