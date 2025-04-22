@@ -5,26 +5,23 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from inspect import currentframe as cfr
-from types import FrameType as FT
-from typing import Union, cast
+from typing import Tuple
 
 import nrpy.c_codegen as ccg
-import nrpy.c_function as cfc
 import nrpy.finite_difference as fin
-import nrpy.helpers.parallel_codegen as pcg
-from nrpy.equations.general_relativity import psi4
-import nrpy.params as par
 import nrpy.helpers.parallelization.utilities as parallel_utils
+import nrpy.params as par
+from nrpy.equations.general_relativity import psi4
 from nrpy.helpers.expression_utils import (
     generate_definition_header,
     get_params_commondata_symbols_from_expr_list,
 )
 
-def register_CFunction_psi4_metric_deriv_quantities(
+
+def generate_CFunction_psi4_metric_deriv_quantities(
     CoordSystem: str,
     enable_fd_functions: bool,
-) -> Union[None, pcg.NRPyEnv_type]:
+) -> Tuple[str, str]:
     """
     Register C function for psi4 metric derivative quantity computations.
 
@@ -33,10 +30,6 @@ def register_CFunction_psi4_metric_deriv_quantities(
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
-    if pcg.pcg_registration_phase():
-        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
-        return None
-
     parallelization = par.parval_from_str("parallelization")
     # Initialize psi4 tetrad
     psi4_class = psi4.Psi4(
@@ -44,19 +37,33 @@ def register_CFunction_psi4_metric_deriv_quantities(
         enable_rfm_precompute=False,
     )
 
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "Compute metric derivative quantities gamma_{ij,kl}, Gamma^i_{jk}, and K_{ij,k} needed for psi4."
     name = "psi4_metric_deriv_quantities"
-    params = """const params_struct *restrict params,
-    const REAL *restrict in_gfs, const REAL xx0, const REAL xx1, const REAL xx2, const int i0, const int i1, const int i2, REAL arr_gammaDDdDD[81], REAL arr_GammaUDD[27], REAL arr_KDDdD[27]"""
+    cfunc_type = "void"
+
+    arg_dict_cuda = {
+        "in_gfs": "const REAL *restrict",
+        "xx0": "const REAL",
+        "xx1": "const REAL",
+        "xx2": "const REAL",
+        "i0": "const int",
+        "i1": "const int",
+        "i2": "const int",
+        "arr_gammaDDdDD[81]": "REAL",
+        "arr_GammaUDD[27]": "REAL",
+        "arr_KDDdD[27]": "REAL",
+    }
+
+    arg_dict_host = {
+        "params": "const params_struct *restrict",
+        **arg_dict_cuda,
+    }
 
     # Find symbols stored in params
-    param_symbols, commondata_symbols = get_params_commondata_symbols_from_expr_list(
+    param_symbols, _ = get_params_commondata_symbols_from_expr_list(
         psi4_class.metric_derivs_expr_list, exclude=[f"xx{j}" for j in range(3)]
     )
-    loop_params = parallel_utils.get_loop_parameters(
-        parallelization
-    )
+    loop_params = parallel_utils.get_loop_parameters(parallelization)
 
     params_definitions = generate_definition_header(
         param_symbols,
@@ -64,7 +71,7 @@ def register_CFunction_psi4_metric_deriv_quantities(
     )
     kernel_body = f"{loop_params}\n{params_definitions}\n"
 
-    body = kernel_body + ccg.c_codegen(
+    kernel_body += ccg.c_codegen(
         psi4_class.metric_derivs_expr_list,
         psi4_class.metric_derivs_varname_arr_list,
         verbose=False,
@@ -74,14 +81,29 @@ def register_CFunction_psi4_metric_deriv_quantities(
         enable_fd_functions=enable_fd_functions,
     )
 
-    cfc.register_CFunction(
-        includes=includes,
-        prefunc=fin.construct_FD_functions_prefunc() if enable_fd_functions else "",
-        desc=desc,
-        CoordSystem_for_wrapper_func=CoordSystem,
-        name=name,
-        params=params,
-        include_CodeParameters_h=False,
-        body=body,
+    prefunc = ""
+    if parallelization == "cuda" and enable_fd_functions:
+        prefunc = fin.construct_FD_functions_prefunc(
+            cfunc_decorators="__device__ "
+        ).replace("SIMD", "CUDA")
+    elif enable_fd_functions:
+        prefunc = fin.construct_FD_functions_prefunc()
+
+    kernel, launch_body = parallel_utils.generate_kernel_and_launch_code(
+        name,
+        kernel_body.replace("SIMD", "CUDA" if parallelization == "cuda" else "SIMD"),
+        arg_dict_cuda,
+        arg_dict_host,
+        parallelization=parallelization,
+        comments=desc,
+        cfunc_type=cfunc_type,
+        launchblock_with_braces=False,
+        cfunc_decorators="__device__",
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
+    for arg in ["arr_gammaDDdDD[81]", "arr_GammaUDD[27]", "arr_KDDdD[27]"]:
+        launch_body = launch_body.replace(arg, arg.split("[")[0])
+
+    prefunc += kernel
+
+    return prefunc, launch_body

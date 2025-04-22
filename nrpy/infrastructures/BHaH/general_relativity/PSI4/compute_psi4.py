@@ -13,24 +13,30 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.BHaH.simple_loop as lp
-from nrpy.equations.general_relativity import psi4
-import nrpy.params as par
 import nrpy.helpers.parallelization.utilities as parallel_utils
+import nrpy.infrastructures.BHaH.simple_loop as lp
+import nrpy.params as par
+from nrpy.equations.general_relativity import psi4
 from nrpy.helpers.expression_utils import (
     generate_definition_header,
     get_params_commondata_symbols_from_expr_list,
 )
+from nrpy.infrastructures.BHaH.general_relativity.PSI4.compute_psi4_metric_deriv import (
+    generate_CFunction_psi4_metric_deriv_quantities,
+)
+
 
 def register_CFunction_psi4(
     CoordSystem: str,
     OMP_collapse: int,
+    enable_fd_functions: bool,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Add psi4 to Cfunction dictionary.
 
     :param CoordSystem: Coordinate system to be used.
     :param OMP_collapse: OpenMP collapse clause integer value.
+    :param enable_fd_functions: Flag to enable or disable the finite difference functions.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -76,18 +82,24 @@ def register_CFunction_psi4(
     expr_list = [psi4_class.psi4_re, psi4_class.psi4_im]
 
     # Find symbols stored in params
-    param_symbols, commondata_symbols = get_params_commondata_symbols_from_expr_list(
+    param_symbols, _ = get_params_commondata_symbols_from_expr_list(
         expr_list, exclude=[f"xx{j}" for j in range(3)]
     )
-    loop_params = parallel_utils.get_loop_parameters(
-        parallelization
-    )
+    loop_params = parallel_utils.get_loop_parameters(parallelization)
 
     params_definitions = generate_definition_header(
         param_symbols,
         var_access=parallel_utils.get_params_access(parallelization),
     )
     kernel_body = f"{loop_params}\n{params_definitions}\n"
+
+    psi4_metric_deriv_kernel, psi4_metric_deriv_launch = (
+        generate_CFunction_psi4_metric_deriv_quantities(
+            CoordSystem=CoordSystem,
+            enable_fd_functions=enable_fd_functions,
+        )
+    )
+
     # body += kernel_body
     loop_prefix = rf"""
 REAL xx0, xx1, xx2;
@@ -125,7 +137,7 @@ psi4_tetrad(params,
     &mre4U0,&mre4U1,&mre4U2,&mre4U3,&mim4U0,&mim4U1,&mim4U2,&mim4U3,&n4U0,&n4U1,&n4U2,&n4U3,
     xx0, xx1, xx2);
 
-psi4_metric_deriv_quantities(params, in_gfs, xx0, xx1, xx2, i0, i1, i2, arr_gammaDDdDD, arr_GammaUDD, arr_KDDdD);
+{psi4_metric_deriv_launch}
 // Next, unpack gammaDDdDD, GammaUDD, KDDdD from their arrays:
 MAYBE_UNUSED REAL {psi4_class.metric_deriv_var_list_str};
 {psi4_class.metric_deriv_unpack_arrays}
@@ -163,7 +175,7 @@ MAYBE_UNUSED REAL {psi4_class.metric_deriv_var_list_str};
         comments=desc,
         cfunc_type=cfunc_type,
         launchblock_with_braces=False,
-        thread_tiling_macro_suffix="RICCI_EVAL",
+        thread_tiling_macro_suffix="PSI4",
     )
 
     body = ""
@@ -172,7 +184,7 @@ MAYBE_UNUSED REAL {psi4_class.metric_deriv_var_list_str};
     body += launch_body
 
     cfc.register_CFunction(
-        prefunc=prefunc,
+        prefunc=psi4_metric_deriv_kernel + prefunc,
         includes=includes,
         desc=desc,
         CoordSystem_for_wrapper_func=CoordSystem,
