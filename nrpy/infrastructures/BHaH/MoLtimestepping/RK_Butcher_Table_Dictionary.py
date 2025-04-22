@@ -96,13 +96,34 @@ def generate_Butcher_tables(
     ["", sp.Rational(2,9), sp.Rational(1,3), sp.Rational(4,9)]]
     , 3)
 
-    # Step 2.a.viii: Strong Stability Preserving Runge-Kutta (SSPRK3) Method
-    Butcher_dict['SSPRK3'] = (
+    # Step 2.a.viii: Strong Stability Preserving Runge-Kutta (SSPRK, 3 stages, order 3) Method
+    Butcher_dict['SSPRK33'] = (
     [[0],
     [1, 1],
     [sp.Rational(1,2), sp.Rational(1,4), sp.Rational(1,4)],
     ["", sp.Rational(1,6), sp.Rational(1,6), sp.Rational(2,3)]]
     , 3)
+
+    # Step 2.a.xii: SSPRK43 (4 stages, order 3), from https://www.jstor.org/stable/pdf/4100965.pdf
+    Butcher_dict['SSPRK43'] = (
+    [[0],
+    [sp.Rational(1,2), sp.Rational(1,2)],
+    [1, sp.Rational(1,2), sp.Rational(1,2)],
+    [sp.Rational(1,2), sp.Rational(1,6), sp.Rational(1,6), sp.Rational(1,6)],
+    ["", sp.Rational(1,6), sp.Rational(1,6), sp.Rational(1,6), sp.Rational(1,2)]]
+    , 3
+    )
+
+    # Step 2.a.x: SSPRK53 (5 stages, order 3), from https://www.jstor.org/stable/pdf/4100965.pdf
+    Butcher_dict['SSPRK53'] = (
+    [[0],
+    [sp.Rational(0.37726891511710), sp.Rational(0.37726891511710)],
+    [sp.Rational(0.75453783023419), sp.Rational(0.37726891511710), sp.Rational(0.37726891511710)],
+    [sp.Rational(0.49056882269314), sp.Rational(0.16352294089771), sp.Rational(0.16352294089771), sp.Rational(0.16352294089771)],
+    [sp.Rational(0.78784303014311), sp.Rational(0.14904059394856), sp.Rational(0.14831273384724), sp.Rational(0.14831273384724), sp.Rational(0.34217696850008)],
+    ["", sp.Rational(0.19707596384481), sp.Rational(0.11780316509765), sp.Rational(0.11709725193772), sp.Rational(0.27015874934251), sp.Rational(0.29786487010104)]]
+    , 3
+    )
 
     # Step 2.a.ix: Classic RK4 Method
 
@@ -113,6 +134,17 @@ def generate_Butcher_tables(
     [1, 0, 0, 1],
     ["", sp.Rational(1,6), sp.Rational(1,3), sp.Rational(1,3), sp.Rational(1,6)]]
     , 4)
+
+    # Step 2.a.xi: SSPRK54 (5 stages, order 4), from https://www.jstor.org/stable/pdf/4100965.pdf
+    Butcher_dict['SSPRK54'] = (
+    [[0],
+    [sp.Rational(0.39175222700392), sp.Rational(0.39175222700392)],
+    [sp.Rational(0.58607968896779), sp.Rational(0.21766909633821), sp.Rational(0.36841059262959)],
+    [sp.Rational(0.47454236302687), sp.Rational(0.08269208670950), sp.Rational(0.13995850206999), sp.Rational(0.25189177424738)],
+    [sp.Rational(0.93501063100924), sp.Rational(0.06796628370320), sp.Rational(0.11503469844438), sp.Rational(0.20703489864929), sp.Rational(0.54497475021237)],
+    ["", sp.Rational(0.14681187618661), sp.Rational(0.24848290924556), sp.Rational(0.10425883036650), sp.Rational(0.27443890091960), sp.Rational(0.22600748319395)]]
+    , 4
+    )
 
     # Step 2.a.x:  RK5 Dormand-Prince Method
 
