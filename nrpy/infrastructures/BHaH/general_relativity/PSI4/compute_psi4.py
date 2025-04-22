@@ -44,6 +44,7 @@ def register_CFunction_psi4(
 
     desc = "Compute psi4 at all interior gridpoints"
     name = "psi4"
+    cfunc_type = "void"
 
     arg_dict_cuda = {
         "x0": "const REAL *restrict",
@@ -54,7 +55,6 @@ def register_CFunction_psi4(
     }
 
     arg_dict_host = {
-        "commondata": "const commondata_struct *restrict",
         "params": "const params_struct *restrict",
         **arg_dict_cuda,
     }
@@ -88,7 +88,7 @@ def register_CFunction_psi4(
         var_access=parallel_utils.get_params_access(parallelization),
     )
     kernel_body = f"{loop_params}\n{params_definitions}\n"
-    body += kernel_body
+    # body += kernel_body
     loop_prefix = rf"""
 REAL xx0, xx1, xx2;
 {{
@@ -130,7 +130,7 @@ psi4_metric_deriv_quantities(params, in_gfs, xx0, xx1, xx2, i0, i1, i2, arr_gamm
 MAYBE_UNUSED REAL {psi4_class.metric_deriv_var_list_str};
 {psi4_class.metric_deriv_unpack_arrays}
 """
-    body += lp.simple_loop(
+    kernel_body += lp.simple_loop(
         loop_body=loop_prefix
         + ccg.c_codegen(
             expr_list,
@@ -154,7 +154,25 @@ MAYBE_UNUSED REAL {psi4_class.metric_deriv_var_list_str};
         OMP_collapse=OMP_collapse,
     )
 
+    prefunc, launch_body = parallel_utils.generate_kernel_and_launch_code(
+        name,
+        kernel_body.replace("SIMD", "CUDA" if parallelization == "cuda" else "SIMD"),
+        arg_dict_cuda,
+        arg_dict_host,
+        parallelization=parallelization,
+        comments=desc,
+        cfunc_type=cfunc_type,
+        launchblock_with_braces=False,
+        thread_tiling_macro_suffix="RICCI_EVAL",
+    )
+
+    body = ""
+    for i in range(3):
+        body += f"const REAL *restrict x{i} = xx[{i}];\n"
+    body += launch_body
+
     cfc.register_CFunction(
+        prefunc=prefunc,
         includes=includes,
         desc=desc,
         CoordSystem_for_wrapper_func=CoordSystem,
