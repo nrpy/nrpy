@@ -182,10 +182,9 @@ MAYBE_UNUSED REAL {psi4_class.metric_deriv_var_list_str};
         thread_tiling_macro_suffix="PSI4",
     )
 
-    body = ""
+    body = launch_body
     for i in range(3):
-        body += f"const REAL *restrict x{i} = xx[{i}];\n"
-    body += launch_body
+        body = body.replace(f"x{i}", f"xx[{i}]")
 
     cfc.register_CFunction(
         prefunc=psi4_metric_deriv_kernel + psi4_tetrad_kernel + prefunc,
