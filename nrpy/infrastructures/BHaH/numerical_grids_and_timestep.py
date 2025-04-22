@@ -507,6 +507,7 @@ def register_CFunction_numerical_grids_and_timestep(
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
     enable_set_cfl_timestep: bool = True,
+    enable_psi4_diagnostics_set_up: bool = False,
 ) -> None:
     """
     Register a C function to set up all numerical grids and timestep.
@@ -676,12 +677,14 @@ if(calling_for_first_time) {
 for(int grid=0;grid<commondata->NUMGRIDS;grid++) {
    griddata[grid].params.grid_idx = grid;
 }
-
-// Step 1.i: Set up diagnosticstruct for psi4 decomposition in cylindrical-like coordinates
-for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
-  psi4_diagnostics_set_up(commondata, &griddata[grid].params, griddata[grid].xx, &griddata[grid].diagnosticstruct);
-}
 """
+    if enable_psi4_diagnostics_set_up:
+        body += r"""
+    // Step 1.i: Set up diagnosticstruct for psi4 decomposition in cylindrical-like coordinates
+    for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
+      psi4_diagnostics_set_up(commondata, &griddata[grid].params, griddata[grid].xx, &griddata[grid].diagnosticstruct);
+    }
+    """
     cfc.register_CFunction(
         includes=includes,
         desc=desc,

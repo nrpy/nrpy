@@ -236,6 +236,7 @@ numerical_grids_and_timestep.register_CFunctions(
     Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
+    enable_psi4_diagnostics_set_up=True,
 )
 
 cbc.CurviBoundaryConditions_register_C_functions(
