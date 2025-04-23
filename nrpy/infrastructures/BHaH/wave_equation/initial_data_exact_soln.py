@@ -194,6 +194,7 @@ def generate_CFunction_initial_data_compute(
         comments=desc,
         cfunc_type=cfunc_type,
         launchblock_with_braces=False,
+        thread_tiling_macro_suffix="WAVE_ID_EXACT"
     )
 
     for i in range(3):
