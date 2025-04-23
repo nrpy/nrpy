@@ -114,6 +114,7 @@ if __name__ == "__main__":
                 "superB.h",
             ],
             "nrpy.helpers": ["simd_intrinsics.h"],
+            "nrpy.helpers": ["cuda_intrinsics.h"],
             "nrpy": ["py.typed"],
         },
         classifiers=[
