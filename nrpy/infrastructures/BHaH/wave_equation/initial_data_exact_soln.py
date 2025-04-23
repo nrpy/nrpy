@@ -10,10 +10,10 @@ from types import FrameType as FT
 from typing import Tuple, Union, cast
 
 import nrpy.c_codegen as ccg
-import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
+import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.params as par
 from nrpy.equations.wave_equation.WaveEquation_Solutions_InitialData import (
@@ -43,7 +43,6 @@ def generate_CFunction_exact_solution_single_Cartesian_point(
 
     :return: A tuple containing the kernel and launch body for the exact solution.
     """
-
     # Populate uu_ID, vv_ID
     exactsoln = WaveEquation_solution_Cartesian(
         WaveType=WaveType,
@@ -128,7 +127,6 @@ def generate_CFunction_initial_data_compute(
     Generate the initial data compute kernel for the wave equation with specific parameters.
 
     :param OMP_collapse: Degree of OpenMP loop collapsing.
-    :param enable_checkpointing: Attempt to read from a checkpoint file before generating initial data.
     :param WaveType: The type of wave: SphericalGaussian or PlaneWave
     :param default_sigma: The default value for the Gaussian width (sigma).
     :param default_k0: The default value for the plane wave wavenumber k in the x-direction.
@@ -145,11 +143,8 @@ def generate_CFunction_initial_data_compute(
     uu_gf_memaccess = gri.BHaHGridFunction.access_gf("uu")
     vv_gf_memaccess = gri.BHaHGridFunction.access_gf("vv")
     kernel_body = ""
-    host_griddata = "griddata_host" if parallelization in ["cuda"] else "griddata"
 
-    kernel_body += parallel_utils.get_loop_parameters(
-        parallelization
-    )
+    kernel_body += parallel_utils.get_loop_parameters(parallelization)
 
     arg_dict_cuda = {
         "params": "const params_struct *restrict",
@@ -164,15 +159,17 @@ def generate_CFunction_initial_data_compute(
         **arg_dict_cuda,
     }
 
-    exact_singlept_kernel, exact_singlept_launch = generate_CFunction_exact_solution_single_Cartesian_point(
-        WaveType=WaveType,
-        default_sigma=default_sigma,
-        default_k0=default_k0,
-        default_k1=default_k1,
-        default_k2=default_k2,
+    exact_singlept_kernel, exact_singlept_launch = (
+        generate_CFunction_exact_solution_single_Cartesian_point(
+            WaveType=WaveType,
+            default_sigma=default_sigma,
+            default_k0=default_k0,
+            default_k1=default_k1,
+            default_k2=default_k2,
+        )
     )
 
-    loop_body=(
+    loop_body = (
         "REAL xCart[3]; REAL xOrig[3] = {xx0, xx1, xx2}; xx_to_Cart(params, xOrig, xCart);\n"
         f"{exact_singlept_launch}"
     )
@@ -280,7 +277,7 @@ if( read_checkpoint(commondata, griddata) ) return;
         default_k2=default_k2,
     )
 
-    body+= id_compute_launch
+    body += id_compute_launch
     if parallelization in ["cuda"]:
         body += "BHAH_FREE_DEVICE(params);\n"
     body += "}\n"
