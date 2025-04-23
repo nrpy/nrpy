@@ -254,9 +254,7 @@ const int psi4_spinweightm2_sph_harmonics_max_l = commondata->swm2sh_maximum_l_m
 
 
 def register_griddata() -> None:
-    """
-    Register the diagnostic_struct's contribution to the griddata_struct.
-    """
+    """Register the diagnostic_struct's contribution to the griddata_struct."""
     griddata_commondata.register_griddata_commondata(
         __name__,
         "diagnostic_struct diagnosticstruct",
@@ -265,9 +263,7 @@ def register_griddata() -> None:
 
 
 def register_BHaH_defines_h() -> None:
-    """
-    Register the diagnostic_struct's contribution to the BHaH_defines.h file.
-    """
+    """Register the diagnostic_struct's contribution to the BHaH_defines.h file."""
     BHd_str = r"""
     // for psi4 decomposition in cylindrical-like coordinates
     typedef struct __diagnostic_struct__ {
