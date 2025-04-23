@@ -104,7 +104,9 @@ def register_CFunction_rhs_eval(
         var_access=parallel_utils.get_params_access(parallelization),
     )
 
-    kernel_body = parallel_utils.get_loop_parameters(parallelization)
+    kernel_body = parallel_utils.get_loop_parameters(
+        parallelization, enable_intrinsics=enable_intrinsics
+    )
 
     if enable_intrinsics:
         for symbol in commondata_symbols:
@@ -167,7 +169,7 @@ def register_CFunction_rhs_eval(
         arg_dict_host,
         parallelization=parallelization,
         comments=desc,
-        cfunc_type=cfunc_type,
+        cfunc_type=f"static {cfunc_type}",
         launchblock_with_braces=False,
         thread_tiling_macro_suffix="WAVE_RHS",
     )
