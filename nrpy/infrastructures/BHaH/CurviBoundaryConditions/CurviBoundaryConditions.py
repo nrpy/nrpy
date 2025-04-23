@@ -572,9 +572,6 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
         ", bc_struct *restrict bcstruct_device" if parallelization in ["cuda"] else ""
     )
 
-    if parallelization == "cuda":
-        register_CFunction_cpyHosttoDevice_bc_struct()
-
     # Setup host-side struct to populate before copying to device
     body = r"""
   ////////////////////////////////////////
@@ -1831,6 +1828,10 @@ def CurviBoundaryConditions_register_C_functions(
     :param set_parity_on_aux: If True, set parity on auxiliary grid functions.
     :param set_parity_on_auxevol: If True, set parity on auxiliary evolution grid functions.
     """
+
+    if par.parval_from_str("parallelization") == "cuda":
+        register_CFunction_cpyHosttoDevice_bc_struct()
+
     for CoordSystem in set_of_CoordSystems:
         # Register C function to set up the boundary condition struct.
         register_CFunction_bcstruct_set_up(CoordSystem=CoordSystem)
