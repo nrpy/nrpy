@@ -21,11 +21,11 @@ import shutil
 from pathlib import Path
 
 import nrpy.helpers.parallel_codegen as pcg
+import nrpy.infrastructures.BHaH.BHaHAHA.interpolation_2d_general__uniform_src_grid as interpolation2d
 import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 import nrpy.infrastructures.BHaH.special_functions.spin_weight_minus2_spherical_harmonics as swm2sh
 import nrpy.params as par
-import nrpy.infrastructures.BHaH.BHaHAHA.interpolation_2d_general__uniform_src_grid as interpolation2d
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import (
     BHaH_defines_h,
