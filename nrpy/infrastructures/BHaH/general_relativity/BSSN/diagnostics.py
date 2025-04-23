@@ -21,6 +21,7 @@ from nrpy.infrastructures.superB.CurviBoundaryConditions import (
     register_CFunction_apply_bcs_outerextrap_and_inner_specific_gfs,
 )
 
+
 def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type]:
     r"""
     Register C function for setting up diagnostic struct.
@@ -382,7 +383,6 @@ def register_CFunction_diagnostics(
                 plane=plane,
             )
 
-
     # Register diagnostic_struct's contribution to griddata_struct:
     register_griddata()
 
@@ -394,7 +394,6 @@ def register_CFunction_diagnostics(
         register_CFunction_psi4_diagnostics_set_up()
         register_CFunction_apply_bcs_inner_only_specific_gfs()
         register_CFunction_apply_bcs_outerextrap_and_inner_specific_gfs()
-
 
     desc = r"""Diagnostics."""
     cfunc_type = "void"

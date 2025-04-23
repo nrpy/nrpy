@@ -241,7 +241,8 @@ numerical_grids_and_timestep.register_CFunctions(
 )
 
 cbc.CurviBoundaryConditions_register_C_functions(
-    set_of_CoordSystems={CoordSystem}, radiation_BC_fd_order=radiation_BC_fd_order,
+    set_of_CoordSystems={CoordSystem},
+    radiation_BC_fd_order=radiation_BC_fd_order,
     set_parity_on_aux=True,
 )
 

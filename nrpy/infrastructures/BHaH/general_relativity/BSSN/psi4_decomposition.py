@@ -166,6 +166,7 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
         body=body,
     )
 
+
 def register_CFunction_psi4_spinweightm2_decomposition_on_cylindlike_grids() -> None:
     """Register C function for decomposing psi4 into spin-weighted spherical harmonics for cylindrical-like coordinates."""
     prefunc = r"""
