@@ -194,7 +194,7 @@ def generate_CFunction_initial_data_compute(
         comments=desc,
         cfunc_type=cfunc_type,
         launchblock_with_braces=False,
-        thread_tiling_macro_suffix="WAVE_ID_EXACT"
+        thread_tiling_macro_suffix="WAVE_ID_EXACT",
     )
 
     for i in range(3):
@@ -205,9 +205,8 @@ def generate_CFunction_initial_data_compute(
     return prefunc, launch_body
 
 
-def register_CFunction_initial_data(
+def register_CFunction_initial_data_exact(
     OMP_collapse: int,
-    enable_checkpointing: bool = False,
     WaveType: str = "SphericalGaussian",
     default_sigma: float = 3.0,
     default_k0: float = 1.0,
@@ -218,12 +217,76 @@ def register_CFunction_initial_data(
     Register the initial data function for the wave equation with specific parameters.
 
     :param OMP_collapse: Degree of OpenMP loop collapsing.
-    :param enable_checkpointing: Attempt to read from a checkpoint file before generating initial data.
     :param WaveType: The type of wave: SphericalGaussian or PlaneWave
     :param default_sigma: The default value for the Gaussian width (sigma).
     :param default_k0: The default value for the plane wave wavenumber k in the x-direction.
     :param default_k1: The default value for the plane wave wavenumber k in the y-direction.
     :param default_k2: The default value for the plane wave wavenumber k in the z-direction.
+
+    :return: None if in registration phase, else the updated NRPy environment.
+    """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+    parallelization = par.parval_from_str("parallelization")
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+
+    desc = r"""Set initial data to params.time==0 corresponds to the initial data."""
+    cfunc_type = "void"
+    name = "initial_data_exact"
+    arg_dict_host = {
+        "commondata": "const commondata_struct *restrict",
+        "params_in": "const params_struct *restrict",
+        "x0": "const REAL *restrict",
+        "x1": "const REAL *restrict",
+        "x2": "const REAL *restrict",
+        "in_gfs": "REAL *restrict",
+    }
+    params = ", ".join([f"{ptype} {pname}" for pname, ptype in arg_dict_host.items()])
+    body = ""
+
+    if parallelization in ["cuda"]:
+        body += "cpyHosttoDevice_params__constant(params_in, params_in->grid_idx % NUM_STREAMS);\n"
+        body += "params_struct * params;\n"
+        body += "BHAH_MALLOC_DEVICE(params, sizeof(params_struct));\n"
+        body += (
+            "BHAH_MEMCPY_HOST_TO_DEVICE(params, params_in, sizeof(params_struct));\n"
+        )
+    else:
+        body += "const params_struct *restrict params = params_in;\n"
+
+    prefunc, id_compute_launch = generate_CFunction_initial_data_compute(
+        OMP_collapse=OMP_collapse,
+        WaveType=WaveType,
+        default_sigma=default_sigma,
+        default_k0=default_k0,
+        default_k1=default_k1,
+        default_k2=default_k2,
+    )
+
+    body += id_compute_launch.replace("params->", "params_in->")
+    if parallelization in ["cuda"]:
+        body += "BHAH_FREE_DEVICE(params);\n"
+    cfc.register_CFunction(
+        prefunc=prefunc,
+        includes=includes,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        include_CodeParameters_h=False,
+        body=body,
+    )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
+
+def register_CFunction_initial_data(
+    enable_checkpointing: bool = False,
+) -> Union[None, pcg.NRPyEnv_type]:
+    """
+    Register the initial data function for the wave equation with specific parameters.
+
+    :param enable_checkpointing: Attempt to read from a checkpoint file before generating initial data.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -256,34 +319,13 @@ if( read_checkpoint(commondata, griddata) ) return;
     body += r"""for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   // Unpack griddata struct:
 """
-    if parallelization in ["cuda"]:
-        body += "cpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % NUM_STREAMS);\n"
-        body += "params_struct * params;\n"
-        body += "BHAH_MALLOC_DEVICE(params, sizeof(params_struct));\n"
-        body += "BHAH_MEMCPY_HOST_TO_DEVICE(params, &griddata[grid].params, sizeof(params_struct));\n"
-    else:
-        body += "params_struct *restrict params = &griddata[grid].params;\n"
-
-    body += "// Unpack griddata struct:\n"
     for i in range(3):
         body += f"REAL *restrict x{i} = griddata[grid].xx[{i}];\n"
     body += "REAL *restrict in_gfs = griddata[grid].gridfuncs.y_n_gfs;\n"
-
-    prefunc, id_compute_launch = generate_CFunction_initial_data_compute(
-        OMP_collapse=OMP_collapse,
-        WaveType=WaveType,
-        default_sigma=default_sigma,
-        default_k0=default_k0,
-        default_k1=default_k1,
-        default_k2=default_k2,
-    )
-
-    body += id_compute_launch
-    if parallelization in ["cuda"]:
-        body += "BHAH_FREE_DEVICE(params);\n"
+    body += "params_struct *restrict params = &griddata[grid].params;\n"
+    body += "initial_data_exact(commondata, params, x0, x1, x2, in_gfs);\n"
     body += "}\n"
     cfc.register_CFunction(
-        prefunc=prefunc,
         includes=includes,
         desc=desc,
         cfunc_type=cfunc_type,
