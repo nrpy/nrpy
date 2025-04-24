@@ -151,7 +151,6 @@ __global__ static void auxevol_gfs_all_points_gpu(const size_t streamid, const R
 
         auxevol_gfs_single_point_gpu(streamid, xx0, xx1, xx2, &in_gfs[IDX4(PSI_BACKGROUNDGF, i0, i1, i2)],
                                      &in_gfs[IDX4(ADD_TIMES_AUUGF, i0, i1, i2)]);
-        cudaCheckErrors(cudaKernel, "auxevol_gfs_single_point_gpu failure");
 
       } // END LOOP: for (int i0 = tid0; i0 < Nxx_plus_2NGHOSTS0; i0 += stride0)
     } // END LOOP: for (int i1 = tid1; i1 < Nxx_plus_2NGHOSTS1; i1 += stride1)
