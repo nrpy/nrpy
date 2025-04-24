@@ -851,7 +851,7 @@ for (int pt = tid0; pt < num_inner_boundary_points; pt+=stride0) {"""
         comments=comments,
         launch_dict={
             "blocks_per_grid": [
-                "(num_inner_boundary_points + threads_in_x_dir - 1) / threads_in_x_dir"
+                "MAX(1U, (num_inner_boundary_points + threads_in_x_dir - 1) / threads_in_x_dir)"
             ],
             "stream": "params->grid_idx % NUM_STREAMS",
         },
@@ -948,7 +948,7 @@ for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
         comments=comments,
         launch_dict={
             "blocks_per_grid": [
-                "(num_pure_outer_boundary_points + threads_in_x_dir -1) / threads_in_x_dir"
+                "MAX(1U, (num_pure_outer_boundary_points + threads_in_x_dir -1) / threads_in_x_dir)"
             ],
             "stream": "default",
         },
@@ -1584,7 +1584,7 @@ for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {
         comments=comments,
         launch_dict={
             "blocks_per_grid": [
-                "(num_pure_outer_boundary_points + threads_in_x_dir -1) / threads_in_x_dir"
+                "MAX(1U, (num_pure_outer_boundary_points + threads_in_x_dir -1) / threads_in_x_dir)"
             ],
             "stream": "params->grid_idx % NUM_STREAMS",
         },
@@ -1828,7 +1828,6 @@ def CurviBoundaryConditions_register_C_functions(
     :param set_parity_on_aux: If True, set parity on auxiliary grid functions.
     :param set_parity_on_auxevol: If True, set parity on auxiliary evolution grid functions.
     """
-
     if par.parval_from_str("parallelization") == "cuda":
         register_CFunction_cpyHosttoDevice_bc_struct()
 
