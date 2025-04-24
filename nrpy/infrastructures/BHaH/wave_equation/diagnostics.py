@@ -142,7 +142,12 @@ def register_CFunction_diagnostics(
     # fmt: on
 
     host_griddata = "griddata_host" if parallelization == "cuda" else "griddata"
-    body = rf"""  const REAL currtime = commondata->time, currdt = commondata->dt, outevery = commondata->diagnostics_output_every;
+    body = (
+        "cpyHosttoDevice_commondata__constant(commondata);\n"
+        if parallelization in ["cuda"]
+        else ""
+    )
+    body += rf"""  const REAL currtime = commondata->time, currdt = commondata->dt, outevery = commondata->diagnostics_output_every;
   // Explanation of the if() below:
   // Step 1: round(currtime / outevery) rounds to the nearest integer multiple of currtime.
   // Step 2: Multiplying by outevery yields the exact time we should output again, t_out.
