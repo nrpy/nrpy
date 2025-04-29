@@ -18,6 +18,7 @@ Note: This is the superB version.
 
 """
 
+import argparse
 import os
 
 #########################################################
@@ -55,9 +56,11 @@ from nrpy.infrastructures.BHaH.general_relativity import (
     TwoPunctures,
     psi4_C_codegen_library,
 )
-import argparse
+
 parser = argparse.ArgumentParser()
-parser.add_argument("--paper", action="store_true", help="use the paper-version parameters")
+parser.add_argument(
+    "--paper", action="store_true", help="use the paper-version parameters"
+)
 args = parser.parse_args()
 paper = args.paper
 
