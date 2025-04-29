@@ -100,7 +100,7 @@ swm2sh_maximum_l_mode_generated = 8
 swm2sh_maximum_l_mode_to_compute = 2 if not paper else 8
 Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
-    "SinhCylindrical": [400, 2, 1200],
+    "SinhCylindrical": [800, 2, 2400],
 }
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.25 if not paper else +5.0
