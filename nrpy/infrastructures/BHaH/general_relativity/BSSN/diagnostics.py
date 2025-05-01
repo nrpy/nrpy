@@ -43,19 +43,21 @@ def register_CFunction_psi4_diagnostics_set_up(
     params = "commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], diagnostic_struct *restrict diagnosticstruct"
 
     if "Spherical" in CoordSystem:
-        choose_number_pts_in_theta_shell = "N_theta = params->Nxx1;"
-        choose_number_pts_in_phi_shell = "N_phi = params->Nxx2;"
+        choose_number_pts_in_theta_shell = "const int N_theta = params->Nxx1;"
+        choose_number_pts_in_phi_shell = "const int N_phi = params->Nxx2;"
     elif "Cylindrical" in CoordSystem:
-        choose_number_pts_in_theta_shell = "N_theta = params->Nxx2;"
-        choose_number_pts_in_phi_shell = "N_phi = params->Nxx1;"
+        choose_number_pts_in_theta_shell = "const int N_theta = params->Nxx2;"
+        choose_number_pts_in_phi_shell = "const int N_phi = params->Nxx1;"
     elif "SymTP" in CoordSystem:
-        choose_number_pts_in_theta_shell = "N_theta = params->Nxx1;"
-        choose_number_pts_in_phi_shell = "N_phi = params->Nxx2;"
+        choose_number_pts_in_theta_shell = "const int N_theta = params->Nxx1;"
+        choose_number_pts_in_phi_shell = "const int N_phi = params->Nxx2;"
     else:
         raise ValueError(f"CoordSystem = {CoordSystem} not supported.")
 
     body = rf"""
+  // Number of points on shell in theta direction
   {choose_number_pts_in_theta_shell}
+  // Number of points on shell in phi direction
   {choose_number_pts_in_phi_shell}
 """
     body += r"""
@@ -73,8 +75,6 @@ const int psi4_spinweightm2_sph_harmonics_max_l = commondata->swm2sh_maximum_l_m
   REAL theta_max = PI;
   REAL phi_min = -PI;
   REAL phi_max = PI;
-  const int N_theta = params->Nxx2; // set # of points in theta same as # of pts in z for the cylindrical-like global grid
-  const int N_phi = params->Nxx1;   // set # of points in phi same as # of pts in phi for the cylindrical-like global grid
   const int N_tot_shell = N_theta * N_phi;
   REAL dtheta = (theta_max - theta_min) / N_theta;
   diagnosticstruct->dtheta = dtheta;
@@ -283,7 +283,7 @@ def register_griddata() -> None:
 def register_BHaH_defines_h() -> None:
     """Register the diagnostic_struct's contribution to the BHaH_defines.h file."""
     BHd_str = r"""
-    // for psi4 decomposition in cylindrical-like coordinates
+    // for psi4 decomposition
     typedef struct __diagnostic_struct__ {
       int num_of_R_exts_grid;
       int psi4_spinweightm2_sph_harmonics_max_l;
@@ -485,37 +485,20 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {{
     diagnostics_nearest_2d_yz_plane(commondata, params, xx, &{host_griddata}[grid].gridfuncs);
 """
     if enable_psi4_diagnostics:
-        body += r"""      // Do psi4 output, but only if the grid is spherical- or cylindrical-like.
-    if (strstr(CoordSystemName, "Spherical") != NULL || strstr(CoordSystemName, "Cylindrical") != NULL) {
+        body += r"""      // Do psi4 output
+    // Set psi4.
+    psi4(commondata, params, xx, y_n_gfs, diagnostic_output_gfs);
 
-      // Set psi4.
-      psi4(commondata, params, xx, y_n_gfs, diagnostic_output_gfs);
+    // Apply outer and inner bcs to psi4 needed to do interpolation correctly
+    int aux_gfs_to_sync[2] = {PSI4_REGF, PSI4_IMGF};
+    apply_bcs_outerextrap_and_inner_specific_gfs(commondata, &griddata[grid].params, &griddata[grid].bcstruct, 2, griddata[grid].gridfuncs.diagnostic_output_gfs, aux_gfs_to_sync, aux_gf_parity);
 
-      if (strstr(CoordSystemName, "Spherical")) {
+    // Decompose psi4 into spin-weight -2  spherical harmonics & output to files.
+    diagnostic_struct *restrict diagnosticstruct = &griddata[grid].diagnosticstruct;
 
-        // Adjusted to match Tutorial-Start_to_Finish-BSSNCurvilinear-Two_BHs_Collide-Psi4.ipynb
-        const int psi4_spinweightm2_sph_harmonics_max_l = 2;
-#define num_of_R_exts 24
-        const REAL list_of_R_exts[num_of_R_exts] = {10.0, 20.0, 21.0, 22.0, 23.0, 24.0, 25.0, 26.0, 27.0, 28.0, 29.0,  30.0,
-                                                    31.0, 32.0, 33.0, 35.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0, 150.0};
-        // Decompose psi4 into spin-weight -2  spherical harmonics & output to files.
-        psi4_spinweightm2_decomposition_on_sphlike_grids(commondata, params, diagnostic_output_gfs, list_of_R_exts, num_of_R_exts,
-                                                         psi4_spinweightm2_sph_harmonics_max_l, xx);
-
-      } else if (strstr(CoordSystemName, "Cylindrical")) {
-
-        // Apply outer and inner bcs to psi4 needed to do interpolation correctly
-        int aux_gfs_to_sync[2] = {PSI4_REGF, PSI4_IMGF};
-        apply_bcs_outerextrap_and_inner_specific_gfs(commondata, &griddata[grid].params, &griddata[grid].bcstruct, 2, griddata[grid].gridfuncs.diagnostic_output_gfs, aux_gfs_to_sync, aux_gf_parity);
-
-        // Decompose psi4 into spin-weight -2  spherical harmonics & output to files.
-        diagnostic_struct *restrict diagnosticstruct = &griddata[grid].diagnosticstruct;
-
-        psi4_spinweightm2_decomposition_on_cylindlike_grids(commondata, params, diagnostic_output_gfs, diagnosticstruct->list_of_R_exts_grid, diagnosticstruct->num_of_R_exts_grid,
-        diagnosticstruct->psi4_spinweightm2_sph_harmonics_max_l, xx, diagnosticstruct->N_shell_pts_grid,
-        diagnosticstruct->xx_shell_grid, diagnosticstruct->N_theta_shell_grid, diagnosticstruct->theta_shell_grid, diagnosticstruct->dtheta);
-      }
-    }
+    psi4_spinweightm2_decomposition(commondata, params, diagnostic_output_gfs, diagnosticstruct->list_of_R_exts_grid, diagnosticstruct->num_of_R_exts_grid,
+    diagnosticstruct->psi4_spinweightm2_sph_harmonics_max_l, xx, diagnosticstruct->N_shell_pts_grid,
+    diagnosticstruct->xx_shell_grid, diagnosticstruct->N_theta_shell_grid, diagnosticstruct->theta_shell_grid, diagnosticstruct->dtheta);
 """
     body += r"""
   }
