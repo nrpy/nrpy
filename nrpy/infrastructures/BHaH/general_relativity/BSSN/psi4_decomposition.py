@@ -94,7 +94,7 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
     elif "Cylindrical" in CoordSystem:
         radial_like_index = 0
         theta_like_index = 2
-        phi_index = 2
+        phi_index = 1
     elif "SymTP" in CoordSystem:
         radial_like_index = 0
         theta_like_index = 1
