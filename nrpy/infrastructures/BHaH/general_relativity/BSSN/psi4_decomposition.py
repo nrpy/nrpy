@@ -11,7 +11,8 @@ import nrpy.c_function as cfc
 
 
 def register_CFunction_psi4_spinweightm2_decomposition(CoordSystem: str) -> None:
-    """Register C function for decomposing psi4 into spin-weighted spherical harmonics.
+    """
+    Register C function for decomposing psi4 into spin-weighted spherical harmonics.
 
     :param CoordSystem: Specifies the coordinate system for psi4 decomposition.
     :raises ValueError: If psi4 decomposition is not supported for the coordinate system.
