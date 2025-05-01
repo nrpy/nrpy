@@ -9,10 +9,12 @@ Author: Zachariah B. Etienne
 
 import nrpy.c_function as cfc
 
+
 def register_CFunction_psi4_spinweightm2_decomposition(CoordSystem: str) -> None:
     """Register C function for decomposing psi4 into spin-weighted spherical harmonics.
 
     :param CoordSystem: Specifies the coordinate system for psi4 decomposition.
+    :raises ValueError: If psi4 decomposition is not supported for the coordinate system.
     """
     prefunc = r"""
 static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1, const REAL dxx1, const REAL dxx2,
@@ -84,7 +86,6 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
                                                          int *restrict N_shell_pts_grid, REAL ***restrict xx_shell_grid,
                                                          int *restrict N_theta_shell_grid, REAL **restrict theta_shell_grid, REAL dtheta"""
 
-
     if "Spherical" in CoordSystem:
         radial_like_index = 0
         theta_like_index = 1
@@ -99,7 +100,6 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
         phi_index = 2
     else:
         raise ValueError(f"CoordSystem = {CoordSystem} not supported.")
-
 
     body = rf"""
 

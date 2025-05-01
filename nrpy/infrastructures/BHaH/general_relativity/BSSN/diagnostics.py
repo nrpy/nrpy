@@ -25,11 +25,12 @@ from nrpy.infrastructures.superB.CurviBoundaryConditions import (
 def register_CFunction_psi4_diagnostics_set_up(
     CoordSystem: str,
 ) -> Union[None, pcg.NRPyEnv_type]:
-    r"""
+    """
     Register C function for setting up diagnostic struct.
 
     :param CoordSystem: Specifies the coordinate system for psi4 diagnostics set up.
     :return: None if in registration phase, else the updated NRPy environment.
+    :raises ValueError: If psi4 decomposition is not supported for the coordinate system.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
