@@ -129,9 +129,9 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
   REAL *restrict src_x0x1[3];
   src_x0x1[1] = (REAL *restrict)malloc(sizeof(REAL) * src_Nxx_plus_2NGHOSTS0);
   src_x0x1[2] = (REAL *restrict)malloc(sizeof(REAL) * src_Nxx_plus_2NGHOSTS1);
-  for (int j = 0; j < Nxx_plus_2NGHOSTS0; j++)
+  for (int j = 0; j < src_Nxx_plus_2NGHOSTS0; j++)
     src_x0x1[1][j] = xx[radial_like_index][j];
-  for (int j = 0; j < Nxx_plus_2NGHOSTS1; j++)
+  for (int j = 0; j < src_Nxx_plus_2NGHOSTS1; j++)
     src_x0x1[2][j] = xx[theta_like_index][j];
   const int total_size = src_Nxx_plus_2NGHOSTS0 * src_Nxx_plus_2NGHOSTS1;
   REAL *restrict src_gf_psi4r = (REAL *)malloc(sizeof(REAL) * total_size); // with shape [src_Nxx_plus_2NGHOSTS0 * src_Nxx_plus_2NGHOSTS1]
