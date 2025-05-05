@@ -56,9 +56,9 @@ def register_CFunction_psi4_diagnostics_set_up(
         raise ValueError(f"CoordSystem = {CoordSystem} not supported.")
 
     body = rf"""
-  // Number of points on shell in theta direction
+  // # of points on shell in theta direction can be chosen freely, here it set to the same as # of points in the theta-like direction of the grid
+  // phi values need to be exactly the same as phi values of grid, all coordinate systems supported have a phi coordinate
   {choose_number_pts_in_theta_shell}
-  // Number of points on shell in phi direction
   {choose_number_pts_in_phi_shell}
 """
     body += r"""
@@ -69,8 +69,6 @@ const int psi4_spinweightm2_sph_harmonics_max_l = commondata->swm2sh_maximum_l_m
 
 
   // Set up uniform 2d grid in theta and phi at R_ext (2d shells at different R_ext)
-  // phi values need to be exactly the same as phi values of  grid
-  // # of pts in the theta direction can be chosen freely, here it set to the same as number of points in the theta-like direction of the grid
   const REAL PI = params->PI;
   const REAL theta_min = 0.0;
   REAL theta_max = PI;
@@ -203,6 +201,8 @@ const int psi4_spinweightm2_sph_harmonics_max_l = commondata->swm2sh_maximum_l_m
           int i_th_grid, i_ph_grid;
           const int N_theta_shell_grid = diagnosticstruct->N_theta_shell_grid[which_R_ext];
           REVERSE_IDX2GENERAL(which_pt_on_grid, N_theta_shell_grid, i_th_grid, i_ph_grid);
+          // suppress “set but not used” warning
+          (void)i_ph_grid;
           diagnosticstruct->theta_shell_grid[which_R_ext][i_th_grid] = xx_shell_sph[which_R_ext][0][i_th];
           which_pt_on_grid++;
         }
