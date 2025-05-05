@@ -69,8 +69,8 @@ const int psi4_spinweightm2_sph_harmonics_max_l = commondata->swm2sh_maximum_l_m
 
 
   // Set up uniform 2d grid in theta and phi at R_ext (2d shells at different R_ext)
-  // phi values need to be exactly the same as phi values of the cylindrical-like grid
-  // # of pts in the theta direction can be chosen freely, here it set to the same as number of points in z of the global grid
+  // phi values need to be exactly the same as phi values of  grid
+  // # of pts in the theta direction can be chosen freely, here it set to the same as number of points in the theta-like direction of the grid
   const REAL PI = params->PI;
   const REAL theta_min = 0.0;
   REAL theta_max = PI;
@@ -121,15 +121,15 @@ const int psi4_spinweightm2_sph_harmonics_max_l = commondata->swm2sh_maximum_l_m
   }
 
   // For each pt on each spherical shell at R_ext find if pt lies within the grid
-  //(it should for bhah single grids, but not for multipatch...!!)
+  //(it should for bhah single grids, but not for multipatch...)
   // set N_shell_pts_grid and xx_shell_grid in diagnostic struct
   diagnosticstruct->N_shell_pts_grid = (int *restrict)malloc(sizeof(int) * NUM_OF_R_EXTS);
   diagnosticstruct->N_theta_shell_grid = (int *restrict)malloc(sizeof(int) * NUM_OF_R_EXTS);
   diagnosticstruct->xx_shell_grid = (REAL * **restrict)malloc(NUM_OF_R_EXTS * sizeof(REAL **));
   diagnosticstruct->theta_shell_grid = (REAL * *restrict)malloc(NUM_OF_R_EXTS * sizeof(REAL *));
 
-  // Count number of pts that lie within the extent of this grid
   for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {
+    // Count number of pts that lie within the extent of this grid
     int count_pt_on_grid = 0;
     bool b_theta_grid[N_theta];
     bool b_phi_grid[N_phi];
@@ -153,21 +153,6 @@ const int psi4_spinweightm2_sph_harmonics_max_l = commondata->swm2sh_maximum_l_m
           count_pt_on_grid++;
           b_theta_grid[i_th] = true;
           b_phi_grid[i_ph] = true;
-        }
-
-        if (((closest_xx[0] == params->xxmin0 || closest_xx[0] == params->xxmax0) &&
-             (params->xxmin1 <= closest_xx[1] && closest_xx[1] <= params->xxmax1) &&
-             (params->xxmin2 <= closest_xx[2] && closest_xx[2] <= params->xxmax2)) ||
-
-            ((params->xxmin0 <= closest_xx[0] && closest_xx[0] <= params->xxmax0) &&
-             (closest_xx[1] == params->xxmin1 || closest_xx[1] == params->xxmax1) &&
-             (params->xxmin2 <= closest_xx[2] && closest_xx[2] <= params->xxmax2)) ||
-
-            ((params->xxmin0 <= closest_xx[0] && closest_xx[0] <= params->xxmax0) &&
-             (params->xxmin1 <= closest_xx[1] && closest_xx[1] <= params->xxmax1) &&
-             (closest_xx[2] == params->xxmin2 || closest_xx[2] == params->xxmax2))) {
-          // The point lies on one of the boundaries.
-          printf("Error: point lies exactly on one of the grid boundaries\n");
         }
       }
     }
@@ -213,16 +198,11 @@ const int psi4_spinweightm2_sph_harmonics_max_l = commondata->swm2sh_maximum_l_m
           diagnosticstruct->xx_shell_grid[which_R_ext][which_pt_on_grid][0] = closest_xx[0];
           diagnosticstruct->xx_shell_grid[which_R_ext][which_pt_on_grid][1] = closest_xx[1];
           diagnosticstruct->xx_shell_grid[which_R_ext][which_pt_on_grid][2] = closest_xx[2];
+
           // also save theta values
           int i_th_grid, i_ph_grid;
           const int N_theta_shell_grid = diagnosticstruct->N_theta_shell_grid[which_R_ext];
           REVERSE_IDX2GENERAL(which_pt_on_grid, N_theta_shell_grid, i_th_grid, i_ph_grid);
-          // check IDX2GENERAL(i_th_grid, i_ph_grid, N_theta_shell_grid) should be equal to which_pt_on_grid
-          int idx2general_result = IDX2GENERAL(i_th_grid, i_ph_grid, N_theta_shell_grid);
-          if (idx2general_result != which_pt_on_grid) {
-            printf("Mismatch: IDX2GENERAL(i_th_grid, i_ph_grid, N_theta_shell_grid) = %d, but which_pt_on_grid = %d\n", idx2general_result,
-                   which_pt_on_grid);
-          }
           diagnosticstruct->theta_shell_grid[which_R_ext][i_th_grid] = xx_shell_sph[which_R_ext][0][i_th];
           which_pt_on_grid++;
         }
