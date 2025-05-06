@@ -20,6 +20,44 @@ from nrpy.infrastructures.superB.CurviBoundaryConditions import (
     register_CFunction_apply_bcs_inner_only_specific_gfs,
     register_CFunction_apply_bcs_outerextrap_and_inner_specific_gfs,
 )
+import nrpy.params as par
+import numpy as np
+
+par.register_CodeParameter(
+    "int", __name__, "num_theta_points_on_shell_for_psi4_interp", 32, commondata=True
+)
+
+# Define governing parameters for extraction radii (R_exts)
+R_ext_min, R_ext_max, num_R_exts = 36.923, 150.0, 8
+
+# Calculate the list of R_exts values.
+# The distribution is linear in 1/R_ext, ensuring denser sampling at smaller radii.
+# Reciprocal values span 1/R_ext_max to 1/R_ext_min for R_exts to span R_ext_min to R_ext_max.
+reciprocal_R_ext_values = np.linspace(1.0 / R_ext_max, 1.0 / R_ext_min, num_R_exts)
+# Convert back to R_ext, sort, and round for consistent representation.
+list_of_R_exts_values = sorted([round(1.0 / val, 3) for val in reciprocal_R_ext_values])
+
+# Register NUM_OF_R_EXTS: the number of extraction radii.
+par.register_CodeParameter(
+    cparam_type="#define",
+    module=__name__,
+    name="NUM_OF_R_EXTS",
+    defaultvalue=num_R_exts,
+    description=f"Number of extraction radii ({num_R_exts})."
+)
+
+# Register list_of_R_exts: the array containing extraction radii values.
+par.register_CodeParameter(
+    cparam_type=f"REAL[{num_R_exts}]",
+    module=__name__,
+    name="list_of_R_exts",
+    defaultvalue=list_of_R_exts_values,
+    description=f"List of radii at which psi4 is extracted.",
+    add_to_parfile=True,
+    add_to_set_CodeParameters_h=False,
+    commondata=True,
+    assumption="RealPositive"
+)
 
 
 def register_CFunction_psi4_diagnostics_set_up(
@@ -198,11 +236,10 @@ const int psi4_spinweightm2_sph_harmonics_max_l = commondata->swm2sh_maximum_l_m
           diagnosticstruct->xx_shell_grid[which_R_ext][which_pt_on_grid][2] = closest_xx[2];
 
           // also save theta values
-          int i_th_grid, i_ph_grid;
+          int i_th_grid
+          MAYBE_UNUSED int i_ph_grid;
           const int N_theta_shell_grid = diagnosticstruct->N_theta_shell_grid[which_R_ext];
           REVERSE_IDX2GENERAL(which_pt_on_grid, N_theta_shell_grid, i_th_grid, i_ph_grid);
-          // suppress “set but not used” warning
-          (void)i_ph_grid;
           diagnosticstruct->theta_shell_grid[which_R_ext][i_th_grid] = xx_shell_sph[which_R_ext][0][i_th];
           which_pt_on_grid++;
         }
