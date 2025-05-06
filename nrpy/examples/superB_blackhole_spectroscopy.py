@@ -84,7 +84,7 @@ TP_npoints_phi = 4
 
 enable_KreissOliger_dissipation = True
 enable_CAKO = True
-enable_CAHD = True if not paper else False
+enable_CAHD = not paper  # True if paper.
 enable_SSL = True
 KreissOliger_strength_gauge = 0.99
 KreissOliger_strength_nongauge = 0.3
@@ -128,18 +128,15 @@ if "Cylindrical" in CoordSystem:
     par.adjust_CodeParam_default("Nchare2", 4 if not paper else 24)
 
 OMP_collapse = 1
+sinh_width = 0.2
 if "Spherical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "2")
     par.adjust_CodeParam_default("CFL_FACTOR", 1.0)
     OMP_collapse = 2  # about 2x faster
-    if CoordSystem == "SinhSpherical":
-        sinh_width = 0.2
 if "Cylindrical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "1")
     par.adjust_CodeParam_default("CFL_FACTOR", 0.5)
     OMP_collapse = 2  # might be slightly faster
-    if CoordSystem == "SinhCylindrical":
-        sinh_width = 0.2
 
 project_dir = os.path.join("project", project_name)
 
