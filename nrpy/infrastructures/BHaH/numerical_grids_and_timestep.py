@@ -679,13 +679,7 @@ for(int grid=0;grid<commondata->NUMGRIDS;grid++) {
    griddata[grid].params.grid_idx = grid;
 }
 """
-    if enable_psi4_diagnostics_set_up:
-        body += r"""
-    // Step 1.i: Set up diagnosticstruct for psi4 decomposition in cylindrical-like coordinates
-    for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
-      psi4_diagnostics_set_up(commondata, &griddata[grid].params, griddata[grid].xx, &griddata[grid].diagnosticstruct);
-    }
-    """
+
     cfc.register_CFunction(
         includes=includes,
         desc=desc,

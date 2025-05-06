@@ -26,7 +26,7 @@ core_modules_list = [
     "params_struct",
     "finite_difference",
     "reference_metric",
-    "nrpy.infrastructures.BHaH.general_relativity.BSSN.diagnostics",
+    "nrpy.infrastructures.BHaH.general_relativity.BSSN.psi4_decomposition",
     "nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions",
     "nrpy.infrastructures.BHaH.MoLtimestepping.MoL_register_all",
     "nrpydev.infrastructures.BHaH.interpolation.interpolation",
