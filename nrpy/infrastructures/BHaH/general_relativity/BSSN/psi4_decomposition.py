@@ -9,13 +9,11 @@ Author: Zachariah B. Etienne
 
 import nrpy.c_function as cfc
 import nrpy.params as par
-import numpy as np
 from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
 from nrpy.infrastructures.superB.CurviBoundaryConditions import (
     register_CFunction_apply_bcs_inner_only_specific_gfs,
     register_CFunction_apply_bcs_outerextrap_and_inner_specific_gfs,
 )
-
 
 par.register_CodeParameter(
     "int", __name__, "num_theta_points_on_shell_for_psi4_interp", 32, commondata=True
@@ -27,8 +25,11 @@ R_ext_min, R_ext_max, num_R_exts = 36.923, 150.0, 8
 # Calculate the list of R_exts values.
 # The distribution is linear in 1/R_ext, ensuring denser sampling at smaller radii.
 # Reciprocal values span 1/R_ext_max to 1/R_ext_min for R_exts to span R_ext_min to R_ext_max.
-reciprocal_R_ext_values = np.linspace(1.0 / R_ext_max, 1.0 / R_ext_min, num_R_exts)
-# Convert back to R_ext, sort, and round for consistent representation.
+R_ext_min, R_ext_max, num_R_exts = 36.923, 150.0, 8
+recip_min = 1.0 / R_ext_max
+recip_max = 1.0 / R_ext_min
+step = (recip_max - recip_min) / (num_R_exts - 1)
+reciprocal_R_ext_values = [recip_min + i * step for i in range(num_R_exts)]
 list_of_R_exts_values = sorted([round(1.0 / val, 3) for val in reciprocal_R_ext_values])
 
 # Register NUM_OF_R_EXTS: the number of extraction radii.
@@ -119,14 +120,14 @@ def register_CFunction_psi4_spinweightm2_decomposition(CoordSystem: str) -> None
 /*
 This prefunction sets up the diagnotic struct:
 
-typedef struct __diagnostic_struct__ {
+typedef struct __diagnostic_struct__ {{
   int *restrict N_shell_pts_grid;            // of shape int [NUM_OF_R_EXTS]
   REAL **restrict xx_radial_like_shell_grid; // of shape [NUM_OF_R_EXTS][N_shell_pts_grid]
   REAL **restrict xx_theta_like_shell_grid;  // of shape [NUM_OF_R_EXTS][N_shell_pts_grid]
   int *restrict N_theta_shell_grid;          // of shape int [NUM_OF_R_EXTS]
   REAL **restrict theta_shell_grid;          // of shape [NUM_OF_R_EXTS][N_theta_shell_grid]
   REAL dtheta;
-} diagnostic_struct;
+}} diagnostic_struct;
 
 We set up thin shells at R_ext radii, on which we will integrate psi4 * spin weight 2 spherical harmonics.
 We assume that the grid might me a rectangular partition of the whole grid and therefore need to find for each shell,
