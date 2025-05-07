@@ -48,8 +48,8 @@ par.register_CodeParameter(
     defaultvalue=list_of_R_exts_values,
     description=f"List of radii at which psi4 is extracted.",
     add_to_parfile=True,
-    add_to_set_CodeParameters_h=False,
     commondata=True,
+    add_to_set_CodeParameters_h=False,
     assumption="RealPositive"
 )
 
@@ -94,35 +94,48 @@ def register_CFunction_psi4_spinweightm2_decomposition(CoordSystem: str) -> None
     """
 
     if "Spherical" in CoordSystem:
-        choose_number_pts_in_theta_shell = "const int N_theta = params->Nxx1;"
-        choose_number_pts_in_phi_shell = "const int N_phi = params->Nxx2;"
+        radial_like_index = 0
+        theta_like_index = 1
+        phi_index = 2
     elif "Cylindrical" in CoordSystem:
-        choose_number_pts_in_theta_shell = "const int N_theta = params->Nxx2;"
-        choose_number_pts_in_phi_shell = "const int N_phi = params->Nxx1;"
+        radial_like_index = 0
+        theta_like_index = 2
+        phi_index = 1
     elif "SymTP" in CoordSystem:
-        choose_number_pts_in_theta_shell = "const int N_theta = params->Nxx1;"
-        choose_number_pts_in_phi_shell = "const int N_phi = params->Nxx2;"
+        radial_like_index = 0
+        theta_like_index = 1
+        phi_index = 2
     else:
         raise ValueError(f"CoordSystem = {CoordSystem} not supported.")
 
+    setup_prefunc = r"""
 
-    setup_prefunc = rf"""
+// IDX2GENERAL: Map 2D indices (i,j) to a 1D index using stride Ni
+#define IDX2GENERAL(i, j, Ni) ((i) + (Ni) * (j))
+// REVERSE_IDX2GENERAL: Recover (i,j) from a 1D index and stride Ni
+#define REVERSE_IDX2GENERAL(index, Ni, i, j) \
+{                                            \
+    j = (index) / (Ni);                      \
+    i = (index) % (Ni);                      \
+}
+
 static void psi4_diagnostics_set_up(const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3],
-                                                   diagnostic_struct *restrict diagnosticstruct) {{
-  // # of points on shell in theta direction can be chosen freely, here it set to the same as # of points in the theta-like direction of the grid
-  // phi values need to be exactly the same as phi values of grid, all coordinate systems supported have a phi coordinate
-  {choose_number_pts_in_theta_shell}
-  {choose_number_pts_in_phi_shell}
+                                                   diagnostic_struct *restrict diagnosticstruct) {
+
+const int psi4_spinweightm2_sph_harmonics_max_l = commondata->swm2sh_maximum_l_mode_to_compute;
+const REAL *restrict list_of_R_exts = commondata->list_of_R_exts;
+
+//Thin shells with N_theta and N_phi number of points are constructed at each extraction radius R_ext
+const int N_theta = commondata->num_theta_points_on_shell_for_psi4_interp;
+"""
+    setup_prefunc += rf"""
+// phi values of shell need to be exactly the same as phi values of grid, all coordinate systems supported have a phi coordinate
+const int N_phi = params->Nxx{phi_index};
 """
     setup_prefunc += r"""
-const int psi4_spinweightm2_sph_harmonics_max_l = commondata->swm2sh_maximum_l_mode_to_compute;
-#define NUM_OF_R_EXTS 24
-  const REAL list_of_R_exts[NUM_OF_R_EXTS] = {10.0, 20.0, 21.0, 22.0, 23.0, 24.0, 25.0, 26.0, 27.0, 28.0, 29.0,  30.0,
-                                              31.0, 32.0, 33.0, 35.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0, 150.0};
-
 
   // Set up uniform 2d grid in theta and phi at R_ext (2d shells at different R_ext)
-  const REAL PI = params->PI;
+  const REAL PI = M_PI;
   const REAL theta_min = 0.0;
   REAL theta_max = PI;
   REAL phi_min = -PI;
@@ -362,21 +375,6 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
     REAL *restrict diagnostic_output_gfs,
     REAL *restrict xx[3],
     diagnostic_struct *restrict diagnosticstruct"""
-
-    if "Spherical" in CoordSystem:
-        radial_like_index = 0
-        theta_like_index = 1
-        phi_index = 2
-    elif "Cylindrical" in CoordSystem:
-        radial_like_index = 0
-        theta_like_index = 2
-        phi_index = 1
-    elif "SymTP" in CoordSystem:
-        radial_like_index = 0
-        theta_like_index = 1
-        phi_index = 2
-    else:
-        raise ValueError(f"CoordSystem = {CoordSystem} not supported.")
 
 
     # Register diagnostic_struct's contribution to BHaH_defines.h:
