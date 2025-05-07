@@ -48,9 +48,7 @@ def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type
   const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
 
   const int psi4_spinweightm2_sph_harmonics_max_l = commondata->swm2sh_maximum_l_mode_to_compute;
-#define NUM_OF_R_EXTS 24
-  const REAL list_of_R_exts[NUM_OF_R_EXTS] = {10.0, 20.0, 21.0, 22.0, 23.0, 24.0, 25.0, 26.0, 27.0, 28.0, 29.0,  30.0,
-                                                31.0, 32.0, 33.0, 35.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0, 150.0};
+  const REAL *restrict list_of_R_exts = commondata->list_of_R_exts;
 
   //
   // Case spherical-like grid
