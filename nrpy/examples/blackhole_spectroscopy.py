@@ -52,7 +52,7 @@ par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Code-generation-time parameters:
 project_name = "blackhole_spectroscopy"
-CoordSystem = "SinhSpherical"
+CoordSystem = "SinhCylindrical"
 IDtype = "TP_Interp"
 IDCoordSystem = "Cartesian"
 
@@ -82,7 +82,7 @@ swm2sh_maximum_l_mode_generated = 8
 swm2sh_maximum_l_mode_to_compute = 2  # for consistency with NRPy 1.0 version.
 Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
-    "Cylindrical": [400, 2, 1200],
+    "SinhCylindrical": [400, 2, 1200],
 }
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.25
@@ -108,6 +108,8 @@ if "Cylindrical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "1")
     par.adjust_CodeParam_default("CFL_FACTOR", 0.5)
     OMP_collapse = 2  # might be slightly faster
+    if CoordSystem == "SinhCylindrical":
+        sinh_width = 0.2
 
 project_dir = os.path.join("project", project_name)
 
@@ -283,6 +285,11 @@ rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 # Coord system parameters
 if CoordSystem == "SinhSpherical":
     par.adjust_CodeParam_default("SINHW", sinh_width)
+if CoordSystem == "SinhCylindrical":
+    par.adjust_CodeParam_default("AMPLRHO", grid_physical_size)
+    par.adjust_CodeParam_default("AMPLZ", grid_physical_size)
+    par.adjust_CodeParam_default("SINHWRHO", sinh_width)
+    par.adjust_CodeParam_default("SINHWZ", sinh_width)
 par.adjust_CodeParam_default("t_final", t_final)
 # Initial data parameters
 par.adjust_CodeParam_default("initial_sep", initial_sep)
