@@ -67,15 +67,11 @@ def register_BHaH_defines_h() -> None:
     BHd_str = r"""
     // for psi4 decomposition
     typedef struct __diagnostic_struct__ {
-      int num_of_R_exts_grid;
-      int psi4_spinweightm2_sph_harmonics_max_l;
-      REAL *restrict list_of_R_exts_grid;
-      int tot_N_shell_pts_grid;
       REAL dtheta;
-      int *restrict N_shell_pts_grid; // of shape int [num_of_R_exts_grid]
-      int *restrict N_theta_shell_grid; // of shape int [num_of_R_exts_grid]
-      REAL ***restrict xx_shell_grid; // of shape [num_of_R_exts_grid][N_shell_pts_grid][3]
-      REAL **restrict theta_shell_grid; // of shape [num_of_R_exts_grid][N_theta_shell_grid]
+      int *restrict N_shell_pts_grid; // of shape int [NUM_OF_R_EXTS]
+      int *restrict N_theta_shell_grid; // of shape int [NUM_OF_R_EXTS]
+      REAL ***restrict xx_shell_grid; // of shape [NUM_OF_R_EXTS][N_shell_pts_grid][3]
+      REAL **restrict theta_shell_grid; // of shape [NUM_OF_R_EXTS][N_theta_shell_grid]
     } diagnostic_struct;
     """
 
@@ -122,7 +118,6 @@ def register_CFunction_psi4_spinweightm2_decomposition(CoordSystem: str) -> None
 static void psi4_diagnostics_set_up(const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3],
                                                    diagnostic_struct *restrict diagnosticstruct) {
 
-const int psi4_spinweightm2_sph_harmonics_max_l = commondata->swm2sh_maximum_l_mode_to_compute;
 const REAL *restrict list_of_R_exts = commondata->list_of_R_exts;
 
 //Thin shells with N_theta and N_phi number of points are constructed at each extraction radius R_ext
@@ -275,19 +270,12 @@ const int N_phi = params->Nxx{phi_index};
     }
   } // end loop over all R_ext
 
-  diagnosticstruct->num_of_R_exts_grid = NUM_OF_R_EXTS;
-  diagnosticstruct->list_of_R_exts_grid = (REAL *restrict)malloc(sizeof(REAL) * NUM_OF_R_EXTS);
-  for (int i = 0; i < NUM_OF_R_EXTS; i++) {
-    diagnosticstruct->list_of_R_exts_grid[i] = list_of_R_exts[i];
-  }
-  diagnosticstruct->psi4_spinweightm2_sph_harmonics_max_l = psi4_spinweightm2_sph_harmonics_max_l;
   int sum = 0;
   for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {
     if (diagnosticstruct->N_shell_pts_grid[which_R_ext] > 0) {
       sum += diagnosticstruct->N_shell_pts_grid[which_R_ext];
     }
   }
-  diagnosticstruct->tot_N_shell_pts_grid = sum;
 
   // Free memory
   for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {
@@ -395,9 +383,7 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
     is_first_call = false;
   }
 
-  const REAL *restrict list_of_R_exts = diagnosticstruct->list_of_R_exts_grid;
-  const int num_of_R_exts = diagnosticstruct->num_of_R_exts_grid;
-  const int psi4_spinweightm2_sph_harmonics_max_l = diagnosticstruct->psi4_spinweightm2_sph_harmonics_max_l;
+  const REAL *restrict list_of_R_exts = commondata->list_of_R_exts;
   int *restrict N_shell_pts_grid = diagnosticstruct->N_shell_pts_grid;
   REAL ***restrict xx_shell_grid = diagnosticstruct->xx_shell_grid;
   int *restrict N_theta_shell_grid = diagnosticstruct->N_theta_shell_grid;
@@ -441,7 +427,7 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
   REAL *restrict src_gf_psi4i = (REAL *)malloc(sizeof(REAL) * total_size); // with shape [src_Nxx_plus_2NGHOSTS0 * src_Nxx_plus_2NGHOSTS1]
 
   // Step 2: Loop over all extraction indices:
-  for (int which_R_ext = 0; which_R_ext < num_of_R_exts; which_R_ext++) {
+  for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {
     // Step 2.a: Set the extraction radius R_ext based on the radial index R_ext_idx
     const REAL R_ext = list_of_R_exts[which_R_ext];
     const int num_dst_pts = N_shell_pts_grid[which_R_ext];
@@ -511,7 +497,7 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
       } // end loop over all phi values of grid
 
       // Step 3: Perform integrations across all l,m modes from l=2 up to and including L_MAX (global variable):
-      lowlevel_decompose_psi4_into_swm2_modes(Nxx_plus_2NGHOSTS_phi_index, dxx_phi_index, dtheta, psi4_spinweightm2_sph_harmonics_max_l, commondata->time,
+      lowlevel_decompose_psi4_into_swm2_modes(Nxx_plus_2NGHOSTS_phi_index, dxx_phi_index, dtheta, swm2sh_maximum_l_mode_to_compute, commondata->time,
                                               R_ext, th_array, sinth_array, ph_array, N_theta_shell_grid[which_R_ext], psi4r_at_R_ext,
                                               psi4i_at_R_ext);
 
