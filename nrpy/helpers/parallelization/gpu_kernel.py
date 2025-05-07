@@ -103,7 +103,7 @@ class GPU_Kernel:
             self.params_dict = {"streamid": "const size_t", **params_dict}
         self.name = c_function_name
         self.cfunc_type = f"{decorators} {cfunc_type}"
-        self.cuda_check_error = cuda_check_error
+        self.cuda_check_error = cuda_check_error and "__global__" in self.decorators
 
         self.CFunction: cfc.CFunction
         self.desc: str = f"Kernel: {self.name}.\n" + comments

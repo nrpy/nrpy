@@ -18,6 +18,7 @@ Note: This is the superB version.
 
 """
 
+import argparse
 import os
 
 #########################################################
@@ -56,6 +57,13 @@ from nrpy.infrastructures.BHaH.general_relativity import (
     psi4_C_codegen_library,
 )
 
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "--paper", action="store_true", help="use the paper-version parameters"
+)
+args = parser.parse_args()
+paper = args.paper
+
 par.set_parval_from_str("Infrastructure", "BHaH")
 
 
@@ -65,7 +73,7 @@ CoordSystem = "SinhCylindrical"
 IDtype = "TP_Interp"
 IDCoordSystem = "Cartesian"
 
-initial_sep = 0.5
+initial_sep = 0.5 if not paper else 10.0
 mass_ratio = 1.0  # must be >= 1.0. Will need higher resolution for > 1.0.
 BH_m_chix = 0.0  # dimensionless spin parameter for less-massive BH
 BH_M_chix = 0.0  # dimensionless spin parameter for more-massive BH
@@ -89,18 +97,18 @@ enable_charm_checkpointing = True
 default_checkpoint_every = 20.0
 t_final = 1.5 * grid_physical_size
 swm2sh_maximum_l_mode_generated = 8
-swm2sh_maximum_l_mode_to_compute = 2  # for consistency with NRPy 1.0 version.
+swm2sh_maximum_l_mode_to_compute = 2 if not paper else 8
 Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
-    "SinhCylindrical": [400, 2, 1200],
+    "SinhCylindrical": [800, 2, 2400],
 }
 default_BH1_mass = default_BH2_mass = 0.5
-default_BH1_z_posn = +0.25
-default_BH2_z_posn = -0.25
+default_BH1_z_posn = +0.25 if not paper else +5.0
+default_BH2_z_posn = -0.25 if not paper else -5.0
 enable_rfm_precompute = True
-MoL_method = "RK4"
+MoL_method = "RK4" if not paper else "SSPRK3"
 fd_order = 8
-radiation_BC_fd_order = 4
+radiation_BC_fd_order = 4 if not paper else 8
 enable_intrinsics = True
 separate_Ricci_and_BSSN_RHS = True
 parallel_codegen_enable = True
@@ -115,23 +123,20 @@ if "Spherical" in CoordSystem:
     par.adjust_CodeParam_default("Nchare1", 2)
     par.adjust_CodeParam_default("Nchare2", 1)
 if "Cylindrical" in CoordSystem:
-    par.adjust_CodeParam_default("Nchare0", 4)
+    par.adjust_CodeParam_default("Nchare0", 4 if not paper else 5)
     par.adjust_CodeParam_default("Nchare1", 1)
-    par.adjust_CodeParam_default("Nchare2", 4)
+    par.adjust_CodeParam_default("Nchare2", 4 if not paper else 24)
 
 OMP_collapse = 1
+sinh_width = 0.2
 if "Spherical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "2")
     par.adjust_CodeParam_default("CFL_FACTOR", 1.0)
     OMP_collapse = 2  # about 2x faster
-    if CoordSystem == "SinhSpherical":
-        sinh_width = 0.2
 if "Cylindrical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "1")
     par.adjust_CodeParam_default("CFL_FACTOR", 0.5)
     OMP_collapse = 2  # might be slightly faster
-    if CoordSystem == "SinhCylindrical":
-        sinh_width = 0.2
 
 project_dir = os.path.join("project", project_name)
 
