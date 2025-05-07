@@ -335,7 +335,7 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
           REAL ReY_sm2_l_m, ImY_sm2_l_m;
           spin_weight_minus2_sph_harmonics(l, m, th, ph, &ReY_sm2_l_m, &ImY_sm2_l_m);
 
-          const int idx2d = i2 + N_theta * i1;
+          const int idx2d = IDX2GENERAL(i2, i1, N_theta);
           const REAL a = psi4r_at_R_ext[idx2d];
           const REAL b = psi4i_at_R_ext[idx2d];
           const REAL c = ReY_sm2_l_m;
@@ -488,7 +488,7 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
           th_array[i2] = theta_shell_grid[which_R_ext][i2];
           sinth_array[i2] = sin(th_array[i2]);
           // Store result to "2D" array (actually 1D array with 2D storage):
-          const int idx2d = i2 + N_theta_shell_grid[which_R_ext] * (i1 - NGHOSTS);
+          const int idx2d = IDX2GENERAL(i2, (i1 - NGHOSTS), N_theta_shell_grid[which_R_ext]);
           psi4r_at_R_ext[idx2d] = dst_data_psi4r[IDX2GENERAL(i2, i1 - NGHOSTS, N_theta_shell_grid[which_R_ext])];
           psi4i_at_R_ext[idx2d] = dst_data_psi4i[IDX2GENERAL(i2, i1 - NGHOSTS, N_theta_shell_grid[which_R_ext])];
         }
