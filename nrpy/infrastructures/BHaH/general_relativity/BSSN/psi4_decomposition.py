@@ -67,7 +67,6 @@ def register_BHaH_defines_h() -> None:
     BHd_str = r"""
     // for psi4 decomposition
     typedef struct __diagnostic_struct__ {
-
       int *restrict N_shell_pts_grid; // of shape int [NUM_OF_R_EXTS]
       REAL **restrict xx_radial_like_shell_grid; // of shape [NUM_OF_R_EXTS][N_shell_pts_grid]
       REAL **restrict xx_theta_like_shell_grid; // of shape [NUM_OF_R_EXTS][N_shell_pts_grid]
@@ -108,16 +107,32 @@ def register_CFunction_psi4_spinweightm2_decomposition(CoordSystem: str) -> None
 
     setup_prefunc = rf"""
 
-  // IDX2GENERAL: Map 2D indices (i,j) to a 1D index using stride Ni
-  #define IDX2GENERAL(i, j, Ni) ((i) + (Ni) * (j))
-  // REVERSE_IDX2GENERAL: Recover (i,j) from a 1D index and stride Ni
-  #define REVERSE_IDX2GENERAL(index, Ni, i, j) \
-  {{                                            \
-      j = (index) / (Ni);                      \
-      i = (index) % (Ni);                      \
-  }}
+// IDX2GENERAL: Map 2D indices (i,j) to a 1D index using stride Ni
+#define IDX2GENERAL(i, j, Ni) ((i) + (Ni) * (j))
+// REVERSE_IDX2GENERAL: Recover (i,j) from a 1D index and stride Ni
+#define REVERSE_IDX2GENERAL(index, Ni, i, j) \
+{{                                            \
+    j = (index) / (Ni);                      \
+    i = (index) % (Ni);                      \
+}}
 
-  static void psi4_diagnostics_set_up(const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3],
+/*
+This prefunction sets up the diagnotic struct:
+
+typedef struct __diagnostic_struct__ {
+  int *restrict N_shell_pts_grid;            // of shape int [NUM_OF_R_EXTS]
+  REAL **restrict xx_radial_like_shell_grid; // of shape [NUM_OF_R_EXTS][N_shell_pts_grid]
+  REAL **restrict xx_theta_like_shell_grid;  // of shape [NUM_OF_R_EXTS][N_shell_pts_grid]
+  int *restrict N_theta_shell_grid;          // of shape int [NUM_OF_R_EXTS]
+  REAL **restrict theta_shell_grid;          // of shape [NUM_OF_R_EXTS][N_theta_shell_grid]
+  REAL dtheta;
+} diagnostic_struct;
+
+We set up thin shells at R_ext radii, on which we will integrate psi4 * spin weight 2 spherical harmonics.
+We assume that the grid might me a rectangular partition of the whole grid and therefore need to find for each shell,
+the # of shell points which lie on the grid "N_shell_pts_grid".
+*/
+static void psi4_diagnostics_set_up(const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3],
                                                      diagnostic_struct *restrict diagnosticstruct) {{
 
   const REAL *restrict list_of_R_exts = commondata->list_of_R_exts;
