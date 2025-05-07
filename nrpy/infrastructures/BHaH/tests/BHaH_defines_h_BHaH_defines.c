@@ -154,14 +154,6 @@ typedef struct __MoL_gridfunctions_struct__ {
 #define IDX3(i, j, k) ((i) + Nxx_plus_2NGHOSTS0 * ((j) + Nxx_plus_2NGHOSTS1 * ((k))))
 // IDX3P: Similar to IDX3, but retrieves grid dimensions from the provided parameter structure "params".
 #define IDX3P(params, i, j, k) ((i) + (params)->Nxx_plus_2NGHOSTS0 * ((j) + (params)->Nxx_plus_2NGHOSTS1 * ((k))))
-// IDX2GENERAL: Map 2D indices (i,j) to a 1D index using stride Ni
-#define IDX2GENERAL(i, j, Ni) ((i) + (Ni) * (j))
-// REVERSE_IDX2GENERAL: Recover (i,j) from a 1D index and stride Ni
-#define REVERSE_IDX2GENERAL(index, Ni, i, j)                                                                                                         \
-  {                                                                                                                                                  \
-    j = (index) / (Ni);                                                                                                                              \
-    i = (index) % (Ni);                                                                                                                              \
-  }
 // END: Indexing macros
 
 // ----------------------------
