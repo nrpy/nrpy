@@ -67,7 +67,7 @@ TP_npoints_phi = 4
 
 enable_KreissOliger_dissipation = True
 enable_CAKO = True
-enable_CAHD = True
+enable_CAHD = False
 enable_SSL = True
 KreissOliger_strength_gauge = 0.99
 KreissOliger_strength_nongauge = 0.3
