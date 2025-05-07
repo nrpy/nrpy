@@ -38,7 +38,7 @@ par.register_CodeParameter(
     module=__name__,
     name="NUM_OF_R_EXTS",
     defaultvalue=num_R_exts,
-    description=f"Number of extraction radii ({num_R_exts})."
+    description=f"Number of extraction radii ({num_R_exts}).",
 )
 
 # Register list_of_R_exts: the array containing extraction radii values.
@@ -51,8 +51,9 @@ par.register_CodeParameter(
     add_to_parfile=True,
     commondata=True,
     add_to_set_CodeParameters_h=False,
-    assumption="RealPositive"
+    assumption="RealPositive",
 )
+
 
 def register_griddata() -> None:
     """Register the diagnostic_struct's contribution to the griddata_struct."""
@@ -61,6 +62,7 @@ def register_griddata() -> None:
         "diagnostic_struct diagnosticstruct",
         "data needed to do psi4 decomposition in cylindrical-like coordinates",
     )
+
 
 # Register the diagnostic_struct to the BHaH_defines.h
 def register_BHaH_defines_h() -> None:
@@ -377,7 +379,6 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
     REAL *restrict xx[3],
     diagnostic_struct *restrict diagnosticstruct"""
 
-
     # Register diagnostic_struct's contribution to BHaH_defines.h:
     register_BHaH_defines_h()
 
@@ -387,7 +388,6 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
     # Register C functions apply_bcs_inner_only_specific_gfs and apply_bcs_outerextrap_and_inner_specific_gfs, needed for 2d interp of psi4
     register_CFunction_apply_bcs_inner_only_specific_gfs()
     register_CFunction_apply_bcs_outerextrap_and_inner_specific_gfs()
-
 
     body = r"""
   static bool is_first_call = true;
