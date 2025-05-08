@@ -105,6 +105,8 @@ def register_CFunction_psi4_spinweightm2_decomposition(CoordSystem: str) -> None
     i = (index) % (Ni);                      \
 }}
 
+static const int phi_dirn = {phi_index};
+
 /*
 This prefunction sets up the diagnotic struct:
 
@@ -135,7 +137,8 @@ static void psi4_diagnostics_set_up(const commondata_struct *restrict commondata
   const int N_theta = commondata->num_theta_points_on_shell_for_psi4_interp;
 
   // Phi values of shell need to be exactly the same as phi values of grid, all coordinate systems supported have a phi coordinate
-  const int N_phi = params->Nxx{phi_index};
+  const int Nxx[3] = {{ params->Nxx0, params->Nxx1, params->Nxx2 }};
+  const int N_phi = Nxx[phi_dirn];
 
   // Set up uniform 2d grid in theta and phi at R_ext (2d shells at different R_ext)
   const REAL PI = M_PI;
