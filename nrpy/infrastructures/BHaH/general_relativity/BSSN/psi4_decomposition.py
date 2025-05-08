@@ -92,7 +92,6 @@ def register_CFunction_psi4_spinweightm2_decomposition(CoordSystem: str) -> None
     :param CoordSystem: Specifies the coordinate system for psi4 decomposition.
     :raises ValueError: If psi4 decomposition is not supported for the coordinate system.
     """
-
     if "Spherical" in CoordSystem:
         radial_like_index = 0
         theta_like_index = 1
@@ -109,7 +108,6 @@ def register_CFunction_psi4_spinweightm2_decomposition(CoordSystem: str) -> None
         raise ValueError(f"CoordSystem = {CoordSystem} not supported.")
 
     setup_prefunc = rf"""
-
 // IDX2GENERAL: Map 2D indices (i,j) to a 1D index using stride Ni
 #define IDX2GENERAL(i, j, Ni) ((i) + (Ni) * (j))
 // REVERSE_IDX2GENERAL: Recover (i,j) from a 1D index and stride Ni
