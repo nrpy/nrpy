@@ -98,6 +98,9 @@ default_checkpoint_every = 20.0
 t_final = 1.5 * grid_physical_size
 swm2sh_maximum_l_mode_generated = 8
 swm2sh_maximum_l_mode_to_compute = 2 if not paper else 8
+if paper:
+    num_psi4_extraction_radii = 1
+    list_of_psi4_extraction_radii = [80.0]
 Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
     "SinhCylindrical": [800, 2, 2400],
@@ -351,6 +354,9 @@ par.adjust_CodeParam_default("eta", GammaDriving_eta)
 par.adjust_CodeParam_default(
     "swm2sh_maximum_l_mode_to_compute", swm2sh_maximum_l_mode_to_compute
 )
+if paper:
+    par.adjust_CodeParam_default("num_psi4_extraction_radii", num_psi4_extraction_radii)
+    par.adjust_CodeParam_default("list_of_psi4_extraction_radii", list_of_psi4_extraction_radii)
 
 #########################################################
 # STEP 3: Generate header files, register C functions and

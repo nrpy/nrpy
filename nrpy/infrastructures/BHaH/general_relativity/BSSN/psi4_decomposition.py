@@ -19,41 +19,29 @@ par.register_CodeParameter(
     "int", __name__, "num_theta_points_on_shell_for_psi4_interp", 32, commondata=True
 )
 
-# Define governing parameters for extraction radii (R_exts)
-R_ext_min, R_ext_max, num_R_exts = 36.923, 150.0, 8
-
-# Calculate the list of R_exts values.
-# The distribution is linear in 1/R_ext, ensuring denser sampling at smaller radii.
-# Reciprocal values span 1/R_ext_max to 1/R_ext_min for R_exts to span R_ext_min to R_ext_max.
-R_ext_min, R_ext_max, num_R_exts = 36.923, 150.0, 8
-recip_min = 1.0 / R_ext_max
-recip_max = 1.0 / R_ext_min
-step = (recip_max - recip_min) / (num_R_exts - 1)
-reciprocal_R_ext_values = [recip_min + i * step for i in range(num_R_exts)]
-list_of_R_exts_values = sorted([round(1.0 / val, 3) for val in reciprocal_R_ext_values])
-
-# Register NUM_OF_R_EXTS: the number of extraction radii.
 par.register_CodeParameter(
-    cparam_type="#define",
+    cparam_type="int",
     module=__name__,
-    name="NUM_OF_R_EXTS",
-    defaultvalue=num_R_exts,
-    description=f"Number of extraction radii ({num_R_exts}).",
+    name="num_psi4_extraction_radii",
+    defaultvalue=6,
+    description=f"Number of radii at which psi4 is extracted.",
+    add_to_parfile=True,
+    commondata=True,
+    add_to_set_CodeParameters_h=False,
 )
 
-# Register list_of_R_exts: the array containing extraction radii values.
+# Register list_of_psi4_extraction_radii: the array containing extraction radii values.
 par.register_CodeParameter(
-    cparam_type=f"REAL[{num_R_exts}]",
+    cparam_type=f"REAL[6]",
     module=__name__,
-    name="list_of_R_exts",
-    defaultvalue=list_of_R_exts_values,
-    description=f"List of radii at which psi4 is extracted.",
+    name="list_of_psi4_extraction_radii",
+    defaultvalue=[15,30,45,60,75,90],
+    description=f"List of radii at which psi4 is extracted. Must set num_psi4_extraction_radii consistently.",
     add_to_parfile=True,
     commondata=True,
     add_to_set_CodeParameters_h=False,
     assumption="RealPositive",
 )
-
 
 def register_griddata() -> None:
     """Register the diagnostic_struct's contribution to the griddata_struct."""
@@ -70,11 +58,11 @@ def register_BHaH_defines_h() -> None:
     BHd_str = r"""
     // for psi4 decomposition
     typedef struct __diagnostic_struct__ {
-      int *restrict N_shell_pts_grid; // of shape int [NUM_OF_R_EXTS]
-      REAL **restrict xx_radial_like_shell_grid; // of shape [NUM_OF_R_EXTS][N_shell_pts_grid]
-      REAL **restrict xx_theta_like_shell_grid; // of shape [NUM_OF_R_EXTS][N_shell_pts_grid]
-      int *restrict N_theta_shell_grid; // of shape int [NUM_OF_R_EXTS]
-      REAL **restrict theta_shell_grid; // of shape [NUM_OF_R_EXTS][N_theta_shell_grid]
+      int *restrict N_shell_pts_grid; // of shape int [num_psi4_extraction_radii]
+      REAL **restrict xx_radial_like_shell_grid; // of shape [num_psi4_extraction_radii][N_shell_pts_grid]
+      REAL **restrict xx_theta_like_shell_grid; // of shape [num_psi4_extraction_radii][N_shell_pts_grid]
+      int *restrict N_theta_shell_grid; // of shape int [num_psi4_extraction_radii]
+      REAL **restrict theta_shell_grid; // of shape [num_psi4_extraction_radii][N_theta_shell_grid]
       REAL dtheta;
     } diagnostic_struct;
     """
@@ -121,11 +109,11 @@ def register_CFunction_psi4_spinweightm2_decomposition(CoordSystem: str) -> None
 This prefunction sets up the diagnotic struct:
 
 typedef struct __diagnostic_struct__ {{
-  int *restrict N_shell_pts_grid;            // of shape int [NUM_OF_R_EXTS]
-  REAL **restrict xx_radial_like_shell_grid; // of shape [NUM_OF_R_EXTS][N_shell_pts_grid]
-  REAL **restrict xx_theta_like_shell_grid;  // of shape [NUM_OF_R_EXTS][N_shell_pts_grid]
-  int *restrict N_theta_shell_grid;          // of shape int [NUM_OF_R_EXTS]
-  REAL **restrict theta_shell_grid;          // of shape [NUM_OF_R_EXTS][N_theta_shell_grid]
+  int *restrict N_shell_pts_grid;            // of shape int [num_psi4_extraction_radii]
+  REAL **restrict xx_radial_like_shell_grid; // of shape [num_psi4_extraction_radii][N_shell_pts_grid]
+  REAL **restrict xx_theta_like_shell_grid;  // of shape [num_psi4_extraction_radii][N_shell_pts_grid]
+  int *restrict N_theta_shell_grid;          // of shape int [num_psi4_extraction_radii]
+  REAL **restrict theta_shell_grid;          // of shape [num_psi4_extraction_radii][N_theta_shell_grid]
   REAL dtheta;
 }} diagnostic_struct;
 
@@ -140,7 +128,8 @@ The destination points for 2d interpolation  "xx_radial_like_shell_grid" and ""x
 static void psi4_diagnostics_set_up(const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3],
                                                      diagnostic_struct *restrict diagnosticstruct) {{
 
-  const REAL *restrict list_of_R_exts = commondata->list_of_R_exts;
+  const int num_psi4_extraction_radii = commondata->num_psi4_extraction_radii;
+  const REAL *restrict list_of_psi4_extraction_radii = commondata->list_of_psi4_extraction_radii;
 
   // Thin shells with N_theta and N_phi number of points are constructed at each extraction radius R_ext
   const int N_theta = commondata->num_theta_points_on_shell_for_psi4_interp;
@@ -158,13 +147,13 @@ static void psi4_diagnostics_set_up(const commondata_struct *restrict commondata
   REAL dtheta = (theta_max - theta_min) / N_theta;
   diagnosticstruct->dtheta = dtheta;
   const REAL dphi = (phi_max - phi_min) / N_phi;
-  REAL ***restrict xx_shell_sph = (REAL * **restrict)malloc(NUM_OF_R_EXTS * sizeof(REAL **));
-  for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {{
+  REAL ***restrict xx_shell_sph = (REAL * **restrict)malloc(num_psi4_extraction_radii * sizeof(REAL **));
+  for (int which_R_ext = 0; which_R_ext < num_psi4_extraction_radii; which_R_ext++) {{
     xx_shell_sph[which_R_ext] = (REAL * *restrict)malloc(2 * sizeof(REAL *));
     xx_shell_sph[which_R_ext][0] = (REAL *restrict)malloc(N_theta * sizeof(REAL));
     xx_shell_sph[which_R_ext][1] = (REAL *restrict)malloc(N_phi * sizeof(REAL));
   }}
-  for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {{
+  for (int which_R_ext = 0; which_R_ext < num_psi4_extraction_radii; which_R_ext++) {{
     for (int j = 0; j < N_theta; j++) {{
       xx_shell_sph[which_R_ext][0][j] = theta_min + ((REAL)j + 0.5) * dtheta;
     }}
@@ -174,15 +163,15 @@ static void psi4_diagnostics_set_up(const commondata_struct *restrict commondata
   }}
 
   // Convert points on shells to Cartesian coordinates
-  REAL ***restrict xx_shell_Cart = (REAL * **restrict)malloc(NUM_OF_R_EXTS * sizeof(REAL **));
-  for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {{
+  REAL ***restrict xx_shell_Cart = (REAL * **restrict)malloc(num_psi4_extraction_radii * sizeof(REAL **));
+  for (int which_R_ext = 0; which_R_ext < num_psi4_extraction_radii; which_R_ext++) {{
     xx_shell_Cart[which_R_ext] = (REAL * *restrict)malloc(3 * sizeof(REAL *));
     xx_shell_Cart[which_R_ext][0] = (REAL *restrict)malloc(N_tot_shell * sizeof(REAL));
     xx_shell_Cart[which_R_ext][1] = (REAL *restrict)malloc(N_tot_shell * sizeof(REAL));
     xx_shell_Cart[which_R_ext][2] = (REAL *restrict)malloc(N_tot_shell * sizeof(REAL));
   }}
-  for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {{
-    REAL r = list_of_R_exts[which_R_ext];
+  for (int which_R_ext = 0; which_R_ext < num_psi4_extraction_radii; which_R_ext++) {{
+    REAL r = list_of_psi4_extraction_radii[which_R_ext];
     for (int i_ph = 0; i_ph < N_phi; i_ph++) {{
       REAL phi = xx_shell_sph[which_R_ext][1][i_ph];
       for (int i_th = 0; i_th < N_theta; i_th++) {{
@@ -201,13 +190,13 @@ static void psi4_diagnostics_set_up(const commondata_struct *restrict commondata
   // For each pt on each spherical shell at R_ext find if pt lies within the grid
   //(it should for bhah single grids, but not for multipatch...)
 
-  diagnosticstruct->N_shell_pts_grid = (int *restrict)malloc(sizeof(int) * NUM_OF_R_EXTS);
-  diagnosticstruct->xx_radial_like_shell_grid = (REAL **restrict)malloc(NUM_OF_R_EXTS * sizeof(REAL *));
-  diagnosticstruct->xx_theta_like_shell_grid = (REAL **restrict)malloc(NUM_OF_R_EXTS * sizeof(REAL *));
-  diagnosticstruct->N_theta_shell_grid = (int *restrict)malloc(sizeof(int) * NUM_OF_R_EXTS);
-  diagnosticstruct->theta_shell_grid = (REAL **restrict)malloc(NUM_OF_R_EXTS * sizeof(REAL *));
+  diagnosticstruct->N_shell_pts_grid = (int *restrict)malloc(sizeof(int) * num_psi4_extraction_radii);
+  diagnosticstruct->xx_radial_like_shell_grid = (REAL **restrict)malloc(num_psi4_extraction_radii * sizeof(REAL *));
+  diagnosticstruct->xx_theta_like_shell_grid = (REAL **restrict)malloc(num_psi4_extraction_radii * sizeof(REAL *));
+  diagnosticstruct->N_theta_shell_grid = (int *restrict)malloc(sizeof(int) * num_psi4_extraction_radii);
+  diagnosticstruct->theta_shell_grid = (REAL **restrict)malloc(num_psi4_extraction_radii * sizeof(REAL *));
 
-  for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {{
+  for (int which_R_ext = 0; which_R_ext < num_psi4_extraction_radii; which_R_ext++) {{
     // Count number of pts that lie within the extent of this grid
     int count_pt_on_grid = 0;
     bool b_theta_grid[N_theta];
@@ -288,20 +277,20 @@ static void psi4_diagnostics_set_up(const commondata_struct *restrict commondata
   }} // end loop over all R_ext
 
   int sum = 0;
-  for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {{
+  for (int which_R_ext = 0; which_R_ext < num_psi4_extraction_radii; which_R_ext++) {{
     if (diagnosticstruct->N_shell_pts_grid[which_R_ext] > 0) {{
       sum += diagnosticstruct->N_shell_pts_grid[which_R_ext];
     }}
   }}
 
   // Free memory
-  for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {{
+  for (int which_R_ext = 0; which_R_ext < num_psi4_extraction_radii; which_R_ext++) {{
     free(xx_shell_sph[which_R_ext][0]);
     free(xx_shell_sph[which_R_ext][1]);
     free(xx_shell_sph[which_R_ext]);
   }}
   free(xx_shell_sph);
-  for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {{
+  for (int which_R_ext = 0; which_R_ext < num_psi4_extraction_radii; which_R_ext++) {{
     free(xx_shell_Cart[which_R_ext][0]);
     free(xx_shell_Cart[which_R_ext][1]);
     free(xx_shell_Cart[which_R_ext][2]);
@@ -398,7 +387,8 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
     is_first_call = false;
   }
 
-  const REAL *restrict list_of_R_exts = commondata->list_of_R_exts;
+  const int num_psi4_extraction_radii = commondata->num_psi4_extraction_radii;
+  const REAL *restrict list_of_psi4_extraction_radii = commondata->list_of_psi4_extraction_radii;
   int *restrict N_shell_pts_grid = diagnosticstruct->N_shell_pts_grid;
   REAL **restrict xx_radial_like_shell_grid = diagnosticstruct->xx_radial_like_shell_grid;
   REAL **restrict xx_theta_like_shell_grid = diagnosticstruct->xx_theta_like_shell_grid;
@@ -443,9 +433,9 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
   REAL *restrict src_gf_psi4i = (REAL *)malloc(sizeof(REAL) * total_size); // with shape [src_Nxx_plus_2NGHOSTS0 * src_Nxx_plus_2NGHOSTS1]
 
   // Step 2: Loop over all extraction indices:
-  for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {
+  for (int which_R_ext = 0; which_R_ext < num_psi4_extraction_radii; which_R_ext++) {
     // Step 2.a: Set the extraction radius R_ext based on the radial index R_ext_idx
-    const REAL R_ext = list_of_R_exts[which_R_ext];
+    const REAL R_ext = list_of_psi4_extraction_radii[which_R_ext];
     const int num_dst_pts = N_shell_pts_grid[which_R_ext];
     if (num_dst_pts > 0) {
 
