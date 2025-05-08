@@ -9,7 +9,6 @@ Author: Zachariah B. Etienne
 
 import nrpy.c_function as cfc
 import nrpy.params as par
-from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
 from nrpy.infrastructures.superB.CurviBoundaryConditions import (
     register_CFunction_apply_bcs_inner_only_specific_gfs,
     register_CFunction_apply_bcs_outerextrap_and_inner_specific_gfs,
@@ -24,7 +23,7 @@ par.register_CodeParameter(
     module=__name__,
     name="num_psi4_extraction_radii",
     defaultvalue=6,
-    description=f"Number of radii at which psi4 is extracted.",
+    description="Number of radii at which psi4 is extracted.",
     add_to_parfile=True,
     commondata=True,
     add_to_set_CodeParameters_h=False,
@@ -32,11 +31,11 @@ par.register_CodeParameter(
 
 # Register list_of_psi4_extraction_radii: the array containing extraction radii values.
 par.register_CodeParameter(
-    cparam_type=f"REAL[6]",
+    cparam_type="REAL[6]",
     module=__name__,
     name="list_of_psi4_extraction_radii",
     defaultvalue=[15, 30, 45, 60, 75, 90],
-    description=f"List of radii at which psi4 is extracted. Must set num_psi4_extraction_radii consistently.",
+    description="List of radii at which psi4 is extracted. Must set num_psi4_extraction_radii consistently.",
     add_to_parfile=True,
     commondata=True,
     add_to_set_CodeParameters_h=False,
