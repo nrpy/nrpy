@@ -35,13 +35,14 @@ par.register_CodeParameter(
     cparam_type=f"REAL[6]",
     module=__name__,
     name="list_of_psi4_extraction_radii",
-    defaultvalue=[15,30,45,60,75,90],
+    defaultvalue=[15, 30, 45, 60, 75, 90],
     description=f"List of radii at which psi4 is extracted. Must set num_psi4_extraction_radii consistently.",
     add_to_parfile=True,
     commondata=True,
     add_to_set_CodeParameters_h=False,
     assumption="RealPositive",
 )
+
 
 def register_griddata() -> None:
     """Register the diagnostic_struct's contribution to the griddata_struct."""
