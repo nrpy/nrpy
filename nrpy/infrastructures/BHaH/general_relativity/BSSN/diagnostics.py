@@ -196,8 +196,7 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {{
     apply_bcs_outerextrap_and_inner_specific_gfs(commondata, &griddata[grid].params, &griddata[grid].bcstruct, 2, griddata[grid].gridfuncs.diagnostic_output_gfs, aux_gfs_to_sync, aux_gf_parity);
 
     // Decompose psi4 into spin-weight -2  spherical harmonics & output to files.
-    diagnostic_struct *restrict diagnosticstruct = &griddata[grid].diagnosticstruct;
-    psi4_spinweightm2_decomposition(commondata, params, diagnostic_output_gfs, xx, diagnosticstruct);
+    psi4_spinweightm2_decomposition(commondata, params, diagnostic_output_gfs, xx);
 
 """
     body += r"""

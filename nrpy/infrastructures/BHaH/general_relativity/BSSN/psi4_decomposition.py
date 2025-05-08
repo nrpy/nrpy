@@ -43,37 +43,6 @@ par.register_CodeParameter(
     assumption="RealPositive",
 )
 
-
-def register_griddata() -> None:
-    """Register the diagnostic_struct's contribution to the griddata_struct."""
-    griddata_commondata.register_griddata_commondata(
-        __name__,
-        "diagnostic_struct diagnosticstruct",
-        "data needed to do psi4 decomposition in cylindrical-like coordinates",
-    )
-
-
-# Register the diagnostic_struct to the BHaH_defines.h
-def register_BHaH_defines_h() -> None:
-    """Register the diagnostic_struct's contribution to the BHaH_defines.h file."""
-    BHd_str = r"""
-    // for psi4 decomposition
-    typedef struct __diagnostic_struct__ {
-      int *restrict N_shell_pts_grid; // of shape int [num_psi4_extraction_radii]
-      REAL **restrict xx_radial_like_shell_grid; // of shape [num_psi4_extraction_radii][N_shell_pts_grid]
-      REAL **restrict xx_theta_like_shell_grid; // of shape [num_psi4_extraction_radii][N_shell_pts_grid]
-      int *restrict N_theta_shell_grid; // of shape int [num_psi4_extraction_radii]
-      REAL **restrict theta_shell_grid; // of shape [num_psi4_extraction_radii][N_theta_shell_grid]
-      REAL dtheta;
-    } diagnostic_struct;
-    """
-
-    BHaH_defines_h.register_BHaH_defines(
-        __name__,
-        BHd_str,
-    )
-
-
 def register_CFunction_psi4_spinweightm2_decomposition(CoordSystem: str) -> None:
     """
     Register C function for decomposing psi4 into spin-weighted spherical harmonics via 2D interpolation on uniform source grids at each φ slice.
@@ -108,9 +77,7 @@ def register_CFunction_psi4_spinweightm2_decomposition(CoordSystem: str) -> None
 
 static const int phi_dirn = {phi_index};
 
-/*
-This prefunction sets up the diagnotic struct:
-
+// for psi4 decomposition
 typedef struct __diagnostic_struct__ {{
   int *restrict N_shell_pts_grid;            // of shape int [num_psi4_extraction_radii]
   REAL **restrict xx_radial_like_shell_grid; // of shape [num_psi4_extraction_radii][N_shell_pts_grid]
@@ -120,6 +87,12 @@ typedef struct __diagnostic_struct__ {{
   REAL dtheta;
 }} diagnostic_struct;
 
+static diagnostic_struct diagnosticstruct;
+
+
+/*
+This prefunction sets up the diagnotic struct:
+
 Set up thin shells at R_ext radii for integration of psi4 * spin weight 2 spherical harmonics.
 
 Assumes that grid might be a rectangular partition of the whole grid.
@@ -128,8 +101,7 @@ For each shell the # of shell points which lie on the grid "N_shell_pts_grid" is
 
 The destination points for 2d interpolation  "xx_radial_like_shell_grid" and ""xx_theta_like_shell_grid" are computed.
 */
-static void psi4_diagnostics_set_up(const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3],
-                                                     diagnostic_struct *restrict diagnosticstruct) {{
+static void psi4_diagnostics_set_up(const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3]) {{
 
   const int num_psi4_extraction_radii = commondata->num_psi4_extraction_radii;
   const REAL *restrict list_of_psi4_extraction_radii = commondata->list_of_psi4_extraction_radii;
@@ -149,7 +121,7 @@ static void psi4_diagnostics_set_up(const commondata_struct *restrict commondata
   REAL phi_max = PI;
   const int N_tot_shell = N_theta * N_phi;
   REAL dtheta = (theta_max - theta_min) / N_theta;
-  diagnosticstruct->dtheta = dtheta;
+  diagnosticstruct.dtheta = dtheta;
   const REAL dphi = (phi_max - phi_min) / N_phi;
   REAL ***restrict xx_shell_sph = (REAL * **restrict)malloc(num_psi4_extraction_radii * sizeof(REAL **));
   for (int which_R_ext = 0; which_R_ext < num_psi4_extraction_radii; which_R_ext++) {{
@@ -194,11 +166,11 @@ static void psi4_diagnostics_set_up(const commondata_struct *restrict commondata
   // For each pt on each spherical shell at R_ext find if pt lies within the grid
   //(it should for bhah single grids, but not for multipatch...)
 
-  diagnosticstruct->N_shell_pts_grid = (int *restrict)malloc(sizeof(int) * num_psi4_extraction_radii);
-  diagnosticstruct->xx_radial_like_shell_grid = (REAL **restrict)malloc(num_psi4_extraction_radii * sizeof(REAL *));
-  diagnosticstruct->xx_theta_like_shell_grid = (REAL **restrict)malloc(num_psi4_extraction_radii * sizeof(REAL *));
-  diagnosticstruct->N_theta_shell_grid = (int *restrict)malloc(sizeof(int) * num_psi4_extraction_radii);
-  diagnosticstruct->theta_shell_grid = (REAL **restrict)malloc(num_psi4_extraction_radii * sizeof(REAL *));
+  diagnosticstruct.N_shell_pts_grid = (int *restrict)malloc(sizeof(int) * num_psi4_extraction_radii);
+  diagnosticstruct.xx_radial_like_shell_grid = (REAL **restrict)malloc(num_psi4_extraction_radii * sizeof(REAL *));
+  diagnosticstruct.xx_theta_like_shell_grid = (REAL **restrict)malloc(num_psi4_extraction_radii * sizeof(REAL *));
+  diagnosticstruct.N_theta_shell_grid = (int *restrict)malloc(sizeof(int) * num_psi4_extraction_radii);
+  diagnosticstruct.theta_shell_grid = (REAL **restrict)malloc(num_psi4_extraction_radii * sizeof(REAL *));
 
   for (int which_R_ext = 0; which_R_ext < num_psi4_extraction_radii; which_R_ext++) {{
     // Count number of pts that lie within the extent of this grid
@@ -243,13 +215,13 @@ static void psi4_diagnostics_set_up(const commondata_struct *restrict commondata
       }}
     }}
     // Set values in diagnosticstruct
-    diagnosticstruct->N_shell_pts_grid[which_R_ext] = count_pt_on_grid;
-    diagnosticstruct->N_theta_shell_grid[which_R_ext] = count_theta_grid;
+    diagnosticstruct.N_shell_pts_grid[which_R_ext] = count_pt_on_grid;
+    diagnosticstruct.N_theta_shell_grid[which_R_ext] = count_theta_grid;
 
     // Allocate memory after counting
-    diagnosticstruct->xx_radial_like_shell_grid[which_R_ext] = (REAL *restrict)malloc(count_pt_on_grid * sizeof(REAL));
-    diagnosticstruct->xx_theta_like_shell_grid[which_R_ext] = (REAL *restrict)malloc(count_pt_on_grid * sizeof(REAL));
-    diagnosticstruct->theta_shell_grid[which_R_ext] = (REAL *restrict)malloc(count_theta_grid * sizeof(REAL));
+    diagnosticstruct.xx_radial_like_shell_grid[which_R_ext] = (REAL *restrict)malloc(count_pt_on_grid * sizeof(REAL));
+    diagnosticstruct.xx_theta_like_shell_grid[which_R_ext] = (REAL *restrict)malloc(count_pt_on_grid * sizeof(REAL));
+    diagnosticstruct.theta_shell_grid[which_R_ext] = (REAL *restrict)malloc(count_theta_grid * sizeof(REAL));
 
     // Now set them
     int which_pt_on_grid = 0;
@@ -265,15 +237,15 @@ static void psi4_diagnostics_set_up(const commondata_struct *restrict commondata
             (params->xxmin1 <= closest_xx[1] && closest_xx[1] <= params->xxmax1) &&
             (params->xxmin2 <= closest_xx[2] && closest_xx[2] <= params->xxmax2)) {{
 
-          diagnosticstruct->xx_radial_like_shell_grid[which_R_ext][which_pt_on_grid] = closest_xx[{radial_like_index}];
-          diagnosticstruct->xx_theta_like_shell_grid[which_R_ext][which_pt_on_grid] = closest_xx[{theta_like_index}];
+          diagnosticstruct.xx_radial_like_shell_grid[which_R_ext][which_pt_on_grid] = closest_xx[{radial_like_index}];
+          diagnosticstruct.xx_theta_like_shell_grid[which_R_ext][which_pt_on_grid] = closest_xx[{theta_like_index}];
 
           // Also save theta values
           int i_th_grid;
           MAYBE_UNUSED int i_ph_grid;
-          const int N_theta_shell_grid = diagnosticstruct->N_theta_shell_grid[which_R_ext];
+          const int N_theta_shell_grid = diagnosticstruct.N_theta_shell_grid[which_R_ext];
           REVERSE_IDX2GENERAL(which_pt_on_grid, N_theta_shell_grid, i_th_grid, i_ph_grid);
-          diagnosticstruct->theta_shell_grid[which_R_ext][i_th_grid] = xx_shell_sph[which_R_ext][0][i_th];
+          diagnosticstruct.theta_shell_grid[which_R_ext][i_th_grid] = xx_shell_sph[which_R_ext][0][i_th];
           which_pt_on_grid++;
         }}
       }}
@@ -282,8 +254,8 @@ static void psi4_diagnostics_set_up(const commondata_struct *restrict commondata
 
   int sum = 0;
   for (int which_R_ext = 0; which_R_ext < num_psi4_extraction_radii; which_R_ext++) {{
-    if (diagnosticstruct->N_shell_pts_grid[which_R_ext] > 0) {{
-      sum += diagnosticstruct->N_shell_pts_grid[which_R_ext];
+    if (diagnosticstruct.N_shell_pts_grid[which_R_ext] > 0) {{
+      sum += diagnosticstruct.N_shell_pts_grid[which_R_ext];
     }}
   }}
 
@@ -371,34 +343,24 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
     params = r"""const commondata_struct *restrict commondata,
     const params_struct *restrict params,
     REAL *restrict diagnostic_output_gfs,
-    REAL *restrict xx[3],
-    diagnostic_struct *restrict diagnosticstruct"""
-
-    # Register diagnostic_struct's contribution to BHaH_defines.h:
-    register_BHaH_defines_h()
-
-    # Register diagnostic_struct's contribution to griddata_struct:
-    register_griddata()
+    REAL *restrict xx[3]"""
 
     # Register C functions apply_bcs_inner_only_specific_gfs and apply_bcs_outerextrap_and_inner_specific_gfs, needed for 2d interp of psi4
     register_CFunction_apply_bcs_inner_only_specific_gfs()
     register_CFunction_apply_bcs_outerextrap_and_inner_specific_gfs()
 
     body = r"""
-  static bool is_first_call = true;
-  if (is_first_call) {
-    psi4_diagnostics_set_up(commondata, params, xx, diagnosticstruct);
-    is_first_call = false;
-  }
+
+  psi4_diagnostics_set_up(commondata, params, xx);
 
   const int num_psi4_extraction_radii = commondata->num_psi4_extraction_radii;
   const REAL *restrict list_of_psi4_extraction_radii = commondata->list_of_psi4_extraction_radii;
-  int *restrict N_shell_pts_grid = diagnosticstruct->N_shell_pts_grid;
-  REAL **restrict xx_radial_like_shell_grid = diagnosticstruct->xx_radial_like_shell_grid;
-  REAL **restrict xx_theta_like_shell_grid = diagnosticstruct->xx_theta_like_shell_grid;
-  int *restrict N_theta_shell_grid = diagnosticstruct->N_theta_shell_grid;
-  REAL **restrict theta_shell_grid = diagnosticstruct->theta_shell_grid;
-  const REAL dtheta = diagnosticstruct->dtheta;
+  int *restrict N_shell_pts_grid = diagnosticstruct.N_shell_pts_grid;
+  REAL **restrict xx_radial_like_shell_grid = diagnosticstruct.xx_radial_like_shell_grid;
+  REAL **restrict xx_theta_like_shell_grid = diagnosticstruct.xx_theta_like_shell_grid;
+  int *restrict N_theta_shell_grid = diagnosticstruct.N_theta_shell_grid;
+  REAL **restrict theta_shell_grid = diagnosticstruct.theta_shell_grid;
+  const REAL dtheta = diagnosticstruct.dtheta;
 """
 
     body += rf"""
@@ -526,6 +488,18 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
   free(src_gf_psi4i);
   free(src_x0x1[1]);
   free(src_x0x1[2]);
+
+  // Free memory in diagnosticstruct
+  for(int i = 0; i < commondata->num_psi4_extraction_radii; ++i) {
+      free(diagnosticstruct.xx_radial_like_shell_grid[i]);
+      free(diagnosticstruct.xx_theta_like_shell_grid[i]);
+      free(diagnosticstruct.theta_shell_grid[i]);
+  }
+  free(diagnosticstruct.xx_radial_like_shell_grid);
+  free(diagnosticstruct.xx_theta_like_shell_grid);
+  free(diagnosticstruct.theta_shell_grid);
+  free(diagnosticstruct.N_shell_pts_grid);
+  free(diagnosticstruct.N_theta_shell_grid);
 """
 
     cfc.register_CFunction(
