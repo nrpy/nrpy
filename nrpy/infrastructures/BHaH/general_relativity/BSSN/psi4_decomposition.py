@@ -131,19 +131,23 @@ typedef struct __diagnostic_struct__ {{
   REAL dtheta;
 }} diagnostic_struct;
 
-We set up thin shells at R_ext radii, on which we will integrate psi4 * spin weight 2 spherical harmonics.
-We assume that the grid might me a rectangular partition of the whole grid and therefore need to find for each shell,
-the # of shell points which lie on the grid "N_shell_pts_grid".
+Set up thin shells at R_ext radii for integration of psi4 * spin weight 2 spherical harmonics.
+
+Assumes that grid might be a rectangular partition of the whole grid.
+
+For each shell the # of shell points which lie on the grid "N_shell_pts_grid" is found.
+
+The destination points for 2d interpolation  "xx_radial_like_shell_grid" and ""xx_theta_like_shell_grid" are computed.
 */
 static void psi4_diagnostics_set_up(const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3],
                                                      diagnostic_struct *restrict diagnosticstruct) {{
 
   const REAL *restrict list_of_R_exts = commondata->list_of_R_exts;
 
-  //Thin shells with N_theta and N_phi number of points are constructed at each extraction radius R_ext
+  // Thin shells with N_theta and N_phi number of points are constructed at each extraction radius R_ext
   const int N_theta = commondata->num_theta_points_on_shell_for_psi4_interp;
 
-  // phi values of shell need to be exactly the same as phi values of grid, all coordinate systems supported have a phi coordinate
+  // Phi values of shell need to be exactly the same as phi values of grid, all coordinate systems supported have a phi coordinate
   const int N_phi = params->Nxx{phi_index};
 
   // Set up uniform 2d grid in theta and phi at R_ext (2d shells at different R_ext)
@@ -198,7 +202,7 @@ static void psi4_diagnostics_set_up(const commondata_struct *restrict commondata
 
   // For each pt on each spherical shell at R_ext find if pt lies within the grid
   //(it should for bhah single grids, but not for multipatch...)
-  // set N_shell_pts_grid and xx_shell_grid in diagnostic struct
+
   diagnosticstruct->N_shell_pts_grid = (int *restrict)malloc(sizeof(int) * NUM_OF_R_EXTS);
   diagnosticstruct->xx_radial_like_shell_grid = (REAL **restrict)malloc(NUM_OF_R_EXTS * sizeof(REAL *));
   diagnosticstruct->xx_theta_like_shell_grid = (REAL **restrict)malloc(NUM_OF_R_EXTS * sizeof(REAL *));
@@ -273,7 +277,7 @@ static void psi4_diagnostics_set_up(const commondata_struct *restrict commondata
           diagnosticstruct->xx_radial_like_shell_grid[which_R_ext][which_pt_on_grid] = closest_xx[{radial_like_index}];
           diagnosticstruct->xx_theta_like_shell_grid[which_R_ext][which_pt_on_grid] = closest_xx[{theta_like_index}];
 
-          // also save theta values
+          // Also save theta values
           int i_th_grid;
           MAYBE_UNUSED int i_ph_grid;
           const int N_theta_shell_grid = diagnosticstruct->N_theta_shell_grid[which_R_ext];
@@ -422,8 +426,8 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
 
     body += r"""
 
-  // set parameters for interpolation
-  // src grid is the whole grid in radial-like and theta-like coordinates
+  // Set parameters for interpolation
+  // Src grid is the whole grid in radial-like and theta-like coordinates
   const int N_interp_GHOSTS = NGHOSTS;
   const REAL src_dxx0 = dxx_radial_like_index;
   const REAL src_dxx1 = dxx_theta_like_index;
