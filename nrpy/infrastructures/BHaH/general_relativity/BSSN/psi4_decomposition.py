@@ -43,6 +43,7 @@ par.register_CodeParameter(
     assumption="RealPositive",
 )
 
+
 def register_CFunction_psi4_spinweightm2_decomposition(CoordSystem: str) -> None:
     """
     Register C function for decomposing psi4 into spin-weighted spherical harmonics via 2D interpolation on uniform source grids at each φ slice.
@@ -91,15 +92,13 @@ static diagnostic_struct diagnosticstruct;
 
 
 /*
-This prefunction sets up the diagnotic struct:
+This prefunction sets up the diagnotic struct.
 
 Set up thin shells at R_ext radii for integration of psi4 * spin weight 2 spherical harmonics.
 
-Assumes that grid might be a rectangular partition of the whole grid.
+Assumes that grid might be a rectangular partition of the whole grid. For each shell the # of shell points which lie on the grid "N_shell_pts_grid" is found.
 
-For each shell the # of shell points which lie on the grid "N_shell_pts_grid" is found.
-
-The destination points for 2d interpolation  "xx_radial_like_shell_grid" and ""xx_theta_like_shell_grid" are computed.
+The destination points for 2d interpolation "xx_radial_like_shell_grid" and ""xx_theta_like_shell_grid" are computed.
 */
 static void psi4_diagnostics_set_up(const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3]) {{
 
