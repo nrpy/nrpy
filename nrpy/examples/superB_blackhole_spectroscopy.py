@@ -356,7 +356,9 @@ par.adjust_CodeParam_default(
 )
 if paper:
     par.adjust_CodeParam_default("num_psi4_extraction_radii", num_psi4_extraction_radii)
-    par.adjust_CodeParam_default("list_of_psi4_extraction_radii", list_of_psi4_extraction_radii)
+    par.adjust_CodeParam_default(
+        "list_of_psi4_extraction_radii", list_of_psi4_extraction_radii
+    )
 
 #########################################################
 # STEP 3: Generate header files, register C functions and
