@@ -25,7 +25,7 @@ core_modules_list = [
     "commondata_struct",
     "params_struct",
     "finite_difference",
-    "reference_metric",    
+    "reference_metric",
     "nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions",
     "nrpy.infrastructures.BHaH.MoLtimestepping.MoL_register_all",
     "nrpydev.infrastructures.BHaH.interpolation.interpolation",
