@@ -507,7 +507,6 @@ def register_CFunction_numerical_grids_and_timestep(
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
     enable_set_cfl_timestep: bool = True,
-    enable_psi4_diagnostics_set_up: bool = False,
 ) -> None:
     """
     Register a C function to set up all numerical grids and timestep.
@@ -522,7 +521,6 @@ def register_CFunction_numerical_grids_and_timestep(
     :param enable_rfm_precompute: Whether to enable reference metric precomputation (default: False).
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions (default: False).
     :param enable_set_cfl_timestep: Whether to enable computation of dt, the CFL timestep. A custom version can be implemented later.
-    :param enable_psi4_diagnostics_set_up: Whether to enable psi4_diagnostics set up needed for psi4 decompositiion in cylindrical-like coords.
 
     :raises ValueError: If invalid gridding_approach selected.
 
@@ -699,7 +697,6 @@ def register_CFunctions(
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
     enable_set_cfl_timestep: bool = True,
-    enable_psi4_diagnostics_set_up: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register C functions related to coordinate systems and grid parameters.
@@ -711,7 +708,6 @@ def register_CFunctions(
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions.
     :param enable_set_cfl_timestep: Whether to enable computation of dt, the CFL timestep. A custom version can be implemented later.
-    :param enable_psi4_diagnostics_set_up: Whether to enable psi4_diagnostics set up needed for psi4 decompositiion in cylindrical-like coords.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -734,7 +730,6 @@ def register_CFunctions(
         enable_rfm_precompute=enable_rfm_precompute,
         enable_CurviBCs=enable_CurviBCs,
         enable_set_cfl_timestep=enable_set_cfl_timestep,
-        enable_psi4_diagnostics_set_up=enable_psi4_diagnostics_set_up,
     )
 
     if gridding_approach == "multipatch" or enable_set_cfl_timestep:

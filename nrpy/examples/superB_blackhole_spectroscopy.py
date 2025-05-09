@@ -98,9 +98,9 @@ default_checkpoint_every = 20.0
 t_final = 1.5 * grid_physical_size
 swm2sh_maximum_l_mode_generated = 8
 swm2sh_maximum_l_mode_to_compute = 2 if not paper else 8
-if paper:
-    num_psi4_extraction_radii = 1
+if paper:    
     list_of_psi4_extraction_radii = [80.0]
+    num_psi4_extraction_radii = len(list_of_psi4_extraction_radii)
 Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
     "SinhCylindrical": [400, 2, 1200] if not paper else [800, 2, 2400],
