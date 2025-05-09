@@ -69,7 +69,7 @@ par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Code-generation-time parameters:
 project_name = "superB_blackhole_spectroscopy"
-CoordSystem = "SinhSpherical" if not paper else "SinhCylindrical"
+CoordSystem = "SinhCylindrical"
 IDtype = "TP_Interp"
 IDCoordSystem = "Cartesian"
 
@@ -84,7 +84,7 @@ TP_npoints_phi = 4
 
 enable_KreissOliger_dissipation = True
 enable_CAKO = True
-enable_CAHD = not paper  # True if paper.
+enable_CAHD = False
 enable_SSL = True
 KreissOliger_strength_gauge = 0.99
 KreissOliger_strength_nongauge = 0.3
@@ -98,9 +98,12 @@ default_checkpoint_every = 20.0
 t_final = 1.5 * grid_physical_size
 swm2sh_maximum_l_mode_generated = 8
 swm2sh_maximum_l_mode_to_compute = 2 if not paper else 8
+if paper:
+    list_of_psi4_extraction_radii = [80.0]
+    num_psi4_extraction_radii = len(list_of_psi4_extraction_radii)
 Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
-    "SinhCylindrical": [800, 2, 2400],
+    "SinhCylindrical": [400, 2, 1200] if not paper else [800, 2, 2400],
 }
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.25 if not paper else +5.0
@@ -351,6 +354,11 @@ par.adjust_CodeParam_default("eta", GammaDriving_eta)
 par.adjust_CodeParam_default(
     "swm2sh_maximum_l_mode_to_compute", swm2sh_maximum_l_mode_to_compute
 )
+if paper:
+    par.adjust_CodeParam_default("num_psi4_extraction_radii", num_psi4_extraction_radii)
+    par.adjust_CodeParam_default(
+        "list_of_psi4_extraction_radii", list_of_psi4_extraction_radii
+    )
 
 #########################################################
 # STEP 3: Generate header files, register C functions and

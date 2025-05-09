@@ -69,6 +69,11 @@ void pup_commondata_struct(PUP::er &p, commondata_struct &commondata) {
                 c_output = (
                     f"PUParray(p, {struct}.{parname}, {chararray_size});{comment}\n"
                 )
+            elif "REAL" in CPtype and "[" in CPtype and "]" in CPtype:
+                realarray_size = CPtype.split("[")[1].replace("]", "")
+                c_output = (
+                    f"PUParray(p, {struct}.{parname}, {realarray_size});{comment}\n"
+                )
             elif "TIMEVAR" in CPtype:
                 c_output = f"p|{struct}.{parname}.tv_sec;{comment}\n"
                 c_output += f"p|{struct}.{parname}.tv_nsec;{comment}\n"

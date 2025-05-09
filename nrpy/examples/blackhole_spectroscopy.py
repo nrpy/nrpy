@@ -21,6 +21,7 @@ import shutil
 from pathlib import Path
 
 import nrpy.helpers.parallel_codegen as pcg
+import nrpy.infrastructures.BHaH.BHaHAHA.interpolation_2d_general__uniform_src_grid as interpolation2d
 import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 import nrpy.infrastructures.BHaH.special_functions.spin_weight_minus2_spherical_harmonics as swm2sh
@@ -51,7 +52,7 @@ par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Code-generation-time parameters:
 project_name = "blackhole_spectroscopy"
-CoordSystem = "SinhSpherical"
+CoordSystem = "SinhCylindrical"
 IDtype = "TP_Interp"
 IDCoordSystem = "Cartesian"
 
@@ -66,7 +67,7 @@ TP_npoints_phi = 4
 
 enable_KreissOliger_dissipation = True
 enable_CAKO = True
-enable_CAHD = True
+enable_CAHD = False
 enable_SSL = True
 KreissOliger_strength_gauge = 0.99
 KreissOliger_strength_nongauge = 0.3
@@ -81,6 +82,7 @@ swm2sh_maximum_l_mode_generated = 8
 swm2sh_maximum_l_mode_to_compute = 2  # for consistency with NRPy 1.0 version.
 Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
+    "SinhCylindrical": [400, 2, 1200],
 }
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.25
@@ -104,8 +106,10 @@ if "Spherical" in CoordSystem:
         sinh_width = 0.2
 if "Cylindrical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "1")
-    par.adjust_CodeParam_default("CFL_FACTOR", 1.0)
+    par.adjust_CodeParam_default("CFL_FACTOR", 0.5)
     OMP_collapse = 2  # might be slightly faster
+    if CoordSystem == "SinhCylindrical":
+        sinh_width = 0.2
 
 project_dir = os.path.join("project", project_name)
 
@@ -145,6 +149,9 @@ TP_solve(&ID_persist);
   free_derivs (&ID_persist.cf_v, ID_persist.npoints_A * ID_persist.npoints_B * ID_persist.npoints_phi);
 }
 """,
+)
+interpolation2d.register_CFunction_interpolation_2d_general__uniform_src_grid(
+    enable_simd=enable_intrinsics, project_dir=project_dir
 )
 BSSN.diagnostics.register_CFunction_diagnostics(
     set_of_CoordSystems={CoordSystem},
@@ -223,7 +230,9 @@ swm2sh.register_CFunction_spin_weight_minus2_sph_harmonics()
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 # Does not need to be parallelized.
-BSSN.psi4_decomposition.register_CFunction_psi4_spinweightm2_decomposition_on_sphlike_grids()
+BSSN.psi4_decomposition.register_CFunction_psi4_spinweightm2_decomposition(
+    CoordSystem=CoordSystem
+)
 
 numerical_grids_and_timestep.register_CFunctions(
     set_of_CoordSystems={CoordSystem},
@@ -234,7 +243,9 @@ numerical_grids_and_timestep.register_CFunctions(
 )
 
 cbc.CurviBoundaryConditions_register_C_functions(
-    set_of_CoordSystems={CoordSystem}, radiation_BC_fd_order=radiation_BC_fd_order
+    set_of_CoordSystems={CoordSystem},
+    radiation_BC_fd_order=radiation_BC_fd_order,
+    set_parity_on_aux=True,
 )
 
 rhs_string = ""
@@ -273,6 +284,11 @@ rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 # Coord system parameters
 if CoordSystem == "SinhSpherical":
     par.adjust_CodeParam_default("SINHW", sinh_width)
+if CoordSystem == "SinhCylindrical":
+    par.adjust_CodeParam_default("AMPLRHO", grid_physical_size)
+    par.adjust_CodeParam_default("AMPLZ", grid_physical_size)
+    par.adjust_CodeParam_default("SINHWRHO", sinh_width)
+    par.adjust_CodeParam_default("SINHWZ", sinh_width)
 par.adjust_CodeParam_default("t_final", t_final)
 # Initial data parameters
 par.adjust_CodeParam_default("initial_sep", initial_sep)

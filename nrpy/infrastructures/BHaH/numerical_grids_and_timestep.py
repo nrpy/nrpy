@@ -677,6 +677,7 @@ for(int grid=0;grid<commondata->NUMGRIDS;grid++) {
    griddata[grid].params.grid_idx = grid;
 }
 """
+
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
