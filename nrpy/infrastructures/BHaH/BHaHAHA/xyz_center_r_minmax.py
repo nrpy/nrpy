@@ -12,8 +12,6 @@ import nrpy.c_function as cfc
 
 def register_CFunction_xyz_center_r_minmax() -> None:
     """Register a C function to set up cell-centered radial numerical grid for interpolation to external_input grid."""
-
-    # Step 4: Register radial_grid_cell_centered_set_up().
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """
 Performs adaptive extrapolation to determine the center coordinates and minimum/maximum radii

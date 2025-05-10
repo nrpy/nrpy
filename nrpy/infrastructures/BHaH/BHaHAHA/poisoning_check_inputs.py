@@ -14,7 +14,7 @@ import nrpy.c_function as cfc
 
 def register_CFunction_poisoning_check_inputs() -> None:
     """
-    Registers the C function 'poisoning_check_inputs()' with NRPy2.
+    Register the C function 'poisoning_check_inputs()' with NRPy2.
 
     This function checks the inputs of a `bhahaha_params_and_data_struct` by verifying
     that `REAL` numbers are not `NaN`, pointers are not `NULL`, and integers are not `-100`.
