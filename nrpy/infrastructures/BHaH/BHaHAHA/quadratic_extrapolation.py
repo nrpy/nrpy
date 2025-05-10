@@ -12,8 +12,6 @@ import nrpy.c_function as cfc
 
 def register_CFunction_quadratic_extrapolation() -> None:
     """Register a C function to perform quadratic extrapolation."""
-
-    # Step 4: Register radial_grid_cell_centered_set_up().
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """
 Performs up to quadratic extrapolation using a Lagrange-based formula.

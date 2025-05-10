@@ -13,8 +13,6 @@ from nrpy.infrastructures.BHaH import griddata_commondata
 
 def register_CFunction_over_relaxation() -> None:
     """Register a C function to perform over relaxation."""
-
-    # Step 4: Register radial_grid_cell_centered_set_up().
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     griddata_commondata.register_griddata_commondata(
         __name__,

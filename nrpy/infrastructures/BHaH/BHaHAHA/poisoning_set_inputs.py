@@ -1,5 +1,5 @@
 """
-Module to register the C function 'poisoning_set_inputs()' with NRPy2.
+Register the C function 'poisoning_set_inputs()' with NRPy2.
 
 This function poisons the inputs of a `bhahaha_params_and_data_struct` by setting
 `REAL` numbers to `NaN`, pointers to `NULL`, and integers to `-1`.
@@ -13,7 +13,7 @@ import nrpy.c_function as cfc
 
 def register_CFunction_poisoning_set_inputs() -> None:
     """
-    Registers the C function 'poisoning_set_inputs()' with NRPy2.
+    Register the C function 'poisoning_set_inputs()' with NRPy2.
 
     This function poisons the inputs of a `bhahaha_params_and_data_struct` by setting
     `REAL` numbers to `NaN`, pointers to `NULL`, and integers to `-1`.
