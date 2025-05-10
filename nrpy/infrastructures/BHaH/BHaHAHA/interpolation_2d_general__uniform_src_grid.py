@@ -42,13 +42,7 @@ def register_CFunction_interpolation_2d_general__uniform_src_grid(
             subdirectory="intrinsics",
         )
 
-    includes = [
-        "math.h",
-        "intrinsics/simd_intrinsics.h",
-        "stdio.h",
-        "stdlib.h",
-        "BHaH_defines.h",
-    ]
+    includes = ["math.h", "intrinsics/simd_intrinsics.h", "stdio.h", "stdlib.h"]
 
     prefunc = """
 #ifndef REAL
