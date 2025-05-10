@@ -11,6 +11,7 @@ Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
 import argparse
 import copy
 import os
+import pkgutil
 import shutil
 from pathlib import Path
 
@@ -236,18 +237,21 @@ Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
 )
 
 # Append latest error codes & error message function prototype to BHaHAHA.h
-# Read the contents of the original file
-with Path("nrpy/infrastructures/BHaH/BHaHAHA/BHaHAHA_header.h").open(
-    "r",
-    encoding="utf-8",
-) as input_file:
-    BHaHAHA_h = input_file.read()
+# Load the header file using pkgutil
+data_bytes = pkgutil.get_data("nrpy.infrastructures.BHaH.BHaHAHA", "BHaHAHA_header.h")
+if data_bytes is None:
+    raise FileNotFoundError("BHaHAHA_header.h not found via pkgutil.get_data")
+
+BHaHAHA_h = data_bytes.decode("utf-8")
+
+# Append finite-difference ghostzones setting
 BHaHAHA_h += f"""
 //===============================================
 // Set the number of (finite-difference) ghostzones in BHaHAHA
 //===============================================
 #define BHAHAHA_NGHOSTS {int(par.parval_from_str("finite_difference::fd_order") / 2)}
 """
+
 # Append the error codes
 BHaHAHA_h += """
 //===============================================
@@ -259,6 +263,7 @@ typedef enum {
 for item in error_message.error_code_msg_tuples_list:
     BHaHAHA_h += f"  {item[0]},\n"
 BHaHAHA_h += "} bhahaha_error_codes;\n"
+
 BHaHAHA_h += """
 // Function: bah_error_message
 // Interprets bah_find_horizon() error codes & returns a useful string.
@@ -267,6 +272,7 @@ const char *bah_error_message(const bhahaha_error_codes error_code);
 
 #endif // BHAHAHA_HEADER_H
 """
+
 # Write the updated content to the output file
 with Path(project_dir, "BHaHAHA.h").open("w", encoding="utf-8") as output_file:
     output_file.write(BHaHAHA_h)
