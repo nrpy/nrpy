@@ -11,7 +11,7 @@ Author: Nishita Jadoo
         njadoo **at** uidaho **dot* edu
 """
 
-from typing import List
+from typing import Any, List
 
 import nrpy.c_function as cfc
 import nrpy.params as par
@@ -27,7 +27,7 @@ from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary impor
 
 
 def generate_pup_serialization_lines_for_CodeParams(
-    field_name: str, codeparam, struct_prefix: str
+    field_name: str, codeparam: Any, struct_prefix: str
 ) -> List[str]:
     """
     Emit PUP serialization lines for one CodeParam field.

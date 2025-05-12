@@ -7,7 +7,7 @@ Author: Zachariah B. Etienne
 
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import nrpy.grid as gri
 import nrpy.helpers.parallelization.utilities as parallel_utils
@@ -81,7 +81,7 @@ typedef struct __griddata__ {
 
 
 # Helper function to parse cparam_type into base, size and is_array
-def parse_cparam_type(cparam_type: str):
+def parse_cparam_type(cparam_type: str) -> Tuple[str, Optional[str], bool]:
     """
     Parse a cparam_type string into three parts.
 
@@ -89,11 +89,10 @@ def parse_cparam_type(cparam_type: str):
     - size     – the text inside the first '[ ]' (or None if not an array)
     - is_array – True if the string contains '[...]', False otherwise
     Examples
-
-        "int"                -> ("int",          None,         False)
-        "REAL[8]"            -> ("REAL",         "8",          True)
-        "char[100]"          -> ("char",         "100",        True)
-        "TIMEVAR"            -> ("TIMEVAR",      None,         False)
+        "int"                -> ("int",     None,     False)
+        "REAL[8]"            -> ("REAL",    "8",      True)
+        "char[100]"          -> ("char",    "100",    True)
+        "TIMEVAR"            -> ("TIMEVAR", None,     False)
 
     :param cparam_type: the raw CParam type string, e.g. "REAL[8]" or "char[NAME]"
     :return: a tuple (base, size, is_array) where
