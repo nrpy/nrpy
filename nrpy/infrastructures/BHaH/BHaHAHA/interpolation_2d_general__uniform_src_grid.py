@@ -50,6 +50,11 @@ def register_CFunction_interpolation_2d_general__uniform_src_grid(
 #endif
 #define DEBUG
 
+#ifdef STANDALONE
+// Remove the bah_ prefix if compiling as a standalone code, as this function goes by other names in other codes.
+#define bah_interpolation_2d_general__uniform_src_grid interpolation_2d_general__uniform_src_grid
+#endif
+
 // In case this code is compiled as C++:
 #ifdef __cplusplus
 #ifndef restrict
