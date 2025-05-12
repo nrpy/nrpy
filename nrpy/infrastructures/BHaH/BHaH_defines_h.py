@@ -80,6 +80,43 @@ typedef struct __griddata__ {
     return griddata_struct_def
 
 
+# Helper function to parse cparam_type into base, size and is_array
+def parse_cparam_type(cparam_type: str):
+    """
+    Parse a cparam_type string into three parts.
+
+    - base     – the text before the first '['
+    - size     – the text inside the first '[ ]' (or None if not an array)
+    - is_array – True if the string contains '[...]', False otherwise
+    Examples
+
+        "int"                -> ("int",          None,         False)
+        "REAL[8]"            -> ("REAL",         "8",          True)
+        "char[100]"          -> ("char",         "100",        True)
+        "TIMEVAR"            -> ("TIMEVAR",      None,         False)
+
+    :param cparam_type: the raw CParam type string, e.g. "REAL[8]" or "char[NAME]"
+    :return: a tuple (base, size, is_array) where
+             - base is the type name before any '[',
+             - size is the bracketed content as a string (or None if not an array),
+             - is_array is True if brackets were present, else False.
+    """
+    # 1) Scalar if no brackets
+    if "[" not in cparam_type or "]" not in cparam_type:
+        base = cparam_type.strip()
+        return base, None, False
+
+    # 2) Otherwise split off base and remainder
+    base, after = cparam_type.split("[", 1)
+    base = base.strip()  # e.g. "char" or "REAL"
+
+    # 3) Extract size inside the first pair of brackets
+    size_str, _ = after.split("]", 1)
+    size = size_str.strip()  # keep as a string
+
+    return base, size, True
+
+
 def register_BHaH_defines(module: str, BHaH_defines: str) -> None:
     """
     Register contributions from a given module to par.glb_extras_dict["BHaH_defines"] for BHaH_defines.h.
@@ -239,18 +276,15 @@ def output_BHaH_defines_h(
 
         :return: A formatted C declaration string with an inline comment.
         """
-        if "[" in cp_type and "]" in cp_type:
-            base_type, size_with_bracket = cp_type.split("[", 1)
-            size = size_with_bracket.split("]", 1)[0]
-            base_type = base_type.strip()
-            size = size.strip()
-            if base_type.startswith("char"):
+        base, size, is_array = parse_cparam_type(cp_type)
+        if is_array:
+            if base.startswith("char"):
                 # Handle char arrays
                 decl = f"  char {var_name}[{size}];"
             else:
-                decl = f"  {base_type} {var_name}[{size}];"
+                decl = f"  {base} {var_name}[{size}];"
         else:
-            decl = f"  {cp_type} {var_name};"
+            decl = f"  {base} {var_name};"
 
         # Conditional comment based on description
         if description:
