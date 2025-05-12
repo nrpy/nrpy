@@ -510,12 +510,12 @@ SinhCylindrical coordinates.
   // Extract necessary information from common data and diagnostic structures.
   const int num_psi4_extraction_radii = commondata->num_psi4_extraction_radii;
   const REAL *restrict list_of_psi4_extraction_radii = commondata->list_of_psi4_extraction_radii;
-  int *restrict N_shell_pts_grid = diagnosticstruct.N_shell_pts_grid;             // Num points on grid per shell.
+  int *restrict N_shell_pts_grid = diagnosticstruct.N_shell_pts_grid;                     // Num points on grid per shell.
   REAL **restrict xx_radial_like_shell_grid = diagnosticstruct.xx_radial_like_shell_grid; // Dest radial coord for interp.
-  REAL **restrict xx_theta_like_shell_grid = diagnosticstruct.xx_theta_like_shell_grid;  // Dest theta coord for interp.
-  int *restrict N_theta_shell_grid = diagnosticstruct.N_theta_shell_grid;             // Num unique theta points per shell.
-  REAL **restrict theta_shell_grid = diagnosticstruct.theta_shell_grid;              // Actual theta values (rad) per shell.
-  const REAL dtheta = diagnosticstruct.dtheta;                                      // Theta spacing on conceptual shell.
+  REAL **restrict xx_theta_like_shell_grid = diagnosticstruct.xx_theta_like_shell_grid;   // Dest theta coord for interp.
+  int *restrict N_theta_shell_grid = diagnosticstruct.N_theta_shell_grid;                 // Num unique theta points per shell.
+  REAL **restrict theta_shell_grid = diagnosticstruct.theta_shell_grid;                   // Actual theta values (rad) per shell.
+  const REAL dtheta = diagnosticstruct.dtheta;                                            // Theta spacing on conceptual shell.
 
   // Grid dimensions including ghost zones.
   const int Nxx_plus_2NGHOSTS_arr[3] = {Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2};
@@ -531,15 +531,15 @@ SinhCylindrical coordinates.
 
   // --- Set up parameters for 2D interpolation ---
   // The source grid for interpolation is a 2D slice (radial-like, theta-like) for a fixed phi.
-  const int N_interp_GHOSTS = NGHOSTS; // Number of ghost zones needed by the interpolator.
-  const REAL src_dxx0 = dxx_radial_like; // Source grid spacing in dimension 0.
-  const REAL src_dxx1 = dxx_theta_like;  // Source grid spacing in dimension 1.
+  const int N_interp_GHOSTS = NGHOSTS;                                   // Number of ghost zones needed by the interpolator.
+  const REAL src_dxx0 = dxx_radial_like;                                 // Source grid spacing in dimension 0.
+  const REAL src_dxx1 = dxx_theta_like;                                  // Source grid spacing in dimension 1.
   const int src_Nxx_plus_2NGHOSTS0 = Nxx_plus_2NGHOSTS_radial_like_dirn; // Source grid size in dimension 0.
   const int src_Nxx_plus_2NGHOSTS1 = Nxx_plus_2NGHOSTS_theta_like_dirn;  // Source grid size in dimension 1.
 
   // Allocate memory for source grid coordinate arrays needed by the interpolator.
-  REAL *restrict src_x0x1[3]; // Interpolator expects 3 elements, but we only use [1] and [2].
-  src_x0x1[0] = NULL;         // Unused by 2D interpolator.
+  REAL *restrict src_x0x1[3];                                                  // Interpolator expects 3 elements, but we only use [1] and [2].
+  src_x0x1[0] = NULL;                                                          // Unused by 2D interpolator.
   src_x0x1[1] = (REAL *restrict)malloc(sizeof(REAL) * src_Nxx_plus_2NGHOSTS0); // Radial-like coordinates.
   src_x0x1[2] = (REAL *restrict)malloc(sizeof(REAL) * src_Nxx_plus_2NGHOSTS1); // Theta-like coordinates.
   // Populate source coordinate arrays.
@@ -570,7 +570,7 @@ SinhCylindrical coordinates.
       // Populate the destination points array from the diagnostic structure.
       for (int i = 0; i < num_dst_pts; i++) {
         dst_pts[i][0] = xx_radial_like_shell_grid[which_R_ext][i]; // Radial-like coordinate.
-        dst_pts[i][1] = xx_theta_like_shell_grid[which_R_ext][i]; // Theta-like coordinate.
+        dst_pts[i][1] = xx_theta_like_shell_grid[which_R_ext][i];  // Theta-like coordinate.
       } // END FOR populating destination points
 
       // Allocate memory for the interpolated data (destination data) for psi4 real and imaginary parts.
@@ -593,25 +593,24 @@ SinhCylindrical coordinates.
 
       // Step 2: Interpolate psi4 onto the shell points. This requires looping through phi slices.
       // The interpolation is 2D (radial-like, theta-like), performed independently for each phi slice.
-#pragma omp parallel for // Parallelize the loop over phi slices.
       // Loop over physical grid points in the phi direction.
       for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS_phi - NGHOSTS; i1++) {
         // Store the phi value for this slice (index relative to physical points).
         ph_array[i1 - NGHOSTS] = xx[phi_dirn][i1];
 
-        // Populate the 2D source grid function arrays (src_gf_psi4r/i) for the current phi slice (i1).
-        // Note: This inner loop is implicitly parallelized by the outer OMP directive.
-        // Consider adding omp parallel for here if needed and if the outer loop is removed or changed.
-        for (int j = 0; j < src_Nxx_plus_2NGHOSTS1; j++) { // Loop over theta-like dimension (index j).
+      // Populate the 2D source grid function arrays (src_gf_psi4r/i) for the current phi slice (i1).
+      // Note: This inner loop is implicitly parallelized by the outer OMP directive.
+#pragma omp parallel for                                     // Parallelize the loop over theta slices.
+        for (int j = 0; j < src_Nxx_plus_2NGHOSTS1; j++) {   // Loop over theta-like dimension (index j).
           for (int i = 0; i < src_Nxx_plus_2NGHOSTS0; i++) { // Loop over radial-like dimension (index i).
             // Calculate the 1D index for the source array.
             int idx = i + src_Nxx_plus_2NGHOSTS0 * j;
 
             // Construct the 3D grid index (i0, i1, i2) for accessing diagnostic_output_gfs.
             int ii012[3];
-            ii012[radial_like_dirn] = i;  // Radial-like index.
-            ii012[theta_like_dirn] = j;   // Theta-like index.
-            ii012[phi_dirn] = i1;         // Current phi slice index.
+            ii012[radial_like_dirn] = i; // Radial-like index.
+            ii012[theta_like_dirn] = j;  // Theta-like index.
+            ii012[phi_dirn] = i1;        // Current phi slice index.
 
             // Copy psi4 real and imaginary data from the main grid function array to the 2D source slice.
             src_gf_psi4r[idx] = diagnostic_output_gfs[IDX4(PSI4_REGF, ii012[0], ii012[1], ii012[2])];
@@ -641,6 +640,7 @@ SinhCylindrical coordinates.
 
         // Store the interpolated results (dst_data_psi4r/i) into the final 2D shell arrays (psi4r/i_at_R_ext).
         // Also, populate the theta and sin(theta) arrays within this loop (though they only need populating once).
+#pragma omp parallel for // Parallelize the loop over theta slices.
         for (int i2 = 0; i2 < N_theta_local; i2++) {
           // Populate theta and sin(theta) arrays using values from the diagnostic struct.
           // This is done inside the phi loop, which is slightly redundant but safe if OMP is used.
@@ -673,19 +673,18 @@ SinhCylindrical coordinates.
       } // END OMP parallel for loop over phi slices (i1)
 
       // Step 3: Perform the spin-weighted spherical harmonic decomposition using the interpolated data.
-      lowlevel_decompose_psi4_into_swm2_modes(
-          Nxx_plus_2NGHOSTS_phi,             // Size of phi dimension (used for indexing range)
-          dxx_phi,                           // Phi spacing (dphi)
-          dtheta,                            // Theta spacing (dtheta)
-          swm2sh_maximum_l_mode_to_compute,  // Max l mode to compute
-          commondata->time,                  // Current time
-          R_ext,                             // Current extraction radius
-          th_array,                          // Array of theta values
-          sinth_array,                       // Array of sin(theta) values
-          ph_array,                          // Array of phi values
-          N_theta_local,                     // Number of theta points on grid for this shell
-          psi4r_at_R_ext,                    // Interpolated real part of psi4
-          psi4i_at_R_ext                     // Interpolated imaginary part of psi4
+      lowlevel_decompose_psi4_into_swm2_modes(Nxx_plus_2NGHOSTS_phi,            // Size of phi dimension (used for indexing range)
+                                              dxx_phi,                          // Phi spacing (dphi)
+                                              dtheta,                           // Theta spacing (dtheta)
+                                              swm2sh_maximum_l_mode_to_compute, // Max l mode to compute
+                                              commondata->time,                 // Current time
+                                              R_ext,                            // Current extraction radius
+                                              th_array,                         // Array of theta values
+                                              sinth_array,                      // Array of sin(theta) values
+                                              ph_array,                         // Array of phi values
+                                              N_theta_local,                    // Number of theta points on grid for this shell
+                                              psi4r_at_R_ext,                   // Interpolated real part of psi4
+                                              psi4i_at_R_ext                    // Interpolated imaginary part of psi4
       );
 
       // Step 4: Free memory allocated specifically for this extraction radius.
