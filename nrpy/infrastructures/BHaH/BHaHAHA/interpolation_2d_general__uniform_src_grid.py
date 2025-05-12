@@ -49,6 +49,13 @@ def register_CFunction_interpolation_2d_general__uniform_src_grid(
 #define REAL double
 #endif
 #define DEBUG
+
+// In case this code is compiled as C++:
+#ifdef __cplusplus
+#ifndef restrict
+#define restrict __restrict__
+#endif
+#endif
 """
     prefunc += """//===============================================
 // BHaHAHA Error Handling
