@@ -11,16 +11,51 @@ Author: Nishita Jadoo
         njadoo **at** uidaho **dot* edu
 """
 
-from typing import List
+from typing import Any, List
 
 import nrpy.c_function as cfc
 import nrpy.params as par
+from nrpy.infrastructures.BHaH.BHaH_defines_h import (
+    parse_cparam_type,
+)
 from nrpy.infrastructures.BHaH.MoLtimestepping.MoL_gridfunction_names import (
     generate_gridfunction_names,
 )
 from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import (
     generate_Butcher_tables,
 )
+
+
+def generate_pup_serialization_lines_for_CodeParams(
+    field_name: str, codeparam: Any, struct_prefix: str
+) -> List[str]:
+    """
+    Emit PUP serialization lines for one CodeParam field.
+
+    :param field_name:     The name of the field in the struct.
+    :param codeparam:      The CodeParam object, with attributes `cparam_type` and `module`.
+    :param struct_prefix:  The C‐struct instance name (e.g. "commondata" or "params").
+    :return:               A list of C++ lines (strings) performing p| or PUParray calls
+                           for this field.
+    """
+    base, size, is_array = parse_cparam_type(codeparam.cparam_type)
+    lines: List[str] = []
+    comment = f"  // {codeparam.module}::{field_name}"
+    target = f"{struct_prefix}.{field_name}"
+
+    if is_array:
+        # All 1D arrays use PUParray
+        lines.append(f"PUParray(p, {target}, {size});{comment}\n")
+    else:
+        if base == "TIMEVAR":
+            # TIMEVAR has two sub‐fields: tv_sec and tv_nsec
+            lines.append(f"p|{target}.tv_sec;{comment}\n")
+            lines.append(f"p|{target}.tv_nsec;{comment}\n")
+        else:
+            # Simple scalar field
+            lines.append(f"p|{target};{comment}\n")
+
+    return lines
 
 
 def register_CFunction_superB_pup_routines(
@@ -52,69 +87,36 @@ This comprehensive set of routines is crucial for efficient data management and 
 """
     # prefunc contains most of the C++ source code for the PUP routines.
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    prefunc = """
-// PUP routine for struct commondata_struct
-void pup_commondata_struct(PUP::er &p, commondata_struct &commondata) {
-"""
-    struct_list: List[str] = (
-        []
-    )  # List to store individual struct elements for commondata_struct.
-    for parname, CodeParam in par.glb_code_params_dict.items():
-        if CodeParam.commondata:
-            struct = "commondata"
-            CPtype = CodeParam.cparam_type
-            comment = f"  // {CodeParam.module}::{parname}"
-            if "char" in CPtype and "[" in CPtype and "]" in CPtype:
-                chararray_size = CPtype.split("[")[1].replace("]", "")
-                c_output = (
-                    f"PUParray(p, {struct}.{parname}, {chararray_size});{comment}\n"
-                )
-            elif "REAL" in CPtype and "[" in CPtype and "]" in CPtype:
-                realarray_size = CPtype.split("[")[1].replace("]", "")
-                c_output = (
-                    f"PUParray(p, {struct}.{parname}, {realarray_size});{comment}\n"
-                )
-            elif "TIMEVAR" in CPtype:
-                c_output = f"p|{struct}.{parname}.tv_sec;{comment}\n"
-                c_output += f"p|{struct}.{parname}.tv_nsec;{comment}\n"
-            else:
-                c_output = f"p|{struct}.{parname};{comment}\n"
-            struct_list.append(c_output)
-    # Sort the lines alphabetically and join them with line breaks.
+
+    # PUP routine for commondata_struct
+    commondata_lines = []
+    for name, param in par.glb_code_params_dict.items():
+        if param.commondata:
+            commondata_lines += generate_pup_serialization_lines_for_CodeParams(
+                name, param, "commondata"
+            )
+    prefunc = """// PUP routine for struct commondata_struct
+    void pup_commondata_struct(PUP::er &p, commondata_struct &commondata) {
+    """
     prefunc += "// PUP commondata struct\n"
-    prefunc += "".join(sorted(struct_list))
-    prefunc += """
-}"""
+    prefunc += "".join(sorted(commondata_lines))
+    prefunc += "}\n"
 
-    prefunc += """
-// PUP routine for struct params_struct
-void pup_params_struct(PUP::er &p, params_struct &params) {
-"""
-    params_struct_list: List[str] = (
-        []
-    )  # List to store individual struct elements for params_struct.
-    for parname, CodeParam in par.glb_code_params_dict.items():
-        CPtype = CodeParam.cparam_type
-        if not CodeParam.commondata and CPtype != "#define":
-            struct = "params"
-            comment = f"  // {CodeParam.module}::{parname}"
-            if "char" in CPtype and "[" in CPtype and "]" in CPtype:
-                chararray_size = CPtype.split("[")[1].replace("]", "")
-                c_output = (
-                    f"PUParray(p, {struct}.{parname}, {chararray_size});{comment}\n"
-                )
-            elif "TIMEVAR" in CPtype:
-                c_output = f"p|{struct}.{parname}.tv_sec;{comment}\n"
-                c_output += f"p|{struct}.{parname}.tv_nsec;{comment}\n"
-            else:
-                c_output = f"p|{struct}.{parname};{comment}\n"
-            params_struct_list.append(c_output)
-    # Sort the lines alphabetically and join them with line breaks.
+    # PUP routine for params_struct
+    params_lines = []
+    for name, param in par.glb_code_params_dict.items():
+        if not param.commondata and param.cparam_type != "#define":
+            params_lines += generate_pup_serialization_lines_for_CodeParams(
+                name, param, "params"
+            )
+    prefunc += """// PUP routine for struct params_struct
+    void pup_params_struct(PUP::er &p, params_struct &params) {
+    """
     prefunc += "// PUP params struct\n"
-    prefunc += "".join(sorted(params_struct_list))
-    prefunc += """
-}"""
+    prefunc += "".join(sorted(params_lines))
+    prefunc += "}\n"
 
+    # PUP routine for bc_struct and structs within
     prefunc += """
 // PUP routine for struct innerpt_bc_struct
 void pup_innerpt_bc_struct(PUP::er &p, innerpt_bc_struct &ibc) {
@@ -189,12 +191,10 @@ void pup_bc_struct(PUP::er &p, bc_struct &bc) {
   }
 }
 """
-
+    # PUP routine for MoL_gridfunctions_struct
     prefunc += """
 // PUP routine for struct MoL_gridfunctions_struct
-void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfuncs, const params_struct &params, const commondata_struct &commondata) {"""
-
-    prefunc += r"""
+void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfuncs, const params_struct &params, const commondata_struct &commondata) {
   p | gridfuncs.num_evol_gfs_to_sync;
   p | gridfuncs.num_auxevol_gfs_to_sync;
   p | gridfuncs.num_aux_gfs_to_sync;
@@ -202,9 +202,7 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
   PUParray(p, gridfuncs.evol_gfs_to_sync, gridfuncs.num_evol_gfs_to_sync);
   PUParray(p, gridfuncs.auxevol_gfs_to_sync, gridfuncs.num_auxevol_gfs_to_sync);
   PUParray(p, gridfuncs.aux_gfs_to_sync, gridfuncs.num_aux_gfs_to_sync);
-"""
 
-    prefunc += """
   const int Nxx_plus_2NGHOSTS_tot = params.Nxx_plus_2NGHOSTS0 * params.Nxx_plus_2NGHOSTS1 * params.Nxx_plus_2NGHOSTS2;
   if (p.isUnpacking()) {
 """
@@ -252,7 +250,7 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
     prefunc += """
 }
 """
-
+    # PUP routine for charecomm_struct
     prefunc += """
 // PUP routine for struct charecomm_struct
 void pup_charecomm_struct(PUP::er &p, charecomm_struct &cc, const params_struct &params, const params_struct &params_chare) {
@@ -268,6 +266,7 @@ void pup_charecomm_struct(PUP::er &p, charecomm_struct &cc, const params_struct 
   PUParray(p, cc.localidx3pt_to_globalidx3pt, ntotchare);
 }"""
 
+    # PUP routine for diagnostic_struct
     prefunc += """
 // PUP routine for struct diagnostic_struct
 void pup_diagnostic_struct(PUP::er &p, diagnostic_struct &ds, const params_struct &params_chare) {
@@ -386,6 +385,7 @@ void pup_diagnostic_struct(PUP::er &p, diagnostic_struct &ds, const params_struc
     prefunc += r"""
 }"""
 
+    # PUP routine for tmpBuffers_struct
     prefunc += """
 // PUP routine for struct tmpBuffers_struct
 void pup_tmpBuffers_struct(PUP::er &p, tmpBuffers_struct &tmpBuffers, const params_struct &params, const nonlocalinnerbc_struct &nonlocalinnerbc, const MoL_gridfunctions_struct &gridfuncs) {
@@ -415,8 +415,10 @@ void pup_tmpBuffers_struct(PUP::er &p, tmpBuffers_struct &tmpBuffers, const para
       tmpBuffers.tmpBuffer_innerbc_receiv[which_chare] = (REAL *restrict)malloc(sizeof(REAL) * max_sync_gfs * num_srcpts_each_chare[which_chare]);
     }
   }
-}
+}"""
 
+    # PUP routine for nonlocalinnerbc_struct
+    prefunc += """
 // PUP routine for struct nonlocalinnerbc_struct
 void pup_nonlocalinnerbc_struct(PUP::er &p, nonlocalinnerbc_struct &nonlocal, const commondata_struct &commondata) {
   const int Nchare0 = commondata.Nchare0;
@@ -465,8 +467,10 @@ void pup_nonlocalinnerbc_struct(PUP::er &p, nonlocalinnerbc_struct &nonlocal, co
     }
     PUParray(p, nonlocal.globalidx3_srcpts_tosend[dst_chare], nonlocal.num_srcpts_tosend_each_chare[dst_chare]);
   }
-}
+}"""
 
+    # PUP routine for griddata struct
+    prefunc += """
 // PUP routine for struct griddata
 // During time evolution, need params from griddata which is used to unpack charecomm_struct in griddata_chare and xx for diagnostics.
 void pup_griddata(PUP::er &p, griddata_struct &gd) {
@@ -479,8 +483,10 @@ void pup_griddata(PUP::er &p, griddata_struct &gd) {
   PUParray(p, gd.xx[0], gd.params.Nxx_plus_2NGHOSTS0);
   PUParray(p, gd.xx[1], gd.params.Nxx_plus_2NGHOSTS1);
   PUParray(p, gd.xx[2], gd.params.Nxx_plus_2NGHOSTS2);
-}
+}"""
 
+    # PUP routine for griddata_chare struct
+    prefunc += """
 // PUP routine for struct griddata_chare
 // For unpacking order is important; unpacked structs are used for unpacking the subsequent structs.
 void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const params_struct &params, const commondata_struct &commondata) {
