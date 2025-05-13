@@ -548,6 +548,188 @@ def Cfunction_initial_data_lambdaU_grid_interior(
 
     return prefunc, launch_body
 
+def register_BHaH_defines_h(
+    ID_persist_struct_str: str,
+    enable_T4munu: bool = False,
+) -> None:
+    """
+    Register the initial_data_struct and ID_persist_struct contribution to BHaH_defines.h.
+
+    This function constructs the C typedefs for initial_data_struct—
+    including optional stress-energy (T4) fields—and for ID_persist_struct,
+    then registers them via register_BHaH_defines.
+
+    :param ID_persist_struct_str: body of the ID_persist_struct (C code fragment)
+    :param enable_T4munu:        if True, include the T4SphorCartUU block
+    """
+    # build the initial_data_struct
+    BHd_str = r"""typedef struct __initial_data_struct__ {
+  REAL alpha;
+
+  REAL betaSphorCartU0, betaSphorCartU1, betaSphorCartU2;
+  REAL BSphorCartU0, BSphorCartU1, BSphorCartU2;
+
+  REAL gammaSphorCartDD00, gammaSphorCartDD01, gammaSphorCartDD02;
+  REAL gammaSphorCartDD11, gammaSphorCartDD12, gammaSphorCartDD22;
+
+  REAL KSphorCartDD00, KSphorCartDD01, KSphorCartDD02;
+  REAL KSphorCartDD11, KSphorCartDD12, KSphorCartDD22;
+"""
+    if enable_T4munu:
+        BHd_str += r"""
+  REAL T4SphorCartUU00,T4SphorCartUU01,T4SphorCartUU02,T4SphorCartUU03;
+  REAL                 T4SphorCartUU11,T4SphorCartUU12,T4SphorCartUU13;
+  REAL                                 T4SphorCartUU22,T4SphorCartUU23;
+  REAL                                                 T4SphorCartUU33;
+"""
+
+    BHd_str += r"""
+} initial_data_struct;
+"""
+
+    # append the ID_persist_struct definition
+    BHd_str += "typedef struct __ID_persist_struct__ {\n"
+    BHd_str += ID_persist_struct_str + "\n"
+    BHd_str += "} ID_persist_struct;\n"
+
+    # register into BHaH_defines.h
+    BHaH_defines_h.register_BHaH_defines(
+        __name__,
+        BHd_str
+    )
+
+from typing import Tuple
+
+def generate_ADM_Initial_Data_Reader_prefunc_and_lambdaU_launch(
+    enable_T4munu: bool,
+    CoordSystem: str,
+    IDCoordSystem: str = "Spherical"
+) -> Tuple[str, str]:
+    """
+    Generate the C “prefunc” string and the lambdaU launch snippet for the
+    initial-data reader converting ADM→BSSN.
+
+    :param enable_T4munu: whether to include the T4UU stress-energy block
+    :param CoordSystem:   coordinate system for the BSSN conversion CFunctions
+    :param IDCoordSystem: coordinate system for the ADM→Cart conversion (default "Spherical")
+    :return: a tuple (prefunc, lambdaU_launch) where
+             - prefunc is the C code defining the ADM, BSSN, and rescaled-BSSN structs
+               and the conversion CFunction bodies plus lambdaU prefuc
+             - lambdaU_launch is the C code snippet to launch the lambdaU grid interior
+    """
+    def T4UU_prettyprint() -> str:
+        """
+        Return a pretty-printed string for T4UU variables in C code.
+        """
+        return r"""
+  REAL T4UU00,T4UU01,T4UU02,T4UU03;
+  REAL        T4UU11,T4UU12,T4UU13;
+  REAL               T4UU22,T4UU23;
+  REAL                      T4UU33;
+"""
+
+    prefunc = """
+// ADM variables in the Cartesian basis:
+typedef struct __ADM_Cart_basis_struct__ {
+  REAL alpha, betaU0,betaU1,betaU2, BU0,BU1,BU2;
+  REAL gammaDD00,gammaDD01,gammaDD02,gammaDD11,gammaDD12,gammaDD22;
+  REAL KDD00,KDD01,KDD02,KDD11,KDD12,KDD22;
+"""
+    if enable_T4munu:
+        prefunc += T4UU_prettyprint()
+    prefunc += "} ADM_Cart_basis_struct;\n"
+
+    prefunc += """
+// BSSN variables in the Cartesian basis:
+typedef struct __BSSN_Cart_basis_struct__ {
+  REAL alpha, betaU0,betaU1,betaU2, BU0,BU1,BU2;
+  REAL cf, trK;
+  REAL gammabarDD00,gammabarDD01,gammabarDD02,gammabarDD11,gammabarDD12,gammabarDD22;
+  REAL AbarDD00,AbarDD01,AbarDD02,AbarDD11,AbarDD12,AbarDD22;
+"""
+    if enable_T4munu:
+        prefunc += T4UU_prettyprint()
+    prefunc += "} BSSN_Cart_basis_struct;\n"
+
+    prefunc += """
+// Rescaled BSSN variables in the rfm basis:
+typedef struct __rescaled_BSSN_rfm_basis_struct__ {
+  REAL alpha, vetU0,vetU1,vetU2, betU0,betU1,betU2;
+  REAL cf, trK;
+  REAL hDD00,hDD01,hDD02,hDD11,hDD12,hDD22;
+  REAL aDD00,aDD01,aDD02,aDD11,aDD12,aDD22;
+"""
+    if enable_T4munu:
+        prefunc += T4UU_prettyprint()
+    prefunc += "} rescaled_BSSN_rfm_basis_struct;\n"
+
+    prefunc += Cfunction_ADM_SphorCart_to_Cart(
+        IDCoordSystem=IDCoordSystem,
+        enable_T4munu=enable_T4munu,
+    )
+    prefunc += Cfunction_ADM_Cart_to_BSSN_Cart(enable_T4munu=enable_T4munu)
+    prefunc += Cfunction_BSSN_Cart_to_rescaled_BSSN_rfm(
+        CoordSystem=CoordSystem,
+        enable_T4munu=enable_T4munu,
+    )
+
+    lambdaU_prefunc, lambdaU_launch = Cfunction_initial_data_lambdaU_grid_interior(
+        CoordSystem=CoordSystem
+    )
+    prefunc += lambdaU_prefunc
+
+    return prefunc, lambdaU_launch
+
+def setup_ADM_initial_data_reader(
+    ID_persist_struct_str: str,
+    enable_T4munu: bool,
+    enable_fd_functions: bool,
+    addl_includes: Optional[List[str]],
+    CoordSystem: str,
+    IDCoordSystem: str = "Spherical"
+) -> Tuple[List[str], str, str]:
+    """
+    Perform Steps 1–3 for the ADM initial-data reader registration:
+
+    1. Register the initial_data_struct and ID_persist_struct via BHaH_defines_h.
+    2. Assemble the include list.
+    3. Generate the prefunc string and lambdaU launch snippet.
+
+    :param ID_persist_struct_str:  String for persistent ID structure.
+    :param enable_T4munu:         Whether to include T4UU blocks.
+    :param enable_fd_functions:   Whether to add finite-difference headers.
+    :param addl_includes:         Additional headers to include.
+    :param CoordSystem:           Target coordinate system for CFunctions.
+    :param IDCoordSystem:         Input ADM coordinate system (default "Spherical").
+    :return:                       A tuple (includes, prefunc, lambdaU_launch).
+    :raises ValueError:           If `addl_includes` is provided but not a list.
+    """
+    # Step 1: register BHaH_defines.h contribution
+    register_BHaH_defines_h(
+        ID_persist_struct_str=ID_persist_struct_str,
+        enable_T4munu=enable_T4munu,
+    )
+
+    # Step 2: build include list
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    if enable_fd_functions:
+        includes += ["finite_difference_functions.h"]
+
+    if addl_includes is not None:
+        if not isinstance(addl_includes, list):
+            raise ValueError("Error: addl_includes must be a list.")
+        includes += addl_includes
+
+    # Step 3: generate prefunc and lambdaU_launch
+    prefunc, lambdaU_launch = generate_ADM_Initial_Data_Reader_prefunc_and_lambdaU_launch(
+        enable_T4munu=enable_T4munu,
+        CoordSystem=CoordSystem,
+        IDCoordSystem=IDCoordSystem,
+    )
+
+    return includes, prefunc, lambdaU_launch
+
+
 
 def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     CoordSystem: str,
@@ -570,106 +752,15 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     :raises ValueError: If `addl_includes` is provided but is not a list, ensuring that additional includes are correctly formatted for inclusion.
     """
     parallelization = par.parval_from_str("parallelization")
-    # Step 1: construct this function's contribution to BHaH_defines.h:
-    BHd = r"""typedef struct __initial_data_struct__ {
-  REAL alpha;
 
-  REAL betaSphorCartU0, betaSphorCartU1, betaSphorCartU2;
-  REAL BSphorCartU0, BSphorCartU1, BSphorCartU2;
-
-  REAL gammaSphorCartDD00, gammaSphorCartDD01, gammaSphorCartDD02;
-  REAL gammaSphorCartDD11, gammaSphorCartDD12, gammaSphorCartDD22;
-
-  REAL KSphorCartDD00, KSphorCartDD01, KSphorCartDD02;
-  REAL KSphorCartDD11, KSphorCartDD12, KSphorCartDD22;
-"""
-    if enable_T4munu:
-        BHd += """
-  REAL T4SphorCartUU00,T4SphorCartUU01,T4SphorCartUU02,T4SphorCartUU03;
-  REAL                 T4SphorCartUU11,T4SphorCartUU12,T4SphorCartUU13;
-  REAL                                 T4SphorCartUU22,T4SphorCartUU23;
-  REAL                                                 T4SphorCartUU33;
-"""
-    BHd += """
-} initial_data_struct;
-"""
-    BHd += "typedef struct __ID_persist_struct__ {\n"
-    BHd += ID_persist_struct_str + "\n"
-    BHd += "} ID_persist_struct;\n"
-    BHaH_defines_h.register_BHaH_defines(__name__, BHd)
-
-    # Step 2: include BHaH_defines.h and register CFunction.
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    if enable_fd_functions:
-        includes += ["finite_difference_functions.h"]
-
-    if addl_includes is not None:
-        if not isinstance(addl_includes, list):
-            raise ValueError("Error: addl_includes must be a list.")
-        includes += addl_includes
-
-    def T4UU_prettyprint() -> str:
-        """
-        Return a pretty-printed string for T4UU variables in C code.
-
-        :return: A string containing the C declarations for T4UU variables.
-        """
-        return r"""
-  REAL T4UU00,T4UU01,T4UU02,T4UU03;
-  REAL        T4UU11,T4UU12,T4UU13;
-  REAL               T4UU22,T4UU23;
-  REAL                      T4UU33;
-"""
-
-    prefunc = """
-// ADM variables in the Cartesian basis:
-typedef struct __ADM_Cart_basis_struct__ {
-  REAL alpha, betaU0,betaU1,betaU2, BU0,BU1,BU2;
-  REAL gammaDD00,gammaDD01,gammaDD02,gammaDD11,gammaDD12,gammaDD22;
-  REAL KDD00,KDD01,KDD02,KDD11,KDD12,KDD22;
-"""
-    if enable_T4munu:
-        prefunc += T4UU_prettyprint()
-    prefunc += "} ADM_Cart_basis_struct;\n"
-    ##############
-    prefunc += """
-// BSSN variables in the Cartesian basis:
-typedef struct __BSSN_Cart_basis_struct__ {
-  REAL alpha, betaU0,betaU1,betaU2, BU0,BU1,BU2;
-  REAL cf, trK;
-  REAL gammabarDD00,gammabarDD01,gammabarDD02,gammabarDD11,gammabarDD12,gammabarDD22;
-  REAL AbarDD00,AbarDD01,AbarDD02,AbarDD11,AbarDD12,AbarDD22;
-"""
-    if enable_T4munu:
-        prefunc += T4UU_prettyprint()
-    prefunc += "} BSSN_Cart_basis_struct;\n"
-    ##############
-    prefunc += """
-// Rescaled BSSN variables in the rfm basis:
-typedef struct __rescaled_BSSN_rfm_basis_struct__ {
-  REAL alpha, vetU0,vetU1,vetU2, betU0,betU1,betU2;
-  REAL cf, trK;
-  REAL hDD00,hDD01,hDD02,hDD11,hDD12,hDD22;
-  REAL aDD00,aDD01,aDD02,aDD11,aDD12,aDD22;
-"""
-    if enable_T4munu:
-        prefunc += T4UU_prettyprint()
-    prefunc += "} rescaled_BSSN_rfm_basis_struct;\n"
-    ##############
-    ##############
-    prefunc += Cfunction_ADM_SphorCart_to_Cart(
-        IDCoordSystem=IDCoordSystem,
+    includes, prefunc, lambdaU_launch = setup_ADM_initial_data_reader(
+        ID_persist_struct_str=ID_persist_struct_str,
         enable_T4munu=enable_T4munu,
-    )
-    prefunc += Cfunction_ADM_Cart_to_BSSN_Cart(enable_T4munu=enable_T4munu)
-    prefunc += Cfunction_BSSN_Cart_to_rescaled_BSSN_rfm(
+        enable_fd_functions=enable_fd_functions,
+        addl_includes=addl_includes,
         CoordSystem=CoordSystem,
-        enable_T4munu=enable_T4munu,
+        IDCoordSystem=IDCoordSystem,
     )
-    lambdaU_prefunc, lambdaU_launch = Cfunction_initial_data_lambdaU_grid_interior(
-        CoordSystem=CoordSystem
-    )
-    prefunc += lambdaU_prefunc
 
     desc = f"Read ADM data in the {IDCoordSystem} basis, and output rescaled BSSN data in the {CoordSystem} basis"
     cfunc_type = "void"
