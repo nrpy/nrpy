@@ -13,9 +13,6 @@ from typing import List, Optional, Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
-from nrpy.infrastructures.BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter import (
-    setup_ADM_initial_data_reader,
-)
 from nrpy.equations.general_relativity.InitialData_Cartesian import (
     InitialData_Cartesian,
 )
@@ -23,6 +20,12 @@ from nrpy.equations.general_relativity.InitialData_Spherical import (
     InitialData_Spherical,
 )
 from nrpy.infrastructures.BHaH import BHaH_defines_h
+from nrpy.infrastructures.BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter import (
+    build_apply_inner_bcs_block,
+    build_initial_data_conversion_loop,
+    build_lambdaU_zeroing_block,
+    setup_ADM_initial_data_reader,
+)
 
 
 def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
@@ -67,53 +70,13 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
 
     body = r"""
   switch (initial_data_part) {
-    case INITIALDATA_BIN_ONE: {
-    const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
-    const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
-    const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
+    case INITIALDATA_BIN_ONE: {"""
 
-    LOOP_OMP("omp parallel for", i0, 0, Nxx_plus_2NGHOSTS0, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
-      // xxL are the local coordinates on the destination grid
-      REAL xxL[3] = { xx[0][i0], xx[1][i1], xx[2][i2] };
+    body += build_initial_data_conversion_loop(enable_T4munu)
 
-      // xCart is the global Cartesian coordinate, which accounts for any grid offsets from the origin.
-      REAL xCart[3];
-      REAL xOrig[3] = {xx[0][i0], xx[1][i1], xx[2][i2]};
-      xx_to_Cart(params, xOrig, xCart);
+    body += build_lambdaU_zeroing_block()
 
-      // Read or compute initial data at destination point xCart
-      initial_data_struct initial_data;
-      ID_function(commondata, params, xCart, ID_persist, &initial_data);
-
-      ADM_Cart_basis_struct ADM_Cart_basis;
-      ADM_SphorCart_to_Cart(commondata, params, xCart, &initial_data, &ADM_Cart_basis);
-
-      BSSN_Cart_basis_struct BSSN_Cart_basis;
-      ADM_Cart_to_BSSN_Cart(commondata, params, xCart, &ADM_Cart_basis, &BSSN_Cart_basis);
-
-      rescaled_BSSN_rfm_basis_struct rescaled_BSSN_rfm_basis;
-      BSSN_Cart_to_rescaled_BSSN_rfm(commondata, params, xxL, &BSSN_Cart_basis, &rescaled_BSSN_rfm_basis);
-
-      const int idx3 = IDX3(i0, i1, i2);
-"""
-    gf_list = ["alpha", "trK", "cf"]
-    for i in range(3):
-        gf_list += [f"vetU{i}", f"betU{i}"]
-        for j in range(i, 3):
-            gf_list += [f"hDD{i}{j}", f"aDD{i}{j}"]
-    for gf in sorted(gf_list):
-        body += f"gridfuncs->y_n_gfs[IDX4pt({gf.upper()}GF, idx3)] = rescaled_BSSN_rfm_basis.{gf};\n"
-    if enable_T4munu:
-        for mu in range(4):
-            for nu in range(mu, 4):
-                gf = f"T4UU{mu}{nu}"
-                body += f"gridfuncs->auxevol_gfs[IDX4pt({gf.upper()}GF, idx3)] = rescaled_BSSN_rfm_basis.{gf};\n"
     body += """
-        // Initialize lambdaU to zero
-        gridfuncs->y_n_gfs[IDX4pt(LAMBDAU0GF, idx3)] = 0.0;
-        gridfuncs->y_n_gfs[IDX4pt(LAMBDAU1GF, idx3)] = 0.0;
-        gridfuncs->y_n_gfs[IDX4pt(LAMBDAU2GF, idx3)] = 0.0;
-      } // END LOOP over all gridpoints on given grid
       break;
     }
 """
@@ -229,17 +192,25 @@ griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_pers
     }}"""
     if free_ID_persist_struct_str:
         body += free_ID_persist_struct_str
-    body += rf"""
+    body += """
     break;
-  }}
+  }"""
+
+    apply_inner_bcs_block = build_apply_inner_bcs_block()
+    body += f"""
   case INITIALDATA_APPLYBCS_INNERONLY: {{
     for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {{
+
       // Unpack griddata struct:
       params_struct *restrict params = &griddata[grid].params;
-      apply_bcs_inner_only(commondata, params, &griddata[grid].bcstruct, griddata[grid].gridfuncs.y_n_gfs);
+      bc_struct *restrict bcstruct = &griddata[grid].bcstruct;
+      MoL_gridfunctions_struct *restrict gridfuncs = &griddata[grid].gridfuncs;
+
+      {apply_inner_bcs_block}
     }}
     break;
-  }}
+  }}"""
+    body += f"""
   case INITIALDATA_BIN_TWO: {{
     for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {{
       // Unpack griddata struct:
@@ -248,16 +219,17 @@ griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_pers
                                                          NULL, {IDtype}, initial_data_part);
     }}
     break;
-  }}
-  case INITIALDATA_APPLYBCS_OUTEREXTRAPANDINNER: {{
-    for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {{
+  }}"""
+    body += """
+  case INITIALDATA_APPLYBCS_OUTEREXTRAPANDINNER: {
+    for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
       // Unpack griddata struct:
       params_struct *restrict params = &griddata[grid].params;
       apply_bcs_outerextrap_and_inner(commondata, params, &griddata[grid].bcstruct, griddata[grid].gridfuncs.y_n_gfs);
-    }}
+    }
     break;
-  }}
-}}
+  }
+}
 """
     cfc.register_CFunction(
         includes=includes,

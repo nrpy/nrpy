@@ -548,6 +548,7 @@ def Cfunction_initial_data_lambdaU_grid_interior(
 
     return prefunc, launch_body
 
+
 def register_BHaH_defines_h(
     ID_persist_struct_str: str,
     enable_T4munu: bool = False,
@@ -593,17 +594,14 @@ def register_BHaH_defines_h(
     BHd_str += "} ID_persist_struct;\n"
 
     # register into BHaH_defines.h
-    BHaH_defines_h.register_BHaH_defines(
-        __name__,
-        BHd_str
-    )
+    BHaH_defines_h.register_BHaH_defines(__name__, BHd_str)
+
 
 from typing import Tuple
 
+
 def generate_ADM_Initial_Data_Reader_prefunc_and_lambdaU_launch(
-    enable_T4munu: bool,
-    CoordSystem: str,
-    IDCoordSystem: str = "Spherical"
+    enable_T4munu: bool, CoordSystem: str, IDCoordSystem: str = "Spherical"
 ) -> Tuple[str, str]:
     """
     Generate the C “prefunc” string and the lambdaU launch snippet for the
@@ -617,6 +615,7 @@ def generate_ADM_Initial_Data_Reader_prefunc_and_lambdaU_launch(
                and the conversion CFunction bodies plus lambdaU prefuc
              - lambdaU_launch is the C code snippet to launch the lambdaU grid interior
     """
+
     def T4UU_prettyprint() -> str:
         """
         Return a pretty-printed string for T4UU variables in C code.
@@ -680,13 +679,14 @@ typedef struct __rescaled_BSSN_rfm_basis_struct__ {
 
     return prefunc, lambdaU_launch
 
+
 def setup_ADM_initial_data_reader(
     ID_persist_struct_str: str,
     enable_T4munu: bool,
     enable_fd_functions: bool,
     addl_includes: Optional[List[str]],
     CoordSystem: str,
-    IDCoordSystem: str = "Spherical"
+    IDCoordSystem: str = "Spherical",
 ) -> Tuple[List[str], str, str]:
     """
     Perform Steps 1–3 for the ADM initial-data reader registration:
@@ -721,14 +721,133 @@ def setup_ADM_initial_data_reader(
         includes += addl_includes
 
     # Step 3: generate prefunc and lambdaU_launch
-    prefunc, lambdaU_launch = generate_ADM_Initial_Data_Reader_prefunc_and_lambdaU_launch(
-        enable_T4munu=enable_T4munu,
-        CoordSystem=CoordSystem,
-        IDCoordSystem=IDCoordSystem,
+    prefunc, lambdaU_launch = (
+        generate_ADM_Initial_Data_Reader_prefunc_and_lambdaU_launch(
+            enable_T4munu=enable_T4munu,
+            CoordSystem=CoordSystem,
+            IDCoordSystem=IDCoordSystem,
+        )
     )
 
     return includes, prefunc, lambdaU_launch
 
+
+def build_initial_data_conversion_loop(enable_T4munu: bool) -> str:
+    """
+    Return the C code snippet that both code1 and code2 share:
+
+      1) Declare the three Nxx_plus_2NGHOSTS constants
+      2) Open the `LOOP_OMP("omp parallel for", i0,i1,i2)` triple‐loop
+      3) Compute xxL, xCart, call ID_function
+      4) Convert through ADM→Cart, Cart→BSSN, BSSN→rescaled_RFM
+      5) Set idx3 = IDX3(i0,i1,i2)
+      6) Write out every BSSN field into gridfuncs->y_n_gfs, and
+         (if enable_T4munu) T4UU fields into auxevol_gfs.
+
+    :param enable_T4munu: whether to include the stress‐energy (T4UU) fields
+    :returns: a raw string containing the entire loop + assignments
+    """
+    header = r"""
+  const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
+  const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
+  const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
+
+  LOOP_OMP("omp parallel for",
+           i0, 0, Nxx_plus_2NGHOSTS0,
+           i1, 0, Nxx_plus_2NGHOSTS1,
+           i2, 0, Nxx_plus_2NGHOSTS2) {
+    // xxL are the local coordinates on the destination grid
+    const REAL xxL[3] = { xx[0][i0], xx[1][i1], xx[2][i2] };
+
+    // xCart is the global Cartesian coordinate, which accounts for any grid offsets from the origin.
+    REAL xCart[3];
+    REAL xOrig[3] = {xx[0][i0], xx[1][i1], xx[2][i2]};
+    xx_to_Cart(params, xOrig, xCart);
+
+    // Read or compute initial data at destination point xCart
+    initial_data_struct initial_data;
+    ID_function(commondata, params, xCart, ID_persist, &initial_data);
+
+    ADM_Cart_basis_struct ADM_Cart_basis;
+    ADM_SphorCart_to_Cart(commondata, params, xCart, &initial_data, &ADM_Cart_basis);
+
+    BSSN_Cart_basis_struct BSSN_Cart_basis;
+    ADM_Cart_to_BSSN_Cart(commondata, params, xCart, &ADM_Cart_basis, &BSSN_Cart_basis);
+
+    rescaled_BSSN_rfm_basis_struct rescaled_BSSN_rfm_basis;
+    BSSN_Cart_to_rescaled_BSSN_rfm(commondata, params,
+                                   xxL,
+                                   &BSSN_Cart_basis,
+                                   &rescaled_BSSN_rfm_basis);
+
+    const int idx3 = IDX3(i0, i1, i2);
+"""
+
+    # 2) build the list of fields to write out
+    gf_list: List[str] = ["alpha", "trK", "cf"]
+    for i in range(3):
+        gf_list += [f"vetU{i}", f"betU{i}"]
+        for j in range(i, 3):
+            gf_list += [f"hDD{i}{j}", f"aDD{i}{j}"]
+    if enable_T4munu:
+        for mu in range(4):
+            for nu in range(mu, 4):
+                gf_list.append(f"T4UU{mu}{nu}")
+
+    # 3) emit each assignment line
+    lines: List[str] = []
+    for field in sorted(gf_list):
+        target = "auxevol_gfs" if field.startswith("T4UU") else "y_n_gfs"
+        lines.append(
+            f"    gridfuncs->{target}[IDX4pt({field.upper()}GF, idx3)]"
+            f" = rescaled_BSSN_rfm_basis.{field};"
+        )
+
+    # 4) combine and return
+    return header + "\n".join(lines) + "\n"
+
+
+def build_lambdaU_zeroing_block() -> str:
+    """
+    Build the C code snippet that zeros out lambda^i and closes
+    the OpenMP loop over all gridpoints.
+
+    :return: The formatted C code block for lambda^i initialization
+             and loop termination.
+    """
+    return r"""
+    // Initialize lambdaU to zero
+    gridfuncs->y_n_gfs[IDX4pt(LAMBDAU0GF, idx3)] = 0.0;
+    gridfuncs->y_n_gfs[IDX4pt(LAMBDAU1GF, idx3)] = 0.0;
+    gridfuncs->y_n_gfs[IDX4pt(LAMBDAU2GF, idx3)] = 0.0;
+  } // END LOOP over all gridpoints on given grid
+"""
+
+
+def build_apply_inner_bcs_block(parallelization: Optional[str] = None) -> str:
+    """
+    Build the C code block that explains why inner boundary conditions
+    must be applied and then invokes apply_bcs_inner_only on the gridfunctions.
+
+    :param parallelization: The current parallelization mode (e.g., "cuda"), or None.
+    :return: The formatted C code block for inner‐BC comments and call,
+             with pointer adjustments for CUDA if needed.
+    """
+    code_block = r"""
+  // Now we've set all but lambda^i, which will be computed via a finite-difference of hDD.
+  //    However, hDD is not correctly set in inner boundary points so we apply inner bcs first.
+
+  // Apply inner bcs to get correct values of all tensor quantities across symmetry boundaries;
+  //    BSSN_Cart_to_rescaled_BSSN_rfm() converts each xCart->xx, which guarantees a mapping
+  //    to the grid interior. It therefore does not account for parity conditions across
+  //    symmetry boundaries being correct.
+  apply_bcs_inner_only(commondata, params, bcstruct, gridfuncs->y_n_gfs);
+"""
+    if parallelization == "cuda":
+        code_block = code_block.replace("gridfuncs->", "d_gridfuncs->").replace(
+            " xx", " d_xx"
+        )
+    return code_block
 
 
 def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
@@ -786,47 +905,8 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
         ),
     )
 
-    body = r"""
-  const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
-  const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
-  const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
+    body = build_initial_data_conversion_loop(enable_T4munu)
 
-  LOOP_OMP("omp parallel for", i0, 0, Nxx_plus_2NGHOSTS0, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
-    // xxL are the local coordinates on the destination grid
-    const REAL xxL[3] = { xx[0][i0], xx[1][i1], xx[2][i2] };
-
-    // xCart is the global Cartesian coordinate, which accounts for any grid offsets from the origin.
-    REAL xCart[3];
-    REAL xOrig[3] = {xx[0][i0], xx[1][i1], xx[2][i2]};
-    xx_to_Cart(params, xOrig, xCart);
-
-    // Read or compute initial data at destination point xCart
-    initial_data_struct initial_data;
-    ID_function(commondata, params, xCart, ID_persist, &initial_data);
-
-    ADM_Cart_basis_struct ADM_Cart_basis;
-    ADM_SphorCart_to_Cart(commondata, params, xCart, &initial_data, &ADM_Cart_basis);
-
-    BSSN_Cart_basis_struct BSSN_Cart_basis;
-    ADM_Cart_to_BSSN_Cart(commondata, params, xCart, &ADM_Cart_basis, &BSSN_Cart_basis);
-
-    rescaled_BSSN_rfm_basis_struct rescaled_BSSN_rfm_basis;
-    BSSN_Cart_to_rescaled_BSSN_rfm(commondata, params, xxL, &BSSN_Cart_basis, &rescaled_BSSN_rfm_basis);
-
-    const int idx3 = IDX3(i0, i1, i2);
-"""
-    gf_list = ["alpha", "trK", "cf"]
-    for i in range(3):
-        gf_list += [f"vetU{i}", f"betU{i}"]
-        for j in range(i, 3):
-            gf_list += [f"hDD{i}{j}", f"aDD{i}{j}"]
-    for gf in sorted(gf_list):
-        body += f"gridfuncs->y_n_gfs[IDX4pt({gf.upper()}GF, idx3)] = rescaled_BSSN_rfm_basis.{gf};\n"
-    if enable_T4munu:
-        for mu in range(4):
-            for nu in range(mu, 4):
-                gf = f"T4UU{mu}{nu}"
-                body += f"gridfuncs->auxevol_gfs[IDX4pt({gf.upper()}GF, idx3)] = rescaled_BSSN_rfm_basis.{gf};\n"
     post_initial_data_call: str = ""
     if parallelization in ["cuda"]:
         post_initial_data_call = """
@@ -841,30 +921,14 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     """
         post_initial_data_call += "BHAH_DEVICE_SYNC();\n"
 
-    body += f"""
-    // Initialize lambdaU to zero
-    gridfuncs->y_n_gfs[IDX4pt(LAMBDAU0GF, idx3)] = 0.0;
-    gridfuncs->y_n_gfs[IDX4pt(LAMBDAU1GF, idx3)] = 0.0;
-    gridfuncs->y_n_gfs[IDX4pt(LAMBDAU2GF, idx3)] = 0.0;
-  }} // END LOOP over all gridpoints on given grid
-  {post_initial_data_call}
-"""
-    body += f"""
-  // Now we've set all but lambda^i, which will be computed via a finite-difference of hDD.
-  //    However, hDD is not correctly set in inner boundary points so we apply inner bcs first.
+    body += build_lambdaU_zeroing_block()
 
-  // Apply inner bcs to get correct values of all tensor quantities across symmetry boundaries;
-  //    BSSN_Cart_to_rescaled_BSSN_rfm() converts each xCart->xx, which guarantees a mapping
-  //    to the grid interior. It therefore does not account for parity conditions across
-  //    symmetry boundaries being correct.
-  apply_bcs_inner_only(commondata, params, bcstruct, gridfuncs->y_n_gfs);
+    body += post_initial_data_call
 
-  {lambdaU_launch}
-""".replace(
-        "gridfuncs->", "d_gridfuncs->" if parallelization in ["cuda"] else "gridfuncs->"
-    ).replace(
-        " xx", " d_xx" if parallelization in ["cuda"] else " xx"
-    )
+    body += build_apply_inner_bcs_block(parallelization)
+
+    body += lambdaU_launch
+
     cfc.register_CFunction(
         includes=includes,
         prefunc=prefunc,
