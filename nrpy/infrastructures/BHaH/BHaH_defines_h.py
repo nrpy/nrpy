@@ -80,7 +80,6 @@ typedef struct __griddata__ {
     return griddata_struct_def
 
 
-# Helper function to parse cparam_type into base, size and is_array
 def parse_cparam_type(cparam_type: str) -> Tuple[str, Optional[str], bool]:
     """
     Parse a cparam_type string into three parts.
@@ -88,17 +87,30 @@ def parse_cparam_type(cparam_type: str) -> Tuple[str, Optional[str], bool]:
     - base     – the text before the first '['
     - size     – the text inside the first '[ ]' (or None if not an array)
     - is_array – True if the string contains '[...]', False otherwise
-    Examples
-        "int"                -> ("int",     None,     False)
-        "REAL[8]"            -> ("REAL",    "8",      True)
-        "char[100]"          -> ("char",    "100",    True)
-        "TIMEVAR"            -> ("TIMEVAR", None,     False)
 
-    :param cparam_type: the raw CParam type string, e.g. "REAL[8]" or "char[NAME]"
-    :return: a tuple (base, size, is_array) where
-             - base is the type name before any '[',
-             - size is the bracketed content as a string (or None if not an array),
-             - is_array is True if brackets were present, else False.
+    Examples
+    --------
+    >>> parse_cparam_type("int")
+    ('int', None, False)
+
+    >>> parse_cparam_type("REAL[8]")
+    ('REAL', '8', True)
+
+    >>> parse_cparam_type("char[100]")
+    ('char', '100', True)
+
+    >>> parse_cparam_type("  REAL[ 16 ] ")
+    ('REAL', '16', True)
+
+    # Invalid sizes must be numeric
+    >>> parse_cparam_type("char[NAME]")  # doctest: +IGNORE_EXCEPTION_DETAIL
+    Traceback (most recent call last):
+    ...
+    ValueError: Invalid array size 'NAME'
+
+    :param cparam_type: the raw CParam type string, e.g. "REAL[8]"
+    :return: a tuple (base, size, is_array)
+    :raises ValueError: if the bracket content is not a numeric string.
     """
     # 1) Scalar if no brackets
     if "[" not in cparam_type or "]" not in cparam_type:
@@ -107,11 +119,15 @@ def parse_cparam_type(cparam_type: str) -> Tuple[str, Optional[str], bool]:
 
     # 2) Otherwise split off base and remainder
     base, after = cparam_type.split("[", 1)
-    base = base.strip()  # e.g. "char" or "REAL"
+    base = base.strip()
 
     # 3) Extract size inside the first pair of brackets
     size_str, _ = after.split("]", 1)
-    size = size_str.strip()  # keep as a string
+    size = size_str.strip()
+
+    # 4) Validate numeric size
+    if not size.isdigit():
+        raise ValueError(f"Invalid array size '{size}'")
 
     return base, size, True
 
