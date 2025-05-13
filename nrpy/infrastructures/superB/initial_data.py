@@ -13,18 +13,12 @@ from typing import List, Optional, Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
+import nrpy.infrastructures.BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter as admid
 from nrpy.equations.general_relativity.InitialData_Cartesian import (
     InitialData_Cartesian,
 )
 from nrpy.equations.general_relativity.InitialData_Spherical import (
     InitialData_Spherical,
-)
-from nrpy.infrastructures.BHaH import BHaH_defines_h
-from nrpy.infrastructures.BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter import (
-    build_apply_inner_bcs_block,
-    build_initial_data_conversion_loop,
-    build_lambdaU_zeroing_block,
-    setup_ADM_initial_data_reader,
 )
 
 
@@ -45,11 +39,8 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     :param enable_T4munu: Whether to include stress-energy tensor components.
     :param enable_fd_functions: Whether to enable finite-difference functions.
     :param ID_persist_struct_str: String for persistent ID structure.
-
-    :raises ValueError: If `addl_includes` is provided but is not a list, ensuring that additional includes are correctly formatted for inclusion.
     """
-
-    includes, prefunc, lambdaU_launch = setup_ADM_initial_data_reader(
+    includes, prefunc, lambdaU_launch = admid.setup_ADM_initial_data_reader(
         ID_persist_struct_str=ID_persist_struct_str,
         enable_T4munu=enable_T4munu,
         enable_fd_functions=enable_fd_functions,
@@ -72,9 +63,9 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
   switch (initial_data_part) {
     case INITIALDATA_BIN_ONE: {"""
 
-    body += build_initial_data_conversion_loop(enable_T4munu)
+    body += admid.build_initial_data_conversion_loop(enable_T4munu)
 
-    body += build_lambdaU_zeroing_block()
+    body += admid.build_lambdaU_zeroing_block()
 
     body += """
       break;
@@ -196,7 +187,7 @@ griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_pers
     break;
   }"""
 
-    apply_inner_bcs_block = build_apply_inner_bcs_block()
+    apply_inner_bcs_block = admid.build_apply_inner_bcs_block()
     body += f"""
   case INITIALDATA_APPLYBCS_INNERONLY: {{
     for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {{

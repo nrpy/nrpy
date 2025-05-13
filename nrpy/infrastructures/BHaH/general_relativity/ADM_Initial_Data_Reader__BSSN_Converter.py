@@ -597,15 +597,11 @@ def register_BHaH_defines_h(
     BHaH_defines_h.register_BHaH_defines(__name__, BHd_str)
 
 
-from typing import Tuple
-
-
 def generate_ADM_Initial_Data_Reader_prefunc_and_lambdaU_launch(
     enable_T4munu: bool, CoordSystem: str, IDCoordSystem: str = "Spherical"
 ) -> Tuple[str, str]:
     """
-    Generate the C “prefunc” string and the lambdaU launch snippet for the
-    initial-data reader converting ADM→BSSN.
+    Generate the C “prefunc” string and the lambdaU launch snippet for the initial-data reader converting ADM→BSSN.
 
     :param enable_T4munu: whether to include the T4UU stress-energy block
     :param CoordSystem:   coordinate system for the BSSN conversion CFunctions
@@ -619,6 +615,8 @@ def generate_ADM_Initial_Data_Reader_prefunc_and_lambdaU_launch(
     def T4UU_prettyprint() -> str:
         """
         Return a pretty-printed string for T4UU variables in C code.
+
+        :return: The pretty-printed T4UU variables declaration block.
         """
         return r"""
   REAL T4UU00,T4UU01,T4UU02,T4UU03;
@@ -689,7 +687,7 @@ def setup_ADM_initial_data_reader(
     IDCoordSystem: str = "Spherical",
 ) -> Tuple[List[str], str, str]:
     """
-    Perform Steps 1–3 for the ADM initial-data reader registration:
+    Perform Steps 1–3 for the ADM initial-data reader registration.
 
     1. Register the initial_data_struct and ID_persist_struct via BHaH_defines_h.
     2. Assemble the include list.
@@ -734,7 +732,7 @@ def setup_ADM_initial_data_reader(
 
 def build_initial_data_conversion_loop(enable_T4munu: bool) -> str:
     """
-    Return the C code snippet that both code1 and code2 share:
+    Generate the string for the initial data conversion loop.
 
       1) Declare the three Nxx_plus_2NGHOSTS constants
       2) Open the `LOOP_OMP("omp parallel for", i0,i1,i2)` triple‐loop
@@ -809,8 +807,7 @@ def build_initial_data_conversion_loop(enable_T4munu: bool) -> str:
 
 def build_lambdaU_zeroing_block() -> str:
     """
-    Build the C code snippet that zeros out lambda^i and closes
-    the OpenMP loop over all gridpoints.
+    Build the C code snippet that zeros out lambdaU and closes the OpenMP loop over all gridpoints.
 
     :return: The formatted C code block for lambda^i initialization
              and loop termination.
@@ -826,8 +823,7 @@ def build_lambdaU_zeroing_block() -> str:
 
 def build_apply_inner_bcs_block(parallelization: Optional[str] = None) -> str:
     """
-    Build the C code block that explains why inner boundary conditions
-    must be applied and then invokes apply_bcs_inner_only on the gridfunctions.
+    Build the C code block that explains why inner boundary conditions must be applied and then invokes apply_bcs_inner_only on the gridfunctions.
 
     :param parallelization: The current parallelization mode (e.g., "cuda"), or None.
     :return: The formatted C code block for inner‐BC comments and call,
@@ -867,8 +863,6 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     :param enable_T4munu: Whether to include stress-energy tensor components.
     :param enable_fd_functions: Whether to enable finite-difference functions.
     :param ID_persist_struct_str: String for persistent ID structure.
-
-    :raises ValueError: If `addl_includes` is provided but is not a list, ensuring that additional includes are correctly formatted for inclusion.
     """
     parallelization = par.parval_from_str("parallelization")
 
