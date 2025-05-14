@@ -284,6 +284,231 @@ def simple_loop(
     return full_loop_body
 
 
+def compute_1d_loop_ranges(
+    CoordSystem: str,
+    axis: str,
+) -> Tuple[
+    sp.Symbol,
+    List[Union[int, sp.Expr]],
+    List[Union[int, sp.Expr]],
+    List[Union[int, sp.Expr]],
+    List[Union[int, sp.Expr]],
+]:
+    """
+    Generate the index‐point lists and counts for a 1D diagnostic loop.
+
+    :param CoordSystem: Specifies the coordinate system (e.g., "Cartesian", "Spherical").
+    :param axis: Specifies the axis of output; accepts either "y" or "z".
+    :return: Tuple containing:
+             - NGHOSTS symbol,
+             - Nxx_plus_2NGHOSTS array,
+             - Nxx array,
+             - i012_pts list of [i0_pts, i1_pts, i2_pts],
+             - numpts list of counts per direction.
+    :raises ValueError: If axis is not 'y' or 'z'.
+    DocTests:
+    >>> NG, Nxx_p2, Nxx, pts, nums = compute_1d_loop_ranges("Cartesian", "y")
+    >>> nums[0]
+    1
+    >>> len(pts[0])
+    1
+    >>> compute_1d_loop_ranges("Cartesian", "x")
+    Traceback (most recent call last):
+    ...
+    ValueError: 1D loop output only supports y or z axes. axis = 'x' not supported.
+    """
+    if axis not in ["y", "z"]:
+        raise ValueError(
+            f"1D loop output only supports y or z axes. axis = {axis!r} not supported."
+        )
+
+    NGHOSTS = sp.Symbol("NGHOSTS", real=True)
+    Nxx_plus_2NGHOSTS = ixp.declarerank1("Nxx_plus_2NGHOSTS")
+    Nxx = ixp.declarerank1("Nxx")
+
+    i0_pts: List[Union[int, sp.Expr]] = []
+    i1_pts: List[Union[int, sp.Expr]] = []
+    i2_pts: List[Union[int, sp.Expr]] = []
+
+    if axis == "y":
+        if "Cartesian" in CoordSystem:
+            i0_pts += [Nxx_plus_2NGHOSTS[0] / 2]
+            i2_pts += [Nxx_plus_2NGHOSTS[2] / 2]
+        elif "Spherical" in CoordSystem:
+            i1_pts += [Nxx_plus_2NGHOSTS[1] / 2]
+            i2_pts += [NGHOSTS + sp.Rational(1, 4) * Nxx[2] - sp.Rational(1, 2)]
+            i2_pts += [NGHOSTS + sp.Rational(3, 4) * Nxx[2] - sp.Rational(1, 2)]
+        elif "Cylindrical" in CoordSystem:
+            i1_pts += [NGHOSTS + sp.Rational(1, 4) * Nxx[1] - sp.Rational(1, 2)]
+            i1_pts += [NGHOSTS + sp.Rational(3, 4) * Nxx[1] - sp.Rational(1, 2)]
+            i2_pts += [Nxx_plus_2NGHOSTS[2] / 2]
+        elif "SymTP" in CoordSystem:
+            i1_pts += [Nxx_plus_2NGHOSTS[1] / 2]
+            i2_pts += [NGHOSTS + sp.Rational(1, 4) * Nxx[2] - sp.Rational(1, 2)]
+            i2_pts += [NGHOSTS + sp.Rational(3, 4) * Nxx[2] - sp.Rational(1, 2)]
+        elif "Wedge" in CoordSystem:
+            i0_pts += [-1]
+            i1_pts += [-1]
+            i2_pts += [-1]
+        else:
+            raise ValueError(f"CoordSystem = {CoordSystem!r} not supported.")
+
+    if axis == "z":
+        if "Cartesian" in CoordSystem:
+            i0_pts += [Nxx_plus_2NGHOSTS[0] / 2]
+            i1_pts += [Nxx_plus_2NGHOSTS[1] / 2]
+        elif "Spherical" in CoordSystem:
+            if "Ring" in CoordSystem:
+                i0_pts += [-1]
+                i1_pts += [-1]
+                i2_pts += [-1]
+            else:
+                i1_pts += [NGHOSTS]
+                i1_pts += [Nxx_plus_2NGHOSTS[1] - NGHOSTS - 1]
+                i2_pts += [NGHOSTS]
+        elif "Cylindrical" in CoordSystem:
+            i0_pts += [NGHOSTS]
+            i1_pts += [NGHOSTS]
+        elif "SymTP" in CoordSystem:
+            i1_pts += [NGHOSTS]
+            i1_pts += [Nxx_plus_2NGHOSTS[1] - NGHOSTS - 1]
+            i2_pts += [NGHOSTS]
+        elif "Wedge" in CoordSystem:
+            i1_pts += [Nxx_plus_2NGHOSTS[1] / 2]
+            i2_pts += [Nxx_plus_2NGHOSTS[2] / 2]
+        else:
+            raise ValueError(f"CoordSystem = {CoordSystem!r} not supported.")
+
+    i012_pts = [i0_pts, i1_pts, i2_pts]
+
+    if (
+        (i0_pts and i0_pts[0] == -1)
+        or (i1_pts and i1_pts[0] == -1)
+        or (i2_pts and i2_pts[0] == -1)
+    ):
+        numpts = [0, 0, 0]
+    else:
+        numpts = [
+            len(i0_pts) if i0_pts else Nxx[0],
+            len(i1_pts) if i1_pts else Nxx[1],
+            len(i2_pts) if i2_pts else Nxx[2],
+        ]
+
+    return NGHOSTS, Nxx_plus_2NGHOSTS, Nxx, i012_pts, numpts
+
+
+def generate_1d_loop_header(
+    axis: str,
+    CoordSystem: str,
+    numpts: Sequence[Union[int, sp.Expr]],
+) -> str:
+    """
+    Return the C code that defines the i*_pts arrays and data_points buffer
+    for a 1D diagnostic loop.
+
+    :param axis: The axis along which output is generated (e.g., "y" or "z").
+    :param CoordSystem: The coordinate system name (e.g., "Cartesian").
+    :param numpts: A sequence of three counts [numpts_i0, numpts_i1, numpts_i2].
+    :return: The C code header as a string.
+    :raises IndexError: If numpts does not contain exactly three elements.
+    DocTests:
+    >>> from sympy import symbols
+    >>> header = generate_1d_loop_header("x", "Cartesian", [1, 2, 3])
+    >>> "numpts_i0=1" in header
+    True
+    >>> header.splitlines()[1].startswith("const int numpts_i1=2")
+    True
+    """
+    return f"""// Define points for output along the {axis}-axis in {CoordSystem} coordinates.
+const int numpts_i0={numpts[0]}, numpts_i1={numpts[1]}, numpts_i2={numpts[2]};
+int i0_pts[numpts_i0], i1_pts[numpts_i1], i2_pts[numpts_i2];
+
+data_point_1d_struct data_points[numpts_i0 * numpts_i1 * numpts_i2];
+int data_index = 0;
+"""
+
+
+def append_1d_loop_body(
+    out_string: str,
+    loop_body_store_results: str,
+    axis: str,
+    Nxx: Sequence[Union[int, sp.Expr]],
+    numpts: Sequence[Union[int, sp.Expr]],
+    i012_pts: List[List[Union[int, sp.Expr]]],
+    pragma: str,
+) -> str:
+    """
+    Append the index-array setup and main LOOP_NOOMP block to out_string.
+
+    :param out_string: Prefix C code to which the loop body is added.
+    :param loop_body_store_results: Code to store results in the innermost loop.
+    :param axis: The axis name for diagnostic output ("y" or "z").
+    :param Nxx: Sequence of full grid sizes per dimension including ghosts.
+    :param numpts: Sequence of numbers of points per dimension.
+    :param i012_pts: Three lists of explicit index points for each dimension.
+    :param pragma: The loop prefix, e.g., OpenMP pragma.
+    :return: Combined C code with index setup and main loop appended.
+    DocTests:
+    >>> from sympy import symbols
+    >>> X = symbols('X')
+    >>> result = append_1d_loop_body("", "// STORE;", "y", [X, X, X], [1, 1, 1], [[0], [0], [0]], "#pr\\n")
+    >>> "// STORE;" in result
+    True
+    >>> result.startswith("#pr")
+    True
+    """
+    # Build the i*_pts arrays
+    for i in range(3):
+        if numpts[i] == Nxx[i]:
+            out_string += (
+                f"{pragma}"
+                f"for(int i{i}=NGHOSTS; i{i}<Nxx{i} + NGHOSTS; i{i}++) "
+                f"i{i}_pts[i{i}-NGHOSTS] = i{i};\n"
+            )
+        elif numpts == [0, 0, 0] and i == 0:
+            out_string += (
+                f"// CoordSystem = {{CoordSystem}} has no points on the {axis} axis!\n"
+            )
+        else:
+            for j, pt in enumerate(i012_pts[i]):
+                out_string += f"i{i}_pts[{j}] = (int)({sp.ccode(pt)});\n"
+
+    # Append the main loop
+    out_string += f"""// Main loop{(' to store data points along the specified axis' if 'data_points' in loop_body_store_results else '')}
+LOOP_NOOMP(i0_pt,0,numpts_i0, i1_pt,0,numpts_i1, i2_pt,0,numpts_i2) {{
+  const int i0 = i0_pts[i0_pt], i1 = i1_pts[i1_pt], i2 = i2_pts[i2_pt];
+  const int idx3 = IDX3(i0, i1, i2);
+  REAL xCart[3];
+  REAL xOrig[3] = {{xx[0][i0], xx[1][i1], xx[2][i2]}};
+  xx_to_Cart(params, xOrig, xCart);
+
+  {loop_body_store_results}
+}}
+"""
+    return out_string
+
+
+def generate_qsort_compare_string() -> str:
+    """
+    Generate the qsort() comparison function for 1D data_point_1d_struct.
+
+    :return: The C code for the comparison function that sorts by xCart_axis.
+    DocTests:
+    >>> s = generate_qsort_compare_string()
+    >>> "// qsort() comparison function for 1D output." in s
+    True
+    >>> "static int compare" in s
+    True
+    """
+    return """// qsort() comparison function for 1D output.
+static int compare(const void *a, const void *b) {
+  REAL l = ((data_point_1d_struct *)a)->xCart_axis;
+  REAL r = ((data_point_1d_struct *)b)->xCart_axis;
+  return (l > r) - (l < r);
+}
+"""
+
+
 def simple_loop_1D(
     CoordSystem: str,
     out_quantities_dict: Dict[Tuple[str, str], str],
@@ -312,108 +537,14 @@ def simple_loop_1D(
     >>> diag1d = clang_format(simple_loop_1D(CoordSystem="Spherical", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, axis="z")[1])
     >>> validate_strings(diag1d, "Spherical_z_axis")
     """
-    if axis not in ["y", "z"]:
-        raise ValueError(
-            f"1D loop output only supports y or z axes. axis = {axis} not supported."
-        )
 
-    NGHOSTS = sp.Symbol("NGHOSTS", real=True)
-    Nxx_plus_2NGHOSTS = ixp.declarerank1("Nxx_plus_2NGHOSTS")
-    Nxx = ixp.declarerank1("Nxx")
-
-    i0_pts: List[Union[int, sp.Expr]] = []
-    i1_pts: List[Union[int, sp.Expr]] = []
-    i2_pts: List[Union[int, sp.Expr]] = []
-
-    if axis == "y":
-        if "Cartesian" in CoordSystem:
-            # x-axis == { x_mid, z_mid }
-            i0_pts += [Nxx_plus_2NGHOSTS[0] / 2]
-            i2_pts += [Nxx_plus_2NGHOSTS[2] / 2]
-        elif "Spherical" in CoordSystem:
-            # y-axis == { theta_mid, see yz-plane discussion for Spherical below for explanation of phi points }
-            i1_pts += [Nxx_plus_2NGHOSTS[1] / 2]
-            i2_pts += [NGHOSTS + sp.Rational(1, 4) * Nxx[2] - sp.Rational(1, 2)]
-            i2_pts += [NGHOSTS + sp.Rational(3, 4) * Nxx[2] - sp.Rational(1, 2)]
-        elif "Cylindrical" in CoordSystem:
-            # Cylindrical: rho,phi,z
-            # y-axis == { see yz-plane discussion for Spherical below for explanation of phi points, z_mid }
-            i1_pts += [NGHOSTS + sp.Rational(1, 4) * Nxx[1] - sp.Rational(1, 2)]
-            i1_pts += [NGHOSTS + sp.Rational(3, 4) * Nxx[1] - sp.Rational(1, 2)]
-            i2_pts += [Nxx_plus_2NGHOSTS[2] / 2]
-        elif "SymTP" in CoordSystem:
-            # y-axis == { x1_mid, see yz-plane discussion for Spherical below for explanation of phi points }
-            i1_pts += [Nxx_plus_2NGHOSTS[1] / 2]
-            i2_pts += [NGHOSTS + sp.Rational(1, 4) * Nxx[2] - sp.Rational(1, 2)]
-            i2_pts += [NGHOSTS + sp.Rational(3, 4) * Nxx[2] - sp.Rational(1, 2)]
-        elif "Wedge" in CoordSystem:
-            # NO POINTS ON Y AXIS
-            i0_pts += [-1]
-            i1_pts += [-1]
-            i2_pts += [-1]
-        else:
-            raise ValueError(f"CoordSystem = {CoordSystem} not supported.")
-
-    if axis == "z":
-        if "Cartesian" in CoordSystem:
-            # z-axis == { x_mid, y_mid }
-            i0_pts += [Nxx_plus_2NGHOSTS[0] / 2]
-            i1_pts += [Nxx_plus_2NGHOSTS[1] / 2]
-        elif "Spherical" in CoordSystem:
-            if "Ring" in CoordSystem:
-                # NO POINTS ON Z AXIS
-                i0_pts += [-1]
-                i1_pts += [-1]
-                i2_pts += [-1]
-            else:
-                # z-axis == { th_min & th_max, phi_min  }
-                i1_pts += [NGHOSTS]
-                i1_pts += [Nxx_plus_2NGHOSTS[1] - NGHOSTS - 1]
-                i2_pts += [NGHOSTS]
-        elif "Cylindrical" in CoordSystem:
-            # Cylindrical: rho,phi,z
-            # z-axis == { rho_min & phi_min }
-            i0_pts += [NGHOSTS]
-            i1_pts += [NGHOSTS]
-        elif "SymTP" in CoordSystem:
-            # SymTP:
-            # self.xx_to_Cart[2] = f(xx0) * sp.cos(self.xx[1])
-            #  -> Aim for cos(xx1) = 1 -> xx1 = 0 & pi
-            # z_axis == { xx1_min & xx1_max, xx2_min }
-            # FIXME: Missing points between foci (not an easy fix).
-            i1_pts += [NGHOSTS]
-            i1_pts += [Nxx_plus_2NGHOSTS[1] - NGHOSTS - 1]
-            i2_pts += [NGHOSTS]
-        elif "Wedge" in CoordSystem:
-            # Wedge-like: same as Spherical except x_new = +/-z_old, y_new = y_old, z_new = x_old
-            # Thus the z-axis here is the same as the +x-axis in Spherical-like.
-            # +x-axis == { theta_mid, phi={phi_mid} (since phi goes from -pi to pi) }
-            i1_pts += [Nxx_plus_2NGHOSTS[1] / 2]
-            i2_pts += [Nxx_plus_2NGHOSTS[2] / 2]
-        else:
-            raise ValueError(f"CoordSystem = {CoordSystem} not supported.")
-
-    i012_pts = [i0_pts, i1_pts, i2_pts]
-    numpts: List[Union[int, sp.Expr]] = [0] * 3
-    if (
-        (i0_pts and i0_pts[0] == -1)
-        or (i1_pts and i1_pts[0] == -1)
-        or (i2_pts and i2_pts[0] == -1)
-    ):
-        numpts = [0, 0, 0]
-    else:
-        numpts[0] = len(i0_pts) if i0_pts else Nxx[0]
-        numpts[1] = len(i1_pts) if i1_pts else Nxx[1]
-        numpts[2] = len(i2_pts) if i2_pts else Nxx[2]
+    NGHOSTS, Nxx_plus_2NGHOSTS, Nxx, i012_pts, numpts = compute_1d_loop_ranges(
+        CoordSystem, axis
+    )
 
     pragma = "#pragma omp parallel for\n"
-    out_string = f"""// Define points for output along the {axis}-axis in {CoordSystem} coordinates.
-const int numpts_i0={numpts[0]}, numpts_i1={numpts[1]}, numpts_i2={numpts[2]};
-int i0_pts[numpts_i0], i1_pts[numpts_i1], i2_pts[numpts_i2];
 
-data_point_1d_struct data_points[numpts_i0 * numpts_i1 * numpts_i2];
-int data_index = 0;
-"""
+    out_string = generate_1d_loop_header(axis, CoordSystem, numpts)
 
     # Loop body for storing results.
     loop_body_store_results = ""
@@ -428,28 +559,9 @@ dp1d.xCart_axis = {'xCart[1];' if axis == "y" else 'xCart[2];'}
         loop_body_store_results += f"dp1d.{key[1]} = {value};\n"
     loop_body_store_results += "data_points[data_index] = dp1d; data_index++;\n}\n"
 
-    # Main loop body.
-    for i in range(3):
-        if numpts[i] == Nxx[i]:
-            out_string += f"{pragma}for(int i{i}=NGHOSTS; i{i}<Nxx{i} + NGHOSTS; i{i}++) i{i}_pts[i{i}-NGHOSTS] = i{i};\n"
-        elif numpts == [0, 0, 0] and i == 0:
-            out_string += (
-                f"// CoordSystem = {CoordSystem} has no points on the {axis} axis!\n"
-            )
-        else:
-            for j, pt in enumerate(i012_pts[i]):
-                out_string += f"i{i}_pts[{j}] = (int)({sp.ccode(pt)});\n"
-    out_string += f"""// Main loop to store data points along the specified axis
-LOOP_NOOMP(i0_pt,0,numpts_i0, i1_pt,0,numpts_i1, i2_pt,0,numpts_i2) {{
-  const int i0 = i0_pts[i0_pt], i1 = i1_pts[i1_pt], i2 = i2_pts[i2_pt];
-  const int idx3 = IDX3(i0, i1, i2);
-  REAL xCart[3];
-  REAL xOrig[3] = {{xx[0][i0], xx[1][i1], xx[2][i2]}};
-  xx_to_Cart(params, xOrig, xCart);
-
-  {loop_body_store_results}
-}}
-"""
+    out_string = append_1d_loop_body(
+        out_string, loop_body_store_results, axis, Nxx, numpts, i012_pts, pragma
+    )
 
     # Post-loop: qsort() along xCart_axis and output to file.
     prefunc_content = """// Struct to hold 1D data points
@@ -458,15 +570,9 @@ REAL xCart_axis;
 """
     for key in out_quantities_dict.keys():
         prefunc_content += f"  {key[0]} {key[1]};\n"
-    prefunc_content += """} data_point_1d_struct;
 
-// qsort() comparison function for 1D output.
-static int compare(const void *a, const void *b) {
-  REAL l = ((data_point_1d_struct *)a)->xCart_axis;
-  REAL r = ((data_point_1d_struct *)b)->xCart_axis;
-  return (l > r) - (l < r);
-}
-"""
+    prefunc_content += "} data_point_1d_struct;\n\n"
+    prefunc_content += generate_qsort_compare_string()
 
     qsort_and_output_to_file = r"""
 qsort(data_points, data_index, sizeof(data_point_1d_struct), compare);
