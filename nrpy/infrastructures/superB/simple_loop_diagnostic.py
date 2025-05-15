@@ -10,11 +10,10 @@ Email: njadoo *at* uidaho *dot* edu
 
 """
 
-from typing import List, Tuple, Union
+from typing import Tuple
 
 import sympy as sp
 
-import nrpy.indexedexp as ixp
 from nrpy.infrastructures.BHaH.simple_loop import (
     append_1d_loop_body,
     compute_1d_loop_ranges,
@@ -35,13 +34,8 @@ def simple_loop_1D(
     :param axis: Specifies the axis of output: either "x" or "z" axis.
 
     :return: Complete loop code, output as a string.
-
-    :raises ValueError: If axis is not 'y' or 'z'.
     """
-
-    NGHOSTS, Nxx_plus_2NGHOSTS, Nxx, i012_pts, numpts = compute_1d_loop_ranges(
-        CoordSystem, axis
-    )
+    Nxx, i012_pts, numpts = compute_1d_loop_ranges(CoordSystem, axis)
 
     pragma = "#pragma omp parallel for\n"
 
@@ -91,7 +85,6 @@ def simple_loop_2D(
     :param CoordSystem: Coordinate system, e.g., "Cartesian"
     :param plane: Specifies the plane of output: either "xy" or "yz" (default)
     :return: Complete loop code, output as a string.
-    :raises ValueError: If plane is not 'xy' or 'yz'.
     """
     pragma = "#pragma omp parallel for\n"
     max_numpts, i012_pts, numpts = max_numpts__i012_pts__numpts_2D(CoordSystem, plane)

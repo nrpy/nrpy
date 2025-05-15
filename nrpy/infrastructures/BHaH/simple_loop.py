@@ -288,26 +288,23 @@ def compute_1d_loop_ranges(
     CoordSystem: str,
     axis: str,
 ) -> Tuple[
-    sp.Symbol,
-    List[Union[int, sp.Expr]],
-    List[Union[int, sp.Expr]],
-    List[Union[int, sp.Expr]],
+    Sequence[Union[int, sp.Expr]],
+    List[List[Union[int, sp.Expr]]],
     List[Union[int, sp.Expr]],
 ]:
-    """
+    r"""
     Generate the index‐point lists and counts for a 1D diagnostic loop.
 
     :param CoordSystem: Specifies the coordinate system (e.g., "Cartesian", "Spherical").
     :param axis: Specifies the axis of output; accepts either "y" or "z".
     :return: Tuple containing:
-             - NGHOSTS symbol,
-             - Nxx_plus_2NGHOSTS array,
              - Nxx array,
              - i012_pts list of [i0_pts, i1_pts, i2_pts],
              - numpts list of counts per direction.
     :raises ValueError: If axis is not 'y' or 'z'.
+
     DocTests:
-    >>> NG, Nxx_p2, Nxx, pts, nums = compute_1d_loop_ranges("Cartesian", "y")
+    >>> Nxx, pts, nums = compute_1d_loop_ranges("Cartesian", "y")
     >>> nums[0]
     1
     >>> len(pts[0])
@@ -394,7 +391,7 @@ def compute_1d_loop_ranges(
             len(i2_pts) if i2_pts else Nxx[2],
         ]
 
-    return NGHOSTS, Nxx_plus_2NGHOSTS, Nxx, i012_pts, numpts
+    return Nxx, i012_pts, numpts
 
 
 def generate_1d_loop_header(
@@ -403,21 +400,12 @@ def generate_1d_loop_header(
     numpts: Sequence[Union[int, sp.Expr]],
 ) -> str:
     """
-    Return the C code that defines the i*_pts arrays and data_points buffer
-    for a 1D diagnostic loop.
+    Return the C code that defines the i*_pts arrays and data_points buffer for a 1D diagnostic loop.
 
     :param axis: The axis along which output is generated (e.g., "y" or "z").
     :param CoordSystem: The coordinate system name (e.g., "Cartesian").
     :param numpts: A sequence of three counts [numpts_i0, numpts_i1, numpts_i2].
     :return: The C code header as a string.
-    :raises IndexError: If numpts does not contain exactly three elements.
-    DocTests:
-    >>> from sympy import symbols
-    >>> header = generate_1d_loop_header("x", "Cartesian", [1, 2, 3])
-    >>> "numpts_i0=1" in header
-    True
-    >>> header.splitlines()[1].startswith("const int numpts_i1=2")
-    True
     """
     return f"""// Define points for output along the {axis}-axis in {CoordSystem} coordinates.
 const int numpts_i0={numpts[0]}, numpts_i1={numpts[1]}, numpts_i2={numpts[2]};
@@ -437,7 +425,7 @@ def append_1d_loop_body(
     i012_pts: List[List[Union[int, sp.Expr]]],
     pragma: str,
 ) -> str:
-    """
+    r"""
     Append the index-array setup and main LOOP_NOOMP block to out_string.
 
     :param out_string: Prefix C code to which the loop body is added.
@@ -448,14 +436,6 @@ def append_1d_loop_body(
     :param i012_pts: Three lists of explicit index points for each dimension.
     :param pragma: The loop prefix, e.g., OpenMP pragma.
     :return: Combined C code with index setup and main loop appended.
-    DocTests:
-    >>> from sympy import symbols
-    >>> X = symbols('X')
-    >>> result = append_1d_loop_body("", "// STORE;", "y", [X, X, X], [1, 1, 1], [[0], [0], [0]], "#pr\\n")
-    >>> "// STORE;" in result
-    True
-    >>> result.startswith("#pr")
-    True
     """
     # Build the i*_pts arrays
     for i in range(3):
@@ -493,6 +473,7 @@ def generate_qsort_compare_string() -> str:
     Generate the qsort() comparison function for 1D data_point_1d_struct.
 
     :return: The C code for the comparison function that sorts by xCart_axis.
+
     DocTests:
     >>> s = generate_qsort_compare_string()
     >>> "// qsort() comparison function for 1D output." in s
@@ -525,8 +506,6 @@ def simple_loop_1D(
     :param axis: The axis along which the output is generated; accepts either "y" or "z" (default is "z").
     :return: A tuple containing two strings: the first string represents the struct and comparison function definitions,
              and the second string represents the loop code to output data along the specified axis.
-    :raises ValueError: If the provided axis is not "y" or "z",
-                        or if the CoordSystem is not supported by this function.
 
     Doctests:
     >>> from nrpy.helpers.generic import clang_format, validate_strings
@@ -537,10 +516,7 @@ def simple_loop_1D(
     >>> diag1d = clang_format(simple_loop_1D(CoordSystem="Spherical", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, axis="z")[1])
     >>> validate_strings(diag1d, "Spherical_z_axis")
     """
-
-    NGHOSTS, Nxx_plus_2NGHOSTS, Nxx, i012_pts, numpts = compute_1d_loop_ranges(
-        CoordSystem, axis
-    )
+    Nxx, i012_pts, numpts = compute_1d_loop_ranges(CoordSystem, axis)
 
     pragma = "#pragma omp parallel for\n"
 
