@@ -284,33 +284,25 @@ def simple_loop(
     return full_loop_body
 
 
-def simple_loop_1D(
+def compute_1d_loop_ranges(
     CoordSystem: str,
-    out_quantities_dict: Dict[Tuple[str, str], str],
-    axis: str = "z",
-) -> Tuple[str, str]:
+    axis: str,
+) -> Tuple[
+    Sequence[Union[int, sp.Expr]],
+    List[List[Union[int, sp.Expr]]],
+    List[Union[int, sp.Expr]],
+]:
     r"""
-    Generate a C code snippet to output data along a specified axis in a given coordinate system.
-    The generated code includes a loop that considers the points closest to the specified axis
-    in the provided coordinate system.
+    Compute the grid extents, per‐axis index lists, and point counts needed to extract a one‐dimensional diagnostic slice along the specified axis.
 
-    :param CoordSystem: Specifies the coordinate system (e.g., "Cartesian" or "Spherical").
-    :param out_quantities_dict: Dictionary containing quantities tooutput. Keys are tuples of (type, name)
-                                and values are the C code expressions to compute the quantities.
-    :param axis: The axis along which the output is generated; accepts either "y" or "z" (default is "z").
-    :return: A tuple containing two strings: the first string represents the struct and comparison function definitions,
-             and the second string represents the loop code to output data along the specified axis.
+    :param CoordSystem: Specifies the coordinate system (e.g., "Cartesian", "Spherical").
+    :param axis: Specifies the axis of output; accepts either "y" or "z".
+    :return: Tuple containing:
+             - Nxx array,
+             - i012_pts list of [i0_pts, i1_pts, i2_pts],
+             - numpts list of counts per direction.
     :raises ValueError: If the provided axis is not "y" or "z",
                         or if the CoordSystem is not supported by this function.
-
-    Doctests:
-    >>> from nrpy.helpers.generic import clang_format, validate_strings
-    >>> diag1d = clang_format(simple_loop_1D(CoordSystem="Cartesian", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, axis="y")[1])
-    >>> validate_strings(diag1d, "Cartesian_y_axis")
-    >>> diag1d = clang_format(simple_loop_1D(CoordSystem="SinhSpherical", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, axis="y")[1])
-    >>> validate_strings(diag1d, "SinhSpherical_y_axis")
-    >>> diag1d = clang_format(simple_loop_1D(CoordSystem="Spherical", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, axis="z")[1])
-    >>> validate_strings(diag1d, "Spherical_z_axis")
     """
     if axis not in ["y", "z"]:
         raise ValueError(
@@ -394,7 +386,7 @@ def simple_loop_1D(
             raise ValueError(f"CoordSystem = {CoordSystem} not supported.")
 
     i012_pts = [i0_pts, i1_pts, i2_pts]
-    numpts: List[Union[int, sp.Expr]] = [0] * 3
+
     if (
         (i0_pts and i0_pts[0] == -1)
         or (i1_pts and i1_pts[0] == -1)
@@ -402,18 +394,142 @@ def simple_loop_1D(
     ):
         numpts = [0, 0, 0]
     else:
-        numpts[0] = len(i0_pts) if i0_pts else Nxx[0]
-        numpts[1] = len(i1_pts) if i1_pts else Nxx[1]
-        numpts[2] = len(i2_pts) if i2_pts else Nxx[2]
+        numpts = [
+            len(i0_pts) if i0_pts else Nxx[0],
+            len(i1_pts) if i1_pts else Nxx[1],
+            len(i2_pts) if i2_pts else Nxx[2],
+        ]
 
-    pragma = "#pragma omp parallel for\n"
-    out_string = f"""// Define points for output along the {axis}-axis in {CoordSystem} coordinates.
+    return Nxx, i012_pts, numpts
+
+
+def generate_1d_loop_header(
+    axis: str,
+    CoordSystem: str,
+    numpts: Sequence[Union[int, sp.Expr]],
+) -> str:
+    """
+    Return the C code that defines the i*_pts arrays and data_points buffer for a 1D diagnostic loop.
+
+    :param axis: The axis along which output is generated (e.g., "y" or "z").
+    :param CoordSystem: The coordinate system name (e.g., "Cartesian").
+    :param numpts: A sequence of three counts [numpts_i0, numpts_i1, numpts_i2].
+    :return: The C code header as a string.
+    """
+    return f"""// Define points for output along the {axis}-axis in {CoordSystem} coordinates.
 const int numpts_i0={numpts[0]}, numpts_i1={numpts[1]}, numpts_i2={numpts[2]};
 int i0_pts[numpts_i0], i1_pts[numpts_i1], i2_pts[numpts_i2];
 
 data_point_1d_struct data_points[numpts_i0 * numpts_i1 * numpts_i2];
 int data_index = 0;
 """
+
+
+def append_1d_loop_body(
+    out_string: str,
+    loop_body_store_results: str,
+    axis: str,
+    Nxx: Sequence[Union[int, sp.Expr]],
+    numpts: Sequence[Union[int, sp.Expr]],
+    i012_pts: List[List[Union[int, sp.Expr]]],
+    pragma: str,
+) -> str:
+    r"""
+    Append the index-array setup and main LOOP_NOOMP block to out_string.
+
+    :param out_string: Prefix C code to which the loop body is added.
+    :param loop_body_store_results: Code to store results in the innermost loop.
+    :param axis: The axis name for diagnostic output ("y" or "z").
+    :param Nxx: Sequence of full grid sizes per dimension including ghosts.
+    :param numpts: Sequence of numbers of points per dimension.
+    :param i012_pts: Three lists of explicit index points for each dimension.
+    :param pragma: The loop prefix, e.g., OpenMP pragma.
+    :return: Combined C code with index setup and main loop appended.
+    """
+    # Build the i*_pts arrays
+    for i in range(3):
+        if numpts[i] == Nxx[i]:
+            out_string += (
+                f"{pragma}"
+                f"for(int i{i}=NGHOSTS; i{i}<Nxx{i} + NGHOSTS; i{i}++) "
+                f"i{i}_pts[i{i}-NGHOSTS] = i{i};\n"
+            )
+        elif numpts == [0, 0, 0] and i == 0:
+            out_string += (
+                f"// CoordSystem = {{CoordSystem}} has no points on the {axis} axis!\n"
+            )
+        else:
+            for j, pt in enumerate(i012_pts[i]):
+                out_string += f"i{i}_pts[{j}] = (int)({sp.ccode(pt)});\n"
+
+    # Append the main loop
+    out_string += f"""// Main loop{(' to store data points along the specified axis' if 'data_points' in loop_body_store_results else '')}
+LOOP_NOOMP(i0_pt,0,numpts_i0, i1_pt,0,numpts_i1, i2_pt,0,numpts_i2) {{
+  const int i0 = i0_pts[i0_pt], i1 = i1_pts[i1_pt], i2 = i2_pts[i2_pt];
+  const int idx3 = IDX3(i0, i1, i2);
+  REAL xCart[3];
+  REAL xOrig[3] = {{xx[0][i0], xx[1][i1], xx[2][i2]}};
+  xx_to_Cart(params, xOrig, xCart);
+
+  {loop_body_store_results}
+}}
+"""
+    return out_string
+
+
+def generate_qsort_compare_string() -> str:
+    """
+    Generate the qsort() comparison function for 1D data_point_1d_struct.
+
+    :return: The C code for the comparison function that sorts by xCart_axis.
+
+    DocTests:
+    >>> s = generate_qsort_compare_string()
+    >>> "// qsort() comparison function for 1D output." in s
+    True
+    >>> "static int compare" in s
+    True
+    """
+    return """// qsort() comparison function for 1D output.
+static int compare(const void *a, const void *b) {
+  REAL l = ((data_point_1d_struct *)a)->xCart_axis;
+  REAL r = ((data_point_1d_struct *)b)->xCart_axis;
+  return (l > r) - (l < r);
+}
+"""
+
+
+def simple_loop_1D(
+    CoordSystem: str,
+    out_quantities_dict: Dict[Tuple[str, str], str],
+    axis: str = "z",
+) -> Tuple[str, str]:
+    r"""
+    Generate a C code snippet to output data along a specified axis in a given coordinate system.
+    The generated code includes a loop that considers the points closest to the specified axis
+    in the provided coordinate system.
+
+    :param CoordSystem: Specifies the coordinate system (e.g., "Cartesian" or "Spherical").
+    :param out_quantities_dict: Dictionary containing quantities tooutput. Keys are tuples of (type, name)
+                                and values are the C code expressions to compute the quantities.
+    :param axis: The axis along which the output is generated; accepts either "y" or "z" (default is "z").
+    :return: A tuple containing two strings: the first string represents the struct and comparison function definitions,
+             and the second string represents the loop code to output data along the specified axis.
+
+    Doctests:
+    >>> from nrpy.helpers.generic import clang_format, validate_strings
+    >>> diag1d = clang_format(simple_loop_1D(CoordSystem="Cartesian", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, axis="y")[1])
+    >>> validate_strings(diag1d, "Cartesian_y_axis")
+    >>> diag1d = clang_format(simple_loop_1D(CoordSystem="SinhSpherical", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, axis="y")[1])
+    >>> validate_strings(diag1d, "SinhSpherical_y_axis")
+    >>> diag1d = clang_format(simple_loop_1D(CoordSystem="Spherical", out_quantities_dict = {("REAL", "log10HL"): "log10(fabs(diagnostic_output_gfs[IDX4pt(HGF, idx3)] + 1e-16))"}, axis="z")[1])
+    >>> validate_strings(diag1d, "Spherical_z_axis")
+    """
+    Nxx, i012_pts, numpts = compute_1d_loop_ranges(CoordSystem, axis)
+
+    pragma = "#pragma omp parallel for\n"
+
+    out_string = generate_1d_loop_header(axis, CoordSystem, numpts)
 
     # Loop body for storing results.
     loop_body_store_results = ""
@@ -428,28 +544,9 @@ dp1d.xCart_axis = {'xCart[1];' if axis == "y" else 'xCart[2];'}
         loop_body_store_results += f"dp1d.{key[1]} = {value};\n"
     loop_body_store_results += "data_points[data_index] = dp1d; data_index++;\n}\n"
 
-    # Main loop body.
-    for i in range(3):
-        if numpts[i] == Nxx[i]:
-            out_string += f"{pragma}for(int i{i}=NGHOSTS; i{i}<Nxx{i} + NGHOSTS; i{i}++) i{i}_pts[i{i}-NGHOSTS] = i{i};\n"
-        elif numpts == [0, 0, 0] and i == 0:
-            out_string += (
-                f"// CoordSystem = {CoordSystem} has no points on the {axis} axis!\n"
-            )
-        else:
-            for j, pt in enumerate(i012_pts[i]):
-                out_string += f"i{i}_pts[{j}] = (int)({sp.ccode(pt)});\n"
-    out_string += f"""// Main loop to store data points along the specified axis
-LOOP_NOOMP(i0_pt,0,numpts_i0, i1_pt,0,numpts_i1, i2_pt,0,numpts_i2) {{
-  const int i0 = i0_pts[i0_pt], i1 = i1_pts[i1_pt], i2 = i2_pts[i2_pt];
-  const int idx3 = IDX3(i0, i1, i2);
-  REAL xCart[3];
-  REAL xOrig[3] = {{xx[0][i0], xx[1][i1], xx[2][i2]}};
-  xx_to_Cart(params, xOrig, xCart);
-
-  {loop_body_store_results}
-}}
-"""
+    out_string = append_1d_loop_body(
+        out_string, loop_body_store_results, axis, Nxx, numpts, i012_pts, pragma
+    )
 
     # Post-loop: qsort() along xCart_axis and output to file.
     prefunc_content = """// Struct to hold 1D data points
@@ -458,15 +555,9 @@ REAL xCart_axis;
 """
     for key in out_quantities_dict.keys():
         prefunc_content += f"  {key[0]} {key[1]};\n"
-    prefunc_content += """} data_point_1d_struct;
 
-// qsort() comparison function for 1D output.
-static int compare(const void *a, const void *b) {
-  REAL l = ((data_point_1d_struct *)a)->xCart_axis;
-  REAL r = ((data_point_1d_struct *)b)->xCart_axis;
-  return (l > r) - (l < r);
-}
-"""
+    prefunc_content += "} data_point_1d_struct;\n\n"
+    prefunc_content += generate_qsort_compare_string()
 
     qsort_and_output_to_file = r"""
 qsort(data_points, data_index, sizeof(data_point_1d_struct), compare);
