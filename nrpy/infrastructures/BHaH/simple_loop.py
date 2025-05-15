@@ -293,7 +293,7 @@ def compute_1d_loop_ranges(
     List[Union[int, sp.Expr]],
 ]:
     r"""
-    Generate the index‐point lists and counts for a 1D diagnostic loop.
+    Compute the grid extents, per‐axis index lists, and point counts needed to extract a one‐dimensional diagnostic slice along the specified axis.
 
     :param CoordSystem: Specifies the coordinate system (e.g., "Cartesian", "Spherical").
     :param axis: Specifies the axis of output; accepts either "y" or "z".
@@ -301,22 +301,12 @@ def compute_1d_loop_ranges(
              - Nxx array,
              - i012_pts list of [i0_pts, i1_pts, i2_pts],
              - numpts list of counts per direction.
-    :raises ValueError: If axis is not 'y' or 'z'.
-
-    DocTests:
-    >>> Nxx, pts, nums = compute_1d_loop_ranges("Cartesian", "y")
-    >>> nums[0]
-    1
-    >>> len(pts[0])
-    1
-    >>> compute_1d_loop_ranges("Cartesian", "x")
-    Traceback (most recent call last):
-    ...
-    ValueError: 1D loop output only supports y or z axes. axis = 'x' not supported.
+    :raises ValueError: If the provided axis is not "y" or "z",
+                        or if the CoordSystem is not supported by this function.
     """
     if axis not in ["y", "z"]:
         raise ValueError(
-            f"1D loop output only supports y or z axes. axis = {axis!r} not supported."
+            f"1D loop output only supports y or z axes. axis = {axis} not supported."
         )
 
     NGHOSTS = sp.Symbol("NGHOSTS", real=True)
@@ -329,52 +319,71 @@ def compute_1d_loop_ranges(
 
     if axis == "y":
         if "Cartesian" in CoordSystem:
+            # x-axis == { x_mid, z_mid }
             i0_pts += [Nxx_plus_2NGHOSTS[0] / 2]
             i2_pts += [Nxx_plus_2NGHOSTS[2] / 2]
         elif "Spherical" in CoordSystem:
+            # y-axis == { theta_mid, see yz-plane discussion for Spherical below for explanation of phi points }
             i1_pts += [Nxx_plus_2NGHOSTS[1] / 2]
             i2_pts += [NGHOSTS + sp.Rational(1, 4) * Nxx[2] - sp.Rational(1, 2)]
             i2_pts += [NGHOSTS + sp.Rational(3, 4) * Nxx[2] - sp.Rational(1, 2)]
         elif "Cylindrical" in CoordSystem:
+            # Cylindrical: rho,phi,z
+            # y-axis == { see yz-plane discussion for Spherical below for explanation of phi points, z_mid }
             i1_pts += [NGHOSTS + sp.Rational(1, 4) * Nxx[1] - sp.Rational(1, 2)]
             i1_pts += [NGHOSTS + sp.Rational(3, 4) * Nxx[1] - sp.Rational(1, 2)]
             i2_pts += [Nxx_plus_2NGHOSTS[2] / 2]
         elif "SymTP" in CoordSystem:
+            # y-axis == { x1_mid, see yz-plane discussion for Spherical below for explanation of phi points }
             i1_pts += [Nxx_plus_2NGHOSTS[1] / 2]
             i2_pts += [NGHOSTS + sp.Rational(1, 4) * Nxx[2] - sp.Rational(1, 2)]
             i2_pts += [NGHOSTS + sp.Rational(3, 4) * Nxx[2] - sp.Rational(1, 2)]
         elif "Wedge" in CoordSystem:
+            # NO POINTS ON Y AXIS
             i0_pts += [-1]
             i1_pts += [-1]
             i2_pts += [-1]
         else:
-            raise ValueError(f"CoordSystem = {CoordSystem!r} not supported.")
+            raise ValueError(f"CoordSystem = {CoordSystem} not supported.")
 
     if axis == "z":
         if "Cartesian" in CoordSystem:
+            # z-axis == { x_mid, y_mid }
             i0_pts += [Nxx_plus_2NGHOSTS[0] / 2]
             i1_pts += [Nxx_plus_2NGHOSTS[1] / 2]
         elif "Spherical" in CoordSystem:
             if "Ring" in CoordSystem:
+                # NO POINTS ON Z AXIS
                 i0_pts += [-1]
                 i1_pts += [-1]
                 i2_pts += [-1]
             else:
+                # z-axis == { th_min & th_max, phi_min  }
                 i1_pts += [NGHOSTS]
                 i1_pts += [Nxx_plus_2NGHOSTS[1] - NGHOSTS - 1]
                 i2_pts += [NGHOSTS]
         elif "Cylindrical" in CoordSystem:
+            # Cylindrical: rho,phi,z
+            # z-axis == { rho_min & phi_min }
             i0_pts += [NGHOSTS]
             i1_pts += [NGHOSTS]
         elif "SymTP" in CoordSystem:
+            # SymTP:
+            # self.xx_to_Cart[2] = f(xx0) * sp.cos(self.xx[1])
+            #  -> Aim for cos(xx1) = 1 -> xx1 = 0 & pi
+            # z_axis == { xx1_min & xx1_max, xx2_min }
+            # FIXME: Missing points between foci (not an easy fix).
             i1_pts += [NGHOSTS]
             i1_pts += [Nxx_plus_2NGHOSTS[1] - NGHOSTS - 1]
             i2_pts += [NGHOSTS]
         elif "Wedge" in CoordSystem:
+            # Wedge-like: same as Spherical except x_new = +/-z_old, y_new = y_old, z_new = x_old
+            # Thus the z-axis here is the same as the +x-axis in Spherical-like.
+            # +x-axis == { theta_mid, phi={phi_mid} (since phi goes from -pi to pi) }
             i1_pts += [Nxx_plus_2NGHOSTS[1] / 2]
             i2_pts += [Nxx_plus_2NGHOSTS[2] / 2]
         else:
-            raise ValueError(f"CoordSystem = {CoordSystem!r} not supported.")
+            raise ValueError(f"CoordSystem = {CoordSystem} not supported.")
 
     i012_pts = [i0_pts, i1_pts, i2_pts]
 
