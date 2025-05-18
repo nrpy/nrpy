@@ -294,7 +294,7 @@ Computes proper circumferences along the equator and polar directions for appare
     int weight_stencil_size;
     bah_diagnostics_integration_weights(N_angle, N_angle, &weights, &weight_stencil_size);
 
-    // Compute the total circumference by integrating over the sampled equator points.
+    // Compute the total xy-plane circumference by integrating over the sampled points.
     REAL sum_circumference = 0.0;
 #pragma omp parallel for reduction(+ : sum_circumference)
     for (int ic = 0; ic < N_angle; ic++) {
@@ -303,7 +303,8 @@ Computes proper circumferences along the equator and polar directions for appare
     } // END LOOP over ic
     // Multiply the sum by d[angle]
     commondata->bhahaha_diagnostics->xy_plane_circumference = sum_circumference * d_angle;
-  }
+  } // END xy-plane circumference
+
   // Polar (xz-plane) circumference next
   {
     // Initialize destination points along the xz-plane for interpolation.
@@ -333,7 +334,7 @@ Computes proper circumferences along the equator and polar directions for appare
     int weight_stencil_size;
     bah_diagnostics_integration_weights(N_angle, N_angle, &weights, &weight_stencil_size);
 
-    // Compute the total circumference by integrating over the sampled equator points.
+    // Compute the total xz-plane circumference by integrating over the sampled points.
     REAL sum_circumference = 0.0;
 #pragma omp parallel for reduction(+ : sum_circumference)
     for (int ic = 0; ic < N_angle; ic++) {
@@ -342,7 +343,8 @@ Computes proper circumferences along the equator and polar directions for appare
     } // END LOOP over ic
     // Multiply the sum by d[angle]
     commondata->bhahaha_diagnostics->xz_plane_circumference = sum_circumference * d_angle;
-  }
+  } // END xz-plane circumference
+
   // Polar (yz-plane) circumference next
   {
     // Initialize destination points along the yz-plane for interpolation.
@@ -372,7 +374,7 @@ Computes proper circumferences along the equator and polar directions for appare
     int weight_stencil_size;
     bah_diagnostics_integration_weights(N_angle, N_angle, &weights, &weight_stencil_size);
 
-    // Compute the total circumference by integrating over the sampled equator points.
+    // Compute the total yz-plane circumference by integrating over the sampled points.
     REAL sum_circumference = 0.0;
 #pragma omp parallel for reduction(+ : sum_circumference)
     for (int ic = 0; ic < N_angle; ic++) {
@@ -381,7 +383,7 @@ Computes proper circumferences along the equator and polar directions for appare
     } // END LOOP over ic
     // Multiply the sum by d[angle]
     commondata->bhahaha_diagnostics->yz_plane_circumference = sum_circumference * d_angle;
-  }
+  } // END yz-plane circumference
 
   // Next estimate spin parameter magnitudes, valid for equilibrium BHs only.
   //   Based on Eq 5.2 of Alcubierre et al arXiv:gr-qc/0411149.
