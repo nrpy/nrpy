@@ -42,19 +42,25 @@ def register_CFunction_interpolation_2d_general__uniform_src_grid(
             subdirectory="intrinsics",
         )
 
-    includes = [
-        "math.h",
-        "intrinsics/simd_intrinsics.h",
-        "stdio.h",
-        "stdlib.h",
-        "BHaH_defines.h",
-    ]
+    includes = ["math.h", "intrinsics/simd_intrinsics.h", "stdio.h", "stdlib.h"]
 
     prefunc = """
 #ifndef REAL
 #define REAL double
 #endif
 #define DEBUG
+
+#ifdef STANDALONE
+// Remove the bah_ prefix if compiling as a standalone code, as this function goes by other names in other codes.
+#define bah_interpolation_2d_general__uniform_src_grid interpolation_2d_general__uniform_src_grid
+#endif
+
+// In case this code is compiled as C++:
+#ifdef __cplusplus
+#ifndef restrict
+#define restrict __restrict__
+#endif
+#endif
 """
     prefunc += """//===============================================
 // BHaHAHA Error Handling

@@ -25,13 +25,13 @@
     __typeof__(A) _max = (_a > _b) ? _a : _b;                                                                                                           \
     _max > _c ? _max : _c;                                                                                                                               \
   })
+#define IDX3_OF_CHARE(i, j, k) ((i) + Nchare0 * ((j) + Nchare1 * ((k))))
 #define IDX2GENERAL(i, j, Ni) ((i) + (Ni) * (j))
 #define REVERSE_IDX2GENERAL(index, Ni, i, j) \
-{ \
-    j = (index) / (Ni); \
-    i = (index) % (Ni); \
+{                                            \
+    j = (index) / (Ni);                      \
+    i = (index) % (Ni);                      \
 }
-#define IDX3_OF_CHARE(i, j, k) ((i) + Nchare0 * ((j) + Nchare1 * ((k))))
 #define IDX3GENERAL(i, j, k, Ni, Nj) ((i) + (Ni) * ((j) + (Nj) * (k)))
 #define REVERSE_IDX3GENERAL(index, Ni, Nj, i, j, k) \
 { \

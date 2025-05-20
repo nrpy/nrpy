@@ -3,6 +3,8 @@ Generate C functions for computing BSSN diagnostics in curvilinear coordinates.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
+        Nishita Jadoo
+        njadoo **at** uidaho **dot* edu
 """
 
 from inspect import currentframe as cfr
@@ -13,6 +15,7 @@ import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices as out012d
 import nrpy.params as par
+from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
 
 
 def register_CFunction_diagnostics(
@@ -183,12 +186,13 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {{
         )
         body += rf"""
 
-      // Do psi4 output, but only if the grid is spherical-like.
-      if (strstr(CoordSystemName, "Spherical") != NULL) {{
-        // Set psi4.
-        psi4(commondata, params, xx, y_n_gfs, diagnostic_output_gfs);
-        {post_psi4_compute}
-      }}
+      // Do psi4 output
+      // Set psi4.
+      psi4(commondata, params, xx, y_n_gfs, diagnostic_output_gfs);
+      {post_psi4_compute}
+      // Apply outer and inner bcs to psi4 needed to do interpolation correctly
+      int aux_gfs_to_sync[2] = {{PSI4_REGF, PSI4_IMGF}};
+      apply_bcs_outerextrap_and_inner_specific_gfs(commondata, &griddata[grid].params, &griddata[grid].bcstruct, 2, griddata[grid].gridfuncs.diagnostic_output_gfs, aux_gfs_to_sync, aux_gf_parity);
 """.replace("xx", "griddata[grid].xx" if parallelization in ["cuda"] else "xx")
 
     body += f"""
@@ -209,24 +213,12 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {{
             if parallelization in ["cuda"]
             else ""
         )
-        body += rf"""
-      // Do psi4 output, but only if the grid is spherical-like.
-      if (strstr(CoordSystemName, "Spherical") != NULL) {{
-        // Adjusted to match Tutorial-Start_to_Finish-BSSNCurvilinear-Two_BHs_Collide-Psi4.ipynb
-        const int psi4_spinweightm2_sph_harmonics_max_l = 2;
-#define num_of_R_exts 24
-        const REAL list_of_R_exts[num_of_R_exts] =
-        {{ 10.0, 20.0, 21.0, 22.0, 23.0,
-          24.0, 25.0, 26.0, 27.0, 28.0,
-          29.0, 30.0, 31.0, 32.0, 33.0,
-          35.0, 40.0, 50.0, 60.0, 70.0,
-          80.0, 90.0, 100.0, 150.0 }};
-
-        {psi4_sync}
-        // Decompose psi4 into spin-weight -2  spherical harmonics & output to files.
-        psi4_spinweightm2_decomposition_on_sphlike_grids(commondata, params, diagnostic_output_gfs, list_of_R_exts, num_of_R_exts, psi4_spinweightm2_sph_harmonics_max_l, xx);
-      }}
+        body += rf"""      // Do psi4 output
+    {psi4_sync}
+    // Decompose psi4 into spin-weight -2  spherical harmonics & output to files.
+    psi4_spinweightm2_decomposition(commondata, params, diagnostic_output_gfs, xx);
 """.replace("diagnostic_output_gfs", "host_diagnostic_output_gfs" if parallelization in ["cuda"] else "diagnostic_output_gfs")
+
     body += r"""
   }
 }

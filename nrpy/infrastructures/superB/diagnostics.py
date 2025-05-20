@@ -48,9 +48,8 @@ def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type
   const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
 
   const int psi4_spinweightm2_sph_harmonics_max_l = commondata->swm2sh_maximum_l_mode_to_compute;
-#define NUM_OF_R_EXTS 24
-  const REAL list_of_R_exts[NUM_OF_R_EXTS] = {10.0, 20.0, 21.0, 22.0, 23.0, 24.0, 25.0, 26.0, 27.0, 28.0, 29.0,  30.0,
-                                                31.0, 32.0, 33.0, 35.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0, 150.0};
+  const int num_of_r_exts = commondata->num_psi4_extraction_radii;
+  const REAL *restrict list_of_R_exts = commondata->list_of_psi4_extraction_radii;
 
   //
   // Case spherical-like grid
@@ -59,7 +58,7 @@ def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type
 
     // Find which R_exts lie in the chares's grid
     int count_num_of_R_exts_chare = 0;
-    for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {
+    for (int which_R_ext = 0; which_R_ext < num_of_r_exts; which_R_ext++) {
       const REAL R_ext = list_of_R_exts[which_R_ext];
       const REAL xCart_R_ext[3] = {R_ext, 0.0, 0.0};
       int Cart_to_i0i1i2[3];
@@ -85,7 +84,7 @@ def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type
     diagnosticstruct->psi4_spinweightm2_sph_harmonics_max_l = psi4_spinweightm2_sph_harmonics_max_l;
 
     count_num_of_R_exts_chare = 0; // Reset the counter
-    for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {
+    for (int which_R_ext = 0; which_R_ext < num_of_r_exts; which_R_ext++) {
       const REAL R_ext = list_of_R_exts[which_R_ext];
       const REAL xCart_R_ext[3] = {R_ext, 0.0, 0.0};
       int Cart_to_i0i1i2[3];
@@ -132,13 +131,13 @@ def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type
     REAL dtheta = (theta_max - theta_min)/N_theta;
     diagnosticstruct->dtheta = dtheta;
     const REAL dphi = (phi_max - phi_min)/N_phi;
-    REAL ***restrict xx_shell_sph = (REAL ***restrict)malloc(NUM_OF_R_EXTS * sizeof(REAL **));
-    for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {
+    REAL ***restrict xx_shell_sph = (REAL ***restrict)malloc(num_of_r_exts * sizeof(REAL **));
+    for (int which_R_ext = 0; which_R_ext < num_of_r_exts; which_R_ext++) {
       xx_shell_sph[which_R_ext] = (REAL **restrict)malloc(2 * sizeof(REAL *));
       xx_shell_sph[which_R_ext][0] = (REAL *restrict)malloc(N_theta * sizeof(REAL));
       xx_shell_sph[which_R_ext][1] = (REAL *restrict)malloc(N_phi * sizeof(REAL));
     }
-    for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {
+    for (int which_R_ext = 0; which_R_ext < num_of_r_exts; which_R_ext++) {
       for (int j = 0; j < N_theta; j++) {
         xx_shell_sph[which_R_ext][0][j] = theta_min + ((REAL)j + 0.5) * dtheta;
       }
@@ -148,14 +147,14 @@ def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type
     }
 
     // Convert points on shells to Cartesian coordinates
-    REAL ***restrict xx_shell_Cart = (REAL ***restrict)malloc(NUM_OF_R_EXTS * sizeof(REAL **));
-    for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {
+    REAL ***restrict xx_shell_Cart = (REAL ***restrict)malloc(num_of_r_exts * sizeof(REAL **));
+    for (int which_R_ext = 0; which_R_ext < num_of_r_exts; which_R_ext++) {
       xx_shell_Cart[which_R_ext] = (REAL **restrict)malloc(3 * sizeof(REAL *));
       xx_shell_Cart[which_R_ext][0] = (REAL *restrict)malloc(N_tot_shell * sizeof(REAL));
       xx_shell_Cart[which_R_ext][1] = (REAL *restrict)malloc(N_tot_shell * sizeof(REAL));
       xx_shell_Cart[which_R_ext][2] = (REAL *restrict)malloc(N_tot_shell * sizeof(REAL));
     }
-    for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {
+    for (int which_R_ext = 0; which_R_ext < num_of_r_exts; which_R_ext++) {
       REAL r = list_of_R_exts[which_R_ext];
       for (int i_ph = 0; i_ph < N_phi; i_ph++) {
         REAL phi = xx_shell_sph[which_R_ext][1][i_ph];
@@ -174,13 +173,13 @@ def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type
 
     // For each pt on each spherical at R_ext find if pt lies within the chare's grid
     // set N_shell_pts_chare and xx_shell_chare in diagnostic struct
-    diagnosticstruct->N_shell_pts_chare = (int *restrict)malloc(sizeof(int) * NUM_OF_R_EXTS);
-    diagnosticstruct->N_theta_shell_chare = (int *restrict)malloc(sizeof(int) * NUM_OF_R_EXTS);
-    diagnosticstruct->xx_shell_chare = (REAL ***restrict)malloc(NUM_OF_R_EXTS * sizeof(REAL **));
-    diagnosticstruct->theta_shell_chare = (REAL **restrict)malloc(NUM_OF_R_EXTS * sizeof(REAL *));
+    diagnosticstruct->N_shell_pts_chare = (int *restrict)malloc(sizeof(int) * num_of_r_exts);
+    diagnosticstruct->N_theta_shell_chare = (int *restrict)malloc(sizeof(int) * num_of_r_exts);
+    diagnosticstruct->xx_shell_chare = (REAL ***restrict)malloc(num_of_r_exts * sizeof(REAL **));
+    diagnosticstruct->theta_shell_chare = (REAL **restrict)malloc(num_of_r_exts * sizeof(REAL *));
 
     // Count number of pts that lie within the extent of this chare's grid
-    for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {
+    for (int which_R_ext = 0; which_R_ext < num_of_r_exts; which_R_ext++) {
       int count_pt_on_chare = 0;
       bool b_theta_chare[N_theta] = {false};
       bool b_phi_chare[N_phi] = {false};
@@ -278,9 +277,9 @@ def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type
       }
     } // end loop over all R_ext
 
-    diagnosticstruct->num_of_R_exts_chare = NUM_OF_R_EXTS;
-    diagnosticstruct->list_of_R_exts_chare = (REAL *restrict)malloc(sizeof(REAL) * NUM_OF_R_EXTS);
-    for (int i = 0; i < NUM_OF_R_EXTS; i++) {
+    diagnosticstruct->num_of_R_exts_chare = num_of_r_exts;
+    diagnosticstruct->list_of_R_exts_chare = (REAL *restrict)malloc(sizeof(REAL) * num_of_r_exts);
+    for (int i = 0; i < num_of_r_exts; i++) {
       diagnosticstruct->list_of_R_exts_chare[i] = list_of_R_exts[i];
     }
     diagnosticstruct->psi4_spinweightm2_sph_harmonics_max_l = psi4_spinweightm2_sph_harmonics_max_l;
@@ -299,7 +298,7 @@ def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type
       diagnosticstruct->globalsums_for_psi4_decomp[i] = 0.0;
     }
     int sum = 0;
-    for(int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {
+    for(int which_R_ext = 0; which_R_ext < num_of_r_exts; which_R_ext++) {
         if(diagnosticstruct->N_shell_pts_chare[which_R_ext] > 0) {
             sum += diagnosticstruct->N_shell_pts_chare[which_R_ext];
         }
@@ -307,13 +306,13 @@ def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type
     diagnosticstruct->tot_N_shell_pts_chare = sum;
 
     // Free memory
-    for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {
+    for (int which_R_ext = 0; which_R_ext < num_of_r_exts; which_R_ext++) {
         free(xx_shell_sph[which_R_ext][0]);
         free(xx_shell_sph[which_R_ext][1]);
         free(xx_shell_sph[which_R_ext]);
     }
     free(xx_shell_sph);
-    for (int which_R_ext = 0; which_R_ext < NUM_OF_R_EXTS; which_R_ext++) {
+    for (int which_R_ext = 0; which_R_ext < num_of_r_exts; which_R_ext++) {
         free(xx_shell_Cart[which_R_ext][0]);
         free(xx_shell_Cart[which_R_ext][1]);
         free(xx_shell_Cart[which_R_ext][2]);

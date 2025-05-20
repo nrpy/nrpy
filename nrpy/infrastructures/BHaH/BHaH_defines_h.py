@@ -7,7 +7,7 @@ Author: Zachariah B. Etienne
 
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import nrpy.grid as gri
 import nrpy.helpers.parallelization.utilities as parallel_utils
@@ -78,6 +78,58 @@ typedef struct __griddata__ {
     griddata_struct_def += "} griddata_struct;\n"
 
     return griddata_struct_def
+
+
+def parse_cparam_type(cparam_type: str) -> Tuple[str, Optional[str], bool]:
+    """
+    Parse a cparam_type string into three parts.
+
+    - base     – the text before the first '['
+    - size     – the text inside the first '[ ]' (or None if not an array)
+    - is_array – True if the string contains '[...]', False otherwise
+
+    Examples
+    --------
+    >>> parse_cparam_type("int")
+    ('int', None, False)
+
+    >>> parse_cparam_type("REAL[8]")
+    ('REAL', '8', True)
+
+    >>> parse_cparam_type("char[100]")
+    ('char', '100', True)
+
+    >>> parse_cparam_type("  REAL[ 16 ] ")
+    ('REAL', '16', True)
+
+    # Invalid sizes must be numeric
+    >>> parse_cparam_type("char[NAME]")  # doctest: +IGNORE_EXCEPTION_DETAIL
+    Traceback (most recent call last):
+    ...
+    ValueError: Invalid array size 'NAME'
+
+    :param cparam_type: the raw CParam type string, e.g. "REAL[8]"
+    :return: a tuple (base, size, is_array)
+    :raises ValueError: if the bracket content is not a numeric string.
+    """
+    # 1) Scalar if no brackets
+    if "[" not in cparam_type or "]" not in cparam_type:
+        base = cparam_type.strip()
+        return base, None, False
+
+    # 2) Otherwise split off base and remainder
+    base, after = cparam_type.split("[", 1)
+    base = base.strip()
+
+    # 3) Extract size inside the first pair of brackets
+    size_str, _ = after.split("]", 1)
+    size = size_str.strip()
+
+    # 4) Validate numeric size
+    if not size.isdigit():
+        raise ValueError(f"Invalid array size '{size}'")
+
+    return base, size, True
 
 
 def register_BHaH_defines(module: str, BHaH_defines: str) -> None:
@@ -239,18 +291,15 @@ def output_BHaH_defines_h(
 
         :return: A formatted C declaration string with an inline comment.
         """
-        if "[" in cp_type and "]" in cp_type:
-            base_type, size_with_bracket = cp_type.split("[", 1)
-            size = size_with_bracket.split("]", 1)[0]
-            base_type = base_type.strip()
-            size = size.strip()
-            if base_type.startswith("char"):
+        base, size, is_array = parse_cparam_type(cp_type)
+        if is_array:
+            if base.startswith("char"):
                 # Handle char arrays
                 decl = f"  char {var_name}[{size}];"
             else:
-                decl = f"  {base_type} {var_name}[{size}];"
+                decl = f"  {base} {var_name}[{size}];"
         else:
-            decl = f"  {cp_type} {var_name};"
+            decl = f"  {base} {var_name};"
 
         # Conditional comment based on description
         if description:

@@ -570,7 +570,7 @@ def register_CFunction_numerical_grids_and_timestep(
     const bool set_xxmin_xxmax_to_defaults = true;
     int grid=0;
 """
-        for which_CoordSystem, CoordSystem in enumerate(set_of_CoordSystems):
+        for which_CoordSystem, CoordSystem in enumerate(sorted(set_of_CoordSystems)):
             body += f"""// In multipatch, gridname is a helpful alias indicating position of the patch. E.g., "lower {CoordSystem} patch"
     snprintf(griddata[grid].params.gridname, 100, "grid_{CoordSystem}");
 """
@@ -677,6 +677,7 @@ for(int grid=0;grid<commondata->NUMGRIDS;grid++) {
    griddata[grid].params.grid_idx = grid;
 }
 """
+
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
