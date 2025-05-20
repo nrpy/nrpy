@@ -12,6 +12,7 @@ from typing import Any, Dict, Union
 import nrpy.grid as gri
 import nrpy.params as par
 from nrpy.helpers.generic import clang_format
+from nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions import BHaH_defines_set_gridfunction_defines_with_parity_types
 
 if "DEVICE_THREAD_MACROS" not in par.glb_extras_dict:
     par.glb_extras_dict["DEVICE_THREAD_MACROS"] = {}
@@ -72,6 +73,8 @@ class CUDA_BHaH_device_defines_h:
         additional_macros_str: Union[str, None] = None,
         num_streams: int = 3,
         nghosts: Union[int, None] = None,
+        set_parity_on_aux: bool = False,
+        set_parity_on_auxevol: bool = False,
     ) -> None:
         self.project_Path = Path(project_dir)
         self.project_Path.mkdir(parents=True, exist_ok=True)
@@ -99,11 +102,6 @@ class CUDA_BHaH_device_defines_h:
                 "suffix": "",
                 "comment": "// Device storage for commondata\n",
             },
-            "d_evol_gf_parity": {
-                "type": "__constant__ int8_t",
-                "suffix": "[24]",
-                "comment": "// Device storage for grid function parity\n",
-            },
             "streams": {
                 "type": "cudaStream_t",
                 "suffix": "[NUM_STREAMS]",
@@ -115,6 +113,36 @@ class CUDA_BHaH_device_defines_h:
                 "comment": "",
             },
         }
+        # First add human-readable gridfunction aliases (grid.py) to BHaH_defines dictionary.
+        (
+            evolved_variables_list,
+            auxiliary_variables_list,
+            auxevol_variables_list,
+        ) = gri.BHaHGridFunction.gridfunction_lists()[0:3]
+
+        if len(evolved_variables_list) > 0:
+            standard_decl_dict["d_evol_gf_parity"] = {
+                "type": "__constant__ int8_t",
+                "suffix": f"[{len(evolved_variables_list)}]",
+                "comment": "// Device storage for evolved gridfunction parity\n",
+            }
+
+        if set_parity_on_aux:
+            if len(auxiliary_variables_list) > 0:
+                standard_decl_dict["d_aux_gf_parity"] = {
+                    "type": "__constant__ int8_t",
+                    "suffix": f"[{len(auxiliary_variables_list)}]",
+                    "comment": "// Device storage for evolved gridfunction parity\n",
+                }
+
+        if set_parity_on_auxevol:
+            if len(auxevol_variables_list) > 0:
+                standard_decl_dict["d_auxevol_gf_parity"] = {
+                    "type": "__constant__ int8_t",
+                    "suffix": f"[{len(auxevol_variables_list)}]",
+                    "comment": "// Device storage for evolved gridfunction parity\n",
+                }
+
         evolved_variables_list: list[str]
         (
             evolved_variables_list,
@@ -233,6 +261,8 @@ class BHaH_CUDA_global_init_h:
         self,
         project_dir: str,
         declarations_dict: Dict[str, Dict[str, str]],
+        set_parity_on_aux: bool = False,
+        set_parity_on_auxevol: bool = False,
     ) -> None:
         self.project_Path = Path(project_dir)
         self.project_Path.mkdir(parents=True, exist_ok=True)
@@ -246,11 +276,35 @@ class BHaH_CUDA_global_init_h:
 // Initialize streams
 for(int i = 0; i < NUM_STREAMS; ++i) {
     cudaStreamCreate(&streams[i]);
-}
-// Copy parity array to device __constant__ memory
-cudaMemcpyToSymbol(d_evol_gf_parity, evol_gf_parity, 24 * sizeof(int8_t));
+}"""
+
+        # First add human-readable gridfunction aliases (grid.py) to BHaH_defines dictionary.
+        (
+            evolved_variables_list,
+            auxiliary_variables_list,
+            auxevol_variables_list,
+        ) = gri.BHaHGridFunction.gridfunction_lists()[0:3]
+
+        if len(evolved_variables_list) > 0:
+            self.file_output_str += f"""// Copy evolv parity array to device __constant__ memory
+cudaMemcpyToSymbol(d_evol_gf_parity, evol_gf_parity, {len(evolved_variables_list)}] * sizeof(int8_t));
 cudaCheckErrors(copy, "Copy to d_evol_gf_parity failed");
 """
+
+        if set_parity_on_aux:
+            if len(auxiliary_variables_list) > 0:
+                self.file_output_str += f"""// Copy aux parity array to device __constant__ memory
+cudaMemcpyToSymbol(d_aux_gf_parity, aux_gf_parity, {len(auxiliary_variables_list)}] * sizeof(int8_t));
+cudaCheckErrors(copy, "Copy to d_aux_gf_parity failed");
+"""
+
+        if set_parity_on_auxevol:
+            if len(auxevol_variables_list) > 0:
+                self.file_output_str += f"""// Copy auxevolv parity array to device __constant__ memory
+cudaMemcpyToSymbol(d_auxevol_gf_parity, auxevol_gf_parity, {len(auxevol_variables_list)}] * sizeof(int8_t));
+cudaCheckErrors(copy, "Copy to d_auxevol_gf_parity failed");
+"""
+
         if "d_gridfunctions_wavespeed" in declarations_dict.keys():
             self.file_output_str += """
 // Copy gridfunctions_wavespeed array to device memory
