@@ -219,14 +219,10 @@ static void psi4_diagnostics_set_up(const commondata_struct *restrict commondata
     int count_pt_on_grid = 0;
     // Boolean flags to track which theta/phi indices correspond to points on the grid.
     bool b_theta_grid[N_theta];
-    bool b_phi_grid[N_phi];
     // Initialize flags to false.
     for (int i = 0; i < N_theta; i++) {
       b_theta_grid[i] = false;
     } // END FOR theta flag initialization
-    for (int j = 0; j < N_phi; j++) {
-      b_phi_grid[j] = false;
-    } // END FOR phi flag initialization
 
     // First pass: Iterate through all points on the conceptual shell to count how many fall within this grid patch.
     // Loop through phi points.
@@ -248,7 +244,6 @@ static void psi4_diagnostics_set_up(const commondata_struct *restrict commondata
           // If the point is inside the grid boundaries:
           count_pt_on_grid++;      // Increment the counter.
           b_theta_grid[i_th] = true; // Mark this theta index as present on the grid.
-          b_phi_grid[i_ph] = true;   // Mark this phi index as present on the grid.
         } // END IF point is within grid boundaries
       } // END FOR theta loop (counting pass)
     } // END FOR phi loop (counting pass)
@@ -260,15 +255,6 @@ static void psi4_diagnostics_set_up(const commondata_struct *restrict commondata
         count_theta_grid++;
       } // END IF
     } // END FOR counting unique theta values
-
-    // Count the number of unique phi values that are represented on the grid.
-    // This count should ideally match Nxx[phi_dirn] if the grid covers the full phi range.
-    int count_phi_grid = 0;
-    for (int i = 0; i < N_phi; i++) {
-      if (b_phi_grid[i]) {
-        count_phi_grid++;
-      } // END IF
-    } // END FOR counting unique phi values
 
     // Store the counts in the diagnostic structure for this shell.
     diagnosticstruct.N_shell_pts_grid[which_R_ext] = count_pt_on_grid;
