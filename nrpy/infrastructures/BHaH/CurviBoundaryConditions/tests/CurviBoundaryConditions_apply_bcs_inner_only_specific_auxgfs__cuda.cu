@@ -28,7 +28,7 @@ __global__ static void apply_bcs_inner_only_specific_auxgfs_gpu(const size_t str
       const int dstpt = inner_bc_array[pt].dstpt;
       const int srcpt = inner_bc_array[pt].srcpt;
       gfs[IDX4pt(gfs_to_sync[which_gf], dstpt)] =
-          inner_bc_array[pt].parity[aux_gf_parity[gfs_to_sync[which_gf]]] * gfs[IDX4pt(gfs_to_sync[which_gf], srcpt)];
+          inner_bc_array[pt].parity[d_aux_gf_parity[gfs_to_sync[which_gf]]] * gfs[IDX4pt(gfs_to_sync[which_gf], srcpt)];
     } // END for(int pt=0;pt<num_inner_pts;pt++)
   } // END for(int which_gf=0;which_gf<num_gfs;which_gf++)
 } // END FUNCTION apply_bcs_inner_only_specific_auxgfs_gpu

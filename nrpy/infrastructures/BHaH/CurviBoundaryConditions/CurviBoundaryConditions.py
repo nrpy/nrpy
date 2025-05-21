@@ -808,11 +808,11 @@ for (int pt = tid0; pt < num_inner_boundary_points; pt+=stride0) {{"""
     }} // END for(int pt=0;pt<num_inner_pts;pt++)
   }} // END for(int which_gf=0;which_gf<{loop_bounds};which_gf++)
 """.replace(
-        f"{parity_ary}[which_gf]",
+        f"{parity_ary}[{gf_index}]",
         (
-            f"d_{parity_ary}[which_gf]"
+            f"d_{parity_ary}[{gf_index}]"
             if parallelization == "cuda"
-            else f"{parity_ary}[which_gf]"
+            else f"{parity_ary}[{gf_index}]"
         ),
     )
 
