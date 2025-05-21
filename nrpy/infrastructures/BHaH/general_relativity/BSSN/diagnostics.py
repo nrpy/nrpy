@@ -15,7 +15,6 @@ import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices as out012d
 import nrpy.params as par
-from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
 
 
 def register_CFunction_diagnostics(
@@ -189,11 +188,13 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {{
       // Do psi4 output
       // Set psi4.
       psi4(commondata, params, xx, y_n_gfs, diagnostic_output_gfs);
-      {post_psi4_compute}
       // Apply outer and inner bcs to psi4 needed to do interpolation correctly
       int aux_gfs_to_sync[2] = {{PSI4_REGF, PSI4_IMGF}};
-      apply_bcs_outerextrap_and_inner_specific_gfs(commondata, &griddata[grid].params, &griddata[grid].bcstruct, 2, griddata[grid].gridfuncs.diagnostic_output_gfs, aux_gfs_to_sync, aux_gf_parity);
-""".replace("xx", "griddata[grid].xx" if parallelization in ["cuda"] else "xx")
+      apply_bcs_outerextrap_and_inner_specific_auxgfs(commondata, &griddata[grid].params, &griddata[grid].bcstruct, griddata[grid].gridfuncs.diagnostic_output_gfs, 2, aux_gfs_to_sync);
+      {post_psi4_compute}
+""".replace(
+            "xx", "griddata[grid].xx" if parallelization in ["cuda"] else "xx"
+        )
 
     body += f"""
     // 0D output
@@ -217,7 +218,14 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {{
     {psi4_sync}
     // Decompose psi4 into spin-weight -2  spherical harmonics & output to files.
     psi4_spinweightm2_decomposition(commondata, params, diagnostic_output_gfs, xx);
-""".replace("diagnostic_output_gfs", "host_diagnostic_output_gfs" if parallelization in ["cuda"] else "diagnostic_output_gfs")
+""".replace(
+            "diagnostic_output_gfs",
+            (
+                "host_diagnostic_output_gfs"
+                if parallelization in ["cuda"]
+                else "diagnostic_output_gfs"
+            ),
+        )
 
     body += r"""
   }
