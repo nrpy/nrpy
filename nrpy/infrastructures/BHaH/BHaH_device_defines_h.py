@@ -12,7 +12,6 @@ from typing import Any, Dict, Union
 import nrpy.grid as gri
 import nrpy.params as par
 from nrpy.helpers.generic import clang_format
-from nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions import BHaH_defines_set_gridfunction_defines_with_parity_types
 
 if "DEVICE_THREAD_MACROS" not in par.glb_extras_dict:
     par.glb_extras_dict["DEVICE_THREAD_MACROS"] = {}
@@ -39,9 +38,10 @@ def generate_declaration_str(
         prefix += " "
     decl_str: str = ""
     for var, sub_dict in decl_dict.items():
+        suffix = f"[{sub_dict['array_size']}]" if sub_dict["array_size"] else ""
         # Standard declarations str
         decl_str += f"{sub_dict['comment']}"
-        decl_str += f"{prefix} {sub_dict['type']} {var}{sub_dict['suffix']};\n"
+        decl_str += f"{prefix} {sub_dict['type']} {var}{suffix};\n"
     return decl_str
 
 
@@ -94,22 +94,22 @@ class CUDA_BHaH_device_defines_h:
         standard_decl_dict = {
             "d_params": {
                 "type": "__constant__ params_struct",
-                "suffix": "[NUM_STREAMS]",
+                "array_size": "NUM_STREAMS",
                 "comment": "// Device storage for grid parameters\n",
             },
             "d_commondata": {
                 "type": "__constant__ commondata_struct",
-                "suffix": "",
+                "array_size": "",
                 "comment": "// Device storage for commondata\n",
             },
             "streams": {
                 "type": "cudaStream_t",
-                "suffix": "[NUM_STREAMS]",
+                "array_size": "NUM_STREAMS",
                 "comment": "",
             },
             "GPU_N_SMS": {
                 "type": "size_t",
-                "suffix": "",
+                "array_size": "",
                 "comment": "",
             },
         }
@@ -123,7 +123,7 @@ class CUDA_BHaH_device_defines_h:
         if len(evolved_variables_list) > 0:
             standard_decl_dict["d_evol_gf_parity"] = {
                 "type": "__constant__ int8_t",
-                "suffix": f"[{len(evolved_variables_list)}]",
+                "array_size": f"{len(evolved_variables_list)}",
                 "comment": "// Device storage for evolved gridfunction parity\n",
             }
 
@@ -131,7 +131,7 @@ class CUDA_BHaH_device_defines_h:
             if len(auxiliary_variables_list) > 0:
                 standard_decl_dict["d_aux_gf_parity"] = {
                     "type": "__constant__ int8_t",
-                    "suffix": f"[{len(auxiliary_variables_list)}]",
+                    "array_size": f"{len(auxiliary_variables_list)}",
                     "comment": "// Device storage for evolved gridfunction parity\n",
                 }
 
@@ -139,7 +139,7 @@ class CUDA_BHaH_device_defines_h:
             if len(auxevol_variables_list) > 0:
                 standard_decl_dict["d_auxevol_gf_parity"] = {
                     "type": "__constant__ int8_t",
-                    "suffix": f"[{len(auxevol_variables_list)}]",
+                    "array_size": f"{len(auxevol_variables_list)}",
                     "comment": "// Device storage for evolved gridfunction parity\n",
                 }
 
@@ -153,12 +153,12 @@ class CUDA_BHaH_device_defines_h:
         if evolved_variables_list:
             standard_decl_dict["d_gridfunctions_wavespeed"] = {
                 "type": "__constant__ REAL",
-                "suffix": "[NUM_EVOL_GFS]",
+                "array_size": "NUM_EVOL_GFS",
                 "comment": "",
             }
             standard_decl_dict["d_gridfunctions_f_infinity"] = {
                 "type": "__constant__ REAL",
-                "suffix": "[NUM_EVOL_GFS]",
+                "array_size": "NUM_EVOL_GFS",
                 "comment": "",
             }
         self.combined_decl_dict = standard_decl_dict
@@ -278,42 +278,20 @@ for(int i = 0; i < NUM_STREAMS; ++i) {
     cudaStreamCreate(&streams[i]);
 }"""
 
-        # First add human-readable gridfunction aliases (grid.py) to BHaH_defines dictionary.
-        (
-            evolved_variables_list,
-            auxiliary_variables_list,
-            auxevol_variables_list,
-        ) = gri.BHaHGridFunction.gridfunction_lists()[0:3]
-
-        if len(evolved_variables_list) > 0:
-            self.file_output_str += f"""// Copy evolv parity array to device __constant__ memory
-cudaMemcpyToSymbol(d_evol_gf_parity, evol_gf_parity, {len(evolved_variables_list)}] * sizeof(int8_t));
-cudaCheckErrors(copy, "Copy to d_evol_gf_parity failed");
-"""
-
-        if set_parity_on_aux:
-            if len(auxiliary_variables_list) > 0:
-                self.file_output_str += f"""// Copy aux parity array to device __constant__ memory
-cudaMemcpyToSymbol(d_aux_gf_parity, aux_gf_parity, {len(auxiliary_variables_list)}] * sizeof(int8_t));
-cudaCheckErrors(copy, "Copy to d_aux_gf_parity failed");
-"""
-
-        if set_parity_on_auxevol:
-            if len(auxevol_variables_list) > 0:
-                self.file_output_str += f"""// Copy auxevolv parity array to device __constant__ memory
-cudaMemcpyToSymbol(d_auxevol_gf_parity, auxevol_gf_parity, {len(auxevol_variables_list)}] * sizeof(int8_t));
-cudaCheckErrors(copy, "Copy to d_auxevol_gf_parity failed");
-"""
-
-        if "d_gridfunctions_wavespeed" in declarations_dict.keys():
-            self.file_output_str += """
-// Copy gridfunctions_wavespeed array to device memory
-cudaMemcpyToSymbol(d_gridfunctions_wavespeed, gridfunctions_wavespeed, NUM_EVOL_GFS * sizeof(REAL));
-cudaCheckErrors(copy, "Copy to d_gridfunctions_wavespeed failed");
-
-// Copy gridfunctions_f_infinity array to device memory
-cudaMemcpyToSymbol(d_gridfunctions_f_infinity, gridfunctions_f_infinity, NUM_EVOL_GFS * sizeof(REAL));
-cudaCheckErrors(copy, "Copy to d_gridfunctions_f_infinity failed");
+        # Ensure necessary global arrays, currently stored in BHaH_defines.h, are copied to
+        # device __constant__ memory
+        for constant_ary in [
+            "d_evol_gf_parity",
+            "d_aux_gf_parity",
+            "d_auxevol_gf_parity",
+            "d_gridfunctions_wavespeed",
+            "d_gridfunctions_f_infinity"]:
+            if constant_ary in declarations_dict.keys():
+                host_ary_name = constant_ary.replace("d_", "")
+                host_ary_type = declarations_dict[constant_ary]["type"].replace("__constant__", "").strip()
+                self.file_output_str += f"""// Copy {host_ary_name} to device __constant__ memory
+cudaMemcpyToSymbol({constant_ary}, {host_ary_name}, {declarations_dict[constant_ary]['array_size']} * sizeof({host_ary_type}));
+cudaCheckErrors(copy, "Copy to {constant_ary} failed");
 """
 
         self.file_output_str = clang_format(self.file_output_str)
