@@ -54,6 +54,8 @@ class CUDA_BHaH_device_defines_h:
     :param additional_macros_str: Block string of additional macro definitions
     :param num_streams: Number of CUDA streams to use
     :param nghosts: Number of ghost zones for the FD stencil
+    :param set_parity_on_aux: Flag to set parity on auxiliary variables. Default is False.
+    :param set_parity_on_auxevol: Flag to set parity on auxevol variables. Default is False.
 
     >>> import nrpy.c_function as cfc
     >>> from nrpy.helpers.generic import validate_strings
@@ -143,12 +145,6 @@ class CUDA_BHaH_device_defines_h:
                     "comment": "// Device storage for evolved gridfunction parity\n",
                 }
 
-        evolved_variables_list: list[str]
-        (
-            evolved_variables_list,
-            _auxiliary_variables_list,
-            _auxevol_variables_list,
-        ) = gri.BHaHGridFunction.gridfunction_lists()
         # This device storage is only needed by some problems
         if evolved_variables_list:
             standard_decl_dict["d_gridfunctions_wavespeed"] = {
@@ -251,18 +247,12 @@ class BHaH_CUDA_global_init_h:
     for (int i = 0; i < NUM_STREAMS; ++i) {
       cudaStreamCreate(&streams[i]);
     }
-    // Copy parity array to device __constant__ memory
-    cudaMemcpyToSymbol(d_evol_gf_parity, evol_gf_parity, 24 * sizeof(int8_t));
-    cudaCheckErrors(copy, "Copy to d_evol_gf_parity failed");
-    <BLANKLINE>
     """
 
     def __init__(
         self,
         project_dir: str,
         declarations_dict: Dict[str, Dict[str, str]],
-        set_parity_on_aux: bool = False,
-        set_parity_on_auxevol: bool = False,
     ) -> None:
         self.project_Path = Path(project_dir)
         self.project_Path.mkdir(parents=True, exist_ok=True)
@@ -285,10 +275,15 @@ for(int i = 0; i < NUM_STREAMS; ++i) {
             "d_aux_gf_parity",
             "d_auxevol_gf_parity",
             "d_gridfunctions_wavespeed",
-            "d_gridfunctions_f_infinity"]:
+            "d_gridfunctions_f_infinity",
+        ]:
             if constant_ary in declarations_dict.keys():
                 host_ary_name = constant_ary.replace("d_", "")
-                host_ary_type = declarations_dict[constant_ary]["type"].replace("__constant__", "").strip()
+                host_ary_type = (
+                    declarations_dict[constant_ary]["type"]
+                    .replace("__constant__", "")
+                    .strip()
+                )
                 self.file_output_str += f"""// Copy {host_ary_name} to device __constant__ memory
 cudaMemcpyToSymbol({constant_ary}, {host_ary_name}, {declarations_dict[constant_ary]['array_size']} * sizeof({host_ary_type}));
 cudaCheckErrors(copy, "Copy to {constant_ary} failed");
@@ -322,10 +317,6 @@ class BHaH_CUDA_global_defines_h:
     for (int i = 0; i < NUM_STREAMS; ++i) {
       cudaStreamCreate(&streams[i]);
     }
-    // Copy parity array to device __constant__ memory
-    cudaMemcpyToSymbol(d_evol_gf_parity, evol_gf_parity, 24 * sizeof(int8_t));
-    cudaCheckErrors(copy, "Copy to d_evol_gf_parity failed");
-    <BLANKLINE>
     """
 
     def __init__(
