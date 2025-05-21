@@ -9,9 +9,9 @@ Author: Zachariah B. Etienne
 
 import nrpy.c_function as cfc
 import nrpy.params as par
-from nrpy.infrastructures.superB.CurviBoundaryConditions import (
-    register_CFunction_apply_bcs_inner_only_specific_gfs,
-    register_CFunction_apply_bcs_outerextrap_and_inner_specific_gfs,
+from nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions import (
+    register_CFunction_apply_bcs_inner_only_specific_auxgfs,
+    register_CFunction_apply_bcs_outerextrap_and_inner_specific_auxgfs,
 )
 
 par.register_CodeParameter(
@@ -499,9 +499,9 @@ SinhCylindrical coordinates.
     REAL *restrict diagnostic_output_gfs,
     REAL *restrict xx[3]"""
 
-    # Register C functions apply_bcs_inner_only_specific_gfs and apply_bcs_outerextrap_and_inner_specific_gfs, needed for 2d interp of psi4
-    register_CFunction_apply_bcs_inner_only_specific_gfs()
-    register_CFunction_apply_bcs_outerextrap_and_inner_specific_gfs()
+    # Register C functions apply_bcs_inner_only_specific_gfs and apply_bcs_outerextrap_and_inner_specific_auxgfs, needed for 2d interp of psi4
+    register_CFunction_apply_bcs_inner_only_specific_auxgfs()
+    register_CFunction_apply_bcs_outerextrap_and_inner_specific_auxgfs()
 
     body = r"""
   // Step 0: Set up the diagnostic structure (calculates shell points on grid, etc.).
