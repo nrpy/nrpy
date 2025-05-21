@@ -382,7 +382,9 @@ copy_files(
     subdirectory="TwoPunctures",
 )
 gpu_defines_filename = BHaH_device_defines_h.output_device_headers(
-    project_dir, num_streams=num_cuda_streams
+    project_dir,
+    num_streams=num_cuda_streams,
+    set_parity_on_aux=True,
 )
 BHaH_defines_h.output_BHaH_defines_h(
     additional_includes=[str(Path("TwoPunctures") / Path("TwoPunctures.h"))],
@@ -408,7 +410,9 @@ post_non_y_n_auxevol_mallocs = ""
 if enable_CAHD:
     post_non_y_n_auxevol_mallocs = """for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
     cahdprefactor_auxevol_gridfunction(&commondata, &griddata[grid].params, griddata[grid].xx,  griddata[grid].gridfuncs.auxevol_gfs);
-}\n""".replace("griddata", "griddata_device" if parallelization == "cuda" else "griddata")
+}\n""".replace(
+        "griddata", "griddata_device" if parallelization == "cuda" else "griddata"
+    )
 
 # Set griddata struct used for calculations to griddata_device for certain parallelizations
 compute_griddata = "griddata_device" if parallelization in ["cuda"] else "griddata"
@@ -438,7 +442,7 @@ if enable_intrinsics:
     copy_files(
         package="nrpy.helpers",
         filenames_list=(
-            ["cuda_intrinsics.h"]
+            ["cuda_intrinsics.h", "simd_intrinsics.h"]
             if parallelization == "cuda"
             else ["simd_intrinsics.h"]
         ),
@@ -480,9 +484,3 @@ print(
     f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
 )
 print(f"    Parameter file can be found in {project_name}.par")
-
-# print(cfc.CFunction_dict["initial_data"].full_function)
-# print(cfc.CFunction_dict["rhs_eval"].full_function)
-# print(cfc.CFunction_dict["apply_bcs"].full_function)
-# print(cfc.CFunction_dict["parameter_file_read_and_parse"].full_function)
-# print(cfc.CFunction_dict["main"].full_function)
