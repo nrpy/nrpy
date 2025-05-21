@@ -63,8 +63,8 @@ void apply_bcs_inner_only_specific_auxgfs(const commondata_struct *restrict comm
   dim3 blocks_per_grid(MAX(1U, (num_inner_boundary_points + threads_in_x_dir - 1) / threads_in_x_dir), 1, 1);
   size_t sm = 0;
   size_t streamid = params->grid_idx % NUM_STREAMS;
-  apply_bcs_inner_only_specific_auxgfs_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, num_inner_boundary_points,
-                                                                                                          inner_bc_array, gfs, num_gfs, gfs_to_sync);
+  apply_bcs_inner_only_specific_auxgfs_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(
+      streamid, num_inner_boundary_points, inner_bc_array, gfs, num_gfs, gfs_to_sync_device);
   cudaCheckErrors(cudaKernel, "apply_bcs_inner_only_specific_auxgfs_gpu failure");
 
   BHAH_DEVICE_SYNC();

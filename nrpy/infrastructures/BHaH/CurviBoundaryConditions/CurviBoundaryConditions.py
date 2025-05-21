@@ -977,6 +977,7 @@ boundary points ("inner maps to outer").
         BHAH_MALLOC_DEVICE(gfs_to_sync_device, num_gfs * sizeof(int));
         cudaMemcpy(gfs_to_sync_device, gfs_to_sync, num_gfs * sizeof(int), cudaMemcpyHostToDevice);
         """
+        new_body = new_body.replace("gfs_to_sync", "gfs_to_sync_device")
     kernel_launch_body += new_body
 
     if parallelization in ["cuda"]:
