@@ -134,7 +134,7 @@ class CUDA_BHaH_device_defines_h:
                 standard_decl_dict["d_aux_gf_parity"] = {
                     "type": "__constant__ int8_t",
                     "array_size": f"{len(auxiliary_variables_list)}",
-                    "comment": "// Device storage for evolved gridfunction parity\n",
+                    "comment": "// Device storage for aux gridfunction parity\n",
                 }
 
         if set_parity_on_auxevol:
@@ -142,7 +142,7 @@ class CUDA_BHaH_device_defines_h:
                 standard_decl_dict["d_auxevol_gf_parity"] = {
                     "type": "__constant__ int8_t",
                     "array_size": f"{len(auxevol_variables_list)}",
-                    "comment": "// Device storage for evolved gridfunction parity\n",
+                    "comment": "// Device storage for aux evolved gridfunction parity\n",
                 }
 
         # This device storage is only needed by some problems
@@ -355,6 +355,8 @@ def output_device_headers(
     additional_macros_str: Union[str, None] = None,
     num_streams: int = 3,
     nghosts: Union[int, None] = None,
+    set_parity_on_aux: bool = False,
+    set_parity_on_auxevol: bool = False,
 ) -> str:
     """
     Generate device specific header files.
@@ -367,6 +369,8 @@ def output_device_headers(
     :param additional_macros_str: Block string of additional macro definitions
     :param num_streams: Number of CUDA streams to use
     :param nghosts: FD stencil radius
+    :param set_parity_on_aux: Flag to set parity on auxiliary variables. Default is False.
+    :param set_parity_on_auxevol: Flag to set parity on auxevol variables. Default is False.
     :returns: header filename
     """
     parallelization = par.parval_from_str("parallelization")
@@ -378,6 +382,8 @@ def output_device_headers(
             additional_macros_str=additional_macros_str,
             num_streams=num_streams,
             nghosts=nghosts,
+            set_parity_on_aux=set_parity_on_aux,
+            set_parity_on_auxevol=set_parity_on_auxevol,
         )
 
         BHaH_CUDA_global_defines_h(
