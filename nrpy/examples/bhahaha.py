@@ -68,8 +68,15 @@ parser.add_argument(
     help="Finite-difference order; interpolation order is one less than this. Default=6. For precision horizon finding, set to 8.",
     default=6,
 )
+parser.add_argument(
+    "--outrootdir",
+    type=str,
+    help="Output root directory. Default = project/",
+    default="project",
+)
 args = parser.parse_args()
 fd_order = args.fdorder
+outrootdir = args.outrootdir
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -91,7 +98,7 @@ boundary_conditions_desc = "inner boundaries only"
 
 #########################################################
 # STEP 2: Project directory setup
-project_dir = os.path.join("project", project_name)
+project_dir = os.path.join(outrootdir, project_name)
 
 # Clean the project directory if it exists
 shutil.rmtree(project_dir, ignore_errors=True)
@@ -280,6 +287,6 @@ with Path(project_dir, "BHaHAHA.h").open("w", encoding="utf-8") as output_file:
 #########################################################
 # STEP 10: Final message
 print(
-    f"Finished! Now go into ./project/{project_name} and type `make` to build BHaHAHA.\n"
+    f"Finished! Now go into ./{outrootdir}/{project_name} and type `make` to build BHaHAHA.\n"
     "For help linking to your NR code, start by reading BHaHAHA.h"
 )

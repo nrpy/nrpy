@@ -16,6 +16,7 @@ Author: Zachariah B. Etienne
 import argparse
 import os
 import shutil
+import subprocess
 
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.helpers.parallelization.cuda_utilities as cudautils
@@ -141,6 +142,34 @@ par.adjust_CodeParam_default("t_final", t_final)
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
+if parallelization != "cuda":
+    try:
+        # Attempt to run as a script path
+        subprocess.run(
+            [
+                "python",
+                "nrpy/examples/bhahaha.py",
+                "--fdorder",
+                str(fd_order),
+                "--outrootdir",
+                project_dir,
+            ],
+            check=True,
+        )
+    except subprocess.CalledProcessError:
+        # If it fails (e.g., from a pip install), try running as a module
+        subprocess.run(
+            [
+                "python",
+                "-m",
+                "nrpy.examples.bhahaha",
+                "--fdorder",
+                str(fd_order),
+                "--outrootdir",
+                project_dir,
+            ],
+            check=True,
+        )
 
 if parallelization == "cuda":
     cudautils.register_CFunctions_HostDevice__operations()
@@ -327,11 +356,17 @@ if parallelization == "cuda":
         compiler_opt_option="nvcc",
     )
 else:
+    BHaHAHA_subdir = "BHaHAHA"
+    if fd_order != 6:
+        BHaHAHA_subdir = f"BHaHAHA-{fd_order}o"
+
     Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
         project_dir=project_dir,
         project_name=project_name,
+        addl_dirs_to_make=[BHaHAHA_subdir],
         exec_or_library_name=project_name,
         compiler_opt_option="default",
+        addl_libraries=[f"-L{BHaHAHA_subdir}", f"-l{BHaHAHA_subdir}"],
     )
 print(
     f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
