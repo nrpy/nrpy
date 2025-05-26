@@ -29,7 +29,7 @@ def register_CFunction_diagnostics_file_output() -> Union[None, pcg.NRPyEnv_type
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    includes = ["BHaH_defines.h"]
     desc = """Outputs BHaHAHA diagnostic data to two files:
 1. A diagnostics file (appended) for the given horizon
 2. A gnuplot-friendly file of horizon-surface data

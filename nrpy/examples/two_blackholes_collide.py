@@ -119,6 +119,10 @@ NUMGRIDS = len(set_of_CoordSystems)
 num_cuda_streams = NUMGRIDS
 par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
 
+BHaHAHA_subdir = "BHaHAHA"
+if fd_order != 6:
+    BHaHAHA_subdir = f"BHaHAHA-{fd_order}o"
+
 OMP_collapse = 1
 if "Spherical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "2")
@@ -156,6 +160,18 @@ if parallelization != "cuda":
             ],
             check=True,
         )
+        from nrpy.infrastructures.BHaH.BHaHAHA import BHaH_implementation
+        from nrpy.infrastructures.BHaH.BHaHAHA import (
+            interpolation_3d_general__uniform_src_grid,
+        )
+
+        BHaH_implementation.register_CFunction_bhahaha_find_horizons(
+            BHaHAHA_subdir=BHaHAHA_subdir, CoordSystem=CoordSystem, max_horizons=3
+        )
+        interpolation_3d_general__uniform_src_grid.register_CFunction_interpolation_3d_general__uniform_src_grid(
+            enable_simd=enable_intrinsics, project_dir=project_dir
+        )
+
     except subprocess.CalledProcessError:
         # If it fails (e.g., from a pip install), try running as a module
         subprocess.run(
@@ -294,6 +310,25 @@ par.adjust_CodeParam_default("BH1_mass", default_BH1_mass)
 par.adjust_CodeParam_default("BH2_mass", default_BH2_mass)
 par.adjust_CodeParam_default("BH1_posn_z", default_BH1_z_posn)
 par.adjust_CodeParam_default("BH2_posn_z", default_BH2_z_posn)
+if parallelization == "openmp":
+    # Set BHaHAHA defaults to reasonable values.
+    par.adjust_CodeParam_default(
+        "bah_initial_grid_z_center", [default_BH1_z_posn, default_BH2_z_posn, 0.0]
+    )
+    par.adjust_CodeParam_default("bah_Nr_interp_max", 40)
+    par.adjust_CodeParam_default(
+        "bah_M_scale",
+        [default_BH1_mass, default_BH2_mass, default_BH1_mass + default_BH2_mass],
+    )
+    par.adjust_CodeParam_default(
+        "bah_max_search_radius",
+        [
+            0.6 * default_BH1_mass,
+            0.6 * default_BH2_mass,
+            1.1 * (default_BH1_mass + default_BH2_mass),
+        ],
+    )
+
 
 CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
 CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
@@ -308,6 +343,11 @@ gpu_defines_filename = BHaH_device_defines_h.output_device_headers(
 )
 BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
+    additional_includes=(
+        [os.path.join(BHaHAHA_subdir, "BHaHAHA.h")]
+        if parallelization == "openmp"
+        else []
+    ),
     enable_intrinsics=enable_intrinsics,
     intrinsics_header_lst=(
         ["cuda_intrinsics.h"] if parallelization == "cuda" else ["simd_intrinsics.h"]
@@ -328,6 +368,11 @@ BHaH_defines_h.output_BHaH_defines_h(
 
 main_c.register_CFunction_main_c(
     initial_data_desc=IDtype,
+    # pre_diagnostics=(
+    #     "bhahaha_find_horizons(&commondata, griddata);\n"
+    #     if parallelization == "openmp"
+    #     else ""
+    # ),
     MoL_method=MoL_method,
     boundary_conditions_desc=boundary_conditions_desc,
 )
@@ -356,10 +401,6 @@ if parallelization == "cuda":
         compiler_opt_option="nvcc",
     )
 else:
-    BHaHAHA_subdir = "BHaHAHA"
-    if fd_order != 6:
-        BHaHAHA_subdir = f"BHaHAHA-{fd_order}o"
-
     Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
         project_dir=project_dir,
         project_name=project_name,

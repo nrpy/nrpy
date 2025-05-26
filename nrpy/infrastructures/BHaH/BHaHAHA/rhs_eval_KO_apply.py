@@ -57,7 +57,7 @@ def register_CFunction_rhs_eval(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    includes = ["BHaH_defines.h"]
     desc = "Evaluate RHSs"
     cfunc_type = "void"
     name = "rhs_eval"
@@ -139,7 +139,7 @@ def register_CFunction_KO_apply(
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    includes = ["BHaH_defines.h"]
     desc = "Apply KO"
     cfunc_type = "void"
     name = "KO_apply"

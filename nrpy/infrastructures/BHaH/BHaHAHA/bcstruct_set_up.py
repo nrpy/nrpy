@@ -559,10 +559,7 @@ typedef struct {
         )
 
     # Step 3: Register bcstruct_set_up().
-    includes = [
-        "BHaH_defines.h",
-        "BHaH_function_prototypes.h",
-    ]
+    includes = ["BHaH_defines.h"]
     prefunc = Cfunction__EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(
         CoordSystem
     )
