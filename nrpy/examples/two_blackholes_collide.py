@@ -160,8 +160,8 @@ if parallelization != "cuda":
             ],
             check=True,
         )
-        from nrpy.infrastructures.BHaH.BHaHAHA import BHaH_implementation
         from nrpy.infrastructures.BHaH.BHaHAHA import (
+            BHaH_implementation,
             interpolation_3d_general__uniform_src_grid,
         )
 
