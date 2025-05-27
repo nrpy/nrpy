@@ -34,6 +34,7 @@ def register_CFunction_bhahaha_find_horizons(
     :param max_horizons: Maximum number of horizons to search for.
     :return: None if in registration phase, else the updated NRPy environment.
     :raises ValueError: If EvolvedConformalFactor_cf set to unsupported value.
+
     >>> env = register_CFunction_bhahaha_find_horizons()
     """
     if pcg.pcg_registration_phase():
