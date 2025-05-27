@@ -160,18 +160,6 @@ if parallelization != "cuda":
             ],
             check=True,
         )
-        from nrpy.infrastructures.BHaH.BHaHAHA import (
-            BHaH_implementation,
-            interpolation_3d_general__uniform_src_grid,
-        )
-
-        BHaH_implementation.register_CFunction_bhahaha_find_horizons(
-            BHaHAHA_subdir=BHaHAHA_subdir, CoordSystem=CoordSystem, max_horizons=3
-        )
-        interpolation_3d_general__uniform_src_grid.register_CFunction_interpolation_3d_general__uniform_src_grid(
-            enable_simd=enable_intrinsics, project_dir=project_dir
-        )
-
     except subprocess.CalledProcessError:
         # If it fails (e.g., from a pip install), try running as a module
         subprocess.run(
@@ -186,6 +174,18 @@ if parallelization != "cuda":
             ],
             check=True,
         )
+    from nrpy.infrastructures.BHaH.BHaHAHA import (
+        BHaH_implementation,
+        interpolation_3d_general__uniform_src_grid,
+    )
+
+    BHaH_implementation.register_CFunction_bhahaha_find_horizons(
+        BHaHAHA_subdir=BHaHAHA_subdir, CoordSystem=CoordSystem, max_horizons=3
+    )
+    interpolation_3d_general__uniform_src_grid.register_CFunction_interpolation_3d_general__uniform_src_grid(
+        enable_simd=enable_intrinsics, project_dir=project_dir
+    )
+
 
 if parallelization == "cuda":
     cudautils.register_CFunctions_HostDevice__operations()
