@@ -236,7 +236,7 @@ all: {exec_or_library_name}
 """
 
     # Add the valgrind target
-    Makefile_str += "valgrind: clean"
+    Makefile_str += "valgrind: clean\n"
     for dir in addl_dirs_to_make:
         Makefile_str += f"""\t$(MAKE) CFLAGS="$(VALGRIND_CFLAGS)" -C {dir}\n"""
     Makefile_str += f"""\t$(MAKE) CFLAGS="$(VALGRIND_CFLAGS)" all\n"""
