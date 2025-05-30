@@ -325,8 +325,24 @@ if parallelization == "openmp":
         [
             0.6 * default_BH1_mass,
             0.6 * default_BH2_mass,
-            1.1 * (default_BH1_mass + default_BH2_mass),
+            1.9 * (default_BH1_mass + default_BH2_mass),
         ],
+    )
+    par.adjust_CodeParam_default(
+        "bah_Theta_L2_times_M_tolerance",
+        [2e-4, 2e-4, 2e-4],
+    )
+    par.adjust_CodeParam_default(
+        "bah_Nphi_array_multigrid",
+        [2, 2, 2],
+    )
+    par.adjust_CodeParam_default(
+        "bah_Nr_interp_max",
+        40,
+    )
+    par.adjust_CodeParam_default(
+        "bah_BBH_mode_enable",
+        1,
     )
 
 
@@ -368,11 +384,11 @@ BHaH_defines_h.output_BHaH_defines_h(
 
 main_c.register_CFunction_main_c(
     initial_data_desc=IDtype,
-    # pre_diagnostics=(
-    #     "bhahaha_find_horizons(&commondata, griddata);\n"
-    #     if parallelization == "openmp"
-    #     else ""
-    # ),
+    pre_diagnostics=(
+        "bhahaha_find_horizons(&commondata, griddata);\n"
+        if parallelization == "openmp"
+        else ""
+    ),
     MoL_method=MoL_method,
     boundary_conditions_desc=boundary_conditions_desc,
 )
