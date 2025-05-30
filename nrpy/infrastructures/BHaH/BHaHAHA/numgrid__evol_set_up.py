@@ -134,6 +134,7 @@ def register_CFunction_numgrid__evol_set_up() -> None:
   const int grid = 0;
   params_struct *restrict params = &griddata[grid].params;
 
+  snprintf(params->CoordSystemName, 100, "Spherical"); // Must be set, or valgrind will complain about reading this in set_CodeParameters.h
   params->grid_physical_size = 1.0; // Unused, since h sets the actual radius
 
   // Set grid sizes from Nx_evol_grid
