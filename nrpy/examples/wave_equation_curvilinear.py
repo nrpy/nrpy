@@ -89,7 +89,7 @@ grid_physical_size = 10.0
 t_final = 0.8 * grid_physical_size
 default_diagnostics_output_every = 0.5
 default_checkpoint_every = 50.0
-CoordSystem = "Cartesian"
+CoordSystem = "SinhCylindrical"
 set_of_CoordSystems = {CoordSystem}
 list_of_grid_physical_sizes = []
 for CoordSystem in set_of_CoordSystems:
@@ -100,6 +100,7 @@ num_cuda_streams = NUMGRIDS
 Nxx_dict = {
     "Spherical": [64, 2, 2],
     "SinhSpherical": [64, 2, 2],
+    "SinhCylindrical": [64, 2, 64],
     "Cartesian": [64, 64, 64],
     "SinhCartesian": [64, 64, 64],
 }
@@ -107,10 +108,16 @@ OMP_collapse = 1
 if (
     "Spherical" in CoordSystem
     and WaveType == "SphericalGaussian"
-    and Nxx_dict["Spherical"][1] == Nxx_dict["Spherical"][2] == 2
+    and Nxx_dict[CoordSystem][1] == Nxx_dict[CoordSystem][2] == 2
 ):
     par.set_parval_from_str("symmetry_axes", "12")
     OMP_collapse = 2  # about 2x faster
+if (
+    "Cylindrical" in CoordSystem
+    and WaveType == "SphericalGaussian"
+    and Nxx_dict[CoordSystem][1] == 2
+):
+    par.set_parval_from_str("symmetry_axes", "1")
 
 MoL_method = "RK4"
 fd_order = 4

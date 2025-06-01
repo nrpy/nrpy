@@ -151,7 +151,8 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     iter++;
   }} // END Newton-Raphson iterations to compute xx{i}
   if(iter >= ITER_MAX) {{
-    printf("ERROR: Newton-Raphson failed for {CoordSystem}: xx{i}, x,y,z = %.15e %.15e %.15e\\n", Cartx,Carty,Cartz);
+    fprintf(stderr, "ERROR: Newton-Raphson failed for {CoordSystem}: xx{i}, x,y,z = %.15e %.15e %.15e\\n", Cartx,Carty,Cartz);
+    exit(1);
   }}
   xx[{i}] = xx{i};
 """
@@ -250,7 +251,7 @@ def register_CFunction_xx_to_Cart(
 
     cfunc_type = "void"
     name = "xx_to_Cart"
-    params = "const params_struct *restrict params, REAL xx[3], REAL xCart[3]"
+    params = "const params_struct *restrict params, const REAL xx[3], REAL xCart[3]"
     body = ""
     cfunc_decorators = "__host__ __device__" if parallelization == "cuda" else ""
 
@@ -284,10 +285,10 @@ def register_CFunction_xx_to_Cart(
     ]
 
     body = """
-    const REAL xx0 = xx[0];
-    const REAL xx1 = xx[1];
-    const REAL xx2 = xx[2];
-    """ + ccg.c_codegen(
+const REAL xx0 = xx[0];
+const REAL xx1 = xx[1];
+const REAL xx2 = xx[2];
+""" + ccg.c_codegen(
         xx_to_Cart_expr_list,
         ["xCart[0]", "xCart[1]", "xCart[2]"],
     )

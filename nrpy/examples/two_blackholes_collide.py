@@ -393,7 +393,9 @@ main_c.register_CFunction_main_c(
     boundary_conditions_desc=boundary_conditions_desc,
 )
 griddata_commondata.register_CFunction_griddata_free(
-    enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True
+    enable_rfm_precompute=enable_rfm_precompute,
+    enable_CurviBCs=True,
+    enable_bhahaha=(parallelization != "cuda"),
 )
 
 if enable_intrinsics:
