@@ -180,7 +180,7 @@ if parallelization != "cuda":
     )
 
     BHaH_implementation.register_CFunction_bhahaha_find_horizons(
-        BHaHAHA_subdir=BHaHAHA_subdir, CoordSystem=CoordSystem, max_horizons=3
+        CoordSystem=CoordSystem, max_horizons=3
     )
     interpolation_3d_general__uniform_src_grid.register_CFunction_interpolation_3d_general__uniform_src_grid(
         enable_simd=enable_intrinsics, project_dir=project_dir
