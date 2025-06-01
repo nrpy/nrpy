@@ -112,7 +112,7 @@ def register_CFunction_rhs_eval(
         include_CodeParameters_h=True,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_KO_apply(
@@ -215,4 +215,4 @@ def register_CFunction_KO_apply(
         include_CodeParameters_h=True,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()

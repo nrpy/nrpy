@@ -53,4 +53,4 @@ schedule FUNC_NAME at STARTUP
         ET_thorn_name=thorn_name,
         ET_schedule_bins_entries=[("STARTUP", schedule)],
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()

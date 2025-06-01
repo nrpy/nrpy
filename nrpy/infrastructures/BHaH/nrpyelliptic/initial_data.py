@@ -56,7 +56,7 @@ def register_CFunction_initial_guess_single_point() -> Union[None, pcg.NRPyEnv_t
         body=body,
         cfunc_decorators=cfunc_decorators,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_initial_guess_all_points(
@@ -155,4 +155,4 @@ if( read_checkpoint(commondata, griddata) ) return;
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()

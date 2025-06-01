@@ -740,7 +740,7 @@ def register_CFunctions(
         for CoordSystem in set_of_CoordSystems:
             register_CFunction_ds_min_radial_like_dirns_single_pt(CoordSystem)
 
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 if __name__ == "__main__":

@@ -78,4 +78,4 @@ schedule FUNC_NAME in MoL_PostStep before {thorn_name}_enforce_detgammahat_const
         ET_schedule_bins_entries=[("MoL_PostStep", schedule)],
         ET_current_thorn_CodeParams_used=["lapse_floor"],
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()

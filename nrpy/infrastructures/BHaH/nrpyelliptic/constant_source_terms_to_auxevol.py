@@ -357,7 +357,7 @@ def register_CFunction_initialize_constant_auxevol(
         include_CodeParameters_h=True,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 if __name__ == "__main__":

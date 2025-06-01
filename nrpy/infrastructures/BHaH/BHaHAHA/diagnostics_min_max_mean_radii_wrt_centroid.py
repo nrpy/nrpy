@@ -125,7 +125,7 @@ def register_CFunction_diagnostics_min_max_mean_radii_wrt_centroid(
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 if __name__ == "__main__":

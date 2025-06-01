@@ -231,4 +231,4 @@ griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_pers
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()

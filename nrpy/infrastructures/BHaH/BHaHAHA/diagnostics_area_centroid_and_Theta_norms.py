@@ -168,7 +168,7 @@ def register_CFunction_diagnostics_area_centroid_and_Theta_norms(
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 if __name__ == "__main__":

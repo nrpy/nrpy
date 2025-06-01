@@ -277,7 +277,7 @@ def register_CFunction_initial_data_exact(
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_initial_data(
@@ -334,4 +334,4 @@ if( read_checkpoint(commondata, griddata) ) return;
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()

@@ -559,4 +559,4 @@ int main() {
         body=body,
         postfunc=postfunc,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()

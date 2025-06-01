@@ -202,7 +202,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
         body=body,
         cfunc_decorators=cfunc_decorators,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_xx_to_Cart(
@@ -305,7 +305,7 @@ const REAL xx2 = xx[2];
         body=body,
         cfunc_decorators=cfunc_decorators,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 if __name__ == "__main__":

@@ -128,7 +128,7 @@ gsl_interp_accel_free(acc);
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conservative() -> (
@@ -180,7 +180,7 @@ return GSL_SUCCESS;
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conservative_nodf() -> (
@@ -256,7 +256,7 @@ return GSL_SUCCESS;
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit() -> (
@@ -322,7 +322,7 @@ return GSL_SUCCESS;
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_dRHS() -> (
@@ -388,7 +388,7 @@ return GSL_SUCCESS;
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_RHSdRHS() -> (
@@ -428,7 +428,7 @@ return GSL_SUCCESS;
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_dissipative() -> (
@@ -499,7 +499,7 @@ return status;
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_SEOBNRv5_aligned_spin_radial_momentum_condition() -> (
@@ -573,4 +573,4 @@ return prstar_condition;
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()

@@ -125,7 +125,7 @@ MAYBE_UNUSED REAL {psi4_class.metric_deriv_var_list_str};
         include_CodeParameters_h=True,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_psi4_metric_deriv_quantities(
@@ -176,7 +176,7 @@ def register_CFunction_psi4_metric_deriv_quantities(
         include_CodeParameters_h=True,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_psi4_tetrad(
@@ -259,4 +259,4 @@ def register_CFunction_psi4_tetrad(
         include_CodeParameters_h=True,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()

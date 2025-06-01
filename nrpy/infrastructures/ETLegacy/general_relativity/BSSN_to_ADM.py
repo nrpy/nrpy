@@ -178,4 +178,4 @@ schedule FUNC_NAME in MoL_PseudoEvolution after {thorn_name}_aux_ApplyBCs
         ET_thorn_name=thorn_name,
         ET_schedule_bins_entries=ET_schedule_bins_entries,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()

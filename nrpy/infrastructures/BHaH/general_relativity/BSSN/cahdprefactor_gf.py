@@ -66,4 +66,4 @@ REAL dsmin0, dsmin1, dsmin2;
             ),
             CoordSystem_for_wrapper_func=CoordSystem,
         )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
