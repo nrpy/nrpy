@@ -57,7 +57,8 @@ void Cart_to_xx_and_nearest_i0i1i2__rfm__SinhCylindricalv2n2(const params_struct
       iter++;
     } // END Newton-Raphson iterations to compute xx0
     if (iter >= ITER_MAX) {
-      printf("ERROR: Newton-Raphson failed for SinhCylindricalv2n2: xx0, x,y,z = %.15e %.15e %.15e\n", Cartx, Carty, Cartz);
+      fprintf(stderr, "ERROR: Newton-Raphson failed for SinhCylindricalv2n2: xx0, x,y,z = %.15e %.15e %.15e\n", Cartx, Carty, Cartz);
+      exit(1);
     }
     xx[0] = xx0;
 
@@ -87,7 +88,8 @@ void Cart_to_xx_and_nearest_i0i1i2__rfm__SinhCylindricalv2n2(const params_struct
       iter++;
     } // END Newton-Raphson iterations to compute xx2
     if (iter >= ITER_MAX) {
-      printf("ERROR: Newton-Raphson failed for SinhCylindricalv2n2: xx2, x,y,z = %.15e %.15e %.15e\n", Cartx, Carty, Cartz);
+      fprintf(stderr, "ERROR: Newton-Raphson failed for SinhCylindricalv2n2: xx2, x,y,z = %.15e %.15e %.15e\n", Cartx, Carty, Cartz);
+      exit(1);
     }
     xx[2] = xx2;
 
