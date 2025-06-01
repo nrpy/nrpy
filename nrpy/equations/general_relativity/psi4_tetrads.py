@@ -7,7 +7,7 @@ Authors: Zachariah B. Etienne
 """
 
 # Step 1.a: import all needed modules
-from typing import List, Union, cast
+from typing import List
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
 

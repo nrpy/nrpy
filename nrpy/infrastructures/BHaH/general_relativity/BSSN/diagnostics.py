@@ -15,7 +15,6 @@ import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices as out012d
 import nrpy.params as par
-from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
 
 
 def register_CFunction_diagnostics(

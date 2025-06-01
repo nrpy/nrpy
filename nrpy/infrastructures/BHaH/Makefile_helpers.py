@@ -192,8 +192,8 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     else:
         # Executable
         target_rule = f"""{exec_or_library_name}: $(OBJ_FILES)\n"""
-        for dir in addl_dirs_to_make:
-            target_rule += f"""\t$(MAKE) -C {dir}\n"""
+        for directory in addl_dirs_to_make:
+            target_rule += f"""\t$(MAKE) -C {directory}\n"""
         target_rule += "\t$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)\n"
     # Construct the Makefile string
     Makefile_str = (
@@ -208,7 +208,7 @@ VALGRIND_CFLAGS = {CFLAGS_dict["debug"]}
 {LDFLAGS_str}
 """
     if not CC == "nvcc":
-        Makefile_str += f"""
+        Makefile_str += """
 # Check for OpenMP support
 OPENMP_FLAG = -fopenmp
 COMPILER_SUPPORTS_OPENMP := $(shell echo | $(CC) $(OPENMP_FLAG) -E - >/dev/null 2>&1 && echo YES || echo NO)
@@ -237,9 +237,9 @@ all: {exec_or_library_name}
 
     # Add the valgrind target
     Makefile_str += "valgrind: clean\n"
-    for dir in addl_dirs_to_make:
-        Makefile_str += f"""\t$(MAKE) CFLAGS="$(VALGRIND_CFLAGS)" -C {dir}\n"""
-    Makefile_str += f"""\t$(MAKE) CFLAGS="$(VALGRIND_CFLAGS)" all\n"""
+    for directory in addl_dirs_to_make:
+        Makefile_str += f"""\t$(MAKE) CFLAGS="$(VALGRIND_CFLAGS)" -C {directory}\n"""
+    Makefile_str += """\t$(MAKE) CFLAGS="$(VALGRIND_CFLAGS)" all\n"""
     if not create_lib:
         Makefile_str += f"""\tvalgrind --track-origins=yes --leak-check=full --show-leak-kinds=all -s ./{exec_or_library_name}
 

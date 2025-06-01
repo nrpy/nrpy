@@ -22,14 +22,12 @@ from nrpy.infrastructures.BHaH import griddata_commondata
 
 
 def register_CFunction_bhahaha_find_horizons(
-    BHaHAHA_subdir: str,
     CoordSystem: str,
     max_horizons: int,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the C function for general-purpose 3D Lagrange interpolation.
 
-    :param BHaHAHA_subdir: Subdirectory where BHaHAHA is located.
     :param CoordSystem: CoordSystem of project, where horizon finding will take place.
     :param max_horizons: Maximum number of horizons to search for.
     :return: None if in registration phase, else the updated NRPy environment.
