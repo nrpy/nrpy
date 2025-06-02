@@ -16,12 +16,13 @@ from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
 from nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions import (
     BHaH_defines_set_gridfunction_defines_with_parity_types,
     register_CFunction_apply_bcs_inner_only,
+    register_CFunction_apply_bcs_inner_only_specific_auxgfs,
     register_CFunction_apply_bcs_outerextrap_and_inner,
+    register_CFunction_apply_bcs_outerextrap_and_inner_specific_auxgfs,
     register_CFunction_apply_bcs_outerradiation_and_inner,
     register_CFunction_bcstruct_set_up,
-    register_CFunction_apply_bcs_inner_only_specific_auxgfs,
-    register_CFunction_apply_bcs_outerextrap_and_inner_specific_auxgfs
 )
+
 
 def register_CFunction_apply_bcs_inner_only_nonlocal() -> None:
     """Register C function for filling inner boundary points on the computational grid, as prescribed by bcstruct."""
