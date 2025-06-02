@@ -22,6 +22,7 @@ import os
 #         and compile-time parameters.
 import shutil
 from pathlib import Path
+import subprocess
 
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
@@ -94,6 +95,10 @@ if "Cartesian" in CoordSystem:
     par.adjust_CodeParam_default("Nchare1", 16)
     par.adjust_CodeParam_default("Nchare2", 16)
 
+BHaHAHA_subdir = "BHaHAHA"
+if fd_order != 6:
+    BHaHAHA_subdir = f"BHaHAHA-{fd_order}o"
+
 OMP_collapse = 1
 if "Spherical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "2")
@@ -117,6 +122,45 @@ par.adjust_CodeParam_default("t_final", t_final)
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
+try:
+    # Attempt to run as a script path
+    subprocess.run(
+        [
+            "python",
+            "nrpy/examples/bhahaha.py",
+            "--fdorder",
+            str(fd_order),
+            "--outrootdir",
+            project_dir,
+        ],
+        check=True,
+    )
+except subprocess.CalledProcessError:
+    # If it fails (e.g., from a pip install), try running as a module
+    subprocess.run(
+        [
+            "python",
+            "-m",
+            "nrpy.examples.bhahaha",
+            "--fdorder",
+            str(fd_order),
+            "--outrootdir",
+            project_dir,
+        ],
+        check=True,
+    )
+from nrpy.infrastructures.BHaH.BHaHAHA import (
+    BHaH_implementation,
+    interpolation_3d_general__uniform_src_grid,
+)
+
+BHaH_implementation.register_CFunction_bhahaha_find_horizons(
+    BHaHAHA_subdir=BHaHAHA_subdir, CoordSystem=CoordSystem, max_horizons=3
+)
+interpolation_3d_general__uniform_src_grid.register_CFunction_interpolation_3d_general__uniform_src_grid(
+    enable_simd=enable_intrinsics, project_dir=project_dir
+)
+
 superBinitialdata.register_CFunction_initial_data(
     CoordSystem=CoordSystem,
     IDtype=IDtype,
@@ -247,6 +291,24 @@ par.adjust_CodeParam_default("BH1_mass", default_BH1_mass)
 par.adjust_CodeParam_default("BH2_mass", default_BH2_mass)
 par.adjust_CodeParam_default("BH1_posn_z", default_BH1_z_posn)
 par.adjust_CodeParam_default("BH2_posn_z", default_BH2_z_posn)
+# Set BHaHAHA defaults to reasonable values.
+par.adjust_CodeParam_default(
+    "bah_initial_grid_z_center", [default_BH1_z_posn, default_BH2_z_posn, 0.0]
+)
+par.adjust_CodeParam_default("bah_Nr_interp_max", 40)
+par.adjust_CodeParam_default(
+    "bah_M_scale",
+    [default_BH1_mass, default_BH2_mass, default_BH1_mass + default_BH2_mass],
+)
+par.adjust_CodeParam_default(
+    "bah_max_search_radius",
+    [
+        0.6 * default_BH1_mass,
+        0.6 * default_BH2_mass,
+        1.1 * (default_BH1_mass + default_BH2_mass),
+    ],
+)
+
 
 CPs.write_CodeParameters_h_files(project_dir=project_dir)
 CPs.register_CFunctions_params_commondata_struct_set_to_default()
@@ -278,7 +340,7 @@ superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
 )
 
 Bdefines_h.output_BHaH_defines_h(
-    additional_includes=[str(Path("superB") / Path("superB.h"))],
+    additional_includes=[str(Path("superB") / Path("superB.h")), os.path.join(BHaHAHA_subdir, "BHaHAHA.h")],
     project_dir=project_dir,
     enable_intrinsics=enable_intrinsics,
     enable_rfm_precompute=enable_rfm_precompute,
