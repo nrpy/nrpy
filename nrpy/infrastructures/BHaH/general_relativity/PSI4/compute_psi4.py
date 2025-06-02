@@ -196,4 +196,4 @@ MAYBE_UNUSED REAL {psi4_class.metric_deriv_var_list_str};
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
