@@ -154,4 +154,4 @@ def register_CFunction_Ricci_eval(
         body=launch_body,
         enable_simd=enable_intrinsics,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()

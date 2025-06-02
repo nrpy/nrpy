@@ -178,4 +178,4 @@ def register_CFunction_rhs_eval(
         body=body,
         enable_simd=False,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()

@@ -330,7 +330,7 @@ def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_diagnostics(
@@ -587,7 +587,7 @@ default: {
         "store indices of 1d and 2d diagnostic points, the offset in the output file, etc",
     )
 
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_psi4_spinweightm2_decomposition_on_sphlike_grids() -> None:

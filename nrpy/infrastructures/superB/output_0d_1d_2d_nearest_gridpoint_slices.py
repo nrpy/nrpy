@@ -152,7 +152,7 @@ fclose(outfile);
         include_CodeParameters_h=True,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_diagnostics_nearest_1d_axis(
@@ -234,7 +234,7 @@ for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {{
         include_CodeParameters_h=True,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_diagnostics_nearest_2d_plane(
@@ -318,7 +318,7 @@ for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {{
         include_CodeParameters_h=True,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_diagnostics_set_up_nearest_1d_axis(
@@ -435,7 +435,7 @@ for (int i = 0; i < data_index; i++) {{
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_diagnostics_set_up_nearest_2d_plane(
@@ -548,7 +548,7 @@ LOOP_NOOMP(i0_pt, 0, numpts_i0, i1_pt, 0, numpts_i1, i2_pt, 0, numpts_i2) {{
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 if __name__ == "__main__":

@@ -125,4 +125,4 @@ schedule FUNC_NAME in MoL_PostStep
         ET_thorn_name=thorn_name,
         ET_schedule_bins_entries=[("MoL_PostStep", schedule)],
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()

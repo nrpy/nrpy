@@ -51,7 +51,7 @@ if (count == 0){
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper_complex_out() -> (
@@ -91,7 +91,7 @@ return complex_gamma;
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper() -> (
@@ -128,7 +128,7 @@ return cexp(lnr.val + I*arg.val);
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_SEOBNRv5_aligned_spin_process_waveform() -> (
@@ -211,7 +211,7 @@ free(processed_waveform);
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_SEOBNRv5_multidimensional_root_wrapper() -> (
@@ -269,4 +269,4 @@ gsl_vector_free (x);
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()

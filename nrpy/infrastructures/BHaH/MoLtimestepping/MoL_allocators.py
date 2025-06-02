@@ -38,7 +38,7 @@ def register_CFunction_MoL_malloc(
     """
     parallelization = par.parval_from_str("parallelization")
     check_supported_parallelization("register_CFunction_MoL_malloc")
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    includes = ["BHaH_defines.h"]
 
     (
         y_n_gridfunctions,
@@ -103,7 +103,7 @@ def register_CFunction_MoL_free_memory(
     """
     parallelization = par.parval_from_str("parallelization")
     check_supported_parallelization("register_CFunction_MoL_free_memory")
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    includes = ["BHaH_defines.h"]
     desc = f'Method of Lines (MoL) for "{MoL_method}" method: Free memory for "{which_gfs}" gridfunctions\n'
     desc += "   - y_n_gfs are used to store data for the vector of gridfunctions y_i at t_n, at the start of each MoL timestep\n"
     desc += "   - non_y_n_gfs are needed for intermediate (e.g., k_i) storage in chosen MoL method\n"

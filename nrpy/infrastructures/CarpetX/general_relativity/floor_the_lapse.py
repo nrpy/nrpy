@@ -73,4 +73,4 @@ schedule FUNC_NAME in ODESolvers_PostStep before {thorn_name}_enforce_detgammaha
         ET_schedule_bins_entries=[("ODESolvers_PostStep", schedule)],
         ET_current_thorn_CodeParams_used=["lapse_floor"],
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()

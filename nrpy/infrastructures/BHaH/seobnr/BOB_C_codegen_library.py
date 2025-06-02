@@ -79,7 +79,7 @@ omegas[1] = wdot_t_attach;
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_BOB_aligned_spin_waveform() -> Union[None, pcg.NRPyEnv_type]:
@@ -130,7 +130,7 @@ waveform[1] = phi;
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_BOB_aligned_spin_waveform_from_times() -> (
@@ -180,4 +180,4 @@ free(wrapped_phases);
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()

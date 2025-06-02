@@ -21,7 +21,7 @@ def register_CFunction_cfl_limited_timestep_based_on_h_equals_r() -> None:
 
     This ensures stability by adhering to the CFL condition.
     """
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    includes = ["BHaH_defines.h"]
     description = "Compute minimum timestep dt = CFL_FACTOR * ds_min on a 2D spherical numerical grid."
     cfunc_type = "void"
     name = "cfl_limited_timestep_based_on_h_equals_r"

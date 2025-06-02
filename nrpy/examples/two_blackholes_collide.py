@@ -16,6 +16,7 @@ Author: Zachariah B. Etienne
 import argparse
 import os
 import shutil
+import subprocess
 
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.helpers.parallelization.cuda_utilities as cudautils
@@ -118,6 +119,10 @@ NUMGRIDS = len(set_of_CoordSystems)
 num_cuda_streams = NUMGRIDS
 par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
 
+BHaHAHA_subdir = "BHaHAHA"
+if fd_order != 6:
+    BHaHAHA_subdir = f"BHaHAHA-{fd_order}o"
+
 OMP_collapse = 1
 if "Spherical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "2")
@@ -141,6 +146,46 @@ par.adjust_CodeParam_default("t_final", t_final)
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
+if parallelization != "cuda":
+    try:
+        # Attempt to run as a script path
+        subprocess.run(
+            [
+                "python",
+                "nrpy/examples/bhahaha.py",
+                "--fdorder",
+                str(fd_order),
+                "--outrootdir",
+                project_dir,
+            ],
+            check=True,
+        )
+    except subprocess.CalledProcessError:
+        # If it fails (e.g., from a pip install), try running as a module
+        subprocess.run(
+            [
+                "python",
+                "-m",
+                "nrpy.examples.bhahaha",
+                "--fdorder",
+                str(fd_order),
+                "--outrootdir",
+                project_dir,
+            ],
+            check=True,
+        )
+    from nrpy.infrastructures.BHaH.BHaHAHA import (
+        BHaH_implementation,
+        interpolation_3d_general__uniform_src_grid,
+    )
+
+    BHaH_implementation.register_CFunction_bhahaha_find_horizons(
+        CoordSystem=CoordSystem, max_horizons=3
+    )
+    interpolation_3d_general__uniform_src_grid.register_CFunction_interpolation_3d_general__uniform_src_grid(
+        enable_simd=enable_intrinsics, project_dir=project_dir
+    )
+
 
 if parallelization == "cuda":
     cudautils.register_CFunctions_HostDevice__operations()
@@ -265,6 +310,41 @@ par.adjust_CodeParam_default("BH1_mass", default_BH1_mass)
 par.adjust_CodeParam_default("BH2_mass", default_BH2_mass)
 par.adjust_CodeParam_default("BH1_posn_z", default_BH1_z_posn)
 par.adjust_CodeParam_default("BH2_posn_z", default_BH2_z_posn)
+if parallelization == "openmp":
+    # Set BHaHAHA defaults to reasonable values.
+    par.adjust_CodeParam_default(
+        "bah_initial_grid_z_center", [default_BH1_z_posn, default_BH2_z_posn, 0.0]
+    )
+    par.adjust_CodeParam_default("bah_Nr_interp_max", 40)
+    par.adjust_CodeParam_default(
+        "bah_M_scale",
+        [default_BH1_mass, default_BH2_mass, default_BH1_mass + default_BH2_mass],
+    )
+    par.adjust_CodeParam_default(
+        "bah_max_search_radius",
+        [
+            0.6 * default_BH1_mass,
+            0.6 * default_BH2_mass,
+            1.9 * (default_BH1_mass + default_BH2_mass),
+        ],
+    )
+    par.adjust_CodeParam_default(
+        "bah_Theta_L2_times_M_tolerance",
+        [2e-4, 2e-4, 2e-4],
+    )
+    par.adjust_CodeParam_default(
+        "bah_Nphi_array_multigrid",
+        [2, 2, 2],
+    )
+    par.adjust_CodeParam_default(
+        "bah_Nr_interp_max",
+        40,
+    )
+    par.adjust_CodeParam_default(
+        "bah_BBH_mode_enable",
+        1,
+    )
+
 
 CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
 CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
@@ -279,6 +359,11 @@ gpu_defines_filename = BHaH_device_defines_h.output_device_headers(
 )
 BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
+    additional_includes=(
+        [os.path.join(BHaHAHA_subdir, "BHaHAHA.h")]
+        if parallelization == "openmp"
+        else []
+    ),
     enable_intrinsics=enable_intrinsics,
     intrinsics_header_lst=(
         ["cuda_intrinsics.h"] if parallelization == "cuda" else ["simd_intrinsics.h"]
@@ -299,11 +384,18 @@ BHaH_defines_h.output_BHaH_defines_h(
 
 main_c.register_CFunction_main_c(
     initial_data_desc=IDtype,
+    pre_diagnostics=(
+        "bhahaha_find_horizons(&commondata, griddata);\n"
+        if parallelization == "openmp"
+        else ""
+    ),
     MoL_method=MoL_method,
     boundary_conditions_desc=boundary_conditions_desc,
 )
 griddata_commondata.register_CFunction_griddata_free(
-    enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True
+    enable_rfm_precompute=enable_rfm_precompute,
+    enable_CurviBCs=True,
+    enable_bhahaha=(parallelization != "cuda"),
 )
 
 if enable_intrinsics:
@@ -330,8 +422,10 @@ else:
     Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
         project_dir=project_dir,
         project_name=project_name,
+        addl_dirs_to_make=[BHaHAHA_subdir],
         exec_or_library_name=project_name,
         compiler_opt_option="default",
+        addl_libraries=[f"-L{BHaHAHA_subdir}", f"-l{BHaHAHA_subdir}"],
     )
 print(
     f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."

@@ -73,7 +73,6 @@ def register_CFunctions(
     ['MoL_free_memory_non_y_n_gfs', 'MoL_free_memory_y_n_gfs', 'MoL_malloc_non_y_n_gfs', 'MoL_malloc_y_n_gfs', 'MoL_step_forward_in_time']
     >>> print(cfc.CFunction_dict["MoL_free_memory_non_y_n_gfs"].full_function) # doctest: +ELLIPSIS
     #include "BHaH_defines.h"
-    #include "BHaH_function_prototypes.h"
     /**
      * Method of Lines (MoL) for "RK4" method: Free memory for "non_y_n_gfs" gridfunctions
      * - y_n_gfs are used to store data for the vector of gridfunctions y_i at t_n, at the start of each MoL timestep
@@ -90,7 +89,6 @@ def register_CFunctions(
     <BLANKLINE>
     >>> print(cfc.CFunction_dict["MoL_malloc_non_y_n_gfs"].full_function) # doctest: +ELLIPSIS
     #include "BHaH_defines.h"
-    #include "BHaH_function_prototypes.h"
     /**
      * Method of Lines (MoL) for "RK4" method: Allocate memory for "non_y_n_gfs" gridfunctions
      * - y_n_gfs are used to store data for the vector of gridfunctions y_i at t_n, at the start of each MoL timestep

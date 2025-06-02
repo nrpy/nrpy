@@ -12,7 +12,7 @@ import nrpy.c_function as cfc
 
 def register_CFunction_quadratic_extrapolation() -> None:
     """Register a C function to perform quadratic extrapolation."""
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    includes = ["BHaH_defines.h"]
     desc = """
 Performs up to quadratic extrapolation using a Lagrange-based formula.
 

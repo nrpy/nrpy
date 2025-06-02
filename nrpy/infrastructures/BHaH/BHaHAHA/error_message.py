@@ -76,7 +76,7 @@ def register_CFunction_error_message() -> None:
         is_commondata=True,
     )
 
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    includes = ["BHaH_defines.h"]
     desc = """
  Function: bah_error_handling()
 

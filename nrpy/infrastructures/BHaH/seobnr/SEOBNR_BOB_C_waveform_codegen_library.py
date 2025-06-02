@@ -48,7 +48,7 @@ for (size_t i = 1; i < nsteps_arr; i++){
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_SEOBNRv5_NQC_corrections() -> Union[None, pcg.NRPyEnv_type]:
@@ -301,7 +301,7 @@ return GSL_SUCCESS;
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_SEOBNRv5_aligned_spin_interpolate_modes() -> (
@@ -390,7 +390,7 @@ free(h22_nophase_imag);
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_SEOBNRv5_aligned_spin_IMR_waveform() -> (
@@ -478,4 +478,4 @@ return GSL_SUCCESS;
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()

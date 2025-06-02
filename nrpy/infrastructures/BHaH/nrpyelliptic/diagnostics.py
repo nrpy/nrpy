@@ -401,7 +401,7 @@ def register_CFunction_compute_residual_all_points(
         body=body,
         enable_simd=enable_intrinsics,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 # Define diagnostics function
@@ -626,7 +626,7 @@ def register_CFunction_diagnostics(
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 # Define function to evaluate stop conditions
@@ -691,7 +691,7 @@ def register_CFunction_check_stop_conditions() -> Union[None, pcg.NRPyEnv_type]:
         include_CodeParameters_h=False,  # set_CodeParameters.h is manually included after the declaration of params_struct *restrict params
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 if __name__ == "__main__":

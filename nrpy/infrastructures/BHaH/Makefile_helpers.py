@@ -23,6 +23,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     exec_or_library_name: str = "",
     compiler_opt_option: str = "default",
     addl_CFLAGS: Optional[List[str]] = None,
+    addl_dirs_to_make: Optional[List[str]] = None,
     addl_libraries: Optional[List[str]] = None,
     CC: str = "autodetect",
     create_lib: bool = False,
@@ -39,6 +40,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     :param exec_or_library_name: The name of the executable. If empty, same as project_name.
     :param compiler_opt_option: Compiler optimization option. Defaults to "default".
     :param addl_CFLAGS: Additional compiler flags.
+    :param addl_dirs_to_make: Additional directories in which the `make` command should be run, to compile libraries, etc.
     :param addl_libraries: Additional libraries to link.
     :param CC: C compiler to use. Defaults to "autodetect".
     :param create_lib: Whether to create a library. Defaults to False.
@@ -74,6 +76,8 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         raise ValueError(
             "`static_lib` set to True, but `create_lib` set to False. Both must be set to True to create a static library."
         )
+    if addl_dirs_to_make is None:
+        addl_dirs_to_make = []
 
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
@@ -187,11 +191,10 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
 """
     else:
         # Executable
-        target_rule = f"""{exec_or_library_name}: $(OBJ_FILES)
-\t$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
-
-"""
-
+        target_rule = f"""{exec_or_library_name}: $(OBJ_FILES)\n"""
+        for directory in addl_dirs_to_make:
+            target_rule += f"""\t$(MAKE) -C {directory}\n"""
+        target_rule += "\t$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)\n"
     # Construct the Makefile string
     Makefile_str = (
         rf"CC = {CC}  # Locally overwrites CC to {CC}\n"
@@ -205,7 +208,7 @@ VALGRIND_CFLAGS = {CFLAGS_dict["debug"]}
 {LDFLAGS_str}
 """
     if not CC == "nvcc":
-        Makefile_str += f"""
+        Makefile_str += """
 # Check for OpenMP support
 OPENMP_FLAG = -fopenmp
 COMPILER_SUPPORTS_OPENMP := $(shell echo | $(CC) $(OPENMP_FLAG) -E - >/dev/null 2>&1 && echo YES || echo NO)
@@ -233,9 +236,10 @@ all: {exec_or_library_name}
 """
 
     # Add the valgrind target
-    Makefile_str += """valgrind: clean
-\t$(MAKE) CFLAGS="$(VALGRIND_CFLAGS)" all
-"""
+    Makefile_str += "valgrind: clean\n"
+    for directory in addl_dirs_to_make:
+        Makefile_str += f"""\t$(MAKE) CFLAGS="$(VALGRIND_CFLAGS)" -C {directory}\n"""
+    Makefile_str += """\t$(MAKE) CFLAGS="$(VALGRIND_CFLAGS)" all\n"""
     if not create_lib:
         Makefile_str += f"""\tvalgrind --track-origins=yes --leak-check=full --show-leak-kinds=all -s ./{exec_or_library_name}
 
@@ -244,7 +248,7 @@ all: {exec_or_library_name}
     # Clean target
     Makefile_str += f"""# Use $(RM) to be cross-platform compatible.
 clean:
-\t$(RM) *.o */*.o *~ */*~ ./#* *.txt *.gp *.dat *.avi *.png {exec_or_library_name}
+\t$(RM) *.o */*.o *~ */*~ */lib*.a ./#* *.txt *.gp *.dat *.avi *.png {exec_or_library_name}
 """
 
     # Write the Makefile

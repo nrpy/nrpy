@@ -246,4 +246,4 @@ if(commondata->time + commondata->dt > commondata->t_final) printf("\n");
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()

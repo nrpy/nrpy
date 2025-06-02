@@ -174,4 +174,4 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
         body=launch_body,
         enable_simd=False,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()

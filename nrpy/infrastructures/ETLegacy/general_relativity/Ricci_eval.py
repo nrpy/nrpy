@@ -120,4 +120,4 @@ if(FD_order == {fd_order}) {{
     )
     # Reset to the initial values
     par.set_parval_from_str("fd_order", orig_fd_order)
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()

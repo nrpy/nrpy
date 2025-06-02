@@ -138,4 +138,4 @@ printf("p_t, p_r = %.15e %.15e\n", Pt, Pr);
         params=params,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()

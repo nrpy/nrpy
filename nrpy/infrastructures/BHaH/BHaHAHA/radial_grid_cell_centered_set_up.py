@@ -12,7 +12,7 @@ import nrpy.c_function as cfc
 
 def register_CFunction_radial_grid_cell_centered_set_up() -> None:
     """Register a C function to set up cell-centered radial numerical grid for interpolation to external_input grid."""
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    includes = ["BHaH_defines.h"]
     prefunc = r"""
 // Parameter to set a min number of interior points for the BHaHAHA destination grid;
 //   for example, if output_r_min = output_r_max, this will ensure at least 4 interior
