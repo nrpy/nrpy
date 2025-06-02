@@ -483,12 +483,15 @@ def register_CodeParameter(
     return CP.symbol
 
 
-def adjust_CodeParam_default(CodeParameter_name: str, new_default: Any) -> None:
+def adjust_CodeParam_default(
+    CodeParameter_name: str, new_default: Any, new_cparam_type: Any = None
+) -> None:
     """
     Adjust the default value of a given code parameter.
 
     :param CodeParameter_name: The name of the code parameter to be adjusted.
     :param new_default: The new default value for the code parameter.
+    :param new_cparam_type: Optional new C parameter type to be set. If None, the existing type is retained.
     :raises ValueError: If the given CodeParameter_name does not exist in glb_code_params_dict.
 
     DocTests:
@@ -521,10 +524,18 @@ def adjust_CodeParam_default(CodeParameter_name: str, new_default: Any) -> None:
             if CPname.split("[")[0] == CodeParameter_name.split("[")[0]:
                 index = int(CodeParameter_name.split("[")[1].split("]")[0])
                 CPvalue.defaultvalue[index] = new_default
+                CPvalue.cparam_type = (
+                    new_cparam_type if new_cparam_type else CPvalue.cparam_type
+                )
                 found_parameter = True
                 break
     elif CodeParameter_name in glb_code_params_dict:
         glb_code_params_dict[CodeParameter_name].defaultvalue = new_default
+        glb_code_params_dict[CodeParameter_name].cparam_type = (
+            new_cparam_type
+            if new_cparam_type
+            else glb_code_params_dict[CodeParameter_name].cparam_type
+        )
         found_parameter = True
 
     if not found_parameter:
