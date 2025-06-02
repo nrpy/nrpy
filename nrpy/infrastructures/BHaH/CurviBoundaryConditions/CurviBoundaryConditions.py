@@ -25,11 +25,11 @@ import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tenso
 import nrpy.params as par  # NRPy+: Parameter interface
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 from nrpy.helpers.expression_utils import get_unique_expression_symbols_as_strings
-from nrpy.helpers.parallelization.cuda_utilities import (
-    register_CFunction_cpyHosttoDevice_bc_struct,
-)
 from nrpy.helpers.parallelization.gpu_kernel import GPU_Kernel
 from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
+from nrpy.infrastructures.BHaH.parallelization.cuda_utilities import (
+    register_CFunction_cpyHosttoDevice_bc_struct,
+)
 from nrpy.validate_expressions.validate_expressions import check_zero
 
 _ = par.CodeParameter(

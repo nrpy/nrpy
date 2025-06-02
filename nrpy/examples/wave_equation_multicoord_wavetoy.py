@@ -14,7 +14,7 @@ import os
 import shutil
 
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.helpers.parallelization.cuda_utilities as cudautils
+import nrpy.infrastructures.BHaH.parallelization.cuda_utilities as cudautils
 import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 import nrpy.params as par
