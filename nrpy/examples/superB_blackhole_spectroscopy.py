@@ -52,9 +52,9 @@ from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import rfm_precompute, rfm_wrapper_functions
 from nrpy.infrastructures.BHaH.general_relativity import (
     BSSN,
+    PSI4,
     NRPyPN_quasicircular_momenta,
     TwoPunctures,
-    psi4_C_codegen_library,
 )
 
 parser = argparse.ArgumentParser()
@@ -99,7 +99,7 @@ t_final = 1.5 * grid_physical_size
 swm2sh_maximum_l_mode_generated = 8
 swm2sh_maximum_l_mode_to_compute = 2 if not paper else 8
 if paper:
-    list_of_psi4_extraction_radii = [80.0]
+    list_of_psi4_extraction_radii = [80.0, 160.0]
     num_psi4_extraction_radii = len(list_of_psi4_extraction_radii)
 Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
@@ -109,7 +109,7 @@ default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.25 if not paper else +5.0
 default_BH2_z_posn = -0.25 if not paper else -5.0
 enable_rfm_precompute = True
-MoL_method = "RK4" if not paper else "SSPRK3"
+MoL_method = "RK4" if not paper else "SSPK33"
 fd_order = 8
 radiation_BC_fd_order = 4 if not paper else 8
 enable_intrinsics = True
@@ -245,19 +245,13 @@ BSSN.constraints.register_CFunction_constraints(
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
-swm2sh.register_CFunction_spin_weight_minus2_sph_harmonics()
 
-psi4_C_codegen_library.register_CFunction_psi4(
+PSI4.compute_psi4.register_CFunction_psi4(
     CoordSystem=CoordSystem,
     OMP_collapse=OMP_collapse,
-)
-psi4_C_codegen_library.register_CFunction_psi4_metric_deriv_quantities(
-    CoordSystem=CoordSystem,
     enable_fd_functions=enable_fd_functions,
 )
-psi4_C_codegen_library.register_CFunction_psi4_tetrad(
-    CoordSystem=CoordSystem,
-)
+swm2sh.register_CFunction_spin_weight_minus2_sph_harmonics()
 
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
@@ -357,7 +351,9 @@ par.adjust_CodeParam_default(
 if paper:
     par.adjust_CodeParam_default("num_psi4_extraction_radii", num_psi4_extraction_radii)
     par.adjust_CodeParam_default(
-        "list_of_psi4_extraction_radii", list_of_psi4_extraction_radii
+        "list_of_psi4_extraction_radii",
+        list_of_psi4_extraction_radii,
+        new_cparam_type=f"REAL[{num_psi4_extraction_radii}]",
     )
 
 #########################################################
