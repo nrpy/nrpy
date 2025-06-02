@@ -484,7 +484,7 @@ def register_CodeParameter(
 
 
 def adjust_CodeParam_default(
-    CodeParameter_name: str, new_default: Any, new_cparam_type: Any = None
+    CodeParameter_name: str, new_default: Any, new_cparam_type: str = ""
 ) -> None:
     """
     Adjust the default value of a given code parameter.
