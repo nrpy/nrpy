@@ -171,7 +171,30 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {{
         for idx, gf in out_quantities_gf_indexes_dict.items():
             if "diagnostic_output_gfs" in gf:
                 body += f"    cpyDevicetoHost__gf(commondata, params, host_{gf}, {gf}, {idx}, {idx}, streamid);\n"
-            body += "cudaStreamSynchronize(streams[streamid]);"
+        body += "cudaStreamSynchronize(streams[streamid]);"
+
+    # Start Psi4 calculation after synchronizing streams (CUDA only)
+    if enable_psi4_diagnostics:
+        # Currently we just offload the data to Host for psi4 decomposition
+        post_psi4_compute = (
+            """cpyDevicetoHost__gf(commondata, params, host_diagnostic_output_gfs, diagnostic_output_gfs, PSI4_IMGF, PSI4_IMGF, streamid);
+        cpyDevicetoHost__gf(commondata, params, host_diagnostic_output_gfs, diagnostic_output_gfs, PSI4_REGF, PSI4_REGF, streamid);
+        """
+            if parallelization in ["cuda"]
+            else ""
+        )
+        body += rf"""
+
+      // Do psi4 output
+      // Set psi4.
+      psi4(commondata, params, xx, y_n_gfs, diagnostic_output_gfs);
+      // Apply outer and inner bcs to psi4 needed to do interpolation correctly
+      int aux_gfs_to_sync[2] = {{PSI4_REGF, PSI4_IMGF}};
+      apply_bcs_outerextrap_and_inner_specific_auxgfs(commondata, &griddata[grid].params, &griddata[grid].bcstruct, griddata[grid].gridfuncs.diagnostic_output_gfs, 2, aux_gfs_to_sync);
+      {post_psi4_compute}
+""".replace(
+            "xx", "griddata[grid].xx" if parallelization in ["cuda"] else "xx"
+        )
 
     body += f"""
     // 0D output
@@ -186,18 +209,24 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {{
     diagnostics_nearest_2d_yz_plane(commondata, params, xx, &{host_griddata}[grid].gridfuncs);
 """
     if enable_psi4_diagnostics:
-        body += r"""      // Do psi4 output
-    // Set psi4.
-    psi4(commondata, params, xx, y_n_gfs, diagnostic_output_gfs);
-
-    // Apply outer and inner bcs to psi4 needed to do interpolation correctly
-    int aux_gfs_to_sync[2] = {PSI4_REGF, PSI4_IMGF};
-    apply_bcs_outerextrap_and_inner_specific_gfs(commondata, &griddata[grid].params, &griddata[grid].bcstruct, 2, griddata[grid].gridfuncs.diagnostic_output_gfs, aux_gfs_to_sync, aux_gf_parity);
-
+        psi4_sync = (
+            "cudaStreamSynchronize(streams[streamid]);"
+            if parallelization in ["cuda"]
+            else ""
+        )
+        body += rf"""      // Do psi4 output
+    {psi4_sync}
     // Decompose psi4 into spin-weight -2  spherical harmonics & output to files.
     psi4_spinweightm2_decomposition(commondata, params, diagnostic_output_gfs, xx);
+""".replace(
+            "diagnostic_output_gfs",
+            (
+                "host_diagnostic_output_gfs"
+                if parallelization in ["cuda"]
+                else "diagnostic_output_gfs"
+            ),
+        )
 
-"""
     body += r"""
   }
 }

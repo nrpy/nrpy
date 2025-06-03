@@ -921,6 +921,10 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
 
     body += build_apply_inner_bcs_block(parallelization)
 
+    if parallelization in ["cuda"]:
+        lambdaU_launch = lambdaU_launch.replace("gridfuncs->", "d_gridfuncs->").replace(
+            " xx", " d_xx"
+        )
     body += lambdaU_launch
 
     cfc.register_CFunction(

@@ -44,10 +44,12 @@ def register_CFunction_TP_FuncAndJacobian() -> None:
 /*#define FAC sin(al)*sin(be)*sin(al)*sin(be)*/
 /*#define FAC 1*/
 
+#ifndef __NVCC__
 static inline REAL min (REAL const x, REAL const y)
 {
   return x<y ? x : y;
 }
+#endif
 
 /* --------------------------------------------------------------------------*/
 int
@@ -233,7 +235,7 @@ F_of_v (ID_persist_struct par,
   values = dvector (0, nvar - 1);
   allocate_derivs (&U, nvar);
 
-  sources=calloc(n1*n2*n3, sizeof(REAL));
+  sources=(REAL *)calloc(n1*n2*n3, sizeof(REAL));
   /* ZACH DISABLED:
      if (par.use_sources)
      {

@@ -355,8 +355,6 @@ def register_CFunction_CUDA__malloc_host_gfs() -> None:
       const int Nxx_plus_2NGHOSTS_tot = params->Nxx_plus_2NGHOSTS0 * params->Nxx_plus_2NGHOSTS1 * params->Nxx_plus_2NGHOSTS2;
     <BLANKLINE>
       BHAH_MALLOC_PINNED(gridfuncs->y_n_gfs, sizeof(REAL) * Nxx_plus_2NGHOSTS_tot * NUM_EVOL_GFS);
-      if (NUM_AUXEVOL_GFS > 0)
-        BHAH_MALLOC_PINNED(gridfuncs->auxevol_gfs, sizeof(REAL) * NUM_AUXEVOL_GFS * Nxx_plus_2NGHOSTS_tot);
     } // END FUNCTION CUDA__malloc_host_gfs
     <BLANKLINE>
     """
@@ -370,6 +368,51 @@ def register_CFunction_CUDA__malloc_host_gfs() -> None:
   const int Nxx_plus_2NGHOSTS_tot = params->Nxx_plus_2NGHOSTS0 * params->Nxx_plus_2NGHOSTS1 * params->Nxx_plus_2NGHOSTS2;
 
   BHAH_MALLOC_PINNED(gridfuncs->y_n_gfs, sizeof(REAL) * Nxx_plus_2NGHOSTS_tot * NUM_EVOL_GFS);
+"""
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        CoordSystem_for_wrapper_func="",
+        name=name,
+        params=params,
+        include_CodeParameters_h=False,
+        body=body,
+        subdirectory="CUDA_utils",
+    )
+
+
+def register_CFunction_CUDA__malloc_host_aux_gfs() -> None:
+    """
+    Register C function for allocating sufficient Host storage for diagnostics GFs.
+
+    DOCTEST:
+    >>> import nrpy.c_function as cfc
+    >>> register_CFunction_CUDA__malloc_host_aux_gfs()
+    >>> print(cfc.CFunction_dict['CUDA__malloc_host_aux_gfs'].full_function)
+    #include "../BHaH_defines.h"
+    /**
+     * Allocate Host storage for diagnostics GFs.
+     */
+    __host__ void CUDA__malloc_host_aux_gfs(const commondata_struct *restrict commondata, const params_struct *restrict params,
+                                            MoL_gridfunctions_struct *restrict gridfuncs) {
+    <BLANKLINE>
+      const int Nxx_plus_2NGHOSTS_tot = params->Nxx_plus_2NGHOSTS0 * params->Nxx_plus_2NGHOSTS1 * params->Nxx_plus_2NGHOSTS2;
+    <BLANKLINE>
+      if (NUM_AUXEVOL_GFS > 0)
+        BHAH_MALLOC_PINNED(gridfuncs->auxevol_gfs, sizeof(REAL) * NUM_AUXEVOL_GFS * Nxx_plus_2NGHOSTS_tot);
+    } // END FUNCTION CUDA__malloc_host_aux_gfs
+    <BLANKLINE>
+    """
+    includes = ["BHaH_defines.h"]
+    desc = r"""Allocate Host storage for diagnostics GFs."""
+    cfunc_type = "__host__ void"
+    name = "CUDA__malloc_host_aux_gfs"
+    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, "
+    params += "MoL_gridfunctions_struct *restrict gridfuncs"
+    body = """
+  const int Nxx_plus_2NGHOSTS_tot = params->Nxx_plus_2NGHOSTS0 * params->Nxx_plus_2NGHOSTS1 * params->Nxx_plus_2NGHOSTS2;
+
   if (NUM_AUXEVOL_GFS > 0)
     BHAH_MALLOC_PINNED(gridfuncs->auxevol_gfs, sizeof(REAL) * NUM_AUXEVOL_GFS * Nxx_plus_2NGHOSTS_tot);
 """
@@ -482,12 +525,7 @@ def register_CFunction_CUDA__free_host_gfs() -> None:
     /**
      * Free Host storage for diagnostics GFs.
      */
-    __host__ void CUDA__free_host_gfs(MoL_gridfunctions_struct *gridfuncs) {
-    <BLANKLINE>
-      BHAH_FREE_PINNED(gridfuncs->y_n_gfs);
-      if (NUM_AUXEVOL_GFS > 0)
-        BHAH_FREE_PINNED(gridfuncs->auxevol_gfs);
-    } // END FUNCTION CUDA__free_host_gfs
+    __host__ void CUDA__free_host_gfs(MoL_gridfunctions_struct *gridfuncs) { BHAH_FREE_PINNED(gridfuncs->y_n_gfs); } // END FUNCTION CUDA__free_host_gfs
     <BLANKLINE>
     """
     includes = ["BHaH_defines.h"]
@@ -497,6 +535,45 @@ def register_CFunction_CUDA__free_host_gfs() -> None:
     params = "MoL_gridfunctions_struct * gridfuncs"
     body = """
     BHAH_FREE_PINNED(gridfuncs->y_n_gfs);
+"""
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        CoordSystem_for_wrapper_func="",
+        name=name,
+        params=params,
+        include_CodeParameters_h=False,
+        body=body,
+        subdirectory="CUDA_utils",
+    )
+
+
+def register_CFunction_CUDA__free_host_aux_gfs() -> None:
+    """
+    Register C function for allocating sufficient Host storage for diagnostics GFs.
+
+    DOCTEST:
+    >>> import nrpy.c_function as cfc
+    >>> register_CFunction_CUDA__free_host_aux_gfs()
+    >>> print(cfc.CFunction_dict['CUDA__free_host_aux_gfs'].full_function)
+    #include "../BHaH_defines.h"
+    /**
+     * Free Host storage for diagnostics GFs.
+     */
+    __host__ void CUDA__free_host_aux_gfs(MoL_gridfunctions_struct *gridfuncs) {
+    <BLANKLINE>
+      if (NUM_AUXEVOL_GFS > 0)
+        BHAH_FREE_PINNED(gridfuncs->auxevol_gfs);
+    } // END FUNCTION CUDA__free_host_aux_gfs
+    <BLANKLINE>
+    """
+    includes = ["BHaH_defines.h"]
+    desc = r"""Free Host storage for diagnostics GFs."""
+    cfunc_type = "__host__ void"
+    name = "CUDA__free_host_aux_gfs"
+    params = "MoL_gridfunctions_struct * gridfuncs"
+    body = """
     if (NUM_AUXEVOL_GFS > 0)
         BHAH_FREE_PINNED(gridfuncs->auxevol_gfs);
 """
@@ -645,6 +722,8 @@ def register_CFunctions_HostDevice__operations() -> None:
     register_CFunction_CUDA__free_host_gfs()
     register_CFunction_CUDA__malloc_host_diagnostic_gfs()
     register_CFunction_CUDA__free_host_diagnostic_gfs()
+    register_CFunction_CUDA__malloc_host_aux_gfs()
+    register_CFunction_CUDA__free_host_aux_gfs()
 
 
 # Define implemented reductions

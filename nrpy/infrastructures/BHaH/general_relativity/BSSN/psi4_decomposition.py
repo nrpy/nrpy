@@ -9,9 +9,9 @@ Author: Zachariah B. Etienne
 
 import nrpy.c_function as cfc
 import nrpy.params as par
-from nrpy.infrastructures.superB.CurviBoundaryConditions import (
-    register_CFunction_apply_bcs_inner_only_specific_gfs,
-    register_CFunction_apply_bcs_outerextrap_and_inner_specific_gfs,
+from nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions import (
+    register_CFunction_apply_bcs_inner_only_specific_auxgfs,
+    register_CFunction_apply_bcs_outerextrap_and_inner_specific_auxgfs,
 )
 
 par.register_CodeParameter(
@@ -219,14 +219,10 @@ static void psi4_diagnostics_set_up(const commondata_struct *restrict commondata
     int count_pt_on_grid = 0;
     // Boolean flags to track which theta/phi indices correspond to points on the grid.
     bool b_theta_grid[N_theta];
-    bool b_phi_grid[N_phi];
     // Initialize flags to false.
     for (int i = 0; i < N_theta; i++) {
       b_theta_grid[i] = false;
     } // END FOR theta flag initialization
-    for (int j = 0; j < N_phi; j++) {
-      b_phi_grid[j] = false;
-    } // END FOR phi flag initialization
 
     // First pass: Iterate through all points on the conceptual shell to count how many fall within this grid patch.
     // Loop through phi points.
@@ -248,7 +244,6 @@ static void psi4_diagnostics_set_up(const commondata_struct *restrict commondata
           // If the point is inside the grid boundaries:
           count_pt_on_grid++;      // Increment the counter.
           b_theta_grid[i_th] = true; // Mark this theta index as present on the grid.
-          b_phi_grid[i_ph] = true;   // Mark this phi index as present on the grid.
         } // END IF point is within grid boundaries
       } // END FOR theta loop (counting pass)
     } // END FOR phi loop (counting pass)
@@ -260,15 +255,6 @@ static void psi4_diagnostics_set_up(const commondata_struct *restrict commondata
         count_theta_grid++;
       } // END IF
     } // END FOR counting unique theta values
-
-    // Count the number of unique phi values that are represented on the grid.
-    // This count should ideally match Nxx[phi_dirn] if the grid covers the full phi range.
-    int count_phi_grid = 0;
-    for (int i = 0; i < N_phi; i++) {
-      if (b_phi_grid[i]) {
-        count_phi_grid++;
-      } // END IF
-    } // END FOR counting unique phi values
 
     // Store the counts in the diagnostic structure for this shell.
     diagnosticstruct.N_shell_pts_grid[which_R_ext] = count_pt_on_grid;
@@ -476,13 +462,13 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const int Nxx_plus_2NGHOSTS1
 
     desc = """
 @brief Calculates and outputs the spin-weighted spherical harmonic decomposition of psi4.
- 
+
 This function orchestrates the process of extracting the psi4 Weyl scalar on multiple
 spherical shells, interpolating it onto these shells, and then decomposing the interpolated
 data into spin-weighted spherical harmonic modes (s=-2, l>=2). The results are written to
 files for each extraction radius and l-mode. This specific version is tailored for
 SinhCylindrical coordinates.
- 
+
 @param commondata Common data structure containing simulation parameters (time, extraction radii, etc.).
 @param params Parameters structure containing grid information (dimensions, spacings, boundaries).
 @param diagnostic_output_gfs Array containing grid functions, including PSI4_REGF and PSI4_IMGF.
@@ -499,9 +485,9 @@ SinhCylindrical coordinates.
     REAL *restrict diagnostic_output_gfs,
     REAL *restrict xx[3]"""
 
-    # Register C functions apply_bcs_inner_only_specific_gfs and apply_bcs_outerextrap_and_inner_specific_gfs, needed for 2d interp of psi4
-    register_CFunction_apply_bcs_inner_only_specific_gfs()
-    register_CFunction_apply_bcs_outerextrap_and_inner_specific_gfs()
+    # Register C functions apply_bcs_inner_only_specific_gfs and apply_bcs_outerextrap_and_inner_specific_auxgfs, needed for 2d interp of psi4
+    register_CFunction_apply_bcs_inner_only_specific_auxgfs()
+    register_CFunction_apply_bcs_outerextrap_and_inner_specific_auxgfs()
 
     body = r"""
   // Step 0: Set up the diagnostic structure (calculates shell points on grid, etc.).

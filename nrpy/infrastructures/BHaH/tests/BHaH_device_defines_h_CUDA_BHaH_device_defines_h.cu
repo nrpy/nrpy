@@ -11,8 +11,6 @@
 extern __constant__ params_struct d_params[NUM_STREAMS];
 // Device storage for commondata
 extern __constant__ commondata_struct d_commondata;
-// Device storage for grid function parity
-extern __constant__ int8_t d_evol_gf_parity[24];
 extern cudaStream_t streams[NUM_STREAMS];
 extern size_t GPU_N_SMS;
 

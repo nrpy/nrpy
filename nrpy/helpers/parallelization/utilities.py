@@ -6,7 +6,7 @@ Authors: Samuel D. Tootle; sdtootle **at** gmail **dot** com
 
 from typing import Any, Dict, Optional, Tuple
 
-import nrpy.helpers.parallelization.cuda_utilities as cuda_utils
+import nrpy.infrastructures.BHaH.parallelization.cuda_utilities as cuda_utils
 from nrpy.helpers.parallelization.gpu_kernel import GPU_Kernel
 
 

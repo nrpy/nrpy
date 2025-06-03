@@ -38,9 +38,10 @@ def generate_declaration_str(
         prefix += " "
     decl_str: str = ""
     for var, sub_dict in decl_dict.items():
+        suffix = f"[{sub_dict['array_size']}]" if sub_dict["array_size"] else ""
         # Standard declarations str
         decl_str += f"{sub_dict['comment']}"
-        decl_str += f"{prefix} {sub_dict['type']} {var}{sub_dict['suffix']};\n"
+        decl_str += f"{prefix} {sub_dict['type']} {var}{suffix};\n"
     return decl_str
 
 
@@ -53,6 +54,8 @@ class CUDA_BHaH_device_defines_h:
     :param additional_macros_str: Block string of additional macro definitions
     :param num_streams: Number of CUDA streams to use
     :param nghosts: Number of ghost zones for the FD stencil
+    :param set_parity_on_aux: Flag to set parity on auxiliary variables. Default is False.
+    :param set_parity_on_auxevol: Flag to set parity on auxevol variables. Default is False.
 
     >>> import nrpy.c_function as cfc
     >>> from nrpy.helpers.generic import validate_strings
@@ -72,6 +75,8 @@ class CUDA_BHaH_device_defines_h:
         additional_macros_str: Union[str, None] = None,
         num_streams: int = 3,
         nghosts: Union[int, None] = None,
+        set_parity_on_aux: bool = False,
+        set_parity_on_auxevol: bool = False,
     ) -> None:
         self.project_Path = Path(project_dir)
         self.project_Path.mkdir(parents=True, exist_ok=True)
@@ -91,46 +96,65 @@ class CUDA_BHaH_device_defines_h:
         standard_decl_dict = {
             "d_params": {
                 "type": "__constant__ params_struct",
-                "suffix": "[NUM_STREAMS]",
+                "array_size": "NUM_STREAMS",
                 "comment": "// Device storage for grid parameters\n",
             },
             "d_commondata": {
                 "type": "__constant__ commondata_struct",
-                "suffix": "",
+                "array_size": "",
                 "comment": "// Device storage for commondata\n",
-            },
-            "d_evol_gf_parity": {
-                "type": "__constant__ int8_t",
-                "suffix": "[24]",
-                "comment": "// Device storage for grid function parity\n",
             },
             "streams": {
                 "type": "cudaStream_t",
-                "suffix": "[NUM_STREAMS]",
+                "array_size": "NUM_STREAMS",
                 "comment": "",
             },
             "GPU_N_SMS": {
                 "type": "size_t",
-                "suffix": "",
+                "array_size": "",
                 "comment": "",
             },
         }
-        evolved_variables_list: list[str]
+        # First add human-readable gridfunction aliases (grid.py) to BHaH_defines dictionary.
         (
             evolved_variables_list,
-            _auxiliary_variables_list,
-            _auxevol_variables_list,
-        ) = gri.BHaHGridFunction.gridfunction_lists()
+            auxiliary_variables_list,
+            auxevol_variables_list,
+        ) = gri.BHaHGridFunction.gridfunction_lists()[0:3]
+
+        if len(evolved_variables_list) > 0:
+            standard_decl_dict["d_evol_gf_parity"] = {
+                "type": "__constant__ int8_t",
+                "array_size": f"{len(evolved_variables_list)}",
+                "comment": "// Device storage for evolved gridfunction parity\n",
+            }
+
+        if set_parity_on_aux:
+            if len(auxiliary_variables_list) > 0:
+                standard_decl_dict["d_aux_gf_parity"] = {
+                    "type": "__constant__ int8_t",
+                    "array_size": f"{len(auxiliary_variables_list)}",
+                    "comment": "// Device storage for aux gridfunction parity\n",
+                }
+
+        if set_parity_on_auxevol:
+            if len(auxevol_variables_list) > 0:
+                standard_decl_dict["d_auxevol_gf_parity"] = {
+                    "type": "__constant__ int8_t",
+                    "array_size": f"{len(auxevol_variables_list)}",
+                    "comment": "// Device storage for aux evolved gridfunction parity\n",
+                }
+
         # This device storage is only needed by some problems
         if evolved_variables_list:
             standard_decl_dict["d_gridfunctions_wavespeed"] = {
                 "type": "__constant__ REAL",
-                "suffix": "[NUM_EVOL_GFS]",
+                "array_size": "NUM_EVOL_GFS",
                 "comment": "",
             }
             standard_decl_dict["d_gridfunctions_f_infinity"] = {
                 "type": "__constant__ REAL",
-                "suffix": "[NUM_EVOL_GFS]",
+                "array_size": "NUM_EVOL_GFS",
                 "comment": "",
             }
         self.combined_decl_dict = standard_decl_dict
@@ -223,10 +247,6 @@ class BHaH_CUDA_global_init_h:
     for (int i = 0; i < NUM_STREAMS; ++i) {
       cudaStreamCreate(&streams[i]);
     }
-    // Copy parity array to device __constant__ memory
-    cudaMemcpyToSymbol(d_evol_gf_parity, evol_gf_parity, 24 * sizeof(int8_t));
-    cudaCheckErrors(copy, "Copy to d_evol_gf_parity failed");
-    <BLANKLINE>
     """
 
     def __init__(
@@ -246,20 +266,27 @@ class BHaH_CUDA_global_init_h:
 // Initialize streams
 for(int i = 0; i < NUM_STREAMS; ++i) {
     cudaStreamCreate(&streams[i]);
-}
-// Copy parity array to device __constant__ memory
-cudaMemcpyToSymbol(d_evol_gf_parity, evol_gf_parity, 24 * sizeof(int8_t));
-cudaCheckErrors(copy, "Copy to d_evol_gf_parity failed");
-"""
-        if "d_gridfunctions_wavespeed" in declarations_dict.keys():
-            self.file_output_str += """
-// Copy gridfunctions_wavespeed array to device memory
-cudaMemcpyToSymbol(d_gridfunctions_wavespeed, gridfunctions_wavespeed, NUM_EVOL_GFS * sizeof(REAL));
-cudaCheckErrors(copy, "Copy to d_gridfunctions_wavespeed failed");
+}"""
 
-// Copy gridfunctions_f_infinity array to device memory
-cudaMemcpyToSymbol(d_gridfunctions_f_infinity, gridfunctions_f_infinity, NUM_EVOL_GFS * sizeof(REAL));
-cudaCheckErrors(copy, "Copy to d_gridfunctions_f_infinity failed");
+        # Ensure necessary global arrays, currently stored in BHaH_defines.h, are copied to
+        # device __constant__ memory
+        for constant_ary in [
+            "d_evol_gf_parity",
+            "d_aux_gf_parity",
+            "d_auxevol_gf_parity",
+            "d_gridfunctions_wavespeed",
+            "d_gridfunctions_f_infinity",
+        ]:
+            if constant_ary in declarations_dict.keys():
+                host_ary_name = constant_ary.replace("d_", "")
+                host_ary_type = (
+                    declarations_dict[constant_ary]["type"]
+                    .replace("__constant__", "")
+                    .strip()
+                )
+                self.file_output_str += f"""// Copy {host_ary_name} to device __constant__ memory
+cudaMemcpyToSymbol({constant_ary}, {host_ary_name}, {declarations_dict[constant_ary]['array_size']} * sizeof({host_ary_type}));
+cudaCheckErrors(copy, "Copy to {constant_ary} failed");
 """
 
         self.file_output_str = clang_format(self.file_output_str)
@@ -290,10 +317,6 @@ class BHaH_CUDA_global_defines_h:
     for (int i = 0; i < NUM_STREAMS; ++i) {
       cudaStreamCreate(&streams[i]);
     }
-    // Copy parity array to device __constant__ memory
-    cudaMemcpyToSymbol(d_evol_gf_parity, evol_gf_parity, 24 * sizeof(int8_t));
-    cudaCheckErrors(copy, "Copy to d_evol_gf_parity failed");
-    <BLANKLINE>
     """
 
     def __init__(
@@ -332,6 +355,8 @@ def output_device_headers(
     additional_macros_str: Union[str, None] = None,
     num_streams: int = 3,
     nghosts: Union[int, None] = None,
+    set_parity_on_aux: bool = False,
+    set_parity_on_auxevol: bool = False,
 ) -> str:
     """
     Generate device specific header files.
@@ -344,6 +369,8 @@ def output_device_headers(
     :param additional_macros_str: Block string of additional macro definitions
     :param num_streams: Number of CUDA streams to use
     :param nghosts: FD stencil radius
+    :param set_parity_on_aux: Flag to set parity on auxiliary variables. Default is False.
+    :param set_parity_on_auxevol: Flag to set parity on auxevol variables. Default is False.
     :returns: header filename
     """
     parallelization = par.parval_from_str("parallelization")
@@ -355,6 +382,8 @@ def output_device_headers(
             additional_macros_str=additional_macros_str,
             num_streams=num_streams,
             nghosts=nghosts,
+            set_parity_on_aux=set_parity_on_aux,
+            set_parity_on_auxevol=set_parity_on_auxevol,
         )
 
         BHaH_CUDA_global_defines_h(
