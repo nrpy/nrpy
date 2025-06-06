@@ -445,6 +445,100 @@ def append_1d_loop_body(
     :param i012_pts: Three lists of explicit index points for each dimension.
     :param pragma: The loop prefix, e.g., OpenMP pragma.
     :return: Combined C code with index setup and main loop appended.
+
+    Examples
+    >>> import sympy as sp
+    >>> from nrpy.helpers.generic import clang_format
+    >>> Nxx0, Nxx1, Nxx2 = sp.symbols("Nxx0 Nxx1 Nxx2")
+
+    >>> # Test Case 1: Full grid loop for the first dimension and explicit points for others.
+    >>> # This also tests the conditional comment for 'data_points'.
+    >>> params = {
+    ...     "out_string": "",
+    ...     "loop_body_store_results": "data_points[i0_pt] = xCart[0];",
+    ...     "axis": "y",
+    ...     "Nxx": [Nxx0, 128, 128],
+    ...     "numpts": [Nxx0, 2, 2],
+    ...     "i012_pts": [[], [63, 64], [63, 64]],
+    ...     "pragma": "#pragma omp parallel for\n"
+    ... }
+    >>> result = clang_format(append_1d_loop_body(**params))
+    >>> print(result)
+    #pragma omp parallel for
+    for (int i0 = NGHOSTS; i0 < Nxx0 + NGHOSTS; i0++)
+      i0_pts[i0 - NGHOSTS] = i0;
+    i1_pts[0] = (int)(63);
+    i1_pts[1] = (int)(64);
+    i2_pts[0] = (int)(63);
+    i2_pts[1] = (int)(64);
+    // Main loop to store data points along the specified axis
+    LOOP_NOOMP(i0_pt, 0, numpts_i0, i1_pt, 0, numpts_i1, i2_pt, 0, numpts_i2) {
+      const int i0 = i0_pts[i0_pt], i1 = i1_pts[i1_pt], i2 = i2_pts[i2_pt];
+      const int idx3 = IDX3(i0, i1, i2);
+      REAL xCart[3];
+      REAL xOrig[3] = {xx[0][i0], xx[1][i1], xx[2][i2]};
+      xx_to_Cart(params, xOrig, xCart);
+    <BLANKLINE>
+      data_points[i0_pt] = xCart[0];
+    }
+    <BLANKLINE>
+
+    >>> # Test Case 2: All dimensions use explicit points, including sympy expressions.
+    >>> # Also tests appending to a non-empty out_string.
+    >>> params = {
+    ...     "out_string": "double time = 1.0;",
+    ...     "loop_body_store_results": "results[idx3] = sin(xCart[0]);",
+    ...     "axis": "z",
+    ...     "Nxx": [64, 64, 64],
+    ...     "numpts": [1, 2, 3],
+    ...     "i012_pts": [[32], [sp.sympify(31), Nxx1 / 2], [10, 20, 30]],
+    ...     "pragma": ""
+    ... }
+    >>> result = clang_format(append_1d_loop_body(**params))
+    >>> print(result)
+    double time = 1.0;
+    i0_pts[0] = (int)(32);
+    i1_pts[0] = (int)(31);
+    i1_pts[1] = (int)((1.0 / 2.0) * Nxx1);
+    i2_pts[0] = (int)(10);
+    i2_pts[1] = (int)(20);
+    i2_pts[2] = (int)(30);
+    // Main loop
+    LOOP_NOOMP(i0_pt, 0, numpts_i0, i1_pt, 0, numpts_i1, i2_pt, 0, numpts_i2) {
+      const int i0 = i0_pts[i0_pt], i1 = i1_pts[i1_pt], i2 = i2_pts[i2_pt];
+      const int idx3 = IDX3(i0, i1, i2);
+      REAL xCart[3];
+      REAL xOrig[3] = {xx[0][i0], xx[1][i1], xx[2][i2]};
+      xx_to_Cart(params, xOrig, xCart);
+    <BLANKLINE>
+      results[idx3] = sin(xCart[0]);
+    }
+    <BLANKLINE>
+
+    >>> # Test Case 3: No points on the specified axis.
+    >>> params = {
+    ...     "out_string": "",
+    ...     "loop_body_store_results": "return;",
+    ...     "axis": "z",
+    ...     "Nxx": [Nxx0, Nxx1, Nxx2],
+    ...     "numpts": [0, 0, 0],
+    ...     "i012_pts": [[], [], []],
+    ...     "pragma": ""
+    ... }
+    >>> result = clang_format(append_1d_loop_body(**params))
+    >>> print(result)
+    // CoordSystem = {CoordSystem} has no points on the z axis!
+    // Main loop
+    LOOP_NOOMP(i0_pt, 0, numpts_i0, i1_pt, 0, numpts_i1, i2_pt, 0, numpts_i2) {
+      const int i0 = i0_pts[i0_pt], i1 = i1_pts[i1_pt], i2 = i2_pts[i2_pt];
+      const int idx3 = IDX3(i0, i1, i2);
+      REAL xCart[3];
+      REAL xOrig[3] = {xx[0][i0], xx[1][i1], xx[2][i2]};
+      xx_to_Cart(params, xOrig, xCart);
+    <BLANKLINE>
+      return;
+    }
+    <BLANKLINE>
     """
     # Build the i*_pts arrays
     for i in range(3):
