@@ -6,7 +6,7 @@ Email: zachetie **at** gmail **dot* com
 Contributor: Ken Sible
 Email: ksible *at* outlook *dot* com
 Contributor: Samuel D. Tootle
-Email: sdtootle **at** gmail **dot** com
+Email: sdtootle **at** gmail **dot* com
 """
 
 from typing import Dict, List, Sequence, Tuple, Union
@@ -18,6 +18,147 @@ import nrpy.indexedexp as ixp
 import nrpy.params as par
 
 implemented_loop_regions = ["", "all points", "interior", "interior plus one upper"]
+
+# NRPy+ level symbolic expressions for grid properties
+_NGHOSTS = sp.Symbol("NGHOSTS", real=True)
+_Nxx = ixp.declarerank1("Nxx")
+_Nxx_plus_2NGHOSTS = ixp.declarerank1("Nxx_plus_2NGHOSTS")
+
+# Data-driven definitions for 1D loop ranges.
+_COORD_DEFINITIONS_1D = {
+    "y": {
+        # y-axis == { x_mid, z_mid }
+        "Cartesian": {
+            "i0": [_Nxx_plus_2NGHOSTS[0] / 2],
+            "i2": [_Nxx_plus_2NGHOSTS[2] / 2],
+        },
+        # y-axis == { theta_mid, see yz-plane discussion for Spherical in 2D for explanation of phi points }
+        "Spherical": {
+            "i1": [_Nxx_plus_2NGHOSTS[1] / 2],
+            "i2": [
+                _NGHOSTS + sp.Rational(1, 4) * _Nxx[2] - sp.Rational(1, 2),
+                _NGHOSTS + sp.Rational(3, 4) * _Nxx[2] - sp.Rational(1, 2),
+            ],
+        },
+        # Cylindrical: rho,phi,z
+        # y-axis == { see yz-plane discussion for Spherical in 2D for explanation of phi points, z_mid }
+        "Cylindrical": {
+            "i1": [
+                _NGHOSTS + sp.Rational(1, 4) * _Nxx[1] - sp.Rational(1, 2),
+                _NGHOSTS + sp.Rational(3, 4) * _Nxx[1] - sp.Rational(1, 2),
+            ],
+            "i2": [_Nxx_plus_2NGHOSTS[2] / 2],
+        },
+        # y-axis == { x1_mid, see yz-plane discussion for Spherical in 2D for explanation of phi points }
+        "SymTP": {
+            "i1": [_Nxx_plus_2NGHOSTS[1] / 2],
+            "i2": [
+                _NGHOSTS + sp.Rational(1, 4) * _Nxx[2] - sp.Rational(1, 2),
+                _NGHOSTS + sp.Rational(3, 4) * _Nxx[2] - sp.Rational(1, 2),
+            ],
+        },
+        # NO POINTS ON Y AXIS
+        "Wedge": {"i0": [-1], "i1": [-1], "i2": [-1]},
+    },
+    "z": {
+        # z-axis == { x_mid, y_mid }
+        "Cartesian": {
+            "i0": [_Nxx_plus_2NGHOSTS[0] / 2],
+            "i1": [_Nxx_plus_2NGHOSTS[1] / 2],
+        },
+        # z-axis == { th_min & th_max, phi_min  }
+        "Spherical": {
+            "i1": [_NGHOSTS, _Nxx_plus_2NGHOSTS[1] - _NGHOSTS - 1],
+            "i2": [_NGHOSTS],
+        },
+        # NO POINTS ON Z AXIS
+        "Spherical_Ring": {"i0": [-1], "i1": [-1], "i2": [-1]},
+        # Cylindrical: rho,phi,z
+        # z-axis == { rho_min & phi_min }
+        "Cylindrical": {"i0": [_NGHOSTS], "i1": [_NGHOSTS]},
+        # SymTP:
+        # self.xx_to_Cart[2] = f(xx0) * sp.cos(self.xx[1])
+        #  -> Aim for cos(xx1) = 1 -> xx1 = 0 & pi
+        # z_axis == { xx1_min & xx1_max, xx2_min }
+        # FIXME: Missing points between foci (not an easy fix).
+        "SymTP": {
+            "i1": [_NGHOSTS, _Nxx_plus_2NGHOSTS[1] - _NGHOSTS - 1],
+            "i2": [_NGHOSTS],
+        },
+        # Wedge-like: same as Spherical except x_new = +/-z_old, y_new = y_old, z_new = x_old
+        # Thus the z-axis here is the same as the +x-axis in Spherical-like.
+        # +x-axis == { theta_mid, phi={phi_mid} (since phi goes from -pi to pi) }
+        "Wedge": {"i1": [_Nxx_plus_2NGHOSTS[1] / 2], "i2": [_Nxx_plus_2NGHOSTS[2] / 2]},
+    },
+}
+
+# Data-driven definitions for 2D loop ranges.
+_COORD_DEFINITIONS_2D = {
+    "xy": {
+        # xy-plane == { z_mid }, where z index is i2
+        "Cartesian": {"i2": [_Nxx_plus_2NGHOSTS[2] / 2]},
+        "Cylindrical": {"i2": [_Nxx_plus_2NGHOSTS[2] / 2]},
+        # xy-plane == { theta_mid }, where theta index is i1
+        "Spherical": {"i1": [_Nxx_plus_2NGHOSTS[1] / 2]},
+        "SymTP": {"i1": [_Nxx_plus_2NGHOSTS[1] / 2]},
+        # UWedgeHSinhSph: same as Spherical except x_new = -z_old, y_new = y_old, z_new = x_old
+        # Thus the xy plane here is the same as the -z,y plane in Spherical-like.
+        # LWedgeHSinhSph: same as Spherical except x_new = z_old, y_new = y_old, z_new = -x_old
+        # Thus the xy plane here is the same as the z,y plane in Spherical-like
+        # (for both see discussion below for yz plane in Spherical)
+        "Wedge": {
+            "i2": [
+                _NGHOSTS + sp.Rational(1, 4) * _Nxx[2] - sp.Rational(1, 2),
+                _NGHOSTS + sp.Rational(3, 4) * _Nxx[2] - sp.Rational(1, 2),
+            ]
+        },
+    },
+    "yz": {
+        "Cartesian": {"i0": [_Nxx_plus_2NGHOSTS[0] / 2]},
+        # See documentation for Spherical below; Cylindrical-like coordinates choose xx1 = phi instead of xx2.
+        "Cylindrical": {
+            "i1": [
+                _NGHOSTS + sp.Rational(1, 4) * _Nxx[1] - sp.Rational(1, 2),
+                _NGHOSTS + sp.Rational(3, 4) * _Nxx[1] - sp.Rational(1, 2),
+            ]
+        },
+        # In Spherical/SymTP coordinates, phi_min=-PI and phi_max=+PI.
+        # The yz plane is specifically at -PI/2 and +PI/2.
+        # When Nphi=2, NGHOSTS and NGHOSTS+1 correspond to -PI/2 and +PI/2 *exactly*.
+        # WARNING: For Nphi=4, the planes don't sample -PI/2 and +PI/2 exactly. Instead, they sample at:
+        #          {-3/4, -1/4, +1/4, +3/4}*PI. The closest planes are at indices 1 and 3 for these values.
+        #                   ^           ^  <--- closest planes; at 1 and 3
+        #             ^           ^        <--- closest planes; at 0 and 2
+        #          The same applies for Nphi=4, 8, 12, etc. It's best to choose Nphi as a multiple of 2 but not 4.
+        # General formula for cell-centered grid in phi is:
+        # xx_i = -PI + [(i-NGHOSTS) + 0.5] * (2*PI)/Nxx2
+        # In symbolic math (using sympy), the closest planes for -PI/2 and +PI/2 can be calculated as follows:
+        # index_at_PIo2, PI, Nxx2, NGHOSTS = symbols('index_at_PIo2 PI Nxx2 NGHOSTS', real=True)
+        # expr = -PI + ((index_at_PIo2-NGHOSTS) + Rational(1,2)) * (2*PI)/Nxx2
+        # solve(expr - PI/2, index_at_PIo2)  # solves for expr = PI/2
+        # # NGHOSTS + 3*Nphi/4 - 1/2 -> Closest plane for +PI/2: NGHOSTS + 3*Nxx2/4 - 1/2
+        # solve(expr - (-PI/2), index_at_PIo2)  # solves for expr = -PI/2
+        # # NGHOSTS + Nphi/4 - 1/2 -> Closest plane for -PI/2: NGHOSTS + Nxx2/4 - 1/2
+        "Spherical": {
+            "i2": [
+                _NGHOSTS + sp.Rational(1, 4) * _Nxx[2] - sp.Rational(1, 2),
+                _NGHOSTS + sp.Rational(3, 4) * _Nxx[2] - sp.Rational(1, 2),
+            ]
+        },
+        "SymTP": {
+            "i2": [
+                _NGHOSTS + sp.Rational(1, 4) * _Nxx[2] - sp.Rational(1, 2),
+                _NGHOSTS + sp.Rational(3, 4) * _Nxx[2] - sp.Rational(1, 2),
+            ]
+        },
+        # UWedgeHSinhSph: same as Spherical except x_new = -z_old, y_new = y_old, z_new = x_old
+        # Thus the yz plane here is the same as the y,x plane in Spherical-like.
+        # LWedgeHSinhSph: same as Spherical except x_new = z_old, y_new = y_old, z_new = -x_old
+        # Thus the yz plane here is the same as the y,-x plane in Spherical-like
+        # xy-plane == { theta_mid }, where theta index is i1
+        "Wedge": {"i1": [_Nxx_plus_2NGHOSTS[1] / 2]},
+    },
+}
 
 
 def implemented_loop_regions_err(loop_region: str) -> str:
@@ -37,42 +178,58 @@ def get_loop_region_ranges(
     loop_region: str, min_idx_prefix: Union[str, None] = None
 ) -> Tuple[List[str], List[str]]:
     """
-    Return Loop region index ranges.
+    Return Loop region index ranges using a data-driven approach for clarity.
 
-    :param loop_region: Loop region
-    :param min_idx_prefix: String that specifies the starting value prefix (GPU specific)
-    :returns: region indicies
+    :param loop_region: Loop region.
+    :param min_idx_prefix: String that specifies the starting value prefix (GPU specific).
+    :returns: A tuple of two lists: loop minimums and loop maximums.
     """
-    i2i1i0_mins = ["", "", ""]
-    i2i1i0_maxs = ["", "", ""]
+    # Define base components for ranges
+    if min_idx_prefix:
+        all_points_min = [f"{min_idx_prefix}{i}" for i in reversed(range(3))]
+        interior_min = [f"{min_idx_prefix}{i}+NGHOSTS" for i in reversed(range(3))]
+    else:
+        all_points_min = ["0", "0", "0"]
+        interior_min = ["NGHOSTS", "NGHOSTS", "NGHOSTS"]
 
-    # 'AllPoints': loop over all points on a numerical grid, including ghost zones
-    if loop_region == "all points":
-        if min_idx_prefix is not None:
-            i2i1i0_mins = [f"{min_idx_prefix}{i}" for i in reversed(range(3))]
-        else:
-            i2i1i0_mins = ["0", "0", "0"]
-        i2i1i0_maxs = ["Nxx_plus_2NGHOSTS2", "Nxx_plus_2NGHOSTS1", "Nxx_plus_2NGHOSTS0"]
-    # 'InteriorPoints': loop over the interior of a numerical grid, i.e. exclude ghost zones
-    elif "interior" in loop_region:
-        if not min_idx_prefix is None:
-            i2i1i0_mins = [f"{min_idx_prefix}{i}+NGHOSTS" for i in reversed(range(3))]
-        else:
-            i2i1i0_mins = ["NGHOSTS", "NGHOSTS", "NGHOSTS"]
+    all_points_max = [f"Nxx_plus_2NGHOSTS{i}" for i in reversed(range(3))]
+    interior_max = [f"{m} - NGHOSTS" for m in all_points_max]
+    interior_plus_one_max = [f"{m} + 1" for m in interior_max]
 
-        if loop_region == "interior plus one upper":
-            i2i1i0_maxs = [
-                "Nxx_plus_2NGHOSTS2 - NGHOSTS + 1",
-                "Nxx_plus_2NGHOSTS1 - NGHOSTS + 1",
-                "Nxx_plus_2NGHOSTS0 - NGHOSTS + 1",
-            ]
-        else:
-            i2i1i0_maxs = [
-                "Nxx_plus_2NGHOSTS2 - NGHOSTS",
-                "Nxx_plus_2NGHOSTS1 - NGHOSTS",
-                "Nxx_plus_2NGHOSTS0 - NGHOSTS",
-            ]
-    return i2i1i0_mins, i2i1i0_maxs
+    # Configuration dictionary maps loop_region to its min/max ranges
+    region_map = {
+        "all points": (all_points_min, all_points_max),
+        "interior": (interior_min, interior_max),
+        "interior plus one upper": (interior_min, interior_plus_one_max),
+    }
+
+    # Default to empty ranges if loop_region is not found (e.g., "").
+    return region_map.get(loop_region, (["", "", ""], ["", "", ""]))
+
+
+def _simple_loop_pragma(
+    enable_OpenMP: bool,
+    OMP_custom_pragma: str,
+    OMP_collapse: int,
+    parallelization: str,
+) -> str:
+    """
+    Generate the OpenMP pragma string.
+
+    :param enable_OpenMP: Flag to enable OpenMP parallelization.
+    :param OMP_custom_pragma: A custom OpenMP pragma string to use instead of the default.
+    :param OMP_collapse: The number of loops to collapse in the pragma.
+    :param parallelization: The parallelization strategy (e.g., "openmp", "cuda").
+    :return: The generated OpenMP pragma string, or an empty string if not applicable.
+    """
+    if OMP_custom_pragma:
+        return OMP_custom_pragma
+    if enable_OpenMP and parallelization == "openmp":
+        pragma = "#pragma omp parallel for"
+        if OMP_collapse > 1:
+            pragma += f" collapse({OMP_collapse})"
+        return pragma
+    return ""
 
 
 def simple_loop(
@@ -178,110 +335,93 @@ def simple_loop(
     } // END LOOP: for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++)
     <BLANKLINE>
     """
-    parallelization = par.parval_from_str("parallelization")
-    # 'AllPoints': loop over all points on a numerical grid, including ghost zones
-    if loop_region == "":
+    if not loop_region:
         return loop_body
     if loop_region not in implemented_loop_regions:
         raise ValueError(implemented_loop_regions_err(loop_region))
-    i2i1i0_mins, i2i1i0_maxs = get_loop_region_ranges(
-        loop_region, min_idx_prefix="tid" if parallelization == "cuda" else None
-    )
 
-    read_rfm_xx_arrays = ["", "", ""]
+    if enable_rfm_precompute and read_xxs:
+        raise ValueError("enable_rfm_precompute and Read_xxs cannot both be enabled.")
 
-    # SIMD is used only if intrinsics are enabled and we're not, currently, using CUDA.
-    use_simd = enable_intrinsics and (parallelization != "cuda")
-
-    # Determine if a reset is needed since it is only relevant to openmp
-    OMP_collapse = OMP_collapse if parallelization == "openmp" else 1
-
-    # 'Read_xxs': read the xx[3][:] 1D coordinate arrays, as some interior dependency exists
-    if not use_simd and read_xxs:
-        if parallelization == "cuda":
-            read_rfm_xx_arrays = [
-                "MAYBE_UNUSED const REAL xx0 = x0[i0];",
-                "MAYBE_UNUSED const REAL xx1 = x1[i1];",
-                "MAYBE_UNUSED const REAL xx2 = x2[i2];",
-            ]
-        else:
-            read_rfm_xx_arrays = [
-                "MAYBE_UNUSED const REAL xx0 = xx[0][i0];",
-                "MAYBE_UNUSED const REAL xx1 = xx[1][i1];",
-                "MAYBE_UNUSED const REAL xx2 = xx[2][i2];",
-            ]
-    elif read_xxs and use_simd:
+    parallelization = par.parval_from_str("parallelization")
+    is_cuda = parallelization == "cuda"
+    use_simd = enable_intrinsics and not is_cuda
+    if read_xxs and use_simd:
         raise ValueError("no innerSIMD support for Read_xxs (currently).")
 
-    # 'enable_rfm_precompute': enable pre-computation of reference metric
+    increment = (
+        ["stride2", "stride1", "stride0"]
+        if is_cuda
+        else ["1", "1", "simd_width" if use_simd else "1"]
+    )
+
+    min_idx_prefix = "tid" if is_cuda else None
+    i2i1i0_mins, i2i1i0_maxs = get_loop_region_ranges(loop_region, min_idx_prefix)
+
+    rfm_reads = ["", "", ""]
     if enable_rfm_precompute:
-        if read_xxs:
-            raise ValueError(
-                "enable_rfm_precompute and Read_xxs cannot both be enabled."
-            )
         # pylint: disable=C0415
         from nrpy.infrastructures.BHaH import rfm_precompute
 
         rfmp = rfm_precompute.ReferenceMetricPrecompute(CoordSystem)
-        if enable_intrinsics:
-            read_rfm_xx_arrays = [
+        rfm_reads = (
+            [
                 rfmp.readvr_intrinsics_inner_str[0],
                 rfmp.readvr_intrinsics_outer_str[1],
                 rfmp.readvr_intrinsics_outer_str[2],
             ]
-        else:
-            read_rfm_xx_arrays = [
-                rfmp.readvr_str[0],
-                rfmp.readvr_str[1],
-                rfmp.readvr_str[2],
+            if enable_intrinsics
+            else list(rfmp.readvr_str)
+        )
+    elif read_xxs:
+        rfm_reads = (
+            [
+                "MAYBE_UNUSED const REAL xx0 = x0[i0];",
+                "MAYBE_UNUSED const REAL xx1 = x1[i1];",
+                "MAYBE_UNUSED const REAL xx2 = x2[i2];",
             ]
-    # 'DisableOpenMP': disable loop parallelization using OpenMP
-    if enable_OpenMP or OMP_custom_pragma != "":
-        if OMP_custom_pragma == "" and parallelization == "openmp":
-            pragma = "#pragma omp parallel for"
-            if OMP_collapse > 1:
-                pragma = f"#pragma omp parallel for collapse({OMP_collapse})"
-        # 'OMP_custom_pragma': enable loop parallelization using OpenMP with custom pragma
-        else:
-            pragma = OMP_custom_pragma
-    else:
-        pragma = ""
-    increment = (
-        ["stride2", "stride1", "stride0"]
-        if parallelization == "cuda"
-        else (["1", "1", "simd_width"] if enable_intrinsics else ["1", "1", "1"])
+            if is_cuda
+            else [
+                "MAYBE_UNUSED const REAL xx0 = xx[0][i0];",
+                "MAYBE_UNUSED const REAL xx1 = xx[1][i1];",
+                "MAYBE_UNUSED const REAL xx2 = xx[2][i2];",
+            ]
+        )
+    rfm_i0_code, rfm_i1_code, rfm_i2_code = rfm_reads
+
+    effective_collapse = OMP_collapse if parallelization == "openmp" else 1
+    pragma = _simple_loop_pragma(
+        enable_OpenMP, OMP_custom_pragma, effective_collapse, parallelization
     )
 
-    loop_body = read_rfm_xx_arrays[0] + f"\n\n{loop_body}"
-    prefix_loop_with = [pragma, read_rfm_xx_arrays[2], read_rfm_xx_arrays[1]]
+    prefix_i2, prefix_i1, prefix_i0 = pragma, "", ""
+    body_prefix_parts = []
 
-    if OMP_collapse == 2:
-        prefix_loop_with = [
-            pragma,
-            "",
-            read_rfm_xx_arrays[2] + read_rfm_xx_arrays[1],
-        ]
-    elif OMP_collapse == 3:
-        prefix_loop_with = [
-            pragma,
-            "",
-            "",
-        ]
-        # above: loop_body = read_rfm_xx_arrays[0] + loop_body -----v
-        loop_body = read_rfm_xx_arrays[2] + read_rfm_xx_arrays[1] + loop_body
+    if effective_collapse == 3:
+        body_prefix_parts.extend([rfm_i2_code, rfm_i1_code, rfm_i0_code])
+    elif effective_collapse == 2:
+        prefix_i0 = "".join(filter(None, [rfm_i2_code, rfm_i1_code]))
+        body_prefix_parts.append(rfm_i0_code)
+    else:  # Default case: collapse = 1
+        prefix_i1 = rfm_i2_code
+        prefix_i0 = rfm_i1_code
+        body_prefix_parts.append(rfm_i0_code)
 
-    full_loop_body = str(
+    prefix_loop_with = [prefix_i2, prefix_i1, prefix_i0]
+    body_prefix = "".join(filter(None, body_prefix_parts))
+
+    final_loop_body = f"{body_prefix}\n\n{loop_body}"
+
+    return str(
         lp.loop(
             ["i2", "i1", "i0"],
             i2i1i0_mins,
             i2i1i0_maxs,
             increment,
             prefix_loop_with,
-            loop_body=loop_body,
+            loop_body=final_loop_body,
         )
     )
-
-    return full_loop_body
 
 
 def compute_1d_loop_ranges(
@@ -309,98 +449,36 @@ def compute_1d_loop_ranges(
             f"1D loop output only supports y or z axes. axis = {axis} not supported."
         )
 
-    NGHOSTS = sp.Symbol("NGHOSTS", real=True)
-    Nxx_plus_2NGHOSTS = ixp.declarerank1("Nxx_plus_2NGHOSTS")
-    Nxx = ixp.declarerank1("Nxx")
+    # Select the correct configuration based on coordinate system and axis
+    config = None
+    # Handle special case of Spherical + Ring on z-axis first
+    if axis == "z" and "Spherical" in CoordSystem and "Ring" in CoordSystem:
+        config = _COORD_DEFINITIONS_1D["z"]["Spherical_Ring"]
+    else:
+        for family, family_config in _COORD_DEFINITIONS_1D[axis].items():
+            if family in CoordSystem:
+                config = family_config
+                break
 
-    i0_pts: List[Union[int, sp.Expr]] = []
-    i1_pts: List[Union[int, sp.Expr]] = []
-    i2_pts: List[Union[int, sp.Expr]] = []
+    if config is None:
+        raise ValueError(f"CoordSystem = {CoordSystem} not supported.")
 
-    if axis == "y":
-        if "Cartesian" in CoordSystem:
-            # x-axis == { x_mid, z_mid }
-            i0_pts += [Nxx_plus_2NGHOSTS[0] / 2]
-            i2_pts += [Nxx_plus_2NGHOSTS[2] / 2]
-        elif "Spherical" in CoordSystem:
-            # y-axis == { theta_mid, see yz-plane discussion for Spherical below for explanation of phi points }
-            i1_pts += [Nxx_plus_2NGHOSTS[1] / 2]
-            i2_pts += [NGHOSTS + sp.Rational(1, 4) * Nxx[2] - sp.Rational(1, 2)]
-            i2_pts += [NGHOSTS + sp.Rational(3, 4) * Nxx[2] - sp.Rational(1, 2)]
-        elif "Cylindrical" in CoordSystem:
-            # Cylindrical: rho,phi,z
-            # y-axis == { see yz-plane discussion for Spherical below for explanation of phi points, z_mid }
-            i1_pts += [NGHOSTS + sp.Rational(1, 4) * Nxx[1] - sp.Rational(1, 2)]
-            i1_pts += [NGHOSTS + sp.Rational(3, 4) * Nxx[1] - sp.Rational(1, 2)]
-            i2_pts += [Nxx_plus_2NGHOSTS[2] / 2]
-        elif "SymTP" in CoordSystem:
-            # y-axis == { x1_mid, see yz-plane discussion for Spherical below for explanation of phi points }
-            i1_pts += [Nxx_plus_2NGHOSTS[1] / 2]
-            i2_pts += [NGHOSTS + sp.Rational(1, 4) * Nxx[2] - sp.Rational(1, 2)]
-            i2_pts += [NGHOSTS + sp.Rational(3, 4) * Nxx[2] - sp.Rational(1, 2)]
-        elif "Wedge" in CoordSystem:
-            # NO POINTS ON Y AXIS
-            i0_pts += [-1]
-            i1_pts += [-1]
-            i2_pts += [-1]
-        else:
-            raise ValueError(f"CoordSystem = {CoordSystem} not supported.")
-
-    if axis == "z":
-        if "Cartesian" in CoordSystem:
-            # z-axis == { x_mid, y_mid }
-            i0_pts += [Nxx_plus_2NGHOSTS[0] / 2]
-            i1_pts += [Nxx_plus_2NGHOSTS[1] / 2]
-        elif "Spherical" in CoordSystem:
-            if "Ring" in CoordSystem:
-                # NO POINTS ON Z AXIS
-                i0_pts += [-1]
-                i1_pts += [-1]
-                i2_pts += [-1]
-            else:
-                # z-axis == { th_min & th_max, phi_min  }
-                i1_pts += [NGHOSTS]
-                i1_pts += [Nxx_plus_2NGHOSTS[1] - NGHOSTS - 1]
-                i2_pts += [NGHOSTS]
-        elif "Cylindrical" in CoordSystem:
-            # Cylindrical: rho,phi,z
-            # z-axis == { rho_min & phi_min }
-            i0_pts += [NGHOSTS]
-            i1_pts += [NGHOSTS]
-        elif "SymTP" in CoordSystem:
-            # SymTP:
-            # self.xx_to_Cart[2] = f(xx0) * sp.cos(self.xx[1])
-            #  -> Aim for cos(xx1) = 1 -> xx1 = 0 & pi
-            # z_axis == { xx1_min & xx1_max, xx2_min }
-            # FIXME: Missing points between foci (not an easy fix).
-            i1_pts += [NGHOSTS]
-            i1_pts += [Nxx_plus_2NGHOSTS[1] - NGHOSTS - 1]
-            i2_pts += [NGHOSTS]
-        elif "Wedge" in CoordSystem:
-            # Wedge-like: same as Spherical except x_new = +/-z_old, y_new = y_old, z_new = x_old
-            # Thus the z-axis here is the same as the +x-axis in Spherical-like.
-            # +x-axis == { theta_mid, phi={phi_mid} (since phi goes from -pi to pi) }
-            i1_pts += [Nxx_plus_2NGHOSTS[1] / 2]
-            i2_pts += [Nxx_plus_2NGHOSTS[2] / 2]
-        else:
-            raise ValueError(f"CoordSystem = {CoordSystem} not supported.")
-
+    i0_pts: List[Union[int, sp.Expr]] = config.get("i0", [])
+    i1_pts: List[Union[int, sp.Expr]] = config.get("i1", [])
+    i2_pts: List[Union[int, sp.Expr]] = config.get("i2", [])
     i012_pts = [i0_pts, i1_pts, i2_pts]
 
-    if (
-        (i0_pts and i0_pts[0] == -1)
-        or (i1_pts and i1_pts[0] == -1)
-        or (i2_pts and i2_pts[0] == -1)
-    ):
-        numpts = [0, 0, 0]
+    # Calculate number of points
+    if i0_pts and i0_pts[0] == -1:
+        numpts: List[Union[int, sp.Expr]] = [0, 0, 0]
     else:
         numpts = [
-            len(i0_pts) if i0_pts else Nxx[0],
-            len(i1_pts) if i1_pts else Nxx[1],
-            len(i2_pts) if i2_pts else Nxx[2],
+            len(i0_pts) if i0_pts else _Nxx[0],
+            len(i1_pts) if i1_pts else _Nxx[1],
+            len(i2_pts) if i2_pts else _Nxx[2],
         ]
 
-    return Nxx, i012_pts, numpts
+    return _Nxx, i012_pts, numpts
 
 
 def generate_1d_loop_header(
@@ -621,57 +699,54 @@ def simple_loop_1D(
     """
     Nxx, i012_pts, numpts = compute_1d_loop_ranges(CoordSystem, axis)
 
-    pragma = "#pragma omp parallel for\n"
+    struct_fields = "\n".join(
+        f"  {ctype} {cname};" for ctype, cname in out_quantities_dict
+    )
+    prefunc_content = f"""// Struct to hold 1D data points
+typedef struct {{
+  REAL xCart_axis;
+{struct_fields}
+}} data_point_1d_struct;
+
+{generate_qsort_compare_string()}"""
 
     out_string = generate_1d_loop_header(axis, CoordSystem, numpts)
 
-    # Loop body for storing results.
-    loop_body_store_results = ""
-    # Continue to append to loop_body_store_results here...
-    loop_body_store_results += f"""{{
+    dp1d_assignments = "\n".join(
+        f"dp1d.{name} = {expr};" for (_, name), expr in out_quantities_dict.items()
+    )
+    loop_body_store_results = f"""{{
 // Store the data in the data_point_1d_struct
 data_point_1d_struct dp1d;
 dp1d.xCart_axis = {'xCart[1];' if axis == "y" else 'xCart[2];'}
-"""
-
-    for key, value in out_quantities_dict.items():
-        loop_body_store_results += f"dp1d.{key[1]} = {value};\n"
-    loop_body_store_results += "data_points[data_index] = dp1d; data_index++;\n}\n"
+{dp1d_assignments}
+data_points[data_index] = dp1d; data_index++;
+}}"""
 
     out_string = append_1d_loop_body(
-        out_string, loop_body_store_results, axis, Nxx, numpts, i012_pts, pragma
+        out_string,
+        loop_body_store_results,
+        axis,
+        Nxx,
+        numpts,
+        i012_pts,
+        "#pragma omp parallel for\n",
     )
+    out_string = out_string.replace("{CoordSystem}", CoordSystem)
 
-    # Post-loop: qsort() along xCart_axis and output to file.
-    prefunc_content = """// Struct to hold 1D data points
-typedef struct {
-REAL xCart_axis;
-"""
-    for key in out_quantities_dict.keys():
-        prefunc_content += f"  {key[0]} {key[1]};\n"
+    printf_formats = " ".join(
+        "%.15e" if ctype != "int" else "%d" for ctype, _ in out_quantities_dict
+    )
+    printf_vars = ", ".join(f"data_points[i].{name}" for _, name in out_quantities_dict)
 
-    prefunc_content += "} data_point_1d_struct;\n\n"
-    prefunc_content += generate_qsort_compare_string()
-
-    qsort_and_output_to_file = r"""
+    # Note the \\n to produce a literal \n in the C code. This fixes the doctest failure.
+    qsort_and_output_to_file = f"""
 qsort(data_points, data_index, sizeof(data_point_1d_struct), compare);
 
-for (int i = 0; i < data_index; i++) {
-  fprintf(outfile, "%.15e """
-
-    for key in out_quantities_dict.keys():
-        printf_c_type = "%.15e" if key[0] != "int" else "%d"
-        qsort_and_output_to_file += f"{printf_c_type} "
-
-    qsort_and_output_to_file = (
-        f'{qsort_and_output_to_file[:-1]}\\n", data_points[i].xCart_axis, '
-    )
-
-    for key in out_quantities_dict.keys():
-        qsort_and_output_to_file += f"data_points[i].{key[1]}, "
-
-    qsort_and_output_to_file = f"{qsort_and_output_to_file[:-2]});\n}}\n"
-
+for (int i = 0; i < data_index; i++) {{
+  fprintf(outfile, "%.15e {printf_formats}\\n", data_points[i].xCart_axis, {printf_vars});
+}}
+"""
     out_string += qsort_and_output_to_file
 
     return prefunc_content, out_string
@@ -711,78 +786,27 @@ def max_numpts__i012_pts__numpts_2D(
             f"2D loop output only supports xy or yz planes. plane = {plane} not supported."
         )
 
-    NGHOSTS = sp.Symbol("NGHOSTS", real=True)
-    Nxx_plus_2NGHOSTS = ixp.declarerank1("Nxx_plus_2NGHOSTS")
-    Nxx = ixp.declarerank1("Nxx")
+    config = None
+    plane_config = _COORD_DEFINITIONS_2D[plane]
+    for family, family_config in plane_config.items():
+        if family in CoordSystem:
+            config = family_config
+            break
 
-    i0_pts: List[sp.Expr] = []
-    i1_pts: List[sp.Expr] = []
-    i2_pts: List[sp.Expr] = []
+    if config is None:
+        raise ValueError(f"CoordSystem = {CoordSystem} not supported.")
 
-    if plane == "xy":
-        if "Cartesian" in CoordSystem or "Cylindrical" in CoordSystem:
-            # xy-plane == { z_mid }, where z index is i2
-            i2_pts += [Nxx_plus_2NGHOSTS[2] / 2]
-        elif "Spherical" in CoordSystem or "SymTP" in CoordSystem:
-            # xy-plane == { theta_mid }, where theta index is i1
-            i1_pts += [Nxx_plus_2NGHOSTS[1] / 2]
-        elif "Wedge" in CoordSystem:
-            # UWedgeHSinhSph: same as Spherical except x_new = -z_old, y_new = y_old, z_new = x_old
-            # Thus the xy plane here is the same as the -z,y plane in Spherical-like.
-            # LWedgeHSinhSph: same as Spherical except x_new = z_old, y_new = y_old, z_new = -x_old
-            # Thus the xy plane here is the same as the z,y plane in Spherical-like
-            # (for both see discussion below for yz plane in Spherical)
-            i2_pts += [NGHOSTS + sp.Rational(1, 4) * Nxx[2] - sp.Rational(1, 2)]
-            i2_pts += [NGHOSTS + sp.Rational(3, 4) * Nxx[2] - sp.Rational(1, 2)]
-        else:
-            raise ValueError(f"CoordSystem = {CoordSystem} not supported.")
-
-    if plane == "yz":
-        if "Cartesian" in CoordSystem:
-            i0_pts += [Nxx_plus_2NGHOSTS[0] / 2]
-        elif "Cylindrical" in CoordSystem:
-            # See documentation for Spherical below; Cylindrical-like coordinates choose xx1 = phi instead of xx2.
-            i1_pts += [NGHOSTS + sp.Rational(1, 4) * Nxx[1] - sp.Rational(1, 2)]
-            i1_pts += [NGHOSTS + sp.Rational(3, 4) * Nxx[1] - sp.Rational(1, 2)]
-        elif "Spherical" in CoordSystem or "SymTP" in CoordSystem:
-            # In Spherical/SymTP coordinates, phi_min=-PI and phi_max=+PI.
-            # The yz plane is specifically at -PI/2 and +PI/2.
-            # When Nphi=2, NGHOSTS and NGHOSTS+1 correspond to -PI/2 and +PI/2 *exactly*.
-            # WARNING: For Nphi=4, the planes don't sample -PI/2 and +PI/2 exactly. Instead, they sample at:
-            #          {-3/4, -1/4, +1/4, +3/4}*PI. The closest planes are at indices 1 and 3 for these values.
-            #                   ^           ^  <--- closest planes; at 1 and 3
-            #             ^           ^        <--- closest planes; at 0 and 2
-            #          The same applies for Nphi=4, 8, 12, etc. It's best to choose Nphi as a multiple of 2 but not 4.
-            # General formula for cell-centered grid in phi is:
-            # xx_i = -PI + [(i-NGHOSTS) + 0.5] * (2*PI)/Nxx2
-            # In symbolic math (using sympy), the closest planes for -PI/2 and +PI/2 can be calculated as follows:
-            # index_at_PIo2, PI, Nxx2, NGHOSTS = symbols('index_at_PIo2 PI Nxx2 NGHOSTS', real=True)
-            # expr = -PI + ((index_at_PIo2-NGHOSTS) + Rational(1,2)) * (2*PI)/Nxx2
-            # solve(expr - PI/2, index_at_PIo2)  # solves for expr = PI/2
-            # # NGHOSTS + 3*Nphi/4 - 1/2 -> Closest plane for +PI/2: NGHOSTS + 3*Nxx2/4 - 1/2
-            # solve(expr - (-PI/2), index_at_PIo2)  # solves for expr = -PI/2
-            # # NGHOSTS + Nphi/4 - 1/2 -> Closest plane for -PI/2: NGHOSTS + Nxx2/4 - 1/2
-            i2_pts += [NGHOSTS + sp.Rational(1, 4) * Nxx[2] - sp.Rational(1, 2)]
-            i2_pts += [NGHOSTS + sp.Rational(3, 4) * Nxx[2] - sp.Rational(1, 2)]
-        elif "Wedge" in CoordSystem:
-            # UWedgeHSinhSph: same as Spherical except x_new = -z_old, y_new = y_old, z_new = x_old
-            # Thus the yz plane here is the same as the y,x plane in Spherical-like.
-            # LWedgeHSinhSph: same as Spherical except x_new = z_old, y_new = y_old, z_new = -x_old
-            # Thus the yz plane here is the same as the y,-x plane in Spherical-like
-            # xy-plane == { theta_mid }, where theta index is i1
-            i1_pts += [Nxx_plus_2NGHOSTS[1] / 2]
-        else:
-            raise ValueError(f"CoordSystem = {CoordSystem} not supported.")
-
+    i0_pts: List[sp.Expr] = config.get("i0", [])
+    i1_pts: List[sp.Expr] = config.get("i1", [])
+    i2_pts: List[sp.Expr] = config.get("i2", [])
     i012_pts = [i0_pts, i1_pts, i2_pts]
-    max_numpts = Nxx[:]
-    if include_GHOSTS:
-        max_numpts = Nxx_plus_2NGHOSTS[:]
 
-    numpts: List[Union[int, sp.Expr]] = [0] * 3
-    numpts[0] = len(i0_pts) if i0_pts else max_numpts[0]
-    numpts[1] = len(i1_pts) if i1_pts else max_numpts[1]
-    numpts[2] = len(i2_pts) if i2_pts else max_numpts[2]
+    max_numpts = _Nxx_plus_2NGHOSTS[:] if include_GHOSTS else _Nxx[:]
+    numpts: List[Union[int, sp.Expr]] = [
+        len(i0_pts) if i0_pts else max_numpts[0],
+        len(i1_pts) if i1_pts else max_numpts[1],
+        len(i2_pts) if i2_pts else max_numpts[2],
+    ]
     return max_numpts, i012_pts, numpts
 
 
@@ -814,48 +838,50 @@ def simple_loop_2D(
     pragma = "#pragma omp parallel for\n"
     max_numpts, i012_pts, numpts = max_numpts__i012_pts__numpts_2D(CoordSystem, plane)
 
-    out_string = f"""// Define points for output along the {plane}-plane in {CoordSystem} coordinates.
-const int numpts_i0={numpts[0]}, numpts_i1={numpts[1]}, numpts_i2={numpts[2]};
-int i0_pts[numpts_i0], i1_pts[numpts_i1], i2_pts[numpts_i2];
-"""
+    code_lines = [
+        f"// Define points for output along the {plane}-plane in {CoordSystem} coordinates.",
+        f"const int numpts_i0={numpts[0]}, numpts_i1={numpts[1]}, numpts_i2={numpts[2]};",
+        "int i0_pts[numpts_i0], i1_pts[numpts_i1], i2_pts[numpts_i2];",
+    ]
     for i in range(3):
         if numpts[i] == max_numpts[i]:
-            out_string += f"{pragma}for(int i{i}=NGHOSTS; i{i}<Nxx{i} + NGHOSTS; i{i}++) i{i}_pts[i{i}-NGHOSTS] = i{i};\n"
+            code_lines.append(
+                f"{pragma}for(int i{i}=NGHOSTS; i{i}<Nxx{i} + NGHOSTS; i{i}++) i{i}_pts[i{i}-NGHOSTS] = i{i};"
+            )
         else:
             for j, pt in enumerate(i012_pts[i]):
-                out_string += f"i{i}_pts[{j}] = (int)({sp.ccode(pt)});\n"
+                code_lines.append(f"i{i}_pts[{j}] = (int)({sp.ccode(pt)});")
+    init_code = "\n".join(code_lines)
 
-    out_string += """// Main loop to store data points in the specified plane
-LOOP_NOOMP(i0_pt,0,numpts_i0, i1_pt,0,numpts_i1, i2_pt,0,numpts_i2) {
+    declarations = "\n".join(
+        [
+            f"const {key[0]} {key[1]} = {value};"
+            for key, value in out_quantities_dict.items()
+        ]
+    )
+    printf_formats = " ".join(
+        ["%.15e" if key[0] != "int" else "%d" for key in out_quantities_dict.keys()]
+    )
+    printf_vars = ", ".join(key[1] for key in out_quantities_dict.keys())
+    coords_to_print = "xCart[0], xCart[1]" if plane == "xy" else "xCart[1], xCart[2]"
+
+    # Note the \\n to produce a literal \n in the C code.
+    main_loop = f"""// Main loop to store data points in the specified plane
+LOOP_NOOMP(i0_pt,0,numpts_i0, i1_pt,0,numpts_i1, i2_pt,0,numpts_i2) {{
   const int i0 = i0_pts[i0_pt], i1 = i1_pts[i1_pt], i2 = i2_pts[i2_pt];
   const int idx3 = IDX3(i0, i1, i2);
   REAL xCart[3];
-  REAL xOrig[3] = {xx[0][i0], xx[1][i1], xx[2][i2]};
+  REAL xOrig[3] = {{xx[0][i0], xx[1][i1], xx[2][i2]}};
   xx_to_Cart(params, xOrig, xCart);
+  {{
+    // Collect diagnostic data
+    {declarations}
+    fprintf(outfile, "%.15e %.15e {printf_formats}\\n", {coords_to_print}, {printf_vars});
+  }}
+}}
 """
-    out_string += "{\n"
-    out_string += "// Collect diagnostic data\n"
-    for key, value in out_quantities_dict.items():
-        out_string += f"const {key[0]} {key[1]} = {value};\n"
-    out_string += 'fprintf(outfile, "%.15e %.15e '
 
-    for key in out_quantities_dict.keys():
-        printf_c_type = "%.15e" if key[0] != "int" else "%d"
-        out_string += f"{printf_c_type} "
-
-    out_string = f'{out_string[:-1]}\\n", '
-
-    if plane == "xy":
-        out_string += "xCart[0], xCart[1], "
-    elif plane == "yz":
-        out_string += "xCart[1], xCart[2], "
-
-    for key in out_quantities_dict.keys():
-        out_string += f"{key[1]}, "
-
-    out_string = f"{out_string[:-2]});\n}}\n}}\n"
-
-    return out_string
+    return f"{init_code}\n{main_loop}"
 
 
 if __name__ == "__main__":
