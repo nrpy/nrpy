@@ -109,7 +109,7 @@ default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.25 if not paper else +5.0
 default_BH2_z_posn = -0.25 if not paper else -5.0
 enable_rfm_precompute = True
-MoL_method = "RK4" if not paper else "SSPK33"
+MoL_method = "RK4" if not paper else "SSPRK33"
 fd_order = 8
 radiation_BC_fd_order = 4 if not paper else 8
 enable_intrinsics = True
@@ -126,9 +126,9 @@ if "Spherical" in CoordSystem:
     par.adjust_CodeParam_default("Nchare1", 2)
     par.adjust_CodeParam_default("Nchare2", 1)
 if "Cylindrical" in CoordSystem:
-    par.adjust_CodeParam_default("Nchare0", 4 if not paper else 5)
+    par.adjust_CodeParam_default("Nchare0", 4)
     par.adjust_CodeParam_default("Nchare1", 1)
-    par.adjust_CodeParam_default("Nchare2", 4 if not paper else 24)
+    par.adjust_CodeParam_default("Nchare2", 4)
 
 OMP_collapse = 1
 sinh_width = 0.2
