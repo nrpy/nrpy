@@ -19,7 +19,7 @@ import nrpy.params as par
 
 implemented_loop_regions = ["", "all points", "interior", "interior plus one upper"]
 
-# NRPy+ level symbolic expressions for grid properties
+# NRPy-level symbolic expressions for grid properties
 _NGHOSTS = sp.Symbol("NGHOSTS", real=True)
 _Nxx = ixp.declarerank1("Nxx")
 _Nxx_plus_2NGHOSTS = ixp.declarerank1("Nxx_plus_2NGHOSTS")
