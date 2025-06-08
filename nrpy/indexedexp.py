@@ -17,7 +17,6 @@ import nrpy.params as par
 # Used to specify axes of symmetry so that derivatives across these axes get set to zero
 par.register_param(py_type=str, module=__name__, name="symmetry_axes", value="")
 
-# Define common type hints for tensor structures
 _symbol_type = Any  # sp.Expr
 _rank1_type = Sequence[_symbol_type]
 _rank2_type = Sequence[_rank1_type]
@@ -36,10 +35,10 @@ def create_tensor_symbolic(
     """
     Create a multi-dimensional symbolic tensor of a specified shape.
 
-    :param shape: The shape of the tensor. A list of integers, one for each dimension's size.
+    :param shape: The shape of the tensor. A list of integers can be specified to indicate the dimensions of each tensor component.
     :param symbol: The base symbol name for elements in the tensor. Defaults to "".
-    :param preindex: A list of parent indices for recursive construction. Defaults to None.
-    :param character_zero_index: The starting character for zero index (e.g., 'x' or 'A'). Defaults to "".
+    :param preindex: The index to start from when naming elements. Defaults to None.
+    :param character_zero_index: The starting character for zero index. Defaults to "".
     :return: A list of sympy symbols representing the tensor.
 
     >>> create_tensor_symbolic(2, 'a')
@@ -57,169 +56,49 @@ def create_tensor_symbolic(
     >>> create_tensor_symbolic([2, 2], 'a', character_zero_index='A')
     [[aAA, aAB], [aBA, aBB]]
     """
-    # Ensure shape is a list and get current dimension size and remaining shape.
-    shape_list = [shape] if isinstance(shape, int) else shape
-    current_dim_size = shape_list[0]
-    remaining_shape = shape_list[1:]
-    indices_prefix = preindex if preindex is not None else []
+    # If shape is a single integer, convert it to a list to represent a 1D tensor
+    shape = [shape] if isinstance(shape, int) else shape
 
-    # Base case: If no dimensions remain, create the final (rank-1) slice of the tensor.
-    if not remaining_shape:
-        # Set up for character-based indexing if requested
-        if character_zero_index:
-            alphabet = string.ascii_uppercase + string.ascii_lowercase
-            index_to_char = dict(enumerate(alphabet))
-            start_idx = alphabet.index(character_zero_index)
+    # If index is not provided, initialize it as an empty list. This represents the starting point for naming elements.
+    preindex = preindex or []
 
-        tensor_slice = []
-        for i in range(current_dim_size):
-            final_indices = indices_prefix + [i]
-            if symbol is None:
-                # If no symbol name is provided, create a tensor of zeros.
-                element = sp.sympify(0)
-            else:
-                if character_zero_index:
-                    idx_str = "".join(
-                        index_to_char[start_idx + n] for n in final_indices
-                    )
-                else:
-                    idx_str = "".join(map(str, final_indices))
-                element = sp.Symbol(symbol + idx_str)
-            tensor_slice.append(element)
-        return tensor_slice
+    # Create an alphabet list for character indexing
+    alphabet = list(string.ascii_uppercase + string.ascii_lowercase)
 
-    # Recursive step: For higher-rank tensors, build each slice of the current dimension.
-    return [
-        create_tensor_symbolic(
-            remaining_shape, symbol, indices_prefix + [i], character_zero_index
+    # Create a mapping of integers to characters
+    index_to_char = dict(
+        enumerate(alphabet)
+    )  # unnecessary comprehension: {i: char for i, char in enumerate(alphabet)}
+
+    # Get the starting index for character_zero_index if provided
+    start_idx = alphabet.index(character_zero_index) if character_zero_index else 0
+
+    # Generate the tensor
+    tensor = [
+        (
+            sp.Symbol(
+                symbol
+                + "".join(
+                    index_to_char[start_idx + n] if character_zero_index else str(n)
+                    for n in preindex + [i]
+                ),
+            )
+            if symbol
+            else sp.sympify(0)
         )
-        for i in range(current_dim_size)
+        for i in range(shape[0])
     ]
 
+    # If the shape has more than one dimension, recursively call create_symbolic_tensor function to handle the remaining dimensions.
+    if len(shape) > 1:
+        tensor = [
+            create_tensor_symbolic(
+                shape[1:], symbol, preindex + [i], character_zero_index
+            )
+            for i in range(shape[0])
+        ]
 
-def _is_valid_symbol_name(sym: Any) -> bool:
-    """
-    Validate that the symbol name is a string with allowed characters.
-
-    :param sym: The symbol name to validate.
-    :return: True if the symbol name is valid, False otherwise.
-    """
-    if not isinstance(sym, str):
-        return False
-    # Allow letters, numbers, underscore, and "->" for derivative notation.
-    return all(c.isalnum() or c in ["_", "-", ">"] for c in sym)
-
-
-def _get_tensor_element(
-    tensor: Sequence[_recur_symbol_type], indices: Tuple[int, ...]
-) -> _symbol_type:
-    """
-    Get an element from a nested list tensor using a tuple of indices.
-
-    :param tensor: The tensor (nested list) to access.
-    :param indices: A tuple of indices specifying the element's position.
-    :return: The tensor element at the specified indices.
-    """
-    element = tensor
-    for index in indices:
-        element = element[index]
-    return element
-
-
-def _set_tensor_element(
-    tensor: Sequence[_recur_symbol_type], indices: Tuple[int, ...], value: _symbol_type
-) -> None:
-    """
-    Set an element in a nested list tensor using a tuple of indices.
-
-    :param tensor: The tensor (nested list) to modify.
-    :param indices: A tuple of indices specifying the element's position.
-    :param value: The new value to set at the specified position.
-    """
-    parent = tensor
-    for index in indices[:-1]:
-        parent = parent[index]
-    cast(List[_recur_symbol_type], parent)[indices[-1]] = value
-
-
-def _expand_symmetry_groups(symmetry: str) -> List[str]:
-    """
-    Expand compact symmetry notations into a list of pairwise symmetries.
-
-    This function preserves the exact, sometimes non-obvious, behavior of the
-    original code to ensure functional equivalence.
-    For example: "sym01_sym23" -> ["sym01", "sym23"]
-                 "sym012" -> ["sym01", "sym12"]
-                 "sym0123" -> ["sym01", "sym12", "sym23"]
-
-    :param symmetry: The compact symmetry string (e.g., "sym012").
-    :return: A list of pairwise symmetry strings (e.g., ["sym01", "sym12"]).
-    """
-    symmetry_list = []
-    for sym_group in symmetry.split("_"):
-        prefix_len = 3 if sym_group.startswith("sym") else 4
-        indices_str = sym_group[prefix_len:]
-        # This logic for expanding groups like 'sym012' is preserved from the original.
-        # It produces a chain of adjacent swaps (e.g., 0<->1, 1<->2), which, when
-        # applied transitively, achieves the intended symmetry.
-        if len(indices_str) in (3, 4):
-            prefix = sym_group[:prefix_len]
-            for i in range(len(indices_str) - 1):
-                symmetry_list.append(prefix + indices_str[i : i + 2])
-        else:
-            symmetry_list.append(sym_group)
-    return symmetry_list
-
-
-def _apply_symmetrization_globally(
-    indexedexp: Sequence[_recur_symbol_type],
-    rank: int,
-    symmetry: str,
-    dimension: int,
-) -> Sequence[_recur_symbol_type]:
-    """
-    Apply symmetry properties to a tensor of any rank. This function modifies the tensor in-place.
-
-    :param indexedexp: The tensor to symmetrize, modified in-place.
-    :param rank: The rank of the tensor.
-    :param symmetry: The symmetry string to apply.
-    :param dimension: The dimension of the tensor.
-    :raises ValueError: If an unsupported symmetry option is provided.
-    :return: The symmetrized tensor.
-    """
-    symmetry_list = _expand_symmetry_groups(symmetry)
-    sym_map = {f"{i}{j}": (i, j) for i in range(rank) for j in range(i + 1, rank)}
-
-    # This nested loop structure is a direct, more readable translation of the original's
-    # generator expression. It acts as a fixed-point iteration hack, repeatedly applying
-    # symmetries to ensure transitive relations (e.g., a=b and b=c implies a=c) are
-    # fully resolved. It must be preserved for functional equivalence.
-    for n in range(len(symmetry_list), 0, -1):
-        for k in range(n):
-            sym = symmetry_list[k]
-            sign = 1 if sym.startswith("sym") else -1
-            sym_indices_str = sym[-2:]
-
-            if sym_indices_str in sym_map:
-                idx1, idx2 = sym_map[sym_indices_str]
-                for indices in func.product(range(dimension), repeat=rank):
-                    if indices[idx1] > indices[idx2]:
-                        # Swap indices to find the canonical element
-                        swapped_indices = list(indices)
-                        swapped_indices[idx1], swapped_indices[idx2] = (
-                            swapped_indices[idx2],
-                            swapped_indices[idx1],
-                        )
-                        val = _get_tensor_element(indexedexp, tuple(swapped_indices))
-                        _set_tensor_element(indexedexp, indices, sign * val)
-                    elif sign == -1 and indices[idx1] == indices[idx2]:
-                        # Zero out diagonal elements for anti-symmetry
-                        _set_tensor_element(indexedexp, indices, sp.sympify(0))
-
-            elif sym != "nosym":
-                raise ValueError(f"unsupported symmetry option '{sym}'")
-
-    return indexedexp
+    return tensor
 
 
 def declare_indexedexp(
@@ -297,48 +176,84 @@ def declare_indexedexp(
     >>> ixp = declare_indexedexp('M', rank=4, dimension=3, symmetry='anti0123')
     >>> assert len(set(map(abs, func.repeat(func.flatten, ixp, 3))).difference({0})) == 0
     """
-    if idx_expr_basename is not None and not _is_valid_symbol_name(idx_expr_basename):
-        raise ValueError(
-            'symbol must be an alphanumeric string, with underscores and "->" allowed.'
-        )
 
-    # Deprecation check for old 'DIM' parameter
-    if "DIM" in kwargs:
+    def symmetrize(
+        rank: int,
+        indexedexp: Sequence[_recur_symbol_type],
+        symmetry: str,
+        dimension: int,
+    ) -> Sequence[_recur_symbol_type]:
+        """
+        Symmetrize the provided tensor of the given rank according to the specified symmetry.
+
+        :param rank: The rank of the tensor.
+        :param indexedexp: The tensor to symmetrize.
+        :param symmetry: The symmetry to apply.
+        :param dimension: The dimension of the tensor.
+        :return: The symmetrized tensor.
+        :raises ValueError: If an unsupported rank or symmetry option is provided.
+        """
+        if rank == 1:
+            if symmetry == "nosym":
+                return indexedexp
+            raise ValueError("cannot symmetrize indexed expression of rank 1")
+        if rank == 2:
+            indexedexp = symmetrize_rank2(
+                cast(_rank2_type, indexedexp), symmetry, dimension
+            )
+        elif rank == 3:
+            indexedexp = symmetrize_rank3(
+                cast(_rank3_type, indexedexp), symmetry, dimension
+            )
+        elif rank == 4:
+            indexedexp = symmetrize_rank4(
+                cast(_rank4_type, indexedexp), symmetry, dimension
+            )
+        else:
+            raise ValueError("unsupported rank for indexed expression")
+        return indexedexp
+
+    if idx_expr_basename is not None:
+
+        def valid_symbol(sym: Any) -> bool:
+            if not isinstance(sym, str):
+                return False
+            for char in sym:
+                if not (char.isalpha() or char.isdigit() or char in ["_", "-", ">"]):
+                    return False
+            return True
+
+        if not valid_symbol(idx_expr_basename):
+            raise ValueError(
+                'symbol must be an alphanumeric string, underscores and "->" allowed.'
+            )
+    old_dimension = kwargs.get("DIM")
+    if old_dimension:
         raise ValueError("DIM= is deprecated, use dimension=")
-
-    # FIX: The following logic is restored from the original code to ensure
-    # functional equivalence. The zerorank*() functions call this with
-    # dimension=-1 to signal that the default dimension should be used.
     dimension = kwargs.get("dimension")
-    if dimension is None or dimension < 0:
+    if not dimension or dimension < 0:
         dimension = 3  # set default dimension to 3
     elif not isinstance(dimension, int) or dimension <= 0:
-        raise ValueError("dimension must be a positive integer.")
-
-    # Validate and set rank
+        raise ValueError(
+            "dimension=N argument must be set, and N must be a positive integer"
+        )
     rank = kwargs.get("rank")
     if not rank or not isinstance(rank, int) or not 0 < rank <= 4:
-        raise ValueError("rank must be an integer between 1 and 4.")
-
-    # Create the base tensor full of unique symbolic elements
-    indexedexp = create_tensor_symbolic(rank * [dimension], idx_expr_basename)
-
-    # Apply symmetry if specified
+        raise ValueError(
+            "rank=N argument must be set, and N must be between 1 and 4 inclusive"
+        )
+    indexedexp: Sequence[_recur_symbol_type] = create_tensor_symbolic(
+        rank * [dimension], idx_expr_basename
+    )
     symmetry = kwargs.get("symmetry")
     if symmetry:
         if not symmetry.startswith(("sym", "anti", "nosym")):
             raise ValueError(
-                f"Unsupported symmetry '{symmetry}' for indexed expression. "
-                "Valid symmetry options must start with 'sym', 'anti', or 'nosym'"
+                f"Unsupported symmetry '{symmetry}' for indexed expression. Valid symmetry options must start with 'sym', 'anti', or 'nosym'"
             )
-        if rank > 1:
-            indexedexp = _apply_symmetrization_globally(
-                indexedexp, rank, symmetry, dimension
-            )
-        elif symmetry != "nosym":
-            raise ValueError("Cannot symmetrize an indexed expression of rank 1.")
-
-    # Zero out derivatives across symmetry axes, if any are defined
+        indexedexp = symmetrize(
+            rank, cast(_rank2_type, indexedexp), symmetry, dimension
+        )
     return zero_out_derivatives_across_symmetry_axes(indexedexp)
 
 
@@ -354,16 +269,27 @@ def symmetrize_rank2(
     :param symmetry: The symmetry operation to perform. Options include "sym01" or "nosym".
     :param dimension: The dimension of the matrix.
     :return: The matrix after applying the symmetry operation.
+    :raises ValueError: If an unsupported symmetry option is provided.
 
     Doctest:
     >>> a, b, c, d = sp.symbols('a b c d', real=True)
     >>> print(symmetrize_rank2([[a, b], [c, d]], "sym01", 2))
     [[a, b], [b, d]]
     """
-    return cast(
-        _rank2_type,
-        _apply_symmetrization_globally(indexedexp, 2, symmetry, dimension),
-    )
+    for sym in symmetry.split("_"):
+        sign = 1 if sym[:3] == "sym" else -1
+        for i, j in func.product(range(dimension), repeat=2):
+            if sym[-2:] == "01":
+                assert isinstance(indexedexp, list) and isinstance(indexedexp[0], list)
+                if j < i:
+                    indexedexp[i][j] = sign * indexedexp[j][i]
+                elif i == j and sign < 0:
+                    indexedexp[i][j] = 0
+            elif sym == "nosym":
+                pass
+            else:
+                raise ValueError(f"unsupported symmetry option '{str(sym)}'")
+    return indexedexp
 
 
 def symmetrize_rank3(
@@ -378,6 +304,7 @@ def symmetrize_rank3(
     :param symmetry: The symmetry operation to perform. Options include "sym01", "sym02", "sym12", "nosym", and others.
     :param dimension: The dimension of the tensor.
     :return: The tensor after applying the symmetry operation.
+    :raises ValueError: If an unsupported symmetry option is provided.
 
     Doctest:
     >>> a, b, c, d, e, f, g, h, i0 = sp.symbols('a b c d e f g h i0', real=True)
@@ -390,10 +317,40 @@ def symmetrize_rank3(
     ...             if rank3[i][j][k] - rank3[j][i][k]:
     ...                 raise ValueError("ERROR! symmetrize_rank3 didn't work.")
     """
-    return cast(
-        _rank3_type,
-        _apply_symmetrization_globally(indexedexp, 3, symmetry, dimension),
-    )
+    symmetry_list = []
+    for sym in symmetry.split("_"):
+        index = 3 if sym[:3] == "sym" else 4
+        if len(sym[index:]) == 3:
+            prefix = sym[:index]
+            symmetry_list.append(prefix + sym[index : (index + 2)])
+            symmetry_list.append(prefix + sym[(index + 1) : (index + 3)])
+        else:
+            symmetry_list.append(sym)
+    for sym in (
+        symmetry_list[k] for n in range(len(symmetry_list), 0, -1) for k in range(n)
+    ):
+        sign = 1 if sym[:3] == "sym" else -1
+        for i, j, k in func.product(range(dimension), repeat=3):
+            if sym[-2:] == "01":
+                if j < i:
+                    indexedexp[i][j][k] = sign * indexedexp[j][i][k]
+                elif i == j and sign < 0:
+                    indexedexp[i][j][k] = 0
+            elif sym[-2:] == "02":
+                if k < i:
+                    indexedexp[i][j][k] = sign * indexedexp[k][j][i]
+                elif i == k and sign < 0:
+                    indexedexp[i][j][k] = 0
+            elif sym[-2:] == "12":
+                if k < j:
+                    indexedexp[i][j][k] = sign * indexedexp[i][k][j]
+                elif j == k and sign < 0:
+                    indexedexp[i][j][k] = 0
+            elif sym == "nosym":
+                pass
+            else:
+                raise ValueError(f"unsupported symmetry option '{str(sym)}'")
+    return indexedexp
 
 
 def symmetrize_rank4(
@@ -408,6 +365,7 @@ def symmetrize_rank4(
     :param symmetry: The symmetry operation to perform. Options include "sym01", "sym02", "sym12", "sym03", "sym13", "sym23", "nosym", and others.
     :param dimension: The dimension of the 4-tensor.
     :return: The 4-tensor after applying the symmetry operation.
+    :raises ValueError: If an unsupported symmetry option is provided.
 
     Doctest:
     >>> aDDDD = declarerank4("aDDDD", dimension=3)
@@ -419,10 +377,57 @@ def symmetrize_rank4(
     ...                 raise ValueError("ERROR! symmetrize_rank4 didn't work.")
 
     """
-    return cast(
-        _rank4_type,
-        _apply_symmetrization_globally(indexedexp, 4, symmetry, dimension),
-    )
+    symmetry_list = []
+    for sym in symmetry.split("_"):
+        index = 3 if sym[:3] == "sym" else 4
+        if len(sym[index:]) in (3, 4):
+            prefix = sym[:index]
+            symmetry_list.append(prefix + sym[index : (index + 2)])
+            symmetry_list.append(prefix + sym[(index + 1) : (index + 3)])
+            if len(sym[index:]) == 4:
+                symmetry_list.append(prefix + sym[(index + 2) : (index + 4)])
+        else:
+            symmetry_list.append(sym)
+    for sym in (
+        symmetry_list[k] for n in range(len(symmetry_list), 0, -1) for k in range(n)
+    ):
+        sign = 1 if sym[:3] == "sym" else -1
+        for i, j, k, l in func.product(range(dimension), repeat=4):
+            if sym[-2:] == "01":
+                if j < i:
+                    indexedexp[i][j][k][l] = sign * indexedexp[j][i][k][l]
+                elif i == j and sign < 0:
+                    indexedexp[i][j][k][l] = 0
+            elif sym[-2:] == "02":
+                if k < i:
+                    indexedexp[i][j][k][l] = sign * indexedexp[k][j][i][l]
+                elif i == k and sign < 0:
+                    indexedexp[i][j][k][l] = 0
+            elif sym[-2:] == "03":
+                if l < i:
+                    indexedexp[i][j][k][l] = sign * indexedexp[l][j][k][i]
+                elif i == l and sign < 0:
+                    indexedexp[i][j][k][l] = 0
+            elif sym[-2:] == "12":
+                if k < j:
+                    indexedexp[i][j][k][l] = sign * indexedexp[i][k][j][l]
+                elif j == k and sign < 0:
+                    indexedexp[i][j][k][l] = 0
+            elif sym[-2:] == "13":
+                if l < j:
+                    indexedexp[i][j][k][l] = sign * indexedexp[i][l][k][j]
+                elif j == l and sign < 0:
+                    indexedexp[i][j][k][l] = 0
+            elif sym[-2:] == "23":
+                if l < k:
+                    indexedexp[i][j][k][l] = sign * indexedexp[i][j][l][k]
+                elif k == l and sign < 0:
+                    indexedexp[i][j][k][l] = 0
+            elif sym == "nosym":
+                pass
+            else:
+                raise ValueError(f"unsupported symmetry option '{sym}'")
+    return indexedexp
 
 
 # typehinting: Must allow for sp.Expr in the zerorank*()s, so that it can be modified later
@@ -484,66 +489,15 @@ def get_rank(IDX_EXPR: Sequence[_recur_symbol_type]) -> int:
     5
     """
     rank = 0
-    temp_expr = IDX_EXPR
-    while isinstance(temp_expr, list):
+    temp = IDX_EXPR
+
+    while isinstance(temp, list):
         rank += 1
-        if not temp_expr:
+        if len(temp) == 0:
             break
-        temp_expr = temp_expr[0]
+        temp = temp[0]
+
     return rank
-
-
-def _symbol_has_derivative_across_symmetry_axis(
-    symbol_name: str, symmetry_axes: str
-) -> bool:
-    """
-    Check if a symbol's name indicates it's a derivative taken across a symmetry axis.
-
-    This function assumes derivative indices are the final characters of the symbol name.
-    For example, if '2' is a symmetry axis, 'alpha_dD2' should be zeroed.
-
-    :param symbol_name: The string name of the symbol to check (e.g., 'alpha_dD0').
-    :param symmetry_axes: A string containing axes of symmetry (e.g., "01").
-    :return: True if the symbol should be zeroed.
-    :raises ValueError: For unsupported derivative orders (greater than 2).
-    """
-    if "_d" not in symbol_name:
-        return False
-
-    # Find the derivative order (number of 'D's after '_d').
-    # This logic is preserved from the original code.
-    deriv_order = 1
-    if "DDD" in symbol_name:
-        raise ValueError(
-            f"Error: Derivative order > 2 not supported. Failed expression: {symbol_name}"
-        )
-    if "DD" in symbol_name:
-        deriv_order = 2
-
-    # The last `deriv_order` characters in the symbol name are the derivative indices.
-    # Check if any of these indices are in the set of symmetry axes.
-    derivative_indices = symbol_name[-deriv_order:]
-    return any(idx in symmetry_axes for idx in derivative_indices)
-
-
-def _recursive_zero_out(
-    expression: _recur_symbol_type, symmetry_axes: str
-) -> _recur_symbol_type:
-    """
-    Recursively traverse a tensor, zeroing elements that have derivs on symmetry axes.
-
-    :param expression: The tensor or sub-tensor to process.
-    :param symmetry_axes: A string containing axes of symmetry.
-    :return: The processed tensor with derivatives on symmetry axes zeroed.
-    """
-    if not isinstance(expression, list):
-        # Base case: we are at a SymPy expression (a scalar).
-        if _symbol_has_derivative_across_symmetry_axis(str(expression), symmetry_axes):
-            return sp.sympify(0)
-        return expression
-
-    # Recursive step: process each item in the list and reconstruct the list.
-    return [_recursive_zero_out(item, symmetry_axes) for item in expression]
 
 
 def zero_out_derivatives_across_symmetry_axes(
@@ -573,7 +527,7 @@ def zero_out_derivatives_across_symmetry_axes(
     >>> zero_out_derivatives_across_symmetry_axes(declarerank3("trK_dDDD"))
     Traceback (most recent call last):
     ...
-    ValueError: Error: Derivative order > 2 not supported. Failed expression: trK_dDDD000
+    ValueError: Error. Derivative order > 2 not supported. Failed expression: trK_dDDD000
     >>> par.set_parval_from_str("symmetry_axes", "01")
     >>> zero_out_derivatives_across_symmetry_axes(declarerank2("trK_dDD"))
     [[0, 0, 0], [0, 0, 0], [0, 0, trK_dDD22]]
@@ -582,18 +536,80 @@ def zero_out_derivatives_across_symmetry_axes(
     [[[[0, 0, 0], [0, aDD_dDD0011, aDD_dDD0012], [0, aDD_dDD0012, aDD_dDD0022]], [[0, 0, 0], [0, aDD_dDD0111, aDD_dDD0112], [0, aDD_dDD0112, aDD_dDD0122]], [[0, 0, 0], [0, aDD_dDD0211, aDD_dDD0212], [0, aDD_dDD0212, aDD_dDD0222]]], [[[0, 0, 0], [0, aDD_dDD0111, aDD_dDD0112], [0, aDD_dDD0112, aDD_dDD0122]], [[0, 0, 0], [0, aDD_dDD1111, aDD_dDD1112], [0, aDD_dDD1112, aDD_dDD1122]], [[0, 0, 0], [0, aDD_dDD1211, aDD_dDD1212], [0, aDD_dDD1212, aDD_dDD1222]]], [[[0, 0, 0], [0, aDD_dDD0211, aDD_dDD0212], [0, aDD_dDD0212, aDD_dDD0222]], [[0, 0, 0], [0, aDD_dDD1211, aDD_dDD1212], [0, aDD_dDD1212, aDD_dDD1222]], [[0, 0, 0], [0, aDD_dDD2211, aDD_dDD2212], [0, aDD_dDD2212, aDD_dDD2222]]]]
     """
     symmetry_axes = par.parval_from_str("indexedexp::symmetry_axes")
-    if not symmetry_axes:
+    if symmetry_axes == "":
         return IDX_EXPR
 
-    # This rank check is preserved from the original implementation.
     rank = get_rank(IDX_EXPR)
     if rank > 4 or rank == 0:
         raise ValueError(
             f"Error: Only ranks from 1 to 4 are supported; {IDX_EXPR} does not seem to fit this pattern."
         )
 
-    # Use a recursive helper to traverse the tensor structure of any rank.
-    return _recursive_zero_out(IDX_EXPR, symmetry_axes)
+    def performs_derivative_across_symmetry_axis(idxobj_str: str) -> bool:
+        if "_d" in idxobj_str:
+            # First we find the order of the derivative:
+            deriv_order = 1
+            for i in range(len(idxobj_str) - 1):
+                if idxobj_str[i : i + 2] == "_d":
+                    # The order of the derivative is given by the number of D's in a row after the _d:
+                    if "DDD" in idxobj_str[i + 2 :]:
+                        raise ValueError(
+                            f"Error. Derivative order > 2 not supported. Failed expression: {idxobj_str}"
+                        )
+                    if "DD" in idxobj_str[i + 2 :]:
+                        deriv_order = 2
+            end_idx_of_idxobj_str = len(idxobj_str) - 1
+            for j in range(
+                end_idx_of_idxobj_str, end_idx_of_idxobj_str - deriv_order, -1
+            ):
+                if idxobj_str[j] in symmetry_axes:
+                    return True
+        return False
+
+    if rank == 1:
+        assert isinstance(IDX_EXPR, list)
+        DIM = len(IDX_EXPR)
+        for i0 in range(DIM):
+            if performs_derivative_across_symmetry_axis(str(IDX_EXPR[i0])):
+                IDX_EXPR[i0] = sp.sympify(0)
+    if rank == 2:
+        assert isinstance(IDX_EXPR, list) and isinstance(IDX_EXPR[0], list)
+        DIM = len(IDX_EXPR[0])
+        for i0 in range(DIM):
+            for i1 in range(DIM):
+                if performs_derivative_across_symmetry_axis(str(IDX_EXPR[i0][i1])):
+                    IDX_EXPR[i0][i1] = sp.sympify(0)
+    if rank == 3:
+        assert (
+            isinstance(IDX_EXPR, list)
+            and isinstance(IDX_EXPR[0], list)
+            and isinstance(IDX_EXPR[0][0], list)
+        )
+        DIM = len(IDX_EXPR[0][0])
+        for i0 in range(DIM):
+            for i1 in range(DIM):
+                for i2 in range(DIM):
+                    if performs_derivative_across_symmetry_axis(
+                        str(IDX_EXPR[i0][i1][i2])
+                    ):
+                        IDX_EXPR[i0][i1][i2] = sp.sympify(0)
+    if rank == 4:
+        assert (
+            isinstance(IDX_EXPR, list)
+            and isinstance(IDX_EXPR[0], list)
+            and isinstance(IDX_EXPR[0][0], list)
+            and isinstance(IDX_EXPR[0][0][0], list)
+        )
+        DIM = len(IDX_EXPR[0][0][0])
+        for i0 in range(DIM):
+            for i1 in range(DIM):
+                for i2 in range(DIM):
+                    for i3 in range(DIM):
+                        if performs_derivative_across_symmetry_axis(
+                            str(IDX_EXPR[i0][i1][i2][i3])
+                        ):
+                            IDX_EXPR[i0][i1][i2][i3] = sp.sympify(0)
+    return IDX_EXPR
 
 
 def declarerank1(idx_expr_basename: str, **kwargs: Any) -> _rank1_type:
@@ -648,10 +664,7 @@ class NonInvertibleMatrixError(ZeroDivisionError):
     """Matrix Not Invertible; Division By Zero."""
 
 
-# The following matrix inverter functions are hard-coded for performance.
-# They implement the analytic solution for the inverse of a matrix of a given size.
-
-
+# We use the following functions to evaluate 3-metric inverses
 def symm_matrix_inverter2x2(
     a: List[List[Union[sp.Expr, sp.Symbol]]],
 ) -> Tuple[List[List[Union[sp.Expr, sp.Symbol]]], Union[sp.Expr, sp.Symbol]]:
@@ -670,18 +683,18 @@ def symm_matrix_inverter2x2(
     >>> matrix = [[b, c], [c, d]]
     >>> inverse, determinant = symm_matrix_inverter2x2(matrix)
     """
-    # Using the analytic solution for the determinant of a symmetric 2x2 matrix.
+    # It is far more efficient to write out the matrix determinant and inverse by hand
+    #   instead of using SymPy's built-in functions, since the matrix is symmetric.
     outDET = a[0][0] * a[1][1] - a[0][1] ** 2
     if outDET == 0:
         raise NonInvertibleMatrixError("matrix has determinant zero")
 
-    inv_det = 1 / outDET
     outINV = [[sp.sympify(0) for _ in range(2)] for __ in range(2)]
 
-    outINV[0][0] = a[1][1] * inv_det
-    outINV[0][1] = -a[0][1] * inv_det
-    outINV[1][1] = a[0][0] * inv_det
-    # Symmetric matrix property
+    # First fill in the upper-triangle of the gPhysINV matrix...
+    outINV[0][0] = a[1][1] / outDET
+    outINV[0][1] = -a[0][1] / outDET
+    outINV[1][1] = a[0][0] / outDET
     outINV[1][0] = outINV[0][1]
     return outINV, outDET
 
@@ -704,7 +717,8 @@ def symm_matrix_inverter3x3(
     >>> matrix = [[a0, b, c], [b, d, e], [c, e, f]]
     >>> inverse, determinant = symm_matrix_inverter3x3(matrix)
     """
-    # Using the analytic solution for the determinant of a symmetric 3x3 matrix.
+    # It is far more efficient to write out the matrix determinant and inverse by hand
+    #   instead of using SymPy's built-in functions, since the matrix is symmetric.
     outDET = (
         -a[0][2] ** 2 * a[1][1]
         + 2 * a[0][1] * a[0][2] * a[1][2]
@@ -713,26 +727,49 @@ def symm_matrix_inverter3x3(
         + a[0][0] * a[1][1] * a[2][2]
     )
     if outDET == 0:
+        # print(a)
         raise NonInvertibleMatrixError("matrix has determinant zero")
 
-    inv_det = 1 / outDET
     outINV = [[sp.sympify(0) for _ in range(3)] for __ in range(3)]
 
-    # Using the analytic solution for the matrix inverse.
-    outINV[0][0] = (-a[1][2] ** 2 + a[1][1] * a[2][2]) * inv_det
-    outINV[0][1] = (a[0][2] * a[1][2] - a[0][1] * a[2][2]) * inv_det
-    outINV[0][2] = (-a[0][2] * a[1][1] + a[0][1] * a[1][2]) * inv_det
-    outINV[1][1] = (-a[0][2] ** 2 + a[0][0] * a[2][2]) * inv_det
-    outINV[1][2] = (a[0][1] * a[0][2] - a[0][0] * a[1][2]) * inv_det
-    outINV[2][2] = (-a[0][1] ** 2 + a[0][0] * a[1][1]) * inv_det
-    # Symmetric matrix property
+    # First fill in the upper-triangle of the gPhysINV matrix...
+    outINV[0][0] = (-a[1][2] ** 2 + a[1][1] * a[2][2]) / outDET
+    outINV[0][1] = (+a[0][2] * a[1][2] - a[0][1] * a[2][2]) / outDET
+    outINV[0][2] = (-a[0][2] * a[1][1] + a[0][1] * a[1][2]) / outDET
+    outINV[1][1] = (-a[0][2] ** 2 + a[0][0] * a[2][2]) / outDET
+    outINV[1][2] = (+a[0][1] * a[0][2] - a[0][0] * a[1][2]) / outDET
+    outINV[2][2] = (-a[0][1] ** 2 + a[0][0] * a[1][1]) / outDET
     outINV[1][0] = outINV[0][1]
     outINV[2][0] = outINV[0][2]
     outINV[2][1] = outINV[1][2]
     return outINV, outDET
 
 
-# Validation test code for symm_matrix_inverter4x4() is available in the original file.
+# Validation test code for symm_matrix_inverter4x4():
+# import indexedexp as ixp
+# R4DD = ixp.declarerank2("R4DD", "sym01", dimension=4)
+#
+# # Compute R4DD's inverse:
+# R4DDinv, det = ixp.symm_matrix_inverter4x4(R4DD)
+#
+# # Next matrix multiply: IsUnit = R^{-1} R
+# IsUnit = ixp.zerorank2(dimension=4)
+# for i in range(4):
+#     for j in range(4):
+#         for k in range(4):
+#             IsUnit[i][j] += R4DDinv[i][k] * R4DD[k][j]
+#             # If you'd like to check R R^{-1} instead:
+#             # IsUnit[i][j] += R4DD[i][k] * R4DDinv[k][j]
+#
+# # Next check, is IsUnit == Unit matrix?!
+# from UnitTesting.assert_equal import check_zero
+# for diag in range(4):
+#     print(check_zero(IsUnit[diag][diag]-1))
+# for offdiag_i in range(4):
+#     for offdiag_j in range(4):
+#         if offdiag_i != offdiag_j:
+#             print(check_zero(IsUnit[offdiag_i][offdiag_j]))
+# # ^^ all should output as True.
 def symm_matrix_inverter4x4(
     a: List[List[Union[sp.Expr, sp.Symbol]]],
 ) -> Tuple[List[List[Union[sp.Expr, sp.Symbol]]], Union[sp.Expr, sp.Symbol]]:
@@ -763,7 +800,8 @@ def symm_matrix_inverter4x4(
     # ...            if not check_zero(IsUnit[offdiag_i][offdiag_j]):
     # ...                print("Error!")
     """
-    # Hard-coded formula for the determinant of a 4x4 symmetric matrix for performance.
+    # It is far more efficient to write out the matrix determinant and inverse by hand
+    #   instead of using SymPy's built-in functions, since the matrix is symmetric.
     outDET = (
         +a[0][2] * a[0][2] * a[1][3] * a[1][3]
         + a[0][3] * a[0][3] * a[1][2] * a[1][2]
@@ -796,38 +834,37 @@ def symm_matrix_inverter4x4(
     if outDET == 0:
         raise NonInvertibleMatrixError("matrix has determinant zero")
 
-    inv_det = 1 / outDET
     outINV = [[sp.sympify(0) for _ in range(4)] for __ in range(4)]
 
-    # Hard-coded formula for the inverse of a 4x4 symmetric matrix for performance.
+    # First fill in the upper-triangle of the gPhysINV matrix...
     outINV[0][0] = (
         -a[1][3] * a[1][3] * a[2][2]
         + 2 * a[1][2] * a[1][3] * a[2][3]
         - a[1][1] * a[2][3] * a[2][3]
         - a[1][2] * a[1][2] * a[3][3]
         + a[1][1] * a[2][2] * a[3][3]
-    ) * inv_det
+    ) / outDET
     outINV[1][1] = (
         -a[0][3] * a[0][3] * a[2][2]
         + 2 * a[0][2] * a[0][3] * a[2][3]
         - a[0][0] * a[2][3] * a[2][3]
         - a[0][2] * a[0][2] * a[3][3]
         + a[0][0] * a[2][2] * a[3][3]
-    ) * inv_det
+    ) / outDET
     outINV[2][2] = (
         -a[0][3] * a[0][3] * a[1][1]
         + 2 * a[0][1] * a[0][3] * a[1][3]
         - a[0][0] * a[1][3] * a[1][3]
         - a[0][1] * a[0][1] * a[3][3]
         + a[0][0] * a[1][1] * a[3][3]
-    ) * inv_det
+    ) / outDET
     outINV[3][3] = (
         -a[0][2] * a[0][2] * a[1][1]
         + 2 * a[0][1] * a[0][2] * a[1][2]
         - a[0][0] * a[1][2] * a[1][2]
         - a[0][1] * a[0][1] * a[2][2]
         + a[0][0] * a[1][1] * a[2][2]
-    ) * inv_det
+    ) / outDET
     outINV[0][1] = (
         +a[0][3] * a[1][3] * a[2][2]
         - a[0][3] * a[1][2] * a[2][3]
@@ -835,7 +872,7 @@ def symm_matrix_inverter4x4(
         + a[0][1] * a[2][3] * a[2][3]
         + a[0][2] * a[1][2] * a[3][3]
         - a[0][1] * a[2][2] * a[3][3]
-    ) * inv_det
+    ) / outDET
     outINV[0][2] = (
         -a[0][3] * a[1][2] * a[1][3]
         + a[0][2] * a[1][3] * a[1][3]
@@ -843,7 +880,7 @@ def symm_matrix_inverter4x4(
         - a[0][1] * a[1][3] * a[2][3]
         - a[0][2] * a[1][1] * a[3][3]
         + a[0][1] * a[1][2] * a[3][3]
-    ) * inv_det
+    ) / outDET
     outINV[0][3] = (
         -a[0][2] * a[1][2] * a[1][3]
         + a[0][1] * a[1][3] * a[2][2]
@@ -851,7 +888,7 @@ def symm_matrix_inverter4x4(
         - a[0][3] * a[1][1] * a[2][2]
         + a[0][2] * a[1][1] * a[2][3]
         - a[0][1] * a[1][2] * a[2][3]
-    ) * inv_det
+    ) / outDET
     outINV[1][2] = (
         +a[0][3] * a[0][3] * a[1][2]
         + a[0][0] * a[1][3] * a[2][3]
@@ -859,7 +896,7 @@ def symm_matrix_inverter4x4(
         - a[0][3] * a[0][1] * a[2][3]
         + a[0][1] * a[0][2] * a[3][3]
         - a[0][0] * a[1][2] * a[3][3]
-    ) * inv_det
+    ) / outDET
     outINV[1][3] = (
         +a[0][2] * a[0][2] * a[1][3]
         + a[0][1] * a[0][3] * a[2][2]
@@ -867,7 +904,7 @@ def symm_matrix_inverter4x4(
         + a[0][0] * a[1][2] * a[2][3]
         - a[0][2] * a[0][3] * a[1][2]
         - a[0][2] * a[0][1] * a[2][3]
-    ) * inv_det
+    ) / outDET
     outINV[2][3] = (
         +a[0][2] * a[0][3] * a[1][1]
         - a[0][1] * a[0][3] * a[1][2]
@@ -875,9 +912,9 @@ def symm_matrix_inverter4x4(
         + a[0][0] * a[1][2] * a[1][3]
         + a[0][1] * a[0][1] * a[2][3]
         - a[0][0] * a[1][1] * a[2][3]
-    ) * inv_det
+    ) / outDET
 
-    # Symmetric matrix property fills the lower triangle.
+    # Then we fill the lower triangle of the symmetric matrix
     outINV[1][0] = outINV[0][1]
     outINV[2][0] = outINV[0][2]
     outINV[2][1] = outINV[1][2]
@@ -888,6 +925,8 @@ def symm_matrix_inverter4x4(
     return outINV, outDET
 
 
+# SymPy's generic matrix inverter takes a long time to invert 3x3 matrices, so here we have an optimized version.
+# We use the following functions to evaluate 3-metric inverses
 def generic_matrix_inverter2x2(
     a: List[List[Union[sp.Expr, sp.Symbol]]],
 ) -> Tuple[List[List[Union[sp.Expr, sp.Symbol]]], Union[sp.Expr, sp.Symbol]]:
@@ -909,13 +948,12 @@ def generic_matrix_inverter2x2(
     if outDET == 0:
         raise NonInvertibleMatrixError("matrix has determinant zero")
 
-    inv_det = 1 / outDET
     outINV = [[sp.sympify(0) for _ in range(2)] for __ in range(2)]
 
-    outINV[0][0] = a[1][1] * inv_det
-    outINV[0][1] = -a[0][1] * inv_det
-    outINV[1][0] = -a[1][0] * inv_det
-    outINV[1][1] = a[0][0] * inv_det
+    outINV[0][0] = a[1][1] / outDET
+    outINV[0][1] = -a[0][1] / outDET
+    outINV[1][1] = a[0][0] / outDET
+    outINV[1][0] = -a[1][0] / outDET
     return outINV, outDET
 
 
@@ -936,7 +974,6 @@ def generic_matrix_inverter3x3(
     >>> gDD = declarerank2("gDD")
     >>> gUU, detg = generic_matrix_inverter3x3(gDD)
     """
-    # Hard-coded determinant formula.
     outDET = (
         -a[0][2] * a[1][1] * a[2][0]
         + a[0][1] * a[1][2] * a[2][0]
@@ -948,19 +985,21 @@ def generic_matrix_inverter3x3(
     if outDET == 0:
         raise NonInvertibleMatrixError("matrix has determinant zero")
 
-    inv_det = 1 / outDET
     outINV = [[sp.sympify(0) for _ in range(3)] for __ in range(3)]
 
-    # Hard-coded matrix inverse formula (Cramer's rule).
-    outINV[0][0] = (-a[1][2] * a[2][1] + a[1][1] * a[2][2]) * inv_det
-    outINV[0][1] = (a[0][2] * a[2][1] - a[0][1] * a[2][2]) * inv_det
-    outINV[0][2] = (-a[0][2] * a[1][1] + a[0][1] * a[1][2]) * inv_det
-    outINV[1][0] = (a[1][2] * a[2][0] - a[1][0] * a[2][2]) * inv_det
-    outINV[1][1] = (-a[0][2] * a[2][0] + a[0][0] * a[2][2]) * inv_det
-    outINV[1][2] = (a[0][2] * a[1][0] - a[0][0] * a[1][2]) * inv_det
-    outINV[2][0] = (-a[1][1] * a[2][0] + a[1][0] * a[2][1]) * inv_det
-    outINV[2][1] = (a[0][1] * a[2][0] - a[0][0] * a[2][1]) * inv_det
-    outINV[2][2] = (-a[0][1] * a[1][0] + a[0][0] * a[1][1]) * inv_det
+    outINV[0][0] = -a[1][2] * a[2][1] + a[1][1] * a[2][2]
+    outINV[0][1] = a[0][2] * a[2][1] - a[0][1] * a[2][2]
+    outINV[0][2] = -a[0][2] * a[1][1] + a[0][1] * a[1][2]
+    outINV[1][0] = a[1][2] * a[2][0] - a[1][0] * a[2][2]
+    outINV[1][1] = -a[0][2] * a[2][0] + a[0][0] * a[2][2]
+    outINV[1][2] = a[0][2] * a[1][0] - a[0][0] * a[1][2]
+    outINV[2][0] = -a[1][1] * a[2][0] + a[1][0] * a[2][1]
+    outINV[2][1] = a[0][1] * a[2][0] - a[0][0] * a[2][1]
+    outINV[2][2] = -a[0][1] * a[1][0] + a[0][0] * a[1][1]
+
+    for i in range(3):
+        for j in range(3):
+            outINV[i][j] /= outDET
 
     return outINV, outDET
 
@@ -1027,7 +1066,6 @@ def generic_matrix_inverter4x4(
     if outDET == 0:
         raise NonInvertibleMatrixError("matrix has determinant zero")
 
-    inv_det = 1 / outDET
     outINV = [[sp.sympify(0) for _ in range(4)] for __ in range(4)]
 
     # CForm[FullSimplify[Inverse[A]*Det[A]]] >>> t.txt
@@ -1039,7 +1077,7 @@ def generic_matrix_inverter4x4(
         - a[1][1] * a[2][3] * a[3][2]
         - a[1][2] * a[2][1] * a[3][3]
         + a[1][1] * a[2][2] * a[3][3]
-    ) * inv_det
+    )
     outINV[0][1] = (
         a[0][3] * a[2][2] * a[3][1]
         - a[0][2] * a[2][3] * a[3][1]
@@ -1047,7 +1085,7 @@ def generic_matrix_inverter4x4(
         + a[0][1] * a[2][3] * a[3][2]
         + a[0][2] * a[2][1] * a[3][3]
         - a[0][1] * a[2][2] * a[3][3]
-    ) * inv_det
+    )
     outINV[0][2] = (
         -a[0][3] * a[1][2] * a[3][1]
         + a[0][2] * a[1][3] * a[3][1]
@@ -1055,7 +1093,7 @@ def generic_matrix_inverter4x4(
         - a[0][1] * a[1][3] * a[3][2]
         - a[0][2] * a[1][1] * a[3][3]
         + a[0][1] * a[1][2] * a[3][3]
-    ) * inv_det
+    )
     outINV[0][3] = (
         a[0][3] * a[1][2] * a[2][1]
         - a[0][2] * a[1][3] * a[2][1]
@@ -1063,7 +1101,7 @@ def generic_matrix_inverter4x4(
         + a[0][1] * a[1][3] * a[2][2]
         + a[0][2] * a[1][1] * a[2][3]
         - a[0][1] * a[1][2] * a[2][3]
-    ) * inv_det
+    )
     outINV[1][0] = (
         a[1][3] * a[2][2] * a[3][0]
         - a[1][2] * a[2][3] * a[3][0]
@@ -1071,7 +1109,7 @@ def generic_matrix_inverter4x4(
         + a[1][0] * a[2][3] * a[3][2]
         + a[1][2] * a[2][0] * a[3][3]
         - a[1][0] * a[2][2] * a[3][3]
-    ) * inv_det
+    )
     outINV[1][1] = (
         -a[0][3] * a[2][2] * a[3][0]
         + a[0][2] * a[2][3] * a[3][0]
@@ -1079,7 +1117,7 @@ def generic_matrix_inverter4x4(
         - a[0][0] * a[2][3] * a[3][2]
         - a[0][2] * a[2][0] * a[3][3]
         + a[0][0] * a[2][2] * a[3][3]
-    ) * inv_det
+    )
     outINV[1][2] = (
         a[0][3] * a[1][2] * a[3][0]
         - a[0][2] * a[1][3] * a[3][0]
@@ -1087,7 +1125,7 @@ def generic_matrix_inverter4x4(
         + a[0][0] * a[1][3] * a[3][2]
         + a[0][2] * a[1][0] * a[3][3]
         - a[0][0] * a[1][2] * a[3][3]
-    ) * inv_det
+    )
     outINV[1][3] = (
         -a[0][3] * a[1][2] * a[2][0]
         + a[0][2] * a[1][3] * a[2][0]
@@ -1095,7 +1133,7 @@ def generic_matrix_inverter4x4(
         - a[0][0] * a[1][3] * a[2][2]
         - a[0][2] * a[1][0] * a[2][3]
         + a[0][0] * a[1][2] * a[2][3]
-    ) * inv_det
+    )
     outINV[2][0] = (
         -a[1][3] * a[2][1] * a[3][0]
         + a[1][1] * a[2][3] * a[3][0]
@@ -1103,7 +1141,7 @@ def generic_matrix_inverter4x4(
         - a[1][0] * a[2][3] * a[3][1]
         - a[1][1] * a[2][0] * a[3][3]
         + a[1][0] * a[2][1] * a[3][3]
-    ) * inv_det
+    )
     outINV[2][1] = (
         a[0][3] * a[2][1] * a[3][0]
         - a[0][1] * a[2][3] * a[3][0]
@@ -1111,7 +1149,7 @@ def generic_matrix_inverter4x4(
         + a[0][0] * a[2][3] * a[3][1]
         + a[0][1] * a[2][0] * a[3][3]
         - a[0][0] * a[2][1] * a[3][3]
-    ) * inv_det
+    )
     outINV[2][2] = (
         -a[0][3] * a[1][1] * a[3][0]
         + a[0][1] * a[1][3] * a[3][0]
@@ -1119,7 +1157,7 @@ def generic_matrix_inverter4x4(
         - a[0][0] * a[1][3] * a[3][1]
         - a[0][1] * a[1][0] * a[3][3]
         + a[0][0] * a[1][1] * a[3][3]
-    ) * inv_det
+    )
     outINV[2][3] = (
         a[0][3] * a[1][1] * a[2][0]
         - a[0][1] * a[1][3] * a[2][0]
@@ -1127,7 +1165,7 @@ def generic_matrix_inverter4x4(
         + a[0][0] * a[1][3] * a[2][1]
         + a[0][1] * a[1][0] * a[2][3]
         - a[0][0] * a[1][1] * a[2][3]
-    ) * inv_det
+    )
     outINV[3][0] = (
         a[1][2] * a[2][1] * a[3][0]
         - a[1][1] * a[2][2] * a[3][0]
@@ -1135,7 +1173,7 @@ def generic_matrix_inverter4x4(
         + a[1][0] * a[2][2] * a[3][1]
         + a[1][1] * a[2][0] * a[3][2]
         - a[1][0] * a[2][1] * a[3][2]
-    ) * inv_det
+    )
     outINV[3][1] = (
         -a[0][2] * a[2][1] * a[3][0]
         + a[0][1] * a[2][2] * a[3][0]
@@ -1143,7 +1181,7 @@ def generic_matrix_inverter4x4(
         - a[0][0] * a[2][2] * a[3][1]
         - a[0][1] * a[2][0] * a[3][2]
         + a[0][0] * a[2][1] * a[3][2]
-    ) * inv_det
+    )
     outINV[3][2] = (
         a[0][2] * a[1][1] * a[3][0]
         - a[0][1] * a[1][2] * a[3][0]
@@ -1151,7 +1189,7 @@ def generic_matrix_inverter4x4(
         + a[0][0] * a[1][2] * a[3][1]
         + a[0][1] * a[1][0] * a[3][2]
         - a[0][0] * a[1][1] * a[3][2]
-    ) * inv_det
+    )
     outINV[3][3] = (
         -a[0][2] * a[1][1] * a[2][0]
         + a[0][1] * a[1][2] * a[2][0]
@@ -1159,17 +1197,22 @@ def generic_matrix_inverter4x4(
         - a[0][0] * a[1][2] * a[2][1]
         - a[0][1] * a[1][0] * a[2][2]
         + a[0][0] * a[1][1] * a[2][2]
-    ) * inv_det
+    )
+
+    for mu in range(4):
+        for nu in range(4):
+            outINV[mu][nu] /= outDET
 
     return outINV, outDET
 
 
+# Define the rank-3 version of the Levi-Civita symbol.
 def LeviCivitaSymbol_dim3_rank3() -> List[List[List[int]]]:
     """
     Calculate the Levi-Civita symbol for 3 dimensions.
 
     This function creates a 3x3x3 rank-3 tensor where each element corresponds to the Levi-Civita symbol
-    epsilon_ijk, calculated using the formula (i - j) * (j - k) * (k - i) / 2.
+    epsilon_ijk, calculated using the formula (i - j) * (j - k) * (k - i) * 1/2.
 
     :return: A 3x3x3 tensor with integer elements, representing the Levi-Civita symbol.
 
@@ -1177,16 +1220,24 @@ def LeviCivitaSymbol_dim3_rank3() -> List[List[List[int]]]:
     >>> LeviCivitaSymbol_dim3_rank3()
     [[[0, 0, 0], [0, 0, 1], [0, -1, 0]], [[0, 0, -1], [0, 0, 0], [1, 0, 0]], [[0, 1, 0], [-1, 0, 0], [0, 0, 0]]]
     """
-    # Initialize a 3x3x3 tensor of zeros.
-    levi_civita = zerorank3(dimension=3)
+    # A MyPy-friendly version of zerorank3(dimension=3) for this case:
+    LeviCivitaSymbol = [
+        [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
+        [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
+        [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
+    ]
 
-    for i, j, k in func.product(range(3), repeat=3):
-        # This formula concisely generates the Levi-Civita symbol from indices.
-        # See: https://codegolf.stackexchange.com/questions/160359/levi-civita-symbol
-        levi_civita[i][j][k] = (i - j) * (j - k) * (k - i) // 2
-    return cast(List[List[List[int]]], levi_civita)
+    for i in range(3):
+        for j in range(3):
+            for k in range(3):
+                # From https://codegolf.stackexchange.com/questions/160359/levi-civita-symbol :
+                LeviCivitaSymbol[i][j][k] = (
+                    (i - j) * (j - k) * (k - i) * sp.Rational(1, 2)
+                )
+    return LeviCivitaSymbol
 
 
+# Define the UUU rank-3 version of the Levi-Civita *tensor*; UUU divides by sqrtgammaDET
 def LeviCivitaTensorUUU_dim3_rank3(
     sqrtgammaDET: sp.Expr,
 ) -> Union[List[List[List[sp.Expr]]], List[List[List[int]]]]:
@@ -1204,14 +1255,24 @@ def LeviCivitaTensorUUU_dim3_rank3(
     >>> LeviCivitaTensorUUU_dim3_rank3(sqrtgammaDET)
     [[[0, 0, 0], [0, 0, 1/sqrtgammaDET], [0, -1/sqrtgammaDET, 0]], [[0, 0, -1/sqrtgammaDET], [0, 0, 0], [1/sqrtgammaDET, 0, 0]], [[0, 1/sqrtgammaDET, 0], [-1/sqrtgammaDET, 0, 0], [0, 0, 0]]]
     """
-    levi_civita_symbol = LeviCivitaSymbol_dim3_rank3()
-    # To get the contravariant tensor density, divide by the sqrt of the metric determinant.
-    return [
-        [[elem / sqrtgammaDET for elem in row] for row in matrix]
-        for matrix in levi_civita_symbol
+    # Here, we import the Levi-Civita tensor and compute the tensor with upper indices
+    LeviCivitaSymbolDDD = LeviCivitaSymbol_dim3_rank3()
+    # A MyPy-friendly version of zerorank3(dimension=3) for this case:
+    LeviCivitaTensorUUU = [
+        [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
+        [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
+        [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
     ]
+    for i in range(3):
+        for j in range(3):
+            for k in range(3):
+                LeviCivitaTensorUUU[i][j][k] = (
+                    LeviCivitaSymbolDDD[i][j][k] / sqrtgammaDET
+                )
+    return LeviCivitaTensorUUU
 
 
+# Define the DDD rank-3 version of the Levi-Civita *tensor*; DDD multiplies by sqrtgammaDET
 def LeviCivitaTensorDDD_dim3_rank3(
     sqrtgammaDET: sp.Expr,
 ) -> Union[List[List[List[sp.Expr]]], List[List[List[int]]]]:
@@ -1229,50 +1290,27 @@ def LeviCivitaTensorDDD_dim3_rank3(
     >>> LeviCivitaTensorDDD_dim3_rank3(sqrtgammaDET)
     [[[0, 0, 0], [0, 0, sqrtgammaDET], [0, -sqrtgammaDET, 0]], [[0, 0, -sqrtgammaDET], [0, 0, 0], [sqrtgammaDET, 0, 0]], [[0, sqrtgammaDET, 0], [-sqrtgammaDET, 0, 0], [0, 0, 0]]]
     """
-    levi_civita_symbol = LeviCivitaSymbol_dim3_rank3()
-    # To get the covariant tensor density, multiply by the sqrt of the metric determinant.
-    return [
-        [[elem * sqrtgammaDET for elem in row] for row in matrix]
-        for matrix in levi_civita_symbol
+    # Here, we import the Levi-Civita tensor and compute the tensor with lower indices
+    LeviCivitaSymbolDDD = LeviCivitaSymbol_dim3_rank3()
+    # A MyPy-friendly version of zerorank3(dimension=3) for this case:
+    LeviCivitaTensorDDD = [
+        [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
+        [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
+        [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
     ]
+    for i in range(3):
+        for j in range(3):
+            for k in range(3):
+                LeviCivitaTensorDDD[i][j][k] = (
+                    LeviCivitaSymbolDDD[i][j][k] * sqrtgammaDET
+                )
+    return LeviCivitaTensorDDD
 
 
 if __name__ == "__main__":
     import doctest
 
     results = doctest.testmod()
-
-    # Validation test code for symm_matrix_inverter4x4():
-    import nrpy.validate_expressions.validate_expressions as ve
-
-    R4DD = cast(
-        List[List[sp.Expr]], declarerank2("R4DD", symmetry="sym01", dimension=4)
-    )
-
-    # Compute R4DD's inverse:
-    R4DDinv, det = symm_matrix_inverter4x4(R4DD)
-
-    # Next matrix multiply: IsUnit = R^{-1} R
-    IsUnit = zerorank2(dimension=4)
-    for ii in range(4):
-        for jj in range(4):
-            for kk in range(4):
-                IsUnit[ii][jj] += R4DDinv[ii][kk] * R4DD[kk][jj]
-                # If you'd like to check R R^{-1} instead:
-                # IsUnit[i][j] += R4DD[i][k] * R4DDinv[k][j]
-
-    # Next check, is IsUnit == Unit matrix?!
-    for diag in range(4):
-        if not ve.check_zero(IsUnit[diag][diag] - 1):
-            raise ValueError("4x4 matrix inversion failed, along diagonal!")
-    for offdiag_i in range(4):
-        for offdiag_j in range(4):
-            if offdiag_i != offdiag_j:
-                if not ve.check_zero(IsUnit[offdiag_i][offdiag_j]):
-                    raise ValueError(
-                        "4x4 matrix inversion failed, in off-diagonal element!"
-                    )
-    # ^^ all should output as True.
 
     if results.failed > 0:
         print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
