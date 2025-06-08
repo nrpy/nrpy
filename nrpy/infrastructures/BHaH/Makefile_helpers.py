@@ -186,7 +186,7 @@ def _construct_makefile_content(
     """
     # Set the compiler assignment line based on whether it's nvcc
     cc_line = (
-        rf"CC = {cc}  # Locally overwrites CC to {cc}"
+        f"CC = {cc}  # Locally overwrites CC to {cc}"
         if cc == "nvcc"
         else f"CC ?= {cc}  # assigns the value CC to {cc} only if environment variable CC is not already set"
     )

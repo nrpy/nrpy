@@ -7,7 +7,7 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union, cast
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union, cast
 
 import sympy as sp
 from typing_extensions import Literal
@@ -53,9 +53,83 @@ _ = par.register_CodeParameter(
 )
 
 
+def _format_c_offset_str(var: str, offset: int) -> str:
+    """
+    Format a C-style variable with an offset, matching original output.
+
+    :param var: The variable name string (e.g., "i0").
+    :param offset: The integer offset.
+    :return: A string like "i0", "i0+1", or "i0-1".
+    """
+    if offset == 0:
+        return var
+    # The .replace() is needed to match the original's output exactly.
+    return f"{var}+{offset}".replace("+-", "-")
+
+
+def _flatten_and_unique_str(nested_list: List[Any]) -> List[str]:
+    """
+    Flatten a nested list into a single list of unique strings, preserving order.
+
+    :param nested_list: The list to be flattened.
+    :return: An order-preserved list containing unique string representations of the elements.
+    """
+    flat_list: List[str] = []
+    seen: set[str] = set()
+
+    def recurse(sub_list: Any) -> None:
+        """
+        Recursive helper to traverse the nested structure.
+
+        :param sub_list: The list or item to process.
+        """
+        if isinstance(sub_list, list):
+            for item in sub_list:
+                recurse(item)
+        else:
+            name = str(sub_list)
+            if name not in seen:
+                seen.add(name)
+                flat_list.append(name)
+
+    recurse(nested_list)
+    return flat_list
+
+
 # Core GridFunction class.
 class GridFunction:
     """The core class for grid functions."""
+
+    # Parity conditions for rank-2 tensors, organized by dimension.
+    _PARITY_CONDITIONS_RANK2_DIM3: Dict[Tuple[str, str], int] = {
+        ("0", "0"): 4,
+        ("0", "1"): 5,
+        ("1", "0"): 5,
+        ("0", "2"): 6,
+        ("2", "0"): 6,
+        ("1", "1"): 7,
+        ("1", "2"): 8,
+        ("2", "1"): 8,
+        ("2", "2"): 9,
+    }
+    _PARITY_CONDITIONS_RANK2_DIM4: Dict[Tuple[str, str], int] = {
+        ("0", "0"): 0,  # scalar tt component
+        ("0", "1"): 1,
+        ("1", "0"): 1,
+        ("0", "2"): 2,
+        ("2", "0"): 2,  # vector ti
+        ("0", "3"): 3,
+        ("3", "0"): 3,
+        ("1", "1"): 4,
+        ("1", "2"): 5,
+        ("2", "1"): 5,
+        ("1", "3"): 6,  # tensor ij
+        ("3", "1"): 6,
+        ("2", "2"): 7,
+        ("2", "3"): 8,
+        ("3", "2"): 8,
+        ("3", "3"): 9,
+    }
 
     def __init__(
         self,
@@ -125,18 +199,17 @@ class GridFunction:
             ... except: "Attempt to create a gridfunction ending in an integer failed. Good."
             'Attempt to create a gridfunction ending in an integer failed. Good.'
         """
-        # First check for zero-length basenames:
-        if len(name) == 0:
-            raise ValueError("Tried to register gridfunction without a name!")
-
         if not isinstance(name, str):
             raise TypeError("Gridfunction names must be strings")
+        # First check for zero-length basenames:
+        if not name:
+            raise ValueError("Tried to register gridfunction without a name!")
 
-        if len(name) > 0 and name[-1].isdigit():
+        if name[-1].isdigit():
             raise ValueError(
                 f"Tried to register gridfunction with base name: {name}\n"
-                f"To ensure that finite difference code generations do not get confused,\n"
-                f"gridfunctions with base names ending in an integer are forbidden; pick a new name."
+                "To ensure that finite difference code generations do not get confused,\n"
+                "gridfunctions with base names ending in an integer are forbidden; pick a new name."
             )
 
     @staticmethod
@@ -160,25 +233,20 @@ class GridFunction:
             gridfunction_lists()
             (['evol_gf1', 'evol_gf2'], ['aux_gf1', 'aux_gf2'], ['auxevol_gf1', 'auxevol_gf2'])
         """
-        # Initialize dictionary for holding lists of gridfunction names for each group.
-        groups: Dict[str, List[str]] = {
-            "EVOL": [],
-            "AUX": [],
-            "AUXEVOL": [],
-        }
-
-        # Iterate through the global dictionary of gridfunctions.
-        for _key, gf in glb_gridfcs_dict.items():
-            if gf.group in groups:
-                groups[gf.group].append(gf.name)
-
-        # Sort the lists. Iterating through a copy of the keys to avoid modifying the dictionary while iterating.
-        for group in list(groups.keys()):
-            # Sort case-insensitively to ensure consistent order, e.g., "RbarDD" doesn't appear before "cf".
-            groups[group] = sorted(groups[group], key=lambda x: x.lower())
-
-        # Pack the sorted lists into a tuple and return.
-        return groups["EVOL"], groups["AUX"], groups["AUXEVOL"]
+        # Using list comprehensions for a concise and Pythonic implementation.
+        evol_gfs = sorted(
+            [gf.name for gf in glb_gridfcs_dict.values() if gf.group == "EVOL"],
+            key=str.lower,
+        )
+        aux_gfs = sorted(
+            [gf.name for gf in glb_gridfcs_dict.values() if gf.group == "AUX"],
+            key=str.lower,
+        )
+        auxevol_gfs = sorted(
+            [gf.name for gf in glb_gridfcs_dict.values() if gf.group == "AUXEVOL"],
+            key=str.lower,
+        )
+        return evol_gfs, aux_gfs, auxevol_gfs
 
     @staticmethod
     def set_parity_types(list_of_gf_names: List[str]) -> List[int]:
@@ -196,73 +264,48 @@ class GridFunction:
                             based on their names, ranks, and dimensions, or if the number of
                             determined parity types does not match the number of input grid function names.
         """
-        parity_type: List[int] = []
+        parity_type_list: List[int] = []
         for name in list_of_gf_names:
-            for gf in glb_gridfcs_dict.values():
-                if gf.name == name:
-                    parity_type__orig_len = len(parity_type)
-                    if gf.rank == 0:
-                        parity_type.append(0)
-                    elif gf.rank == 1:
-                        parity_type.append(int(gf.name[-1]) + 1)
-                    elif gf.rank == 2:
-                        idx0 = gf.name[-2]
-                        idx1 = gf.name[-1]
-                        parity_conditions: Dict[Tuple[str, str], int] = {}
-                        if gf.dimension == 3:
-                            parity_conditions = {
-                                ("0", "0"): 4,
-                                ("0", "1"): 5,
-                                ("1", "0"): 5,
-                                ("0", "2"): 6,
-                                ("2", "0"): 6,
-                                ("1", "1"): 7,
-                                ("1", "2"): 8,
-                                ("2", "1"): 8,
-                                ("2", "2"): 9,
-                            }
-                        elif gf.dimension == 4:
-                            parity_conditions = {
-                                # scalar tt component
-                                ("0", "0"): 0,
-                                # vector ti components
-                                ("0", "1"): 1,
-                                ("1", "0"): 1,
-                                ("0", "2"): 2,
-                                ("2", "0"): 2,
-                                ("0", "3"): 3,
-                                ("3", "0"): 3,
-                                # tensor ij components
-                                ("1", "1"): 4,
-                                ("1", "2"): 5,
-                                ("2", "1"): 5,
-                                ("1", "3"): 6,
-                                ("3", "1"): 6,
-                                ("2", "2"): 7,
-                                ("2", "3"): 8,
-                                ("3", "2"): 8,
-                                ("3", "3"): 9,
-                            }
+            gf = glb_gridfcs_dict.get(name)
+            if not gf:
+                # This emulates the original's behavior of failing the length check at the end.
+                continue
 
-                        parity_value: Union[int, None] = parity_conditions.get(
-                            (idx0, idx1)
-                        )
-                        if parity_value is not None:
-                            parity_type.append(parity_value)
-                    if len(parity_type) == parity_type__orig_len:
-                        raise ValueError(
-                            f"Error: Could not figure out parity type for {gf.group} gridfunction: {gf.name}, {gf.name[-2]}, {gf.name[-1]}, {gf.rank}, {gf.dimension}"
-                        )
+            parity_val: Optional[int] = None
+            if gf.rank == 0:
+                parity_val = 0
+            elif gf.rank == 1:
+                parity_val = int(gf.name[-1]) + 1
+            elif gf.rank == 2:
+                indices = (gf.name[-2], gf.name[-1])
+                if gf.dimension == 3:
+                    parity_val = GridFunction._PARITY_CONDITIONS_RANK2_DIM3.get(indices)
+                elif gf.dimension == 4:
+                    parity_val = GridFunction._PARITY_CONDITIONS_RANK2_DIM4.get(indices)
 
-        if len(parity_type) != len(list_of_gf_names):
+            if parity_val is not None:
+                parity_type_list.append(parity_val)
+            else:
+                raise ValueError(
+                    f"Error: Could not figure out parity type for {gf.group} gridfunction: {gf.name}, {gf.name[-2]}, {gf.name[-1]}, {gf.rank}, {gf.dimension}"
+                )
+
+        if len(parity_type_list) != len(list_of_gf_names):
             raise ValueError(
                 "Error: For some reason the length of the parity types list did not match the length of the gf list."
             )
-        return parity_type
+        return parity_type_list
 
 
 class BHaHGridFunction(GridFunction):
     """The subclass for BlackHoles@Home grid functions."""
+
+    VALID_GROUPS: Tuple[str, ...] = ("EVOL", "AUX", "AUXEVOL")
+    GROUP_DESCRIPTIONS: str = (
+        '    "EVOL": for evolved quantities (i.e., quantities stepped forward in time),\n'
+        '    "AUXEVOL": for auxiliary quantities needed at all points by evolved quantities,\n'
+        '    "AUX": for all other quantities needed at all gridpoints.\n'
+    )
 
     def __init__(
         self,
@@ -280,6 +323,7 @@ class BHaHGridFunction(GridFunction):
             name, group, rank, dimension, "REAL", f_infinity, wavespeed, is_basename
         )
         self.verify_gridfunction_group_is_valid()
+        # Adhere to original magic string default to preserve doctest compatibility
         if gf_array_name == "use_in_gfs_for_EVOL_auxevol_gfs_for_AUXEVOL_etc":
             if group == "EVOL":
                 self.gf_array_name = "in_gfs"
@@ -291,9 +335,8 @@ class BHaHGridFunction(GridFunction):
             self.gf_array_name = gf_array_name
 
         self.sync_gf_in_superB = sync_gf_in_superB
-        if sync_gf_in_superB == None:
-            if group == "EVOL" or group == "AUX":
-                self.sync_gf_in_superB = True
+        if sync_gf_in_superB is None and group in ("EVOL", "AUX"):
+            self.sync_gf_in_superB = True
 
     def verify_gridfunction_group_is_valid(self) -> None:
         """
@@ -312,19 +355,11 @@ class BHaHGridFunction(GridFunction):
         ... except: print("Errored out. This is good.")
         Errored out. This is good.
         """
-        valid_groups = (
-            "EVOL",
-            "AUX",
-            "AUXEVOL",
-        )
-        if self.group not in valid_groups:
-            msg = (
+        if self.group not in self.VALID_GROUPS:
+            raise ValueError(
                 f"Unsupported gridfunction group {self.group}. Supported groups include:\n"
-                '    "EVOL": for evolved quantities (i.e., quantities stepped forward in time),\n'
-                '    "AUXEVOL": for auxiliary quantities needed at all points by evolved quantities,\n'
-                '    "AUX": for all other quantities needed at all gridpoints.\n'
+                f"{self.GROUP_DESCRIPTIONS}"
             )
-            raise ValueError(msg)
 
     def read_gf_from_memory_Ccode_onept(
         self, i0_offset: int = 0, i1_offset: int = 0, i2_offset: int = 0, **kwargs: Any
@@ -349,16 +384,14 @@ class BHaHGridFunction(GridFunction):
         >>> glb_gridfcs_dict["defg"].read_gf_from_memory_Ccode_onept(0, -1, 0, enable_simd=True, gf_array_name="My_Array")
         'ReadSIMD(&My_Array[IDX4(DEFGGF, i0, i1-1, i2)])'
         """
-        i0 = f"i0+{i0_offset}".replace("+-", "-") if i0_offset != 0 else "i0"
-        i1 = f"i1+{i1_offset}".replace("+-", "-") if i1_offset != 0 else "i1"
-        i2 = f"i2+{i2_offset}".replace("+-", "-") if i2_offset != 0 else "i2"
-
         gf_array_name = kwargs.get("gf_array_name", self.gf_array_name)
+        access_string = self.access_gf(
+            self.name, i0_offset, i1_offset, i2_offset, gf_array_name
+        )
 
-        ret_string = f"{gf_array_name}[IDX4({self.name.upper()}GF, {i0}, {i1}, {i2})]"
         if kwargs.get("enable_simd"):
-            return f"ReadSIMD(&{ret_string})"
-        return ret_string
+            return f"ReadSIMD(&{access_string})"
+        return access_string
 
     @staticmethod
     def access_gf(
@@ -385,9 +418,9 @@ class BHaHGridFunction(GridFunction):
         >>> BHaHGridFunction.access_gf("defg", 0, -1, 0, "My_Array")
         'My_Array[IDX4(DEFGGF, i0, i1-1, i2)]'
         """
-        i0 = f"i0+{i0_offset}".replace("+-", "-") if i0_offset != 0 else "i0"
-        i1 = f"i1+{i1_offset}".replace("+-", "-") if i1_offset != 0 else "i1"
-        i2 = f"i2+{i2_offset}".replace("+-", "-") if i2_offset != 0 else "i2"
+        i0 = _format_c_offset_str("i0", i0_offset)
+        i1 = _format_c_offset_str("i1", i1_offset)
+        i2 = _format_c_offset_str("i2", i2_offset)
 
         return f"{gf_array_name}[IDX4({gf_name.upper()}GF, {i0}, {i1}, {i2})]"
 
@@ -407,13 +440,13 @@ class BHaHGridFunction(GridFunction):
         :return: The resulting string representation of the GridFunction definitions.
         """
 
-        def define_gfs(name: str, gfs: List[str]) -> str:
+        def define_gfs_group(name: str, gfs: List[str]) -> str:
             """
-            Generate string representation for a list of GridFunctions.
+            Generate C-style #define string for a list of GridFunctions in a group.
 
-            :param name: The name of the group.
-            :param gfs: The list of GridFunctions.
-            :return: The resulting string representation.
+            :param name: The name of the group (e.g., "EVOL").
+            :param gfs: The list of grid function names in the group.
+            :return: A formatted C-style string with #defines.
             """
             num_gfs = len(gfs)
             defines = "\n".join(
@@ -421,21 +454,15 @@ class BHaHGridFunction(GridFunction):
             )
             return f"\n// {name.upper()} VARIABLES:\n#define NUM_{name.upper()}_GFS {num_gfs}\n{defines}\n"
 
-        (
-            evolved_variables_list,
-            auxiliary_variables_list,
-            auxevol_variables_list,
-        ) = BHaHGridFunction.gridfunction_lists()
+        evol, aux, auxevol = BHaHGridFunction.gridfunction_lists()
 
-        outstr = f"{define_gfs('EVOL', evolved_variables_list)}"
+        # Start with the EVOL group defines
+        outstr = define_gfs_group("EVOL", evol)
 
-        if evolved_variables_list:
-            f_infinity_list = [
-                str(glb_gridfcs_dict[var].f_infinity) for var in evolved_variables_list
-            ]
-            f_wavespeed_list = [
-                str(glb_gridfcs_dict[var].wavespeed) for var in evolved_variables_list
-            ]
+        # Append f_infinity and wavespeed definitions if EVOL variables exist
+        if evol:
+            f_infinity_list = [str(glb_gridfcs_dict[var].f_infinity) for var in evol]
+            f_wavespeed_list = [str(glb_gridfcs_dict[var].wavespeed) for var in evol]
 
             f_infinity_str = ", ".join(f_infinity_list)
             f_wavespeed_str = ", ".join(f_wavespeed_list)
@@ -446,14 +473,22 @@ class BHaHGridFunction(GridFunction):
             outstr += "\n\n// SET gridfunctions_wavespeed[i] = evolved gridfunction i's characteristic wave speed:\n"
             outstr += f"static const REAL gridfunctions_wavespeed[NUM_EVOL_GFS] = {{ {f_wavespeed_str} }};\n"
 
-        outstr += f"{define_gfs('AUX', auxiliary_variables_list)}"
-        outstr += f"{define_gfs('AUXEVOL', auxevol_variables_list)}"
+        # Append AUX and AUXEVOL group defines
+        outstr += define_gfs_group("AUX", aux)
+        outstr += define_gfs_group("AUXEVOL", auxevol)
 
         return outstr
 
 
 class ETLegacyGridFunction(GridFunction):
     """Subclass for basic (non-CarpetX) Einstein Toolkit grid functions."""
+
+    VALID_GROUPS: Tuple[str, ...] = ("EVOL", "AUX", "AUXEVOL")
+    GROUP_DESCRIPTIONS: str = (
+        '    "EVOL": for evolved quantities (i.e., quantities stepped forward in time),\n'
+        '    "AUXEVOL": for auxiliary quantities needed at all points by evolved quantities,\n'
+        '    "AUX": for all other quantities needed at all gridpoints.\n'
+    )
 
     def __init__(
         self,
@@ -476,7 +511,10 @@ class ETLegacyGridFunction(GridFunction):
             wavespeed,
             is_basename,
         )
+        # The following local variable is unused, but preserved to match the original
+        # code's behavior and pass a doctest that inspects __dict__.
         _gf_array_name = gf_array_name
+        self.verify_gridfunction_group_is_valid()
 
     def verify_gridfunction_group_is_valid(self) -> None:
         """
@@ -489,19 +527,11 @@ class ETLegacyGridFunction(GridFunction):
 
         :raises ValueError: If the 'group' attribute is not one of the valid groups.
         """
-        valid_groups = (
-            "EVOL",
-            "AUX",
-            "AUXEVOL",
-        )
-        if self.group not in valid_groups:
-            msg = (
+        if self.group not in self.VALID_GROUPS:
+            raise ValueError(
                 f"Unsupported gridfunction group {self.group}. Supported groups include:\n"
-                '    "EVOL": for evolved quantities (i.e., quantities stepped forward in time),\n'
-                '    "AUXEVOL": for auxiliary quantities needed at all points by evolved quantities,\n'
-                '    "AUX": for all other quantities needed at all gridpoints.\n'
+                f"{self.GROUP_DESCRIPTIONS}"
             )
-            raise ValueError(msg)
 
     @staticmethod
     def access_gf(
@@ -528,14 +558,12 @@ class ETLegacyGridFunction(GridFunction):
         >>> ETLegacyGridFunction.access_gf("defg", 0, -1, 0)
         'defgGF[CCTK_GFINDEX3D(cctkGH, i0, i1-1, i2)]'
         """
-        i0 = f"i0+{i0_offset}".replace("+-", "-") if i0_offset != 0 else "i0"
-        i1 = f"i1+{i1_offset}".replace("+-", "-") if i1_offset != 0 else "i1"
-        i2 = f"i2+{i2_offset}".replace("+-", "-") if i2_offset != 0 else "i2"
+        i0 = _format_c_offset_str("i0", i0_offset)
+        i1 = _format_c_offset_str("i1", i1_offset)
+        i2 = _format_c_offset_str("i2", i2_offset)
+        gf_name_str = f"{gf_name}GF" if use_GF_suffix else gf_name
 
-        access_str = f"{gf_name}[CCTK_GFINDEX3D(cctkGH, {i0}, {i1}, {i2})]"
-        if use_GF_suffix:
-            access_str = f"{gf_name}GF[CCTK_GFINDEX3D(cctkGH, {i0}, {i1}, {i2})]"
-        return access_str
+        return f"{gf_name_str}[CCTK_GFINDEX3D(cctkGH, {i0}, {i1}, {i2})]"
 
     def read_gf_from_memory_Ccode_onept(
         self, i0_offset: int = 0, i1_offset: int = 0, i2_offset: int = 0, **kwargs: Any
@@ -563,22 +591,36 @@ class ETLegacyGridFunction(GridFunction):
         >>> glb_gridfcs_dict["defg"].read_gf_from_memory_Ccode_onept(0, -1, 0, enable_simd=True, use_GF_suffix=False)
         'ReadSIMD(&defg[CCTK_GFINDEX3D(cctkGH, i0, i1-1, i2)])'
         """
-        i0 = f"i0+{i0_offset}".replace("+-", "-") if i0_offset != 0 else "i0"
-        i1 = f"i1+{i1_offset}".replace("+-", "-") if i1_offset != 0 else "i1"
-        i2 = f"i2+{i2_offset}".replace("+-", "-") if i2_offset != 0 else "i2"
-
-        ret_string = f"{self.name}GF[CCTK_GFINDEX3D(cctkGH, {i0}, {i1}, {i2})]"
-        # if use_GF_suffix defined AND set to False, remove GF suffix
-        if "use_GF_suffix" in kwargs and not kwargs["use_GF_suffix"]:
-            ret_string = f"{self.name}[CCTK_GFINDEX3D(cctkGH, {i0}, {i1}, {i2})]"
+        use_GF_suffix = kwargs.get("use_GF_suffix", True)
+        access_str = self.access_gf(
+            self.name, i0_offset, i1_offset, i2_offset, use_GF_suffix
+        )
         if kwargs.get("enable_simd"):
-            ret_string = f"ReadSIMD(&{ret_string})"
-
-        return ret_string
+            return f"ReadSIMD(&{access_str})"
+        return access_str
 
 
 class CarpetXGridFunction(GridFunction):
     """Class for CarpetX gridfunction operations."""
+
+    VALID_GROUPS: Tuple[str, ...] = (
+        "EVOL",
+        "AUX",
+        "AUXEVOL",
+        "EXTERNAL",
+        "CORE",
+        "TILE_TMP",
+        "SCALAR_TMP",
+    )
+    GROUP_DESCRIPTIONS: str = (
+        '    "EVOL": for evolved quantities (i.e., quantities stepped forward in time),\n'
+        '    "AUXEVOL": for auxiliary quantities needed at all points by evolved quantities,\n'
+        '    "AUX": for all other quantities needed at all gridpoints.\n'
+        '    "EXTERNAL": for all quantities defined in other modules.\n'
+        '    "CORE": for all quantities defined inside the CarpetX driver.\n'
+        '    "TILE_TMP": for all temporary quantities defined for CarpetX tiles.\n'
+        '    "SCALAR_TMP": for all temporary quantities defined for doubles.'
+    )
 
     def __init__(
         self,
@@ -605,25 +647,21 @@ class CarpetXGridFunction(GridFunction):
         )
         validate_literal_arguments()
         self.thorn = thorn
-        _gf_array_name = gf_array_name
         self.centering = centering
+        # The following local variable is unused, but preserved to match the original
+        # code's behavior and pass a doctest that inspects __dict__.
+        _gf_array_name = gf_array_name
+
+        # Validation steps.
+        self.verify_gridfunction_group_is_valid()
+        self.verify_gridfunction_centering_is_valid()
 
         group_suffixes = {
             "EXTERNAL": "_ext",
             "CORE": "_core",
             "TILE_TMP": "_tile_tmp",
-            "SCALAR_TMP": "",
         }
-        if self.group in group_suffixes:
-            self.name += group_suffixes[self.group]
-
-        # Dictionaries for storing grid function groups.
-        # self.index_group = {}
-        # self.rev_index_group = {}
-
-        # Validation step.
-        self.verify_gridfunction_centering_is_valid()
-        self.verify_gridfunction_group_is_valid()
+        self.name += group_suffixes.get(self.group, "")
 
     def verify_gridfunction_group_is_valid(self) -> None:
         """
@@ -640,27 +678,11 @@ class CarpetXGridFunction(GridFunction):
 
         :raises ValueError: If the 'group' attribute is not one of the valid groups.
         """
-        valid_groups = (
-            "EVOL",
-            "AUX",
-            "AUXEVOL",
-            "EXTERNAL",
-            "CORE",
-            "TILE_TMP",
-            "SCALAR_TMP",
-        )
-        if self.group not in valid_groups:
-            msg = (
+        if self.group not in self.VALID_GROUPS:
+            raise ValueError(
                 f"Unsupported gridfunction group {self.group}. Supported groups include:\n"
-                '    "EVOL": for evolved quantities (i.e., quantities stepped forward in time),\n'
-                '    "AUXEVOL": for auxiliary quantities needed at all points by evolved quantities,\n'
-                '    "AUX": for all other quantities needed at all gridpoints.\n'
-                '    "EXTERNAL": for all quantities defined in other modules.\n'
-                '    "CORE": for all quantities defined inside the CarpetX driver.\n'
-                '    "TILE_TMP": for all temporary quantities defined for CarpetX tiles.\n'
-                '    "SCALAR_TMP": for all temporary quantities defined for doubles.'
+                f"{self.GROUP_DESCRIPTIONS}"
             )
-            raise ValueError(msg)
 
     def verify_gridfunction_centering_is_valid(self) -> None:
         """
@@ -672,12 +694,11 @@ class CarpetXGridFunction(GridFunction):
         :raises ValueError: If the 'centering' attribute is not valid.
         """
         if len(self.centering) != 3 or any(c not in ("C", "V") for c in self.centering):
-            msg = (
+            raise ValueError(
                 f"Unsupported gridfunction centering {self.centering}. Supported centerings are 3-character strings, each character being either:\n"
                 '    "C": for cell-centered quantities,\n'
                 '    "V": for vertex-centered quantities.'
             )
-            raise ValueError(msg)
 
     @staticmethod
     def access_gf(
@@ -710,6 +731,7 @@ class CarpetXGridFunction(GridFunction):
         """
         index = index_name
         if not reuse_index:
+            # This logic is reverted to match the original's exact whitespace output for doctest compatibility.
             index = "p.I"
             if i0_offset != 0:
                 index += f" + {i0_offset}*p.DI[0]".replace("+ -", "- ")
@@ -718,10 +740,8 @@ class CarpetXGridFunction(GridFunction):
             if i2_offset != 0:
                 index += f" + {i2_offset}*p.DI[2]".replace("+ -", "- ")
 
-        access_str = f"{gf_name}({index})"
-        if use_GF_suffix:
-            access_str = f"{gf_name}GF({index})"
-        return access_str
+        gf_name_str = f"{gf_name}GF" if use_GF_suffix else gf_name
+        return f"{gf_name_str}({index})"
 
     def read_gf_from_memory_Ccode_onept(
         self, i0_offset: int = 0, i1_offset: int = 0, i2_offset: int = 0, **kwargs: Any
@@ -747,39 +767,47 @@ class CarpetXGridFunction(GridFunction):
         >>> glb_gridfcs_dict["defg"].read_gf_from_memory_Ccode_onept(0, -1, 0, enable_simd=True, use_GF_suffix=False)
         'ReadSIMD(&defg(p.I - 1*p.DI[1]))'
         """
-        # if "reuse_index" in kwargs and not kwargs["reuse_index"]:
-        index = "p.I"
-        if i0_offset != 0:
-            index += f" + {i0_offset}*p.DI[0]".replace("+ -", "- ")
-        if i1_offset != 0:
-            index += f" + {i1_offset}*p.DI[1]".replace("+ -", "- ")
-        if i2_offset != 0:
-            index += f" + {i2_offset}*p.DI[2]".replace("+ -", "- ")
-        # else:
-        #     if "index_name" in kwargs:
-        #         index = kwargs["index_name"]
-        #     else:
-        #         #Error out
-        #         exit(1)
+        use_GF_suffix = kwargs.get("use_GF_suffix", True)
+        reuse_index = kwargs.get("reuse_index", False)
+        index_name = kwargs.get("index_name", "")
 
-        ret_string = f"{self.name}GF"
-        # if use_GF_suffix defined AND set to True, add GF suffix
-        if "use_GF_suffix" in kwargs and not kwargs["use_GF_suffix"]:
-            ret_string = f"{self.name}"
-        ret_string += f"({index})"
+        access_str = self.access_gf(
+            self.name,
+            i0_offset,
+            i1_offset,
+            i2_offset,
+            use_GF_suffix,
+            reuse_index,
+            index_name,
+        )
 
         if kwargs.get("enable_simd"):
-            ret_string = f"ReadSIMD(&{ret_string})"
+            return f"ReadSIMD(&{access_str})"
+        return access_str
 
-        return ret_string
 
+# Type alias for grid function objects.
+GridFunctionType = Union[
+    GridFunction, BHaHGridFunction, ETLegacyGridFunction, CarpetXGridFunction
+]
 
-# Contains a list of gridfunction objects.
-glb_gridfcs_dict: Dict[
-    str,
-    Union[GridFunction, BHaHGridFunction, ETLegacyGridFunction, CarpetXGridFunction],
-] = {}
+# Global dictionary of registered grid functions.
+glb_gridfcs_dict: Dict[str, GridFunctionType] = {}
 
+# Factory mapping for grid function classes based on infrastructure.
+GF_CLASS_MAP: Dict[str, type[GridFunctionType]] = {
+    "BHaH": BHaHGridFunction,
+    "ETLegacy": ETLegacyGridFunction,
+    "CarpetX": CarpetXGridFunction,
+}
+
+# Factory mapping for ixp rank-N declaration functions.
+IXP_RANK_FUNC_MAP: Dict[int, Callable[..., Any]] = {
+    1: ixp.declarerank1,
+    2: ixp.declarerank2,
+    3: ixp.declarerank3,
+    4: ixp.declarerank4,
+}
 
 #####################################
 # Outside the classes above, only define functions in grid.py that are used by multiple infrastructures
@@ -828,36 +856,29 @@ def register_gridfunctions(
     wavespeed 1.0
     is_basename False
     """
-    # Step 1: Convert names to a list if it's not already a list
-    if not isinstance(names, list):
-        names = [names]
+    names_list = names if isinstance(names, list) else [names]
 
-    # Step 2: Process each gridfunction
+    infrastructure = par.parval_from_str("Infrastructure")
+    gf_class = GF_CLASS_MAP.get(infrastructure)
+    if not gf_class:
+        raise ValueError(f"Infrastructure = {infrastructure} unknown")
+
     sympy_symbol_list: List[sp.Symbol] = []
-    Infrastructure = par.parval_from_str("Infrastructure")
-    for i, name in enumerate(names):
+    for i, name in enumerate(names_list):
         if name in glb_gridfcs_dict:
             print(f"Warning: Gridfunction {name} is already registered.")
         else:
-            gf: Union[BHaHGridFunction, ETLegacyGridFunction, CarpetXGridFunction]
-            kwargs_modify = kwargs.copy()
+            # For parameters that can be lists, select the i-th element for this gridfunction.
+            kwargs_individual = kwargs.copy()
             for param in ["f_infinity", "wavespeed"]:
-                if kwargs.get(param) and isinstance(kwargs.get(param), list):
-                    # mypy: Once again bonks out after I've CONFIRMED kwargs.get(param) is not None and is a list!
-                    kwargs_modify[param] = kwargs.get(param)[i]  # type: ignore
-            if Infrastructure == "BHaH":
-                gf = BHaHGridFunction(name, dimension=dimension, **kwargs_modify)
-            elif Infrastructure == "ETLegacy":
-                gf = ETLegacyGridFunction(name, dimension=dimension, **kwargs_modify)
-            elif Infrastructure == "CarpetX":
-                gf = CarpetXGridFunction(name, dimension=dimension, **kwargs_modify)
-            else:
-                raise ValueError(f"Infrastructure = {Infrastructure} unknown")
+                if isinstance(kwargs.get(param), list):
+                    kwargs_individual[param] = kwargs[param][i]
 
-            glb_gridfcs_dict[name] = gf
-        sympy_symbol_list += [sp.symbols(name, real=True)]
+            glb_gridfcs_dict[name] = gf_class(
+                name, dimension=dimension, **kwargs_individual
+            )
+        sympy_symbol_list.append(sp.symbols(name, real=True))
 
-    # Step 3: Return the list of sympy symbols, which can have any number of elements >= 1
     return sympy_symbol_list
 
 
@@ -884,22 +905,10 @@ def register_gridfunctions_for_single_rank1(
     >>> print(outstr[:-1])
     betU0 betU1 betU2
     """
-    # Step 1: Declare a list of SymPy variables,
-    #         where IDX_OBJ_TMP[i] = gf_basename+str(i)
-    IDX_OBJ_TMP = ixp.declarerank1(basename, dimension=dimension, **kwargs)
-
-    # Step 2: Register each gridfunction
-    gf_list = []
-    for i in range(3):
-        gf_list += [str(IDX_OBJ_TMP[i])]
-    # Manually adjust kwargs so that basename is not checked (we're not passing the basename!),
-    # and rank is set to 1.
-    kwargs["is_basename"] = False
-    kwargs["rank"] = 1
-    register_gridfunctions(gf_list, dimension, **kwargs)
-
-    # Step 3: Return array of SymPy variables
-    return IDX_OBJ_TMP
+    # This is a convenience wrapper for the more general rank-N function.
+    return register_gridfunctions_for_single_rankN(
+        basename, rank=1, dimension=dimension, **kwargs
+    )
 
 
 def register_gridfunctions_for_single_rank2(
@@ -926,32 +935,10 @@ def register_gridfunctions_for_single_rank2(
     >>> print(outstr[:-1])
     gDD00 gDD01 gDD02 gDD11 gDD12 gDD22
     """
-    # Step 1: Declare a list of lists of SymPy variables,
-    #         where IDX_OBJ_TMP[i][j] = gf_basename+str(i)+str(j)
-    IDX_OBJ_TMP = ixp.declarerank2(
-        basename, symmetry=symmetry, dimension=dimension, **kwargs
+    # This is a convenience wrapper for the more general rank-N function.
+    return register_gridfunctions_for_single_rankN(
+        basename, rank=2, symmetry=symmetry, dimension=dimension, **kwargs
     )
-
-    # Step 2: register each gridfunction, being careful not
-    #         not to store duplicates due to rank-2 symmetries.
-    gf_list: List[str] = []
-    for i in range(dimension):
-        for j in range(dimension):
-            save = True
-            for gf in gf_list:
-                if gf == str(IDX_OBJ_TMP[i][j]):
-                    save = False
-            if save:
-                gf_list.append(str(IDX_OBJ_TMP[i][j]))
-
-    # Manually adjust kwargs so that basename is not checked (we're not passing the basename!),
-    # and rank is set to 2.
-    kwargs["is_basename"] = False
-    kwargs["rank"] = 2
-    register_gridfunctions(gf_list, dimension, **kwargs)
-
-    # Step 3: Return array of SymPy variables
-    return IDX_OBJ_TMP
 
 
 def register_gridfunctions_for_single_rankN(
@@ -1002,75 +989,40 @@ def register_gridfunctions_for_single_rankN(
     >>> print(glb_gridfcs_dict['R0001'].__dict__)
     {'name': 'R0001', 'group': 'EVOL', 'rank': 4, 'dimension': 4, 'gf_type': 'CCTK_REAL', 'f_infinity': 0.0, 'wavespeed': 1.0, 'is_basename': False}
     """
-
-    def flatten_list(nested_list: List[Any]) -> List[Any]:
-        """
-        Flattens a nested list into a single list.
-
-        :param nested_list: The list to be flattened.
-        :return: A single list containing all the elements of the nested list.
-
-        >>> flatten_list([[1, 2], [3, 4]])
-        [1, 2, 3, 4]
-        >>> flatten_list([[[1], [2]], [[3], [4]]])
-        [1, 2, 3, 4]
-        """
-        if not isinstance(nested_list, list):
-            return [nested_list]
-        return [item for sublist in nested_list for item in flatten_list(sublist)]
-
-    # Add type hint to IDX_OBJ_TMP, or some versions of mypy will assume its type from its first usage (List[sp.Symbol])
-    IDX_OBJ_TMP: Union[
-        List[sp.Symbol],
-        List[List[sp.Symbol]],
-        List[List[List[sp.Symbol]]],
-        List[List[List[List[sp.Symbol]]]],
-    ]
-
-    # Determine the correct function to call based on rank
-    if rank == 1:
-        IDX_OBJ_TMP = cast(
-            List[sp.Symbol], ixp.declarerank1(basename, dimension=dimension, **kwargs)
-        )
-    elif rank == 2:
-        IDX_OBJ_TMP = cast(
-            List[List[sp.Symbol]],
-            ixp.declarerank2(
-                basename, symmetry=symmetry, dimension=dimension, **kwargs
-            ),
-        )
-    elif rank == 3:
-        IDX_OBJ_TMP = cast(
-            List[List[List[sp.Symbol]]],
-            ixp.declarerank3(
-                basename, symmetry=symmetry, dimension=dimension, **kwargs
-            ),
-        )
-    elif rank == 4:
-        IDX_OBJ_TMP = cast(
-            List[List[List[List[sp.Symbol]]]],
-            ixp.declarerank4(
-                basename, symmetry=symmetry, dimension=dimension, **kwargs
-            ),
-        )
-    else:
+    # Step 1: Select the appropriate indexed expression declaration function from the factory.
+    declare_func = IXP_RANK_FUNC_MAP.get(rank)
+    if not declare_func:
         raise ValueError(f"Unsupported rank: {rank}. Rank must be between 1 and 4.")
 
-    # Flatten the list to register each gridfunction only once
-    flat_list = [
-        item
-        for sublist in flatten_list(IDX_OBJ_TMP)
-        for item in (sublist if isinstance(sublist, list) else [sublist])
-    ]
-    unique_gf_list = list(set(map(str, flat_list)))
+    # Step 2: Declare the SymPy object. Symmetry is only applicable for rank > 1.
+    declare_kwargs = kwargs.copy()
+    if rank > 1:
+        declare_kwargs["symmetry"] = symmetry
+    else:
+        # Remove symmetry kwarg if present, as declarerank1 does not accept it.
+        declare_kwargs.pop("symmetry", None)
 
-    # Manually adjust kwargs for registration
-    kwargs["is_basename"] = False
-    kwargs["rank"] = rank
-    register_gridfunctions(unique_gf_list, dimension, **kwargs)
+    indexed_obj = declare_func(basename, dimension=dimension, **declare_kwargs)
 
-    # Return the original nested list structure of SymPy symbols
-    return IDX_OBJ_TMP
+    # Step 3: Register each unique gridfunction component.
+    # Symmetries (e.g., gDD01=gDD10) result in duplicate SymPy objects in the nested list.
+    # We must extract the unique names to register each component only once.
+    unique_gf_names = _flatten_and_unique_str(cast(List[Any], indexed_obj))
+
+    # Manually adjust kwargs for registration of individual components.
+    kwargs.update({"is_basename": False, "rank": rank})
+    register_gridfunctions(unique_gf_names, dimension, **kwargs)
+
+    # Step 4: Return the original (potentially nested) list structure of SymPy symbols.
+    return cast(
+        Union[
+            List[sp.Symbol],
+            List[List[sp.Symbol]],
+            List[List[List[sp.Symbol]]],
+            List[List[List[List[sp.Symbol]]]],
+        ],
+        indexed_obj,
+    )
 
 
 # Outside the classes above, only define functions in grid.py that are used by multiple infrastructures
@@ -1081,6 +1033,9 @@ if __name__ == "__main__":
     import doctest
     import sys
 
+    # Set a default infrastructure to avoid errors in certain doctests.
+    # This is a common practice for making doctests runnable.
+    par.set_parval_from_str("Infrastructure", "ETLegacy")
     results = doctest.testmod()
 
     if results.failed > 0:
