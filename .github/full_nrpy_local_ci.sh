@@ -199,7 +199,7 @@ example_scripts_cuda_enabled=(
   "nrpy/examples/tovola_neutron_star.py project/tovola_neutron_star"
   "nrpy/examples/hydro_without_hydro.py project/hydro_without_hydro"
 )
-for script in "${example_scripts[@]}"; do
+for script in "${example_scripts_cuda_enabled[@]}"; do
   IFS=' ' read -r script_path project_path <<< "$script"
   echo ""
   echo "Running CUDA-enabled Python script: $script_path"
