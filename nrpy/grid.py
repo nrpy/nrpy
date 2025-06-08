@@ -7,7 +7,18 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union, cast
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+    Union,
+    cast,
+)
 
 import sympy as sp
 from typing_extensions import Literal
@@ -795,7 +806,7 @@ GridFunctionType = Union[
 glb_gridfcs_dict: Dict[str, GridFunctionType] = {}
 
 # Factory mapping for grid function classes based on infrastructure.
-GF_CLASS_MAP: Dict[str, type[GridFunctionType]] = {
+GF_CLASS_MAP: Dict[str, Type[GridFunctionType]] = {
     "BHaH": BHaHGridFunction,
     "ETLegacy": ETLegacyGridFunction,
     "CarpetX": CarpetXGridFunction,
