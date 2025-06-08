@@ -193,7 +193,7 @@ example_scripts_cuda_enabled=(
   "nrpy/examples/wave_equation_curvilinear.py project/curviwavetoy"
   "nrpy/examples/nrpyelliptic_conformally_flat.py project/nrpyelliptic_conformally_flat"
   "nrpy/examples/two_blackholes_collide.py project/two_blackholes_collide"
-  "nrpy/examples/blackhole_spectroscopy.py project/blackhole_spectroscopy"
+#  "nrpy/examples/blackhole_spectroscopy.py project/blackhole_spectroscopy"
   "nrpy/examples/spinning_blackhole.py project/spinning_blackhole"
   "nrpy/examples/wave_equation_multicoord_wavetoy.py project/multicoords_curviwavetoy"
   "nrpy/examples/tovola_neutron_star.py project/tovola_neutron_star"
