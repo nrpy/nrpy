@@ -16,8 +16,8 @@ from nrpy.helpers.generic import clang_format
 from nrpy.infrastructures.BHaH import griddata_commondata
 
 # The ordering of core_modules_list is based largely on data structure dependencies.
-# E.g., griddata_struct contains bc_struct.  Module names are parellel scheme dependent
-# Note: These are here such that they can be modified as needed by relevant modules (e.g. MoL)
+# E.g., griddata_struct contains bc_struct. Module names are parallel scheme dependent.
+# Note: These are here such that they can be modified as needed by relevant modules (e.g., MoL).
 core_modules_list = [
     "general",
     "after_general",
@@ -37,18 +37,17 @@ def register_griddata_struct_and_return_griddata_struct_str(
     enable_rfm_precompute: bool = True,
 ) -> str:
     """
-    Register contributions to the griddata struct from different modules and construct the griddata_struct string.
+    Register contributions to the griddata struct and construct its C-string definition.
 
-    :param enable_rfm_precompute: A boolean value reflecting whether reference metric precomputation is enabled.
-    :return: A string representing the typedef structure for grid data, including contributions from BHaH modules,
-             reference_metric, CurviBoundaryConditions, and masking, if applicable.
+    :param enable_rfm_precompute: Whether to enable reference metric precomputation.
+    :return: A string for the typedef of griddata_struct.
 
-    DocTests:
+    Doctests:
     >>> result = register_griddata_struct_and_return_griddata_struct_str()
     >>> isinstance(result, str)
     True
     """
-    # Step 1: Register griddata_struct contributions from all BHaH modules:
+    # Register griddata_struct contributions from BHaH modules.
     griddata_commondata.register_griddata_commondata(
         "params",
         "params_struct params",
@@ -72,7 +71,7 @@ typedef struct __griddata__ {
         griddata_struct_def += f"  // NRPy+ MODULE: {module}\n"
         for item in item_list:
             griddata_struct_def += f"  {item.c_declaration};"
-            if item.description != "":
+            if item.description:
                 griddata_struct_def += f"// <- {item.description}"
             griddata_struct_def += "\n"
     griddata_struct_def += "} griddata_struct;\n"
@@ -82,120 +81,71 @@ typedef struct __griddata__ {
 
 def parse_cparam_type(cparam_type: str) -> Tuple[str, Optional[str], bool]:
     """
-    Parse a cparam_type string into three parts.
+    Parse a cparam_type string into its base type, size, and array status.
 
-    - base     – the text before the first '['
-    - size     – the text inside the first '[ ]' (or None if not an array)
-    - is_array – True if the string contains '[...]', False otherwise
+    :param cparam_type: The raw CParam type string, e.g., "REAL[8]".
+    :return: A tuple (base, size, is_array).
+    :raises ValueError: If the array size is not a numeric string.
 
-    Examples
-    --------
+    Doctests:
     >>> parse_cparam_type("int")
     ('int', None, False)
-
     >>> parse_cparam_type("REAL[8]")
     ('REAL', '8', True)
-
     >>> parse_cparam_type("char[100]")
     ('char', '100', True)
-
     >>> parse_cparam_type("  REAL[ 16 ] ")
     ('REAL', '16', True)
-
-    # Invalid sizes must be numeric
     >>> parse_cparam_type("char[NAME]")  # doctest: +IGNORE_EXCEPTION_DETAIL
     Traceback (most recent call last):
     ...
     ValueError: Invalid array size 'NAME'
-
-    :param cparam_type: the raw CParam type string, e.g. "REAL[8]"
-    :return: a tuple (base, size, is_array)
-    :raises ValueError: if the bracket content is not a numeric string.
     """
-    # 1) Scalar if no brackets
     if "[" not in cparam_type or "]" not in cparam_type:
-        base = cparam_type.strip()
-        return base, None, False
+        return cparam_type.strip(), None, False
 
-    # 2) Otherwise split off base and remainder
     base, after = cparam_type.split("[", 1)
-    base = base.strip()
-
-    # 3) Extract size inside the first pair of brackets
     size_str, _ = after.split("]", 1)
     size = size_str.strip()
 
-    # 4) Validate numeric size
     if not size.isdigit():
         raise ValueError(f"Invalid array size '{size}'")
 
-    return base, size, True
+    return base.strip(), size, True
 
 
-def register_BHaH_defines(module: str, BHaH_defines: str) -> None:
+def register_BHaH_defines(module: str, bhah_defines_str: str) -> None:
     """
-    Register contributions from a given module to par.glb_extras_dict["BHaH_defines"] for BHaH_defines.h.
+    Register C-code definitions for a given module.
 
-    :param module: The name of the module for which the defines are being registered.
-    :param BHaH_defines: The contribution (string) to BHaH_defines.h.
+    :param module: The name of the module registering the definitions.
+    :param bhah_defines_str: The string containing the C-code definitions.
 
-    DocTests:
+    Doctests:
     >>> par.glb_extras_dict = {}
     >>> register_BHaH_defines('test_module', '#define TEST_MACRO 1')
     >>> 'test_module' in par.glb_extras_dict['BHaH_defines']
     True
     """
-    if "BHaH_defines" not in par.glb_extras_dict:
-        par.glb_extras_dict["BHaH_defines"] = {}
-
-    if module not in par.glb_extras_dict["BHaH_defines"].keys():
-        par.glb_extras_dict["BHaH_defines"][module] = BHaH_defines
-    else:
-        par.glb_extras_dict["BHaH_defines"][module] += BHaH_defines
+    bhah_defines_dict = par.glb_extras_dict.setdefault("BHaH_defines", {})
+    bhah_defines_dict[module] = bhah_defines_dict.get(module, "") + bhah_defines_str
 
 
-def output_BHaH_defines_h(
-    project_dir: str,
-    additional_includes: Optional[List[str]] = None,
-    restrict_pointer_type: str = "*restrict",
-    enable_intrinsics: bool = True,
-    intrinsics_header_lst: List[str] = ["simd_intrinsics.h"],
-    define_no_simd_UPWIND_ALG: bool = True,
-    enable_rfm_precompute: bool = True,
-    fin_NGHOSTS_add_one_for_upwinding_or_KO: bool = False,
-    DOUBLE_means: str = "double",
-    supplemental_defines_dict: Optional[Dict[str, str]] = None,
+def _register_general_defines(
+    additional_includes: Optional[List[str]],
+    enable_intrinsics: bool,
+    intrinsics_header_lst: List[str],
+    double_means: str,
 ) -> None:
-    r"""
-    Output C code header file with macro definitions and other configurations for the project.
-
-    :param project_dir: Directory where the project C code is output
-    :param additional_includes: Additional header files to be included in the output
-    :param restrict_pointer_type: Allow modifications of restrict pointer type.  Default is *restrict
-    :param enable_intrinsics: Flag to enable hardware intrinsics
-    :param intrinsics_header_lst: List of intrinsics header files
-    :param define_no_simd_UPWIND_ALG: Flag to #define a SIMD-less UPWIND_ALG. No need to define this if UPWIND_ALG() unused.
-    :param enable_rfm_precompute: A boolean value reflecting whether reference metric precomputation is enabled.
-    :param fin_NGHOSTS_add_one_for_upwinding_or_KO: Option to add one extra ghost zone for upwinding
-    :param DOUBLE_means: Overload DOUBLE macro type for specific calculations that require higher than single precision
-    :param supplemental_defines_dict: Additional key-value pairs to be included in the output file
-
-    DocTests:
-    >>> from nrpy.infrastructures.BHaH.MoLtimestepping import MoL_register_all
-    >>> import nrpy.finite_difference as fin
-    >>> from nrpy.helpers.generic import validate_strings
-    >>> MoL_register_all.register_CFunctions(register_MoL_step_forward_in_time=False)
-    >>> project_dir = Path("/tmp", "tmp_BHaH_defines_h")
-    >>> project_dir.mkdir(parents=True, exist_ok=True)
-    >>> output_BHaH_defines_h(project_dir=str(project_dir))
-    >>> validate_strings((project_dir / "BHaH_defines.h").read_text(), "BHaH_defines")
     """
-    project_Path = Path(project_dir)
-    project_Path.mkdir(parents=True, exist_ok=True)
+    Register general-purpose headers and macros.
 
-    ###############################
-    # GENERALLY USEFUL DEFINITIONS
-    gen_BHd_str = """#include <ctype.h>   // Character type functions, such as isdigit, isalpha, etc.
+    :param additional_includes: List of additional user-specified include files.
+    :param enable_intrinsics: Flag to enable hardware intrinsics.
+    :param intrinsics_header_lst: List of intrinsics header files.
+    :param double_means: C type for the DOUBLE macro.
+    """
+    general_defines_str = """#include <ctype.h>   // Character type functions, such as isdigit, isalpha, etc.
 #include <errno.h>   // Error number definitions
 #include <math.h>    // Transcendental functions, etc.
 #include <stdbool.h> // bool-typed variables
@@ -206,15 +156,16 @@ def output_BHaH_defines_h(
 #include <time.h>    // Time-related functions and types, such as time(), clock(),
 """
     if enable_intrinsics:
-        gen_BHd_str += "// output_BHaH_defines_h(...,enable_intrinsics=True) was called so we intrinsics headers:\n"
+        general_defines_str += "// output_BHaH_defines_h(...,enable_intrinsics=True) was called so we intrinsics headers:\n"
         for intr_header in intrinsics_header_lst:
-            gen_BHd_str += f"""#include "intrinsics/{intr_header}"\n"""
+            general_defines_str += f'#include "intrinsics/{intr_header}"\n'
     if additional_includes:
         for include in additional_includes:
-            gen_BHd_str += f'#include "{include}"\n'
-    REAL_means = par.parval_from_str("fp_type")
-    gen_BHd_str += f"""#define REAL {REAL_means}
-#define DOUBLE {DOUBLE_means}
+            general_defines_str += f'#include "{include}"\n'
+
+    real_means = par.parval_from_str("fp_type")
+    general_defines_str += f"""#define REAL {real_means}
+#define DOUBLE {double_means}
 
 // These macros for MIN(), MAX(), and SQR() ensure that if the arguments inside
 //   are a function/complex expression, the function/expression is evaluated
@@ -223,19 +174,19 @@ def output_BHaH_defines_h(
 // #define MIN(A, B) ( ((A) < (B)) ? (A) : (B) )
 // #define MAX(A, B) ( ((A) > (B)) ? (A) : (B) )
 // #define SQR(A) ((A) * (A))
-#define MIN(A, B) ({{ \
-    __typeof__(A) _a = (A); \
-    __typeof__(B) _b = (B); \
-    _a < _b ? _a : _b; \
+#define MIN(A, B) ({{ \\
+    __typeof__(A) _a = (A); \\
+    __typeof__(B) _b = (B); \\
+    _a < _b ? _a : _b; \\
 }})
-#define MAX(A, B) ({{ \
-    __typeof__(A) _a = (A); \
-    __typeof__(B) _b = (B); \
-    _a > _b ? _a : _b; \
+#define MAX(A, B) ({{ \\
+    __typeof__(A) _a = (A); \\
+    __typeof__(B) _b = (B); \\
+    _a > _b ? _a : _b; \\
 }})
-#define SQR(A) ({{ \
-    __typeof__(A) _a = (A); \
-    _a * _a; \
+#define SQR(A) ({{ \\
+    __typeof__(A) _a = (A); \\
+    _a * _a; \\
 }})
 #ifndef MAYBE_UNUSED
 #if __cplusplus >= 201703L
@@ -247,117 +198,101 @@ def output_BHaH_defines_h(
 #endif // END check for GCC, Clang, or NVCC
 #endif // END MAYBE_UNUSED
 """
-
-    code_params_includes_define_type = False
-    for CPname, CodeParam in par.glb_code_params_dict.items():
-        CPtype = CodeParam.cparam_type
-        if CPtype == "#define":
-            if not code_params_includes_define_type:
-                code_params_includes_define_type = True
-                gen_BHd_str += "// START: CodeParameters declared as #define.\n"
-            gen_BHd_str += f"""#ifndef {CPname}
-#define {CPname} {CodeParam.defaultvalue} // {CodeParam.module}
+    has_define_type_params = False
+    for cp_name, code_param in par.glb_code_params_dict.items():
+        if code_param.cparam_type == "#define":
+            if not has_define_type_params:
+                has_define_type_params = True
+                general_defines_str += "// START: CodeParameters declared as #define.\n"
+            general_defines_str += f"""#ifndef {cp_name}
+#define {cp_name} {code_param.defaultvalue} // {code_param.module}
 #endif
 """
-    if code_params_includes_define_type:
-        gen_BHd_str += "// END: CodeParameters declared as #define.\n"
-    register_BHaH_defines("general", gen_BHd_str)
+    if has_define_type_params:
+        general_defines_str += "// END: CodeParameters declared as #define.\n"
+    register_BHaH_defines("general", general_defines_str)
 
-    #####################################
-    # PARAMS_STRUCT AND COMMONDATA_STRUCT
-    # Generate C code to declare C params_struct & commondata_struct;
-    #         output to "declare_Cparameters_struct.h"
-    #         We want the elements of this struct to be *sorted*,
-    #         to ensure that the struct is consistently ordered
-    #         for checkpointing purposes.
-    par_BHd_str = "typedef struct __params_struct__ {\n"
-    commondata_BHd_str = "typedef struct __commondata_struct__ {\n"
-    CCodelines_params_struct: List[str] = []
-    CCodelines_commondata_struct: List[str] = []
 
-    # Helper function to format C declarations without using regex
+def _register_param_structs() -> None:
+    """Register `params_struct` and `commondata_struct` definitions."""
+
     def format_c_declaration(
-        cp_type: str, var_name: str, module: str, description: str
+        c_type: str, var_name: str, module: str, description: str
     ) -> str:
         """
-        Given a CodeParameter type, variable name, module, and description, return the correct C declaration string.
-        Handles both scalar and array types using simple string operations.
+        Format a C declaration for a struct member.
 
-        :param cp_type: The type of the C parameter (e.g., "REAL" or "int[8]").
+        :param c_type: The C type of the variable (e.g., "REAL" or "int[8]").
         :param var_name: The name of the variable.
-        :param module: The module name to be included in the comment.
-        :param description: A description of the parameter to be appended to the comment.
-                            If empty, only the module and variable name are included in the comment.
-
-        :return: A formatted C declaration string with an inline comment.
+        :param module: The module defining the variable.
+        :param description: The description of the variable.
+        :return: A formatted C declaration string with comments.
         """
-        base, size, is_array = parse_cparam_type(cp_type)
-        if is_array:
-            if base.startswith("char"):
-                # Handle char arrays
-                decl = f"  char {var_name}[{size}];"
+        base, size, is_array = parse_cparam_type(c_type)
+        decl = (
+            f"  char {var_name}[{size}];"
+            if is_array and base.startswith("char")
+            else (
+                f"  {base} {var_name}[{size}];" if is_array else f"  {base} {var_name};"
+            )
+        )
+        comment = f" // {description} ({module})" if description else f" // ({module})"
+        return f"{decl}{comment}\n"
+
+    params_struct_lines: List[str] = []
+    commondata_struct_lines: List[str] = []
+
+    for cp_name, code_param in par.glb_code_params_dict.items():
+        if code_param.cparam_type != "#define":
+            c_declaration = format_c_declaration(
+                code_param.cparam_type,
+                cp_name,
+                code_param.module,
+                code_param.description.strip(),
+            )
+            if code_param.commondata:
+                commondata_struct_lines.append(c_declaration)
             else:
-                decl = f"  {base} {var_name}[{size}];"
-        else:
-            decl = f"  {base} {var_name};"
-
-        # Conditional comment based on description
-        if description:
-            comment = f" // {description} ({module})"
-        else:
-            comment = f" // ({module})"
-
-        return decl + comment + "\n"
-
-    # Add all CodeParameters
-    # Iterate through the global code parameters dictionary
-    for CPname, CodeParam in par.glb_code_params_dict.items():
-        CPtype = CodeParam.cparam_type
-        if CPtype != "#define":
-            # All CodeParams have a description field
-            description = CodeParam.description.strip()
-            module = CodeParam.module
-            c_declaration = format_c_declaration(CPtype, CPname, module, description)
-            # Append c_declaration to the appropriate structure: commondata or params
-            if CodeParam.commondata:
-                CCodelines_commondata_struct.append(c_declaration)
-            else:
-                CCodelines_params_struct.append(c_declaration)
+                params_struct_lines.append(c_declaration)
 
     if "commondata_struct" in par.glb_extras_dict:
         for module, item_list in par.glb_extras_dict["commondata_struct"].items():
             for item in item_list:
                 c_code_line = f"  {item.c_declaration};"
-                if item.description != "":
+                if item.description:
                     c_code_line += f" // <- {module}: {item.description}"
-                CCodelines_commondata_struct.append(c_code_line + "\n")
+                commondata_struct_lines.append(f"{c_code_line}\n")
 
-    # Sort CCodelines_params_struct and append them to the par_BHd_str
-    for line in sorted(CCodelines_params_struct):
-        par_BHd_str += line
-    # Sort CCodelines_commondata_struct and append them to the commondata_BHd_str
-    for line in sorted(CCodelines_commondata_struct):
-        commondata_BHd_str += line
+    params_struct_str = "typedef struct __params_struct__ {\n"
+    params_struct_str += "".join(sorted(params_struct_lines))
+    params_struct_str += "} params_struct;\n"
 
-    par_BHd_str += "} params_struct;\n"
-    commondata_BHd_str += "} commondata_struct;\n"
+    commondata_struct_str = "typedef struct __commondata_struct__ {\n"
+    commondata_struct_str += "".join(sorted(commondata_struct_lines))
+    commondata_struct_str += "} commondata_struct;\n"
 
-    register_BHaH_defines("params_struct", par_BHd_str)
-    register_BHaH_defines("commondata_struct", commondata_BHd_str)
+    register_BHaH_defines("params_struct", params_struct_str)
+    register_BHaH_defines("commondata_struct", commondata_struct_str)
 
-    ###############################
-    # FINITE DIFFERENCE
-    # First register C functions needed by finite_difference
 
-    # Then set up the dictionary entry for finite_difference in BHaH_defines
+def _register_finite_difference_defines(
+    add_one_for_upwinding: bool, enable_intrinsics: bool, define_no_simd_upwind: bool
+) -> None:
+    """
+    Register finite difference C-code definitions.
+
+    :param add_one_for_upwinding: Flag to add an extra ghost zone for upwinding.
+    :param enable_intrinsics: Flag to enable hardware intrinsics.
+    :param define_no_simd_upwind: Flag to define a non-SIMD UPWIND_ALG macro.
+    """
     if any("finite_difference" in key for key in sys.modules):
-        NGHOSTS = int(par.parval_from_str("finite_difference::fd_order") / 2)
-        if fin_NGHOSTS_add_one_for_upwinding_or_KO:
-            NGHOSTS += 1
-        fin_BHd_str = f"""
+        nghosts = int(par.parval_from_str("finite_difference::fd_order") / 2)
+        if add_one_for_upwinding:
+            nghosts += 1
+        fd_defines_str = f"""
 // Set the number of ghost zones
 // Note that upwinding in e.g., BSSN requires that NGHOSTS = fd_order/2 + 1 <- Notice the +1.
-#define NGHOSTS {NGHOSTS}
+#define NGHOSTS {nghosts}
 
 // Declare NO_INLINE macro, used in FD functions. GCC v10+ compilations hang on complex RHS expressions (like BSSN) without this.
 #if defined(__GNUC__) || defined(__clang__) || defined(__INTEL_COMPILER)
@@ -368,18 +303,22 @@ def output_BHaH_defines_h(
     #define NO_INLINE // Fallback for unknown compilers
 #endif
 """
-        if not enable_intrinsics and define_no_simd_UPWIND_ALG:
-            fin_BHd_str += """
+        if not enable_intrinsics and define_no_simd_upwind:
+            fd_defines_str += """
 // When enable_intrinsics = False, this is the UPWIND_ALG() macro:
 #define UPWIND_ALG(UpwindVecU) UpwindVecU > 0.0 ? 1.0 : 0.0
 """
-        register_BHaH_defines("finite_difference", fin_BHd_str)
+        register_BHaH_defines("finite_difference", fd_defines_str)
 
-    ###############################
-    # GRID, etc.
-    # Then set up the dictionary entry for grid in BHaH_defines
-    gri_BHd_str = gri.BHaHGridFunction.gridfunction_defines()
-    gri_BHd_str += r"""
+
+def _register_grid_defines(enable_rfm_precompute: bool) -> None:
+    """
+    Register grid-related C-code definitions.
+
+    :param enable_rfm_precompute: Flag for reference metric precomputation.
+    """
+    grid_defines_str = gri.BHaHGridFunction.gridfunction_defines()
+    grid_defines_str += r"""
 // ----------------------------
 // Indexing macros
 // ----------------------------
@@ -449,20 +388,75 @@ def output_BHaH_defines_h(
     griddata_struct_def = register_griddata_struct_and_return_griddata_struct_str(
         enable_rfm_precompute=enable_rfm_precompute
     )
-    # Add a newline as needed:
     if not griddata_struct_def.startswith("\n"):
         griddata_struct_def = "\n" + griddata_struct_def
-    gri_BHd_str += griddata_struct_def
+    grid_defines_str += griddata_struct_def
 
-    register_BHaH_defines("grid", gri_BHd_str)
+    register_BHaH_defines("grid", grid_defines_str)
 
+
+def output_BHaH_defines_h(
+    project_dir: str,
+    additional_includes: Optional[List[str]] = None,
+    restrict_pointer_type: str = "*restrict",
+    enable_intrinsics: bool = True,
+    intrinsics_header_lst: Optional[List[str]] = None,
+    define_no_simd_UPWIND_ALG: bool = True,
+    enable_rfm_precompute: bool = True,
+    fin_NGHOSTS_add_one_for_upwinding_or_KO: bool = False,
+    DOUBLE_means: str = "double",
+    supplemental_defines_dict: Optional[Dict[str, str]] = None,
+) -> None:
+    r"""
+    Output C code header file with macro definitions and other configurations.
+
+    :param project_dir: Directory where the project C code is output.
+    :param additional_includes: Additional header files to include.
+    :param restrict_pointer_type: Pointer type for restrict, e.g., "*restrict".
+    :param enable_intrinsics: Flag to enable hardware intrinsics.
+    :param intrinsics_header_lst: List of intrinsics header files.
+    :param define_no_simd_UPWIND_ALG: Flag to define a non-SIMD UPWIND_ALG.
+    :param enable_rfm_precompute: Flag for reference metric precomputation.
+    :param fin_NGHOSTS_add_one_for_upwinding_or_KO: Add ghost zone for upwinding.
+    :param DOUBLE_means: C type for the DOUBLE macro.
+    :param supplemental_defines_dict: Additional key-value pairs for defines.
+
+    Doctests:
+    >>> from nrpy.infrastructures.BHaH.MoLtimestepping import MoL_register_all
+    >>> import nrpy.finite_difference as fin
+    >>> from nrpy.helpers.generic import validate_strings
+    >>> MoL_register_all.register_CFunctions(register_MoL_step_forward_in_time=False)
+    >>> project_path = Path("/tmp", "tmp_BHaH_defines_h")
+    >>> project_path.mkdir(parents=True, exist_ok=True)
+    >>> output_BHaH_defines_h(project_dir=str(project_path))
+    >>> validate_strings((project_path / "BHaH_defines.h").read_text(), "BHaH_defines")
+    """
+    if intrinsics_header_lst is None:
+        intrinsics_header_lst = ["simd_intrinsics.h"]
+
+    project_path = Path(project_dir)
+    project_path.mkdir(parents=True, exist_ok=True)
+
+    # Step 1: Register all defines by calling helper functions.
+    _register_general_defines(
+        additional_includes, enable_intrinsics, intrinsics_header_lst, DOUBLE_means
+    )
+    _register_param_structs()
+    _register_finite_difference_defines(
+        fin_NGHOSTS_add_one_for_upwinding_or_KO,
+        enable_intrinsics,
+        define_no_simd_UPWIND_ALG,
+    )
+    _register_grid_defines(enable_rfm_precompute)
+
+    # Step 2: Assemble the final header file content.
     def output_key(key_name: str, item_name: str) -> str:
         """
-        Format a string for outputting the definitions for a specific module.
+        Format a C-code block for a given module.
 
-        :param key_name: The name of the module or key.
-        :param item_name: The definitions or content associated with the module.
-        :return: A formatted string containing the module name and its content.
+        :param key_name: The name of the module.
+        :param item_name: The C-code content for the module.
+        :return: A formatted string containing the module's definitions.
         """
         return f"""
 // ----------------------------
@@ -476,23 +470,20 @@ def output_BHaH_defines_h(
 // BHaH core header file, automatically generated from output_BHaH_defines_h within BHaH_defines_h.py,
 //    DO NOT EDIT THIS FILE BY HAND.\n\n"""
 
-    # Populate BHaH_defines.h with core modules
+    registered_defines = par.glb_extras_dict.get("BHaH_defines", {})
     for core_module in core_modules_list:
-        if core_module in par.glb_extras_dict["BHaH_defines"].keys():
-            file_output_str += output_key(
-                core_module, par.glb_extras_dict["BHaH_defines"][core_module]
-            )
+        if core_module in registered_defines:
+            file_output_str += output_key(core_module, registered_defines[core_module])
 
-    # Populate BHaH_defines.h with non-core modules
-    for key, item in sorted(par.glb_extras_dict["BHaH_defines"].items()):
+    for key, item in sorted(registered_defines.items()):
         if key not in core_modules_list:
             print(f"Outputting non-core modules key = {key} to BHaH_defines.h")
             file_output_str += output_key(key, item)
 
-    # Populate BHaH_defines.h with whatever else is desired.
     if supplemental_defines_dict:
-        for key in supplemental_defines_dict:
-            file_output_str += output_key(key, supplemental_defines_dict[key])
+        for key, value in supplemental_defines_dict.items():
+            file_output_str += output_key(key, value)
+
     file_output_str += """
     #ifndef BHAH_TYPEOF
     #if __cplusplus >= 2000707L
@@ -532,34 +523,48 @@ def output_BHaH_defines_h(
     parallelization = par.parval_from_str("parallelization")
 
     if parallelization != "openmp":
+        malloc_func = parallel_utils.get_memory_malloc_function(parallelization)
+        check_err_malloc = parallel_utils.get_check_errors_str(
+            parallelization, malloc_func, opt_msg='Malloc: "#a" failed'
+        )
+        free_func = parallel_utils.get_memory_free_function(parallelization)
+        check_err_free = parallel_utils.get_check_errors_str(
+            parallelization, free_func, opt_msg='Free: "#a" failed'
+        )
         file_output_str += rf"""
     #define BHAH_MALLOC_DEVICE(a, sz) \
     do {{ \
-        {parallel_utils.get_memory_malloc_function(parallelization)}(&a, sz); \
-        {parallel_utils.get_check_errors_str(parallelization, parallel_utils.get_memory_malloc_function(parallelization), opt_msg='Malloc: "#a" failed')} \
+        {malloc_func}(&a, sz); \
+        {check_err_malloc} \
     }} while(0);
     #define BHAH_FREE_DEVICE(a) \
     do {{ \
         if (a) {{ \
-            {parallel_utils.get_memory_free_function(parallelization)}((void*)(a)); \
-            {parallel_utils.get_check_errors_str(parallelization, parallel_utils.get_memory_free_function(parallelization), opt_msg='Free: "#a" failed')} \
+            {free_func}((void*)(a)); \
+            {check_err_free} \
             (a) = nullptr; \
         }} \
     }} while (0);
 """
     if parallelization == "cuda":
+        check_err_malloc_host = parallel_utils.get_check_errors_str(
+            parallelization, "cudaMallocHost", opt_msg='Malloc: "#a" failed'
+        )
+        check_err_free_host = parallel_utils.get_check_errors_str(
+            parallelization, "cudaFreeHost", opt_msg='Free: "#a" failed'
+        )
         file_output_str += rf"""
     #define BHAH_MALLOC_PINNED(a, sz) \
     do {{ \
         cudaMallocHost((void**)&a, sz); \
-        {parallel_utils.get_check_errors_str(parallelization, "cudaMallocHost", opt_msg='Malloc: "#a" failed')} \
+        {check_err_malloc_host} \
     }} while (0);
 
     #define BHAH_FREE_PINNED(a) \
     do {{ \
         if (a) {{ \
             cudaFreeHost((void*)(a)); \
-            {parallel_utils.get_check_errors_str(parallelization, "cudaFreeHost", opt_msg='Free: "#a" failed')} \
+            {check_err_free_host} \
             (a) = nullptr; \
         }} \
     }} while (0);
@@ -584,12 +589,13 @@ def output_BHaH_defines_h(
     }} while(0);
 """
     if parallelization in ["cuda"]:
-        file_output_str += f"#define BHAH_DEVICE_SYNC() {parallel_utils.get_device_sync_function(parallelization)}\n"
+        sync_func = parallel_utils.get_device_sync_function(parallelization)
+        file_output_str += f"#define BHAH_DEVICE_SYNC() {sync_func}\n"
     file_output_str += r"#endif"
 
     file_output_str = file_output_str.replace("*restrict", restrict_pointer_type)
 
-    bhah_defines_file = project_Path / "BHaH_defines.h"
+    bhah_defines_file = project_path / "BHaH_defines.h"
     with bhah_defines_file.open("w", encoding="utf-8") as file:
         file.write(clang_format(file_output_str))
 
