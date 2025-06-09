@@ -1,6 +1,5 @@
 """
-C function registration for converting between grid coordinate (xx0,xx1,xx2)
-(uniform grid spacing) to Cartesian coordinate (x,y,z).
+C function registration for converting between grid coordinate (xx0,xx1,xx2) (uniform grid spacing) to Cartesian coordinate (x,y,z).
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
