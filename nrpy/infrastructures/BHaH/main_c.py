@@ -11,6 +11,284 @@ import nrpy.c_function as cfc
 import nrpy.params as par
 
 
+def _check_required_functions() -> None:
+    """
+    Check for all required C functions for BHaH main().
+
+    :raises ValueError: If any required C functions are not registered.
+    """
+    required_functions: List[Tuple[str, str]] = [
+        ("params_struct_set_to_default", "CodeParameters.py"),
+        ("commondata_struct_set_to_default", "CodeParameters.py"),
+        ("cmdline_input_and_parfile_parser", "cmdline_input_and_parfiles.py"),
+        (
+            "numerical_grids_and_timestep",
+            "e.g., numerical_grids_and_timestep.py or user defined",
+        ),
+        ("MoL_malloc_y_n_gfs", "MoL.py"),
+        ("MoL_malloc_non_y_n_gfs", "MoL.py"),
+        ("initial_data", "initial_data.py"),
+        ("MoL_step_forward_in_time", "MoL.py"),
+        ("diagnostics", "diagnostics.py"),
+        ("MoL_free_memory_y_n_gfs", "MoL.py"),
+        ("MoL_free_memory_non_y_n_gfs", "MoL.py"),
+    ]
+
+    missing_functions = [
+        func_tuple
+        for func_tuple in required_functions
+        if func_tuple[0] not in cfc.CFunction_dict
+    ]
+
+    if missing_functions:
+        error_msg = "Error: These functions are required for all BHaH main() functions, and are not registered.\n"
+        for name, origin in missing_functions:
+            error_msg += f'  {name}, registered by function within "{origin}"\n'
+        raise ValueError(error_msg)
+
+
+def _generate_main_desc(
+    MoL_method: str,
+    initial_data_desc: str,
+    set_initial_data_after_auxevol_malloc: bool,
+    boundary_conditions_desc: str,
+    post_non_y_n_auxevol_mallocs: str,
+) -> str:
+    """
+    Generate the descriptive comment block for the main() C function.
+
+    :param MoL_method: Method of Lines algorithm.
+    :param initial_data_desc: Description for initial data.
+    :param set_initial_data_after_auxevol_malloc: Flag to set initial data after auxevol malloc.
+    :param boundary_conditions_desc: Description of the boundary conditions.
+    :param post_non_y_n_auxevol_mallocs: String of post-malloc function calls.
+    :return: The formatted description string for the C function.
+    """
+    # Define descriptions for steps that can be reordered.
+    allocate_auxevol_desc = "Allocate storage for non-y_n gridfunctions needed for the Runge-Kutta-like time-stepping."
+    set_initial_data_desc = f"Set {initial_data_desc} initial data."
+
+    # Determine the order of Step 3 and 4 descriptions based on the input flag.
+    step3_desc, step4_desc = (
+        (allocate_auxevol_desc, set_initial_data_desc)
+        if set_initial_data_after_auxevol_malloc
+        else (set_initial_data_desc, allocate_auxevol_desc)
+    )
+
+    # Build the main description string.
+    desc = f"""-={{ main() function }}=-
+Step 1.a: Initialize each CodeParameter in the commondata struct to its default value.
+Step 1.b: Overwrite the default values with those from the parameter file.
+          Then overwrite the parameter file values with those provided via command line arguments.
+Step 1.c: Allocate memory for MAXNUMGRIDS griddata structs,
+          where each structure contains data specific to an individual grid.
+Step 1.d: Initialize each CodeParameter in griddata.params to its default value.
+Step 1.e: Set up numerical grids, including parameters such as NUMGRIDS, xx[3], masks, Nxx, dxx, invdxx,
+          bcstruct, rfm_precompute, timestep, and others.
+Step 2: Allocate storage for the initial data (y_n_gfs gridfunctions) on each grid.
+Step 3: {step3_desc}
+Step 4: {step4_desc}
+"""
+    if post_non_y_n_auxevol_mallocs:
+        # This string is appended without a preceding newline to match original output.
+        desc += "Step 4.a: Post-initial-data functions called after memory for non-y_n and auxevol gridfunctions is allocated."
+
+    desc += f"""Step 5: MAIN SIMULATION LOOP
+- Step 5.a: Functions to run prior to diagnostics. E.g., regridding.
+- Step 5.b: Output diagnostics.
+- Step 5.c: Prepare to step forward in time.
+- Step 5.d: Step forward in time using Method of Lines with {MoL_method} algorithm, applying {boundary_conditions_desc} boundary conditions.
+- Step 5.e: Finish up step in time.
+Step 6: Free all allocated memory."""
+    return desc
+
+
+def _generate_main_body(
+    MoL_method: str,
+    set_initial_data_after_auxevol_malloc: bool,
+    boundary_conditions_desc: str,
+    post_non_y_n_auxevol_mallocs: str,
+    pre_diagnostics: str,
+    pre_MoL_step_forward_in_time: str,
+    post_MoL_step_forward_in_time: str,
+) -> str:
+    """
+    Generate the C code for the body of the main() function.
+
+    :param MoL_method: Method of Lines algorithm.
+    :param set_initial_data_after_auxevol_malloc: Flag to set initial data after auxevol malloc.
+    :param boundary_conditions_desc: Description of the boundary conditions.
+    :param post_non_y_n_auxevol_mallocs: String of post-malloc function calls.
+    :param pre_diagnostics: String of pre-diagnostics function calls.
+    :param pre_MoL_step_forward_in_time: String of pre-MoL step function calls.
+    :param post_MoL_step_forward_in_time: String of post-MoL step function calls.
+    :return: The formatted C code for the function body.
+    """
+    parallelization = par.parval_from_str("parallelization")
+    is_cuda = parallelization == "cuda"
+    compute_griddata = "griddata_device" if is_cuda else "griddata"
+
+    body_parts = []
+
+    # Step 0: Variable declarations
+    body_parts.append(
+        "commondata_struct commondata; // commondata contains parameters common to all grids.\n"
+    )
+    griddata_declare = f"griddata_struct *restrict {compute_griddata}; // griddata contains data specific to an individual grid.\n"
+    if is_cuda:
+        griddata_declare += r"""griddata_struct *restrict griddata_host; // stores only the host data needed for diagnostics
+#include "BHaH_CUDA_global_init.h"
+"""
+    body_parts.append(griddata_declare)
+
+    # Step 1: Initialization
+    step1_code = f"""
+// Step 1.a: Initialize each CodeParameter in the commondata struct to its default value.
+commondata_struct_set_to_default(&commondata);
+
+// Step 1.b: Overwrite the default values with those from the parameter file.
+//           Then overwrite the parameter file values with those provided via command line arguments.
+cmdline_input_and_parfile_parser(&commondata, argc, argv);
+
+// Step 1.c: Allocate memory for MAXNUMGRIDS griddata structs,
+//           where each structure contains data specific to an individual grid.
+{compute_griddata} = (griddata_struct *restrict)malloc(sizeof(griddata_struct)*MAXNUMGRIDS);
+"""
+    if is_cuda:
+        step1_code += "griddata_host = (griddata_struct *)malloc(sizeof(griddata_struct) * MAXNUMGRIDS);\n"
+    step1_code += f"""
+// Step 1.d: Initialize each CodeParameter in {compute_griddata}.params to its default value.
+params_struct_set_to_default(&commondata, {compute_griddata});
+
+// Step 1.e: Set up numerical grids, including parameters such as NUMGRIDS, xx[3], masks, Nxx, dxx, invdxx,
+//           bcstruct, rfm_precompute, timestep, and others.
+{{
+  // If this function is being called for the first time, initialize commondata.time, nn, t_0, and nn_0 to 0.
+  const bool calling_for_first_time = true;
+  numerical_grids_and_timestep({'&commondata, ' + (f'{compute_griddata}, griddata_host,' if is_cuda else f'{compute_griddata},')} calling_for_first_time);
+}}
+"""
+    body_parts.append(step1_code)
+
+    # Step 2: Allocate memory for evolved gridfunctions (y_n_gfs)
+    step2_code = f"""
+for(int grid=0; grid<commondata.NUMGRIDS; grid++) {{
+  // Step 2: Allocate storage for the initial data (y_n_gfs gridfunctions) on each grid.
+  MoL_malloc_y_n_gfs(&commondata, &{compute_griddata}[grid].params, &{compute_griddata}[grid].gridfuncs);
+}}
+"""
+    if is_cuda:
+        step2_code += f"""
+for(int grid=0; grid<commondata.NUMGRIDS; grid++) {{
+  // Step 2.b: Allocate host storage for diagnostics
+  CUDA__malloc_host_gfs(&commondata, &{compute_griddata}[grid].params, &griddata_host[grid].gridfuncs);
+  CUDA__malloc_host_aux_gfs(&commondata, &{compute_griddata}[grid].params, &griddata_host[grid].gridfuncs);
+  CUDA__malloc_host_diagnostic_gfs(&commondata, &{compute_griddata}[grid].params, &griddata_host[grid].gridfuncs);
+}}
+"""
+    body_parts.append(step2_code)
+
+    # Steps 3 & 4: Set initial data and allocate memory for auxiliary gridfunctions.
+    initial_data_call = f"initial_data(&commondata, {f'griddata_host, {compute_griddata}' if is_cuda else compute_griddata});"
+    setup_initial_data_code = f"Set up initial data.\n{initial_data_call}\n"
+    allocate_storage_code = f"""Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping.
+for(int grid=0; grid<commondata.NUMGRIDS; grid++)
+  MoL_malloc_non_y_n_gfs(&commondata, &{compute_griddata}[grid].params, &{compute_griddata}[grid].gridfuncs);\n"""
+
+    step3_code, step4_code = (
+        (allocate_storage_code, setup_initial_data_code)
+        if set_initial_data_after_auxevol_malloc
+        else (setup_initial_data_code, allocate_storage_code)
+    )
+    body_parts.append(f"\n// Step 3: {step3_code}\n// Step 4: {step4_code}")
+
+    if post_non_y_n_auxevol_mallocs:
+        body_parts.append(
+            "// Step 4.a: Functions called after memory for non-y_n and auxevol gridfunctions is allocated.\n"
+        )
+        body_parts.append(post_non_y_n_auxevol_mallocs)
+
+    # Step 5: Main simulation loop
+    diagnostics_call_args = f"&commondata, {f'{compute_griddata}, griddata_host' if is_cuda else compute_griddata}"
+    loop_part_1 = """
+// Step 5: MAIN SIMULATION LOOP
+while(commondata.time < commondata.t_final) { // Main loop to progress forward in time.
+  // Step 5.a: Main loop, part 1 (pre_diagnostics): Functions to run prior to diagnostics. E.g., regridding.
+"""
+    body_parts.append(loop_part_1)
+    if pre_diagnostics:
+        body_parts.append(pre_diagnostics)
+    else:
+        body_parts.append(
+            "// (nothing here; specify by setting pre_diagnostics string in register_CFunction_main_c().)\n"
+        )
+
+    loop_part_2 = f"""
+  // Step 5.b: Main loop, part 2: Output diagnostics
+  diagnostics({diagnostics_call_args});
+
+  // Step 5.c: Main loop, part 3 (pre_MoL_step_forward_in_time): Prepare to step forward in time
+"""
+    body_parts.append(loop_part_2)
+    if pre_MoL_step_forward_in_time:
+        body_parts.append(pre_MoL_step_forward_in_time)
+    else:
+        body_parts.append(
+            "// (nothing here; specify by setting pre_MoL_step_forward_in_time string in register_CFunction_main_c().)\n"
+        )
+
+    loop_part_3 = f"""
+  // Step 5.d: Main loop, part 4: Step forward in time using Method of Lines with {MoL_method} algorithm,
+  //           applying {boundary_conditions_desc} boundary conditions.
+  MoL_step_forward_in_time(&commondata, {compute_griddata});
+
+  // Step 5.e: Main loop, part 5 (post_MoL_step_forward_in_time): Finish up step in time
+"""
+    body_parts.append(loop_part_3)
+    if post_MoL_step_forward_in_time:
+        body_parts.append(post_MoL_step_forward_in_time)
+    else:
+        body_parts.append(
+            "  // (nothing here; specify by setting post_MoL_step_forward_in_time string in register_CFunction_main_c().)\n"
+        )
+
+    # Step 6: Free all allocated memory
+    device_sync = "BHAH_DEVICE_SYNC();" if is_cuda else ""
+    free_memory_code = ""
+    if is_cuda:
+        free_memory_code = rf"""
+  const bool free_non_y_n_gfs_and_core_griddata_pointers=true;
+  griddata_free_device(&commondata, {compute_griddata}, free_non_y_n_gfs_and_core_griddata_pointers);
+  griddata_free(&commondata, griddata_host, free_non_y_n_gfs_and_core_griddata_pointers);
+}}
+for (int i = 0; i < NUM_STREAMS; ++i) {{
+  cudaStreamDestroy(streams[i]);
+}}
+BHAH_DEVICE_SYNC();
+cudaDeviceReset();
+"""
+    else:
+        free_memory_code = rf"""
+  const bool free_non_y_n_gfs_and_core_griddata_pointers=true;
+  griddata_free(&commondata, {compute_griddata}, free_non_y_n_gfs_and_core_griddata_pointers);
+}}
+"""
+    loop_part_4 = f"""
+}} // End main loop to progress forward in time.
+{device_sync}
+// Step 6: Free all allocated memory
+{{{free_memory_code}"""
+    body_parts.append(loop_part_4)
+    body_parts.append(
+        r"""return 0;
+"""
+    )
+
+    # Construct the final body string and perform necessary replacements.
+    body = "".join(body_parts)
+    return body.replace("*restrict", "*")
+
+
 def register_CFunction_main_c(
     MoL_method: str,
     initial_data_desc: str = "",
@@ -34,7 +312,6 @@ def register_CFunction_main_c(
     :param pre_diagnostics: Function calls prior to diagnostics; e.g., regridding. Default is an empty string.
     :param pre_MoL_step_forward_in_time: Function calls AFTER diagnostics and prior to each right-hand-side update, default is an empty string.
     :param post_MoL_step_forward_in_time: Function calls after each right-hand-side update, default is an empty string.
-    :raises ValueError: Raised if any required function for BHaH main() is not registered.
 
     Doctest:
     >>> import nrpy.c_function as cfc
@@ -68,235 +345,41 @@ def register_CFunction_main_c(
     ...    validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
     Setting up reference_metric[Cartesian]...
     """
+    # Step 1: Check for all required functions.
+    _check_required_functions()
+
+    # Step 2: Set up parameters and include files based on parallelization.
     parallelization = par.parval_from_str("parallelization")
-    # Make sure all required C functions are registered
-    missing_functions: List[Tuple[str, str]] = []
-    for func_tuple in [
-        ("params_struct_set_to_default", "CodeParameters.py"),
-        ("commondata_struct_set_to_default", "CodeParameters.py"),
-        ("cmdline_input_and_parfile_parser", "cmdline_input_and_parfiles.py"),
-        (
-            "numerical_grids_and_timestep",
-            "e.g., numerical_grids_and_timestep.py or user defined",
-        ),
-        ("MoL_malloc_y_n_gfs", "MoL.py"),
-        ("MoL_malloc_non_y_n_gfs", "MoL.py"),
-        ("initial_data", "initial_data.py"),
-        ("MoL_step_forward_in_time", "MoL.py"),
-        ("diagnostics", "diagnostics.py"),
-        ("MoL_free_memory_y_n_gfs", "MoL.py"),
-        ("MoL_free_memory_non_y_n_gfs", "MoL.py"),
-    ]:
-        if func_tuple[0] not in cfc.CFunction_dict:
-            missing_functions += [func_tuple]
-    if missing_functions:
-        error_msg = "Error: These functions are required for all BHaH main() functions, and are not registered.\n"
-        for func_tuple in missing_functions:
-            error_msg += (
-                f'  {func_tuple[0]}, registered by function within "{func_tuple[1]}"\n'
-            )
-        raise ValueError(error_msg)
-
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    includes += ["BHaH_global_device_defines.h"] if parallelization in ["cuda"] else []
-    allocate_auxevol_desc = "Allocate storage for non-y_n gridfunctions needed for the Runge-Kutta-like time-stepping."
-    set_initial_data_desc = f"Set {initial_data_desc} initial data."
-    step3desc = set_initial_data_desc
-    step4desc = allocate_auxevol_desc
-    if set_initial_data_after_auxevol_malloc:
-        step3desc = allocate_auxevol_desc
-        step4desc = set_initial_data_desc
-    desc = f"""-={{ main() function }}=-
-Step 1.a: Initialize each CodeParameter in the commondata struct to its default value.
-Step 1.b: Overwrite the default values with those from the parameter file.
-          Then overwrite the parameter file values with those provided via command line arguments.
-Step 1.c: Allocate memory for MAXNUMGRIDS griddata structs,
-          where each structure contains data specific to an individual grid.
-Step 1.d: Initialize each CodeParameter in griddata.params to its default value.
-Step 1.e: Set up numerical grids, including parameters such as NUMGRIDS, xx[3], masks, Nxx, dxx, invdxx,
-          bcstruct, rfm_precompute, timestep, and others.
-Step 2: Allocate storage for the initial data (y_n_gfs gridfunctions) on each grid.
-Step 3: {step3desc}
-Step 4: {step4desc}
-"""
-    if post_non_y_n_auxevol_mallocs:
-        desc += "Step 4.a: Post-initial-data functions called after memory for non-y_n and auxevol gridfunctions is allocated."
-    desc += f"""Step 5: MAIN SIMULATION LOOP
-- Step 5.a: Functions to run prior to diagnostics. E.g., regridding.
-- Step 5.b: Output diagnostics.
-- Step 5.c: Prepare to step forward in time.
-- Step 5.d: Step forward in time using Method of Lines with {MoL_method} algorithm, applying {boundary_conditions_desc} boundary conditions.
-- Step 5.e: Finish up step in time.
-Step 6: Free all allocated memory."""
-    cfunc_type = "int"
-    name = "main"
-    params = "int argc, const char *argv[]"
-    body = "commondata_struct commondata; // commondata contains parameters common to all grids.\n"
-
-    # Set griddata struct used for calculations to griddata_device for certain parallelizations
-    compute_griddata = "griddata_device" if parallelization in ["cuda"] else "griddata"
-
-    griddata_declare = rf"""griddata_struct *restrict {compute_griddata}; // griddata contains data specific to an individual grid.
-"""
-    if parallelization in ["cuda"]:
-        griddata_declare += r"""griddata_struct *restrict griddata_host; // stores only the host data needed for diagnostics
-#include "BHaH_CUDA_global_init.h"
-"""
-    body += griddata_declare
-    body += r"""
-// Step 1.a: Initialize each CodeParameter in the commondata struct to its default value.
-commondata_struct_set_to_default(&commondata);
-
-// Step 1.b: Overwrite the default values with those from the parameter file.
-//           Then overwrite the parameter file values with those provided via command line arguments.
-cmdline_input_and_parfile_parser(&commondata, argc, argv);
-"""
-    griddata_malloc = rf"""
-// Step 1.c: Allocate memory for MAXNUMGRIDS griddata structs,
-//           where each structure contains data specific to an individual grid.
-{compute_griddata} = (griddata_struct *restrict)malloc(sizeof(griddata_struct)*MAXNUMGRIDS);
-"""
-
-    if parallelization in ["cuda"]:
-        griddata_malloc += "griddata_host = (griddata_struct *)malloc(sizeof(griddata_struct) * MAXNUMGRIDS);\n"
-
-    body += griddata_malloc
-    body += rf"""
-// Step 1.d: Initialize each CodeParameter in {compute_griddata}.params to its default value.
-params_struct_set_to_default(&commondata, {compute_griddata});
-"""
-
-    body += rf"""
-// Step 1.e: Set up numerical grids, including parameters such as NUMGRIDS, xx[3], masks, Nxx, dxx, invdxx,
-//           bcstruct, rfm_precompute, timestep, and others.
-{{
-  // If this function is being called for the first time, initialize commondata.time, nn, t_0, and nn_0 to 0.
-  const bool calling_for_first_time = true;
-  numerical_grids_and_timestep(&commondata, {compute_griddata}, calling_for_first_time);
-}}
-""".replace(
-        f"{compute_griddata},",
-        (
-            f"{compute_griddata}, griddata_host,"
-            if parallelization in ["cuda"]
-            else f"{compute_griddata},"
-        ),
-    )
-    body += rf"""
-for(int grid=0; grid<commondata.NUMGRIDS; grid++) {{
-  // Step 2: Allocate storage for the initial data (y_n_gfs gridfunctions) on each grid.
-  MoL_malloc_y_n_gfs(&commondata, &{compute_griddata}[grid].params, &{compute_griddata}[grid].gridfuncs);
-}}
-"""
     if parallelization == "cuda":
-        body += rf"""
-for(int grid=0; grid<commondata.NUMGRIDS; grid++) {{
-  // Step 2.b: Allocate host storage for diagnostics
-  CUDA__malloc_host_gfs(&commondata, &{compute_griddata}[grid].params, &griddata_host[grid].gridfuncs);
-  CUDA__malloc_host_aux_gfs(&commondata, &{compute_griddata}[grid].params, &griddata_host[grid].gridfuncs);
-  CUDA__malloc_host_diagnostic_gfs(&commondata, &{compute_griddata}[grid].params, &griddata_host[grid].gridfuncs);
-}}
-"""
-    setup_initial_data_code = (
-        f"""Set up initial data.
-initial_data(&commondata, griddata_host, {compute_griddata});
-"""
-        if parallelization in ["cuda"]
-        else f"""Set up initial data.
-initial_data(&commondata, {compute_griddata});
-"""
-    )
-    allocate_storage_code = f"""Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping.
-for(int grid=0; grid<commondata.NUMGRIDS; grid++)
-  MoL_malloc_non_y_n_gfs(&commondata, &{compute_griddata}[grid].params, &{compute_griddata}[grid].gridfuncs);
-"""
-    step3code = setup_initial_data_code
-    step4code = allocate_storage_code
-    if set_initial_data_after_auxevol_malloc:
-        step3code = allocate_storage_code
-        step4code = setup_initial_data_code
-    body += f"""
-// Step 3: {step3code}
+        includes.append("BHaH_global_device_defines.h")
 
-// Step 4: {step4code}
-"""
-    if post_non_y_n_auxevol_mallocs:
-        body += "// Step 4.a: Functions called after memory for non-y_n and auxevol gridfunctions is allocated.\n"
-        body += post_non_y_n_auxevol_mallocs
-    body += """
-// Step 5: MAIN SIMULATION LOOP
-while(commondata.time < commondata.t_final) { // Main loop to progress forward in time.
-  // Step 5.a: Main loop, part 1 (pre_diagnostics): Functions to run prior to diagnostics. E.g., regridding.
-"""
-    if pre_diagnostics:
-        body += pre_diagnostics
-    else:
-        body += "// (nothing here; specify by setting pre_diagnostics string in register_CFunction_main_c().)\n"
-    body += f"""
-  // Step 5.b: Main loop, part 2: Output diagnostics
-  diagnostics(&commondata, {compute_griddata});
+    # Step 3: Generate the description and body of the main function using helpers.
+    desc = _generate_main_desc(
+        MoL_method,
+        initial_data_desc,
+        set_initial_data_after_auxevol_malloc,
+        boundary_conditions_desc,
+        post_non_y_n_auxevol_mallocs,
+    )
+    body = _generate_main_body(
+        MoL_method,
+        set_initial_data_after_auxevol_malloc,
+        boundary_conditions_desc,
+        post_non_y_n_auxevol_mallocs,
+        pre_diagnostics,
+        pre_MoL_step_forward_in_time,
+        post_MoL_step_forward_in_time,
+    )
 
-  // Step 5.c: Main loop, part 3 (pre_MoL_step_forward_in_time): Prepare to step forward in time
-""".replace(
-        compute_griddata,
-        (
-            f"{compute_griddata}, griddata_host"
-            if parallelization in ["cuda"]
-            else compute_griddata
-        ),
-    )
-    if pre_MoL_step_forward_in_time:
-        body += pre_MoL_step_forward_in_time
-    else:
-        body += "// (nothing here; specify by setting pre_MoL_step_forward_in_time string in register_CFunction_main_c().)\n"
-    body += f"""
-  // Step 5.d: Main loop, part 4: Step forward in time using Method of Lines with {MoL_method} algorithm,
-  //           applying {boundary_conditions_desc} boundary conditions.
-  MoL_step_forward_in_time(&commondata, {compute_griddata});
-
-  // Step 5.e: Main loop, part 5 (post_MoL_step_forward_in_time): Finish up step in time
-"""
-    if post_MoL_step_forward_in_time != "":
-        body += post_MoL_step_forward_in_time
-    else:
-        body += "  // (nothing here; specify by setting post_MoL_step_forward_in_time string in register_CFunction_main_c().)\n"
-    body += r"""
-} // End main loop to progress forward in time.
-BHAH_DEVICE_SYNC();
-// Step 6: Free all allocated memory
-{""".replace(
-        "BHAH_DEVICE_SYNC();",
-        "" if parallelization not in ["cuda"] else "BHAH_DEVICE_SYNC();",
-    )
-    body += (
-        rf"""
-  const bool free_non_y_n_gfs_and_core_griddata_pointers=true;
-  griddata_free_device(&commondata, {compute_griddata}, free_non_y_n_gfs_and_core_griddata_pointers);
-  griddata_free(&commondata, griddata_host, free_non_y_n_gfs_and_core_griddata_pointers);
-}}
-for (int i = 0; i < NUM_STREAMS; ++i) {{
-  cudaStreamDestroy(streams[i]);
-}}
-BHAH_DEVICE_SYNC();
-cudaDeviceReset();
-"""
-        if parallelization in ["cuda"]
-        else rf"""
-  const bool free_non_y_n_gfs_and_core_griddata_pointers=true;
-  griddata_free(&commondata, {compute_griddata}, free_non_y_n_gfs_and_core_griddata_pointers);
-}}
-"""
-    )
-    body += r"""return 0;
-"""
-    body = body.replace("*restrict", "*")
+    # Step 4: Register the CFunction.
     cfc.register_CFunction(
         includes=includes,
         prefunc=prefunc,
         desc=desc,
-        cfunc_type=cfunc_type,
-        name=name,
-        params=params,
+        cfunc_type="int",
+        name="main",
+        params="int argc, const char *argv[]",
         body=body,
     )
 
