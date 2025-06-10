@@ -17,13 +17,13 @@ void numerical_grids_and_timestep(commondata_struct *restrict commondata, gridda
     int Nx[3] = {-1, -1, -1};
 
     // Step 1.c: For each grid, set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx based on grid_physical_size
-    const bool set_xxmin_xxmax_to_defaults = true;
+    const bool apply_convergence_factor_and_set_xxminmax_defaults = true;
     int grid = 0;
     // In multipatch, gridname is a helpful alias indicating position of the patch. E.g., "lower Spherical patch"
     snprintf(griddata[grid].params.gridname, 100, "grid_Spherical");
     griddata[grid].params.CoordSystem_hash = SPHERICAL;
     griddata[grid].params.grid_physical_size = 10.0;
-    numerical_grid_params_Nxx_dxx_xx(commondata, &griddata[grid].params, griddata[grid].xx, Nx, set_xxmin_xxmax_to_defaults);
+    numerical_grid_params_Nxx_dxx_xx(commondata, &griddata[grid].params, griddata[grid].xx, Nx, apply_convergence_factor_and_set_xxminmax_defaults);
     memcpy(&griddata_host[grid].params, &griddata[grid].params, sizeof(params_struct));
     grid++;
   }

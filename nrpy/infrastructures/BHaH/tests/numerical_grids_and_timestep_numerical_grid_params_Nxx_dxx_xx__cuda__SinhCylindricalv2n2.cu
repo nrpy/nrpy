@@ -36,7 +36,7 @@ __global__ static void initialize_grid_xx2_gpu(const size_t streamid, REAL *rest
  * Inputs:
  * - Nx[] inputs: Specifies new grid dimensions, if needed.
  * - params.convergence_factor (set to 1.0 by default): Factor by which grid resolution is increased; set to 1.0 by default.
- * - set_xxmin_xxmax_to_defaults: Whether to set xxmin[3], xxmax[3] to default values set in reference_metric.py.
+ * - apply_convergence_factor_and_set_xxminmax_defaults: Whether to set xxmin[3], xxmax[3] to default values set in reference_metric.py.
  *
  * Parameter outputs:
  * - Nxx: Number of grid points in each direction.
@@ -49,7 +49,7 @@ __global__ static void initialize_grid_xx2_gpu(const size_t streamid, REAL *rest
  *
  */
 void numerical_grid_params_Nxx_dxx_xx__rfm__SinhCylindricalv2n2(const commondata_struct *restrict commondata, params_struct *restrict params,
-                                                                REAL *xx[3], const int Nx[3], const bool set_xxmin_xxmax_to_defaults) {
+                                                                REAL *xx[3], const int Nx[3], const bool apply_convergence_factor_and_set_xxminmax_defaults) {
   // Set default values for the grid resolution in each dimension.
   params->Nxx0 = 72;
   params->Nxx1 = 12;
@@ -85,7 +85,7 @@ void numerical_grid_params_Nxx_dxx_xx__rfm__SinhCylindricalv2n2(const commondata
     params->AMPLRHO = grid_physical_size;
     params->AMPLZ = grid_physical_size;
   }
-  if (set_xxmin_xxmax_to_defaults) {
+  if (apply_convergence_factor_and_set_xxminmax_defaults) {
 #include "../set_CodeParameters.h"
     // Set {xxmin[], xxmax[]} to default values, which could be functions of other rfm params (set in set_CodeParameters.h above):
     params->xxmin0 = 0;

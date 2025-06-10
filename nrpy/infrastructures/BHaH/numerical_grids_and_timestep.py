@@ -80,7 +80,7 @@ def register_CFunction_numerical_grid_params_Nxx_dxx_xx(
 Inputs:
 - Nx[] inputs: Specifies new grid dimensions, if needed.
 - params.convergence_factor (set to 1.0 by default): Factor by which grid resolution is increased; set to 1.0 by default.
-- set_xxmin_xxmax_to_defaults: Whether to set xxmin[3], xxmax[3] to default values set in reference_metric.py.
+- apply_convergence_factor_and_set_xxminmax_defaults: Whether to apply convergence factor, and set xxmin[3], xxmax[3] to default values set in reference_metric.py.
 
 Parameter outputs:
 - Nxx: Number of grid points in each direction.
@@ -94,7 +94,7 @@ Grid setup output:
     parallelization = par.parval_from_str("parallelization")
     cfunc_type = "void"
     name = "numerical_grid_params_Nxx_dxx_xx"
-    params = "const commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3], const int Nx[3], const bool set_xxmin_xxmax_to_defaults".replace(
+    params = "const commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3], const int Nx[3], const bool apply_convergence_factor_and_set_xxminmax_defaults".replace(
         "REAL *restrict xx[3]",
         "REAL * xx[3]" if parallelization in ["cuda"] else "REAL *restrict xx[3]",
     )
@@ -111,7 +111,7 @@ if( Nx[0]!=-1 && Nx[1]!=-1 && Nx[2]!=-1 ) {
 snprintf(params->CoordSystemName, 100, "{CoordSystem}");
 
 // Resize grid by convergence_factor; used for convergence testing.
-{{
+if (apply_convergence_factor_and_set_xxminmax_defaults) {{
   // convergence_factor does not increase resolution across an axis of symmetry (Nxx == 2):
   if(params->Nxx0 != 2) params->Nxx0 *= commondata->convergence_factor;
   if(params->Nxx1 != 2) params->Nxx1 *= commondata->convergence_factor;
@@ -145,7 +145,7 @@ params->Nxx_plus_2NGHOSTS2 = params->Nxx2 + 2*NGHOSTS;
         body += "}\n"
 
     # Set minimum and maximum values of xx[][] for each grid.
-    body += """if (set_xxmin_xxmax_to_defaults) {
+    body += """if (apply_convergence_factor_and_set_xxminmax_defaults) {
 #include "../set_CodeParameters.h"
 // Set {xxmin[], xxmax[]} to default values, which could be functions of other rfm params (set in set_CodeParameters.h above):
 """
@@ -567,7 +567,7 @@ def register_CFunction_numerical_grids_and_timestep(
     int Nx[3] = { -1, -1, -1 };
 
     // Step 1.c: For each grid, set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx based on grid_physical_size
-    const bool set_xxmin_xxmax_to_defaults = true;
+    const bool apply_convergence_factor_and_set_xxminmax_defaults = true;
     int grid=0;
 """
         for which_CoordSystem, CoordSystem in enumerate(sorted(set_of_CoordSystems)):
@@ -578,7 +578,7 @@ def register_CFunction_numerical_grids_and_timestep(
                 f"  griddata[grid].params.CoordSystem_hash = {CoordSystem.upper()};\n"
             )
             body += f"  griddata[grid].params.grid_physical_size = {list_of_grid_physical_sizes[which_CoordSystem]};\n"
-            body += "  numerical_grid_params_Nxx_dxx_xx(commondata, &griddata[grid].params, griddata[grid].xx, Nx, set_xxmin_xxmax_to_defaults);\n"
+            body += "  numerical_grid_params_Nxx_dxx_xx(commondata, &griddata[grid].params, griddata[grid].xx, Nx, apply_convergence_factor_and_set_xxminmax_defaults);\n"
             body += (
                 "  memcpy(&griddata_host[grid].params, &griddata[grid].params, sizeof(params_struct));\n"
                 if parallelization in ["cuda"]
