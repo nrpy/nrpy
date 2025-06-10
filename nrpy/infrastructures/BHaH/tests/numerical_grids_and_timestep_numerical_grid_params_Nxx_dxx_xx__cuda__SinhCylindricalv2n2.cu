@@ -36,7 +36,8 @@ __global__ static void initialize_grid_xx2_gpu(const size_t streamid, REAL *rest
  * Inputs:
  * - Nx[] inputs: Specifies new grid dimensions, if needed.
  * - params.convergence_factor (set to 1.0 by default): Factor by which grid resolution is increased; set to 1.0 by default.
- * - apply_convergence_factor_and_set_xxminmax_defaults: Whether to set xxmin[3], xxmax[3] to default values set in reference_metric.py.
+ * - apply_convergence_factor_and_set_xxminmax_defaults: Whether to apply convergence factor, and set xxmin[3], xxmax[3] to default values set in
+ * reference_metric.py.
  *
  * Parameter outputs:
  * - Nxx: Number of grid points in each direction.
@@ -49,7 +50,8 @@ __global__ static void initialize_grid_xx2_gpu(const size_t streamid, REAL *rest
  *
  */
 void numerical_grid_params_Nxx_dxx_xx__rfm__SinhCylindricalv2n2(const commondata_struct *restrict commondata, params_struct *restrict params,
-                                                                REAL *xx[3], const int Nx[3], const bool apply_convergence_factor_and_set_xxminmax_defaults) {
+                                                                REAL *xx[3], const int Nx[3],
+                                                                const bool apply_convergence_factor_and_set_xxminmax_defaults) {
   // Set default values for the grid resolution in each dimension.
   params->Nxx0 = 72;
   params->Nxx1 = 12;
@@ -64,7 +66,7 @@ void numerical_grid_params_Nxx_dxx_xx__rfm__SinhCylindricalv2n2(const commondata
   snprintf(params->CoordSystemName, 100, "SinhCylindricalv2n2");
 
   // Resize grid by convergence_factor; used for convergence testing.
-  {
+  if (apply_convergence_factor_and_set_xxminmax_defaults) {
     // convergence_factor does not increase resolution across an axis of symmetry (Nxx == 2):
     if (params->Nxx0 != 2)
       params->Nxx0 *= commondata->convergence_factor;
