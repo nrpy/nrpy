@@ -334,7 +334,6 @@ void apply_bcs_outerradiation_and_inner__rfm__SinhCylindricalv2n2(const commonda
                                                                   const REAL custom_wavespeed[NUM_EVOL_GFS],
                                                                   const REAL custom_f_infinity[NUM_EVOL_GFS], REAL *restrict gfs,
                                                                   REAL *restrict rhs_gfs) {
-#include "../set_CodeParameters.h"
 
   // Update device constants
   cudaMemcpyToSymbol(d_gridfunctions_wavespeed, custom_wavespeed, NUM_EVOL_GFS * sizeof(REAL));

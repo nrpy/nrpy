@@ -215,7 +215,6 @@ void apply_bcs_outerradiation_and_inner__rfm__HoleySinhSpherical(const commondat
                                                                  const REAL custom_wavespeed[NUM_EVOL_GFS],
                                                                  const REAL custom_f_infinity[NUM_EVOL_GFS], REAL *restrict gfs,
                                                                  REAL *restrict rhs_gfs) {
-#include "../set_CodeParameters.h"
 
   ////////////////////////////////////////////////////////
   // STEP 1 of 2: Apply BCs to pure outer boundary points.

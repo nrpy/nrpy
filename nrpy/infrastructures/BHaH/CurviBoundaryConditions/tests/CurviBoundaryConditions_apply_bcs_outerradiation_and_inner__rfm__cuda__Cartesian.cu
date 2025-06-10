@@ -363,7 +363,6 @@ void apply_bcs_outerradiation_and_inner__rfm__Cartesian(const commondata_struct 
                                                         const bc_struct *restrict bcstruct, REAL *restrict xx[3],
                                                         const REAL custom_wavespeed[NUM_EVOL_GFS], const REAL custom_f_infinity[NUM_EVOL_GFS],
                                                         REAL *restrict gfs, REAL *restrict rhs_gfs) {
-#include "../set_CodeParameters.h"
 
   // Update device constants
   cudaMemcpyToSymbol(d_gridfunctions_wavespeed, custom_wavespeed, NUM_EVOL_GFS * sizeof(REAL));
