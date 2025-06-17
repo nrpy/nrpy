@@ -376,7 +376,7 @@ for (i = 0; i < commondata->nsteps_low; i++) {
   dynamics[H] = commondata->dynamics_low[IDX(i,H)];
   dynamics[OMEGA] = commondata->dynamics_low[IDX(i,OMEGA)];
   dynamics[OMEGA_CIRC] = commondata->dynamics_low[IDX(i,OMEGA_CIRC)];
-  
+
   //compute
   //store
   commondata->waveform_low[IDX_WF(i,TIME)] = dynamics[TIME];
@@ -393,7 +393,7 @@ for (i = 0; i < commondata->nsteps_fine; i++) {
   dynamics[H] = commondata->dynamics_fine[IDX(i,H)];
   dynamics[OMEGA] = commondata->dynamics_fine[IDX(i,OMEGA)];
   dynamics[OMEGA_CIRC] = commondata->dynamics_fine[IDX(i,OMEGA_CIRC)];
-  
+
   //compute
   //store
   commondata->waveform_fine[IDX_WF(i,TIME)] = dynamics[TIME];

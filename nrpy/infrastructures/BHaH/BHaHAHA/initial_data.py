@@ -57,7 +57,7 @@ def register_CFunction_initial_data() -> None:
   }
 
   // Step 2.a: Use OpenMP to parallelize the loop over the entire grid, initializing the h(theta, phi) scalar.
-  const REAL times[3] = { commondata->bhahaha_params_and_data->t_m1, // 
+  const REAL times[3] = { commondata->bhahaha_params_and_data->t_m1, //
                           commondata->bhahaha_params_and_data->t_m2, //
                           commondata->bhahaha_params_and_data->t_m3 };
   LOOP_OMP("omp parallel for",            //

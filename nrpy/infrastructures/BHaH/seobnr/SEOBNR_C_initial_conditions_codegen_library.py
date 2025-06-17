@@ -102,7 +102,7 @@ const REAL imomegaqnm22[107] = { 0.0880269,0.0880272,0.0880274,0.088028,0.088028
   0.0873453,0.086882,0.0863212,0.0856388,0.0848021,0.0837652,0.0824618,0.0807929,0.0799908,0.0790927,0.0780817,0.0769364,0.0756296,
   0.0741258,0.072378,0.0703215,0.0678642,0.0648692,0.0611186,0.0562313,0.053149,0.0494336,0.0447904,0.0419586,0.0386302,0.0371155,
   0.0354677,0.033659,0.0316517,0.0293904,0.0268082,0.0238377,0.0221857,0.0204114,0.0185063,0.0175021,0.016462,0.015385,0.0151651,
-  0.0149437,0.0147207,0.0144962,0.0142701,0.0138132,0.0133501,0.0131161,0.0128806 
+  0.0149437,0.0147207,0.0144962,0.0142701,0.0138132,0.0133501,0.0131161,0.0128806
   };
 
 gsl_spline *spline = gsl_spline_alloc(gsl_interp_cspline, 107);
@@ -525,10 +525,10 @@ const REAL m2 = ((commondata_struct *restrict) params)->m2;
 const REAL chi1 = ((commondata_struct *restrict) params)->chi1;
 const REAL chi2 = ((commondata_struct *restrict) params)->chi2;
 const REAL a6 = ((commondata_struct *restrict) params)->a6;
-const REAL dSO = ((commondata_struct *restrict) params)->dSO; 
-const REAL r = ((commondata_struct *restrict) params)->r; 
-const REAL pphi = ((commondata_struct *restrict) params)->pphi; 
-REAL prstar = x; 
+const REAL dSO = ((commondata_struct *restrict) params)->dSO;
+const REAL r = ((commondata_struct *restrict) params)->r;
+const REAL pphi = ((commondata_struct *restrict) params)->pphi;
+REAL prstar = x;
 """
     H = SEOBNRv5_Ham.SEOBNRv5_aligned_spin_Hamiltonian_quantities()
     body += ccg.c_codegen(
@@ -561,7 +561,7 @@ const REAL y[4] = {r , 0. , prstar , pphi};
 SEOBNRv5_aligned_spin_flux(y,Hreal,Omega,Omega_circ,flux,params);
 const REAL dLdt = flux[1];
 const REAL rdot_rad = dLdt / dLdr;
-const REAL prstar_condition = rdot_dyn - rdot_rad;    
+const REAL prstar_condition = rdot_dyn - rdot_rad;
 return prstar_condition;
 """
     cfc.register_CFunction(

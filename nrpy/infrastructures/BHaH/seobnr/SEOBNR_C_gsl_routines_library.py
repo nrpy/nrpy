@@ -145,7 +145,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_process_waveform() -> (
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """
     Window and zero-pad the SEOBNRv5 time-domain 22 mode for Fourier transformation.
-    
+
     A Tukey window is applied to the time-domain 22 mode using the window function given by
     Bloomfield, P. Fourier Analysis of Time Series: An Introduction. New York: Wiley-Interscience, 2000.
     """

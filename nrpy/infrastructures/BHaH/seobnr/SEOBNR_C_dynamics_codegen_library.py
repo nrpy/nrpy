@@ -152,7 +152,7 @@ for(int iter = 0; iter < 2; iter++) {
       result = (left_refined + right_refined) * 0.5;
       return result;
     }
-  } 
+  }
 }
 return result;
 """
