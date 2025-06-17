@@ -1,7 +1,7 @@
 #include "../BHaH_defines.h"
 /**
  * Given Cartesian point (x,y,z), this function unshifts the grid back to the origin to output the corresponding
- * (xx0,xx1,xx2) and the "closest" (i0,i1,i2) for the given grid
+ *             (xx0,xx1,xx2) and the "closest" (i0,i1,i2) for the given grid
  */
 void Cart_to_xx_and_nearest_i0i1i2__rfm__SinhSymTP(const params_struct *restrict params, const REAL xCart[3], REAL xx[3], int Cart_to_i0i1i2[3]) {
 
