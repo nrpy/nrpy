@@ -331,8 +331,8 @@ void bcstruct_set_up__rfm__SinhCylindricalv2n2(const commondata_struct *restrict
 
   ////////////////////////////////////////
   // STEP 1: SET UP INNER BOUNDARY STRUCTS
+  // First count the number of inner boundary points and allocate memory for inner_bc_array.
   {
-    // First count the number of inner points.
     int num_inner = 0;
     LOOP_OMP("omp parallel for reduction(+:num_inner)", i0, 0, Nxx_plus_2NGHOSTS0, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
       const int i0i1i2[3] = {i0, i1, i2};
@@ -346,15 +346,15 @@ void bcstruct_set_up__rfm__SinhCylindricalv2n2(const commondata_struct *restrict
           // this is an inner boundary point, which maps either
           //  to the grid interior or to an outer boundary point
           num_inner++;
-        }
-      }
-    }
+        } // END IF boundary point maps to itself, then outer; otherwise inner
+      } // END IF point lies on grid boundary
+    } // END LOOP over all points
     // Store num_inner to bc_info:
     bcstruct->bc_info.num_inner_boundary_points = num_inner;
 
     // Next allocate memory for inner_boundary_points:
     bcstruct->inner_bc_array = (innerpt_bc_struct *restrict)malloc(sizeof(innerpt_bc_struct) * num_inner);
-  }
+  } // END count number of inner boundary points and allocate memory for inner_bc_array.
 
   // Then set inner_bc_array:
   {
@@ -375,10 +375,10 @@ void bcstruct_set_up__rfm__SinhCylindricalv2n2(const commondata_struct *restrict
                                                   bcstruct->inner_bc_array);
 
           which_inner++;
-        }
-      }
-    }
-  }
+        } // END IF boundary point maps to itself, then outer; otherwise inner
+      } // END IF point lies on grid boundary
+    } // END LOOP over all points
+  } // END set inner_bc_array.
 
   ////////////////////////////////////////
   // STEP 2: SET UP OUTER BOUNDARY STRUCTS
