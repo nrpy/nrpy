@@ -33,30 +33,6 @@ def superfast_uniq(seq: List[Any]) -> List[Any]:
     return [x for x in seq if x not in seen and not seen.add(x)]  # type: ignore
 
 
-# Used within c_function to create multi-line comments.
-def prefix_with_star(input_string: str) -> str:
-    r"""
-    Prefix every line in the input string with "   * ".
-
-    Useful for formatting multi-line comments or documentation blocks by adding a consistent prefix to each line.
-
-    :param input_string: The input multi-line string to be prefixed.
-    :return: The modified string with "* " prefixed on every line.
-
-    Example:
-    >>> s = "   Hello\n   World   "
-    >>> prefix_with_star(s)
-    '   * Hello\n   * World'
-    """
-    # Splitting the string by line breaks, trimming each line, and prefixing
-    lines = input_string.split("\n")
-    prefixed_lines = ["   * " + line.strip() for line in lines]
-
-    # Joining the prefixed lines back into a single string
-    result = "\n".join(prefixed_lines)
-    return result
-
-
 def clang_format(
     c_code_str: str,
 ) -> str:

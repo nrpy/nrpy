@@ -204,41 +204,41 @@ def Cfunction__EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(
 
     :raises RuntimeError: If the conversion back to Cartesian coordinates does not match the original coordinates, indicating an error in the mapping process.
     """
-    desc = """* Map a reference metric grid point index (i0, i1, i2) in a ghost zone to an interior point index (i0, i1, i2)':
-* (i0, i1, i2) -> (i0, i1, i2)',
-* if it is an inner boundary point. If the grid point maps to itself; i.e.,
-* (i0, i1, i2) -> (i0, i1, i2),
-* it should have been marked as an outer boundary point. This process involves the following double-map:
-* (x0, x1, x2) -> (Cartx, Carty, Cartz) -> (x0, x1, x2)'
-* However, the second map from Cartesian to the reference metric does not always have a closed-form expression,
-* and this simple algorithm will fail. To address this, we exploit the fact that an arbitrary reference metric and
-* its "eigencoordinate" share the exact same index mapping:
-* (i0, i1, i2) -> (i0, i1, i2)'
-* Therefore, while the mapping
-* (Cartx, Carty, Cartz) -> (x0, x1, x2)'
-* may not be closed-form for the chosen CoordSystem, the eigencoordinate mapping
-* (Cartx, Carty, Cartz) -> (x0, x1, x2)'
-* will be, for all reference metrics in NRPy.
-*
-* Definition of Eigencoordinate:
-*
-* A coordinate system's "eigencoordinate" is the simplest member of its family:
-* - Spherical-like: Spherical
-* - Cylindrical-like: Cylindrical
-* - Cartesian-like: Cartesian
-* - SymTP-like: SymTP
-*
-* Key Steps:
-* 1. Convert to Cartesian Coordinates:
-*    - Transform (x0, x1, x2) from eigencoordinates to Cartesian (Cartx, Carty, Cartz).
-* 2. Map Back to Eigencoordinates:
-*    - Convert (Cartx, Carty, Cartz) back to eigencoordinates (x0', x1', x2').
-* 3. Sanity Check and Data Handling:
-*    - If (x0, x1, x2) != (x0', x1', x2'), the point is an inner boundary point.
-*      - For example, in Spherical coordinates, a negative radius becomes positive.
-*    - On a cell-centered grid, the mapped point lies within the grid interior.
-*      - Update the data at (i0, i1, i2) by copying from (i0_inbounds, i1_inbounds, i2_inbounds).
-*      - Apply a sign change (+1 or -1) if the data represents tensors or vectors.
+    desc = """Map a reference metric grid point index (i0, i1, i2) in a ghost zone to an interior point index (i0, i1, i2)':
+(i0, i1, i2) -> (i0, i1, i2)',
+if it is an inner boundary point. If the grid point maps to itself; i.e.,
+(i0, i1, i2) -> (i0, i1, i2),
+it should have been marked as an outer boundary point. This process involves the following double-map:
+(x0, x1, x2) -> (Cartx, Carty, Cartz) -> (x0, x1, x2)'
+However, the second map from Cartesian to the reference metric does not always have a closed-form expression,
+and this simple algorithm will fail. To address this, we exploit the fact that an arbitrary reference metric and
+its "eigencoordinate" share the exact same index mapping:
+(i0, i1, i2) -> (i0, i1, i2)'
+Therefore, while the mapping
+(Cartx, Carty, Cartz) -> (x0, x1, x2)'
+may not be closed-form for the chosen CoordSystem, the eigencoordinate mapping
+(Cartx, Carty, Cartz) -> (x0, x1, x2)'
+will be, for all reference metrics in NRPy.
+
+Definition of Eigencoordinate:
+
+A coordinate system's "eigencoordinate" is the simplest member of its family:
+- Spherical-like: Spherical
+- Cylindrical-like: Cylindrical
+- Cartesian-like: Cartesian
+- SymTP-like: SymTP
+
+Key Steps:
+1. Convert to Cartesian Coordinates:
+   - Transform (x0, x1, x2) from eigencoordinates to Cartesian (Cartx, Carty, Cartz).
+2. Map Back to Eigencoordinates:
+   - Convert (Cartx, Carty, Cartz) back to eigencoordinates (x0', x1', x2').
+3. Sanity Check and Data Handling:
+   - If (x0, x1, x2) != (x0', x1', x2'), the point is an inner boundary point.
+     - For example, in Spherical coordinates, a negative radius becomes positive.
+   - On a cell-centered grid, the mapped point lies within the grid interior.
+     - Update the data at (i0, i1, i2) by copying from (i0_inbounds, i1_inbounds, i2_inbounds).
+     - Apply a sign change (+1 or -1) if the data represents tensors or vectors.
 """
     cfunc_type = "static void"
     name = "EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt"
@@ -508,63 +508,63 @@ def register_CFunction_bcstruct_set_up(
     )
     prefunc += Cfunction__set_parity_for_inner_boundary_single_pt(CoordSystem)
     parallelization = par.parval_from_str("parallelization")
-    desc = r"""* At each coordinate point (x0,x1,x2) situated at grid index (i0,i1,i2):
-* Step 1: Set up inner boundary structs bcstruct->inner_bc_array[].
-*   Recall that at each inner boundary point we must set innerpt_bc_struct:
-*     typedef struct __innerpt_bc_struct__ {
-*       int dstpt;  // dstpt is the 3D grid index IDX3(i0,i1,i2) of the inner boundary point (i0,i1,i2)
-*        int srcpt;  // srcpt is the 3D grid index (a la IDX3) to which the inner boundary point maps
-*       int8_t parity[10];  // parity[10] is a calculation of dot products for the 10 independent parity types
-*     } innerpt_bc_struct;
-*   At each ghostzone (i.e., each point within NGHOSTS points from grid boundary):
-*     Call EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt().
-*         This function converts the curvilinear coordinate (x0,x1,x2) to the corresponding
-*         Cartesian coordinate (x,y,z), then finds the grid point
-*         (i0_inbounds,i1_inbounds,i2_inbounds) in the grid interior or outer boundary
-*         corresponding to this Cartesian coordinate (x,y,z).
-*     If (i0,i1,i2) *is not* the same as (i0_inbounds,i1_inbounds,i2_inbounds),
-*         then we are at an inner boundary point. We must set
-*         Set bcstruct->inner_bc_array for this point, which requires we specify
-*         both (i0_inbounds,i1_inbounds,i2_inbounds) [just found!] and parity
-*         conditions for this gridpoint. The latter is found & specified within the
-*         function set_parity_for_inner_boundary_single_pt().
-*     If (i0,i1,i2) *is* the same as (i0_inbounds,i1_inbounds,i2_inbounds),
-*         then we are at an outer boundary point. Take care of outer BCs in Step 2.
-* Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][idx2d]:
-*   Recall that at each inner boundary point we must set outerpt_bc_struct:
-*     typedef struct __outerpt_bc_struct__ {
-*       short i0,i1,i2;  // the outer boundary point grid index (i0,i1,i2), on the 3D grid
-*       int8_t FACEX0,FACEX1,FACEX2;  // 1-byte integers that store
-*       //                               FACEX0,FACEX1,FACEX2 = +1, 0, 0 if on the i0=i0min face,
-*       //                               FACEX0,FACEX1,FACEX2 = -1, 0, 0 if on the i0=i0max face,
-*       //                               FACEX0,FACEX1,FACEX2 =  0,+1, 0 if on the i1=i2min face,
-*       //                               FACEX0,FACEX1,FACEX2 =  0,-1, 0 if on the i1=i1max face,
-*       //                               FACEX0,FACEX1,FACEX2 =  0, 0,+1 if on the i2=i2min face, or
-*       //                               FACEX0,FACEX1,FACEX2 =  0, 0,-1 if on the i2=i2max face,
-*     } outerpt_bc_struct;
-*   Outer boundary points are filled from the inside out, two faces at a time.
-*     E.g., consider a Cartesian coordinate grid that has 14 points in each direction,
-*     including the ghostzones, with NGHOSTS=2.
-*     We first fill in the lower x0 face with (i0=1,i1={2,11},i2={2,11}). We fill these
-*     points in first, since they will in general (at least in the case of extrapolation
-*     outer BCs) depend on e.g., i0=2 and i0=3 points.
-*     Simultaneously we can fill in the upper x0 face with (i0=12,i1={2,11},i2={2,11}),
-*     since these points depend only on e.g., i0=11 and i0=10 (again assuming extrap. BCs).
-*     Next we can fill in the lower x1 face: (i0={1,12},i1=2,i2={2,11}). Notice these
-*     depend on i0 min and max faces being filled. The remaining pattern goes like this:
-*     Upper x1 face: (i0={1,12},i1=12,i2={2,11})
-*     Lower x2 face: (i0={1,12},i1={1,12},i2=1)
-*     Upper x2 face: (i0={1,12},i1={1,12},i2=12)
-*     Lower x0 face: (i0=0,i1={1,12},i2={1,12})
-*     Upper x0 face: (i0=13,i1={1,12},i2={1,12})
-*     Lower x1 face: (i0={0,13},i1=0,i2={2,11})
-*     Upper x1 face: (i0={0,13},i1=13,i2={2,11})
-*     Lower x2 face: (i0={0,13},i1={0,13},i2=0)
-*     Upper x2 face: (i0={0,13},i1={0,13},i2=13)
-*   Note that we allocate a outerpt_bc_struct at *all* boundary points,
-*     regardless of whether the point is an outer or inner point. However
-*     the struct is set only at outer boundary points. This is slightly
-*     wasteful, but only in memory, not in CPU."""
+    desc = r"""At each coordinate point (x0,x1,x2) situated at grid index (i0,i1,i2):
+Step 1: Set up inner boundary structs bcstruct->inner_bc_array[].
+  Recall that at each inner boundary point we must set innerpt_bc_struct:
+    typedef struct __innerpt_bc_struct__ {
+      int dstpt;  // dstpt is the 3D grid index IDX3(i0,i1,i2) of the inner boundary point (i0,i1,i2)
+       int srcpt;  // srcpt is the 3D grid index (a la IDX3) to which the inner boundary point maps
+      int8_t parity[10];  // parity[10] is a calculation of dot products for the 10 independent parity types
+    } innerpt_bc_struct;
+  At each ghostzone (i.e., each point within NGHOSTS points from grid boundary):
+    Call EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt().
+        This function converts the curvilinear coordinate (x0,x1,x2) to the corresponding
+        Cartesian coordinate (x,y,z), then finds the grid point
+        (i0_inbounds,i1_inbounds,i2_inbounds) in the grid interior or outer boundary
+        corresponding to this Cartesian coordinate (x,y,z).
+    If (i0,i1,i2) *is notthe same as (i0_inbounds,i1_inbounds,i2_inbounds),
+        then we are at an inner boundary point. We must set
+        Set bcstruct->inner_bc_array for this point, which requires we specify
+        both (i0_inbounds,i1_inbounds,i2_inbounds) [just found!] and parity
+        conditions for this gridpoint. The latter is found & specified within the
+        function set_parity_for_inner_boundary_single_pt().
+    If (i0,i1,i2) *is* the same as (i0_inbounds,i1_inbounds,i2_inbounds),
+        then we are at an outer boundary point. Take care of outer BCs in Step 2.
+Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][idx2d]:
+  Recall that at each inner boundary point we must set outerpt_bc_struct:
+    typedef struct __outerpt_bc_struct__ {
+      short i0,i1,i2;  // the outer boundary point grid index (i0,i1,i2), on the 3D grid
+      int8_t FACEX0,FACEX1,FACEX2;  // 1-byte integers that store
+      //                               FACEX0,FACEX1,FACEX2 = +1, 0, 0 if on the i0=i0min face,
+      //                               FACEX0,FACEX1,FACEX2 = -1, 0, 0 if on the i0=i0max face,
+      //                               FACEX0,FACEX1,FACEX2 =  0,+1, 0 if on the i1=i2min face,
+      //                               FACEX0,FACEX1,FACEX2 =  0,-1, 0 if on the i1=i1max face,
+      //                               FACEX0,FACEX1,FACEX2 =  0, 0,+1 if on the i2=i2min face, or
+      //                               FACEX0,FACEX1,FACEX2 =  0, 0,-1 if on the i2=i2max face,
+    } outerpt_bc_struct;
+  Outer boundary points are filled from the inside out, two faces at a time.
+    E.g., consider a Cartesian coordinate grid that has 14 points in each direction,
+    including the ghostzones, with NGHOSTS=2.
+    We first fill in the lower x0 face with (i0=1,i1={2,11},i2={2,11}). We fill these
+    points in first, since they will in general (at least in the case of extrapolation
+    outer BCs) depend on e.g., i0=2 and i0=3 points.
+    Simultaneously we can fill in the upper x0 face with (i0=12,i1={2,11},i2={2,11}),
+    since these points depend only on e.g., i0=11 and i0=10 (again assuming extrap. BCs).
+    Next we can fill in the lower x1 face: (i0={1,12},i1=2,i2={2,11}). Notice these
+    depend on i0 min and max faces being filled. The remaining pattern goes like this:
+    Upper x1 face: (i0={1,12},i1=12,i2={2,11})
+    Lower x2 face: (i0={1,12},i1={1,12},i2=1)
+    Upper x2 face: (i0={1,12},i1={1,12},i2=12)
+    Lower x0 face: (i0=0,i1={1,12},i2={1,12})
+    Upper x0 face: (i0=13,i1={1,12},i2={1,12})
+    Lower x1 face: (i0={0,13},i1=0,i2={2,11})
+    Upper x1 face: (i0={0,13},i1=13,i2={2,11})
+    Lower x2 face: (i0={0,13},i1={0,13},i2=0)
+    Upper x2 face: (i0={0,13},i1={0,13},i2=13)
+  Note that we allocate a outerpt_bc_struct at *all* boundary points,
+    regardless of whether the point is an outer or inner point. However
+    the struct is set only at outer boundary points. This is slightly
+    wasteful, but only in memory, not in CPU."""
     cfunc_type = "void"
     name = "bcstruct_set_up"
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], bc_struct *restrict bcstruct"
@@ -1242,15 +1242,15 @@ def register_CFunction_apply_bcs_outerextrap_and_inner() -> None:
     ...    validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = r"""#Suppose the outer boundary point is at the i0=max(i0) face. Then we fit known data at i0-3, i0-2, and i0-1
-#  to the unique quadratic polynomial that passes through those points, and fill the data at
-#  i0 with the value implied from the polynomial.
-#As derived in nrpytutorial's Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb,
-#  the coefficients must be f_{i0} = f_{i0-3} - 3 f_{i0-2} + 3 f_{i0-1}.
-#  To check these coefficients are correct, consider
-#  * f(x0 = constant. Then f_{i0} = f_{i0-3} <- CHECK!
-#  * f(x) = x. WOLOG suppose x0=0. Then f_{i0} = (-3dx) - 3(-2dx) + 3(-dx) = + dx(-3+6-3) = 0 <- CHECK!
-#  * f(x) = x^2. WOLOG suppose x0=0. Then f_{i0} = (-3dx)^2 - 3(-2dx)^2 + 3(-dx)^2 = + dx^2(9-12+3) = 0 <- CHECK!"""
+    desc = r"""Suppose the outer boundary point is at the i0=max(i0) face. Then we fit known data at i0-3, i0-2, and i0-1
+  to the unique quadratic polynomial that passes through those points, and fill the data at
+  i0 with the value implied from the polynomial.
+As derived in nrpytutorial's Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb,
+  the coefficients must be f_{i0} = f_{i0-3} - 3 f_{i0-2} + 3 f_{i0-1}.
+  To check these coefficients are correct, consider
+  * f(x0 = constant. Then f_{i0} = f_{i0-3} <- CHECK!
+  * f(x) = x. WOLOG suppose x0=0. Then f_{i0} = (-3dx) - 3(-2dx) + 3(-dx) = + dx(-3+6-3) = 0 <- CHECK!
+  * f(x) = x^2. WOLOG suppose x0=0. Then f_{i0} = (-3dx)^2 - 3(-2dx)^2 + 3(-dx)^2 = + dx^2(9-12+3) = 0 <- CHECK!"""
     cfunc_type = "void"
     name = "apply_bcs_outerextrap_and_inner"
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const bc_struct *restrict bcstruct, REAL *restrict gfs"

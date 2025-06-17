@@ -9,10 +9,7 @@ import os
 from typing import Dict, List, Optional, Tuple
 
 import nrpy.params as par
-from nrpy.helpers.generic import (
-    clang_format,
-    prefix_with_star,
-)
+from nrpy.helpers.generic import clang_format
 
 
 class CFunction:
@@ -109,6 +106,35 @@ class CFunction:
             self.generate_full_function()
         )
 
+    # Used within c_function to create multi-line comments.
+    @staticmethod
+    def prefix_with_star(input_string: str) -> str:
+        r"""
+        Prefix every line in the input string with " * ".
+
+        This function preserves leading whitespace on each line while removing any trailing whitespace.
+        It is useful for formatting multi-line comments or documentation blocks by adding a
+        consistent prefix to each line.
+
+        :param input_string: The input multi-line string to be prefixed.
+        :return: The modified string with " * " prefixed on every line, with leading whitespace preserved
+                 and trailing whitespace removed.
+
+        Example:
+        >>> s = "   Hello\n   World   "
+        >>> CFunction.prefix_with_star(s)
+        ' *    Hello\n *    World'
+        """
+        # Splitting the string by line breaks
+        lines = input_string.split("\n")
+
+        # Removing trailing whitespace from each line and then prefixing with " * "
+        prefixed_lines = [" * " + line.rstrip() for line in lines]
+
+        # Joining the prefixed lines back into a single string
+        result = "\n".join(prefixed_lines)
+        return result
+
     @staticmethod
     def subdirectory_depth(subdirectory: str) -> int:
         """
@@ -203,7 +229,7 @@ class CFunction:
             complete_func += f"{self.prefunc}\n"
 
         if self.desc:
-            complete_func += f"/**\n{prefix_with_star(self.desc)}\n*/\n"
+            complete_func += f"/**\n{self.prefix_with_star(self.desc)}\n*/\n"
 
         function_prototype = (
             f"{self.cfunc_decorators}{self.cfunc_type} {self.name}({self.params});"
