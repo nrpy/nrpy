@@ -522,7 +522,7 @@ Step 1: Set up inner boundary structs bcstruct->inner_bc_array[].
         Cartesian coordinate (x,y,z), then finds the grid point
         (i0_inbounds,i1_inbounds,i2_inbounds) in the grid interior or outer boundary
         corresponding to this Cartesian coordinate (x,y,z).
-    If (i0,i1,i2) *is notthe same as (i0_inbounds,i1_inbounds,i2_inbounds),
+    If (i0,i1,i2) *is not* the same as (i0_inbounds,i1_inbounds,i2_inbounds),
         then we are at an inner boundary point. We must set
         Set bcstruct->inner_bc_array for this point, which requires we specify
         both (i0_inbounds,i1_inbounds,i2_inbounds) [just found!] and parity

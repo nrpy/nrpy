@@ -54,15 +54,15 @@ static void apply_bcs_outerextrap_and_inner_only__launcher(const params_struct *
 } // END FUNCTION apply_bcs_outerextrap_and_inner_only__launcher
 
 /**
- * #Suppose the outer boundary point is at the i0=max(i0) face. Then we fit known data at i0-3, i0-2, and i0-1
- * #  to the unique quadratic polynomial that passes through those points, and fill the data at
- * #  i0 with the value implied from the polynomial.
- * #As derived in nrpytutorial's Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb,
- * #  the coefficients must be f_{i0} = f_{i0-3} - 3 f_{i0-2} + 3 f_{i0-1}.
- * #  To check these coefficients are correct, consider
- * #  * f(x0 = constant. Then f_{i0} = f_{i0-3} <- CHECK!
- * #  * f(x) = x. WOLOG suppose x0=0. Then f_{i0} = (-3dx) - 3(-2dx) + 3(-dx) = + dx(-3+6-3) = 0 <- CHECK!
- * #  * f(x) = x^2. WOLOG suppose x0=0. Then f_{i0} = (-3dx)^2 - 3(-2dx)^2 + 3(-dx)^2 = + dx^2(9-12+3) = 0 <- CHECK!
+ * Suppose the outer boundary point is at the i0=max(i0) face. Then we fit known data at i0-3, i0-2, and i0-1
+ *   to the unique quadratic polynomial that passes through those points, and fill the data at
+ *   i0 with the value implied from the polynomial.
+ * As derived in nrpytutorial's Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb,
+ *   the coefficients must be f_{i0} = f_{i0-3} - 3 f_{i0-2} + 3 f_{i0-1}.
+ *   To check these coefficients are correct, consider
+ *   * f(x0 = constant. Then f_{i0} = f_{i0-3} <- CHECK!
+ *   * f(x) = x. WOLOG suppose x0=0. Then f_{i0} = (-3dx) - 3(-2dx) + 3(-dx) = + dx(-3+6-3) = 0 <- CHECK!
+ *   * f(x) = x^2. WOLOG suppose x0=0. Then f_{i0} = (-3dx)^2 - 3(-2dx)^2 + 3(-dx)^2 = + dx^2(9-12+3) = 0 <- CHECK!
  */
 void apply_bcs_outerextrap_and_inner(const commondata_struct *restrict commondata, const params_struct *restrict params,
                                      const bc_struct *restrict bcstruct, REAL *restrict gfs) {
