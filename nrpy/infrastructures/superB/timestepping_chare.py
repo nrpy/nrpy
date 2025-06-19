@@ -1651,7 +1651,7 @@ def output_timestepping_ci(
                 // Set psi4.
                 psi4(&commondata, &griddata_chare[grid].params, griddata_chare[grid].xx, griddata_chare[grid].gridfuncs.y_n_gfs, griddata_chare[grid].gridfuncs.diagnostic_output_gfs);
                 // Apply outer and inner bcs to psi4
-                apply_bcs_outerextrap_and_inner_specific_auxgfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].bcstruct, griddata_chare[grid].gridfuncs.diagnostic_output_gfs, griddata_chare[grid].gridfuncs.num_aux_gfs_to_sync, griddata_chare[grid].gridfuncs.aux_gfs_to_sync);
+                apply_bcs_inner_only_specific_auxgfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].bcstruct, griddata_chare[grid].gridfuncs.diagnostic_output_gfs, griddata_chare[grid].gridfuncs.num_aux_gfs_to_sync, griddata_chare[grid].gridfuncs.aux_gfs_to_sync);
               }"""
 
         file_output_str += generate_send_nonlocalinnerbc_data_code(

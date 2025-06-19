@@ -355,7 +355,8 @@ def CurviBoundaryConditions_register_C_functions(
     CurviBoundaryConditions.apply_bcs_outerextrap_and_inner.register_CFunction_apply_bcs_outerextrap_and_inner()
 
     # Register C function to apply boundary conditions to outer-extrapolated and inner boundary points for specific gfs.
-    CurviBoundaryConditions.apply_bcs_outerextrap_and_inner.register_CFunction_apply_bcs_outerextrap_and_inner_specific_auxgfs()
+    # Was once needed for psi4, now unused.
+    # CurviBoundaryConditions.apply_bcs_outerextrap_and_inner.register_CFunction_apply_bcs_outerextrap_and_inner_specific_auxgfs()
 
     # Register bcstruct's contribution to griddata_struct:
     griddata_commondata.register_griddata_commondata(

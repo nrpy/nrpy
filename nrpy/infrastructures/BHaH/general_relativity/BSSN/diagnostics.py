@@ -190,7 +190,8 @@ if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {{
       psi4(commondata, params, xx, y_n_gfs, diagnostic_output_gfs);
       // Apply outer and inner bcs to psi4 needed to do interpolation correctly
       int aux_gfs_to_sync[2] = {{PSI4_REGF, PSI4_IMGF}};
-      apply_bcs_outerextrap_and_inner_specific_auxgfs(commondata, &griddata[grid].params, &griddata[grid].bcstruct, griddata[grid].gridfuncs.diagnostic_output_gfs, 2, aux_gfs_to_sync);
+      apply_bcs_inner_only_specific_auxgfs(commondata, &griddata[grid].params, &griddata[grid].bcstruct,
+                                           griddata[grid].gridfuncs.diagnostic_output_gfs, 2, aux_gfs_to_sync);
       {post_psi4_compute}
 """.replace(
             "xx", "griddata[grid].xx" if parallelization in ["cuda"] else "xx"
