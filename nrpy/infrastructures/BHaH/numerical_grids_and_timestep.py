@@ -700,6 +700,7 @@ def register_CFunctions(
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
     enable_set_cfl_timestep: bool = True,
+    enable_masks: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register C functions related to coordinate systems and grid parameters.
@@ -711,6 +712,7 @@ def register_CFunctions(
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions.
     :param enable_set_cfl_timestep: Whether to enable computation of dt, the CFL timestep. A custom version can be implemented later.
+    :param enable_masks: If True, make bcstruct algorithm mask-aware.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -733,6 +735,7 @@ def register_CFunctions(
         enable_rfm_precompute=enable_rfm_precompute,
         enable_CurviBCs=enable_CurviBCs,
         enable_set_cfl_timestep=enable_set_cfl_timestep,
+        enable_masks=enable_masks,
     )
 
     if gridding_approach == "multipatch" or enable_set_cfl_timestep:
