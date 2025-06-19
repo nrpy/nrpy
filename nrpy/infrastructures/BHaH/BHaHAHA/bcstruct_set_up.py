@@ -538,7 +538,7 @@ typedef struct {
 } bc_struct;
 """
     BHaH_defines_h.register_BHaH_defines(
-        "nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions",
+        "nrpy.infrastructures.BHaH.CurviBoundaryConditions.BHaH_defines",
         # Puts these definitions near the top of BHaH_defines.h, before grid.
         BHaH_defines,
     )

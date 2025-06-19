@@ -17,14 +17,12 @@ from pathlib import Path
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
-import nrpy.infrastructures.BHaH.CodeParameters as CPs
-import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
-
-# import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import (
+    BHaH_defines_h,
+    CodeParameters,
+    Makefile_helpers,
     MoLtimestepping,
     rfm_precompute,
     xx_tofrom_Cart,
@@ -216,9 +214,9 @@ par.adjust_CodeParam_default(
 
 #########################################################
 # STEP 8: Generate header files, register C functions, set up boundary conditions, and create a Makefile
-CPs.write_CodeParameters_h_files(project_dir=project_dir)
-CPs.register_CFunctions_params_commondata_struct_set_to_default()
-Bdefines_h.output_BHaH_defines_h(
+CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
+CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
+BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     enable_intrinsics=enable_simd,
     define_no_simd_UPWIND_ALG=False,
@@ -234,7 +232,7 @@ if enable_simd:
         subdirectory="intrinsics",
     )
 
-Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
+Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
     exec_or_library_name=f"lib{project_name}",

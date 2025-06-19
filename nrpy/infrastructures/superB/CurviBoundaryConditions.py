@@ -412,7 +412,7 @@ typedef struct __bc_struct__ {
     )
     # ~ BHaH_defines_h.register_BHaH_defines(__name__, CBC_BHd_str)
     BHaH_defines_h.register_BHaH_defines(
-        "nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions",
+        "nrpy.infrastructures.BHaH.CurviBoundaryConditions.BHaH_defines",
         CBC_BHd_str,
     )
 
