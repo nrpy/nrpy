@@ -507,6 +507,7 @@ def register_CFunction_numerical_grids_and_timestep(
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
     enable_set_cfl_timestep: bool = True,
+    enable_masks: bool = False,
 ) -> None:
     """
     Register a C function to set up all numerical grids and timestep.
@@ -521,8 +522,9 @@ def register_CFunction_numerical_grids_and_timestep(
     :param enable_rfm_precompute: Whether to enable reference metric precomputation (default: False).
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions (default: False).
     :param enable_set_cfl_timestep: Whether to enable computation of dt, the CFL timestep. A custom version can be implemented later.
+    :param enable_masks: If True, make bcstruct algorithm mask-aware.
 
-    :raises ValueError: If invalid gridding_approach selected.
+    :raises ValueError: If invalid gridding_approach selected, or enable_masks with CUDA.
 
     Doctests:
     >>> from nrpy.helpers.generic import validate_strings
@@ -637,24 +639,25 @@ def register_CFunction_numerical_grids_and_timestep(
 """
     body += "\n// Step 1.e: Set up curvilinear boundary condition struct (bcstruct)\n"
     if enable_CurviBCs:
+        body += "for(int grid=0; grid<commondata->NUMGRIDS; grid++) {\n"
+        mask_arg = ""
+        if enable_masks:
+            mask_arg = ", griddata[grid].mask"
+            if parallelization == "cuda":
+                raise ValueError("CUDA parallelization does not yet support masking.")
         body += (
-            r"""for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
-  bcstruct_set_up(commondata, &griddata[grid].params, griddata_host[grid].xx, &griddata_host[grid].bcstruct, &griddata[grid].bcstruct);
-}
-"""
-            if parallelization in ["cuda"]
-            else r"""for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
-  bcstruct_set_up(commondata, &griddata[grid].params, griddata[grid].xx, &griddata[grid].bcstruct);
-}
-"""
+            f"bcstruct_set_up(commondata, &griddata[grid].params, griddata[grid].xx, &griddata[grid].bcstruct {mask_arg});\n"
+            if parallelization != "cuda"
+            else "bcstruct_set_up(commondata, &griddata[grid].params, griddata_host[grid].xx, &griddata_host[grid].bcstruct, &griddata[grid].bcstruct);\n"
         )
+        body += "}\n"
     else:
         body += "// (curvilinear boundary conditions bcstruct disabled)\n"
     if enable_set_cfl_timestep:
         sync_params = (
-            "cpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % NUM_STREAMS);"
-            if parallelization in ["cuda"]
-            else ""
+            ""
+            if parallelization != "cuda"
+            else "cpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % NUM_STREAMS);"
         )
         body += rf"""
 // Step 1.f: Set timestep based on minimum spacing between neighboring gridpoints.
