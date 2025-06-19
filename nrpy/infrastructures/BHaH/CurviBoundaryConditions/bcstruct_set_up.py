@@ -502,8 +502,9 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], bc_struct *restrict bcstruct"
     params += ", int8_t *restrict mask" if enable_masks else ""
     params += (
-        ", bc_struct *restrict bcstruct_device" if parallelization in ["cuda"] else ""
+        "" if parallelization != "cuda" else ", bc_struct *restrict bcstruct_device"
     )
+    params += ", const int8_t *restrict mask" if enable_masks else ""
 
     # Setup host-side struct to populate before copying to device
     body = r"""
@@ -512,14 +513,13 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
   // First count the number of inner boundary points and allocate memory for inner_bc_array.
   {
     int num_inner = 0;
-    LOOP_OMP("omp parallel for reduction(+:num_inner)",
-             i0,0,Nxx_plus_2NGHOSTS0,  i1,0,Nxx_plus_2NGHOSTS1,  i2,0,Nxx_plus_2NGHOSTS2) {
-      const int i0i1i2[3] = { i0,i1,i2 };
-      if(!IS_IN_GRID_INTERIOR(i0i1i2, Nxx_plus_2NGHOSTS0,Nxx_plus_2NGHOSTS1,Nxx_plus_2NGHOSTS2, NGHOSTS)) {
+    LOOP_OMP("omp parallel for reduction(+:num_inner)", i0, 0, Nxx_plus_2NGHOSTS0, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
+      const int i0i1i2[3] = {i0, i1, i2};
+      if (!IS_IN_GRID_INTERIOR(i0i1i2, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, NGHOSTS)) {
         REAL x0x1x2_inbounds[3];
         int i0i1i2_inbounds[3];
-        EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(commondata, params, xx, i0,i1,i2, x0x1x2_inbounds,i0i1i2_inbounds);
-        if(i0 == i0i1i2_inbounds[0] && i1==i0i1i2_inbounds[1] && i2==i0i1i2_inbounds[2]) {
+        EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(commondata, params, xx, i0, i1, i2, x0x1x2_inbounds, i0i1i2_inbounds);
+        if (i0 == i0i1i2_inbounds[0] && i1 == i0i1i2_inbounds[1] && i2 == i0i1i2_inbounds[2]) {
           // this is a pure outer boundary point.
         } else {
           // this is an inner boundary point, which maps either
@@ -532,26 +532,26 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
     bcstruct->bc_info.num_inner_boundary_points = num_inner;
 
     // Next allocate memory for inner_boundary_points:
-    bcstruct->inner_bc_array = (innerpt_bc_struct *restrict)malloc( sizeof(innerpt_bc_struct)*num_inner );
+    bcstruct->inner_bc_array = (innerpt_bc_struct *)malloc(sizeof(innerpt_bc_struct) * num_inner);
   } // END count number of inner boundary points and allocate memory for inner_bc_array.
 
   // Then set inner_bc_array:
   {
     int which_inner = 0;
-    LOOP_NOOMP(i0,0,Nxx_plus_2NGHOSTS0,  i1,0,Nxx_plus_2NGHOSTS1,  i2,0,Nxx_plus_2NGHOSTS2) {
-      const int i0i1i2[3] = { i0,i1,i2 };
-      if(!IS_IN_GRID_INTERIOR(i0i1i2, Nxx_plus_2NGHOSTS0,Nxx_plus_2NGHOSTS1,Nxx_plus_2NGHOSTS2, NGHOSTS)) {
+    LOOP_NOOMP(i0, 0, Nxx_plus_2NGHOSTS0, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
+      const int i0i1i2[3] = {i0, i1, i2};
+      if (!IS_IN_GRID_INTERIOR(i0i1i2, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, NGHOSTS)) {
         REAL x0x1x2_inbounds[3];
         int i0i1i2_inbounds[3];
-        EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(commondata, params, xx, i0,i1,i2, x0x1x2_inbounds,i0i1i2_inbounds);
-        if(i0 == i0i1i2_inbounds[0] && i1==i0i1i2_inbounds[1] && i2==i0i1i2_inbounds[2]) {
+        EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(commondata, params, xx, i0, i1, i2, x0x1x2_inbounds, i0i1i2_inbounds);
+        if (i0 == i0i1i2_inbounds[0] && i1 == i0i1i2_inbounds[1] && i2 == i0i1i2_inbounds[2]) {
           // this is a pure outer boundary point.
         } else {
-          bcstruct->inner_bc_array[which_inner].dstpt = IDX3(i0,i1,i2);
-          bcstruct->inner_bc_array[which_inner].srcpt = IDX3(i0i1i2_inbounds[0],i0i1i2_inbounds[1],i0i1i2_inbounds[2]);
-          //printf("%d / %d\n",which_inner, bc_info->num_inner_boundary_points);
-          set_parity_for_inner_boundary_single_pt(commondata, params, xx[0][i0],xx[1][i1],xx[2][i2],
-                                                  x0x1x2_inbounds, which_inner, bcstruct->inner_bc_array);
+          bcstruct->inner_bc_array[which_inner].dstpt = IDX3(i0, i1, i2);
+          bcstruct->inner_bc_array[which_inner].srcpt = IDX3(i0i1i2_inbounds[0], i0i1i2_inbounds[1], i0i1i2_inbounds[2]);
+          // printf("%d / %d\n",which_inner, bc_info->num_inner_boundary_points);
+          set_parity_for_inner_boundary_single_pt(commondata, params, xx[0][i0], xx[1][i1], xx[2][i2], x0x1x2_inbounds, which_inner,
+                                                  bcstruct->inner_bc_array);
 
           which_inner++;
         } // END IF boundary point maps to itself, then outer; otherwise inner
@@ -579,7 +579,7 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
     // x0min and x0max faces: Allocate memory for outer_bc_array and set bc_loop_bounds:
     //                        Note that x0min and x0max faces have exactly the same size.
     //                   Also, note that face/2 --v   offsets this factor of 2 ------------------------------------------v
-    bcstruct->pure_outer_bc_array[3*which_gz + face/2] = (outerpt_bc_struct *restrict)malloc(sizeof(outerpt_bc_struct) * 2 *
+    bcstruct->pure_outer_bc_array[3*which_gz + face/2] = (outerpt_bc_struct *)malloc(sizeof(outerpt_bc_struct) * 2 *
                                                                                              ((x0min_face_range[1]-x0min_face_range[0]) *
                                                                                               (x0min_face_range[3]-x0min_face_range[2]) *
                                                                                               (x0min_face_range[5]-x0min_face_range[4])));
@@ -595,7 +595,7 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
     // x1min and x1max faces: Allocate memory for outer_bc_array and set bc_loop_bounds:
     //                        Note that x1min and x1max faces have exactly the same size.
     //                   Also, note that face/2 --v   offsets this factor of 2 ------------------------------------------v
-    bcstruct->pure_outer_bc_array[3*which_gz + face/2] = (outerpt_bc_struct *restrict)malloc(sizeof(outerpt_bc_struct) * 2 *
+    bcstruct->pure_outer_bc_array[3*which_gz + face/2] = (outerpt_bc_struct *)malloc(sizeof(outerpt_bc_struct) * 2 *
                                                                                              ((x1min_face_range[1]-x1min_face_range[0]) *
                                                                                               (x1min_face_range[3]-x1min_face_range[2]) *
                                                                                               (x1min_face_range[5]-x1min_face_range[4])));
@@ -612,7 +612,7 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
     // x2min and x2max faces: Allocate memory for outer_bc_array and set bc_loop_bounds:
     //                        Note that x2min and x2max faces have exactly the same size.
     //                   Also, note that face/2 --v   offsets this factor of 2 ------------------------------------------v
-    bcstruct->pure_outer_bc_array[3*which_gz + face/2] = (outerpt_bc_struct *restrict)malloc(sizeof(outerpt_bc_struct) * 2 *
+    bcstruct->pure_outer_bc_array[3*which_gz + face/2] = (outerpt_bc_struct *)malloc(sizeof(outerpt_bc_struct) * 2 *
                                                                                              ((x2min_face_range[1]-x2min_face_range[0]) *
                                                                                               (x2min_face_range[3]-x2min_face_range[2]) *
                                                                                               (x2min_face_range[5]-x2min_face_range[4])));
@@ -678,9 +678,6 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
       bcstruct->bc_info.num_pure_outer_boundary_points[which_gz][dirn] = idx2d;
     }
 """
-    body = body.replace(
-        "*restrict)", "*)" if parallelization == "cuda" else "*restrict)"
-    )
     if parallelization == "cuda":
         body += """
         int streamid = params->grid_idx % NUM_STREAMS;
