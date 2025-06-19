@@ -488,40 +488,40 @@ def output_BHaH_defines_h(
             file_output_str += output_key(key, value)
 
     file_output_str += """
-    #ifndef BHAH_TYPEOF
-    #if __cplusplus >= 2000707L
-    #define BHAH_TYPEOF(a) decltype(a)
-    #elif defined(__GNUC__) || defined(__clang__) || defined(__NVCC__)
-    #define BHAH_TYPEOF(a) __typeof__(a)
-    #else
-    #define BHAH_TYPEOF(a)
-    #endif // END check for GCC, Clang, or C++
-    #endif // END BHAH_TYPEOF
+#ifndef BHAH_TYPEOF
+#if __cplusplus >= 2000707L
+#define BHAH_TYPEOF(a) decltype(a)
+#elif defined(__GNUC__) || defined(__clang__) || defined(__NVCC__)
+#define BHAH_TYPEOF(a) __typeof__(a)
+#else
+#define BHAH_TYPEOF(a)
+#endif // END check for GCC, Clang, or C++
+#endif // END BHAH_TYPEOF
 
-    #define BHAH_MALLOC(a, sz) \
-    do { \
-        a = (BHAH_TYPEOF(a)) malloc(sz); \
-    } while(0);
-    #define BHAH_MALLOC__PtrMember(a, b, sz) \
-    do { \
-        if (a) { \
-            BHAH_MALLOC(a->b, sz); \
-        } \
-    } while(0);
+#define BHAH_MALLOC(a, sz) \
+do { \
+    a = (BHAH_TYPEOF(a)) malloc(sz); \
+} while(0);
+#define BHAH_MALLOC__PtrMember(a, b, sz) \
+do { \
+    if (a) { \
+        BHAH_MALLOC(a->b, sz); \
+    } \
+} while(0);
 
-    #define BHAH_FREE(a) \
-    do { \
-        if (a) { \
-            free((void*)(a)); \
-            (a) = NULL; \
-        } \
-    } while (0);
-    #define BHAH_FREE__PtrMember(a, b) \
-    do { \
-        if (a) { \
-            BHAH_FREE(a->b); \
-        } \
-    } while(0);
+#define BHAH_FREE(a) \
+do { \
+    if (a) { \
+        free((void*)(a)); \
+        (a) = NULL; \
+    } \
+} while (0);
+#define BHAH_FREE__PtrMember(a, b) \
+do { \
+    if (a) { \
+        BHAH_FREE(a->b); \
+    } \
+} while(0);
 """
     parallelization = par.parval_from_str("parallelization")
 
@@ -535,19 +535,19 @@ def output_BHaH_defines_h(
             parallelization, free_func, opt_msg='Free: "#a" failed'
         )
         file_output_str += rf"""
-    #define BHAH_MALLOC_DEVICE(a, sz) \
-    do {{ \
-        {malloc_func}(&a, sz); \
-        {check_err_malloc} \
-    }} while(0);
-    #define BHAH_FREE_DEVICE(a) \
-    do {{ \
-        if (a) {{ \
-            {free_func}((void*)(a)); \
-            {check_err_free} \
-            (a) = nullptr; \
-        }} \
-    }} while (0);
+#define BHAH_MALLOC_DEVICE(a, sz) \
+do {{ \
+    {malloc_func}(&a, sz); \
+    {check_err_malloc} \
+}} while(0);
+#define BHAH_FREE_DEVICE(a) \
+do {{ \
+    if (a) {{ \
+        {free_func}((void*)(a)); \
+        {check_err_free} \
+        (a) = nullptr; \
+    }} \
+}} while (0);
 """
     if parallelization == "cuda":
         check_err_malloc_host = parallel_utils.get_check_errors_str(
@@ -557,39 +557,39 @@ def output_BHaH_defines_h(
             parallelization, "cudaFreeHost", opt_msg='Free: "#a" failed'
         )
         file_output_str += rf"""
-    #define BHAH_MALLOC_PINNED(a, sz) \
-    do {{ \
-        cudaMallocHost((void**)&a, sz); \
-        {check_err_malloc_host} \
-    }} while (0);
+#define BHAH_MALLOC_PINNED(a, sz) \
+do {{ \
+    cudaMallocHost((void**)&a, sz); \
+    {check_err_malloc_host} \
+}} while (0);
 
-    #define BHAH_FREE_PINNED(a) \
-    do {{ \
-        if (a) {{ \
-            cudaFreeHost((void*)(a)); \
-            {check_err_free_host} \
-            (a) = nullptr; \
-        }} \
-    }} while (0);
-    #define BHAH_FREE_DEVICE__PtrMember(a, b) \
-    do {{ \
-        if (a) {{ \
-            decltype(a->b) tmp_ptr_##b = nullptr; \
-            cudaMemcpy(&tmp_ptr_##b, &a->b, sizeof(void *), cudaMemcpyDeviceToHost); \
-            if(tmp_ptr_##b) {{ \
-                BHAH_FREE_DEVICE(tmp_ptr_##b); \
-                cudaMemcpy(&a->b, &tmp_ptr_##b, sizeof(void *), cudaMemcpyHostToDevice); \
-            }}\
-        }} \
-    }} while(0);
-    #define BHAH_MALLOC_DEVICE__PtrMember(a, b, sz) \
-    do {{ \
-        if (a) {{ \
-            decltype(a->b) tmp_ptr_##b = nullptr; \
-            BHAH_MALLOC_DEVICE(tmp_ptr_##b, sz); \
+#define BHAH_FREE_PINNED(a) \
+do {{ \
+    if (a) {{ \
+        cudaFreeHost((void*)(a)); \
+        {check_err_free_host} \
+        (a) = nullptr; \
+    }} \
+}} while (0);
+#define BHAH_FREE_DEVICE__PtrMember(a, b) \
+do {{ \
+    if (a) {{ \
+        decltype(a->b) tmp_ptr_##b = nullptr; \
+        cudaMemcpy(&tmp_ptr_##b, &a->b, sizeof(void *), cudaMemcpyDeviceToHost); \
+        if(tmp_ptr_##b) {{ \
+            BHAH_FREE_DEVICE(tmp_ptr_##b); \
             cudaMemcpy(&a->b, &tmp_ptr_##b, sizeof(void *), cudaMemcpyHostToDevice); \
-        }} \
-    }} while(0);
+        }}\
+    }} \
+}} while(0);
+#define BHAH_MALLOC_DEVICE__PtrMember(a, b, sz) \
+do {{ \
+    if (a) {{ \
+        decltype(a->b) tmp_ptr_##b = nullptr; \
+        BHAH_MALLOC_DEVICE(tmp_ptr_##b, sz); \
+        cudaMemcpy(&a->b, &tmp_ptr_##b, sizeof(void *), cudaMemcpyHostToDevice); \
+    }} \
+}} while(0);
 """
     if parallelization in ["cuda"]:
         sync_func = parallel_utils.get_device_sync_function(parallelization)
