@@ -18,10 +18,10 @@ import nrpy.params as par
 from nrpy.infrastructures.BHaH.BHaH_defines_h import (
     parse_cparam_type,
 )
-from nrpy.infrastructures.BHaH.MoLtimestepping.MoL_gridfunction_names import (
+from nrpy.infrastructures.BHaH.MoLtimestepping.gridfunction_names import (
     generate_gridfunction_names,
 )
-from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import (
+from nrpy.infrastructures.BHaH.MoLtimestepping.rk_butcher_table_dictionary import (
     generate_Butcher_tables,
 )
 

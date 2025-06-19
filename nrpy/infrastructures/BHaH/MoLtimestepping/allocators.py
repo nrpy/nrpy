@@ -1,6 +1,22 @@
-# nrpy/infrastructures/BHaH/MoLtimestepping/MoL_allocators.py
+# nrpy/infrastructures/BHaH/MoLtimestepping/allocators.py
 """
-Memory allocators and deallocators for y_n_gfs and non_y_n_gfs in MoL-based codes.
+Generates C functions for memory management within the MoL time-stepping framework.
+
+This module provides functions to create C code for allocating and deallocating
+memory for the gridfunctions required by the Method of Lines (MoL) integrators.
+It distinguishes between two categories of gridfunctions:
+
+- `y_n_gfs`: The set of gridfunctions that store the state of the system at the
+  beginning of a time step (t_n).
+- `non_y_n_gfs`: Auxiliary gridfunctions needed for intermediate calculations
+  within a time step, such as the stages (k_i) in a Runge-Kutta method.
+
+The main functions are:
+- `register_CFunction_MoL_malloc()`: Registers a C function to allocate memory.
+- `register_CFunction_MoL_free_memory()`: Registers a C function to free memory.
+
+These are specialized based on the chosen MoL algorithm (e.g., "RK4") to
+ensure the correct number of auxiliary arrays are managed.
 
 Authors: Zachariah B. Etienne (lead maintainer)
          zachetie **at** gmail **dot* com
@@ -12,10 +28,10 @@ from typing import Dict, List, Tuple, Union
 
 import nrpy.c_function as cfc
 import nrpy.params as par
-from nrpy.infrastructures.BHaH.MoLtimestepping.MoL_gridfunction_names import (
+from nrpy.infrastructures.BHaH.MoLtimestepping.gridfunction_names import (
     generate_gridfunction_names,
 )
-from nrpy.infrastructures.BHaH.MoLtimestepping.MoL_rk_substep import (
+from nrpy.infrastructures.BHaH.MoLtimestepping.rk_substep import (
     check_supported_parallelization,
 )
 

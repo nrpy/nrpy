@@ -12,15 +12,10 @@ Authors: Zachariah B. Etienne
 from typing import Set
 
 import nrpy.c_function as cfc
-from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
-from nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions import (
-    BHaH_defines_set_gridfunction_defines_with_parity_types,
-    register_CFunction_apply_bcs_inner_only,
-    register_CFunction_apply_bcs_inner_only_specific_auxgfs,
-    register_CFunction_apply_bcs_outerextrap_and_inner,
-    register_CFunction_apply_bcs_outerextrap_and_inner_specific_auxgfs,
-    register_CFunction_apply_bcs_outerradiation_and_inner,
-    register_CFunction_bcstruct_set_up,
+from nrpy.infrastructures.BHaH import (
+    BHaH_defines_h,
+    CurviBoundaryConditions,
+    griddata_commondata,
 )
 
 
@@ -337,28 +332,30 @@ def CurviBoundaryConditions_register_C_functions(
     """
     for CoordSystem in set_of_CoordSystems:
         # Register C function to set up the boundary condition struct.
-        register_CFunction_bcstruct_set_up(CoordSystem=CoordSystem)
+        CurviBoundaryConditions.bcstruct_set_up.register_CFunction_bcstruct_set_up(
+            CoordSystem=CoordSystem
+        )
 
         # Register C function to apply boundary conditions to both pure outer and inner boundary points.
-        register_CFunction_apply_bcs_outerradiation_and_inner(
+        CurviBoundaryConditions.apply_bcs_outerradiation_and_inner.register_CFunction_apply_bcs_outerradiation_and_inner(
             CoordSystem=CoordSystem,
             radiation_BC_fd_order=radiation_BC_fd_order,
         )
 
     # Register C function to apply boundary conditions to inner-only boundary points.
-    register_CFunction_apply_bcs_inner_only()
+    CurviBoundaryConditions.apply_bcs_inner_only.register_CFunction_apply_bcs_inner_only()
 
     # Register C function to apply boundary conditions to inner-only boundary points for specific gfs.
-    register_CFunction_apply_bcs_inner_only_specific_auxgfs()
+    CurviBoundaryConditions.apply_bcs_inner_only.register_CFunction_apply_bcs_inner_only_specific_auxgfs()
 
     # Register C function to apply boundary conditions to nonlocal inner-only boundary points.
     register_CFunction_apply_bcs_inner_only_nonlocal()
 
     # Register C function to apply boundary conditions to outer-extrapolated and inner boundary points.
-    register_CFunction_apply_bcs_outerextrap_and_inner()
+    CurviBoundaryConditions.apply_bcs_outerextrap_and_inner.register_CFunction_apply_bcs_outerextrap_and_inner()
 
     # Register C function to apply boundary conditions to outer-extrapolated and inner boundary points for specific gfs.
-    register_CFunction_apply_bcs_outerextrap_and_inner_specific_auxgfs()
+    CurviBoundaryConditions.apply_bcs_outerextrap_and_inner.register_CFunction_apply_bcs_outerextrap_and_inner_specific_auxgfs()
 
     # Register bcstruct's contribution to griddata_struct:
     griddata_commondata.register_griddata_commondata(
@@ -408,7 +405,7 @@ typedef struct __bc_struct__ {
 } bc_struct;
 """
     # inter-chare communication assumes auxevol parity types are set
-    CBC_BHd_str += BHaH_defines_set_gridfunction_defines_with_parity_types(
+    CBC_BHd_str += CurviBoundaryConditions.BHaH_defines.BHaH_defines_set_gridfunction_defines_with_parity_types(
         set_parity_on_aux=set_parity_on_aux,
         set_parity_on_auxevol=True,
         verbose=True,

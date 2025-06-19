@@ -1,6 +1,25 @@
-# nrpy/infrastructures/BHaH/MoLtimestepping/MoL_rk_substep.py
+# nrpy/infrastructures/BHaH/MoLtimestepping/rk_substep.py
 """
-Functions and classes for constructing individual Runge-Kutta substeps and the dictionary that stores them.
+Generates C code for individual substeps of Runge-Kutta (RK) time integration methods.
+
+This module acts as a low-level builder for the Method of Lines (MoL)
+framework. Its primary role is to convert the abstract, symbolic definition
+of an RK substep into a concrete, parallelized block of C code.
+
+The main components are:
+- `RKFunction` class: Encapsulates the C code generation for a single RK
+  update formula (e.g., `y_new = y_old + dt * b_i * k_i`). It creates a
+  self-contained C function, handling OpenMP/CUDA parallelization and
+  optional SIMD intrinsics.
+- `single_RK_substep_input_symbolic()`: The primary driver function. It
+  takes symbolic expressions and C function call strings to construct the
+  full sequence for one substep: RHS evaluation -> RK update -> boundary
+  conditions.
+- `MoL_Functions_dict`: A dictionary that registers all generated `RKFunction`
+  objects, making them available for compilation into the final C binary.
+
+The code blocks generated here are assembled by other MoL modules to create
+the complete `MoL_step_forward_in_time` function.
 
 Authors: Zachariah B. Etienne (lead maintainer)
          zachetie **at** gmail **dot* com

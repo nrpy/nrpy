@@ -17,14 +17,15 @@ import os
 import shutil
 
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import (
     BHaH_defines_h,
     CodeParameters,
+    CurviBoundaryConditions,
     Makefile_helpers,
+    MoLtimestepping,
     checkpointing,
     cmdline_input_and_parfiles,
     griddata_commondata,
@@ -35,7 +36,6 @@ from nrpy.infrastructures.BHaH import (
     xx_tofrom_Cart,
 )
 from nrpy.infrastructures.BHaH.general_relativity import BSSN, TOVola
-from nrpy.infrastructures.BHaH.MoLtimestepping import MoL_register_all
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -82,7 +82,6 @@ shutil.rmtree(project_dir, ignore_errors=True)
 par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 par.set_parval_from_str("fd_order", fd_order)
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
-
 
 #########################################################
 # STEP 2: Declare core C functions & register each to
@@ -152,12 +151,12 @@ numerical_grids_and_timestep.register_CFunctions(
     enable_CurviBCs=True,
 )
 
-cbc.CurviBoundaryConditions_register_C_functions(
+CurviBoundaryConditions.register_all.register_C_functions(
     set_of_CoordSystems={CoordSystem}, radiation_BC_fd_order=radiation_BC_fd_order
 )
 
 rhs_string = ""
-MoL_register_all.register_CFunctions(
+MoLtimestepping.register_all.register_CFunctions(
     MoL_method="RK4",
     rhs_string=rhs_string,
     post_rhs_string="",
@@ -176,7 +175,6 @@ rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 if CoordSystem == "SinhSpherical":
     par.adjust_CodeParam_default("SINHW", sinh_width)
 par.adjust_CodeParam_default("t_final", t_final)
-
 
 #########################################################
 # STEP 3: Generate header files, register C functions and

@@ -65,14 +65,14 @@
 // commondata_struct:
 // ----------------------------
 typedef struct __commondata_struct__ {
-  REAL CFL_FACTOR; // (nrpy.infrastructures.BHaH.MoLtimestepping.MoL_register_all)
-  REAL dt;         // (nrpy.infrastructures.BHaH.MoLtimestepping.MoL_register_all)
-  REAL t_0;        // (nrpy.infrastructures.BHaH.MoLtimestepping.MoL_register_all)
-  REAL t_final;    // (nrpy.infrastructures.BHaH.MoLtimestepping.MoL_register_all)
-  REAL time;       // (nrpy.infrastructures.BHaH.MoLtimestepping.MoL_register_all)
+  REAL CFL_FACTOR; // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
+  REAL dt;         // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
+  REAL t_0;        // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
+  REAL t_final;    // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
+  REAL time;       // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
   int NUMGRIDS;    // (nrpy.grid)
-  int nn;          // (nrpy.infrastructures.BHaH.MoLtimestepping.MoL_register_all)
-  int nn_0;        // (nrpy.infrastructures.BHaH.MoLtimestepping.MoL_register_all)
+  int nn;          // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
+  int nn_0;        // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
 } commondata_struct;
 
 // ----------------------------
@@ -106,7 +106,7 @@ typedef struct __params_struct__ {
 
 // ----------------------------
 // Basic definitions for module
-// nrpy.infrastructures.BHaH.MoLtimestepping.MoL_register_all:
+// nrpy.infrastructures.BHaH.MoLtimestepping.BHaH_defines:
 // ----------------------------
 typedef struct __MoL_gridfunctions_struct__ {
   REAL *restrict y_n_gfs;
@@ -201,7 +201,7 @@ typedef struct __griddata__ {
   // griddata_struct stores data needed on each grid
   // xx[3] stores the uniform grid coordinates.
   REAL *restrict xx[3];
-  // NRPy+ MODULE: nrpy.infrastructures.BHaH.MoLtimestepping.MoL_register_all
+  // NRPy+ MODULE: nrpy.infrastructures.BHaH.MoLtimestepping.register_all
   MoL_gridfunctions_struct gridfuncs; // <- MoL gridfunctions
   // NRPy+ MODULE: params
   params_struct params; // <- BHaH parameters, generated from NRPy+'s CodeParameters

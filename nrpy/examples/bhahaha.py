@@ -25,6 +25,7 @@ import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import (
+    MoLtimestepping,
     rfm_precompute,
     xx_tofrom_Cart,
 )
@@ -57,7 +58,6 @@ from nrpy.infrastructures.BHaH.BHaHAHA import (
     rhs_eval_KO_apply,
     xyz_center_r_minmax,
 )
-from nrpy.infrastructures.BHaH.MoLtimestepping import MoL_register_all
 
 parser = argparse.ArgumentParser(
     description="BHaHAHA, the BlackHoles@Home Apparent Horizon Algorithm"
@@ -182,7 +182,7 @@ if(commondata->KO_diss_strength > 0.0)
 """
 if not enable_rfm_precompute:
     rhs_string = rhs_string.replace("rfmstruct", "xx")
-MoL_register_all.register_CFunctions(
+MoLtimestepping.register_all.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,
     post_rhs_string="bah_apply_bcs_inner_only(commondata, params, bcstruct, RK_OUTPUT_GFS);",

@@ -23,7 +23,6 @@ from pathlib import Path
 
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.BHaHAHA.interpolation_2d_general__uniform_src_grid as interpolation2d
-import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 import nrpy.infrastructures.BHaH.parallelization.cuda_utilities as cudautils
 import nrpy.infrastructures.BHaH.special_functions.spin_weight_minus2_spherical_harmonics as swm2sh
@@ -33,7 +32,9 @@ from nrpy.infrastructures.BHaH import (
     BHaH_defines_h,
     BHaH_device_defines_h,
     CodeParameters,
+    CurviBoundaryConditions,
     Makefile_helpers,
+    MoLtimestepping,
     checkpointing,
     cmdline_input_and_parfiles,
     griddata_commondata,
@@ -49,7 +50,6 @@ from nrpy.infrastructures.BHaH.general_relativity import (
     NRPyPN_quasicircular_momenta,
     TwoPunctures,
 )
-from nrpy.infrastructures.BHaH.MoLtimestepping import MoL_register_all
 
 parser = argparse.ArgumentParser(
     description="NRPyElliptic Solver for Conformally Flat BBH initial data"
@@ -175,7 +175,6 @@ par.set_parval_from_str(
     "swm2sh_maximum_l_mode_generated", swm2sh_maximum_l_mode_generated
 )
 
-
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
@@ -296,7 +295,7 @@ numerical_grids_and_timestep.register_CFunctions(
     enable_CurviBCs=True,
 )
 
-cbc.CurviBoundaryConditions_register_C_functions(
+CurviBoundaryConditions.register_all.register_C_functions(
     set_of_CoordSystems=set_of_CoordSystems,
     radiation_BC_fd_order=radiation_BC_fd_order,
     set_parity_on_aux=True,
@@ -319,7 +318,7 @@ if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
 if not enable_rfm_precompute:
     rhs_string = rhs_string.replace("rfmstruct", "xx")
 
-MoL_register_all.register_CFunctions(
+MoLtimestepping.register_all.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,
     post_rhs_string="""if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)

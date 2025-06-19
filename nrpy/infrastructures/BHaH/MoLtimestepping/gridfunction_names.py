@@ -1,7 +1,22 @@
-# nrpy/infrastructures/BHaH/MoLtimestepping/MoL_gridfunction_names.py
+# nrpy/infrastructures/BHaH/MoLtimestepping/gridfunction_names.py
 """
-Functions for naming the gridfunctions (y_n_gfs, k_i gfs, etc.) based on the chosen Method of Lines method.
-Also checks whether a Butcher table is diagonal.
+Determines the names of gridfunction arrays for Method of Lines (MoL) time integration.
+
+This module provides the naming convention for C arrays that store gridfunction
+data during a time step. The required arrays and their names depend on the
+chosen MoL algorithm (e.g., a specific Runge-Kutta method), ensuring
+consistency between memory allocation and the time-stepping logic.
+
+The core function, `generate_gridfunction_names`, inspects the algorithm's
+Butcher tableau to decide on a memory layout:
+- For diagonal Butcher tables (used in memory-optimized explicit methods),
+  a compact set of arrays (`k_odd_gfs`, `k_even_gfs`) is used to store
+  intermediate Runge-Kutta stages, reusing memory.
+- For non-diagonal tables (used in generic or implicit methods), a separate
+  array is named for each stage (`k1_gfs`, `k2_gfs`, ...).
+
+These names are then used by other MoL modules to create the
+`MoL_gridfunctions_struct` and implement the stepping algorithm.
 
 Authors: Zachariah B. Etienne (lead maintainer)
          zachetie **at** gmail **dot* com
@@ -53,8 +68,8 @@ def generate_gridfunction_names(
              diagnostic_gridfunctions_point_to, and diagnostic_gridfunctions2_point_to.
 
     Doctests:
-    >>> from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import generate_Butcher_tables
-    >>> Butcher_dict = generate_Butcher_tables()
+    >>> from nrpy.infrastructures.BHaH import MoLtimestepping
+    >>> Butcher_dict = MoLtimestepping.rk_butcher_table_dictionary.generate_Butcher_tables()
     >>> generate_gridfunction_names(Butcher_dict, "RK2 Heun")
     ('y_n_gfs', ['y_nplus1_running_total_gfs', 'k_odd_gfs', 'k_even_gfs', 'auxevol_gfs'], 'y_nplus1_running_total_gfs', 'k_odd_gfs')
     >>> generate_gridfunction_names(Butcher_dict, "RK3")

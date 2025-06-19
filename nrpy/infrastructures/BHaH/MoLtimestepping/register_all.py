@@ -1,32 +1,29 @@
-# nrpy/infrastructures/BHaH/MoLtimestepping/MoL_register_all.py
+# nrpy/infrastructures/BHaH/MoLtimestepping/register_all.py
 """
-A one-stop function to register *all* MoL C-functions in the correct order.
-This includes memory allocation, free, and the main step-forward function.
+Registers all C code components for Method of Lines (MoL) time integration.
+
+This module provides a "one-stop shop" for setting up the time-stepping
+framework within the NRPy BHaH infrastructure. It uses the Method of Lines
+approach, where spatial derivatives are discretized first, yielding a large
+system of ordinary differential equations (ODEs) that are then solved
+numerically.
+
+The main function, `register_CFunctions`, generates and registers all
+necessary C components, including:
+- The core `MoL_step_forward_in_time` function, which evolves gridfunctions
+  by one timestep using a specified algorithm (e.g., Runge-Kutta).
+- Memory allocation and deallocation routines for the temporary storage
+  (e.g., Runge-Kutta stages) required by the chosen integrator.
+- The `MoL_gridfunctions_struct` to manage all MoL-related data.
+- C preprocessor definitions related to the MoL algorithm.
 
 Authors: Zachariah B. Etienne (lead maintainer)
          zachetie **at** gmail **dot* com
          Samuel Tootle (GPU support in NRPy2)
          Brandon Clark (original, NRPy1 version)
 """
-
 import nrpy.params as par
-from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
-from nrpy.infrastructures.BHaH.MoLtimestepping.MoL_allocators import (
-    register_CFunction_MoL_free_memory,
-    register_CFunction_MoL_malloc,
-)
-from nrpy.infrastructures.BHaH.MoLtimestepping.MoL_gridfunction_names import (
-    generate_gridfunction_names,
-)
-from nrpy.infrastructures.BHaH.MoLtimestepping.MoL_rk_substep import (
-    check_supported_parallelization,
-)
-from nrpy.infrastructures.BHaH.MoLtimestepping.MoL_step_forward import (
-    register_CFunction_MoL_step_forward_in_time,
-)
-from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import (
-    generate_Butcher_tables,
-)
+from nrpy.infrastructures.BHaH import MoLtimestepping, griddata_commondata
 
 # fmt: off
 _ = par.CodeParameter("int", __name__, "nn_0", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
@@ -36,6 +33,8 @@ _ = par.CodeParameter("REAL", __name__, "dt", add_to_parfile=False, add_to_set_C
 _ = par.CodeParameter("REAL", __name__, "t_0", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
 _ = par.CodeParameter("REAL", __name__, "time", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
 _ = par.CodeParameter("REAL", __name__, "t_final", 10.0, commondata=True)
+
+
 # fmt: on
 
 
@@ -108,19 +107,22 @@ def register_CFunctions(
     } // END FUNCTION MoL_malloc_non_y_n_gfs
     <BLANKLINE>
     """
-    parallelization = par.parval_from_str("parallelization")
-    check_supported_parallelization("register_CFunctions")
+    MoLtimestepping.rk_substep.check_supported_parallelization("register_CFunctions")
 
-    Butcher_dict = generate_Butcher_tables()
+    Butcher_dict = MoLtimestepping.rk_butcher_table_dictionary.generate_Butcher_tables()
 
     # Step 1: Build all memory alloc and free:
     for which_gfs in ["y_n_gfs", "non_y_n_gfs"]:
-        register_CFunction_MoL_malloc(Butcher_dict, MoL_method, which_gfs)
-        register_CFunction_MoL_free_memory(Butcher_dict, MoL_method, which_gfs)
+        MoLtimestepping.allocators.register_CFunction_MoL_malloc(
+            Butcher_dict, MoL_method, which_gfs
+        )
+        MoLtimestepping.allocators.register_CFunction_MoL_free_memory(
+            Butcher_dict, MoL_method, which_gfs
+        )
 
     # Step 2: Possibly register the main stepping function:
     if register_MoL_step_forward_in_time:
-        register_CFunction_MoL_step_forward_in_time(
+        MoLtimestepping.step_forward.register_CFunction_MoL_step_forward_in_time(
             Butcher_dict,
             MoL_method,
             rhs_string,
@@ -137,26 +139,7 @@ def register_CFunctions(
         __name__, "MoL_gridfunctions_struct gridfuncs", "MoL gridfunctions"
     )
 
-    (
-        y_n_gridfunctions,
-        non_y_n_gridfunctions_list,
-        _diag_pt,
-        _diag_pt2,
-    ) = generate_gridfunction_names(Butcher_dict, MoL_method=MoL_method)
-
-    BHaH_MoL_body: str = (
-        "typedef struct __MoL_gridfunctions_struct__ {\n"
-        + f"REAL *restrict {y_n_gridfunctions};\n"
-        + "".join(f"REAL *restrict {gfs};\n" for gfs in non_y_n_gridfunctions_list)
-        + r"""REAL *restrict diagnostic_output_gfs;
-REAL *restrict diagnostic_output_gfs2;
-} MoL_gridfunctions_struct;
-"""
-    )
-    if parallelization != "openmp":
-        BHaH_MoL_body = BHaH_MoL_body.replace("REAL *restrict ", "REAL * ")
-
-    BHaH_defines_h.register_BHaH_defines(__name__, BHaH_MoL_body)
+    MoLtimestepping.BHaH_defines.register_BHaH_defines_h(Butcher_dict, MoL_method)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,20 @@
+# nrpy/infrastructures/BHaH/MoLtimestepping/rk_butcher_table_dictionary.py
 """
-Construct a Python dictionary of Butcher tables for explicit RK methods.
+Defines a comprehensive dictionary of Butcher tables for various explicit time integration methods.
+
+This module serves as a central repository for the coefficients that define
+numerical schemes used in the Method of Lines (MoL) framework. The core
+function, `generate_Butcher_tables`, constructs a dictionary mapping method
+names (e.g., "RK4", "DP5") to their corresponding Butcher tableaux.
+
+The collection includes a wide range of explicit methods:
+- Standard Runge-Kutta (RK) schemes of various orders.
+- Strong Stability Preserving (SSP) methods.
+- Embedded pairs for adaptive step-size control (e.g., Dormand-Prince, Cash-Karp).
+- Optionally, Adams-Bashforth multi-step methods.
+
+The MoL time-stepping modules use this dictionary to retrieve the appropriate
+coefficients and generate the C code for evolving the system in time.
 
 Authors: Brandon Clark
          Zachariah B. Etienne

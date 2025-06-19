@@ -1,6 +1,23 @@
-# nrpy/infrastructures/BHaH/MoLtimestepping/MoL_step_forward.py
+# nrpy/infrastructures/BHaH/MoLtimestepping/step_forward.py
 """
-Register the core function that performs one full MoL time step, assembling substeps as needed.
+Generates the core C function for advancing the solution one full time step using the Method of Lines.
+
+This module is responsible for constructing the main driver function,
+`MoL_step_forward_in_time`, which orchestrates the sequence of
+operations needed to evolve all gridfunctions over a single time step, `dt`.
+
+The function `register_CFunction_MoL_step_forward_in_time` assembles the
+complete time step by:
+1.  Retrieving the Butcher tableau for the specified Method of Lines (MoL)
+    integration algorithm (e.g., "RK4").
+2.  Iterating through the stages (substeps) of the algorithm.
+3.  For each substep, calling `single_RK_substep_input_symbolic` to generate
+    the C code for the right-hand side (RHS) evaluation, the Runge-Kutta (RK)
+    update, and the application of boundary conditions.
+4.  Combining these C code blocks into a single, comprehensive C function.
+
+This top-level function manages the flow of data between gridfunction arrays
+(e.g., `y_n_gfs`, `k_odd_gfs`) according to the logic of the chosen integrator.
 
 Authors: Zachariah B. Etienne (lead maintainer)
          zachetie **at** gmail **dot* com
@@ -16,11 +33,11 @@ import sympy as sp
 
 import nrpy.c_function as cfc
 import nrpy.params as par
-from nrpy.infrastructures.BHaH.MoLtimestepping.MoL_gridfunction_names import (
+from nrpy.infrastructures.BHaH.MoLtimestepping.gridfunction_names import (
     generate_gridfunction_names,
     is_diagonal_Butcher,
 )
-from nrpy.infrastructures.BHaH.MoLtimestepping.MoL_rk_substep import (
+from nrpy.infrastructures.BHaH.MoLtimestepping.rk_substep import (
     check_supported_parallelization,
     construct_RK_functions_prefunc,
     single_RK_substep_input_symbolic,
@@ -55,11 +72,9 @@ def register_CFunction_MoL_step_forward_in_time(
     Doctest:
     >>> import nrpy.c_function as cfc
     >>> import nrpy.params as par
-    >>> from nrpy.infrastructures.BHaH.MoLtimestepping.MoL_step_forward import register_CFunction_MoL_step_forward_in_time
-    >>> from nrpy.infrastructures.BHaH.MoLtimestepping.MoL_rk_substep import MoL_Functions_dict
+    >>> from nrpy.infrastructures.BHaH import MoLtimestepping
     >>> from nrpy.helpers.generic import validate_strings
-    >>> from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import generate_Butcher_tables
-    >>> Butcher_dict = generate_Butcher_tables()
+    >>> Butcher_dict = MoLtimestepping.rk_butcher_table_dictionary.generate_Butcher_tables()
     >>> rhs_string = "rhs_eval(commondata, params, rfmstruct,  auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);"
     >>> post_rhs_string = (
     ... "if (strncmp(commondata->outer_bc_type, \"extrapolation\", 50) == 0)\n"
@@ -69,7 +84,7 @@ def register_CFunction_MoL_step_forward_in_time(
     >>> for k, v in Butcher_dict.items():
     ...     Butcher = Butcher_dict[k][0]
     ...     cfc.CFunction_dict.clear()
-    ...     MoL_Functions_dict.clear()
+    ...     MoLtimestepping.rk_substep.MoL_Functions_dict.clear()
     ...     if Butcher[-1][0] != "":
     ...         continue  # skip adaptive methods
     ...     par.set_parval_from_str("parallelization", "cuda")
@@ -85,7 +100,7 @@ def register_CFunction_MoL_step_forward_in_time(
     ...     validation_desc = f"CUDA__MoL_step_forward_in_time__{k}".replace(" ", "_")
     ...     validate_strings(generated_str, validation_desc, file_ext="cu")
     >>> cfc.CFunction_dict.clear()
-    >>> MoL_Functions_dict.clear()
+    >>> MoLtimestepping.rk_substep.MoL_Functions_dict.clear()
     >>> try:
     ...     register_CFunction_MoL_step_forward_in_time(Butcher_dict, "AHE")
     ... except ValueError as e:

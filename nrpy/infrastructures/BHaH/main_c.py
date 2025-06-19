@@ -1,5 +1,24 @@
 """
-Generate the C main() function for all codes in the BHaH infrastructure.
+Generates the main C `main()` function for simulations within the BHaH infrastructure.
+
+This module acts as the final assembler for a BHaH-based executable, creating
+the top-level `main()` function that orchestrates the entire simulation.
+
+The `register_CFunction_main_c` function constructs a standard simulation
+lifecycle, which includes:
+- Parsing command-line arguments and parameter files.
+- Setting up numerical grids and the time step.
+- Allocating memory for all required gridfunctions.
+- Setting the initial data.
+- Executing the main time-evolution loop.
+- Freeing memory upon completion.
+
+A key feature is its configurability. The main loop is designed with specific
+hooks (e.g., `pre_diagnostics`, `post_MoL_step_forward_in_time`) that allow
+custom C code to be injected at various stages, enabling flexible simulation
+logic without altering the core structure. The module also validates that all
+necessary C functions from other components have been registered before
+generating the `main` function that calls them.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -328,9 +347,9 @@ def register_CFunction_main_c(
     >>> import nrpy.params as par
     >>> from nrpy.infrastructures.BHaH import (
     ...     CodeParameters,
+    ...     MoLtimestepping,
     ...     cmdline_input_and_parfiles,
     ...     numerical_grids_and_timestep,
-    ...     MoLtimestepping,
     ... )
     >>> # We need diagnostics and initial data functions to be registered, so we choose wave_equation for simplicity
     >>> from nrpy.infrastructures.BHaH.wave_equation import diagnostics, initial_data_exact_soln
@@ -346,7 +365,7 @@ def register_CFunction_main_c(
     ...    cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(project_name)
     ...    _ = diagnostics.register_CFunction_diagnostics(set_of_coordsys, 100)
     ...    _ = numerical_grids_and_timestep.register_CFunctions(set_of_coordsys, [5], Nxx_dict)
-    ...    _ = MoLtimestepping.MoL_register_all.register_CFunctions()
+    ...    _ = MoLtimestepping.register_all.register_CFunctions()
     ...    _ = initial_data_exact_soln.register_CFunction_initial_data(1)
     ...    register_CFunction_main_c("RK4")
     ...    generated_str = cfc.CFunction_dict["main"].full_function

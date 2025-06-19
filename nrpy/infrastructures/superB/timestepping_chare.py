@@ -15,13 +15,7 @@ import sympy as sp  # Import SymPy, a computer algebra system written entirely i
 import nrpy.c_function as cfc
 import nrpy.params as par
 from nrpy.helpers.generic import clang_format
-from nrpy.infrastructures.BHaH import griddata_commondata
-from nrpy.infrastructures.BHaH.MoLtimestepping.MoL_gridfunction_names import (
-    generate_gridfunction_names,
-)
-from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import (
-    generate_Butcher_tables,
-)
+from nrpy.infrastructures.BHaH import MoLtimestepping, griddata_commondata
 from nrpy.infrastructures.superB.MoL import (
     generate_post_rhs_output_list,
     generate_rhs_output_exprs,
@@ -513,7 +507,9 @@ def generate_switch_statement_for_gf_types(
         non_y_n_gridfunctions_list,
         _diagnostic_gridfunctions_point_to,
         _diagnostic_gridfunctions2_point_to,
-    ) = generate_gridfunction_names(Butcher_dict, MoL_method=MoL_method)
+    ) = MoLtimestepping.gridfunction_names.generate_gridfunction_names(
+        Butcher_dict, MoL_method=MoL_method
+    )
 
     # Convert y_n_gridfunctions to a list if it's a string
     gf_list = (
@@ -600,7 +596,9 @@ def generate_switch_statement_for_gf_types_for_entry_method(
         non_y_n_gridfunctions_list,
         _diagnostic_gridfunctions_point_to,
         _diagnostic_gridfunctions2_point_to,
-    ) = generate_gridfunction_names(Butcher_dict, MoL_method=MoL_method)
+    ) = MoLtimestepping.gridfunction_names.generate_gridfunction_names(
+        Butcher_dict, MoL_method=MoL_method
+    )
 
     # Convert y_n_gridfunctions to a list if it's a string
     gf_list = (
@@ -660,7 +658,9 @@ def generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
         non_y_n_gridfunctions_list,
         _diagnostic_gridfunctions_point_to,
         _diagnostic_gridfunctions2_point_to,
-    ) = generate_gridfunction_names(Butcher_dict, MoL_method=MoL_method)
+    ) = MoLtimestepping.gridfunction_names.generate_gridfunction_names(
+        Butcher_dict, MoL_method=MoL_method
+    )
 
     # Convert y_n_gridfunctions to a list if it's a string
     gf_list: List[str] = (
@@ -2093,7 +2093,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         enable_L2norm_BSSN_constraints_diagnostics=enable_L2norm_BSSN_constraints_diagnostics,
     )
 
-    Butcher_dict = generate_Butcher_tables()
+    Butcher_dict = MoLtimestepping.rk_butcher_table_dictionary.generate_Butcher_tables()
 
     output_timestepping_cpp(
         project_dir=project_dir,
