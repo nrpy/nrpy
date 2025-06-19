@@ -159,9 +159,9 @@ def _generate_main_body(
 
     # Step 0: Variable declarations
     declarations_c_code = "commondata_struct commondata; // commondata contains parameters common to all grids.\n"
-    declarations_c_code += f"griddata_struct *restrict {compute_griddata}; // griddata contains data specific to an individual grid.\n"
+    declarations_c_code += f"griddata_struct *{compute_griddata}; // griddata contains data specific to an individual grid.\n"
     if is_cuda:
-        declarations_c_code += r"""griddata_struct *restrict griddata_host; // stores only the host data needed for diagnostics
+        declarations_c_code += r"""griddata_struct *griddata_host; // stores only the host data needed for diagnostics
 #include "BHaH_CUDA_global_init.h"
 """
     body_parts.append(declarations_c_code)
