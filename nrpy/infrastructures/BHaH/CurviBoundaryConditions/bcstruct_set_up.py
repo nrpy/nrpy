@@ -499,12 +499,12 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
     wasteful, but only in memory, not in CPU."""
     cfunc_type = "void"
     name = "bcstruct_set_up"
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], bc_struct *restrict bcstruct"
-    params += ", int8_t *restrict mask" if enable_masks else ""
+    params = "const commondata_struct *restrict commondata, const params_struct *restrict params"
+    params += ", const int8_t *restrict mask" if enable_masks else ""
+    params += ", REAL *restrict xx[3], bc_struct *restrict bcstruct"
     params += (
         "" if parallelization != "cuda" else ", bc_struct *restrict bcstruct_device"
     )
-    params += ", const int8_t *restrict mask" if enable_masks else ""
 
     # Setup host-side struct to populate before copying to device
     body = r"""

@@ -642,11 +642,11 @@ def register_CFunction_numerical_grids_and_timestep(
         body += "for(int grid=0; grid<commondata->NUMGRIDS; grid++) {\n"
         mask_arg = ""
         if enable_masks:
-            mask_arg = ", griddata[grid].mask"
+            mask_arg = "griddata[grid].mask,"
             if parallelization == "cuda":
                 raise ValueError("CUDA parallelization does not yet support masking.")
         body += (
-            f"bcstruct_set_up(commondata, &griddata[grid].params, griddata[grid].xx, &griddata[grid].bcstruct {mask_arg});\n"
+            f"bcstruct_set_up(commondata, &griddata[grid].params, {mask_arg} griddata[grid].xx, &griddata[grid].bcstruct);\n"
             if parallelization != "cuda"
             else "bcstruct_set_up(commondata, &griddata[grid].params, griddata_host[grid].xx, &griddata_host[grid].bcstruct, &griddata[grid].bcstruct);\n"
         )
