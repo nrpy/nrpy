@@ -167,7 +167,7 @@ def _generate_main_body(
     body_parts.append(declarations_c_code)
 
     # Step 1: Initialization
-    griddata_malloc_code = f"{compute_griddata} = (griddata_struct *restrict)malloc(sizeof(griddata_struct)*MAXNUMGRIDS);"
+    griddata_malloc_code = f"{compute_griddata} = (griddata_struct *)malloc(sizeof(griddata_struct) * MAXNUMGRIDS);"
     if is_cuda:
         griddata_malloc_code += "\ngriddata_host = (griddata_struct *)malloc(sizeof(griddata_struct) * MAXNUMGRIDS);"
     numerical_grids_args = (
@@ -281,8 +281,13 @@ while(commondata.time < commondata.t_final) { // Main loop to progress forward i
 
     # Step 6: Free all allocated memory
     device_sync = "BHAH_DEVICE_SYNC();" if is_cuda else ""
-    free_memory_code = ""
-    if is_cuda:
+    if not is_cuda:
+        free_memory_code = rf"""
+  const bool free_non_y_n_gfs_and_core_griddata_pointers=true;
+  griddata_free(&commondata, {compute_griddata}, free_non_y_n_gfs_and_core_griddata_pointers);
+}}
+        """
+    else:
         free_memory_code = rf"""
   const bool free_non_y_n_gfs_and_core_griddata_pointers=true;
   griddata_free_device(&commondata, {compute_griddata}, free_non_y_n_gfs_and_core_griddata_pointers);
@@ -293,12 +298,6 @@ for (int i = 0; i < NUM_STREAMS; ++i) {{
 }}
 BHAH_DEVICE_SYNC();
 cudaDeviceReset();
-"""
-    else:
-        free_memory_code = rf"""
-  const bool free_non_y_n_gfs_and_core_griddata_pointers=true;
-  griddata_free(&commondata, {compute_griddata}, free_non_y_n_gfs_and_core_griddata_pointers);
-}}
 """
     body_parts.append(
         f"""
@@ -314,7 +313,7 @@ cudaDeviceReset();
 
     # Construct the final body string and perform necessary replacements.
     body = "".join(body_parts)
-    return body.replace("*restrict", "*")
+    return body
 
 
 def register_CFunction_main_c(
