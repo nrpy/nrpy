@@ -400,12 +400,12 @@ void bcstruct_set_up__rfm__Cartesian(const commondata_struct *restrict commondat
     // x0min face: Can't set bc_info->bc_loop_bounds[which_gz][face] = { i0min,i0max, ... } since it's not const :(
     for (int i = 0; i < 6; i++) {
       bcstruct->bc_info.bc_loop_bounds[which_gz][face][i] = x0min_face_range[i];
-    }
+    } // END LOOP over all six faces of the grid
     face++;
     // x0max face: Set loop bounds & allocate memory for outer_bc_array:
     for (int i = 0; i < 6; i++) {
       bcstruct->bc_info.bc_loop_bounds[which_gz][face][i] = x0max_face_range[i];
-    }
+    } // END LOOP over all six faces of the grid
     face++;
     ////////////////////////
 
@@ -419,12 +419,12 @@ void bcstruct_set_up__rfm__Cartesian(const commondata_struct *restrict commondat
     // x1min face: Can't set bc_info->bc_loop_bounds[which_gz][face] = { i0min,i0max, ... } since it's not const :(
     for (int i = 0; i < 6; i++) {
       bcstruct->bc_info.bc_loop_bounds[which_gz][face][i] = x1min_face_range[i];
-    }
+    } // END LOOP over all six faces of the grid
     face++;
     // x1max face: Set loop bounds & allocate memory for outer_bc_array:
     for (int i = 0; i < 6; i++) {
       bcstruct->bc_info.bc_loop_bounds[which_gz][face][i] = x1max_face_range[i];
-    }
+    } // END LOOP over all six faces of the grid
     face++;
     ////////////////////////
 
@@ -438,15 +438,15 @@ void bcstruct_set_up__rfm__Cartesian(const commondata_struct *restrict commondat
     // x2min face: Can't set bc_info->bc_loop_bounds[which_gz][face] = { i0min,i0max, ... } since it's not const :(
     for (int i = 0; i < 6; i++) {
       bcstruct->bc_info.bc_loop_bounds[which_gz][face][i] = x2min_face_range[i];
-    }
+    } // END LOOP over all six faces of the grid
     face++;
     // x2max face: Set loop bounds & allocate memory for outer_bc_array:
     for (int i = 0; i < 6; i++) {
       bcstruct->bc_info.bc_loop_bounds[which_gz][face][i] = x2max_face_range[i];
-    }
+    } // END LOOP over all six faces of the grid
     face++;
     ////////////////////////
-  }
+  } // END LOOP over ghost zones, from inner to outer.
 
   for (int which_gz = 0; which_gz < NGHOSTS; which_gz++)
     for (int dirn = 0; dirn < 3; dirn++) {

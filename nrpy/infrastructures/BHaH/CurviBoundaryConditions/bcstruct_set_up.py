@@ -519,7 +519,7 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
     mask_check = ""
     if enable_masks:
         mask_check = "&& mask[IDX3(i0, i1, i2)] != UNSET"
-    body += f"if (!IS_IN_GRID_INTERIOR(i0i1i2, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, NGHOSTS) {mask_check}) {{\n"
+    body += f"if (!IS_IN_GRID_INTERIOR(i0i1i2, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, NGHOSTS) {mask_check}) {{"
     body += """
         REAL x0x1x2_inbounds[3];
         int i0i1i2_inbounds[3];
@@ -546,7 +546,7 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
     LOOP_NOOMP(i0, 0, Nxx_plus_2NGHOSTS0, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
       const int i0i1i2[3] = {i0, i1, i2};
 """
-    body += f"if (!IS_IN_GRID_INTERIOR(i0i1i2, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, NGHOSTS) {mask_check}) {{\n"
+    body += f"if (!IS_IN_GRID_INTERIOR(i0i1i2, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, NGHOSTS) {mask_check}) {{"
     body += r"""
         REAL x0x1x2_inbounds[3];
         int i0i1i2_inbounds[3];
