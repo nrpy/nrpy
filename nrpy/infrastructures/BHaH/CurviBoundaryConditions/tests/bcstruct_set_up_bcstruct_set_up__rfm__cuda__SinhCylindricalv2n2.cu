@@ -405,8 +405,9 @@ void bcstruct_set_up__rfm__SinhCylindricalv2n2(const commondata_struct *restrict
     ////////////////////////
     // x0min and x0max faces: Allocate memory for outer_bc_array and set bc_loop_bounds:
     //                        Note that x0min and x0max faces have exactly the same size.
-    //                   Also, note that face/2 --v   offsets this factor of 2 ------------------------------------------v
+    //                   Also, note that    face/2 ---v
     bcstruct->pure_outer_bc_array[3 * which_gz + face / 2] = (outerpt_bc_struct *)malloc(
+        //   offsets this factor of 2 --v
         sizeof(outerpt_bc_struct) * 2 *
         ((x0min_face_range[1] - x0min_face_range[0]) * (x0min_face_range[3] - x0min_face_range[2]) * (x0min_face_range[5] - x0min_face_range[4])));
     // x0min face: Can't set bc_info->bc_loop_bounds[which_gz][face] = { i0min,i0max, ... } since it's not const :(
@@ -414,7 +415,7 @@ void bcstruct_set_up__rfm__SinhCylindricalv2n2(const commondata_struct *restrict
       bcstruct->bc_info.bc_loop_bounds[which_gz][face][i] = x0min_face_range[i];
     } // END LOOP over all six faces of the grid
     face++;
-    // x0max face: Set loop bounds & allocate memory for outer_bc_array:
+    // x0max face: Set loop bounds:
     for (int i = 0; i < 6; i++) {
       bcstruct->bc_info.bc_loop_bounds[which_gz][face][i] = x0max_face_range[i];
     } // END LOOP over all six faces of the grid
@@ -424,8 +425,9 @@ void bcstruct_set_up__rfm__SinhCylindricalv2n2(const commondata_struct *restrict
     ////////////////////////
     // x1min and x1max faces: Allocate memory for outer_bc_array and set bc_loop_bounds:
     //                        Note that x1min and x1max faces have exactly the same size.
-    //                   Also, note that face/2 --v   offsets this factor of 2 ------------------------------------------v
+    //                   Also, note that    face/2 ---v
     bcstruct->pure_outer_bc_array[3 * which_gz + face / 2] = (outerpt_bc_struct *)malloc(
+        //   offsets this factor of 2 --v
         sizeof(outerpt_bc_struct) * 2 *
         ((x1min_face_range[1] - x1min_face_range[0]) * (x1min_face_range[3] - x1min_face_range[2]) * (x1min_face_range[5] - x1min_face_range[4])));
     // x1min face: Can't set bc_info->bc_loop_bounds[which_gz][face] = { i0min,i0max, ... } since it's not const :(
@@ -433,7 +435,7 @@ void bcstruct_set_up__rfm__SinhCylindricalv2n2(const commondata_struct *restrict
       bcstruct->bc_info.bc_loop_bounds[which_gz][face][i] = x1min_face_range[i];
     } // END LOOP over all six faces of the grid
     face++;
-    // x1max face: Set loop bounds & allocate memory for outer_bc_array:
+    // x1max face: Set loop bounds:
     for (int i = 0; i < 6; i++) {
       bcstruct->bc_info.bc_loop_bounds[which_gz][face][i] = x1max_face_range[i];
     } // END LOOP over all six faces of the grid
@@ -443,8 +445,9 @@ void bcstruct_set_up__rfm__SinhCylindricalv2n2(const commondata_struct *restrict
     ////////////////////////
     // x2min and x2max faces: Allocate memory for outer_bc_array and set bc_loop_bounds:
     //                        Note that x2min and x2max faces have exactly the same size.
-    //                   Also, note that face/2 --v   offsets this factor of 2 ------------------------------------------v
+    //                   Also, note that    face/2 ---v
     bcstruct->pure_outer_bc_array[3 * which_gz + face / 2] = (outerpt_bc_struct *)malloc(
+        //   offsets this factor of 2 --v
         sizeof(outerpt_bc_struct) * 2 *
         ((x2min_face_range[1] - x2min_face_range[0]) * (x2min_face_range[3] - x2min_face_range[2]) * (x2min_face_range[5] - x2min_face_range[4])));
     // x2min face: Can't set bc_info->bc_loop_bounds[which_gz][face] = { i0min,i0max, ... } since it's not const :(
@@ -452,7 +455,7 @@ void bcstruct_set_up__rfm__SinhCylindricalv2n2(const commondata_struct *restrict
       bcstruct->bc_info.bc_loop_bounds[which_gz][face][i] = x2min_face_range[i];
     } // END LOOP over all six faces of the grid
     face++;
-    // x2max face: Set loop bounds & allocate memory for outer_bc_array:
+    // x2max face: Set loop bounds:
     for (int i = 0; i < 6; i++) {
       bcstruct->bc_info.bc_loop_bounds[which_gz][face][i] = x2max_face_range[i];
     } // END LOOP over all six faces of the grid

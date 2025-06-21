@@ -516,10 +516,10 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
     LOOP_OMP("omp parallel for reduction(+:num_inner)", i0, 0, Nxx_plus_2NGHOSTS0, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
       const int i0i1i2[3] = {i0, i1, i2};
 """
-    mask_check = ""
+    unset_mask_check = ""
     if enable_masks:
-        mask_check = "&& mask[IDX3(i0, i1, i2)] != UNSET"
-    body += f"if (!IS_IN_GRID_INTERIOR(i0i1i2, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, NGHOSTS) {mask_check}) {{"
+        unset_mask_check = "&& mask[IDX3(i0, i1, i2)] != UNSET"
+    body += f"if (!IS_IN_GRID_INTERIOR(i0i1i2, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, NGHOSTS) {unset_mask_check}) {{"
     body += """
         REAL x0x1x2_inbounds[3];
         int i0i1i2_inbounds[3];
@@ -546,7 +546,7 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
     LOOP_NOOMP(i0, 0, Nxx_plus_2NGHOSTS0, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
       const int i0i1i2[3] = {i0, i1, i2};
 """
-    body += f"if (!IS_IN_GRID_INTERIOR(i0i1i2, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, NGHOSTS) {mask_check}) {{"
+    body += f"if (!IS_IN_GRID_INTERIOR(i0i1i2, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, NGHOSTS) {unset_mask_check}) {{"
     body += r"""
         REAL x0x1x2_inbounds[3];
         int i0i1i2_inbounds[3];
@@ -591,8 +591,9 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
     ////////////////////////
     // x0min and x0max faces: Allocate memory for outer_bc_array and set bc_loop_bounds:
     //                        Note that x0min and x0max faces have exactly the same size.
-    //                   Also, note that face/2 --v   offsets this factor of 2 ------------------------------------------v
+    //                   Also, note that    face/2 ---v
     bcstruct->pure_outer_bc_array[3 * which_gz + face / 2] = (outerpt_bc_struct *)malloc(
+    //   offsets this factor of 2 --v
         sizeof(outerpt_bc_struct) * 2 *
         ((x0min_face_range[1] - x0min_face_range[0]) * (x0min_face_range[3] - x0min_face_range[2]) * (x0min_face_range[5] - x0min_face_range[4])));
     // x0min face: Can't set bc_info->bc_loop_bounds[which_gz][face] = { i0min,i0max, ... } since it's not const :(
@@ -600,7 +601,7 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
       bcstruct->bc_info.bc_loop_bounds[which_gz][face][i] = x0min_face_range[i];
     } // END LOOP over all six faces of the grid
     face++;
-    // x0max face: Set loop bounds & allocate memory for outer_bc_array:
+    // x0max face: Set loop bounds:
     for (int i = 0; i < 6; i++) {
       bcstruct->bc_info.bc_loop_bounds[which_gz][face][i] = x0max_face_range[i];
     } // END LOOP over all six faces of the grid
@@ -610,8 +611,9 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
     ////////////////////////
     // x1min and x1max faces: Allocate memory for outer_bc_array and set bc_loop_bounds:
     //                        Note that x1min and x1max faces have exactly the same size.
-    //                   Also, note that face/2 --v   offsets this factor of 2 ------------------------------------------v
+    //                   Also, note that    face/2 ---v
     bcstruct->pure_outer_bc_array[3 * which_gz + face / 2] = (outerpt_bc_struct *)malloc(
+    //   offsets this factor of 2 --v
         sizeof(outerpt_bc_struct) * 2 *
         ((x1min_face_range[1] - x1min_face_range[0]) * (x1min_face_range[3] - x1min_face_range[2]) * (x1min_face_range[5] - x1min_face_range[4])));
     // x1min face: Can't set bc_info->bc_loop_bounds[which_gz][face] = { i0min,i0max, ... } since it's not const :(
@@ -619,7 +621,7 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
       bcstruct->bc_info.bc_loop_bounds[which_gz][face][i] = x1min_face_range[i];
     } // END LOOP over all six faces of the grid
     face++;
-    // x1max face: Set loop bounds & allocate memory for outer_bc_array:
+    // x1max face: Set loop bounds:
     for (int i = 0; i < 6; i++) {
       bcstruct->bc_info.bc_loop_bounds[which_gz][face][i] = x1max_face_range[i];
     } // END LOOP over all six faces of the grid
@@ -629,8 +631,9 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
     ////////////////////////
     // x2min and x2max faces: Allocate memory for outer_bc_array and set bc_loop_bounds:
     //                        Note that x2min and x2max faces have exactly the same size.
-    //                   Also, note that face/2 --v   offsets this factor of 2 ------------------------------------------v
+    //                   Also, note that    face/2 ---v
     bcstruct->pure_outer_bc_array[3 * which_gz + face / 2] = (outerpt_bc_struct *)malloc(
+    //   offsets this factor of 2 --v
         sizeof(outerpt_bc_struct) * 2 *
         ((x2min_face_range[1] - x2min_face_range[0]) * (x2min_face_range[3] - x2min_face_range[2]) * (x2min_face_range[5] - x2min_face_range[4])));
     // x2min face: Can't set bc_info->bc_loop_bounds[which_gz][face] = { i0min,i0max, ... } since it's not const :(
@@ -638,7 +641,7 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
       bcstruct->bc_info.bc_loop_bounds[which_gz][face][i] = x2min_face_range[i];
     } // END LOOP over all six faces of the grid
     face++;
-    // x2max face: Set loop bounds & allocate memory for outer_bc_array:
+    // x2max face: Set loop bounds:
     for (int i = 0; i < 6; i++) {
       bcstruct->bc_info.bc_loop_bounds[which_gz][face][i] = x2max_face_range[i];
     } // END LOOP over all six faces of the grid
@@ -663,7 +666,12 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
           REAL x0x1x2_inbounds[3];
           int i0i1i2_inbounds[3];
           EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(commondata, params, xx, i0, i1, i2, x0x1x2_inbounds, i0i1i2_inbounds);
-          if (i0 == i0i1i2_inbounds[0] && i1 == i0i1i2_inbounds[1] && i2 == i0i1i2_inbounds[2]) {
+"""
+    outer_boundary_mask_check = ""
+    if enable_masks:
+        outer_boundary_mask_check = "&& mask[IDX3(i0, i1, i2)] == OUTER_BOUNDARY"
+    body += f"if (i0 == i0i1i2_inbounds[0] && i1 == i0i1i2_inbounds[1] && i2 == i0i1i2_inbounds[2] {outer_boundary_mask_check}) {{"
+    body += """
             bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].i0 = i0;
             bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].i1 = i1;
             bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].i2 = i2;
@@ -686,7 +694,9 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
           REAL x0x1x2_inbounds[3];
           int i0i1i2_inbounds[3];
           EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(commondata, params, xx, i0, i1, i2, x0x1x2_inbounds, i0i1i2_inbounds);
-          if (i0 == i0i1i2_inbounds[0] && i1 == i0i1i2_inbounds[1] && i2 == i0i1i2_inbounds[2]) {
+"""
+    body += f"if (i0 == i0i1i2_inbounds[0] && i1 == i0i1i2_inbounds[1] && i2 == i0i1i2_inbounds[2] {outer_boundary_mask_check}) {{"
+    body += """
             bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].i0 = i0;
             bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].i1 = i1;
             bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].i2 = i2;
