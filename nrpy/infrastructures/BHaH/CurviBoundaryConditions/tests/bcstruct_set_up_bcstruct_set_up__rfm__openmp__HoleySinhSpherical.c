@@ -471,10 +471,10 @@ void bcstruct_set_up__rfm__HoleySinhSpherical(const commondata_struct *restrict 
     ////////////////////////
   } // END LOOP over ghost zones, from inner to outer.
 
-  for (int which_gz = 0; which_gz < NGHOSTS; which_gz++)
+  for (int which_gz = 0; which_gz < NGHOSTS; which_gz++) {
     for (int dirn = 0; dirn < 3; dirn++) {
       int idx2d = 0;
-      // LOWER FACE: dirn=0 -> x0min; dirn=1 -> x1min; dirn=2 -> x2min
+      // LOWER FACES: dirn=0 -> x0min; dirn=1 -> x1min; dirn=2 -> x2min
       {
         const int face = dirn * 2;
 #define IDX2D_BCS(i0, i0min, i0max, i1, i1min, i1max, i2, i2min, i2max)                                                                              \
@@ -482,9 +482,9 @@ void bcstruct_set_up__rfm__HoleySinhSpherical(const commondata_struct *restrict 
         const int FACEX0 = (face == 0) - (face == 1); // +1 if face==0 (x0min) ; -1 if face==1 (x0max). Otherwise 0.
         const int FACEX1 = (face == 2) - (face == 3); // +1 if face==2 (x1min) ; -1 if face==3 (x1max). Otherwise 0.
         const int FACEX2 = (face == 4) - (face == 5); // +1 if face==4 (x2min) ; -1 if face==5 (x2max). Otherwise 0.
-        LOOP_NOOMP(i0, bcstruct->bc_info.bc_loop_bounds[which_gz][face][0], bcstruct->bc_info.bc_loop_bounds[which_gz][face][1], i1,
-                   bcstruct->bc_info.bc_loop_bounds[which_gz][face][2], bcstruct->bc_info.bc_loop_bounds[which_gz][face][3], i2,
-                   bcstruct->bc_info.bc_loop_bounds[which_gz][face][4], bcstruct->bc_info.bc_loop_bounds[which_gz][face][5]) {
+        LOOP_NOOMP(i0, bcstruct->bc_info.bc_loop_bounds[which_gz][face][0], bcstruct->bc_info.bc_loop_bounds[which_gz][face][1], //
+                   i1, bcstruct->bc_info.bc_loop_bounds[which_gz][face][2], bcstruct->bc_info.bc_loop_bounds[which_gz][face][3], //
+                   i2, bcstruct->bc_info.bc_loop_bounds[which_gz][face][4], bcstruct->bc_info.bc_loop_bounds[which_gz][face][5]) {
           REAL x0x1x2_inbounds[3];
           int i0i1i2_inbounds[3];
           EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(commondata, params, xx, i0, i1, i2, x0x1x2_inbounds, i0i1i2_inbounds);
@@ -496,10 +496,10 @@ void bcstruct_set_up__rfm__HoleySinhSpherical(const commondata_struct *restrict 
             bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].FACEX1 = FACEX1;
             bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].FACEX2 = FACEX2;
             idx2d++;
-          }
-        }
-      }
-      // UPPER FACE: dirn=0 -> x0max; dirn=1 -> x1max; dirn=2 -> x2max
+          } // END IF outer boundary point
+        } // END LOOP over all boundary points on lower faces
+      } // END BLOCK lower faces
+      // UPPER FACES: dirn=0 -> x0max; dirn=1 -> x1max; dirn=2 -> x2max
       {
         const int face = dirn * 2 + 1;
         const int FACEX0 = (face == 0) - (face == 1); // +1 if face==0 ; -1 if face==1. Otherwise 0.
@@ -519,9 +519,10 @@ void bcstruct_set_up__rfm__HoleySinhSpherical(const commondata_struct *restrict 
             bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].FACEX1 = FACEX1;
             bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].FACEX2 = FACEX2;
             idx2d++;
-          }
-        }
-      }
+          } // END IF outer boundary point
+        } // END LOOP over all boundary points on upper faces
+      } // END BLOCK upper faces
       bcstruct->bc_info.num_pure_outer_boundary_points[which_gz][dirn] = idx2d;
-    }
+    } // END LOOP over three directions
+  } // END LOOP over NGHOSTS ghost zones, from innermost to outermost ghost zones
 } // END FUNCTION bcstruct_set_up__rfm__HoleySinhSpherical
