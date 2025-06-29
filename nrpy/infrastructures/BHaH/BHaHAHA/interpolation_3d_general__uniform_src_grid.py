@@ -263,6 +263,8 @@ The function assumes that the destination grid points are within the range of th
 
 #ifdef STANDALONE
 
+#include <omp.h> // Include OpenMP header for the timer function.
+
 // Define the number of grid functions to interpolate as a macro for compile-time constant.
 #define NUM_INTERP_GFS 4 // Number of grid functions to interpolate.
 
@@ -477,10 +479,23 @@ int main() {
       }
     }
 
+    // --- Start of benchmarking ---
+    double start_time = omp_get_wtime();
+
     // Call the interpolation function.
     int error_code = interpolation_3d_general__uniform_src_grid(N_interp_GHOSTS, src_dxx0_val, src_dxx1_val, src_dxx2_val, src_Nxx_plus_2NGHOSTS0,
                                                                 src_Nxx_plus_2NGHOSTS1, src_Nxx_plus_2NGHOSTS2, NUM_INTERP_GFS, src_x0x1x2,
                                                                 src_gf_ptrs, num_dst_pts, dst_pts, dst_data);
+
+    double end_time = omp_get_wtime();
+    double elapsed_time = end_time - start_time;
+    // --- End of benchmarking ---
+
+    // Report performance metrics.
+    printf("\n--- Benchmarking for Resolution %d (%dx%dx%d) ---\n", res, N_x0, N_x1, N_x2);
+    printf("Interpolated %d points in %.4f seconds.\n", num_dst_pts, elapsed_time);
+    printf("Performance: %.4f million points per second.\n", (double)num_dst_pts / elapsed_time / 1e6);
+    printf("--------------------------------------------------\n");
 
     if (error_code != INTERP_SUCCESS) {
       fprintf(stderr, "Interpolation error code: %d\n", error_code);
@@ -525,6 +540,7 @@ int main() {
     }
   } // END LOOP: Over resolutions.
 
+  printf("\n--- Convergence Results ---\n");
   // Compute the observed order of convergence for each grid function.
   for (int gf = 0; gf < NUM_INTERP_GFS; gf++) {
     for (int res = 1; res < num_resolutions; res++) {
