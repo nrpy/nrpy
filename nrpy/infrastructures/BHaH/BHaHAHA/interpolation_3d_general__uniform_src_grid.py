@@ -204,9 +204,9 @@ The function assumes that the destination grid points are within the range of th
         const REAL coeff_x1_i = coeff_x1[ix1];
         for (int ix0 = 0; ix0 < INTERP_ORDER; ix0++) {
           coeff_3d[ix2][ix1][ix0] = coeff_x0[ix0] * coeff_x1_i * coeff_x2_i;
-        } // END LOOP: Over ix0.
-      } // END LOOP: Over ix1.
-    } // END LOOP: Over ix2.
+        } // END LOOP x0 direction
+      } // END LOOP x1 direction
+    } // END LOOP x2 direction
 
 #define SRC_IDX3(i0, i1, i2) ((i0) + src_Nxx_plus_2NGHOSTS0 * ((i1) + src_Nxx_plus_2NGHOSTS1 * (i2)))
 
@@ -237,7 +237,7 @@ The function assumes that the destination grid points are within the range of th
             REAL_SIMD_ARRAY vec_coeff = ReadSIMD(&coeff_3d[ix2][ix1][ix0]);
             // Use FMA to multiply src and coeff and add to vec_sum
             vec_sum = FusedMulAddSIMD(vec_src, vec_coeff, vec_sum);
-          }
+          } // END LOOP x0 direction up to integer number of SIMD widths
 
           sum += HorizAddSIMD(vec_sum);
 
@@ -245,9 +245,9 @@ The function assumes that the destination grid points are within the range of th
           for (; ix0 < INTERP_ORDER; ix0++) {
             const int current_idx0 = base_offset + ix0;
             sum += src_gf_ptrs[gf][current_idx0] * coeff_3d[ix2][ix1][ix0];
-          }
-        }
-      }
+          } // END LOOP remainder of x0 direction
+        } // END LOOP x1 direction
+      } // END LOOP x2 direction
 
       // Store the interpolated value for this grid function and destination point.
       dst_data[gf][dst_pt] = sum * src_invdxx012_INTERP_ORDERm1;
