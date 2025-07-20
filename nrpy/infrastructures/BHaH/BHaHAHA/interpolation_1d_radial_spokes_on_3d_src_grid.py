@@ -232,7 +232,8 @@ spherical grid. It computes the interpolated values using Lagrange polynomials.
 
 #include <omp.h>
 
-const REAL RADIAL_EXTENT = 10.0; // Radial domain [0, RADIAL_EXTENT].
+#define RADIAL_EXTENT 10.0
+#define NUM_RESOLUTIONS 3
 
 /**
  * Initializes the coordinate arrays for the source grid.
@@ -246,41 +247,28 @@ const REAL RADIAL_EXTENT = 10.0; // Radial domain [0, RADIAL_EXTENT].
  * @param src_dxx                    Array to store grid spacings in r, theta, and phi directions.
  * @param src_Nxx_plus_2NGHOSTS      Array containing the total number of grid points in each direction, including ghost zones.
  */
-void initialize_coordinates(const int N_r, const int N_theta, const int N_phi, REAL *src_r_theta_phi[3], REAL src_dxx[3],
-                            const int src_Nxx_plus_2NGHOSTS[3]) {
-  // Calculate grid spacings based on the number of grid points.
-  src_dxx[0] = RADIAL_EXTENT / N_r; // Radial grid spacing for domain [0, RADIAL_EXTENT].
-  src_dxx[1] = M_PI / N_theta;      // Theta grid spacing for domain [0, pi).
-  src_dxx[2] = 2.0 * M_PI / N_phi;  // Phi grid spacing for domain [-pi, pi).
-
-  // Allocate memory for the coordinate arrays.
+int initialize_coordinates(const int N_r, const int N_theta, const int N_phi, REAL *src_r_theta_phi[3], REAL src_dxx[3],
+                           const int src_Nxx_plus_2NGHOSTS[3]) {
+  src_dxx[0] = RADIAL_EXTENT / N_r;
+  src_dxx[1] = M_PI / N_theta;
+  src_dxx[2] = 2.0 * M_PI / N_phi;
   src_r_theta_phi[0] = (REAL *)malloc(sizeof(REAL) * src_Nxx_plus_2NGHOSTS[0]);
   src_r_theta_phi[1] = (REAL *)malloc(sizeof(REAL) * src_Nxx_plus_2NGHOSTS[1]);
   src_r_theta_phi[2] = (REAL *)malloc(sizeof(REAL) * src_Nxx_plus_2NGHOSTS[2]);
-
-  if (src_r_theta_phi[0] == NULL || src_r_theta_phi[1] == NULL || src_r_theta_phi[2] == NULL) {
-    fprintf(stderr, "Memory allocation failed for coordinate arrays.\n");
-    exit(EXIT_FAILURE);
-  }
-
-  // Initialize radial coordinate with ghost zones.
-  for (int i = 0; i < src_Nxx_plus_2NGHOSTS[0]; i++) {
+  if (!src_r_theta_phi[0] || !src_r_theta_phi[1] || !src_r_theta_phi[2]) {
+    free(src_r_theta_phi[0]);
+    free(src_r_theta_phi[1]);
+    free(src_r_theta_phi[2]);
+    return -1;
+  } // END IF memory allocation issue.
+  for (int i = 0; i < src_Nxx_plus_2NGHOSTS[0]; i++)
     src_r_theta_phi[0][i] = (i - NinterpGHOSTS) * src_dxx[0];
-  }
-
-  // Initialize theta coordinate with ghost zones.
-  const REAL xxmin1 = 0.0;
-  for (int j = 0; j < src_Nxx_plus_2NGHOSTS[1]; j++) {
-    src_r_theta_phi[1][j] = xxmin1 + ((REAL)(j - NGHOSTS) + 0.5) * src_dxx[1];
-  }
-
-  // Initialize phi coordinate with ghost zones.
-  const REAL xxmin2 = -M_PI;
-  for (int k = 0; k < src_Nxx_plus_2NGHOSTS[2]; k++) {
-    src_r_theta_phi[2][k] = xxmin2 + ((REAL)(k - NGHOSTS) + 0.5) * src_dxx[2];
-  }
-} // END FUNCTION: initialize_coordinates.
-
+  for (int j = 0; j < src_Nxx_plus_2NGHOSTS[1]; j++)
+    src_r_theta_phi[1][j] = 0.0 + ((REAL)(j - NGHOSTS) + 0.5) * src_dxx[1];
+  for (int k = 0; k < src_Nxx_plus_2NGHOSTS[2]; k++)
+    src_r_theta_phi[2][k] = -M_PI + ((REAL)(k - NGHOSTS) + 0.5) * src_dxx[2];
+  return 0;
+} // END FUNCTION initialize_coordinates()
 /**
  * Initializes the source grid function using a provided analytic function.
  *
@@ -290,31 +278,23 @@ void initialize_coordinates(const int N_r, const int N_theta, const int N_phi, R
  * @param src_r_theta_phi        Array containing coordinate values for r, theta, and phi.
  * @param src_gf                 Array to store the initialized source grid function values.
  */
-void initialize_src_gf(const int src_Nxx_plus_2NGHOSTS[3], REAL *src_r_theta_phi[3], REAL *src_gf) {
-  // Declare the variables used in SRC_IDX4 macro
-  const int src_Nxx_plus_2NGHOSTS0 = src_Nxx_plus_2NGHOSTS[0];
-  const int src_Nxx_plus_2NGHOSTS1 = src_Nxx_plus_2NGHOSTS[1];
-  const int src_Nxx_plus_2NGHOSTS2 = src_Nxx_plus_2NGHOSTS[2];
-  // Allocate memory to precompute r_func values for each radial position
+int initialize_src_gf(const int src_Nxx_plus_2NGHOSTS[3], REAL *src_r_theta_phi[3], REAL *src_gf) {
+  const int src_Nxx_plus_2NGHOSTS0 = src_Nxx_plus_2NGHOSTS[0], src_Nxx_plus_2NGHOSTS1 = src_Nxx_plus_2NGHOSTS[1],
+            src_Nxx_plus_2NGHOSTS2 = src_Nxx_plus_2NGHOSTS[2];
   REAL *r_func_values = (REAL *)malloc(sizeof(REAL) * src_Nxx_plus_2NGHOSTS0);
-  if (r_func_values == NULL) {
-    fprintf(stderr, "Memory allocation failed for r_func_values.\n");
-    exit(EXIT_FAILURE);
+  if (!r_func_values) {
+    fprintf(stderr, "malloc failed for r_func_values.\n");
+    return -1;
   }
-  // Precompute r_func for each radial position
   for (int i = 0; i < src_Nxx_plus_2NGHOSTS0; i++) {
-    const REAL r = src_r_theta_phi[0][i];
-    r_func_values[i] = sin(r) * r * r;
+    r_func_values[i] = sin(src_r_theta_phi[0][i]) * src_r_theta_phi[0][i] * src_r_theta_phi[0][i];
   }
-  // Set the analytic grid functions
 #pragma omp parallel for
   for (int gf = 0; gf < NUM_INTERP_SRC_GFS; gf++) {
     for (int k = 0; k < src_Nxx_plus_2NGHOSTS2; k++) {
-      const REAL phi = src_r_theta_phi[2][k];
-      const REAL cosphi = cos(phi);
+      const REAL cosphi = cos(src_r_theta_phi[2][k]);
       for (int j = 0; j < src_Nxx_plus_2NGHOSTS1; j++) {
-        const REAL theta = src_r_theta_phi[1][j];
-        const REAL sintheta = sin(theta);
+        const REAL sintheta = sin(src_r_theta_phi[1][j]);
         for (int i = 0; i < src_Nxx_plus_2NGHOSTS0; i++) {
           src_gf[SRC_IDX4(gf, i, j, k)] = r_func_values[i] * sintheta * cosphi;
         }
@@ -322,7 +302,8 @@ void initialize_src_gf(const int src_Nxx_plus_2NGHOSTS[3], REAL *src_r_theta_phi
     }
   }
   free(r_func_values);
-} // END FUNCTION: initialize_src_gf.
+  return 0;
+} // END FUNCTION initialize_src_gf()
 
 /**
  * Main function to execute the standalone 1D interpolation and perform convergence validation tests.
@@ -334,128 +315,102 @@ void initialize_src_gf(const int src_Nxx_plus_2NGHOSTS[3], REAL *src_r_theta_phi
  *         EXIT_FAILURE or specific error codes if memory allocation or interpolation fails.
  */
 int main() {
-  const int INTERP_ORDER = (2 * NinterpGHOSTS + 1); // Defines the interpolation order based on ghost zones.
-  const int num_resolutions = 3;                    // Number of grid resolutions to test.
+  int return_code = EXIT_SUCCESS;
+  REAL *src_r_theta_phi[3] = {NULL, NULL, NULL};
+  REAL *src_gf = NULL, *dst_radii = NULL, *dst_interp_gfs = NULL;
+  int N_r_arr[NUM_RESOLUTIONS] = {16, 32, 64};
+  REAL h_arr[NUM_RESOLUTIONS], error_L2_norm[NUM_RESOLUTIONS];
+  const int N_theta = 32, N_phi = 64;
 
-  int N_r_arr[num_resolutions];        // Array to hold the number of radial grid points for each resolution.
-  REAL h_arr[num_resolutions];         // Array to store grid spacings for convergence analysis.
-  REAL error_L2_norm[num_resolutions]; // Array to store L2 norms of interpolation errors.
-
-  // Define grid resolutions for the radial direction.
-  N_r_arr[0] = 16;
-  N_r_arr[1] = 32;
-  N_r_arr[2] = 64;
-
-  // Fixed resolutions for theta and phi directions.
-  const int N_theta = 32;
-  const int N_phi = 64;
-
-  // Iterate over each grid resolution to perform interpolation and error analysis.
-  for (int res = 0; res < num_resolutions; res++) {
-    int N_r = N_r_arr[res]; // Current resolution in radial direction.
-
-    // Calculate grid spacing based on current resolution.
-    h_arr[res] = (N_r > 0) ? (RADIAL_EXTENT / N_r) : 0.0; // Radial domain [0, RADIAL_EXTENT].
-
-    // Determine the total number of grid points including ghost zones.
-    int src_Nxx_plus_2NGHOSTS[3];
-    src_Nxx_plus_2NGHOSTS[0] = N_r + 2 * NinterpGHOSTS;
-    src_Nxx_plus_2NGHOSTS[1] = N_theta + 2 * NGHOSTS;
-    src_Nxx_plus_2NGHOSTS[2] = N_phi + 2 * NGHOSTS;
-
-    // Initialize coordinate arrays for the source grid.
-    REAL *src_r_theta_phi[3] = {NULL, NULL, NULL};
-    REAL src_dxx[3]; // Array to store grid spacings in r, theta, phi.
-
-    initialize_coordinates(N_r, N_theta, N_phi, src_r_theta_phi, src_dxx, src_Nxx_plus_2NGHOSTS); // Set up grid coordinates.
-
-    // Define destination grid parameters (same as source for theta and phi).
-    params_struct params;
-    params.Nxx0 = 1; // Only one radial point at i = NGHOSTS.
-    params.Nxx1 = N_theta;
-    params.Nxx2 = N_phi;
-    params.Nxx_plus_2NGHOSTS0 = 1 + 2 * NGHOSTS; // Only one radial point.
-    params.Nxx_plus_2NGHOSTS1 = N_theta + 2 * NGHOSTS;
-    params.Nxx_plus_2NGHOSTS2 = N_phi + 2 * NGHOSTS;
-
-    // Allocate memory for the source grid function data.
-    int total_src_grid_points = src_Nxx_plus_2NGHOSTS[0] * src_Nxx_plus_2NGHOSTS[1] * src_Nxx_plus_2NGHOSTS[2];
-    REAL *src_gf = (REAL *)malloc(sizeof(REAL) * NUM_INTERP_SRC_GFS * total_src_grid_points);
-    if (src_gf == NULL) {
-      fprintf(stderr, "Memory allocation failed for source grid function.\n");
-      return EXIT_FAILURE;
+  for (int res = 0; res < NUM_RESOLUTIONS; res++) {
+    int N_r = N_r_arr[res];
+    h_arr[res] = (N_r > 0) ? (RADIAL_EXTENT / N_r) : 0.0;
+    int src_Nxx_plus_2NGHOSTS[3] = {N_r + 2 * NinterpGHOSTS, N_theta + 2 * NGHOSTS, N_phi + 2 * NGHOSTS};
+    REAL src_dxx[3];
+    if (initialize_coordinates(N_r, N_theta, N_phi, src_r_theta_phi, src_dxx, src_Nxx_plus_2NGHOSTS) != 0) {
+      return_code = EXIT_FAILURE;
+      goto cleanup;
     }
 
-    // Initialize the source grid function using the analytic function.
-    initialize_src_gf(src_Nxx_plus_2NGHOSTS, src_r_theta_phi, src_gf);
-
-    // Prepare common data structure required by the interpolation function.
-    commondata_struct commondata;
-    commondata.interp_src_Nxx0 = N_r;
-    commondata.interp_src_Nxx_plus_2NGHOSTS0 = src_Nxx_plus_2NGHOSTS[0];
-    commondata.interp_src_Nxx_plus_2NGHOSTS1 = src_Nxx_plus_2NGHOSTS[1];
-    commondata.interp_src_Nxx_plus_2NGHOSTS2 = src_Nxx_plus_2NGHOSTS[2];
-    commondata.interp_src_r_theta_phi[0] = src_r_theta_phi[0];
-    commondata.interp_src_r_theta_phi[1] = src_r_theta_phi[1];
-    commondata.interp_src_r_theta_phi[2] = src_r_theta_phi[2];
-    commondata.interp_src_invdxx0 = 1.0 / src_dxx[0];
-    commondata.interp_src_dxx0 = src_dxx[0];
-    commondata.interp_src_gfs = src_gf;
-
-    // Allocate memory for destination radii grid function and interpolated grid functions.
-    int dst_Nxx_plus_2NGHOSTS0 = 1 + 2 * NGHOSTS; // Only one radial point.
-    int dst_Nxx_plus_2NGHOSTS1 = N_theta + 2 * NGHOSTS;
-    int dst_Nxx_plus_2NGHOSTS2 = N_phi + 2 * NGHOSTS;
-    // int total_dst_grid_points = dst_Nxx_plus_2NGHOSTS0 * dst_Nxx_plus_2NGHOSTS1 * dst_Nxx_plus_2NGHOSTS2;
-
-    // Define a safe domain within the source grid to ensure all destination points lie within bounds.
-    REAL r_min_safe = src_r_theta_phi[0][NinterpGHOSTS] + 1e-6;
-    REAL r_max_safe = src_r_theta_phi[0][src_Nxx_plus_2NGHOSTS[0] - NinterpGHOSTS - 1] - 1e-6;
-
-    // Destination grid has the same number of gridpoints as the src grid.
-    REAL *dst_radii = (REAL *)malloc(sizeof(REAL) * src_Nxx_plus_2NGHOSTS[0] * src_Nxx_plus_2NGHOSTS[1] * src_Nxx_plus_2NGHOSTS[2]);
-    REAL *dst_interp_gfs =
-        (REAL *)malloc(sizeof(REAL) * NUM_INTERP_SRC_GFS * src_Nxx_plus_2NGHOSTS[0] * src_Nxx_plus_2NGHOSTS[1] * src_Nxx_plus_2NGHOSTS[2]);
-    if (dst_radii == NULL || dst_interp_gfs == NULL) {
-      fprintf(stderr, "Memory allocation failed for destination radii.\n");
-      return EXIT_FAILURE;
+    params_struct params = {.Nxx0 = 1,
+                            .Nxx1 = N_theta,
+                            .Nxx2 = N_phi,
+                            .Nxx_plus_2NGHOSTS0 = 1 + 2 * NGHOSTS,
+                            .Nxx_plus_2NGHOSTS1 = N_theta + 2 * NGHOSTS,
+                            .Nxx_plus_2NGHOSTS2 = N_phi + 2 * NGHOSTS};
+    const int dst_Nxx_plus_2NGHOSTS0 = params.Nxx_plus_2NGHOSTS0;
+    const int dst_Nxx_plus_2NGHOSTS1 = params.Nxx_plus_2NGHOSTS1;
+    const int dst_Nxx_plus_2NGHOSTS2 = params.Nxx_plus_2NGHOSTS2;
+    const size_t total_src_pts = (size_t)src_Nxx_plus_2NGHOSTS[0] * src_Nxx_plus_2NGHOSTS[1] * src_Nxx_plus_2NGHOSTS[2];
+    src_gf = (REAL *)malloc(sizeof(REAL) * NUM_INTERP_SRC_GFS * total_src_pts);
+    if (!src_gf) {
+      fprintf(stderr, "malloc failed for src_gf.\n");
+      return_code = EXIT_FAILURE;
+      goto cleanup;
+    }
+    if (initialize_src_gf(src_Nxx_plus_2NGHOSTS, src_r_theta_phi, src_gf) != 0) {
+      return_code = EXIT_FAILURE;
+      goto cleanup;
     }
 
-    // Assign destination radii with random values between r_min_safe and r_max_safe.
+    // Use designated initializers for commondata_struct to avoid ambiguity and errors.
+    commondata_struct commondata = {.interp_src_Nxx0 = N_r,
+                                    .interp_src_Nxx_plus_2NGHOSTS0 = src_Nxx_plus_2NGHOSTS[0],
+                                    .interp_src_Nxx_plus_2NGHOSTS1 = src_Nxx_plus_2NGHOSTS[1],
+                                    .interp_src_Nxx_plus_2NGHOSTS2 = src_Nxx_plus_2NGHOSTS[2],
+                                    .interp_src_invdxx0 = 1.0 / src_dxx[0],
+                                    .interp_src_dxx0 = src_dxx[0],
+                                    .interp_src_gfs = src_gf};
+    for (int i = 0; i < 3; i++)
+      commondata.interp_src_r_theta_phi[i] = src_r_theta_phi[i];
+
+    const size_t total_dst_pts = (size_t)params.Nxx_plus_2NGHOSTS0 * params.Nxx_plus_2NGHOSTS1 * params.Nxx_plus_2NGHOSTS2;
+    dst_radii = (REAL *)malloc(sizeof(REAL) * total_dst_pts);
+    dst_interp_gfs = (REAL *)malloc(sizeof(REAL) * NUM_INTERP_SRC_GFS * total_dst_pts);
+    if (!dst_radii || !dst_interp_gfs) {
+      fprintf(stderr, "malloc failed for destination arrays.\n");
+      return_code = EXIT_FAILURE;
+      goto cleanup;
+    }
+
+    const REAL r_min_safe = src_r_theta_phi[0][NinterpGHOSTS] + 1e-6;
+    const REAL r_max_safe = src_r_theta_phi[0][src_Nxx_plus_2NGHOSTS[0] - NinterpGHOSTS - 1] - 1e-6;
+    srand(42 + res);
     for (int j = NGHOSTS; j < N_theta + NGHOSTS; j++) {
       for (int k = NGHOSTS; k < N_phi + NGHOSTS; k++) {
         // Generate a random value between r_min_safe and r_max_safe
-        dst_radii[DST_IDX3(NGHOSTS, j, k)] = r_min_safe + ((REAL)rand() / (REAL)RAND_MAX) * (r_max_safe - r_min_safe);
+        dst_radii[DST_IDX3(NGHOSTS, j, k)] = r_min_safe + ((REAL)rand() / RAND_MAX) * (r_max_safe - r_min_safe);
       }
     }
 
-    // Perform the interpolation.
-    // 1D interpolations are pretty fast, so we need to perform many of them to get a good benchmark.
-    //   Also, other operations (esp setting src grid data & computing errors) do take some time,
-    //   and we want our benchmark to be representative of *interpolation* timings.
+#ifdef _OPENMP
     double start_time = omp_get_wtime();
-    const int NUM_TIMES = 40000;
-    int error_code;
-    for (int num_times = 0; num_times < NUM_TIMES; num_times++) {
+#endif
+    int error_code = BHAHAHA_SUCCESS;
+    const int NUM_TIMES = 90000;
+    for (int n = 0; n < NUM_TIMES; n++) {
       error_code = bah_interpolation_1d_radial_spokes_on_3d_src_grid(&params, &commondata, dst_radii, dst_interp_gfs);
-    } // END LOOP: over num_times
+      if (error_code != BHAHAHA_SUCCESS)
+        break;
+    }
+#ifdef _OPENMP
     double end_time = omp_get_wtime();
+#endif
 
-    const long long num_dst_pts = N_theta * N_phi * NUM_TIMES;
-    printf("--- Benchmarking for Resolution N_r = %d (%dx%dx%d) ---\n", N_r, N_r, N_theta, N_phi);
-    printf("Interpolated %lld points in %.4f seconds.\n", num_dst_pts, end_time - start_time);
-    printf("Performance: %.4f million points per second.\n", (double)num_dst_pts / (end_time - start_time) / 1e6);
+    printf("--- Benchmarking for Resolution N_r = %d ---\n", N_r);
+#ifdef _OPENMP
+    const long long num_interps = (long long)N_theta * N_phi * NUM_TIMES;
+    printf("Interpolated %lld points in %.4f seconds.\n", num_interps, end_time - start_time);
+    printf("Performance: %.4f million points per second.\n", (double)num_interps / (end_time - start_time) / 1e6);
+#endif
 
-    // Check for any interpolation errors and handle them appropriately.
     if (error_code != BHAHAHA_SUCCESS) {
       fprintf(stderr, "Interpolation failed with error code: %d\n", error_code);
-      return error_code; // Exit with the specific error code encountered.
+      return_code = error_code;
+      goto cleanup;
     }
 
-    // Calculate the L2 norm of the interpolation error to assess accuracy.
     REAL error_sum = 0.0;
-
-    // Compute the exact solution and error at each (theta, phi) point.
 #pragma omp parallel for reduction(+ : error_sum)
     for (int k = NGHOSTS; k < N_phi + NGHOSTS; k++) {
       const REAL phi = src_r_theta_phi[2][k];
@@ -473,32 +428,41 @@ int main() {
         error_sum += error * error;
       }
     }
-
-    int num_points = N_theta * N_phi;                  // Total number of points where error is computed.
-    error_L2_norm[res] = sqrt(error_sum / num_points); // Store the L2 norm for the current resolution.
-    // Output the interpolation error for the current grid resolution.
+    error_L2_norm[res] = sqrt(error_sum / (N_theta * N_phi));
     printf("Resolution %d: N_r = %d, h = %.5e, L2 error = %.5e\n", res, N_r, h_arr[res], error_L2_norm[res]);
 
-    // Free all memory allocated within this loop iteration
-    free(src_r_theta_phi[0]);
-    free(src_r_theta_phi[1]);
-    free(src_r_theta_phi[2]);
+    for (int i = 0; i < 3; i++) {
+      free(src_r_theta_phi[i]);
+      src_r_theta_phi[i] = NULL;
+    }
     free(src_gf);
+    src_gf = NULL;
     free(dst_radii);
+    dst_radii = NULL;
     free(dst_interp_gfs);
-  } // END LOOP: Iterate over all grid resolutions.
-
-  // Analyze and report the observed order of convergence between successive resolutions.
-  for (int res = 1; res < num_resolutions; res++) {
-    REAL observed_order = log(error_L2_norm[res - 1] / error_L2_norm[res]) / log(h_arr[res - 1] / h_arr[res]);
-    printf("Observed order of convergence between resolutions %d and %d: %.2f\n", res - 1, res, observed_order);
+    dst_interp_gfs = NULL;
   }
 
-  // Inform the expected order of convergence based on the interpolation order.
+  const int INTERP_ORDER = (2 * NinterpGHOSTS + 1);
+  printf("\n--- Convergence Results ---\n");
+  for (int res = 1; res < NUM_RESOLUTIONS; res++) {
+    REAL observed_order = log(error_L2_norm[res - 1] / error_L2_norm[res]) / log(h_arr[res - 1] / h_arr[res]);
+    printf("Observed order of convergence between res %d and %d: %.2f\n", res - 1, res, observed_order);
+  }
   printf("Expected order of convergence: %d\n", INTERP_ORDER);
 
-  return EXIT_SUCCESS; // Indicate successful execution.
-} // END FUNCTION: main.
+cleanup:
+  if (return_code != EXIT_SUCCESS)
+    printf("\nAn error occurred. Cleaning up...\n");
+  else
+    printf("\nProgram finished successfully. Cleaning up...\n");
+  for (int i = 0; i < 3; i++)
+    free(src_r_theta_phi[i]);
+  free(src_gf);
+  free(dst_radii);
+  free(dst_interp_gfs);
+  return return_code;
+} // END FUNCTION main()
 
 #endif // STANDALONE
 """
