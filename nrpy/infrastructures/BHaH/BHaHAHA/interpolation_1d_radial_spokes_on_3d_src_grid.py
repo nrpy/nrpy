@@ -347,8 +347,8 @@ int main() {
   N_r_arr[2] = 64;
 
   // Fixed resolutions for theta and phi directions.
-  const int N_theta = 256;
-  const int N_phi = 512;
+  const int N_theta = 32;
+  const int N_phi = 64;
 
   // Iterate over each grid resolution to perform interpolation and error analysis.
   for (int res = 0; res < num_resolutions; res++) {
@@ -434,7 +434,7 @@ int main() {
     //   Also, other operations (esp setting src grid data & computing errors) do take some time,
     //   and we want our benchmark to be representative of *interpolation* timings.
     double start_time = omp_get_wtime();
-    const int NUM_TIMES = 10;
+    const int NUM_TIMES = 40000;
     int error_code;
     for (int num_times = 0; num_times < NUM_TIMES; num_times++) {
       error_code = bah_interpolation_1d_radial_spokes_on_3d_src_grid(&params, &commondata, dst_radii, dst_interp_gfs);
