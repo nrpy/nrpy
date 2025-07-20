@@ -230,6 +230,8 @@ spherical grid. It computes the interpolated values using Lagrange polynomials.
 
 #ifdef STANDALONE
 
+#include <omp.h>
+
 const REAL RADIAL_EXTENT = 10.0; // Radial domain [0, RADIAL_EXTENT].
 
 /**
@@ -345,8 +347,8 @@ int main() {
   N_r_arr[2] = 64;
 
   // Fixed resolutions for theta and phi directions.
-  const int N_theta = 640;
-  const int N_phi = 1280;
+  const int N_theta = 256;
+  const int N_phi = 512;
 
   // Iterate over each grid resolution to perform interpolation and error analysis.
   for (int res = 0; res < num_resolutions; res++) {
@@ -404,7 +406,7 @@ int main() {
     int dst_Nxx_plus_2NGHOSTS0 = 1 + 2 * NGHOSTS; // Only one radial point.
     int dst_Nxx_plus_2NGHOSTS1 = N_theta + 2 * NGHOSTS;
     int dst_Nxx_plus_2NGHOSTS2 = N_phi + 2 * NGHOSTS;
-    int total_dst_grid_points = dst_Nxx_plus_2NGHOSTS0 * dst_Nxx_plus_2NGHOSTS1 * dst_Nxx_plus_2NGHOSTS2;
+    // int total_dst_grid_points = dst_Nxx_plus_2NGHOSTS0 * dst_Nxx_plus_2NGHOSTS1 * dst_Nxx_plus_2NGHOSTS2;
 
     // Define a safe domain within the source grid to ensure all destination points lie within bounds.
     REAL r_min_safe = src_r_theta_phi[0][NinterpGHOSTS] + 1e-6;
@@ -428,7 +430,21 @@ int main() {
     }
 
     // Perform the interpolation.
-    int error_code = bah_interpolation_1d_radial_spokes_on_3d_src_grid(&params, &commondata, dst_radii, dst_interp_gfs);
+    // 1D interpolations are pretty fast, so we need to perform many of them to get a good benchmark.
+    //   Also, other operations (esp setting src grid data & computing errors) do take some time,
+    //   and we want our benchmark to be representative of *interpolation* timings.
+    double start_time = omp_get_wtime();
+    const int NUM_TIMES = 10;
+    int error_code;
+    for (int num_times = 0; num_times < NUM_TIMES; num_times++) {
+      error_code = bah_interpolation_1d_radial_spokes_on_3d_src_grid(&params, &commondata, dst_radii, dst_interp_gfs);
+    } // END LOOP: over num_times
+    double end_time = omp_get_wtime();
+
+    const long long num_dst_pts = N_theta * N_phi * NUM_TIMES;
+    printf("--- Benchmarking for Resolution N_r = %d (%dx%dx%d) ---\n", N_r, N_r, N_theta, N_phi);
+    printf("Interpolated %lld points in %.4f seconds.\n", num_dst_pts, end_time - start_time);
+    printf("Performance: %.4f million points per second.\n", (double)num_dst_pts / (end_time - start_time) / 1e6);
 
     // Check for any interpolation errors and handle them appropriately.
     if (error_code != BHAHAHA_SUCCESS) {
@@ -460,9 +476,16 @@ int main() {
 
     int num_points = N_theta * N_phi;                  // Total number of points where error is computed.
     error_L2_norm[res] = sqrt(error_sum / num_points); // Store the L2 norm for the current resolution.
-
     // Output the interpolation error for the current grid resolution.
     printf("Resolution %d: N_r = %d, h = %.5e, L2 error = %.5e\n", res, N_r, h_arr[res], error_L2_norm[res]);
+
+    // Free all memory allocated within this loop iteration
+    free(src_r_theta_phi[0]);
+    free(src_r_theta_phi[1]);
+    free(src_r_theta_phi[2]);
+    free(src_gf);
+    free(dst_radii);
+    free(dst_interp_gfs);
   } // END LOOP: Iterate over all grid resolutions.
 
   // Analyze and report the observed order of convergence between successive resolutions.
