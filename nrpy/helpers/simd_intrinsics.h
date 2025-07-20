@@ -116,9 +116,9 @@
 // Horizontal addition (output is a double). Inpsired by https://www.ed-yang.com/worknotes/docs/manual-vectorization/sumreduce/
 #define HorizAddSIMD(vec)                                                                                                                            \
   ({                                                                                                                                                 \
-    __m128d low = _mm256_castpd256_pd128(vec);                                 /* Extract lower 128 bits */                                          \
-    __m128d high = _mm256_extractf128_pd(vec, 1);                              /* Extract upper 128 bits */                                          \
-    __m128d sum_128 = _mm_add_pd(low, high);                                   /* Add low and high parts */                                          \
+    const __m128d low_128 = _mm256_castpd256_pd128(vec);                       /* Extract lower 128 bits */                                          \
+    const __m128d high_128 = _mm256_extractf128_pd(vec, 1);                    /* Extract upper 128 bits */                                          \
+    const __m128d sum_128 = _mm_add_pd(low_128, high_128);                     /* Add low and high parts */                                          \
     _mm_cvtsd_f64(sum_128) + _mm_cvtsd_f64(_mm_unpackhi_pd(sum_128, sum_128)); /* Final scalar sum */                                                \
   })
 
@@ -182,17 +182,17 @@
 // SSE3-enabled horizontal addition
 #define HorizAddSIMD(vec_sum)                                                                                                                        \
   ({                                                                                                                                                 \
-    __m128d sum_128 = _mm_hadd_pd(vec_sum, vec_sum); /* Perform horizontal addition */                                                               \
-    _mm_cvtsd_f64(sum_128);                          /* Extract final scalar sum */                                                                  \
+    const __m128d sum_128 = _mm_hadd_pd(vec_sum, vec_sum); /* Perform horizontal addition */                                                         \
+    _mm_cvtsd_f64(sum_128);                                /* Extract final scalar sum */                                                            \
   })
 
 #else
 // Pure SSE2 horizontal addition (without SSE3)
 #define HorizAddSIMD(vec_sum)                                                                                                                        \
   ({                                                                                                                                                 \
-    __m128d temp = _mm_shuffle_pd(vec_sum, vec_sum, 0x1); /* Swap the two 64-bit lanes */                                                            \
-    __m128d sum_128 = _mm_add_pd(vec_sum, temp);          /* Add the swapped lanes */                                                                \
-    _mm_cvtsd_f64(sum_128);                               /* Extract final scalar sum */                                                             \
+    const __m128d temp_shuf = _mm_shuffle_pd(vec_sum, vec_sum, 0x1); /* Swap the two 64-bit lanes */                                                 \
+    const __m128d sum_128 = _mm_add_pd(vec_sum, temp_shuf);          /* Add the swapped lanes */                                                     \
+    _mm_cvtsd_f64(sum_128);                                          /* Extract final scalar sum */                                                  \
   })
 #endif // __SSE3__
 
