@@ -113,6 +113,9 @@ if __name__ == "__main__":
             "nrpy.infrastructures.BHaH.BHaHAHA": [
                 "BHaHAHA_header.h",
             ],
+            "nrpy.infrastructures.BHaH.interpolation": [
+                "interpolation_lagrange_uniform.h",
+            ],
             "nrpy.infrastructures.superB.superB": [
                 "superB.h",
             ],

@@ -44,8 +44,14 @@ def register_CFunction_interpolation_1d_radial_spokes_on_3d_src_grid(
             project_dir=project_dir,
             subdirectory="intrinsics",
         )
+    copy_files(
+        package="nrpy.infrastructures.BHaH.interpolation",
+        filenames_list=["interpolation_lagrange_uniform.h"],
+        project_dir=project_dir,
+        subdirectory="./",
+    )
 
-    includes = ["BHaH_defines.h", "intrinsics/simd_intrinsics.h"]
+    includes = ["BHaH_defines.h", "interpolation_lagrange_uniform.h"]
 
     # Step 3: Register contributions to BHaH_defines.h and commondata.
     BHaH_defines_h.register_BHaH_defines(
@@ -99,8 +105,8 @@ spherical grid. It computes the interpolated values using Lagrange polynomials.
   const int dst_Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
 
   // Source grid coordinates for r, theta, and phi.
-  const REAL *restrict interp_src_r_theta_phi[3] = {commondata->interp_src_r_theta_phi[0], commondata->interp_src_r_theta_phi[1],
-                                                    commondata->interp_src_r_theta_phi[2]};
+  const REAL *interp_src_r_theta_phi[3] = {commondata->interp_src_r_theta_phi[0], commondata->interp_src_r_theta_phi[1],
+                                           commondata->interp_src_r_theta_phi[2]};
   const REAL xxmin_incl_ghosts0 = interp_src_r_theta_phi[0][0];
 
   // Precompute (1/(src_dr))^(INTERP_ORDER-1) normalization factor.
@@ -108,7 +114,7 @@ spherical grid. It computes the interpolated values using Lagrange polynomials.
   const REAL src_invdxx0_INTERP_ORDERm1 = pow(commondata->interp_src_invdxx0, (INTERP_ORDER - 1));
 
   // Source grid functions.
-  const REAL *restrict interp_src_gfs = commondata->interp_src_gfs;
+  const REAL *interp_src_gfs = commondata->interp_src_gfs;
 
   // Perform sanity checks to ensure all required pointers are valid.
   if (interp_src_r_theta_phi[0] == NULL || interp_src_gfs == NULL || dst_radii_aka_src_h_gf == NULL || dst_interp_gfs == NULL)
@@ -118,19 +124,12 @@ spherical grid. It computes the interpolated values using Lagrange polynomials.
   if (INTERP_ORDER > commondata->interp_src_Nxx0 + 2 * NinterpGHOSTS)
     return INTERP1D_INTERP_ORDER_GT_NXX_PLUS_2NINTERPGHOSTS0; // Return error if interpolation order is too high.
 
-  // Precompute inverse denominators for Lagrange interpolation coefficients to optimize performance.
-  REAL inv_denom[INTERP_ORDER];
-  for (int i = 0; i < INTERP_ORDER; i++) {
-    REAL denom = 1.0;
-    for (int j = 0; j < i; j++)
-      denom *= (REAL)(i - j);
-    for (int j = i + 1; j < INTERP_ORDER; j++)
-      denom *= (REAL)(i - j);
-    inv_denom[i] = 1.0 / denom; // Store the inverse to avoid repeated division operations.
-  } // END LOOP: Precompute inverse denominators.
-
   // Initialize the error flag to track any interpolation issues.
   int error_flag = BHAHAHA_SUCCESS;
+
+  // Precompute 1/denom coefficients for interpolation.
+  REAL inv_denom[INTERP_ORDER];
+  compute_inv_denom(INTERP_ORDER, inv_denom);
 
   // Parallelize the outer loops using OpenMP for better performance.
 #pragma omp parallel for
@@ -142,7 +141,7 @@ spherical grid. It computes the interpolated values using Lagrange polynomials.
       const int idx_center0 = (int)((r_dst - xxmin_incl_ghosts0) * src_invdxx0 + 0.5);
 
       // Determine the base index for the interpolation stencil.
-      const int base_idx_x = idx_center0 - NinterpGHOSTS;
+      const int base_idx_x0 = idx_center0 - NinterpGHOSTS;
 
       {
         // Ensure the stencil is within valid grid bounds.
@@ -171,55 +170,19 @@ spherical grid. It computes the interpolated values using Lagrange polynomials.
 #endif // DEBUG
       } // END SANITY CHECKS.
 
-      // Arrays to store Lagrange interpolation coefficients and differences.
-      REAL coeff_r[INTERP_ORDER];
-      REAL diffs[INTERP_ORDER];
-
       // Step 1: Precompute all differences between destination radius and source grid points within the stencil.
-#pragma omp simd
-      for (int j = 0; j < INTERP_ORDER; j++) {
-        diffs[j] = r_dst - interp_src_r_theta_phi[0][base_idx_x + j];
-      } // END LOOP over j.
+      REAL diffs_x0[INTERP_ORDER];
+      compute_diffs_xi(INTERP_ORDER, r_dst, &interp_src_r_theta_phi[0][base_idx_x0], diffs_x0);
 
       // Step 2: Compute Lagrange basis coefficients for the radial direction.
-#pragma omp simd
-      for (int i = 0; i < INTERP_ORDER; i++) {
-        REAL numer_i = 1.0;
-        // Compute product for j < i (scalar loop).
-        for (int j = 0; j < i; j++) {
-          numer_i *= diffs[j];
-        } // END LOOP over j < i.
-        // Compute product for j > i (scalar loop).
-        for (int j = i + 1; j < INTERP_ORDER; j++) {
-          numer_i *= diffs[j];
-        } // END LOOP over j > i.
+      REAL lagrange_basis_coeffs_x0[INTERP_ORDER];
+      compute_lagrange_basis_coeffs_xi(INTERP_ORDER, inv_denom, diffs_x0, lagrange_basis_coeffs_x0);
 
-        coeff_r[i] = numer_i * inv_denom[i]; // Scale by the inverse denominator.
-      } // END LOOP over i.
-
-      // Perform the 1D Lagrange interpolation along the radial direction with SIMD optimizations.
+      // Step 3: Perform the 1D Lagrange interpolation along the radial direction.
       for (int gf = 0; gf < NUM_INTERP_SRC_GFS; gf++) {
-        REAL sum = 0.0;
-        REAL_SIMD_ARRAY vec_sum = SetZeroSIMD; // Initialize vector sum to zero
-
-        // Vectorized loop using SIMD
-        int i = 0;
-        for (; i <= INTERP_ORDER - simd_width; i += simd_width) {
-          REAL_SIMD_ARRAY vec_src = ReadSIMD(&interp_src_gfs[SRC_IDX4(gf, base_idx_x + i, itheta, iphi)]);
-          REAL_SIMD_ARRAY vec_coeff = ReadSIMD(&coeff_r[i]);
-          vec_sum = FusedMulAddSIMD(vec_src, vec_coeff, vec_sum);
-        }
-
-        // Accumulate SIMD result
-        sum += HorizAddSIMD(vec_sum);
-
-        // Handle remaining elements that don't fit into a full SIMD register
-        for (; i < INTERP_ORDER; i++) {
-          const int i_gf_idx = base_idx_x + i;
-          sum += interp_src_gfs[SRC_IDX4(gf, i_gf_idx, itheta, iphi)] * coeff_r[i];
-        }
-
-        dst_interp_gfs[DST_IDX4(gf, NGHOSTS, itheta, iphi)] = sum * src_invdxx0_INTERP_ORDERm1;
+        dst_interp_gfs[DST_IDX4(gf, NGHOSTS, itheta, iphi)] =
+            sum_lagrange_x0_simd(INTERP_ORDER, &interp_src_gfs[SRC_IDX4(gf, base_idx_x0, itheta, iphi)], lagrange_basis_coeffs_x0) *
+            src_invdxx0_INTERP_ORDERm1;
       } // END LOOP over grid functions.
     } // END LOOP over theta.
   } // END LOOP over phi.
