@@ -164,11 +164,10 @@ Notes:
         compute_diffs_xi(INTERP_ORDER, theta_dst, &src_r_theta_phi[1][base_idx_th], diffs_th);
         compute_diffs_xi(INTERP_ORDER, phi_dst, &src_r_theta_phi[2][base_idx_ph], diffs_ph);
 
+        // Step 2: Precompute combined Lagrange coefficients to reduce computations
         REAL lagrange_basis_coeffs_th[INTERP_ORDER], lagrange_basis_coeffs_ph[INTERP_ORDER];
         compute_lagrange_basis_coeffs_xi(INTERP_ORDER, inv_denom, diffs_th, lagrange_basis_coeffs_th);
         compute_lagrange_basis_coeffs_xi(INTERP_ORDER, inv_denom, diffs_ph, lagrange_basis_coeffs_ph);
-
-        // Precompute combined Lagrange coefficients to reduce computations
         REAL coeff_2d[INTERP_ORDER][INTERP_ORDER];
         for (int iph = 0; iph < INTERP_ORDER; iph++) {
           const REAL coeff_ph_i = lagrange_basis_coeffs_ph[iph];
@@ -177,7 +176,7 @@ Notes:
           } // END LOOP over theta
         } // END LOOP over phi
 
-        // Perform the 2D Lagrange interpolation, optimizing memory accesses and enabling vectorization
+        // Step 3: Perform the 2D Lagrange interpolation, optimizing memory accesses and enabling vectorization
         REAL sum[NUM_EXT_INPUT_CONFORMAL_GFS];
         for (int gf = 0; gf < NUM_EXT_INPUT_CONFORMAL_GFS; gf++) {
           sum[gf] = 0.0;
