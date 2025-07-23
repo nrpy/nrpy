@@ -15,6 +15,19 @@
 #define REAL double
 #endif
 
+#ifndef RESTRICT
+#if defined(_MSC_VER)
+/* MSVC */
+#define RESTRICT __restrict
+#elif defined(__cplusplus)
+/* GNU/Clang C++ */
+#define RESTRICT __restrict__
+#else
+/* C99 */
+#define RESTRICT restrict
+#endif
+#endif
+
 /**
  * @brief Precompute inverse denominators for Lagrange interpolation coefficients.
  *
@@ -24,7 +37,7 @@
  * @param INTERP_ORDER The order of the interpolation.
  * @param inv_denom Array to store the precomputed inverse denominators.  Must be of size INTERP_ORDER.
  */
-static inline void compute_inv_denom(const int INTERP_ORDER, REAL inv_denom[INTERP_ORDER]) {
+static inline void compute_inv_denom(const int INTERP_ORDER, REAL *RESTRICT inv_denom) {
   for (int i = 0; i < INTERP_ORDER; i++) {
     REAL denom = 1.0;
     for (int j = 0; j < i; j++)
@@ -46,7 +59,7 @@ static inline void compute_inv_denom(const int INTERP_ORDER, REAL inv_denom[INTE
  * @param src_xi_stencil Pointer to the array of source stencil coordinates.
  * @param diffs Array to store the computed differences. Must be of size INTERP_ORDER.
  */
-static inline void compute_diffs_xi(const int INTERP_ORDER, const REAL dst_xi, const REAL *restrict src_xi_stencil, REAL diffs[INTERP_ORDER]) {
+static inline void compute_diffs_xi(const int INTERP_ORDER, const REAL dst_xi, const REAL *RESTRICT src_xi_stencil, REAL *RESTRICT diffs) {
 #pragma omp simd
   for (int j = 0; j < INTERP_ORDER; j++) {
     diffs[j] = dst_xi - src_xi_stencil[j];
@@ -64,8 +77,8 @@ static inline void compute_diffs_xi(const int INTERP_ORDER, const REAL dst_xi, c
  * @param diffs Array of differences between destination and source stencil coordinates.
  * @param lagrange_basis_coeffs_xi Array to store the computed Lagrange basis coefficients. Must be of size INTERP_ORDER.
  */
-static inline void compute_lagrange_basis_coeffs_xi(const int INTERP_ORDER, const REAL inv_denom[INTERP_ORDER], const REAL diffs[INTERP_ORDER],
-                                                    REAL lagrange_basis_coeffs_xi[INTERP_ORDER]) {
+static inline void compute_lagrange_basis_coeffs_xi(const int INTERP_ORDER, const REAL *RESTRICT inv_denom, const REAL *RESTRICT diffs,
+                                                    REAL *RESTRICT lagrange_basis_coeffs_xi) {
 #pragma omp simd
   for (int i = 0; i < INTERP_ORDER; i++) {
     REAL numer_i = 1.0;
@@ -93,32 +106,18 @@ static inline void compute_lagrange_basis_coeffs_xi(const int INTERP_ORDER, cons
  * @param lagrange_basis_coeffs_x0_base_idx Pointer to the array of Lagrange basis coefficients.
  * @return The weighted sum of the Lagrange interpolation.
  */
-static inline REAL sum_lagrange_x0_simd(const int INTERP_ORDER, const REAL *restrict src_gf_base_idx,
-                                        const REAL *restrict lagrange_basis_coeffs_x0_base_idx) {
+static inline REAL sum_lagrange_x0_simd(const int INTERP_ORDER, const REAL *RESTRICT src_gf_base_idx,
+                                        const REAL *RESTRICT lagrange_basis_coeffs_x0_base_idx) {
   REAL sum = 0;
 
   // Vectorized loop over ix0 using SIMD with FMA, if available
   int ix0 = 0;
-  // For AVX-256/AVX-512 CPUs, when 3 < INTERP_ORDER = INTERP_ORDER < 8, then use AVX-256 SIMD instructions.
-#if INTERP_ORDER > 3 && INTERP_ORDER < 8 && ((simd_width == 8) || (simd_width == 4))
-  // AVX-256 MulSIMD():
-  REAL_SIMD_ARRAY vec_sum = _mm256_mul_pd(_mm256_loadu_pd(&src_gf_base_idx[ix0]), _mm256_loadu_pd(&lagrange_basis_coeffs_x0_base_idx[ix0]));
-  // AVX-256 HorizAddSIMD():
-  sum += ({
-    const __m128d low_128 = _mm256_castpd256_pd128(vec_sum);                   /* Extract lower 128 bits */
-    const __m128d high_128 = _mm256_extractf128_pd(vec_sum, 1);                /* Extract upper 128 bits */
-    const __m128d sum_128 = _mm_add_pd(low_128, high_128);                     /* Add low and high parts */
-    _mm_cvtsd_f64(sum_128) + _mm_cvtsd_f64(_mm_unpackhi_pd(sum_128, sum_128)); /* Final scalar sum */
-  });
-  ix0 = 4;
-#else
   REAL_SIMD_ARRAY vec_sum = SetZeroSIMD;
   for (; ix0 <= INTERP_ORDER - simd_width; ix0 += simd_width) {
     vec_sum = FusedMulAddSIMD(ReadSIMD(&src_gf_base_idx[ix0]), ReadSIMD(&lagrange_basis_coeffs_x0_base_idx[ix0]), vec_sum);
   } // END LOOP x0 direction up to integer number of SIMD widths
   // Accumulate SIMD result
   sum += HorizAddSIMD(vec_sum);
-#endif
 
   // Handle remaining elements that don't fit into a full SIMD register
   for (; ix0 < INTERP_ORDER; ix0++) {
