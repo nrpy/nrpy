@@ -13,11 +13,11 @@ from typing import Union, cast
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-import nrpy.equations.seobnr.BOB_aligned_spin_waveform_quantities as BOB_wf
+import nrpy.equations.seobnr.SEOBNRv5_aligned_spin_merger_quantities as SEOBNRv5_mr
 import nrpy.helpers.parallel_codegen as pcg
 
 
-def register_CFunction_BOB_aligned_spin_NQC_rhs() -> Union[None, pcg.NRPyEnv_type]:
+def register_CFunction_SEOBNRv5_aligned_spin_NQC_rhs() -> Union[None, pcg.NRPyEnv_type]:
     """
     Register CFunction for calculating the NQC amplitudes and phase from BOB.
 
@@ -27,10 +27,10 @@ def register_CFunction_BOB_aligned_spin_NQC_rhs() -> Union[None, pcg.NRPyEnv_typ
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    wf = BOB_wf.BOB_aligned_spin_waveform_quantities()
+    wf = SEOBNRv5_mr.SEOBNRv5_aligned_spin_merger_quantities()
     # We are going to be doing this twice;
     # once for the fine dynamics and once for the coarse.
-    BOB_code = ccg.c_codegen(
+    SEOBNRv5_code = ccg.c_codegen(
         [
             wf.h_t_attach,
             wf.hdot_t_attach,
@@ -49,26 +49,24 @@ def register_CFunction_BOB_aligned_spin_NQC_rhs() -> Union[None, pcg.NRPyEnv_typ
         include_braces=False,
     )
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Calculate the BOB informed NQC amplitudes and phases."""
+    desc = """Calculate the SEOBNRv5 informed NQC amplitudes and phases."""
     cfunc_type = "void"
-    name = "BOB_aligned_spin_NQC_rhs"
+    name = "SEOBNRv5_aligned_spin_NQC_rhs"
     params = "commondata_struct *restrict commondata , REAL *restrict amps , REAL *restrict omegas"
     body = """
 const REAL m1 = commondata->m1;
 const REAL m2 = commondata->m2;
 const REAL chi1 = commondata->chi1;
 const REAL chi2 = commondata->chi2;
-const REAL omega_qnm = commondata->omega_qnm;
-const REAL tau_qnm = commondata->tau_qnm;
 //compute
 """
-    body += BOB_code
+    body += SEOBNRv5_code
     body += """
 amps[0] = h_t_attach;
 amps[1] = hdot_t_attach;
 amps[2] = hddot_t_attach;
-omegas[0] = w_t_attach;
-omegas[1] = wdot_t_attach;
+omegas[0] = fabs(w_t_attach);
+omegas[1] = fabs(wdot_t_attach);
 """
     cfc.register_CFunction(
         includes=includes,
@@ -79,12 +77,14 @@ omegas[1] = wdot_t_attach;
         include_CodeParameters_h=False,
         body=body,
     )
-    return pcg.NRPyEnv()
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
-def register_CFunction_BOB_aligned_spin_waveform() -> Union[None, pcg.NRPyEnv_type]:
+def register_CFunction_SEOBNRv5_aligned_spin_merger_waveform() -> (
+    Union[None, pcg.NRPyEnv_type]
+):
     """
-    Register CFunction for calculating the (2,2) mode of BOB.
+    Register CFunction for calculating the (2,2) mode of the SEOBNRv5 merger.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -92,10 +92,8 @@ def register_CFunction_BOB_aligned_spin_waveform() -> Union[None, pcg.NRPyEnv_ty
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    wf = BOB_wf.BOB_aligned_spin_waveform_quantities()
-    # We are going to be doing this twice;
-    # once for the fine dynamics and once for the coarse.
-    BOB_code = ccg.c_codegen(
+    wf = SEOBNRv5_mr.SEOBNRv5_aligned_spin_merger_quantities()
+    SEOBNRv5_code = ccg.c_codegen(
         [wf.h, wf.phi],
         ["const REAL h", "const REAL phi"],
         verbose=False,
@@ -104,8 +102,8 @@ def register_CFunction_BOB_aligned_spin_waveform() -> Union[None, pcg.NRPyEnv_ty
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """Calculate the BOB 22 mode."""
     cfunc_type = "void"
-    name = "BOB_aligned_spin_waveform"
-    params = "const REAL t , commondata_struct *restrict commondata , REAL *restrict waveform"
+    name = "SEOBNRv5_aligned_spin_merger_waveform"
+    params = "const REAL t , const REAL h_0 , const REAL hdot_0 , const REAL phi_0 , const REAL phidot_0, commondata_struct *restrict commondata , REAL *restrict waveform"
     body = """
 const REAL m1 = commondata->m1;
 const REAL m2 = commondata->m2;
@@ -116,7 +114,7 @@ const REAL tau_qnm = commondata->tau_qnm;
 const REAL t_0 = commondata->t_attach;
 //compute
 """
-    body += BOB_code
+    body += SEOBNRv5_code
     body += """
 waveform[0] = h;
 waveform[1] = phi;
@@ -130,14 +128,14 @@ waveform[1] = phi;
         include_CodeParameters_h=False,
         body=body,
     )
-    return pcg.NRPyEnv()
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
-def register_CFunction_BOB_aligned_spin_waveform_from_times() -> (
+def register_CFunction_SEOBNRv5_aligned_spin_merger_waveform_from_times() -> (
     Union[None, pcg.NRPyEnv_type]
 ):
     """
-    Register CFunction for computing the (2,2) mode of BOB given the evaluation times.
+    Register CFunction for computing the (2,2) mode of the SEOBNRv5 merger ringdown waveform given the evaluation times.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -148,28 +146,18 @@ def register_CFunction_BOB_aligned_spin_waveform_from_times() -> (
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """Calculate the BOB 22 mode."""
     cfunc_type = "void"
-    name = "BOB_aligned_spin_waveform_from_times"
-    params = "REAL *restrict times , REAL *restrict amps , REAL *restrict phases , const size_t nsteps_BOB , commondata_struct *restrict commondata"
+    name = "SEOBNRv5_aligned_spin_merger_waveform_from_times"
+    params = "REAL *restrict times , REAL *restrict amps , REAL *restrict phases , const REAL h_0 , const REAL hdot_0 , const REAL phi_0 , const REAL phidot_0, const size_t nsteps_MR , commondata_struct *restrict commondata"
     body = """
 size_t i;
-REAL *restrict wrapped_phases = (REAL *)malloc(nsteps_BOB*sizeof(REAL));
 REAL waveform[2];
-for (i = 0; i < nsteps_BOB; i++) {
+for (i = 0; i < nsteps_MR; i++) {
   //compute
-  BOB_aligned_spin_waveform(times[i], commondata , waveform);
+  SEOBNRv5_aligned_spin_merger_waveform(times[i], h_0 , hdot_0 , phi_0 , phidot_0 , commondata , waveform);
   //store
   amps[i] = waveform[0];
-  wrapped_phases[i] = waveform[1];
+  phases[i] = waveform[1];
 }
-//unwrap the phase
-SEOBNRv5_aligned_spin_unwrap(wrapped_phases,phases,nsteps_BOB);
-
-//shift and take absolute value of the phase
-const REAL pshift = fabs(phases[0]);
-for (i = 0; i < nsteps_BOB; i++){
-  phases[i] = fabs(phases[i]) - pshift;
-}
-free(wrapped_phases);
 """
     cfc.register_CFunction(
         includes=includes,
@@ -180,4 +168,4 @@ free(wrapped_phases);
         include_CodeParameters_h=False,
         body=body,
     )
-    return pcg.NRPyEnv()
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
