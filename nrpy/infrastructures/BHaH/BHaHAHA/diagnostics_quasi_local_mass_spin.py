@@ -20,7 +20,7 @@ The core algorithm involves:
 5. Using J and the irreducible mass M_irr (from the horizon area) to
    compute the Christodoulou-Ruffini mass M.
 
-Author: [Your Name/Enhanced LLM]
+Author: Ralston Graves
 """
 
 from inspect import currentframe as cfr
