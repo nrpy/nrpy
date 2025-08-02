@@ -21,6 +21,7 @@ The core algorithm involves:
    compute the Christodoulou-Ruffini mass M.
 
 Author: Ralston Graves
+ralstongraves **at** gmail **dot** com
 """
 
 from inspect import currentframe as cfr
@@ -104,12 +105,15 @@ def register_CFunction_diagnostics_quasi_local_mass_spin(
     )
 
     # Step 2: Define all symbolic quantities needed for the spin calculation.
-    # We use ExpansionFunctionTheta as it provides all needed geometric quantities
-    # derived from the BSSN variables interpolated to the AH surface.
+    # We use ExpansionFunctionTheta as it provides some of the necessary geometric
+    # quantities derived from the BSSN variables interpolated to the AH surface.
     Th = ExpansionFunctionTheta[CoordSystem]
     gammaDD = Th.gammaDD
+    gammaUU = Th.gammaUU
+    detgamma = Th.detgamma
+    gammaDD_dD = Th.gammaDD_dD
     KDD = Th.KDD
-    gammaUU, _ = ixp.symm_matrix_inverter3x3(gammaDD)
+
 
     # Define horizon shape function 'h' and its derivatives.
     h = sp.Symbol("hh", real=True)
@@ -135,13 +139,22 @@ def register_CFunction_diagnostics_quasi_local_mass_spin(
         for j in range(3):
             sU[i] += gammaUU[i][j] * sD[j]
     
-    # B) Compute the rotational 1-form, omega_A = -s_i(D_A r^i)
+    # Compute the trace of K_{ij}, K = g^{ij} * K_{ij}
+    trK = sp.symbols("trK", real=True)
+    for i in range(3):
+        for j in range(3):
+            trK += gammaUU[i][j] * KDD[i][j]
+
+    # B) Compute the rotational 1-form, omega_A = (K_{jk} - K*g_{jk})h^j_A * s^k
     # where A is a surface index (0 for theta, 1 for phi).
-    omega_d = ixp.zerorank1(dimension=2)
-    sU_
+    # First define the projector hUD
+    hUD = ixp.zerorank2(dimension=3)
+
+    omegaD = ixp.zerorank1(dimension=2)
     for A in range(2):
         for j in range(3):
-            omega_d[A] += -sD[j] * KDD[j][A + 1]
+            for k in range(3):
+                omegaD[A] += (KDD[j][k] - (trK * gammaDD[j][k])) * hUD[j][A] * sU[k]
 
     # C) Define the Approximate Killing Vector (AKV) phi^A from the potential zeta.
     # phi^A = epsilon^{AB} * D_B(zeta), where D_B is the surface covariant derivative.
