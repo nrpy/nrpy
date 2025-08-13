@@ -35,6 +35,7 @@ import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.indexedexp as ixp
+import nrpy.reference_metric as refmetric
 from nrpy.equations.general_relativity.bhahaha.ExpansionFunctionTheta import (
     ExpansionFunctionTheta,
 )
@@ -113,13 +114,19 @@ def register_CFunction_diagnostics_quasi_local_mass_spin(
     detgamma = Th.detgamma
     gammaDD_dD = Th.gammaDD_dD
     KDD = Th.KDD
+    # Use the surface area function to get the induced 2-metric on the AH
+    q2DD = area.compute_q2DD()
+    q2UU, q2det = ixp.symm_matrix_inverter2x2(q2DD)
 
+    # Define lapse function. This can be found in
+    # BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py
+    alpha = sp.symbol('alpha', real=True)
 
     # Define horizon shape function 'h' and its derivatives.
     h = sp.Symbol("hh", real=True)
     h_dD = ixp.declarerank1("hh_dD", dimension=3)
 
-    # A) Compute the unit normal vector to the horizon surface, s^i.
+    # Compute the unit normal vector to the horizon surface, s^i.
     # The surface is r - h(theta, phi) = 0. The normal is proportional to nabla_i(r-h).
     sD = ixp.zerorank1(dimension=3)
     sD[0] = 1
@@ -138,6 +145,16 @@ def register_CFunction_diagnostics_quasi_local_mass_spin(
     for i in range(3):
         for j in range(3):
             sU[i] += gammaUU[i][j] * sD[j]
+
+    # Compute Christoffels on the horizon
+    ChristoffelUDD = ixp.zerorank3(dimension=2)
+    for A in range(2):
+        for B in range(2):
+            for C in range(2):
+                for D in range(2):
+                    ChristoffelUDD[A][B][C] += 0.5 * q2UU[A][D] * (
+                        q2DD_dD[C][D][B] + q2DD_dD[B][D][C] - q2DD_dD[B][C][D])
+
     
     # Compute the trace of K_{ij}, K = g^{ij} * K_{ij}
     trK = sp.symbols("trK", real=True)
@@ -145,10 +162,20 @@ def register_CFunction_diagnostics_quasi_local_mass_spin(
         for j in range(3):
             trK += gammaUU[i][j] * KDD[i][j]
 
-    # B) Compute the rotational 1-form, omega_A = (K_{jk} - K*g_{jk})h^j_A * s^k
+    # Compute the rotational 1-form, omega_A = (K_{jk} - K*g_{jk})h^j_A * s^k
     # where A is a surface index (0 for theta, 1 for phi).
-    # First define the projector hUD
-    hUD = ixp.zerorank2(dimension=3)
+    # First define the projector hUD. This requires the timelike normal to the spatial slice
+    uD = ixp.zerorank1(dimension=4)
+    uD[0] = -alpha
+    uU = ixp.zerorank1(dimension=4)
+    for mu in range(4):
+        for nu in range(4):
+            uD[mu] += gammaUU[mu][nu] * uD[nu]
+
+    hUD = ixp.declarerank2(dimension=3)
+    for i in range(3):
+        for j in range(3):
+            hUD[i][j] = (i == j) + (uD[j] * uU[i]) - (sD[j] * sU[i])
 
     omegaD = ixp.zerorank1(dimension=2)
     for A in range(2):
@@ -156,11 +183,11 @@ def register_CFunction_diagnostics_quasi_local_mass_spin(
             for k in range(3):
                 omegaD[A] += (KDD[j][k] - (trK * gammaDD[j][k])) * hUD[j][A] * sU[k]
 
-    # C) Define the Approximate Killing Vector (AKV) phi^A from the potential zeta.
+    # Define the Approximate Killing Vector (AKV) phi^A from the potential zeta.
     # phi^A = epsilon^{AB} * D_B(zeta), where D_B is the surface covariant derivative.
     # For a scalar, D_B(zeta) is just partial_B(zeta).
     q2DD = area.compute_q2DD()
-    _, q2det = ixp.symm_matrix_inverter2x2(q2DD)
+    q2UU, q2det = ixp.symm_matrix_inverter2x2(q2DD)
     zeta_dD = ixp.declarerank1("zeta_gf_dD", dimension=2)  # Derivatives of zeta_gf
 
     phiU = ixp.zerorank1(dimension=2)
@@ -168,10 +195,11 @@ def register_CFunction_diagnostics_quasi_local_mass_spin(
     phiU[0] = (1 / sp.sqrt(q2det)) * zeta_dD[1]  # phi^theta
     phiU[1] = -(1 / sp.sqrt(q2det)) * zeta_dD[0]  # phi^phi
 
-    # D) Define the integrand for the spin calculation: omega_A * phi^A
+    # D) Define the integrand for the spin calculation (for each component): varpi * (epsilon^AB * D_A phi_B)
     integrand = sp.sympify(0)
     for A in range(2):
-        integrand += omega_d[A] * phiU[A]
+        for B in range(2):
+            integrand += ((A < B) - (A > B)) * (phiD_dD)
 
     # Step 3: Register the C function.
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "math.h"]
