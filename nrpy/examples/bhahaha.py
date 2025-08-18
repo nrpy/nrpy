@@ -72,9 +72,15 @@ parser.add_argument(
     help="Output root directory. Default = project/",
     default="project",
 )
+parser.add_argument(
+    "--cpp",
+    action="store_true",
+    help="Generate C++-compatible BHaHAHA",
+)
 args = parser.parse_args()
 fd_order = args.fdorder
 outrootdir = args.outrootdir
+use_cpp = args.cpp
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -277,6 +283,21 @@ const char *bah_error_message(const bhahaha_error_codes error_code);
 
 #endif // BHAHAHA_HEADER_H
 """
+
+if use_cpp:
+    # C++ compatibility: extern "C" and restrict mapping
+    cpp_compatibility_preamble = (
+        "#ifdef __cplusplus\n"
+        "extern \"C\" {\n"
+        "#endif\n\n"
+        "#define restrict __restrict__\n\n"
+    )
+    cpp_compatibility_epilogue = (
+        "\n#ifdef __cplusplus\n"
+        "}\n"
+        "#endif"
+    )
+    BHaHAHA_h = cpp_compatibility_preamble + BHaHAHA_h + cpp_compatibility_epilogue
 
 # Write the updated content to the output file
 with Path(project_dir, "BHaHAHA.h").open("w", encoding="utf-8") as output_file:

@@ -132,6 +132,7 @@ try:
             str(fd_order),
             "--outrootdir",
             project_dir,
+            "--cpp",
         ],
         check=True,
     )
@@ -146,6 +147,7 @@ except subprocess.CalledProcessError:
             str(fd_order),
             "--outrootdir",
             project_dir,
+            "--cpp",
         ],
         check=True,
     )
