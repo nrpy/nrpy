@@ -358,10 +358,11 @@ if enable_intrinsics:
 superBMakefile.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
+    addl_dirs_to_make=[BHaHAHA_subdir],
     exec_or_library_name=project_name,
     compiler_opt_option="default",
     addl_CFLAGS=["-fpermissive "],
-    addl_libraries=["-module CkIO"],
+    addl_libraries=["-module CkIO", f"-L{BHaHAHA_subdir}", f"-l{BHaHAHA_subdir}"],
     CC="charmc",
 )
 print(

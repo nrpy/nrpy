@@ -34,6 +34,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     exec_or_library_name: str = "",
     compiler_opt_option: str = "default",
     addl_CFLAGS: Optional[List[str]] = None,
+    addl_dirs_to_make: Optional[List[str]] = None,
     addl_libraries: Optional[List[str]] = None,
     CC: str = "autodetect",
     create_lib: bool = False,
@@ -47,6 +48,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     :param exec_or_library_name: The name of the executable. If set to empty string, same as project_name.
     :param compiler_opt_option: Compiler optimization option. Defaults to "default". Other options: "fast" and "debug"
     :param addl_CFLAGS: Additional compiler flags. Must be a list.
+    :param addl_dirs_to_make: Additional directories in which `make` should be run.
     :param addl_libraries: Additional libraries to link. Must be a list.
     :param CC: C compiler to use. Defaults to "autodetect" (clang if using Darwin, gcc otherwise)
     :param create_lib: Whether to create a library. Defaults to False.
@@ -217,7 +219,9 @@ main.decl.h main.def.h: main.ci
 	$(CC) $(CFLAGS) $(INCLUDEDIRS) main.ci
 
 {exec_or_library_name}: $(OBJ_FILES) timestepping.o main.o
-	$(CC) -language charm++ $^ -o $@ $(LDFLAGS)
+"""
+    Makefile_str += "".join(f"\t$(MAKE) -C {d}\n" for d in addl_dirs_to_make)
+    Makefile_str += f"""\t$(CC) -language charm++ $^ -o $@ $(LDFLAGS)
 
 # Use $(RM) to be cross-platform compatible.
 clean:
