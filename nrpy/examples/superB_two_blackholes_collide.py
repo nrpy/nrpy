@@ -160,7 +160,8 @@ BHaH_implementation.register_CFunction_bhahaha_find_horizons(
     CoordSystem=CoordSystem, max_horizons=3
 )
 interpolation_3d_general__uniform_src_grid.register_CFunction_interpolation_3d_general__uniform_src_grid(
-    enable_simd=enable_intrinsics, project_dir=project_dir
+    enable_simd=enable_intrinsics, project_dir=project_dir,
+    use_cpp=True,
 )
 
 superBinitialdata.register_CFunction_initial_data(

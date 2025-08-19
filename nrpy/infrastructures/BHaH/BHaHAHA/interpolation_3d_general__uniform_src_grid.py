@@ -17,6 +17,7 @@ from nrpy.helpers.generic import copy_files
 def register_CFunction_interpolation_3d_general__uniform_src_grid(
     enable_simd: bool,
     project_dir: str,
+    use_cpp: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the C function for general-purpose 3D Lagrange interpolation.
@@ -25,6 +26,8 @@ def register_CFunction_interpolation_3d_general__uniform_src_grid(
 
     :param enable_simd: Whether the rest of the code enables SIMD optimizations, as this code requires simd_intrinsics.h (which includes SIMD-disabled options).
     :param project_dir: Directory of the project, to set the destination for simd_instrinsics.h .
+    :param use_cpp: If True, emit a C++-compatible variant: map 'restrict'→'__restrict__' under C++, and switch sized array params to unsized pointer params (src_x0x1x2[], src_gf_ptrs[], dst_data[]).
+
     :return: None if in registration phase, else the updated NRPy environment.
 
     DocTests:
@@ -64,6 +67,12 @@ enum {
 
 #pragma GCC optimize("unroll-loops")
 """
+    if use_cpp:
+        prefunc += r"""
+#ifndef restrict
+#define restrict __restrict__
+#endif
+"""
 
     desc = r"""Performs 3D Lagrange interpolation from a set of uniform grid points on the source grid to arbitrary destination points.
 
@@ -93,11 +102,15 @@ The function assumes that the destination grid points are within the range of th
 
     cfunc_type = "int"
     name = "interpolation_3d_general__uniform_src_grid"
-    params = """
-    const int n_interp_ghosts, const REAL src_dxx0, const REAL src_dxx1, const REAL src_dxx2,
-    const int src_Nxx_plus_2NGHOSTS0, const int src_Nxx_plus_2NGHOSTS1, const int src_Nxx_plus_2NGHOSTS2,
-    const int NUM_INTERP_GFS, REAL *restrict src_x0x1x2[3], const REAL *restrict src_gf_ptrs[NUM_INTERP_GFS],
-    const int num_dst_pts, const REAL dst_x0x1x2[][3], REAL *restrict dst_data[NUM_INTERP_GFS]"""
+
+    # Parameter suffixes: C++ uses unsized pointers ([]); C uses sized arrays ([3], [NUM_INTERP_GFS])
+    src_x0x1x2_suffix = "[]" if use_cpp else "[3]"
+    interp_gfs_suffix = "[]" if use_cpp else "[NUM_INTERP_GFS]"
+    params = f"""
+        const int n_interp_ghosts, const REAL src_dxx0, const REAL src_dxx1, const REAL src_dxx2,
+        const int src_Nxx_plus_2NGHOSTS0, const int src_Nxx_plus_2NGHOSTS1, const int src_Nxx_plus_2NGHOSTS2,
+        const int NUM_INTERP_GFS, REAL *restrict src_x0x1x2{src_x0x1x2_suffix}, const REAL *restrict src_gf_ptrs{interp_gfs_suffix},
+        const int num_dst_pts, const REAL dst_x0x1x2[][3], REAL *restrict dst_data{interp_gfs_suffix}"""
 
     body = r"""
   // Unpack parameters.
