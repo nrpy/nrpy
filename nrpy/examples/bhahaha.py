@@ -295,22 +295,15 @@ if use_cpp:
     # C++ compatibility: extern "C" and restrict mapping
     cpp_compatibility_preamble = (
         "#ifdef __cplusplus\n"
-        "extern \"C\" {\n"
+        'extern "C" {\n'
         "#endif\n\n"
         "#define restrict __restrict__\n\n"
     )
-    cpp_compatibility_epilogue = (
-        "\n#ifdef __cplusplus\n"
-        "}\n"
-        "#endif"
-    )
+    cpp_compatibility_epilogue = "\n#ifdef __cplusplus\n" "}\n" "#endif"
     BHaHAHA_h = cpp_compatibility_preamble + BHaHAHA_h + cpp_compatibility_epilogue
 
     # Convert fixed-size parameter to pointer
-    BHaHAHA_h = BHaHAHA_h.replace(
-        "REAL radii[Nr_interp_max]",
-        "REAL radii[]"
-    )
+    BHaHAHA_h = BHaHAHA_h.replace("REAL radii[Nr_interp_max]", "REAL radii[]")
 
 
 # Write the updated content to the output file

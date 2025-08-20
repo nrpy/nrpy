@@ -162,7 +162,8 @@ BHaH_implementation.register_CFunction_bhahaha_find_horizons(
     CoordSystem=CoordSystem, max_horizons=3
 )
 interpolation_3d_general__uniform_src_grid.register_CFunction_interpolation_3d_general__uniform_src_grid(
-    enable_simd=enable_intrinsics, project_dir=project_dir,
+    enable_simd=enable_intrinsics,
+    project_dir=project_dir,
     use_cpp=True,
 )
 
@@ -345,7 +346,10 @@ superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
 )
 
 Bdefines_h.output_BHaH_defines_h(
-    additional_includes=[str(Path("superB") / Path("superB.h")), os.path.join(BHaHAHA_subdir, "BHaHAHA.h")],
+    additional_includes=[
+        str(Path("superB") / Path("superB.h")),
+        os.path.join(BHaHAHA_subdir, "BHaHAHA.h"),
+    ],
     project_dir=project_dir,
     enable_intrinsics=enable_intrinsics,
     enable_rfm_precompute=enable_rfm_precompute,
