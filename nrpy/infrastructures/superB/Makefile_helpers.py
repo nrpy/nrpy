@@ -57,6 +57,8 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     :raises TypeError: If addl_CFLAGS or include_dirs are not lists.
     :raises ValueError: If addl_CFLAGS or addl_libraries are specified incorrectly, or if OS unsupported.
     """
+    local_addl_dirs_to_make = addl_dirs_to_make or []
+
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
 
@@ -220,7 +222,7 @@ main.decl.h main.def.h: main.ci
 
 {exec_or_library_name}: $(OBJ_FILES) timestepping.o main.o
 """
-    Makefile_str += "".join(f"\t$(MAKE) -C {d}\n" for d in addl_dirs_to_make)
+    Makefile_str += "".join(f"\t$(MAKE) -C {d}\n" for d in local_addl_dirs_to_make)
     Makefile_str += f"""\t$(CC) -language charm++ $^ -o $@ $(LDFLAGS)
 
 # Use $(RM) to be cross-platform compatible.
