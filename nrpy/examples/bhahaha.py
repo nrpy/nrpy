@@ -77,10 +77,16 @@ parser.add_argument(
     action="store_true",
     help="Generate C++-compatible BHaHAHA",
 )
+parser.add_argument(
+    "--no-openmp",
+    action="store_true",
+    help="Disable OpenMP flags",
+)
 args = parser.parse_args()
 fd_order = args.fdorder
 outrootdir = args.outrootdir
 use_cpp = args.cpp
+use_openmp = not args.no_openmp  # default: True if flag omitted
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -245,6 +251,7 @@ Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     lib_function_prefix="bah_",
     create_lib=True,
     static_lib=True,
+    use_openmp=use_openmp,
 )
 
 # Append latest error codes & error message function prototype to BHaHAHA.h

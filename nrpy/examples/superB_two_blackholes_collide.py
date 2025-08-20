@@ -133,6 +133,7 @@ try:
             "--outrootdir",
             project_dir,
             "--cpp",
+            "--no-openmp",
         ],
         check=True,
     )
@@ -148,6 +149,7 @@ except subprocess.CalledProcessError:
             "--outrootdir",
             project_dir,
             "--cpp",
+            "--no-openmp",
         ],
         check=True,
     )

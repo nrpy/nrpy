@@ -167,6 +167,7 @@ def _construct_makefile_content(
     target_rule: str,
     valgrind_rule: str,
     clean_rule: str,
+    use_openmp: bool = True,
 ) -> str:
     """
     Construct the entire Makefile content using a template.
@@ -182,6 +183,7 @@ def _construct_makefile_content(
     :param target_rule: The Makefile rule for building the main target.
     :param valgrind_rule: The Makefile rule for the 'valgrind' target.
     :param clean_rule: The Makefile rule for the 'clean' target.
+    :param use_openmp: If True, add OpenMP flags; if False, omit them.
     :return: The complete string content of the Makefile.
     """
     # Set the compiler assignment line based on whether it's nvcc
@@ -191,22 +193,25 @@ def _construct_makefile_content(
         else f"CC ?= {cc}  # assigns the value CC to {cc} only if environment variable CC is not already set"
     )
 
-    # Define the OpenMP detection block, which differs for nvcc
-    if cc != "nvcc":
-        openmp_block = """
-# Check for OpenMP support
-OPENMP_FLAG = -fopenmp
-COMPILER_SUPPORTS_OPENMP := $(shell echo | $(CC) $(OPENMP_FLAG) -E - >/dev/null 2>&1 && echo YES || echo NO)
+    if use_openmp:
+        # Define the OpenMP detection block, which differs for nvcc
+        if cc != "nvcc":
+            openmp_block = """
+    # Check for OpenMP support
+    OPENMP_FLAG = -fopenmp
+    COMPILER_SUPPORTS_OPENMP := $(shell echo | $(CC) $(OPENMP_FLAG) -E - >/dev/null 2>&1 && echo YES || echo NO)
 
-ifeq ($(COMPILER_SUPPORTS_OPENMP), YES)
+    ifeq ($(COMPILER_SUPPORTS_OPENMP), YES)
+        CFLAGS += $(OPENMP_FLAG)
+        LDFLAGS += $(OPENMP_FLAG)
+    endif"""
+        else:
+            openmp_block = """
+    OPENMP_FLAG = -fopenmp
     CFLAGS += $(OPENMP_FLAG)
-    LDFLAGS += $(OPENMP_FLAG)
-endif"""
+    LDFLAGS += $(OPENMP_FLAG)"""
     else:
-        openmp_block = """
-OPENMP_FLAG = -fopenmp
-CFLAGS += $(OPENMP_FLAG)
-LDFLAGS += $(OPENMP_FLAG)"""
+        openmp_block = ""  # No OpenMP flags
 
     # Assemble the final Makefile string using an f-string template for clarity
     return f"""{cc_line}
@@ -246,6 +251,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     lib_function_prefix: str = "",
     include_dirs: Optional[List[str]] = None,
     src_code_file_ext: str = "c",
+    use_openmp: bool = True,
 ) -> None:
     """
     Output C functions registered to CFunction_dict and construct a Makefile for compiling C code.
@@ -263,6 +269,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     :param lib_function_prefix: Prefix to add to library function names.
     :param include_dirs: List of include directories.
     :param src_code_file_ext: Extension for C source files.
+    :param use_openmp: If True, add OpenMP flags; if False, omit them.
     :raises TypeError: If 'addl_libraries' is not a list.
 
     DocTests:
@@ -375,6 +382,7 @@ clean:
         target_rule=target_rule,
         valgrind_rule=valgrind_rule,
         clean_rule=clean_rule,
+        use_openmp=use_openmp,
     )
 
     (project_path / _MAKEFILE).write_text(makefile_content, encoding="utf-8")
