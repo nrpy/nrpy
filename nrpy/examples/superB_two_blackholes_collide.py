@@ -21,8 +21,8 @@ import os
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
 import shutil
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
