@@ -35,6 +35,7 @@ import nrpy.infrastructures.superB.chare_communication_maps as charecomm
 import nrpy.infrastructures.superB.CurviBoundaryConditions as superBcbc
 import nrpy.infrastructures.superB.diagnostics as superBdiagnostics
 import nrpy.infrastructures.superB.initial_data as superBinitialdata
+import nrpy.infrastructures.superB.interpolator3d_chare as superBinterpolator3d
 import nrpy.infrastructures.superB.main_chare as superBmain
 import nrpy.infrastructures.superB.Makefile_helpers as superBMakefile
 import nrpy.infrastructures.superB.MoL as superBMoL
@@ -77,6 +78,7 @@ parallel_codegen_enable = True
 enable_fd_functions = True
 enable_KreissOliger_dissipation = False
 enable_CAKO = True
+enable_BHaHAHA = True
 outer_bcs_type = "radiation"
 boundary_conditions_desc = "outgoing radiation"
 # Number of chares, Nchare0, Nchare1, and Nchare2, in each direction,
@@ -118,54 +120,56 @@ par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 
 par.adjust_CodeParam_default("t_final", t_final)
 
-
-#########################################################
-# STEP 2: Declare core C functions & register each to
-#         cfc.CFunction_dict["function_name"]
-try:
-    # Attempt to run as a script path
-    subprocess.run(
-        [
-            "python",
-            "nrpy/examples/bhahaha.py",
-            "--fdorder",
-            str(fd_order),
-            "--outrootdir",
-            project_dir,
-            "--cpp",
-            "--no-openmp",
-        ],
-        check=True,
+if enable_BHaHAHA:
+    #########################################################
+    # STEP 2: Declare core C functions & register each to
+    #         cfc.CFunction_dict["function_name"]
+    try:
+        # Attempt to run as a script path
+        subprocess.run(
+            [
+                "python",
+                "nrpy/examples/bhahaha.py",
+                "--fdorder",
+                str(fd_order),
+                "--outrootdir",
+                project_dir,
+                "--cpp",
+                "--no-openmp",
+            ],
+            check=True,
+        )
+    except subprocess.CalledProcessError:
+        # If it fails (e.g., from a pip install), try running as a module
+        subprocess.run(
+            [
+                "python",
+                "-m",
+                "nrpy.examples.bhahaha",
+                "--fdorder",
+                str(fd_order),
+                "--outrootdir",
+                project_dir,
+                "--cpp",
+                "--no-openmp",
+            ],
+            check=True,
+        )
+    from nrpy.infrastructures.BHaH.BHaHAHA import (
+        BHaH_implementation,
+        interpolation_3d_general__uniform_src_grid,
     )
-except subprocess.CalledProcessError:
-    # If it fails (e.g., from a pip install), try running as a module
-    subprocess.run(
-        [
-            "python",
-            "-m",
-            "nrpy.examples.bhahaha",
-            "--fdorder",
-            str(fd_order),
-            "--outrootdir",
-            project_dir,
-            "--cpp",
-            "--no-openmp",
-        ],
-        check=True,
-    )
-from nrpy.infrastructures.BHaH.BHaHAHA import (
-    BHaH_implementation,
-    interpolation_3d_general__uniform_src_grid,
-)
 
-BHaH_implementation.register_CFunction_bhahaha_find_horizons(
-    CoordSystem=CoordSystem, max_horizons=3
-)
-interpolation_3d_general__uniform_src_grid.register_CFunction_interpolation_3d_general__uniform_src_grid(
-    enable_simd=enable_intrinsics,
-    project_dir=project_dir,
-    use_cpp=True,
-)
+    BHaH_implementation.register_CFunction_bhahaha_find_horizons(
+        CoordSystem=CoordSystem, max_horizons=3
+    )
+    interpolation_3d_general__uniform_src_grid.register_CFunction_interpolation_3d_general__uniform_src_grid(
+        enable_simd=enable_intrinsics,
+        project_dir=project_dir,
+        use_cpp=True,
+    )
+    superBinterpolator3d.output_interpolator3d_h_cpp_ci(project_dir=project_dir)
+
 
 superBinitialdata.register_CFunction_initial_data(
     CoordSystem=CoordSystem,
@@ -335,7 +339,7 @@ copy_files(
 
 superBmain.output_commondata_object_h_and_main_h_cpp_ci(
     project_dir=project_dir,
-    with_bhahaha_horizons=True,
+    enable_BHaHAHA=enable_BHaHAHA,
 )
 superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
     project_dir=project_dir,
