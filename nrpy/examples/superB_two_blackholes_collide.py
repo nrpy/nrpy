@@ -335,6 +335,7 @@ copy_files(
 
 superBmain.output_commondata_object_h_and_main_h_cpp_ci(
     project_dir=project_dir,
+    with_bhahaha_horizons=True,
 )
 superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
     project_dir=project_dir,
