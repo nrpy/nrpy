@@ -67,6 +67,11 @@ amps[1] = hdot_t_attach;
 amps[2] = hddot_t_attach;
 omegas[0] = fabs(w_t_attach);
 omegas[1] = fabs(wdot_t_attach);
+commondata->nr_amp_1 = amps[0];
+commondata->nr_amp_2 = amps[1];
+commondata->nr_amp_3 = amps[2];
+commondata->nr_omega_1 = omegas[0];
+commondata->nr_omega_2 = omegas[1];
 """
     cfc.register_CFunction(
         includes=includes,
@@ -103,7 +108,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_merger_waveform() -> (
     desc = """Calculate the BOB 22 mode."""
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_merger_waveform"
-    params = "const REAL t , const REAL h_0 , const REAL hdot_0 , const REAL phi_0 , const REAL phidot_0, commondata_struct *restrict commondata , REAL *restrict waveform"
+    params = "const REAL t , const REAL t_0, const REAL h_0 , const REAL hdot_0 , const REAL phi_0 , const REAL phidot_0, commondata_struct *restrict commondata , REAL *restrict waveform"
     body = """
 const REAL m1 = commondata->m1;
 const REAL m2 = commondata->m2;
@@ -111,7 +116,6 @@ const REAL chi1 = commondata->chi1;
 const REAL chi2 = commondata->chi2;
 const REAL omega_qnm = commondata->omega_qnm;
 const REAL tau_qnm = commondata->tau_qnm;
-const REAL t_0 = commondata->t_attach;
 //compute
 """
     body += SEOBNRv5_code
@@ -147,13 +151,13 @@ def register_CFunction_SEOBNRv5_aligned_spin_merger_waveform_from_times() -> (
     desc = """Calculate the BOB 22 mode."""
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_merger_waveform_from_times"
-    params = "REAL *restrict times , REAL *restrict amps , REAL *restrict phases , const REAL h_0 , const REAL hdot_0 , const REAL phi_0 , const REAL phidot_0, const size_t nsteps_MR , commondata_struct *restrict commondata"
+    params = "REAL *restrict times , REAL *restrict amps , REAL *restrict phases , const REAL t_0, const REAL h_0 , const REAL hdot_0 , const REAL phi_0 , const REAL phidot_0, const size_t nsteps_MR , commondata_struct *restrict commondata"
     body = """
 size_t i;
 REAL waveform[2];
 for (i = 0; i < nsteps_MR; i++) {
   //compute
-  SEOBNRv5_aligned_spin_merger_waveform(times[i], h_0 , hdot_0 , phi_0 , phidot_0 , commondata , waveform);
+  SEOBNRv5_aligned_spin_merger_waveform(times[i], t_0, h_0 , hdot_0 , phi_0 , phidot_0 , commondata , waveform);
   //store
   amps[i] = waveform[0];
   phases[i] = waveform[1];

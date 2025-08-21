@@ -84,19 +84,26 @@ numerical_relativity_nqc_flag = False
 # Flag to compute SEOBNRv5's phenomological fit for the merger-ringdown waveform.
 seobnv5_merger_ringdown_flag = False
 
+# Flag to precompute the waveform coefficients. Only works for aligned spins.
+# Once we have precession in place, we can make this more tunable
+precompute_waveform_coefficients = False
+
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
 
 
 def register_CFunction_main_c(
-    output_waveform: bool = True, frequency_domain: bool = False
+    output_waveform: bool = True,
+    frequency_domain: bool = False,
+    precompute_waveform_coefficients: bool = False,
 ) -> None:
     """
     Generate a simplified C main() function for computing SEOBNRv5 Hamiltonian and its derivatives.
 
     :param output_waveform: Flag to enable/disable printing the waveform
     :param frequency_domain: Flag to enable/disable FFT to get a frequency domain waveform
+    :param precompute_waveform_coefficients: Flag to enable/disable precomputing the waveform coefficients
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """-={ main() function }=-
@@ -114,9 +121,12 @@ commondata_struct_set_to_default(&commondata);
 cmdline_input_and_parfile_parser(&commondata, argc, argv);
 // Step 1.c: Overwrite default values of m1, m2, a6, and dSO.
 SEOBNRv5_aligned_spin_coefficients(&commondata);
-// Step 1.d: Set the waveform coefficients
+"""
+    if precompute_waveform_coefficients:
+        body += r"""// Step 1.d: Set the waveform coefficients
 SEOBNRv5_aligned_spin_waveform_coefficients(&commondata);
-// Step 2.a: Compute SEOBNRv5 conservative initial conditions.
+"""
+    body += r"""// Step 2.a: Compute SEOBNRv5 conservative initial conditions.
 SEOBNRv5_aligned_spin_initial_conditions_conservative(&commondata);
 // Step 2.b: Print out the conservative initial conditions.
 //printf("r = %.15e\n",commondata.r);
@@ -160,6 +170,7 @@ for (size_t i = 0; i < commondata.nsteps_IMR; i++) {
 """
 
     body += r"""
+commondata_io(&commondata, "commondata.bin");
 free(commondata.dynamics_low);
 free(commondata.dynamics_fine);
 free(commondata.waveform_low);
@@ -184,25 +195,25 @@ return 0;
     )
 
 
+seobnr_CCL.register_CFunction_commondata_io()
 seobnr_gsl.register_CFunction_handle_gsl_return_status()
 seobnr_gsl.register_CFunction_SEOBNRv5_multidimensional_root_wrapper()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_right_hand_sides()
 seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_coefficients()
 seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit()
-seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_dRHS()
-seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_RHSdRHS()
-seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conservative()
+# seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_dRHS()
+# seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_RHSdRHS()
+seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conservative_nodf()
 seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_radial_momentum_condition()
 seobnr_ic_CCL.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_dissipative()
 seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_augments()
 seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_argrelmin()
+seobnr_dyn_CCL.register_CFunction_eval_abs_deriv()
+seobnr_dyn_CCL.register_CFunction_find_local_minimum_index()
 seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_iterative_refinement()
 seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_intepolate_dynamics()
 seobnr_gsl.register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics()
-# Flag to precompute the waveform coefficients. Only works for aligned spins.
-# Once we have precession in place, we can make this more tunable
-precompute_waveform_coefficients = True
 if precompute_waveform_coefficients:
     seobnr_CCL_precomp.register_CFunction_SEOBNRv5_aligned_spin_waveform_coefficients()
     seobnr_CCL_precomp.register_CFunction_SEOBNRv5_aligned_spin_waveform()
@@ -351,6 +362,10 @@ Bdefines_h.output_BHaH_defines_h(
 #define NUMMODES 2
 #define STRAIN 1
 #define IDX_WF(idx,var) ((idx)*NUMMODES + (var))
+typedef struct {
+  gsl_spline *spline;
+  gsl_interp_accel *acc;
+} spline_data;
 """
     },
     enable_intrinsics=False,

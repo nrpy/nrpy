@@ -2,7 +2,7 @@
 Construct symbolic expression for the SEOBNRv5 aligned-spin gravitational-wave strain and flux when precomputing the waveform coefficients.
 The coefficients entering the expressions for the strain and flux are
 functions of mass ratio and spin. Since the spins do not evolve when they are aligned,
-we can compute these coefficients once at the start of the code to accelerate 
+we can compute these coefficients once at the start of the code to accelerate
 the computation of fluxes and strain.
 
 Authors: Siddharth Mahesh
@@ -14,7 +14,7 @@ License: BSD 2-Clause
 """
 
 # Step P1: Import needed modules:
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Union
 
 import sympy as sp
 
@@ -56,7 +56,7 @@ def complex_mult(z1: List[Any], z2: List[Any]) -> List[Any]:
     return [z1[RE] * z2[RE] - z1[IM] * z2[IM], z1[RE] * z2[IM] + z1[IM] * z2[RE]]
 
 
-def f2r(input_float: float) -> sp.Rational:
+def f2r(input_float: float, do_nothing: bool = False) -> Union[float, sp.Rational]:
     """
     Convert a floating-point number to a high-precision rational number.
 
@@ -64,15 +64,19 @@ def f2r(input_float: float) -> sp.Rational:
     and appends 60 zeros to increase the precision of the conversion to a rational number.
 
     :param input_float: The floating-point number to convert.
-    :return: A sympy Rational number with high precision.
+    :param do_nothing: Boolean flag to return the input float (for debugging, default is False).
+    :return: Original float if do_nothing is True, else a sympy Rational number with high precision.
 
     >>> f2r(0.1)
     1/10
     >>> f2r(1.5)
     3/2
-    >>> f2r(2.0)
-    2
+    >>> f2r(2.0,do_nothing=True)
+    2.0
     """
+    # if do_nothing is True, return the input float
+    if do_nothing:
+        return input_float
     # Convert the input float to a string
     float_as_string = str(input_float)
 
@@ -992,65 +996,95 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
         self.rho[2, 1, 10, 1] = sp.Rational(5029963, 5927040)
 
         self.Y = [
-            [0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [f2r(0), f2r(0), f2r(0), f2r(0), f2r(0), f2r(0), f2r(0), f2r(0), f2r(0)],
             [
-                0,
+                f2r(0),
                 f2r(0.3454941494713355),
-                0,
+                f2r(0),
                 f2r(0.3231801841141506),
-                0,
+                f2r(0),
                 f2r(0.32028164857621516),
-                0,
+                f2r(0),
                 f2r(0.31937046138540076),
-                0,
+                f2r(0),
             ],
             [
-                0,
-                0,
+                f2r(0),
+                f2r(0),
                 f2r(0.3862742020231896),
-                0,
+                f2r(0),
                 f2r(0.33452327177864466),
-                0,
+                f2r(0),
                 f2r(0.32569524293385776),
-                0,
+                f2r(0),
                 f2r(0.32254835519288305),
             ],
             [
-                0,
-                0,
-                0,
+                f2r(0),
+                f2r(0),
+                f2r(0),
                 f2r(0.4172238236327842),
-                0,
+                f2r(0),
                 f2r(0.34594371914684025),
-                0,
+                f2r(0),
                 f2r(0.331899519333737),
-                0,
+                f2r(0),
             ],
             [
-                0,
-                0,
-                0,
-                0,
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0),
                 f2r(0.4425326924449826),
-                0,
+                f2r(0),
                 f2r(0.3567812628539981),
-                0,
+                f2r(0),
                 f2r(0.3382915688890245),
             ],
             [
-                0,
-                0,
-                0,
-                0,
-                0,
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0),
                 f2r(0.46413220344085826),
-                0,
+                f2r(0),
                 f2r(0.3669287245764378),
-                0,
+                f2r(0),
             ],
-            [0, 0, 0, 0, 0, 0, f2r(0.48308411358006625), 0, f2r(0.3764161087284946)],
-            [0, 0, 0, 0, 0, 0, 0, f2r(0.5000395635705508), 0],
-            [0, 0, 0, 0, 0, 0, 0, 0, f2r(0.5154289843972844)],
+            [
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0.48308411358006625),
+                f2r(0),
+                f2r(0.3764161087284946),
+            ],
+            [
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0.5000395635705508),
+                f2r(0),
+            ],
+            [
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0.5154289843972844),
+            ],
         ]
         self.c = sp.zeros(10)
         for k in range(2, 10):

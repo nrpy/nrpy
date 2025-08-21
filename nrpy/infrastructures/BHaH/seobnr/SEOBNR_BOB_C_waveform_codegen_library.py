@@ -128,7 +128,10 @@ else{
 
 REAL t_peak = commondata->t_ISCO - commondata->Delta_t;
 size_t peak_idx;
-// gsl doesn't calculate derivatives well at the edge so use nsteps - 2 for t_peak
+// if t_peak > the last point of the ODE trajector,
+// use the second last point in time for t_peak, instead of the last point as in pySEOBNR.
+// gsl's cubic spline uses natural boundary conditions that sets second derivatives to zero
+// resulting in a singular matrix.
 if (t_peak > times[commondata->nsteps_fine - 1]){
   t_peak = times[commondata->nsteps_fine - 2];
   peak_idx = commondata->nsteps_fine - 2;
@@ -337,7 +340,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_interpolate_modes() -> (
     body = """
 size_t i;
 const size_t nsteps_inspiral_old = commondata->nsteps_inspiral;
-const size_t nsteps_new = (size_t) ((commondata->waveform_inspiral[IDX_WF(commondata->nsteps_inspiral - 1,TIME)] - commondata->waveform_inspiral[IDX_WF(0,TIME)]) / dT);
+const size_t nsteps_new = (size_t) ((commondata->waveform_inspiral[IDX_WF(commondata->nsteps_inspiral - 1,TIME)] - commondata->waveform_inspiral[IDX_WF(0,TIME)]) / dT) + 1; 
 // build the complex inspiral modes
 REAL *restrict times_old = (REAL *)malloc(nsteps_inspiral_old * sizeof(REAL));
 REAL *restrict orbital_phases = (REAL *)malloc(nsteps_inspiral_old * sizeof(REAL));
@@ -470,13 +473,13 @@ for (i = left; i < right; i++){
 gsl_interp_accel *restrict acc = gsl_interp_accel_alloc();
 gsl_spline *restrict spline = gsl_spline_alloc(gsl_interp_cspline, right - left);
 gsl_spline_init(spline,times_cropped, amps_cropped,right-left);
-const REAL h_0 = gsl_spline_eval(spline, commondata->t_attach, acc);
-const REAL hdot_0 = gsl_spline_eval_deriv(spline, commondata->t_attach, acc);
+const REAL h_0 = gsl_spline_eval(spline, t_match, acc);
+const REAL hdot_0 = gsl_spline_eval_deriv(spline, t_match, acc);
 
 gsl_spline_init(spline,times_cropped, phases_cropped,right-left);
 gsl_interp_accel_reset(acc);
-const REAL phi_0 = gsl_spline_eval(spline, commondata->t_attach, acc);
-const REAL phidot_0 = gsl_spline_eval_deriv(spline, commondata->t_attach, acc);
+const REAL phi_0 = gsl_spline_eval(spline, t_match, acc);
+const REAL phidot_0 = gsl_spline_eval_deriv(spline, t_match, acc);
 
 gsl_spline_free(spline);
 gsl_interp_accel_free(acc);

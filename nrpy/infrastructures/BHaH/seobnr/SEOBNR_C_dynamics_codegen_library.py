@@ -103,7 +103,7 @@ return minima_count_or_idx;
     return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
 
 
-def register_CFunction_SEOBNRv5_aligned_spin_iterative_refinement() -> (
+def register_CFunction_SEOBNRv5_aligned_spin_iterative_refinement_old() -> (
     Union[None, pcg.NRPyEnv_type]
 ):
     """
@@ -153,6 +153,174 @@ for(int iter = 0; iter < 2; iter++) {
       return result;
     }
   } 
+}
+return result;
+"""
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        include_CodeParameters_h=False,
+        body=body,
+    )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
+
+def register_CFunction_eval_abs_deriv() -> Union[None, pcg.NRPyEnv_type]:
+    """
+    Register CFunction for evaluating the absolute derivative at a given point.
+
+    :return: None if in registration phase, else the updated NRPy environment.
+    """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    desc = """Evaluate the absolute derivative at a given point."""
+    cfunc_type = "double"
+    name = "eval_abs_deriv"
+    params = "double t, void *params"
+    body = """
+spline_data *sdata = (spline_data *)params;
+return fabs(gsl_spline_eval_deriv(sdata->spline, t, sdata->acc));
+"""
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        include_CodeParameters_h=False,
+        body=body,
+    )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
+
+def register_CFunction_find_local_minimum_index() -> Union[None, pcg.NRPyEnv_type]:
+    """
+    Register CFunction for finding the local minimum index in an array.
+
+    :return: None if in registration phase, else the updated NRPy environment.
+    """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    desc = """Find the local minimum index in an array."""
+    cfunc_type = "size_t"
+    name = "find_local_minimum_index"
+    params = "REAL *restrict arr, size_t size, int order"
+    body = """
+  if (size < 2 * order + 1) {
+    return -1; // Not enough points to apply the order
+  }
+
+  for (size_t i = 0; i < size; ++i) {
+    bool is_min = true;
+    for (int shift = 1; shift <= order; ++shift) {
+      // clipped indexing: return 0 or size-1 if out of bounds
+      size_t left_idx = MAX(i,shift) - shift; // returns 0 if i < shift else i - shift
+      size_t right_idx = MIN(i+shift,size-1); // returns size-1 if i > size-1 else i + shift
+      is_min = is_min && (arr[i] < arr[left_idx]) && (arr[i] < arr[right_idx]);
+      if (is_min) return i;
+    }
+  }
+  return -1; // No local minimum found
+"""
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        include_CodeParameters_h=False,
+        body=body,
+    )
+    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+
+
+def register_CFunction_SEOBNRv5_aligned_spin_iterative_refinement() -> (
+    Union[None, pcg.NRPyEnv_type]
+):
+    """
+    Register CFunction for evaluating the peak in frequency or momentum in SEOBNRv5.
+
+    :return: None if in registration phase, else the updated NRPy environment.
+    """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    desc = """Evaluate the peak in frequency or momentum in SEOBNRv5"""
+    cfunc_type = "REAL"
+    name = "SEOBNRv5_aligned_spin_iterative_refinement"
+    params = "spline_data *sdata, double initial_left, double initial_right, int levels, double dt_initial, bool pr"
+    body = """
+if (levels < 2) {
+  printf("Error: levels must be greater than 1\\n");
+  return (initial_left + initial_right) / 2.0;
+}
+
+double current_left = initial_left;
+double current_right = initial_right;
+double result = (current_left + current_right) / 2.0; // Default if nothing found
+bool found_any_min = false;
+
+for (int n = 1; n <= levels; ++n) {
+  double dt = dt_initial / pow(10.0, n);
+    
+  // Generate t_fine points dynamically, similar to numpy.arange
+  // Ensure at least 2 points for interval, more for derivative
+  size_t num_t_fine = (size_t)floor((current_right - current_left) / dt) + 1;
+  if (num_t_fine < 5) { // Need enough points for argrelmin order=3
+    if (pr) return current_right;
+    return (current_left + current_right) / 2.0;
+  }
+
+  double *t_fine = (double *)malloc(num_t_fine * sizeof(double));
+  double *deriv_values = (double *)malloc(num_t_fine * sizeof(double));
+
+  if (!t_fine || !deriv_values) {
+    printf("Memory allocation failed for t_fine or deriv_values.\\n");
+    if (t_fine) free(t_fine);
+    if (deriv_values) free(deriv_values);
+    return result; // Return last known good result or default
+  }
+
+  for (size_t i = 0; i < num_t_fine; ++i) {
+    t_fine[i] = current_left + i * dt;
+    if (t_fine[i] > current_right) t_fine[i] = current_right; // Cap at right boundary
+    deriv_values[i] = fabs(gsl_spline_eval_deriv(sdata->spline, t_fine[i], sdata->acc));
+  }
+
+  // Find local minimum using a simplified argrelmin logic
+  int min_idx = find_local_minimum_index(deriv_values, num_t_fine, 3); // order=3 from Python
+
+  if (min_idx != -1) {
+    result = t_fine[min_idx];
+    
+    // Refine interval
+    current_left = fmax(result - 10.0 * dt, initial_left);
+    current_right = fmin(result + 10.0 * dt, initial_right);
+    found_any_min = true;
+  } else {
+    // No local minimum found in this iteration
+    free(t_fine);
+    free(deriv_values);
+    if (pr) return current_right;
+    return (current_left + current_right) / 2.0;
+  }
+    
+  free(t_fine);
+  free(deriv_values);
+}
+
+if (!found_any_min) {
+  if (pr) return initial_right;
+  return (initial_left + initial_right) / 2.0;
 }
 return result;
 """
@@ -221,7 +389,7 @@ gsl_spline *restrict pphi_spline = gsl_spline_alloc(gsl_interp_cspline, nsteps_f
 gsl_spline_init(pphi_spline, ts, pphis, nsteps_fine_prelim);
 
 const REAL dt = 0.1;
-commondata->nsteps_fine = (size_t)(time_end - time_start) / dt;
+commondata->nsteps_fine = (size_t)((time_end - time_start) / dt + 1);
 commondata->dynamics_fine = (REAL *)malloc(NUMVARS * commondata->nsteps_fine * sizeof(REAL));
 REAL t;
 for (i = 0; i < commondata->nsteps_fine; i++) {
@@ -433,6 +601,19 @@ for (i = 0; i < nsteps_fine_prelim; i++){
   dynamics_fine_prelim[IDX(i,OMEGA_CIRC)] = dynamics_RK[IDX(i + coarse_fine_separation_idx,OMEGA_CIRC)];
 }
 
+commondata->dynamics_raw = malloc(NUMVARS * nsteps * sizeof(REAL));
+commondata->nsteps_raw = nsteps;
+for (i = 0; i < nsteps; i++){
+  commondata->dynamics_raw[IDX(i,TIME)] = dynamics_RK[IDX(i,TIME)];
+  commondata->dynamics_raw[IDX(i,R)] = dynamics_RK[IDX(i,R)];
+  commondata->dynamics_raw[IDX(i,PHI)] = dynamics_RK[IDX(i,PHI)];
+  commondata->dynamics_raw[IDX(i,PRSTAR)] = dynamics_RK[IDX(i,PRSTAR)];
+  commondata->dynamics_raw[IDX(i,PPHI)] = dynamics_RK[IDX(i,PPHI)];
+  commondata->dynamics_raw[IDX(i,H)] = dynamics_RK[IDX(i,H)];
+  commondata->dynamics_raw[IDX(i,OMEGA)] = dynamics_RK[IDX(i,OMEGA)];
+  commondata->dynamics_raw[IDX(i,OMEGA_CIRC)] = dynamics_RK[IDX(i,OMEGA_CIRC)];
+}
+
 free(dynamics_RK);
 
 // t_peak = dynamics[-1] if there is no peak
@@ -442,26 +623,42 @@ REAL t_peak = times_fine_prelim[nsteps_fine_prelim - 1];
     if perform_iterative_refinement:
         body += """
 // perform iterative refinement to find the true peak of the dynamics
-if (stop != 0){
-  REAL *restrict fpeak_fine = (REAL *)malloc(nsteps_fine_prelim * sizeof(REAL));
-  for (i = 0; i < nsteps_fine_prelim;i++){
-    fpeak_fine[i] = dynamics_fine_prelim[IDX(i,stop)];
+if (stop == OMEGA) {
+  REAL *t_values = (REAL *)malloc(nsteps_fine_prelim * sizeof(REAL));
+  REAL *omega_values = (REAL *)malloc(nsteps_fine_prelim * sizeof(REAL));
+  for (i = 0; i < nsteps_fine_prelim; i++) {
+    t_values[i] = dynamics_fine_prelim[IDX(i, TIME)];
+    omega_values[i] = dynamics_fine_prelim[IDX(i, OMEGA)];
   }
-  gsl_interp_accel *acc
-      = gsl_interp_accel_alloc ();
-  gsl_spline *spline
-      = gsl_spline_alloc (gsl_interp_cspline, nsteps_fine_prelim);
-  gsl_spline_init(spline,times_fine_prelim,fpeak_fine,nsteps_fine_prelim);
-  REAL right = times_fine_prelim[nsteps_fine_prelim - 1];
-  REAL left = times_fine_prelim[0];
-  if (stop == PRSTAR){
-    left = times_fine_prelim[nsteps_fine_prelim - 1] - 10.;
-  }
-  t_peak = SEOBNRv5_aligned_spin_iterative_refinement(spline,acc,left,right,stop);
-  gsl_spline_free (spline);
-  gsl_interp_accel_free (acc);
-  free(fpeak_fine);
+  REAL dt = times_fine_prelim[nsteps_fine_prelim - 1] - times_fine_prelim[nsteps_fine_prelim - 2];
+  gsl_interp_accel *acc = gsl_interp_accel_alloc();
+  gsl_spline *spline = gsl_spline_alloc(gsl_interp_cspline, nsteps_fine_prelim);
+  gsl_spline_init(spline, t_values, omega_values, nsteps_fine_prelim);
+  spline_data sdata = {spline, acc};
+  t_peak = SEOBNRv5_aligned_spin_iterative_refinement(&sdata, times_fine_prelim[0], times_fine_prelim[nsteps_fine_prelim - 1], 3, dt, false);
+  free(t_values);
+  free(omega_values);
+  gsl_spline_free(spline);
+  gsl_interp_accel_free(acc);
 }
+if (stop == PRSTAR) {
+  REAL *t_values = (REAL *)malloc(nsteps_fine_prelim * sizeof(REAL));
+  REAL *prstar_values = (REAL *)malloc(nsteps_fine_prelim * sizeof(REAL));
+  for (i = 0; i < nsteps_fine_prelim; i++) {
+    t_values[i] = dynamics_fine_prelim[IDX(i, TIME)];
+    prstar_values[i] = dynamics_fine_prelim[IDX(i, PRSTAR)];
+  }
+  REAL dt = times_fine_prelim[nsteps_fine_prelim - 1] - times_fine_prelim[nsteps_fine_prelim - 2];
+  gsl_interp_accel *acc = gsl_interp_accel_alloc();
+  gsl_spline *spline = gsl_spline_alloc(gsl_interp_cspline, nsteps_fine_prelim);
+  gsl_spline_init(spline, t_values, prstar_values, nsteps_fine_prelim);
+  spline_data sdata = {spline, acc};
+  t_peak = SEOBNRv5_aligned_spin_iterative_refinement(&sdata, times_fine_prelim[0], times_fine_prelim[nsteps_fine_prelim - 1], 3, dt, true);
+  free(t_values);
+  free(prstar_values);
+  gsl_spline_free(spline);
+  gsl_interp_accel_free(acc);
+}    
 """
     body += """
 // interpolate the dynamics

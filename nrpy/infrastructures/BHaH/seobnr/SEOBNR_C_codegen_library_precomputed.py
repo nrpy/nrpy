@@ -1,7 +1,7 @@
 """
 Set up C function library for the SEOBNR aligned spin expressions when using pre-computed waveform coefficients.
 The waveform coefficients entering the factorized resummed waveform expressions are functions of the masses and spins.
-The individual spins do not evolve when the spins are aligned and we can compute and store the flux coefficients 
+The individual spins do not evolve when the spins are aligned and we can compute and store the flux coefficients
 at the start of the code to accelerate the computation of fluxes and waveforms.
 
 

@@ -10,7 +10,7 @@ License: BSD 2-Clause
 """
 
 # Step P1: Import needed modules:
-from typing import Any, List
+from typing import Any, List, Union
 
 import sympy as sp
 
@@ -54,7 +54,7 @@ def complex_mult(z1: List[Any], z2: List[Any]) -> List[Any]:
     return [z1[0] * z2[0] - z1[1] * z2[1], z1[0] * z2[1] + z1[1] * z2[0]]
 
 
-def f2r(input_float: float) -> sp.Rational:
+def f2r(input_float: float, do_nothing: bool = False) -> Union[float, sp.Rational]:
     """
     Convert a floating-point number to a high-precision rational number.
 
@@ -62,15 +62,19 @@ def f2r(input_float: float) -> sp.Rational:
     and appends 60 zeros to increase the precision of the conversion to a rational number.
 
     :param input_float: The floating-point number to convert.
-    :return: A sympy Rational number with high precision.
+    :param do_nothing: Boolean flag to return the input float (for debugging, default is False).
+    :return: Original float if do_nothing is True, else a sympy Rational number with high precision.
 
     >>> f2r(0.1)
     1/10
     >>> f2r(1.5)
     3/2
-    >>> f2r(2.0)
-    2
+    >>> f2r(2.0,do_nothing=True)
+    2.0
     """
+    # if do_nothing is True, return the input float
+    if do_nothing:
+        return input_float
     # Convert the input float to a string
     float_as_string = str(input_float)
 
@@ -95,9 +99,50 @@ class SEOBNR_aligned_spin_constants:
         various coefficients required for the waveforms's amplitude and phase.
         :return None:
         """
-        (m1, m2, chi1, chi2) = sp.symbols("m1 m2 chi1 chi2", real=True)
+        (self.m1, self.m2, self.chi1, self.chi2) = sp.symbols(
+            "m1 m2 chi1 chi2", real=True
+        )
+        # compute calibration parameters
+        self.compute_calibration_params()
+        # Final mass and spin computation
+        self.final_spin_non_precessing_HBR2016()
+        self.final_mass_non_precessing_UIB2016()
+        self.rISCO = self.Kerr_ISCO_radius(self.a_f)
+        self.rstop = -1 * coord_less_bound(self.Delta_t, 0).subs(
+            sp.Function("nrpyAbs"), sp.Abs
+        ) + f2r(0.98) * self.rISCO * coord_greater_bound(self.Delta_t, 0).subs(
+            sp.Function("nrpyAbs"), sp.Abs
+        )
 
-        # Delta_t computation
+    def Kerr_ISCO_radius(self, a: sp.core.mul.Mul) -> sp.core.mul.Mul:
+        """
+        Compute the radius of the innermost stable circular orbit (ISCO) of a Kerr black hole.
+
+        :param a: dimensionless spin parameter of the Kerr black hole.
+        :return: radius of the ISCO in Boyer-Lindquist coordinates.
+        """
+        # restrict a to 1.
+        a_ceil_one = (a + 1 - sp.Abs(a - 1)) / 2
+        z1 = 1 + (1 - a_ceil_one**2) ** (sp.Rational(1, 3)) * (
+            (1 + a_ceil_one) ** (sp.Rational(1, 3))
+            + (1 - a_ceil_one) ** (sp.Rational(1, 3))
+        )
+        z2 = sp.sqrt(3 * a_ceil_one**2 + z1**2)
+        a_sign = sp.sign(a_ceil_one)
+        return 3 + z2 - sp.sqrt((3 - z1) * (3 + z1 + 2 * z2)) * a_sign
+
+    def compute_calibration_params(
+        self,
+    ) -> None:
+        """
+        Compute the calibration parameters for the SEOBNRv5 aligned-spin model.
+
+        :return None:
+        """
+        m1 = self.m1
+        m2 = self.m2
+        chi1 = self.chi1
+        chi2 = self.chi2
         M = m1 + m2
         nu = m1 * m2 / M**2
         ap = (m1 * chi1 + m2 * chi2) / M**2
@@ -168,10 +213,20 @@ class SEOBNR_aligned_spin_constants:
         )
         self.Delta_t = Delta_t_NS + Delta_t_S
 
-        # Final mass and spin computation
+    def final_spin_non_precessing_HBR2016(
+        self,
+    ) -> None:
+        """
+        Compute the final spin for the SEOBNRv5 aligned-spin model.
+        The spin is calculated using the non-precessing HBR2016 fits with version "M3J4"
+        as outlined in https://lscsoft.docs.ligo.org/lalsuite/lalinference/nrutils_8py_source.html
 
-        # Final spin non-precessing HBR2016 version "M3J4"
-        # cf https://lscsoft.docs.ligo.org/lalsuite/lalinference/nrutils_8py_source.html
+        :return None:
+        """
+        m1 = self.m1
+        m2 = self.m2
+        chi1 = self.chi1
+        chi2 = self.chi2
         nM = 3
         nJ = 4
         k = sp.zeros(4, 5)
@@ -199,6 +254,7 @@ class SEOBNR_aligned_spin_constants:
         q = m2 / m1
         chi1z = chi1
         chi2z = chi2
+        nu = m1 * m2 / (m1 + m2) ** 2
         atot = (chi1z + chi2z * q * q) / ((1 + q) * (1 + q))
         aeff = atot + xi * nu * (chi1z + chi2z)
         rISCOeff = self.Kerr_ISCO_radius(aeff)
@@ -215,13 +271,23 @@ class SEOBNR_aligned_spin_constants:
 
         ell = sp.Abs(LISCOeff - 2 * atot * (EISCOeff - 1) + nu * ksum)
         self.a_f = atot + ell / (1 / q + 2 + q)
-        self.rISCO = self.Kerr_ISCO_radius(self.a_f)
-        self.rstop = -1 * coord_less_bound(self.Delta_t, 0).subs(
-            sp.Function("nrpyAbs"), sp.Abs
-        ) + f2r(0.98) * self.rISCO * coord_greater_bound(self.Delta_t, 0).subs(
-            sp.Function("nrpyAbs"), sp.Abs
-        )
+
+    def final_mass_non_precessing_UIB2016(
+        self,
+    ) -> None:
+        """
+        Compute the final mass for the SEOBNRv5 aligned-spin model.
+        The mass is calculated using the non-precessing UIB2016 fits with version "v2"
+        as outlined in https://lscsoft.docs.ligo.org/lalsuite/lalinference/nrutils_8py_source.html
+
+        :return None:
+        """
+        m1 = self.m1
+        m2 = self.m2
+        chi1 = self.chi1
+        chi2 = self.chi2
         Shat = (m1 * m1 * chi1 + m2 * m2 * chi2) / (m1 * m1 + m2 * m2)
+        nu = m1 * m2 / (m1 + m2) ** 2
         Shat2 = Shat * Shat
         Shat3 = Shat2 * Shat
         nu2 = nu * nu
@@ -276,23 +342,6 @@ class SEOBNR_aligned_spin_constants:
             A_1 * Deltachi + A_2 * Deltachi2 + A_3 * Deltachi * Shat
         )
         self.M_f = 1 - (Erad_nu_Shat + DeltaErad_nu_Shat_Deltachi)
-
-    def Kerr_ISCO_radius(self, a: sp.core.mul.Mul) -> sp.core.mul.Mul:
-        """
-        Compute the radius of the innermost stable circular orbit (ISCO) of a Kerr black hole.
-
-        :param a: dimensionless spin parameter of the Kerr black hole.
-        :return: radius of the ISCO in Boyer-Lindquist coordinates.
-        """
-        # restrict a to 1.
-        a_ceil_one = (a + 1 - sp.Abs(a - 1)) / 2
-        z1 = 1 + (1 - a_ceil_one**2) ** (sp.Rational(1, 3)) * (
-            (1 + a_ceil_one) ** (sp.Rational(1, 3))
-            + (1 - a_ceil_one) ** (sp.Rational(1, 3))
-        )
-        z2 = sp.sqrt(3 * a_ceil_one**2 + z1**2)
-        a_sign = sp.sign(a_ceil_one)
-        return 3 + z2 - sp.sqrt((3 - z1) * (3 + z1 + 2 * z2)) * a_sign
 
 
 if __name__ == "__main__":
