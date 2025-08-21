@@ -142,7 +142,7 @@ return GSL_SUCCESS;
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_SEOBNRv5_aligned_spin_waveform() -> (
@@ -216,7 +216,7 @@ return h22;
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_SEOBNRv5_aligned_spin_flux() -> Union[None, pcg.NRPyEnv_type]:
@@ -268,4 +268,4 @@ return GSL_SUCCESS;
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()

@@ -82,7 +82,7 @@ commondata->nr_omega_2 = omegas[1];
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_SEOBNRv5_aligned_spin_merger_waveform() -> (
@@ -132,7 +132,7 @@ waveform[1] = phi;
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_SEOBNRv5_aligned_spin_merger_waveform_from_times() -> (
@@ -172,4 +172,4 @@ for (i = 0; i < nsteps_MR; i++) {
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()

@@ -195,7 +195,7 @@ return fabs(gsl_spline_eval_deriv(sdata->spline, t, sdata->acc));
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_find_local_minimum_index() -> Union[None, pcg.NRPyEnv_type]:
@@ -238,7 +238,7 @@ def register_CFunction_find_local_minimum_index() -> Union[None, pcg.NRPyEnv_typ
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_SEOBNRv5_aligned_spin_iterative_refinement() -> (
@@ -333,7 +333,7 @@ return result;
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_SEOBNRv5_aligned_spin_intepolate_dynamics() -> (
