@@ -157,8 +157,10 @@ if enable_BHaHAHA:
             check=True,
         )
     from nrpy.infrastructures.BHaH.BHaHAHA import (
-        BHaH_implementation,
         interpolation_3d_general__uniform_src_grid,
+    )
+    from nrpy.infrastructures.superB import (
+        BHaH_implementation,
     )
 
     BHaH_implementation.register_CFunction_bhahaha_find_horizons(
