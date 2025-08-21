@@ -18,7 +18,10 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.indexedexp as ixp
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
-from nrpy.infrastructures.BHaH import griddata_commondata
+from nrpy.infrastructures.BHaH import (
+    BHaH_defines_h,
+    griddata_commondata,
+)
 
 
 def register_bhahaha_commondata_and_params(max_horizons: int) -> None:
@@ -165,7 +168,11 @@ def register_bhahaha_commondata_and_params(max_horizons: int) -> None:
         description="BBH mode: Record of which horizons are active.",
     )
 
-def build_bhahaha_prefunc(CoordSystem: str,) -> str:
+
+def build_bhahaha_prefunc(
+    CoordSystem: str,
+    add_bhahaha_gf_interp_ind_to_bhah_defines: bool = False,
+) -> str:
     """
     Construct the C prelude used by the generated horizon-finder function.
     Includes:
@@ -177,8 +184,10 @@ def build_bhahaha_prefunc(CoordSystem: str,) -> str:
       * interpolation + BSSN→ADM transformation routine
 
     :param CoordSystem: CoordSystem of project, where horizon finding will take place.
+    :param add_bhahaha_gf_interp_ind_to_bhah_defines: add to BHaH_defines.h instead of defining here.
     :return: Raw C string to be injected as the function preamble.
     """
+
     prefunc = r"""
 // Enum for indexing the final ADM metric components BHaHAHA expects.
 enum FINAL_ADM_METRIC_INDICES {
@@ -196,7 +205,9 @@ enum FINAL_ADM_METRIC_INDICES {
   FINAL_INTERP_KDDZZGF,
   BHAHAHA_NUM_METRIC_COMPONENTS
 }; // END ENUM: FINAL_ADM_METRIC_INDICES
+"""
 
+    prefunc += r"""
 // Enum for indexing interpolated BSSN gridfunctions. (NRPy-specific)
 enum INTERP_BSSN_GF_INDICES {
   INTERP_ADD00GF_IDX,
@@ -215,15 +226,24 @@ enum INTERP_BSSN_GF_INDICES {
   INTERP_TRKGF_IDX,
   BHAHAHA_NUM_INTERP_GFS
 }; // END ENUM: INTERP_BSSN_GF_INDICES
-
-// BSSN gridfunctions input into the interpolator. Must be in the same order as the enum list below.
+"""
+    bhahaha_gf_interp_indices_string = r"""// BSSN gridfunctions input into the interpolator. Must be in the same order as the enum list below.
 const int bhahaha_gf_interp_indices[BHAHAHA_NUM_INTERP_GFS] = {
     ADD00GF, ADD01GF, ADD02GF, ADD11GF, ADD12GF, ADD22GF, // Traceless, rescaled extrinsic curvature components.
     CFGF,                                                 // Conformal factor.
     HDD00GF, HDD01GF, HDD02GF, HDD11GF, HDD12GF, HDD22GF, // Rescaled conformal 3-metric components.
     TRKGF                                                 // Trace of extrinsic curvature.
-};
+};"""
 
+    if add_bhahaha_gf_interp_ind_to_bhah_defines:
+        BHaH_defines_h.register_BHaH_defines(
+            __name__,
+            bhahaha_gf_interp_indices_string + "\n#define BHAHAHA_NUM_INTERP_GFS 14\n",
+        )
+    else:
+        prefunc += "\n" + bhahaha_gf_interp_indices_string + "\n"
+
+    prefunc += r"""
 /**
  * Calculates the time difference in seconds between two `struct timeval` instances.
  *
@@ -583,7 +603,6 @@ def register_CFunction_bhahaha_find_horizons(
     ]
 
     prefunc = build_bhahaha_prefunc(CoordSystem)
-
 
     desc = r"""Main driver function for finding apparent horizons using the BHaHAHA library.
 It orchestrates initialization, BBH logic, extrapolation, interpolation, solving,
