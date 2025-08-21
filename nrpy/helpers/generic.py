@@ -15,6 +15,7 @@ from pathlib import Path
 from types import FrameType, ModuleType
 from typing import Any, List, Optional, cast
 
+import nrpy.params as par
 from nrpy.helpers.cached_functions import is_cached, read_cached, write_cached
 
 
@@ -32,33 +33,8 @@ def superfast_uniq(seq: List[Any]) -> List[Any]:
     return [x for x in seq if x not in seen and not seen.add(x)]  # type: ignore
 
 
-# Used within c_function to create multi-line comments.
-def prefix_with_star(input_string: str) -> str:
-    r"""
-    Prefix every line in the input string with "   * ".
-
-    Useful for formatting multi-line comments or documentation blocks by adding a consistent prefix to each line.
-
-    :param input_string: The input multi-line string to be prefixed.
-    :return: The modified string with "* " prefixed on every line.
-
-    Example:
-    >>> s = "   Hello\n   World   "
-    >>> prefix_with_star(s)
-    '   * Hello\n   * World'
-    """
-    # Splitting the string by line breaks, trimming each line, and prefixing
-    lines = input_string.split("\n")
-    prefixed_lines = ["   * " + line.strip() for line in lines]
-
-    # Joining the prefixed lines back into a single string
-    result = "\n".join(prefixed_lines)
-    return result
-
-
 def clang_format(
     c_code_str: str,
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> str:
     r"""
     Format a given C code string using clang-format.
@@ -67,7 +43,6 @@ def clang_format(
     Ensures consistent code formatting across the project.
 
     :param c_code_str: The C code string to be formatted.
-    :param clang_format_options: Formatting options for clang-format.
     :return: Formatted C code string.
     :raises RuntimeError: If clang-format encounters any error.
 
@@ -81,6 +56,7 @@ def clang_format(
       return 0;
     }
     """
+    clang_format_options = par.parval_from_str("clang_format_options")
     unique_id = __name__ + c_code_str + clang_format_options
     if is_cached(unique_id):
         return cast(str, read_cached(unique_id))

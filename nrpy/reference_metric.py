@@ -4,8 +4,9 @@ Define the ReferenceMetric class and its related functionalities.
 This module defines the ReferenceMetric class which handles various
 functionalities related to the reference metric.
 
-Author: Zachariah B. Etienne
-        zachetie **at** gmail **dot* com
+Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
+         SinhSymTP fixes:
+         Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
 """
 
 from typing import Any, Dict, List, Tuple, cast
@@ -1215,53 +1216,42 @@ class ReferenceMetric:
             self.Cart_to_xx[2] = phSph
 
         elif self.CoordSystem == "SinhSymTP":
-            rSph = sp.sqrt(self.Cartx**2 + self.Carty**2 + self.Cartz**2)
-            thSph = sp.acos(self.Cartz / rSph)
-            phSph = sp.atan2(self.Carty, self.Cartx)
+            # These expressions come from a Mathematica notebook shared by Thiago on Feb 26, 2025 in #nrpy2.
+            #  They are validated at the bottom of this file.
 
-            # Mathematica script to compute Cart_to_xx[]
-            #             AA = x1;
-            #             var2 = Sqrt[AA^2 + bScale^2];
-            #             RHOSYMTP = AA*Sin[x2];
-            #             ZSYMTP = var2*Cos[x2];
-            #             Solve[{rSph == Sqrt[RHOSYMTP^2 + ZSYMTP^2],
-            #                    thSph == ArcCos[ZSYMTP/Sqrt[RHOSYMTP^2 + ZSYMTP^2]],
-            #                    phSph == x3},
-            #                   {x1, x2, x3}]
-            self.Cart_to_xx[0] = (
-                sp.sqrt(
-                    -(bScale**2)
-                    + rSph**2
-                    + sp.sqrt(
-                        bScale**4
-                        + 2 * bScale**2 * rSph**2
-                        + rSph**4
-                        - 4 * bScale**2 * rSph**2 * sp.cos(thSph) ** 2
-                    )
-                )
-                * SQRT1_2
-            )  # SQRT1_2 = 1/sqrt(2); define this way for UnitTesting
+            # Define intermediate terms based on Cartx, Carty, Cartz for clarity
+            # Note: The sqrt_term_inner and denom_sqrt terms match the validation script.
+            sqrt_term_inner = sp.sqrt(
+                (self.Cartx**2 + self.Carty**2 + (bScale - self.Cartz) ** 2)
+                * (self.Cartx**2 + self.Carty**2 + (bScale + self.Cartz) ** 2)
+            )
+            denom_sqrt_x0 = sp.sqrt(
+                -(bScale**2)
+                + self.Cartx**2
+                + self.Carty**2
+                + self.Cartz**2
+                + sqrt_term_inner
+            )
+            denom_sqrt_x1 = sp.sqrt(
+                bScale**2
+                + self.Cartx**2
+                + self.Carty**2
+                + self.Cartz**2
+                + sqrt_term_inner
+            )
 
-            # The sign() function in the following expression ensures the correct root is taken.
-            self.Cart_to_xx[1] = sp.acos(
-                sp.sign(self.Cartz)
-                * (
-                    sp.sqrt(
-                        1
-                        + rSph**2 / bScale**2
-                        - sp.sqrt(
-                            bScale**4
-                            + 2 * bScale**2 * rSph**2
-                            + rSph**4
-                            - 4 * bScale**2 * rSph**2 * sp.cos(thSph) ** 2
-                        )
-                        / bScale**2
-                    )
-                    * SQRT1_2
-                )
-            )  # SQRT1_2 = 1/sqrt(2); define this way for UnitTesting
+            # Inverse transformation derived from Mathematica (see validation script)
+            def acsch(x: sp.Expr) -> sp.Expr:
+                return sp.log(sp.sqrt(1 + x ** (-2)) + 1 / x)
 
-            self.Cart_to_xx[2] = phSph
+            def csch(x: sp.Expr) -> sp.Expr:
+                return 2 / (sp.exp(x) - sp.exp(-x))
+
+            self.Cart_to_xx[0] = SINHWAA * acsch(
+                sp.sqrt(sp.Integer(2)) * AMAX * csch(1 / SINHWAA) / (denom_sqrt_x0)
+            )
+            self.Cart_to_xx[1] = sp.acos(sp.sqrt(2) * self.Cartz / denom_sqrt_x1)
+            self.Cart_to_xx[2] = sp.atan2(self.Carty, self.Cartx)
         else:
             raise ValueError(
                 f"prolate-spheroidal-like CoordSystem == {self.CoordSystem} unrecognized"
@@ -1551,6 +1541,13 @@ supported_CoordSystems = [
     "HoleySinhSpherical",
 ]
 
+unittest_CoordSystems = [
+    "SinhSymTP",
+    "HoleySinhSpherical",
+    "Cartesian",
+    "SinhCylindricalv2n2",
+]
+
 if __name__ == "__main__":
     import doctest
     import os
@@ -1578,3 +1575,45 @@ if __name__ == "__main__":
             f"{os.path.splitext(os.path.basename(__file__))[0]}_{Coord}",
             results_dict,
         )
+
+    # --------------------------------------------------------------------------
+    # Add specific validation test for SinhSymTP coordinate inversion here
+    # --------------------------------------------------------------------------
+    # Get the ReferenceMetric object for SinhSymTP
+    rfm_sinhsymtp = reference_metric["SinhSymTP"]
+
+    # Define the substitution dictionary: xx[0], xx[1], xx[2] mapped to Cart_to_xx expressions
+    sub_dict_backward_in_forward = {
+        rfm_sinhsymtp.xx[0]: rfm_sinhsymtp.Cart_to_xx[0],
+        rfm_sinhsymtp.xx[1]: rfm_sinhsymtp.Cart_to_xx[1],
+        rfm_sinhsymtp.xx[2]: rfm_sinhsymtp.Cart_to_xx[2],
+    }
+
+    # Substitute backward into forward for each Cartesian component
+    Cartx_check = rfm_sinhsymtp.xx_to_Cart[0].subs(sub_dict_backward_in_forward)
+    Carty_check = rfm_sinhsymtp.xx_to_Cart[1].subs(sub_dict_backward_in_forward)
+    Cartz_check = rfm_sinhsymtp.xx_to_Cart[2].subs(sub_dict_backward_in_forward)
+
+    # Calculate the differences (should be zero if inversion is correct)
+    diff_Cartx = Cartx_check - rfm_sinhsymtp.Cartx
+    diff_Carty = Carty_check - rfm_sinhsymtp.Carty
+    diff_Cartz = Cartz_check - rfm_sinhsymtp.Cartz
+
+    is_zero_Cartx = ve.check_zero(
+        diff_Cartx, verbose=False, fixed_mpfs_for_free_symbols=True, hex_offset=1
+    )
+    is_zero_Carty = ve.check_zero(
+        diff_Carty, verbose=False, fixed_mpfs_for_free_symbols=True, hex_offset=0
+    )
+    is_zero_Cartz = ve.check_zero(
+        diff_Cartz, verbose=False, fixed_mpfs_for_free_symbols=True, hex_offset=0
+    )
+
+    if is_zero_Cartx and is_zero_Carty and is_zero_Cartz:
+        print("PASS: SinhSymTP coordinate inversion validation (Cart -> xx -> Cart)")
+    else:
+        print(
+            "FAILURE: SinhSymTP coordinate inversion validation (Cart -> xx -> Cart) FAILED."
+        )
+        print(is_zero_Cartx, is_zero_Carty, is_zero_Cartz)
+        sys.exit(1)

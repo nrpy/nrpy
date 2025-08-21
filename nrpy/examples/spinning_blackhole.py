@@ -11,6 +11,7 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
+import argparse
 import os
 
 #########################################################
@@ -19,15 +20,17 @@ import os
 import shutil
 
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
-import nrpy.infrastructures.BHaH.general_relativity.BSSN_C_codegen_library as BCl
+import nrpy.infrastructures.BHaH.parallelization.cuda_utilities as cudautils
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import (
     BHaH_defines_h,
+    BHaH_device_defines_h,
     CodeParameters,
+    CurviBoundaryConditions,
     Makefile_helpers,
+    MoLtimestepping,
     cmdline_input_and_parfiles,
     griddata_commondata,
     main_c,
@@ -36,9 +39,52 @@ from nrpy.infrastructures.BHaH import (
     rfm_wrapper_functions,
     xx_tofrom_Cart,
 )
-from nrpy.infrastructures.BHaH.MoLtimestepping import MoL_register_all
+from nrpy.infrastructures.BHaH.general_relativity import BSSN
+
+parser = argparse.ArgumentParser(
+    description="NRPyElliptic Solver for Conformally Flat BBH initial data"
+)
+parser.add_argument(
+    "--parallelization",
+    type=str,
+    help="Parallelization strategy to use (e.g. openmp, cuda).",
+    default="openmp",
+)
+parser.add_argument(
+    "--floating_point_precision",
+    type=str,
+    help="Floating point precision (e.g. float, double).",
+    default="double",
+)
+parser.add_argument(
+    "--disable_intrinsics",
+    action="store_true",
+    help="Flag to disable hardware intrinsics",
+    default=False,
+)
+parser.add_argument(
+    "--disable_rfm_precompute",
+    action="store_true",
+    help="Flag to disable RFM precomputation.",
+    default=False,
+)
+args = parser.parse_args()
+
+# Code-generation-time parameters:
+fp_type = args.floating_point_precision.lower()
+parallelization = args.parallelization.lower()
+enable_intrinsics = not args.disable_intrinsics
+enable_rfm_precompute = not args.disable_rfm_precompute
+
+if parallelization not in ["openmp", "cuda"]:
+    raise ValueError(
+        f"Invalid parallelization strategy: {parallelization}. "
+        "Choose 'openmp' or 'cuda'."
+    )
 
 par.set_parval_from_str("Infrastructure", "BHaH")
+par.set_parval_from_str("parallelization", parallelization)
+par.set_parval_from_str("fp_type", fp_type)
 
 # Code-generation-time parameters:
 project_name = "spinning_blackhole"
@@ -59,16 +105,19 @@ Nxx_dict = {
 }
 default_BH_mass = 1.0
 default_BH_spin_chi = +0.8
-enable_rfm_precompute = True
 MoL_method = "RK4"
 fd_order = 4
 radiation_BC_fd_order = 4
-enable_simd = True
 separate_Ricci_and_BSSN_RHS = True
 parallel_codegen_enable = True
 enable_fd_functions = True
 enable_KreissOliger_dissipation = False
 boundary_conditions_desc = "outgoing radiation"
+
+set_of_CoordSystems = {CoordSystem}
+NUMGRIDS = len(set_of_CoordSystems)
+num_cuda_streams = NUMGRIDS
+par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
 
 OMP_collapse = 1
 if "Spherical" in CoordSystem:
@@ -88,11 +137,16 @@ par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 
 par.adjust_CodeParam_default("t_final", t_final)
 
-
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
-BCl.register_CFunction_initial_data(
+
+if parallelization == "cuda":
+    cudautils.register_CFunctions_HostDevice__operations()
+    cudautils.register_CFunction_find_global_minimum()
+    cudautils.register_CFunction_find_global_sum()
+
+BSSN.initial_data.register_CFunction_initial_data(
     CoordSystem=CoordSystem,
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
@@ -100,14 +154,14 @@ BCl.register_CFunction_initial_data(
 )
 
 numerical_grids_and_timestep.register_CFunctions(
-    set_of_CoordSystems={CoordSystem},
+    set_of_CoordSystems=set_of_CoordSystems,
     list_of_grid_physical_sizes=[grid_physical_size],
     Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
 )
-BCl.register_CFunction_diagnostics(
-    set_of_CoordSystems={CoordSystem},
+BSSN.diagnostics.register_CFunction_diagnostics(
+    set_of_CoordSystems=set_of_CoordSystems,
     default_diagnostics_out_every=diagnostics_output_every,
     enable_psi4_diagnostics=False,
     grid_center_filename_tuple=("out0d-conv_factor%.2f.txt", "convergence_factor"),
@@ -123,13 +177,15 @@ BCl.register_CFunction_diagnostics(
 )
 
 if enable_rfm_precompute:
-    rfm_precompute.register_CFunctions_rfm_precompute(set_of_CoordSystems={CoordSystem})
-BCl.register_CFunction_rhs_eval(
+    rfm_precompute.register_CFunctions_rfm_precompute(
+        set_of_CoordSystems=set_of_CoordSystems
+    )
+BSSN.rhs_eval.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
     enable_T4munu=False,
-    enable_simd=enable_simd,
+    enable_intrinsics=enable_intrinsics,
     enable_fd_functions=enable_fd_functions,
     enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
     LapseEvolutionOption=LapseEvolutionOption,
@@ -137,25 +193,25 @@ BCl.register_CFunction_rhs_eval(
     OMP_collapse=OMP_collapse,
 )
 if separate_Ricci_and_BSSN_RHS:
-    BCl.register_CFunction_Ricci_eval(
+    BSSN.Ricci_eval.register_CFunction_Ricci_eval(
         CoordSystem=CoordSystem,
         enable_rfm_precompute=enable_rfm_precompute,
-        enable_simd=enable_simd,
+        enable_intrinsics=enable_intrinsics,
         enable_fd_functions=enable_fd_functions,
         OMP_collapse=OMP_collapse,
     )
-BCl.register_CFunction_enforce_detgammabar_equals_detgammahat(
+BSSN.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
-BCl.register_CFunction_constraints(
+BSSN.constraints.register_CFunction_constraints(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
     enable_T4munu=False,
-    enable_simd=enable_simd,
+    enable_intrinsics=enable_intrinsics,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
@@ -163,14 +219,12 @@ BCl.register_CFunction_constraints(
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 
-cbc.CurviBoundaryConditions_register_C_functions(
-    set_of_CoordSystems={CoordSystem}, radiation_BC_fd_order=radiation_BC_fd_order
+CurviBoundaryConditions.register_all.register_C_functions(
+    set_of_CoordSystems=set_of_CoordSystems, radiation_BC_fd_order=radiation_BC_fd_order
 )
 rhs_string = ""
 if separate_Ricci_and_BSSN_RHS:
-    rhs_string += (
-        "Ricci_eval(commondata, params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
-    )
+    rhs_string += "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
 rhs_string += """
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
 if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
@@ -180,14 +234,17 @@ if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
 if not enable_rfm_precompute:
     rhs_string = rhs_string.replace("rfmstruct", "xx")
 
-MoL_register_all.register_CFunctions(
+MoLtimestepping.register_all.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,
     post_rhs_string="""if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
   apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);
-  enforce_detgammabar_equals_detgammahat(commondata, params, rfmstruct, RK_OUTPUT_GFS);""",
+  enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
+    rational_const_alias=(
+        "static constexpr" if parallelization == "cuda" else "static const"
+    ),
 )
 xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
 xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
@@ -208,7 +265,6 @@ if IDtype == "UIUCBlackHole":
 elif IDtype == "OffsetKerrSchild":
     par.adjust_CodeParam_default("a", default_BH_spin_chi * default_BH_mass)
 
-
 CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
 CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
 cmdline_input_and_parfiles.generate_default_parfile(
@@ -217,11 +273,27 @@ cmdline_input_and_parfiles.generate_default_parfile(
 cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
     project_name=project_name, cmdline_inputs=["convergence_factor"]
 )
+gpu_defines_filename = BHaH_device_defines_h.output_device_headers(
+    project_dir, num_streams=num_cuda_streams
+)
 BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
-    enable_intrinsics=enable_simd,
+    enable_intrinsics=enable_intrinsics,
+    intrinsics_header_lst=(
+        ["cuda_intrinsics.h"] if parallelization == "cuda" else ["simd_intrinsics.h"]
+    ),
     enable_rfm_precompute=enable_rfm_precompute,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
+    DOUBLE_means="double" if fp_type == "float" else "REAL",
+    restrict_pointer_type="*" if parallelization == "cuda" else "*restrict",
+    supplemental_defines_dict=(
+        {
+            "C++/CUDA safe restrict": "#define restrict __restrict__",
+            "GPU Header": f'#include "{gpu_defines_filename}"',
+        }
+        if parallelization == "cuda"
+        else {}
+    ),
 )
 
 main_c.register_CFunction_main_c(
@@ -233,19 +305,33 @@ griddata_commondata.register_CFunction_griddata_free(
     enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True
 )
 
-if enable_simd:
+if enable_intrinsics:
     copy_files(
         package="nrpy.helpers",
-        filenames_list=["simd_intrinsics.h"],
+        filenames_list=(
+            ["cuda_intrinsics.h"]
+            if parallelization == "cuda"
+            else ["simd_intrinsics.h"]
+        ),
         project_dir=project_dir,
         subdirectory="intrinsics",
     )
-Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
-    project_dir=project_dir,
-    project_name=project_name,
-    exec_or_library_name=project_name,
-    compiler_opt_option="default",
-)
+if parallelization == "cuda":
+    Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
+        project_dir=project_dir,
+        project_name=project_name,
+        exec_or_library_name=project_name,
+        CC="nvcc",
+        src_code_file_ext="cu",
+        compiler_opt_option="nvcc",
+    )
+else:
+    Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
+        project_dir=project_dir,
+        project_name=project_name,
+        exec_or_library_name=project_name,
+        compiler_opt_option="default",
+    )
 print(
     f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
 )

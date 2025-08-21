@@ -18,6 +18,7 @@ Note: This is the superB version.
 
 """
 
+import argparse
 import os
 
 #########################################################
@@ -33,9 +34,6 @@ import nrpy.infrastructures.BHaH.checkpointing as chkpt
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
-import nrpy.infrastructures.BHaH.general_relativity.NRPyPN_quasicircular_momenta as NRPyPNqm
-import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.ID_persist_struct as IDps
-import nrpy.infrastructures.BHaH.general_relativity.TwoPunctures.TwoPunctures_lib as TPl
 import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
 import nrpy.infrastructures.BHaH.special_functions.spin_weight_minus2_spherical_harmonics as swm2sh
 import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xxCartxx
@@ -53,21 +51,29 @@ import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import rfm_precompute, rfm_wrapper_functions
 from nrpy.infrastructures.BHaH.general_relativity import (
-    BSSN_C_codegen_library,
-    psi4_C_codegen_library,
+    BSSN,
+    PSI4,
+    NRPyPN_quasicircular_momenta,
+    TwoPunctures,
 )
+
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "--paper", action="store_true", help="use the paper-version parameters"
+)
+args = parser.parse_args()
+paper = args.paper
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
 
 # Code-generation-time parameters:
 project_name = "superB_blackhole_spectroscopy"
-# CoordSystem = "SinhSpherical"
 CoordSystem = "SinhCylindrical"
 IDtype = "TP_Interp"
 IDCoordSystem = "Cartesian"
 
-initial_sep = 0.5
+initial_sep = 0.5 if not paper else 10.0
 mass_ratio = 1.0  # must be >= 1.0. Will need higher resolution for > 1.0.
 BH_m_chix = 0.0  # dimensionless spin parameter for less-massive BH
 BH_M_chix = 0.0  # dimensionless spin parameter for more-massive BH
@@ -78,6 +84,8 @@ TP_npoints_phi = 4
 
 enable_KreissOliger_dissipation = True
 enable_CAKO = True
+enable_CAHD = False
+enable_SSL = True
 KreissOliger_strength_gauge = 0.99
 KreissOliger_strength_nongauge = 0.3
 LapseEvolutionOption = "OnePlusLog"
@@ -86,22 +94,25 @@ GammaDriving_eta = 2.0
 grid_physical_size = 300.0
 diagnostics_output_every = 0.5
 enable_charm_checkpointing = True
-default_checkpoint_every = 2.0
+default_checkpoint_every = 20.0
 t_final = 1.5 * grid_physical_size
 swm2sh_maximum_l_mode_generated = 8
-swm2sh_maximum_l_mode_to_compute = 2  # for consistency with NRPy 1.0 version.
+swm2sh_maximum_l_mode_to_compute = 2 if not paper else 8
+if paper:
+    list_of_psi4_extraction_radii = [80.0, 160.0]
+    num_psi4_extraction_radii = len(list_of_psi4_extraction_radii)
 Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
-    "SinhCylindrical": [64, 2, 200],
+    "SinhCylindrical": [400, 2, 1200] if not paper else [800, 2, 2400],
 }
 default_BH1_mass = default_BH2_mass = 0.5
-default_BH1_z_posn = +0.25
-default_BH2_z_posn = -0.25
+default_BH1_z_posn = +0.25 if not paper else +5.0
+default_BH2_z_posn = -0.25 if not paper else -5.0
 enable_rfm_precompute = True
-MoL_method = "RK4"
+MoL_method = "RK4" if not paper else "SSPRK33"
 fd_order = 8
-radiation_BC_fd_order = 4
-enable_simd = True
+radiation_BC_fd_order = 4 if not paper else 8
+enable_intrinsics = True
 separate_Ricci_and_BSSN_RHS = True
 parallel_codegen_enable = True
 enable_fd_functions = True
@@ -111,27 +122,24 @@ boundary_conditions_desc = "outgoing radiation"
 # should be chosen such that Nxx0/Nchare0, Nxx1/Nchare1, Nxx2/Nchare2 are integers greater than NGHOSTS,
 # NGHOSTS is fd_order/2
 if "Spherical" in CoordSystem:
-    par.adjust_CodeParam_default("Nchare0", 20)
+    par.adjust_CodeParam_default("Nchare0", 10)
     par.adjust_CodeParam_default("Nchare1", 2)
     par.adjust_CodeParam_default("Nchare2", 1)
 if "Cylindrical" in CoordSystem:
     par.adjust_CodeParam_default("Nchare0", 4)
     par.adjust_CodeParam_default("Nchare1", 1)
-    par.adjust_CodeParam_default("Nchare2", 10)
+    par.adjust_CodeParam_default("Nchare2", 4)
 
 OMP_collapse = 1
+sinh_width = 0.2
 if "Spherical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "2")
     par.adjust_CodeParam_default("CFL_FACTOR", 1.0)
     OMP_collapse = 2  # about 2x faster
-    if CoordSystem == "SinhSpherical":
-        sinh_width = 0.2
 if "Cylindrical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "1")
     par.adjust_CodeParam_default("CFL_FACTOR", 0.5)
     OMP_collapse = 2  # might be slightly faster
-    if CoordSystem == "SinhCylindrical":
-        sinh_width = 0.2
 
 project_dir = os.path.join("project", project_name)
 
@@ -150,14 +158,14 @@ par.set_parval_from_str(
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
-NRPyPNqm.register_CFunction_NRPyPN_quasicircular_momenta()
-TPl.register_C_functions()
+NRPyPN_quasicircular_momenta.register_CFunction_NRPyPN_quasicircular_momenta()
+TwoPunctures.TwoPunctures_lib.register_C_functions()
 superBinitialdata.register_CFunction_initial_data(
     CoordSystem=CoordSystem,
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
     enable_checkpointing=False,
-    ID_persist_struct_str=IDps.ID_persist_str(),
+    ID_persist_struct_str=TwoPunctures.ID_persist_struct.ID_persist_str(),
     populate_ID_persist_struct_str=r"""
 initialize_ID_persist_struct(commondata, &ID_persist);
 TP_solve(&ID_persist);
@@ -173,7 +181,7 @@ TP_solve(&ID_persist);
 """,
 )
 interpolation2d.register_CFunction_interpolation_2d_general__uniform_src_grid(
-    enable_simd=enable_simd, project_dir=project_dir
+    enable_simd=enable_intrinsics, project_dir=project_dir
 )
 superBdiagnostics.register_CFunction_diagnostics(
     set_of_CoordSystems={CoordSystem},
@@ -193,57 +201,57 @@ superBdiagnostics.register_CFunction_diagnostics(
 )
 if enable_rfm_precompute:
     rfm_precompute.register_CFunctions_rfm_precompute(set_of_CoordSystems={CoordSystem})
-BSSN_C_codegen_library.register_CFunction_rhs_eval(
+BSSN.rhs_eval.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
     enable_T4munu=False,
-    enable_simd=enable_simd,
+    enable_intrinsics=enable_intrinsics,
     enable_fd_functions=enable_fd_functions,
     LapseEvolutionOption=LapseEvolutionOption,
     ShiftEvolutionOption=ShiftEvolutionOption,
     enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
-    enable_CAKO=enable_CAKO,
     KreissOliger_strength_gauge=KreissOliger_strength_gauge,
     KreissOliger_strength_nongauge=KreissOliger_strength_nongauge,
+    enable_CAKO=enable_CAKO,
+    enable_CAHD=enable_CAHD,
+    enable_SSL=enable_SSL,
     OMP_collapse=OMP_collapse,
 )
+if enable_CAHD:
+    BSSN.cahdprefactor_gf.register_CFunction_cahdprefactor_auxevol_gridfunction(
+        {CoordSystem}
+    )
 if separate_Ricci_and_BSSN_RHS:
-    BSSN_C_codegen_library.register_CFunction_Ricci_eval(
+    BSSN.Ricci_eval.register_CFunction_Ricci_eval(
         CoordSystem=CoordSystem,
         enable_rfm_precompute=enable_rfm_precompute,
-        enable_simd=enable_simd,
+        enable_intrinsics=enable_intrinsics,
         enable_fd_functions=enable_fd_functions,
         OMP_collapse=OMP_collapse,
     )
-BSSN_C_codegen_library.register_CFunction_enforce_detgammabar_equals_detgammahat(
+BSSN.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
-BSSN_C_codegen_library.register_CFunction_constraints(
+BSSN.constraints.register_CFunction_constraints(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
     enable_T4munu=False,
-    enable_simd=enable_simd,
+    enable_intrinsics=enable_intrinsics,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
+)
+
+PSI4.compute_psi4.register_CFunction_psi4(
+    CoordSystem=CoordSystem,
+    OMP_collapse=OMP_collapse,
+    enable_fd_functions=enable_fd_functions,
 )
 swm2sh.register_CFunction_spin_weight_minus2_sph_harmonics()
-
-psi4_C_codegen_library.register_CFunction_psi4(
-    CoordSystem=CoordSystem,
-    OMP_collapse=OMP_collapse,
-)
-psi4_C_codegen_library.register_CFunction_psi4_metric_deriv_quantities(
-    CoordSystem=CoordSystem,
-    enable_fd_functions=enable_fd_functions,
-)
-psi4_C_codegen_library.register_CFunction_psi4_tetrad(
-    CoordSystem=CoordSystem,
-)
 
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
@@ -273,10 +281,13 @@ superBcbc.CurviBoundaryConditions_register_C_functions(
 )
 
 rhs_string = ""
+if enable_SSL:
+    rhs_string += """
+// Set SSL strength (SSL_Gaussian_prefactor):
+commondata->SSL_Gaussian_prefactor = commondata->SSL_h * exp(-commondata->time * commondata->time / (2 * commondata->SSL_sigma * commondata->SSL_sigma));
+"""
 if separate_Ricci_and_BSSN_RHS:
-    rhs_string += (
-        "Ricci_eval(commondata, params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
-    )
+    rhs_string += "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
 if outer_bcs_type == "radiation":
     rhs_string += """
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
@@ -299,7 +310,7 @@ superBMoL.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,
     post_rhs_bcs_str=post_rhs_bcs_str,
-    post_rhs_string="""enforce_detgammabar_equals_detgammahat(commondata, params, rfmstruct, RK_OUTPUT_GFS);""",
+    post_rhs_string="""enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
 )
@@ -318,6 +329,7 @@ if CoordSystem == "SinhCylindrical":
     par.adjust_CodeParam_default("AMPLZ", grid_physical_size)
     par.adjust_CodeParam_default("SINHWRHO", sinh_width)
     par.adjust_CodeParam_default("SINHWZ", sinh_width)
+
 par.adjust_CodeParam_default("t_final", t_final)
 # Initial data parameters
 par.adjust_CodeParam_default("initial_sep", initial_sep)
@@ -336,6 +348,13 @@ par.adjust_CodeParam_default("eta", GammaDriving_eta)
 par.adjust_CodeParam_default(
     "swm2sh_maximum_l_mode_to_compute", swm2sh_maximum_l_mode_to_compute
 )
+if paper:
+    par.adjust_CodeParam_default("num_psi4_extraction_radii", num_psi4_extraction_radii)
+    par.adjust_CodeParam_default(
+        "list_of_psi4_extraction_radii",
+        list_of_psi4_extraction_radii,
+        new_cparam_type=f"REAL[{num_psi4_extraction_radii}]",
+    )
 
 #########################################################
 # STEP 3: Generate header files, register C functions and
@@ -360,9 +379,17 @@ superBmain.output_commondata_object_h_and_main_h_cpp_ci(
     project_dir=project_dir,
     enable_charm_checkpointing=enable_charm_checkpointing,
 )
+
+post_non_y_n_auxevol_mallocs = ""
+if enable_CAHD:
+    post_non_y_n_auxevol_mallocs = """for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
+    cahdprefactor_auxevol_gridfunction(&commondata, &griddata_chare[grid].params, griddata_chare[grid].xx,  griddata_chare[grid].gridfuncs.auxevol_gfs);
+}\n"""
+
 superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
     project_dir=project_dir,
     MoL_method=MoL_method,
+    post_non_y_n_auxevol_mallocs=post_non_y_n_auxevol_mallocs,
     enable_rfm_precompute=enable_rfm_precompute,
     outer_bcs_type=outer_bcs_type,
     enable_psi4_diagnostics=True,
@@ -371,7 +398,6 @@ superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
 )
 
 superBpup.register_CFunction_superB_pup_routines(
-    set_of_CoordSystems={CoordSystem},
     MoL_method=MoL_method,
     enable_psi4_diagnostics=True,
 )
@@ -388,13 +414,13 @@ Bdefines_h.output_BHaH_defines_h(
         str(Path("superB") / Path("superB.h")),
     ],
     project_dir=project_dir,
-    enable_intrinsics=enable_simd,
+    enable_intrinsics=enable_intrinsics,
     enable_rfm_precompute=enable_rfm_precompute,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
 )
 
 
-if enable_simd:
+if enable_intrinsics:
     copy_files(
         package="nrpy.helpers",
         filenames_list=["simd_intrinsics.h"],

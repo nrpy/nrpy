@@ -274,7 +274,7 @@ fftw_cleanup();
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_SEOBNRv5_aligned_spin_waveform() -> (
@@ -350,7 +350,7 @@ return h22;
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics() -> (
@@ -387,7 +387,7 @@ for (i = 0; i < commondata->nsteps_low; i++) {
   dynamics[H] = commondata->dynamics_low[IDX(i,H)];
   dynamics[OMEGA] = commondata->dynamics_low[IDX(i,OMEGA)];
   dynamics[OMEGA_CIRC] = commondata->dynamics_low[IDX(i,OMEGA_CIRC)];
-  
+
   //compute
   //store
   commondata->waveform_low[IDX_WF(i,TIME)] = dynamics[TIME];
@@ -404,7 +404,7 @@ for (i = 0; i < commondata->nsteps_fine; i++) {
   dynamics[H] = commondata->dynamics_fine[IDX(i,H)];
   dynamics[OMEGA] = commondata->dynamics_fine[IDX(i,OMEGA)];
   dynamics[OMEGA_CIRC] = commondata->dynamics_fine[IDX(i,OMEGA_CIRC)];
-  
+
   //compute
   //store
   commondata->waveform_fine[IDX_WF(i,TIME)] = dynamics[TIME];
@@ -421,7 +421,7 @@ return GSL_SUCCESS;
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_SEOBNRv5_aligned_spin_flux() -> Union[None, pcg.NRPyEnv_type]:
@@ -472,7 +472,7 @@ return GSL_SUCCESS;
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_SEOBNRv5_aligned_spin_right_hand_sides() -> (
@@ -542,7 +542,7 @@ return GSL_SUCCESS;
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_commondata_io() -> Union[None, pcg.NRPyEnv_type]:
@@ -658,4 +658,4 @@ return GSL_SUCCESS;
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()

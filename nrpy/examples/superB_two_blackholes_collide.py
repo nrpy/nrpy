@@ -28,7 +28,6 @@ import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
-import nrpy.infrastructures.BHaH.general_relativity.BSSN_C_codegen_library as BCl
 import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
 import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xxCartxx
 import nrpy.infrastructures.superB.chare_communication_maps as charecomm
@@ -44,6 +43,7 @@ import nrpy.infrastructures.superB.timestepping_chare as superBtimestepping
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import rfm_precompute, rfm_wrapper_functions
+from nrpy.infrastructures.BHaH.general_relativity import BSSN
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -70,7 +70,7 @@ enable_rfm_precompute = True
 MoL_method = "RK4"
 fd_order = 4
 radiation_BC_fd_order = 4
-enable_simd = True
+enable_intrinsics = True
 separate_Ricci_and_BSSN_RHS = True
 parallel_codegen_enable = True
 enable_fd_functions = True
@@ -155,12 +155,12 @@ superBdiagnostics.register_CFunction_diagnostics(
 
 if enable_rfm_precompute:
     rfm_precompute.register_CFunctions_rfm_precompute(set_of_CoordSystems={CoordSystem})
-BCl.register_CFunction_rhs_eval(
+BSSN.rhs_eval.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
     enable_T4munu=False,
-    enable_simd=enable_simd,
+    enable_intrinsics=enable_intrinsics,
     enable_fd_functions=enable_fd_functions,
     LapseEvolutionOption=LapseEvolutionOption,
     ShiftEvolutionOption=ShiftEvolutionOption,
@@ -168,25 +168,25 @@ BCl.register_CFunction_rhs_eval(
     enable_CAKO=enable_CAKO,
     OMP_collapse=OMP_collapse,
 )
-BCl.register_CFunction_Ricci_eval(
+BSSN.Ricci_eval.register_CFunction_Ricci_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
-    enable_simd=enable_simd,
+    enable_intrinsics=enable_intrinsics,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
-BCl.register_CFunction_enforce_detgammabar_equals_detgammahat(
+BSSN.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
-BCl.register_CFunction_constraints(
+BSSN.constraints.register_CFunction_constraints(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
     enable_T4munu=False,
-    enable_simd=enable_simd,
+    enable_intrinsics=enable_intrinsics,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
@@ -202,9 +202,7 @@ superBcbc.CurviBoundaryConditions_register_C_functions(
 )
 rhs_string = ""
 if separate_Ricci_and_BSSN_RHS:
-    rhs_string += (
-        "Ricci_eval(commondata, params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
-    )
+    rhs_string += "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
 if outer_bcs_type == "radiation":
     rhs_string += """
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
@@ -227,7 +225,7 @@ superBMoL.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,
     post_rhs_bcs_str=post_rhs_bcs_str,
-    post_rhs_string="""enforce_detgammabar_equals_detgammahat(commondata, params, rfmstruct, RK_OUTPUT_GFS);""",
+    post_rhs_string="""enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
 )
@@ -258,7 +256,6 @@ cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
 )
 
 superBpup.register_CFunction_superB_pup_routines(
-    set_of_CoordSystems={CoordSystem},
     MoL_method=MoL_method,
 )
 copy_files(
@@ -283,12 +280,12 @@ superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
 Bdefines_h.output_BHaH_defines_h(
     additional_includes=[str(Path("superB") / Path("superB.h"))],
     project_dir=project_dir,
-    enable_intrinsics=enable_simd,
+    enable_intrinsics=enable_intrinsics,
     enable_rfm_precompute=enable_rfm_precompute,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
 )
 
-if enable_simd:
+if enable_intrinsics:
     copy_files(
         package="nrpy.helpers",
         filenames_list=["simd_intrinsics.h"],

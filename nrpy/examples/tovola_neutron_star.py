@@ -17,18 +17,15 @@ import os
 import shutil
 
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.BHaH.CurviBoundaryConditions.CurviBoundaryConditions as cbc
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
-import nrpy.infrastructures.BHaH.general_relativity.BSSN_C_codegen_library as BCl
-import nrpy.infrastructures.BHaH.general_relativity.TOVola.ID_persist_struct as IDps
-import nrpy.infrastructures.BHaH.general_relativity.TOVola.TOVola_interp as TOVinterp
-import nrpy.infrastructures.BHaH.general_relativity.TOVola.TOVola_solve as TOVsolve
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH import (
     BHaH_defines_h,
     CodeParameters,
+    CurviBoundaryConditions,
     Makefile_helpers,
+    MoLtimestepping,
     checkpointing,
     cmdline_input_and_parfiles,
     griddata_commondata,
@@ -38,7 +35,7 @@ from nrpy.infrastructures.BHaH import (
     rfm_wrapper_functions,
     xx_tofrom_Cart,
 )
-from nrpy.infrastructures.BHaH.MoLtimestepping import MoL_register_all
+from nrpy.infrastructures.BHaH.general_relativity import BSSN, TOVola
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -59,7 +56,7 @@ Nxx_dict = {
 enable_rfm_precompute = True
 fd_order = 4
 radiation_BC_fd_order = 4
-enable_simd = True
+enable_intrinsics = True
 parallel_codegen_enable = True
 enable_fd_functions = True
 separately_compute_Ricci = False
@@ -86,19 +83,18 @@ par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 par.set_parval_from_str("fd_order", fd_order)
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 
-
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
 
-TOVinterp.register_CFunction_TOVola_interp()
-TOVsolve.register_CFunction_TOVola_solve()
-BCl.register_CFunction_initial_data(
+TOVola.TOVola_interp.register_CFunction_TOVola_interp()
+TOVola.TOVola_solve.register_CFunction_TOVola_solve()
+BSSN.initial_data.register_CFunction_initial_data(
     CoordSystem=CoordSystem,
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
     enable_checkpointing=True,
-    ID_persist_struct_str=IDps.ID_persist_str(),
+    ID_persist_struct_str=TOVola.ID_persist_struct.ID_persist_str(),
     populate_ID_persist_struct_str=r"""
 TOVola_solve(commondata, &ID_persist);
 """,
@@ -116,7 +112,7 @@ TOVola_solve(commondata, &ID_persist);
 """,
     enable_T4munu=True,
 )
-BCl.register_CFunction_diagnostics(
+BSSN.diagnostics.register_CFunction_diagnostics(
     set_of_CoordSystems={CoordSystem},
     default_diagnostics_out_every=diagnostics_output_every,
     enable_psi4_diagnostics=False,
@@ -134,12 +130,12 @@ BCl.register_CFunction_diagnostics(
 )
 if enable_rfm_precompute:
     rfm_precompute.register_CFunctions_rfm_precompute(set_of_CoordSystems={CoordSystem})
-BCl.register_CFunction_constraints(
+BSSN.constraints.register_CFunction_constraints(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=False,
     enable_T4munu=True,
-    enable_simd=enable_simd,
+    enable_intrinsics=enable_intrinsics,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
@@ -155,12 +151,12 @@ numerical_grids_and_timestep.register_CFunctions(
     enable_CurviBCs=True,
 )
 
-cbc.CurviBoundaryConditions_register_C_functions(
+CurviBoundaryConditions.register_all.register_C_functions(
     set_of_CoordSystems={CoordSystem}, radiation_BC_fd_order=radiation_BC_fd_order
 )
 
 rhs_string = ""
-MoL_register_all.register_CFunctions(
+MoLtimestepping.register_all.register_CFunctions(
     MoL_method="RK4",
     rhs_string=rhs_string,
     post_rhs_string="",
@@ -180,7 +176,6 @@ if CoordSystem == "SinhSpherical":
     par.adjust_CodeParam_default("SINHW", sinh_width)
 par.adjust_CodeParam_default("t_final", t_final)
 
-
 #########################################################
 # STEP 3: Generate header files, register C functions and
 #         command line parameters, set up boundary conditions,
@@ -196,7 +191,7 @@ cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
 )
 BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
-    enable_intrinsics=enable_simd,
+    enable_intrinsics=enable_intrinsics,
     enable_rfm_precompute=enable_rfm_precompute,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
 )
@@ -213,7 +208,7 @@ griddata_commondata.register_CFunction_griddata_free(
     enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True
 )
 
-if enable_simd:
+if enable_intrinsics:
     copy_files(
         package="nrpy.helpers",
         filenames_list=["simd_intrinsics.h"],

@@ -50,7 +50,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_augments() -> (
         include_CodeParameters_h=True,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_SEOBNRv5_aligned_spin_argrelmin() -> (
@@ -100,7 +100,7 @@ return minima_count_or_idx;
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_SEOBNRv5_aligned_spin_iterative_refinement_old() -> (
@@ -152,7 +152,7 @@ for(int iter = 0; iter < 2; iter++) {
       result = (left_refined + right_refined) * 0.5;
       return result;
     }
-  } 
+  }
 }
 return result;
 """
@@ -165,7 +165,7 @@ return result;
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_eval_abs_deriv() -> Union[None, pcg.NRPyEnv_type]:
@@ -434,7 +434,7 @@ return GSL_SUCCESS;
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_SEOBNRv5_aligned_spin_ode_integration(
@@ -679,4 +679,4 @@ return GSL_SUCCESS;
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()

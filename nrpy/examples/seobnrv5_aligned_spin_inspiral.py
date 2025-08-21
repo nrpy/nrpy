@@ -240,7 +240,7 @@ if __name__ == "__main__":
 Generating a compileable C project to calculate gravitational waveforms using the SEOBNRv5 and BOB model!
 To learn more about usage options, run:
 python nrpy/example/seobnrv5_aligned_spin_inspiral.py -h
-or 
+or
 python nrpy/example/seobnrv5_aligned_spin_inspiral.py --help
 """
         )

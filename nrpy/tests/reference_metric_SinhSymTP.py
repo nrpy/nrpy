@@ -1,8 +1,8 @@
-from mpmath import mpf  # type: ignore
+from mpmath import mpc, mpf  # type: ignore
 
 trusted_dict = {
-    "Cart_to_xx_0": mpf("0.488559899010444541612584647472559"),
-    "Cart_to_xx_1": mpf("1.18304329028982242800313235440622"),
+    "Cart_to_xx_0": mpc(real="0.845961500079082738380111125878829", imag="0.0"),
+    "Cart_to_xx_1": mpc(real="1.18304329028982242800313235440602", imag="0.0"),
     "Cart_to_xx_2": mpf("0.104277269822046439469449849362747"),
     "Cartx": mpf("0.449832882742496220629391245893203"),
     "Carty": mpf("0.0470781072226313934692143448046409"),

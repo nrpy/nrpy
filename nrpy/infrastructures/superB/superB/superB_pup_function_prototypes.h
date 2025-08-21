@@ -1,6 +1,5 @@
 void pup_commondata_struct(PUP::er &p, commondata_struct &cd);
 void pup_params_struct(PUP::er &p, params_struct &ps);
-void pup_rfm_struct(PUP::er &p, rfm_struct &rfm, const params_struct *restrict params);
 void pup_innerpt_bc_struct(PUP::er &p, innerpt_bc_struct &ibc);
 void pup_outerpt_bc_struct(PUP::er &p, outerpt_bc_struct &obc);
 void pup_bc_info_struct(PUP::er &p, bc_info_struct &bci);

@@ -7,7 +7,7 @@ Authors: Zachariah B. Etienne
 """
 
 # Step 1.a: import all needed modules
-from typing import List, Union, cast
+from typing import List
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
 
@@ -181,11 +181,11 @@ class Psi4Tetrads:
             e3U[a] /= sp.sqrt(omegaDD[2][2])
 
         # Step 2.j: Construct l^mu, n^mu, and m^mu, based on r^mu, theta^mu, phi^mu, and u^mu:
-        r4U = cast(List[sp.Expr], ixp.zerorank1(dimension=4))
+        r4U = ixp.zerorank1(dimension=4)
         # u4U = cast(List[Union[int, sp.Expr]], ixp.zerorank1(dimension=4))
-        u4U = cast(List[Union[int, sp.Expr]], ixp.zerorank1(dimension=4))
-        theta4U = cast(List[sp.Expr], ixp.zerorank1(dimension=4))
-        phi4U = cast(List[sp.Expr], ixp.zerorank1(dimension=4))
+        u4U = ixp.zerorank1(dimension=4)
+        theta4U = ixp.zerorank1(dimension=4)
+        phi4U = ixp.zerorank1(dimension=4)
 
         for a in range(3):
             r4U[a + 1] = e2U[a]

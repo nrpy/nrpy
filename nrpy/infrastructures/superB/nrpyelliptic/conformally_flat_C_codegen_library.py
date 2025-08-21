@@ -353,4 +353,4 @@ def register_CFunction_diagnostics(
         "store indices of 1d and 2d diagnostic points, the offset in the output file, etc",
     )
 
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()

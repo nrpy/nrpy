@@ -48,7 +48,7 @@ for (size_t i = 1; i < nsteps_arr; i++){
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_SEOBNRv5_NQC_corrections(
@@ -81,7 +81,7 @@ REAL *restrict Omega = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 REAL *restrict hamp = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 REAL *restrict phase = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 REAL *restrict phase_unwrapped = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
-REAL radius, omega, prstar; 
+REAL radius, omega, prstar;
 double complex h22;
 size_t i;
 
@@ -107,7 +107,7 @@ if (commondata->r_ISCO < r[commondata->nsteps_fine - 1]){
 }
 else{
   const REAL dt_ISCO = 0.001;
-  const size_t N_zoom = (size_t) ((times[commondata->nsteps_fine - 1] - times[0]) / dt_ISCO);  
+  const size_t N_zoom = (size_t) ((times[commondata->nsteps_fine - 1] - times[0]) / dt_ISCO);
   REAL *restrict t_zoom = (REAL *) malloc(N_zoom * sizeof(REAL));
   REAL *restrict minus_r_zoom = (REAL *) malloc(N_zoom * sizeof(REAL));
   gsl_interp_accel *restrict acc_r = gsl_interp_accel_alloc();
@@ -116,10 +116,10 @@ else{
   for (i = 0; i < N_zoom; i++){
     t_zoom[i] = times[0] + i * dt_ISCO;
     minus_r_zoom[i] = -1.0*gsl_spline_eval(spline_r,t_zoom[i],acc_r);
-  }  
+  }
   const size_t ISCO_zoom_idx = gsl_interp_bsearch(minus_r_zoom, -commondata->r_ISCO, 0 , N_zoom);
   commondata->t_ISCO = t_zoom[ISCO_zoom_idx];
-  
+
   gsl_interp_accel_free(acc_r);
   gsl_spline_free(spline_r);
   free(t_zoom);
@@ -317,7 +317,7 @@ return GSL_SUCCESS;
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_SEOBNRv5_aligned_spin_interpolate_modes() -> (
@@ -406,7 +406,7 @@ free(h22_nophase_imag);
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_SEOBNRv5_aligned_spin_IMR_waveform(
@@ -453,7 +453,7 @@ if (idx_match == commondata->nsteps_inspiral - 1){
 }
 const REAL t_match = times_new[idx_match];
 const size_t nsteps_ringdown = 15 * (size_t) (commondata->tau_qnm / dT);
-REAL *restrict ringdown_time = (REAL *)malloc(nsteps_ringdown*sizeof(REAL)); 
+REAL *restrict ringdown_time = (REAL *)malloc(nsteps_ringdown*sizeof(REAL));
 REAL *restrict ringdown_amp = (REAL *)malloc(nsteps_ringdown*sizeof(REAL));
 REAL *restrict ringdown_phase = (REAL *)malloc(nsteps_ringdown*sizeof(REAL));
 for(i = 0; i < nsteps_ringdown; i++){
@@ -527,4 +527,4 @@ return GSL_SUCCESS;
         include_CodeParameters_h=False,
         body=body,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()

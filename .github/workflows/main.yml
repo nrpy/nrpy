@@ -50,9 +50,9 @@ jobs:
           pip install -U ipython setuptools
           sudo apt-get -y install libgsl-dev
 
-      - name: Install sympy or DEVELOPMENT sympy based on Python version
+      - name: Install sympy or DEVELOPMENT sympy based on Python version. sympy-dev requires Python 3.9 or higher.
         run: |
-          if [[ "${{ matrix.python-version }}" != "3.7.13" ]]; then
+          if [[ "${{ matrix.python-version }}" != "3.7.13" && "${{ matrix.python-version }}" != "3.8.12" ]]; then
             pip install git+https://github.com/sympy/sympy.git
           else
             pip install sympy
@@ -193,7 +193,7 @@ jobs:
           echo "All static analysis tests passed successfully."
 
   einsteintoolkit-validation:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
@@ -205,6 +205,9 @@ jobs:
 
       - name: Download Apptainer image
         run: wget -q https://github.com/nrpy/einsteintoolkit_ci_images/releases/download/v1.0.3/custom_ubuntu.sif
+
+      - name: Disable AppArmor restriction on unprivileged user namespaces, needed for 24.04 compatibility.
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
       - name: Build Apptainer sandbox
         run: apptainer build --sandbox custom_ubuntu_sandbox custom_ubuntu.sif
@@ -244,7 +247,7 @@ jobs:
           "
 
   charmpp-validation:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
@@ -256,6 +259,9 @@ jobs:
 
       - name: Download Apptainer image
         run: wget -q https://github.com/nrpy/charmpp_barebones_ci_images/releases/download/v1.0.0/custom_ubuntu_charmpp.sif
+
+      - name: Disable AppArmor restriction on unprivileged user namespaces, needed for 24.04 compatibility.
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
       - name: Build Apptainer sandbox
         run: apptainer build --sandbox custom_ubuntu_charmpp_sandbox custom_ubuntu_charmpp.sif
@@ -338,7 +344,8 @@ jobs:
           python -m nrpy.examples.seobnrv5_aligned_spin_inspiral && (cd project/seobnrv5_aligned_spin_inspiral && make && make clean) &&
           python -m nrpy.examples.tovola_neutron_star && (cd project/tovola_neutron_star && make && make clean) &&
           python -m nrpy.examples.hydro_without_hydro && (cd project/hydro_without_hydro && make && make clean) &&
-          python -m nrpy.examples.manga_bhah_lib && (cd project/bhah_lib && make && make clean)
+          python -m nrpy.examples.manga_bhah_lib && (cd project/bhah_lib && make && make clean) &&
+          python -m nrpy.examples.bhahaha && (cd project/BHaHAHA && make && make clean)
 
   codegen-mac:
     runs-on: macos-13
@@ -383,4 +390,5 @@ jobs:
           python -m nrpy.examples.seobnrv5_aligned_spin_inspiral && (cd project/seobnrv5_aligned_spin_inspiral && make && make clean) &&
           python -m nrpy.examples.tovola_neutron_star && (cd project/tovola_neutron_star && make && make clean) &&
           python -m nrpy.examples.hydro_without_hydro && (cd project/hydro_without_hydro && make && make clean) &&
-          python -m nrpy.examples.manga_bhah_lib && (cd project/bhah_lib && make && make clean)
+          python -m nrpy.examples.manga_bhah_lib && (cd project/bhah_lib && make && make clean) &&
+          python -m nrpy.examples.bhahaha && (cd project/BHaHAHA && make && make clean)

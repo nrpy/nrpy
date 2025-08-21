@@ -56,6 +56,7 @@ eta_damping = 11.0
 MINIMUM_GLOBAL_WAVESPEED = 0.7
 CFL_FACTOR = 1.0  # NRPyElliptic wave speed prescription assumes this parameter is ALWAYS set to 1
 CoordSystem = "SinhSpherical"
+set_of_CoordSystems = {CoordSystem}
 Nxx_dict = {
     "SinhSymTP": [128, 128, 16],
     "SinhCylindricalv2": [128, 16, 256],
@@ -165,24 +166,14 @@ nrpyelliptic.initial_data.register_CFunction_initial_guess_all_points(
     OMP_collapse=OMP_collapse, enable_checkpointing=enable_checkpointing
 )
 
-# Generate function to set variable wavespeed
-nrpyelliptic.variable_wavespeed_gfs.register_CFunction_variable_wavespeed_gfs_all_points(
-    CoordSystem=CoordSystem
-)
-
-# Generate functions to set AUXEVOL gridfunctions
-nrpyelliptic.constant_source_terms_to_auxevol.register_CFunction_auxevol_gfs_single_point(
-    CoordSystem=CoordSystem
-)
-nrpyelliptic.constant_source_terms_to_auxevol.register_CFunction_auxevol_gfs_all_points(
-    OMP_collapse=OMP_collapse
-)
-
 # Generate function that calls functions to set variable wavespeed and all other AUXEVOL gridfunctions
-nrpyelliptic.constant_source_terms_to_auxevol.register_CFunction_initialize_constant_auxevol()
+for CoordSystem in set_of_CoordSystems:
+    nrpyelliptic.constant_source_terms_to_auxevol.register_CFunction_initialize_constant_auxevol(
+        CoordSystem, OMP_collapse=OMP_collapse
+    )
 
 numericalgrids.register_CFunctions(
-    set_of_CoordSystems={CoordSystem},
+    set_of_CoordSystems=set_of_CoordSystems,
     list_of_grid_physical_sizes=[grid_physical_size],
     Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
@@ -190,7 +181,7 @@ numericalgrids.register_CFunctions(
 )
 
 superBnumericalgrids.register_CFunctions(
-    set_of_CoordSystems={CoordSystem},
+    set_of_CoordSystems=set_of_CoordSystems,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
 )
@@ -202,13 +193,15 @@ superBnrpyellClib.register_CFunction_diagnostics(
 )
 
 if enable_rfm_precompute:
-    rfm_precompute.register_CFunctions_rfm_precompute(set_of_CoordSystems={CoordSystem})
+    rfm_precompute.register_CFunctions_rfm_precompute(
+        set_of_CoordSystems=set_of_CoordSystems
+    )
 
 # Generate function to compute RHSs
 nrpyelliptic.rhs_eval.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
-    enable_simd=enable_simd,
+    enable_intrinsics=enable_simd,
     OMP_collapse=OMP_collapse,
 )
 
@@ -216,7 +209,7 @@ nrpyelliptic.rhs_eval.register_CFunction_rhs_eval(
 nrpyelliptic.diagnostics.register_CFunction_compute_residual_all_points(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
-    enable_simd=enable_simd,
+    enable_intrinsics=enable_simd,
     OMP_collapse=OMP_collapse,
 )
 
@@ -231,9 +224,9 @@ nrpyelliptic.diagnostics.register_CFunction_check_stop_conditions()
 if __name__ == "__main__" and parallel_codegen_enable:
     pcg.do_parallel_codegen()
 
-charecomm.chare_comm_register_C_functions(set_of_CoordSystems={CoordSystem})
+charecomm.chare_comm_register_C_functions(set_of_CoordSystems=set_of_CoordSystems)
 superBcbc.CurviBoundaryConditions_register_C_functions(
-    set_of_CoordSystems={CoordSystem},
+    set_of_CoordSystems=set_of_CoordSystems,
     radiation_BC_fd_order=radiation_BC_fd_order,
     set_parity_on_aux=True,
 )
@@ -360,7 +353,6 @@ serial {
 """
 
 superBpup.register_CFunction_superB_pup_routines(
-    set_of_CoordSystems={CoordSystem},
     MoL_method=MoL_method,
 )
 copy_files(
@@ -380,7 +372,7 @@ superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_psi4_diagnostics=False,
     enable_residual_diagnostics=True,
-    post_non_y_n_auxevol_mallocs="initialize_constant_auxevol(&commondata, griddata_chare);\n",
+    post_non_y_n_auxevol_mallocs="initialize_constant_auxevol(&commondata, &griddata_chare[grid].params, griddata_chare[grid].xx, &griddata_chare[grid].gridfuncs);\n",
     post_MoL_step_forward_in_time=post_MoL_step_forward_in_time,
 )
 

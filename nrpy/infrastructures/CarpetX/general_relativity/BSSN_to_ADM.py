@@ -153,4 +153,4 @@ schedule FUNC_NAME in ODESolvers_PostStep after {thorn_name}_enforce_detgammahat
         ET_thorn_name=thorn_name,
         ET_schedule_bins_entries=ET_schedule_bins_entries,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()

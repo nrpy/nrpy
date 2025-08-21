@@ -202,7 +202,7 @@ schedule FUNC_NAME IN {schedule_bin}
         ET_current_thorn_CodeParams_used=ET_current_thorn_CodeParams_used,
         ET_other_thorn_CodeParams_used=ET_other_thorn_CodeParams_used,
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 def register_CFunction_rhs_eval(thorn_name: str) -> Union[None, pcg.NRPyEnv_type]:
@@ -288,7 +288,7 @@ schedule FUNC_NAME in MoL_CalcRHS as rhs_eval
         ET_thorn_name=thorn_name,
         ET_schedule_bins_entries=[ET_schedule_bin_entry],
     )
-    return cast(pcg.NRPyEnv_type, pcg.NRPyEnv())
+    return pcg.NRPyEnv()
 
 
 # Parallel codegen:

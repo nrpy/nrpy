@@ -9,7 +9,7 @@ import os
 from typing import Dict, List, Optional, Tuple
 
 import nrpy.params as par
-from nrpy.helpers.generic import clang_format, prefix_with_star
+from nrpy.helpers.generic import clang_format
 
 
 class CFunction:
@@ -33,7 +33,6 @@ class CFunction:
     :param ET_schedule_bins_entries: (ET only) List of (schedule bin, schedule entry) tuples for Einstein Toolkit schedule.ccl.
     :param ET_current_thorn_CodeParams_used: (ET only) List of CodeParameter names this function uses, for *this thorn's* param.ccl.
     :param ET_other_thorn_CodeParams_used: (ET only) List of CodeParameter names this function uses, for *other thorn's* param.ccl.
-    :param clang_format_options: Options for the clang-format tool. Defaults to "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
 
     DocTests:
     >>> func = CFunction(desc="just a test... testing 1,2,3", name="main", params="", body="return 0;")
@@ -70,7 +69,6 @@ class CFunction:
         ET_schedule_bins_entries: Optional[List[Tuple[str, str]]] = None,
         ET_current_thorn_CodeParams_used: Optional[List[str]] = None,
         ET_other_thorn_CodeParams_used: Optional[List[str]] = None,
-        clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
     ) -> None:
         for attribute in [(name, "name"), (desc, "desc"), (body, "body")]:
             if not attribute[0]:
@@ -103,11 +101,39 @@ class CFunction:
         self.cfunc_decorators = (
             f"{cfunc_decorators} " if cfunc_decorators != "" else cfunc_decorators
         )
-        self.clang_format_options = clang_format_options
 
         self.function_prototype, self.raw_function, self.full_function = (
             self.generate_full_function()
         )
+
+    # Used within c_function to create multi-line comments.
+    @staticmethod
+    def prefix_with_star(input_string: str) -> str:
+        r"""
+        Prefix every line in the input string with " * ".
+
+        This function preserves leading whitespace on each line while removing any trailing whitespace.
+        It is useful for formatting multi-line comments or documentation blocks by adding a
+        consistent prefix to each line.
+
+        :param input_string: The input multi-line string to be prefixed.
+        :return: The modified string with " * " prefixed on every line, with leading whitespace preserved
+                 and trailing whitespace removed.
+
+        Example:
+        >>> s = "   Hello\n   World   "
+        >>> CFunction.prefix_with_star(s)
+        ' *    Hello\n *    World'
+        """
+        # Splitting the string by line breaks
+        lines = input_string.split("\n")
+
+        # Removing trailing whitespace from each line and then prefixing with " * "
+        prefixed_lines = [" * " + line.rstrip() for line in lines]
+
+        # Joining the prefixed lines back into a single string
+        result = "\n".join(prefixed_lines)
+        return result
 
     @staticmethod
     def subdirectory_depth(subdirectory: str) -> int:
@@ -193,6 +219,7 @@ class CFunction:
                                 "BHaH_defines.h",
                                 "BHaH_function_prototypes.h",
                                 "simd_intrinsics.h",
+                                "cuda_intrinsics.h",
                             ]
                         ):
                             inc = os.path.join(rel_path_to_root_directory, inc)
@@ -202,7 +229,7 @@ class CFunction:
             complete_func += f"{self.prefunc}\n"
 
         if self.desc:
-            complete_func += f"/**\n{prefix_with_star(self.desc)}\n*/\n"
+            complete_func += f"/**\n{self.prefix_with_star(self.desc)}\n*/\n"
 
         function_prototype = (
             f"{self.cfunc_decorators}{self.cfunc_type} {self.name}({self.params});"
@@ -214,7 +241,7 @@ class CFunction:
         return (
             function_prototype,
             complete_func,
-            clang_format(complete_func, clang_format_options=self.clang_format_options),
+            clang_format(complete_func),
         )
 
 
@@ -262,7 +289,6 @@ def register_CFunction(
     ET_schedule_bins_entries: Optional[List[Tuple[str, str]]] = None,
     ET_current_thorn_CodeParams_used: Optional[List[str]] = None,
     ET_other_thorn_CodeParams_used: Optional[List[str]] = None,
-    clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
 ) -> None:
     """
     Add a C function to a dictionary called CFunction_dict, using the provided parameters.
@@ -284,7 +310,6 @@ def register_CFunction(
     :param ET_schedule_bins_entries: (ET only) List of tuples for Einstein Toolkit schedule.
     :param ET_current_thorn_CodeParams_used: (ET only) List of CodeParameter names this function uses, for *this thorn's* param.ccl.
     :param ET_other_thorn_CodeParams_used: (ET only) List of CodeParameter names this function uses, for *other thorn's* param.ccl.
-    :param clang_format_options: Options for the clang-format tool. Defaults to "-style={BasedOnStyle: LLVM, ColumnLimit: 150}".
 
     :raises ValueError: If the name is already registered in CFunction_dict.
 
@@ -316,7 +341,6 @@ def register_CFunction(
         ET_current_thorn_CodeParams_used=ET_current_thorn_CodeParams_used,
         ET_other_thorn_CodeParams_used=ET_other_thorn_CodeParams_used,
         cfunc_decorators=cfunc_decorators,
-        clang_format_options=clang_format_options,
     )
 
 

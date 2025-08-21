@@ -1,126 +1,122 @@
 """
-Register superB_pup_routines.cpp.
+Register the superB PUP routines for Charm++ checkpointing and load balancing.
+
+This script registers the C function "superB_pup_routines" from the file
+"superB_pup_routines.cpp", which contains various Pack-Unpack (PUP) routines for
+structs used in checkpointing and load balancing in Charm++. These routines handle
+the packing and unpacking of data structures such as commondata, params, rfm, boundary
+conditions, MoL grid functions, and more.
 
 Author: Nishita Jadoo
         njadoo **at** uidaho **dot* edu
 """
 
-from typing import List, Set
+from typing import Any, List
 
 import nrpy.c_function as cfc
 import nrpy.params as par
-from nrpy.infrastructures.BHaH.MoLtimestepping.MoL_gridfunction_names import (
+from nrpy.infrastructures.BHaH.BHaH_defines_h import (
+    parse_cparam_type,
+)
+from nrpy.infrastructures.BHaH.MoLtimestepping.gridfunction_names import (
     generate_gridfunction_names,
 )
-from nrpy.infrastructures.BHaH.MoLtimestepping.RK_Butcher_Table_Dictionary import (
+from nrpy.infrastructures.BHaH.MoLtimestepping.rk_butcher_table_dictionary import (
     generate_Butcher_tables,
 )
-from nrpy.infrastructures.BHaH.rfm_precompute import ReferenceMetricPrecompute
+
+
+def generate_pup_serialization_lines_for_CodeParams(
+    field_name: str, codeparam: Any, struct_prefix: str
+) -> List[str]:
+    """
+    Emit PUP serialization lines for one CodeParam field.
+
+    :param field_name:     The name of the field in the struct.
+    :param codeparam:      The CodeParam object, with attributes `cparam_type` and `module`.
+    :param struct_prefix:  The C‐struct instance name (e.g. "commondata" or "params").
+    :return:               A list of C++ lines (strings) performing p| or PUParray calls
+                           for this field.
+    """
+    base, size, is_array = parse_cparam_type(codeparam.cparam_type)
+    lines: List[str] = []
+    comment = f"  // {codeparam.module}::{field_name}"
+    target = f"{struct_prefix}.{field_name}"
+
+    if is_array:
+        # All 1D arrays use PUParray
+        lines.append(f"PUParray(p, {target}, {size});{comment}\n")
+    else:
+        if base == "TIMEVAR":
+            # TIMEVAR has two sub‐fields: tv_sec and tv_nsec
+            lines.append(f"p|{target}.tv_sec;{comment}\n")
+            lines.append(f"p|{target}.tv_nsec;{comment}\n")
+        else:
+            # Simple scalar field
+            lines.append(f"p|{target};{comment}\n")
+
+    return lines
 
 
 def register_CFunction_superB_pup_routines(
-    set_of_CoordSystems: Set[str],
     MoL_method: str = "RK4",
     enable_psi4_diagnostics: bool = False,
 ) -> None:
     """
-    Register C function superB_pup_routines(), a collection of Pack Un-Pack (PUP) for structs. PUP routines are used for checkpointing and load balancing in Charm++.
+    Register the C function "superB_pup_routines", which is a collection of Pack-Unpack (PUP) routines for various structs.
+    These routines are used for checkpointing and load balancing in Charm++.
 
-    :param set_of_CoordSystems: Set of coordinate systems to register the C functions.
-    :param MoL_method: The method to be used for MoL. Default is 'RK4'.
-    :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
+    :param MoL_method: The Method of Lines (MoL) method to be used (default is "RK4").
+    :param enable_psi4_diagnostics: Flag to enable psi4 diagnostics.
+
+    DocTests:
+        >>> register_CFunction_superB_pup_routines()
     """
-    desc = "superB_pup_routines.cpp from superB. Note that this cpp file is just a collection of PUP functions. superB_pup_routines() is unused."
-    # prefunc contains most of the source code
-    prefunc = "// " + desc + "\n\n"
-    prefunc += r"""/* superB:  File  "superB_pup_routines.cpp"*/
-#include "../BHaH_defines.h"
-#include "../BHaH_function_prototypes.h"
+    desc = """This file implements a collection of Pack-Unpack (PUP) routines used in Charm++ for checkpointing,
+and load balancing in the superB framework.
+It includes routines for serializing and deserializing:
+    - commondata_struct and params_struct,
+    - rfm_struct with reference metric precomputation and memory allocation,
+    - inner and outer boundary condition structures (innerpt_bc_struct, outerpt_bc_struct, bc_info_struct, bc_struct),
+    - MoL grid functions (MoL_gridfunctions_struct),
+    - chare communication structures (charecomm_struct),
+    - diagnostic information (diagnostic_struct),
+    - temporary buffers and nonlocal inner boundary conditions (tmpBuffers_struct, nonlocalinnerbc_struct),
+    - and grid data structures (griddata_struct, griddata_chare).
+This comprehensive set of routines is crucial for efficient data management and communication in high-performance, parallel simulations.
 """
-    prefunc += """
-// PUP routine for struct commondata_struct
-void pup_commondata_struct(PUP::er &p, commondata_struct &commondata) {
-"""
-    struct_list: List[str] = []  # List to store individual struct elements
-    for parname, CodeParam in par.glb_code_params_dict.items():
-        if CodeParam.commondata:
-            struct = "commondata"
-            CPtype = CodeParam.cparam_type
-            comment = f"  // {CodeParam.module}::{parname}"
-            if "char" in CPtype and "[" in CPtype and "]" in CPtype:
-                chararray_size = CPtype.split("[")[1].replace("]", "")
-                c_output = (
-                    f"PUParray(p, {struct}.{parname}, {chararray_size});{comment}\n"
-                )
-            elif "TIMEVAR" in CPtype:
-                c_output = f"p|{struct}.{parname}.tv_sec;{comment}\n"
-                c_output += f"p|{struct}.{parname}.tv_nsec;{comment}\n"
-            else:
-                c_output = f"p|{struct}.{parname};{comment}\n"
-            struct_list.append(c_output)
-    # Sort the lines alphabetically and join them with line breaks
+    # prefunc contains most of the C++ source code for the PUP routines.
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+
+    # PUP routine for commondata_struct
+    commondata_lines = []
+    for name, param in par.glb_code_params_dict.items():
+        if param.commondata:
+            commondata_lines += generate_pup_serialization_lines_for_CodeParams(
+                name, param, "commondata"
+            )
+    prefunc = """// PUP routine for struct commondata_struct
+    void pup_commondata_struct(PUP::er &p, commondata_struct &commondata) {
+    """
     prefunc += "// PUP commondata struct\n"
-    prefunc += "".join(sorted(struct_list))
-    prefunc += """
-}"""
+    prefunc += "".join(sorted(commondata_lines))
+    prefunc += "}\n"
 
-    prefunc += """
-// PUP routine for struct params_struct
-void pup_params_struct(PUP::er &p, params_struct &params) {
-"""
-    params_struct_list: List[str] = []  # List to store individual struct elements
-    for parname, CodeParam in par.glb_code_params_dict.items():
-        CPtype = CodeParam.cparam_type
-        if not CodeParam.commondata and CPtype != "#define":
-            struct = "params"
-            comment = f"  // {CodeParam.module}::{parname}"
-            if "char" in CPtype and "[" in CPtype and "]" in CPtype:
-                chararray_size = CPtype.split("[")[1].replace("]", "")
-                c_output = (
-                    f"PUParray(p, {struct}.{parname}, {chararray_size});{comment}\n"
-                )
-            elif "TIMEVAR" in CPtype:
-                c_output = f"p|{struct}.{parname}.tv_sec;{comment}\n"
-                c_output += f"p|{struct}.{parname}.tv_nsec;{comment}\n"
-            else:
-                c_output = f"p|{struct}.{parname};{comment}\n"
-            params_struct_list.append(c_output)
-    # Sort the lines alphabetically and join them with line breaks
+    # PUP routine for params_struct
+    params_lines = []
+    for name, param in par.glb_code_params_dict.items():
+        if not param.commondata and param.cparam_type != "#define":
+            params_lines += generate_pup_serialization_lines_for_CodeParams(
+                name, param, "params"
+            )
+    prefunc += """// PUP routine for struct params_struct
+    void pup_params_struct(PUP::er &p, params_struct &params) {
+    """
     prefunc += "// PUP params struct\n"
-    prefunc += "".join(sorted(params_struct_list))
-    prefunc += """
-}"""
+    prefunc += "".join(sorted(params_lines))
+    prefunc += "}\n"
 
-    prefunc += """
-// PUP routine for struct rfm_struct
-void pup_rfm_struct(PUP::er &p, rfm_struct *restrict rfm, const params_struct *restrict params) {
-  const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
-  const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
-  const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
-  if (p.isUnpacking()) {
-"""
-    for CoordSystem in set_of_CoordSystems:
-        rfm_precompute = ReferenceMetricPrecompute(CoordSystem)
-        # Add memory allocation code
-        prefunc += rfm_precompute.rfm_struct__malloc.replace("rfmstruct", "rfm")
-        prefunc += """}
-        """
-        # Add PUParray calls
-        for define in rfm_precompute.BHaH_defines_list:
-            # Extract variable names from the define strings
-            var_name = define.split()[2].strip(";")
-            # Assuming all variables have the same allocation size, adjust as necessary
-            if "xx0" in var_name:
-                size = "Nxx_plus_2NGHOSTS0"
-            elif "xx1" in var_name:
-                size = "Nxx_plus_2NGHOSTS1"
-            else:
-                size = "Nxx_plus_2NGHOSTS2"
-            prefunc += f"  PUParray(p, rfm->{var_name}, {size});\n"
-    prefunc += """
-}
-"""
-
+    # PUP routine for bc_struct and structs within
     prefunc += """
 // PUP routine for struct innerpt_bc_struct
 void pup_innerpt_bc_struct(PUP::er &p, innerpt_bc_struct &ibc) {
@@ -195,12 +191,10 @@ void pup_bc_struct(PUP::er &p, bc_struct &bc) {
   }
 }
 """
-
+    # PUP routine for MoL_gridfunctions_struct
     prefunc += """
 // PUP routine for struct MoL_gridfunctions_struct
-void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfuncs, const params_struct &params, const commondata_struct &commondata) {"""
-
-    prefunc += r"""
+void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfuncs, const params_struct &params, const commondata_struct &commondata) {
   p | gridfuncs.num_evol_gfs_to_sync;
   p | gridfuncs.num_auxevol_gfs_to_sync;
   p | gridfuncs.num_aux_gfs_to_sync;
@@ -208,9 +202,7 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
   PUParray(p, gridfuncs.evol_gfs_to_sync, gridfuncs.num_evol_gfs_to_sync);
   PUParray(p, gridfuncs.auxevol_gfs_to_sync, gridfuncs.num_auxevol_gfs_to_sync);
   PUParray(p, gridfuncs.aux_gfs_to_sync, gridfuncs.num_aux_gfs_to_sync);
-"""
 
-    prefunc += """
   const int Nxx_plus_2NGHOSTS_tot = params.Nxx_plus_2NGHOSTS0 * params.Nxx_plus_2NGHOSTS1 * params.Nxx_plus_2NGHOSTS2;
   if (p.isUnpacking()) {
 """
@@ -221,20 +213,20 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
         _,
         diagnostic_gridfunctions2_point_to,
     ) = generate_gridfunction_names(Butcher_dict, MoL_method=MoL_method)
-    # Combine y_n_gfs and non_y_n_gfs into a single list
+    # Combine y_n_gfs and non_y_n_gfs into a single list.
     gridfunctions_list = [y_n_gridfunctions] + non_y_n_gridfunctions_list
     for gridfunctions in gridfunctions_list:
         num_gfs = (
             "NUM_EVOL_GFS" if gridfunctions != "auxevol_gfs" else "NUM_AUXEVOL_GFS"
         )
-        # Don't malloc a zero-sized array.
+        # Do not allocate a zero-sized array.
         if num_gfs == "NUM_AUXEVOL_GFS":
             prefunc += "  if(NUM_AUXEVOL_GFS > 0) "
         prefunc += (
             f"gridfuncs.{gridfunctions} = (REAL *restrict)malloc(sizeof(REAL) * {num_gfs} * "
             "Nxx_plus_2NGHOSTS_tot);\n"
         )
-    # In superB, allocate separate memory to diagnostic_output_gfs
+    # In superB, allocate separate memory for diagnostic_output_gfs.
     prefunc += "gridfuncs.diagnostic_output_gfs  = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);\n"
     prefunc += f"gridfuncs.diagnostic_output_gfs2 = gridfuncs.{diagnostic_gridfunctions2_point_to};\n"
     prefunc += """
@@ -244,19 +236,21 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
         num_gfs = (
             "NUM_EVOL_GFS" if gridfunctions != "auxevol_gfs" else "NUM_AUXEVOL_GFS"
         )
-        # Don't malloc a zero-sized array.
-        if num_gfs == "NUM_AUXEVOL_GFS":
-            prefunc += "  if(NUM_AUXEVOL_GFS > 0) "
-        if gridfunctions in ["y_n_gfs", "auxevol_gfs"]:
-            prefunc += f"PUParray(p, gridfuncs.{gridfunctions}, {num_gfs} * Nxx_plus_2NGHOSTS_tot);\n"
-        else:
-            prefunc += f"//PUParray(p, gridfuncs.{gridfunctions}, {num_gfs} * Nxx_plus_2NGHOSTS_tot);\n"
-
-    prefunc += "//PUParray(p, gridfuncs.diagnostic_output_gfs, NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);\n"
+        if gridfunctions == "y_n_gfs":
+            prefunc += (
+                f"PUParray(p, gridfuncs.y_n_gfs, {num_gfs} * Nxx_plus_2NGHOSTS_tot);\n"
+            )
+        elif gridfunctions == "auxevol_gfs":
+            prefunc += rf"""
+  if (strstr(params.CoordSystemName, "Spherical") != NULL) {{
+    if(NUM_AUXEVOL_GFS > 0) {{
+      PUParray(p, gridfuncs.auxevol_gfs, {num_gfs} * Nxx_plus_2NGHOSTS_tot);
+    }}
+  }}"""
     prefunc += """
 }
 """
-
+    # PUP routine for charecomm_struct
     prefunc += """
 // PUP routine for struct charecomm_struct
 void pup_charecomm_struct(PUP::er &p, charecomm_struct &cc, const params_struct &params, const params_struct &params_chare) {
@@ -272,6 +266,7 @@ void pup_charecomm_struct(PUP::er &p, charecomm_struct &cc, const params_struct 
   PUParray(p, cc.localidx3pt_to_globalidx3pt, ntotchare);
 }"""
 
+    # PUP routine for diagnostic_struct
     prefunc += """
 // PUP routine for struct diagnostic_struct
 void pup_diagnostic_struct(PUP::er &p, diagnostic_struct &ds, const params_struct &params_chare) {
@@ -390,6 +385,7 @@ void pup_diagnostic_struct(PUP::er &p, diagnostic_struct &ds, const params_struc
     prefunc += r"""
 }"""
 
+    # PUP routine for tmpBuffers_struct
     prefunc += """
 // PUP routine for struct tmpBuffers_struct
 void pup_tmpBuffers_struct(PUP::er &p, tmpBuffers_struct &tmpBuffers, const params_struct &params, const nonlocalinnerbc_struct &nonlocalinnerbc, const MoL_gridfunctions_struct &gridfuncs) {
@@ -405,9 +401,6 @@ void pup_tmpBuffers_struct(PUP::er &p, tmpBuffers_struct &tmpBuffers, const para
     tmpBuffers.tmpBuffer_NS = (REAL *restrict)malloc(sizeof(REAL) * size_NS);
     tmpBuffers.tmpBuffer_TB = (REAL *restrict)malloc(sizeof(REAL) * size_TB);
   }
-  //PUParray(p, tmpBuffers.tmpBuffer_EW, size_EW);
-  //PUParray(p, tmpBuffers.tmpBuffer_NS, size_NS);
-  //PUParray(p, tmpBuffers.tmpBuffer_TB, size_TB);
   const int tot_num_dst_chares = nonlocalinnerbc.tot_num_dst_chares;
   const int tot_num_src_chares = nonlocalinnerbc.tot_num_src_chares;
   const int *num_srcpts_tosend_each_chare = nonlocalinnerbc.num_srcpts_tosend_each_chare;
@@ -422,14 +415,10 @@ void pup_tmpBuffers_struct(PUP::er &p, tmpBuffers_struct &tmpBuffers, const para
       tmpBuffers.tmpBuffer_innerbc_receiv[which_chare] = (REAL *restrict)malloc(sizeof(REAL) * max_sync_gfs * num_srcpts_each_chare[which_chare]);
     }
   }
-  //for (int which_chare = 0; which_chare < tot_num_dst_chares; which_chare++) {
-  //  PUParray(p, tmpBuffers.tmpBuffer_innerbc_send[which_chare], max_sync_gfs * num_srcpts_tosend_each_chare[which_chare]);
-  //}
-  //for (int which_chare = 0; which_chare < tot_num_src_chares; which_chare++) {
-  //  PUParray(p, tmpBuffers.tmpBuffer_innerbc_receiv[which_chare], max_sync_gfs * num_srcpts_each_chare[which_chare]);
-  //}
-}
+}"""
 
+    # PUP routine for nonlocalinnerbc_struct
+    prefunc += """
 // PUP routine for struct nonlocalinnerbc_struct
 void pup_nonlocalinnerbc_struct(PUP::er &p, nonlocalinnerbc_struct &nonlocal, const commondata_struct &commondata) {
   const int Nchare0 = commondata.Nchare0;
@@ -478,10 +467,12 @@ void pup_nonlocalinnerbc_struct(PUP::er &p, nonlocalinnerbc_struct &nonlocal, co
     }
     PUParray(p, nonlocal.globalidx3_srcpts_tosend[dst_chare], nonlocal.num_srcpts_tosend_each_chare[dst_chare]);
   }
-}
+}"""
 
+    # PUP routine for griddata struct
+    prefunc += """
 // PUP routine for struct griddata
-// during time evolution, need params from griddata which is used to unpack charecomm_struct in griddata_chare and xx for diagnostics
+// During time evolution, need params from griddata which is used to unpack charecomm_struct in griddata_chare and xx for diagnostics.
 void pup_griddata(PUP::er &p, griddata_struct &gd) {
   pup_params_struct(p, gd.params);
   if (p.isUnpacking()) {
@@ -492,10 +483,12 @@ void pup_griddata(PUP::er &p, griddata_struct &gd) {
   PUParray(p, gd.xx[0], gd.params.Nxx_plus_2NGHOSTS0);
   PUParray(p, gd.xx[1], gd.params.Nxx_plus_2NGHOSTS1);
   PUParray(p, gd.xx[2], gd.params.Nxx_plus_2NGHOSTS2);
-}
+}"""
 
+    # PUP routine for griddata_chare struct
+    prefunc += """
 // PUP routine for struct griddata_chare
-// For unpacking order is important, unpacked structs are used for unpacking the subsequent structs
+// For unpacking order is important; unpacked structs are used for unpacking the subsequent structs.
 void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const params_struct &params, const commondata_struct &commondata) {
 
   pup_params_struct(p, gd.params);
@@ -521,11 +514,11 @@ void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const params_struct &pa
 
   pup_tmpBuffers_struct(p, gd.tmpBuffers, gd.params, gd.nonlocalinnerbcstruct, gd.gridfuncs);
 
-  // ZACH SAYS: This doesn't seem to be correct anymore.
-  //PUParray(p, gd.CoordSystemname, 100);
-  //PUParray(p, gd.gridname, 100);
-
-  pup_rfm_struct(p, gd.rfmstruct, &gd.params);
+  if (p.isUnpacking()) {
+    gd.rfmstruct = (rfm_struct *)malloc(sizeof(rfm_struct));
+    rfm_precompute_malloc(&commondata, &gd.params, gd.rfmstruct);
+    rfm_precompute_defines(&commondata, &gd.params, gd.rfmstruct, gd.xx);
+  }
 }
 """
 
@@ -537,9 +530,23 @@ void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const params_struct &pa
 """
     cfc.register_CFunction(
         subdirectory="superB",
+        includes=includes,
         prefunc=prefunc,
         desc=desc,
         name=name,
         params=params,
         body=body,
     )
+
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

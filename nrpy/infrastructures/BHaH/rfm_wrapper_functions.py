@@ -55,6 +55,8 @@ def register_CFunctions_CoordSystem_wrapper_funcs() -> None:
     CoordSystem_hash_dict: Dict[str, int] = {}
     for i, wrapper_func_name in enumerate(wrapper_func_list):
         base_CFunc = base_CFunc_list[i]
+        gpu_compatible = "device" in base_CFunc.cfunc_decorators
+
         set_of_CoordSystems: Set[str] = set()
         wrapper_subdir = ""
         for name, CFunc in cfc.CFunction_dict.items():
@@ -92,10 +94,16 @@ def register_CFunctions_CoordSystem_wrapper_funcs() -> None:
                 f"  {wrapper_func_name}__rfm__{CoordSystem}({params[:-2]});\n"
             )
             wrapper_body += "  break;\n"
-        wrapper_body += rf"""default:
+        wrapper_body += (
+            rf"""default:
+  printf("ERROR in {wrapper_func_name}(): CoordSystem hash = %d not #define'd!\n", params->CoordSystem_hash);
+}}"""
+            if gpu_compatible
+            else rf"""default:
   fprintf(stderr, "ERROR in {wrapper_func_name}(): CoordSystem hash = %d not #define'd!\n", params->CoordSystem_hash);
   exit(1);
 }}"""
+        )
         cfc.register_CFunction(
             subdirectory=wrapper_subdir,
             enable_simd=False,
@@ -108,7 +116,7 @@ def register_CFunctions_CoordSystem_wrapper_funcs() -> None:
             params=base_CFunc.params,
             include_CodeParameters_h=False,
             body=wrapper_body,
-            clang_format_options=base_CFunc.clang_format_options,
+            cfunc_decorators=base_CFunc.cfunc_decorators,
         )
 
     BHd_str = ""

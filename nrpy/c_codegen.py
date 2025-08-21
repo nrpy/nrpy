@@ -21,7 +21,10 @@ from nrpy.helpers.cse_preprocess_postprocess import (  # NRPy+: CSE preprocessin
     cse_preprocess,
 )
 from nrpy.helpers.custom_c_codegen_functions import custom_functions_for_SymPy_ccode
-from nrpy.helpers.generic import clang_format, superfast_uniq
+from nrpy.helpers.generic import (
+    clang_format,
+    superfast_uniq,
+)
 from nrpy.helpers.simd import expr_convert_to_simd_intrins
 from nrpy.helpers.type_annotation_utilities import (
     generate_class_representation,
@@ -88,7 +91,6 @@ class CCodeGen:
         symbol_to_Rational_dict: Optional[Dict[sp.Basic, sp.Rational]] = None,
         rational_const_alias: str = "static const",
         clang_format_enable: bool = False,
-        clang_format_options: str = "-style={BasedOnStyle: LLVM, ColumnLimit: 150}",
     ) -> None:
         """
         Initialize the CCodeGen class with provided options for generating C code.
@@ -121,7 +123,6 @@ class CCodeGen:
         :param symbol_to_Rational_dict: Dictionary mapping sympy symbols to their corresponding sympy Rationals.
         :param rational_const_alias: Override default alias for specifying rational constness
         :param clang_format_enable: Boolean to enable clang formatting.
-        :param clang_format_options: Options for clang formatting.
 
         :raises ValueError: If 'fp_type' is not recognized as a valid floating-point type.
         :raises ValueError: If SIMD optimizations are enabled but the floating-point type is not 'double'.
@@ -188,7 +189,7 @@ class CCodeGen:
         self.symbol_to_Rational_dict = symbol_to_Rational_dict
         self.rational_const_alias = rational_const_alias
         self.clang_format_enable = clang_format_enable
-        self.clang_format_options = clang_format_options
+        self.clang_format_options = par.parval_from_str("clang_format_options")
 
         self.fd_order = par.parval_from_str("finite_difference::fd_order")
 
@@ -674,9 +675,7 @@ def c_codegen(
                 )
 
             for i, varname in enumerate(simd_const_varnms):
-                simd_RATIONAL_decls += (
-                    f"static const double dbl{varname} = {simd_const_values[i]};\n"
-                )
+                simd_RATIONAL_decls += f"{CCGParams.rational_const_alias} double dbl{varname} = {simd_const_values[i]};\n"
                 # Workaround for possibly unused NegativeOne SIMD variables.
                 maybe_unused = " "
                 if varname.endswith("NegativeOne_") or varname.endswith("Integer_1"):
@@ -1081,8 +1080,8 @@ def gridfunction_management_and_FD_codegen(
             NRPy_FD_StepNumber += 1
             if CCGParams.enable_simd:
                 for n in ["0", "1"]:
-                    Coutput += f"""const double tmp_upwind_Integer_{n} = {n}.000000000000000000000000000000000;\n
-const REAL_SIMD_ARRAY upwind_Integer_{n} = ConstSIMD(tmp_upwind_Integer_{n});
+                    Coutput += f"""MAYBE_UNUSED const double tmp_upwind_Integer_{n} = {n}.000000000000000000000000000000000;\n
+MAYBE_UNUSED const REAL_SIMD_ARRAY upwind_Integer_{n} = ConstSIMD(tmp_upwind_Integer_{n});
 """
             for dirn in upwind_directions:
                 Coutput += f"const {CCGParams.fp_type_alias} Upwind{dirn} = UPWIND_ALG(UpwindControlVectorU{dirn});\n"
@@ -1184,9 +1183,7 @@ const REAL_SIMD_ARRAY upwind_Integer_{n} = ConstSIMD(tmp_upwind_Integer_{n});
         Coutput += f"\n{write_to_mem_string}"
 
     if CCGParams.clang_format_enable:
-        Coutput = clang_format(
-            Coutput, clang_format_options=CCGParams.clang_format_options
-        )
+        Coutput = clang_format(Coutput)
 
     return Coutput
 

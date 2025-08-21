@@ -189,6 +189,8 @@ except perhaps non_y_n_gfs (e.g., after a regrid, in which non_y_n_gfs are freed
 """
     if parallelization == "cuda":
         body += "CUDA__free_host_gfs(&griddata[grid].gridfuncs);"
+        body += "CUDA__free_host_aux_gfs(&griddata[grid].gridfuncs);"
+        body += "CUDA__free_host_diagnostic_gfs(&griddata[grid].gridfuncs);"
     else:
         body += r"""
 
@@ -203,8 +205,8 @@ except perhaps non_y_n_gfs (e.g., after a regrid, in which non_y_n_gfs are freed
 } // END for(int grid=0;grid<commondata->NUMGRIDS;grid++)
 """
     body += r"""if(free_non_y_n_gfs_and_core_griddata_pointers) {
-        BHAH_FREE(griddata);
-    }"""
+    BHAH_FREE(griddata);
+}"""
     cfc.register_CFunction(
         includes=["BHaH_defines.h", "BHaH_function_prototypes.h"],
         desc=desc,
