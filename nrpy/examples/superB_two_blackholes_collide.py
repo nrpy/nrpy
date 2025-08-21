@@ -34,6 +34,7 @@ import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xxCartxx
 import nrpy.infrastructures.superB.chare_communication_maps as charecomm
 import nrpy.infrastructures.superB.CurviBoundaryConditions as superBcbc
 import nrpy.infrastructures.superB.diagnostics as superBdiagnostics
+import nrpy.infrastructures.superB.horizon_finder_chare as superBhorizonfinder
 import nrpy.infrastructures.superB.initial_data as superBinitialdata
 import nrpy.infrastructures.superB.interpolator3d_chare as superBinterpolator3d
 import nrpy.infrastructures.superB.main_chare as superBmain
@@ -169,6 +170,7 @@ if enable_BHaHAHA:
         use_cpp=True,
     )
     superBinterpolator3d.output_interpolator3d_h_cpp_ci(project_dir=project_dir)
+    superBhorizonfinder.output_horizon_finder_h_cpp_ci(project_dir=project_dir)
 
 
 superBinitialdata.register_CFunction_initial_data(
