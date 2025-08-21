@@ -1,5 +1,5 @@
 """
-Generate interpolator3d.cpp, interpolator3d.h, interpolator3d.ci and commondata.h for the superB infrastructure.
+Generate interpolator3d.cpp, interpolator3d.h and interpolator3d.ci for the superB infrastructure.
 
 Author: Nishita Jadoo
         njadoo **at** uidaho **dot* edu
@@ -347,7 +347,7 @@ def output_interpolator3d_h_cpp_ci(
     project_dir: str,
 ) -> None:
     """
-    Generate commondata_object.h, interpolator3d.h, interpolator3d.cpp and interpolator3d.ci.
+    Generate interpolator3d.h, interpolator3d.cpp and interpolator3d.ci.
     :param project_dir: Directory where the project C code is output.
     """
 
