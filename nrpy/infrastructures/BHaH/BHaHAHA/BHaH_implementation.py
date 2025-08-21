@@ -21,24 +21,13 @@ import nrpy.reference_metric as refmetric
 from nrpy.infrastructures.BHaH import griddata_commondata
 
 
-def register_CFunction_bhahaha_find_horizons(
-    CoordSystem: str,
-    max_horizons: int,
-) -> Union[None, pcg.NRPyEnv_type]:
+def register_bhahaha_commondata_and_params(max_horizons: int) -> None:
     """
-    Register the C function for general-purpose 3D Lagrange interpolation.
+    Register BHaHAHA commondata arrays and all related CodeParameters.
 
-    :param CoordSystem: CoordSystem of project, where horizon finding will take place.
-    :param max_horizons: Maximum number of horizons to search for.
-    :return: None if in registration phase, else the updated NRPy environment.
-    :raises ValueError: If EvolvedConformalFactor_cf set to unsupported value.
-
-    >>> env = register_CFunction_bhahaha_find_horizons()
+    :param max_horizons: Maximum number of horizons to support.
+    :return: None.
     """
-    if pcg.pcg_registration_phase():
-        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
-        return None
-
     griddata_commondata.register_griddata_commondata(
         __name__,
         f"bhahaha_params_and_data_struct bhahaha_params_and_data[{max_horizons}]",
@@ -176,11 +165,20 @@ def register_CFunction_bhahaha_find_horizons(
         description="BBH mode: Record of which horizons are active.",
     )
 
-    includes = [
-        "BHaH_defines.h",
-        "BHaH_function_prototypes.h",
-        "sys/time.h",
-    ]
+def build_bhahaha_prefunc(CoordSystem: str,) -> str:
+    """
+    Construct the C prelude used by the generated horizon-finder function.
+    Includes:
+      * FINAL_ADM_METRIC_INDICES and INTERP_BSSN_GF_INDICES enums
+      * bhahaha_gf_interp_indices[] mapping
+      * timing helper (timeval_to_seconds)
+      * input validation (check_multigrid_resolution_inputs)
+      * per-horizon init/free helpers
+      * interpolation + BSSN→ADM transformation routine
+
+    :param CoordSystem: CoordSystem of project, where horizon finding will take place.
+    :return: Raw C string to be injected as the function preamble.
+    """
     prefunc = r"""
 // Enum for indexing the final ADM metric components BHaHAHA expects.
 enum FINAL_ADM_METRIC_INDICES {
@@ -555,6 +553,37 @@ static void BHaHAHA_interpolate_metric_data_nrpy(const commondata_struct *restri
   } // END LOOP: for i (freeing dst_data_ptrs_bssn)
 } // END FUNCTION: BHaHAHA_interpolate_metric_data_nrpy
 """
+    return prefunc
+
+
+def register_CFunction_bhahaha_find_horizons(
+    CoordSystem: str,
+    max_horizons: int,
+) -> Union[None, pcg.NRPyEnv_type]:
+    """
+    Register the C function for general-purpose 3D Lagrange interpolation.
+
+    :param CoordSystem: CoordSystem of project, where horizon finding will take place.
+    :param max_horizons: Maximum number of horizons to search for.
+    :return: None if in registration phase, else the updated NRPy environment.
+    :raises ValueError: If EvolvedConformalFactor_cf set to unsupported value.
+
+    >>> env = register_CFunction_bhahaha_find_horizons()
+    """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+
+    register_bhahaha_commondata_and_params(max_horizons)
+
+    includes = [
+        "BHaH_defines.h",
+        "BHaH_function_prototypes.h",
+        "sys/time.h",
+    ]
+
+    prefunc = build_bhahaha_prefunc(CoordSystem)
+
 
     desc = r"""Main driver function for finding apparent horizons using the BHaHAHA library.
 It orchestrates initialization, BBH logic, extrapolation, interpolation, solving,
@@ -946,6 +975,7 @@ and result updates for multiple horizons.
     printf("NRPy_BHaHAHA total elapsed time (Iter %d): %.6f s\n", commondata->nn, timeval_to_seconds(start_time_total, end_time_total));
   } // END IF: verbosity for total time print
   """
+
     cfc.register_CFunction(
         subdirectory="",
         includes=includes,
