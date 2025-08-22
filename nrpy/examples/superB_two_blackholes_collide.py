@@ -352,6 +352,7 @@ superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_psi4_diagnostics=False,
     enable_L2norm_BSSN_constraints_diagnostics=True,
+    enable_BHaHAHA=enable_BHaHAHA,
 )
 
 Bdefines_h.output_BHaH_defines_h(
