@@ -115,7 +115,7 @@ def output_interpolator3d_cpp(
 #include "timestepping.h"
 #include "horizon_finder.h"
 #include "interpolator3d.h"
-#include "InterpBufMsg.h"
+#include "interp_buf_msg.h"
 #include <cstring>
 
 extern/* readonly */ CProxy_Timestepping timesteppingArray;

@@ -82,7 +82,7 @@ def output_horizon_finder_cpp(
 #include "timestepping.h"
 #include "interpolator3d.h"
 #include "horizon_finder.h"
-#include "InterpBufMsg.h"
+#include "interp_buf_msg.h"
 
 extern/* readonly */ CProxy_Main mainProxy;
 extern/* readonly */ CProxy_Timestepping timesteppingArray;
