@@ -10,6 +10,33 @@ from pathlib import Path
 from nrpy.helpers.generic import clang_format
 
 
+def output_interp_buf_msg_h(
+    project_dir: str,
+) -> None:
+    r"""
+    Output header file with definition for class InterpBufMsg.
+    :param project_dir: Directory where the project C code is output
+    """
+    project_Path = Path(project_dir)
+    project_Path.mkdir(parents=True, exist_ok=True)
+
+    file_output_str = """#ifndef INTERP_BUF_MSG_H
+#define INTERP_BUF_MSG_H
+
+class InterpBufMsg : public CMessage_InterpBufMsg {
+public:
+  int horizon_idx;
+  int len;
+  char *buf;
+};
+
+#endif // INTERP_BUF_MSG_H
+"""
+    interp_buf_msg_file = project_Path / "interp_buf_msg.h"
+    with interp_buf_msg_file.open("w", encoding="utf-8") as file:
+        file.write(clang_format(file_output_str))
+
+
 def output_interpolator3d_h(
     project_dir: str,
 ) -> None:
@@ -350,6 +377,10 @@ def output_interpolator3d_h_cpp_ci(
     Generate interpolator3d.h, interpolator3d.cpp and interpolator3d.ci.
     :param project_dir: Directory where the project C code is output.
     """
+
+    output_interp_buf_msg_h(
+        project_dir=project_dir,
+    )
 
     output_interpolator3d_h(
         project_dir=project_dir,
