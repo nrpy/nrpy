@@ -383,6 +383,7 @@ superBMakefile.output_CFunctions_function_prototypes_and_construct_Makefile(
     addl_CFLAGS=["-fpermissive "],
     addl_libraries=["-module CkIO", f"-L{BHaHAHA_subdir}", f"-l{BHaHAHA_subdir}"],
     CC="charmc",
+    enable_BHaHAHA=enable_BHaHAHA,
 )
 print(
     f"Finished! Now go into project/{project_name} and type `make` to build, then ./charmrun +p4 ./{project_name} to run with 4 processors, for example."
