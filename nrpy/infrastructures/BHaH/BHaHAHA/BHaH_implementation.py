@@ -207,10 +207,7 @@ enum FINAL_ADM_METRIC_INDICES {
 }; // END ENUM: FINAL_ADM_METRIC_INDICES
 """
 
-    prefunc += r"""
-// Enum for indexing interpolated BSSN gridfunctions. (NRPy-specific)
-enum INTERP_BSSN_GF_INDICES {
-  INTERP_ADD00GF_IDX,
+    enum_INTERP_BSSN_GF_INDICES_parts = """INTERP_ADD00GF_IDX,
   INTERP_ADD01GF_IDX,
   INTERP_ADD02GF_IDX,
   INTERP_ADD11GF_IDX,
@@ -223,10 +220,24 @@ enum INTERP_BSSN_GF_INDICES {
   INTERP_HDD11GF_IDX,
   INTERP_HDD12GF_IDX,
   INTERP_HDD22GF_IDX,
-  INTERP_TRKGF_IDX,
+  INTERP_TRKGF_IDX,"""
+
+    if not add_bhahaha_gf_interp_ind_to_bhah_defines:
+        prefunc += f"""
+// Enum for indexing interpolated BSSN gridfunctions. (NRPy-specific)
+enum INTERP_BSSN_GF_INDICES {{
+  {enum_INTERP_BSSN_GF_INDICES_parts}
   BHAHAHA_NUM_INTERP_GFS
-}; // END ENUM: INTERP_BSSN_GF_INDICES
+}}; // END ENUM: INTERP_BSSN_GF_INDICES
 """
+    else:
+        prefunc += f"""
+// Enum for indexing interpolated BSSN gridfunctions. (NRPy-specific)
+enum INTERP_BSSN_GF_INDICES {{
+  {enum_INTERP_BSSN_GF_INDICES_parts}
+}}; // END ENUM: INTERP_BSSN_GF_INDICES
+"""
+
     bhahaha_gf_interp_indices_string = r"""// BSSN gridfunctions input into the interpolator. Must be in the same order as the enum list below.
 const int bhahaha_gf_interp_indices[BHAHAHA_NUM_INTERP_GFS] = {
     ADD00GF, ADD01GF, ADD02GF, ADD11GF, ADD12GF, ADD22GF, // Traceless, rescaled extrinsic curvature components.
@@ -235,13 +246,13 @@ const int bhahaha_gf_interp_indices[BHAHAHA_NUM_INTERP_GFS] = {
     TRKGF                                                 // Trace of extrinsic curvature.
 };"""
 
-    if add_bhahaha_gf_interp_ind_to_bhah_defines:
+    if not add_bhahaha_gf_interp_ind_to_bhah_defines:
+        prefunc += "\n" + bhahaha_gf_interp_indices_string + "\n"
+    else:
         BHaH_defines_h.register_BHaH_defines(
             __name__,
-            bhahaha_gf_interp_indices_string + "\n#define BHAHAHA_NUM_INTERP_GFS 14\n",
+            "\n#define BHAHAHA_NUM_INTERP_GFS 14\n" + bhahaha_gf_interp_indices_string,
         )
-    else:
-        prefunc += "\n" + bhahaha_gf_interp_indices_string + "\n"
 
     prefunc += r"""
 /**
