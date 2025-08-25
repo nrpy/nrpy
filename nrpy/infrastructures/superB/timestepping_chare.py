@@ -1712,15 +1712,6 @@ def output_timestepping_ci(
           time_start = commondata.time;
         }
         """
-    if enable_BHaHAHA:
-        file_output_str += r"""
-        // If diagnostics are requested this step, send the entire set of required BHaHAHA gridfunctions to the corresponding Interpolator3d chare
-        if (write_diagnostics_this_step) {
-          serial {
-            send_bhahaha_gfs_to_corresponding_interpolator_chare(grid);
-          }
-        }
-        """
     if enable_residual_diagnostics:
         file_output_str += r"""
         serial {
@@ -1751,6 +1742,16 @@ def output_timestepping_ci(
                                              commondata.time) < 0.5 * commondata.dt;"""
         file_output_str += r"""
             }"""
+
+    if enable_BHaHAHA:
+        file_output_str += r"""
+          // If diagnostics are requested this step, send the entire set of required BHaHAHA gridfunctions to the corresponding Interpolator3d chare
+          if (write_diagnostics_this_step) {
+            serial {
+              send_bhahaha_gfs_to_corresponding_interpolator_chare(grid);
+            }
+          }
+        """
     file_output_str += """
          // Step 5.a: Main loop, part 1: Output diagnostics"""
     if enable_psi4_diagnostics:
@@ -2026,10 +2027,12 @@ def output_timestepping_ci(
         }
       } // End main loop to progress forward in time.
 """
-    file_output_str += r"""
+    if not enable_BHaHAHA:
+        file_output_str += r"""
       serial{
         mainProxy.done();
-      }
+      }"""
+    file_output_str += r"""
     };
     entry void start_write_1d_y(Ck::IO::SessionReadyMsg *m);
     entry void start_write_1d_z(Ck::IO::SessionReadyMsg *m);
