@@ -26,12 +26,13 @@ def run_sebob(executable_path: str, inputs: np.ndarray) -> np.ndarray:
     :param inputs: List of inputs to the sebob executable.
     :return: Output of the sebob executable.
     """
-    input_str = [f"{elt:.18e}" for elt in inputs]
+    parameters_file = executable_path + ".par"
+    inputs_str = [f"{elt:.15f}" for elt in inputs]
     result = subprocess.run(
-        [executable_path] + input_str, capture_output=True, text=True, check=True
+        [executable_path, parameters_file] + inputs_str, capture_output=True, text=True, check=True
     )
 
-    return np.loadtxt(StringIO(result.stdout), delimiter=",")
+    return np.loadtxt(StringIO(result.stdout))
 
 def calculate_rmse(data1: np.ndarray, data2: np.ndarray) -> Union[float,Any]:
     """
@@ -41,8 +42,21 @@ def calculate_rmse(data1: np.ndarray, data2: np.ndarray) -> Union[float,Any]:
     :param data2: Second dataset.
     :return: RMSE value.
     """
-    rmse = np.sqrt(np.mean((data1[:, 1:] - data2[:, 1:]) ** 2))
-    return rmse
+    h22_1 = data1[:, 1] + 1j*data1[:, 2]
+    amp1 , phase1 = np.abs(h22_1), np.unwrap(np.angle(h22_1))
+    h22_2 = data2[:, 1] + 1j*data2[:, 2]
+    amp2 , phase2 = np.abs(h22_2), np.unwrap(np.angle(h22_2))
+    t_min = max(data1[0, 0], data2[0, 0])
+    t_max = min(data1[0, -1], data2[0, -1])
+    # sample at 10% of the total number of points
+    sampled_times = np.linspace(t_min, t_max, data1.shape[0]//10)
+    sampled_amp_data1 = np.interp(sampled_times, data1[:, 0], amp1)
+    sampled_amp_data2 = np.interp(sampled_times, data2[:, 0], amp2)
+    sampled_phase_data1 = np.interp(sampled_times, data1[:, 0], phase1)
+    sampled_phase_data2 = np.interp(sampled_times, data2[:, 0], phase2)
+    rmse_amp = np.sqrt(np.mean((sampled_amp_data1 - sampled_amp_data2) ** 2))
+    rmse_phase = np.sqrt(np.mean((sampled_phase_data1 - sampled_phase_data2) ** 2))
+    return rmse_amp + rmse_phase
 
 
 def process_input_set(nominal_args: tuple[np.ndarray, str, str]) -> tuple[Union[float,Any], Union[float,Any]]:
@@ -56,7 +70,6 @@ def process_input_set(nominal_args: tuple[np.ndarray, str, str]) -> tuple[Union[
 
     # 1. Run trusted code with nominal inputs
     trusted_output = run_sebob(trusted_exec, nominal_inputs)
-
     # 2. Run current code with nominal inputs
     current_output = run_sebob(current_exec, nominal_inputs)
 
@@ -95,6 +108,7 @@ if __name__ == "__main__":
     baseline_errors = []
     test_errors = []
     for i in range(num_sets):
+        print(f"Processing input set {i+1}/{num_sets}...")
         task = (all_inputs[i], args.trusted_exec, args.current_exec)
         baseline_err, test_err = process_input_set(task)
         baseline_errors.append(baseline_err)
