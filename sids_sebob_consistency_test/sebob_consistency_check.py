@@ -1,0 +1,118 @@
+"""
+Set up on-the-fly accuracy comparison for sebob.
+usage: sebob_consistency_check.py [-h] --current-exec CURRENT_EXEC --trusted-exec TRUSTED_EXEC --inputs INPUTS
+
+Authors: Siddharth Mahesh
+        sm0193 **at** mix **dot** wvu **dot** edu
+"""
+import argparse
+import subprocess
+import sys
+from io import StringIO
+from typing import Any, Union
+
+import numpy as np
+
+# --- Configuration ---
+PERTURBATION_MAGNITUDE = 1e-14
+
+
+# --- Helper Functions ---
+def run_sebob(executable_path: str, inputs: np.ndarray) -> np.ndarray:
+    """
+    Run sebob executable with a single set of inputs.
+    
+    :param executable_path: Path to the sebob executable.
+    :param inputs: List of inputs to the sebob executable.
+    :return: Output of the sebob executable.
+    """
+    input_str = [f"{elt:.18e}" for elt in inputs]
+    result = subprocess.run(
+        [executable_path] + input_str, capture_output=True, text=True, check=True
+    )
+
+    return np.loadtxt(StringIO(result.stdout), delimiter=",")
+
+def calculate_rmse(data1: np.ndarray, data2: np.ndarray) -> Union[float,Any]:
+    """
+    Calculate the Root Mean Square Error (RMSE) between two datasets.
+    
+    :param data1: First dataset.
+    :param data2: Second dataset.
+    :return: RMSE value.
+    """
+    rmse = np.sqrt(np.mean((data1[:, 1:] - data2[:, 1:]) ** 2))
+    return rmse
+
+
+def process_input_set(nominal_args: tuple[np.ndarray, str, str]) -> tuple[Union[float,Any], Union[float,Any]]:
+    """
+    Process a single input set to get both baseline and test error.
+    
+    :param nominal_args: Tuple containing the nominal input paramters, path to trusted executable, and path to current executable.
+    :return: Tuple containing the baseline error and test error.
+    """
+    nominal_inputs, trusted_exec, current_exec = nominal_args
+
+    # 1. Run trusted code with nominal inputs
+    trusted_output = run_sebob(trusted_exec, nominal_inputs)
+
+    # 2. Run current code with nominal inputs
+    current_output = run_sebob(current_exec, nominal_inputs)
+
+    # 3. Create perturbed inputs and run trusted code again
+    perturbation = (
+        np.random.choice([-1, 1], size=nominal_inputs.shape, replace=True) * np.random.uniform(1, 3, size=nominal_inputs.shape) * PERTURBATION_MAGNITUDE
+    )
+    perturbed_inputs = nominal_inputs * (1 + perturbation)
+    perturbed_output = run_sebob(trusted_exec, perturbed_inputs)
+
+    # Calculate errors
+    baseline_error = calculate_rmse(trusted_output, perturbed_output)
+    test_error = calculate_rmse(trusted_output, current_output)
+    return baseline_error, test_error
+
+
+# --- Main Logic ---
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="On-the-fly CI accuracy comparison.")
+    parser.add_argument(
+        "--current-exec", required=True, help="Path to the current executable."
+    )
+    parser.add_argument(
+        "--trusted-exec", required=True, help="Path to the trusted executable."
+    )
+    parser.add_argument(
+        "--inputs", required=True, help="Path to the input_sets.csv file."
+    )
+    args = parser.parse_args()
+
+    print("Loading input sets...")
+    all_inputs = np.loadtxt(args.inputs, delimiter=",")
+    num_sets = len(all_inputs)
+
+    print(f"Starting accuracy comparison for {num_sets} input sets...")
+    baseline_errors = []
+    test_errors = []
+    for i in range(num_sets):
+        task = (all_inputs[i], args.trusted_exec, args.current_exec)
+        baseline_err, test_err = process_input_set(task)
+        baseline_errors.append(baseline_err)
+        test_errors.append(test_err)
+
+    # Final comparison
+    baseline_median = np.median(baseline_errors)
+    test_median = np.median(test_errors)
+
+    print("\n--- Test Results ---")
+    print(f"Test Error Median:      {test_median:.6e}")
+    print(f"Baseline Error Median:  {baseline_median:.6e}")
+
+    if test_median <= baseline_median:
+        print("\nPASSED: Median error is within the dynamically generated baseline.")
+        sys.exit(0)
+    else:
+        print(
+            f"\nFAILED: Median error ({test_median:.6e}) exceeds the baseline ({baseline_median:.6e})."
+        )
+        sys.exit(1)

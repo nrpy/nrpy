@@ -1,0 +1,92 @@
+name: sebob-consistency-check
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ 'ubuntu-22.04', 'ubuntu-24.04' ]
+        python-version: [ '3.7.13', '3.8.12', '3.9.19', '3.x' ]
+        exclude:
+          - os: 'ubuntu-24.04'
+            python-version: '3.7.13'
+
+    steps:
+    - name: Checkout current commit code
+      uses: actions/checkout@v4
+      with:
+        path: current_code # Checkout to a specific directory
+
+    - name: Checkout trusted commit code
+      uses: actions/checkout@v4
+      with:
+        # IMPORTANT: Replace with your actual trusted commit hash
+        ref: '1f9e73488dcf66453b906153b0f23bf9b9679a82' #trusted hash on my repo. Update to the one that passes current PR
+        path: trusted_code
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Display Python version
+      run: python --version
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -U -r requirements.txt
+        if [[ "${{ matrix.python-version }}" != "3.7.13"  && "${{ matrix.python-version }}" != "3.8.12" ]]; then
+          pip install -U -r requirements-dev.txt
+        else
+          # Install packages from requirements-dev.txt without fixed versions; i.e., install the latest version compatible with this Python version.
+          sed 's/==.*//' requirements-dev.txt | xargs pip install -U
+        fi
+        if [[ "${{ matrix.python-version }}" == "3.8.12" ]]; then
+          pip install pylint==3.2.0  # pylint 3.2.4+ is broken in 3.8.12.
+        fi
+        # FIXME: until NRPyLaTeX is updated in pypi.
+        pip install -U nrpylatex
+        pip install -U ipython setuptools
+        sudo apt-get -y install libgsl-dev
+
+    - name: Install sympy or DEVELOPMENT sympy based on Python version. sympy-dev requires Python 3.9 or higher.
+      run: |
+        if [[ "${{ matrix.python-version }}" != "3.7.13" && "${{ matrix.python-version }}" != "3.8.12" ]]; then
+          pip install git+https://github.com/sympy/sympy.git
+        else
+          pip install sympy
+        fi
+
+    - name: Display sympy and clang-format versions
+      run: |
+        echo "Running CI tests with SymPy version = $(isympy --version)"
+        echo "Running CI tests with clang-format version = $(clang-format --version)"
+
+    - name: Build current sebob executable
+      working-directory: ./current_code
+      run: |
+        python nrpy/examples/seobnrv5_aligned_spin_inspiral.py
+        cd project/seobnrv5_aligned_spin_inspiral
+        make
+
+    - name: Build trusted sebob executable
+      working-directory: ./trusted_code
+      run: |
+        python nrpy/examples/seobnrv5_aligned_spin_inspiral.py
+        cd project/seobnrv5_aligned_spin_inspiral
+        make
+
+    - name: Run on-the-fly comparison
+      run: |
+        python ./current_code/nrpy/test/sebob_consistency_check.py \
+          --current-exec ./current_code/project/seobnrv5_aligned_spin_inspiral \
+          --trusted-exec ./trusted_code/project/seobnrv5_aligned_spin_inspiral \
+          --inputs ./current_code/input_sets.csv
