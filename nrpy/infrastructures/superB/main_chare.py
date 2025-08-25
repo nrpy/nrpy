@@ -237,21 +237,17 @@ Main::Main(CkArgMsg* msg) {
   rr_offset += numHorizons;
 
   // Timestepping (3D)
-  {
-    CProxy_RRMap_with_offset rrMapTS = CProxy_RRMap_with_offset::ckNew(rr_offset, Nchare0, Nchare1);
-    CkArrayOptions optsTS(Nchare0, Nchare1, Nchare2);
-    optsTS.setMap(rrMapTS);
-    timesteppingArray = CProxy_Timestepping::ckNew(commondataObj, optsTS);
-    rr_offset += Ncharetotal;
-  }
+  CProxy_RRMap_with_offset rrMapTS = CProxy_RRMap_with_offset::ckNew(rr_offset, Nchare0, Nchare1);
+  CkArrayOptions optsTS(Nchare0, Nchare1, Nchare2);
+  optsTS.setMap(rrMapTS);
+  timesteppingArray = CProxy_Timestepping::ckNew(commondataObj, optsTS);
+  rr_offset += Ncharetotal;
 
   // Interpolator3d (3D) after timesteppers
-  if (enable_horizons) {
-    CProxy_RRMap_with_offset rrMapI = CProxy_RRMap_with_offset::ckNew(rr_offset, Nchare0, Nchare1);
-    CkArrayOptions optsI(Nchare0, Nchare1, Nchare2);
-    optsI.setMap(rrMapI);
-    interpolator3dArray = CProxy_Interpolator3d::ckNew(optsI);
-  }
+  CProxy_RRMap_with_offset rrMapI = CProxy_RRMap_with_offset::ckNew(rr_offset, Nchare0, Nchare1);
+  CkArrayOptions optsI(Nchare0, Nchare1, Nchare2);
+  optsI.setMap(rrMapI);
+  interpolator3dArray = CProxy_Interpolator3d::ckNew(optsI);
 
   timesteppingArray.start();
 }

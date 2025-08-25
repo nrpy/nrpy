@@ -71,7 +71,7 @@ public:
 
 #endif // INTERP_BUF_MSG_H
 """
-    interp_buf_msg_file = project_Path / "interp_buf_msg.h"
+    interp_buf_msg_file = project_Path / "InterpBufMsg.h"
     with interp_buf_msg_file.open("w", encoding="utf-8") as file:
         file.write(clang_format(file_output_str))
 
@@ -154,7 +154,7 @@ def output_interpolator3d_cpp(
 #include "timestepping.h"
 #include "horizon_finder.h"
 #include "interpolator3d.h"
-#include "interp_buf_msg.h"
+#include "InterpBufMsg.h"
 #include <cstring>
 
 extern/* readonly */ CProxy_Timestepping timesteppingArray;
@@ -269,7 +269,7 @@ void Interpolator3d::send_interp_concat(){
 """
     interpolator3d_cpp_file = project_Path / "interpolator3d.cpp"
     with interpolator3d_cpp_file.open("w", encoding="utf-8") as file:
-        file.write(clang_format(file_output_str))
+        file.write(file_output_str)
 
 
 def output_interpolator3d_ci(

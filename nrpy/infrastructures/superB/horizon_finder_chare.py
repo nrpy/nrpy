@@ -82,7 +82,7 @@ def output_horizon_finder_cpp(
 #include "timestepping.h"
 #include "interpolator3d.h"
 #include "horizon_finder.h"
-#include "interp_buf_msg.h"
+#include "InterpBufMsg.h"
 
 extern/* readonly */ CProxy_Main mainProxy;
 extern/* readonly */ CProxy_Timestepping timesteppingArray;
@@ -126,7 +126,7 @@ void Horizon_finder::process_interpolation_results(InterpBufMsg *msg) {
 """
     horizon_finder_cpp_file = project_Path / "horizon_finder.cpp"
     with horizon_finder_cpp_file.open("w", encoding="utf-8") as file:
-        file.write(clang_format(file_output_str))
+        file.write(file_output_str)
 
 
 def output_horizon_finder_ci(
