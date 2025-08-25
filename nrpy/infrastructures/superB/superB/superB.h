@@ -148,6 +148,7 @@ typedef struct __tmpBuffers_struct__ {
   REAL *restrict tmpBuffer_TB;
   REAL **restrict tmpBuffer_innerbc_send;
   REAL **restrict tmpBuffer_innerbc_receiv;
+  REAL *restrict tmpBuffer_bhahaha_gfs;
 } tmpBuffers_struct;
 
 typedef struct __nonlocalinnerbc_struct__ {

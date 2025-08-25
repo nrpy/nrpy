@@ -279,10 +279,13 @@ void Timestepping::pup(PUP::er &p) {
     return code
 
 
-def register_CFunction_timestepping_malloc() -> None:
+def register_CFunction_timestepping_malloc(
+    enable_BHaHAHA: bool = False,
+) -> None:
     """
     Register a C function for timestepping malloc.
 
+    :param enable_BHaHAHA: If True, allocate memory of tmpBuffer_bhahaha_gfs..
     :return None
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
@@ -302,21 +305,26 @@ tmpBuffers->tmpBuffer_NS = (REAL *restrict)malloc(sizeof(REAL) * max_sync_gfs * 
 tmpBuffers->tmpBuffer_TB = (REAL *restrict)malloc(sizeof(REAL) * max_sync_gfs * NGHOSTS * Nxx_plus_2NGHOSTS_face2);
 
 // Unpack nonlocalinnerbcstruct
-  const int tot_num_dst_chares = nonlocalinnerbcstruct->tot_num_dst_chares;
-  const int *restrict num_srcpts_tosend_each_chare = nonlocalinnerbcstruct->num_srcpts_tosend_each_chare;
-  const int tot_num_src_chares = nonlocalinnerbcstruct->tot_num_src_chares;
-  const int *restrict num_srcpts_each_chare = nonlocalinnerbcstruct->num_srcpts_each_chare;
+const int tot_num_dst_chares = nonlocalinnerbcstruct->tot_num_dst_chares;
+const int *restrict num_srcpts_tosend_each_chare = nonlocalinnerbcstruct->num_srcpts_tosend_each_chare;
+const int tot_num_src_chares = nonlocalinnerbcstruct->tot_num_src_chares;
+const int *restrict num_srcpts_each_chare = nonlocalinnerbcstruct->num_srcpts_each_chare;
 
-  tmpBuffers->tmpBuffer_innerbc_send = (REAL **)malloc(tot_num_dst_chares * sizeof(REAL *));
-  for (int which_chare = 0; which_chare < tot_num_dst_chares; which_chare++) {
-    tmpBuffers->tmpBuffer_innerbc_send[which_chare] = (REAL *restrict)malloc(sizeof(REAL) * max_sync_gfs * num_srcpts_tosend_each_chare[which_chare]);
-  }
-  tmpBuffers->tmpBuffer_innerbc_receiv = (REAL **)malloc(tot_num_src_chares * sizeof(REAL *));
-  for (int which_chare = 0; which_chare < tot_num_src_chares; which_chare++) {
-    tmpBuffers->tmpBuffer_innerbc_receiv[which_chare] = (REAL *restrict)malloc(sizeof(REAL) * max_sync_gfs * num_srcpts_each_chare[which_chare]);
-  }
-
+tmpBuffers->tmpBuffer_innerbc_send = (REAL **)malloc(tot_num_dst_chares * sizeof(REAL *));
+for (int which_chare = 0; which_chare < tot_num_dst_chares; which_chare++) {
+  tmpBuffers->tmpBuffer_innerbc_send[which_chare] = (REAL *restrict)malloc(sizeof(REAL) * max_sync_gfs * num_srcpts_tosend_each_chare[which_chare]);
+}
+tmpBuffers->tmpBuffer_innerbc_receiv = (REAL **)malloc(tot_num_src_chares * sizeof(REAL *));
+for (int which_chare = 0; which_chare < tot_num_src_chares; which_chare++) {
+  tmpBuffers->tmpBuffer_innerbc_receiv[which_chare] = (REAL *restrict)malloc(sizeof(REAL) * max_sync_gfs * num_srcpts_each_chare[which_chare]);
+}
 """
+    if enable_BHaHAHA:
+        body += """
+const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
+tmpBuffers->tmpBuffer_bhahaha_gfs = (REAL *restrict)malloc(sizeof(REAL) * BHAHAHA_NUM_INTERP_GFS * Nxx_plus_2NGHOSTS_tot);
+"""
+
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
@@ -328,10 +336,13 @@ tmpBuffers->tmpBuffer_TB = (REAL *restrict)malloc(sizeof(REAL) * max_sync_gfs * 
     )
 
 
-def register_CFunction_timestepping_free_memory() -> None:
+def register_CFunction_timestepping_free_memory(
+    enable_BHaHAHA: bool = False,
+) -> None:
     """
     Register a C function for timestepping free memory.
 
+    :param enable_BHaHAHA: If True, free memory of tmpBuffer_bhahaha_gfs.
     :return None
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
@@ -367,6 +378,12 @@ if (tmpBuffers->tmpBuffer_innerbc_receiv != NULL) {
   free(tmpBuffers->tmpBuffer_innerbc_receiv);
 }
 """
+    if enable_BHaHAHA:
+        body += """
+if (tmpBuffers->tmpBuffer_bhahaha_gfs != NULL)
+  free(tmpBuffers->tmpBuffer_bhahaha_gfs);
+"""
+
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
@@ -2222,9 +2239,13 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         enable_BHaHAHA=enable_BHaHAHA,
     )
 
-    register_CFunction_timestepping_malloc()
+    register_CFunction_timestepping_malloc(
+        enable_BHaHAHA=enable_BHaHAHA,
+    )
 
-    register_CFunction_timestepping_free_memory()
+    register_CFunction_timestepping_free_memory(
+        enable_BHaHAHA=enable_BHaHAHA,
+    )
 
     # Register temporary buffers for face data communication to griddata_struct:
     griddata_commondata.register_griddata_commondata(
