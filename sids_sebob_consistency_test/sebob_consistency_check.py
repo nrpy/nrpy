@@ -11,7 +11,7 @@ import os
 import subprocess
 import sys
 from io import StringIO
-from typing import Any, Union, Tuple
+from typing import Any, Tuple, Union
 
 import numpy as np
 
