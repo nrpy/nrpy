@@ -88,6 +88,9 @@ seobnv5_merger_ringdown_flag = False
 # Once we have precession in place, we can make this more tunable
 precompute_waveform_coefficients = False
 
+# Flag to output the commondata struct to a file.
+output_commondata_flag = False
+
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
@@ -97,6 +100,7 @@ def register_CFunction_main_c(
     output_waveform: bool = True,
     frequency_domain: bool = False,
     precompute_waveform_coefficients: bool = False,
+    output_commondata: bool = False,
 ) -> None:
     """
     Generate a simplified C main() function for computing SEOBNRv5 Hamiltonian and its derivatives.
@@ -104,6 +108,7 @@ def register_CFunction_main_c(
     :param output_waveform: Flag to enable/disable printing the waveform
     :param frequency_domain: Flag to enable/disable FFT to get a frequency domain waveform
     :param precompute_waveform_coefficients: Flag to enable/disable precomputing the waveform coefficients
+    :param output_commondata: Flag to enable/disable outputting the commondata struct to a file
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """-={ main() function }=-
@@ -168,9 +173,11 @@ for (size_t i = 0; i < commondata.nsteps_IMR; i++) {
     , creal(commondata.waveform_IMR[IDX_WF(i,STRAIN)]), cimag(commondata.waveform_IMR[IDX_WF(i,STRAIN)]));
 }
 """
-
-    body += r"""
+    if output_commondata:
+        body += r"""
 commondata_io(&commondata, "commondata.bin");
+"""
+    body += r"""
 free(commondata.dynamics_low);
 free(commondata.dynamics_fine);
 free(commondata.waveform_low);

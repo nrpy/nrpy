@@ -6,7 +6,6 @@ Authors: Siddharth Mahesh
         sm0193 **at** mix **dot** wvu **dot** edu
 """
 
-import argparse
 import os
 import subprocess
 import sys
@@ -63,8 +62,14 @@ def calculate_rmse(
     sampled_amp_data2 = np.interp(sampled_times, data2[:, 0], amp2)
     sampled_phase_data1 = np.interp(sampled_times, data1[:, 0], phase1)
     sampled_phase_data2 = np.interp(sampled_times, data2[:, 0], phase2)
-    rmse_amp = np.sqrt(np.mean((sampled_amp_data1 - sampled_amp_data2) ** 2))
-    rmse_phase = np.sqrt(np.mean((sampled_phase_data1 - sampled_phase_data2) ** 2))
+    rmse_amp = np.sqrt(
+        np.mean(((sampled_amp_data1 - sampled_amp_data2) / sampled_amp_data1) ** 2)
+    )
+    rmse_phase = np.sqrt(
+        np.mean(
+            ((sampled_phase_data1 - sampled_phase_data2) / sampled_phase_data1) ** 2
+        )
+    )
     return rmse_amp + rmse_phase
 
 
@@ -77,21 +82,24 @@ def process_input_set(
     :param nominal_args: Tuple containing the nominal input paramters, path to trusted executable, and path to current executable.
     :return: Tuple containing the baseline error and test error.
     """
-    nominal_inputs, trusted_exec, current_exec = nominal_args
+    nominal_inputs, nominal_trusted_exec, nominal_current_exec = nominal_args
 
     # 1. Run trusted code with nominal inputs
-    trusted_output = run_sebob(trusted_exec, nominal_inputs)
+    trusted_output = run_sebob(nominal_trusted_exec, nominal_inputs)
     # 2. Run current code with nominal inputs
-    current_output = run_sebob(current_exec, nominal_inputs)
+    current_output = run_sebob(nominal_current_exec, nominal_inputs)
 
-    # 3. Create perturbed inputs and run trusted code again
+    # 3. Create perturbed inputs only for mass ratio and spins and run trusted code again
     perturbation = (
-        np.random.choice([-1, 1], size=nominal_inputs.shape, replace=True)
-        * np.random.uniform(1, 3, size=nominal_inputs.shape)
+        np.random.choice([-1, 1], size=3, replace=True)
+        * np.random.uniform(1, 3, size=3)
         * PERTURBATION_MAGNITUDE
     )
-    perturbed_inputs = nominal_inputs * (1 + perturbation)
-    perturbed_output = run_sebob(trusted_exec, perturbed_inputs)
+    perturbed_inputs = nominal_inputs.copy()
+    perturbed_inputs[0] = nominal_inputs[0] * (1 + perturbation[0])
+    perturbed_inputs[1] = nominal_inputs[1] * (1 + perturbation[1])
+    perturbed_inputs[2] = nominal_inputs[2] * (1 + perturbation[2])
+    perturbed_output = run_sebob(nominal_trusted_exec, perturbed_inputs)
 
     # Calculate errors
     baseline_error = calculate_rmse(trusted_output, perturbed_output)
@@ -101,72 +109,33 @@ def process_input_set(
 
 # --- Main Logic ---
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="On-the-fly CI accuracy comparison.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    print("Loading input sets...")
+    inputs_set = np.loadtxt(
+        "./nrpy/infrastructures/BHaH/seobnr/tests/input_sets.csv", delimiter=","
     )
-    parser.add_argument(
-        "--current-exec",
-        help="Path to the current executable.",
-        default="None",
-        required=False,
+    num_sets = len(inputs_set)
+    cdir = os.getcwd()
+    # go to the directory where the trusted sebob executable is located
+    os.chdir("./nrpy/infrastructures/BHaH/seobnr/tests/seobnrv5_aligned_spin_inspiral")
+    subprocess.run(
+        ["make", "clean"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=True,
     )
-    parser.add_argument(
-        "--trusted-exec",
-        help="Path to the trusted executable.",
-        default="None",
-        required=False,
+    subprocess.run(["make"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+    # go to the directory where the current sebob executable is located
+    os.chdir(cdir)
+    trusted_exec = "./nrpy/infrastructures/BHaH/seobnr/tests/seobnrv5_aligned_spin_inspiral/seobnrv5_aligned_spin_inspiral"
+    current_exec = (
+        "./project/seobnrv5_aligned_spin_inspiral/seobnrv5_aligned_spin_inspiral"
     )
-    parser.add_argument(
-        "--inputs",
-        help="Path to the input_sets.csv file.",
-        default="None",
-        required=False,
-    )
-    args = parser.parse_args()
-    if_no_args = (
-        args.current_exec == "None"
-        and args.trusted_exec == "None"
-        and args.inputs == "None"
-    )
-
-    if (
-        args.current_exec == "None"
-        or args.trusted_exec == "None"
-        or args.inputs == "None"
-    ):
-        print("Loading input sets...")
-        args.inputs = np.loadtxt(
-            "./sids_sebob_consistency_test/input_sets.csv", delimiter=","
-        )
-        all_inputs = np.array([args.inputs[0]])
-        num_sets = len(all_inputs)
-        cdir = os.getcwd()
-        # go to the directory where the sebob executables are located
-        os.chdir("./sids_sebob_consistency_test/seobnrv5_aligned_spin_inspiral")
-        subprocess.run(
-            ["make", "clean"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            check=True,
-        )
-        subprocess.run(
-            ["make"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True
-        )
-        os.chdir(cdir)
-        args.trusted_exec = "./sids_sebob_consistency_test/seobnrv5_aligned_spin_inspiral/seobnrv5_aligned_spin_inspiral"
-        args.current_exec = "./sids_sebob_consistency_test/seobnrv5_aligned_spin_inspiral/seobnrv5_aligned_spin_inspiral"
-    else:
-        print("Loading input sets...")
-        all_inputs = np.loadtxt(args.inputs, delimiter=",")
-        num_sets = len(all_inputs)
-
     print(f"Starting accuracy comparison for {num_sets} input sets...")
     baseline_errors = []
     test_errors = []
     for i in range(num_sets):
         print(f"Processing input set {i+1}/{num_sets}...")
-        task = (all_inputs[i], args.trusted_exec, args.current_exec)
+        task = (inputs_set[i], trusted_exec, current_exec)
         baseline_err, test_err = process_input_set(task)
         baseline_errors.append(baseline_err)
         test_errors.append(test_err)
@@ -179,18 +148,17 @@ if __name__ == "__main__":
     print(f"Test Error Median:      {test_median:.6e}")
     print(f"Baseline Error Median:  {baseline_median:.6e}")
     # remove the object files from the sebob directory if no args were passed
-    if if_no_args:
-        cdir = os.getcwd()
-        os.chdir("./sids_sebob_consistency_test/seobnrv5_aligned_spin_inspiral")
-        subprocess.run(
-            ["make", "clean"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            check=True,
-        )
-        os.chdir(cdir)
+    cdir = os.getcwd()
+    os.chdir("./nrpy/infrastructures/BHaH/seobnr/tests/seobnrv5_aligned_spin_inspiral")
+    subprocess.run(
+        ["make", "clean"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=True,
+    )
+    os.chdir(cdir)
     if test_median <= baseline_median:
-        print("\nPASSED: Median error is within the dynamically generated baseline.")
+        print("\nPASSED: Median error is within roundoff baseline.")
         sys.exit(0)
     else:
         print(
