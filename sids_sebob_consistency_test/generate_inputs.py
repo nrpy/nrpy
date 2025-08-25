@@ -9,7 +9,8 @@ import numpy as np
 
 NUM_SETS = 10000
 NUM_INPUTS = 6
-Q_RANGE = np.linspace(1.0, 10.0, NUM_SETS)
+# sometimes roundoff perturbation can give q > 1 but eta < 0.25 This avoids that
+Q_RANGE = np.linspace(1.01, 10.0, NUM_SETS)
 np.random.shuffle(Q_RANGE)
 CHI1_RANGE = np.linspace(-0.99, 0.99, NUM_SETS)
 np.random.shuffle(CHI1_RANGE)

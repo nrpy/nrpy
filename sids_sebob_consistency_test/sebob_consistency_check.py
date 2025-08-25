@@ -5,6 +5,7 @@ usage: sebob_consistency_check.py [-h] --current-exec CURRENT_EXEC --trusted-exe
 Authors: Siddharth Mahesh
         sm0193 **at** mix **dot** wvu **dot** edu
 """
+
 import argparse
 import subprocess
 import sys
@@ -21,7 +22,7 @@ PERTURBATION_MAGNITUDE = 1e-14
 def run_sebob(executable_path: str, inputs: np.ndarray) -> np.ndarray:
     """
     Run sebob executable with a single set of inputs.
-    
+
     :param executable_path: Path to the sebob executable.
     :param inputs: List of inputs to the sebob executable.
     :return: Output of the sebob executable.
@@ -29,27 +30,31 @@ def run_sebob(executable_path: str, inputs: np.ndarray) -> np.ndarray:
     parameters_file = executable_path + ".par"
     inputs_str = [f"{elt:.15f}" for elt in inputs]
     result = subprocess.run(
-        [executable_path, parameters_file] + inputs_str, capture_output=True, text=True, check=True
+        [executable_path, parameters_file] + inputs_str,
+        capture_output=True,
+        text=True,
+        check=True,
     )
 
     return np.loadtxt(StringIO(result.stdout))
 
-def calculate_rmse(data1: np.ndarray, data2: np.ndarray) -> Union[float,Any]:
+
+def calculate_rmse(data1: np.ndarray, data2: np.ndarray) -> Union[float, Any]:
     """
     Calculate the Root Mean Square Error (RMSE) between two datasets.
-    
+
     :param data1: First dataset.
     :param data2: Second dataset.
     :return: RMSE value.
     """
-    h22_1 = data1[:, 1] + 1j*data1[:, 2]
-    amp1 , phase1 = np.abs(h22_1), np.unwrap(np.angle(h22_1))
-    h22_2 = data2[:, 1] + 1j*data2[:, 2]
-    amp2 , phase2 = np.abs(h22_2), np.unwrap(np.angle(h22_2))
+    h22_1 = data1[:, 1] + 1j * data1[:, 2]
+    amp1, phase1 = np.abs(h22_1), np.unwrap(np.angle(h22_1))
+    h22_2 = data2[:, 1] + 1j * data2[:, 2]
+    amp2, phase2 = np.abs(h22_2), np.unwrap(np.angle(h22_2))
     t_min = max(data1[0, 0], data2[0, 0])
     t_max = min(data1[0, -1], data2[0, -1])
     # sample at 10% of the total number of points
-    sampled_times = np.linspace(t_min, t_max, data1.shape[0]//10)
+    sampled_times = np.linspace(t_min, t_max, data1.shape[0] // 10)
     sampled_amp_data1 = np.interp(sampled_times, data1[:, 0], amp1)
     sampled_amp_data2 = np.interp(sampled_times, data2[:, 0], amp2)
     sampled_phase_data1 = np.interp(sampled_times, data1[:, 0], phase1)
@@ -59,10 +64,12 @@ def calculate_rmse(data1: np.ndarray, data2: np.ndarray) -> Union[float,Any]:
     return rmse_amp + rmse_phase
 
 
-def process_input_set(nominal_args: tuple[np.ndarray, str, str]) -> tuple[Union[float,Any], Union[float,Any]]:
+def process_input_set(
+    nominal_args: tuple[np.ndarray, str, str],
+) -> tuple[Union[float, Any], Union[float, Any]]:
     """
     Process a single input set to get both baseline and test error.
-    
+
     :param nominal_args: Tuple containing the nominal input paramters, path to trusted executable, and path to current executable.
     :return: Tuple containing the baseline error and test error.
     """
@@ -75,7 +82,9 @@ def process_input_set(nominal_args: tuple[np.ndarray, str, str]) -> tuple[Union[
 
     # 3. Create perturbed inputs and run trusted code again
     perturbation = (
-        np.random.choice([-1, 1], size=nominal_inputs.shape, replace=True) * np.random.uniform(1, 3, size=nominal_inputs.shape) * PERTURBATION_MAGNITUDE
+        np.random.choice([-1, 1], size=nominal_inputs.shape, replace=True)
+        * np.random.uniform(1, 3, size=nominal_inputs.shape)
+        * PERTURBATION_MAGNITUDE
     )
     perturbed_inputs = nominal_inputs * (1 + perturbation)
     perturbed_output = run_sebob(trusted_exec, perturbed_inputs)
@@ -88,21 +97,47 @@ def process_input_set(nominal_args: tuple[np.ndarray, str, str]) -> tuple[Union[
 
 # --- Main Logic ---
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="On-the-fly CI accuracy comparison.")
-    parser.add_argument(
-        "--current-exec", required=True, help="Path to the current executable."
+    parser = argparse.ArgumentParser(
+        description="On-the-fly CI accuracy comparison.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
-        "--trusted-exec", required=True, help="Path to the trusted executable."
+        "--current-exec",
+        help="Path to the current executable.",
+        default="None",
+        required=False,
     )
     parser.add_argument(
-        "--inputs", required=True, help="Path to the input_sets.csv file."
+        "--trusted-exec",
+        help="Path to the trusted executable.",
+        default="None",
+        required=False,
+    )
+    parser.add_argument(
+        "--inputs",
+        help="Path to the input_sets.csv file.",
+        default="None",
+        required=False,
     )
     args = parser.parse_args()
 
-    print("Loading input sets...")
-    all_inputs = np.loadtxt(args.inputs, delimiter=",")
-    num_sets = len(all_inputs)
+    if (
+        args.current_exec == "None"
+        or args.trusted_exec == "None"
+        or args.inputs == "None"
+    ):
+        print("Loading input sets...")
+        args.inputs = np.loadtxt(
+            "./sids_sebob_consistency_test/input_sets.csv", delimiter=","
+        )
+        all_inputs = np.array([args.inputs[0]])
+        num_sets = len(all_inputs)
+        args.trusted_exec = "./sids_sebob_consistency_test/seobnrv5_aligned_spin_inspiral/seobnrv5_aligned_spin_inspiral"
+        args.current_exec = "./sids_sebob_consistency_test/seobnrv5_aligned_spin_inspiral/seobnrv5_aligned_spin_inspiral"
+    else:
+        print("Loading input sets...")
+        all_inputs = np.loadtxt(args.inputs, delimiter=",")
+        num_sets = len(all_inputs)
 
     print(f"Starting accuracy comparison for {num_sets} input sets...")
     baseline_errors = []
