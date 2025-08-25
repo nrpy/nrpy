@@ -14,13 +14,14 @@ from io import StringIO
 from typing import Any, Tuple, Union
 
 import numpy as np
+from numpy.typing import NDArray
 
 # --- Configuration ---
 PERTURBATION_MAGNITUDE = 1e-14
 
 
 # --- Helper Functions ---
-def run_sebob(executable_path: str, inputs: np.ndarray) -> np.ndarray:
+def run_sebob(executable_path: str, inputs: NDArray[np.float64]) -> NDArray[np.float64]:
     """
     Run sebob executable with a single set of inputs.
 
@@ -40,7 +41,9 @@ def run_sebob(executable_path: str, inputs: np.ndarray) -> np.ndarray:
     return np.loadtxt(StringIO(result.stdout))
 
 
-def calculate_rmse(data1: np.ndarray, data2: np.ndarray) -> Union[float, Any]:
+def calculate_rmse(
+    data1: NDArray[np.float64], data2: NDArray[np.float64]
+) -> Union[float, Any]:
     """
     Calculate the Root Mean Square Error (RMSE) between two datasets.
 
@@ -66,7 +69,7 @@ def calculate_rmse(data1: np.ndarray, data2: np.ndarray) -> Union[float, Any]:
 
 
 def process_input_set(
-    nominal_args: Tuple[np.ndarray, str, str],
+    nominal_args: Tuple[NDArray[np.float64], str, str],
 ) -> Tuple[Union[float, Any], Union[float, Any]]:
     """
     Process a single input set to get both baseline and test error.
