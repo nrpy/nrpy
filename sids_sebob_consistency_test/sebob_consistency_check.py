@@ -11,7 +11,7 @@ import os
 import subprocess
 import sys
 from io import StringIO
-from typing import Any, Union
+from typing import Any, Union, Tuple
 
 import numpy as np
 
@@ -66,8 +66,8 @@ def calculate_rmse(data1: np.ndarray, data2: np.ndarray) -> Union[float, Any]:
 
 
 def process_input_set(
-    nominal_args: tuple[np.ndarray, str, str],
-) -> tuple[Union[float, Any], Union[float, Any]]:
+    nominal_args: Tuple[np.ndarray, str, str],
+) -> Tuple[Union[float, Any], Union[float, Any]]:
     """
     Process a single input set to get both baseline and test error.
 
