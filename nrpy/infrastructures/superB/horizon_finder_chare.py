@@ -175,6 +175,7 @@ module horizon_finder {
           if (!(commondata.bah_BBH_mode_enable && !commondata.bah_BBH_mode_horizon_active[which_horizon])) {
             serial {
               //bhahaha_find_horizons(&commondata, griddata, &x_center, &y_center, &z_center, &radii, &total_elements, &dst_x0x1x2, &dst_data_ptrs, which_horizon, BHAHAHA_FIND_HORIZONS_SETUP);
+              bhahaha_find_horizons(&commondata, griddata);
             }
 
             when ready_for_interpolation() {
@@ -190,6 +191,7 @@ module horizon_finder {
             }
             serial {
               //bhahaha_find_horizons(&commondata, griddata, &x_center, &y_center, &z_center, &radii, &total_elements, &dst_x0x1x2, &dst_data_ptrs, which_horizon, BHAHAHA_FIND_HORIZONS_FIND_AND_WRITE_TO_FILE);
+              bhahaha_find_horizons(&commondata, griddata);
               free(radii);
               thisProxy[CkArrayIndex1D(thisIndex)].horizon_finding_complete();
             }

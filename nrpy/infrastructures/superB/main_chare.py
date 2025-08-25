@@ -298,10 +298,21 @@ def output_main_ci(
 
   readonly CProxy_Main mainProxy;
   readonly CProxy_Timestepping timesteppingArray;
-
-
+  """
+    if enable_BHaHAHA:
+        file_output_str += r"""
+  readonly CProxy_Horizon_finder horizon_finderProxy;
+  readonly CProxy_Interpolator3d interpolator3dArray;
+  """
+    file_output_str += r"""
   extern module timestepping;
-
+  """
+    if enable_BHaHAHA:
+        file_output_str += r"""
+  extern module horizon_finder;
+  extern module interpolator3d;
+"""
+    file_output_str += r"""
   mainchare Main {
     entry Main(CkArgMsg* msg);
     entry void done();
