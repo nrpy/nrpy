@@ -108,7 +108,7 @@ def register_CFunction_main_c(
     :param output_waveform: Flag to enable/disable printing the waveform
     :param frequency_domain: Flag to enable/disable FFT to get a frequency domain waveform
     :param precompute_waveform_coefficients: Flag to enable/disable precomputing the waveform coefficients
-    :param output_commondata: Flag to enable/disable outputting the commondata struct to a file
+    :param output_commondata: Flag to enable/disable outputting the commondata struct to a binary file
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """-={ main() function }=-
