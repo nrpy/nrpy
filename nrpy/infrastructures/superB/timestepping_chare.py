@@ -847,6 +847,8 @@ extern /* readonly */ CProxy_Interpolator3d interpolator3dArray;"""
     file_output_str += r"""
 Timestepping::Timestepping(CommondataObject &&inData) {
 
+  CkPrintf("Timestepping chare %d,%d,%d created on PE %d\n", thisIndex.x, thisIndex.y, thisIndex.z, CkMyPe());
+
   commondata = inData.commondata;
 
   if (thisIndex.x == 0 || thisIndex.y == 0 || thisIndex.z == 0 || thisIndex.x == (commondata.Nchare0 - 1) || thisIndex.y == (commondata.Nchare1 - 1) ||

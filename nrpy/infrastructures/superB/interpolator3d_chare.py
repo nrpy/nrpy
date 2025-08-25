@@ -162,7 +162,7 @@ extern/* readonly */ CProxy_Horizon_finder horizon_finderProxy;
 extern/* readonly */ CProxy_Interpolator3d interpolator3dArray;
 
 Interpolator3d::Interpolator3d() {
-  CkPrintf("Interpolator3d chare %d%d%d created on PE %d\n", thisIndex.x, thisIndex.y, thisIndex.z, CkMyPe());
+  CkPrintf("Interpolator3d chare %d,%d,%d created on PE %d\n", thisIndex.x, thisIndex.y, thisIndex.z, CkMyPe());
 }
 
 // migration constructor
