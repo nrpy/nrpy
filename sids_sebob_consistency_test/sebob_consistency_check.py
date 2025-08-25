@@ -7,6 +7,7 @@ Authors: Siddharth Mahesh
 """
 
 import argparse
+import os
 import subprocess
 import sys
 from io import StringIO
@@ -120,6 +121,11 @@ if __name__ == "__main__":
         required=False,
     )
     args = parser.parse_args()
+    if_no_args = (
+        args.current_exec == "None"
+        and args.trusted_exec == "None"
+        and args.inputs == "None"
+    )
 
     if (
         args.current_exec == "None"
@@ -132,6 +138,19 @@ if __name__ == "__main__":
         )
         all_inputs = np.array([args.inputs[0]])
         num_sets = len(all_inputs)
+        cdir = os.getcwd()
+        # go to the directory where the sebob executables are located
+        os.chdir("./sids_sebob_consistency_test/seobnrv5_aligned_spin_inspiral")
+        subprocess.run(
+            ["make", "clean"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+        )
+        subprocess.run(
+            ["make"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True
+        )
+        os.chdir(cdir)
         args.trusted_exec = "./sids_sebob_consistency_test/seobnrv5_aligned_spin_inspiral/seobnrv5_aligned_spin_inspiral"
         args.current_exec = "./sids_sebob_consistency_test/seobnrv5_aligned_spin_inspiral/seobnrv5_aligned_spin_inspiral"
     else:
@@ -156,7 +175,17 @@ if __name__ == "__main__":
     print("\n--- Test Results ---")
     print(f"Test Error Median:      {test_median:.6e}")
     print(f"Baseline Error Median:  {baseline_median:.6e}")
-
+    # remove the object files from the sebob directory if no args were passed
+    if if_no_args:
+        cdir = os.getcwd()
+        os.chdir("./sids_sebob_consistency_test/seobnrv5_aligned_spin_inspiral")
+        subprocess.run(
+            ["make", "clean"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+        )
+        os.chdir(cdir)
     if test_median <= baseline_median:
         print("\nPASSED: Median error is within the dynamically generated baseline.")
         sys.exit(0)

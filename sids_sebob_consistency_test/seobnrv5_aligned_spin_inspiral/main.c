@@ -39,7 +39,6 @@ int main(int argc, const char *argv[]) {
            cimag(commondata.waveform_IMR[IDX_WF(i, STRAIN)]));
   }
 
-  commondata_io(&commondata, "commondata.bin");
   free(commondata.dynamics_low);
   free(commondata.dynamics_fine);
   free(commondata.waveform_low);
