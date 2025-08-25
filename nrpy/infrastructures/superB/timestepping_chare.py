@@ -800,12 +800,13 @@ def output_timestepping_cpp(
 """
 
     file_output_str += r"""
-extern /* readonly */ CProxy_Main mainProxy;"""
+extern /* readonly */ CProxy_Main mainProxy;
+extern /* readonly */ CProxy_Timestepping timesteppingArray;"""
 
     if enable_BHaHAHA:
         file_output_str += r"""
 extern /* readonly */ CProxy_Horizon_finder horizon_finderProxy;
-"""
+extern /* readonly */ CProxy_Interpolator3d interpolator3dArray;"""
 
     file_output_str += r"""
 /*

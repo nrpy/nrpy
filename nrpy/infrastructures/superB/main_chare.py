@@ -226,18 +226,15 @@ Main::Main(CkArgMsg* msg) {
   const int Nchare2 = commondataObj.commondata.Nchare2;
   const int Ncharetotal = Nchare0 * Nchare1 * Nchare2;
   const int numHorizons = commondataObj.commondata.bah_max_num_horizons;
-  const bool enable_horizons = (commondataObj.commondata.enable_horizons != 0);
 
   int rr_offset = 0;
 
   // Horizons first (1D) to maximize chance of distinct PEs
-  if (enable_horizons) {
-    CProxy_RRMap_with_offset rrMapH = CProxy_RRMap_with_offset::ckNew(rr_offset, Nchare0, Nchare1);
-    CkArrayOptions optsH(numHorizons);
-    optsH.setMap(rrMapH);
-    horizon_finderProxy = CProxy_Horizon_finder::ckNew(optsH);
-    rr_offset += numHorizons;
-  }
+  CProxy_RRMap_with_offset rrMapH = CProxy_RRMap_with_offset::ckNew(rr_offset, Nchare0, Nchare1);
+  CkArrayOptions optsH(numHorizons);
+  optsH.setMap(rrMapH);
+  horizon_finderProxy = CProxy_Horizon_finder::ckNew(optsH);
+  rr_offset += numHorizons;
 
   // Timestepping (3D)
   {
