@@ -109,10 +109,8 @@ def process_input_set(
 
 # --- Main Logic ---
 if __name__ == "__main__":
-    print("Loading input sets...")
-    inputs_set = np.loadtxt(
-        "./nrpy/examples/tests/input_sets.csv", delimiter=","
-    )
+    # equal mass non-spinning binary with ~20M separation and ~.1M spacing
+    inputs_set = np.array([[1.0, 0.0, 0.0, 0.0118, 50.0, 2.4627455127717882e-05]])
     num_sets = len(inputs_set)
     cdir = os.getcwd()
     # go to the directory where the trusted sebob executable is located
