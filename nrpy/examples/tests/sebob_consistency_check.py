@@ -111,12 +111,12 @@ def process_input_set(
 if __name__ == "__main__":
     print("Loading input sets...")
     inputs_set = np.loadtxt(
-        "./nrpy/infrastructures/BHaH/seobnr/tests/input_sets.csv", delimiter=","
+        "./nrpy/examples/tests/input_sets.csv", delimiter=","
     )
     num_sets = len(inputs_set)
     cdir = os.getcwd()
     # go to the directory where the trusted sebob executable is located
-    os.chdir("./nrpy/infrastructures/BHaH/seobnr/tests/seobnrv5_aligned_spin_inspiral")
+    os.chdir("./project/seobnrv5_aligned_spin_inspiral")
     subprocess.run(
         ["make", "clean"],
         stdout=subprocess.PIPE,
@@ -125,8 +125,12 @@ if __name__ == "__main__":
     )
     subprocess.run(["make"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
     # go to the directory where the current sebob executable is located
+    # for now, using the same trusted and current executables
+    # the next PR will have the trusted executable in a different directory
     os.chdir(cdir)
-    trusted_exec = "./nrpy/infrastructures/BHaH/seobnr/tests/seobnrv5_aligned_spin_inspiral/seobnrv5_aligned_spin_inspiral"
+    trusted_exec = (
+        "./project/seobnrv5_aligned_spin_inspiral/seobnrv5_aligned_spin_inspiral"
+    )
     current_exec = (
         "./project/seobnrv5_aligned_spin_inspiral/seobnrv5_aligned_spin_inspiral"
     )
@@ -147,16 +151,6 @@ if __name__ == "__main__":
     print("\n--- Test Results ---")
     print(f"Test Error Median:      {test_median:.6e}")
     print(f"Baseline Error Median:  {baseline_median:.6e}")
-    # remove the object files from the sebob directory if no args were passed
-    cdir = os.getcwd()
-    os.chdir("./nrpy/infrastructures/BHaH/seobnr/tests/seobnrv5_aligned_spin_inspiral")
-    subprocess.run(
-        ["make", "clean"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=True,
-    )
-    os.chdir(cdir)
     if test_median <= baseline_median:
         print("\nPASSED: Median error is within roundoff baseline.")
         sys.exit(0)
