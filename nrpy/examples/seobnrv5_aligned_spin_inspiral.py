@@ -1,5 +1,5 @@
 """
-Set up a complete C code project for setting 3.5PN quasicircular momenta for binary black holes, using NRPyPN.
+Set up a complete C code project for setting up the Spinning Effective-to-Backwards One Body (SEBOB) model with SEOBNRv5 and BOB.
 
 Authors: Siddharth Mahesh
         sm0193 **at** mix **dot** wvu **dot** edu
@@ -13,7 +13,6 @@ import os
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
 import shutil
-import sys
 from pathlib import Path
 
 import nrpy.c_function as cfc
@@ -46,50 +45,28 @@ shutil.rmtree(project_dir, ignore_errors=True)
 
 par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 
-
-# Define a function to print instructions in case there is a help flag
-def print_help() -> None:
-    """Print a list of usage options for running seobnrv5_aligned_spin_inspiral."""
-    print(
-        """
-Generate a compileable C project to calculate gravitational waveforms using the SEOBNRv5 and BOB model!
-Usage: python nrpy/example/seobnrv5_aligned_spin_inspiral.py [options] [arguments]
-
-Options:
-  -h, --help, -?, --?                                    Show this help message and exit.
-  --output_waveform=True/False                           Enable/disable printing the waveforms. (Defaults to True)
-  --frequency_domain=True/False                          Returns waveform in the frequency domain. (Defaults to False)
-  --use_numerical_relativity_nqc=True/False              Enable/disable numerical relativity fits to evaluate Non Quasi-Circular corrections to the inspiral. (Defaults to False)
-  --use_seobnrv5_merger_ringdown=True/False              Enables/disable SEOBNRv5's phenomological fit for the merger-ringdown waveform. (Defaults to False) 
-
-Example:
-  python nrpy/example/seobnrv5_aligned_spin_inspiral.py --output_waveform=True --frequency_domain=True
-          Generates a C project that calculates the FFT-ed frequency domain waveform using SEOBNRv5 and BOB
-          and prints the real and imaginary part of the strain as a frequency series.
-    """
-    )
-
-
-# Set flags to default values
-
+# Development flags (NOT command-line-tunable)
 # Flag to compute the SEOBNR waveform in the frequency domain.
 frequency_domain_flag = False
-
-# Flag to output the SEOBNRv5 waveform using a print statement like lalsimulation does.
-output_waveform_flag = True
-
-# Flag to use numerical relativity fits to evaluate Non Quasi-Circular corrections to the inspiral.
-numerical_relativity_nqc_flag = False
-
-# Flag to compute SEOBNRv5's phenomological fit for the merger-ringdown waveform.
-seobnv5_merger_ringdown_flag = False
-
 # Flag to precompute the waveform coefficients. Only works for aligned spins.
 # Once we have precession in place, we can make this more tunable
-precompute_waveform_coefficients = False
-
+precompute_waveform_coefficients_flag = False
 # Flag to output the commondata struct to a file.
 output_commondata_flag = False
+# Flag to output the SEOBNRv5 waveform using a print statement like lalsimulation does.
+# (set to False for performance checks)
+output_waveform_flag = True
+# SEOBNRv5 uses an iterative refinement routine to find the location of the peak of the orbital frequency.
+# This is not done in a robust manner and disabling it does not impact accuracy.
+# This flag helps enable/disable the routine at the codegen level so that we can assess the impact on performance and accuracy.
+perform_iterative_refinement = True
+
+
+# Command-line-tunable flags (tuned through choice of approximant, defaults to all BOBs)
+# Flag to use numerical relativity fits to evaluate Non Quasi-Circular corrections to the inspiral.
+numerical_relativity_nqc_flag = False
+# Flag to compute SEOBNRv5's phenomological fit for the merger-ringdown waveform.
+seobnv5_merger_ringdown_flag = False
 
 #########################################################
 # STEP 2: Declare core C functions & register each to
@@ -103,7 +80,7 @@ def register_CFunction_main_c(
     output_commondata: bool = False,
 ) -> None:
     """
-    Generate a simplified C main() function for computing SEOBNRv5 Hamiltonian and its derivatives.
+    Generate a simplified C main() function for computing the SEBOB waveform.
 
     :param output_waveform: Flag to enable/disable printing the waveform
     :param frequency_domain: Flag to enable/disable FFT to get a frequency domain waveform
@@ -221,7 +198,7 @@ seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_iterative_refinement()
 seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_intepolate_dynamics()
 seobnr_gsl.register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper()
 seobnr_CCL.register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics()
-if precompute_waveform_coefficients:
+if precompute_waveform_coefficients_flag:
     seobnr_CCL_precomp.register_CFunction_SEOBNRv5_aligned_spin_waveform_coefficients()
     seobnr_CCL_precomp.register_CFunction_SEOBNRv5_aligned_spin_waveform()
     seobnr_CCL_precomp.register_CFunction_SEOBNRv5_aligned_spin_flux()
@@ -232,55 +209,44 @@ seobnr_wf_CCL.register_CFunction_SEOBNRv5_aligned_spin_unwrap()
 seobnr_wf_CCL.register_CFunction_SEOBNRv5_aligned_spin_interpolate_modes()
 
 if __name__ == "__main__":
-    # SEOBNRv5 uses an iterative refinement routine to find the location of the peak of the orbital frequency.
-    # This is not done in a robust manner and disabling it does not impact accuracy.
-    # This flag helps enable/disable the routine at the codegen level so that we can assess the impact on performance and accuracy.
-    perform_iterative_refinement = True
+    print(
+        """Generating a compileable C project to calculate gravitational waveforms using the SEOBNRv5 and BOB model! 
+To learn more about usage options, run: python nrpy/example/seobnrv5_aligned_spin_inspiral.py -h
+"""
+    )
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Generate a compileable C project to calculate gravitational waveforms using the SEOBNRv5 and BOB model!"
+    )
+
+    parser.add_argument(
+        "-seobnrv5_bob",
+        action="store_true",
+        help="SEOBNRv5 model with BOB-informed NQC corrections and merger-ringdown (default)",
+    )
+    parser.add_argument(
+        "-seobnrv5_nrnqc_bob",
+        action="store_true",
+        help="SEOBNRv5 model with native NQC corrections and BOB-informed merger-ringdown",
+    )
+    parser.add_argument(
+        "-seobnrv5_nrpy", action="store_true", help="native SEOBNRv5 model"
+    )
+    args = parser.parse_args()
+
+    if not args.seobnrv5_bob and not args.seobnrv5_nrnqc_bob and not args.seobnrv5_nrpy:
+        print("Defaulting to seobnrv5_bob.")
+        args.seobnrv5_bob = True
+    if args.seobnrv5_nrnqc_bob:
+        use_numerical_relativity_nqc_flag = True
+    if args.seobnrv5_nrpy:
+        use_numerical_relativity_nqc_flag = True
+        use_seobnrv5_merger_ringdown_flag = True
+
     seobnr_dyn_CCL.register_CFunction_SEOBNRv5_aligned_spin_ode_integration(
         perform_iterative_refinement
     )
-
-    # If running without arguments, output the ideal waveform code and inform about running help.
-    if len(sys.argv) == 1:
-        print(
-            """
-Generating a compileable C project to calculate gravitational waveforms using the SEOBNRv5 and BOB model!
-To learn more about usage options, run:
-python nrpy/example/seobnrv5_aligned_spin_inspiral.py -h
-or
-python nrpy/example/seobnrv5_aligned_spin_inspiral.py --help
-"""
-        )
-
-    # Check for help flags
-    if any(flag in sys.argv for flag in ["-h", "--help", "-?", "--?"]):
-        print_help()
-        sys.exit(0)
-
-    # Check for additional flags
-    if len(sys.argv) > 1:
-        for arg in sys.argv[1:]:
-            if arg.startswith("--output_waveform="):
-                output_waveform_flag = arg.split("=")[1].lower() == "true"
-            elif arg.startswith("--frequency_domain="):
-                frequency_domain_flag = arg.split("=")[1].lower() == "true"
-            elif arg.startswith("--use_numerical_relativity_nqc="):
-                numerical_relativity_nqc_flag = arg.split("=")[1].lower() == "true"
-            elif arg.startswith("--use_seobnrv5_merger_ringdown="):
-                seobnv5_merger_ringdown_flag = arg.split("=")[1].lower() == "true"
-            else:
-                print(
-                    f"""
-Unrecognized option {arg}
-For a full list of usage options see below or run:
-python nrpy/example/seobnrv5_aligned_spin_inspiral.py -h
-or 
-python nrpy/example/seobnrv5_aligned_spin_inspiral.py --help
-"""
-                )
-                print_help()
-                sys.exit(0)
-
     # Register some functions/code parameters based on input flags
     if frequency_domain_flag:
         par.register_CodeParameter(
@@ -377,7 +343,12 @@ typedef struct {
     },
     enable_intrinsics=False,
 )
-register_CFunction_main_c(output_waveform_flag, frequency_domain_flag)
+register_CFunction_main_c(
+    output_waveform_flag,
+    frequency_domain_flag,
+    precompute_waveform_coefficients_flag,
+    output_commondata_flag,
+)
 
 addl_cflags = ["$(shell gsl-config --cflags)"]
 if frequency_domain_flag:
