@@ -45,7 +45,7 @@ shutil.rmtree(project_dir, ignore_errors=True)
 
 par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 
-# Development flags (NOT user-tunable)
+# Development flags (NOT command-line-tunable)
 # Flag to compute the SEOBNR waveform in the frequency domain.
 frequency_domain_flag = False
 # Flag to precompute the waveform coefficients. Only works for aligned spins.
@@ -62,7 +62,7 @@ output_waveform_flag = True
 perform_iterative_refinement = True
 
 
-# User-tunable flags (tuned through choice of approximant, defaults to all BOBs)
+# Command-line-tunable flags (tuned through choice of approximant, defaults to all BOBs)
 # Flag to use numerical relativity fits to evaluate Non Quasi-Circular corrections to the inspiral.
 numerical_relativity_nqc_flag = False
 # Flag to compute SEOBNRv5's phenomological fit for the merger-ringdown waveform.
