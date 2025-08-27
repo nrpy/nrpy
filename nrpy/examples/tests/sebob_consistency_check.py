@@ -28,10 +28,11 @@ def run_sebob(executable_path: str, inputs: NDArray[np.float64]) -> NDArray[np.f
     :param inputs: List of inputs to the sebob executable.
     :return: Output of the sebob executable.
     """
-    parameters_file = executable_path + ".par"
+    executable_file = executable_path + "/seobnrv5_aligned_spin_inspiral"
+    parameters_file = executable_file + ".par"
     inputs_str = [f"{elt:.15f}" for elt in inputs]
     result = subprocess.run(
-        [executable_path, parameters_file] + inputs_str,
+        [executable_file, parameters_file] + inputs_str,
         capture_output=True,
         text=True,
         check=True,
@@ -109,12 +110,25 @@ def process_input_set(
 
 # --- Main Logic ---
 if __name__ == "__main__":
-    # equal mass non-spinning binary with ~20M separation and ~.1M spacing
-    inputs_set = np.array([[1.0, 0.0, 0.0, 0.0118, 50.0, 2.4627455127717882e-05]])
-    num_sets = len(inputs_set)
+    import argparse
+    parser = argparse.ArgumentParser(description="Run sebob consistency check.")
+    parser.add_argument("--trusted-exec", type=str, required=True, help="Path to trusted sebob executable.")
+    parser.add_argument("--current-exec", type=str, required=True, help="Path to current sebob executable.")
+    args = parser.parse_args()
+    num_sets = 10
+    q = np.linspace(1.01, 10, num_sets)
+    np.random.shuffle(q)
+    chi_1 = np.linspace(-0.9, 0.9, num_sets)
+    np.random.shuffle(chi_1)
+    chi_2 = np.linspace(-0.9, 0.9, num_sets)
+    np.random.shuffle(chi_2)
+    M = 50
+    omega_0 = 0.011
+    dt = 2.4627455127717882e-05
+    
     cdir = os.getcwd()
     # go to the directory where the trusted sebob executable is located
-    os.chdir("./project/seobnrv5_aligned_spin_inspiral")
+    os.chdir(args.trusted_exec)
     subprocess.run(
         ["make", "clean"],
         stdout=subprocess.PIPE,
@@ -122,27 +136,30 @@ if __name__ == "__main__":
         check=True,
     )
     subprocess.run(["make"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-    # go to the directory where the current sebob executable is located
-    # for now, using the same trusted and current executables
-    # the next PR will have the trusted executable in a different directory
     os.chdir(cdir)
-    trusted_exec = (
-        "./project/seobnrv5_aligned_spin_inspiral/seobnrv5_aligned_spin_inspiral"
+    # go to the directory where the current sebob executable is located
+    os.chdir(args.current_exec)
+    subprocess.run(
+        ["make", "clean"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=True,
     )
-    current_exec = (
-        "./project/seobnrv5_aligned_spin_inspiral/seobnrv5_aligned_spin_inspiral"
-    )
+    subprocess.run(["make"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+    os.chdir(cdir)
+    trusted_exec = args.trusted_exec
+    current_exec = args.current_exec
     print(f"Starting accuracy comparison for {num_sets} input sets...")
     baseline_errors = []
     test_errors = []
     for i in range(num_sets):
         print(f"Processing input set {i+1}/{num_sets}...")
-        task = (inputs_set[i], trusted_exec, current_exec)
+        inputs_set = np.array([q[i], chi_1[i], chi_2[i], omega_0, M, dt])
+        task = (inputs_set, trusted_exec, current_exec)
         baseline_err, test_err = process_input_set(task)
         baseline_errors.append(baseline_err)
         test_errors.append(test_err)
 
-    # Final comparison
     baseline_median = np.median(baseline_errors)
     test_median = np.median(test_errors)
 

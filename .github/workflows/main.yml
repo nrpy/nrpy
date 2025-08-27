@@ -424,6 +424,19 @@ jobs:
           pip install numpy
           sudo apt-get -y install libgsl-dev
 
+      - name: Checkout trusted commit code
+        uses: actions/checkout@v4
+        with:
+          ref: '1a23b750e585e33de7416622ffac7f59bdb007ee'
+          path: trusted_code
+
+      - name: Build trusted sebob executable
+        run: |
+          cd trusted_code &&
+          pip install . &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral && (cd project/seobnrv5_aligned_spin_inspiral && make)
+          cd ..
+
       - name: Build current sebob executable
         run: |
           pwd &&
@@ -432,4 +445,9 @@ jobs:
       
       - name: Run on-the-fly comparison
         run: |
-          python nrpy/examples/tests/sebob_consistency_check.py
+          python nrpy/examples/tests/sebob_consistency_check.py --trusted-exec ./trusted_code/project/seobnrv5_aligned_spin_inspiral --current-exec ./project/seobnrv5_aligned_spin_inspiral
+
+      - name: Clean up
+        run: |
+          (cd trusted_code/project/seobnrv5_aligned_spin_inspiral && make clean) &&
+          (cd project/seobnrv5_aligned_spin_inspiral && make clean)

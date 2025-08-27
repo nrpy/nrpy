@@ -41,7 +41,16 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients() -> (
     params = "commondata_struct *restrict commondata"
     v5_const = SEOBNRv5_const.SEOBNR_aligned_spin_constants()
     body = """
-const REAL q = commondata->mass_ratio;
+REAL q = commondata->mass_ratio;
+REAL eta = q / (1.0 + q) / (1.0 + q);
+if (eta > 0.25){
+  if (fabs(q - 1.) < 1e-13){
+    q = 1.;
+  } else{
+    printf("mass ratio = %.15e causes eta = %.15e > 0.25\\n",q,eta);
+    exit(EXIT_FAILURE);
+  }
+}
 commondata->m1 = q / (1.0 + q);
 commondata->m2 = 1.0 / (1.0 + q);
 const REAL m1 = commondata->m1;
