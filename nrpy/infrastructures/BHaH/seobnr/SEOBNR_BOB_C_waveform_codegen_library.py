@@ -51,10 +51,13 @@ for (size_t i = 1; i < nsteps_arr; i++){
     return pcg.NRPyEnv()
 
 
-def register_CFunction_SEOBNRv5_NQC_corrections() -> Union[None, pcg.NRPyEnv_type]:
+def register_CFunction_SEOBNRv5_NQC_corrections(
+    use_numerical_relativity_nqc: bool,
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register CFunction for evaluating the Non Quasi-Circular (NQC) corrections for the SEOBNRv5 waveform.
 
+    :param use_numerical_relativity_nqc: Flag to specify if NQCs are informed by NR fits or BOB.
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
@@ -125,16 +128,20 @@ else{
 
 REAL t_peak = commondata->t_ISCO - commondata->Delta_t;
 size_t peak_idx;
+// if t_peak > the last point of the ODE trajector,
+// use the second last point in time for t_peak, instead of the last point as in pySEOBNR.
+// gsl's cubic spline uses natural boundary conditions that sets second derivatives to zero
+// resulting in a singular matrix.
 if (t_peak > times[commondata->nsteps_fine - 1]){
-  t_peak = times[commondata->nsteps_fine - 1];
-  peak_idx = commondata->nsteps_fine - 1;
+  t_peak = times[commondata->nsteps_fine - 2];
+  peak_idx = commondata->nsteps_fine - 2;
 }
 else{
   peak_idx = gsl_interp_bsearch(times, t_peak, 0, commondata->nsteps_fine);
 }
 commondata->t_attach = t_peak;
 size_t N = 5;
-size_t left = MAX(peak_idx - N, 0);
+size_t left = MAX(peak_idx, N) - N;
 size_t right = MIN(peak_idx + N , commondata->nsteps_fine);
 REAL Q_cropped1[right - left], Q_cropped2[right - left], Q_cropped3[right - left], P_cropped1[right - left], P_cropped2[right - left];
 REAL t_cropped[right-left], phase_cropped[right - left], amp_cropped[right-left];
@@ -209,7 +216,16 @@ else{
 }
 
 REAL omegas[2] , amps[3];
+"""
+    if not use_numerical_relativity_nqc:
+        body += """
 BOB_aligned_spin_NQC_rhs(commondata,amps,omegas);
+"""
+    else:
+        body += """
+SEOBNRv5_aligned_spin_NQC_rhs(commondata,amps,omegas);
+"""
+    body += """
 gsl_vector_set(A , 0 , amps[0] - amp_insp);
 gsl_vector_set(A , 1 , amps[1] - ampdot_insp);
 gsl_vector_set(A , 2 , amps[2] - ampddot_insp);
@@ -324,7 +340,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_interpolate_modes() -> (
     body = """
 size_t i;
 const size_t nsteps_inspiral_old = commondata->nsteps_inspiral;
-const size_t nsteps_new = (size_t) (commondata->waveform_inspiral[IDX_WF(commondata->nsteps_inspiral - 1,TIME)] - commondata->waveform_inspiral[IDX_WF(0,TIME)]) / dT;
+const size_t nsteps_new = (size_t) ((commondata->waveform_inspiral[IDX_WF(commondata->nsteps_inspiral - 1,TIME)] - commondata->waveform_inspiral[IDX_WF(0,TIME)]) / dT) + 1; 
 // build the complex inspiral modes
 REAL *restrict times_old = (REAL *)malloc(nsteps_inspiral_old * sizeof(REAL));
 REAL *restrict orbital_phases = (REAL *)malloc(nsteps_inspiral_old * sizeof(REAL));
@@ -393,12 +409,13 @@ free(h22_nophase_imag);
     return pcg.NRPyEnv()
 
 
-def register_CFunction_SEOBNRv5_aligned_spin_IMR_waveform() -> (
-    Union[None, pcg.NRPyEnv_type]
-):
+def register_CFunction_SEOBNRv5_aligned_spin_IMR_waveform(
+    use_seobnrv5_merger_ringdown: bool,
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register CFunction for evaluating the (2,2) IMR mode for the SEOBNRv5 waveform.
 
+    :param use_seobnrv5_merger_ringdown: Flag to specify whether or not to use the native SEOBNRv5 merger ringdown model instead of BOB.
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
@@ -435,7 +452,6 @@ if (idx_match == commondata->nsteps_inspiral - 1){
   idx_match--;
 }
 const REAL t_match = times_new[idx_match];
-const REAL phase_match = h22_phase_new[idx_match + 1];
 const size_t nsteps_ringdown = 15 * (size_t) (commondata->tau_qnm / dT);
 REAL *restrict ringdown_time = (REAL *)malloc(nsteps_ringdown*sizeof(REAL));
 REAL *restrict ringdown_amp = (REAL *)malloc(nsteps_ringdown*sizeof(REAL));
@@ -443,15 +459,48 @@ REAL *restrict ringdown_phase = (REAL *)malloc(nsteps_ringdown*sizeof(REAL));
 for(i = 0; i < nsteps_ringdown; i++){
   ringdown_time[i] = t_match + (i + 1) * dT;
 }
+"""
+    if use_seobnrv5_merger_ringdown:
+        body += """
+size_t left = MAX(5,idx_match) - 5;
+size_t right = MIN(commondata->nsteps_inspiral,idx_match + 5);
+REAL times_cropped[right-left] , amps_cropped[right-left] , phases_cropped[right-left];
+for (i = left; i < right; i++){
+  times_cropped[i - left] = times_new[i];
+  amps_cropped[i - left] = h22_amp_new[i];
+  phases_cropped[i - left] = h22_phase_new[i];
+}
+gsl_interp_accel *restrict acc = gsl_interp_accel_alloc();
+gsl_spline *restrict spline = gsl_spline_alloc(gsl_interp_cspline, right - left);
+gsl_spline_init(spline,times_cropped, amps_cropped,right-left);
+const REAL h_0 = gsl_spline_eval(spline, t_match, acc);
+const REAL hdot_0 = gsl_spline_eval_deriv(spline, t_match, acc);
+
+gsl_spline_init(spline,times_cropped, phases_cropped,right-left);
+gsl_interp_accel_reset(acc);
+const REAL phi_0 = gsl_spline_eval(spline, t_match, acc);
+const REAL phidot_0 = gsl_spline_eval_deriv(spline, t_match, acc);
+
+gsl_spline_free(spline);
+gsl_interp_accel_free(acc);
+
+
+SEOBNRv5_aligned_spin_merger_waveform_from_times(ringdown_time,ringdown_amp,ringdown_phase,h_0,hdot_0,phi_0,phidot_0,nsteps_ringdown,commondata);
+"""
+    else:
+        body += """
+const REAL phase_match = h22_phase_new[idx_match + 1];
 BOB_aligned_spin_waveform_from_times(ringdown_time,ringdown_amp,ringdown_phase,nsteps_ringdown,commondata);
-const REAL true_sign = copysign(phase_match,1.);
+const REAL true_sign = copysign(1.,phase_match);
 for(i = 0; i < nsteps_ringdown; i++){
   ringdown_phase[i] = true_sign*ringdown_phase[i] + phase_match;
 }
+"""
+    body += """
 commondata->nsteps_IMR = idx_match + 1 + nsteps_ringdown;
 commondata->waveform_IMR = (double complex *)malloc(NUMMODES * commondata->nsteps_IMR*sizeof(double complex));
 for (i = 0; i <= idx_match; i++){
-  commondata->waveform_IMR[IDX_WF(i,TIME)] = times_new[i];
+  commondata->waveform_IMR[IDX_WF(i,TIME)] = times_new[i] - commondata->t_attach;
   h22 = h22_amp_new[i] * cexp(I * h22_phase_new[i]);
   commondata->waveform_IMR[IDX_WF(i,STRAIN)] = h22;
 }
@@ -460,7 +509,7 @@ free(h22_phase_new);
 free(times_new);
 
 for(i = 0; i < nsteps_ringdown; i++){
-  commondata->waveform_IMR[IDX_WF(i + 1 + idx_match,TIME)] = ringdown_time[i];
+  commondata->waveform_IMR[IDX_WF(i + 1 + idx_match,TIME)] = ringdown_time[i] - commondata->t_attach;
   h22 = ringdown_amp[i] * cexp(I * ringdown_phase[i]);
   commondata->waveform_IMR[IDX_WF(i + 1 + idx_match,STRAIN)] = h22;
 }

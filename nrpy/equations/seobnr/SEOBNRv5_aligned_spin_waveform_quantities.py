@@ -1,83 +1,35 @@
 """
-Construct symbolic expression for the SEOBNRv5 aligned-spin gravitational-wave strain and flux.
+Construct the SEOBNRv5 factorized modes for aligned-spin binaries.
 
 Authors: Siddharth Mahesh
-        sm0193 **at** mix **dot** wvu **dot** edu
-        Zachariah B. Etienne
-        zachetie **at** gmail **dot* com
+sm0193 at mix dot wvu dot edu
+Zachariah B. Etienne
+zachetie at gmail *dot com
+
+The factorized-resummed modes are central to the Effective-One-Body (EOB) formalism, which maps the
+conservative part of the two-body problem to the motion of an effective particle in a deformed metric.
+This approach combines post-Newtonian (PN) theory with numerical relativity (NR)
+calibrations to model the inspiral phase of a binary black hole merger.
+
+The modes is expressed in terms of the binary masses (m1, m2), spins (chi1, chi2),
+canonical variables (r, phi, prstar, pphi), and Hamiltonian quantities (Hreal, Omega, Omega_circ)
+(see Equations 25-35 and Appendix B of https://arxiv.org/pdf/2303.18039 for the full list of terms).
+It is also used in the SEBOB formalism described in Mahesh, McWilliams, and Etienne,
+"Spinning Effective-to-Backwards-One Body".
 
 License: BSD 2-Clause
 """
 
 # Step P1: Import needed modules:
-from typing import Any, Dict, List
+from typing import Dict
 
 import sympy as sp
 
 from nrpy.equations.grhd.Min_Max_and_Piecewise_Expressions import coord_greater_bound
+from nrpy.helpers.float_to_rational import f2r
 
 # The name of this module ("WaveEquation") is given by __name__:
 thismodule = __name__
-
-
-def complex_mult(z1: List[Any], z2: List[Any]) -> List[Any]:
-    """
-    Multiply two complex numbers given as list of real and imaginary parts.
-
-    This functions takes two lists containing the real and imaginary part of a complex number
-    and returns a list with the real and imaginary part of the resulting multiple.
-
-    :param z1: Complex number 1 as list [Real(z1),Imag(z1)]
-    :param z2: Complex number 2 as list [Real(z2),Imag(z2)]
-    :return: Complex number z1 x z2 as list [Real(z1*z2),Imag(z1*z2)]
-
-    >>> z1 = [1,2]
-    >>> z2 = [3,5]
-    >>> complex_mult(z1,z2)
-    [-7, 11]
-
-    >>> import sympy as sp
-    >>> x1 , y1 , x2 , y2 = sp.symbols('x1 y1 x2 y2',real = True)
-    >>> z1 = [x1,y1]
-    >>> z2 = [x2,y2]
-    >>> complex_mult(z1,z2)
-    [x1*x2 - y1*y2, x1*y2 + x2*y1]
-    """
-    # complex multiplication
-    # z1 = x1 + I*y1
-    # z2 = x2 + I*y2
-    # z1*z2 = x1*x2 - y1*y2 + I*(x1*y2 + x2*y1)
-    RE = 0
-    IM = 1
-    return [z1[RE] * z2[RE] - z1[IM] * z2[IM], z1[RE] * z2[IM] + z1[IM] * z2[RE]]
-
-
-def f2r(input_float: float) -> sp.Rational:
-    """
-    Convert a floating-point number to a high-precision rational number.
-
-    This function takes a floating-point number, converts it to a string,
-    and appends 60 zeros to increase the precision of the conversion to a rational number.
-
-    :param input_float: The floating-point number to convert.
-    :return: A sympy Rational number with high precision.
-
-    >>> f2r(0.1)
-    1/10
-    >>> f2r(1.5)
-    3/2
-    >>> f2r(2.0)
-    2
-    """
-    # Convert the input float to a string
-    float_as_string = str(input_float)
-
-    # Ensure the string has a decimal point
-    if "." not in float_as_string:
-        float_as_string = f"{float_as_string}."
-
-    # Append 60 zeros after the decimal of the floating point number to increase precision
-    return sp.Rational(float_as_string + "0" * 60)
 
 
 class SEOBNRv5_aligned_spin_waveform_quantities:
@@ -85,12 +37,23 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
 
     def __init__(self) -> None:
         """
-        Compute the SEOBNRv5 aligned-spin Hamiltonian.
+        Compute the SEOBNRv5 aligned-spin gravitational-wave strain and flux.
 
         This constructor sets up the necessary symbolic variables and expressions
         used in the computation of the aligned-spin SEOBNRv5 flux and strain. It
         initializes class variables like mass parameters, spin parameters, and
         various coefficients required for the waveforms's multipole modes.
+        The key outputs of the SEOBNRv5_aligned_spin_waveform_quantities class are:
+            - 'rholm',
+            - 'deltalm',
+            - 'fspin': The factorized modes
+                        (Appendix B of https://arxiv.org/pdf/2303.18039).
+            - 'flux': The factorized-resummed flux
+                        needed for ODE integration
+                        (Equation 16 of https://arxiv.org/pdf/2303.18039).
+            - 'hlms': The factorized waveform modes
+                        (For now, only the (l=2,m=2) mode is computed)
+                        (Equation 25-34 of https://arxiv.org/pdf/2303.18039).
 
         Inputs: 'm1', 'm2', 'r', 'phi', 'prstar', 'pphi', 'chi1', 'chi2', 'Hreal', 'Omega' and 'Omega_circ'
         Outputs: 'flux' and 'hlms'
@@ -134,6 +97,8 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
         self.chi_A = sp.Rational(1, 2) * (chi1 - chi2)
         self.chi_S = sp.Rational(1, 2) * (chi1 + chi2)
         self.vomega = self.Omega ** (sp.Rational(1, 3))
+        self.a = (1 - 2 * self.nu) * self.chi_S + self.delta * self.chi_A
+        a2 = self.a**2
         self.vphi = self.Omega * (self.Omega_circ ** (-sp.Rational(2, 3)))
         self.vh3 = self.Omega * self.Hreal
         Heff = (self.Hreal**2 - 1) / (2 * self.nu) + 1
@@ -1149,6 +1114,8 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             * (
                 sp.Rational(9202, 2205) * eulerlog[2]
                 - sp.Rational(387216563023, 160190110080)
+                + (18353.0 * a2) / 21168.0
+                - a2 * a2 / 8.0
             )
             + self.vomega**10
             * (
@@ -1189,65 +1156,95 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             )
         )
         self.Y = [
-            [0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [f2r(0), f2r(0), f2r(0), f2r(0), f2r(0), f2r(0), f2r(0), f2r(0), f2r(0)],
             [
-                0,
+                f2r(0),
                 f2r(0.3454941494713355),
-                0,
+                f2r(0),
                 f2r(0.3231801841141506),
-                0,
+                f2r(0),
                 f2r(0.32028164857621516),
-                0,
+                f2r(0),
                 f2r(0.31937046138540076),
-                0,
+                f2r(0),
             ],
             [
-                0,
-                0,
+                f2r(0),
+                f2r(0),
                 f2r(0.3862742020231896),
-                0,
+                f2r(0),
                 f2r(0.33452327177864466),
-                0,
+                f2r(0),
                 f2r(0.32569524293385776),
-                0,
+                f2r(0),
                 f2r(0.32254835519288305),
             ],
             [
-                0,
-                0,
-                0,
+                f2r(0),
+                f2r(0),
+                f2r(0),
                 f2r(0.4172238236327842),
-                0,
+                f2r(0),
                 f2r(0.34594371914684025),
-                0,
+                f2r(0),
                 f2r(0.331899519333737),
-                0,
+                f2r(0),
             ],
             [
-                0,
-                0,
-                0,
-                0,
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0),
                 f2r(0.4425326924449826),
-                0,
+                f2r(0),
                 f2r(0.3567812628539981),
-                0,
+                f2r(0),
                 f2r(0.3382915688890245),
             ],
             [
-                0,
-                0,
-                0,
-                0,
-                0,
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0),
                 f2r(0.46413220344085826),
-                0,
+                f2r(0),
                 f2r(0.3669287245764378),
-                0,
+                f2r(0),
             ],
-            [0, 0, 0, 0, 0, 0, f2r(0.48308411358006625), 0, f2r(0.3764161087284946)],
-            [0, 0, 0, 0, 0, 0, 0, f2r(0.5000395635705508), 0],
-            [0, 0, 0, 0, 0, 0, 0, 0, f2r(0.5154289843972844)],
+            [
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0.48308411358006625),
+                f2r(0),
+                f2r(0.3764161087284946),
+            ],
+            [
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0.5000395635705508),
+                f2r(0),
+            ],
+            [
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0),
+                f2r(0.5154289843972844),
+            ],
         ]
         self.c = sp.zeros(10)
         for k in range(2, 10):

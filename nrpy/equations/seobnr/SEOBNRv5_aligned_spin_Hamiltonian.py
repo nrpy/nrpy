@@ -1,47 +1,31 @@
 """
-Construct symbolic expression for the SEOBNRv5 aligned-spin Hamiltonian and associated quantities.
+Construct the SEOBNRv5 Hamiltonian for aligned-spin binaries.
 
 Authors: Siddharth Mahesh
-        sm0193 **at** mix **dot** wvu **dot** edu
-        Zachariah B. Etienne
-        zachetie **at** gmail **dot* com
+sm0193 at mix dot wvu dot edu
+Zachariah B. Etienne
+zachetie at gmail *dot com
 
+The Hamiltonian is central to the Effective-One-Body (EOB) formalism, which maps the
+conservative part of the two-body problem to the motion of an effective particle in a deformed metric.
+This approach combines post-Newtonian (PN) theory with numerical relativity (NR)
+calibrations to model the inspiral phase of a binary black hole merger.
+
+The Hamiltonian is expressed in terms of the binary masses (m1, m2), spins (chi1, chi2), and
+canonical variable (r, phi, pr, pphi). This implementation is based on
+the SEOBNRv5HM model (see Section II.C of https://arxiv.org/pdf/2303.18143 for the full list of terms)
+and is used in the SEBOB formalism described in Mahesh, McWilliams, and Etienne,
+"Spinning Effective-to-Backwards-One Body".
 License: BSD 2-Clause
 """
 
 # Step P1: Import needed modules:
 import sympy as sp
 
+from nrpy.helpers.float_to_rational import f2r
+
 # The name of this module ("WaveEquation") is given by __name__:
 thismodule = __name__
-
-
-def f2r(input_float: float) -> sp.Rational:
-    """
-    Convert a floating-point number to a high-precision rational number.
-
-    This function takes a floating-point number, converts it to a string,
-    and appends 60 zeros to increase the precision of the conversion to a rational number.
-
-    :param input_float: The floating-point number to convert.
-    :return: A sympy Rational number with high precision.
-
-    >>> f2r(0.1)
-    1/10
-    >>> f2r(1.5)
-    3/2
-    >>> f2r(2.0)
-    2
-    """
-    # Convert the input float to a string
-    float_as_string = str(input_float)
-
-    # Ensure the string has a decimal point
-    if "." not in float_as_string:
-        float_as_string = f"{float_as_string}."
-
-    # Append 60 zeros after the decimal of the floating point number to increase precision
-    return sp.Rational(float_as_string + "0" * 60)
 
 
 class SEOBNRv5_aligned_spin_Hamiltonian_quantities:
@@ -56,6 +40,19 @@ class SEOBNRv5_aligned_spin_Hamiltonian_quantities:
         initializes class variables like mass parameters, spin parameters, and
         various coefficients required for the Hamiltonian's effective potential
         calculations.
+
+        The key outputs of the SEOBNRv5_aligned_spin_Hamiltonian_quantities class are:
+            - 'xi': The tortoise parameter
+                        (Equation 7 of https://arxiv.org/pdf/2303.18039).
+            - 'Hreal': The Hamiltonian
+                        (Equations 9, A1-A6 of https://arxiv.org/pdf/2303.18039).
+            - First derivatives of the Hamiltonian
+                        needed for ODE integration.
+            - First and second derivatives of the Hamiltonian
+                        needed for initial conditions.
+            - The instantaneous and circular frequency
+                        needed for waveform and flux calculations.
+
 
         Inputs: 'm1', 'm2', 'r', 'prstar', 'pphi', 'chi1', 'chi2', 'a6', and 'dSO'
         Outputs: 'xi' and 'Hreal'

@@ -1,103 +1,114 @@
 """
-Construct symbolic expression for the SEOBNRv5 aligned-spin constants.
+Construct the SEOBNRv5 NR-derived constants.
 
 Authors: Siddharth Mahesh
-        sm0193 **at** mix **dot** wvu **dot** edu
-        Zachariah B. Etienne
-        zachetie **at** gmail **dot* com
+sm0193 at mix dot wvu dot edu
+Zachariah B. Etienne
+zachetie at gmail *dot com
+
+The SEOBNRv5 model relies on NR-calibrated or inferred constants
+for improving the accuracy of the EOB Hamiltonian and merger-ringdown waveform.
+The Backwards-One Body (BOB) formalism relies on the properties of the remnant black hole
+for the merger-ringdown waveform and NQC corrections.
+The NR constants are expressed in terms of the binary masses (m1, m2), and spins (chi1, chi2).
 
 License: BSD 2-Clause
 """
 
 # Step P1: Import needed modules:
-from typing import Any, List
-
 import sympy as sp
 
 from nrpy.equations.grhd.Min_Max_and_Piecewise_Expressions import (
     coord_greater_bound,
     coord_less_bound,
 )
+from nrpy.helpers.float_to_rational import f2r
 
 # The name of this module ("WaveEquation") is given by __name__:
 thismodule = __name__
 
 
-def complex_mult(z1: List[Any], z2: List[Any]) -> List[Any]:
-    """
-    Multiply two complex numbers given as list of real and imaginary parts.
-
-    This functions takes two lists containing the real and imaginary part of a complex number
-    and returns a list with the real and imaginary part of the resulting multiple.
-
-    :param z1: Complex number 1 as list [Real(z1),Imag(z1)]
-    :param z2: Complex number 2 as list [Real(z2),Imag(z2)]
-    :return: Complex number z1 x z2 as list [Real(z1*z2),Imag(z1*z2)]
-
-    >>> z1 = [1,2]
-    >>> z2 = [3,5]
-    >>> complex_mult(z1,z2)
-    [-7, 11]
-
-    >>> import sympy as sp
-    >>> x1 , y1 , x2 , y2 = sp.symbols('x1 y1 x2 y2',real = True)
-    >>> z1 = [x1,y1]
-    >>> z2 = [x2,y2]
-    >>> complex_mult(z1,z2)
-    [x1*x2 - y1*y2, x1*y2 + x2*y1]
-    """
-    # complex multiplication
-    # z1 = x1 + I*y1
-    # z2 = x2 + I*y2
-    # z1*z2 = x1*x2 - y1*y2 + I*(x1*y2 + x2*y1)
-
-    return [z1[0] * z2[0] - z1[1] * z2[1], z1[0] * z2[1] + z1[1] * z2[0]]
-
-
-def f2r(input_float: float) -> sp.Rational:
-    """
-    Convert a floating-point number to a high-precision rational number.
-
-    This function takes a floating-point number, converts it to a string,
-    and appends 60 zeros to increase the precision of the conversion to a rational number.
-
-    :param input_float: The floating-point number to convert.
-    :return: A sympy Rational number with high precision.
-
-    >>> f2r(0.1)
-    1/10
-    >>> f2r(1.5)
-    3/2
-    >>> f2r(2.0)
-    2
-    """
-    # Convert the input float to a string
-    float_as_string = str(input_float)
-
-    # Ensure the string has a decimal point
-    if "." not in float_as_string:
-        float_as_string = f"{float_as_string}."
-
-    # Append 60 zeros after the decimal of the floating point number to increase precision
-    return sp.Rational(float_as_string + "0" * 60)
-
-
 class SEOBNR_aligned_spin_constants:
-    """Class for computing the BOB aligned-spin gravitational-wave strain and NQC corrections."""
+    """Class for computing the SEOBNR aligned-spin constants."""
 
     def __init__(self) -> None:
         """
-        Compute the BOB aligned-spin waveform.
+        Compute the SEOBNR aligned-spin constants.
 
         This constructor sets up the necessary symbolic variables and expressions
-        used in the computation of the aligned-spin BOB strain. It
+        used in the computation of the SEOBNR aligned-spin constants. It
         initializes class variables like mass parameters, spin parameters, and
-        various coefficients required for the waveforms's amplitude and phase.
+        computes the NR calibration as well as the remnant properties of the black hole.
+        The key outputs of the SEOBNRv5_aligned_spin_constants class are:
+            - 'a_6' : the pseudo-5PN non-spinning Hamiltonian
+                            calibration parameter for the SEOBNRv5 model.
+                            Equation 78 of https://arxiv.org/pdf/2303.18039.
+            - 'Delta_t' : the time delay between the peak of the (l=2,m=2) mode
+                            and the time when the EOB perturber crosses
+                            the innermost stable circular orbit (ISCO) of the remnant.
+                            Equation 79 & 80 of https://arxiv.org/pdf/2303.18039.
+            - 'd_SO' : the spin-orbit calibration parameter for the SEOBNRv5 model.
+                            Equation 81 of https://arxiv.org/pdf/2303.18039.
+            - 'a_f' : the final spin of the remnant black hole
+                            using https://arxiv.org/pdf/1605.01938 and implemented in
+                            https://lscsoft.docs.ligo.org/lalsuite/lalinference/nrutils_8py_source.html#l01020
+                            with inputs "M3J4" for M=3 and J=4.
+            - 'M_f' : the final mass of the remnant black hole
+                            using https://arxiv.org/abs/1611.00332 and implemented in
+                            bbh_final_mass_non_precessing_UIB2016() in
+                            https://arxiv.org/src/1611.00332v2/anc/FinalStateUIB2016.py
+                            with version="v2" as input.
+            - 'rISCO' : the ISCO radius of the remnant black hole.
+                            using Equation 2.21 of Bardeen, Press, and Teukolsky,
+                            https://ui.adsabs.harvard.edu/abs/1972ApJ...178..347B/abstract
+            - 'rstop' : the radius of the remnant black hole at the time of ISCO crossing.
+
         :return None:
         """
-        (m1, m2, chi1, chi2) = sp.symbols("m1 m2 chi1 chi2", real=True)
+        (self.m1, self.m2, self.chi1, self.chi2) = sp.symbols(
+            "m1 m2 chi1 chi2", real=True
+        )
+        # compute calibration parameters
+        self.compute_calibration_params()
+        # Final mass and spin computation
+        self.final_spin_non_precessing_HBR2016()
+        self.final_mass_non_precessing_UIB2016()
+        self.rISCO = self.Kerr_ISCO_radius(self.a_f)
+        self.rstop = -1 * coord_less_bound(self.Delta_t, 0).subs(
+            sp.Function("nrpyAbs"), sp.Abs
+        ) + f2r(0.98) * self.rISCO * coord_greater_bound(self.Delta_t, 0).subs(
+            sp.Function("nrpyAbs"), sp.Abs
+        )
 
-        # Delta_t computation
+    def Kerr_ISCO_radius(self, a: sp.core.mul.Mul) -> sp.core.mul.Mul:
+        """
+        Compute the radius of the innermost stable circular orbit (ISCO) of a Kerr black hole.
+
+        :param a: dimensionless spin parameter of the Kerr black hole.
+        :return: radius of the ISCO in Boyer-Lindquist coordinates.
+        """
+        # restrict a to 1.
+        a_ceil_one = (a + 1 - sp.Abs(a - 1)) / 2
+        z1 = 1 + (1 - a_ceil_one**2) ** (sp.Rational(1, 3)) * (
+            (1 + a_ceil_one) ** (sp.Rational(1, 3))
+            + (1 - a_ceil_one) ** (sp.Rational(1, 3))
+        )
+        z2 = sp.sqrt(3 * a_ceil_one**2 + z1**2)
+        a_sign = sp.sign(a_ceil_one)
+        return 3 + z2 - sp.sqrt((3 - z1) * (3 + z1 + 2 * z2)) * a_sign
+
+    def compute_calibration_params(
+        self,
+    ) -> None:
+        """
+        Compute the calibration parameters for the SEOBNRv5 aligned-spin model.
+
+        :return None:
+        """
+        m1 = self.m1
+        m2 = self.m2
+        chi1 = self.chi1
+        chi2 = self.chi2
         M = m1 + m2
         nu = m1 * m2 / M**2
         ap = (m1 * chi1 + m2 * chi2) / M**2
@@ -168,21 +179,22 @@ class SEOBNR_aligned_spin_constants:
         )
         self.Delta_t = Delta_t_NS + Delta_t_S
 
-        # Final mass and spin computation
-        atot = m1 * m1 * chi1 + m2 * m2 * chi2
-        aeff = atot + f2r(0.474046) * nu * (chi1 + chi2)
-        aeff_max1 = (aeff + 1 - sp.Abs(aeff - 1)) / 2
-        Z1eff = 1 + (sp.cbrt(1 - aeff_max1 * aeff_max1)) * (
-            sp.cbrt(1 + aeff_max1) + sp.cbrt(1 - aeff_max1)
-        )
-        Z2eff = sp.sqrt(3 * aeff_max1 * aeff_max1 + Z1eff * Z1eff)
-        rISCOeff = (
-            3 + Z2eff - sp.sign(aeff_max1) * sp.sqrt((3 - Z1eff) * (3 + Z1eff + Z2eff))
-        )
-        LISCOeff = (sp.Rational(2, 3) / sp.sqrt(3)) * (
-            1 + 2 * sp.sqrt(3 * rISCOeff - 2)
-        )
-        EISCOeff = sp.sqrt(1 - 2 / (3 * rISCOeff))
+    def final_spin_non_precessing_HBR2016(
+        self,
+    ) -> None:
+        """
+        Compute the final spin for the SEOBNRv5 aligned-spin model.
+        The spin is calculated using the non-precessing HBR2016 fits with version "M3J4"
+        as outlined in https://lscsoft.docs.ligo.org/lalsuite/lalinference/nrutils_8py_source.html
+
+        :return None:
+        """
+        m1 = self.m1
+        m2 = self.m2
+        chi1 = self.chi1
+        chi2 = self.chi2
+        nM = 3
+        nJ = 4
         k = sp.zeros(4, 5)
         k[0, 0] = -f2r(5.97723)
         k[0, 1] = f2r(3.39221)
@@ -204,28 +216,44 @@ class SEOBNR_aligned_spin_constants:
         k[3, 2] = -f2r(697.177)
         k[3, 3] = f2r(753.738)
         k[3, 4] = f2r(1166.89)
+        xi = f2r(0.474046)
+        q = m2 / m1
+        chi1z = chi1
+        chi2z = chi2
+        nu = m1 * m2 / (m1 + m2) ** 2
+        atot = (chi1z + chi2z * q * q) / ((1 + q) * (1 + q))
+        aeff = atot + xi * nu * (chi1z + chi2z)
+        rISCOeff = self.Kerr_ISCO_radius(aeff)
+        LISCOeff = (sp.Rational(2, 3) / sp.sqrt(3)) * (
+            1 + 2 * sp.sqrt(3 * rISCOeff - 2)
+        )
+        EISCOeff = sp.sqrt(1 - 2 / (3 * rISCOeff))
+        aeff_j = [1, aeff, aeff**2, aeff**3, aeff**4]
+        nu_i = [1, nu, nu**2, nu**3]
+        ksum = 0
+        for i in range(nM + 1):
+            for j in range(nJ + 1):
+                ksum += k[i, j] * nu_i[i] * aeff_j[j]
 
-        NRfactor = 0
-        nu_i = 1
-        for i in range(4):
-            aeff_j = 1
-            for j in range(5):
-                NRfactor += k[i, j] * nu_i * aeff_j
-                aeff_j *= aeff
-            nu_i *= nu
-        ell = sp.Abs(LISCOeff - 2 * atot * (EISCOeff - 1) + nu * NRfactor)
-        self.a_f = atot + nu * ell
-        Z1f = 1 + (sp.cbrt(1 - self.a_f * self.a_f)) * (
-            sp.cbrt(1 + self.a_f) + sp.cbrt(1 - self.a_f)
-        )
-        Z2f = sp.sqrt(3 * self.a_f * self.a_f + Z1f * Z1f)
-        self.rISCO = 3 + Z2f - sp.sign(self.a_f) * sp.sqrt((3 - Z1f) * (3 + Z1f + Z2f))
-        self.rstop = -1 * coord_less_bound(self.Delta_t, 0).subs(
-            sp.Function("nrpyAbs"), sp.Abs
-        ) + f2r(0.98) * self.rISCO * coord_greater_bound(self.Delta_t, 0).subs(
-            sp.Function("nrpyAbs"), sp.Abs
-        )
+        ell = sp.Abs(LISCOeff - 2 * atot * (EISCOeff - 1) + nu * ksum)
+        self.a_f = atot + ell / (1 / q + 2 + q)
+
+    def final_mass_non_precessing_UIB2016(
+        self,
+    ) -> None:
+        """
+        Compute the final mass for the SEOBNRv5 aligned-spin model.
+        The mass is calculated using the non-precessing UIB2016 fits with version "v2"
+        as outlined in https://lscsoft.docs.ligo.org/lalsuite/lalinference/nrutils_8py_source.html
+
+        :return None:
+        """
+        m1 = self.m1
+        m2 = self.m2
+        chi1 = self.chi1
+        chi2 = self.chi2
         Shat = (m1 * m1 * chi1 + m2 * m2 * chi2) / (m1 * m1 + m2 * m2)
+        nu = m1 * m2 / (m1 + m2) ** 2
         Shat2 = Shat * Shat
         Shat3 = Shat2 * Shat
         nu2 = nu * nu
