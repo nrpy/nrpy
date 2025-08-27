@@ -15,28 +15,29 @@ from typing import Union
 import sympy as sp
 
 
-def f2r(input_float: float, do_nothing: bool = False) -> Union[float, sp.Rational]:
+def f2r(
+    input_float: Union[float, str],
+    zpad: int = 60,
+) -> Union[float, sp.Rational]:
     """
-    Convert a floating-point number to a high-precision rational number.
+    Convert a float-like number to a high-precision sympy.Rational number.
 
-    This function takes a floating-point number, converts it to a string,
-    and appends 60 zeros to increase the precision of the conversion to a rational number.
+    This helper reduces decimal-to-binary rounding noise before constructing
+    a Rational. It is useful when building closed-form targets or attachment
+    conditions derived from the BOB model, where tiny float errors can leak
+    into symbolic solves and generated C code.
 
-    :param input_float: The floating-point number to convert.
-    :param do_nothing: Boolean flag to return the input float (for debugging, default is False).
-    :return: Original float if do_nothing is True, else a sympy Rational number with high precision.
+    :param input_float: Float-like input. Accepts float, mpmath.mpf or string.
+    :param zpad: Number of zeros to append after the decimal point (default is 60).
+    :return: A sympy Rational number with high precision.
 
     >>> f2r(0.1)
     1/10
     >>> f2r(1.5)
     3/2
-    >>> f2r(2.0,do_nothing=True)
-    2.0
+    >>> f2r("2.0",zpad=2)
+    2
     """
-    # if do_nothing is True, return the input float
-    if do_nothing:
-        return input_float
-    # Convert the input float to a string
     float_as_string = str(input_float)
 
     # Ensure the string has a decimal point
@@ -44,4 +45,4 @@ def f2r(input_float: float, do_nothing: bool = False) -> Union[float, sp.Rationa
         float_as_string = f"{float_as_string}."
 
     # Append 60 zeros after the decimal of the floating point number to increase precision
-    return sp.Rational(float_as_string + "0" * 60)
+    return sp.Rational(float_as_string + "0" * zpad)
