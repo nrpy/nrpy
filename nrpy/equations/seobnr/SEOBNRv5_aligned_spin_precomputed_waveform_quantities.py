@@ -1,14 +1,27 @@
 """
-Construct symbolic expression for the SEOBNRv5 aligned-spin gravitational-wave strain and flux when precomputing the waveform coefficients.
-The coefficients entering the expressions for the strain and flux are
-functions of mass ratio and spin. Since the spins do not evolve when they are aligned,
-we can compute these coefficients once at the start of the code to accelerate
-the computation of fluxes and strain.
+Construct the SEOBNRv5 factorized modes for aligned-spin binaries.
 
 Authors: Siddharth Mahesh
-        sm0193 **at** mix **dot** wvu **dot** edu
-        Zachariah B. Etienne
-        zachetie **at** gmail **dot* com
+sm0193 at mix dot wvu dot edu
+Zachariah B. Etienne
+zachetie at gmail *dot com
+
+The factorized-resummed modes are central to the Effective-One-Body (EOB) formalism, which maps the
+conservative part of the two-body problem to the motion of an effective particle in a deformed metric.
+This approach combines post-Newtonian (PN) theory with numerical relativity (NR)
+calibrations to model the inspiral phase of a binary black hole merger.
+
+The modes is expressed in terms of the binary masses (m1, m2), spins (chi1, chi2),
+canonical variables (r, phi, prstar, pphi), and Hamiltonian quantities (Hreal, Omega, Omega_circ)
+(see Equations 25-35 and Appendix B of https://arxiv.org/pdf/2303.18039 for the full list of terms).
+It is also used in the SEBOB formalism described in Mahesh, McWilliams, and Etienne,
+"Spinning Effective-to-Backwards-One Body".
+
+This module differs from nrpy.equations.seobnr.SEOBNRv5_aligned_spin_waveform_quantities
+in that it is designed for C codes that precompute and store the waveform coefficients
+entering the expressions for the strain and flux for performance testing.
+The precomputing of coefficients did not have any impact on the performance of the C code,
+but the functionality is retained for posterity.
 
 License: BSD 2-Clause
 """
@@ -30,12 +43,23 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
 
     def __init__(self) -> None:
         """
-        Compute the SEOBNRv5 aligned-spin Hamiltonian.
+        Compute the SEOBNRv5 aligned-spin gravitational-wave strain and flux.
 
         This constructor sets up the necessary symbolic variables and expressions
         used in the computation of the aligned-spin SEOBNRv5 flux and strain. It
         initializes class variables like mass parameters, spin parameters, and
         various coefficients required for the waveforms's multipole modes.
+        The key outputs of the SEOBNRv5_aligned_spin_waveform_quantities class are:
+            - 'rholm',
+            - 'deltalm',
+            - 'fspin': The factorized modes
+                        (Appendix B of https://arxiv.org/pdf/2303.18039).
+            - 'flux': The factorized-resummed flux
+                        needed for ODE integration
+                        (Equation 16 of https://arxiv.org/pdf/2303.18039).
+            - 'hlms': The factorized waveform modes
+                        (For now, only the (l=2,m=2) mode is computed)
+                        (Equation 25-34 of https://arxiv.org/pdf/2303.18039).
 
         Inputs: 'm1', 'm2', 'r', 'phi', 'prstar', 'pphi', 'chi1', 'chi2', 'Hreal', 'Omega' and 'Omega_circ'
         Outputs: 'flux' and 'hlms'

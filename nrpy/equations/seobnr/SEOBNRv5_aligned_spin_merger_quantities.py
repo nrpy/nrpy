@@ -1,11 +1,29 @@
 """
-Construct symbolic expression for the SEOBNRv5 symbolic aligned-spin gravitational-wave merger strain and NQC corrections.
+Construct the native SEOBNRv5 merger-ringdown (l=2,m=2) mode and NQC correction factors for aligned-spin binaries.
 
 Authors: Siddharth Mahesh
-        sm0193 **at** mix **dot** wvu **dot** edu
-        Zachariah B. Etienne
-        zachetie **at** gmail **dot* com
+sm0193 at mix dot wvu dot edu
+Zachariah B. Etienne
+zachetie at gmail *dot com
 
+The phenomenological modes documented below are attached as the merger-ringdown component
+to inspiral waveforms generated using the Effective-One-Body (EOB) formalism, which maps
+the conservative part of the two-body problem to the motion of an effective particle in a deformed metric.
+This approach combines post-Newtonian (PN) theory with numerical relativity (NR)
+calibrations to model the inspiral phase of a binary black hole merger.
+
+The Non Quasi-Circular corrections are performed by the SEOBNRv5 model
+to ensure that the inspiral waveform matches the NR waveform
+at the peak of the (l=2,m=2) strain mode up to second derivatives in amplitude and phase.
+See Appendix B of https://arxiv.org/pdf/2303.18039 for the full list of NQC terms.
+
+The modes are expressed in terms of the binary masses (m1, m2), spins (chi1, chi2),
+the quasi-normal modes of the remnant black hole (omega_qnm, tau_qnm),
+and initial conditions derived from the inspiral waveform (t_0, h_0, hdot_0, phi_0, phidot_0)
+(see Equations 48-53 and Appendix B of https://arxiv.org/pdf/2303.18039 for the full list of terms).
+These are used for documenting the native SEOBNRv5 model in NRPy
+and as part of the analysis of the SEBOB formalism  described in Mahesh, McWilliams, and Etienne,
+"Spinning Effective-to-Backwards-One Body".
 License: BSD 2-Clause
 """
 
@@ -29,6 +47,22 @@ class SEOBNRv5_aligned_spin_merger_quantities:
         used in the computation of the SEOBNRv5 aligned-spin merger strain. It
         initializes class variables like mass parameters, spin parameters, and
         various coefficients required for the waveforms's amplitude and phase.
+        The key outputs of the SEOBNRv5_aligned_spin_merger_quantities class are:
+            - 'h' : the amplitude of the merger-ringdown (l=2,m=2) mode.
+            - 'phi' : the phase of the merger-ringdown (l=2,m=2) mode.
+            - 'h_t_attach' : the NR-fitted strain amplitude of the (l=2,m=2) mode
+                                at the NQC attachment time.
+                                (Equation C8 of https://arxiv.org/pdf/2303.18039)
+            - 'hddot_t_attach' : the NR-fitted second time derivative of the strain amplitude (l=2,m=2) mode
+                                at the NQC attachment time.
+                                (Equation C22 of https://arxiv.org/pdf/2303.18039)
+            - 'w_t_attach' : the NR-fitted angular frequency of the (l=2,m=2) mode
+                                at the NQC attachment time.
+                                (Equation C29 of https://arxiv.org/pdf/2303.18039)
+            - 'wdot_t_attach' : the NR-fitted first time derivative of the angular frequency of the (l=2,m=2) mode
+                                at the NQC attachment time.
+                                (Equation C36 of https://arxiv.org/pdf/2303.18039)
+
         :return None:
         """
         (

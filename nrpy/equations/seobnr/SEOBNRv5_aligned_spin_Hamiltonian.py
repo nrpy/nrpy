@@ -1,11 +1,21 @@
 """
-Construct symbolic expression for the SEOBNRv5 aligned-spin Hamiltonian and associated quantities.
+Construct the SEOBNRv5 Hamiltonian for aligned-spin binaries.
 
 Authors: Siddharth Mahesh
-        sm0193 **at** mix **dot** wvu **dot** edu
-        Zachariah B. Etienne
-        zachetie **at** gmail **dot* com
+sm0193 at mix dot wvu dot edu
+Zachariah B. Etienne
+zachetie at gmail *dot com
 
+The Hamiltonian is central to the Effective-One-Body (EOB) formalism, which maps the
+conservative part of the two-body problem to the motion of an effective particle in a deformed metric.
+This approach combines post-Newtonian (PN) theory with numerical relativity (NR)
+calibrations to model the inspiral phase of a binary black hole merger.
+
+The Hamiltonian is expressed in terms of the binary masses (m1, m2), spins (chi1, chi2), and
+canonical variable (r, phi, pr, pphi). This implementation is based on
+the SEOBNRv5HM model (see Section II.C of https://arxiv.org/pdf/2303.18143 for the full list of terms)
+and is used in the SEBOB formalism described in Mahesh, McWilliams, and Etienne,
+"Spinning Effective-to-Backwards-One Body".
 License: BSD 2-Clause
 """
 
@@ -30,6 +40,19 @@ class SEOBNRv5_aligned_spin_Hamiltonian_quantities:
         initializes class variables like mass parameters, spin parameters, and
         various coefficients required for the Hamiltonian's effective potential
         calculations.
+
+        The key outputs of the SEOBNRv5_aligned_spin_Hamiltonian_quantities class are:
+            - 'xi': The tortoise parameter
+                        (Equation 7 of https://arxiv.org/pdf/2303.18039).
+            - 'Hreal': The Hamiltonian
+                        (Equations 9, A1-A6 of https://arxiv.org/pdf/2303.18039).
+            - First derivatives of the Hamiltonian
+                        needed for ODE integration.
+            - First and second derivatives of the Hamiltonian
+                        needed for initial conditions.
+            - The instantaneous and circular frequency
+                        needed for waveform and flux calculations.
+
 
         Inputs: 'm1', 'm2', 'r', 'prstar', 'pphi', 'chi1', 'chi2', 'a6', and 'dSO'
         Outputs: 'xi' and 'Hreal'

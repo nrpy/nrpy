@@ -1,10 +1,16 @@
 """
-Construct symbolic expression for the SEOBNRv5 aligned-spin constants.
+Construct the SEOBNRv5 NR-derived constants.
 
 Authors: Siddharth Mahesh
-        sm0193 **at** mix **dot** wvu **dot** edu
-        Zachariah B. Etienne
-        zachetie **at** gmail **dot* com
+sm0193 at mix dot wvu dot edu
+Zachariah B. Etienne
+zachetie at gmail *dot com
+
+The SEOBNRv5 model relies on NR-calibrated or inferred constants
+for improving the accuracy of the EOB Hamiltonian and merger-ringdown waveform.
+The Backwards-One Body (BOB) formalism relies on the properties of the remnant black hole
+for the merger-ringdown waveform and NQC corrections.
+The NR constants are expressed in terms of the binary masses (m1, m2), and spins (chi1, chi2).
 
 License: BSD 2-Clause
 """
@@ -23,16 +29,40 @@ thismodule = __name__
 
 
 class SEOBNR_aligned_spin_constants:
-    """Class for computing the BOB aligned-spin gravitational-wave strain and NQC corrections."""
+    """Class for computing the SEOBNR aligned-spin constants."""
 
     def __init__(self) -> None:
         """
-        Compute the BOB aligned-spin waveform.
+        Compute the SEOBNR aligned-spin constants.
 
         This constructor sets up the necessary symbolic variables and expressions
-        used in the computation of the aligned-spin BOB strain. It
+        used in the computation of the SEOBNR aligned-spin constants. It
         initializes class variables like mass parameters, spin parameters, and
-        various coefficients required for the waveforms's amplitude and phase.
+        computes the NR calibration as well as the remnant properties of the black hole.
+        The key outputs of the SEOBNRv5_aligned_spin_constants class are:
+            - 'a_6' : the pseudo-5PN non-spinning Hamiltonian
+                            calibration parameter for the SEOBNRv5 model.
+                            Equation 78 of https://arxiv.org/pdf/2303.18039.
+            - 'Delta_t' : the time delay between the peak of the (l=2,m=2) mode
+                            and the time when the EOB perturber crosses
+                            the innermost stable circular orbit (ISCO) of the remnant.
+                            Equation 79 & 80 of https://arxiv.org/pdf/2303.18039.
+            - 'd_SO' : the spin-orbit calibration parameter for the SEOBNRv5 model.
+                            Equation 81 of https://arxiv.org/pdf/2303.18039.
+            - 'a_f' : the final spin of the remnant black hole
+                            using https://arxiv.org/pdf/1605.01938 and implemented in
+                            https://lscsoft.docs.ligo.org/lalsuite/lalinference/nrutils_8py_source.html#l01020
+                            with inputs "M3J4" for M=3 and J=4.
+            - 'M_f' : the final mass of the remnant black hole
+                            using https://arxiv.org/abs/1611.00332 and implemented in
+                            bbh_final_mass_non_precessing_UIB2016() in
+                            https://arxiv.org/src/1611.00332v2/anc/FinalStateUIB2016.py
+                            with version="v2" as input.
+            - 'rISCO' : the ISCO radius of the remnant black hole.
+                            using Equation 2.21 of Bardeen, Press, and Teukolsky,
+                            https://ui.adsabs.harvard.edu/abs/1972ApJ...178..347B/abstract
+            - 'rstop' : the radius of the remnant black hole at the time of ISCO crossing.
+
         :return None:
         """
         (self.m1, self.m2, self.chi1, self.chi2) = sp.symbols(
