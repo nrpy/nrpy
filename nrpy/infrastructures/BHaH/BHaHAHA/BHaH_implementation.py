@@ -168,136 +168,13 @@ def register_bhahaha_commondata_and_params(max_horizons: int) -> None:
     )
 
 
-def build_bhahaha_prefunc(
-    CoordSystem: str,
-    add_bhahaha_gf_interp_ind_to_bhah_defines: bool = False,
-) -> str:
+def string_for_static_func_initialize_bhahaha_solver_params_and_shapes() -> str:
+    r"""
+    Generate the C string for initialize_bhahaha_solver_params_and_shapes static function.
+
+    :return: Raw C string.
     """
-    Construct the C prelude used by the generated horizon-finder function.
-    Includes:
-      * FINAL_ADM_METRIC_INDICES and INTERP_BSSN_GF_INDICES enums
-      * bhahaha_gf_interp_indices[] mapping
-      * timing helper (timeval_to_seconds)
-      * input validation (check_multigrid_resolution_inputs)
-      * per-horizon init/free helpers
-      * interpolation + BSSN→ADM transformation routine
-
-    :param CoordSystem: CoordSystem of project, where horizon finding will take place.
-    :param add_bhahaha_gf_interp_ind_to_bhah_defines: add to BHaH_defines.h instead of defining here.
-    :return: Raw C string to be injected as the function preamble.
-    :raises ValueError: If ``EvolvedConformalFactor_cf`` is set to an unsupported value.
-    """
-    prefunc = r"""
-// Enum for indexing the final ADM metric components BHaHAHA expects.
-enum FINAL_ADM_METRIC_INDICES {
-  FINAL_INTERP_GAMMADDXXGF,
-  FINAL_INTERP_GAMMADDXYGF,
-  FINAL_INTERP_GAMMADDXZGF,
-  FINAL_INTERP_GAMMADDYYGF,
-  FINAL_INTERP_GAMMADDYZGF,
-  FINAL_INTERP_GAMMADDZZGF,
-  FINAL_INTERP_KDDXXGF,
-  FINAL_INTERP_KDDXYGF,
-  FINAL_INTERP_KDDXZGF,
-  FINAL_INTERP_KDDYYGF,
-  FINAL_INTERP_KDDYZGF,
-  FINAL_INTERP_KDDZZGF,
-  BHAHAHA_NUM_METRIC_COMPONENTS
-}; // END ENUM: FINAL_ADM_METRIC_INDICES
-"""
-
-    enum_INTERP_BSSN_GF_INDICES_parts = """INTERP_ADD00GF_IDX,
-  INTERP_ADD01GF_IDX,
-  INTERP_ADD02GF_IDX,
-  INTERP_ADD11GF_IDX,
-  INTERP_ADD12GF_IDX,
-  INTERP_ADD22GF_IDX,
-  INTERP_CFGF_IDX,
-  INTERP_HDD00GF_IDX,
-  INTERP_HDD01GF_IDX,
-  INTERP_HDD02GF_IDX,
-  INTERP_HDD11GF_IDX,
-  INTERP_HDD12GF_IDX,
-  INTERP_HDD22GF_IDX,
-  INTERP_TRKGF_IDX,"""
-
-    if not add_bhahaha_gf_interp_ind_to_bhah_defines:
-        prefunc += f"""
-// Enum for indexing interpolated BSSN gridfunctions. (NRPy-specific)
-enum INTERP_BSSN_GF_INDICES {{
-  {enum_INTERP_BSSN_GF_INDICES_parts}
-  BHAHAHA_NUM_INTERP_GFS
-}}; // END ENUM: INTERP_BSSN_GF_INDICES
-"""
-    else:
-        prefunc += f"""
-// Enum for indexing interpolated BSSN gridfunctions. (NRPy-specific)
-enum INTERP_BSSN_GF_INDICES {{
-  {enum_INTERP_BSSN_GF_INDICES_parts}
-}}; // END ENUM: INTERP_BSSN_GF_INDICES
-"""
-
-    bhahaha_gf_interp_indices_string = r"""// BSSN gridfunctions input into the interpolator. Must be in the same order as the enum list below.
-const int bhahaha_gf_interp_indices[BHAHAHA_NUM_INTERP_GFS] = {
-    ADD00GF, ADD01GF, ADD02GF, ADD11GF, ADD12GF, ADD22GF, // Traceless, rescaled extrinsic curvature components.
-    CFGF,                                                 // Conformal factor.
-    HDD00GF, HDD01GF, HDD02GF, HDD11GF, HDD12GF, HDD22GF, // Rescaled conformal 3-metric components.
-    TRKGF                                                 // Trace of extrinsic curvature.
-};"""
-
-    if not add_bhahaha_gf_interp_ind_to_bhah_defines:
-        prefunc += "\n" + bhahaha_gf_interp_indices_string + "\n"
-    else:
-        BHaH_defines_h.register_BHaH_defines(
-            __name__,
-            "\n#define BHAHAHA_NUM_INTERP_GFS 14\n" + bhahaha_gf_interp_indices_string,
-        )
-
-    prefunc += r"""
-/**
- * Calculates the time difference in seconds between two `struct timeval` instances.
- *
- * @param start - The starting `struct timeval`.
- * @param end - The ending `struct timeval`.
- * @return - The time difference in seconds as a REAL.
- */
-static REAL timeval_to_seconds(struct timeval start, struct timeval end) {
-  const REAL start_seconds = start.tv_sec + start.tv_usec / 1.0e6;
-  const REAL end_seconds = end.tv_sec + end.tv_usec / 1.0e6;
-  return end_seconds - start_seconds;
-} // END FUNCTION: timeval_to_seconds
-
-/**
- * Validates BHaHAHA multigrid resolution inputs.
- * Checks if `bah_num_resolutions_multigrid` is positive and if all
- * `bah_Ntheta_array_multigrid` and `bah_Nphi_array_multigrid` entries are positive.
- * If validation fails, prints an error and exits.
- *
- * @param commondata - Pointer to `commondata_struct` containing multigrid settings.
- * @return - None (`void`).
- */
-static void check_multigrid_resolution_inputs(const commondata_struct *restrict commondata) {
-  int trigger_error = 0;
-  if (commondata->bah_num_resolutions_multigrid <= 0) {
-    trigger_error = 1;
-  } else { // num_resolutions_multigrid > 0
-    for (int res = 0; res < commondata->bah_num_resolutions_multigrid; res++) {
-      if (commondata->bah_Ntheta_array_multigrid[res] <= 0 || commondata->bah_Nphi_array_multigrid[res] <= 0) {
-        trigger_error = 1;
-        break;
-      } // END IF: invalid resolution
-    } // END LOOP: for res
-  } // END ELSE: num_resolutions_multigrid > 0
-  if (trigger_error) {
-    fprintf(stderr, "ERROR: BHaHAHA multigrid resolutions are unset or invalid. Please specify "
-                    "non-zero values, e.g.:\n"
-                    "   bah_num_resolutions_multigrid = 3\n"
-                    "   bah_Ntheta_array_multigrid   = [8, 16, 32]\n"
-                    "   bah_Nphi_array_multigrid     = [16, 32, 64]\n");
-    exit(EXIT_FAILURE);
-  } // END IF: trigger_error
-} // END FUNCTION: check_multigrid_resolution_inputs
-
+    outstring = r"""
 /**
  * Initializes non-persistent BHaHAHA solver parameters for a specific horizon and
  * allocates memory for horizon shape history arrays if it's the first call.
@@ -357,7 +234,357 @@ static void initialize_bhahaha_solver_params_and_shapes(commondata_struct *restr
   // STEP 4: Sets `current_horizon_params->input_metric_data` to NULL.
   current_horizon_params->input_metric_data = NULL;
 } // END FUNCTION: initialize_bhahaha_solver_params_and_shapes
+"""
+    return outstring
 
+
+def string_for_spherical_interp_setup_steps_1_to_4() -> str:
+    r"""
+    Generate the C string for spherical interpolation setup (steps 1–4).
+
+    :return: Raw C string.
+    """
+    outstring = r"""
+  // STEP 1: Determine spherical grid parameters and total interpolation points.
+  const int Ntheta_interp = current_horizon_params->Ntheta_array_multigrid[current_horizon_params->num_resolutions_multigrid - 1];
+  const int Nphi_interp = current_horizon_params->Nphi_array_multigrid[current_horizon_params->num_resolutions_multigrid - 1];
+  const REAL dtheta_interp = M_PI / ((REAL)Ntheta_interp);
+  const REAL dphi_interp = 2.0 * M_PI / ((REAL)Nphi_interp);
+
+  const int actual_Nr_interp = current_horizon_params->Nr_external_input;
+  const int total_interp_points = actual_Nr_interp * Ntheta_interp * Nphi_interp;
+
+  // STEP 2: Return if no points to interpolate.
+  if (total_interp_points == 0)
+    return; // END IF: total_interp_points == 0, no points to interpolate
+
+  // STEP 3: Allocate memory for destination reference-metric coordinates.
+  REAL(*dst_x0x1x2_interp)[3] = (REAL(*)[3])malloc(total_interp_points * 3 * sizeof(REAL));
+  if (dst_x0x1x2_interp == NULL) {
+    fprintf(stderr, "ERROR: Failed to allocate memory for dst_x0x1x2_interp.\n");
+    exit(EXIT_FAILURE);
+  } // END IF: dst_x0x1x2_interp == NULL
+
+#define IDX3_SPH_INTERP_LOCAL(ir, itheta, iphi) ((ir) + actual_Nr_interp * ((itheta) + Ntheta_interp * (iphi)))
+
+  // STEP 4: Populate `dst_x0x1x2_interp`.
+#pragma omp parallel for
+  for (int iphi = 0; iphi < Nphi_interp; iphi++) {
+    const REAL phi = -M_PI + ((REAL)iphi + 0.5) * dphi_interp;
+    const REAL sinphi = sin(phi);
+    const REAL cosphi = cos(phi);
+    for (int itheta = 0; itheta < Ntheta_interp; itheta++) {
+      const REAL theta = ((REAL)itheta + 0.5) * dtheta_interp;
+      const REAL sintheta = sin(theta);
+      const REAL costheta = cos(theta);
+      for (int ir = 0; ir < actual_Nr_interp; ir++) {
+        const REAL r = radii[ir];
+        const int idx3 = IDX3_SPH_INTERP_LOCAL(ir, itheta, iphi);
+        const REAL xCart[3] = {x_center + r * sintheta * cosphi, y_center + r * sintheta * sinphi, z_center + r * costheta};
+        int Cart_to_i0i1i2_not_stored_to_save_memory[3];
+        Cart_to_xx_and_nearest_i0i1i2(params, xCart, dst_x0x1x2_interp[idx3], Cart_to_i0i1i2_not_stored_to_save_memory);
+      } // END LOOP: for ir (spherical grid setup)
+    } // END LOOP: for itheta (spherical grid setup)
+  } // END LOOP: for iphi (#pragma omp parallel for, spherical grid setup)
+"""
+    return outstring
+
+
+def string_for_spherical_interp_setup_step_6_allocate_tmp_bssn() -> str:
+    r"""
+    Generate the C string for spherical interpolation setup (step 6).
+
+    :return: Raw C string.
+    """
+    outstring = r"""
+// STEP 6: Allocate temporary memory for interpolated BSSN variables.
+  REAL *dst_data_ptrs_bssn[BHAHAHA_NUM_INTERP_GFS];
+  for (int i = 0; i < BHAHAHA_NUM_INTERP_GFS; i++) {
+    dst_data_ptrs_bssn[i] = (REAL *)malloc(total_interp_points * sizeof(REAL));
+    if (dst_data_ptrs_bssn[i] == NULL) {
+      fprintf(stderr, "ERROR: Failed to allocate memory for dst_data_ptrs_bssn[%d].\n", i);
+      for (int k = 0; k < i; ++k)
+        BHAH_FREE(dst_data_ptrs_bssn[k]);
+      BHAH_FREE(dst_x0x1x2_interp);
+      exit(EXIT_FAILURE);
+    } // END IF: dst_data_ptrs_bssn[i] == NULL
+  } // END LOOP: for i (allocating dst_data_ptrs_bssn)
+"""
+    return outstring
+
+
+def string_for_bssn_to_adm_transformation_block(CoordSystem: str) -> str:
+    r"""
+    Generate the C string for STEP 8: BSSN→ADM Cartesian transformation block.
+
+    :param CoordSystem: CoordSystem of project, where horizon finding will take place.
+    :return: Raw C string to be injected as the transformation block.
+    :raises ValueError: If ``EvolvedConformalFactor_cf`` is set to an unsupported value.
+    """
+    outstring = r"""
+{                             // Start of BSSN to ADM transformation block
+#include "set_CodeParameters.h" // NRPy-specific include for coordinate transformations and symbolic expressions
+
+    // STEP 8: Transform interpolated BSSN data to ADM Cartesian components.
+#pragma omp parallel for
+    for (int iphi = 0; iphi < Nphi_interp; iphi++) {
+      for (int itheta = 0; itheta < Ntheta_interp; itheta++) {
+        for (int ir = 0; ir < actual_Nr_interp; ir++) {
+          const int offset = total_interp_points;
+          const int idx3 = IDX3_SPH_INTERP_LOCAL(ir, itheta, iphi);
+          const REAL xx0 = dst_x0x1x2_interp[idx3][0];
+          const REAL xx1 = dst_x0x1x2_interp[idx3][1];
+          const REAL xx2 = dst_x0x1x2_interp[idx3][2];
+
+          const REAL cf = dst_data_ptrs_bssn[INTERP_CFGF_IDX][idx3];
+          const REAL trK = dst_data_ptrs_bssn[INTERP_TRKGF_IDX][idx3];
+"""
+    defines_list: List[str] = []
+    for i in range(3):
+        for j in range(i, 3):
+            defines_list += [
+                f"          const REAL rfm_hDD{i}{j} = dst_data_ptrs_bssn[INTERP_HDD{i}{j}GF_IDX][idx3];\n"
+            ]
+            defines_list += [
+                f"          const REAL rfm_aDD{i}{j} = dst_data_ptrs_bssn[INTERP_ADD{i}{j}GF_IDX][idx3];\n"
+            ]
+    outstring += "".join(sorted(defines_list, key=str.casefold))
+
+    rfm = refmetric.reference_metric[CoordSystem]
+    rfm_aDD = ixp.declarerank2("rfm_aDD", symmetry="sym01")
+    rfm_hDD = ixp.declarerank2("rfm_hDD", symmetry="sym01")
+    rfm_gammabarDD = ixp.zerorank2()
+    rfm_AbarDD = ixp.zerorank2()
+    for i in range(3):
+        for j in range(3):
+            rfm_gammabarDD[i][j] = rfm_hDD[i][j] * rfm.ReDD[i][j] + rfm.ghatDD[i][j]
+            rfm_AbarDD[i][j] = rfm_aDD[i][j] * rfm.ReDD[i][j]
+    Cart_gammabarDD = jac.basis_transform_tensorDD_from_rfmbasis_to_Cartesian(
+        CoordSystem, rfm_gammabarDD
+    )
+    Cart_AbarDD = jac.basis_transform_tensorDD_from_rfmbasis_to_Cartesian(
+        CoordSystem, rfm_AbarDD
+    )
+    exp4phi = sp.sympify(0)
+    cf = sp.Symbol("cf", real=True)
+    EvolvedConformalFactor_cf = par.parval_from_str("EvolvedConformalFactor_cf")
+    if EvolvedConformalFactor_cf == "phi":
+        exp4phi = sp.exp(4 * cf)
+    elif EvolvedConformalFactor_cf == "chi":
+        exp4phi = 1 / cf
+    elif EvolvedConformalFactor_cf == "W":
+        exp4phi = 1 / cf**2
+    else:
+        raise ValueError(
+            f"Error EvolvedConformalFactor_cf type = {EvolvedConformalFactor_cf} unknown."
+        )
+    expr_list: List[sp.Expr] = []
+    name_list: List[str] = []
+    Cart_gammaDD = ixp.zerorank2()
+    labels = ["X", "Y", "Z"]
+    for i in range(3):
+        for j in range(i, 3):
+            Cart_gammaDD[i][j] = exp4phi * Cart_gammabarDD[i][j]
+            expr_list += [Cart_gammaDD[i][j]]
+            name_list += [
+                f"input_metric_data_target_array[FINAL_INTERP_GAMMADD{labels[i]}{labels[j]}GF * offset + idx3]"
+            ]
+    Cart_KDD = ixp.zerorank2()
+    trK_sym = sp.Symbol("trK", real=True)
+    for i in range(3):
+        for j in range(i, 3):
+            Cart_KDD[i][j] = (
+                exp4phi * Cart_AbarDD[i][j]
+                + sp.Rational(1, 3) * Cart_gammaDD[i][j] * trK_sym
+            )
+            expr_list += [Cart_KDD[i][j]]
+            name_list += [
+                f"input_metric_data_target_array[FINAL_INTERP_KDD{labels[i]}{labels[j]}GF * offset + idx3]"
+            ]
+    codegen_str = ccg.c_codegen(
+        expr_list, name_list, include_braces=True, verbose=False
+    )
+    outstring += codegen_str
+
+    outstring += r"""
+        } // END LOOP: for ir (BSSN to ADM transformation)
+      } // END LOOP: for itheta (BSSN to ADM transformation)
+    } // END LOOP: for iphi (#pragma omp parallel for, BSSN to ADM transformation)
+  } // End of BSSN to ADM transformation block
+"""
+    return outstring
+
+
+def string_for_prefunc_enums_and_interp_indices(
+    add_bhahaha_gf_interp_ind_to_bhah_defines: bool = False,
+) -> str:
+    r"""
+    Generate the C string for prefunc enums and interpolator index arrays.
+
+    :param add_bhahaha_gf_interp_ind_to_bhah_defines: add to BHaH_defines.h instead of defining here.
+    :return: Raw C string.
+    """
+    outstring = r"""
+// Enum for indexing the final ADM metric components BHaHAHA expects.
+enum FINAL_ADM_METRIC_INDICES {
+  FINAL_INTERP_GAMMADDXXGF,
+  FINAL_INTERP_GAMMADDXYGF,
+  FINAL_INTERP_GAMMADDXZGF,
+  FINAL_INTERP_GAMMADDYYGF,
+  FINAL_INTERP_GAMMADDYZGF,
+  FINAL_INTERP_GAMMADDZZGF,
+  FINAL_INTERP_KDDXXGF,
+  FINAL_INTERP_KDDXYGF,
+  FINAL_INTERP_KDDXZGF,
+  FINAL_INTERP_KDDYYGF,
+  FINAL_INTERP_KDDYZGF,
+  FINAL_INTERP_KDDZZGF,
+  BHAHAHA_NUM_METRIC_COMPONENTS
+}; // END ENUM: FINAL_ADM_METRIC_INDICES
+"""
+    enum_INTERP_BSSN_GF_INDICES_parts = """INTERP_ADD00GF_IDX,
+  INTERP_ADD01GF_IDX,
+  INTERP_ADD02GF_IDX,
+  INTERP_ADD11GF_IDX,
+  INTERP_ADD12GF_IDX,
+  INTERP_ADD22GF_IDX,
+  INTERP_CFGF_IDX,
+  INTERP_HDD00GF_IDX,
+  INTERP_HDD01GF_IDX,
+  INTERP_HDD02GF_IDX,
+  INTERP_HDD11GF_IDX,
+  INTERP_HDD12GF_IDX,
+  INTERP_HDD22GF_IDX,
+  INTERP_TRKGF_IDX,"""
+
+    if not add_bhahaha_gf_interp_ind_to_bhah_defines:
+        outstring += f"""
+// Enum for indexing interpolated BSSN gridfunctions. (NRPy-specific)
+enum INTERP_BSSN_GF_INDICES {{
+  {enum_INTERP_BSSN_GF_INDICES_parts}
+  BHAHAHA_NUM_INTERP_GFS
+}}; // END ENUM: INTERP_BSSN_GF_INDICES
+"""
+    else:
+        outstring += f"""
+// Enum for indexing interpolated BSSN gridfunctions. (NRPy-specific)
+enum INTERP_BSSN_GF_INDICES {{
+  {enum_INTERP_BSSN_GF_INDICES_parts}
+}}; // END ENUM: INTERP_BSSN_GF_INDICES
+"""
+
+    bhahaha_gf_interp_indices_string = r"""// BSSN gridfunctions input into the interpolator. Must be in the same order as the enum list below.
+const int bhahaha_gf_interp_indices[BHAHAHA_NUM_INTERP_GFS] = {
+    ADD00GF, ADD01GF, ADD02GF, ADD11GF, ADD12GF, ADD22GF, // Traceless, rescaled extrinsic curvature components.
+    CFGF,                                                 // Conformal factor.
+    HDD00GF, HDD01GF, HDD02GF, HDD11GF, HDD12GF, HDD22GF, // Rescaled conformal 3-metric components.
+    TRKGF                                                 // Trace of extrinsic curvature.
+};"""
+
+    if not add_bhahaha_gf_interp_ind_to_bhah_defines:
+        outstring += "\n" + bhahaha_gf_interp_indices_string + "\n"
+    else:
+        BHaH_defines_h.register_BHaH_defines(
+            __name__,
+            "\n#define BHAHAHA_NUM_INTERP_GFS 14\n" + bhahaha_gf_interp_indices_string,
+        )
+
+    return outstring
+
+
+def string_for_static_func_timeval_to_seconds() -> str:
+    r"""
+    Generate the C string for static function: timeval_to_seconds.
+
+    :return: Raw C string.
+    """
+    outstring = r"""
+/**
+ * Calculates the time difference in seconds between two `struct timeval` instances.
+ *
+ * @param start - The starting `struct timeval`.
+ * @param end - The ending `struct timeval`.
+ * @return - The time difference in seconds as a REAL.
+ */
+static REAL timeval_to_seconds(struct timeval start, struct timeval end) {
+  const REAL start_seconds = start.tv_sec + start.tv_usec / 1.0e6;
+  const REAL end_seconds = end.tv_sec + end.tv_usec / 1.0e6;
+  return end_seconds - start_seconds;
+} // END FUNCTION: timeval_to_seconds
+"""
+    return outstring
+
+
+def string_for_static_func_check_multigrid_resolution_inputs() -> str:
+    r"""
+    Generate the C string for static function: check_multigrid_resolution_inputs.
+
+    :return: Raw C string.
+    """
+    outstring = r"""
+/**
+ * Validates BHaHAHA multigrid resolution inputs.
+ * Checks if `bah_num_resolutions_multigrid` is positive and if all
+ * `bah_Ntheta_array_multigrid` and `bah_Nphi_array_multigrid` entries are positive.
+ * If validation fails, prints an error and exits.
+ *
+ * @param commondata - Pointer to `commondata_struct` containing multigrid settings.
+ * @return - None (`void`).
+ */
+static void check_multigrid_resolution_inputs(const commondata_struct *restrict commondata) {
+  int trigger_error = 0;
+  if (commondata->bah_num_resolutions_multigrid <= 0) {
+    trigger_error = 1;
+  } else { // num_resolutions_multigrid > 0
+    for (int res = 0; res < commondata->bah_num_resolutions_multigrid; res++) {
+      if (commondata->bah_Ntheta_array_multigrid[res] <= 0 || commondata->bah_Nphi_array_multigrid[res] <= 0) {
+        trigger_error = 1;
+        break;
+      } // END IF: invalid resolution
+    } // END LOOP: for res
+  } // END ELSE: num_resolutions_multigrid > 0
+  if (trigger_error) {
+    fprintf(stderr, "ERROR: BHaHAHA multigrid resolutions are unset or invalid. Please specify "
+                    "non-zero values, e.g.:\n"
+                    "   bah_num_resolutions_multigrid = 3\n"
+                    "   bah_Ntheta_array_multigrid   = [8, 16, 32]\n"
+                    "   bah_Nphi_array_multigrid     = [16, 32, 64]\n");
+    exit(EXIT_FAILURE);
+  } // END IF: trigger_error
+} // END FUNCTION: check_multigrid_resolution_inputs
+"""
+    return outstring
+
+
+def build_bhahaha_prefunc(
+    CoordSystem: str,
+    add_bhahaha_gf_interp_ind_to_bhah_defines: bool = False,
+) -> str:
+    """
+    Construct the C prelude used by the generated horizon-finder function.
+    Includes:
+      * FINAL_ADM_METRIC_INDICES and INTERP_BSSN_GF_INDICES enums
+      * bhahaha_gf_interp_indices[] mapping
+      * timing helper (timeval_to_seconds)
+      * input validation (check_multigrid_resolution_inputs)
+      * per-horizon init/free helpers
+      * interpolation + BSSN→ADM transformation routine
+
+    :param CoordSystem: CoordSystem of project, where horizon finding will take place.
+    :param add_bhahaha_gf_interp_ind_to_bhah_defines: add to BHaH_defines.h instead of defining here.
+    :return: Raw C string to be injected as the function preamble.
+    """
+    prefunc = string_for_prefunc_enums_and_interp_indices(
+        add_bhahaha_gf_interp_ind_to_bhah_defines=add_bhahaha_gf_interp_ind_to_bhah_defines
+    )
+
+    prefunc += string_for_static_func_timeval_to_seconds()
+
+    prefunc += string_for_static_func_check_multigrid_resolution_inputs()
+
+    prefunc += string_for_static_func_initialize_bhahaha_solver_params_and_shapes()
+
+    prefunc += r"""
 /**
  * Frees memory allocated for horizon shape history arrays (`prev_horizon_m1/m2/m3`)
  * for all horizons.
@@ -418,49 +645,11 @@ static void BHaHAHA_interpolate_metric_data_nrpy(const commondata_struct *restri
                                                  bhahaha_params_and_data_struct *restrict current_horizon_params, const REAL x_center,
                                                  const REAL y_center, const REAL z_center, const REAL radii[],
                                                  REAL *restrict input_metric_data_target_array) {
+"""
 
-  // STEP 1: Determine spherical grid parameters and total interpolation points.
-  const int Ntheta_interp = current_horizon_params->Ntheta_array_multigrid[current_horizon_params->num_resolutions_multigrid - 1];
-  const int Nphi_interp = current_horizon_params->Nphi_array_multigrid[current_horizon_params->num_resolutions_multigrid - 1];
-  const REAL dtheta_interp = M_PI / ((REAL)Ntheta_interp);
-  const REAL dphi_interp = 2.0 * M_PI / ((REAL)Nphi_interp);
+    prefunc += string_for_spherical_interp_setup_steps_1_to_4()
 
-  const int actual_Nr_interp = current_horizon_params->Nr_external_input;
-  const int total_interp_points = actual_Nr_interp * Ntheta_interp * Nphi_interp;
-
-  // STEP 2: Return if no points to interpolate.
-  if (total_interp_points == 0)
-    return; // END IF: total_interp_points == 0, no points to interpolate
-
-  // STEP 3: Allocate memory for destination reference-metric coordinates.
-  REAL(*dst_x0x1x2_interp)[3] = (REAL(*)[3])malloc(total_interp_points * 3 * sizeof(REAL));
-  if (dst_x0x1x2_interp == NULL) {
-    fprintf(stderr, "ERROR: Failed to allocate memory for dst_x0x1x2_interp.\n");
-    exit(EXIT_FAILURE);
-  } // END IF: dst_x0x1x2_interp == NULL
-
-#define IDX3_SPH_INTERP_LOCAL(ir, itheta, iphi) ((ir) + actual_Nr_interp * ((itheta) + Ntheta_interp * (iphi)))
-
-  // STEP 4: Populate `dst_x0x1x2_interp`.
-#pragma omp parallel for
-  for (int iphi = 0; iphi < Nphi_interp; iphi++) {
-    const REAL phi = -M_PI + ((REAL)iphi + 0.5) * dphi_interp;
-    const REAL sinphi = sin(phi);
-    const REAL cosphi = cos(phi);
-    for (int itheta = 0; itheta < Ntheta_interp; itheta++) {
-      const REAL theta = ((REAL)itheta + 0.5) * dtheta_interp;
-      const REAL sintheta = sin(theta);
-      const REAL costheta = cos(theta);
-      for (int ir = 0; ir < actual_Nr_interp; ir++) {
-        const REAL r = radii[ir];
-        const int idx3 = IDX3_SPH_INTERP_LOCAL(ir, itheta, iphi);
-        const REAL xCart[3] = {x_center + r * sintheta * cosphi, y_center + r * sintheta * sinphi, z_center + r * costheta};
-        int Cart_to_i0i1i2_not_stored_to_save_memory[3];
-        Cart_to_xx_and_nearest_i0i1i2(params, xCart, dst_x0x1x2_interp[idx3], Cart_to_i0i1i2_not_stored_to_save_memory);
-      } // END LOOP: for ir (spherical grid setup)
-    } // END LOOP: for itheta (spherical grid setup)
-  } // END LOOP: for iphi (#pragma omp parallel for, spherical grid setup)
-
+    prefunc += r"""
   // STEP 5: Initialize source gridfunction pointers.
   const REAL *restrict src_gf_ptrs[BHAHAHA_NUM_INTERP_GFS];
   const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
@@ -470,112 +659,20 @@ static void BHaHAHA_interpolate_metric_data_nrpy(const commondata_struct *restri
   for (int idx = 0; idx < BHAHAHA_NUM_INTERP_GFS; idx++) {
     src_gf_ptrs[idx] = &y_n_gfs[IDX4(bhahaha_gf_interp_indices[idx], 0, 0, 0)];
   } // END LOOP: for idx (setting up src_gf_ptrs)
+  """
 
-  // STEP 6: Allocate temporary memory for interpolated BSSN variables.
-  REAL *dst_data_ptrs_bssn[BHAHAHA_NUM_INTERP_GFS];
-  for (int i = 0; i < BHAHAHA_NUM_INTERP_GFS; i++) {
-    dst_data_ptrs_bssn[i] = (REAL *)malloc(total_interp_points * sizeof(REAL));
-    if (dst_data_ptrs_bssn[i] == NULL) {
-      fprintf(stderr, "ERROR: Failed to allocate memory for dst_data_ptrs_bssn[%d].\n", i);
-      for (int k = 0; k < i; ++k)
-        BHAH_FREE(dst_data_ptrs_bssn[k]);
-      BHAH_FREE(dst_x0x1x2_interp);
-      exit(EXIT_FAILURE);
-    } // END IF: dst_data_ptrs_bssn[i] == NULL
-  } // END LOOP: for i (allocating dst_data_ptrs_bssn)
+    prefunc += string_for_spherical_interp_setup_step_6_allocate_tmp_bssn()
 
+    prefunc += r"""
   // STEP 7: Perform 3D interpolation.
   interpolation_3d_general__uniform_src_grid((NGHOSTS), params->dxx0, params->dxx1, params->dxx2, params->Nxx_plus_2NGHOSTS0,
                                              params->Nxx_plus_2NGHOSTS1, params->Nxx_plus_2NGHOSTS2, BHAHAHA_NUM_INTERP_GFS, xx, src_gf_ptrs,
                                              total_interp_points, dst_x0x1x2_interp, dst_data_ptrs_bssn);
+  """
 
-  {                             // Start of BSSN to ADM transformation block
-#include "set_CodeParameters.h" // NRPy-specific include for coordinate transformations and symbolic expressions
-
-    // STEP 8: Transform interpolated BSSN data to ADM Cartesian components.
-#pragma omp parallel for
-    for (int iphi = 0; iphi < Nphi_interp; iphi++) {
-      for (int itheta = 0; itheta < Ntheta_interp; itheta++) {
-        for (int ir = 0; ir < actual_Nr_interp; ir++) {
-          const int offset = total_interp_points;
-          const int idx3 = IDX3_SPH_INTERP_LOCAL(ir, itheta, iphi);
-          const REAL xx0 = dst_x0x1x2_interp[idx3][0];
-          const REAL xx1 = dst_x0x1x2_interp[idx3][1];
-          const REAL xx2 = dst_x0x1x2_interp[idx3][2];
-
-          const REAL cf = dst_data_ptrs_bssn[INTERP_CFGF_IDX][idx3];
-          const REAL trK = dst_data_ptrs_bssn[INTERP_TRKGF_IDX][idx3];
-"""
-    defines_list: List[str] = []
-    for i in range(3):
-        for j in range(i, 3):
-            defines_list += [
-                f"const REAL rfm_hDD{i}{j} = dst_data_ptrs_bssn[INTERP_HDD{i}{j}GF_IDX][idx3];\n"
-            ]
-            defines_list += [
-                f"const REAL rfm_aDD{i}{j} = dst_data_ptrs_bssn[INTERP_ADD{i}{j}GF_IDX][idx3];\n"
-            ]
-    prefunc += "".join(sorted(defines_list, key=str.casefold))
-
-    rfm = refmetric.reference_metric[CoordSystem]
-    rfm_aDD = ixp.declarerank2("rfm_aDD", symmetry="sym01")
-    rfm_hDD = ixp.declarerank2("rfm_hDD", symmetry="sym01")
-    rfm_gammabarDD = ixp.zerorank2()
-    rfm_AbarDD = ixp.zerorank2()
-    for i in range(3):
-        for j in range(3):
-            rfm_gammabarDD[i][j] = rfm_hDD[i][j] * rfm.ReDD[i][j] + rfm.ghatDD[i][j]
-            rfm_AbarDD[i][j] = rfm_aDD[i][j] * rfm.ReDD[i][j]
-    Cart_gammabarDD = jac.basis_transform_tensorDD_from_rfmbasis_to_Cartesian(
-        CoordSystem, rfm_gammabarDD
-    )
-    Cart_AbarDD = jac.basis_transform_tensorDD_from_rfmbasis_to_Cartesian(
-        CoordSystem, rfm_AbarDD
-    )
-    exp4phi = sp.sympify(0)
-    cf = sp.Symbol("cf", real=True)
-    EvolvedConformalFactor_cf = par.parval_from_str("EvolvedConformalFactor_cf")
-    if EvolvedConformalFactor_cf == "phi":
-        exp4phi = sp.exp(4 * cf)
-    elif EvolvedConformalFactor_cf == "chi":
-        exp4phi = 1 / cf
-    elif EvolvedConformalFactor_cf == "W":
-        exp4phi = 1 / cf**2
-    else:
-        raise ValueError(
-            f"Error EvolvedConformalFactor_cf type = {EvolvedConformalFactor_cf} unknown."
-        )
-    expr_list: List[sp.Expr] = []
-    name_list: List[str] = []
-    Cart_gammaDD = ixp.zerorank2()
-    labels = ["X", "Y", "Z"]
-    for i in range(3):
-        for j in range(i, 3):
-            Cart_gammaDD[i][j] = exp4phi * Cart_gammabarDD[i][j]
-            expr_list += [Cart_gammaDD[i][j]]
-            name_list += [
-                f"input_metric_data_target_array[FINAL_INTERP_GAMMADD{labels[i]}{labels[j]}GF * offset + idx3]"
-            ]
-    Cart_KDD = ixp.zerorank2()
-    trK = sp.Symbol("trK", real=True)
-    for i in range(3):
-        for j in range(i, 3):
-            Cart_KDD[i][j] = (
-                exp4phi * Cart_AbarDD[i][j]
-                + sp.Rational(1, 3) * Cart_gammaDD[i][j] * trK
-            )
-            expr_list += [Cart_KDD[i][j]]
-            name_list += [
-                f"input_metric_data_target_array[FINAL_INTERP_KDD{labels[i]}{labels[j]}GF * offset + idx3]"
-            ]
-    prefunc += ccg.c_codegen(expr_list, name_list, include_braces=True, verbose=False)
+    prefunc += string_for_bssn_to_adm_transformation_block(CoordSystem)
 
     prefunc += r"""
-        } // END LOOP: for ir (BSSN to ADM transformation)
-      } // END LOOP: for itheta (BSSN to ADM transformation)
-    } // END LOOP: for iphi (#pragma omp parallel for, BSSN to ADM transformation)
-  } // End of BSSN to ADM transformation block
-
   // STEP 10: Free allocated temporary memory.
   BHAH_FREE(dst_x0x1x2_interp);
   for (int i = 0; i < BHAHAHA_NUM_INTERP_GFS; i++) {
