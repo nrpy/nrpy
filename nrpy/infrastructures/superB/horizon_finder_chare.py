@@ -35,7 +35,9 @@ Horizon_finder_SDAG_CODE
   /// Member Variables (Object State) ///
   commondata_struct commondata;
   griddata_struct *griddata;
-  REAL x_center, y_center, z_center;
+  REAL *x_guess;
+  REAL *y_guess;
+  REAL *z_guess;
   int total_elements;
   int which_horizon;
   REAL *radii;
@@ -97,7 +99,11 @@ Horizon_finder::Horizon_finder() {
 Horizon_finder::Horizon_finder(CkMigrateMessage *msg) : CBase_Horizon_finder(msg) {}
 
 // destructor
-Horizon_finder::~Horizon_finder() {}
+Horizon_finder::~Horizon_finder() {
+  if (x_guess) free(x_guess);
+  if (y_guess) free(y_guess);
+  if (z_guess) free(z_guess);
+}
 
 void Horizon_finder::process_interpolation_results(InterpBufMsg *msg) {
   char *buf = msg->buf;
@@ -161,6 +167,9 @@ module horizon_finder {
       serial {
         commondata = inData1.commondata;
         griddata = inData2.griddata;
+        x_guess = (REAL *)malloc(commondata.bah_max_num_horizons * sizeof(REAL));
+        y_guess = (REAL *)malloc(commondata.bah_max_num_horizons * sizeof(REAL));
+        z_guess = (REAL *)malloc(commondata.bah_max_num_horizons * sizeof(REAL));
       }
       while (commondata.time < commondata.t_final) {
         serial {
@@ -174,8 +183,7 @@ module horizon_finder {
           // In BBH mode, skip horizons that aren't active.
           if (!(commondata.bah_BBH_mode_enable && !commondata.bah_BBH_mode_horizon_active[which_horizon])) {
             serial {
-              //bhahaha_find_horizons(&commondata, griddata, &x_center, &y_center, &z_center, &radii, &total_elements, &dst_x0x1x2, &dst_data_ptrs, which_horizon, BHAHAHA_FIND_HORIZONS_SETUP);
-              bhahaha_find_horizons(&commondata, griddata);
+              bhahaha_find_horizons(&commondata, griddata, x_guess, y_guess, z_guess, &radii, &total_elements, &dst_x0x1x2, &dst_data_ptrs, which_horizon, BHAHAHA_FIND_HORIZONS_SETUP);
             }
 
             when ready_for_interpolation() {
@@ -190,8 +198,7 @@ module horizon_finder {
               }
             }
             serial {
-              //bhahaha_find_horizons(&commondata, griddata, &x_center, &y_center, &z_center, &radii, &total_elements, &dst_x0x1x2, &dst_data_ptrs, which_horizon, BHAHAHA_FIND_HORIZONS_FIND_AND_WRITE_TO_FILE);
-              bhahaha_find_horizons(&commondata, griddata);
+              bhahaha_find_horizons(&commondata, griddata, x_guess, y_guess, z_guess, &radii, &total_elements, &dst_x0x1x2, &dst_data_ptrs, which_horizon, BHAHAHA_FIND_HORIZONS_FIND_AND_WRITE_TO_FILE);
               free(radii);
               thisProxy[CkArrayIndex1D(thisIndex)].horizon_finding_complete();
             }
@@ -230,7 +237,6 @@ def output_horizon_finder_h_cpp_ci(
     Generate horizon_finder.h, horizon_finder.cpp and horizon_finder.ci.
     :param project_dir: Directory where the project C code is output.
     """
-
     output_horizon_finder_h(
         project_dir=project_dir,
     )
