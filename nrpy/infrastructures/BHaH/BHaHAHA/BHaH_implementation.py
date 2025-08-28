@@ -830,18 +830,32 @@ def string_for_step6_apply_robustness_improv_and_extrap_horizon_guesses() -> str
     return outstring
 
 
-def string_for_step7_main_loop_for_each_horizon() -> str:
-    r"""
-    Generate the C string for STEP 7: main loop for each horizon.
+def string_for_step7a_to_d_main_loop_for_each_horizon(
+    single_horizon: bool = False,
+) -> str:
+    """
+    Generate the C string for STEP 7 a to d: main loop for each horizon.
 
+    :param single_horizon: If True, emit code for a single horizon (`which_horizon`). Otherwise, emit the standard for-loop.
     :return: Raw C string.
     """
-    outstring = r"""
+    if single_horizon:
+        outstring = r"""
+      // STEP 7: Main computation for one horizon.
+        int h = which_horizon;
+        // STEP 7.a: Skip if horizon is not active.
+        if (!commondata->bah_BBH_mode_horizon_active[h])
+          return; // END IF: not active, return
+"""
+    else:
+        outstring = r"""
   // STEP 7: Main loop for each horizon.
   for (int h = 0; h < commondata->bah_max_num_horizons; h++) {
-    // STEP 7.a: Skip if horizon is not active.
+  // STEP 7.a: Skip if horizon is not active.
     if (!commondata->bah_BBH_mode_horizon_active[h])
       continue; // END IF: not active, continue loop
+"""
+    outstring += r"""
 
     gettimeofday(&iter_time_tracker, NULL); // Per-horizon timer start
 
@@ -887,13 +901,26 @@ def string_for_step7_main_loop_for_each_horizon() -> str:
                                            radii_interp, // Pass the populated radii_interp array for this horizon
                                            current_horizon_params->input_metric_data);
     } // END IF: call BHaHAHA_interpolate_metric_data_nrpy
+"""
+    return outstring
 
+
+def string_for_step7e_to_g_main_loop_for_each_horizon(
+    single_horizon: bool = False,
+) -> str:
+    r"""
+    Generate the C string for STEP 7 e to g: main loop for each horizon.
+
+    :param single_horizon: If True, emit code for a single horizon (`which_horizon`). Otherwise, emit the standard for-loop.
+    :return: Raw C string.
+    """
+    outstring = r"""
     if (commondata->bah_verbosity_level >= 2) {
-      struct timeval temp_time;
-      gettimeofday(&temp_time, NULL);
-      printf("%.6f s : FINISH interpolate H%d (%.3fs)\n", timeval_to_seconds(start_time_total, temp_time), h,
-             timeval_to_seconds(iter_time_tracker, temp_time));
-      gettimeofday(&iter_time_tracker, NULL); // Reset for solver timing
+        struct timeval temp_time;
+        gettimeofday(&temp_time, NULL);
+        printf("%.6f s : FINISH interpolate H%d (%.3fs)\n", timeval_to_seconds(start_time_total, temp_time), h,
+               timeval_to_seconds(iter_time_tracker, temp_time));
+        gettimeofday(&iter_time_tracker, NULL); // Reset for solver timing
     } // END IF: verbosity for finish interpolate
 
     // STEP 7.e: Call `bah_find_horizon` solver if metric data available.
@@ -932,7 +959,9 @@ def string_for_step7_main_loop_for_each_horizon() -> str:
       gettimeofday(&temp_time, NULL);
       printf("%.6f s : FINISH find H%d (%.3fs for solve section)\n", timeval_to_seconds(start_time_total, temp_time), h,
              timeval_to_seconds(iter_time_tracker, temp_time));
-    } // END IF: verbosity for finish find horizon
+    } // END IF: verbosity for finish find horizon"""
+    if not single_horizon:
+        outstring += r"""
   } // END LOOP: for h (main find loop)
 """
     return outstring
@@ -1100,7 +1129,9 @@ and result updates for multiple horizons.
   } // END IF: verbosity_level > 1 (pre-interpolation print)
   """
 
-    body += string_for_step7_main_loop_for_each_horizon()
+    body += string_for_step7a_to_d_main_loop_for_each_horizon()
+
+    body += string_for_step7e_to_g_main_loop_for_each_horizon()
 
     body += string_for_step8_print_total_elapsed_time()
 
