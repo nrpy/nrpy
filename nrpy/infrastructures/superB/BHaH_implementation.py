@@ -9,29 +9,150 @@ Author: Zachariah B. Etienne
 
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import Union, cast
+from typing import List, Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 from nrpy.infrastructures.BHaH.BHaHAHA.BHaH_implementation import (
+    generate_bssn_to_adm_codegen,
     register_bhahaha_commondata_and_params,
+    string_for_func_free_bhahaha_horizon_shape_data_all_horizons,
     string_for_prefunc_enums_and_interp_indices,
-    string_for_static_func_timeval_to_seconds,
     string_for_static_func_check_multigrid_resolution_inputs,
     string_for_static_func_initialize_bhahaha_solver_params_and_shapes,
-    string_for_spherical_interp_setup_steps_1_to_4,
-    string_for_spherical_interp_setup_step_6_allocate_tmp_bssn,
-    string_for_bssn_to_adm_transformation_block,
+    string_for_static_func_timeval_to_seconds,
     string_for_step1_horizon_schedule,
     string_for_step2_validate_multigrid_inputs,
     string_for_step3_initialize_bhahaha_data_structs_and_solver_params,
     string_for_step4_populate_iteration_metadata,
     string_for_step5_apply_bbh_mode_logic,
     string_for_step6_apply_robustness_improv_and_extrap_horizon_guesses,
-    string_for_step7a_to_d_main_loop_for_each_horizon,
+    string_for_step7a_to_c_main_loop_for_each_horizon,
     string_for_step7e_to_g_main_loop_for_each_horizon,
     string_for_step8_print_total_elapsed_time,
 )
+
+
+def string_for_spherical_interp_setup_steps_1_to_4() -> str:
+    r"""
+    Generate the C string for spherical interpolation setup (steps 1–4).
+
+    :return: Raw C string.
+    """
+    outstring = r"""
+  // STEP 1: Determine spherical grid parameters and total interpolation points.
+  const int Ntheta_interp = current_horizon_params->Ntheta_array_multigrid[current_horizon_params->num_resolutions_multigrid - 1];
+  const int Nphi_interp = current_horizon_params->Nphi_array_multigrid[current_horizon_params->num_resolutions_multigrid - 1];
+  const REAL dtheta_interp = M_PI / ((REAL)Ntheta_interp);
+  const REAL dphi_interp = 2.0 * M_PI / ((REAL)Nphi_interp);
+
+  const int actual_Nr_interp = current_horizon_params->Nr_external_input;
+  *total_interp_points = actual_Nr_interp * Ntheta_interp * Nphi_interp;
+
+  // STEP 2: Return if no points to interpolate.
+  if (total_interp_points == 0)
+    return; // END IF: total_interp_points == 0, no points to interpolate
+
+  // STEP 3: Allocate memory for destination reference-metric coordinates.
+  *dst_x0x1x2_interp = (REAL(*)[3])malloc(*total_interp_points * 3 * sizeof(REAL));
+  if (dst_x0x1x2_interp == NULL) {
+    fprintf(stderr, "ERROR: Failed to allocate memory for dst_x0x1x2_interp.\n");
+    exit(EXIT_FAILURE);
+  } // END IF: dst_x0x1x2_interp == NULL
+
+#define IDX3_SPH_INTERP_LOCAL(ir, itheta, iphi) ((ir) + actual_Nr_interp * ((itheta) + Ntheta_interp * (iphi)))
+
+  // STEP 4: Populate `dst_x0x1x2_interp`.
+#pragma omp parallel for
+  for (int iphi = 0; iphi < Nphi_interp; iphi++) {
+    const REAL phi = -M_PI + ((REAL)iphi + 0.5) * dphi_interp;
+    const REAL sinphi = sin(phi);
+    const REAL cosphi = cos(phi);
+    for (int itheta = 0; itheta < Ntheta_interp; itheta++) {
+      const REAL theta = ((REAL)itheta + 0.5) * dtheta_interp;
+      const REAL sintheta = sin(theta);
+      const REAL costheta = cos(theta);
+      for (int ir = 0; ir < actual_Nr_interp; ir++) {
+        const REAL r = radii[ir];
+        const int idx3 = IDX3_SPH_INTERP_LOCAL(ir, itheta, iphi);
+        const REAL xCart[3] = {x_center + r * sintheta * cosphi, y_center + r * sintheta * sinphi, z_center + r * costheta};
+        int Cart_to_i0i1i2_not_stored_to_save_memory[3];
+        *total_interp_points = actual_Nr_interp * Ntheta_interp * Nphi_interp;
+      } // END LOOP: for ir (spherical grid setup)
+    } // END LOOP: for itheta (spherical grid setup)
+  } // END LOOP: for iphi (#pragma omp parallel for, spherical grid setup)
+"""
+    return outstring
+
+
+def string_for_spherical_interp_setup_step_6_allocate_tmp_bssn() -> str:
+    r"""
+    Generate the C string for spherical interpolation setup (step 6).
+
+    :return: Raw C string.
+    """
+    outstring = r"""
+// STEP 6: Allocate temporary memory for interpolated BSSN variables.
+  *dst_data_ptrs_bssn = (REAL **)malloc(BHAHAHA_NUM_INTERP_GFS * sizeof(REAL *));
+  for (int i = 0; i < BHAHAHA_NUM_INTERP_GFS; i++) {
+    (*dst_data_ptrs_bssn)[i] = (REAL *)malloc(*total_interp_points * sizeof(REAL));
+    if (dst_data_ptrs_bssn[i] == NULL) {
+      fprintf(stderr, "ERROR: Failed to allocate memory for dst_data_ptrs_bssn[%d].\n", i);
+      for (int k = 0; k < i; ++k)
+        BHAH_FREE(dst_data_ptrs_bssn[k]);
+      BHAH_FREE(dst_x0x1x2_interp);
+      exit(EXIT_FAILURE);
+    } // END IF: dst_data_ptrs_bssn[i] == NULL
+  } // END LOOP: for i (allocating dst_data_ptrs_bssn)
+"""
+    return outstring
+
+
+def string_for_bssn_to_adm_transformation_block(CoordSystem: str) -> str:
+    r"""
+    Generate the C string for STEP 8: BSSN→ADM Cartesian transformation block.
+
+    :param CoordSystem: CoordSystem of project, where horizon finding will take place.
+    :return: Raw C string to be injected as the transformation block.
+    """
+    outstring = r"""
+{                             // Start of BSSN to ADM transformation block
+#include "set_CodeParameters.h" // NRPy-specific include for coordinate transformations and symbolic expressions
+
+    // STEP 8: Transform interpolated BSSN data to ADM Cartesian components.
+#pragma omp parallel for
+    for (int iphi = 0; iphi < Nphi_interp; iphi++) {
+      for (int itheta = 0; itheta < Ntheta_interp; itheta++) {
+        for (int ir = 0; ir < actual_Nr_interp; ir++) {
+          const int offset = total_interp_points;
+          const int idx3 = IDX3_SPH_INTERP_LOCAL(ir, itheta, iphi);
+          const REAL xx0 = (*dst_x0x1x2_interp)[idx3][0];
+          const REAL xx1 = (*dst_x0x1x2_interp)[idx3][1];
+          const REAL xx2 = (*dst_x0x1x2_interp)[idx3][2];
+
+          const REAL cf = (*dst_data_ptrs_bssn)[INTERP_CFGF_IDX][idx3];
+          const REAL trK = (*dst_data_ptrs_bssn)[INTERP_TRKGF_IDX][idx3];
+"""
+    defines_list: List[str] = []
+    for i in range(3):
+        for j in range(i, 3):
+            defines_list += [
+                f"          const REAL rfm_hDD{i}{j} = (*dst_data_ptrs_bssn)[INTERP_HDD{i}{j}GF_IDX][idx3];\n"
+            ]
+            defines_list += [
+                f"          const REAL rfm_aDD{i}{j} = (*dst_data_ptrs_bssn)[INTERP_ADD{i}{j}GF_IDX][idx3];\n"
+            ]
+    outstring += "".join(sorted(defines_list, key=str.casefold))
+
+    outstring += generate_bssn_to_adm_codegen(CoordSystem)
+
+    outstring += r"""
+        } // END LOOP: for ir (BSSN to ADM transformation)
+      } // END LOOP: for itheta (BSSN to ADM transformation)
+    } // END LOOP: for iphi (#pragma omp parallel for, BSSN to ADM transformation)
+  } // End of BSSN to ADM transformation block
+"""
+    return outstring
 
 
 def build_bhahaha_prefunc(
@@ -62,25 +183,65 @@ def build_bhahaha_prefunc(
 
     prefunc += string_for_static_func_initialize_bhahaha_solver_params_and_shapes()
 
+    prefunc += string_for_func_free_bhahaha_horizon_shape_data_all_horizons()
+
     prefunc += r"""
+
 /**
- * Frees memory allocated for horizon shape history arrays (`prev_horizon_m1/m2/m3`)
- * for all horizons.
+ * Interpolates BSSN metric data from a Cartesian NRPy grid to a spherical grid,
+ * transforms it to ADM Cartesian components, and stores it for BHaHAHA.
  *
- * @param commondata - Pointer to `commondata_struct` containing the BHaHAHA data.
+ * The function performs the following steps:
+ * 1. Determines spherical grid parameters (Ntheta, Nphi, dtheta, dphi from `current_horizon_params`)
+ *    and total number of interpolation points (`total_interp_points`).
+ * 2. Returns if `total_interp_points` is zero.
+ * 3. Allocates memory for destination reference-metric coordinates (`dst_x0x1x2_interp`). Exits on failure.
+ * 4. Populates `dst_x0x1x2_interp`: For each point on the spherical grid (defined by `radii`,
+ *    theta, phi around `x_center`, `y_center`, `z_center`), converts its Cartesian
+ *    coordinates to reference-metric coordinates using `Cart_to_xx_and_nearest_i0i1i2`.
+ * 5. Initializes source gridfunction pointers (`src_gf_ptrs`) for BSSN variables from `y_n_gfs`.
+ * 6. Allocates temporary memory for interpolated BSSN variables at spherical grid points
+ *    (`dst_data_ptrs_bssn`). Exits on failure.
+ * 7. Performs 3D interpolation of BSSN GFs from the source Cartesian grid (`xx`, `src_gf_ptrs`)
+ *    to the spherical target points (`dst_x0x1x2_interp`), storing results in `dst_data_ptrs_bssn`.
+ * 8. Transforms interpolated BSSN data to ADM Cartesian components: For each point, uses
+ *    the interpolated BSSN values (cf, trK, aDD, hDD) and reference-metric coordinates
+ *    (xx0, xx1, xx2) to compute g_ij and K_ij in Cartesian coordinates.
+ * 9. Stores the resulting ADM components (gxx, gxy, ..., Kzz) into `input_metric_data_target_array`
+ *    in the flat layout expected by BHaHAHA.
+ * 10. Frees allocated temporary memory (`dst_x0x1x2_interp` and `dst_data_ptrs_bssn`).
+ *
+ * @param commondata - Pointer to `commondata_struct`.
+ * @param params - Pointer to `params_struct` for the source Cartesian grid.
+ * @param xx - Array of pointers to source Cartesian grid coordinate arrays.
+ * @param y_n_gfs - Pointer to the array of all gridfunctions on the source grid.
+ * @param current_horizon_params - Pointer to `bhahaha_params_and_data_struct` for the current horizon,
+ *                                 providing spherical grid resolution and radial point count.
+ * @param x_center - X-coordinate for the center of the spherical interpolation grid.
+ * @param y_center - Y-coordinate for the center of the spherical interpolation grid.
+ * @param z_center - Z-coordinate for the center of the
+ * @param radii - Array of radial distances for the spherical interpolation grid shells.
+ * @param input_metric_data_target_array - Target array for the final ADM metric components.
  * @return - None (`void`).
  */
-void free_bhahaha_horizon_shape_data_all_horizons(commondata_struct *restrict commondata) {
-  for (int h = 0; h < commondata->bah_max_num_horizons; ++h) {
-    bhahaha_params_and_data_struct *current_horizon_params = &commondata->bhahaha_params_and_data[h];
-    if (current_horizon_params != NULL) {
-      BHAH_FREE(current_horizon_params->prev_horizon_m1);
-      BHAH_FREE(current_horizon_params->prev_horizon_m2);
-      BHAH_FREE(current_horizon_params->prev_horizon_m3);
-    } // END IF: current_horizon_params != NULL
-  } // END LOOP: for h
-} // END FUNCTION: free_bhahaha_horizon_shape_data_all_horizons
+static void BHaHAHA_compute_dst_pts_metric_data_nrpy(const commondata_struct *restrict commondata, const params_struct *restrict params,REAL *restrict xx[3],
+                                                 bhahaha_params_and_data_struct *restrict current_horizon_params, const REAL x_center,
+                                                 const REAL y_center, const REAL z_center, const REAL radii[],
+                                                 int *total_interp_points, REAL (**dst_x0x1x2_interp)[3], REAL ***dst_data_ptrs_bssn) {
 
+
+
+"""
+
+    prefunc += string_for_spherical_interp_setup_steps_1_to_4()
+
+    prefunc += string_for_spherical_interp_setup_step_6_allocate_tmp_bssn()
+
+    prefunc += r"""
+} // END FUNCTION: BHaHAHA_compute_dst_pts_metric_data_nrpy
+"""
+
+    prefunc += r"""
 /**
  * Interpolates BSSN metric data from a Cartesian NRPy grid to a spherical grid,
  * transforms it to ADM Cartesian components, and stores it for BHaHAHA.
@@ -121,32 +282,21 @@ void free_bhahaha_horizon_shape_data_all_horizons(commondata_struct *restrict co
 static void BHaHAHA_interpolate_metric_data_nrpy(const commondata_struct *restrict commondata, const params_struct *restrict params,
                                                  REAL *restrict xx[3], const REAL *restrict y_n_gfs,
                                                  bhahaha_params_and_data_struct *restrict current_horizon_params, const REAL x_center,
-                                                 const REAL y_center, const REAL z_center, const REAL radii[],
+                                                 const REAL y_center, const REAL z_center, const REAL radii[], REAL (**dst_x0x1x2_interp)[3], REAL ***dst_data_ptrs_bssn,
                                                  REAL *restrict input_metric_data_target_array) {
+
+
+  //Determine spherical grid parameters and total interpolation points.
+  const int Ntheta_interp = current_horizon_params->Ntheta_array_multigrid[current_horizon_params->num_resolutions_multigrid - 1];
+  const int Nphi_interp = current_horizon_params->Nphi_array_multigrid[current_horizon_params->num_resolutions_multigrid - 1];
+  const REAL dtheta_interp = M_PI / ((REAL)Ntheta_interp);
+  const REAL dphi_interp = 2.0 * M_PI / ((REAL)Nphi_interp);
+
+  const int actual_Nr_interp = current_horizon_params->Nr_external_input;
+  const int total_interp_points = actual_Nr_interp * Ntheta_interp * Nphi_interp;
+
+#define IDX3_SPH_INTERP_LOCAL(ir, itheta, iphi) ((ir) + actual_Nr_interp * ((itheta) + Ntheta_interp * (iphi)))
 """
-
-    prefunc += string_for_spherical_interp_setup_steps_1_to_4()
-
-    prefunc += r"""
-  // STEP 5: Initialize source gridfunction pointers.
-  const REAL *restrict src_gf_ptrs[BHAHAHA_NUM_INTERP_GFS];
-  const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
-  const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
-  const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
-
-  for (int idx = 0; idx < BHAHAHA_NUM_INTERP_GFS; idx++) {
-    src_gf_ptrs[idx] = &y_n_gfs[IDX4(bhahaha_gf_interp_indices[idx], 0, 0, 0)];
-  } // END LOOP: for idx (setting up src_gf_ptrs)
-  """
-
-    prefunc += string_for_spherical_interp_setup_step_6_allocate_tmp_bssn()
-
-    prefunc += r"""
-  // STEP 7: Perform 3D interpolation.
-  interpolation_3d_general__uniform_src_grid((NGHOSTS), params->dxx0, params->dxx1, params->dxx2, params->Nxx_plus_2NGHOSTS0,
-                                             params->Nxx_plus_2NGHOSTS1, params->Nxx_plus_2NGHOSTS2, BHAHAHA_NUM_INTERP_GFS, xx, src_gf_ptrs,
-                                             total_interp_points, dst_x0x1x2_interp, dst_data_ptrs_bssn);
-  """
 
     prefunc += string_for_bssn_to_adm_transformation_block(CoordSystem)
 
@@ -312,7 +462,17 @@ and result updates for multiple horizons.
   } // END IF: verbosity_level > 1 (pre-interpolation print)
   """
 
-    body += string_for_step7a_to_d_main_loop_for_each_horizon(single_horizon=True)
+    body += string_for_step7a_to_c_main_loop_for_each_horizon(single_horizon=True)
+
+    body += """
+    // STEP 7.d: Interpolate metric data.
+    if (current_horizon_params->input_metric_data && current_horizon_params->Nr_external_input > 0) {
+      BHaHAHA_compute_dst_pts_metric_data_nrpy(commondata, &griddata[0].params, griddata[0].xx, current_horizon_params, x_guess[h], y_guess[h],
+                                           z_guess[h],   // Use per-horizon guess
+                                           radii_interp, // Pass the populated radii_interp array for this horizon
+                                           total_elements, dst_x0x1x2, dst_data_ptrs);
+    } // END IF: call BHaHAHA_interpolate_metric_data_nrpy
+    """
 
     body += r"""
     break;
