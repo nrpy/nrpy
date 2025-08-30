@@ -157,6 +157,7 @@ commondata_io(&commondata, "commondata.bin");
     body += r"""
 free(commondata.dynamics_low);
 free(commondata.dynamics_fine);
+free(commondata.dynamics_raw);
 free(commondata.waveform_low);
 free(commondata.waveform_fine);
 free(commondata.waveform_inspiral);
