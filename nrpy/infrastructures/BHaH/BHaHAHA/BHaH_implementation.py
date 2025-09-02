@@ -956,11 +956,14 @@ def string_for_step6_apply_robustness_improv_and_extrap_horizon_guesses() -> str
 
 def string_for_step7a_to_c_main_loop_for_each_horizon(
     single_horizon: bool = False,
+    allocate_radii_interp: bool = False,
 ) -> str:
     """
     Generate the C string for STEP 7 a to c: main loop for each horizon.
 
     :param single_horizon: If True, emit code for a single horizon (`which_horizon`). Otherwise, emit the standard for-loop.
+    :param allocate_radii_interp: If True, allocate `radii_interp` on the heap
+                                   with malloc; otherwise, use stack array.
     :return: Raw C string.
     """
     if single_horizon:
@@ -979,21 +982,28 @@ def string_for_step7a_to_c_main_loop_for_each_horizon(
     if (!commondata->bah_BBH_mode_horizon_active[h])
       continue; // END IF: not active, continue loop
 """
-    outstring += r"""
+    if allocate_radii_interp:
+        radii_interp_decl = "*radii_interp = (REAL*)malloc(sizeof(REAL) * commondata->bah_Nr_interp_max);"
+        radii_interp_arg = "*radii_interp"
+    else:
+        radii_interp_decl = "REAL radii_interp[commondata->bah_Nr_interp_max];"
+        radii_interp_arg = "radii_interp"
+
+    outstring += rf"""
 
     gettimeofday(&iter_time_tracker, NULL); // Per-horizon timer start
 
     bhahaha_params_and_data_struct *current_horizon_params = &commondata->bhahaha_params_and_data[h];
 
     // STEP 7.b: Set up the radial grid for interpolation.
-    REAL radii_interp[commondata->bah_Nr_interp_max];                           // Max capacity from commondata (scalar)
+    {radii_interp_decl}                           // Max capacity from commondata (scalar)
     bah_radial_grid_cell_centered_set_up(commondata->bah_Nr_interp_max,         // Max capacity of radii_interp array
                                          commondata->bah_max_search_radius[h],  // Overall max search radius for this horizon
                                          r_min_guess[h], r_max_guess[h], // Current guess for search range from extrapolation
                                          &current_horizon_params->Nr_external_input, // Output: Actual Nr used for this horizon
                                          &current_horizon_params->r_min_external_input, // Output: Actual r_min used
                                          &current_horizon_params->dr_external_input, // Output: Actual dr used
-                                         radii_interp);                         // Output: populated radii for this horizon
+                                         {radii_interp_arg});                         // Output: populated radii for this horizon
 
     // STEP 7.c: Allocate buffer for interpolated ADM metric data.
     const int Ntheta_interp_eff = current_horizon_params->Ntheta_array_multigrid[current_horizon_params->num_resolutions_multigrid - 1];
@@ -1001,21 +1011,21 @@ def string_for_step7a_to_c_main_loop_for_each_horizon(
     const size_t npts_metric_adm =
         (size_t)BHAHAHA_NUM_METRIC_COMPONENTS * current_horizon_params->Nr_external_input * Ntheta_interp_eff * Nphi_interp_eff;
 
-    if (current_horizon_params->Nr_external_input > 0) {
+    if (current_horizon_params->Nr_external_input > 0) {{
       current_horizon_params->input_metric_data = (REAL *)malloc(npts_metric_adm * sizeof(REAL));
-      if (!current_horizon_params->input_metric_data) {
+      if (!current_horizon_params->input_metric_data) {{
         fprintf(stderr, "ERROR: malloc() failed for input_metric_data for H%d (%zu REALs).\n", h, npts_metric_adm);
         exit(EXIT_FAILURE);
-      } // END IF: malloc failed for input_metric_data
-    } else { // Nr_external_input <= 0
+      }} // END IF: malloc failed for input_metric_data
+    }} else {{ // Nr_external_input <= 0
       current_horizon_params->input_metric_data = NULL;
-    } // END ELSE: Nr_external_input <= 0
+    }} // END ELSE: Nr_external_input <= 0
 
-    if (commondata->bah_verbosity_level >= 2) {
+    if (commondata->bah_verbosity_level >= 2) {{
       struct timeval temp_time;
       gettimeofday(&temp_time, NULL);
       printf("%.6f s : START interpolate H%d\n", timeval_to_seconds(start_time_total, temp_time), h);
-    } // END IF: verbosity for start interpolate
+    }} // END IF: verbosity for start interpolate
 """
     return outstring
 

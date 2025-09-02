@@ -419,7 +419,9 @@ and result updates for multiple horizons.
 
     cfunc_type = "void"
     name = "bhahaha_find_horizons"
-    params = """commondata_struct *restrict commondata, griddata_struct *restrict griddata, REAL x_guess[], REAL y_guess[], REAL z_guess[],REAL **radii, int *total_elements, REAL (**dst_x0x1x2)[3], REAL ***dst_data_ptrs,const int which_horizon, const int which_bhahaha_part"""
+    params = """commondata_struct *restrict commondata, griddata_struct *restrict griddata, REAL x_guess[], REAL y_guess[], REAL z_guess[],
+                           REAL **radii_interp, int *total_elements, REAL (**dst_x0x1x2)[3], REAL ***dst_data_ptrs, const int which_horizon,
+                           const int which_bhahaha_part"""
     body = """
     switch (which_bhahaha_part) {
     case BHAHAHA_FIND_HORIZONS_SETUP: {
@@ -462,14 +464,16 @@ and result updates for multiple horizons.
   } // END IF: verbosity_level > 1 (pre-interpolation print)
   """
 
-    body += string_for_step7a_to_c_main_loop_for_each_horizon(single_horizon=True)
+    body += string_for_step7a_to_c_main_loop_for_each_horizon(
+        single_horizon=True, allocate_radii_interp=True
+    )
 
     body += """
     // STEP 7.d: Interpolate metric data.
     if (current_horizon_params->input_metric_data && current_horizon_params->Nr_external_input > 0) {
       BHaHAHA_compute_dst_pts_metric_data_nrpy(commondata, &griddata[0].params, griddata[0].xx, current_horizon_params, x_guess[h], y_guess[h],
                                            z_guess[h],   // Use per-horizon guess
-                                           radii_interp, // Pass the populated radii_interp array for this horizon
+                                           *radii_interp, // Pass the populated radii_interp array for this horizon
                                            total_elements, dst_x0x1x2, dst_data_ptrs);
     } // END IF: call BHaHAHA_interpolate_metric_data_nrpy
     """
@@ -480,6 +484,14 @@ and result updates for multiple horizons.
     case BHAHAHA_FIND_HORIZONS_FIND_AND_WRITE_TO_FILE: {
       int h = which_horizon;
       bhahaha_params_and_data_struct *current_horizon_params = &commondata->bhahaha_params_and_data[h];
+      if (current_horizon_params->input_metric_data && current_horizon_params->Nr_external_input > 0) {
+        BHaHAHA_interpolate_metric_data_nrpy(commondata, &griddata[0].params, griddata[0].xx, griddata[0].gridfuncs.y_n_gfs, current_horizon_params,
+                                             x_guess[h], y_guess[h],
+                                             z_guess[h],   // Use per-horizon guess
+                                             *radii_interp, // Pass the populated radii_interp array for this horizon
+                                             dst_x0x1x2, dst_data_ptrs,
+                                             current_horizon_params->input_metric_data);
+      } // END IF: call BHaHAHA_interpolate_metric_data_nrpy
   """
 
     body += string_for_step7e_to_g_main_loop_for_each_horizon(single_horizon=True)
