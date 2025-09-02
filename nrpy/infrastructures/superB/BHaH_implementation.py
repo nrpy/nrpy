@@ -96,11 +96,11 @@ def string_for_spherical_interp_setup_step_6_allocate_tmp_bssn() -> str:
   *dst_data_ptrs_bssn = (REAL **)malloc(BHAHAHA_NUM_INTERP_GFS * sizeof(REAL *));
   for (int i = 0; i < BHAHAHA_NUM_INTERP_GFS; i++) {
     (*dst_data_ptrs_bssn)[i] = (REAL *)malloc(*total_interp_points * sizeof(REAL));
-    if (dst_data_ptrs_bssn[i] == NULL) {
+    if ((*dst_data_ptrs_bssn)[i] == NULL) {
       fprintf(stderr, "ERROR: Failed to allocate memory for dst_data_ptrs_bssn[%d].\n", i);
       for (int k = 0; k < i; ++k)
-        BHAH_FREE(dst_data_ptrs_bssn[k]);
-      BHAH_FREE(dst_x0x1x2_interp);
+        BHAH_FREE((*dst_data_ptrs_bssn)[k]);
+      BHAH_FREE(*dst_x0x1x2_interp);
       exit(EXIT_FAILURE);
     } // END IF: dst_data_ptrs_bssn[i] == NULL
   } // END LOOP: for i (allocating dst_data_ptrs_bssn)
@@ -302,10 +302,11 @@ static void BHaHAHA_interpolate_metric_data_nrpy(const commondata_struct *restri
 
     prefunc += r"""
   // STEP 10: Free allocated temporary memory.
-  BHAH_FREE(dst_x0x1x2_interp);
-  for (int i = 0; i < BHAHAHA_NUM_INTERP_GFS; i++) {
-    BHAH_FREE(dst_data_ptrs_bssn[i]);
-  } // END LOOP: for i (freeing dst_data_ptrs_bssn)
+  BHAH_FREE(*dst_x0x1x2_interp);
+  for (int i = 0; i < BHAHAHA_NUM_INTERP_GFS; i) {
+    BHAH_FREE((*dst_data_ptrs_bssn)[i]);
+  } // END LOOP: for i (freeing (*dst_data_ptrs_bssn))
+  BHAH_FREE(*dst_data_ptrs_bssn);
 } // END FUNCTION: BHaHAHA_interpolate_metric_data_nrpy
 """
     return prefunc
