@@ -303,7 +303,7 @@ static void BHaHAHA_interpolate_metric_data_nrpy(const commondata_struct *restri
     prefunc += r"""
   // STEP 10: Free allocated temporary memory.
   BHAH_FREE(*dst_x0x1x2_interp);
-  for (int i = 0; i < BHAHAHA_NUM_INTERP_GFS; i) {
+  for (int i = 0; i < BHAHAHA_NUM_INTERP_GFS; i++) {
     BHAH_FREE((*dst_data_ptrs_bssn)[i]);
   } // END LOOP: for i (freeing (*dst_data_ptrs_bssn))
   BHAH_FREE(*dst_data_ptrs_bssn);
