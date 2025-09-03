@@ -77,7 +77,7 @@ def string_for_spherical_interp_setup_steps_1_to_4() -> str:
         const int idx3 = IDX3_SPH_INTERP_LOCAL(ir, itheta, iphi);
         const REAL xCart[3] = {x_center + r * sintheta * cosphi, y_center + r * sintheta * sinphi, z_center + r * costheta};
         int Cart_to_i0i1i2_not_stored_to_save_memory[3];
-        *total_interp_points = actual_Nr_interp * Ntheta_interp * Nphi_interp;
+        Cart_to_xx_and_nearest_i0i1i2(params, xCart, (*dst_x0x1x2_interp)[idx3], Cart_to_i0i1i2_not_stored_to_save_memory);
       } // END LOOP: for ir (spherical grid setup)
     } // END LOOP: for itheta (spherical grid setup)
   } // END LOOP: for iphi (#pragma omp parallel for, spherical grid setup)
@@ -439,7 +439,6 @@ and result updates for multiple horizons.
 
     body += r"""
   // Local arrays for per-horizon guesses for the current find.
-  REAL x_guess[max_num_horizons], y_guess[max_num_horizons], z_guess[max_num_horizons];
   REAL r_min_guess[max_num_horizons], r_max_guess[max_num_horizons];
   """
 
