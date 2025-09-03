@@ -149,7 +149,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_waveform() -> (
     Union[None, pcg.NRPyEnv_type]
 ):
     """
-    Register CFunction for calculating the (2,2) mode of SEOBNRv5.
+    Register CFunction for calculating the (2,2) mode of the SEOBNRv5 inspiral.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """

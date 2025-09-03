@@ -1,5 +1,5 @@
 """
-Set up C function library for BOB related routines.
+Set up C function library for native SEOBNRv5 merger-related routines.
 
 Authors: Siddharth Mahesh
         sm0193 **at** mix **dot** wvu **dot** edu
@@ -19,7 +19,7 @@ import nrpy.helpers.parallel_codegen as pcg
 
 def register_CFunction_SEOBNRv5_aligned_spin_NQC_rhs() -> Union[None, pcg.NRPyEnv_type]:
     """
-    Register CFunction for calculating the NQC amplitudes and phase from BOB.
+    Register CFunction for calculating the NQC amplitudes and phase from SEOBNRv5.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -105,7 +105,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_merger_waveform() -> (
         include_braces=False,
     )
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Calculate the BOB 22 mode."""
+    desc = """Calculate the SEOBNRv5 merger 22 mode."""
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_merger_waveform"
     params = "const REAL t , const REAL t_0, const REAL h_0 , const REAL hdot_0 , const REAL phi_0 , const REAL phidot_0, commondata_struct *restrict commondata , REAL *restrict waveform"
@@ -148,7 +148,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_merger_waveform_from_times() -> (
         return None
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Calculate the BOB 22 mode."""
+    desc = """Calculate the SEOBNRv5 merger 22 mode."""
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_merger_waveform_from_times"
     params = "REAL *restrict times , REAL *restrict amps , REAL *restrict phases , const REAL t_0, const REAL h_0 , const REAL hdot_0 , const REAL phi_0 , const REAL phidot_0, const size_t nsteps_MR , commondata_struct *restrict commondata"
