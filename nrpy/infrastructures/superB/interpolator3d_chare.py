@@ -368,7 +368,7 @@ module interpolator3d {
                 const int Nxx_plus_2NGHOSTS1 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS1;
                 const int Nxx_plus_2NGHOSTS2 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS2;
 
-                interpolation_3d_general__uniform_src_grid((NGHOSTS - 1), griddata_chare[grid].params.dxx0, griddata_chare[grid].params.dxx1, griddata_chare[grid].params.dxx2, Nxx_plus_2NGHOSTS0,
+                interpolation_3d_general__uniform_src_grid((NGHOSTS), griddata_chare[grid].params.dxx0, griddata_chare[grid].params.dxx1, griddata_chare[grid].params.dxx2, Nxx_plus_2NGHOSTS0,
                                                        Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, BHAHAHA_NUM_INTERP_GFS, griddata_chare[grid].xx, src_gf_ptrs,
                                                        total_elements_chare, dst_x0x1x2_chare, dst_data_ptrs_chare);
                 contribute_interpolation_results(index_horizonfinder_chare);
