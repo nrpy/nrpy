@@ -29,7 +29,6 @@ from nrpy.infrastructures.BHaH.BHaHAHA.BHaH_implementation import (
     string_for_step6_apply_robustness_improv_and_extrap_horizon_guesses,
     string_for_step7a_to_c_main_loop_for_each_horizon,
     string_for_step7e_to_g_main_loop_for_each_horizon,
-    string_for_step8_print_total_elapsed_time,
 )
 
 
@@ -341,10 +340,6 @@ def register_CFunction_bhahaha_find_horizons(
         CoordSystem, add_bhahaha_gf_interp_ind_to_bhah_defines=True
     )
 
-    prefunc += """
-    static struct timeval start_time_total, iter_time_tracker;
-    """
-
     desc = r"""Main driver function for finding apparent horizons using the BHaHAHA library.
 It orchestrates initialization, BBH logic, extrapolation, interpolation, solving,
 and result updates for multiple horizons.
@@ -429,10 +424,6 @@ and result updates for multiple horizons.
     """
     body += string_for_step1_horizon_schedule()
 
-    body += r"""
-  gettimeofday(&start_time_total, NULL);
-  """
-
     body += string_for_step2_validate_multigrid_inputs()
 
     body += string_for_step3_initialize_bhahaha_data_structs_and_solver_params()
@@ -465,7 +456,9 @@ and result updates for multiple horizons.
   """
 
     body += string_for_step7a_to_c_main_loop_for_each_horizon(
-        single_horizon=True, allocate_radii_interp=True
+        single_horizon=True,
+        allocate_radii_interp=True,
+        enable_timing=False,
     )
 
     body += """
@@ -494,9 +487,9 @@ and result updates for multiple horizons.
       } // END IF: call BHaHAHA_interpolate_metric_data_nrpy
   """
 
-    body += string_for_step7e_to_g_main_loop_for_each_horizon(single_horizon=True)
-
-    body += string_for_step8_print_total_elapsed_time()
+    body += string_for_step7e_to_g_main_loop_for_each_horizon(
+        single_horizon=True, enable_timing=False
+    )
 
     body += r"""
     break;

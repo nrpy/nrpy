@@ -957,6 +957,7 @@ def string_for_step6_apply_robustness_improv_and_extrap_horizon_guesses() -> str
 def string_for_step7a_to_c_main_loop_for_each_horizon(
     single_horizon: bool = False,
     allocate_radii_interp: bool = False,
+    enable_timing: bool = True,
 ) -> str:
     """
     Generate the C string for STEP 7 a to c: main loop for each horizon.
@@ -964,6 +965,7 @@ def string_for_step7a_to_c_main_loop_for_each_horizon(
     :param single_horizon: If True, emit code for a single horizon (`which_horizon`). Otherwise, emit the standard for-loop.
     :param allocate_radii_interp: If True, allocate `radii_interp` on the heap
                                    with malloc; otherwise, use stack array.
+    :param enable_timing: If False, skip emitting `gettimeofday` lines.
     :return: Raw C string.
     """
     if single_horizon:
@@ -989,10 +991,12 @@ def string_for_step7a_to_c_main_loop_for_each_horizon(
         radii_interp_decl = "REAL radii_interp[commondata->bah_Nr_interp_max];"
         radii_interp_arg = "radii_interp"
 
-    outstring += rf"""
-
+    if enable_timing:
+        outstring += r"""
     gettimeofday(&iter_time_tracker, NULL); // Per-horizon timer start
+"""
 
+    outstring += rf"""
     bhahaha_params_and_data_struct *current_horizon_params = &commondata->bhahaha_params_and_data[h];
 
     // STEP 7.b: Set up the radial grid for interpolation.
@@ -1022,30 +1026,44 @@ def string_for_step7a_to_c_main_loop_for_each_horizon(
     }} // END ELSE: Nr_external_input <= 0
 
     if (commondata->bah_verbosity_level >= 2) {{
-      struct timeval temp_time;
+      struct timeval temp_time;"""
+    if enable_timing:
+        outstring += r"""
       gettimeofday(&temp_time, NULL);
-      printf("%.6f s : START interpolate H%d\n", timeval_to_seconds(start_time_total, temp_time), h);
-    }} // END IF: verbosity for start interpolate
+      printf("%.6f s : START interpolate H%d\n", timeval_to_seconds(start_time_total, temp_time), h);"""
+    else:
+        outstring += r"""
+      printf("START interpolate\n");"""
+    outstring += r"""
+    } // END IF: verbosity for start interpolate
 """
     return outstring
 
 
 def string_for_step7e_to_g_main_loop_for_each_horizon(
     single_horizon: bool = False,
+    enable_timing: bool = True,
 ) -> str:
     r"""
     Generate the C string for STEP 7 e to g: main loop for each horizon.
 
     :param single_horizon: If True, emit code for a single horizon (`which_horizon`). Otherwise, emit the standard for-loop.
+    :param enable_timing: If False, skip emitting `gettimeofday` lines.
     :return: Raw C string.
     """
     outstring = r"""
-    if (commondata->bah_verbosity_level >= 2) {
+    if (commondata->bah_verbosity_level >= 2) {"""
+    if enable_timing:
+        outstring += r"""
         struct timeval temp_time;
         gettimeofday(&temp_time, NULL);
         printf("%.6f s : FINISH interpolate H%d (%.3fs)\n", timeval_to_seconds(start_time_total, temp_time), h,
                timeval_to_seconds(iter_time_tracker, temp_time));
-        gettimeofday(&iter_time_tracker, NULL); // Reset for solver timing
+        gettimeofday(&iter_time_tracker, NULL); // Reset for solver timing"""
+    else:
+        outstring += r"""
+        printf("FINISH interpolate\n");"""
+    outstring += r"""
     } // END IF: verbosity for finish interpolate
 
     // STEP 7.e: Call `bah_find_horizon` solver if metric data available.
@@ -1079,11 +1097,17 @@ def string_for_step7e_to_g_main_loop_for_each_horizon(
     // STEP 7.g: Free the allocated `input_metric_data` buffer.
     BHAH_FREE(current_horizon_params->input_metric_data);
 
-    if (commondata->bah_verbosity_level >= 1) {
+    if (commondata->bah_verbosity_level >= 1) {"""
+    if enable_timing:
+        outstring += r"""
       struct timeval temp_time;
       gettimeofday(&temp_time, NULL);
       printf("%.6f s : FINISH find H%d (%.3fs for solve section)\n", timeval_to_seconds(start_time_total, temp_time), h,
-             timeval_to_seconds(iter_time_tracker, temp_time));
+             timeval_to_seconds(iter_time_tracker, temp_time));"""
+    else:
+        outstring += r"""
+      printf("FINISH find\n");"""
+    outstring += r"""
     } // END IF: verbosity for finish find horizon"""
     if not single_horizon:
         outstring += r"""
