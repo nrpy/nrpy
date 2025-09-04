@@ -43,7 +43,7 @@ Horizon_finder_SDAG_CODE
   REAL *radii;
   REAL (*dst_x0x1x2)[3];
   REAL **dst_data_ptrs;
-  bool write_diagnostics_this_step;
+  bool do_horizon_find;
 
   /// Member Functions (private) ///
 
@@ -173,10 +173,23 @@ module horizon_finder {
       }
       while (commondata.time < commondata.t_final) {
         serial {
-          write_diagnostics_this_step = fabs(round(commondata.time / commondata.diagnostics_output_every) * commondata.diagnostics_output_every -
-                                             commondata.time) < 0.5 * commondata.dt;
+          do_horizon_find = true;  // default: yes, find horizon
+          // STEP 1: Check if horizon find is scheduled for the current iteration.
+          if (commondata.diagnostics_output_every <= 0 ||
+              (commondata.nn % (int)(commondata.diagnostics_output_every / commondata.dt + 0.5)) != 0) {
+            int bah_find_every = 1;  // Placeholder: find every iteration. This should be a commondata param.
+            if (commondata.diagnostics_output_every > commondata.dt) {
+              // A basic way to get find_every from time interval
+              bah_find_every = (int)(commondata.diagnostics_output_every / commondata.dt + 0.5);
+              if (bah_find_every == 0)
+                bah_find_every = 1;
+            }
+            if (bah_find_every <= 0 || (commondata.nn % bah_find_every) != 0) {
+              do_horizon_find = false;  // not scheduled this iteration
+            }
+          } // END IF: diagnostics_output_every > 0
         }
-        if (write_diagnostics_this_step) {
+        if (do_horizon_find) {
           serial {
             which_horizon = thisIndex;
           }

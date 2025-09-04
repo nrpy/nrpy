@@ -456,6 +456,9 @@ class Timestepping : public CBase_Timestepping {
     if enable_charm_checkpointing:
         file_output_str += r"""
     bool write_chckpt_this_step;"""
+    if enable_BHaHAHA:
+        file_output_str += r"""
+    bool do_horizon_find;"""
     file_output_str += r"""
     Ck::IO::File f_1d_y;
     Ck::IO::File f_1d_z;
@@ -1747,11 +1750,26 @@ def output_timestepping_ci(
 
     if enable_BHaHAHA:
         file_output_str += r"""
-          // If diagnostics are requested this step, send the entire set of required BHaHAHA gridfunctions to the corresponding Interpolator3d chare
-          if (write_diagnostics_this_step) {
-            serial {
-              send_bhahaha_gfs_to_corresponding_interpolator_chare(grid);
-            }
+          serial {
+            do_horizon_find = true;  // default: yes, find horizon
+            // STEP 1: Check if horizon find is scheduled for the current iteration.
+            if (commondata.diagnostics_output_every <= 0 ||
+                (commondata.nn % (int)(commondata.diagnostics_output_every / commondata.dt + 0.5)) != 0) {
+              int bah_find_every = 1;  // Placeholder: find every iteration. This should be a commondata param.
+              if (commondata.diagnostics_output_every > commondata.dt) {
+                // A basic way to get find_every from time interval
+                bah_find_every = (int)(commondata.diagnostics_output_every / commondata.dt + 0.5);
+                if (bah_find_every == 0)
+                  bah_find_every = 1;
+              }
+              if (bah_find_every <= 0 || (commondata.nn % bah_find_every) != 0) {
+                do_horizon_find = false;  // not scheduled this iteration
+              }
+            } // END IF: diagnostics_output_every > 0
+          }
+          // If do horison for this step, send the entire set of required BHaHAHA gridfunctions to the corresponding Interpolator3d chare
+          if (do_horizon_find) {
+              serial { send_bhahaha_gfs_to_corresponding_interpolator_chare(grid); }
           }
         """
     file_output_str += """
