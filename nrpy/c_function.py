@@ -8,7 +8,6 @@ Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
 import os
 from typing import Dict, List, Optional, Tuple
 
-import nrpy.params as par
 from nrpy.helpers.generic import clang_format
 
 
@@ -195,10 +194,7 @@ class CFunction:
                 if self.enable_simd or "simd_width" in self.body
                 else "set_CodeParameters.h"
             )
-            if par.parval_from_str("Infrastructure") == "BHaH":
-                include_Cparams_str = f'#include "{os.path.join(rel_path_to_root_directory, CodeParameters_file_name)}"\n'
-            else:
-                include_Cparams_str = f'#include "{CodeParameters_file_name}"\n'
+            include_Cparams_str = f'#include "{CodeParameters_file_name}"\n'
 
         complete_func = ""
 

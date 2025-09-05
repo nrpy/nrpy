@@ -10,7 +10,7 @@
  */
 void diagnostics_nearest_grid_center__rfm__SinhCylindrical(commondata_struct *restrict commondata, const params_struct *restrict params,
                                                            MoL_gridfunctions_struct *restrict gridfuncs) {
-#include "../set_CodeParameters.h"
+#include "set_CodeParameters.h"
 
   // Unpack gridfuncs struct:
   const REAL *restrict y_n_gfs = gridfuncs->y_n_gfs;

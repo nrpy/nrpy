@@ -127,7 +127,7 @@ params->Nxx_plus_2NGHOSTS2 = params->Nxx2 + 2*NGHOSTS;
     rfm = refmetric.reference_metric[CoordSystem]
     # Set grid_physical_size & grid_hole_radius
     body += """{
-#include "../set_CodeParameters.h"
+#include "set_CodeParameters.h"
 // Set grid size to a function of grid_physical_size (grid_physical_size set in set_CodeParameters.h above):
 """
     for key, value in rfm.grid_physical_size_dict.items():
@@ -137,7 +137,7 @@ params->Nxx_plus_2NGHOSTS2 = params->Nxx2 + 2*NGHOSTS;
     # Set grid_hole_radius
     if "Holey" in CoordSystem or "Wedge" in CoordSystem:
         body += """{
-#include "../set_CodeParameters.h"
+#include "set_CodeParameters.h"
 // Set grid hole radius to a function of grid_hole_radius (grid_hole_radius set in set_CodeParameters.h above):
 """
         for key, value in rfm.grid_hole_radius_dict.items():
@@ -146,7 +146,7 @@ params->Nxx_plus_2NGHOSTS2 = params->Nxx2 + 2*NGHOSTS;
 
     # Set minimum and maximum values of xx[][] for each grid.
     body += """if (apply_convergence_factor_and_set_xxminmax_defaults) {
-#include "../set_CodeParameters.h"
+#include "set_CodeParameters.h"
 // Set {xxmin[], xxmax[]} to default values, which could be functions of other rfm params (set in set_CodeParameters.h above):
 """
     for minmax in ["min", "max"]:

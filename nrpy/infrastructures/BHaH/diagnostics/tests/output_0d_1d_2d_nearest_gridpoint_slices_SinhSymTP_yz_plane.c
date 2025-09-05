@@ -5,7 +5,7 @@
  */
 void diagnostics_nearest_2d_yz_plane__rfm__SinhSymTP(commondata_struct *restrict commondata, const params_struct *restrict params,
                                                      REAL *restrict xx[3], MoL_gridfunctions_struct *restrict gridfuncs) {
-#include "../set_CodeParameters.h"
+#include "set_CodeParameters.h"
 
   // Unpack grid function pointers from gridfuncs struct
   const REAL *restrict y_n_gfs = gridfuncs->y_n_gfs;

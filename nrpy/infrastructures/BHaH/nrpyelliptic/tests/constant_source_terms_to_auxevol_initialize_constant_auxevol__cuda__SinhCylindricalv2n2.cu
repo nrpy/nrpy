@@ -249,7 +249,7 @@ __global__ static void variable_wavespeed_gfs_all_points_gpu(const size_t stream
  */
 void initialize_constant_auxevol__rfm__SinhCylindricalv2n2(commondata_struct *restrict commondata, params_struct *restrict params,
                                                            REAL *restrict xx[3], MoL_gridfunctions_struct *restrict gridfuncs) {
-#include "../set_CodeParameters.h"
+#include "set_CodeParameters.h"
   cpyHosttoDevice_commondata__constant(commondata);
 
   REAL *restrict auxevol_gfs = gridfuncs->auxevol_gfs;

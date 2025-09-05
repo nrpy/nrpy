@@ -81,12 +81,12 @@ void numerical_grid_params_Nxx_dxx_xx__rfm__SinhSymTP(const commondata_struct *r
   params->Nxx_plus_2NGHOSTS2 = params->Nxx2 + 2 * NGHOSTS;
 
   {
-#include "../set_CodeParameters.h"
+#include "set_CodeParameters.h"
     // Set grid size to a function of grid_physical_size (grid_physical_size set in set_CodeParameters.h above):
     params->AMAX = grid_physical_size;
   }
   if (apply_convergence_factor_and_set_xxminmax_defaults) {
-#include "../set_CodeParameters.h"
+#include "set_CodeParameters.h"
     // Set {xxmin[], xxmax[]} to default values, which could be functions of other rfm params (set in set_CodeParameters.h above):
     params->xxmin0 = 0;
     params->xxmin1 = 0;

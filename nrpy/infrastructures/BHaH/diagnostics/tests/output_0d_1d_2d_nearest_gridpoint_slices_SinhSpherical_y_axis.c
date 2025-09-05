@@ -18,7 +18,7 @@ static int compare(const void *a, const void *b) {
  */
 void diagnostics_nearest_1d_y_axis__rfm__SinhSpherical(commondata_struct *restrict commondata, const params_struct *restrict params,
                                                        REAL *restrict xx[3], MoL_gridfunctions_struct *restrict gridfuncs) {
-#include "../set_CodeParameters.h"
+#include "set_CodeParameters.h"
 
   // Unpack grid function pointers from gridfuncs struct
   const REAL *restrict y_n_gfs = gridfuncs->y_n_gfs;
