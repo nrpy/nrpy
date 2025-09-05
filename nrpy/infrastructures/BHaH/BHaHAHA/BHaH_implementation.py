@@ -751,10 +751,14 @@ def string_for_step2_validate_multigrid_inputs() -> str:
     return outstring
 
 
-def string_for_step3_initialize_bhahaha_data_structs_and_solver_params() -> str:
+def string_for_step3_initialize_bhahaha_data_structs_and_solver_params(
+    enable_BBH_mode: bool = True,
+) -> str:
     r"""
     Generate the C string for STEP 3: initialize BHaHAHA data structures and solver parameters.
 
+    :param enable_BBH_mode: If True, include BBH mode initialization logic.
+                            If False, skip it and always activate all horizons.
     :return: Raw C string.
     """
     outstring = r"""
@@ -779,7 +783,9 @@ def string_for_step3_initialize_bhahaha_data_structs_and_solver_params() -> str:
       initialize_bhahaha_solver_params_and_shapes(commondata, h, true); // true for shape alloc
 
     } // END LOOP: for h (iteration 0 persistent data initialization)
-
+"""
+    if enable_BBH_mode:
+        outstring += r"""
     // STEP 3.a.iii: Initialize `commondata->bah_BBH_mode_horizon_active`.
     if (commondata->bah_BBH_mode_enable) {
       if (commondata->bah_max_num_horizons != 3) {
@@ -803,7 +809,15 @@ def string_for_step3_initialize_bhahaha_data_structs_and_solver_params() -> str:
       for (int h = 0; h < commondata->bah_max_num_horizons; h++) {
         commondata->bah_BBH_mode_horizon_active[h] = 1; // Activate all configured horizons
       } // END LOOP: for h (activating all horizons if not BBH mode)
-    } // END ELSE: not BBH_mode_enable (iteration 0 horizon activity)
+    } // END ELSE: not BBH_mode_enable (iteration 0 horizon activity)"""
+    else:
+        outstring += r"""
+    // STEP 3.a.iii: Initialize `commondata->bah_BBH_mode_horizon_active` (non-BBH mode only).
+    for (int h = 0; h < commondata->bah_max_num_horizons; h++) {
+      commondata->bah_BBH_mode_horizon_active[h] = 1; // Activate all configured horizons
+    } // END LOOP: for h (activating all horizons if BBH mode disabled in codegen)
+"""
+    outstring += r"""
   } else { // Not the first call (nn != 0)
     // STEP 3.b: If not the first call:
     for (int h = 0; h < commondata->bah_max_num_horizons; h++) {
@@ -916,10 +930,16 @@ def string_for_step5_apply_bbh_mode_logic() -> str:
     return outstring
 
 
-def string_for_step6_apply_robustness_improv_and_extrap_horizon_guesses() -> str:
+def string_for_step6_apply_robustness_improv_and_extrap_horizon_guesses(
+    enable_BBH_mode: bool = True,
+) -> str:
     r"""
     Generate the C string for STEP 6: apply robustness improvements and extrapolate horizon guesses.
 
+
+    :param enable_BBH_mode: If True, include the extra robustness block
+                            for the BBH common horizon (STEP 6.a.iii).
+                            If False, skip it.
     :return: Raw C string.
     """
     outstring = r"""
@@ -933,14 +953,17 @@ def string_for_step6_apply_robustness_improv_and_extrap_horizon_guesses() -> str
       current_horizon_params->cfl_factor *= 0.9;
       // STEP 6.a.ii: Force fixed radius guess.
       current_horizon_params->use_fixed_radius_guess_on_full_sphere = 1; // Force fixed radius if not found reliably.
-
+"""
+    if enable_BBH_mode:
+        outstring += r"""
       // STEP 6.a.iii: If BBH common horizon, adjust resolution/iterations.
       if (commondata->bah_BBH_mode_enable && h == commondata->bah_BBH_mode_common_horizon_idx &&
           current_horizon_params->num_resolutions_multigrid >= 2) {
         current_horizon_params->Ntheta_array_multigrid[0] = commondata->bah_Ntheta_array_multigrid[1]; // Use 2nd level res for 1st.
         current_horizon_params->Nphi_array_multigrid[0] = commondata->bah_Nphi_array_multigrid[1];
         current_horizon_params->max_iterations *= 2;
-      } // END IF: BBH mode common horizon robustness for resolution/iterations
+      } // END IF: BBH mode common horizon robustness for resolution/iterations"""
+    outstring += r"""
     } // END IF: robustness improvements for not-yet-found horizons
 
     // STEP 6.b: Extrapolate current guesses.
@@ -958,6 +981,7 @@ def string_for_step7a_to_c_main_loop_for_each_horizon(
     single_horizon: bool = False,
     allocate_radii_interp: bool = False,
     enable_timing: bool = True,
+    enable_BBH_mode: bool = True,
 ) -> str:
     """
     Generate the C string for STEP 7 a to c: main loop for each horizon.
@@ -966,13 +990,21 @@ def string_for_step7a_to_c_main_loop_for_each_horizon(
     :param allocate_radii_interp: If True, allocate `radii_interp` on the heap
                                    with malloc; otherwise, use stack array.
     :param enable_timing: If False, skip emitting `gettimeofday` lines.
+    :param enable_BBH_mode: **Only used when `single_horizon` is True.**
+                            If True, emit the BBH activity guard
+                            (`if (!commondata->bah_BBH_mode_horizon_active[h]) return;`)
+                            for the selected horizon. If False, **omit** that guard.
+                            (No effect when `single_horizon` is False.)
     :return: Raw C string.
     """
     if single_horizon:
         outstring = r"""
       // STEP 7: Main computation for one horizon.
         int h = which_horizon;
-        // STEP 7.a: Skip if horizon is not active.
+        """
+        if enable_BBH_mode:
+            outstring += r"""
+      // STEP 7.a: Skip if horizon is not active.
         if (!commondata->bah_BBH_mode_horizon_active[h])
           return; // END IF: not active, return
 """
