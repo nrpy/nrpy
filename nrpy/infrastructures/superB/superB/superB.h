@@ -86,6 +86,9 @@
 #define INITIALDATA_BIN_TWO 2
 #define INITIALDATA_APPLYBCS_OUTEREXTRAPANDINNER 3
 
+#define BHAHAHA_FIND_HORIZONS_SETUP 0
+#define BHAHAHA_FIND_HORIZONS_FIND_AND_WRITE_TO_FILE 1
+
 typedef struct __charecomm_struct__ {
   int *restrict globalidx3pt_to_chareidx3;    // which chare is evolving or applying bcs to grid point
   int *restrict globalidx3pt_to_localidx3pt;  // local index of grid point on chare that is evolving or setting bcs for gridpoint
@@ -148,6 +151,7 @@ typedef struct __tmpBuffers_struct__ {
   REAL *restrict tmpBuffer_TB;
   REAL **restrict tmpBuffer_innerbc_send;
   REAL **restrict tmpBuffer_innerbc_receiv;
+  REAL *restrict tmpBuffer_bhahaha_gfs;
 } tmpBuffers_struct;
 
 typedef struct __nonlocalinnerbc_struct__ {

@@ -34,10 +34,12 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     exec_or_library_name: str = "",
     compiler_opt_option: str = "default",
     addl_CFLAGS: Optional[List[str]] = None,
+    addl_dirs_to_make: Optional[List[str]] = None,
     addl_libraries: Optional[List[str]] = None,
     CC: str = "autodetect",
     create_lib: bool = False,
     include_dirs: Optional[List[str]] = None,
+    enable_BHaHAHA: bool = False,
 ) -> None:
     """
     Output C functions registered to CFunction_dict and construct a Makefile for compiling C code.
@@ -47,14 +49,18 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     :param exec_or_library_name: The name of the executable. If set to empty string, same as project_name.
     :param compiler_opt_option: Compiler optimization option. Defaults to "default". Other options: "fast" and "debug"
     :param addl_CFLAGS: Additional compiler flags. Must be a list.
+    :param addl_dirs_to_make: Additional directories in which `make` should be run.
     :param addl_libraries: Additional libraries to link. Must be a list.
     :param CC: C compiler to use. Defaults to "autodetect" (clang if using Darwin, gcc otherwise)
     :param create_lib: Whether to create a library. Defaults to False.
     :param include_dirs: List of include directories. Must be a list.
+    :param enable_BHaHAHA: If True, compile and link interpolator3d and horizon_finder chare files.
 
     :raises TypeError: If addl_CFLAGS or include_dirs are not lists.
     :raises ValueError: If addl_CFLAGS or addl_libraries are specified incorrectly, or if OS unsupported.
     """
+    local_addl_dirs_to_make = addl_dirs_to_make or []
+
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
 
@@ -139,9 +145,6 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         else:
             CC = "gcc"
 
-    # ~ if shutil.which(CC) is None:
-    # ~ raise FileNotFoundError(f"{CC} C compiler is not found")
-
     CFLAGS_dict = {
         "default": "-O2 -march=native -g",
         "fast": "-O3 -funroll-loops -march=native -g -Wall",
@@ -199,11 +202,15 @@ all: {exec_or_library_name}
 
 %.o: %.cpp $(COMMON_HEADERS)
 	$(CC) $(CFLAGS) $(INCLUDEDIRS) -c $< -o $@
-
+"""
+    if not enable_BHaHAHA:
+        # Minimal build: timestepping + main only (no bhahaha horizon finder)
+        Makefile_str += f"""
 timestepping.o: timestepping.cpp timestepping.h main.h timestepping.def.h
 	$(CC) $(CFLAGS) $(INCLUDEDIRS) -c $< -o $@
 
 timestepping.h: timestepping.decl.h
+main.h: timestepping.decl.h main.decl.h
 
 timestepping.decl.h timestepping.def.h: timestepping.ci
 	$(CC) $(CFLAGS) $(INCLUDEDIRS) timestepping.ci
@@ -211,17 +218,52 @@ timestepping.decl.h timestepping.def.h: timestepping.ci
 main.o: main.cpp main.h main.decl.h main.def.h timestepping.decl.h
 	$(CC) $(CFLAGS) $(INCLUDEDIRS) -c $< -o $@
 
-main.h: timestepping.decl.h main.decl.h
-
 main.decl.h main.def.h: main.ci
 	$(CC) $(CFLAGS) $(INCLUDEDIRS) main.ci
 
 {exec_or_library_name}: $(OBJ_FILES) timestepping.o main.o
-	$(CC) -language charm++ $^ -o $@ $(LDFLAGS)
+"""
+    else:
+        # Full build: add interpolator3d + horizon_finder
+        Makefile_str += f"""
+timestepping.decl.h timestepping.def.h: timestepping.ci
+	$(CC) timestepping.ci
+
+interpolator3d.decl.h interpolator3d.def.h: interpolator3d.ci
+	$(CC) interpolator3d.ci
+
+horizon_finder.decl.h horizon_finder.def.h: horizon_finder.ci interpolator3d.decl.h
+	$(CC) horizon_finder.ci
+
+main.decl.h main.def.h: main.ci
+	$(CC) main.ci
+
+timestepping.h: timestepping.decl.h
+interpolator3d.h: interpolator3d.decl.h
+horizon_finder.h: horizon_finder.decl.h interpolator3d.decl.h
+main.h: main.decl.h timestepping.decl.h horizon_finder.decl.h interpolator3d.decl.h
+
+timestepping.o: timestepping.cpp timestepping.h horizon_finder.h main.h timestepping.def.h
+	$(CC) $(CFLAGS) $(INCLUDEDIRS) -c $< -o $@
+
+interpolator3d.o: interpolator3d.cpp interpolator3d.h timestepping.h horizon_finder.h interpolator3d.def.h
+	$(CC) $(CFLAGS) $(INCLUDEDIRS) -c $< -o $@
+
+horizon_finder.o: horizon_finder.cpp horizon_finder.h interpolator3d.h timestepping.h main.h horizon_finder.def.h
+	$(CC) $(CFLAGS) $(INCLUDEDIRS) -c $< -o $@
+
+main.o: main.cpp main.h main.def.h timestepping.decl.h horizon_finder.decl.h interpolator3d.decl.h
+	$(CC) $(CFLAGS) $(INCLUDEDIRS) -c $< -o $@
+
+{exec_or_library_name}: $(OBJ_FILES) interpolator3d.o horizon_finder.o timestepping.o main.o
+"""
+
+    Makefile_str += "".join(f"\t$(MAKE) -C {d}\n" for d in local_addl_dirs_to_make)
+    Makefile_str += f"""\t$(CC) -language charm++ $^ -o $@ $(LDFLAGS)
 
 # Use $(RM) to be cross-platform compatible.
 clean:
-	$(RM) *.o */*.o *~ */*~ ./#* *.txt *.dat *.avi *.png {exec_or_library_name} *.decl.h *.def.h charmrun
+	$(RM) *.o */*.o *~ */*~ ./#* *.txt *.gp *.dat *.avi *.png {exec_or_library_name} *.decl.h *.def.h charmrun
 	$(RM) -r log
 """
     # Add the valgrind target
