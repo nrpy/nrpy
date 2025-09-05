@@ -163,7 +163,6 @@ def build_bhahaha_prefunc(
     Includes:
       * FINAL_ADM_METRIC_INDICES and INTERP_BSSN_GF_INDICES enums
       * bhahaha_gf_interp_indices[] mapping
-      * timing helper (timeval_to_seconds)
       * input validation (check_multigrid_resolution_inputs)
       * per-horizon init/free helpers
       * interpolation + BSSN→ADM transformation routine
@@ -175,8 +174,6 @@ def build_bhahaha_prefunc(
     prefunc = string_for_prefunc_enums_and_interp_indices(
         add_bhahaha_gf_interp_ind_to_bhah_defines=add_bhahaha_gf_interp_ind_to_bhah_defines
     )
-
-    prefunc += string_for_static_func_timeval_to_seconds()
 
     prefunc += string_for_static_func_check_multigrid_resolution_inputs()
 
@@ -390,7 +387,8 @@ and result updates for multiple horizons.
     switch (which_bhahaha_part) {
     case BHAHAHA_FIND_HORIZONS_SETUP: {
     """
-    body += string_for_step1_horizon_schedule()
+    body += """
+    const int max_num_horizons = commondata->bah_max_num_horizons;"""
 
     body += string_for_step2_validate_multigrid_inputs()
 
