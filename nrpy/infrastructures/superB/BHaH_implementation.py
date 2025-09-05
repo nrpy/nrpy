@@ -20,8 +20,6 @@ from nrpy.infrastructures.BHaH.BHaHAHA.BHaH_implementation import (
     string_for_prefunc_enums_and_interp_indices,
     string_for_static_func_check_multigrid_resolution_inputs,
     string_for_static_func_initialize_bhahaha_solver_params_and_shapes,
-    string_for_static_func_timeval_to_seconds,
-    string_for_step1_horizon_schedule,
     string_for_step2_validate_multigrid_inputs,
     string_for_step3_initialize_bhahaha_data_structs_and_solver_params,
     string_for_step4_populate_iteration_metadata,

@@ -416,7 +416,6 @@ def output_interpolator3d_h_cpp_ci(
     Generate interpolator3d.h, interpolator3d.cpp and interpolator3d.ci.
     :param project_dir: Directory where the project C code is output.
     """
-
     output_griddata_object_h(
         project_dir=project_dir,
     )
