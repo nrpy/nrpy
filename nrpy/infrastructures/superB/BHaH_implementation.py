@@ -48,10 +48,6 @@ def string_for_spherical_interp_setup_steps_1_to_4() -> str:
   const int actual_Nr_interp = current_horizon_params->Nr_external_input;
   *total_interp_points = actual_Nr_interp * Ntheta_interp * Nphi_interp;
 
-  // STEP 2: Return if no points to interpolate.
-  if (total_interp_points == 0)
-    return; // END IF: total_interp_points == 0, no points to interpolate
-
   // STEP 3: Allocate memory for destination reference-metric coordinates.
   *dst_x0x1x2_interp = (REAL(*)[3])malloc(*total_interp_points * 3 * sizeof(REAL));
   if (dst_x0x1x2_interp == NULL) {
