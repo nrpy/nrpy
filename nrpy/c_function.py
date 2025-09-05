@@ -212,17 +212,6 @@ class CFunction:
                 if "<" in inc:
                     complete_func += f"#include {inc}\n"
                 else:
-                    if par.parval_from_str("Infrastructure") == "BHaH":
-                        if any(
-                            x in inc
-                            for x in [
-                                "BHaH_defines.h",
-                                "BHaH_function_prototypes.h",
-                                "simd_intrinsics.h",
-                                "cuda_intrinsics.h",
-                            ]
-                        ):
-                            inc = os.path.join(rel_path_to_root_directory, inc)
                     complete_func += f'#include "{inc}"\n'
 
         if self.prefunc:

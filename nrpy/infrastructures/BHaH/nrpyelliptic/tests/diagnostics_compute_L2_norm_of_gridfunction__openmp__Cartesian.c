@@ -1,5 +1,5 @@
-#include "../BHaH_defines.h"
-#include "../BHaH_function_prototypes.h"
+#include "BHaH_defines.h"
+#include "BHaH_function_prototypes.h"
 /**
  * Kernel: compute_L2_norm_of_gridfunction_host.
  * Kernel to compute L2 quantities pointwise (summed).

@@ -1,5 +1,5 @@
-#include "../BHaH_defines.h"
-#include "../BHaH_function_prototypes.h"
+#include "BHaH_defines.h"
+#include "BHaH_function_prototypes.h"
 
 #define SET_XX_CELL_CENTERED_COORDS(COORD_DIR)                                                                                                       \
   const int index = blockIdx.x * blockDim.x + threadIdx.x;                                                                                           \

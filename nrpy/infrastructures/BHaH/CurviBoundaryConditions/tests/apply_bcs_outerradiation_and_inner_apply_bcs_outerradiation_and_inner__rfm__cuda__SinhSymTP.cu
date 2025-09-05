@@ -1,5 +1,5 @@
-#include "../BHaH_defines.h"
-#include "../BHaH_function_prototypes.h"
+#include "BHaH_defines.h"
+#include "BHaH_function_prototypes.h"
 /**
  * Compute 1st derivative finite-difference derivative with arbitrary upwind
  */

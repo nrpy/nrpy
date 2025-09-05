@@ -35,7 +35,7 @@ def register_CFunction_cpyHosttoDevice_params__constant() -> None:
     >>> import nrpy.c_function as cfc
     >>> register_CFunction_cpyHosttoDevice_params__constant()
     >>> print(cfc.CFunction_dict['cpyHosttoDevice_params__constant'].full_function)
-    #include "../BHaH_defines.h"
+    #include "BHaH_defines.h"
     /**
      * Copy parameters to GPU __constant__.
      */
@@ -76,7 +76,7 @@ def register_CFunction_cpyHosttoDevice_bc_struct() -> None:
     >>> import nrpy.c_function as cfc
     >>> register_CFunction_cpyHosttoDevice_bc_struct()
     >>> print(cfc.CFunction_dict['cpyHosttoDevice_bc_struct'].full_function)
-    #include "../BHaH_defines.h"
+    #include "BHaH_defines.h"
     /**
      * Copy parameters to GPU __constant__.
      */
@@ -182,7 +182,7 @@ def register_CFunction_cpyHosttoDevice_commondata__constant() -> None:
     >>> import nrpy.c_function as cfc
     >>> register_CFunction_cpyHosttoDevice_commondata__constant()
     >>> print(cfc.CFunction_dict['cpyHosttoDevice_commondata__constant'].full_function)
-    #include "../BHaH_defines.h"
+    #include "BHaH_defines.h"
     /**
      * Copy parameters to GPU __constant__.
      */
@@ -267,7 +267,7 @@ def register_CFunction_cpyDevicetoHost__grid() -> None:
     >>> import nrpy.c_function as cfc
     >>> register_CFunction_cpyDevicetoHost__grid()
     >>> print(cfc.CFunction_dict['cpyDevicetoHost__grid'].full_function)
-    #include "../BHaH_defines.h"
+    #include "BHaH_defines.h"
     /**
      * Kernel: mallocHostgrid.
      * Allocate griddata_struct[grid].xx for host.
@@ -345,7 +345,7 @@ def register_CFunction_CUDA__malloc_host_gfs() -> None:
     >>> import nrpy.c_function as cfc
     >>> register_CFunction_CUDA__malloc_host_gfs()
     >>> print(cfc.CFunction_dict['CUDA__malloc_host_gfs'].full_function)
-    #include "../BHaH_defines.h"
+    #include "BHaH_defines.h"
     /**
      * Allocate Host storage for diagnostics GFs.
      */
@@ -390,7 +390,7 @@ def register_CFunction_CUDA__malloc_host_aux_gfs() -> None:
     >>> import nrpy.c_function as cfc
     >>> register_CFunction_CUDA__malloc_host_aux_gfs()
     >>> print(cfc.CFunction_dict['CUDA__malloc_host_aux_gfs'].full_function)
-    #include "../BHaH_defines.h"
+    #include "BHaH_defines.h"
     /**
      * Allocate Host storage for diagnostics GFs.
      */
@@ -437,7 +437,7 @@ def register_CFunction_CUDA__malloc_host_diagnostic_gfs() -> None:
     >>> import nrpy.c_function as cfc
     >>> register_CFunction_CUDA__malloc_host_diagnostic_gfs()
     >>> print(cfc.CFunction_dict['CUDA__malloc_host_diagnostic_gfs'].full_function)
-    #include "../BHaH_defines.h"
+    #include "BHaH_defines.h"
     /**
      * Allocate Host storage for diagnostics GFs.
      */
@@ -482,7 +482,7 @@ def register_CFunction_CUDA__free_host_diagnostic_gfs() -> None:
     >>> import nrpy.c_function as cfc
     >>> register_CFunction_CUDA__free_host_diagnostic_gfs()
     >>> print(cfc.CFunction_dict['CUDA__free_host_diagnostic_gfs'].full_function)
-    #include "../BHaH_defines.h"
+    #include "BHaH_defines.h"
     /**
      * Free Host storage for additional diagnostics GFs.
      */
@@ -521,7 +521,7 @@ def register_CFunction_CUDA__free_host_gfs() -> None:
     >>> import nrpy.c_function as cfc
     >>> register_CFunction_CUDA__free_host_gfs()
     >>> print(cfc.CFunction_dict['CUDA__free_host_gfs'].full_function)
-    #include "../BHaH_defines.h"
+    #include "BHaH_defines.h"
     /**
      * Free Host storage for diagnostics GFs.
      */
@@ -557,7 +557,7 @@ def register_CFunction_CUDA__free_host_aux_gfs() -> None:
     >>> import nrpy.c_function as cfc
     >>> register_CFunction_CUDA__free_host_aux_gfs()
     >>> print(cfc.CFunction_dict['CUDA__free_host_aux_gfs'].full_function)
-    #include "../BHaH_defines.h"
+    #include "BHaH_defines.h"
     /**
      * Free Host storage for diagnostics GFs.
      */
@@ -598,7 +598,7 @@ def register_CFunction_cpyDevicetoHost__gf() -> None:
     >>> import nrpy.c_function as cfc
     >>> register_CFunction_cpyDevicetoHost__gf()
     >>> print(cfc.CFunction_dict['cpyDevicetoHost__gf'].full_function)
-    #include "../BHaH_defines.h"
+    #include "BHaH_defines.h"
     /**
      * Asynchronously copying a grid function from device to host.
      */
@@ -658,7 +658,7 @@ def register_CFunction_cpyHosttoDevice__gf() -> None:
     >>> import nrpy.c_function as cfc
     >>> register_CFunction_cpyHosttoDevice__gf()
     >>> print(cfc.CFunction_dict['cpyHosttoDevice__gf'].full_function)
-    #include "../BHaH_defines.h"
+    #include "BHaH_defines.h"
     /**
      * Asynchronously copying a grid function from host to device.
      */

@@ -1,5 +1,5 @@
-#include "../BHaH_defines.h"
-#include "../BHaH_function_prototypes.h"
+#include "BHaH_defines.h"
+#include "BHaH_function_prototypes.h"
 
 /**
  * Kernel: auxevol_gfs_single_point_gpu.

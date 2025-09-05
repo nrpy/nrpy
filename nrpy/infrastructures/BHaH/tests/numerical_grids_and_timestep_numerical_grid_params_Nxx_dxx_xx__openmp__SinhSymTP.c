@@ -1,5 +1,5 @@
-#include "../BHaH_defines.h"
-#include "../BHaH_function_prototypes.h"
+#include "BHaH_defines.h"
+#include "BHaH_function_prototypes.h"
 
 #define SET_XX_CELL_CENTERED_COORDS(COORD_DIR)                                                                                                       \
   static const REAL onehalf = 1.0 / 2.0;                                                                                                             \
