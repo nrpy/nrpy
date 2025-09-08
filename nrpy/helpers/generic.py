@@ -8,6 +8,7 @@ Author: Zachariah B. Etienne
 
 import inspect
 import pkgutil
+import platform
 import subprocess
 import sys
 from difflib import ndiff
@@ -33,9 +34,7 @@ def superfast_uniq(seq: List[Any]) -> List[Any]:
     return [x for x in seq if x not in seen and not seen.add(x)]  # type: ignore
 
 
-def clang_format(
-    c_code_str: str,
-) -> str:
+def clang_format(c_code_str: str) -> str:
     r"""
     Format a given C code string using clang-format.
 
@@ -45,37 +44,81 @@ def clang_format(
     :param c_code_str: The C code string to be formatted.
     :return: Formatted C code string.
     :raises RuntimeError: If clang-format encounters any error.
+    :raises OSError: If clang-format is not installed / not found on PATH.
 
     Doctest:
-    >>> print(clang_format(r'''int main() { printf("Hello, World!"); for(int i=0;i<10;i++) for(int j=i;j<10;j++) printf("%d %d\n",i,j); return 0; }'''))
+    >>> print(clang_format(r'''int main() { printf("Hello, World!"); for(int i=0;i<10;i++) for(int j=i;j<10;j++) printf("%d %d\\n",i,j); return 0; }'''))
     int main() {
       printf("Hello, World!");
       for (int i = 0; i < 10; i++)
         for (int j = i; j < 10; j++)
-          printf("%d %d\n", i, j);
+          printf("%d %d\\n", i, j);
       return 0;
     }
     """
-    clang_format_options = par.parval_from_str("clang_format_options")
+    clang_format_options = par.parval_from_str("clang_format_options")  # always a str
+
+    # Returned cached output if inputs are exactly the same
     unique_id = __name__ + c_code_str + clang_format_options
     if is_cached(unique_id):
         return cast(str, read_cached(unique_id))
-    # For Python 3.6 compatibility, use subprocess.PIPE instead of capture_output
-    with subprocess.Popen(
-        ["clang-format", clang_format_options],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    ) as process:
-        # Send C code string to clang-format and fetch the result
-        stdout, stderr = process.communicate(input=c_code_str.encode())
 
-        # If the process exited without errors, return the formatted code
-        if process.returncode == 0:
-            write_cached(unique_id, stdout.decode())
-            return stdout.decode()
+    # Build the command. Since options is a STRING, pass it as ONE argv element
+    cmd = ["clang-format"]
+    if clang_format_options.strip():
+        cmd.append(clang_format_options)
 
-        raise RuntimeError(f"Error using clang-format: {stderr.decode()}")
+    try:
+        # Python 3.6-compatible: use Popen with PIPEs (no capture_output)
+        with subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        ) as process:
+            stdout, stderr = process.communicate(input=c_code_str.encode("utf-8"))
+
+            if process.returncode == 0:
+                formatted = stdout.decode("utf-8", errors="replace")
+                write_cached(unique_id, formatted)
+                return formatted
+
+            err = stderr.decode("utf-8", errors="replace").strip()
+            raise RuntimeError(
+                f"clang-format exited with code {process.returncode}.\n"
+                f"Command: {' '.join(cmd)}\n\nstderr:\n{err or '<no stderr>'}"
+            )
+
+    except FileNotFoundError as exc:
+        # Detailed, platform-aware installation message
+        arch = platform.machine().lower()
+        system = platform.system()
+        details = [
+            "clang-format was not found on your system (executable 'clang-format' is not in PATH).",
+            "",
+            "How to install:",
+        ]
+        if arch in ("x86_64", "amd64"):
+            details.append(
+                "- On x86_64, you can install via pip: `pip install clang-format` "
+                "(this provides a `clang-format` executable in your Python environment)."
+            )
+        details.append(
+            "- Otherwise, install it from your OS package manager (it is usually a standard package):\n"
+            "  * macOS (Homebrew): `brew install clang-format`\n"
+            "  * Ubuntu/Debian:    `sudo apt-get install clang-format`\n"
+            "  * Fedora:           `sudo dnf install clang-tools-extra`\n"
+            "  * Arch:             `sudo pacman -S clang`\n"
+            "  * Windows (winget): `winget install LLVM.LLVM` (ensure LLVM/bin is on PATH)"
+        )
+        details.extend(
+            [
+                "",
+                f"Detected platform: {system} / {arch}",
+                "After installation, ensure `clang-format` is on your PATH and re-run the command.",
+            ]
+        )
+        raise OSError("\n".join(details)) from exc
 
 
 def validate_strings(

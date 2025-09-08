@@ -31,7 +31,7 @@ __global__ static void initialize_grid_xx2_gpu(const size_t streamid, REAL *rest
 } // END FUNCTION initialize_grid_xx2_gpu
 
 /**
- * Initializes a cell-centered grid in SinhSymTP coordinates based on physical dimensions (grid_physical_size).
+ * Initializes a cell-centered grid in the local coordinate system based on physical dimensions (grid_physical_size).
  *
  * Inputs:
  * - Nx[] inputs: Specifies new grid dimensions, if needed.
