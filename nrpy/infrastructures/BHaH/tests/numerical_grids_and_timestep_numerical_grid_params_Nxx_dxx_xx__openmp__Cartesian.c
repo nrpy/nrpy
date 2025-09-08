@@ -29,7 +29,7 @@ static void initialize_grid_xx2_host(const params_struct *restrict params, REAL 
 } // END FUNCTION initialize_grid_xx2_host
 
 /**
- * Initializes a cell-centered grid in Cartesian coordinates based on physical dimensions (grid_physical_size).
+ * Initializes a cell-centered grid in the local coordinate system based on physical dimensions (grid_physical_size).
  *
  * Inputs:
  * - Nx[] inputs: Specifies new grid dimensions, if needed.
