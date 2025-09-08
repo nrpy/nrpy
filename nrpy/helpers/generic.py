@@ -9,7 +9,6 @@ Author: Zachariah B. Etienne
 import inspect
 import pkgutil
 import platform
-import shutil
 import subprocess
 import sys
 from difflib import ndiff
@@ -44,13 +43,8 @@ def clang_format(c_code_str: str) -> str:
 
     :param c_code_str: The C code string to be formatted.
     :return: Formatted C code string.
-    :raises RuntimeError: If clang-format encounters any error or times out.
+    :raises RuntimeError: If clang-format encounters any error.
     :raises OSError: If clang-format is not installed / not found on PATH.
-
-    Notes:
-      - `par.parval_from_str("clang_format_options")` may be a string (e.g. "-style={BasedOnStyle: LLVM, ColumnLimit: 150}"),
-        a list/tuple of arguments (e.g. ["-style", "LLVM"]), or empty/None.
-      - Many Linux distros ship versioned binaries (e.g., `clang-format-17`); we try those too.
 
     Doctest:
     >>> print(clang_format(r'''int main() { printf("Hello, World!"); for(int i=0;i<10;i++) for(int j=i;j<10;j++) printf("%d %d\\n",i,j); return 0; }'''))
@@ -62,50 +56,15 @@ def clang_format(c_code_str: str) -> str:
       return 0;
     }
     """
-    # Fetch options
-    clang_format_options = par.parval_from_str("clang_format_options")
+    clang_format_options = par.parval_from_str("clang_format_options")  # always a str
 
-    # Return cached output if the exact code has been clang formatted already
+    # Returned cached output if inputs are exactly the same
     unique_id = __name__ + c_code_str + clang_format_options
     if is_cached(unique_id):
         return cast(str, read_cached(unique_id))
 
-    # Resolve executable: plain and versioned names
-    candidates = ["clang-format"] + [f"clang-format-{v}" for v in range(20, 4, -1)]
-    exe = next((name for name in candidates if shutil.which(name)), None)
-    if exe is None:
-        arch = platform.machine().lower()
-        system = platform.system()
-        details = [
-            "clang-format was not found on your system (no suitable executable in PATH).",
-            "",
-            "How to install:",
-        ]
-        if arch in ("x86_64", "amd64"):
-            details.append(
-                "- On x86_64, you can install via pip: `pip install clang-format` "
-                "(this provides a `clang-format` executable in your Python environment)."
-            )
-        details.append(
-            "- Otherwise, install it from your OS package manager (it is usually a standard package):\n"
-            "  * macOS (Homebrew): `brew install clang-format`\n"
-            "  * Ubuntu/Debian:    `sudo apt-get install clang-format`\n"
-            "  * Fedora:           `sudo dnf install clang-tools-extra`\n"
-            "  * Arch:             `sudo pacman -S clang`\n"
-            "  * Windows (winget): `winget install LLVM.LLVM` (ensure LLVM/bin is on PATH)"
-        )
-        details.extend(
-            [
-                "",
-                f"Detected platform: {system} / {arch}",
-                "After installation, ensure `clang-format` (or a versioned alias like `clang-format-17`) is on PATH.",
-            ]
-        )
-        raise OSError("\n".join(details))
-
     # Build the command. Since options is a STRING, pass it as ONE argv element
-    # so maps like -style={BasedOnStyle: LLVM, ColumnLimit: 150} stay intact.
-    cmd = [exe]
+    cmd = ["clang-format"]
     if clang_format_options.strip():
         cmd.append(clang_format_options)
 
@@ -126,27 +85,40 @@ def clang_format(c_code_str: str) -> str:
 
             err = stderr.decode("utf-8", errors="replace").strip()
             raise RuntimeError(
-                "clang-format exited with code {}.\nCommand: {}\n\nstderr:\n{}".format(
-                    process.returncode, " ".join(cmd), (err or "<no stderr>")
-                )
+                f"clang-format exited with code {process.returncode}.\n"
+                f"Command: {' '.join(cmd)}\n\nstderr:\n{err or '<no stderr>'}"
             )
 
-    except FileNotFoundError:
-        # Redundant due to which-check, but retained for completeness
+    except FileNotFoundError as exc:
+        # Detailed, platform-aware installation message
         arch = platform.machine().lower()
         system = platform.system()
         details = [
-            "clang-format was not found on your system (executable not resolvable).",
+            "clang-format was not found on your system (executable 'clang-format' is not in PATH).",
             "",
             "How to install:",
         ]
         if arch in ("x86_64", "amd64"):
-            details.append("- On x86_64, install via pip: `pip install clang-format`.")
+            details.append(
+                "- On x86_64, you can install via pip: `pip install clang-format` "
+                "(this provides a `clang-format` executable in your Python environment)."
+            )
         details.append(
-            "- Otherwise use your OS package manager (see common commands above)."
+            "- Otherwise, install it from your OS package manager (it is usually a standard package):\n"
+            "  * macOS (Homebrew): `brew install clang-format`\n"
+            "  * Ubuntu/Debian:    `sudo apt-get install clang-format`\n"
+            "  * Fedora:           `sudo dnf install clang-tools-extra`\n"
+            "  * Arch:             `sudo pacman -S clang`\n"
+            "  * Windows (winget): `winget install LLVM.LLVM` (ensure LLVM/bin is on PATH)"
         )
-        details.append(f"\nDetected platform: {system} / {arch}")
-        raise OSError("\n".join(details))
+        details.extend(
+            [
+                "",
+                f"Detected platform: {system} / {arch}",
+                "After installation, ensure `clang-format` is on your PATH and re-run the command.",
+            ]
+        )
+        raise OSError("\n".join(details)) from exc
 
 
 def validate_strings(
