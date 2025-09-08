@@ -26,7 +26,14 @@ def register_CFunction_handle_gsl_return_status() -> Union[None, pcg.NRPyEnv_typ
         return None
 
     includes = ["BHaH_defines.h"]
-    desc = """Handle GSL return status."""
+    desc = """
+Error handler for calls to GSL-dependent routines.
+
+@param status - The return value of the GSL-dependent call.
+@param status_desired - The desired return statuses of the GSL call.
+@param num_desired - The number of desired return statuses.
+@param function_name - The name of the GSL-dependent function that was called.
+"""
     cfunc_type = "void"
     name = "handle_gsl_return_status"
     params = "int status, int status_desired[], int num_desired, const char *restrict function_name"
@@ -54,46 +61,6 @@ if (count == 0){
     return pcg.NRPyEnv()
 
 
-def register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper_complex_out() -> (
-    Union[None, pcg.NRPyEnv_type]
-):
-    """
-    Register CFunction for evaluating the complex gamma function using GSL.
-
-    :return: None if in registration phase, else the updated NRPy environment.
-    """
-    if pcg.pcg_registration_phase():
-        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
-        return None
-
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Evaluate the gamma function using GSL."""
-    cfunc_type = "double complex"
-    name = "SEOBNRv5_aligned_spin_gamma_wrapper"
-    params = "const double complex z"
-    body = """
-const REAL z_real = (REAL) creal(z);
-const REAL z_imag = (REAL) cimag(z);
-gsl_sf_result lnr, arg;
-int status = gsl_sf_lngamma_complex_e(z_real, z_imag, &lnr, &arg);
-int status_desired[1] = {GSL_SUCCESS};
-char lngamma_name[] = "gsl_sf_lngamma_complex_e";
-handle_gsl_return_status(status,status_desired,1,lngamma_name);
-double complex complex_gamma = cexp(lnr.val + I*arg.val);
-return complex_gamma;
-"""
-    cfc.register_CFunction(
-        includes=includes,
-        desc=desc,
-        cfunc_type=cfunc_type,
-        name=name,
-        params=params,
-        include_CodeParameters_h=False,
-        body=body,
-    )
-    return pcg.NRPyEnv()
-
-
 def register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper() -> (
     Union[None, pcg.NRPyEnv_type]
 ):
@@ -107,7 +74,13 @@ def register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper() -> (
         return None
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Evaluate the gamma function using GSL."""
+    desc = """
+Wrapper function for evaluating the complex gamma function using GSL's lngamma_complex_e.
+
+@param z_real - The real part of the input complex number.
+@param z_imag - The imaginary part of the input complex number.
+@returns - The gamma function evaluated at z.
+"""
     cfunc_type = "double complex"
     name = "SEOBNRv5_aligned_spin_gamma_wrapper"
     params = "const REAL z_real, const REAL z_imag"
@@ -227,9 +200,16 @@ def register_CFunction_SEOBNRv5_multidimensional_root_wrapper() -> (
         return None
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Multidimensional root finder using GSL."""
+    desc = """
+Wrapper function for performing multidimensional root-finding using GSL when higher derivatives of the root function are available.
+
+@param f - The GSL structure containing the root function and derivatives.
+@param x_guess - The initial guess for the root.
+@param n - The dimensionality of the root-finding problem.
+@param x_result - The result of the root-finding.
+"""
     cfunc_type = "void"
-    name = "SEOBNRv5_aligned_multidimensional_root_wrapper"
+    name = "SEOBNRv5_aligned_spin_multidimensional_root_wrapper"
     params = "gsl_multiroot_function_fdf f, const REAL *restrict x_guess, const size_t n, REAL *restrict x_result"
     body = """
 size_t i , iter = 0;

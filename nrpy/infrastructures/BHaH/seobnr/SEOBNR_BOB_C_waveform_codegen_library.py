@@ -26,7 +26,13 @@ def register_CFunction_SEOBNRv5_aligned_spin_unwrap() -> Union[None, pcg.NRPyEnv
         return None
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """C function to perform numpy.unwrap."""
+    desc = """
+Unwraps an array of angles with a period of 2pi.
+
+@param angles_in - Array of angles to unwrap.
+@param angles_out - Array to store the unwrapped angles.
+@param nsteps_arr - length of the angles_in array.
+"""
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_unwrap"
     params = "REAL *restrict angles_in , REAL *restrict angles_out, size_t nsteps_arr"
@@ -65,7 +71,12 @@ def register_CFunction_SEOBNRv5_NQC_corrections(
         return None
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Evaluate SEOBNRv5 NQC corrections."""
+    desc = """
+Computes and applies the Non Quasi-Circular (NQC) corrections to the inspiral waveform.
+
+@param commondata - Common data structure containing the model parameters.
+@return - Returns GSL_SUCCESS (0) on success or a nonzero error code on failure.
+"""
     cfunc_type = "int"
     name = "SEOBNRv5_aligned_spin_NQC_corrections"
     params = "commondata_struct *restrict commondata"
@@ -305,8 +316,6 @@ for (i = 0; i< commondata->nsteps_fine; i++){
   commondata->waveform_inspiral[IDX_WF(i+commondata->nsteps_low,TIME)] = commondata->dynamics_fine[IDX(i,TIME)];
   commondata->waveform_inspiral[IDX_WF(i+commondata->nsteps_low,STRAIN)] = nqc_amp * commondata->waveform_fine[IDX_WF(i,STRAIN)] * cexp(I * nqc_phase);
 }
-
-return GSL_SUCCESS;
 """
     cfc.register_CFunction(
         includes=includes,
@@ -333,7 +342,12 @@ def register_CFunction_SEOBNRv5_aligned_spin_interpolate_modes() -> (
         return None
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Interpolate the SEOBNRv5 (2,2) inspiral mode."""
+    desc = """
+Interpolates the (2,2) inspiral modes and stores them in the waveform_inspiral array with constant spacing.
+
+@param commondata - Common data structure containing the model parameters.
+@param dT - Time step for interpolation.
+"""
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_interpolate_modes"
     params = "commondata_struct *restrict commondata, const REAL dT"
@@ -423,8 +437,12 @@ def register_CFunction_SEOBNRv5_aligned_spin_IMR_waveform(
         return None
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Evaluate SEOBNRv5 (2,2) mode."""
-    cfunc_type = "int"
+    desc = """
+Evaluates the (2,2) mode for the waveform by combining the inspiral and merger ringdown modes.
+
+@param commondata - Common data structure containing the model parameters.
+"""
+    cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_IMR_waveform"
     params = "commondata_struct *restrict commondata"
     body = """
@@ -516,7 +534,6 @@ for(i = 0; i < nsteps_ringdown; i++){
 free(ringdown_time);
 free(ringdown_phase);
 free(ringdown_amp);
-return GSL_SUCCESS;
 """
     cfc.register_CFunction(
         includes=includes,

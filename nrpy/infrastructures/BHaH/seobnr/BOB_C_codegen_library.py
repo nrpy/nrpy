@@ -49,7 +49,13 @@ def register_CFunction_BOB_aligned_spin_NQC_rhs() -> Union[None, pcg.NRPyEnv_typ
         include_braces=False,
     )
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Calculate the BOB informed NQC amplitudes and phases."""
+    desc = """
+Calculates the BOB-informed Non Quasi-Circular (NQC) right-hand side terms.
+
+@param commondata - Common data structure containing the model parameters.
+@param amps - Array to store the calculated amplitudes.
+@param omegas - Array to store the calculated angular frequencies.
+"""
     cfunc_type = "void"
     name = "BOB_aligned_spin_NQC_rhs"
     params = "commondata_struct *restrict commondata , REAL *restrict amps , REAL *restrict omegas"
@@ -102,7 +108,13 @@ def register_CFunction_BOB_aligned_spin_waveform() -> Union[None, pcg.NRPyEnv_ty
         include_braces=False,
     )
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Calculate the BOB 22 mode."""
+    desc = """
+Calculates the BOB (2,2) mode for a single timestep.
+
+@param t - Time at which to evaluate the waveform.
+@param commondata - Common data structure containing the model parameters.
+@param waveform - Array to store the calculated waveform.
+"""
     cfunc_type = "void"
     name = "BOB_aligned_spin_waveform"
     params = "const REAL t , commondata_struct *restrict commondata , REAL *restrict waveform"
@@ -146,7 +158,14 @@ def register_CFunction_BOB_aligned_spin_waveform_from_times() -> (
         return None
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Calculate the BOB 22 mode."""
+    desc = """
+Calculates the BOB (2,2) mode for a given array of times.
+
+@param times - Array of times at which to evaluate the waveform.
+@param amps - Array to store the calculated amplitudes.
+@param phases - Array to store the calculated phases.
+@param nsteps_BOB - length of the times array.
+@param commondata - Common data structure containing the model parameters."""
     cfunc_type = "void"
     name = "BOB_aligned_spin_waveform_from_times"
     params = "REAL *restrict times , REAL *restrict amps , REAL *restrict phases , const size_t nsteps_BOB , commondata_struct *restrict commondata"

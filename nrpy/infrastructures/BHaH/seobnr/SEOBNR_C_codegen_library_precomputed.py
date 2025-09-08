@@ -38,8 +38,11 @@ def register_CFunction_SEOBNRv5_aligned_spin_waveform_coefficients() -> (
         return None
 
     includes = ["BHaH_defines.h"]
-    desc = """Evaluate the SEOBNRv5 waveform coefficients"""
-    cfunc_type = "int"
+    desc = """
+Evaluates the SEOBNRv5 inspiral waveform coefficients.
+
+@param commondata - Common data structure containing the model parameters."""
+    cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_waveform_coefficients"
     params = "commondata_struct *restrict commondata"
     wf = SEOBNRv5_precomp_wf.SEOBNRv5_aligned_spin_waveform_quantities()
@@ -131,7 +134,6 @@ const REAL m2 = commondata->m2;
 const REAL chi1 = commondata->chi1;
 const REAL chi2 = commondata->chi2;
 {coeffs_ccode}
-return GSL_SUCCESS;
 """
     cfc.register_CFunction(
         includes=includes,
@@ -149,7 +151,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_waveform() -> (
     Union[None, pcg.NRPyEnv_type]
 ):
     """
-    Register CFunction for calculating the (2,2) mode of the SEOBNRv5 inspiral.
+    Register CFunction for calculating the (2,2) mode of the SEOBNRv5 inspiral when the waveform coefficients have been precomputed.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -183,7 +185,13 @@ def register_CFunction_SEOBNRv5_aligned_spin_waveform() -> (
     )
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Calculate the SEOBNRv5 22 mode."""
+    desc = """
+Calculates the SEOBNRv5 (2,2) mode for a single timestep.
+
+@param dynamics - Array of dynamical variables.
+@param commondata - Common data structure containing the model parameters.
+@return - The (2,2) mode of the SEOBNRv5 inspiral.
+"""
     cfunc_type = "double complex"
     prefunc = "#include<complex.h>"
     name = "SEOBNRv5_aligned_spin_waveform"
@@ -221,7 +229,7 @@ return h22;
 
 def register_CFunction_SEOBNRv5_aligned_spin_flux() -> Union[None, pcg.NRPyEnv_type]:
     """
-    Register CFunction for evaluating the SEOBNRv5 aligned spin flux.
+    Register CFunction for evaluating the SEOBNRv5 aligned spin flux when the waveform coefficients have been precomputed.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -230,8 +238,17 @@ def register_CFunction_SEOBNRv5_aligned_spin_flux() -> Union[None, pcg.NRPyEnv_t
         return None
 
     includes = ["BHaH_defines.h"]
-    desc = """Evaluate the SEOBNRv5 aligned spin flux."""
-    cfunc_type = "int"
+    desc = """
+Evaluates the SEOBNRv5 aligned spin flux.
+
+@param y - Array of dynamical variables.
+@param Hreal - The real EOB Hamiltonian.
+@param Omega - The instantaneous angular frequency of the EOB perturber.
+@param Omega_circ - The circular angular frequency of the EOB perturber.
+@param f - Array to store the flux.
+@param params - Pointer to the commondata structure containing the model parameters.
+"""
+    cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_flux"
     params = "const REAL *restrict y, const REAL Hreal, const REAL Omega, const REAL Omega_circ, REAL *restrict f, void *restrict params"
     wf = SEOBNRv5_precomp_wf.SEOBNRv5_aligned_spin_waveform_quantities()
@@ -257,7 +274,6 @@ const REAL pphi = y[3];
 const REAL flux_over_omega = flux / Omega;
 f[0] = prstar * flux_over_omega / pphi;
 f[1] = flux_over_omega;
-return GSL_SUCCESS;
 """
     cfc.register_CFunction(
         includes=includes,

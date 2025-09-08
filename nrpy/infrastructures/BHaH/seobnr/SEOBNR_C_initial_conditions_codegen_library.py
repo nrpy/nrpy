@@ -35,7 +35,11 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients() -> (
         return None
 
     includes = ["BHaH_defines.h"]
-    desc = """Evaluate the SEOBNRv5 coefficients."""
+    desc = """
+Evaluate and store the SEOBNRv5 calibration coefficients and remnant properties.
+
+@param commondata - The Common data structure containing the model parameters.
+"""
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_coefficients"
     params = "commondata_struct *restrict commondata"
@@ -144,7 +148,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conservative() -
     Union[None, pcg.NRPyEnv_type]
 ):
     """
-    Register CFunction for evaluating SEOBNRv5's conservative initial conditions using GSL.
+    Register CFunction for evaluating SEOBNRv5's conservative initial conditions using GSL when the Jacobian of the initial conditions is already computed.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -157,8 +161,13 @@ def register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conservative() -
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_multiroots.h>
 """
-    desc = """Evaluate the SEOBNRv5 conservative initial conditions."""
-    cfunc_type = "int"
+    desc = """
+Evaluates the conservative part of the initial conditions for the SEOBNRv5 ODE integration.
+This function assumes that the Jacobian of the initial conditions is already computed.
+
+@params commondata - The Common data structure containing the model parameters.
+"""
+    cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_initial_conditions_conservative"
     params = "commondata_struct *restrict commondata"
     body = """
@@ -177,7 +186,6 @@ SEOBNRv5_aligned_multidimensional_root_wrapper(f,x_guess,n,x_result);
 commondata->r = x_result[0];
 commondata->pphi = x_result[1];
 free(x_result);
-return GSL_SUCCESS;
 """
     cfc.register_CFunction(
         includes=includes,
@@ -209,7 +217,13 @@ def register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conservative_nod
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_multiroots.h>
 """
-    desc = """Evaluate the SEOBNRv5 conservative initial conditions."""
+    desc = """
+Evaluates the conservative initial conditions for the SEOBNRv5 ODE integration.
+The conservative initial conditions are given by a circular orbit (p_{r_*} = 0) such that the 
+the time derivative of the tortoise momentum is zero and the time derivative of the orbital phase equals the input orbital frequency.
+@params commondata - The Common data structure containing the model parameters.
+@returns - GSL_SUCCESS (0) upon success.
+"""
     cfunc_type = "int"
     name = "SEOBNRv5_aligned_spin_initial_conditions_conservative"
     params = "commondata_struct *restrict commondata"
@@ -286,7 +300,15 @@ def register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit() -> (
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_multiroots.h>
 """
-    desc = """Evaluate SEOBNRv5 Hamiltonian's circular orbit conditions to compute conservative initial conditions."""
+    desc = """
+Computes the derivative of the SEOBNRv5 Hamiltonian with respect to the radial separation and angular momentum.
+The above values are used to evaluate the conservative initial conditions given by a circular orbit at input orbital frequency.
+
+@params x - The gsl_vector object containing the radial separation and angular momentum.
+@params params - The Common data structure containing the model parameters.
+@params f - The gsl_vector object to store the respective derivatives of the Hamiltonian.
+@returns - GSL_SUCCESS (0) as required by GSL.
+"""
     cfunc_type = "int"
     name = "SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit"
     params = "const gsl_vector *restrict x , void *restrict params , gsl_vector *restrict f"  # This convention is from the gsl multi-dimensional root finder example
@@ -352,7 +374,15 @@ def register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_dRHS() -
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_multiroots.h>
 """
-    desc = """Evaluate SEOBNRv5 Hamiltonian's circular orbit conditions' derivative to compute conservative initial conditions."""
+    desc = """
+Evaluates the Jacobian of the SEOBNRv5 circular orbit conditions for debugging.
+This is used for performance and accuracy verification.
+
+@params x - The gsl_vector object containing the radial separation and angular momentum.
+@params params - The Common data structure containing the model parameters.
+@params J - The gsl_matrix object to store the Jacobian of the circular orbit conditions.
+@returns - GSL_SUCCESS (0) as required by GSL.
+"""
     cfunc_type = "int"
     name = "SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_dRHS"
     params = "const gsl_vector *restrict x, void *restrict params, gsl_matrix *restrict J"  # This convention is from the gsl multi-dimensional root finder example
@@ -418,7 +448,15 @@ def register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_RHSdRHS(
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_multiroots.h>
 """
-    desc = """Evaluate SEOBNRv5 Hamiltonian's circular orbit and derivative conditions to compute conservative initial conditions."""
+    desc = """
+Combines the SEOBNRv5 circular orbit condition and it's Jacobian to pass to gsl/multiroots.
+
+@params x - The gsl_vector object containing the radial separation and angular momentum.
+@params params - The Common data structure containing the model parameters.
+@params f - The gsl_vector object to store the respective derivatives of the Hamiltonian.
+@params J - The gsl_matrix object to store the Jacobian of the circular orbit conditions.
+@returns - GSL_SUCCESS (0) as required by GSL.
+"""
     cfunc_type = "int"
     name = "SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_RHSdRHS"
     params = "const gsl_vector *restrict x, void *restrict params, gsl_vector *restrict f, gsl_matrix *restrict J"  # This convention is from the gsl multi-dimensional root finder example
@@ -453,7 +491,12 @@ def register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_dissipative() ->
         return None
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Evaluate the SEOBNRv5 dissipative initial conditions."""
+    desc = """
+Evaluates the dissipative initial conditions for the SEOBNRv5 ODE integration.
+
+@params commondata - The Common data structure containing the model parameters.
+@returns - GSL_SUCCESS (0) upon success.
+"""
     cfunc_type = "int"
     name = "SEOBNRv5_aligned_spin_initial_conditions_dissipative"
     params = "commondata_struct *restrict commondata"
@@ -524,7 +567,13 @@ def register_CFunction_SEOBNRv5_aligned_spin_radial_momentum_condition() -> (
         return None
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Evaluate SEOBNRv5 radial momentum condition."""
+    desc = """
+Evaluates the SEOBNRv5 adiabatic radial momentum condition.
+
+@params x - The radial tortoise momentum.
+@params params - The Common data structure containing the model parameters.
+@returns - The radial momentum condition.
+"""
     cfunc_type = "REAL"
     name = "SEOBNRv5_aligned_spin_radial_momentum_conditions"
     params = "REAL x, void *restrict params"
