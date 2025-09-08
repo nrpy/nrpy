@@ -15,7 +15,7 @@ import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 
 
-def register_CFunction_SEOBNRv5_aligned_spin_intepolate_dynamics() -> (
+def register_CFunction_SEOBNRv5_aligned_spin_interpolate_dynamics() -> (
     Union[None, pcg.NRPyEnv_type]
 ):
     """

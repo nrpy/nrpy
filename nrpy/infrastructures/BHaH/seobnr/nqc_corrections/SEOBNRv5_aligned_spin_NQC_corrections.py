@@ -15,7 +15,7 @@ import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 
 
-def register_CFunction_SEOBNRv5_NQC_corrections(
+def register_CFunction_SEOBNRv5_aligned_spin_NQC_corrections(
     use_numerical_relativity_nqc: bool,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """

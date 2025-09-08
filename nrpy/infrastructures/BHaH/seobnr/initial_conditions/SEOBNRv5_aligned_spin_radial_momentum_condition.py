@@ -38,7 +38,7 @@ Evaluates the SEOBNRv5 adiabatic radial momentum condition.
 @returns - The radial momentum condition.
 """
     cfunc_type = "REAL"
-    name = "SEOBNRv5_aligned_spin_radial_momentum_conditions"
+    name = "SEOBNRv5_aligned_spin_radial_momentum_condition"
     params = "REAL x, void *restrict params"
     body = """
 const REAL m1 = ((commondata_struct *restrict) params)->m1;

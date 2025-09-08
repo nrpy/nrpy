@@ -49,7 +49,7 @@ REAL x_hi = 0.0;
 REAL xtol = 1e-12;
 REAL rtol = 1e-10;
 gsl_function F;
-F.function = &SEOBNRv5_aligned_spin_radial_momentum_conditions;
+F.function = &SEOBNRv5_aligned_spin_radial_momentum_condition;
 F.params = commondata;
 
 T = gsl_root_fsolver_brent;
