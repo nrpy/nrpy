@@ -1,5 +1,5 @@
-#include "../BHaH_defines.h"
-#include "../BHaH_function_prototypes.h"
+#include "BHaH_defines.h"
+#include "BHaH_function_prototypes.h"
 
 #define SET_XX_CELL_CENTERED_COORDS(COORD_DIR)                                                                                                       \
   const int index = blockIdx.x * blockDim.x + threadIdx.x;                                                                                           \
@@ -81,7 +81,7 @@ void numerical_grid_params_Nxx_dxx_xx__rfm__Cartesian(const commondata_struct *r
   params->Nxx_plus_2NGHOSTS2 = params->Nxx2 + 2 * NGHOSTS;
 
   {
-#include "../set_CodeParameters.h"
+#include "set_CodeParameters.h"
     // Set grid size to a function of grid_physical_size (grid_physical_size set in set_CodeParameters.h above):
     params->xmin = -grid_physical_size;
     params->ymin = -grid_physical_size;
@@ -91,7 +91,7 @@ void numerical_grid_params_Nxx_dxx_xx__rfm__Cartesian(const commondata_struct *r
     params->zmax = grid_physical_size;
   }
   if (apply_convergence_factor_and_set_xxminmax_defaults) {
-#include "../set_CodeParameters.h"
+#include "set_CodeParameters.h"
     // Set {xxmin[], xxmax[]} to default values, which could be functions of other rfm params (set in set_CodeParameters.h above):
     params->xxmin0 = xmin;
     params->xxmin1 = ymin;

@@ -1,5 +1,5 @@
-#include "../BHaH_defines.h"
-#include "../BHaH_function_prototypes.h"
+#include "BHaH_defines.h"
+#include "BHaH_function_prototypes.h"
 /**
  * Output diagnostic quantities at grid's *physical* center.
  * For example:
@@ -10,7 +10,7 @@
  */
 void diagnostics_nearest_grid_center__rfm__SinhCylindrical(commondata_struct *restrict commondata, const params_struct *restrict params,
                                                            MoL_gridfunctions_struct *restrict gridfuncs) {
-#include "../set_CodeParameters.h"
+#include "set_CodeParameters.h"
 
   // Unpack gridfuncs struct:
   const REAL *restrict y_n_gfs = gridfuncs->y_n_gfs;

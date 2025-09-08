@@ -1,5 +1,5 @@
-#include "../BHaH_defines.h"
-#include "../intrinsics/simd_intrinsics.h"
+#include "BHaH_defines.h"
+#include "intrinsics/simd_intrinsics.h"
 /**
  * Kernel: compute_residual_all_points_host.
  * Kernel to compute the residual throughout the grid.

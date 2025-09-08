@@ -1,5 +1,5 @@
-#include "../BHaH_defines.h"
-#include "../BHaH_function_prototypes.h"
+#include "BHaH_defines.h"
+#include "BHaH_function_prototypes.h"
 /**
  * Kernel: compute_L2_norm_of_gridfunction_host.
  * Kernel to compute L2 quantities pointwise (summed).
@@ -69,7 +69,7 @@ static void compute_L2_norm_of_gridfunction_host(const params_struct *restrict p
 void compute_L2_norm_of_gridfunction__rfm__HoleySinhSpherical(commondata_struct *restrict commondata, params_struct *restrict params,
                                                               REAL *restrict xx[3], const REAL integration_radius, const int gf_index, REAL *l2norm,
                                                               const REAL *restrict in_gfs) {
-#include "../set_CodeParameters.h"
+#include "set_CodeParameters.h"
 
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
   REAL *restrict x0 = xx[0];

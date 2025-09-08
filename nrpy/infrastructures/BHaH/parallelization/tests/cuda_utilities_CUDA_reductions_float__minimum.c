@@ -1,4 +1,4 @@
-#include "../BHaH_defines.h"
+#include "BHaH_defines.h"
 
 __global__ static void find_global__minimum__cuda(REAL *data, REAL *min, uint const data_length) {
   // shared data between all warps

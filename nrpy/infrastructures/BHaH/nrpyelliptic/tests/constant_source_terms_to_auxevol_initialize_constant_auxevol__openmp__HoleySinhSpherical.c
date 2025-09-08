@@ -1,5 +1,5 @@
-#include "../BHaH_defines.h"
-#include "../BHaH_function_prototypes.h"
+#include "BHaH_defines.h"
+#include "BHaH_function_prototypes.h"
 
 /**
  * Kernel: auxevol_gfs_single_point_host.
@@ -199,7 +199,7 @@ static void variable_wavespeed_gfs_all_points_host(const params_struct *restrict
  */
 void initialize_constant_auxevol__rfm__HoleySinhSpherical(commondata_struct *restrict commondata, params_struct *restrict params,
                                                           REAL *restrict xx[3], MoL_gridfunctions_struct *restrict gridfuncs) {
-#include "../set_CodeParameters.h"
+#include "set_CodeParameters.h"
 
   REAL *restrict auxevol_gfs = gridfuncs->auxevol_gfs;
   REAL *restrict x0 = xx[0];
