@@ -8,6 +8,8 @@ Author: Zachariah B. Etienne
 
 import inspect
 import pkgutil
+import platform
+import shutil
 import subprocess
 import sys
 from difflib import ndiff
@@ -33,9 +35,7 @@ def superfast_uniq(seq: List[Any]) -> List[Any]:
     return [x for x in seq if x not in seen and not seen.add(x)]  # type: ignore
 
 
-def clang_format(
-    c_code_str: str,
-) -> str:
+def clang_format(c_code_str: str) -> str:
     r"""
     Format a given C code string using clang-format.
 
@@ -44,38 +44,109 @@ def clang_format(
 
     :param c_code_str: The C code string to be formatted.
     :return: Formatted C code string.
-    :raises RuntimeError: If clang-format encounters any error.
+    :raises RuntimeError: If clang-format encounters any error or times out.
+    :raises OSError: If clang-format is not installed / not found on PATH.
+
+    Notes:
+      - `par.parval_from_str("clang_format_options")` may be a string (e.g. "-style={BasedOnStyle: LLVM, ColumnLimit: 150}"),
+        a list/tuple of arguments (e.g. ["-style", "LLVM"]), or empty/None.
+      - Many Linux distros ship versioned binaries (e.g., `clang-format-17`); we try those too.
 
     Doctest:
-    >>> print(clang_format(r'''int main() { printf("Hello, World!"); for(int i=0;i<10;i++) for(int j=i;j<10;j++) printf("%d %d\n",i,j); return 0; }'''))
+    >>> print(clang_format(r'''int main() { printf("Hello, World!"); for(int i=0;i<10;i++) for(int j=i;j<10;j++) printf("%d %d\\n",i,j); return 0; }'''))
     int main() {
       printf("Hello, World!");
       for (int i = 0; i < 10; i++)
         for (int j = i; j < 10; j++)
-          printf("%d %d\n", i, j);
+          printf("%d %d\\n", i, j);
       return 0;
     }
     """
+    # Fetch options
     clang_format_options = par.parval_from_str("clang_format_options")
+
+    # Return cached output if the exact code has been clang formatted already
     unique_id = __name__ + c_code_str + clang_format_options
     if is_cached(unique_id):
         return cast(str, read_cached(unique_id))
-    # For Python 3.6 compatibility, use subprocess.PIPE instead of capture_output
-    with subprocess.Popen(
-        ["clang-format", clang_format_options],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    ) as process:
-        # Send C code string to clang-format and fetch the result
-        stdout, stderr = process.communicate(input=c_code_str.encode())
 
-        # If the process exited without errors, return the formatted code
-        if process.returncode == 0:
-            write_cached(unique_id, stdout.decode())
-            return stdout.decode()
+    # Resolve executable: plain and versioned names
+    candidates = ["clang-format"] + [f"clang-format-{v}" for v in range(20, 4, -1)]
+    exe = next((name for name in candidates if shutil.which(name)), None)
+    if exe is None:
+        arch = platform.machine().lower()
+        system = platform.system()
+        details = [
+            "clang-format was not found on your system (no suitable executable in PATH).",
+            "",
+            "How to install:",
+        ]
+        if arch in ("x86_64", "amd64"):
+            details.append(
+                "- On x86_64, you can install via pip: `pip install clang-format` "
+                "(this provides a `clang-format` executable in your Python environment)."
+            )
+        details.append(
+            "- Otherwise, install it from your OS package manager (it is usually a standard package):\n"
+            "  * macOS (Homebrew): `brew install clang-format`\n"
+            "  * Ubuntu/Debian:    `sudo apt-get install clang-format`\n"
+            "  * Fedora:           `sudo dnf install clang-tools-extra`\n"
+            "  * Arch:             `sudo pacman -S clang`\n"
+            "  * Windows (winget): `winget install LLVM.LLVM` (ensure LLVM/bin is on PATH)"
+        )
+        details.extend(
+            [
+                "",
+                f"Detected platform: {system} / {arch}",
+                "After installation, ensure `clang-format` (or a versioned alias like `clang-format-17`) is on PATH.",
+            ]
+        )
+        raise OSError("\n".join(details))
 
-        raise RuntimeError(f"Error using clang-format: {stderr.decode()}")
+    # Build the command. Since options is a STRING, pass it as ONE argv element
+    # so maps like -style={BasedOnStyle: LLVM, ColumnLimit: 150} stay intact.
+    cmd = [exe]
+    if clang_format_options.strip():
+        cmd.append(clang_format_options)
+
+    try:
+        # Python 3.6-compatible: use Popen with PIPEs (no capture_output)
+        with subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        ) as process:
+            stdout, stderr = process.communicate(input=c_code_str.encode("utf-8"))
+
+            if process.returncode == 0:
+                formatted = stdout.decode("utf-8", errors="replace")
+                write_cached(unique_id, formatted)
+                return formatted
+
+            err = stderr.decode("utf-8", errors="replace").strip()
+            raise RuntimeError(
+                "clang-format exited with code {}.\nCommand: {}\n\nstderr:\n{}".format(
+                    process.returncode, " ".join(cmd), (err or "<no stderr>")
+                )
+            )
+
+    except FileNotFoundError:
+        # Redundant due to which-check, but retained for completeness
+        arch = platform.machine().lower()
+        system = platform.system()
+        details = [
+            "clang-format was not found on your system (executable not resolvable).",
+            "",
+            "How to install:",
+        ]
+        if arch in ("x86_64", "amd64"):
+            details.append("- On x86_64, install via pip: `pip install clang-format`.")
+        details.append(
+            "- Otherwise use your OS package manager (see common commands above)."
+        )
+        details.append(f"\nDetected platform: {system} / {arch}")
+        raise OSError("\n".join(details))
 
 
 def validate_strings(
