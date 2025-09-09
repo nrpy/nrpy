@@ -49,7 +49,13 @@ def register_CFunction_SEOBNRv5_aligned_spin_NQC_rhs() -> Union[None, pcg.NRPyEn
         include_braces=False,
     )
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Calculate the SEOBNRv5 informed NQC amplitudes and phases."""
+    desc = """
+Calculate the SEOBNRv5 NR-informed right-hand sides for the Non Quasi-Circular (NQC) corrections.
+
+@params commondata - Common data structure containing the model parameters.
+@params amps - Array to store the amplitude and its higher derivatives.
+@params omegas - Array to store the angular frequency and its derivative.
+"""
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_NQC_rhs"
     params = "commondata_struct *restrict commondata , REAL *restrict amps , REAL *restrict omegas"
@@ -105,7 +111,18 @@ def register_CFunction_SEOBNRv5_aligned_spin_merger_waveform() -> (
         include_braces=False,
     )
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Calculate the SEOBNRv5 merger 22 mode."""
+    desc = """
+Calculates the (2,2) mode of the native SEOBNRv5 merger-ringdown model at a single timestep.
+
+@params t - Time at which to evaluate the waveform.
+@params t_0 - Attachment time.
+@params h_0 - Amplitude at attachment time.
+@params hdot_0 - Amplitude derivative at attachment time.
+@params phi_0 - Phase at attachment time.
+@params phidot_0 - Angular frequency at attachment time.
+@params commondata - Common data structure containing the model parameters.
+@params waveform - Array to store the amplitude and phase of the waveform.
+"""
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_merger_waveform"
     params = "const REAL t , const REAL t_0, const REAL h_0 , const REAL hdot_0 , const REAL phi_0 , const REAL phidot_0, commondata_struct *restrict commondata , REAL *restrict waveform"
@@ -148,7 +165,20 @@ def register_CFunction_SEOBNRv5_aligned_spin_merger_waveform_from_times() -> (
         return None
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Calculate the SEOBNRv5 merger 22 mode."""
+    desc = """
+Calculates the (2,2) mode of the native SEOBNRv5 merger-ringdown model for a given array of times.
+
+@params times - Array of times at which to evaluate the waveform.
+@params amps - Array to store the calculated amplitudes.
+@params phases - Array to store the calculated phases.
+@params t_0 - Attachment time.
+@params h_0 - Amplitude at attachment time.
+@params hdot_0 - Amplitude derivative at attachment time.
+@params phi_0 - Phase at attachment time.
+@params phidot_0 - Angular frequency at attachment time.
+@params nsteps_MR - length of the times array.
+@params commondata - Common data structure containing the model parameters.
+"""
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_merger_waveform_from_times"
     params = "REAL *restrict times , REAL *restrict amps , REAL *restrict phases , const REAL t_0, const REAL h_0 , const REAL hdot_0 , const REAL phi_0 , const REAL phidot_0, const size_t nsteps_MR , commondata_struct *restrict commondata"

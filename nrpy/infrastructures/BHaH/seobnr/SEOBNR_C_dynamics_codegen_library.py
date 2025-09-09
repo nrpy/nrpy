@@ -30,7 +30,12 @@ def register_CFunction_SEOBNRv5_aligned_spin_augments() -> (
         return None
 
     includes = ["BHaH_defines.h"]
-    desc = """Evaluate SEOBNRv5 Hamiltonian and circular derivatives."""
+    desc = """
+Evaluates SEOBNRv5 Hamiltonian, instantaneous angular frequency, and circular angular frequency.
+These quantities are augmented to the dynamical variables for the calculation of the inspiral modes.
+
+@param commondata - The commondata struct containing the model parameters.
+"""
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_augments"
     params = "commondata_struct *restrict commondata"
@@ -66,7 +71,15 @@ def register_CFunction_SEOBNRv5_aligned_spin_argrelmin() -> (
         return None
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """C function to perform scipy.argrelmin for order = 3."""
+    desc = """
+C function to calculate the index of the first minimum in an array.
+The logic follows that of scipy.argrelmin with order = 3,
+however it outputs the index of the first relative minimum from the left.
+
+@param arr - The array to find the minimum in.
+@param nsteps_arr - The number of steps in the array.
+@returns - The index of the first minimum in the array.
+"""
     cfunc_type = "size_t"
     name = "SEOBNRv5_aligned_spin_argrelmin"
     params = "REAL *restrict arr , size_t nsteps_arr"
@@ -103,71 +116,6 @@ return minima_count_or_idx;
     return pcg.NRPyEnv()
 
 
-def register_CFunction_SEOBNRv5_aligned_spin_iterative_refinement_old() -> (
-    Union[None, pcg.NRPyEnv_type]
-):
-    """
-    Register CFunction for evaluating the peak in frequency or momentum in SEOBNRv5.
-
-    :return: None if in registration phase, else the updated NRPy environment.
-    """
-    if pcg.pcg_registration_phase():
-        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
-        return None
-
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Evaluate the peak in frequency or momentum in SEOBNRv5"""
-    cfunc_type = "REAL"
-    name = "SEOBNRv5_aligned_spin_iterative_refinement"
-    params = "gsl_spline *restrict spline, gsl_interp_accel *restrict acc, const REAL left, const REAL right, const int stop"
-    body = """
-REAL left_refined = left;
-REAL right_refined = right;
-REAL dt = 0.1 , result;
-REAL *restrict abs_F_dots , *restrict Ts;
-size_t nsteps_Ts , i;
-size_t minimaIDX;
-for(int iter = 0; iter < 2; iter++) {
-  dt = dt * 0.1;
-  nsteps_Ts = (size_t) ((right_refined - left_refined) / dt );
-  Ts = (REAL *)malloc(nsteps_Ts * sizeof(REAL));
-  abs_F_dots = (REAL *)malloc(nsteps_Ts * sizeof(REAL));
-  for (i = 0 ; i < nsteps_Ts; i++){
-    Ts[i] = left_refined + i * dt;
-    abs_F_dots[i] = fabs(gsl_spline_eval_deriv(spline,Ts[i],acc));
-  }
-  minimaIDX = SEOBNRv5_aligned_spin_argrelmin(abs_F_dots,nsteps_Ts);
-  result = Ts[minimaIDX];
-  free(Ts);
-  free(abs_F_dots);
-  if (minimaIDX > 0){
-    left_refined = MAX(left_refined,result - 10.);
-    right_refined = MIN(right_refined,result + 10.);
-  }
-  else{
-    if (stop == PRSTAR){
-      return right_refined;
-    }
-    else{
-      result = (left_refined + right_refined) * 0.5;
-      return result;
-    }
-  }
-}
-return result;
-"""
-    cfc.register_CFunction(
-        includes=includes,
-        desc=desc,
-        cfunc_type=cfunc_type,
-        name=name,
-        params=params,
-        include_CodeParameters_h=False,
-        body=body,
-    )
-    return pcg.NRPyEnv()
-
-
 def register_CFunction_eval_abs_deriv() -> Union[None, pcg.NRPyEnv_type]:
     """
     Register CFunction for evaluating the absolute derivative at a given point.
@@ -178,7 +126,13 @@ def register_CFunction_eval_abs_deriv() -> Union[None, pcg.NRPyEnv_type]:
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Evaluate the absolute derivative at a given point."""
+    desc = """
+Evaluates the absolute value of the derivative of a spline at a given point.
+
+@param t - The point at which to evaluate the derivative.
+@param params - The spline data.
+@returns - The absolute value of the derivative of the spline at the given point.
+"""
     cfunc_type = "double"
     name = "eval_abs_deriv"
     params = "double t, void *params"
@@ -208,7 +162,14 @@ def register_CFunction_find_local_minimum_index() -> Union[None, pcg.NRPyEnv_typ
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Find the local minimum index in an array."""
+    desc = """
+Finds the local minimum index in an array.
+
+@param arr - The array to search for the minimum in.
+@param size - The size of the array.
+@param order - The maximum array index shift to consider for the minimum.
+@returns - The index of the local minimum in the array or -1 if no minimum is found.
+"""
     cfunc_type = "size_t"
     name = "find_local_minimum_index"
     params = "REAL *restrict arr, size_t size, int order"
@@ -254,7 +215,18 @@ def register_CFunction_SEOBNRv5_aligned_spin_iterative_refinement() -> (
         return None
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Evaluate the peak in frequency or momentum in SEOBNRv5"""
+    desc = """
+Evaluates the time at which the peak in orbital frequency or tortoise momentum occurs in the SEOBNRv5 dynamics.
+This is done by iteratively interpolating and refining the interval in which the peak occurs.
+
+@param sdata - Struct containing the spline of the tortoise momentum or orbital frequency.
+@param initial_left - The left endpoint of the interval to search for the peak.
+@param initial_right - The right endpoint of the interval to search for the peak.
+@param levels - The number of iterations of refinement to perform.
+@param dt_initial - The initial time step to use for interpolation.
+@param pr - Boolean flag to determine whether to find the peak in tortoise momentum or orbital frequency.
+@returns - The time at which the peak in orbital frequency or tortoise momentum occurs, or the midpoint of the interval if no peak is found.
+"""
     cfunc_type = "REAL"
     name = "SEOBNRv5_aligned_spin_iterative_refinement"
     params = "spline_data *sdata, double initial_left, double initial_right, int levels, double dt_initial, bool pr"
@@ -349,8 +321,16 @@ def register_CFunction_SEOBNRv5_aligned_spin_intepolate_dynamics() -> (
         return None
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Evaluate the peak in frequency or momentum in SEOBNRv5"""
-    cfunc_type = "int"
+    desc = """
+Interpolates and fine samples the SEOBNRv5 dynamics close to the end point for Non Quasi-Circular (NQC) corrections.
+
+@param commondata - Struct containing the common data for the SEOBNRv5 dynamics.
+@param dynamics_fine_prelim - Array containing the portion of the dynamics that needs fine sampling.
+@param nsteps_fine_prelim - Lenght of dynamics_fine_prelim.
+@param t_peak - The estimated end time of the trajectory (can be the last element or the orbital frequency/tortoise momentum peak).
+@param stop - Stop condition of the ODE integration; used to determine if iterative refinement was performed.
+"""
+    cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_interpolate_dynamics"
     params = "commondata_struct *restrict commondata, REAL *restrict dynamics_fine_prelim, const size_t nsteps_fine_prelim, const REAL t_peak, const int stop"
     body = """
@@ -423,7 +403,6 @@ free(rs);
 free(phis);
 free(prs);
 free(pphis);
-return GSL_SUCCESS;
 """
     cfc.register_CFunction(
         includes=includes,
@@ -456,8 +435,13 @@ def register_CFunction_SEOBNRv5_aligned_spin_ode_integration(
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_odeiv2.h>
 """
-    desc = """Integrate the SEOBNRv5 equations of motion."""
-    cfunc_type = "int"
+    desc = """
+Integrates the SEOBNRv5 equations of motion to obtain the dynamics of the EOB perturber
+as well as the augmented dynamical quantities for generating the inspiral waveform.
+
+@param commondata - Common data struct containing the model parameters.
+"""
+    cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_ode_integration"
     params = "commondata_struct *restrict commondata"
     body = """
@@ -666,8 +650,7 @@ if (stop == PRSTAR) {
 status = SEOBNRv5_aligned_spin_interpolate_dynamics(commondata,dynamics_fine_prelim,nsteps_fine_prelim,t_peak,stop);
 free(dynamics_fine_prelim);
 free(times_fine_prelim);
-free(times);
-return GSL_SUCCESS;
+free(times);;
 """
     cfc.register_CFunction(
         includes=includes,

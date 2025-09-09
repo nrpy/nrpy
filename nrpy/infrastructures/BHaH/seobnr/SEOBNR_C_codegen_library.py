@@ -281,7 +281,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_waveform() -> (
     Union[None, pcg.NRPyEnv_type]
 ):
     """
-    Register CFunction for calculating the (2,2) mode of SEOBNRv5.
+    Register CFunction for calculating the (2,2) mode of SEOBNRv5 inspiral waveform.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -315,7 +315,13 @@ def register_CFunction_SEOBNRv5_aligned_spin_waveform() -> (
     )
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Calculate the SEOBNRv5 22 mode."""
+    desc = """
+Calculates the (2,2) mode of the SEOBNRv5 inspiral waveform for a single timestep.
+
+@param dynamics - Array of dynamical variables.
+@param commondata - Common data structure containing the model parameters.
+@return - The (2,2) mode of the SEOBNRv5 inspiral waveform.
+"""
     cfunc_type = "double complex"
     prefunc = "#include<complex.h>"
     name = "SEOBNRv5_aligned_spin_waveform"
@@ -366,8 +372,12 @@ def register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics() -> (
         return None
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Calculate the SEOBNRv5 22 mode."""
-    cfunc_type = "int"
+    desc = """
+Calculates the (2,2) mode of the SEOBNRv5 inspiral waveform for the low- and fine-sampled ODE trajectory.
+
+@param commondata - Common data structure containing the model parameters.
+"""
+    cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_waveform_from_dynamics"
     params = "commondata_struct *restrict commondata"
     body = """
@@ -410,7 +420,6 @@ for (i = 0; i < commondata->nsteps_fine; i++) {
   commondata->waveform_fine[IDX_WF(i,TIME)] = dynamics[TIME];
   commondata->waveform_fine[IDX_WF(i,STRAIN)] = SEOBNRv5_aligned_spin_waveform(dynamics, commondata);
 }
-return GSL_SUCCESS;
 """
     cfc.register_CFunction(
         includes=includes,
@@ -435,8 +444,17 @@ def register_CFunction_SEOBNRv5_aligned_spin_flux() -> Union[None, pcg.NRPyEnv_t
         return None
 
     includes = ["BHaH_defines.h"]
-    desc = """Evaluate the SEOBNRv5 aligned spin flux."""
-    cfunc_type = "int"
+    desc = """
+Evaluates the SEOBNRv5 aligned spin flux for the ODE right-hand sides.
+
+@param y - Array of dynamical variables.
+@param Hreal - The real part of the Hamiltonian.
+@param Omega - The instantaneous angular frequency of the EOB perturber.
+@param Omega_circ - The circular angular frequency of the EOB perturber.
+@param f - Array to store the flux.
+@param params - Common data structure containing the model parameters.
+"""
+    cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_flux"
     params = "const REAL *restrict y, const REAL Hreal, const REAL Omega, const REAL Omega_circ, REAL *restrict f, void *restrict params"
     wf = SEOBNRv5_wf.SEOBNRv5_aligned_spin_waveform_quantities()
@@ -461,7 +479,6 @@ const REAL pphi = y[3];
 const REAL flux_over_omega = flux / Omega;
 f[0] = prstar * flux_over_omega / pphi;
 f[1] = flux_over_omega;
-return GSL_SUCCESS;
 """
     cfc.register_CFunction(
         includes=includes,
@@ -488,8 +505,15 @@ def register_CFunction_SEOBNRv5_aligned_spin_right_hand_sides() -> (
         return None
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Evaluate SEOBNRv5 Hamiltonian and needed derivatives to compute binary dynamics."""
-    cfunc_type = "int"
+    desc = """
+Evaluate SEOBNRv5 Hamiltonian and needed derivatives to compute binary dynamics.
+
+@param t - The current time.
+@param y - Array of dynamical variables.
+@param f - Array to store the right-hand sides.
+@param params - Common data structure containing the model parameters.
+"""
+    cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_right_hand_sides"
     params = "REAL t, const REAL *restrict y, REAL *restrict f, void *restrict params"
     Hq = SEOBNRv5_Ham.SEOBNRv5_aligned_spin_Hamiltonian_quantities()
@@ -531,7 +555,6 @@ f[0] = xi * dHreal_dprstar;
 f[1] = dHreal_dpphi;
 f[2] = -xi * dHreal_dr + flux[0];
 f[3] = flux[1];
-return GSL_SUCCESS;
 """
     cfc.register_CFunction(
         includes=includes,
@@ -556,7 +579,13 @@ def register_CFunction_commondata_io() -> Union[None, pcg.NRPyEnv_type]:
         return None
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Store the commondata struct in a binary file."""
+    desc = """
+Store the commondata struct in a binary file for debugging purposes.
+
+@param data - The commondata struct to store.
+@param filename - The name of the file to store the commondata struct in.
+@returns - GSL_SUCCESS (0) on success, non-zero on failure.
+"""
     cfunc_type = "int"
     name = "commondata_io"
     params = "commondata_struct *restrict data, const char *restrict filename"
