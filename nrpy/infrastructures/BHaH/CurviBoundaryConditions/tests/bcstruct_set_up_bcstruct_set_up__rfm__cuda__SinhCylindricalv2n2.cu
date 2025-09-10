@@ -36,7 +36,6 @@
  *    - On a cell-centered grid, the mapped point lies within the grid interior.
  *      - Update the data at (i0, i1, i2) by copying from (i0_inbounds, i1_inbounds, i2_inbounds).
  *      - Apply a sign change (+1 or -1) if the data represents tensors or vectors.
- *
  */
 static void EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(const commondata_struct *restrict commondata,
                                                                       const params_struct *restrict params, REAL *restrict xx[3], const int i0,

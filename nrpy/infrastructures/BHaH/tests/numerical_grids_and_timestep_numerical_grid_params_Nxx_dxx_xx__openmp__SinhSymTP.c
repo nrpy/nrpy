@@ -45,7 +45,6 @@ static void initialize_grid_xx2_host(const params_struct *restrict params, REAL 
  *
  * Grid setup output:
  * - xx: Coordinate values for each (cell-centered) grid point.
- *
  */
 void numerical_grid_params_Nxx_dxx_xx__rfm__SinhSymTP(const commondata_struct *restrict commondata, params_struct *restrict params,
                                                       REAL *restrict xx[3], const int Nx[3],

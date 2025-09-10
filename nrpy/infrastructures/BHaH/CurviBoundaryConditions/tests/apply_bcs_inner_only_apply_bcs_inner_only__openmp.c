@@ -27,14 +27,12 @@ static void apply_bcs_inner_only_host(const params_struct *restrict params, cons
 } // END FUNCTION apply_bcs_inner_only_host
 
 /**
- *
  * Apply BCs to inner boundary points only,
  * using data stored in bcstruct->inner_bc_array.
  * These structs are set in bcstruct_set_up().
  * Inner boundary points map to either the grid
  * interior ("pure inner") or to pure outer
  * boundary points ("inner maps to outer").
- *
  */
 void apply_bcs_inner_only(const commondata_struct *restrict commondata, const params_struct *restrict params, const bc_struct *restrict bcstruct,
                           REAL *restrict gfs) {

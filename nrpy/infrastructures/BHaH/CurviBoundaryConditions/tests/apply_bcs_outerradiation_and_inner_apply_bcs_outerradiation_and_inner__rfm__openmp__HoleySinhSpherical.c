@@ -102,7 +102,6 @@ static inline REAL compute_partial_r_f(const params_struct *restrict params, REA
 
 /**
  * *** Apply radiation BCs to all outer boundaries. ***
- *
  */
 static inline REAL radiation_bcs(const params_struct *restrict params, REAL *restrict xx[3], const REAL *restrict gfs, REAL *restrict gfs_rhss,
                                  const int which_gf, const REAL gf_wavespeed, const REAL gf_f_infinity, const int dest_i0, const int dest_i1,
@@ -208,7 +207,6 @@ static void apply_bcs_pure_only(const params_struct *restrict params, const bc_s
  * boundary points. In the first step, it parallelizes the task using OpenMP and starts by applying BCs to
  * the outer boundary points layer-by-layer, prioritizing the faces in the order x0, x1, x2. The second step
  * applies BCs to the inner boundary points, which may map either to the grid interior or to the outer boundary.
- *
  */
 void apply_bcs_outerradiation_and_inner__rfm__HoleySinhSpherical(const commondata_struct *restrict commondata, const params_struct *restrict params,
                                                                  const bc_struct *restrict bcstruct, REAL *restrict xx[3],
