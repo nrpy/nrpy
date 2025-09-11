@@ -50,9 +50,14 @@ class SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities:
         it can be hard to visually differentiate between the two cases and can lead
         to false positives in bug analyses.
 
+        All potentials entering the effective Hamiltonian are computed under the assumption 
+        that the system of interest is a black hole binary. That is all multipolar coefficients
+        \hat{C}_{*} in Equations 4 and 5 of https://arxiv.org/pdf/2303.18143 are set to zero,
+        and their contributions to the potentials are neglected in the code.
+
         The key outputs of the SEOBNRv5_generic_spin_Hamiltonian_quantities class are:
             - 'xi': The tortoise parameter
-                        (Equation 41 of https://arxiv.org/pdf/2303.18143).
+                        (Equation 44 of https://arxiv.org/pdf/2303.18143).
             - 'Hreal': The Hamiltonian
                         (Equation 7 of https://arxiv.org/pdf/2303.18143).
             - First derivatives of the Hamiltonian
@@ -186,6 +191,7 @@ class SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities:
         # https://git.ligo.org/waveforms/software/pyseobnr/-/blob/2aebc3347dfade6d1df282ae6eedd34083a980b0/pyseobnr/eob/hamiltonian/Ham_AvgS2precess_simple_cython_PA_AD.pyx
         # Dnons = Dbpm (line 111 ONLY in the above permalink)
         # Anons = Apm (line 113 ONLY in the above permalink)
+        # d5 = 0 (Appendix A of https://arxiv.org/pdf/2303.18039)
         d5 = 0
         Dnons = (
             self.r
@@ -349,7 +355,7 @@ class SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities:
                 + 13212057600 * self.r**5
             )
         )
-        # tortoise factor xi (Equation 41 of https://arxiv.org/pdf/2303.18143)
+        # tortoise factor xi (Equation 44 of https://arxiv.org/pdf/2303.18143)
         self.xi = sp.sqrt(Dnons) * (Anons + apsq * u * u) / (1 + apsq * u * u)
         # radial momentum pr in terms of tortoise momentum prstar
         # (Equation 42 of https://arxiv.org/pdf/2303.18143)
@@ -550,6 +556,7 @@ class SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities:
         Qpprec = Qnos + QalignSS
         Bpprecp = 1 + BinplanepSS_avg
         Bpprecnp = -1 + apsq * u * u + Anons * Dnons + BnpalignSS
+        # Equation 17 of https://arxiv.org/pdf/2303.18143
         Bkerreqnpa = -(1 + 2 / self.r) / (self.r**2 + apsq * (1 + 2 / self.r))
         Apprec = (apsq * u * u + Anons + AalignSS + AinplaneSS_avg) / (
             1 + apsq * (1 + 2 / self.r) / (self.r**2)
