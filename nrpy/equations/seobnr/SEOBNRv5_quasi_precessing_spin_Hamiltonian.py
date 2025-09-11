@@ -50,9 +50,9 @@ class SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities:
         it can be hard to visually differentiate between the two cases and can lead
         to false positives in bug analyses.
 
-        All potentials entering the effective Hamiltonian are computed under the assumption 
+        All potentials entering the effective Hamiltonian are computed under the assumption
         that the system of interest is a black hole binary. That is all multipolar coefficients
-        \hat{C}_{*} in Equations 4 and 5 of https://arxiv.org/pdf/2303.18143 are set to zero,
+        hat{C}_{*} in Equations 4 and 5 of https://arxiv.org/pdf/2303.18143 are set to zero,
         and their contributions to the potentials are neglected in the code.
 
         The key outputs of the SEOBNRv5_generic_spin_Hamiltonian_quantities class are:
