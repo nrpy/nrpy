@@ -44,11 +44,17 @@ class SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities:
         various coefficients required for the Hamiltonian's effective potential
         calculations.
 
+        Care needs to be taken in documenting the precessing v/s partially precessing
+        equations as the orbit averaging and assumptions of circularity result in
+        different expressions for the metric potential. Without the correct equation numbers,
+        it can be hard to visually differentiate between the two cases and can lead
+        to false positives in bug analyses.
+
         The key outputs of the SEOBNRv5_generic_spin_Hamiltonian_quantities class are:
             - 'xi': The tortoise parameter
-                        (Equation 7 of https://arxiv.org/pdf/2303.18039).
+                        (Equation 41 of https://arxiv.org/pdf/2303.18143).
             - 'Hreal': The Hamiltonian
-                        (Equations 9, A1-A6 of https://arxiv.org/pdf/2303.18039).
+                        (Equation 7 of https://arxiv.org/pdf/2303.18143).
             - First derivatives of the Hamiltonian
                         needed for ODE integration.
             - First and second derivatives of the Hamiltonian
@@ -106,6 +112,8 @@ class SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities:
         am_l = m1_norm * self.chi1_l - m2_norm * self.chi2_l
         ap_dot_l = self.pphi * ap_l
         am_dot_l = self.pphi * am_l
+        # orbit averaged version of the spin combinations
+        # see 54 of https://arxiv.org/pdf/2303.18143
         n_dot_ap_2_avg = sp.Rational(1, 2) * (apsq - ap_dot_ln**2)
         n_dot_am_2_avg = sp.Rational(1, 2) * (amsq - am_dot_ln**2)
         n_dot_ap_times_n_dot_am_avg = sp.Rational(1, 2) * (
@@ -114,6 +122,7 @@ class SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities:
         # define inverse radius
         u = 1 / self.r
         # non-spinning metric potentials
+        # Equation 25 of https://arxiv.org/pdf/2303.18143
         Qnos = (
             (
                 f2r(0.121954868780449) * self.nu * self.prstar**8 / self.r
@@ -170,6 +179,13 @@ class SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities:
             )
             + self.prstar**4 * (-6 * self.nu**2 + 8 * self.nu) / self.r**2
         )
+        # below two terms are given as Taylor expanded potentials
+        # in
+        # however, the Pade approximant is what we want.
+        # The Pade approximated versions are taken from
+        # https://git.ligo.org/waveforms/software/pyseobnr/-/blob/2aebc3347dfade6d1df282ae6eedd34083a980b0/pyseobnr/eob/hamiltonian/Ham_AvgS2precess_simple_cython_PA_AD.pyx
+        # Dnons = Dbpm (line 111 ONLY in the above permalink)
+        # Anons = Apm (line 113 ONLY in the above permalink)
         d5 = 0
         Dnons = (
             self.r
@@ -333,11 +349,15 @@ class SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities:
                 + 13212057600 * self.r**5
             )
         )
-        # tortoise coordinate
+        # tortoise factor xi (Equation 41 of https://arxiv.org/pdf/2303.18143)
         self.xi = sp.sqrt(Dnons) * (Anons + apsq * u * u) / (1 + apsq * u * u)
+        # radial momentum pr in terms of tortoise momentum prstar
+        # (Equation 42 of https://arxiv.org/pdf/2303.18143)
         pr = self.prstar / self.xi
         # odd-in-spin potentials
         # gyro-gravitomagnetic factors
+        # v5PHM only uses up to 3.5 PN for these terms
+        # Equation 28a of https://arxiv.org/pdf/2303.18143
         gap = (
             sp.Rational(7, 4)
             + (self.pphi**2 / self.r**2)
@@ -362,6 +382,7 @@ class SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities:
                 - sp.Rational(5, 64)
             )
         )
+        # Equation 28b of https://arxiv.org/pdf/2303.18143
         gam = (
             sp.Rational(1, 4)
             + (self.pphi**2 / self.r**2)
@@ -387,43 +408,38 @@ class SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities:
             )
         )
         # SO calibration factor
+        # Equation 29 of https://arxiv.org/pdf/2303.18143
         SOcalib = self.nu * dSO * ap_dot_l * (u**3)
         # cubic-in-spin SO terms
+        # Equation 50 of https://arxiv.org/pdf/2303.18143
+        # same as Equation 37 but with with p_r = 0
+        # and some values changed due to the
+        # orbit averaging procedure
         Gppreca3_avg = ap_dot_l * (
             self.pphi**2
             * u**3
             * (
                 sp.Rational(1, 2) * delta * n_dot_ap_times_n_dot_am_avg
-                - sp.Rational(1, 2) * n_dot_ap_2_avg
-            )
-            + pr**2
-            * u
-            * (
-                sp.Rational(5, 4) * n_dot_ap_2_avg
-                - sp.Rational(3, 2) * delta * n_dot_ap_times_n_dot_am_avg
+                - sp.Rational(1, 4) * n_dot_ap_2_avg
             )
             + u**2
             * (
-                -sp.Rational(1, 2) * apsq
-                + n_dot_ap_2_avg
+                -sp.Rational(1, 4) * apsq
+                - sp.Rational(3, 4) * n_dot_ap_2_avg
                 + sp.Rational(5, 24) * delta * ap_dot_am
                 - sp.Rational(5, 3) * delta * n_dot_ap_times_n_dot_am_avg
             )
         ) + am_dot_l * (
-            sp.Rational(1, 2) * pr**2 * u * delta * n_dot_ap_2_avg
-            - sp.Rational(1, 4)
-            * self.pphi**2
-            * u**3
-            * delta
-            * n_dot_ap_times_n_dot_am_avg
+            -sp.Rational(1, 4) * self.pphi**2 * u**3 * delta * n_dot_ap_2_avg
             + u**2
             * (
                 sp.Rational(1, 24) * delta * apsq
-                + sp.Rational(2, 3) * delta * n_dot_ap_2_avg
+                + sp.Rational(5, 12) * delta * n_dot_ap_2_avg
             )
         )
         # quadratic-in-spin metric potentials
         # in-plane spin components
+        # Equation 49a of https://arxiv.org/pdf/2303.18143
         AinplaneSS_avg = (
             2 * u**3 * n_dot_ap_2_avg
             + u**4
@@ -451,12 +467,13 @@ class SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities:
                 * n_dot_ap_2_avg
             )
         )
+        # Equation 49b of https://arxiv.org/pdf/2303.18143
         BinplanepSS_avg = (
             -(u**2) * n_dot_ap_2_avg
             + u**3
             * (
                 sp.Rational(3, 4) * delta * n_dot_ap_times_n_dot_am_avg
-                + (sp.Rational(3, 4) * self.nu - sp.Rational(3, 16)) * n_dot_am_2_avg
+                + (-sp.Rational(3, 4) * self.nu + sp.Rational(3, 16)) * n_dot_am_2_avg
                 + (-sp.Rational(7, 4) * self.nu - sp.Rational(15, 16)) * n_dot_ap_2_avg
             )
             + u**4
@@ -478,7 +495,9 @@ class SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities:
                 * n_dot_ap_2_avg
             )
         )
-        # out-of-plane spin components (same as aligned for quasi-precessing)
+        # out-of-plane spin components, same as aligned for quasi-precessing
+        # binaries with values replaced by dot products.
+        # Equation 39f of https://arxiv.org/pdf/2303.18143
         QalignSS = ((pr**4) / (self.r**3)) * (
             apsq
             * (
@@ -494,6 +513,7 @@ class SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities:
                 - sp.Rational(15, 32)
             )
         )
+        # Equation 39d of https://arxiv.org/pdf/2303.18143
         BnpalignSS = (1 / self.r**3) * (
             apsq * (3 * self.nu + sp.Rational(45, 16))
             - delta * ap_dot_am * sp.Rational(21, 8)
@@ -508,6 +528,7 @@ class SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities:
                 - sp.Rational(37, 64)
             )
         )
+        # Equation 39a of https://arxiv.org/pdf/2303.18143
         AalignSS = (1 / self.r**4) * (
             apsq * sp.Rational(9, 8)
             - delta * ap_dot_am * sp.Rational(5, 4)
@@ -525,6 +546,7 @@ class SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities:
             )
         )
         # metric potentials
+        # Equation 48 of https://arxiv.org/pdf/2303.18143
         Qpprec = Qnos + QalignSS
         Bpprecp = 1 + BinplanepSS_avg
         Bpprecnp = -1 + apsq * u * u + Anons * Dnons + BnpalignSS
@@ -533,6 +555,8 @@ class SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities:
             1 + apsq * (1 + 2 / self.r) / (self.r**2)
         )
         # even-in-spin Hamiltonian
+        # Equation 47 of https://arxiv.org/pdf/2303.18143
+        # broken into two parts.
         Heven = sp.sqrt(
             Apprec
             * (
@@ -548,6 +572,7 @@ class SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities:
             self.r**3 + apsq * (self.r + 2)
         )
         Heff = Hodd + Heven
+        # Equation 7 of https://arxiv.org/pdf/2303.18143
         self.Hreal = sp.sqrt(1 + 2 * self.nu * (Heff - 1))
         self.dHreal_dr = sp.diff(self.Hreal, self.r) / self.nu
         self.dHreal_dprstar = sp.diff(self.Hreal, self.prstar) / self.nu
