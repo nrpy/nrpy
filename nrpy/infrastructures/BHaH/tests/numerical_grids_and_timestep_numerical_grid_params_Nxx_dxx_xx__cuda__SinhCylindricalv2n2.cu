@@ -47,7 +47,6 @@ __global__ static void initialize_grid_xx2_gpu(const size_t streamid, REAL *rest
  *
  * Grid setup output:
  * - xx: Coordinate values for each (cell-centered) grid point.
- *
  */
 void numerical_grid_params_Nxx_dxx_xx__rfm__SinhCylindricalv2n2(const commondata_struct *restrict commondata, params_struct *restrict params,
                                                                 REAL *xx[3], const int Nx[3],

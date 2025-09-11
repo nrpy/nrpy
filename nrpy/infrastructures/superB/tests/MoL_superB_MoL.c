@@ -2,7 +2,6 @@
 #include "BHaH_function_prototypes.h"
 /**
  * Method of Lines (MoL) for "RK4" method: Step forward one full timestep.
- *
  */
 void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_struct *restrict griddata, const REAL time_start,
                               const int which_RK_substep, const int which_MOL_part) {

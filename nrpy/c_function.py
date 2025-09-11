@@ -109,30 +109,107 @@ class CFunction:
     @staticmethod
     def prefix_with_star(input_string: str) -> str:
         r"""
-        Prefix every line in the input string with " * ".
+        Reformat every line in a multi-line string to have a " * " prefix, preserving indentation.
 
-        This function preserves leading whitespace on each line while removing any trailing whitespace.
-        It is useful for formatting multi-line comments or documentation blocks by adding a
-        consistent prefix to each line.
+        This function standardizes comment blocks by ensuring the content of each
+        line is prefixed with " * ". It preserves all leading whitespace (indentation)
+        and applies these rules to the first non-whitespace characters:
 
-        :param input_string: The input multi-line string to be prefixed.
-        :return: The modified string with " * " prefixed on every line, with leading whitespace preserved
-                 and trailing whitespace removed.
+        1. If the content starts with "* " or "*", that prefix is removed and
+           replaced with a standard " * ".
+        2. If the content does not start with a star, the standard " * " prefix
+           is inserted between the leading whitespace and the content.
 
-        Example:
-        >>> s = "   Hello\n   World   "
-        >>> CFunction.prefix_with_star(s)
-        ' *    Hello\n *    World'
+        Trailing whitespace on each line is always removed.
+
+        :param input_string: The input multi-line string to be reformatted.
+        :return: The modified string with " * " prefixed consistently on every line.
+
+        Doctests
+        >>> # Rule 1: Correctly reformats existing prefixes while preserving indentation.
+        >>> print(CFunction.prefix_with_star(" * Hello\n * World   "))
+         * Hello
+         * World
+        >>> # Rule 2: Handles different prefixes and indentation levels.
+        >>> print(CFunction.prefix_with_star("*Hello\n  * World"))
+         * *Hello
+         *  * World
+        >>> # Rule 3: Adds a prefix where one is missing.
+        >>> print(CFunction.prefix_with_star("Hello\n  World"))
+         * Hello
+         *   World
+        >>> # Handles empty lines correctly.
+        >>> print(CFunction.prefix_with_star("First line\n\nThird line"))
+         * First line
+         *
+         * Third line
+        >>> # Ignore irrelevant asterisks
+        >>> print(CFunction.prefix_with_star("*** Emphasis! ***\nI want to *emphasize*"))
+         * *** Emphasis! ***
+         * I want to *emphasize*
+        >>> # Handles lines with more than one space before a star.
+        >>> print(CFunction.prefix_with_star("  *  "))
+         *  *
+        >>> # Handles lines with just one space before a star.
+        >>> print(CFunction.prefix_with_star(" *"))
+         *
         """
-        # Splitting the string by line breaks
+        # NOTE:
+        # - Treat " * " at column 0 as an existing standardized prefix and normalize it.
+        # - Treat a bare " *" at column 0 (no trailing space/content) as an empty-content line.
+        # - Asterisks that appear after indentation are considered part of the content
+        #   (e.g., "  * World" becomes " *  * World" — we keep the inner "* World").
+        # - The trailing space in the " * " prefix effectively occupies one indentation
+        #   column. To preserve alignment, when a line has indentation and its first
+        #   non-space character is "*", we insert the prefix and then append the
+        #   original indentation minus one space.
+
+        # Strip only leading/trailing newline characters, preserving spaces/tabs at the ends.
+        input_string = input_string.strip("\n")
+
         lines = input_string.split("\n")
+        out_lines = []
 
-        # Removing trailing whitespace from each line and then prefixing with " * "
-        prefixed_lines = [" * " + line.rstrip() for line in lines]
+        for raw in lines:
+            # Remove trailing whitespace first.
+            clean = raw.rstrip()
 
-        # Joining the prefixed lines back into a single string
-        result = "\n".join(prefixed_lines)
-        return result
+            # Empty/whitespace-only line -> just the prefix without trailing space.
+            if clean.strip() == "":
+                out_lines.append(" *")
+                continue
+
+            # If the line is exactly a lone " *" at column 0, keep it as an empty-content line.
+            if clean == " *":
+                out_lines.append(" *")
+                continue
+
+            # If the line already begins with the canonical prefix at column 0,
+            # normalize by removing that prefix and re-adding it.
+            if clean.startswith(" * "):
+                content = clean[3:]
+                out_lines.append(" * " + content)
+                continue
+
+            # Compute indentation and the rest of the line.
+            i = 0
+            while i < len(clean) and clean[i] == " ":
+                i += 1
+            indent = clean[:i]
+            rest = clean[i:]
+
+            # Decide how much indentation to keep after the inserted prefix.
+            if rest.startswith("*"):
+                # Avoid double-spacing between " * " and a following star
+                # by consuming one indentation space if present.
+                indent_after_prefix = indent[1:] if len(indent) > 0 else ""
+            else:
+                indent_after_prefix = indent
+
+            # Build the reformatted line without stripping decorative asterisks in content.
+            out_lines.append(" * " + indent_after_prefix + rest)
+
+        return "\n".join(out_lines)
 
     @staticmethod
     def subdirectory_depth(subdirectory: str) -> int:

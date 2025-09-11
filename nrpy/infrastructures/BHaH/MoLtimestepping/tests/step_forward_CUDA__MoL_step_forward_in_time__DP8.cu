@@ -851,7 +851,6 @@ static void rk_substep_13__launcher(params_struct *restrict params, REAL *restri
 
 /**
  * Method of Lines (MoL) for "DP8" method: Step forward one full timestep.
- *
  */
 void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_struct *restrict griddata) {
 
