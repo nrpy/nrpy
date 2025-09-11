@@ -57,7 +57,7 @@ class SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities:
                         needed for waveform and flux calculations.
 
 
-        Inputs: 'm1', 'm2', 'r', 'phi', 'prstar', 'pphi', 'chi1_x', 'chi1_y', 'chi1_z', 'chi2_x', 'chi2_y', 'chi2_z', 'chi1_l', 'chi1_ln', 'chi2_l', 'chi2_ln', 'a6', and 'dSO'
+        Inputs: 'm1', 'm2', 'r', 'phi', 'prstar', 'pphi', 'chi1_x', 'chi1_y', 'chi1_z', 'chi1_l', 'chi1_ln', 'chi2_x', 'chi2_y', 'chi2_z', 'chi2_l', 'chi2_ln', 'a6', and 'dSO'
         Outputs: 'xi' and 'Hreal'
         """
         (
@@ -70,17 +70,17 @@ class SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities:
             self.chi1_x,  # x-component of the spin of the first black hole
             self.chi1_y,  # y-component of the spin of the first black hole
             self.chi1_z,  # z-component of the spin of the first black hole
+            self.chi1_l,  # projection of the spin of the first black hole onto the orbital angular momentum
+            self.chi1_ln,  # projection of the spin of the first black hole onto the Newtonian orbital angular momentum (needed for orbit averaging)
             self.chi2_x,  # x-component of the spin of the second black hole
             self.chi2_y,  # y-component of the spin of the second black hole
             self.chi2_z,  # z-component of the spin of the second black hole
-            self.chi1_l,  # projection of the spin of the first black hole onto the orbital angular momentum
             self.chi2_l,  # projection of the spin of the second black hole onto the orbital angular momentum
-            self.chi1_ln,  # projection of the spin of the first black hole onto the Newtonian orbital angular momentum (needed for orbit averaging)
             self.chi2_ln,  # projection of the spin of the second black hole onto the Newtonian angular momentum (needed for orbit averaging)
             a6,
             dSO,
         ) = sp.symbols(
-            "m1 m2 r phi prstar pphi chi1_x chi1_y chi1_z chi2_x chi2_y chi2_z chi1_l chi1_ln chi2_l chi2_ln a6 dSO",
+            "m1 m2 r phi prstar pphi chi1_x chi1_y chi1_z chi1_l chi1_ln chi2_x chi2_y chi2_z chi2_l chi2_ln a6 dSO",
             real=True,
         )
         # mass combinations
