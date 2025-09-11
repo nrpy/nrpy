@@ -322,6 +322,7 @@ par.adjust_CodeParam_default(
         1.1 * (default_BH1_mass + default_BH2_mass),
     ],
 )
+par.adjust_CodeParam_default("bah_verbosity_level", 0)
 
 
 CPs.write_CodeParameters_h_files(project_dir=project_dir)
