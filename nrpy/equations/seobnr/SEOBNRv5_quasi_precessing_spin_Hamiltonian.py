@@ -162,7 +162,7 @@ class SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities:
                 + self.prstar**4
                 * (
                     f2r(602.318540416564) * self.nu**3
-                    + self.nu**2 * (118.4 * sp.log(self.r) - f2r(1796.13660498019))
+                    + self.nu**2 * (f2r(118.4) * sp.log(self.r) - f2r(1796.13660498019))
                     + self.nu
                     * (f2r(452.542166996693) - f2r(51.6952380952381) * sp.log(self.r))
                 )
@@ -252,7 +252,8 @@ class SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities:
                     - 138141470005001 * self.nu**2
                     - 4718592 * self.nu * (40950 * d5 + f2r(86207832.4415642))
                     + 450172889755120 * self.nu
-                    + f2r(86618264430493.3) * (1 - 0.496948781616935 * self.nu) ** 2
+                    + f2r(86618264430493.3)
+                    * (1 - f2r(0.496948781616935) * self.nu) ** 2
                     + 188440788778196
                 )
                 + 5787938193408 * self.r * sp.log(self.r) ** 2
