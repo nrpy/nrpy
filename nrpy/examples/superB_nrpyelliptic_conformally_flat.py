@@ -205,7 +205,7 @@ nrpyelliptic.rhs_eval.register_CFunction_rhs_eval(
 )
 
 # Generate function to compute residuals
-nrpyelliptic.diagnostics.register_CFunction_compute_residual_all_points(
+nrpyelliptic.residual_H_compute_all_points.register_CFunction_residual_H_compute_all_points(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_intrinsics=enable_simd,
@@ -213,12 +213,10 @@ nrpyelliptic.diagnostics.register_CFunction_compute_residual_all_points(
 )
 
 # Generate diagnostics functions
-superBnrpyellClib.register_CFunction_compute_L2_norm_of_gridfunction(
-    CoordSystem=CoordSystem
-)
+superBnrpyellClib.register_CFunction_log10_L2norm_gf(CoordSystem=CoordSystem)
 
 # Register function to check for stop conditions
-nrpyelliptic.diagnostics.register_CFunction_check_stop_conditions()
+nrpyelliptic.stop_conditions_check.register_CFunction_stop_conditions_check()
 
 if __name__ == "__main__" and parallel_codegen_enable:
     pcg.do_parallel_codegen()
@@ -344,7 +342,7 @@ cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
 # Define post_MoL_step_forward_in_time string for main function
 post_MoL_step_forward_in_time = r"""
 serial {
-  check_stop_conditions(&commondata, griddata_chare);
+  stop_conditions_check(&commondata, griddata_chare);
   if (commondata.stop_relaxation) {
     mainProxy.done();
   }

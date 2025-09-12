@@ -1,12 +1,11 @@
 #include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
 /**
- * Kernel: compute_L2_norm_of_gridfunction_gpu.
+ * Kernel: log10_L2norm_gf_gpu.
  * Kernel to compute L2 quantities pointwise (not summed).
  */
-__global__ static void compute_L2_norm_of_gridfunction_gpu(const size_t streamid, const REAL *restrict x0, const REAL *restrict x1,
-                                                           const REAL *restrict x2, const REAL *restrict in_gfs, REAL *restrict aux_gfs,
-                                                           const REAL integration_radius, const int gf_index) {
+__global__ static void log10_L2norm_gf_gpu(const size_t streamid, const REAL *restrict x0, const REAL *restrict x1, const REAL *restrict x2,
+                                           const REAL *restrict in_gfs, REAL *restrict aux_gfs, const REAL integration_radius, const int gf_index) {
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = d_params[streamid].Nxx_plus_2NGHOSTS0;
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = d_params[streamid].Nxx_plus_2NGHOSTS1;
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = d_params[streamid].Nxx_plus_2NGHOSTS2;
@@ -85,14 +84,14 @@ __global__ static void compute_L2_norm_of_gridfunction_gpu(const size_t streamid
       } // END LOOP: for (int i0 = tid0+NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0 += stride0)
     } // END LOOP: for (int i1 = tid1+NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1 += stride1)
   } // END LOOP: for (int i2 = tid2+NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2 += stride2)
-} // END FUNCTION compute_L2_norm_of_gridfunction_gpu
+} // END FUNCTION log10_L2norm_gf_gpu
 
 /**
  * Compute l2-norm of a gridfunction assuming a single grid.
  */
-void compute_L2_norm_of_gridfunction__rfm__SinhCylindricalv2n2(commondata_struct *restrict commondata, params_struct *restrict params,
-                                                               REAL *restrict xx[3], const REAL integration_radius, const int gf_index, REAL *l2norm,
-                                                               const REAL *restrict in_gfs, REAL *restrict aux_gfs) {
+void log10_L2norm_gf__rfm__SinhCylindricalv2n2(commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3],
+                                               const REAL integration_radius, const int gf_index, REAL *l2norm, const REAL *restrict in_gfs,
+                                               REAL *restrict aux_gfs) {
 #include "set_CodeParameters.h"
 
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
@@ -112,9 +111,9 @@ void compute_L2_norm_of_gridfunction__rfm__SinhCylindricalv2n2(commondata_struct
                        (params->Nxx_plus_2NGHOSTS2 + threads_in_z_dir - 1) / threads_in_z_dir);
   size_t sm = 0;
   size_t streamid = params->grid_idx % NUM_STREAMS;
-  compute_L2_norm_of_gridfunction_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, x0, x1, x2, in_gfs, aux_gfs,
-                                                                                                     integration_radius, gf_index);
-  cudaCheckErrors(cudaKernel, "compute_L2_norm_of_gridfunction_gpu failure");
+  log10_L2norm_gf_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, x0, x1, x2, in_gfs, aux_gfs, integration_radius,
+                                                                                     gf_index);
+  cudaCheckErrors(cudaKernel, "log10_L2norm_gf_gpu failure");
 
   // Set summation variables to compute l2-norm
   REAL squared_sum = find_global__sum(&aux_gfs[IDX4(L2_SQUARED_DVGF, 0, 0, 0)], Nxx_plus_2NGHOSTS_tot);
@@ -124,4 +123,4 @@ void compute_L2_norm_of_gridfunction__rfm__SinhCylindricalv2n2(commondata_struct
 
   // Compute and output the log of the l2-norm.
   *l2norm = log10(1e-16 + sqrt(squared_sum / volume_sum)); // 1e-16 + ... avoids log10(0)
-} // END FUNCTION compute_L2_norm_of_gridfunction__rfm__SinhCylindricalv2n2
+} // END FUNCTION log10_L2norm_gf__rfm__SinhCylindricalv2n2

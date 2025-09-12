@@ -225,7 +225,7 @@ __global__ static void variable_wavespeed_gfs_all_points_gpu(const size_t stream
 /**
  * Call functions that set up all AUXEVOL gridfunctions.
  */
-void initialize_constant_auxevol__rfm__SinhSymTP(commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3],
+void auxevol_gfs_set_to_constant__rfm__SinhSymTP(commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3],
                                                  MoL_gridfunctions_struct *restrict gridfuncs) {
 #include "set_CodeParameters.h"
   cpyHosttoDevice_commondata__constant(commondata);
@@ -265,4 +265,4 @@ void initialize_constant_auxevol__rfm__SinhSymTP(commondata_struct *restrict com
     auxevol_gfs_all_points_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, x0, x1, x2, auxevol_gfs);
     cudaCheckErrors(cudaKernel, "auxevol_gfs_all_points_gpu failure");
   }
-} // END FUNCTION initialize_constant_auxevol__rfm__SinhSymTP
+} // END FUNCTION auxevol_gfs_set_to_constant__rfm__SinhSymTP

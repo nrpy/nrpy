@@ -275,7 +275,7 @@ def register_CFunction_auxevol_gfs_set_to_constant(
     >>> import nrpy.params as par
     >>> from nrpy.reference_metric import unittest_CoordSystems
     >>> supported_Parallelizations = ["openmp", "cuda"]
-    >>> name="initialize_constant_auxevol"
+    >>> name="auxevol_gfs_set_to_constant"
     >>> for parallelization in supported_Parallelizations:
     ...    par.set_parval_from_str("parallelization", parallelization)
     ...    for CoordSystem in unittest_CoordSystems:

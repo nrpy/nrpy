@@ -127,6 +127,7 @@ fclose(outfile);
 """
 
     cfc.register_CFunction(
+        subdirectory="diagnostics",
         includes=includes,
         desc=desc,
         cfunc_type=cfunc_type,
@@ -202,6 +203,7 @@ if (!outfile) {{
 fclose(outfile);
 """
     cfc.register_CFunction(
+        subdirectory="diagnostics",
         includes=includes,
         prefunc=prefunc,
         desc=desc,
@@ -278,6 +280,7 @@ if (!outfile) {{
 fclose(outfile);
 """
     cfc.register_CFunction(
+        subdirectory="diagnostics",
         includes=includes,
         desc=desc,
         cfunc_type=cfunc_type,

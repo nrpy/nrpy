@@ -22,7 +22,7 @@ from nrpy.infrastructures.BHaH import griddata_commondata
 
 
 # Define function to compute the l^2 of a gridfunction
-def register_CFunction_compute_L2_norm_of_gridfunction(
+def register_CFunction_log10_L2norm_gf(
     CoordSystem: str,
 ) -> None:
     """
@@ -36,7 +36,7 @@ def register_CFunction_compute_L2_norm_of_gridfunction(
     includes = ["BHaH_defines.h"]
     desc = "Compute l2-norm of a gridfunction assuming a single grid."
     cfunc_type = "void"
-    name = "compute_L2_norm_of_gridfunction"
+    name = "log10_L2norm_gf"
     params = """commondata_struct *restrict commondata, griddata_struct *restrict griddata,
                 const REAL integration_radius, const int gf_index, const REAL *restrict in_gf, REAL localsums_for_residualH[2]"""
 
@@ -297,7 +297,7 @@ def register_CFunction_diagnostics(
     const REAL integration_radius = 1000;
 
     // Compute local sums for l2-norm of Hamiltonian constraint violation
-    compute_L2_norm_of_gridfunction(commondata, griddata_chare, integration_radius, RESIDUAL_HGF, diagnostic_output_gfs, localsums_for_residualH);
+    log10_L2norm_gf(commondata, griddata_chare, integration_radius, RESIDUAL_HGF, diagnostic_output_gfs, localsums_for_residualH);
 
 """
     body += r"""

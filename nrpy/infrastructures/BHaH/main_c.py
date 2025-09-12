@@ -48,7 +48,7 @@ def _check_required_functions() -> None:
         ("MoL_malloc_non_y_n_gfs", "MoL.py"),
         ("initial_data", "initial_data.py"),
         ("MoL_step_forward_in_time", "MoL.py"),
-        ("diagnostics", "diagnostics.py"),
+        ("diagnostics", "log10_L2norm_gf.py"),
         ("MoL_free_memory_y_n_gfs", "MoL.py"),
         ("MoL_free_memory_non_y_n_gfs", "MoL.py"),
     ]

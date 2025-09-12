@@ -1,11 +1,11 @@
 #include "BHaH_defines.h"
 #include "intrinsics/simd_intrinsics.h"
 /**
- * Kernel: compute_residual_all_points_host.
+ * Kernel: residual_H_compute_all_points_host.
  * Kernel to compute the residual throughout the grid.
  */
-static void compute_residual_all_points_host(const params_struct *restrict params, const rfm_struct *restrict rfmstruct,
-                                             const REAL *restrict auxevol_gfs, const REAL *restrict in_gfs, REAL *restrict aux_gfs) {
+static void residual_H_compute_all_points_host(const params_struct *restrict params, const rfm_struct *restrict rfmstruct,
+                                               const REAL *restrict auxevol_gfs, const REAL *restrict in_gfs, REAL *restrict aux_gfs) {
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
@@ -123,14 +123,14 @@ static void compute_residual_all_points_host(const params_struct *restrict param
       } // END LOOP: for (int i0 = NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0 += simd_width)
     } // END LOOP: for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++)
   } // END LOOP: for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++)
-} // END FUNCTION compute_residual_all_points_host
+} // END FUNCTION residual_H_compute_all_points_host
 
 /**
  * Compute residual of the Hamiltonian constraint for the hyperbolic relaxation equation.
  */
-void compute_residual_all_points__rfm__HoleySinhSpherical(const commondata_struct *restrict commondata, const params_struct *restrict params,
-                                                          const rfm_struct *restrict rfmstruct, const REAL *restrict auxevol_gfs,
-                                                          const REAL *restrict in_gfs, REAL *restrict aux_gfs) {
-  compute_residual_all_points_host(params, rfmstruct, auxevol_gfs, in_gfs, aux_gfs);
+void residual_H_compute_all_points__rfm__HoleySinhSpherical(const commondata_struct *restrict commondata, const params_struct *restrict params,
+                                                            const rfm_struct *restrict rfmstruct, const REAL *restrict auxevol_gfs,
+                                                            const REAL *restrict in_gfs, REAL *restrict aux_gfs) {
+  residual_H_compute_all_points_host(params, rfmstruct, auxevol_gfs, in_gfs, aux_gfs);
 
-} // END FUNCTION compute_residual_all_points__rfm__HoleySinhSpherical
+} // END FUNCTION residual_H_compute_all_points__rfm__HoleySinhSpherical

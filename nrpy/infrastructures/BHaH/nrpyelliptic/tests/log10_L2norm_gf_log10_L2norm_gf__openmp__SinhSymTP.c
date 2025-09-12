@@ -1,12 +1,12 @@
 #include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
 /**
- * Kernel: compute_L2_norm_of_gridfunction_host.
+ * Kernel: log10_L2norm_gf_host.
  * Kernel to compute L2 quantities pointwise (summed).
  */
-static void compute_L2_norm_of_gridfunction_host(const params_struct *restrict params, const REAL *restrict x0, const REAL *restrict x1,
-                                                 const REAL *restrict x2, const REAL *restrict in_gfs, REAL *restrict squared_sum_final,
-                                                 REAL *restrict volume_sum_final, const REAL integration_radius, const int gf_index) {
+static void log10_L2norm_gf_host(const params_struct *restrict params, const REAL *restrict x0, const REAL *restrict x1, const REAL *restrict x2,
+                                 const REAL *restrict in_gfs, REAL *restrict squared_sum_final, REAL *restrict volume_sum_final,
+                                 const REAL integration_radius, const int gf_index) {
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
@@ -69,13 +69,13 @@ static void compute_L2_norm_of_gridfunction_host(const params_struct *restrict p
   } // END LOOP: for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++)
   *squared_sum_final = squared_sum;
   *volume_sum_final = volume_sum;
-} // END FUNCTION compute_L2_norm_of_gridfunction_host
+} // END FUNCTION log10_L2norm_gf_host
 
 /**
  * Compute l2-norm of a gridfunction assuming a single grid.
  */
-void compute_L2_norm_of_gridfunction__rfm__SinhSymTP(commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3],
-                                                     const REAL integration_radius, const int gf_index, REAL *l2norm, const REAL *restrict in_gfs) {
+void log10_L2norm_gf__rfm__SinhSymTP(commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3],
+                                     const REAL integration_radius, const int gf_index, REAL *l2norm, const REAL *restrict in_gfs) {
 #include "set_CodeParameters.h"
 
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
@@ -86,8 +86,8 @@ void compute_L2_norm_of_gridfunction__rfm__SinhSymTP(commondata_struct *restrict
   // Set summation variables to compute l2-norm
   DOUBLE squared_sum = 0.0;
   DOUBLE volume_sum = 0.0;
-  compute_L2_norm_of_gridfunction_host(params, x0, x1, x2, in_gfs, &squared_sum, &volume_sum, integration_radius, gf_index);
+  log10_L2norm_gf_host(params, x0, x1, x2, in_gfs, &squared_sum, &volume_sum, integration_radius, gf_index);
 
   // Compute and output the log of the l2-norm.
   *l2norm = log10(1e-16 + sqrt(squared_sum / volume_sum)); // 1e-16 + ... avoids log10(0)
-} // END FUNCTION compute_L2_norm_of_gridfunction__rfm__SinhSymTP
+} // END FUNCTION log10_L2norm_gf__rfm__SinhSymTP

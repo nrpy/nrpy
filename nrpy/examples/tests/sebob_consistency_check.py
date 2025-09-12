@@ -111,9 +111,20 @@ def process_input_set(
 # --- Main Logic ---
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser(description="Run sebob consistency check.")
-    parser.add_argument("--trusted-exec", type=str, required=True, help="Path to trusted sebob executable.")
-    parser.add_argument("--current-exec", type=str, required=True, help="Path to current sebob executable.")
+    parser.add_argument(
+        "--trusted-exec",
+        type=str,
+        required=True,
+        help="Path to trusted sebob executable.",
+    )
+    parser.add_argument(
+        "--current-exec",
+        type=str,
+        required=True,
+        help="Path to current sebob executable.",
+    )
     args = parser.parse_args()
     num_sets = 10
     q = np.linspace(1.01, 10, num_sets)
@@ -125,7 +136,7 @@ if __name__ == "__main__":
     M = 50
     omega_0 = 0.011
     dt = 2.4627455127717882e-05
-    
+
     cdir = os.getcwd()
     # go to the directory where the trusted sebob executable is located
     os.chdir(args.trusted_exec)

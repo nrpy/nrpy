@@ -211,7 +211,7 @@ static void variable_wavespeed_gfs_all_points_host(const params_struct *restrict
 /**
  * Call functions that set up all AUXEVOL gridfunctions.
  */
-void initialize_constant_auxevol__rfm__SinhSymTP(commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3],
+void auxevol_gfs_set_to_constant__rfm__SinhSymTP(commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3],
                                                  MoL_gridfunctions_struct *restrict gridfuncs) {
 #include "set_CodeParameters.h"
 
@@ -226,4 +226,4 @@ void initialize_constant_auxevol__rfm__SinhSymTP(commondata_struct *restrict com
   // Set up all other AUXEVOL gridfunctions
   auxevol_gfs_all_points_host(commondata, params, x0, x1, x2, auxevol_gfs);
 
-} // END FUNCTION initialize_constant_auxevol__rfm__SinhSymTP
+} // END FUNCTION auxevol_gfs_set_to_constant__rfm__SinhSymTP

@@ -251,7 +251,7 @@ nrpyelliptic.rhs_eval.register_CFunction_rhs_eval(
 )
 
 # Generate function to compute residuals
-nrpyelliptic.diagnostics.register_CFunction_compute_residual_all_points(
+nrpyelliptic.residual_H_compute_all_points.register_CFunction_residual_H_compute_all_points(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_intrinsics=enable_intrinsics,
@@ -259,12 +259,10 @@ nrpyelliptic.diagnostics.register_CFunction_compute_residual_all_points(
 )
 
 # Generate diagnostics functions
-nrpyelliptic.diagnostics.register_CFunction_compute_L2_norm_of_gridfunction(
-    CoordSystem=CoordSystem
-)
+nrpyelliptic.log10_L2norm_gf.register_CFunction_log10_L2norm_gf(CoordSystem=CoordSystem)
 
 # Register function to check for stop conditions
-nrpyelliptic.diagnostics.register_CFunction_check_stop_conditions()
+nrpyelliptic.stop_conditions_check.register_CFunction_stop_conditions_check()
 
 if __name__ == "__main__" and parallel_codegen_enable:
     pcg.do_parallel_codegen()
@@ -432,7 +430,7 @@ write_checkpoint_call = f"write_checkpoint(&commondata, {compute_griddata});\n".
         else compute_griddata
     ),
 )
-post_MoL_step_forward_in_time = rf"""    check_stop_conditions(&commondata, {compute_griddata});
+post_MoL_step_forward_in_time = rf"""    stop_conditions_check(&commondata, {compute_griddata});
     if (commondata.stop_relaxation) {{
       // Force a checkpoint when stop condition is reached.
       commondata.checkpoint_every = 1e-4*commondata.dt;
