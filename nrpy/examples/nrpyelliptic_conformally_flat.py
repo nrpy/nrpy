@@ -220,7 +220,7 @@ nrpyelliptic.initial_data.register_CFunction_initial_guess_all_points(
 
 # Generate function that calls functions to set variable wavespeed and all other AUXEVOL gridfunctions
 for CoordSystem in set_of_CoordSystems:
-    nrpyelliptic.constant_source_terms_to_auxevol.register_CFunction_initialize_constant_auxevol(
+    nrpyelliptic.auxevol_gfs_set_to_constant.register_CFunction_auxevol_gfs_set_to_constant(
         CoordSystem, OMP_collapse=OMP_collapse, enable_intrinsics=enable_intrinsics
     )
 
@@ -296,7 +296,7 @@ MoLtimestepping.register_all.register_CFunctions(
   apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
-    enable_intrinsics=enable_intrinsics,
+    enable_intrinsics=False,  # SIMD intrinsics in MoL is not properly supported -- MoL update loops are not properly bounds checked.
     rational_const_alias="static constexpr" if parallelization == "cuda" else "const",
 )
 checkpointing.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
@@ -442,7 +442,7 @@ post_MoL_step_forward_in_time = rf"""    check_stop_conditions(&commondata, {com
 """
 post_non_y_n_auxevol_mallocs = (
     "for (int grid = 0; grid < commondata.NUMGRIDS; grid++)\n"
-    f"initialize_constant_auxevol(&commondata, &{compute_griddata}[grid].params, {compute_griddata}[grid].xx, &{compute_griddata}[grid].gridfuncs);\n"
+    f"auxevol_gfs_set_to_constant(&commondata, &{compute_griddata}[grid].params, {compute_griddata}[grid].xx, &{compute_griddata}[grid].gridfuncs);\n"
 )
 pre_MoL_step_forward_in_time = f"{write_checkpoint_call}"
 main_c.register_CFunction_main_c(

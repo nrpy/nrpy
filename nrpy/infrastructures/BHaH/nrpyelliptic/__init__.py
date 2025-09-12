@@ -1,5 +1,5 @@
 from . import (
-    constant_source_terms_to_auxevol,
+    auxevol_gfs_set_to_constant,
     diagnostics,
     initial_data,
     rhs_eval,

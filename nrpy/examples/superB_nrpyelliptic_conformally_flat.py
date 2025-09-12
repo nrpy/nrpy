@@ -24,7 +24,6 @@ import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
 import nrpy.infrastructures.superB.chare_communication_maps as charecomm
 import nrpy.infrastructures.superB.CurviBoundaryConditions as superBcbc
-import nrpy.infrastructures.superB.initial_data as superBinitialdata
 import nrpy.infrastructures.superB.main_chare as superBmain
 import nrpy.infrastructures.superB.Makefile_helpers as superBMakefile
 import nrpy.infrastructures.superB.MoL as superBMoL
@@ -168,7 +167,7 @@ nrpyelliptic.initial_data.register_CFunction_initial_guess_all_points(
 
 # Generate function that calls functions to set variable wavespeed and all other AUXEVOL gridfunctions
 for CoordSystem in set_of_CoordSystems:
-    nrpyelliptic.constant_source_terms_to_auxevol.register_CFunction_initialize_constant_auxevol(
+    nrpyelliptic.auxevol_gfs_set_to_constant.register_CFunction_auxevol_gfs_set_to_constant(
         CoordSystem, OMP_collapse=OMP_collapse
     )
 
@@ -372,7 +371,7 @@ superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_psi4_diagnostics=False,
     enable_residual_diagnostics=True,
-    post_non_y_n_auxevol_mallocs="initialize_constant_auxevol(&commondata, &griddata_chare[grid].params, griddata_chare[grid].xx, &griddata_chare[grid].gridfuncs);\n",
+    post_non_y_n_auxevol_mallocs="auxevol_gfs_set_to_constant(&commondata, &griddata_chare[grid].params, griddata_chare[grid].xx, &griddata_chare[grid].gridfuncs);\n",
     post_MoL_step_forward_in_time=post_MoL_step_forward_in_time,
 )
 

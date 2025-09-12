@@ -256,7 +256,7 @@ def generate_prefunc_auxevol_gfs_all_points(
     return prefunc, new_body
 
 
-def register_CFunction_initialize_constant_auxevol(
+def register_CFunction_auxevol_gfs_set_to_constant(
     CoordSystem: str,
     OMP_collapse: int = 1,
     enable_intrinsics: bool = False,
@@ -280,7 +280,7 @@ def register_CFunction_initialize_constant_auxevol(
     ...    par.set_parval_from_str("parallelization", parallelization)
     ...    for CoordSystem in unittest_CoordSystems:
     ...       cfc.CFunction_dict.clear()
-    ...       _ = register_CFunction_initialize_constant_auxevol(CoordSystem)
+    ...       _ = register_CFunction_auxevol_gfs_set_to_constant(CoordSystem)
     ...       generated_str = cfc.CFunction_dict[f'{name}__rfm__{CoordSystem}'].full_function
     ...       validation_desc = f"{name}__{parallelization}__{CoordSystem}".replace(" ", "_")
     ...       validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
@@ -298,7 +298,7 @@ def register_CFunction_initialize_constant_auxevol(
 
     desc = r"""Call functions that set up all AUXEVOL gridfunctions."""
     cfunc_type = "void"
-    name = "initialize_constant_auxevol"
+    name = "auxevol_gfs_set_to_constant"
     params = "commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3], MoL_gridfunctions_struct *restrict gridfuncs"
     body = (
         "cpyHosttoDevice_commondata__constant(commondata);\n"
