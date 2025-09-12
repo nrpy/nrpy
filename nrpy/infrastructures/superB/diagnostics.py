@@ -506,12 +506,12 @@ case OUTPUT_L2NORM_BSSN_CONSTRAINTS: {
   const REAL integration_radius2 = 1000;
   // Compute local sums for l2-norm of the Hamiltonian and momentum constraints
   REAL localsums_HGF[2];
-  compute_L2_norm_of_gridfunction_between_r1_r2(commondata, griddata_chare, integration_radius1, integration_radius2, HGF, diagnostic_output_gfs,
-                                                localsums_HGF);
+  L2norm_gf_between_r1_and_r2(commondata, griddata_chare, integration_radius1, integration_radius2, HGF, diagnostic_output_gfs,
+                              localsums_HGF);
 
   REAL localsums_MSQUAREDGF[2];
-  compute_L2_norm_of_gridfunction_between_r1_r2(commondata, griddata_chare, integration_radius1, integration_radius2, MSQUAREDGF,
-                                                diagnostic_output_gfs, localsums_MSQUAREDGF);
+  L2norm_gf_between_r1_and_r2(commondata, griddata_chare, integration_radius1, integration_radius2, MSQUAREDGF,
+                              diagnostic_output_gfs, localsums_MSQUAREDGF);
 
   localsums[0] = localsums_HGF[0];
   localsums[1] = localsums_HGF[1];

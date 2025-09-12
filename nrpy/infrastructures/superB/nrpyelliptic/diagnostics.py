@@ -124,7 +124,7 @@ def register_CFunction_diagnostics(
 
   if (which_output == OUTPUT_RESIDUAL) {
     // Compute Hamiltonian constraint violation and store it at diagnostic_output_gfs
-    compute_residual_all_points(commondata, params_chare, rfmstruct_chare, auxevol_gfs, y_n_gfs, diagnostic_output_gfs);
+    residual_H_compute_all_points(commondata, params_chare, rfmstruct_chare, auxevol_gfs, y_n_gfs, diagnostic_output_gfs);
 
     // Set integration radius for l2-norm computation
     const REAL integration_radius = 1000;
