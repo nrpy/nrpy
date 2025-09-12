@@ -7,7 +7,9 @@ from . import (
     initial_data,
     main_chare,
     numerical_grids,
+    nrpyelliptic,
     output_0d_1d_2d_nearest_gridpoint_slices,
     simple_loop_diagnostic,
+    superB,
     timestepping_chare,
 )
