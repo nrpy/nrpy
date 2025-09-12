@@ -16,9 +16,7 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.superB.output_0d_1d_2d_nearest_gridpoint_slices as out012d
 import nrpy.params as par
 from nrpy.infrastructures.BHaH import griddata_commondata
-from nrpy.infrastructures.superB.nrpyelliptic.conformally_flat_C_codegen_library import (
-    register_CFunction_compute_L2_norm_of_gridfunction_between_r1_r2,
-)
+from nrpy.infrastructures.superB.nrpyelliptic import L2norm_gf_between_r1_and_r2
 
 
 def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type]:
@@ -426,7 +424,7 @@ def register_CFunction_diagnostics(
             )
 
         if enable_L2norm_BSSN_constraints_diagnostics:
-            register_CFunction_compute_L2_norm_of_gridfunction_between_r1_r2(
+            L2norm_gf_between_r1_and_r2.register_CFunction_L2norm_gf_between_r1_and_r2(
                 CoordSystem=CoordSystem
             )
 

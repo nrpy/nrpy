@@ -22,17 +22,9 @@ import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
-import nrpy.infrastructures.superB.chare_communication_maps as charecomm
-import nrpy.infrastructures.superB.CurviBoundaryConditions as superBcbc
-import nrpy.infrastructures.superB.main_chare as superBmain
-import nrpy.infrastructures.superB.Makefile_helpers as superBMakefile
-import nrpy.infrastructures.superB.MoL as superBMoL
-import nrpy.infrastructures.superB.nrpyelliptic.conformally_flat_C_codegen_library as superBnrpyellClib
-import nrpy.infrastructures.superB.numerical_grids as superBnumericalgrids
-import nrpy.infrastructures.superB.superB.superB_pup as superBpup
-import nrpy.infrastructures.superB.timestepping_chare as superBtimestepping
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
+from nrpy.infrastructures import superB
 from nrpy.infrastructures.BHaH import (
     griddata_commondata,
     nrpyelliptic,
@@ -40,6 +32,8 @@ from nrpy.infrastructures.BHaH import (
     rfm_wrapper_functions,
     xx_tofrom_Cart,
 )
+from nrpy.infrastructures.superB import nrpyelliptic as superB_nrpyelliptic
+from nrpy.infrastructures.superB import superB as superB_core
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -179,14 +173,14 @@ numericalgrids.register_CFunctions(
     enable_CurviBCs=True,
 )
 
-superBnumericalgrids.register_CFunctions(
+superB.numerical_grids.register_CFunctions(
     set_of_CoordSystems=set_of_CoordSystems,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
 )
 xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
 
-superBnrpyellClib.register_CFunction_diagnostics(
+superB_nrpyelliptic.diagnostics.register_CFunction_diagnostics(
     CoordSystem=CoordSystem,
     default_diagnostics_out_every=default_diagnostics_output_every,
 )
@@ -213,7 +207,9 @@ nrpyelliptic.residual_H_compute_all_points.register_CFunction_residual_H_compute
 )
 
 # Generate diagnostics functions
-superBnrpyellClib.register_CFunction_log10_L2norm_gf(CoordSystem=CoordSystem)
+superB_nrpyelliptic.log10_L2norm_gf.register_CFunction_log10_L2norm_gf(
+    CoordSystem=CoordSystem
+)
 
 # Register function to check for stop conditions
 nrpyelliptic.stop_conditions_check.register_CFunction_stop_conditions_check()
@@ -221,8 +217,10 @@ nrpyelliptic.stop_conditions_check.register_CFunction_stop_conditions_check()
 if __name__ == "__main__" and parallel_codegen_enable:
     pcg.do_parallel_codegen()
 
-charecomm.chare_comm_register_C_functions(set_of_CoordSystems=set_of_CoordSystems)
-superBcbc.CurviBoundaryConditions_register_C_functions(
+superB.chare_communication_maps.chare_comm_register_C_functions(
+    set_of_CoordSystems=set_of_CoordSystems
+)
+superB.CurviBoundaryConditions.CurviBoundaryConditions_register_C_functions(
     set_of_CoordSystems=set_of_CoordSystems,
     radiation_BC_fd_order=radiation_BC_fd_order,
     set_parity_on_aux=True,
@@ -244,7 +242,7 @@ if outer_bcs_type != "radiation":
     post_rhs_bcs_str += """
 apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);"""
 
-superBMoL.register_CFunctions(
+superB.MoL.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,
     post_rhs_bcs_str=post_rhs_bcs_str,
@@ -349,7 +347,7 @@ serial {
 }
 """
 
-superBpup.register_CFunction_superB_pup_routines(
+superB_core.superB_pup.register_CFunction_superB_pup_routines(
     MoL_method=MoL_method,
 )
 copy_files(
@@ -359,10 +357,10 @@ copy_files(
     subdirectory="superB",
 )
 
-superBmain.output_commondata_object_h_and_main_h_cpp_ci(
+superB.main_chare.output_commondata_object_h_and_main_h_cpp_ci(
     project_dir=project_dir,
 )
-superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
+superB.timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(
     project_dir=project_dir,
     MoL_method=MoL_method,
     outer_bcs_type=outer_bcs_type,
@@ -391,7 +389,7 @@ if enable_simd:
         subdirectory="intrinsics",
     )
 
-superBMakefile.output_CFunctions_function_prototypes_and_construct_Makefile(
+superB.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
     exec_or_library_name=project_name,
