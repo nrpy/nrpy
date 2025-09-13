@@ -182,7 +182,7 @@ def register_CFunction_KO_apply(
 
     body = "if(commondata->KO_diss_strength == 0.0) return;\n"
     h = sp.Symbol("hh", real=True)
-    body += lp.simple_loop(
+    body += BHaH.simple_loop.simple_loop(
         loop_body=ccg.c_codegen(
             [
                 hh_rhs.subs(rfm.xx[0], h).subs(sp.sympify("f0_of_xx0"), h),
