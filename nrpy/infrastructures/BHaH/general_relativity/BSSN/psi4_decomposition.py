@@ -13,34 +13,6 @@ from nrpy.infrastructures.BHaH.CurviBoundaryConditions.apply_bcs_inner_only impo
     register_CFunction_apply_bcs_inner_only_specific_auxgfs,
 )
 
-par.register_CodeParameter(
-    "int", __name__, "num_theta_points_on_shell_for_psi4_interp", 32, commondata=True
-)
-
-par.register_CodeParameter(
-    cparam_type="int",
-    module=__name__,
-    name="num_psi4_extraction_radii",
-    defaultvalue=6,
-    description="Number of radii at which psi4 is extracted.",
-    add_to_parfile=True,
-    commondata=True,
-    add_to_set_CodeParameters_h=False,
-)
-
-# Register list_of_psi4_extraction_radii: the array containing extraction radii values.
-par.register_CodeParameter(
-    cparam_type="REAL[6]",
-    module=__name__,
-    name="list_of_psi4_extraction_radii",
-    defaultvalue=[15, 30, 45, 60, 75, 90],
-    description="List of radii at which psi4 is extracted. Must set num_psi4_extraction_radii consistently.",
-    add_to_parfile=True,
-    commondata=True,
-    add_to_set_CodeParameters_h=False,
-    assumption="RealPositive",
-)
-
 
 def register_CFunction_psi4_spinweightm2_decomposition(CoordSystem: str) -> None:
     """
@@ -63,6 +35,38 @@ def register_CFunction_psi4_spinweightm2_decomposition(CoordSystem: str) -> None
         phi_index = 2
     else:
         raise ValueError(f"CoordSystem = {CoordSystem} not supported.")
+
+    par.register_CodeParameter(
+        "int",
+        __name__,
+        "num_theta_points_on_shell_for_psi4_interp",
+        32,
+        commondata=True,
+    )
+
+    par.register_CodeParameter(
+        cparam_type="int",
+        module=__name__,
+        name="num_psi4_extraction_radii",
+        defaultvalue=6,
+        description="Number of radii at which psi4 is extracted.",
+        add_to_parfile=True,
+        commondata=True,
+        add_to_set_CodeParameters_h=False,
+    )
+
+    # Register list_of_psi4_extraction_radii: the array containing extraction radii values.
+    par.register_CodeParameter(
+        cparam_type="REAL[6]",
+        module=__name__,
+        name="list_of_psi4_extraction_radii",
+        defaultvalue=[15, 30, 45, 60, 75, 90],
+        description="List of radii at which psi4 is extracted. Must set num_psi4_extraction_radii consistently.",
+        add_to_parfile=True,
+        commondata=True,
+        add_to_set_CodeParameters_h=False,
+        assumption="RealPositive",
+    )
 
     setup_prefunc = f"""
 #ifndef M_PI

@@ -25,18 +25,6 @@ Authors: Zachariah B. Etienne (lead maintainer)
 import nrpy.params as par
 from nrpy.infrastructures.BHaH import MoLtimestepping, griddata_commondata
 
-# fmt: off
-_ = par.CodeParameter("int", __name__, "nn_0", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
-_ = par.CodeParameter("int", __name__, "nn", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
-_ = par.CodeParameter("REAL", __name__, "CFL_FACTOR", 0.5, commondata=True)
-_ = par.CodeParameter("REAL", __name__, "dt", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
-_ = par.CodeParameter("REAL", __name__, "t_0", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
-_ = par.CodeParameter("REAL", __name__, "time", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
-_ = par.CodeParameter("REAL", __name__, "t_final", 10.0, commondata=True)
-
-
-# fmt: on
-
 
 def register_CFunctions(
     MoL_method: str = "RK4",
@@ -106,6 +94,16 @@ def register_CFunctions(
     } // END FUNCTION MoL_malloc_non_y_n_gfs
     <BLANKLINE>
     """
+    # fmt: off
+    _ = par.CodeParameter("int", __name__, "nn_0", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
+    _ = par.CodeParameter("int", __name__, "nn", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
+    _ = par.CodeParameter("REAL", __name__, "CFL_FACTOR", 0.5, commondata=True)
+    _ = par.CodeParameter("REAL", __name__, "dt", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
+    _ = par.CodeParameter("REAL", __name__, "t_0", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
+    _ = par.CodeParameter("REAL", __name__, "time", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
+    _ = par.CodeParameter("REAL", __name__, "t_final", 10.0, commondata=True)
+    # fmt: on
+
     MoLtimestepping.rk_substep.check_supported_parallelization("register_CFunctions")
 
     Butcher_dict = MoLtimestepping.rk_butcher_table_dictionary.generate_Butcher_tables()

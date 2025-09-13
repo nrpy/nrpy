@@ -9,6 +9,7 @@ Note: This is the superB version.
 """
 
 import os
+
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
@@ -18,8 +19,7 @@ from pathlib import Path
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
-from nrpy.infrastructures import BHaH
-from nrpy.infrastructures import superB
+from nrpy.infrastructures import BHaH, superB
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 

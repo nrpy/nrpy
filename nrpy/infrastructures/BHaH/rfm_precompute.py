@@ -14,9 +14,9 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
+from nrpy.helpers import parallelization
 from nrpy.helpers.expression_utils import get_unique_expression_symbols_as_strings
 from nrpy.helpers.generic import superfast_uniq
-from nrpy.helpers.parallelization.utilities import generate_kernel_and_launch_code
 from nrpy.infrastructures.BHaH.BHaH_defines_h import register_BHaH_defines
 
 
@@ -326,16 +326,18 @@ def generate_rfmprecompute_defines(
             arg_dict_host[coord_var] = "const REAL *restrict"
 
         # Generate and append the C code for the kernel and its launcher.
-        new_prefunc, new_body = generate_kernel_and_launch_code(
-            kernel_name,
-            kernel_body,
-            arg_dict_cuda,
-            arg_dict_host,
-            par.parval_from_str("parallelization"),
-            cfunc_type="static void",
-            comments=comments,
-            launchblock_with_braces=True,
-            thread_tiling_macro_suffix="DEFAULT",
+        new_prefunc, new_body = (
+            parallelization.utilities.generate_kernel_and_launch_code(
+                kernel_name,
+                kernel_body,
+                arg_dict_cuda,
+                arg_dict_host,
+                par.parval_from_str("parallelization"),
+                cfunc_type="static void",
+                comments=comments,
+                launchblock_with_braces=True,
+                thread_tiling_macro_suffix="DEFAULT",
+            )
         )
         prefuncs += new_prefunc
         bodies += new_body

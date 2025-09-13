@@ -22,12 +22,6 @@ import nrpy.grid as gri
 import nrpy.indexedexp as ixp
 import nrpy.params as par  # NRPy+: Parameter interface
 
-# NRPy+: Common parameters for all WaveEquation modules (defines wavespeed)
-from nrpy.equations.wave_equation.CommonParams import wavespeed
-
-# The name of this module ("InitialData") is given by __name__:
-thismodule = __name__
-
 
 class WaveEquation_solution_Cartesian:
     """
@@ -90,10 +84,10 @@ def SphericalGaussian(
 
     # Step 2: Declare free parameters intrinsic to these initial data
     # provided as a C parameter by MoLtimestepping.MoL
-    time = sp.symbols("time", real=True)
+    time, wavespeed = sp.symbols("time wavespeed", real=True)
     sigma = par.register_CodeParameter(
         cparam_type="REAL",
-        module=thismodule,
+        module=__name__,
         name="sigma",
         defaultvalue=default_sigma,
         commondata=True,
@@ -157,12 +151,10 @@ def PlaneWave(
     xCart = ixp.declarerank1("xCart")
 
     # Step 2: Declare free parameters intrinsic to these initial data
-    time = sp.symbols(
-        "time", real=True
-    )  # provided as a C parameter by MoLtimestepping.MoL
+    time, wavespeed = sp.symbols("time wavespeed", real=True)
     kk = par.register_CodeParameters(
         cparam_type="REAL",
-        module=thismodule,
+        module=__name__,
         names=["kk0", "kk1", "kk2"],
         defaultvalues=[default_k0, default_k1, default_k2],
         commondata=True,

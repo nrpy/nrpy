@@ -16,18 +16,6 @@ import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy
 import nrpy.params as par
 from nrpy.helpers.cached_functions import cached_simplify
 
-# C code generation of sp.pi assumes M_PI is defined.
-#   However, this is not a standard definition, so this is our workaround.
-M_PI = par.register_CodeParameter(
-    "#define",
-    __name__,
-    "M_PI",
-    "3.1415926535897932384626433",
-    add_to_parfile=False,
-    add_to_set_CodeParameters_h=False,
-    add_to_glb_code_params_dict=True,
-)
-
 
 def Y(
     s: int,
@@ -52,6 +40,17 @@ def Y(
 
     :return: Expression for the spin-weighted spherical harmonic.
     """
+    # C code generation of sp.pi assumes M_PI is defined.
+    #   However, this is not a standard definition, so this is our workaround.
+    _ = par.register_CodeParameter(
+        "#define",
+        __name__,
+        "M_PI",
+        "3.1415926535897932384626433",
+        add_to_parfile=False,
+        add_to_set_CodeParameters_h=False,
+        add_to_glb_code_params_dict=True,
+    )
     Sum: sp.Expr = sp.sympify(0)
     # Not sympifying -1 causes SymPy to revert to double-precision arithmetic
     negative_one = sp.sympify(-1)

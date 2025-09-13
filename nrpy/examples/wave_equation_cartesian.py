@@ -16,23 +16,13 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.indexedexp as ixp
-import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 import nrpy.params as par
 from nrpy.equations.wave_equation.WaveEquation_RHSs import WaveEquation_RHSs
 from nrpy.equations.wave_equation.WaveEquation_Solutions_InitialData import (
     WaveEquation_solution_Cartesian,
 )
 from nrpy.helpers.generic import copy_files
-from nrpy.infrastructures.BHaH import (
-    BHaH_defines_h,
-    CodeParameters,
-    Makefile_helpers,
-    MoLtimestepping,
-    cmdline_input_and_parfiles,
-    griddata_commondata,
-    main_c,
-    simple_loop,
-)
+from nrpy.infrastructures import BHaH
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -55,7 +45,6 @@ shutil.rmtree(project_dir, ignore_errors=True)
 
 par.set_parval_from_str("fd_order", fd_order)
 par.set_parval_from_str("fp_type", fp_type)
-par.adjust_CodeParam_default("t_final", t_final)
 
 # fmt: off
 for i in range(3):
@@ -68,8 +57,6 @@ for i in range(3):
     _ = par.CodeParameter("REAL", __name__, f"invdxx{i}", -0.1, add_to_parfile=False, add_to_set_CodeParameters_h=True)
     _ = par.CodeParameter("REAL", __name__, f"dxx{i}", -0.1, add_to_parfile=False, add_to_set_CodeParameters_h=True)
 _ = par.CodeParameter("REAL", __name__, "convergence_factor", 1.0, commondata=True)
-
-
 # fmt: on
 
 
@@ -220,7 +207,7 @@ def register_CFunction_initial_data() -> None:
         xx[ww] = griddata[grid].xx[ww];
       REAL *restrict in_gfs = griddata[grid].gridfuncs.y_n_gfs;
     """
-    body += simple_loop.simple_loop(
+    body += BHaH.simple_loop.simple_loop(
         loop_body="// exact_solution_single_Cartesian_point() takes Cartesian coordinates as input.\n"
         "// To avoid confusion in other reference metrics, we make this explicit here.\n"
         "const REAL xCart0 = xx0; const REAL xCart1 = xx1; const REAL xCart2 = xx2;\n"
@@ -349,7 +336,7 @@ def register_CFunction_rhs_eval() -> None:
             rhs.uu_rhs += diss_strength * uu_dKOD[k]
             rhs.vv_rhs += diss_strength * vv_dKOD[k]
 
-    body = simple_loop.simple_loop(
+    body = BHaH.simple_loop.simple_loop(
         loop_body=ccg.c_codegen(
             [rhs.uu_rhs, rhs.vv_rhs],
             [
@@ -443,37 +430,39 @@ register_CFunction_numerical_grids_and_timestep_setup()
 register_CFunction_diagnostics()
 register_CFunction_rhs_eval()
 register_CFunction_apply_bcs()
-MoLtimestepping.register_all.register_CFunctions(
+BHaH.MoLtimestepping.register_all.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string="rhs_eval(commondata, params,  RK_INPUT_GFS, RK_OUTPUT_GFS);",
     post_rhs_string="apply_bcs(commondata, params,  RK_OUTPUT_GFS);",
 )
-progress.register_CFunction_progress_indicator()
+BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator()
 
 #########################################################
 # STEP 3: Generate header files, register C functions and
 #         command line parameters, set up boundary conditions,
 #         and create a Makefile for this project.
 #         Project is output to project/[project_name]/
-CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
-CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
-cmdline_input_and_parfiles.generate_default_parfile(
+par.adjust_CodeParam_default("t_final", t_final)
+
+BHaH.CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
+BHaH.CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
+BHaH.cmdline_input_and_parfiles.generate_default_parfile(
     project_dir=project_dir, project_name=project_name
 )
-cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
+BHaH.cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
     project_name=project_name, cmdline_inputs=["convergence_factor"]
 )
-BHaH_defines_h.output_BHaH_defines_h(
+BHaH.BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     enable_intrinsics=enable_simd,
     enable_rfm_precompute=False,
 )
-main_c.register_CFunction_main_c(
+BHaH.main_c.register_CFunction_main_c(
     MoL_method=MoL_method,
     initial_data_desc=WaveType,
     boundary_conditions_desc="Quadratic extrapolation, manually defined",
 )
-griddata_commondata.register_CFunction_griddata_free(
+BHaH.griddata_commondata.register_CFunction_griddata_free(
     enable_rfm_precompute=False, enable_CurviBCs=False
 )
 
@@ -485,7 +474,7 @@ if enable_simd:
         subdirectory="intrinsics",
     )
 
-Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
+BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
     exec_or_library_name=project_name,

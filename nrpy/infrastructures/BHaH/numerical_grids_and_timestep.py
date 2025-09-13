@@ -25,21 +25,6 @@ from nrpy.helpers.expression_utils import (
     get_params_commondata_symbols_from_expr_list,
 )
 
-# fmt: off
-for j in range(3):
-    _ = par.CodeParameter("int", __name__, f"Nxx_plus_2NGHOSTS{j}", add_to_parfile=False, add_to_set_CodeParameters_h=True)
-    _ = par.CodeParameter("int", __name__, f"Nxx{j}", 64)
-    # reference_metric sets xxmin and xxmax below.
-    _ = par.CodeParameter("REAL", __name__, f"xxmin{j}", -10.0, add_to_parfile=False, add_to_set_CodeParameters_h=True)
-    _ = par.CodeParameter("REAL", __name__, f"xxmax{j}", 10.0, add_to_parfile=False, add_to_set_CodeParameters_h=True)
-    _ = par.CodeParameter("REAL", __name__, f"invdxx{j}", add_to_parfile=False, add_to_set_CodeParameters_h=True)
-    _ = par.CodeParameter("REAL", __name__, f"dxx{j}", add_to_parfile=False, add_to_set_CodeParameters_h=True)
-_ = par.CodeParameter("REAL", __name__, "convergence_factor", 1.0, commondata=True)
-_ = par.CodeParameter("int", __name__, "CoordSystem_hash", commondata=False, add_to_parfile=False)
-_ = par.CodeParameter("int", __name__, "grid_idx", 0, commondata=False, add_to_parfile=False)
-_ = par.CodeParameter("char[100]", __name__, "gridname", commondata=False, add_to_parfile=False)
-# fmt: on
-
 
 def register_CFunction_numerical_grid_params_Nxx_dxx_xx(
     CoordSystem: str, Nxx_dict: Dict[str, List[int]]
@@ -74,6 +59,7 @@ def register_CFunction_numerical_grid_params_Nxx_dxx_xx(
         raise ValueError(
             f"{CoordSystem} is not in Nxx_dict = {Nxx_dict}. Please add it."
         )
+
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = f"""Initializes a cell-centered grid in the local coordinate system based on physical dimensions (grid_physical_size).
 
@@ -324,6 +310,12 @@ def register_CFunction_ds_min_single_pt(
     Setting up reference_metric[Cartesian]...
     Setting up reference_metric[SinhCylindricalv2n2]...
     """
+    # dxx{0,1,2} must be registered or it won't be declared at the top of the function.
+    # fmt: off
+    for j in range(3):
+        _ = par.CodeParameter("REAL", __name__, f"dxx{j}", add_to_parfile=False, add_to_set_CodeParameters_h=True)
+    # fmt: on
+
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "Examining all three directions at a given point on a numerical grid, find the minimum grid spacing ds_min."
     cfunc_type = "void"
@@ -720,6 +712,21 @@ def register_CFunctions(
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
+
+    # fmt: off
+    for j in range(3):
+        _ = par.CodeParameter("int", __name__, f"Nxx_plus_2NGHOSTS{j}", add_to_parfile=False, add_to_set_CodeParameters_h=True)
+        _ = par.CodeParameter("int", __name__, f"Nxx{j}", 64)
+        # reference_metric sets xxmin and xxmax below.
+        _ = par.CodeParameter("REAL", __name__, f"xxmin{j}", -10.0, add_to_parfile=False, add_to_set_CodeParameters_h=True)
+        _ = par.CodeParameter("REAL", __name__, f"xxmax{j}", 10.0, add_to_parfile=False, add_to_set_CodeParameters_h=True)
+        _ = par.CodeParameter("REAL", __name__, f"invdxx{j}", add_to_parfile=False, add_to_set_CodeParameters_h=True)
+        _ = par.CodeParameter("REAL", __name__, f"dxx{j}", add_to_parfile=False, add_to_set_CodeParameters_h=True)
+    _ = par.CodeParameter("REAL", __name__, "convergence_factor", 1.0, commondata=True)
+    _ = par.CodeParameter("int", __name__, "CoordSystem_hash", commondata=False, add_to_parfile=False)
+    _ = par.CodeParameter("int", __name__, "grid_idx", 0, commondata=False, add_to_parfile=False)
+    _ = par.CodeParameter("char[100]", __name__, "gridname", commondata=False, add_to_parfile=False)
+    # fmt: on
 
     for CoordSystem in set_of_CoordSystems:
         register_CFunction_numerical_grid_params_Nxx_dxx_xx(

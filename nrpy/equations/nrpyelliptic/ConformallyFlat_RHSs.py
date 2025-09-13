@@ -16,8 +16,8 @@ import sympy as sp  # For symbolic computations
 
 import nrpy.grid as gri  # NRPy+: Functionality for handling numerical grids
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
+import nrpy.params as par
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
-from nrpy.equations.nrpyelliptic.CommonParams import eta_damping
 
 
 # Specify RHSs as class variables,
@@ -42,6 +42,13 @@ class HyperbolicRelaxationCurvilinearRHSs:
         rfm = refmetric.reference_metric[
             CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
         ]
+
+        # Parameters common to/needed by all NRPyElliptic Python modules
+
+        # Step P1.a: Define the damping parameter used in the hyperbolic relaxation method
+        eta_damping = par.register_CodeParameter(
+            "REAL", __name__, "eta_damping", 10.0, commondata=True
+        )
 
         # Step 2: Compute the contracted Christoffel symbols:
         contractedGammahatU = ixp.zerorank1()

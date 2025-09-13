@@ -17,29 +17,29 @@ import nrpy.equations.special_functions.spin_weighted_spherical_harmonics as SWS
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 
-par.register_param(
-    int,
-    __name__,
-    "swm2sh_maximum_l_mode_generated",
-    2,
-)
-par.register_CodeParameter(
-    "int", __name__, "swm2sh_maximum_l_mode_to_compute", 2, commondata=True
-)
 
-
-def register_CFunction_spin_weight_minus2_sph_harmonics() -> (
-    Union[None, pcg.NRPyEnv_type]
-):
+def register_CFunction_spin_weight_minus2_sph_harmonics(
+    swm2sh_maximum_l_mode_generated: int = 2,
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register C function for computing arbitrary spin-weight -2 spherical harmonics.
     These spherical harmonics are computed at any (l, m) pair at a specific point (theta, phi).
+
+    :param swm2sh_maximum_l_mode_generated: The maximum l mode for which to generate C code.
 
     :return: None if in the PCG registration phase, otherwise an NRPy environment object.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cf()).f_code.co_name}", locals())
         return None
+
+    par.register_CodeParameter(
+        "int",
+        __name__,
+        "swm2sh_maximum_l_mode_to_compute",
+        swm2sh_maximum_l_mode_generated,
+        commondata=True,
+    )
 
     includes = ["BHaH_defines.h"]
     # Set up the C function for computing the spin-weight -2 spherical harmonic at theta,phi: Y_{s=-2, l,m}(theta,phi)
@@ -56,9 +56,6 @@ def register_CFunction_spin_weight_minus2_sph_harmonics() -> (
 
     # maximum_l: The maximum value of the angular momentum number 'l' up to which
     #                  the function will compute the spin-weight -2 spherical harmonics.
-    swm2sh_maximum_l_mode_generated = par.parval_from_str(
-        "swm2sh_maximum_l_mode_generated"
-    )
     for l in range(
         swm2sh_maximum_l_mode_generated + 1
     ):  # Output values up to and including l=8.

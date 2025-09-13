@@ -23,14 +23,6 @@ from nrpy.equations.general_relativity.bhahaha.ExpansionFunctionTheta import (
     ExpansionFunctionTheta,
 )
 
-_eta_damping = par.register_CodeParameter(
-    "REAL",
-    __name__,
-    name="eta_damping",
-    defaultvalue=2.0,
-    commondata=True,
-)
-
 
 def register_CFunction_rhs_eval(
     CoordSystem: str = "Spherical",
@@ -77,8 +69,16 @@ def register_CFunction_rhs_eval(
     Th = ExpansionFunctionTheta[
         CoordSystem + ("_rfm_precompute" if enable_rfm_precompute else "")
     ]
+    eta_damping = par.register_CodeParameter(
+        "REAL",
+        __name__,
+        name="eta_damping",
+        defaultvalue=2.0,
+        commondata=True,
+    )
+
     # vv and hh are gridfunctions:
-    hh_rhs = sp.Symbol("vv", real=True) - _eta_damping * sp.Symbol("hh", real=True)
+    hh_rhs = sp.Symbol("vv", real=True) - eta_damping * sp.Symbol("hh", real=True)
     # wavespeed = sp.Symbol("variable_wavespeed", real=True)
     wavespeed = sp.sympify(1)  # Disabling variable wavespeed, as it does not help.
     # The minus sign here is because F_{,ij} ~ -h_{,ij}

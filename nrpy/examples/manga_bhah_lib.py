@@ -16,19 +16,7 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
-from nrpy.infrastructures.BHaH import (
-    BHaH_defines_h,
-    CodeParameters,
-    CurviBoundaryConditions,
-    Makefile_helpers,
-    MoLtimestepping,
-    bhah_lib,
-    checkpointing,
-    numerical_grids_and_timestep,
-    rfm_precompute,
-    rfm_wrapper_functions,
-    xx_tofrom_Cart,
-)
+from nrpy.infrastructures import BHaH
 from nrpy.infrastructures.BHaH.general_relativity import BSSN, TOVola
 
 par.set_parval_from_str("Infrastructure", "BHaH")
@@ -75,10 +63,12 @@ shutil.rmtree(project_dir, ignore_errors=True)
 par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 par.set_parval_from_str("fd_order", fd_order)
 par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
-checkpointing.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
+BHaH.checkpointing.register_CFunctions(
+    default_checkpoint_every=default_checkpoint_every
+)
 progress.register_CFunction_progress_indicator()
 
-numerical_grids_and_timestep.register_CFunctions(
+BHaH.numerical_grids_and_timestep.register_CFunctions(
     set_of_CoordSystems=set_of_CoordSystems,
     list_of_grid_physical_sizes=[grid_physical_size],
     Nxx_dict=Nxx_dict,
@@ -175,14 +165,14 @@ TOVola_solve(commondata, &ID_persist);
     )
 
 if enable_rfm_precompute:
-    rfm_precompute.register_CFunctions_rfm_precompute(
+    BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
         set_of_CoordSystems=set_of_CoordSystems
     )
 
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 
-CurviBoundaryConditions.register_all.register_C_functions(
+BHaH.CurviBoundaryConditions.register_all.register_C_functions(
     set_of_CoordSystems=set_of_CoordSystems,
     radiation_BC_fd_order=radiation_BC_fd_order,
 )
@@ -196,7 +186,7 @@ if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
 if not enable_rfm_precompute:
     rhs_string = rhs_string.replace("rfmstruct", "xx")
 
-MoLtimestepping.register_all.register_CFunctions(
+BHaH.MoLtimestepping.register_all.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,
     post_rhs_string="""if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
@@ -207,9 +197,9 @@ MoLtimestepping.register_all.register_CFunctions(
 )
 
 for CoordSystem in set_of_CoordSystems:
-    xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
-    xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
-rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
+    BHaH.xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
+    BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
+BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
 #########################################################
 # STEP 3: Generate header files, register C functions and
@@ -220,9 +210,9 @@ if "SinhSpherical" in set_of_CoordSystems:
     par.adjust_CodeParam_default("SINHW", 0.4)
 par.adjust_CodeParam_default("eta", GammaDriving_eta)
 
-CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
-CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
-BHaH_defines_h.output_BHaH_defines_h(
+BHaH.CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
+BHaH.CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
+BHaH.BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     enable_intrinsics=enable_intrinsics,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
@@ -243,9 +233,9 @@ if enable_intrinsics:
         subdirectory="intrinsics",
     )
 
-bhah_lib.register_CFunctions_bhah_lib()
+BHaH.bhah_lib.register_CFunctions_bhah_lib()
 
-Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
+BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
     exec_or_library_name="lib" + project_name,

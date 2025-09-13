@@ -51,7 +51,7 @@ def register_griddata_struct_and_return_griddata_struct_str(
     griddata_commondata.register_griddata_commondata(
         "params",
         "params_struct params",
-        "BHaH parameters, generated from NRPy+'s CodeParameters",
+        "BHaH parameters, generated from NRPy's CodeParameters",
     )
     if any("reference_metric" in key for key in sys.modules):
         if enable_rfm_precompute:
@@ -68,7 +68,7 @@ typedef struct __griddata__ {
   REAL *restrict xx[3];
 """
     for module, item_list in par.glb_extras_dict["griddata_struct"].items():
-        griddata_struct_def += f"  // NRPy+ MODULE: {module}\n"
+        griddata_struct_def += f"  // NRPy MODULE: {module}\n"
         for item in item_list:
             griddata_struct_def += f"  {item.c_declaration};"
             if item.description:

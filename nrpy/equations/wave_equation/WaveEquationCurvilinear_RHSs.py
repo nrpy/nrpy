@@ -11,7 +11,7 @@ The wave equation in curvilinear coordinates can be
 hat{g}^{mu nu} partial_{mu} partial_{nu} u - hat{Gamma}^{tau} partial_{tau} u ,
 where hat{Gamma}^{tau} is the *contracted* Christoffel symbol.
 
-For reference metrics supported by NRPy+,
+For reference metrics supported by NRPy,
   hat{g}_{t nu} = -delta_{t nu},
   where delta_{t nu} is the Kronecker delta, we have
 partial_t^2 u = hat{g}^{i j} partial_{i} partial_{j} u - hat{Gamma}^i partial_i u ,
@@ -27,12 +27,10 @@ partial_t v = hat{g}^{i j} partial_{i} partial_{j} u - hat{Gamma}^i partial_i u
 # Step P1: Import needed modules:
 import sympy as sp  # For symbolic computations
 
-import nrpy.grid as gri  # NRPy+: Functionality for handling numerical grids
-import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
-import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
-from nrpy.equations.wave_equation.CommonParams import (  # NRPy+: Common parameters for all WaveEquation modules (defines wavespeed)
-    wavespeed,
-)
+import nrpy.grid as gri  # NRPy: Functionality for handling numerical grids
+import nrpy.indexedexp as ixp  # NRPy: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
+import nrpy.params as par
+import nrpy.reference_metric as refmetric  # NRPy: Reference metric support
 
 # The name of this module ("WaveEquationCurvilinear") is given by __name__:
 thismodule: str = __name__
@@ -54,6 +52,15 @@ class WaveEquationCurvilinear_RHSs:
         .. note::
             Class variables uu_rhs and vv_rhs will be set in this function.
         """
+        # Step 0: Define the C parameter wavespeed. The `wavespeed`
+        #         variable is a proper SymPy variable, so it can be
+        #         used in below expressions. In the C code, it acts
+        #         just like a usual parameter, whose value is
+        #         specified in the parameter file.
+        wavespeed = par.register_CodeParameter(
+            "REAL", __name__, "wavespeed", 1.0, commondata=True
+        )
+
         # Step 1: Set up the reference metric and
         #         quantities derived from the
         #         reference metric.

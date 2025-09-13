@@ -26,10 +26,6 @@ import nrpy.grid as gri
 import nrpy.params as par
 from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
 
-_ = par.CodeParameter(
-    "char[50]", __name__, "outer_bc_type", "radiation", commondata=True
-)
-
 
 # For example, if the gridfunction name ends with "01", then (based on the table in the
 # NRPy Jupyter notebook corresponding to this Python module) the set_parity_types()
@@ -61,6 +57,11 @@ def BHaH_defines_set_gridfunction_defines_with_parity_types(
         auxiliary_variables_list,
         auxevol_variables_list,
     ) = gri.BHaHGridFunction.gridfunction_lists()[0:3]
+
+    # Next register outer_bc_type code parameter
+    _ = par.CodeParameter(
+        "char[50]", __name__, "outer_bc_type", "radiation", commondata=True
+    )
 
     outstr = """
 /* PARITY TYPES FOR EVOLVED (plus optional) GRIDFUNCTIONS.

@@ -9,25 +9,6 @@ import nrpy.c_function as cfc
 import nrpy.params as par
 from nrpy.infrastructures.BHaH import BHaH_defines_h
 
-_ = par.register_CodeParameter(
-    "TIMEVAR",
-    __name__,
-    "start_wallclock_time",
-    commondata=True,
-    add_to_parfile=False,
-    add_to_set_CodeParameters_h=False,
-)
-
-_ = par.register_CodeParameter(
-    "int",
-    __name__,
-    "output_progress_every",
-    1,
-    commondata=True,
-    add_to_parfile=True,
-    add_to_set_CodeParameters_h=False,
-)
-
 
 def register_CFunction_progress_indicator(
     progress_str: str = r"""
@@ -49,6 +30,25 @@ def register_CFunction_progress_indicator(
     :param progress_str: String representing the progress output format.
     :param compute_ETA: Whether to compute the estimated time of arrival.
     """
+    _ = par.register_CodeParameter(
+        "TIMEVAR",
+        __name__,
+        "start_wallclock_time",
+        commondata=True,
+        add_to_parfile=False,
+        add_to_set_CodeParameters_h=False,
+    )
+
+    _ = par.register_CodeParameter(
+        "int",
+        __name__,
+        "output_progress_every",
+        1,
+        commondata=True,
+        add_to_parfile=True,
+        add_to_set_CodeParameters_h=False,
+    )
+
     BHaH_defines_h.register_BHaH_defines(
         __name__,
         r"""#ifdef __linux__

@@ -26,14 +26,9 @@ and nabla is the Laplacian differential operator.
 # Step P1: Import needed modules:
 import sympy as sp
 
-import nrpy.grid as gri  # NRPy+: Functionality for handling numerical grids
-import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
-
-# NRPy+: Common parameters for all WaveEquation modules (defines wavespeed)
-from nrpy.equations.wave_equation.CommonParams import wavespeed
-
-# The name of this module ("WaveEquation") is given by __name__:
-thismodule = __name__
+import nrpy.grid as gri  # NRPy: Functionality for handling numerical grids
+import nrpy.indexedexp as ixp  # NRPy: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
+import nrpy.params as par
 
 
 class WaveEquation_RHSs:
@@ -46,6 +41,15 @@ class WaveEquation_RHSs:
         .. note::
             Class variables uu_rhs and vv_rhs will be set in this function.
         """
+        # Step 0: Define the C parameter wavespeed. The `wavespeed`
+        #         variable is a proper SymPy variable, so it can be
+        #         used in below expressions. In the C code, it acts
+        #         just like a usual parameter, whose value is
+        #         specified in the parameter file.
+        wavespeed = par.register_CodeParameter(
+            "REAL", __name__, "wavespeed", 1.0, commondata=True
+        )
+
         # Step 1: Declare the rank-2 indexed expression \partial_{ij} u,
         #         which is symmetric about the interchange of indices i and j.
         #         Derivative variables like these must have an underscore

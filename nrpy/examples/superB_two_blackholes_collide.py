@@ -16,6 +16,7 @@ Note: This is the superB version.
 """
 
 import os
+
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
@@ -23,19 +24,9 @@ import shutil
 from pathlib import Path
 
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.superB.CurviBoundaryConditions as superBcbc
-import nrpy.infrastructures.superB.Makefile_helpers as superBMakefile
-import nrpy.infrastructures.superB.MoL as superBMoL
-import nrpy.infrastructures.superB.chare_communication_maps as charecomm
-import nrpy.infrastructures.superB.diagnostics as superBdiagnostics
-import nrpy.infrastructures.superB.initial_data as superBinitialdata
-import nrpy.infrastructures.superB.main_chare as superBmain
-import nrpy.infrastructures.superB.numerical_grids as superBnumericalgrids
-import nrpy.infrastructures.superB.superB.superB_pup as superBpup
-import nrpy.infrastructures.superB.timestepping_chare as superBtimestepping
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
-from nrpy.infrastructures import BHaH
+from nrpy.infrastructures import BHaH, superB
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -109,7 +100,7 @@ par.adjust_CodeParam_default("t_final", t_final)
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
-superBinitialdata.register_CFunction_initial_data(
+superB.initial_data.register_CFunction_initial_data(
     CoordSystem=CoordSystem,
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
@@ -123,12 +114,12 @@ BHaH.numerical_grids_and_timestep.register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
 )
-superBnumericalgrids.register_CFunctions(
+superB.numerical_grids.register_CFunctions(
     set_of_CoordSystems={CoordSystem},
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
 )
-superBdiagnostics.register_CFunction_diagnostics(
+superB.diagnostics.register_CFunction_diagnostics(
     set_of_CoordSystems={CoordSystem},
     default_diagnostics_out_every=diagnostics_output_every,
     grid_center_filename_tuple=("out0d-conv_factor%.2f.txt", "convergence_factor"),
@@ -188,8 +179,10 @@ BHaH.general_relativity.BSSN.constraints.register_CFunction_constraints(
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 
-charecomm.chare_comm_register_C_functions(set_of_CoordSystems={CoordSystem})
-superBcbc.CurviBoundaryConditions_register_C_functions(
+superB.chare_communication_maps.chare_comm_register_C_functions(
+    set_of_CoordSystems={CoordSystem}
+)
+superB.CurviBoundaryConditions.CurviBoundaryConditions_register_C_functions(
     set_of_CoordSystems={CoordSystem},
     radiation_BC_fd_order=radiation_BC_fd_order,
     set_parity_on_aux=True,
@@ -215,7 +208,7 @@ if outer_bcs_type != "radiation":
     post_rhs_bcs_str += """
 apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);"""
 
-superBMoL.register_CFunctions(
+superB.MoL.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,
     post_rhs_bcs_str=post_rhs_bcs_str,
@@ -251,7 +244,7 @@ BHaH.cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_par
     project_name=project_name, cmdline_inputs=["convergence_factor"]
 )
 
-superBpup.register_CFunction_superB_pup_routines(
+superB.superB.superB_pup.register_CFunction_superB_pup_routines(
     MoL_method=MoL_method,
 )
 copy_files(
@@ -261,10 +254,10 @@ copy_files(
     subdirectory="superB",
 )
 
-superBmain.output_commondata_object_h_and_main_h_cpp_ci(
+superB.main_chare.output_commondata_object_h_and_main_h_cpp_ci(
     project_dir=project_dir,
 )
-superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
+superB.timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(
     project_dir=project_dir,
     MoL_method=MoL_method,
     outer_bcs_type=outer_bcs_type,
@@ -289,7 +282,7 @@ if enable_intrinsics:
         subdirectory="intrinsics",
     )
 
-superBMakefile.output_CFunctions_function_prototypes_and_construct_Makefile(
+superB.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
     exec_or_library_name=project_name,

@@ -65,14 +65,15 @@
 // commondata_struct:
 // ----------------------------
 typedef struct __commondata_struct__ {
-  REAL CFL_FACTOR; // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
-  REAL dt;         // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
-  REAL t_0;        // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
-  REAL t_final;    // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
-  REAL time;       // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
-  int NUMGRIDS;    // (nrpy.grid)
-  int nn;          // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
-  int nn_0;        // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
+  REAL CFL_FACTOR;        // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
+  REAL dt;                // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
+  REAL t_0;               // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
+  REAL t_final;           // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
+  REAL time;              // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
+  char outer_bc_type[50]; // (nrpy.infrastructures.BHaH.CurviBoundaryConditions.register_all)
+  int NUMGRIDS;           // (nrpy.grid)
+  int nn;                 // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
+  int nn_0;               // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
 } commondata_struct;
 
 // ----------------------------
@@ -201,10 +202,12 @@ typedef struct __griddata__ {
   // griddata_struct stores data needed on each grid
   // xx[3] stores the uniform grid coordinates.
   REAL *restrict xx[3];
-  // NRPy+ MODULE: nrpy.infrastructures.BHaH.MoLtimestepping.register_all
+  // NRPy MODULE: nrpy.infrastructures.BHaH.MoLtimestepping.register_all
   MoL_gridfunctions_struct gridfuncs; // <- MoL gridfunctions
-  // NRPy+ MODULE: params
-  params_struct params; // <- BHaH parameters, generated from NRPy+'s CodeParameters
+  // NRPy MODULE: params
+  params_struct params; // <- BHaH parameters, generated from NRPy's CodeParameters
+  // NRPy MODULE: reference_metric
+  rfm_struct *rfmstruct; // <- includes e.g., 1D arrays of reference metric quantities
 } griddata_struct;
 
 #ifndef BHAH_TYPEOF
