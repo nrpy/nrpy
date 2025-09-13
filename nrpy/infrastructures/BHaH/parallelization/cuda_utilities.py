@@ -81,7 +81,6 @@ def register_CFunction_cpyHosttoDevice_bc_struct() -> None:
      * Copy parameters to GPU __constant__.
      */
     __host__ void cpyHosttoDevice_bc_struct(const bc_struct *restrict host_src, bc_struct *restrict device_dst, const int streamid) {
-    <BLANKLINE>
       // Copy the bc_info structure (basic metadata)
       // This is always stored on the host currently.
       memcpy(&device_dst->bc_info, &host_src->bc_info, sizeof(bc_info_struct));
@@ -116,6 +115,7 @@ def register_CFunction_cpyHosttoDevice_bc_struct() -> None:
           }
         }
       }
+    <BLANKLINE>
     } // END FUNCTION cpyHosttoDevice_bc_struct
     <BLANKLINE>
     """
@@ -225,7 +225,6 @@ def generate_CFunction_mallocHostgrid() -> str:
      */
     __host__ static void mallocHostgrid(const commondata_struct *restrict commondata, const params_struct *restrict params,
                                         griddata_struct *restrict gd_host, const griddata_struct *restrict gd_gpu) {
-    <BLANKLINE>
       int const &Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
       int const &Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
       int const &Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
@@ -274,7 +273,6 @@ def register_CFunction_cpyDevicetoHost__grid() -> None:
      */
     __host__ static void mallocHostgrid(const commondata_struct *restrict commondata, const params_struct *restrict params,
                                         griddata_struct *restrict gd_host, const griddata_struct *restrict gd_gpu) {
-    <BLANKLINE>
       int const &Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
       int const &Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
       int const &Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
@@ -351,7 +349,6 @@ def register_CFunction_CUDA__malloc_host_gfs() -> None:
      */
     __host__ void CUDA__malloc_host_gfs(const commondata_struct *restrict commondata, const params_struct *restrict params,
                                         MoL_gridfunctions_struct *restrict gridfuncs) {
-    <BLANKLINE>
       const int Nxx_plus_2NGHOSTS_tot = params->Nxx_plus_2NGHOSTS0 * params->Nxx_plus_2NGHOSTS1 * params->Nxx_plus_2NGHOSTS2;
     <BLANKLINE>
       BHAH_MALLOC_PINNED(gridfuncs->y_n_gfs, sizeof(REAL) * Nxx_plus_2NGHOSTS_tot * NUM_EVOL_GFS);
@@ -396,7 +393,6 @@ def register_CFunction_CUDA__malloc_host_aux_gfs() -> None:
      */
     __host__ void CUDA__malloc_host_aux_gfs(const commondata_struct *restrict commondata, const params_struct *restrict params,
                                             MoL_gridfunctions_struct *restrict gridfuncs) {
-    <BLANKLINE>
       const int Nxx_plus_2NGHOSTS_tot = params->Nxx_plus_2NGHOSTS0 * params->Nxx_plus_2NGHOSTS1 * params->Nxx_plus_2NGHOSTS2;
     <BLANKLINE>
       if (NUM_AUXEVOL_GFS > 0)
@@ -443,7 +439,6 @@ def register_CFunction_CUDA__malloc_host_diagnostic_gfs() -> None:
      */
     __host__ void CUDA__malloc_host_diagnostic_gfs(const commondata_struct *restrict commondata, const params_struct *restrict params,
                                                    MoL_gridfunctions_struct *restrict gridfuncs) {
-    <BLANKLINE>
       const int Nxx_plus_2NGHOSTS_tot = params->Nxx_plus_2NGHOSTS0 * params->Nxx_plus_2NGHOSTS1 * params->Nxx_plus_2NGHOSTS2;
     <BLANKLINE>
       BHAH_MALLOC_PINNED(gridfuncs->diagnostic_output_gfs, sizeof(REAL) * Nxx_plus_2NGHOSTS_tot * NUM_EVOL_GFS);
@@ -487,7 +482,6 @@ def register_CFunction_CUDA__free_host_diagnostic_gfs() -> None:
      * Free Host storage for additional diagnostics GFs.
      */
     __host__ void CUDA__free_host_diagnostic_gfs(MoL_gridfunctions_struct *gridfuncs) {
-    <BLANKLINE>
       BHAH_FREE_PINNED(gridfuncs->diagnostic_output_gfs);
     } // END FUNCTION CUDA__free_host_diagnostic_gfs
     <BLANKLINE>
@@ -562,7 +556,6 @@ def register_CFunction_CUDA__free_host_aux_gfs() -> None:
      * Free Host storage for diagnostics GFs.
      */
     __host__ void CUDA__free_host_aux_gfs(MoL_gridfunctions_struct *gridfuncs) {
-    <BLANKLINE>
       if (NUM_AUXEVOL_GFS > 0)
         BHAH_FREE_PINNED(gridfuncs->auxevol_gfs);
     } // END FUNCTION CUDA__free_host_aux_gfs
@@ -604,7 +597,6 @@ def register_CFunction_cpyDevicetoHost__gf() -> None:
      */
     __host__ void cpyDevicetoHost__gf(const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *gf_host,
                                       const REAL *gf_gpu, const int host_GF_IDX, const int gpu_GF_IDX, const size_t streamid) {
-    <BLANKLINE>
       int const Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
       int const Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
       int const Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
@@ -664,7 +656,6 @@ def register_CFunction_cpyHosttoDevice__gf() -> None:
      */
     __host__ void cpyHosttoDevice__gf(const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL *gf_host,
                                       REAL *gf_gpu, const int host_GF_IDX, const int gpu_GF_IDX, size_t streamid) {
-    <BLANKLINE>
       int const Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
       int const Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
       int const Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;

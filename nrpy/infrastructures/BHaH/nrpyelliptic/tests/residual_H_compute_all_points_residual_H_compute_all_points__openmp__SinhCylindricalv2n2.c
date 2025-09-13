@@ -125,5 +125,4 @@ void residual_H_compute_all_points__rfm__SinhCylindricalv2n2(const commondata_st
                                                              const rfm_struct *restrict rfmstruct, const REAL *restrict auxevol_gfs,
                                                              const REAL *restrict in_gfs, REAL *restrict aux_gfs) {
   residual_H_compute_all_points_host(params, rfmstruct, auxevol_gfs, in_gfs, aux_gfs);
-
 } // END FUNCTION residual_H_compute_all_points__rfm__SinhCylindricalv2n2

@@ -265,4 +265,5 @@ void auxevol_gfs_set_to_constant__rfm__SinhSymTP(commondata_struct *restrict com
     auxevol_gfs_all_points_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, x0, x1, x2, auxevol_gfs);
     cudaCheckErrors(cudaKernel, "auxevol_gfs_all_points_gpu failure");
   }
+
 } // END FUNCTION auxevol_gfs_set_to_constant__rfm__SinhSymTP

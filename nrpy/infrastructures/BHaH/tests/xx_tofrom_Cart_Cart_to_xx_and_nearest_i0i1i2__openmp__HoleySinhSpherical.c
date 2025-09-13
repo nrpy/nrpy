@@ -5,7 +5,6 @@
  */
 void Cart_to_xx_and_nearest_i0i1i2__rfm__HoleySinhSpherical(const params_struct *restrict params, const REAL xCart[3], REAL xx[3],
                                                             int Cart_to_i0i1i2[3]) {
-
   // Set (Cartx, Carty, Cartz) relative to the global (as opposed to local) grid.
   //   This local grid may be offset from the origin by adjusting
   //   (Cart_originx, Cart_originy, Cart_originz) to nonzero values.

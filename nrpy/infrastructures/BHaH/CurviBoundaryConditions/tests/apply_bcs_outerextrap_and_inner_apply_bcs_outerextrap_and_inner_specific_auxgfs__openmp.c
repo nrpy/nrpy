@@ -70,7 +70,6 @@ void apply_bcs_outerextrap_and_inner_specific_auxgfs(const commondata_struct *re
                                                      const bc_struct *restrict bcstruct, REAL *restrict gfs, const int num_gfs,
                                                      const int *gfs_to_sync) {
 #include "set_CodeParameters.h"
-
   ////////////////////////////////////////////////////////
   // STEP 1 of 2: Apply BCs to pure outer boundary points.
   //              By "pure" we mean that these points are

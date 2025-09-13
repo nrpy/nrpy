@@ -46,7 +46,6 @@ static void rk_substep_None__launcher(params_struct *restrict params, REAL *rest
  * Method of Lines (MoL) for "Euler" method: Step forward one full timestep.
  */
 void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_struct *restrict griddata) {
-
   // C code implementation of -={ Euler }=- Method of Lines timestepping.
 
   // First set the initial time:

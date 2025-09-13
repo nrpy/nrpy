@@ -139,7 +139,6 @@ static void rk_substep_3__launcher(params_struct *restrict params, REAL *restric
  * Method of Lines (MoL) for "RK3 Heun" method: Step forward one full timestep.
  */
 void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_struct *restrict griddata) {
-
   // C code implementation of -={ RK3 Heun }=- Method of Lines timestepping.
 
   // First set the initial time:

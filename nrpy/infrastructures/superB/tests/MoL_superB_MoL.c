@@ -5,7 +5,6 @@
  */
 void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_struct *restrict griddata, const REAL time_start,
                               const int which_RK_substep, const int which_MOL_part) {
-
   // C code implementation of -={ RK4 }=- Method of Lines timestepping.
 
   switch (which_RK_substep) {

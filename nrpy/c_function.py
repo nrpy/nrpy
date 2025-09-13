@@ -296,7 +296,8 @@ class CFunction:
         function_prototype = (
             f"{self.cfunc_decorators}{self.cfunc_type} {self.name}({self.params});"
         )
-        complete_func += f"{function_prototype.replace(';', '')} {{\n{include_Cparams_str}{self.body}}} // END FUNCTION {self.name}\n"
+        # self.body: Strip leading & trailing newlines, then add a single newline at the end of string. --v
+        complete_func += f"{function_prototype.replace(';', '')} {{\n{include_Cparams_str}{self.body.strip("\n")+"\n"}}} // END FUNCTION {self.name}\n"
 
         complete_func += f"{self.postfunc}\n"
 

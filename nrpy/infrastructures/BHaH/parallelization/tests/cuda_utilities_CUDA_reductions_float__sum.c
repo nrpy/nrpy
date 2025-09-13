@@ -72,7 +72,6 @@ __global__ static void find_global__sum__cuda(REAL *data, REAL *min, uint const 
  * Find array global sum.
  */
 REAL find_global__sum(REAL *data, uint const data_length) {
-
   // This can be tested up to 1024
   uint threadCount = 32;
 

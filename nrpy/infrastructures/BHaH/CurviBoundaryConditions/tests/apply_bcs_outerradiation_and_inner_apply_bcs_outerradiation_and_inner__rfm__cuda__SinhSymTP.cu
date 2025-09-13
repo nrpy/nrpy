@@ -285,7 +285,6 @@ __global__ static void apply_bcs_pure_only_gpu(const size_t streamid, const int 
  */
 static void apply_bcs_pure_only(const params_struct *restrict params, const bc_struct *restrict bcstruct, REAL *restrict *xx, REAL *restrict gfs,
                                 REAL *restrict rhs_gfs, const REAL *custom_wavespeed, const REAL *custom_f_infinity) {
-
   const bc_info_struct *bc_info = &bcstruct->bc_info;
   REAL *restrict x0 = xx[0];
   REAL *restrict x1 = xx[1];
@@ -322,7 +321,6 @@ void apply_bcs_outerradiation_and_inner__rfm__SinhSymTP(const commondata_struct 
                                                         const bc_struct *restrict bcstruct, REAL *restrict xx[3],
                                                         const REAL custom_wavespeed[NUM_EVOL_GFS], const REAL custom_f_infinity[NUM_EVOL_GFS],
                                                         REAL *restrict gfs, REAL *restrict rhs_gfs) {
-
   // Update device constants
   cudaMemcpyToSymbol(d_gridfunctions_wavespeed, custom_wavespeed, NUM_EVOL_GFS * sizeof(REAL));
   cudaCheckErrors(copy, "Copy to d_gridfunctions_wavespeed failed");

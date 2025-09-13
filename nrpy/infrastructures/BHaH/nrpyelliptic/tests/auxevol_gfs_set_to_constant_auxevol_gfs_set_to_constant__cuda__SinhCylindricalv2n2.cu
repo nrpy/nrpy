@@ -288,4 +288,5 @@ void auxevol_gfs_set_to_constant__rfm__SinhCylindricalv2n2(commondata_struct *re
     auxevol_gfs_all_points_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, x0, x1, x2, auxevol_gfs);
     cudaCheckErrors(cudaKernel, "auxevol_gfs_all_points_gpu failure");
   }
+
 } // END FUNCTION auxevol_gfs_set_to_constant__rfm__SinhCylindricalv2n2

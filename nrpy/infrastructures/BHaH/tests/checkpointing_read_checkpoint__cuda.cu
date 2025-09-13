@@ -28,7 +28,6 @@
  * Read a checkpoint file
  */
 int read_checkpoint(commondata_struct *restrict commondata, griddata_struct *restrict griddata, griddata_struct *restrict griddata_device) {
-
   char filename[256];
   snprintf(filename, 256, "checkpoint-conv_factor%.2f.dat", commondata->convergence_factor);
   // If the checkpoint doesn't exist then return 0.

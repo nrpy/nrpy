@@ -5,7 +5,6 @@
  * taking into account the possibility that the origin of this grid is off-center.
  */
 __host__ __device__ void xx_to_Cart__rfm__SinhCylindricalv2n2(const params_struct *restrict params, const REAL xx[3], REAL xCart[3]) {
-
   const REAL xx0 = xx[0];
   const REAL xx1 = xx[1];
   const REAL xx2 = xx[2];

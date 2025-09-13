@@ -61,7 +61,6 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
      * Set commondata_struct to default values specified within NRPy+.
      */
     void commondata_struct_set_to_default(commondata_struct *restrict commondata) {
-    <BLANKLINE>
       // Set commondata_struct variables to default
       commondata->a = 1;                   // CodeParameters_c_files::a
       commondata->blah_int = 1;            // CodeParameters_c_files::blah_int
