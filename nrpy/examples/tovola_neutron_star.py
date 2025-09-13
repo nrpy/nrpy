@@ -31,7 +31,7 @@ IDCoordSystem = "Spherical"
 
 grid_physical_size = 10.0
 sinh_width = 0.0785
-t_final = 0.0001
+t_final = 1.0e-10
 diagnostics_output_every = 0.5
 default_checkpoint_every = 2.0
 Nxx_dict = {
@@ -161,10 +161,6 @@ BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 if CoordSystem == "SinhSpherical":
     par.adjust_CodeParam_default("SINHW", sinh_width)
 par.adjust_CodeParam_default("t_final", t_final)
-if "Spherical" in CoordSystem:
-    par.adjust_CodeParam_default("CFL_FACTOR", 1.0)
-if "Cylindrical" in CoordSystem:
-    par.adjust_CodeParam_default("CFL_FACTOR", 1.0)
 
 #########################################################
 # STEP 3: Generate header files, register C functions and
