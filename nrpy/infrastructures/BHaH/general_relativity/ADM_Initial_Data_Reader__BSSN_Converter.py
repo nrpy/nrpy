@@ -27,8 +27,8 @@ from nrpy.helpers.expression_utils import (
     generate_definition_header,
     get_params_commondata_symbols_from_expr_list,
 )
-from nrpy.infrastructures.BHaH import BHaH_defines_h
 from nrpy.helpers.parallelization import utilities
+from nrpy.infrastructures.BHaH import BHaH_defines_h
 
 
 def register_CFunction_exact_ADM_ID_function(
