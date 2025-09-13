@@ -9,8 +9,8 @@ Authors: Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.reference_metric as refmetric
+from nrpy.infrastructures import BHaH
 
 
 # Define function to compute the l^2 of a gridfunction between 2 radii
@@ -71,7 +71,7 @@ if(r > integration_radius1 && r < integration_radius2) {
 
 """
 
-    body += lp.simple_loop(
+    body += BHaH.simple_loop.simple_loop(
         loop_body="\n" + loop_body,
         read_xxs=True,
         loop_region="interior",

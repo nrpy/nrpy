@@ -154,15 +154,10 @@ if parallelization != "cuda":
             ],
             check=True,
         )
-    from nrpy.infrastructures.BHaH.BHaHAHA import (
-        BHaH_implementation,
-        interpolation_3d_general__uniform_src_grid,
-    )
-
-    BHaH_implementation.register_CFunction_bhahaha_find_horizons(
+    BHaH.BHaHAHA.BHaH_implementation.register_CFunction_bhahaha_find_horizons(
         CoordSystem=CoordSystem, max_horizons=3
     )
-    interpolation_3d_general__uniform_src_grid.register_CFunction_interpolation_3d_general__uniform_src_grid(
+    BHaH.BHaHAHA.interpolation_3d_general__uniform_src_grid.register_CFunction_interpolation_3d_general__uniform_src_grid(
         enable_simd=enable_intrinsics, project_dir=project_dir
     )
 
