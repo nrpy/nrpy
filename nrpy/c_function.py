@@ -301,7 +301,13 @@ class CFunction:
             f"{self.cfunc_decorators}{self.cfunc_type} {self.name}({self.params});"
         )
         # self.body: Strip leading & trailing newlines, then add a single newline at the end of string. --v
-        complete_func += f"{function_prototype.replace(';', '')} {{\n{include_Cparams_str}{self.body.strip('\n') + '\n'}}} // END FUNCTION {self.name}\n"
+        newline = "\n"  # Need to use newline variable due to Python <= 3.8 being unable to handle backslashes in f-strings.
+        body = self.body.rstrip(newline) + newline
+        complete_func += (
+            f"{function_prototype.replace(';', '')} {{{newline}"
+            f"{include_Cparams_str}{body}"
+            f"}} // END FUNCTION {self.name}{newline}"
+        )
         # self.postfunc: Strip leading & trailing newlines, then add newlines at start and end.
         complete_func += "\n" + self.postfunc.strip("\n") + "\n"
 
