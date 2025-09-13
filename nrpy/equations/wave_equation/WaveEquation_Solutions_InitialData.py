@@ -12,6 +12,7 @@ License: BSD 2-Clause
 """
 
 import sys
+
 # Step P1: Import needed modules:
 from typing import Tuple
 
