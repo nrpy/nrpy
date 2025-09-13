@@ -26,7 +26,7 @@ import nrpy.indexedexp as ixp
 import nrpy.infrastructures.BHaH.BHaHAHA.bcstruct_set_up as locCBC
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
-from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_numgrid__external_input_set_up() -> (
@@ -100,22 +100,22 @@ enum {{
             verbose=True,
         )
     )
-    BHaH_defines_h.register_BHaH_defines(__name__, BHaH_defines_contrib)
+    BHaH.BHaH_defines_h.register_BHaH_defines(__name__, BHaH_defines_contrib)
 
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         __name__,
         "REAL *restrict external_input_gfs_Cart_basis_no_gzs",
         f"{len(list_of_external_input_gf_names_ranks)} gridfunctions provided by external source, including gamma_ij and K_ij, in Cartesian basis, with no ghostzones.",
         is_commondata=True,
     )
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         __name__,
         "REAL *restrict external_input_gfs",
         f"{len(list_of_external_input_gf_names_ranks)} gridfunctions provided by external source, including gamma_ij and K_ij, in spherical rescaled basis, with ghostzones.",
         is_commondata=True,
     )
 
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         __name__,
         "REAL *restrict external_input_r_theta_phi[3]",
         "Three 1D arrays storing uniform (r, theta, phi) coordinates.",
