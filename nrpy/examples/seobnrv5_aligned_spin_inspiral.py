@@ -377,6 +377,8 @@ if frequency_domain_flag:
 Bdefines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     additional_includes=additional_includes,
+    enable_intrinsics=False,
+    enable_rfm_precompute=False,
     supplemental_defines_dict={
         "SEOBNR": """
 #include<complex.h>
@@ -401,7 +403,6 @@ typedef struct {
 } spline_data;
 """
     },
-    enable_intrinsics=False,
 )
 register_CFunction_main_c(
     output_waveform_flag,

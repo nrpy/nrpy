@@ -167,13 +167,13 @@ __global__ static void variable_wavespeed_gfs_all_points_gpu(const size_t stream
 
         /*
          *  Original SymPy expressions:
-         *  "[const REAL dsmin0 = dxx0]"
-         *  "[const REAL dsmin1 = dxx1]"
-         *  "[const REAL dsmin2 = dxx2]"
+         *  "[const REAL dsmin0 = d_params[streamid].dxx0]"
+         *  "[const REAL dsmin1 = d_params[streamid].dxx1]"
+         *  "[const REAL dsmin2 = d_params[streamid].dxx2]"
          */
-        const REAL dsmin0 = dxx0;
-        const REAL dsmin1 = dxx1;
-        const REAL dsmin2 = dxx2;
+        const REAL dsmin0 = d_params[streamid].dxx0;
+        const REAL dsmin1 = d_params[streamid].dxx1;
+        const REAL dsmin2 = d_params[streamid].dxx2;
 
         // Set local wavespeed
         in_gfs[IDX4(VARIABLE_WAVESPEEDGF, i0, i1, i2)] = MINIMUM_GLOBAL_WAVESPEED * MIN(dsmin0, MIN(dsmin1, dsmin2)) / dt;
@@ -191,10 +191,10 @@ void auxevol_gfs_set_to_constant__rfm__Cartesian(commondata_struct *restrict com
 #include "set_CodeParameters.h"
   cpyHosttoDevice_commondata__constant(commondata);
 
-  REAL *restrict auxevol_gfs = gridfuncs->auxevol_gfs;
-  REAL *restrict x0 = xx[0];
-  REAL *restrict x1 = xx[1];
-  REAL *restrict x2 = xx[2];
+  REAL *auxevol_gfs = gridfuncs->auxevol_gfs;
+  REAL *x0 = xx[0];
+  REAL *x1 = xx[1];
+  REAL *x2 = xx[2];
 
   // Set up variable wavespeed
   {

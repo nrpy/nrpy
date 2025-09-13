@@ -214,13 +214,13 @@ __global__ static void variable_wavespeed_gfs_all_points_gpu(const size_t stream
 
         /*
          *  Original SymPy expressions:
-         *  "[const REAL dsmin0 = dxx0*(rho_slope + xx0**2*(AMPLRHO - rho_slope)*(exp(xx0/SINHWRHO)/SINHWRHO +
+         *  "[const REAL dsmin0 = d_params[streamid].dxx0*(rho_slope + xx0**2*(AMPLRHO - rho_slope)*(exp(xx0/SINHWRHO)/SINHWRHO +
          * exp(-xx0/SINHWRHO)/SINHWRHO)/(exp(1/SINHWRHO) - exp(-1/SINHWRHO)) + 2*xx0*(AMPLRHO - rho_slope)*(exp(xx0/SINHWRHO) -
          * exp(-xx0/SINHWRHO))/(exp(1/SINHWRHO) - exp(-1/SINHWRHO)))]"
-         *  "[const REAL dsmin1 = dxx1*(rho_slope*xx0 + xx0**2*(AMPLRHO - rho_slope)*(exp(xx0/SINHWRHO) - exp(-xx0/SINHWRHO))/(exp(1/SINHWRHO) -
-         * exp(-1/SINHWRHO)))]"
-         *  "[const REAL dsmin2 = dxx2*(xx2**2*(AMPLZ - z_slope)*(exp(xx2/SINHWZ)/SINHWZ + exp(-xx2/SINHWZ)/SINHWZ)/(exp(1/SINHWZ) - exp(-1/SINHWZ)) +
-         * 2*xx2*(AMPLZ - z_slope)*(exp(xx2/SINHWZ) - exp(-xx2/SINHWZ))/(exp(1/SINHWZ) - exp(-1/SINHWZ)) + z_slope)]"
+         *  "[const REAL dsmin1 = d_params[streamid].dxx1*(rho_slope*xx0 + xx0**2*(AMPLRHO - rho_slope)*(exp(xx0/SINHWRHO) -
+         * exp(-xx0/SINHWRHO))/(exp(1/SINHWRHO) - exp(-1/SINHWRHO)))]"
+         *  "[const REAL dsmin2 = d_params[streamid].dxx2*(xx2**2*(AMPLZ - z_slope)*(exp(xx2/SINHWZ)/SINHWZ + exp(-xx2/SINHWZ)/SINHWZ)/(exp(1/SINHWZ)
+         * - exp(-1/SINHWZ)) + 2*xx2*(AMPLZ - z_slope)*(exp(xx2/SINHWZ) - exp(-xx2/SINHWZ))/(exp(1/SINHWZ) - exp(-1/SINHWZ)) + z_slope)]"
          */
         const REAL tmp0 = (1.0 / (SINHWRHO));
         const REAL tmp7 = (1.0 / (SINHWZ));
@@ -232,9 +232,10 @@ __global__ static void variable_wavespeed_gfs_all_points_gpu(const size_t stream
         const REAL tmp9 = exp(tmp7 * xx2);
         const REAL tmp10 = exp(-tmp7 * xx2);
         const REAL tmp4 = tmp2 - tmp3;
-        const REAL dsmin0 = dxx0 * (rho_slope + 2 * tmp4 * tmp5 * xx0 + tmp6 * (tmp0 * tmp2 + tmp0 * tmp3));
-        const REAL dsmin1 = dxx1 * (rho_slope * xx0 + tmp4 * tmp6);
-        const REAL dsmin2 = dxx2 * (tmp11 * ((xx2) * (xx2)) * (tmp10 * tmp7 + tmp7 * tmp9) + 2 * tmp11 * xx2 * (-tmp10 + tmp9) + z_slope);
+        const REAL dsmin0 = d_params[streamid].dxx0 * (rho_slope + 2 * tmp4 * tmp5 * xx0 + tmp6 * (tmp0 * tmp2 + tmp0 * tmp3));
+        const REAL dsmin1 = d_params[streamid].dxx1 * (rho_slope * xx0 + tmp4 * tmp6);
+        const REAL dsmin2 =
+            d_params[streamid].dxx2 * (tmp11 * ((xx2) * (xx2)) * (tmp10 * tmp7 + tmp7 * tmp9) + 2 * tmp11 * xx2 * (-tmp10 + tmp9) + z_slope);
 
         // Set local wavespeed
         in_gfs[IDX4(VARIABLE_WAVESPEEDGF, i0, i1, i2)] = MINIMUM_GLOBAL_WAVESPEED * MIN(dsmin0, MIN(dsmin1, dsmin2)) / dt;
@@ -252,10 +253,10 @@ void auxevol_gfs_set_to_constant__rfm__SinhCylindricalv2n2(commondata_struct *re
 #include "set_CodeParameters.h"
   cpyHosttoDevice_commondata__constant(commondata);
 
-  REAL *restrict auxevol_gfs = gridfuncs->auxevol_gfs;
-  REAL *restrict x0 = xx[0];
-  REAL *restrict x1 = xx[1];
-  REAL *restrict x2 = xx[2];
+  REAL *auxevol_gfs = gridfuncs->auxevol_gfs;
+  REAL *x0 = xx[0];
+  REAL *x1 = xx[1];
+  REAL *x2 = xx[2];
 
   // Set up variable wavespeed
   {

@@ -173,18 +173,18 @@ static void variable_wavespeed_gfs_all_points_host(const params_struct *restrict
 
         /*
          *  Original SymPy expressions:
-         *  "[const REAL dsmin0 = AMPL*dxx0*(exp(xx0/SINHW)/SINHW + exp(-xx0/SINHW)/SINHW)/(exp(1/SINHW) - exp(-1/SINHW))]"
-         *  "[const REAL dsmin1 = AMPL*dxx1*(exp(xx0/SINHW) - exp(-xx0/SINHW))/(exp(1/SINHW) - exp(-1/SINHW))]"
-         *  "[const REAL dsmin2 = AMPL*dxx2*(exp(xx0/SINHW) - exp(-xx0/SINHW))*sin(xx1)/(exp(1/SINHW) - exp(-1/SINHW))]"
+         *  "[const REAL dsmin0 = AMPL*params->dxx0*(exp(xx0/SINHW)/SINHW + exp(-xx0/SINHW)/SINHW)/(exp(1/SINHW) - exp(-1/SINHW))]"
+         *  "[const REAL dsmin1 = AMPL*params->dxx1*(exp(xx0/SINHW) - exp(-xx0/SINHW))/(exp(1/SINHW) - exp(-1/SINHW))]"
+         *  "[const REAL dsmin2 = AMPL*params->dxx2*(exp(xx0/SINHW) - exp(-xx0/SINHW))*sin(xx1)/(exp(1/SINHW) - exp(-1/SINHW))]"
          */
         const REAL tmp0 = (1.0 / (SINHW));
         const REAL tmp4 = AMPL / (exp(tmp0) - exp(-tmp0));
         const REAL tmp2 = exp(tmp0 * xx0);
         const REAL tmp3 = exp(-tmp0 * xx0);
         const REAL tmp5 = tmp4 * (tmp2 - tmp3);
-        const REAL dsmin0 = dxx0 * tmp4 * (tmp0 * tmp2 + tmp0 * tmp3);
-        const REAL dsmin1 = dxx1 * tmp5;
-        const REAL dsmin2 = dxx2 * tmp5 * sin(xx1);
+        const REAL dsmin0 = params->dxx0 * tmp4 * (tmp0 * tmp2 + tmp0 * tmp3);
+        const REAL dsmin1 = params->dxx1 * tmp5;
+        const REAL dsmin2 = params->dxx2 * tmp5 * sin(xx1);
 
         // Set local wavespeed
         in_gfs[IDX4(VARIABLE_WAVESPEEDGF, i0, i1, i2)] = MINIMUM_GLOBAL_WAVESPEED * MIN(dsmin0, MIN(dsmin1, dsmin2)) / dt;
@@ -201,10 +201,10 @@ void auxevol_gfs_set_to_constant__rfm__HoleySinhSpherical(commondata_struct *res
                                                           REAL *restrict xx[3], MoL_gridfunctions_struct *restrict gridfuncs) {
 #include "set_CodeParameters.h"
 
-  REAL *restrict auxevol_gfs = gridfuncs->auxevol_gfs;
-  REAL *restrict x0 = xx[0];
-  REAL *restrict x1 = xx[1];
-  REAL *restrict x2 = xx[2];
+  REAL *auxevol_gfs = gridfuncs->auxevol_gfs;
+  REAL *x0 = xx[0];
+  REAL *x1 = xx[1];
+  REAL *x2 = xx[2];
 
   // Set up variable wavespeed
   variable_wavespeed_gfs_all_points_host(params, x0, x1, x2, auxevol_gfs, dt, MINIMUM_GLOBAL_WAVESPEED);

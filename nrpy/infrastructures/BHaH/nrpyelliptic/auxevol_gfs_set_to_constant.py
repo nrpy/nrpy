@@ -56,7 +56,7 @@ def generate_prefunc_variable_wavespeed_gfs_all_points(
     }
 
     rfm = refmetric.reference_metric[CoordSystem]
-    dxx0, dxx1, dxx2 = sp.symbols("dxx0 dxx1 dxx2", real=True)
+    dxx0, dxx1, dxx2 = sp.symbols("params->dxx0 params->dxx1 params->dxx2", real=True)
     expr_list = [
         rfm.scalefactor_orthog[0] * dxx0,
         rfm.scalefactor_orthog[1] * dxx1,
@@ -333,10 +333,10 @@ def register_CFunction_auxevol_gfs_set_to_constant(
         else wavespeed_all_points_launch
     )
     body += rf"""
-    REAL *restrict auxevol_gfs = gridfuncs->auxevol_gfs;
-    REAL *restrict x0 = xx[0];
-    REAL *restrict x1 = xx[1];
-    REAL *restrict x2 = xx[2];
+    REAL *auxevol_gfs = gridfuncs->auxevol_gfs;
+    REAL *x0 = xx[0];
+    REAL *x1 = xx[1];
+    REAL *x2 = xx[2];
 
     // Set up variable wavespeed
     {wavespeed_all_points_launch.replace("in_gfs", "auxevol_gfs")}
