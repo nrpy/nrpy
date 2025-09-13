@@ -16,12 +16,12 @@ import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.indexedexp as ixp
-import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
 from nrpy.equations.general_relativity.bhahaha.ExpansionFunctionTheta import (
     ExpansionFunctionTheta,
 )
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_rhs_eval(
@@ -84,7 +84,7 @@ def register_CFunction_rhs_eval(
     # The minus sign here is because F_{,ij} ~ -h_{,ij}
     vv_rhs = -(wavespeed**2) * Th.Theta
 
-    body = lp.simple_loop(
+    body = BHaH.simple_loop.simple_loop(
         loop_body=ccg.c_codegen(
             [hh_rhs, vv_rhs],
             [
