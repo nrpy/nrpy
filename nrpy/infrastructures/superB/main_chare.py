@@ -54,11 +54,13 @@ class CommondataObject {
 def output_main_h(
     project_dir: str,
     enable_charm_checkpointing: bool = False,
+    enable_BHaHAHA: bool = False,
 ) -> None:
     """
     Generate main.h.
     :param project_dir: Directory where the project C code is output
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
+    :param enable_BHaHAHA: If True, include horizon_finder and interpolator3d declarations.
     """
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
@@ -68,8 +70,13 @@ def output_main_h(
 
 #include "pup.h"
 #include "main.decl.h"
-#include "timestepping.decl.h"
-
+#include "timestepping.decl.h" """
+    if enable_BHaHAHA:
+        file_output_str += """
+#include "horizon_finder.decl.h"
+#include "interpolator3d.decl.h"
+"""
+    file_output_str += """
 class Main : public CBase_Main {
 
   private:
@@ -103,12 +110,14 @@ class Main : public CBase_Main {
 def output_main_cpp(
     project_dir: str,
     enable_charm_checkpointing: bool = False,
+    enable_BHaHAHA: bool = False,
 ) -> None:
     """
     Generate the "generic" C main() function for all simulation codes in the superB infrastructure.
     :param project_dir: Directory where the project C code is output
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     :raises ValueError: Raised if any required function for superB main() is not registered.
+    :param enable_BHaHAHA: If True, emit horizon_finder + interpolator3d arrays and the RR mapper.
     """
     # Make sure all required C functions are registered
     missing_functions: List[Tuple[str, str]] = []
@@ -132,11 +141,49 @@ def output_main_cpp(
     file_output_str = r"""#include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
 #include "main.h"
-#include "timestepping.decl.h"
+#include "timestepping.decl.h" """
 
+    if enable_BHaHAHA:
+        file_output_str += r"""
+#include "horizon_finder.decl.h"
+#include "interpolator3d.decl.h" """
+
+    file_output_str += r"""
 /* readonly */ CProxy_Main mainProxy;
 /* readonly */ CProxy_Timestepping timesteppingArray;
+"""
 
+    if enable_BHaHAHA:
+        file_output_str += r"""
+/* readonly */ CProxy_Horizon_finder horizon_finderProxy;
+/* readonly */ CProxy_Interpolator3d interpolator3dArray; """
+
+    if enable_BHaHAHA:
+        file_output_str += r"""
+//===============================================
+// RRMap_with_offset
+// - Flatten (x,y,z) -> linear = x + N0*y + N0*N1*z
+// - PE = (linear + offset) % CkNumPes()
+// - Works for 1D/2D (missing dims treated as 0).
+//===============================================
+class RRMap_with_offset : public CkArrayMap {
+    int offset;
+    int Nchare0, Nchare1;
+
+public:
+    RRMap_with_offset(int _offset = 0, int _Nchare0 = 1, int _Nchare1 = 1)
+        : offset(_offset), Nchare0(_Nchare0), Nchare1(_Nchare1) {}
+
+    int procNum(int /*unused*/, const CkArrayIndex& idx) override {
+        const int x = idx.data()[0];
+        const int y = (idx.nInts > 1) ? idx.data()[1] : 0;
+        const int z = (idx.nInts > 2) ? idx.data()[2] : 0;
+        const int linear = x + Nchare0 * y + Nchare0 * Nchare1 * z;
+        return (linear + offset) % CkNumPes();
+    }
+};"""
+
+    file_output_str += r"""
 /*
  * -={ main() function }=-
  * Step 1.a: Set each commondata CodeParameter to default.
@@ -160,12 +207,53 @@ Main::Main(CkArgMsg* msg) {
   }
   cmdline_input_and_parfile_parser(&commondataObj.commondata, msg->argc, argv_const);
   delete[] argv_const;
+"""
 
+    if not enable_BHaHAHA:
+        # Original minimal launch
+        file_output_str += r"""
   timesteppingArray = CProxy_Timestepping::ckNew(commondataObj, commondataObj.commondata.Nchare0, commondataObj.commondata.Nchare1, commondataObj.commondata.Nchare2);
 
   timesteppingArray.start();
 }
+"""
+    else:
+        # Horizons + Round-Robin(RR) with offset placement
+        file_output_str += r"""
+  // Dimensions & counts
+  const int Nchare0 = commondataObj.commondata.Nchare0;
+  const int Nchare1 = commondataObj.commondata.Nchare1;
+  const int Nchare2 = commondataObj.commondata.Nchare2;
+  const int Ncharetotal = Nchare0 * Nchare1 * Nchare2;
+  const int numHorizons = commondataObj.commondata.bah_max_num_horizons;
 
+  int rr_offset = 0;
+
+  // Horizons first (1D) to maximize chance of distinct PEs
+  CProxy_RRMap_with_offset rrMapH = CProxy_RRMap_with_offset::ckNew(rr_offset, Nchare0, Nchare1);
+  CkArrayOptions optsH(numHorizons);
+  optsH.setMap(rrMapH);
+  horizon_finderProxy = CProxy_Horizon_finder::ckNew(optsH);
+  rr_offset += numHorizons;
+
+  // Timestepping (3D)
+  CProxy_RRMap_with_offset rrMapTS = CProxy_RRMap_with_offset::ckNew(rr_offset, Nchare0, Nchare1);
+  CkArrayOptions optsTS(Nchare0, Nchare1, Nchare2);
+  optsTS.setMap(rrMapTS);
+  timesteppingArray = CProxy_Timestepping::ckNew(commondataObj, optsTS);
+  rr_offset += Ncharetotal;
+
+  // Interpolator3d (3D) after timesteppers
+  CProxy_RRMap_with_offset rrMapI = CProxy_RRMap_with_offset::ckNew(rr_offset, Nchare0, Nchare1);
+  CkArrayOptions optsI(Nchare0, Nchare1, Nchare2);
+  optsI.setMap(rrMapI);
+  interpolator3dArray = CProxy_Interpolator3d::ckNew(optsI);
+
+  timesteppingArray.start();
+}
+"""
+
+    file_output_str += r"""
 Main::Main(CkMigrateMessage* msg) {
   mainProxy = thisProxy;
 }
@@ -192,11 +280,13 @@ void Main::pup(PUP::er &p) {
 
 def output_main_ci(
     project_dir: str,
+    enable_BHaHAHA: bool = False,
 ) -> None:
     """
     Generate main.ci.
 
     :param project_dir: Directory where the project C code is output
+    :param enable_BHaHAHA: If True, include horizon_finder and interpolator3d declarations.
     """
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
@@ -208,15 +298,36 @@ def output_main_ci(
 
   readonly CProxy_Main mainProxy;
   readonly CProxy_Timestepping timesteppingArray;
-
-
+  """
+    if enable_BHaHAHA:
+        file_output_str += r"""
+  readonly CProxy_Horizon_finder horizon_finderProxy;
+  readonly CProxy_Interpolator3d interpolator3dArray;
+  """
+    file_output_str += r"""
   extern module timestepping;
-
+  """
+    if enable_BHaHAHA:
+        file_output_str += r"""
+  extern module horizon_finder;
+  extern module interpolator3d;
+"""
+    file_output_str += r"""
   mainchare Main {
     entry Main(CkArgMsg* msg);
     entry void done();
-  };
+  };"""
+    if enable_BHaHAHA:
+        file_output_str += r"""
+  //-----------------------------------------------
+  // RRMap_with_offset: round-robin array mapper with a start offset.
+  // PE = (flatten(x,y,z; Nchare0,Nchare1) + offset) % CkNumPes()
+  //-----------------------------------------------
+  group RRMap_with_offset : CkArrayMap {
+    entry RRMap_with_offset(int offset, int Nchare0, int Nchare1);
+  }"""
 
+    file_output_str += r"""
 }
 """
     main_ci_file = project_Path / "main.ci"
@@ -227,11 +338,13 @@ def output_main_ci(
 def output_commondata_object_h_and_main_h_cpp_ci(
     project_dir: str,
     enable_charm_checkpointing: bool = False,
+    enable_BHaHAHA: bool = False,
 ) -> None:
     """
     Generate commondata_object.h, main.h, main.cpp and main.ci.
     :param project_dir: Directory where the project C code is output.
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
+    :param enable_BHaHAHA: If True, include horizon_finder and interpolator3d declarations.
     """
     output_commondata_object_h(
         project_dir=project_dir,
@@ -240,13 +353,16 @@ def output_commondata_object_h_and_main_h_cpp_ci(
     output_main_h(
         project_dir=project_dir,
         enable_charm_checkpointing=enable_charm_checkpointing,
+        enable_BHaHAHA=enable_BHaHAHA,
     )
 
     output_main_cpp(
         project_dir=project_dir,
         enable_charm_checkpointing=enable_charm_checkpointing,
+        enable_BHaHAHA=enable_BHaHAHA,
     )
 
     output_main_ci(
         project_dir=project_dir,
+        enable_BHaHAHA=enable_BHaHAHA,
     )
