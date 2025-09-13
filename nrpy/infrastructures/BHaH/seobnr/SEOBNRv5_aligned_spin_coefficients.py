@@ -17,162 +17,6 @@ import nrpy.equations.seobnr.SEOBNRv5_aligned_spin_constants as SEOBNRv5_const
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 
-# Needed during integration and derived from other quantities; do not set!
-par.register_CodeParameters(
-    "REAL",
-    __name__,
-    [
-        "r",
-        "phi",
-        "m1",
-        "m2",
-        "a6",
-        "dSO",
-        "prstar",
-        "pphi",
-        "t_stepback",
-    ],
-    [
-        20,
-        0,
-        0.5,
-        0.5,
-        0.0,
-        0.0,
-        0.0,
-        3.3,
-        250.0,
-    ],  # r, phi, m1, m2, a6, dSO, prstar, pphi
-    commondata=True,
-    add_to_parfile=False,
-)
-
-par.register_CodeParameters(
-    "REAL",
-    __name__,
-    [
-        "Delta_t",
-        "dT",
-        "t_ISCO",
-        "t_attach",
-        "omega_qnm",
-        "tau_qnm",
-        "a_f",
-        "M_f",
-        "nr_amp_1",
-        "nr_amp_2",
-        "nr_amp_3",
-        "nr_omega_1",
-        "nr_omega_2",
-        "a_1_NQC",
-        "a_2_NQC",
-        "a_3_NQC",
-        "b_1_NQC",
-        "b_2_NQC",
-        "r_stop",
-        "r_ISCO",
-    ],
-    [
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-    ],
-    commondata=True,
-    add_to_parfile=False,
-)
-
-
-par.register_CodeParameters(
-    "REAL *restrict",
-    __name__,
-    [
-        "dynamics_low",
-        "dynamics_fine",
-        "dynamics_raw",
-    ],
-    commondata=True,
-    add_to_parfile=False,
-    add_to_set_CodeParameters_h=False,
-)
-
-par.register_CodeParameters(
-    "double complex *restrict",
-    __name__,
-    [
-        "waveform_low",
-        "waveform_fine",
-        "waveform_inspiral",
-        "waveform_IMR",
-    ],
-    commondata=True,
-    add_to_parfile=False,
-    add_to_set_CodeParameters_h=False,
-)
-
-
-par.register_CodeParameters(
-    "size_t",
-    __name__,
-    ["nsteps_raw", "nsteps_low", "nsteps_fine", "nsteps_inspiral", "nsteps_IMR"],
-    commondata=True,
-    add_to_parfile=False,
-    add_to_set_CodeParameters_h=False,
-)
-
-par.register_CodeParameters(
-    "REAL",
-    __name__,
-    [
-        "dHreal_dr",
-        "dHreal_dprstar",
-        "dHreal_dpphi",
-        "dHreal_dr_dr",
-        "dHreal_dr_dpphi",
-        "dHreal_dr_circ",
-        "dHreal_dpphi_circ",
-        "Hreal",
-        "xi",
-        "flux",
-        "Omega_circ",
-    ],
-    commondata=True,
-    add_to_parfile=False,
-)
-
-# This is sufficient for initial conditions. Order is the same as pySEOBNR.
-par.register_CodeParameters(
-    "REAL",
-    __name__,
-    ["mass_ratio", "chi1", "chi2", "initial_omega", "total_mass", "dt"],
-    [
-        1,
-        0.4,
-        -0.3,
-        0.01118,
-        50,
-        2.4627455127717882e-05,
-    ],  # mass_ratio convention is m_greater/m_lesser, initial_omega chosen for r ~ 20M
-    commondata=True,
-    add_to_parfile=True,
-)
-
 
 def register_CFunction_SEOBNRv5_aligned_spin_coefficients() -> (
     Union[None, pcg.NRPyEnv_type]
@@ -189,6 +33,160 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients() -> (
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
+
+    # Needed during integration and derived from other quantities; do not set!
+    par.register_CodeParameters(
+        "REAL",
+        __name__,
+        [
+            "r",
+            "phi",
+            "m1",
+            "m2",
+            "a6",
+            "dSO",
+            "prstar",
+            "pphi",
+            "t_stepback",
+        ],
+        [
+            20,
+            0,
+            0.5,
+            0.5,
+            0.0,
+            0.0,
+            0.0,
+            3.3,
+            250.0,
+        ],  # r, phi, m1, m2, a6, dSO, prstar, pphi
+        commondata=True,
+        add_to_parfile=False,
+    )
+
+    par.register_CodeParameters(
+        "REAL",
+        __name__,
+        [
+            "Delta_t",
+            "dT",
+            "t_ISCO",
+            "t_attach",
+            "omega_qnm",
+            "tau_qnm",
+            "a_f",
+            "M_f",
+            "nr_amp_1",
+            "nr_amp_2",
+            "nr_amp_3",
+            "nr_omega_1",
+            "nr_omega_2",
+            "a_1_NQC",
+            "a_2_NQC",
+            "a_3_NQC",
+            "b_1_NQC",
+            "b_2_NQC",
+            "r_stop",
+            "r_ISCO",
+        ],
+        [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+        ],
+        commondata=True,
+        add_to_parfile=False,
+    )
+
+    par.register_CodeParameters(
+        "REAL *restrict",
+        __name__,
+        [
+            "dynamics_low",
+            "dynamics_fine",
+            "dynamics_raw",
+        ],
+        commondata=True,
+        add_to_parfile=False,
+        add_to_set_CodeParameters_h=False,
+    )
+
+    par.register_CodeParameters(
+        "double complex *restrict",
+        __name__,
+        [
+            "waveform_low",
+            "waveform_fine",
+            "waveform_inspiral",
+            "waveform_IMR",
+        ],
+        commondata=True,
+        add_to_parfile=False,
+        add_to_set_CodeParameters_h=False,
+    )
+
+    par.register_CodeParameters(
+        "size_t",
+        __name__,
+        ["nsteps_raw", "nsteps_low", "nsteps_fine", "nsteps_inspiral", "nsteps_IMR"],
+        commondata=True,
+        add_to_parfile=False,
+        add_to_set_CodeParameters_h=False,
+    )
+
+    par.register_CodeParameters(
+        "REAL",
+        __name__,
+        [
+            "dHreal_dr",
+            "dHreal_dprstar",
+            "dHreal_dpphi",
+            "dHreal_dr_dr",
+            "dHreal_dr_dpphi",
+            "dHreal_dr_circ",
+            "dHreal_dpphi_circ",
+            "Hreal",
+            "xi",
+            "flux",
+            "Omega_circ",
+        ],
+        commondata=True,
+        add_to_parfile=False,
+    )
+
+    # This is sufficient for initial conditions. Order is the same as pySEOBNR.
+    par.register_CodeParameters(
+        "REAL",
+        __name__,
+        ["mass_ratio", "chi1", "chi2", "initial_omega", "total_mass", "dt"],
+        [
+            1,
+            0.4,
+            -0.3,
+            0.01118,
+            50,
+            2.4627455127717882e-05,
+        ],  # mass_ratio convention is m_greater/m_lesser, initial_omega chosen for r ~ 20M
+        commondata=True,
+        add_to_parfile=True,
+    )
 
     includes = ["BHaH_defines.h"]
     desc = """

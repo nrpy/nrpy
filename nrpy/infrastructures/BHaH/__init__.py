@@ -18,6 +18,7 @@ from . import (
     parallelization,
     rfm_precompute,
     rfm_wrapper_functions,
+    seobnr,
     simple_loop,
     special_functions,
     wave_equation,

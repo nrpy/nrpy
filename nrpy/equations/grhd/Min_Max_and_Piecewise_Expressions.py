@@ -11,11 +11,20 @@ import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy
 
 import nrpy.params as par  # NRPy+: parameter interface
 
-nrpyAbs = sp.Function("nrpyAbs")
+_nrpyAbs = sp.Function("nrpyAbs")
 
-TINYDOUBLE = par.register_CodeParameter(
-    "#define", __name__, "TINYDOUBLE", 1e-100, commondata=False
-)
+
+def register_TINYDOUBLE_if_needed() -> sp.Expr:
+    """
+    Register TINYDOUBLE if it hasn't been registered, and return the symbol.
+
+    :return: TINYDOUBLE sympy symbol.
+    """
+    if "TINYDOUBLE" not in par.glb_code_params_dict:
+        par.register_CodeParameter(
+            "#define", __name__, "TINYDOUBLE", 1e-100, commondata=False
+        )
+    return sp.Symbol("TINYDOUBLE", real=True)
 
 
 def min_noif(a: sp.Expr, b: sp.Expr) -> sp.Expr:
@@ -28,10 +37,10 @@ def min_noif(a: sp.Expr, b: sp.Expr) -> sp.Expr:
     :return: minimum of the two in symbolic form.
     """
     if a == sp.sympify(0):
-        return sp.Rational(1, 2) * (b - nrpyAbs(b))
+        return sp.Rational(1, 2) * (b - _nrpyAbs(b))
     if b == sp.sympify(0):
-        return sp.Rational(1, 2) * (a - nrpyAbs(a))
-    return sp.Rational(1, 2) * (a + b - nrpyAbs(a - b))
+        return sp.Rational(1, 2) * (a - _nrpyAbs(a))
+    return sp.Rational(1, 2) * (a + b - _nrpyAbs(a - b))
 
 
 def max_noif(a: sp.Expr, b: sp.Expr) -> sp.Expr:
@@ -44,10 +53,10 @@ def max_noif(a: sp.Expr, b: sp.Expr) -> sp.Expr:
     :return: maximum of the two in symbolic form
     """
     if a == sp.sympify(0):
-        return sp.Rational(1, 2) * (b + nrpyAbs(b))
+        return sp.Rational(1, 2) * (b + _nrpyAbs(b))
     if b == sp.sympify(0):
-        return sp.Rational(1, 2) * (a + nrpyAbs(a))
-    return sp.Rational(1, 2) * (a + b + nrpyAbs(a - b))
+        return sp.Rational(1, 2) * (a + _nrpyAbs(a))
+    return sp.Rational(1, 2) * (a + b + _nrpyAbs(a - b))
 
 
 def coord_leq_bound(x: sp.Expr, xstar: sp.Expr) -> sp.Expr:
@@ -59,6 +68,7 @@ def coord_leq_bound(x: sp.Expr, xstar: sp.Expr) -> sp.Expr:
 
     :return: symbolic form x <= xstar
     """
+    TINYDOUBLE = register_TINYDOUBLE_if_needed()
     return min_noif(x - xstar - TINYDOUBLE, 0.0) / (x - xstar - TINYDOUBLE)
 
 
@@ -71,6 +81,7 @@ def coord_geq_bound(x: sp.Expr, xstar: sp.Expr) -> sp.Expr:
 
     :return: symbolic form x >= xstar
     """
+    TINYDOUBLE = register_TINYDOUBLE_if_needed()
     return max_noif(x - xstar + TINYDOUBLE, 0.0) / (x - xstar + TINYDOUBLE)
 
 
@@ -83,6 +94,7 @@ def coord_less_bound(x: sp.Expr, xstar: sp.Expr) -> sp.Expr:
 
     :return: symbolic form x > xstar
     """
+    TINYDOUBLE = register_TINYDOUBLE_if_needed()
     return min_noif(x - xstar, 0.0) / (x - xstar - TINYDOUBLE)
 
 
@@ -95,6 +107,7 @@ def coord_greater_bound(x: sp.Expr, xstar: sp.Expr) -> sp.Expr:
 
     :return: symbolic form x > xstar
     """
+    TINYDOUBLE = register_TINYDOUBLE_if_needed()
     return max_noif(x - xstar, 0.0) / (x - xstar + TINYDOUBLE)
 
 
