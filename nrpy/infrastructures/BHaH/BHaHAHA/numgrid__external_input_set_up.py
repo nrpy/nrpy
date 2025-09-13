@@ -23,7 +23,6 @@ import nrpy.c_function as cfc
 import nrpy.helpers.jacobians as jac
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.indexedexp as ixp
-import nrpy.infrastructures.BHaH.BHaHAHA.bcstruct_set_up as locCBC
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
 from nrpy.infrastructures import BHaH
@@ -93,12 +92,10 @@ enum {{
     for name, _ in list_of_external_input_gf_names_ranks:
         BHaH_defines_contrib += f"    {name.upper()}GF,\n"
     BHaH_defines_contrib += "};\n"
-    BHaH_defines_contrib += (
-        locCBC.BHaH_defines_set_gridfunction_defines_with_parity_types(
-            grid_name="external_input",
-            list_of_gf_names_ranks=list_of_external_input_gf_names_ranks,
-            verbose=True,
-        )
+    BHaH_defines_contrib += BHaH.BHaHAHA.bcstruct_set_up.BHaH_defines_set_gridfunction_defines_with_parity_types(
+        grid_name="external_input",
+        list_of_gf_names_ranks=list_of_external_input_gf_names_ranks,
+        verbose=True,
     )
     BHaH.BHaH_defines_h.register_BHaH_defines(__name__, BHaH_defines_contrib)
 
