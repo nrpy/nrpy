@@ -29,6 +29,30 @@ def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
+    par.register_CodeParameter(
+        cparam_type="int",
+        module=__name__,
+        name="num_psi4_extraction_radii",
+        defaultvalue=6,
+        description="Number of radii at which psi4 is extracted.",
+        add_to_parfile=True,
+        commondata=True,
+        add_to_set_CodeParameters_h=False,
+    )
+
+    # Register list_of_psi4_extraction_radii: the array containing extraction radii values.
+    par.register_CodeParameter(
+        cparam_type="REAL[6]",
+        module=__name__,
+        name="list_of_psi4_extraction_radii",
+        defaultvalue=[15, 30, 45, 60, 75, 90],
+        description="List of radii at which psi4 is extracted. Must set num_psi4_extraction_radii consistently.",
+        add_to_parfile=True,
+        commondata=True,
+        add_to_set_CodeParameters_h=False,
+        assumption="RealPositive",
+    )
+
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
     desc = "Setup psi4_diagnostics."
@@ -368,6 +392,7 @@ def register_CFunction_diagnostics(
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
+
     _ = par.CodeParameter(
         "REAL",
         __name__,
