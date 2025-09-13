@@ -42,6 +42,14 @@ class WaveEquation_solution_Cartesian:
         default_k2: float = 1.0,
         default_sigma: float = 3.0,
     ):
+        # Declare the C parameters time & wavespeed if not already declared.
+        if "wavespeed" not in par.glb_params_dict:
+            par.register_CodeParameter(
+                "REAL", __name__, "wavespeed", 1.0, commondata=True
+            )
+        if "time" not in par.glb_params_dict:
+            par.register_CodeParameter("REAL", __name__, "time", 0.0, commondata=True)
+
         if "uu" not in gri.glb_gridfcs_dict:
             gri.register_gridfunctions(
                 ["uu", "vv"], group="EVOL", f_infinity=[2.0, 0.0], wavespeed=[1.0, 1.0]
@@ -79,21 +87,12 @@ def SphericalGaussian(
              the time derivative of the wave equation solution vv, and their respective values at
              the origin (r=0), uu_exactsoln_r0 and vv_exactsoln_r0.
     """
-    # Step 0: Define the C parameter wavespeed. This is
-    #         a proper SymPy variable, so can be
-    #         used in below expressions. In the C code, it acts
-    #         just like a usual parameter, whose value is
-    #         specified in the parameter file.
-    wavespeed = par.register_CodeParameter(
-        "REAL", __name__, "wavespeed", 1.0, commondata=True
-    )
-
     # Step 1: Set up Cartesian coordinates (x, y, z) = (xCart0, xCart1, xCart2)
     xCart = ixp.declarerank1("xCart")
 
     # Step 2: Declare free parameters intrinsic to these initial data
-    # provided as a C parameter by MoLtimestepping.MoL
-    time = sp.symbols("commondata->time", real=True)
+    # time & wavespeed have been declared as CodeParameters in __init__ if not already defined.
+    time, wavespeed = sp.symbols("time wavespeed", real=True)
     sigma = par.register_CodeParameter(
         cparam_type="REAL",
         module=__name__,
@@ -156,20 +155,12 @@ def PlaneWave(
     :return: A tuple containing sympy expressions for the exact solution of the wave equation uu
              and its time derivative vv.
     """
-    # Step 0: Define the C parameter wavespeed. This is
-    #         a proper SymPy variable, so can be
-    #         used in below expressions. In the C code, it acts
-    #         just like a usual parameter, whose value is
-    #         specified in the parameter file.
-    wavespeed = par.register_CodeParameter(
-        "REAL", __name__, "wavespeed", 1.0, commondata=True
-    )
-
     # Step 1: Set up Cartesian coordinates (x, y, z) = (xCart0, xCart1, xCart2)
     xCart = ixp.declarerank1("xCart")
 
     # Step 2: Declare free parameters intrinsic to these initial data
-    time = sp.symbols("commondata->time", real=True)
+    # time & wavespeed have been declared as CodeParameters in __init__ if not already defined.
+    time, wavespeed = sp.symbols("time wavespeed", real=True)
     kk = par.register_CodeParameters(
         cparam_type="REAL",
         module=__name__,

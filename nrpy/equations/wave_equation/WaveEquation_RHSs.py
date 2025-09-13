@@ -41,14 +41,12 @@ class WaveEquation_RHSs:
         .. note::
             Class variables uu_rhs and vv_rhs will be set in this function.
         """
-        # Step 0: Define the C parameter wavespeed. The `wavespeed`
-        #         variable is a proper SymPy variable, so it can be
-        #         used in below expressions. In the C code, it acts
-        #         just like a usual parameter, whose value is
-        #         specified in the parameter file.
-        wavespeed = par.register_CodeParameter(
-            "REAL", __name__, "wavespeed", 1.0, commondata=True
-        )
+        # Declare the C parameter wavespeed if not already declared.
+        if "wavespeed" not in par.glb_params_dict:
+            par.register_CodeParameter(
+                "REAL", __name__, "wavespeed", 1.0, commondata=True
+            )
+        wavespeed = sp.Symbol("wavespeed", real=True)
 
         # Step 1: Declare the rank-2 indexed expression \partial_{ij} u,
         #         which is symmetric about the interchange of indices i and j.
