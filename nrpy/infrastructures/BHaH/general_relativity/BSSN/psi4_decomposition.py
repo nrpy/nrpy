@@ -9,9 +9,7 @@ Author: Zachariah B. Etienne
 
 import nrpy.c_function as cfc
 import nrpy.params as par
-from nrpy.infrastructures.BHaH.CurviBoundaryConditions.apply_bcs_inner_only import (
-    register_CFunction_apply_bcs_inner_only_specific_auxgfs,
-)
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_psi4_spinweightm2_decomposition(CoordSystem: str) -> None:
@@ -489,7 +487,7 @@ SinhCylindrical coordinates.
     REAL *restrict xx[3]"""
 
     # Register C functions apply_bcs_inner_only_specific_gfs, needed for 2d interp of psi4
-    register_CFunction_apply_bcs_inner_only_specific_auxgfs()
+    BHaH.CurviBoundaryConditions.apply_bcs_inner_only.register_CFunction_apply_bcs_inner_only_specific_auxgfs()
 
     body = r"""
   // Step 0: Set up the diagnostic structure (calculates shell points on grid, etc.).

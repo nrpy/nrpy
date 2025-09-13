@@ -10,7 +10,6 @@ Author: Zachariah B. Etienne
 """
 
 import os
-
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
@@ -48,13 +47,11 @@ separately_compute_Ricci = False
 OMP_collapse = 1
 if "Spherical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "2")
-    par.adjust_CodeParam_default("CFL_FACTOR", 1.0)
     OMP_collapse = 2  # about 2x faster
     if CoordSystem == "SinhSpherical":
         sinh_width = 0.2
 if "Cylindrical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "1")
-    par.adjust_CodeParam_default("CFL_FACTOR", 1.0)
     OMP_collapse = 2  # might be slightly faster
 
 project_dir = os.path.join("project", project_name)
@@ -163,6 +160,10 @@ BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 if CoordSystem == "SinhSpherical":
     par.adjust_CodeParam_default("SINHW", sinh_width)
 par.adjust_CodeParam_default("t_final", t_final)
+if "Spherical" in CoordSystem:
+    par.adjust_CodeParam_default("CFL_FACTOR", 1.0)
+if "Cylindrical" in CoordSystem:
+    par.adjust_CodeParam_default("CFL_FACTOR", 1.0)
 
 #########################################################
 # STEP 3: Generate header files, register C functions and

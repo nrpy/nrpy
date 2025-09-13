@@ -13,10 +13,8 @@ from typing import Dict, Set, Tuple, Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.superB.output_0d_1d_2d_nearest_gridpoint_slices as out012d
 import nrpy.params as par
-from nrpy.infrastructures.BHaH import griddata_commondata
-from nrpy.infrastructures.superB.nrpyelliptic import L2norm_gf_between_r1_and_r2
+from nrpy.infrastructures import BHaH, superB
 
 
 def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type]:
@@ -417,18 +415,18 @@ def register_CFunction_diagnostics(
     # fmt: on
 
     for CoordSystem in set_of_CoordSystems:
-        out012d.register_CFunction_diagnostics_nearest_grid_center(
+        superB.output_0d_1d_2d_nearest_gridpoint_slices.register_CFunction_diagnostics_nearest_grid_center(
             CoordSystem=CoordSystem,
             out_quantities_dict=out_quantities_dict,
             filename_tuple=grid_center_filename_tuple,
         )
         for axis in ["y", "z"]:
-            out012d.register_CFunction_diagnostics_nearest_1d_axis(
+            superB.output_0d_1d_2d_nearest_gridpoint_slices.register_CFunction_diagnostics_nearest_1d_axis(
                 CoordSystem=CoordSystem,
                 out_quantities_dict=out_quantities_dict,
                 axis=axis,
             )
-            out012d.register_CFunction_diagnostics_set_up_nearest_1d_axis(
+            superB.output_0d_1d_2d_nearest_gridpoint_slices.register_CFunction_diagnostics_set_up_nearest_1d_axis(
                 CoordSystem=CoordSystem,
                 out_quantities_dict=out_quantities_dict,
                 filename_tuple=axis_filename_tuple,
@@ -436,12 +434,12 @@ def register_CFunction_diagnostics(
             )
 
         for plane in ["xy", "yz"]:
-            out012d.register_CFunction_diagnostics_nearest_2d_plane(
+            superB.output_0d_1d_2d_nearest_gridpoint_slices.register_CFunction_diagnostics_nearest_2d_plane(
                 CoordSystem=CoordSystem,
                 out_quantities_dict=out_quantities_dict,
                 plane=plane,
             )
-            out012d.register_CFunction_diagnostics_set_up_nearest_2d_plane(
+            superB.output_0d_1d_2d_nearest_gridpoint_slices.register_CFunction_diagnostics_set_up_nearest_2d_plane(
                 CoordSystem=CoordSystem,
                 out_quantities_dict=out_quantities_dict,
                 filename_tuple=plane_filename_tuple,
@@ -449,7 +447,7 @@ def register_CFunction_diagnostics(
             )
 
         if enable_L2norm_BSSN_constraints_diagnostics:
-            L2norm_gf_between_r1_and_r2.register_CFunction_L2norm_gf_between_r1_and_r2(
+            superB.nrpyelliptic.L2norm_gf_between_r1_and_r2.register_CFunction_L2norm_gf_between_r1_and_r2(
                 CoordSystem=CoordSystem
             )
 
@@ -604,7 +602,7 @@ default: {
     )
 
     # Register diagnostic_struct's contribution to griddata_struct:
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         __name__,
         "diagnostic_struct diagnosticstruct",
         "store indices of 1d and 2d diagnostic points, the offset in the output file, etc",

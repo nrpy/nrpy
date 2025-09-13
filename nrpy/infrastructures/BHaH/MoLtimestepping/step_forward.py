@@ -33,15 +33,7 @@ import sympy as sp
 
 import nrpy.c_function as cfc
 import nrpy.params as par
-from nrpy.infrastructures.BHaH.MoLtimestepping.gridfunction_names import (
-    generate_gridfunction_names,
-    is_diagonal_Butcher,
-)
-from nrpy.infrastructures.BHaH.MoLtimestepping.rk_substep import (
-    check_supported_parallelization,
-    construct_RK_functions_prefunc,
-    single_RK_substep_input_symbolic,
-)
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_MoL_step_forward_in_time(
@@ -72,9 +64,9 @@ def register_CFunction_MoL_step_forward_in_time(
     Doctest:
     >>> import nrpy.c_function as cfc
     >>> import nrpy.params as par
-    >>> from nrpy.infrastructures.BHaH import MoLtimestepping
+    >>> from nrpy.infrastructures import BHaH
     >>> from nrpy.helpers.generic import validate_strings
-    >>> Butcher_dict = MoLtimestepping.rk_butcher_table_dictionary.generate_Butcher_tables()
+    >>> Butcher_dict = BHaH.MoLtimestepping.rk_butcher_table_dictionary.generate_Butcher_tables()
     >>> rhs_string = "rhs_eval(commondata, params, rfmstruct,  auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);"
     >>> post_rhs_string = (
     ... "if (strncmp(commondata->outer_bc_type, \"extrapolation\", 50) == 0)\n"
@@ -84,7 +76,7 @@ def register_CFunction_MoL_step_forward_in_time(
     >>> for k, v in Butcher_dict.items():
     ...     Butcher = Butcher_dict[k][0]
     ...     cfc.CFunction_dict.clear()
-    ...     MoLtimestepping.rk_substep.MoL_Functions_dict.clear()
+    ...     BHaH.MoLtimestepping.rk_substep.MoL_Functions_dict.clear()
     ...     if Butcher[-1][0] != "":
     ...         continue  # skip adaptive methods
     ...     par.set_parval_from_str("parallelization", "cuda")
@@ -100,7 +92,7 @@ def register_CFunction_MoL_step_forward_in_time(
     ...     validation_desc = f"CUDA__MoL_step_forward_in_time__{k}".replace(" ", "_")
     ...     validate_strings(generated_str, validation_desc, file_ext="cu")
     >>> cfc.CFunction_dict.clear()
-    >>> MoLtimestepping.rk_substep.MoL_Functions_dict.clear()
+    >>> BHaH.MoLtimestepping.rk_substep.MoL_Functions_dict.clear()
     >>> try:
     ...     register_CFunction_MoL_step_forward_in_time(Butcher_dict, "AHE")
     ... except ValueError as e:
@@ -108,7 +100,9 @@ def register_CFunction_MoL_step_forward_in_time(
     ValueError: Adaptive order Butcher tables are currently not supported in MoL.
     """
     parallelization = par.parval_from_str("parallelization")
-    check_supported_parallelization("register_CFunction_MoL_step_forward_in_time")
+    BHaH.MoLtimestepping.rk_substep.check_supported_parallelization(
+        "register_CFunction_MoL_step_forward_in_time"
+    )
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     if enable_intrinsics and parallelization == "cuda":
         includes += [os.path.join("intrinsics", "cuda_intrinsics.h")]
@@ -127,7 +121,9 @@ def register_CFunction_MoL_step_forward_in_time(
         non_y_n_gridfunctions_list,
         _discard_pt,
         _discard_pt2,
-    ) = generate_gridfunction_names(Butcher_dict, MoL_method)
+    ) = BHaH.MoLtimestepping.gridfunction_names.generate_gridfunction_names(
+        Butcher_dict, MoL_method
+    )
 
     gf_prefix = "griddata[grid].gridfuncs."
 
@@ -163,7 +159,12 @@ const REAL time_start = commondata->time;
     rk_step_body_dict: Dict[str, str] = {}
 
     # Diagonal RK3 check
-    if is_diagonal_Butcher(Butcher_dict, MoL_method) and "RK3" in MoL_method:
+    if (
+        BHaH.MoLtimestepping.gridfunction_names.is_diagonal_Butcher(
+            Butcher_dict, MoL_method
+        )
+        and "RK3" in MoL_method
+    ):
         body += """
 // In a diagonal RK3 method, we only need 3 gridfunctions (y_n, k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs, k2_or_y_nplus_a32_k2_gfs).
 """
@@ -176,7 +177,7 @@ const REAL time_start = commondata->time;
 
         # k1
         rk_step_body_dict["RK_SUBSTEP_K1"] = (
-            single_RK_substep_input_symbolic(
+            BHaH.MoLtimestepping.rk_substep.single_RK_substep_input_symbolic(
                 additional_comments="""
 // RHS evaluation:
 //  1. We will store k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs
@@ -203,7 +204,7 @@ const REAL time_start = commondata->time;
 
         # k2
         rk_step_body_dict["RK_SUBSTEP_K2"] = (
-            single_RK_substep_input_symbolic(
+            BHaH.MoLtimestepping.rk_substep.single_RK_substep_input_symbolic(
                 additional_comments="""
 // RHS evaluation:
 //    1. Reassign k1_or_yrun to the running total
@@ -236,7 +237,7 @@ const REAL time_start = commondata->time;
 
         # k3
         rk_step_body_dict["RK_SUBSTEP_K3"] = (
-            single_RK_substep_input_symbolic(
+            BHaH.MoLtimestepping.rk_substep.single_RK_substep_input_symbolic(
                 additional_comments="""
 // RHS evaluation:
 //    1. Add k3 to the running total and save to y_n
@@ -265,7 +266,9 @@ const REAL time_start = commondata->time;
     else:
         # Non-diagonal or other diagonal
         y_n = sp.Symbol("y_n_gfsL", real=True)
-        if not is_diagonal_Butcher(Butcher_dict, MoL_method):
+        if not BHaH.MoLtimestepping.gridfunction_names.is_diagonal_Butcher(
+            Butcher_dict, MoL_method
+        ):
             # Non-diagonal
             for s in range(num_steps):
                 next_y_input = sp.Symbol("next_y_input_gfsL", real=True)
@@ -300,7 +303,7 @@ const REAL time_start = commondata->time;
                     post_rhs_output = next_y_input
 
                 rk_step_body_dict[f"RK_SUBSTEP_K{s+1}"] = (
-                    single_RK_substep_input_symbolic(
+                    BHaH.MoLtimestepping.rk_substep.single_RK_substep_input_symbolic(
                         substep_time_offset_dt=Butcher[s][0],
                         rhs_str=rhs_string,
                         rhs_input_expr=rhs_input,
@@ -321,25 +324,27 @@ const REAL time_start = commondata->time;
             # Diagonal Butcher, e.g., Euler or standard diagonal RK4
             y_nplus1_running_total = sp.Symbol("y_nplus1_running_total_gfsL", real=True)
             if MoL_method == "Euler":
-                rk_step_body_dict[f"{MoL_method}"] = single_RK_substep_input_symbolic(
-                    additional_comments="// ***Euler timestepping only requires one RHS evaluation***",
-                    substep_time_offset_dt=Butcher[0][0],
-                    rhs_str=rhs_string,
-                    rhs_input_expr=y_n,
-                    rhs_output_expr=y_nplus1_running_total,
-                    RK_lhs_list=[y_n],
-                    RK_rhs_list=[
-                        y_n
-                        + y_nplus1_running_total
-                        * sp.Symbol("commondata->dt", real=True)
-                    ],
-                    post_rhs_list=[post_rhs_string],
-                    post_rhs_output_list=[y_n],
-                    enable_intrinsics=enable_intrinsics,
-                    gf_aliases=gf_aliases,
-                    post_post_rhs_string=post_post_rhs_string,
-                    rational_const_alias=rational_const_alias,
-                    rk_step=None,
+                rk_step_body_dict[f"{MoL_method}"] = (
+                    BHaH.MoLtimestepping.rk_substep.single_RK_substep_input_symbolic(
+                        additional_comments="// ***Euler timestepping only requires one RHS evaluation***",
+                        substep_time_offset_dt=Butcher[0][0],
+                        rhs_str=rhs_string,
+                        rhs_input_expr=y_n,
+                        rhs_output_expr=y_nplus1_running_total,
+                        RK_lhs_list=[y_n],
+                        RK_rhs_list=[
+                            y_n
+                            + y_nplus1_running_total
+                            * sp.Symbol("commondata->dt", real=True)
+                        ],
+                        post_rhs_list=[post_rhs_string],
+                        post_rhs_output_list=[y_n],
+                        enable_intrinsics=enable_intrinsics,
+                        gf_aliases=gf_aliases,
+                        post_post_rhs_string=post_post_rhs_string,
+                        rational_const_alias=rational_const_alias,
+                        rk_step=None,
+                    )
                 )
             else:
                 k_odd = sp.Symbol("k_odd_gfsL", real=True)
@@ -426,7 +431,7 @@ const REAL time_start = commondata->time;
                         post_rhs_output = y_n
 
                     rk_step_body_dict[f"RK_SUBSTEP_K{s+1}"] = (
-                        single_RK_substep_input_symbolic(
+                        BHaH.MoLtimestepping.rk_substep.single_RK_substep_input_symbolic(
                             substep_time_offset_dt=Butcher[s][0],
                             rhs_str=rhs_string,
                             rhs_input_expr=rhs_input,
@@ -463,7 +468,7 @@ _Pragma("omp parallel for") \
             )
             prefunc = prefunc.replace("(ii)++", "(ii) += (simd_width)")
 
-    prefunc += construct_RK_functions_prefunc()
+    prefunc += BHaH.MoLtimestepping.rk_substep.construct_RK_functions_prefunc()
 
     for _, v in rk_step_body_dict.items():
         body += v

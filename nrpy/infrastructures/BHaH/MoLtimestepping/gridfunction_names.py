@@ -68,8 +68,8 @@ def generate_gridfunction_names(
              diagnostic_gridfunctions_point_to, and diagnostic_gridfunctions2_point_to.
 
     Doctests:
-    >>> from nrpy.infrastructures.BHaH import MoLtimestepping
-    >>> Butcher_dict = MoLtimestepping.rk_butcher_table_dictionary.generate_Butcher_tables()
+    >>> from nrpy.infrastructures import BHaH
+    >>> Butcher_dict = BHaH.MoLtimestepping.rk_butcher_table_dictionary.generate_Butcher_tables()
     >>> generate_gridfunction_names(Butcher_dict, "RK2 Heun")
     ('y_n_gfs', ['y_nplus1_running_total_gfs', 'k_odd_gfs', 'k_even_gfs', 'auxevol_gfs'], 'y_nplus1_running_total_gfs', 'k_odd_gfs')
     >>> generate_gridfunction_names(Butcher_dict, "RK3")

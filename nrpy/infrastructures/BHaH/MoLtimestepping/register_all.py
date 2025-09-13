@@ -23,7 +23,7 @@ Authors: Zachariah B. Etienne (lead maintainer)
          Brandon Clark (original, NRPy1 version)
 """
 import nrpy.params as par
-from nrpy.infrastructures.BHaH import MoLtimestepping, griddata_commondata
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunctions(
@@ -104,22 +104,26 @@ def register_CFunctions(
     _ = par.CodeParameter("REAL", __name__, "t_final", 10.0, commondata=True)
     # fmt: on
 
-    MoLtimestepping.rk_substep.check_supported_parallelization("register_CFunctions")
+    BHaH.MoLtimestepping.rk_substep.check_supported_parallelization(
+        "register_CFunctions"
+    )
 
-    Butcher_dict = MoLtimestepping.rk_butcher_table_dictionary.generate_Butcher_tables()
+    Butcher_dict = (
+        BHaH.MoLtimestepping.rk_butcher_table_dictionary.generate_Butcher_tables()
+    )
 
     # Step 1: Build all memory alloc and free:
     for which_gfs in ["y_n_gfs", "non_y_n_gfs"]:
-        MoLtimestepping.allocators.register_CFunction_MoL_malloc(
+        BHaH.MoLtimestepping.allocators.register_CFunction_MoL_malloc(
             Butcher_dict, MoL_method, which_gfs
         )
-        MoLtimestepping.allocators.register_CFunction_MoL_free_memory(
+        BHaH.MoLtimestepping.allocators.register_CFunction_MoL_free_memory(
             Butcher_dict, MoL_method, which_gfs
         )
 
     # Step 2: Possibly register the main stepping function:
     if register_MoL_step_forward_in_time:
-        MoLtimestepping.step_forward.register_CFunction_MoL_step_forward_in_time(
+        BHaH.MoLtimestepping.step_forward.register_CFunction_MoL_step_forward_in_time(
             Butcher_dict,
             MoL_method,
             rhs_string,
@@ -132,11 +136,11 @@ def register_CFunctions(
         )
 
     # Step 3: Register the struct in BHaH_defines_h:
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         __name__, "MoL_gridfunctions_struct gridfuncs", "MoL gridfunctions"
     )
 
-    MoLtimestepping.BHaH_defines.register_BHaH_defines_h(Butcher_dict, MoL_method)
+    BHaH.MoLtimestepping.BHaH_defines.register_BHaH_defines_h(Butcher_dict, MoL_method)
 
 
 if __name__ == "__main__":

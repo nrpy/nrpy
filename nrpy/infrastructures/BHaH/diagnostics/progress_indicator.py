@@ -7,7 +7,7 @@ Author: Zachariah B. Etienne
 
 import nrpy.c_function as cfc
 import nrpy.params as par
-from nrpy.infrastructures.BHaH import BHaH_defines_h
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_progress_indicator(
@@ -49,7 +49,7 @@ def register_CFunction_progress_indicator(
         add_to_set_CodeParameters_h=False,
     )
 
-    BHaH_defines_h.register_BHaH_defines(
+    BHaH.BHaH_defines_h.register_BHaH_defines(
         __name__,
         r"""#ifdef __linux__
 // Timer with nanosecond resolution. Only on Linux.

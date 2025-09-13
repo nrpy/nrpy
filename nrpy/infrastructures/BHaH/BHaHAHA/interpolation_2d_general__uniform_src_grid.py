@@ -12,7 +12,7 @@ from typing import Union, cast
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 from nrpy.helpers.generic import copy_files
-from nrpy.infrastructures.BHaH.BHaHAHA import error_message
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_interpolation_2d_general__uniform_src_grid(
@@ -74,7 +74,7 @@ def register_CFunction_interpolation_2d_general__uniform_src_grid(
 // Error codes, set in error_message.py
 typedef enum {
 """
-    for item in error_message.error_code_msg_tuples_list:
+    for item in BHaH.BHaHAHA.error_message.error_code_msg_tuples_list:
         prefunc += f"  {item[0]},\n"
     prefunc += """} bhahaha_error_codes;
 #pragma GCC optimize("unroll-loops")"""

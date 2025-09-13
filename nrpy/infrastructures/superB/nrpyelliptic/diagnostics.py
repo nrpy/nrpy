@@ -13,9 +13,8 @@ from typing import Dict, Tuple, Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.superB.output_0d_1d_2d_nearest_gridpoint_slices as out012d
 import nrpy.params as par
-from nrpy.infrastructures.BHaH import griddata_commondata
+from nrpy.infrastructures import BHaH, superB
 
 
 # Define diagnostics function
@@ -72,24 +71,24 @@ def register_CFunction_diagnostics(
     # fmt: on
 
     for axis in ["y", "z"]:
-        out012d.register_CFunction_diagnostics_nearest_1d_axis(
+        superB.output_0d_1d_2d_nearest_gridpoint_slices.register_CFunction_diagnostics_nearest_1d_axis(
             CoordSystem=CoordSystem,
             out_quantities_dict=out_quantities_dict,
             axis=axis,
         )
-        out012d.register_CFunction_diagnostics_set_up_nearest_1d_axis(
+        superB.output_0d_1d_2d_nearest_gridpoint_slices.register_CFunction_diagnostics_set_up_nearest_1d_axis(
             CoordSystem=CoordSystem,
             out_quantities_dict=out_quantities_dict,
             filename_tuple=axis_filename_tuple,
             axis=axis,
         )
     for plane in ["xy", "yz"]:
-        out012d.register_CFunction_diagnostics_nearest_2d_plane(
+        superB.output_0d_1d_2d_nearest_gridpoint_slices.register_CFunction_diagnostics_nearest_2d_plane(
             CoordSystem=CoordSystem,
             out_quantities_dict=out_quantities_dict,
             plane=plane,
         )
-        out012d.register_CFunction_diagnostics_set_up_nearest_2d_plane(
+        superB.output_0d_1d_2d_nearest_gridpoint_slices.register_CFunction_diagnostics_set_up_nearest_2d_plane(
             CoordSystem=CoordSystem,
             out_quantities_dict=out_quantities_dict,
             filename_tuple=plane_filename_tuple,
@@ -180,7 +179,7 @@ def register_CFunction_diagnostics(
     )
 
     # Register diagnostic_struct's contribution to griddata_struct:
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         __name__,
         "diagnostic_struct diagnosticstruct",
         "store indices of 1d and 2d diagnostic points, the offset in the output file, etc",

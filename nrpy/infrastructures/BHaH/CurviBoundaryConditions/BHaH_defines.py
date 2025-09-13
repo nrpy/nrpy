@@ -24,7 +24,7 @@ Authors: Zachariah B. Etienne
 
 import nrpy.grid as gri
 import nrpy.params as par
-from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
+from nrpy.infrastructures import BHaH
 
 
 # For example, if the gridfunction name ends with "01", then (based on the table in the
@@ -109,7 +109,7 @@ def register_griddata_commondata() -> None:
     This function registers the bcstruct, which contains all the data needed to perform
     boundary conditions in curvilinear coordinates, to the commondata structure.
     """
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         __name__,
         "bc_struct bcstruct",
         "all data needed to apply boundary conditions in curvilinear coordinates",
@@ -175,7 +175,7 @@ typedef struct __bc_struct__ {
         set_parity_on_auxevol=set_parity_on_auxevol,
         verbose=True,
     )
-    BHaH_defines_h.register_BHaH_defines(
+    BHaH.BHaH_defines_h.register_BHaH_defines(
         __name__,
         CBC_BHd_str.replace(
             "*restrict",

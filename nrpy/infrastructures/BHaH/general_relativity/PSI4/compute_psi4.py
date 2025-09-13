@@ -21,12 +21,6 @@ from nrpy.helpers.expression_utils import (
     get_params_commondata_symbols_from_expr_list,
 )
 from nrpy.infrastructures import BHaH
-from nrpy.infrastructures.BHaH.general_relativity.PSI4.compute_psi4_metric_deriv import (
-    generate_CFunction_psi4_metric_deriv_quantities,
-)
-from nrpy.infrastructures.BHaH.general_relativity.PSI4.compute_psi4_tetrad import (
-    generate_CFunction_psi4_tetrad,
-)
 
 
 def register_CFunction_psi4(
@@ -101,16 +95,18 @@ def register_CFunction_psi4(
     kernel_body = f"{loop_params}\n{params_definitions}\n"
 
     psi4_metric_deriv_kernel, psi4_metric_deriv_launch = (
-        generate_CFunction_psi4_metric_deriv_quantities(
+        BHaH.general_relativity.PSI4.compute_psi4_metric_deriv.generate_CFunction_psi4_metric_deriv_quantities(
             CoordSystem=CoordSystem,
             enable_fd_functions=enable_fd_functions,
         )
     )
 
-    psi4_tetrad_kernel, psi4_tetrad_launch = generate_CFunction_psi4_tetrad(
-        CoordSystem=CoordSystem,
-        tetrad=tetrad,
-        use_metric_to_construct_unit_normal=use_metric_to_construct_unit_normal,
+    psi4_tetrad_kernel, psi4_tetrad_launch = (
+        BHaH.general_relativity.PSI4.compute_psi4_tetrad.generate_CFunction_psi4_tetrad(
+            CoordSystem=CoordSystem,
+            tetrad=tetrad,
+            use_metric_to_construct_unit_normal=use_metric_to_construct_unit_normal,
+        )
     )
 
     # body += kernel_body

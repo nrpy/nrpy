@@ -17,7 +17,7 @@ import nrpy.reference_metric as refmetric
 from nrpy.helpers import parallelization
 from nrpy.helpers.expression_utils import get_unique_expression_symbols_as_strings
 from nrpy.helpers.generic import superfast_uniq
-from nrpy.infrastructures.BHaH.BHaH_defines_h import register_BHaH_defines
+from nrpy.infrastructures import BHaH
 
 
 class ReferenceMetricPrecompute:
@@ -355,7 +355,6 @@ def register_CFunctions_rfm_precompute(
 
     Doctest:
     >>> import nrpy.c_function as cfc
-    >>> from nrpy.infrastructures.BHaH import rfm_precompute
     >>> from nrpy.reference_metric import unittest_CoordSystems
     >>> from nrpy.helpers.generic import validate_strings
     >>> import nrpy.params as par
@@ -365,7 +364,7 @@ def register_CFunctions_rfm_precompute(
     ...    par.set_parval_from_str("parallelization", parallelization)
     ...    for CoordSystem in unittest_CoordSystems:
     ...       cfc.CFunction_dict.clear()
-    ...       rfm_precompute.register_CFunctions_rfm_precompute({CoordSystem})
+    ...       BHaH.rfm_precompute.register_CFunctions_rfm_precompute({CoordSystem})
     ...       for rfm_base_function in ["malloc", "defines", "free"]:
     ...          generated_str = cfc.CFunction_dict[f'rfm_precompute_{rfm_base_function}__rfm__{CoordSystem}'].full_function
     ...          validation_desc = f"{rfm_base_function}__{parallelization}__{CoordSystem}".replace(" ", "_")
@@ -431,7 +430,7 @@ def register_CFunctions_rfm_precompute(
     BHaH_defines = "typedef struct __rfmstruct__ {\n"
     BHaH_defines += "\n".join(sorted(superfast_uniq(combined_BHaH_defines_list)))
     BHaH_defines += "\n} rfm_struct;\n"
-    register_BHaH_defines("reference_metric", BHaH_defines)
+    BHaH.BHaH_defines_h.register_BHaH_defines("reference_metric", BHaH_defines)
 
 
 if __name__ == "__main__":

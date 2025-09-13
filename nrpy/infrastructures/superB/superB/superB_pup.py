@@ -15,15 +15,7 @@ from typing import Any, List
 
 import nrpy.c_function as cfc
 import nrpy.params as par
-from nrpy.infrastructures.BHaH.BHaH_defines_h import (
-    parse_cparam_type,
-)
-from nrpy.infrastructures.BHaH.MoLtimestepping.gridfunction_names import (
-    generate_gridfunction_names,
-)
-from nrpy.infrastructures.BHaH.MoLtimestepping.rk_butcher_table_dictionary import (
-    generate_Butcher_tables,
-)
+from nrpy.infrastructures import BHaH
 
 
 def generate_pup_serialization_lines_for_CodeParams(
@@ -38,7 +30,7 @@ def generate_pup_serialization_lines_for_CodeParams(
     :return:               A list of C++ lines (strings) performing p| or PUParray calls
                            for this field.
     """
-    base, size, is_array = parse_cparam_type(codeparam.cparam_type)
+    base, size, is_array = BHaH.BHaH_defines_h.parse_cparam_type(codeparam.cparam_type)
     lines: List[str] = []
     comment = f"  // {codeparam.module}::{field_name}"
     target = f"{struct_prefix}.{field_name}"
@@ -206,13 +198,17 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
   const int Nxx_plus_2NGHOSTS_tot = params.Nxx_plus_2NGHOSTS0 * params.Nxx_plus_2NGHOSTS1 * params.Nxx_plus_2NGHOSTS2;
   if (p.isUnpacking()) {
 """
-    Butcher_dict = generate_Butcher_tables()
+    Butcher_dict = (
+        BHaH.MoLtimestepping.rk_butcher_table_dictionary.generate_Butcher_tables()
+    )
     (
         y_n_gridfunctions,
         non_y_n_gridfunctions_list,
         _,
         diagnostic_gridfunctions2_point_to,
-    ) = generate_gridfunction_names(Butcher_dict, MoL_method=MoL_method)
+    ) = BHaH.MoLtimestepping.gridfunction_names.generate_gridfunction_names(
+        Butcher_dict, MoL_method=MoL_method
+    )
     # Combine y_n_gfs and non_y_n_gfs into a single list.
     gridfunctions_list = [y_n_gridfunctions] + non_y_n_gridfunctions_list
     for gridfunctions in gridfunctions_list:
