@@ -20,7 +20,6 @@ Note: This is the superB version.
 
 import argparse
 import os
-
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
@@ -125,10 +124,6 @@ shutil.rmtree(project_dir, ignore_errors=True)
 par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 par.set_parval_from_str("fd_order", fd_order)
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
-par.set_parval_from_str(
-    "swm2sh_maximum_l_mode_generated", swm2sh_maximum_l_mode_generated
-)
-
 
 #########################################################
 # STEP 2: Declare core C functions & register each to
@@ -228,7 +223,9 @@ BHaH.general_relativity.PSI4.compute_psi4.register_CFunction_psi4(
     OMP_collapse=OMP_collapse,
     enable_fd_functions=enable_fd_functions,
 )
-BHaH.special_functions.spin_weight_minus2_spherical_harmonics.register_CFunction_spin_weight_minus2_sph_harmonics()
+BHaH.special_functions.spin_weight_minus2_spherical_harmonics.register_CFunction_spin_weight_minus2_sph_harmonics(
+    swm2sh_maximum_l_mode_generated=swm2sh_maximum_l_mode_generated
+)
 
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
