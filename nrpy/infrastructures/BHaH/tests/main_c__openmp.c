@@ -1,5 +1,6 @@
 #include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
+
 /**
  * -={ main() function }=-
  * Step 1.a: Initialize each CodeParameter in the commondata struct to its default value.

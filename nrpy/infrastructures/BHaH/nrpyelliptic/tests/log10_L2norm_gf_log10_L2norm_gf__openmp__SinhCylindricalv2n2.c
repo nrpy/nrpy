@@ -1,5 +1,6 @@
 #include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
+
 /**
  * Kernel: log10_L2norm_gf_host.
  * Kernel to compute L2 quantities pointwise (summed).

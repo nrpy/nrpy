@@ -1,5 +1,6 @@
 #include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
+
 /**
  * Kernel: compute_ds_min_gpu.
  * Kernel to find minimum grid spacing.

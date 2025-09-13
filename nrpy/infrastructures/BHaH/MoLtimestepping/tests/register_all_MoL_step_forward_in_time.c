@@ -5,6 +5,7 @@
   _Pragma("omp parallel for") for (int(ii) = 0;                                                                                                      \
                                    (ii) < params->Nxx_plus_2NGHOSTS0 * params->Nxx_plus_2NGHOSTS1 * params->Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;       \
                                    (ii)++)
+
 /**
  * Kernel: rk_substep_1_host.
  * Compute RK substep 1.

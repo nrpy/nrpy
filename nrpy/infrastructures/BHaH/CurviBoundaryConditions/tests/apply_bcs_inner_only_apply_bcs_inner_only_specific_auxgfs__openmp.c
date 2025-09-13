@@ -1,4 +1,5 @@
 #include "BHaH_defines.h"
+
 /**
  * Kernel: apply_bcs_inner_only_specific_auxgfs_host.
  * Apply BCs to inner boundary points only for specified GFs.

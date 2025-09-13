@@ -1,5 +1,6 @@
 #include "BHaH_defines.h"
 #include "intrinsics/cuda_intrinsics.h"
+
 /**
  * Kernel: residual_H_compute_all_points_gpu.
  * Kernel to compute the residual throughout the grid.

@@ -1,5 +1,6 @@
 #include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
+
 // Struct to hold 1D data points
 typedef struct {
   REAL xCart_axis;

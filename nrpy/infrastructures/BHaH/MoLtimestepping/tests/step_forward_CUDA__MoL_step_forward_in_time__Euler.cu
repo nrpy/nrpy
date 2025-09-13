@@ -8,6 +8,7 @@
   for (int(ii) = (tid0);                                                                                                                             \
        (ii) < d_params[streamid].Nxx_plus_2NGHOSTS0 * d_params[streamid].Nxx_plus_2NGHOSTS1 * d_params[streamid].Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;  \
        (ii) += (stride0))
+
 /**
  * Kernel: rk_substep_None_gpu.
  * Compute RK substep None.

@@ -1,5 +1,6 @@
 #include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
+
 /**
  * Kernel: apply_bcs_outerextrap_and_inner_only_specific_auxgfs_host.
  * Apply extrapolation BCs to pure points.

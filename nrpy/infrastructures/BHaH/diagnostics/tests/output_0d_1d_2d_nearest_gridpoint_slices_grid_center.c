@@ -1,5 +1,6 @@
 #include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
+
 /**
  * Output diagnostic quantities at grid's *physical* center.
  * For example:
