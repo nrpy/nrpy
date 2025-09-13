@@ -1,80 +1,37 @@
 """
-Construct symbolic expression for the BOB aligned-spin gravitational-wave strain and NQC corrections.
+Construct the BOB merger-ringdown (l=2,m=2) mode and NQC correction factors for aligned-spin binaries.
 
 Authors: Siddharth Mahesh
-        sm0193 **at** mix **dot** wvu **dot** edu
-        Zachariah B. Etienne
-        zachetie **at** gmail **dot* com
+sm0193 at mix dot wvu dot edu
+Zachariah B. Etienne
+zachetie at gmail *dot com
+
+The Backwards-One Body (BOB) formalism is a first principles merger-ringdown model that
+maps the properties of null congruences in the spacetime of the remnant black hole to
+the merger-ringdown waveform of a binary black hole merger.
+
+The Non Quasi-Circular corrections are performed by the SEOBNRv5 model
+to ensure that the inspiral waveform matches the NR waveform
+at the peak of the (l=2,m=2) strain mode up to second derivatives in amplitude and phase.
+See Appendix B of https://arxiv.org/pdf/2303.18039 for the strain and angular frequency terms.
+See Section IV B of Mahesh, McWilliams, and Etienne, "Spinning Effective-to-Backwards-One Body"
+for the BOB-derived NQC corrections.
+
+The modes are expressed in terms of the binary masses (m1, m2), spins (chi1, chi2),
+the quasi-normal modes of the remnant black hole (omega_qnm, tau_qnm), and NQC attachment time (t_0)
+(see Equations 24-31 of Mahesh, McWilliams, and Etienne, "Spinning Effective-to-Backwards-One Body"
+for the full list of terms).
 
 License: BSD 2-Clause
 """
 
 # Step P1: Import needed modules:
-from typing import Any, List
-
 import sympy as sp
+
+from nrpy.helpers.float_to_rational import f2r
 
 # The name of this module ("WaveEquation") is given by __name__:
 thismodule = __name__
-
-
-def complex_mult(z1: List[Any], z2: List[Any]) -> List[Any]:
-    """
-    Multiply two complex numbers given as list of real and imaginary parts.
-
-    This functions takes two lists containing the real and imaginary part of a complex number
-    and returns a list with the real and imaginary part of the resulting multiple.
-
-    :param z1: Complex number 1 as list [Real(z1),Imag(z1)]
-    :param z2: Complex number 2 as list [Real(z2),Imag(z2)]
-    :return: Complex number z1 x z2 as list [Real(z1*z2),Imag(z1*z2)]
-
-    >>> z1 = [1,2]
-    >>> z2 = [3,5]
-    >>> complex_mult(z1,z2)
-    [-7, 11]
-
-    >>> import sympy as sp
-    >>> x1 , y1 , x2 , y2 = sp.symbols('x1 y1 x2 y2',real = True)
-    >>> z1 = [x1,y1]
-    >>> z2 = [x2,y2]
-    >>> complex_mult(z1,z2)
-    [x1*x2 - y1*y2, x1*y2 + x2*y1]
-    """
-    # complex multiplication
-    # z1 = x1 + I*y1
-    # z2 = x2 + I*y2
-    # z1*z2 = x1*x2 - y1*y2 + I*(x1*y2 + x2*y1)
-
-    return [z1[0] * z2[0] - z1[1] * z2[1], z1[0] * z2[1] + z1[1] * z2[0]]
-
-
-def f2r(input_float: float) -> sp.Rational:
-    """
-    Convert a floating-point number to a high-precision rational number.
-
-    This function takes a floating-point number, converts it to a string,
-    and appends 60 zeros to increase the precision of the conversion to a rational number.
-
-    :param input_float: The floating-point number to convert.
-    :return: A sympy Rational number with high precision.
-
-    >>> f2r(0.1)
-    1/10
-    >>> f2r(1.5)
-    3/2
-    >>> f2r(2.0)
-    2
-    """
-    # Convert the input float to a string
-    float_as_string = str(input_float)
-
-    # Ensure the string has a decimal point
-    if "." not in float_as_string:
-        float_as_string = f"{float_as_string}."
-
-    # Append 60 zeros after the decimal of the floating point number to increase precision
-    return sp.Rational(float_as_string + "0" * 60)
 
 
 class BOB_aligned_spin_waveform_quantities:
@@ -88,6 +45,20 @@ class BOB_aligned_spin_waveform_quantities:
         used in the computation of the aligned-spin BOB strain. It
         initializes class variables like mass parameters, spin parameters, and
         various coefficients required for the waveforms's amplitude and phase.
+        The key outputs of the BOB_aligned_spin_waveform_quantities class are:
+            - 'h' : the amplitude of the merger-ringdown (l=2,m=2) mode.
+            - 'phi' : the phase of the merger-ringdown (l=2,m=2) mode.
+            - 'h_t_attach' : the NR-fitted strain amplitude of the (l=2,m=2) mode
+                                at the NQC attachment time.
+                                (Equation C8 of https://arxiv.org/pdf/2303.18039)
+            - 'hddot_t_attach' : the BOB-derived second time derivative of the strain amplitude (l=2,m=2) mode
+                                at the NQC attachment time.
+            - 'w_t_attach' : the NR-fitted angular frequency of the (l=2,m=2) mode
+                                at the NQC attachment time.
+                                (Equation C29 of https://arxiv.org/pdf/2303.18039)
+            - 'wdot_t_attach' : the BOB-derived first time derivative of the angular frequency of the (l=2,m=2) mode
+                                at the NQC attachment time.
+
         :return None:
         """
         (m1, m2, chi1, chi2, omega_qnm, tau_qnm, t_0, t) = sp.symbols(

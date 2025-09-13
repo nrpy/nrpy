@@ -17,25 +17,9 @@ import os
 import shutil
 
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
-from nrpy.infrastructures.BHaH import (
-    BHaH_defines_h,
-    CodeParameters,
-    CurviBoundaryConditions,
-    Makefile_helpers,
-    MoLtimestepping,
-    checkpointing,
-    cmdline_input_and_parfiles,
-    griddata_commondata,
-    main_c,
-    numerical_grids_and_timestep,
-    rfm_precompute,
-    rfm_wrapper_functions,
-    xx_tofrom_Cart,
-)
-from nrpy.infrastructures.BHaH.general_relativity import BSSN, TOVola
+from nrpy.infrastructures import BHaH
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -47,7 +31,7 @@ IDCoordSystem = "Spherical"
 
 grid_physical_size = 10.0
 sinh_width = 0.0785
-t_final = 0.0001
+t_final = 1.0e-10
 diagnostics_output_every = 0.5
 default_checkpoint_every = 2.0
 Nxx_dict = {
@@ -64,13 +48,11 @@ separately_compute_Ricci = False
 OMP_collapse = 1
 if "Spherical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "2")
-    par.adjust_CodeParam_default("CFL_FACTOR", 1.0)
     OMP_collapse = 2  # about 2x faster
     if CoordSystem == "SinhSpherical":
         sinh_width = 0.2
 if "Cylindrical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "1")
-    par.adjust_CodeParam_default("CFL_FACTOR", 1.0)
     OMP_collapse = 2  # might be slightly faster
 
 project_dir = os.path.join("project", project_name)
@@ -87,14 +69,14 @@ par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
 
-TOVola.TOVola_interp.register_CFunction_TOVola_interp()
-TOVola.TOVola_solve.register_CFunction_TOVola_solve()
-BSSN.initial_data.register_CFunction_initial_data(
+BHaH.general_relativity.TOVola.TOVola_interp.register_CFunction_TOVola_interp()
+BHaH.general_relativity.TOVola.TOVola_solve.register_CFunction_TOVola_solve()
+BHaH.general_relativity.BSSN.initial_data.register_CFunction_initial_data(
     CoordSystem=CoordSystem,
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
     enable_checkpointing=True,
-    ID_persist_struct_str=TOVola.ID_persist_struct.ID_persist_str(),
+    ID_persist_struct_str=BHaH.general_relativity.TOVola.ID_persist_struct.ID_persist_str(),
     populate_ID_persist_struct_str=r"""
 TOVola_solve(commondata, &ID_persist);
 """,
@@ -112,7 +94,7 @@ TOVola_solve(commondata, &ID_persist);
 """,
     enable_T4munu=True,
 )
-BSSN.diagnostics.register_CFunction_diagnostics(
+BHaH.general_relativity.BSSN.diagnostics.register_CFunction_diagnostics(
     set_of_CoordSystems={CoordSystem},
     default_diagnostics_out_every=diagnostics_output_every,
     enable_psi4_diagnostics=False,
@@ -129,8 +111,10 @@ BSSN.diagnostics.register_CFunction_diagnostics(
     out_quantities_dict="default",
 )
 if enable_rfm_precompute:
-    rfm_precompute.register_CFunctions_rfm_precompute(set_of_CoordSystems={CoordSystem})
-BSSN.constraints.register_CFunction_constraints(
+    BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
+        set_of_CoordSystems={CoordSystem}
+    )
+BHaH.general_relativity.BSSN.constraints.register_CFunction_constraints(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=False,
@@ -143,7 +127,7 @@ BSSN.constraints.register_CFunction_constraints(
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 # Does not need to be parallelized.
-numerical_grids_and_timestep.register_CFunctions(
+BHaH.numerical_grids_and_timestep.register_CFunctions(
     set_of_CoordSystems={CoordSystem},
     list_of_grid_physical_sizes=[grid_physical_size],
     Nxx_dict=Nxx_dict,
@@ -151,12 +135,12 @@ numerical_grids_and_timestep.register_CFunctions(
     enable_CurviBCs=True,
 )
 
-CurviBoundaryConditions.register_all.register_C_functions(
+BHaH.CurviBoundaryConditions.register_all.register_C_functions(
     set_of_CoordSystems={CoordSystem}, radiation_BC_fd_order=radiation_BC_fd_order
 )
 
 rhs_string = ""
-MoLtimestepping.register_all.register_CFunctions(
+BHaH.MoLtimestepping.register_all.register_CFunctions(
     MoL_method="RK4",
     rhs_string=rhs_string,
     post_rhs_string="",
@@ -164,11 +148,13 @@ MoLtimestepping.register_all.register_CFunctions(
     enable_curviBCs=True,
 )
 
-xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
-xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
-checkpointing.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
-progress.register_CFunction_progress_indicator()
-rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
+BHaH.xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
+BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
+BHaH.checkpointing.register_CFunctions(
+    default_checkpoint_every=default_checkpoint_every
+)
+BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator()
+BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
 # Reset CodeParameter defaults according to variables set above.
 # Coord system parameters
@@ -181,22 +167,22 @@ par.adjust_CodeParam_default("t_final", t_final)
 #         command line parameters, set up boundary conditions,
 #         and create a Makefile for this project.
 #         Project is output to project/[project_name]/
-CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
-CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
-cmdline_input_and_parfiles.generate_default_parfile(
+BHaH.CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
+BHaH.CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
+BHaH.cmdline_input_and_parfiles.generate_default_parfile(
     project_dir=project_dir, project_name=project_name
 )
-cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
+BHaH.cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
     project_name=project_name, cmdline_inputs=["convergence_factor"]
 )
-BHaH_defines_h.output_BHaH_defines_h(
+BHaH.BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     enable_intrinsics=enable_intrinsics,
     enable_rfm_precompute=enable_rfm_precompute,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
 )
 post_non_y_n_auxevol_mallocs = ""
-main_c.register_CFunction_main_c(
+BHaH.main_c.register_CFunction_main_c(
     MoL_method="",
     initial_data_desc=IDtype,
     set_initial_data_after_auxevol_malloc=True,
@@ -204,7 +190,7 @@ main_c.register_CFunction_main_c(
     post_non_y_n_auxevol_mallocs=post_non_y_n_auxevol_mallocs,
     pre_MoL_step_forward_in_time="",
 )
-griddata_commondata.register_CFunction_griddata_free(
+BHaH.griddata_commondata.register_CFunction_griddata_free(
     enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True
 )
 
@@ -216,7 +202,7 @@ if enable_intrinsics:
         subdirectory="intrinsics",
     )
 
-Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
+BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
     exec_or_library_name=project_name,

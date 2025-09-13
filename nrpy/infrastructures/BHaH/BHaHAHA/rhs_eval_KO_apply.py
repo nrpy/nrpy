@@ -16,20 +16,12 @@ import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.indexedexp as ixp
-import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
 from nrpy.equations.general_relativity.bhahaha.ExpansionFunctionTheta import (
     ExpansionFunctionTheta,
 )
-
-_eta_damping = par.register_CodeParameter(
-    "REAL",
-    __name__,
-    name="eta_damping",
-    defaultvalue=2.0,
-    commondata=True,
-)
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_rhs_eval(
@@ -77,14 +69,22 @@ def register_CFunction_rhs_eval(
     Th = ExpansionFunctionTheta[
         CoordSystem + ("_rfm_precompute" if enable_rfm_precompute else "")
     ]
+    eta_damping = par.register_CodeParameter(
+        "REAL",
+        __name__,
+        name="eta_damping",
+        defaultvalue=2.0,
+        commondata=True,
+    )
+
     # vv and hh are gridfunctions:
-    hh_rhs = sp.Symbol("vv", real=True) - _eta_damping * sp.Symbol("hh", real=True)
+    hh_rhs = sp.Symbol("vv", real=True) - eta_damping * sp.Symbol("hh", real=True)
     # wavespeed = sp.Symbol("variable_wavespeed", real=True)
     wavespeed = sp.sympify(1)  # Disabling variable wavespeed, as it does not help.
     # The minus sign here is because F_{,ij} ~ -h_{,ij}
     vv_rhs = -(wavespeed**2) * Th.Theta
 
-    body = lp.simple_loop(
+    body = BHaH.simple_loop.simple_loop(
         loop_body=ccg.c_codegen(
             [hh_rhs, vv_rhs],
             [
@@ -182,7 +182,7 @@ def register_CFunction_KO_apply(
 
     body = "if(commondata->KO_diss_strength == 0.0) return;\n"
     h = sp.Symbol("hh", real=True)
-    body += lp.simple_loop(
+    body += BHaH.simple_loop.simple_loop(
         loop_body=ccg.c_codegen(
             [
                 hh_rhs.subs(rfm.xx[0], h).subs(sp.sympify("f0_of_xx0"), h),

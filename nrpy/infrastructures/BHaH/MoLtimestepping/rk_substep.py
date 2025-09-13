@@ -35,7 +35,7 @@ import nrpy.c_function as cfc
 import nrpy.params as par
 from nrpy.c_codegen import c_codegen
 from nrpy.helpers.generic import superfast_uniq
-from nrpy.helpers.parallelization.utilities import generate_kernel_and_launch_code
+from nrpy.helpers.parallelization import utilities
 
 ##############################################################################
 # Parallelization check and set:
@@ -187,7 +187,7 @@ class RKFunction:
         if self.enable_intrinsics and parallelization == "openmp":
             kernel_body = kernel_body.replace("dt", "DT")
             kernel_body = "const REAL_SIMD_ARRAY DT = ConstSIMD(dt);\n" + kernel_body
-        prefunc, new_body = generate_kernel_and_launch_code(
+        prefunc, new_body = utilities.generate_kernel_and_launch_code(
             self.name,
             kernel_body,
             arg_dict_cuda,

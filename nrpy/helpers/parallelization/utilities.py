@@ -6,8 +6,8 @@ Authors: Samuel D. Tootle; sdtootle **at** gmail **dot** com
 
 from typing import Any, Dict, Optional, Tuple
 
-import nrpy.infrastructures.BHaH.parallelization.cuda_utilities as cuda_utils
 from nrpy.helpers.parallelization.gpu_kernel import GPU_Kernel
+from nrpy.infrastructures import BHaH
 
 
 def get_params_access(parallelization: str) -> str:
@@ -146,7 +146,9 @@ def generate_kernel_and_launch_code(
     if parallelization == "cuda":
         params_access = get_params_access(parallelization)
         launch_dict = (
-            cuda_utils.default_launch_dictionary if launch_dict is None else launch_dict
+            BHaH.parallelization.cuda_utilities.default_launch_dictionary
+            if launch_dict is None
+            else launch_dict
         )
         device_kernel = GPU_Kernel(
             kernel_body.replace("params->", params_access),

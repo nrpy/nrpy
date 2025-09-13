@@ -11,7 +11,6 @@ from typing import Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter as admid
 import nrpy.params as par
 from nrpy.equations.general_relativity.InitialData_Cartesian import (
     InitialData_Cartesian,
@@ -19,6 +18,7 @@ from nrpy.equations.general_relativity.InitialData_Cartesian import (
 from nrpy.equations.general_relativity.InitialData_Spherical import (
     InitialData_Spherical,
 )
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_initial_data(
@@ -64,7 +64,7 @@ def register_CFunction_initial_data(
         else:
             ID = InitialData_Spherical(IDtype=IDtype)
 
-        admid.register_CFunction_exact_ADM_ID_function(
+        BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter.register_CFunction_exact_ADM_ID_function(
             IDCoordSystem,
             IDtype,
             ID.alpha,
@@ -79,7 +79,7 @@ def register_CFunction_initial_data(
         )
         print("Assuming initial data functionality is implemented elsewhere.")
 
-    admid.register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
+    BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter.register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
         CoordSystem,
         IDCoordSystem=IDCoordSystem,
         ID_persist_struct_str=ID_persist_struct_str,

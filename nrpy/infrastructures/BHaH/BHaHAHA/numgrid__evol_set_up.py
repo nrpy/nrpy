@@ -12,9 +12,8 @@ from typing import List, Tuple
 
 import nrpy.c_function as cfc
 import nrpy.grid as gri
-import nrpy.infrastructures.BHaH.BHaHAHA.bcstruct_set_up as locCBC
 import nrpy.params as par
-from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_numgrid__evol_set_up() -> None:
@@ -52,55 +51,53 @@ def register_CFunction_numgrid__evol_set_up() -> None:
     # Scalar gridfunctions
     list_of_evol_gf_names_ranks.append(("hh", 0))
     list_of_evol_gf_names_ranks.append(("vv", 0))
-    BHaH_defines_contrib = (
-        locCBC.BHaH_defines_set_gridfunction_defines_with_parity_types(
-            grid_name="evol",
-            list_of_gf_names_ranks=list_of_evol_gf_names_ranks,
-            verbose=True,
-        )
+    BHaH_defines_contrib = BHaH.BHaHAHA.bcstruct_set_up.BHaH_defines_set_gridfunction_defines_with_parity_types(
+        grid_name="evol",
+        list_of_gf_names_ranks=list_of_evol_gf_names_ranks,
+        verbose=True,
     )
-    BHaH_defines_h.register_BHaH_defines(__name__, BHaH_defines_contrib)
+    BHaH.BHaH_defines_h.register_BHaH_defines(__name__, BHaH_defines_contrib)
 
     # Carrying over previously found horizon to the current horizon evolution.
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         __name__,
         "bhahaha_params_and_data_struct *restrict bhahaha_params_and_data",
         "input parameters and data set by the external code",
         is_commondata=True,
     )
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         __name__,
         "REAL *restrict coarse_horizon",
         "most recently found coarse-resolution horizon h(theta, phi) on the evolution grid",
         is_commondata=True,
     )
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         __name__,
         "int use_coarse_horizon",
         "prolongate h from coarse to finer, in initial_data(); 1=yes, 0=no",
         is_commondata=True,
     )
     for i in range(1, 3):
-        griddata_commondata.register_griddata_commondata(
+        BHaH.griddata_commondata.register_griddata_commondata(
             __name__,
             f"REAL coarse_horizon_dxx{i}",
             f"coarse horizon dxx{i}",
             is_commondata=True,
         )
-        griddata_commondata.register_griddata_commondata(
+        BHaH.griddata_commondata.register_griddata_commondata(
             __name__,
             f"int coarse_horizon_Nxx_plus_2NGHOSTS{i}",
             f"coarse horizon Nxx_plus_2NGHOSTS{i}",
             is_commondata=True,
         )
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         __name__,
         "REAL *restrict coarse_horizon_r_theta_phi[3]",
         "coarse horizon r_theta_phi",
         is_commondata=True,
     )
     # By NRPy/BHaH convention, bcstruct goes in griddata for the evolved grid.
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         __name__,
         "bc_struct bcstruct",
         "all data needed to apply boundary conditions in curvilinear coordinates",

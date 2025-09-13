@@ -14,13 +14,7 @@ from typing import Tuple
 
 import sympy as sp
 
-from nrpy.infrastructures.BHaH.simple_loop import (
-    append_1d_loop_body,
-    compute_1d_loop_ranges,
-    generate_1d_loop_header,
-    generate_qsort_compare_string,
-    max_numpts__i012_pts__numpts_2D,
-)
+from nrpy.infrastructures import BHaH
 
 
 def simple_loop_1D(
@@ -35,11 +29,11 @@ def simple_loop_1D(
 
     :return: Complete loop code, output as a string.
     """
-    Nxx, i012_pts, numpts = compute_1d_loop_ranges(CoordSystem, axis)
+    Nxx, i012_pts, numpts = BHaH.simple_loop.compute_1d_loop_ranges(CoordSystem, axis)
 
     pragma = "#pragma omp parallel for\n"
 
-    out_string = generate_1d_loop_header(axis, CoordSystem, numpts)
+    out_string = BHaH.simple_loop.generate_1d_loop_header(axis, CoordSystem, numpts)
 
     # Loop body for storing results.
     loop_body_store_results = f"""{{
@@ -52,7 +46,7 @@ dp1d.i2 = i2;
 
     loop_body_store_results += "data_points[data_index] = dp1d; data_index++;\n}\n"
 
-    out_string = append_1d_loop_body(
+    out_string = BHaH.simple_loop.append_1d_loop_body(
         out_string, loop_body_store_results, axis, Nxx, numpts, i012_pts, pragma
     )
 
@@ -65,7 +59,7 @@ int i1;
 int i2;
 } data_point_1d_struct;
 """
-    prefunc_content += generate_qsort_compare_string()
+    prefunc_content += BHaH.simple_loop.generate_qsort_compare_string()
 
     qsort = r"""
 qsort(data_points, data_index, sizeof(data_point_1d_struct), compare);
@@ -87,7 +81,9 @@ def simple_loop_2D(
     :return: Complete loop code, output as a string.
     """
     pragma = "#pragma omp parallel for\n"
-    max_numpts, i012_pts, numpts = max_numpts__i012_pts__numpts_2D(CoordSystem, plane)
+    max_numpts, i012_pts, numpts = BHaH.simple_loop.max_numpts__i012_pts__numpts_2D(
+        CoordSystem, plane
+    )
 
     out_string = f"""// Define points for output along the {plane}-plane in {CoordSystem} coordinates.
 const int numpts_i0={numpts[0]}, numpts_i1={numpts[1]}, numpts_i2={numpts[2]};

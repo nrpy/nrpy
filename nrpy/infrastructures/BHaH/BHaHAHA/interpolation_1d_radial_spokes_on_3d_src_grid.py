@@ -12,7 +12,7 @@ from typing import Union, cast
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 from nrpy.helpers.generic import copy_files
-from nrpy.infrastructures.BHaH import BHaH_defines_h
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_interpolation_1d_radial_spokes_on_3d_src_grid(
@@ -54,7 +54,7 @@ def register_CFunction_interpolation_1d_radial_spokes_on_3d_src_grid(
     includes = ["BHaH_defines.h", "interpolation_lagrange_uniform.h"]
 
     # Step 3: Register contributions to BHaH_defines.h and commondata.
-    BHaH_defines_h.register_BHaH_defines(
+    BHaH.BHaH_defines_h.register_BHaH_defines(
         __name__, "#define NinterpGHOSTS (NGHOSTS - 1)\n"
     )
 

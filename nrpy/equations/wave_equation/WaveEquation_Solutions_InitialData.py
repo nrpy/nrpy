@@ -22,12 +22,6 @@ import nrpy.grid as gri
 import nrpy.indexedexp as ixp
 import nrpy.params as par  # NRPy+: Parameter interface
 
-# NRPy+: Common parameters for all WaveEquation modules (defines wavespeed)
-from nrpy.equations.wave_equation.CommonParams import wavespeed
-
-# The name of this module ("InitialData") is given by __name__:
-thismodule = __name__
-
 
 class WaveEquation_solution_Cartesian:
     """
@@ -48,6 +42,14 @@ class WaveEquation_solution_Cartesian:
         default_k2: float = 1.0,
         default_sigma: float = 3.0,
     ):
+        # Declare the C parameters time & wavespeed if not already declared.
+        if "wavespeed" not in par.glb_params_dict:
+            par.register_CodeParameter(
+                "REAL", __name__, "wavespeed", 1.0, commondata=True
+            )
+        if "time" not in par.glb_params_dict:
+            par.register_CodeParameter("REAL", __name__, "time", 0.0, commondata=True)
+
         if "uu" not in gri.glb_gridfcs_dict:
             gri.register_gridfunctions(
                 ["uu", "vv"], group="EVOL", f_infinity=[2.0, 0.0], wavespeed=[1.0, 1.0]
@@ -89,11 +91,11 @@ def SphericalGaussian(
     xCart = ixp.declarerank1("xCart")
 
     # Step 2: Declare free parameters intrinsic to these initial data
-    # provided as a C parameter by MoLtimestepping.MoL
-    time = sp.symbols("time", real=True)
+    # time & wavespeed have been declared as CodeParameters in __init__ if not already defined.
+    time, wavespeed = sp.symbols("time wavespeed", real=True)
     sigma = par.register_CodeParameter(
         cparam_type="REAL",
-        module=thismodule,
+        module=__name__,
         name="sigma",
         defaultvalue=default_sigma,
         commondata=True,
@@ -157,12 +159,11 @@ def PlaneWave(
     xCart = ixp.declarerank1("xCart")
 
     # Step 2: Declare free parameters intrinsic to these initial data
-    time = sp.symbols(
-        "time", real=True
-    )  # provided as a C parameter by MoLtimestepping.MoL
+    # time & wavespeed have been declared as CodeParameters in __init__ if not already defined.
+    time, wavespeed = sp.symbols("time wavespeed", real=True)
     kk = par.register_CodeParameters(
         cparam_type="REAL",
-        module=thismodule,
+        module=__name__,
         names=["kk0", "kk1", "kk2"],
         defaultvalues=[default_k0, default_k1, default_k2],
         commondata=True,

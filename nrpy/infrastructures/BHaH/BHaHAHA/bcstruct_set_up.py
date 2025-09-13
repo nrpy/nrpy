@@ -18,7 +18,7 @@ import nrpy.c_function as cfc
 import nrpy.indexedexp as ixp  # NRPy: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 import nrpy.params as par
 import nrpy.reference_metric as refmetric  # NRPy: Reference metric support
-from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
+from nrpy.infrastructures import BHaH
 
 
 # Set unit-vector dot products (=parity) for each of the 28 parity condition types
@@ -537,7 +537,7 @@ typedef struct {
   //                                  bounds and parallelizing over as many boundary points as possible.
 } bc_struct;
 """
-    BHaH_defines_h.register_BHaH_defines(
+    BHaH.BHaH_defines_h.register_BHaH_defines(
         "nrpy.infrastructures.BHaH.CurviBoundaryConditions.BHaH_defines",
         # Puts these definitions near the top of BHaH_defines.h, before grid.
         BHaH_defines,
@@ -545,13 +545,13 @@ typedef struct {
 
     # Step 2: Register contributions of this function to the commondata struct.
     for i in range(3):
-        griddata_commondata.register_griddata_commondata(
+        BHaH.griddata_commondata.register_griddata_commondata(
             __name__,
             f"REAL bcstruct_Nxx_plus_2NGHOSTS{i}",
             f"The Nxx_plus_2NGHOSTS{i} used when setting up bcstruct",
             is_commondata=True,
         )
-        griddata_commondata.register_griddata_commondata(
+        BHaH.griddata_commondata.register_griddata_commondata(
             __name__,
             f"REAL bcstruct_dxx{i}",
             f"The dxx{i} used when setting up bcstruct",

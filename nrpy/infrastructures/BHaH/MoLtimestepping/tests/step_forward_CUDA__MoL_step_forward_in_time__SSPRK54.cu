@@ -256,7 +256,6 @@ static void rk_substep_5__launcher(params_struct *restrict params, REAL *restric
 
 /**
  * Method of Lines (MoL) for "SSPRK54" method: Step forward one full timestep.
- *
  */
 void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_struct *restrict griddata) {
 

@@ -8,7 +8,7 @@ Author: Zachariah B. Etienne
 from typing import List, Tuple
 
 import nrpy.c_function as cfc
-from nrpy.infrastructures.BHaH import griddata_commondata
+from nrpy.infrastructures import BHaH
 
 # Define a list of (str, str) tuples representing error code macro names and messages:
 error_code_msg_tuples_list: List[Tuple[str, str]] = []
@@ -69,7 +69,7 @@ def register_CFunction_error_message() -> None:
     DocTests:
         >>> register_CFunction_error_message()
     """
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         __name__,
         "int error_flag",
         "Enables subroutines to pass error flags to parent routines.",

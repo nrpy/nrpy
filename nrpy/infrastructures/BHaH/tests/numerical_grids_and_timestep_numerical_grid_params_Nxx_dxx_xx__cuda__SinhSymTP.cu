@@ -1,5 +1,5 @@
-#include "../BHaH_defines.h"
-#include "../BHaH_function_prototypes.h"
+#include "BHaH_defines.h"
+#include "BHaH_function_prototypes.h"
 
 #define SET_XX_CELL_CENTERED_COORDS(COORD_DIR)                                                                                                       \
   const int index = blockIdx.x * blockDim.x + threadIdx.x;                                                                                           \
@@ -31,7 +31,7 @@ __global__ static void initialize_grid_xx2_gpu(const size_t streamid, REAL *rest
 } // END FUNCTION initialize_grid_xx2_gpu
 
 /**
- * Initializes a cell-centered grid in SinhSymTP coordinates based on physical dimensions (grid_physical_size).
+ * Initializes a cell-centered grid in the local coordinate system based on physical dimensions (grid_physical_size).
  *
  * Inputs:
  * - Nx[] inputs: Specifies new grid dimensions, if needed.
@@ -47,7 +47,6 @@ __global__ static void initialize_grid_xx2_gpu(const size_t streamid, REAL *rest
  *
  * Grid setup output:
  * - xx: Coordinate values for each (cell-centered) grid point.
- *
  */
 void numerical_grid_params_Nxx_dxx_xx__rfm__SinhSymTP(const commondata_struct *restrict commondata, params_struct *restrict params, REAL *xx[3],
                                                       const int Nx[3], const bool apply_convergence_factor_and_set_xxminmax_defaults) {
@@ -81,12 +80,12 @@ void numerical_grid_params_Nxx_dxx_xx__rfm__SinhSymTP(const commondata_struct *r
   params->Nxx_plus_2NGHOSTS2 = params->Nxx2 + 2 * NGHOSTS;
 
   {
-#include "../set_CodeParameters.h"
+#include "set_CodeParameters.h"
     // Set grid size to a function of grid_physical_size (grid_physical_size set in set_CodeParameters.h above):
     params->AMAX = grid_physical_size;
   }
   if (apply_convergence_factor_and_set_xxminmax_defaults) {
-#include "../set_CodeParameters.h"
+#include "set_CodeParameters.h"
     // Set {xxmin[], xxmax[]} to default values, which could be functions of other rfm params (set in set_CodeParameters.h above):
     params->xxmin0 = 0;
     params->xxmin1 = 0;

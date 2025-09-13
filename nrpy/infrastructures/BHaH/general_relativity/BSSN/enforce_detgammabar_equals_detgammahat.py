@@ -18,7 +18,6 @@ import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.indexedexp as ixp
-import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
@@ -26,6 +25,7 @@ from nrpy.helpers.expression_utils import (
     generate_definition_header,
     get_params_commondata_symbols_from_expr_list,
 )
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_enforce_detgammabar_equals_detgammahat(
@@ -116,7 +116,7 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
     #   Exercise to the reader: prove that for any reasonable grid,
     #   SIMD loops over grid interiors never write data out of bounds
     #   and are threadsafe for any reasonable number of threads.
-    kernel_body = lp.simple_loop(
+    kernel_body = BHaH.simple_loop.simple_loop(
         loop_body=ccg.c_codegen(
             hprimeDD_expr_list,
             hDD_access_gfs,

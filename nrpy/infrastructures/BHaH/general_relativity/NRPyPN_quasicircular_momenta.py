@@ -30,45 +30,6 @@ import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 
-par.register_CodeParameters(
-    "REAL",
-    __name__,
-    [
-        "initial_sep",
-        "mass_ratio",
-        "bbhxy_BH_M_chix",
-        "bbhxy_BH_M_chiy",
-        "bbhxy_BH_M_chiz",
-        "bbhxy_BH_m_chix",
-        "bbhxy_BH_m_chiy",
-        "bbhxy_BH_m_chiz",
-    ],
-    [10.0, 1.0, 0, 0, 0, 0, 0, 0],
-    commondata=True,
-)
-par.register_CodeParameters(
-    "REAL",
-    __name__,
-    [
-        "mass_M",
-        "mass_m",
-    ],
-    [0.5, 0.5],
-    commondata=True,
-    add_to_parfile=False,
-)
-par.register_CodeParameters(
-    "REAL",
-    __name__,
-    [
-        "initial_p_t",
-        "initial_p_r",
-    ],
-    [-1, -1],
-    commondata=True,
-    add_to_parfile=True,
-)
-
 
 def register_CFunction_NRPyPN_quasicircular_momenta() -> Union[None, pcg.NRPyEnv_type]:
     """
@@ -84,6 +45,45 @@ def register_CFunction_NRPyPN_quasicircular_momenta() -> Union[None, pcg.NRPyEnv
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
+
+    par.register_CodeParameters(
+        "REAL",
+        __name__,
+        [
+            "initial_sep",
+            "mass_ratio",
+            "bbhxy_BH_M_chix",
+            "bbhxy_BH_M_chiy",
+            "bbhxy_BH_M_chiz",
+            "bbhxy_BH_m_chix",
+            "bbhxy_BH_m_chiy",
+            "bbhxy_BH_m_chiz",
+        ],
+        [10.0, 1.0, 0, 0, 0, 0, 0, 0],
+        commondata=True,
+    )
+    par.register_CodeParameters(
+        "REAL",
+        __name__,
+        [
+            "mass_M",
+            "mass_m",
+        ],
+        [0.5, 0.5],
+        commondata=True,
+        add_to_parfile=False,
+    )
+    par.register_CodeParameters(
+        "REAL",
+        __name__,
+        [
+            "initial_p_t",
+            "initial_p_r",
+        ],
+        [-1, -1],
+        commondata=True,
+        add_to_parfile=True,
+    )
 
     includes = ["BHaH_defines.h"]
     desc = """Compute quasicircular momenta using validated expressions from NRPyPN."""

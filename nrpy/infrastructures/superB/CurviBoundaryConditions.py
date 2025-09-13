@@ -12,11 +12,7 @@ Authors: Zachariah B. Etienne
 from typing import Set
 
 import nrpy.c_function as cfc
-from nrpy.infrastructures.BHaH import (
-    BHaH_defines_h,
-    CurviBoundaryConditions,
-    griddata_commondata,
-)
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_apply_bcs_inner_only_nonlocal() -> None:
@@ -332,34 +328,34 @@ def CurviBoundaryConditions_register_C_functions(
     """
     for CoordSystem in set_of_CoordSystems:
         # Register C function to set up the boundary condition struct.
-        CurviBoundaryConditions.bcstruct_set_up.register_CFunction_bcstruct_set_up(
+        BHaH.CurviBoundaryConditions.bcstruct_set_up.register_CFunction_bcstruct_set_up(
             CoordSystem=CoordSystem
         )
 
         # Register C function to apply boundary conditions to both pure outer and inner boundary points.
-        CurviBoundaryConditions.apply_bcs_outerradiation_and_inner.register_CFunction_apply_bcs_outerradiation_and_inner(
+        BHaH.CurviBoundaryConditions.apply_bcs_outerradiation_and_inner.register_CFunction_apply_bcs_outerradiation_and_inner(
             CoordSystem=CoordSystem,
             radiation_BC_fd_order=radiation_BC_fd_order,
         )
 
     # Register C function to apply boundary conditions to inner-only boundary points.
-    CurviBoundaryConditions.apply_bcs_inner_only.register_CFunction_apply_bcs_inner_only()
+    BHaH.CurviBoundaryConditions.apply_bcs_inner_only.register_CFunction_apply_bcs_inner_only()
 
     # Register C function to apply boundary conditions to inner-only boundary points for specific gfs.
-    CurviBoundaryConditions.apply_bcs_inner_only.register_CFunction_apply_bcs_inner_only_specific_auxgfs()
+    BHaH.CurviBoundaryConditions.apply_bcs_inner_only.register_CFunction_apply_bcs_inner_only_specific_auxgfs()
 
     # Register C function to apply boundary conditions to nonlocal inner-only boundary points.
     register_CFunction_apply_bcs_inner_only_nonlocal()
 
     # Register C function to apply boundary conditions to outer-extrapolated and inner boundary points.
-    CurviBoundaryConditions.apply_bcs_outerextrap_and_inner.register_CFunction_apply_bcs_outerextrap_and_inner()
+    BHaH.CurviBoundaryConditions.apply_bcs_outerextrap_and_inner.register_CFunction_apply_bcs_outerextrap_and_inner()
 
     # Register C function to apply boundary conditions to outer-extrapolated and inner boundary points for specific gfs.
     # Was once needed for psi4, now unused.
     # CurviBoundaryConditions.apply_bcs_outerextrap_and_inner.register_CFunction_apply_bcs_outerextrap_and_inner_specific_auxgfs()
 
     # Register bcstruct's contribution to griddata_struct:
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         __name__,
         "bc_struct bcstruct",
         "all data needed to perform boundary conditions in curvilinear coordinates",
@@ -406,13 +402,13 @@ typedef struct __bc_struct__ {
 } bc_struct;
 """
     # inter-chare communication assumes auxevol parity types are set
-    CBC_BHd_str += CurviBoundaryConditions.BHaH_defines.BHaH_defines_set_gridfunction_defines_with_parity_types(
+    CBC_BHd_str += BHaH.CurviBoundaryConditions.BHaH_defines.BHaH_defines_set_gridfunction_defines_with_parity_types(
         set_parity_on_aux=set_parity_on_aux,
         set_parity_on_auxevol=True,
         verbose=True,
     )
     # ~ BHaH_defines_h.register_BHaH_defines(__name__, CBC_BHd_str)
-    BHaH_defines_h.register_BHaH_defines(
+    BHaH.BHaH_defines_h.register_BHaH_defines(
         "nrpy.infrastructures.BHaH.CurviBoundaryConditions.BHaH_defines",
         CBC_BHd_str,
     )
@@ -422,7 +418,7 @@ typedef struct __bc_struct__ {
         register_CFunction_bcstruct_chare_set_up(CoordSystem=CoordSystem)
 
     # Register temporary buffers for face data communication to griddata_struct:
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         __name__,
         "nonlocalinnerbc_struct nonlocalinnerbcstruct",
         "for communication of non-local inner boundary data across chares",

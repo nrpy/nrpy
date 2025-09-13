@@ -28,34 +28,9 @@ import shutil
 from pathlib import Path
 
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
-import nrpy.infrastructures.BHaH.BHaHAHA.interpolation_2d_general__uniform_src_grid as interpolation2d
-import nrpy.infrastructures.BHaH.checkpointing as chkpt
-import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
-import nrpy.infrastructures.BHaH.CodeParameters as CPs
-import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
-import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
-import nrpy.infrastructures.BHaH.special_functions.spin_weight_minus2_spherical_harmonics as swm2sh
-import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xxCartxx
-import nrpy.infrastructures.superB.chare_communication_maps as charecomm
-import nrpy.infrastructures.superB.CurviBoundaryConditions as superBcbc
-import nrpy.infrastructures.superB.diagnostics as superBdiagnostics
-import nrpy.infrastructures.superB.initial_data as superBinitialdata
-import nrpy.infrastructures.superB.main_chare as superBmain
-import nrpy.infrastructures.superB.Makefile_helpers as superBMakefile
-import nrpy.infrastructures.superB.MoL as superBMoL
-import nrpy.infrastructures.superB.numerical_grids as superBnumericalgrids
-import nrpy.infrastructures.superB.superB.superB_pup as superBpup
-import nrpy.infrastructures.superB.timestepping_chare as superBtimestepping
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
-from nrpy.infrastructures.BHaH import rfm_precompute, rfm_wrapper_functions
-from nrpy.infrastructures.BHaH.general_relativity import (
-    BSSN,
-    PSI4,
-    NRPyPN_quasicircular_momenta,
-    TwoPunctures,
-)
+from nrpy.infrastructures import BHaH, superB
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -150,22 +125,18 @@ shutil.rmtree(project_dir, ignore_errors=True)
 par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 par.set_parval_from_str("fd_order", fd_order)
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
-par.set_parval_from_str(
-    "swm2sh_maximum_l_mode_generated", swm2sh_maximum_l_mode_generated
-)
-
 
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
-NRPyPN_quasicircular_momenta.register_CFunction_NRPyPN_quasicircular_momenta()
-TwoPunctures.TwoPunctures_lib.register_C_functions()
-superBinitialdata.register_CFunction_initial_data(
+BHaH.general_relativity.NRPyPN_quasicircular_momenta.register_CFunction_NRPyPN_quasicircular_momenta()
+BHaH.general_relativity.TwoPunctures.TwoPunctures_lib.register_C_functions()
+superB.initial_data.register_CFunction_initial_data(
     CoordSystem=CoordSystem,
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
     enable_checkpointing=False,
-    ID_persist_struct_str=TwoPunctures.ID_persist_struct.ID_persist_str(),
+    ID_persist_struct_str=BHaH.general_relativity.TwoPunctures.ID_persist_struct.ID_persist_str(),
     populate_ID_persist_struct_str=r"""
 initialize_ID_persist_struct(commondata, &ID_persist);
 TP_solve(&ID_persist);
@@ -180,10 +151,10 @@ TP_solve(&ID_persist);
 }
 """,
 )
-interpolation2d.register_CFunction_interpolation_2d_general__uniform_src_grid(
+BHaH.BHaHAHA.interpolation_2d_general__uniform_src_grid.register_CFunction_interpolation_2d_general__uniform_src_grid(
     enable_simd=enable_intrinsics, project_dir=project_dir
 )
-superBdiagnostics.register_CFunction_diagnostics(
+superB.diagnostics.register_CFunction_diagnostics(
     set_of_CoordSystems={CoordSystem},
     default_diagnostics_out_every=diagnostics_output_every,
     grid_center_filename_tuple=("out0d-conv_factor%.2f.txt", "convergence_factor"),
@@ -200,8 +171,10 @@ superBdiagnostics.register_CFunction_diagnostics(
     enable_L2norm_BSSN_constraints_diagnostics=True,
 )
 if enable_rfm_precompute:
-    rfm_precompute.register_CFunctions_rfm_precompute(set_of_CoordSystems={CoordSystem})
-BSSN.rhs_eval.register_CFunction_rhs_eval(
+    BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
+        set_of_CoordSystems={CoordSystem}
+    )
+BHaH.general_relativity.BSSN.rhs_eval.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
@@ -219,24 +192,24 @@ BSSN.rhs_eval.register_CFunction_rhs_eval(
     OMP_collapse=OMP_collapse,
 )
 if enable_CAHD:
-    BSSN.cahdprefactor_gf.register_CFunction_cahdprefactor_auxevol_gridfunction(
+    BHaH.general_relativity.BSSN.cahdprefactor_gf.register_CFunction_cahdprefactor_auxevol_gridfunction(
         {CoordSystem}
     )
 if separate_Ricci_and_BSSN_RHS:
-    BSSN.Ricci_eval.register_CFunction_Ricci_eval(
+    BHaH.general_relativity.BSSN.Ricci_eval.register_CFunction_Ricci_eval(
         CoordSystem=CoordSystem,
         enable_rfm_precompute=enable_rfm_precompute,
         enable_intrinsics=enable_intrinsics,
         enable_fd_functions=enable_fd_functions,
         OMP_collapse=OMP_collapse,
     )
-BSSN.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
+BHaH.general_relativity.BSSN.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
-BSSN.constraints.register_CFunction_constraints(
+BHaH.general_relativity.BSSN.constraints.register_CFunction_constraints(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
@@ -246,35 +219,39 @@ BSSN.constraints.register_CFunction_constraints(
     OMP_collapse=OMP_collapse,
 )
 
-PSI4.compute_psi4.register_CFunction_psi4(
+BHaH.general_relativity.PSI4.compute_psi4.register_CFunction_psi4(
     CoordSystem=CoordSystem,
     OMP_collapse=OMP_collapse,
     enable_fd_functions=enable_fd_functions,
 )
-swm2sh.register_CFunction_spin_weight_minus2_sph_harmonics()
+BHaH.special_functions.spin_weight_minus2_spherical_harmonics.register_CFunction_spin_weight_minus2_sph_harmonics(
+    swm2sh_maximum_l_mode_generated=swm2sh_maximum_l_mode_generated
+)
 
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 # Does not need to be parallelized.
-superBdiagnostics.register_CFunction_psi4_spinweightm2_decomposition_on_sphlike_grids()
-superBdiagnostics.register_CFunction_psi4_spinweightm2_decomposition_on_cylindlike_grids()
-superBdiagnostics.register_CFunction_psi4_spinweightm2_decomposition_file_write()
+superB.diagnostics.register_CFunction_psi4_spinweightm2_decomposition_on_sphlike_grids()
+superB.diagnostics.register_CFunction_psi4_spinweightm2_decomposition_on_cylindlike_grids()
+superB.diagnostics.register_CFunction_psi4_spinweightm2_decomposition_file_write()
 
-numericalgrids.register_CFunctions(
+BHaH.numerical_grids_and_timestep.register_CFunctions(
     set_of_CoordSystems={CoordSystem},
     list_of_grid_physical_sizes=[grid_physical_size],
     Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
 )
-superBnumericalgrids.register_CFunctions(
+superB.numerical_grids.register_CFunctions(
     set_of_CoordSystems={CoordSystem},
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
     enable_psi4_diagnostics=True,
 )
-charecomm.chare_comm_register_C_functions(set_of_CoordSystems={CoordSystem})
-superBcbc.CurviBoundaryConditions_register_C_functions(
+superB.chare_communication_maps.chare_comm_register_C_functions(
+    set_of_CoordSystems={CoordSystem}
+)
+superB.CurviBoundaryConditions.CurviBoundaryConditions_register_C_functions(
     set_of_CoordSystems={CoordSystem},
     radiation_BC_fd_order=radiation_BC_fd_order,
     set_parity_on_aux=True,
@@ -306,7 +283,7 @@ if outer_bcs_type != "radiation":
     post_rhs_bcs_str += """
 apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);"""
 
-superBMoL.register_CFunctions(
+superB.MoL.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,
     post_rhs_bcs_str=post_rhs_bcs_str,
@@ -314,11 +291,13 @@ superBMoL.register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
 )
-xxCartxx.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
-xxCartxx.register_CFunction_xx_to_Cart(CoordSystem)
-chkpt.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
-progress.register_CFunction_progress_indicator()
-rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
+BHaH.xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
+BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
+BHaH.checkpointing.register_CFunctions(
+    default_checkpoint_every=default_checkpoint_every
+)
+BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator()
+BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
 # Reset CodeParameter defaults according to variables set above.
 # Coord system parameters
@@ -361,10 +340,12 @@ if paper:
 #         command line parameters, set up boundary conditions,
 #         and create a Makefile for this project.
 #         Project is output to project/[project_name]/
-CPs.write_CodeParameters_h_files(project_dir=project_dir)
-CPs.register_CFunctions_params_commondata_struct_set_to_default()
-cmdpar.generate_default_parfile(project_dir=project_dir, project_name=project_name)
-cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
+BHaH.CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
+BHaH.CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
+BHaH.cmdline_input_and_parfiles.generate_default_parfile(
+    project_dir=project_dir, project_name=project_name
+)
+BHaH.cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
     project_name=project_name, cmdline_inputs=["convergence_factor"]
 )
 
@@ -375,7 +356,7 @@ copy_files(
     subdirectory="TwoPunctures",
 )
 
-superBmain.output_commondata_object_h_and_main_h_cpp_ci(
+superB.main_chare.output_commondata_object_h_and_main_h_cpp_ci(
     project_dir=project_dir,
     enable_charm_checkpointing=enable_charm_checkpointing,
 )
@@ -386,7 +367,7 @@ if enable_CAHD:
     cahdprefactor_auxevol_gridfunction(&commondata, &griddata_chare[grid].params, griddata_chare[grid].xx,  griddata_chare[grid].gridfuncs.auxevol_gfs);
 }\n"""
 
-superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
+superB.timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(
     project_dir=project_dir,
     MoL_method=MoL_method,
     post_non_y_n_auxevol_mallocs=post_non_y_n_auxevol_mallocs,
@@ -397,7 +378,7 @@ superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
     enable_L2norm_BSSN_constraints_diagnostics=True,
 )
 
-superBpup.register_CFunction_superB_pup_routines(
+superB.superB.superB_pup.register_CFunction_superB_pup_routines(
     MoL_method=MoL_method,
     enable_psi4_diagnostics=True,
 )
@@ -408,7 +389,7 @@ copy_files(
     subdirectory="superB",
 )
 
-Bdefines_h.output_BHaH_defines_h(
+BHaH.BHaH_defines_h.output_BHaH_defines_h(
     additional_includes=[
         str(Path("TwoPunctures") / Path("TwoPunctures.h")),
         str(Path("superB") / Path("superB.h")),
@@ -428,7 +409,7 @@ if enable_intrinsics:
         subdirectory="intrinsics",
     )
 
-superBMakefile.output_CFunctions_function_prototypes_and_construct_Makefile(
+superB.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
     exec_or_library_name=project_name,

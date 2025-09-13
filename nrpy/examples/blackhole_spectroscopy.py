@@ -22,34 +22,9 @@ import shutil
 from pathlib import Path
 
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.BHaH.BHaHAHA.interpolation_2d_general__uniform_src_grid as interpolation2d
-import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
-import nrpy.infrastructures.BHaH.parallelization.cuda_utilities as cudautils
-import nrpy.infrastructures.BHaH.special_functions.spin_weight_minus2_spherical_harmonics as swm2sh
-import nrpy.params as par
+from nrpy import params as par
 from nrpy.helpers.generic import copy_files
-from nrpy.infrastructures.BHaH import (
-    BHaH_defines_h,
-    BHaH_device_defines_h,
-    CodeParameters,
-    CurviBoundaryConditions,
-    Makefile_helpers,
-    MoLtimestepping,
-    checkpointing,
-    cmdline_input_and_parfiles,
-    griddata_commondata,
-    main_c,
-    numerical_grids_and_timestep,
-    rfm_precompute,
-    rfm_wrapper_functions,
-    xx_tofrom_Cart,
-)
-from nrpy.infrastructures.BHaH.general_relativity import (
-    BSSN,
-    PSI4,
-    NRPyPN_quasicircular_momenta,
-    TwoPunctures,
-)
+from nrpy.infrastructures import BHaH
 
 parser = argparse.ArgumentParser(
     description="NRPyElliptic Solver for Conformally Flat BBH initial data"
@@ -151,13 +126,11 @@ par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
 OMP_collapse = 1
 if "Spherical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "2")
-    par.adjust_CodeParam_default("CFL_FACTOR", 1.0)
     OMP_collapse = 2  # about 2x faster
     if CoordSystem == "SinhSpherical":
         sinh_width = 0.2
 if "Cylindrical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "1")
-    par.adjust_CodeParam_default("CFL_FACTOR", 0.5)
     OMP_collapse = 2  # might be slightly faster
     if CoordSystem == "SinhCylindrical":
         sinh_width = 0.2
@@ -171,27 +144,24 @@ shutil.rmtree(project_dir, ignore_errors=True)
 par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 par.set_parval_from_str("fd_order", fd_order)
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
-par.set_parval_from_str(
-    "swm2sh_maximum_l_mode_generated", swm2sh_maximum_l_mode_generated
-)
 
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
 
 if parallelization == "cuda":
-    cudautils.register_CFunctions_HostDevice__operations()
-    cudautils.register_CFunction_find_global_minimum()
-    cudautils.register_CFunction_find_global_sum()
+    BHaH.parallelization.cuda_utilities.register_CFunctions_HostDevice__operations()
+    BHaH.parallelization.cuda_utilities.register_CFunction_find_global_minimum()
+    BHaH.parallelization.cuda_utilities.register_CFunction_find_global_sum()
 
-NRPyPN_quasicircular_momenta.register_CFunction_NRPyPN_quasicircular_momenta()
-TwoPunctures.TwoPunctures_lib.register_C_functions()
-BSSN.initial_data.register_CFunction_initial_data(
+BHaH.general_relativity.NRPyPN_quasicircular_momenta.register_CFunction_NRPyPN_quasicircular_momenta()
+BHaH.general_relativity.TwoPunctures.TwoPunctures_lib.register_C_functions()
+BHaH.general_relativity.BSSN.initial_data.register_CFunction_initial_data(
     CoordSystem=CoordSystem,
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
     enable_checkpointing=True,
-    ID_persist_struct_str=TwoPunctures.ID_persist_struct.ID_persist_str(),
+    ID_persist_struct_str=BHaH.general_relativity.TwoPunctures.ID_persist_struct.ID_persist_str(),
     populate_ID_persist_struct_str=r"""
 initialize_ID_persist_struct(commondata, &ID_persist);
 TP_solve(&ID_persist);
@@ -206,10 +176,10 @@ TP_solve(&ID_persist);
 }
 """,
 )
-interpolation2d.register_CFunction_interpolation_2d_general__uniform_src_grid(
+BHaH.BHaHAHA.interpolation_2d_general__uniform_src_grid.register_CFunction_interpolation_2d_general__uniform_src_grid(
     enable_simd=enable_intrinsics, project_dir=project_dir
 )
-BSSN.diagnostics.register_CFunction_diagnostics(
+BHaH.general_relativity.BSSN.diagnostics.register_CFunction_diagnostics(
     set_of_CoordSystems=set_of_CoordSystems,
     default_diagnostics_out_every=diagnostics_output_every,
     enable_psi4_diagnostics=True,
@@ -225,10 +195,10 @@ BSSN.diagnostics.register_CFunction_diagnostics(
     out_quantities_dict="default",
 )
 if enable_rfm_precompute:
-    rfm_precompute.register_CFunctions_rfm_precompute(
+    BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
         set_of_CoordSystems=set_of_CoordSystems,
     )
-BSSN.rhs_eval.register_CFunction_rhs_eval(
+BHaH.general_relativity.BSSN.rhs_eval.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
@@ -246,24 +216,24 @@ BSSN.rhs_eval.register_CFunction_rhs_eval(
     OMP_collapse=OMP_collapse,
 )
 if enable_CAHD:
-    BSSN.cahdprefactor_gf.register_CFunction_cahdprefactor_auxevol_gridfunction(
+    BHaH.general_relativity.BSSN.cahdprefactor_gf.register_CFunction_cahdprefactor_auxevol_gridfunction(
         {CoordSystem}
     )
 if separate_Ricci_and_BSSN_RHS:
-    BSSN.Ricci_eval.register_CFunction_Ricci_eval(
+    BHaH.general_relativity.BSSN.Ricci_eval.register_CFunction_Ricci_eval(
         CoordSystem=CoordSystem,
         enable_rfm_precompute=enable_rfm_precompute,
         enable_intrinsics=enable_intrinsics,
         enable_fd_functions=enable_fd_functions,
         OMP_collapse=OMP_collapse,
     )
-BSSN.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
+BHaH.general_relativity.BSSN.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
-BSSN.constraints.register_CFunction_constraints(
+BHaH.general_relativity.BSSN.constraints.register_CFunction_constraints(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
@@ -273,21 +243,23 @@ BSSN.constraints.register_CFunction_constraints(
     OMP_collapse=OMP_collapse,
 )
 
-PSI4.compute_psi4.register_CFunction_psi4(
+BHaH.general_relativity.PSI4.compute_psi4.register_CFunction_psi4(
     CoordSystem=CoordSystem,
     OMP_collapse=OMP_collapse,
     enable_fd_functions=enable_fd_functions,
 )
-swm2sh.register_CFunction_spin_weight_minus2_sph_harmonics()
+BHaH.special_functions.spin_weight_minus2_spherical_harmonics.register_CFunction_spin_weight_minus2_sph_harmonics(
+    swm2sh_maximum_l_mode_generated=swm2sh_maximum_l_mode_generated
+)
 
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 # Does not need to be parallelized.
-BSSN.psi4_decomposition.register_CFunction_psi4_spinweightm2_decomposition(
+BHaH.general_relativity.BSSN.psi4_decomposition.register_CFunction_psi4_spinweightm2_decomposition(
     CoordSystem=CoordSystem
 )
 
-numerical_grids_and_timestep.register_CFunctions(
+BHaH.numerical_grids_and_timestep.register_CFunctions(
     set_of_CoordSystems=set_of_CoordSystems,
     list_of_grid_physical_sizes=[grid_physical_size],
     Nxx_dict=Nxx_dict,
@@ -295,7 +267,7 @@ numerical_grids_and_timestep.register_CFunctions(
     enable_CurviBCs=True,
 )
 
-CurviBoundaryConditions.register_all.register_C_functions(
+BHaH.CurviBoundaryConditions.register_all.register_C_functions(
     set_of_CoordSystems=set_of_CoordSystems,
     radiation_BC_fd_order=radiation_BC_fd_order,
     set_parity_on_aux=True,
@@ -318,7 +290,7 @@ if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
 if not enable_rfm_precompute:
     rhs_string = rhs_string.replace("rfmstruct", "xx")
 
-MoLtimestepping.register_all.register_CFunctions(
+BHaH.MoLtimestepping.register_all.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,
     post_rhs_string="""if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
@@ -327,14 +299,21 @@ MoLtimestepping.register_all.register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
 )
-xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
-xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
-checkpointing.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
-progress.register_CFunction_progress_indicator()
-rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
+BHaH.xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
+BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
+BHaH.checkpointing.register_CFunctions(
+    default_checkpoint_every=default_checkpoint_every
+)
+BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator()
+BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
 # Reset CodeParameter defaults according to variables set above.
 # Coord system parameters
+if "Spherical" in CoordSystem:
+    par.adjust_CodeParam_default("CFL_FACTOR", 1.0)
+if "Cylindrical" in CoordSystem:
+    par.adjust_CodeParam_default("CFL_FACTOR", 0.5)
+
 if CoordSystem == "SinhSpherical":
     par.adjust_CodeParam_default("SINHW", sinh_width)
 if CoordSystem == "SinhCylindrical":
@@ -366,12 +345,12 @@ par.adjust_CodeParam_default(
 #         command line parameters, set up boundary conditions,
 #         and create a Makefile for this project.
 #         Project is output to project/[project_name]/
-CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
-CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
-cmdline_input_and_parfiles.generate_default_parfile(
+BHaH.CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
+BHaH.CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
+BHaH.cmdline_input_and_parfiles.generate_default_parfile(
     project_dir=project_dir, project_name=project_name
 )
-cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
+BHaH.cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
     project_name=project_name, cmdline_inputs=["convergence_factor"]
 )
 copy_files(
@@ -380,12 +359,12 @@ copy_files(
     project_dir=project_dir,
     subdirectory="TwoPunctures",
 )
-gpu_defines_filename = BHaH_device_defines_h.output_device_headers(
+gpu_defines_filename = BHaH.BHaH_device_defines_h.output_device_headers(
     project_dir,
     num_streams=num_cuda_streams,
     set_parity_on_aux=True,
 )
-BHaH_defines_h.output_BHaH_defines_h(
+BHaH.BHaH_defines_h.output_BHaH_defines_h(
     additional_includes=[str(Path("TwoPunctures") / Path("TwoPunctures.h"))],
     project_dir=project_dir,
     enable_intrinsics=enable_intrinsics,
@@ -426,14 +405,14 @@ write_checkpoint_call = f"write_checkpoint(&commondata, {compute_griddata});\n".
     ),
 )
 
-main_c.register_CFunction_main_c(
+BHaH.main_c.register_CFunction_main_c(
     MoL_method=MoL_method,
     initial_data_desc=IDtype,
     boundary_conditions_desc=boundary_conditions_desc,
     post_non_y_n_auxevol_mallocs=post_non_y_n_auxevol_mallocs,
     pre_MoL_step_forward_in_time=write_checkpoint_call,
 )
-griddata_commondata.register_CFunction_griddata_free(
+BHaH.griddata_commondata.register_CFunction_griddata_free(
     enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True
 )
 
@@ -460,7 +439,7 @@ cuda_makefiles_options = (
 )
 
 if parallelization == "cuda":
-    Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
+    BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
         project_dir=project_dir,
         project_name=project_name,
         exec_or_library_name=project_name,
@@ -471,7 +450,7 @@ if parallelization == "cuda":
         addl_libraries=["$(shell gsl-config --libs)"],
     )
 else:
-    Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
+    BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
         project_dir=project_dir,
         project_name=project_name,
         exec_or_library_name=project_name,

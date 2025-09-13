@@ -18,9 +18,8 @@ from typing import List, Tuple, Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.BHaH.BHaHAHA.bcstruct_set_up as locCBC
 import nrpy.params as par
-from nrpy.infrastructures.BHaH import BHaH_defines_h, griddata_commondata
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_numgrid__interp_src_set_up() -> Union[None, pcg.NRPyEnv_type]:
@@ -115,23 +114,21 @@ enum {{
     BHaH_defines_contrib += "};\n"
 
     # Finally, define parity types for interp_src gridfunctions.
-    BHaH_defines_contrib += (
-        locCBC.BHaH_defines_set_gridfunction_defines_with_parity_types(
-            grid_name="interp_src",
-            list_of_gf_names_ranks=list_of_interp_src_gf_names_ranks,
-            verbose=True,
-        )
+    BHaH_defines_contrib += BHaH.BHaHAHA.bcstruct_set_up.BHaH_defines_set_gridfunction_defines_with_parity_types(
+        grid_name="interp_src",
+        list_of_gf_names_ranks=list_of_interp_src_gf_names_ranks,
+        verbose=True,
     )
 
-    BHaH_defines_h.register_BHaH_defines(__name__, BHaH_defines_contrib)
+    BHaH.BHaH_defines_h.register_BHaH_defines(__name__, BHaH_defines_contrib)
 
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         __name__,
         "REAL *restrict interp_src_r_theta_phi[3]",
         "Source grid coordinates",
         is_commondata=True,
     )
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         __name__,
         "REAL *restrict interp_src_gfs",
         f"{len(list_of_interp_src_gf_names_ranks)} 3D volume-filling gridfunctions with same angular sampling as evolved grid, but same radial sampling as input_gfs. GFs include: h_ij, h_ij,k, a_ij, trK, W, and W_,k. In RESCALED SPHERICAL basis.",

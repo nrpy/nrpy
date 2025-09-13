@@ -18,7 +18,7 @@ License: Lesser GNU Public License, version 2.0+
 #include <stdbool.h>
 #define REAL double
 
-#include "../BHaH_defines.h"
+#include "BHaH_defines.h"
 #include "TwoPunctures.h"
 
 // #define REAL double

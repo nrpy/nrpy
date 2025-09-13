@@ -13,23 +13,9 @@ import os
 import shutil
 
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
-from nrpy.infrastructures.BHaH import (
-    BHaH_defines_h,
-    CodeParameters,
-    CurviBoundaryConditions,
-    Makefile_helpers,
-    MoLtimestepping,
-    bhah_lib,
-    checkpointing,
-    numerical_grids_and_timestep,
-    rfm_precompute,
-    rfm_wrapper_functions,
-    xx_tofrom_Cart,
-)
-from nrpy.infrastructures.BHaH.general_relativity import BSSN, TOVola
+from nrpy.infrastructures import BHaH
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -75,10 +61,12 @@ shutil.rmtree(project_dir, ignore_errors=True)
 par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 par.set_parval_from_str("fd_order", fd_order)
 par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
-checkpointing.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
-progress.register_CFunction_progress_indicator()
+BHaH.checkpointing.register_CFunctions(
+    default_checkpoint_every=default_checkpoint_every
+)
+BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator()
 
-numerical_grids_and_timestep.register_CFunctions(
+BHaH.numerical_grids_and_timestep.register_CFunctions(
     set_of_CoordSystems=set_of_CoordSystems,
     list_of_grid_physical_sizes=[grid_physical_size],
     Nxx_dict=Nxx_dict,
@@ -86,7 +74,7 @@ numerical_grids_and_timestep.register_CFunctions(
     enable_CurviBCs=True,
 )
 
-BSSN.diagnostics.register_CFunction_diagnostics(
+BHaH.general_relativity.BSSN.diagnostics.register_CFunction_diagnostics(
     set_of_CoordSystems=set_of_CoordSystems,
     default_diagnostics_out_every=diagnostics_output_every,
     out_quantities_dict={
@@ -109,17 +97,17 @@ BSSN.diagnostics.register_CFunction_diagnostics(
 # cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
 #     project_name=project_name, cmdline_inputs=["CFL_factor"]
 # )
-TOVola.TOVola_interp.register_CFunction_TOVola_interp()
-TOVola.TOVola_solve.register_CFunction_TOVola_solve()
+BHaH.general_relativity.TOVola.TOVola_interp.register_CFunction_TOVola_interp()
+BHaH.general_relativity.TOVola.TOVola_solve.register_CFunction_TOVola_solve()
 
 for CoordSystem in set_of_CoordSystems:
     par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
-    BSSN.initial_data.register_CFunction_initial_data(
+    BHaH.general_relativity.BSSN.initial_data.register_CFunction_initial_data(
         CoordSystem=CoordSystem,
         IDtype=IDtype,
         IDCoordSystem="Spherical",
         enable_checkpointing=True,
-        ID_persist_struct_str=TOVola.ID_persist_struct.ID_persist_str(),
+        ID_persist_struct_str=BHaH.general_relativity.TOVola.ID_persist_struct.ID_persist_str(),
         populate_ID_persist_struct_str=r"""
 TOVola_solve(commondata, &ID_persist);
 """,
@@ -138,7 +126,7 @@ TOVola_solve(commondata, &ID_persist);
         enable_T4munu=True,
     )
 
-    BSSN.rhs_eval.register_CFunction_rhs_eval(
+    BHaH.general_relativity.BSSN.rhs_eval.register_CFunction_rhs_eval(
         CoordSystem=CoordSystem,
         enable_rfm_precompute=enable_rfm_precompute,
         enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
@@ -151,20 +139,20 @@ TOVola_solve(commondata, &ID_persist);
         OMP_collapse=OMP_collapse,
     )
     if separate_Ricci_and_BSSN_RHS:
-        BSSN.Ricci_eval.register_CFunction_Ricci_eval(
+        BHaH.general_relativity.BSSN.Ricci_eval.register_CFunction_Ricci_eval(
             CoordSystem=CoordSystem,
             enable_rfm_precompute=enable_rfm_precompute,
             enable_intrinsics=enable_intrinsics,
             enable_fd_functions=enable_fd_functions,
             OMP_collapse=OMP_collapse,
         )
-    BSSN.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
+    BHaH.general_relativity.BSSN.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
         CoordSystem=CoordSystem,
         enable_rfm_precompute=enable_rfm_precompute,
         enable_fd_functions=enable_fd_functions,
         OMP_collapse=OMP_collapse,
     )
-    BSSN.constraints.register_CFunction_constraints(
+    BHaH.general_relativity.BSSN.constraints.register_CFunction_constraints(
         CoordSystem=CoordSystem,
         enable_rfm_precompute=enable_rfm_precompute,
         enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
@@ -175,14 +163,14 @@ TOVola_solve(commondata, &ID_persist);
     )
 
 if enable_rfm_precompute:
-    rfm_precompute.register_CFunctions_rfm_precompute(
+    BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
         set_of_CoordSystems=set_of_CoordSystems
     )
 
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 
-CurviBoundaryConditions.register_all.register_C_functions(
+BHaH.CurviBoundaryConditions.register_all.register_C_functions(
     set_of_CoordSystems=set_of_CoordSystems,
     radiation_BC_fd_order=radiation_BC_fd_order,
 )
@@ -196,7 +184,7 @@ if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
 if not enable_rfm_precompute:
     rhs_string = rhs_string.replace("rfmstruct", "xx")
 
-MoLtimestepping.register_all.register_CFunctions(
+BHaH.MoLtimestepping.register_all.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,
     post_rhs_string="""if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
@@ -207,9 +195,9 @@ MoLtimestepping.register_all.register_CFunctions(
 )
 
 for CoordSystem in set_of_CoordSystems:
-    xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
-    xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
-rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
+    BHaH.xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
+    BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
+BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
 #########################################################
 # STEP 3: Generate header files, register C functions and
@@ -220,9 +208,9 @@ if "SinhSpherical" in set_of_CoordSystems:
     par.adjust_CodeParam_default("SINHW", 0.4)
 par.adjust_CodeParam_default("eta", GammaDriving_eta)
 
-CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
-CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
-BHaH_defines_h.output_BHaH_defines_h(
+BHaH.CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
+BHaH.CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
+BHaH.BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     enable_intrinsics=enable_intrinsics,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
@@ -243,9 +231,9 @@ if enable_intrinsics:
         subdirectory="intrinsics",
     )
 
-bhah_lib.register_CFunctions_bhah_lib()
+BHaH.bhah_lib.register_CFunctions_bhah_lib()
 
-Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
+BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
     exec_or_library_name="lib" + project_name,

@@ -18,34 +18,7 @@ import nrpy.params as par
 from nrpy.helpers.cached_functions import cached_simplify
 from nrpy.helpers.generic import superfast_uniq
 
-# grid_physical_size is set based entirely on CoordSystem. So it is a rfm parameter not a grid parameter.
-par.register_param(bool, __name__, "enable_grid_physical_size", True)
-# For multipatch runs, set to "All". For single grid runs, set to the grid's CoordSystem.
-#    Otherwise you'll find this pollutes the CodeParameter namespace.
 par.register_param(str, __name__, "CoordSystem_to_register_CodeParameters", "All")
-par.register_CodeParameter(
-    "REAL",
-    __name__,
-    "grid_physical_size",
-    defaultvalue=10.0,
-    add_to_glb_code_params_dict=True,
-)
-par.register_CodeParameter(
-    "REAL",
-    __name__,
-    "grid_hole_radius",
-    defaultvalue=2.0,
-    add_to_glb_code_params_dict=True,
-)
-par.register_CodeParameter(
-    "char[100]",
-    __name__,
-    "CoordSystemName",
-    "unset",
-    add_to_glb_code_params_dict=True,
-    add_to_parfile=False,
-    add_to_set_CodeParameters_h=True,
-)
 
 
 class ReferenceMetric:
@@ -70,6 +43,34 @@ class ReferenceMetric:
         :param SymPySimplifyExpressions: A boolean indicating whether to simplify expressions using SymPy. Default is False.
         :raises ValueError: If an unrecognized coordinate system is specified.
         """
+        # grid_physical_size is set based entirely on CoordSystem. So it is a rfm parameter not a grid parameter.
+        par.register_param(bool, __name__, "enable_grid_physical_size", True)
+        # For multipatch runs, set to "All". For single grid runs, set to the grid's CoordSystem.
+        #    Otherwise you'll find this pollutes the CodeParameter namespace.
+        par.register_CodeParameter(
+            "REAL",
+            __name__,
+            "grid_physical_size",
+            defaultvalue=10.0,
+            add_to_glb_code_params_dict=True,
+        )
+        par.register_CodeParameter(
+            "REAL",
+            __name__,
+            "grid_hole_radius",
+            defaultvalue=2.0,
+            add_to_glb_code_params_dict=True,
+        )
+        par.register_CodeParameter(
+            "char[100]",
+            __name__,
+            "CoordSystemName",
+            "unset",
+            add_to_glb_code_params_dict=True,
+            add_to_parfile=False,
+            add_to_set_CodeParameters_h=True,
+        )
+
         self.CoordSystem = CoordSystem
         self.SymPySimplifyExpressions = SymPySimplifyExpressions
 

@@ -13,12 +13,8 @@ from typing import Dict, Set, Tuple, Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.superB.output_0d_1d_2d_nearest_gridpoint_slices as out012d
 import nrpy.params as par
-from nrpy.infrastructures.BHaH import griddata_commondata
-from nrpy.infrastructures.superB.nrpyelliptic.conformally_flat_C_codegen_library import (
-    register_CFunction_compute_L2_norm_of_gridfunction_between_r1_r2,
-)
+from nrpy.infrastructures import BHaH, superB
 
 
 def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type]:
@@ -30,6 +26,30 @@ def register_CFunction_psi4_diagnostics_set_up() -> Union[None, pcg.NRPyEnv_type
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
+
+    par.register_CodeParameter(
+        cparam_type="int",
+        module=__name__,
+        name="num_psi4_extraction_radii",
+        defaultvalue=6,
+        description="Number of radii at which psi4 is extracted.",
+        add_to_parfile=True,
+        commondata=True,
+        add_to_set_CodeParameters_h=False,
+    )
+
+    # Register list_of_psi4_extraction_radii: the array containing extraction radii values.
+    par.register_CodeParameter(
+        cparam_type="REAL[6]",
+        module=__name__,
+        name="list_of_psi4_extraction_radii",
+        defaultvalue=[15, 30, 45, 60, 75, 90],
+        description="List of radii at which psi4 is extracted. Must set num_psi4_extraction_radii consistently.",
+        add_to_parfile=True,
+        commondata=True,
+        add_to_set_CodeParameters_h=False,
+        assumption="RealPositive",
+    )
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
@@ -370,6 +390,7 @@ def register_CFunction_diagnostics(
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
+
     _ = par.CodeParameter(
         "REAL",
         __name__,
@@ -394,18 +415,18 @@ def register_CFunction_diagnostics(
     # fmt: on
 
     for CoordSystem in set_of_CoordSystems:
-        out012d.register_CFunction_diagnostics_nearest_grid_center(
+        superB.output_0d_1d_2d_nearest_gridpoint_slices.register_CFunction_diagnostics_nearest_grid_center(
             CoordSystem=CoordSystem,
             out_quantities_dict=out_quantities_dict,
             filename_tuple=grid_center_filename_tuple,
         )
         for axis in ["y", "z"]:
-            out012d.register_CFunction_diagnostics_nearest_1d_axis(
+            superB.output_0d_1d_2d_nearest_gridpoint_slices.register_CFunction_diagnostics_nearest_1d_axis(
                 CoordSystem=CoordSystem,
                 out_quantities_dict=out_quantities_dict,
                 axis=axis,
             )
-            out012d.register_CFunction_diagnostics_set_up_nearest_1d_axis(
+            superB.output_0d_1d_2d_nearest_gridpoint_slices.register_CFunction_diagnostics_set_up_nearest_1d_axis(
                 CoordSystem=CoordSystem,
                 out_quantities_dict=out_quantities_dict,
                 filename_tuple=axis_filename_tuple,
@@ -413,12 +434,12 @@ def register_CFunction_diagnostics(
             )
 
         for plane in ["xy", "yz"]:
-            out012d.register_CFunction_diagnostics_nearest_2d_plane(
+            superB.output_0d_1d_2d_nearest_gridpoint_slices.register_CFunction_diagnostics_nearest_2d_plane(
                 CoordSystem=CoordSystem,
                 out_quantities_dict=out_quantities_dict,
                 plane=plane,
             )
-            out012d.register_CFunction_diagnostics_set_up_nearest_2d_plane(
+            superB.output_0d_1d_2d_nearest_gridpoint_slices.register_CFunction_diagnostics_set_up_nearest_2d_plane(
                 CoordSystem=CoordSystem,
                 out_quantities_dict=out_quantities_dict,
                 filename_tuple=plane_filename_tuple,
@@ -426,7 +447,7 @@ def register_CFunction_diagnostics(
             )
 
         if enable_L2norm_BSSN_constraints_diagnostics:
-            register_CFunction_compute_L2_norm_of_gridfunction_between_r1_r2(
+            superB.nrpyelliptic.L2norm_gf_between_r1_and_r2.register_CFunction_L2norm_gf_between_r1_and_r2(
                 CoordSystem=CoordSystem
             )
 
@@ -508,12 +529,12 @@ case OUTPUT_L2NORM_BSSN_CONSTRAINTS: {
   const REAL integration_radius2 = 1000;
   // Compute local sums for l2-norm of the Hamiltonian and momentum constraints
   REAL localsums_HGF[2];
-  compute_L2_norm_of_gridfunction_between_r1_r2(commondata, griddata_chare, integration_radius1, integration_radius2, HGF, diagnostic_output_gfs,
-                                                localsums_HGF);
+  L2norm_gf_between_r1_and_r2(commondata, griddata_chare, integration_radius1, integration_radius2, HGF, diagnostic_output_gfs,
+                              localsums_HGF);
 
   REAL localsums_MSQUAREDGF[2];
-  compute_L2_norm_of_gridfunction_between_r1_r2(commondata, griddata_chare, integration_radius1, integration_radius2, MSQUAREDGF,
-                                                diagnostic_output_gfs, localsums_MSQUAREDGF);
+  L2norm_gf_between_r1_and_r2(commondata, griddata_chare, integration_radius1, integration_radius2, MSQUAREDGF,
+                              diagnostic_output_gfs, localsums_MSQUAREDGF);
 
   localsums[0] = localsums_HGF[0];
   localsums[1] = localsums_HGF[1];
@@ -581,7 +602,7 @@ default: {
     )
 
     # Register diagnostic_struct's contribution to griddata_struct:
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         __name__,
         "diagnostic_struct diagnosticstruct",
         "store indices of 1d and 2d diagnostic points, the offset in the output file, etc",

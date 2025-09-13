@@ -21,7 +21,6 @@ import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.indexedexp as ixp
-import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
 import nrpy.validate_expressions.validate_expressions as ve
@@ -33,6 +32,7 @@ from nrpy.helpers.expression_utils import (
     generate_definition_header,
     get_params_commondata_symbols_from_expr_list,
 )
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_rhs_eval(
@@ -333,7 +333,7 @@ def register_CFunction_rhs_eval(
         **{k.replace("CUDA", "SIMD"): v for k, v in arg_dict_cuda.items()},
     }
 
-    kernel_body = lp.simple_loop(
+    kernel_body = BHaH.simple_loop.simple_loop(
         loop_body=ccg.c_codegen(
             expr_list,
             BSSN_RHSs_access_gf,

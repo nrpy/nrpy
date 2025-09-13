@@ -1,4 +1,4 @@
-#include "../BHaH_defines.h"
+#include "BHaH_defines.h"
 /**
  * rfm_precompute_defines: reference metric precomputed lookup arrays: defines
  */

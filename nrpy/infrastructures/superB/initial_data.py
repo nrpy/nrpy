@@ -13,13 +13,13 @@ from typing import List, Optional, Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter as admid
 from nrpy.equations.general_relativity.InitialData_Cartesian import (
     InitialData_Cartesian,
 )
 from nrpy.equations.general_relativity.InitialData_Spherical import (
     InitialData_Spherical,
 )
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
@@ -40,13 +40,15 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     :param enable_fd_functions: Whether to enable finite-difference functions.
     :param ID_persist_struct_str: String for persistent ID structure.
     """
-    includes, prefunc, lambdaU_launch = admid.setup_ADM_initial_data_reader(
-        ID_persist_struct_str=ID_persist_struct_str,
-        enable_T4munu=enable_T4munu,
-        enable_fd_functions=enable_fd_functions,
-        addl_includes=addl_includes,
-        CoordSystem=CoordSystem,
-        IDCoordSystem=IDCoordSystem,
+    includes, prefunc, lambdaU_launch = (
+        BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter.setup_ADM_initial_data_reader(
+            ID_persist_struct_str=ID_persist_struct_str,
+            enable_T4munu=enable_T4munu,
+            enable_fd_functions=enable_fd_functions,
+            addl_includes=addl_includes,
+            CoordSystem=CoordSystem,
+            IDCoordSystem=IDCoordSystem,
+        )
     )
 
     desc = f"Read ADM data in the {IDCoordSystem} basis, and output rescaled BSSN data in the {CoordSystem} basis"
@@ -63,9 +65,13 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
   switch (initial_data_part) {
     case INITIALDATA_BIN_ONE: {"""
 
-    body += admid.build_initial_data_conversion_loop(enable_T4munu)
+    body += BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter.build_initial_data_conversion_loop(
+        enable_T4munu
+    )
 
-    body += admid.build_lambdaU_zeroing_block()
+    body += (
+        BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter.build_lambdaU_zeroing_block()
+    )
 
     body += """
       break;
@@ -133,7 +139,7 @@ def register_CFunction_initial_data(
         else:
             ID = InitialData_Spherical(IDtype=IDtype)
 
-        admid.register_CFunction_exact_ADM_ID_function(
+        BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter.register_CFunction_exact_ADM_ID_function(
             IDCoordSystem,
             IDtype,
             ID.alpha,
@@ -187,7 +193,9 @@ griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_pers
     break;
   }"""
 
-    apply_inner_bcs_block = admid.build_apply_inner_bcs_block()
+    apply_inner_bcs_block = (
+        BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter.build_apply_inner_bcs_block()
+    )
     body += f"""
   case INITIALDATA_APPLYBCS_INNERONLY: {{
     for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {{

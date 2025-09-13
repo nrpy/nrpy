@@ -15,12 +15,12 @@ import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.helpers.parallelization.utilities as parallel_utils
-import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.params as par
 from nrpy.equations.nrpyelliptic.ConformallyFlat_RHSs import (
     HyperbolicRelaxationCurvilinearRHSs,
 )
 from nrpy.helpers.expression_utils import get_params_commondata_symbols_from_expr_list
+from nrpy.infrastructures import BHaH
 
 
 # Define function to evaluate RHSs
@@ -69,7 +69,7 @@ def register_CFunction_rhs_eval(
     # Populate uu_rhs, vv_rhs
     rhs = HyperbolicRelaxationCurvilinearRHSs(CoordSystem, enable_rfm_precompute)
     expr_list = [rhs.uu_rhs, rhs.vv_rhs]
-    loop_body = lp.simple_loop(
+    loop_body = BHaH.simple_loop.simple_loop(
         loop_body=ccg.c_codegen(
             expr_list,
             [

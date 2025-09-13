@@ -18,7 +18,7 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.indexedexp as ixp
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
-from nrpy.infrastructures.BHaH import griddata_commondata
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_bhahaha_find_horizons(
@@ -39,13 +39,13 @@ def register_CFunction_bhahaha_find_horizons(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         __name__,
         f"bhahaha_params_and_data_struct bhahaha_params_and_data[{max_horizons}]",
         "BHaHAHA parameters and data, including previous horizon data",
         is_commondata=True,
     )
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         __name__,
         f"bhahaha_diagnostics_struct bhahaha_diagnostics[{max_horizons}]",
         "BHaHAHA diagnostics",

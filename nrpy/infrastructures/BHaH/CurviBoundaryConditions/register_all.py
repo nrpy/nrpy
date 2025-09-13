@@ -22,10 +22,7 @@ Authors: Zachariah B. Etienne
 from typing import Set
 
 import nrpy.params as par
-from nrpy.infrastructures.BHaH import CurviBoundaryConditions, griddata_commondata
-from nrpy.infrastructures.BHaH.parallelization.cuda_utilities import (
-    register_CFunction_cpyHosttoDevice_bc_struct,
-)
+from nrpy.infrastructures import BHaH
 
 _ = par.CodeParameter(
     "char[50]", __name__, "outer_bc_type", "radiation", commondata=True
@@ -49,36 +46,36 @@ def register_C_functions(
     :param enable_masks: If True, make bcstruct algorithm mask-aware.
     """
     if par.parval_from_str("parallelization") == "cuda":
-        register_CFunction_cpyHosttoDevice_bc_struct()
+        BHaH.parallelization.cuda_utilities.register_CFunction_cpyHosttoDevice_bc_struct()
 
     for CoordSystem in set_of_CoordSystems:
         # Register C function to set up the boundary condition struct.
-        CurviBoundaryConditions.bcstruct_set_up.register_CFunction_bcstruct_set_up(
+        BHaH.CurviBoundaryConditions.bcstruct_set_up.register_CFunction_bcstruct_set_up(
             CoordSystem=CoordSystem,
             enable_masks=enable_masks,
         )
 
         # Register C function to apply boundary conditions to both pure outer and inner boundary points.
-        CurviBoundaryConditions.apply_bcs_outerradiation_and_inner.register_CFunction_apply_bcs_outerradiation_and_inner(
+        BHaH.CurviBoundaryConditions.apply_bcs_outerradiation_and_inner.register_CFunction_apply_bcs_outerradiation_and_inner(
             CoordSystem=CoordSystem,
             radiation_BC_fd_order=radiation_BC_fd_order,
         )
 
     # Register C function to apply boundary conditions to inner-only boundary points.
-    CurviBoundaryConditions.apply_bcs_inner_only.register_CFunction_apply_bcs_inner_only()
+    BHaH.CurviBoundaryConditions.apply_bcs_inner_only.register_CFunction_apply_bcs_inner_only()
 
     # Register C function to apply boundary conditions to outer-extrapolated and inner boundary points.
-    CurviBoundaryConditions.apply_bcs_outerextrap_and_inner.register_CFunction_apply_bcs_outerextrap_and_inner()
+    BHaH.CurviBoundaryConditions.apply_bcs_outerextrap_and_inner.register_CFunction_apply_bcs_outerextrap_and_inner()
 
     # Register bcstruct's contribution to griddata_struct and commondata_struct:
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         __name__,
         "bc_struct bcstruct",
         "all data needed to apply boundary conditions in curvilinear coordinates",
     )
 
     # Register bcstruct's contribution to BHaH_defines.h:
-    CurviBoundaryConditions.BHaH_defines.register_BHaH_defines_h(
+    BHaH.CurviBoundaryConditions.BHaH_defines.register_BHaH_defines_h(
         set_parity_on_aux=set_parity_on_aux, set_parity_on_auxevol=set_parity_on_auxevol
     )
 

@@ -26,11 +26,7 @@ import nrpy.params as par  # NRPy+: Parameter interface
 from nrpy.c_codegen import c_codegen
 from nrpy.grid import BHaHGridFunction, glb_gridfcs_dict
 from nrpy.helpers.generic import superfast_uniq
-from nrpy.infrastructures.BHaH import (
-    BHaH_defines_h,
-    MoLtimestepping,
-    griddata_commondata,
-)
+from nrpy.infrastructures import BHaH
 
 # fmt: off
 _ = par.CodeParameter("int", __name__, "nn_0", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
@@ -234,7 +230,9 @@ def generate_post_rhs_output_list(
     post_rhs = []
 
     if (
-        MoLtimestepping.gridfunction_names.is_diagonal_Butcher(Butcher_dict, MoL_method)
+        BHaH.MoLtimestepping.gridfunction_names.is_diagonal_Butcher(
+            Butcher_dict, MoL_method
+        )
         and "RK3" in MoL_method
     ):
         y_n_gfs = "Y_N_GFS"
@@ -254,7 +252,7 @@ def generate_post_rhs_output_list(
             post_rhs = [y_n_gfs]
     else:
         y_n = "Y_N_GFS"
-        if not MoLtimestepping.gridfunction_names.is_diagonal_Butcher(
+        if not BHaH.MoLtimestepping.gridfunction_names.is_diagonal_Butcher(
             Butcher_dict, MoL_method
         ):
             next_y_input = "NEXT_Y_INPUT_GFS"
@@ -296,7 +294,9 @@ def generate_rhs_output_exprs(
     rhs_output_expr = []
 
     if (
-        MoLtimestepping.gridfunction_names.is_diagonal_Butcher(Butcher_dict, MoL_method)
+        BHaH.MoLtimestepping.gridfunction_names.is_diagonal_Butcher(
+            Butcher_dict, MoL_method
+        )
         and "RK3" in MoL_method
     ):
         y_n_gfs = "Y_N_GFS"
@@ -312,7 +312,7 @@ def generate_rhs_output_exprs(
         elif s == 2:
             rhs_output_expr = [y_n_gfs]
     else:
-        if not MoLtimestepping.gridfunction_names.is_diagonal_Butcher(
+        if not BHaH.MoLtimestepping.gridfunction_names.is_diagonal_Butcher(
             Butcher_dict, MoL_method
         ):
             rhs_output_expr = [f"K{rk_substep}_GFS"]
@@ -429,7 +429,7 @@ for (int i = 0; i < NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot; i++) {"""
         non_y_n_gridfunctions_list,
         _diagnostic_gridfunctions_point_to,
         _diagnostic_gridfunctions2_point_to,
-    ) = MoLtimestepping.gridfunction_names.generate_gridfunction_names(
+    ) = BHaH.MoLtimestepping.gridfunction_names.generate_gridfunction_names(
         Butcher_dict, MoL_method=MoL_method
     )
     # Convert y_n_gridfunctions to a list if it's a string
@@ -532,7 +532,7 @@ def register_CFunction_MoL_step_forward_in_time(
         non_y_n_gridfunctions_list,
         _throwaway,
         _throwaway2,
-    ) = MoLtimestepping.gridfunction_names.generate_gridfunction_names(
+    ) = BHaH.MoLtimestepping.gridfunction_names.generate_gridfunction_names(
         Butcher_dict, MoL_method
     )
 
@@ -573,7 +573,9 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
 """
 
     if (
-        MoLtimestepping.gridfunction_names.is_diagonal_Butcher(Butcher_dict, MoL_method)
+        BHaH.MoLtimestepping.gridfunction_names.is_diagonal_Butcher(
+            Butcher_dict, MoL_method
+        )
         and "RK3" in MoL_method
     ):
         # Diagonal RK3 only!!!
@@ -707,7 +709,7 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
 
     else:
         y_n = sp.Symbol("y_n_gfsL", real=True)
-        if not MoLtimestepping.gridfunction_names.is_diagonal_Butcher(
+        if not BHaH.MoLtimestepping.gridfunction_names.is_diagonal_Butcher(
             Butcher_dict, MoL_method
         ):
             for s in range(num_steps):
@@ -1009,13 +1011,15 @@ def register_CFunctions(
     >>> register_CFunctions()
     >>> validate_strings(cfc.CFunction_dict["MoL_step_forward_in_time"].full_function, "superB_MoL")
     """
-    Butcher_dict = MoLtimestepping.rk_butcher_table_dictionary.generate_Butcher_tables()
+    Butcher_dict = (
+        BHaH.MoLtimestepping.rk_butcher_table_dictionary.generate_Butcher_tables()
+    )
 
     for which_gfs in ["y_n_gfs", "non_y_n_gfs"]:
-        MoLtimestepping.allocators.register_CFunction_MoL_malloc(
+        BHaH.MoLtimestepping.allocators.register_CFunction_MoL_malloc(
             Butcher_dict, MoL_method, which_gfs
         )
-        MoLtimestepping.allocators.register_CFunction_MoL_free_memory(
+        BHaH.MoLtimestepping.allocators.register_CFunction_MoL_free_memory(
             Butcher_dict, MoL_method, which_gfs
         )
 
@@ -1040,7 +1044,7 @@ def register_CFunctions(
             enable_simd=enable_simd,
         )
 
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         __name__, "MoL_gridfunctions_struct gridfuncs", "MoL gridfunctions"
     )
 
@@ -1050,7 +1054,7 @@ def register_CFunctions(
         non_y_n_gridfunctions_list,
         _diagnostic_gridfunctions_point_to,
         _diagnostic_gridfunctions2_point_to,
-    ) = MoLtimestepping.gridfunction_names.generate_gridfunction_names(
+    ) = BHaH.MoLtimestepping.gridfunction_names.generate_gridfunction_names(
         Butcher_dict, MoL_method=MoL_method
     )
 
@@ -1074,7 +1078,7 @@ def register_CFunctions(
     )
 
     # Step 3.b: Create MoL_timestepping struct:
-    BHaH_defines_h.register_BHaH_defines(
+    BHaH.BHaH_defines_h.register_BHaH_defines(
         "nrpy.infrastructures.BHaH.MoLtimestepping.BHaH_defines",
         f"typedef struct __MoL_gridfunctions_struct__ {{\n"
         f"""int num_evol_gfs_to_sync;

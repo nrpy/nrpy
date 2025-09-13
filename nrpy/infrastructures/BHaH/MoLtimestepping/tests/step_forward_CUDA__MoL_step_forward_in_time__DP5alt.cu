@@ -405,7 +405,6 @@ static void rk_substep_7__launcher(params_struct *restrict params, REAL *restric
 
 /**
  * Method of Lines (MoL) for "DP5alt" method: Step forward one full timestep.
- *
  */
 void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_struct *restrict griddata) {
 

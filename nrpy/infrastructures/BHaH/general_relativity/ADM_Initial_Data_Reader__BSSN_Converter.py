@@ -15,9 +15,7 @@ import nrpy.c_codegen as ccg  # NRPy+: C code generation
 import nrpy.c_function as cfc  # NRPy+: C function registration
 import nrpy.grid as gri  # NRPy+: Functions having to do with numerical grids
 import nrpy.helpers.jacobians as jac
-import nrpy.helpers.parallelization.utilities as gpu_utils
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
-import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.params as par  # NRPy+: Parameter interface
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 from nrpy.equations.general_relativity.ADM_to_BSSN import ADM_to_BSSN
@@ -28,8 +26,8 @@ from nrpy.helpers.expression_utils import (
     generate_definition_header,
     get_params_commondata_symbols_from_expr_list,
 )
-from nrpy.helpers.parallelization.utilities import generate_kernel_and_launch_code
-from nrpy.infrastructures.BHaH import BHaH_defines_h
+from nrpy.helpers.parallelization import utilities
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_exact_ADM_ID_function(
@@ -497,7 +495,7 @@ def Cfunction_initial_data_lambdaU_grid_interior(
     enable_intrinsics = (
         False  # FAILS FOR float: True if parallelization != "openmp" else False
     )
-    kernel_body = lp.simple_loop(
+    kernel_body = BHaH.simple_loop.simple_loop(
         ccg.c_codegen(
             lambdaU,
             [
@@ -514,19 +512,19 @@ def Cfunction_initial_data_lambdaU_grid_interior(
         read_xxs=True,
         enable_intrinsics=enable_intrinsics,
     )
-    loop_params = gpu_utils.get_loop_parameters(
+    loop_params = utilities.get_loop_parameters(
         parallelization, enable_intrinsics=enable_intrinsics
     )
     param_symbols, _ = get_params_commondata_symbols_from_expr_list(lambdaU)
     params_definitions = generate_definition_header(
         param_symbols,
         enable_intrinsics=enable_intrinsics,
-        var_access=gpu_utils.get_params_access(parallelization),
+        var_access=utilities.get_params_access(parallelization),
     ).replace("SIMD", "CUDA" if parallelization == "cuda" else "SIMD")
 
     kernel_body = f"{loop_params}\n{params_definitions}\n{kernel_body}"
 
-    prefunc, launch_body = generate_kernel_and_launch_code(
+    prefunc, launch_body = utilities.generate_kernel_and_launch_code(
         name,
         kernel_body,
         arg_dict_cuda,
@@ -594,7 +592,7 @@ def register_BHaH_defines_h(
     BHd_str += "} ID_persist_struct;\n"
 
     # register into BHaH_defines.h
-    BHaH_defines_h.register_BHaH_defines(__name__, BHd_str)
+    BHaH.BHaH_defines_h.register_BHaH_defines(__name__, BHd_str)
 
 
 def generate_ADM_Initial_Data_Reader_prefunc_and_lambdaU_launch(

@@ -141,10 +141,10 @@ def _configure_compiler_and_flags(
                 updated_addl_CFLAGS.append(flag)
 
     cflags_dict = {
-        "default": "-std=gnu99 -O2 -march=native -g -Wall",
-        "fast": "-std=gnu99 -O3 -funroll-loops -march=native -g -Wall",
-        "debug": "-std=gnu99 -O2 -g -Wall -Wno-unknown-pragmas",
-        "nvcc": "-Xcompiler -fopenmp -Xcompiler -g -O2 -arch=native -O2 -Xcompiler=-march=native -Xcompiler -Wall --forward-unknown-to-host-compiler --Werror cross-execution-space-call --relocatable-device-code=true -allow-unsupported-compiler",
+        "default": "-std=gnu99 -O2 -march=native -g -Wall -I.",
+        "fast": "-std=gnu99 -O3 -funroll-loops -march=native -g -Wall -I.",
+        "debug": "-I. -std=gnu99 -O2 -g -Wall -Wno-unknown-pragmas",
+        "nvcc": "-Xcompiler -fopenmp -Xcompiler -g -O2 -arch=native -O2 -Xcompiler=-march=native -Xcompiler -Wall --forward-unknown-to-host-compiler --Werror cross-execution-space-call --relocatable-device-code=true -allow-unsupported-compiler -I.",
     }
 
     if updated_addl_CFLAGS:

@@ -361,9 +361,9 @@ def simple_loop(
     rfm_reads = ["", "", ""]
     if enable_rfm_precompute:
         # pylint: disable=C0415
-        from nrpy.infrastructures.BHaH import rfm_precompute
+        from nrpy.infrastructures import BHaH
 
-        rfmp = rfm_precompute.ReferenceMetricPrecompute(CoordSystem)
+        rfmp = BHaH.rfm_precompute.ReferenceMetricPrecompute(CoordSystem)
         rfm_reads = (
             [
                 rfmp.readvr_intrinsics_inner_str[0],

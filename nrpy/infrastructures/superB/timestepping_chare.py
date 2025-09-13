@@ -15,11 +15,7 @@ import sympy as sp  # Import SymPy, a computer algebra system written entirely i
 import nrpy.c_function as cfc
 import nrpy.params as par
 from nrpy.helpers.generic import clang_format
-from nrpy.infrastructures.BHaH import MoLtimestepping, griddata_commondata
-from nrpy.infrastructures.superB.MoL import (
-    generate_post_rhs_output_list,
-    generate_rhs_output_exprs,
-)
+from nrpy.infrastructures import BHaH, superB
 
 
 def generate_send_nonlocalinnerbc_data_code(which_gf: str) -> str:
@@ -533,7 +529,7 @@ def generate_switch_statement_for_gf_types(
         non_y_n_gridfunctions_list,
         _diagnostic_gridfunctions_point_to,
         _diagnostic_gridfunctions2_point_to,
-    ) = MoLtimestepping.gridfunction_names.generate_gridfunction_names(
+    ) = BHaH.MoLtimestepping.gridfunction_names.generate_gridfunction_names(
         Butcher_dict, MoL_method=MoL_method
     )
 
@@ -622,7 +618,7 @@ def generate_switch_statement_for_gf_types_for_entry_method(
         non_y_n_gridfunctions_list,
         _diagnostic_gridfunctions_point_to,
         _diagnostic_gridfunctions2_point_to,
-    ) = MoLtimestepping.gridfunction_names.generate_gridfunction_names(
+    ) = BHaH.MoLtimestepping.gridfunction_names.generate_gridfunction_names(
         Butcher_dict, MoL_method=MoL_method
     )
 
@@ -684,7 +680,7 @@ def generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
         non_y_n_gridfunctions_list,
         _diagnostic_gridfunctions_point_to,
         _diagnostic_gridfunctions2_point_to,
-    ) = MoLtimestepping.gridfunction_names.generate_gridfunction_names(
+    ) = BHaH.MoLtimestepping.gridfunction_names.generate_gridfunction_names(
         Butcher_dict, MoL_method=MoL_method
     )
 
@@ -709,10 +705,10 @@ def generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
     post_rhs_output_list_all = []
     num_steps = len(Butcher_dict[MoL_method][0]) - 1
     for s in range(num_steps):
-        rhs_output_exprs_list = generate_rhs_output_exprs(
+        rhs_output_exprs_list = superB.MoL.generate_rhs_output_exprs(
             Butcher_dict, MoL_method, s + 1
         )
-        post_rhs_output_list = generate_post_rhs_output_list(
+        post_rhs_output_list = superB.MoL.generate_post_rhs_output_list(
             Butcher_dict, MoL_method, s + 1
         )
         rhs_output_exprs_list_all.extend(rhs_output_exprs_list)
@@ -792,7 +788,7 @@ def output_timestepping_cpp(
         ("MoL_malloc_non_y_n_gfs", "MoL.py"),
         ("initial_data", "initial_data.py"),
         ("MoL_step_forward_in_time", "MoL.py"),
-        ("diagnostics", "diagnostics.py"),
+        ("diagnostics", "log10_L2norm_gf.py"),
         ("MoL_free_memory_y_n_gfs", "MoL.py"),
         ("MoL_free_memory_non_y_n_gfs", "MoL.py"),
     ]:
@@ -1980,10 +1976,10 @@ def output_timestepping_ci(
 
     # Loop over RK substeps and loop directions.
     for s in range(num_steps):
-        rhs_output_exprs_list = generate_rhs_output_exprs(
+        rhs_output_exprs_list = superB.MoL.generate_rhs_output_exprs(
             Butcher_dict, MoL_method, s + 1
         )
-        post_rhs_output_list = generate_post_rhs_output_list(
+        post_rhs_output_list = superB.MoL.generate_post_rhs_output_list(
             Butcher_dict, MoL_method, s + 1
         )
         file_output_str += generate_mol_step_forward_code(
@@ -2232,7 +2228,9 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         enable_BHaHAHA=enable_BHaHAHA,
     )
 
-    Butcher_dict = MoLtimestepping.rk_butcher_table_dictionary.generate_Butcher_tables()
+    Butcher_dict = (
+        BHaH.MoLtimestepping.rk_butcher_table_dictionary.generate_Butcher_tables()
+    )
 
     output_timestepping_cpp(
         project_dir=project_dir,
@@ -2271,7 +2269,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
     )
 
     # Register temporary buffers for face data communication to griddata_struct:
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         __name__,
         "tmpBuffers_struct tmpBuffers",
         "temporary buffer for sending face data to neighbor chares",

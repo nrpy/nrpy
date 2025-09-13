@@ -13,16 +13,8 @@ from typing import List, Tuple, Union, cast
 import sympy as sp  # For symbolic computations
 
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
+import nrpy.params as par
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
-from nrpy.equations.nrpyelliptic.CommonParams import (
-    P0U,
-    P1U,
-    S0U,
-    S1U,
-    bare_mass_0,
-    bare_mass_1,
-    zPunc,
-)
 
 
 def compute_psi_background_and_ADD_times_AUU(
@@ -35,6 +27,37 @@ def compute_psi_background_and_ADD_times_AUU(
 
     :return: psi_background, ADD_times_AUU
     """
+    # Step 0: Define puncture parameters
+
+    # Step 0.a: bare masses
+    bare_mass_0 = par.register_CodeParameter(
+        "REAL", __name__, "bare_mass_0", 0.0, commondata=True
+    )
+    bare_mass_1 = par.register_CodeParameter(
+        "REAL", __name__, "bare_mass_1", 0.0, commondata=True
+    )
+
+    # Step 0.b: position of the punctures in the z axis
+    zPunc = par.register_CodeParameter("REAL", __name__, "zPunc", 5.0, commondata=True)
+
+    # Step 0.c.1: linear momentum 0
+    P0U = par.register_CodeParameters(
+        "REAL", __name__, ["P0_x", "P0_y", "P0_z"], 0.0, commondata=True
+    )
+    # Step 0.c.2: linear momentum 1
+    P1U = par.register_CodeParameters(
+        "REAL", __name__, ["P1_x", "P1_y", "P1_z"], 0.0, commondata=True
+    )
+
+    # Step 0.d.1: angular momentum 0
+    S0U = par.register_CodeParameters(
+        "REAL", __name__, ["S0_x", "S0_y", "S0_z"], 0.0, commondata=True
+    )
+    # Step 0.d.2: angular momentum 1
+    S1U = par.register_CodeParameters(
+        "REAL", __name__, ["S1_x", "S1_y", "S1_z"], 0.0, commondata=True
+    )
+
     # Step 1: Set up the reference metric
     rfm = refmetric.reference_metric[CoordSystem]
 

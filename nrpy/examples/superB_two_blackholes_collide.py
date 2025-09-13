@@ -25,28 +25,9 @@ import subprocess
 from pathlib import Path
 
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
-import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
-import nrpy.infrastructures.BHaH.CodeParameters as CPs
-import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
-import nrpy.infrastructures.BHaH.numerical_grids_and_timestep as numericalgrids
-import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xxCartxx
-import nrpy.infrastructures.superB.chare_communication_maps as charecomm
-import nrpy.infrastructures.superB.CurviBoundaryConditions as superBcbc
-import nrpy.infrastructures.superB.diagnostics as superBdiagnostics
-import nrpy.infrastructures.superB.horizon_finder_chare as superBhorizonfinder
-import nrpy.infrastructures.superB.initial_data as superBinitialdata
-import nrpy.infrastructures.superB.interpolator3d_chare as superBinterpolator3d
-import nrpy.infrastructures.superB.main_chare as superBmain
-import nrpy.infrastructures.superB.Makefile_helpers as superBMakefile
-import nrpy.infrastructures.superB.MoL as superBMoL
-import nrpy.infrastructures.superB.numerical_grids as superBnumericalgrids
-import nrpy.infrastructures.superB.superB.superB_pup as superBpup
-import nrpy.infrastructures.superB.timestepping_chare as superBtimestepping
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
-from nrpy.infrastructures.BHaH import rfm_precompute, rfm_wrapper_functions
-from nrpy.infrastructures.BHaH.general_relativity import BSSN
+from nrpy.infrastructures import BHaH, superB
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -175,26 +156,29 @@ if enable_BHaHAHA:
     superBhorizonfinder.output_horizon_finder_h_cpp_ci(project_dir=project_dir)
 
 
-superBinitialdata.register_CFunction_initial_data(
+#########################################################
+# STEP 2: Declare core C functions & register each to
+#         cfc.CFunction_dict["function_name"]
+superB.initial_data.register_CFunction_initial_data(
     CoordSystem=CoordSystem,
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
     ID_persist_struct_str="",
 )
 
-numericalgrids.register_CFunctions(
+BHaH.numerical_grids_and_timestep.register_CFunctions(
     set_of_CoordSystems={CoordSystem},
     list_of_grid_physical_sizes=[grid_physical_size],
     Nxx_dict=Nxx_dict,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
 )
-superBnumericalgrids.register_CFunctions(
+superB.numerical_grids.register_CFunctions(
     set_of_CoordSystems={CoordSystem},
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
 )
-superBdiagnostics.register_CFunction_diagnostics(
+superB.diagnostics.register_CFunction_diagnostics(
     set_of_CoordSystems={CoordSystem},
     default_diagnostics_out_every=diagnostics_output_every,
     grid_center_filename_tuple=("out0d-conv_factor%.2f.txt", "convergence_factor"),
@@ -212,8 +196,10 @@ superBdiagnostics.register_CFunction_diagnostics(
 )
 
 if enable_rfm_precompute:
-    rfm_precompute.register_CFunctions_rfm_precompute(set_of_CoordSystems={CoordSystem})
-BSSN.rhs_eval.register_CFunction_rhs_eval(
+    BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
+        set_of_CoordSystems={CoordSystem}
+    )
+BHaH.general_relativity.BSSN.rhs_eval.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
@@ -226,20 +212,20 @@ BSSN.rhs_eval.register_CFunction_rhs_eval(
     enable_CAKO=enable_CAKO,
     OMP_collapse=OMP_collapse,
 )
-BSSN.Ricci_eval.register_CFunction_Ricci_eval(
+BHaH.general_relativity.BSSN.Ricci_eval.register_CFunction_Ricci_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_intrinsics=enable_intrinsics,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
-BSSN.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
+BHaH.general_relativity.BSSN.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
-BSSN.constraints.register_CFunction_constraints(
+BHaH.general_relativity.BSSN.constraints.register_CFunction_constraints(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
@@ -252,8 +238,10 @@ BSSN.constraints.register_CFunction_constraints(
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 
-charecomm.chare_comm_register_C_functions(set_of_CoordSystems={CoordSystem})
-superBcbc.CurviBoundaryConditions_register_C_functions(
+superB.chare_communication_maps.chare_comm_register_C_functions(
+    set_of_CoordSystems={CoordSystem}
+)
+superB.CurviBoundaryConditions.CurviBoundaryConditions_register_C_functions(
     set_of_CoordSystems={CoordSystem},
     radiation_BC_fd_order=radiation_BC_fd_order,
     set_parity_on_aux=True,
@@ -279,7 +267,7 @@ if outer_bcs_type != "radiation":
     post_rhs_bcs_str += """
 apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);"""
 
-superBMoL.register_CFunctions(
+superB.MoL.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,
     post_rhs_bcs_str=post_rhs_bcs_str,
@@ -288,10 +276,10 @@ superBMoL.register_CFunctions(
     enable_curviBCs=True,
 )
 
-xxCartxx.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
-xxCartxx.register_CFunction_xx_to_Cart(CoordSystem)
-progress.register_CFunction_progress_indicator()
-rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
+BHaH.xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
+BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
+BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator()
+BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
 #########################################################
 # STEP 3: Generate header files, register C functions and
@@ -325,14 +313,16 @@ par.adjust_CodeParam_default(
 par.adjust_CodeParam_default("bah_verbosity_level", 0)
 
 
-CPs.write_CodeParameters_h_files(project_dir=project_dir)
-CPs.register_CFunctions_params_commondata_struct_set_to_default()
-cmdpar.generate_default_parfile(project_dir=project_dir, project_name=project_name)
-cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
+BHaH.CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
+BHaH.CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
+BHaH.cmdline_input_and_parfiles.generate_default_parfile(
+    project_dir=project_dir, project_name=project_name
+)
+BHaH.cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
     project_name=project_name, cmdline_inputs=["convergence_factor"]
 )
 
-superBpup.register_CFunction_superB_pup_routines(
+superB.superB.superB_pup.register_CFunction_superB_pup_routines(
     MoL_method=MoL_method,
 )
 copy_files(
@@ -342,11 +332,11 @@ copy_files(
     subdirectory="superB",
 )
 
-superBmain.output_commondata_object_h_and_main_h_cpp_ci(
+superB.main_chare.output_commondata_object_h_and_main_h_cpp_ci(
     project_dir=project_dir,
     enable_BHaHAHA=enable_BHaHAHA,
 )
-superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
+superB.timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(
     project_dir=project_dir,
     MoL_method=MoL_method,
     outer_bcs_type=outer_bcs_type,
@@ -356,11 +346,8 @@ superBtimestepping.output_timestepping_h_cpp_ci_register_CFunctions(
     enable_BHaHAHA=enable_BHaHAHA,
 )
 
-Bdefines_h.output_BHaH_defines_h(
-    additional_includes=[
-        str(Path("superB") / Path("superB.h")),
-        os.path.join(BHaHAHA_subdir, "BHaHAHA.h"),
-    ],
+BHaH.BHaH_defines_h.output_BHaH_defines_h(
+    additional_includes=[str(Path("superB") / Path("superB.h"))],
     project_dir=project_dir,
     enable_intrinsics=enable_intrinsics,
     enable_rfm_precompute=enable_rfm_precompute,
@@ -375,7 +362,7 @@ if enable_intrinsics:
         subdirectory="intrinsics",
     )
 
-superBMakefile.output_CFunctions_function_prototypes_and_construct_Makefile(
+superB.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
     addl_dirs_to_make=[BHaHAHA_subdir],

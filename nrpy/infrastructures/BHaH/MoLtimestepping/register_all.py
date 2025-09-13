@@ -23,19 +23,7 @@ Authors: Zachariah B. Etienne (lead maintainer)
          Brandon Clark (original, NRPy1 version)
 """
 import nrpy.params as par
-from nrpy.infrastructures.BHaH import MoLtimestepping, griddata_commondata
-
-# fmt: off
-_ = par.CodeParameter("int", __name__, "nn_0", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
-_ = par.CodeParameter("int", __name__, "nn", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
-_ = par.CodeParameter("REAL", __name__, "CFL_FACTOR", 0.5, commondata=True)
-_ = par.CodeParameter("REAL", __name__, "dt", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
-_ = par.CodeParameter("REAL", __name__, "t_0", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
-_ = par.CodeParameter("REAL", __name__, "time", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
-_ = par.CodeParameter("REAL", __name__, "t_final", 10.0, commondata=True)
-
-
-# fmt: on
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunctions(
@@ -76,7 +64,6 @@ def register_CFunctions(
      * Method of Lines (MoL) for "RK4" method: Free memory for "non_y_n_gfs" gridfunctions
      *    - y_n_gfs are used to store data for the vector of gridfunctions y_i at t_n, at the start of each MoL timestep
      *    - non_y_n_gfs are needed for intermediate (e.g., k_i) storage in chosen MoL method
-     *
      */
     void MoL_free_memory_non_y_n_gfs(MoL_gridfunctions_struct *restrict gridfuncs) {
       BHAH_FREE(gridfuncs->y_nplus1_running_total_gfs);
@@ -107,22 +94,36 @@ def register_CFunctions(
     } // END FUNCTION MoL_malloc_non_y_n_gfs
     <BLANKLINE>
     """
-    MoLtimestepping.rk_substep.check_supported_parallelization("register_CFunctions")
+    # fmt: off
+    _ = par.CodeParameter("int", __name__, "nn_0", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
+    _ = par.CodeParameter("int", __name__, "nn", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
+    _ = par.CodeParameter("REAL", __name__, "CFL_FACTOR", 0.5, commondata=True)
+    _ = par.CodeParameter("REAL", __name__, "dt", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
+    _ = par.CodeParameter("REAL", __name__, "t_0", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
+    _ = par.CodeParameter("REAL", __name__, "time", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
+    _ = par.CodeParameter("REAL", __name__, "t_final", 10.0, commondata=True)
+    # fmt: on
 
-    Butcher_dict = MoLtimestepping.rk_butcher_table_dictionary.generate_Butcher_tables()
+    BHaH.MoLtimestepping.rk_substep.check_supported_parallelization(
+        "register_CFunctions"
+    )
+
+    Butcher_dict = (
+        BHaH.MoLtimestepping.rk_butcher_table_dictionary.generate_Butcher_tables()
+    )
 
     # Step 1: Build all memory alloc and free:
     for which_gfs in ["y_n_gfs", "non_y_n_gfs"]:
-        MoLtimestepping.allocators.register_CFunction_MoL_malloc(
+        BHaH.MoLtimestepping.allocators.register_CFunction_MoL_malloc(
             Butcher_dict, MoL_method, which_gfs
         )
-        MoLtimestepping.allocators.register_CFunction_MoL_free_memory(
+        BHaH.MoLtimestepping.allocators.register_CFunction_MoL_free_memory(
             Butcher_dict, MoL_method, which_gfs
         )
 
     # Step 2: Possibly register the main stepping function:
     if register_MoL_step_forward_in_time:
-        MoLtimestepping.step_forward.register_CFunction_MoL_step_forward_in_time(
+        BHaH.MoLtimestepping.step_forward.register_CFunction_MoL_step_forward_in_time(
             Butcher_dict,
             MoL_method,
             rhs_string,
@@ -135,11 +136,11 @@ def register_CFunctions(
         )
 
     # Step 3: Register the struct in BHaH_defines_h:
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         __name__, "MoL_gridfunctions_struct gridfuncs", "MoL gridfunctions"
     )
 
-    MoLtimestepping.BHaH_defines.register_BHaH_defines_h(Butcher_dict, MoL_method)
+    BHaH.MoLtimestepping.BHaH_defines.register_BHaH_defines_h(Butcher_dict, MoL_method)
 
 
 if __name__ == "__main__":

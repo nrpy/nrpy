@@ -26,15 +26,14 @@ void diagnostics(commondata_struct *restrict commondata, griddata_struct *restri
     const rfm_struct *restrict rfmstruct = griddata[grid].rfmstruct;
 
     // Compute Hamiltonian constraint violation and store it at diagnostic_output_gfs
-    compute_residual_all_points(commondata, params, rfmstruct, auxevol_gfs, y_n_gfs, diagnostic_output_gfs);
+    residual_H_compute_all_points(commondata, params, rfmstruct, auxevol_gfs, y_n_gfs, diagnostic_output_gfs);
 
     // Set integration radius for l2-norm computation
     const REAL integration_radius = 1000;
 
     // Compute l2-norm of Hamiltonian constraint violation
     REAL residual_H;
-    compute_L2_norm_of_gridfunction(commondata, &griddata[grid].params, griddata[grid].xx, integration_radius, RESIDUAL_HGF, &residual_H,
-                                    diagnostic_output_gfs);
+    log10_L2norm_gf(commondata, &griddata[grid].params, griddata[grid].xx, integration_radius, RESIDUAL_HGF, &residual_H, diagnostic_output_gfs);
     global_norm = MAX(global_norm, residual_H);
   } // END for(grid=0; grid<commondata->NUMGRIDS; ++grid)
 
