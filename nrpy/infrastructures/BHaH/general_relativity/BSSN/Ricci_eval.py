@@ -16,13 +16,13 @@ import nrpy.finite_difference as fin
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.helpers.parallelization.utilities as parallel_utils
-import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.params as par
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.helpers.expression_utils import (
     generate_definition_header,
     get_params_commondata_symbols_from_expr_list,
 )
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_Ricci_eval(
@@ -92,7 +92,7 @@ def register_CFunction_Ricci_eval(
         Ricci_access_gfs += [
             gri.BHaHGridFunction.access_gf(var, 0, 0, 0, gf_array_name="auxevol_gfs")
         ]
-    kernel_body = lp.simple_loop(
+    kernel_body = BHaH.simple_loop.simple_loop(
         loop_body=ccg.c_codegen(
             Bq.Ricci_exprs,
             Ricci_access_gfs,

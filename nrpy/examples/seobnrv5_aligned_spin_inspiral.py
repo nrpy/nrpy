@@ -17,64 +17,8 @@ from pathlib import Path
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
-import nrpy.infrastructures.BHaH.cmdline_input_and_parfiles as cmdpar
-import nrpy.infrastructures.BHaH.CodeParameters as CPs
-import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 import nrpy.params as par
-from nrpy.infrastructures.BHaH.seobnr import (
-    SEOBNRv5_aligned_spin_coefficients,
-    SEOBNRv5_aligned_spin_IMR_waveform,
-)
-from nrpy.infrastructures.BHaH.seobnr.dynamics import (
-    SEOBNRv5_aligned_spin_argrelmin,
-    SEOBNRv5_aligned_spin_augments,
-    SEOBNRv5_aligned_spin_flux,
-    SEOBNRv5_aligned_spin_interpolate_dynamics,
-    SEOBNRv5_aligned_spin_iterative_refinement,
-    SEOBNRv5_aligned_spin_ode_integration,
-    SEOBNRv5_aligned_spin_right_hand_sides,
-    eval_abs_deriv,
-    find_local_minimum_index,
-)
-from nrpy.infrastructures.BHaH.seobnr.fft_utils import (
-    SEOBNRv5_aligned_spin_FD_waveform,
-    SEOBNRv5_aligned_spin_process_waveform,
-)
-from nrpy.infrastructures.BHaH.seobnr.initial_conditions import (
-    SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit,
-    SEOBNRv5_aligned_spin_initial_conditions_conservative_nodf,
-    SEOBNRv5_aligned_spin_initial_conditions_dissipative,
-    SEOBNRv5_aligned_spin_multidimensional_root_wrapper,
-    SEOBNRv5_aligned_spin_radial_momentum_condition,
-)
-from nrpy.infrastructures.BHaH.seobnr.inspiral_waveform import (
-    SEOBNRv5_aligned_spin_gamma_wrapper,
-    SEOBNRv5_aligned_spin_interpolate_modes,
-    SEOBNRv5_aligned_spin_waveform,
-    SEOBNRv5_aligned_spin_waveform_from_dynamics,
-)
-from nrpy.infrastructures.BHaH.seobnr.inspiral_waveform_precomputed import (
-    SEOBNRv5_aligned_spin_flux_precomputed,
-    SEOBNRv5_aligned_spin_waveform_coefficients,
-    SEOBNRv5_aligned_spin_waveform_precomputed,
-)
-from nrpy.infrastructures.BHaH.seobnr.merger_waveform import (
-    BOB_aligned_spin_waveform,
-    BOB_aligned_spin_waveform_from_times,
-    SEOBNRv5_aligned_spin_merger_waveform,
-    SEOBNRv5_aligned_spin_merger_waveform_from_times,
-)
-from nrpy.infrastructures.BHaH.seobnr.nqc_corrections import (
-    BOB_aligned_spin_NQC_rhs,
-    SEOBNRv5_aligned_spin_NQC_corrections,
-    SEOBNRv5_aligned_spin_NQC_rhs,
-)
-from nrpy.infrastructures.BHaH.seobnr.utils import (
-    SEOBNRv5_aligned_spin_unwrap,
-    commondata_io,
-    handle_gsl_return_status,
-)
+from nrpy.infrastructures import BHaH
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -226,46 +170,46 @@ return 0;
 
 
 # register utilities needed by the waveform code
-commondata_io.register_CFunction_commondata_io()
-handle_gsl_return_status.register_CFunction_handle_gsl_return_status()
-SEOBNRv5_aligned_spin_unwrap.register_CFunction_SEOBNRv5_aligned_spin_unwrap()
+BHaH.seobnr.utils.commondata_io.register_CFunction_commondata_io()
+BHaH.seobnr.utils.handle_gsl_return_status.register_CFunction_handle_gsl_return_status()
+BHaH.seobnr.utils.SEOBNRv5_aligned_spin_unwrap.register_CFunction_SEOBNRv5_aligned_spin_unwrap()
 
 # register SEOBNRv5 coefficients
-SEOBNRv5_aligned_spin_coefficients.register_CFunction_SEOBNRv5_aligned_spin_coefficients()
+BHaH.seobnr.SEOBNRv5_aligned_spin_coefficients.register_CFunction_SEOBNRv5_aligned_spin_coefficients()
 
 # register initial condition routines
-SEOBNRv5_aligned_spin_multidimensional_root_wrapper.register_CFunction_SEOBNRv5_multidimensional_root_wrapper()
-SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit()
+BHaH.seobnr.initial_conditions.SEOBNRv5_aligned_spin_multidimensional_root_wrapper.register_CFunction_SEOBNRv5_multidimensional_root_wrapper()
+BHaH.seobnr.initial_conditions.SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit()
 # SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_dRHS.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_dRHS()
 # SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_RHSdRHS.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_RHSdRHS()
 # SEOBNRv5_aligned_spin_initial_conditions_conservative.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conservative()
-SEOBNRv5_aligned_spin_initial_conditions_conservative_nodf.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conservative_nodf()
-SEOBNRv5_aligned_spin_radial_momentum_condition.register_CFunction_SEOBNRv5_aligned_spin_radial_momentum_condition()
-SEOBNRv5_aligned_spin_initial_conditions_dissipative.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_dissipative()
+BHaH.seobnr.initial_conditions.SEOBNRv5_aligned_spin_initial_conditions_conservative_nodf.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conservative_nodf()
+BHaH.seobnr.initial_conditions.SEOBNRv5_aligned_spin_radial_momentum_condition.register_CFunction_SEOBNRv5_aligned_spin_radial_momentum_condition()
+BHaH.seobnr.initial_conditions.SEOBNRv5_aligned_spin_initial_conditions_dissipative.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_dissipative()
 
 # register trajectory integration and processing routines
-eval_abs_deriv.register_CFunction_eval_abs_deriv()
-find_local_minimum_index.register_CFunction_find_local_minimum_index()
-SEOBNRv5_aligned_spin_argrelmin.register_CFunction_SEOBNRv5_aligned_spin_argrelmin()
-SEOBNRv5_aligned_spin_augments.register_CFunction_SEOBNRv5_aligned_spin_augments()
-SEOBNRv5_aligned_spin_interpolate_dynamics.register_CFunction_SEOBNRv5_aligned_spin_interpolate_dynamics()
-SEOBNRv5_aligned_spin_iterative_refinement.register_CFunction_SEOBNRv5_aligned_spin_iterative_refinement()
-SEOBNRv5_aligned_spin_right_hand_sides.register_CFunction_SEOBNRv5_aligned_spin_right_hand_sides()
-SEOBNRv5_aligned_spin_ode_integration.register_CFunction_SEOBNRv5_aligned_spin_ode_integration(
+BHaH.seobnr.dynamics.eval_abs_deriv.register_CFunction_eval_abs_deriv()
+BHaH.seobnr.dynamics.find_local_minimum_index.register_CFunction_find_local_minimum_index()
+BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_argrelmin.register_CFunction_SEOBNRv5_aligned_spin_argrelmin()
+BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_augments.register_CFunction_SEOBNRv5_aligned_spin_augments()
+BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_interpolate_dynamics.register_CFunction_SEOBNRv5_aligned_spin_interpolate_dynamics()
+BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_iterative_refinement.register_CFunction_SEOBNRv5_aligned_spin_iterative_refinement()
+BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_right_hand_sides.register_CFunction_SEOBNRv5_aligned_spin_right_hand_sides()
+BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_ode_integration.register_CFunction_SEOBNRv5_aligned_spin_ode_integration(
     perform_iterative_refinement
 )
 
 # register inspiral waveform routines
-SEOBNRv5_aligned_spin_gamma_wrapper.register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper()
-SEOBNRv5_aligned_spin_interpolate_modes.register_CFunction_SEOBNRv5_aligned_spin_interpolate_modes()
-SEOBNRv5_aligned_spin_waveform_from_dynamics.register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics()
+BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_gamma_wrapper.register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper()
+BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_interpolate_modes.register_CFunction_SEOBNRv5_aligned_spin_interpolate_modes()
+BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_waveform_from_dynamics.register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics()
 if precompute_waveform_coefficients_flag:
-    SEOBNRv5_aligned_spin_waveform_coefficients.register_CFunction_SEOBNRv5_aligned_spin_waveform_coefficients()
-    SEOBNRv5_aligned_spin_waveform_precomputed.register_CFunction_SEOBNRv5_aligned_spin_waveform()
-    SEOBNRv5_aligned_spin_flux_precomputed.register_CFunction_SEOBNRv5_aligned_spin_flux()
+    BHaH.seobnr.inspiral_waveform_precomputed.SEOBNRv5_aligned_spin_waveform_coefficients.register_CFunction_SEOBNRv5_aligned_spin_waveform_coefficients()
+    BHaH.seobnr.inspiral_waveform_precomputed.SEOBNRv5_aligned_spin_waveform_precomputed.register_CFunction_SEOBNRv5_aligned_spin_waveform()
+    BHaH.seobnr.inspiral_waveform_precomputed.SEOBNRv5_aligned_spin_flux_precomputed.register_CFunction_SEOBNRv5_aligned_spin_flux()
 else:
-    SEOBNRv5_aligned_spin_waveform.register_CFunction_SEOBNRv5_aligned_spin_waveform()
-    SEOBNRv5_aligned_spin_flux.register_CFunction_SEOBNRv5_aligned_spin_flux()
+    BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_waveform.register_CFunction_SEOBNRv5_aligned_spin_waveform()
+    BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_flux.register_CFunction_SEOBNRv5_aligned_spin_flux()
 
 if __name__ == "__main__":
     print(
@@ -321,28 +265,28 @@ To learn more about usage options, run: python nrpy/example/seobnrv5_aligned_spi
             add_to_parfile=False,
             add_to_set_CodeParameters_h=False,
         )
-        SEOBNRv5_aligned_spin_FD_waveform.register_CFunction_SEOBNRv5_aligned_spin_FD_waveform()
-        SEOBNRv5_aligned_spin_process_waveform.register_CFunction_SEOBNRv5_aligned_spin_process_waveform()
+        BHaH.seobnr.fft_utils.SEOBNRv5_aligned_spin_FD_waveform.register_CFunction_SEOBNRv5_aligned_spin_FD_waveform()
+        BHaH.seobnr.fft_utils.SEOBNRv5_aligned_spin_process_waveform.register_CFunction_SEOBNRv5_aligned_spin_process_waveform()
 
     # set up NQC correction routines based on input flags
-    SEOBNRv5_aligned_spin_NQC_corrections.register_CFunction_SEOBNRv5_aligned_spin_NQC_corrections(
+    BHaH.seobnr.nqc_corrections.SEOBNRv5_aligned_spin_NQC_corrections.register_CFunction_SEOBNRv5_aligned_spin_NQC_corrections(
         numerical_relativity_nqc_flag
     )
     if numerical_relativity_nqc_flag:
-        SEOBNRv5_aligned_spin_NQC_rhs.register_CFunction_SEOBNRv5_aligned_spin_NQC_rhs()
+        BHaH.seobnr.nqc_corrections.SEOBNRv5_aligned_spin_NQC_rhs.register_CFunction_SEOBNRv5_aligned_spin_NQC_rhs()
     else:
-        BOB_aligned_spin_NQC_rhs.register_CFunction_BOB_aligned_spin_NQC_rhs()
+        BHaH.seobnr.nqc_corrections.BOB_aligned_spin_NQC_rhs.register_CFunction_BOB_aligned_spin_NQC_rhs()
 
     # set up merger-ringdown routines based on input flags
     if seobnv5_merger_ringdown_flag:
-        SEOBNRv5_aligned_spin_merger_waveform.register_CFunction_SEOBNRv5_aligned_spin_merger_waveform()
-        SEOBNRv5_aligned_spin_merger_waveform_from_times.register_CFunction_SEOBNRv5_aligned_spin_merger_waveform_from_times()
+        BHaH.seobnr.merger_waveform.SEOBNRv5_aligned_spin_merger_waveform.register_CFunction_SEOBNRv5_aligned_spin_merger_waveform()
+        BHaH.seobnr.merger_waveform.SEOBNRv5_aligned_spin_merger_waveform_from_times.register_CFunction_SEOBNRv5_aligned_spin_merger_waveform_from_times()
     else:
-        BOB_aligned_spin_waveform.register_CFunction_BOB_aligned_spin_waveform()
-        BOB_aligned_spin_waveform_from_times.register_CFunction_BOB_aligned_spin_waveform_from_times()
+        BHaH.seobnr.merger_waveform.BOB_aligned_spin_waveform.register_CFunction_BOB_aligned_spin_waveform()
+        BHaH.seobnr.merger_waveform.BOB_aligned_spin_waveform_from_times.register_CFunction_BOB_aligned_spin_waveform_from_times()
 
     # register IMR waveform generation routine
-    SEOBNRv5_aligned_spin_IMR_waveform.register_CFunction_SEOBNRv5_aligned_spin_IMR_waveform(
+    BHaH.seobnr.SEOBNRv5_aligned_spin_IMR_waveform.register_CFunction_SEOBNRv5_aligned_spin_IMR_waveform(
         seobnv5_merger_ringdown_flag
     )
     pcg.do_parallel_codegen()
@@ -351,10 +295,14 @@ To learn more about usage options, run: python nrpy/example/seobnrv5_aligned_spi
 #         command line parameters, set up boundary conditions,
 #         and create a Makefile for this project.
 #         Project is output to project/[project_name]/
-CPs.write_CodeParameters_h_files(set_commondata_only=True, project_dir=project_dir)
-CPs.register_CFunctions_params_commondata_struct_set_to_default()
-cmdpar.generate_default_parfile(project_dir=project_dir, project_name=project_name)
-cmdpar.register_CFunction_cmdline_input_and_parfile_parser(
+BHaH.CodeParameters.write_CodeParameters_h_files(
+    set_commondata_only=True, project_dir=project_dir
+)
+BHaH.CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
+BHaH.cmdline_input_and_parfiles.generate_default_parfile(
+    project_dir=project_dir, project_name=project_name
+)
+BHaH.cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
     project_name=project_name,
     cmdline_inputs=["mass_ratio", "chi1", "chi2", "initial_omega", "total_mass", "dt"],
 )
@@ -374,9 +322,11 @@ additional_includes = [
 ]
 if frequency_domain_flag:
     additional_includes.append(str(Path("fftw3.h")))
-Bdefines_h.output_BHaH_defines_h(
+BHaH.BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     additional_includes=additional_includes,
+    enable_intrinsics=False,
+    enable_rfm_precompute=False,
     supplemental_defines_dict={
         "SEOBNR": """
 #include<complex.h>
@@ -401,7 +351,6 @@ typedef struct {
 } spline_data;
 """
     },
-    enable_intrinsics=False,
 )
 register_CFunction_main_c(
     output_waveform_flag,
@@ -413,7 +362,7 @@ register_CFunction_main_c(
 addl_cflags = ["$(shell gsl-config --cflags)"]
 if frequency_domain_flag:
     addl_cflags.append("-lfftw3 -lm")
-Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
+BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
     exec_or_library_name=project_name,

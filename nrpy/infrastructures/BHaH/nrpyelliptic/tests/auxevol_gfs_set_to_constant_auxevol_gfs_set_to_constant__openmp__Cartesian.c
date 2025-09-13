@@ -153,13 +153,13 @@ static void variable_wavespeed_gfs_all_points_host(const params_struct *restrict
 
         /*
          *  Original SymPy expressions:
-         *  "[const REAL dsmin0 = dxx0]"
-         *  "[const REAL dsmin1 = dxx1]"
-         *  "[const REAL dsmin2 = dxx2]"
+         *  "[const REAL dsmin0 = params->dxx0]"
+         *  "[const REAL dsmin1 = params->dxx1]"
+         *  "[const REAL dsmin2 = params->dxx2]"
          */
-        const REAL dsmin0 = dxx0;
-        const REAL dsmin1 = dxx1;
-        const REAL dsmin2 = dxx2;
+        const REAL dsmin0 = params->dxx0;
+        const REAL dsmin1 = params->dxx1;
+        const REAL dsmin2 = params->dxx2;
 
         // Set local wavespeed
         in_gfs[IDX4(VARIABLE_WAVESPEEDGF, i0, i1, i2)] = MINIMUM_GLOBAL_WAVESPEED * MIN(dsmin0, MIN(dsmin1, dsmin2)) / dt;
@@ -172,14 +172,14 @@ static void variable_wavespeed_gfs_all_points_host(const params_struct *restrict
 /**
  * Call functions that set up all AUXEVOL gridfunctions.
  */
-void initialize_constant_auxevol__rfm__Cartesian(commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3],
+void auxevol_gfs_set_to_constant__rfm__Cartesian(commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3],
                                                  MoL_gridfunctions_struct *restrict gridfuncs) {
 #include "set_CodeParameters.h"
 
-  REAL *restrict auxevol_gfs = gridfuncs->auxevol_gfs;
-  REAL *restrict x0 = xx[0];
-  REAL *restrict x1 = xx[1];
-  REAL *restrict x2 = xx[2];
+  REAL *auxevol_gfs = gridfuncs->auxevol_gfs;
+  REAL *x0 = xx[0];
+  REAL *x1 = xx[1];
+  REAL *x2 = xx[2];
 
   // Set up variable wavespeed
   variable_wavespeed_gfs_all_points_host(params, x0, x1, x2, auxevol_gfs, dt, MINIMUM_GLOBAL_WAVESPEED);
@@ -187,4 +187,4 @@ void initialize_constant_auxevol__rfm__Cartesian(commondata_struct *restrict com
   // Set up all other AUXEVOL gridfunctions
   auxevol_gfs_all_points_host(commondata, params, x0, x1, x2, auxevol_gfs);
 
-} // END FUNCTION initialize_constant_auxevol__rfm__Cartesian
+} // END FUNCTION auxevol_gfs_set_to_constant__rfm__Cartesian

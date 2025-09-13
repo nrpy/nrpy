@@ -13,7 +13,7 @@ import nrpy.grid as gri
 import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.params as par
 from nrpy.helpers.generic import clang_format
-from nrpy.infrastructures.BHaH import griddata_commondata
+from nrpy.infrastructures import BHaH
 
 # The ordering of core_modules_list is based largely on data structure dependencies.
 # E.g., griddata_struct contains bc_struct. Module names are parallel scheme dependent.
@@ -48,14 +48,14 @@ def register_griddata_struct_and_return_griddata_struct_str(
     True
     """
     # Register griddata_struct contributions from BHaH modules.
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         "params",
         "params_struct params",
-        "BHaH parameters, generated from NRPy+'s CodeParameters",
+        "BHaH parameters, generated from NRPy's CodeParameters",
     )
     if any("reference_metric" in key for key in sys.modules):
         if enable_rfm_precompute:
-            griddata_commondata.register_griddata_commondata(
+            BHaH.griddata_commondata.register_griddata_commondata(
                 "reference_metric",
                 "rfm_struct* rfmstruct",
                 "includes e.g., 1D arrays of reference metric quantities",
@@ -68,7 +68,7 @@ typedef struct __griddata__ {
   REAL *restrict xx[3];
 """
     for module, item_list in par.glb_extras_dict["griddata_struct"].items():
-        griddata_struct_def += f"  // NRPy+ MODULE: {module}\n"
+        griddata_struct_def += f"  // NRPy MODULE: {module}\n"
         for item in item_list:
             griddata_struct_def += f"  {item.c_declaration};"
             if item.description:
@@ -422,10 +422,10 @@ def output_BHaH_defines_h(
     :param supplemental_defines_dict: Additional key-value pairs for defines.
 
     Doctests:
-    >>> from nrpy.infrastructures.BHaH import MoLtimestepping
+    >>> from nrpy.infrastructures import BHaH
     >>> import nrpy.finite_difference as fin
     >>> from nrpy.helpers.generic import validate_strings
-    >>> MoLtimestepping.register_all.register_CFunctions(register_MoL_step_forward_in_time=False)
+    >>> BHaH.MoLtimestepping.register_all.register_CFunctions(register_MoL_step_forward_in_time=False)
     >>> project_path = Path("/tmp", "tmp_BHaH_defines_h")
     >>> project_path.mkdir(parents=True, exist_ok=True)
     >>> output_BHaH_defines_h(project_dir=str(project_path))

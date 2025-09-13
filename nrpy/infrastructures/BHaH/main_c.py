@@ -48,7 +48,7 @@ def _check_required_functions() -> None:
         ("MoL_malloc_non_y_n_gfs", "MoL.py"),
         ("initial_data", "initial_data.py"),
         ("MoL_step_forward_in_time", "MoL.py"),
-        ("diagnostics", "diagnostics.py"),
+        ("diagnostics", "log10_L2norm_gf.py"),
         ("MoL_free_memory_y_n_gfs", "MoL.py"),
         ("MoL_free_memory_non_y_n_gfs", "MoL.py"),
     ]
@@ -344,14 +344,7 @@ def register_CFunction_main_c(
     >>> import nrpy.c_function as cfc
     >>> from nrpy.helpers.generic import validate_strings
     >>> import nrpy.params as par
-    >>> from nrpy.infrastructures.BHaH import (
-    ...     CodeParameters,
-    ...     MoLtimestepping,
-    ...     cmdline_input_and_parfiles,
-    ...     numerical_grids_and_timestep,
-    ... )
-    >>> # We need diagnostics and initial data functions to be registered, so we choose wave_equation for simplicity
-    >>> from nrpy.infrastructures.BHaH.wave_equation import diagnostics, initial_data_exact_soln
+    >>> from nrpy.infrastructures import BHaH
     >>> supported_Parallelizations = ["openmp", "cuda"]
     >>> set_of_coordsys = {"Cartesian"}
     >>> project_name = "main_test"
@@ -360,12 +353,12 @@ def register_CFunction_main_c(
     ...    par.glb_extras_dict.clear()
     ...    cfc.CFunction_dict.clear()
     ...    par.set_parval_from_str("parallelization", parallelization)
-    ...    CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
-    ...    cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(project_name)
-    ...    _ = diagnostics.register_CFunction_diagnostics(set_of_coordsys, 100)
-    ...    _ = numerical_grids_and_timestep.register_CFunctions(set_of_coordsys, [5], Nxx_dict)
-    ...    _ = MoLtimestepping.register_all.register_CFunctions()
-    ...    _ = initial_data_exact_soln.register_CFunction_initial_data(1)
+    ...    BHaH.CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
+    ...    BHaH.cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(project_name)
+    ...    _ = BHaH.wave_equation.diagnostics.register_CFunction_diagnostics(set_of_coordsys, 100)
+    ...    _ = BHaH.numerical_grids_and_timestep.register_CFunctions(set_of_coordsys, [5], Nxx_dict)
+    ...    _ = BHaH.MoLtimestepping.register_all.register_CFunctions()
+    ...    _ = BHaH.wave_equation.initial_data_exact_soln.register_CFunction_initial_data()
     ...    register_CFunction_main_c("RK4")
     ...    generated_str = cfc.CFunction_dict["main"].full_function
     ...    validation_desc = f"_{parallelization}".replace(" ", "_")

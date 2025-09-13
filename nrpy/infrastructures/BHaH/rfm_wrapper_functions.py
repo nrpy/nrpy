@@ -10,7 +10,7 @@ import re
 from typing import Dict, List, Set
 
 import nrpy.c_function as cfc
-from nrpy.infrastructures.BHaH.BHaH_defines_h import register_BHaH_defines
+from nrpy.infrastructures import BHaH
 
 
 def get_CoordSystem_hash(CoordSystem: str) -> int:
@@ -124,7 +124,7 @@ def register_CFunctions_CoordSystem_wrapper_funcs() -> None:
         CoordSystem_hash_dict.items(), key=lambda kv: kv[0].upper()
     ):
         BHd_str += f"#define {key.upper()} {item}\n"
-    register_BHaH_defines(__name__, BHd_str)
+    BHaH.BHaH_defines_h.register_BHaH_defines(__name__, BHd_str)
 
 
 if __name__ == "__main__":

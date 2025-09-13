@@ -13,14 +13,8 @@ import os
 import shutil
 
 import nrpy.c_function as cfc
-import nrpy.infrastructures.BHaH.general_relativity.NRPyPN_quasicircular_momenta as NRPyPNqm
 import nrpy.params as par
-from nrpy.infrastructures.BHaH import (
-    BHaH_defines_h,
-    CodeParameters,
-    Makefile_helpers,
-    cmdline_input_and_parfiles,
-)
+from nrpy.infrastructures import BHaH
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -71,21 +65,21 @@ return 0;
     )
 
 
-NRPyPNqm.register_CFunction_NRPyPN_quasicircular_momenta()
+BHaH.general_relativity.NRPyPN_quasicircular_momenta.register_CFunction_NRPyPN_quasicircular_momenta()
 
 #########################################################
 # STEP 3: Generate header files, register C functions and
 #         command line parameters, set up boundary conditions,
 #         and create a Makefile for this project.
 #         Project is output to project/[project_name]/
-CodeParameters.write_CodeParameters_h_files(
+BHaH.CodeParameters.write_CodeParameters_h_files(
     set_commondata_only=True, project_dir=project_dir
 )
-CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
-cmdline_input_and_parfiles.generate_default_parfile(
+BHaH.CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
+BHaH.cmdline_input_and_parfiles.generate_default_parfile(
     project_dir=project_dir, project_name=project_name
 )
-cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
+BHaH.cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
     project_name=project_name,
     cmdline_inputs=[
         "initial_sep",
@@ -98,10 +92,14 @@ cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
         "bbhxy_BH_m_chiz",
     ],
 )
-BHaH_defines_h.output_BHaH_defines_h(project_dir=project_dir, enable_intrinsics=False)
+BHaH.BHaH_defines_h.output_BHaH_defines_h(
+    project_dir=project_dir,
+    enable_intrinsics=False,
+    enable_rfm_precompute=False,
+)
 register_CFunction_main_c()
 
-Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
+BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
     exec_or_library_name=project_name,

@@ -11,7 +11,7 @@ Authors: Zachariah B. Etienne
 from typing import Dict, List, Tuple, Union
 
 import nrpy.params as par
-from nrpy.infrastructures.BHaH import BHaH_defines_h, MoLtimestepping
+from nrpy.infrastructures import BHaH
 
 
 def register_BHaH_defines_h(
@@ -30,7 +30,7 @@ def register_BHaH_defines_h(
         non_y_n_gridfunctions_list,
         _diag_pt,
         _diag_pt2,
-    ) = MoLtimestepping.gridfunction_names.generate_gridfunction_names(
+    ) = BHaH.MoLtimestepping.gridfunction_names.generate_gridfunction_names(
         Butcher_dict, MoL_method=MoL_method
     )
 
@@ -46,4 +46,4 @@ REAL *restrict diagnostic_output_gfs2;
     if parallelization != "openmp":
         BHaH_MoL_body = BHaH_MoL_body.replace("REAL *restrict ", "REAL * ")
 
-    BHaH_defines_h.register_BHaH_defines(__name__, BHaH_MoL_body)
+    BHaH.BHaH_defines_h.register_BHaH_defines(__name__, BHaH_MoL_body)

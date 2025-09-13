@@ -1,11 +1,11 @@
 #include "BHaH_defines.h"
 #include "intrinsics/cuda_intrinsics.h"
 /**
- * Kernel: compute_residual_all_points_gpu.
+ * Kernel: residual_H_compute_all_points_gpu.
  * Kernel to compute the residual throughout the grid.
  */
-__global__ static void compute_residual_all_points_gpu(const size_t streamid, const rfm_struct *restrict rfmstruct, const REAL *restrict auxevol_gfs,
-                                                       const REAL *restrict in_gfs, REAL *restrict aux_gfs) {
+__global__ static void residual_H_compute_all_points_gpu(const size_t streamid, const rfm_struct *restrict rfmstruct,
+                                                         const REAL *restrict auxevol_gfs, const REAL *restrict in_gfs, REAL *restrict aux_gfs) {
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = d_params[streamid].Nxx_plus_2NGHOSTS0;
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = d_params[streamid].Nxx_plus_2NGHOSTS1;
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = d_params[streamid].Nxx_plus_2NGHOSTS2;
@@ -26,8 +26,19 @@ __global__ static void compute_residual_all_points_gpu(const size_t streamid, co
   MAYBE_UNUSED const int stride2 = blockDim.z * gridDim.z;
 
   for (int i2 = tid2 + NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2 += stride2) {
+    const double NOCUDAf3_of_xx2 = rfmstruct->f3_of_xx2[i2];
+    MAYBE_UNUSED const REAL_CUDA_ARRAY f3_of_xx2 = ConstCUDA(NOCUDAf3_of_xx2);
+    const double NOCUDAf3_of_xx2__D2 = rfmstruct->f3_of_xx2__D2[i2];
+    MAYBE_UNUSED const REAL_CUDA_ARRAY f3_of_xx2__D2 = ConstCUDA(NOCUDAf3_of_xx2__D2);
+    const double NOCUDAf3_of_xx2__DD22 = rfmstruct->f3_of_xx2__DD22[i2];
+    MAYBE_UNUSED const REAL_CUDA_ARRAY f3_of_xx2__DD22 = ConstCUDA(NOCUDAf3_of_xx2__DD22);
+
     for (int i1 = tid1 + NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1 += stride1) {
       for (int i0 = tid0 + NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0 += stride0) {
+        MAYBE_UNUSED const REAL_CUDA_ARRAY f0_of_xx0 = ReadCUDA(&rfmstruct->f0_of_xx0[i0]);
+        MAYBE_UNUSED const REAL_CUDA_ARRAY f0_of_xx0__D0 = ReadCUDA(&rfmstruct->f0_of_xx0__D0[i0]);
+        MAYBE_UNUSED const REAL_CUDA_ARRAY f0_of_xx0__DD00 = ReadCUDA(&rfmstruct->f0_of_xx0__DD00[i0]);
+        MAYBE_UNUSED const REAL_CUDA_ARRAY f0_of_xx0__DDD000 = ReadCUDA(&rfmstruct->f0_of_xx0__DDD000[i0]);
 
         /*
          * NRPy+-Generated GF Access/FD Code, Step 1 of 2:
@@ -54,6 +65,9 @@ __global__ static void compute_residual_all_points_gpu(const size_t streamid, co
         static const double dblFDPart1_Rational_1_12 = 1.0 / 12.0;
         const REAL_CUDA_ARRAY FDPart1_Rational_1_12 = ConstCUDA(dblFDPart1_Rational_1_12);
 
+        static const double dblFDPart1_Rational_2_3 = 2.0 / 3.0;
+        const REAL_CUDA_ARRAY FDPart1_Rational_2_3 = ConstCUDA(dblFDPart1_Rational_2_3);
+
         static const double dblFDPart1_Rational_4_3 = 4.0 / 3.0;
         const REAL_CUDA_ARRAY FDPart1_Rational_4_3 = ConstCUDA(dblFDPart1_Rational_4_3);
 
@@ -61,6 +75,10 @@ __global__ static void compute_residual_all_points_gpu(const size_t streamid, co
         const REAL_CUDA_ARRAY FDPart1_Rational_5_2 = ConstCUDA(dblFDPart1_Rational_5_2);
 
         const REAL_CUDA_ARRAY FDPart1tmp0 = MulCUDA(FDPart1_Rational_5_2, uu);
+        const REAL_CUDA_ARRAY uu_dD0 = MulCUDA(
+            invdxx0, FusedMulAddCUDA(FDPart1_Rational_1_12, SubCUDA(uu_i0m2, uu_i0p2), MulCUDA(FDPart1_Rational_2_3, SubCUDA(uu_i0p1, uu_i0m1))));
+        const REAL_CUDA_ARRAY uu_dD2 = MulCUDA(
+            invdxx2, FusedMulAddCUDA(FDPart1_Rational_1_12, SubCUDA(uu_i2m2, uu_i2p2), MulCUDA(FDPart1_Rational_2_3, SubCUDA(uu_i2p1, uu_i2m1))));
         const REAL_CUDA_ARRAY uu_dDD00 =
             MulCUDA(MulCUDA(invdxx0, invdxx0), FusedMulSubCUDA(FDPart1_Rational_4_3, AddCUDA(uu_i0m1, uu_i0p1),
                                                                FusedMulAddCUDA(FDPart1_Rational_1_12, AddCUDA(uu_i0m2, uu_i0p2), FDPart1tmp0)));
@@ -78,34 +96,41 @@ __global__ static void compute_residual_all_points_gpu(const size_t streamid, co
         static const double dblFDPart3_Integer_1 = 1.0;
         MAYBE_UNUSED const REAL_CUDA_ARRAY FDPart3_Integer_1 = ConstCUDA(dblFDPart3_Integer_1);
 
+        static const double dblFDPart3_NegativeOne_ = -1.0;
+        MAYBE_UNUSED const REAL_CUDA_ARRAY FDPart3_NegativeOne_ = ConstCUDA(dblFDPart3_NegativeOne_);
+
         static const double dblFDPart3_Rational_1_8 = 1.0 / 8.0;
         const REAL_CUDA_ARRAY FDPart3_Rational_1_8 = ConstCUDA(dblFDPart3_Rational_1_8);
 
-        const REAL_CUDA_ARRAY __RHS_exp_0 =
-            AddCUDA(AddCUDA(uu_dDD00, uu_dDD11),
-                    FusedMulAddCUDA(FDPart3_Rational_1_8,
-                                    DivCUDA(ADD_times_AUU,
-                                            MulCUDA(MulCUDA(MulCUDA(MulCUDA(MulCUDA(MulCUDA(AddCUDA(psi_background, uu), AddCUDA(psi_background, uu)),
-                                                                                    AddCUDA(psi_background, uu)),
-                                                                            AddCUDA(psi_background, uu)),
-                                                                    AddCUDA(psi_background, uu)),
-                                                            AddCUDA(psi_background, uu)),
-                                                    AddCUDA(psi_background, uu))),
-                                    uu_dDD22));
+        const REAL_CUDA_ARRAY __RHS_exp_0 = FusedMulAddCUDA(
+            FDPart3_Rational_1_8,
+            DivCUDA(ADD_times_AUU, MulCUDA(MulCUDA(MulCUDA(MulCUDA(MulCUDA(MulCUDA(AddCUDA(psi_background, uu), AddCUDA(psi_background, uu)),
+                                                                           AddCUDA(psi_background, uu)),
+                                                                   AddCUDA(psi_background, uu)),
+                                                           AddCUDA(psi_background, uu)),
+                                                   AddCUDA(psi_background, uu)),
+                                           AddCUDA(psi_background, uu))),
+            AddCUDA(
+                AddCUDA(DivCUDA(uu_dDD11, MulCUDA(f0_of_xx0, f0_of_xx0)), DivCUDA(uu_dDD22, MulCUDA(f3_of_xx2, f3_of_xx2))),
+                NegFusedMulAddCUDA(f3_of_xx2__D2, DivCUDA(uu_dD2, MulCUDA(MulCUDA(f3_of_xx2, f3_of_xx2), f3_of_xx2)),
+                                   NegFusedMulAddCUDA(uu_dD0,
+                                                      SubCUDA(DivCUDA(f0_of_xx0__DD00, MulCUDA(MulCUDA(f0_of_xx0__D0, f0_of_xx0__D0), f0_of_xx0__D0)),
+                                                              DivCUDA(DivCUDA(FDPart3_Integer_1, f0_of_xx0__D0), f0_of_xx0)),
+                                                      DivCUDA(uu_dDD00, MulCUDA(f0_of_xx0__D0, f0_of_xx0__D0))))));
 
         WriteCUDA(&aux_gfs[IDX4(RESIDUAL_HGF, i0, i1, i2)], __RHS_exp_0);
 
       } // END LOOP: for (int i0 = tid0+NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0 += stride0)
     } // END LOOP: for (int i1 = tid1+NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1 += stride1)
   } // END LOOP: for (int i2 = tid2+NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2 += stride2)
-} // END FUNCTION compute_residual_all_points_gpu
+} // END FUNCTION residual_H_compute_all_points_gpu
 
 /**
  * Compute residual of the Hamiltonian constraint for the hyperbolic relaxation equation.
  */
-void compute_residual_all_points__rfm__Cartesian(const commondata_struct *restrict commondata, const params_struct *restrict params,
-                                                 const rfm_struct *restrict rfmstruct, const REAL *restrict auxevol_gfs, const REAL *restrict in_gfs,
-                                                 REAL *restrict aux_gfs) {
+void residual_H_compute_all_points__rfm__SinhCylindricalv2n2(const commondata_struct *restrict commondata, const params_struct *restrict params,
+                                                             const rfm_struct *restrict rfmstruct, const REAL *restrict auxevol_gfs,
+                                                             const REAL *restrict in_gfs, REAL *restrict aux_gfs) {
 
   const size_t threads_in_x_dir = BHAH_THREADS_IN_X_DIR_NELL_H;
   const size_t threads_in_y_dir = BHAH_THREADS_IN_Y_DIR_NELL_H;
@@ -116,7 +141,7 @@ void compute_residual_all_points__rfm__Cartesian(const commondata_struct *restri
                        (params->Nxx_plus_2NGHOSTS2 + threads_in_z_dir - 1) / threads_in_z_dir);
   size_t sm = 0;
   size_t streamid = params->grid_idx % NUM_STREAMS;
-  compute_residual_all_points_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, rfmstruct, auxevol_gfs, in_gfs, aux_gfs);
-  cudaCheckErrors(cudaKernel, "compute_residual_all_points_gpu failure");
+  residual_H_compute_all_points_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, rfmstruct, auxevol_gfs, in_gfs, aux_gfs);
+  cudaCheckErrors(cudaKernel, "residual_H_compute_all_points_gpu failure");
 
-} // END FUNCTION compute_residual_all_points__rfm__Cartesian
+} // END FUNCTION residual_H_compute_all_points__rfm__SinhCylindricalv2n2

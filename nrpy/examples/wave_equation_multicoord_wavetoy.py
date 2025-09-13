@@ -14,27 +14,9 @@ import os
 import shutil
 
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.BHaH.diagnostics.progress_indicator as progress
-import nrpy.infrastructures.BHaH.parallelization.cuda_utilities as cudautils
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
-from nrpy.infrastructures.BHaH import (
-    BHaH_defines_h,
-    BHaH_device_defines_h,
-    CodeParameters,
-    CurviBoundaryConditions,
-    Makefile_helpers,
-    MoLtimestepping,
-    checkpointing,
-    cmdline_input_and_parfiles,
-    griddata_commondata,
-    main_c,
-    numerical_grids_and_timestep,
-    rfm_precompute,
-    rfm_wrapper_functions,
-    wave_equation,
-    xx_tofrom_Cart,
-)
+from nrpy.infrastructures import BHaH
 
 parser = argparse.ArgumentParser(
     description="NRPyElliptic Solver for Conformally Flat BBH initial data"
@@ -120,25 +102,24 @@ shutil.rmtree(project_dir, ignore_errors=True)
 par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
 par.set_parval_from_str("fd_order", fd_order)
 par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
-par.adjust_CodeParam_default("t_final", t_final)
 
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
 
 if parallelization == "cuda":
-    cudautils.register_CFunctions_HostDevice__operations()
-    cudautils.register_CFunction_find_global_minimum()
-    cudautils.register_CFunction_find_global_sum()
+    BHaH.parallelization.cuda_utilities.register_CFunctions_HostDevice__operations()
+    BHaH.parallelization.cuda_utilities.register_CFunction_find_global_minimum()
+    BHaH.parallelization.cuda_utilities.register_CFunction_find_global_sum()
 
-wave_equation.initial_data_exact_soln.register_CFunction_initial_data_exact(
+BHaH.wave_equation.initial_data_exact_soln.register_CFunction_initial_data_exact(
     OMP_collapse=OMP_collapse, WaveType=WaveType, default_sigma=default_sigma
 )
-wave_equation.initial_data_exact_soln.register_CFunction_initial_data(
+BHaH.wave_equation.initial_data_exact_soln.register_CFunction_initial_data(
     enable_checkpointing=True,
 )
 
-numerical_grids_and_timestep.register_CFunctions(
+BHaH.numerical_grids_and_timestep.register_CFunctions(
     set_of_CoordSystems=set_of_CoordSystems,
     list_of_grid_physical_sizes=list_of_grid_physical_sizes,
     Nxx_dict=Nxx_dict,
@@ -147,16 +128,16 @@ numerical_grids_and_timestep.register_CFunctions(
 )
 
 for CoordSystem in set_of_CoordSystems:
-    wave_equation.rhs_eval.register_CFunction_rhs_eval(
+    BHaH.wave_equation.rhs_eval.register_CFunction_rhs_eval(
         CoordSystem=CoordSystem,
         enable_rfm_precompute=enable_rfm_precompute,
         enable_intrinsics=enable_intrinsics,
         enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
         OMP_collapse=OMP_collapse,
     )
-    xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
+    BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
 
-wave_equation.diagnostics.register_CFunction_diagnostics(
+BHaH.wave_equation.diagnostics.register_CFunction_diagnostics(
     set_of_CoordSystems=set_of_CoordSystems,
     default_diagnostics_out_every=default_diagnostics_output_every,
     grid_center_filename_tuple=(
@@ -178,11 +159,11 @@ if __name__ == "__main__" and parallel_codegen_enable:
     pcg.do_parallel_codegen()
 
 if enable_rfm_precompute:
-    rfm_precompute.register_CFunctions_rfm_precompute(
+    BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
         set_of_CoordSystems=set_of_CoordSystems
     )
 
-CurviBoundaryConditions.register_all.register_C_functions(
+BHaH.CurviBoundaryConditions.register_all.register_C_functions(
     set_of_CoordSystems=set_of_CoordSystems,
     radiation_BC_fd_order=radiation_BC_fd_order,
 )
@@ -193,7 +174,7 @@ if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
                                      RK_INPUT_GFS, RK_OUTPUT_GFS);"""
 if not enable_rfm_precompute:
     rhs_string = rhs_string.replace("rfmstruct", "xx")
-MoLtimestepping.register_all.register_CFunctions(
+BHaH.MoLtimestepping.register_all.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,
     post_rhs_string="""if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
@@ -201,27 +182,30 @@ MoLtimestepping.register_all.register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
 )
-checkpointing.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
-progress.register_CFunction_progress_indicator()
-rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
+BHaH.checkpointing.register_CFunctions(
+    default_checkpoint_every=default_checkpoint_every
+)
+BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator()
+BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
 #########################################################
 # STEP 3: Generate header files, register C functions and
 #         command line parameters, set up boundary conditions,
 #         and create a Makefile for this project.
 #         Project is output to project/[project_name]/
-CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
-CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
-cmdline_input_and_parfiles.generate_default_parfile(
+par.adjust_CodeParam_default("t_final", t_final)
+BHaH.CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
+BHaH.CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
+BHaH.cmdline_input_and_parfiles.generate_default_parfile(
     project_dir=project_dir, project_name=project_name
 )
-cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
+BHaH.cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
     project_name=project_name, cmdline_inputs=["convergence_factor"]
 )
-gpu_defines_filename = BHaH_device_defines_h.output_device_headers(
+gpu_defines_filename = BHaH.BHaH_device_defines_h.output_device_headers(
     project_dir, num_streams=num_cuda_streams
 )
-BHaH_defines_h.output_BHaH_defines_h(
+BHaH.BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     enable_intrinsics=enable_intrinsics,
     intrinsics_header_lst=(
@@ -251,13 +235,13 @@ write_checkpoint_call = f"write_checkpoint(&commondata, {compute_griddata});\n".
     ),
 )
 
-main_c.register_CFunction_main_c(
+BHaH.main_c.register_CFunction_main_c(
     initial_data_desc=WaveType,
     MoL_method=MoL_method,
     pre_MoL_step_forward_in_time=write_checkpoint_call,
     boundary_conditions_desc=boundary_conditions_desc,
 )
-griddata_commondata.register_CFunction_griddata_free(
+BHaH.griddata_commondata.register_CFunction_griddata_free(
     enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True
 )
 
@@ -283,7 +267,7 @@ cuda_makefiles_options = (
     else {}
 )
 if parallelization == "cuda":
-    Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
+    BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
         project_dir=project_dir,
         project_name=project_name,
         exec_or_library_name=project_name,
@@ -292,7 +276,7 @@ if parallelization == "cuda":
         compiler_opt_option="nvcc",
     )
 else:
-    Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
+    BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
         project_dir=project_dir,
         project_name=project_name,
         exec_or_library_name=project_name,

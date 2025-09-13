@@ -10,30 +10,6 @@ Author: Zachariah B. Etienne
 import nrpy.c_function as cfc
 import nrpy.params as par
 
-par.register_CodeParameter(
-    "char[100]",
-    "TwoPunctures",
-    "TP_BBH_description",
-    "No name",
-    commondata=True,
-    add_to_parfile=True,
-    add_to_set_CodeParameters_h=False,
-)
-par.register_CodeParameters(
-    "int",
-    "TwoPunctures",
-    ["TP_npoints_A", "TP_npoints_B", "TP_npoints_phi"],
-    [-1, -1, -1],
-    commondata=True,
-)
-par.register_CodeParameters(
-    "REAL",
-    "TwoPunctures",
-    ["TP_bare_mass_m", "TP_bare_mass_M"],
-    [-1, -1],
-    commondata=True,
-)
-
 
 def ID_persist_str() -> str:
     """
@@ -41,6 +17,30 @@ def ID_persist_str() -> str:
 
     :return: ID_persist_struct contents.
     """
+    par.register_CodeParameter(
+        "char[100]",
+        __name__,
+        "TP_BBH_description",
+        "No name",
+        commondata=True,
+        add_to_parfile=True,
+        add_to_set_CodeParameters_h=False,
+    )
+    par.register_CodeParameters(
+        "int",
+        __name__,
+        ["TP_npoints_A", "TP_npoints_B", "TP_npoints_phi"],
+        [-1, -1, -1],
+        commondata=True,
+    )
+    par.register_CodeParameters(
+        "REAL",
+        __name__,
+        ["TP_bare_mass_m", "TP_bare_mass_M"],
+        [-1, -1],
+        commondata=True,
+    )
+
     return r"""
   derivs v;    // stores coefficients
   derivs cf_v; // stores coefficients
@@ -238,7 +238,7 @@ set up initial_p_t and initial_p_r if not set in parfile.
   fprintf(stderr, "#################################\n");
 """
     cfc.register_CFunction(
-        subdirectory="TwoPunctures",
+        subdirectory=__name__,
         includes=includes,
         desc=desc,
         cfunc_type=cfunc_type,

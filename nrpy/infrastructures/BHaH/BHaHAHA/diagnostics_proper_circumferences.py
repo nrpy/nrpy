@@ -13,7 +13,7 @@ from typing import Union, cast
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
-from nrpy.infrastructures.BHaH.BHaHAHA import area
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_diagnostics_proper_circumferences(
@@ -126,7 +126,7 @@ REAL compute_spin(const REAL C_r) {
 """
     # Newton-Raphson is a bit more robust; also our initial guess is pretty good, so typically we need only a few iterations.
     prefunc += ccg.c_codegen(
-        area.spin_NewtonRaphson(), "const REAL x_np1", include_braces=False
+        BHaH.BHaHAHA.area.spin_NewtonRaphson(), "const REAL x_np1", include_braces=False
     )
     prefunc += r"""
     if (x_np1 > 1.0) {
@@ -197,8 +197,8 @@ Computes proper circumferences along the equator and polar directions for appare
 """
     body += ccg.c_codegen(
         [
-            area.circumferential_arclength(direction="theta"),
-            area.circumferential_arclength(direction="phi"),
+            BHaH.BHaHAHA.area.circumferential_arclength(direction="theta"),
+            BHaH.BHaHAHA.area.circumferential_arclength(direction="phi"),
         ],
         [
             "diagnostic_output_gfs[IDX4pt(0, 0) + IDX2(i1, i2)]",

@@ -28,12 +28,7 @@ from typing import Dict, List, Tuple, Union
 
 import nrpy.c_function as cfc
 import nrpy.params as par
-from nrpy.infrastructures.BHaH.MoLtimestepping.gridfunction_names import (
-    generate_gridfunction_names,
-)
-from nrpy.infrastructures.BHaH.MoLtimestepping.rk_substep import (
-    check_supported_parallelization,
-)
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_MoL_malloc(
@@ -53,7 +48,9 @@ def register_CFunction_MoL_malloc(
     Doctest: FIXME
     """
     parallelization = par.parval_from_str("parallelization")
-    check_supported_parallelization("register_CFunction_MoL_malloc")
+    BHaH.MoLtimestepping.rk_substep.check_supported_parallelization(
+        "register_CFunction_MoL_malloc"
+    )
     includes = ["BHaH_defines.h"]
 
     (
@@ -61,7 +58,9 @@ def register_CFunction_MoL_malloc(
         non_y_n_gridfunctions_list,
         diagnostic_gridfunctions_point_to,
         diagnostic_gridfunctions2_point_to,
-    ) = generate_gridfunction_names(Butcher_dict, MoL_method=MoL_method)
+    ) = BHaH.MoLtimestepping.gridfunction_names.generate_gridfunction_names(
+        Butcher_dict, MoL_method=MoL_method
+    )
 
     if which_gfs == "y_n_gfs":
         gridfunctions_list = [y_n_gridfunctions]
@@ -118,7 +117,9 @@ def register_CFunction_MoL_free_memory(
     :raises ValueError: If the 'which_gfs' argument is unrecognized.
     """
     parallelization = par.parval_from_str("parallelization")
-    check_supported_parallelization("register_CFunction_MoL_free_memory")
+    BHaH.MoLtimestepping.rk_substep.check_supported_parallelization(
+        "register_CFunction_MoL_free_memory"
+    )
     includes = ["BHaH_defines.h"]
     desc = f'Method of Lines (MoL) for "{MoL_method}" method: Free memory for "{which_gfs}" gridfunctions\n'
     desc += "   - y_n_gfs are used to store data for the vector of gridfunctions y_i at t_n, at the start of each MoL timestep\n"
@@ -130,7 +131,9 @@ def register_CFunction_MoL_free_memory(
         non_y_n_gridfunctions_list,
         _diagnostic_gridfunctions_point_to,
         _diagnostic_gridfunctions2_point_to,
-    ) = generate_gridfunction_names(Butcher_dict, MoL_method)
+    ) = BHaH.MoLtimestepping.gridfunction_names.generate_gridfunction_names(
+        Butcher_dict, MoL_method
+    )
 
     if which_gfs == "y_n_gfs":
         gridfunctions_list = [y_n_gridfunctions]

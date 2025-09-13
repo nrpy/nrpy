@@ -14,19 +14,13 @@ import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.helpers.parallelization.utilities as parallel_utils
-import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.params as par
 from nrpy.equations.general_relativity import psi4
 from nrpy.helpers.expression_utils import (
     generate_definition_header,
     get_params_commondata_symbols_from_expr_list,
 )
-from nrpy.infrastructures.BHaH.general_relativity.PSI4.compute_psi4_metric_deriv import (
-    generate_CFunction_psi4_metric_deriv_quantities,
-)
-from nrpy.infrastructures.BHaH.general_relativity.PSI4.compute_psi4_tetrad import (
-    generate_CFunction_psi4_tetrad,
-)
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_psi4(
@@ -101,16 +95,18 @@ def register_CFunction_psi4(
     kernel_body = f"{loop_params}\n{params_definitions}\n"
 
     psi4_metric_deriv_kernel, psi4_metric_deriv_launch = (
-        generate_CFunction_psi4_metric_deriv_quantities(
+        BHaH.general_relativity.PSI4.compute_psi4_metric_deriv.generate_CFunction_psi4_metric_deriv_quantities(
             CoordSystem=CoordSystem,
             enable_fd_functions=enable_fd_functions,
         )
     )
 
-    psi4_tetrad_kernel, psi4_tetrad_launch = generate_CFunction_psi4_tetrad(
-        CoordSystem=CoordSystem,
-        tetrad=tetrad,
-        use_metric_to_construct_unit_normal=use_metric_to_construct_unit_normal,
+    psi4_tetrad_kernel, psi4_tetrad_launch = (
+        BHaH.general_relativity.PSI4.compute_psi4_tetrad.generate_CFunction_psi4_tetrad(
+            CoordSystem=CoordSystem,
+            tetrad=tetrad,
+            use_metric_to_construct_unit_normal=use_metric_to_construct_unit_normal,
+        )
     )
 
     # body += kernel_body
@@ -146,7 +142,7 @@ const int idx3 = IDX3(i0, i1, i2);
 MAYBE_UNUSED REAL {psi4_class.metric_deriv_var_list_str};
 {psi4_class.metric_deriv_unpack_arrays}
 """
-    kernel_body += lp.simple_loop(
+    kernel_body += BHaH.simple_loop.simple_loop(
         loop_body=loop_prefix
         + ccg.c_codegen(
             expr_list,

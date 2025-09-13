@@ -17,7 +17,7 @@ import nrpy.params as par
 from nrpy.equations.general_relativity.bhahaha.ExpansionFunctionTheta import (
     ExpansionFunctionTheta,
 )
-from nrpy.infrastructures.BHaH.BHaHAHA import area
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_diagnostics_area_centroid_and_Theta_norms(
@@ -100,7 +100,7 @@ def register_CFunction_diagnostics_area_centroid_and_Theta_norms(
 """
     body += (
         ccg.c_codegen(
-            [Th.Theta, area.area3()],
+            [Th.Theta, BHaH.BHaHAHA.area.area3()],
             ["const REAL Theta", "const REAL area_element"],
             enable_fd_codegen=True,
             enable_fd_functions=enable_fd_functions,

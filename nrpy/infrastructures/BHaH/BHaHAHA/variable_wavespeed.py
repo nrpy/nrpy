@@ -16,14 +16,6 @@ import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 
-_MINIMUM_GLOBAL_WAVESPEED = par.register_CodeParameter(
-    "REAL",
-    __name__,
-    name="MINIMUM_GLOBAL_WAVESPEED",
-    defaultvalue=0.2,
-    commondata=True,
-)
-
 
 def register_CFunction_variable_wavespeed(
     CoordSystem: str = "Spherical",
@@ -45,6 +37,14 @@ def register_CFunction_variable_wavespeed(
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
+
+    _MINIMUM_GLOBAL_WAVESPEED = par.register_CodeParameter(
+        "REAL",
+        __name__,
+        name="MINIMUM_GLOBAL_WAVESPEED",
+        defaultvalue=0.2,
+        commondata=True,
+    )
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "Set variable wavespeed"

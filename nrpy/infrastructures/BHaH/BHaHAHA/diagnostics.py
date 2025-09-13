@@ -16,7 +16,7 @@ import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
-from nrpy.infrastructures.BHaH import griddata_commondata
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_diagnostics() -> Union[None, pcg.NRPyEnv_type]:
@@ -33,13 +33,13 @@ def register_CFunction_diagnostics() -> Union[None, pcg.NRPyEnv_type]:
         return None
 
     # Add BHaHAHA.h's diagnostics struct to commondata, so we can easily read/write those variables here.
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         __name__,
         "bhahaha_diagnostics_struct *restrict bhahaha_diagnostics",
         "diagnostics quantities; struct defined in BHaHAHA.h",
         is_commondata=True,
     )
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         __name__,
         "int is_final_iteration",
         "diagnostics quantities; struct defined in BHaHAHA.h",

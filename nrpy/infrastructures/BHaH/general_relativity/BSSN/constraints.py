@@ -16,13 +16,13 @@ import nrpy.finite_difference as fin
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.helpers.parallelization.utilities as parallel_utils
-import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.params as par
 from nrpy.equations.general_relativity.BSSN_constraints import BSSN_constraints
 from nrpy.helpers.expression_utils import (
     generate_definition_header,
     get_params_commondata_symbols_from_expr_list,
 )
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_constraints(
@@ -101,7 +101,7 @@ def register_CFunction_constraints(
             )
         ]
     expr_list = [Bcon.H, Bcon.Msquared]
-    kernel_body = lp.simple_loop(
+    kernel_body = BHaH.simple_loop.simple_loop(
         loop_body=ccg.c_codegen(
             expr_list,
             Constraints_access_gfs,

@@ -6,13 +6,15 @@ Author: Zachariah B. Etienne
 """
 
 import nrpy.c_function as cfc
-from nrpy.infrastructures.BHaH import BHaH_defines_h
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_find_horizon() -> None:
     """Register main driver (find horizon) function for BHaHAHA, based on BlackHoles@Home's main_c.py."""
     # Add BHaHAHA.h include near the top of BHaH_defines.h ("general" module):
-    BHaH_defines_h.register_BHaH_defines("after_general", """#include "BHaHAHA.h"\n""")
+    BHaH.BHaH_defines_h.register_BHaH_defines(
+        "after_general", """#include "BHaHAHA.h"\n"""
+    )
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     prefunc = """

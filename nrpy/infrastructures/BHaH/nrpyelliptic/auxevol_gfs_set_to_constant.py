@@ -16,13 +16,13 @@ import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.helpers.parallelization.utilities as parallel_utils
-import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
 from nrpy.equations.nrpyelliptic.ConformallyFlat_SourceTerms import (
     compute_psi_background_and_ADD_times_AUU,
 )
 from nrpy.helpers.expression_utils import get_params_commondata_symbols_from_expr_list
+from nrpy.infrastructures import BHaH
 
 
 def generate_prefunc_variable_wavespeed_gfs_all_points(
@@ -56,7 +56,7 @@ def generate_prefunc_variable_wavespeed_gfs_all_points(
     }
 
     rfm = refmetric.reference_metric[CoordSystem]
-    dxx0, dxx1, dxx2 = sp.symbols("dxx0 dxx1 dxx2", real=True)
+    dxx0, dxx1, dxx2 = sp.symbols("params->dxx0 params->dxx1 params->dxx2", real=True)
     expr_list = [
         rfm.scalefactor_orthog[0] * dxx0,
         rfm.scalefactor_orthog[1] * dxx1,
@@ -74,7 +74,7 @@ def generate_prefunc_variable_wavespeed_gfs_all_points(
     dsmin_computation_str += f"""\n// Set local wavespeed
         {variable_wavespeed_memaccess} = MINIMUM_GLOBAL_WAVESPEED * MIN(dsmin0, MIN(dsmin1, dsmin2)) / dt;\n"""
 
-    loop_body = lp.simple_loop(
+    loop_body = BHaH.simple_loop.simple_loop(
         loop_body="\n" + dsmin_computation_str,
         read_xxs=True,
         loop_region="interior",
@@ -215,7 +215,7 @@ def generate_prefunc_auxevol_gfs_all_points(
     single_point_launch = single_point_launch.replace(
         "psi_background", f"&{psi_background_memaccess}"
     ).replace("ADD_times_AUU", f"&{ADD_times_AUU_memaccess}")
-    kernel_body += lp.simple_loop(
+    kernel_body += BHaH.simple_loop.simple_loop(
         f"{single_point_launch}",
         read_xxs=True,
         loop_region="all points",
@@ -256,7 +256,7 @@ def generate_prefunc_auxevol_gfs_all_points(
     return prefunc, new_body
 
 
-def register_CFunction_initialize_constant_auxevol(
+def register_CFunction_auxevol_gfs_set_to_constant(
     CoordSystem: str,
     OMP_collapse: int = 1,
     enable_intrinsics: bool = False,
@@ -275,12 +275,12 @@ def register_CFunction_initialize_constant_auxevol(
     >>> import nrpy.params as par
     >>> from nrpy.reference_metric import unittest_CoordSystems
     >>> supported_Parallelizations = ["openmp", "cuda"]
-    >>> name="initialize_constant_auxevol"
+    >>> name="auxevol_gfs_set_to_constant"
     >>> for parallelization in supported_Parallelizations:
     ...    par.set_parval_from_str("parallelization", parallelization)
     ...    for CoordSystem in unittest_CoordSystems:
     ...       cfc.CFunction_dict.clear()
-    ...       _ = register_CFunction_initialize_constant_auxevol(CoordSystem)
+    ...       _ = register_CFunction_auxevol_gfs_set_to_constant(CoordSystem)
     ...       generated_str = cfc.CFunction_dict[f'{name}__rfm__{CoordSystem}'].full_function
     ...       validation_desc = f"{name}__{parallelization}__{CoordSystem}".replace(" ", "_")
     ...       validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
@@ -293,12 +293,16 @@ def register_CFunction_initialize_constant_auxevol(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
+    _ = par.register_CodeParameter(
+        "REAL", __name__, "MINIMUM_GLOBAL_WAVESPEED", 0.7, commondata=True
+    )
+
     parallelization = par.parval_from_str("parallelization")
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
     desc = r"""Call functions that set up all AUXEVOL gridfunctions."""
     cfunc_type = "void"
-    name = "initialize_constant_auxevol"
+    name = "auxevol_gfs_set_to_constant"
     params = "commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3], MoL_gridfunctions_struct *restrict gridfuncs"
     body = (
         "cpyHosttoDevice_commondata__constant(commondata);\n"
@@ -329,10 +333,10 @@ def register_CFunction_initialize_constant_auxevol(
         else wavespeed_all_points_launch
     )
     body += rf"""
-    REAL *restrict auxevol_gfs = gridfuncs->auxevol_gfs;
-    REAL *restrict x0 = xx[0];
-    REAL *restrict x1 = xx[1];
-    REAL *restrict x2 = xx[2];
+    REAL *auxevol_gfs = gridfuncs->auxevol_gfs;
+    REAL *x0 = xx[0];
+    REAL *x1 = xx[1];
+    REAL *x2 = xx[2];
 
     // Set up variable wavespeed
     {wavespeed_all_points_launch.replace("in_gfs", "auxevol_gfs")}

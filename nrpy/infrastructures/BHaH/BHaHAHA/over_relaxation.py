@@ -8,19 +8,19 @@ Author: Zachariah B. Etienne
 """
 
 import nrpy.c_function as cfc
-from nrpy.infrastructures.BHaH import griddata_commondata
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_over_relaxation() -> None:
     """Register a C function to perform over relaxation."""
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         __name__,
         "REAL *restrict h_p",
         "Previously stored horizon guess, used for linear extrapolated over-relaxation.",
         is_commondata=True,
     )
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         __name__,
         "REAL time_of_h_p",
         "Time at which previously stored horizon guess was stored.",

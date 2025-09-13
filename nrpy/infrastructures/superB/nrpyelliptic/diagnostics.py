@@ -11,178 +11,10 @@ from inspect import currentframe as cfr
 from types import FrameType as FT
 from typing import Dict, Tuple, Union, cast
 
-import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.BHaH.simple_loop as lp
-import nrpy.infrastructures.superB.output_0d_1d_2d_nearest_gridpoint_slices as out012d
 import nrpy.params as par
-import nrpy.reference_metric as refmetric
-from nrpy.infrastructures.BHaH import griddata_commondata
-
-
-# Define function to compute the l^2 of a gridfunction
-def register_CFunction_compute_L2_norm_of_gridfunction(
-    CoordSystem: str,
-) -> None:
-    """
-    Register function to compute l2-norm of a gridfunction assuming a single grid.
-
-    Note that parallel codegen is disabled for this function, as it sometimes causes a
-    multiprocess race condition on Python 3.6.7
-
-    :param CoordSystem: the rfm coordinate system.
-    """
-    includes = ["BHaH_defines.h"]
-    desc = "Compute l2-norm of a gridfunction assuming a single grid."
-    cfunc_type = "void"
-    name = "compute_L2_norm_of_gridfunction"
-    params = """commondata_struct *restrict commondata, griddata_struct *restrict griddata,
-                const REAL integration_radius, const int gf_index, const REAL *restrict in_gf, REAL localsums_for_residualH[2]"""
-
-    rfm = refmetric.reference_metric[CoordSystem]
-
-    loop_body = ccg.c_codegen(
-        [
-            rfm.xxSph[0],
-            rfm.detgammahat,
-        ],
-        [
-            "const REAL r",
-            "const REAL sqrtdetgamma",
-        ],
-        include_braces=False,
-    )
-
-    loop_body += r"""
-if(r < integration_radius) {
-  const REAL gf_of_x = in_gf[IDX4(gf_index, i0, i1, i2)];
-  const REAL dV = sqrtdetgamma * dxx0 * dxx1 * dxx2;
-  squared_sum += gf_of_x * gf_of_x * dV;
-  volume_sum  += dV;
-} // END if(r < integration_radius)
-"""
-    body = r"""
-  // Unpack grid parameters assuming a single grid
-  const int grid = 0;
-  params_struct *restrict params = &griddata[grid].params;
-#include "set_CodeParameters.h"
-
-  // Define reference metric grid
-  REAL *restrict xx[3];
-  for (int ww = 0; ww < 3; ww++)
-    xx[ww] = griddata[grid].xx[ww];
-
-  // Set summation variables to compute l2-norm
-  REAL squared_sum = 0.0;
-  REAL volume_sum  = 0.0;
-
-"""
-
-    body += lp.simple_loop(
-        loop_body="\n" + loop_body,
-        read_xxs=True,
-        loop_region="interior",
-        OMP_custom_pragma=r"#pragma omp parallel for reduction(+:squared_sum,volume_sum)",
-    )
-
-    body += r"""
-  localsums_for_residualH[0] = squared_sum;
-	localsums_for_residualH[1] = volume_sum;
-"""
-
-    cfc.register_CFunction(
-        includes=includes,
-        desc=desc,
-        cfunc_type=cfunc_type,
-        CoordSystem_for_wrapper_func="",
-        name=name,
-        params=params,
-        include_CodeParameters_h=False,  # set_CodeParameters.h is manually included after the declaration of params_struct *restrict params
-        body=body,
-    )
-
-
-# Define function to compute the l^2 of a gridfunction between 2 radii
-def register_CFunction_compute_L2_norm_of_gridfunction_between_r1_r2(
-    CoordSystem: str,
-) -> None:
-    """
-    Register function to compute l2-norm of a gridfunction between 2 radii assuming a single grid.
-
-    Note that parallel codegen is disabled for this function, as it sometimes causes a
-    multiprocess race condition on Python 3.6.7
-
-    :param CoordSystem: the rfm coordinate system.
-    """
-    includes = ["BHaH_defines.h"]
-    desc = "Compute l2-norm of a gridfunction between 2 radii  assuming a single grid."
-    cfunc_type = "void"
-    name = "compute_L2_norm_of_gridfunction_between_r1_r2"
-    params = """commondata_struct *restrict commondata, griddata_struct *restrict griddata,
-                const REAL integration_radius1, const REAL integration_radius2, const int gf_index, const REAL *restrict in_gf, REAL localsums[2]"""
-
-    rfm = refmetric.reference_metric[CoordSystem]
-
-    loop_body = ccg.c_codegen(
-        [
-            rfm.xxSph[0],
-            rfm.detgammahat,
-        ],
-        [
-            "const REAL r",
-            "const REAL sqrtdetgamma",
-        ],
-        include_braces=False,
-    )
-
-    loop_body += r"""
-if(r > integration_radius1 && r < integration_radius2) {
-  const REAL gf_of_x = in_gf[IDX4(gf_index, i0, i1, i2)];
-  const REAL dV = sqrtdetgamma * dxx0 * dxx1 * dxx2;
-  squared_sum += gf_of_x * gf_of_x * dV;
-  volume_sum  += dV;
-} // END if(r > integration_radius1 && r < integration_radius2)
-"""
-    body = r"""
-  // Unpack grid parameters assuming a single grid
-  const int grid = 0;
-  params_struct *restrict params = &griddata[grid].params;
-#include "set_CodeParameters.h"
-
-  // Define reference metric grid
-  REAL *restrict xx[3];
-  for (int ww = 0; ww < 3; ww++)
-    xx[ww] = griddata[grid].xx[ww];
-
-  // Set summation variables to compute l2-norm
-  REAL squared_sum = 0.0;
-  REAL volume_sum  = 0.0;
-
-"""
-
-    body += lp.simple_loop(
-        loop_body="\n" + loop_body,
-        read_xxs=True,
-        loop_region="interior",
-        OMP_custom_pragma=r"#pragma omp parallel for reduction(+:squared_sum,volume_sum)",
-    )
-
-    body += r"""
-  localsums[0] = squared_sum;
-	localsums[1] = volume_sum;
-"""
-
-    cfc.register_CFunction(
-        includes=includes,
-        desc=desc,
-        cfunc_type=cfunc_type,
-        CoordSystem_for_wrapper_func="",
-        name=name,
-        params=params,
-        include_CodeParameters_h=False,  # set_CodeParameters.h is manually included after the declaration of params_struct *restrict params
-        body=body,
-    )
+from nrpy.infrastructures import BHaH, superB
 
 
 # Define diagnostics function
@@ -239,24 +71,24 @@ def register_CFunction_diagnostics(
     # fmt: on
 
     for axis in ["y", "z"]:
-        out012d.register_CFunction_diagnostics_nearest_1d_axis(
+        superB.output_0d_1d_2d_nearest_gridpoint_slices.register_CFunction_diagnostics_nearest_1d_axis(
             CoordSystem=CoordSystem,
             out_quantities_dict=out_quantities_dict,
             axis=axis,
         )
-        out012d.register_CFunction_diagnostics_set_up_nearest_1d_axis(
+        superB.output_0d_1d_2d_nearest_gridpoint_slices.register_CFunction_diagnostics_set_up_nearest_1d_axis(
             CoordSystem=CoordSystem,
             out_quantities_dict=out_quantities_dict,
             filename_tuple=axis_filename_tuple,
             axis=axis,
         )
     for plane in ["xy", "yz"]:
-        out012d.register_CFunction_diagnostics_nearest_2d_plane(
+        superB.output_0d_1d_2d_nearest_gridpoint_slices.register_CFunction_diagnostics_nearest_2d_plane(
             CoordSystem=CoordSystem,
             out_quantities_dict=out_quantities_dict,
             plane=plane,
         )
-        out012d.register_CFunction_diagnostics_set_up_nearest_2d_plane(
+        superB.output_0d_1d_2d_nearest_gridpoint_slices.register_CFunction_diagnostics_set_up_nearest_2d_plane(
             CoordSystem=CoordSystem,
             out_quantities_dict=out_quantities_dict,
             filename_tuple=plane_filename_tuple,
@@ -291,13 +123,13 @@ def register_CFunction_diagnostics(
 
   if (which_output == OUTPUT_RESIDUAL) {
     // Compute Hamiltonian constraint violation and store it at diagnostic_output_gfs
-    compute_residual_all_points(commondata, params_chare, rfmstruct_chare, auxevol_gfs, y_n_gfs, diagnostic_output_gfs);
+    residual_H_compute_all_points(commondata, params_chare, rfmstruct_chare, auxevol_gfs, y_n_gfs, diagnostic_output_gfs);
 
     // Set integration radius for l2-norm computation
     const REAL integration_radius = 1000;
 
     // Compute local sums for l2-norm of Hamiltonian constraint violation
-    compute_L2_norm_of_gridfunction(commondata, griddata_chare, integration_radius, RESIDUAL_HGF, diagnostic_output_gfs, localsums_for_residualH);
+    log10_L2norm_gf(commondata, griddata_chare, integration_radius, RESIDUAL_HGF, diagnostic_output_gfs, localsums_for_residualH);
 
 """
     body += r"""
@@ -347,7 +179,7 @@ def register_CFunction_diagnostics(
     )
 
     # Register diagnostic_struct's contribution to griddata_struct:
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         __name__,
         "diagnostic_struct diagnosticstruct",
         "store indices of 1d and 2d diagnostic points, the offset in the output file, etc",

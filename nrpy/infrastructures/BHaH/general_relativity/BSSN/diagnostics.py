@@ -13,8 +13,8 @@ from typing import Dict, Set, Tuple, Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices as out012d
 import nrpy.params as par
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_diagnostics(
@@ -91,20 +91,20 @@ def register_CFunction_diagnostics(
     }
 
     for CoordSystem in set_of_CoordSystems:
-        out012d.register_CFunction_diagnostics_nearest_grid_center(
+        BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices.register_CFunction_diagnostics_nearest_grid_center(
             CoordSystem=CoordSystem,
             out_quantities_dict=out_quantities_dict,
             filename_tuple=grid_center_filename_tuple,
         )
         for axis in ["y", "z"]:
-            out012d.register_CFunction_diagnostics_nearest_1d_axis(
+            BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices.register_CFunction_diagnostics_nearest_1d_axis(
                 CoordSystem=CoordSystem,
                 out_quantities_dict=out_quantities_dict,
                 filename_tuple=axis_filename_tuple,
                 axis=axis,
             )
         for plane in ["xy", "yz"]:
-            out012d.register_CFunction_diagnostics_nearest_2d_plane(
+            BHaH.diagnostics.output_0d_1d_2d_nearest_gridpoint_slices.register_CFunction_diagnostics_nearest_2d_plane(
                 CoordSystem=CoordSystem,
                 out_quantities_dict=out_quantities_dict,
                 filename_tuple=plane_filename_tuple,

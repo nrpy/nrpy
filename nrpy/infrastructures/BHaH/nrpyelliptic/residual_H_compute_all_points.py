@@ -1,5 +1,5 @@
 """
-C function for evaluating the RHS of the hyperbolic relaxation equation in curvilinear coordinates, using a reference-metric formalism.
+C function for hyperbolic relaxation diagnostics.
 
 Authors: Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
          Zachariah B. Etienne; zachetie **at** gmail **dot* com
@@ -23,29 +23,51 @@ from nrpy.helpers.expression_utils import get_params_commondata_symbols_from_exp
 from nrpy.infrastructures import BHaH
 
 
-# Define function to evaluate RHSs
-def register_CFunction_rhs_eval(
+# Define function to compute residual the solution
+def register_CFunction_residual_H_compute_all_points(
     CoordSystem: str,
     enable_rfm_precompute: bool,
     enable_intrinsics: bool,
-    OMP_collapse: int,
+    OMP_collapse: int = 1,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Register the right-hand side (RHS) evaluation function for the hyperbolic relaxation equation.
+    Register the residual evaluation function.
 
-    This function sets the right-hand side of the hyperbolic relaxation equation according to the
-    selected coordinate system and specified parameters.
+    This function sets the residual of the Hamiltonian constraint in the hyperbolic
+    relaxation equation according to the selected coordinate system and specified
+    parameters.
 
     :param CoordSystem: The coordinate system.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
-    :param enable_intrinsics: Whether to enable hardware intrinsics.
+    :param enable_intrinsics: Whether to enable hardware intrinsics (e.g. simd).
     :param OMP_collapse: Level of OpenMP loop collapsing.
 
     :return: None if in registration phase, else the updated NRPy environment.
+
+    Doctest:
+    >>> import nrpy.c_function as cfc
+    >>> from nrpy.helpers.generic import validate_strings
+    >>> import nrpy.params as par
+    >>> from nrpy.reference_metric import unittest_CoordSystems
+    >>> supported_Parallelizations = ["openmp", "cuda"]
+    >>> name="residual_H_compute_all_points"
+    >>> for parallelization in supported_Parallelizations:
+    ...    par.set_parval_from_str("parallelization", parallelization)
+    ...    for CoordSystem in unittest_CoordSystems:
+    ...       cfc.CFunction_dict.clear()
+    ...       _ = register_CFunction_residual_H_compute_all_points(CoordSystem, True, True)
+    ...       generated_str = cfc.CFunction_dict[f'{name}__rfm__{CoordSystem}'].full_function
+    ...       validation_desc = f"{name}__{parallelization}__{CoordSystem}".replace(" ", "_")
+    ...       validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
+    Setting up reference_metric[SinhSymTP_rfm_precompute]...
+    Setting up reference_metric[HoleySinhSpherical_rfm_precompute]...
+    Setting up reference_metric[Cartesian_rfm_precompute]...
+    Setting up reference_metric[SinhCylindricalv2n2_rfm_precompute]...
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
+
     parallelization = par.parval_from_str("parallelization")
     includes = ["BHaH_defines.h"]
     if enable_intrinsics:
@@ -54,27 +76,23 @@ def register_CFunction_rhs_eval(
             if parallelization in ["cuda"]
             else [str(Path("intrinsics") / "simd_intrinsics.h")]
         )
-    desc = r"""Set RHSs for hyperbolic relaxation equation."""
+    desc = r"""Compute residual of the Hamiltonian constraint for the hyperbolic relaxation equation."""
     cfunc_type = "void"
-    name = "rhs_eval"
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], const REAL *restrict auxevol_gfs, const REAL *restrict in_gfs, REAL *restrict rhs_gfs"
+    name = "residual_H_compute_all_points"
+    params = """const commondata_struct *restrict commondata, const params_struct *restrict params,
+                REAL *restrict xx[3], const REAL *restrict auxevol_gfs, const REAL *restrict in_gfs,
+                REAL *restrict aux_gfs"""
     if enable_rfm_precompute:
         params = params.replace(
             "REAL *restrict xx[3]", "const rfm_struct *restrict rfmstruct"
         )
-    body = ""
-    if not enable_rfm_precompute:
-        for i in range(3):
-            body += f"const REAL *restrict x{i} = xx[{i}];\n"
-    # Populate uu_rhs, vv_rhs
+    # Populate residual_H
     rhs = HyperbolicRelaxationCurvilinearRHSs(CoordSystem, enable_rfm_precompute)
-    expr_list = [rhs.uu_rhs, rhs.vv_rhs]
     loop_body = BHaH.simple_loop.simple_loop(
         loop_body=ccg.c_codegen(
-            expr_list,
+            [rhs.residual],
             [
-                gri.BHaHGridFunction.access_gf("uu", gf_array_name="rhs_gfs"),
-                gri.BHaHGridFunction.access_gf("vv", gf_array_name="rhs_gfs"),
+                gri.BHaHGridFunction.access_gf("residual_H", gf_array_name="aux_gfs"),
             ],
             enable_fd_codegen=True,
             enable_simd=enable_intrinsics,
@@ -86,43 +104,21 @@ def register_CFunction_rhs_eval(
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,
     )
-    # Since simd intrinsics only supports double precision, CCG has constants hardcoded as dbl,
-    # this is not the case for CUDA intrinsics, for example, so we can use REAL
-    # to explore other precisions, e.g. single precision.
-    # Note: dbl prefix is not changed to avoid potential replace issues in the calculations themselves
-    loop_body = loop_body.replace(
-        "static const double dbl",
-        (
-            "static constexpr REAL dbl"
-            if parallelization in ["cuda"]
-            else "static const double dbl"
-        ),
-    )
+
     loop_params = parallel_utils.get_loop_parameters(
         parallelization, enable_intrinsics=enable_intrinsics
     )
+
     params_symbols, _ = get_params_commondata_symbols_from_expr_list(
         [rhs.residual], exclude=[f"xx{i}" for i in range(3)]
     )
-
     if len(params_symbols) > 0:
         loop_params += "// Load necessary parameters from params_struct\n"
         for param in params_symbols:
             loop_params += f"const REAL {param} = {parallel_utils.get_params_access(parallelization)}{param};\n"
+        loop_params += "\n"
 
-    loop_params += "\n// Setup parameters from function arguments\n"
-    loop_params += (
-        "const REAL NOSIMDeta_dampening = eta_damping_in;\n"
-        "MAYBE_UNUSED const REAL_SIMD_ARRAY eta_damping = ConstSIMD(NOSIMDeta_dampening);\n"
-        if enable_intrinsics
-        else "const REAL eta_damping = eta_damping_in;\n"
-    )
-    loop_params += "\n"
-
-    if parallelization == "cuda":
-        loop_params = loop_params.replace("SIMD", "CUDA")
-
-    comments = "Kernel to evaluate RHS on the interior."
+    comments = "Kernel to compute the residual throughout the grid."
 
     # Prepare the argument dicts
     arg_dict_cuda = (
@@ -134,8 +130,7 @@ def register_CFunction_rhs_eval(
         {
             "auxevol_gfs": "const REAL *restrict",
             "in_gfs": "const REAL *restrict",
-            "rhs_gfs": "REAL *restrict",
-            "eta_damping_in": "const REAL",
+            "aux_gfs": "REAL *restrict",
         }
     )
     arg_dict_host = {
@@ -144,6 +139,7 @@ def register_CFunction_rhs_eval(
     }
 
     kernel_body = f"{loop_params}\n{loop_body}"
+
     for i in range(3):
         kernel_body = kernel_body.replace(f"xx[{i}]", f"x{i}")
     prefunc, new_body = parallel_utils.generate_kernel_and_launch_code(
@@ -155,20 +151,19 @@ def register_CFunction_rhs_eval(
         comments=comments,
         launch_dict={
             "blocks_per_grid": [],
-            "threads_per_block": ["64", "NGHOSTS"],
+            "threads_per_block": ["32", "NGHOSTS"],
             "stream": "default",
         },
-        thread_tiling_macro_suffix="NELL_RHS",
+        thread_tiling_macro_suffix="NELL_H",
     )
-
-    new_body = new_body.replace("eta_damping_in", "eta_damping")
     for i in range(3):
         new_body = new_body.replace(f"x{i}", f"xx[{i}]")
     body = f"{new_body}\n"
 
     cfc.register_CFunction(
+        subdirectory="diagnostics",
         prefunc=prefunc,
-        include_CodeParameters_h=True,
+        include_CodeParameters_h=False,
         includes=includes,
         desc=desc,
         cfunc_type=cfunc_type,
@@ -176,6 +171,19 @@ def register_CFunction_rhs_eval(
         name=name,
         params=params,
         body=body,
-        enable_simd=False,
+        enable_simd=enable_intrinsics,
     )
     return pcg.NRPyEnv()
+
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

@@ -7,33 +7,6 @@ Author: Zachariah B. Etienne
 
 import nrpy.params as par
 
-par.register_CodeParameters(
-    "REAL",
-    "TOVola",
-    [
-        "initial_central_density",
-        "poly_eos_K",
-        "poly_eos_Gamma",
-        "initial_ode_step_size",
-        "min_step_size",
-        "max_step_size",
-        "ode_error_limit",
-    ],
-    [0.125, 1.0, 2.0, 1e-20, 1e-20, 1.0, 1e-6],
-    commondata=True,
-)
-par.register_CodeParameters(
-    "int",
-    "TOVola",
-    [
-        "ode_max_steps",
-        "interpolation_stencil_size",
-        "max_interpolation_stencil_size",
-    ],
-    [5000000, 11, 13],
-    commondata=True,
-)
-
 
 def ID_persist_str() -> str:
     """
@@ -41,6 +14,33 @@ def ID_persist_str() -> str:
 
     :return: ID_persist_struct contents.
     """
+    par.register_CodeParameters(
+        "REAL",
+        "TOVola",
+        [
+            "initial_central_density",
+            "poly_eos_K",
+            "poly_eos_Gamma",
+            "initial_ode_step_size",
+            "min_step_size",
+            "max_step_size",
+            "ode_error_limit",
+        ],
+        [0.125, 1.0, 2.0, 1e-20, 1e-20, 1.0, 1e-6],
+        commondata=True,
+    )
+    par.register_CodeParameters(
+        "int",
+        "TOVola",
+        [
+            "ode_max_steps",
+            "interpolation_stencil_size",
+            "max_interpolation_stencil_size",
+        ],
+        [5000000, 11, 13],
+        commondata=True,
+    )
+
     return r"""
   // The following arrays store stellar information at all numpoints_arr radii:
   REAL *restrict r_Schw_arr; // Stellar radial coordinate in units of Schwarzschild radius

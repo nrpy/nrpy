@@ -9,7 +9,7 @@ Authors: Nishita Jadoo
 from typing import Set
 
 import nrpy.c_function as cfc
-from nrpy.infrastructures.BHaH import griddata_commondata
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_charecommstruct_set_up(CoordSystem: str) -> None:
@@ -152,7 +152,7 @@ def chare_comm_register_C_functions(
         register_CFunction_charecommstruct_set_up(CoordSystem=CoordSystem)
 
     # Register charecomm_struct's contribution to griddata_struct:
-    griddata_commondata.register_griddata_commondata(
+    BHaH.griddata_commondata.register_griddata_commondata(
         __name__,
         "charecomm_struct charecommstruct",
         "maps that convert between index of a pt in chare's local grid to the index on the global grid, etc",

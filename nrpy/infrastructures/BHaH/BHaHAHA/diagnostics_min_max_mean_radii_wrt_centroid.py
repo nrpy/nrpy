@@ -13,7 +13,7 @@ from typing import Union, cast
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
-from nrpy.infrastructures.BHaH.BHaHAHA import area
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_diagnostics_min_max_mean_radii_wrt_centroid(
@@ -78,7 +78,7 @@ def register_CFunction_diagnostics_min_max_mean_radii_wrt_centroid(
 """
     body += (
         ccg.c_codegen(
-            area.area3(),
+            BHaH.BHaHAHA.area.area3(),
             "const REAL area_element",
             enable_fd_codegen=True,
             enable_fd_functions=enable_fd_functions,

@@ -180,12 +180,12 @@ static void variable_wavespeed_gfs_all_points_host(const params_struct *restrict
 
         /*
          *  Original SymPy expressions:
-         *  "[const REAL dsmin0 = AMAX*dxx0*(exp(xx0/SINHWAA)/SINHWAA + exp(-xx0/SINHWAA)/SINHWAA)*sqrt(AMAX**2*(exp(xx0/SINHWAA) -
+         *  "[const REAL dsmin0 = AMAX*params->dxx0*(exp(xx0/SINHWAA)/SINHWAA + exp(-xx0/SINHWAA)/SINHWAA)*sqrt(AMAX**2*(exp(xx0/SINHWAA) -
          * exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 + bScale**2*sin(xx1)**2)/(sqrt(AMAX**2*(exp(xx0/SINHWAA) -
          * exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 + bScale**2)*(exp(1/SINHWAA) - exp(-1/SINHWAA)))]"
-         *  "[const REAL dsmin1 = dxx1*sqrt(AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 +
+         *  "[const REAL dsmin1 = params->dxx1*sqrt(AMAX**2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))**2/(exp(1/SINHWAA) - exp(-1/SINHWAA))**2 +
          * bScale**2*sin(xx1)**2)]"
-         *  "[const REAL dsmin2 = AMAX*dxx2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))*sin(xx1)/(exp(1/SINHWAA) - exp(-1/SINHWAA))]"
+         *  "[const REAL dsmin2 = AMAX*params->dxx2*(exp(xx0/SINHWAA) - exp(-xx0/SINHWAA))*sin(xx1)/(exp(1/SINHWAA) - exp(-1/SINHWAA))]"
          */
         const REAL tmp1 = sin(xx1);
         const REAL tmp2 = (1.0 / (SINHWAA));
@@ -196,9 +196,9 @@ static void variable_wavespeed_gfs_all_points_host(const params_struct *restrict
         const REAL tmp7 = tmp5 - tmp6;
         const REAL tmp8 = ((AMAX) * (AMAX)) * ((tmp7) * (tmp7)) / ((tmp3) * (tmp3));
         const REAL tmp9 = sqrt(((bScale) * (bScale)) * ((tmp1) * (tmp1)) + tmp8);
-        const REAL dsmin0 = dxx0 * tmp10 * tmp9 * (tmp2 * tmp5 + tmp2 * tmp6) / sqrt(((bScale) * (bScale)) + tmp8);
-        const REAL dsmin1 = dxx1 * tmp9;
-        const REAL dsmin2 = dxx2 * tmp1 * tmp10 * tmp7;
+        const REAL dsmin0 = params->dxx0 * tmp10 * tmp9 * (tmp2 * tmp5 + tmp2 * tmp6) / sqrt(((bScale) * (bScale)) + tmp8);
+        const REAL dsmin1 = params->dxx1 * tmp9;
+        const REAL dsmin2 = params->dxx2 * tmp1 * tmp10 * tmp7;
 
         // Set local wavespeed
         in_gfs[IDX4(VARIABLE_WAVESPEEDGF, i0, i1, i2)] = MINIMUM_GLOBAL_WAVESPEED * MIN(dsmin0, MIN(dsmin1, dsmin2)) / dt;
@@ -211,14 +211,14 @@ static void variable_wavespeed_gfs_all_points_host(const params_struct *restrict
 /**
  * Call functions that set up all AUXEVOL gridfunctions.
  */
-void initialize_constant_auxevol__rfm__SinhSymTP(commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3],
+void auxevol_gfs_set_to_constant__rfm__SinhSymTP(commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3],
                                                  MoL_gridfunctions_struct *restrict gridfuncs) {
 #include "set_CodeParameters.h"
 
-  REAL *restrict auxevol_gfs = gridfuncs->auxevol_gfs;
-  REAL *restrict x0 = xx[0];
-  REAL *restrict x1 = xx[1];
-  REAL *restrict x2 = xx[2];
+  REAL *auxevol_gfs = gridfuncs->auxevol_gfs;
+  REAL *x0 = xx[0];
+  REAL *x1 = xx[1];
+  REAL *x2 = xx[2];
 
   // Set up variable wavespeed
   variable_wavespeed_gfs_all_points_host(params, x0, x1, x2, auxevol_gfs, dt, MINIMUM_GLOBAL_WAVESPEED);
@@ -226,4 +226,4 @@ void initialize_constant_auxevol__rfm__SinhSymTP(commondata_struct *restrict com
   // Set up all other AUXEVOL gridfunctions
   auxevol_gfs_all_points_host(commondata, params, x0, x1, x2, auxevol_gfs);
 
-} // END FUNCTION initialize_constant_auxevol__rfm__SinhSymTP
+} // END FUNCTION auxevol_gfs_set_to_constant__rfm__SinhSymTP

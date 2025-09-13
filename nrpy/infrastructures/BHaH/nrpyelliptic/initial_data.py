@@ -16,8 +16,8 @@ import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.helpers.parallelization.utilities as parallel_utils
-import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.params as par
+from nrpy.infrastructures import BHaH
 
 
 # Define functions to set up initial guess
@@ -104,7 +104,7 @@ if( read_checkpoint(commondata, griddata) ) return;
   REAL *restrict in_gfs = griddata[grid].gridfuncs.y_n_gfs;
 """
     kernel_body = f"{parallel_utils.get_loop_parameters(parallelization)}\n"
-    kernel_body += lp.simple_loop(
+    kernel_body += BHaH.simple_loop.simple_loop(
         loop_body="initial_guess_single_point(xx0,xx1,xx2,"
         f"&{uu_gf_memaccess},"
         f"&{vv_gf_memaccess});",
