@@ -26,7 +26,7 @@ import sympy as sp
 
 import nrpy.c_function as cfc
 import nrpy.indexedexp as ixp
-import nrpy.infrastructures.BHaH.simple_loop as lp
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_diagnostics_nearest_grid_center(
@@ -173,7 +173,7 @@ def register_CFunction_diagnostics_nearest_1d_axis(
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
-    prefunc, loop_1d = lp.simple_loop_1D(
+    prefunc, loop_1d = BHaH.simple_loop.simple_loop_1D(
         CoordSystem=CoordSystem,
         out_quantities_dict=out_quantities_dict,
         axis=axis,
@@ -250,7 +250,7 @@ def register_CFunction_diagnostics_nearest_2d_plane(
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
-    loop_2d = lp.simple_loop_2D(
+    loop_2d = BHaH.simple_loop.simple_loop_2D(
         CoordSystem=CoordSystem,
         out_quantities_dict=out_quantities_dict,
         plane=plane,

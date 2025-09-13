@@ -17,13 +17,13 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.helpers.parallelization.utilities as parallel_utils
-import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
 from nrpy.helpers.expression_utils import (
     generate_definition_header,
     get_params_commondata_symbols_from_expr_list,
 )
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_numerical_grid_params_Nxx_dxx_xx(
@@ -390,7 +390,7 @@ def generate_grid_minimum_gridspacing_prefunc() -> Tuple[str, str]:
     if parallelization != "cuda":
         body += "REAL ds_min = 1e38;\n"
         OMP_custom_pragma = "#pragma omp parallel for reduction(min:ds_min)"
-    body += rf"""{lp.simple_loop(
+    body += rf"""{BHaH.simple_loop.simple_loop(
         loop_body,
         loop_region="all points",
         OMP_custom_pragma=OMP_custom_pragma)}

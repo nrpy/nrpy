@@ -16,13 +16,13 @@ import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.helpers.parallelization.utilities as parallel_utils
-import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
 from nrpy.equations.nrpyelliptic.ConformallyFlat_SourceTerms import (
     compute_psi_background_and_ADD_times_AUU,
 )
 from nrpy.helpers.expression_utils import get_params_commondata_symbols_from_expr_list
+from nrpy.infrastructures import BHaH
 
 
 def generate_prefunc_variable_wavespeed_gfs_all_points(
@@ -74,7 +74,7 @@ def generate_prefunc_variable_wavespeed_gfs_all_points(
     dsmin_computation_str += f"""\n// Set local wavespeed
         {variable_wavespeed_memaccess} = MINIMUM_GLOBAL_WAVESPEED * MIN(dsmin0, MIN(dsmin1, dsmin2)) / dt;\n"""
 
-    loop_body = lp.simple_loop(
+    loop_body = BHaH.simple_loop.simple_loop(
         loop_body="\n" + dsmin_computation_str,
         read_xxs=True,
         loop_region="interior",
@@ -215,7 +215,7 @@ def generate_prefunc_auxevol_gfs_all_points(
     single_point_launch = single_point_launch.replace(
         "psi_background", f"&{psi_background_memaccess}"
     ).replace("ADD_times_AUU", f"&{ADD_times_AUU_memaccess}")
-    kernel_body += lp.simple_loop(
+    kernel_body += BHaH.simple_loop.simple_loop(
         f"{single_point_launch}",
         read_xxs=True,
         loop_region="all points",

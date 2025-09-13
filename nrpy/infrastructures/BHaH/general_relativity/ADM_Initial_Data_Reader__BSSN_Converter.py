@@ -16,7 +16,6 @@ import nrpy.c_function as cfc  # NRPy+: C function registration
 import nrpy.grid as gri  # NRPy+: Functions having to do with numerical grids
 import nrpy.helpers.jacobians as jac
 import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
-import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.params as par  # NRPy+: Parameter interface
 import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
 from nrpy.equations.general_relativity.ADM_to_BSSN import ADM_to_BSSN
@@ -28,7 +27,7 @@ from nrpy.helpers.expression_utils import (
     get_params_commondata_symbols_from_expr_list,
 )
 from nrpy.helpers.parallelization import utilities
-from nrpy.infrastructures.BHaH import BHaH_defines_h
+from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_exact_ADM_ID_function(
@@ -496,7 +495,7 @@ def Cfunction_initial_data_lambdaU_grid_interior(
     enable_intrinsics = (
         False  # FAILS FOR float: True if parallelization != "openmp" else False
     )
-    kernel_body = lp.simple_loop(
+    kernel_body = BHaH.simple_loop.simple_loop(
         ccg.c_codegen(
             lambdaU,
             [
@@ -593,7 +592,7 @@ def register_BHaH_defines_h(
     BHd_str += "} ID_persist_struct;\n"
 
     # register into BHaH_defines.h
-    BHaH_defines_h.register_BHaH_defines(__name__, BHd_str)
+    BHaH.BHaH_defines_h.register_BHaH_defines(__name__, BHd_str)
 
 
 def generate_ADM_Initial_Data_Reader_prefunc_and_lambdaU_launch(

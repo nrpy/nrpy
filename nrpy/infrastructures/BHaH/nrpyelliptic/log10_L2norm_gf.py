@@ -8,10 +8,10 @@ Authors: Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.helpers.parallelization.utilities as parallel_utils
-import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
 from nrpy.helpers.expression_utils import get_params_commondata_symbols_from_expr_list
+from nrpy.infrastructures import BHaH
 
 
 # Define function to compute the l^2 of a gridfunction
@@ -108,7 +108,7 @@ if(r < integration_radius) {
     )
 
     # Generate the loop for the reduction_loop_body
-    loop_body = lp.simple_loop(
+    loop_body = BHaH.simple_loop.simple_loop(
         loop_body="\n" + reduction_loop_body,
         read_xxs=True,
         loop_region="interior",
