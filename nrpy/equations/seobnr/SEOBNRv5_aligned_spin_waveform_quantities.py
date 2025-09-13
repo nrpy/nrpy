@@ -1339,32 +1339,55 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
         """
         hlms = {}
         # modes = [(2, 2)]
-        l, m = 2, 2
-        pn_contribution_f = self.rho["(2 , 2)"] ** l
-        pn_contribution_delta = sp.exp(sp.I * self.deltalm["(2 , 2)"])
-        pn_contribution = pn_contribution_f * pn_contribution_delta
-        gamma_term = sp.Symbol(f"gamma_{l}{m}")
-        khat2 = self.khat[2]
-        tail_prefactor = (
-            sp.exp(sp.pi * khat2)
-            * (sp.exp(2 * sp.I * khat2 * sp.log(2 * 2 * self.Omega * self.r0)))
-            / sp.factorial(2)
-        )
-        tail_term = gamma_term * tail_prefactor
-        non_newtonian_contribution = tail_term * pn_contribution
-        n = (8 * sp.I * sp.pi * (sp.I * 2) ** 2 / sp.factorial2(2 * 2 + 1)) * sp.sqrt(
-            ((2 + 1) * (2 + 2)) / ((2) * (2 - 1))
-        )
-        newtonian_strain = (
-            self.nu
-            * n
-            * self.c[2]
-            * self.vphi**2
-            * self.Y[2][2]
-            * sp.exp(-2 * sp.I * self.phi)
-        )
-        hlms_no_source = newtonian_strain * non_newtonian_contribution
-        hlms[f"({l} , {m})"] = hlms_no_source * self.effective_source[0]
+        # l, m = 2, 2
+        for l in range(2, 9):
+            for m in range(1, l + 1):
+                if not (l + m) % 2:
+                    n = (
+                                8 * sp.pi * (sp.I * m) ** l / sp.factorial2(2 * l + 1)
+                        ) * sp.sqrt(((l + 1) * (l + 2)) / ((l) * (l - 1)))
+                else:
+                    n = (
+                                -16 * sp.I * sp.pi * (sp.I * m) ** l / sp.factorial2(2 * l + 1)
+                        ) * sp.sqrt(
+                        ((2 * l + 1) * (l + 2) * (l ** 2 - m ** 2))
+                        / ((2 * l - 1) * (l + 1) * (l) * (l - 1))
+                    )
+                pn_contribution_f = 0
+                if not m % 2:
+                    pn_contribution_f += self.rho[f"({l} , {m})"] ** l
+                if m % 2:
+                    pn_contribution_f += self.rho[f"({l} , {m})"] ** l
+                    if (l < 5) or (l == 5 and m == 5):
+                        pn_contribution_f = (
+                                self.noneqcond
+                                * (
+                                        self.rho[f"({l} , {m})"] ** l
+                                        + self.fspin[f"({l} , {m})"]
+                                )
+                                + self.eqcond * self.fspin_limit[f"({l} , {m})"]
+                        )
+                pn_contribution_delta = sp.exp(sp.I * self.deltalm[f"({l} , {m})"])
+                pn_contribution = pn_contribution_f * pn_contribution_delta
+                gamma_term = sp.Symbol(f"gamma_{l}{m}")
+                khat_m = self.khat[m]
+                tail_prefactor = (
+                        sp.exp(sp.pi * khat_m)
+                        * (sp.exp(2 * sp.I * khat_m * sp.log(2 * m * self.Omega * self.r0)))
+                        / sp.factorial(l)
+                )
+                tail_term = gamma_term * tail_prefactor
+                non_newtonian_contribution = tail_term * pn_contribution
+                newtonian_strain = (
+                        self.nu
+                        * n
+                        * self.c[l + (l + m) % 2]
+                        * self.vphi ** (l + (l + m) % 2)
+                        * self.Y[m][l - (l + m) % 2]
+                        * sp.exp(-m * sp.I * self.phi)
+                )
+                hlms_no_source = newtonian_strain * non_newtonian_contribution
+                hlms[f"({l} , {m})"] = hlms_no_source * self.effective_source[0]
         return hlms
 
 
