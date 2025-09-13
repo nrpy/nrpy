@@ -12,7 +12,6 @@ License: BSD 2-Clause
 """
 
 import sys
-
 # Step P1: Import needed modules:
 from typing import Tuple
 
@@ -79,12 +78,21 @@ def SphericalGaussian(
              the time derivative of the wave equation solution vv, and their respective values at
              the origin (r=0), uu_exactsoln_r0 and vv_exactsoln_r0.
     """
+    # Step 0: Define the C parameters exact_wave_time & wavespeed. These
+    #         are proper SymPy variables, so can be
+    #         used in below expressions. In the C code, it acts
+    #         just like a usual parameter, whose value is
+    #         specified in the parameter file.
+    exact_wave_time, wavespeed = par.register_CodeParameters(
+        "REAL", __name__, ["exact_wave_time", "wavespeed"], [0.0, 1.0], commondata=True
+    )
+
     # Step 1: Set up Cartesian coordinates (x, y, z) = (xCart0, xCart1, xCart2)
     xCart = ixp.declarerank1("xCart")
 
     # Step 2: Declare free parameters intrinsic to these initial data
     # provided as a C parameter by MoLtimestepping.MoL
-    time, wavespeed = sp.symbols("time wavespeed", real=True)
+
     sigma = par.register_CodeParameter(
         cparam_type="REAL",
         module=__name__,
@@ -103,30 +111,30 @@ def SphericalGaussian(
     # uu_exactsoln = (r - wavespeed*time)/r * sp.exp(- (r - wavespeed*time)**2 / (2*sigma**2) )
     # By convention, limit(uu, r->infinity) = 2. This ensures that relative error is well defined.
     uu_exactsoln = (
-        +((r - wavespeed * time) / r)
-        * sp.exp(-((r - wavespeed * time) ** 2) / (2 * sigma**2))
-        + ((r + wavespeed * time) / r)
-        * sp.exp(-((r + wavespeed * time) ** 2) / (2 * sigma**2))
+        +((r - wavespeed * exact_wave_time) / r)
+        * sp.exp(-((r - wavespeed * exact_wave_time) ** 2) / (2 * sigma**2))
+        + ((r + wavespeed * exact_wave_time) / r)
+        * sp.exp(-((r + wavespeed * exact_wave_time) ** 2) / (2 * sigma**2))
     ) + sp.sympify(
         2
     )  # Adding 2 ensures relative error is well defined (solution does not cross zero)
-    vv_exactsoln = sp.diff(uu_exactsoln, time)
+    vv_exactsoln = sp.diff(uu_exactsoln, exact_wave_time)
 
     # In the limit r->0, this equation is undefined, but we can use L'Hôpital's rule to
     # find the solution. The denominator is 1/r, which becomes 1. We evaluate the numerator
     # using sympy.
     rvar = sp.symbols("rvar", real=True)
     uu_exactsoln_r0 = sp.diff(
-        +(rvar - wavespeed * time)
-        * sp.exp(-((rvar - wavespeed * time) ** 2) / (2 * sigma**2))
-        + (rvar + wavespeed * time)
-        * sp.exp(-((rvar + wavespeed * time) ** 2) / (2 * sigma**2)),
+        +(rvar - wavespeed * exact_wave_time)
+        * sp.exp(-((rvar - wavespeed * exact_wave_time) ** 2) / (2 * sigma**2))
+        + (rvar + wavespeed * exact_wave_time)
+        * sp.exp(-((rvar + wavespeed * exact_wave_time) ** 2) / (2 * sigma**2)),
         rvar,
     ) + sp.sympify(
         2
     )  # Adding 2 ensures relative error is well defined (solution does not cross zero)
     uu_exactsoln_r0 = uu_exactsoln_r0.subs(rvar, r)
-    vv_exactsoln_r0 = sp.diff(uu_exactsoln_r0, time)
+    vv_exactsoln_r0 = sp.diff(uu_exactsoln_r0, exact_wave_time)
 
     return uu_exactsoln, vv_exactsoln, uu_exactsoln_r0, vv_exactsoln_r0
 
@@ -147,11 +155,19 @@ def PlaneWave(
     :return: A tuple containing sympy expressions for the exact solution of the wave equation uu
              and its time derivative vv.
     """
+    # Step 0: Define the C parameters exact_wave_time & wavespeed. These
+    #         are proper SymPy variables, so can be
+    #         used in below expressions. In the C code, it acts
+    #         just like a usual parameter, whose value is
+    #         specified in the parameter file.
+    exact_wave_time, wavespeed = par.register_CodeParameters(
+        "REAL", __name__, ["exact_wave_time", "wavespeed"], [0.0, 1.0], commondata=True
+    )
+
     # Step 1: Set up Cartesian coordinates (x, y, z) = (xCart0, xCart1, xCart2)
     xCart = ixp.declarerank1("xCart")
 
     # Step 2: Declare free parameters intrinsic to these initial data
-    time, wavespeed = sp.symbols("time wavespeed", real=True)
     kk = par.register_CodeParameters(
         cparam_type="REAL",
         module=__name__,
