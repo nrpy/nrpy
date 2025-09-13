@@ -293,6 +293,10 @@ def register_CFunction_auxevol_gfs_set_to_constant(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
+    _ = par.register_CodeParameter(
+        "REAL", __name__, "MINIMUM_GLOBAL_WAVESPEED", 0.7, commondata=True
+    )
+
     parallelization = par.parval_from_str("parallelization")
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
