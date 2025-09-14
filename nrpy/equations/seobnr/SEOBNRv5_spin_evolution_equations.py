@@ -281,7 +281,7 @@ class SEOBNRv5_spin_evolution_equations:
                 sp.Rational(541, 896) * nu**2
                 - sp.Rational(5605, 2592) * nu**3
                 - sp.Rational(56198689, 217728) * nu
-                + sp.pi**2 * (sp.Rational(451, 48) + sp.Rational(16, 3))
+                + sp.pi**2 * (sp.Rational(451, 48) * nu + sp.Rational(16, 3))
                 - sp.Rational(1712, 105) * sp.log(v)
                 - sp.Rational(1712, 105) * EulerGamma
                 + sp.Rational(16447322263, 139708800)
