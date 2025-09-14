@@ -56,7 +56,7 @@ class SEOBNRv5_spin_evolution_equations:
         hat{C}_{*} in Equations 4 and 5 of https://arxiv.org/pdf/2303.18143 are set to zero,
         and their contributions to the potentials are neglected in the code.
 
-        The key outputs of the SEOBNRv5_generic_spin_Hamiltonian_quantities class are:
+        The key outputs of the SEOBNRv5_spin_evolution_equations class are:
             - 'S1dot': The time derivative of the spin vector of the first black hole
                         (Equation 66 of https://arxiv.org/pdf/2303.18143).
             - 'S2dot': The time derivative of the spin vector of the second black hole
