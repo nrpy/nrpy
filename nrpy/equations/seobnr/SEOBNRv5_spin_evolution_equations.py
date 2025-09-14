@@ -46,6 +46,11 @@ class SEOBNRv5_spin_evolution_equations:
         various coefficients required for the dynamics of the spins, angular momenta
         and PN velocity parameter v.
 
+        Care must be taken when expressing the right hand sides of thes equations. The
+        spin dependent factors are normalized by factors of 1 / (M mu). To account for the
+        mu in the denominator, we replace mu with the symmetric
+        mass ratio since mu = nu in M = 1 units.
+
         All potentials entering the effective Hamiltonian are computed under the assumption
         that the system of interest is a black hole binary. That is all multipolar coefficients
         hat{C}_{*} in Equations 4 and 5 of https://arxiv.org/pdf/2303.18143 are set to zero,
@@ -90,6 +95,7 @@ class SEOBNRv5_spin_evolution_equations:
         m1_norm = self.m1 / M
         m2_norm = self.m2 / M
         nu = m1_norm * m2_norm
+        nu_inverse = 1 / nu
         delta = m1_norm - m2_norm
         # spin combinations
         S1 = chi1 * self.m1**2
@@ -130,7 +136,9 @@ class SEOBNRv5_spin_evolution_equations:
                     + sp.Rational(81, 16) * nu
                 )
             )
-            + v**6
+            # all terms have 1/mu dependence
+            + nu_inverse
+            * v**6
             * (
                 ln_cross_S1
                 * (
@@ -139,7 +147,8 @@ class SEOBNRv5_spin_evolution_equations:
                 )
                 + sp.Rational(1, 2) * nu * S2_cross_S1
             )
-            + v**8
+            + nu_inverse
+            * v**8
             * (
                 ln_cross_S1
                 * (
@@ -153,7 +162,8 @@ class SEOBNRv5_spin_evolution_equations:
                 )
                 - sp.Rational(1, 4) * nu**2 * S2_cross_S1
             )
-            + v**10
+            + nu_inverse
+            * v**10
             * (
                 ln_cross_S1
                 * (
@@ -207,7 +217,9 @@ class SEOBNRv5_spin_evolution_equations:
                     + sp.Rational(81, 16) * nu
                 )
             )
-            + v**6
+            # all terms have 1/mu dependence
+            + nu_inverse
+            * v**6
             * (
                 ln_cross_S2
                 * (
@@ -216,7 +228,8 @@ class SEOBNRv5_spin_evolution_equations:
                 )
                 + sp.Rational(1, 2) * nu * S1_cross_S2
             )
-            + v**8
+            + nu_inverse
+            * v**8
             * (
                 ln_cross_S2
                 * (
@@ -230,7 +243,8 @@ class SEOBNRv5_spin_evolution_equations:
                 )
                 - sp.Rational(1, 4) * nu**2 * S1_cross_S2
             )
-            + v**10
+            + nu_inverse
+            * v**10
             * (
                 ln_cross_S2
                 * (
@@ -296,110 +310,124 @@ class SEOBNRv5_spin_evolution_equations:
             )
         )
         # Equation 69c of https://arxiv.org/pdf/2303.18143
-        v_dot_spin_orbit = (
-            # S1 part
-            ln_dot_S1
+        # has an overall 1/mu dependence
+        v_dot_spin_orbit = nu_inverse * (
+            nu_inverse
             * (
-                v**3 * (-sp.Rational(19, 6) * nu - sp.Rational(25, 4) * m2_norm)
-                + v**5
+                # S1 part
+                ln_dot_S1
                 * (
-                    sp.Rational(79, 6) * nu**2
-                    - sp.Rational(21611, 1008) * nu
-                    + (sp.Rational(281, 8) * nu - sp.Rational(809, 84)) * m2_norm
-                )
-                + sp.pi
-                * v**6
-                * (-sp.Rational(37, 3) * nu - sp.Rational(151, 6) * m2_norm)
-                + v**7
-                * (
-                    -sp.Rational(10819, 432) * nu**3
-                    + sp.Rational(40289, 288) * nu**2
-                    - sp.Rational(1932041, 18144) * nu
-                    + (
-                        -sp.Rational(2903, 32) * nu**2
-                        + sp.Rational(257023, 1008) * nu
-                        - sp.Rational(1195759, 18144)
+                    v**3 * (-sp.Rational(19, 6) * nu - sp.Rational(25, 4) * m2_norm)
+                    + v**5
+                    * (
+                        sp.Rational(79, 6) * nu**2
+                        - sp.Rational(21611, 1008) * nu
+                        + (sp.Rational(281, 8) * nu - sp.Rational(809, 84)) * m2_norm
                     )
-                    * m2_norm
-                )
-                + sp.pi
-                * v**8
-                * (
-                    sp.Rational(34303, 336) * nu**2
-                    - sp.Rational(46957, 504) * nu
-                    + (sp.Rational(50483, 224) * nu - sp.Rational(1665, 28)) * m2_norm
-                )
-            )
-            # 1 <-> 2 part
-            + ln_dot_S2
-            * (
-                v**3 * (-sp.Rational(19, 6) * nu - sp.Rational(25, 4) * m1_norm)
-                + v**5
-                * (
-                    sp.Rational(79, 6) * nu**2
-                    - sp.Rational(21611, 1008) * nu
-                    + (sp.Rational(281, 8) * nu - sp.Rational(809, 84)) * m1_norm
-                )
-                + sp.pi
-                * v**6
-                * (-sp.Rational(37, 3) * nu - sp.Rational(151, 6) * m1_norm)
-                + v**7
-                * (
-                    -sp.Rational(10819, 432) * nu**3
-                    + sp.Rational(40289, 288) * nu**2
-                    - sp.Rational(1932041, 18144) * nu
-                    + (
-                        -sp.Rational(2903, 32) * nu**2
-                        + sp.Rational(257023, 1008) * nu
-                        - sp.Rational(1195759, 18144)
+                    + sp.pi
+                    * v**6
+                    * (-sp.Rational(37, 3) * nu - sp.Rational(151, 6) * m2_norm)
+                    + v**7
+                    * (
+                        -sp.Rational(10819, 432) * nu**3
+                        + sp.Rational(40289, 288) * nu**2
+                        - sp.Rational(1932041, 18144) * nu
+                        + (
+                            -sp.Rational(2903, 32) * nu**2
+                            + sp.Rational(257023, 1008) * nu
+                            - sp.Rational(1195759, 18144)
+                        )
+                        * m2_norm
                     )
-                    * m1_norm
+                    + sp.pi
+                    * v**8
+                    * (
+                        sp.Rational(34303, 336) * nu**2
+                        - sp.Rational(46957, 504) * nu
+                        + (sp.Rational(50483, 224) * nu - sp.Rational(1665, 28))
+                        * m2_norm
+                    )
                 )
-                + sp.pi
-                * v**8
+                # 1 <-> 2 part
+                + ln_dot_S2
                 * (
-                    sp.Rational(34303, 336) * nu**2
-                    - sp.Rational(46957, 504) * nu
-                    + (sp.Rational(50483, 224) * nu - sp.Rational(1665, 28)) * m1_norm
+                    v**3 * (-sp.Rational(19, 6) * nu - sp.Rational(25, 4) * m1_norm)
+                    + v**5
+                    * (
+                        sp.Rational(79, 6) * nu**2
+                        - sp.Rational(21611, 1008) * nu
+                        + (sp.Rational(281, 8) * nu - sp.Rational(809, 84)) * m1_norm
+                    )
+                    + sp.pi
+                    * v**6
+                    * (-sp.Rational(37, 3) * nu - sp.Rational(151, 6) * m1_norm)
+                    + v**7
+                    * (
+                        -sp.Rational(10819, 432) * nu**3
+                        + sp.Rational(40289, 288) * nu**2
+                        - sp.Rational(1932041, 18144) * nu
+                        + (
+                            -sp.Rational(2903, 32) * nu**2
+                            + sp.Rational(257023, 1008) * nu
+                            - sp.Rational(1195759, 18144)
+                        )
+                        * m1_norm
+                    )
+                    + sp.pi
+                    * v**8
+                    * (
+                        sp.Rational(34303, 336) * nu**2
+                        - sp.Rational(46957, 504) * nu
+                        + (sp.Rational(50483, 224) * nu - sp.Rational(1665, 28))
+                        * m1_norm
+                    )
                 )
             )
         )
         # Equation 69d of https://arxiv.org/pdf/2303.18143
-        v_dot_spin1_spin2 = nu * (
-            v**4
+        # has an overall 1/mu**2 dependence but also a nu dependence
+        # leaving it in this way so that the normalization is transparent
+        v_dot_spin1_spin2 = (
+            nu_inverse**2
+            * nu
             * (
-                sp.Rational(721, 48) * ln_dot_S1 * ln_dot_S2
-                - sp.Rational(247, 48) * S1_dot_S2
-            )
-            + v**6
-            * (
-                (sp.Rational(14433, 224) - sp.Rational(11779, 288) * nu)
-                * ln_dot_S1
-                * ln_dot_S2
-                + (sp.Rational(6373, 288) * nu + sp.Rational(16255, 672)) * S1_dot_S2
-            )
-            + sp.pi
-            * v**7
-            * (sp.Rational(207, 4) * ln_dot_S1 * ln_dot_S2 - 12 * S1_dot_S2)
-            + v**8
-            * (
-                (
-                    -sp.Rational(162541, 3456) * nu**2
-                    - sp.Rational(195697, 896) * nu
-                    - sp.Rational(9355721, 72576)
+                v**4
+                * (
+                    sp.Rational(721, 48) * ln_dot_S1 * ln_dot_S2
+                    - sp.Rational(247, 48) * S1_dot_S2
                 )
-                * S1_dot_S2
-                + (
-                    sp.Rational(33163, 3456) * nu**2
-                    - sp.Rational(10150387, 24192) * nu
-                    + sp.Rational(21001565, 24192)
+                + v**6
+                * (
+                    (sp.Rational(14433, 224) - sp.Rational(11779, 288) * nu)
+                    * ln_dot_S1
+                    * ln_dot_S2
+                    + (sp.Rational(6373, 288) * nu + sp.Rational(16255, 672))
+                    * S1_dot_S2
                 )
-                * ln_dot_S1
-                * ln_dot_S2
+                + sp.pi
+                * v**7
+                * (sp.Rational(207, 4) * ln_dot_S1 * ln_dot_S2 - 12 * S1_dot_S2)
+                + v**8
+                * (
+                    (
+                        -sp.Rational(162541, 3456) * nu**2
+                        - sp.Rational(195697, 896) * nu
+                        - sp.Rational(9355721, 72576)
+                    )
+                    * S1_dot_S2
+                    + (
+                        sp.Rational(33163, 3456) * nu**2
+                        - sp.Rational(10150387, 24192) * nu
+                        + sp.Rational(21001565, 24192)
+                    )
+                    * ln_dot_S1
+                    * ln_dot_S2
+                )
             )
         )
         # Equation 69e of https://arxiv.org/pdf/2303.18143
-        v_dot_spin_squared = (
+        # has an overall 1/mu**2 dependence
+        v_dot_spin_squared = nu_inverse**2 * (
             # S1 part
             (
                 v**4
@@ -568,7 +596,8 @@ class SEOBNRv5_spin_evolution_equations:
             * v**8
         )
         # Equation 65c of https://arxiv.org/pdf/2303.18143
-        L_spin_orbit = (
+        # has an overall 1/mu dependence
+        L_spin_orbit = nu_inverse * (
             # S1 part
             (
                 v**3
@@ -679,61 +708,68 @@ class SEOBNRv5_spin_evolution_equations:
             )
         )
         # Equation 65d of https://arxiv.org/pdf/2303.18143
-        L_spin1_spin2 = nu * (
-            v**4
+        # has an overall 1/mu**2 dependence but also a nu dependence
+        # leaving it in this way so that the normalization is transparent
+        L_spin1_spin2 = (
+            nu_inverse**2
+            * nu
             * (
-                ln * (2 * ln_dot_S1 * ln_dot_S2 - S1_dot_S2)
-                + sp.Rational(1, 2) * ln_dot_S1 * S2
-                + sp.Rational(1, 2) * ln_dot_S2 * S1
-            )
-            + v**6
-            * (
-                ln
+                v**4
                 * (
-                    ln_dot_S1
-                    * ln_dot_S2
-                    * (sp.Rational(13, 36) * nu - sp.Rational(7, 6))
-                    + sp.Rational(2, 3) * nu * S1_dot_S2
+                    ln * (2 * ln_dot_S1 * ln_dot_S2 - S1_dot_S2)
+                    + sp.Rational(1, 2) * ln_dot_S1 * S2
+                    + sp.Rational(1, 2) * ln_dot_S2 * S1
                 )
-                + S2 * ln_dot_S1 * (sp.Rational(5, 4) - sp.Rational(7, 24) * nu)
-                + S1 * ln_dot_S2 * (sp.Rational(5, 4) - sp.Rational(7, 24) * nu)
-            )
-            + v**8
-            * (
-                ln
+                + v**6
                 * (
-                    ln_dot_S1
+                    ln
+                    * (
+                        ln_dot_S1
+                        * ln_dot_S2
+                        * (sp.Rational(13, 36) * nu - sp.Rational(7, 6))
+                        + sp.Rational(2, 3) * nu * S1_dot_S2
+                    )
+                    + S2 * ln_dot_S1 * (sp.Rational(5, 4) - sp.Rational(7, 24) * nu)
+                    + S1 * ln_dot_S2 * (sp.Rational(5, 4) - sp.Rational(7, 24) * nu)
+                )
+                + v**8
+                * (
+                    ln
+                    * (
+                        ln_dot_S1
+                        * ln_dot_S2
+                        * (
+                            -sp.Rational(361, 432) * nu**2
+                            + sp.Rational(361, 288) * nu
+                            + sp.Rational(15, 4)
+                        )
+                        + (
+                            -sp.Rational(5, 72) * nu**2
+                            - sp.Rational(245, 24) * nu
+                            - sp.Rational(5, 4)
+                        )
+                        * S1_dot_S2
+                    )
+                    + S2
+                    * ln_dot_S1
+                    * (
+                        -sp.Rational(223, 288) * nu**2
+                        - sp.Rational(349, 64) * nu
+                        + sp.Rational(15, 8)
+                    )
+                    + S1
                     * ln_dot_S2
                     * (
-                        -sp.Rational(361, 432) * nu**2
-                        + sp.Rational(361, 288) * nu
-                        + sp.Rational(15, 4)
+                        -sp.Rational(223, 288) * nu**2
+                        - sp.Rational(349, 64) * nu
+                        + sp.Rational(15, 8)
                     )
-                    + (
-                        -sp.Rational(5, 72) * nu**2
-                        - sp.Rational(245, 24) * nu
-                        - sp.Rational(5, 4)
-                    )
-                    * S1_dot_S2
-                )
-                + S2
-                * ln_dot_S1
-                * (
-                    -sp.Rational(223, 288) * nu**2
-                    - sp.Rational(349, 64) * nu
-                    + sp.Rational(15, 8)
-                )
-                + S1
-                * ln_dot_S2
-                * (
-                    -sp.Rational(223, 288) * nu**2
-                    - sp.Rational(349, 64) * nu
-                    + sp.Rational(15, 8)
                 )
             )
         )
         # Equation 65e of https://arxiv.org/pdf/2303.18143
-        L_spin_squared = (
+        # has an overall 1/mu**2 dependence
+        L_spin_squared = nu_inverse**2 * (
             # S1 part
             (
                 v**4
@@ -903,7 +939,8 @@ class SEOBNRv5_spin_evolution_equations:
         # is given as a combination of
         # spin-orbit + spin1-spin2 + spin-squared
         # Equation 71b of https://arxiv.org/pdf/2303.18143
-        ln_dot_spin_orbit = (
+        # has an overall 1/mu dependence
+        ln_dot_spin_orbit = nu_inverse * (
             # S1 part
             ln_cross_S1
             * (
@@ -952,53 +989,64 @@ class SEOBNRv5_spin_evolution_equations:
             )
         )
         # Equation 71c of https://arxiv.org/pdf/2303.18143
-        ln_dot_spin1_spin2 = nu * (
-            sp.Rational(3, 2)
-            * v**7
-            * (ln_cross_S1 * ln_dot_S2 + ln_cross_S2 * ln_dot_S1)
-            + v**9
+        # has an overall 1/mu**2 dependence but also a nu dependence
+        # leaving it in this way so that the normalization is transparent
+        ln_dot_spin1_spin2 = (
+            nu_inverse**2
+            * nu
             * (
-                ln_cross_S1
-                * ln_dot_S2
+                sp.Rational(3, 2)
+                * v**7
+                * (ln_cross_S1 * ln_dot_S2 + ln_cross_S2 * ln_dot_S1)
+                + v**9
                 * (
-                    -sp.Rational(5, 4) * nu
-                    - sp.Rational(15, 8) * m2_norm
-                    - sp.Rational(21, 4)
+                    ln_cross_S1
+                    * ln_dot_S2
+                    * (
+                        -sp.Rational(5, 4) * nu
+                        - sp.Rational(15, 8) * m2_norm
+                        - sp.Rational(21, 4)
+                    )
+                    + ln_cross_S2
+                    * ln_dot_S1
+                    * (
+                        -sp.Rational(5, 4) * nu
+                        + sp.Rational(15, 8) * m2_norm
+                        - sp.Rational(57, 8)
+                    )
+                    - sp.Rational(5, 8) * delta * ln * ln_dot_S1_cross_S2
+                    + sp.Rational(3, 8) * delta * S1_cross_S2
                 )
-                + ln_cross_S2
-                * ln_dot_S1
+                + v**11
                 * (
-                    -sp.Rational(5, 4) * nu
-                    + sp.Rational(15, 8) * m2_norm
-                    - sp.Rational(57, 8)
+                    ln_cross_S1
+                    * ln_dot_S2
+                    * (
+                        -sp.Rational(1, 6) * nu**2
+                        + sp.Rational(25, 4) * nu
+                        + (sp.Rational(71, 32) * nu + sp.Rational(9, 32)) * m2_norm
+                        + sp.Rational(15, 16)
+                    )
+                    + ln_cross_S2
+                    * ln_dot_S1
+                    * (
+                        -sp.Rational(1, 6) * nu**2
+                        + sp.Rational(271, 32) * nu
+                        + (-sp.Rational(71, 32) * nu - sp.Rational(9, 32)) * m2_norm
+                        + sp.Rational(39, 32)
+                    )
+                    + sp.Rational(1, 96)
+                    * delta
+                    * (89 * nu - 27)
+                    * ln
+                    * ln_dot_S1_cross_S2
+                    - sp.Rational(9, 32) * delta * (2 * nu + 1) * S1_cross_S2
                 )
-                - sp.Rational(5, 8) * delta * ln * ln_dot_S1_cross_S2
-                + sp.Rational(3, 8) * delta * S1_cross_S2
-            )
-            + v**11
-            * (
-                ln_cross_S1
-                * ln_dot_S2
-                * (
-                    -sp.Rational(1, 6) * nu**2
-                    + sp.Rational(25, 4) * nu
-                    + (sp.Rational(71, 32) * nu + sp.Rational(9, 32)) * m2_norm
-                    + sp.Rational(15, 16)
-                )
-                + ln_cross_S2
-                * ln_dot_S1
-                * (
-                    -sp.Rational(1, 6) * nu**2
-                    + sp.Rational(271, 32) * nu
-                    + (-sp.Rational(71, 32) * nu - sp.Rational(9, 32)) * m2_norm
-                    + sp.Rational(39, 32)
-                )
-                + sp.Rational(1, 96) * delta * (89 * nu - 27) * ln * ln_dot_S1_cross_S2
-                - sp.Rational(9, 32) * delta * (2 * nu + 1) * S1_cross_S2
             )
         )
         # Equation 71d of https://arxiv.org/pdf/2303.18143
-        ln_dot_spin_squared = (
+        # has an overall 1/mu**2 dependence
+        ln_dot_spin_squared = nu_inverse**2 * (
             # S1 part
             (ln_cross_S1 * ln_dot_S1)
             * (
