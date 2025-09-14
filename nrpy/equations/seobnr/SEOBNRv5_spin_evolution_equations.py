@@ -65,7 +65,7 @@ class SEOBNRv5_spin_evolution_equations:
                         (Equation 71 of https://arxiv.org/pdf/2303.18143).
             - 'omegadot': The time derivative of the orbital frequency
                         (Equation 69 of https://arxiv.org/pdf/2303.18143).
-            - 'L'   : The orbital angular momentum
+            - 'L'   : The dimensionless orbital angular momentum
                         (Equation 65 of https://arxiv.org/pdf/2303.18143).
         """
         (
@@ -933,8 +933,8 @@ class SEOBNRv5_spin_evolution_equations:
             )
         )
         # Equation 65a of https://arxiv.org/pdf/2303.18143
-        # the normalization factor M*mu in the RHS
-        # can be neglected since L also has units M*mu
+        # The following computes the dimensionless orbital angular momentum, L/(M*mu).
+        # The overall M*mu factor from Eq. 65a is therefore omitted from the expression.
         L = (L_nospin + L_spin_orbit + L_spin1_spin2 + L_spin_squared) / v
         # ln_dot: Equation 71 of https://arxiv.org/pdf/2303.18143
         # is given as a combination of
