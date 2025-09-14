@@ -1,4 +1,5 @@
 #include "BHaH_defines.h"
+
 /**
  * Kernel: rfm_precompute_defines__f0_of_xx0_gpu.
  * Kernel to precompute metric quantity f0_of_xx0.

@@ -1,4 +1,5 @@
 #include "BHaH_defines.h"
+
 /**
  * rfm_precompute_malloc: reference metric precomputed lookup arrays: malloc
  */

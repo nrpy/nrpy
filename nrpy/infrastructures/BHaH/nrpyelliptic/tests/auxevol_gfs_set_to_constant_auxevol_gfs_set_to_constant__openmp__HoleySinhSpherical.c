@@ -200,7 +200,6 @@ static void variable_wavespeed_gfs_all_points_host(const params_struct *restrict
 void auxevol_gfs_set_to_constant__rfm__HoleySinhSpherical(commondata_struct *restrict commondata, params_struct *restrict params,
                                                           REAL *restrict xx[3], MoL_gridfunctions_struct *restrict gridfuncs) {
 #include "set_CodeParameters.h"
-
   REAL *auxevol_gfs = gridfuncs->auxevol_gfs;
   REAL *x0 = xx[0];
   REAL *x1 = xx[1];

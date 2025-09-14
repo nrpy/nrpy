@@ -1,12 +1,12 @@
 #include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
+
 /**
  * Output diagnostic quantities at gridpoints closest to yz plane.
  */
 void diagnostics_nearest_2d_yz_plane__rfm__SinhSymTP(commondata_struct *restrict commondata, const params_struct *restrict params,
                                                      REAL *restrict xx[3], MoL_gridfunctions_struct *restrict gridfuncs) {
 #include "set_CodeParameters.h"
-
   // Unpack grid function pointers from gridfuncs struct
   const REAL *restrict y_n_gfs = gridfuncs->y_n_gfs;
   MAYBE_UNUSED const REAL *restrict auxevol_gfs = gridfuncs->auxevol_gfs;

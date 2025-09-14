@@ -1,5 +1,6 @@
 #include "BHaH_defines.h"
 #include "intrinsics/cuda_intrinsics.h"
+
 /**
  * Kernel: residual_H_compute_all_points_gpu.
  * Kernel to compute the residual throughout the grid.
@@ -106,7 +107,6 @@ __global__ static void residual_H_compute_all_points_gpu(const size_t streamid, 
 void residual_H_compute_all_points__rfm__Cartesian(const commondata_struct *restrict commondata, const params_struct *restrict params,
                                                    const rfm_struct *restrict rfmstruct, const REAL *restrict auxevol_gfs,
                                                    const REAL *restrict in_gfs, REAL *restrict aux_gfs) {
-
   const size_t threads_in_x_dir = BHAH_THREADS_IN_X_DIR_NELL_H;
   const size_t threads_in_y_dir = BHAH_THREADS_IN_Y_DIR_NELL_H;
   const size_t threads_in_z_dir = BHAH_THREADS_IN_Z_DIR_NELL_H;
@@ -118,5 +118,4 @@ void residual_H_compute_all_points__rfm__Cartesian(const commondata_struct *rest
   size_t streamid = params->grid_idx % NUM_STREAMS;
   residual_H_compute_all_points_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, rfmstruct, auxevol_gfs, in_gfs, aux_gfs);
   cudaCheckErrors(cudaKernel, "residual_H_compute_all_points_gpu failure");
-
 } // END FUNCTION residual_H_compute_all_points__rfm__Cartesian

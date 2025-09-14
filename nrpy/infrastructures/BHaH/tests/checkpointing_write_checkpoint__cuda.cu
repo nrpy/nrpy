@@ -15,7 +15,6 @@
  * Write a checkpoint file
  */
 void write_checkpoint(const commondata_struct *restrict commondata, griddata_struct *restrict griddata, griddata_struct *restrict griddata_device) {
-
   char filename[256];
   snprintf(filename, 256, "checkpoint-conv_factor%.2f.dat", commondata->convergence_factor);
   const REAL currtime = commondata->time, currdt = commondata->dt, outevery = commondata->checkpoint_every;

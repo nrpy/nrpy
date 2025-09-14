@@ -82,7 +82,6 @@ __global__ static void find_global__minimum__cuda(REAL *data, REAL *min, uint co
  * Find array global minimum.
  */
 REAL find_global__minimum(REAL *data, uint const data_length) {
-
   // This can be tested up to 1024
   uint threadCount = 32;
 

@@ -42,6 +42,7 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
     >>> register_CFunctions_params_commondata_struct_set_to_default()
     >>> print(cfc.CFunction_dict["params_struct_set_to_default"].full_function)
     #include "BHaH_defines.h"
+    <BLANKLINE>
     /**
      * Set params_struct to default values specified within NRPy+.
      */
@@ -57,11 +58,11 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
     <BLANKLINE>
     >>> print(cfc.CFunction_dict["commondata_struct_set_to_default"].full_function)
     #include "BHaH_defines.h"
+    <BLANKLINE>
     /**
      * Set commondata_struct to default values specified within NRPy+.
      */
     void commondata_struct_set_to_default(commondata_struct *restrict commondata) {
-    <BLANKLINE>
       // Set commondata_struct variables to default
       commondata->a = 1;                   // CodeParameters_c_files::a
       commondata->blah_int = 1;            // CodeParameters_c_files::blah_int

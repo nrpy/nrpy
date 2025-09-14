@@ -360,7 +360,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     # Clean target rule
     clean_rule = f"""# Use $(RM) to be cross-platform compatible.
 clean:
-\t$(RM) *.o */*.o *~ */*~ */lib*.a ./#* *.txt *.gp *.dat *.avi *.png {final_exec_or_library_name}"""
+\t$(RM) *.o */*.o */*/*.o *~ */*~ */lib*.a ./#* *.txt *.gp *.dat *.avi *.png {final_exec_or_library_name}"""
 
     # Part 5: Assemble and Write Makefile
     makefile_content = _construct_makefile_content(

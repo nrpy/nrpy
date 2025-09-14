@@ -8,6 +8,7 @@
   for (int(ii) = (tid0);                                                                                                                             \
        (ii) < d_params[streamid].Nxx_plus_2NGHOSTS0 * d_params[streamid].Nxx_plus_2NGHOSTS1 * d_params[streamid].Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;  \
        (ii) += (stride0))
+
 /**
  * Kernel: rk_substep_1_gpu.
  * Compute RK substep 1.
@@ -91,7 +92,6 @@ static void rk_substep_2__launcher(params_struct *restrict params, REAL *restric
  * Method of Lines (MoL) for "RK2 MP" method: Step forward one full timestep.
  */
 void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_struct *restrict griddata) {
-
   // C code implementation of -={ RK2 MP }=- Method of Lines timestepping.
 
   // First set the initial time:

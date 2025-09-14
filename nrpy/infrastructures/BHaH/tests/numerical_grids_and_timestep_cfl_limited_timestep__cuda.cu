@@ -1,5 +1,6 @@
 #include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
+
 /**
  * Kernel: compute_ds_min_gpu.
  * Kernel to find minimum grid spacing.
@@ -31,14 +32,12 @@ __global__ static void compute_ds_min_gpu(const size_t streamid, const params_st
       } // END LOOP: for (int i0 = tid0; i0 < Nxx_plus_2NGHOSTS0; i0 += stride0)
     } // END LOOP: for (int i1 = tid1; i1 < Nxx_plus_2NGHOSTS1; i1 += stride1)
   } // END LOOP: for (int i2 = tid2; i2 < Nxx_plus_2NGHOSTS2; i2 += stride2)
-
 } // END FUNCTION compute_ds_min_gpu
 
 /**
  * Compute minimum timestep dt = CFL_FACTOR * ds_min.
  */
 void cfl_limited_timestep(commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3]) {
-
   // Allocate memory for ds_min on the device
   const int Nxx_tot = params->Nxx_plus_2NGHOSTS0 * params->Nxx_plus_2NGHOSTS1 * params->Nxx_plus_2NGHOSTS2;
   REAL *ds_min_device;

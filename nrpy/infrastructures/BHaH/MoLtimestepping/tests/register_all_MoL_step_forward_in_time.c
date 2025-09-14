@@ -5,6 +5,7 @@
   _Pragma("omp parallel for") for (int(ii) = 0;                                                                                                      \
                                    (ii) < params->Nxx_plus_2NGHOSTS0 * params->Nxx_plus_2NGHOSTS1 * params->Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;       \
                                    (ii)++)
+
 /**
  * Kernel: rk_substep_1_host.
  * Compute RK substep 1.
@@ -105,7 +106,6 @@ static void rk_substep_4__launcher(params_struct *restrict params, REAL *restric
  * Method of Lines (MoL) for "RK4" method: Step forward one full timestep.
  */
 void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_struct *restrict griddata) {
-
   // C code implementation of -={ RK4 }=- Method of Lines timestepping.
 
   // First set the initial time:

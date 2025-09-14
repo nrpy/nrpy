@@ -1,5 +1,6 @@
 #include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
+
 /**
  * Kernel: log10_L2norm_gf_host.
  * Kernel to compute L2 quantities pointwise (summed).
@@ -61,6 +62,7 @@ static void log10_L2norm_gf_host(const params_struct *restrict params, const REA
   } // END LOOP: for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++)
   *squared_sum_final = squared_sum;
   *volume_sum_final = volume_sum;
+
 } // END FUNCTION log10_L2norm_gf_host
 
 /**
@@ -69,7 +71,6 @@ static void log10_L2norm_gf_host(const params_struct *restrict params, const REA
 void log10_L2norm_gf__rfm__HoleySinhSpherical(commondata_struct *restrict commondata, params_struct *restrict params, REAL *restrict xx[3],
                                               const REAL integration_radius, const int gf_index, REAL *l2norm, const REAL *restrict in_gfs) {
 #include "set_CodeParameters.h"
-
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
   REAL *restrict x0 = xx[0];
   REAL *restrict x1 = xx[1];

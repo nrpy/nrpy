@@ -1,4 +1,5 @@
 #include "BHaH_defines.h"
+
 /**
  * Kernel: apply_bcs_inner_only_host.
  * Apply BCs to inner boundary points only.
@@ -36,7 +37,6 @@ static void apply_bcs_inner_only_host(const params_struct *restrict params, cons
  */
 void apply_bcs_inner_only(const commondata_struct *restrict commondata, const params_struct *restrict params, const bc_struct *restrict bcstruct,
                           REAL *restrict gfs) {
-
   // Unpack bc_info from bcstruct
   const bc_info_struct *bc_info = &bcstruct->bc_info;
   const innerpt_bc_struct *restrict inner_bc_array = bcstruct->inner_bc_array;

@@ -1,4 +1,5 @@
 #include "BHaH_defines.h"
+
 /**
  * Kernel: apply_bcs_inner_only_specific_auxgfs_gpu.
  * Apply BCs to inner boundary points only for specified GFs.
@@ -43,7 +44,6 @@ __global__ static void apply_bcs_inner_only_specific_auxgfs_gpu(const size_t str
  */
 void apply_bcs_inner_only_specific_auxgfs(const commondata_struct *restrict commondata, const params_struct *restrict params,
                                           const bc_struct *restrict bcstruct, REAL *restrict gfs, const int num_gfs, const int *gfs_to_sync) {
-
   // Unpack bc_info from bcstruct
   const bc_info_struct *bc_info = &bcstruct->bc_info;
   const innerpt_bc_struct *restrict inner_bc_array = bcstruct->inner_bc_array;
@@ -68,4 +68,5 @@ void apply_bcs_inner_only_specific_auxgfs(const commondata_struct *restrict comm
   BHAH_DEVICE_SYNC();
   // Free device memory for gfs_to_sync
   BHAH_FREE_DEVICE(gfs_to_sync_device);
+
 } // END FUNCTION apply_bcs_inner_only_specific_auxgfs
