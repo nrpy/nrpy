@@ -110,7 +110,7 @@ class SEOBNRv5_spin_evolution_equations:
         S1_dot = (
             ln_cross_S1
             * (
-                v**5 * (sp.Rational(3, 2) * m1_norm + sp.Rational(1, 2) * nu)
+                v**5 * (sp.Rational(3, 2) * m2_norm + sp.Rational(1, 2) * nu)
                 + v**7
                 * (
                     (sp.Rational(9, 8) - sp.Rational(5, 4) * nu) * m2_norm
@@ -146,7 +146,7 @@ class SEOBNRv5_spin_evolution_equations:
                     ln_dot_S1
                     * (
                         -sp.Rational(17, 12) * nu**2
-                        - sp.Rational(9, 4) * nu**2
+                        - sp.Rational(9, 4) * nu
                         + (sp.Rational(9, 4) - sp.Rational(15, 4)) * m2_norm
                     )
                     + ln_dot_S2 * (sp.Rational(1, 12) * nu**2 - sp.Rational(1, 2) * nu)
@@ -187,7 +187,7 @@ class SEOBNRv5_spin_evolution_equations:
         S2_dot = (
             ln_cross_S2
             * (
-                v**5 * (sp.Rational(3, 2) * m2_norm + sp.Rational(1, 2) * nu)
+                v**5 * (sp.Rational(3, 2) * m1_norm + sp.Rational(1, 2) * nu)
                 + v**7
                 * (
                     (sp.Rational(9, 8) - sp.Rational(5, 4) * nu) * m1_norm
@@ -223,7 +223,7 @@ class SEOBNRv5_spin_evolution_equations:
                     ln_dot_S2
                     * (
                         -sp.Rational(17, 12) * nu**2
-                        - sp.Rational(9, 4) * nu**2
+                        - sp.Rational(9, 4) * nu
                         + (sp.Rational(9, 4) - sp.Rational(15, 4)) * m1_norm
                     )
                     + ln_dot_S1 * (sp.Rational(1, 12) * nu**2 - sp.Rational(1, 2) * nu)
@@ -305,7 +305,7 @@ class SEOBNRv5_spin_evolution_equations:
                 * (
                     sp.Rational(79, 6) * nu**2
                     - sp.Rational(21611, 1008) * nu
-                    + (sp.Rational(281, 8) * nu - sp.Rational(809, 84) * m2_norm)
+                    + (sp.Rational(281, 8) * nu - sp.Rational(809, 84)) * m2_norm
                 )
                 + sp.pi
                 * v**6
@@ -318,8 +318,9 @@ class SEOBNRv5_spin_evolution_equations:
                     + (
                         -sp.Rational(2903, 32) * nu**2
                         + sp.Rational(257023, 1008) * nu
-                        - sp.Rational(1195759, 18144) * m2_norm
+                        - sp.Rational(1195759, 18144)
                     )
+                    * m2_norm
                 )
                 + sp.pi
                 * v**8
@@ -337,7 +338,7 @@ class SEOBNRv5_spin_evolution_equations:
                 * (
                     sp.Rational(79, 6) * nu**2
                     - sp.Rational(21611, 1008) * nu
-                    + (sp.Rational(281, 8) * nu - sp.Rational(809, 84) * m1_norm)
+                    + (sp.Rational(281, 8) * nu - sp.Rational(809, 84)) * m1_norm
                 )
                 + sp.pi
                 * v**6
@@ -350,8 +351,9 @@ class SEOBNRv5_spin_evolution_equations:
                     + (
                         -sp.Rational(2903, 32) * nu**2
                         + sp.Rational(257023, 1008) * nu
-                        - sp.Rational(1195759, 18144) * m1_norm
+                        - sp.Rational(1195759, 18144)
                     )
+                    * m1_norm
                 )
                 + sp.pi
                 * v**8
@@ -376,7 +378,9 @@ class SEOBNRv5_spin_evolution_equations:
                 * ln_dot_S2
                 + (sp.Rational(6373, 288) * nu + sp.Rational(16255, 672)) * S1_dot_S2
             )
-            + v**7 * (sp.Rational(207, 4) * ln_dot_S1 * ln_dot_S2 - 12 * S1_dot_S2)
+            + sp.pi
+            * v**7
+            * (sp.Rational(207, 4) * ln_dot_S1 * ln_dot_S2 - 12 * S1_dot_S2)
             + v**8
             * (
                 (
