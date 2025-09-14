@@ -933,6 +933,8 @@ class SEOBNRv5_spin_evolution_equations:
             )
         )
         # Equation 65a of https://arxiv.org/pdf/2303.18143
+        # the normalization factor M*mu in the RHS
+        # can be neglected since L also has units M*mu
         L = (L_nospin + L_spin_orbit + L_spin1_spin2 + L_spin_squared) / v
         # ln_dot: Equation 71 of https://arxiv.org/pdf/2303.18143
         # is given as a combination of
