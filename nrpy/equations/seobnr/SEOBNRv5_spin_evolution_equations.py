@@ -156,7 +156,7 @@ class SEOBNRv5_spin_evolution_equations:
                     * (
                         -sp.Rational(17, 12) * nu**2
                         - sp.Rational(9, 4) * nu
-                        + (sp.Rational(9, 4) - sp.Rational(15, 4)) * m2_norm
+                        + (sp.Rational(9, 4) - sp.Rational(15, 4) * nu) * m2_norm
                     )
                     + ln_dot_S2 * (sp.Rational(1, 12) * nu**2 - sp.Rational(1, 2) * nu)
                 )
@@ -237,7 +237,7 @@ class SEOBNRv5_spin_evolution_equations:
                     * (
                         -sp.Rational(17, 12) * nu**2
                         - sp.Rational(9, 4) * nu
-                        + (sp.Rational(9, 4) - sp.Rational(15, 4)) * m1_norm
+                        + (sp.Rational(9, 4) - sp.Rational(15, 4) * nu) * m1_norm
                     )
                     + ln_dot_S1 * (sp.Rational(1, 12) * nu**2 - sp.Rational(1, 2) * nu)
                 )
@@ -312,8 +312,7 @@ class SEOBNRv5_spin_evolution_equations:
         # Equation 69c of https://arxiv.org/pdf/2303.18143
         # has an overall 1/mu dependence
         v_dot_spin_orbit = nu_inverse * (
-            nu_inverse
-            * (
+            (
                 # S1 part
                 ln_dot_S1
                 * (
