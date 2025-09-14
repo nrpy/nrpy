@@ -28,7 +28,7 @@ import sympy as sp
 from nrpy.equations.grhd.Min_Max_and_Piecewise_Expressions import coord_greater_bound
 from nrpy.helpers.float_to_rational import f2r
 
-# The name of this module ("WaveEquation") is given by __name__:
+# The name of this module is given by __name__:
 thismodule = __name__
 
 

@@ -7,7 +7,7 @@ Zachariah B. Etienne
 zachetie at gmail *dot com
 
 In the 5th version of the Spinning Effective One Body (SEOBNRv5) model,
-the orbital quantities and the spins are evolved separately, with the spin evolution equations are informed
+the orbital quantities and the spins are evolved separately, with the spin evolution equations informed
 by Taylor expanded post-Newtonian expressions in the quasi-circular limit.
 
 The spin evolution equations are a set of equations that depend on
@@ -29,7 +29,7 @@ import sympy as sp
 
 from nrpy.helpers.float_to_rational import f2r
 
-# The name of this module ("WaveEquation") is given by __name__:
+# The name of this module is given by __name__:
 thismodule = __name__
 
 
@@ -136,7 +136,7 @@ class SEOBNRv5_spin_evolution_equations:
                     + sp.Rational(81, 16) * nu
                 )
             )
-            # all terms have 1/mu dependence
+            # the following terms all have a 1/mu dependence
             + nu_inverse
             * v**6
             * (
@@ -217,7 +217,7 @@ class SEOBNRv5_spin_evolution_equations:
                     + sp.Rational(81, 16) * nu
                 )
             )
-            # all terms have 1/mu dependence
+            # the following terms all have a 1/mu dependence
             + nu_inverse
             * v**6
             * (
