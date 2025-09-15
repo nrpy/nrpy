@@ -4,7 +4,9 @@ from . import (
     MoL,
     chare_communication_maps,
     diagnostics,
+    horizon_finder_chare,
     initial_data,
+    interpolator3d_chare,
     main_chare,
     nrpyelliptic,
     numerical_grids,
@@ -12,6 +14,4 @@ from . import (
     simple_loop_diagnostic,
     superB,
     timestepping_chare,
-    interpolator3d_chare,
-    horizon_finder_chare,
 )
