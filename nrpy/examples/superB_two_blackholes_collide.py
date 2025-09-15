@@ -347,7 +347,10 @@ superB.timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(
 )
 
 BHaH.BHaH_defines_h.output_BHaH_defines_h(
-    additional_includes=[str(Path("superB") / Path("superB.h"))],
+    additional_includes=[
+        str(Path("superB") / Path("superB.h")),
+        os.path.join(BHaHAHA_subdir, "BHaHAHA.h"),
+    ],
     project_dir=project_dir,
     enable_intrinsics=enable_intrinsics,
     enable_rfm_precompute=enable_rfm_precompute,
