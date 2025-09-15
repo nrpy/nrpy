@@ -152,8 +152,8 @@ if enable_BHaHAHA:
         project_dir=project_dir,
         use_cpp=True,
     )
-    superBinterpolator3d.output_interpolator3d_h_cpp_ci(project_dir=project_dir)
-    superBhorizonfinder.output_horizon_finder_h_cpp_ci(project_dir=project_dir)
+    superB.interpolator3d_chare.output_interpolator3d_h_cpp_ci(project_dir=project_dir)
+    superB.horizon_finder_chare.output_horizon_finder_h_cpp_ci(project_dir=project_dir)
 
 
 #########################################################

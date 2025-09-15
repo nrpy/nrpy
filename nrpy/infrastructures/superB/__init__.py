@@ -12,4 +12,6 @@ from . import (
     simple_loop_diagnostic,
     superB,
     timestepping_chare,
+    interpolator3d_chare,
+    horizon_finder_chare,
 )
