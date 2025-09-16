@@ -64,8 +64,8 @@ class BOB_v2_waveform_quantities:
 
         :return None:
         """
-        (m1, m2, chi1, chi2, omega_qnm, tau_qnm, t_0, t_p, t) = sp.symbols(
-            "m1 m2 chi1 chi2 omega_qnm tau_qnm t_0 t_p t", real=True
+        (m1, m2, chi1, chi2, Omega_0, omega_qnm, tau_qnm, t_0, t_p, t) = sp.symbols(
+            "m1 m2 chi1 chi2 Omega_0 omega_qnm tau_qnm t_0 t_p t", real=True
         )
         # NQC matching parameters
         M = m1 + m2
@@ -110,17 +110,36 @@ class BOB_v2_waveform_quantities:
             - f2r(0.2685414392185025978)
         )
         # BOB computation begins here
-        Omega_0 = omega22NR / 2
         Omega_qnm = omega_qnm / 2
         T = (t - t_p) / tau_qnm
         T_0 = (t_0 - t_p) / tau_qnm
         # BOB news quantities
+        # Note:
+        # While the derivation below follows Kankani et al
+        # they fix constants of integration/continuity by requiring
+        # t_0 = - infinity
+        # A_p = peak news amplitude from NR
+        # Omega_0 = asymptotic initial orbital frequency
+        # For IMR attachment it can be more optimal
+        # to define the constants of integration/continuity
+        # as follows
+        # t_0 = time of peak strain
+        # A_p = rescaled peak news amplitude such that
+        #         BOB strain amplitude matches NR fitted quantity
+        #         at t_0
+        # Omega_0 = rescaled initial orbital frequency such that
+        #         BOB phase frequency matches NR fitted quantity
+        #         at t_0
+        # The condition for A_p can be expressed as a closed form.
+        # The definition of t_0 implies that
+        # Omega_0 and T_0 have to be evaluated numerically
+        # given the NQC matching parameters.
         A_noap = 1 / sp.cosh(T)
         k = (Omega_qnm**2 - Omega_0**2) / (1 - sp.tanh(T_0))
-        Omega_orb = (Omega_0**2 - k * (sp.tanh(T) - sp.tanh(T_0))) ** sp.Rational(1, 2)
+        Omega_orb = (Omega_0**2 + k * (sp.tanh(T) - sp.tanh(T_0))) ** sp.Rational(1, 2)
         Phi_orb = -tau_qnm * (
-            Omega_qnm * sp.tanh(Omega_orb / Omega_qnm)
-            - Omega_0 * sp.tanh(Omega_0 / Omega_orb)
+            Omega_qnm * sp.atanh(Omega_orb / Omega_qnm)
+            - Omega_0 * sp.atanh(Omega_0 / Omega_orb)
         )
         omega_news = 2 * Omega_orb
         # Going from news to strain
@@ -158,7 +177,8 @@ class BOB_v2_waveform_quantities:
         # unlike in BOBv1 where t_0 - t_p has a closed form,
         # we will need to solve a non-linear equation to
         # get t_0 - t_p
-        self.strain_peak_time_condition = sp.diff(strain_amplitude_noap, t).subs(t, t_0)
+        self.t_p_condition = sp.diff(strain_amplitude_noap, t).subs(t, t_0)
+        self.Omega_0_condition = strain_frequency.subs(t, t_0) - omega22NR
         self.h_t_attach = h22NR
         self.hdot_t_attach = sp.sympify(0)
         hddot = sp.diff(sp.diff(self.h, t), t)
