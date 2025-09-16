@@ -290,7 +290,7 @@ jobs:
           python3 -u nrpy/examples/superB_two_blackholes_collide.py
           cd project/superB_two_blackholes_collide/
           make -j2
-          charmrun +p2 ./superB_two_blackholes_collide
+          ./charmrun +p2 ./superB_two_blackholes_collide
           "
 
   codegen-ubuntu:
