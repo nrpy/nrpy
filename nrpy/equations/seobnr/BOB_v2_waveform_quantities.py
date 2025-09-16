@@ -18,9 +18,7 @@ See Section IV B of Mahesh, McWilliams, and Etienne, "Spinning Effective-to-Back
 for the BOB-derived NQC corrections.
 
 The modes are expressed in terms of the binary masses (m1, m2), spins (chi1, chi2),
-the quasi-normal modes of the remnant black hole (omega_qnm, tau_qnm), and NQC attachment time (t_0)
-(see Equations 24-31 of Mahesh, McWilliams, and Etienne, "Spinning Effective-to-Backwards-One Body"
-for the full list of terms).
+the quasi-normal modes of the remnant black hole (omega_qnm, tau_qnm), and NQC attachment time (t_0).
 
 License: BSD 2-Clause
 """
@@ -46,7 +44,7 @@ class BOB_v2_waveform_quantities:
         class variables like mass parameters, spin parameters, and various
         coefficients required for the waveform's amplitude and phase.
         The waveform is currently calculated for the (2,2) mode for the sake of
-        debuggin/sanity checks. Higher mode information will be added in an
+        debugging/sanity checks. Higher mode information will be added in an
         upcoming commit.
         The key outputs of the BOB_v2_waveform_quantities class are:
             - 'h' : the amplitude of the merger-ringdown (l=2,m=2) mode.
@@ -134,6 +132,7 @@ class BOB_v2_waveform_quantities:
         # The definition of t_0 implies that
         # Omega_0 and T_0 have to be evaluated numerically
         # given the NQC matching parameters.
+        # A_noap = The BOB news amplitude without the A_p scale factor
         A_noap = 1 / sp.cosh(T)
         k = (Omega_qnm**2 - Omega_0**2) / (1 - sp.tanh(T_0))
         Omega_orb = (Omega_0**2 + k * (sp.tanh(T) - sp.tanh(T_0))) ** sp.Rational(1, 2)
