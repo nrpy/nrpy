@@ -1,5 +1,6 @@
 #include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
+
 /**
  * Compute 1st derivative finite-difference derivative with arbitrary upwind
  */
@@ -116,7 +117,6 @@ static inline REAL FD1_arbitrary_upwind_x2_dirn(const params_struct *restrict pa
  */
 static inline void r_and_partial_xi_partial_r_derivs(const params_struct *restrict params, const REAL xx0, const REAL xx1, const REAL xx2, REAL *r,
                                                      REAL *partial_x0_partial_r, REAL *partial_x1_partial_r, REAL *partial_x2_partial_r) {
-
   const REAL tmp0 = ((xx2) * (xx2));
   const REAL tmp3 = ((xx0) * (xx0)) + ((xx1) * (xx1));
   const REAL tmp4 = tmp0 + tmp3;
@@ -277,7 +277,6 @@ static void apply_bcs_pure_only_host(const params_struct *restrict params, const
  */
 static void apply_bcs_pure_only(const params_struct *restrict params, const bc_struct *restrict bcstruct, REAL *restrict *xx, REAL *restrict gfs,
                                 REAL *restrict rhs_gfs, const REAL *custom_wavespeed, const REAL *custom_f_infinity) {
-
   const bc_info_struct *bc_info = &bcstruct->bc_info;
   REAL *restrict x0 = xx[0];
   REAL *restrict x1 = xx[1];
@@ -305,7 +304,6 @@ void apply_bcs_outerradiation_and_inner__rfm__Cartesian(const commondata_struct 
                                                         const bc_struct *restrict bcstruct, REAL *restrict xx[3],
                                                         const REAL custom_wavespeed[NUM_EVOL_GFS], const REAL custom_f_infinity[NUM_EVOL_GFS],
                                                         REAL *restrict gfs, REAL *restrict rhs_gfs) {
-
   ////////////////////////////////////////////////////////
   // STEP 1 of 2: Apply BCs to pure outer boundary points.
   //              By "pure" we mean that these points are

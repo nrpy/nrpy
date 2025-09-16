@@ -1,5 +1,6 @@
 #include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
+
 /**
  * Map a reference metric grid point index (i0, i1, i2) in a ghost zone to an interior point index (i0, i1, i2)':
  * (i0, i1, i2) -> (i0, i1, i2)',
@@ -41,7 +42,6 @@ static void EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(const comm
                                                                       const params_struct *restrict params, REAL *restrict xx[3], const int i0,
                                                                       const int i1, const int i2, REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]) {
 #include "set_CodeParameters.h"
-
   // Step 1: Convert the (curvilinear) coordinate (x0,x1,x2) to Cartesian coordinates:
   //         (x0,x1,x2) -> (Cartx,Carty,Cartz)
   //         Find the Cartesian coordinate that (x0,x1,x2)
@@ -192,7 +192,6 @@ static void set_parity_for_inner_boundary_single_pt(const commondata_struct *res
                                                     const REAL xx0, const REAL xx1, const REAL xx2, const REAL x0x1x2_inbounds[3], const int idx,
                                                     innerpt_bc_struct *restrict innerpt_bc_arr) {
 #include "set_CodeParameters.h"
-
 #define EPS_REL 1e-8
 
   const DOUBLE xx0_inbounds = x0x1x2_inbounds[0];
@@ -315,7 +314,6 @@ static void set_parity_for_inner_boundary_single_pt(const commondata_struct *res
 void bcstruct_set_up__rfm__Cartesian(const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3],
                                      bc_struct *restrict bcstruct) {
 #include "set_CodeParameters.h"
-
   ////////////////////////////////////////
   // STEP 1: SET UP INNER BOUNDARY STRUCTS
   // First count the number of inner boundary points and allocate memory for inner_bc_array.

@@ -48,7 +48,12 @@ class WaveEquation_solution_Cartesian:
                 "REAL", __name__, "wavespeed", 1.0, commondata=True
             )
         if "time" not in par.glb_params_dict:
-            par.register_CodeParameter("REAL", __name__, "time", 0.0, commondata=True)
+            time_module = __name__
+            if par.parval_from_str("Infrastructure") == "BHaH":
+                time_module = "nrpy.infrastructures.BHaH.MoLtimestepping.register_all"
+            par.register_CodeParameter(
+                "REAL", time_module, "time", 0.0, commondata=True, add_to_parfile=False
+            )
 
         if "uu" not in gri.glb_gridfcs_dict:
             gri.register_gridfunctions(

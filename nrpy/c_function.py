@@ -287,8 +287,12 @@ class CFunction:
                 else:
                     complete_func += f'#include "{inc}"\n'
 
+            # Add a blank line after includes.
+            complete_func += "\n"
+
         if self.prefunc:
-            complete_func += f"{self.prefunc}\n"
+            # self.prefunc: Strip leading & trailing newlines, then add one newlines at start and two at the end.
+            complete_func += "\n" + self.prefunc.strip("\n") + "\n\n"
 
         if self.desc:
             complete_func += f"/**\n{self.prefix_with_star(self.desc)}\n*/\n"
@@ -296,9 +300,11 @@ class CFunction:
         function_prototype = (
             f"{self.cfunc_decorators}{self.cfunc_type} {self.name}({self.params});"
         )
-        complete_func += f"{function_prototype.replace(';', '')} {{\n{include_Cparams_str}{self.body}}} // END FUNCTION {self.name}\n"
-
-        complete_func += f"{self.postfunc}\n"
+        # self.body: Strip leading & trailing newlines, then add a single newline at the end of string. --v
+        newline = "\n"  # Need to use newline variable due to Python <= 3.8 being unable to handle backslashes in f-strings.
+        complete_func += f"{function_prototype.replace(';', '')} {{{newline}{include_Cparams_str}{self.body.strip(newline) + newline}}} // END FUNCTION {self.name}{newline}"
+        # self.postfunc: Strip leading & trailing newlines, then add newlines at start and end.
+        complete_func += "\n" + self.postfunc.strip("\n") + "\n"
 
         return (
             function_prototype,

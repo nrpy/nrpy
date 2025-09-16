@@ -1,5 +1,6 @@
 #include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
+
 /**
  * Examining all three directions at a given point on a numerical grid, find the minimum grid spacing ds_min.
  */

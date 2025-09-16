@@ -1,10 +1,10 @@
 #include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
+
 /**
  * Set up numerical grids and timestep.
  */
 void numerical_grids_and_timestep(commondata_struct *restrict commondata, griddata_struct *restrict griddata, bool calling_for_first_time) {
-
   // Step 1.a: Set each CodeParameter in griddata.params to default, for MAXNUMGRIDS grids.
   if (calling_for_first_time)
     params_struct_set_to_default(commondata, griddata);

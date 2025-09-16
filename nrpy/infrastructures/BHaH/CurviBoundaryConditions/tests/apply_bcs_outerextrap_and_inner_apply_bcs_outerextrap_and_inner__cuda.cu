@@ -1,5 +1,6 @@
 #include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
+
 /**
  * Kernel: apply_bcs_outerextrap_and_inner_only_gpu.
  * Apply extrapolation BCs to pure points.
@@ -46,7 +47,6 @@ __global__ static void apply_bcs_outerextrap_and_inner_only_gpu(const size_t str
  */
 static void apply_bcs_outerextrap_and_inner_only__launcher(const params_struct *restrict params, const bc_struct *restrict bcstruct,
                                                            REAL *restrict gfs) {
-
   const bc_info_struct *bc_info = &bcstruct->bc_info;
   for (int which_gz = 0; which_gz < NGHOSTS; which_gz++) {
     for (int dirn = 0; dirn < 3; dirn++) {
@@ -84,7 +84,6 @@ static void apply_bcs_outerextrap_and_inner_only__launcher(const params_struct *
 void apply_bcs_outerextrap_and_inner(const commondata_struct *restrict commondata, const params_struct *restrict params,
                                      const bc_struct *restrict bcstruct, REAL *restrict gfs) {
 #include "set_CodeParameters.h"
-
   ////////////////////////////////////////////////////////
   // STEP 1 of 2: Apply BCs to pure outer boundary points.
   //              By "pure" we mean that these points are

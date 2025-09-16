@@ -82,7 +82,6 @@ __global__ static void find_global__maximum__cuda(REAL *data, REAL *min, uint co
  * Find array global maximum.
  */
 REAL find_global__maximum(REAL *data, uint const data_length) {
-
   // This can be tested up to 1024
   uint threadCount = 32;
 

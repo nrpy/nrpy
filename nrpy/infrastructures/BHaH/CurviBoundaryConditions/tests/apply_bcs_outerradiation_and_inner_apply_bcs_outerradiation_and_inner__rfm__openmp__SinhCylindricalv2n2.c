@@ -1,5 +1,6 @@
 #include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
+
 /**
  * Compute 1st derivative finite-difference derivative with arbitrary upwind
  */
@@ -255,7 +256,6 @@ static void apply_bcs_pure_only_host(const params_struct *restrict params, const
  */
 static void apply_bcs_pure_only(const params_struct *restrict params, const bc_struct *restrict bcstruct, REAL *restrict *xx, REAL *restrict gfs,
                                 REAL *restrict rhs_gfs, const REAL *custom_wavespeed, const REAL *custom_f_infinity) {
-
   const bc_info_struct *bc_info = &bcstruct->bc_info;
   REAL *restrict x0 = xx[0];
   REAL *restrict x1 = xx[1];
@@ -284,7 +284,6 @@ void apply_bcs_outerradiation_and_inner__rfm__SinhCylindricalv2n2(const commonda
                                                                   const REAL custom_wavespeed[NUM_EVOL_GFS],
                                                                   const REAL custom_f_infinity[NUM_EVOL_GFS], REAL *restrict gfs,
                                                                   REAL *restrict rhs_gfs) {
-
   ////////////////////////////////////////////////////////
   // STEP 1 of 2: Apply BCs to pure outer boundary points.
   //              By "pure" we mean that these points are
