@@ -1387,7 +1387,7 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             )
             hlms_no_source = newtonian_strain * non_newtonian_contribution
             hlms[f"({l} , {m})"] = hlms_no_source * self.effective_source[(1 + m) % 2]
-        return hlms
+        return modes
 
 
 if __name__ == "__main__":
