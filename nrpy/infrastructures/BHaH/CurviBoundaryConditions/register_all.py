@@ -24,6 +24,7 @@ from typing import Set
 import nrpy.params as par
 from nrpy.infrastructures import BHaH
 
+
 def register_C_functions(
     set_of_CoordSystems: Set[str],
     radiation_BC_fd_order: int = 2,
