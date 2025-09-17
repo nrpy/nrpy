@@ -91,21 +91,21 @@ static const int phi_dirn = {phi_index}; // Index corresponding to the phi coord
 // This includes grid points on shells, their coordinates, and related counts.
 typedef struct __diagnostic_struct__ {
   // Number of grid points found on each extraction shell within the current process's grid boundaries.
-  int *restrict N_shell_pts_grid; // Array shape: [num_psi4_extraction_radii]
+  int *N_shell_pts_grid; // Array shape: [num_psi4_extraction_radii]
 
   // Radial-like coordinate (e.g., x0) of grid points on each shell.
   // Used as destination points for interpolation.
-  REAL **restrict xx_radial_like_shell_grid; // Array shape: [num_psi4_extraction_radii][N_shell_pts_grid[which_R_ext]]
+  REAL **xx_radial_like_shell_grid; // Array shape: [num_psi4_extraction_radii][N_shell_pts_grid[which_R_ext]]
 
   // Theta-like coordinate (e.g., x2) of grid points on each shell.
   // Used as destination points for interpolation.
-  REAL **restrict xx_theta_like_shell_grid; // Array shape: [num_psi4_extraction_radii][N_shell_pts_grid[which_R_ext]]
+  REAL **xx_theta_like_shell_grid; // Array shape: [num_psi4_extraction_radii][N_shell_pts_grid[which_R_ext]]
 
   // Number of unique theta points found on each extraction shell within the grid boundaries.
-  int *restrict N_theta_shell_grid; // Array shape: [num_psi4_extraction_radii]
+  int *N_theta_shell_grid; // Array shape: [num_psi4_extraction_radii]
 
   // Unique theta values (in radians) corresponding to the grid points on each shell.
-  REAL **restrict theta_shell_grid; // Array shape: [num_psi4_extraction_radii][N_theta_shell_grid[which_R_ext]]
+  REAL **theta_shell_grid; // Array shape: [num_psi4_extraction_radii][N_theta_shell_grid[which_R_ext]]
 
   // Angular step size in theta for the uniformly distributed points on the ideal spherical shell.
   REAL dtheta;
