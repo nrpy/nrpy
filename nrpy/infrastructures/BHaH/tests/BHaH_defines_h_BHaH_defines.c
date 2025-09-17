@@ -109,13 +109,13 @@ typedef struct __params_struct__ {
 // nrpy.infrastructures.BHaH.MoLtimestepping.BHaH_defines:
 // ----------------------------
 typedef struct __MoL_gridfunctions_struct__ {
-  REAL *restrict y_n_gfs;
-  REAL *restrict y_nplus1_running_total_gfs;
-  REAL *restrict k_odd_gfs;
-  REAL *restrict k_even_gfs;
-  REAL *restrict auxevol_gfs;
-  REAL *restrict diagnostic_output_gfs;
-  REAL *restrict diagnostic_output_gfs2;
+  REAL *y_n_gfs;
+  REAL *y_nplus1_running_total_gfs;
+  REAL *k_odd_gfs;
+  REAL *k_even_gfs;
+  REAL *auxevol_gfs;
+  REAL *diagnostic_output_gfs;
+  REAL *diagnostic_output_gfs2;
 } MoL_gridfunctions_struct;
 
 // ----------------------------
@@ -200,7 +200,7 @@ typedef struct __MoL_gridfunctions_struct__ {
 typedef struct __griddata__ {
   // griddata_struct stores data needed on each grid
   // xx[3] stores the uniform grid coordinates.
-  REAL *restrict xx[3];
+  REAL *xx[3];
   // NRPy MODULE: nrpy.infrastructures.BHaH.MoLtimestepping.register_all
   MoL_gridfunctions_struct gridfuncs; // <- MoL gridfunctions
   // NRPy MODULE: params
