@@ -35,28 +35,28 @@ typedef struct {
   REAL rho_energy;
   REAL r_lengthscale;
 
-  REAL *restrict r_Schw_arr;
-  REAL *restrict rho_energy_arr;
-  REAL *restrict rho_baryon_arr;
-  REAL *restrict P_arr;
-  REAL *restrict M_arr;
-  REAL *restrict nu_arr;
-  REAL *restrict r_iso_arr;
+  REAL *r_Schw_arr;
+  REAL *rho_energy_arr;
+  REAL *rho_baryon_arr;
+  REAL *P_arr;
+  REAL *M_arr;
+  REAL *nu_arr;
+  REAL *r_iso_arr;
   int numels_alloced_TOV_arr;
 
   int numpoints_actually_saved;
 
-  const commondata_struct *restrict commondata;
+  const commondata_struct *commondata;
 } TOVola_data_struct;
 
 /* Mock GRHayLib Functions for Simple Polytrope */
-void ghl_hybrid_get_K_and_Gamma(const TOVola_data_struct *TOVdata, REAL rho_baryon, REAL *restrict K, REAL *restrict Gamma) {
+static void TOVola_hybrid_get_K_and_Gamma(const TOVola_data_struct *TOVdata, REAL rho_baryon, REAL *restrict K, REAL *restrict Gamma) {
   // For Simple Polytrope, K and Gamma are constants
   *K = TOVdata->commondata->poly_eos_K;         // Retrieved from TOVdata
   *Gamma = TOVdata->commondata->poly_eos_Gamma; // Retrieved from TOVdata
 }
 
-void ghl_hybrid_compute_P_cold_and_eps_cold(const TOVola_data_struct *TOVdata, REAL rho_baryon, REAL *restrict P, REAL *restrict eps) {
+static void TOVola_hybrid_compute_P_cold_and_eps_cold(const TOVola_data_struct *TOVdata, REAL rho_baryon, REAL *restrict P, REAL *restrict eps) {
   // For Simple Polytrope: P = K * rho_baryon^Gamma
   REAL K = TOVdata->commondata->poly_eos_K;
   REAL Gamma = TOVdata->commondata->poly_eos_Gamma;
@@ -66,7 +66,7 @@ void ghl_hybrid_compute_P_cold_and_eps_cold(const TOVola_data_struct *TOVdata, R
 }
 
 /* Exception handler to prevent negative pressures */
-void TOVola_exception_handler(REAL r, REAL y[]) {
+static void TOVola_exception_handler(REAL r, REAL y[]) {
   // Ensure pressure does not become negative due to numerical errors
   if (y[TOVOLA_PRESSURE] < 0) {
     y[TOVOLA_PRESSURE] = 0;
@@ -74,7 +74,7 @@ void TOVola_exception_handler(REAL r, REAL y[]) {
 }
 
 /* Termination condition for the integration */
-int TOVola_do_we_terminate(REAL r, REAL y[], TOVola_data_struct *TOVdata) {
+static int TOVola_do_we_terminate(REAL r, REAL y[], TOVola_data_struct *TOVdata) {
   /* if (TOVdata->eos_type == TABULATED_EOS) { */
   /*     // Not implemented in this standalone version */
   /*     // Return 0 to continue integration */
@@ -90,7 +90,7 @@ int TOVola_do_we_terminate(REAL r, REAL y[], TOVola_data_struct *TOVdata) {
 }
 
 /* Evaluate rho_baryon and rho_energy based on the EOS type */
-void TOVola_evaluate_rho_and_eps(REAL r, const REAL y[], TOVola_data_struct *TOVdata) {
+static void TOVola_evaluate_rho_and_eps(REAL r, const REAL y[], TOVola_data_struct *TOVdata) {
   // Simple Polytrope
   /* if (TOVdata->eos_type == SIMPLE_POLYTROPE) { */
   REAL aK, aGamma;
@@ -98,10 +98,10 @@ void TOVola_evaluate_rho_and_eps(REAL r, const REAL y[], TOVola_data_struct *TOV
   REAL eps, aPress;
 
   // Retrieve K and Gamma from GRHayL
-  ghl_hybrid_get_K_and_Gamma(TOVdata, aRho_baryon, &aK, &aGamma);
+  TOVola_hybrid_get_K_and_Gamma(TOVdata, aRho_baryon, &aK, &aGamma);
   TOVdata->rho_baryon = pow(y[TOVOLA_PRESSURE] / aK, 1.0 / aGamma);
   aRho_baryon = TOVdata->rho_baryon;
-  ghl_hybrid_compute_P_cold_and_eps_cold(TOVdata, aRho_baryon, &aPress, &eps);
+  TOVola_hybrid_compute_P_cold_and_eps_cold(TOVdata, aRho_baryon, &aPress, &eps);
   TOVdata->rho_energy = TOVdata->rho_baryon * (1.0 + eps);
   /* } */
   /*
@@ -122,7 +122,7 @@ void TOVola_evaluate_rho_and_eps(REAL r, const REAL y[], TOVola_data_struct *TOV
 }
 
 /* The main ODE function for GSL */
-int TOVola_ODE(REAL r_Schw, const REAL y[], REAL dydr_Schw[], void *params) {
+static int TOVola_ODE(REAL r_Schw, const REAL y[], REAL dydr_Schw[], void *params) {
   // Cast params to TOVdata_struct
   TOVola_data_struct *TOVdata = (TOVola_data_struct *)params;
 
@@ -170,21 +170,21 @@ int TOVola_ODE(REAL r_Schw, const REAL y[], REAL dydr_Schw[], void *params) {
 }
 
 /* Placeholder Jacobian function required by GSL */
-int TOVola_jacobian_placeholder(REAL t, const REAL y[], REAL *restrict dfdy, REAL dfdt[], void *params) {
+static int TOVola_jacobian_placeholder(REAL t, const REAL y[], REAL *restrict dfdy, REAL dfdt[], void *params) {
   // Jacobian is not necessary for the TOV solution, but GSL requires some
   // function Leave it empty as it does not affect the final results
   return GSL_SUCCESS;
 }
 
 /* Initialize the ODE variables */
-void TOVola_get_initial_condition(REAL y[], TOVola_data_struct *TOVdata) {
+static void TOVola_get_initial_condition(REAL y[], TOVola_data_struct *TOVdata) {
   // Simple Polytrope
   /* if (TOVdata->eos_type == SIMPLE_POLYTROPE) { */
   REAL aK, aGamma;
   REAL rhoC_baryon = TOVdata->commondata->initial_central_density;
 
   // Retrieve K and Gamma from GRHayL
-  ghl_hybrid_get_K_and_Gamma(TOVdata, rhoC_baryon, &aK, &aGamma);
+  TOVola_hybrid_get_K_and_Gamma(TOVdata, rhoC_baryon, &aK, &aGamma);
   y[TOVOLA_PRESSURE] = aK * pow(rhoC_baryon, aGamma); // Pressure
   y[TOVOLA_NU] = 0.0;                                 // nu
   y[TOVOLA_MASS] = 0.0;                               // Mass
@@ -216,7 +216,7 @@ void TOVola_get_initial_condition(REAL y[], TOVola_data_struct *TOVdata) {
 }
 
 /* Assign constants after each integration step */
-void TOVola_assign_constants(REAL c[], TOVola_data_struct *TOVdata) {
+static void TOVola_assign_constants(REAL c[], TOVola_data_struct *TOVdata) {
   // Assign the densities
   c[0] = TOVdata->rho_energy; // Total energy density
   c[1] = TOVdata->rho_baryon; // Baryon density
@@ -260,13 +260,13 @@ static int setup_ode_system(const char *ode_method, gsl_odeiv2_system *system, g
 
 /* Initialize TOVola_data_struct structure with initial allocation */
 static int initialize_tovola_data(TOVola_data_struct *TOVdata) {
-  TOVdata->r_Schw_arr = (REAL *restrict)malloc(sizeof(REAL) * TOVdata->numels_alloced_TOV_arr);
-  TOVdata->rho_energy_arr = (REAL *restrict)malloc(sizeof(REAL) * TOVdata->numels_alloced_TOV_arr);
-  TOVdata->rho_baryon_arr = (REAL *restrict)malloc(sizeof(REAL) * TOVdata->numels_alloced_TOV_arr);
-  TOVdata->P_arr = (REAL *restrict)malloc(sizeof(REAL) * TOVdata->numels_alloced_TOV_arr);
-  TOVdata->M_arr = (REAL *restrict)malloc(sizeof(REAL) * TOVdata->numels_alloced_TOV_arr);
-  TOVdata->nu_arr = (REAL *restrict)malloc(sizeof(REAL) * TOVdata->numels_alloced_TOV_arr);
-  TOVdata->r_iso_arr = (REAL *restrict)malloc(sizeof(REAL) * TOVdata->numels_alloced_TOV_arr);
+  TOVdata->r_Schw_arr = (REAL *)malloc(sizeof(REAL) * TOVdata->numels_alloced_TOV_arr);
+  TOVdata->rho_energy_arr = (REAL *)malloc(sizeof(REAL) * TOVdata->numels_alloced_TOV_arr);
+  TOVdata->rho_baryon_arr = (REAL *)malloc(sizeof(REAL) * TOVdata->numels_alloced_TOV_arr);
+  TOVdata->P_arr = (REAL *)malloc(sizeof(REAL) * TOVdata->numels_alloced_TOV_arr);
+  TOVdata->M_arr = (REAL *)malloc(sizeof(REAL) * TOVdata->numels_alloced_TOV_arr);
+  TOVdata->nu_arr = (REAL *)malloc(sizeof(REAL) * TOVdata->numels_alloced_TOV_arr);
+  TOVdata->r_iso_arr = (REAL *)malloc(sizeof(REAL) * TOVdata->numels_alloced_TOV_arr);
 
   if (!TOVdata->r_Schw_arr || !TOVdata->rho_energy_arr || !TOVdata->rho_baryon_arr || !TOVdata->P_arr || !TOVdata->M_arr || !TOVdata->nu_arr ||
       !TOVdata->r_iso_arr) {
@@ -289,7 +289,7 @@ static void free_tovola_data(TOVola_data_struct *TOVdata) {
 }
 
 /* Normalize and set data */
-void TOVola_Normalize_and_set_data_integrated(TOVola_data_struct *TOVdata, REAL *restrict r_Schw, REAL *restrict rho_energy,
+static void TOVola_Normalize_and_set_data_integrated(TOVola_data_struct *TOVdata, REAL *restrict r_Schw, REAL *restrict rho_energy,
                                               REAL *restrict rho_baryon, REAL *restrict P, REAL *restrict M, REAL *restrict expnu,
                                               REAL *restrict exp4phi, REAL *restrict r_iso) {
   printf("TOVola Normalizing raw TOV data...\n");
@@ -329,15 +329,12 @@ void TOVola_Normalize_and_set_data_integrated(TOVola_data_struct *TOVdata, REAL 
 }
 
 /* Extend data to r<0, to ensure we can interpolate to r=0 */
-void extend_to_negative_r(REAL *restrict arr, const REAL parity, REAL *restrict tmp, const TOVola_data_struct *restrict TOVdata) {
+static void extend_to_negative_r(REAL *restrict arr, const REAL parity, REAL *restrict tmp, const TOVola_data_struct *restrict TOVdata) {
   for(int i=0;i<NEGATIVE_R_INTERP_BUFFER; i++) tmp[i] = parity * arr[NEGATIVE_R_INTERP_BUFFER - i - 1];
   for(int i=0;i<TOVdata->numpoints_actually_saved; i++) tmp[i+NEGATIVE_R_INTERP_BUFFER] = arr[i];
   memcpy(arr, tmp, sizeof(REAL) * (TOVdata->numpoints_actually_saved+NEGATIVE_R_INTERP_BUFFER));
 }
-""".replace(
-        "(REAL *restrict)",
-        "(REAL *)" if parallelization in ["cuda"] else "(REAL *restrict)",
-    )
+"""
     desc = "Driver routine for TOV solve."
     name = "TOVola_solve"
     params = (
@@ -405,13 +402,13 @@ void extend_to_negative_r(REAL *restrict arr, const REAL parity, REAL *restrict 
       // Update arr_size instead of modifying the macro
       const int new_arr_size = 1.5 * TOVdata->numels_alloced_TOV_arr;
       TOVdata->numels_alloced_TOV_arr = new_arr_size;
-      TOVdata->r_Schw_arr = (REAL *restrict)realloc(TOVdata->r_Schw_arr, sizeof(REAL) * new_arr_size);
-      TOVdata->rho_energy_arr = (REAL *restrict)realloc(TOVdata->rho_energy_arr, sizeof(REAL) * new_arr_size);
-      TOVdata->rho_baryon_arr = (REAL *restrict)realloc(TOVdata->rho_baryon_arr, sizeof(REAL) * new_arr_size);
-      TOVdata->P_arr = (REAL *restrict)realloc(TOVdata->P_arr, sizeof(REAL) * new_arr_size);
-      TOVdata->M_arr = (REAL *restrict)realloc(TOVdata->M_arr, sizeof(REAL) * new_arr_size);
-      TOVdata->nu_arr = (REAL *restrict)realloc(TOVdata->nu_arr, sizeof(REAL) * new_arr_size);
-      TOVdata->r_iso_arr = (REAL *restrict)realloc(TOVdata->r_iso_arr, sizeof(REAL) * new_arr_size);
+      TOVdata->r_Schw_arr = (REAL *)realloc(TOVdata->r_Schw_arr, sizeof(REAL) * new_arr_size);
+      TOVdata->rho_energy_arr = (REAL *)realloc(TOVdata->rho_energy_arr, sizeof(REAL) * new_arr_size);
+      TOVdata->rho_baryon_arr = (REAL *)realloc(TOVdata->rho_baryon_arr, sizeof(REAL) * new_arr_size);
+      TOVdata->P_arr = (REAL *)realloc(TOVdata->P_arr, sizeof(REAL) * new_arr_size);
+      TOVdata->M_arr = (REAL *)realloc(TOVdata->M_arr, sizeof(REAL) * new_arr_size);
+      TOVdata->nu_arr = (REAL *)realloc(TOVdata->nu_arr, sizeof(REAL) * new_arr_size);
+      TOVdata->r_iso_arr = (REAL *)realloc(TOVdata->r_iso_arr, sizeof(REAL) * new_arr_size);
 
       if (!TOVdata->r_Schw_arr || !TOVdata->rho_energy_arr || !TOVdata->rho_baryon_arr || !TOVdata->P_arr || !TOVdata->M_arr || !TOVdata->nu_arr ||
           !TOVdata->r_iso_arr) {
@@ -449,7 +446,7 @@ void extend_to_negative_r(REAL *restrict arr, const REAL parity, REAL *restrict 
     // Data in TOVdata->*_arr are stored at r=TOVdata->commondata->initial_ode_step_size > 0 up to the stellar surface.
     // However, we may need data at r=0, which would require extrapolation.
     // To prevent that, we copy INTERP_BUFFER data points from r>0 to r<0 so that we can always interpolate.
-    REAL *restrict tmp = (REAL *restrict)malloc(sizeof(REAL) * (TOVdata->numpoints_actually_saved + NEGATIVE_R_INTERP_BUFFER));
+    REAL *tmp = (REAL *)malloc(sizeof(REAL) * (TOVdata->numpoints_actually_saved + NEGATIVE_R_INTERP_BUFFER));
 
     //printf("Rbefor = %.15e\n", TOVdata->r_Schw_arr[TOVdata->numpoints_actually_saved-1]);
 
@@ -469,14 +466,14 @@ void extend_to_negative_r(REAL *restrict arr, const REAL parity, REAL *restrict 
   }
 
   /* Allocate and populate ID_persist_struct arrays */
-  ID_persist->r_Schw_arr = (REAL *restrict)malloc(sizeof(REAL) * TOVdata->numpoints_actually_saved);
-  ID_persist->rho_energy_arr = (REAL *restrict)malloc(sizeof(REAL) * TOVdata->numpoints_actually_saved);
-  ID_persist->rho_baryon_arr = (REAL *restrict)malloc(sizeof(REAL) * TOVdata->numpoints_actually_saved);
-  ID_persist->P_arr = (REAL *restrict)malloc(sizeof(REAL) * TOVdata->numpoints_actually_saved);
-  ID_persist->M_arr = (REAL *restrict)malloc(sizeof(REAL) * TOVdata->numpoints_actually_saved);
-  ID_persist->expnu_arr = (REAL *restrict)malloc(sizeof(REAL) * TOVdata->numpoints_actually_saved);
-  ID_persist->exp4phi_arr = (REAL *restrict)malloc(sizeof(REAL) * TOVdata->numpoints_actually_saved);
-  ID_persist->r_iso_arr = (REAL *restrict)malloc(sizeof(REAL) * TOVdata->numpoints_actually_saved);
+  ID_persist->r_Schw_arr = (REAL *)malloc(sizeof(REAL) * TOVdata->numpoints_actually_saved);
+  ID_persist->rho_energy_arr = (REAL *)malloc(sizeof(REAL) * TOVdata->numpoints_actually_saved);
+  ID_persist->rho_baryon_arr = (REAL *)malloc(sizeof(REAL) * TOVdata->numpoints_actually_saved);
+  ID_persist->P_arr = (REAL *)malloc(sizeof(REAL) * TOVdata->numpoints_actually_saved);
+  ID_persist->M_arr = (REAL *)malloc(sizeof(REAL) * TOVdata->numpoints_actually_saved);
+  ID_persist->expnu_arr = (REAL *)malloc(sizeof(REAL) * TOVdata->numpoints_actually_saved);
+  ID_persist->exp4phi_arr = (REAL *)malloc(sizeof(REAL) * TOVdata->numpoints_actually_saved);
+  ID_persist->r_iso_arr = (REAL *)malloc(sizeof(REAL) * TOVdata->numpoints_actually_saved);
 
   if (!ID_persist->r_Schw_arr || !ID_persist->rho_energy_arr || !ID_persist->rho_baryon_arr || !ID_persist->P_arr || !ID_persist->M_arr ||
       !ID_persist->expnu_arr || !ID_persist->exp4phi_arr || !ID_persist->r_iso_arr) {
@@ -493,10 +490,7 @@ void extend_to_negative_r(REAL *restrict arr, const REAL parity, REAL *restrict 
 
   /* Free raw data as it's no longer needed */
   free_tovola_data(TOVdata);
-""".replace(
-        "(REAL *restrict)",
-        "(REAL *)" if parallelization in ["cuda"] else "(REAL *restrict)",
-    )
+"""
     cfc.register_CFunction(
         subdirectory="TOVola",
         includes=includes,
