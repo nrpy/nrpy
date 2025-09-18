@@ -21,6 +21,7 @@ import os
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
 import shutil
+import subprocess
 from pathlib import Path
 
 import nrpy.helpers.parallel_codegen as pcg
@@ -59,6 +60,7 @@ parallel_codegen_enable = True
 enable_fd_functions = True
 enable_KreissOliger_dissipation = False
 enable_CAKO = True
+enable_BHaHAHA = False
 outer_bcs_type = "radiation"
 boundary_conditions_desc = "outgoing radiation"
 # Number of chares, Nchare0, Nchare1, and Nchare2, in each direction,
@@ -76,6 +78,10 @@ if "Cartesian" in CoordSystem:
     par.adjust_CodeParam_default("Nchare0", 16)
     par.adjust_CodeParam_default("Nchare1", 16)
     par.adjust_CodeParam_default("Nchare2", 16)
+
+BHaHAHA_subdir = "BHaHAHA"
+if fd_order != 6:
+    BHaHAHA_subdir = f"BHaHAHA-{fd_order}o"
 
 OMP_collapse = 1
 if "Spherical" in CoordSystem:
@@ -95,6 +101,59 @@ par.set_parval_from_str("fd_order", fd_order)
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 
 par.adjust_CodeParam_default("t_final", t_final)
+
+if enable_BHaHAHA:
+    #########################################################
+    # STEP 2: Declare core C functions & register each to
+    #         cfc.CFunction_dict["function_name"]
+    try:
+        # Attempt to run as a script path
+        subprocess.run(
+            [
+                "python",
+                "nrpy/examples/bhahaha.py",
+                "--fdorder",
+                str(fd_order),
+                "--outrootdir",
+                project_dir,
+                "--cpp",
+                "--no-openmp",
+            ],
+            check=True,
+        )
+    except subprocess.CalledProcessError:
+        # If it fails (e.g., from a pip install), try running as a module
+        subprocess.run(
+            [
+                "python",
+                "-m",
+                "nrpy.examples.bhahaha",
+                "--fdorder",
+                str(fd_order),
+                "--outrootdir",
+                project_dir,
+                "--cpp",
+                "--no-openmp",
+            ],
+            check=True,
+        )
+    from nrpy.infrastructures.BHaH.BHaHAHA import (
+        interpolation_3d_general__uniform_src_grid,
+    )
+    from nrpy.infrastructures.superB import (
+        BHaH_implementation,
+    )
+
+    BHaH_implementation.register_CFunction_bhahaha_find_horizons(
+        CoordSystem=CoordSystem, max_horizons=3
+    )
+    interpolation_3d_general__uniform_src_grid.register_CFunction_interpolation_3d_general__uniform_src_grid(
+        enable_simd=enable_intrinsics,
+        project_dir=project_dir,
+        use_cpp=True,
+    )
+    superB.interpolator3d_chare.output_interpolator3d_h_cpp_ci(project_dir=project_dir)
+    superB.horizon_finder_chare.output_horizon_finder_h_cpp_ci(project_dir=project_dir)
 
 
 #########################################################
@@ -234,6 +293,26 @@ par.adjust_CodeParam_default("BH1_mass", default_BH1_mass)
 par.adjust_CodeParam_default("BH2_mass", default_BH2_mass)
 par.adjust_CodeParam_default("BH1_posn_z", default_BH1_z_posn)
 par.adjust_CodeParam_default("BH2_posn_z", default_BH2_z_posn)
+if enable_BHaHAHA:
+    # Set BHaHAHA defaults to reasonable values.
+    par.adjust_CodeParam_default(
+        "bah_initial_grid_z_center", [default_BH1_z_posn, default_BH2_z_posn, 0.0]
+    )
+    par.adjust_CodeParam_default("bah_Nr_interp_max", 40)
+    par.adjust_CodeParam_default(
+        "bah_M_scale",
+        [default_BH1_mass, default_BH2_mass, default_BH1_mass + default_BH2_mass],
+    )
+    par.adjust_CodeParam_default(
+        "bah_max_search_radius",
+        [
+            0.6 * default_BH1_mass,
+            0.6 * default_BH2_mass,
+            1.1 * (default_BH1_mass + default_BH2_mass),
+        ],
+    )
+    par.adjust_CodeParam_default("bah_verbosity_level", 0)
+
 
 BHaH.CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
 BHaH.CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
@@ -256,6 +335,7 @@ copy_files(
 
 superB.main_chare.output_commondata_object_h_and_main_h_cpp_ci(
     project_dir=project_dir,
+    enable_BHaHAHA=enable_BHaHAHA,
 )
 superB.timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(
     project_dir=project_dir,
@@ -264,10 +344,14 @@ superB.timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_psi4_diagnostics=False,
     enable_L2norm_BSSN_constraints_diagnostics=True,
+    enable_BHaHAHA=enable_BHaHAHA,
 )
 
 BHaH.BHaH_defines_h.output_BHaH_defines_h(
-    additional_includes=[str(Path("superB") / Path("superB.h"))],
+    additional_includes=[
+        str(Path("superB") / "superB.h"),
+        *([os.path.join(BHaHAHA_subdir, "BHaHAHA.h")] if enable_BHaHAHA else []),
+    ],
     project_dir=project_dir,
     enable_intrinsics=enable_intrinsics,
     enable_rfm_precompute=enable_rfm_precompute,
@@ -285,12 +369,18 @@ if enable_intrinsics:
 superB.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
+    addl_dirs_to_make=[*([BHaHAHA_subdir] if enable_BHaHAHA else [])],
     exec_or_library_name=project_name,
     compiler_opt_option="default",
     addl_CFLAGS=["-fpermissive "],
-    addl_libraries=["-module CkIO"],
+    addl_libraries=[
+        "-module CkIO",
+        *([f"-L{BHaHAHA_subdir}", f"-l{BHaHAHA_subdir}"] if enable_BHaHAHA else []),
+    ],
     CC="charmc",
+    enable_BHaHAHA=enable_BHaHAHA,
 )
+
 print(
     f"Finished! Now go into project/{project_name} and type `make` to build, then ./charmrun +p4 ./{project_name} to run with 4 processors, for example."
 )
