@@ -7,6 +7,7 @@ Authors: Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
 
 import argparse
 import os
+
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
@@ -410,7 +411,7 @@ compute_griddata = "griddata_device" if parallelization in ["cuda"] else "gridda
 # Define {pre,post}_MoL_step_forward_in_time string for main function
 write_checkpoint_call = (
     f"write_checkpoint(&commondata, "
-    f"{'griddata_host, griddata_device' if parallelization in ['cuda'] else 'griddata'});\n"
+    f"{'griddata_host, griddata_device' if parallelization == 'cuda' else 'griddata'});\n"
 )
 pre_MoL_step_forward_in_time = write_checkpoint_call
 post_MoL_step_forward_in_time = rf"""    stop_conditions_check(&commondata, {compute_griddata});

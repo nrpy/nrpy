@@ -14,6 +14,7 @@ Author: Zachariah B. Etienne
 
 import argparse
 import os
+
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
@@ -392,7 +393,7 @@ if enable_CAHD:
     )
 
 # Set griddata struct used for calculations to griddata_device for certain parallelizations
-compute_griddata = "griddata_device" if parallelization in ["cuda"] else "griddata"
+compute_griddata = "griddata_device" if parallelization == "cuda" else "griddata"
 
 # Define post_MoL_step_forward_in_time string for main function
 BHaH.main_c.register_CFunction_main_c(
@@ -402,7 +403,7 @@ BHaH.main_c.register_CFunction_main_c(
     post_non_y_n_auxevol_mallocs=post_non_y_n_auxevol_mallocs,
     pre_MoL_step_forward_in_time=(
         f"write_checkpoint(&commondata, "
-        f"{'griddata_host, griddata_device' if parallelization in ['cuda'] else 'griddata'});\n"
+        f"{'griddata_host, griddata_device' if parallelization == 'cuda' else 'griddata'});\n"
     ),
 )
 BHaH.griddata_commondata.register_CFunction_griddata_free(
