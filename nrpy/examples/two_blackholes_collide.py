@@ -384,6 +384,7 @@ BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefi
     project_name=project_name,
     exec_or_library_name=project_name,
     compiler_opt_option=("nvcc" if parallelization == "cuda" else "default"),
+    addl_dirs_to_make=([BHaHAHA_subdir] if parallelization == "openmp" else []),
     CC=("nvcc" if parallelization == "cuda" else "autodetect"),
     src_code_file_ext=("cu" if parallelization == "cuda" else "c"),
     addl_libraries=(
