@@ -406,17 +406,14 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
 )
 
 # Set griddata struct used for calculations to griddata_device for certain parallelizations
-compute_griddata = "griddata_device" if parallelization in ["cuda"] else "griddata"
+compute_griddata = "griddata_device" if parallelization == "cuda" else "griddata"
 
-# Define post_MoL_step_forward_in_time string for main function
-write_checkpoint_call = f"write_checkpoint(&commondata, {compute_griddata});\n".replace(
-    compute_griddata,
-    (
-        f"griddata_host, {compute_griddata}"
-        if parallelization in ["cuda"]
-        else compute_griddata
-    ),
+# Define {pre,post}_MoL_step_forward_in_time string for main function
+write_checkpoint_call = (
+    f"write_checkpoint(&commondata, "
+    f"{'griddata_host, griddata_device' if parallelization == 'cuda' else 'griddata'});\n"
 )
+pre_MoL_step_forward_in_time = write_checkpoint_call
 post_MoL_step_forward_in_time = rf"""    stop_conditions_check(&commondata, {compute_griddata});
     if (commondata.stop_relaxation) {{
       // Force a checkpoint when stop condition is reached.
@@ -429,7 +426,6 @@ post_non_y_n_auxevol_mallocs = (
     "for (int grid = 0; grid < commondata.NUMGRIDS; grid++)\n"
     f"auxevol_gfs_set_to_constant(&commondata, &{compute_griddata}[grid].params, {compute_griddata}[grid].xx, &{compute_griddata}[grid].gridfuncs);\n"
 )
-pre_MoL_step_forward_in_time = f"{write_checkpoint_call}"
 BHaH.main_c.register_CFunction_main_c(
     MoL_method=MoL_method,
     initial_data_desc="",
@@ -445,39 +441,22 @@ BHaH.griddata_commondata.register_CFunction_griddata_free(
 if enable_intrinsics:
     copy_files(
         package="nrpy.helpers",
-        filenames_list=(
-            ["cuda_intrinsics.h"]
-            if parallelization == "cuda"
-            else ["simd_intrinsics.h"]
-        ),
+        filenames_list=[
+            f"{'cuda' if parallelization == 'cuda' else 'simd'}_intrinsics.h"
+        ],
         project_dir=project_dir,
         subdirectory="intrinsics",
     )
 
-cuda_makefiles_options = (
-    {
-        "CC": "nvcc",
-        "src_code_file_ext": "cu",
-        "compiler_opt_option": "nvcc",
-    }
-    if parallelization == "cuda"
-    else {}
+BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
+    project_dir=project_dir,
+    project_name=project_name,
+    exec_or_library_name=project_name,
+    compiler_opt_option=("nvcc" if parallelization == "cuda" else "default"),
+    CC=("nvcc" if parallelization == "cuda" else "autodetect"),
+    src_code_file_ext=("cu" if parallelization == "cuda" else "c"),
 )
-if parallelization == "cuda":
-    BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
-        project_dir=project_dir,
-        project_name=project_name,
-        exec_or_library_name=project_name,
-        CC="nvcc",
-        src_code_file_ext="cu",
-        compiler_opt_option="nvcc",
-    )
-else:
-    BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
-        project_dir=project_dir,
-        project_name=project_name,
-        exec_or_library_name=project_name,
-    )
+
 print(
     f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
 )
