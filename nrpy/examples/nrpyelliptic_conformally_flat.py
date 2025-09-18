@@ -406,7 +406,7 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
 )
 
 # Set griddata struct used for calculations to griddata_device for certain parallelizations
-compute_griddata = "griddata_device" if parallelization in ["cuda"] else "griddata"
+compute_griddata = "griddata_device" if parallelization == "cuda" else "griddata"
 
 # Define {pre,post}_MoL_step_forward_in_time string for main function
 write_checkpoint_call = (
