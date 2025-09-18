@@ -441,11 +441,9 @@ BHaH.griddata_commondata.register_CFunction_griddata_free(
 if enable_intrinsics:
     copy_files(
         package="nrpy.helpers",
-        filenames_list=(
-            ["cuda_intrinsics.h"]
-            if parallelization == "cuda"
-            else ["simd_intrinsics.h"]
-        ),
+        filenames_list=[
+            f"{'cuda' if parallelization == 'cuda' else 'simd'}_intrinsics.h"
+        ],
         project_dir=project_dir,
         subdirectory="intrinsics",
     )
