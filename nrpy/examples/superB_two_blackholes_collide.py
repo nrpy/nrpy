@@ -60,7 +60,7 @@ parallel_codegen_enable = True
 enable_fd_functions = True
 enable_KreissOliger_dissipation = False
 enable_CAKO = True
-enable_BHaHAHA = True
+enable_BHaHAHA = False
 outer_bcs_type = "radiation"
 boundary_conditions_desc = "outgoing radiation"
 # Number of chares, Nchare0, Nchare1, and Nchare2, in each direction,
@@ -293,24 +293,25 @@ par.adjust_CodeParam_default("BH1_mass", default_BH1_mass)
 par.adjust_CodeParam_default("BH2_mass", default_BH2_mass)
 par.adjust_CodeParam_default("BH1_posn_z", default_BH1_z_posn)
 par.adjust_CodeParam_default("BH2_posn_z", default_BH2_z_posn)
-# Set BHaHAHA defaults to reasonable values.
-par.adjust_CodeParam_default(
-    "bah_initial_grid_z_center", [default_BH1_z_posn, default_BH2_z_posn, 0.0]
-)
-par.adjust_CodeParam_default("bah_Nr_interp_max", 40)
-par.adjust_CodeParam_default(
-    "bah_M_scale",
-    [default_BH1_mass, default_BH2_mass, default_BH1_mass + default_BH2_mass],
-)
-par.adjust_CodeParam_default(
-    "bah_max_search_radius",
-    [
-        0.6 * default_BH1_mass,
-        0.6 * default_BH2_mass,
-        1.1 * (default_BH1_mass + default_BH2_mass),
-    ],
-)
-par.adjust_CodeParam_default("bah_verbosity_level", 0)
+if enable_BHaHAHA:
+    # Set BHaHAHA defaults to reasonable values.
+    par.adjust_CodeParam_default(
+        "bah_initial_grid_z_center", [default_BH1_z_posn, default_BH2_z_posn, 0.0]
+    )
+    par.adjust_CodeParam_default("bah_Nr_interp_max", 40)
+    par.adjust_CodeParam_default(
+        "bah_M_scale",
+        [default_BH1_mass, default_BH2_mass, default_BH1_mass + default_BH2_mass],
+    )
+    par.adjust_CodeParam_default(
+        "bah_max_search_radius",
+        [
+            0.6 * default_BH1_mass,
+            0.6 * default_BH2_mass,
+            1.1 * (default_BH1_mass + default_BH2_mass),
+        ],
+    )
+    par.adjust_CodeParam_default("bah_verbosity_level", 0)
 
 
 BHaH.CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
@@ -348,8 +349,8 @@ superB.timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(
 
 BHaH.BHaH_defines_h.output_BHaH_defines_h(
     additional_includes=[
-        str(Path("superB") / Path("superB.h")),
-        os.path.join(BHaHAHA_subdir, "BHaHAHA.h"),
+        str(Path("superB") / "superB.h"),
+        *([os.path.join(BHaHAHA_subdir, "BHaHAHA.h")] if enable_BHaHAHA else []),
     ],
     project_dir=project_dir,
     enable_intrinsics=enable_intrinsics,
@@ -368,14 +369,18 @@ if enable_intrinsics:
 superB.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
-    addl_dirs_to_make=[BHaHAHA_subdir],
+    addl_dirs_to_make=[*([BHaHAHA_subdir] if enable_BHaHAHA else [])],
     exec_or_library_name=project_name,
     compiler_opt_option="default",
     addl_CFLAGS=["-fpermissive "],
-    addl_libraries=["-module CkIO", f"-L{BHaHAHA_subdir}", f"-l{BHaHAHA_subdir}"],
+    addl_libraries=[
+        "-module CkIO",
+        *([f"-L{BHaHAHA_subdir}", f"-l{BHaHAHA_subdir}"] if enable_BHaHAHA else []),
+    ],
     CC="charmc",
     enable_BHaHAHA=enable_BHaHAHA,
 )
+
 print(
     f"Finished! Now go into project/{project_name} and type `make` to build, then ./charmrun +p4 ./{project_name} to run with 4 processors, for example."
 )
