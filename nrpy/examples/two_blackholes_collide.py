@@ -358,7 +358,7 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
 
 BHaH.main_c.register_CFunction_main_c(
     initial_data_desc=IDtype,
-    pre_diagnostics=f"{'bhahaha_find_horizons(&commondata, griddata);\n' if parallelization=='openmp' else ''}",
+    pre_diagnostics=f"{'bhahaha_find_horizons(&commondata, griddata);' if parallelization=='openmp' else ''}\n",
     MoL_method=MoL_method,
     boundary_conditions_desc=boundary_conditions_desc,
 )
