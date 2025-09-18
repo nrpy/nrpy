@@ -7,7 +7,6 @@ Author: Zachariah B. Etienne
 
 import argparse
 import os
-
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
@@ -237,20 +236,13 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
     ),
 )
 
-compute_griddata = "griddata_device" if parallelization in ["cuda"] else "griddata"
-write_checkpoint_call = f"write_checkpoint(&commondata, {compute_griddata});\n".replace(
-    compute_griddata,
-    (
-        f"griddata_host, {compute_griddata}"
-        if parallelization in ["cuda"]
-        else compute_griddata
-    ),
-)
-
 BHaH.main_c.register_CFunction_main_c(
     initial_data_desc=WaveType,
     MoL_method=MoL_method,
-    pre_MoL_step_forward_in_time=write_checkpoint_call,
+    pre_MoL_step_forward_in_time=(
+        f"write_checkpoint(&commondata, "
+        f"{'griddata_host, griddata_device' if parallelization in ['cuda'] else 'griddata'});\n"
+    ),
     boundary_conditions_desc=boundary_conditions_desc,
 )
 BHaH.griddata_commondata.register_CFunction_griddata_free(

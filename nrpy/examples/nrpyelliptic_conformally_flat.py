@@ -7,7 +7,6 @@ Authors: Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
 
 import argparse
 import os
-
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
@@ -408,15 +407,12 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
 # Set griddata struct used for calculations to griddata_device for certain parallelizations
 compute_griddata = "griddata_device" if parallelization in ["cuda"] else "griddata"
 
-# Define post_MoL_step_forward_in_time string for main function
-write_checkpoint_call = f"write_checkpoint(&commondata, {compute_griddata});\n".replace(
-    compute_griddata,
-    (
-        f"griddata_host, {compute_griddata}"
-        if parallelization in ["cuda"]
-        else compute_griddata
-    ),
+# Define {pre,post}_MoL_step_forward_in_time string for main function
+write_checkpoint_call = (
+    f"write_checkpoint(&commondata, "
+    f"{'griddata_host, griddata_device' if parallelization in ['cuda'] else 'griddata'});\n"
 )
+pre_MoL_step_forward_in_time = write_checkpoint_call
 post_MoL_step_forward_in_time = rf"""    stop_conditions_check(&commondata, {compute_griddata});
     if (commondata.stop_relaxation) {{
       // Force a checkpoint when stop condition is reached.
@@ -429,7 +425,6 @@ post_non_y_n_auxevol_mallocs = (
     "for (int grid = 0; grid < commondata.NUMGRIDS; grid++)\n"
     f"auxevol_gfs_set_to_constant(&commondata, &{compute_griddata}[grid].params, {compute_griddata}[grid].xx, &{compute_griddata}[grid].gridfuncs);\n"
 )
-pre_MoL_step_forward_in_time = f"{write_checkpoint_call}"
 BHaH.main_c.register_CFunction_main_c(
     MoL_method=MoL_method,
     initial_data_desc="",
