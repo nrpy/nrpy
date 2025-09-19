@@ -1342,11 +1342,11 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
         # l, m = 2, 2
         for l, m in modes:
             if not (l + m) % 2:
-                n = (8 * sp.pi * (sp.I * m) ** l / sp.factorial2(2 * l + 1)) * sp.sqrt(
+                n = sp.I * (8 * sp.pi * (sp.I * m) ** l / sp.factorial2(2 * l + 1)) * sp.sqrt(
                     ((l + 1) * (l + 2)) / ((l) * (l - 1))
                 )
             else:
-                n = (
+                n = sp.I * (
                     -16 * sp.I * sp.pi * (sp.I * m) ** l / sp.factorial2(2 * l + 1)
                 ) * sp.sqrt(
                     ((2 * l + 1) * (l + 2) * (l**2 - m**2))
