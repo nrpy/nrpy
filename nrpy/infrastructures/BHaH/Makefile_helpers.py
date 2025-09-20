@@ -127,7 +127,6 @@ def _configure_compiler_and_flags(
     :param static_lib: Whether the library should be static.
     :param addl_CFLAGS: A list of additional compiler flags.
     :return: A tuple containing the compiler and the CFLAGS dictionary.
-    :raises FileNotFoundError: If the specified C compiler is not found.
     """
     if cc == "autodetect":
         cc = _autodetect_cc()
@@ -411,7 +410,6 @@ def compile_Makefile(
     :param CC: C compiler.
     :param attempt: Compilation attempt number.
 
-    :raises FileNotFoundError: If the C compiler or make is not found.
     :raises RuntimeError: If compilation fails after two attempts.
 
     DocTests:
