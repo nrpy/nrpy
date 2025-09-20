@@ -10,6 +10,7 @@ import os
 import platform
 import shutil
 import subprocess
+import warnings
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -131,7 +132,7 @@ def _configure_compiler_and_flags(
     if cc == "autodetect":
         cc = _autodetect_cc()
     if not shutil.which(cc):
-        raise FileNotFoundError(f"{cc} C compiler is not found")
+        warnings.warn(f"{cc} C compiler is not found", UserWarning)
 
     updated_addl_CFLAGS = addl_CFLAGS.copy() if addl_CFLAGS else []
     if create_lib and not static_lib:
@@ -439,9 +440,9 @@ def compile_Makefile(
         final_CC = _autodetect_cc()
 
     if not shutil.which(final_CC):
-        raise FileNotFoundError(f"{final_CC} C compiler is not found")
+        warnings.warn(f"{final_CC} C compiler is not found", UserWarning)
     if not shutil.which("make"):
-        raise FileNotFoundError("make is not found")
+        warnings.warn("make is not found")
 
     output_CFunctions_function_prototypes_and_construct_Makefile(
         project_dir=project_dir,
