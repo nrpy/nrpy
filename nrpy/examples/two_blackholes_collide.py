@@ -378,7 +378,6 @@ if enable_intrinsics:
         subdirectory="intrinsics",
     )
 
-
 BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
