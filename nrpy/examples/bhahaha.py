@@ -36,9 +36,21 @@ parser.add_argument(
     help="Output root directory. Default = project/",
     default="project",
 )
+parser.add_argument(
+    "--cpp",
+    action="store_true",
+    help="Generate C++-compatible BHaHAHA",
+)
+parser.add_argument(
+    "--no-openmp",
+    action="store_true",
+    help="Disable OpenMP flags",
+)
 args = parser.parse_args()
 fd_order = args.fdorder
 outrootdir = args.outrootdir
+use_cpp = args.cpp
+use_openmp = not args.no_openmp  # default: True if flag omitted
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -203,6 +215,7 @@ BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefi
     lib_function_prefix="bah_",
     create_lib=True,
     static_lib=True,
+    use_openmp=use_openmp,
 )
 
 # Append latest error codes & error message function prototype to BHaHAHA.h
@@ -241,6 +254,21 @@ const char *bah_error_message(const bhahaha_error_codes error_code);
 
 #endif // BHAHAHA_HEADER_H
 """
+
+if use_cpp:
+    # C++ compatibility: extern "C" and restrict mapping
+    cpp_compatibility_preamble = (
+        "#ifdef __cplusplus\n"
+        'extern "C" {\n'
+        "#endif\n\n"
+        "#define restrict __restrict__\n\n"
+    )
+    cpp_compatibility_epilogue = "\n#ifdef __cplusplus\n" "}\n" "#endif"
+    BHaHAHA_h = cpp_compatibility_preamble + BHaHAHA_h + cpp_compatibility_epilogue
+
+    # Convert fixed-size parameter to pointer
+    BHaHAHA_h = BHaHAHA_h.replace("REAL radii[Nr_interp_max]", "REAL radii[]")
+
 
 # Write the updated content to the output file
 with Path(project_dir, "BHaHAHA.h").open("w", encoding="utf-8") as output_file:
