@@ -56,12 +56,12 @@ typedef struct {
   //==========================
   // Metric and grid setup
   //==========================
-  REAL *restrict input_metric_data; // Stores gamma_{ij} and K_{ij} in Cartesian
-                                    // basis on Nr x Ntheta x Nphi grid.
-                                    // Indexing: input_metric_data[(i + Nr * (j
-                                    // + Ntheta * (k + Nphi * gf)))], where gf
-                                    // is the gridfunction (gxx=0, gxy=1, gxz=2,
-                                    // gyy=3, gyz=4, gzz=5, kxx=6, kxy=7, etc.).
+  REAL *input_metric_data; // Stores gamma_{ij} and K_{ij} in Cartesian
+                           // basis on Nr x Ntheta x Nphi grid.
+                           // Indexing: input_metric_data[(i + Nr * (j
+                           // + Ntheta * (k + Nphi * gf)))], where gf
+                           // is the gridfunction (gxx=0, gxy=1, gxz=2,
+                           // gyy=3, gyz=4, gzz=5, kxx=6, kxy=7, etc.).
 
   //==========================
   // External Input Numerical Grid: Radial parameters
@@ -151,7 +151,7 @@ typedef struct {
   // Previous horizons found:
   //    m1 = "minus 1" = most recent found; m2 = next-to-most-recent found; etc.
   // EXTERNAL NR CODE MUST ALLOCATE: max(Ntheta) x max(Nphi) doubles for each of these, but does not set them!
-  REAL *restrict prev_horizon_m1, *restrict prev_horizon_m2, *restrict prev_horizon_m3;
+  REAL *prev_horizon_m1, *prev_horizon_m2, *prev_horizon_m3;
 
   // DO NOT TOUCH: Persistent quantities set by BHaHAHA.
   // External NR code times at which previous horizons were found.
