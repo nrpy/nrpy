@@ -10,6 +10,7 @@ import os
 import platform
 import shutil
 import subprocess
+import warnings
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -126,12 +127,11 @@ def _configure_compiler_and_flags(
     :param static_lib: Whether the library should be static.
     :param addl_CFLAGS: A list of additional compiler flags.
     :return: A tuple containing the compiler and the CFLAGS dictionary.
-    :raises FileNotFoundError: If the specified C compiler is not found.
     """
     if cc == "autodetect":
         cc = _autodetect_cc()
     if not shutil.which(cc):
-        raise FileNotFoundError(f"{cc} C compiler is not found")
+        warnings.warn(f"{cc} C compiler is not found", UserWarning)
 
     updated_addl_CFLAGS = addl_CFLAGS.copy() if addl_CFLAGS else []
     if create_lib and not static_lib:
@@ -167,6 +167,7 @@ def _construct_makefile_content(
     target_rule: str,
     valgrind_rule: str,
     clean_rule: str,
+    use_openmp: bool = True,
 ) -> str:
     """
     Construct the entire Makefile content using a template.
@@ -182,6 +183,7 @@ def _construct_makefile_content(
     :param target_rule: The Makefile rule for building the main target.
     :param valgrind_rule: The Makefile rule for the 'valgrind' target.
     :param clean_rule: The Makefile rule for the 'clean' target.
+    :param use_openmp: If True, add OpenMP flags; if False, omit them.
     :return: The complete string content of the Makefile.
     """
     # Set the compiler assignment line based on whether it's nvcc
@@ -191,22 +193,25 @@ def _construct_makefile_content(
         else f"CC ?= {cc}  # assigns the value CC to {cc} only if environment variable CC is not already set"
     )
 
-    # Define the OpenMP detection block, which differs for nvcc
-    if cc != "nvcc":
-        openmp_block = """
-# Check for OpenMP support
-OPENMP_FLAG = -fopenmp
-COMPILER_SUPPORTS_OPENMP := $(shell echo | $(CC) $(OPENMP_FLAG) -E - >/dev/null 2>&1 && echo YES || echo NO)
+    if use_openmp:
+        # Define the OpenMP detection block, which differs for nvcc
+        if cc != "nvcc":
+            openmp_block = """
+    # Check for OpenMP support
+    OPENMP_FLAG = -fopenmp
+    COMPILER_SUPPORTS_OPENMP := $(shell echo | $(CC) $(OPENMP_FLAG) -E - >/dev/null 2>&1 && echo YES || echo NO)
 
-ifeq ($(COMPILER_SUPPORTS_OPENMP), YES)
+    ifeq ($(COMPILER_SUPPORTS_OPENMP), YES)
+        CFLAGS += $(OPENMP_FLAG)
+        LDFLAGS += $(OPENMP_FLAG)
+    endif"""
+        else:
+            openmp_block = """
+    OPENMP_FLAG = -fopenmp
     CFLAGS += $(OPENMP_FLAG)
-    LDFLAGS += $(OPENMP_FLAG)
-endif"""
+    LDFLAGS += $(OPENMP_FLAG)"""
     else:
-        openmp_block = """
-OPENMP_FLAG = -fopenmp
-CFLAGS += $(OPENMP_FLAG)
-LDFLAGS += $(OPENMP_FLAG)"""
+        openmp_block = ""  # No OpenMP flags
 
     # Assemble the final Makefile string using an f-string template for clarity
     return f"""{cc_line}
@@ -246,6 +251,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     lib_function_prefix: str = "",
     include_dirs: Optional[List[str]] = None,
     src_code_file_ext: str = "c",
+    use_openmp: bool = True,
 ) -> None:
     """
     Output C functions registered to CFunction_dict and construct a Makefile for compiling C code.
@@ -263,6 +269,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     :param lib_function_prefix: Prefix to add to library function names.
     :param include_dirs: List of include directories.
     :param src_code_file_ext: Extension for C source files.
+    :param use_openmp: If True, add OpenMP flags; if False, omit them.
     :raises TypeError: If 'addl_libraries' is not a list.
 
     DocTests:
@@ -375,6 +382,7 @@ clean:
         target_rule=target_rule,
         valgrind_rule=valgrind_rule,
         clean_rule=clean_rule,
+        use_openmp=use_openmp,
     )
 
     (project_path / _MAKEFILE).write_text(makefile_content, encoding="utf-8")
@@ -402,7 +410,6 @@ def compile_Makefile(
     :param CC: C compiler.
     :param attempt: Compilation attempt number.
 
-    :raises FileNotFoundError: If the C compiler or make is not found.
     :raises RuntimeError: If compilation fails after two attempts.
 
     DocTests:
@@ -431,9 +438,9 @@ def compile_Makefile(
         final_CC = _autodetect_cc()
 
     if not shutil.which(final_CC):
-        raise FileNotFoundError(f"{final_CC} C compiler is not found")
+        warnings.warn(f"{final_CC} C compiler is not found", UserWarning)
     if not shutil.which("make"):
-        raise FileNotFoundError("make is not found")
+        warnings.warn("make is not found")
 
     output_CFunctions_function_prototypes_and_construct_Makefile(
         project_dir=project_dir,

@@ -225,20 +225,13 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
     ),
 )
 
-compute_griddata = "griddata_device" if parallelization in ["cuda"] else "griddata"
-write_checkpoint_call = f"write_checkpoint(&commondata, {compute_griddata});\n".replace(
-    compute_griddata,
-    (
-        f"griddata_host, {compute_griddata}"
-        if parallelization in ["cuda"]
-        else compute_griddata
-    ),
-)
-
 BHaH.main_c.register_CFunction_main_c(
     initial_data_desc=WaveType,
     MoL_method=MoL_method,
-    pre_MoL_step_forward_in_time=write_checkpoint_call,
+    pre_MoL_step_forward_in_time=(
+        f"write_checkpoint(&commondata, "
+        f"{'griddata_host, griddata_device' if parallelization == 'cuda' else 'griddata'});\n"
+    ),
     boundary_conditions_desc=boundary_conditions_desc,
 )
 BHaH.griddata_commondata.register_CFunction_griddata_free(
@@ -248,39 +241,22 @@ BHaH.griddata_commondata.register_CFunction_griddata_free(
 if enable_intrinsics:
     copy_files(
         package="nrpy.helpers",
-        filenames_list=(
-            ["cuda_intrinsics.h"]
-            if parallelization == "cuda"
-            else ["simd_intrinsics.h"]
-        ),
+        filenames_list=[
+            f"{'cuda' if parallelization == 'cuda' else 'simd'}_intrinsics.h"
+        ],
         project_dir=project_dir,
         subdirectory="intrinsics",
     )
 
-cuda_makefiles_options = (
-    {
-        "CC": "nvcc",
-        "src_code_file_ext": "cu",
-        "compiler_opt_option": "nvcc",
-    }
-    if parallelization == "cuda"
-    else {}
+BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
+    project_dir=project_dir,
+    project_name=project_name,
+    exec_or_library_name=project_name,
+    compiler_opt_option=("nvcc" if parallelization == "cuda" else "default"),
+    CC=("nvcc" if parallelization == "cuda" else "autodetect"),
+    src_code_file_ext=("cu" if parallelization == "cuda" else "c"),
 )
-if parallelization == "cuda":
-    BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
-        project_dir=project_dir,
-        project_name=project_name,
-        exec_or_library_name=project_name,
-        CC="nvcc",
-        src_code_file_ext="cu",
-        compiler_opt_option="nvcc",
-    )
-else:
-    BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
-        project_dir=project_dir,
-        project_name=project_name,
-        exec_or_library_name=project_name,
-    )
+
 print(
     f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
 )

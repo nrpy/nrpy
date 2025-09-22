@@ -163,8 +163,8 @@ typedef struct __bc_info_struct__ {
 } bc_info_struct;
 
 typedef struct __bc_struct__ {
-  innerpt_bc_struct *restrict inner_bc_array;  // information needed for updating each inner boundary point
-  outerpt_bc_struct *restrict pure_outer_bc_array[NGHOSTS*3]; // information needed for updating each outer
+  innerpt_bc_struct *inner_bc_array;  // information needed for updating each inner boundary point
+  outerpt_bc_struct *pure_outer_bc_array[NGHOSTS*3]; // information needed for updating each outer
   //                                                             boundary point
   bc_info_struct bc_info;  // stores number of inner and outer boundary points, needed for setting loop
   //                          bounds and parallelizing over as many boundary points as possible.
@@ -177,8 +177,5 @@ typedef struct __bc_struct__ {
     )
     BHaH.BHaH_defines_h.register_BHaH_defines(
         __name__,
-        CBC_BHd_str.replace(
-            "*restrict",
-            "*" if par.parval_from_str("parallelization") == "cuda" else "*restrict",
-        ),
+        CBC_BHd_str,
     )

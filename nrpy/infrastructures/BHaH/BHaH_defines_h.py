@@ -65,7 +65,7 @@ def register_griddata_struct_and_return_griddata_struct_str(
 typedef struct __griddata__ {
   // griddata_struct stores data needed on each grid
   // xx[3] stores the uniform grid coordinates.
-  REAL *restrict xx[3];
+  REAL *xx[3];
 """
     for module, item_list in par.glb_extras_dict["griddata_struct"].items():
         griddata_struct_def += f"  // NRPy MODULE: {module}\n"

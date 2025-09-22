@@ -91,21 +91,21 @@ static const int phi_dirn = {phi_index}; // Index corresponding to the phi coord
 // This includes grid points on shells, their coordinates, and related counts.
 typedef struct __diagnostic_struct__ {
   // Number of grid points found on each extraction shell within the current process's grid boundaries.
-  int *restrict N_shell_pts_grid; // Array shape: [num_psi4_extraction_radii]
+  int *N_shell_pts_grid; // Array shape: [num_psi4_extraction_radii]
 
   // Radial-like coordinate (e.g., x0) of grid points on each shell.
   // Used as destination points for interpolation.
-  REAL **restrict xx_radial_like_shell_grid; // Array shape: [num_psi4_extraction_radii][N_shell_pts_grid[which_R_ext]]
+  REAL **xx_radial_like_shell_grid; // Array shape: [num_psi4_extraction_radii][N_shell_pts_grid[which_R_ext]]
 
   // Theta-like coordinate (e.g., x2) of grid points on each shell.
   // Used as destination points for interpolation.
-  REAL **restrict xx_theta_like_shell_grid; // Array shape: [num_psi4_extraction_radii][N_shell_pts_grid[which_R_ext]]
+  REAL **xx_theta_like_shell_grid; // Array shape: [num_psi4_extraction_radii][N_shell_pts_grid[which_R_ext]]
 
   // Number of unique theta points found on each extraction shell within the grid boundaries.
-  int *restrict N_theta_shell_grid; // Array shape: [num_psi4_extraction_radii]
+  int *N_theta_shell_grid; // Array shape: [num_psi4_extraction_radii]
 
   // Unique theta values (in radians) corresponding to the grid points on each shell.
-  REAL **restrict theta_shell_grid; // Array shape: [num_psi4_extraction_radii][N_theta_shell_grid[which_R_ext]]
+  REAL **theta_shell_grid; // Array shape: [num_psi4_extraction_radii][N_theta_shell_grid[which_R_ext]]
 
   // Angular step size in theta for the uniformly distributed points on the ideal spherical shell.
   REAL dtheta;
@@ -132,7 +132,7 @@ static diagnostic_struct diagnosticstruct;
 static void psi4_diagnostics_set_up(const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3]) {
 
   const int num_psi4_extraction_radii = commondata->num_psi4_extraction_radii;
-  const REAL *restrict list_of_psi4_extraction_radii = commondata->list_of_psi4_extraction_radii;
+  const REAL *list_of_psi4_extraction_radii = commondata->list_of_psi4_extraction_radii;
 
   // Number of theta points to define the resolution of the conceptual spherical shells.
   const int N_theta = commondata->num_theta_points_on_shell_for_psi4_interp;
@@ -156,7 +156,7 @@ static void psi4_diagnostics_set_up(const commondata_struct *restrict commondata
   // Allocate memory for spherical coordinates (theta, phi) on each shell.
   // xx_shell_sph[which_R_ext][0] -> theta values
   // xx_shell_sph[which_R_ext][1] -> phi values
-  REAL ***restrict xx_shell_sph = (REAL * **)malloc(num_psi4_extraction_radii * sizeof(REAL **));
+  REAL ***xx_shell_sph = (REAL ***)malloc(num_psi4_extraction_radii * sizeof(REAL **));
   for (int which_R_ext = 0; which_R_ext < num_psi4_extraction_radii; which_R_ext++) {
     xx_shell_sph[which_R_ext] = (REAL * *)malloc(2 * sizeof(REAL *));
     xx_shell_sph[which_R_ext][0] = (REAL *)malloc(N_theta * sizeof(REAL)); // Theta points
@@ -177,7 +177,7 @@ static void psi4_diagnostics_set_up(const commondata_struct *restrict commondata
   } // END FOR loop populating spherical coordinates
 
   // Allocate memory for Cartesian coordinates (x, y, z) corresponding to the shell points.
-  REAL ***restrict xx_shell_Cart = (REAL * **)malloc(num_psi4_extraction_radii * sizeof(REAL **));
+  REAL ***xx_shell_Cart = (REAL ***)malloc(num_psi4_extraction_radii * sizeof(REAL **));
   for (int which_R_ext = 0; which_R_ext < num_psi4_extraction_radii; which_R_ext++) {
     xx_shell_Cart[which_R_ext] = (REAL * *)malloc(3 * sizeof(REAL *));
     xx_shell_Cart[which_R_ext][0] = (REAL *)malloc(N_tot_shell * sizeof(REAL)); // x coordinates
@@ -524,7 +524,7 @@ SinhCylindrical coordinates.
   const int src_Nxx_plus_2NGHOSTS1 = Nxx_plus_2NGHOSTS_theta_like_dirn;  // Source grid size in dimension 1.
 
   // Allocate memory for source grid coordinate arrays needed by the interpolator.
-  REAL *restrict src_x0x1[3];                                                  // Interpolator expects 3 elements, but we only use [1] and [2].
+  REAL *src_x0x1[3];                                                           // Interpolator expects 3 elements, but we only use [1] and [2].
   src_x0x1[0] = NULL;                                                          // Unused by 2D interpolator.
   src_x0x1[1] = (REAL *)malloc(sizeof(REAL) * src_Nxx_plus_2NGHOSTS0); // Radial-like coordinates.
   src_x0x1[2] = (REAL *)malloc(sizeof(REAL) * src_Nxx_plus_2NGHOSTS1); // Theta-like coordinates.
@@ -538,8 +538,8 @@ SinhCylindrical coordinates.
   const int total_size = src_Nxx_plus_2NGHOSTS0 * src_Nxx_plus_2NGHOSTS1;
   // Allocate memory for the source grid function data (real and imaginary parts of psi4) for one phi-slice.
   // These will be repopulated for each phi slice inside the loop.
-  REAL *restrict src_gf_psi4r = (REAL *)malloc(sizeof(REAL) * total_size); // Shape: [src_N0 * src_N1]
-  REAL *restrict src_gf_psi4i = (REAL *)malloc(sizeof(REAL) * total_size); // Shape: [src_N0 * src_N1]
+  REAL *src_gf_psi4r = (REAL *)malloc(sizeof(REAL) * total_size); // Shape: [src_N0 * src_N1]
+  REAL *src_gf_psi4i = (REAL *)malloc(sizeof(REAL) * total_size); // Shape: [src_N0 * src_N1]
 
   // Step 1: Loop over all extraction radii.
   for (int which_R_ext = 0; which_R_ext < num_psi4_extraction_radii; which_R_ext++) {
@@ -568,14 +568,14 @@ SinhCylindrical coordinates.
       int N_theta_local = N_theta_shell_grid[which_R_ext];
       int N_phi_local = Nxx_plus_2NGHOSTS_phi - 2 * NGHOSTS; // Number of physical phi points.
       int sizeof_2Darray = sizeof(REAL) * N_phi_local * N_theta_local;
-      REAL *restrict psi4r_at_R_ext = (REAL *)malloc(sizeof_2Darray); // Real part on the shell.
-      REAL *restrict psi4i_at_R_ext = (REAL *)malloc(sizeof_2Darray); // Imaginary part on the shell.
+      REAL *psi4r_at_R_ext = (REAL *)malloc(sizeof_2Darray); // Real part on the shell.
+      REAL *psi4i_at_R_ext = (REAL *)malloc(sizeof_2Darray); // Imaginary part on the shell.
 
       // Allocate and populate 1D arrays for theta, sin(theta), and phi values corresponding
       // to the points used in the final decomposition integral.
-      REAL *restrict sinth_array = (REAL *)malloc(sizeof(REAL) * N_theta_local);
-      REAL *restrict th_array = (REAL *)malloc(sizeof(REAL) * N_theta_local);
-      REAL *restrict ph_array = (REAL *)malloc(sizeof(REAL) * N_phi_local);
+      REAL *sinth_array = (REAL *)malloc(sizeof(REAL) * N_theta_local);
+      REAL *th_array = (REAL *)malloc(sizeof(REAL) * N_theta_local);
+      REAL *ph_array = (REAL *)malloc(sizeof(REAL) * N_phi_local);
 
       // Step 2: Interpolate psi4 onto the shell points. This requires looping through phi slices.
       // The interpolation is 2D (radial-like, theta-like), performed independently for each phi slice.

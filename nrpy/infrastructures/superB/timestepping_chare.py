@@ -275,10 +275,13 @@ void Timestepping::pup(PUP::er &p) {
     return code
 
 
-def register_CFunction_timestepping_malloc() -> None:
+def register_CFunction_timestepping_malloc(
+    enable_BHaHAHA: bool = False,
+) -> None:
     """
     Register a C function for timestepping malloc.
 
+    :param enable_BHaHAHA: If True, allocate memory of tmpBuffer_bhahaha_gfs..
     :return None
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
@@ -298,21 +301,26 @@ tmpBuffers->tmpBuffer_NS = (REAL *restrict)malloc(sizeof(REAL) * max_sync_gfs * 
 tmpBuffers->tmpBuffer_TB = (REAL *restrict)malloc(sizeof(REAL) * max_sync_gfs * NGHOSTS * Nxx_plus_2NGHOSTS_face2);
 
 // Unpack nonlocalinnerbcstruct
-  const int tot_num_dst_chares = nonlocalinnerbcstruct->tot_num_dst_chares;
-  const int *restrict num_srcpts_tosend_each_chare = nonlocalinnerbcstruct->num_srcpts_tosend_each_chare;
-  const int tot_num_src_chares = nonlocalinnerbcstruct->tot_num_src_chares;
-  const int *restrict num_srcpts_each_chare = nonlocalinnerbcstruct->num_srcpts_each_chare;
+const int tot_num_dst_chares = nonlocalinnerbcstruct->tot_num_dst_chares;
+const int *restrict num_srcpts_tosend_each_chare = nonlocalinnerbcstruct->num_srcpts_tosend_each_chare;
+const int tot_num_src_chares = nonlocalinnerbcstruct->tot_num_src_chares;
+const int *restrict num_srcpts_each_chare = nonlocalinnerbcstruct->num_srcpts_each_chare;
 
-  tmpBuffers->tmpBuffer_innerbc_send = (REAL **)malloc(tot_num_dst_chares * sizeof(REAL *));
-  for (int which_chare = 0; which_chare < tot_num_dst_chares; which_chare++) {
-    tmpBuffers->tmpBuffer_innerbc_send[which_chare] = (REAL *restrict)malloc(sizeof(REAL) * max_sync_gfs * num_srcpts_tosend_each_chare[which_chare]);
-  }
-  tmpBuffers->tmpBuffer_innerbc_receiv = (REAL **)malloc(tot_num_src_chares * sizeof(REAL *));
-  for (int which_chare = 0; which_chare < tot_num_src_chares; which_chare++) {
-    tmpBuffers->tmpBuffer_innerbc_receiv[which_chare] = (REAL *restrict)malloc(sizeof(REAL) * max_sync_gfs * num_srcpts_each_chare[which_chare]);
-  }
-
+tmpBuffers->tmpBuffer_innerbc_send = (REAL **)malloc(tot_num_dst_chares * sizeof(REAL *));
+for (int which_chare = 0; which_chare < tot_num_dst_chares; which_chare++) {
+  tmpBuffers->tmpBuffer_innerbc_send[which_chare] = (REAL *restrict)malloc(sizeof(REAL) * max_sync_gfs * num_srcpts_tosend_each_chare[which_chare]);
+}
+tmpBuffers->tmpBuffer_innerbc_receiv = (REAL **)malloc(tot_num_src_chares * sizeof(REAL *));
+for (int which_chare = 0; which_chare < tot_num_src_chares; which_chare++) {
+  tmpBuffers->tmpBuffer_innerbc_receiv[which_chare] = (REAL *restrict)malloc(sizeof(REAL) * max_sync_gfs * num_srcpts_each_chare[which_chare]);
+}
 """
+    if enable_BHaHAHA:
+        body += """
+const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
+tmpBuffers->tmpBuffer_bhahaha_gfs = (REAL *restrict)malloc(sizeof(REAL) * BHAHAHA_NUM_INTERP_GFS * Nxx_plus_2NGHOSTS_tot);
+"""
+
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
@@ -324,10 +332,13 @@ tmpBuffers->tmpBuffer_TB = (REAL *restrict)malloc(sizeof(REAL) * max_sync_gfs * 
     )
 
 
-def register_CFunction_timestepping_free_memory() -> None:
+def register_CFunction_timestepping_free_memory(
+    enable_BHaHAHA: bool = False,
+) -> None:
     """
     Register a C function for timestepping free memory.
 
+    :param enable_BHaHAHA: If True, free memory of tmpBuffer_bhahaha_gfs.
     :return None
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
@@ -363,6 +374,12 @@ if (tmpBuffers->tmpBuffer_innerbc_receiv != NULL) {
   free(tmpBuffers->tmpBuffer_innerbc_receiv);
 }
 """
+    if enable_BHaHAHA:
+        body += """
+if (tmpBuffers->tmpBuffer_bhahaha_gfs != NULL)
+  free(tmpBuffers->tmpBuffer_bhahaha_gfs);
+"""
+
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
@@ -379,6 +396,7 @@ def output_timestepping_h(
     enable_psi4_diagnostics: bool = False,
     enable_charm_checkpointing: bool = False,
     enable_L2norm_BSSN_constraints_diagnostics: bool = False,
+    enable_BHaHAHA: bool = False,
 ) -> None:
     """
     Generate timestepping.h.
@@ -388,6 +406,7 @@ def output_timestepping_h(
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     :param enable_L2norm_BSSN_constraints_diagnostics: Whether or not to enable L2norm of BSSN_constraints diagnostics.
+    :param enable_BHaHAHA: If True, add creation of horizon_finder and interpolator3d chares and communication with them.
     """
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
@@ -433,6 +452,9 @@ class Timestepping : public CBase_Timestepping {
     if enable_charm_checkpointing:
         file_output_str += r"""
     bool write_chckpt_this_step;"""
+    if enable_BHaHAHA:
+        file_output_str += r"""
+    bool do_horizon_find;"""
     file_output_str += r"""
     Ck::IO::File f_1d_y;
     Ck::IO::File f_1d_z;
@@ -463,6 +485,10 @@ class Timestepping : public CBase_Timestepping {
         file_output_str += r"""
     void contribute_localsums_for_psi4_decomp(sectionBcastMsg *msg, const int grid);
     void create_section();
+"""
+    if enable_BHaHAHA:
+        file_output_str += r"""
+    void send_bhahaha_gfs_to_corresponding_interpolator_chare(const int grid);
 """
     file_output_str += r"""
   public:
@@ -730,6 +756,7 @@ def output_timestepping_cpp(
     enable_psi4_diagnostics: bool = False,
     enable_charm_checkpointing: bool = False,
     enable_L2norm_BSSN_constraints_diagnostics: bool = False,
+    enable_BHaHAHA: bool = False,
 ) -> None:
     """
     Generate timestepping.cpp.
@@ -745,6 +772,7 @@ def output_timestepping_cpp(
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     :param enable_L2norm_BSSN_constraints_diagnostics: Enable diagnostics for the L2 norm of BSSN constraint violations.
+    :param enable_BHaHAHA: If True, add creation of horizon_finder and interpolator3d chares and communication with them.
     :raises ValueError: Raised if any required function is not registered.
     """
     initial_data_desc += " "
@@ -780,10 +808,23 @@ def output_timestepping_cpp(
     file_output_str = r"""#include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
 #include "timestepping.h"
-#include "main.h"
+#include "main.h" """
 
+    if enable_BHaHAHA:
+        file_output_str += r"""
+#include "horizon_finder.h"
+"""
+
+    file_output_str += r"""
 extern /* readonly */ CProxy_Main mainProxy;
+extern /* readonly */ CProxy_Timestepping timesteppingArray;"""
 
+    if enable_BHaHAHA:
+        file_output_str += r"""
+extern /* readonly */ CProxy_Horizon_finder horizon_finderProxy;
+extern /* readonly */ CProxy_Interpolator3d interpolator3dArray;"""
+
+    file_output_str += r"""
 /*
 *Step 1.c: Allocate NUMGRIDS griddata arrays, each containing data specific to an individual grid.
 *Step 1.d: Set each CodeParameter in griddata.params to default.
@@ -804,6 +845,8 @@ extern /* readonly */ CProxy_Main mainProxy;
 """
     file_output_str += r"""
 Timestepping::Timestepping(CommondataObject &&inData) {
+
+  CkPrintf("Timestepping chare %d,%d,%d created on PE %d\n", thisIndex.x, thisIndex.y, thisIndex.z, CkMyPe());
 
   commondata = inData.commondata;
 
@@ -1412,6 +1455,35 @@ void Timestepping::process_nonlocalinnerbc(const int type_gfs, const int grid) {
     if enable_charm_checkpointing:
         file_output_str += generate_PUP_code(enable_psi4_diagnostics)
 
+    if enable_BHaHAHA:
+        file_output_str += r"""
+void Timestepping::send_bhahaha_gfs_to_corresponding_interpolator_chare(const int grid) {
+  const int Nchare0 = commondata.Nchare0;
+  const int Nchare1 = commondata.Nchare1;
+  const int Nchare2 = commondata.Nchare2;
+  const int Nxx_plus_2NGHOSTS0 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS0;
+  const int Nxx_plus_2NGHOSTS1 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS1;
+  const int Nxx_plus_2NGHOSTS2 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS2;
+  const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
+
+  REAL *restrict tmpBuffer = griddata_chare[grid].tmpBuffers.tmpBuffer_bhahaha_gfs;
+  const REAL *restrict gfs = griddata_chare[grid].gridfuncs.y_n_gfs;
+
+  int idx =  0;
+  for (int which_gf = 0; which_gf < BHAHAHA_NUM_INTERP_GFS; which_gf++) {
+    for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
+      for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++) {
+        for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++) {
+          tmpBuffer[idx] = gfs[IDX4(bhahaha_gf_interp_indices[which_gf], i0, i1, i2)];
+          idx++;
+        }
+      }
+    }
+  }
+ interpolator3dArray[CkArrayIndex3D(thisIndex.x, thisIndex.y, thisIndex.z)].receiv_bhahaha_gfs(BHAHAHA_NUM_INTERP_GFS * Nxx_plus_2NGHOSTS_tot, tmpBuffer);
+}
+"""
+
     file_output_str += r"""
 #include "timestepping.def.h"
 """
@@ -1433,6 +1505,7 @@ def output_timestepping_ci(
     enable_residual_diagnostics: bool = False,
     enable_charm_checkpointing: bool = False,
     enable_L2norm_BSSN_constraints_diagnostics: bool = False,
+    enable_BHaHAHA: bool = False,
 ) -> None:
     """
     Generate timestepping.ci.
@@ -1448,6 +1521,7 @@ def output_timestepping_ci(
     :param enable_residual_diagnostics: Whether or not to enable residual diagnostics.
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     :param enable_L2norm_BSSN_constraints_diagnostics: Whether or not to enable L2norm of BSSN_constraints diagnostics.
+    :param enable_BHaHAHA: If True, add creation of horizon_finder and interpolator3d chares and communication with them.
     """
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
@@ -1471,13 +1545,48 @@ def output_timestepping_ci(
     entry void ready_2d_xy(Ck::IO::FileReadyMsg *m);
     entry void ready_2d_yz(Ck::IO::FileReadyMsg *m);
     // Step 5: MAIN SIMULATION LOOP
-    entry void start() {"""
+    entry void start() {
+"""
 
     if enable_psi4_diagnostics:
         file_output_str += r"""
       serial {
         create_section();
-      }"""
+      }
+"""
+
+    if enable_BHaHAHA:
+        file_output_str += r"""
+      // Only Timestepping chare (0,0,0) launches the horizon finder chares.
+      if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
+        serial {
+          GriddataObject griddataObj;
+          griddataObj.size_griddata = commondata.NUMGRIDS;
+          griddataObj.griddata = new griddata_struct[commondata.NUMGRIDS];
+          for(int grid=0; grid<commondata.NUMGRIDS; grid++){
+            griddataObj.griddata[grid] = griddata[grid];
+
+          }
+          CommondataObject commondataObj;
+          commondataObj.commondata = commondata;
+          horizon_finderProxy.start(commondataObj, griddataObj);
+        }
+      }
+
+      // Each Timestepping chare starts its corresponding Interpolator3d chare.
+      serial {
+          GriddataObject griddataObj;
+          griddataObj.size_griddata = commondata.NUMGRIDS;
+          griddataObj.griddata = new griddata_struct[commondata.NUMGRIDS];
+          for(int grid=0; grid<commondata.NUMGRIDS; grid++){
+            griddataObj.griddata[grid] = griddata_chare[grid];
+          }
+          CommondataObject commondataObj;
+          commondataObj.commondata = commondata;
+          interpolator3dArray[CkArrayIndex3D(thisIndex.x, thisIndex.y, thisIndex.z)].start(commondataObj, griddataObj);
+      }
+"""
+
     file_output_str += r"""
       if (griddata_chare[grid].nonlocalinnerbcstruct.tot_num_src_chares > 0) {
         serial {
@@ -1634,6 +1743,31 @@ def output_timestepping_ci(
                                              commondata.time) < 0.5 * commondata.dt;"""
         file_output_str += r"""
             }"""
+
+    if enable_BHaHAHA:
+        file_output_str += r"""
+          serial {
+            do_horizon_find = true;  // default: yes, find horizon
+            // STEP 1: Check if horizon find is scheduled for the current iteration.
+            if (commondata.diagnostics_output_every <= 0 ||
+                (commondata.nn % (int)(commondata.diagnostics_output_every / commondata.dt + 0.5)) != 0) {
+              int bah_find_every = 1;  // Placeholder: find every iteration. This should be a commondata param.
+              if (commondata.diagnostics_output_every > commondata.dt) {
+                // A basic way to get find_every from time interval
+                bah_find_every = (int)(commondata.diagnostics_output_every / commondata.dt + 0.5);
+                if (bah_find_every == 0)
+                  bah_find_every = 1;
+              }
+              if (bah_find_every <= 0 || (commondata.nn % bah_find_every) != 0) {
+                do_horizon_find = false;  // not scheduled this iteration
+              }
+            } // END IF: diagnostics_output_every > 0
+          }
+          // If do horison for this step, send the entire set of required BHaHAHA gridfunctions to the corresponding Interpolator3d chare
+          if (do_horizon_find) {
+              serial { send_bhahaha_gfs_to_corresponding_interpolator_chare(grid); }
+          }
+        """
     file_output_str += """
          // Step 5.a: Main loop, part 1: Output diagnostics"""
     if enable_psi4_diagnostics:
@@ -1909,10 +2043,12 @@ def output_timestepping_ci(
         }
       } // End main loop to progress forward in time.
 """
-    file_output_str += r"""
+    if not enable_BHaHAHA:
+        file_output_str += r"""
       serial{
         mainProxy.done();
-      }
+      }"""
+    file_output_str += r"""
     };
     entry void start_write_1d_y(Ck::IO::SessionReadyMsg *m);
     entry void start_write_1d_z(Ck::IO::SessionReadyMsg *m);
@@ -2059,6 +2195,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
     enable_residual_diagnostics: bool = False,
     enable_charm_checkpointing: bool = False,
     enable_L2norm_BSSN_constraints_diagnostics: bool = False,
+    enable_BHaHAHA: bool = False,
 ) -> None:
     """
     Output timestepping h, cpp, and ci files and register C functions.
@@ -2074,6 +2211,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
     :param enable_residual_diagnostics: Whether or not to enable residual diagnostics.
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     :param enable_L2norm_BSSN_constraints_diagnostics: Whether or not to enable L2norm of BSSN_constraints diagnostics.
+    :param enable_BHaHAHA: If True, add creation of horizon_finder and interpolator3d chares and communication with them.
     """
     # For NRPy elliptic: register parameter wavespeed at outer boundary
     if enable_residual_diagnostics:
@@ -2087,6 +2225,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         enable_psi4_diagnostics=enable_psi4_diagnostics,
         enable_charm_checkpointing=enable_charm_checkpointing,
         enable_L2norm_BSSN_constraints_diagnostics=enable_L2norm_BSSN_constraints_diagnostics,
+        enable_BHaHAHA=enable_BHaHAHA,
     )
 
     Butcher_dict = (
@@ -2103,6 +2242,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         enable_psi4_diagnostics=enable_psi4_diagnostics,
         enable_charm_checkpointing=enable_charm_checkpointing,
         enable_L2norm_BSSN_constraints_diagnostics=enable_L2norm_BSSN_constraints_diagnostics,
+        enable_BHaHAHA=enable_BHaHAHA,
     )
 
     output_timestepping_ci(
@@ -2117,11 +2257,16 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         Butcher_dict=Butcher_dict,
         enable_charm_checkpointing=enable_charm_checkpointing,
         enable_L2norm_BSSN_constraints_diagnostics=enable_L2norm_BSSN_constraints_diagnostics,
+        enable_BHaHAHA=enable_BHaHAHA,
     )
 
-    register_CFunction_timestepping_malloc()
+    register_CFunction_timestepping_malloc(
+        enable_BHaHAHA=enable_BHaHAHA,
+    )
 
-    register_CFunction_timestepping_free_memory()
+    register_CFunction_timestepping_free_memory(
+        enable_BHaHAHA=enable_BHaHAHA,
+    )
 
     # Register temporary buffers for face data communication to griddata_struct:
     BHaH.griddata_commondata.register_griddata_commondata(

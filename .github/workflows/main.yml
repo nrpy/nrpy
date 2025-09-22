@@ -290,7 +290,7 @@ jobs:
           python3 -u nrpy/examples/superB_two_blackholes_collide.py
           cd project/superB_two_blackholes_collide/
           make -j2
-          charmrun +p2 ./superB_two_blackholes_collide
+          ./charmrun +p2 ./superB_two_blackholes_collide
           "
 
   codegen-ubuntu:
@@ -427,7 +427,7 @@ jobs:
       - name: Checkout trusted commit code
         uses: actions/checkout@v4
         with:
-          ref: 'e16a1192d723519e3fe1011e1f31a79ca5793a69'
+          ref: 'd96fdd6190f5c7273ebd93db3bb17f933b66d480'
           path: trusted_code
 
       - name: Build trusted sebob executable

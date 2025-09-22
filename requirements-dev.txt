@@ -1,10 +1,10 @@
 appdirs
-black==25.1.0
-clang-format==21.1.0
+black==25.9.0
+clang-format==21.1.1
 darglint
 ipython
 isort
-mypy==1.17.1
+mypy==1.18.2
 nrpypn
 nrpylatex
 numpy

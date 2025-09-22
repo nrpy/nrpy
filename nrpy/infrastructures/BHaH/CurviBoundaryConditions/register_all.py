@@ -24,10 +24,6 @@ from typing import Set
 import nrpy.params as par
 from nrpy.infrastructures import BHaH
 
-_ = par.CodeParameter(
-    "char[50]", __name__, "outer_bc_type", "radiation", commondata=True
-)
-
 
 def register_C_functions(
     set_of_CoordSystems: Set[str],
@@ -45,6 +41,10 @@ def register_C_functions(
     :param set_parity_on_auxevol: If True, set parity on auxiliary evolution grid functions.
     :param enable_masks: If True, make bcstruct algorithm mask-aware.
     """
+    _ = par.CodeParameter(
+        "char[50]", __name__, "outer_bc_type", "radiation", commondata=True
+    )
+
     if par.parval_from_str("parallelization") == "cuda":
         BHaH.parallelization.cuda_utilities.register_CFunction_cpyHosttoDevice_bc_struct()
 
