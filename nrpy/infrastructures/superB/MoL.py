@@ -1088,10 +1088,10 @@ def register_CFunctions(
         int evol_gfs_to_sync[{num_evol_gfs_to_sync}];
         int auxevol_gfs_to_sync[{num_auxevol_gfs_to_sync}];
         int aux_gfs_to_sync[{num_aux_gfs_to_sync}];\n"""
-        f"REAL *restrict {y_n_gridfunctions};\n"
-        + "".join(f"REAL *restrict {gfs};\n" for gfs in non_y_n_gridfunctions_list)
-        + r"""REAL *restrict diagnostic_output_gfs;
-REAL *restrict diagnostic_output_gfs2;
+        f"REAL *{y_n_gridfunctions};\n"
+        + "".join(f"REAL *{gfs};\n" for gfs in non_y_n_gridfunctions_list)
+        + r"""REAL *diagnostic_output_gfs;
+REAL *diagnostic_output_gfs2;
 } MoL_gridfunctions_struct;
 """
         + rf"""// Define constants for accessing gridfunction types

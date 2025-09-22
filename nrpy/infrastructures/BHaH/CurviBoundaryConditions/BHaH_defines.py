@@ -177,8 +177,5 @@ typedef struct __bc_struct__ {
     )
     BHaH.BHaH_defines_h.register_BHaH_defines(
         __name__,
-        CBC_BHd_str.replace(
-            "*restrict",
-            "*" if par.parval_from_str("parallelization") == "cuda" else "*restrict",
-        ),
+        CBC_BHd_str,
     )
