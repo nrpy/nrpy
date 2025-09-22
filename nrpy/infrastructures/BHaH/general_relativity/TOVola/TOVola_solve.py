@@ -12,12 +12,10 @@ Authors: David Boyer
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.equations.tov.TOV_equations as tov_eqs
-import nrpy.params as par
 
 
 def register_CFunction_TOVola_solve() -> None:
     """Register C function TP_solve(), main driver function for pseudospectral solve."""
-    parallelization = par.parval_from_str("parallelization")
     includes = ["BHaH_defines.h", "gsl/gsl_errno.h", "gsl/gsl_odeiv2.h"]
     prefunc = r"""
 #define ODE_SOLVER_DIM 4
