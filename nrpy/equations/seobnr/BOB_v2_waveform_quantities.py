@@ -138,9 +138,10 @@ class BOB_v2_waveform_quantities:
         A_noap = 1 / sp.cosh(T)
         k = (Omega_qnm**2 - Omega_0**2) / (1 - sp.tanh(T_0))
         Omega_orb = (Omega_0**2 + k * (sp.tanh(T) - sp.tanh(T_0))) ** sp.Rational(1, 2)
+        Omega_minf = (Omega_0**2 + k * (-1 - sp.tanh(T_0))) ** sp.Rational(1, 2)
         Phi_orb = -tau_qnm * (
             Omega_qnm * sp.atanh(Omega_orb / Omega_qnm)
-            - Omega_0 * sp.atanh(Omega_0 / Omega_orb)
+            - Omega_minf * sp.atanh(Omega_minf / Omega_orb)
         )
         omega_news = 2 * Omega_orb
         # Going from news to strain
@@ -149,7 +150,7 @@ class BOB_v2_waveform_quantities:
         # where H is complex and given by the infinite series
         # H = Sum_n H_n
         # First the series is truncated at N = N_provisional
-        N_provisional = 2
+        N_provisional = 4
         i_times_omega = sp.I * omega_news
         H_n = A_noap / i_times_omega
         Hbar_n = -A_noap / i_times_omega
@@ -160,29 +161,35 @@ class BOB_v2_waveform_quantities:
             Hbar_n = sp.diff(Hbar_n, t) / i_times_omega
             H += H_n
             Hbar += Hbar_n
-        # Since the merger and NQC handling need amplitude and phase
-        # we use the below three identities
+        # Since the merger and NQC handling need amplitude and frequency
+        # we use the below two identities
         # amp(z) = sqrt(z * zbar)
         strain_amplitude_noap = sp.sqrt(H * Hbar)
-        # phase(z*exp(i * phi)) = phi + atan((z - zbar)/(i * (z + zbar)))
-        strain_phase = 2 * Phi_orb + sp.atan((H - Hbar) / (sp.I * (H + Hbar)))
         # frequency(z*exp(i * phi)) = phidot -i * (zbar * zdot - zbardot * z) / (2 * z * zbar)
         strain_frequency = omega_news - sp.I * (
             Hbar * sp.diff(H, t) - sp.diff(Hbar, t) * H
         ) / (2 * H * Hbar)
         # define A_p based on continuity at strain peak
         A_p = h22NR / strain_amplitude_noap.subs(t, t_0)
-        self.h = A_p * strain_amplitude_noap
-        self.phi = strain_phase
+        self.h_complex = A_p * H * sp.exp(2 * sp.I * Phi_orb)
         # mostly trivial
         # unlike in BOBv1 where t_0 - t_p has a closed form,
         # we will need to solve a non-linear equation to
         # get t_0 - t_p
+        # additionally, we will need to evaluate Omega_0 numerically
+        # such that the wavform frequency at t_0 matches
+        # the NR fitted quantity at t_0: omega22NR
+        # For initial guesses, we can specify the
+        # solutions at N = 0
+        # t_p_guess = t_0 + tau_qnm * log(Omega_0/Omega_qnm)
+        # Omega_0_guess = omega22NR/2
         self.t_p_condition = sp.diff(strain_amplitude_noap, t).subs(t, t_0)
+        self.t_p_guess = t_0 + tau_qnm * sp.log(omega_qnm / omega22NR)
         self.Omega_0_condition = strain_frequency.subs(t, t_0) - omega22NR
+        self.Omega_0_guess = omega22NR / 2
         self.h_t_attach = h22NR
         self.hdot_t_attach = sp.sympify(0)
-        hddot = sp.diff(sp.diff(self.h, t), t)
+        hddot = A_p * sp.diff(sp.diff(strain_amplitude_noap, t), t)
         self.hddot_t_attach = hddot.subs(t, t_0)
         self.w_t_attach = omega22NR
         self.wdot_t_attach = sp.diff(strain_frequency, t).subs(t, t_0)
