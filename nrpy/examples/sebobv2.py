@@ -1,6 +1,5 @@
 """
-Set up a complete C code project for setting up the second edition of
-the Spinning Effective-to-Backwards One Body (SEBOB) model with SEOBNRv5 and BOB.
+Set up a complete C code project for the second version of the Spinning Effective-to-Backwards One Body (SEBOBv2) model.
 
 This is a work in progress. The final SEBOBv2 contains
 the following improvements over the current SEBOBv1:
