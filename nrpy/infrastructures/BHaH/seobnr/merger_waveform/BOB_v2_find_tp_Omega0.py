@@ -99,6 +99,15 @@ do {
   handle_gsl_return_status(status,test_residual_status,2,residual_name);
 }
 while(status == GSL_CONTINUE && iter < maxiter);
+// if the peak conditions are not met, exit out.
+if (status == GSL_CONTINUE) {
+  const REAL t_p_error = gsl_vector_get(s->f,0);
+  const REAL Omega_0_error = gsl_vector_get(s->f,1);
+  const REAL total_error = sqrt(t_p_error*t_p_error + Omega_0_error*Omega_0_error);
+  printf("In function BOB_v2_find_tp_Omega0, the peak strain conditions were not solved within maximum iterations.\\n");
+  printf("t_p_error = %.5e\\nOmega_0_error = %.5e\\ntotal_error = %.5e\\ntolerance = %.5e\\n",t_p_error,Omega_0_error,total_error,6.e-12);
+  exit(EXIT_FAILURE);
+}
 for (i = 0; i < n; i++){
 x_result[i] = gsl_vector_get(s->x , i);
 }
@@ -110,7 +119,7 @@ free(x_result);
 return GSL_SUCCESS;
 """
     cfc.register_CFunction(
-        subdirectory="initial_conditions",
+        subdirectory="merger_waveform",
         includes=includes,
         prefunc=prefunc,
         desc=desc,

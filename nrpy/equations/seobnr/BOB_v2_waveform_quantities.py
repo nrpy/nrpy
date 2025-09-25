@@ -143,7 +143,8 @@ class BOB_v2_waveform_quantities:
             Omega_qnm * sp.atanh(Omega_orb / Omega_qnm)
             - Omega_minf * sp.atanh(Omega_minf / Omega_orb)
         )
-        omega_news = 2 * Omega_orb
+        omega_news = -2 * Omega_orb
+        phi_news = -2 * Phi_orb
         # Going from news to strain
         # The BOB strain is given as
         # h = H*exp(i * m * Phi_orb)
@@ -171,7 +172,7 @@ class BOB_v2_waveform_quantities:
         ) / (2 * H * Hbar)
         # define A_p based on continuity at strain peak
         A_p = h22NR / strain_amplitude_noap.subs(t, t_0)
-        self.h_complex = A_p * H * sp.exp(2 * sp.I * Phi_orb)
+        self.h_complex = A_p * H * sp.exp(sp.I * phi_news)
         # mostly trivial
         # unlike in BOBv1 where t_0 - t_p has a closed form,
         # we will need to solve a non-linear equation to

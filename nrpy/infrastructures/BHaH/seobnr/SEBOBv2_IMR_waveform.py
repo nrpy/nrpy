@@ -68,9 +68,8 @@ for(i = 0; i < nsteps_ringdown; i++){
 }
 const REAL phase_match = h22_phase_new[idx_match + 1];
 BOB_v2_waveform_from_times(ringdown_time,ringdown_amp,ringdown_phase,nsteps_ringdown,commondata);
-const REAL true_sign = copysign(1.,phase_match);
 for(i = 0; i < nsteps_ringdown; i++){
-  ringdown_phase[i] = true_sign*ringdown_phase[i] + phase_match;
+  ringdown_phase[i] = ringdown_phase[i] + phase_match;
 }
 commondata->nsteps_IMR = idx_match + 1 + nsteps_ringdown;
 commondata->waveform_IMR = (double complex *)malloc(NUMMODES * commondata->nsteps_IMR*sizeof(double complex));

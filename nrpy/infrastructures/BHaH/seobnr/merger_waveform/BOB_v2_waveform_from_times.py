@@ -51,10 +51,10 @@ for (i = 0; i < nsteps_BOB; i++) {
 //unwrap the phase
 SEOBNRv5_aligned_spin_unwrap(wrapped_phases,phases,nsteps_BOB);
 
-//shift and take absolute value of the phase
-const REAL pshift = fabs(phases[0]);
+//zero shift the phase
+const REAL pshift = phases[0];
 for (i = 0; i < nsteps_BOB; i++){
-  phases[i] = fabs(phases[i]) - pshift;
+  phases[i] = phases[i] - pshift;
 }
 free(wrapped_phases);
 """

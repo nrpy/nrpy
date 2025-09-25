@@ -28,22 +28,13 @@ def register_CFunction_BOB_v2_waveform() -> Union[None, pcg.NRPyEnv_type]:
         return None
 
     wf = BOB_v2_wf.BOB_v2_waveform_quantities()
-    BOB_code = (
-        ccg.c_codegen(
-            wf.h_complex,
-            "const REAL h_complex",
-            verbose=False,
-            include_braces=False,
-        )
-        .replace("REAL", "double complex")
-        .replace("exp", "cexp")
-        .replace("sqrt", "csqrt")
-        .replace("pow", "cpow")
-        .replace("fabs", "cabs")
-        .replace("tanh", "ctanh")
-        .replace("sinh", "csinh")
-        .replace("cosh", "ccosh")
-        .replace("actanh", "catanh")
+    BOB_code = ccg.c_codegen(
+        wf.h_complex,
+        "const COMPLEX h_complex",
+        verbose=False,
+        include_braces=False,
+        fp_type="double complex",
+        fp_type_alias="COMPLEX",
     )
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """
