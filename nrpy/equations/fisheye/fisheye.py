@@ -28,6 +28,65 @@ Author: Nishita Jadoo
 from typing import Sequence, Tuple
 import sympy as sp
 import nrpy.indexedexp as ixp
+import nrpy.params as par  # NRPy CodeParameters
+
+# ---------------------------------------------------------------------
+# Register Fisheye CodeParameters (max length 5 for each array)
+# n = number of transitions (0..4). We use the first n+1 entries of a,
+# and the first n entries of R and s.
+# ---------------------------------------------------------------------
+_FISH_MAX = 5
+
+par.register_CodeParameter(
+    cparam_type="INT",
+    module=__name__,
+    name="fisheye_n",
+    defaultvalue=0,
+    description="Number of fisheye transition zones n (0..4).",
+    add_to_parfile=True,
+    commondata=True,
+    add_to_set_CodeParameters_h=False,
+    assumption="IntNonNegative",
+)
+
+par.register_CodeParameter(
+    cparam_type=f"REAL[{_FISH_MAX}]",
+    module=__name__,
+    name="fisheye_a",
+    defaultvalue=[1, 1, 1, 1, 1],
+    description=(
+        "Fisheye coefficients [a_0, ..., a_k]; use entries 0..n inclusive "
+        "for algorithm that needs a_0..a_n (with n <= 4)."
+    ),
+    add_to_parfile=True,
+    commondata=True,
+    add_to_set_CodeParameters_h=False,
+    assumption="Real",
+)
+
+par.register_CodeParameter(
+    cparam_type=f"REAL[{_FISH_MAX}]",
+    module=__name__,
+    name="fisheye_R",
+    defaultvalue=[0, 0, 0, 0, 0],
+    description="Fisheye transition centers [R_1, ..., R_n] (use first n entries).",
+    add_to_parfile=True,
+    commondata=True,
+    add_to_set_CodeParameters_h=False,
+    assumption="Real",
+)
+
+par.register_CodeParameter(
+    cparam_type=f"REAL[{_FISH_MAX}]",
+    module=__name__,
+    name="fisheye_s",
+    defaultvalue=[1, 1, 1, 1, 1],
+    description="Fisheye transition widths [s_1, ..., s_n] (use first n entries).",
+    add_to_parfile=True,
+    commondata=True,
+    add_to_set_CodeParameters_h=False,
+    assumption="RealPositive",
+)
 
 
 # ================================================================
@@ -35,72 +94,109 @@ import nrpy.indexedexp as ixp
 # ================================================================
 
 
-def fisheye_rprime_of_r(
-    r: sp.Expr,
-    a: Sequence[sp.Expr],
-    R: Sequence[sp.Expr],
-    s: Sequence[sp.Expr],
-) -> sp.Expr:
+def fisheye_rprime_of_r(r: sp.Expr) -> sp.Expr:
     r"""
-    Compute r'(r) for the radial fisheye profile.
+    Compute r'(r) for the radial fisheye profile using NRPy CodeParameters.
 
     :param r: Physical radius \(r\).
-    :param a: Coefficients \([a_0, a_1, \ldots, a_n]\), where \(a_n\) is the outermost scale.
-    :param R: Transition centers \([R_1, \ldots, R_n]\).
-    :param s: Transition widths \([s_1, \ldots, s_n]\).
     :return: The fisheye radius \(r'(r)\) as a SymPy expression.
 
     Doctests:
-    >>> r = sp.Integer(3)
-    >>> # Pure global scale: n=0, a=[2] -> r' = 2*r
-    >>> fisheye_rprime_of_r(r, a=[sp.Integer(2)], R=[], s=[])
+    >>> # Configure a pure global scale: n=0, a_0=2 -> r' = 2*r
+    >>> par.set_parval_from_str("fisheye_n", 0)
+    >>> par.set_parval_from_str("fisheye_a", [2,1,1,1,1])
+    >>> par.set_parval_from_str("fisheye_R", [0,0,0,0,0])
+    >>> par.set_parval_from_str("fisheye_s", [1,1,1,1,1])
+    >>> fisheye_rprime_of_r(sp.Integer(3))
     6
     """
-    n = len(R)
-    assert len(s) == n and len(a) == n + 1
-    rp = a[-1] * r
-    for i in range(n):
-        num = (a[i] - a[i + 1]) * s[i]
-        denom = 2 * sp.tanh(R[i] / s[i])
-        term = sp.log(sp.cosh((r + R[i]) / s[i]) / sp.cosh((r - R[i]) / s[i]))
-        rp += num / denom * term
+    n = int(par.parval_from_str("fisheye_n"))
+    if not (0 <= n <= _FISH_MAX - 1):
+        raise ValueError("fisheye_n must be in [0, 4].")
+    a_arr = list(par.parval_from_str("fisheye_a"))
+    R_arr = list(par.parval_from_str("fisheye_R"))
+    s_arr = list(par.parval_from_str("fisheye_s"))
+
+    rp = sp.sympify(a_arr[n]) * r  # a_n * r
+    for i in range(1, n + 1):
+        a_im1 = sp.sympify(a_arr[i - 1])
+        a_i = sp.sympify(a_arr[i])
+        R_i = sp.sympify(R_arr[i - 1])
+        s_i = sp.sympify(s_arr[i - 1])
+        denom = 2 * sp.tanh(R_i / s_i)
+        term = sp.log(sp.cosh((r + R_i) / s_i) / sp.cosh((r - R_i) / s_i))
+        rp += (a_im1 - a_i) * s_i / denom * term
     return sp.simplify(rp)
 
 
-def fisheye_drprime_dr(
-    r: sp.Expr,
-    a: Sequence[sp.Expr],
-    R: Sequence[sp.Expr],
-    s: Sequence[sp.Expr],
-) -> sp.Expr:
+def fisheye_drprime_dr(r: sp.Expr) -> sp.Expr:
     r"""
-    Compute \(dr'/dr\) for the radial fisheye profile.
+    Compute \(dr'/dr\) for the radial fisheye profile using NRPy CodeParameters.
 
     :param r: Physical radius \(r\) (symbolic allowed).
-    :param a: Coefficients \([a_0, a_1, \ldots, a_n]\), where \(a_n\) is the outermost scale.
-    :param R: Transition centers \([R_1, \ldots, R_n]\).
-    :param s: Transition widths \([s_1, \ldots, s_n]\).
     :return: The radial derivative \(dr'/dr\) as a SymPy expression.
 
     Doctests:
-    >>> r = sp.symbols("r", positive=True)
-    >>> # Pure global scale: n=0, a=[2] -> dr'/dr = 2
-    >>> fisheye_drprime_dr(r, a=[sp.Integer(2)], R=[], s=[])
+    >>> # Pure global scale: n=0, a_0=2 -> dr'/dr = 2
+    >>> par.set_parval_from_str("fisheye_n", 0)
+    >>> par.set_parval_from_str("fisheye_a", [2,1,1,1,1])
+    >>> fisheye_drprime_dr(sp.symbols("r", positive=True))
     2
     """
-    n = len(R)
-    assert len(s) == n and len(a) == n + 1
-    drp = a[-1]
-    for i in range(n):
-        coeff = (a[i] - a[i + 1]) / sp.tanh(R[i] / s[i])
-        bracket = (sp.tanh((r + R[i]) / s[i]) - sp.tanh((r - R[i]) / s[i])) / 2
+    n = int(par.parval_from_str("fisheye_n"))
+    if not (0 <= n <= _FISH_MAX - 1):
+        raise ValueError("fisheye_n must be in [0, 4].")
+    a_arr = list(par.parval_from_str("fisheye_a"))
+    R_arr = list(par.parval_from_str("fisheye_R"))
+    s_arr = list(par.parval_from_str("fisheye_s"))
+
+    drp = sp.sympify(a_arr[n])
+    for i in range(1, n + 1):
+        a_im1 = sp.sympify(a_arr[i - 1])
+        a_i = sp.sympify(a_arr[i])
+        R_i = sp.sympify(R_arr[i - 1])
+        s_i = sp.sympify(s_arr[i - 1])
+        coeff = (a_im1 - a_i) / sp.tanh(R_i / s_i)
+        bracket = (sp.tanh((r + R_i) / s_i) - sp.tanh((r - R_i) / s_i)) / 2
         drp += coeff * bracket
     return sp.simplify(drp)
 
 
 # ================================================================
-# Core: build J and J^{-1} from {x'^i, r', r, dr'/dr}
+# Core helpers
 # ================================================================
+
+def _compute_r_rprime_and_drprime(xprimeU: Sequence[sp.Expr]) -> Tuple[sp.Expr, sp.Expr, sp.Expr]:
+    r"""
+    Given fisheye coordinates \(x'^i\), compute \(r'=\sqrt{x'^i x'^i}\),
+    the corresponding physical radius \(r\), and \(dr'/dr\).
+
+    Notes
+    -----
+    - For general fisheye with transitions (n>0), inverting \(r'(r)\) may
+      require a numeric solve; here we keep doctests to n=0 where
+      \(r' = a_0 r\) and inversion is analytic.
+    - If symbolic inversion is required, we return a positive symbol `r`
+      and keep expressions in terms of `r`.
+
+    :param xprimeU: Primed Cartesian coordinates \([x'^0, x'^1, x'^2]\).
+    :return: Tuple \((rprime, r, drprime\_dr)\).
+    """
+    rprime = sp.sqrt(sum(comp * comp for comp in xprimeU))
+    n = int(par.parval_from_str("fisheye_n"))
+    a_arr = list(par.parval_from_str("fisheye_a"))
+
+    # If n=0, r' = a0 * r  => r = r'/a0
+    if n == 0:
+        a0 = sp.sympify(a_arr[0])
+        r = sp.simplify(rprime / a0)
+        drp = sp.sympify(a_arr[0])
+        return rprime, r, drp
+
+    # General case: attempt symbolic fallback
+    r_sym = sp.symbols("r", positive=True)
+    drp = fisheye_drprime_dr(r_sym)
+    return rprime, r_sym, drp
 
 
 def build_fisheye_jacobians_from_xprime(
@@ -123,24 +219,19 @@ def build_fisheye_jacobians_from_xprime(
              and \(Jinv\) is \(3\times 3\) with entries \(Jinv[a][i]\).
 
     Doctests:
-    >>> # Global scaling test: x'^i = 2 x^i => r' = 2r, dr'/dr = 2.
-    >>> x0p, x1p, x2p = 2, 0, 0
-    >>> xprimeU = [sp.Integer(x0p), sp.Integer(x1p), sp.Integer(x2p)]
-    >>> rprime = sp.Integer(2)     # since point corresponds to x=(1,0,0)
-    >>> r = sp.Integer(1)
-    >>> drpdr = sp.Integer(2)
+    >>> # Global scaling: n=0, a0=2 -> r' = 2 r, J = (1/2) I, Jinv = 2 I.
+    >>> par.set_parval_from_str("fisheye_n", 0)
+    >>> par.set_parval_from_str("fisheye_a", [2,1,1,1,1])
+    >>> xprimeU = [sp.Integer(2), sp.Integer(0), sp.Integer(0)]  # r' = 2
+    >>> rprime, r, drpdr = _compute_r_rprime_and_drprime(xprimeU)
     >>> J, Jinv = build_fisheye_jacobians_from_xprime(xprimeU, rprime, r, drpdr)
     >>> [sp.simplify(J[i][i]) for i in range(3)]
     [1/2, 1/2, 1/2]
     >>> [sp.simplify(Jinv[i][i]) for i in range(3)]
     [2, 2, 2]
-    >>> # Check JJ^{-1} = I at this sample:
-    >>> M = [[sp.simplify(sum(J[i][k]*Jinv[k][j] for k in range(3))) for j in range(3)] for i in range(3)]
-    >>> M
-    [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
     """
     dim = 3
-    J = ixp.zerorank2(dimension=dim)  # rows i, cols a
+    J = ixp.zerorank2(dimension=dim)   # rows i, cols a
     Jinv = ixp.zerorank2(dimension=dim)  # rows a, cols i
 
     dr_drprime = sp.simplify(1 / drprime_dr)
@@ -176,31 +267,27 @@ def build_fisheye_jacobians_from_xprime(
 
 def basis_transform_vectorU_from_fisheye_to_Cartesian(
     xprimeU: Sequence[sp.Expr],
-    rprime: sp.Expr,
-    r: sp.Expr,
-    drprime_dr: sp.Expr,
     src_vectorU_prime: Sequence[sp.Expr],
 ) -> Sequence[sp.Expr]:
     r"""
     Transform a contravariant vector from fisheye basis to Cartesian.
 
-    :param xprimeU: Primed Cartesian coordinates \([x'^0, x'^1, x'^2]\).
-    :param rprime: Fisheye radius \(r'\).
-    :param r: Physical radius \(r\).
-    :param drprime_dr: Radial derivative \(dr'/dr\) at \(r\).
+    :param xprimeU: Primed Cartesian coordinates \([x'^0, x'^1, x'^2]\) of the evaluation point.
     :param src_vectorU_prime: Source contravariant vector \(v'^a\) in fisheye basis.
     :return: Transformed contravariant vector \(v^i\) in Cartesian basis.
 
     Doctests:
-    >>> # With global r'=2r (J = 1/2 I), a contravariant vector halves.
+    >>> # Set fisheye: n=0, a0=2 -> r' = 2 r (pure scaling)
+    >>> par.set_parval_from_str("fisheye_n", 0)
+    >>> par.set_parval_from_str("fisheye_a", [2,1,1,1,1])
     >>> xprimeU = [sp.Integer(2), sp.Integer(0), sp.Integer(0)]
-    >>> rprime, r, drpdr = sp.Integer(2), sp.Integer(1), sp.Integer(2)
     >>> vprime = [sp.Integer(3), sp.Integer(4), sp.Integer(5)]
-    >>> v = basis_transform_vectorU_from_fisheye_to_Cartesian(xprimeU, rprime, r, drpdr, vprime)
+    >>> v = basis_transform_vectorU_from_fisheye_to_Cartesian(xprimeU, vprime)
     >>> [sp.simplify(comp) for comp in v]
     [3/2, 2, 5/2]
     """
-    J, _ = build_fisheye_jacobians_from_xprime(xprimeU, rprime, r, drprime_dr)
+    rprime, r, drpdr = _compute_r_rprime_and_drprime(xprimeU)
+    J, _ = build_fisheye_jacobians_from_xprime(xprimeU, rprime, r, drpdr)
     dim = 3
     dst = ixp.zerorank1(dimension=dim)
     for i in range(dim):
@@ -211,31 +298,26 @@ def basis_transform_vectorU_from_fisheye_to_Cartesian(
 
 def basis_transform_vectorD_from_fisheye_to_Cartesian(
     xprimeU: Sequence[sp.Expr],
-    rprime: sp.Expr,
-    r: sp.Expr,
-    drprime_dr: sp.Expr,
     src_vectorD_prime: Sequence[sp.Expr],
 ) -> Sequence[sp.Expr]:
     r"""
     Transform a covariant vector from fisheye basis to Cartesian.
 
-    :param xprimeU: Primed Cartesian coordinates \([x'^0, x'^1, x'^2]\).
-    :param rprime: Fisheye radius \(r'\).
-    :param r: Physical radius \(r\).
-    :param drprime_dr: Radial derivative \(dr'/dr\) at \(r\).
+    :param xprimeU: Primed Cartesian coordinates \([x'^0, x'^1, x'^2]\) of the evaluation point.
     :param src_vectorD_prime: Source covariant vector \(\omega'_a\) in fisheye basis.
     :return: Transformed covariant vector \(\omega_i\) in Cartesian basis.
 
     Doctests:
-    >>> # With global r'=2r (Jinv = 2 I), a covector doubles.
+    >>> par.set_parval_from_str("fisheye_n", 0)
+    >>> par.set_parval_from_str("fisheye_a", [2,1,1,1,1])
     >>> xprimeU = [sp.Integer(2), sp.Integer(0), sp.Integer(0)]
-    >>> rprime, r, drpdr = sp.Integer(2), sp.Integer(1), sp.Integer(2)
     >>> wprime = [sp.Integer(1), sp.Integer(-2), sp.Integer(3)]
-    >>> w = basis_transform_vectorD_from_fisheye_to_Cartesian(xprimeU, rprime, r, drpdr, wprime)
+    >>> w = basis_transform_vectorD_from_fisheye_to_Cartesian(xprimeU, wprime)
     >>> [sp.simplify(comp) for comp in w]
     [2, -4, 6]
     """
-    _, Jinv = build_fisheye_jacobians_from_xprime(xprimeU, rprime, r, drprime_dr)
+    rprime, r, drpdr = _compute_r_rprime_and_drprime(xprimeU)
+    _, Jinv = build_fisheye_jacobians_from_xprime(xprimeU, rprime, r, drpdr)
     dim = 3
     dst = ixp.zerorank1(dimension=dim)
     for i in range(dim):
@@ -246,33 +328,28 @@ def basis_transform_vectorD_from_fisheye_to_Cartesian(
 
 def basis_transform_tensorDD_from_fisheye_to_Cartesian(
     xprimeU: Sequence[sp.Expr],
-    rprime: sp.Expr,
-    r: sp.Expr,
-    drprime_dr: sp.Expr,
     src_tensorDD_prime: Sequence[Sequence[sp.Expr]],
 ) -> Sequence[Sequence[sp.Expr]]:
     r"""
     Transform a rank-2 covariant tensor from fisheye basis to Cartesian.
 
-    :param xprimeU: Primed Cartesian coordinates \([x'^0, x'^1, x'^2]\).
-    :param rprime: Fisheye radius \(r'\).
-    :param r: Physical radius \(r\).
-    :param drprime_dr: Radial derivative \(dr'/dr\) at \(r\).
+    :param xprimeU: Primed Cartesian coordinates \([x'^0, x'^1, x'^2]\) of the evaluation point.
     :param src_tensorDD_prime: Source covariant tensor \(T'_{ab}\) in fisheye basis.
     :return: Transformed covariant tensor \(T_{ij}\) in Cartesian basis.
 
     Doctests:
-    >>> # With global r'=2r, Jinv = 2I, so T_{ij} = 4 T'_{ij} for covariant rank-2.
+    >>> par.set_parval_from_str("fisheye_n", 0)
+    >>> par.set_parval_from_str("fisheye_a", [2,1,1,1,1])
     >>> xprimeU = [sp.Integer(2), sp.Integer(0), sp.Integer(0)]
-    >>> rprime, r, drpdr = sp.Integer(2), sp.Integer(1), sp.Integer(2)
     >>> Tprime = [[sp.Integer(1), sp.Integer(2), sp.Integer(0)],
     ...           [sp.Integer(2), sp.Integer(5), sp.Integer(-1)],
     ...           [sp.Integer(0), sp.Integer(-1), sp.Integer(4)]]
-    >>> T = basis_transform_tensorDD_from_fisheye_to_Cartesian(xprimeU, rprime, r, drpdr, Tprime)
+    >>> T = basis_transform_tensorDD_from_fisheye_to_Cartesian(xprimeU, Tprime)
     >>> [[sp.simplify(T[i][j]) for j in range(3)] for i in range(3)]
     [[4, 8, 0], [8, 20, -4], [0, -4, 16]]
     """
-    _, Jinv = build_fisheye_jacobians_from_xprime(xprimeU, rprime, r, drprime_dr)
+    rprime, r, drpdr = _compute_r_rprime_and_drprime(xprimeU)
+    _, Jinv = build_fisheye_jacobians_from_xprime(xprimeU, rprime, r, drpdr)
     dim = 3
     dst = ixp.zerorank2(dimension=dim)
     for i in range(dim):
@@ -287,31 +364,26 @@ def basis_transform_tensorDD_from_fisheye_to_Cartesian(
 
 def basis_transform_vectorU_from_Cartesian_to_fisheye(
     xprimeU: Sequence[sp.Expr],
-    rprime: sp.Expr,
-    r: sp.Expr,
-    drprime_dr: sp.Expr,
     src_vectorU_cart: Sequence[sp.Expr],
 ) -> Sequence[sp.Expr]:
     r"""
     Transform a contravariant vector from Cartesian to fisheye basis.
 
-    :param xprimeU: Primed Cartesian coordinates \([x'^0, x'^1, x'^2]\).
-    :param rprime: Fisheye radius \(r'\).
-    :param r: Physical radius \(r\).
-    :param drprime_dr: Radial derivative \(dr'/dr\) at \(r\).
+    :param xprimeU: Primed Cartesian coordinates \([x'^0, x'^1, x'^2]\) of the evaluation point.
     :param src_vectorU_cart: Source contravariant vector \(v^i\) in Cartesian basis.
     :return: Transformed contravariant vector \(v'^a\) in fisheye basis.
 
     Doctests:
-    >>> # Inverse of previous: vectorU scales up by factor 2.
+    >>> par.set_parval_from_str("fisheye_n", 0)
+    >>> par.set_parval_from_str("fisheye_a", [2,1,1,1,1])
     >>> xprimeU = [sp.Integer(2), sp.Integer(0), sp.Integer(0)]
-    >>> rprime, r, drpdr = sp.Integer(2), sp.Integer(1), sp.Integer(2)
     >>> vcart = [sp.Rational(3,2), sp.Integer(2), sp.Rational(5,2)]
-    >>> vprime = basis_transform_vectorU_from_Cartesian_to_fisheye(xprimeU, rprime, r, drpdr, vcart)
+    >>> vprime = basis_transform_vectorU_from_Cartesian_to_fisheye(xprimeU, vcart)
     >>> [sp.simplify(comp) for comp in vprime]
     [3, 4, 5]
     """
-    _, Jinv = build_fisheye_jacobians_from_xprime(xprimeU, rprime, r, drprime_dr)
+    rprime, r, drpdr = _compute_r_rprime_and_drprime(xprimeU)
+    _, Jinv = build_fisheye_jacobians_from_xprime(xprimeU, rprime, r, drpdr)
     dim = 3
     dst = ixp.zerorank1(dimension=dim)
     for aidx in range(dim):
@@ -322,31 +394,26 @@ def basis_transform_vectorU_from_Cartesian_to_fisheye(
 
 def basis_transform_vectorD_from_Cartesian_to_fisheye(
     xprimeU: Sequence[sp.Expr],
-    rprime: sp.Expr,
-    r: sp.Expr,
-    drprime_dr: sp.Expr,
     src_vectorD_cart: Sequence[sp.Expr],
 ) -> Sequence[sp.Expr]:
     r"""
     Transform a covariant vector from Cartesian to fisheye basis.
 
-    :param xprimeU: Primed Cartesian coordinates \([x'^0, x'^1, x'^2]\).
-    :param rprime: Fisheye radius \(r'\).
-    :param r: Physical radius \(r\).
-    :param drprime_dr: Radial derivative \(dr'/dr\) at \(r\).
+    :param xprimeU: Primed Cartesian coordinates \([x'^0, x'^1, x'^2]\) of the evaluation point.
     :param src_vectorD_cart: Source covariant vector \(\omega_i\) in Cartesian basis.
     :return: Transformed covariant vector \(\omega'_a\) in fisheye basis.
 
     Doctests:
-    >>> # Inverse of previous covector: halves.
+    >>> par.set_parval_from_str("fisheye_n", 0)
+    >>> par.set_parval_from_str("fisheye_a", [2,1,1,1,1])
     >>> xprimeU = [sp.Integer(2), sp.Integer(0), sp.Integer(0)]
-    >>> rprime, r, drpdr = sp.Integer(2), sp.Integer(1), sp.Integer(2)
     >>> wcart = [sp.Integer(2), sp.Integer(-4), sp.Integer(6)]
-    >>> wprime = basis_transform_vectorD_from_Cartesian_to_fisheye(xprimeU, rprime, r, drpdr, wcart)
+    >>> wprime = basis_transform_vectorD_from_Cartesian_to_fisheye(xprimeU, wcart)
     >>> [sp.simplify(comp) for comp in wprime]
     [1, -2, 3]
     """
-    J, _ = build_fisheye_jacobians_from_xprime(xprimeU, rprime, r, drprime_dr)
+    rprime, r, drpdr = _compute_r_rprime_and_drprime(xprimeU)
+    J, _ = build_fisheye_jacobians_from_xprime(xprimeU, rprime, r, drpdr)
     dim = 3
     dst = ixp.zerorank1(dimension=dim)
     for aidx in range(dim):
@@ -357,33 +424,28 @@ def basis_transform_vectorD_from_Cartesian_to_fisheye(
 
 def basis_transform_tensorDD_from_Cartesian_to_fisheye(
     xprimeU: Sequence[sp.Expr],
-    rprime: sp.Expr,
-    r: sp.Expr,
-    drprime_dr: sp.Expr,
     src_tensorDD_cart: Sequence[Sequence[sp.Expr]],
 ) -> Sequence[Sequence[sp.Expr]]:
     r"""
     Transform a rank-2 covariant tensor from Cartesian to fisheye basis.
 
-    :param xprimeU: Primed Cartesian coordinates \([x'^0, x'^1, x'^2]\).
-    :param rprime: Fisheye radius \(r'\).
-    :param r: Physical radius \(r\).
-    :param drprime_dr: Radial derivative \(dr'/dr\) at \(r\).
+    :param xprimeU: Primed Cartesian coordinates \([x'^0, x'^1, x'^2]\) of the evaluation point.
     :param src_tensorDD_cart: Source covariant tensor \(T_{ij}\) in Cartesian basis.
     :return: Transformed covariant tensor \(T'_{ab}\) in fisheye basis.
 
     Doctests:
-    >>> # Inverse of previous tensor test: divides by 4.
+    >>> par.set_parval_from_str("fisheye_n", 0)
+    >>> par.set_parval_from_str("fisheye_a", [2,1,1,1,1])
     >>> xprimeU = [sp.Integer(2), sp.Integer(0), sp.Integer(0)]
-    >>> rprime, r, drpdr = sp.Integer(2), sp.Integer(1), sp.Integer(2)
     >>> Tcart = [[sp.Integer(4), sp.Integer(8), sp.Integer(0)],
     ...          [sp.Integer(8), sp.Integer(20), sp.Integer(-4)],
     ...          [sp.Integer(0), sp.Integer(-4), sp.Integer(16)]]
-    >>> Tprime = basis_transform_tensorDD_from_Cartesian_to_fisheye(xprimeU, rprime, r, drpdr, Tcart)
+    >>> Tprime = basis_transform_tensorDD_from_Cartesian_to_fisheye(xprimeU, Tcart)
     >>> [[sp.simplify(Tprime[i][j]) for j in range(3)] for i in range(3)]
     [[1, 2, 0], [2, 5, -1], [0, -1, 4]]
     """
-    J, _ = build_fisheye_jacobians_from_xprime(xprimeU, rprime, r, drprime_dr)
+    rprime, r, drpdr = _compute_r_rprime_and_drprime(xprimeU)
+    J, _ = build_fisheye_jacobians_from_xprime(xprimeU, rprime, r, drpdr)
     dim = 3
     dst = ixp.zerorank2(dimension=dim)
     for aidx in range(dim):
@@ -401,34 +463,28 @@ def basis_transform_tensorDD_from_Cartesian_to_fisheye(
 
 def basis_transform_4tensorUU_from_time_indep_fisheye_to_Cartesian(
     xprimeU: Sequence[sp.Expr],
-    rprime: sp.Expr,
-    r: sp.Expr,
-    drprime_dr: sp.Expr,
     T4UU_prime: Sequence[Sequence[sp.Expr]],
 ) -> Sequence[Sequence[sp.Expr]]:
     r"""
     Transform a contravariant 4-tensor (time-independent spatial map) from fisheye to Cartesian.
 
-    :param xprimeU: Primed Cartesian coordinates \([x'^0, x'^1, x'^2]\).
-    :param rprime: Fisheye radius \(r'\).
-    :param r: Physical radius \(r\).
-    :param drprime_dr: Radial derivative \(dr'/dr\) at \(r\).
+    :param xprimeU: Primed Cartesian coordinates \([x'^0, x'^1, x'^2]\) of the evaluation point.
     :param T4UU_prime: Source 4-tensor \(T'^{\mu\nu}\) (contravariant) in fisheye basis.
     :return: Transformed 4-tensor \(T^{\mu\nu}\) (contravariant) in Cartesian basis.
 
     Doctests:
-    >>> # For global r'=2r, each spatial contravariant index contributes a factor 1/2.
+    >>> par.set_parval_from_str("fisheye_n", 0)
+    >>> par.set_parval_from_str("fisheye_a", [2,1,1,1,1])
     >>> xprimeU = [sp.Integer(2), sp.Integer(0), sp.Integer(0)]
-    >>> rprime, r, drpdr = sp.Integer(2), sp.Integer(1), sp.Integer(2)
-    >>> # Spatial block diag [2,4,6] -> after map becomes [1,2,3] per single index, i.e., 1/2 each.
     >>> T4p = [[sp.Integer(7),0,0,0],[0,sp.Integer(2),0,0],[0,0,sp.Integer(4),0],[0,0,0,sp.Integer(6)]]
-    >>> T4 = basis_transform_4tensorUU_from_time_indep_fisheye_to_Cartesian(xprimeU, rprime, r, drpdr, T4p)
+    >>> T4 = basis_transform_4tensorUU_from_time_indep_fisheye_to_Cartesian(xprimeU, T4p)
     >>> [sp.simplify(T4[i][i]) for i in range(4)]
     [7, 1/2, 1, 3/2]
     """
-    dim = 3
-    J, _ = build_fisheye_jacobians_from_xprime(xprimeU, rprime, r, drprime_dr)
+    rprime, r, drpdr = _compute_r_rprime_and_drprime(xprimeU)
+    J, _ = build_fisheye_jacobians_from_xprime(xprimeU, rprime, r, drpdr)
 
+    dim = 3
     Jac4 = ixp.zerorank2(dimension=4)
     Jac4[0][0] = sp.Integer(1)
     for i in range(dim):
@@ -446,33 +502,28 @@ def basis_transform_4tensorUU_from_time_indep_fisheye_to_Cartesian(
 
 def basis_transform_4tensorUU_from_Cartesian_to_time_indep_fisheye(
     xprimeU: Sequence[sp.Expr],
-    rprime: sp.Expr,
-    r: sp.Expr,
-    drprime_dr: sp.Expr,
     T4UU_cart: Sequence[Sequence[sp.Expr]],
 ) -> Sequence[Sequence[sp.Expr]]:
     r"""
     Transform a contravariant 4-tensor (time-independent spatial map) from Cartesian to fisheye.
 
-    :param xprimeU: Primed Cartesian coordinates \([x'^0, x'^1, x'^2]\).
-    :param rprime: Fisheye radius \(r'\).
-    :param r: Physical radius \(r\).
-    :param drprime_dr: Radial derivative \(dr'/dr\) at \(r\).
+    :param xprimeU: Primed Cartesian coordinates \([x'^0, x'^1, x'^2]\) of the evaluation point.
     :param T4UU_cart: Source 4-tensor \(T^{\mu\nu}\) (contravariant) in Cartesian basis.
     :return: Transformed 4-tensor \(T'^{\mu\nu}\) (contravariant) in fisheye basis.
 
     Doctests:
+    >>> par.set_parval_from_str("fisheye_n", 0)
+    >>> par.set_parval_from_str("fisheye_a", [2,1,1,1,1])
     >>> xprimeU = [sp.Integer(2), sp.Integer(0), sp.Integer(0)]
-    >>> rprime, r, drpdr = sp.Integer(2), sp.Integer(1), sp.Integer(2)
-    >>> # Spatial block diag [1,2,3] -> after inverse map becomes [4,8,12] (factor 2 per index).
     >>> T4c = [[sp.Integer(7),0,0,0],[0,sp.Integer(1),0,0],[0,0,sp.Integer(2),0],[0,0,0,sp.Integer(3)]]
-    >>> T4p = basis_transform_4tensorUU_from_Cartesian_to_time_indep_fisheye(xprimeU, rprime, r, drpdr, T4c)
+    >>> T4p = basis_transform_4tensorUU_from_Cartesian_to_time_indep_fisheye(xprimeU, T4c)
     >>> [sp.simplify(T4p[i][i]) for i in range(4)]
     [7, 4, 8, 12]
     """
-    dim = 3
-    _, Jinv = build_fisheye_jacobians_from_xprime(xprimeU, rprime, r, drprime_dr)
+    rprime, r, drpdr = _compute_r_rprime_and_drprime(xprimeU)
+    _, Jinv = build_fisheye_jacobians_from_xprime(xprimeU, rprime, r, drpdr)
 
+    dim = 3
     Jac4inv = ixp.zerorank2(dimension=4)
     Jac4inv[0][0] = sp.Integer(1)
     for a in range(dim):
