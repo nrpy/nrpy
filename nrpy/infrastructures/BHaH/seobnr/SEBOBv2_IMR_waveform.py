@@ -31,18 +31,50 @@ Evaluates the (2,2) mode for the waveform by combining the inspiral and merger r
 
 @param commondata - Common data structure containing the model parameters.
 """
-    cfunc_type = "void"
+    cfunc_type = "int"
     name = "SEBOBv2_IMR_waveform"
     params = "commondata_struct *restrict commondata"
     body = """
 size_t i;
 const REAL dT = commondata->dt/(commondata->total_mass*4.925490947641266978197229498498379006e-6);
 SEOBNRv5_aligned_spin_interpolate_modes(commondata , dT);
-double complex h22;
+const size_t nsteps_ringdown = 15 * (size_t) (commondata->tau_qnm / dT);
+COMPLEX h22;
 REAL *restrict times_new = malloc(commondata->nsteps_inspiral*sizeof(REAL));
+if (times_new == NULL){
+  fprintf(stderr,"Error: in SEBOBv2_IMR_waveform(), malloc() failed for times_new\\n");
+  exit(1);
+}
 REAL *restrict h22_amp_new = (REAL *)malloc(commondata->nsteps_inspiral*sizeof(REAL));
+if (h22_amp_new == NULL){
+  fprintf(stderr,"Error: in SEBOBv2_IMR_waveform(), malloc() failed for h22_amp_new\\n");
+  exit(1);
+}
 REAL *restrict h22_phase_new = (REAL *)malloc(commondata->nsteps_inspiral*sizeof(REAL));
+if (h22_phase_new == NULL){
+  fprintf(stderr,"Error: in SEBOBv2_IMR_waveform(), malloc() failed for h22_phase_new\\n");
+  exit(1);
+}
 REAL *restrict h22_wrapped_phase_new = (REAL *)malloc(commondata->nsteps_inspiral*sizeof(REAL));
+if (h22_wrapped_phase_new == NULL){
+  fprintf(stderr,"Error: in SEBOBv2_IMR_waveform(), malloc() failed for h22_wrapped_phase_new\\n");
+  exit(1);
+}
+REAL *restrict ringdown_time = (REAL *)malloc(nsteps_ringdown*sizeof(REAL));
+if (ringdown_time == NULL){
+  fprintf(stderr,"Error: in SEBOBv2_IMR_waveform(), malloc() failed for ringdown_time\\n");
+  exit(1);
+}
+REAL *restrict ringdown_amp = (REAL *)malloc(nsteps_ringdown*sizeof(REAL));
+if (ringdown_amp == NULL){
+  fprintf(stderr,"Error: in SEBOBv2_IMR_waveform(), malloc() failed for ringdown_amp\\n");
+  exit(1);
+}
+REAL *restrict ringdown_phase = (REAL *)malloc(nsteps_ringdown*sizeof(REAL));
+if (ringdown_phase == NULL){
+  fprintf(stderr,"Error: in SEBOBv2_IMR_waveform(), malloc() failed for ringdown_phase\\n");
+  exit(1);
+}
 for(i = 0; i < commondata->nsteps_inspiral; i++){
   times_new[i] = commondata->waveform_inspiral[IDX_WF(i,TIME)];
   h22 = commondata->waveform_inspiral[IDX_WF(i,STRAIN)];
@@ -59,10 +91,6 @@ if (idx_match == commondata->nsteps_inspiral - 1){
   idx_match--;
 }
 const REAL t_match = times_new[idx_match];
-const size_t nsteps_ringdown = 15 * (size_t) (commondata->tau_qnm / dT);
-REAL *restrict ringdown_time = (REAL *)malloc(nsteps_ringdown*sizeof(REAL));
-REAL *restrict ringdown_amp = (REAL *)malloc(nsteps_ringdown*sizeof(REAL));
-REAL *restrict ringdown_phase = (REAL *)malloc(nsteps_ringdown*sizeof(REAL));
 for(i = 0; i < nsteps_ringdown; i++){
   ringdown_time[i] = t_match + (i + 1) * dT;
 }
@@ -73,20 +101,24 @@ for(i = 0; i < nsteps_ringdown; i++){
 }
 commondata->nsteps_IMR = idx_match + 1 + nsteps_ringdown;
 commondata->waveform_IMR = (double complex *)malloc(NUMMODES * commondata->nsteps_IMR*sizeof(double complex));
+if (commondata->waveform_IMR == NULL){
+  fprintf(stderr,"Error: in SEBOBv2_IMR_waveform(), malloc() failed to for commondata->waveform_IMR\\n");
+  exit(1);
+}
 for (i = 0; i <= idx_match; i++){
   commondata->waveform_IMR[IDX_WF(i,TIME)] = times_new[i] - commondata->t_attach;
   h22 = h22_amp_new[i] * cexp(I * h22_phase_new[i]);
   commondata->waveform_IMR[IDX_WF(i,STRAIN)] = h22;
 }
-free(h22_amp_new);
-free(h22_phase_new);
-free(times_new);
 
 for(i = 0; i < nsteps_ringdown; i++){
   commondata->waveform_IMR[IDX_WF(i + 1 + idx_match,TIME)] = ringdown_time[i] - commondata->t_attach;
   h22 = ringdown_amp[i] * cexp(I * ringdown_phase[i]);
   commondata->waveform_IMR[IDX_WF(i + 1 + idx_match,STRAIN)] = h22;
 }
+free(h22_amp_new);
+free(h22_phase_new);
+free(times_new);
 free(ringdown_time);
 free(ringdown_phase);
 free(ringdown_amp);

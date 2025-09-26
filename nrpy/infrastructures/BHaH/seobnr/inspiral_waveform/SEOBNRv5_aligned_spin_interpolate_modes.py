@@ -43,9 +43,25 @@ const size_t nsteps_inspiral_old = commondata->nsteps_inspiral;
 const size_t nsteps_new = (size_t) ((commondata->waveform_inspiral[IDX_WF(commondata->nsteps_inspiral - 1,TIME)] - commondata->waveform_inspiral[IDX_WF(0,TIME)]) / dT) + 1; 
 // build the complex inspiral modes
 REAL *restrict times_old = (REAL *)malloc(nsteps_inspiral_old * sizeof(REAL));
+if (times_old == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_interpolate_modes(), malloc() failed to for times_old\\n");
+  exit(1);
+}
 REAL *restrict orbital_phases = (REAL *)malloc(nsteps_inspiral_old * sizeof(REAL));
+if (orbital_phases == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_interpolate_modes(), malloc() failed to for orbital_phases\\n");
+  exit(1);
+}
 REAL *restrict h22_nophase_real = (REAL *)malloc(nsteps_inspiral_old * sizeof(REAL));
+if (h22_nophase_real == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_interpolate_modes(), malloc() failed to for h22_nophase_real\\n");
+  exit(1);
+}
 REAL *restrict h22_nophase_imag = (REAL *)malloc(nsteps_inspiral_old * sizeof(REAL));
+if (h22_nophase_imag == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_interpolate_modes(), malloc() failed to for h22_nophase_imag\\n");
+  exit(1);
+}
 double complex h22_nophase , h22_rescaled;
 for (i = 0; i < commondata->nsteps_low; i++){
   times_old[i] = commondata->waveform_inspiral[IDX_WF(i,TIME)];
@@ -66,17 +82,45 @@ for (i = 0; i < commondata->nsteps_fine; i++){
 REAL orbital_phase, h22_real , h22_imag, time;
 const REAL tstart = commondata->waveform_inspiral[IDX_WF(0,TIME)];
 gsl_interp_accel *restrict acc_real = gsl_interp_accel_alloc();
+if (acc_real == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_interpolate_modes(), gsl_interp_accel_alloc failed to initialize\\n");
+  exit(1);
+}
 gsl_interp_accel *restrict acc_imag = gsl_interp_accel_alloc();
+if (acc_imag == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_interpolate_modes(), gsl_interp_accel_alloc failed to initialize\\n");
+  exit(1);
+}
 gsl_interp_accel *restrict acc = gsl_interp_accel_alloc();
+if (acc == NULL){ 
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_interpolate_modes(), gsl_interp_accel_alloc failed to initialize\\n");
+  exit(1);
+}
 gsl_spline *restrict spline_real = gsl_spline_alloc(gsl_interp_cspline, nsteps_inspiral_old);
+if (spline_real == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_interpolate_modes(), gsl_spline_alloc failed to initialize\\n");
+  exit(1);
+}
 gsl_spline *restrict spline_imag = gsl_spline_alloc(gsl_interp_cspline, nsteps_inspiral_old);
+if (spline_imag == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_interpolate_modes(), gsl_spline_alloc failed to initialize\\n");
+  exit(1);
+}
 gsl_spline *restrict spline = gsl_spline_alloc(gsl_interp_cspline, nsteps_inspiral_old);
+if (spline == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_interpolate_modes(), gsl_spline_alloc failed to initialize\\n");
+  exit(1);
+}
 gsl_spline_init(spline,times_old,orbital_phases, nsteps_inspiral_old);
 gsl_spline_init(spline_real,times_old,h22_nophase_real, nsteps_inspiral_old);
 gsl_spline_init(spline_imag,times_old,h22_nophase_imag, nsteps_inspiral_old);
 //realloc the amount of memory needed to store the interpolated modes
 commondata->nsteps_inspiral = nsteps_new;
 commondata->waveform_inspiral = (double complex *)realloc(commondata->waveform_inspiral,commondata->nsteps_inspiral * NUMMODES * sizeof(double complex));
+if (commondata->waveform_inspiral == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_interpolate_modes(), malloc() failed to for waveform_inspiral\\n");
+  exit(1);
+}
 for (i = 0; i < commondata->nsteps_inspiral; i++){
   time = tstart + i * dT;
   commondata->waveform_inspiral[IDX_WF(i,TIME)] = time;

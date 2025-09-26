@@ -43,9 +43,25 @@ const REAL dT = commondata->dt/(commondata->total_mass*4.92549094764126697819722
 SEOBNRv5_aligned_spin_interpolate_modes(commondata , dT);
 double complex h22;
 REAL *restrict times_new = malloc(commondata->nsteps_inspiral*sizeof(REAL));
+if (times_new == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_IMR_waveform(), malloc() failed to for times_new\\n");
+  exit(1);
+}
 REAL *restrict h22_amp_new = (REAL *)malloc(commondata->nsteps_inspiral*sizeof(REAL));
+if (h22_amp_new == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_IMR_waveform(), malloc() failed to for h22_amp_new\\n");
+  exit(1);
+}
 REAL *restrict h22_phase_new = (REAL *)malloc(commondata->nsteps_inspiral*sizeof(REAL));
+if (h22_phase_new == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_IMR_waveform(), malloc() failed to for h22_phase_new\\n");
+  exit(1);
+}
 REAL *restrict h22_wrapped_phase_new = (REAL *)malloc(commondata->nsteps_inspiral*sizeof(REAL));
+if (h22_wrapped_phase_new == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_IMR_waveform(), malloc() failed to for h22_wrapped_phase_new\\n");
+  exit(1);
+}
 for(i = 0; i < commondata->nsteps_inspiral; i++){
   times_new[i] = commondata->waveform_inspiral[IDX_WF(i,TIME)];
   h22 = commondata->waveform_inspiral[IDX_WF(i,STRAIN)];
@@ -64,8 +80,20 @@ if (idx_match == commondata->nsteps_inspiral - 1){
 const REAL t_match = times_new[idx_match];
 const size_t nsteps_ringdown = 15 * (size_t) (commondata->tau_qnm / dT);
 REAL *restrict ringdown_time = (REAL *)malloc(nsteps_ringdown*sizeof(REAL));
+if (ringdown_time == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_IMR_waveform(), malloc() failed to for ringdown_time\\n");
+  exit(1);
+}
 REAL *restrict ringdown_amp = (REAL *)malloc(nsteps_ringdown*sizeof(REAL));
+if (ringdown_amp == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_IMR_waveform(), malloc() failed to for ringdown_amp\\n");
+  exit(1);
+}
 REAL *restrict ringdown_phase = (REAL *)malloc(nsteps_ringdown*sizeof(REAL));
+if (ringdown_phase == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_IMR_waveform(), malloc() failed to for ringdown_phase\\n");
+  exit(1);
+}
 for(i = 0; i < nsteps_ringdown; i++){
   ringdown_time[i] = t_match + (i + 1) * dT;
 }
@@ -81,7 +109,15 @@ for (i = left; i < right; i++){
   phases_cropped[i - left] = h22_phase_new[i];
 }
 gsl_interp_accel *restrict acc = gsl_interp_accel_alloc();
+if (acc == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_IMR_waveform(), gsl_interp_accel_alloc failed to initialize\\n");
+  exit(1);
+}
 gsl_spline *restrict spline = gsl_spline_alloc(gsl_interp_cspline, right - left);
+if (spline == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_IMR_waveform(), gsl_spline_alloc failed to initialize\\n");
+  exit(1);
+}
 gsl_spline_init(spline,times_cropped, amps_cropped,right-left);
 const REAL h_0 = gsl_spline_eval(spline, t_match, acc);
 const REAL hdot_0 = gsl_spline_eval_deriv(spline, t_match, acc);
@@ -109,6 +145,10 @@ for(i = 0; i < nsteps_ringdown; i++){
     body += """
 commondata->nsteps_IMR = idx_match + 1 + nsteps_ringdown;
 commondata->waveform_IMR = (double complex *)malloc(NUMMODES * commondata->nsteps_IMR*sizeof(double complex));
+if (commondata->waveform_IMR == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_IMR_waveform(), malloc() failed to for commondata->waveform_IMR\\n");
+  exit(1);
+}
 for (i = 0; i <= idx_match; i++){
   commondata->waveform_IMR[IDX_WF(i,TIME)] = times_new[i] - commondata->t_attach;
   h22 = h22_amp_new[i] * cexp(I * h22_phase_new[i]);

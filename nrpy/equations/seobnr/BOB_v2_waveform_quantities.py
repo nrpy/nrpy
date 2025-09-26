@@ -139,7 +139,7 @@ class BOB_v2_waveform_quantities:
         k = (Omega_qnm**2 - Omega_0**2) / (1 - sp.tanh(T_0))
         Omega_orb = (Omega_0**2 + k * (sp.tanh(T) - sp.tanh(T_0))) ** sp.Rational(1, 2)
         Omega_minf = (Omega_0**2 + k * (-1 - sp.tanh(T_0))) ** sp.Rational(1, 2)
-        Phi_orb = -tau_qnm * (
+        Phi_orb = tau_qnm * (
             Omega_qnm * sp.atanh(Omega_orb / Omega_qnm)
             - Omega_minf * sp.atanh(Omega_minf / Omega_orb)
         )
@@ -180,20 +180,30 @@ class BOB_v2_waveform_quantities:
         # additionally, we will need to evaluate Omega_0 numerically
         # such that the wavform frequency at t_0 matches
         # the NR fitted quantity at t_0: omega22NR
-        # For initial guesses, we can specify the
-        # solutions at N = 0
+        # Note: omega22NR is documented to be positive over parameter space
+        # but the BOB strain frequency is, by definition, negative.
+        # Therefore, we use omega_strain + omega22NR = 0
+        # as the Omega_0 condition.
+        # Note 2:
+        # For initial guesses,
+        # we can use the closed-form solutions for N = 0
         # t_p_guess = t_0 + tau_qnm * log(Omega_0/Omega_qnm)
         # Omega_0_guess = omega22NR/2
+        # Note 3: the NQC corrections uses
+        # the positive strain frequency convention.
+        # Since the BOB strain frequency is, by definition, negative.
+        # Therefore, we add a minus sign to wdot_t_attach
+        # for consistency.
         self.t_p_condition = sp.diff(strain_amplitude_noap, t).subs(t, t_0)
         self.t_p_guess = t_0 + tau_qnm * sp.log(omega_qnm / omega22NR)
-        self.Omega_0_condition = strain_frequency.subs(t, t_0) - omega22NR
+        self.Omega_0_condition = strain_frequency.subs(t, t_0) + omega22NR
         self.Omega_0_guess = omega22NR / 2
         self.h_t_attach = h22NR
         self.hdot_t_attach = sp.sympify(0)
         hddot = A_p * sp.diff(sp.diff(strain_amplitude_noap, t), t)
         self.hddot_t_attach = hddot.subs(t, t_0)
         self.w_t_attach = omega22NR
-        self.wdot_t_attach = sp.diff(strain_frequency, t).subs(t, t_0)
+        self.wdot_t_attach = -sp.diff(strain_frequency, t).subs(t, t_0)
 
 
 if __name__ == "__main__":

@@ -77,9 +77,25 @@ const REAL tau_qnm = commondata->tau_qnm;
     body += """
 const REAL x_guess[2] = {creal(t_p_guess),creal(Omega_0_guess)};
 REAL *restrict x_result = malloc(2*sizeof(REAL));
+if (x_result == NULL){
+  fprintf(stderr,"Error: in BOB_v2_find_tp_Omega(), malloc() failed to for x_result\\n");
+  exit(1);
+}
 const gsl_multiroot_fsolver_type *restrict T = gsl_multiroot_fsolver_hybrids;
+if (T == NULL){
+  fprintf(stderr,"Error: in BOB_v2_find_tp_Omega(), could not assign gsl_multiroot_fsolver_hybrids to T\\n");
+  exit(1);
+}
 gsl_multiroot_fsolver *restrict s = gsl_multiroot_fsolver_alloc(T , n);
+if (s == NULL){
+  fprintf(stderr,"Error: in BOB_v2_find_tp_Omega(), gsl_multiroot_fsolver_alloc failed to initialize\\n");
+  exit(1);
+}
 gsl_vector *restrict x = gsl_vector_alloc(n);
+if (x == NULL){
+  fprintf(stderr,"Error: in BOB_v2_find_tp_Omega(), gsl_vector_alloc failed to initialize\\n");
+  exit(1);
+}
 size_t i , iter = 0;
 int status;
 const int maxiter = 100;
@@ -104,8 +120,8 @@ if (status == GSL_CONTINUE) {
   const REAL t_p_error = gsl_vector_get(s->f,0);
   const REAL Omega_0_error = gsl_vector_get(s->f,1);
   const REAL total_error = sqrt(t_p_error*t_p_error + Omega_0_error*Omega_0_error);
-  printf("In function BOB_v2_find_tp_Omega0, the peak strain conditions were not solved within maximum iterations.\\n");
-  printf("t_p_error = %.5e\\nOmega_0_error = %.5e\\ntotal_error = %.5e\\ntolerance = %.5e\\n",t_p_error,Omega_0_error,total_error,6.e-12);
+  printf("In function BOB_v2_find_tp_Omega0, the peak strain conditions were not solved within maximum iterations.\\\n");
+  printf("t_p_error = %.5e\\\nOmega_0_error = %.5e\\\ntotal_error = %.5e\\\ntolerance = %.5e\\\n",t_p_error,Omega_0_error,total_error,6.e-12);
   exit(EXIT_FAILURE);
 }
 for (i = 0; i < n; i++){
