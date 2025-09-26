@@ -1,4 +1,5 @@
 from . import (
+    SEBOBv2_IMR_waveform,
     SEOBNRv5_aligned_spin_coefficients,
     SEOBNRv5_aligned_spin_IMR_waveform,
     dynamics,

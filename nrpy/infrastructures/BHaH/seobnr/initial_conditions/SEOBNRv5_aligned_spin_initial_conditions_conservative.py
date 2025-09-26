@@ -53,6 +53,10 @@ REAL pphi = pow(omega,-1./3.);
 REAL r = pphi*pphi;
 const REAL x_guess[2] = {r,pphi};
 REAL *restrict x_result = malloc(2*sizeof(REAL));
+if (x_result == NULL){
+  fprintf(stderr, "In SEOBNRv5_aligned_spin_initial_conditions_conservative(), malloc() failed for x_result\\n");
+  exit(1);
+}
 SEOBNRv5_aligned_multidimensional_root_wrapper(f,x_guess,n,x_result);
 commondata->r = x_result[0];
 commondata->pphi = x_result[1];
