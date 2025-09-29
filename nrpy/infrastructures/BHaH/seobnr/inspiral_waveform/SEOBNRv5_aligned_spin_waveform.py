@@ -34,15 +34,13 @@ def register_CFunction_SEOBNRv5_aligned_spin_waveform() -> (
     h22 = hlms["(2 , 2)"]
     # We are going to be doing this twice;
     # once for the fine dynamics and once for the coarse.
-    h22_code = (
-        ccg.c_codegen(
-            h22,
-            ["const double complex h22"],
-            verbose=False,
-            include_braces=False,
-        )
-        .replace("REAL", "double complex")
-        .replace("exp", "cexp")
+    h22_code = ccg.c_codegen(
+        h22,
+        ["const COMPLEX h22"],
+        verbose=False,
+        include_braces=False,
+        fp_type="double complex",
+        fp_type_alias="COMPLEX",
     )
     khat2_code = ccg.c_codegen(
         [wf.khat[2]],
@@ -67,7 +65,7 @@ Calculates the (2,2) mode of the SEOBNRv5 inspiral waveform for a single timeste
     name = "SEOBNRv5_aligned_spin_waveform"
     params = "REAL *restrict dynamics, commondata_struct *restrict commondata"
     body = """
-double complex gamma_22;
+COMPLEX gamma_22;
 const REAL m1 = commondata->m1;
 const REAL m2 = commondata->m2;
 const REAL chi1 = commondata->chi1;

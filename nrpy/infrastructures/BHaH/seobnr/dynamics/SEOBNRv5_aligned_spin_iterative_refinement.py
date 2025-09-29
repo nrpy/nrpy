@@ -66,13 +66,14 @@ for (int n = 1; n <= levels; ++n) {
   }
 
   double *t_fine = (double *)malloc(num_t_fine * sizeof(double));
+  if (t_fine == NULL) {
+    fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_iterative_refinement(), malloc() failed to for t_fine\\n");
+    exit(1);
+  }
   double *deriv_values = (double *)malloc(num_t_fine * sizeof(double));
-
-  if (!t_fine || !deriv_values) {
-    printf("Memory allocation failed for t_fine or deriv_values.\\n");
-    if (t_fine) free(t_fine);
-    if (deriv_values) free(deriv_values);
-    return result; // Return last known good result or default
+  if (deriv_values == NULL) {
+    fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_iterative_refinement(), malloc() failed to for deriv_values\\n");
+    exit(1);
   }
 
   for (size_t i = 0; i < num_t_fine; ++i) {

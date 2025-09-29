@@ -273,7 +273,15 @@ const REAL imomegaqnm22[107] = { 0.0880269,0.0880272,0.0880274,0.088028,0.088028
   };
 
 gsl_spline *spline = gsl_spline_alloc(gsl_interp_cspline, 107);
+if (spline == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_coefficients(), gsl_spline_alloc failed to initialize\\n");
+  exit(1);
+}
 gsl_interp_accel *acc = gsl_interp_accel_alloc();
+if (acc == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_coefficients(), gsl_interp_acc_alloc failed to initialize\\n");
+  exit(1);
+}
 
 gsl_spline_init(spline, afinallist, reomegaqnm22, 107);
 commondata->omega_qnm = gsl_spline_eval(spline, commondata->a_f, acc) / commondata->M_f;

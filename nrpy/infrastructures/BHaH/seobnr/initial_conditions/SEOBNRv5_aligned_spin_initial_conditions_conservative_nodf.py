@@ -52,9 +52,25 @@ REAL pphi = pow(omega,-1./3.);
 REAL r = pphi*pphi;
 const REAL x_guess[2] = {r,pphi};
 REAL *restrict x_result = malloc(2*sizeof(REAL));
+if (x_result == NULL){
+  fprintf(stderr, "In SEOBNRv5_aligned_spin_initial_conditions_conservative_nodf(), malloc() failed for x_result\\n");
+  exit(1);
+}
 const gsl_multiroot_fsolver_type *restrict T = gsl_multiroot_fsolver_hybrids;
+if (T == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_initial_conditions_conservative_nodf(), could not assign gsl_multiroot_fsolver_hybrids to T\\n");
+  exit(1);
+}
 gsl_multiroot_fsolver *restrict s = gsl_multiroot_fsolver_alloc(T , n);
+if (s == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_initial_conditions_conservative_nodf(), gsl_multiroot_fsolver_alloc failed to initialize\\n");
+  exit(1);
+}
 gsl_vector *restrict x = gsl_vector_alloc(n);
+if (x == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_initial_conditions_conservative_nodf(), gsl_vector_alloc failed to initialize\\n");
+  exit(1);
+}
 size_t i , iter = 0;
 int status;
 const int maxiter = 100;

@@ -1,5 +1,5 @@
 """
-Set up C function library for SEOBNR and BOB attachment routines.
+Set up C function library for SEBOBv2 NQC attachment routines.
 
 Authors: Siddharth Mahesh
         sm0193 **at** mix **dot** wvu **dot** edu
@@ -15,13 +15,10 @@ import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 
 
-def register_CFunction_SEOBNRv5_aligned_spin_NQC_corrections(
-    use_numerical_relativity_nqc: bool,
-) -> Union[None, pcg.NRPyEnv_type]:
+def register_CFunction_SEBOBv2_NQC_corrections() -> Union[None, pcg.NRPyEnv_type]:
     """
-    Register CFunction for evaluating the Non Quasi-Circular (NQC) corrections for the SEOBNRv5 waveform.
+    Register CFunction for evaluating the Non Quasi-Circular (NQC) corrections for the SEBOBv2 waveform.
 
-    :param use_numerical_relativity_nqc: Flag to specify if NQCs are informed by NR fits or BOB.
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
@@ -36,62 +33,62 @@ Computes and applies the Non Quasi-Circular (NQC) corrections to the inspiral wa
 @return - Returns GSL_SUCCESS (0) on success or a nonzero error code on failure.
 """
     cfunc_type = "void"
-    name = "SEOBNRv5_aligned_spin_NQC_corrections"
+    name = "SEBOBv2_NQC_corrections"
     params = "commondata_struct *restrict commondata"
     body = """
 REAL *restrict times = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (times == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for times\\n");
+  fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for times\\n");
   exit(1);
 }
 REAL *restrict Q1 = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (Q1 == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for Q1\\n");
+  fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for Q1\\n");
   exit(1);
 }
 REAL *restrict Q2 = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (Q2 == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for Q2\\n");
+  fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for Q2\\n");
   exit(1);
 }
 REAL *restrict Q3 = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (Q3 == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for Q3\\n");
+  fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for Q3\\n");
   exit(1);
 }
 REAL *restrict P1 = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (P1 == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for P1\\n");
+  fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for P1\\n");
   exit(1);
 }
 REAL *restrict P2 = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (P2 == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for P2\\n");
+  fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for P2\\n");
   exit(1);
 }
 REAL *restrict r = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (r == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for r\\n");
+  fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for r\\n");
   exit(1);
 }
 REAL *restrict Omega = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (Omega == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for Omega\\n");
+  fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for Omega\\n");
   exit(1);
 }
 REAL *restrict hamp = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (hamp == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for hamp\\n");
+  fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for hamp\\n");
   exit(1);
 }
 REAL *restrict phase = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (phase == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for phase\\n");
+  fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for phase\\n");
   exit(1);
 }
 REAL *restrict phase_unwrapped = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (phase_unwrapped == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for phase_unwrapped\\n");
+  fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for phase_unwrapped\\n");
   exit(1);
 }
 REAL radius, omega, prstar;
@@ -122,9 +119,25 @@ else{
   const REAL dt_ISCO = 0.001;
   const size_t N_zoom = (size_t) ((times[commondata->nsteps_fine - 1] - times[0]) / dt_ISCO);
   REAL *restrict t_zoom = (REAL *) malloc(N_zoom * sizeof(REAL));
+  if (t_zoom == NULL){
+    fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for t_zoom\\n");
+    exit(1);
+  }
   REAL *restrict minus_r_zoom = (REAL *) malloc(N_zoom * sizeof(REAL));
+  if (minus_r_zoom == NULL){
+    fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for times\\n");
+    exit(1);
+  }
   gsl_interp_accel *restrict acc_r = gsl_interp_accel_alloc();
+  if (acc_r == NULL){
+    fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_interp_accel_alloc() failed to initialize\\n");
+    exit(1);
+  }
   gsl_spline *restrict spline_r = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
+  if (spline_r == NULL){
+    fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_spline_alloc() failed to initialize\\n");
+    exit(1);
+  }
   gsl_spline_init(spline_r,times,r,commondata->nsteps_fine);
   for (i = 0; i < N_zoom; i++){
     t_zoom[i] = times[0] + i * dt_ISCO;
@@ -153,6 +166,9 @@ else{
   peak_idx = gsl_interp_bsearch(times, t_peak, 0, commondata->nsteps_fine);
 }
 commondata->t_attach = t_peak;
+// Compute t_p and Omega_0 in BOB
+BOB_v2_find_tp_Omega0(commondata);
+// Compute Q_cropped, P_cropped, t_cropped, phase_cropped, amp_cropped
 size_t N = 5;
 size_t left = MAX(peak_idx, N) - N;
 size_t right = MIN(peak_idx + N , commondata->nsteps_fine);
@@ -170,25 +186,26 @@ for (i = left; i < right; i++){
 }
 gsl_interp_accel *restrict acc = gsl_interp_accel_alloc();
 if (acc == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_interp_accel_alloc() failed to initialize\\n");
+  fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_interp_accel_alloc() failed to initialize\\n");
   exit(1);
 }
 gsl_spline *restrict spline = gsl_spline_alloc(gsl_interp_cspline, right - left);
 if (spline == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_spline_alloc() failed to initialize\\n");
+  fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_splin_alloc() failed to initialize\\n");
   exit(1);
 }
 
 gsl_matrix *restrict Q = gsl_matrix_alloc (3, 3);
 if (Q == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_matrix_alloc() failed to initialize\\n");
+  fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_matrix_alloc() failed to initialize\\n");
   exit(1);
 }
 gsl_matrix *restrict P = gsl_matrix_alloc (2, 2);
 if (P == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_matrix_alloc() failed to initialize\\n");
+  fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_matrix_alloc() failed to initialize\\n");
   exit(1);
 }
+
 gsl_spline_init(spline,t_cropped, Q_cropped1,right-left);
 gsl_matrix_set(Q,0,0,gsl_spline_eval(spline, t_peak, acc));
 gsl_matrix_set(Q,1,0,gsl_spline_eval_deriv(spline, t_peak, acc));
@@ -218,14 +235,15 @@ gsl_matrix_set(P,1,1,-gsl_spline_eval_deriv2(spline, t_peak, acc));
 
 gsl_vector *restrict A = gsl_vector_alloc(3);
 if (A == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_vector_alloc() failed to initialize\\n");
+  fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_vector_alloc() failed to initialize\\n");
   exit(1);
 }
 gsl_vector *restrict O = gsl_vector_alloc(2);
 if (O == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_vector_alloc() failed to initialize\\n");
+  fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_vector_alloc() failed to initialize\\n");
   exit(1);
 }
+
 
 gsl_spline_init(spline,t_cropped, amp_cropped,right-left);
 gsl_interp_accel_reset(acc);
@@ -251,16 +269,7 @@ else{
 }
 
 REAL omegas[2] , amps[3];
-"""
-    if not use_numerical_relativity_nqc:
-        body += """
-BOB_aligned_spin_NQC_rhs(commondata,amps,omegas);
-"""
-    else:
-        body += """
-SEOBNRv5_aligned_spin_NQC_rhs(commondata,amps,omegas);
-"""
-    body += """
+BOB_v2_NQC_rhs(commondata,amps,omegas);
 gsl_vector_set(A , 0 , amps[0] - amp_insp);
 gsl_vector_set(A , 1 , amps[1] - ampdot_insp);
 gsl_vector_set(A , 2 , amps[2] - ampddot_insp);
@@ -269,13 +278,14 @@ gsl_vector_set(O , 1 , omegas[1] - omegadot_insp);
 
 gsl_vector *restrict a = gsl_vector_alloc (3);
 if (a == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_vector_alloc() failed to initialize\\n");
+  fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_vector_alloc() failed to initialize\\n");
   exit(1);
 }
+
 int s;
 gsl_permutation *restrict p_A = gsl_permutation_alloc (3);
 if (p_A == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_permutation_alloc() failed to initialize\\n");
+  fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_permutation_alloc() failed to initialize\\n");
   exit(1);
 }
 gsl_linalg_LU_decomp(Q, p_A, &s);
@@ -292,12 +302,12 @@ gsl_matrix_free(Q);
 
 gsl_vector *restrict b = gsl_vector_alloc(2);
 if (b == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_vector_alloc() failed to initialize\\n");
+  fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_vector_alloc() failed to initialize\\n");
   exit(1);
 }
 gsl_permutation * p_B = gsl_permutation_alloc(2);
 if (p_B == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_permutation_alloc() failed to initialize\\n");
+  fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_permutation_alloc() failed to initialize\\n");
   exit(1);
 }
 gsl_linalg_LU_decomp(P, p_B, &s);
@@ -326,6 +336,10 @@ free(phase_unwrapped);
 // apply the nqc correction
 commondata->nsteps_inspiral = commondata->nsteps_low + commondata->nsteps_fine;
 commondata->waveform_inspiral = (double complex *)malloc(commondata->nsteps_inspiral*NUMMODES*sizeof(double complex));
+if (commondata->waveform_inspiral == NULL){
+  fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for commondata->waveform_inspiral\\n");
+  exit(1);
+}
 REAL nqc_amp, nqc_phase, q1, q2, q3,p1, p2;
 for (i = 0; i < commondata->nsteps_low; i++){
   prstar = commondata->dynamics_low[IDX(i,PRSTAR)];

@@ -39,8 +39,8 @@ Store the commondata struct in a binary file for debugging purposes.
     body = """
 FILE *fp = fopen(filename, "wb");
 if (fp == NULL) {
-    perror("Error opening file for writing");
-    return 1;
+    fprintf(stderr,"Error: in commondata_io() could not open file for writing\\n");
+    exit(1);
 }
 
 // Write non-pointer members

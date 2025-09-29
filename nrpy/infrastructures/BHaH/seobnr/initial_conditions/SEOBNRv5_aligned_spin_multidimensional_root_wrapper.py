@@ -44,8 +44,20 @@ size_t i , iter = 0;
 const int maxiter = 100;
 int status;
 const gsl_multiroot_fdfsolver_type *restrict T = gsl_multiroot_fdfsolver_hybridsj;
+if (T == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_multidimensional_root_wrapper(), could not assign gsl_multiroot_fsolver_hybrids to T\\n");
+  exit(1);
+}
 gsl_multiroot_fdfsolver *restrict s = gsl_multiroot_fdfsolver_alloc(T , n);
+if (s == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_multidimensional_root_wrapper(), gsl_multiroot_fdfsolver_alloc failed to initialize\\n");
+  exit(1);
+}
 gsl_vector *restrict x = gsl_vector_alloc(n);
+if (x == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_multidimensional_root_wrapper(), gsl_vector_alloc failed to initialize\\n");
+  exit(1);
+}
 for (i = 0; i < n; i++){
 gsl_vector_set(x , i , x_guess[i]);
 }

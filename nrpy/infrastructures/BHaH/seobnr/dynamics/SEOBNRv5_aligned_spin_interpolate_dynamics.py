@@ -51,10 +51,30 @@ if (stop != 0){
 }
 
 REAL *restrict ts = (REAL *)malloc(nsteps_fine_prelim*sizeof(REAL));
+if (ts == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_interpolate_dynamics(), malloc() failed to for ts\\n");
+  exit(1);
+}
 REAL *restrict rs = (REAL *)malloc(nsteps_fine_prelim*sizeof(REAL));
+if (rs == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_interpolate_dynamics(), malloc() failed to for rs\\n");
+  exit(1);
+}
 REAL *restrict phis = (REAL *)malloc(nsteps_fine_prelim*sizeof(REAL));
+if (phis == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_interpolate_dynamics(), malloc() failed to for phis\\n");
+  exit(1);
+}
 REAL *restrict prs = (REAL *)malloc(nsteps_fine_prelim*sizeof(REAL));
+if (prs == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_interpolate_dynamics(), malloc() failed to for prs\\n");
+  exit(1);
+}
 REAL *restrict pphis = (REAL *)malloc(nsteps_fine_prelim*sizeof(REAL));
+if (pphis == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_interpolate_dynamics(), malloc() failed to for pphis\\n");
+  exit(1);
+}
 for (i = 0; i < nsteps_fine_prelim; i++) {
   ts[i] = dynamics_fine_prelim[IDX(i,TIME)];
   rs[i] = dynamics_fine_prelim[IDX(i,R)];
@@ -63,21 +83,57 @@ for (i = 0; i < nsteps_fine_prelim; i++) {
   pphis[i] = dynamics_fine_prelim[IDX(i,PPHI)];
 }
 gsl_interp_accel *restrict r_acc = gsl_interp_accel_alloc();
+if (r_acc == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_interpolate_dynamics(), gsl_interp_accel_alloc() failed to initialize for r_acc\\n");
+  exit(1);
+}
 gsl_spline *restrict r_spline = gsl_spline_alloc(gsl_interp_cspline, nsteps_fine_prelim);
+if (r_spline == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_interpolate_dynamics(), gsl_spline_alloc() failed to initialize for r_spline\\n");
+  exit(1);
+}
 gsl_spline_init(r_spline, ts, rs, nsteps_fine_prelim);
 gsl_interp_accel *restrict phi_acc = gsl_interp_accel_alloc();
+if (phi_acc == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_interpolate_dynamics(), gsl_interp_accel_alloc() failed to initialize for phi_acc\\n");
+  exit(1);
+}
 gsl_spline *restrict phi_spline = gsl_spline_alloc(gsl_interp_cspline, nsteps_fine_prelim);
+if (phi_spline == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_interpolate_dynamics(), gsl_spline_alloc() failed to initialize for phi_spline\\n");
+  exit(1);
+}
 gsl_spline_init(phi_spline, ts, phis, nsteps_fine_prelim);
 gsl_interp_accel *restrict pr_acc = gsl_interp_accel_alloc();
+if (pr_acc == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_interpolate_dynamics(), gsl_interp_accel_alloc() failed to initialize for pr_acc\\n");
+  exit(1);
+}
 gsl_spline *restrict pr_spline = gsl_spline_alloc(gsl_interp_cspline, nsteps_fine_prelim);
+if (pr_spline == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_interpolate_dynamics(), gsl_spline_alloc() failed to initialize for pr_spline\\n");
+  exit(1);
+}
 gsl_spline_init(pr_spline, ts, prs, nsteps_fine_prelim);
 gsl_interp_accel *restrict pphi_acc = gsl_interp_accel_alloc();
+if (pphi_acc == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_interpolate_dynamics(), gsl_interp_accel_alloc() failed to initialize for pphi_acc\\n");
+  exit(1);
+}
 gsl_spline *restrict pphi_spline = gsl_spline_alloc(gsl_interp_cspline, nsteps_fine_prelim);
+if (pphi_spline == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_interpolate_dynamics(), gsl_spline_alloc() failed to initialize for pphi_spline\\n");
+  exit(1);
+}
 gsl_spline_init(pphi_spline, ts, pphis, nsteps_fine_prelim);
 
 const REAL dt = 0.1;
 commondata->nsteps_fine = (size_t)((time_end - time_start) / dt + 1);
 commondata->dynamics_fine = (REAL *)malloc(NUMVARS * commondata->nsteps_fine * sizeof(REAL));
+if (commondata->dynamics_fine == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_interpolate_dynamics(), malloc() failed to for commondata->dynamics_fine\\n");
+  exit(1);
+}
 REAL t;
 for (i = 0; i < commondata->nsteps_fine; i++) {
   t = time_start + i * dt;
