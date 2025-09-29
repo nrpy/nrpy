@@ -40,8 +40,12 @@ def _resolve_r_rprime_and_drprime(
     r: Optional[sp.Expr] = None,
     r_of_rprime: Optional[Callable[[sp.Expr], sp.Expr]] = None,
 ) -> Tuple[sp.Expr, sp.Expr, sp.Expr]:
-    """
+    r"""
     Resolve (r', r, dr'/dr) at a point given x'^i and the radial profile.
+
+    We determine r' directly from x'^i. If `r` is not provided, we attempt to
+    invert the map r'(r) = r' analytically using SymPy. We reject non-closed-form
+    inversions (e.g., RootOf/CRootOf) and raise ValueError in that case.
 
     :param xprimeU: Primed Cartesian coordinates [x'^0, x'^1, x'^2].
     :param rprime_of_r: Callable returning r'(r).
@@ -57,28 +61,71 @@ def _resolve_r_rprime_and_drprime(
     >>> (sp.simplify(rp), sp.simplify(rr), sp.simplify(drp))
     (2, 1, 2)
 
-    Doctest (nonlinear r' = r + r^3 at r=1, so r' = 2, dr'/dr = 4):
+    Doctest (nonlinear r' = r + r^3; with x'=(2,0,0) so r'=2; exact inversion should yield r=1):
     >>> rprime_of_r = lambda rv: rv + rv**3
     >>> drprime     = lambda rv: 1 + 3*rv**2
-    >>> rp, rr, drp = _resolve_r_rprime_and_drprime([sp.Integer(2), 0, 0], rprime_of_r, drprime, r=sp.Integer(1))
-    >>> (sp.simplify(rp), sp.simplify(rr), sp.simplify(drp))
+    >>> rp, rr, drp = _resolve_r_rprime_and_drprime([sp.Integer(2), 0, 0], rprime_of_r, drprime)
+    >>> (sp.nsimplify(rp), sp.nsimplify(rr), sp.nsimplify(drp))
     (2, 1, 4)
     """
+    # Compute r' from x'^i
     rprime = sp.sqrt(sum(comp * comp for comp in xprimeU))
 
-    if r is None:
+    # If r is given, we can bypass inversion
+    if r is not None:
+        r_val = sp.simplify(r)
+    else:
+        # If an explicit inverse r(r') is provided, prefer it
         if r_of_rprime is not None:
-            r = sp.simplify(r_of_rprime(rprime))
+            r_val = sp.simplify(r_of_rprime(rprime))
         else:
-            # Fallback for pure global scaling: r' = a0 * r => r = r'/a0, with a0 = r'(1)
-            a0 = sp.simplify(rprime_of_r(sp.Integer(1)))
-            if a0 != 0:
-                r = sp.simplify(rprime / a0)
-            else:
-                r = sp.symbols("r", positive=True)
+            # Attempt exact symbolic inversion of r'(r) = rprime
+            rr = sp.symbols("rr", positive=True, real=True)
+            eq = sp.Eq(sp.simplify(rprime_of_r(rr)), sp.simplify(rprime))
 
-    drp = sp.simplify(drprime_dr(r))
-    return rprime, r, drp
+            # Ask SymPy to give radicals for degree <= 4
+            sols = sp.solve(eq, rr, dict=False, cubics=True, quartics=True)
+
+            if not sols:
+                raise ValueError("Could not invert r'(r) symbolically: no solution found.")
+
+            # Filter: real & positive solutions only
+            def _is_real_positive(expr: sp.Expr) -> bool:
+                # Avoid non-explicit algebraic forms like RootOf/CRootOf
+                if expr.has(sp.RootOf) or expr.has(sp.CRootOf):
+                    return False
+                # Try a symbolic check for positivity; if undecidable, fall back to heuristic:
+                # we allow expressions that simplify to a positive rational/float or are
+                # provably positive by assumptions.
+                expr_simpl = sp.simplify(expr)
+                # If it evaluates to a number, check positivity directly
+                if expr_simpl.is_number:
+                    return bool(sp.re(expr_simpl) > 0 and sp.im(expr_simpl) == 0)
+                # Otherwise, rely on SymPy's sign info if available
+                if expr_simpl.is_real is False:
+                    return False
+                if expr_simpl.is_positive is True:
+                    return True
+                # Last resort: reject ambiguous
+                return False
+
+            real_pos_sols = [sp.simplify(s) for s in sols if _is_real_positive(s)]
+
+            if len(real_pos_sols) == 0:
+                raise ValueError(
+                    "Symbolic inversion produced no explicit real, positive solution for r."
+                )
+            if len(real_pos_sols) > 1:
+                # Ambiguous mapping at this r' (non-monotonic profile?): be explicit.
+                raise ValueError(
+                    f"Symbolic inversion is ambiguous at r'={sp.simplify(rprime)}; "
+                    f"multiple explicit positive real roots found: {real_pos_sols}"
+                )
+
+            r_val = real_pos_sols[0]
+
+    drp = sp.simplify(drprime_dr(r_val))
+    return sp.simplify(rprime), sp.simplify(r_val), drp
 
 
 def build_radialmap_jacobians_from_xprime(
