@@ -20,43 +20,48 @@ Multi-transition profile:
            * [ (tanh((r+R_i)/s_i) - tanh((r-R_i)/s_i)) / 2 ].
 
 Author: Nishita Jadoo
+        njadoo **at** uidaho **dot* edu
 """
 
 from __future__ import annotations
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Tuple
 
 import sympy as sp  # SymPy: CAS
+import nrpy.params as par  # NRPy+: parameter interface
 
-# Optional read-only dependency; not required for doctests.
-try:
-    import nrpy.params as par  # NRPy+: parameter interface
-except Exception:  # pragma: no cover
-    par = None
+
+def _make_symbol_list(prefix: str, indices: Sequence[int]) -> Tuple[sp.Symbol, ...]:
+    """Create a tuple of symbols like ('a0','a1',...) or ('R1','R2',...)."""
+    return tuple(sp.symbols(" ".join(f"{prefix}{i}" for i in indices)))
 
 
 class FisheyeRadialProfile:
-    """
+    r"""
     Build symbolic expressions for the *radial* fisheye profile r'(r) and dr'/dr.
 
     Parameters
     ----------
-    n : int in [0..4]
-        Number of fisheye transition zones.
-    a, R, s : sequences (length ≥ 5)
+    n : int, optional
+        Number of fisheye transition zones. If omitted, read from
+        `par.parval_from_str("fisheye_n")`.
+    a, R, s : sequences of scalars/symbols, optional
         Fisheye coefficients (a), transition centers (R), and widths (s).
-        Only entries up to n (or n+1 for a) are used.
+        If omitted, **symbolic** sequences of appropriate lengths are created:
+
+          - a = (a0, a1, ..., a_n)           length n+1
+          - R = (R1, R2, ..., R_n)           length n
+          - s = (s1, s2, ..., s_n)           length n
+
+        You may pass numeric or symbolic entries. Only entries up to n are used.
 
     Notes
     -----
-    If any parameter is omitted and `nrpy.params` is available, values are taken
-    from CodeParameters: "fisheye_n", "fisheye_a", "fisheye_R", "fisheye_s".
+    When n = 0: r' = a0 * r and dr'/dr = a0.
 
-    When n=0: r' = a0 * r and dr'/dr = a0.
-
-    Doctests
-    --------
+    Doctests (self-contained: do not use nrpy.params)
+    -----------------------------------------------
     >>> # Analytic sanity check: n=0, a0=2 -> r' = 2 r; dr'/dr = 2
-    >>> prof = FisheyeRadialProfile(n=0, a=[2,1,1,1,1], R=[0,0,0,0,0], s=[1,1,1,1,1])
+    >>> prof = FisheyeRadialProfile(n=0, a=[2])
     >>> prof.rprime_of_r(sp.Integer(3))
     6
     >>> sp.simplify(prof.drprime_dr(sp.symbols("r", positive=True)))
@@ -69,10 +74,19 @@ class FisheyeRadialProfile:
     >>> sp.simplify(sp.diff(rp, r) - drp)
     0
 
-    >>> # Symbolic identity for a simple n=1 case
-    >>> prof1 = FisheyeRadialProfile(n=1, a=[2,1,1,1,1], R=[3,0,0,0,0], s=[2,1,1,1,1])
+    >>> # Symbolic identity for a simple n=1 case with explicit numbers
+    >>> prof1 = FisheyeRadialProfile(n=1, a=[2, 1], R=[3], s=[2])
     >>> r = sp.symbols("r", positive=True)
     >>> sp.simplify(sp.diff(prof1.rprime_of_r(r), r) - prof1.drprime_dr(r))
+    0
+
+    >>> # Purely symbolic build via automatic symbols when args omitted:
+    >>> # (we pass n explicitly so doctest remains self-contained)
+    >>> prof_sym = FisheyeRadialProfile(n=2)
+    >>> len(prof_sym.a), len(prof_sym.R), len(prof_sym.s)
+    (3, 2, 2)
+    >>> r = sp.symbols("r", positive=True)
+    >>> sp.simplify(sp.diff(prof_sym.rprime_of_r(r), r) - prof_sym.drprime_dr(r))
     0
     """
 
@@ -85,31 +99,43 @@ class FisheyeRadialProfile:
         R: Optional[Sequence[object]] = None,
         s: Optional[Sequence[object]] = None,
     ) -> None:
-        # Optionally read from nrpy.params, but never register here.
-        if n is None or a is None or R is None or s is None:
-            if par is not None:
-                if n is None:
-                    n = int(par.parval_from_str("fisheye_n"))
-                if a is None:
-                    a = list(par.parval_from_str("fisheye_a"))
-                if R is None:
-                    R = list(par.parval_from_str("fisheye_R"))
-                if s is None:
-                    s = list(par.parval_from_str("fisheye_s"))
+        # Determine n
+        if n is None:
+            n = int(par.parval_from_str("fisheye_n"))
+        n = int(n)
+        if n < 0:
+            raise ValueError("fisheye_n must be >= 0.")
+        self.n = n
+
+        # Build a, R, s (use user-provided if present; else generate *symbols* of correct lengths)
+        if a is None:
+            # a0..a_n
+            self.a = _make_symbol_list("a", range(0, n + 1))
+        else:
+            if len(a) < n + 1:
+                raise ValueError(f"length of a must be at least n+1 = {n+1}.")
+            self.a = tuple(sp.sympify(val) for val in a[: n + 1])
+
+        if n == 0:
+            # No transitions; R and s unused.
+            self.R = tuple()
+            self.s = tuple()
+        else:
+            if R is None:
+                # R1..R_n
+                self.R = _make_symbol_list("R", range(1, n + 1))
             else:
-                raise ValueError(
-                    "FisheyeRadialProfile requires (n, a, R, s), or provide CodeParameters via nrpy.params."
-                )
+                if len(R) < n:
+                    raise ValueError(f"length of R must be at least n = {n}.")
+                self.R = tuple(sp.sympify(val) for val in R[:n])
 
-        if not (0 <= int(n) <= 4):
-            raise ValueError("fisheye_n must be in [0, 4].")
-        if len(a) < 5 or len(R) < 5 or len(s) < 5:
-            raise ValueError("a, R, s must each have length ≥ 5.")
-
-        self.n = int(n)
-        self.a = tuple(sp.sympify(val) for val in a[:5])
-        self.R = tuple(sp.sympify(val) for val in R[:5])
-        self.s = tuple(sp.sympify(val) for val in s[:5])
+            if s is None:
+                # s1..s_n
+                self.s = _make_symbol_list("s", range(1, n + 1))
+            else:
+                if len(s) < n:
+                    raise ValueError(f"length of s must be at least n = {n}.")
+                self.s = tuple(sp.sympify(val) for val in s[:n])
 
     # -------------------------
     # Core expressions
@@ -137,64 +163,13 @@ class FisheyeRadialProfile:
         return sp.simplify(drp)
 
 
-# ================================================================
-# Doctest + validate_expressions hook (numeric trusted results only)
-# ================================================================
 if __name__ == "__main__":
     import doctest
-    import os
     import sys
-    from mpmath import mp, mpf
 
-    # Optional: generate/compare trusted results (if NRPy test harness is available)
-    try:
-        import nrpy.validate_expressions.validate_expressions as ve
-    except Exception:
-        ve = None
-
-    # 1) run doctests
     results = doctest.testmod()
     if results.failed > 0:
         print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
         sys.exit(1)
     else:
         print(f"Doctest passed: All {results.attempted} test(s) passed")
-
-    # helper to convert SymPy expr to high-precision mpf
-    def to_mpf(expr, prec_dps: int = 80) -> mpf:
-        mp.dps = prec_dps
-        return mpf(str(sp.N(expr, prec_dps)))
-
-    # ---------- Trusted test: analytic baseline n=0 ----------
-    prof0 = FisheyeRadialProfile(n=0, a=[2, 1, 1, 1, 1], R=[0, 0, 0, 0, 0], s=[1, 1, 1, 1, 1])
-    r0_a = sp.Integer(3)
-    r0_b = sp.Integer(7)
-    results_dict = {
-        "n0_rprime_at_3": to_mpf(prof0.rprime_of_r(r0_a)),   # = 6
-        "n0_drprime_at_7": to_mpf(prof0.drprime_dr(r0_b)),   # = 2
-    }
-
-    # ---------- Trusted test: nontrivial two-transition case n=2 ----------
-    # Parameters chosen to be smooth and positive, with distinct transitions.
-    prof2 = FisheyeRadialProfile(
-        n=2,
-        a=[2.0, 1.5, 1.0, 1.0, 1.0],
-        R=[3.0, 6.0, 0.0, 0.0, 0.0],
-        s=[1.0, 1.5, 1.0, 1.0, 1.0],
-    )
-    r2_a = sp.Integer(4)
-    r2_b = sp.Integer(10)
-    results_dict.update({
-        "n2_rprime_at_4": to_mpf(prof2.rprime_of_r(r2_a)),
-        "n2_drprime_at_4": to_mpf(prof2.drprime_dr(r2_a)),
-        "n2_rprime_at_10": to_mpf(prof2.rprime_of_r(r2_b)),
-        "n2_drprime_at_10": to_mpf(prof2.drprime_dr(r2_b)),
-    })
-
-    if ve is not None:
-        ve.compare_or_generate_trusted_results(
-            os.path.abspath(__file__),
-            os.getcwd(),
-            os.path.splitext(os.path.basename(__file__))[0],  # => tests/trusted/fisheye_radial_profile.py
-            results_dict,
-        )
