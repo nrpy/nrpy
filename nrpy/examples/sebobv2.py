@@ -225,7 +225,7 @@ if precompute_waveform_coefficients_flag:
     BHaH.seobnr.inspiral_waveform_precomputed.SEOBNRv5_aligned_spin_waveform_precomputed.register_CFunction_SEOBNRv5_aligned_spin_waveform()
     BHaH.seobnr.inspiral_waveform_precomputed.SEOBNRv5_aligned_spin_flux_precomputed.register_CFunction_SEOBNRv5_aligned_spin_flux()
 else:
-    BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_waveform.register_CFunction_SEOBNRv5_aligned_spin_waveform()
+    BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_waveform_higher_order_strain.register_CFunction_SEOBNRv5_aligned_spin_waveform()
     BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_flux.register_CFunction_SEOBNRv5_aligned_spin_flux()
 
 # register additional commondata parameters needed for SEBOBv2 (but not needed for SEOBNR)
@@ -330,8 +330,14 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
 #define OMEGA 6
 #define OMEGA_CIRC 7
 #define IDX(idx, var) ((idx)*NUMVARS + (var))
-#define NUMMODES 2
-#define STRAIN 1
+#define NUMMODES 8 
+#define STRAIN22 1
+#define STRAIN21 2
+#define STRAIN33 3
+#define STRAIN32 4
+#define STRAIN44 5
+#define STRAIN43 6
+#define STRAIN55 7
 #define IDX_WF(idx,var) ((idx)*NUMMODES + (var))
 typedef struct {
   gsl_spline *spline;
