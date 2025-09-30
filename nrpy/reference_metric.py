@@ -7,7 +7,7 @@ functionalities related to the reference metric.
 Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
          SinhSymTP fixes:
          Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
-         fisheye:
+         Fisheye:
          Nishita Jadoo
          njadoo **at** uidaho **dot* edu
 """
@@ -166,10 +166,10 @@ class ReferenceMetric:
         elif "Cylindrical" in CoordSystem:
             self.EigenCoord = "Cylindrical"
             self.cylindrical_like()
-        elif CoordSystem == "fisheye":
+        elif CoordSystem == "Fisheye":
             # Cartesian-like coordinates with a purely radial fisheye remap
             # (see Faber et al. PRD 96, 104035, Appendix on fisheye coords).
-            self.EigenCoord = "fisheye"
+            self.EigenCoord = "Fisheye"
             self.fisheye()
         else:
             raise ValueError(
@@ -203,11 +203,10 @@ class ReferenceMetric:
         # → No orthonormal scale factors.
         # → Skip the entire reference-metric (ghat/Re/Gamma) pipeline.
         # =====================================================================
-        if getattr(self, "EigenCoord", "") == "fisheye":
+        if getattr(self, "EigenCoord", "") == "Fisheye":
             self.Jac_dUSph_dDrfmUD = None
             self.Jac_dUrfm_dDSphUD = None
             return
-
 
         # to/from Spherical coordinates
         def compute_Jacobian_and_inverseJacobian_tofrom_Spherical(
@@ -1569,9 +1568,10 @@ class ReferenceMetric:
             )
 
         # --------------------------------------------------------------
-        # Radial profile (see nrpy.equations.fisheye.fisheye_radial_profile)
+        # Radial profile (see nrpy.equations.fisheye_transformation.fisheye_radial_profile)
         # --------------------------------------------------------------
-        from nrpy.equations.fisheye.fisheye_radial_profile import FisheyeRadialProfile
+        from nrpy.equations.fisheye_transformation import fisheye_radial_profile
+
         prof = FisheyeRadialProfile(
             n=n_val,
             a=a_syms,
@@ -1590,9 +1590,12 @@ class ReferenceMetric:
         self.Cart_to_xx[2] = sp.simplify(scale_c2x * self.Cartz)
 
         self.requires_NewtonRaphson_for_Cart_to_xx = True
-        rbar_xx = sp.sqrt(self.xx[0]**2 + self.xx[1]**2 + self.xx[2]**2)
+        rbar_xx = sp.sqrt(self.xx[0] ** 2 + self.xx[1] ** 2 + self.xx[2] ** 2)
         r_phys = sp.Symbol("r_phys", positive=True)
-        if isinstance(self.NewtonRaphson_f_of_xx, list) and len(self.NewtonRaphson_f_of_xx) == 3:
+        if (
+            isinstance(self.NewtonRaphson_f_of_xx, list)
+            and len(self.NewtonRaphson_f_of_xx) == 3
+        ):
             self.NewtonRaphson_f_of_xx[0] = prof.rprime_of_r(r_phys) - rbar_xx
 
         scale_x2c = sp.Piecewise((0, sp.Eq(rbar_xx, 0)), (r_phys / rbar_xx, True))
@@ -1680,7 +1683,7 @@ supported_CoordSystems = [
     "UWedgeHSinhSph",
     "RingHoleySinhSpherical",
     "HoleySinhSpherical",
-    "fisheye",
+    "Fisheye",
 ]
 
 unittest_CoordSystems = [
