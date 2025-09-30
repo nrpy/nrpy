@@ -88,7 +88,8 @@ const REAL Omega_circ = dynamics[OMEGA_CIRC];
 """
     body += khat_code
     for key in hlms_dict.keys():
-        l, m = key.split(",")
+        mode = ast.literal_eval(key)
+        l, m = mode
         body += f"""
     gamma_{l}{m} = SEOBNRv5_aligned_spin_gamma_wrapper(1 + 1, -2.khat{m})"""
 
