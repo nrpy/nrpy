@@ -11,6 +11,7 @@ from inspect import currentframe as cfr
 from types import FrameType as FT
 from typing import Union, cast
 
+import ast
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.equations.seobnr.SEOBNRv5_aligned_spin_waveform_quantities as SEOBNRv5_wf
@@ -34,12 +35,15 @@ def register_CFunction_SEOBNRv5_aligned_spin_waveform() -> (
     hlms = []
     hlms_labels = []
     khatm = []
+    khatm_labels = []
 
-    for key, values in hlms_dict.items():
-        l, m = key.split(",")
+    for key in hlms_dict.keys():
+        mode = ast.literal_eval(key)
+        l, m = mode
         hlms.append(hlms_dict[f"({l}, {m})"])
         hlms_labels.append(f"const double complex h{l}{m}")
         khatm.append(f"{m}")
+        khatm_labels.append(f"const REAL khat{m}")
     # We are going to be doing this twice;
     # once for the fine dynamics and once for the coarse.
     h_code = ccg.c_codegen(
@@ -52,9 +56,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_waveform() -> (
     )
     khat_code = ccg.c_codegen(
         [wf.khat[khatm]],
-        [
-            f"const REAL khat{khatm}",
-        ],
+        khatm_labels,
         verbose=False,
         include_braces=False,
         cse_varprefix="khat",
@@ -88,7 +90,7 @@ const REAL Omega_circ = dynamics[OMEGA_CIRC];
     for key in hlms_dict.keys():
         l, m = key.split(",")
         body += f"""
-    gamma_{l}{m} = SEOBNRv5_aligned_spin_gamma_wrapper(1 + 1, -2.khat{m}"""
+    gamma_{l}{m} = SEOBNRv5_aligned_spin_gamma_wrapper(1 + 1, -2.khat{m})"""
 
     body += h_code
     body += """
