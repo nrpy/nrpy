@@ -197,19 +197,19 @@ def _construct_makefile_content(
         # Define the OpenMP detection block, which differs for nvcc
         if cc != "nvcc":
             openmp_block = """
-    # Check for OpenMP support
-    OPENMP_FLAG = -fopenmp
-    COMPILER_SUPPORTS_OPENMP := $(shell echo | $(CC) $(OPENMP_FLAG) -E - >/dev/null 2>&1 && echo YES || echo NO)
+# Check for OpenMP support
+OPENMP_FLAG = -fopenmp
+COMPILER_SUPPORTS_OPENMP := $(shell echo | $(CC) $(OPENMP_FLAG) -E - >/dev/null 2>&1 && echo YES || echo NO)
 
-    ifeq ($(COMPILER_SUPPORTS_OPENMP), YES)
-        CFLAGS += $(OPENMP_FLAG)
-        LDFLAGS += $(OPENMP_FLAG)
-    endif"""
+ifeq ($(COMPILER_SUPPORTS_OPENMP), YES)
+    CFLAGS += $(OPENMP_FLAG)
+    LDFLAGS += $(OPENMP_FLAG)
+endif"""
         else:
             openmp_block = """
-    OPENMP_FLAG = -fopenmp
-    CFLAGS += $(OPENMP_FLAG)
-    LDFLAGS += $(OPENMP_FLAG)"""
+OPENMP_FLAG = -fopenmp
+CFLAGS += $(OPENMP_FLAG)
+LDFLAGS += $(OPENMP_FLAG)"""
     else:
         openmp_block = ""  # No OpenMP flags
 
