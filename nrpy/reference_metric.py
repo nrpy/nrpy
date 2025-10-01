@@ -204,8 +204,56 @@ class ReferenceMetric:
         # → Skip the entire reference-metric (ghat/Re/Gamma) pipeline.
         # =====================================================================
         if getattr(self, "EigenCoord", "") == "Fisheye":
-            self.Jac_dUSph_dDrfmUD = None
-            self.Jac_dUrfm_dDSphUD = None
+            # We won't construct spherical ↔ rfm Jacobians, the hatted
+            # metric objects, or their derivatives. Initialize all to zero
+            # tensors/scalars so downstream code & validators have symbols.
+
+            # no spherical coordinates used
+            self.xxSph = [sp.Integer(0)] * 3
+
+            # orthogonal scale factors & funcforms
+            self.scalefactor_orthog = [sp.Integer(0)] * 3
+            self.scalefactor_orthog_funcform = [sp.Integer(0)] * 3
+
+            # spherical↔rfm Jacobians (zero 3x3s)
+            self.Jac_dUSph_dDrfmUD = ixp.zerorank2(3)
+            self.Jac_dUrfm_dDSphUD = ixp.zerorank2(3)
+
+            # reference-metric pieces
+            self.ReU = ixp.zerorank1(3)
+            self.ReD = ixp.zerorank1(3)
+            self.ReDD = ixp.zerorank2(3)
+            self.ghatDD = ixp.zerorank2(3)
+            self.ghatUU = ixp.zerorank2(3)
+            self.detgammahat = sp.Integer(0)
+
+            # derivatives of det(ghat)
+            self.detgammahatdD = ixp.zerorank1(3)
+            self.detgammahatdDD = ixp.zerorank2(3)
+
+            # derivatives of rescaling vectors/matrix
+            self.ReUdD = ixp.zerorank2(3)
+            self.ReUdDD = ixp.zerorank3(3)
+            self.ReDdD = ixp.zerorank2(3)
+            self.ReDdDD = ixp.zerorank3(3)
+            self.ReDDdD = ixp.zerorank3(3)
+            self.ReDDdDD = ixp.zerorank4(3)
+
+            # derivatives of reference metric
+            self.ghatDDdD = ixp.zerorank3(3)
+            self.ghatDDdDD = ixp.zerorank4(3)
+
+            # Christoffels and their derivatives
+            self.GammahatUDD = ixp.zerorank3(3)
+            self.GammahatUDDdD = ixp.zerorank4(3)
+
+            # Dummy out rfm-precompute helper functions used in other coords
+            self.f0_of_xx0 = sp.Integer(0)
+            self.f1_of_xx1 = sp.Integer(0)
+            self.f2_of_xx0 = sp.Integer(0)
+            self.f3_of_xx2 = sp.Integer(0)
+            self.f4_of_xx1 = sp.Integer(0)
+
             return
 
         # to/from Spherical coordinates
