@@ -1517,15 +1517,8 @@ class ReferenceMetric:
         # --------------------------------------------------------------
         # Fisheye parameters (defaults: n=1, a0=1, a1=4, R1=3, s1=1.0)
         # --------------------------------------------------------------
-        fisheye_n = par.register_CodeParameter(
-            "int",
-            self.CodeParam_modulename,
-            "fisheye_n",
-            1,
-            add_to_parfile=self.add_rfm_params_to_parfile,
-            add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
-        )
-        n_val = int(par.parval_from_str(f"{self.CodeParam_modulename}::fisheye_n"))
+        par.register_param(int, __name__, "fisheye_n", 1)
+        n_val = int(par.parval_from_str("fisheye_n"))
 
         a_syms = []
         for i in range(0, n_val + 1):
@@ -1570,7 +1563,9 @@ class ReferenceMetric:
         # --------------------------------------------------------------
         # Radial profile (see nrpy.equations.fisheye_transformation.fisheye_radial_profile)
         # --------------------------------------------------------------
-        from nrpy.equations.fisheye_transformation import fisheye_radial_profile
+        from nrpy.equations.fisheye_transformation.fisheye_radial_profile import (
+            FisheyeRadialProfile,
+        )
 
         prof = FisheyeRadialProfile(
             n=n_val,
@@ -1584,7 +1579,7 @@ class ReferenceMetric:
         # --------------------------------------------------------------
         r_cart = sp.sqrt(self.Cartx**2 + self.Carty**2 + self.Cartz**2)
         rprime_cart = prof.rprime_of_r(r_cart)
-        scale_c2x = sp.Piecewise((0, sp.Eq(r_cart, 0)), (rprime_cart / r_cart, True))
+        scale_c2x = sp.simplify(rprime_cart / r_cart)
         self.Cart_to_xx[0] = sp.simplify(scale_c2x * self.Cartx)
         self.Cart_to_xx[1] = sp.simplify(scale_c2x * self.Carty)
         self.Cart_to_xx[2] = sp.simplify(scale_c2x * self.Cartz)
@@ -1598,7 +1593,7 @@ class ReferenceMetric:
         ):
             self.NewtonRaphson_f_of_xx[0] = prof.rprime_of_r(r_phys) - rbar_xx
 
-        scale_x2c = sp.Piecewise((0, sp.Eq(rbar_xx, 0)), (r_phys / rbar_xx, True))
+        scale_x2c = sp.simplify(r_phys / rbar_xx)
         self.xx_to_Cart[0] = sp.simplify(scale_x2c * self.xx[0])
         self.xx_to_Cart[1] = sp.simplify(scale_x2c * self.xx[1])
         self.xx_to_Cart[2] = sp.simplify(scale_x2c * self.xx[2])
