@@ -452,7 +452,9 @@ def Cfunction_BSSN_Cart_to_BSSN_Fisheye(
                                            const BSSN_Cart_basis_struct *restrict BSSN_Cart_basis,
                                            BSSN_Fisheye_basis_struct *restrict BSSN_Fisheye"""
 
-    body = ""
+    body = """
+  const REAL xx0=xxL[0], xx1=xxL[1], xx2=xxL[2];
+"""
 
 
     # Define the input variables:
@@ -915,13 +917,19 @@ def build_initial_data_conversion_loop(enable_T4munu: bool, CoordSystem: str,) -
             for nu in range(mu, 4):
                 gf_list.append(f"T4UU{mu}{nu}")
 
+
+    if CoordSystem != "Fisheye":
+        final_basis = "rescaled_BSSN_rfm_basis"
+    else:
+        final_basis = "BSSN_Fisheye_basis"
+
     # 3) emit each assignment line
     lines: List[str] = []
     for field in sorted(gf_list):
         target = "auxevol_gfs" if field.startswith("T4UU") else "y_n_gfs"
         lines.append(
             f"    gridfuncs->{target}[IDX4pt({field.upper()}GF, idx3)]"
-            f" = rescaled_BSSN_rfm_basis.{field};"
+            f" = {final_basis}.{field};"
         )
 
     # 4) combine and return
