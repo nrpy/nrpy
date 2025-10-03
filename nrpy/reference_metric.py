@@ -1622,29 +1622,28 @@ class ReferenceMetric:
             s=s_syms if n_val > 0 else None,
         )
 
-        # --------------------------------------------------------------
-        # Maps: Cart → xx (closed form), xx → Cart (inversion needed)
-        # --------------------------------------------------------------
-        r_cart = sp.sqrt(self.Cartx**2 + self.Carty**2 + self.Cartz**2)
-        rprime_cart = prof.rprime_of_r(r_cart)
-        scale_c2x = sp.simplify(rprime_cart / r_cart)
-        self.Cart_to_xx[0] = sp.simplify(scale_c2x * self.Cartx)
-        self.Cart_to_xx[1] = sp.simplify(scale_c2x * self.Carty)
-        self.Cart_to_xx[2] = sp.simplify(scale_c2x * self.Cartz)
+        r = sp.sqrt(self.xx[0] ** 2 + self.xx[1] ** 2 + self.xx[2] ** 2)
+        rprime = prof.rprime_of_r(r)
+        rprime_over_r = sp.simplify(rprime / r)
+        self.xx_to_Cart[0] = sp.simplify(rprime_over_r * self.xx[0])
+        self.xx_to_Cart[1] = sp.simplify(rprime_over_r * self.xx[1])
+        self.xx_to_Cart[2] = sp.simplify(rprime_over_r * self.xx[2])
 
         self.requires_NewtonRaphson_for_Cart_to_xx = True
-        rbar_xx = sp.sqrt(self.xx[0] ** 2 + self.xx[1] ** 2 + self.xx[2] ** 2)
-        r_phys = sp.Symbol("r_phys", positive=True)
-        if (
-            isinstance(self.NewtonRaphson_f_of_xx, list)
-            and len(self.NewtonRaphson_f_of_xx) == 3
-        ):
-            self.NewtonRaphson_f_of_xx[0] = prof.rprime_of_r(r_phys) - rbar_xx
 
-        scale_x2c = sp.simplify(r_phys / rbar_xx)
-        self.xx_to_Cart[0] = sp.simplify(scale_x2c * self.xx[0])
-        self.xx_to_Cart[1] = sp.simplify(scale_x2c * self.xx[1])
-        self.xx_to_Cart[2] = sp.simplify(scale_x2c * self.xx[2])
+        # NO CLOSED-FORM EXPRESSION
+        self.Cart_to_xx[0] = "NewtonRaphson"
+        self.NewtonRaphson_f_of_xx[0] = sp.simplify(
+            (rprime_over_r * self.xx[0]) - self.Cartx
+        )
+        self.Cart_to_xx[1] = "NewtonRaphson"
+        self.NewtonRaphson_f_of_xx[1] = sp.simplify(
+            (rprime_over_r * self.xx[1]) - self.Carty
+        )
+        self.Cart_to_xx[2] = "NewtonRaphson"
+        self.NewtonRaphson_f_of_xx[2] = sp.simplify(
+            (rprime_over_r * self.xx[2]) - self.Cartz
+        )
 
         # No orthonormal unit vectors in fisheye coords
         self.UnitVectors = None
