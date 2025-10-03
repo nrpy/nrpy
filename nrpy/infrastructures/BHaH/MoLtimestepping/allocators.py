@@ -145,7 +145,7 @@ def register_CFunction_MoL_free_memory(
     name: str = f"MoL_free_memory_{which_gfs}"
     params = "MoL_gridfunctions_struct *restrict gridfuncs"
     if which_gfs == "non_y_n_gfs":
-        params += ", bool free_auxevol_gfs_if_exist"
+        params += ", const bool free_auxevol_gfs_if_exist"
     body = ""
     for gridfunction in gridfunctions_list:
         if gridfunction == "auxevol_gfs":
