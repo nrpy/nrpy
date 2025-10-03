@@ -345,7 +345,8 @@ jobs:
           python -m nrpy.examples.tovola_neutron_star && (cd project/tovola_neutron_star && make && make clean) &&
           python -m nrpy.examples.hydro_without_hydro && (cd project/hydro_without_hydro && make && make clean) &&
           python -m nrpy.examples.manga_bhah_lib && (cd project/bhah_lib && make && make clean) &&
-          python -m nrpy.examples.bhahaha && (cd project/BHaHAHA && make && make clean)
+          python -m nrpy.examples.bhahaha && (cd project/BHaHAHA && make && make clean) &&
+          python -m nrpy.examples.sebobv2 && (cd project/sebobv2 && make && make clean) 
 
   codegen-mac:
     runs-on: macos-13
@@ -391,7 +392,8 @@ jobs:
           python -m nrpy.examples.tovola_neutron_star && (cd project/tovola_neutron_star && make && make clean) &&
           python -m nrpy.examples.hydro_without_hydro && (cd project/hydro_without_hydro && make && make clean) &&
           python -m nrpy.examples.manga_bhah_lib && (cd project/bhah_lib && make && make clean) &&
-          python -m nrpy.examples.bhahaha && (cd project/BHaHAHA && make && make clean)
+          python -m nrpy.examples.bhahaha && (cd project/BHaHAHA && make && make clean) &&
+          python -m nrpy.examples.sebobv2 && (cd project/sebobv2 && make && make clean)
 
   sebob-consistency-test:
     runs-on: ${{ matrix.os }}
