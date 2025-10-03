@@ -32,6 +32,11 @@ _COORD_DEFINITIONS_1D = {
             "i0": [_Nxx_plus_2NGHOSTS[0] / 2],
             "i2": [_Nxx_plus_2NGHOSTS[2] / 2],
         },
+        # y-axis == { x_mid, z_mid }
+        "Fisheye": {
+            "i0": [_Nxx_plus_2NGHOSTS[0] / 2],
+            "i2": [_Nxx_plus_2NGHOSTS[2] / 2],
+        },
         # y-axis == { theta_mid, see yz-plane discussion for Spherical in 2D for explanation of phi points }
         "Spherical": {
             "i1": [_Nxx_plus_2NGHOSTS[1] / 2],
@@ -66,6 +71,11 @@ _COORD_DEFINITIONS_1D = {
             "i0": [_Nxx_plus_2NGHOSTS[0] / 2],
             "i1": [_Nxx_plus_2NGHOSTS[1] / 2],
         },
+        # z-axis == { x_mid, y_mid }
+        "Fisheye": {
+            "i0": [_Nxx_plus_2NGHOSTS[0] / 2],
+            "i1": [_Nxx_plus_2NGHOSTS[1] / 2],
+        },
         # z-axis == { th_min & th_max, phi_min  }
         "Spherical": {
             "i1": [_NGHOSTS, _Nxx_plus_2NGHOSTS[1] - _NGHOSTS - 1],
@@ -97,6 +107,7 @@ _COORD_DEFINITIONS_2D = {
     "xy": {
         # xy-plane == { z_mid }, where z index is i2
         "Cartesian": {"i2": [_Nxx_plus_2NGHOSTS[2] / 2]},
+        "Fisheye": {"i2": [_Nxx_plus_2NGHOSTS[2] / 2]},
         "Cylindrical": {"i2": [_Nxx_plus_2NGHOSTS[2] / 2]},
         # xy-plane == { theta_mid }, where theta index is i1
         "Spherical": {"i1": [_Nxx_plus_2NGHOSTS[1] / 2]},
@@ -115,6 +126,7 @@ _COORD_DEFINITIONS_2D = {
     },
     "yz": {
         "Cartesian": {"i0": [_Nxx_plus_2NGHOSTS[0] / 2]},
+        "Fisheye": {"i0": [_Nxx_plus_2NGHOSTS[0] / 2]},
         # See documentation for Spherical below; Cylindrical-like coordinates choose xx1 = phi instead of xx2.
         "Cylindrical": {
             "i1": [
