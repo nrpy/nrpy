@@ -437,6 +437,100 @@ After the basis transform, all BSSN quantities are rescaled."""
     ).full_function
 
 
+def Cfunction_rescaled_BSSN_rfm_to_BSSN_Fisheye(
+    enable_T4munu: bool = False,
+) -> str:
+    """
+    Generate C code for converting BSSN variables from Cartesian
+    basis into the Fisheye basis.
+
+    IMPORTANT:
+      • rescaled_BSSN_rfm_basis is the same as *Cartesian BSSN*.
+      • "rfm" here just means pure Cartesian coordinates.
+      • This function computes the Jacobian and applies the
+        basis transformation Cartesian → Fisheye.
+
+    :param enable_T4munu: Whether to include T4UU tensor in the transformation.
+    :return: Returns the generated C code as a string.
+    """
+    desc = rf"""Cartesian -> Fisheye basis transformation of BSSN vectors/tensors."""
+    cfunc_type = "static void"
+    name = "rescaled_BSSN_rfm_basis_to_BSSN_Fisheye"
+    params = """const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xxL[3],
+                                           const rescaled_BSSN_rfm_basis_struct *restrict rescaled_BSSN_rfm_basis,
+                                           BSSN_Fisheye_basis_struct *restrict BSSN_Fisheye_basis"""
+
+    body = """
+  const REAL xx0=xxL[0], xx1=xxL[1], xx2=xxL[2];
+"""
+
+    # Define the input variables:
+    hCartDD = ixp.declarerank2("rescaled_BSSN_rfm_basis->hDD", symmetry="sym01")
+    aCartDD = ixp.declarerank2("rescaled_BSSN_rfm_basis->aDD", symmetry="sym01")
+    vetCartU = ixp.declarerank1("rescaled_BSSN_rfm_basis->vetU")
+    betCartU = ixp.declarerank1("rescaled_BSSN_rfm_basis->betU")
+
+    # Compute Jacobian to convert to Fisheye coordinates
+    hDD = jac.basis_transform_tensorDD_from_Cartesian_to_rfmbasis("Fisheye", hCartDD)
+    aDD = jac.basis_transform_tensorDD_from_Cartesian_to_rfmbasis("Fisheye", aCartDD)
+    vetU = jac.basis_transform_vectorU_from_Cartesian_to_rfmbasis("Fisheye", vetCartU)
+    betU = jac.basis_transform_vectorU_from_Cartesian_to_rfmbasis("Fisheye", betCartU)
+
+    if enable_T4munu:
+        T4CartUU = ixp.declarerank2(
+            "rescaled_BSSN_rfm_basis->T4UU", symmetry="sym01", dimension=4
+        )
+        T4UU = jac.basis_transform_4tensorUU_from_Cartesian_to_time_indep_rfmbasis(
+            "Fisheye", T4CartUU
+        )
+
+    alpha, cf, trK = sp.symbols(
+        "rescaled_BSSN_rfm_basis->alpha rescaled_BSSN_rfm_basis->cf rescaled_BSSN_rfm_basis->trK",
+        real=True,
+    )
+
+    list_of_output_exprs = [alpha, cf, trK]
+    list_of_output_varnames = [
+        "BSSN_Fisheye_basis->alpha",
+        "BSSN_Fisheye_basis->cf",
+        "BSSN_Fisheye_basis->trK",
+    ]
+    for i in range(3):
+        list_of_output_exprs += [vetU[i]]
+        list_of_output_varnames += [f"BSSN_Fisheye_basis->vetU{i}"]
+        list_of_output_exprs += [betU[i]]
+        list_of_output_varnames += [f"BSSN_Fisheye_basis->betU{i}"]
+        for j in range(i, 3):
+            list_of_output_exprs += [hDD[i][j]]
+            list_of_output_varnames += [f"BSSN_Fisheye_basis->hDD{i}{j}"]
+            list_of_output_exprs += [aDD[i][j]]
+            list_of_output_varnames += [f"BSSN_Fisheye_basis->aDD{i}{j}"]
+
+    # Sort the outputs before calling outputC()
+    # https://stackoverflow.com/questions/9764298/is-it-possible-to-sort-two-listswhich-reference-each-other-in-the-exact-same-w
+    list_of_output_varnames, list_of_output_exprs = (
+        list(t)
+        for t in zip(*sorted(zip(list_of_output_varnames, list_of_output_exprs)))
+    )
+
+    body += ccg.c_codegen(
+        list_of_output_exprs,
+        list_of_output_varnames,
+        verbose=False,
+        include_braces=False,
+    )
+
+    return cfc.CFunction(
+        subdirectory="Fisheye",
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        include_CodeParameters_h=True,
+        body=body,
+    ).full_function
+
+
 # Cfunction_initial_data_lambdaU_grid_interior() computes lambdaU from
 # finite-difference derivatives of rescaled metric quantities
 def Cfunction_initial_data_lambdaU_grid_interior(
@@ -658,20 +752,38 @@ typedef struct __rescaled_BSSN_rfm_basis_struct__ {
         prefunc += T4UU_prettyprint()
     prefunc += "} rescaled_BSSN_rfm_basis_struct;\n"
 
+    if CoordSystem == "Fisheye":
+        prefunc += """
+    // BSSN variables in the fisheye basis:
+    typedef struct __BSSN_Fisheye_struct__ {
+      REAL alpha, vetU0,vetU1,vetU2, betU0,betU1,betU2;
+      REAL cf, trK;
+      REAL hDD00,hDD01,hDD02,hDD11,hDD12,hDD22;
+      REAL aDD00,aDD01,aDD02,aDD11,aDD12,aDD22;
+    """
+        if enable_T4munu:
+            prefunc += T4UU_prettyprint()
+        prefunc += "} BSSN_Fisheye_basis_struct;\n"
+
     prefunc += Cfunction_ADM_SphorCart_to_Cart(
         IDCoordSystem=IDCoordSystem,
         enable_T4munu=enable_T4munu,
     )
     prefunc += Cfunction_ADM_Cart_to_BSSN_Cart(enable_T4munu=enable_T4munu)
     prefunc += Cfunction_BSSN_Cart_to_rescaled_BSSN_rfm(
-        CoordSystem=CoordSystem,
+        CoordSystem=(CoordSystem if CoordSystem != "Fisheye" else "Cartesian"),
         enable_T4munu=enable_T4munu,
     )
 
     lambdaU_prefunc, lambdaU_launch = Cfunction_initial_data_lambdaU_grid_interior(
-        CoordSystem=CoordSystem
+        CoordSystem=(CoordSystem if CoordSystem != "Fisheye" else "Cartesian"),
     )
     prefunc += lambdaU_prefunc
+
+    if CoordSystem == "Fisheye":
+        prefunc += Cfunction_rescaled_BSSN_rfm_to_BSSN_Fisheye(
+            enable_T4munu=enable_T4munu
+        )
 
     return prefunc, lambdaU_launch
 
@@ -728,21 +840,31 @@ def setup_ADM_initial_data_reader(
     return includes, prefunc, lambdaU_launch
 
 
-def build_initial_data_conversion_loop(enable_T4munu: bool) -> str:
+def build_initial_data_conversion_loop(
+    enable_T4munu: bool,
+    CoordSystem: str,
+) -> str:
     """
     Generate the string for the initial data conversion loop.
 
       1) Declare the three Nxx_plus_2NGHOSTS constants
-      2) Open the `LOOP_OMP("omp parallel for", i0,i1,i2)` triple‐loop
+      2) Open the `LOOP_OMP("omp parallel for", i0,i1,i2)` triple-loop
       3) Compute xxL, xCart, call ID_function
       4) Convert through ADM→Cart, Cart→BSSN, BSSN→rescaled_RFM
+         - If CoordSystem == "Fisheye", additionally convert rescaled_RFM→Fisheye
+           to populate a BSSN_Fisheye_basis_struct.
       5) Set idx3 = IDX3(i0,i1,i2)
       6) Write out every BSSN field into gridfuncs->y_n_gfs, and
          (if enable_T4munu) T4UU fields into auxevol_gfs.
 
-    :param enable_T4munu: whether to include the stress‐energy (T4UU) fields
+    :param enable_T4munu: whether to include the stress-energy (T4UU) fields
+    :param CoordSystem: destination coordinate system name. This parameter only
+                        changes behavior when set to "Fisheye"; in that case an
+                        extra rescaled_RFM→Fisheye conversion is performed.
+                        For all other coordinate systems, behavior is unchanged.
     :returns: a raw string containing the entire loop + assignments
     """
+
     header = r"""
   const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
   const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
@@ -775,7 +897,16 @@ def build_initial_data_conversion_loop(enable_T4munu: bool) -> str:
                                    xxL,
                                    &BSSN_Cart_basis,
                                    &rescaled_BSSN_rfm_basis);
-
+"""
+    if CoordSystem == "Fisheye":
+        header += r"""
+    BSSN_Fisheye_basis_struct BSSN_Fisheye_basis;
+    rescaled_BSSN_rfm_basis_to_BSSN_Fisheye(commondata, params,
+                                   xxL,
+                                   &rescaled_BSSN_rfm_basis,
+                                   &BSSN_Fisheye_basis);
+"""
+    header += r"""
     const int idx3 = IDX3(i0, i1, i2);
 """
 
@@ -790,13 +921,18 @@ def build_initial_data_conversion_loop(enable_T4munu: bool) -> str:
             for nu in range(mu, 4):
                 gf_list.append(f"T4UU{mu}{nu}")
 
+    if CoordSystem != "Fisheye":
+        final_basis = "rescaled_BSSN_rfm_basis"
+    else:
+        final_basis = "BSSN_Fisheye_basis"
+
     # 3) emit each assignment line
     lines: List[str] = []
     for field in sorted(gf_list):
         target = "auxevol_gfs" if field.startswith("T4UU") else "y_n_gfs"
         lines.append(
             f"    gridfuncs->{target}[IDX4pt({field.upper()}GF, idx3)]"
-            f" = rescaled_BSSN_rfm_basis.{field};"
+            f" = {final_basis}.{field};"
         )
 
     # 4) combine and return
@@ -897,7 +1033,7 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
         ),
     )
 
-    body = build_initial_data_conversion_loop(enable_T4munu)
+    body = build_initial_data_conversion_loop(enable_T4munu, CoordSystem)
 
     post_initial_data_call: str = ""
     if parallelization in ["cuda"]:
