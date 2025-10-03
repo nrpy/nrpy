@@ -12,7 +12,6 @@ from typing import Union, cast
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.params as par
@@ -81,7 +80,7 @@ def register_CFunction_residual_H_compute_all_points(
     name = "residual_H_compute_all_points"
     params = """const commondata_struct *restrict commondata, const params_struct *restrict params,
                 REAL *restrict xx[3], const REAL *restrict auxevol_gfs, const REAL *restrict in_gfs,
-                REAL *restrict aux_gfs"""
+                REAL *restrict dest_gf_address"""
     if enable_rfm_precompute:
         params = params.replace(
             "REAL *restrict xx[3]", "const rfm_struct *restrict rfmstruct"
@@ -91,9 +90,7 @@ def register_CFunction_residual_H_compute_all_points(
     loop_body = BHaH.simple_loop.simple_loop(
         loop_body=ccg.c_codegen(
             [rhs.residual],
-            [
-                gri.BHaHGridFunction.access_gf("residual_H", gf_array_name="aux_gfs"),
-            ],
+            ["dest_gf_address[IDX3(i0,i1,i2)]"],
             enable_fd_codegen=True,
             enable_simd=enable_intrinsics,
         ).replace("SIMD", "CUDA" if parallelization == "cuda" else "SIMD"),
@@ -130,7 +127,7 @@ def register_CFunction_residual_H_compute_all_points(
         {
             "auxevol_gfs": "const REAL *restrict",
             "in_gfs": "const REAL *restrict",
-            "aux_gfs": "REAL *restrict",
+            "dest_gf_address": "REAL *restrict",
         }
     )
     arg_dict_host = {

@@ -6,7 +6,7 @@
  * Kernel to compute the residual throughout the grid.
  */
 static void residual_H_compute_all_points_host(const params_struct *restrict params, const rfm_struct *restrict rfmstruct,
-                                               const REAL *restrict auxevol_gfs, const REAL *restrict in_gfs, REAL *restrict aux_gfs) {
+                                               const REAL *restrict auxevol_gfs, const REAL *restrict in_gfs, REAL *restrict dest_gf_address) {
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
@@ -112,7 +112,7 @@ static void residual_H_compute_all_points_host(const params_struct *restrict par
                                                               DivSIMD(DivSIMD(FDPart3_Integer_1, f0_of_xx0__D0), f0_of_xx0)),
                                                       DivSIMD(uu_dDD00, MulSIMD(f0_of_xx0__D0, f0_of_xx0__D0))))));
 
-        WriteSIMD(&aux_gfs[IDX4(RESIDUAL_HGF, i0, i1, i2)], __RHS_exp_0);
+        WriteSIMD(&dest_gf_address[IDX3(i0, i1, i2)], __RHS_exp_0);
 
       } // END LOOP: for (int i0 = NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0 += simd_width)
     } // END LOOP: for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++)
@@ -124,6 +124,6 @@ static void residual_H_compute_all_points_host(const params_struct *restrict par
  */
 void residual_H_compute_all_points__rfm__SinhCylindricalv2n2(const commondata_struct *restrict commondata, const params_struct *restrict params,
                                                              const rfm_struct *restrict rfmstruct, const REAL *restrict auxevol_gfs,
-                                                             const REAL *restrict in_gfs, REAL *restrict aux_gfs) {
-  residual_H_compute_all_points_host(params, rfmstruct, auxevol_gfs, in_gfs, aux_gfs);
+                                                             const REAL *restrict in_gfs, REAL *restrict dest_gf_address) {
+  residual_H_compute_all_points_host(params, rfmstruct, auxevol_gfs, in_gfs, dest_gf_address);
 } // END FUNCTION residual_H_compute_all_points__rfm__SinhCylindricalv2n2

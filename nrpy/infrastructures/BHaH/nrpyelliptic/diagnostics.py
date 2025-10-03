@@ -141,7 +141,7 @@ def register_CFunction_diagnostics(
   const rfm_struct *restrict rfmstruct = griddata[grid].rfmstruct;
 
   // Compute Hamiltonian constraint violation and store it at diagnostic_output_gfs
-  residual_H_compute_all_points(commondata, params, rfmstruct, auxevol_gfs, y_n_gfs, diagnostic_output_gfs);
+  residual_H_compute_all_points(commondata, params, rfmstruct, auxevol_gfs, y_n_gfs, &diagnostic_output_gfs[IDX4pt(RESIDUAL_HGF, 0)]);
 """
     else:
         body += r"""
@@ -151,7 +151,7 @@ def register_CFunction_diagnostics(
     xx[ww] = griddata[grid].xx[ww];
 
   // Compute Hamiltonian constraint violation and store it at diagnostic_output_gfs
-  residual_H_compute_all_points(commondata, params, xx, auxevol_gfs, y_n_gfs, diagnostic_output_gfs);
+  residual_H_compute_all_points(commondata, params, xx, auxevol_gfs, y_n_gfs, &diagnostic_output_gfs[IDX4pt(RESIDUAL_HGF, 0)]);
 """
 
     if parallelization in ["cuda"]:

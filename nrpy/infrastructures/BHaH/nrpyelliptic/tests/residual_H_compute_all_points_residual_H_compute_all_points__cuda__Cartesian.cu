@@ -6,7 +6,8 @@
  * Kernel to compute the residual throughout the grid.
  */
 __global__ static void residual_H_compute_all_points_gpu(const size_t streamid, const rfm_struct *restrict rfmstruct,
-                                                         const REAL *restrict auxevol_gfs, const REAL *restrict in_gfs, REAL *restrict aux_gfs) {
+                                                         const REAL *restrict auxevol_gfs, const REAL *restrict in_gfs,
+                                                         REAL *restrict dest_gf_address) {
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = d_params[streamid].Nxx_plus_2NGHOSTS0;
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = d_params[streamid].Nxx_plus_2NGHOSTS1;
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = d_params[streamid].Nxx_plus_2NGHOSTS2;
@@ -94,7 +95,7 @@ __global__ static void residual_H_compute_all_points_gpu(const size_t streamid, 
                                                     AddCUDA(psi_background, uu))),
                                     uu_dDD22));
 
-        WriteCUDA(&aux_gfs[IDX4(RESIDUAL_HGF, i0, i1, i2)], __RHS_exp_0);
+        WriteCUDA(&dest_gf_address[IDX3(i0, i1, i2)], __RHS_exp_0);
 
       } // END LOOP: for (int i0 = tid0+NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0 += stride0)
     } // END LOOP: for (int i1 = tid1+NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1 += stride1)
@@ -106,7 +107,7 @@ __global__ static void residual_H_compute_all_points_gpu(const size_t streamid, 
  */
 void residual_H_compute_all_points__rfm__Cartesian(const commondata_struct *restrict commondata, const params_struct *restrict params,
                                                    const rfm_struct *restrict rfmstruct, const REAL *restrict auxevol_gfs,
-                                                   const REAL *restrict in_gfs, REAL *restrict aux_gfs) {
+                                                   const REAL *restrict in_gfs, REAL *restrict dest_gf_address) {
   const size_t threads_in_x_dir = BHAH_THREADS_IN_X_DIR_NELL_H;
   const size_t threads_in_y_dir = BHAH_THREADS_IN_Y_DIR_NELL_H;
   const size_t threads_in_z_dir = BHAH_THREADS_IN_Z_DIR_NELL_H;
@@ -116,6 +117,7 @@ void residual_H_compute_all_points__rfm__Cartesian(const commondata_struct *rest
                        (params->Nxx_plus_2NGHOSTS2 + threads_in_z_dir - 1) / threads_in_z_dir);
   size_t sm = 0;
   size_t streamid = params->grid_idx % NUM_STREAMS;
-  residual_H_compute_all_points_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, rfmstruct, auxevol_gfs, in_gfs, aux_gfs);
+  residual_H_compute_all_points_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, rfmstruct, auxevol_gfs, in_gfs,
+                                                                                                   dest_gf_address);
   cudaCheckErrors(cudaKernel, "residual_H_compute_all_points_gpu failure");
 } // END FUNCTION residual_H_compute_all_points__rfm__Cartesian

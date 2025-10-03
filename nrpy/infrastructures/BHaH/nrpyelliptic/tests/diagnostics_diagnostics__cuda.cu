@@ -34,7 +34,7 @@ void diagnostics(commondata_struct *restrict commondata, griddata_struct *restri
     const rfm_struct *restrict rfmstruct = griddata[grid].rfmstruct;
 
     // Compute Hamiltonian constraint violation and store it at diagnostic_output_gfs
-    residual_H_compute_all_points(commondata, params, rfmstruct, auxevol_gfs, y_n_gfs, diagnostic_output_gfs);
+    residual_H_compute_all_points(commondata, params, rfmstruct, auxevol_gfs, y_n_gfs, &diagnostic_output_gfs[IDX4pt(RESIDUAL_HGF, 0)]);
     if (n_step % outevery == 0) {
       BHAH_DEVICE_SYNC();
       size_t streamid = params->grid_idx % NUM_STREAMS;
