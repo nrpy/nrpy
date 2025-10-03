@@ -436,26 +436,33 @@ After the basis transform, all BSSN quantities are rescaled."""
         body=body,
     ).full_function
 
-def Cfunction_BSSN_Cart_to_BSSN_Fisheye(
+
+def Cfunction_rescaled_BSSN_rfm_to_BSSN_Fisheye(
     enable_T4munu: bool = False,
 ) -> str:
     """
-    Convert Cartesian-basis BSSN vectors/tensors (except lambda^i) to Fisheye basis.
+    Generate C code for converting BSSN variables from Cartesian
+    basis into the Fisheye basis.
+
+    IMPORTANT:
+      • rescaled_BSSN_rfm_basis is the same as *Cartesian BSSN*.
+      • "rfm" here just means pure Cartesian coordinates.
+      • This function computes the Jacobian and applies the
+        basis transformation Cartesian → Fisheye.
 
     :param enable_T4munu: Whether to include T4UU tensor in the transformation.
     :return: Returns the generated C code as a string.
     """
     desc = rf"""Cartesian -> Fisheye basis transformation of BSSN vectors/tensors."""
     cfunc_type = "static void"
-    name = "BSSN_Cart_to_BSSN_Fisheye"
+    name = "rescaled_BSSN_rfm_basis_to_BSSN_Fisheye"
     params = """const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xxL[3],
-                                           const BSSN_Cart_basis_struct *restrict BSSN_Cart_basis,
-                                           BSSN_Fisheye_basis_struct *restrict BSSN_Fisheye"""
+                                           const rescaled_BSSN_rfm_basis_struct *restrict rescaled_BSSN_rfm_basis,
+                                           BSSN_Fisheye_basis_struct *restrict BSSN_Fisheye_basis"""
 
     body = """
   const REAL xx0=xxL[0], xx1=xxL[1], xx2=xxL[2];
 """
-
 
     # Define the input variables:
     hCartDD = ixp.declarerank2("rescaled_BSSN_rfm_basis->hDD", symmetry="sym01")
@@ -464,18 +471,10 @@ def Cfunction_BSSN_Cart_to_BSSN_Fisheye(
     betCartU = ixp.declarerank1("rescaled_BSSN_rfm_basis->betU")
 
     # Compute Jacobian to convert to Fisheye coordinates
-    hDD = jac.basis_transform_tensorDD_from_Cartesian_to_rfmbasis(
-        "Fisheye", hCartDD
-    )
-    aDD = jac.basis_transform_tensorDD_from_Cartesian_to_rfmbasis(
-        "Fisheye", aCartDD
-    )
-    vetU = jac.basis_transform_vectorU_from_Cartesian_to_rfmbasis(
-        "Fisheye", vetCartU
-    )
-    betU = jac.basis_transform_vectorU_from_Cartesian_to_rfmbasis(
-        "Fisheye", betCartU
-    )
+    hDD = jac.basis_transform_tensorDD_from_Cartesian_to_rfmbasis("Fisheye", hCartDD)
+    aDD = jac.basis_transform_tensorDD_from_Cartesian_to_rfmbasis("Fisheye", aCartDD)
+    vetU = jac.basis_transform_vectorU_from_Cartesian_to_rfmbasis("Fisheye", vetCartU)
+    betU = jac.basis_transform_vectorU_from_Cartesian_to_rfmbasis("Fisheye", betCartU)
 
     if enable_T4munu:
         T4CartUU = ixp.declarerank2(
@@ -486,7 +485,8 @@ def Cfunction_BSSN_Cart_to_BSSN_Fisheye(
         )
 
     alpha, cf, trK = sp.symbols(
-        "rescaled_BSSN_rfm_basis->alpha rescaled_BSSN_rfm_basis->cf rescaled_BSSN_rfm_basis->trK", real=True
+        "rescaled_BSSN_rfm_basis->alpha rescaled_BSSN_rfm_basis->cf rescaled_BSSN_rfm_basis->trK",
+        real=True,
     )
 
     list_of_output_exprs = [alpha, cf, trK]
@@ -752,7 +752,6 @@ typedef struct __rescaled_BSSN_rfm_basis_struct__ {
         prefunc += T4UU_prettyprint()
     prefunc += "} rescaled_BSSN_rfm_basis_struct;\n"
 
-
     if CoordSystem == "Fisheye":
         prefunc += """
     // BSSN variables in the fisheye basis:
@@ -782,7 +781,9 @@ typedef struct __rescaled_BSSN_rfm_basis_struct__ {
     prefunc += lambdaU_prefunc
 
     if CoordSystem == "Fisheye":
-        prefunc += Cfunction_BSSN_Cart_to_BSSN_Fisheye(enable_T4munu=enable_T4munu)
+        prefunc += Cfunction_rescaled_BSSN_rfm_to_BSSN_Fisheye(
+            enable_T4munu=enable_T4munu
+        )
 
     return prefunc, lambdaU_launch
 
@@ -839,7 +840,10 @@ def setup_ADM_initial_data_reader(
     return includes, prefunc, lambdaU_launch
 
 
-def build_initial_data_conversion_loop(enable_T4munu: bool, CoordSystem: str,) -> str:
+def build_initial_data_conversion_loop(
+    enable_T4munu: bool,
+    CoordSystem: str,
+) -> str:
     """
     Generate the string for the initial data conversion loop.
 
@@ -897,7 +901,7 @@ def build_initial_data_conversion_loop(enable_T4munu: bool, CoordSystem: str,) -
     if CoordSystem == "Fisheye":
         header += r"""
     BSSN_Fisheye_basis_struct BSSN_Fisheye_basis;
-    BSSN_Cart_to_BSSN_Fisheye(commondata, params,
+    rescaled_BSSN_rfm_basis_to_BSSN_Fisheye(commondata, params,
                                    xxL,
                                    &rescaled_BSSN_rfm_basis,
                                    &BSSN_Fisheye_basis);
@@ -916,7 +920,6 @@ def build_initial_data_conversion_loop(enable_T4munu: bool, CoordSystem: str,) -
         for mu in range(4):
             for nu in range(mu, 4):
                 gf_list.append(f"T4UU{mu}{nu}")
-
 
     if CoordSystem != "Fisheye":
         final_basis = "rescaled_BSSN_rfm_basis"
