@@ -196,20 +196,34 @@ class ReferenceMetric:
             self.Jac_dUrfm_dDCartUD,
         ) = compute_Jacobian_and_inverseJacobian_tofrom_Cartesian(self)
 
+        # to/from Spherical coordinates
+        def compute_Jacobian_and_inverseJacobian_tofrom_Spherical(
+            self: ReferenceMetric,
+        ) -> Tuple[List[List[sp.Expr]], List[List[sp.Expr]]]:
+            # Step 2.a: First construct Jacobian matrix:
+            Jac_dUSph_dDrfmUD = ixp.zerorank2()
+            for i in range(3):
+                for j in range(3):
+                    Jac_dUSph_dDrfmUD[i][j] = sp.diff(self.xxSph[i], self.xx[j])
+            Jac_dUrfm_dDSphUD, dummyDET = ixp.generic_matrix_inverter3x3(
+                Jac_dUSph_dDrfmUD
+            )
+            return Jac_dUSph_dDrfmUD, Jac_dUrfm_dDSphUD
+
+        (
+            self.Jac_dUSph_dDrfmUD,
+            self.Jac_dUrfm_dDSphUD,
+        ) = compute_Jacobian_and_inverseJacobian_tofrom_Spherical(self)
+
         # =====================================================================
         # FISHEYE SHORT-CIRCUIT:
         # For fisheye coords we STOP after Cart/↔/rfm Jacobians.
-        # → No spherical Jacobians.
         # → No orthonormal scale factors.
         # → Skip the entire reference-metric (ghat/Re/Gamma) pipeline.
         # =====================================================================
         if getattr(self, "CoordSystem", "") == "Fisheye":
-            # We won't construct spherical ↔ rfm Jacobians, the hatted
             # metric objects, or their derivatives. Initialize all to zero
             # tensors/scalars so downstream code & validators have symbols.
-
-            # no spherical coordinates used
-            self.xxSph = [sp.Integer(0)] * 3
 
             # orthogonal scale factors & funcforms
             self.scalefactor_orthog = [sp.Integer(0)] * 3
@@ -253,27 +267,7 @@ class ReferenceMetric:
             self.f2_of_xx0 = sp.Integer(0)
             self.f3_of_xx2 = sp.Integer(0)
             self.f4_of_xx1 = sp.Integer(0)
-
             return
-
-        # to/from Spherical coordinates
-        def compute_Jacobian_and_inverseJacobian_tofrom_Spherical(
-            self: ReferenceMetric,
-        ) -> Tuple[List[List[sp.Expr]], List[List[sp.Expr]]]:
-            # Step 2.a: First construct Jacobian matrix:
-            Jac_dUSph_dDrfmUD = ixp.zerorank2()
-            for i in range(3):
-                for j in range(3):
-                    Jac_dUSph_dDrfmUD[i][j] = sp.diff(self.xxSph[i], self.xx[j])
-            Jac_dUrfm_dDSphUD, dummyDET = ixp.generic_matrix_inverter3x3(
-                Jac_dUSph_dDrfmUD
-            )
-            return Jac_dUSph_dDrfmUD, Jac_dUrfm_dDSphUD
-
-        (
-            self.Jac_dUSph_dDrfmUD,
-            self.Jac_dUrfm_dDSphUD,
-        ) = compute_Jacobian_and_inverseJacobian_tofrom_Spherical(self)
 
         # Step 1: Compute ghatDD (reference metric), ghatUU
         #         (inverse reference metric), as well as
@@ -1628,6 +1622,13 @@ class ReferenceMetric:
         self.xx_to_Cart[0] = sp.simplify(rprime_over_r * self.xx[0])
         self.xx_to_Cart[1] = sp.simplify(rprime_over_r * self.xx[1])
         self.xx_to_Cart[2] = sp.simplify(rprime_over_r * self.xx[2])
+
+        # Compute (r,th,ph) from (xx_to_Cart2,xx_to_Cart1,xx_to_Cart2)
+        self.xxSph[0] = sp.sqrt(
+            self.xx_to_Cart[0] ** 2 + self.xx_to_Cart[1] ** 2 + self.xx_to_Cart[2] ** 2
+        )
+        self.xxSph[1] = sp.acos(self.xx_to_Cart[2] / self.xxSph[0])
+        self.xxSph[2] = sp.atan2(self.xx_to_Cart[1], self.xx_to_Cart[0])
 
         self.requires_NewtonRaphson_for_Cart_to_xx = True
 
