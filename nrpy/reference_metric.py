@@ -169,7 +169,7 @@ class ReferenceMetric:
         elif CoordSystem == "Fisheye":
             # Cartesian-like coordinates with a purely radial fisheye remap
             # (see Faber et al. PRD 96, 104035, Appendix on fisheye coords).
-            self.EigenCoord = "Fisheye"
+            self.EigenCoord = "Cartesian"
             self.fisheye()
         else:
             raise ValueError(
@@ -203,7 +203,7 @@ class ReferenceMetric:
         # → No orthonormal scale factors.
         # → Skip the entire reference-metric (ghat/Re/Gamma) pipeline.
         # =====================================================================
-        if getattr(self, "EigenCoord", "") == "Fisheye":
+        if getattr(self, "CoordSystem", "") == "Fisheye":
             # We won't construct spherical ↔ rfm Jacobians, the hatted
             # metric objects, or their derivatives. Initialize all to zero
             # tensors/scalars so downstream code & validators have symbols.
@@ -1645,8 +1645,13 @@ class ReferenceMetric:
             (rprime_over_r * self.xx[2]) - self.Cartz
         )
 
-        # No orthonormal unit vectors in fisheye coords
-        self.UnitVectors = None
+        # CAUTION: Fisheye basis vectors are not orthonormal everywhere,
+        # but we set UnitVectors same as Cartesian-like for use in curvilinear BCs.
+        self.UnitVectors = [
+            [sp.sympify(1), sp.sympify(0), sp.sympify(0)],
+            [sp.sympify(0), sp.sympify(1), sp.sympify(0)],
+            [sp.sympify(0), sp.sympify(0), sp.sympify(1)],
+        ]
         self.radial_like_dirns = [0, 1, 2]
         # END: Set universal attributes for all fisheye coordinate systems:
 
