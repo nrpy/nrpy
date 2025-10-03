@@ -122,7 +122,8 @@ except perhaps non_y_n_gfs (e.g., after a regrid, in which non_y_n_gfs are freed
     body += r"""
   MoL_free_memory_y_n_gfs(&griddata[grid].gridfuncs);
   if(free_non_y_n_gfs_and_core_griddata_pointers) {
-    MoL_free_memory_non_y_n_gfs(&griddata[grid].gridfuncs);
+    const bool free_auxevol_gfs_if_exist = true;
+    MoL_free_memory_non_y_n_gfs(&griddata[grid].gridfuncs, free_auxevol_gfs_if_exist);
   }
   for(int i=0;i<3;i++) {
     BHAH_FREE_DEVICE(griddata[grid].xx[i]);
@@ -196,7 +197,8 @@ except perhaps non_y_n_gfs (e.g., after a regrid, in which non_y_n_gfs are freed
 
   MoL_free_memory_y_n_gfs(&griddata[grid].gridfuncs);
   if(free_non_y_n_gfs_and_core_griddata_pointers) {
-    MoL_free_memory_non_y_n_gfs(&griddata[grid].gridfuncs);
+    const bool free_auxevol_gfs_if_exist = true;
+    MoL_free_memory_non_y_n_gfs(&griddata[grid].gridfuncs, free_auxevol_gfs_if_exist);
   }"""
     body += """
   for(int i=0;i<3;i++) {

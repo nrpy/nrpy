@@ -61,7 +61,7 @@ def register_CFunction_numerical_grid_params_Nxx_dxx_xx(
         )
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = f"""Initializes a cell-centered grid in the local coordinate system based on physical dimensions (grid_physical_size).
+    desc = """Initializes a cell-centered grid in the local coordinate system based on physical dimensions (grid_physical_size).
 
 Inputs:
 - Nx[] inputs: Specifies new grid dimensions, if needed.

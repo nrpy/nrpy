@@ -920,7 +920,10 @@ Timestepping::~Timestepping() {
   // Step 5: Free all allocated memory
   for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
     MoL_free_memory_y_n_gfs(&griddata_chare[grid].gridfuncs);
-    MoL_free_memory_non_y_n_gfs(&griddata_chare[grid].gridfuncs);
+    {
+      const bool free_auxevol_gfs_if_exist = true;
+      MoL_free_memory_non_y_n_gfs(&griddata_chare[grid].gridfuncs, free_auxevol_gfs_if_exist);
+    }
     MoL_free_memory_diagnostic_gfs(&griddata_chare[grid].gridfuncs);
     timestepping_free_memory_tmpBuffer(&griddata_chare[grid].nonlocalinnerbcstruct, &griddata_chare[grid].tmpBuffers);"""
     if enable_rfm_precompute:

@@ -57,7 +57,10 @@ static void free_all_but_external_input_gfs(commondata_struct *restrict commonda
 
   // Free grid functions allocated by the Method of Lines.
   bah_MoL_free_memory_y_n_gfs(&griddata[grid].gridfuncs);
-  bah_MoL_free_memory_non_y_n_gfs(&griddata[grid].gridfuncs);
+  {
+    const bool free_auxevol_gfs_if_exist = true;
+    bah_MoL_free_memory_non_y_n_gfs(&griddata[grid].gridfuncs, free_auxevol_gfs_if_exist);
+  }
 
   // Free coordinate arrays for each dimension.
   for (int i = 0; i < 3; i++) {

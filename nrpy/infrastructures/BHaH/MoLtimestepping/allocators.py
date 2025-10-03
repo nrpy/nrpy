@@ -144,10 +144,12 @@ def register_CFunction_MoL_free_memory(
 
     name: str = f"MoL_free_memory_{which_gfs}"
     params = "MoL_gridfunctions_struct *restrict gridfuncs"
+    if which_gfs == "non_y_n_gfs":
+        params += ", bool free_auxevol_gfs_if_exist"
     body = ""
     for gridfunction in gridfunctions_list:
         if gridfunction == "auxevol_gfs":
-            body += "  if(NUM_AUXEVOL_GFS > 0)"
+            body += "  if(NUM_AUXEVOL_GFS > 0 && free_auxevol_gfs_if_exist)"
         if parallelization == "cuda":
             body += f" BHAH_FREE_DEVICE(gridfuncs->{gridfunction});\n"
         else:

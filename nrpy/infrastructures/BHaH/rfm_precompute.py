@@ -375,8 +375,7 @@ def register_CFunctions_rfm_precompute(
     Setting up reference_metric[SinhCylindricalv2n2_rfm_precompute]...
     """
     combined_BHaH_defines_list = []
-    parallelization = par.parval_from_str("parallelization")
-    is_cuda = parallelization == "cuda"
+    is_cuda = par.parval_from_str("parallelization") == "cuda"
 
     for CoordSystem in set_of_CoordSystems:
         rfm_precompute = ReferenceMetricPrecompute(CoordSystem)
