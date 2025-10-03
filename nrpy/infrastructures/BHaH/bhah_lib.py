@@ -85,8 +85,9 @@ def register_CFunction_bhah_finalize() -> None:
     commondata_struct *commondata = bhah_struct->commondata;
     griddata_struct *griddata = bhah_struct->griddata;
     for(int grid = 0; grid < commondata->NUMGRIDS; grid++) {
-              MoL_free_memory_y_n_gfs(&griddata[grid].gridfuncs);
-              MoL_free_memory_non_y_n_gfs(&griddata[grid].gridfuncs);
+      const bool free_auxevol_gfs_if_exist = true;
+      MoL_free_memory_y_n_gfs(&griddata[grid].gridfuncs);
+      MoL_free_memory_non_y_n_gfs(&griddata[grid].gridfuncs, free_auxevol_gfs_if_exist);
       rfm_precompute_free(commondata, &griddata[grid].params, griddata[grid].rfmstruct);
     }
     free(bhah_struct->commondata);
