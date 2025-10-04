@@ -52,12 +52,15 @@ def register_CFunction_stop_conditions_check() -> Union[None, pcg.NRPyEnv_type]:
   // Check if total number of iteration steps has been reached:
   //  EITHER the number of pseudo-time steps nn has reached nn_max,
   //  OR the log10(residual integral) < log10(residual integral tolerance).
-  if ((commondata->nn >= commondata->nn_max) || (commondata->log10_current_residual < commondata->log10_residual_tolerance)) {
-    printf("\nExiting main loop after %8d iterations\n", commondata->nn);
-    printf("The tolerance for the logarithmic residual is %.8e\n", commondata->log10_residual_tolerance);
-    printf("Exiting relaxation with logarithmic residual of %.8e\n", commondata->log10_current_residual);
+  if (commondata->nn >= commondata->nn_max) {
+    printf("\nMax iterations reached: iter=%d (max=%d), log10(res)=%.6e, log10(tol)=%.6e\n", commondata->nn, commondata->nn_max,
+           commondata->log10_current_residual, commondata->log10_residual_tolerance);
     commondata->stop_relaxation = true;
-  } // END IF one of the stop conditions have been met.
+  } else if (commondata->log10_current_residual < commondata->log10_residual_tolerance) {
+    printf("\nConvergence reached: iter=%d (max=%d), log10(res)=%.6e, log10(tol)=%.6e\n", commondata->nn, commondata->nn_max,
+           commondata->log10_current_residual, commondata->log10_residual_tolerance);
+    commondata->stop_relaxation = true;
+  } // END IF max iterations or convergence reached.
 """
 
     cfc.register_CFunction(
