@@ -28,9 +28,7 @@ def register_CFunction_stop_conditions_check() -> Union[None, pcg.NRPyEnv_type]:
     desc = "Evaluate stop conditions."
     cfunc_type = "void"
     name = "stop_conditions_check"
-    params = (
-        """commondata_struct *restrict commondata, griddata_struct *restrict griddata"""
-    )
+    params = "commondata_struct *restrict commondata"
 
     # Register a parameter to stop hyperbolic relaxation
     _stop_relaxation = par.register_CodeParameter(
@@ -50,20 +48,16 @@ def register_CFunction_stop_conditions_check() -> Union[None, pcg.NRPyEnv_type]:
         "REAL", __name__, "log10_current_residual", 1.0, commondata=True
     )
 
-    body = r"""  // Since this version of NRPyElliptic is unigrid, we simply set the grid index to 0
-  const int grid = 0;
-
-  // Set params
-  params_struct *restrict params = &griddata[grid].params;
-#include "set_CodeParameters.h"
-
-  // Check if total number of iteration steps has been reached
-  if ((nn >= nn_max) || (log10_current_residual < log10_residual_tolerance)){
-    printf("\nExiting main loop after %8d iterations\n", nn);
-    printf("The tolerance for the logarithmic residual is %.8e\n", log10_residual_tolerance);
-    printf("Exiting relaxation with logarithmic residual of %.8e\n", log10_current_residual);
+    body = r"""
+  // Check if total number of iteration steps has been reached:
+  //  EITHER the number of pseudo-time steps nn has reached nn_max,
+  //  OR the log10(residual integral) < log10(residual integral tolerance).
+  if ((commondata->nn >= commondata->nn_max) || (commondata->log10_current_residual < commondata->log10_residual_tolerance)) {
+    printf("\nExiting main loop after %8d iterations\n", commondata->nn);
+    printf("The tolerance for the logarithmic residual is %.8e\n", commondata->log10_residual_tolerance);
+    printf("Exiting relaxation with logarithmic residual of %.8e\n", commondata->log10_current_residual);
     commondata->stop_relaxation = true;
-  }
+  } // END IF one of the stop conditions have been met.
 """
 
     cfc.register_CFunction(
@@ -73,7 +67,7 @@ def register_CFunction_stop_conditions_check() -> Union[None, pcg.NRPyEnv_type]:
         CoordSystem_for_wrapper_func="",
         name=name,
         params=params,
-        include_CodeParameters_h=False,  # set_CodeParameters.h is manually included after the declaration of params_struct *restrict params
+        include_CodeParameters_h=False,
         body=body,
     )
     return pcg.NRPyEnv()
