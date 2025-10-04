@@ -328,7 +328,7 @@ BHaH.cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_par
 # Define post_MoL_step_forward_in_time string for main function
 post_MoL_step_forward_in_time = r"""
 serial {
-  stop_conditions_check(&commondata, griddata_chare);
+  stop_conditions_check(&commondata);
   if (commondata.stop_relaxation) {
     mainProxy.done();
   }
