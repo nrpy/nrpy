@@ -48,14 +48,14 @@ par.set_parval_from_str("Infrastructure", "BHaH")
 # Code-generation-time parameters:
 project_name = "sebobv2"
 
-parallel_codegen_enable = True
+enable_parallel_codegen = True
 
 project_dir = os.path.join("project", project_name)
 
 # First clean the project directory, if it exists.
 shutil.rmtree(project_dir, ignore_errors=True)
 
-par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
+par.set_parval_from_str("enable_parallel_codegen", enable_parallel_codegen)
 
 # Development flags (NOT command-line-tunable)
 # Flag to compute the SEOBNR waveform in the frequency domain.
