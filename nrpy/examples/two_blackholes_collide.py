@@ -316,7 +316,7 @@ if parallelization == "openmp":
         40,
     )
     par.adjust_CodeParam_default(
-        "bah_BBH_mode_enable",
+        "bah_enable_BBH_mode",
         1,
     )
 
