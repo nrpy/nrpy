@@ -405,13 +405,13 @@ if __name__ == "__main__":
     Coord = "Cartesian"
     LapseEvolOption = "OnePlusLog"
     ShiftEvolOption = "GammaDriving2ndOrder_Covariant"
-    for T4munu_enable in [True, False]:
+    for enable_T4munu in [True, False]:
         for improvements_enable in [True, False]:
             results_dict = register_CFunction_rhs_eval(
                 thorn_name="dummy_thorn_name",
                 CoordSystem=Coord,
                 enable_rfm_precompute=False,
-                enable_T4munu=T4munu_enable,
+                enable_T4munu=enable_T4munu,
                 enable_simd=False,
                 fd_order=4,  # unused for this validation.
                 LapseEvolutionOption=LapseEvolOption,
@@ -427,6 +427,6 @@ if __name__ == "__main__":
                 os.getcwd(),
                 # File basename. If this is set to "trusted_module_test1", then
                 #   trusted results_dict will be stored in tests/trusted_module_test1.py
-                f"{os.path.splitext(os.path.basename(__file__))[0]}_{LapseEvolOption}_{ShiftEvolOption}_{Coord}_T4munu{T4munu_enable}_improvements{improvements_enable}",
+                f"{os.path.splitext(os.path.basename(__file__))[0]}_{LapseEvolOption}_{ShiftEvolOption}_{Coord}_T4munu{enable_T4munu}_improvements{improvements_enable}",
                 cast(Dict[str, Union[mpf, mpc]], results_dict),
             )
