@@ -210,7 +210,7 @@ for script in "${cuda_example_scripts[@]}"; do
   fi
 
   if [[ $script_path != *"superB"* && $script_path != *"carpet"* ]]; then
-    echo "Compiling CUDA_enabled project in $project_path..."
+    echo "Compiling CUDA-enabled project in $project_path..."
     (cd "$project_path" && make && make clean)
     if [[ $? -ne 0 ]]; then
       echo "Error: Compilation in $project_path failed."
