@@ -705,7 +705,7 @@ and result updates for multiple horizons.
       for (int h = 0; h < commondata->bah_max_num_horizons; h++) {
         commondata->bah_BBH_mode_horizon_active[h] = 1; // Activate all configured horizons
       } // END LOOP: for h (activating all horizons if not BBH mode)
-    } // END ELSE: not BBH_mode_enable (iteration 0 horizon activity)
+    } // END ELSE: not enable_BBH_mode (iteration 0 horizon activity)
   } else { // Not the first call (nn != 0)
     // STEP 3.b: If not the first call:
     for (int h = 0; h < commondata->bah_max_num_horizons; h++) {

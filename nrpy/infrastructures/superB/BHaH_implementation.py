@@ -321,7 +321,7 @@ def string_for_step3_initialize_bhahaha_data_structs_and_solver_params(
       for (int h = 0; h < commondata->bah_max_num_horizons; h++) {
         commondata->bah_BBH_mode_horizon_active[h] = 1; // Activate all configured horizons
       } // END LOOP: for h (activating all horizons if not BBH mode)
-    } // END ELSE: not BBH_mode_enable (iteration 0 horizon activity)"""
+    } // END ELSE: not enable_BBH_mode (iteration 0 horizon activity)"""
     else:
         outstring += r"""
     // STEP 3.a.iii: Initialize `commondata->bah_BBH_mode_horizon_active` (non-BBH mode only).
