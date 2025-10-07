@@ -42,8 +42,9 @@ def register_CFunction_SEOBNRv5_aligned_spin_waveform() -> (
         l, m = mode
         hlms.append(hlms_dict[f"({l} , {m})"])
         hlms_labels.append(f"const double complex h{l}{m}")
-        khatm.append(wf.khat[m])
-        khatm_labels.append(f"const REAL khat{m}")
+        if wf.khat[m] not in khatm:
+            khatm.append(wf.khat[m])
+            khatm_labels.append(f"const REAL khat{m}")
     # We are going to be doing this twice;
     # once for the fine dynamics and once for the coarse.
     h_code = ccg.c_codegen(
@@ -76,11 +77,18 @@ Calculates the (2,2) mode of the SEOBNRv5 inspiral waveform for a single timeste
     params = "REAL *restrict dynamics, commondata_struct *restrict commondata, double complex *inspiral_modes"
     body = """
 COMPLEX gamma_22;
+COMPLEX gamma_21;
+COMPLEX gamma_33;
+COMPLEX gamma_32;
+COMPLEX gamma_44;
+COMPLEX gamma_43;
+COMPLEX gamma_55;
 const REAL m1 = commondata->m1;
 const REAL m2 = commondata->m2;
 const REAL chi1 = commondata->chi1;
 const REAL chi2 = commondata->chi2;
 const REAL phi = dynamics[PHI];
+const REAL pphi = dynamics[PPHI];
 const REAL Hreal = dynamics[H];
 const REAL Omega = dynamics[OMEGA];
 const REAL Omega_circ = dynamics[OMEGA_CIRC];
@@ -91,17 +99,18 @@ const REAL Omega_circ = dynamics[OMEGA_CIRC];
         mode = ast.literal_eval(key)
         l, m = mode
         body += f"""
-    gamma_{l}{m} = SEOBNRv5_aligned_spin_gamma_wrapper(1 + 1, -2.*khat{m})"""
+    gamma_{l}{m} = SEOBNRv5_aligned_spin_gamma_wrapper({l} + 1, -2.*khat{m});
+"""
 
     body += h_code
     body += """
-inspiral_modes[STRAIN22 - 1] = h22
-inspiral_modes[STRAIN21 - 1] = h21
-inspiral_modes[STRAIN33 - 1] = h33
-inspiral_modes[STRAIN32 - 1] = h32
-inspiral_modes[STRAIN44 - 1] = h44
-inspiral_modes[STRAIN43 - 1] = h43
-inspiral_modes[STRAIN55 - 1] = h55
+inspiral_modes[STRAIN22 - 1] = h22;
+inspiral_modes[STRAIN21 - 1] = h21;
+inspiral_modes[STRAIN33 - 1] = h33;
+inspiral_modes[STRAIN32 - 1] = h32;
+inspiral_modes[STRAIN44 - 1] = h44;
+inspiral_modes[STRAIN43 - 1] = h43;
+inspiral_modes[STRAIN55 - 1] = h55;
 """
     cfc.register_CFunction(
         subdirectory="inspiral_waveform",

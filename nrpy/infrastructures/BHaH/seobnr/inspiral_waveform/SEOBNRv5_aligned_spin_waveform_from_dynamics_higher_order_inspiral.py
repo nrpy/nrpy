@@ -39,7 +39,7 @@ Calculates the (2,2) mode of the SEOBNRv5 inspiral waveform for the low- and fin
     body = """
 int i;
 REAL dynamics[NUMVARS];
-COMPLEX strain_modes_single_timestep[NUMMODES- 1];
+COMPLEX *strain_modes_single_timestep = (COMPLEX *) malloc((NUMMODES- 1)*sizeof(COMPLEX));
 commondata->waveform_low = (double complex *)malloc(commondata->nsteps_low*NUMMODESSTORED*sizeof(double complex));
 commondata->waveform_low = (double complex *)malloc(commondata->nsteps_low*NUMMODES*sizeof(double complex)); //t , h_+ , h_x
 if (commondata->waveform_low == NULL){
@@ -67,8 +67,7 @@ for (i = 0; i < commondata->nsteps_low; i++) {
 
   //compute
   //store
-  commondata->waveform_low[IDX_WF(i,TIME)] = dynamics[TIME];
-  commondata->waveform_low[IDX_WF(i,STRAIN)] = SEOBNRv5_aligned_spin_waveform(dynamics, commondata);
+  SEOBNRv5_aligned_spin_waveform(dynamics, commondata, strain_modes_single_timestep);
   commondata->waveform_low[IDX_WF(i,TIME)] = dynamics[TIME];
   commondata->waveform_low[IDX_WF(i,STRAIN)] = strain_modes_single_timestep[STRAIN22-1];
 }
@@ -86,10 +85,11 @@ for (i = 0; i < commondata->nsteps_fine; i++) {
 
   //compute
   //store
+  SEOBNRv5_aligned_spin_waveform(dynamics, commondata, strain_modes_single_timestep);
   commondata->waveform_fine[IDX_WF(i,TIME)] = dynamics[TIME];
-  commondata->waveform_fine[IDX_WF(i,STRAIN)] = SEOBNRv5_aligned_spin_waveform(dynamics, commondata);
-    commondata->waveform_fine[IDX_WF(i,TIME)] = dynamics[TIME];
   commondata->waveform_fine[IDX_WF(i,STRAIN)] = strain_modes_single_timestep[STRAIN22-1];
+  
+free(strain_modes_single_timestep);
 }
 """
     cfc.register_CFunction(
