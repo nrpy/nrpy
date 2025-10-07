@@ -4,4 +4,5 @@ from . import (
     SEOBNRv5_aligned_spin_waveform,
     SEOBNRv5_aligned_spin_waveform_higher_order_strain,
     SEOBNRv5_aligned_spin_waveform_from_dynamics,
+    SEOBNRv5_aligned_spin_waveform_from_dynamics_higher_order_inspiral,
 )

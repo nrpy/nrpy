@@ -40,9 +40,9 @@ def register_CFunction_SEOBNRv5_aligned_spin_waveform() -> (
     for key in hlms_dict.keys():
         mode = ast.literal_eval(key)
         l, m = mode
-        hlms.append(hlms_dict[f"({l}, {m})"])
+        hlms.append(hlms_dict[f"({l} , {m})"])
         hlms_labels.append(f"const double complex h{l}{m}")
-        khatm.append(f"{m}")
+        khatm.append(wf.khat[m])
         khatm_labels.append(f"const REAL khat{m}")
     # We are going to be doing this twice;
     # once for the fine dynamics and once for the coarse.
@@ -55,7 +55,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_waveform() -> (
         fp_type_alias="COMPLEX",
     )
     khat_code = ccg.c_codegen(
-        [wf.khat[khatm]],
+        khatm,
         khatm_labels,
         verbose=False,
         include_braces=False,
@@ -73,7 +73,7 @@ Calculates the (2,2) mode of the SEOBNRv5 inspiral waveform for a single timeste
     cfunc_type = "void"
     prefunc = "#include<complex.h>"
     name = "SEOBNRv5_aligned_spin_waveform"
-    params = "REAL *restrict dynamics, commondata_struct *restrict commondata, double complex *inspiral modes"
+    params = "REAL *restrict dynamics, commondata_struct *restrict commondata, double complex *inspiral_modes"
     body = """
 COMPLEX gamma_22;
 const REAL m1 = commondata->m1;
@@ -91,7 +91,7 @@ const REAL Omega_circ = dynamics[OMEGA_CIRC];
         mode = ast.literal_eval(key)
         l, m = mode
         body += f"""
-    gamma_{l}{m} = SEOBNRv5_aligned_spin_gamma_wrapper(1 + 1, -2.khat{m})"""
+    gamma_{l}{m} = SEOBNRv5_aligned_spin_gamma_wrapper(1 + 1, -2.*khat{m})"""
 
     body += h_code
     body += """

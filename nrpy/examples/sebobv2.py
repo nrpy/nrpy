@@ -219,7 +219,7 @@ BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_ode_integration.register_CFunction_SE
 # register inspiral waveform routines
 BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_gamma_wrapper.register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper()
 BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_interpolate_modes.register_CFunction_SEOBNRv5_aligned_spin_interpolate_modes()
-BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_waveform_from_dynamics.register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics()
+BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_waveform_from_dynamics_higher_order_inspiral.register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics()
 if precompute_waveform_coefficients_flag:
     BHaH.seobnr.inspiral_waveform_precomputed.SEOBNRv5_aligned_spin_waveform_coefficients.register_CFunction_SEOBNRv5_aligned_spin_waveform_coefficients()
     BHaH.seobnr.inspiral_waveform_precomputed.SEOBNRv5_aligned_spin_waveform_precomputed.register_CFunction_SEOBNRv5_aligned_spin_waveform()
@@ -338,7 +338,9 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
 #define STRAIN44 5
 #define STRAIN43 6
 #define STRAIN55 7
-#define IDX_WF(idx,var) ((idx)*NUMMODES + (var))
+#define NUMMODESSTORED 2 // process 2,2 mode for now
+#define STRAIN 1
+#define IDX_WF(idx,var) ((idx)*NUMMODESSTORED + (var))
 typedef struct {
   gsl_spline *spline;
   gsl_interp_accel *acc;
