@@ -73,7 +73,7 @@ par.set_parval_from_str("fp_type", fp_type)
 
 # Code-generation-time parameters:
 project_name = "blackhole_spectroscopy"
-CoordSystem = "SinhCylindrical"
+CoordSystem = "Fisheye"
 IDtype = "TP_Interp"
 IDCoordSystem = "Cartesian"
 
@@ -104,6 +104,7 @@ swm2sh_maximum_l_mode_to_compute = 2  # for consistency with NRPy 1.0 version.
 Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
     "SinhCylindrical": [400, 2, 1200],
+    "Fisheye": [400, 400, 400],
 }
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.25
@@ -117,6 +118,7 @@ separate_Ricci_and_BSSN_RHS = True
 parallel_codegen_enable = True
 enable_fd_functions = True
 boundary_conditions_desc = "outgoing radiation"
+enable_psi4_diagnostics = True if CoordSystem != "Fisheye" else False
 
 set_of_CoordSystems = {CoordSystem}
 NUMGRIDS = len(set_of_CoordSystems)
@@ -182,7 +184,7 @@ BHaH.BHaHAHA.interpolation_2d_general__uniform_src_grid.register_CFunction_inter
 BHaH.general_relativity.BSSN.diagnostics.register_CFunction_diagnostics(
     set_of_CoordSystems=set_of_CoordSystems,
     default_diagnostics_out_every=diagnostics_output_every,
-    enable_psi4_diagnostics=True,
+    enable_psi4_diagnostics=enable_psi4_diagnostics,
     grid_center_filename_tuple=("out0d-conv_factor%.2f.txt", "convergence_factor"),
     axis_filename_tuple=(
         "out1d-AXIS-conv_factor%.2f-t%08.2f.txt",
@@ -196,10 +198,12 @@ BHaH.general_relativity.BSSN.diagnostics.register_CFunction_diagnostics(
 )
 if enable_rfm_precompute:
     BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
-        set_of_CoordSystems=set_of_CoordSystems,
+        set_of_CoordSystems=(
+            set_of_CoordSystems if CoordSystem != "Fisheye" else {"Cartesian"}
+        ),
     )
 BHaH.general_relativity.BSSN.rhs_eval.register_CFunction_rhs_eval(
-    CoordSystem=CoordSystem,
+    CoordSystem=(CoordSystem if CoordSystem != "Fisheye" else "Cartesian"),
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
     enable_T4munu=False,
@@ -217,24 +221,24 @@ BHaH.general_relativity.BSSN.rhs_eval.register_CFunction_rhs_eval(
 )
 if enable_CAHD:
     BHaH.general_relativity.BSSN.cahdprefactor_gf.register_CFunction_cahdprefactor_auxevol_gridfunction(
-        {CoordSystem}
+        CoordSystem={CoordSystem} if CoordSystem != "Fisheye" else {"Cartesian"},
     )
 if separate_Ricci_and_BSSN_RHS:
     BHaH.general_relativity.BSSN.Ricci_eval.register_CFunction_Ricci_eval(
-        CoordSystem=CoordSystem,
+        CoordSystem=(CoordSystem if CoordSystem != "Fisheye" else "Cartesian"),
         enable_rfm_precompute=enable_rfm_precompute,
         enable_intrinsics=enable_intrinsics,
         enable_fd_functions=enable_fd_functions,
         OMP_collapse=OMP_collapse,
     )
 BHaH.general_relativity.BSSN.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
-    CoordSystem=CoordSystem,
+    CoordSystem=(CoordSystem if CoordSystem != "Fisheye" else "Cartesian"),
     enable_rfm_precompute=enable_rfm_precompute,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
 BHaH.general_relativity.BSSN.constraints.register_CFunction_constraints(
-    CoordSystem=CoordSystem,
+    CoordSystem=(CoordSystem if CoordSystem != "Fisheye" else "Cartesian"),
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
     enable_T4munu=False,
@@ -243,28 +247,32 @@ BHaH.general_relativity.BSSN.constraints.register_CFunction_constraints(
     OMP_collapse=OMP_collapse,
 )
 
-BHaH.general_relativity.PSI4.compute_psi4.register_CFunction_psi4(
-    CoordSystem=CoordSystem,
-    OMP_collapse=OMP_collapse,
-    enable_fd_functions=enable_fd_functions,
-)
-BHaH.special_functions.spin_weight_minus2_spherical_harmonics.register_CFunction_spin_weight_minus2_sph_harmonics(
-    swm2sh_maximum_l_mode_generated=swm2sh_maximum_l_mode_generated
-)
+if enable_psi4_diagnostics:
+    BHaH.general_relativity.PSI4.compute_psi4.register_CFunction_psi4(
+        CoordSystem=CoordSystem,
+        OMP_collapse=OMP_collapse,
+        enable_fd_functions=enable_fd_functions,
+    )
+    BHaH.special_functions.spin_weight_minus2_spherical_harmonics.register_CFunction_spin_weight_minus2_sph_harmonics(
+        swm2sh_maximum_l_mode_generated=swm2sh_maximum_l_mode_generated
+    )
 
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 # Does not need to be parallelized.
-BHaH.general_relativity.BSSN.psi4_decomposition.register_CFunction_psi4_spinweightm2_decomposition(
-    CoordSystem=CoordSystem
-)
+if enable_psi4_diagnostics:
+    BHaH.general_relativity.BSSN.psi4_decomposition.register_CFunction_psi4_spinweightm2_decomposition(
+        CoordSystem=CoordSystem
+    )
 
 BHaH.numerical_grids_and_timestep.register_CFunctions(
     set_of_CoordSystems=set_of_CoordSystems,
     list_of_grid_physical_sizes=[grid_physical_size],
     Nxx_dict=Nxx_dict,
-    enable_rfm_precompute=enable_rfm_precompute,
-    enable_CurviBCs=True,
+    enable_rfm_precompute=(
+        enable_rfm_precompute if CoordSystem != "Fisheye" else False
+    ),
+    enable_CurviBCs=(True if CoordSystem != "Fisheye" else False),
 )
 
 BHaH.CurviBoundaryConditions.register_all.register_C_functions(
@@ -336,9 +344,10 @@ par.adjust_CodeParam_default("TP_bare_mass_m", 1.0 / (1.0 + mass_ratio))
 par.adjust_CodeParam_default("TP_bare_mass_M", mass_ratio / (1.0 + mass_ratio))
 # Evolution / diagnostics parameters
 par.adjust_CodeParam_default("eta", GammaDriving_eta)
-par.adjust_CodeParam_default(
-    "swm2sh_maximum_l_mode_to_compute", swm2sh_maximum_l_mode_to_compute
-)
+if enable_psi4_diagnostics:
+    par.adjust_CodeParam_default(
+        "swm2sh_maximum_l_mode_to_compute", swm2sh_maximum_l_mode_to_compute
+    )
 
 #########################################################
 # STEP 3: Generate header files, register C functions and
