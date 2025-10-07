@@ -229,10 +229,6 @@ class ReferenceMetric:
             self.scalefactor_orthog = [sp.Integer(0)] * 3
             self.scalefactor_orthog_funcform = [sp.Integer(0)] * 3
 
-            # spherical↔rfm Jacobians (zero 3x3s)
-            self.Jac_dUSph_dDrfmUD = ixp.zerorank2(3)
-            self.Jac_dUrfm_dDSphUD = ixp.zerorank2(3)
-
             # reference-metric pieces
             self.ReU = ixp.zerorank1(3)
             self.ReD = ixp.zerorank1(3)
@@ -1630,21 +1626,12 @@ class ReferenceMetric:
         self.xxSph[1] = sp.acos(self.xx_to_Cart[2] / self.xxSph[0])
         self.xxSph[2] = sp.atan2(self.xx_to_Cart[1], self.xx_to_Cart[0])
 
-        self.requires_NewtonRaphson_for_Cart_to_xx = True
-
-        # NO CLOSED-FORM EXPRESSION
-        self.Cart_to_xx[0] = "NewtonRaphson"
-        self.NewtonRaphson_f_of_xx[0] = sp.simplify(
-            (rprime_over_r * self.xx[0]) - self.Cartx
-        )
-        self.Cart_to_xx[1] = "NewtonRaphson"
-        self.NewtonRaphson_f_of_xx[1] = sp.simplify(
-            (rprime_over_r * self.xx[1]) - self.Carty
-        )
-        self.Cart_to_xx[2] = "NewtonRaphson"
-        self.NewtonRaphson_f_of_xx[2] = sp.simplify(
-            (rprime_over_r * self.xx[2]) - self.Cartz
-        )
+        # We do NOT provide a Cart->xx inverse
+        # Tell generators there is no NR to emit, and zero out placeholders.
+        self.requires_NewtonRaphson_for_Cart_to_xx = False
+        self.Cart_to_xx[0] = sp.Integer(0)
+        self.Cart_to_xx[1] = sp.Integer(0)
+        self.Cart_to_xx[2] = sp.Integer(0)
 
         # CAUTION: Fisheye basis vectors are not orthonormal everywhere,
         # but we set UnitVectors same as Cartesian-like for use in curvilinear BCs.
