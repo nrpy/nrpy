@@ -252,9 +252,8 @@ def register_CFunction_ds_min_radial_like_dirns_single_pt(
     desc = "Examining only radial-like (non-angular) directions at a given point on a numerical grid, find the minimum grid spacing ds_min."
     cfunc_type = "void"
     name = "ds_min_radial_like_dirns_single_pt"
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xx0, const REAL xx1, const REAL xx2, REAL *restrict ds_min_radial_like_dirns"
+    params = "const params_struct *restrict params, const REAL xx0, const REAL xx1, const REAL xx2, REAL *restrict ds_min_radial_like_dirns"
     rfm = refmetric.reference_metric[CoordSystem]
-    # These are set in CodeParameters.h
     dxx = sp.symbols("dxx0 dxx1 dxx2", real=True)
     body = "MAYBE_UNUSED REAL ds0=1e38, ds1=1e38, ds2=1e38;\n"
     ds_expr_list: List[sp.Expr] = []
@@ -262,7 +261,13 @@ def register_CFunction_ds_min_radial_like_dirns_single_pt(
     for dirn in rfm.radial_like_dirns:
         ds_expr_list += [sp.Abs(rfm.scalefactor_orthog[dirn] * dxx[dirn])]
         ds_str_list += [f"ds{dirn}"]
-    body += ccg.c_codegen(
+    param_symbols, _ = get_params_commondata_symbols_from_expr_list(ds_expr_list)
+    params_definitions = generate_definition_header(
+        param_symbols,
+        enable_intrinsics=False,
+        var_access=parallel_utils.get_params_access("openmp"),
+    )
+    body += params_definitions + ccg.c_codegen(
         ds_expr_list,
         ds_str_list,
         include_braces=False,
@@ -275,7 +280,7 @@ def register_CFunction_ds_min_radial_like_dirns_single_pt(
         CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params=params,
-        include_CodeParameters_h=True,
+        include_CodeParameters_h=False,
         body=body,
     )
 
