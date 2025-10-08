@@ -57,7 +57,9 @@ def register_CFunction_cahdprefactor_auxevol_gridfunction(
             **arg_dict_cuda,
         }
 
-        rfm = refmetric.reference_metric[CoordSystem]
+        rfm = refmetric.reference_metric[
+            CoordSystem if CoordSystem != "Fisheye" else "Cartesian"
+        ]
         dxx0, dxx1, dxx2 = sp.symbols("dxx0 dxx1 dxx2", real=True)
         loop_body = r"""  // Compute cahdprefactor gridfunction = C_CAHD * CFL_FACTOR * dsmin.
 REAL dsmin0, dsmin1, dsmin2;

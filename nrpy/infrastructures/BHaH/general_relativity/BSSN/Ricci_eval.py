@@ -49,7 +49,8 @@ def register_CFunction_Ricci_eval(
 
     parallelization = par.parval_from_str("parallelization")
     Bq = BSSN_quantities[
-        CoordSystem + ("_rfm_precompute" if enable_rfm_precompute else "")
+        (CoordSystem if CoordSystem != "Fisheye" else "Cartesian")
+        + ("_rfm_precompute" if enable_rfm_precompute else "")
     ]
 
     includes = ["BHaH_defines.h"]
@@ -105,7 +106,7 @@ def register_CFunction_Ricci_eval(
         ).replace("SIMD", "CUDA" if parallelization == "cuda" else "SIMD"),
         loop_region="interior",
         enable_intrinsics=enable_intrinsics,
-        CoordSystem=CoordSystem,
+        CoordSystem=(CoordSystem if CoordSystem != "Fisheye" else "Cartesian"),
         enable_rfm_precompute=enable_rfm_precompute,
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,

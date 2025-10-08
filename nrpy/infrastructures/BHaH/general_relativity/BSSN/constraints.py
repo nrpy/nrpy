@@ -53,7 +53,7 @@ def register_CFunction_constraints(
 
     parallelization = par.parval_from_str("parallelization")
     Bcon = BSSN_constraints[
-        CoordSystem
+        (CoordSystem if CoordSystem != "Fisheye" else "Cartesian")
         + ("_rfm_precompute" if enable_rfm_precompute else "")
         + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
         + ("_T4munu" if enable_T4munu else "")
@@ -114,7 +114,7 @@ def register_CFunction_constraints(
         ).replace("SIMD", "CUDA" if parallelization == "cuda" else "SIMD"),
         loop_region="interior",
         enable_intrinsics=enable_intrinsics,
-        CoordSystem=CoordSystem,
+        CoordSystem=(CoordSystem if CoordSystem != "Fisheye" else "Cartesian"),
         enable_rfm_precompute=enable_rfm_precompute,
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,

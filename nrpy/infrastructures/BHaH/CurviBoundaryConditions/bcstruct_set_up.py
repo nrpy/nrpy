@@ -436,9 +436,11 @@ def register_CFunction_bcstruct_set_up(
         "BHaH_function_prototypes.h",
     ]
     prefunc = Cfunction__EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(
-        CoordSystem
+        CoordSystem=(CoordSystem if CoordSystem != "Fisheye" else "Cartesian")
     )
-    prefunc += Cfunction__set_parity_for_inner_boundary_single_pt(CoordSystem)
+    prefunc += Cfunction__set_parity_for_inner_boundary_single_pt(
+        CoordSystem=(CoordSystem if CoordSystem != "Fisheye" else "Cartesian")
+    )
     parallelization = par.parval_from_str("parallelization")
     desc = r"""At each coordinate point (x0,x1,x2) situated at grid index (i0,i1,i2):
 Step 1: Set up inner boundary structs bcstruct->inner_bc_array[].

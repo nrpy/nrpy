@@ -121,13 +121,13 @@ def register_CFunction_rhs_eval(
 
     # Populate BSSN rhs variables
     rhs = BSSN_RHSs[
-        CoordSystem
+        (CoordSystem if CoordSystem != "Fisheye" else "Cartesian")
         + ("_rfm_precompute" if enable_rfm_precompute else "")
         + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
         + ("_T4munu" if enable_T4munu else "")
     ]
     alpha_rhs, vet_rhsU, bet_rhsU = BSSN_gauge_RHSs(
-        CoordSystem=CoordSystem,
+        CoordSystem=(CoordSystem if CoordSystem != "Fisheye" else "Cartesian"),
         enable_rfm_precompute=enable_rfm_precompute,
         enable_T4munu=enable_T4munu,
         LapseEvolutionOption=LapseEvolutionOption,
@@ -147,7 +147,7 @@ def register_CFunction_rhs_eval(
 
     # Define conformal factor W.
     Bq = BSSN_quantities[
-        CoordSystem
+        (CoordSystem if CoordSystem != "Fisheye" else "Cartesian")
         + ("_rfm_precompute" if enable_rfm_precompute else "")
         + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
     ]
@@ -180,7 +180,12 @@ def register_CFunction_rhs_eval(
         # ^^^ END CAKO ^^^
 
         rfm = refmetric.reference_metric[
-            CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
+            (
+                (CoordSystem if CoordSystem != "Fisheye" else "Cartesian")
+                + "_rfm_precompute"
+                if enable_rfm_precompute
+                else (CoordSystem if CoordSystem != "Fisheye" else "Cartesian")
+            )
         ]
         alpha_dKOD = ixp.declarerank1("alpha_dKOD")
         cf_dKOD = ixp.declarerank1("cf_dKOD")
@@ -222,7 +227,7 @@ def register_CFunction_rhs_eval(
     # vvv BEGIN CAHD vvv
     if enable_CAHD:
         Bcon = BSSN_constraints[
-            CoordSystem
+            (CoordSystem if CoordSystem != "Fisheye" else "Cartesian")
             + ("_rfm_precompute" if enable_rfm_precompute else "")
             + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
             + ("_T4munu" if enable_T4munu else "")
@@ -291,7 +296,12 @@ def register_CFunction_rhs_eval(
         ]
     # Set up upwind control vector (betaU)
     rfm = refmetric.reference_metric[
-        CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
+        (
+            (CoordSystem if CoordSystem != "Fisheye" else "Cartesian")
+            + "_rfm_precompute"
+            if enable_rfm_precompute
+            else (CoordSystem if CoordSystem != "Fisheye" else "Cartesian")
+        )
     ]
     betaU = ixp.zerorank1()
     vetU = ixp.declarerank1("vetU")
@@ -309,7 +319,7 @@ def register_CFunction_rhs_eval(
     #     os.getcwd(),
     #     # File basename. If this is set to "trusted_module_test1", then
     #     #   trusted results_dict will be stored in tests/trusted_module_test1.py
-    #     f"{os.path.splitext(os.path.basename(__file__))[0]}_{LapseEvolutionOption}_{ShiftEvolutionOption}_{CoordSystem}_T4munu{enable_T4munu}_KO{enable_KreissOliger_dissipation}",
+    #     f"{os.path.splitext(os.path.basename(__file__))[0]}_{LapseEvolutionOption}_{ShiftEvolutionOption}_{(CoordSystem if CoordSystem != "Fisheye" else "Cartesian")}_T4munu{enable_T4munu}_KO{enable_KreissOliger_dissipation}",
     #     cast(Dict[str, Union[mpf, mpc]], results_dict),
     # )
 
@@ -347,7 +357,7 @@ def register_CFunction_rhs_eval(
         ).replace("SIMD", "CUDA" if parallelization == "cuda" else "SIMD"),
         loop_region="interior",
         enable_intrinsics=enable_intrinsics,
-        CoordSystem=CoordSystem,
+        CoordSystem=(CoordSystem if CoordSystem != "Fisheye" else "Cartesian"),
         enable_rfm_precompute=enable_rfm_precompute,
         read_xxs=not enable_rfm_precompute,
         OMP_collapse=OMP_collapse,

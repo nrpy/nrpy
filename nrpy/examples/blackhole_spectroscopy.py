@@ -198,12 +198,10 @@ BHaH.general_relativity.BSSN.diagnostics.register_CFunction_diagnostics(
 )
 if enable_rfm_precompute:
     BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
-        set_of_CoordSystems=(
-            set_of_CoordSystems if CoordSystem != "Fisheye" else {"Cartesian"}
-        ),
+        set_of_CoordSystems,
     )
 BHaH.general_relativity.BSSN.rhs_eval.register_CFunction_rhs_eval(
-    CoordSystem=(CoordSystem if CoordSystem != "Fisheye" else "Cartesian"),
+    CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
     enable_T4munu=False,
@@ -221,24 +219,24 @@ BHaH.general_relativity.BSSN.rhs_eval.register_CFunction_rhs_eval(
 )
 if enable_CAHD:
     BHaH.general_relativity.BSSN.cahdprefactor_gf.register_CFunction_cahdprefactor_auxevol_gridfunction(
-        CoordSystem={CoordSystem} if CoordSystem != "Fisheye" else {"Cartesian"},
+        CoordSystem={CoordSystem},
     )
 if separate_Ricci_and_BSSN_RHS:
     BHaH.general_relativity.BSSN.Ricci_eval.register_CFunction_Ricci_eval(
-        CoordSystem=(CoordSystem if CoordSystem != "Fisheye" else "Cartesian"),
+        CoordSystem=CoordSystem,
         enable_rfm_precompute=enable_rfm_precompute,
         enable_intrinsics=enable_intrinsics,
         enable_fd_functions=enable_fd_functions,
         OMP_collapse=OMP_collapse,
     )
 BHaH.general_relativity.BSSN.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
-    CoordSystem=(CoordSystem if CoordSystem != "Fisheye" else "Cartesian"),
+    CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
 BHaH.general_relativity.BSSN.constraints.register_CFunction_constraints(
-    CoordSystem=(CoordSystem if CoordSystem != "Fisheye" else "Cartesian"),
+    CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
     enable_T4munu=False,
@@ -269,10 +267,8 @@ BHaH.numerical_grids_and_timestep.register_CFunctions(
     set_of_CoordSystems=set_of_CoordSystems,
     list_of_grid_physical_sizes=[grid_physical_size],
     Nxx_dict=Nxx_dict,
-    enable_rfm_precompute=(
-        enable_rfm_precompute if CoordSystem != "Fisheye" else False
-    ),
-    enable_CurviBCs=(True if CoordSystem != "Fisheye" else False),
+    enable_rfm_precompute=enable_rfm_precompute,
+    enable_CurviBCs=True,
 )
 
 BHaH.CurviBoundaryConditions.register_all.register_C_functions(
