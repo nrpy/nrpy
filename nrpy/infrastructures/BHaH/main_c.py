@@ -213,7 +213,7 @@ for(int grid=0; grid<commondata.NUMGRIDS; grid++) {{
 for(int grid=0; grid<commondata.NUMGRIDS; grid++) {{
   // Step 2.b: Allocate host storage for diagnostics
   CUDA__malloc_host_gfs(&commondata, &{compute_griddata}[grid].params, &griddata_host[grid].gridfuncs);
-  CUDA__malloc_host_aux_gfs(&commondata, &{compute_griddata}[grid].params, &griddata_host[grid].gridfuncs);
+  CUDA__malloc_host_auxevol_gfs(&commondata, &{compute_griddata}[grid].params, &griddata_host[grid].gridfuncs);
   CUDA__malloc_host_diagnostic_gfs(&commondata, &{compute_griddata}[grid].params, &griddata_host[grid].gridfuncs);
 }}
 """
