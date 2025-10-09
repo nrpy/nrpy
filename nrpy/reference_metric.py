@@ -218,7 +218,7 @@ class ReferenceMetric:
         # =====================================================================
         # FISHEYE SHORT-CIRCUIT:
         # For fisheye coords we STOP after Cart/↔/rfm Jacobians.
-        # → No orthonormal scale factors.
+        # → No orthonormal function forms.
         # → Skip the entire reference-metric (ghat/Re/Gamma) pipeline.
         # =====================================================================
         if getattr(self, "CoordSystem", "") == "Fisheye":
@@ -226,7 +226,6 @@ class ReferenceMetric:
             # tensors/scalars so downstream code & validators have symbols.
 
             # orthogonal scale factors & funcforms
-            self.scalefactor_orthog = [sp.Integer(0)] * 3
             self.scalefactor_orthog_funcform = [sp.Integer(0)] * 3
 
             # reference-metric pieces
@@ -1632,6 +1631,13 @@ class ReferenceMetric:
         self.Cart_to_xx[0] = sp.Integer(0)
         self.Cart_to_xx[1] = sp.Integer(0)
         self.Cart_to_xx[2] = sp.Integer(0)
+
+        # Fisheye is Cartesian-like: these scalefactor_orthog[i] = ∂x_Cart,i/∂xx_i give axis-aligned physical steps,
+        # which is exactly what ds_min (nearest-neighbor along coordinate axes) needs.
+        # CAUTION: The fisheye metric is generally non-diagonal; for g_ij use the full Jacobian J=∂x_Cart/∂xx and g=J.T*J.
+        self.scalefactor_orthog[0] = sp.diff(self.xx_to_Cart[0], self.xx[0])
+        self.scalefactor_orthog[1] = sp.diff(self.xx_to_Cart[1], self.xx[1])
+        self.scalefactor_orthog[2] = sp.diff(self.xx_to_Cart[2], self.xx[2])
 
         # CAUTION: Fisheye basis vectors are not orthonormal everywhere,
         # but we set UnitVectors same as Cartesian-like for use in curvilinear BCs.
