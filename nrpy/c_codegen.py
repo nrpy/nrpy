@@ -92,7 +92,7 @@ class CCodeGen:
         upwind_control_vec: Union[List[sp.Symbol], sp.Symbol] = sp.Symbol("unset"),
         symbol_to_Rational_dict: Optional[Dict[sp.Basic, sp.Rational]] = None,
         rational_const_alias: str = "static const",
-        clang_format_enable: bool = False,
+        enable_clang_format: bool = False,
     ) -> None:
         """
         Initialize the CCodeGen class with provided options for generating C code.
@@ -124,7 +124,7 @@ class CCodeGen:
         :param upwind_control_vec: Upwind control vector as a symbol or list of symbols.
         :param symbol_to_Rational_dict: Dictionary mapping sympy symbols to their corresponding sympy Rationals.
         :param rational_const_alias: Override default alias for specifying rational constness
-        :param clang_format_enable: Boolean to enable clang formatting.
+        :param enable_clang_format: Boolean to enable clang formatting.
 
         :raises ValueError: If 'fp_type' is not recognized as a valid floating-point type.
         :raises ValueError: If SIMD optimizations are enabled but the floating-point type is not 'double'.
@@ -190,7 +190,7 @@ class CCodeGen:
         self.upwind_control_vec = upwind_control_vec
         self.symbol_to_Rational_dict = symbol_to_Rational_dict
         self.rational_const_alias = rational_const_alias
-        self.clang_format_enable = clang_format_enable
+        self.enable_clang_format = enable_clang_format
         self.clang_format_options = par.parval_from_str("clang_format_options")
 
         self.fd_order = par.parval_from_str("finite_difference::fd_order")
@@ -1186,7 +1186,7 @@ MAYBE_UNUSED const REAL_SIMD_ARRAY upwind_Integer_{n} = ConstSIMD(tmp_upwind_Int
     if write_to_mem_string != "":
         Coutput += f"\n{write_to_mem_string}"
 
-    if CCGParams.clang_format_enable:
+    if CCGParams.enable_clang_format:
         Coutput = clang_format(Coutput)
 
     return Coutput

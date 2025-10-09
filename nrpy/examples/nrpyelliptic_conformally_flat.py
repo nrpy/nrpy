@@ -123,7 +123,7 @@ enable_checkpointing = True
 MoL_method = "RK4"
 fd_order = 10
 radiation_BC_fd_order = 6
-parallel_codegen_enable = True
+enable_parallel_codegen = True
 boundary_conditions_desc = "outgoing radiation"
 set_of_CoordSystems = {CoordSystem}
 NUMGRIDS = len(set_of_CoordSystems)
@@ -179,7 +179,7 @@ project_dir = os.path.join("project", project_name)
 # First clean the project directory, if it exists.
 shutil.rmtree(project_dir, ignore_errors=True)
 
-par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
+par.set_parval_from_str("enable_parallel_codegen", enable_parallel_codegen)
 par.set_parval_from_str("fd_order", fd_order)
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 
@@ -247,7 +247,7 @@ BHaH.nrpyelliptic.log10_L2norm_gf.register_CFunction_log10_L2norm_gf(
 # Register function to check for stop conditions
 BHaH.nrpyelliptic.stop_conditions_check.register_CFunction_stop_conditions_check()
 
-if __name__ == "__main__" and parallel_codegen_enable:
+if __name__ == "__main__" and enable_parallel_codegen:
     pcg.do_parallel_codegen()
 
 BHaH.CurviBoundaryConditions.register_all.register_C_functions(

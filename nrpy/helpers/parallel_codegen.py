@@ -16,7 +16,7 @@ import nrpy.grid as gri
 import nrpy.params as par
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
-par.register_param(bool, __name__, "parallel_codegen_enable", False)
+par.register_param(bool, __name__, "enable_parallel_codegen", False)
 par.register_param(str, __name__, "parallel_codegen_stage", "register")
 
 
@@ -116,7 +116,7 @@ def pcg_registration_phase() -> bool:
     :return: Boolean indicating if the registration phase is active.
     """
     return (
-        cast(bool, par.parval_from_str("parallel_codegen_enable"))
+        cast(bool, par.parval_from_str("enable_parallel_codegen"))
         and par.parval_from_str("parallel_codegen_stage") == "register"
     )
 
@@ -233,7 +233,7 @@ def wrapper_func(args: Tuple[Dict[str, Any], str, Any]) -> Any:
 
 def do_parallel_codegen() -> None:
     """Perform parallel code generation by calling registered functions concurrently."""
-    if not par.parval_from_str("parallel_codegen_enable"):
+    if not par.parval_from_str("enable_parallel_codegen"):
         return
 
     par.set_parval_from_str("parallel_codegen_stage", "codegen")

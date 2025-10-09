@@ -44,7 +44,7 @@ fd_order = 4
 radiation_BC_fd_order = 4
 enable_intrinsics = True
 separate_Ricci_and_BSSN_RHS = True
-parallel_codegen_enable = True
+enable_parallel_codegen = True
 enable_fd_functions = True
 enable_KreissOliger_dissipation = False
 boundary_conditions_desc = "outgoing radiation"
@@ -58,7 +58,7 @@ project_dir = os.path.join("project", project_name)
 # First clean the project directory, if it exists.
 shutil.rmtree(project_dir, ignore_errors=True)
 
-par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
+par.set_parval_from_str("enable_parallel_codegen", enable_parallel_codegen)
 par.set_parval_from_str("fd_order", fd_order)
 par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
 BHaH.checkpointing.register_CFunctions(

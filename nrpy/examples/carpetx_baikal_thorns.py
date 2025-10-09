@@ -40,14 +40,14 @@ enable_simd = False
 LapseEvolutionOption = "OnePlusLog"
 ShiftEvolutionOption = "GammaDriving2ndOrder_NoCovariant"
 enable_KreissOliger_dissipation = True
-parallel_codegen_enable = True
+enable_parallel_codegen = True
 CoordSystem = "Cartesian"
 register_MU_gridfunctions = True
 
 project_dir = os.path.join("project", project_name)
 
 par.set_parval_from_str("Infrastructure", "CarpetX")
-par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
+par.set_parval_from_str("enable_parallel_codegen", enable_parallel_codegen)
 par.set_parval_from_str("register_MU_gridfunctions", register_MU_gridfunctions)
 
 ########################
@@ -129,7 +129,7 @@ for evol_thorn_name in thorn_names:
 #  STEP 2: Generate functions in parallel
 ########################
 
-if __name__ == "__main__" and parallel_codegen_enable:
+if __name__ == "__main__" and enable_parallel_codegen:
     pcg.do_parallel_codegen()
 
 for evol_thorn_name in thorn_names:

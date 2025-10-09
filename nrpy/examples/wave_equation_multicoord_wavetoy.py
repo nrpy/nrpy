@@ -91,7 +91,7 @@ MoL_method = "RK4"
 fd_order = 4
 radiation_BC_fd_order = 2
 enable_KreissOliger_dissipation = False
-parallel_codegen_enable = True
+enable_parallel_codegen = True
 boundary_conditions_desc = "outgoing radiation"
 
 project_dir = os.path.join("project", project_name)
@@ -99,7 +99,7 @@ project_dir = os.path.join("project", project_name)
 # First clean the project directory, if it exists.
 shutil.rmtree(project_dir, ignore_errors=True)
 
-par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
+par.set_parval_from_str("enable_parallel_codegen", enable_parallel_codegen)
 par.set_parval_from_str("fd_order", fd_order)
 par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
 
@@ -155,7 +155,7 @@ BHaH.wave_equation.diagnostics.register_CFunction_diagnostics(
     out_quantities_dict="default",
 )
 
-if __name__ == "__main__" and parallel_codegen_enable:
+if __name__ == "__main__" and enable_parallel_codegen:
     pcg.do_parallel_codegen()
 
 if enable_rfm_precompute:

@@ -194,7 +194,7 @@ module horizon_finder {
             which_horizon = thisIndex;
           }
           // In BBH mode, skip horizons that aren't active.
-          if (!(commondata.bah_BBH_mode_enable && !commondata.bah_BBH_mode_horizon_active[which_horizon])) {
+          if (!(commondata.bah_enable_BBH_mode && !commondata.bah_BBH_mode_horizon_active[which_horizon])) {
             serial {
               bhahaha_find_horizons(&commondata, griddata, x_guess, y_guess, z_guess, &radii, &total_elements, &dst_x0x1x2, &dst_data_ptrs, which_horizon, BHAHAHA_FIND_HORIZONS_SETUP);
             }

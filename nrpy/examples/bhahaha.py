@@ -67,7 +67,7 @@ enable_rfm_precompute = True
 enable_fd_functions = False
 MoL_method = "SSPRK33"
 enable_simd = False  # Does not work, as the SIMD vector would be in the radial direction, where only a single point is sampled.
-parallel_codegen_enable = True
+enable_parallel_codegen = True
 boundary_conditions_desc = "inner boundaries only"
 
 #########################################################
@@ -79,7 +79,7 @@ shutil.rmtree(project_dir, ignore_errors=True)
 
 #########################################################
 # STEP 3: Define the damping parameter, min global wavespeed, and residual stop condition
-par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
+par.set_parval_from_str("enable_parallel_codegen", enable_parallel_codegen)
 par.set_parval_from_str("fd_order", fd_order)
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 
@@ -135,7 +135,7 @@ BHaH.BHaHAHA.rhs_eval_KO_apply.register_CFunction_KO_apply(
     enable_fd_functions=enable_fd_functions,
 )
 
-if __name__ == "__main__" and parallel_codegen_enable:
+if __name__ == "__main__" and enable_parallel_codegen:
     pcg.do_parallel_codegen()
 
 #########################################################

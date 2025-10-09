@@ -41,7 +41,7 @@ enable_rfm_precompute = True
 fd_order = 4
 radiation_BC_fd_order = 4
 enable_intrinsics = True
-parallel_codegen_enable = True
+enable_parallel_codegen = True
 enable_fd_functions = True
 separately_compute_Ricci = False
 
@@ -61,7 +61,7 @@ project_dir = os.path.join("project", project_name)
 shutil.rmtree(project_dir, ignore_errors=True)
 
 # Set NRPy parameters that steer the code generation
-par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
+par.set_parval_from_str("enable_parallel_codegen", enable_parallel_codegen)
 par.set_parval_from_str("fd_order", fd_order)
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 
