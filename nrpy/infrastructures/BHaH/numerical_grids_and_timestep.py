@@ -262,10 +262,13 @@ def register_CFunction_ds_min_radial_like_dirns_single_pt(
         ds_expr_list += [sp.Abs(rfm.scalefactor_orthog[dirn] * dxx[dirn])]
         ds_str_list += [f"ds{dirn}"]
     param_symbols, _ = get_params_commondata_symbols_from_expr_list(ds_expr_list)
-    params_definitions = generate_definition_header(
-        param_symbols,
-        enable_intrinsics=False,
-        var_access=parallel_utils.get_params_access("openmp"),
+    params_definitions = (
+        generate_definition_header(
+            param_symbols,
+            enable_intrinsics=False,
+            var_access=parallel_utils.get_params_access("openmp"),
+        )
+        + "\n"
     )
     body += params_definitions + ccg.c_codegen(
         ds_expr_list,
