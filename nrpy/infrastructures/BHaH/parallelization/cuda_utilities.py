@@ -398,7 +398,7 @@ def register_CFunction_CUDA__malloc_host_auxevol_gfs() -> None:
      * Allocate Host storage for auxevol GFs.
      */
     __host__ void CUDA__malloc_host_auxevol_gfs(const commondata_struct *restrict commondata, const params_struct *restrict params,
-                                            MoL_gridfunctions_struct *restrict gridfuncs) {
+                                                MoL_gridfunctions_struct *restrict gridfuncs) {
       const int Nxx_plus_2NGHOSTS_tot = params->Nxx_plus_2NGHOSTS0 * params->Nxx_plus_2NGHOSTS1 * params->Nxx_plus_2NGHOSTS2;
     <BLANKLINE>
       if (NUM_AUXEVOL_GFS > 0)
