@@ -1552,14 +1552,31 @@ class ReferenceMetric:
         }
 
         # --------------------------------------------------------------
-        # Fisheye parameters (defaults: n=1, a0=1, a1=4, R1=3, s1=1.0)
+        # Fisheye parameters (defaults: identity map; n=0, a0=1.0)
         # --------------------------------------------------------------
-        par.register_param(int, __name__, "fisheye_n", 1)
+        # Prefer module-level FISHEYE_DEFAULTS if present; otherwise use a safe identity.
+        _defaults = globals().get(
+            "FISHEYE_DEFAULTS",
+            {
+                "transition_count": 0,  # n
+                "radial_scale_factors": [1.0],  # a_0 .. a_n
+                "transition_centers": [],  # R_1 .. R_n
+                "transition_half_widths": [],  # s_1 .. s_n
+            },
+        )
+
+        # Number of transitions (n)
+        par.register_param(int, __name__, "fisheye_n", _defaults["transition_count"])
         n_val = int(par.parval_from_str("fisheye_n"))
 
+        # a_i for i = 0..n  (length = n+1, includes a_0)
         a_syms = []
         for i in range(0, n_val + 1):
-            default_ai = 1.0 if i == 0 else (4.0 if i == 1 else 1.0)
+            # default: pull from defaults if available; ensure a_0 falls back to 1.0 (identity)
+            if i < len(_defaults["radial_scale_factors"]):
+                default_ai = _defaults["radial_scale_factors"][i]
+            else:
+                default_ai = 1.0 if i == 0 else 1.0
             a_syms.append(
                 par.register_CodeParameter(
                     "REAL",
@@ -1571,11 +1588,22 @@ class ReferenceMetric:
                 )
             )
 
+        # R_i and s_i for i = 1..n  (each length = n)
         R_syms = []
         s_syms = []
         for i in range(1, n_val + 1):
-            default_Ri = 3.0 if i == 1 else float(i)
-            default_si = 1.0
+            # Pull from defaults if given; otherwise: R_1->3.0, R_i->i; s_i->1.0
+            idx = i - 1
+            default_Ri = (
+                _defaults["transition_centers"][idx]
+                if idx < len(_defaults["transition_centers"])
+                else (3.0 if i == 1 else float(i))
+            )
+            default_si = (
+                _defaults["transition_half_widths"][idx]
+                if idx < len(_defaults["transition_half_widths"])
+                else 1.0
+            )
             R_syms.append(
                 par.register_CodeParameter(
                     "REAL",
@@ -1597,8 +1625,14 @@ class ReferenceMetric:
                 )
             )
 
+        # Sanity checks help catch accidental mismatches.
+        assert len(a_syms) == n_val + 1
+        if n_val > 0:
+            assert len(R_syms) == n_val
+            assert len(s_syms) == n_val
+
         # --------------------------------------------------------------
-        # Radial profile (see nrpy.equations.fisheye_transformation.fisheye_radial_profile)
+        # Build the radial profile object using the symbols above
         # --------------------------------------------------------------
         from nrpy.equations.fisheye_transformation.fisheye_radial_profile import (
             FisheyeRadialProfile,
@@ -1607,8 +1641,8 @@ class ReferenceMetric:
         prof = FisheyeRadialProfile(
             n=n_val,
             a=a_syms,
-            R=R_syms if n_val > 0 else None,
-            s=s_syms if n_val > 0 else None,
+            R=(R_syms if n_val > 0 else None),
+            s=(s_syms if n_val > 0 else None),
         )
 
         r = sp.sqrt(self.xx[0] ** 2 + self.xx[1] ** 2 + self.xx[2] ** 2)
@@ -1632,9 +1666,12 @@ class ReferenceMetric:
         self.Cart_to_xx[1] = sp.Integer(0)
         self.Cart_to_xx[2] = sp.Integer(0)
 
-        # Fisheye is Cartesian-like: these scalefactor_orthog[i] = ∂x_Cart,i/∂xx_i give axis-aligned physical steps,
-        # which is exactly what ds_min (nearest-neighbor along coordinate axes) needs.
-        # CAUTION: The fisheye metric is generally non-diagonal; for g_ij use the full Jacobian J=∂x_Cart/∂xx and g=J.T*J.
+        # For fisheye we define scalefactor_orthog[i] := ∂x_Cart,i/∂xx_i (along each coordinate axis).
+        # Used ONLY for ds_min, this is a componentwise lower bound on the axis-aligned spacing |dx_i|.
+        # CAUTION: A step in xx_i changes ALL Cartesian components in fisheye; the true spacing along the
+        # xx_i-line is ‖∂x_Cart/∂xx_i‖ * dxx_i with the Euclidean norm over (x,y,z). Using only ∂x_i/∂xx_i
+        # underestimates ds_min (safer CFL). If you need exact spacing or g_ij, use the full Jacobian
+        # J = ∂x_Cart/∂xx and either ‖J[:,i]‖ for axis steps or g = J.T * J.
         self.scalefactor_orthog[0] = sp.diff(self.xx_to_Cart[0], self.xx[0])
         self.scalefactor_orthog[1] = sp.diff(self.xx_to_Cart[1], self.xx[1])
         self.scalefactor_orthog[2] = sp.diff(self.xx_to_Cart[2], self.xx[2])
