@@ -89,8 +89,9 @@ for (i = 0; i < commondata->nsteps_fine; i++) {
   commondata->waveform_fine[IDX_WF(i,TIME)] = dynamics[TIME];
   commondata->waveform_fine[IDX_WF(i,STRAIN)] = strain_modes_single_timestep[STRAIN22-1];
   
-free(strain_modes_single_timestep);
+
 }
+free(strain_modes_single_timestep);
 """
     cfc.register_CFunction(
         subdirectory="inspiral_waveform",

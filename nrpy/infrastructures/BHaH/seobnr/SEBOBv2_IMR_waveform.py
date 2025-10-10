@@ -31,7 +31,7 @@ Evaluates the (2,2) mode for the waveform by combining the inspiral and merger r
 
 @param commondata - Common data structure containing the model parameters.
 """
-    cfunc_type = "int"
+    cfunc_type = "void"
     name = "SEBOBv2_IMR_waveform"
     params = "commondata_struct *restrict commondata"
     body = """
