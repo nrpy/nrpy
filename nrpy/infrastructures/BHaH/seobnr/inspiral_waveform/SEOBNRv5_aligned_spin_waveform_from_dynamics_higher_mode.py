@@ -40,8 +40,8 @@ Calculates the (2,2) mode of the SEOBNRv5 inspiral waveform for the low- and fin
 int i;
 REAL dynamics[NUMVARS];
 COMPLEX *strain_modes_single_timestep = (COMPLEX *) malloc((NUMMODES- 1)*sizeof(COMPLEX));
-if (COMPLEX *strain_modes_single_timestep == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_waveform_from_dynamics(), malloc() failed to for COMPLEX *strain_modes_single_timestep\\n");
+if (strain_modes_single_timestep == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_waveform_from_dynamics(), malloc() failed to for strain_modes_single_timestep\\n");
   exit(1);
 }
 commondata->waveform_low = (double complex *)malloc(commondata->nsteps_low*NUMMODESSTORED*sizeof(double complex));
