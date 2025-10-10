@@ -70,6 +70,7 @@ if parallelization not in ["openmp", "cuda"]:
 par.set_parval_from_str("Infrastructure", "BHaH")
 par.set_parval_from_str("parallelization", parallelization)
 par.set_parval_from_str("fp_type", fp_type)
+par.set_parval_from_str("fisheye_n", 1)
 
 # Code-generation-time parameters:
 project_name = "blackhole_spectroscopy"
@@ -104,7 +105,7 @@ swm2sh_maximum_l_mode_to_compute = 2  # for consistency with NRPy 1.0 version.
 Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
     "SinhCylindrical": [400, 2, 1200],
-    "Fisheye": [400, 400, 400],
+    "Fisheye": [100, 100, 100],
 }
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.25
@@ -325,6 +326,12 @@ if CoordSystem == "SinhCylindrical":
     par.adjust_CodeParam_default("AMPLZ", grid_physical_size)
     par.adjust_CodeParam_default("SINHWRHO", sinh_width)
     par.adjust_CodeParam_default("SINHWZ", sinh_width)
+if CoordSystem == "Fisheye":
+    par.adjust_CodeParam_default("fisheye_a0", 1.0)
+    par.adjust_CodeParam_default("fisheye_a1", 4.0)
+    par.adjust_CodeParam_default("fisheye_R1", 0.17 * grid_physical_size)
+    par.adjust_CodeParam_default("fisheye_s1", 0.03 * grid_physical_size)
+
 par.adjust_CodeParam_default("t_final", t_final)
 # Initial data parameters
 par.adjust_CodeParam_default("initial_sep", initial_sep)

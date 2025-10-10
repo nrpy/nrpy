@@ -22,6 +22,7 @@ from nrpy.helpers.cached_functions import cached_simplify
 from nrpy.helpers.generic import superfast_uniq
 
 par.register_param(str, __name__, "CoordSystem_to_register_CodeParameters", "All")
+par.register_param(int, __name__, "fisheye_n", 0)  # identity by default (n = 0)
 
 
 class ReferenceMetric:
@@ -1558,15 +1559,14 @@ class ReferenceMetric:
         _defaults = globals().get(
             "FISHEYE_DEFAULTS",
             {
-                "transition_count": 0,  # n
+                "transition_count": 0,  # n (only used to set the default of the param above)
                 "radial_scale_factors": [1.0],  # a_0 .. a_n
                 "transition_centers": [],  # R_1 .. R_n
                 "transition_half_widths": [],  # s_1 .. s_n
             },
         )
 
-        # Number of transitions (n)
-        par.register_param(int, __name__, "fisheye_n", _defaults["transition_count"])
+        # Number of transitions (n) — read from the parameter, not a CodeParameter.
         n_val = int(par.parval_from_str("fisheye_n"))
 
         # a_i for i = 0..n  (length = n+1, includes a_0)
@@ -1592,7 +1592,6 @@ class ReferenceMetric:
         R_syms = []
         s_syms = []
         for i in range(1, n_val + 1):
-            # Pull from defaults if given; otherwise: R_1->3.0, R_i->i; s_i->1.0
             idx = i - 1
             default_Ri = (
                 _defaults["transition_centers"][idx]
