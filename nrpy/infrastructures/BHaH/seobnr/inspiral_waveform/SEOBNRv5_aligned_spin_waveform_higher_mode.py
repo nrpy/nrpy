@@ -7,11 +7,11 @@ Authors: Siddharth Mahesh
         zachetie **at** gmail **dot* com
 """
 
+import ast
 from inspect import currentframe as cfr
 from types import FrameType as FT
 from typing import Union, cast
 
-import ast
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.equations.seobnr.SEOBNRv5_aligned_spin_waveform_quantities as SEOBNRv5_wf
