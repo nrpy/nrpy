@@ -378,7 +378,9 @@ def register_CFunctions_rfm_precompute(
     is_cuda = par.parval_from_str("parallelization") == "cuda"
 
     for CoordSystem in set_of_CoordSystems:
-        rfm_precompute = ReferenceMetricPrecompute(CoordSystem)
+        rfm_precompute = ReferenceMetricPrecompute(
+            CoordSystem=(CoordSystem if CoordSystem != "Fisheye" else "Cartesian")
+        )
 
         # In CUDA, 'restrict' is a keyword and cannot be used with pointer-to-pointer members
         # like those in the rfm_struct.
