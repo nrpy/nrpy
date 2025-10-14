@@ -106,6 +106,7 @@ Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
     "SinhCylindrical": [400, 2, 1200],
     "Fisheye": [100, 100, 100],
+    "Cartesian": [100, 100, 100],
 }
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.25
@@ -119,7 +120,9 @@ separate_Ricci_and_BSSN_RHS = True
 parallel_codegen_enable = True
 enable_fd_functions = True
 boundary_conditions_desc = "outgoing radiation"
-enable_psi4_diagnostics = True if CoordSystem != "Fisheye" else False
+enable_psi4_diagnostics = (
+    True if (CoordSystem != "Fisheye" and CoordSystem != "Cartesian") else False
+)
 
 set_of_CoordSystems = {CoordSystem}
 NUMGRIDS = len(set_of_CoordSystems)
@@ -137,6 +140,11 @@ if "Cylindrical" in CoordSystem:
     OMP_collapse = 2  # might be slightly faster
     if CoordSystem == "SinhCylindrical":
         sinh_width = 0.2
+if "Fisheye" in CoordSystem:
+    fisheye_a0 = 0.6
+    fisheye_a1 = 1.0
+    fisheye_R1 = 0.20 * grid_physical_size
+    fisheye_s1 = 0.03 * grid_physical_size
 
 project_dir = os.path.join("project", project_name)
 
@@ -327,10 +335,10 @@ if CoordSystem == "SinhCylindrical":
     par.adjust_CodeParam_default("SINHWRHO", sinh_width)
     par.adjust_CodeParam_default("SINHWZ", sinh_width)
 if CoordSystem == "Fisheye":
-    par.adjust_CodeParam_default("fisheye_a0", 1.0)
-    par.adjust_CodeParam_default("fisheye_a1", 4.0)
-    par.adjust_CodeParam_default("fisheye_R1", 0.17 * grid_physical_size)
-    par.adjust_CodeParam_default("fisheye_s1", 0.03 * grid_physical_size)
+    par.adjust_CodeParam_default("fisheye_a0", fisheye_a0)
+    par.adjust_CodeParam_default("fisheye_a1", fisheye_a1)
+    par.adjust_CodeParam_default("fisheye_R1", fisheye_R1)
+    par.adjust_CodeParam_default("fisheye_s1", fisheye_s1)
 
 par.adjust_CodeParam_default("t_final", t_final)
 # Initial data parameters
