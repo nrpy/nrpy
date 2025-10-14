@@ -7,6 +7,9 @@ functionalities related to the reference metric.
 Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
          SinhSymTP fixes:
          Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
+         Fisheye:
+         Nishita Jadoo
+         njadoo **at** uidaho **dot* edu
 """
 
 from typing import Any, Dict, List, Tuple, cast
@@ -19,6 +22,7 @@ from nrpy.helpers.cached_functions import cached_simplify
 from nrpy.helpers.generic import superfast_uniq
 
 par.register_param(str, __name__, "CoordSystem_to_register_CodeParameters", "All")
+par.register_param(int, __name__, "fisheye_n", 0)  # identity by default (n = 0)
 
 
 class ReferenceMetric:
@@ -163,6 +167,11 @@ class ReferenceMetric:
         elif "Cylindrical" in CoordSystem:
             self.EigenCoord = "Cylindrical"
             self.cylindrical_like()
+        elif CoordSystem == "Fisheye":
+            # Cartesian-like coordinates with a purely radial fisheye remap
+            # (see Faber et al. PRD 96, 104035, Appendix on fisheye coords).
+            self.EigenCoord = "Cartesian"
+            self.fisheye()
         else:
             raise ValueError(
                 f"Error: CoordSystem = {CoordSystem} unrecognized. Please check for typos, or add this CoordSystem support to reference_metric"
@@ -206,6 +215,55 @@ class ReferenceMetric:
             self.Jac_dUSph_dDrfmUD,
             self.Jac_dUrfm_dDSphUD,
         ) = compute_Jacobian_and_inverseJacobian_tofrom_Spherical(self)
+
+        # =====================================================================
+        # FISHEYE SHORT-CIRCUIT:
+        # For fisheye coords we STOP after Cart/↔/rfm Jacobians.
+        # → No orthonormal function forms.
+        # → Skip the entire reference-metric (ghat/Re/Gamma) pipeline.
+        # =====================================================================
+        if getattr(self, "CoordSystem", "") == "Fisheye":
+            # metric objects, or their derivatives. Initialize all to zero
+            # tensors/scalars so downstream code & validators have symbols.
+
+            # orthogonal scale factors & funcforms
+            self.scalefactor_orthog_funcform = [sp.Integer(0)] * 3
+
+            # reference-metric pieces
+            self.ReU = ixp.zerorank1(3)
+            self.ReD = ixp.zerorank1(3)
+            self.ReDD = ixp.zerorank2(3)
+            self.ghatDD = ixp.zerorank2(3)
+            self.ghatUU = ixp.zerorank2(3)
+            self.detgammahat = sp.Integer(0)
+
+            # derivatives of det(ghat)
+            self.detgammahatdD = ixp.zerorank1(3)
+            self.detgammahatdDD = ixp.zerorank2(3)
+
+            # derivatives of rescaling vectors/matrix
+            self.ReUdD = ixp.zerorank2(3)
+            self.ReUdDD = ixp.zerorank3(3)
+            self.ReDdD = ixp.zerorank2(3)
+            self.ReDdDD = ixp.zerorank3(3)
+            self.ReDDdD = ixp.zerorank3(3)
+            self.ReDDdDD = ixp.zerorank4(3)
+
+            # derivatives of reference metric
+            self.ghatDDdD = ixp.zerorank3(3)
+            self.ghatDDdDD = ixp.zerorank4(3)
+
+            # Christoffels and their derivatives
+            self.GammahatUDD = ixp.zerorank3(3)
+            self.GammahatUDDdD = ixp.zerorank4(3)
+
+            # Dummy out rfm-precompute helper functions used in other coords
+            self.f0_of_xx0 = sp.Integer(0)
+            self.f1_of_xx1 = sp.Integer(0)
+            self.f2_of_xx0 = sp.Integer(0)
+            self.f3_of_xx2 = sp.Integer(0)
+            self.f4_of_xx1 = sp.Integer(0)
+            return
 
         # Step 1: Compute ghatDD (reference metric), ghatUU
         #         (inverse reference metric), as well as
@@ -1465,6 +1523,168 @@ class ReferenceMetric:
         ]
         # END: Set universal attributes for all Cylindrical-like coordinate systems:
 
+    def fisheye(self) -> None:
+        """Fisheye coordinates: apply a nonlinear radial map r→r'(r) to Cartesian coords.
+
+        The angular directions are unchanged, but the radial coordinate is
+        distorted. The resulting metric is not δ_ij and the basis is not orthonormal.
+        """
+
+        # --------------------------------------------------------------
+        # Domain extents (same style as Cartesian)
+        # --------------------------------------------------------------
+        par.register_CodeParameters(
+            "REAL",
+            self.CodeParam_modulename,
+            ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"],
+            [-10.0, 10.0, -10.0, 10.0, -10.0, 10.0],
+            add_to_parfile=self.add_rfm_params_to_parfile,
+            add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
+        )
+        self.xxmin = ["xmin", "ymin", "zmin"]
+        self.xxmax = ["xmax", "ymax", "zmax"]
+        self.grid_physical_size_dict = {
+            "xmin": "-grid_physical_size",
+            "ymin": "-grid_physical_size",
+            "zmin": "-grid_physical_size",
+            "xmax": "grid_physical_size",
+            "ymax": "grid_physical_size",
+            "zmax": "grid_physical_size",
+        }
+
+        # --------------------------------------------------------------
+        # Fisheye parameters (defaults: identity map; n=0, a0=1.0)
+        # --------------------------------------------------------------
+        # Prefer module-level FISHEYE_DEFAULTS if present; otherwise use a safe identity.
+        _defaults = globals().get(
+            "FISHEYE_DEFAULTS",
+            {
+                "transition_count": 0,  # n (only used to set the default of the param above)
+                "radial_scale_factors": [1.0],  # a_0 .. a_n
+                "transition_centers": [],  # R_1 .. R_n
+                "transition_half_widths": [],  # s_1 .. s_n
+            },
+        )
+
+        # Number of transitions (n) — read from the parameter, not a CodeParameter.
+        n_val = int(par.parval_from_str("fisheye_n"))
+
+        # a_i for i = 0..n  (length = n+1, includes a_0)
+        a_syms = []
+        for i in range(0, n_val + 1):
+            # default: pull from defaults if available; ensure a_0 falls back to 1.0 (identity)
+            if i < len(_defaults["radial_scale_factors"]):
+                default_ai = _defaults["radial_scale_factors"][i]
+            else:
+                default_ai = 1.0 if i == 0 else 1.0
+            a_syms.append(
+                par.register_CodeParameter(
+                    "REAL",
+                    self.CodeParam_modulename,
+                    f"fisheye_a{i}",
+                    default_ai,
+                    add_to_parfile=self.add_rfm_params_to_parfile,
+                    add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
+                )
+            )
+
+        # R_i and s_i for i = 1..n  (each length = n)
+        R_syms = []
+        s_syms = []
+        for i in range(1, n_val + 1):
+            idx = i - 1
+            default_Ri = (
+                _defaults["transition_centers"][idx]
+                if idx < len(_defaults["transition_centers"])
+                else (3.0 if i == 1 else float(i))
+            )
+            default_si = (
+                _defaults["transition_half_widths"][idx]
+                if idx < len(_defaults["transition_half_widths"])
+                else 1.0
+            )
+            R_syms.append(
+                par.register_CodeParameter(
+                    "REAL",
+                    self.CodeParam_modulename,
+                    f"fisheye_R{i}",
+                    default_Ri,
+                    add_to_parfile=self.add_rfm_params_to_parfile,
+                    add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
+                )
+            )
+            s_syms.append(
+                par.register_CodeParameter(
+                    "REAL",
+                    self.CodeParam_modulename,
+                    f"fisheye_s{i}",
+                    default_si,
+                    add_to_parfile=self.add_rfm_params_to_parfile,
+                    add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
+                )
+            )
+
+        # Sanity checks help catch accidental mismatches.
+        assert len(a_syms) == n_val + 1
+        if n_val > 0:
+            assert len(R_syms) == n_val
+            assert len(s_syms) == n_val
+
+        # --------------------------------------------------------------
+        # Build the radial profile object using the symbols above
+        # --------------------------------------------------------------
+        from nrpy.equations.fisheye_transformation.fisheye_radial_profile import (
+            FisheyeRadialProfile,
+        )
+
+        prof = FisheyeRadialProfile(
+            n=n_val,
+            a=a_syms,
+            R=(R_syms if n_val > 0 else None),
+            s=(s_syms if n_val > 0 else None),
+        )
+
+        r = sp.sqrt(self.xx[0] ** 2 + self.xx[1] ** 2 + self.xx[2] ** 2)
+        rprime = prof.rprime_of_r(r)
+        rprime_over_r = sp.simplify(rprime / r)
+        self.xx_to_Cart[0] = sp.simplify(rprime_over_r * self.xx[0])
+        self.xx_to_Cart[1] = sp.simplify(rprime_over_r * self.xx[1])
+        self.xx_to_Cart[2] = sp.simplify(rprime_over_r * self.xx[2])
+
+        # Compute (r,th,ph) from (xx_to_Cart2,xx_to_Cart1,xx_to_Cart2)
+        self.xxSph[0] = sp.sqrt(
+            self.xx_to_Cart[0] ** 2 + self.xx_to_Cart[1] ** 2 + self.xx_to_Cart[2] ** 2
+        )
+        self.xxSph[1] = sp.acos(self.xx_to_Cart[2] / self.xxSph[0])
+        self.xxSph[2] = sp.atan2(self.xx_to_Cart[1], self.xx_to_Cart[0])
+
+        # We do NOT provide a Cart->xx inverse
+        # Tell generators there is no NR to emit, and zero out placeholders.
+        self.requires_NewtonRaphson_for_Cart_to_xx = False
+        self.Cart_to_xx[0] = sp.Integer(0)
+        self.Cart_to_xx[1] = sp.Integer(0)
+        self.Cart_to_xx[2] = sp.Integer(0)
+
+        # For fisheye we define scalefactor_orthog[i] := ∂x_Cart,i/∂xx_i (along each coordinate axis).
+        # Used ONLY for ds_min, this is a componentwise lower bound on the axis-aligned spacing |dx_i|.
+        # CAUTION: A step in xx_i changes ALL Cartesian components in fisheye; the true spacing along the
+        # xx_i-line is ‖∂x_Cart/∂xx_i‖ * dxx_i with the Euclidean norm over (x,y,z). Using only ∂x_i/∂xx_i
+        # underestimates ds_min (safer CFL). If you need exact spacing or g_ij, use the full Jacobian
+        # J = ∂x_Cart/∂xx and either ‖J[:,i]‖ for axis steps or g = J.T * J.
+        self.scalefactor_orthog[0] = sp.diff(self.xx_to_Cart[0], self.xx[0])
+        self.scalefactor_orthog[1] = sp.diff(self.xx_to_Cart[1], self.xx[1])
+        self.scalefactor_orthog[2] = sp.diff(self.xx_to_Cart[2], self.xx[2])
+
+        # CAUTION: Fisheye basis vectors are not orthonormal everywhere,
+        # but we set UnitVectors same as Cartesian-like for use in curvilinear BCs.
+        self.UnitVectors = [
+            [sp.sympify(1), sp.sympify(0), sp.sympify(0)],
+            [sp.sympify(0), sp.sympify(1), sp.sympify(0)],
+            [sp.sympify(0), sp.sympify(0), sp.sympify(1)],
+        ]
+        self.radial_like_dirns = [0, 1, 2]
+        # END: Set universal attributes for all fisheye coordinate systems:
+
     def register_pi(self) -> sp.Symbol:
         """
         Register the mathematical constant pi as a code parameter and return PI as a sympy symbol.
@@ -1540,6 +1760,7 @@ supported_CoordSystems = [
     "UWedgeHSinhSph",
     "RingHoleySinhSpherical",
     "HoleySinhSpherical",
+    "Fisheye",
 ]
 
 unittest_CoordSystems = [

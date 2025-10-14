@@ -82,7 +82,7 @@ In SinhSymTP, this will be at i0_min,i1_mid,i2_mid (i2 == phi doesn't matter).""
         or "SymTP" in CoordSystem
     ):
         i0_center = NGHOSTS
-    elif "Cartesian" in CoordSystem:
+    elif "Cartesian" in CoordSystem or "Fisheye" in CoordSystem:
         pass  # defaults are correct here.
     else:
         raise ValueError()
