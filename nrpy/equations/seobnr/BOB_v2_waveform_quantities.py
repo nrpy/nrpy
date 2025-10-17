@@ -147,7 +147,7 @@ class BOB_v2_waveform_quantities:
         phi_news = -2 * Phi_orb
         # Going from news to strain
         # The BOB strain is given as
-        # h = H*exp(i * m * Phi_orb)
+        # h = H*exp(- i * m * Phi_orb)
         # where H is complex and given by the infinite series
         # H = Sum_n H_n
         # First the series is truncated at N = N_provisional
@@ -178,7 +178,7 @@ class BOB_v2_waveform_quantities:
         # we will need to solve a non-linear equation to
         # get t_0 - t_p
         # additionally, we will need to evaluate Omega_0 numerically
-        # such that the wavform frequency at t_0 matches
+        # such that the waveform frequency at t_0 matches
         # the NR fitted quantity at t_0: omega22NR
         # Note: omega22NR is documented to be positive over parameter space
         # but the BOB strain frequency is, by definition, negative.

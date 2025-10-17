@@ -42,22 +42,13 @@ Evaluates the BOBv2 peak news time and reference orbital frequency using GSL.
     name = "BOB_v2_find_tp_Omega0"
     params = "commondata_struct *restrict commondata"
     wf = BOB_v2_waveform_quantities()
-    initial_guess_code = (
-        ccg.c_codegen(
-            [wf.t_p_guess, wf.Omega_0_guess],
-            ["const REAL t_p_guess", "const REAL Omega_0_guess"],
-            verbose=False,
-            include_braces=False,
-        )
-        .replace("REAL", "double complex")
-        .replace("exp", "cexp")
-        .replace("sqrt", "csqrt")
-        .replace("pow", "cpow")
-        .replace("fabs", "cabs")
-        .replace("tanh", "ctanh")
-        .replace("sinh", "csinh")
-        .replace("cosh", "ccosh")
-        .replace("actanh", "catanh")
+    initial_guess_code = ccg.c_codegen(
+        [wf.t_p_guess, wf.Omega_0_guess],
+        ["const COMPLEX t_p_guess", "const COMPLEX Omega_0_guess"],
+        verbose=False,
+        include_braces=False,
+        fp_type="double complex",
+        fp_type_alias="COMPLEX",
     )
     body = """
 const size_t n = 2;
