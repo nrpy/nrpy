@@ -9,7 +9,7 @@ Authors: Siddharth Mahesh
 
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import Tuple, Union, cast
+from typing import List, Tuple, Union, cast
 
 import sympy as sp
 
@@ -19,7 +19,7 @@ import nrpy.helpers.parallel_codegen as pcg
 
 def get_integration_stencil_uniform_spacing(
     polynomial_order: int,
-) -> Tuple[list[list[sp.core.numbers.Rational]], list[list[int]]]:
+) -> Tuple[List[List[sp.core.numbers.Rational]], List[List[int]]]:
     """
     Evaluate 8-th order accurate numerical integrals.
     This function evaluates the integrals
@@ -44,8 +44,8 @@ def get_integration_stencil_uniform_spacing(
             if i != j:
                 l_i *= (x - X[j]) / (X[i] - X[j])
         interpolating_polynomial += l_i * Y[i]
-    weights: list[list[sp.core.numbers.Rational]] = []
-    indices: list[list[int]] = []
+    weights: List[List[sp.core.numbers.Rational]] = []
+    indices: List[List[int]] = []
     for i in range(polynomial_order):
         integral = sp.simplify(
             sp.integrate(interpolating_polynomial, (x, X[i], X[i + 1]))
