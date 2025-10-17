@@ -74,22 +74,13 @@ const REAL t_p = gsl_vector_get(x , 0);
 const REAL Omega_0 = gsl_vector_get(x , 1);
 """
     wf = BOB_v2_wf.BOB_v2_waveform_quantities()
-    body += (
-        ccg.c_codegen(
-            [wf.t_p_condition, wf.Omega_0_condition],
-            ["REAL t_p_condition", "REAL Omega_0_condition"],
-            verbose=False,
-            include_braces=False,
-        )
-        .replace("REAL", "double complex")
-        .replace("exp", "cexp")
-        .replace("sqrt", "csqrt")
-        .replace("pow", "cpow")
-        .replace("fabs", "cabs")
-        .replace("tanh", "ctanh")
-        .replace("sinh", "csinh")
-        .replace("cosh", "ccosh")
-        .replace("actanh", "catanh")
+    body += ccg.c_codegen(
+        [wf.t_p_condition, wf.Omega_0_condition],
+        ["COMPLEX t_p_condition", "COMPLEX Omega_0_condition"],
+        verbose=False,
+        include_braces=False,
+        fp_type="double complex",
+        fp_type_alias="COMPLEX",
     )
     body += """
 gsl_vector_set(f , 0 , creal(t_p_condition));
