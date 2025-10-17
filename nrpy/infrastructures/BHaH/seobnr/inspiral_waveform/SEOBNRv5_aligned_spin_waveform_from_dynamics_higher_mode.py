@@ -45,13 +45,11 @@ if (strain_modes_single_timestep == NULL){
   exit(1);
 }
 commondata->waveform_low = (double complex *)malloc(commondata->nsteps_low*NUMMODESSTORED*sizeof(double complex));
-commondata->waveform_low = (double complex *)malloc(commondata->nsteps_low*NUMMODES*sizeof(double complex)); //t , h_+ , h_x
 if (commondata->waveform_low == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_waveform_from_dynamics(), malloc() failed to for commondata->waveform_low\\n");
   exit(1);
 }
 commondata->waveform_fine = (double complex *)malloc(commondata->nsteps_fine*NUMMODESSTORED*sizeof(double complex));
-commondata->waveform_fine = (double complex *)malloc(commondata->nsteps_fine*NUMMODES*sizeof(double complex)); //t , h_+ , h_x
 if (commondata->waveform_fine == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_waveform_from_dynamics(), malloc() failed to for commondata->waveform_fine\\n");
   exit(1);

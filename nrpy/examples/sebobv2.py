@@ -5,7 +5,7 @@ This is a work in progress. The final SEBOBv2 contains
 the following improvements over the current SEBOBv1:
 
 []1. Higher multipolar modes
-[]    1.a. Inspiral modes (2,2), (2,1), (3,3), (3,2), (4,4), (4,3), (5,5)
+[*]    1.a. Inspiral modes (2,2), (2,1), (3,3), (3,2), (4,4), (4,3), (5,5); Currently computes all inspiral modes but only outputs (2,2) for now
 []    1.b. Merger-ringdown modes (2,2), (2,1), (3,3), (3,2), (4,4), (4,3), (5,5)
 []    1.c. NQCs for higher modes
 []    1.d. Computing mode-mixing coefficients for higher modes
