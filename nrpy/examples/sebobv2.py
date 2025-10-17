@@ -5,7 +5,7 @@ This is a work in progress. The final SEBOBv2 contains
 the following improvements over the current SEBOBv1:
 
 []1. Higher multipolar modes
-[]    1.a. Inspiral modes (2,2), (2,1), (3,3), (3,2), (4,4), (4,3), (5,5)
+[*]    1.a. Inspiral modes (2,2), (2,1), (3,3), (3,2), (4,4), (4,3), (5,5); Currently computes all inspiral modes but only outputs (2,2) for now
 []    1.b. Merger-ringdown modes (2,2), (2,1), (3,3), (3,2), (4,4), (4,3), (5,5)
 []    1.c. NQCs for higher modes
 []    1.d. Computing mode-mixing coefficients for higher modes
@@ -219,13 +219,13 @@ BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_ode_integration.register_CFunction_SE
 # register inspiral waveform routines
 BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_gamma_wrapper.register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper()
 BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_interpolate_modes.register_CFunction_SEOBNRv5_aligned_spin_interpolate_modes()
-BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_waveform_from_dynamics.register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics()
+BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_waveform_from_dynamics_higher_mode.register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics()
 if precompute_waveform_coefficients_flag:
     BHaH.seobnr.inspiral_waveform_precomputed.SEOBNRv5_aligned_spin_waveform_coefficients.register_CFunction_SEOBNRv5_aligned_spin_waveform_coefficients()
     BHaH.seobnr.inspiral_waveform_precomputed.SEOBNRv5_aligned_spin_waveform_precomputed.register_CFunction_SEOBNRv5_aligned_spin_waveform()
     BHaH.seobnr.inspiral_waveform_precomputed.SEOBNRv5_aligned_spin_flux_precomputed.register_CFunction_SEOBNRv5_aligned_spin_flux()
 else:
-    BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_waveform.register_CFunction_SEOBNRv5_aligned_spin_waveform()
+    BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_waveform_higher_mode.register_CFunction_SEOBNRv5_aligned_spin_waveform()
     BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_flux.register_CFunction_SEOBNRv5_aligned_spin_flux()
 
 # register additional commondata parameters needed for SEBOBv2 (but not needed for SEOBNR)
@@ -330,9 +330,17 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
 #define OMEGA 6
 #define OMEGA_CIRC 7
 #define IDX(idx, var) ((idx)*NUMVARS + (var))
-#define NUMMODES 2
+#define NUMMODES 8 
+#define STRAIN22 1
+#define STRAIN21 2
+#define STRAIN33 3
+#define STRAIN32 4
+#define STRAIN44 5
+#define STRAIN43 6
+#define STRAIN55 7
+#define NUMMODESSTORED 2 // process 2,2 mode for now
 #define STRAIN 1
-#define IDX_WF(idx,var) ((idx)*NUMMODES + (var))
+#define IDX_WF(idx,var) ((idx)*NUMMODESSTORED + (var))
 typedef struct {
   gsl_spline *spline;
   gsl_interp_accel *acc;
