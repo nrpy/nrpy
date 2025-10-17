@@ -88,7 +88,7 @@ for (i = 0; i < commondata->nsteps_fine; i++) {
   dynamics[OMEGA_CIRC] = commondata->dynamics_fine[IDX(i,OMEGA_CIRC)];
 
   //compute
-  //store
+  //store only 2,2 mode for now, higher modes will be stored in a future update
   SEOBNRv5_aligned_spin_waveform(dynamics, commondata, strain_modes_single_timestep);
   commondata->waveform_fine[IDX_WF(i,TIME)] = dynamics[TIME];
   commondata->waveform_fine[IDX_WF(i,STRAIN)] = strain_modes_single_timestep[STRAIN22-1];
