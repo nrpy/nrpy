@@ -10,7 +10,7 @@ the outset (no post-hoc substitutions).
 
 This version keeps runtime behavior identical but improves and clarifies
 documentation, with explicit links to the notation used in Owen et al.,
-"Black Hole Spin Axis in Numerical Relativity" (2017).
+"Black Hole Spin Axis in Numerical Relativity" (2017): arXiv:1708.07325v2
 
 Mathematical summary
 ---------------------------------
