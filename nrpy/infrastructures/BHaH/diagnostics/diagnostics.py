@@ -139,6 +139,7 @@ def register_CFunction_diagnostics(  # pylint: disable=unused-argument
     )
     if parallelization == "cuda":
         params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata_device, griddata_struct *restrict griddata"
+    newline = "\n"  # Backslashes aren't allowed in Python 3.7 f-strings; this is our workaround.
     body = f"""
   const REAL currtime = commondata->time, currdt = commondata->dt, outevery = commondata->diagnostics_output_every;
   // Explanation of the if() below:
@@ -177,11 +178,11 @@ def register_CFunction_diagnostics(  # pylint: disable=unused-argument
     diagnostic_gfs_set(commondata, griddata, diagnostic_gfs);
 
     {"// Nearest-point diagnostics, at center, along y,z axes (1D) and xy and yz planes (2D)." if enable_nearest_diagnostics else ""}
-    {"diagnostics_nearest(commondata, griddata, (const double **)diagnostic_gfs);\n" if enable_nearest_diagnostics else ""}
+    {"diagnostics_nearest(commondata, griddata, (const double **)diagnostic_gfs);"+newline if enable_nearest_diagnostics else ""}
     {"// Interpolation diagnostics, at center, along x,y,z axes (1D) and xy and yz planes (2D)." if enable_interp_diagnostics else ""}
-    {"diagnostics_interp(commondata, griddata, (const double **)diagnostic_gfs);\n" if enable_interp_diagnostics else ""}
+    {"diagnostics_interp(commondata, griddata, (const double **)diagnostic_gfs);"+newline if enable_interp_diagnostics else ""}
     {"// Volume-integration diagnostics." if enable_volume_integration_diagnostics else ""}
-    {"diagnostics_volume_integration(commondata, griddata, (const double **)diagnostic_gfs);\n" if enable_volume_integration_diagnostics else ""}
+    {"diagnostics_volume_integration(commondata, griddata, (const double **)diagnostic_gfs);"+newline if enable_volume_integration_diagnostics else ""}
     // Free temporary storage allocated to diagnostic_gfs.
     for(int grid=0; grid<commondata->NUMGRIDS; grid++)
       free(diagnostic_gfs[grid]);
@@ -193,7 +194,7 @@ def register_CFunction_diagnostics(  # pylint: disable=unused-argument
   }} // END if output step
 
   progress_indicator(commondata, griddata);
-  if (commondata->time + commondata->dt > commondata->t_final) printf("\\n");
+  if (commondata->time + commondata->dt > commondata->t_final) printf("{newline}");
 """
     cfc.register_CFunction(
         subdirectory="diagnostics",

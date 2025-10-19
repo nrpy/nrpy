@@ -68,7 +68,7 @@ def diagnostics_gfs_h_create(
             "diagnostics_gfs_h_create() must be called AFTER parallel codegen."
         )
 
-    newline = "\n"  # Needed for Python 3.7 compatibility in the f-strings below
+    newline = "\n"  # Backslashes aren't allowed in Python 3.7 f-strings; this is our workaround.
     body = rf"""
 /**
  * @file diagnostic_gfs.h
