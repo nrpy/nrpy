@@ -425,24 +425,13 @@ const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_
 for (int i = 0; i < NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot; i++) {
 """
     # Generating gridfunction names based on the given MoL method
-    (
-        y_n_gridfunctions,
-        non_y_n_gridfunctions_list,
-        _diagnostic_gridfunctions_point_to,
-        _diagnostic_gridfunctions2_point_to,
-    ) = BHaH.MoLtimestepping.rk_butcher_table_dictionary.intermediate_stage_gf_names_list(
+    intermediate_stage_gfs = BHaH.MoLtimestepping.rk_butcher_table_dictionary.intermediate_stage_gf_names_list(
         Butcher_dict, MoL_method=MoL_method
     )
-    # Convert y_n_gridfunctions to a list if it's a string
-    gf_list = (
-        [y_n_gridfunctions] if isinstance(y_n_gridfunctions, str) else y_n_gridfunctions
-    )
-    gf_list.extend(non_y_n_gridfunctions_list)
-    for gf in gf_list:
-        if gf not in ("auxevol_gfs", "diagnostic_output_gfs"):
-            body += f"gridfuncs->{gf.lower()}[i] = NAN;"
+    for gf in intermediate_stage_gfs + ["y_n_gfs"]:
+        body += f"gridfuncs->{gf.lower()}[i] = NAN;"
     body += """
-}"""
+} // END LOOP over NUM_EVOL_GFS"""
 
     try:
         cfc.register_CFunction(
