@@ -1,7 +1,17 @@
 """
-Register numerical_grids_and_timestep() C function, as well as functions called by this one.
+C function registration for computing the local 3D volume element sqrt(detgammahat) * d3xx at a point.
 
-These functions set up numerical grids for use within the BHaH infrastructure.
+This module constructs and registers the C helper routine "sqrt_detgammahat_d3xx_volume_element".
+The generated C function evaluates the positive volume element used in 3D integrals at the
+provided local coordinates (xx0, xx1, xx2). The expression is:
+    sqrt(detgammahat(xx0,xx1,xx2)) * abs(dxx0 * dxx1 * dxx2)
+The grid spacings dxx{0,1,2} are taken from CodeParameters.h, and reference-metric data are
+specialized at registration time for the selected coordinate system.
+
+Function
+--------
+register_CFunction_sqrt_detgammahat_d3xx_volume_element
+    Construct and register the "sqrt_detgammahat_d3xx_volume_element" C function.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -24,11 +34,18 @@ def register_CFunction_sqrt_detgammahat_d3xx_volume_element(
     CoordSystem: str,
 ) -> None:
     """
-    Register a C function to find the minimum grid spacing ds_min.
+    Construct and register a C function that computes the local 3D volume element at a point.
 
-    ds_min is the minimum spacing between neighboring gridpoints on a numerical grid.
+    This function generates and registers the C helper "sqrt_detgammahat_d3xx_volume_element". The
+    generated C code evaluates sqrt(detgammahat) * abs(dxx0 * dxx1 * dxx2) at the provided local
+    coordinates (xx0, xx1, xx2), using reference-metric data associated with the requested
+    coordinate system. The dxx{0,1,2} grid spacings are declared in CodeParameters.h and pulled
+    in via the params_struct definitions. For CUDA builds, the function is decorated with
+    __host__ __device__; for OpenMP builds it is a plain C function. The result is returned by
+    reference through the dV pointer in C.
 
-    :param CoordSystem: The coordinate system of the numerical grid.
+    :param CoordSystem: Name of the coordinate system used to select the reference metric data
+                        embedded in the generated C function.
 
     Doctests:
     >>> from nrpy.helpers.generic import validate_strings
@@ -45,10 +62,6 @@ def register_CFunction_sqrt_detgammahat_d3xx_volume_element(
     ...       generated_str = cfc.CFunction_dict[f'{name}__rfm__{CoordSystem}'].full_function
     ...       validation_desc = f"{name}__{parallelization}__{CoordSystem}"
     ...       validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
-    Setting up reference_metric[SinhSymTP]...
-    Setting up reference_metric[HoleySinhSpherical]...
-    Setting up reference_metric[Cartesian]...
-    Setting up reference_metric[SinhCylindricalv2n2]...
     """
     # dxx{0,1,2} must be registered or it won't be declared at the top of the function.
     # fmt: off
@@ -58,19 +71,27 @@ def register_CFunction_sqrt_detgammahat_d3xx_volume_element(
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """
- * @brief Compute the local 3D volume element sqrt{detgammahat} d^3xx at a point.
+ * @file sqrt_detgammahat_d3xx_volume_element.c
+ * @brief Compute the local 3D volume element sqrt(detgammahat) * d3xx at a point.
  *
- * Given a set of grid/metric parameters and local coordinates, this function evaluates
- * the positive volume element used for integrating scalar fields over a 3D grid.
- * The implementation uses precomputed parameters in @p params and elementary functions
- * of the local coordinates. The result is stored by reference in @p dV.
+ * This routine evaluates the positive volume element used when integrating scalar fields on a
+ * 3D grid. The evaluation uses reference-metric data and grid spacings stored in the params
+ * structure. The computed value is returned by reference via the dV pointer.
  *
- * @param params Pointer to the global/solver parameters required to evaluate the volume element.
- * @param xx0 Local coordinate 0 at which to evaluate the volume element.
- * @param xx1 Local coordinate 1 at which to evaluate the volume element.
- * @param xx2 Local coordinate 2 at which to evaluate the volume element.
- * @param dV  Output pointer set to the absolute value of the local volume element.
- * @return void This function returns no value; the result is written to @p dV.
+ * The expression implemented is:
+ *   dV = sqrt(detgammahat(xx0, xx1, xx2)) * abs(dxx0 * dxx1 * dxx2)
+ * The absolute value ensures a positive volume element regardless of coordinate orientation.
+ *
+ * @param[in]  params  Pointer to parameter struct (reference-metric data, grid spacings, and sizes).
+ * @param[in]  xx0     Local coordinate 0 at which to evaluate the volume element.
+ * @param[in]  xx1     Local coordinate 1 at which to evaluate the volume element.
+ * @param[in]  xx2     Local coordinate 2 at which to evaluate the volume element.
+ * @param[out] dV      Pointer to the location where the volume element will be stored.
+ *
+ * @return     void. The result is written to *dV.
+ *
+ * Note: If a user-editable block is provided in the implementation, users may add custom logic,
+ * such as scaling or additional diagnostics, prior to writing the result.
  """
     cfunc_type = "void"
     name = "sqrt_detgammahat_d3xx_volume_element"
