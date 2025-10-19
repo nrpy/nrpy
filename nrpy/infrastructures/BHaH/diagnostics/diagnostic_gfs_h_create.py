@@ -68,7 +68,7 @@ def diagnostics_gfs_h_create(
             "diagnostics_gfs_h_create() must be called AFTER parallel codegen."
         )
 
-    body = f"""
+    body = fr"""
 /**
  * @file diagnostic_gfs.h
  * @brief Defines the enum and name table for all diagnostic gridfunctions.

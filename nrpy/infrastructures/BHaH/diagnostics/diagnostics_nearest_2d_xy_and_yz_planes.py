@@ -1,15 +1,16 @@
 """
-Registers the C function for 2D diagnostics on the nearest xy and yz planes for a single grid.
+C function registration for 2D diagnostics on the nearest xy and yz planes for a single grid.
 
-This module provides the Python registration function for the C helper routine
-`diagnostics_nearest_2d_xy_and_yz_planes`. This C function samples gridfunction data
-(no interpolation) at grid points on the planes nearest to the xy- and yz-planes
-for the specified grid. The caller is responsible for looping over grids.
+This module constructs and registers the C helper routine "diagnostics_nearest_2d_xy_and_yz_planes".
+The generated C function samples gridfunction data without interpolation at interior points on the
+planes nearest to the xy and yz coordinate planes for the selected grid. For each call and grid,
+two per-timestep files are written: one for the xy plane and one for the yz plane. The caller is
+responsible for looping over grids.
 
 Functions
 ---------
 register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes
-    Registers the `diagnostics_nearest_2d_xy_and_yz_planes` C function.
+    Construct and register the "diagnostics_nearest_2d_xy_and_yz_planes" C function.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -17,7 +18,7 @@ Author: Zachariah B. Etienne
 
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import Dict, Union, cast
+from typing import Dict, Sequence, Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
@@ -26,22 +27,23 @@ import nrpy.helpers.parallel_codegen as pcg
 def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
     CoordSystem: str,
 ) -> Union[None, pcg.NRPyEnv_type]:
-    r"""
-    Register a C function for 2D diagnostics on the nearest xy- and yz-planes for a single grid.
+    """
+    Construct and register a C function that writes 2D diagnostics on the nearest xy and yz planes for a single grid.
 
-    This function uses a data-driven architecture to define plane geometries for various
-    coordinate systems, including Cartesian, Spherical, Cylindrical, SymTP, and Wedge.
-    This approach improves maintainability and simplifies the addition of new systems.
+    This function generates and registers the C helper "diagnostics_nearest_2d_xy_and_yz_planes".
+    The generated C code identifies interior slices nearest to the xy and yz planes based on the
+    provided coordinate system, converts native grid coordinates to Cartesian (x, y, z) for output,
+    and for each call writes two per-timestep files: one for the xy plane and one for the yz plane.
+    Sampling is performed without interpolation; values are read directly from the selected grid's
+    diagnostic gridfunctions. The plane selection and loop ordering are configured via a small
+    data-driven table for Cartesian, Cylindrical, Spherical, SymTP, and Wedge families; some
+    families emit multiple slices for a plane (for example, two phi slices near +/- pi/2 to realize x=0).
 
-    The generated C function correctly performs the following actions:
-    1.  Identifies the grid indices corresponding to the xy- and yz-planes for the
-        specified coordinate system family.
-    2.  Transforms native grid coordinates to Cartesian coordinates (x, y, z) for output.
-    3.  Creates a new output file for each plane and timestep, adhering to the standard
-        diagnostic file format: a time comment, a header row, and data rows.
-
-    :param CoordSystem: Specifies the coordinate system for the diagnostics.
+    :param CoordSystem: Name of the coordinate system family that specializes plane selection and the wrapper.
     :return: None if in registration phase, else the updated NRPy environment.
+
+    Doctests:
+    TBD
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -149,24 +151,25 @@ def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
     }
 
     def _get_coord_family(cs: str) -> str:
-        """Return the coordinate system family name from the full CoordSystem string."""
+        """
+        Return the coordinate system family name from the full CoordSystem string.
+
+        :param cs: The full CoordSystem string.
+        :raises ValueError: If the coordinate system is not supported.
+        :return: The coordinate family name.
+        """
         for family in plane_configs["xy"]:
             if family in cs:
                 return family
         raise ValueError(f"Unsupported CoordSystem: {cs}")
 
-    def _generate_plane_loop_code(
-        config: Dict[str, Union[str, list]], plane: str
-    ) -> str:
-        """Generate a C code block for sampling a plane based on its config.
+    def _generate_plane_loop_code(config: Dict[str, Sequence[str]], plane: str) -> str:
+        """
+        Generate a C code block for sampling a plane based on its config.
 
-        Parameters
-        ----------
-        config : dict
-            A CONFIG as documented above (fixed_dim, fixed_val, loop_dims).
-        plane : str
-            Either "xy" or "yz"; determines which Cartesian components go to row[0], row[1],
-            and which output file handle to use.
+        :param config: A CONFIG as documented above (fixed_dim, fixed_val, loop_dims).
+        :param plane: Either "xy" or "yz"; determines output mapping and file handle.
+        :return: The generated C code string for the plane loop.
         """
         loop_dims, fixed_dim, fixed_val = (
             config["loop_dims"],
@@ -226,23 +229,40 @@ diag_write_row({out_file}, {num_coords} + NUM_GFS_NEAREST, row);
         "diagnostics/diagnostics_nearest_common.h",
     ]
     desc = f"""
- * @brief Sample and write 2D diagnostics on the nearest xy- and yz-planes for a single grid ({CoordSystem}).
+ * @file diagnostics_nearest_2d_xy_and_yz_planes.c
+ * @brief Sample and write 2D diagnostics on the nearest xy and yz planes for a single {CoordSystem} grid.
  *
- * For the specified grid and current time, this function:
- *  - Locates the interior planes nearest to the xy and yz planes (per {CoordSystem} layout).
- *  - Transforms grid coordinates to Cartesian coordinates for output.
- *  - Writes one row per interior point containing coordinates and selected diagnostics.
- *  - Produces two files per call: one for the xy plane and one for the yz plane.
+ * Overview:
+ * For the specified grid at the current time, this routine:
+ *  - Locates interior slices that are nearest to the xy and yz planes, with selection rules
+ *    specialized by the runtime coordinate system.
+ *  - Converts native coordinates xx to Cartesian coordinates (x, y, z) using xx_to_Cart so that
+ *    the first columns of each row contain mapped coordinates.
+ *  - Writes two files per call, one for the xy plane and one for the yz plane. Each file begins
+ *    with a time comment and a header, followed by one row per interior point that contains the
+ *    mapped coordinates and sampled diagnostic values.
+ *  - Performs sampling without interpolation; values are read directly from gridfuncs_diags[grid].
  *
- * @param[in,out] commondata    Pointer to common runtime data (time and I/O context).
- * @param[in]     grid          Grid index to process.
- * @param[in]     params        Pointer to simulation/grid parameters.
- * @param[in]     xx            Native grid coordinates; xx[d][i_d] gives coordinate along dimension d.
- * @param[in]     NUM_GFS_NEAREST Number of diagnostic gridfunctions to sample.
- * @param[in]     which_gfs     Array of length NUM_GFS_NEAREST listing which gridfunctions to sample.
- * @param[in]     diagnostic_gf_names Array of length NUM_GFS_NEAREST with human-readable names for headers.
- * @param[in]     gridfuncs_diags Array of pointers; gridfuncs_diags[grid] points to this grid's diagnostic data.
- * @return        void          No return value; writes output files and may exit on fatal I/O/memory errors.
+ * Plane selection notes (examples, not exhaustive):
+ *  - Cartesian: xy fixes i2 at mid; yz fixes i0 at mid.
+ *  - Cylindrical: xy fixes z at mid; yz emits two phi slices near +/- pi/2 to realize x=0.
+ *  - Spherical and SymTP: xy fixes the polar-like angle at mid; yz emits two phi-like slices near +/- pi/2.
+ *  - Wedge: xy may emit two z-like slices at quarter indices; yz fixes the across-wedge index at mid.
+ *
+ * If a user-editable block is provided in the implementation, users may insert custom logic such as
+ * adding extra columns or filtering before rows are written.
+ *
+ * @param[in,out] commondata            Pointer to common runtime data used for time and I/O.
+ * @param[in]     grid                  Grid index to process.
+ * @param[in]     params                Pointer to simulation and grid parameters (sizes, names, strides).
+ * @param[in]     xx                    Native grid coordinates; xx[d][i_d] gives the coordinate along dimension d.
+ * @param[in]     NUM_GFS_NEAREST       Number of diagnostic gridfunctions to sample at each interior point.
+ * @param[in]     which_gfs             Array of length NUM_GFS_NEAREST specifying which gridfunctions to sample.
+ * @param[in]     diagnostic_gf_names   Array of length NUM_GFS_NEAREST with human-readable names for headers.
+ * @param[in]     gridfuncs_diags       Array of pointers; gridfuncs_diags[grid] points to this grid's diagnostic data.
+ *
+ * @return        void                  No return value. On success two text files are written and closed. Fatal I/O
+ *                                      or allocation failures result in program termination.
 """
     cfunc_type = "void"
     name = "diagnostics_nearest_2d_xy_and_yz_planes"

@@ -8,10 +8,10 @@ invokes specialized helpers to emit nearest-sampled diagnostics:
   - 1D: diagnostics_nearest_1d_y_and_z_axes() samples along the lines nearest the y and z axes.
   - 2D: diagnostics_nearest_2d_xy_and_yz_planes() samples across the planes nearest the xy and yz planes.
 
-The C routine organizes a single USER-EDIT section that appears once, before the per-grid loop.
-In that section, users define which_gfs arrays (by enum) for each dimensionality. These selections
-apply to all grids. The third function parameter, gridfuncs_diags[grid], must point to caller-owned
-REAL diagnostic gridfunctions that serve as the sampling source.
+A single USER-EDIT block appears before the per-grid loop. In that block, users select
+which_gfs arrays (by enum) for each dimensionality; these selections apply to all grids.
+The third C parameter, gridfuncs_diags[grid], must point to caller-owned REAL diagnostic
+gridfunctions that serve as the sampling source.
 
 During code generation:
   - The routine is placed under the diagnostics/ subdirectory.
@@ -38,14 +38,16 @@ def register_CFunction_diagnostics_nearest() -> Union[None, pcg.NRPyEnv_type]:
     Construct and register a C function that dispatches nearest-sampled diagnostics to helper routines.
 
     This function generates and registers the C routine diagnostics_nearest(), which contains:
-      - One USER-EDIT section: users specify per-dimensional which_gfs arrays (applies to all grids).
-      - One loop over grids: for each grid, the helpers are invoked for 0D, 1D, and 2D outputs.
+      - One USER-EDIT block where users specify per-dimensional which_gfs arrays. These selections apply to all grids.
+      - One loop over grids. For each grid, the routine calls the 0D, 1D, and 2D helper functions that handle
+        coordinate selection, sampling from caller-provided diagnostic buffers, and file output.
 
-    Returns:
-        None during registration, else the updated NRPy environment.
+    This function takes no Python parameters.
+
+    :return: None if in registration phase, else the updated NRPy environment.
 
     Doctests:
-        TBD
+    TBD
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -54,41 +56,43 @@ def register_CFunction_diagnostics_nearest() -> Union[None, pcg.NRPyEnv_type]:
     # --- C Function Registration ---
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "diagnostic_gfs.h"]
     desc = """
- * @brief Dispatch nearest-sampled 0D, 1D, and 2D diagnostics to specialized helper routines.
+ * @brief Dispatch nearest-sampled diagnostics by invoking specialized helper routines for 0D, 1D, and 2D outputs.
  *
- * This routine coordinates diagnostic output by sampling nearest-point diagnostic
- * gridfunction data at:
- *   - 0D: the grid index triplet nearest to the physical center.
- *   - 1D: the lines nearest to the y and z axes.
- *   - 2D: the planes nearest to the xy and yz coordinate planes.
+ * The diagnostics_nearest() dispatcher coordinates sampling of diagnostic gridfunction data from caller-provided
+ * buffers and delegates output to three helper functions:
+ *   - diagnostics_nearest_grid_center(): emits 0D diagnostics at the index triplet nearest the physical center.
+ *   - diagnostics_nearest_1d_y_and_z_axes(): emits 1D diagnostics along lines nearest the y and z axes.
+ *   - diagnostics_nearest_2d_xy_and_yz_planes(): emits 2D diagnostics across planes nearest the xy and yz planes.
  *
- * A single USER-EDIT section defines which_gfs arrays for each dimensionality. These arrays list
- * diagnostic gridfunctions (by enum index) to sample and emit. The per-grid loop below then calls
- * the 0D, 1D, and 2D helpers for each grid using those same selections.
- *
- * This dispatcher does not allocate or free memory; the caller provides valid source buffers.
+ * A single USER-EDIT block appears before the per-grid loop. In that block, users select which_gfs arrays (by enum)
+ * for each dimensionality. These selections are applied uniformly to all grids. The dispatcher itself performs no
+ * memory allocation or deallocation; all buffers are owned by the caller. Helper routines may perform file I/O.
  *
  * @param[in] commondata
- *   Shared simulation metadata and runtime context (e.g., time, iteration counters, number of grids).
+ *   Pointer to shared simulation metadata and runtime context, including NUMGRIDS and iteration/time information.
  *
  * @param[in] griddata
- *   Per-grid data including parameters, coordinates, and gridfunction strides required by helpers.
+ *   Pointer to an array of per-grid data structures. For grid index "grid", griddata[grid] provides parameters,
+ *   coordinates, and strides required by the diagnostics helper routines.
  *
  * @param[in] gridfuncs_diags
- *   Array of length MAXNUMGRIDS; for each grid index "grid", gridfuncs_diags[grid] must point to
- *   the REAL diagnostic gridfunction data used as the sampling source.
+ *   Array of length MAXNUMGRIDS. For each grid index "grid", gridfuncs_diags[grid] must point to caller-owned
+ *   REAL diagnostic gridfunction data that serve as the sampling source.
  *
  * @pre
  *   - For each active grid, gridfuncs_diags[grid] is non-null and points to valid diagnostic data.
- *   - Enum values referenced in which_gfs[] correspond to valid diagnostic gridfunctions.
- *   - diagnostics_nearest_grid_center(), diagnostics_nearest_1d_y_and_z_axes(), and
- *     diagnostics_nearest_2d_xy_and_yz_planes() are linked and available.
+ *   - which_gfs indices selected in the USER-EDIT block map to valid diagnostic gridfunctions.
+ *   - Helper symbols diagnostics_nearest_grid_center(), diagnostics_nearest_1d_y_and_z_axes(), and
+ *     diagnostics_nearest_2d_xy_and_yz_planes() are available at link time.
  *
  * @post
- *   - For each grid and timestep, helper routines may write out0d, out1d-y, out1d-z, out2d-xy, and out2d-yz files.
+ *   - For each grid, helper routines may emit 0D, 1D (y and z), and 2D (xy and yz) diagnostic outputs.
  *   - No memory is allocated or freed by this dispatcher.
  *
  * @return void
+ *
+ * @note The USER-EDIT block is for selecting which diagnostic gridfunctions to sample. Keep it concise and avoid
+ *       per-grid logic there, as the dispatcher handles iteration over grids.
  """
     cfunc_type = "void"
     name = "diagnostics_nearest"

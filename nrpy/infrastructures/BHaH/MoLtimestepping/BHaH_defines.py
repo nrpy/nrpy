@@ -28,11 +28,11 @@ def register_BHaH_defines_h(
     )
     BHaH_MoL_body: str = (
         "typedef struct __MoL_gridfunctions_struct__ {\n"
-        + f"REAL *y_n_gfs;\n"
+        + "REAL *y_n_gfs;\n"
         + "".join(
             f"REAL *{gfs};\n" for gfs in intermediate_stage_gfs_gridfunctions_list
         )
-        + r"""REAL *auxevol_gfs;
+        + """REAL *auxevol_gfs;
 } MoL_gridfunctions_struct;
 """
     )

@@ -1,15 +1,18 @@
 """
-Registers the C function for 1D diagnostics along the nearest y and z axes for a single grid.
+C function registration for 1D diagnostics along the nearest y and z axes for a single grid.
 
-This module provides the Python registration function for the C helper routine
-`diagnostics_nearest_1d_y_and_z_axes`. This C function samples gridfunction data
-(no interpolation) at grid points along the lines nearest to the y- and z-axes
-for the specified grid. The caller is responsible for looping over grids.
+This module constructs and registers the C helper routine "diagnostics_nearest_1d_y_and_z_axes".
+The generated C function samples gridfunction data without interpolation along axis-aligned
+lines that are nearest to the physical y- and z-axes for the specified grid. The caller is
+responsible for looping over grids. For each timestep, rows are appended to two persistent
+per-grid output files (one for y and one for z) whose names encode the coordinate system,
+grid number, and convergence factor. Each file begins with a one-line time comment and an
+axis-specific header, followed by rows whose first column is the axis coordinate.
 
-Functions
----------
+Function
+--------
 register_CFunction_diagnostics_nearest_1d_y_and_z_axes
-    Registers the `diagnostics_nearest_1d_y_and_z_axes` C function.
+    Construct and register the "diagnostics_nearest_1d_y_and_z_axes" C function.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -17,7 +20,7 @@ Author: Zachariah B. Etienne
 
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import Union, cast
+from typing import Any, Dict, List, Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
@@ -25,16 +28,27 @@ import nrpy.helpers.parallel_codegen as pcg
 
 def register_CFunction_diagnostics_nearest_1d_y_and_z_axes(
     CoordSystem: str,
-) -> Union[None, pcg.NRPyEnv]:
-    r"""
-    Register a C function that outputs 1D diagnostics along the nearest y- and z-axes (no interpolation).
+) -> Union[None, pcg.NRPyEnv_type]:
+    """
+    Construct & register a C helper for 1D diagnostics along the nearest points to the y- and z-axes.
 
-    - Correct per-family geometry (Cartesian, Spherical, Cylindrical, SymTP, Wedge, Spherical_Ring).
-    - Data-driven axis-line specification for maintainability.
-    - Collect -> sort -> write: buffer (coord, idx3), sort by physical axis coordinate,
-      then fetch gridfunction values and write rows.
-    - Emits a one-line time comment ("# [time] = ...") at top, then axis-specific headers ("y" or "z").
-    - Uses IDX3P / IDX4Ppt index macros for portability.
+    This function generates and registers the C helper "diagnostics_nearest_1d_y_and_z_axes", which
+    mirrors the interpolation-based diagnostics API so it can serve as a drop-in replacement in
+    calling code that loops over grids. The generated C code (a) selects axis-line samples according
+    to the coordinate family implied by `CoordSystem`, (b) converts logical coordinates to Cartesian,
+    (c) buffers (axis_coord, idx3) pairs, (d) sorts by the physical axis coordinate, and (e) streams
+    rows whose first column is the axis coordinate followed by selected diagnostic gridfunction values.
+    Two persistent per-grid output files are produced per call, one for the y-axis and one for the z-axis.
+    Each file begins with a one-line time comment and an axis-specific header. Sampling is performed at
+    grid points only; no interpolation is used.
+
+    :param CoordSystem: Name of the coordinate system used to specialize axis-line selection and
+                        wrapper generation (e.g., Cartesian, Spherical, Cylindrical, SymTP, Wedge,
+                        Spherical_Ring).
+    :return: None if in registration phase, else the updated NRPy environment.
+
+    Doctests:
+    TBD
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -215,7 +229,7 @@ def register_CFunction_diagnostics_nearest_1d_y_and_z_axes(
     y_lines = axis_configs["y"][fam]
     z_lines = axis_configs["z"][fam]
 
-    def _count_expr(lines) -> str:
+    def _count_expr(lines: List[Dict[str, Any]]) -> str:
         # Map each index name to the interior count symbol used in C.
         # keys:   "i0","i1","i2" (grid indices)
         # values: "N0int","N1int","N2int" (C locals representing interior sizes)
@@ -228,7 +242,7 @@ def register_CFunction_diagnostics_nearest_1d_y_and_z_axes(
     y_count_expr = _count_expr(y_lines)
     z_count_expr = _count_expr(z_lines)
 
-    def _gen_fill(axis_char: str, lines) -> str:
+    def _gen_fill(axis_char: str, lines: List[Dict[str, Any]]) -> str:
         if not lines:
             return "(void)xx;  // no points for this axis/family\n"
 
@@ -303,24 +317,45 @@ static int compare_by_coord(const void *a, const void *b) {
         "diagnostics/diagnostics_nearest_common.h",
     ]
 
-    desc = f"""
- * @brief Emit 1D diagnostics along nearest y and z axes (no interpolation) for "{CoordSystem}".
+    desc = """
+ * @file diagnostics_nearest_1d_y_and_z_axes.c
+ * @brief Write 1D diagnostics for a single grid by sampling, without interpolation, axis-aligned
+ *        lines nearest to the physical y and z axes, and append rows per timestep to persistent files.
  *
- * For each axis, this routine:
- *  1) Builds a set of (coord, idx3) samples for lines aligned with the axis,
- *  2) Sorts samples by the physical axis coordinate,
- *  3) Writes a single-line time comment and an axis-specific header (no "time" column),
- *  4) Streams rows: [axis_coord, selected gridfunctions...].
+ * The function "diagnostics_nearest_1d_y_and_z_axes" appends diagnostics for a single grid to two
+ * per-grid text files whose names encode the runtime coordinate system, grid number, and convergence
+ * factor:
  *
- * @param commondata Pointer to common simulation data (time, iteration, etc.).
- * @param grid Zero-based grid index to select source data.
- * @param params Pointer to grid/coordinate parameters.
- * @param xx Array of 3 pointers to logical coordinates for each dimension.
- * @param NUM_GFS_NEAREST Number of diagnostic gridfunctions to output.
- * @param which_gfs Indices of the diagnostic gridfunctions to output.
- * @param diagnostic_gf_names Names of the diagnostic gridfunctions (for headers).
- * @param gridfuncs_diags Array of per-grid pointers to diagnostic data (flattened).
- * @return void
+ *   out1d-y-<CoordSystemName>-grid<XX>-conv_factor-<CF>.txt
+ *   out1d-z-<CoordSystemName>-grid<XX>-conv_factor-<CF>.txt
+ *
+ * For each axis, the routine:
+ *   1) Selects one or more index-line samples based on the coordinate family (e.g., Cartesian,
+ *      Spherical, Cylindrical, SymTP, Wedge, Spherical_Ring).
+ *   2) Converts logical coordinates xx to Cartesian via xx_to_Cart and extracts y (xCart[1]) or
+ *      z (xCart[2]) as the axis coordinate.
+ *   3) Buffers (axis_coord, idx3) pairs, then sorts them in ascending order using qsort.
+ *   4) Writes a single-line time comment, an axis-specific header ("y" or "z"), and streams rows:
+ *      [axis_coord, values of selected diagnostic gridfunctions].
+ *
+ * Gridfunction values are loaded from the flattened diagnostic array using IDX4Ppt with a 3D index
+ * constructed by IDX3P. Sampling occurs at grid points only; no interpolation is performed.
+ * On allocation or file-open failure, the routine prints an error message to stderr and terminates.
+ * If a user-editable block is provided in the implementation, users may add custom logic such as
+ * additional columns or filtering before rows are written.
+ *
+ * @param[in]  commondata           Pointer to global simulation metadata (e.g., time and step counters).
+ * @param[in]  grid                 Zero-based grid index used for selecting data and for file naming.
+ * @param[in]  params               Pointer to per-grid parameters (sizes, ghost zones, strides, names).
+ * @param[in]  xx                   Array of 3 pointers to logical coordinates per dimension; used for
+ *                                  coordinate conversion to Cartesian space.
+ * @param[in]  NUM_GFS_NEAREST      Number of gridfunctions to include per output row.
+ * @param[in]  which_gfs            Array of length NUM_GFS_NEAREST identifying the gridfunction indices.
+ * @param[in]  diagnostic_gf_names  Array of NUM_GFS_NEAREST C strings used to construct column headers.
+ * @param[in]  gridfuncs_diags      Array of per-grid pointers to flattened diagnostic data; this routine
+ *                                  reads from gridfuncs_diags[grid].
+ *
+ * @return     void
 """
 
     cfunc_type = "void"

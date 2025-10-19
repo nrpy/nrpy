@@ -114,8 +114,6 @@ typedef struct __MoL_gridfunctions_struct__ {
   REAL *k_odd_gfs;
   REAL *k_even_gfs;
   REAL *auxevol_gfs;
-  REAL *diagnostic_output_gfs;
-  REAL *diagnostic_output_gfs2;
 } MoL_gridfunctions_struct;
 
 // ----------------------------
@@ -243,4 +241,22 @@ typedef struct __griddata__ {
       BHAH_FREE(a->b);                                                                                                                               \
     }                                                                                                                                                \
   } while (0);
+
+#ifdef __CUDACC__
+/* Expand to the statement(s) you pass in */
+#define IFCUDARUN(...)                                                                                                                               \
+  do {                                                                                                                                               \
+    {                                                                                                                                                \
+      __VA_ARGS__;                                                                                                                                   \
+    }                                                                                                                                                \
+  } while (0)
+#else
+/* Compile away to nothing on non-CUDA builds */
+#define IFCUDARUN(...)                                                                                                                               \
+  do {                                                                                                                                               \
+    {                                                                                                                                                \
+      (void)0;                                                                                                                                       \
+    }                                                                                                                                                \
+  } while (0)
+#endif
 #endif

@@ -1,16 +1,16 @@
 """
-Registers the C function for 0D diagnostics at the nearest grid-center point for a single grid.
+C function registration for 0D diagnostics at the nearest grid-center point for a single grid.
 
-This module provides the Python registration function for the C helper routine
-`diagnostics_nearest_grid_center`. This C function samples gridfunction data
-(no interpolation) at the single grid point nearest to the physical grid center
-for the specified grid. The caller is responsible for looping over grids. It
-appends one line per timestep to a persistent (per-grid) output file.
+This module constructs and registers the C helper routine "diagnostics_nearest_grid_center".
+The generated C function samples gridfunction data without interpolation at the single grid
+point nearest the physical grid center for the specified grid. The caller is responsible for
+looping over grids. One line is appended per timestep to a persistent per-grid output file
+whose name encodes the coordinate system, grid number, and convergence factor.
 
-Functions
----------
+Function
+--------
 register_CFunction_diagnostics_nearest_grid_center
-    Registers the `diagnostics_nearest_grid_center` C function.
+    Construct and register the "diagnostics_nearest_grid_center" C function.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -27,35 +27,25 @@ import nrpy.helpers.parallel_codegen as pcg
 def register_CFunction_diagnostics_nearest_grid_center(
     CoordSystem: str,
 ) -> Union[None, pcg.NRPyEnv_type]:
-    r"""
-    Register C function for "0-dimensional" simulation diagnostics for a single grid: sample (no interpolation)
-    at the grid's physical center and append to a per-grid file (one row per timestep).
+    """
+    Construct and register a C function that writes 0D diagnostics by sampling (no interpolation).
 
-    The generated C function takes the same inputs as the interpolation-based API used by
-    `diagnostics_interp_*` helpers, enabling drop-in replacement in calling code that
-    loops over grids.
+    This function generates and registers the C helper "diagnostics_nearest_grid_center", which
+    mirrors the interpolation-based diagnostics API so it can serve as a drop-in replacement in
+    calling code that loops over grids. For the selected grid, the generated C code opens a
+    persistent per-grid output file, writes a header on the first timestep, and on every timestep
+    appends a single row containing the simulation time followed by sampled gridfunction values.
+    The nearest-to-center index selection is specialized based on the coordinate system: for
+    Cartesian-like systems the mid index is used in all directions; for Spherical, Cylindrical,
+    and SymTP the radial index is set to NGHOSTS and mid indices are used in the angular directions.
 
-    Behavior:
-    - For the given grid, opens a persistent output file (same filename across timesteps) that encodes the
-      runtime coordinate system name, grid number, and convergence factor.
-    - At every timestep, appends a single row containing the simulation time followed by the sampled
-      gridfunction values at the gridpoint nearest to the physical center (no interpolation).
-
-    Filename format (persistent across timesteps):
-      out0d-<CoordSystemName>-grid<XX>-conv_factor-<CF>.txt
-
-    Index selection (nearest-to-center sampling):
-    - Cartesian-like systems: i0=i0_mid, i1=i1_mid, i2=i2_mid (each mid ~= Nxx_plus_2NGHOSTSi/2).
-    - Spherical/Cylindrical/SymTP: i0 = NGHOSTS (radial minimum), i1=i1_mid, i2=i2_mid.
-
-    Columns:
-    - "time" followed by the sampled gridfunction values (in the order given by `which_gfs`).
-
-    :param CoordSystem: Specifies the coordinate system for the diagnostics.
-    :raises ValueError: If an unsupported coordinate system is specified (only systems with a defined center).
+    :param CoordSystem: Name of the coordinate system used to specialize index selection in the
+                        generated C function and its wrapper.
+    :raises ValueError: If the coordinate system is not supported by this helper.
     :return: None if in registration phase, else the updated NRPy environment.
 
-    Doctests: TBD
+    Doctests:
+    TBD
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -85,37 +75,37 @@ def register_CFunction_diagnostics_nearest_grid_center(
         "diagnostics/diagnostics_nearest_common.h",
     ]
 
-    desc = f"""
- * @brief Samples and writes 0D diagnostics to a per-grid output file (one row per timestep) for a single grid.
+    desc = """
+ * @file diagnostics_nearest_grid_center.c
+ * @brief Write 0D diagnostics for a single grid by sampling, without interpolation, the grid
+ *        point nearest the physical grid center, and append one row per timestep to a persistent file.
  *
- * @details For the specified grid, this function samples (no interpolation) a set of specified gridfunctions
- *          at the single grid point nearest to the physical grid center, specialized for the
- *          coordinate system "{CoordSystem}". The results are appended to a persistent per-grid file
- *          whose filename encodes the runtime coordinate system name from params->CoordSystemName,
- *          grid number, and convergence factor.
+ * The function "diagnostics_nearest_grid_center" appends diagnostics for a single grid to a per-grid
+ * text file whose name encodes the runtime coordinate system, grid number, and convergence factor:
  *
- *          Filename format (persistent across timesteps):
- *            out0d-<CoordSystemName>-grid<XX>-conv_factor-<CF>.txt
+ *   out0d-<CoordSystemName>-grid<XX>-conv_factor-<CF>.txt
  *
- *          Index selection (nearest-to-center sampling):
- *            - Cartesian-like systems: i0=i0_mid, i1=i1_mid, i2=i2_mid (each mid ~= Nxx_plus_2NGHOSTSi/2).
- *            - Spherical/Cylindrical/SymTP: i0 = NGHOSTS (radial minimum), i1=i1_mid, i2=i2_mid.
+ * On the first timestep, a header is written. On all timesteps, one row is appended containing the
+ * simulation time followed by sampled gridfunction values. The nearest-to-center indices are chosen
+ * based on the coordinate system: for Cartesian-like systems, the midpoint index is chosen in each
+ * dimension; for Spherical, Cylindrical, and SymTP, the radial index is set to NGHOSTS and midpoint
+ * indices are chosen in the angular directions. The "xx" coordinate arrays are accepted for API
+ * compatibility but are not used by this routine.
  *
- *          Each appended row consists of: time followed by the sampled gridfunction values.
+ * If a user-editable block is provided in the implementation, users may add custom logic such as
+ * additional columns or filtering before rows are written.
  *
- * @param[in]  commondata           Global simulation metadata (time, iteration, etc.).
- * @param[in]  grid                 Grid index used for file naming and selecting gridfuncs_diags[grid].
- * @param[in]  params               Per-grid parameters (sizes, ghost zones, strides, coordinates metadata).
- * @param[in]  xx                   Per-grid uniform coordinate arrays; xx[0], xx[1], xx[2]. Unused by this function.
- * @param[in]  NUM_GFS_NEAREST       Number of gridfunctions to sample.
- * @param[in]  which_gfs            Array of indices specifying which source gridfunctions to sample.
- * @param[in]  diagnostic_gf_names  Human-readable names for the diagnostics (used in headers).
- * @param[in]  gridfuncs_diags      Array of pointers to the source gridfunction data for each grid; this
- *                                  function samples from gridfuncs_diags[grid].
+ * @param[in]  commondata           Pointer to global simulation metadata (e.g., time and step counters).
+ * @param[in]  grid                 Grid index used for selecting data and for file naming.
+ * @param[in]  params               Pointer to per-grid parameters (sizes, ghost zones, strides, names).
+ * @param[in]  xx                   Per-grid coordinate arrays; accepted for interface compatibility, unused here.
+ * @param[in]  NUM_GFS_NEAREST      Number of gridfunctions to sample at the selected index.
+ * @param[in]  which_gfs            Array of indices identifying the source gridfunctions to sample.
+ * @param[in]  diagnostic_gf_names  Array of human-readable names corresponding to the sampled gridfunctions.
+ * @param[in]  gridfuncs_diags      Array of pointers to per-grid source gridfunction data; this routine reads
+ *                                  from gridfuncs_diags[grid].
  *
- * @post Creates (on first timestep) or appends (subsequent timesteps) one line to this grid's output file.
- *
- * @return Void.
+ * @return     void.
  """
     cfunc_type = "void"
     name = "diagnostics_nearest_grid_center"
