@@ -110,11 +110,8 @@ extern "C" {{
 // It is the single source of truth for diagnostic quantities.
 enum {{
 {
-    # Use a list comprehension within the f-string to generate the enum body.
     '\n'.join(
-        # The items are just the name with a comma.
         [f"      {item}," for item in list(diagnostic_gfs_names_dict.keys())] +
-        # The last item is the special counter.
         ["      TOTAL_NUM_DIAG_GFS // must be last: total produced diagnostics (== count)"]
     )
     }
@@ -130,7 +127,6 @@ enum {{
 // Using C99 designated initializers makes this robust against reordering the enum.
 MAYBE_UNUSED static const char *diagnostic_gf_names[TOTAL_NUM_DIAG_GFS] = {{
 {
-    # Use a generator expression to create each line: `[KEY] = "value",`
     '\n'.join(
         f'      DIAG_INIT({key}, "{value}"), //'
         for key, value in diagnostic_gfs_names_dict.items()
