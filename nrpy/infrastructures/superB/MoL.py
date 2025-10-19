@@ -517,22 +517,17 @@ def register_CFunction_MoL_step_forward_in_time(
 
 
 """
-    (
-        y_n_gridfunctions,
-        non_y_n_gridfunctions_list,
-        _throwaway,
-        _throwaway2,
-    ) = BHaH.MoLtimestepping.intermediate_gf_names_list.generate_gridfunction_names(
-        Butcher_dict, MoL_method
-    )
 
+    intermediate_stage_gfs = BHaH.MoLtimestepping.rk_butcher_table_dictionary.intermediate_stage_gf_names_list(
+        Butcher_dict, MoL_method=MoL_method
+    )
     gf_prefix = "griddata[grid].gridfuncs."
 
     gf_aliases = f"""// Set gridfunction aliases from gridfuncs struct
 // y_n gridfunctions
-REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
+REAL *restrict y_n_gfs = {gf_prefix}y_n_gfs;
 // Temporary timelevel & AUXEVOL gridfunctions:\n"""
-    for gf in non_y_n_gridfunctions_list:
+    for gf in intermediate_stage_gfs + ["auxevol_gfs"]:
         gf_aliases += f"REAL *restrict {gf} = {gf_prefix}{gf};\n"
 
     gf_aliases += "params_struct *restrict params = &griddata[grid].params;\n"
@@ -1005,14 +1000,12 @@ def register_CFunctions(
         BHaH.MoLtimestepping.rk_butcher_table_dictionary.generate_Butcher_tables()
     )
 
-    for which_gfs in ["y_n_gfs", "non_y_n_gfs"]:
-        BHaH.MoLtimestepping.allocators.register_CFunction_MoL_malloc(
-            Butcher_dict, MoL_method, which_gfs
-        )
-        BHaH.MoLtimestepping.allocators.register_CFunction_MoL_free_memory(
-            Butcher_dict, MoL_method, which_gfs
-        )
-
+    BHaH.MoLtimestepping.MoL_malloc_intermediate_stage_gfs.register_CFunction_MoL_malloc_intermediate_stage_gfs(
+        Butcher_dict=Butcher_dict, MoL_method=MoL_method
+    )
+    BHaH.MoLtimestepping.MoL_free_intermediate_stage_gfs.register_CFunction_MoL_free_intermediate_levels(
+        Butcher_dict=Butcher_dict, MoL_method=MoL_method
+    )
     register_CFunction_initialize_yn_and_non_yn_gfs_to_nan(Butcher_dict, MoL_method)
 
     register_CFunction_MoL_malloc_diagnostic_gfs()
@@ -1039,27 +1032,13 @@ def register_CFunctions(
     )
 
     # Generating gridfunction names based on the given MoL method
-    (
-        y_n_gridfunctions,
-        non_y_n_gridfunctions_list,
-        _diagnostic_gridfunctions_point_to,
-        _diagnostic_gridfunctions2_point_to,
-    ) = BHaH.MoLtimestepping.intermediate_gf_names_list.generate_gridfunction_names(
+    intermediate_stage_gfs = BHaH.MoLtimestepping.rk_butcher_table_dictionary.intermediate_stage_gf_names_list(
         Butcher_dict, MoL_method=MoL_method
     )
-
-    # Convert y_n_gridfunctions to a list if it's a string
-    gf_list = (
-        [y_n_gridfunctions] if isinstance(y_n_gridfunctions, str) else y_n_gridfunctions
-    )
-    gf_list.extend(non_y_n_gridfunctions_list)
-
-    # Define constants for diagnostic gfs also since they do not point to other gfs in superB
-    gf_list.append("diagnostic_output_gfs")
+    gf_list = ["y_n_gfs"] + intermediate_stage_gfs + ["auxevoL_gfs"]
 
     # Define constants to keep synching of y n gfs during initial data distinct
-    gf_list.append("y_n_gfs_initialdata_part1")
-    gf_list.append("y_n_gfs_initialdata_part2")
+    gf_list += ["y_n_gfs_initialdata_part1", "y_n_gfs_initialdata_part2"]
 
     gf_constants = create_gf_constants(gf_list)
 
@@ -1078,10 +1057,9 @@ def register_CFunctions(
         int evol_gfs_to_sync[{num_evol_gfs_to_sync}];
         int auxevol_gfs_to_sync[{num_auxevol_gfs_to_sync}];
         int aux_gfs_to_sync[{num_aux_gfs_to_sync}];\n"""
-        f"REAL *{y_n_gridfunctions};\n"
-        + "".join(f"REAL *{gfs};\n" for gfs in non_y_n_gridfunctions_list)
-        + r"""REAL *diagnostic_output_gfs;
-REAL *diagnostic_output_gfs2;
+        "REAL *y_n_gfs;\n"
+        + "".join(f"REAL *{gfs};\n" for gfs in intermediate_stage_gfs)
+        + """REAL *auxevol_gfs;
 } MoL_gridfunctions_struct;
 """
         + rf"""// Define constants for accessing gridfunction types
