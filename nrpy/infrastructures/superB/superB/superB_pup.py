@@ -201,16 +201,10 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
     Butcher_dict = (
         BHaH.MoLtimestepping.rk_butcher_table_dictionary.generate_Butcher_tables()
     )
-    (
-        y_n_gridfunctions,
-        non_y_n_gridfunctions_list,
-        _,
-        diagnostic_gridfunctions2_point_to,
-    ) = BHaH.MoLtimestepping.intermediate_gf_names_list.generate_gridfunction_names(
+    intermediate_stage_gfs = BHaH.MoLtimestepping.rk_butcher_table_dictionary.intermediate_stage_gf_names_list(
         Butcher_dict, MoL_method=MoL_method
     )
-    # Combine y_n_gfs and non_y_n_gfs into a single list.
-    gridfunctions_list = [y_n_gridfunctions] + non_y_n_gridfunctions_list
+    gridfunctions_list = ["y_n_gfs"] + intermediate_stage_gfs + ["auxevol_gfs"]
     for gridfunctions in gridfunctions_list:
         num_gfs = (
             "NUM_EVOL_GFS" if gridfunctions != "auxevol_gfs" else "NUM_AUXEVOL_GFS"
@@ -224,7 +218,6 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
         )
     # In superB, allocate separate memory for diagnostic_output_gfs.
     prefunc += "gridfuncs.diagnostic_output_gfs  = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);\n"
-    prefunc += f"gridfuncs.diagnostic_output_gfs2 = gridfuncs.{diagnostic_gridfunctions2_point_to};\n"
     prefunc += """
     initialize_yn_and_non_yn_gfs_to_nan(&commondata, &params, &gridfuncs);
   }"""
