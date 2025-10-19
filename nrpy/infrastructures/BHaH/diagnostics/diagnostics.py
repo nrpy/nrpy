@@ -140,6 +140,7 @@ def register_CFunction_diagnostics(  # pylint: disable=unused-argument
     if parallelization == "cuda":
         params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata_device, griddata_struct *restrict griddata"
     newline = "\n"  # Backslashes aren't allowed in Python 3.7 f-strings; this is our workaround.
+    rnewline = "\\n"  # Backslashes aren't allowed in Python 3.7 f-strings; this is our workaround.
     body = f"""
   const REAL currtime = commondata->time, currdt = commondata->dt, outevery = commondata->diagnostics_output_every;
   // Explanation of the if() below:
@@ -194,7 +195,7 @@ def register_CFunction_diagnostics(  # pylint: disable=unused-argument
   }} // END if output step
 
   progress_indicator(commondata, griddata);
-  if (commondata->time + commondata->dt > commondata->t_final) printf("{newline}");
+  if (commondata->time + commondata->dt > commondata->t_final) printf("{rnewline}");
 """
     cfc.register_CFunction(
         subdirectory="diagnostics",
