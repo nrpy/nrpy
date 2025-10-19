@@ -68,7 +68,8 @@ def diagnostics_gfs_h_create(
             "diagnostics_gfs_h_create() must be called AFTER parallel codegen."
         )
 
-    body = fr"""
+    newline = "\n"  # Needed for Python 3.7 compatibility in the f-strings below
+    body = rf"""
 /**
  * @file diagnostic_gfs.h
  * @brief Defines the enum and name table for all diagnostic gridfunctions.
@@ -110,7 +111,7 @@ extern "C" {{
 // It is the single source of truth for diagnostic quantities.
 enum {{
 {
-    '\n'.join(
+    newline.join(
         [f"      {item}," for item in list(diagnostic_gfs_names_dict.keys())] +
         ["      TOTAL_NUM_DIAG_GFS // must be last: total produced diagnostics (== count)"]
     )
@@ -127,7 +128,7 @@ enum {{
 // Using C99 designated initializers makes this robust against reordering the enum.
 MAYBE_UNUSED static const char *diagnostic_gf_names[TOTAL_NUM_DIAG_GFS] = {{
 {
-    '\n'.join(
+    newline.join(
         f'      DIAG_INIT({key}, "{value}"), //'
         for key, value in diagnostic_gfs_names_dict.items()
     )
