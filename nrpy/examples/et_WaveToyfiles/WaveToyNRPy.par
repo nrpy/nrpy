@@ -62,7 +62,7 @@ Carpet::storage_verbose   = no
 #Carpet::timers_verbose    = no
 CarpetLib::output_bboxes  = no
 
-driver::ghost_size       = 4  # Based on NRPy+ FD order!
+driver::ghost_size       = 4  # Based on NRPy FD order!
 Carpet::use_buffer_zones = yes
 
 Carpet::prolongation_order_space = 5

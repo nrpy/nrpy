@@ -36,7 +36,7 @@ void residual_H_compute_all_points__rfm__SinhCylindricalv2n2(const commondata_st
         MAYBE_UNUSED const REAL xx0 = xx[0][i0];
 
         /*
-         * NRPy+-Generated GF Access/FD Code, Step 1 of 2:
+         * NRPy-Generated GF Access/FD Code, Step 1 of 2:
          * Read gridfunction(s) from main memory and compute FD stencils as needed.
          */
         const REAL ADD_times_AUU = auxevol_gfs[IDX4(ADD_TIMES_AUUGF, i0, i1, i2)];
@@ -69,7 +69,7 @@ void residual_H_compute_all_points__rfm__SinhCylindricalv2n2(const commondata_st
             ((invdxx2) * (invdxx2)) * (FDPart1_Rational_1_12 * (-uu_i2m2 - uu_i2p2) + FDPart1_Rational_4_3 * (uu_i2m1 + uu_i2p1) + FDPart1tmp0);
 
         /*
-         * NRPy+-Generated GF Access/FD Code, Step 2 of 2:
+         * NRPy-Generated GF Access/FD Code, Step 2 of 2:
          * Evaluate SymPy expressions and write to main memory.
          */
         const REAL FDPart3tmp0 = (1.0 / (SINHWRHO));

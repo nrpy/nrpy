@@ -9,11 +9,11 @@ Author: Terrence Pierre Jacques
 
 from typing import Sequence
 
-# Step 1.a: import all needed modules from NRPy+:
-import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
+# Step 1.a: import all needed modules from NRPy:
+import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
-import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
-import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
+import nrpy.indexedexp as ixp  # NRPy: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
+import nrpy.reference_metric as refmetric  # NRPy: Reference metric support
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.equations.general_relativity.BSSN_to_ADM import BSSN_to_ADM
 from nrpy.equations.general_relativity.g4munu_conversions import (

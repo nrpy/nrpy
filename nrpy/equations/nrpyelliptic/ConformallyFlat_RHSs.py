@@ -14,10 +14,10 @@ from typing import Dict
 
 import sympy as sp  # For symbolic computations
 
-import nrpy.grid as gri  # NRPy+: Functionality for handling numerical grids
-import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
+import nrpy.grid as gri  # NRPy: Functionality for handling numerical grids
+import nrpy.indexedexp as ixp  # NRPy: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 import nrpy.params as par
-import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
+import nrpy.reference_metric as refmetric  # NRPy: Reference metric support
 
 
 # Specify RHSs as class variables,

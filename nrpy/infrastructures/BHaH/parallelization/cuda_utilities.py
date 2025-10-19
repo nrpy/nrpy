@@ -5,7 +5,7 @@ Authors: Samuel D. Tootle; sdtootle **at** gmail **dot** com
 """
 
 import nrpy.c_function as cfc
-import nrpy.params as par  # NRPy+: Parameter interface
+import nrpy.params as par  # NRPy: Parameter interface
 from nrpy.helpers.parallelization.gpu_kernel import GPU_Kernel
 
 """

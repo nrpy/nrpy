@@ -5,22 +5,22 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-# Initialize core Python/NRPy+ modules
-# Step 1: Initialize core Python/NRPy+ modules
+# Initialize core Python/NRPy modules
+# Step 1: Initialize core Python/NRPy modules
 from typing import List, Optional, Sequence, Tuple, cast
 
-import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
+import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
-import nrpy.c_codegen as ccg  # NRPy+: C code generation
-import nrpy.c_function as cfc  # NRPy+: C function registration
-import nrpy.grid as gri  # NRPy+: Functions having to do with numerical grids
+import nrpy.c_codegen as ccg  # NRPy: C code generation
+import nrpy.c_function as cfc  # NRPy: C function registration
+import nrpy.grid as gri  # NRPy: Functions having to do with numerical grids
 import nrpy.helpers.jacobians as jac
-import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
-import nrpy.params as par  # NRPy+: Parameter interface
-import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
+import nrpy.indexedexp as ixp  # NRPy: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
+import nrpy.params as par  # NRPy: Parameter interface
+import nrpy.reference_metric as refmetric  # NRPy: Reference metric support
 from nrpy.equations.general_relativity.ADM_to_BSSN import ADM_to_BSSN
 
-# NRPy+: Computes useful BSSN quantities; e.g., gammabarUU & GammabarUDD needed below
+# NRPy: Computes useful BSSN quantities; e.g., gammabarUU & GammabarUDD needed below
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.helpers.expression_utils import (
     generate_definition_header,

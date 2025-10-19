@@ -11,18 +11,18 @@ Authors: Zachariah B. Etienne
         terrencepierrej **at** gmail **dot* com
 """
 
-# Step 1: Import all needed modules from NRPy+:
+# Step 1: Import all needed modules from NRPy:
 from typing import List, Tuple
 
-import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
+import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
-import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
-import nrpy.params as par  # NRPy+: Parameter interface
-import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
-from nrpy.equations.general_relativity.BSSN_quantities import (  # NRPy+: Computes useful BSSN quantities
+import nrpy.indexedexp as ixp  # NRPy: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
+import nrpy.params as par  # NRPy: Parameter interface
+import nrpy.reference_metric as refmetric  # NRPy: Reference metric support
+from nrpy.equations.general_relativity.BSSN_quantities import (  # NRPy: Computes useful BSSN quantities
     BSSN_quantities,
 )
-from nrpy.equations.general_relativity.BSSN_RHSs import (  # NRPy+: Constructs BSSN right-hand-side expressions
+from nrpy.equations.general_relativity.BSSN_RHSs import (  # NRPy: Constructs BSSN right-hand-side expressions
     BSSN_RHSs,
 )
 

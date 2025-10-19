@@ -53,7 +53,7 @@ def cache_file(unique_id: str) -> Path:
 
 def NRPy_params_checksum() -> str:
     """
-    Generate a checksum of NRPy+ parameters stored in par.glb_params_dict.
+    Generate a checksum of NRPy parameters stored in par.glb_params_dict.
 
     :return: The checksum string.
 

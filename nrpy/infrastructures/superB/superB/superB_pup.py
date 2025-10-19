@@ -522,7 +522,7 @@ void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const params_struct &pa
     params = """ """
     body = r"""
   // This space intentionally left blank:
-  // NRPy+ requires C files share the same name as the primary function within the C file.
+  // NRPy requires C files share the same name as the primary function within the C file.
 """
     cfc.register_CFunction(
         subdirectory="superB",

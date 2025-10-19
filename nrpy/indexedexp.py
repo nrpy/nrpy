@@ -9,9 +9,9 @@ import string
 import sys  # Standard Python module for multiplatform OS-level functions
 from typing import Any, List, Optional, Sequence, Tuple, Union, cast
 
-import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
+import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
-import nrpy.helpers.functional as func  # NRPy+: Python toolkit for functional programming
+import nrpy.helpers.functional as func  # NRPy: Python toolkit for functional programming
 import nrpy.params as par
 
 # Used to specify axes of symmetry so that derivatives across these axes get set to zero

@@ -22,7 +22,7 @@ from typing import Dict, List, Tuple, Union
 import sympy as sp  # Import SymPy, a computer algebra system written entirely in Python
 
 import nrpy.c_function as cfc
-import nrpy.params as par  # NRPy+: Parameter interface
+import nrpy.params as par  # NRPy: Parameter interface
 from nrpy.c_codegen import c_codegen
 from nrpy.grid import BHaHGridFunction, glb_gridfcs_dict
 from nrpy.helpers.generic import superfast_uniq

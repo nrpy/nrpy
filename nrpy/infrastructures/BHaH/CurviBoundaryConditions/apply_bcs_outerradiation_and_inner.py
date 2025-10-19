@@ -23,15 +23,15 @@ Authors: Zachariah B. Etienne
 
 from typing import List, Tuple
 
-import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
+import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 import sympy.codegen.ast as sp_ast
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-import nrpy.finite_difference as fin  # NRPy+: Finite-difference module
+import nrpy.finite_difference as fin  # NRPy: Finite-difference module
 import nrpy.helpers.parallelization.utilities as parallel_utils
-import nrpy.params as par  # NRPy+: Parameter interface
-import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
+import nrpy.params as par  # NRPy: Parameter interface
+import nrpy.reference_metric as refmetric  # NRPy: Reference metric support
 from nrpy.helpers.expression_utils import get_unique_expression_symbols_as_strings
 from nrpy.helpers.parallelization.gpu_kernel import GPU_Kernel
 from nrpy.validate_expressions.validate_expressions import check_zero
