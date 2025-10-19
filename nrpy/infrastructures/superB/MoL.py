@@ -422,14 +422,15 @@ def register_CFunction_initialize_yn_and_non_yn_gfs_to_nan(
     )
     body: str = """
 const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
-for (int i = 0; i < NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot; i++) {"""
+for (int i = 0; i < NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot; i++) {
+"""
     # Generating gridfunction names based on the given MoL method
     (
         y_n_gridfunctions,
         non_y_n_gridfunctions_list,
         _diagnostic_gridfunctions_point_to,
         _diagnostic_gridfunctions2_point_to,
-    ) = BHaH.MoLtimestepping.gridfunction_names.generate_gridfunction_names(
+    ) = BHaH.MoLtimestepping.rk_butcher_table_dictionary.intermediate_stage_gf_names_list(
         Butcher_dict, MoL_method=MoL_method
     )
     # Convert y_n_gridfunctions to a list if it's a string

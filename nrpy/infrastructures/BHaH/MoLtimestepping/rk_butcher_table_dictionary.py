@@ -56,13 +56,29 @@ def intermediate_stage_gf_names_list(
     MoL_method: str = "RK4",
 ) -> List[str]:
     """
-    Generate gridfunction names for the specified Method of Lines (MoL) method.
-    Used for setting up MoL_malloc, MoL_step_forward_in_time, MoL_free, and BHaH_defines.h
+    Return the ordered list of intermediate-stage gridfunction names for the given MoL time integrator.
 
-    :param Butcher_dict: Dictionary of Butcher tables for the MoL method.
-    :param MoL_method: The MoL method to generate gridfunction names for.
-    :return: A tuple containing y_n_gridfunctions, intermediate_stage_gfs_list,
-             diagnostic_gridfunctions_point_to, and diagnostic_gridfunctions2_point_to.
+    These names are used when setting up `MoL_malloc`, `MoL_step_forward_in_time`,
+    `MoL_free`, and `BHaH_defines.h`.
+
+    Behavior:
+      * Diagonal RK3 methods (i.e., `is_diagonal_Butcher(Butcher_dict, MoL_method)` is True
+        and "RK3" is in the method name) use two combined-stage arrays:
+        ["k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs",
+         "k2_or_y_nplus_a32_k2_gfs"].
+      * Non-diagonal methods return one array for the next y input plus one per stage:
+        ["next_y_input_gfs", "k1_gfs", ..., f"k{s}_gfs"], where
+        s = len(Butcher_dict[MoL_method][0]) - 1.
+      * Diagonal methods (e.g., "RK2 Heun", "RK4", "Euler") always include
+        "y_nplus1_running_total_gfs"; for all except "Euler", two additional accumulators
+        are included: ["k_odd_gfs", "k_even_gfs"].
+
+    :param Butcher_dict: Mapping from MoL method name to a tuple ``(tableau, meta)``,
+        where ``tableau`` is a list of lists representing the Butcher tableau
+        (only its length is used here) and ``meta`` is an integer metadata value (unused here).
+    :param MoL_method: Name of the MoL method (e.g., "RK2 Heun", "RK3", "RK3 Ralston", "RK4").
+        Defaults to "RK4".
+    :return: List[str] of gridfunction names in the order they should be allocated/used.
 
     Doctests:
     >>> from nrpy.infrastructures import BHaH
