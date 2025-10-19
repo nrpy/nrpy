@@ -18,10 +18,10 @@ __global__ static void rk_substep_1_gpu(const size_t streamid, REAL *restrict k1
   LOOP_ALL_GFS_GPS(i) {
     const REAL k1_gfsL = k1_gfs[i];
     const REAL y_n_gfsL = y_n_gfs[i];
-    static constexpr double dblRK_Rational_1_10 = 1.0 / 10.0;
-    const REAL_CUDA_ARRAY RK_Rational_1_10 = ConstCUDA(dblRK_Rational_1_10);
+    static constexpr double dblRK_Rational_1_5 = 1.0 / 5.0;
+    const REAL_CUDA_ARRAY RK_Rational_1_5 = ConstCUDA(dblRK_Rational_1_5);
 
-    const REAL_CUDA_ARRAY __rk_exp_0 = FusedMulAddCUDA(RK_Rational_1_10, MulCUDA(k1_gfsL, dt), y_n_gfsL);
+    const REAL_CUDA_ARRAY __rk_exp_0 = FusedMulAddCUDA(RK_Rational_1_5, MulCUDA(k1_gfsL, dt), y_n_gfsL);
     WriteCUDA(&next_y_input_gfs[i], __rk_exp_0);
   }
 } // END FUNCTION rk_substep_1_gpu
@@ -57,17 +57,14 @@ __global__ static void rk_substep_2_gpu(const size_t streamid, REAL *restrict k1
     const REAL k1_gfsL = k1_gfs[i];
     const REAL k2_gfsL = k2_gfs[i];
     const REAL y_n_gfsL = y_n_gfs[i];
-    static constexpr double dbl_NegativeOne_ = -1.0;
-    MAYBE_UNUSED const REAL_CUDA_ARRAY _NegativeOne_ = ConstCUDA(dbl_NegativeOne_);
+    static constexpr double dblRK_Rational_3_40 = 3.0 / 40.0;
+    const REAL_CUDA_ARRAY RK_Rational_3_40 = ConstCUDA(dblRK_Rational_3_40);
 
-    static constexpr double dblRK_Rational_20_81 = 20.0 / 81.0;
-    const REAL_CUDA_ARRAY RK_Rational_20_81 = ConstCUDA(dblRK_Rational_20_81);
-
-    static constexpr double dblRK_Rational_2_81 = 2.0 / 81.0;
-    const REAL_CUDA_ARRAY RK_Rational_2_81 = ConstCUDA(dblRK_Rational_2_81);
+    static constexpr double dblRK_Rational_9_40 = 9.0 / 40.0;
+    const REAL_CUDA_ARRAY RK_Rational_9_40 = ConstCUDA(dblRK_Rational_9_40);
 
     const REAL_CUDA_ARRAY __rk_exp_0 =
-        FusedMulAddCUDA(RK_Rational_20_81, MulCUDA(k2_gfsL, dt), NegFusedMulAddCUDA(RK_Rational_2_81, MulCUDA(k1_gfsL, dt), y_n_gfsL));
+        FusedMulAddCUDA(RK_Rational_3_40, MulCUDA(k1_gfsL, dt), FusedMulAddCUDA(RK_Rational_9_40, MulCUDA(k2_gfsL, dt), y_n_gfsL));
     WriteCUDA(&next_y_input_gfs[i], __rk_exp_0);
   }
 } // END FUNCTION rk_substep_2_gpu
@@ -107,18 +104,18 @@ __global__ static void rk_substep_3_gpu(const size_t streamid, REAL *restrict k1
     static constexpr double dbl_NegativeOne_ = -1.0;
     MAYBE_UNUSED const REAL_CUDA_ARRAY _NegativeOne_ = ConstCUDA(dbl_NegativeOne_);
 
-    static constexpr double dblRK_Rational_1053_1372 = 1053.0 / 1372.0;
-    const REAL_CUDA_ARRAY RK_Rational_1053_1372 = ConstCUDA(dblRK_Rational_1053_1372);
+    static constexpr double dblRK_Rational_32_9 = 32.0 / 9.0;
+    const REAL_CUDA_ARRAY RK_Rational_32_9 = ConstCUDA(dblRK_Rational_32_9);
 
-    static constexpr double dblRK_Rational_270_343 = 270.0 / 343.0;
-    const REAL_CUDA_ARRAY RK_Rational_270_343 = ConstCUDA(dblRK_Rational_270_343);
+    static constexpr double dblRK_Rational_44_45 = 44.0 / 45.0;
+    const REAL_CUDA_ARRAY RK_Rational_44_45 = ConstCUDA(dblRK_Rational_44_45);
 
-    static constexpr double dblRK_Rational_615_1372 = 615.0 / 1372.0;
-    const REAL_CUDA_ARRAY RK_Rational_615_1372 = ConstCUDA(dblRK_Rational_615_1372);
+    static constexpr double dblRK_Rational_56_15 = 56.0 / 15.0;
+    const REAL_CUDA_ARRAY RK_Rational_56_15 = ConstCUDA(dblRK_Rational_56_15);
 
     const REAL_CUDA_ARRAY __rk_exp_0 = FusedMulAddCUDA(
-        RK_Rational_1053_1372, MulCUDA(k3_gfsL, dt),
-        FusedMulAddCUDA(RK_Rational_615_1372, MulCUDA(k1_gfsL, dt), NegFusedMulAddCUDA(RK_Rational_270_343, MulCUDA(k2_gfsL, dt), y_n_gfsL)));
+        RK_Rational_32_9, MulCUDA(k3_gfsL, dt),
+        FusedMulAddCUDA(RK_Rational_44_45, MulCUDA(k1_gfsL, dt), NegFusedMulAddCUDA(RK_Rational_56_15, MulCUDA(k2_gfsL, dt), y_n_gfsL)));
     WriteCUDA(&next_y_input_gfs[i], __rk_exp_0);
   }
 } // END FUNCTION rk_substep_3_gpu
@@ -159,23 +156,23 @@ __global__ static void rk_substep_4_gpu(const size_t streamid, REAL *restrict k1
     static constexpr double dbl_NegativeOne_ = -1.0;
     MAYBE_UNUSED const REAL_CUDA_ARRAY _NegativeOne_ = ConstCUDA(dbl_NegativeOne_);
 
-    static constexpr double dblRK_Rational_3243_5500 = 3243.0 / 5500.0;
-    const REAL_CUDA_ARRAY RK_Rational_3243_5500 = ConstCUDA(dblRK_Rational_3243_5500);
+    static constexpr double dblRK_Rational_19372_6561 = 19372.0 / 6561.0;
+    const REAL_CUDA_ARRAY RK_Rational_19372_6561 = ConstCUDA(dblRK_Rational_19372_6561);
 
-    static constexpr double dblRK_Rational_4998_17875 = 4998.0 / 17875.0;
-    const REAL_CUDA_ARRAY RK_Rational_4998_17875 = ConstCUDA(dblRK_Rational_4998_17875);
+    static constexpr double dblRK_Rational_212_729 = 212.0 / 729.0;
+    const REAL_CUDA_ARRAY RK_Rational_212_729 = ConstCUDA(dblRK_Rational_212_729);
 
-    static constexpr double dblRK_Rational_50949_71500 = 50949.0 / 71500.0;
-    const REAL_CUDA_ARRAY RK_Rational_50949_71500 = ConstCUDA(dblRK_Rational_50949_71500);
+    static constexpr double dblRK_Rational_25360_2187 = 25360.0 / 2187.0;
+    const REAL_CUDA_ARRAY RK_Rational_25360_2187 = ConstCUDA(dblRK_Rational_25360_2187);
 
-    static constexpr double dblRK_Rational_54_55 = 54.0 / 55.0;
-    const REAL_CUDA_ARRAY RK_Rational_54_55 = ConstCUDA(dblRK_Rational_54_55);
+    static constexpr double dblRK_Rational_64448_6561 = 64448.0 / 6561.0;
+    const REAL_CUDA_ARRAY RK_Rational_64448_6561 = ConstCUDA(dblRK_Rational_64448_6561);
 
     const REAL_CUDA_ARRAY __rk_exp_0 =
-        FusedMulAddCUDA(RK_Rational_3243_5500, MulCUDA(k1_gfsL, dt),
-                        FusedMulAddCUDA(RK_Rational_4998_17875, MulCUDA(k4_gfsL, dt),
-                                        FusedMulAddCUDA(RK_Rational_50949_71500, MulCUDA(k3_gfsL, dt),
-                                                        NegFusedMulAddCUDA(RK_Rational_54_55, MulCUDA(k2_gfsL, dt), y_n_gfsL))));
+        FusedMulAddCUDA(RK_Rational_19372_6561, MulCUDA(k1_gfsL, dt),
+                        FusedMulAddCUDA(RK_Rational_64448_6561, MulCUDA(k3_gfsL, dt),
+                                        NegFusedMulAddCUDA(RK_Rational_25360_2187, MulCUDA(k2_gfsL, dt),
+                                                           NegFusedMulAddCUDA(RK_Rational_212_729, MulCUDA(k4_gfsL, dt), y_n_gfsL))));
     WriteCUDA(&next_y_input_gfs[i], __rk_exp_0);
   }
 } // END FUNCTION rk_substep_4_gpu
@@ -219,27 +216,27 @@ __global__ static void rk_substep_5_gpu(const size_t streamid, REAL *restrict k1
     static constexpr double dbl_NegativeOne_ = -1.0;
     MAYBE_UNUSED const REAL_CUDA_ARRAY _NegativeOne_ = ConstCUDA(dbl_NegativeOne_);
 
-    static constexpr double dblRK_Rational_24206_37125 = 24206.0 / 37125.0;
-    const REAL_CUDA_ARRAY RK_Rational_24206_37125 = ConstCUDA(dblRK_Rational_24206_37125);
+    static constexpr double dblRK_Rational_355_33 = 355.0 / 33.0;
+    const REAL_CUDA_ARRAY RK_Rational_355_33 = ConstCUDA(dblRK_Rational_355_33);
 
-    static constexpr double dblRK_Rational_26492_37125 = 26492.0 / 37125.0;
-    const REAL_CUDA_ARRAY RK_Rational_26492_37125 = ConstCUDA(dblRK_Rational_26492_37125);
+    static constexpr double dblRK_Rational_46732_5247 = 46732.0 / 5247.0;
+    const REAL_CUDA_ARRAY RK_Rational_46732_5247 = ConstCUDA(dblRK_Rational_46732_5247);
 
-    static constexpr double dblRK_Rational_2808_23375 = 2808.0 / 23375.0;
-    const REAL_CUDA_ARRAY RK_Rational_2808_23375 = ConstCUDA(dblRK_Rational_2808_23375);
+    static constexpr double dblRK_Rational_49_176 = 49.0 / 176.0;
+    const REAL_CUDA_ARRAY RK_Rational_49_176 = ConstCUDA(dblRK_Rational_49_176);
 
-    static constexpr double dblRK_Rational_338_459 = 338.0 / 459.0;
-    const REAL_CUDA_ARRAY RK_Rational_338_459 = ConstCUDA(dblRK_Rational_338_459);
+    static constexpr double dblRK_Rational_5103_18656 = 5103.0 / 18656.0;
+    const REAL_CUDA_ARRAY RK_Rational_5103_18656 = ConstCUDA(dblRK_Rational_5103_18656);
 
-    static constexpr double dblRK_Rational_72_55 = 72.0 / 55.0;
-    const REAL_CUDA_ARRAY RK_Rational_72_55 = ConstCUDA(dblRK_Rational_72_55);
+    static constexpr double dblRK_Rational_9017_3168 = 9017.0 / 3168.0;
+    const REAL_CUDA_ARRAY RK_Rational_9017_3168 = ConstCUDA(dblRK_Rational_9017_3168);
 
-    const REAL_CUDA_ARRAY __rk_exp_0 = FusedMulAddCUDA(
-        RK_Rational_72_55, MulCUDA(k2_gfsL, dt),
-        FusedMulAddCUDA(RK_Rational_2808_23375, MulCUDA(k3_gfsL, dt),
-                        FusedMulAddCUDA(RK_Rational_338_459, MulCUDA(k5_gfsL, dt),
-                                        NegFusedMulAddCUDA(RK_Rational_26492_37125, MulCUDA(k1_gfsL, dt),
-                                                           NegFusedMulAddCUDA(RK_Rational_24206_37125, MulCUDA(k4_gfsL, dt), y_n_gfsL)))));
+    const REAL_CUDA_ARRAY __rk_exp_0 =
+        FusedMulAddCUDA(RK_Rational_9017_3168, MulCUDA(k1_gfsL, dt),
+                        FusedMulAddCUDA(RK_Rational_46732_5247, MulCUDA(k3_gfsL, dt),
+                                        FusedMulAddCUDA(RK_Rational_49_176, MulCUDA(k4_gfsL, dt),
+                                                        NegFusedMulAddCUDA(RK_Rational_5103_18656, MulCUDA(k5_gfsL, dt),
+                                                                           NegFusedMulAddCUDA(RK_Rational_355_33, MulCUDA(k2_gfsL, dt), y_n_gfsL)))));
     WriteCUDA(&next_y_input_gfs[i], __rk_exp_0);
   }
 } // END FUNCTION rk_substep_5_gpu
@@ -271,12 +268,11 @@ static void rk_substep_5__launcher(params_struct *restrict params, REAL *restric
  * Kernel: rk_substep_6_gpu.
  * Compute RK substep 6.
  */
-__global__ static void rk_substep_6_gpu(const size_t streamid, REAL *restrict k1_gfs, REAL *restrict k2_gfs, REAL *restrict k3_gfs,
-                                        REAL *restrict k4_gfs, REAL *restrict k5_gfs, REAL *restrict k6_gfs, REAL *restrict y_n_gfs,
-                                        REAL *restrict next_y_input_gfs, const REAL dt) {
+__global__ static void rk_substep_6_gpu(const size_t streamid, REAL *restrict k1_gfs, REAL *restrict k3_gfs, REAL *restrict k4_gfs,
+                                        REAL *restrict k5_gfs, REAL *restrict k6_gfs, REAL *restrict y_n_gfs, REAL *restrict next_y_input_gfs,
+                                        const REAL dt) {
   LOOP_ALL_GFS_GPS(i) {
     const REAL k1_gfsL = k1_gfs[i];
-    const REAL k2_gfsL = k2_gfs[i];
     const REAL k3_gfsL = k3_gfs[i];
     const REAL k4_gfsL = k4_gfs[i];
     const REAL k5_gfsL = k5_gfs[i];
@@ -285,32 +281,27 @@ __global__ static void rk_substep_6_gpu(const size_t streamid, REAL *restrict k1
     static constexpr double dbl_NegativeOne_ = -1.0;
     MAYBE_UNUSED const REAL_CUDA_ARRAY _NegativeOne_ = ConstCUDA(dbl_NegativeOne_);
 
-    static constexpr double dblRK_Rational_24117_31603 = 24117.0 / 31603.0;
-    const REAL_CUDA_ARRAY RK_Rational_24117_31603 = ConstCUDA(dblRK_Rational_24117_31603);
+    static constexpr double dblRK_Rational_11_84 = 11.0 / 84.0;
+    const REAL_CUDA_ARRAY RK_Rational_11_84 = ConstCUDA(dblRK_Rational_11_84);
 
-    static constexpr double dblRK_Rational_35_11 = 35.0 / 11.0;
-    const REAL_CUDA_ARRAY RK_Rational_35_11 = ConstCUDA(dblRK_Rational_35_11);
+    static constexpr double dblRK_Rational_125_192 = 125.0 / 192.0;
+    const REAL_CUDA_ARRAY RK_Rational_125_192 = ConstCUDA(dblRK_Rational_125_192);
 
-    static constexpr double dblRK_Rational_3925_4056 = 3925.0 / 4056.0;
-    const REAL_CUDA_ARRAY RK_Rational_3925_4056 = ConstCUDA(dblRK_Rational_3925_4056);
+    static constexpr double dblRK_Rational_2187_6784 = 2187.0 / 6784.0;
+    const REAL_CUDA_ARRAY RK_Rational_2187_6784 = ConstCUDA(dblRK_Rational_2187_6784);
 
-    static constexpr double dblRK_Rational_5225_1836 = 5225.0 / 1836.0;
-    const REAL_CUDA_ARRAY RK_Rational_5225_1836 = ConstCUDA(dblRK_Rational_5225_1836);
+    static constexpr double dblRK_Rational_35_384 = 35.0 / 384.0;
+    const REAL_CUDA_ARRAY RK_Rational_35_384 = ConstCUDA(dblRK_Rational_35_384);
 
-    static constexpr double dblRK_Rational_5561_2376 = 5561.0 / 2376.0;
-    const REAL_CUDA_ARRAY RK_Rational_5561_2376 = ConstCUDA(dblRK_Rational_5561_2376);
+    static constexpr double dblRK_Rational_500_1113 = 500.0 / 1113.0;
+    const REAL_CUDA_ARRAY RK_Rational_500_1113 = ConstCUDA(dblRK_Rational_500_1113);
 
-    static constexpr double dblRK_Rational_899983_200772 = 899983.0 / 200772.0;
-    const REAL_CUDA_ARRAY RK_Rational_899983_200772 = ConstCUDA(dblRK_Rational_899983_200772);
-
-    const REAL_CUDA_ARRAY __rk_exp_0 = FusedMulAddCUDA(
-        RK_Rational_899983_200772, MulCUDA(k4_gfsL, dt),
-        NegFusedMulAddCUDA(
-            RK_Rational_35_11, MulCUDA(k2_gfsL, dt),
-            FusedMulAddCUDA(RK_Rational_3925_4056, MulCUDA(k6_gfsL, dt),
-                            FusedMulAddCUDA(RK_Rational_5561_2376, MulCUDA(k1_gfsL, dt),
-                                            NegFusedMulAddCUDA(RK_Rational_5225_1836, MulCUDA(k5_gfsL, dt),
-                                                               NegFusedMulAddCUDA(RK_Rational_24117_31603, MulCUDA(k3_gfsL, dt), y_n_gfsL))))));
+    const REAL_CUDA_ARRAY __rk_exp_0 =
+        FusedMulAddCUDA(RK_Rational_35_384, MulCUDA(k1_gfsL, dt),
+                        FusedMulAddCUDA(RK_Rational_11_84, MulCUDA(k6_gfsL, dt),
+                                        FusedMulAddCUDA(RK_Rational_125_192, MulCUDA(k4_gfsL, dt),
+                                                        FusedMulAddCUDA(RK_Rational_500_1113, MulCUDA(k3_gfsL, dt),
+                                                                        NegFusedMulAddCUDA(RK_Rational_2187_6784, MulCUDA(k5_gfsL, dt), y_n_gfsL)))));
     WriteCUDA(&next_y_input_gfs[i], __rk_exp_0);
   }
 } // END FUNCTION rk_substep_6_gpu
@@ -318,155 +309,8 @@ __global__ static void rk_substep_6_gpu(const size_t streamid, REAL *restrict k1
 /**
  * Runge-Kutta function for substep 6.
  */
-static void rk_substep_6__launcher(params_struct *restrict params, REAL *restrict k1_gfs, REAL *restrict k2_gfs, REAL *restrict k3_gfs,
-                                   REAL *restrict k4_gfs, REAL *restrict k5_gfs, REAL *restrict k6_gfs, REAL *restrict y_n_gfs,
-                                   REAL *restrict next_y_input_gfs, const REAL dt) {
-  const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
-  const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
-  const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
-  MAYBE_UNUSED const int Ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;
-
-  const size_t threads_in_x_dir = BHAH_THREADS_IN_X_DIR_MOL_SUBSTEP;
-  const size_t threads_in_y_dir = BHAH_THREADS_IN_Y_DIR_MOL_SUBSTEP;
-  const size_t threads_in_z_dir = BHAH_THREADS_IN_Z_DIR_MOL_SUBSTEP;
-  dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
-  dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
-  size_t sm = 0;
-  size_t streamid = params->grid_idx % NUM_STREAMS;
-  rk_substep_6_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, k2_gfs, k3_gfs, k4_gfs, k5_gfs, k6_gfs, y_n_gfs,
-                                                                                  next_y_input_gfs, dt);
-  cudaCheckErrors(cudaKernel, "rk_substep_6_gpu failure");
-} // END FUNCTION rk_substep_6__launcher
-
-/**
- * Kernel: rk_substep_7_gpu.
- * Compute RK substep 7.
- */
-__global__ static void rk_substep_7_gpu(const size_t streamid, REAL *restrict k1_gfs, REAL *restrict k2_gfs, REAL *restrict k3_gfs,
-                                        REAL *restrict k4_gfs, REAL *restrict k5_gfs, REAL *restrict k6_gfs, REAL *restrict y_n_gfs,
-                                        REAL *restrict next_y_input_gfs, const REAL dt) {
-  LOOP_ALL_GFS_GPS(i) {
-    const REAL k1_gfsL = k1_gfs[i];
-    const REAL k2_gfsL = k2_gfs[i];
-    const REAL k3_gfsL = k3_gfs[i];
-    const REAL k4_gfsL = k4_gfs[i];
-    const REAL k5_gfsL = k5_gfs[i];
-    const REAL k6_gfsL = k6_gfs[i];
-    const REAL y_n_gfsL = y_n_gfs[i];
-    static constexpr double dbl_NegativeOne_ = -1.0;
-    MAYBE_UNUSED const REAL_CUDA_ARRAY _NegativeOne_ = ConstCUDA(dbl_NegativeOne_);
-
-    static constexpr double dblRK_Rational_10513573_3212352 = 10513573.0 / 3212352.0;
-    const REAL_CUDA_ARRAY RK_Rational_10513573_3212352 = ConstCUDA(dblRK_Rational_10513573_3212352);
-
-    static constexpr double dblRK_Rational_2945_1232 = 2945.0 / 1232.0;
-    const REAL_CUDA_ARRAY RK_Rational_2945_1232 = ConstCUDA(dblRK_Rational_2945_1232);
-
-    static constexpr double dblRK_Rational_376225_454272 = 376225.0 / 454272.0;
-    const REAL_CUDA_ARRAY RK_Rational_376225_454272 = ConstCUDA(dblRK_Rational_376225_454272);
-
-    static constexpr double dblRK_Rational_424325_205632 = 424325.0 / 205632.0;
-    const REAL_CUDA_ARRAY RK_Rational_424325_205632 = ConstCUDA(dblRK_Rational_424325_205632);
-
-    static constexpr double dblRK_Rational_465467_266112 = 465467.0 / 266112.0;
-    const REAL_CUDA_ARRAY RK_Rational_465467_266112 = ConstCUDA(dblRK_Rational_465467_266112);
-
-    static constexpr double dblRK_Rational_5610201_14158144 = 5610201.0 / 14158144.0;
-    const REAL_CUDA_ARRAY RK_Rational_5610201_14158144 = ConstCUDA(dblRK_Rational_5610201_14158144);
-
-    const REAL_CUDA_ARRAY __rk_exp_0 = FusedMulAddCUDA(
-        RK_Rational_465467_266112, MulCUDA(k1_gfsL, dt),
-        NegFusedMulAddCUDA(
-            RK_Rational_424325_205632, MulCUDA(k5_gfsL, dt),
-            FusedMulAddCUDA(RK_Rational_10513573_3212352, MulCUDA(k4_gfsL, dt),
-                            FusedMulAddCUDA(RK_Rational_376225_454272, MulCUDA(k6_gfsL, dt),
-                                            NegFusedMulAddCUDA(RK_Rational_5610201_14158144, MulCUDA(k3_gfsL, dt),
-                                                               NegFusedMulAddCUDA(RK_Rational_2945_1232, MulCUDA(k2_gfsL, dt), y_n_gfsL))))));
-    WriteCUDA(&next_y_input_gfs[i], __rk_exp_0);
-  }
-} // END FUNCTION rk_substep_7_gpu
-
-/**
- * Runge-Kutta function for substep 7.
- */
-static void rk_substep_7__launcher(params_struct *restrict params, REAL *restrict k1_gfs, REAL *restrict k2_gfs, REAL *restrict k3_gfs,
-                                   REAL *restrict k4_gfs, REAL *restrict k5_gfs, REAL *restrict k6_gfs, REAL *restrict y_n_gfs,
-                                   REAL *restrict next_y_input_gfs, const REAL dt) {
-  const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
-  const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
-  const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
-  MAYBE_UNUSED const int Ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;
-
-  const size_t threads_in_x_dir = BHAH_THREADS_IN_X_DIR_MOL_SUBSTEP;
-  const size_t threads_in_y_dir = BHAH_THREADS_IN_Y_DIR_MOL_SUBSTEP;
-  const size_t threads_in_z_dir = BHAH_THREADS_IN_Z_DIR_MOL_SUBSTEP;
-  dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
-  dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
-  size_t sm = 0;
-  size_t streamid = params->grid_idx % NUM_STREAMS;
-  rk_substep_7_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, k2_gfs, k3_gfs, k4_gfs, k5_gfs, k6_gfs, y_n_gfs,
-                                                                                  next_y_input_gfs, dt);
-  cudaCheckErrors(cudaKernel, "rk_substep_7_gpu failure");
-} // END FUNCTION rk_substep_7__launcher
-
-/**
- * Kernel: rk_substep_8_gpu.
- * Compute RK substep 8.
- */
-__global__ static void rk_substep_8_gpu(const size_t streamid, REAL *restrict k1_gfs, REAL *restrict k3_gfs, REAL *restrict k4_gfs,
-                                        REAL *restrict k5_gfs, REAL *restrict k6_gfs, REAL *restrict k7_gfs, REAL *restrict k8_gfs,
-                                        REAL *restrict y_n_gfs, const REAL dt) {
-  LOOP_ALL_GFS_GPS(i) {
-    const REAL k1_gfsL = k1_gfs[i];
-    const REAL k3_gfsL = k3_gfs[i];
-    const REAL k4_gfsL = k4_gfs[i];
-    const REAL k5_gfsL = k5_gfs[i];
-    const REAL k6_gfsL = k6_gfs[i];
-    const REAL k7_gfsL = k7_gfs[i];
-    const REAL k8_gfsL = k8_gfs[i];
-    const REAL y_n_gfsL = y_n_gfs[i];
-    static constexpr double dbl_NegativeOne_ = -1.0;
-    MAYBE_UNUSED const REAL_CUDA_ARRAY _NegativeOne_ = ConstCUDA(dbl_NegativeOne_);
-
-    static constexpr double dblRK_Rational_1375_5408 = 1375.0 / 5408.0;
-    const REAL_CUDA_ARRAY RK_Rational_1375_5408 = ConstCUDA(dblRK_Rational_1375_5408);
-
-    static constexpr double dblRK_Rational_1375_7344 = 1375.0 / 7344.0;
-    const REAL_CUDA_ARRAY RK_Rational_1375_7344 = ConstCUDA(dblRK_Rational_1375_7344);
-
-    static constexpr double dblRK_Rational_16807_146016 = 16807.0 / 146016.0;
-    const REAL_CUDA_ARRAY RK_Rational_16807_146016 = ConstCUDA(dblRK_Rational_16807_146016);
-
-    static constexpr double dblRK_Rational_1_10 = 1.0 / 10.0;
-    const REAL_CUDA_ARRAY RK_Rational_1_10 = ConstCUDA(dblRK_Rational_1_10);
-
-    static constexpr double dblRK_Rational_37_1120 = 37.0 / 1120.0;
-    const REAL_CUDA_ARRAY RK_Rational_37_1120 = ConstCUDA(dblRK_Rational_37_1120);
-
-    static constexpr double dblRK_Rational_61_864 = 61.0 / 864.0;
-    const REAL_CUDA_ARRAY RK_Rational_61_864 = ConstCUDA(dblRK_Rational_61_864);
-
-    static constexpr double dblRK_Rational_98415_321776 = 98415.0 / 321776.0;
-    const REAL_CUDA_ARRAY RK_Rational_98415_321776 = ConstCUDA(dblRK_Rational_98415_321776);
-
-    const REAL_CUDA_ARRAY __rk_exp_0 = FusedMulAddCUDA(
-        RK_Rational_61_864, MulCUDA(k1_gfsL, dt),
-        FusedMulAddCUDA(RK_Rational_16807_146016, MulCUDA(k4_gfsL, dt),
-                        FusedMulAddCUDA(RK_Rational_1_10, MulCUDA(k8_gfsL, dt),
-                                        FusedMulAddCUDA(RK_Rational_1375_5408, MulCUDA(k6_gfsL, dt),
-                                                        FusedMulAddCUDA(RK_Rational_1375_7344, MulCUDA(k5_gfsL, dt),
-                                                                        FusedMulAddCUDA(RK_Rational_98415_321776, MulCUDA(k3_gfsL, dt),
-                                                                                        NegFusedMulAddCUDA(RK_Rational_37_1120, MulCUDA(k7_gfsL, dt),
-                                                                                                           y_n_gfsL)))))));
-    WriteCUDA(&y_n_gfs[i], __rk_exp_0);
-  }
-} // END FUNCTION rk_substep_8_gpu
-
-/**
- * Runge-Kutta function for substep 8.
- */
-static void rk_substep_8__launcher(params_struct *restrict params, REAL *restrict k1_gfs, REAL *restrict k3_gfs, REAL *restrict k4_gfs,
-                                   REAL *restrict k5_gfs, REAL *restrict k6_gfs, REAL *restrict k7_gfs, REAL *restrict k8_gfs, REAL *restrict y_n_gfs,
+static void rk_substep_6__launcher(params_struct *restrict params, REAL *restrict k1_gfs, REAL *restrict k3_gfs, REAL *restrict k4_gfs,
+                                   REAL *restrict k5_gfs, REAL *restrict k6_gfs, REAL *restrict y_n_gfs, REAL *restrict next_y_input_gfs,
                                    const REAL dt) {
   const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
   const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
@@ -480,16 +324,78 @@ static void rk_substep_8__launcher(params_struct *restrict params, REAL *restric
   dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
   size_t sm = 0;
   size_t streamid = params->grid_idx % NUM_STREAMS;
-  rk_substep_8_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, k3_gfs, k4_gfs, k5_gfs, k6_gfs, k7_gfs, k8_gfs,
-                                                                                  y_n_gfs, dt);
-  cudaCheckErrors(cudaKernel, "rk_substep_8_gpu failure");
-} // END FUNCTION rk_substep_8__launcher
+  rk_substep_6_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, k3_gfs, k4_gfs, k5_gfs, k6_gfs, y_n_gfs,
+                                                                                  next_y_input_gfs, dt);
+  cudaCheckErrors(cudaKernel, "rk_substep_6_gpu failure");
+} // END FUNCTION rk_substep_6__launcher
 
 /**
- * Method of Lines (MoL) for "DP6" method: Step forward one full timestep.
+ * Kernel: rk_substep_7_gpu.
+ * Compute RK substep 7.
+ */
+__global__ static void rk_substep_7_gpu(const size_t streamid, REAL *restrict k1_gfs, REAL *restrict k3_gfs, REAL *restrict k4_gfs,
+                                        REAL *restrict k5_gfs, REAL *restrict k6_gfs, REAL *restrict y_n_gfs, const REAL dt) {
+  LOOP_ALL_GFS_GPS(i) {
+    const REAL k1_gfsL = k1_gfs[i];
+    const REAL k3_gfsL = k3_gfs[i];
+    const REAL k4_gfsL = k4_gfs[i];
+    const REAL k5_gfsL = k5_gfs[i];
+    const REAL k6_gfsL = k6_gfs[i];
+    const REAL y_n_gfsL = y_n_gfs[i];
+    static constexpr double dbl_NegativeOne_ = -1.0;
+    MAYBE_UNUSED const REAL_CUDA_ARRAY _NegativeOne_ = ConstCUDA(dbl_NegativeOne_);
+
+    static constexpr double dblRK_Rational_11_84 = 11.0 / 84.0;
+    const REAL_CUDA_ARRAY RK_Rational_11_84 = ConstCUDA(dblRK_Rational_11_84);
+
+    static constexpr double dblRK_Rational_125_192 = 125.0 / 192.0;
+    const REAL_CUDA_ARRAY RK_Rational_125_192 = ConstCUDA(dblRK_Rational_125_192);
+
+    static constexpr double dblRK_Rational_2187_6784 = 2187.0 / 6784.0;
+    const REAL_CUDA_ARRAY RK_Rational_2187_6784 = ConstCUDA(dblRK_Rational_2187_6784);
+
+    static constexpr double dblRK_Rational_35_384 = 35.0 / 384.0;
+    const REAL_CUDA_ARRAY RK_Rational_35_384 = ConstCUDA(dblRK_Rational_35_384);
+
+    static constexpr double dblRK_Rational_500_1113 = 500.0 / 1113.0;
+    const REAL_CUDA_ARRAY RK_Rational_500_1113 = ConstCUDA(dblRK_Rational_500_1113);
+
+    const REAL_CUDA_ARRAY __rk_exp_0 =
+        FusedMulAddCUDA(RK_Rational_35_384, MulCUDA(k1_gfsL, dt),
+                        FusedMulAddCUDA(RK_Rational_11_84, MulCUDA(k6_gfsL, dt),
+                                        FusedMulAddCUDA(RK_Rational_125_192, MulCUDA(k4_gfsL, dt),
+                                                        FusedMulAddCUDA(RK_Rational_500_1113, MulCUDA(k3_gfsL, dt),
+                                                                        NegFusedMulAddCUDA(RK_Rational_2187_6784, MulCUDA(k5_gfsL, dt), y_n_gfsL)))));
+    WriteCUDA(&y_n_gfs[i], __rk_exp_0);
+  }
+} // END FUNCTION rk_substep_7_gpu
+
+/**
+ * Runge-Kutta function for substep 7.
+ */
+static void rk_substep_7__launcher(params_struct *restrict params, REAL *restrict k1_gfs, REAL *restrict k3_gfs, REAL *restrict k4_gfs,
+                                   REAL *restrict k5_gfs, REAL *restrict k6_gfs, REAL *restrict y_n_gfs, const REAL dt) {
+  const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
+  const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
+  const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
+  MAYBE_UNUSED const int Ntot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_EVOL_GFS;
+
+  const size_t threads_in_x_dir = BHAH_THREADS_IN_X_DIR_MOL_SUBSTEP;
+  const size_t threads_in_y_dir = BHAH_THREADS_IN_Y_DIR_MOL_SUBSTEP;
+  const size_t threads_in_z_dir = BHAH_THREADS_IN_Z_DIR_MOL_SUBSTEP;
+  dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
+  dim3 blocks_per_grid((Ntot + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
+  size_t sm = 0;
+  size_t streamid = params->grid_idx % NUM_STREAMS;
+  rk_substep_7_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, k3_gfs, k4_gfs, k5_gfs, k6_gfs, y_n_gfs, dt);
+  cudaCheckErrors(cudaKernel, "rk_substep_7_gpu failure");
+} // END FUNCTION rk_substep_7__launcher
+
+/**
+ * Method of Lines (MoL) for "DP5" method: Step forward one full timestep.
  */
 void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_struct *restrict griddata) {
-  // C code implementation of -={ DP6 }=- Method of Lines timestepping.
+  // C code implementation of -={ DP5 }=- Method of Lines timestepping.
 
   // First set the initial time:
   const REAL time_start = commondata->time;
@@ -507,8 +413,8 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     MAYBE_UNUSED REAL *restrict k5_gfs = griddata[grid].gridfuncs.k5_gfs;
     MAYBE_UNUSED REAL *restrict k6_gfs = griddata[grid].gridfuncs.k6_gfs;
     MAYBE_UNUSED REAL *restrict k7_gfs = griddata[grid].gridfuncs.k7_gfs;
-    MAYBE_UNUSED REAL *restrict k8_gfs = griddata[grid].gridfuncs.k8_gfs;
     MAYBE_UNUSED REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
+
     // Set pointers to this grid's params, rfm_struct/xx, bc_struct, etc.
     MAYBE_UNUSED params_struct *restrict params = &griddata[grid].params;
     MAYBE_UNUSED REAL *restrict xx[3];
@@ -523,7 +429,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
 
   // -={ START k2 substep }=-
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
-    commondata->time = time_start + 1.00000000000000006e-01 * commondata->dt;
+    commondata->time = time_start + 2.00000000000000011e-01 * commondata->dt;
     cpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % NUM_STREAMS);
     // Set gridfunction aliases, from griddata[].gridfuncs.
     MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
@@ -535,8 +441,8 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     MAYBE_UNUSED REAL *restrict k5_gfs = griddata[grid].gridfuncs.k5_gfs;
     MAYBE_UNUSED REAL *restrict k6_gfs = griddata[grid].gridfuncs.k6_gfs;
     MAYBE_UNUSED REAL *restrict k7_gfs = griddata[grid].gridfuncs.k7_gfs;
-    MAYBE_UNUSED REAL *restrict k8_gfs = griddata[grid].gridfuncs.k8_gfs;
     MAYBE_UNUSED REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
+
     // Set pointers to this grid's params, rfm_struct/xx, bc_struct, etc.
     MAYBE_UNUSED params_struct *restrict params = &griddata[grid].params;
     MAYBE_UNUSED REAL *restrict xx[3];
@@ -551,7 +457,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
 
   // -={ START k3 substep }=-
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
-    commondata->time = time_start + 2.22222222222222210e-01 * commondata->dt;
+    commondata->time = time_start + 2.99999999999999989e-01 * commondata->dt;
     cpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % NUM_STREAMS);
     // Set gridfunction aliases, from griddata[].gridfuncs.
     MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
@@ -563,8 +469,8 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     MAYBE_UNUSED REAL *restrict k5_gfs = griddata[grid].gridfuncs.k5_gfs;
     MAYBE_UNUSED REAL *restrict k6_gfs = griddata[grid].gridfuncs.k6_gfs;
     MAYBE_UNUSED REAL *restrict k7_gfs = griddata[grid].gridfuncs.k7_gfs;
-    MAYBE_UNUSED REAL *restrict k8_gfs = griddata[grid].gridfuncs.k8_gfs;
     MAYBE_UNUSED REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
+
     // Set pointers to this grid's params, rfm_struct/xx, bc_struct, etc.
     MAYBE_UNUSED params_struct *restrict params = &griddata[grid].params;
     MAYBE_UNUSED REAL *restrict xx[3];
@@ -579,7 +485,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
 
   // -={ START k4 substep }=-
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
-    commondata->time = time_start + 4.28571428571428548e-01 * commondata->dt;
+    commondata->time = time_start + 8.00000000000000044e-01 * commondata->dt;
     cpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % NUM_STREAMS);
     // Set gridfunction aliases, from griddata[].gridfuncs.
     MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
@@ -591,8 +497,8 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     MAYBE_UNUSED REAL *restrict k5_gfs = griddata[grid].gridfuncs.k5_gfs;
     MAYBE_UNUSED REAL *restrict k6_gfs = griddata[grid].gridfuncs.k6_gfs;
     MAYBE_UNUSED REAL *restrict k7_gfs = griddata[grid].gridfuncs.k7_gfs;
-    MAYBE_UNUSED REAL *restrict k8_gfs = griddata[grid].gridfuncs.k8_gfs;
     MAYBE_UNUSED REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
+
     // Set pointers to this grid's params, rfm_struct/xx, bc_struct, etc.
     MAYBE_UNUSED params_struct *restrict params = &griddata[grid].params;
     MAYBE_UNUSED REAL *restrict xx[3];
@@ -607,7 +513,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
 
   // -={ START k5 substep }=-
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
-    commondata->time = time_start + 5.99999999999999978e-01 * commondata->dt;
+    commondata->time = time_start + 8.88888888888888840e-01 * commondata->dt;
     cpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % NUM_STREAMS);
     // Set gridfunction aliases, from griddata[].gridfuncs.
     MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
@@ -619,8 +525,8 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     MAYBE_UNUSED REAL *restrict k5_gfs = griddata[grid].gridfuncs.k5_gfs;
     MAYBE_UNUSED REAL *restrict k6_gfs = griddata[grid].gridfuncs.k6_gfs;
     MAYBE_UNUSED REAL *restrict k7_gfs = griddata[grid].gridfuncs.k7_gfs;
-    MAYBE_UNUSED REAL *restrict k8_gfs = griddata[grid].gridfuncs.k8_gfs;
     MAYBE_UNUSED REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
+
     // Set pointers to this grid's params, rfm_struct/xx, bc_struct, etc.
     MAYBE_UNUSED params_struct *restrict params = &griddata[grid].params;
     MAYBE_UNUSED REAL *restrict xx[3];
@@ -635,7 +541,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
 
   // -={ START k6 substep }=-
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
-    commondata->time = time_start + 8.00000000000000044e-01 * commondata->dt;
+    commondata->time = time_start + 1.00000000000000000e+00 * commondata->dt;
     cpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % NUM_STREAMS);
     // Set gridfunction aliases, from griddata[].gridfuncs.
     MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
@@ -647,15 +553,15 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     MAYBE_UNUSED REAL *restrict k5_gfs = griddata[grid].gridfuncs.k5_gfs;
     MAYBE_UNUSED REAL *restrict k6_gfs = griddata[grid].gridfuncs.k6_gfs;
     MAYBE_UNUSED REAL *restrict k7_gfs = griddata[grid].gridfuncs.k7_gfs;
-    MAYBE_UNUSED REAL *restrict k8_gfs = griddata[grid].gridfuncs.k8_gfs;
     MAYBE_UNUSED REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
+
     // Set pointers to this grid's params, rfm_struct/xx, bc_struct, etc.
     MAYBE_UNUSED params_struct *restrict params = &griddata[grid].params;
     MAYBE_UNUSED REAL *restrict xx[3];
     for (int ww = 0; ww < 3; ww++)
       xx[ww] = griddata[grid].xx[ww];
     rhs_eval(commondata, params, rfmstruct, auxevol_gfs, next_y_input_gfs, k6_gfs);
-    rk_substep_6__launcher(params, k1_gfs, k2_gfs, k3_gfs, k4_gfs, k5_gfs, k6_gfs, y_n_gfs, next_y_input_gfs, commondata->dt);
+    rk_substep_6__launcher(params, k1_gfs, k3_gfs, k4_gfs, k5_gfs, k6_gfs, y_n_gfs, next_y_input_gfs, commondata->dt);
     if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
       apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, next_y_input_gfs);
   }
@@ -675,47 +581,19 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     MAYBE_UNUSED REAL *restrict k5_gfs = griddata[grid].gridfuncs.k5_gfs;
     MAYBE_UNUSED REAL *restrict k6_gfs = griddata[grid].gridfuncs.k6_gfs;
     MAYBE_UNUSED REAL *restrict k7_gfs = griddata[grid].gridfuncs.k7_gfs;
-    MAYBE_UNUSED REAL *restrict k8_gfs = griddata[grid].gridfuncs.k8_gfs;
     MAYBE_UNUSED REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
+
     // Set pointers to this grid's params, rfm_struct/xx, bc_struct, etc.
     MAYBE_UNUSED params_struct *restrict params = &griddata[grid].params;
     MAYBE_UNUSED REAL *restrict xx[3];
     for (int ww = 0; ww < 3; ww++)
       xx[ww] = griddata[grid].xx[ww];
     rhs_eval(commondata, params, rfmstruct, auxevol_gfs, next_y_input_gfs, k7_gfs);
-    rk_substep_7__launcher(params, k1_gfs, k2_gfs, k3_gfs, k4_gfs, k5_gfs, k6_gfs, y_n_gfs, next_y_input_gfs, commondata->dt);
-    if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
-      apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, next_y_input_gfs);
-  }
-  // -={ END k7 substep }=-
-
-  // -={ START k8 substep }=-
-  for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
-    commondata->time = time_start + 1.00000000000000000e+00 * commondata->dt;
-    cpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % NUM_STREAMS);
-    // Set gridfunction aliases, from griddata[].gridfuncs.
-    MAYBE_UNUSED REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
-    MAYBE_UNUSED REAL *restrict next_y_input_gfs = griddata[grid].gridfuncs.next_y_input_gfs;
-    MAYBE_UNUSED REAL *restrict k1_gfs = griddata[grid].gridfuncs.k1_gfs;
-    MAYBE_UNUSED REAL *restrict k2_gfs = griddata[grid].gridfuncs.k2_gfs;
-    MAYBE_UNUSED REAL *restrict k3_gfs = griddata[grid].gridfuncs.k3_gfs;
-    MAYBE_UNUSED REAL *restrict k4_gfs = griddata[grid].gridfuncs.k4_gfs;
-    MAYBE_UNUSED REAL *restrict k5_gfs = griddata[grid].gridfuncs.k5_gfs;
-    MAYBE_UNUSED REAL *restrict k6_gfs = griddata[grid].gridfuncs.k6_gfs;
-    MAYBE_UNUSED REAL *restrict k7_gfs = griddata[grid].gridfuncs.k7_gfs;
-    MAYBE_UNUSED REAL *restrict k8_gfs = griddata[grid].gridfuncs.k8_gfs;
-    MAYBE_UNUSED REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
-    // Set pointers to this grid's params, rfm_struct/xx, bc_struct, etc.
-    MAYBE_UNUSED params_struct *restrict params = &griddata[grid].params;
-    MAYBE_UNUSED REAL *restrict xx[3];
-    for (int ww = 0; ww < 3; ww++)
-      xx[ww] = griddata[grid].xx[ww];
-    rhs_eval(commondata, params, rfmstruct, auxevol_gfs, next_y_input_gfs, k8_gfs);
-    rk_substep_8__launcher(params, k1_gfs, k3_gfs, k4_gfs, k5_gfs, k6_gfs, k7_gfs, k8_gfs, y_n_gfs, commondata->dt);
+    rk_substep_7__launcher(params, k1_gfs, k3_gfs, k4_gfs, k5_gfs, k6_gfs, y_n_gfs, commondata->dt);
     if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
       apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, y_n_gfs);
   }
-  // -={ END k8 substep }=-
+  // -={ END k7 substep }=-
 
   // Adding dt to commondata->time many times will induce roundoff error,
   // so here we set time based on the iteration number:

@@ -164,6 +164,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
         griddata[grid].gridfuncs.k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs;
     MAYBE_UNUSED REAL *restrict k2_or_y_nplus_a32_k2_gfs = griddata[grid].gridfuncs.k2_or_y_nplus_a32_k2_gfs;
     MAYBE_UNUSED REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
+
     // Set pointers to this grid's params, rfm_struct/xx, bc_struct, etc.
     MAYBE_UNUSED params_struct *restrict params = &griddata[grid].params;
     MAYBE_UNUSED REAL *restrict xx[3];
@@ -190,6 +191,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
         griddata[grid].gridfuncs.k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs;
     MAYBE_UNUSED REAL *restrict k2_or_y_nplus_a32_k2_gfs = griddata[grid].gridfuncs.k2_or_y_nplus_a32_k2_gfs;
     MAYBE_UNUSED REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
+
     // Set pointers to this grid's params, rfm_struct/xx, bc_struct, etc.
     MAYBE_UNUSED params_struct *restrict params = &griddata[grid].params;
     MAYBE_UNUSED REAL *restrict xx[3];
@@ -218,6 +220,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
         griddata[grid].gridfuncs.k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs;
     MAYBE_UNUSED REAL *restrict k2_or_y_nplus_a32_k2_gfs = griddata[grid].gridfuncs.k2_or_y_nplus_a32_k2_gfs;
     MAYBE_UNUSED REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
+
     // Set pointers to this grid's params, rfm_struct/xx, bc_struct, etc.
     MAYBE_UNUSED params_struct *restrict params = &griddata[grid].params;
     MAYBE_UNUSED REAL *restrict xx[3];

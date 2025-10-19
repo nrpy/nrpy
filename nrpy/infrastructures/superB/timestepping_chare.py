@@ -529,7 +529,7 @@ def generate_switch_statement_for_gf_types(
         non_y_n_gridfunctions_list,
         _diagnostic_gridfunctions_point_to,
         _diagnostic_gridfunctions2_point_to,
-    ) = BHaH.MoLtimestepping.gridfunction_names.generate_gridfunction_names(
+    ) = BHaH.MoLtimestepping.intermediate_gridfunction_names_list.generate_gridfunction_names(
         Butcher_dict, MoL_method=MoL_method
     )
 
@@ -618,7 +618,7 @@ def generate_switch_statement_for_gf_types_for_entry_method(
         non_y_n_gridfunctions_list,
         _diagnostic_gridfunctions_point_to,
         _diagnostic_gridfunctions2_point_to,
-    ) = BHaH.MoLtimestepping.gridfunction_names.generate_gridfunction_names(
+    ) = BHaH.MoLtimestepping.intermediate_gf_names_list.generate_gridfunction_names(
         Butcher_dict, MoL_method=MoL_method
     )
 
@@ -680,7 +680,7 @@ def generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
         non_y_n_gridfunctions_list,
         _diagnostic_gridfunctions_point_to,
         _diagnostic_gridfunctions2_point_to,
-    ) = BHaH.MoLtimestepping.gridfunction_names.generate_gridfunction_names(
+    ) = BHaH.MoLtimestepping.intermediate_gf_names_list.generate_gridfunction_names(
         Butcher_dict, MoL_method=MoL_method
     )
 

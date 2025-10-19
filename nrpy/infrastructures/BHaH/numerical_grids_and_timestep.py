@@ -554,21 +554,18 @@ def register_CFunction_numerical_grids_and_timestep(
             else "griddata,"
         ),
     )
-    body = r"""
-  // Step 1.a: Set each CodeParameter in griddata.params to default, for MAXNUMGRIDS grids.
-  if(calling_for_first_time)
-    params_struct_set_to_default(commondata, griddata);"""
-    body += rf"""
-  // Step 1.b: Set commondata->NUMGRIDS to number of CoordSystems we have
+    body = ""
+    if gridding_approach == "independent grid(s)":
+        body += rf"""
+  // Step 1.a: Set up independent grids: first set NUMGRIDS == number of unique CoordSystems we have.
   commondata->NUMGRIDS = {len(set_of_CoordSystems)};
 """
-    if gridding_approach == "independent grid(s)":
         body += """
   {
     // Independent grids
     int Nx[3] = { -1, -1, -1 };
 
-    // Step 1.c: For each grid, set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx based on grid_physical_size
+    // For each grid, set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx based on grid_physical_size
     const bool apply_convergence_factor_and_set_xxminmax_defaults = true;
     int grid=0;
 """
@@ -607,7 +604,7 @@ def register_CFunction_numerical_grids_and_timestep(
                 add_to_set_CodeParameters_h=False,
             )
         body += """
-  // Step 1.c: Multipatch grid structures are set up algorithmically.
+  // Step 1.a: Multipatch grid structures are set up algorithmically.
   multipatch_grids_set_up(commondata, griddata);
 """
     else:
@@ -615,7 +612,7 @@ def register_CFunction_numerical_grids_and_timestep(
             f"""gridding_approach == "{gridding_approach}" not supported.
         Supported approaches include: "independent grid(s)" (default) and "multipatch"."""
         )
-    body += "\n// Step 1.d: Allocate memory for and define reference-metric precomputation lookup tables\n"
+    body += "\n// Step 1.b: Allocate memory for and define reference-metric precomputation lookup tables\n"
     if enable_rfm_precompute:
         body += r"""for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   BHAH_MALLOC(griddata[grid].rfmstruct, sizeof(rfm_struct))
@@ -637,7 +634,7 @@ def register_CFunction_numerical_grids_and_timestep(
   cpyDevicetoHost__grid(commondata, griddata_host, griddata);
   BHAH_DEVICE_SYNC();
 """
-    body += "\n// Step 1.e: Set up curvilinear boundary condition struct (bcstruct)\n"
+    body += "\n// Step 1.c: Set up curvilinear boundary condition struct (bcstruct)\n"
     if enable_CurviBCs:
         body += "for(int grid=0; grid<commondata->NUMGRIDS; grid++) {\n"
         mask_arg = ""
@@ -660,14 +657,14 @@ def register_CFunction_numerical_grids_and_timestep(
             else "cpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % NUM_STREAMS);"
         )
         body += rf"""
-// Step 1.f: Set timestep based on minimum spacing between neighboring gridpoints.
+// Step 1.d: Set timestep based on minimum spacing between neighboring gridpoints.
 commondata->dt = 1e30;
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {{
   {sync_params}
   cfl_limited_timestep(commondata, &griddata[grid].params, griddata[grid].xx);
 }}"""
     body += r"""
-// Step 1.g: Initialize timestepping parameters to zero if this is the first time this function is called.
+// Step 1.e: Initialize timestepping parameters to zero if this is the first time this function is called.
 if(calling_for_first_time) {
   commondata->nn = 0;
   commondata->nn_0 = 0;
@@ -675,7 +672,7 @@ if(calling_for_first_time) {
   commondata->time = 0.0;
 }
 
-// Step 1.h: Set grid_idx for each grid.
+// Step 1.f: Set grid_idx for each grid.
 for(int grid=0;grid<commondata->NUMGRIDS;grid++) {
    griddata[grid].params.grid_idx = grid;
 }

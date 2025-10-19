@@ -230,7 +230,7 @@ def generate_post_rhs_output_list(
     post_rhs = []
 
     if (
-        BHaH.MoLtimestepping.gridfunction_names.is_diagonal_Butcher(
+        BHaH.MoLtimestepping.intermediate_gridfunction_names_list.is_diagonal_Butcher(
             Butcher_dict, MoL_method
         )
         and "RK3" in MoL_method
@@ -252,7 +252,7 @@ def generate_post_rhs_output_list(
             post_rhs = [y_n_gfs]
     else:
         y_n = "Y_N_GFS"
-        if not BHaH.MoLtimestepping.gridfunction_names.is_diagonal_Butcher(
+        if not BHaH.MoLtimestepping.intermediate_gridfunction_names_list.is_diagonal_Butcher(
             Butcher_dict, MoL_method
         ):
             next_y_input = "NEXT_Y_INPUT_GFS"
@@ -294,7 +294,7 @@ def generate_rhs_output_exprs(
     rhs_output_expr = []
 
     if (
-        BHaH.MoLtimestepping.gridfunction_names.is_diagonal_Butcher(
+        BHaH.MoLtimestepping.intermediate_gridfunction_names_list.is_diagonal_Butcher(
             Butcher_dict, MoL_method
         )
         and "RK3" in MoL_method
@@ -312,7 +312,7 @@ def generate_rhs_output_exprs(
         elif s == 2:
             rhs_output_expr = [y_n_gfs]
     else:
-        if not BHaH.MoLtimestepping.gridfunction_names.is_diagonal_Butcher(
+        if not BHaH.MoLtimestepping.intermediate_gf_names_list.is_diagonal_Butcher(
             Butcher_dict, MoL_method
         ):
             rhs_output_expr = [f"K{rk_substep}_GFS"]
@@ -532,7 +532,7 @@ def register_CFunction_MoL_step_forward_in_time(
         non_y_n_gridfunctions_list,
         _throwaway,
         _throwaway2,
-    ) = BHaH.MoLtimestepping.gridfunction_names.generate_gridfunction_names(
+    ) = BHaH.MoLtimestepping.intermediate_gf_names_list.generate_gridfunction_names(
         Butcher_dict, MoL_method
     )
 
@@ -573,7 +573,7 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
 """
 
     if (
-        BHaH.MoLtimestepping.gridfunction_names.is_diagonal_Butcher(
+        BHaH.MoLtimestepping.intermediate_gf_names_list.is_diagonal_Butcher(
             Butcher_dict, MoL_method
         )
         and "RK3" in MoL_method
@@ -709,7 +709,7 @@ REAL *restrict {y_n_gridfunctions} = {gf_prefix}{y_n_gridfunctions};
 
     else:
         y_n = sp.Symbol("y_n_gfsL", real=True)
-        if not BHaH.MoLtimestepping.gridfunction_names.is_diagonal_Butcher(
+        if not BHaH.MoLtimestepping.intermediate_gridfunction_names_list.is_diagonal_Butcher(
             Butcher_dict, MoL_method
         ):
             for s in range(num_steps):
@@ -1054,7 +1054,7 @@ def register_CFunctions(
         non_y_n_gridfunctions_list,
         _diagnostic_gridfunctions_point_to,
         _diagnostic_gridfunctions2_point_to,
-    ) = BHaH.MoLtimestepping.gridfunction_names.generate_gridfunction_names(
+    ) = BHaH.MoLtimestepping.intermediate_gf_names_list.generate_gridfunction_names(
         Butcher_dict, MoL_method=MoL_method
     )
 

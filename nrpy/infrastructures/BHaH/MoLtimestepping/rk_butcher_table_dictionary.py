@@ -21,11 +21,82 @@ Authors: Brandon Clark
          zachetie **at** gmail **dot* com
          Gabriel M Steward
 """
-
-# Step 1: Initialize needed Python/NRPy+ modules
 from typing import Dict, List, Tuple, Union
 
 import sympy as sp  # Import SymPy, Python's computer algebra system
+
+
+def is_diagonal_Butcher(
+    Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
+    key: str,
+) -> bool:
+    """
+    Check if a given Butcher table (from Butcher_dict) is diagonal.
+
+    :param Butcher_dict: A dictionary containing Butcher tables. Each key maps to a table (list of lists).
+    :param key: The key to retrieve the Butcher table from the Butcher_dict.
+
+    :return: True if the table is diagonal, False otherwise.
+
+    Note:
+    A Butcher table is diagonal if all its non-diagonal elements are zero.
+    """
+    Butcher = Butcher_dict[key][0]
+    L = len(Butcher) - 1
+
+    for i in range(L):
+        for j in range(1, i):
+            if Butcher[i][j] != sp.sympify(0):
+                return False
+    return True
+
+
+def intermediate_stage_gf_names_list(
+    Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
+    MoL_method: str = "RK4",
+) -> List[str]:
+    """
+    Generate gridfunction names for the specified Method of Lines (MoL) method.
+    Used for setting up MoL_malloc, MoL_step_forward_in_time, MoL_free, and BHaH_defines.h
+
+    :param Butcher_dict: Dictionary of Butcher tables for the MoL method.
+    :param MoL_method: The MoL method to generate gridfunction names for.
+    :return: A tuple containing y_n_gridfunctions, intermediate_stage_gfs_list,
+             diagnostic_gridfunctions_point_to, and diagnostic_gridfunctions2_point_to.
+
+    Doctests:
+    >>> from nrpy.infrastructures import BHaH
+    >>> Butcher_dict = BHaH.MoLtimestepping.rk_butcher_table_dictionary.generate_Butcher_tables()
+    >>> intermediate_stage_gf_names_list(Butcher_dict, "RK2 Heun")
+    ['y_nplus1_running_total_gfs', 'k_odd_gfs', 'k_even_gfs']
+    >>> intermediate_stage_gf_names_list(Butcher_dict, "RK3")
+    ['next_y_input_gfs', 'k1_gfs', 'k2_gfs', 'k3_gfs']
+    >>> intermediate_stage_gf_names_list(Butcher_dict, "RK3 Ralston")
+    ['k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs', 'k2_or_y_nplus_a32_k2_gfs']
+    >>> intermediate_stage_gf_names_list(Butcher_dict, "RK4")
+    ['y_nplus1_running_total_gfs', 'k_odd_gfs', 'k_even_gfs']
+    """
+    intermediate_stage_gfs_list = []
+
+    if is_diagonal_Butcher(Butcher_dict, MoL_method) and "RK3" in MoL_method:
+        intermediate_stage_gfs_list.extend(
+            [
+                "k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs",
+                "k2_or_y_nplus_a32_k2_gfs",
+            ]
+        )
+    else:
+        if not is_diagonal_Butcher(Butcher_dict, MoL_method):
+            num_k = len(Butcher_dict[MoL_method][0]) - 1
+            intermediate_stage_gfs_list.append("next_y_input_gfs")
+            for i in range(num_k):
+                intermediate_stage_gfs_list.append(f"k{i + 1}_gfs")
+        else:
+            intermediate_stage_gfs_list.append("y_nplus1_running_total_gfs")
+            if MoL_method != "Euler":
+                intermediate_stage_gfs_list.extend(["k_odd_gfs", "k_even_gfs"])
+
+    return intermediate_stage_gfs_list
 
 
 # Step 2a: Generate a Dictionary of Butcher Tables for Explicit Runge Kutta Techniques

@@ -44,13 +44,11 @@ def _check_required_functions() -> None:
             "numerical_grids_and_timestep",
             "e.g., numerical_grids_and_timestep.py or user defined",
         ),
-        ("MoL_malloc_y_n_gfs", "MoL.py"),
-        ("MoL_malloc_non_y_n_gfs", "MoL.py"),
-        ("initial_data", "initial_data.py"),
-        ("MoL_step_forward_in_time", "MoL.py"),
+        ("MoL_free_intermediate_stage_gfs", "MoLtimestepping/"),
+        ("MoL_malloc_intermediate_stage_gfs", "MoLtimestepping/"),
+        ("MoL_step_forward_in_time", "MoLtimestepping/"),
         ("diagnostics", "log10_L2norm_gf.py"),
-        ("MoL_free_memory_y_n_gfs", "MoL.py"),
-        ("MoL_free_memory_non_y_n_gfs", "MoL.py"),
+        ("initial_data", "initial_data.py"),
     ]
 
     missing_functions = [
@@ -197,25 +195,29 @@ params_struct_set_to_default(&commondata, {compute_griddata});
   // If this function is being called for the first time, initialize commondata.time, nn, t_0, and nn_0 to 0.
   const bool calling_for_first_time = true;
   numerical_grids_and_timestep({numerical_grids_args});
-}}
+}} // END setup of numerical & temporal grids.
 """
     body_parts.append(step1_c_code)
 
+    allocator_macro = (
+        "BHAH_MALLOC_DEVICE" if parallelization == "cuda" else "BHAH_MALLOC"
+    )
     # Step 2: Allocate memory for evolved gridfunctions (y_n_gfs).
     step2_c_code = f"""
+// Step 2: Allocate storage for the initial data (y_n_gfs gridfunctions) on each grid.
 for(int grid=0; grid<commondata.NUMGRIDS; grid++) {{
-  // Step 2: Allocate storage for the initial data (y_n_gfs gridfunctions) on each grid.
-  MoL_malloc_y_n_gfs(&commondata, &{compute_griddata}[grid].params, &{compute_griddata}[grid].gridfuncs);
-}}
-"""
-    if is_cuda:
-        step2_c_code += f"""
-for(int grid=0; grid<commondata.NUMGRIDS; grid++) {{
-  // Step 2.b: Allocate host storage for diagnostics
-  CUDA__malloc_host_gfs(&commondata, &{compute_griddata}[grid].params, &griddata_host[grid].gridfuncs);
-  CUDA__malloc_host_auxevol_gfs(&commondata, &{compute_griddata}[grid].params, &griddata_host[grid].gridfuncs);
-  CUDA__malloc_host_diagnostic_gfs(&commondata, &{compute_griddata}[grid].params, &griddata_host[grid].gridfuncs);
-}}
+  const int Nxx_plus_2NGHOSTS_tot = ({compute_griddata}[grid].params.Nxx_plus_2NGHOSTS0 * //
+                                     {compute_griddata}[grid].params.Nxx_plus_2NGHOSTS1 * //
+                                     {compute_griddata}[grid].params.Nxx_plus_2NGHOSTS2);
+  {allocator_macro}({compute_griddata}[grid].gridfuncs.y_n_gfs, sizeof(REAL) * Nxx_plus_2NGHOSTS_tot * NUM_EVOL_GFS);
+  if (NUM_AUXEVOL_GFS > 0) {{
+    {allocator_macro}({compute_griddata}[grid].gridfuncs.auxevol_gfs, sizeof(REAL) * Nxx_plus_2NGHOSTS_tot * NUM_AUXEVOL_GFS);
+    IFCUDARUN(BHAH_MALLOC(griddata_host[grid].gridfuncs.auxevol_gfs, sizeof(REAL) * Nxx_plus_2NGHOSTS_tot * NUM_AUXEVOL_GFS););
+  }} // END IF NUM_AUXEVOL_GFS > 0
+
+  // On GPU, separately allocate y_n_gfs on the host, for diagnostics purposes.
+  IFCUDARUN(BHAH_MALLOC_PINNED(griddata_host[grid].gridfuncs.y_n_gfs, sizeof(REAL) * Nxx_plus_2NGHOSTS_tot * NUM_EVOL_GFS););
+}} // END LOOP over grids
 """
     body_parts.append(step2_c_code)
 
@@ -224,7 +226,7 @@ for(int grid=0; grid<commondata.NUMGRIDS; grid++) {{
     setup_initial_data_code = f"Set up initial data.\n{initial_data_call}\n"
     allocate_storage_code = f"""Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping.
 for(int grid=0; grid<commondata.NUMGRIDS; grid++)
-  MoL_malloc_non_y_n_gfs(&commondata, &{compute_griddata}[grid].params, &{compute_griddata}[grid].gridfuncs);\n"""
+  MoL_malloc_intermediate_stage_gfs(&commondata, &{compute_griddata}[grid].params, &{compute_griddata}[grid].gridfuncs);\n"""
 
     if set_initial_data_after_auxevol_malloc:
         step3_code, step4_code = (allocate_storage_code, setup_initial_data_code)

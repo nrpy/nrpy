@@ -206,7 +206,7 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
         non_y_n_gridfunctions_list,
         _,
         diagnostic_gridfunctions2_point_to,
-    ) = BHaH.MoLtimestepping.gridfunction_names.generate_gridfunction_names(
+    ) = BHaH.MoLtimestepping.intermediate_gf_names_list.generate_gridfunction_names(
         Butcher_dict, MoL_method=MoL_method
     )
     # Combine y_n_gfs and non_y_n_gfs into a single list.

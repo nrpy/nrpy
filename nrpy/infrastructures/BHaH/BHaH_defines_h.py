@@ -522,6 +522,14 @@ do { \
         BHAH_FREE(a->b); \
     } \
 } while(0);
+
+#ifdef __CUDACC__
+  /* Expand to the statement(s) you pass in */
+  #define IFCUDARUN(...) do {{ __VA_ARGS__; }} while (0)
+#else
+  /* Compile away to nothing on non-CUDA builds */
+  #define IFCUDARUN(...) do {{ (void)0; }} while (0)
+#endif
 """
     parallelization = par.parval_from_str("parallelization")
 
@@ -547,7 +555,7 @@ do {{ \
         {check_err_free} \
         (a) = nullptr; \
     }} \
-}} while (0);
+}} while (0);\
 """
     if parallelization == "cuda":
         check_err_malloc_host = parallel_utils.get_check_errors_str(
@@ -589,7 +597,8 @@ do {{ \
         BHAH_MALLOC_DEVICE(tmp_ptr_##b, sz); \
         cudaMemcpy(&a->b, &tmp_ptr_##b, sizeof(void *), cudaMemcpyHostToDevice); \
     }} \
-}} while(0);
+}} while(0);\
+/* In some common header, e.g. cuda_wrap.h */
 """
     if parallelization in ["cuda"]:
         sync_func = parallel_utils.get_device_sync_function(parallelization)

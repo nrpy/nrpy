@@ -7,7 +7,6 @@ Authors: Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
 
 import argparse
 import os
-
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
@@ -79,9 +78,9 @@ def get_log10_residual_tolerance(fp_type_str: str = "double") -> float:
     """
     res: float = -1.0
     if fp_type_str == "double":
-        res = -15.8
+        res = -11.2
     elif fp_type_str == "float":
-        res = -10.0
+        res = -6.5
     else:
         raise ValueError(f"residual tolerence not defined for {fp_type_str} precision")
     return res
@@ -89,7 +88,7 @@ def get_log10_residual_tolerance(fp_type_str: str = "double") -> float:
 
 # Set tolerance for log10(residual) to stop relaxation
 log10_residual_tolerance = get_log10_residual_tolerance(fp_type_str=fp_type)
-default_diagnostics_output_every = 100
+default_diagnostics_output_every = 8e-2
 default_checkpoint_every = 50.0
 eta_damping = 11.0
 MINIMUM_GLOBAL_WAVESPEED = 0.7
@@ -214,11 +213,19 @@ BHaH.numerical_grids_and_timestep.register_CFunctions(
 )
 BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
 
-BHaH.nrpyelliptic.diagnostics.register_CFunction_diagnostics(
-    CoordSystem=CoordSystem,
-    enable_rfm_precompute=enable_rfm_precompute,
+# Diagnostics C code registration
+BHaH.diagnostics.diagnostics.register_all_diagnostics(
+    set_of_CoordSystems=set_of_CoordSystems,
+    project_dir=project_dir,
     default_diagnostics_out_every=default_diagnostics_output_every,
+    enable_nearest_diagnostics=True,
+    enable_interp_diagnostics=False,
+    enable_volume_integration_diagnostics=True,
+    enable_free_auxevol=False,
 )
+BHaH.nrpyelliptic.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set()
+BHaH.nrpyelliptic.diagnostics_nearest.register_CFunction_diagnostics_nearest()
+BHaH.nrpyelliptic.diagnostics_volume_integration.register_CFunction_diagnostics_volume_integration()
 
 if enable_rfm_precompute:
     BHaH.rfm_precompute.register_CFunctions_rfm_precompute(set_of_CoordSystems)
@@ -239,16 +246,18 @@ BHaH.nrpyelliptic.residual_H_compute_all_points.register_CFunction_residual_H_co
     OMP_collapse=OMP_collapse,
 )
 
-# Generate diagnostics functions
-BHaH.nrpyelliptic.log10_L2norm_gf.register_CFunction_log10_L2norm_gf(
-    CoordSystem=CoordSystem
-)
-
 # Register function to check for stop conditions
 BHaH.nrpyelliptic.stop_conditions_check.register_CFunction_stop_conditions_check()
 
 if __name__ == "__main__" and enable_parallel_codegen:
     pcg.do_parallel_codegen()
+
+#########################################################
+# STEP 3 (post parallel codegen): Generate header files,
+#         register remaining C functions and command-line
+#         parameters, set up boundary conditions, and
+#         create a Makefile for this project.
+#         Project is output to project/[project_name]/
 
 BHaH.CurviBoundaryConditions.register_all.register_C_functions(
     set_of_CoordSystems,
@@ -360,12 +369,10 @@ if initial_data_type == "axisymmetric":
         ]:
             par.adjust_CodeParam_default(param, value)
 
-#########################################################
-# STEP 3: Generate header files, register C functions and
-#         command line parameters, set up boundary conditions,
-#         and create a Makefile for this project.
-#         Project is output to project/[project_name]/
-
+BHaH.diagnostics.diagnostic_gfs_h_create.diagnostics_gfs_h_create(
+    project_dir=project_dir,
+    diagnostic_gfs_names_dict=par.glb_extras_dict["diagnostic_gfs_names_dict"],
+)
 BHaH.CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
 BHaH.CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
 BHaH.cmdline_input_and_parfiles.generate_default_parfile(
@@ -422,10 +429,20 @@ post_MoL_step_forward_in_time = rf"""    stop_conditions_check(&commondata);
       break;
     }}
 """
-post_non_y_n_auxevol_mallocs = (
-    "for (int grid = 0; grid < commondata.NUMGRIDS; grid++)\n"
-    f"auxevol_gfs_set_to_constant(&commondata, &{compute_griddata}[grid].params, {compute_griddata}[grid].xx, &{compute_griddata}[grid].gridfuncs);\n"
-)
+post_non_y_n_auxevol_mallocs = f"""
+  for (int grid = 0; grid < commondata.NUMGRIDS; grid++) {{
+    auxevol_gfs_set_to_constant(&commondata, &{compute_griddata}[grid].params, {compute_griddata}[grid].xx, &{compute_griddata}[grid].gridfuncs);
+#ifdef __CUDACC__
+    // Ensure kernels that wrote auxevol_gfs on this grid are done
+    size_t streamid = griddata_device[grid].params.grid_idx % NUM_STREAMS;
+    cudaStreamSynchronize(streams[streamid]); // <-- important with non-default streams
+    cudaMemcpy(griddata_host[grid].gridfuncs.auxevol_gfs, griddata_device[grid].gridfuncs.auxevol_gfs,
+               sizeof(REAL) * griddata_device[grid].params.Nxx_plus_2NGHOSTS0 * griddata_device[grid].params.Nxx_plus_2NGHOSTS1 *
+                   griddata_device[grid].params.Nxx_plus_2NGHOSTS2 * NUM_AUXEVOL_GFS,
+               cudaMemcpyDeviceToHost);
+#endif // __CUDACC
+  }} // END LOOP over grids
+"""
 BHaH.main_c.register_CFunction_main_c(
     MoL_method=MoL_method,
     initial_data_desc="",
@@ -442,7 +459,7 @@ if enable_intrinsics:
     copy_files(
         package="nrpy.helpers",
         filenames_list=[
-            f"{'cuda' if parallelization == 'cuda' else 'simd'}_intrinsics.h"
+            "cuda_intrinsics.h" if parallelization == "cuda" else "simd_intrinsics.h"
         ],
         project_dir=project_dir,
         subdirectory="intrinsics",
