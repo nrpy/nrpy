@@ -63,15 +63,14 @@ def register_CFunction_diagnostic_gfs_set() -> Union[None, pcg.NRPyEnv_type]:
       const bc_struct bcstruct = griddata[grid].bcstruct;
       const innerpt_bc_struct *restrict inner_bc_array = bcstruct.inner_bc_array;
       const int num_inner_boundary_points = bcstruct.bc_info.num_inner_boundary_points;
-#pragma omp parallel for collapse(2) // spawn threads and distribute across them
-      for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
-        for (int pt = 0; pt < num_inner_boundary_points; pt++) {
-          const int dstpt = inner_bc_array[pt].dstpt;
-          const int srcpt = inner_bc_array[pt].srcpt;
-          diagnostic_gfs[grid][IDX4pt(DIAG_RESIDUAL, dstpt)] =
-              inner_bc_array[pt].parity[evol_gf_parity[which_gf]] * diagnostic_gfs[grid][IDX4pt(DIAG_RESIDUAL, srcpt)];
-        } // END for(int pt=0;pt<num_inner_pts;pt++)
-      } // END for(int which_gf=0;which_gf<NUM_EVOL_GFS;which_gf++)
+#pragma omp parallel for
+      for (int pt = 0; pt < num_inner_boundary_points; pt++) {
+        const int dstpt = inner_bc_array[pt].dstpt;
+        const int srcpt = inner_bc_array[pt].srcpt;
+        const int evol_gf_with_same_parity = UUGF; // <- IMPORTANT
+        diagnostic_gfs[grid][IDX4pt(DIAG_RESIDUAL, dstpt)] =
+            inner_bc_array[pt].parity[evol_gf_parity[evol_gf_with_same_parity]] * diagnostic_gfs[grid][IDX4pt(DIAG_RESIDUAL, srcpt)];
+      } // END LOOP over inner boundary points
     } // END applying inner bcs to DIAG_RESIDUAL
 
     LOOP_OMP("omp parallel for", i0, 0, Nxx_plus_2NGHOSTS0, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
