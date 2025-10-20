@@ -26,13 +26,13 @@ from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_constraints_eval(
-        CoordSystem: str,
-        enable_rfm_precompute: bool,
-        enable_RbarDD_gridfunctions: bool,
-        enable_T4munu: bool,
-        enable_intrinsics: bool,
-        enable_fd_functions: bool,
-        OMP_collapse: int,
+    CoordSystem: str,
+    enable_rfm_precompute: bool,
+    enable_RbarDD_gridfunctions: bool,
+    enable_T4munu: bool,
+    enable_intrinsics: bool,
+    enable_fd_functions: bool,
+    OMP_collapse: int,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the BSSN constraints evaluation function.
@@ -57,7 +57,7 @@ def register_CFunction_constraints_eval(
         + ("_rfm_precompute" if enable_rfm_precompute else "")
         + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
         + ("_T4munu" if enable_T4munu else "")
-        ]
+    ]
 
     includes = ["BHaH_defines.h"]
     if enable_intrinsics:

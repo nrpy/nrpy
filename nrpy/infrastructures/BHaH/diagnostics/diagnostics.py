@@ -30,11 +30,11 @@ from nrpy.infrastructures import BHaH
 
 
 def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
-        default_diagnostics_out_every: float,
-        enable_nearest_diagnostics: bool,
-        enable_interp_diagnostics: bool,
-        enable_volume_integration_diagnostics: bool,
-        enable_free_auxevol: bool = True,
+    default_diagnostics_out_every: float,
+    enable_nearest_diagnostics: bool,
+    enable_interp_diagnostics: bool,
+    enable_volume_integration_diagnostics: bool,
+    enable_free_auxevol: bool = True,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Construct and register a C function that drives all scheduled diagnostics.
@@ -211,13 +211,13 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
 
 
 def register_all_diagnostics(
-        project_dir: str,
-        set_of_CoordSystems: Set[str],
-        default_diagnostics_out_every: float,
-        enable_nearest_diagnostics: bool,
-        enable_interp_diagnostics: bool,
-        enable_volume_integration_diagnostics: bool,
-        enable_free_auxevol: bool = True,
+    project_dir: str,
+    set_of_CoordSystems: Set[str],
+    default_diagnostics_out_every: float,
+    enable_nearest_diagnostics: bool,
+    enable_interp_diagnostics: bool,
+    enable_volume_integration_diagnostics: bool,
+    enable_free_auxevol: bool = True,
 ) -> None:
     """
     Register and stage all diagnostics-related C code and helper headers.

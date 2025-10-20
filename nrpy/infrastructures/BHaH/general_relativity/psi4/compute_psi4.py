@@ -24,11 +24,11 @@ from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_psi4(
-        CoordSystem: str,
-        OMP_collapse: int,
-        enable_fd_functions: bool,
-        tetrad: str = "quasiKinnersley",
-        use_metric_to_construct_unit_normal: bool = False,
+    CoordSystem: str,
+    OMP_collapse: int,
+    enable_fd_functions: bool,
+    tetrad: str = "quasiKinnersley",
+    use_metric_to_construct_unit_normal: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Add psi4 to Cfunction dictionary.
@@ -144,7 +144,7 @@ MAYBE_UNUSED REAL {psi4_class.metric_deriv_var_list_str};
 """
     kernel_body += BHaH.simple_loop.simple_loop(
         loop_body=loop_prefix
-                  + ccg.c_codegen(
+        + ccg.c_codegen(
             expr_list,
             [
                 gri.BHaHGridFunction.access_gf(

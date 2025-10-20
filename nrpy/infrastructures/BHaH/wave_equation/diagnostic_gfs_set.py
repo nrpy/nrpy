@@ -1,36 +1,17 @@
 """
-Register and emit the C `diagnostic_gfs_set()` routine for wave-equation diagnostics.
+C function registration for populating per-grid diagnostic arrays used by interpolation and integration routines.
 
-This module exposes a single entry point,
-`register_CFunction_diagnostic_gfs_set()`, which generates and registers the
-C function `diagnostic_gfs_set()`. The generated routine evaluates the
-Cartesian exact solution for the selected wave type and fills per-grid,
-gf-major diagnostic arrays with numerical fields, exact fields, and relative
-errors.
+This module constructs and registers the C routine "diagnostic_gfs_set".
+The generated C function iterates over all grids to fill per-grid diagnostic arrays for
+downstream interpolation and integration routines: it computes a residual-type diagnostic;
+optionally applies inner boundary conditions using parity-consistent signs; copies selected
+evolved gridfunctions from y_n_gfs into designated diagnostic channels; and records a
+per-point grid identifier.
 
-Diagnostics produced by the generated routine (enum tokens must exist in
-`diagnostic_gfs.h`).
-
-During code generation:
-  - The routine pulls the exact solution from
-    `WaveEquation_solution_Cartesian(WaveType=..., default_sigma=...)`.
-  - It records two dictionaries into `par.glb_extras_dict`:
-      * `diagnostic_gfs_names_dict`: enum-token to short-name map
-      * `diagnostic_gfs_0d1d2d_interp_dict`: selections for 0D/1D/2D interpolation
-  - It includes the headers `BHaH_defines.h`, `BHaH_function_prototypes.h`,
-    and `diagnostics/diagnostic_gfs.h`.
-
-At runtime, `diagnostic_gfs_set()` loops over grids and grid points, converts
-local coordinates to Cartesian, evaluates the exact fields `uexact` and
-`vexact`, loads numerical fields from `y_n_gfs`, and writes diagnostics into
-`diagnostic_gfs[grid][...]`. Relative errors are computed as
-`(numerical - exact) / (exact + 1e-16)` to avoid divide-by-zero.
-
-Ownership and scope:
-  - The caller allocates `diagnostic_gfs[grid]` for each grid; this routine
-    only writes into these arrays and does not free them.
-  - Interpolation and file I/O are performed by separate drivers such as
-    `diagnostics_interp()`.
+Function
+--------
+register_CFunction_diagnostic_gfs_set
+    Construct and register the "diagnostic_gfs_set" C function.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -50,52 +31,34 @@ from nrpy.equations.wave_equation.WaveEquation_Solutions_InitialData import (
 
 
 def register_CFunction_diagnostic_gfs_set(
-    WaveType: str = "PlaneWave",
-    default_k0: float = 1.0,
-    default_k1: float = 1.0,
-    default_k2: float = 1.0,
-    default_sigma: float = 3.0,
+        WaveType: str = "PlaneWave",
+        default_k0: float = 1.0,
+        default_k1: float = 1.0,
+        default_k2: float = 1.0,
+        default_sigma: float = 3.0,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Generate and register the C `diagnostic_gfs_set()` routine that fills per-grid diagnostic arrays.
+    Construct and register a C function that populates per-grid wave-equation diagnostics, including exact fields and relative errors.
 
-    This routine:
-      1) Records the call during the parallel codegen registration phase, returning None.
-      2) Otherwise, constructs the C function metadata and body, including headers:
-           - `BHaH_defines.h`
-           - `BHaH_function_prototypes.h`
-           - `diagnostics/diagnostic_gfs.h`
-      3) Instantiates the exact wave solution via
-         `WaveEquation_solution_Cartesian(WaveType=..., default_sigma=...)` and embeds
-         its C expressions to compute `uexact` and `vexact`.
-      4) Emits a grid-parallel loop that:
-           - Converts local coordinates to Cartesian with `xx_to_Cart`.
-           - Loads numerical fields `u` and `v` from `y_n_gfs`.
-           - Stores numerical and exact fields, and relative errors:
-               * DIAG_UNUM, DIAG_UEXACT, DIAG_VNUM, DIAG_VEXACT
-               * DIAG_RELERROR_UUGF = (u_num - u_exact) / (u_exact + 1e-16)
-               * DIAG_RELERROR_VVGF = (v_num - v_exact) / (v_exact + 1e-16)
-             Also stores DIAG_GRIDINDEX = (REAL)grid.
-      5) Publishes:
-           - `par.glb_extras_dict["diagnostic_gfs_names_dict"]` mapping enum tokens to short names
-           - `par.glb_extras_dict["diagnostic_gfs_0d1d2d_interp_dict"]` selecting 0D/1D/2D outputs
-      6) Registers the function under `diagnostics/` and returns the updated NRPy environment.
+    This function generates and registers the C helper "diagnostic_gfs_set", which loops over all
+    grids and, at each grid point, evaluates an analytic wave solution to obtain exact field values,
+    reads the corresponding numerical fields from the current time level, computes relative-error
+    diagnostics, copies both numerical and exact fields into designated diagnostic channels, and sets
+    a per-point grid identifier. Coordinates are converted from the runtime coordinate system to
+    Cartesian before evaluating the analytic solution. Runtime parameters such as time, wavespeed,
+    and width are read from commondata; the provided defaults seed the generated code for cases where
+    runtime values are not overridden. Each per-grid output buffer is assumed to hold
+    TOTAL_NUM_DIAG_GFS times the number of points in that grid.
 
-    Memory and ownership:
-      - The caller allocates `diagnostic_gfs[grid]` with room for all diagnostics and
-        grid points. This routine does not allocate or free those buffers.
+    :param WaveType: Name of the analytic wave solution used to generate exact fields (for example, "PlaneWave").
+    :param default_k0: Default x-direction wavenumber used by the analytic solution.
+    :param default_k1: Default y-direction wavenumber used by the analytic solution.
+    :param default_k2: Default z-direction wavenumber used by the analytic solution.
+    :param default_sigma: Default width parameter for localized analytic solutions.
+    :return: None if in registration phase, else the updated NRPy environment.
 
-    Parallel and backend notes:
-        device/host coordination; otherwise the parameter is omitted.
-      - OpenMP-style loops are emitted via the `LOOP_OMP` macro when applicable.
-
-    :param WaveType: Wave solution family to use for exact fields (for example, "PlaneWave").
-    :param default_k0: Default wave vector component k0 used by the exact solution generator.
-    :param default_k1: Default wave vector component k1 used by the exact solution generator.
-    :param default_k2: Default wave vector component k2 used by the exact solution generator.
-    :param default_sigma: Default width parameter used by the exact solution generator.
-
-    :returns: None during the registration phase; otherwise the updated NRPy environment.
+    Doctests:
+    TBD
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -107,45 +70,39 @@ def register_CFunction_diagnostic_gfs_set(
         "diagnostics/diagnostic_gfs.h",
     ]
     desc = """
- * @brief Populate per-grid diagnostic arrays for wave-equation fields and errors.
+ * @file diagnostic_gfs_set.c
+ * @brief Populate per-grid diagnostic arrays used by interpolation and integration routines.
  *
- * @details
- * This routine fills caller-allocated diagnostic arrays with numerical fields,
- * exact fields, and relative errors for the wave equation on all grids.
- * For each grid and grid point:
+ * The function "diagnostic_gfs_set" loops over all grids and fills per-grid diagnostic arrays:
+ *   1) Compute a residual-type diagnostic at all points using a helper that evaluates the
+ *      finite-difference residual.
+ *   2) If enabled at code-generation time, apply inner boundary conditions to that residual by
+ *      copying from a source point to a destination point with a sign determined by the relevant
+ *      parity, ensuring parity-consistent values near symmetry or excision boundaries.
+ *   3) Copy selected evolved gridfunctions from the current time level (y_n_gfs) into designated
+ *      diagnostic channels for downstream consumers.
+ *   4) Set a per-point grid identifier channel to the grid index (converted to REAL).
  *
- *  - Convert local coordinates to Cartesian via xx_to_Cart().
- *  - Evaluate the exact solution (uexact, vexact) for the configured wave type.
- *  - Load numerical fields from y_n_gfs (UUGF and VVGF).
- *  - Store diagnostics.
- * The set of diagnostics is defined by the enum in diagnostics/diagnostic_gfs.h,
- * with short names provided by diagnostic_gf_names[]. Interpolation and output
- * are performed elsewhere by drivers such as diagnostics_interp().
+ * The routine assumes each per-grid output buffer is contiguous and large enough to store all
+ * diagnostic channels:
+ *     TOTAL_NUM_DIAG_GFS * Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2
+ * Loops over grid points may be parallelized with OpenMP if available.
  *
- * @param[in]  commondata      Global simulation constants (for example, sigma, wavespeed, time).
- * @param[in]  griddata        Per-grid data, including coordinates and y_n_gfs.
- * @param[out] diagnostic_gfs  Caller-allocated per-grid, gf-major diagnostic arrays to be filled.
- * @param[in]  griddata_host   (CUDA builds only) Host-side mirror of griddata for device access.
+ * If a user-editable block is present in the implementation, users may add custom logic such as
+ * extra diagnostics or filtering before finalizing values.
  *
- * @pre
- *  - diagnostic_gfs[grid] is non-null and large enough for all diagnostics and grid points.
- *  - griddata contains valid coordinates, parameters, and y_n_gfs arrays.
- *  - Enum tokens DIAG_RELERROR_UUGF, DIAG_RELERROR_VVGF, DIAG_UNUM, DIAG_UEXACT,
- *    DIAG_VNUM, DIAG_VEXACT, and DIAG_GRIDINDEX exist and are in range.
+ * @param[in]  commondata
+ *     Pointer to global simulation metadata (e.g., counters and configuration) accessed by helpers
+ *     and used to determine the number of grids to process.
+ * @param[in]  griddata
+ *     Pointer to an array of per-grid data. For each grid, this provides parameters, coordinates,
+ *     boundary condition metadata, and gridfunctions (including y_n_gfs and any auxiliary data)
+ *     referenced by this routine and its helpers.
+ * @param[out] diagnostic_gfs
+ *     Array of per-grid output buffers. For each grid, diagnostic_gfs[grid] must point to a buffer
+ *     of size TOTAL_NUM_DIAG_GFS * Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2.
  *
- * @post
- *  - All listed diagnostics are populated for each grid point on each grid.
- *  - No memory is allocated or freed by this routine.
- *
- * @warning
- *  - Relative errors use a small denominator guard 1e-16 to avoid division by zero.
- *  - This routine only writes into diagnostic_gfs[grid]; allocation and deallocation
- *    are the caller's responsibility.
- *
- * @return void
- *
- * @see diagnostics/diagnostic_gfs.h
- * @see diagnostics_interp()
+ * @return void.
 """
     cfunc_type = "void"
     name = "diagnostic_gfs_set"
@@ -184,7 +141,7 @@ for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {{
       const REAL wavespeed = commondata->wavespeed;
       const REAL time = commondata->time;
       REAL uexact, vexact;
-    { ccg.c_codegen([waveeq.uu_exactsoln, waveeq.vv_exactsoln], ["uexact", "vexact"]) }
+    {ccg.c_codegen([waveeq.uu_exactsoln, waveeq.vv_exactsoln], ["uexact", "vexact"])}
     const REAL unum = y_n_gfs[IDX4pt(UUGF, idx3)];
     const REAL vnum = y_n_gfs[IDX4pt(VVGF, idx3)];
     diagnostic_gfs[grid][IDX4pt(DIAG_RELERROR_UUGF, idx3)] = (unum - uexact) / (uexact + 1e-16);

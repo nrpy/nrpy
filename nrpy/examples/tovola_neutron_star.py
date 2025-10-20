@@ -10,6 +10,7 @@ Author: Zachariah B. Etienne
 """
 
 import os
+
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.

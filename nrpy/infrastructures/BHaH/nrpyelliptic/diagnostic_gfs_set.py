@@ -1,5 +1,17 @@
 """
-Register and emit the C `diagnostic_gfs_set()` routine for interpolation and integration diagnostics.
+C function registration for populating per-grid diagnostic arrays used by interpolation and integration routines.
+
+This module constructs and registers the C routine "diagnostic_gfs_set".
+The generated C function iterates over all grids to fill per-grid diagnostic arrays for
+downstream interpolation and integration routines: it computes a residual-type diagnostic;
+optionally applies inner boundary conditions using parity-consistent signs; copies selected
+evolved gridfunctions from y_n_gfs into designated diagnostic channels; and records a
+per-point grid identifier.
+
+Function
+--------
+register_CFunction_diagnostic_gfs_set
+    Construct and register the "diagnostic_gfs_set" C function.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -14,11 +26,27 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 
 
-def register_CFunction_diagnostic_gfs_set() -> Union[None, pcg.NRPyEnv_type]:
+def register_CFunction_diagnostic_gfs_set(
+    enable_interp_diagnostics: bool,
+) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Generate and register the C `diagnostic_gfs_set()` routine that fills per-grid diagnostic arrays.
+    Construct and register a C function that populates per-grid diagnostic arrays used by interpolation and integration routines.
 
-    :returns: None during the registration phase; otherwise the updated NRPy environment.
+    This function generates and registers the C helper "diagnostic_gfs_set", which loops over all
+    grids and fills per-grid diagnostic arrays as follows: it computes a residual-type diagnostic at
+    all points; if enable_interp_diagnostics is True, it applies inner boundary conditions using
+    per-point parity to ensure parity-consistent values near symmetry or excision boundaries; it
+    copies a subset of current-time-level evolved gridfunctions from y_n_gfs into designated
+    diagnostic channels; and it stores the grid index (cast to REAL) into a dedicated channel. Each
+    per-grid output buffer is assumed to hold TOTAL_NUM_DIAG_GFS times the number of points in that grid.
+
+    :param enable_interp_diagnostics: If True, apply an inner boundary condition pass to the
+                                      residual-type diagnostic using appropriate parity; if False,
+                                      skip that step.
+    :return: None if in registration phase, else the updated NRPy environment.
+
+    Doctests:
+    TBD
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -30,7 +58,39 @@ def register_CFunction_diagnostic_gfs_set() -> Union[None, pcg.NRPyEnv_type]:
         "diagnostics/diagnostic_gfs.h",
     ]
     desc = """
- * @brief Populate diagnostic_gfs[][] for interpolation & integration diagnostics.
+ * @file diagnostic_gfs_set.c
+ * @brief Populate per-grid diagnostic arrays used by interpolation and integration routines.
+ *
+ * The function "diagnostic_gfs_set" loops over all grids and fills per-grid diagnostic arrays:
+ *   1) Compute a residual-type diagnostic at all points using a helper that evaluates the
+ *      finite-difference residual.
+ *   2) If enabled at code-generation time, apply inner boundary conditions to that residual by
+ *      copying from a source point to a destination point with a sign determined by the relevant
+ *      parity, ensuring parity-consistent values near symmetry or excision boundaries.
+ *   3) Copy selected evolved gridfunctions from the current time level (y_n_gfs) into designated
+ *      diagnostic channels for downstream consumers.
+ *   4) Set a per-point grid identifier channel to the grid index (converted to REAL).
+ *
+ * The routine assumes each per-grid output buffer is contiguous and large enough to store all
+ * diagnostic channels:
+ *     TOTAL_NUM_DIAG_GFS * Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2
+ * Loops over grid points may be parallelized with OpenMP if available.
+ *
+ * If a user-editable block is present in the implementation, users may add custom logic such as
+ * extra diagnostics or filtering before finalizing values.
+ *
+ * @param[in]  commondata
+ *     Pointer to global simulation metadata (e.g., counters and configuration) accessed by helpers
+ *     and used to determine the number of grids to process.
+ * @param[in]  griddata
+ *     Pointer to an array of per-grid data. For each grid, this provides parameters, coordinates,
+ *     boundary condition metadata, and gridfunctions (including y_n_gfs and any auxiliary data)
+ *     referenced by this routine and its helpers.
+ * @param[out] diagnostic_gfs
+ *     Array of per-grid output buffers. For each grid, diagnostic_gfs[grid] must point to a buffer
+ *     of size TOTAL_NUM_DIAG_GFS * Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2.
+ *
+ * @return void.
 """
     cfunc_type = "void"
     name = "diagnostic_gfs_set"
@@ -57,7 +117,9 @@ def register_CFunction_diagnostic_gfs_set() -> Union[None, pcg.NRPyEnv_type]:
 
     residual_H_compute_all_points(commondata, params, (REAL* restrict*)griddata[grid].xx, griddata[grid].gridfuncs.auxevol_gfs, y_n_gfs,
                                   &diagnostic_gfs[grid][IDX4pt(DIAG_RESIDUAL, 0)]);
-
+"""
+    if enable_interp_diagnostics:
+        body += """
     // Apply inner bcs to DIAG_RESIDUAL, as it depends on finite differences.
     {
       const bc_struct bcstruct = griddata[grid].bcstruct;
@@ -72,7 +134,8 @@ def register_CFunction_diagnostic_gfs_set() -> Union[None, pcg.NRPyEnv_type]:
             inner_bc_array[pt].parity[evol_gf_parity[evol_gf_with_same_parity]] * diagnostic_gfs[grid][IDX4pt(DIAG_RESIDUAL, srcpt)];
       } // END LOOP over inner boundary points
     } // END applying inner bcs to DIAG_RESIDUAL
-
+"""
+    body += """
     LOOP_OMP("omp parallel for", i0, 0, Nxx_plus_2NGHOSTS0, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
       const int idx3 = IDX3(i0, i1, i2);
       diagnostic_gfs[grid][IDX4pt(DIAG_UUGF, idx3)] = y_n_gfs[IDX4pt(UUGF, idx3)];
