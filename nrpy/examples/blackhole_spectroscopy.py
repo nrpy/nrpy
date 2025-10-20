@@ -189,7 +189,7 @@ BHaH.diagnostics.diagnostics.register_all_diagnostics(
     enable_free_auxevol=False,
 )
 BHaH.general_relativity.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
-    enable_psi4=True
+    enable_interp_diagnostics=False, enable_psi4=True
 )
 BHaH.general_relativity.diagnostics_nearest.register_CFunction_diagnostics_nearest()
 BHaH.general_relativity.diagnostics_volume_integration.register_CFunction_diagnostics_volume_integration()

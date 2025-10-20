@@ -31,11 +31,11 @@ from nrpy.equations.wave_equation.WaveEquation_Solutions_InitialData import (
 
 
 def register_CFunction_diagnostic_gfs_set(
-        WaveType: str = "PlaneWave",
-        default_k0: float = 1.0,
-        default_k1: float = 1.0,
-        default_k2: float = 1.0,
-        default_sigma: float = 3.0,
+    WaveType: str = "PlaneWave",
+    default_k0: float = 1.0,
+    default_k1: float = 1.0,
+    default_k2: float = 1.0,
+    default_sigma: float = 3.0,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Construct and register a C function that populates per-grid wave-equation diagnostics, including exact fields and relative errors.
