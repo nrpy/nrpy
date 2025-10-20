@@ -74,7 +74,7 @@ par.set_parval_from_str("fisheye_n", 1)
 
 # Code-generation-time parameters:
 project_name = "blackhole_spectroscopy"
-CoordSystem = "Fisheye"
+CoordSystem = "SinhCylindrical"
 IDtype = "TP_Interp"
 IDCoordSystem = "Cartesian"
 
@@ -96,7 +96,7 @@ KreissOliger_strength_nongauge = 0.3
 LapseEvolutionOption = "OnePlusLog"
 ShiftEvolutionOption = "GammaDriving2ndOrder_Covariant"
 GammaDriving_eta = 2.0
-grid_physical_size = 300.0
+grid_physical_size = 300.0 if CoordSystem != "Fisheye" else 100.0
 diagnostics_output_every = 0.5
 default_checkpoint_every = 2.0
 t_final = 1.5 * grid_physical_size
@@ -141,10 +141,10 @@ if "Cylindrical" in CoordSystem:
     if CoordSystem == "SinhCylindrical":
         sinh_width = 0.2
 if "Fisheye" in CoordSystem:
-    fisheye_a0 = 0.6
-    fisheye_a1 = 1.0
-    fisheye_R1 = 0.20 * grid_physical_size
-    fisheye_s1 = 0.03 * grid_physical_size
+    fisheye_a0 = 1.0
+    fisheye_a1 = 8.0
+    fisheye_R1 = 97
+    fisheye_s1 = 16
 
 project_dir = os.path.join("project", project_name)
 
