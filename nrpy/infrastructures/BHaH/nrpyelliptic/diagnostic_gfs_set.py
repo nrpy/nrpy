@@ -49,14 +49,11 @@ def register_CFunction_diagnostic_gfs_set() -> Union[None, pcg.NRPyEnv_type]:
     SET_NXX_PLUS_2NGHOSTS_VARS(grid);
     const REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
 
-    // Poison diagnostic_gfs:
-    LOOP_OMP("omp parallel for", i0, 0, Nxx_plus_2NGHOSTS0, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
-      const int idx3 = IDX3(i0, i1, i2);
-      diagnostic_gfs[grid][IDX4pt(DIAG_RESIDUAL, idx3)] = NAN;
-      diagnostic_gfs[grid][IDX4pt(DIAG_UUGF, idx3)] = NAN;
-      diagnostic_gfs[grid][IDX4pt(DIAG_VVGF, idx3)] = NAN;
-      diagnostic_gfs[grid][IDX4pt(DIAG_GRIDINDEX, idx3)] = NAN;
-    } // END LOOP, poisoning diagnostic_gfs
+    // Poison diagnostic_gfs (for debugging purposes only; WARNING: this might make valgrind ineffective)
+    // #pragma omp parallel for
+    //     for (int ii = 0; ii < TOTAL_NUM_DIAG_GFS * Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2; ii++) {
+    //       diagnostic_gfs[grid][ii] = NAN;
+    //     } // END LOOP over all points & gridfunctions, poisoning diagnostic_gfs
 
     residual_H_compute_all_points(commondata, params, (REAL* restrict*)griddata[grid].xx, griddata[grid].gridfuncs.auxevol_gfs, y_n_gfs,
                                   &diagnostic_gfs[grid][IDX4pt(DIAG_RESIDUAL, 0)]);

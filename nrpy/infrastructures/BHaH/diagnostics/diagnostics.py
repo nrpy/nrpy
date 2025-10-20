@@ -29,12 +29,12 @@ from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures import BHaH
 
 
-def register_CFunction_diagnostics(  # pylint: disable=unused-argument
-    default_diagnostics_out_every: float,
-    enable_nearest_diagnostics: bool,
-    enable_interp_diagnostics: bool,
-    enable_volume_integration_diagnostics: bool,
-    enable_free_auxevol: bool = True,
+def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
+        default_diagnostics_out_every: float,
+        enable_nearest_diagnostics: bool,
+        enable_interp_diagnostics: bool,
+        enable_volume_integration_diagnostics: bool,
+        enable_free_auxevol: bool = True,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Construct and register a C function that drives all scheduled diagnostics.
@@ -179,11 +179,11 @@ def register_CFunction_diagnostics(  # pylint: disable=unused-argument
     diagnostic_gfs_set(commondata, griddata, diagnostic_gfs);
 
     {"// Nearest-point diagnostics, at center, along y,z axes (1D) and xy and yz planes (2D)." if enable_nearest_diagnostics else ""}
-    {"diagnostics_nearest(commondata, griddata, (const double **)diagnostic_gfs);"+newline if enable_nearest_diagnostics else ""}
+    {"diagnostics_nearest(commondata, griddata, (const double **)diagnostic_gfs);" + newline if enable_nearest_diagnostics else ""}
     {"// Interpolation diagnostics, at center, along x,y,z axes (1D) and xy and yz planes (2D)." if enable_interp_diagnostics else ""}
-    {"diagnostics_interp(commondata, griddata, (const double **)diagnostic_gfs);"+newline if enable_interp_diagnostics else ""}
+    {"diagnostics_interp(commondata, griddata, (const double **)diagnostic_gfs);" + newline if enable_interp_diagnostics else ""}
     {"// Volume-integration diagnostics." if enable_volume_integration_diagnostics else ""}
-    {"diagnostics_volume_integration(commondata, griddata, (const double **)diagnostic_gfs);"+newline if enable_volume_integration_diagnostics else ""}
+    {"diagnostics_volume_integration(commondata, griddata, (const double **)diagnostic_gfs);" + newline if enable_volume_integration_diagnostics else ""}
     // Free temporary storage allocated to diagnostic_gfs.
     for(int grid=0; grid<commondata->NUMGRIDS; grid++)
       free(diagnostic_gfs[grid]);
@@ -211,13 +211,13 @@ def register_CFunction_diagnostics(  # pylint: disable=unused-argument
 
 
 def register_all_diagnostics(
-    project_dir: str,
-    set_of_CoordSystems: Set[str],
-    default_diagnostics_out_every: float,
-    enable_nearest_diagnostics: bool,
-    enable_interp_diagnostics: bool,
-    enable_volume_integration_diagnostics: bool,
-    enable_free_auxevol: bool = True,
+        project_dir: str,
+        set_of_CoordSystems: Set[str],
+        default_diagnostics_out_every: float,
+        enable_nearest_diagnostics: bool,
+        enable_interp_diagnostics: bool,
+        enable_volume_integration_diagnostics: bool,
+        enable_free_auxevol: bool = True,
 ) -> None:
     """
     Register and stage all diagnostics-related C code and helper headers.
@@ -252,7 +252,7 @@ def register_all_diagnostics(
             subdirectory="diagnostics",
         )
 
-    register_CFunction_diagnostics(
+    _register_CFunction_diagnostics(
         default_diagnostics_out_every=default_diagnostics_out_every,
         enable_nearest_diagnostics=enable_nearest_diagnostics,
         enable_interp_diagnostics=enable_interp_diagnostics,

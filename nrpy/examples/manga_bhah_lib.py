@@ -6,7 +6,6 @@ Author: Leonardo Rosa Werneck
 """
 
 import os
-
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
@@ -152,7 +151,7 @@ TOVola_solve(commondata, &ID_persist);
         enable_fd_functions=enable_fd_functions,
         OMP_collapse=OMP_collapse,
     )
-    BHaH.general_relativity.BSSN.constraints.register_CFunction_constraints(
+    BHaH.general_relativity.BSSN.constraints.register_CFunction_constraints_eval(
         CoordSystem=CoordSystem,
         enable_rfm_precompute=enable_rfm_precompute,
         enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
