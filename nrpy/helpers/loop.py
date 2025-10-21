@@ -1,5 +1,5 @@
 """
-NRPy+ Loop Generation.
+NRPy Loop Generation.
 
 The following script generates a single or nested loop of arbitrary
 dimension in C, and has support for cache blocking (loop tiling).

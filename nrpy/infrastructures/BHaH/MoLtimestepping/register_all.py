@@ -57,43 +57,64 @@ def register_CFunctions(
     >>> register_CFunctions()
     >>> validate_strings(cfc.CFunction_dict["MoL_step_forward_in_time"].full_function, "MoL_step_forward_in_time")
     >>> sorted(cfc.CFunction_dict.keys())
-    ['MoL_free_memory_non_y_n_gfs', 'MoL_free_memory_y_n_gfs', 'MoL_malloc_non_y_n_gfs', 'MoL_malloc_y_n_gfs', 'MoL_step_forward_in_time']
-    >>> print(cfc.CFunction_dict["MoL_free_memory_non_y_n_gfs"].full_function) # doctest: +ELLIPSIS
+    ['MoL_free_intermediate_stage_gfs', 'MoL_malloc_intermediate_stage_gfs', 'MoL_step_forward_in_time']
+    >>> print(cfc.CFunction_dict["MoL_free_intermediate_stage_gfs"].full_function) # doctest: +ELLIPSIS
     #include "BHaH_defines.h"
     <BLANKLINE>
     /**
-     * Method of Lines (MoL) for "RK4" method: Free memory for "non_y_n_gfs" gridfunctions
-     *    - y_n_gfs are used to store data for the vector of gridfunctions y_i at t_n, at the start of each MoL timestep
-     *    - non_y_n_gfs are needed for intermediate (e.g., k_i) storage in chosen MoL method
+     * Free intermediate-level (k_i) storage for the "RK4" Method of Lines (MoL) scheme.
+     *
+     * This routine is registered as "MoL_free_intermediate_stage_gfs".
+     * It frees intermediate-level gridfunction storage.
+     *
+     * @param commondata Pointer to common, read-only runtime data. Included for a uniform
+     *                   function signature across BHaH routines; it is not modified here.
+     * @param params     Pointer to grid parameter struct providing Nxx_plus_2NGHOSTS0/1/2 and
+     *                   related metadata needed to compute allocation sizes.
+     * @param gridfuncs  Pointer to the MoL gridfunctions struct whose intermediate-level
+     *                   arrays will be allocated by this routine.
+     *
+     * @return void
      */
-    void MoL_free_memory_non_y_n_gfs(MoL_gridfunctions_struct *restrict gridfuncs, const bool free_auxevol_gfs_if_exist) {
+    void MoL_free_intermediate_stage_gfs(MoL_gridfunctions_struct *restrict gridfuncs) {
       BHAH_FREE(gridfuncs->y_nplus1_running_total_gfs);
       BHAH_FREE(gridfuncs->k_odd_gfs);
       BHAH_FREE(gridfuncs->k_even_gfs);
-      if (NUM_AUXEVOL_GFS > 0 && free_auxevol_gfs_if_exist)
-        BHAH_FREE(gridfuncs->auxevol_gfs);
-    } // END FUNCTION MoL_free_memory_non_y_n_gfs
+    } // END FUNCTION MoL_free_intermediate_stage_gfs
     <BLANKLINE>
-    >>> print(cfc.CFunction_dict["MoL_malloc_non_y_n_gfs"].full_function) # doctest: +ELLIPSIS
+    >>> print(cfc.CFunction_dict["MoL_malloc_intermediate_stage_gfs"].full_function) # doctest: +ELLIPSIS
     #include "BHaH_defines.h"
     <BLANKLINE>
     /**
-     * Method of Lines (MoL) for "RK4" method: Allocate memory for "non_y_n_gfs" gridfunctions
-     *    - y_n_gfs are used to store data for the vector of gridfunctions y_i at t_n, at the start of each MoL timestep
-     *    - non_y_n_gfs are needed for intermediate (e.g., k_i) storage in chosen MoL method
+     * Allocate intermediate-level (k_i) storage for the "RK4" Method of Lines (MoL) scheme.
+     *
+     * This routine is registered as "MoL_malloc_intermediate_stage_gfs". At runtime it computes
+     * the total number of grid points including ghost zones as:
+     *     Nxx_plus_2NGHOSTS_tot = params->Nxx_plus_2NGHOSTS0
+     *                            * params->Nxx_plus_2NGHOSTS1
+     *                            * params->Nxx_plus_2NGHOSTS2;
+     * For each required intermediate-level gridfunction array (with "auxevol_gfs" excluded),
+     * the routine allocates:
+     *     sizeof(REAL) * NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot
+     * The allocation macro is chosen by the build/runtime configuration:
+     *     BHAH_MALLOC_DEVICE for CUDA builds, otherwise BHAH_MALLOC.
+     *
+     * @param commondata Pointer to common, read-only runtime data. Included for a uniform
+     *                   function signature across BHaH routines; it is not modified here.
+     * @param params     Pointer to grid parameter struct providing Nxx_plus_2NGHOSTS0/1/2 and
+     *                   related metadata needed to compute allocation sizes.
+     * @param gridfuncs  Pointer to the MoL gridfunctions struct whose intermediate-level
+     *                   arrays will be allocated by this routine.
+     *
+     * @return void
      */
-    void MoL_malloc_non_y_n_gfs(const commondata_struct *restrict commondata, const params_struct *restrict params,
-                                MoL_gridfunctions_struct *restrict gridfuncs) {
+    void MoL_malloc_intermediate_stage_gfs(const commondata_struct *restrict commondata, const params_struct *restrict params,
+                                           MoL_gridfunctions_struct *restrict gridfuncs) {
       const int Nxx_plus_2NGHOSTS_tot = params->Nxx_plus_2NGHOSTS0 * params->Nxx_plus_2NGHOSTS1 * params->Nxx_plus_2NGHOSTS2;
       BHAH_MALLOC(gridfuncs->y_nplus1_running_total_gfs, sizeof(REAL) * NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);
       BHAH_MALLOC(gridfuncs->k_odd_gfs, sizeof(REAL) * NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);
       BHAH_MALLOC(gridfuncs->k_even_gfs, sizeof(REAL) * NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);
-      if (NUM_AUXEVOL_GFS > 0)
-        BHAH_MALLOC(gridfuncs->auxevol_gfs, sizeof(REAL) * NUM_AUXEVOL_GFS * Nxx_plus_2NGHOSTS_tot);
-    <BLANKLINE>
-      gridfuncs->diagnostic_output_gfs = gridfuncs->y_nplus1_running_total_gfs;
-      gridfuncs->diagnostic_output_gfs2 = gridfuncs->k_odd_gfs;
-    } // END FUNCTION MoL_malloc_non_y_n_gfs
+    } // END FUNCTION MoL_malloc_intermediate_stage_gfs
     <BLANKLINE>
     """
     # fmt: off
@@ -115,17 +136,16 @@ def register_CFunctions(
     )
 
     # Step 1: Build all memory alloc and free:
-    for which_gfs in ["y_n_gfs", "non_y_n_gfs"]:
-        BHaH.MoLtimestepping.allocators.register_CFunction_MoL_malloc(
-            Butcher_dict, MoL_method, which_gfs
-        )
-        BHaH.MoLtimestepping.allocators.register_CFunction_MoL_free_memory(
-            Butcher_dict, MoL_method, which_gfs
-        )
+    BHaH.MoLtimestepping.MoL_malloc_intermediate_stage_gfs.register_CFunction_MoL_malloc_intermediate_stage_gfs(
+        Butcher_dict, MoL_method
+    )
+    BHaH.MoLtimestepping.MoL_free_intermediate_stage_gfs.register_CFunction_MoL_free_intermediate_levels(
+        Butcher_dict, MoL_method
+    )
 
     # Step 2: Possibly register the main stepping function:
     if register_MoL_step_forward_in_time:
-        BHaH.MoLtimestepping.step_forward.register_CFunction_MoL_step_forward_in_time(
+        BHaH.MoLtimestepping.MoL_step_forward_in_time.register_CFunction_MoL_step_forward_in_time(
             Butcher_dict,
             MoL_method,
             rhs_string,

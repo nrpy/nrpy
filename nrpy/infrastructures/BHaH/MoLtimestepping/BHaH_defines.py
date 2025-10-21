@@ -23,21 +23,16 @@ def register_BHaH_defines_h(
     :param Butcher_dict: Dictionary of Butcher tables for the MoL method.
     :param MoL_method: Method for the Method of Lines.
     """
-    (
-        y_n_gridfunctions,
-        non_y_n_gridfunctions_list,
-        _diag_pt,
-        _diag_pt2,
-    ) = BHaH.MoLtimestepping.gridfunction_names.generate_gridfunction_names(
+    intermediate_stage_gfs_gridfunctions_list = BHaH.MoLtimestepping.rk_butcher_table_dictionary.intermediate_stage_gf_names_list(
         Butcher_dict, MoL_method=MoL_method
     )
-
     BHaH_MoL_body: str = (
         "typedef struct __MoL_gridfunctions_struct__ {\n"
-        + f"REAL *{y_n_gridfunctions};\n"
-        + "".join(f"REAL *{gfs};\n" for gfs in non_y_n_gridfunctions_list)
-        + r"""REAL *diagnostic_output_gfs;
-REAL *diagnostic_output_gfs2;
+        + "REAL *y_n_gfs;\n"
+        + "".join(
+            f"REAL *{gfs};\n" for gfs in intermediate_stage_gfs_gridfunctions_list
+        )
+        + """REAL *auxevol_gfs;
 } MoL_gridfunctions_struct;
 """
     )

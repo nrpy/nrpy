@@ -114,25 +114,25 @@ except perhaps non_y_n_gfs (e.g., after a regrid, in which non_y_n_gfs are freed
         body += "  BHAH_FREE_DEVICE(griddata[grid].rfmstruct);\n"
     if enable_CurviBCs:
         body += r"""
-  BHAH_FREE_DEVICE(griddata[grid].bcstruct.inner_bc_array);
-  for(int ng=0;ng<NGHOSTS*3;ng++) {
+    BHAH_FREE_DEVICE(griddata[grid].bcstruct.inner_bc_array);
+    for (int ng = 0; ng < NGHOSTS * 3; ng++)
       BHAH_FREE_DEVICE(griddata[grid].bcstruct.pure_outer_bc_array[ng]);
-}
 """
     body += r"""
-  MoL_free_memory_y_n_gfs(&griddata[grid].gridfuncs);
-  if(free_non_y_n_gfs_and_core_griddata_pointers) {
-    const bool free_auxevol_gfs_if_exist = true;
-    MoL_free_memory_non_y_n_gfs(&griddata[grid].gridfuncs, free_auxevol_gfs_if_exist);
-  }
-  for(int i=0;i<3;i++) {
-    BHAH_FREE_DEVICE(griddata[grid].xx[i]);
-  }
-} // END for(int grid=0;grid<commondata->NUMGRIDS;grid++)
+    BHAH_FREE_DEVICE(griddata[grid].gridfuncs.y_n_gfs);
+    if (free_non_y_n_gfs_and_core_griddata_pointers) {
+      MoL_free_intermediate_stage_gfs(&griddata[grid].gridfuncs);
+      if (NUM_AUXEVOL_GFS > 0)
+        BHAH_FREE_DEVICE(griddata[grid].gridfuncs.auxevol_gfs);
+    } // END IF free_non_y_n_gfs_and_core_griddata_pointers
+    for (int dirn = 0; dirn < 3; dirn++)
+      BHAH_FREE_DEVICE(griddata[grid].xx[dirn]);
+  } // END LOOP over grids
 """
-    body += r"""if(free_non_y_n_gfs_and_core_griddata_pointers) {
-        BHAH_FREE(griddata);
-    }"""
+    body += r"""
+  if(free_non_y_n_gfs_and_core_griddata_pointers)
+    BHAH_FREE(griddata);
+"""
     cfc.register_CFunction(
         includes=["BHaH_defines.h", "BHaH_function_prototypes.h"],
         desc=desc,
@@ -186,29 +186,31 @@ except perhaps non_y_n_gfs (e.g., after a regrid, in which non_y_n_gfs are freed
   BHAH_FREE(griddata[grid].bcstruct.inner_bc_array);
   for(int ng=0;ng<NGHOSTS*3;ng++) {
       BHAH_FREE(griddata[grid].bcstruct.pure_outer_bc_array[ng]);
-}
+  } // END LOOP freeing outer bc ghostzone arrays in all three directions 
 """
     if parallelization == "cuda":
-        body += "CUDA__free_host_gfs(&griddata[grid].gridfuncs);"
-        body += "CUDA__free_host_aux_gfs(&griddata[grid].gridfuncs);"
-        body += "CUDA__free_host_diagnostic_gfs(&griddata[grid].gridfuncs);"
+        body += """
+    BHAH_FREE_PINNED(griddata[grid].gridfuncs.y_n_gfs);
+    if (free_non_y_n_gfs_and_core_griddata_pointers && NUM_AUXEVOL_GFS > 0)
+      BHAH_FREE_PINNED(griddata[grid].gridfuncs.auxevol_gfs);
+"""
     else:
         body += r"""
-
-  MoL_free_memory_y_n_gfs(&griddata[grid].gridfuncs);
-  if(free_non_y_n_gfs_and_core_griddata_pointers) {
-    const bool free_auxevol_gfs_if_exist = true;
-    MoL_free_memory_non_y_n_gfs(&griddata[grid].gridfuncs, free_auxevol_gfs_if_exist);
-  }"""
-    body += """
-  for(int i=0;i<3;i++) {
-    BHAH_FREE(griddata[grid].xx[i]);
-  }
-} // END for(int grid=0;grid<commondata->NUMGRIDS;grid++)
+    BHAH_FREE(griddata[grid].gridfuncs.y_n_gfs);
+    if(free_non_y_n_gfs_and_core_griddata_pointers) {
+      MoL_free_intermediate_stage_gfs(&griddata[grid].gridfuncs);
+      if (NUM_AUXEVOL_GFS > 0)
+        BHAH_FREE(griddata[grid].gridfuncs.auxevol_gfs);
+    } // END IF free_non_y_n_gfs_and_core_griddata_pointers
 """
-    body += r"""if(free_non_y_n_gfs_and_core_griddata_pointers) {
+    body += """
+    for(int dirn=0; dirn<3; dirn++)
+      BHAH_FREE(griddata[grid].xx[dirn]);
+  } // END LOOP over grids
+
+  if(free_non_y_n_gfs_and_core_griddata_pointers)
     BHAH_FREE(griddata);
-}"""
+"""
     cfc.register_CFunction(
         includes=["BHaH_defines.h", "BHaH_function_prototypes.h"],
         desc=desc,

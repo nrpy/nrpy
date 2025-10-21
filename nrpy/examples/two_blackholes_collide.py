@@ -226,7 +226,7 @@ BHaH.general_relativity.BSSN.enforce_detgammabar_equals_detgammahat.register_CFu
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
-BHaH.general_relativity.BSSN.constraints.register_CFunction_constraints(
+BHaH.general_relativity.BSSN.constraints.register_CFunction_constraints_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
@@ -358,7 +358,7 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
 
 BHaH.main_c.register_CFunction_main_c(
     initial_data_desc=IDtype,
-    pre_diagnostics=f"{'bhahaha_find_horizons(&commondata, griddata);' if parallelization=='openmp' else ''}\n",
+    pre_diagnostics=f"{'bhahaha_find_horizons(&commondata, griddata);' if parallelization == 'openmp' else ''}\n",
     MoL_method=MoL_method,
     boundary_conditions_desc=boundary_conditions_desc,
 )

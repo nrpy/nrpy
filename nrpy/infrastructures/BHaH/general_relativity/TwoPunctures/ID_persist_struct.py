@@ -238,7 +238,6 @@ set up initial_p_t and initial_p_r if not set in parfile.
   fprintf(stderr, "#################################\n");
 """
     cfc.register_CFunction(
-        subdirectory=__name__,
         includes=includes,
         desc=desc,
         cfunc_type=cfunc_type,

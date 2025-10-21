@@ -5,11 +5,11 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-# Step 1.a: import all needed modules from NRPy+:
-import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
+# Step 1.a: import all needed modules from NRPy:
+import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
-import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
-import nrpy.params as par  # NRPy+: parameter interface
+import nrpy.indexedexp as ixp  # NRPy: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
+import nrpy.params as par  # NRPy: parameter interface
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 
 
@@ -27,7 +27,7 @@ class BSSN_to_ADM:
 
         :raises ValueError: If the EvolvedConformalFactor_cf parameter is set to an unknown value.
         """
-        # Step 1.b: Set EvolvedConformalFactor_cf from NRPy+ parameter
+        # Step 1.b: Set EvolvedConformalFactor_cf from NRPy parameter
         EvolvedConformalFactor_cf = par.parval_from_str("EvolvedConformalFactor_cf")
 
         # Step 1.c: Import all needed basic (unrescaled) BSSN scalars & tensors from BSSN_quantities

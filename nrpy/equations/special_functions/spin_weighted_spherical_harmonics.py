@@ -11,7 +11,7 @@ Authors: Brandon Clark
 
 from typing import Dict, cast
 
-import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
+import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
 import nrpy.params as par
 from nrpy.helpers.cached_functions import cached_simplify

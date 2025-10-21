@@ -11,7 +11,7 @@ via exact differentiation (courtesy SymPy), and the inverse Jacobian
 
 Jac_dUrfm_dDCartUD[i][j] = dx^i_rfm / dx^j_Cart
 
-using NRPy+'s generic_matrix_inverter3x3() function.
+using NRPy's generic_matrix_inverter3x3() function.
 
 Author: Zachariah B. Etienne; zachetie **at** gmail **dot* com
 """

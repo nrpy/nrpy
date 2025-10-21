@@ -1,5 +1,5 @@
 """
-Initialize, store, and recall parameters for NRPy+.
+Initialize, store, and recall parameters for NRPy.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -242,7 +242,7 @@ class CodeParameter:
                 )
 
 
-# Where we store NRPy+ parameters and default values of parameters.
+# Where we store NRPy parameters and default values of parameters.
 glb_params_dict: Dict[str, NRPyParameter] = {}
 # Where we store C runtime parameters and default values of parameters.
 glb_code_params_dict: Dict[str, CodeParameter] = {}

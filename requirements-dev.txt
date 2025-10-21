@@ -1,6 +1,6 @@
 appdirs
 black==25.9.0
-clang-format==21.1.1
+clang-format==21.1.2
 darglint
 ipython
 isort

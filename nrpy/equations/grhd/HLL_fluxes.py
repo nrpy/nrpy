@@ -267,7 +267,7 @@ if __name__ == "__main__":
     import os
     import sys
 
-    import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
+    import nrpy.reference_metric as refmetric  # NRPy: Reference metric support
     import nrpy.validate_expressions.validate_expressions as ve
     from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
     from nrpy.equations.general_relativity.BSSN_to_ADM import BSSN_to_ADM

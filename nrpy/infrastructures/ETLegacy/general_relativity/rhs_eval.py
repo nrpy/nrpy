@@ -24,7 +24,7 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.indexedexp as ixp
 import nrpy.infrastructures.ETLegacy.simple_loop as lp
 import nrpy.params as par
-import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
+import nrpy.reference_metric as refmetric  # NRPy: Reference metric support
 import nrpy.validate_expressions.validate_expressions as ve
 from nrpy.equations.general_relativity.BSSN_constraints import BSSN_constraints
 from nrpy.equations.general_relativity.BSSN_gauge_RHSs import BSSN_gauge_RHSs

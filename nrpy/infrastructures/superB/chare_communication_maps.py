@@ -5,7 +5,7 @@ Authors: Nishita Jadoo
          njadoo **at** uidaho **dot* edu
 """
 
-# Step P1: Import needed NRPy+ core modules:
+# Step P1: Import needed NRPy core modules:
 from typing import Set
 
 import nrpy.c_function as cfc

@@ -9,11 +9,11 @@ import sys  # Standard Python module for multiplatform OS-level functions
 from operator import itemgetter
 from typing import Any, Dict, List, Tuple, Union
 
-import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
+import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
 import nrpy.c_function as cfc
-import nrpy.grid as gri  # NRPy+: Functions having to do with numerical grids
-import nrpy.params as par  # NRPy+: parameter interface
+import nrpy.grid as gri  # NRPy: Functions having to do with numerical grids
+import nrpy.params as par  # NRPy: parameter interface
 from nrpy.helpers.cse_preprocess_postprocess import cse_preprocess
 from nrpy.helpers.generic import superfast_uniq
 
@@ -413,7 +413,7 @@ def extract_list_of_deriv_var_strings_from_sympyexpr_list(
             else:
                 # At one time this raised a ValueError that
                 #   All variables in SymPy expressions passed to FD_c_codegen() must be registered
-                #   in NRPy+ as either a gridfunction or CodeParameter.
+                #   in NRPy as either a gridfunction or CodeParameter.
                 # We are now more permissive.
                 pass
 

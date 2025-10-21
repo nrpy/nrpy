@@ -9,20 +9,11 @@
   { MAYBE_UNUSED const int numitems=fread((ptr), (size), (nmemb), (stream)); }
 // clang-format on
 
-#define BHAH_CHKPT_HOST_MOL_GF_FREE(gf_ptr)                                                                                                          \
-  CUDA__free_host_gfs(gf_ptr);                                                                                                                       \
-  CUDA__free_host_diagnostic_gfs(gf_ptr);
-#define BHAH_CHKPT_HOST_MOL_GF_MALLOC(cd, params_ptr, gf_ptr)                                                                                        \
-  CUDA__malloc_host_gfs(cd, params_ptr, gf_ptr);                                                                                                     \
-  CUDA__malloc_host_diagnostic_gfs(cd, params_ptr, gf_ptr);
-#define BHAH_CHKPT_DEVICE_MOL_GF_FREE(gf_ptr) MoL_free_memory_y_n_gfs(gf_ptr);
-#define BHAH_CHKPT_DEVICE_MOL_GF_MALLOC(cd, params_ptr, gf_ptr) MoL_malloc_y_n_gfs(cd, params_ptr, gf_ptr);
-#define BHAH_CHKPT_CPY_HOST_TO_DEVICE_PARAMS() memcpy(&griddata_device[grid].params, &griddata[grid].params, sizeof(params_struct));
 #define BHAH_CHKPT_CPY_HOST_TO_DEVICE_ALL_GFS()                                                                                                      \
-  for (int gf = 0; gf < NUM_EVOL_GFS; ++gf) {                                                                                                        \
+  for (int gf = 0; gf < NUM_EVOL_GFS; gf++) {                                                                                                        \
     cpyHosttoDevice__gf(commondata, &griddata[grid].params, griddata[grid].gridfuncs.y_n_gfs, griddata_device[grid].gridfuncs.y_n_gfs, gf, gf,       \
                         griddata[grid].params.grid_idx % NUM_STREAMS);                                                                               \
-  }
+  } // END LOOP over gridfunctions
 
 /**
  * Read a checkpoint file
@@ -50,27 +41,32 @@ int read_checkpoint(commondata_struct *restrict commondata, griddata_struct *res
     const int Nxx_plus_2NGHOSTS0 = griddata[grid].params.Nxx_plus_2NGHOSTS0;
     const int Nxx_plus_2NGHOSTS1 = griddata[grid].params.Nxx_plus_2NGHOSTS1;
     const int Nxx_plus_2NGHOSTS2 = griddata[grid].params.Nxx_plus_2NGHOSTS2;
-    const int ntot = griddata[grid].params.Nxx_plus_2NGHOSTS0 * griddata[grid].params.Nxx_plus_2NGHOSTS1 * griddata[grid].params.Nxx_plus_2NGHOSTS2;
-    fprintf(stderr, "Reading checkpoint: grid = %d | pts = %d / %d | %d\n", grid, count, ntot, Nxx_plus_2NGHOSTS2);
+    const int ntot_grid =
+        griddata[grid].params.Nxx_plus_2NGHOSTS0 * griddata[grid].params.Nxx_plus_2NGHOSTS1 * griddata[grid].params.Nxx_plus_2NGHOSTS2;
+    fprintf(stderr, "Reading checkpoint: grid = %d | pts = %d / %d | %d\n", grid, count, ntot_grid, Nxx_plus_2NGHOSTS2);
     FREAD(out_data_indices, sizeof(int), count, cp_file);
     FREAD(compact_out_data, sizeof(REAL), count * NUM_EVOL_GFS, cp_file);
+#ifdef __CUDACC__
+    memcpy(&griddata_device[grid].params, &griddata[grid].params, sizeof(params_struct));
+    BHAH_FREE_DEVICE(griddata_device[grid].gridfuncs.y_n_gfs);
+    BHAH_MALLOC_DEVICE(griddata_device[grid].gridfuncs.y_n_gfs, sizeof(REAL) * ntot_grid * NUM_EVOL_GFS);
+    BHAH_FREE_PINNED(griddata[grid].gridfuncs.y_n_gfs);
+    BHAH_MALLOC_PINNED(griddata[grid].gridfuncs.y_n_gfs, sizeof(REAL) * ntot_grid * NUM_EVOL_GFS);
+#else
+    BHAH_FREE(griddata[grid].gridfuncs.y_n_gfs);
+    BHAH_MALLOC(griddata[grid].gridfuncs.y_n_gfs, sizeof(REAL) * ntot_grid * NUM_EVOL_GFS);
+#endif // __CUDACC__
 
-    BHAH_CHKPT_CPY_HOST_TO_DEVICE_PARAMS();
-    BHAH_CHKPT_DEVICE_MOL_GF_FREE(&griddata_device[grid].gridfuncs);
-    BHAH_CHKPT_DEVICE_MOL_GF_MALLOC(commondata, &griddata_device[grid].params, &griddata_device[grid].gridfuncs);
-
-    BHAH_CHKPT_HOST_MOL_GF_FREE(&griddata[grid].gridfuncs);
-    BHAH_CHKPT_HOST_MOL_GF_MALLOC(commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
 #pragma omp parallel for
     for (int i = 0; i < count; i++) {
       for (int gf = 0; gf < NUM_EVOL_GFS; gf++) {
         griddata[grid].gridfuncs.y_n_gfs[IDX4pt(gf, out_data_indices[i])] = compact_out_data[i * NUM_EVOL_GFS + gf];
-      }
-    }
+      } // END LOOP over gfs
+    } // END LOOP over points
     free(out_data_indices);
     free(compact_out_data);
     BHAH_CHKPT_CPY_HOST_TO_DEVICE_ALL_GFS();
-  }
+  } // END LOOP over grids
   fclose(cp_file);
   fprintf(stderr, "FINISHED WITH READING\n");
 

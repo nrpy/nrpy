@@ -176,8 +176,8 @@ void rx3_To_xyz(int nvar, REAL x, REAL r, REAL phi, REAL *y, REAL *z, derivs U)
     params = """ """
     body = r"""
   // This space intentionally left blank:
-  // NRPy+ requires C files share the same name as the primary function within the C file.
-  // As TwoPunctures was developed outside the NRPy+ infrastructure, it does not abide by this rule.
+  // NRPy requires C files share the same name as the primary function within the C file.
+  // As TwoPunctures was developed outside the NRPy infrastructure, it does not abide by this rule.
   // Hence the need for a function with the same name as the output file.
 """
 

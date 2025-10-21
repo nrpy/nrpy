@@ -9,7 +9,7 @@ Author: Terrence Pierre Jacques
 # Step Import needed modules:
 from typing import Any, Dict, Sequence, Tuple
 
-import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
+import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
 import nrpy.equations.grhd.Min_Max_and_Piecewise_Expressions as noif
 from nrpy.equations.general_relativity.g4munu_conversions import ADM_to_g4UU
@@ -133,8 +133,8 @@ if __name__ == "__main__":
 
     exprs_dict: Dict[str, Any] = {}
 
-    import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
-    import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
+    import nrpy.indexedexp as ixp  # NRPy: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
+    import nrpy.reference_metric as refmetric  # NRPy: Reference metric support
     from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
     from nrpy.equations.general_relativity.BSSN_to_ADM import BSSN_to_ADM
 

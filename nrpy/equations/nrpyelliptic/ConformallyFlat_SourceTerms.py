@@ -12,9 +12,9 @@ from typing import List, Tuple, Union, cast
 
 import sympy as sp  # For symbolic computations
 
-import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
+import nrpy.indexedexp as ixp  # NRPy: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 import nrpy.params as par
-import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
+import nrpy.reference_metric as refmetric  # NRPy: Reference metric support
 
 
 def compute_psi_background_and_ADD_times_AUU(

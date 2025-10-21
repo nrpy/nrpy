@@ -10,7 +10,7 @@ from typing import List, Tuple, Union
 
 import sympy as sp
 
-import nrpy.params as par  # NRPy+: Parameter interface
+import nrpy.params as par  # NRPy: Parameter interface
 
 
 def get_unique_expression_symbols_as_strings(
