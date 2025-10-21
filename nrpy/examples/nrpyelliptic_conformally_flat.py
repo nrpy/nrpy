@@ -7,7 +7,6 @@ Authors: Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
 
 import argparse
 import os
-
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
@@ -224,7 +223,7 @@ BHaH.diagnostics.diagnostics.register_all_diagnostics(
     enable_volume_integration_diagnostics=True,
     enable_free_auxevol=False,
 )
-BHaH.nrpyelliptic.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set()
+BHaH.nrpyelliptic.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(enable_interp_diagnostics=False)
 BHaH.nrpyelliptic.diagnostics_nearest.register_CFunction_diagnostics_nearest()
 BHaH.nrpyelliptic.diagnostics_volume_integration.register_CFunction_diagnostics_volume_integration()
 
@@ -286,7 +285,8 @@ BHaH.MoLtimestepping.register_all.register_CFunctions(
   apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
-    enable_intrinsics=False,  # SIMD intrinsics in MoL is not properly supported -- MoL update loops are not properly bounds checked.
+    enable_intrinsics=False,
+    # SIMD intrinsics in MoL is not properly supported -- MoL update loops are not properly bounds checked.
     rational_const_alias="static constexpr" if parallelization == "cuda" else "const",
 )
 BHaH.checkpointing.register_CFunctions(
