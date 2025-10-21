@@ -100,7 +100,7 @@ def register_CFunction_diagnostic_gfs_set(
 
     diagnostic_gfs_names_dict = {
         "DIAG_HAMILTONIAN": "H_constraint",
-        "DIAG_MSQUAREDGF": "M^2",
+        "DIAG_MSQUARED": "M^2",
         "DIAG_LAPSE": "Lapse",
         "DIAG_W": "Conformal_factor_W",
     }
