@@ -18,7 +18,7 @@ def register_CFunction_specify_NewRad_BoundaryConditions_parameters(
     This function specifies NewRad boundary conditions for evolved gridfunctions
     for a thorn in the Einstein Toolkit.
 
-    :param thorn_name: The name of the NRPy+ generated thorn for which to set up NewRad boundary conditions.
+    :param thorn_name: The name of the NRPy generated thorn for which to set up NewRad boundary conditions.
     """
     includes = [
         "math.h",

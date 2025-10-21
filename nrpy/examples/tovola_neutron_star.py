@@ -114,7 +114,7 @@ if enable_rfm_precompute:
     BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
         set_of_CoordSystems={CoordSystem}
     )
-BHaH.general_relativity.BSSN.constraints.register_CFunction_constraints(
+BHaH.general_relativity.BSSN.constraints.register_CFunction_constraints_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=False,

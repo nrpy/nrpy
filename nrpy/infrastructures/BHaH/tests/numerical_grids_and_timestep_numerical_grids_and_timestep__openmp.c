@@ -5,17 +5,14 @@
  * Set up numerical grids and timestep.
  */
 void numerical_grids_and_timestep(commondata_struct *restrict commondata, griddata_struct *restrict griddata, bool calling_for_first_time) {
-  // Step 1.a: Set each CodeParameter in griddata.params to default, for MAXNUMGRIDS grids.
-  if (calling_for_first_time)
-    params_struct_set_to_default(commondata, griddata);
-  // Step 1.b: Set commondata->NUMGRIDS to number of CoordSystems we have
+  // Step 1.a: Set up independent grids: first set NUMGRIDS == number of unique CoordSystems we have.
   commondata->NUMGRIDS = 1;
 
   {
     // Independent grids
     int Nx[3] = {-1, -1, -1};
 
-    // Step 1.c: For each grid, set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx based on grid_physical_size
+    // For each grid, set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx based on grid_physical_size
     const bool apply_convergence_factor_and_set_xxminmax_defaults = true;
     int grid = 0;
     // In multipatch, gridname is a helpful alias indicating position of the patch. E.g., "lower Spherical patch"
@@ -26,7 +23,7 @@ void numerical_grids_and_timestep(commondata_struct *restrict commondata, gridda
     grid++;
   }
 
-  // Step 1.d: Allocate memory for and define reference-metric precomputation lookup tables
+  // Step 1.b: Allocate memory for and define reference-metric precomputation lookup tables
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     BHAH_MALLOC(griddata[grid].rfmstruct, sizeof(rfm_struct))
 
@@ -34,18 +31,18 @@ void numerical_grids_and_timestep(commondata_struct *restrict commondata, gridda
     rfm_precompute_defines(commondata, &griddata[grid].params, griddata[grid].rfmstruct, griddata[grid].xx);
   }
 
-  // Step 1.e: Set up curvilinear boundary condition struct (bcstruct)
+  // Step 1.c: Set up curvilinear boundary condition struct (bcstruct)
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     bcstruct_set_up(commondata, &griddata[grid].params, griddata[grid].xx, &griddata[grid].bcstruct);
   }
 
-  // Step 1.f: Set timestep based on minimum spacing between neighboring gridpoints.
+  // Step 1.d: Set timestep based on minimum spacing between neighboring gridpoints.
   commondata->dt = 1e30;
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
 
     cfl_limited_timestep(commondata, &griddata[grid].params, griddata[grid].xx);
   }
-  // Step 1.g: Initialize timestepping parameters to zero if this is the first time this function is called.
+  // Step 1.e: Initialize timestepping parameters to zero if this is the first time this function is called.
   if (calling_for_first_time) {
     commondata->nn = 0;
     commondata->nn_0 = 0;
@@ -53,7 +50,7 @@ void numerical_grids_and_timestep(commondata_struct *restrict commondata, gridda
     commondata->time = 0.0;
   }
 
-  // Step 1.h: Set grid_idx for each grid.
+  // Step 1.f: Set grid_idx for each grid.
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     griddata[grid].params.grid_idx = grid;
   }

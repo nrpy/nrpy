@@ -334,13 +334,13 @@ jobs:
           mkdir tmp &&
           cd tmp &&
           python -m nrpy.examples.nrpyelliptic_conformally_flat && (cd project/nrpyelliptic_conformally_flat && make && make clean) &&
-          python -m nrpy.examples.wave_equation_cartesian   && (cd project/wavetoy && make && make clean) &&
-          python -m nrpy.examples.wave_equation_curvilinear && (cd project/curviwavetoy && make && make clean) &&
+          python -m nrpy.examples.wave_equation_cartesian   && (cd project/wave_equation_cartesian && make && make clean) &&
+          python -m nrpy.examples.wave_equation_curvilinear && (cd project/wave_equation_curvilinear && make && make clean) &&
           python -m nrpy.examples.two_blackholes_collide    && (cd project/two_blackholes_collide && make && make clean) &&
           python -m nrpy.examples.blackhole_spectroscopy    && (cd project/blackhole_spectroscopy && make && make clean) &&
           python -m nrpy.examples.spinning_blackhole        && (cd project/spinning_blackhole && make && make clean) &&
           python -m nrpy.examples.nrpypn_quasicircular_momenta && (cd project/nrpypn_quasicircular_momenta && make && make clean) &&
-          python -m nrpy.examples.wave_equation_multicoord_wavetoy && (cd project/multicoords_curviwavetoy && make && make clean) &&
+          python -m nrpy.examples.wave_equation_multicoordinates && (cd project/wave_equation_multicoordinates && make && make clean) &&
           python -m nrpy.examples.seobnrv5_aligned_spin_inspiral && (cd project/seobnrv5_aligned_spin_inspiral && make && make clean) &&
           python -m nrpy.examples.tovola_neutron_star && (cd project/tovola_neutron_star && make && make clean) &&
           python -m nrpy.examples.hydro_without_hydro && (cd project/hydro_without_hydro && make && make clean) &&
@@ -380,13 +380,13 @@ jobs:
           mkdir tmp &&
           cd tmp &&
           python -m nrpy.examples.nrpyelliptic_conformally_flat && (cd project/nrpyelliptic_conformally_flat && make && make clean) &&
-          python -m nrpy.examples.wave_equation_cartesian   && (cd project/wavetoy && make && make clean) &&
-          python -m nrpy.examples.wave_equation_curvilinear && (cd project/curviwavetoy && make && make clean) &&
+          python -m nrpy.examples.wave_equation_cartesian   && (cd project/wave_equation_cartesian && make && make clean) &&
+          python -m nrpy.examples.wave_equation_curvilinear && (cd project/wave_equation_curvilinear && make && make clean) &&
           python -m nrpy.examples.two_blackholes_collide    && (cd project/two_blackholes_collide && make && make clean) &&
           python -m nrpy.examples.blackhole_spectroscopy    && (cd project/blackhole_spectroscopy && make && make clean) &&
           python -m nrpy.examples.spinning_blackhole        && (cd project/spinning_blackhole && make && make clean) &&
           python -m nrpy.examples.nrpypn_quasicircular_momenta && (cd project/nrpypn_quasicircular_momenta && make && make clean) &&
-          python -m nrpy.examples.wave_equation_multicoord_wavetoy && (cd project/multicoords_curviwavetoy && make && make clean) &&
+          python -m nrpy.examples.wave_equation_multicoordinates && (cd project/wave_equation_multicoordinates && make && make clean) &&
           python -m nrpy.examples.seobnrv5_aligned_spin_inspiral && (cd project/seobnrv5_aligned_spin_inspiral && make && make clean) &&
           python -m nrpy.examples.tovola_neutron_star && (cd project/tovola_neutron_star && make && make clean) &&
           python -m nrpy.examples.hydro_without_hydro && (cd project/hydro_without_hydro && make && make clean) &&
@@ -442,7 +442,7 @@ jobs:
           pwd &&
           pip install . &&
           python -m nrpy.examples.seobnrv5_aligned_spin_inspiral && (cd project/seobnrv5_aligned_spin_inspiral && make)
-      
+
       - name: Run on-the-fly comparison
         run: |
           python nrpy/examples/tests/sebob_consistency_check.py --trusted-exec ./trusted_code/project/seobnrv5_aligned_spin_inspiral --current-exec ./project/seobnrv5_aligned_spin_inspiral

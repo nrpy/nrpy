@@ -156,7 +156,7 @@ if parallelization == "cuda":
 
 BHaH.general_relativity.NRPyPN_quasicircular_momenta.register_CFunction_NRPyPN_quasicircular_momenta()
 BHaH.general_relativity.TwoPunctures.TwoPunctures_lib.register_C_functions()
-BHaH.general_relativity.BSSN.initial_data.register_CFunction_initial_data(
+BHaH.general_relativity.initial_data.register_CFunction_initial_data(
     CoordSystem=CoordSystem,
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
@@ -179,26 +179,25 @@ TP_solve(&ID_persist);
 BHaH.BHaHAHA.interpolation_2d_general__uniform_src_grid.register_CFunction_interpolation_2d_general__uniform_src_grid(
     enable_simd=enable_intrinsics, project_dir=project_dir
 )
-BHaH.general_relativity.BSSN.diagnostics.register_CFunction_diagnostics(
+BHaH.diagnostics.diagnostics.register_all_diagnostics(
+    project_dir=project_dir,
     set_of_CoordSystems=set_of_CoordSystems,
     default_diagnostics_out_every=diagnostics_output_every,
-    enable_psi4_diagnostics=True,
-    grid_center_filename_tuple=("out0d-conv_factor%.2f.txt", "convergence_factor"),
-    axis_filename_tuple=(
-        "out1d-AXIS-conv_factor%.2f-t%08.2f.txt",
-        "convergence_factor, time",
-    ),
-    plane_filename_tuple=(
-        "out2d-PLANE-conv_factor%.2f-t%08.2f.txt",
-        "convergence_factor, time",
-    ),
-    out_quantities_dict="default",
+    enable_nearest_diagnostics=True,
+    enable_interp_diagnostics=False,
+    enable_volume_integration_diagnostics=True,
+    enable_free_auxevol=False,
 )
+BHaH.general_relativity.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
+    enable_interp_diagnostics=False, enable_psi4=True
+)
+BHaH.general_relativity.diagnostics_nearest.register_CFunction_diagnostics_nearest()
+BHaH.general_relativity.diagnostics_volume_integration.register_CFunction_diagnostics_volume_integration()
 if enable_rfm_precompute:
     BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
         set_of_CoordSystems=set_of_CoordSystems,
     )
-BHaH.general_relativity.BSSN.rhs_eval.register_CFunction_rhs_eval(
+BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
@@ -216,24 +215,24 @@ BHaH.general_relativity.BSSN.rhs_eval.register_CFunction_rhs_eval(
     OMP_collapse=OMP_collapse,
 )
 if enable_CAHD:
-    BHaH.general_relativity.BSSN.cahdprefactor_gf.register_CFunction_cahdprefactor_auxevol_gridfunction(
+    BHaH.general_relativity.cahdprefactor_gf.register_CFunction_cahdprefactor_auxevol_gridfunction(
         {CoordSystem}
     )
 if separate_Ricci_and_BSSN_RHS:
-    BHaH.general_relativity.BSSN.Ricci_eval.register_CFunction_Ricci_eval(
+    BHaH.general_relativity.Ricci_eval.register_CFunction_Ricci_eval(
         CoordSystem=CoordSystem,
         enable_rfm_precompute=enable_rfm_precompute,
         enable_intrinsics=enable_intrinsics,
         enable_fd_functions=enable_fd_functions,
         OMP_collapse=OMP_collapse,
     )
-BHaH.general_relativity.BSSN.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
+BHaH.general_relativity.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
-BHaH.general_relativity.BSSN.constraints.register_CFunction_constraints(
+BHaH.general_relativity.constraints_eval.register_CFunction_constraints_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
@@ -243,7 +242,7 @@ BHaH.general_relativity.BSSN.constraints.register_CFunction_constraints(
     OMP_collapse=OMP_collapse,
 )
 
-BHaH.general_relativity.PSI4.compute_psi4.register_CFunction_psi4(
+BHaH.general_relativity.psi4.compute_psi4.register_CFunction_psi4(
     CoordSystem=CoordSystem,
     OMP_collapse=OMP_collapse,
     enable_fd_functions=enable_fd_functions,
@@ -255,7 +254,7 @@ BHaH.special_functions.spin_weight_minus2_spherical_harmonics.register_CFunction
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 # Does not need to be parallelized.
-BHaH.general_relativity.BSSN.psi4_decomposition.register_CFunction_psi4_spinweightm2_decomposition(
+BHaH.general_relativity.psi4_decomposition.register_CFunction_psi4_spinweightm2_decomposition(
     CoordSystem=CoordSystem
 )
 
@@ -345,6 +344,10 @@ par.adjust_CodeParam_default(
 #         command line parameters, set up boundary conditions,
 #         and create a Makefile for this project.
 #         Project is output to project/[project_name]/
+BHaH.diagnostics.diagnostic_gfs_h_create.diagnostics_gfs_h_create(
+    project_dir=project_dir,
+    diagnostic_gfs_names_dict=par.glb_extras_dict["diagnostic_gfs_names_dict"],
+)
 BHaH.CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
 BHaH.CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
 BHaH.cmdline_input_and_parfiles.generate_default_parfile(

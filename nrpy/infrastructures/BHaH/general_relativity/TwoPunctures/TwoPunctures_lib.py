@@ -1,5 +1,5 @@
 """
-Register all TwoPunctures functions within NRPy+'s CFunction dictionary.
+Register all TwoPunctures functions within NRPy's CFunction dictionary.
 
 License: Lesser GNU Public License, version 2.0+
 

@@ -8,7 +8,7 @@ Authors: Zachariah B. Etienne
          njadoo **at** uidaho **dot* edu
 """
 
-# Step P1: Import needed NRPy+ core modules:
+# Step P1: Import needed NRPy core modules:
 from typing import Set
 
 import nrpy.c_function as cfc
@@ -363,7 +363,7 @@ def CurviBoundaryConditions_register_C_functions(
 
     # Register bcstruct's contribution to BHaH_defines.h:
     CBC_BHd_str = r"""
-// NRPy+ Curvilinear Boundary Conditions: Core data structures
+// NRPy Curvilinear Boundary Conditions: Core data structures
 // Documented in: Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb
 
 typedef struct __innerpt_bc_struct__ {

@@ -123,7 +123,7 @@ def register_BHaH_defines_h(
     """
     Register the bcstruct's contribution to the BHaH_defines.h file.
 
-    This function registers the data structures needed for NRPy+ curvilinear boundary
+    This function registers the data structures needed for NRPy curvilinear boundary
     conditions in the BHaH_defines.h file, including structures for inner and outer
     boundary conditions and boundary loop bounds. It also sets the parity types for
     evolved, auxiliary, and auxiliary evolution grid functions.
@@ -134,7 +134,7 @@ def register_BHaH_defines_h(
                                   Default is False.
     """
     CBC_BHd_str = r"""
-// NRPy+ Curvilinear Boundary Conditions: Core data structures
+// NRPy Curvilinear Boundary Conditions: Core data structures
 // Documented in: Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb
 
 typedef struct __innerpt_bc_struct__ {

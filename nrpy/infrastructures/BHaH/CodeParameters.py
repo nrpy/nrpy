@@ -1,5 +1,5 @@
 """
-Provide functions to set params_struct and commondata_struct parameters to their default values specified when registering them within NRPy+'s CodeParameters.
+Provide functions to set params_struct and commondata_struct parameters to their default values specified when registering them within NRPy's CodeParameters.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -44,7 +44,7 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
     #include "BHaH_defines.h"
     <BLANKLINE>
     /**
-     * Set params_struct to default values specified within NRPy+.
+     * Set params_struct to default values specified within NRPy.
      */
     void params_struct_set_to_default(commondata_struct *restrict commondata, griddata_struct *restrict griddata) {
       // Loop over params structs:
@@ -60,7 +60,7 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
     #include "BHaH_defines.h"
     <BLANKLINE>
     /**
-     * Set commondata_struct to default values specified within NRPy+.
+     * Set commondata_struct to default values specified within NRPy.
      */
     void commondata_struct_set_to_default(commondata_struct *restrict commondata) {
       // Set commondata_struct variables to default
@@ -80,7 +80,7 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
     """
     for function_name in ["commondata_struct", "params_struct"]:
         includes = ["BHaH_defines.h"]
-        desc = f"Set {function_name} to default values specified within NRPy+."
+        desc = f"Set {function_name} to default values specified within NRPy."
         cfunc_type = "void"
         name = f"{function_name}_set_to_default"
         params = "commondata_struct *restrict commondata"
@@ -201,7 +201,7 @@ def write_CodeParameters_h_files(
             If True, parameters are accessed through pointers (struct->param).
             If False, direct access is assumed (struct.param).
 
-        :return: A string containing the C code to be included in set_CodeParameters*.h, setting simulation parameters according to their specification in NRPy+.
+        :return: A string containing the C code to be included in set_CodeParameters*.h, setting simulation parameters according to their specification in NRPy.
         """
         returnstring = ""
         for CPname, CodeParam in sorted(

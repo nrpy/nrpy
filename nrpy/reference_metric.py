@@ -346,11 +346,11 @@ class ReferenceMetric:
             return
 
         # Step 5: Now that all hatted quantities are written in terms of generic SymPy functions,
-        #         we will now replace SymPy functions with simple variables using rigid NRPy+ syntax,
+        #         we will now replace SymPy functions with simple variables using rigid NRPy syntax,
         #         and store these variables to globals defined above.
         def make_replacements(expr: sp.Expr) -> Any:
             """
-            Replace SymPy functions with simple variables using rigid NRPy+ syntax.
+            Replace SymPy functions with simple variables using rigid NRPy syntax.
 
             :param expr: SymPy expression to be replaced
             :return: Expression with replaced variables
@@ -452,7 +452,7 @@ class ReferenceMetric:
         #         derivatives exactly and set the expressions to zero. Otherwise in the C code
         #         we'd be storing performing arithmetic with zeros -- wasteful!
 
-        # Step 6.a: Construct the full list of *unique* NRPy+ variables representing the
+        # Step 6.a: Construct the full list of *unique* NRPy variables representing the
         #           SymPy functions and derivatives, so that all zero derivatives can be
         #           computed.
         freevars: List[sp.Basic] = []

@@ -64,9 +64,10 @@ par.set_parval_from_str("parallelization", parallelization)
 par.set_parval_from_str("fp_type", fp_type)
 
 # Code-generation-time parameters:
-project_name = "curviwavetoy"
+project_name = "wave_equation_curvilinear"
 WaveType = "SphericalGaussian"
 default_sigma = 3.0
+default_k0, default_k1, default_k2 = (1.0, 1.0, 1.0)
 grid_physical_size = 10.0
 t_final = 0.8 * grid_physical_size
 default_diagnostics_output_every = 0.5
@@ -128,7 +129,12 @@ if parallelization == "cuda":
     BHaH.parallelization.cuda_utilities.register_CFunction_find_global_sum()
 
 BHaH.wave_equation.initial_data_exact_soln.register_CFunction_initial_data_exact(
-    OMP_collapse=OMP_collapse, WaveType=WaveType, default_sigma=default_sigma
+    OMP_collapse=OMP_collapse,
+    WaveType=WaveType,
+    default_sigma=default_sigma,
+    default_k0=default_k0,
+    default_k1=default_k1,
+    default_k2=default_k2,
 )
 BHaH.wave_equation.initial_data_exact_soln.register_CFunction_initial_data(
     enable_checkpointing=True,
@@ -152,23 +158,34 @@ for CoordSystem in set_of_CoordSystems:
     )
     BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
 
-BHaH.wave_equation.diagnostics.register_CFunction_diagnostics(
+# Diagnostics C code registration
+BHaH.diagnostics.diagnostics.register_all_diagnostics(
     set_of_CoordSystems=set_of_CoordSystems,
+    project_dir=project_dir,
     default_diagnostics_out_every=default_diagnostics_output_every,
-    grid_center_filename_tuple=("out0d-conv_factor%.2f.txt", "convergence_factor"),
-    axis_filename_tuple=(
-        "out1d-AXIS-conv_factor%.2f-t%08.2f.txt",
-        "convergence_factor, time",
-    ),
-    plane_filename_tuple=(
-        "out2d-PLANE-conv_factor%.2f-t%08.2f.txt",
-        "convergence_factor, time",
-    ),
-    out_quantities_dict="default",
+    enable_nearest_diagnostics=True,
+    enable_interp_diagnostics=False,
+    enable_volume_integration_diagnostics=False,
+    enable_free_auxevol=False,
 )
+BHaH.wave_equation.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
+    WaveType=WaveType,
+    default_k0=default_k0,
+    default_k1=default_k1,
+    default_k2=default_k2,
+    default_sigma=default_sigma,
+)
+BHaH.wave_equation.diagnostics_nearest.register_CFunction_diagnostics_nearest()
 
 if __name__ == "__main__" and enable_parallel_codegen:
     pcg.do_parallel_codegen()
+
+#########################################################
+# STEP 3 (post parallel codegen): Generate header files,
+#         register remaining C functions and command-line
+#         parameters, set up boundary conditions, and
+#         create a Makefile for this project.
+#         Project is output to project/[project_name]/
 
 if enable_rfm_precompute:
     BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
@@ -200,12 +217,13 @@ BHaH.checkpointing.register_CFunctions(
 BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator()
 BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
-#########################################################
-# STEP 3: Generate header files, register C functions and
-#         command line parameters, set up boundary conditions,
-#         and create a Makefile for this project.
-#         Project is output to project/[project_name]/
 par.adjust_CodeParam_default("t_final", t_final)
+
+BHaH.diagnostics.diagnostic_gfs_h_create.diagnostics_gfs_h_create(
+    project_dir=project_dir,
+    diagnostic_gfs_names_dict=par.glb_extras_dict["diagnostic_gfs_names_dict"],
+)
+
 BHaH.CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
 BHaH.CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
 BHaH.cmdline_input_and_parfiles.generate_default_parfile(

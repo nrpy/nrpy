@@ -147,14 +147,14 @@ echo ""
 echo "Running example scripts and compiling related projects..."
 
 example_scripts=(
-  "nrpy/examples/wave_equation_cartesian.py project/wavetoy"
-  "nrpy/examples/wave_equation_curvilinear.py project/curviwavetoy"
+  "nrpy/examples/wave_equation_cartesian.py project/wave_equation_cartesian"
+  "nrpy/examples/wave_equation_curvilinear.py project/wave_equation_curvilinear"
   "nrpy/examples/nrpyelliptic_conformally_flat.py project/nrpyelliptic_conformally_flat"
   "nrpy/examples/two_blackholes_collide.py project/two_blackholes_collide"
   "nrpy/examples/blackhole_spectroscopy.py project/blackhole_spectroscopy"
   "nrpy/examples/spinning_blackhole.py project/spinning_blackhole"
   "nrpy/examples/nrpypn_quasicircular_momenta.py project/nrpypn_quasicircular_momenta"
-  "nrpy/examples/wave_equation_multicoord_wavetoy.py project/multicoords_curviwavetoy"
+  "nrpy/examples/wave_equation_multicoordinates.py project/wave_equation_multicoordinates"
   "nrpy/examples/carpet_baikal_thorns.py project/carpet_baikal_thorns"
   "nrpy/examples/carpet_wavetoy_thorns.py project/carpet_wavetoy_thorns"
   "nrpy/examples/carpetx_baikal_thorns.py project/carpetx_baikal_thorns"
@@ -190,12 +190,12 @@ for script in "${example_scripts[@]}"; do
 done
 
 cuda_example_scripts=(
-  "nrpy/examples/wave_equation_curvilinear.py project/curviwavetoy"
+  "nrpy/examples/wave_equation_curvilinear.py project/wave_equation_curvilinear"
   "nrpy/examples/nrpyelliptic_conformally_flat.py project/nrpyelliptic_conformally_flat"
   "nrpy/examples/two_blackholes_collide.py project/two_blackholes_collide"
 #  "nrpy/examples/blackhole_spectroscopy.py project/blackhole_spectroscopy"
   "nrpy/examples/spinning_blackhole.py project/spinning_blackhole"
-  "nrpy/examples/wave_equation_multicoord_wavetoy.py project/multicoords_curviwavetoy"
+  "nrpy/examples/wave_equation_multicoordinates.py project/wave_equation_multicoordinates"
   "nrpy/examples/tovola_neutron_star.py project/tovola_neutron_star"
   "nrpy/examples/hydro_without_hydro.py project/hydro_without_hydro"
 )

@@ -26,7 +26,7 @@ _BHAH_DEVICE_DEFINES_H = "BHaH_device_defines.h"
 _BHAH_GLOBAL_DEVICE_DEFINES_H = "BHaH_global_device_defines.h"
 _BHAH_CUDA_GLOBAL_INIT_H = "BHaH_CUDA_global_init.h"
 
-# NRPy+ parameter keys
+# NRPy parameter keys
 _DEVICE_THREAD_MACROS_KEY = "DEVICE_THREAD_MACROS"
 
 # Shared knowledge: List of __constant__ arrays that must be explicitly copied to the device.

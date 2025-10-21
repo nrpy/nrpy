@@ -725,7 +725,7 @@ def register_CFunction_cmdline_input_and_parfile_parser(
     # Step 3: Generate the main C function body.
     body = _generate_c_body(project_name, cmdline_inputs, parameters_list)
 
-    # Step 4: Register the complete C function with NRPy+.
+    # Step 4: Register the complete C function with NRPy.
     cfc.register_CFunction(
         includes=[
             "BHaH_defines.h",

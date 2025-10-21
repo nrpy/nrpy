@@ -174,6 +174,6 @@ def test_example_BSSN() -> bool:
 if __name__ == "__main__":
     if not test_example_BSSN():
         raise AssertionError(
-            "Error: NRPy+ based BSSN expressions (Cartesian, Tmunu=False) "
+            "Error: NRPy based BSSN expressions (Cartesian, Tmunu=False) "
             "disagree with NRPyLaTeX generated expressions"
         )

@@ -27,7 +27,7 @@ from nrpy.infrastructures import BHaH
 par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Code-generation-time parameters:
-project_name = "wavetoy"
+project_name = "wave_equation_cartesian"
 fp_type = "double"
 WaveType = "SphericalGaussian"
 default_sigma = 2.0

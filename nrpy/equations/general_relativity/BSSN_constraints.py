@@ -5,18 +5,18 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-# Step 1: Initialize needed Python/NRPy+ modules
+# Step 1: Initialize needed Python/NRPy modules
 from typing import Dict
 
-import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
+import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
-import nrpy.grid as gri  # NRPy+: Functions having to do with numerical grids
-import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
-import nrpy.params as par  # NRPy+: Parameter interface
-import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
+import nrpy.grid as gri  # NRPy: Functions having to do with numerical grids
+import nrpy.indexedexp as ixp  # NRPy: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
+import nrpy.params as par  # NRPy: Parameter interface
+import nrpy.reference_metric as refmetric  # NRPy: Reference metric support
 from nrpy.equations.general_relativity import T4munu
 
-# NRPy+: Computes useful BSSN quantities
+# NRPy: Computes useful BSSN quantities
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 
 par.register_param(bool, __name__, "register_MU_gridfunctions", False)

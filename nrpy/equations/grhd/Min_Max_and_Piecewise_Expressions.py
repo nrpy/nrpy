@@ -7,9 +7,9 @@ calls of nrpyAbs with fabs calls
 
 from typing import Any, Dict
 
-import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
+import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
-import nrpy.params as par  # NRPy+: parameter interface
+import nrpy.params as par  # NRPy: parameter interface
 
 _nrpyAbs = sp.Function("nrpyAbs")
 

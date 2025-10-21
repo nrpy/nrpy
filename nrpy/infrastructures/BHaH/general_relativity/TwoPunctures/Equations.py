@@ -187,8 +187,8 @@ void LinEquations(ID_persist_struct par, REAL A, REAL B, REAL X, REAL R, REAL x,
     params = """ """
     body = r"""
   // This space intentionally left blank:
-  // NRPy+ requires C files share the same name as the primary function within the C file.
-  // As TwoPunctures was developed outside the NRPy+ infrastructure, it does not abide by this rule.
+  // NRPy requires C files share the same name as the primary function within the C file.
+  // As TwoPunctures was developed outside the NRPy infrastructure, it does not abide by this rule.
   // Hence the need for a function with the same name as the output file.
 """
 

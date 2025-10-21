@@ -41,7 +41,6 @@ paper = args.paper
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
-
 # Code-generation-time parameters:
 project_name = "superB_blackhole_spectroscopy"
 CoordSystem = "SinhCylindrical"
@@ -209,7 +208,7 @@ BHaH.general_relativity.BSSN.enforce_detgammabar_equals_detgammahat.register_CFu
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
-BHaH.general_relativity.BSSN.constraints.register_CFunction_constraints(
+BHaH.general_relativity.BSSN.constraints.register_CFunction_constraints_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
@@ -399,7 +398,6 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
     enable_rfm_precompute=enable_rfm_precompute,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
 )
-
 
 if enable_intrinsics:
     copy_files(

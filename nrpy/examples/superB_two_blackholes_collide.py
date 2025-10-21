@@ -155,7 +155,6 @@ if enable_BHaHAHA:
     superB.interpolator3d_chare.output_interpolator3d_h_cpp_ci(project_dir=project_dir)
     superB.horizon_finder_chare.output_horizon_finder_h_cpp_ci(project_dir=project_dir)
 
-
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
@@ -225,7 +224,7 @@ BHaH.general_relativity.BSSN.enforce_detgammabar_equals_detgammahat.register_CFu
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
-BHaH.general_relativity.BSSN.constraints.register_CFunction_constraints(
+BHaH.general_relativity.BSSN.constraints.register_CFunction_constraints_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
@@ -312,7 +311,6 @@ if enable_BHaHAHA:
         ],
     )
     par.adjust_CodeParam_default("bah_verbosity_level", 0)
-
 
 BHaH.CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
 BHaH.CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()

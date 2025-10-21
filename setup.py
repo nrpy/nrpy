@@ -13,8 +13,9 @@ Instructions for uploading latest release to PyPI:
 import os
 import subprocess
 import sys
+from collections import defaultdict
 from pathlib import Path
-from typing import List
+from typing import Dict, List
 
 from setuptools import find_packages, setup
 
@@ -80,6 +81,61 @@ def get_nrpy_version(pkg_root_directory: str) -> str:
     raise ValueError("Version information could not be found in 'release.txt'")
 
 
+def discover_header_package_data(
+    pkg_root_directory: str, top_package: str = "nrpy"
+) -> Dict[str, List[str]]:
+    """
+    Discover C header files under the package directory and map them into package_data.
+
+    Recursively searches for ``*.h`` under ``top_package`` within ``pkg_root_directory``,
+    skipping any paths that contain a ``tests`` component. Each header is attached to the
+    nearest ancestor directory that is a Python package (i.e., contains ``__init__.py``).
+
+    :param pkg_root_directory: Repository root containing the top-level package directory.
+    :param top_package: The top-level package name to scan (defaults to "nrpy").
+    :return: Mapping from dotted package name to a sorted list of header paths relative to that package directory.
+    """
+    root_path = Path(pkg_root_directory).resolve()
+    top_path = (root_path / top_package).resolve()
+
+    # Build a map from absolute package directories to dotted package names.
+    packages = find_packages(where=pkg_root_directory)
+    pkg_dir_to_name = {
+        (root_path / pkg.replace(".", "/")).resolve(): pkg for pkg in packages
+    }
+
+    result: Dict[str, List[str]] = defaultdict(list)
+
+    # Find all headers under nrpy/, skip anything in a tests/ directory.
+    for header in top_path.rglob("*.h"):
+        if any(part == "tests" for part in header.parts):
+            continue
+
+        # Find the nearest ancestor that is a Python package dir.
+        cur = header.parent.resolve()
+        nearest_pkg_dir = None
+        while True:
+            if cur in pkg_dir_to_name:
+                nearest_pkg_dir = cur
+                break
+            if cur == root_path:
+                break
+            cur = cur.parent
+
+        if nearest_pkg_dir is None:
+            # Fallback: attach relative to top_package if no ancestor has __init__.py
+            pkg_name = top_package
+            rel = header.relative_to(top_path).as_posix()
+        else:
+            pkg_name = pkg_dir_to_name[nearest_pkg_dir]
+            rel = header.relative_to(nearest_pkg_dir).as_posix()
+
+        result[pkg_name].append(rel)
+
+    # Sort for determinism
+    return {pkg: sorted(files) for pkg, files in result.items()}
+
+
 if __name__ == "__main__":
     # Don't install NRPy if this is run from a doctest.
     if "DOCTEST_MODE" in os.environ:
@@ -93,6 +149,14 @@ if __name__ == "__main__":
     if not clang_format_is_installed():
         requirements.append("clang-format")
 
+    # Auto-discover header files
+    auto_pkg_data = discover_header_package_data(dir_setup, top_package="nrpy")
+
+    # Ensure py.typed is included for PEP 561 typing
+    auto_pkg_data.setdefault("nrpy", [])
+    if "py.typed" not in auto_pkg_data["nrpy"]:
+        auto_pkg_data["nrpy"].append("py.typed")
+
     setup(
         name="nrpy",
         version=get_nrpy_version(dir_setup),
@@ -105,23 +169,7 @@ if __name__ == "__main__":
         long_description_content_type="text/markdown",
         python_requires=">=3.6",
         packages=find_packages(),
-        package_data={
-            "nrpy.infrastructures.BHaH.general_relativity.TwoPunctures": [
-                "TP_utilities.h",
-                "TwoPunctures.h",
-            ],
-            "nrpy.infrastructures.BHaH.BHaHAHA": [
-                "BHaHAHA_header.h",
-            ],
-            "nrpy.infrastructures.BHaH.interpolation": [
-                "interpolation_lagrange_uniform.h",
-            ],
-            "nrpy.infrastructures.superB.superB": [
-                "superB.h",
-            ],
-            "nrpy.helpers": ["simd_intrinsics.h", "cuda_intrinsics.h"],
-            "nrpy": ["py.typed"],
-        },
+        package_data=auto_pkg_data,  # ← use the discovered headers
         classifiers=[
             "License :: OSI Approved :: BSD License",
             "Operating System :: OS Independent",
@@ -152,7 +200,6 @@ if __name__ == "__main__":
                 "nrpyinline=bin.nrpyinline:main",
             ],
         },
-        # Ensure your scripts are included in packages
         include_package_data=True,
         zip_safe=False,
     )

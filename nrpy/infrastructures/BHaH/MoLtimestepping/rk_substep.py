@@ -26,7 +26,6 @@ Authors: Zachariah B. Etienne (lead maintainer)
          Samuel Tootle (GPU support in NRPy2)
          Brandon Clark (original, NRPy1 version)
 """
-
 from typing import Dict, List, Union
 
 import sympy as sp
@@ -36,11 +35,6 @@ import nrpy.params as par
 from nrpy.c_codegen import c_codegen
 from nrpy.helpers.generic import superfast_uniq
 from nrpy.helpers.parallelization import utilities
-
-##############################################################################
-# Parallelization check and set:
-
-supported_parallelization = {"cuda", "openmp"}
 
 
 def check_supported_parallelization(
@@ -52,6 +46,7 @@ def check_supported_parallelization(
     :param function_name: Name of the function where the check is performed.
     :raises ValueError: If the parallelization is not supported.
     """
+    supported_parallelization = {"cuda", "openmp"}
     parallelization = par.parval_from_str("parallelization")
     if parallelization not in supported_parallelization:
         raise ValueError(

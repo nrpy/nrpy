@@ -165,6 +165,7 @@ Computes proper circumferences along the equator and polar directions for appare
         "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
     )
     body = r"""
+  const int NUM_DIAG_GFS = 2;
   const int grid = 0;
   // Extract grid dimensions, including ghost zones, for each coordinate direction. Needed for IDX4() macro.
   const int Nxx_plus_2NGHOSTS0 = griddata[grid].params.Nxx_plus_2NGHOSTS0;
@@ -172,7 +173,8 @@ Computes proper circumferences along the equator and polar directions for appare
   const int Nxx_plus_2NGHOSTS2 = griddata[grid].params.Nxx_plus_2NGHOSTS2;
   const int NUM_THETA = Nxx_plus_2NGHOSTS1; // Needed for IDX2() macro.
 
-  REAL *restrict diagnostic_output_gfs = griddata[grid].gridfuncs.diagnostic_output_gfs;
+  REAL *restrict metric_data_gfs;
+  BHAH_MALLOC(metric_data_gfs, Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_DIAG_GFS);
 
   // Compute the line element in the phi direction (sqrt(q_{phi phi})) across the entire grid.
   {
@@ -186,9 +188,9 @@ Computes proper circumferences along the equator and polar directions for appare
     const int i0 = NGHOSTS; // Fixed index for radial coordinate (r).
 
     // Loop over angular grid points (theta and phi) to compute:
-    // 1. sqrt(q_{theta theta}), stored to diagnostic_output_gfs[IDX4(0,...)], and
-    // 2. sqrt(q_{phi phi}), stored to diagnostic_output_gfs[IDX4(1,...)] at each point (theta, phi).
-    // Notice we do clever indexing to ensure this 2D computation stays within the memory bounds of (3D) diagnostic_output_gfs.
+    // 1. sqrt(q_{theta theta}), stored to metric_data_gfs[IDX4(0,...)], and
+    // 2. sqrt(q_{phi phi}), stored to metric_data_gfs[IDX4(1,...)] at each point (theta, phi).
+    // Notice we do clever indexing to ensure this 2D computation stays within the memory bounds of (3D) metric_data_gfs.
 #pragma omp parallel for
     for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++) {
       const MAYBE_UNUSED REAL xx2 = xx[2][i2]; // Phi coordinate at index i2.
@@ -201,8 +203,8 @@ Computes proper circumferences along the equator and polar directions for appare
             BHaH.BHaHAHA.area.circumferential_arclength(direction="phi"),
         ],
         [
-            "diagnostic_output_gfs[IDX4pt(0, 0) + IDX2(i1, i2)]",
-            "diagnostic_output_gfs[IDX4pt(1, 0) + IDX2(i1, i2)]",
+            "metric_data_gfs[IDX4pt(0, 0) + IDX2(i1, i2)]",
+            "metric_data_gfs[IDX4pt(1, 0) + IDX2(i1, i2)]",
         ],
         enable_fd_codegen=True,
         enable_fd_functions=enable_fd_functions,
@@ -244,7 +246,7 @@ Computes proper circumferences along the equator and polar directions for appare
 
           // Apply boundary condition if at the radial interior point (i0 == NGHOSTS).
           if (dst_i0 == NGHOSTS) {
-            diagnostic_output_gfs[IDX4pt(which_gf, 0) + IDX2(dst_i1, dst_i2)] = diagnostic_output_gfs[IDX4pt(which_gf, 0) + IDX2(src_i1, src_i2)];
+            metric_data_gfs[IDX4pt(which_gf, 0) + IDX2(dst_i1, dst_i2)] = metric_data_gfs[IDX4pt(which_gf, 0) + IDX2(src_i1, src_i2)];
           }
         } // END LOOP over inner boundary points
       } // END LOOP over gridfunctions
@@ -282,10 +284,10 @@ Computes proper circumferences along the equator and polar directions for appare
     } // END LOOP over phi angles
 
     // Interpolate sqrt(q_{phi phi}) values onto the equator points to compute the circumference;
-    //   note that sqrt(q_{phi phi}) is stored in diagnostic_output_gfs[IDX4(1,...)]
+    //   note that sqrt(q_{phi phi}) is stored in metric_data_gfs[IDX4(1,...)]
     const int error =
         bah_interpolation_2d_general__uniform_src_grid(NinterpGHOSTS, dxx1, dxx2, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, griddata[grid].xx,
-                                                       &diagnostic_output_gfs[IDX4pt(1, 0)], N_angle, dst_pts, circumference);
+                                                       &metric_data_gfs[IDX4pt(1, 0)], N_angle, dst_pts, circumference);
     if (error != BHAHAHA_SUCCESS)
       return error;
 
@@ -322,10 +324,10 @@ Computes proper circumferences along the equator and polar directions for appare
     } // END LOOP over angle
 
     // Interpolate sqrt(q_{theta theta}) values onto the polar (xz-plane) points to compute the circumference;
-    //   note that sqrt(q_{theta theta}) is stored in diagnostic_output_gfs[IDX4(0,...)]
+    //   note that sqrt(q_{theta theta}) is stored in metric_data_gfs[IDX4(0,...)]
     const int error =
         bah_interpolation_2d_general__uniform_src_grid(NinterpGHOSTS, dxx1, dxx2, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, griddata[grid].xx,
-                                                       &diagnostic_output_gfs[IDX4pt(0, 0)], N_angle, dst_pts, circumference);
+                                                       &metric_data_gfs[IDX4pt(0, 0)], N_angle, dst_pts, circumference);
     if (error != BHAHAHA_SUCCESS)
       return error;
 
@@ -362,10 +364,10 @@ Computes proper circumferences along the equator and polar directions for appare
     } // END LOOP over angle
 
     // Interpolate sqrt(q_{theta theta}) values onto the polar (yz-plane) points to compute the circumference;
-    //   note that sqrt(q_{theta theta}) is stored in diagnostic_output_gfs[IDX4(0,...)]
+    //   note that sqrt(q_{theta theta}) is stored in metric_data_gfs[IDX4(0,...)]
     const int error =
         bah_interpolation_2d_general__uniform_src_grid(NinterpGHOSTS, dxx1, dxx2, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, griddata[grid].xx,
-                                                       &diagnostic_output_gfs[IDX4pt(0, 0)], N_angle, dst_pts, circumference);
+                                                       &metric_data_gfs[IDX4pt(0, 0)], N_angle, dst_pts, circumference);
     if (error != BHAHAHA_SUCCESS)
       return error;
 
@@ -403,9 +405,10 @@ Computes proper circumferences along the equator and polar directions for appare
     commondata->bhahaha_diagnostics->spin_a_z_from_xz_over_xy_prop_circumfs = compute_spin(C_xz_xy);
     commondata->bhahaha_diagnostics->spin_a_z_from_yz_over_xy_prop_circumfs = compute_spin(C_yz_xy);
   }
-  // Free allocated memory for destination points and circumference values.
+  // Free allocated memory for destination points, circumference values, and metric_data_gfs.
   free(dst_pts);
   free(circumference);
+  free(metric_data_gfs);
 
   return BHAHAHA_SUCCESS; // Return success status code.
 """

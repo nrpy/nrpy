@@ -28,7 +28,7 @@ def register_CFunction_RegisterSlicing(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    desc = f"""Register slicing condition for NRPy+-generated thorn {thorn_name}."""
+    desc = f"""Register slicing condition for NRPy-generated thorn {thorn_name}."""
     name = f"{thorn_name}_RegisterSlicing"
     body = f"""
     Einstein_RegisterSlicing ("{thorn_name}");

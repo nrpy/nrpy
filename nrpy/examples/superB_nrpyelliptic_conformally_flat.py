@@ -188,7 +188,6 @@ BHaH.nrpyelliptic.rhs_eval.register_CFunction_rhs_eval(
 BHaH.nrpyelliptic.residual_H_compute_all_points.register_CFunction_residual_H_compute_all_points(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
-    enable_intrinsics=enable_simd,
     OMP_collapse=OMP_collapse,
 )
 
