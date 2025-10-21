@@ -79,6 +79,7 @@ for (size_t i = 1; i < 4; i++){
   offset--;
 }
 //begin central interpolated integrations
+offset = 0;
 for (size_t i = 4; i < nsteps - 3; i++){
   integration_stencil(offset,coeffs,indices);
   for (int j = 0; j < 8; j++){

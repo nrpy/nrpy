@@ -54,10 +54,21 @@ as well as the augmented dynamical quantities for generating the inspiral wavefo
     name = "SEOBNRv5_aligned_spin_pa_integration"
     params = "commondata_struct *restrict commondata"
     body = """
+const REAL m1 = commondata->m1;
+const REAL m2 = commondata->m2;
+const REAL chi1 = commondata->chi1;
+const REAL chi2 = commondata->chi2;
+const REAL nu = m1*m2/((m1+m2)*(m1+m2));
+const REAL chi_eff = (m1*chi1 + m2*chi2)/(m1+m2);
+const REAL r_final_prefactor = 2.7 + chi_eff*(1.0 - 4.0*nu);
+REAL final_r = fmax(10.0, r_final_prefactor * commondata->r_ISCO);
 REAL initial_r = commondata->r;
-REAL final_r = 1.6 * commondata->r_ISCO;
 // fiducial dr = .3
-size_t nsteps = (size_t) ((initial_r - final_r) / .3 + 1);
+REAL dr = .3;
+size_t nsteps = (size_t) ((initial_r - final_r) / dr + 1);
+// update nsteps and dr to ensure a minimum of 10 steps
+nsteps = nsteps > 10? nsteps: 10;
+dr = (initial_r - final_r) / (nsteps - 1);
 REAL *restrict r = (REAL *)malloc(nsteps * sizeof(REAL));
 if (r == NULL) {
     fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_pa_integration, malloc failed for r\\n");
@@ -107,12 +118,12 @@ F_prstar.params = commondata;
 
 // perform zero PA integration
 for (size_t i = 0; i < nsteps; i++) {
-  r[i] = initial_r - .3 * i;
+  r[i] = initial_r - dr * i;
   prstar[i] = 0.;
   dprstar_dr[i] = 0.;
   commondata->r = r[i];
-  x_lo = sqrt(r[i])*0.95;
-  x_hi = sqrt(r[i])*1.05;
+  x_lo = sqrt(r[i])*0.8;
+  x_hi = sqrt(r[i])*1.2;
   F_pphi0.params = commondata;
   pphi[i] = root_finding_1d(x_lo, x_hi, &F_pphi0);    
 }
@@ -120,7 +131,8 @@ for (size_t i = 0; i < nsteps; i++) {
 dy_dx(pphi,r,dpphi_dr,nsteps);
 // perform PA integration
 // fiducial PA order = 8
-for (int j = 1; j < 8; j++) {
+const int PA_ORDER = 8;
+for (int j = 1; j <= PA_ORDER; j++) {
   for (size_t i = 0; i < nsteps; i++){
     commondata->r = r[i];
     commondata->pphi = pphi[i];
@@ -230,7 +242,16 @@ else{
     commondata->dynamics_low[IDX(i,OMEGA)] = commondata->dHreal_dpphi;
     commondata->dynamics_low[IDX(i,OMEGA_CIRC)] = commondata->Omega_circ;
   }
-  memcpy(commondata->dynamics_low + nsteps,ode_dynamics_low,nsteps_ode_dynamics_low * NUMVARS * sizeof(REAL));
+  memcpy(commondata->dynamics_low + nsteps*NUMVARS,ode_dynamics_low,nsteps_ode_dynamics_low * NUMVARS * sizeof(REAL));
+  // add the time offset to the dynamics_low
+  for (size_t i = nsteps; i < nsteps_ode_dynamics_low + nsteps; i++){
+    commondata->dynamics_low[IDX(i,TIME)] += t[nsteps -1];
+  }
+  free(ode_dynamics_low);
+}
+// add the time offset to the dynamics_fine
+for (size_t i = 0; i < commondata->nsteps_fine; i++){
+  commondata->dynamics_fine[IDX(i,TIME)] += t[nsteps -1];
 }
 """
     cfc.register_CFunction(
