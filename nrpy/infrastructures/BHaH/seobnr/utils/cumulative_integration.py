@@ -72,29 +72,32 @@ C[0] = running_integral;
 //begin forward interpolated integrations
 for (size_t i = 1; i < 4; i++){
   integration_stencil(offset,coeffs,indices);
+  running_integral = 0;
   for (int j = 0; j < 8; j++){
     running_integral += coeffs[j]*y[i+indices[j] - 1];
   }
-  C[i] = running_integral * h;
+  C[i] = C[i-1] + running_integral * h;
   offset--;
 }
 //begin central interpolated integrations
 offset = 0;
 for (size_t i = 4; i < nsteps - 3; i++){
   integration_stencil(offset,coeffs,indices);
+  running_integral = 0;
   for (int j = 0; j < 8; j++){
     running_integral += coeffs[j]*y[i+indices[j] - 1];
   }
-  C[i] = running_integral * h;
+  C[i] = C[i-1] + running_integral * h;
 }
 //begin backward interpolated integrations
 for (size_t i = nsteps - 3; i < nsteps; i++){
   offset--;
   integration_stencil(offset,coeffs,indices);
+  running_integral = 0;
   for (int j = 0; j < 8; j++){
     running_integral += coeffs[j]*y[i+indices[j] - 1];
   }
-  C[i] = running_integral * h;
+  C[i] = C[i-1] + running_integral * h;
 }
 """
     cfc.register_CFunction(
