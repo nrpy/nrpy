@@ -373,42 +373,6 @@ def _emit_host_param_copies(unique_params: List[str], indent_spaces: int = 4) ->
 
 
 # --------------------------------------------------------------------------
-# CUDA alloc helpers (kept local to this translation unit for malloc/free)
-# --------------------------------------------------------------------------
-def _prefunc_cuda_alloc_helpers() -> str:
-    """
-    Generate preprocessor definitions for CUDA memory management macros.
-
-    This function returns a C preprocessor block that defines `BHAH_MALLOC_DEVICE__PtrMember`
-    and `BHAH_FREE_DEVICE__PtrMember`. In CUDA builds, these macros wrap `cudaMalloc` and
-    `cudaFree` with error checking. In non-CUDA builds, they are defined as no-ops.
-
-    :return: A string containing the C preprocessor definitions.
-    """
-    return r"""#ifdef __CUDACC__
-#  include <cuda_runtime.h>
-#  ifndef BHAH_MALLOC_DEVICE__PtrMember
-#    define BHAH_MALLOC_DEVICE__PtrMember(structptr, member, nbytes) \
-       do { cudaError_t __e = cudaMalloc((void**)&((structptr)->member), (size_t)(nbytes)); \
-            if (__e != cudaSuccess) { fprintf(stderr, "cudaMalloc failed: %s\n", cudaGetErrorString(__e)); abort(); } } while(0)
-#  endif  // BHAH_MALLOC_DEVICE__PtrMember
-#  ifndef BHAH_FREE_DEVICE__PtrMember
-#    define BHAH_FREE_DEVICE__PtrMember(structptr, member) \
-       do { if ((structptr)->member) { cudaError_t __e2 = cudaFree((structptr)->member); (structptr)->member = NULL; \
-            if (__e2 != cudaSuccess) { fprintf(stderr, "cudaFree failed: %s\n", cudaGetErrorString(__e2)); abort(); } } } while(0)
-#  endif  // BHAH_FREE_DEVICE__PtrMember
-#else  // !__CUDACC__
-#  ifndef BHAH_MALLOC_DEVICE__PtrMember
-#    define BHAH_MALLOC_DEVICE__PtrMember(structptr, member, nbytes) do { (void)(structptr); (void)(member); (void)(nbytes); } while(0)
-#  endif  // BHAH_MALLOC_DEVICE__PtrMember
-#  ifndef BHAH_FREE_DEVICE__PtrMember
-#    define BHAH_FREE_DEVICE__PtrMember(structptr, member) do { (void)(structptr); (void)(member); } while(0)
-#  endif  // BHAH_FREE_DEVICE__PtrMember
-#endif  // __CUDACC__
-"""
-
-
-# --------------------------------------------------------------------------
 # Launch-config snippets (classic BHaH style; readable & copy/paste-friendly)
 # --------------------------------------------------------------------------
 def _emit_launch_setup_1d(n_sym_c: str) -> str:
@@ -658,8 +622,8 @@ def register_CFunctions_rfm_precompute(set_of_CoordSystems: Set[str]) -> None:
 
         # -------- prefuncs --------
         # malloc/free need local CUDA alloc helpers (in case translation unit is compiled in host-only translation).
-        malloc_prefunc = _prefunc_cuda_alloc_helpers()
-        free_prefunc = _prefunc_cuda_alloc_helpers()
+        malloc_prefunc = ""
+        free_prefunc = ""
         # defines() only needs the CUDA kernels:
         defines_prefunc = kernels_prefunc
 
