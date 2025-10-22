@@ -192,6 +192,7 @@ params_struct_set_to_default(&commondata, {compute_griddata});
 // Step 1.e: Set up numerical grids, including parameters such as NUMGRIDS, xx[3], masks, Nxx, dxx, invdxx,
 //           bcstruct, rfm_precompute, timestep, and others.
 {{
+  IFCUDARUN(for (int grid = 0; grid < MAXNUMGRIDS; grid++) griddata_device[grid].params.is_host = false;);
   // If this function is being called for the first time, initialize commondata.time, nn, t_0, and nn_0 to 0.
   const bool calling_for_first_time = true;
   numerical_grids_and_timestep({numerical_grids_args});
