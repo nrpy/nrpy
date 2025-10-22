@@ -39,19 +39,12 @@ parser.add_argument(
     help="Flag to disable hardware intrinsics",
     default=False,
 )
-parser.add_argument(
-    "--disable_rfm_precompute",
-    action="store_true",
-    help="Flag to disable RFM precomputation.",
-    default=False,
-)
 args = parser.parse_args()
 
 # Code-generation-time parameters:
 fp_type = args.floating_point_precision.lower()
 parallelization = args.parallelization.lower()
 enable_intrinsics = not args.disable_intrinsics
-enable_rfm_precompute = not args.disable_rfm_precompute
 
 if parallelization not in ["openmp", "cuda"]:
     raise ValueError(
@@ -209,7 +202,7 @@ BHaH.numerical_grids_and_timestep.register_CFunctions(
     set_of_CoordSystems=set_of_CoordSystems,
     list_of_grid_physical_sizes=[grid_physical_size for c in set_of_CoordSystems],
     Nxx_dict=Nxx_dict,
-    enable_rfm_precompute=enable_rfm_precompute,
+    enable_rfm_precompute=True,
     enable_CurviBCs=True,
 )
 BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
@@ -230,13 +223,11 @@ BHaH.nrpyelliptic.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
 BHaH.nrpyelliptic.diagnostics_nearest.register_CFunction_diagnostics_nearest()
 BHaH.nrpyelliptic.diagnostics_volume_integration.register_CFunction_diagnostics_volume_integration()
 
-if enable_rfm_precompute:
-    BHaH.rfm_precompute.register_CFunctions_rfm_precompute(set_of_CoordSystems)
+BHaH.rfm_precompute.register_CFunctions_rfm_precompute(set_of_CoordSystems)
 
 # Generate function to compute RHSs
 BHaH.nrpyelliptic.rhs_eval.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
-    enable_rfm_precompute=enable_rfm_precompute,
     enable_intrinsics=enable_intrinsics,
     OMP_collapse=OMP_collapse,
 )
@@ -244,7 +235,6 @@ BHaH.nrpyelliptic.rhs_eval.register_CFunction_rhs_eval(
 # Generate function to compute residuals
 BHaH.nrpyelliptic.residual_H_compute_all_points.register_CFunction_residual_H_compute_all_points(
     CoordSystem=CoordSystem,
-    enable_rfm_precompute=enable_rfm_precompute,
     OMP_collapse=OMP_collapse,
 )
 
@@ -279,14 +269,12 @@ if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0) {{
                                      custom_gridfunctions_wavespeed, gridfunctions_f_infinity,
                                      RK_INPUT_GFS, RK_OUTPUT_GFS);
 }}"""
-if not enable_rfm_precompute:
-    rhs_string = rhs_string.replace("rfmstruct", "xx")
 BHaH.MoLtimestepping.register_all.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,
     post_rhs_string="""if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
   apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);""",
-    enable_rfm_precompute=enable_rfm_precompute,
+    enable_rfm_precompute=True,
     enable_curviBCs=True,
     enable_intrinsics=False,
     # SIMD intrinsics in MoL is not properly supported -- MoL update loops are not properly bounds checked.
@@ -393,7 +381,7 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
     intrinsics_header_lst=(
         ["cuda_intrinsics.h"] if parallelization == "cuda" else ["simd_intrinsics.h"]
     ),
-    enable_rfm_precompute=enable_rfm_precompute,
+    enable_rfm_precompute=True,
     DOUBLE_means="double" if fp_type == "float" else "REAL",
     restrict_pointer_type="*" if parallelization == "cuda" else "*restrict",
     supplemental_defines_dict=(
@@ -455,7 +443,7 @@ BHaH.main_c.register_CFunction_main_c(
     post_MoL_step_forward_in_time=post_MoL_step_forward_in_time,
 )
 BHaH.griddata_commondata.register_CFunction_griddata_free(
-    enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True
+    enable_rfm_precompute=True, enable_CurviBCs=True
 )
 
 if enable_intrinsics:
