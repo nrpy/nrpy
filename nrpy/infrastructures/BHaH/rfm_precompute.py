@@ -414,9 +414,7 @@ def _prefunc_cuda_alloc_helpers() -> str:
 def _emit_launch_setup_1d(n_sym_c: str) -> str:
     return f"""
     const size_t threads_in_x_dir = BHAH_THREADS_IN_X_DIR_DEFAULT;
-    const size_t threads_in_y_dir = BHAH_THREADS_IN_Y_DIR_DEFAULT;
-    const size_t threads_in_z_dir = BHAH_THREADS_IN_Z_DIR_DEFAULT;
-    dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
+    dim3 threads_per_block(threads_in_x_dir, 1, 1); // 1-D block to avoid duplicate writes
     dim3 blocks_per_grid((({n_sym_c}) + threads_in_x_dir - 1) / threads_in_x_dir, 1, 1);
 """
 
@@ -425,8 +423,7 @@ def _emit_launch_setup_2d(n0_c: str, n1_c: str) -> str:
     return f"""
     const size_t threads_in_x_dir = BHAH_THREADS_IN_X_DIR_DEFAULT;
     const size_t threads_in_y_dir = BHAH_THREADS_IN_Y_DIR_DEFAULT;
-    const size_t threads_in_z_dir = BHAH_THREADS_IN_Z_DIR_DEFAULT;
-    dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
+    dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, 1);
     dim3 blocks_per_grid((({n0_c}) + threads_in_x_dir - 1) / threads_in_x_dir,
                          (({n1_c}) + threads_in_y_dir - 1) / threads_in_y_dir,
                          1);
@@ -461,23 +458,25 @@ def generate_rfmprecompute_defines(
         if info["kind"] == "1d":
             ax = info["dep_axis_index"]
             expr_cc = info["expr_cc"]
+            # ---- CUDA kernel (1D): pass sizes & scalars explicitly; no device deref of params ----
+            kernel_param_sig = (
+                (", " + ", ".join(f"const REAL {p}" for p in unique_params))
+                if unique_params
+                else ""
+            )
 
             # ---- CUDA kernel (1D) ----
-            kparams = _emit_kernel_param_copies(
-                unique_params, "kparams", indent_spaces=4
-            )
             prefuncs_kernels += f"""
 #ifdef __CUDACC__
 __global__ static void rfm_precompute_defines__{sname}(
-    const params_struct * restrict kparams,
+    const size_t N,
     rfm_struct * restrict d_rfm,
-    const REAL * restrict dx{ax}) {{
-  const size_t N = (size_t)kparams->Nxx_plus_2NGHOSTS{ax};
+    const REAL * restrict dx{ax}{kernel_param_sig}) {{
   size_t thread_linear_index = (size_t)threadIdx.x + (size_t)blockIdx.x * (size_t)blockDim.x;
   size_t thread_linear_stride = (size_t)blockDim.x * (size_t)gridDim.x;
   for (size_t i{ax} = thread_linear_index; i{ax} < N; i{ax} += thread_linear_stride) {{
     const REAL xx{ax} = dx{ax}[i{ax}];
-{kparams}    d_rfm->{sname}[i{ax}] = {expr_cc};
+    d_rfm->{sname}[i{ax}] = {expr_cc};
   }}
 }}
 #endif // __CUDACC__
@@ -486,6 +485,11 @@ __global__ static void rfm_precompute_defines__{sname}(
             # ---- Host loop + CUDA branch (1D) ----
             host_params = _emit_host_param_copies(unique_params, indent_spaces=4)
             launch_setup = _emit_launch_setup_1d("N")
+            kernel_param_vals = (
+                (", " + ", ".join(f"params->{p}" for p in unique_params))
+                if unique_params
+                else ""
+            )
             body += f"""
 /* {sname}: 1D precompute */
 if (params->is_host) {{
@@ -499,7 +503,10 @@ if (params->is_host) {{
 }} else {{
   IFCUDARUN({{
     const size_t N = (size_t)params->Nxx_plus_2NGHOSTS{ax};
-{launch_setup}    rfm_precompute_defines__{sname}<<<blocks_per_grid, threads_per_block>>>(params, rfmstruct, x{ax});
+{launch_setup}    size_t sm = 0;
+    const size_t streamid = params->grid_idx % NUM_STREAMS;
+    rfm_precompute_defines__{sname}<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(N, rfmstruct, x{ax}{kernel_param_vals});
+    cudaCheckErrors(cudaKernel, "rfm_precompute_defines__{sname} failure");
   }});
 }}
 
@@ -507,20 +514,22 @@ if (params->is_host) {{
 
         elif info["kind"] == "2d":
             expr_cc = info["expr_cc"]
+            # ---- CUDA kernel (2D): pass sizes & scalars explicitly; no device deref of params ----
+            kernel_param_sig = (
+                (", " + ", ".join(f"const REAL {p}" for p in unique_params))
+                if unique_params
+                else ""
+            )
 
             # ---- CUDA kernel (2D) ----
-            kparams = _emit_kernel_param_copies(
-                unique_params, "kparams", indent_spaces=6
-            )
             prefuncs_kernels += f"""
 #ifdef __CUDACC__
 __global__ static void rfm_precompute_defines__{sname}(
-    const params_struct * restrict kparams,
+    const size_t N0,
+    const size_t N1,
     rfm_struct * restrict d_rfm,
     const REAL * restrict dx0,
-    const REAL * restrict dx1) {{
-  const size_t N0 = (size_t)kparams->Nxx_plus_2NGHOSTS0;
-  const size_t N1 = (size_t)kparams->Nxx_plus_2NGHOSTS1;
+    const REAL * restrict dx1{kernel_param_sig}) {{
   size_t idx0 = (size_t)threadIdx.x + (size_t)blockIdx.x * (size_t)blockDim.x;
   size_t idx1 = (size_t)threadIdx.y + (size_t)blockIdx.y * (size_t)blockDim.y;
   size_t stride0 = (size_t)blockDim.x * (size_t)gridDim.x;
@@ -529,7 +538,7 @@ __global__ static void rfm_precompute_defines__{sname}(
     for (size_t i0=idx0; i0<N0; i0+=stride0) {{
       const REAL xx0 = dx0[i0];
       const REAL xx1 = dx1[i1];
-{kparams}      const size_t flat_idx = i0 + (size_t)N0 * i1;
+      const size_t flat_idx = i0 + (size_t)N0 * i1;
       d_rfm->{sname}[flat_idx] = {expr_cc};
     }}
   }}
@@ -541,6 +550,11 @@ __global__ static void rfm_precompute_defines__{sname}(
             # ---- Host loop + CUDA branch (2D) ----
             host_params = _emit_host_param_copies(unique_params, indent_spaces=4)
             launch_setup = _emit_launch_setup_2d("N0", "N1")
+            kernel_param_vals = (
+                (", " + ", ".join(f"params->{p}" for p in unique_params))
+                if unique_params
+                else ""
+            )
             body += f"""
 /* {sname}: 2D (xx0,xx1) precompute */
 if (params->is_host) {{
@@ -560,7 +574,10 @@ if (params->is_host) {{
   IFCUDARUN({{
     const size_t N0 = (size_t)params->Nxx_plus_2NGHOSTS0;
     const size_t N1 = (size_t)params->Nxx_plus_2NGHOSTS1;
-{launch_setup}    rfm_precompute_defines__{sname}<<<blocks_per_grid, threads_per_block>>>(params, rfmstruct, x0, x1);
+{launch_setup}    size_t sm = 0;
+    const size_t streamid = params->grid_idx % NUM_STREAMS;
+    rfm_precompute_defines__{sname}<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(N0, N1, rfmstruct, x0, x1{kernel_param_vals});
+    cudaCheckErrors(cudaKernel, "rfm_precompute_defines__{sname} failure");
   }});
 }}
 """
