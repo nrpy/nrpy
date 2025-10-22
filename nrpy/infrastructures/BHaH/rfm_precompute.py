@@ -600,7 +600,7 @@ def register_CFunctions_rfm_precompute(set_of_CoordSystems: Set[str]) -> None:
 
         includes = ["BHaH_defines.h"]
         cfunc_type = "void"
-        base_params = (
+        params = (
             "const commondata_struct * restrict commondata, "
             "const params_struct * restrict params, "
             "rfm_struct * restrict rfmstruct"
@@ -609,36 +609,35 @@ def register_CFunctions_rfm_precompute(set_of_CoordSystems: Set[str]) -> None:
         kernels_prefunc, _ = generate_rfmprecompute_defines(rfm_precompute)
 
         # -------- malloc/free bodies --------
-        malloc_body = (
-            "/* rfm_precompute_malloc: allocate rfmstruct arrays on host or device */\n"
-            "if (params->is_host) {\n"
-            + "".join(
-                f"  {line}\n" for line in rfm_precompute.rfm_struct__malloc_host_lines
-            )
-            + "} else {\n"
-            "  IFCUDARUN({\n"
-            + "".join(
-                f"    {line}\n"
-                for line in rfm_precompute.rfm_struct__malloc_device_lines
-            )
-            + "  });\n"
-            "}\n"
+        host_malloc_lines = "".join(
+            f"  {line}\n" for line in rfm_precompute.rfm_struct__malloc_host_lines
         )
+        device_malloc_lines = "".join(
+            f"    {line}\n" for line in rfm_precompute.rfm_struct__malloc_device_lines
+        )
+        malloc_body = f"""
+  // rfm_precompute_malloc: allocate rfmstruct arrays on host or device
+  if (params->is_host) {{
+    {host_malloc_lines}
+  }} else {{
+    IFCUDARUN({{ {device_malloc_lines} }});
+  }} // END IF params->is_host
+"""
 
-        free_body = (
-            "/* rfm_precompute_free: free rfmstruct arrays from host or device */\n"
-            "if (params->is_host) {\n"
-            + "".join(
-                f"  {line}\n" for line in rfm_precompute.rfm_struct__free_host_lines
-            )
-            + "} else {\n"
-            "  IFCUDARUN({\n"
-            + "".join(
-                f"    {line}\n" for line in rfm_precompute.rfm_struct__free_device_lines
-            )
-            + "  });\n"
-            "}\n"
+        host_free_lines = "".join(
+            f"  {line}\n" for line in rfm_precompute.rfm_struct__free_host_lines
         )
+        device_free_lines = "".join(
+            f"    {line}\n" for line in rfm_precompute.rfm_struct__free_device_lines
+        )
+        free_body = f"""
+  // rfm_precompute_free: free rfmstruct arrays from host or device
+  if (params->is_host) {{
+    {host_free_lines}
+  }} else {{
+    IFCUDARUN({{ {device_free_lines} }});
+  }} // END IF params->is_host
+"""
 
         # -------- prefuncs --------
         # malloc/free need local CUDA alloc helpers (in case translation unit is compiled in host-only translation).
@@ -658,7 +657,7 @@ def register_CFunctions_rfm_precompute(set_of_CoordSystems: Set[str]) -> None:
             "free": free_body,
         }
 
-        doxygen_descs = {
+        desc_dict = {
             "malloc": """
  * @file rfm_precompute_malloc.c
  * @brief Allocates memory for precomputed reference metric quantities.
@@ -702,9 +701,9 @@ def register_CFunctions_rfm_precompute(set_of_CoordSystems: Set[str]) -> None:
         }
 
         for func_name, func_body in c_functions_to_register.items():
-            function_desc = doxygen_descs[func_name]
+            function_desc = desc_dict[func_name]
             function_name = f"rfm_precompute_{func_name}"
-            params_sig = base_params + (
+            params_sig = params + (
                 ", REAL * restrict xx[3]" if func_name == "defines" else ""
             )
 
