@@ -1,5 +1,8 @@
+#ifndef __CUDA_INTRINSICS_H__
+#define __CUDA_INTRINSICS_H__
+
 // Check for CUDA
-#ifdef __NVCC__
+#if defined(__CUDACC__) && defined(__CUDA_ARCH__)
 // If CUDA instructions are unavailable:
 #define REAL_CUDA_ARRAY REAL
 #define CUDA_width 1 // 1 double per loop iteration
@@ -80,4 +83,6 @@
 // Horizontal addition (output is a double)
 #define HorizAddCUDA(a) (a) // For scalar fallback, no horizontal addition needed
 
-#endif
+#endif // defined(__CUDACC__) && defined(__CUDA_ARCH__)
+
+#endif // ifdef __CUDA_INTRINSICS_H__

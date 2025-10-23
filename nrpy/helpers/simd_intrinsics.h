@@ -1,3 +1,6 @@
+#ifndef __SIMD_INTRINSICS_H__
+#define __SIMD_INTRINSICS_H__
+
 #ifndef MAYBE_UNUSED
 #if __cplusplus >= 201703L
 #define MAYBE_UNUSED [[maybe_unused]]
@@ -55,7 +58,7 @@
 #define UPWIND_ALG(a) _mm512_mask_add_pd(upwind_Integer_0, _mm512_cmp_pd_mask((a), upwind_Integer_0, _CMP_GT_OQ), upwind_Integer_0, upwind_Integer_1)
 
 // If compiled with AVX SIMD instructions enabled:
-#elif __AVX__
+#elif __AVX__  // #ifdef __AVX512F__
 #include <immintrin.h>
 #define REAL_SIMD_ARRAY __m256d
 #define simd_width 4 // 4 doubles per loop iteration
@@ -109,7 +112,7 @@
 //                              = c - (c + a*b + c)
 //                              = SubSIMD(c, AddSIMD(c, AddSIMD(MulSIMD(a, b), c)))
 #define NegFusedMulSubSIMD(a, b, c) _mm256_sub_pd((c), _mm256_add_pd((c), _mm256_add_pd(_mm256_mul_pd((a), (b)), (c))))
-#endif
+#endif // __FMA__
 
 // Initialize vector to zero (output is REAL_SIMD_ARRAY)
 #define SetZeroSIMD _mm256_setzero_pd()
@@ -172,7 +175,7 @@
 //                            = c - (c + a*b + c)
 //                            = SubSIMD(c, AddSIMD(c, AddSIMD(MulSIMD(a, b), c)))
 #define NegFusedMulSubSIMD(a, b, c) _mm_sub_pd((c), _mm_add_pd((c), _mm_add_pd(_mm_mul_pd((a), (b)), (c))))
-#endif
+#endif // __FMA__
 
 // Initialize vector to zero (output is REAL_SIMD_ARRAY)
 #define SetZeroSIMD _mm_setzero_pd()
@@ -196,8 +199,7 @@
   })
 #endif // __SSE3__
 
-#else
-// If SIMD instructions are unavailable:
+#else // If SIMD instructions are unavailable:
 #define REAL_SIMD_ARRAY REAL
 #define simd_width 1 // 1 double per loop iteration
 
@@ -236,4 +238,6 @@
 // Horizontal addition (output is a double)
 #define HorizAddSIMD(a) (a) // For scalar fallback, no horizontal addition needed
 
-#endif
+#endif // ifdef/elif block to determine which, if any SIMD is applicable
+
+#endif // ifdef __SIMD_INTRINSICS_H__
