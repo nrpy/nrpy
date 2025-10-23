@@ -358,7 +358,7 @@ def register_CFunction_main_c(
     ...    par.set_parval_from_str("parallelization", parallelization)
     ...    BHaH.CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
     ...    BHaH.cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(project_name)
-    ...    _ = BHaH.diagnostics.diagnostics.register_CFunction_diagnostics(default_diagnostics_out_every=100, enable_nearest_diagnostics=True, enable_interp_diagnostics=False, enable_volume_integration_diagnostics=False, enable_free_auxevol=False)
+    ...    _ = BHaH.diagnostics.diagnostics.register_all_diagnostics(project_dir="/tmp", set_of_CoordSystems=["Spherical"], default_diagnostics_out_every=100, enable_nearest_diagnostics=True, enable_interp_diagnostics=False, enable_volume_integration_diagnostics=False, enable_free_auxevol=False)
     ...    _ = BHaH.numerical_grids_and_timestep.register_CFunctions(set_of_coordsys, [5], Nxx_dict)
     ...    _ = BHaH.MoLtimestepping.register_all.register_CFunctions()
     ...    _ = BHaH.wave_equation.initial_data_exact_soln.register_CFunction_initial_data()

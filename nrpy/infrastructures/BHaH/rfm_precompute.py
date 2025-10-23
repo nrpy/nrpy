@@ -117,13 +117,9 @@ class ReferenceMetricPrecompute:
         self.rfm_struct__define_kernel_dict: Dict[sp.Expr, Any] = {}
 
         # Host-only readers (later rewritten to CUDA variants if needed):
-        self.readvr_str = ["/* Host-only readers */\n"] * self.N_DIMS
-        self.readvr_intrinsics_outer_str = [
-            "/* Host-only SIMD readers */\n"
-        ] * self.N_DIMS
-        self.readvr_intrinsics_inner_str = [
-            "/* Host-only SIMD readers */\n"
-        ] * self.N_DIMS
+        self.readvr_str = [""] * self.N_DIMS
+        self.readvr_intrinsics_outer_str = [""] * self.N_DIMS
+        self.readvr_intrinsics_inner_str = [""] * self.N_DIMS
 
     # --------------------------- discovery ---------------------------
     def _get_sorted_precomputed_expressions(self) -> List[Tuple[sp.Expr, sp.Expr]]:
@@ -212,8 +208,15 @@ class ReferenceMetricPrecompute:
     # --------------------------- small helper ---------------------------
     def _ccg_rhs(self, expr: sp.Expr) -> str:
         """
-        Generate a single C expression (RHS only) for `expr` using NRPy's c_codegen().
-        We request one simple assignment, then strip off the LHS and trailing semicolon.
+        Return the right-hand-side C expression for a SymPy expression.
+
+        Generates a single assignment using NRPy's ``c_codegen`` and then strips the
+        left-hand side and trailing semicolon, yielding only the RHS C expression.
+
+        :param expr: The SymPy expression to convert to C.
+        :type expr: sympy.Expr
+        :return: The RHS C expression (no LHS, no trailing ``;``).
+        :rtype: str
         """
         # Ask c_codegen for a single, simple line: "REAL __rhs = <expr>;"
         code = ccg.c_codegen(
