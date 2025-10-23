@@ -116,13 +116,11 @@ def generate_prefunc_variable_wavespeed_gfs_all_points(
 # Define functions to set AUXEVOL gridfunctions
 def generate_prefunc_auxevol_gfs_single_point(
     CoordSystem: str,
-    enable_intrinsics: bool = False,
 ) -> Tuple[str, str]:
     """
     Generate function for the AUXEVOL grid functions at a single point.
 
     :param CoordSystem: The coordinate system to use in setting up the AUXEVOL gridfunctions.
-    :param enable_intrinsics: Whether to enable hardware intrinsics (default: False).
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -167,8 +165,8 @@ def generate_prefunc_auxevol_gfs_single_point(
         ["*psi_background", "*ADD_times_AUU"],
         verbose=False,
         include_braces=False,
-        enable_simd=enable_intrinsics,
-    ).replace("SIMD", "CUDA" if parallelization == "cuda" else "SIMD")
+        enable_simd=False,
+    )
 
     prefunc, new_body = parallel_utils.generate_kernel_and_launch_code(
         name,
@@ -196,13 +194,12 @@ def generate_prefunc_auxevol_gfs_all_points(
     :return: None if in registration phase, else the updated NRPy environment.
     """
     parallelization = par.parval_from_str("parallelization")
-    enable_cuda_intrinsics = parallelization == "cuda"
 
     name = "auxevol_gfs_all_points"
     psi_background_memaccess = gri.BHaHGridFunction.access_gf("psi_background")
     ADD_times_AUU_memaccess = gri.BHaHGridFunction.access_gf("ADD_times_AUU")
 
-    kernel_body = f"{parallel_utils.get_loop_parameters(parallelization, enable_intrinsics=enable_cuda_intrinsics)}\n"
+    kernel_body = f"{parallel_utils.get_loop_parameters(parallelization, enable_intrinsics=False)}\n"
 
     single_point_prefunc, single_point_launch = (
         generate_prefunc_auxevol_gfs_single_point(CoordSystem)
@@ -215,7 +212,7 @@ def generate_prefunc_auxevol_gfs_all_points(
         read_xxs=True,
         loop_region="all points",
         OMP_collapse=OMP_collapse,
-        enable_intrinsics=enable_cuda_intrinsics,
+        enable_intrinsics=False,
     )
     for i in range(3):
         kernel_body = kernel_body.replace(f"xx[{i}]", f"x{i}")
@@ -291,10 +288,7 @@ def register_CFunction_auxevol_gfs_set_to_constant(
     )
 
     parallelization = par.parval_from_str("parallelization")
-    enable_cuda_intrinsics = parallelization == "cuda"
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    if enable_cuda_intrinsics:
-        includes += ["intrinsics/cuda_intrinsics.h"]
 
     desc = r"""Call functions that set up all AUXEVOL gridfunctions."""
     cfunc_type = "void"

@@ -7,7 +7,7 @@ Author: Zachariah B. Etienne
 
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import List, Union, cast
+from typing import Union, cast
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
