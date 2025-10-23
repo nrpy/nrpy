@@ -36,6 +36,7 @@ from nrpy.infrastructures import BHaH
 # Define function to compute residual the solution
 def register_CFunction_residual_H_compute_all_points(
     CoordSystem: str,
+    enable_simd_intrinsics: bool,
     OMP_collapse: int = 1,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
@@ -50,6 +51,7 @@ def register_CFunction_residual_H_compute_all_points(
     unused by this routine.
 
     :param CoordSystem: Name of the coordinate system that specializes the generated loop bounds and index macros.
+    :param enable_simd_intrinsics: Whether to enable SIMD intrinsics.
     :param OMP_collapse: OpenMP collapse level for the nested loops.
     :return: None if in registration phase, else the updated NRPy environment.
 
@@ -75,6 +77,8 @@ def register_CFunction_residual_H_compute_all_points(
         return None
 
     includes = ["BHaH_defines.h"]
+    if enable_simd_intrinsics:
+        includes += ["intrinsics/simd_intrinsics.h"]
     desc = """
  * @file residual_H_compute_all_points.c
  * @brief Compute the Hamiltonian-constraint residual on all interior grid points and store the result.
@@ -113,10 +117,10 @@ def register_CFunction_residual_H_compute_all_points(
             [rhs.residual],
             ["dest_gf_address[IDX3(i0,i1,i2)]"],
             enable_fd_codegen=True,
-            enable_simd=False,
+            enable_simd=enable_simd_intrinsics,
         ),
         loop_region="interior",
-        enable_intrinsics=False,
+        enable_intrinsics=enable_simd_intrinsics,
         CoordSystem=CoordSystem,
         enable_rfm_precompute=True,
         read_xxs=False,

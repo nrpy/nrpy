@@ -267,15 +267,11 @@ def _register_param_structs() -> None:
     register_BHaH_defines("commondata_struct", commondata_struct_str)
 
 
-def _register_finite_difference_defines(
-    add_one_for_upwinding: bool, enable_intrinsics: bool, define_no_simd_upwind: bool
-) -> None:
+def _register_finite_difference_defines(add_one_for_upwinding: bool) -> None:
     """
     Register finite difference C-code definitions.
 
     :param add_one_for_upwinding: Flag to add an extra ghost zone for upwinding.
-    :param enable_intrinsics: Flag to enable hardware intrinsics.
-    :param define_no_simd_upwind: Flag to define a non-SIMD UPWIND_ALG macro.
     """
     if any("finite_difference" in key for key in sys.modules):
         nghosts = int(par.parval_from_str("finite_difference::fd_order") / 2)
@@ -293,12 +289,12 @@ def _register_finite_difference_defines(
     #define NO_INLINE __declspec(noinline)
 #else
     #define NO_INLINE // Fallback for unknown compilers
-#endif
-"""
-        if not enable_intrinsics and define_no_simd_upwind:
-            fd_defines_str += """
+#endif // NO_INLINE definition
+
+#ifndef UPWIND_ALG
 // When enable_intrinsics = False, this is the UPWIND_ALG() macro:
 #define UPWIND_ALG(UpwindVecU) UpwindVecU > 0.0 ? 1.0 : 0.0
+#endif // UPWIND_ALG
 """
         register_BHaH_defines("finite_difference", fd_defines_str)
 
@@ -391,8 +387,6 @@ def output_BHaH_defines_h(
     project_dir: str,
     additional_includes: Optional[List[str]] = None,
     restrict_pointer_type: str = "*restrict",
-    enable_intrinsics: bool = True,
-    define_no_simd_UPWIND_ALG: bool = True,
     enable_rfm_precompute: bool = True,
     fin_NGHOSTS_add_one_for_upwinding_or_KO: bool = False,
     DOUBLE_means: str = "double",
@@ -404,8 +398,6 @@ def output_BHaH_defines_h(
     :param project_dir: Directory where the project C code is output.
     :param additional_includes: Additional header files to include.
     :param restrict_pointer_type: Pointer type for restrict, e.g., "*restrict".
-    :param enable_intrinsics: Flag to enable hardware intrinsics.
-    :param define_no_simd_UPWIND_ALG: Flag to define a non-SIMD UPWIND_ALG.
     :param enable_rfm_precompute: Flag for reference metric precomputation.
     :param fin_NGHOSTS_add_one_for_upwinding_or_KO: Add ghost zone for upwinding.
     :param DOUBLE_means: C type for the DOUBLE macro.
@@ -427,11 +419,7 @@ def output_BHaH_defines_h(
     # Step 1: Register all defines by calling helper functions.
     _register_general_defines(additional_includes, DOUBLE_means)
     _register_param_structs()
-    _register_finite_difference_defines(
-        fin_NGHOSTS_add_one_for_upwinding_or_KO,
-        enable_intrinsics,
-        define_no_simd_UPWIND_ALG,
-    )
+    _register_finite_difference_defines(fin_NGHOSTS_add_one_for_upwinding_or_KO)
     _register_grid_defines(enable_rfm_precompute)
 
     # Step 2: Assemble the final header file content.
@@ -473,6 +461,13 @@ def output_BHaH_defines_h(
             file_output_str += output_key(key, value)
 
     file_output_str += """
+#ifdef __cplusplus
+#define restrict __restrict__
+#endif // __cplusplus
+#ifdef __CUDACC__
+#include "BHaH_device_defines.h"
+#endif // __CUDACC__
+
 #ifndef BHAH_TYPEOF
 #if __cplusplus >= 2000707L
 #define BHAH_TYPEOF(a) decltype(a)

@@ -91,14 +91,19 @@ def _generate_c_files_and_header(
             ) = cfunc.generate_full_function()
             name = cfunc.name
 
+        # Change the file extension from .cu to .cc if we're using SIMD intrinsics.
+        this_src_code_file_ext = src_code_file_ext
+        if src_code_file_ext == "cu" and "simd_intrinsics.h" in cfunc.full_function:
+            this_src_code_file_ext = "cc"
+
         subdir_path = project_path / (cfunc.subdirectory or ".")
         subdir_path.mkdir(parents=True, exist_ok=True)
-        c_file_path = subdir_path / f"{name}.{src_code_file_ext}"
+        c_file_path = subdir_path / f"{name}.{this_src_code_file_ext}"
         with open(c_file_path, "w", encoding="utf-8") as file:
             file.write(cfunc.full_function)
         # Store the relative path for the Makefile
         c_files.append(
-            str(Path(cfunc.subdirectory or ".") / f"{name}.{src_code_file_ext}")
+            str(Path(cfunc.subdirectory or ".") / f"{name}.{this_src_code_file_ext}")
         )
 
     # Generate BHaH_function_prototypes.h
@@ -209,6 +214,7 @@ endif"""
             openmp_block = """
 OPENMP_FLAG = -fopenmp
 CFLAGS += $(OPENMP_FLAG)
+CXXFLAGS += $(OPENMP_FLAG)
 LDFLAGS += $(OPENMP_FLAG)"""
     else:
         openmp_block = ""  # No OpenMP flags
@@ -217,6 +223,7 @@ LDFLAGS += $(OPENMP_FLAG)"""
     return f"""{cc_line}
 
 CFLAGS = {cflags}
+CXXFLAGS = -I. -O2 -g -Wall -Wno-unknown-pragmas -march=native
 VALGRIND_CFLAGS = {valgrind_cflags}
 {include_dirs_str}
 {ldflags_str}

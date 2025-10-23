@@ -192,11 +192,7 @@ par.adjust_CodeParam_default(
 # STEP 8: Generate header files, register C functions, set up boundary conditions, and create a Makefile
 BHaH.CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
 BHaH.CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
-BHaH.BHaH_defines_h.output_BHaH_defines_h(
-    project_dir=project_dir,
-    enable_intrinsics=enable_simd,
-    define_no_simd_UPWIND_ALG=False,
-)
+BHaH.BHaH_defines_h.output_BHaH_defines_h(project_dir=project_dir)
 
 #########################################################
 # STEP 9: Copy files and construct Makefile

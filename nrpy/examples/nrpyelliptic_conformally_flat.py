@@ -33,18 +33,11 @@ parser.add_argument(
     help="Floating point precision (e.g. float, double).",
     default="double",
 )
-parser.add_argument(
-    "--disable_intrinsics",
-    action="store_true",
-    help="Flag to disable hardware intrinsics",
-    default=False,
-)
 args = parser.parse_args()
 
 # Code-generation-time parameters:
 fp_type = args.floating_point_precision.lower()
 parallelization = args.parallelization.lower()
-enable_intrinsics = not args.disable_intrinsics
 
 if parallelization not in ["openmp", "cuda"]:
     raise ValueError(
@@ -57,6 +50,7 @@ par.set_parval_from_str("fp_type", fp_type)
 par.set_parval_from_str("parallelization", parallelization)
 par.set_parval_from_str("Infrastructure", "BHaH")
 
+enable_simd_intrinsics = True  # parallelization != "cuda"
 grid_physical_size = 1.0e6
 t_final = grid_physical_size  # This parameter is effectively not used in NRPyElliptic
 nn_max = 10000  # Sets the maximum number of relaxation steps
@@ -229,13 +223,14 @@ BHaH.rfm_precompute.register_CFunctions_rfm_precompute(set_of_CoordSystems)
 # Generate function to compute RHSs
 BHaH.nrpyelliptic.rhs_eval.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
-    enable_intrinsics=enable_intrinsics,
+    enable_intrinsics=(enable_simd_intrinsics and not parallelization == "cuda"),
     OMP_collapse=OMP_collapse,
 )
 
 # Generate function to compute residuals
 BHaH.nrpyelliptic.residual_H_compute_all_points.register_CFunction_residual_H_compute_all_points(
     CoordSystem=CoordSystem,
+    enable_simd_intrinsics=enable_simd_intrinsics,
     OMP_collapse=OMP_collapse,
 )
 
@@ -379,26 +374,8 @@ gpu_defines_filename = BHaH.BHaH_device_defines_h.output_device_headers(
 BHaH.BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     enable_rfm_precompute=True,
-    enable_intrinsics=enable_intrinsics,
     DOUBLE_means="double" if fp_type == "float" else "REAL",
     restrict_pointer_type="*" if parallelization == "cuda" else "*restrict",
-    supplemental_defines_dict=(
-        {
-            "ADDITIONAL GPU DIAGNOSTICS": """
-#define L2_DVGF 0
-#define L2_SQUARED_DVGF 1
-""",
-            "ADDITIONAL HOST DIAGNOSTICS": """
-#define HOST_RESIDUAL_HGF 0
-#define HOST_UUGF 1
-#define NUM_HOST_DIAG 2
-""",
-            "C++/CUDA safe restrict": "#define restrict __restrict__",
-            "GPU Header": f'#include "{gpu_defines_filename}"',
-        }
-        if parallelization == "cuda"
-        else {}
-    ),
 )
 
 # Set griddata struct used for calculations to griddata_device for certain parallelizations
@@ -451,14 +428,13 @@ if parallelization == "cuda":
         project_dir=project_dir,
         subdirectory="intrinsics",
     )
-elif enable_intrinsics:
+if enable_simd_intrinsics:
     copy_files(
         package="nrpy.helpers",
         filenames_list=["simd_intrinsics.h"],
         project_dir=project_dir,
         subdirectory="intrinsics",
     )
-
 
 BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,

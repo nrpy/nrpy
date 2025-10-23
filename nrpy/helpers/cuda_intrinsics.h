@@ -2,7 +2,12 @@
 #define __CUDA_INTRINSICS_H__
 
 // Check for CUDA
-#if defined(__CUDACC__) && defined(__CUDA_ARCH__)
+#if defined(__CUDACC__)
+
+#ifdef UPWIND_ALG
+#undef UPWIND_ALG
+#endif // UPWIND_ALG
+
 // If CUDA instructions are unavailable:
 #define REAL_CUDA_ARRAY REAL
 #define CUDA_width 1 // 1 double per loop iteration
@@ -19,7 +24,7 @@
 #define FusedMulAddCUDA(a, b, c) __fma_rn((a), (b), (c))
 #define FusedMulSubCUDA(a, b, c) FusedMulAddCUDA((a), (b), MulCUDA((-1.0), c))
 #define NegFusedMulAddCUDA(a, b, c) SubCUDA((c), MulCUDA((a), (b)))
-#define NegFusedMulSubCUDA(a, b, c) MulCUDA((-1.0),(FusedMulAddCUDA((a), (b), (c))))
+#define NegFusedMulSubCUDA(a, b, c) MulCUDA((-1.0), (FusedMulAddCUDA((a), (b), (c))))
 
 // Mathematical Functions (Scalar)
 #define SqrtCUDA(a) (__dsqrt_rn((a)))
