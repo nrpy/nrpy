@@ -195,7 +195,8 @@ BHaH.nrpyelliptic.initial_data.register_CFunction_initial_guess_all_points(
 # Generate function that calls functions to set variable wavespeed and all other AUXEVOL gridfunctions
 for CoordSystem in set_of_CoordSystems:
     BHaH.nrpyelliptic.auxevol_gfs_set_to_constant.register_CFunction_auxevol_gfs_set_to_constant(
-        CoordSystem, OMP_collapse=OMP_collapse, enable_intrinsics=enable_intrinsics
+        CoordSystem,
+        OMP_collapse=OMP_collapse,
     )
 
 BHaH.numerical_grids_and_timestep.register_CFunctions(
@@ -377,11 +378,8 @@ gpu_defines_filename = BHaH.BHaH_device_defines_h.output_device_headers(
 )
 BHaH.BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
-    enable_intrinsics=enable_intrinsics,
-    intrinsics_header_lst=(
-        ["cuda_intrinsics.h"] if parallelization == "cuda" else ["simd_intrinsics.h"]
-    ),
     enable_rfm_precompute=True,
+    enable_intrinsics=enable_intrinsics,
     DOUBLE_means="double" if fp_type == "float" else "REAL",
     restrict_pointer_type="*" if parallelization == "cuda" else "*restrict",
     supplemental_defines_dict=(
@@ -446,15 +444,21 @@ BHaH.griddata_commondata.register_CFunction_griddata_free(
     enable_rfm_precompute=True, enable_CurviBCs=True
 )
 
-if enable_intrinsics:
+if parallelization == "cuda":
     copy_files(
         package="nrpy.helpers",
-        filenames_list=[
-            "cuda_intrinsics.h" if parallelization == "cuda" else "simd_intrinsics.h"
-        ],
+        filenames_list=["cuda_intrinsics.h"],
         project_dir=project_dir,
         subdirectory="intrinsics",
     )
+elif enable_intrinsics:
+    copy_files(
+        package="nrpy.helpers",
+        filenames_list=["simd_intrinsics.h"],
+        project_dir=project_dir,
+        subdirectory="intrinsics",
+    )
+
 
 BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,

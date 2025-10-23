@@ -133,16 +133,12 @@ def register_BHaH_defines(module: str, bhah_defines_str: str) -> None:
 
 def _register_general_defines(
     additional_includes: Optional[List[str]],
-    enable_intrinsics: bool,
-    intrinsics_header_lst: List[str],
     double_means: str,
 ) -> None:
     """
     Register general-purpose headers and macros.
 
     :param additional_includes: List of additional user-specified include files.
-    :param enable_intrinsics: Flag to enable hardware intrinsics.
-    :param intrinsics_header_lst: List of intrinsics header files.
     :param double_means: C type for the DOUBLE macro.
     """
     general_defines_str = """#include <ctype.h>   // Character type functions, such as isdigit, isalpha, etc.
@@ -155,10 +151,6 @@ def _register_general_defines(
 #include <string.h>  // String handling functions, such as strlen, strcmp, etc.
 #include <time.h>    // Time-related functions and types, such as time(), clock(),
 """
-    if enable_intrinsics:
-        general_defines_str += "// output_BHaH_defines_h(...,enable_intrinsics=True) was called so we intrinsics headers:\n"
-        for intr_header in intrinsics_header_lst:
-            general_defines_str += f'#include "intrinsics/{intr_header}"\n'
     if additional_includes:
         for include in additional_includes:
             general_defines_str += f'#include "{include}"\n'
@@ -400,7 +392,6 @@ def output_BHaH_defines_h(
     additional_includes: Optional[List[str]] = None,
     restrict_pointer_type: str = "*restrict",
     enable_intrinsics: bool = True,
-    intrinsics_header_lst: Optional[List[str]] = None,
     define_no_simd_UPWIND_ALG: bool = True,
     enable_rfm_precompute: bool = True,
     fin_NGHOSTS_add_one_for_upwinding_or_KO: bool = False,
@@ -414,7 +405,6 @@ def output_BHaH_defines_h(
     :param additional_includes: Additional header files to include.
     :param restrict_pointer_type: Pointer type for restrict, e.g., "*restrict".
     :param enable_intrinsics: Flag to enable hardware intrinsics.
-    :param intrinsics_header_lst: List of intrinsics header files.
     :param define_no_simd_UPWIND_ALG: Flag to define a non-SIMD UPWIND_ALG.
     :param enable_rfm_precompute: Flag for reference metric precomputation.
     :param fin_NGHOSTS_add_one_for_upwinding_or_KO: Add ghost zone for upwinding.
@@ -431,16 +421,11 @@ def output_BHaH_defines_h(
     >>> output_BHaH_defines_h(project_dir=str(project_path))
     >>> validate_strings((project_path / "BHaH_defines.h").read_text(), "BHaH_defines")
     """
-    if intrinsics_header_lst is None:
-        intrinsics_header_lst = ["simd_intrinsics.h"]
-
     project_path = Path(project_dir)
     project_path.mkdir(parents=True, exist_ok=True)
 
     # Step 1: Register all defines by calling helper functions.
-    _register_general_defines(
-        additional_includes, enable_intrinsics, intrinsics_header_lst, DOUBLE_means
-    )
+    _register_general_defines(additional_includes, DOUBLE_means)
     _register_param_structs()
     _register_finite_difference_defines(
         fin_NGHOSTS_add_one_for_upwinding_or_KO,
