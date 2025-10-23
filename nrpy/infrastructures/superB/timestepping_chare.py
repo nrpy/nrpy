@@ -18,6 +18,25 @@ from nrpy.helpers.generic import clang_format
 from nrpy.infrastructures import BHaH, superB
 
 
+def generate_complete_gf_list(
+    Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
+    MoL_method: str,
+) -> List[str]:
+    """
+    Generate the complete list of grid function type names based on the given Method of Lines (MoL) method.
+
+    :param Butcher_dict: Dictionary containing Butcher tableau data.
+    :param MoL_method: Method of Lines (MoL) method name.
+    :return: A list of grid function type names (intermediate-stage names plus
+             'y_n_gfs', 'auxevol_gfs_gfs', and 'diagnostic_output_gfs').
+    """
+    gf_list = BHaH.MoLtimestepping.rk_butcher_table_dictionary.intermediate_stage_gf_names_list(
+        Butcher_dict, MoL_method=MoL_method
+    )
+    gf_list.extend(["y_n_gfs", "auxevol_gfs", "diagnostic_output_gfs"])
+    return gf_list
+
+
 def generate_send_nonlocalinnerbc_data_code(which_gf: str) -> str:
     """
     Generate code for sending nonlocal inner bc data.
@@ -523,24 +542,8 @@ def generate_switch_statement_for_gf_types(
     :param set_parity_types: whether to set parity types in switch statements.
     :return: A string representing the switch statement for the grid function types.
     """
-    # Generating gridfunction names based on the given MoL method
-    (
-        y_n_gridfunctions,
-        non_y_n_gridfunctions_list,
-        _diagnostic_gridfunctions_point_to,
-        _diagnostic_gridfunctions2_point_to,
-    ) = BHaH.MoLtimestepping.intermediate_gridfunction_names_list.generate_gridfunction_names(
-        Butcher_dict, MoL_method=MoL_method
-    )
 
-    # Convert y_n_gridfunctions to a list if it's a string
-    gf_list = (
-        [y_n_gridfunctions] if isinstance(y_n_gridfunctions, str) else y_n_gridfunctions
-    )
-    gf_list.extend(non_y_n_gridfunctions_list)
-
-    # Also add case for diagnostic output gfs, they are allocated separate memory for superB and do not to other gfs
-    gf_list.append("diagnostic_output_gfs")
+    gf_list = generate_complete_gf_list(Butcher_dict, MoL_method=MoL_method)
 
     switch_statement = """
 switch (type_gfs) {
@@ -612,24 +615,8 @@ def generate_switch_statement_for_gf_types_for_entry_method(
     :param MoL_method: Method of Lines (MoL) method name.
     :return: A string representing the switch statement for the grid function types.
     """
-    # Generating gridfunction names based on the given MoL method
-    (
-        y_n_gridfunctions,
-        non_y_n_gridfunctions_list,
-        _diagnostic_gridfunctions_point_to,
-        _diagnostic_gridfunctions2_point_to,
-    ) = BHaH.MoLtimestepping.intermediate_gf_names_list.generate_gridfunction_names(
-        Butcher_dict, MoL_method=MoL_method
-    )
 
-    # Convert y_n_gridfunctions to a list if it's a string
-    gf_list = (
-        [y_n_gridfunctions] if isinstance(y_n_gridfunctions, str) else y_n_gridfunctions
-    )
-    gf_list.extend(non_y_n_gridfunctions_list)
-
-    # Also add case for diagnostic output gfs, they are allocated separate memory for superB and do not to other gfs
-    gf_list.append("diagnostic_output_gfs")
+    gf_list = generate_complete_gf_list(Butcher_dict, MoL_method=MoL_method)
 
     # Keep synching of y n gfs during initial data distinct to prevent mismatch of messages
     gf_list.append("y_n_gfs_initialdata_part1")
@@ -674,26 +661,8 @@ def generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
     :return: A string containing entry method declarations separated by newlines.
     :raises ValueError: If `outer_bcs_type` is not set to either 'radiation' or 'extrapolation'.
     """
-    # Generate gridfunction names based on the given MoL method
-    (
-        y_n_gridfunctions,
-        non_y_n_gridfunctions_list,
-        _diagnostic_gridfunctions_point_to,
-        _diagnostic_gridfunctions2_point_to,
-    ) = BHaH.MoLtimestepping.intermediate_gf_names_list.generate_gridfunction_names(
-        Butcher_dict, MoL_method=MoL_method
-    )
 
-    # Convert y_n_gridfunctions to a list if it's a string
-    gf_list: List[str] = (
-        [y_n_gridfunctions]
-        if isinstance(y_n_gridfunctions, str)
-        else list(y_n_gridfunctions)
-    )
-    gf_list.extend(non_y_n_gridfunctions_list)
-
-    # Also add case for diagnostic output gfs, they are allocated separate memory for superB and do not to other gfs
-    gf_list.append("diagnostic_output_gfs")
+    gf_list = generate_complete_gf_list(Butcher_dict, MoL_method=MoL_method)
 
     # need separate entry methods of y n gf during initial data set up to prevent mismatch of messages
     gf_list.append("Y_N_GFS_INITIALDATA_PART1")
@@ -773,34 +742,8 @@ def output_timestepping_cpp(
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     :param enable_L2norm_BSSN_constraints_diagnostics: Enable diagnostics for the L2 norm of BSSN constraint violations.
     :param enable_BHaHAHA: If True, add creation of horizon_finder and interpolator3d chares and communication with them.
-    :raises ValueError: Raised if any required function is not registered.
     """
     initial_data_desc += " "
-    # Make sure all required C functions are registered
-    missing_functions: List[Tuple[str, str]] = []
-    for func_tuple in [
-        ("params_struct_set_to_default", "CodeParameters.py"),
-        (
-            "numerical_grids_and_timestep",
-            "e.g., numerical_grids_and_timestep.py or user defined",
-        ),
-        ("MoL_malloc_y_n_gfs", "MoL.py"),
-        ("MoL_malloc_non_y_n_gfs", "MoL.py"),
-        ("initial_data", "initial_data.py"),
-        ("MoL_step_forward_in_time", "MoL.py"),
-        ("diagnostics", "log10_L2norm_gf.py"),
-        ("MoL_free_memory_y_n_gfs", "MoL.py"),
-        ("MoL_free_memory_non_y_n_gfs", "MoL.py"),
-    ]:
-        if func_tuple[0] not in cfc.CFunction_dict:
-            missing_functions += [func_tuple]
-    if missing_functions:
-        error_msg = "Error: These functions are required and are not registered.\n"
-        for func_tuple in missing_functions:
-            error_msg += (
-                f'  {func_tuple[0]}, registered by function within "{func_tuple[1]}"\n'
-            )
-        raise ValueError(error_msg)
 
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
@@ -875,20 +818,25 @@ Timestepping::Timestepping(CommondataObject &&inData) {
 
   // Step 2: Initial data are set on y_n_gfs gridfunctions. Allocate storage for them first.
   for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
-    MoL_malloc_y_n_gfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].gridfuncs);
     // Define data needed for syncing gfs across chares
     MoL_sync_data_defines(&griddata_chare[grid].gridfuncs);
   }
-
-  // Step 3: Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping
-  for(int grid=0; grid<commondata.NUMGRIDS; grid++)
-    MoL_malloc_non_y_n_gfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].gridfuncs);
 """
 
     file_output_str += """
-  // Allocate storage for diagnostic gridfunctions
-  for(int grid=0; grid<commondata.NUMGRIDS; grid++)
-    MoL_malloc_diagnostic_gfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].gridfuncs);
+//Allocate storage for gridfunctions on each grid.
+for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
+  const int Nxx_plus_2NGHOSTS_tot = (griddata[grid].params.Nxx_plus_2NGHOSTS0 * //
+                                     griddata[grid].params.Nxx_plus_2NGHOSTS1 * //
+                                     griddata[grid].params.Nxx_plus_2NGHOSTS2);
+
+  BHAH_MALLOC(griddata[grid].gridfuncs.y_n_gfs, sizeof(REAL) * Nxx_plus_2NGHOSTS_tot * NUM_EVOL_GFS);
+
+  if (NUM_AUXEVOL_GFS > 0) {
+    BHAH_MALLOC(griddata[grid].gridfuncs.auxevol_gfs, sizeof(REAL) * Nxx_plus_2NGHOSTS_tot * NUM_AUXEVOL_GFS);
+  } // END IF NUM_AUXEVOL_GFS > 0
+
+} // END LOOP over grids
 """
 
     file_output_str += """
@@ -917,31 +865,20 @@ Timestepping::Timestepping(CkMigrateMessage *msg): CBase_Timestepping(msg) { }
 
 // destructor
 Timestepping::~Timestepping() {
-  // Step 5: Free all allocated memory
+
+  griddata_free(&commondata, griddata, free_non_y_n_gfs_and_core_griddata_pointers);
+
   for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
-    MoL_free_memory_y_n_gfs(&griddata_chare[grid].gridfuncs);
-    {
-      const bool free_auxevol_gfs_if_exist = true;
-      MoL_free_memory_non_y_n_gfs(&griddata_chare[grid].gridfuncs, free_auxevol_gfs_if_exist);
-    }
-    MoL_free_memory_diagnostic_gfs(&griddata_chare[grid].gridfuncs);
     timestepping_free_memory_tmpBuffer(&griddata_chare[grid].nonlocalinnerbcstruct, &griddata_chare[grid].tmpBuffers);"""
-    if enable_rfm_precompute:
-        file_output_str += r"""
-    rfm_precompute_free(&commondata, &griddata_chare[grid].params, griddata_chare[grid].rfmstruct);
-    free(griddata_chare[grid].rfmstruct);"""
     if enable_CurviBCs:
         file_output_str += r"""
-    free(griddata[grid].bcstruct.inner_bc_array);
     free(griddata_chare[grid].bcstruct.inner_bc_array);
     free(griddata_chare[grid].bcstruct.inner_bc_array_nonlocal);
     for(int ng=0;ng<NGHOSTS*3;ng++) {
-     free(griddata[grid].bcstruct.pure_outer_bc_array[ng]);
      free(griddata_chare[grid].bcstruct.pure_outer_bc_array[ng]);
     }"""
     file_output_str += r"""
     for(int i=0;i<3;i++) {
-      free(griddata[grid].xx[i]);
       free(griddata_chare[grid].xx[i]);
     }
     free(griddata_chare[grid].diagnosticstruct.localidx3_diagnostic_1d_y_pt);
@@ -1015,7 +952,6 @@ Timestepping::~Timestepping() {
     }
     free(griddata_chare[grid].nonlocalinnerbcstruct.globalidx3_srcpts_tosend);
   }
-  free(griddata);
   free(griddata_chare);
 }
 """

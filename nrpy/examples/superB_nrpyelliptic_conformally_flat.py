@@ -166,10 +166,21 @@ superB.numerical_grids.register_CFunctions(
 )
 BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
 
-superB.nrpyelliptic.diagnostics.register_CFunction_diagnostics(
-    CoordSystem=CoordSystem,
+superB.diagnostics.register_all_diagnostics(
+    set_of_CoordSystems=set_of_CoordSystems,
+    project_dir=project_dir,
     default_diagnostics_out_every=default_diagnostics_output_every,
+    enable_nearest_diagnostics=True,
+    enable_interp_diagnostics=False,
+    enable_volume_integration_diagnostics=True,
+    enable_free_auxevol=False,
 )
+BHaH.nrpyelliptic.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
+    enable_interp_diagnostics=False
+)
+BHaH.nrpyelliptic.diagnostics_nearest.register_CFunction_diagnostics_nearest()
+BHaH.nrpyelliptic.diagnostics_volume_integration.register_CFunction_diagnostics_volume_integration()
+
 
 if enable_rfm_precompute:
     BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
@@ -309,6 +320,12 @@ if initial_data_type == "axisymmetric":
             "S1_z",
         ]:
             par.adjust_CodeParam_default(param, value)
+
+
+BHaH.diagnostics.diagnostic_gfs_h_create.diagnostics_gfs_h_create(
+    project_dir=project_dir,
+    diagnostic_gfs_names_dict=par.glb_extras_dict["diagnostic_gfs_names_dict"],
+)
 
 #########################################################
 # STEP 3: Generate header files, register C functions and

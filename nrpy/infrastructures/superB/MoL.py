@@ -333,73 +333,6 @@ def generate_rhs_output_exprs(
     )
 
 
-def register_CFunction_MoL_malloc_diagnostic_gfs() -> None:
-    """
-    Register the CFunction 'MoL_malloc_diagnostic_gfs'.
-    This function allocates memory for diagnostic grid functions.
-    :raises RuntimeError: If an error occurs while registering the CFunction
-    :return None
-    """
-    includes: List[str] = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc: str = "Allocate memory for diagnostic gfs"
-    cfunc_type: str = "void"
-    name: str = "MoL_malloc_diagnostic_gfs"
-    params: str = (
-        "const commondata_struct *restrict commondata, const params_struct *restrict params, MoL_gridfunctions_struct *restrict gridfuncs"
-    )
-    body: str = """
-const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
-gridfuncs->diagnostic_output_gfs = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);
-"""
-    try:
-        cfc.register_CFunction(
-            includes=includes,
-            desc=desc,
-            cfunc_type=cfunc_type,
-            name=name,
-            params=params,
-            include_CodeParameters_h=True,
-            body=body,
-        )
-    except Exception as e:
-        raise RuntimeError(
-            f"Error registering CFunction 'MoL_malloc_diagnostic_gfs': {str(e)}"
-        ) from e
-
-
-def register_CFunction_MoL_free_memory_diagnostic_gfs() -> None:
-    """
-    Register the CFunction 'MoL_free_memory_diagnostic_gfs'.
-
-    This function frees the memory allocated for diagnostic grid functions.
-
-    :raises RuntimeError: If an error occurs while registering the CFunction
-
-    :return None
-    """
-    includes: List[str] = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc: str = "Free memory for diagnostic gfs"
-    cfunc_type: str = "void"
-    name: str = "MoL_free_memory_diagnostic_gfs"
-    params: str = "MoL_gridfunctions_struct *restrict gridfuncs"
-    body: str = """
-  free(gridfuncs->diagnostic_output_gfs);
-"""
-    try:
-        cfc.register_CFunction(
-            includes=includes,
-            desc=desc,
-            cfunc_type=cfunc_type,
-            name=name,
-            params=params,
-            body=body,
-        )
-    except Exception as e:
-        raise RuntimeError(
-            f"Error registering CFunction 'MoL_free_memory_diagnostic_gfs': {str(e)}"
-        ) from e
-
-
 def register_CFunction_initialize_yn_and_non_yn_gfs_to_nan(
     Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
     MoL_method: str,
@@ -1007,9 +940,6 @@ def register_CFunctions(
         Butcher_dict=Butcher_dict, MoL_method=MoL_method
     )
     register_CFunction_initialize_yn_and_non_yn_gfs_to_nan(Butcher_dict, MoL_method)
-
-    register_CFunction_MoL_malloc_diagnostic_gfs()
-    register_CFunction_MoL_free_memory_diagnostic_gfs()
 
     (num_evol_gfs_to_sync, num_auxevol_gfs_to_sync, num_aux_gfs_to_sync) = (
         register_CFunction_MoL_sync_data_defines()
