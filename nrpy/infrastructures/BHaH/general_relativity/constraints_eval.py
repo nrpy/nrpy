@@ -13,11 +13,8 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.finite_difference as fin
 import nrpy.helpers.parallel_codegen as pcg
+import nrpy.params as par
 from nrpy.equations.general_relativity.BSSN_constraints import BSSN_constraints
-from nrpy.helpers.expression_utils import (
-    generate_definition_header,
-    get_params_commondata_symbols_from_expr_list,
-)
 from nrpy.infrastructures import BHaH
 
 
@@ -41,32 +38,23 @@ def register_CFunction_constraints_eval(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    includes = ["BHaH_defines.h", "diagnostics/diagnostic_gfs.h"]
+    includes = [
+        "BHaH_defines.h",
+        "diagnostics/diagnostic_gfs.h",
+        "intrinsics/simd_intrinsics.h",
+    ]
+
+    orig_parallelization = par.parval_from_str("parallelization")
+    par.set_parval_from_str("parallelization", "openmp")
     desc = r"""Evaluate BSSN constraints."""
     cfunc_type = "void"
     name = "constraints_eval"
-    params = "const params_struct *restrict params, const REAL *restrict xx[], const REAL *restrict in_gfs, REAL *restrict diagnostic_gfs"
-    Bcon = BSSN_constraints[CoordSystem + ("_T4munu" if enable_T4munu else "")]
-    body = """
-  const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
-  const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
-  const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
-  MAYBE_UNUSED const REAL invdxx0 = params->invdxx0;
-  MAYBE_UNUSED const REAL invdxx1 = params->invdxx1;
-  MAYBE_UNUSED const REAL invdxx2 = params->invdxx2;
-"""
+    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const rfm_struct *restrict rfmstruct, const REAL *restrict in_gfs, REAL *restrict diagnostic_gfs"
+    Bcon = BSSN_constraints[
+        CoordSystem + "_rfm_precompute" + ("_T4munu" if enable_T4munu else "")
+    ]
     expr_list = [Bcon.H, Bcon.Msquared]
-    param_symbols, _ = get_params_commondata_symbols_from_expr_list(expr_list)
-    params_definitions = (
-        generate_definition_header(
-            param_symbols,
-            enable_intrinsics=False,
-            var_access="params->",
-        )
-        + "\n"
-    )
-    body += params_definitions
-    body += BHaH.simple_loop.simple_loop(
+    body = BHaH.simple_loop.simple_loop(
         loop_body=ccg.c_codegen(
             expr_list,
             [
@@ -74,30 +62,31 @@ def register_CFunction_constraints_eval(
                 "diagnostic_gfs[IDX4(DIAG_MSQUARED, i0, i1, i2)]",
             ],
             enable_fd_codegen=True,
-            enable_simd=False,
+            enable_simd=True,
             enable_fd_functions=enable_fd_functions,
             rational_const_alias="static const",
         ),
         loop_region="interior",
-        enable_intrinsics=False,
+        enable_intrinsics=True,
         CoordSystem=CoordSystem,
-        enable_rfm_precompute=False,
-        read_xxs=True,
+        enable_rfm_precompute=True,
+        read_xxs=False,
         OMP_collapse=OMP_collapse,
     )
     prefunc = ""
     if enable_fd_functions:
-        prefunc = fin.construct_FD_functions_prefunc()
+        prefunc += fin.construct_FD_functions_prefunc()
+    par.set_parval_from_str("parallelization", orig_parallelization)
     cfc.register_CFunction(
         subdirectory="diagnostics",
-        enable_simd=False,
+        enable_simd=True,
         includes=includes,
         prefunc=prefunc,
         desc=desc,
         cfunc_type=cfunc_type,
         name=name,
         params=params,
-        include_CodeParameters_h=False,
+        include_CodeParameters_h=True,
         body=body,
         CoordSystem_for_wrapper_func=CoordSystem,
     )

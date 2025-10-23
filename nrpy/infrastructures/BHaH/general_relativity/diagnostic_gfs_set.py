@@ -145,14 +145,8 @@ def register_CFunction_diagnostic_gfs_set(
     } // END applying inner bcs to DIAG_RESIDUAL
 """
     body += """
-    LOOP_OMP("omp parallel for", i0, 0, Nxx_plus_2NGHOSTS0, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
-      const int idx3 = IDX3(i0, i1, i2);
-      diagnostic_gfs[grid][IDX4pt(DIAG_UUGF, idx3)] = y_n_gfs[IDX4pt(UUGF, idx3)];
-      diagnostic_gfs[grid][IDX4pt(DIAG_VVGF, idx3)] = y_n_gfs[IDX4pt(VVGF, idx3)];
-      diagnostic_gfs[grid][IDX4pt(DIAG_GRIDINDEX, idx3)] = (REAL)grid;
-    } // END LOOP over all gridpoints to set diagnostic_gfs
-  } // END LOOP over grids
-"""
+  constraints_eval(commondata, params, rfmstruct, y_n_gfs, diagnostic_gfs);
+} // END LOOP over grids"""
     par.glb_extras_dict["diagnostic_gfs_names_dict"] = diagnostic_gfs_names_dict
 
     cfc.register_CFunction(
