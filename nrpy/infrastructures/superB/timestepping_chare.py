@@ -467,6 +467,7 @@ class Timestepping : public CBase_Timestepping {
     //bool contains_gridcenter;
     const int grid = 0;
     const int which_grid_diagnostics = 0;
+    const bool free_non_y_n_gfs_and_core_griddata_pointers=true;
     bool write_diagnostics_this_step;"""
     if enable_charm_checkpointing:
         file_output_str += r"""
