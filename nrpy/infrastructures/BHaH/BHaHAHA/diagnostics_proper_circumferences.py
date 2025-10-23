@@ -1,3 +1,4 @@
+# BHaHAHA/diagnostics_proper_circumferences.py
 """
 Register the C function for computing polar & equatorial circumferences of the horizon.
 Needs: coordinate centroid of the horizon.

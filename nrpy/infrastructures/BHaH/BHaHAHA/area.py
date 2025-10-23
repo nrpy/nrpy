@@ -1,3 +1,4 @@
+# BHaHAHA/area.py
 """
 Calculate various geometric properties of a surface embedded in a 3D spherical space.
 

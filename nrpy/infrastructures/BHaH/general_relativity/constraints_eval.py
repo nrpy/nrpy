@@ -19,25 +19,6 @@ from nrpy.equations.general_relativity.BSSN_constraints import BSSN_constraints
 from nrpy.infrastructures import BHaH
 
 
-def register_CFunction_Ricci_onept():
-    if pcg.pcg_registration_phase():
-        print("registering!", f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
-        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
-        return None
-    cfc.register_CFunction(
-        subdirectory="diagnostics",
-        enable_simd=True,
-        includes=["stdlib.h"],
-        prefunc="// blah",
-        desc="um hi",
-        cfunc_type="void",
-        name="Ricci_onept",
-        params="commondata_struct *restrict commondata",
-        include_CodeParameters_h=True,
-        body=r"""printf("hello world);\n""",
-    )
-
-
 def register_CFunction_constraints_eval(
     CoordSystem: str,
     enable_T4munu: bool,
@@ -89,18 +70,19 @@ def register_CFunction_constraints_eval(
             for j in range(i, 3):
                 gri.glb_gridfcs_dict.pop(f"RbarDD{i}{j}")
     expr_list = [Bcon.H, Bcon.Msquared]
+    loop_body = ccg.c_codegen(
+        expr_list,
+        [
+            "diagnostic_gfs[IDX4(DIAG_HAMILTONIAN, i0, i1, i2)]",
+            "diagnostic_gfs[IDX4(DIAG_MSQUARED, i0, i1, i2)]",
+        ],
+        enable_fd_codegen=True,
+        enable_simd=True,
+        enable_fd_functions=enable_fd_functions,
+        rational_const_alias="static const",
+    )
     body = BHaH.simple_loop.simple_loop(
-        loop_body=ccg.c_codegen(
-            expr_list,
-            [
-                "diagnostic_gfs[IDX4(DIAG_HAMILTONIAN, i0, i1, i2)]",
-                "diagnostic_gfs[IDX4(DIAG_MSQUARED, i0, i1, i2)]",
-            ],
-            enable_fd_codegen=True,
-            enable_simd=True,
-            enable_fd_functions=enable_fd_functions,
-            rational_const_alias="static const",
-        ),
+        loop_body=loop_body,
         loop_region="interior",
         enable_intrinsics=True,
         CoordSystem=CoordSystem,
