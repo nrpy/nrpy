@@ -582,8 +582,8 @@ def register_CFunction_numerical_grids_and_timestep(
     griddata_host[grid].params.is_host = true;
 #endif // __CUDACC__
     grid++;
-  }} // END independent grid setup.
 """
+        body += "} // END independent grid setup\n"
     elif gridding_approach == "multipatch":
         # fmt: off
         _ = par.CodeParameter("char[200]", __name__, "multipatch_choice", "", commondata=True, add_to_parfile=True)

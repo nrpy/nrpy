@@ -366,9 +366,9 @@ static int compare_by_coord(const void *a, const void *b) {
 
     body = rf"""
   // Interior counts
-  const int N0int = params->Nxx_plus_2NGHOSTS0 - 2 * NGHOSTS;
-  const int N1int = params->Nxx_plus_2NGHOSTS1 - 2 * NGHOSTS;
-  const int N2int = params->Nxx_plus_2NGHOSTS2 - 2 * NGHOSTS;
+  MAYBE_UNUSED const int N0int = params->Nxx_plus_2NGHOSTS0 - 2 * NGHOSTS;
+  MAYBE_UNUSED const int N1int = params->Nxx_plus_2NGHOSTS1 - 2 * NGHOSTS;
+  MAYBE_UNUSED const int N2int = params->Nxx_plus_2NGHOSTS2 - 2 * NGHOSTS;
 
   // Common fixed-point helpers
   MAYBE_UNUSED const int i0_mid = params->Nxx_plus_2NGHOSTS0 / 2;
