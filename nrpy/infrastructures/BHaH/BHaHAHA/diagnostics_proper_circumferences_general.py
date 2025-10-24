@@ -465,7 +465,7 @@ We finally store the ratio C_polar/C_equator and an estimated spin a/M.
 
   // ================================================================
   // Equatorial great circle: orthogonal to s.
-  //   Parameterization: r(alpha) = cos alpha e1 + sin alpha e2, alpha in [-pi, pi).
+  //   Parameterization: r(alpha) = cos(alpha) e1 + sin(alpha) e2, alpha in [-pi, pi).
   //   Convert to (theta, phi), interpolate q-roots, compute derivatives wrt alpha,
   //   build the full line element including q_{theta phi}, and integrate.
   // ================================================================
@@ -504,7 +504,7 @@ We finally store the ratio C_polar/C_equator and an estimated spin a/M.
 
   // ================================================================
   // Polar great circle: contains s.
-  //   Parameterization: r(alpha) = cos alpha s + sin alpha e1, alpha in [-pi, pi).
+  //   Parameterization: r(alpha) = cos(alpha) s + sin(alpha) e1, alpha in [-pi, pi).
   //   Proceed as above.
   // ================================================================
 #pragma omp parallel for
