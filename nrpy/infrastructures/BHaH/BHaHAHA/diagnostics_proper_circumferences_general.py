@@ -49,8 +49,9 @@ Design choices that might look odd at first glance, and why they are intentional
    - Robustness: no branch cuts or unwrapping are needed since we avoid finite differencing of angles.
    - Vectorization-friendly: the precompute step is a tight 2D loop; integration becomes a single scalar gather.
 
-Author: Zachariah B. Etienne
-        zachetie **at** gmail **dot* com
+Authors: Wesley Inselman
+         Zachariah B. Etienne
+         zachetie **at** gmail **dot* com
 """
 
 from inspect import currentframe as cfr
@@ -338,17 +339,17 @@ static inline void cart_to_sph(const REAL r[3], REAL *theta, REAL *phi) {
   *phi   = atan2(y, x);
 } // END FUNCTION cart_to_sph()
 
-// Midpoint integrate over alpha with precomputed 8th-order weights.
-//  We keep this minimal and branchless inside the OpenMP loop for best vectorization.
+// Midpoint integrate over alpha with precomputed 8th-order weights (N_angle == Nxx2 is typically divisible by 8 -> 8th order).
 static inline REAL integrate_over_alpha(const REAL *vals, int N_angle, REAL d_alpha) {
   const REAL *restrict weights;
   int weight_stencil_size;
   bah_diagnostics_integration_weights(N_angle, N_angle, &weights, &weight_stencil_size);
   REAL sum = 0.0;
-#pragma omp parallel for reduction(+ : sum)
-  for (int i = 0; i < N_angle; i++) sum += vals[i] * weights[i % weight_stencil_size];
+  // #pragma omp parallel for reduction(+ : sum) // <- N_angle ~64 => thread creation/destruction makes OMP SLOWER
+  for (int i = 0; i < N_angle; i++)
+    sum += vals[i] * weights[i % weight_stencil_size];
   return sum * d_alpha;
-}
+} // END FUNCTION integrate_over_alpha()
 /* ---------- end helpers ---------- */
 """
     desc = """
@@ -556,7 +557,7 @@ Precomputation strategy on the (theta,phi) grid at fixed i0=NGHOSTS:
   //   Parameterization: r(alpha) = cos(alpha) e1 + sin(alpha) e2, alpha in [-pi, pi).
   //   Convert to (theta, phi), interpolate precomputed scalar integrand, and integrate.
   // ================================================================
-#pragma omp parallel for
+  // #pragma omp parallel for // <- N_angle ~64 => thread creation/destruction makes OMP SLOWER
   for (int i = 0; i < N_angle; i++) {
     const REAL alpha = -M_PI + ((REAL)i + 0.5) * d_alpha;
     REAL rvec[3] = {cos(alpha) * e1[0] + sin(alpha) * e2[0], cos(alpha) * e1[1] + sin(alpha) * e2[1], cos(alpha) * e1[2] + sin(alpha) * e2[2]};
@@ -583,7 +584,7 @@ Precomputation strategy on the (theta,phi) grid at fixed i0=NGHOSTS:
   //   Parameterization: r(alpha) = cos(alpha) s + sin(alpha) e1, alpha in [-pi, pi).
   //   Proceed as above.
   // ================================================================
-#pragma omp parallel for
+  // #pragma omp parallel for reduction(+ : sum) // <- N_angle ~64 => thread creation/destruction makes OMP SLOWER
   for (int i = 0; i < N_angle; i++) {
     const REAL alpha = -M_PI + ((REAL)i + 0.5) * d_alpha;
     REAL rvec[3] = {cos(alpha) * s[0] + sin(alpha) * e1[0], cos(alpha) * s[1] + sin(alpha) * e1[1], cos(alpha) * s[2] + sin(alpha) * e1[2]};
