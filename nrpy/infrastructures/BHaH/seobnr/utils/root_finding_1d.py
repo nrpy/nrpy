@@ -58,7 +58,7 @@ handle_gsl_return_status(status,fsolver_set_status,1,fsolver_set_name);
 do {
   iter++;
   status = gsl_root_fsolver_iterate(s);
-  int fsolver_iterate_status[1] = {GSL_SUCCESS};
+  int fsolver_status[1] = {GSL_SUCCESS};
   char fsolver_name[] = "gsl_root_fsolver_iterate";
   handle_gsl_return_status(status,fsolver_status,1,fsolver_name);
   x = gsl_root_fsolver_root(s);
