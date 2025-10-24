@@ -148,6 +148,10 @@ for (int j = 1; j <= PA_ORDER; j++) {
       break;
     case 1:
       // odd order, compute prstar
+      // note that prstar is always negative (inspiral)
+      // Since upper and lower bounds are a 5% window of current prstar
+      // so upper bound = 0.95*prstar and lower bound = 1.05*prstar
+      // If prstar ~ 0, we can use the bounds from the ODE initial conditions
       x_hi = fabs(prstar[i]) > 1e-14 ? prstar[i] * 0.95 : 0.;
       x_lo = fabs(prstar[i]) > 1e-14 ? prstar[i] * 1.05 : -3e-2;
       prstar[i] = root_finding_1d(x_lo, x_hi, &F_prstar);

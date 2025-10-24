@@ -43,8 +43,7 @@ def register_CFunction_dy_dx() -> Union[None, pcg.NRPyEnv_type]:
 REAL coeffs[9] = {0.};
 int indices[9] = {0,0,0,0,0,0,0,0,0};
 int offset = -4;
-const REAL h = fabs(x[1] - x[0]);
-const REAL sign_h = copysign(1.,h);
+const REAL h = x[1] - x[0];
 for (size_t i = 0; i < 4; i++){
     dy_dx[i] = 0.;
     offset = 4 - (int)(i); // guarantess that first point of the stencil is at the first point of the array.
@@ -52,7 +51,7 @@ for (size_t i = 0; i < 4; i++){
     for (int j = 0; j < 9; j++){
         dy_dx[i] += coeffs[j]*y[i+indices[j]];
     }
-    dy_dx[i] /= (sign_h * h);
+    dy_dx[i] /= h;
 }
 offset = 0;
 for (size_t i = 4; i < nsteps - 4; i++){
@@ -61,7 +60,7 @@ for (size_t i = 4; i < nsteps - 4; i++){
     for (int j = 0; j < 9; j++){
         dy_dx[i] += coeffs[j]*y[i+indices[j]];
     }
-    dy_dx[i] /= (sign_h * h);
+    dy_dx[i] /= h;
 }
 for (size_t i = nsteps - 4; i < nsteps; i++){
     dy_dx[i] = 0.;
@@ -70,7 +69,7 @@ for (size_t i = nsteps - 4; i < nsteps; i++){
     for (int j = 0; j < 9; j++){
         dy_dx[i] += coeffs[j]*y[i+indices[j]];
     }
-    dy_dx[i] /= (sign_h * h);
+    dy_dx[i] /= h;
 }
 """
     cfc.register_CFunction(
