@@ -1,7 +1,41 @@
 # BHaHAHA/diagnostics_proper_circumferences.py
 """
-Register the C function for computing polar & equatorial circumferences of the horizon.
-Needs: coordinate centroid of the horizon.
+Register and generate a C routine that computes equatorial and polar proper circumferences of a horizon surface.
+
+We integrate the arclength along great circles on the 2D surface r = h(theta, phi) using the induced 2-metric q_{AB}.
+Let alpha parameterize a great circle on the unit sphere (so theta = theta(alpha), phi = phi(alpha)) and let overdots
+denote derivatives w.r.t. alpha. The physical line element we integrate is:
+
+    ds = sqrt( q_{theta theta} * (dtheta/dalpha)^2
+               + 2 * q_{theta phi} * (dtheta/dalpha) * (dphi/dalpha)
+               +     q_{phi phi}   * (dphi/dalpha)^2 ) dalpha.
+
+Design choices that might look odd at first glance, and why they are intentional:
+
+* Store/interpolate sqrt(q_{theta theta}) and sqrt(q_{phi phi}) but not sqrt(q_{theta phi}).
+  The diagonals are nonnegative “scale factors” along coordinate lines, so interpolating their square roots reduces
+  dynamic range and suppresses negative overshoots from interpolation; we then square them at use sites to recover q_tt, q_pp.
+  The off-diagonal q_{theta phi} can be positive or negative and enters linearly in the cross term; taking a square root would
+  both be undefined for negative values and discard the sign that the cross term needs.
+
+* Work on the i0 = NGHOSTS radial slice.
+  In this infrastructure, r = h(theta, phi) lives at a fixed interior radial index (the horizon layer). Precomputing
+  the induced 2-metric ingredients on that slice keeps memory traffic low and avoids 3D interpolation for a 2D integral.
+
+* Unwrap phi before differencing.
+  Great circles cross the branch cut at +/- pi; naive finite differences across that cut generate O(2*pi) jumps that
+  corrupt the ds integrand. We explicitly unwrap phi(alpha) prior to forming central differences to maintain continuity.
+
+* Use 8th-order midpoint integration with precomputed weights.
+  The ds integrand is smooth along alpha; a fixed stencil midpoint rule with tuned weights offers excellent accuracy per
+  evaluation, vectorizes well, and avoids the overhead/complexity of adaptive quadrature in tight inner loops.
+
+* Use stack-allocated variable-length arrays (VLAs) for per-angle work buffers.
+  N_angle is known at runtime, and VLAs keep allocation overhead minimal and cache locality high inside OpenMP regions.
+
+* Estimate spin from C_polar/C_equator with a safeguarded Newton–Raphson.
+  We start from an analytic approximation (Alcubierre et al., Eq. 5.3) and refine with a bounded/robust NR step computed
+  from elliptic integrals; we clamp out-of-range updates and provide a clear failure code when convergence is not achieved.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -26,27 +60,27 @@ from nrpy.infrastructures import BHaH
 # circumferential_arclength: Calculates the differential arclength element along a specified direction (theta or phi).
 def circumference_metric_roots() -> Tuple[sp.Expr, sp.Expr, sp.Expr]:
     """
-    Build the three quantities needed to evaluate the proper-circumference arclength integrand.
+    Compute the induced-metric ingredients for the proper-circumference integrand.
 
-    I.e., these quantities:
-    sqrt(q_{theta theta}), sqrt(q_{phi phi}), and q_{theta phi},
+    We construct q_{AB} on the embedded surface r = h(theta, phi) in terms of the ambient spatial metric gamma_{ij}
+    and angular derivatives of h. Explicitly,
+        q_{theta theta} = gamma_{rr} h_{,theta}^2 + 2 gamma_{r theta} h_{,theta} + gamma_{theta theta}
+        q_{phi phi}     = gamma_{rr} h_{,phi}^2  + 2 gamma_{r phi}  h_{,phi}  + gamma_{phi phi}
+        q_{theta phi}   = gamma_{rr} h_{,theta} h_{,phi} + gamma_{r theta} h_{,phi}
+                          + gamma_{r phi} h_{,theta} + gamma_{theta phi}.
 
-    where q_{ab} is the induced 2-metric on r = h(theta,phi).
+    We return sqrt(q_{theta theta}), sqrt(q_{phi phi}), and q_{theta phi} (not sqrt) for the following reasons:
+      (1) The diagonals are nonnegative scale factors; interpolating their square roots improves conditioning and guards
+          against tiny negative overshoots that would otherwise cause NaNs in the outer sqrt(ds^2).
+      (2) The cross-term q_{theta phi} changes sign and enters linearly in the ds integrand; preserving its sign is essential.
 
-    These are pure functions of the ambient metric components gamma_{ij}, the radius h(theta,phi),
-    and its angular derivatives h_{,theta}, h_{,phi}:
-
-    q_{theta theta} = gamma_{rr} h_{,theta}^2 + 2 gamma_{r theta} h_{,theta} + gamma_{theta theta}
-    q_{phi phi}   = gamma_{rr} h_{,phi}^2  + 2 gamma_{r phi}  h_{,phi}  + gamma_{phi phi}
-    q_{theta phi}  = gamma_{rr} h_{,theta} h_{,phi} + gamma_{r theta} h_{,phi} + gamma_{r phi} h_{,theta} + gamma_{theta phi}
-
-    The square-roots are applied only to the diagonal elements, because the line element along a curve
-    requires q_{theta theta}, q_{phi phi}, and q_{theta phi} separately.
+    :return: A tuple of SymPy expressions (sqrt_qtt, sqrt_qpp, qtp) evaluated with xx0 -> h substitutions applied.
     """
     Th = ExpansionFunctionTheta["Spherical"]
     h = sp.Symbol("hh", real=True)
     h_dD = ixp.declarerank1("hh_dD")
 
+    # Induced 2-metric components on r = h(theta,phi), expressed on the spherical reference metric.
     qtt = (
         Th.gammaDD[0][0] * h_dD[1] ** 2
         + 2 * Th.gammaDD[0][1] * h_dD[1]
@@ -64,6 +98,8 @@ def circumference_metric_roots() -> Tuple[sp.Expr, sp.Expr, sp.Expr]:
         + Th.gammaDD[1][2]
     )
 
+    # Replace the symbolic radius placeholder xx0 with h in all expressions, then
+    # return sqrt(diagonals) and raw off-diagonal as discussed above.
     sqrt_qtt = sp.sqrt(qtt.replace(sp.sympify("xx0"), h))
     sqrt_qpp = sp.sqrt(qpp.replace(sp.sympify("xx0"), h))
     qtp = qtp.replace(sp.sympify("xx0"), h)
@@ -74,18 +110,26 @@ def register_CFunction_diagnostics_proper_circumferences(
     enable_fd_functions: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Register the C function for computing minimum, maximum, and mean radius *from the coordinate centroid* of the horizon.
-    Needs: coordinate centroid of the horizon.
+    Register the C routine that computes equatorial/polar proper circumferences and a spin estimate from their ratio.
 
-    :param enable_fd_functions: Whether to enable finite difference functions, defaults to True.
+    This generates a C function that:
+      * precomputes sqrt(q_{theta theta}), sqrt(q_{phi phi}), and q_{theta phi} on the (theta,phi) grid at i0=NGHOSTS,
+      * samples great circles defined by the provided spin axis s^i,
+      * builds the line element
+            ds = sqrt( q_tt*(dtheta/dalpha)^2 + 2*q_tp*(dtheta/dalpha)*(dphi/dalpha) + q_pp*(dphi/dalpha)^2 ) dalpha,
+        with q_tt = (sqrt_qtt)^2 and q_pp = (sqrt_qpp)^2,
+      * integrates ds over alpha in [-pi, pi) to obtain C_equator and C_polar, and
+      * estimates a spin magnitude a/M from C_polar/C_equator.
+
+    :param enable_fd_functions: Whether to emit FD derivative helpers in the generated code (passed through to codegen).
     :return: An NRPyEnv_type object if registration is successful, otherwise None.
 
     DocTests:
     >>> import nrpy.grid as gri
     >>> _ = gri.register_gridfunctions("hh")[0]
     >>> env = register_CFunction_diagnostics_proper_circumferences()
-    Setting up reference_metric[Spherical]...
     Setting up ExpansionFunctionThetaClass[Spherical]...
+    Setting up reference_metric[Spherical]...
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -94,89 +138,96 @@ def register_CFunction_diagnostics_proper_circumferences(
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     prefunc = """
 /**
+ * Elliptic integrals and helpers for circumference diagnostics.
+ *
+ * The ds integrand used later is:
+ *   ds = sqrt( q_tt * (dtheta/dalpha)^2 + 2*q_tp*(dtheta/dalpha)*(dphi/dalpha) + q_pp*(dphi/dalpha)^2 ) dalpha,
+ * with q_tt = (sqrt_qtt)^2, q_pp = (sqrt_qpp)^2, and q_tp as-is. We store sqrt(diagonal) for stability/positivity.
+ */
+
+/**
  * Computes the complete elliptic integrals of the second kind E(k) and the first kind K(k)
  * using 8th-order midpoint integration.
+ *
+ * Rationale: The integrands are smooth and bounded on [0, pi/2]; a fixed high-order midpoint stencil with precomputed
+ *            weights delivers excellent accuracy per function evaluation, vectorizes well, and avoids adaptive overhead
+ *            in tight loops. 128 sample points is a conservative default providing ample headroom for convergence tests.
  *
  * @param k - The elliptic modulus parameter (0 <= k <= 1).
  * @param E - Pointer to store the result for the elliptic integral of the second kind E(k).
  * @param K - Pointer to store the result for the elliptic integral of the first kind K(k).
  *
- * This function uses a midpoint integration method with a fixed number of sample points (128)
- * to ensure high accuracy, leveraging precomputed weights for efficiency.
- *
  * @note The function is parallelized with OpenMP to improve performance on large arrays.
  */
 static void elliptic_E_and_K_integrals(const REAL k, REAL *restrict E, REAL *restrict K) {
-  static const int N_sample_pts = 128; // Number of sample points for integration. Chosen for high precision.
-  const REAL *restrict weights;        // Precomputed integration weights for accuracy in the midpoint method.
-  int weight_stencil_size;             // Size of the weight stencil to correctly cycle through the weights.
+  static const int N_sample_pts = 128; // High-accuracy default; power-of-two to simplify weight cycling.
+  const REAL *restrict weights;        // 8th-order midpoint weights (periodic stencil).
+  int weight_stencil_size;             // Size of the periodic weight stencil.
 
   // Retrieve the integration weights based on the number of sample points (divisible by 8 -> 8th order).
   bah_diagnostics_integration_weights(N_sample_pts, N_sample_pts, &weights, &weight_stencil_size);
 
-  const REAL a = 0.0;                            // Lower limit of integration (0 radians).
-  const REAL b = M_PI / 2.0;                     // Upper limit of integration (pi/2 radians).
-  const REAL h = (b - a) / ((REAL)N_sample_pts); // Step size for each subinterval based on sample points.
+  const REAL a = 0.0;                            // Lower limit (0).
+  const REAL b = M_PI / 2.0;                     // Upper limit (pi/2).
+  const REAL h = (b - a) / ((REAL)N_sample_pts); // Midpoint step.
 
-  REAL sum_E = 0.0; // Accumulator for the elliptic integral of the second kind E(k).
-  REAL sum_K = 0.0; // Accumulator for the elliptic integral of the first kind K(k).
+  REAL sum_E = 0.0; // Accumulator for E(k).
+  REAL sum_K = 0.0; // Accumulator for K(k).
 
-  // Parallelized loop to compute both integrals E(k) and K(k) using OpenMP.
+  // Parallelized midpoint rule with periodic weights.
 #pragma omp parallel for reduction(+ : sum_E, sum_K)
   for (int i = 0; i < N_sample_pts; i++) {
-    const REAL theta = a + ((REAL)i + 0.5) * h; // Compute the midpoint for the current subinterval.
-    // Compute sin(theta). For optimization, we could use a lookup table if N_sample_pts is constant.
+    const REAL theta = a + ((REAL)i + 0.5) * h; // midpoint
     const REAL sintheta = sin(theta);
-    // Compute the integrands for the elliptic integrals of the second & first kinds (E(k) & K(k), respectively) at this midpoint.
     const REAL elliptic_E_integrand = sqrt(1.0 - k * sintheta * sintheta);
     const REAL elliptic_K_integrand = 1.0 / elliptic_E_integrand;
-    // Update the running sums for E(k) & K(k), applying the corresponding weight.
     sum_E += weights[i % weight_stencil_size] * elliptic_E_integrand;
     sum_K += weights[i % weight_stencil_size] * elliptic_K_integrand;
-  } // END PARALLEL FOR: Loop through sample points to compute both integrals
+  }
 
-  // Multiply by the step size to complete the integration and store the results.
-  *E = sum_E * h; // Elliptic integral of the second kind.
-  *K = sum_K * h; // Elliptic integral of the first kind.
-} // END FUNCTION: elliptic_E_and_K_integrals
+  *E = sum_E * h;
+  *K = sum_K * h;
+}
 
 /**
  * Estimates the spin parameter magnitude for equilibrium black holes based on the circumference ratio C_r.
  *
- * @param C_r The circumference ratio parameter used to estimate the spin.
- * @return    The estimated spin parameter. Returns -10.0 if C_r is out of valid bounds or if convergence fails.
+ * Rationale & safeguards:
+ *   * Start from an analytic approximation (Alcubierre et al., Eq. 5.3) to land near the root basin.
+ *   * Refine with Newton–Raphson using elliptic integrals (Eq. 5.2), but clamp any out-of-range iterates
+ *     into [0,1] and terminate if we step negative; this avoids excursions where the modulus or square roots
+ *     would be undefined or numerically fragile.
  *
- * This function implements an iterative method to estimate the spin parameter using
- * elliptic integrals. It starts with an initial guess and refines it to achieve a desired
- * relative tolerance. The method is based on Eq. 5.2 of Alcubierre et al. (arXiv:gr-qc/0411149).
+ * @param C_r The circumference ratio C_polar/C_equator used to estimate the spin.
+ * @return    The estimated spin parameter. Returns -10.0 if C_r is out of valid bounds or if convergence fails.
  */
 REAL compute_spin(const REAL C_r) {
-  // Validate the input parameter. Return an error code if C_r exceeds the valid range.
+  // Reject obviously invalid input.
   if (C_r > 1)
     return -10.0;
 
-  // Turns out, this is a conservative spin estimate.
+  // Conservative initial guess (updated below by analytic approximation).
   REAL spin = 0.9;
 
-  // Refine the initial guess using an analytical approximation based on Eq. 5.3 of Alcubierre et al arXiv:gr-qc/0411149.
+  // Analytic approximation (Alcubierre et al., Eq. 5.3).
   const REAL spin_sq = 1 - (2.55 * C_r - 1.55) * (2.55 * C_r - 1.55);
   if (spin_sq >= 0 && spin_sq < 1)
     spin = sqrt(spin_sq);
 
-  const REAL rel_tolerance = 1e-7; // Desired relative tolerance for convergence.
-  REAL rel_diff = 1e10;            // Initialize relative difference to a large value.
-  const int max_its = 20;          // Maximum number of iterations to prevent infinite loops.
-  int it = 0;                      // Iteration counter.
+  const REAL rel_tolerance = 1e-7; // Tight tolerance is cheap here.
+  REAL rel_diff = 1e10;            // Start far away.
+  const int max_its = 20;          // Hard cap to avoid rare pathologies.
+  int it = 0;
 
-  // Iteratively refine the spin estimate until the relative difference is within tolerance or max iterations are reached.
+  // Safeguarded Newton–Raphson iteration.
   while (rel_diff > rel_tolerance && it < max_its) {
     const REAL x = spin;
     REAL E, K;
 
-    // Compute the elliptic integrals E and K based on the current spin estimate.
+    // Compute elliptic integrals at the current iterate; modulus choice matches the analytic mapping.
     elliptic_E_and_K_integrals(-((x * x) / pow(1 + sqrt(1 - (x * x)), 2)), &E, &K);
 
-    // Next complete a Newton-Raphson iteration to improve the spin estimate.
+    // One Newton–Raphson update (generated by NRPy from a symbolic expression).
 """
     # Newton-Raphson is a bit more robust; also our initial guess is pretty good, so typically we need only a few iterations.
     prefunc += ccg.c_codegen(
@@ -184,21 +235,21 @@ REAL compute_spin(const REAL C_r) {
     )
     prefunc += r"""
     if (x_np1 > 1.0) {
-      // Adjust the spin estimate to remain within valid bounds.
+      // Reflect back into [0,1] if we overshoot; keeps modulus well-defined.
       spin = 2.0 - x_np1;
     } else if (x_np1 < 0) {
-      // Terminate iteration if the spin magnitude estimate becomes negative.
+      // Bail out if we step negative; report failure below.
       it = max_its;
       break;
     } else {
-      // Calculate the relative difference and update the spin estimate.
+      // Accept step and measure relative change.
       rel_diff = fabs(x_np1 - x) / x;
       spin = x_np1;
     }
     it++;
-  } // END WHILE: Refining spin estimate until convergence or maximum iterations
+  }
 
-  // Assign spin=-10 if the Newton-Raphson did not converge within the allowed iterations.
+  // Report a clear failure code if we couldn't converge.
   if (it >= max_its) {
     spin = -10.0;
   }
@@ -209,7 +260,9 @@ REAL compute_spin(const REAL C_r) {
 #define BHAHAHA_FAILURE (-1)
 #endif
 
-/* ---------- small vector & math helpers (pure C) ---------- */
+// ---------- small vector & math helpers (pure C) ----------
+// These are intentionally tiny & inlined: they live in tight OpenMP loops,
+// and we want predictable codegen and good autovectorization.
 static inline REAL dot3(const REAL a[3], const REAL b[3]) { return a[0]*b[0] + a[1]*b[1] + a[2]*b[2]; }
 static inline void cross3(const REAL a[3], const REAL b[3], REAL c[3]) {
   c[0] = a[1]*b[2] - a[2]*b[1];
@@ -218,13 +271,16 @@ static inline void cross3(const REAL a[3], const REAL b[3], REAL c[3]) {
 }
 static inline REAL norm3(const REAL a[3]) { return sqrt(dot3(a,a)); }
 static inline void normalize3(REAL a[3]) { const REAL n = norm3(a); if (n > 0.0) { a[0]/=n; a[1]/=n; a[2]/=n; } }
+// Wrap dphi into (-pi, pi]; helps robustly unwrap cumulative angles later.
 static inline REAL wrap_dphi(REAL dphi) { while (dphi > M_PI) dphi -= 2.0*M_PI; while (dphi <= -M_PI) dphi += 2.0*M_PI; return dphi; }
+// Build an orthonormal basis {e1, e2} orthogonal to s; avoid near-collinearity for numerical stability.
 static inline void build_basis_from_s(const REAL s[3], REAL e1[3], REAL e2[3]) {
   REAL a[3] = {1.0, 0.0, 0.0};
   if (fabs(dot3(a,s)) > 0.9) { a[0]=0.0; a[1]=1.0; a[2]=0.0; }
   cross3(s, a, e1); normalize3(e1);
   cross3(s, e1, e2); normalize3(e2);
 }
+// Cartesian unit vector -> spherical angles (theta, phi); inputs here are unit by construction.
 static inline void cart_to_sph(const REAL r[3], REAL *theta, REAL *phi) {
   const REAL x=r[0], y=r[1], z=r[2];
   REAL zz = z; if (zz < -1.0) zz = -1.0; if (zz > 1.0) zz = 1.0;
@@ -232,14 +288,15 @@ static inline void cart_to_sph(const REAL r[3], REAL *theta, REAL *phi) {
   *phi   = atan2(y, x);
 }
 
-/* Compute dtheta/dalpha and dphi/dalpha with central differences.
- * phi(alpha) is unwrapped first to avoid the branch cut at +/- pi: without unwrapping,
- * differences across the cut would produce O(2*pi) jumps that corrupt the line element. */
+// Compute dtheta/dalpha and dphi/dalpha with central differences.
+// IMPORTANT: We unwrap phi(alpha) first to avoid the +/- pi branch cut. Without unwrapping,
+// differences across the cut produce O(2*pi) jumps that would pollute the ds integrand.
 static inline void derivs_wrt_alpha(const REAL *theta, const REAL *phi,
                                     REAL *dtheta_dalpha, REAL *dphi_dalpha,
                                     int N, REAL d_alpha) {
   REAL *phi_unwrap = (REAL *)malloc((size_t)N * sizeof(REAL));
   if (phi_unwrap == NULL) {
+    // Fallback: difference across wrapped phi using wrap_dphi on the fly.
     for (int i = 0; i < N; i++) {
       const int im = (i - 1 + N) % N, ip = (i + 1) % N;
       dtheta_dalpha[i] = (theta[ip] - theta[im]) / (2.0*d_alpha);
@@ -247,6 +304,7 @@ static inline void derivs_wrt_alpha(const REAL *theta, const REAL *phi,
     }
     return;
   }
+  // Cumulative unwrap: ensures continuity over the full loop.
   phi_unwrap[0] = phi[0];
   for (int i = 1; i < N; i++) {
     const REAL d = wrap_dphi(phi[i] - phi[i-1]);
@@ -260,6 +318,8 @@ static inline void derivs_wrt_alpha(const REAL *theta, const REAL *phi,
   free(phi_unwrap);
 }
 
+// Midpoint integrate over alpha with precomputed 8th-order weights.
+//  We keep this minimal and branchless inside the OpenMP loop for best vectorization.
 static inline REAL integrate_over_alpha(const REAL *vals, int N_angle, REAL d_alpha) {
   const REAL *restrict weights;
   int weight_stencil_size;
@@ -270,7 +330,8 @@ static inline REAL integrate_over_alpha(const REAL *vals, int N_angle, REAL d_al
   return sum * d_alpha;
 }
 
-/* DRY helper: interpolate sqrt(q_{theta theta}), sqrt(q_{phi phi}), and q_{theta phi} to dst_pts[ (theta,phi) ] */
+// interpolate sqrt(q_{theta theta}), sqrt(q_{phi phi}), and q_{theta phi} to dst_pts[(theta,phi)].
+//  Note the diagonals are stored as their square roots to enforce positivity & improve conditioning.
 static inline int interp_qroots(const griddata_struct *grid,
                                 REAL *restrict (*coords)[3],
                                 const REAL *restrict src_qtt,
@@ -304,22 +365,21 @@ static inline int interp_qroots(const griddata_struct *grid,
 Computes proper circumferences along the equator and polar directions with respect to the provided spin axis,
 using the induced 2-metric q_{AB} on the surface r = h(theta,phi).
 
+Line element integrated (alpha parametrizes the great circle):
+    ds = sqrt( q_tt * (dtheta/dalpha)^2 + 2*q_tp*(dtheta/dalpha)*(dphi/dalpha) + q_pp * (dphi/dalpha)^2 ) dalpha,
+with q_tt = (sqrt_qtt)^2, q_pp = (sqrt_qpp)^2, and q_tp as-is. Storing sqrt(diagonals) improves interpolation stability
+and preserves positivity; keeping q_tp raw preserves the sign required by the cross term.
+
 @param commondata - Pointer to common data structure containing shared parameters and settings.
 @param griddata - Pointer to grid data structures for each grid, containing parameters and gridfunctions.
 @return - Status code indicating success or type of error (e.g., BHAHAHA_SUCCESS or INITIAL_DATA_MALLOC_ERROR).
-@note - This function uses OpenMP for parallel loops and performs interpolation and integration over grid data.
+@note - Uses OpenMP for parallel loops; performs interpolation and midpoint integration over angular samples.
 
-We precompute on the (theta,phi) grid at fixed i0=NGHOSTS the following three quantities:
-  sqrt(q_{theta theta}), sqrt(q_{phi phi}), and q_{theta phi},
-generated via NRPy's SymPy expressions (BHaHAHA/area.py::circumference_metric_roots).
+Precomputation strategy on the (theta,phi) grid at fixed i0=NGHOSTS:
+  sqrt(q_{theta theta}), sqrt(q_{phi phi}), and q_{theta phi} are generated via NRPy's SymPy expressions
+  (BHaHAHA/area.py::circumference_metric_roots), then interpolated along great circles defined by the unit spin axis s^i.
 
-Then, along great circles defined by the unit spin axis s^i, we interpolate these quantities,
-build the proper line element sqrt(q_tt (dtheta/dalpha)^2 + 2 q_tp (dtheta/dalpha)(dphi/dalpha) + q_pp (dphi/dalpha)^2),
-and integrate over alpha in [-pi,pi) to obtain:
-  - equator_circ: great circle orthogonal to s^i,
-  - polar_circ:  great circle containing s^i.
-
-We finally store the ratio C_polar/C_equator and an estimated spin a/M.
+We finally store C_polar, C_equator, their ratio (C_polar/C_equator), and an estimated spin a/M based on the ratio.
 """
     cfunc_type = "int"
     name = "diagnostics_proper_circumferences"
@@ -327,7 +387,7 @@ We finally store the ratio C_polar/C_equator and an estimated spin a/M.
         "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
     )
     body = r"""
-  const int NUM_DIAG_GFS = 3; // which_gf in {0: sqrt(q_tt), 1: sqrt(q_pp), 2: q_tp}
+  const int NUM_DIAG_GFS = 3; // which_gf in {0: sqrt(q_tt), 1: sqrt(q_pp), 2: q_tp}; diagonals as sqrt for stability.
   const int grid = 0;
   // Extract grid dimensions, including ghost zones, for each coordinate direction. Needed for IDX4() macro.
   const int Nxx_plus_2NGHOSTS0 = griddata[grid].params.Nxx_plus_2NGHOSTS0;
@@ -336,6 +396,7 @@ We finally store the ratio C_polar/C_equator and an estimated spin a/M.
   const int NUM_THETA = Nxx_plus_2NGHOSTS1; // Needed for IDX2() macro.
 
   REAL *restrict metric_data_gfs;
+  // Single heap allocation sized for a 2D (theta,phi) slab at i0 = NGHOSTS.
   BHAH_MALLOC(metric_data_gfs, Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_DIAG_GFS);
 
   // Compute sqrt(q_{theta theta}), sqrt(q_{phi phi}), and q_{theta phi} across the entire (theta,phi) grid at i0=NGHOSTS.
@@ -347,13 +408,13 @@ We finally store the ratio C_polar/C_equator and an estimated spin a/M.
     // Inverse grid spacings for theta and phi directions.
     const REAL invdxx1 = griddata[grid].params.invdxx1;
     const REAL invdxx2 = griddata[grid].params.invdxx2;
-    const int i0 = NGHOSTS; // Fixed index for radial coordinate (r).
+    const int i0 = NGHOSTS; // Fixed index for radial coordinate (r) where r=h(theta,phi) lives.
 
     // Loop over angular grid points (theta and phi) to compute:
     // 1. sqrt(q_{theta theta}), stored to metric_data_gfs[IDX4(0,...)], and
-    // 2. sqrt(q_{phi phi}), stored to metric_data_gfs[IDX4(1,...)] at each point (theta, phi).
-    // 3. q_{theta phi}, stored to metric_data_gfs[IDX4(2,...)] at each point (theta, phi).
-    // Notice we do clever indexing to ensure this 2D computation stays within the memory bounds of (3D) metric_data_gfs.
+    // 2. sqrt(q_{phi phi}),    stored to metric_data_gfs[IDX4(1,...)] at each point (theta, phi).
+    // 3. q_{theta phi},       stored to metric_data_gfs[IDX4(2,...)]. Keep sign; no sqrt.
+    // Clever IDX math ensures this 2D computation stays within the memory bounds of the 3D allocation.
 #pragma omp parallel for
     for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++) {
       const MAYBE_UNUSED REAL xx2 = xx[2][i2]; // Phi coordinate at index i2.
@@ -362,7 +423,7 @@ We finally store the ratio C_polar/C_equator and an estimated spin a/M.
 """
     # Generate the three outputs from the induced 2-metric roots:
     body += ccg.c_codegen(
-        list(BHaH.BHaHAHA.area.circumference_metric_roots()),
+        list(circumference_metric_roots()),
         [
             "metric_data_gfs[IDX4pt(0, 0) + IDX2(i1, i2)]",  # sqrt(q_tt)
             "metric_data_gfs[IDX4pt(1, 0) + IDX2(i1, i2)]",  # sqrt(q_pp)
@@ -389,13 +450,7 @@ We finally store the ratio C_polar/C_equator and an estimated spin a/M.
           const int dstpt = bcstruct->inner_bc_array[pt].dstpt; // Destination point index.
           const int srcpt = bcstruct->inner_bc_array[pt].srcpt; // Source point index for copying.
 
-          // Extract the i0, i1, and i2 indices from dstpt and srcpt.
-          //  -> idx3 = i + Nx0*(j + Nx1*k)
-          //  -> i = mod(idx3, Nx0)
-          //   tmp = (idx3-i)/Nx0
-          //  -> j = mod(tmp, Nx1)
-          //  -> k = (tmp-j)/Nx1
-
+          // Decode (i0,i1,i2) from the flattened idx3; only copy if we are on the i0 == NGHOSTS slab.
           const int dst_i0 = dstpt % Nxx_plus_2NGHOSTS0;
           const int dsttmp = (dstpt - dst_i0) / Nxx_plus_2NGHOSTS0;
           const int dst_i1 = dsttmp % Nxx_plus_2NGHOSTS1;
@@ -406,7 +461,6 @@ We finally store the ratio C_polar/C_equator and an estimated spin a/M.
           const int src_i1 = srctmp % Nxx_plus_2NGHOSTS1;
           const int src_i2 = (srctmp - src_i1) / Nxx_plus_2NGHOSTS1;
 
-          // Apply boundary condition if at the radial interior point (i0 == NGHOSTS).
           if (dst_i0 == NGHOSTS) {
             metric_data_gfs[IDX4pt(which_gf, 0) + IDX2(dst_i1, dst_i2)] = metric_data_gfs[IDX4pt(which_gf, 0) + IDX2(src_i1, src_i2)];
           }
@@ -415,12 +469,12 @@ We finally store the ratio C_polar/C_equator and an estimated spin a/M.
     } // END application of inner boundary conditions
   } // END computation of q-metric root gridfunctions
 
-  // Number of angular points to sample over 2 pi radians.
+  // Number of angular points to sample over 2 pi radians (controls resolution of great-circle integrals).
   const int N_angle = griddata[grid].params.Nxx2;
-  // Compute the angular increment for sampling over 2 pi radians, in alpha parameter.
+  // Uniform alpha step for midpoint samples in [-pi, pi).
   const REAL d_alpha = (M_PI - (-M_PI)) / ((REAL)N_angle);
 
-  // C99 variable-length arrays on the stack (no heap allocations here).
+  // C99 variable-length arrays on the stack (per-thread in OpenMP); avoids heap overhead in tight loops.
   REAL dst_pts[N_angle][2];
   REAL theta[N_angle];
   REAL phi[N_angle];
@@ -431,7 +485,7 @@ We finally store the ratio C_polar/C_equator and an estimated spin a/M.
   REAL qtp[N_angle];
   REAL integrand[N_angle];
 
-  // Next: normalize spin axis and write it back through the macro-backed fields.
+  // Normalize spin axis; if zero-length is provided, fall back to z-axis for determinism.
   REAL s[3] = {
     commondata->bhahaha_diagnostics->BHAHAHA_SPIN_AXIS_X, // unit spin direction, x-component
     commondata->bhahaha_diagnostics->BHAHAHA_SPIN_AXIS_Y, // unit spin direction, y-component
@@ -455,7 +509,7 @@ We finally store the ratio C_polar/C_equator and an estimated spin a/M.
   REAL e1[3], e2[3];
   build_basis_from_s(s, e1, e2);
 
-  // Convenience base pointers for interpolation sources:
+  // Convenience base pointers for interpolation sources; diagonals are stored as square roots by design.
   const REAL *restrict src_qtt = &metric_data_gfs[IDX4pt(0, 0)]; // sqrt(q_{theta theta})
   const REAL *restrict src_qpp = &metric_data_gfs[IDX4pt(1, 0)]; // sqrt(q_{phi phi})
   const REAL *restrict src_qtp = &metric_data_gfs[IDX4pt(2, 0)]; // q_{theta phi}
@@ -490,14 +544,16 @@ We finally store the ratio C_polar/C_equator and an estimated spin a/M.
     }
   }
 
-  // Compute dtheta/dalpha and dphi/dalpha along the equator, with phi unwrapped to avoid branch-cut artifacts.
+  // Compute dtheta/dalpha and dphi/dalpha along the equator; phi is unwrapped inside this helper.
   derivs_wrt_alpha(theta, phi, dth, dph, N_angle, d_alpha);
 
   // Build the proper line-element integrand and integrate to obtain C_equator.
+  // NOTE: q_tt and q_pp are reconstructed by squaring the stored square roots; q_tp is used as-is to preserve sign.
 #pragma omp parallel for
   for (int i = 0; i < N_angle; i++) {
     const REAL qtt = sqrt_qtt[i] * sqrt_qtt[i];
     const REAL qpp = sqrt_qpp[i] * sqrt_qpp[i];
+    // ds = sqrt( qtt * dth^2 + 2*qtp * dth*dph + qpp * dph^2 )
     integrand[i] = sqrt(qtt * (dth[i] * dth[i]) + 2.0 * qtp[i] * (dth[i] * dph[i]) + qpp * (dph[i] * dph[i]));
   }
   const REAL C_equator = integrate_over_alpha(integrand, N_angle, d_alpha);
@@ -536,6 +592,7 @@ We finally store the ratio C_polar/C_equator and an estimated spin a/M.
   for (int i = 0; i < N_angle; i++) {
     const REAL qtt = sqrt_qtt[i] * sqrt_qtt[i];
     const REAL qpp = sqrt_qpp[i] * sqrt_qpp[i];
+    // ds = sqrt( qtt * dth^2 + 2*qtp * dth*dph + qpp * dph^2 )
     integrand[i] = sqrt(qtt * (dth[i] * dth[i]) + 2.0 * qtp[i] * (dth[i] * dph[i]) + qpp * (dph[i] * dph[i]));
   }
   const REAL C_polar = integrate_over_alpha(integrand, N_angle, d_alpha);
