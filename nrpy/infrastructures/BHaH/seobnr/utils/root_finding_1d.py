@@ -50,12 +50,15 @@ REAL xtol = 1e-12;
 REAL rtol = 1e-10;
 T = gsl_root_fsolver_brent;
 s = gsl_root_fsolver_alloc(T);
-gsl_root_fsolver_set(s, F, x_lo, x_hi);
+status = gsl_root_fsolver_set(s, F, x_lo, x_hi);
+int fsolver_set_status[1] = {GSL_SUCCESS};
+char fsolver_set_name[] = "gsl_root_fsolver_set";
+handle_gsl_return_status(status,fsolver_set_status,1,fsolver_set_name);
 
 do {
   iter++;
   status = gsl_root_fsolver_iterate(s);
-  int fsolver_status[1] = {GSL_SUCCESS};
+  int fsolver_iterate_status[1] = {GSL_SUCCESS};
   char fsolver_name[] = "gsl_root_fsolver_iterate";
   handle_gsl_return_status(status,fsolver_status,1,fsolver_name);
   x = gsl_root_fsolver_root(s);
