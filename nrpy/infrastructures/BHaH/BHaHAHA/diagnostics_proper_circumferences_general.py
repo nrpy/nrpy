@@ -13,7 +13,7 @@ denote derivatives w.r.t. alpha. The physical line element we integrate is:
 Design choices that might look odd at first glance, and why they are intentional:
 
 * Store/interpolate sqrt(q_{theta theta}) and sqrt(q_{phi phi}) but not sqrt(q_{theta phi}).
-  The diagonals are nonnegative “scale factors” along coordinate lines, so interpolating their square roots reduces
+  The diagonals are nonnegative "scale factors" along coordinate lines, so interpolating their square roots reduces
   dynamic range and suppresses negative overshoots from interpolation; we then square them at use sites to recover q_tt, q_pp.
   The off-diagonal q_{theta phi} can be positive or negative and enters linearly in the cross term; taking a square root would
   both be undefined for negative values and discard the sign that the cross term needs.
@@ -532,7 +532,7 @@ We finally store C_polar, C_equator, their ratio (C_polar/C_equator), and an est
     cart_to_sph(rvec, &theta[i], &phi[i]);
     dst_pts[i][0] = theta[i];
     dst_pts[i][1] = phi[i];
-  }
+  } // END LOOP over alpha: cell-centered sampling 2 pi across N_angle points 
 
   {
     // Interpolate sqrt(q_{theta theta}), sqrt(q_{phi phi}), and q_{theta phi} onto the equator points.
@@ -541,8 +541,8 @@ We finally store C_polar, C_equator, their ratio (C_polar/C_equator), and an est
     if (err != BHAHAHA_SUCCESS) {
       free(metric_data_gfs);
       return err;
-    }
-  }
+    } // END error check
+  } // END interpolation step across equatorial circumference
 
   // Compute dtheta/dalpha and dphi/dalpha along the equator; phi is unwrapped inside this helper.
   derivs_wrt_alpha(theta, phi, dth, dph, N_angle, d_alpha);
@@ -555,7 +555,7 @@ We finally store C_polar, C_equator, their ratio (C_polar/C_equator), and an est
     const REAL qpp = sqrt_qpp[i] * sqrt_qpp[i];
     // ds = sqrt( qtt * dth^2 + 2*qtp * dth*dph + qpp * dph^2 )
     integrand[i] = sqrt(qtt * (dth[i] * dth[i]) + 2.0 * qtp[i] * (dth[i] * dph[i]) + qpp * (dph[i] * dph[i]));
-  }
+  } // END LOOP over alpha: cell-centered sampling 2 pi across N_angle points 
   const REAL C_equator = integrate_over_alpha(integrand, N_angle, d_alpha);
 
   // ================================================================
@@ -572,7 +572,7 @@ We finally store C_polar, C_equator, their ratio (C_polar/C_equator), and an est
     cart_to_sph(rvec, &theta[i], &phi[i]);
     dst_pts[i][0] = theta[i];
     dst_pts[i][1] = phi[i];
-  }
+  } // END LOOP over alpha: cell-centered sampling 2 pi across N_angle points 
 
   {
     // Interpolate sqrt(q_{theta theta}), sqrt(q_{phi phi}), and q_{theta phi} onto the polar points.
@@ -581,8 +581,8 @@ We finally store C_polar, C_equator, their ratio (C_polar/C_equator), and an est
     if (err != BHAHAHA_SUCCESS) {
       free(metric_data_gfs);
       return err;
-    }
-  }
+    } // END error check
+  } // END interpolation step across polar circumference
 
   // Compute dtheta/dalpha and dphi/dalpha along the polar great circle.
   derivs_wrt_alpha(theta, phi, dth, dph, N_angle, d_alpha);
@@ -594,7 +594,7 @@ We finally store C_polar, C_equator, their ratio (C_polar/C_equator), and an est
     const REAL qpp = sqrt_qpp[i] * sqrt_qpp[i];
     // ds = sqrt( qtt * dth^2 + 2*qtp * dth*dph + qpp * dph^2 )
     integrand[i] = sqrt(qtt * (dth[i] * dth[i]) + 2.0 * qtp[i] * (dth[i] * dph[i]) + qpp * (dph[i] * dph[i]));
-  }
+  } // END LOOP over alpha: cell-centered sampling 2 pi across N_angle points 
   const REAL C_polar = integrate_over_alpha(integrand, N_angle, d_alpha);
 
   // Guard against invalid integrals and store outputs.
@@ -602,7 +602,7 @@ We finally store C_polar, C_equator, their ratio (C_polar/C_equator), and an est
     commondata->error_flag = BHAHAHA_FAILURE;
     free(metric_data_gfs);
     return commondata->error_flag;
-  }
+  } // END error check
 
   // Compute ratio and spin estimate; write results to macro-backed fields.
   const REAL ratio = C_polar / C_equator; // C_polar / C_equator wrt spin axis
