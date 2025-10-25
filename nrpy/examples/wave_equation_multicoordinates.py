@@ -217,10 +217,6 @@ gpu_defines_filename = BHaH.BHaH_device_defines_h.output_device_headers(
 )
 BHaH.BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
-    enable_intrinsics=enable_intrinsics,
-    intrinsics_header_lst=(
-        ["cuda_intrinsics.h"] if parallelization == "cuda" else ["simd_intrinsics.h"]
-    ),
     enable_rfm_precompute=enable_rfm_precompute,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=enable_KreissOliger_dissipation,
     DOUBLE_means="double" if fp_type == "float" else "REAL",

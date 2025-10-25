@@ -36,7 +36,7 @@ from nrpy.infrastructures import BHaH
 # Define function to compute residual the solution
 def register_CFunction_residual_H_compute_all_points(
     CoordSystem: str,
-    enable_rfm_precompute: bool,
+    enable_simd_intrinsics: bool,
     OMP_collapse: int = 1,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
@@ -51,7 +51,7 @@ def register_CFunction_residual_H_compute_all_points(
     unused by this routine.
 
     :param CoordSystem: Name of the coordinate system that specializes the generated loop bounds and index macros.
-    :param enable_rfm_precompute: Request to enable reference-metric precomputation. Currently ignored; codegen forces it off.
+    :param enable_simd_intrinsics: Whether to enable SIMD intrinsics.
     :param OMP_collapse: OpenMP collapse level for the nested loops.
     :return: None if in registration phase, else the updated NRPy environment.
 
@@ -67,17 +67,18 @@ def register_CFunction_residual_H_compute_all_points(
     ...     generated_str = cfc.CFunction_dict[f"{name}__rfm__{CoordSystem}"].full_function
     ...     validation_desc = f"{name}__{CoordSystem}"
     ...     validate_strings(generated_str, validation_desc)
-    Setting up reference_metric[SinhSymTP]...
-    Setting up reference_metric[HoleySinhSpherical]...
-    Setting up reference_metric[Cartesian]...
-    Setting up reference_metric[SinhCylindricalv2n2]...
+    Setting up reference_metric[SinhSymTP_rfm_precompute]...
+    Setting up reference_metric[HoleySinhSpherical_rfm_precompute]...
+    Setting up reference_metric[Cartesian_rfm_precompute]...
+    Setting up reference_metric[SinhCylindricalv2n2_rfm_precompute]...
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    enable_rfm_precompute = False
     includes = ["BHaH_defines.h"]
+    if enable_simd_intrinsics:
+        includes += ["intrinsics/simd_intrinsics.h"]
     desc = """
  * @file residual_H_compute_all_points.c
  * @brief Compute the Hamiltonian-constraint residual on all interior grid points and store the result.
@@ -104,14 +105,11 @@ def register_CFunction_residual_H_compute_all_points(
     cfunc_type = "void"
     name = "residual_H_compute_all_points"
     params = """const commondata_struct *restrict commondata, const params_struct *restrict params,
-                REAL *restrict xx[3], const REAL *restrict auxevol_gfs, const REAL *restrict in_gfs,
+                const rfm_struct *restrict rfmstruct, const REAL *restrict auxevol_gfs, const REAL *restrict in_gfs,
                 REAL *restrict dest_gf_address"""
-    if enable_rfm_precompute:
-        params = params.replace(
-            "REAL *restrict xx[3]", "const rfm_struct *restrict rfmstruct"
-        )
+
     # Populate residual_H
-    rhs = HyperbolicRelaxationCurvilinearRHSs(CoordSystem, enable_rfm_precompute)
+    rhs = HyperbolicRelaxationCurvilinearRHSs(CoordSystem, enable_rfm_precompute=True)
     orig_par = par.parval_from_str("parallelization")
     par.set_parval_from_str("parallelization", "openmp")
     body = BHaH.simple_loop.simple_loop(
@@ -119,13 +117,13 @@ def register_CFunction_residual_H_compute_all_points(
             [rhs.residual],
             ["dest_gf_address[IDX3(i0,i1,i2)]"],
             enable_fd_codegen=True,
-            enable_simd=False,
+            enable_simd=enable_simd_intrinsics,
         ),
         loop_region="interior",
-        enable_intrinsics=False,
+        enable_intrinsics=enable_simd_intrinsics,
         CoordSystem=CoordSystem,
-        enable_rfm_precompute=enable_rfm_precompute,
-        read_xxs=not enable_rfm_precompute,
+        enable_rfm_precompute=True,
+        read_xxs=False,
         OMP_collapse=OMP_collapse,
     )
     par.set_parval_from_str("parallelization", orig_par)

@@ -234,10 +234,7 @@ BHaH.general_relativity.enforce_detgammabar_equals_detgammahat.register_CFunctio
 )
 BHaH.general_relativity.constraints_eval.register_CFunction_constraints_eval(
     CoordSystem=CoordSystem,
-    enable_rfm_precompute=enable_rfm_precompute,
-    enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
     enable_T4munu=False,
-    enable_intrinsics=enable_intrinsics,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
@@ -370,22 +367,10 @@ gpu_defines_filename = BHaH.BHaH_device_defines_h.output_device_headers(
 BHaH.BHaH_defines_h.output_BHaH_defines_h(
     additional_includes=[str(Path("TwoPunctures") / Path("TwoPunctures.h"))],
     project_dir=project_dir,
-    enable_intrinsics=enable_intrinsics,
-    intrinsics_header_lst=(
-        ["cuda_intrinsics.h"] if parallelization == "cuda" else ["simd_intrinsics.h"]
-    ),
     enable_rfm_precompute=enable_rfm_precompute,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
     DOUBLE_means="double" if fp_type == "float" else "REAL",
     restrict_pointer_type="*" if parallelization == "cuda" else "*restrict",
-    supplemental_defines_dict=(
-        {
-            "C++/CUDA safe restrict": "#define restrict __restrict__",
-            "GPU Header": f'#include "{gpu_defines_filename}"',
-        }
-        if parallelization == "cuda"
-        else {}
-    ),
 )
 post_non_y_n_auxevol_mallocs = ""
 if enable_CAHD:

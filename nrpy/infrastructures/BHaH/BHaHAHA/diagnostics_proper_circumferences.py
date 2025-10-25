@@ -1,3 +1,4 @@
+# BHaHAHA/diagnostics_proper_circumferences.py
 """
 Register the C function for computing polar & equatorial circumferences of the horizon.
 Needs: coordinate centroid of the horizon.
@@ -40,17 +41,26 @@ def register_CFunction_diagnostics_proper_circumferences(
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     prefunc = """
 /**
- * Computes the complete elliptic integrals of the second kind E(k) and the first kind K(k)
- * using 8th-order midpoint integration.
+ * Complete elliptic integrals E(m) and K(m) via 8th-order midpoint quadrature.
  *
- * @param k - The elliptic modulus parameter (0 <= k <= 1).
- * @param E - Pointer to store the result for the elliptic integral of the second kind E(k).
- * @param K - Pointer to store the result for the elliptic integral of the first kind K(k).
+ * Computes the complete elliptic integrals in the **parameter** (Legendre) form
+ *   E(m) = ∫₀^{π/2} sqrt(1 − m sin²θ) dθ,
+ *   K(m) = ∫₀^{π/2} dθ / sqrt(1 − m sin²θ).
  *
- * This function uses a midpoint integration method with a fixed number of sample points (128)
- * to ensure high accuracy, leveraging precomputed weights for efficiency.
+ * The implementation uses a fixed 8th-order midpoint rule with periodic weights
+ * over [0, π/2]. The sample count is fixed at 128 (power of two) for high accuracy
+ * and good vectorization.
  *
- * @note The function is parallelized with OpenMP to improve performance on large arrays.
+ * @param m  Legendre **parameter** (a.k.a. k²). Real results require m ≤ 1.
+ *           Negative m is supported (e.g. m ∈ [−1, 0] in this code path).
+ *           @warning This is the parameter m, **not** the modulus k. If you have a
+ *           modulus k, pass m = k*k.
+ * @param[out] E  On return, E(m).
+ * @param[out] K  On return, K(m) (diverges as m → 1⁻).
+ *
+ * @pre E and K are non-null.
+ * @pre The internal weight generator expects the sample count to be compatible
+ *      with the 8th-order periodic stencil (here fixed to 128).
  */
 static void elliptic_E_and_K_integrals(const REAL k, REAL *restrict E, REAL *restrict K) {
   static const int N_sample_pts = 128; // Number of sample points for integration. Chosen for high precision.
@@ -68,7 +78,7 @@ static void elliptic_E_and_K_integrals(const REAL k, REAL *restrict E, REAL *res
   REAL sum_K = 0.0; // Accumulator for the elliptic integral of the first kind K(k).
 
   // Parallelized loop to compute both integrals E(k) and K(k) using OpenMP.
-#pragma omp parallel for reduction(+ : sum_E, sum_K)
+  // #pragma omp parallel for reduction(+ : sum_E, sum_K) <- thread creation/destruction likely -> slower code here
   for (int i = 0; i < N_sample_pts; i++) {
     const REAL theta = a + ((REAL)i + 0.5) * h; // Compute the midpoint for the current subinterval.
     // Compute sin(theta). For optimization, we could use a lookup table if N_sample_pts is constant.
@@ -79,7 +89,7 @@ static void elliptic_E_and_K_integrals(const REAL k, REAL *restrict E, REAL *res
     // Update the running sums for E(k) & K(k), applying the corresponding weight.
     sum_E += weights[i % weight_stencil_size] * elliptic_E_integrand;
     sum_K += weights[i % weight_stencil_size] * elliptic_K_integrand;
-  } // END PARALLEL FOR: Loop through sample points to compute both integrals
+  } // END LOOP over sample points to compute both integrals
 
   // Multiply by the step size to complete the integration and store the results.
   *E = sum_E * h; // Elliptic integral of the second kind.
@@ -89,12 +99,15 @@ static void elliptic_E_and_K_integrals(const REAL k, REAL *restrict E, REAL *res
 /**
  * Estimates the spin parameter magnitude for equilibrium black holes based on the circumference ratio C_r.
  *
+ * Rationale & safeguards:
+ *   * Start from an analytic approximation (Alcubierre et al., Eq. 5.3) to land near the root basin.
+ *   * Refine with Newton–Raphson using elliptic integrals (Eq. 5.2), but clamp any out-of-range iterates
+ *     into [0,1] and terminate if we step negative; this avoids excursions where the modulus or square roots
+ *     would be undefined or numerically fragile.
+ *
  * @param C_r The circumference ratio parameter used to estimate the spin.
  * @return    The estimated spin parameter. Returns -10.0 if C_r is out of valid bounds or if convergence fails.
  *
- * This function implements an iterative method to estimate the spin parameter using
- * elliptic integrals. It starts with an initial guess and refines it to achieve a desired
- * relative tolerance. The method is based on Eq. 5.2 of Alcubierre et al. (arXiv:gr-qc/0411149).
  */
 REAL compute_spin(const REAL C_r) {
   // Validate the input parameter. Return an error code if C_r exceeds the valid range.
@@ -140,16 +153,16 @@ REAL compute_spin(const REAL C_r) {
       // Calculate the relative difference and update the spin estimate.
       rel_diff = fabs(x_np1 - x) / x;
       spin = x_np1;
-    }
+    } // END spin adjustment to go back in-bounds
     it++;
   } // END WHILE: Refining spin estimate until convergence or maximum iterations
 
   // Assign spin=-10 if the Newton-Raphson did not converge within the allowed iterations.
-  if (it >= max_its) {
+  if (it >= max_its)
     spin = -10.0;
-  }
+
   return spin;
-}
+} // END FUNCTION: compute_spin
 """
     desc = """
 Computes proper circumferences along the equator and polar directions for apparent horizon diagnostics.

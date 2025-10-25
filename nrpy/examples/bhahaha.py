@@ -118,6 +118,7 @@ BHaH.BHaHAHA.diagnostics_file_output.register_CFunction_diagnostics_file_output(
 BHaH.BHaHAHA.diagnostics_integration_weights.register_CFunction_diagnostics_integration_weights()
 BHaH.BHaHAHA.diagnostics_min_max_mean_radii_wrt_centroid.register_CFunction_diagnostics_min_max_mean_radii_wrt_centroid()
 BHaH.BHaHAHA.diagnostics_proper_circumferences.register_CFunction_diagnostics_proper_circumferences()
+BHaH.BHaHAHA.diagnostics_proper_circumferences_general.register_CFunction_diagnostics_proper_circumferences_general()
 
 if enable_rfm_precompute:
     BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
@@ -192,11 +193,7 @@ par.adjust_CodeParam_default(
 # STEP 8: Generate header files, register C functions, set up boundary conditions, and create a Makefile
 BHaH.CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
 BHaH.CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
-BHaH.BHaH_defines_h.output_BHaH_defines_h(
-    project_dir=project_dir,
-    enable_intrinsics=enable_simd,
-    define_no_simd_UPWIND_ALG=False,
-)
+BHaH.BHaH_defines_h.output_BHaH_defines_h(project_dir=project_dir)
 
 #########################################################
 # STEP 9: Copy files and construct Makefile

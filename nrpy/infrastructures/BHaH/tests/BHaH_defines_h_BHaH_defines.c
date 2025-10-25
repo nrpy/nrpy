@@ -16,8 +16,6 @@
 #include <stdlib.h>  // malloc/free, etc.
 #include <string.h>  // String handling functions, such as strlen, strcmp, etc.
 #include <time.h>    // Time-related functions and types, such as time(), clock(),
-// output_BHaH_defines_h(...,enable_intrinsics=True) was called so we intrinsics headers:
-#include "intrinsics/simd_intrinsics.h"
 #define REAL double
 #define DOUBLE double
 
@@ -102,7 +100,12 @@ typedef struct __params_struct__ {
 #define NO_INLINE __declspec(noinline)
 #else
 #define NO_INLINE // Fallback for unknown compilers
-#endif
+#endif            // NO_INLINE definition
+
+#ifndef UPWIND_ALG
+// When enable_intrinsics = False, this is the UPWIND_ALG() macro:
+#define UPWIND_ALG(UpwindVecU) UpwindVecU > 0.0 ? 1.0 : 0.0
+#endif // UPWIND_ALG
 
 // ----------------------------
 // Basic definitions for module
@@ -206,6 +209,13 @@ typedef struct __griddata__ {
   // NRPy MODULE: reference_metric
   rfm_struct *rfmstruct; // <- includes e.g., 1D arrays of reference metric quantities
 } griddata_struct;
+
+#ifdef __cplusplus
+#define restrict __restrict__
+#endif // __cplusplus
+#ifdef __CUDACC__
+#include "BHaH_device_defines.h"
+#endif // __CUDACC__
 
 #ifndef BHAH_TYPEOF
 #if __cplusplus >= 2000707L

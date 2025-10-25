@@ -115,7 +115,7 @@ def register_CFunction_diagnostic_gfs_set(
     //       diagnostic_gfs[grid][ii] = NAN;
     //     } // END LOOP over all points & gridfunctions, poisoning diagnostic_gfs
 
-    residual_H_compute_all_points(commondata, params, (REAL* restrict*)griddata[grid].xx, griddata[grid].gridfuncs.auxevol_gfs, y_n_gfs,
+    residual_H_compute_all_points(commondata, params, griddata[grid].rfmstruct, griddata[grid].gridfuncs.auxevol_gfs, y_n_gfs,
                                   &diagnostic_gfs[grid][IDX4pt(DIAG_RESIDUAL, 0)]);
 """
     if enable_interp_diagnostics:

@@ -7,6 +7,7 @@ Authors: Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
 
 import argparse
 import os
+
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
@@ -32,25 +33,11 @@ parser.add_argument(
     help="Floating point precision (e.g. float, double).",
     default="double",
 )
-parser.add_argument(
-    "--disable_intrinsics",
-    action="store_true",
-    help="Flag to disable hardware intrinsics",
-    default=False,
-)
-parser.add_argument(
-    "--disable_rfm_precompute",
-    action="store_true",
-    help="Flag to disable RFM precomputation.",
-    default=False,
-)
 args = parser.parse_args()
 
 # Code-generation-time parameters:
 fp_type = args.floating_point_precision.lower()
 parallelization = args.parallelization.lower()
-enable_intrinsics = not args.disable_intrinsics
-enable_rfm_precompute = not args.disable_rfm_precompute
 
 if parallelization not in ["openmp", "cuda"]:
     raise ValueError(
@@ -63,6 +50,7 @@ par.set_parval_from_str("fp_type", fp_type)
 par.set_parval_from_str("parallelization", parallelization)
 par.set_parval_from_str("Infrastructure", "BHaH")
 
+enable_simd_intrinsics = True  # parallelization != "cuda"
 grid_physical_size = 1.0e6
 t_final = grid_physical_size  # This parameter is effectively not used in NRPyElliptic
 nn_max = 10000  # Sets the maximum number of relaxation steps
@@ -201,14 +189,15 @@ BHaH.nrpyelliptic.initial_data.register_CFunction_initial_guess_all_points(
 # Generate function that calls functions to set variable wavespeed and all other AUXEVOL gridfunctions
 for CoordSystem in set_of_CoordSystems:
     BHaH.nrpyelliptic.auxevol_gfs_set_to_constant.register_CFunction_auxevol_gfs_set_to_constant(
-        CoordSystem, OMP_collapse=OMP_collapse, enable_intrinsics=enable_intrinsics
+        CoordSystem,
+        OMP_collapse=OMP_collapse,
     )
 
 BHaH.numerical_grids_and_timestep.register_CFunctions(
     set_of_CoordSystems=set_of_CoordSystems,
     list_of_grid_physical_sizes=[grid_physical_size for c in set_of_CoordSystems],
     Nxx_dict=Nxx_dict,
-    enable_rfm_precompute=enable_rfm_precompute,
+    enable_rfm_precompute=True,
     enable_CurviBCs=True,
 )
 BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
@@ -223,25 +212,25 @@ BHaH.diagnostics.diagnostics.register_all_diagnostics(
     enable_volume_integration_diagnostics=True,
     enable_free_auxevol=False,
 )
-BHaH.nrpyelliptic.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(enable_interp_diagnostics=False)
+BHaH.nrpyelliptic.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
+    enable_interp_diagnostics=False
+)
 BHaH.nrpyelliptic.diagnostics_nearest.register_CFunction_diagnostics_nearest()
 BHaH.nrpyelliptic.diagnostics_volume_integration.register_CFunction_diagnostics_volume_integration()
 
-if enable_rfm_precompute:
-    BHaH.rfm_precompute.register_CFunctions_rfm_precompute(set_of_CoordSystems)
+BHaH.rfm_precompute.register_CFunctions_rfm_precompute(set_of_CoordSystems)
 
 # Generate function to compute RHSs
 BHaH.nrpyelliptic.rhs_eval.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
-    enable_rfm_precompute=enable_rfm_precompute,
-    enable_intrinsics=enable_intrinsics,
+    enable_intrinsics=(enable_simd_intrinsics and not parallelization == "cuda"),
     OMP_collapse=OMP_collapse,
 )
 
 # Generate function to compute residuals
 BHaH.nrpyelliptic.residual_H_compute_all_points.register_CFunction_residual_H_compute_all_points(
     CoordSystem=CoordSystem,
-    enable_rfm_precompute=enable_rfm_precompute,
+    enable_simd_intrinsics=enable_simd_intrinsics,
     OMP_collapse=OMP_collapse,
 )
 
@@ -276,14 +265,12 @@ if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0) {{
                                      custom_gridfunctions_wavespeed, gridfunctions_f_infinity,
                                      RK_INPUT_GFS, RK_OUTPUT_GFS);
 }}"""
-if not enable_rfm_precompute:
-    rhs_string = rhs_string.replace("rfmstruct", "xx")
 BHaH.MoLtimestepping.register_all.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,
     post_rhs_string="""if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
   apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);""",
-    enable_rfm_precompute=enable_rfm_precompute,
+    enable_rfm_precompute=True,
     enable_curviBCs=True,
     enable_intrinsics=False,
     # SIMD intrinsics in MoL is not properly supported -- MoL update loops are not properly bounds checked.
@@ -386,30 +373,9 @@ gpu_defines_filename = BHaH.BHaH_device_defines_h.output_device_headers(
 )
 BHaH.BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
-    enable_intrinsics=enable_intrinsics,
-    intrinsics_header_lst=(
-        ["cuda_intrinsics.h"] if parallelization == "cuda" else ["simd_intrinsics.h"]
-    ),
-    enable_rfm_precompute=enable_rfm_precompute,
+    enable_rfm_precompute=True,
     DOUBLE_means="double" if fp_type == "float" else "REAL",
     restrict_pointer_type="*" if parallelization == "cuda" else "*restrict",
-    supplemental_defines_dict=(
-        {
-            "ADDITIONAL GPU DIAGNOSTICS": """
-#define L2_DVGF 0
-#define L2_SQUARED_DVGF 1
-""",
-            "ADDITIONAL HOST DIAGNOSTICS": """
-#define HOST_RESIDUAL_HGF 0
-#define HOST_UUGF 1
-#define NUM_HOST_DIAG 2
-""",
-            "C++/CUDA safe restrict": "#define restrict __restrict__",
-            "GPU Header": f'#include "{gpu_defines_filename}"',
-        }
-        if parallelization == "cuda"
-        else {}
-    ),
 )
 
 # Set griddata struct used for calculations to griddata_device for certain parallelizations
@@ -452,15 +418,20 @@ BHaH.main_c.register_CFunction_main_c(
     post_MoL_step_forward_in_time=post_MoL_step_forward_in_time,
 )
 BHaH.griddata_commondata.register_CFunction_griddata_free(
-    enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True
+    enable_rfm_precompute=True, enable_CurviBCs=True
 )
 
-if enable_intrinsics:
+if parallelization == "cuda":
     copy_files(
         package="nrpy.helpers",
-        filenames_list=[
-            "cuda_intrinsics.h" if parallelization == "cuda" else "simd_intrinsics.h"
-        ],
+        filenames_list=["cuda_intrinsics.h"],
+        project_dir=project_dir,
+        subdirectory="intrinsics",
+    )
+if enable_simd_intrinsics:
+    copy_files(
+        package="nrpy.helpers",
+        filenames_list=["simd_intrinsics.h"],
         project_dir=project_dir,
         subdirectory="intrinsics",
     )
