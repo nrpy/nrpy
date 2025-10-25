@@ -115,9 +115,10 @@ def register_CFunction_diagnostic_gfs_set(
     body = """
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     const params_struct *restrict params = &griddata[grid].params;
-    SET_NXX_PLUS_2NGHOSTS_VARS(grid);
+    const rfm_struct *restrict rfmstruct = griddata[grid].rfmstruct;
+    // SET_NXX_PLUS_2NGHOSTS_VARS(grid);
     const REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
-    const rfm_struct *restrict rfmstruct = griddata[grid].gridfuncs.rfmstruct;
+    const REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
 
     // Poison diagnostic_gfs (for debugging purposes only; WARNING: this might make valgrind ineffective)
     // #pragma omp parallel for
@@ -151,7 +152,7 @@ def register_CFunction_diagnostic_gfs_set(
         "diagnostic_gfs[grid]" if parallelization == "cuda" else "auxevol_gfs"
     )
     body += f"""
-  {Ricci_func}(commondata, params, rfmstruct, y_n_gfs, {Ricci_gfs_ptr});
+  {Ricci_func}(params, rfmstruct, y_n_gfs, {Ricci_gfs_ptr});
   constraints_eval(commondata, params, rfmstruct, y_n_gfs, {Ricci_gfs_ptr});
 }} // END LOOP over grids"""
     par.glb_extras_dict["diagnostic_gfs_names_dict"] = diagnostic_gfs_names_dict
