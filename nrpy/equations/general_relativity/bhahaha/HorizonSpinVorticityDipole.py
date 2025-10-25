@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# equations/general_relativity/bhahaha/HorizonSpinVorticityDipole.py
 """
 HorizonSpinVorticityDipole.py.
 ---------------------------------------

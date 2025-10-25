@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# equations/general_relativity/bhahaha/SpECTRESpinEstimate.py
 r"""
 Omega-based quasilocal spin diagnostics on an apparent horizon surface.
 
