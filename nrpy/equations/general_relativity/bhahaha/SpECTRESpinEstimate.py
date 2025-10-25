@@ -1,62 +1,93 @@
 # -*- coding: utf-8 -*-
 r"""
-Omega-based quasilocal spin diagnostics on a Strahlkorper (BHaHAHA-compatible).
+Omega-based quasilocal spin diagnostics on an apparent horizon surface.
 
+Overview
+--------
 Constructs symbolic expressions for spin_vector(), as described here:
 https://spectre-code.org/group__SurfacesGroup.html#ga03595bdaf4f20da98d151470998a22bf
 
-This module constructs the intrinsic 2-geometry on a horizon surface r = h(θ, φ),
-and builds the full set of single-pass **integrands** required by an Ω-based spin
-diagnostic, together with helper eigen-operators for the spin magnitude and
-turnkey reductions to a spin **vector**.
+Specifically, this module builds the intrinsic two-geometry on a horizon surface
+``r = h(θ, φ)`` and assembles the single-pass **integrands** needed by an
+Ω-based quasilocal spin diagnostic. It also provides reduction helpers that
+convert accumulated surface integrals ("RunSums") into a spin **vector** with a
+well-specified near-zero policy.
 
-Integration policy (explicit & uniform):
-- `area_integrand` is **1** (unit scalar). To integrate any per-point quantity f,
-  callers must multiply f by the **area density** `sqrt(q)` (returned here as
-  `area_density`) and by any quadrature weights and angular steps externally:
-    ∮ f dA  ≃  Σ f_ab * area_density_ab * weights * Δθ * Δφ
-- All *moment* integrands are **unweighted**: `measurement_frame_xU`, `xR_momentU`,
-  `xOmega_momentU`, and `zOmegaU` are *not* premultiplied by `sqrt(q)`.
 
-Frames:
-- MetricDataFrame (MDF): where geometry lives (γ_ij, K_ij, s^i, e_A^i, q_AB, R, Ω).
-- MeasurementFrame (MF): only the position vector x^i used inside moment integrals
-  (you may set MF independently via `set_measurement_frame_coords()`).
+What this module constructs
+---------------------------
+Per surface point (no integration performed here):
 
-Conventions & scope:
-- Intrinsic (2D Christoffel) route for R; maximum derivative order is second.
-- Ω = ε^{AB}(∂_A X_B − Γ^C_{AB} X_C) with X_B = e_B^i K_ij s^j, and
-  ε^{θφ} = σ / sqrt(q) with orientation sign σ ∈ {+1, −1} (configurable).
-- Coordinates: ambient reference-metric infrastructure in Spherical coords.
-- A uniform substitution r→h and f0_of_xx0→h is applied at the end of construction.
+* ``area_integrand`` (= 1) and ``area_density`` (= ``sqrt(q)``).
+* ``ricci_scalar`` (= R) via the **intrinsic** 2D Christoffel route.
+* ``spin_function`` (= Ω) using
+  ``Ω = ε^{AB}(∂_A X_B − Γ^C_{AB} X_C)`` with ``X_B = e_B^i K_{ij} s^j``.
+* Moment ingredients in an arbitrary **MeasurementFrame**:
+  ``measurement_frame_xU[3]``, ``xR_momentU[3]`` (= ``x^i R``),
+  ``xOmega_momentU[3]`` (= ``x^i Ω``), and ``zOmegaU[3]`` (= ``z_α Ω``).
+* Eigen-operator helpers used by external solvers for the spin potential ``z``:
+  ``laplacian_of_z`` (= ``Δz``), ``laplacian_of_y`` (= ``Δy``), and
+  ``div_R_grad_z`` (= ``∇·(R∇z)``).
+* Validation integrands: ``gauss_bonnet_integrand`` (= R) and
+  ``omega_constraint_integrand`` (= Ω).
 
-Public outputs per surface point (see `get_public_integrands()`):
-  area_integrand (=1), area_density (=sqrt(q));
-  ricci_scalar (=R), spin_function (=Ω);
-  measurement_frame_xU[3];
-  xR_momentU[3] (= x^i * R), xOmega_momentU[3] (= x^i * Ω);
-  zOmegaU[3] (= z_α * Ω) for α = 0..2;
-  laplacian_of_z (=Δz), laplacian_of_y (=Δy), div_R_grad_z (=∇·(R∇z));
-  gauss_bonnet_integrand (=R), omega_constraint_integrand (=Ω).
+Integration policy (explicit & uniform)
+---------------------------------------
+**Nothing is premultiplied by ``sqrt(q)`` in this module.** To integrate a
+per-point scalar ``f`` you must multiply by ``area_density = sqrt(q)`` and any
+quadrature weights & angular steps externally:
 
-Reduction helpers (RunSums & compatibility):
-- `reduce_centroids_and_direction(sums)` accepts either:
-    RunSums style:  {A, XU[3], R0, XRU[3], O0, XOU[3], (optional) Oabs}
-    Legacy flat:    {A, XU0..2, R0, XRU0..2, O0, XOU0..2, (optional) Oabs}
-  Returns: {x0U[3], xRcorrU[3], IU[3], normI, nU[3]}.
-- `near_zero_policy(A, normI, integral_abs_Omega, eps)` implements the
-  dimensionless trigger ‖I‖ ≤ ε * sqrt(A/(4π)) * ∮|Ω| dA.
-- `Salpha_and_magnitude_from_zOmega(zOmega_integrals)` returns (S_α, S),
-  where S_α = (1/8π) ∮ z_α Ω dA and S = sqrt(Σ S_α²). The legacy
-  `magnitude_from_zOmega()` is retained (returns S only).
-- `compute_spin_vector(sums, S, eps, fallback_choice, zOmega_integrals)` composes the
-  above to return a turnkey spin vector with a documented near-zero fallback.
+``∮ f dA  ≃  Σ f_ab * area_density_ab * weights * Δθ * Δφ``
 
-Validation hooks (integral-level, using the same surface derivatives as Ω & R):
-- `validation_residuals_from_sums(sums)` returns residuals for
-  Gauss–Bonnet (∮R dA − 8π) and Ω-constraint (∮Ω dA).
+All **moment** integrands are **unweighted**: ``measurement_frame_xU``,
+``xR_momentU``, ``xOmega_momentU``, and ``zOmegaU`` are not premultiplied by
+``sqrt(q)``.
 
-Author:
+Frames
+------
+* **MetricDataFrame (MDF)**: where geometry lives (``γ_ij``, ``K_ij``, ``s^i``,
+  ``e_A^i``, ``q_AB``, R, Ω).
+* **MeasurementFrame (MF)**: used **only** for the position vector ``x^i`` that
+  appears inside moment integrals; set via ``set_measurement_frame_coords(...)``.
+  MF may differ from MDF.
+
+Conventions & scope
+-------------------
+* Coordinates: ambient reference-metric infrastructure in spherical coordinates.
+* Intrinsic (2D Christoffel) route for R; max derivative order: second.
+* Orientation: ``ε^{θφ} = σ / sqrt(q)`` with configurable ``σ ∈ {+1, −1}``.
+* A uniform substitution ``r→h`` (and ``f0_of_xx0→h``) is applied at the end of
+  expression construction so all outputs are evaluated **on the surface**.
+
+Outputs and reductions at a glance
+----------------------------------
+Use ``get_public_integrands()`` to retrieve all per-point fields. Then, after
+performing your own quadratures, feed the resulting integrals into the helpers:
+
+* ``reduce_centroids_and_direction(sums)`` → centroids ``x0U``, Ricci shift
+  ``xRcorrU``, direction integral ``IU``, its norm ``normI``, and unit vector
+  ``nU``.
+* ``Salpha_and_magnitude_from_zOmega(zOmega_integrals)`` → ``S_α`` and ``S``
+  with the ``1/(8π)`` normalization applied.
+* ``magnitude_from_zOmega(zOmega_integrals)`` → legacy convenience returning
+  ``S`` only.
+* ``compute_spin_vector(sums, S, eps, ...)`` → final spin vector ``SU`` with a
+  documented near-zero fallback (zero vector or ``z_α`` axis).
+* ``validation_residuals_from_sums(sums)`` → cheap checks for
+  Gauss–Bonnet (``∮R dA − 8π``) and the Ω-constraint (``∮Ω dA``).
+
+Centroid note
+-------------
+This implementation uses the **area-weighted** centroid
+``x0^i = (∮ x^i dA)/A``. Some external codes use an unweighted point-average of
+collocation coordinates; do not mix the two when comparing results.
+
+Authors: Ralston Graves
+         Zachariah B. Etienne
+         zachetie **at** gmail **dot* com
+------
+This file provides documentation-heavy wrappers around symbolic expressions; it
+does not perform numerical integration or eigen-solves.
 """
 
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Union, cast
@@ -68,51 +99,67 @@ import nrpy.reference_metric as refmetric
 
 
 def _sympify_int(x: int) -> sp.Integer:
+    r"""
+    Return the input as a SymPy ``Integer``.
+
+    This helper ensures that integers used inside symbolic expressions are
+    normalized to SymPy's own integer type. Doing so avoids accidental Python
+    ``int`` propagation inside ``Piecewise`` and other SymPy constructs.
+
+    :param x: A Python integer to normalize.
+    :return: ``sympy.Integer`` representing ``x``.
+    """
     return sp.Integer(int(sp.Integer(x)))
 
 
 class SpECTRESpinEstimateClass:
     r"""
-    Build Ω-based quasilocal spin diagnostic pieces on r = h(θ, φ).
+    Build Ω-based quasilocal spin diagnostic pieces on ``r = h(θ, φ)``.
 
     Parameters
     ----------
-    CoordSystem : str
-        Ambient coordinate system. Only "Spherical" is supported.
-    enable_rfm_precompute : bool
-        Use precompute-enabled reference-metric infrastructure if True.
-    orientation_sign : int
-        Orientation σ entering ε^{θφ} = σ / sqrt(q). Choose +1 (default) or −1.
+    CoordSystem : str, optional
+        Ambient coordinate system. Only ``"Spherical"`` is supported.
+    enable_rfm_precompute : bool, optional
+        If ``True``, use the precompute-enabled reference-metric infrastructure.
+        This affects only how coordinate symbols are provided; mathematics is
+        unchanged.
+    orientation_sign : int, optional
+        Orientation σ entering ``ε^{θφ} = σ / sqrt(q)``. Choose ``+1`` (default)
+        or ``−1``. Changing σ flips the sign of Ω and all Ω-weighted moments.
 
-    Public methods
-    --------------
-    - bind_surface_derivs(surface_derivs, *, enforce_shared_stencil=False)
-        Validate & record external derivative placeholders for eigen-operators.
-    - set_measurement_frame_coords(xMeasU)
-        Set MF coordinates x^i used **only** in moment integrands.
-    - set_orientation_sign(sign)
-        Flip / set the orientation used to define Ω (affects Ω & Ω-moments).
-    - get_public_integrands()
+    Public methods (selected)
+    -------------------------
+    bind_surface_derivs(surface_derivs, *, enforce_shared_stencil=False)
+        Validate & record external derivative placeholders for the 2D operators
+        and Ω. Shapes and optional shared-stencil checks are enforced.
+    set_measurement_frame_coords(xMeasU)
+        Set the three MeasurementFrame coordinates ``x^i`` used **only** inside
+        the moment integrands.
+    set_orientation_sign(sign)
+        Flip / set the sign convention used to define Ω.
+    get_public_integrands()
         Return all per-point integrands and scalars (see module docstring).
-    - reduce_centroids_and_direction(sums)
-        RunSums-style single-pass reduction to centroids, Ricci shift, and direction.
-    - near_zero_policy(A, normI, integral_abs_Omega, eps)
-        Dimensionless near-zero criterion as an explicit SymPy inequality.
-    - Salpha_and_magnitude_from_zOmega(zOmega_integrals)
-        Return { "SalphaU": [S1, S2, S3], "S": S } with 1/(8π) normalization.
-    - magnitude_from_zOmega(zOmega_integrals)
-        Legacy: return S only, with 1/(8π) normalization.
-    - compute_spin_vector(sums, S, eps, fallback_choice="zero", zOmega_integrals=None)
-        Turnkey spin-vector constructor with near-zero fallback policy.
-    - validation_residuals_from_sums(sums)
-        Cheap checks: { "gauss_bonnet": ∮R dA − 8π, "omega_constraint": ∮Ω dA }.
+    reduce_centroids_and_direction(sums)
+        Single-pass RunSums reduction to centroids, Ricci shift, and direction.
+    near_zero_policy(A, normI, integral_abs_Omega, eps)
+        Dimensionless near-zero criterion as a SymPy inequality.
+    Salpha_and_magnitude_from_zOmega(zOmega_integrals)
+        Return ``{"SalphaU": [S0, S1, S2], "S": S}`` with ``1/(8π)`` factor.
+    magnitude_from_zOmega(zOmega_integrals)
+        Legacy convenience returning ``S`` only.
+    compute_spin_vector(sums, S, eps, fallback_choice="zero", zOmega_integrals=None)
+        Turnkey spin-vector constructor with near-zero fallback.
+    validation_residuals_from_sums(sums)
+        Cheap checks: ``{"gauss_bonnet": ∮R dA − 8π, "omega_constraint": ∮Ω dA}``.
 
     Notes
     -----
-    - All expressions are constructed from fundamental variables without symbolic
-      differentiation beyond second derivatives.
-    - A final substitution r→h and f0_of_xx0→h is applied uniformly to stored expressions.
-    - `area_integrand` is 1 by construction; always multiply by `area_density` externally.
+    * All expressions are constructed from fundamental variables without
+      symbolic differentiation beyond second derivatives.
+    * A final substitution ``r→h`` and ``f0_of_xx0→h`` is applied uniformly.
+    * ``area_integrand`` is ``1`` by construction; always multiply by
+      ``area_density`` externally when integrating.
     """
 
     # -------------------------------------------------------------------------
@@ -294,27 +341,29 @@ class SpECTRESpinEstimateClass:
     def bind_surface_derivs(
         self, surface_derivs: Dict[str, object], *, enforce_shared_stencil: bool = False
     ) -> None:
-        """
+        r"""
         Validate and record horizon-surface derivative placeholders.
 
-        This function checks and records the provided derivative objects for
-        auditing and tooling. It does not alter already-built symbolic expressions.
+        This function **does not** alter already-built symbolic expressions; it
+        only checks and records the provided derivative objects for auditing and
+        tooling, enforcing shapes and (optionally) a shared stencil ID.
 
         Required keys in ``surface_derivs`` (fixed shapes implied by declarations):
-          - "q2DD_dD"                 (2x2x2)    q_{AB,C}
-          - "q2DD_dDD"                (2x2x2x2)  q_{AB,CD}
-          - "XB_dD"                   (2x2)      (X_B)_,A
-          - "zeta_dD", "zeta_dDD"     (2), (2x2) eigen-operator inputs for z
-          - "y_aux_dD", "y_aux_dDD"   (2), (2x2) eigen-operator inputs for y
-          - "Rgradz_flux_density_dD"  (2)        d_A[ sqrt(q) R q^{AB} z_,B ]
-          - "zU"                      (3)        three scalar test modes z_α
+          - ``"q2DD_dD"``                 (2×2×2)    ``q_{AB,C}``
+          - ``"q2DD_dDD"``                (2×2×2×2)  ``q_{AB,CD}``
+          - ``"XB_dD"``                   (2×2)      ``(X_B)_,A``
+          - ``"zeta_dD"``, ``"zeta_dDD"`` (2), (2×2) derivatives for ``z``
+          - ``"y_aux_dD"``, ``"y_aux_dDD"`` (2), (2×2) derivatives for ``y``
+          - ``"Rgradz_flux_density_dD"``  (2)        ``∂_A[ √q R q^{AB} z_,B ]``
+          - ``"zU"``                      (3)        three scalar test modes ``z_α``
 
-        :param surface_derivs: Dictionary of externally computed surface derivatives.
-        :param enforce_shared_stencil: If True, validate that all derivative
-                                       inputs share a common stencil ID.
-        :raises KeyError: If a required key is missing from ``surface_derivs``.
-        :raises ValueError: If any derivative object has an incorrect shape or if
-                            stencil IDs are inconsistent when required.
+        :param surface_derivs: Dictionary of externally computed surface
+            derivatives.
+        :param enforce_shared_stencil: If ``True``, validate that all derivative
+            inputs share a common ``stencil_id`` (either global or per-array attribute).
+        :raises KeyError: A required key is missing from ``surface_derivs``.
+        :raises ValueError: A derivative object has an incorrect shape, or
+            stencil IDs are inconsistent when ``enforce_shared_stencil=True``.
         """
         required = [
             "q2DD_dD",
@@ -397,14 +446,15 @@ class SpECTRESpinEstimateClass:
     # Public: set measurement-frame coordinates x^i used in moment integrands
     # -------------------------------------------------------------------------
     def set_measurement_frame_coords(self, xMeasU: List[sp.Expr]) -> None:
-        """
-        Set measurement-frame coordinates x^i for moment integrands.
+        r"""
+        Set measurement-frame coordinates ``x^i`` for moment integrands.
 
-        This function sets the 3-vector x^i used only in moment integrands,
-        which affects `measurement_frame_xU`, `xR_momentU`, and `xOmega_momentU`.
+        This affects ``measurement_frame_xU``, ``xR_momentU``, and
+        ``xOmega_momentU`` (all unweighted by design).
 
-        :param xMeasU: List of three SymPy expressions for the coordinates.
-        :raises ValueError: if xMeasU does not have length 3.
+        :param xMeasU: Three expressions representing the MeasurementFrame
+            coordinates ``x^i`` of the surface point.
+        :raises ValueError: ``xMeasU`` does not have length 3.
         """
         if len(xMeasU) != 3:
             raise ValueError("xMeasU must have length 3.")
@@ -418,13 +468,14 @@ class SpECTRESpinEstimateClass:
     # Public: set orientation sign σ used in ε^{θφ} = σ / sqrt(q)
     # -------------------------------------------------------------------------
     def set_orientation_sign(self, sign: int) -> None:
-        """
-        Set the surface-orientation sign σ ∈ {+1, −1}.
+        r"""
+        Set the surface-orientation sign ``σ ∈ {+1, −1}``.
 
-        This affects Ω and all Ω-weighted moments.
+        This affects Ω and all Ω-weighted moments. Use this to switch between
+        alternate conventions on the 2-surface.
 
-        :param sign: The orientation sign, must be +1 or -1.
-        :raises ValueError: if sign is not +1 or -1.
+        :param sign: The orientation sign, ``+1`` or ``−1``.
+        :raises ValueError: ``sign`` is not ``+1`` or ``−1``.
         """
         if int(sign) not in (+1, -1):
             raise ValueError("orientation_sign must be +1 or -1.")
@@ -435,18 +486,28 @@ class SpECTRESpinEstimateClass:
     # Public: get all per-point outputs needed by the diagnostic sweep
     # -------------------------------------------------------------------------
     def get_public_integrands(self) -> Dict[str, object]:
-        """
+        r"""
         Return all per-point integrands and scalars.
 
-        Integration policy: **No field is premultiplied by sqrt(q)**.
-        Users must multiply by `area_density` (=sqrt(q)) and by quadrature weights
-        when forming surface integrals.
+        Integration policy: **No field is premultiplied by ``sqrt(q)``**. Multiply
+        by ``area_density`` and quadrature weights externally when forming
+        surface integrals.
 
-        :return: A dictionary of symbolic expressions for the following fields:
-                 area_integrand, area_density, ricci_scalar, spin_function,
-                 measurement_frame_xU, xR_momentU, xOmega_momentU, zOmegaU,
-                 laplacian_of_z, laplacian_of_y, div_R_grad_z,
-                 gauss_bonnet_integrand, omega_constraint_integrand.
+        :return: Dictionary with the following keys (values are SymPy expressions
+            or lists of expressions):
+            * ``area_integrand``: unit scalar ``1`` (by policy).
+            * ``area_density``: ``sqrt(q)``.
+            * ``ricci_scalar``: the 2D Ricci scalar ``R``.
+            * ``spin_function``: the spin function ``Ω``.
+            * ``measurement_frame_xU``: list[3] of MeasurementFrame coordinates.
+            * ``xR_momentU``: list[3] with components ``x^i * R``.
+            * ``xOmega_momentU``: list[3] with components ``x^i * Ω``.
+            * ``zOmegaU``: list[3] with components ``z_α * Ω``.
+            * ``laplacian_of_z``: ``Δz`` (for eigen-operators).
+            * ``laplacian_of_y``: ``Δy`` (auxiliary mode).
+            * ``div_R_grad_z``: conservative ``∇·(R∇z)`` divided by ``sqrt(q)``.
+            * ``gauss_bonnet_integrand``: same as ``R``.
+            * ``omega_constraint_integrand``: same as ``Ω``.
         """
         out: Dict[str, object] = {}
         out["area_integrand"] = sp.sympify(1)  # unit scalar by policy
@@ -470,16 +531,23 @@ class SpECTRESpinEstimateClass:
     def reduce_centroids_and_direction(
         self, sums: Dict[str, object]
     ) -> Dict[str, object]:
-        """
+        r"""
         Reduce single-pass RunSums to centroids and direction vector.
 
-        This function accepts a dictionary of surface integrals and computes the
-        centroid, Ricci-shifted center, direction integral, and unit direction vector.
+        Expect ``sums`` in either RunSums style
+        ``{"A", "XU"[3], "R0", "XRU"[3], "O0", "XOU"[3], (optional) "Oabs"}``
+        or in the legacy flat style with ``XU0..2``, ``XRU0..2``, ``XOU0..2``.
 
-        :param sums: Dictionary of integrated quantities. Can be in RunSums format
-                     (e.g., {"A": area, "XU": [integral_x, ...]}) or legacy flat
-                     format (e.g., {"XU0": integral_x, ...}).
-        :return: A dictionary with keys: "x0U", "xRcorrU", "IU", "normI", "nU".
+        :param sums: Integrated quantities (RunSums dictionary).
+        :return: ``{"x0U", "xRcorrU", "IU", "normI", "nU"}`` where
+            * ``x0U`` is the area-weighted centroid ``(∮ x^i dA)/A``.
+            * ``xRcorrU`` are the Ricci-shifted centers
+              ``(XR^i − x0^i R0)/(8π)``.
+            * ``IU`` is the direction integral
+              ``∮ Ω (x^i − x0^i − x_R^i) dA``.
+            * ``normI`` is the Euclidean norm of ``IU``.
+            * ``nU`` are components of the unit vector ``IU/‖IU‖`` with a
+              safe ``Piecewise`` when ``‖IU‖=0``.
         """
         # Normalize input to RunSums form
         if "XU" in sums:
@@ -529,14 +597,15 @@ class SpECTRESpinEstimateClass:
         r"""
         Implement the dimensionless near-zero spin policy.
 
-        The policy triggers when ‖I‖ ≤ ε * R_char * ∮|Ω| dA, with R_char = sqrt(A/(4π)).
+        The policy triggers when ``‖I‖ ≤ ε * R_char * ∮|Ω| dA``, with
+        ``R_char = sqrt(A/(4π))``.
 
-        :param A: The total surface area integral, ∮ dA.
-        :param normI: The Euclidean norm of the direction integral, ‖I‖.
-        :param integral_abs_Omega: The integral of the absolute value of Ω, ∮|Ω| dA.
-        :param eps: The dimensionless tolerance ε.
-        :return: A dictionary `{'trigger': inequality}` where `inequality` is a
-                 SymPy expression usable in a Piecewise.
+        :param A: Total surface area ``∮ dA``.
+        :param normI: Euclidean norm of the direction integral ``I``.
+        :param integral_abs_Omega: Integral of the absolute value ``∮|Ω| dA``.
+        :param eps: Dimensionless tolerance ``ε``.
+        :return: ``{"trigger": <inequality>}``, where the value is a SymPy
+            boolean suitable for use in ``Piecewise``.
         """
         R_char = sp.sqrt(A / (4 * sp.pi))
         condition = sp.Le(normI, sp.sympify(eps) * R_char * integral_abs_Omega)
@@ -548,15 +617,16 @@ class SpECTRESpinEstimateClass:
     def Salpha_and_magnitude_from_zOmega(
         self, zOmega_integrals: List[sp.Expr]
     ) -> Dict[str, object]:
-        """
-        Compute S_α and S from the integrals ∮ z_α Ω dA.
+        r"""
+        Compute ``S_α`` and ``S`` from the integrals ``∮ z_α Ω dA``.
 
-        Given the three surface integrals ZΩ_α := ∮ z_α Ω dA, this function
-        returns S_α = (1/(8π)) ZΩ_α and the magnitude S = sqrt(Σ_α S_α²).
+        Given the three surface integrals ``ZΩ_α := ∮ z_α Ω dA``, this function
+        returns ``S_α = (1/(8π)) ZΩ_α`` and the magnitude
+        ``S = sqrt(Σ_α S_α²)``.
 
-        :param zOmega_integrals: List of the three integrals [∮ z_0 Ω dA, ...].
-        :return: A dictionary {"SalphaU": [S_0, S_1, S_2], "S": S}.
-        :raises ValueError: If ``zOmega_integrals`` does not contain exactly three elements.
+        :param zOmega_integrals: ``[∮ z_0 Ω dA, ∮ z_1 Ω dA, ∮ z_2 Ω dA]``.
+        :return: ``{"SalphaU": [S_0, S_1, S_2], "S": S}``.
+        :raises ValueError: ``zOmega_integrals`` does not have length 3.
         """
         if len(zOmega_integrals) != 3:
             raise ValueError("zOmega_integrals must contain three integrals.")
@@ -565,14 +635,14 @@ class SpECTRESpinEstimateClass:
         return {"SalphaU": SalphaU, "S": S}
 
     def magnitude_from_zOmega(self, zOmega_integrals: List[sp.Expr]) -> sp.Expr:
-        """
-        Compute spin magnitude S from the integrals ∮ z_α Ω dA (legacy).
+        r"""
+        Compute spin magnitude ``S`` from the integrals ``∮ z_α Ω dA`` (legacy).
 
-        S = (1/(8π)) * sqrt( sum_α (ZΩ_α)^2 ), consistent with the whitepaper.
+        ``S = (1/(8π)) * sqrt( \sum_α (ZΩ_α)^2 )``.
 
-        :param zOmega_integrals: List of the three integrals [∮ z_0 Ω dA, ...].
-        :return: A SymPy expression for the spin magnitude S.
-        :raises ValueError: If ``zOmega_integrals`` does not contain exactly three elements.
+        :param zOmega_integrals: ``[∮ z_0 Ω dA, ∮ z_1 Ω dA, ∮ z_2 Ω dA]``.
+        :return: The spin magnitude ``S``.
+        :raises ValueError: ``zOmega_integrals`` does not have length 3.
         """
         if len(zOmega_integrals) != 3:
             raise ValueError("zOmega_integrals must contain three integrals.")
@@ -592,19 +662,23 @@ class SpECTRESpinEstimateClass:
         fallback_choice: str = "zero",
         zOmega_integrals: Optional[List[sp.Expr]] = None,
     ) -> Dict[str, object]:
-        """
-        Compose reductions & policies to return a spin vector.
+        r"""
+        Compose reductions and policies to return a spin vector ``S^i``.
 
-        :param sums: RunSums dictionary (see `reduce_centroids_and_direction`).
-        :param S: Spin magnitude (dimensionful or dimensionless).
-        :param eps: Tolerance ε in the near-zero criterion.
-        :param fallback_choice: {"zero", "zalpha"}. Policy on near-zero trigger.
-                                "zero" returns the zero vector. "zalpha" uses the
-                                direction from S_α = (1/8π) ∮ z_α Ω dA.
-        :param zOmega_integrals: Optional list [∮ z_0 Ω dA, ...] needed for "zalpha".
-        :return: Dictionary with keys "SU", "near_zero_trigger", and pass-through
-                 results from `reduce_centroids_and_direction`.
-        :raises ValueError: If `fallback_choice` is invalid.
+        :param sums: RunSums dictionary (see ``reduce_centroids_and_direction``).
+            May optionally contain ``"Oabs" = ∮|Ω| dA`` for a concrete trigger.
+        :param S: Spin magnitude (dimensionful or dimensionless). The returned
+            vector has Euclidean norm ``S`` by construction, unless the near-zero
+            policy triggers and the fallback returns the zero vector.
+        :param eps: Tolerance ``ε`` in the near-zero criterion.
+        :param fallback_choice: One of ``{"zero", "zalpha"}``. If ``"zero"``,
+            return the zero vector when the policy triggers. If ``"zalpha"``,
+            fall back to the direction defined by ``S_α = (1/8π) ∮ z_α Ω dA``.
+        :param zOmega_integrals: Required when ``fallback_choice='zalpha'``;
+            ignored otherwise.
+        :return: ``{"SU": [Sx, Sy, Sz], "near_zero_trigger": <bool>,
+            "x0U", "xRcorrU", "IU", "nU", "normI"}``.
+        :raises ValueError: ``fallback_choice`` is not one of ``{"zero","zalpha"}``.
         """
         red = self.reduce_centroids_and_direction(sums)
 
@@ -663,16 +737,13 @@ class SpECTRESpinEstimateClass:
     def validation_residuals_from_sums(
         self, sums: Dict[str, object]
     ) -> Dict[str, sp.Expr]:
-        """
+        r"""
         Return cheap integral-level validation residuals from RunSums.
 
-        This function computes residuals using the same derivative operators
-        that feed R and Ω.
-          - Gauss–Bonnet:   ∮ R dA − 8π
-          - Ω constraint:   ∮ Ω dA
+        Uses the same surface-derivative operators that feed ``R`` and ``Ω``.
 
-        :param sums: Dictionary of integrated quantities (see `reduce_centroids_and_direction`).
-        :return: A dictionary {"gauss_bonnet": residual, "omega_constraint": residual}.
+        :param sums: Integrated quantities (see ``reduce_centroids_and_direction``).
+        :return: ``{"gauss_bonnet": ∮R dA − 8π, "omega_constraint": ∮Ω dA}``.
         """
         R0 = sums["R0"]
         O0 = sums["O0"]
@@ -682,6 +753,14 @@ class SpECTRESpinEstimateClass:
     # Internal: build 2D connections, Ricci scalar, Ω_base (σ=+1), eigen-ops
     # =========================================================================
     def _build_intrinsic_ops_and_omega_base(self) -> None:
+        r"""
+        Construct intrinsic geometric operators and ``Ω_base``.
+
+        Builds (i) derivatives of ``q^{AB}``, (ii) 2D Christoffel symbols and
+        their derivatives, (iii) the 2D Ricci scalar ``R``, (iv) the base spin
+        function ``Ω_base`` with unit orientation (``σ=+1``), and (v) Laplacians
+        and conservative divergence terms used by eigen-operators.
+        """
         # q^{AB} derivatives from identity: (qUU)_,C = -q^{AE} q^{BF} q_{EF,C}
         self._q2UUdD = ixp.zerorank3(dimension=2)
         for A in range(2):
@@ -716,10 +795,7 @@ class SpECTRESpinEstimateClass:
                     self._GammaU2DD[C][A][B] = val
 
         # Derivatives of Γ using product rule with qUUdD and q2DD_dDD:
-        self._GammaU2DD_dD = [
-            [[[sp.sympify(0) for _ in range(2)] for __ in range(2)] for ___ in range(2)]
-            for ____ in range(2)
-        ]
+        self._GammaU2DD_dD = ixp.zerorank4(dimension=2)
         for E in range(2):
             for C in range(2):
                 for A in range(2):
@@ -818,6 +894,7 @@ class SpECTRESpinEstimateClass:
     # Internal: uniformly apply r->h and f0_of_xx0->h to stored expressions
     # -------------------------------------------------------------------------
     def _apply_surface_substitutions_all(self) -> None:
+        """Apply the on-surface substitutions uniformly to cached expressions."""
         subs_map = {
             self._rfm.xx[0]: self._h,
             sp.sympify("f0_of_xx0"): self._h,
@@ -846,6 +923,7 @@ class SpECTRESpinEstimateClass:
     # Internal: apply orientation sign σ to Ω and rebuild Ω-dependent moments
     # -------------------------------------------------------------------------
     def _update_omega_with_orientation(self) -> None:
+        """Update ``Ω`` and all Ω-dependent moments to respect the current ``σ``."""
         # Ω = σ * Ω_base
         self._Omega = self._orientation_sign * self._Omega_base
         self._xOmega_momentU = [self._xMeasU[i] * self._Omega for i in range(3)]
@@ -857,14 +935,18 @@ class SpECTRESpinEstimateClass:
 
 
 class SpECTRESpinEstimateClass_dict(Dict[str, SpECTRESpinEstimateClass]):
-    """
-    Dictionary-like accessor for SpECTRESpinEstimateClass instances.
+    r"""
+    Dictionary-like accessor for :class:`SpECTRESpinEstimateClass` instances.
 
-    * "Spherical" -> reference metric without precompute
-    * "Spherical_rfm_precompute" -> reference metric with precompute enabled
+    Keys
+    ----
+    * ``"Spherical"`` → reference metric without precompute.
+    * ``"Spherical_rfm_precompute"`` → reference metric with precompute enabled.
 
-    Note:
-        The key only alters which ``rfm`` entry provides coordinate symbols.
+    Notes
+    -----
+    The key only alters which ``rfm`` entry provides coordinate symbols; the
+    resulting symbolic expressions are otherwise identical.
     """
 
     def __getitem__(self, key: str) -> SpECTRESpinEstimateClass:
