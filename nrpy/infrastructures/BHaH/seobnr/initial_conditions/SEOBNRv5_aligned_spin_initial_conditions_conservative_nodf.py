@@ -39,7 +39,7 @@ the time derivative of the tortoise momentum is zero and the time derivative of 
 @params commondata - The Common data structure containing the model parameters.
 @returns - GSL_SUCCESS (0) upon success.
 """
-    cfunc_type = "int"
+    cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_initial_conditions_conservative"
     params = "commondata_struct *restrict commondata"
     body = """
@@ -51,54 +51,10 @@ REAL omega = commondata->initial_omega;
 REAL pphi = pow(omega,-1./3.);
 REAL r = pphi*pphi;
 const REAL x_guess[2] = {r,pphi};
-REAL *restrict x_result = malloc(2*sizeof(REAL));
-if (x_result == NULL){
-  fprintf(stderr, "In SEOBNRv5_aligned_spin_initial_conditions_conservative_nodf(), malloc() failed for x_result\\n");
-  exit(1);
-}
-const gsl_multiroot_fsolver_type *restrict T = gsl_multiroot_fsolver_hybrids;
-if (T == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_initial_conditions_conservative_nodf(), could not assign gsl_multiroot_fsolver_hybrids to T\\n");
-  exit(1);
-}
-gsl_multiroot_fsolver *restrict s = gsl_multiroot_fsolver_alloc(T , n);
-if (s == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_initial_conditions_conservative_nodf(), gsl_multiroot_fsolver_alloc failed to initialize\\n");
-  exit(1);
-}
-gsl_vector *restrict x = gsl_vector_alloc(n);
-if (x == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_initial_conditions_conservative_nodf(), gsl_vector_alloc failed to initialize\\n");
-  exit(1);
-}
-size_t i , iter = 0;
-int status;
-const int maxiter = 100;
-for (i = 0; i < n; i++){
-gsl_vector_set(x , i , x_guess[i]);
-}
-gsl_multiroot_fsolver_set(s , &f , x);
-do {
-  iter++;
-  status = gsl_multiroot_fsolver_iterate (s);
-  int f_solver_status[1] = {GSL_SUCCESS};
-  char fsolver_name[] = "gsl_multiroot_fsolver_iterate";
-  handle_gsl_return_status(status,f_solver_status,1,fsolver_name);
-  status = gsl_multiroot_test_residual (s->f, 6e-12);
-  int test_residual_status[2] = {GSL_SUCCESS,GSL_CONTINUE};
-  char residual_name[] = "gsl_multiroot_test_residual";
-  handle_gsl_return_status(status,test_residual_status,2,residual_name);
-}
-while(status == GSL_CONTINUE && iter < maxiter);
-for (i = 0; i < n; i++){
-x_result[i] = gsl_vector_get(s->x , i);
-}
-gsl_multiroot_fsolver_free (s);
-gsl_vector_free (x);
+REAL x_result[2] = {0.,0.};
+root_finding_multidimensional(2, x_guess, &f, x_result);
 commondata->r = x_result[0];
 commondata->pphi = x_result[1];
-free(x_result);
-return GSL_SUCCESS;
 """
     cfc.register_CFunction(
         subdirectory="initial_conditions",

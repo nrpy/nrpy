@@ -173,6 +173,9 @@ return 0;
 BHaH.seobnr.utils.commondata_io.register_CFunction_commondata_io()
 BHaH.seobnr.utils.handle_gsl_return_status.register_CFunction_handle_gsl_return_status()
 BHaH.seobnr.utils.SEOBNRv5_aligned_spin_unwrap.register_CFunction_SEOBNRv5_aligned_spin_unwrap()
+BHaH.seobnr.utils.root_finding_1d.register_CFunction_root_finding_1d()
+BHaH.seobnr.utils.root_finding_multidimensional.register_CFunction_root_finding_multidimensional()
+
 
 # register SEOBNRv5 coefficients
 BHaH.seobnr.SEOBNRv5_aligned_spin_coefficients.register_CFunction_SEOBNRv5_aligned_spin_coefficients()

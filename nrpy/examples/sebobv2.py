@@ -102,7 +102,7 @@ Step 2: Compute Hamiltonian and derivatives."""
     name = "main"
     params = "int argc, const char *argv[]"
     body = r"""  commondata_struct commondata; // commondata contains parameters common to all grids.
-//Step 0: Initialize a loop parameter for outputs
+// Step 1. Initialize commondata 
 // Step 1.a: Set each commondata CodeParameter to default.
 commondata_struct_set_to_default(&commondata);
 // Step 1.b: Overwrite default values to parfile values. Then overwrite parfile values with values set at cmd line.
@@ -114,27 +114,20 @@ SEOBNRv5_aligned_spin_coefficients(&commondata);
         body += r"""// Step 1.d: Set the waveform coefficients
 SEOBNRv5_aligned_spin_waveform_coefficients(&commondata);
 """
-    body += r"""// Step 2.a: Compute SEOBNRv5 conservative initial conditions.
+    body += r"""// Step 2.: Compute SEOBNRv5 conservative initial conditions.
 SEOBNRv5_aligned_spin_initial_conditions_conservative(&commondata);
-// Step 2.b: Print out the conservative initial conditions.
-//printf("r = %.15e\n",commondata.r);
-//printf("pphi = %.15e\n",commondata.pphi);
-// Step 3.a: Compute SEOBNRv5 dissipative initial conditions.
-SEOBNRv5_aligned_spin_initial_conditions_dissipative(&commondata);
-// Step 3.b: Print out the dissipative initial conditions.
-//printf("prstar = %.15e\n",commondata.prstar);
-// Step 4: Run the ODE integration.
-SEOBNRv5_aligned_spin_ode_integration(&commondata);
-// Step 5. Generate the waveform.
+// Step 3.: Run the trajectory generation.
+SEOBNRv5_aligned_spin_pa_integration(&commondata);
+// Step 4. Generate the waveform.
 SEOBNRv5_aligned_spin_waveform_from_dynamics(&commondata);
-// Step 6. Compute and apply the NQC corrections
+// Step 5. Compute and apply the NQC corrections
 SEBOBv2_NQC_corrections(&commondata);
-// Step 7.a Compute the IMR waveform
+// Step 6. Compute the IMR waveform
 SEBOBv2_IMR_waveform(&commondata);
 """
     if frequency_domain:
         body += r"""
-// Step 7.b Compute the FFT-ed IMR waveform
+// Step 7. Compute the FFT-ed IMR waveform
 // Specify wisdom file
 const char *wisdom_file = "fftw_wisdom.dat";
 SEOBNRv5_aligned_spin_FD_waveform(wisdom_file, &commondata);
@@ -142,7 +135,7 @@ SEOBNRv5_aligned_spin_FD_waveform(wisdom_file, &commondata);
     if output_waveform:
         if frequency_domain:
             body += r"""
-// Step 6.b: Print the resulting waveform.
+// Step 8.: Print the resulting waveform.
 for (size_t i = 0; i < commondata.nsteps_IMR_FD; i++) {
     printf("%.15e %.15e %.15e\n", creal(commondata.waveform_IMR_FD[IDX_WF(i,FREQ)])
     , creal(commondata.waveform_IMR_FD[IDX_WF(i,STRAIN)]), cimag(commondata.waveform_IMR_FD[IDX_WF(i,STRAIN)]));
@@ -150,7 +143,7 @@ for (size_t i = 0; i < commondata.nsteps_IMR_FD; i++) {
 """
         else:
             body += r"""
-// Step 6.b: Print the resulting waveform.
+// Step 7.: Print the resulting waveform.
 for (size_t i = 0; i < commondata.nsteps_IMR; i++) {
     printf("%.15e %.15e %.15e\n", creal(commondata.waveform_IMR[IDX_WF(i,TIME)])
     , creal(commondata.waveform_IMR[IDX_WF(i,STRAIN)]), cimag(commondata.waveform_IMR[IDX_WF(i,STRAIN)]));
@@ -190,6 +183,12 @@ return 0;
 BHaH.seobnr.utils.commondata_io.register_CFunction_commondata_io()
 BHaH.seobnr.utils.handle_gsl_return_status.register_CFunction_handle_gsl_return_status()
 BHaH.seobnr.utils.SEOBNRv5_aligned_spin_unwrap.register_CFunction_SEOBNRv5_aligned_spin_unwrap()
+BHaH.seobnr.utils.dy_dx.register_CFunction_dy_dx()
+BHaH.seobnr.utils.finite_difference_stencil.register_CFunction_finite_difference_stencil()
+BHaH.seobnr.utils.root_finding_1d.register_CFunction_root_finding_1d()
+BHaH.seobnr.utils.root_finding_multidimensional.register_CFunction_root_finding_multidimensional()
+BHaH.seobnr.utils.integration_stencil.register_CFunction_integration_stencil()
+BHaH.seobnr.utils.cumulative_integration.register_CFunction_cumulative_integration()
 
 # register SEOBNRv5 coefficients
 BHaH.seobnr.SEOBNRv5_aligned_spin_coefficients.register_CFunction_SEOBNRv5_aligned_spin_coefficients()
@@ -203,6 +202,14 @@ BHaH.seobnr.initial_conditions.SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit.
 BHaH.seobnr.initial_conditions.SEOBNRv5_aligned_spin_initial_conditions_conservative_nodf.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conservative_nodf()
 BHaH.seobnr.initial_conditions.SEOBNRv5_aligned_spin_radial_momentum_condition.register_CFunction_SEOBNRv5_aligned_spin_radial_momentum_condition()
 BHaH.seobnr.initial_conditions.SEOBNRv5_aligned_spin_initial_conditions_dissipative.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_dissipative()
+
+# register PA integration routines
+BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_pa_integration.register_CFunction_SEOBNRv5_aligned_spin_pa_integration()
+BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_pphi0_equation.register_CFunction_SEOBNRv5_pphi0_equation()
+BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_pphi_equation.register_CFunction_SEOBNRv5_pphi_equation()
+BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_pr_equation.register_CFunction_SEOBNRv5_pr_equation()
+BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_phi_equation.register_CFunction_SEOBNRv5_phi_equation()
+BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_t_equation.register_CFunction_SEOBNRv5_t_equation()
 
 # register trajectory integration and processing routines
 BHaH.seobnr.dynamics.eval_abs_deriv.register_CFunction_eval_abs_deriv()
