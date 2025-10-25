@@ -226,6 +226,16 @@ if separate_Ricci_and_BSSN_RHS:
         enable_fd_functions=enable_fd_functions,
         OMP_collapse=OMP_collapse,
     )
+    if parallelization == "cuda":
+        BHaH.general_relativity.Ricci_eval.register_CFunction_Ricci_eval(
+            CoordSystem=CoordSystem,
+            enable_rfm_precompute=enable_rfm_precompute,
+            enable_intrinsics=enable_intrinsics,
+            enable_fd_functions=enable_fd_functions,
+            OMP_collapse=OMP_collapse,
+            host_only_version=True,
+        )
+
 BHaH.general_relativity.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,

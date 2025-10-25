@@ -117,6 +117,7 @@ def register_CFunction_diagnostic_gfs_set(
     const params_struct *restrict params = &griddata[grid].params;
     SET_NXX_PLUS_2NGHOSTS_VARS(grid);
     const REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
+    const rfm_struct *restrict rfmstruct = griddata[grid].gridfuncs.rfmstruct;
 
     // Poison diagnostic_gfs (for debugging purposes only; WARNING: this might make valgrind ineffective)
     // #pragma omp parallel for
@@ -144,9 +145,15 @@ def register_CFunction_diagnostic_gfs_set(
       } // END LOOP over inner boundary points
     } // END applying inner bcs to DIAG_RESIDUAL
 """
-    body += """
-  constraints_eval(commondata, params, rfmstruct, y_n_gfs, diagnostic_gfs);
-} // END LOOP over grids"""
+    parallelization = par.parval_from_str("parallelization")
+    Ricci_func = f"Ricci_eval{'_host' if parallelization == 'cuda' else ''}"
+    Ricci_gfs_ptr = (
+        "diagnostic_gfs[grid]" if parallelization == "cuda" else "auxevol_gfs"
+    )
+    body += f"""
+  {Ricci_func}(commondata, params, rfmstruct, y_n_gfs, {Ricci_gfs_ptr});
+  constraints_eval(commondata, params, rfmstruct, y_n_gfs, {Ricci_gfs_ptr});
+}} // END LOOP over grids"""
     par.glb_extras_dict["diagnostic_gfs_names_dict"] = diagnostic_gfs_names_dict
 
     cfc.register_CFunction(

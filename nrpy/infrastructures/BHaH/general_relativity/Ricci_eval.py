@@ -31,6 +31,7 @@ def register_CFunction_Ricci_eval(
     enable_intrinsics: bool,
     enable_fd_functions: bool,
     OMP_collapse: int,
+    host_only_version: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the Ricci evaluation function.
@@ -40,6 +41,8 @@ def register_CFunction_Ricci_eval(
     :param enable_intrinsics: Whether to enable SIMD instructions.
     :param enable_fd_functions: Whether to enable finite difference functions.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
+    :param host_only_version: (default: False) Whether to emit a host-only version, for
+                              performing (host-only) diagnostics with CUDA enabled.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -48,6 +51,8 @@ def register_CFunction_Ricci_eval(
         return None
 
     parallelization = par.parval_from_str("parallelization")
+    if host_only_version:
+        parallelization = "openmp"
     Bq = BSSN_quantities[
         CoordSystem + ("_rfm_precompute" if enable_rfm_precompute else "")
     ]
@@ -64,6 +69,8 @@ def register_CFunction_Ricci_eval(
     desc = r"""Set Ricci tensor."""
     cfunc_type = "void"
     name = "Ricci_eval"
+    if host_only_version:
+        name += "_host"
     arg_dict_cuda = {
         "in_gfs": "const REAL *restrict",
         "auxevol_gfs": "REAL *restrict",
@@ -89,9 +96,18 @@ def register_CFunction_Ricci_eval(
     # Populate Ricci tensor
     Ricci_access_gfs: List[str] = []
     for var in Bq.Ricci_varnames:
-        Ricci_access_gfs += [
-            gri.BHaHGridFunction.access_gf(var, 0, 0, 0, gf_array_name="auxevol_gfs")
-        ]
+        if host_only_version:
+            Ricci_access_gfs += [
+                gri.BHaHGridFunction.access_gf(
+                    f"DIAG_{var}", 0, 0, 0, gf_array_name="auxevol_gfs"
+                )
+            ]
+        else:
+            Ricci_access_gfs += [
+                gri.BHaHGridFunction.access_gf(
+                    var, 0, 0, 0, gf_array_name="auxevol_gfs"
+                )
+            ]
     kernel_body = BHaH.simple_loop.simple_loop(
         loop_body=ccg.c_codegen(
             Bq.Ricci_exprs,

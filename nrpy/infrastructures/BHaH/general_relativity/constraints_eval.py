@@ -58,17 +58,6 @@ def register_CFunction_constraints_eval(
         + "_rfm_precompute_RbarDD_gridfunctions"
         + ("_T4munu" if enable_T4munu else "")
     ]
-    # The above dictionary instantiation just populated gri.glb_gridfcs_dict
-    #  with RbarDD gridfunctions. As such, c_codegen will recognize them
-    #  as needing to be read from memory in the below codegen. We want to
-    #  1. make codegen of diagnostics fast (MUST enable RbarDD_gridfunctions)
-    #  2. avoid allocating additional diagnostics gridfunctions
-    #  So to these ends, this function will call another that sets RbarDD
-    #  *pointwise* (or more accurately, SIMD-wise).
-    if "RbarDD00" in gri.glb_gridfcs_dict:
-        for i in range(3):
-            for j in range(i, 3):
-                gri.glb_gridfcs_dict.pop(f"RbarDD{i}{j}")
     expr_list = [Bcon.H, Bcon.Msquared]
     loop_body = ccg.c_codegen(
         expr_list,
