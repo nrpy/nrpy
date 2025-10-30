@@ -12,7 +12,6 @@ from typing import Union, cast
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.finite_difference as fin
-import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 from nrpy.equations.general_relativity.BSSN_constraints import BSSN_constraints
@@ -69,7 +68,7 @@ def register_CFunction_constraints_eval(
         enable_simd=True,
         enable_fd_functions=enable_fd_functions,
         rational_const_alias="static const",
-    )
+    ).replace("auxevol_gfs[IDX4(RBARDD", "diagnostic_gfs[IDX4(DIAG_RBARDD")
     body = BHaH.simple_loop.simple_loop(
         loop_body=loop_body,
         loop_region="interior",
@@ -78,12 +77,6 @@ def register_CFunction_constraints_eval(
         enable_rfm_precompute=True,
         read_xxs=False,
         OMP_collapse=OMP_collapse,
-    )
-    _ = gri.register_gridfunctions_for_single_rank2(
-        "RbarDD",
-        symmetry="sym01",
-        group="AUXEVOL",
-        gf_array_name="auxevol_gfs",
     )
     prefunc = ""
     if enable_fd_functions:

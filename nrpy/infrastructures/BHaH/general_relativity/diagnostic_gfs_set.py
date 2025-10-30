@@ -104,6 +104,13 @@ def register_CFunction_diagnostic_gfs_set(
         "DIAG_LAPSE": "Lapse",
         "DIAG_W": "Conformal_factor_W",
     }
+    for i in range(3):
+        for j in range(i, 3):
+            diagnostic_gfs_names_dict.update(
+                {
+                    f"DIAG_RBARDD{i}{j}GF": f"Ricci_tensor_component_RbarDD{i}{j}",
+                }
+            )
     if enable_psi4:
         diagnostic_gfs_names_dict.update(
             {
@@ -116,9 +123,9 @@ def register_CFunction_diagnostic_gfs_set(
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     const params_struct *restrict params = &griddata[grid].params;
     const rfm_struct *restrict rfmstruct = griddata[grid].rfmstruct;
-    // SET_NXX_PLUS_2NGHOSTS_VARS(grid);
+    SET_NXX_PLUS_2NGHOSTS_VARS(grid);
     const REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
-    const REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
+    REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
 
     // Poison diagnostic_gfs (for debugging purposes only; WARNING: this might make valgrind ineffective)
     // #pragma omp parallel for
@@ -149,7 +156,9 @@ def register_CFunction_diagnostic_gfs_set(
     parallelization = par.parval_from_str("parallelization")
     Ricci_func = f"Ricci_eval{'_host' if parallelization == 'cuda' else ''}"
     Ricci_gfs_ptr = (
-        "diagnostic_gfs[grid]" if parallelization == "cuda" else "auxevol_gfs"
+        "&diagnostic_gfs[grid][IDX4pt(DIAG_RBARDD00GF, 0)]"
+        if parallelization == "cuda"
+        else "&auxevol_gfs[IDX4pt(RBARDD00GF, 0)]"
     )
     body += f"""
   {Ricci_func}(params, rfmstruct, y_n_gfs, {Ricci_gfs_ptr});

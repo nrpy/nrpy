@@ -13,7 +13,6 @@ from typing import List, Union, cast
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.finite_difference as fin
-import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.params as par
@@ -73,7 +72,7 @@ def register_CFunction_Ricci_eval(
         name += "_host"
     arg_dict_cuda = {
         "in_gfs": "const REAL *restrict",
-        "auxevol_gfs": "REAL *restrict",
+        "RbarDD00_ptr": "REAL *restrict",
     }
     if enable_rfm_precompute:
         arg_dict_cuda = {
@@ -95,19 +94,8 @@ def register_CFunction_Ricci_eval(
 
     # Populate Ricci tensor
     Ricci_access_gfs: List[str] = []
-    for var in Bq.Ricci_varnames:
-        if host_only_version:
-            Ricci_access_gfs += [
-                gri.BHaHGridFunction.access_gf(
-                    f"DIAG_{var}", 0, 0, 0, gf_array_name="auxevol_gfs"
-                )
-            ]
-        else:
-            Ricci_access_gfs += [
-                gri.BHaHGridFunction.access_gf(
-                    var, 0, 0, 0, gf_array_name="auxevol_gfs"
-                )
-            ]
+    for gf in range(6):
+        Ricci_access_gfs += [f"RbarDD00_ptr[IDX4({gf}, i0, i1, i2)]"]
     kernel_body = BHaH.simple_loop.simple_loop(
         loop_body=ccg.c_codegen(
             Bq.Ricci_exprs,

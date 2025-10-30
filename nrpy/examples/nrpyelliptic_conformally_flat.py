@@ -7,7 +7,6 @@ Authors: Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
 
 import argparse
 import os
-
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
@@ -50,7 +49,7 @@ par.set_parval_from_str("fp_type", fp_type)
 par.set_parval_from_str("parallelization", parallelization)
 par.set_parval_from_str("Infrastructure", "BHaH")
 
-enable_simd_intrinsics = True  # parallelization != "cuda"
+enable_simd_intrinsics = True
 grid_physical_size = 1.0e6
 t_final = grid_physical_size  # This parameter is effectively not used in NRPyElliptic
 nn_max = 10000  # Sets the maximum number of relaxation steps

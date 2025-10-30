@@ -14,7 +14,6 @@ Author: Zachariah B. Etienne
 
 import argparse
 import os
-
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
@@ -40,18 +39,6 @@ parser.add_argument(
     type=str,
     help="Floating point precision (e.g. float, double).",
     default="double",
-)
-parser.add_argument(
-    "--disable_intrinsics",
-    action="store_true",
-    help="Flag to disable hardware intrinsics",
-    default=False,
-)
-parser.add_argument(
-    "--disable_rfm_precompute",
-    action="store_true",
-    help="Flag to disable RFM precomputation.",
-    default=False,
 )
 args = parser.parse_args()
 
@@ -90,6 +77,7 @@ enable_KreissOliger_dissipation = True
 enable_CAKO = True
 enable_CAHD = False
 enable_SSL = True
+enable_simd_intrinsics = True
 KreissOliger_strength_gauge = 0.99
 KreissOliger_strength_nongauge = 0.3
 LapseEvolutionOption = "OnePlusLog"
@@ -286,7 +274,7 @@ if enable_SSL:
 commondata->SSL_Gaussian_prefactor = commondata->SSL_h * exp(-commondata->time * commondata->time / (2 * commondata->SSL_sigma * commondata->SSL_sigma));
 """
 if separate_Ricci_and_BSSN_RHS:
-    rhs_string += "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
+    rhs_string += "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, &auxevol_gfs[IDX4Ppt(params, RBARDD00GF, 0)]);"
 rhs_string += """
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
 if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
