@@ -379,19 +379,19 @@ class SEOBNRv5_aligned_spin_Hamiltonian_quantities:
             )
         )
         Qalign = Qnos + QalignSS
-        Balignnp = -1 + ap**2 * u * u + Anons * Dnons + BnpalignSS
+        self.Balignnp = -1 + ap**2 * u * u + Anons * Dnons + BnpalignSS
         Bkerreqnp = -(1 + 2 / self.r) / (self.r**2 + ap**2 * (1 + 2 / self.r))
-        Aalign = (ap**2 * u * u + Anons + AalignSS) / (
+        self.Aalign = (ap**2 * u * u + Anons + AalignSS) / (
             1 + ap**2 * (1 + 2 / self.r) / (self.r**2)
         )
         Galigna3 = self.pphi * (delta * am * ap**2 - ap**3) / (4 * self.r**2)
         SOcalib = self.nu * dSO * ap * self.pphi * (u**3)
-        Heven = sp.sqrt(
-            Aalign
+        self.Heven = sp.sqrt(
+            self.Aalign
             * (
                 1
                 + self.pphi * self.pphi / self.r**2
-                + (1 + Balignnp) * pr * pr
+                + (1 + self.Balignnp) * pr * pr
                 + Bkerreqnp * self.pphi * self.pphi * ap**2 / self.r**2
                 + Qalign
             )
@@ -399,8 +399,32 @@ class SEOBNRv5_aligned_spin_Hamiltonian_quantities:
         Hodd = (self.pphi * (gap * ap + delta * gam * am) + SOcalib + Galigna3) / (
             self.r**3 + ap**2 * (self.r + 2)
         )
-        Heff = Hodd + Heven
+        Heff = Hodd + self.Heven
         self.Hreal = sp.sqrt(1 + 2 * self.nu * (Heff - 1))
+        # list of terms needed for PA approximation
+        # note that these terms do not get used in pySEOBNR
+        # but have been included for completeness
+        # and for future PA implementations
+        self.K0 = self.Aalign * (
+            -2 * u**3 * (1 + Bkerreqnp * ap**2)
+            + ap**2 * u**2 * sp.diff(Bkerreqnp, self.r)
+        ) + sp.diff(self.Aalign, self.r) * (u**2 + ap**2 * u**2 * Bkerreqnp)
+        self.K1 = self.Aalign * (
+            (
+                sp.diff(self.Balignnp, self.r)
+                - 2 * sp.diff(self.xi, self.r) * (1 + self.Balignnp) / self.xi
+            )
+            * self.prstar**2
+            / self.xi**2
+            + sp.diff(Qalign, self.r)
+        ) + sp.diff(self.Aalign, self.r) * (
+            1 + self.prstar**2 * (1 + self.Balignnp) / self.xi**2 + Qalign
+        )
+        self.dQalign_dprstar = sp.diff(Qalign, self.prstar)
+        self.r_dot = -self.xi * sp.diff(self.Hreal, self.prstar)
+        Hbarodd = Hodd / self.pphi
+        self.dHoddbar_dr = sp.diff(Hbarodd, self.r)
+        # Terms needed for dynamics
         self.dHreal_dr = sp.diff(self.Hreal, self.r) / self.nu
         self.dHreal_dprstar = sp.diff(self.Hreal, self.prstar) / self.nu
         self.dHreal_dpphi = sp.diff(self.Hreal, self.pphi) / self.nu

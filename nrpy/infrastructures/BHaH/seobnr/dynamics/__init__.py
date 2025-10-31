@@ -5,7 +5,13 @@ from . import (
     SEOBNRv5_aligned_spin_interpolate_dynamics,
     SEOBNRv5_aligned_spin_iterative_refinement,
     SEOBNRv5_aligned_spin_ode_integration,
+    SEOBNRv5_aligned_spin_pa_integration,
+    SEOBNRv5_aligned_spin_phi_equation,
+    SEOBNRv5_aligned_spin_pphi0_equation,
+    SEOBNRv5_aligned_spin_pphi_equation,
+    SEOBNRv5_aligned_spin_pr_equation,
     SEOBNRv5_aligned_spin_right_hand_sides,
+    SEOBNRv5_aligned_spin_t_equation,
     eval_abs_deriv,
     find_local_minimum_index,
 )

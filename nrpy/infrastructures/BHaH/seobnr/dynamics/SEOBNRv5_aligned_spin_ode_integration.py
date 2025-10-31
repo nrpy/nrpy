@@ -159,68 +159,58 @@ for (i = 0; i < nsteps; i++){
 REAL t_desired;
 if (stop == OMEGA){
   t_desired = times[nsteps-1] - commondata->t_stepback - 50.;
-}
-else{
+} else{
   t_desired = times[nsteps-1] - commondata->t_stepback;
 }
 size_t coarse_fine_separation_idx = gsl_interp_bsearch(times,t_desired,0,nsteps-1);
-commondata->dynamics_low = (REAL *)malloc(NUMVARS * coarse_fine_separation_idx * sizeof(REAL));
-if (commondata->dynamics_low == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_ode_integration(), malloc() failed for commondata->dynamics_low\\n");
-  exit(1);
-}
-commondata->nsteps_low = coarse_fine_separation_idx;
-for (i = 0; i < commondata->nsteps_low; i++){
-  commondata->dynamics_low[IDX(i,TIME)] = dynamics_RK[IDX(i,TIME)];
-  commondata->dynamics_low[IDX(i,R)] = dynamics_RK[IDX(i,R)];
-  commondata->dynamics_low[IDX(i,PHI)] = dynamics_RK[IDX(i,PHI)];
-  commondata->dynamics_low[IDX(i,PRSTAR)] = dynamics_RK[IDX(i,PRSTAR)];
-  commondata->dynamics_low[IDX(i,PPHI)] = dynamics_RK[IDX(i,PPHI)];
-  commondata->dynamics_low[IDX(i,H)] = dynamics_RK[IDX(i,H)];
-  commondata->dynamics_low[IDX(i,OMEGA)] = dynamics_RK[IDX(i,OMEGA)];
-  commondata->dynamics_low[IDX(i,OMEGA_CIRC)] = dynamics_RK[IDX(i,OMEGA_CIRC)];
-}
+REAL *times_fine_prelim = NULL;
+REAL *dynamics_fine_prelim = NULL;
+size_t nsteps_fine_prelim = 0;
+// handle case where t_desired is less than the first timestep (only happens when PA integration is performed).
+if (coarse_fine_separation_idx == 0){
+  nsteps_fine_prelim = nsteps;
+  dynamics_fine_prelim = (REAL *)malloc(NUMVARS * nsteps_fine_prelim * sizeof(REAL));
+  if (dynamics_fine_prelim == NULL){
+    fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_ode_integration(), malloc() failed for dynamics_fine_prelim\\n");
+    exit(1);
+  }
+  times_fine_prelim = (REAL *)malloc(nsteps_fine_prelim * sizeof(REAL));
+  if (times_fine_prelim == NULL){
+    fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_ode_integration(), malloc() failed for times_fine_prelim\\n");
+    exit(1);
+  }
+  memcpy(dynamics_fine_prelim,dynamics_RK,nsteps_fine_prelim * NUMVARS * sizeof(REAL));
+  memcpy(times_fine_prelim,times,nsteps_fine_prelim * sizeof(REAL));
+} else{
+  commondata->dynamics_low = (REAL *)malloc(NUMVARS * coarse_fine_separation_idx * sizeof(REAL));
+  if (commondata->dynamics_low == NULL){
+    fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_ode_integration(), malloc() failed for commondata->dynamics_low\\n");
+    exit(1);
+  }
+  memcpy(commondata->dynamics_low,dynamics_RK,coarse_fine_separation_idx * NUMVARS * sizeof(REAL));
+  commondata->nsteps_low = coarse_fine_separation_idx;
 
-size_t nsteps_fine_prelim = nsteps - coarse_fine_separation_idx;
-REAL *restrict dynamics_fine_prelim = (REAL *)malloc(NUMVARS * nsteps_fine_prelim * sizeof(REAL));
-if (dynamics_fine_prelim == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_ode_integration(), malloc() failed for dynamics_fine_prelim\\n");
-  exit(1);
+  nsteps_fine_prelim = nsteps - coarse_fine_separation_idx;
+  dynamics_fine_prelim = (REAL *)malloc(NUMVARS * nsteps_fine_prelim * sizeof(REAL));
+  if (dynamics_fine_prelim == NULL){
+    fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_ode_integration(), malloc() failed for dynamics_fine_prelim\\n");
+    exit(1);
+  }
+  times_fine_prelim = (REAL *)malloc(nsteps_fine_prelim * sizeof(REAL));
+  if (times_fine_prelim == NULL){
+    fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_ode_integration(), malloc() failed for times_fine_prelim\\n");
+    exit(1);
+  }
+  memcpy(dynamics_fine_prelim,dynamics_RK + coarse_fine_separation_idx * NUMVARS,nsteps_fine_prelim * NUMVARS * sizeof(REAL));
+  memcpy(times_fine_prelim,times + coarse_fine_separation_idx,nsteps_fine_prelim * sizeof(REAL));
 }
-REAL *restrict times_fine_prelim = (REAL *)malloc(nsteps_fine_prelim * sizeof(REAL));
-if (times_fine_prelim == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_ode_integration(), malloc() failed for times_fine_prelim\\n");
-  exit(1);
-}
-for (i = 0; i < nsteps_fine_prelim; i++){
-  dynamics_fine_prelim[IDX(i,TIME)] = dynamics_RK[IDX(i + coarse_fine_separation_idx,TIME)];
-  times_fine_prelim[i] = dynamics_fine_prelim[IDX(i,TIME)];
-  dynamics_fine_prelim[IDX(i,R)] = dynamics_RK[IDX(i + coarse_fine_separation_idx,R)];
-  dynamics_fine_prelim[IDX(i,PHI)] = dynamics_RK[IDX(i + coarse_fine_separation_idx,PHI)];
-  dynamics_fine_prelim[IDX(i,PRSTAR)] = dynamics_RK[IDX(i + coarse_fine_separation_idx,PRSTAR)];
-  dynamics_fine_prelim[IDX(i,PPHI)] = dynamics_RK[IDX(i + coarse_fine_separation_idx,PPHI)];
-  dynamics_fine_prelim[IDX(i,H)] = dynamics_RK[IDX(i + coarse_fine_separation_idx,H)];
-  dynamics_fine_prelim[IDX(i,OMEGA)] = dynamics_RK[IDX(i + coarse_fine_separation_idx,OMEGA)];
-  dynamics_fine_prelim[IDX(i,OMEGA_CIRC)] = dynamics_RK[IDX(i + coarse_fine_separation_idx,OMEGA_CIRC)];
-}
-
 commondata->dynamics_raw = malloc(NUMVARS * nsteps * sizeof(REAL));
 if (commondata->dynamics_raw == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_ode_integration(), malloc() failed for commondata->dynamics_raw\\n");
   exit(1);
 }
 commondata->nsteps_raw = nsteps;
-for (i = 0; i < nsteps; i++){
-  commondata->dynamics_raw[IDX(i,TIME)] = dynamics_RK[IDX(i,TIME)];
-  commondata->dynamics_raw[IDX(i,R)] = dynamics_RK[IDX(i,R)];
-  commondata->dynamics_raw[IDX(i,PHI)] = dynamics_RK[IDX(i,PHI)];
-  commondata->dynamics_raw[IDX(i,PRSTAR)] = dynamics_RK[IDX(i,PRSTAR)];
-  commondata->dynamics_raw[IDX(i,PPHI)] = dynamics_RK[IDX(i,PPHI)];
-  commondata->dynamics_raw[IDX(i,H)] = dynamics_RK[IDX(i,H)];
-  commondata->dynamics_raw[IDX(i,OMEGA)] = dynamics_RK[IDX(i,OMEGA)];
-  commondata->dynamics_raw[IDX(i,OMEGA_CIRC)] = dynamics_RK[IDX(i,OMEGA_CIRC)];
-}
-
+memcpy(commondata->dynamics_raw,dynamics_RK,nsteps * NUMVARS * sizeof(REAL));
 free(dynamics_RK);
 
 // t_peak = dynamics[-1] if there is no peak
