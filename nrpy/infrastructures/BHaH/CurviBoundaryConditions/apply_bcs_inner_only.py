@@ -155,7 +155,7 @@ boundary points ("inner maps to outer").
     )
 
 
-def register_CFunction_apply_bcs_inner_only_specific_auxgfs() -> None:
+def register_CFunction_apply_bcs_inner_only_specific_gfs() -> None:
     """
     Register C function for filling inner boundary points for specific gfs on the computational grid.
 
@@ -167,9 +167,9 @@ def register_CFunction_apply_bcs_inner_only_specific_auxgfs() -> None:
     >>> for parallelization in supported_Parallelizations:
     ...    par.set_parval_from_str("parallelization", parallelization)
     ...    cfc.CFunction_dict.clear()
-    ...    register_CFunction_apply_bcs_inner_only_specific_auxgfs()
-    ...    generated_str = cfc.CFunction_dict[f'apply_bcs_inner_only_specific_auxgfs'].full_function
-    ...    validation_desc = f"apply_bcs_inner_only_specific_auxgfs__{parallelization}"
+    ...    register_CFunction_apply_bcs_inner_only_specific_gfs()
+    ...    generated_str = cfc.CFunction_dict[f'apply_bcs_inner_only_specific_gfs'].full_function
+    ...    validation_desc = f"apply_bcs_inner_only_specific_gfs__{parallelization}"
     ...    validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
     """
     includes = ["BHaH_defines.h"]
@@ -182,13 +182,13 @@ interior ("pure inner") or to pure outer
 boundary points ("inner maps to outer").
 """
     cfunc_type = "void"
-    name = "apply_bcs_inner_only_specific_auxgfs"
+    name = "apply_bcs_inner_only_specific_gfs"
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const bc_struct *restrict bcstruct, REAL *restrict gfs, const int num_gfs, const int *gfs_to_sync"
     parallelization = par.parval_from_str("parallelization")
 
     kernel_body = generate_apply_bcs_inner_only__kernel_body(
         loop_bounds="num_gfs",
-        parity_ary="aux_gf_parity",
+        parity_ary="gf_parity",
         gf_index="gfs_to_sync[which_gf]",
     )
 

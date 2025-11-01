@@ -184,6 +184,7 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
     {"diagnostics_interp(commondata, griddata, (const double **)diagnostic_gfs);" + newline if enable_interp_diagnostics else ""}
     {"// Volume-integration diagnostics." if enable_volume_integration_diagnostics else ""}
     {"diagnostics_volume_integration(commondata, griddata, (const double **)diagnostic_gfs);" + newline if enable_volume_integration_diagnostics else ""}
+
     // Free temporary storage allocated to diagnostic_gfs.
     for(int grid=0; grid<commondata->NUMGRIDS; grid++)
       free(diagnostic_gfs[grid]);

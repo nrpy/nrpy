@@ -343,7 +343,7 @@ def single_RK_substep_input_symbolic(
             "RK_OUTPUT_GFS", str(post_rhs_output).replace("gfsL", "gfs")
         )
 
-    body += "}\n"
+    body += "} // END LOOP over grids\n"
 
     for post_rhs, post_rhs_output in zip(post_rhs_list, post_rhs_output_list):
         body += post_post_rhs_string.replace(

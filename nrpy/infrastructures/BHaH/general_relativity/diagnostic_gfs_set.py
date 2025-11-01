@@ -133,9 +133,6 @@ def register_CFunction_diagnostic_gfs_set(
     //       diagnostic_gfs[grid][ii] = NAN;
     //     } // END LOOP over all points & gridfunctions, poisoning diagnostic_gfs
     """
-    if enable_psi4:
-        body += """
-"""
     if enable_interp_diagnostics:
         body += """
     // Apply inner bcs to DIAG_RESIDUAL, as it depends on finite differences.
@@ -161,9 +158,19 @@ def register_CFunction_diagnostic_gfs_set(
         else "&auxevol_gfs[IDX4pt(RBARDD00GF, 0)]"
     )
     body += f"""
-  {Ricci_func}(params, rfmstruct, y_n_gfs, {Ricci_gfs_ptr});
-  constraints_eval(commondata, params, rfmstruct, y_n_gfs, {Ricci_gfs_ptr});
-}} // END LOOP over grids"""
+    // Set Ricci and constraints gridfunctions
+    {Ricci_func}(params, rfmstruct, y_n_gfs, {Ricci_gfs_ptr});
+    constraints_eval(commondata, params, rfmstruct, y_n_gfs, diagnostic_gfs[grid]);
+"""
+    if enable_psi4:
+        body += """
+    // Set psi4 gridfunctions
+    psi4(commondata, params, griddata[grid].xx, y_n_gfs, diagnostic_gfs[grid]);
+    // Apply inner bcs to psi4 needed to do interpolation correctly
+    int diag_gfs_to_sync[2] = {DIAG_PSI4_RE, DIAG_PSI4_IM};
+    apply_bcs_inner_only_specific_gfs(commondata, params, &griddata[grid].bcstruct, diagnostic_gfs[grid], 2, diag_gfs_to_sync);
+"""
+    body += "  } // END LOOP over grids\n"
     par.glb_extras_dict["diagnostic_gfs_names_dict"] = diagnostic_gfs_names_dict
 
     cfc.register_CFunction(

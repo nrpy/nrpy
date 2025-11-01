@@ -14,7 +14,6 @@ Author: Zachariah B. Etienne
 
 import argparse
 import os
-
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
@@ -46,8 +45,6 @@ args = parser.parse_args()
 # Code-generation-time parameters:
 fp_type = args.floating_point_precision.lower()
 parallelization = args.parallelization.lower()
-enable_intrinsics = not args.disable_intrinsics
-enable_rfm_precompute = not args.disable_rfm_precompute
 
 if parallelization not in ["openmp", "cuda"]:
     raise ValueError(
@@ -78,7 +75,6 @@ enable_KreissOliger_dissipation = True
 enable_CAKO = True
 enable_CAHD = False
 enable_SSL = True
-enable_simd_intrinsics = True
 KreissOliger_strength_gauge = 0.99
 KreissOliger_strength_nongauge = 0.3
 LapseEvolutionOption = "OnePlusLog"
@@ -97,13 +93,14 @@ Nxx_dict = {
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.25
 default_BH2_z_posn = -0.25
-enable_rfm_precompute = True
 MoL_method = "RK4"
 fd_order = 8
 radiation_BC_fd_order = 4
-enable_intrinsics = True
 separate_Ricci_and_BSSN_RHS = True
 enable_parallel_codegen = True
+enable_rfm_precompute = True
+enable_intrinsics = True
+enable_simd_intrinsics = True
 enable_fd_functions = True
 boundary_conditions_desc = "outgoing radiation"
 
