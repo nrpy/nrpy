@@ -637,19 +637,26 @@ SinhCylindrical coordinates.
           // Index maps (theta_index, phi_index) -> 1D index.
           const int idx2d = IDX2GENERAL(i2, (i1 - NGHOSTS), N_theta_local);
 
-          // The interpolated data `dst_data_psi4r/i` corresponds to the destination points `dst_pts`.
-          // We need to map the point `(dst_pts[k][0], dst_pts[k][1])` back to the `(i2, i1-NGHOSTS)` structure.
-          // Assuming the `dst_pts` were generated in the same order (phi varying fastest, then theta).
-          // Find the correct index `k` in `dst_data_psi4r/i` that corresponds to `(i2, i1-NGHOSTS)`.
-          // A simpler way: assume `dst_data_psi4r/i` is already ordered correctly according to (theta, phi).
-          // The index into dst_data needs conversion based on how dst_pts was populated.
-          // Assuming dst_pts[k] corresponds to the k-th point found in the second pass of psi4_diagnostics_set_up.
-          // That pass iterates phi first, then theta. So the index should match IDX2GENERAL(i_th_grid, i_ph_grid).
-          // Let's assume the index calculation used for `dst_data_psi4r/i` storage matches `idx2d`.
-          // **Correction:** The `dst_data` corresponds directly to `dst_pts`, which contains *all* points for the shell *on the grid*.
-          // The `psi4r_at_R_ext` array needs to store these values organized by the `(i2, i1-NGHOSTS)` grid structure.
-          // We need the mapping from the `dst_pts` index to the `(i2, i1-NGHOSTS)` index.
-          // Let's retrieve the index from dst_pts assuming it was created with phi varying fastest.
+          // Map dst_data_* into the (theta, phi) grid.
+          //
+          // Ordering established in setup:
+          //   for i1 = NGHOSTS .. Nxx_plus_2NGHOSTS_phi - NGHOSTS - 1  // physical phi columns
+          //     for i2 = 0 .. N_theta_local - 1                        // theta rows
+          // This is phi-major with theta as the fastest-varying index.
+          //
+          // Therefore the destination point index k is:
+          //   k = IDX2GENERAL(i2, (i1 - NGHOSTS), N_theta_local);  // theta-fastest
+          //
+          // Copy:
+          //   int iphi = (i1 - NGHOSTS);
+          //   int dst_idx = IDX2GENERAL(i2, iphi, N_theta_local);
+          //   psi4r_at_R_ext[idx2d] = dst_data_psi4r[dst_idx];
+          //   psi4i_at_R_ext[idx2d] = dst_data_psi4i[dst_idx];
+          //
+          // Precondition: every physical phi column contributes exactly N_theta_local
+          // shell points (full-phi domain, uniform theta set).
+          // If your domain omits phi columns or theta counts vary by phi, do not use
+          // the formula above. Build an explicit (phi, theta) -> k mapping during setup.
           const int dst_idx = IDX2GENERAL(i2, (i1 - NGHOSTS), N_theta_local); // Assuming this matches the implicit ordering in dst_data
 
           // Copy the interpolated value from the temporary destination buffer to the final 2D array.
