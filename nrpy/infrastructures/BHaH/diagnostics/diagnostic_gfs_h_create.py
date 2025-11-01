@@ -66,8 +66,8 @@ def diagnostics_gfs_h_create(
 
     diag_gfs_names: List[str] = []
     diag_gfs_descs: List[str] = []
-    for key, gf_obj in gri.glb_gridfcs_dict.items():
-        if gf_obj.group == "AUX" and gf_obj.name.startswith("DIAG_"):
+    for _, gf_obj in gri.glb_gridfcs_dict.items():
+        if gf_obj.group == "DIAG":
             diag_gfs_names += [gf_obj.name]
             diag_gfs_descs += [gf_obj.desc]
     newline = "\n"  # Backslashes aren't allowed in Python 3.7 f-strings; this is our workaround.
@@ -114,7 +114,7 @@ extern "C" {{
 enum {{
 {
     newline.join(
-        [f"      {gf_name}," for gf_name in diag_gfs_names] +
+        [f"     {gf_name}GF," for gf_name in diag_gfs_names] +
         ["      TOTAL_NUM_DIAG_GFS // must be last: total produced diagnostics (== count)"]
     )
     }
@@ -131,7 +131,7 @@ enum {{
 MAYBE_UNUSED static const char *diagnostic_gf_names[TOTAL_NUM_DIAG_GFS] = {{
 {
     newline.join(
-        f'      DIAG_INIT({gf_name_desc_tuple[0]}, "{gf_name_desc_tuple[1]}"), //'
+        f'      DIAG_INIT({gf_name_desc_tuple[0]}GF, "{gf_name_desc_tuple[1]}"), //'
         for gf_name_desc_tuple in list(zip(diag_gfs_names, diag_gfs_descs))
     )
     }

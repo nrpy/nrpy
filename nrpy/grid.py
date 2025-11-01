@@ -226,9 +226,9 @@ class GridFunction:
             )
 
     @staticmethod
-    def gridfunction_lists() -> Tuple[List[str], List[str], List[str]]:
+    def gridfunction_lists() -> Tuple[List[str], List[str], List[str], List[str]]:
         """
-        Generate sorted lists of gridfunction names for each group type: 'EVOL', 'AUX', and 'AUXEVOL'.
+        Generate sorted lists of gridfunction names for each group type: 'EVOL', 'AUXEVOL', 'DIAG', and 'AUX'.
 
         This function creates a dictionary with group types as keys and corresponding gridfunction names
         as values. It iterates through a global dictionary of gridfunctions, 'glb_gridfcs_dict', and
@@ -240,26 +240,45 @@ class GridFunction:
         gridfunction object should have 'group' and 'name' attributes.
 
         :returns: A tuple containing lists of gridfunction names
-                  for each group: 'EVOL', 'AUX', and 'AUXEVOL', respectively.
+                  for each group: 'EVOL', 'AUXEVOL', 'DIAG', and 'AUX', respectively.
 
         Example:
             gridfunction_lists()
-            (['evol_gf1', 'evol_gf2'], ['aux_gf1', 'aux_gf2'], ['auxevol_gf1', 'auxevol_gf2'])
+            (['evol_gf1', 'evol_gf2'], ['auxevol_gf1', 'auxevol_gf2'], ['diag_gf1], ['aux_gf1', 'aux_gf2'])
         """
         # Using list comprehensions for a concise and Pythonic implementation.
         evol_gfs = sorted(
             [gf.name for gf in glb_gridfcs_dict.values() if gf.group == "EVOL"],
             key=str.lower,
         )
-        aux_gfs = sorted(
-            [gf.name for gf in glb_gridfcs_dict.values() if gf.group == "AUX"],
-            key=str.lower,
-        )
         auxevol_gfs = sorted(
             [gf.name for gf in glb_gridfcs_dict.values() if gf.group == "AUXEVOL"],
             key=str.lower,
         )
-        return evol_gfs, aux_gfs, auxevol_gfs
+        diag_gfs = sorted(
+            [gf.name for gf in glb_gridfcs_dict.values() if gf.group == "DIAG"],
+            key=str.lower,
+        )
+        aux_gfs = sorted(
+            [gf.name for gf in glb_gridfcs_dict.values() if gf.group == "AUX"],
+            key=str.lower,
+        )
+        return evol_gfs, auxevol_gfs, diag_gfs, aux_gfs
+
+    @staticmethod
+    def get_parity_type(name: str, rank: int, dimension: int) -> Union[None, int]:
+        parity_val: Optional[int] = None
+        if rank == 0:
+            parity_val = 0
+        elif rank == 1:
+            parity_val = int(name[-1]) + 1
+        elif rank == 2:
+            indices = (name[-2], name[-1])
+            if dimension == 3:
+                parity_val = GridFunction._PARITY_CONDITIONS_RANK2_DIM3.get(indices)
+            elif dimension == 4:
+                parity_val = GridFunction._PARITY_CONDITIONS_RANK2_DIM4.get(indices)
+        return parity_val
 
     @staticmethod
     def set_parity_types(list_of_gf_names: List[str]) -> List[int]:
@@ -284,18 +303,9 @@ class GridFunction:
                 # This emulates the original's behavior of failing the length check at the end.
                 continue
 
-            parity_val: Optional[int] = None
-            if gf.rank == 0:
-                parity_val = 0
-            elif gf.rank == 1:
-                parity_val = int(gf.name[-1]) + 1
-            elif gf.rank == 2:
-                indices = (gf.name[-2], gf.name[-1])
-                if gf.dimension == 3:
-                    parity_val = GridFunction._PARITY_CONDITIONS_RANK2_DIM3.get(indices)
-                elif gf.dimension == 4:
-                    parity_val = GridFunction._PARITY_CONDITIONS_RANK2_DIM4.get(indices)
-
+            parity_val = BHaHGridFunction.get_parity_type(
+                gf.name, gf.rank, gf.dimension
+            )
             if parity_val is not None:
                 parity_type_list.append(parity_val)
             else:
@@ -313,10 +323,11 @@ class GridFunction:
 class BHaHGridFunction(GridFunction):
     """The subclass for BlackHoles@Home grid functions."""
 
-    VALID_GROUPS: Tuple[str, ...] = ("EVOL", "AUX", "AUXEVOL")
+    VALID_GROUPS: Tuple[str, ...] = ("EVOL", "AUXEVOL", "DIAG", "AUX")
     GROUP_DESCRIPTIONS: str = (
         '    "EVOL": for evolved quantities (i.e., quantities stepped forward in time),\n'
         '    "AUXEVOL": for auxiliary quantities needed at all points by evolved quantities,\n'
+        '    "DIAG": for diagnostic quantities needed at all points (e.g., volume integration, interpolation, etc),\n'
         '    "AUX": for all other quantities needed at all gridpoints.\n'
     )
 
@@ -351,6 +362,8 @@ class BHaHGridFunction(GridFunction):
                 self.gf_array_name = "in_gfs"
             elif group == "AUXEVOL":
                 self.gf_array_name = "auxevol_gfs"
+            elif group == "DIAG":
+                self.gf_array_name = "diagnostic_gfs"
             elif group == "AUX":
                 self.gf_array_name = "aux_gfs"
         else:
@@ -364,10 +377,11 @@ class BHaHGridFunction(GridFunction):
         """
         Validate the gridfunction group.
 
-        The valid groups are 'EVOL', 'AUX' and 'AUXEVOL'.
+        The valid groups are 'EVOL', 'AUXEVOL', 'DIAG', and 'AUX'.
 
         'EVOL': for evolved quantities (i.e., quantities stepped forward in time),
         'AUXEVOL': for auxiliary quantities needed at all points by evolved quantities,
+        'DIAG': for diagnostic quantities needed at all points (e.g., volume integration, interpolation, etc),
         'AUX': for all other quantities needed at all gridpoints.
 
         :raises ValueError: If the group is not valid.
@@ -447,6 +461,19 @@ class BHaHGridFunction(GridFunction):
         return f"{gf_array_name}[IDX4({gf_name.upper()}GF, {i0}, {i1}, {i2})]"
 
     @staticmethod
+    def define_gfs_group(name: str, gfs: List[str]) -> str:
+        """
+        Generate C-style #define string for a list of GridFunctions in a group.
+
+        :param name: The name of the group (e.g., "EVOL").
+        :param gfs: The list of grid function names in the group.
+        :return: A formatted C-style string with #defines.
+        """
+        num_gfs = len(gfs)
+        defines = "\n".join(f"#define {gf.upper()}GF\t{i}" for i, gf in enumerate(gfs))
+        return f"\n// {name.upper()} VARIABLES:\n#define NUM_{name.upper()}_GFS {num_gfs}\n{defines}\n"
+
+    @staticmethod
     def gridfunction_defines() -> str:
         """
         Generate a string representation of all the GridFunction definitions.
@@ -461,25 +488,10 @@ class BHaHGridFunction(GridFunction):
 
         :return: The resulting string representation of the GridFunction definitions.
         """
-
-        def define_gfs_group(name: str, gfs: List[str]) -> str:
-            """
-            Generate C-style #define string for a list of GridFunctions in a group.
-
-            :param name: The name of the group (e.g., "EVOL").
-            :param gfs: The list of grid function names in the group.
-            :return: A formatted C-style string with #defines.
-            """
-            num_gfs = len(gfs)
-            defines = "\n".join(
-                f"#define {gf.upper()}GF\t{i}" for i, gf in enumerate(gfs)
-            )
-            return f"\n// {name.upper()} VARIABLES:\n#define NUM_{name.upper()}_GFS {num_gfs}\n{defines}\n"
-
-        evol, aux, auxevol = BHaHGridFunction.gridfunction_lists()
+        evol, auxevol, _, aux = BHaHGridFunction.gridfunction_lists()
 
         # Start with the EVOL group defines
-        outstr = define_gfs_group("EVOL", evol)
+        outstr = BHaHGridFunction.define_gfs_group("EVOL", evol)
 
         # Append f_infinity and wavespeed definitions if EVOL variables exist
         if evol:
@@ -495,9 +507,9 @@ class BHaHGridFunction(GridFunction):
             outstr += "\n\n// SET gridfunctions_wavespeed[i] = evolved gridfunction i's characteristic wave speed:\n"
             outstr += f"static const REAL gridfunctions_wavespeed[NUM_EVOL_GFS] = {{ {f_wavespeed_str} }};\n"
 
-        # Append AUX and AUXEVOL group defines
-        outstr += define_gfs_group("AUX", aux)
-        outstr += define_gfs_group("AUXEVOL", auxevol)
+        # Append AUXEVOL and AUX group defines; DIAG group is defined in diagnostic_gfs.h
+        outstr += BHaHGridFunction.define_gfs_group("AUXEVOL", auxevol)
+        outstr += BHaHGridFunction.define_gfs_group("AUX", aux)
 
         return outstr
 

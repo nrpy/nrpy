@@ -54,9 +54,10 @@ def BHaH_defines_set_gridfunction_defines_with_parity_types(
     # First add human-readable gridfunction aliases (grid.py) to BHaH_defines dictionary.
     (
         evolved_variables_list,
-        auxiliary_variables_list,
         auxevol_variables_list,
-    ) = gri.BHaHGridFunction.gridfunction_lists()[0:3]
+        diagnostic_variables_list,
+        auxiliary_variables_list,
+    ) = gri.BHaHGridFunction.gridfunction_lists()
 
     # Next register outer_bc_type code parameter
     _ = par.CodeParameter(

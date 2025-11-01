@@ -6,7 +6,7 @@
  */
 __global__ static void apply_bcs_inner_only_specific_gfs_gpu(const size_t streamid, const int num_inner_boundary_points,
                                                              const innerpt_bc_struct *restrict inner_bc_array, REAL *restrict gfs, const int num_gfs,
-                                                             const int *restrict gfs_to_sync) {
+                                                             const int *restrict gf_parities, const int *restrict gfs_to_sync) {
   // Needed for IDX macros
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = d_params[streamid].Nxx_plus_2NGHOSTS0;
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = d_params[streamid].Nxx_plus_2NGHOSTS1;
@@ -29,7 +29,7 @@ __global__ static void apply_bcs_inner_only_specific_gfs_gpu(const size_t stream
       const int dstpt = inner_bc_array[pt].dstpt;
       const int srcpt = inner_bc_array[pt].srcpt;
       gfs[IDX4pt(gfs_to_sync[which_gf], dstpt)] =
-          inner_bc_array[pt].parity[d_aux_gf_parity[gfs_to_sync[which_gf]]] * gfs[IDX4pt(gfs_to_sync[which_gf], srcpt)];
+          inner_bc_array[pt].parity[d_gf_parities[gfs_to_sync[which_gf]]] * gfs[IDX4pt(gfs_to_sync[which_gf], srcpt)];
     } // END for(int pt=0;pt<num_inner_pts;pt++)
   } // END for(int which_gf=0;which_gf<num_gfs;which_gf++)
 } // END FUNCTION apply_bcs_inner_only_specific_gfs_gpu
@@ -43,7 +43,8 @@ __global__ static void apply_bcs_inner_only_specific_gfs_gpu(const size_t stream
  * boundary points ("inner maps to outer").
  */
 void apply_bcs_inner_only_specific_gfs(const commondata_struct *restrict commondata, const params_struct *restrict params,
-                                       const bc_struct *restrict bcstruct, REAL *restrict gfs, const int num_gfs, const int *gfs_to_sync) {
+                                       const bc_struct *restrict bcstruct, REAL *restrict gfs, const int num_gfs, const int *gf_parities,
+                                       const int *gfs_to_sync) {
   // Unpack bc_info from bcstruct
   const bc_info_struct *bc_info = &bcstruct->bc_info;
   const innerpt_bc_struct *restrict inner_bc_array = bcstruct->inner_bc_array;
@@ -62,7 +63,7 @@ void apply_bcs_inner_only_specific_gfs(const commondata_struct *restrict commond
   size_t sm = 0;
   size_t streamid = params->grid_idx % NUM_STREAMS;
   apply_bcs_inner_only_specific_gfs_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(
-      streamid, num_inner_boundary_points, inner_bc_array, gfs, num_gfs, gfs_to_sync_device);
+      streamid, num_inner_boundary_points, inner_bc_array, gfs, num_gfs, gf_parities, gfs_to_sync_device);
   cudaCheckErrors(cudaKernel, "apply_bcs_inner_only_specific_gfs_gpu failure");
 
   BHAH_DEVICE_SYNC();

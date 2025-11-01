@@ -59,8 +59,8 @@ def register_CFunction_constraints_eval(
     loop_body = ccg.c_codegen(
         expr_list,
         [
-            "diagnostic_gfs[IDX4(DIAG_HAMILTONIAN, i0, i1, i2)]",
-            "diagnostic_gfs[IDX4(DIAG_MSQUARED, i0, i1, i2)]",
+            "diagnostic_gfs[IDX4(DIAG_HAMILTONIANGF, i0, i1, i2)]",
+            "diagnostic_gfs[IDX4(DIAG_MSQUAREDGF, i0, i1, i2)]",
         ],
         enable_fd_codegen=True,
         enable_simd=True,

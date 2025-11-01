@@ -61,13 +61,15 @@ public:
 """
     (
         evolved_variables_list,
-        auxiliary_variables_list,
         auxevol_variables_list,
-    ) = gri.CarpetXGridFunction.gridfunction_lists()[0:3]
+        diag_variables_list,
+        auxiliary_variables_list,
+    ) = gri.CarpetXGridFunction.gridfunction_lists()
 
     def construct_parity_string(parities: List[int]) -> str:
         """
         Construct the parities tag for a variable group using the list of parity values.
+        FIXME: This should not be hotwired; use CurviBCs functionality instead.
 
         :param parities: List of parity values for the grid functions.
         :return: A string representing the parities for the grid functions.

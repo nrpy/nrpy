@@ -116,16 +116,16 @@ def register_CFunction_diagnostic_gfs_set(
         default_sigma=default_sigma,
     )
     gri.register_gridfunctions(
-        names="DIAG_RELERROR_UUGF", desc="RelError_u", group="AUX"
+        names="DIAG_RELERROR_UU", desc="RelError_u", group="DIAG"
     )
     gri.register_gridfunctions(
-        names="DIAG_RELERROR_VVGF", desc="RelError_v", group="AUX"
+        names="DIAG_RELERROR_VV", desc="RelError_v", group="DIAG"
     )
-    gri.register_gridfunctions(names="DIAG_UNUM", desc="u_numerical", group="AUX")
-    gri.register_gridfunctions(names="DIAG_UEXACT", desc="u_exact", group="AUX")
-    gri.register_gridfunctions(names="DIAG_VNUM", desc="v_numerical", group="AUX")
-    gri.register_gridfunctions(names="DIAG_VEXACT", desc="v_exact", group="AUX")
-    gri.register_gridfunctions(names="DIAG_GRIDINDEX", desc="GridIndex", group="AUX")
+    gri.register_gridfunctions(names="DIAG_UNUM", desc="u_numerical", group="DIAG")
+    gri.register_gridfunctions(names="DIAG_UEXACT", desc="u_exact", group="DIAG")
+    gri.register_gridfunctions(names="DIAG_VNUM", desc="v_numerical", group="DIAG")
+    gri.register_gridfunctions(names="DIAG_VEXACT", desc="v_exact", group="DIAG")
+    gri.register_gridfunctions(names="DIAG_GRIDINDEX", desc="GridIndex", group="DIAG")
 
     body = rf"""
 for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {{
@@ -148,11 +148,11 @@ for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {{
     const REAL vnum = y_n_gfs[IDX4pt(VVGF, idx3)];
     diagnostic_gfs[grid][IDX4pt(DIAG_RELERROR_UUGF, idx3)] = (unum - uexact) / (uexact + 1e-16);
     diagnostic_gfs[grid][IDX4pt(DIAG_RELERROR_VVGF, idx3)] = (vnum - vexact) / (vexact + 1e-16);
-    diagnostic_gfs[grid][IDX4pt(DIAG_UNUM,          idx3)] = unum;
-    diagnostic_gfs[grid][IDX4pt(DIAG_UEXACT,        idx3)] = uexact;
-    diagnostic_gfs[grid][IDX4pt(DIAG_VNUM,          idx3)] = vnum;
-    diagnostic_gfs[grid][IDX4pt(DIAG_VEXACT,        idx3)] = vexact;
-    diagnostic_gfs[grid][IDX4pt(DIAG_GRIDINDEX,     idx3)] = (REAL)grid;
+    diagnostic_gfs[grid][IDX4pt(DIAG_UNUMGF,          idx3)] = unum;
+    diagnostic_gfs[grid][IDX4pt(DIAG_UEXACTGF,        idx3)] = uexact;
+    diagnostic_gfs[grid][IDX4pt(DIAG_VNUMGF,          idx3)] = vnum;
+    diagnostic_gfs[grid][IDX4pt(DIAG_VEXACTGF,        idx3)] = vexact;
+    diagnostic_gfs[grid][IDX4pt(DIAG_GRIDINDEXGF,     idx3)] = (REAL)grid;
   }} // END LOOP over all gridpoints to set diagnostic_gfs
 }} // END LOOP over grids
 """

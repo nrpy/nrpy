@@ -19,7 +19,7 @@ Author: Zachariah B. Etienne
 
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import Union, cast
+from typing import List, Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.grid as gri
@@ -100,22 +100,35 @@ def register_CFunction_diagnostic_gfs_set(
     params = "const commondata_struct *restrict commondata, const griddata_struct *restrict griddata, REAL *restrict diagnostic_gfs[MAXNUMGRIDS]"
 
     gri.register_gridfunctions(
-        names="DIAG_HAMILTONIAN", desc="H_constraint", group="AUX"
+        names="DIAG_HAMILTONIAN", desc="H_constraint", group="DIAG"
     )
-    gri.register_gridfunctions(names="DIAG_MSQUARED", desc="M^2", group="AUX")
-    gri.register_gridfunctions(names="DIAG_LAPSE", desc="Lapse", group="AUX")
-    gri.register_gridfunctions(names="DIAG_W", desc="Conformal_factor_W", group="AUX")
+    gri.register_gridfunctions(names="DIAG_MSQUARED", desc="M^2", group="DIAG")
+    gri.register_gridfunctions(names="DIAG_LAPSE", desc="Lapse", group="DIAG")
+    gri.register_gridfunctions(names="DIAG_W", desc="Conformal_factor_W", group="DIAG")
     if enable_psi4:
-        gri.register_gridfunctions(names="DIAG_PSI4_RE", desc="Psi4_Re", group="AUX")
-        gri.register_gridfunctions(names="DIAG_PSI4_IM", desc="Psi4_Im", group="AUX")
+        gri.register_gridfunctions(names="DIAG_PSI4_RE", desc="Psi4_Re", group="DIAG")
+        gri.register_gridfunctions(names="DIAG_PSI4_IM", desc="Psi4_Im", group="DIAG")
     gri.register_gridfunctions_for_single_rank2(
         "DIAG_RBARDD",
         desc="Ricci_tensor_component_RbarDD",
         symmetry="sym01",
         dimension=3,
-        group="AUX",
+        group="DIAG",
     )
-    body = """
+    diag_gf_names: List[str] = []
+    diag_gf_parity_types: List[str] = []
+    for k in [k for k, v in gri.glb_gridfcs_dict.items() if v.group == "DIAG"]:
+        gf_obj = gri.glb_gridfcs_dict[k]
+        diag_gf_names += [k]
+        diag_gf_parity_types += [
+            gri.BHaHGridFunction.get_parity_type(
+                gf_obj.name, gf_obj.rank, gf_obj.dimension
+            )
+        ]
+
+    body = f"static const int8_t diag_gf_parities[{len(diag_gf_names)}] = {{ {', '.join(map(str, diag_gf_parity_types))} }};\n"
+
+    body += """
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     const params_struct *restrict params = &griddata[grid].params;
     const rfm_struct *restrict rfmstruct = griddata[grid].rfmstruct;
@@ -163,9 +176,9 @@ def register_CFunction_diagnostic_gfs_set(
     // Set psi4 gridfunctions
     psi4(commondata, params, griddata[grid].xx, y_n_gfs, diagnostic_gfs[grid]);
     // Apply inner bcs to psi4 needed to do interpolation correctly
-    int diag_gfs_to_sync[2] = {DIAG_PSI4_RE, DIAG_PSI4_IM};
-    int diag_gfs_parities[2] = {aux_gf_parity[DIAG_PSI4_RE], aux_gf_parity[DIAG_PSI4_IM]};
-    apply_bcs_inner_only_specific_gfs(commondata, params, &griddata[grid].bcstruct, diagnostic_gfs[grid], 2, diag_gfs_parities, diag_gfs_to_sync);
+    int diag_gfs_to_sync[2] = {DIAG_PSI4_REGF, DIAG_PSI4_IMGF};
+    int diag_gfs_pars[2] = {diag_gf_parities[DIAG_PSI4_REGF], diag_gf_parities[DIAG_PSI4_IMGF]};
+    apply_bcs_inner_only_specific_gfs(commondata, params, &griddata[grid].bcstruct, diagnostic_gfs[grid], 2, diag_gfs_pars, diag_gfs_to_sync);
 """
     body += "  } // END LOOP over grids\n"
 

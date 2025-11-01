@@ -100,9 +100,10 @@ public:
 
     (
         evolved_variables_list,
-        auxiliary_variables_list,
         auxevol_variables_list,
-    ) = gri.CarpetXGridFunction.gridfunction_lists()[0:3]
+        diag_variables_list,
+        auxiliary_variables_list,
+    ) = gri.CarpetXGridFunction.gridfunction_lists()
 
     if is_evol_thorn:
         if evolved_variables_list:

@@ -47,7 +47,11 @@ def register_CFunction_psi4(
 
     # Set up the C function for psi4
     parallelization = par.parval_from_str("parallelization")
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    includes = [
+        "BHaH_defines.h",
+        "BHaH_function_prototypes.h",
+        "diagnostics/diagnostic_gfs.h",
+    ]
 
     desc = "Compute psi4 at all interior gridpoints"
     name = "psi4"
@@ -58,7 +62,7 @@ def register_CFunction_psi4(
         "x1": "const REAL *restrict",
         "x2": "const REAL *restrict",
         "in_gfs": "const REAL *restrict",
-        "diagnostic_output_gfs": "REAL *restrict",
+        "diagnostic_gfs": "REAL *restrict",
     }
 
     arg_dict_host = {
@@ -66,9 +70,7 @@ def register_CFunction_psi4(
         **arg_dict_cuda,
     }
 
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], const REAL *restrict in_gfs, REAL *restrict diagnostic_output_gfs"
-
-    gri.register_gridfunctions(["psi4_re", "psi4_im"], group="AUX")
+    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], const REAL *restrict in_gfs, REAL *restrict diagnostic_gfs"
 
     psi4_class = psi4.Psi4(CoordSystem=CoordSystem, enable_rfm_precompute=False)
     body = r"""if(! (params->Cart_originx == 0 && params->Cart_originy == 0 && params->Cart_originz == 0) ) {
@@ -148,12 +150,12 @@ MAYBE_UNUSED REAL {psi4_class.metric_deriv_var_list_str};
             expr_list,
             [
                 gri.BHaHGridFunction.access_gf(
-                    "psi4_re",
-                    gf_array_name="diagnostic_output_gfs",
+                    "diag_psi4_re",
+                    gf_array_name="diagnostic_gfs",
                 ),
                 gri.BHaHGridFunction.access_gf(
-                    "psi4_im",
-                    gf_array_name="diagnostic_output_gfs",
+                    "diag_psi4_im",
+                    gf_array_name="diagnostic_gfs",
                 ),
             ],
             enable_fd_codegen=True,

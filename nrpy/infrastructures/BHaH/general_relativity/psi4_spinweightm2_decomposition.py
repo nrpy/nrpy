@@ -472,7 +472,7 @@ SinhCylindrical coordinates.
 
 @param commondata Common data structure containing simulation parameters (time, extraction radii, etc.).
 @param params Parameters structure containing grid information (dimensions, spacings, boundaries).
-@param diagnostic_output_gfs Array containing grid functions, including PSI4_REGF and PSI4_IMGF.
+@param diagnostic_gfs Array containing grid functions, including DIAG_PSI4_REGF and DIAG_PSI4_REGF.
 @param xx Array of grid coordinate arrays (e.g., xx[0] for x0, xx[1] for x1, xx[2] for x2).
 @note This function assumes SinhCylindrical coordinates where x0 is radial-like, x2 is theta-like, and x1 is phi.
 @note Calls `psi4_diagnostics_set_up` to prepare extraction data.
@@ -483,7 +483,7 @@ SinhCylindrical coordinates.
     name = "psi4_spinweightm2_decomposition"
     params = r"""const commondata_struct *restrict commondata,
     const params_struct *restrict params,
-    REAL *restrict diagnostic_output_gfs,
+    REAL *restrict diagnostic_gfs,
     REAL *restrict xx[3]"""
 
     # Register C functions apply_bcs_inner_only_specific_gfs, needed for 2d interp of psi4
@@ -592,15 +592,15 @@ SinhCylindrical coordinates.
             // Calculate the 1D index for the source array.
             int idx = i + src_Nxx_plus_2NGHOSTS0 * j;
 
-            // Construct the 3D grid index (i0, i1, i2) for accessing diagnostic_output_gfs.
+            // Construct the 3D grid index (i0, i1, i2) for accessing diagnostic_gfs.
             int ii012[3];
             ii012[radial_like_dirn] = i; // Radial-like index.
             ii012[theta_like_dirn] = j;  // Theta-like index.
             ii012[phi_dirn] = i1;        // Current phi slice index.
 
             // Copy psi4 real and imaginary data from the main grid function array to the 2D source slice.
-            src_gf_psi4r[idx] = diagnostic_output_gfs[IDX4(PSI4_REGF, ii012[0], ii012[1], ii012[2])];
-            src_gf_psi4i[idx] = diagnostic_output_gfs[IDX4(PSI4_IMGF, ii012[0], ii012[1], ii012[2])];
+            src_gf_psi4r[idx] = diagnostic_gfs[IDX4(DIAG_PSI4_REGF, ii012[0], ii012[1], ii012[2])];
+            src_gf_psi4i[idx] = diagnostic_gfs[IDX4(DIAG_PSI4_IMGF, ii012[0], ii012[1], ii012[2])];
           } // END FOR radial-like dimension loop (i)
         } // END FOR theta-like dimension loop (j)
 
@@ -706,7 +706,11 @@ SinhCylindrical coordinates.
 """
 
     cfc.register_CFunction(
-        includes=["BHaH_defines.h", "BHaH_function_prototypes.h"],
+        includes=[
+            "BHaH_defines.h",
+            "BHaH_function_prototypes.h",
+            "diagnostics/diagnostic_gfs.h",
+        ],
         prefunc=prefunc,
         desc=desc,
         CoordSystem_for_wrapper_func=CoordSystem,

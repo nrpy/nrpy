@@ -97,11 +97,11 @@ def register_CFunction_diagnostic_gfs_set(
     params = "const commondata_struct *restrict commondata, const griddata_struct *restrict griddata, REAL *restrict diagnostic_gfs[MAXNUMGRIDS]"
 
     gri.register_gridfunctions(
-        names="DIAG_RESIDUAL", desc="Residual_H_constraint", group="AUX"
+        names="DIAG_RESIDUAL", desc="Residual_H_constraint", group="DIAG"
     )
-    gri.register_gridfunctions(names="DIAG_UUGF", desc="u_numerical", group="AUX")
-    gri.register_gridfunctions(names="DIAG_VVGF", desc="v_numerical", group="AUX")
-    gri.register_gridfunctions(names="DIAG_GRIDINDEX", desc="GridIndex", group="AUX")
+    gri.register_gridfunctions(names="DIAG_UU", desc="u_numerical", group="DIAG")
+    gri.register_gridfunctions(names="DIAG_VV", desc="v_numerical", group="DIAG")
+    gri.register_gridfunctions(names="DIAG_GRIDINDEX", desc="GridIndex", group="DIAG")
 
     body = """
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
@@ -116,7 +116,7 @@ def register_CFunction_diagnostic_gfs_set(
     //     } // END LOOP over all points & gridfunctions, poisoning diagnostic_gfs
 
     residual_H_compute_all_points(commondata, params, griddata[grid].rfmstruct, griddata[grid].gridfuncs.auxevol_gfs, y_n_gfs,
-                                  &diagnostic_gfs[grid][IDX4pt(DIAG_RESIDUAL, 0)]);
+                                  &diagnostic_gfs[grid][IDX4pt(DIAG_RESIDUALGF, 0)]);
 """
     if enable_interp_diagnostics:
         body += """
@@ -130,8 +130,8 @@ def register_CFunction_diagnostic_gfs_set(
         const int dstpt = inner_bc_array[pt].dstpt;
         const int srcpt = inner_bc_array[pt].srcpt;
         const int evol_gf_with_same_parity = UUGF; // <- IMPORTANT
-        diagnostic_gfs[grid][IDX4pt(DIAG_RESIDUAL, dstpt)] =
-            inner_bc_array[pt].parity[evol_gf_parity[evol_gf_with_same_parity]] * diagnostic_gfs[grid][IDX4pt(DIAG_RESIDUAL, srcpt)];
+        diagnostic_gfs[grid][IDX4pt(DIAG_RESIDUALGF, dstpt)] =
+            inner_bc_array[pt].parity[evol_gf_parity[evol_gf_with_same_parity]] * diagnostic_gfs[grid][IDX4pt(DIAG_RESIDUALGF, srcpt)];
       } // END LOOP over inner boundary points
     } // END applying inner bcs to DIAG_RESIDUAL
 """
@@ -140,7 +140,7 @@ def register_CFunction_diagnostic_gfs_set(
       const int idx3 = IDX3(i0, i1, i2);
       diagnostic_gfs[grid][IDX4pt(DIAG_UUGF, idx3)] = y_n_gfs[IDX4pt(UUGF, idx3)];
       diagnostic_gfs[grid][IDX4pt(DIAG_VVGF, idx3)] = y_n_gfs[IDX4pt(VVGF, idx3)];
-      diagnostic_gfs[grid][IDX4pt(DIAG_GRIDINDEX, idx3)] = (REAL)grid;
+      diagnostic_gfs[grid][IDX4pt(DIAG_GRIDINDEXGF, idx3)] = (REAL)grid;
     } // END LOOP over all gridpoints to set diagnostic_gfs
   } // END LOOP over grids
 """

@@ -12,6 +12,6 @@ from . import (
     enforce_detgammabar_equals_detgammahat,
     initial_data,
     psi4,
-    psi4_decomposition,
+    psi4_spinweightm2_decomposition,
     rhs_eval,
 )

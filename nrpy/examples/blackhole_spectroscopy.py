@@ -14,7 +14,6 @@ Author: Zachariah B. Etienne
 
 import argparse
 import os
-
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
@@ -248,7 +247,7 @@ BHaH.special_functions.spin_weight_minus2_spherical_harmonics.register_CFunction
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 # Does not need to be parallelized.
-BHaH.general_relativity.psi4_decomposition.register_CFunction_psi4_spinweightm2_decomposition(
+BHaH.general_relativity.psi4_spinweightm2_decomposition.register_CFunction_psi4_spinweightm2_decomposition(
     CoordSystem=CoordSystem
 )
 
