@@ -23,8 +23,8 @@ from typing import Union, cast
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
+import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.params as par
 from nrpy.equations.wave_equation.WaveEquation_Solutions_InitialData import (
     WaveEquation_solution_Cartesian,
 )
@@ -115,15 +115,13 @@ def register_CFunction_diagnostic_gfs_set(
         default_k2=default_k2,
         default_sigma=default_sigma,
     )
-    diagnostic_gfs_names_dict = {
-        "DIAG_RELERROR_UUGF": "RelError_u",
-        "DIAG_RELERROR_VVGF": "RelError_v",
-        "DIAG_UNUM": "u_numerical",
-        "DIAG_UEXACT": "u_exact",
-        "DIAG_VNUM": "v_numerical",
-        "DIAG_VEXACT": "v_exact",
-        "DIAG_GRIDINDEX": "GridIndex",
-    }
+    gri.register_gridfunctions(names="DIAG_RELERROR_UUGF", desc="RelError_u", group="AUX")
+    gri.register_gridfunctions(names="DIAG_RELERROR_VVGF", desc="RelError_v", group="AUX")
+    gri.register_gridfunctions(names="DIAG_UNUM", desc="u_numerical", group="AUX")
+    gri.register_gridfunctions(names="DIAG_UEXACT", desc="u_exact", group="AUX")
+    gri.register_gridfunctions(names="DIAG_VNUM", desc="v_numerical", group="AUX")
+    gri.register_gridfunctions(names="DIAG_VEXACT", desc="v_exact", group="AUX")
+    gri.register_gridfunctions(names="DIAG_GRIDINDEX", desc="GridIndex", group="AUX")
 
     body = rf"""
 for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {{
@@ -154,7 +152,6 @@ for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {{
   }} // END LOOP over all gridpoints to set diagnostic_gfs
 }} // END LOOP over grids
 """
-    par.glb_extras_dict["diagnostic_gfs_names_dict"] = diagnostic_gfs_names_dict
     cfc.register_CFunction(
         subdirectory="diagnostics",
         includes=includes,

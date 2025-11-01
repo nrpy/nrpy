@@ -235,7 +235,7 @@ BHaH.general_relativity.constraints_eval.register_CFunction_constraints_eval(
     OMP_collapse=OMP_collapse,
 )
 
-BHaH.general_relativity.psi4.compute_psi4.register_CFunction_psi4(
+BHaH.general_relativity.psi4.psi4.register_CFunction_psi4(
     CoordSystem=CoordSystem,
     OMP_collapse=OMP_collapse,
     enable_fd_functions=enable_fd_functions,
@@ -338,8 +338,7 @@ par.adjust_CodeParam_default(
 #         and create a Makefile for this project.
 #         Project is output to project/[project_name]/
 BHaH.diagnostics.diagnostic_gfs_h_create.diagnostics_gfs_h_create(
-    project_dir=project_dir,
-    diagnostic_gfs_names_dict=par.glb_extras_dict["diagnostic_gfs_names_dict"],
+    project_dir=project_dir
 )
 BHaH.CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
 BHaH.CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()

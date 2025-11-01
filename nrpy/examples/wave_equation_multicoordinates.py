@@ -7,7 +7,6 @@ Author: Zachariah B. Etienne
 
 import argparse
 import os
-
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
@@ -170,7 +169,6 @@ if __name__ == "__main__" and enable_parallel_codegen:
 
 BHaH.diagnostics.diagnostic_gfs_h_create.diagnostics_gfs_h_create(
     project_dir=project_dir,
-    diagnostic_gfs_names_dict=par.glb_extras_dict["diagnostic_gfs_names_dict"],
 )
 
 if enable_rfm_precompute:

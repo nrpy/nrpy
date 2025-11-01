@@ -99,7 +99,9 @@ def register_CFunction_diagnostic_gfs_set(
     name = "diagnostic_gfs_set"
     params = "const commondata_struct *restrict commondata, const griddata_struct *restrict griddata, REAL *restrict diagnostic_gfs[MAXNUMGRIDS]"
 
-    gri.register_gridfunctions(names="DIAG_HAM", desc="H_constraint", group="AUX")
+    gri.register_gridfunctions(
+        names="DIAG_HAMILTONIAN", desc="H_constraint", group="AUX"
+    )
     gri.register_gridfunctions(names="DIAG_MSQUARED", desc="M^2", group="AUX")
     gri.register_gridfunctions(names="DIAG_LAPSE", desc="Lapse", group="AUX")
     gri.register_gridfunctions(names="DIAG_W", desc="Conformal_factor_W", group="AUX")
@@ -165,7 +167,6 @@ def register_CFunction_diagnostic_gfs_set(
     apply_bcs_inner_only_specific_gfs(commondata, params, &griddata[grid].bcstruct, diagnostic_gfs[grid], 2, diag_gfs_to_sync);
 """
     body += "  } // END LOOP over grids\n"
-    par.glb_extras_dict["diagnostic_gfs_names_dict"] = diagnostic_gfs_names_dict
 
     cfc.register_CFunction(
         subdirectory="diagnostics",

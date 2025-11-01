@@ -35,8 +35,6 @@ def register_CFunction_constraints_eval(
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
-        # register_CFunction_Ricci_onept()
-        print("registering0!", f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 

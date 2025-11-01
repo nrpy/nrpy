@@ -68,8 +68,8 @@ def diagnostics_gfs_h_create(
     diag_gfs_descs: List[str] = []
     for key, gf_obj in gri.glb_gridfcs_dict.items():
         if gf_obj.group == "AUX" and gf_obj.name.startswith("DIAG_"):
-            diag_gfs_names += gf_obj.name
-            diag_gfs_descs += gf_obj.desc
+            diag_gfs_names += [gf_obj.name]
+            diag_gfs_descs += [gf_obj.desc]
     newline = "\n"  # Backslashes aren't allowed in Python 3.7 f-strings; this is our workaround.
     body = rf"""
 /**

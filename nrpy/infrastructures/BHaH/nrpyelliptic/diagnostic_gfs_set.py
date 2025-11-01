@@ -22,8 +22,8 @@ from types import FrameType as FT
 from typing import Union, cast
 
 import nrpy.c_function as cfc
+import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.params as par
 
 
 def register_CFunction_diagnostic_gfs_set(
@@ -96,12 +96,12 @@ def register_CFunction_diagnostic_gfs_set(
     name = "diagnostic_gfs_set"
     params = "const commondata_struct *restrict commondata, const griddata_struct *restrict griddata, REAL *restrict diagnostic_gfs[MAXNUMGRIDS]"
 
-    diagnostic_gfs_names_dict = {
-        "DIAG_RESIDUAL": "Residual_H_constraint",
-        "DIAG_UUGF": "u_numerical",
-        "DIAG_VVGF": "v_numerical",
-        "DIAG_GRIDINDEX": "GridIndex",
-    }
+    gri.register_gridfunctions(
+        names="DIAG_RESIDUAL", desc="Residual_H_constraint", group="AUX"
+    )
+    gri.register_gridfunctions(names="DIAG_UUGF", desc="u_numerical", group="AUX")
+    gri.register_gridfunctions(names="DIAG_VVGF", desc="v_numerical", group="AUX")
+    gri.register_gridfunctions(names="DIAG_GRIDINDEX", desc="GridIndex", group="AUX")
 
     body = """
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
@@ -144,7 +144,6 @@ def register_CFunction_diagnostic_gfs_set(
     } // END LOOP over all gridpoints to set diagnostic_gfs
   } // END LOOP over grids
 """
-    par.glb_extras_dict["diagnostic_gfs_names_dict"] = diagnostic_gfs_names_dict
 
     cfc.register_CFunction(
         subdirectory="diagnostics",
