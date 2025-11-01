@@ -22,6 +22,7 @@ from types import FrameType as FT
 from typing import Union, cast
 
 import nrpy.c_function as cfc
+import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 
@@ -98,27 +99,20 @@ def register_CFunction_diagnostic_gfs_set(
     name = "diagnostic_gfs_set"
     params = "const commondata_struct *restrict commondata, const griddata_struct *restrict griddata, REAL *restrict diagnostic_gfs[MAXNUMGRIDS]"
 
-    diagnostic_gfs_names_dict = {
-        "DIAG_HAMILTONIAN": "H_constraint",
-        "DIAG_MSQUARED": "M^2",
-        "DIAG_LAPSE": "Lapse",
-        "DIAG_W": "Conformal_factor_W",
-    }
-    for i in range(3):
-        for j in range(i, 3):
-            diagnostic_gfs_names_dict.update(
-                {
-                    f"DIAG_RBARDD{i}{j}GF": f"Ricci_tensor_component_RbarDD{i}{j}",
-                }
-            )
+    gri.register_gridfunctions(names="DIAG_HAM", desc="H_constraint", group="AUX")
+    gri.register_gridfunctions(names="DIAG_MSQUARED", desc="M^2", group="AUX")
+    gri.register_gridfunctions(names="DIAG_LAPSE", desc="Lapse", group="AUX")
+    gri.register_gridfunctions(names="DIAG_W", desc="Conformal_factor_W", group="AUX")
     if enable_psi4:
-        diagnostic_gfs_names_dict.update(
-            {
-                "DIAG_PSI4_RE": "Psi4_Re",
-                "DIAG_PSI4_IM": "Psi4_Im",
-            }
-        )
-
+        gri.register_gridfunctions(names="DIAG_PSI4_RE", desc="Psi4_Re", group="AUX")
+        gri.register_gridfunctions(names="DIAG_PSI4_IM", desc="Psi4_Im", group="AUX")
+    gri.register_gridfunctions_for_single_rank2(
+        "DIAG_RBARDD",
+        desc="Ricci_tensor_component_RbarDD",
+        symmetry="sym01",
+        dimension=3,
+        group="AUX",
+    )
     body = """
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     const params_struct *restrict params = &griddata[grid].params;

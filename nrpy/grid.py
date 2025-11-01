@@ -146,6 +146,7 @@ class GridFunction:
         self,
         name: str,
         group: str = "EVOL",
+        desc: str = "gf_desc_unset",
         rank: int = 0,
         dimension: int = 3,
         gf_type: str = "REAL",
@@ -155,6 +156,7 @@ class GridFunction:
     ) -> None:
         self.name: str = name
         self.group: str = group
+        self.desc: str = desc
         self.rank: int = rank
         self.dimension: int = dimension
         self.gf_type: str = gf_type
@@ -322,6 +324,7 @@ class BHaHGridFunction(GridFunction):
         self,
         name: str,
         group: str = "EVOL",
+        desc: str = "gf_desc_unset",
         rank: int = 0,
         dimension: int = 3,
         f_infinity: float = 0.0,
@@ -331,7 +334,15 @@ class BHaHGridFunction(GridFunction):
         sync_gf_in_superB: Optional[bool] = None,
     ) -> None:
         super().__init__(
-            name, group, rank, dimension, "REAL", f_infinity, wavespeed, is_basename
+            name=name,
+            group=group,
+            desc=desc,
+            rank=rank,
+            dimension=dimension,
+            gf_type="REAL",
+            f_infinity=f_infinity,
+            wavespeed=wavespeed,
+            is_basename=is_basename,
         )
         self.verify_gridfunction_group_is_valid()
         # Adhere to original magic string default to preserve doctest compatibility
@@ -505,6 +516,7 @@ class ETLegacyGridFunction(GridFunction):
         self,
         name: str,
         group: str = "EVOL",
+        desc: str = "gf_desc_unset",
         rank: int = 0,
         dimension: int = 3,
         f_infinity: float = 0.0,
@@ -513,14 +525,15 @@ class ETLegacyGridFunction(GridFunction):
         gf_array_name: str = "",
     ) -> None:
         super().__init__(
-            name,
-            group,
-            rank,
-            dimension,
-            "CCTK_REAL",
-            f_infinity,
-            wavespeed,
-            is_basename,
+            name=name,
+            group=group,
+            desc=desc,
+            rank=rank,
+            dimension=dimension,
+            gf_type="CCTK_REAL",
+            f_infinity=f_infinity,
+            wavespeed=wavespeed,
+            is_basename=is_basename,
         )
         # The following local variable is unused, but preserved to match the original
         # code's behavior and pass a doctest that inspects __dict__.
@@ -637,24 +650,26 @@ class CarpetXGridFunction(GridFunction):
         self,
         name: str,
         group: str = "EVOL",
+        desc: str = "gf_desc_unset",
         rank: int = 0,
         dimension: int = 3,
         f_infinity: float = 0.0,
         wavespeed: float = 1.0,
         is_basename: bool = True,
         centering: centerings = "CCC",
-        gf_array_name: str = "",
         thorn: str = "Cactus",
+        gf_array_name: str = "",
     ) -> None:
         super().__init__(
-            name,
-            group,
-            rank,
-            dimension,
-            "CCTK_REAL",
-            f_infinity,
-            wavespeed,
-            is_basename,
+            name=name,
+            group=group,
+            desc=desc,
+            rank=rank,
+            dimension=dimension,
+            gf_type="CCTK_REAL",
+            f_infinity=f_infinity,
+            wavespeed=wavespeed,
+            is_basename=is_basename,
         )
         validate_literal_arguments()
         self.thorn = thorn
@@ -846,6 +861,7 @@ def register_gridfunctions(
     ...     print(key, value)
     name gridfunc
     group EVOL
+    desc gridfunc
     rank 0
     dimension 3
     gf_type REAL
@@ -860,6 +876,7 @@ def register_gridfunctions(
     ...     print(key, value)
     name gridfunc1
     group EVOL
+    desc gridfunc1
     rank 0
     dimension 3
     gf_type CCTK_REAL
@@ -875,6 +892,13 @@ def register_gridfunctions(
         raise ValueError(f"Infrastructure = {infrastructure} unknown")
 
     sympy_symbol_list: List[sp.Symbol] = []
+    desc_list = kwargs.get("desc_list", None)
+    if desc_list is None:
+        desc_list = names_list.copy()
+    else:
+        # Delete desc_list now that we've extracted the info.
+        #   Needed so kwargs_individual doesn't contain "desc_list"
+        kwargs.pop("desc_list")
     for i, name in enumerate(names_list):
         if name in glb_gridfcs_dict:
             print(f"Warning: Gridfunction {name} is already registered.")
@@ -884,6 +908,7 @@ def register_gridfunctions(
             for param in ["f_infinity", "wavespeed"]:
                 if isinstance(kwargs.get(param), list):
                     kwargs_individual[param] = kwargs[param][i]
+            kwargs_individual["desc"] = desc_list[i]
 
             glb_gridfcs_dict[name] = gf_class(
                 name, dimension=dimension, **kwargs_individual
@@ -982,7 +1007,7 @@ def register_gridfunctions_for_single_rankN(
     >>> print(sorted(list(glb_gridfcs_dict)))
     ['g00', 'g01', 'g02', 'g11', 'g12', 'g22']
     >>> print(glb_gridfcs_dict['g00'].__dict__)
-    {'name': 'g00', 'group': 'EVOL', 'rank': 2, 'dimension': 3, 'gf_type': 'CCTK_REAL', 'f_infinity': 0.0, 'wavespeed': 1.0, 'is_basename': False}
+    {'name': 'g00', 'group': 'EVOL', 'desc': 'gf_desc_unset_g00', 'rank': 2, 'dimension': 3, 'gf_type': 'CCTK_REAL', 'f_infinity': 0.0, 'wavespeed': 1.0, 'is_basename': False}
 
     >>> glb_gridfcs_dict.clear()
     >>> register_gridfunctions_for_single_rankN("A", rank=1)
@@ -990,15 +1015,15 @@ def register_gridfunctions_for_single_rankN(
     >>> print(sorted(list(glb_gridfcs_dict)))
     ['A0', 'A1', 'A2']
     >>> print(glb_gridfcs_dict['A2'].__dict__)
-    {'name': 'A2', 'group': 'EVOL', 'rank': 1, 'dimension': 3, 'gf_type': 'CCTK_REAL', 'f_infinity': 0.0, 'wavespeed': 1.0, 'is_basename': False}
+    {'name': 'A2', 'group': 'EVOL', 'desc': 'gf_desc_unset_A2', 'rank': 1, 'dimension': 3, 'gf_type': 'CCTK_REAL', 'f_infinity': 0.0, 'wavespeed': 1.0, 'is_basename': False}
 
     >>> glb_gridfcs_dict.clear()
-    >>> register_gridfunctions_for_single_rankN("R", rank=4, symmetry="sym01_sym23", dimension=4)
+    >>> register_gridfunctions_for_single_rankN("R", rank=4, symmetry="sym01_sym23", dimension=4, desc="Riemann_tensor")
     [[[[R0000, R0001, R0002, R0003], [R0001, R0011, R0012, R0013], [R0002, R0012, R0022, R0023], [R0003, R0013, R0023, R0033]], [[R0100, R0101, R0102, R0103], [R0101, R0111, R0112, R0113], [R0102, R0112, R0122, R0123], [R0103, R0113, R0123, R0133]], [[R0200, R0201, R0202, R0203], [R0201, R0211, R0212, R0213], [R0202, R0212, R0222, R0223], [R0203, R0213, R0223, R0233]], [[R0300, R0301, R0302, R0303], [R0301, R0311, R0312, R0313], [R0302, R0312, R0322, R0323], [R0303, R0313, R0323, R0333]]], [[[R0100, R0101, R0102, R0103], [R0101, R0111, R0112, R0113], [R0102, R0112, R0122, R0123], [R0103, R0113, R0123, R0133]], [[R1100, R1101, R1102, R1103], [R1101, R1111, R1112, R1113], [R1102, R1112, R1122, R1123], [R1103, R1113, R1123, R1133]], [[R1200, R1201, R1202, R1203], [R1201, R1211, R1212, R1213], [R1202, R1212, R1222, R1223], [R1203, R1213, R1223, R1233]], [[R1300, R1301, R1302, R1303], [R1301, R1311, R1312, R1313], [R1302, R1312, R1322, R1323], [R1303, R1313, R1323, R1333]]], [[[R0200, R0201, R0202, R0203], [R0201, R0211, R0212, R0213], [R0202, R0212, R0222, R0223], [R0203, R0213, R0223, R0233]], [[R1200, R1201, R1202, R1203], [R1201, R1211, R1212, R1213], [R1202, R1212, R1222, R1223], [R1203, R1213, R1223, R1233]], [[R2200, R2201, R2202, R2203], [R2201, R2211, R2212, R2213], [R2202, R2212, R2222, R2223], [R2203, R2213, R2223, R2233]], [[R2300, R2301, R2302, R2303], [R2301, R2311, R2312, R2313], [R2302, R2312, R2322, R2323], [R2303, R2313, R2323, R2333]]], [[[R0300, R0301, R0302, R0303], [R0301, R0311, R0312, R0313], [R0302, R0312, R0322, R0323], [R0303, R0313, R0323, R0333]], [[R1300, R1301, R1302, R1303], [R1301, R1311, R1312, R1313], [R1302, R1312, R1322, R1323], [R1303, R1313, R1323, R1333]], [[R2300, R2301, R2302, R2303], [R2301, R2311, R2312, R2313], [R2302, R2312, R2322, R2323], [R2303, R2313, R2323, R2333]], [[R3300, R3301, R3302, R3303], [R3301, R3311, R3312, R3313], [R3302, R3312, R3322, R3323], [R3303, R3313, R3323, R3333]]]]
     >>> print(sorted(list(glb_gridfcs_dict)))
     ['R0000', 'R0001', 'R0002', 'R0003', 'R0011', 'R0012', 'R0013', 'R0022', 'R0023', 'R0033', 'R0100', 'R0101', 'R0102', 'R0103', 'R0111', 'R0112', 'R0113', 'R0122', 'R0123', 'R0133', 'R0200', 'R0201', 'R0202', 'R0203', 'R0211', 'R0212', 'R0213', 'R0222', 'R0223', 'R0233', 'R0300', 'R0301', 'R0302', 'R0303', 'R0311', 'R0312', 'R0313', 'R0322', 'R0323', 'R0333', 'R1100', 'R1101', 'R1102', 'R1103', 'R1111', 'R1112', 'R1113', 'R1122', 'R1123', 'R1133', 'R1200', 'R1201', 'R1202', 'R1203', 'R1211', 'R1212', 'R1213', 'R1222', 'R1223', 'R1233', 'R1300', 'R1301', 'R1302', 'R1303', 'R1311', 'R1312', 'R1313', 'R1322', 'R1323', 'R1333', 'R2200', 'R2201', 'R2202', 'R2203', 'R2211', 'R2212', 'R2213', 'R2222', 'R2223', 'R2233', 'R2300', 'R2301', 'R2302', 'R2303', 'R2311', 'R2312', 'R2313', 'R2322', 'R2323', 'R2333', 'R3300', 'R3301', 'R3302', 'R3303', 'R3311', 'R3312', 'R3313', 'R3322', 'R3323', 'R3333']
     >>> print(glb_gridfcs_dict['R0001'].__dict__)
-    {'name': 'R0001', 'group': 'EVOL', 'rank': 4, 'dimension': 4, 'gf_type': 'CCTK_REAL', 'f_infinity': 0.0, 'wavespeed': 1.0, 'is_basename': False}
+    {'name': 'R0001', 'group': 'EVOL', 'desc': 'Riemann_tensor_R0001', 'rank': 4, 'dimension': 4, 'gf_type': 'CCTK_REAL', 'f_infinity': 0.0, 'wavespeed': 1.0, 'is_basename': False}
     """
     # Step 1: Select the appropriate indexed expression declaration function from the factory.
     declare_func = IXP_RANK_FUNC_MAP.get(rank)
@@ -1020,11 +1045,22 @@ def register_gridfunctions_for_single_rankN(
     # We must extract the unique names to register each component only once.
     unique_gf_names = _flatten_and_unique_str(cast(List[Any], indexed_obj))
 
-    # Manually adjust kwargs for registration of individual components.
-    kwargs.update({"is_basename": False, "rank": rank})
-    register_gridfunctions(unique_gf_names, dimension, **kwargs)
+    # Step 4: Set unique descriptors for each gridfunction component.
+    base_desc = kwargs.get("desc", None)
+    if base_desc is None:
+        base_desc = "gf_desc_unset"
+    desc_list: List[str] = []
+    for name in unique_gf_names:
+        desc_list += [f"{base_desc}_{name}"]
+    kwargs["desc_list"] = desc_list
 
-    # Step 4: Return the original (potentially nested) list structure of SymPy symbols.
+    # Step 5: Manually adjust kwargs for registration of individual components.
+    kwargs.update({"is_basename": False, "rank": rank})
+
+    # Step 6: Register gridfunctions!
+    register_gridfunctions(names=unique_gf_names, dimension=dimension, **kwargs)
+
+    # Step 7: Return the original (potentially nested) list structure of SymPy symbols.
     return cast(
         Union[
             List[sp.Symbol],
