@@ -55,7 +55,7 @@ def BHaH_defines_set_gridfunction_defines_with_parity_types(
     (
         evolved_variables_list,
         auxevol_variables_list,
-        diagnostic_variables_list,
+        _diagnostic_variables_list,
         auxiliary_variables_list,
     ) = gri.BHaHGridFunction.gridfunction_lists()
 

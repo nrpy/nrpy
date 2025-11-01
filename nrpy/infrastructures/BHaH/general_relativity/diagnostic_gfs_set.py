@@ -47,6 +47,7 @@ def register_CFunction_diagnostic_gfs_set(
     :param enable_psi4:              If True, include additional waveform-related diagnostic channels
                                       in the registration; if False, omit them.
     :return: None if in registration phase, else the updated NRPy environment.
+    :raises ValueError: If a diagnostics gridfunction's parity type cannot be inferred from its name.
 
     Doctests:
     TBD
@@ -116,15 +117,18 @@ def register_CFunction_diagnostic_gfs_set(
         group="DIAG",
     )
     diag_gf_names: List[str] = []
-    diag_gf_parity_types: List[str] = []
+    diag_gf_parity_types: List[Union[int, None]] = []
     for k in [k for k, v in gri.glb_gridfcs_dict.items() if v.group == "DIAG"]:
         gf_obj = gri.glb_gridfcs_dict[k]
         diag_gf_names += [k]
-        diag_gf_parity_types += [
-            gri.BHaHGridFunction.get_parity_type(
-                gf_obj.name, gf_obj.rank, gf_obj.dimension
+        parity_type = gri.BHaHGridFunction.get_parity_type(
+            gf_obj.name, gf_obj.rank, gf_obj.dimension
+        )
+        if parity_type is None:
+            raise ValueError(
+                f"Error: parity type could not be inferred from diagnostics gridfunction {k}"
             )
-        ]
+        diag_gf_parity_types += [parity_type]
 
     body = f"static const int8_t diag_gf_parities[{len(diag_gf_names)}] = {{ {', '.join(map(str, diag_gf_parity_types))} }};\n"
 
