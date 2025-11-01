@@ -115,8 +115,12 @@ def register_CFunction_diagnostic_gfs_set(
         default_k2=default_k2,
         default_sigma=default_sigma,
     )
-    gri.register_gridfunctions(names="DIAG_RELERROR_UUGF", desc="RelError_u", group="AUX")
-    gri.register_gridfunctions(names="DIAG_RELERROR_VVGF", desc="RelError_v", group="AUX")
+    gri.register_gridfunctions(
+        names="DIAG_RELERROR_UUGF", desc="RelError_u", group="AUX"
+    )
+    gri.register_gridfunctions(
+        names="DIAG_RELERROR_VVGF", desc="RelError_v", group="AUX"
+    )
     gri.register_gridfunctions(names="DIAG_UNUM", desc="u_numerical", group="AUX")
     gri.register_gridfunctions(names="DIAG_UEXACT", desc="u_exact", group="AUX")
     gri.register_gridfunctions(names="DIAG_VNUM", desc="v_numerical", group="AUX")
