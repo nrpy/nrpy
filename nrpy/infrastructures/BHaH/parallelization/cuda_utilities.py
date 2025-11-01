@@ -8,13 +8,11 @@ import nrpy.c_function as cfc
 import nrpy.params as par  # NRPy: Parameter interface
 from nrpy.helpers.parallelization.gpu_kernel import GPU_Kernel
 
-"""
-    Define the default launch dictionary for CUDA kernels.
-
-    threads_per_block: Number of threads per block. Default is 32 in the x direction, 1 in the y and z directions.
-    blocks_per_grid: Number of blocks needed in the [x,y,z] direction.  Default is computed based on Nxx and threads_per_block.
-    stream: Stream ID for the kernel.  Empty string defaults to param_streamid % NUM_STREAMS. Exclude from dictionary to use null stream.
-"""
+# Define the default launch dictionary for CUDA kernels.
+#
+# threads_per_block: Number of threads per block. Default is 32 in the x direction, 1 in the y and z directions.
+# blocks_per_grid: Number of blocks needed in the [x,y,z] direction. Default is computed based on Nxx and threads_per_block.
+# stream: Stream ID for the kernel. Empty string defaults to param_streamid % NUM_STREAMS.
 default_launch_dictionary = {
     "blocks_per_grid": [],
     "threads_per_block": [
