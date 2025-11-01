@@ -20,65 +20,12 @@ Authors: Zachariah B. Etienne
 import nrpy.c_function as cfc
 import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.params as par
+from nrpy.infrastructures import BHaH
 
 
-def generate_apply_bcs_inner_only__kernel_body(
-    loop_bounds: str = "NUM_EVOL_GFS",
-    parity_ary: str = "evol_gf_parity",
-    gf_index: str = "which_gf",
-) -> str:
+def register_CFunction_apply_bcs_inner_only_specific_gfs() -> None:
     """
-    Generate the kernel body for the apply_bcs_inner_only function.
-
-    This function is used to apply boundary conditions to inner boundary points
-    on the computational grid.
-
-    :param loop_bounds: The number of loop bounds (default is NUM_EVOL_GFS).
-    :param parity_ary: The name of the parity array (default is evol_gf_parity).
-    :param gf_index: The storage for the index of the grid function (default is which_gf).
-
-    :return: The kernel body as a string.
-    """
-    parallelization = par.parval_from_str("parallelization")
-
-    # Specify kernel body
-    kernel_body = "// Needed for IDX macros\n"
-    kernel_body += parallel_utils.get_loop_parameters(parallelization)
-    kernel_body += (
-        f"""
-for(int which_gf=0;which_gf<{loop_bounds};which_gf++) {{
-for (int pt = tid0; pt < num_inner_boundary_points; pt+=stride0) {{"""
-        if parallelization == "cuda"
-        else f"""
-  // collapse(2) results in a nice speedup here, esp in 2D. Two_BHs_collide goes from
-  //    5550 M/hr to 7264 M/hr on a Ryzen 9 5950X running on all 16 cores with core affinity.
-#pragma omp parallel for collapse(2)  // spawn threads and distribute across them
-  for(int which_gf=0;which_gf<{loop_bounds};which_gf++) {{
-    for(int pt=0;pt<num_inner_boundary_points;pt++) {{"""
-    )
-    kernel_body += f"""
-      const int dstpt = inner_bc_array[pt].dstpt;
-      const int srcpt = inner_bc_array[pt].srcpt;
-      gfs[IDX4pt({gf_index}, dstpt)] = inner_bc_array[pt].parity[{parity_ary}[{gf_index}]] * gfs[IDX4pt({gf_index}, srcpt)];
-    }} // END for(int pt=0;pt<num_inner_pts;pt++)
-  }} // END for(int which_gf=0;which_gf<{loop_bounds};which_gf++)
-""".replace(
-        f"{parity_ary}[{gf_index}]",
-        (
-            f"d_{parity_ary}[{gf_index}]"
-            if parallelization == "cuda"
-            else f"{parity_ary}[{gf_index}]"
-        ),
-    )
-    return kernel_body
-
-
-###############################
-## apply_bcs_inner_only(): Apply inner boundary conditions.
-##  Function is documented below in desc= and body=.
-def register_CFunction_apply_bcs_inner_only() -> None:
-    """
-    Register C function for filling inner boundary points on the computational grid, as prescribed by bcstruct.
+    Register C function for filling inner boundary points for specific gfs on the computational grid.
 
     Doctests:
     >>> from nrpy.helpers.generic import validate_strings
@@ -88,14 +35,14 @@ def register_CFunction_apply_bcs_inner_only() -> None:
     >>> for parallelization in supported_Parallelizations:
     ...    par.set_parval_from_str("parallelization", parallelization)
     ...    cfc.CFunction_dict.clear()
-    ...    register_CFunction_apply_bcs_inner_only()
-    ...    generated_str = cfc.CFunction_dict[f'apply_bcs_inner_only'].full_function
-    ...    validation_desc = f"apply_bcs_inner_only__{parallelization}"
+    ...    register_CFunction_apply_bcs_inner_only_specific_gfs()
+    ...    generated_str = cfc.CFunction_dict[f'apply_bcs_inner_only_specific_gfs'].full_function
+    ...    validation_desc = f"apply_bcs_inner_only_specific_gfs__{parallelization}"
     ...    validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
     """
     includes = ["BHaH_defines.h"]
     desc = r"""
-Apply BCs to inner boundary points only,
+Apply BCs to specific grid functions at inner boundary points only,
 using data stored in bcstruct->inner_bc_array.
 These structs are set in bcstruct_set_up().
 Inner boundary points map to either the grid
@@ -103,18 +50,25 @@ interior ("pure inner") or to pure outer
 boundary points ("inner maps to outer").
 """
     cfunc_type = "void"
-    name = "apply_bcs_inner_only"
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const bc_struct *restrict bcstruct, REAL *restrict gfs"
+    name = "apply_bcs_inner_only_specific_gfs"
+    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const bc_struct *restrict bcstruct, REAL *restrict gfs, const int num_gfs, const int *gf_parities, const int *gfs_to_sync"
     parallelization = par.parval_from_str("parallelization")
 
-    kernel_body = generate_apply_bcs_inner_only__kernel_body()
+    kernel_body = BHaH.CurviBoundaryConditions.apply_bcs_inner_only.generate_apply_bcs_inner_only__kernel_body(
+        loop_bounds="num_gfs",
+        parity_ary="gf_parities",
+        gf_index="gfs_to_sync[which_gf]",
+    )
 
-    comments = "Apply BCs to inner boundary points only."
+    comments = "Apply BCs to inner boundary points only for specified GFs."
     # Prepare the argument dicts
     arg_dict_cuda = {
         "num_inner_boundary_points": "const int",
         "inner_bc_array": "const innerpt_bc_struct *restrict",
         "gfs": "REAL *restrict",
+        "num_gfs": "const int",
+        "gf_parities": "const int *restrict",
+        "gfs_to_sync": "const int *restrict",
     }
     arg_dict_host = {
         "params": "const params_struct *restrict",
@@ -135,12 +89,29 @@ boundary points ("inner maps to outer").
         },
         thread_tiling_macro_suffix="CURVIBC_INNER",
     )
-    kernel_launch_body = rf"""
+    kernel_launch_body = """
   // Unpack bc_info from bcstruct
   const bc_info_struct *bc_info = &bcstruct->bc_info;
   const innerpt_bc_struct *restrict inner_bc_array = bcstruct->inner_bc_array;
   const int num_inner_boundary_points = bc_info->num_inner_boundary_points;
-  {new_body}"""
+"""
+    if parallelization in ["cuda"]:
+        kernel_launch_body += """
+        // Allocate device memory for gfs_to_sync
+        int *gfs_to_sync_device;
+        BHAH_MALLOC_DEVICE(gfs_to_sync_device, num_gfs * sizeof(int));
+        cudaMemcpy(gfs_to_sync_device, gfs_to_sync, num_gfs * sizeof(int), cudaMemcpyHostToDevice);
+        """
+        new_body = new_body.replace("gfs_to_sync", "gfs_to_sync_device")
+    kernel_launch_body += new_body
+
+    if parallelization in ["cuda"]:
+        kernel_launch_body += """
+        BHAH_DEVICE_SYNC();
+        // Free device memory for gfs_to_sync
+        BHAH_FREE_DEVICE(gfs_to_sync_device);
+        """
+
     cfc.register_CFunction(
         prefunc=prefunc,
         includes=includes,

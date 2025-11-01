@@ -164,7 +164,8 @@ def register_CFunction_diagnostic_gfs_set(
     psi4(commondata, params, griddata[grid].xx, y_n_gfs, diagnostic_gfs[grid]);
     // Apply inner bcs to psi4 needed to do interpolation correctly
     int diag_gfs_to_sync[2] = {DIAG_PSI4_RE, DIAG_PSI4_IM};
-    apply_bcs_inner_only_specific_gfs(commondata, params, &griddata[grid].bcstruct, diagnostic_gfs[grid], 2, diag_gfs_to_sync);
+    int diag_gfs_parities[2] = {aux_gf_parity[DIAG_PSI4_RE], aux_gf_parity[DIAG_PSI4_IM]};
+    apply_bcs_inner_only_specific_gfs(commondata, params, &griddata[grid].bcstruct, diagnostic_gfs[grid], 2, diag_gfs_parities, diag_gfs_to_sync);
 """
     body += "  } // END LOOP over grids\n"
 
