@@ -57,6 +57,28 @@ def register_CFunction_diagnostic_gfs_set(
         "BHaH_function_prototypes.h",
         "diagnostics/diagnostic_gfs.h",
     ]
+
+    gri.register_gridfunctions(
+        names="DIAG_RESIDUAL", desc="Residual_H_constraint", group="DIAG"
+    )
+    gri.register_gridfunctions(names="DIAG_UU", desc="u_numerical", group="DIAG")
+    gri.register_gridfunctions(names="DIAG_VV", desc="v_numerical", group="DIAG")
+    gri.register_gridfunctions(names="DIAG_GRIDINDEX", desc="GridIndex", group="DIAG")
+    diag_gf_parity_types = gri.BHaHGridFunction.set_parity_types(
+        sorted([v.name for v in gri.glb_gridfcs_dict.values() if v.group == "DIAG"])
+    )
+    prefunc = f"""
+// NOTE: Inner boundary conditions must be set before any interpolations are performed, whether for psi4 decomp. or interp diags.
+MAYBE_UNUSED static void apply_inner_bcs_to_specific_gfs(const commondata_struct *restrict commondata, const params_struct *restrict params, const bc_struct *restrict bcstruct,
+                                            const int inner_bc_apply_gfs[], const int num_inner_bc_apply_gfs, REAL *restrict diagnostic_gfs) {{
+  const int8_t diag_gf_parities[{len(diag_gf_parity_types)}] = {{ {', '.join(map(str, diag_gf_parity_types))} }};
+  int parities[num_inner_bc_apply_gfs];
+  for (int i = 0; i < num_inner_bc_apply_gfs; i++)
+      parities[i] = diag_gf_parities[inner_bc_apply_gfs[i]];
+  apply_bcs_inner_only_specific_gfs(commondata, params, bcstruct, diagnostic_gfs, num_inner_bc_apply_gfs, parities, inner_bc_apply_gfs);
+}} // END FUNCTION apply_inner_bcs_to_specific_gfs()
+"""
+
     desc = """
  * @file diagnostic_gfs_set.c
  * @brief Populate per-grid diagnostic arrays used by interpolation and integration routines.
@@ -95,14 +117,6 @@ def register_CFunction_diagnostic_gfs_set(
     cfunc_type = "void"
     name = "diagnostic_gfs_set"
     params = "const commondata_struct *restrict commondata, const griddata_struct *restrict griddata, REAL *restrict diagnostic_gfs[MAXNUMGRIDS]"
-
-    gri.register_gridfunctions(
-        names="DIAG_RESIDUAL", desc="Residual_H_constraint", group="DIAG"
-    )
-    gri.register_gridfunctions(names="DIAG_UU", desc="u_numerical", group="DIAG")
-    gri.register_gridfunctions(names="DIAG_VV", desc="v_numerical", group="DIAG")
-    gri.register_gridfunctions(names="DIAG_GRIDINDEX", desc="GridIndex", group="DIAG")
-
     body = """
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     const params_struct *restrict params = &griddata[grid].params;
@@ -119,17 +133,11 @@ def register_CFunction_diagnostic_gfs_set(
                                   &diagnostic_gfs[grid][IDX4pt(DIAG_RESIDUALGF, 0)]);
 """
     if enable_interp_diagnostics:
-        diag_gf_parity_types = gri.BHaHGridFunction.set_parity_types(
-            sorted([v.name for v in gri.glb_gridfcs_dict.values() if v.group == "DIAG"])
-        )
-        body += f"const int8_t diag_gf_parities[{len(diag_gf_parity_types)}] = {{ {', '.join(map(str, diag_gf_parity_types))} }};\n"
         body += """
-    {
-      // Apply inner bcs to psi4 needed to do interpolation correctly
-      int diag_gfs_to_sync[1] = {DIAG_RESIDUALGF};
-      int diag_gfs_pars[1] = {diag_gf_parities[DIAG_RESIDUALGF]};
-      apply_bcs_inner_only_specific_gfs(commondata, params, &griddata[grid].bcstruct, diagnostic_gfs[grid], 1, diag_gfs_pars, diag_gfs_to_sync);
-    } // END set inner BCs on desired GFs
+    // Apply inner bcs to constraints needed to do interpolation correctly
+    const int inner_bc_apply_gfs[] = {DIAG_RESIDUALGF};
+    const int num_inner_bc_apply_gfs = (int)(sizeof(inner_bc_apply_gfs) / sizeof(inner_bc_apply_gfs[0]));
+    apply_inner_bcs_to_specific_gfs(commondata, params, &griddata[grid].bcstruct, inner_bc_apply_gfs, num_inner_bc_apply_gfs, diagnostic_gfs[grid]);
 """
     body += """
     LOOP_OMP("omp parallel for", i0, 0, Nxx_plus_2NGHOSTS0, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
@@ -144,6 +152,7 @@ def register_CFunction_diagnostic_gfs_set(
     cfc.register_CFunction(
         subdirectory="diagnostics",
         includes=includes,
+        prefunc=prefunc,
         desc=desc,
         cfunc_type=cfunc_type,
         name=name,
