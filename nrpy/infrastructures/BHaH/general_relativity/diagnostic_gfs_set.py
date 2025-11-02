@@ -19,7 +19,7 @@ Author: Zachariah B. Etienne
 
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import List, Union, cast
+from typing import Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.grid as gri
@@ -116,22 +116,13 @@ def register_CFunction_diagnostic_gfs_set(
         dimension=3,
         group="DIAG",
     )
-    diag_gf_names: List[str] = []
-    diag_gf_parity_types: List[Union[int, None]] = []
-    for k in [k for k, v in gri.glb_gridfcs_dict.items() if v.group == "DIAG"]:
-        gf_obj = gri.glb_gridfcs_dict[k]
-        diag_gf_names += [k]
-        parity_type = gri.BHaHGridFunction.get_parity_type(
-            gf_obj.name, gf_obj.rank, gf_obj.dimension
+    body = ""
+    if enable_interp_diagnostics or enable_psi4:
+        diag_gf_parity_types = gri.BHaHGridFunction.set_parity_types(
+            sorted([v.name for v in gri.glb_gridfcs_dict.values() if v.group == "DIAG"])
         )
-        if parity_type is None:
-            raise ValueError(
-                f"Error: parity type could not be inferred from diagnostics gridfunction {k}"
-            )
-        diag_gf_parity_types += [parity_type]
-
-    body = f"static const int8_t diag_gf_parities[{len(diag_gf_names)}] = {{ {', '.join(map(str, diag_gf_parity_types))} }};\n"
-
+        body = "// Inner boundary conditions must be set before any interpolations are performed, whether for psi4 decomp. or interp diags.\n"
+        body += f"const int8_t diag_gf_parities[{len(diag_gf_parity_types)}] = {{ {', '.join(map(str, diag_gf_parity_types))} }};\n"
     body += """
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     const params_struct *restrict params = &griddata[grid].params;
@@ -145,23 +136,6 @@ def register_CFunction_diagnostic_gfs_set(
     //     for (int ii = 0; ii < TOTAL_NUM_DIAG_GFS * Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2; ii++) {
     //       diagnostic_gfs[grid][ii] = NAN;
     //     } // END LOOP over all points & gridfunctions, poisoning diagnostic_gfs
-    """
-    if enable_interp_diagnostics:
-        body += """
-    // Apply inner bcs to DIAG_RESIDUAL, as it depends on finite differences.
-    {
-      const bc_struct bcstruct = griddata[grid].bcstruct;
-      const innerpt_bc_struct *restrict inner_bc_array = bcstruct.inner_bc_array;
-      const int num_inner_boundary_points = bcstruct.bc_info.num_inner_boundary_points;
-#pragma omp parallel for
-      for (int pt = 0; pt < num_inner_boundary_points; pt++) {
-        const int dstpt = inner_bc_array[pt].dstpt;
-        const int srcpt = inner_bc_array[pt].srcpt;
-        const int evol_gf_with_same_parity = UUGF; // <- IMPORTANT
-        diagnostic_gfs[grid][IDX4pt(DIAG_RESIDUAL, dstpt)] =
-            inner_bc_array[pt].parity[evol_gf_parity[evol_gf_with_same_parity]] * diagnostic_gfs[grid][IDX4pt(DIAG_RESIDUAL, srcpt)];
-      } // END LOOP over inner boundary points
-    } // END applying inner bcs to DIAG_RESIDUAL
 """
     parallelization = par.parval_from_str("parallelization")
     Ricci_func = f"Ricci_eval{'_host' if parallelization == 'cuda' else ''}"
@@ -178,11 +152,20 @@ def register_CFunction_diagnostic_gfs_set(
     if enable_psi4:
         body += """
     // Set psi4 gridfunctions
-    psi4(commondata, params, griddata[grid].xx, y_n_gfs, diagnostic_gfs[grid]);
+    psi4(commondata, params, (double * restrict*)griddata[grid].xx, y_n_gfs, diagnostic_gfs[grid]);
     // Apply inner bcs to psi4 needed to do interpolation correctly
     int diag_gfs_to_sync[2] = {DIAG_PSI4_REGF, DIAG_PSI4_IMGF};
     int diag_gfs_pars[2] = {diag_gf_parities[DIAG_PSI4_REGF], diag_gf_parities[DIAG_PSI4_IMGF]};
     apply_bcs_inner_only_specific_gfs(commondata, params, &griddata[grid].bcstruct, diagnostic_gfs[grid], 2, diag_gfs_pars, diag_gfs_to_sync);
+"""
+    if enable_interp_diagnostics:
+        body += """
+    {
+      // Apply inner bcs to psi4 needed to do interpolation correctly
+      int diag_gfs_to_sync[2] = {DIAG_HAMILTONIAN, DIAG_MSQUARED};
+      int diag_gfs_pars[2] = {diag_gf_parities[DIAG_HAMILTONIAN], diag_gf_parities[DIAG_MSQUARED]};
+      apply_bcs_inner_only_specific_gfs(commondata, params, &griddata[grid].bcstruct, diagnostic_gfs[grid], 2, diag_gfs_pars, diag_gfs_to_sync);
+    } // END set inner BCs on desired GFs
 """
     body += "  } // END LOOP over grids\n"
 

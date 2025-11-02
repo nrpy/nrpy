@@ -119,21 +119,17 @@ def register_CFunction_diagnostic_gfs_set(
                                   &diagnostic_gfs[grid][IDX4pt(DIAG_RESIDUALGF, 0)]);
 """
     if enable_interp_diagnostics:
+        diag_gf_parity_types = gri.BHaHGridFunction.set_parity_types(
+            sorted([v.name for v in gri.glb_gridfcs_dict.values() if v.group == "DIAG"])
+        )
+        body += f"const int8_t diag_gf_parities[{len(diag_gf_parity_types)}] = {{ {', '.join(map(str, diag_gf_parity_types))} }};\n"
         body += """
-    // Apply inner bcs to DIAG_RESIDUAL, as it depends on finite differences.
     {
-      const bc_struct bcstruct = griddata[grid].bcstruct;
-      const innerpt_bc_struct *restrict inner_bc_array = bcstruct.inner_bc_array;
-      const int num_inner_boundary_points = bcstruct.bc_info.num_inner_boundary_points;
-#pragma omp parallel for
-      for (int pt = 0; pt < num_inner_boundary_points; pt++) {
-        const int dstpt = inner_bc_array[pt].dstpt;
-        const int srcpt = inner_bc_array[pt].srcpt;
-        const int evol_gf_with_same_parity = UUGF; // <- IMPORTANT
-        diagnostic_gfs[grid][IDX4pt(DIAG_RESIDUALGF, dstpt)] =
-            inner_bc_array[pt].parity[evol_gf_parity[evol_gf_with_same_parity]] * diagnostic_gfs[grid][IDX4pt(DIAG_RESIDUALGF, srcpt)];
-      } // END LOOP over inner boundary points
-    } // END applying inner bcs to DIAG_RESIDUAL
+      // Apply inner bcs to psi4 needed to do interpolation correctly
+      int diag_gfs_to_sync[1] = {DIAG_RESIDUALGF};
+      int diag_gfs_pars[1] = {diag_gf_parities[DIAG_RESIDUALGF]};
+      apply_bcs_inner_only_specific_gfs(commondata, params, &griddata[grid].bcstruct, diagnostic_gfs[grid], 1, diag_gfs_pars, diag_gfs_to_sync);
+    } // END set inner BCs on desired GFs
 """
     body += """
     LOOP_OMP("omp parallel for", i0, 0, Nxx_plus_2NGHOSTS0, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {

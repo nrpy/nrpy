@@ -267,6 +267,44 @@ class GridFunction:
 
     @staticmethod
     def get_parity_type(name: str, rank: int, dimension: int) -> Union[None, int]:
+        """
+        Determine the parity type code (integer) for a gridfunction component.
+
+        Parity types encode how a component transforms under spatial inversion (parity).
+        This helper supports ranks 0–2 and follows the NRPy/BHaH conventions:
+          * Rank-0 (scalar): returns 0.
+          * Rank-1 (vector): infers the component index from the final character of `name`
+            (e.g., "betU2" → index 2) and returns index + 1 (i.e., {0,1,2,...} → {1,2,3,...}).
+          * Rank-2 (tensor): infers the two component indices from the final two characters
+            of `name` (e.g., "gDD12" → ("1","2")) and looks up the code in the dimension-
+            specific tables:
+                - 3D:  `GridFunction._PARITY_CONDITIONS_RANK2_DIM3`
+                - 4D:  `GridFunction._PARITY_CONDITIONS_RANK2_DIM4`
+
+        Note:
+            * For rank ≥ 1, this function assumes component names end with digit indices
+              consistent with the registration conventions (e.g., "A0", "gDD12").
+            * If the rank is unsupported, the name is not in the expected form, the
+              indices are out of range, or the (index,dimension) pair is not covered by
+              the lookup tables, the function returns ``None``.
+            * This routine is used by :meth:`set_parity_types` to compute parity codes
+              for registered gridfunctions.
+
+        :param name: Gridfunction component name (e.g., "phi", "betU2", "gDD12").
+        :param rank: Tensor rank of the quantity (supported: 0, 1, 2).
+        :param dimension: Spatial dimension used for rank-2 lookup (typically 3 or 4).
+        :returns: The integer parity type code, or ``None`` if it cannot be determined.
+
+        Doctests:
+        >>> GridFunction.get_parity_type("phi", rank=0, dimension=3)
+        0
+        >>> GridFunction.get_parity_type("betU2", rank=1, dimension=3)
+        3
+        >>> GridFunction.get_parity_type("gDD12", rank=2, dimension=3)
+        8
+        >>> GridFunction.get_parity_type("gDD01", rank=2, dimension=4)
+        1
+        """
         parity_val: Optional[int] = None
         if rank == 0:
             parity_val = 0

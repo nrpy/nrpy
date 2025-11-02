@@ -26,7 +26,7 @@ Author: Zachariah B. Etienne
 """
 
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
@@ -64,12 +64,14 @@ def diagnostics_gfs_h_create(
             "diagnostics_gfs_h_create() must be called AFTER parallel codegen."
         )
 
-    diag_gfs_names: List[str] = []
-    diag_gfs_descs: List[str] = []
-    for _, gf_obj in gri.glb_gridfcs_dict.items():
-        if gf_obj.group == "DIAG":
-            diag_gfs_names += [gf_obj.name]
-            diag_gfs_descs += [gf_obj.desc]
+    diag_items: List[Tuple[str, str]] = sorted(
+        ((v.name, v.desc) for v in gri.glb_gridfcs_dict.values() if v.group == "DIAG"),
+        key=lambda t: t[0].lower(),  # case-insensitive by name
+    )
+    # If you also want parallel lists:
+    diag_gfs_names = [name for name, _ in diag_items]
+    diag_gfs_descs = [desc for _, desc in diag_items]
+
     newline = "\n"  # Backslashes aren't allowed in Python 3.7 f-strings; this is our workaround.
     body = rf"""
 /**
