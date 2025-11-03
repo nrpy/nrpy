@@ -132,10 +132,10 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const REAL dtheta, const REA
     fprintf(outfile, "%e", (double)(curr_time - R_ext));
     for (int m = -l; m <= l; m++) {
       REAL psi4r_l_m = 0.0, psi4i_l_m = 0.0;
-#pragma omp parallel for reduction(+ : psi4r_l_m, psi4i_l_m)
+#pragma omp parallel for collapse(2) reduction(+ : psi4r_l_m, psi4i_l_m)
       for (int i_ph = 0; i_ph < N_phi; i_ph++) {
-        const REAL ph = phi_array[i_ph];
         for (int i_th = 0; i_th < N_theta; i_th++) {
+          const REAL ph = phi_array[i_ph];
           const REAL th = theta_array[i_th];
           const int idx = IDX2GENERAL(i_th, i_ph, N_theta);
           REAL ReY, ImY;
@@ -204,11 +204,21 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const REAL dtheta, const REA
 
   // Precompute theta and phi arrays (cell-centered)
   REAL *theta_array = (REAL *)malloc(N_theta * sizeof(REAL));
+  REAL *sin_theta_array = (REAL *)malloc(N_theta * sizeof(REAL));
+  REAL *cos_theta_array = (REAL *)malloc(N_theta * sizeof(REAL));
   REAL *phi_array = (REAL *)malloc(N_phi * sizeof(REAL));
-  for (int i = 0; i < N_theta; i++)
+  REAL *sin_phi_array = (REAL *)malloc(N_phi * sizeof(REAL));
+  REAL *cos_phi_array = (REAL *)malloc(N_phi * sizeof(REAL));
+  for (int i = 0; i < N_theta; i++) {
     theta_array[i] = ((REAL)i + 0.5) * dtheta;
-  for (int i = 0; i < N_phi; i++)
+    sin_theta_array[i] = sin(theta_array[i]);
+    cos_theta_array[i] = cos(theta_array[i]);
+  } // END LOOP over theta, precomputation of sin/cos theta
+  for (int i = 0; i < N_phi; i++) {
     phi_array[i] = -M_PI + ((REAL)i + 0.5) * dphi;
+    sin_phi_array[i] = sin(phi_array[i]);
+    cos_phi_array[i] = cos(phi_array[i]);
+  } // END LOOP over phi, precomputation of sin/cos phi
 
   const REAL *src_gf_ptrs[2] = {&diagnostic_gfs[IDX4(DIAG_PSI4_REGF, 0, 0, 0)], &diagnostic_gfs[IDX4(DIAG_PSI4_IMGF, 0, 0, 0)]};
 
@@ -222,12 +232,10 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const REAL dtheta, const REA
 
     // First pass: compute coordinates and check if ALL points are in grid interior
     int all_points_interior = 1;
-    for (int i_ph = 0; i_ph < N_phi && all_points_interior; i_ph++) {
-      const REAL phi = phi_array[i_ph];
-      const REAL sin_phi = sin(phi), cos_phi = cos(phi);
+    for (int i_ph = 0; i_ph < N_phi; i_ph++) {
+      const REAL sin_phi = sin_phi_array[i_ph], cos_phi = cos_phi_array[i_ph];
       for (int i_th = 0; i_th < N_theta; i_th++) {
-        const REAL theta = theta_array[i_th];
-        const REAL sin_theta = sin(theta), cos_theta = cos(theta);
+        const REAL sin_theta = sin_theta_array[i_th], cos_theta = cos_theta_array[i_th];
         const int idx = IDX2GENERAL(i_th, i_ph, N_theta);
 
         // Compute Cartesian coordinates
@@ -243,8 +251,8 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const REAL dtheta, const REA
         // Check if point is in grid interior; if ANY point is not, set flag to false
         if (!IS_IN_GRID_INTERIOR(i0i1i2, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, params->Nxx_plus_2NGHOSTS2, NGHOSTS)) {
           all_points_interior = 0;
-          i_ph = N_phi; // Break out of phi loop as well.
-          break;        // Exit early - no need to check remaining points
+          // Now break out of both loops:
+          i_ph = N_phi, i_th = N_theta;
         } // END check whether in grid interior
       } // END LOOP over theta
     } // END LOOP over phi
@@ -272,7 +280,11 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const REAL dtheta, const REA
   } // END LOOP over extraction radii
 
   free(theta_array);
+  free(sin_theta_array);
+  free(cos_theta_array);
   free(phi_array);
+  free(sin_phi_array);
+  free(cos_phi_array);
 """
 
     cfc.register_CFunction(

@@ -81,18 +81,6 @@ def register_CFunction_diagnostic_gfs_set(
     diag_gf_parity_types = gri.BHaHGridFunction.set_parity_types(
         sorted([v.name for v in gri.glb_gridfcs_dict.values() if v.group == "DIAG"])
     )
-    prefunc = f"""
-// NOTE: Inner boundary conditions must be set before any interpolations are performed, whether for psi4 decomp. or interp diags.
-MAYBE_UNUSED static void apply_inner_bcs_to_specific_gfs(const commondata_struct *restrict commondata, const params_struct *restrict params, const bc_struct *restrict bcstruct,
-                                            const int inner_bc_apply_gfs[], const int num_inner_bc_apply_gfs, REAL *restrict diagnostic_gfs) {{
-  const int8_t diag_gf_parities[{len(diag_gf_parity_types)}] = {{ {', '.join(map(str, diag_gf_parity_types))} }};
-  int parities[num_inner_bc_apply_gfs];
-  for (int i = 0; i < num_inner_bc_apply_gfs; i++)
-      parities[i] = diag_gf_parities[inner_bc_apply_gfs[i]];
-  apply_bcs_inner_only_specific_gfs(commondata, params, bcstruct, diagnostic_gfs, num_inner_bc_apply_gfs, parities, inner_bc_apply_gfs);
-}} // END FUNCTION apply_inner_bcs_to_specific_gfs()
-"""
-
     desc = """
  * @file diagnostic_gfs_set.c
  * @brief Populate per-grid diagnostic arrays used by interpolation and integration routines.
@@ -132,7 +120,8 @@ MAYBE_UNUSED static void apply_inner_bcs_to_specific_gfs(const commondata_struct
     name = "diagnostic_gfs_set"
     params = "const commondata_struct *restrict commondata, const griddata_struct *restrict griddata, REAL *restrict diagnostic_gfs[MAXNUMGRIDS]"
 
-    body = """
+    body = f"MAYBE_UNUSED const int8_t diag_gf_parities[{len(diag_gf_parity_types)}] = {{ {', '.join(map(str, diag_gf_parity_types))} }};\n"
+    body += """
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     const params_struct *restrict params = &griddata[grid].params;
     const rfm_struct *restrict rfmstruct = griddata[grid].rfmstruct;
@@ -160,19 +149,23 @@ MAYBE_UNUSED static void apply_inner_bcs_to_specific_gfs(const commondata_struct
 """
     if enable_psi4:
         body += """
+    // NOTE: Inner boundary conditions must be set before any interpolations are performed, whether for psi4 decomp. or interp diags.
     // Set psi4 gridfunctions
     psi4(commondata, params, (REAL * restrict*)griddata[grid].xx, y_n_gfs, diagnostic_gfs[grid]);
     const int inner_bc_apply_gfs[] = {DIAG_PSI4_REGF, DIAG_PSI4_IMGF};
     const int num_inner_bc_apply_gfs = (int)(sizeof(inner_bc_apply_gfs) / sizeof(inner_bc_apply_gfs[0]));
-    apply_inner_bcs_to_specific_gfs(commondata, params, &griddata[grid].bcstruct, inner_bc_apply_gfs, num_inner_bc_apply_gfs, diagnostic_gfs[grid]);
+    apply_bcs_inner_only_specific_gfs(commondata, params, &griddata[grid].bcstruct, diagnostic_gfs[grid], num_inner_bc_apply_gfs, diag_gf_parities,
+                                      inner_bc_apply_gfs);
 """
     if enable_interp_diagnostics:
         body += """
     {
+      // NOTE: Inner boundary conditions must be set before any interpolations are performed, whether for psi4 decomp. or interp diags.
       // Apply inner bcs to constraints needed to do interpolation correctly
       const int inner_bc_apply_gfs[] = {DIAG_HAMILTONIANGF, DIAG_MSQUAREDGF};
       const int num_inner_bc_apply_gfs = (int)(sizeof(inner_bc_apply_gfs) / sizeof(inner_bc_apply_gfs[0]));
-      apply_inner_bcs_to_specific_gfs(commondata, params, &griddata[grid].bcstruct, inner_bc_apply_gfs, num_inner_bc_apply_gfs, diagnostic_gfs[grid]);
+      apply_bcs_inner_only_specific_gfs(commondata, params, &griddata[grid].bcstruct, diagnostic_gfs[grid], num_inner_bc_apply_gfs, diag_gf_parities,
+                                        inner_bc_apply_gfs);
     } // END set inner BCs on desired GFs
 """
     body += "  } // END LOOP over grids\n"
@@ -180,7 +173,6 @@ MAYBE_UNUSED static void apply_inner_bcs_to_specific_gfs(const commondata_struct
     cfc.register_CFunction(
         subdirectory="diagnostics",
         includes=includes,
-        prefunc=prefunc,
         desc=desc,
         cfunc_type=cfunc_type,
         name=name,

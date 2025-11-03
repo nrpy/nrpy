@@ -51,7 +51,7 @@ boundary points ("inner maps to outer").
 """
     cfunc_type = "void"
     name = "apply_bcs_inner_only_specific_gfs"
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const bc_struct *restrict bcstruct, REAL *restrict gfs, const int num_gfs, const int *gf_parities, const int *gfs_to_sync"
+    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const bc_struct *restrict bcstruct, REAL *restrict gfs, const int num_gfs, const int8_t *gf_parities, const int *gfs_to_sync"
     body = r"""
   // Unpack bc_info from bcstruct
   const bc_info_struct *bc_info = &bcstruct->bc_info;
