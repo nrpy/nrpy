@@ -14,7 +14,6 @@ Author: Zachariah B. Etienne
 
 import argparse
 import os
-
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
@@ -163,7 +162,7 @@ TP_solve(&ID_persist);
 }
 """,
 )
-BHaH.BHaHAHA.interpolation_2d_general__uniform_src_grid.register_CFunction_interpolation_2d_general__uniform_src_grid(
+BHaH.BHaHAHA.interpolation_3d_general__uniform_src_grid.register_CFunction_interpolation_3d_general__uniform_src_grid(
     enable_simd=enable_intrinsics, project_dir=project_dir
 )
 BHaH.diagnostics.diagnostics.register_all_diagnostics(
@@ -174,6 +173,7 @@ BHaH.diagnostics.diagnostics.register_all_diagnostics(
     enable_interp_diagnostics=False,
     enable_volume_integration_diagnostics=True,
     enable_free_auxevol=False,
+    enable_psi4_diagnostics=True,
 )
 BHaH.general_relativity.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
     enable_interp_diagnostics=False, enable_psi4=True
@@ -248,9 +248,7 @@ BHaH.special_functions.spin_weight_minus2_spherical_harmonics.register_CFunction
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 # Does not need to be parallelized.
-BHaH.general_relativity.psi4_spinweightm2_decomposition.register_CFunction_psi4_spinweightm2_decomposition(
-    CoordSystem=CoordSystem
-)
+BHaH.general_relativity.psi4_spinweightm2_decomposition.register_CFunction_psi4_spinweightm2_decomposition()
 
 BHaH.numerical_grids_and_timestep.register_CFunctions(
     set_of_CoordSystems=set_of_CoordSystems,

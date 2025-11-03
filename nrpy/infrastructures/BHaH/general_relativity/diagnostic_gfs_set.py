@@ -161,7 +161,7 @@ MAYBE_UNUSED static void apply_inner_bcs_to_specific_gfs(const commondata_struct
     if enable_psi4:
         body += """
     // Set psi4 gridfunctions
-    psi4(commondata, params, (double * restrict*)griddata[grid].xx, y_n_gfs, diagnostic_gfs[grid]);
+    psi4(commondata, params, (REAL * restrict*)griddata[grid].xx, y_n_gfs, diagnostic_gfs[grid]);
     const int inner_bc_apply_gfs[] = {DIAG_PSI4_REGF, DIAG_PSI4_IMGF};
     const int num_inner_bc_apply_gfs = (int)(sizeof(inner_bc_apply_gfs) / sizeof(inner_bc_apply_gfs[0]));
     apply_inner_bcs_to_specific_gfs(commondata, params, &griddata[grid].bcstruct, inner_bc_apply_gfs, num_inner_bc_apply_gfs, diagnostic_gfs[grid]);
