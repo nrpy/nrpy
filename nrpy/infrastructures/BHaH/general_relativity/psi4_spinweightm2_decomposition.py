@@ -224,27 +224,27 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const REAL dtheta, const REA
     int all_points_interior = 1;
     for (int i_ph = 0; i_ph < N_phi && all_points_interior; i_ph++) {
       const REAL phi = phi_array[i_ph];
-      const REAL cos_phi = cos(phi);
-      const REAL sin_phi = sin(phi);
+      const REAL sin_phi = sin(phi), cos_phi = cos(phi);
       for (int i_th = 0; i_th < N_theta; i_th++) {
         const REAL theta = theta_array[i_th];
-        const REAL sin_theta = sin(theta);
+        const REAL sin_theta = sin(theta), cos_theta = cos(theta);
         const int idx = IDX2GENERAL(i_th, i_ph, N_theta);
 
         // Compute Cartesian coordinates
-        const REAL xCart[3] = {R_ext * sin_theta * cos_phi, R_ext * sin_theta * sin_phi, R_ext * cos(theta)};
+        const REAL xCart[3] = {R_ext * sin_theta * cos_phi, R_ext * sin_theta * sin_phi, R_ext * cos_theta};
         int i0i1i2[3];
-        REAL closest_xx[3];
-        Cart_to_xx_and_nearest_i0i1i2(params, xCart, closest_xx, i0i1i2);
+        REAL dst_xx[3]; // Store the *exact* xx destination coordinate on the src grid.
+        Cart_to_xx_and_nearest_i0i1i2(params, xCart, dst_xx, i0i1i2);
 
-        all_dst_pts[idx][0] = closest_xx[0];
-        all_dst_pts[idx][1] = closest_xx[1];
-        all_dst_pts[idx][2] = closest_xx[2];
+        all_dst_pts[idx][0] = dst_xx[0];
+        all_dst_pts[idx][1] = dst_xx[1];
+        all_dst_pts[idx][2] = dst_xx[2];
 
         // Check if point is in grid interior; if ANY point is not, set flag to false
         if (!IS_IN_GRID_INTERIOR(i0i1i2, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, params->Nxx_plus_2NGHOSTS2, NGHOSTS)) {
           all_points_interior = 0;
-          break; // Exit early - no need to check remaining points
+          i_ph = N_phi; // Break out of phi loop as well.
+          break;        // Exit early - no need to check remaining points
         } // END check whether in grid interior
       } // END LOOP over theta
     } // END LOOP over phi
