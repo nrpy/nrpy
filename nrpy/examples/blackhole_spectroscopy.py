@@ -14,7 +14,6 @@ Author: Zachariah B. Etienne
 
 import argparse
 import os
-
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
@@ -163,7 +162,9 @@ TP_solve(&ID_persist);
 """,
 )
 BHaH.BHaHAHA.interpolation_3d_general__uniform_src_grid.register_CFunction_interpolation_3d_general__uniform_src_grid(
-    enable_simd=enable_intrinsics, project_dir=project_dir
+    enable_simd=enable_intrinsics,
+    project_dir=project_dir,
+    use_cpp=(parallelization == "cuda"),
 )
 BHaH.diagnostics.diagnostics.register_all_diagnostics(
     project_dir=project_dir,

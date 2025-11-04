@@ -93,7 +93,10 @@ def _generate_c_files_and_header(
 
         # Change the file extension from .cu to .cc if we're using SIMD intrinsics.
         this_src_code_file_ext = src_code_file_ext
-        if src_code_file_ext == "cu" and "simd_intrinsics.h" in cfunc.full_function:
+        if src_code_file_ext == "cu" and (
+            "simd_intrinsics.h" in cfunc.full_function
+            or "interpolation_lagrange_uniform.h" in cfunc.full_function
+        ):
             this_src_code_file_ext = "cc"
 
         subdir_path = project_path / (cfunc.subdirectory or ".")
