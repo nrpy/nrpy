@@ -127,7 +127,7 @@ def register_CFunction_diagnostic_gfs_set(
     const rfm_struct *restrict rfmstruct = griddata[grid].rfmstruct;
     SET_NXX_PLUS_2NGHOSTS_VARS(grid);
     const REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
-    REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
+    MAYBE_UNUSED REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
 
     // Poison diagnostic_gfs (for debugging purposes only; WARNING: this might make valgrind ineffective)
     // #pragma omp parallel for
@@ -136,7 +136,6 @@ def register_CFunction_diagnostic_gfs_set(
     //     } // END LOOP over all points & gridfunctions, poisoning diagnostic_gfs
 """
     parallelization = par.parval_from_str("parallelization")
-    Ricci_func = f"Ricci_eval{'_host' if parallelization == 'cuda' else ''}"
     Ricci_gfs_ptr = (
         "&diagnostic_gfs[grid][IDX4pt(DIAG_RBARDD00GF, 0)]"
         if parallelization == "cuda"
@@ -144,7 +143,7 @@ def register_CFunction_diagnostic_gfs_set(
     )
     body += f"""
     // Set Ricci and constraints gridfunctions
-    {Ricci_func}(params, rfmstruct, y_n_gfs, {Ricci_gfs_ptr});
+    Ricci_eval{'_host' if parallelization == 'cuda' else ''}(params, rfmstruct, y_n_gfs, {Ricci_gfs_ptr});
     constraints_eval(commondata, params, rfmstruct, y_n_gfs, diagnostic_gfs[grid]);
 """
     if enable_psi4:

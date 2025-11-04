@@ -14,6 +14,7 @@ Author: Zachariah B. Etienne
 
 import argparse
 import os
+
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
@@ -209,7 +210,6 @@ if enable_CAHD:
 if separate_Ricci_and_BSSN_RHS:
     BHaH.general_relativity.Ricci_eval.register_CFunction_Ricci_eval(
         CoordSystem=CoordSystem,
-        enable_rfm_precompute=enable_rfm_precompute,
         enable_intrinsics=enable_intrinsics,
         enable_fd_functions=enable_fd_functions,
         OMP_collapse=OMP_collapse,
@@ -217,7 +217,6 @@ if separate_Ricci_and_BSSN_RHS:
     if parallelization == "cuda":
         BHaH.general_relativity.Ricci_eval.register_CFunction_Ricci_eval(
             CoordSystem=CoordSystem,
-            enable_rfm_precompute=enable_rfm_precompute,
             enable_intrinsics=enable_intrinsics,
             enable_fd_functions=enable_fd_functions,
             OMP_collapse=OMP_collapse,
