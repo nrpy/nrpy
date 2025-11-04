@@ -101,7 +101,6 @@ separate_Ricci_and_BSSN_RHS = True
 enable_parallel_codegen = True
 enable_rfm_precompute = True
 enable_intrinsics = True
-enable_simd_intrinsics = True
 enable_fd_functions = True
 boundary_conditions_desc = "outgoing radiation"
 
@@ -393,15 +392,20 @@ BHaH.griddata_commondata.register_CFunction_griddata_free(
     enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True
 )
 
-if enable_intrinsics:
+if parallelization == "cuda":
     copy_files(
         package="nrpy.helpers",
-        filenames_list=[
-            f"{'cuda' if parallelization == 'cuda' else 'simd'}_intrinsics.h"
-        ],
+        filenames_list=["cuda_intrinsics.h"],
         project_dir=project_dir,
         subdirectory="intrinsics",
     )
+# Needed for 3D interpolation
+copy_files(
+    package="nrpy.helpers",
+    filenames_list=["simd_intrinsics.h"],
+    project_dir=project_dir,
+    subdirectory="intrinsics",
+)
 
 BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
