@@ -10,7 +10,6 @@ Author: Leonardo Rosa Werneck
 """
 
 import argparse
-
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
@@ -156,7 +155,9 @@ BHaH.diagnostics.diagnostics.register_all_diagnostics(
     enable_psi4_diagnostics=False,
 )
 BHaH.general_relativity.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
-    enable_interp_diagnostics=False, enable_psi4=False
+    enable_interp_diagnostics=False,
+    enable_psi4=False,
+    enable_T4munu=True,
 )
 BHaH.general_relativity.diagnostics_nearest.register_CFunction_diagnostics_nearest()
 BHaH.general_relativity.diagnostics_volume_integration.register_CFunction_diagnostics_volume_integration()
@@ -282,15 +283,17 @@ BHaH.griddata_commondata.register_CFunction_griddata_free(
     enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True
 )
 
-if enable_intrinsics:
-    copy_files(
-        package="nrpy.helpers",
-        filenames_list=[
-            f"{'cuda' if parallelization == 'cuda' else 'simd'}_intrinsics.h"
-        ],
-        project_dir=project_dir,
-        subdirectory="intrinsics",
-    )
+# SIMD intrinsics needed for 3D interpolation, constraints evaluation, etc.
+intrinsics_file_list = ["simd_intrinsics.h"]
+if parallelization == "cuda":
+    # CUDA intrinsics needed for CUDA-enabled projects.
+    intrinsics_file_list += ["cuda_intrinsics.h"]
+copy_files(
+    package="nrpy.helpers",
+    filenames_list=intrinsics_file_list,
+    project_dir=project_dir,
+    subdirectory="intrinsics",
+)
 
 BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,

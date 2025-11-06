@@ -14,7 +14,6 @@ Author: Zachariah B. Etienne
 
 import argparse
 import os
-
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
@@ -392,17 +391,14 @@ BHaH.griddata_commondata.register_CFunction_griddata_free(
     enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True
 )
 
+# SIMD intrinsics needed for 3D interpolation, constraints evaluation, etc.
+intrinsics_file_list = ["simd_intrinsics.h"]
 if parallelization == "cuda":
-    copy_files(
-        package="nrpy.helpers",
-        filenames_list=["cuda_intrinsics.h"],
-        project_dir=project_dir,
-        subdirectory="intrinsics",
-    )
-# Needed for 3D interpolation
+    # CUDA intrinsics needed for CUDA-enabled projects.
+    intrinsics_file_list += ["cuda_intrinsics.h"]
 copy_files(
     package="nrpy.helpers",
-    filenames_list=["simd_intrinsics.h"],
+    filenames_list=intrinsics_file_list,
     project_dir=project_dir,
     subdirectory="intrinsics",
 )

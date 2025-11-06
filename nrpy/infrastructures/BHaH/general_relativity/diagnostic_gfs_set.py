@@ -28,7 +28,7 @@ import nrpy.params as par
 
 
 def register_CFunction_diagnostic_gfs_set(
-    enable_interp_diagnostics: bool, enable_psi4: bool
+    enable_interp_diagnostics: bool, enable_psi4: bool, enable_T4munu: bool = False
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Construct and register a C function that populates per-grid diagnostic arrays used by interpolation and integration routines.
@@ -46,6 +46,7 @@ def register_CFunction_diagnostic_gfs_set(
                                       diagnostic; if False, skip that step.
     :param enable_psi4:              If True, include additional waveform-related diagnostic channels
                                       in the registration; if False, omit them.
+    :param enable_T4munu:            If True, copy latest T4munu to DIAG_T4UU gridfunctions.
     :return: None if in registration phase, else the updated NRPy environment.
     :raises ValueError: If a diagnostics gridfunction's parity type cannot be inferred from its name.
 
@@ -78,6 +79,15 @@ def register_CFunction_diagnostic_gfs_set(
         dimension=3,
         group="DIAG",
     )
+    if enable_T4munu:
+        gri.register_gridfunctions_for_single_rank2(
+            "DIAG_T4UU",
+            desc="Stress_energy_tensor_component_T4UU",
+            symmetry="sym01",
+            dimension=4,
+            group="DIAG",
+        )
+
     diag_gf_parity_types = gri.BHaHGridFunction.set_parity_types(
         sorted([v.name for v in gri.glb_gridfcs_dict.values() if v.group == "DIAG"])
     )

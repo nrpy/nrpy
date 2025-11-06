@@ -173,6 +173,13 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
       // Copy solution to host
       for(int gf=0;gf<NUM_EVOL_GFS;gf++)
         cpyDevicetoHost__gf(commondata, params, griddata[grid].gridfuncs.y_n_gfs, griddata_device[grid].gridfuncs.y_n_gfs, gf,gf, streamid);
+#ifdef T4UU00GF
+      for(int gf=0;gf<10;gf++) {{
+        const int idx0_host = IDX4pt(DIAG_T4UU00GF + gf, 0), idx0_device = IDX4pt(T4UU00GF + gf, 0);
+        cpyDevicetoHost__gf(commondata, params, &diagnostic_gfs[grid][idx0_host], &griddata_device[grid].gridfuncs.auxevol_gfs[idx0_device],
+                            idx0_host, idx0_device, streamid);
+      }}
+#endif // T4UU00GF
       // Sync data before attempting to write to file
       cudaStreamSynchronize(streams[streamid]);
 #endif // __CUDACC__

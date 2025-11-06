@@ -56,17 +56,21 @@ def register_CFunction_constraints_eval(
         + ("_T4munu" if enable_T4munu else "")
     ]
     expr_list = [Bcon.H, Bcon.Msquared]
-    loop_body = ccg.c_codegen(
-        expr_list,
-        [
-            "diagnostic_gfs[IDX4(DIAG_HAMILTONIANGF, i0, i1, i2)]",
-            "diagnostic_gfs[IDX4(DIAG_MSQUAREDGF, i0, i1, i2)]",
-        ],
-        enable_fd_codegen=True,
-        enable_simd=True,
-        enable_fd_functions=enable_fd_functions,
-        rational_const_alias="static const",
-    ).replace("auxevol_gfs[IDX4(RBARDD", "diagnostic_gfs[IDX4(DIAG_RBARDD")
+    loop_body = (
+        ccg.c_codegen(
+            expr_list,
+            [
+                "diagnostic_gfs[IDX4(DIAG_HAMILTONIANGF, i0, i1, i2)]",
+                "diagnostic_gfs[IDX4(DIAG_MSQUAREDGF, i0, i1, i2)]",
+            ],
+            enable_fd_codegen=True,
+            enable_simd=True,
+            enable_fd_functions=enable_fd_functions,
+            rational_const_alias="static const",
+        )
+        .replace("auxevol_gfs[IDX4(RBARDD", "diagnostic_gfs[IDX4(DIAG_RBARDD")
+        .replace("auxevol_gfs[IDX4(T4UU", "diagnostic_gfs[IDX4(DIAG_T4UU")
+    )
     body = BHaH.simple_loop.simple_loop(
         loop_body=loop_body,
         loop_region="interior",
