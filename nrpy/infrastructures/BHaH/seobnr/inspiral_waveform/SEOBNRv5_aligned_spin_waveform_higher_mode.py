@@ -87,6 +87,7 @@ const REAL m1 = commondata->m1;
 const REAL m2 = commondata->m2;
 const REAL chi1 = commondata->chi1;
 const REAL chi2 = commondata->chi2;
+const REAL c_N = commondata->c_N;
 const REAL phi = dynamics[PHI];
 const REAL pphi = dynamics[PPHI];
 const REAL Hreal = dynamics[H];

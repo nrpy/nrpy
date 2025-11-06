@@ -70,8 +70,9 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             self.Hreal,
             self.Omega,
             self.Omega_circ,
+            self.c_N
         ) = sp.symbols(
-            "m1 m2 r phi prstar pphi chi1 chi2 Hreal Omega Omega_circ", real=True
+            "m1 m2 r phi prstar pphi chi1 chi2 Hreal Omega Omega_circ c_N", real=True
         )
         self.rho = {}
         for l in range(2, 9):

@@ -48,6 +48,7 @@ const REAL m1 = ((commondata_struct *restrict) params)->m1;
 const REAL m2 = ((commondata_struct *restrict) params)->m2;
 const REAL chi1 = ((commondata_struct *restrict) params)->chi1;
 const REAL chi2 = ((commondata_struct *restrict) params)->chi2;
+const REAL c_N = ((commondata_struct *restrict) params)->c_N;
 const REAL prstar = y[2];
 const REAL pphi = y[3];
 """

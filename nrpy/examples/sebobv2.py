@@ -320,6 +320,7 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
 #include<complex.h>
 #define COMPLEX double complex
 #define NUMVARS 8
+#define c_N 0
 #define TIME 0
 #define FREQ 0
 #define R 1
