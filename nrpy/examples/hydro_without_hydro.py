@@ -154,6 +154,11 @@ BHaH.diagnostics.diagnostics.register_all_diagnostics(
     enable_free_auxevol=False,
     enable_psi4_diagnostics=False,
 )
+BHaH.general_relativity.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
+    enable_interp_diagnostics=False, enable_psi4=False
+)
+BHaH.general_relativity.diagnostics_nearest.register_CFunction_diagnostics_nearest()
+BHaH.general_relativity.diagnostics_volume_integration.register_CFunction_diagnostics_volume_integration()
 if enable_rfm_precompute:
     BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
         set_of_CoordSystems=set_of_CoordSystems,
