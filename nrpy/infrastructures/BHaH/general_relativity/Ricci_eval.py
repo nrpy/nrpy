@@ -51,9 +51,7 @@ def register_CFunction_Ricci_eval(
     if host_only_version:
         # Must reset parallelization parameter, as simple_loop reads the parallelization NRPyParameter.
         par.set_parval_from_str("parallelization", "openmp")
-    if orig_parallelization == "openmp":
-        host_only_version = True
-    is_cuda = not host_only_version
+    is_cuda = orig_parallelization == "cuda" and not host_only_version
 
     Bq = BSSN_quantities[CoordSystem + "_rfm_precompute"]
 
