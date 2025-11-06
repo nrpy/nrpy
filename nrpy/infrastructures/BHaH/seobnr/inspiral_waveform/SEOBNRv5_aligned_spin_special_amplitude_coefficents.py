@@ -17,8 +17,10 @@ import nrpy.c_function as cfc
 import nrpy.equations.seobnr.SEOBNRv5_aligned_spin_waveform_quantities as SEOBNRv5_wf
 import nrpy.helpers.parallel_codegen as pcg
 
-def register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients() -> (Union[None, pcg.NRPyEnv_type]):
 
+def register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients() -> (
+    Union[None, pcg.NRPyEnv_type]
+):
     """
     Register C function for computing and applying "special" amplitude coefficients needed for (2,1), (4,3), and (5,5) modes.
 
@@ -90,7 +92,3 @@ rhos[RHO55 - 1] = rho55;
         body=body,
     )
     return pcg.NRPyEnv()
-
-
-
-
