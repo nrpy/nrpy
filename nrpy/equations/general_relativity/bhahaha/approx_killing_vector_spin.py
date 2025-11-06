@@ -1,17 +1,24 @@
-# akv_spin_bhahaha.py
-# Single-pass integrands for:
-#   (1) Approximate Killing Vector (AKV) spin axis on an AH
-#   (2) Spin magnitude components J_m once the axis is chosen
-#
-# Public API:
-#   - sqrtq : scalar surface element sqrt(det q_AB)
-#   - Hmn_integrand[3][3] : AKV quadratic-form integrands (symmetric)
-#   - Nmn_integrand[3][3] : AKV normalization-form integrands (symmetric)
-#   - Jm_integrand[3]     : spin integrands per rigid-rotation basis direction
-#
-# Note: The global 1/(8*pi) prefactor for J is applied by the caller during surface integration.
+# equations/general_relativity/bhahaha/approx_killing_vector_spin.py
+"""
+Single-pass integrands for:
+ (1) Approximate Killing Vector (AKV) spin axis on an AH
+ (2) Spin magnitude components J_m once the axis is chosen
 
-# Author: Wesley Inselman
+Public API:
+ - sqrtq : scalar surface element sqrt(det q_AB)
+ - Hmn_integrand[3][3] : AKV quadratic-form integrands (symmetric)
+ - Nmn_integrand[3][3] : AKV normalization-form integrands (symmetric)
+ - Jm_integrand[3]     : spin integrands per rigid-rotation basis direction
+
+Note: The global 1/(8*pi) prefactor for J is applied by the caller during surface integration.
+
+Sources:
+ - BHaHAHA (https://arxiv.org/abs/2505.15912)
+ - QuasiLocalMeasures docs (https://einsteintoolkit.org/thornguide/EinsteinAnalysis/QuasiLocalMeasures/documentation.html)
+ - QuasiLocalMeasures source code (https://bitbucket.org/einsteintoolkit/einsteinanalysis)
+
+Author: Wesley Inselman
+"""
 
 from typing import Dict, List, cast
 import sympy as sp
