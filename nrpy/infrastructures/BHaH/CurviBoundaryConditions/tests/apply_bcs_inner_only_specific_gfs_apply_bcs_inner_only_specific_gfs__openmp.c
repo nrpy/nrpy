@@ -12,7 +12,7 @@
  * boundary points ("inner maps to outer").
  */
 void apply_bcs_inner_only_specific_gfs(const commondata_struct *restrict commondata, const params_struct *restrict params,
-                                       const bc_struct *restrict bcstruct, REAL *restrict gfs, const int num_gfs, const int *gf_parities,
+                                       const bc_struct *restrict bcstruct, REAL *restrict gfs, const int num_gfs, const int8_t *gf_parities,
                                        const int *gfs_to_sync) {
   // Unpack bc_info from bcstruct
   const bc_info_struct *bc_info = &bcstruct->bc_info;
