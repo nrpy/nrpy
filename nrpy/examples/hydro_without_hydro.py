@@ -10,7 +10,6 @@ Author: Leonardo Rosa Werneck
 """
 
 import argparse
-
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
@@ -37,25 +36,11 @@ parser.add_argument(
     help="Floating point precision (e.g. float, double).",
     default="double",
 )
-parser.add_argument(
-    "--disable_intrinsics",
-    action="store_true",
-    help="Flag to disable hardware intrinsics",
-    default=False,
-)
-parser.add_argument(
-    "--disable_rfm_precompute",
-    action="store_true",
-    help="Flag to disable RFM precomputation.",
-    default=False,
-)
 args = parser.parse_args()
 
 # Code-generation-time parameters:
 fp_type = args.floating_point_precision.lower()
 parallelization = args.parallelization.lower()
-enable_intrinsics = not args.disable_intrinsics
-enable_rfm_precompute = not args.disable_rfm_precompute
 
 if parallelization not in ["openmp", "cuda"]:
     raise ValueError(
@@ -89,6 +74,8 @@ separate_Ricci_and_BSSN_RHS = True
 enable_parallel_codegen = True
 enable_fd_functions = True
 enable_KreissOliger_dissipation = False
+enable_rfm_precompute = True  # WIP: Will remove; for ease of maintenance we are no longer supporting disabled
+enable_intrinsics = True  # WIP: Will remove; for ease of maintenance we are no longer supporting disabled
 enable_CAKO = True
 enable_T4munu = True
 boundary_conditions_desc = "outgoing radiation"
@@ -125,7 +112,7 @@ if parallelization == "cuda":
 
 BHaH.general_relativity.TOVola.TOVola_interp.register_CFunction_TOVola_interp()
 BHaH.general_relativity.TOVola.TOVola_solve.register_CFunction_TOVola_solve()
-BHaH.general_relativity.BSSN.initial_data.register_CFunction_initial_data(
+BHaH.general_relativity.initial_data.register_CFunction_initial_data(
     CoordSystem=CoordSystem,
     IDtype=IDtype,
     IDCoordSystem="Spherical",
@@ -157,26 +144,21 @@ BHaH.numerical_grids_and_timestep.register_CFunctions(
     enable_CurviBCs=True,
 )
 
-BHaH.general_relativity.BSSN.diagnostics.register_CFunction_diagnostics(
+BHaH.diagnostics.diagnostics.register_all_diagnostics(
+    project_dir=project_dir,
     set_of_CoordSystems=set_of_CoordSystems,
     default_diagnostics_out_every=diagnostics_output_every,
+    enable_nearest_diagnostics=True,
+    enable_interp_diagnostics=False,
+    enable_volume_integration_diagnostics=True,
+    enable_free_auxevol=False,
     enable_psi4_diagnostics=False,
-    grid_center_filename_tuple=("out0d-conv_factor%.2f.txt", "convergence_factor"),
-    axis_filename_tuple=(
-        "out1d-AXIS-conv_factor%.2f-t%08.4f.txt",
-        "convergence_factor, time",
-    ),
-    plane_filename_tuple=(
-        "out2d-PLANE-conv_factor%.2f-t%08.4f.txt",
-        "convergence_factor, time",
-    ),
-    out_quantities_dict="default",
 )
 if enable_rfm_precompute:
     BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
         set_of_CoordSystems=set_of_CoordSystems,
     )
-BHaH.general_relativity.BSSN.rhs_eval.register_CFunction_rhs_eval(
+BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
@@ -190,25 +172,29 @@ BHaH.general_relativity.BSSN.rhs_eval.register_CFunction_rhs_eval(
     OMP_collapse=OMP_collapse,
 )
 if separate_Ricci_and_BSSN_RHS:
-    BHaH.general_relativity.BSSN.Ricci_eval.register_CFunction_Ricci_eval(
+    BHaH.general_relativity.Ricci_eval.register_CFunction_Ricci_eval(
         CoordSystem=CoordSystem,
-        enable_rfm_precompute=enable_rfm_precompute,
         enable_intrinsics=enable_intrinsics,
         enable_fd_functions=enable_fd_functions,
         OMP_collapse=OMP_collapse,
     )
-BHaH.general_relativity.BSSN.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
+    if parallelization == "cuda":
+        BHaH.general_relativity.Ricci_eval.register_CFunction_Ricci_eval(
+            CoordSystem=CoordSystem,
+            enable_intrinsics=enable_intrinsics,
+            enable_fd_functions=enable_fd_functions,
+            OMP_collapse=OMP_collapse,
+            host_only_version=True,
+        )
+BHaH.general_relativity.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
-BHaH.general_relativity.BSSN.constraints.register_CFunction_constraints_eval(
+BHaH.general_relativity.constraints_eval.register_CFunction_constraints_eval(
     CoordSystem=CoordSystem,
-    enable_rfm_precompute=enable_rfm_precompute,
-    enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
     enable_T4munu=enable_T4munu,
-    enable_intrinsics=enable_intrinsics,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
@@ -258,6 +244,9 @@ par.adjust_CodeParam_default("t_final", t_final)
 if CoordSystem == "SinhSpherical":
     par.adjust_CodeParam_default("SINHW", 0.4)
 
+BHaH.diagnostics.diagnostic_gfs_h_create.diagnostics_gfs_h_create(
+    project_dir=project_dir
+)
 BHaH.CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
 BHaH.CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
 BHaH.cmdline_input_and_parfiles.generate_default_parfile(

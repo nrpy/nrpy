@@ -14,7 +14,6 @@ Author: Zachariah B. Etienne
 
 import argparse
 import os
-
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
@@ -99,8 +98,8 @@ fd_order = 8
 radiation_BC_fd_order = 4
 separate_Ricci_and_BSSN_RHS = True
 enable_parallel_codegen = True
-enable_rfm_precompute = True
-enable_intrinsics = True
+enable_rfm_precompute = True  # WIP: Will remove; for ease of maintenance we are no longer supporting disabled
+enable_intrinsics = True  # WIP: Will remove; for ease of maintenance we are no longer supporting disabled
 enable_fd_functions = True
 boundary_conditions_desc = "outgoing radiation"
 
