@@ -11,7 +11,7 @@ from typing import List, Tuple
 
 import sympy as sp
 
-# NRPy+: This module depends on the parameter EvolvedConformalFactor_cf,
+# NRPy: This module depends on the parameter EvolvedConformalFactor_cf,
 #        which is defined in BSSN.BSSN_quantities
 import nrpy.equations.general_relativity.BSSN_quantities  # pylint: disable=unused-import
 import nrpy.indexedexp as ixp
