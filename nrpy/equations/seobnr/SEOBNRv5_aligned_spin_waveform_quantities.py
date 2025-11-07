@@ -70,9 +70,12 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             self.Hreal,
             self.Omega,
             self.Omega_circ,
-            self.c_N,
+            self.c_43,
+            self.c_21,
+            self.c_55,
         ) = sp.symbols(
-            "m1 m2 r phi prstar pphi chi1 chi2 Hreal Omega Omega_circ c_N", real=True
+            "m1 m2 r phi prstar pphi chi1 chi2 Hreal Omega Omega_circ c_43 c_21 c_55",
+            real=True,
         )
         self.rho = {}
         for l in range(2, 9):
@@ -706,6 +709,7 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
                 + f2r(1.25) * self.vomega**6
                 + -f2r(35.7) * self.vomega**8
             )
+            + (self.c_55 * self.vomega**11)
         )
         self.rho["(5 , 4)"] = (
             1
@@ -800,6 +804,7 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
                 + -f2r(3.69) * self.vomega**6
                 + f2r(18.5) * self.vomega**8
             )
+            + (self.c_43 * self.vomega**9)
         )
         self.rho["(4 , 4)"] = (
             1
@@ -1155,6 +1160,7 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
                 + f2r(26.5) * self.vomega**8
                 + 80 * self.vomega**10
             )
+            + (self.c_21 * self.vomega**11)
         )
         self.Y = [
             [f2r(0), f2r(0), f2r(0), f2r(0), f2r(0), f2r(0), f2r(0), f2r(0), f2r(0)],
