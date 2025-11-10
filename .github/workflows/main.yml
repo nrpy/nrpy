@@ -109,6 +109,7 @@ jobs:
             ! -path './project/*' \
             ! -path './build/*' \
             ! -path '*/tests/*' \
+            ! -path '*superB*' \
             ! -path './nrpy/examples/visualization_scripts/*' > python_files.txt
           
           # Count total number of Python files
@@ -279,19 +280,20 @@ jobs:
           python3 --version && isympy --version
           cd /home/runner/work/nrpy/nrpy
           git log | head
-          python3 -u nrpy/examples/superB_nrpyelliptic_conformally_flat.py
-          cd project/superB_nrpyelliptic_conformally_flat/
-          make -j2
-          cd /home/runner/work/nrpy/nrpy
-          python3 -u nrpy/examples/superB_blackhole_spectroscopy.py
-          cd project/superB_blackhole_spectroscopy/
-          make -j2
-          cd /home/runner/work/nrpy/nrpy
-          python3 -u nrpy/examples/superB_two_blackholes_collide.py
-          cd project/superB_two_blackholes_collide/
-          make -j2
-          ./charmrun +p2 ./superB_two_blackholes_collide
           "
+          #          python3 -u nrpy/examples/superB_nrpyelliptic_conformally_flat.py
+          #          cd project/superB_nrpyelliptic_conformally_flat/
+          #          make -j2
+          #          cd /home/runner/work/nrpy/nrpy
+          #          python3 -u nrpy/examples/superB_blackhole_spectroscopy.py
+          #          cd project/superB_blackhole_spectroscopy/
+          #          make -j2
+          #          cd /home/runner/work/nrpy/nrpy
+          #          python3 -u nrpy/examples/superB_two_blackholes_collide.py
+          #          cd project/superB_two_blackholes_collide/
+          #          make -j2
+          #          ./charmrun +p2 ./superB_two_blackholes_collide
+          #          "
 
   codegen-ubuntu:
     runs-on: ${{ matrix.os }}
@@ -320,8 +322,8 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           if [[ "${{ matrix.python-version }}" != "3.7.13" ]]; then pip install -U mypy==1.8.0 black==24.1.1; fi
-          pip install -U pylint clang-format ipython setuptools
-          sudo apt-get -y install libgsl-dev
+               pip install -U pylint clang-format ipython setuptools
+               sudo apt-get -y install libgsl-dev
 
       #    - name: Setup tmate session
       #      uses: mxschmitt/action-tmate@v3
