@@ -44,10 +44,15 @@ def register_CFunction_psi4(
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
+    orig_parallelization = par.parval_from_str("parallelization")
+    par.set_parval_from_str("parallelization", "openmp")
 
     # Set up the C function for psi4
-    parallelization = par.parval_from_str("parallelization")
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    includes = [
+        "BHaH_defines.h",
+        "diagnostics/diagnostic_gfs.h",
+        "intrinsics/simd_intrinsics.h",
+    ]
 
     desc = "Compute psi4 at all interior gridpoints"
     name = "psi4"
@@ -58,7 +63,7 @@ def register_CFunction_psi4(
         "x1": "const REAL *restrict",
         "x2": "const REAL *restrict",
         "in_gfs": "const REAL *restrict",
-        "diagnostic_output_gfs": "REAL *restrict",
+        "diagnostic_gfs": "REAL *restrict",
     }
 
     arg_dict_host = {
@@ -66,9 +71,7 @@ def register_CFunction_psi4(
         **arg_dict_cuda,
     }
 
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], const REAL *restrict in_gfs, REAL *restrict diagnostic_output_gfs"
-
-    gri.register_gridfunctions(["psi4_re", "psi4_im"], group="AUX")
+    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], const REAL *restrict in_gfs, REAL *restrict diagnostic_gfs"
 
     psi4_class = psi4.Psi4(CoordSystem=CoordSystem, enable_rfm_precompute=False)
     body = r"""if(! (params->Cart_originx == 0 && params->Cart_originy == 0 && params->Cart_originz == 0) ) {
@@ -86,11 +89,11 @@ def register_CFunction_psi4(
     param_symbols, _ = get_params_commondata_symbols_from_expr_list(
         expr_list, exclude=[f"xx{j}" for j in range(3)]
     )
-    loop_params = parallel_utils.get_loop_parameters(parallelization)
+    loop_params = parallel_utils.get_loop_parameters("openmp")
 
     params_definitions = generate_definition_header(
         param_symbols,
-        var_access=parallel_utils.get_params_access(parallelization),
+        var_access=parallel_utils.get_params_access("openmp"),
     )
     kernel_body = f"{loop_params}\n{params_definitions}\n"
 
@@ -148,12 +151,12 @@ MAYBE_UNUSED REAL {psi4_class.metric_deriv_var_list_str};
             expr_list,
             [
                 gri.BHaHGridFunction.access_gf(
-                    "psi4_re",
-                    gf_array_name="diagnostic_output_gfs",
+                    "diag_psi4_re",
+                    gf_array_name="diagnostic_gfs",
                 ),
                 gri.BHaHGridFunction.access_gf(
-                    "psi4_im",
-                    gf_array_name="diagnostic_output_gfs",
+                    "diag_psi4_im",
+                    gf_array_name="diagnostic_gfs",
                 ),
             ],
             enable_fd_codegen=True,
@@ -168,10 +171,10 @@ MAYBE_UNUSED REAL {psi4_class.metric_deriv_var_list_str};
 
     prefunc, launch_body = parallel_utils.generate_kernel_and_launch_code(
         name,
-        kernel_body.replace("SIMD", "CUDA" if parallelization == "cuda" else "SIMD"),
+        kernel_body,
         arg_dict_cuda,
         arg_dict_host,
-        parallelization=parallelization,
+        parallelization="openmp",
         comments=desc,
         cfunc_type=cfunc_type,
         launchblock_with_braces=False,
@@ -181,6 +184,8 @@ MAYBE_UNUSED REAL {psi4_class.metric_deriv_var_list_str};
     body = launch_body
     for i in range(3):
         body = body.replace(f"x{i}", f"xx[{i}]")
+
+    par.set_parval_from_str("parallelization", orig_parallelization)
 
     cfc.register_CFunction(
         prefunc=psi4_metric_deriv_kernel + psi4_tetrad_kernel + prefunc,

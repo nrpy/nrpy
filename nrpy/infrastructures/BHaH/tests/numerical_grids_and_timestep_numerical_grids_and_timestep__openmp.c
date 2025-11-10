@@ -28,7 +28,7 @@ void numerical_grids_and_timestep(commondata_struct *restrict commondata, gridda
     griddata_host[grid].params.is_host = true;
 #endif // __CUDACC__
     grid++;
-  } // END independent grid setup.
+  } // END independent grid setup
 
   // This populates griddata_host->xx, which (if rfm_precompute is enabled) is needed for host-side rfm_precompute_defines.
   IFCUDARUN(cpyDevicetoHost__grid(commondata, griddata_host, griddata); BHAH_DEVICE_SYNC(););

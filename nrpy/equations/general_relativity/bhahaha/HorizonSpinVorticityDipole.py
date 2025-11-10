@@ -1,92 +1,119 @@
-# -*- coding: utf-8 -*-
+# equations/general_relativity/bhahaha/HorizonSpinVorticityDipole.py
+
 """
-HorizonSpinVorticityDipole.py.
----------------------------------------
+NRPy module for Owen et al's vorticity-dipole-based black hole spin diagnostics.
 
-Symbolic NRPy construction of single-pass integrands on a closed 2-surface S
-for the Cartesian spin components J^a using the Owen identity and
-reference-metric infrastructure. Everything is built on the surface F=0 from
-the outset (no post-hoc substitutions).
+Reference: Owen et al, arXiv:1708.07325v2
 
-This version keeps runtime behavior identical but improves and clarifies
-documentation, with explicit links to the notation used in Owen et al.,
-"Black Hole Spin Axis in Numerical Relativity" (2017): arXiv:1708.07325v2
+Goals:
+  * Provide symbolic, single-pass integrands on the apparent horizon for:
+      - Vorticity-dipole spin-axis vector:
+            N^i = ∮ Omega * x^i dA
+      - Quasilocal angular-momentum vector:
+            J^i = (1/(8*pi)) ∮ omega_i * phi^i[X^a] dA
+    where:
+      - Omega is the curvature (2D curl) of the normal-bundle connection,
+      - omega_i is constructed from K_ij and s^i following Owen et al.,
+      - phi^i[X^a] are rotation generators built from background Cartesian
+        scalars X^a, tangent to the horizon.
 
-Mathematical summary
----------------------------------
-Objects live on a spatial slice with physical 3-metric gamma_ij and
-extrinsic curvature K_ij (ADM/BSSN). Let S be the closed 2-surface defined
-as the level set F=0 with unit normal s^i (spatial). Define the tangential
-projector:
-    q_i^j = delta_i^j - s_i s^j .
+  * Enforce:
+      - No SymPy .subs() or simplify() calls.
+      - All indexed quantities via nrpy.indexedexp.
+      - All FD-like derivatives named using "*_dD".
+      - Use reference_metric.reference_metric.
+      - Public interface minimal and focused on C code generation.
+      - All per-point integrands depend only on:
+            { h, h_dD, h_dDD, hDD, hDD_dD,
+              W, W_dD, aDD, trK }
+        plus reference-metric data and standard constants.
+      - Spin axis integrals computable in a single pass.
+      - Spin magnitude integrals computable in a single pass (may be separate).
+      - No requirement for additional horizon-only gridfunctions computed
+        in separate preprocessing passes; any derivatives beyond the given
+        list appear only as symbolic "var_dD" placeholders that the
+        C layer may fill directly from volume data as needed.
 
-Owen et al. (and Brown-York) introduce a tangential "momentum density"
-one-form omega_A on S. Restricted to spatial indices and projected tangent
-to S, the trace term drops out and we obtain (see their Sec. 2):
-    omega_i = q_i^p K_pq s^q .
+Key choices (physics and implementation):
 
-Because different codes adopt different sign conventions for K_ij, we make
-that choice explicit and configurable:
-    omega_i = (K_sign) * q_i^p K_pq s^q ,
-where K_sign = +1 matches the Owen/Brown-York convention if your K_ij
-matches theirs; choose K_sign = -1 to compensate for the opposite global
-sign in your stored K_ij.
+  * Level set:
+        F(r,theta,phi) = r - h(theta,phi) = 0
+    in Spherical reference-metric coordinates xx[0]=r, xx[1]=theta, xx[2]=phi.
 
-Let epsilon^{ijk} be the 3D Levi-Civita tensor density with upper indices
-(constructed here from sqrt(det gamma)). Given a Cartesian scalar X^a in
-{ x, y, z }, the associated coordinate-rotation generator tangent to S is
-computed without Christoffels as
-    phi^i[X^a] = epsilon^{ijk} s_j d_k X^a ,
-where d_k X^a are partial derivatives of the Cartesian scalars with respect
-to the reference-metric coordinates, all evaluated directly on S.
+  * Physical 3-metric:
+        gammabar_ij = hDD_ij * ReDD_ij + ghat_ij
+        gamma_ij    = gammabar_ij / W^2       (W = e^{-2phi})
 
-The quasilocal angular momentum densities for the three Cartesian axes are
-then
-    J_a_density = (1/(8*pi)) * omega_i * phi^i[X^a] ,  a in {x,y,z} .
+  * Horizon unit normal:
+        s_i ∝ ∂_i F,
+        s^i = gamma^{ij} ∂_j F / lambda,
+        lambda^2 = gamma^{ij} ∂_i F ∂_j F.
+    Orientation "outward" vs "inward" is configurable; the final
+    omega_i * phi^i and Omega * x^i are invariant under s^i -> -s^i.
 
-Optional Omega curvature of the normal bundle
----------------------------------------------
-Owen et al. also use
-    Omega := epsilon^{AB} D_A omega_B ,
-which equals (in 3D index notation with projections)
-    Omega = epsilon^{ijk} s_i q_j^p q_k^q (nabla_p omega_q) .
-On a closed S and for any scalar zeta with phi_A[zeta] = epsilon_A^B D_B zeta,
-the following identity holds (integration by parts, no boundary term):
-    integral_S (omega_A phi^A[zeta]) dA = integral_S (zeta * Omega) dA .
-This module provides a helper to assemble Omega from a supplied covariant
-derivative tensor nabla_p omega_q, so you can compare (1/(8*pi)) * omega.phi
-densities to (1/(8*pi)) * zeta * Omega without constructing Christoffels here.
+  * Extrinsic curvature (BSSN input):
+        Abar_ij = aDD_ij * ReDD_ij
+        K_ij    = (1/W^2) Abar_ij + (1/3) gamma_ij trK
 
-Boost gauge and orientation notes
----------------------------------
-Under a boost of the null normals adapted to S, omega_A -> omega_A - D_A a.
-The scalar Omega is boost invariant. Flipping the surface normal s^i -> -s^i
-flips both omega and phi, leaving omega.phi unchanged, so J_a_density is
-independent of the choice "outward" vs "inward" up to the overall sign choice
-you control via normal_orientation.
+  * Horizon vorticity one-form:
+        omega_i = q_i^p K_pq s^q
+    with q_i^j = delta_i^j - s_i s^j the tangential projector.
+    The trace term drops out after projection; we encode an explicit
+    K_sign to reconcile global sign conventions of K_ij.
 
-Construction strategy
----------------------
-This module does not build expressions in the 3D bulk and then substitute
-r -> h(theta,phi). Instead, background quantities with r-dependence (flat
-spherical reference metric ghat_ij, "rescaling" Re_ij, and d(Cart^a)/d(rfm^k))
-are constructed directly on the surface r == h(theta,phi). Thus every
-contraction is intrinsically on S and we never call .subs.
+  * Rotation generators (Owen et al.):
+    For each Cartesian scalar X^a in {x,y,z}, define:
+        phi^i[X^a] = epsilon^{ijk} s_j ∂_k X^a
+    using the 3D Levi-Civita tensor built from det(gamma), ensuring
+    tangentiality and covariance. The quasilocal spin component is:
+        J_a = (1/(8*pi)) ∮ omega_i phi^i[X^a] dA.
 
-Public members
---------------
-* JCart_densU[a] : (1/(8*pi)) * (omega_i * phi^i[X^a]) for a = 0:x,1:y,2:z.
-* J_about_axis(nU): scalar spin density about a constant Cartesian axis n^a.
-* Omega_scalar_from_covDomega(covD_omegaD): builds Omega from nabla_p omega_q.
-* omega_moment_density_from_zeta(zeta, covD_omegaD): returns (1/(8*pi)) * zeta * Omega.
+  * Normal-bundle curvature scalar:
+        Omega = epsilon^{AB} D_A omega_B
+    is best computed from 2D derivatives on the surface. To keep this
+    module single-pass compatible and independent of a specific FD
+    stencil, we:
+      - Define Omega through a 3D-projected covariant curl expression,
+        expecting inputs nabla_p omega_q as "omegaD_covD_pq" if users
+        wish to build it explicitly; and
+      - Provide a direct Omega-x^i integrand helper that can be used once
+        Omega is available as a gridfunction built from volume data.
 
-Configuration parameters
-------------------------
-* CoordSystem: reference-metric chart; must be "Spherical".
-* enable_rfm_precompute: reuse the rfm precompute variant (coords only).
-* K_input: "BSSN" (rebuild K_ij from aDD, trK, W) or "external" (supply K_ij).
-* normal_orientation: "outward" or "inward".
-* K_sign: +1 or -1 to reconcile extrinsic-curvature sign conventions.
+    This keeps the interface consistent with the allowed primitive
+    variables and avoids forcing extra horizon-surface passes here.
+
+Public interface (minimal):
+
+  * JCart_densU[3]:
+        Per-point densities:
+            JCart_densU[a] = (1/(8*pi)) * omega_i * phi^i[X^a]
+        for a = 0:x,1:y,2:z. These are to be integrated with the
+        existing area element and quadrature weights in BHaHAHA.
+
+  * Omega_xCart_densU(Omega_sym)[3]:
+        Method returning:
+            (Omega_sym * X^a)
+        per axis, to be multiplied by dA externally.
+        Omega_sym is a SymPy symbol or expression representing Omega
+        in terms of primitives. This keeps Omega construction flexible
+        while supporting single-pass dipole integrals.
+
+  * J_about_axis(nU)[0]:
+        Given a constant axis n^a, returns the scalar density
+            (1/(8*pi)) * omega_i * phi^i[zeta]
+        with zeta = n·X, normalized n.
+
+  * Omega_from_covDomega(covD_omegaD):
+        Helper constructing scalar Omega from supplied covariant
+        derivative nabla_p omega_q via 3D-to-2D projection:
+            Omega = epsilon^{ijk} s_i q_j^p q_k^q (nabla_p omega_q).
+
+Usage notes:
+
+  * All expressions are built in Spherical reference-metric coordinates.
+  * This module does not perform any FD differentiation itself; symbols
+    like "hDD_dD" or "omegaD_covD" are declared and may be populated
+    by generated C code using volume-level data in a single pass.
 
 Authors: Ralston Graves
          Zachariah B. Etienne
@@ -103,38 +130,20 @@ import nrpy.reference_metric as refmetric
 
 class HorizonSpinVorticityDipoleClass:
     """
-    Build symbolic single-pass integrands for J on S: {F=0}.
+    Symbolic construction of vorticity-dipole and quasilocal-spin integrands.
 
-    Parameters
-    ----------
-    CoordSystem : str
-        Reference-metric chart; must be "Spherical".
-    enable_rfm_precompute : bool
-        If True, use the precompute variant of the reference metric (for coords only).
-    K_input : {"BSSN","external"}
-        If "BSSN", reconstruct K_ij from aDD, trK, and W;
-        if "external", accept physical K_ij directly via KDD.
-    normal_orientation : {"outward","inward"}
-        Orientation choice for s^i; inward flips signs of s^i and s_i.
-    K_sign : {+1,-1}
-        Global sign to reconcile K_ij convention. We implement
-            omega_i = (K_sign) * q_i^p K_pq s^q .
-        Set K_sign=+1 to match Owen/Brown-York if your K_ij matches their sign.
-        Set K_sign=-1 if your stored K_ij has the opposite sign.
+    Assumptions: a horizon defined by F(r,theta,phi) = r - h(theta,phi) = 0
+    in a Spherical reference-metric chart.
 
-    Public interface
-    ----------------
-    * JCart_densU[a] : (1/(8*pi)) * (omega_i phi^i[X^a]) for a in {0,1,2}.
-    * J_about_axis(nU) -> (J_density_expr, nU_unit)
-      Scalar spin density for a constant axis n^a (normalized).
-    * Omega_scalar_from_covDomega(covD_omegaD) -> Omega
-      Given covariant derivatives nabla_p omega_q, form
-          Omega = epsilon^{ijk} s_i q_j^p q_k^q (nabla_p omega_q) .
-      No Christoffels are built internally.
-    * omega_moment_density_from_zeta(zeta, covD_omegaD) -> (1/(8*pi)) * zeta * Omega
+    Configuration parameters:
+      CoordSystem        : must be "Spherical".
+      enable_rfm_precompute : use precompute variant of reference metric.
+      K_input            : "BSSN" or "external".
+                            - "BSSN": K_ij built from aDD, trK, W.
+                            - "external": K_ij provided directly as KDD.
+      normal_orientation : "outward" or "inward" (flip s^i).
+      K_sign             : +1 or -1; reconciles K_ij sign conventions.
     """
-
-    # -------------------- ctor --------------------
 
     def __init__(
         self,
@@ -144,6 +153,7 @@ class HorizonSpinVorticityDipoleClass:
         normal_orientation: str = "outward",
         K_sign: int = +1,
     ):
+        # Basic validation
         if CoordSystem != "Spherical":
             raise ValueError(
                 f"Unsupported CoordSystem '{CoordSystem}'. Only 'Spherical' is supported."
@@ -158,129 +168,83 @@ class HorizonSpinVorticityDipoleClass:
         self._CoordSystem = CoordSystem
         self._K_input = K_input
         self._normal_orientation = normal_orientation
-        # Store the chosen K-sign convention as a SymPy integer for exactness.
         self._K_sign = sp.Integer(1) if K_sign == +1 else sp.Integer(-1)
 
-        # Coordinate interface (theta,phi symbols etc.). We do not use ghat/Re/Jac arrays from here.
+        # Reference metric object
         self._rfm = refmetric.reference_metric[
             (
-                (self._CoordSystem + "_rfm_precompute")
+                self._CoordSystem + "_rfm_precompute"
                 if enable_rfm_precompute
                 else self._CoordSystem
             )
         ]
 
-        # Core build: everything is assembled intrinsically on the surface (no .subs ever).
-        self._build_symbolic_expressions()
+        # Core build (no .subs(), no simplify())
+        self._build_all()
 
-    # -------------------- internal helpers (private) --------------------
+    # -------------------------------------------------------------------------
+    # Internal: construct all needed quantities
+    # -------------------------------------------------------------------------
 
-    def _spherical_surface_background(
-        self,
-    ) -> Tuple[
-        List[List[sp.Expr]], List[List[sp.Expr]], List[List[sp.Expr]], sp.Symbol
-    ]:
+    def _build_all(self) -> None:
         """
-        Construct the on-surface flat-spherical background and Cartesian Jacobians.
+        Build gamma_ij, s^i, omega_i, rotation generators, and J densities.
 
-        This function assumes ``r == h(theta, phi)`` from the outset and builds the
-        on-surface reference metric, rescaling tensor, Cartesian Jacobians, and the
-        horizon-shape symbol ``hh``.
-
-        :return: A 4-tuple ``(ghatDD_surf, ReDD_surf, dUCart_surf, hh)`` where
-                 each entry is evaluated on the surface ``r=h(theta,phi)``.
-
-        Doctests:
-        TBD
+        Only minimal, necessary attributes are made public at the end.
         """
-        th = self._rfm.xx[1]  # theta
-        ph = self._rfm.xx[2]  # phi
-        hh = sp.Symbol("hh", real=True)  # scalar h(theta,phi) on the surface
+        # Short-hands
+        # r = self._rfm.xx[0] # Unused; h serves as surface
+        th = self._rfm.xx[1]
+        ph = self._rfm.xx[2]
 
-        # Flat spherical metric on the surface: diag(1, r^2, r^2 sin^2 theta), with r->hh.
-        ghatDD_surf = [[sp.sympify(0) for _ in range(3)] for __ in range(3)]
-        ghatDD_surf[0][0] = sp.Integer(1)
-        ghatDD_surf[1][1] = hh**2
-        ghatDD_surf[2][2] = (hh**2) * sp.sin(th) ** 2
+        # ------------------------------------------------------------------
+        # 0. Horizon shape and level-set gradient
+        # ------------------------------------------------------------------
+        hh = sp.Symbol("hh", real=True)
 
-        # In NRPy conformal machinery, ReDD plays the role of reference scaling factors.
-        # Using ReDD = ghatDD on-surface ensures consistency with the standard split.
-        ReDD_surf = [[ghatDD_surf[i][j] for j in range(3)] for i in range(3)]
-
-        # Cartesian scalars: x = r sin theta cos phi, y = r sin theta sin phi, z = r cos theta, with r->hh.
-        s_th, c_th = sp.sin(th), sp.cos(th)
-        s_ph, c_ph = sp.sin(ph), sp.cos(ph)
-
-        # Build d(Cart^a)/d(rfm^k) evaluated at r=hh.
-        dUCart_surf = [[sp.sympify(0) for _ in range(3)] for __ in range(3)]
-
-        # a = 0 -> x
-        dUCart_surf[0][0] = s_th * c_ph  # dx/dr
-        dUCart_surf[0][1] = hh * c_th * c_ph  # dx/dtheta
-        dUCart_surf[0][2] = -hh * s_th * s_ph  # dx/dphi
-
-        # a = 1 -> y
-        dUCart_surf[1][0] = s_th * s_ph
-        dUCart_surf[1][1] = hh * c_th * s_ph
-        dUCart_surf[1][2] = hh * s_th * c_ph
-
-        # a = 2 -> z
-        dUCart_surf[2][0] = c_th
-        dUCart_surf[2][1] = -hh * s_th
-        dUCart_surf[2][2] = sp.Integer(0)
-
-        return ghatDD_surf, ReDD_surf, dUCart_surf, hh
-
-    def _build_symbolic_expressions(self) -> None:
-        """
-        Assemble required tensors using NRPy idioms without constructing Christoffels.
-
-        This function constructs all background objects (flat metric, rescalings,
-        Cartesian Jacobians) directly on the surface ``r=h(theta,phi)`` and then
-        builds the projected quantities needed for the spin densities.
-
-        Doctests:
-        TBD
-        """
-        # ---- On-surface background: flat spherical metric, rescalings, and dCart/drfm ----
-        ghatDD_surf, ReDD_surf, dUCart_surf, _ = self._spherical_surface_background()
-
-        # ---- Level set F = r - h(theta,phi) and its first derivatives (in r,theta,phi basis) ----
-        # h depends only on (theta,phi); we keep a symbolic hh_dD for clarity.
+        # h_dD: partial derivatives of h with respect to (r,theta,phi) coords.
+        # h depends only on angles, but we do not enforce that algebraically.
         hh_dD = ixp.declarerank1("hh_dD")
+
+        # F = r - h(theta,phi); F_{,i}
         F_dD = ixp.zerorank1()
         F_dD[0] = sp.sympify(1)
         F_dD[1] = -hh_dD[1]
         F_dD[2] = -hh_dD[2]
 
-        # ---- Physical 3-metric gamma_ij from conformal split, evaluated on the surface ----
-        #   gammabar_ij = ghat_ij + h_ij * Re_ij   (Re_ij chosen as ghat_ij on-surface)
-        #   gamma_ij    = gammabar_ij / W^2        (with W = e^{-2 phi})
+        # ------------------------------------------------------------------
+        # 1. Physical 3-metric gamma_ij from conformal + reference metric
+        # ------------------------------------------------------------------
         hDD = ixp.declarerank2("hDD", symmetry="sym01")
         WW = sp.Symbol("WW", real=True)
 
         gammabarDD = ixp.zerorank2()
         for i in range(3):
             for j in range(3):
-                gammabarDD[i][j] = ghatDD_surf[i][j] + hDD[i][j] * ReDD_surf[i][j]
+                gammabarDD[i][j] = (
+                    hDD[i][j] * self._rfm.ReDD[i][j] + self._rfm.ghatDD[i][j]
+                )
 
         self._gammaDD = ixp.zerorank2()
         for i in range(3):
             for j in range(3):
                 self._gammaDD[i][j] = gammabarDD[i][j] / (WW * WW)
 
-        # Invert gamma_ij -> gamma^ij and compute det gamma, sqrt(det gamma)
+        # Inverse metric and determinant
         self._gammaUU, self._detgamma = ixp.symm_matrix_inverter3x3(self._gammaDD)
         self._sqrt_detgamma = sp.sqrt(self._detgamma)
 
-        # ---- Unit normal s_i and s^i to the surface F=0 (within the spatial slice) ----
-        # s_i proportional to d_i F, normalized by lambda = sqrt(gamma^{ij} d_iF d_jF).
+        # ------------------------------------------------------------------
+        # 2. Horizon unit normal s^i
+        # ------------------------------------------------------------------
+        # lambda^2 = gamma^{ij} F_i F_j
         lamb2 = sp.sympify(0)
         for i in range(3):
             for j in range(3):
                 lamb2 += self._gammaUU[i][j] * F_dD[i] * F_dD[j]
         lamb = sp.sqrt(lamb2)
 
+        # s_i = F_i / lambda
         self._sD = ixp.zerorank1()
         for i in range(3):
             self._sD[i] = F_dD[i] / lamb
@@ -289,17 +253,17 @@ class HorizonSpinVorticityDipoleClass:
             for i in range(3):
                 self._sD[i] = -self._sD[i]
 
+        # s^i = gamma^{ij} s_j
         self._sU = ixp.zerorank1()
         for i in range(3):
             for j in range(3):
                 self._sU[i] += self._gammaUU[i][j] * self._sD[j]
 
-        # ---- Extrinsic curvature K_ij (either external or built from BSSN), on the surface ----
+        # ------------------------------------------------------------------
+        # 3. Extrinsic curvature K_ij
+        # ------------------------------------------------------------------
         if self._K_input == "external":
             KDD = ixp.declarerank2("KDD", symmetry="sym01")
-            trK = sp.Symbol(
-                "trK", real=True
-            )  # not needed in omega_i after tangential projection
         else:
             aDD = ixp.declarerank2("aDD", symmetry="sym01")
             trK = sp.Symbol("trK", real=True)
@@ -307,9 +271,9 @@ class HorizonSpinVorticityDipoleClass:
             AbarDD = ixp.zerorank2()
             for i in range(3):
                 for j in range(3):
-                    AbarDD[i][j] = aDD[i][j] * ReDD_surf[i][j]
+                    AbarDD[i][j] = aDD[i][j] * self._rfm.ReDD[i][j]
 
-            exp4phi = 1 / (WW * WW)  # since W = e^{-2 phi} implies e^{4 phi} = 1/W^2
+            exp4phi = 1 / (WW * WW)
             KDD = ixp.zerorank2()
             for i in range(3):
                 for j in range(3):
@@ -318,23 +282,23 @@ class HorizonSpinVorticityDipoleClass:
                         + sp.Rational(1, 3) * self._gammaDD[i][j] * trK
                     )
 
-        # ---- Tangential projector q_i^j = delta_i^j - s_i s^j ----
-        deltaDU = ixp.zerorank2()
+        # ------------------------------------------------------------------
+        # 4. Tangential projector q_i^j
+        # ------------------------------------------------------------------
+        deltaDD = ixp.zerorank2()
         for i in range(3):
             for j in range(3):
-                deltaDU[i][j] = sp.sympify(1) if i == j else sp.sympify(0)
+                deltaDD[i][j] = sp.sympify(1) if i == j else sp.sympify(0)
 
-        qDU = ixp.zerorank2()
+        # q_i^j = delta_i^j - s_i s^j
+        self._qDU = ixp.zerorank2()
         for i in range(3):
             for j in range(3):
-                qDU[i][j] = deltaDU[i][j] - self._sD[i] * self._sU[j]
+                self._qDU[i][j] = deltaDD[i][j] - self._sD[i] * self._sU[j]
 
-        # ---- Horizon vorticity one-form omega_i (stored with a lower index) ----
-        # Derivation sketch:
-        # Starting from omega_i = h_i^p (K_pq - K gamma_pq) s^q with h_i^p = delta_i^p - s_i s^p,
-        # the trace term cancels after tangential projection:
-        #   h_i^p gamma_pq s^q = (delta_i^p - s_i s^p) s_p = s_i - s_i (s^p s_p) = 0 .
-        # Hence omega_i = h_i^p K_pq s^q = q_i^p K_pq s^q, up to the global K_sign.
+        # ------------------------------------------------------------------
+        # 5. Horizon vorticity one-form omega_i = K_sign * q_i^p K_pq s^q
+        # ------------------------------------------------------------------
         K_dot_sU_D = ixp.zerorank1()
         for p in range(3):
             for q in range(3):
@@ -343,62 +307,86 @@ class HorizonSpinVorticityDipoleClass:
         self._omegaD = ixp.zerorank1()
         for i in range(3):
             for p in range(3):
-                # omega_i = (K_sign) * q_i^p K_pq s^q
-                self._omegaD[i] += self._K_sign * qDU[i][p] * K_dot_sU_D[p]
+                self._omegaD[i] += self._K_sign * self._qDU[i][p] * K_dot_sU_D[p]
 
-        # ---- Curved-space Levi-Civita with upper indices and phi^i[X^a] generators ----
-        # epsilon^{ijk} = hat_epsilon^{ijk}/sqrt(det gamma); phi^i[X^a] = epsilon^{ijk} s_j d_k X^a .
-        epsUUU = ixp.LeviCivitaTensorUUU_dim3_rank3(self._sqrt_detgamma)
+        # ------------------------------------------------------------------
+        # 6. Levi-Civita tensor epsilon^{ijk} and rotation generators phi^i[X^a]
+        # ------------------------------------------------------------------
+        # epsilon^{ijk} with upper indices from sqrt(detgamma)
+        self._epsUUU = ixp.LeviCivitaTensorUUU_dim3_rank3(self._sqrt_detgamma)
 
+        # On-surface Cartesian scalars X^a = (x,y,z):
+        # Use standard spherical relations with r->hh (no .subs; define directly).
+        s_th = sp.sin(th)
+        c_th = sp.cos(th)
+        s_ph = sp.sin(ph)
+        c_ph = sp.cos(ph)
+
+        xCart = hh * s_th * c_ph
+        yCart = hh * s_th * s_ph
+        zCart = hh * c_th
+
+        self._xCartU = [xCart, yCart, zCart]
+
+        # dX^a/dx^k in (r,theta,phi), evaluated with r=hh:
+        dX_dxx = [[sp.sympify(0) for _ in range(3)] for __ in range(3)]
+
+        # a=0 -> x = r sin th cos ph -> with r=hh:
+        dX_dxx[0][0] = s_th * c_ph  # dx/dr
+        dX_dxx[0][1] = hh * c_th * c_ph  # dx/dtheta
+        dX_dxx[0][2] = -hh * s_th * s_ph  # dx/dphi
+
+        # a=1 -> y
+        dX_dxx[1][0] = s_th * s_ph
+        dX_dxx[1][1] = hh * c_th * s_ph
+        dX_dxx[1][2] = hh * s_th * c_ph
+
+        # a=2 -> z
+        dX_dxx[2][0] = c_th
+        dX_dxx[2][1] = -hh * s_th
+        dX_dxx[2][2] = sp.sympify(0)
+
+        # phi^i[X^a] = epsilon^{ijk} s_j ∂_k X^a
         self._phiU_by_cart = [[sp.sympify(0) for _ in range(3)] for __ in range(3)]
         for a in range(3):
             for i in range(3):
                 acc = sp.sympify(0)
                 for j in range(3):
                     for k in range(3):
-                        acc += epsUUU[i][j][k] * self._sD[j] * dUCart_surf[a][k]
+                        acc += self._epsUUU[i][j][k] * self._sD[j] * dX_dxx[a][k]
                 self._phiU_by_cart[a][i] = acc
 
-        # ---- Public J densities (scaled by 1/(8*pi)); all are on-surface by construction ----
+        # ------------------------------------------------------------------
+        # 7. Quasilocal J^i densities: JCart_densU[a] = (1/(8*pi)) omega_i phi^i[X^a]
+        # ------------------------------------------------------------------
         one_over_8pi = sp.Integer(1) / (8 * sp.pi)
 
-        omega_dot_phi_no_pref_U = ixp.zerorank1()
+        omega_dot_phi = ixp.zerorank1()
         for a in range(3):
             for i in range(3):
-                omega_dot_phi_no_pref_U[a] += self._omegaD[i] * self._phiU_by_cart[a][i]
+                omega_dot_phi[a] += self._omegaD[i] * self._phiU_by_cart[a][i]
 
         self.JCart_densU = ixp.zerorank1()
         for a in range(3):
-            self.JCart_densU[a] = one_over_8pi * omega_dot_phi_no_pref_U[a]
+            self.JCart_densU[a] = one_over_8pi * omega_dot_phi[a]
 
-        # ---- Local omega.phi helper (unscaled) ----
-        # Useful for comparing against (1/(8*pi)) * zeta * Omega identity.
-        self._omega_dot_phiU = ixp.zerorank1()
-        for a in range(3):
-            self._omega_dot_phiU[a] = omega_dot_phi_no_pref_U[a]
-
-        # Cache objects needed for optional Omega computations
-        self._epsUUU = epsUUU
-        self._qDU = qDU
-
-    # -------------------- public spin-direction helper --------------------
+    # -------------------------------------------------------------------------
+    # Public helpers
+    # -------------------------------------------------------------------------
 
     def J_about_axis(
         self, nU: Optional[List[sp.Expr]] = None
     ) -> Tuple[sp.Expr, List[sp.Expr]]:
         """
-        Compute the scalar spin density about a constant Cartesian axis.
+        Scalar spin density about a constant Cartesian axis n^a.
 
-        This function evaluates
-        ``J[n]_dens = (1/(8*pi)) * omega_i * epsilon^{ijk} s_j D_k (n·X)``
-        using on-surface Jacobians and the precomputed normal and vorticity.
+        Implements:
+          J_density[n] = (1/(8*pi)) * omega_i * phi^i[zeta],
+        where zeta = n·X, with X^a = (x,y,z) and phi^i[zeta] defined as:
+          phi^i[zeta] = epsilon^{ijk} s_j ∂_k (n·X).
 
-        :param nU: Optional list ``[n^x, n^y, n^z]`` of axis components. If ``None``,
-                   symbolic components are used and normalized internally.
-        :return: A tuple ``(J_density_expr, nU_unit)`` where ``nU_unit`` is the normalized axis.
-
-        Doctests:
-        TBD
+        :param nU: optional [n^x, n^y, n^z]; if None, symbolic components used.
+        :return: (J_density_expr, nU_unit)
         """
         if nU is None:
             nU = [
@@ -407,52 +395,69 @@ class HorizonSpinVorticityDipoleClass:
                 sp.Symbol("nU2", real=True),
             ]
 
-        # Normalize the input axis to make the returned unit direction explicit.
+        # Normalize axis
         n2 = sp.sympify(0)
-        for cart_axis in range(3):
-            n2 += nU[cart_axis] * nU[cart_axis]
-        nmag = sp.sqrt(n2 + sp.sympify(0))
-        nU_unit = [nU[cart_axis] / nmag for cart_axis in range(3)]
+        for a in range(3):
+            n2 += nU[a] * nU[a]
+        nmag = sp.sqrt(n2)
+        nU_unit = [nU[a] / nmag for a in range(3)]
 
-        # Recreate on-surface Jacobians for a self-contained method (no shared state mutation).
-        _, _, dUCart_surf, _ = self._spherical_surface_background()
-
+        # d/dx^k of zeta = n·X:
+        # ∂_k zeta = sum_a n^a ∂_k X^a
         Dzeta_dD = ixp.zerorank1()
+        # Rebuild local dX_dxx as above (no state mutation)
+        th = self._rfm.xx[1]
+        ph = self._rfm.xx[2]
+        hh = sp.Symbol("hh", real=True)
+        s_th = sp.sin(th)
+        c_th = sp.cos(th)
+        s_ph = sp.sin(ph)
+        c_ph = sp.cos(ph)
+        dX_dxx = [[sp.sympify(0) for _ in range(3)] for __ in range(3)]
+        dX_dxx[0][0] = s_th * c_ph
+        dX_dxx[0][1] = hh * c_th * c_ph
+        dX_dxx[0][2] = -hh * s_th * s_ph
+        dX_dxx[1][0] = s_th * s_ph
+        dX_dxx[1][1] = hh * c_th * s_ph
+        dX_dxx[1][2] = hh * s_th * c_ph
+        dX_dxx[2][0] = c_th
+        dX_dxx[2][1] = -hh * s_th
+        dX_dxx[2][2] = sp.sympify(0)
+
         for k in range(3):
-            for cart_axis in range(3):
-                Dzeta_dD[k] += nU_unit[cart_axis] * dUCart_surf[cart_axis][k]
+            for a in range(3):
+                Dzeta_dD[k] += nU_unit[a] * dX_dxx[a][k]
 
-        epsUUU = self._epsUUU  # already built from sqrt(det gamma) on-surface
-
+        # phi^i[zeta] = eps^{ijk} s_j ∂_k zeta
         phiU = ixp.zerorank1()
         for i in range(3):
+            acc = sp.sympify(0)
             for j in range(3):
                 for k in range(3):
-                    phiU[i] += epsUUU[i][j][k] * self._sD[j] * Dzeta_dD[k]
+                    acc += self._epsUUU[i][j][k] * self._sD[j] * Dzeta_dD[k]
+            phiU[i] = acc
 
+        # J_density = (1/(8*pi)) * omega_i phi^i[zeta]
         one_over_8pi = sp.Integer(1) / (8 * sp.pi)
         Jdens = sp.sympify(0)
         for i in range(3):
             Jdens += self._omegaD[i] * phiU[i]
+
         return one_over_8pi * Jdens, nU_unit
 
-    # -------------------- optional Omega helpers (no Christoffels built internally) --------------------
-
-    def Omega_scalar_from_covDomega(self, covD_omegaD: List[List[sp.Expr]]) -> sp.Expr:
+    def Omega_from_covDomega(self, covD_omegaD: List[List[sp.Expr]]) -> sp.Expr:
         """
-        Build the scalar ``Omega = epsilon^{AB} D_A omega_B`` from a supplied covariant derivative.
+        Build boost-gauge-invariant scalar Omega = epsilon^{AB} D_A omega_B.
+        This uses 3D projection:
+          Omega = epsilon^{ijk} s_i q_j^p q_k^q (nabla_p omega_q),
 
-        The 3D-to-2D projection used is
-        ``Omega = epsilon^{ijk} s_i q_j^p q_k^q (nabla_p omega_q)``.
+        where covD_omegaD[p][q] = nabla_p omega_q is supplied
+        (e.g., built from volume data and Christoffels in C).
 
-        :param covD_omegaD: 3×3 nested list ``(p,q)`` with entries ``nabla_p omega_q``.
-        :return: SymPy expression for ``Omega``.
-
-        Doctests:
-        TBD
+        :param covD_omegaD: 3x3 nested list for nabla_p omega_q.
+        :return: SymPy expression for Omega.
         """
         Omega = sp.sympify(0)
-        # epsilon^{ijk} s_i q_j^p q_k^q (nabla_p omega_q)
         for i in range(3):
             for j in range(3):
                 for k in range(3):
@@ -467,57 +472,49 @@ class HorizonSpinVorticityDipoleClass:
                             )
         return Omega
 
-    def omega_moment_density_from_zeta(
-        self, zeta: sp.Expr, covD_omegaD: List[List[sp.Expr]]
-    ) -> sp.Expr:
+    def Omega_xCart_densU(self, Omega_expr: sp.Expr) -> List[sp.Expr]:
         """
-        Build the moment-of-vorticity density ``(1/(8*pi)) * zeta * Omega``.
+        Given Omega ito primitive variables, return per-axis integrands Omega * X^a.
 
-        ``Omega`` is computed via :py:meth:`Omega_scalar_from_covDomega`.
+        These are intended to be multiplied by the existing area element
+        and quadrature weights in a single pass:
 
-        :param zeta: Scalar potential (e.g., a Cartesian scalar ``X^a`` or ``n·X``).
-        :param covD_omegaD: 3×3 nested list representing ``nabla_p omega_q``.
-        :return: SymPy expression equal to ``(1/(8*pi)) * zeta * Omega``.
+          N^a ≈ sum_grid Omega_xCart_densU[a] * dA * weights.
 
-        Doctests:
-        TBD
+        :param Omega_expr: SymPy expression for Omega.
+        :return: List [Omega * x, Omega * y, Omega * z].
         """
-        Omega = self.Omega_scalar_from_covDomega(covD_omegaD)
-        return (sp.Integer(1) / (8 * sp.pi)) * zeta * Omega
+        densU = ixp.zerorank1()
+        for a in range(3):
+            densU[a] = Omega_expr * self._xCartU[a]
+        return densU
 
 
 class HorizonSpinVorticityDipoleClass_dict(Dict[str, HorizonSpinVorticityDipoleClass]):
     """
-    Dictionary-like accessor.
+    Dictionary-style accessor for HorizonSpinVorticityDipoleClass.
 
-    * "Spherical" -> reference metric without precompute
-    * "Spherical_rfm_precompute" -> reference metric with precompute enabled
-
-    Note:
-        The on-surface build is independent of precompute; the key only alters
-        which ``rfm`` entry provides coordinate symbols.
+      * "Spherical"
+      * "Spherical_rfm_precompute"
     """
 
     def __getitem__(self, key: str) -> HorizonSpinVorticityDipoleClass:
         if key not in self:
             if key == "Spherical":
-                self.__setitem__(
-                    key,
-                    HorizonSpinVorticityDipoleClass(
-                        CoordSystem="Spherical", enable_rfm_precompute=False
-                    ),
+                obj = HorizonSpinVorticityDipoleClass(
+                    CoordSystem="Spherical",
+                    enable_rfm_precompute=False,
                 )
             elif key == "Spherical_rfm_precompute":
-                self.__setitem__(
-                    key,
-                    HorizonSpinVorticityDipoleClass(
-                        CoordSystem="Spherical", enable_rfm_precompute=True
-                    ),
+                obj = HorizonSpinVorticityDipoleClass(
+                    CoordSystem="Spherical",
+                    enable_rfm_precompute=True,
                 )
             else:
                 raise KeyError(
                     "Supported keys: 'Spherical', 'Spherical_rfm_precompute'."
                 )
+            dict.__setitem__(self, key, obj)
         return dict.__getitem__(self, key)
 
     def __setitem__(self, key: str, value: HorizonSpinVorticityDipoleClass) -> None:
@@ -525,12 +522,14 @@ class HorizonSpinVorticityDipoleClass_dict(Dict[str, HorizonSpinVorticityDipoleC
             raise KeyError("Supported keys: 'Spherical', 'Spherical_rfm_precompute'.")
         dict.__setitem__(self, key, value)
 
+    def __delitem__(self, key: str) -> None:
+        dict.__delitem__(self, key)
 
-# Instantiate accessor
+
+# Public accessor
 HorizonSpinVorticityDipole = HorizonSpinVorticityDipoleClass_dict()
 
 
-# -------------------- validation harness (exports EXACTLY 3 entries) --------------------
 if __name__ == "__main__":
     import doctest
     import os
@@ -538,7 +537,7 @@ if __name__ == "__main__":
 
     import nrpy.validate_expressions.validate_expressions as ve
 
-    # Doctests
+    # Run doctests (none currently defined)
     results = doctest.testmod()
     if results.failed > 0:
         print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
@@ -546,15 +545,15 @@ if __name__ == "__main__":
     else:
         print(f"Doctest passed: All {results.attempted} test(s) passed")
 
-    # Export exactly the 3 J components
+    # Validation: export only the quasilocal JCart_densU components
     for validation_key in ["Spherical", "Spherical_rfm_precompute"]:
         modobj = HorizonSpinVorticityDipole[validation_key]
 
-        export_only: Dict[str, sp.Expr] = {}
+        export_only = {}
         for axis_idx in range(3):
             export_only[f"JCart_densU_{axis_idx}"] = modobj.JCart_densU[axis_idx]
+            # print(modobj.JCart_densU[axis_idx].free_symbols)
 
-        # Process and compare/generate trusted results for exactly these 3 keys
         results_dict = ve.process_dictionary_of_expressions(
             export_only, fixed_mpfs_for_free_symbols=True
         )

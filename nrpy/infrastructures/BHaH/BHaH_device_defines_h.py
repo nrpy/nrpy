@@ -200,9 +200,10 @@ class CUDA_BHaH_device_defines_h:
         }
         (
             evol_list,
-            aux_list,
             auxevol_list,
-        ) = gri.BHaHGridFunction.gridfunction_lists()[0:3]
+            diag_list,
+            aux_list,
+        ) = gri.BHaHGridFunction.gridfunction_lists()
 
         if evol_list:
             standard_decl_dict["d_evol_gf_parity"] = {

@@ -2,14 +2,13 @@
 #include "BHaH_function_prototypes.h"
 
 /**
- * Kernel: apply_bcs_outerextrap_and_inner_only_specific_auxgfs_gpu.
+ * Kernel: apply_bcs_outerextrap_and_inner_only_specific_gfs_gpu.
  * Apply extrapolation BCs to pure points.
  */
-__global__ static void apply_bcs_outerextrap_and_inner_only_specific_auxgfs_gpu(const size_t streamid, const int num_pure_outer_boundary_points,
-                                                                                const int which_gz, const int dirn,
-                                                                                const outerpt_bc_struct *restrict pure_outer_bc_array,
-                                                                                REAL *restrict gfs, const int num_gfs,
-                                                                                const int *restrict gfs_to_sync) {
+__global__ static void apply_bcs_outerextrap_and_inner_only_specific_gfs_gpu(const size_t streamid, const int num_pure_outer_boundary_points,
+                                                                             const int which_gz, const int dirn,
+                                                                             const outerpt_bc_struct *restrict pure_outer_bc_array,
+                                                                             REAL *restrict gfs, const int num_gfs, const int *restrict gfs_to_sync) {
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = d_params[streamid].Nxx_plus_2NGHOSTS0;
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = d_params[streamid].Nxx_plus_2NGHOSTS1;
   MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = d_params[streamid].Nxx_plus_2NGHOSTS2;
@@ -44,12 +43,12 @@ __global__ static void apply_bcs_outerextrap_and_inner_only_specific_auxgfs_gpu(
                                                         1.0 * gfs[IDX4pt(gfs_to_sync[which_gf], idx_offset3)];
     }
   }
-} // END FUNCTION apply_bcs_outerextrap_and_inner_only_specific_auxgfs_gpu
+} // END FUNCTION apply_bcs_outerextrap_and_inner_only_specific_gfs_gpu
 /**
  * Apply BCs to pure boundary points
  */
-static void apply_bcs_outerextrap_and_inner_only_specific_auxgfs__launcher(const params_struct *restrict params, const bc_struct *restrict bcstruct,
-                                                                           REAL *restrict gfs, const int num_gfs, const int *gfs_to_sync) {
+static void apply_bcs_outerextrap_and_inner_only_specific_gfs__launcher(const params_struct *restrict params, const bc_struct *restrict bcstruct,
+                                                                        REAL *restrict gfs, const int num_gfs, const int *gfs_to_sync) {
   const bc_info_struct *bc_info = &bcstruct->bc_info;
   // Allocate device memory for gfs_to_sync
   int *gfs_to_sync_device;
@@ -70,13 +69,13 @@ static void apply_bcs_outerextrap_and_inner_only_specific_auxgfs__launcher(const
         dim3 blocks_per_grid(MAX(1U, (num_pure_outer_boundary_points + threads_in_x_dir - 1) / threads_in_x_dir), 1, 1);
         size_t sm = 0;
         size_t streamid = params->grid_idx % NUM_STREAMS;
-        apply_bcs_outerextrap_and_inner_only_specific_auxgfs_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(
+        apply_bcs_outerextrap_and_inner_only_specific_gfs_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(
             streamid, num_pure_outer_boundary_points, which_gz, dirn, pure_outer_bc_array, gfs, num_gfs, gfs_to_sync_device);
-        cudaCheckErrors(cudaKernel, "apply_bcs_outerextrap_and_inner_only_specific_auxgfs_gpu failure");
+        cudaCheckErrors(cudaKernel, "apply_bcs_outerextrap_and_inner_only_specific_gfs_gpu failure");
       }
     }
   }
-} // END FUNCTION apply_bcs_outerextrap_and_inner_only_specific_auxgfs__launcher
+} // END FUNCTION apply_bcs_outerextrap_and_inner_only_specific_gfs__launcher
 
 /**
  * *Suppose the outer boundary point is at the i0=max(i0) face. Then we fit known data at i0-3, i0-2, and i0-1
@@ -89,9 +88,8 @@ static void apply_bcs_outerextrap_and_inner_only_specific_auxgfs__launcher(const
  * *  * f(x) = x. WOLOG suppose x0=0. Then f_{i0} = (-3dx) - 3(-2dx) + 3(-dx) = + dx(-3+6-3) = 0 <- CHECK!
  * *  * f(x) = x^2. WOLOG suppose x0=0. Then f_{i0} = (-3dx)^2 - 3(-2dx)^2 + 3(-dx)^2 = + dx^2(9-12+3) = 0 <- CHECK!
  */
-void apply_bcs_outerextrap_and_inner_specific_auxgfs(const commondata_struct *restrict commondata, const params_struct *restrict params,
-                                                     const bc_struct *restrict bcstruct, REAL *restrict gfs, const int num_gfs,
-                                                     const int *gfs_to_sync) {
+void apply_bcs_outerextrap_and_inner_specific_gfs(const commondata_struct *restrict commondata, const params_struct *restrict params,
+                                                  const bc_struct *restrict bcstruct, REAL *restrict gfs, const int num_gfs, const int *gfs_to_sync) {
 #include "set_CodeParameters.h"
   ////////////////////////////////////////////////////////
   // STEP 1 of 2: Apply BCs to pure outer boundary points.
@@ -103,7 +101,7 @@ void apply_bcs_outerextrap_and_inner_specific_auxgfs(const commondata_struct *re
   //              layer, we fill in +/- x0 faces first,
   //              then +/- x1 faces, finally +/- x2 faces,
   //              filling in the edges as we go.
-  apply_bcs_outerextrap_and_inner_only_specific_auxgfs__launcher(params, bcstruct, gfs, num_gfs, gfs_to_sync);
+  apply_bcs_outerextrap_and_inner_only_specific_gfs__launcher(params, bcstruct, gfs, num_gfs, gfs_to_sync);
 
   ///////////////////////////////////////////////////////
   // STEP 2 of 2: Apply BCs to inner boundary points.
@@ -113,5 +111,5 @@ void apply_bcs_outerextrap_and_inner_specific_auxgfs(const commondata_struct *re
   //              that map to outer require that outer be
   //              populated first; hence this being
   //              STEP 2 OF 2.
-  apply_bcs_inner_only_specific_auxgfs(commondata, params, bcstruct, gfs, num_gfs, gfs_to_sync);
-} // END FUNCTION apply_bcs_outerextrap_and_inner_specific_auxgfs
+  apply_bcs_inner_only_specific_gfs(commondata, params, bcstruct, gfs, num_gfs, gfs_to_sync);
+} // END FUNCTION apply_bcs_outerextrap_and_inner_specific_gfs

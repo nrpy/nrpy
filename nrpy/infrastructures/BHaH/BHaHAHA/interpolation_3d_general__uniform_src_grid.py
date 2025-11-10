@@ -58,7 +58,7 @@ def register_CFunction_interpolation_3d_general__uniform_src_grid(
 #define REAL double
 #endif
 
-enum {
+MAYBE_UNUSED static enum {
   INTERP_SUCCESS,
   INTERP3D_GENERAL_NULL_PTRS,
   INTERP3D_GENERAL_INTERP_ORDER_GT_NXX123,

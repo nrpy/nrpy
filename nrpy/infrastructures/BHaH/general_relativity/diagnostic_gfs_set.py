@@ -22,12 +22,13 @@ from types import FrameType as FT
 from typing import Union, cast
 
 import nrpy.c_function as cfc
+import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 
 
 def register_CFunction_diagnostic_gfs_set(
-    enable_interp_diagnostics: bool, enable_psi4: bool
+    enable_interp_diagnostics: bool, enable_psi4: bool, enable_T4munu: bool = False
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Construct and register a C function that populates per-grid diagnostic arrays used by interpolation and integration routines.
@@ -45,7 +46,9 @@ def register_CFunction_diagnostic_gfs_set(
                                       diagnostic; if False, skip that step.
     :param enable_psi4:              If True, include additional waveform-related diagnostic channels
                                       in the registration; if False, omit them.
+    :param enable_T4munu:            If True, copy latest T4munu to DIAG_T4UU gridfunctions.
     :return: None if in registration phase, else the updated NRPy environment.
+    :raises ValueError: If a diagnostics gridfunction's parity type cannot be inferred from its name.
 
     Doctests:
     TBD
@@ -59,6 +62,35 @@ def register_CFunction_diagnostic_gfs_set(
         "BHaH_function_prototypes.h",
         "diagnostics/diagnostic_gfs.h",
     ]
+
+    gri.register_gridfunctions(
+        names="DIAG_HAMILTONIAN", desc="H_constraint", group="DIAG"
+    )
+    gri.register_gridfunctions(names="DIAG_MSQUARED", desc="M^2", group="DIAG")
+    gri.register_gridfunctions(names="DIAG_LAPSE", desc="Lapse", group="DIAG")
+    gri.register_gridfunctions(names="DIAG_W", desc="Conformal_factor_W", group="DIAG")
+    if enable_psi4:
+        gri.register_gridfunctions(names="DIAG_PSI4_RE", desc="Psi4_Re", group="DIAG")
+        gri.register_gridfunctions(names="DIAG_PSI4_IM", desc="Psi4_Im", group="DIAG")
+    gri.register_gridfunctions_for_single_rank2(
+        "DIAG_RBARDD",
+        desc="Ricci_tensor_component_RbarDD",
+        symmetry="sym01",
+        dimension=3,
+        group="DIAG",
+    )
+    if enable_T4munu:
+        gri.register_gridfunctions_for_single_rank2(
+            "DIAG_T4UU",
+            desc="Stress_energy_tensor_component_T4UU",
+            symmetry="sym01",
+            dimension=4,
+            group="DIAG",
+        )
+
+    diag_gf_parity_types = gri.BHaHGridFunction.set_parity_types(
+        sorted([v.name for v in gri.glb_gridfcs_dict.values() if v.group == "DIAG"])
+    )
     desc = """
  * @file diagnostic_gfs_set.c
  * @brief Populate per-grid diagnostic arrays used by interpolation and integration routines.
@@ -98,56 +130,54 @@ def register_CFunction_diagnostic_gfs_set(
     name = "diagnostic_gfs_set"
     params = "const commondata_struct *restrict commondata, const griddata_struct *restrict griddata, REAL *restrict diagnostic_gfs[MAXNUMGRIDS]"
 
-    diagnostic_gfs_names_dict = {
-        "DIAG_HAMILTONIAN": "H_constraint",
-        "DIAG_MSQUARED": "M^2",
-        "DIAG_LAPSE": "Lapse",
-        "DIAG_W": "Conformal_factor_W",
-    }
-    if enable_psi4:
-        diagnostic_gfs_names_dict.update(
-            {
-                "DIAG_PSI4_RE": "Psi4_Re",
-                "DIAG_PSI4_IM": "Psi4_Im",
-            }
-        )
-
-    body = """
+    body = f"MAYBE_UNUSED const int8_t diag_gf_parities[{len(diag_gf_parity_types)}] = {{ {', '.join(map(str, diag_gf_parity_types))} }};\n"
+    body += """
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     const params_struct *restrict params = &griddata[grid].params;
+    const rfm_struct *restrict rfmstruct = griddata[grid].rfmstruct;
     SET_NXX_PLUS_2NGHOSTS_VARS(grid);
     const REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
+    MAYBE_UNUSED REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
 
     // Poison diagnostic_gfs (for debugging purposes only; WARNING: this might make valgrind ineffective)
     // #pragma omp parallel for
     //     for (int ii = 0; ii < TOTAL_NUM_DIAG_GFS * Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2; ii++) {
     //       diagnostic_gfs[grid][ii] = NAN;
     //     } // END LOOP over all points & gridfunctions, poisoning diagnostic_gfs
-    """
+"""
+    parallelization = par.parval_from_str("parallelization")
+    Ricci_gfs_ptr = (
+        "&diagnostic_gfs[grid][IDX4pt(DIAG_RBARDD00GF, 0)]"
+        if parallelization == "cuda"
+        else "&auxevol_gfs[IDX4pt(RBARDD00GF, 0)]"
+    )
+    body += f"""
+    // Set Ricci and constraints gridfunctions
+    Ricci_eval{'_host' if parallelization == 'cuda' else ''}(params, rfmstruct, y_n_gfs, {Ricci_gfs_ptr});
+    constraints_eval(commondata, params, rfmstruct, y_n_gfs, auxevol_gfs, diagnostic_gfs[grid]);
+"""
     if enable_psi4:
         body += """
+    // NOTE: Inner boundary conditions must be set before any interpolations are performed, whether for psi4 decomp. or interp diags.
+    // Set psi4 gridfunctions
+    psi4(commondata, params, (REAL * restrict*)griddata[grid].xx, y_n_gfs, diagnostic_gfs[grid]);
+    const int inner_bc_apply_gfs[] = {DIAG_PSI4_REGF, DIAG_PSI4_IMGF};
+    const int num_inner_bc_apply_gfs = (int)(sizeof(inner_bc_apply_gfs) / sizeof(inner_bc_apply_gfs[0]));
+    apply_bcs_inner_only_specific_gfs(commondata, params, &griddata[grid].bcstruct, diagnostic_gfs[grid], num_inner_bc_apply_gfs, diag_gf_parities,
+                                      inner_bc_apply_gfs);
 """
     if enable_interp_diagnostics:
         body += """
-    // Apply inner bcs to DIAG_RESIDUAL, as it depends on finite differences.
     {
-      const bc_struct bcstruct = griddata[grid].bcstruct;
-      const innerpt_bc_struct *restrict inner_bc_array = bcstruct.inner_bc_array;
-      const int num_inner_boundary_points = bcstruct.bc_info.num_inner_boundary_points;
-#pragma omp parallel for
-      for (int pt = 0; pt < num_inner_boundary_points; pt++) {
-        const int dstpt = inner_bc_array[pt].dstpt;
-        const int srcpt = inner_bc_array[pt].srcpt;
-        const int evol_gf_with_same_parity = UUGF; // <- IMPORTANT
-        diagnostic_gfs[grid][IDX4pt(DIAG_RESIDUAL, dstpt)] =
-            inner_bc_array[pt].parity[evol_gf_parity[evol_gf_with_same_parity]] * diagnostic_gfs[grid][IDX4pt(DIAG_RESIDUAL, srcpt)];
-      } // END LOOP over inner boundary points
-    } // END applying inner bcs to DIAG_RESIDUAL
+      // NOTE: Inner boundary conditions must be set before any interpolations are performed, whether for psi4 decomp. or interp diags.
+      // Apply inner bcs to constraints needed to do interpolation correctly
+      const int inner_bc_apply_gfs[] = {DIAG_HAMILTONIANGF, DIAG_MSQUAREDGF};
+      const int num_inner_bc_apply_gfs = (int)(sizeof(inner_bc_apply_gfs) / sizeof(inner_bc_apply_gfs[0]));
+      apply_bcs_inner_only_specific_gfs(commondata, params, &griddata[grid].bcstruct, diagnostic_gfs[grid], num_inner_bc_apply_gfs, diag_gf_parities,
+                                        inner_bc_apply_gfs);
+    } // END set inner BCs on desired GFs
 """
-    body += """
-  constraints_eval(commondata, params, rfmstruct, y_n_gfs, diagnostic_gfs);
-} // END LOOP over grids"""
-    par.glb_extras_dict["diagnostic_gfs_names_dict"] = diagnostic_gfs_names_dict
+    body += "  } // END LOOP over grids\n"
 
     cfc.register_CFunction(
         subdirectory="diagnostics",

@@ -156,24 +156,26 @@ def register_CFunction_diagnostics_volume_integration() -> (
       // Define the integrands for this recipe:
 
       // Important: is_squared=1 enables computation of L2 norm & RMS; RMS_f = sqrt(int f^2 dV / int dV)
-      recipes[NUM_RECIPES].integrands[0] = (diags_integration_integrand_spec_t){.gf_index = DIAG_RESIDUAL, .is_squared = 1};
-      recipes[NUM_RECIPES].num_integrands = 1;
+      recipes[NUM_RECIPES].integrands[0] = (diags_integration_integrand_spec_t){.gf_index = DIAG_HAMILTONIANGF, .is_squared = 1};
+      recipes[NUM_RECIPES].integrands[1] = (diags_integration_integrand_spec_t){.gf_index = DIAG_MSQUAREDGF, .is_squared = 1};
+      recipes[NUM_RECIPES].num_integrands = 2;
 
       NUM_RECIPES++;
     } // END IF define Recipe 0
 
     //  Recipe 1: RMS of numerical solution inside a sphere of radius 80
     if (NUM_RECIPES < DIAGS_INTEGRATION_MAX_RECIPES) {
-      const REAL R_outer = 80;
-      recipes[NUM_RECIPES].name = "sphere_R_80";
+      const REAL R_outer = 8;
+      recipes[NUM_RECIPES].name = "sphere_R_gt_8";
       recipes[NUM_RECIPES].num_rules = 1;
 
       // Important: exclude_inside=0 implies outer is excluded.
-      recipes[NUM_RECIPES].rules[0] = (diags_integration_sphere_rule_t){.center_xyz = {0, 0, 0}, .radius = R_outer, .exclude_inside = 0};
+      recipes[NUM_RECIPES].rules[0] = (diags_integration_sphere_rule_t){.center_xyz = {0, 0, 0}, .radius = R_outer, .exclude_inside = 1};
 
       // Important: is_squared=1 enables computation of L2 norm & RMS; RMS_f = sqrt(int f^2 dV / int dV)
-      recipes[NUM_RECIPES].integrands[0] = (diags_integration_integrand_spec_t){.gf_index = DIAG_RESIDUAL, .is_squared = 1};
-      recipes[NUM_RECIPES].num_integrands = 1;
+      recipes[NUM_RECIPES].integrands[0] = (diags_integration_integrand_spec_t){.gf_index = DIAG_HAMILTONIANGF, .is_squared = 1};
+      recipes[NUM_RECIPES].integrands[1] = (diags_integration_integrand_spec_t){.gf_index = DIAG_MSQUAREDGF, .is_squared = 1};
+      recipes[NUM_RECIPES].num_integrands = 2;
 
       NUM_RECIPES++;
     } // END IF define Recipe 1
@@ -189,11 +191,11 @@ def register_CFunction_diagnostics_volume_integration() -> (
 
   // ========================= USER-EDIT: Capture results =========================
   // Execute all defined recipes and capture results
-  {
-    REAL rms_residual_r_80 = NAN;
-    diags_integration_get_rms(&integration_results, "sphere_R_80", DIAG_RESIDUAL, &rms_residual_r_80);
-    commondata->log10_current_residual = log10(rms_residual_r_80);
-  } // END USER-EDIT capture results block
+  // {
+  //   REAL rms_residual_r_80 = NAN;
+  //   diags_integration_get_rms(&integration_results, "sphere_R_80", DIAG_RESIDUAL, &rms_residual_r_80);
+  //   commondata->log10_current_residual = log10(rms_residual_r_80);
+  // } // END USER-EDIT capture results block
   // ========================= End of user edits =========================
 """
     cfc.register_CFunction(

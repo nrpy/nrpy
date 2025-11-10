@@ -13,7 +13,6 @@ from typing import List, Union, cast
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.finite_difference as fin
-import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.params as par
@@ -27,19 +26,20 @@ from nrpy.infrastructures import BHaH
 
 def register_CFunction_Ricci_eval(
     CoordSystem: str,
-    enable_rfm_precompute: bool,
     enable_intrinsics: bool,
     enable_fd_functions: bool,
     OMP_collapse: int,
+    host_only_version: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the Ricci evaluation function.
 
     :param CoordSystem: The coordinate system to be used.
-    :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param enable_intrinsics: Whether to enable SIMD instructions.
     :param enable_fd_functions: Whether to enable finite difference functions.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
+    :param host_only_version: (default: False) Whether to emit a host-only version, for
+                              performing (host-only) diagnostics with CUDA enabled.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -47,39 +47,36 @@ def register_CFunction_Ricci_eval(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    parallelization = par.parval_from_str("parallelization")
-    Bq = BSSN_quantities[
-        CoordSystem + ("_rfm_precompute" if enable_rfm_precompute else "")
-    ]
+    orig_parallelization = par.parval_from_str("parallelization")
+    if host_only_version:
+        # Must reset parallelization parameter, as simple_loop reads the parallelization NRPyParameter.
+        par.set_parval_from_str("parallelization", "openmp")
+    is_cuda = orig_parallelization == "cuda" and not host_only_version
+
+    Bq = BSSN_quantities[CoordSystem + "_rfm_precompute"]
 
     includes = ["BHaH_defines.h"]
     if enable_intrinsics:
         includes += [
             str(
                 Path("intrinsics") / "cuda_intrinsics.h"
-                if parallelization == "cuda"
+                if is_cuda
                 else Path("intrinsics") / "simd_intrinsics.h"
             )
         ]
     desc = r"""Set Ricci tensor."""
     cfunc_type = "void"
     name = "Ricci_eval"
+    if host_only_version:
+        name += "_host"
     arg_dict_cuda = {
         "in_gfs": "const REAL *restrict",
-        "auxevol_gfs": "REAL *restrict",
+        "RbarDD00_ptr": "REAL *restrict",
     }
-    if enable_rfm_precompute:
-        arg_dict_cuda = {
-            "rfmstruct": "const rfm_struct *restrict",
-            **arg_dict_cuda,
-        }
-    else:
-        arg_dict_cuda = {
-            "x0": "const REAL *restrict",
-            "x1": "const REAL *restrict",
-            "x2": "const REAL *restrict",
-            **arg_dict_cuda,
-        }
+    arg_dict_cuda = {
+        "rfmstruct": "const rfm_struct *restrict",
+        **arg_dict_cuda,
+    }
     arg_dict_host = {
         "params": "const params_struct *restrict",
         **arg_dict_cuda,
@@ -88,10 +85,8 @@ def register_CFunction_Ricci_eval(
 
     # Populate Ricci tensor
     Ricci_access_gfs: List[str] = []
-    for var in Bq.Ricci_varnames:
-        Ricci_access_gfs += [
-            gri.BHaHGridFunction.access_gf(var, 0, 0, 0, gf_array_name="auxevol_gfs")
-        ]
+    for gf in range(6):
+        Ricci_access_gfs += [f"RbarDD00_ptr[IDX4({gf}, i0, i1, i2)]"]
     kernel_body = BHaH.simple_loop.simple_loop(
         loop_body=ccg.c_codegen(
             Bq.Ricci_exprs,
@@ -99,35 +94,36 @@ def register_CFunction_Ricci_eval(
             enable_fd_codegen=True,
             enable_simd=enable_intrinsics,
             enable_fd_functions=enable_fd_functions,
-            rational_const_alias=(
-                "static constexpr" if parallelization == "cuda" else "static const"
-            ),
-        ).replace("SIMD", "CUDA" if parallelization == "cuda" else "SIMD"),
+            rational_const_alias=("static constexpr" if is_cuda else "static const"),
+        ).replace("SIMD", "CUDA" if is_cuda else "SIMD"),
         loop_region="interior",
         enable_intrinsics=enable_intrinsics,
         CoordSystem=CoordSystem,
-        enable_rfm_precompute=enable_rfm_precompute,
-        read_xxs=not enable_rfm_precompute,
+        enable_rfm_precompute=True,
+        read_xxs=False,
         OMP_collapse=OMP_collapse,
     )
     loop_params = parallel_utils.get_loop_parameters(
-        parallelization, enable_intrinsics=enable_intrinsics
+        "cuda" if is_cuda else "openmp", enable_intrinsics=enable_intrinsics
     )
 
     param_symbols, _ = get_params_commondata_symbols_from_expr_list(Bq.Ricci_exprs)
     params_definitions = params_definitions = generate_definition_header(
         param_symbols,
         enable_intrinsics=enable_intrinsics,
-        var_access=parallel_utils.get_params_access(parallelization),
+        var_access=parallel_utils.get_params_access("cuda" if is_cuda else "openmp"),
     )
     kernel_body = f"{loop_params}\n{params_definitions}\n{kernel_body}"
 
     kernel, launch_body = parallel_utils.generate_kernel_and_launch_code(
         name,
-        kernel_body.replace("SIMD", "CUDA" if parallelization == "cuda" else "SIMD"),
+        kernel_body.replace(
+            "SIMD",
+            "CUDA" if is_cuda else "SIMD",
+        ),
         arg_dict_cuda,
         arg_dict_host,
-        parallelization=parallelization,
+        parallelization="cuda" if is_cuda else "openmp",
         comments=desc,
         cfunc_type=cfunc_type,
         launchblock_with_braces=False,
@@ -135,12 +131,15 @@ def register_CFunction_Ricci_eval(
     )
 
     prefunc = ""
-    if parallelization == "cuda" and enable_fd_functions:
+    if is_cuda and enable_fd_functions:
         prefunc = fin.construct_FD_functions_prefunc(
             cfunc_decorators="__device__ "
         ).replace("SIMD", "CUDA")
     elif enable_fd_functions:
         prefunc = fin.construct_FD_functions_prefunc()
+
+    # Restore original parallelization parameter.
+    par.set_parval_from_str("parallelization", orig_parallelization)
 
     cfc.register_CFunction(
         include_CodeParameters_h=False,
