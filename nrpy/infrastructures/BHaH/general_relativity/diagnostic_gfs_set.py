@@ -154,7 +154,7 @@ def register_CFunction_diagnostic_gfs_set(
     body += f"""
     // Set Ricci and constraints gridfunctions
     Ricci_eval{'_host' if parallelization == 'cuda' else ''}(params, rfmstruct, y_n_gfs, {Ricci_gfs_ptr});
-    constraints_eval(commondata, params, rfmstruct, y_n_gfs, diagnostic_gfs[grid]);
+    constraints_eval(commondata, params, rfmstruct, y_n_gfs, auxevol_gfs, diagnostic_gfs[grid]);
 """
     if enable_psi4:
         body += """

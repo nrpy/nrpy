@@ -22,16 +22,15 @@ parser = argparse.ArgumentParser(
     description="NRPyElliptic Solver for Conformally Flat BBH initial data"
 )
 parser.add_argument(
-    "--parallelization",
-    type=str,
-    help="Parallelization strategy to use (e.g. openmp, cuda).",
-    default="openmp",
-)
-parser.add_argument(
     "--floating_point_precision",
     type=str,
     help="Floating point precision (e.g. float, double).",
     default="double",
+)
+parser.add_argument(
+    "--cuda",
+    action="store_true",
+    help="Use CUDA parallelization.",
 )
 parser.add_argument(
     "--disable_intrinsics",
@@ -49,10 +48,11 @@ args = parser.parse_args()
 
 # Code-generation-time parameters:
 fp_type = args.floating_point_precision.lower()
-parallelization = args.parallelization.lower()
 enable_intrinsics = not args.disable_intrinsics
 enable_rfm_precompute = not args.disable_rfm_precompute
 
+# Default to openmp; override with cuda if --cuda is set
+parallelization = "cuda" if args.cuda else "openmp"
 if parallelization not in ["openmp", "cuda"]:
     raise ValueError(
         f"Invalid parallelization strategy: {parallelization}. "
