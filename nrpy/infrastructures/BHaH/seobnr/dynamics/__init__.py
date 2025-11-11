@@ -1,5 +1,4 @@
 from . import (
-    SEOBNRv5_aligned_spin_argrelmin,
     SEOBNRv5_aligned_spin_augments,
     SEOBNRv5_aligned_spin_flux,
     SEOBNRv5_aligned_spin_interpolate_dynamics,
@@ -12,6 +11,9 @@ from . import (
     SEOBNRv5_aligned_spin_pr_equation,
     SEOBNRv5_aligned_spin_right_hand_sides,
     SEOBNRv5_aligned_spin_t_equation,
+    SEOBNRv5_quasi_precessing_spin_angular_momentum,
+    SEOBNRv5_quasi_precessing_spin_dynamics,
+    SEOBNRv5_quasi_precessing_spin_equations,
     eval_abs_deriv,
     find_local_minimum_index,
 )
