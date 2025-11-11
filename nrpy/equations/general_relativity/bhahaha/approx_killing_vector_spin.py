@@ -16,6 +16,19 @@ Sources:
  - BHaHAHA (https://arxiv.org/abs/2505.15912)
  - QuasiLocalMeasures docs (https://einsteintoolkit.org/thornguide/EinsteinAnalysis/QuasiLocalMeasures/documentation.html)
  - QuasiLocalMeasures source code (https://bitbucket.org/einsteintoolkit/einsteinanalysis)
+ 
+ (Foundations of AKV on S²; H_{mn}, N_{mn}, and shear minimization)
+ - Cook & Whiting (2007), *Phys. Rev. D 76, 041501*, arXiv:0706.0199
+ (Eigenvalue formulation of approximate Killing fields)
+ - Beetle (2008), *Phys. Rev. D 78, 084043*, arXiv:0808.1745
+ (Practical AKV spin on apparent horizons; axis determination and normalization)
+ - Owen (2009), *Phys. Rev. D 80, 084012*, arXiv:0907.0280
+ (Hands-on recipe used widely in NR implementations of AKV spin)
+ - Lovelace, Owen, Pfeiffer & Chu (2008), *Phys. Rev. D 78, 084017*, arXiv:0805.4192
+ (Quasilocal angular momentum integrand used here: (K_ij − K γ_ij) φ^i s^j)
+ - Brown & York (1993), *Phys. Rev. D 47, 1407*, arXiv:gr-qc/9209012
+ (Reference-metric / pole-regular formalism used in NRPy+ code generation)
+ - Ruchlin, Etienne & Baumgarte (2018), *Phys. Rev. D 97, 064036*, arXiv:1712.07658
 
 Author: Wesley Inselman
 """
