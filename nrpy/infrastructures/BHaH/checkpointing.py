@@ -38,15 +38,16 @@ def register_CFunction_read_checkpoint(enable_bhahaha: bool = False) -> None:
 // On mismatch, prints a descriptive error to stderr and aborts the program.
 // This is intentionally fatal: partial/failed checkpoint reads are treated
 // as unrecoverable corruption, not a soft "no restart".
-#define FREAD(ptr, size, nmemb, stream, filename, context)                                                                                           \
-  do {                                                                                                                                               \
-    size_t _expected = (size_t)(nmemb);                                                                                                              \
-    size_t _got = fread((ptr), (size), (nmemb), (stream));                                                                                           \
-    if (_got != _expected) {                                                                                                                         \
-      fprintf(stderr, "read_checkpoint: FATAL: error while reading %s (%s): expected %zu items, got %zu.\n", (filename), (context),                  \
-              (unsigned long)_expected, (unsigned long)_got);                                                                                        \
-      exit(EXIT_FAILURE);                                                                                                                            \
-    }                                                                                                                                                \
+#define FREAD(ptr, size, nmemb, stream, filename, context)                                                   \
+  do {                                                                                                       \
+    size_t _expected = (size_t)(nmemb);                                                                      \
+    size_t _got = fread((ptr), (size), (nmemb), (stream));                                                   \
+    if (_got != _expected) {                                                                                 \
+      fprintf(stderr,                                                                                        \
+              "read_checkpoint: FATAL: error while reading %s (%s): expected %zu items, got %zu.\n",         \
+              (filename), (context), _expected, _got);                                                       \
+      exit(EXIT_FAILURE);                                                                                    \
+    }                                                                                                        \
   } while (0)
 
 #define BHAH_CHKPT_CPY_HOST_TO_DEVICE_ALL_GFS() \
