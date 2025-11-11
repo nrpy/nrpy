@@ -46,16 +46,16 @@ Evaluate SEOBNRv5 Hamiltonian, flux, and needed derivatives to compute binary dy
     body = """
 const REAL m1 = ((commondata_struct *restrict) params)->m1;
 const REAL m2 = ((commondata_struct *restrict) params)->m2;
-const REAL ln_x = z[0];
-const REAL ln_y = z[1];
-const REAL ln_z = z[2];
-const REAL chi1_x = z[3];
-const REAL chi1_y = z[4];
-const REAL chi1_z = z[5];
-const REAL chi2_x = z[6];
-const REAL chi2_y = z[7];
-const REAL chi2_z = z[8];
-const REAL omega = z[9];
+const REAL ln_x = z[LN_X];
+const REAL ln_y = z[LN_Y];
+const REAL ln_z = z[LN_Z];
+const REAL chi1_x = z[CHI1_X];
+const REAL chi1_y = z[CHI1_Y];
+const REAL chi1_z = z[CHI1_Z];
+const REAL chi2_x = z[CHI2_X];
+const REAL chi2_y = z[CHI2_Y];
+const REAL chi2_z = z[CHI2_Z];
+const REAL omega = z[OMEGA_PN];
 """
     body += ccg.c_codegen(
         [
@@ -86,16 +86,16 @@ const REAL omega = z[9];
         include_braces=False,
     )
     body += """
-f[0] = ln_dot_x;
-f[1] = ln_dot_y;
-f[2] = ln_dot_z;
-f[3] = chi1_dot_x;
-f[4] = chi1_dot_y;
-f[5] = chi1_dot_z;
-f[6] = chi2_dot_x;
-f[7] = chi2_dot_y;
-f[8] = chi2_dot_z;
-f[9] = omega_dot;
+f[LN_X] = ln_dot_x;
+f[LN_Y] = ln_dot_y;
+f[LN_Z] = ln_dot_z;
+f[CHI1_X] = chi1_dot_x;
+f[CHI1_Y] = chi1_dot_y;
+f[CHI1_Z] = chi1_dot_z;
+f[CHI2_X] = chi2_dot_x;
+f[CHI2_Y] = chi2_dot_y;
+f[CHI2_Z] = chi2_dot_z;
+f[OMEGA_PN] = omega_dot;
 return GSL_SUCCESS;
 """
     cfc.register_CFunction(
