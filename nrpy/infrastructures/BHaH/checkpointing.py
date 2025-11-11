@@ -49,11 +49,6 @@ def register_CFunction_read_checkpoint(enable_bhahaha: bool = False) -> None:
       exit(EXIT_FAILURE);                                                                                    \
     }                                                                                                        \
   } while (0)
-
-#define BHAH_CHKPT_CPY_HOST_TO_DEVICE_ALL_GFS() \
-for (int gf = 0; gf < NUM_EVOL_GFS; gf++) { \
-  cpyHosttoDevice__gf(commondata, &griddata[grid].params, griddata[grid].gridfuncs.y_n_gfs, griddata_device[grid].gridfuncs.y_n_gfs, gf, gf, griddata[grid].params.grid_idx % NUM_STREAMS); \
-} // END LOOP over gridfunctions
 """
     desc = "Read a checkpoint file"
     cfunc_type = "int"
@@ -129,7 +124,9 @@ for (int gf = 0; gf < NUM_EVOL_GFS; gf++) { \
     free(out_data_indices);
     free(compact_out_data);
 
-    IFCUDARUN(BHAH_CHKPT_CPY_HOST_TO_DEVICE_ALL_GFS());
+    IFCUDARUN(for (int gf = 0; gf < NUM_EVOL_GFS; gf++)
+                  cpyHosttoDevice__gf(commondata, &griddata[grid].params, griddata[grid].gridfuncs.y_n_gfs, griddata_device[grid].gridfuncs.y_n_gfs,
+                                      gf, gf, griddata[grid].params.grid_idx % NUM_STREAMS););
 
   } // END LOOP over grids
   fclose(cp_file);
