@@ -90,7 +90,7 @@ def register_CFunction_constraints_eval(
 // Usage example:
 //   RBARDD_GF(RBARDD00GF, i0, i1, i2)
 // expands to:
-//   - auxevol_gfs[IDX4(RBARDD00GF, i0, i1, i2)]       (CPU)
+//   - auxevol_gfs[IDX4(RBARDD00GF, i0, i1, i2)]       (CPU-only)
 //   - diagnostic_gfs[IDX4(DIAG_RBARDD00GF, i0, i1, i2)] (CUDA)
 #define RBARDD_GF(gf, i0, i1, i2) GF_IN(gf, i0, i1, i2)
 #define T4UU_GF(gf, i0, i1, i2)   GF_IN(gf, i0, i1, i2)
