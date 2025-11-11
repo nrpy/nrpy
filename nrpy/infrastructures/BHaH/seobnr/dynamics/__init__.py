@@ -1,5 +1,4 @@
 from . import (
-    SEOBNRv5_aligned_spin_argrelmin,
     SEOBNRv5_aligned_spin_augments,
     SEOBNRv5_aligned_spin_flux,
     SEOBNRv5_aligned_spin_interpolate_dynamics,

@@ -82,7 +82,6 @@ perform_iterative_refinement = True
 
 
 #  Note: Removing step numbers for now.
-# TODO: Add them back once the example is finalized.
 def register_CFunction_main_c(
     output_waveform: bool = True,
     frequency_domain: bool = False,
@@ -105,34 +104,34 @@ Main function for computing the SEBOBv2 waveform.
     name = "main"
     params = "int argc, const char *argv[]"
     body = r"""  commondata_struct commondata; // commondata contains parameters common to all grids.
-// Step . Initialize commondata 
-// Step : Set each commondata CodeParameter to default.
+// Step TBD: Initialize commondata 
+// Step TBD: Set each commondata CodeParameter to default.
 commondata_struct_set_to_default(&commondata);
-// Step : Overwrite default values to parfile values. Then overwrite parfile values with values set at cmd line.
+// Step TBD: Overwrite default values to parfile values. Then overwrite parfile values with values set at cmd line.
 cmdline_input_and_parfile_parser(&commondata, argc, argv);
-// Step : Overwrite default values of m1, m2, a6, and dSO.
+// Step TBD: Overwrite default values of m1, m2, a6, and dSO.
 SEOBNRv5_quasi_precessing_spin_coefficients(&commondata);
 // Step: compute the spin dynamics
 SEOBNRv5_quasi_precessing_spin_dynamics(&commondata);
 """
     if precompute_waveform_coefficients:
-        body += r"""// Step : Set the waveform coefficients
+        body += r"""// Step TBD: Set the waveform coefficients
 SEOBNRv5_aligned_spin_waveform_coefficients(&commondata);
 """
-    body += r"""// Step : Compute SEOBNRv5 conservative initial conditions.
+    body += r"""// Step TBD: Compute SEOBNRv5 conservative initial conditions.
 SEOBNRv5_aligned_spin_initial_conditions_conservative(&commondata);
-// Step : Run the trajectory generation.
+// Step TBD: Run the trajectory generation.
 SEOBNRv5_aligned_spin_pa_integration(&commondata);
-// Step : Generate the waveform.
+// Step TBD: Generate the waveform.
 SEOBNRv5_aligned_spin_waveform_from_dynamics(&commondata);
-// Step : Compute and apply the NQC corrections
+// Step TBD: Compute and apply the NQC corrections
 SEBOBv2_NQC_corrections(&commondata);
-// Step : Compute the IMR waveform
+// Step TBD: Compute the IMR waveform
 SEBOBv2_IMR_waveform(&commondata);
 """
     if frequency_domain:
         body += r"""
-// Step : Compute the FFT-ed IMR waveform
+// Step TBD: Compute the FFT-ed IMR waveform
 // Specify wisdom file
 const char *wisdom_file = "fftw_wisdom.dat";
 SEOBNRv5_aligned_spin_FD_waveform(wisdom_file, &commondata);
@@ -140,7 +139,7 @@ SEOBNRv5_aligned_spin_FD_waveform(wisdom_file, &commondata);
     if output_waveform:
         if frequency_domain:
             body += r"""
-// Step : Print the resulting waveform.
+// Step TBD: Print the resulting waveform.
 for (size_t i = 0; i < commondata.nsteps_IMR_FD; i++) {
     printf("%.15e %.15e %.15e\n", creal(commondata.waveform_IMR_FD[IDX_WF(i,FREQ)])
     , creal(commondata.waveform_IMR_FD[IDX_WF(i,STRAIN)]), cimag(commondata.waveform_IMR_FD[IDX_WF(i,STRAIN)]));
@@ -148,7 +147,7 @@ for (size_t i = 0; i < commondata.nsteps_IMR_FD; i++) {
 """
         else:
             body += r"""
-// Step : Print the resulting waveform.
+// Step TBD: Print the resulting waveform.
 for (size_t i = 0; i < commondata.nsteps_IMR; i++) {
     printf("%.15e %.15e %.15e\n", creal(commondata.waveform_IMR[IDX_WF(i,TIME)])
     , creal(commondata.waveform_IMR[IDX_WF(i,STRAIN)]), cimag(commondata.waveform_IMR[IDX_WF(i,STRAIN)]));
@@ -224,7 +223,6 @@ BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_t_equation.register_CFunction_SEOBNRv
 # register trajectory integration and processing routines
 BHaH.seobnr.dynamics.eval_abs_deriv.register_CFunction_eval_abs_deriv()
 BHaH.seobnr.dynamics.find_local_minimum_index.register_CFunction_find_local_minimum_index()
-BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_argrelmin.register_CFunction_SEOBNRv5_aligned_spin_argrelmin()
 BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_augments.register_CFunction_SEOBNRv5_aligned_spin_augments()
 BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_interpolate_dynamics.register_CFunction_SEOBNRv5_aligned_spin_interpolate_dynamics()
 BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_iterative_refinement.register_CFunction_SEOBNRv5_aligned_spin_iterative_refinement()
