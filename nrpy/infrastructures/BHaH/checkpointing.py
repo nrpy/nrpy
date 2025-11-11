@@ -292,7 +292,6 @@ def register_CFunctions(
     """
     Register CFunctions for checkpointing.
 
-    :param filename_tuple: A tuple containing the filename format and the variables to be inserted into the filename.
     :param default_checkpoint_every: The default checkpoint interval in physical time units.
     :param enable_bhahaha: Whether to enable BHaHAHA.
     """
