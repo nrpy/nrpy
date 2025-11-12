@@ -60,7 +60,8 @@ def register_CFunction_constraints_eval(
     expr_list = [Bcon.H, Bcon.Msquared]
     prefunc = """
 // Map gridfunction enums to the correct backing storage on CPU vs CUDA.
-// CUDA: diagnostic_gfs[IDX4(DIAG_RBARDD00GF, i0, i1, i2)]
+// CUDA: diags entirely on CPU; RbarDD output to diagnostic_gfs: 
+//      diagnostic_gfs[IDX4(DIAG_RBARDD00GF, i0, i1, i2)]
 // CPU: auxevol_gfs[IDX4(RBARDD00GF, i0, i1, i2)]
 #ifdef __CUDACC__
   #define GF_IN(gf, i0, i1, i2) diagnostic_gfs[IDX4(DIAG_##gf, i0, i1, i2)]
