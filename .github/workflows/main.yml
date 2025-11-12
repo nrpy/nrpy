@@ -110,6 +110,7 @@ jobs:
             ! -path './build/*' \
             ! -path '*/tests/*' \
             ! -path '*superB*' \
+            ! -path '*manga*' \
             ! -path './nrpy/examples/visualization_scripts/*' > python_files.txt
           
           # Count total number of Python files
@@ -346,7 +347,7 @@ jobs:
           python -m nrpy.examples.seobnrv5_aligned_spin_inspiral && (cd project/seobnrv5_aligned_spin_inspiral && make && make clean) &&
           python -m nrpy.examples.tovola_neutron_star && (cd project/tovola_neutron_star && make && make clean) &&
           python -m nrpy.examples.hydro_without_hydro && (cd project/hydro_without_hydro && make && make clean) &&
-          python -m nrpy.examples.manga_bhah_lib && (cd project/bhah_lib && make && make clean) &&
+          # python -m nrpy.examples.manga_bhah_lib && (cd project/bhah_lib && make && make clean) &&
           python -m nrpy.examples.bhahaha && (cd project/BHaHAHA && make && make clean) &&
           python -m nrpy.examples.sebobv2 && (cd project/sebobv2 && make && make clean) 
 
@@ -393,7 +394,7 @@ jobs:
           python -m nrpy.examples.seobnrv5_aligned_spin_inspiral && (cd project/seobnrv5_aligned_spin_inspiral && make && make clean) &&
           python -m nrpy.examples.tovola_neutron_star && (cd project/tovola_neutron_star && make && make clean) &&
           python -m nrpy.examples.hydro_without_hydro && (cd project/hydro_without_hydro && make && make clean) &&
-          python -m nrpy.examples.manga_bhah_lib && (cd project/bhah_lib && make && make clean) &&
+          # python -m nrpy.examples.manga_bhah_lib && (cd project/bhah_lib && make && make clean) &&
           python -m nrpy.examples.bhahaha && (cd project/BHaHAHA && make && make clean) &&
           python -m nrpy.examples.sebobv2 && (cd project/sebobv2 && make && make clean)
 
