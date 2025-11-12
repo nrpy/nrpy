@@ -50,7 +50,7 @@ def register_CFunction_constraints_eval(
     desc = r"""Evaluate BSSN constraints."""
     cfunc_type = "void"
     name = "constraints_eval"
-    params = """const commondata_struct *restrict commondata, const params_struct *restrict params, 
+    params = """const commondata_struct *restrict commondata, const params_struct *restrict params,
     const rfm_struct *restrict rfmstruct, const REAL *restrict in_gfs, const REAL *restrict auxevol_gfs, REAL *restrict diagnostic_gfs"""
     Bcon = BSSN_constraints[
         CoordSystem
@@ -59,41 +59,18 @@ def register_CFunction_constraints_eval(
     ]
     expr_list = [Bcon.H, Bcon.Msquared]
     prefunc = """
-// Generic token-paste helper.
-// Uses the C preprocessor's '##' operator to concatenate two tokens into one,
-// as specified in the GCC docs on concatenation [gcc.gnu.org](https://gcc.gnu.org/onlinedocs/cpp/Concatenation.html).
-#define PASTE(a,b) a##b
-
-// Map a gridfunction enum like RBARDD00GF to its diagnostic counterpart DIAG_RBARDD00GF.
-// We keep this as a macro (not a hard-coded table) so it composes with all such GFs uniformly.
-#define DIAG_NAME(gf) PASTE(DIAG_, gf)
-
+// Map gridfunction enums to the correct backing storage on CPU vs CUDA.
+// CUDA: diags entirely on CPU; RbarDD output to diagnostic_gfs: 
+//      diagnostic_gfs[IDX4(DIAG_RBARDD00GF, i0, i1, i2)]
+// CPU: auxevol_gfs[IDX4(RBARDD00GF, i0, i1, i2)]
 #ifdef __CUDACC__
-  // CUDA kernels:
-  // - Read/write these fields from diagnostic_gfs.
-  // - Prepend DIAG_ to the GF enum when indexing so the same symbolic name
-  //   (e.g. RBARDD00GF) maps to the diagnostic storage location.
-  //
-  // The IDX4 macro is assumed to take (gf, i0, i1, i2) and map to a flat index.
-  #define GF_IN(gf, i0, i1, i2) diagnostic_gfs[IDX4(DIAG_NAME(gf), i0, i1, i2)]
+  #define GF_IN(gf, i0, i1, i2) diagnostic_gfs[IDX4(DIAG_##gf, i0, i1, i2)]
 #else
-  // CPU code:
-  // - Use the original auxevol_gfs layout without renaming.
   #define GF_IN(gf, i0, i1, i2) auxevol_gfs[IDX4(gf, i0, i1, i2)]
 #endif // __CUDACC__
-
-// Convenience wrappers for specific GF families used in both CPU and CUDA code.
-//
-// These let the Python code generator emit RBARDD_GF(...) / T4UU_GF(...)
-// uniformly; GF_IN then resolves to the correct backing array and (for CUDA)
-// the DIAG_* GF index.
-// Usage example:
-//   RBARDD_GF(RBARDD00GF, i0, i1, i2)
-// expands to:
-//   - auxevol_gfs[IDX4(RBARDD00GF, i0, i1, i2)]       (CPU)
-//   - diagnostic_gfs[IDX4(DIAG_RBARDD00GF, i0, i1, i2)] (CUDA)
-#define RBARDD_GF(gf, i0, i1, i2) GF_IN(gf, i0, i1, i2)
-#define T4UU_GF(gf, i0, i1, i2)   GF_IN(gf, i0, i1, i2)
+// These all resolve through GF_IN so call sites stay uniform.
+#define RBARDD_GF GF_IN
+#define T4UU_GF   GF_IN
 
 """
     loop_body = ccg.c_codegen(
