@@ -176,6 +176,7 @@ BHaH.diagnostics.diagnostics.register_all_diagnostics(
     enable_volume_integration_diagnostics=True,
     enable_free_auxevol=False,
     enable_psi4_diagnostics=False,
+    enable_bhahaha=(False if parallelization == "cuda" else True),
 )
 BHaH.general_relativity.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
     enable_interp_diagnostics=False, enable_psi4=False
@@ -340,7 +341,6 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
 
 BHaH.main_c.register_CFunction_main_c(
     initial_data_desc=IDtype,
-    pre_diagnostics=f"{'bhahaha_find_horizons(&commondata, griddata);' if parallelization == 'openmp' else ''}\n",
     MoL_method=MoL_method,
     boundary_conditions_desc=boundary_conditions_desc,
 )

@@ -184,11 +184,11 @@ to identify the apparent horizon with progressively refined grid resolutions.
       const int grid = 0;
 
       // Step 3.a: Allocate storage for initial grid functions (y_n_gfs).
-      BHAH_MALLOC(griddata[grid].gridfuncs.y_n_gfs, NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);
+      BHAH_MALLOC(griddata[grid].gridfuncs.y_n_gfs, NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot * sizeof(REAL));
 
       // Step 3.b: Allocate storage for additional grid functions required for time-stepping.
       bah_MoL_malloc_intermediate_stage_gfs(&commondata, params, &griddata[grid].gridfuncs);
-      BHAH_MALLOC(griddata[grid].gridfuncs.auxevol_gfs, NUM_AUXEVOL_GFS * Nxx_plus_2NGHOSTS_tot);
+      BHAH_MALLOC(griddata[grid].gridfuncs.auxevol_gfs, NUM_AUXEVOL_GFS * Nxx_plus_2NGHOSTS_tot * sizeof(REAL));
 
       // Step 3.c: Initialize commondata.h_p = NULL, so that if Step 5.a (interp 1D) fails,
       //   it doesn't trigger a double free() of h_p.

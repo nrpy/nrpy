@@ -36,6 +36,7 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
     enable_volume_integration_diagnostics: bool,
     enable_free_auxevol: bool = True,
     enable_psi4_diagnostics: bool = False,
+    enable_bhahaha: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Construct and register a C function that drives all scheduled diagnostics.
@@ -65,6 +66,7 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
         ignored by the generated code.
     :param enable_psi4_diagnostics: If True, include a call to
         psi4_spinweightm2_decomposition(...) on output steps.
+    :param enable_bhahaha: If True, include a call to bhahaha_find_horizon(...) on output steps.
     :return: None if in registration phase (after recording the requested registration),
         else the updated NRPy environment.
 
@@ -156,6 +158,9 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
     // for (int grid = 0; grid < commondata->NUMGRIDS; grid++)
     //   MoL_free_intermediate_stage_gfs(&griddata[grid].gridfuncs);
 
+    {"// Find apparent horizon(s)." if enable_bhahaha else ""}
+    {"bhahaha_find_horizons(commondata, griddata);" + newline if enable_bhahaha else ""}
+
     // Allocate temporary storage for diagnostic_gfs.
     REAL *diagnostic_gfs[MAXNUMGRIDS];
     for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {{
@@ -231,6 +236,7 @@ def register_all_diagnostics(
     enable_volume_integration_diagnostics: bool,
     enable_free_auxevol: bool = True,
     enable_psi4_diagnostics: bool = False,
+    enable_bhahaha: bool = False,
 ) -> None:
     """
     Register and stage all diagnostics-related C code and helper headers.
@@ -249,6 +255,7 @@ def register_all_diagnostics(
     :param enable_volume_integration_diagnostics: If True, include volume-integration diagnostics.
     :param enable_free_auxevol: Reserved for future use; currently ignored by the generated code.
     :param enable_psi4_diagnostics: If True, decompose psi4 into spin-weight -2 spherical harmonics.
+    :param enable_bhahaha: If True, include a call to bhahaha_find_horizon(...) on output steps.
 
     Doctests:
     TBD
@@ -273,6 +280,7 @@ def register_all_diagnostics(
         enable_volume_integration_diagnostics=enable_volume_integration_diagnostics,
         enable_free_auxevol=enable_free_auxevol,
         enable_psi4_diagnostics=enable_psi4_diagnostics,
+        enable_bhahaha=enable_bhahaha,
     )
     if enable_nearest_diagnostics:
         for CoordSystem in set_of_CoordSystems:

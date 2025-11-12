@@ -391,7 +391,7 @@ Precomputation strategy on the (theta,phi) grid at fixed i0=NGHOSTS:
 
   REAL *restrict metric_data_gfs;
   // Single heap allocation sized for a 2D (theta,phi) slab at i0 = NGHOSTS.
-  BHAH_MALLOC(metric_data_gfs, Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_DIAG_GFS);
+  BHAH_MALLOC(metric_data_gfs, Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_DIAG_GFS * sizeof(REAL));
 
   // Compute sqrt(q_{theta theta}), sqrt(q_{phi phi}), and q_{theta phi} across the entire (theta,phi) grid at i0=NGHOSTS.
   {
