@@ -13,9 +13,13 @@ import nrpy.params as par
 
 def register_CFunction_psi4_spinweightm2_decomposition() -> None:
     """
-    Register C function for decomposing psi4 into spin-weighted spherical harmonics via 2D interpolation on uniform source grids at each φ slice.
+    Register the C function `psi4_spinweightm2_decomposition`.
 
-    :raises ValueError: If psi4 decomposition is not supported for the coordinate system.
+    The registered C function:
+    - Sets parameters for psi4 extraction radii and angular resolution.
+    - Interpolates psi4 from the 3D grid onto spherical shells.
+    - Decomposes psi4 into spin-weight -2 spherical-harmonic modes.
+    - Writes R_ext * psi4_{l,m} time series to disk.
     """
     par.register_CodeParameters(
         "int",

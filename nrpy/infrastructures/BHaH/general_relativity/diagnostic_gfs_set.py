@@ -48,7 +48,6 @@ def register_CFunction_diagnostic_gfs_set(
                                       in the registration; if False, omit them.
     :param enable_T4munu:            If True, copy latest T4munu to DIAG_T4UU gridfunctions.
     :return: None if in registration phase, else the updated NRPy environment.
-    :raises ValueError: If a diagnostics gridfunction's parity type cannot be inferred from its name.
 
     Doctests:
     TBD
@@ -135,7 +134,6 @@ def register_CFunction_diagnostic_gfs_set(
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     const params_struct *restrict params = &griddata[grid].params;
     const rfm_struct *restrict rfmstruct = griddata[grid].rfmstruct;
-    SET_NXX_PLUS_2NGHOSTS_VARS(grid);
     const REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
     MAYBE_UNUSED REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
 
@@ -146,16 +144,16 @@ def register_CFunction_diagnostic_gfs_set(
     //     } // END LOOP over all points & gridfunctions, poisoning diagnostic_gfs
 """
     parallelization = par.parval_from_str("parallelization")
-    Ricci_gfs_ptr = (
-        "&diagnostic_gfs[grid][IDX4pt(DIAG_RBARDD00GF, 0)]"
+    ricci_call = (
+        "Ricci_eval_host(params, rfmstruct, y_n_gfs, diagnostic_gfs[grid]);"
         if parallelization == "cuda"
-        else "&auxevol_gfs[IDX4pt(RBARDD00GF, 0)]"
+        else "Ricci_eval(params, rfmstruct, y_n_gfs, auxevol_gfs);"
     )
     body += f"""
     // Set Ricci and constraints gridfunctions
-    Ricci_eval{'_host' if parallelization == 'cuda' else ''}(params, rfmstruct, y_n_gfs, {Ricci_gfs_ptr});
+    {ricci_call}
     constraints_eval(commondata, params, rfmstruct, y_n_gfs, auxevol_gfs, diagnostic_gfs[grid]);
-"""
+    """
     if enable_psi4:
         body += """
     // NOTE: Inner boundary conditions must be set before any interpolations are performed, whether for psi4 decomp. or interp diags.

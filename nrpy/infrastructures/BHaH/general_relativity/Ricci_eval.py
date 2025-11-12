@@ -64,6 +64,8 @@ def register_CFunction_Ricci_eval(
                 else Path("intrinsics") / "simd_intrinsics.h"
             )
         ]
+    if host_only_version:
+        includes += ["diagnostics/diagnostic_gfs.h"]
     desc = r"""Set Ricci tensor."""
     cfunc_type = "void"
     name = "Ricci_eval"
@@ -71,7 +73,7 @@ def register_CFunction_Ricci_eval(
         name += "_host"
     arg_dict_cuda = {
         "in_gfs": "const REAL *restrict",
-        "RbarDD00_ptr": "REAL *restrict",
+        "out_gfs": "REAL *restrict",
     }
     arg_dict_cuda = {
         "rfmstruct": "const rfm_struct *restrict",
@@ -83,10 +85,10 @@ def register_CFunction_Ricci_eval(
     }
     params = ",".join([f"{v} {k}" for k, v in arg_dict_host.items()])
 
-    # Populate Ricci tensor
     Ricci_access_gfs: List[str] = []
-    for gf in range(6):
-        Ricci_access_gfs += [f"RbarDD00_ptr[IDX4({gf}, i0, i1, i2)]"]
+    for var in Bq.Ricci_varnames:
+        diag_prefix = "DIAG_" if host_only_version else ""
+        Ricci_access_gfs += [f"out_gfs[IDX4({diag_prefix}{var.upper()}GF, i0, i1, i2)]"]
     kernel_body = BHaH.simple_loop.simple_loop(
         loop_body=ccg.c_codegen(
             Bq.Ricci_exprs,
@@ -132,11 +134,11 @@ def register_CFunction_Ricci_eval(
 
     prefunc = ""
     if is_cuda and enable_fd_functions:
-        prefunc = fin.construct_FD_functions_prefunc(
+        prefunc += fin.construct_FD_functions_prefunc(
             cfunc_decorators="__device__ "
         ).replace("SIMD", "CUDA")
     elif enable_fd_functions:
-        prefunc = fin.construct_FD_functions_prefunc()
+        prefunc += fin.construct_FD_functions_prefunc()
 
     # Restore original parallelization parameter.
     par.set_parval_from_str("parallelization", orig_parallelization)
