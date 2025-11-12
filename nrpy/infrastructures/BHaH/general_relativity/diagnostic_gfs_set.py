@@ -48,7 +48,6 @@ def register_CFunction_diagnostic_gfs_set(
                                       in the registration; if False, omit them.
     :param enable_T4munu:            If True, copy latest T4munu to DIAG_T4UU gridfunctions.
     :return: None if in registration phase, else the updated NRPy environment.
-    :raises ValueError: If a diagnostics gridfunction's parity type cannot be inferred from its name.
 
     Doctests:
     TBD

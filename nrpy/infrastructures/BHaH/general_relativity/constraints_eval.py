@@ -50,7 +50,7 @@ def register_CFunction_constraints_eval(
     desc = r"""Evaluate BSSN constraints."""
     cfunc_type = "void"
     name = "constraints_eval"
-    params = """const commondata_struct *restrict commondata, const params_struct *restrict params, 
+    params = """const commondata_struct *restrict commondata, const params_struct *restrict params,
     const rfm_struct *restrict rfmstruct, const REAL *restrict in_gfs, const REAL *restrict auxevol_gfs, REAL *restrict diagnostic_gfs"""
     Bcon = BSSN_constraints[
         CoordSystem
