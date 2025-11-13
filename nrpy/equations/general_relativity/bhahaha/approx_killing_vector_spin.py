@@ -283,7 +283,7 @@ class ApproxKillingSpinClass:
             for A in range(1, 3):
                 divm += d_xiU[m][A][A]
                 for B in range(1, 3):
-                    divm += self._Gamma2D[A][A][B] * self._xiU[m][B]
+                    divm += self._Gamma2D[A][C][A] * self._xiU[m][C]
             self._div_xi[m] = divm
 
         # 2D covariant derivative of xi_B: D_A xi_B = ∂_A xi_B - Γ^C_{AB} xi_C
