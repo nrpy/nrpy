@@ -5,7 +5,7 @@ This module performs the same power simplification as custom_c_codegen_functions
 Author: Siddharth Mahesh; sm0193 **at** mix **dot* wvu **dot* edu
 """
 
-from typing import Any, Union
+from typing import Any, Dict, Union
 
 import sympy as sp
 
@@ -30,7 +30,7 @@ class NRPyJaxPrinter(Printer):  # type: ignore
     _kf = known_functions
     _kc = known_constants
 
-    def __init__(self, settings=None) -> None:
+    def __init__(self, settings: Union[None, Dict[str, Any]] = None) -> None:
         """
         Initialize the NRPyJaxPrinter.
 
