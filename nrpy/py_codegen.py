@@ -105,14 +105,14 @@ def py_codegen(
 
     >>> x, y, z = sp.symbols("x y z", real=True)
     >>> print(py_codegen(x**2 + sp.sqrt(y) - sp.sin(x*z), "blah", verbose=False))
-    blah = ((x)*(x)) + jax.numpy.sqrt(y) - jax.numpy.sin(x*z)
+    blah = ((x)*(x)) + jnp.sqrt(y) - jnp.sin(x*z)
     <BLANKLINE>
     >>> print(py_codegen(x**5 + x**3 + sp.sin(x**3), "blah"))
     #
     #  Original SymPy expression:
     #  "blah = x**5 + x**3 + sin(x**3)"
     tmp0 = ((x)*(x)*(x))
-    blah = tmp0 + ((x)*(x)*(x)*(x)*(x)) + jax.numpy.sin(tmp0)
+    blah = tmp0 + ((x)*(x)*(x)*(x)*(x)) + jnp.sin(tmp0)
     <BLANKLINE>
     """
     # Injected tuples wreak havoc in this function, so check for them & error out if spotted.

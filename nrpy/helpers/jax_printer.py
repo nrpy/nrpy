@@ -8,16 +8,35 @@ Author: Siddharth Mahesh; sm0193 **at** mix **dot* wvu **dot* edu
 from typing import Any, Union
 
 import sympy as sp
-from sympy.printing.numpy import JaxPrinter
+
+try:
+    from sympy.printing.numpy import JaxPrinter as Printer
+    from sympy.printing.numpy import _known_constants_jax as known_constants
+    from sympy.printing.numpy import _known_functions_jax as known_functions
+except ImportError:
+    # Fallback for older SymPy versions
+    from sympy.printing.numpy import NumPyPrinter as Printer
+    from sympy.printing.numpy import _known_constants_numpy, _known_functions_numpy
+
+    known_functions = {k: "jnp." + v for k, v in _known_functions_numpy.items()}
+    known_constants = {k: "jnp." + v for k, v in _known_constants_numpy.items()}
 
 
 # adding a type ignore as mypy does not let me inherit from JaxPrinter
-class NRPyJaxPrinter(JaxPrinter):  # type: ignore
+class NRPyJaxPrinter(Printer):  # type: ignore
     """Custom JAX printer to handle custom power simplification."""
 
-    def __init__(self) -> None:
-        """Initialize the NRPyJaxPrinter."""
-        super().__init__()
+    _module = "jnp"
+    _kf = known_functions
+    _kc = known_constants
+
+    def __init__(self, settings=None) -> None:
+        """
+        Initialize the NRPyJaxPrinter.
+
+        :param settings: Settings for the printer.(defaults to None)
+        """
+        super().__init__(settings=settings)
 
     def _print_Pow(self, expr: sp.Basic, rational: bool = False) -> Union[str, Any]:
         """
@@ -43,19 +62,19 @@ class NRPyJaxPrinter(JaxPrinter):  # type: ignore
         if exp == sp.Rational(1, 2) or (
             getattr(exp, "is_Float", False) and float(exp) == 0.5
         ):
-            return f"jax.numpy.sqrt({b})"
+            return f"{self._module}.sqrt({b})"
         if exp == -sp.Rational(1, 2) or (
             getattr(exp, "is_Float", False) and float(exp) == -0.5
         ):
-            return f"(1.0/jax.numpy.sqrt({b}))"
+            return f"(1.0/{self._module}.sqrt({b}))"
         if exp == sp.Rational(1, 3):
-            return f"jax.numpy.cbrt({b})"
+            return f"{self._module}.cbrt({b})"
         if exp == -sp.Rational(1, 3):
-            return f"(1.0/jax.numpy.cbrt({b}))"
+            return f"(1.0/{self._module}.cbrt({b}))"
         if exp == sp.Rational(1, 6):
-            return f"jax.numpy.sqrt(jax.numpy.cbrt({b}))"
+            return f"{self._module}.sqrt({self._module}.cbrt({b}))"
         if exp == -sp.Rational(1, 6):
-            return f"(1.0/(jax.numpy.sqrt(jax.numpy.cbrt({b}))))"
+            return f"(1.0/({self._module}.sqrt({self._module}.cbrt({b}))))"
 
         # Small integer powers mapped to repeated multiplication
         if isinstance(exp, sp.Integer):
