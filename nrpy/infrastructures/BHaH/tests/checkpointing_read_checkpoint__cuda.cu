@@ -11,17 +11,11 @@
     size_t _expected = (size_t)(nmemb);                                                                                                              \
     size_t _got = fread((ptr), (size), (nmemb), (stream));                                                                                           \
     if (_got != _expected) {                                                                                                                         \
-      fprintf(stderr, "read_checkpoint: FATAL: error while reading %s (%s): expected %zu items, got %zu.\n", (filename), (context),                  \
-              (unsigned long)_expected, (unsigned long)_got);                                                                                        \
+      fprintf(stderr, "read_checkpoint: FATAL: error while reading %s (%s): expected %zu items, got %zu.\n", (filename), (context), _expected,       \
+              _got);                                                                                                                                 \
       exit(EXIT_FAILURE);                                                                                                                            \
     }                                                                                                                                                \
   } while (0)
-
-#define BHAH_CHKPT_CPY_HOST_TO_DEVICE_ALL_GFS()                                                                                                      \
-  for (int gf = 0; gf < NUM_EVOL_GFS; gf++) {                                                                                                        \
-    cpyHosttoDevice__gf(commondata, &griddata[grid].params, griddata[grid].gridfuncs.y_n_gfs, griddata_device[grid].gridfuncs.y_n_gfs, gf, gf,       \
-                        griddata[grid].params.grid_idx % NUM_STREAMS);                                                                               \
-  } // END LOOP over gridfunctions
 
 /**
  * Read a checkpoint file
@@ -75,7 +69,9 @@ int read_checkpoint(commondata_struct *restrict commondata, griddata_struct *res
     free(out_data_indices);
     free(compact_out_data);
 
-    IFCUDARUN(BHAH_CHKPT_CPY_HOST_TO_DEVICE_ALL_GFS());
+    IFCUDARUN(for (int gf = 0; gf < NUM_EVOL_GFS; gf++)
+                  cpyHosttoDevice__gf(commondata, &griddata[grid].params, griddata[grid].gridfuncs.y_n_gfs, griddata_device[grid].gridfuncs.y_n_gfs,
+                                      gf, gf, griddata[grid].params.grid_idx % NUM_STREAMS););
 
   } // END LOOP over grids
   fclose(cp_file);

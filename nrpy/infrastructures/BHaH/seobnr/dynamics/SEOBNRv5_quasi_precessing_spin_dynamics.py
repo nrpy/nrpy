@@ -249,10 +249,10 @@ commondata->L_z.acc = gsl_interp_accel_alloc();
 gsl_spline_init(commondata->L_z.spline, omega, L_z, nsteps);
 
 // free up memory
-free(chi1_dot_lnhat);
-free(chi2_dot_lnhat);
-free(chi1_dot_l);
-free(chi2_dot_l);
+free(chi1_lnhat);
+free(chi2_lnhat);
+free(chi1_l);
+free(chi2_l);
 free(lnhat_x);
 free(lnhat_y);
 free(lnhat_z);

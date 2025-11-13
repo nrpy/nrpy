@@ -58,21 +58,6 @@ def register_CFunction_constraints_eval(
         + ("_T4munu" if enable_T4munu else "")
     ]
     expr_list = [Bcon.H, Bcon.Msquared]
-    prefunc = """
-// Map gridfunction enums to the correct backing storage on CPU vs CUDA.
-// CUDA: diags entirely on CPU; RbarDD output to diagnostic_gfs: 
-//      diagnostic_gfs[IDX4(DIAG_RBARDD00GF, i0, i1, i2)]
-// CPU: auxevol_gfs[IDX4(RBARDD00GF, i0, i1, i2)]
-#ifdef __CUDACC__
-  #define GF_IN(gf, i0, i1, i2) diagnostic_gfs[IDX4(DIAG_##gf, i0, i1, i2)]
-#else
-  #define GF_IN(gf, i0, i1, i2) auxevol_gfs[IDX4(gf, i0, i1, i2)]
-#endif // __CUDACC__
-// These all resolve through GF_IN so call sites stay uniform.
-#define RBARDD_GF GF_IN
-#define T4UU_GF   GF_IN
-
-"""
     loop_body = ccg.c_codegen(
         expr_list,
         [
@@ -85,17 +70,19 @@ def register_CFunction_constraints_eval(
         rational_const_alias="static const",
     )
     # RBARDD: auxevol_gfs[IDX4(RBARDDxyGF, i0, i1, i2)] -> RBARDD_GF(RBARDDxyGF, i0, i1, i2)
-    loop_body = re.sub(
-        r"auxevol_gfs\[IDX4\((RBARDD[0-9][0-9]GF), i0, i1, i2\)\]",
-        r"RBARDD_GF(\1, i0, i1, i2)",
-        loop_body,
-    )
-    # T4UU: auxevol_gfs[IDX4(T4UUxyGF, i0, i1, i2)] -> T4UU_GF(T4UUxyGF, i0, i1, i2)
-    loop_body = re.sub(
-        r"auxevol_gfs\[IDX4\((T4UU[0-9][0-9]GF), i0, i1, i2\)\]",
-        r"T4UU_GF(\1, i0, i1, i2)",
-        loop_body,
-    )
+    if orig_parallelization == "cuda":
+        loop_body = re.sub(
+            r"auxevol_gfs\[IDX4\((RBARDD[0-9][0-9]GF), i0, i1, i2\)\]",
+            r"diagnostic_gfs[IDX4(DIAG_\1, i0, i1, i2)]",
+            loop_body,
+        )
+        if enable_T4munu:
+            # T4UU: auxevol_gfs[IDX4(T4UUxyGF, i0, i1, i2)] -> T4UU_GF(T4UUxyGF, i0, i1, i2)
+            loop_body = re.sub(
+                r"auxevol_gfs\[IDX4\((T4UU[0-9][0-9]GF), i0, i1, i2\)\]",
+                r"diagnostic_gfs[IDX4(DIAG_\1, i0, i1, i2)]",
+                loop_body,
+            )
     body = BHaH.simple_loop.simple_loop(
         loop_body=loop_body,
         loop_region="interior",
@@ -110,11 +97,7 @@ def register_CFunction_constraints_eval(
         subdirectory="diagnostics",
         enable_simd=True,
         includes=includes,
-        prefunc=(
-            prefunc + fin.construct_FD_functions_prefunc()
-            if enable_fd_functions
-            else ""
-        ),
+        prefunc=(fin.construct_FD_functions_prefunc() if enable_fd_functions else ""),
         desc=desc,
         cfunc_type=cfunc_type,
         name=name,

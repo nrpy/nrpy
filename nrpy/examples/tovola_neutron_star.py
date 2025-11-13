@@ -37,13 +37,14 @@ default_checkpoint_every = 2.0
 Nxx_dict = {
     "SinhSpherical": [64, 16, 2],
 }
-enable_rfm_precompute = True
 fd_order = 4
 radiation_BC_fd_order = 4
-enable_intrinsics = True
 enable_parallel_codegen = True
 enable_fd_functions = True
-separately_compute_Ricci = False
+
+enable_rfm_precompute = True  # WIP: Will remove; for ease of maintenance we are no longer supporting disabled
+enable_intrinsics = True  # WIP: Will remove; for ease of maintenance we are no longer supporting disabled
+
 
 OMP_collapse = 1
 if "Spherical" in CoordSystem:
@@ -54,6 +55,8 @@ if "Spherical" in CoordSystem:
 if "Cylindrical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "1")
     OMP_collapse = 2  # might be slightly faster
+
+set_of_CoordSystems = {CoordSystem}
 
 project_dir = os.path.join("project", project_name)
 
@@ -71,7 +74,7 @@ par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 
 BHaH.general_relativity.TOVola.TOVola_interp.register_CFunction_TOVola_interp()
 BHaH.general_relativity.TOVola.TOVola_solve.register_CFunction_TOVola_solve()
-BHaH.general_relativity.BSSN.initial_data.register_CFunction_initial_data(
+BHaH.general_relativity.initial_data.register_CFunction_initial_data(
     CoordSystem=CoordSystem,
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
@@ -94,32 +97,32 @@ TOVola_solve(commondata, &ID_persist);
 """,
     enable_T4munu=True,
 )
-BHaH.general_relativity.BSSN.diagnostics.register_CFunction_diagnostics(
-    set_of_CoordSystems={CoordSystem},
-    default_diagnostics_out_every=diagnostics_output_every,
-    enable_psi4_diagnostics=False,
-    use_Ricci_eval_func=False,
-    grid_center_filename_tuple=("out0d-conv_factor%.2f.txt", "convergence_factor"),
-    axis_filename_tuple=(
-        "out1d-AXIS-conv_factor%.2f-t%08.2f.txt",
-        "convergence_factor, time",
-    ),
-    plane_filename_tuple=(
-        "out2d-PLANE-conv_factor%.2f-t%08.2f.txt",
-        "convergence_factor, time",
-    ),
-    out_quantities_dict="default",
+BHaH.general_relativity.Ricci_eval.register_CFunction_Ricci_eval(
+    CoordSystem=CoordSystem,
+    enable_intrinsics=enable_intrinsics,
+    enable_fd_functions=enable_fd_functions,
+    OMP_collapse=OMP_collapse,
 )
+BHaH.diagnostics.diagnostics.register_all_diagnostics(
+    project_dir=project_dir,
+    set_of_CoordSystems=set_of_CoordSystems,
+    default_diagnostics_out_every=diagnostics_output_every,
+    enable_nearest_diagnostics=True,
+    enable_interp_diagnostics=False,
+    enable_volume_integration_diagnostics=True,
+)
+BHaH.general_relativity.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
+    enable_interp_diagnostics=False, enable_psi4=False
+)
+BHaH.general_relativity.diagnostics_nearest.register_CFunction_diagnostics_nearest()
+BHaH.general_relativity.diagnostics_volume_integration.register_CFunction_diagnostics_volume_integration()
 if enable_rfm_precompute:
     BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
         set_of_CoordSystems={CoordSystem}
     )
-BHaH.general_relativity.BSSN.constraints.register_CFunction_constraints_eval(
+BHaH.general_relativity.constraints_eval.register_CFunction_constraints_eval(
     CoordSystem=CoordSystem,
-    enable_rfm_precompute=enable_rfm_precompute,
-    enable_RbarDD_gridfunctions=False,
     enable_T4munu=True,
-    enable_intrinsics=enable_intrinsics,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
@@ -167,6 +170,9 @@ par.adjust_CodeParam_default("t_final", t_final)
 #         command line parameters, set up boundary conditions,
 #         and create a Makefile for this project.
 #         Project is output to project/[project_name]/
+BHaH.diagnostics.diagnostic_gfs_h_create.diagnostics_gfs_h_create(
+    project_dir=project_dir
+)
 BHaH.CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
 BHaH.CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
 BHaH.cmdline_input_and_parfiles.generate_default_parfile(
@@ -193,13 +199,17 @@ BHaH.griddata_commondata.register_CFunction_griddata_free(
     enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True
 )
 
-if enable_intrinsics:
-    copy_files(
-        package="nrpy.helpers",
-        filenames_list=["simd_intrinsics.h"],
-        project_dir=project_dir,
-        subdirectory="intrinsics",
-    )
+# SIMD intrinsics needed for 3D interpolation, constraints evaluation, etc.
+intrinsics_file_list = ["simd_intrinsics.h"]
+# if parallelization == "cuda":
+#     # CUDA intrinsics needed for CUDA-enabled projects.
+#     intrinsics_file_list += ["cuda_intrinsics.h"]
+copy_files(
+    package="nrpy.helpers",
+    filenames_list=intrinsics_file_list,
+    project_dir=project_dir,
+    subdirectory="intrinsics",
+)
 
 BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,

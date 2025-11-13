@@ -419,7 +419,7 @@ def register_CFunction_cpyHosttoDevice__gf() -> None:
     <BLANKLINE>
       int offset_gpu = Nxx_plus_2NGHOSTS_tot * gpu_GF_IDX;
       int offset_host = Nxx_plus_2NGHOSTS_tot * host_GF_IDX;
-      cudaMemcpyAsync(&gf_gpu[offset_host], &gf_host[offset_gpu], sizeof(REAL) * Nxx_plus_2NGHOSTS_tot, cudaMemcpyHostToDevice, streams[streamid]);
+      cudaMemcpyAsync(&gf_gpu[offset_gpu], &gf_host[offset_host], sizeof(REAL) * Nxx_plus_2NGHOSTS_tot, cudaMemcpyHostToDevice, streams[streamid]);
       cudaCheckErrors(cudaMemcpyAsync, "Copy of gf data failed");
     } // END FUNCTION cpyHosttoDevice__gf
     <BLANKLINE>
@@ -438,8 +438,8 @@ def register_CFunction_cpyHosttoDevice__gf() -> None:
 
   int offset_gpu  = Nxx_plus_2NGHOSTS_tot * gpu_GF_IDX;
   int offset_host = Nxx_plus_2NGHOSTS_tot * host_GF_IDX;
-  cudaMemcpyAsync(&gf_gpu[offset_host],
-                  &gf_host[offset_gpu],
+  cudaMemcpyAsync(&gf_gpu[offset_gpu],
+                  &gf_host[offset_host],
                   sizeof(REAL) * Nxx_plus_2NGHOSTS_tot,
                   cudaMemcpyHostToDevice, streams[streamid]);
   cudaCheckErrors(cudaMemcpyAsync, "Copy of gf data failed");
