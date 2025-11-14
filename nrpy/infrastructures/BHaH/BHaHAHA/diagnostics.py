@@ -161,6 +161,8 @@ calculations, norm evaluations, and detailed final iteration analyses.
       if (commondata->error_flag != BHAHAHA_SUCCESS)
         return;
 
+      bah_diagnostics_quasi_local_mass_spin(commondata, griddata);
+
       // Display detailed final iteration diagnostics if verbosity is enabled.
       {
         bhahaha_diagnostics_struct *restrict bhahaha_diags = commondata->bhahaha_diagnostics;
