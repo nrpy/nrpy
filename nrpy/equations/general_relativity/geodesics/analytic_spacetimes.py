@@ -1,20 +1,15 @@
-# In file: nrpy/equations/general_relativity/analytic_spacetimes.py
 """
 Construct symbolic expressions for various analytic spacetime metrics.
 
 This module provides a class-based structure for generating the symbolic
 metric tensor for several common analytic solutions to Einstein's equations,
 such as Kerr-Schild and Schwarzschild. It is designed to integrate with
-nrpy's CodeParameter system. It adheres to the nrpy "gold standard" for
-equations modules, including a caching dictionary and a validation suite.
+nrpy's CodeParameter system.
 
 Author: Dalton J. Moone
-        (based on the NRPy+ framework by the NRPy+ team)
 """
+
 # Step 0.a: Import standard Python modules
-import doctest
-import os
-import sys
 from typing import Dict, List, Tuple
 
 # Step 0.b: Import third-party modules
@@ -40,15 +35,18 @@ class AnalyticSpacetimes:
     coordinate system symbols, storing them as instance attributes.
     """
 
+    # mypy --strict requires class attributes to be declared.
+    spacetime_name: str
+    g4DD: List[List[sp.Expr]]
+    xx: List[sp.Symbol]
+
     def __init__(self, spacetime_name: str) -> None:
         """
-        Get or create an AnalyticSpacetimes instance for a given configuration.
+        Initialize and generate the symbolic metric for a given spacetime.
 
-        Args:
-            key: A string key identifying the spacetime (e.g., "KerrSchild").
-
-        Returns
-            An AnalyticSpacetimes instance for the specified configuration.
+        :param spacetime_name: The name of the spacetime to generate
+                               (e.g., "KerrSchild", "Schwarzschild_Cartesian").
+        :raises ValueError: If the requested spacetime is not supported.
         """
         self.spacetime_name = spacetime_name
 
@@ -67,16 +65,13 @@ class AnalyticSpacetimes:
         Define the Kerr metric in Cartesian Kerr-Schild coordinates.
 
         The metric is constructed as g_munu = eta_munu + 2H * l_mu * l_nu.
-        This recipe uses the global CodeParameter symbols for M and a.
 
-        Returns
-            A tuple (g4DD, xx), where g4DD is the symbolic 4x4 metric tensor
-            and xx is the list of symbolic coordinate variables (t, x, y, z).
+        :return: A tuple (g4DD, xx), where g4DD is the symbolic 4x4 metric tensor
+                 and xx is the list of symbolic coordinate variables (x, y, z).
         """
         # Step 1: Define generic symbolic coordinates.
-        t, x, y, z = sp.symbols("t x y z", real=True)
-        xx = [t, x, y, z]
-        # Can combine the two lines above
+        x, y, z = sp.symbols("x y z", real=True)
+        xx = [x, y, z]
 
         # Step 2: Define intermediate geometric quantities.
         r2 = x**2 + y**2 + z**2
@@ -114,15 +109,13 @@ class AnalyticSpacetimes:
 
         This recipe uses the global CodeParameter symbol for M.
 
-        Returns
-            A tuple (g4DD, xx), where g4DD is the symbolic 4x4 metric tensor
-            and xx is the list of symbolic coordinate variables.
+        :return: A tuple (g4DD, xx), where g4DD is the symbolic 4x4 metric tensor
+                 and xx is the list of symbolic coordinate variables.
         """
         # Step 1: Define generic symbolic coordinates and radial distance.
-        t, x, y, z = sp.symbols("t x y z", real=True)
-        xx = [t, x, y, z]
+        x, y, z = sp.symbols("x y z", real=True)
+        xx = [x, y, z]
         r = sp.sqrt(x**2 + y**2 + z**2)
-        x_i = [x, y, z]
 
         g4DD = ixp.zerorank2(dimension=4)
         # Step 2: Set the time-time component.
@@ -135,23 +128,20 @@ class AnalyticSpacetimes:
             for j in range(3):
                 delta_ij = sp.sympify(1) if i == j else sp.sympify(0)
                 g4DD[i + 1][j + 1] = delta_ij + (2 * M_scale / r) * (
-                    x_i[i] * x_i[j] / (r**2)
+                    xx[i] * xx[j] / (r**2)
                 )
         return g4DD, xx
 
 
-class AnalyticSpacetimes_dict(Dict[str, AnalyticSpacetimes]):
+class AnalyticSpacetimes_dict(Dict[str, "AnalyticSpacetimes"]):
     """A caching dictionary for AnalyticSpacetimes instances."""
 
-    def __getitem__(self, key: str) -> AnalyticSpacetimes:
+    def __getitem__(self, key: str) -> "AnalyticSpacetimes":
         """
         Get or create an AnalyticSpacetimes instance for a given configuration.
 
-        Args:
-            key: A string key identifying the spacetime (e.g., "KerrSchild").
-
-        Returns
-            An AnalyticSpacetimes instance for the specified configuration.
+        :param key: A string key identifying the spacetime (e.g., "KerrSchild").
+        :return: An AnalyticSpacetimes instance for the specified configuration.
         """
         if key not in self:
             print(f"Setting up analytic spacetime: '{key}'...")
@@ -163,6 +153,11 @@ Analytic_Spacetimes = AnalyticSpacetimes_dict()
 
 
 if __name__ == "__main__":
+    # Move imports here to avoid pylint unused-import errors.
+    import doctest
+    import os
+    import sys
+
     results = doctest.testmod()
     if results.failed > 0:
         print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
@@ -170,14 +165,16 @@ if __name__ == "__main__":
     else:
         print(f"Doctest passed: All {results.attempted} test(s) passed")
 
-    for spacetime_name in ["KerrSchild", "Schwarzschild_Cartesian"]:
-        spacetimes = Analytic_Spacetimes[spacetime_name]
+    # Use a distinct loop variable name to avoid pylint redefined-outer-name warnings.
+    for spacetime_name_str in ["KerrSchild", "Schwarzschild_Cartesian"]:
+        spacetimes = Analytic_Spacetimes[spacetime_name_str]
         results_dict = ve.process_dictionary_of_expressions(
             spacetimes.__dict__, fixed_mpfs_for_free_symbols=True
         )
+        # Break long line to satisfy pylint line-too-long.
         ve.compare_or_generate_trusted_results(
             os.path.abspath(__file__),
             os.getcwd(),
-            f"{os.path.splitext(os.path.basename(__file__))[0]}_{spacetime_name}",
+            f"{os.path.splitext(os.path.basename(__file__))[0]}_{spacetime_name_str}",
             results_dict,
         )
