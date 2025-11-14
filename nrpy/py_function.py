@@ -29,15 +29,38 @@ class PyFunction:
     >>> print(func.full_function)
     <BLANKLINE>
     def main():
-    """
-    just a test... testing 1,2,3
-    """
-    return 0
+        """
+        just a test... testing 1,2,3
+        """
+        return 0
     <BLANKLINE>
     >>> func2 = PyFunction()  # doctest: +ELLIPSIS
     Traceback (most recent call last):
         ...
     ValueError: Error in PyFunction: 'name' attribute must be set.
+    >>> imports = ["import jax","import jax.numpy as jnp"]
+    >>> pyfunc_decorators = "@jax.jit"
+    >>> name = "main"
+    >>> desc = """Add two arrays
+    ... # this function adds two arrays
+    ... """
+    >>> params = "a,b"
+    >>> body = """res = jnp.add(a,b)
+    ... return res"""
+    >>> func = PyFunction(imports=imports,pyfunc_decorators=pyfunc_decorators,name=name,params=params,desc=desc,body=body)
+    >>> print(func.full_function)
+    import jax
+    import jax.numpy as jnp
+    <BLANKLINE>
+    @jax.jit
+    def main(a,b):
+        """
+        Add two arrays
+        this function adds two arrays
+        """
+        res = jnp.add(a,b)
+        return res
+    <BLANKLINE>
     '''
 
     def __init__(
@@ -89,7 +112,7 @@ class PyFunction:
         input_string = input_string.strip("\n")
 
         lines = input_string.split("\n")
-        out_lines = ['"""\n']
+        out_lines = ['    """\n']
 
         for raw in lines:
             # Remove trailing whitespace first.
@@ -97,41 +120,63 @@ class PyFunction:
 
             # Empty/whitespace-only line -> add a blank line.
             if clean.strip() == "":
-                out_lines.append("")
+                out_lines.append("\n")
                 continue
 
             # If the line is exactly a lone " #" at column 0, keep it as an empty-content line.
             if clean == " #":
-                out_lines.append("")
+                out_lines.append("\n")
                 continue
 
             # If the line already begins with the canonical prefix at column 0,
             # normalize by removing that prefix and re-adding it.
             if clean.startswith(" # "):
-                content = clean[3:]
-                out_lines.append(content)
-                continue
+                clean = clean[3:]
+            if clean.startswith(" #"):
+                clean = clean[2:]
+            if clean.startswith("#"):
+                clean = clean[1:]
 
             # Compute indentation and the rest of the line.
             i = 0
             while i < len(clean) and clean[i] == " ":
                 i += 1
-            indent = clean[:i]
             rest = clean[i:]
 
-            # Decide how much indentation to keep after the inserted prefix.
+            # Remove any leading hash.
             if rest.startswith("#"):
-                # Avoid double-spacing between " # " and a following hash
-                # by consuming one indentation space if present.
-                indent_after_prefix = indent[1:] if len(indent) > 0 else ""
-            else:
-                indent_after_prefix = indent
+                rest = rest[1:]
 
-            # Build the reformatted line.
-            out_lines.append(indent_after_prefix + rest)
+            # Build the reformatted line with standard 4-space indentation.
+            out_lines.append(f"    {rest}\n")
 
-        out_lines.append('\n"""')
+        out_lines.append('    """')
         return "".join(out_lines)
+
+    @staticmethod
+    def indent_body(body: str) -> str:
+        """
+        Indent the body of a function with standard 4-space indentation.
+
+        :param body: The body of the function to be indented.
+        :return: The indented body of the function.
+        """
+        body_as_lines = body.split("\n")
+        out_body = []
+        for body_line in body_as_lines:
+            clean = body_line.rstrip()
+            if clean.strip() == "":
+                out_body.append("\n")
+                continue
+            if clean.startswith(" "):
+                i = 0
+                while i < len(clean) and clean[i] == " ":
+                    i += 1
+                rest = clean[i:]
+                out_body.append(f"    {rest}\n")
+            else:
+                out_body.append(f"    {body_line}\n")
+        return "".join(out_body)
 
     @staticmethod
     def subdirectory_depth(subdirectory: str) -> int:
@@ -194,7 +239,7 @@ class PyFunction:
                         f"Error in Pyfunction(name={self.name}): imports must be a list of strings. Found imports = {self.imports}"
                     )
 
-                complete_func += f'import "{imp}"\n'
+                complete_func += f"{imp}\n"
 
             # Add a blank line after imports.
             complete_func += "\n"
@@ -208,12 +253,10 @@ class PyFunction:
             complete_func += f"{self.remove_hashes(self.desc)}\n"
 
         # self.body: Strip leading & trailing newlines, then add a single newline at the end of string. --v
-        newline = "\n"  # Need to use newline variable due to Python <= 3.8 being unable to handle backslashes in f-strings.
-        complete_func += f"{self.body.strip(newline) + newline}"
+        complete_func += f"{self.indent_body(self.body)}"
         # self.postfunc: Strip leading & trailing newlines, then add newlines at start and end.
         if self.postfunc != "":
             complete_func += "\n" + self.postfunc.strip("\n") + "\n"
-
         return complete_func
 
 

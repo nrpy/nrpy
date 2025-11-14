@@ -9,7 +9,6 @@ Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
          Siddharth Mahesh; sm0193 **at** mix **dot* wvu **dot* edu
 """
 
-import re  # Regular expressions can be toxic due to edge cases -- we use them sparingly
 import sys
 from typing import Any, Dict, List, Optional, Sequence, Union
 
@@ -198,7 +197,7 @@ def py_codegen(
             sympyexprs.append(expr)
 
         # Check sympy version and process the main group
-        sympy_version = tuple(map(int, re.findall(r"\d+", sp.__version__)))
+        sympy_version = tuple(int(x) for x in sp.__version__.split(".")[:2])
         if sympy_version < (1, 3):
             print(
                 f"Warning: SymPy version {sp.__version__} does not support CSE postprocessing."
