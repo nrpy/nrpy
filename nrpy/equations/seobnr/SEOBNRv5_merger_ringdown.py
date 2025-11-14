@@ -1,7 +1,7 @@
 """
 Construct quantities for the SEOBNRv5 merger-ringdown model.
 
-Authors: 
+Authors:
 
 Suchindram Dasgupta
 sd00113 at mix dot wvu dot edu
@@ -26,7 +26,6 @@ License: BSD 2-Clause
 # Step P1: Import needed modules:
 import sympy as sp
 
-# This import assumes the standard NRPy+ project structure.
 from nrpy.equations.grhd.Min_Max_and_Piecewise_Expressions import (
     coord_greater_bound,
     coord_less_bound,
@@ -58,6 +57,9 @@ class SEOBNRv5_MergerRingdown_Quantities:
         Outputs (as class attributes):
         ------------------------------
         - self.chi_f_dot_L_f: Symbolic dot product of remnant spin and orbital angular momentum.
+        - self.omega_QNM_l_2_m_2, self.omega_QNM_l_2_m_1, self.omega_QNM_l_2_m_n1, self.omega_QNM_l_2_m_n2:
+          Input symbols for the l=2 QNM frequencies needed to construct omega_prec.
+          These represent the (2,2), (2,1), (2,-1), and (2,-2) modes in the J-frame.
         - self.omega_prec: Precession frequency of the co-precessing frame (Eq. 21).
         - self.alpha_merger_RD, self.beta_merger_RD, self.gamma_merger_RD: Post-merger angles (Eqs. 18-20).
         - self.omega_QNM_J_...: Input symbols for J-frame frequencies (e.g., self.omega_QNM_J_l2_m2).
@@ -75,15 +77,17 @@ class SEOBNRv5_MergerRingdown_Quantities:
         self.chi_f_dot_L_f = chi_f_x * L_f_x + chi_f_y * L_f_y + chi_f_z * L_f_z
 
         # Step 3: Implement precession frequency (Eq. 21)
+        # Define symbols for all four l=2 QNM frequencies needed for omega_prec calculation.
         self.omega_QNM_l_2_m_2 = sp.Symbol("omega_QNM_l_2_m_2", real=True)
         self.omega_QNM_l_2_m_1 = sp.Symbol("omega_QNM_l_2_m_1", real=True)
-        self.omega_QNM_l_2_m_n2_1 = sp.Symbol("omega_QNM_l_2_m_n2_1", real=True)
+        self.omega_QNM_l_2_m_n1 = sp.Symbol("omega_QNM_l_2_m_n1", real=True)
+        self.omega_QNM_l_2_m_n2 = sp.Symbol("omega_QNM_l_2_m_n2", real=True)
 
+        # Prograde branch: omega_prec = omega_22 - omega_21
         omega_prec_prograde = self.omega_QNM_l_2_m_2 - self.omega_QNM_l_2_m_1
-        omega_prec_retrograde = self.omega_QNM_l_2_m_2 - self.omega_QNM_l_2_m_n2_1
+        # Retrograde branch: omega_prec = omega_2,-1 - omega_2,-2
+        omega_prec_retrograde = self.omega_QNM_l_2_m_n1 - self.omega_QNM_l_2_m_n2
 
-        # The validation tool requires standard sympy.Abs, not the custom nrpyAbs.
-        # We perform a substitution to ensure compatibility.
         prograde_part = omega_prec_prograde * coord_greater_bound(
             self.chi_f_dot_L_f, 0
         ).subs(sp.Function("nrpyAbs"), sp.Abs)
