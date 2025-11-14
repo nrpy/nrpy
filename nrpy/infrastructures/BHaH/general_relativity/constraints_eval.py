@@ -5,6 +5,7 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
+import re
 from inspect import currentframe as cfr
 from types import FrameType as FT
 from typing import Union, cast
@@ -35,8 +36,6 @@ def register_CFunction_constraints_eval(
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
-        # register_CFunction_Ricci_onept()
-        print("registering0!", f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
@@ -51,7 +50,8 @@ def register_CFunction_constraints_eval(
     desc = r"""Evaluate BSSN constraints."""
     cfunc_type = "void"
     name = "constraints_eval"
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const rfm_struct *restrict rfmstruct, const REAL *restrict in_gfs, REAL *restrict diagnostic_gfs"
+    params = """const commondata_struct *restrict commondata, const params_struct *restrict params,
+    const rfm_struct *restrict rfmstruct, const REAL *restrict in_gfs, const REAL *restrict auxevol_gfs, REAL *restrict diagnostic_gfs"""
     Bcon = BSSN_constraints[
         CoordSystem
         + "_rfm_precompute_RbarDD_gridfunctions"
@@ -61,14 +61,28 @@ def register_CFunction_constraints_eval(
     loop_body = ccg.c_codegen(
         expr_list,
         [
-            "diagnostic_gfs[IDX4(DIAG_HAMILTONIAN, i0, i1, i2)]",
-            "diagnostic_gfs[IDX4(DIAG_MSQUARED, i0, i1, i2)]",
+            "diagnostic_gfs[IDX4(DIAG_HAMILTONIANGF, i0, i1, i2)]",
+            "diagnostic_gfs[IDX4(DIAG_MSQUAREDGF, i0, i1, i2)]",
         ],
         enable_fd_codegen=True,
         enable_simd=True,
         enable_fd_functions=enable_fd_functions,
         rational_const_alias="static const",
-    ).replace("auxevol_gfs[IDX4(RBARDD", "diagnostic_gfs[IDX4(DIAG_RBARDD")
+    )
+    # RBARDD: auxevol_gfs[IDX4(RBARDDxyGF, i0, i1, i2)] -> RBARDD_GF(RBARDDxyGF, i0, i1, i2)
+    if orig_parallelization == "cuda":
+        loop_body = re.sub(
+            r"auxevol_gfs\[IDX4\((RBARDD[0-9][0-9]GF), i0, i1, i2\)\]",
+            r"diagnostic_gfs[IDX4(DIAG_\1, i0, i1, i2)]",
+            loop_body,
+        )
+        if enable_T4munu:
+            # T4UU: auxevol_gfs[IDX4(T4UUxyGF, i0, i1, i2)] -> T4UU_GF(T4UUxyGF, i0, i1, i2)
+            loop_body = re.sub(
+                r"auxevol_gfs\[IDX4\((T4UU[0-9][0-9]GF), i0, i1, i2\)\]",
+                r"diagnostic_gfs[IDX4(DIAG_\1, i0, i1, i2)]",
+                loop_body,
+            )
     body = BHaH.simple_loop.simple_loop(
         loop_body=loop_body,
         loop_region="interior",
@@ -78,15 +92,12 @@ def register_CFunction_constraints_eval(
         read_xxs=False,
         OMP_collapse=OMP_collapse,
     )
-    prefunc = ""
-    if enable_fd_functions:
-        prefunc += fin.construct_FD_functions_prefunc()
     par.set_parval_from_str("parallelization", orig_parallelization)
     cfc.register_CFunction(
         subdirectory="diagnostics",
         enable_simd=True,
         includes=includes,
-        prefunc=prefunc,
+        prefunc=(fin.construct_FD_functions_prefunc() if enable_fd_functions else ""),
         desc=desc,
         cfunc_type=cfunc_type,
         name=name,

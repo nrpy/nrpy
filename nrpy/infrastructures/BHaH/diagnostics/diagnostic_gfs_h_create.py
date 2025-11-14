@@ -26,15 +26,15 @@ Author: Zachariah B. Etienne
 """
 
 from pathlib import Path
-from typing import Dict
+from typing import List, Tuple
 
+import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 from nrpy.helpers.generic import clang_format
 
 
 def diagnostics_gfs_h_create(
     project_dir: str,
-    diagnostic_gfs_names_dict: Dict[str, str],
 ) -> None:
     """
     Generate and write the `diagnostic_gfs.h` C header file.
@@ -56,10 +56,6 @@ def diagnostics_gfs_h_create(
 
     :param project_dir: The root output directory for the project. The header
                         is written into a "diagnostics" subdirectory within it.
-    :param diagnostic_gfs_names_dict: A dictionary where keys are the C enum
-                                      tokens (e.g., "DIAG_RHO") and values are
-                                      the short, one-word C string names
-                                      (e.g., "rho").
     :raises EnvironmentError: If called during the parallel codegen registration
                               phase, as it must run after.
     """
@@ -67,6 +63,14 @@ def diagnostics_gfs_h_create(
         raise EnvironmentError(
             "diagnostics_gfs_h_create() must be called AFTER parallel codegen."
         )
+
+    diag_items: List[Tuple[str, str]] = sorted(
+        ((v.name, v.desc) for v in gri.glb_gridfcs_dict.values() if v.group == "DIAG"),
+        key=lambda t: t[0].lower(),  # case-insensitive by name
+    )
+    # If you also want parallel lists:
+    diag_gfs_names = [name for name, _ in diag_items]
+    diag_gfs_descs = [desc for _, desc in diag_items]
 
     newline = "\n"  # Backslashes aren't allowed in Python 3.7 f-strings; this is our workaround.
     body = rf"""
@@ -112,7 +116,7 @@ extern "C" {{
 enum {{
 {
     newline.join(
-        [f"      {item}," for item in list(diagnostic_gfs_names_dict.keys())] +
+        [f"     {gf_name}GF," for gf_name in diag_gfs_names] +
         ["      TOTAL_NUM_DIAG_GFS // must be last: total produced diagnostics (== count)"]
     )
     }
@@ -129,8 +133,8 @@ enum {{
 MAYBE_UNUSED static const char *diagnostic_gf_names[TOTAL_NUM_DIAG_GFS] = {{
 {
     newline.join(
-        f'      DIAG_INIT({key}, "{value}"), //'
-        for key, value in diagnostic_gfs_names_dict.items()
+        f'      DIAG_INIT({gf_name_desc_tuple[0]}GF, "{gf_name_desc_tuple[1]}"), //'
+        for gf_name_desc_tuple in list(zip(diag_gfs_names, diag_gfs_descs))
     )
     }
 }};

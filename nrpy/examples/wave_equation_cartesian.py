@@ -454,7 +454,6 @@ BHaH.cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_par
 )
 BHaH.BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
-    enable_intrinsics=enable_simd,
     enable_rfm_precompute=False,
 )
 BHaH.main_c.register_CFunction_main_c(

@@ -156,8 +156,8 @@ def register_CFunction_diagnostics_volume_integration() -> (
       // Define the integrands for this recipe:
 
       // Important: is_squared=1 enables computation of L2 norm & RMS; RMS_f = sqrt(int f^2 dV / int dV)
-      recipes[NUM_RECIPES].integrands[0] = (diags_integration_integrand_spec_t){.gf_index = DIAG_HAMILTONIAN, .is_squared = 1};
-      recipes[NUM_RECIPES].integrands[1] = (diags_integration_integrand_spec_t){.gf_index = DIAG_MSQUARED, .is_squared = 1};
+      recipes[NUM_RECIPES].integrands[0] = (diags_integration_integrand_spec_t){.gf_index = DIAG_HAMILTONIANGF, .is_squared = 1};
+      recipes[NUM_RECIPES].integrands[1] = (diags_integration_integrand_spec_t){.gf_index = DIAG_MSQUAREDGF, .is_squared = 1};
       recipes[NUM_RECIPES].num_integrands = 2;
 
       NUM_RECIPES++;
@@ -166,15 +166,15 @@ def register_CFunction_diagnostics_volume_integration() -> (
     //  Recipe 1: RMS of numerical solution inside a sphere of radius 80
     if (NUM_RECIPES < DIAGS_INTEGRATION_MAX_RECIPES) {
       const REAL R_outer = 8;
-      recipes[NUM_RECIPES].name = "sphere_R_8";
+      recipes[NUM_RECIPES].name = "sphere_R_gt_8";
       recipes[NUM_RECIPES].num_rules = 1;
 
       // Important: exclude_inside=0 implies outer is excluded.
       recipes[NUM_RECIPES].rules[0] = (diags_integration_sphere_rule_t){.center_xyz = {0, 0, 0}, .radius = R_outer, .exclude_inside = 1};
 
       // Important: is_squared=1 enables computation of L2 norm & RMS; RMS_f = sqrt(int f^2 dV / int dV)
-      recipes[NUM_RECIPES].integrands[0] = (diags_integration_integrand_spec_t){.gf_index = DIAG_HAMILTONIAN, .is_squared = 1};
-      recipes[NUM_RECIPES].integrands[1] = (diags_integration_integrand_spec_t){.gf_index = DIAG_MSQUARED, .is_squared = 1};
+      recipes[NUM_RECIPES].integrands[0] = (diags_integration_integrand_spec_t){.gf_index = DIAG_HAMILTONIANGF, .is_squared = 1};
+      recipes[NUM_RECIPES].integrands[1] = (diags_integration_integrand_spec_t){.gf_index = DIAG_MSQUAREDGF, .is_squared = 1};
       recipes[NUM_RECIPES].num_integrands = 2;
 
       NUM_RECIPES++;

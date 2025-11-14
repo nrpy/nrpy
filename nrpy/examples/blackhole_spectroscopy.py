@@ -26,14 +26,11 @@ from nrpy import params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures import BHaH
 
-parser = argparse.ArgumentParser(
-    description="NRPyElliptic Solver for Conformally Flat BBH initial data"
-)
+parser = argparse.ArgumentParser(description="Black hole spectroscopy NRPy example")
 parser.add_argument(
-    "--parallelization",
-    type=str,
-    help="Parallelization strategy to use (e.g. openmp, cuda).",
-    default="openmp",
+    "--cuda",
+    action="store_true",
+    help="Use CUDA parallelization.",
 )
 parser.add_argument(
     "--floating_point_precision",
@@ -45,10 +42,8 @@ args = parser.parse_args()
 
 # Code-generation-time parameters:
 fp_type = args.floating_point_precision.lower()
-parallelization = args.parallelization.lower()
-enable_intrinsics = not args.disable_intrinsics
-enable_rfm_precompute = not args.disable_rfm_precompute
-
+# Default to openmp; override with cuda if --cuda is set
+parallelization = "cuda" if args.cuda else "openmp"
 if parallelization not in ["openmp", "cuda"]:
     raise ValueError(
         f"Invalid parallelization strategy: {parallelization}. "
@@ -78,7 +73,6 @@ enable_KreissOliger_dissipation = True
 enable_CAKO = True
 enable_CAHD = False
 enable_SSL = True
-enable_simd_intrinsics = True
 KreissOliger_strength_gauge = 0.99
 KreissOliger_strength_nongauge = 0.3
 LapseEvolutionOption = "OnePlusLog"
@@ -97,13 +91,13 @@ Nxx_dict = {
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.25
 default_BH2_z_posn = -0.25
-enable_rfm_precompute = True
 MoL_method = "RK4"
 fd_order = 8
 radiation_BC_fd_order = 4
-enable_intrinsics = True
 separate_Ricci_and_BSSN_RHS = True
 enable_parallel_codegen = True
+enable_rfm_precompute = True  # WIP: Will remove; for ease of maintenance we are no longer supporting disabled
+enable_intrinsics = True  # WIP: Will remove; for ease of maintenance we are no longer supporting disabled
 enable_fd_functions = True
 boundary_conditions_desc = "outgoing radiation"
 
@@ -165,8 +159,10 @@ TP_solve(&ID_persist);
 }
 """,
 )
-BHaH.BHaHAHA.interpolation_2d_general__uniform_src_grid.register_CFunction_interpolation_2d_general__uniform_src_grid(
-    enable_simd=enable_intrinsics, project_dir=project_dir
+BHaH.BHaHAHA.interpolation_3d_general__uniform_src_grid.register_CFunction_interpolation_3d_general__uniform_src_grid(
+    enable_simd=enable_intrinsics,
+    project_dir=project_dir,
+    use_cpp=(parallelization == "cuda"),
 )
 BHaH.diagnostics.diagnostics.register_all_diagnostics(
     project_dir=project_dir,
@@ -176,6 +172,7 @@ BHaH.diagnostics.diagnostics.register_all_diagnostics(
     enable_interp_diagnostics=False,
     enable_volume_integration_diagnostics=True,
     enable_free_auxevol=False,
+    enable_psi4_diagnostics=True,
 )
 BHaH.general_relativity.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
     enable_interp_diagnostics=False, enable_psi4=True
@@ -210,7 +207,6 @@ if enable_CAHD:
 if separate_Ricci_and_BSSN_RHS:
     BHaH.general_relativity.Ricci_eval.register_CFunction_Ricci_eval(
         CoordSystem=CoordSystem,
-        enable_rfm_precompute=enable_rfm_precompute,
         enable_intrinsics=enable_intrinsics,
         enable_fd_functions=enable_fd_functions,
         OMP_collapse=OMP_collapse,
@@ -218,7 +214,6 @@ if separate_Ricci_and_BSSN_RHS:
     if parallelization == "cuda":
         BHaH.general_relativity.Ricci_eval.register_CFunction_Ricci_eval(
             CoordSystem=CoordSystem,
-            enable_rfm_precompute=enable_rfm_precompute,
             enable_intrinsics=enable_intrinsics,
             enable_fd_functions=enable_fd_functions,
             OMP_collapse=OMP_collapse,
@@ -238,7 +233,7 @@ BHaH.general_relativity.constraints_eval.register_CFunction_constraints_eval(
     OMP_collapse=OMP_collapse,
 )
 
-BHaH.general_relativity.psi4.compute_psi4.register_CFunction_psi4(
+BHaH.general_relativity.psi4.psi4.register_CFunction_psi4(
     CoordSystem=CoordSystem,
     OMP_collapse=OMP_collapse,
     enable_fd_functions=enable_fd_functions,
@@ -250,9 +245,7 @@ BHaH.special_functions.spin_weight_minus2_spherical_harmonics.register_CFunction
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 # Does not need to be parallelized.
-BHaH.general_relativity.psi4_decomposition.register_CFunction_psi4_spinweightm2_decomposition(
-    CoordSystem=CoordSystem
-)
+BHaH.general_relativity.psi4_spinweightm2_decomposition.register_CFunction_psi4_spinweightm2_decomposition()
 
 BHaH.numerical_grids_and_timestep.register_CFunctions(
     set_of_CoordSystems=set_of_CoordSystems,
@@ -341,8 +334,7 @@ par.adjust_CodeParam_default(
 #         and create a Makefile for this project.
 #         Project is output to project/[project_name]/
 BHaH.diagnostics.diagnostic_gfs_h_create.diagnostics_gfs_h_create(
-    project_dir=project_dir,
-    diagnostic_gfs_names_dict=par.glb_extras_dict["diagnostic_gfs_names_dict"],
+    project_dir=project_dir
 )
 BHaH.CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
 BHaH.CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
@@ -397,15 +389,17 @@ BHaH.griddata_commondata.register_CFunction_griddata_free(
     enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True
 )
 
-if enable_intrinsics:
-    copy_files(
-        package="nrpy.helpers",
-        filenames_list=[
-            f"{'cuda' if parallelization == 'cuda' else 'simd'}_intrinsics.h"
-        ],
-        project_dir=project_dir,
-        subdirectory="intrinsics",
-    )
+# SIMD intrinsics needed for 3D interpolation, constraints evaluation, etc.
+intrinsics_file_list = ["simd_intrinsics.h"]
+if parallelization == "cuda":
+    # CUDA intrinsics needed for CUDA-enabled projects.
+    intrinsics_file_list += ["cuda_intrinsics.h"]
+copy_files(
+    package="nrpy.helpers",
+    filenames_list=intrinsics_file_list,
+    project_dir=project_dir,
+    subdirectory="intrinsics",
+)
 
 BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,

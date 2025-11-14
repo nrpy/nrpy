@@ -420,13 +420,13 @@ if __name__ == "__main__":
     LapseEvolOption = "OnePlusLog"
     ShiftEvolOption = "GammaDriving2ndOrder_Covariant"
     for Rbar_gfs in [True, False]:
-        for enable_T4munu in [True, False]:
+        for _enable_T4munu in [True, False]:
             for enable_Improvements in [True, False]:
                 results_dict = register_CFunction_rhs_eval(
                     CoordSystem=Coord,
                     enable_rfm_precompute=True,
                     enable_RbarDD_gridfunctions=Rbar_gfs,
-                    enable_T4munu=enable_T4munu,
+                    enable_T4munu=_enable_T4munu,
                     enable_intrinsics=False,
                     enable_fd_functions=False,
                     enable_KreissOliger_dissipation=True,
@@ -442,6 +442,6 @@ if __name__ == "__main__":
                     os.getcwd(),
                     # File basename. If this is set to "trusted_module_test1", then
                     #   trusted results_dict will be stored in tests/trusted_module_test1.py
-                    f"{os.path.splitext(os.path.basename(__file__))[0]}_{LapseEvolOption}_{ShiftEvolOption}_{Coord}_Rbargfs{Rbar_gfs}_T4munu{enable_T4munu}_Improvements{enable_Improvements}",
+                    f"{os.path.splitext(os.path.basename(__file__))[0]}_{LapseEvolOption}_{ShiftEvolOption}_{Coord}_Rbargfs{Rbar_gfs}_T4munu{_enable_T4munu}_Improvements{enable_Improvements}",
                     cast(Dict[str, Union[mpf, mpc]], results_dict),
                 )

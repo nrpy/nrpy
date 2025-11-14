@@ -424,7 +424,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     rk_substep_1__launcher(params, k1_gfs, y_n_gfs, next_y_input_gfs, commondata->dt);
     if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
       apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, next_y_input_gfs);
-  }
+  } // END LOOP over grids
   // -={ END k1 substep }=-
 
   // -={ START k2 substep }=-
@@ -452,7 +452,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     rk_substep_2__launcher(params, k1_gfs, k2_gfs, y_n_gfs, next_y_input_gfs, commondata->dt);
     if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
       apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, next_y_input_gfs);
-  }
+  } // END LOOP over grids
   // -={ END k2 substep }=-
 
   // -={ START k3 substep }=-
@@ -480,7 +480,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     rk_substep_3__launcher(params, k1_gfs, k2_gfs, k3_gfs, y_n_gfs, next_y_input_gfs, commondata->dt);
     if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
       apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, next_y_input_gfs);
-  }
+  } // END LOOP over grids
   // -={ END k3 substep }=-
 
   // -={ START k4 substep }=-
@@ -508,7 +508,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     rk_substep_4__launcher(params, k1_gfs, k2_gfs, k3_gfs, k4_gfs, y_n_gfs, next_y_input_gfs, commondata->dt);
     if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
       apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, next_y_input_gfs);
-  }
+  } // END LOOP over grids
   // -={ END k4 substep }=-
 
   // -={ START k5 substep }=-
@@ -536,7 +536,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     rk_substep_5__launcher(params, k1_gfs, k2_gfs, k3_gfs, k4_gfs, k5_gfs, y_n_gfs, next_y_input_gfs, commondata->dt);
     if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
       apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, next_y_input_gfs);
-  }
+  } // END LOOP over grids
   // -={ END k5 substep }=-
 
   // -={ START k6 substep }=-
@@ -564,7 +564,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     rk_substep_6__launcher(params, k1_gfs, k3_gfs, k4_gfs, k5_gfs, k6_gfs, y_n_gfs, next_y_input_gfs, commondata->dt);
     if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
       apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, next_y_input_gfs);
-  }
+  } // END LOOP over grids
   // -={ END k6 substep }=-
 
   // -={ START k7 substep }=-
@@ -592,7 +592,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     rk_substep_7__launcher(params, k1_gfs, k3_gfs, k4_gfs, k5_gfs, k6_gfs, y_n_gfs, commondata->dt);
     if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
       apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, y_n_gfs);
-  }
+  } // END LOOP over grids
   // -={ END k7 substep }=-
 
   // Adding dt to commondata->time many times will induce roundoff error,

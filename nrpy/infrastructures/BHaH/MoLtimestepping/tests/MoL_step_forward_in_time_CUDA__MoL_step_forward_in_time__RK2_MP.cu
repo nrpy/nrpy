@@ -116,7 +116,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     rk_substep_1__launcher(params, k_odd_gfs, y_n_gfs, y_nplus1_running_total_gfs, commondata->dt);
     if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
       apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, k_odd_gfs);
-  }
+  } // END LOOP over grids
   // -={ END k1 substep }=-
 
   // -={ START k2 substep }=-
@@ -139,7 +139,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     rk_substep_2__launcher(params, k_even_gfs, y_n_gfs, y_nplus1_running_total_gfs, commondata->dt);
     if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
       apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, y_n_gfs);
-  }
+  } // END LOOP over grids
   // -={ END k2 substep }=-
 
   // Adding dt to commondata->time many times will induce roundoff error,

@@ -22,8 +22,8 @@ from types import FrameType as FT
 from typing import Union, cast
 
 import nrpy.c_function as cfc
+import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.params as par
 
 
 def register_CFunction_diagnostic_gfs_set(
@@ -57,6 +57,16 @@ def register_CFunction_diagnostic_gfs_set(
         "BHaH_function_prototypes.h",
         "diagnostics/diagnostic_gfs.h",
     ]
+
+    gri.register_gridfunctions(
+        names="DIAG_RESIDUAL", desc="Residual_H_constraint", group="DIAG"
+    )
+    gri.register_gridfunctions(names="DIAG_UU", desc="u_numerical", group="DIAG")
+    gri.register_gridfunctions(names="DIAG_VV", desc="v_numerical", group="DIAG")
+    gri.register_gridfunctions(names="DIAG_GRIDINDEX", desc="GridIndex", group="DIAG")
+    diag_gf_parity_types = gri.BHaHGridFunction.set_parity_types(
+        sorted([v.name for v in gri.glb_gridfcs_dict.values() if v.group == "DIAG"])
+    )
     desc = """
  * @file diagnostic_gfs_set.c
  * @brief Populate per-grid diagnostic arrays used by interpolation and integration routines.
@@ -95,15 +105,8 @@ def register_CFunction_diagnostic_gfs_set(
     cfunc_type = "void"
     name = "diagnostic_gfs_set"
     params = "const commondata_struct *restrict commondata, const griddata_struct *restrict griddata, REAL *restrict diagnostic_gfs[MAXNUMGRIDS]"
-
-    diagnostic_gfs_names_dict = {
-        "DIAG_RESIDUAL": "Residual_H_constraint",
-        "DIAG_UUGF": "u_numerical",
-        "DIAG_VVGF": "v_numerical",
-        "DIAG_GRIDINDEX": "GridIndex",
-    }
-
-    body = """
+    body = f"MAYBE_UNUSED const int8_t diag_gf_parities[{len(diag_gf_parity_types)}] = {{ {', '.join(map(str, diag_gf_parity_types))} }};\n"
+    body += """
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     const params_struct *restrict params = &griddata[grid].params;
     SET_NXX_PLUS_2NGHOSTS_VARS(grid);
@@ -116,35 +119,25 @@ def register_CFunction_diagnostic_gfs_set(
     //     } // END LOOP over all points & gridfunctions, poisoning diagnostic_gfs
 
     residual_H_compute_all_points(commondata, params, griddata[grid].rfmstruct, griddata[grid].gridfuncs.auxevol_gfs, y_n_gfs,
-                                  &diagnostic_gfs[grid][IDX4pt(DIAG_RESIDUAL, 0)]);
+                                  &diagnostic_gfs[grid][IDX4pt(DIAG_RESIDUALGF, 0)]);
 """
     if enable_interp_diagnostics:
         body += """
-    // Apply inner bcs to DIAG_RESIDUAL, as it depends on finite differences.
-    {
-      const bc_struct bcstruct = griddata[grid].bcstruct;
-      const innerpt_bc_struct *restrict inner_bc_array = bcstruct.inner_bc_array;
-      const int num_inner_boundary_points = bcstruct.bc_info.num_inner_boundary_points;
-#pragma omp parallel for
-      for (int pt = 0; pt < num_inner_boundary_points; pt++) {
-        const int dstpt = inner_bc_array[pt].dstpt;
-        const int srcpt = inner_bc_array[pt].srcpt;
-        const int evol_gf_with_same_parity = UUGF; // <- IMPORTANT
-        diagnostic_gfs[grid][IDX4pt(DIAG_RESIDUAL, dstpt)] =
-            inner_bc_array[pt].parity[evol_gf_parity[evol_gf_with_same_parity]] * diagnostic_gfs[grid][IDX4pt(DIAG_RESIDUAL, srcpt)];
-      } // END LOOP over inner boundary points
-    } // END applying inner bcs to DIAG_RESIDUAL
+    // Apply inner bcs to constraints needed to do interpolation correctly
+    const int inner_bc_apply_gfs[] = {DIAG_RESIDUALGF};
+    const int num_inner_bc_apply_gfs = (int)(sizeof(inner_bc_apply_gfs) / sizeof(inner_bc_apply_gfs[0]));
+    apply_bcs_inner_only_specific_gfs(commondata, params, &griddata[grid].bcstruct, diagnostic_gfs[grid], num_inner_bc_apply_gfs, diag_gf_parities,
+                                      inner_bc_apply_gfs);
 """
     body += """
     LOOP_OMP("omp parallel for", i0, 0, Nxx_plus_2NGHOSTS0, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
       const int idx3 = IDX3(i0, i1, i2);
       diagnostic_gfs[grid][IDX4pt(DIAG_UUGF, idx3)] = y_n_gfs[IDX4pt(UUGF, idx3)];
       diagnostic_gfs[grid][IDX4pt(DIAG_VVGF, idx3)] = y_n_gfs[IDX4pt(VVGF, idx3)];
-      diagnostic_gfs[grid][IDX4pt(DIAG_GRIDINDEX, idx3)] = (REAL)grid;
+      diagnostic_gfs[grid][IDX4pt(DIAG_GRIDINDEXGF, idx3)] = (REAL)grid;
     } // END LOOP over all gridpoints to set diagnostic_gfs
   } // END LOOP over grids
 """
-    par.glb_extras_dict["diagnostic_gfs_names_dict"] = diagnostic_gfs_names_dict
 
     cfc.register_CFunction(
         subdirectory="diagnostics",

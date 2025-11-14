@@ -128,7 +128,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     rhs_eval(Nxx, Nxx_plus_2NGHOSTS, dxx, y_n_gfs, k_odd_gfs);
     rk_substep_1__launcher(params, k_odd_gfs, y_n_gfs, y_nplus1_running_total_gfs, commondata->dt);
     apply_bcs(Nxx, Nxx_plus_2NGHOSTS, k_odd_gfs);
-  }
+  } // END LOOP over grids
   // -={ END k1 substep }=-
 
   // -={ START k2 substep }=-
@@ -149,7 +149,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     rhs_eval(Nxx, Nxx_plus_2NGHOSTS, dxx, k_odd_gfs, k_even_gfs);
     rk_substep_2__launcher(params, k_even_gfs, y_nplus1_running_total_gfs, y_n_gfs, commondata->dt);
     apply_bcs(Nxx, Nxx_plus_2NGHOSTS, k_even_gfs);
-  }
+  } // END LOOP over grids
   // -={ END k2 substep }=-
 
   // -={ START k3 substep }=-
@@ -170,7 +170,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     rhs_eval(Nxx, Nxx_plus_2NGHOSTS, dxx, k_even_gfs, k_odd_gfs);
     rk_substep_3__launcher(params, k_odd_gfs, y_nplus1_running_total_gfs, y_n_gfs, commondata->dt);
     apply_bcs(Nxx, Nxx_plus_2NGHOSTS, k_odd_gfs);
-  }
+  } // END LOOP over grids
   // -={ END k3 substep }=-
 
   // -={ START k4 substep }=-
@@ -191,7 +191,7 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     rhs_eval(Nxx, Nxx_plus_2NGHOSTS, dxx, k_odd_gfs, k_even_gfs);
     rk_substep_4__launcher(params, k_even_gfs, y_n_gfs, y_nplus1_running_total_gfs, commondata->dt);
     apply_bcs(Nxx, Nxx_plus_2NGHOSTS, y_n_gfs);
-  }
+  } // END LOOP over grids
   // -={ END k4 substep }=-
 
   // Adding dt to commondata->time many times will induce roundoff error,

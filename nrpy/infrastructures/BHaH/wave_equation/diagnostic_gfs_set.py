@@ -23,8 +23,8 @@ from typing import Union, cast
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
+import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.params as par
 from nrpy.equations.wave_equation.WaveEquation_Solutions_InitialData import (
     WaveEquation_solution_Cartesian,
 )
@@ -115,15 +115,17 @@ def register_CFunction_diagnostic_gfs_set(
         default_k2=default_k2,
         default_sigma=default_sigma,
     )
-    diagnostic_gfs_names_dict = {
-        "DIAG_RELERROR_UUGF": "RelError_u",
-        "DIAG_RELERROR_VVGF": "RelError_v",
-        "DIAG_UNUM": "u_numerical",
-        "DIAG_UEXACT": "u_exact",
-        "DIAG_VNUM": "v_numerical",
-        "DIAG_VEXACT": "v_exact",
-        "DIAG_GRIDINDEX": "GridIndex",
-    }
+    gri.register_gridfunctions(
+        names="DIAG_RELERROR_UU", desc="RelError_u", group="DIAG"
+    )
+    gri.register_gridfunctions(
+        names="DIAG_RELERROR_VV", desc="RelError_v", group="DIAG"
+    )
+    gri.register_gridfunctions(names="DIAG_UNUM", desc="u_numerical", group="DIAG")
+    gri.register_gridfunctions(names="DIAG_UEXACT", desc="u_exact", group="DIAG")
+    gri.register_gridfunctions(names="DIAG_VNUM", desc="v_numerical", group="DIAG")
+    gri.register_gridfunctions(names="DIAG_VEXACT", desc="v_exact", group="DIAG")
+    gri.register_gridfunctions(names="DIAG_GRIDINDEX", desc="GridIndex", group="DIAG")
 
     body = rf"""
 for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {{
@@ -146,15 +148,14 @@ for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {{
     const REAL vnum = y_n_gfs[IDX4pt(VVGF, idx3)];
     diagnostic_gfs[grid][IDX4pt(DIAG_RELERROR_UUGF, idx3)] = (unum - uexact) / (uexact + 1e-16);
     diagnostic_gfs[grid][IDX4pt(DIAG_RELERROR_VVGF, idx3)] = (vnum - vexact) / (vexact + 1e-16);
-    diagnostic_gfs[grid][IDX4pt(DIAG_UNUM,          idx3)] = unum;
-    diagnostic_gfs[grid][IDX4pt(DIAG_UEXACT,        idx3)] = uexact;
-    diagnostic_gfs[grid][IDX4pt(DIAG_VNUM,          idx3)] = vnum;
-    diagnostic_gfs[grid][IDX4pt(DIAG_VEXACT,        idx3)] = vexact;
-    diagnostic_gfs[grid][IDX4pt(DIAG_GRIDINDEX,     idx3)] = (REAL)grid;
+    diagnostic_gfs[grid][IDX4pt(DIAG_UNUMGF,          idx3)] = unum;
+    diagnostic_gfs[grid][IDX4pt(DIAG_UEXACTGF,        idx3)] = uexact;
+    diagnostic_gfs[grid][IDX4pt(DIAG_VNUMGF,          idx3)] = vnum;
+    diagnostic_gfs[grid][IDX4pt(DIAG_VEXACTGF,        idx3)] = vexact;
+    diagnostic_gfs[grid][IDX4pt(DIAG_GRIDINDEXGF,     idx3)] = (REAL)grid;
   }} // END LOOP over all gridpoints to set diagnostic_gfs
 }} // END LOOP over grids
 """
-    par.glb_extras_dict["diagnostic_gfs_names_dict"] = diagnostic_gfs_names_dict
     cfc.register_CFunction(
         subdirectory="diagnostics",
         includes=includes,
