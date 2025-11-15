@@ -57,12 +57,9 @@ class SEOBNRv5_MergerRingdown_Quantities:
         Outputs (as class attributes):
         ------------------------------
         - self.chi_f_dot_L_f: Symbolic dot product of remnant spin and orbital angular momentum.
-        - self.omega_QNM_l_2_m_2, self.omega_QNM_l_2_m_1, self.omega_QNM_l_2_m_n1, self.omega_QNM_l_2_m_n2:
-          Input symbols for the l=2 QNM frequencies needed to construct omega_prec.
-          These represent the (2,2), (2,1), (2,-1), and (2,-2) modes in the J-frame.
+        - self.omega_QNM_J_...: Input symbols for all J-frame QNM frequencies (e.g., self.omega_QNM_J_l2_m2).
         - self.omega_prec: Precession frequency of the co-precessing frame (Eq. 21).
         - self.alpha_merger_RD, self.beta_merger_RD, self.gamma_merger_RD: Post-merger angles (Eqs. 18-20).
-        - self.omega_QNM_J_...: Input symbols for J-frame frequencies (e.g., self.omega_QNM_J_l2_m2).
         - self.omega_QNM_P_...: Output expressions for co-precessing frequencies (e.g., self.omega_QNM_P_l2_m2) (Eq. 22).
         """
         # Step 1: Define fundamental input symbols
@@ -73,20 +70,24 @@ class SEOBNRv5_MergerRingdown_Quantities:
         )
         self.t, self.t_match = sp.symbols("t t_match", real=True)
 
-        # Step 2: Calculate the dot product explicitly, storing it as an attribute
+        # Step 2: Calculate the dot product explicitly
         self.chi_f_dot_L_f = chi_f_x * L_f_x + chi_f_y * L_f_y + chi_f_z * L_f_z
 
-        # Step 3: Implement precession frequency (Eq. 21)
-        # Define symbols for all four l=2 QNM frequencies needed for omega_prec calculation.
-        self.omega_QNM_l_2_m_2 = sp.Symbol("omega_QNM_l_2_m_2", real=True)
-        self.omega_QNM_l_2_m_1 = sp.Symbol("omega_QNM_l_2_m_1", real=True)
-        self.omega_QNM_l_2_m_n1 = sp.Symbol("omega_QNM_l_2_m_n1", real=True)
-        self.omega_QNM_l_2_m_n2 = sp.Symbol("omega_QNM_l_2_m_n2", real=True)
+        # Step 3: Define a single, unified set of J-frame QNM symbols
+        self.omega_QNM_J_l2_m2 = sp.Symbol("omega_QNM_J_l2_m2", real=True)
+        self.omega_QNM_J_l2_m1 = sp.Symbol("omega_QNM_J_l2_m1", real=True)
+        self.omega_QNM_J_l2_mn1 = sp.Symbol("omega_QNM_J_l2_mn1", real=True)
+        self.omega_QNM_J_l2_mn2 = sp.Symbol("omega_QNM_J_l2_mn2", real=True)
 
-        # Prograde branch: omega_prec = omega_22 - omega_21
-        omega_prec_prograde = self.omega_QNM_l_2_m_2 - self.omega_QNM_l_2_m_1
-        # Retrograde branch: omega_prec = omega_2,-1 - omega_2,-2
-        omega_prec_retrograde = self.omega_QNM_l_2_m_n1 - self.omega_QNM_l_2_m_n2
+        # Then, define symbols for the remaining modes (l > 2).
+        modes_l_gt_2 = [(3, 3), (3, 2), (4, 4), (4, 3), (5, 5)]
+        for l, m in modes_l_gt_2:
+            attr_name = f"omega_QNM_J_l{l}_m{m}"
+            setattr(self, attr_name, sp.Symbol(attr_name, real=True))
+
+        # Step 4: Implement precession frequency (Eq. 21) using the unified symbols
+        omega_prec_prograde = self.omega_QNM_J_l2_m2 - self.omega_QNM_J_l2_m1
+        omega_prec_retrograde = self.omega_QNM_J_l2_mn1 - self.omega_QNM_J_l2_mn2
 
         prograde_part = omega_prec_prograde * coord_greater_bound(
             self.chi_f_dot_L_f, 0
@@ -96,7 +97,7 @@ class SEOBNRv5_MergerRingdown_Quantities:
         ).subs(sp.Function("nrpyAbs"), sp.Abs)
         self.omega_prec = prograde_part + retrograde_part
 
-        # Step 4: Implement post-merger Euler angles (Eqs. 18-20)
+        # Step 5: Implement post-merger Euler angles (Eqs. 18-20)
         time_diff = self.t - self.t_match
         self.alpha_merger_RD = self.alpha_match + self.omega_prec * time_diff
         self.beta_merger_RD = self.beta_match
@@ -104,23 +105,14 @@ class SEOBNRv5_MergerRingdown_Quantities:
             self.beta_match
         )
 
-        # Step 5: Loop through modes to calculate co-precessing QNM frequencies (Eq. 22)
-        modes = [
-            (2, 2),
-            (2, 1),
-            (3, 3),
-            (3, 2),
-            (4, 4),
-            (4, 3),
-            (5, 5),
-        ]
-
-        for l, m in modes:
+        # Step 6: Calculate all co-precessing QNM frequencies (Eq. 22)
+        all_modes = [(2, 2), (2, 1)] + modes_l_gt_2
+        for l, m in all_modes:
             omega_J_attr_name = f"omega_QNM_J_l{l}_m{m}"
             omega_P_attr_name = f"omega_QNM_P_l{l}_m{m}"
 
-            omega_J_symbol = sp.Symbol(omega_J_attr_name, real=True)
-            setattr(self, omega_J_attr_name, omega_J_symbol)
+            # Retrieve the unified J-frame symbol
+            omega_J_symbol = getattr(self, omega_J_attr_name)
 
             omega_P_expr = (
                 omega_J_symbol
