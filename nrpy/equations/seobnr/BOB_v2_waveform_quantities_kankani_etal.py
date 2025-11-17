@@ -1,5 +1,5 @@
 """
-Construct the BOBv2 merger-ringdown modes and NQC correction factors for aligned-spin binaries.
+Construct the BOBv2 merger-ringdown modes, as described in https://www.arxiv.org/abs/2510.25012, and NQC correction factors for aligned-spin binaries.
 
 Authors: Siddharth Mahesh
 sm0193 at mix dot wvu dot edu
@@ -39,7 +39,7 @@ class BOB_v2_waveform_quantities:
 
     def __init__(self) -> None:
         """
-        Compute the BOBv2 waveform.
+        Compute the BOBv2 waveform as described in https://www.arxiv.org/abs/2510.25012.
 
         This constructor sets up the necessary symbolic variables and expressions
         used in the computation of the BOBv2 waveform. It initializes
@@ -54,7 +54,7 @@ class BOB_v2_waveform_quantities:
             - 'hddot_t_attach' : the BOB-derived second time derivative of the strain amplitude (l=2,m=2) mode
                                 at the NQC attachment time.
             - 'w_t_attach' : the angular frequency of the (2,2) mode at the attachment time
-                                (Equation C29 of https://arxiv.org/pdf/2303.18039)
+
             - 'wdot_t_attach' : the BOB-derived first time derivative of the angular frequency of the (l=2,m=2) mode
                                 at the NQC attachment time.
             - 't_p_condition' : the BOBv2 peak strain condition.
@@ -144,17 +144,20 @@ class BOB_v2_waveform_quantities:
         Omega0 = A * Mf + B * chif + C
 
         # BOB computation begins here
+        # We build BOB for the news according to equation (1) for the amplitude and (13) for the phase in https://www.arxiv.org/abs/2510.25012
         Omega_QNM = omega_qnm / 2
         T = (t - t_p) / tau_qnm
 
+        # Eq. (10) and (11) in https://www.arxiv.org/abs/2510.25012 with t_0 = -infty
         Omega_minus = Omega_QNM**2 - Omega0**2
         Omega_plus = Omega_QNM**2 + Omega0**2
         Omega_orb = sp.sqrt(
             Omega_minus * sp.tanh(T) / sp.Integer(2) + Omega_plus / sp.Integer(2)
         )
-
+        # Eq. (1) in https://www.arxiv.org/abs/2510.25012
         Ap = news22NR_Ap / sp.cosh(T)
 
+        # Eq. (13) in https://www.arxiv.org/abs/2510.25012. Because we take t_0 = -infty, the phase has a closed form expression
         Omega_minus_Q = (
             Omega_QNM - Omega_orb
         )  # equivalent to |Omega_orb - Omega_QNM| since Omega_orb < Omega_QNM
