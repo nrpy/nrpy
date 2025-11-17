@@ -15,7 +15,7 @@ the merger-ringdown waveform of a binary black hole merger.
 The Non Quasi-Circular corrections are performed by the SEOBNRv5 model
 to ensure that the inspiral waveform matches the NR waveform
 at the peak of the (l=2,m=2) strain mode up to second derivatives in amplitude and phase.
-See *citation to Anuj's paper*.
+See https://www.arxiv.org/abs/2510.25012
 See Section IV B of Mahesh, McWilliams, and Etienne, "Spinning Effective-to-Backwards-One Body"
 for the BOB-derived NQC corrections.
 
@@ -49,25 +49,20 @@ class BOB_v2_waveform_quantities:
         debugging/sanity checks. Higher mode information will be added in an
         upcoming commit.
         The key outputs of the BOB_v2_waveform_quantities class are:
-            - 'h' : the amplitude of the merger-ringdown (l=2,m=2) mode.
-            - 'phi' : the phase of the merger-ringdown (l=2,m=2) mode.
-            - 'h_t_attach' : the NR-fitted strain amplitude of the (l=2,m=2) mode
-                                at the NQC attachment time.
-                                (Equation C8 of https://arxiv.org/pdf/2303.18039)
+            - 'h_complex' : complex merger-ringdown strain for the (2,2) mode
+            - 'h_t_attach' : the time of the peak strain amplitude of the BOB merger-ringdown strain
             - 'hddot_t_attach' : the BOB-derived second time derivative of the strain amplitude (l=2,m=2) mode
                                 at the NQC attachment time.
-            - 'w_t_attach' : the NR-fitted angular frequency of the (l=2,m=2) mode
-                                at the NQC attachment time.
+            - 'w_t_attach' : the angular frequency of the (2,2) mode at the attachment time
                                 (Equation C29 of https://arxiv.org/pdf/2303.18039)
             - 'wdot_t_attach' : the BOB-derived first time derivative of the angular frequency of the (l=2,m=2) mode
                                 at the NQC attachment time.
             - 't_p_condition' : the BOBv2 peak strain condition.
-            - 'Omega_0_condition' : the BOBv2 reference orbital frequency condition.
 
         :return None:
         """
-        (m1, m2, chi1, chi2, Omega_0, omega_qnm, tau_qnm, t_0, t_p, t) = sp.symbols(
-            "m1 m2 chi1 chi2 Omega_0 omega_qnm tau_qnm t_0 t_p t", real=True
+        (m1, m2, chi1, chi2, omega_qnm, tau_qnm, t_attach, t_p, t) = sp.symbols(
+            "m1 m2 chi1 chi2 omega_qnm tau_qnm t_attach t_p t", real=True
         )
 
         (Mf, chif) = sp.symbols("Mf chif", real=True)
@@ -160,22 +155,25 @@ class BOB_v2_waveform_quantities:
 
         Ap = news22NR_Ap / sp.cosh(T)
 
-        Omega_minus_Q = sp.Abs(Omega_orb - Omega_QNM)
-        Omega_minus_0 = sp.Abs(Omega_orb - Omega_0)
+        Omega_minus_Q = (
+            Omega_QNM - Omega_orb
+        )  # equivalent to |Omega_orb - Omega_QNM| since Omega_orb < Omega_QNM
+        Omega_minus_0 = Omega_orb - Omega0
         outer = tau_qnm / 2
         inner1 = sp.log((Omega_orb + Omega_QNM) / (Omega_minus_Q))
-        inner2 = sp.log((Omega_orb + Omega_0) / (Omega_minus_0))
-        Phi_orb = outer * (Omega_QNM * inner1 - Omega_0 * inner2)
+        inner2 = sp.log((Omega_orb + Omega0) / (Omega_minus_0))
+        Phi_orb = outer * (Omega_QNM * inner1 - Omega0 * inner2)
         omega_news = -2 * Omega_orb
         phi_news = -2 * Phi_orb
 
         # Going from news to strain
         # The BOB strain is given as
-        # h = H*exp(i * m * Phi_orb)
+        # h = H*exp(-i * m * Phi_orb)
         # where H is complex and given by the infinite series
         # H = Sum_n H_n
         # First the series is truncated at N = N_provisional
 
+        # This is purposely set to 2 for testing right now, and can be changed later.
         N_provisional = 0
         i_times_omega = sp.I * omega_news
         H_n = Ap / i_times_omega
@@ -201,14 +199,32 @@ class BOB_v2_waveform_quantities:
         # BOB strain peak values will not match the NR values
         # Therefore we calculate the new BOB strain peak values and use those for NQCs
         # Ask Sid for more
-        self.t_p_condition = sp.diff(strain_amplitude, t).subs(t, t_0)
-        self.t_p_guess = t_0 + tau_qnm * sp.log(Omega_QNM / Omega_0)
-        self.h_t_attach = strain_amplitude.subs(t, t_0)
+
+        # Note:
+        # For initial guesses,
+        # we can use the closed-form solutions for N = 0
+        # t_p_guess = t_attach + tau_qnm * log(Omega_0/Omega_qnm)
+        # Omega_0_guess = omega22NR/2
+        # This guess is not perfect, but we only need a reasonable value for an initial guess, which this provides.
+
+        # Note 2: the NQC corrections uses
+        # the positive strain frequency convention.
+        # Since the BOB strain frequency is, by definition, negative.
+        # Therefore, we add a minus sign to wdot_t_attach
+        # for consistency.
+
+        # Note 3:
+        # We choose to force hdot_t_attach = 0 to help with attachment to the inspiral in the existing nrpy infrastructure.
+
+        self.t_p_condition = sp.diff(strain_amplitude, t).subs(t, t_attach)
+        self.t_p_guess = t_attach + tau_qnm * sp.log(Omega_QNM / Omega0)
+        self.h_t_attach = strain_amplitude.subs(t, t_attach)
+
         self.hdot_t_attach = sp.sympify(0)
         hddot = sp.diff(sp.diff(strain_amplitude, t), t)
-        self.hddot_t_attach = hddot.subs(t, t_0)
-        self.w_t_attach = strain_frequency.subs(t, t_0)
-        self.wdot_t_attach = -sp.diff(strain_frequency, t).subs(t, t_0)
+        self.hddot_t_attach = hddot.subs(t, t_attach)
+        self.w_t_attach = strain_frequency.subs(t, t_attach)
+        self.wdot_t_attach = -sp.diff(strain_frequency, t).subs(t, t_attach)
 
 
 if __name__ == "__main__":
