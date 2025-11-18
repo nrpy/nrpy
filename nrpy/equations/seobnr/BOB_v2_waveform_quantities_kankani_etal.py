@@ -1,5 +1,5 @@
 """
-Construct the BOBv2 merger-ringdown modes, as described in https://www.arxiv.org/abs/2510.25012, and NQC correction factors for aligned-spin binaries.
+Construct the BOBv2 merger-ringdown modes, as described in https://www.arxiv.org/abs/2510.25012, and NQC-relevant matching quantities for aligned-spin binaries.
 
 Authors: Siddharth Mahesh
 sm0193 at mix dot wvu dot edu
@@ -12,12 +12,6 @@ The Backwards-One Body (BOB) formalism is a first principles merger-ringdown mod
 maps the properties of null congruences in the spacetime of the remnant black hole to
 the merger-ringdown waveform of a binary black hole merger.
 
-The Non Quasi-Circular corrections are performed by the SEOBNRv5 model
-to ensure that the inspiral waveform matches the NR waveform
-at the peak of the (l=2,m=2) strain mode up to second derivatives in amplitude and phase.
-See https://www.arxiv.org/abs/2510.25012
-See Section IV B of Mahesh, McWilliams, and Etienne, "Spinning Effective-to-Backwards-One Body"
-for the BOB-derived NQC corrections.
 
 The modes are expressed in terms of the binary masses (m1, m2), spins (chi1, chi2),
 the quasi-normal modes of the remnant black hole (omega_qnm, tau_qnm), and NQC attachment time (t_0).
@@ -50,7 +44,7 @@ class BOB_v2_waveform_quantities:
         upcoming commit.
         The key outputs of the BOB_v2_waveform_quantities class are:
             - 'h_complex' : complex merger-ringdown strain for the (2,2) mode
-            - 'h_t_attach' : the time of the peak strain amplitude of the BOB merger-ringdown strain
+            - 'h_t_attach' : the peak strain amplitude of the BOB merger-ringdown strain for the (l=2,m=2) mode
             - 'hddot_t_attach' : the BOB-derived second time derivative of the strain amplitude (l=2,m=2) mode
                                 at the NQC attachment time.
             - 'w_t_attach' : the angular frequency of the (2,2) mode at the attachment time
@@ -176,7 +170,7 @@ class BOB_v2_waveform_quantities:
         # H = Sum_n H_n
         # First the series is truncated at N = N_provisional
 
-        # This is purposely set to 2 for testing right now, and can be changed later.
+        # This is purposely set to 0 for testing right now, and can be changed later.
         N_provisional = 0
         i_times_omega = sp.I * omega_news
         H_n = Ap / i_times_omega
@@ -219,8 +213,11 @@ class BOB_v2_waveform_quantities:
         # Note 3:
         # We choose to force hdot_t_attach = 0 to help with attachment to the inspiral in the existing nrpy infrastructure.
 
+        # Note 4:
+        # We set the t_p_guess = t_attach purposely since we do not need to ensure continuity at the NR strain peak
+
         self.t_p_condition = sp.diff(strain_amplitude, t).subs(t, t_attach)
-        self.t_p_guess = t_attach + tau_qnm * sp.log(Omega_QNM / Omega0)
+        self.t_p_guess = t_attach
         self.h_t_attach = strain_amplitude.subs(t, t_attach)
 
         self.hdot_t_attach = sp.sympify(0)
