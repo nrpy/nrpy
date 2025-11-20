@@ -1,6 +1,7 @@
 # equations/general_relativity/bhahaha/approx_killing_vector_spin.py
 """
-Single-pass integrands for:
+Single-pass integrands for AKV-based spin diagnostics on apparent horizons.
+
  (1) Approximate Killing Vector (AKV) spin axis on an AH
  (2) Spin magnitude components J_m once the axis is chosen
 
@@ -16,7 +17,7 @@ Sources:
  - BHaHAHA (https://arxiv.org/abs/2505.15912)
  - QuasiLocalMeasures docs (https://einsteintoolkit.org/thornguide/EinsteinAnalysis/QuasiLocalMeasures/documentation.html)
  - QuasiLocalMeasures source code (https://bitbucket.org/einsteintoolkit/einsteinanalysis)
- 
+
  (Foundations of AKV on S²; H_{mn}, N_{mn}, and shear minimization)
  - Cook & Whiting (2007), *Phys. Rev. D 76, 041501*, arXiv:0706.0199
  (Eigenvalue formulation of approximate Killing fields)
@@ -34,6 +35,7 @@ Author: Wesley Inselman
 """
 
 from typing import Dict, List, cast
+
 import sympy as sp
 
 import nrpy.indexedexp as ixp
@@ -42,9 +44,8 @@ import nrpy.reference_metric as refmetric
 
 class ApproxKillingSpinClass:
     """
-    Build symbolic expressions to compute:
-      (a) AKV axis via minimization over the rigid-rotation (l=1) subspace,
-      (b) Spin magnitude components using that axis.
+    Build symbolic expressions for AKV spin and axis on an apparent horizon.
+
     Coordinates: spherical (r,theta,phi), AH given by F=r-h(theta,phi)=0.
     Inputs follow NRPy 'var_dD' naming; no .subs or simplify used.
     The caller applies the overall 1/(8*pi) prefactor when integrating J.
@@ -57,14 +58,18 @@ class ApproxKillingSpinClass:
         enable_rfm_precompute = CoordSystem.endswith("_rfm_precompute")
         self.CoordSystem = "Spherical"
         self._rfm = refmetric.reference_metric[
-            (self.CoordSystem + "_rfm_precompute") if enable_rfm_precompute else self.CoordSystem
+            (
+                (self.CoordSystem + "_rfm_precompute")
+                if enable_rfm_precompute
+                else self.CoordSystem
+            )
         ]
 
         # Public outputs
-        self.sqrtq = None
-        self.Hmn_integrand = None
-        self.Nmn_integrand = None
-        self.Jm_integrand = None
+        self.sqrtq: sp.Expr
+        self.Hmn_integrand: List[List[sp.Expr]]
+        self.Nmn_integrand: List[List[sp.Expr]]
+        self.Jm_integrand: List[sp.Expr]
 
         # Build pipeline
         self._build_3metric_and_derivs_()
@@ -82,13 +87,18 @@ class ApproxKillingSpinClass:
 
         # h_ij (barred-metric deviation) and derivatives
         hDD = ixp.declarerank2("hDD", symmetry="sym01")
-        partial_D_hDD = cast(List[List[List[sp.Expr]]], ixp.declarerank3("partial_D_hDD", symmetry="sym12"))
+        partial_D_hDD = cast(
+            List[List[List[sp.Expr]]],
+            ixp.declarerank3("partial_D_hDD", symmetry="sym12"),
+        )
 
         # gammabar_ij
         self._gammabarDD = ixp.zerorank2()
         for i in range(3):
             for j in range(3):
-                self._gammabarDD[i][j] = hDD[i][j] * self._rfm.ReDD[i][j] + self._rfm.ghatDD[i][j]
+                self._gammabarDD[i][j] = (
+                    hDD[i][j] * self._rfm.ReDD[i][j] + self._rfm.ghatDD[i][j]
+                )
 
         # Physical 3-metric gamma_ij = gammabar_ij / W^2
         self._gammaDD = ixp.zerorank2()
@@ -110,7 +120,9 @@ class ApproxKillingSpinClass:
         for i in range(3):
             for j in range(3):
                 for k in range(3):
-                    self._gammaDDdD[i][j][k] = (-2 * self._gammabarDD[i][j] * WdD[k]) / (W * W * W) + gammabarDDdD[i][j][k] / (W * W)
+                    self._gammaDDdD[i][j][k] = (
+                        -2 * self._gammabarDD[i][j] * WdD[k]
+                    ) / (W * W * W) + gammabarDDdD[i][j][k] / (W * W)
 
         # gamma^ij and det(gamma)
         self._gammaUU, _detgamma_unused = ixp.symm_matrix_inverter3x3(self._gammaDD)
@@ -125,7 +137,10 @@ class ApproxKillingSpinClass:
         self._KDD = ixp.zerorank2()
         for i in range(3):
             for j in range(3):
-                self._KDD[i][j] = self._AbarDD[i][j] / (W * W) + sp.Rational(1, 3) * self._gammaDD[i][j] * self._trK
+                self._KDD[i][j] = (
+                    self._AbarDD[i][j] / (W * W)
+                    + sp.Rational(1, 3) * self._gammaDD[i][j] * self._trK
+                )
 
     # ------------------------
     # 2-surface geometry on r=h(theta,phi)
@@ -133,7 +148,9 @@ class ApproxKillingSpinClass:
     def _build_surface_geometry_(self) -> None:
         # Horizon shape and derivatives
         self._h = sp.Symbol("hh", real=True)
-        self._h_dD = ixp.declarerank1("hh_dD")      # [h_r, h_theta, h_phi]; angular components nonzero in practice
+        self._h_dD = ixp.declarerank1(
+            "hh_dD"
+        )  # [h_r, h_theta, h_phi]; angular components nonzero in practice
         self._h_dDD = ixp.declarerank2("hh_dDD", symmetry="sym01")
 
         # Level-set gradient F_{,i} in spherical basis: [1, -h_,theta, -h_,phi]
@@ -153,12 +170,15 @@ class ApproxKillingSpinClass:
                 s = sp.sympify(0)
                 for i in range(3):
                     for j in range(3):
-                        s += self._pU_i_A[i][A] * self._pU_i_A[j][B] * self._gammaDD[i][j]
+                        s += (
+                            self._pU_i_A[i][A]
+                            * self._pU_i_A[j][B]
+                            * self._gammaDD[i][j]
+                        )
                 self._qDD[A][B] = s
 
         # det(q_AB) and q^{AB}
-        q2x2 = [[self._qDD[1][1], self._qDD[1][2]],
-                [self._qDD[2][1], self._qDD[2][2]]]
+        q2x2 = [[self._qDD[1][1], self._qDD[1][2]], [self._qDD[2][1], self._qDD[2][2]]]
         self._qUU2, self._detq2 = ixp.symm_matrix_inverter2x2(q2x2)
         self._qUU = ixp.zerorank2()
         self._qUU[1][1] = self._qUU2[0][0]
@@ -188,11 +208,24 @@ class ApproxKillingSpinClass:
                     for i in range(3):
                         for j in range(3):
                             for k in range(3):
-                                s += self._pU_i_A[i][A] * self._pU_i_A[j][B] * self._gammaDDdD[i][j][k] * dxk_dyC[k][C]
+                                s += (
+                                    self._pU_i_A[i][A]
+                                    * self._pU_i_A[j][B]
+                                    * self._gammaDDdD[i][j][k]
+                                    * dxk_dyC[k][C]
+                                )
                     for i in range(3):
                         for j in range(3):
-                            s += dp_iA_dC[i][A][C] * self._pU_i_A[j][B] * self._gammaDD[i][j]
-                            s += self._pU_i_A[i][A] * dp_iA_dC[j][B][C] * self._gammaDD[i][j]
+                            s += (
+                                dp_iA_dC[i][A][C]
+                                * self._pU_i_A[j][B]
+                                * self._gammaDD[i][j]
+                            )
+                            s += (
+                                self._pU_i_A[i][A]
+                                * dp_iA_dC[j][B][C]
+                                * self._gammaDD[i][j]
+                            )
                     self._qDDdD[A][B][C] = s
 
         # 2D Christoffels Γ^C_{AB}
@@ -202,8 +235,14 @@ class ApproxKillingSpinClass:
                 for C in range(1, 3):
                     val = sp.sympify(0)
                     for D in range(1, 3):
-                        val += sp.Rational(1, 2) * self._qUU[C][D] * (
-                            self._qDDdD[A][D][B] + self._qDDdD[B][D][A] - self._qDDdD[A][B][D]
+                        val += (
+                            sp.Rational(1, 2)
+                            * self._qUU[C][D]
+                            * (
+                                self._qDDdD[A][D][B]
+                                + self._qDDdD[B][D][A]
+                                - self._qDDdD[A][B][D]
+                            )
                         )
                     self._Gamma2D[A][B][C] = val
 
@@ -241,7 +280,9 @@ class ApproxKillingSpinClass:
         # representation is compatible with that regularization.
         cot = cos(theta) / sin(theta)
 
-        self._xiU = [ixp.zerorank1() for _ in range(3)]  # contravariant components over A∈{1,2}
+        self._xiU = [
+            ixp.zerorank1() for _ in range(3)
+        ]  # contravariant components over A∈{1,2}
         # z
         self._xiU[2][1] = sp.sympify(0)
         self._xiU[2][2] = sp.sympify(1)
@@ -263,7 +304,9 @@ class ApproxKillingSpinClass:
 
         # Angular derivatives ∂_C xi^A (analytic)
         d_xiU = [ixp.zerorank2() for _ in range(3)]  # [m][A][C]
-        d_cot_dtheta = -(sp.sympify(1) + cot * cot)  # d/dtheta(cot)= -csc^2 = -(1+cot^2)
+        d_cot_dtheta = -(
+            sp.sympify(1) + cot * cot
+        )  # d/dtheta(cot)= -csc^2 = -(1+cot^2)
         # m=2 (z): zeros already
         # m=0 (x)
         d_xiU[0][1][1] = sp.sympify(0)
@@ -282,7 +325,7 @@ class ApproxKillingSpinClass:
             divm = sp.sympify(0)
             for A in range(1, 3):
                 divm += d_xiU[m][A][A]
-                for B in range(1, 3):
+                for C in range(1, 3):
                     divm += self._Gamma2D[A][C][A] * self._xiU[m][C]
             self._div_xi[m] = divm
 
@@ -306,7 +349,11 @@ class ApproxKillingSpinClass:
         for m in range(3):
             for A in range(1, 3):
                 for B in range(1, 3):
-                    self._SDD[m][A][B] = self._D_xiD[m][A][B] + self._D_xiD[m][B][A] - self._div_xi[m] * self._qDD[A][B]
+                    self._SDD[m][A][B] = (
+                        self._D_xiD[m][A][B]
+                        + self._D_xiD[m][B][A]
+                        - self._div_xi[m] * self._qDD[A][B]
+                    )
 
         # Quadratic-form integrand H_mn = S_AB[m] S_CD[n] q^{AC} q^{BD} * sqrt(q)
         H = ixp.zerorank2()
@@ -317,7 +364,12 @@ class ApproxKillingSpinClass:
                     for B in range(1, 3):
                         for C in range(1, 3):
                             for D in range(1, 3):
-                                s += self._SDD[m][A][B] * self._SDD[n][C][D] * self._qUU[A][C] * self._qUU[B][D]
+                                s += (
+                                    self._SDD[m][A][B]
+                                    * self._SDD[n][C][D]
+                                    * self._qUU[A][C]
+                                    * self._qUU[B][D]
+                                )
                 H[m][n] = s * self.sqrtq
 
         # Normalization-form integrand N_mn = q_AB xi^A_(m) xi^B_(n) * sqrt(q)
@@ -369,6 +421,8 @@ class ApproxKillingSpinClass:
 
 
 class ApproxKillingSpinClass_dict(Dict[str, ApproxKillingSpinClass]):
+    """Lazy mapping from coordinate-system name to ApproxKillingSpinClass instances."""
+
     def __getitem__(self, key: str) -> ApproxKillingSpinClass:
         if key not in self:
             if key not in ["Spherical", "Spherical_rfm_precompute"]:
@@ -390,6 +444,7 @@ if __name__ == "__main__":
     import doctest
     import os
     import sys
+
     import nrpy.validate_expressions.validate_expressions as ve
 
     results = doctest.testmod()
@@ -401,11 +456,12 @@ if __name__ == "__main__":
 
     for validation_key in ["Spherical", "Spherical_rfm_precompute"]:
         akv = ApproxKillingSpin[validation_key]
-        results_dict = ve.process_dictionary_of_expressions(akv.__dict__, fixed_mpfs_for_free_symbols=True)
+        results_dict = ve.process_dictionary_of_expressions(
+            akv.__dict__, fixed_mpfs_for_free_symbols=True
+        )
         ve.compare_or_generate_trusted_results(
             os.path.abspath(__file__),
             os.getcwd(),
             f"{os.path.splitext(os.path.basename(__file__))[0]}_{validation_key}",
             results_dict,
         )
-
