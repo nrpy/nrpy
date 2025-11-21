@@ -200,7 +200,7 @@ class CCodeGen:
         # Set fp_type and fp_type_alias
         Infrastructure = par.parval_from_str("Infrastructure")
         if self.enable_simd:
-            if self.fp_type not in "double":
+            if self.fp_type != "double":
                 raise ValueError(
                     "SIMD output currently only supports double precision. Sorry!"
                 )
