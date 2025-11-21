@@ -10,6 +10,7 @@ Author: Dalton J. Moone
 """
 
 # Step 0.a: Import standard Python modules
+import logging
 from typing import Dict, List, Tuple
 
 # Step 0.b: Import third-party modules
@@ -45,15 +46,15 @@ class AnalyticSpacetimes:
         Initialize and generate the symbolic metric for a given spacetime.
 
         :param spacetime_name: The name of the spacetime to generate
-                               (e.g., "KerrSchild", "Schwarzschild_Cartesian").
+                               (e.g., "KerrSchild_Cartesian", "Schwarzschild_Cartesian_Isotropic").
         :raises ValueError: If the requested spacetime is not supported.
         """
         self.spacetime_name = spacetime_name
 
-        if self.spacetime_name == "KerrSchild":
+        if self.spacetime_name == "KerrSchild_Cartesian":
             self.g4DD, self.xx = self._define_kerr_metric_Cartesian_Kerr_Schild()
-        elif self.spacetime_name == "Schwarzschild_Cartesian":
-            self.g4DD, self.xx = self._define_schwarzschild_metric_cartesian()
+        elif self.spacetime_name == "Schwarzschild_Cartesian_Isotropic":
+            self.g4DD, self.xx = self._define_schwarzschild_Cartesian_isotropic()
         else:
             raise ValueError(f"Spacetime '{self.spacetime_name}' is not supported.")
 
@@ -65,29 +66,43 @@ class AnalyticSpacetimes:
         Define the Kerr metric in Cartesian Kerr-Schild coordinates.
 
         The metric is constructed as g_munu = eta_munu + 2H * l_mu * l_nu.
+        This form is regular everywhere, including the horizon.
+
+        Reference:
+        Wikipedia: Kerr-Schild coordinates
+        Permanent Link: https://en.wikipedia.org/w/index.php?title=Kerr_metric&oldid=1318460406
+        (See section on Kerr–Schild coordinates)
 
         :return: A tuple (g4DD, xx), where g4DD is the symbolic 4x4 metric tensor
-                 and xx is the list of symbolic coordinate variables (x, y, z).
+                 and xx is the list of symbolic coordinate variables (t, x, y, z).
         """
         # Step 1: Define generic symbolic coordinates.
-        x, y, z = sp.symbols("x y z", real=True)
-        xx = [x, y, z]
+        t, x, y, z = sp.symbols("t x y z", real=True)
+        xx = [t, x, y, z]
 
         # Step 2: Define intermediate geometric quantities.
-        r2 = x**2 + y**2 + z**2
+        # The Kerr-Schild radius 'r' is not the Euclidean radius. It is solved
+        # for implicitly from the Cartesian coordinates (x, y, z) and spin a.
+        # rho2 is the squared Euclidean distance from the origin.
+        rho2 = x**2 + y**2 + z**2
+        a_spin2 = a_spin**2
+
+        # This is the solution to the quartic equation for r:
+        # r^4 - (rho^2 - a^2)r^2 - a^2 z^2 = 0
+        r2 = sp.Rational(1, 2) * (
+            rho2 - a_spin2 + sp.sqrt((rho2 - a_spin2) ** 2 + 4 * a_spin2 * z**2)
+        )
         r = sp.sqrt(r2)
 
         # Step 3: Define the Kerr-Schild null vector l_mu.
-        # Formula: l_mu = (1, (r*x + a*y)/(r^2+a^2), (r*y - a*x)/(r^2+a^2), z/r)
         l_down = ixp.zerorank1(dimension=4)
         l_down[0] = sp.sympify(1)
-        l_down[1] = (r * x + a_spin * y) / (r2 + a_spin**2)
-        l_down[2] = (r * y - a_spin * x) / (r2 + a_spin**2)
+        l_down[1] = (r * x + a_spin * y) / (r2 + a_spin2)
+        l_down[2] = (r * y - a_spin * x) / (r2 + a_spin2)
         l_down[3] = z / r
 
         # Step 4: Define the scalar function H.
-        # Formula: H = (M*r^3) / (r^4 + a^2*z^2)
-        H = (M_scale * r**3) / (r**4 + a_spin**2 * z**2)
+        H = (M_scale * r**3) / (r**4 + a_spin2 * z**2)
 
         # Step 5: Construct the Kerr-Schild metric g_munu = eta_munu + 2H * l_mu * l_nu.
         eta4DD = ixp.zerorank2(dimension=4)
@@ -101,35 +116,46 @@ class AnalyticSpacetimes:
         return g4DD, xx
 
     @staticmethod
-    def _define_schwarzschild_metric_cartesian() -> (
+    def _define_schwarzschild_Cartesian_isotropic() -> (
         Tuple[List[List[sp.Expr]], List[sp.Symbol]]
     ):
         """
-        Define the Schwarzschild metric in standard Cartesian coordinates.
+        Define the Schwarzschild metric in Cartesian isotropic coordinates.
 
-        This recipe uses the global CodeParameter symbol for M.
+        Reference:
+        Wikipedia: Schwarzschild metric
+        Permanent Link: https://en.wikipedia.org/w/index.php?title=Schwarzschild_metric&oldid=1322152082
+        (See Isotropic coordinates under section "Alternative coordinates")
 
         :return: A tuple (g4DD, xx), where g4DD is the symbolic 4x4 metric tensor
-                 and xx is the list of symbolic coordinate variables.
+                 and xx is the list of symbolic coordinate variables (t, x, y, z).
         """
-        # Step 1: Define generic symbolic coordinates and radial distance.
-        x, y, z = sp.symbols("x y z", real=True)
-        xx = [x, y, z]
-        r = sp.sqrt(x**2 + y**2 + z**2)
+        # Step 1: Define coordinates and parameters.
+        t, x, y, z = sp.symbols("t x y z", real=True)
+        xx = [t, x, y, z]
 
+        # The isotropic radial coordinate R is the standard Euclidean distance.
+        R = sp.sqrt(x**2 + y**2 + z**2)
+
+        # The Schwarzschild radius rs = 2M.
+        rs = 2 * M_scale
+
+        # Step 2: Define the metric components from the line element.
+        # ds^2 = -f(R)^2 dt^2 + g(R)^2 (dx^2 + dy^2 + dz^2)
         g4DD = ixp.zerorank2(dimension=4)
-        # Step 2: Set the time-time component.
-        # Formula: g_tt = -(1 - 2M/r).
-        g4DD[0][0] = -(1 - 2 * M_scale / r)
 
-        # Step 3: Set the space-space components.
-        # Formula: g_ij = delta_ij + (2M/r) * (x_i * x_j / r^2).
-        for i in range(3):
-            for j in range(3):
-                delta_ij = sp.sympify(1) if i == j else sp.sympify(0)
-                g4DD[i + 1][j + 1] = delta_ij + (2 * M_scale / r) * (
-                    xx[i] * xx[j] / (r**2)
-                )
+        # g_tt component: -( (1 - rs/4R) / (1 + rs/4R) )^2
+        term_in_paren = rs / (4 * R)
+        g_tt_numerator = 1 - term_in_paren
+        g_tt_denominator = 1 + term_in_paren
+        g4DD[0][0] = -((g_tt_numerator / g_tt_denominator) ** 2)
+
+        # Spatial components: g_ii = (1 + rs/4R)^4
+        conformal_factor = (1 + term_in_paren) ** 4
+        g4DD[1][1] = conformal_factor
+        g4DD[2][2] = conformal_factor
+        g4DD[3][3] = conformal_factor
+
         return g4DD, xx
 
 
@@ -144,7 +170,10 @@ class AnalyticSpacetimes_dict(Dict[str, "AnalyticSpacetimes"]):
         :return: An AnalyticSpacetimes instance for the specified configuration.
         """
         if key not in self:
-            print(f"Setting up analytic spacetime: '{key}'...")
+            # This implements the fix for Issue [6], replacing print() with logging.
+            logging.getLogger(__name__).info(
+                "Setting up analytic spacetime: '%s'...", key
+            )
             self[key] = AnalyticSpacetimes(spacetime_name=key)
         return super().__getitem__(key)
 
@@ -153,10 +182,12 @@ Analytic_Spacetimes = AnalyticSpacetimes_dict()
 
 
 if __name__ == "__main__":
-    # Move imports here to avoid pylint unused-import errors.
     import doctest
     import os
     import sys
+
+    # Configure logging to output to the console.
+    logging.basicConfig(level=logging.INFO)
 
     results = doctest.testmod()
     if results.failed > 0:
@@ -166,7 +197,10 @@ if __name__ == "__main__":
         print(f"Doctest passed: All {results.attempted} test(s) passed")
 
     # Use a distinct loop variable name to avoid pylint redefined-outer-name warnings.
-    for spacetime_name_str in ["KerrSchild", "Schwarzschild_Cartesian"]:
+    for spacetime_name_str in [
+        "KerrSchild_Cartesian",
+        "Schwarzschild_Cartesian_Isotropic",
+    ]:
         spacetimes = Analytic_Spacetimes[spacetime_name_str]
         results_dict = ve.process_dictionary_of_expressions(
             spacetimes.__dict__, fixed_mpfs_for_free_symbols=True
