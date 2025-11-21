@@ -23,6 +23,7 @@ import nrpy.validate_expressions.validate_expressions as ve
 
 # Step 0.d: Define global CodeParameters for physical parameters.
 # These are special sympy symbols that the C code generator recognizes.
+# Assumes geometric units where G=c=1. M_scale is the ADM mass of the black hole.
 M_scale = par.register_CodeParameter("REAL", __name__, "M_scale", 1.0)
 a_spin = par.register_CodeParameter("REAL", __name__, "a_spin", 0.0)
 
@@ -170,7 +171,7 @@ class AnalyticSpacetimes_dict(Dict[str, "AnalyticSpacetimes"]):
         :return: An AnalyticSpacetimes instance for the specified configuration.
         """
         if key not in self:
-            # This implements the fix for Issue [6], replacing print() with logging.
+            # If the spacetime is not cached, generate it and add it to the cache.
             logging.getLogger(__name__).info(
                 "Setting up analytic spacetime: '%s'...", key
             )
