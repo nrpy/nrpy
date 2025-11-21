@@ -558,8 +558,12 @@ def c_codegen(
                 sympyexprs_SCALAR_TMPs_are_sp_Eq.append(expr)
 
         # Check sympy version and process the main group
-        sympy_version = tuple(int(x) for x in sp.__version__.split(".")[:2])
-        if sympy_version < (1, 3):
+        sympy_version = sp.__version__.replace("rc", "...").replace("b", "...")
+        sympy_major_version = int(sympy_version.split(".")[0])
+        sympy_minor_version = int(sympy_version.split(".")[1])
+        if sympy_major_version < 1 or (
+            sympy_major_version == 1 and sympy_minor_version < 3
+        ):
             print(
                 f"Warning: SymPy version {sp.__version__} does not support CSE postprocessing."
             )

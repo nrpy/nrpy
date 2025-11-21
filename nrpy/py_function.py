@@ -7,7 +7,7 @@ Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
 """
 
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 
 class PyFunction:
@@ -157,6 +157,7 @@ class PyFunction:
     def indent_body(body: str) -> str:
         """
         Indent the body of a function with standard 4-space indentation.
+        Preserves relative indentation between lines.
 
         :param body: The body of the function to be indented.
         :return: The indented body of the function.
@@ -164,18 +165,12 @@ class PyFunction:
         body_as_lines = body.split("\n")
         out_body = []
         for body_line in body_as_lines:
-            clean = body_line.rstrip()
-            if clean.strip() == "":
+            if body_line.strip() == "":
                 out_body.append("\n")
                 continue
-            if clean.startswith(" "):
-                i = 0
-                while i < len(clean) and clean[i] == " ":
-                    i += 1
-                rest = clean[i:]
-                out_body.append(f"    {rest}\n")
-            else:
-                out_body.append(f"    {body_line}\n")
+            # Shift all non-blank lines right by four spaces, but do not
+            # normalize or strip their existing indentation.
+            out_body.append(f"    {body_line.rstrip()}\n")
         return "".join(out_body)
 
     @staticmethod
@@ -236,7 +231,7 @@ class PyFunction:
             for imp in self.imports:
                 if not isinstance(imp, str):
                     raise TypeError(
-                        f"Error in Pyfunction(name={self.name}): imports must be a list of strings. Found imports = {self.imports}"
+                        f"Error in PyFunction(name={self.name}): imports must be a list of strings. Found imports = {self.imports}"
                     )
 
                 complete_func += f"{imp}\n"
@@ -261,6 +256,29 @@ class PyFunction:
 
 
 PyFunction_dict: Dict[str, PyFunction] = {}
+
+
+def function_name_and_subdir_with_CoordSystem(
+    subdirectory: str, name: str, CoordSystem_for_wrapper_func: str
+) -> Tuple[str, str]:
+    """
+    Append a CoordSystem_for_wrapper_func string with a specific format to the provided name.
+
+    :param subdirectory: The subdirectory within which we place this function.
+    :param name: The wrapper function name.
+    :param CoordSystem_for_wrapper_func: The coordinate system subdirectory string.
+    :return: The coordinate-specific subdirectory and function name.
+
+    DocTests:
+        >>> function_name_and_subdir_with_CoordSystem(os.path.join("."), "xx_to_Cart", "SinhSpherical")
+        ('./SinhSpherical', 'xx_to_Cart__rfm__SinhSpherical')
+    """
+    if CoordSystem_for_wrapper_func:
+        return (
+            os.path.join(subdirectory, CoordSystem_for_wrapper_func),
+            f"{name}__rfm__{CoordSystem_for_wrapper_func}",
+        )
+    return subdirectory, name
 
 
 def register_PyFunction(

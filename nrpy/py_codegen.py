@@ -16,6 +16,7 @@ import sympy as sp
 from typing_extensions import Literal
 
 import nrpy.params as par
+from nrpy.c_codegen import apply_substitution_dict
 from nrpy.helpers.cse_preprocess_postprocess import (  # NRPy: CSE preprocessing and postprocessing
     cse_postprocess,
 )
@@ -197,8 +198,13 @@ def py_codegen(
             sympyexprs.append(expr)
 
         # Check sympy version and process the main group
-        sympy_version = tuple(int(x) for x in sp.__version__.split(".")[:2])
-        if sympy_version < (1, 3):
+        sympy_version = sp.__version__.replace("rc", "...").replace("b", "...")
+        sympy_major_version = int(sympy_version.split(".")[0])
+        sympy_minor_version = int(sympy_version.split(".")[1])
+
+        if sympy_major_version < 1 or (
+            sympy_major_version == 1 and sympy_minor_version < 3
+        ):
             print(
                 f"Warning: SymPy version {sp.__version__} does not support CSE postprocessing."
             )
@@ -254,39 +260,6 @@ def py_codegen(
 
     # Step 5: Return result string
     return final_Pycode_output_str
-
-
-def apply_substitution_dict(
-    expr: sp.Basic, postproc_substitution_dict: Dict[str, str]
-) -> sp.Basic:
-    """
-    Apply substitutions to a SymPy expression based on a dictionary.
-
-    This function takes a SymPy expression and a substitution dictionary and
-    applies the substitutions defined in the dictionary to the expression.
-
-    :param expr: A SymPy expression.
-    :param postproc_substitution_dict: A dictionary with the original variable names
-                                       as keys and the substrings to append as values.
-    :return: Modified SymPy expression after substitutions.
-
-    :Example:
-
-    >>> import sympy as sp
-    >>> x = sp.Symbol('x')
-    >>> apply_substitution_dict(x**2 + 1, {'x': '_new'})
-    x_new**2 + 1
-    """
-    # Loop through all the free symbols in the given SymPy expression.
-    for sym in list(expr.free_symbols):
-        ss = str(sym)
-        # If the current symbol's string representation is in the substitution dictionary...
-        if ss in postproc_substitution_dict:
-            # ... then substitute the symbol in the expression with the new symbol formed by appending the string from the dictionary.
-            expr = expr.subs(sym, sp.symbols(ss + postproc_substitution_dict[ss]))
-
-    # Return the modified expression.
-    return expr
 
 
 if __name__ == "__main__":
