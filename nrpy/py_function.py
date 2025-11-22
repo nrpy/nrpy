@@ -17,11 +17,11 @@ class PyFunction:
     :param subdirectory: Path from the root source directory to this Python function. Defaults to the current directory.
     :param imports: A list of strings representing import files.
     :param prefunc: A string containing code above the core function declaration. Defaults to an empty string.
-    :param desc: A description of the function.
+    :param desc: A *required* description of the function.
     :param pyfunc_decorators: Optional decorators for PyFunctions, e.g. JAX decorators, Equinox decorators, etc.
-    :param name: The name of the function.
+    :param name: The *required* name of the function.
     :param params: A string representing the function's input parameters. Defaults to an empty string.
-    :param body: The body of the function.
+    :param body: The *required* body of the function.
     :param postfunc: A string containing code below the core function definition. Defaults to an empty string.
 
     DocTests:
@@ -221,10 +221,6 @@ class PyFunction:
 
         :raises TypeError: If any item in the `imports` list is not a string.
         """
-        rel_path_to_root_directory = ""
-        for _ in range(self.subdirectory_depth(self.subdirectory)):
-            rel_path_to_root_directory = os.path.join(rel_path_to_root_directory, "..")
-
         complete_func = ""
 
         if self.imports:
@@ -256,30 +252,6 @@ class PyFunction:
 
 
 PyFunction_dict: Dict[str, PyFunction] = {}
-
-
-def function_name_and_subdir_with_CoordSystem(
-    subdirectory: str, name: str, CoordSystem_for_wrapper_func: str
-) -> Tuple[str, str]:
-    """
-    Append a CoordSystem_for_wrapper_func string with a specific format to the provided name.
-
-    :param subdirectory: The subdirectory within which we place this function.
-    :param name: The wrapper function name.
-    :param CoordSystem_for_wrapper_func: The coordinate system subdirectory string.
-    :return: The coordinate-specific subdirectory and function name.
-
-    DocTests:
-        >>> function_name_and_subdir_with_CoordSystem(os.path.join("."), "xx_to_Cart", "SinhSpherical")
-        ('./SinhSpherical', 'xx_to_Cart__rfm__SinhSpherical')
-    """
-    if CoordSystem_for_wrapper_func:
-        return (
-            os.path.join(subdirectory, CoordSystem_for_wrapper_func),
-            f"{name}__rfm__{CoordSystem_for_wrapper_func}",
-        )
-    return subdirectory, name
-
 
 def register_PyFunction(
     subdirectory: str = os.path.join("."),
