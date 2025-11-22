@@ -44,13 +44,13 @@ class BOB_v2_waveform_quantities:
         upcoming commit.
         The key outputs of the BOB_v2_waveform_quantities class are:
             - 'h_complex' : complex merger-ringdown strain for the (2,2) mode
-            - 'h_t_attach' : the peak strain amplitude of the BOB merger-ringdown strain for the (l=2,m=2) mode
+            - 'h_t_attach' : the strain amplitude of the BOB merger-ringdown strain for the (l=2,m=2) mode at t_attach
             - 'hddot_t_attach' : the BOB-derived second time derivative of the strain amplitude (l=2,m=2) mode
-                                at the NQC attachment time.
-            - 'w_t_attach' : the angular frequency of the (2,2) mode at the attachment time
+                                at t_attach.
+            - 'w_t_attach' : the angular frequency of the (2,2) mode at t_attach
 
             - 'wdot_t_attach' : the BOB-derived first time derivative of the angular frequency of the (l=2,m=2) mode
-                                at the NQC attachment time.
+                                at t_attach.
             - 't_p_condition' : the BOBv2 peak strain condition.
 
         :return None:
@@ -95,7 +95,6 @@ class BOB_v2_waveform_quantities:
         coeff12 = f2r(0.4715159651693307)
         coeff13 = f2r(0.4273652956250933)
         coeff14 = f2r(0.0327224221106050)
-        coeff15 = f2r(-0.1365442193657105)
 
         term1 = coeff1 * chip3 * nup1
         term2 = coeff2 * chip3
