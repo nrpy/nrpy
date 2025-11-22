@@ -81,21 +81,21 @@ class BOB_v2_waveform_quantities:
         nup3 = nu**3
         nup4 = nu**4
 
-        coeff1 = f2r(-0.1502782927808088)
-        coeff2 = f2r(0.0772527566672910)
-        coeff3 = f2r(-0.4915078035114737)
-        coeff4 = f2r(0.0844626781097461)
-        coeff5 = f2r(-9.9006874770940101)
-        coeff6 = f2r(4.3195764159638648)
-        coeff7 = f2r(-0.6726797586869773)
-        coeff8 = f2r(-14310.0848419331578043)
-        coeff9 = f2r(8.9275792268810878)
-        coeff10 = f2r(-4.0137844777738332)
-        coeff11 = f2r(2.4354075600224134)
-        coeff12 = f2r(0.3226728252422290)
-        coeff13 = f2r(0.4325654236226389)
-        coeff14 = f2r(0.0305373070314258)
-        coeff15 = f2r(14310.2825118014534382)
+        coeff1 = f2r(-0.1690964613229652)
+        coeff2 = f2r(0.0804022444632999)
+        coeff3 = f2r(-0.1636344956438827)
+        coeff4 = f2r(0.0957036572344713)
+        coeff5 = f2r(-8.2209626908806417)
+        coeff6 = f2r(3.5325407860101454)
+        coeff7 = f2r(-0.5562670282104044)
+        coeff8 = f2r(0.1923923251183420)
+        coeff9 = f2r(-1.5773993140208711)
+        coeff10 = f2r(2.6183097662645647)
+        coeff11 = f2r(0.9216415432031680)
+        coeff12 = f2r(0.4715159651693307)
+        coeff13 = f2r(0.4273652956250933)
+        coeff14 = f2r(0.0327224221106050)
+        coeff15 = f2r(-0.1365442193657105)
 
         term1 = coeff1 * chip3 * nup1
         term2 = coeff2 * chip3
@@ -111,7 +111,6 @@ class BOB_v2_waveform_quantities:
         term12 = coeff12 * nup1
         term13 = coeff13
         term14 = coeff14 * chip4
-        term15 = coeff15 * chip1
 
         news22NR_Ap = nu * sp.Abs(
             term1
@@ -128,7 +127,6 @@ class BOB_v2_waveform_quantities:
             + term12
             + term13
             + term14
-            + term15
         )
 
         # Fit for Omega0 for the News (2,2) frequency
@@ -171,6 +169,7 @@ class BOB_v2_waveform_quantities:
         # First the series is truncated at N = N_provisional
 
         # This is purposely set to 0 for testing right now, and can be changed later.
+        # The best choice will be determined post-testing as the Kankani and McWilliams paper did not study the effects on NQC calibtations
         N_provisional = 0
         i_times_omega = sp.I * omega_news
         H_n = Ap / i_times_omega
