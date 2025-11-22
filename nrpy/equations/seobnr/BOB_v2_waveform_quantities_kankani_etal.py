@@ -1,0 +1,255 @@
+"""
+Construct the BOBv2 merger-ringdown modes, as described in https://www.arxiv.org/abs/2510.25012, and NQC-relevant matching quantities for aligned-spin binaries.
+
+Authors: Siddharth Mahesh
+sm0193 at mix dot wvu dot edu
+Zachariah B. Etienne
+zachetie at gmail *dot com
+Anuj A. Kankani
+aak00009 at mix dot wvu dot edu
+
+The Backwards-One Body (BOB) formalism is a first principles merger-ringdown model that
+maps the properties of null congruences in the spacetime of the remnant black hole to
+the merger-ringdown waveform of a binary black hole merger.
+
+
+The modes are expressed in terms of the binary masses (m1, m2), spins (chi1, chi2),
+the quasi-normal modes of the remnant black hole (omega_qnm, tau_qnm), and NQC attachment time (t_0).
+
+License: BSD 2-Clause
+"""
+
+# Step P1: Import needed modules:
+import sympy as sp
+
+from nrpy.helpers.float_to_rational import f2r
+
+# The name of this module is given by __name__:
+thismodule = __name__
+
+
+class BOB_v2_waveform_quantities:
+    """Class for computing the BOBv2 gravitational-wave strain and NQC corrections."""
+
+    def __init__(self) -> None:
+        """
+        Compute the BOBv2 waveform as described in https://www.arxiv.org/abs/2510.25012.
+
+        This constructor sets up the necessary symbolic variables and expressions
+        used in the computation of the BOBv2 waveform. It initializes
+        class variables like mass parameters, spin parameters, and various
+        coefficients required for the waveform's amplitude and phase.
+        The waveform is currently calculated for the (2,2) mode for the sake of
+        debugging/sanity checks. Higher mode information will be added in an
+        upcoming commit.
+        The key outputs of the BOB_v2_waveform_quantities class are:
+            - 'h_complex' : complex merger-ringdown strain for the (2,2) mode
+            - 'h_t_attach' : the strain amplitude of the BOB merger-ringdown strain for the (l=2,m=2) mode at t_attach
+            - 'hddot_t_attach' : the BOB-derived second time derivative of the strain amplitude (l=2,m=2) mode
+                                at t_attach.
+            - 'w_t_attach' : the angular frequency of the (2,2) mode at t_attach
+
+            - 'wdot_t_attach' : the BOB-derived first time derivative of the angular frequency of the (l=2,m=2) mode
+                                at t_attach.
+            - 't_p_condition' : the BOBv2 peak strain condition.
+
+        :return None:
+        """
+        (m1, m2, chi1, chi2, omega_qnm, tau_qnm, t_attach, t_p, t) = sp.symbols(
+            "m1 m2 chi1 chi2 omega_qnm tau_qnm t_attach t_p t", real=True
+        )
+
+        (Mf, chif) = sp.symbols("Mf chif", real=True)
+        # NQC matching parameters
+        M = m1 + m2
+        nu = m1 * m2 / M**2
+
+        chi_s = (chi1 + chi2) / 2
+        chi_a = (chi1 - chi2) / 2
+        delta = (m1 - m2) / M
+        chi_eob = chi_s + chi_a * delta / (
+            1 - 2 * nu
+        )  # Eq (C7 in https://arxiv.org/pdf/2303.18039)
+
+        # Fit for peak amplitude of the news (2,2) mode
+        chip1 = chi_eob
+        chip2 = chi_eob**2
+        chip3 = chi_eob**3
+        chip4 = chi_eob**4
+        nup1 = nu
+        nup2 = nu**2
+        nup3 = nu**3
+        nup4 = nu**4
+
+        coeff1 = f2r(-0.1690964613229652)
+        coeff2 = f2r(0.0804022444632999)
+        coeff3 = f2r(-0.1636344956438827)
+        coeff4 = f2r(0.0957036572344713)
+        coeff5 = f2r(-8.2209626908806417)
+        coeff6 = f2r(3.5325407860101454)
+        coeff7 = f2r(-0.5562670282104044)
+        coeff8 = f2r(0.1923923251183420)
+        coeff9 = f2r(-1.5773993140208711)
+        coeff10 = f2r(2.6183097662645647)
+        coeff11 = f2r(0.9216415432031680)
+        coeff12 = f2r(0.4715159651693307)
+        coeff13 = f2r(0.4273652956250933)
+        coeff14 = f2r(0.0327224221106050)
+
+        term1 = coeff1 * chip3 * nup1
+        term2 = coeff2 * chip3
+        term3 = coeff3 * chip2 * nup2
+        term4 = coeff4 * chip2
+        term5 = coeff5 * chip1 * nup3
+        term6 = coeff6 * chip1 * nup2
+        term7 = coeff7 * chip1 * nup1
+        term8 = coeff8 * chip1
+        term9 = coeff9 * nup4
+        term10 = coeff10 * nup3
+        term11 = coeff11 * nup2
+        term12 = coeff12 * nup1
+        term13 = coeff13
+        term14 = coeff14 * chip4
+
+        news22NR_Ap = nu * sp.Abs(
+            term1
+            + term2
+            + term3
+            + term4
+            + term5
+            + term6
+            + term7
+            + term8
+            + term9
+            + term10
+            + term11
+            + term12
+            + term13
+            + term14
+        )
+
+        # Fit for Omega0 for the News (2,2) frequency
+        A = f2r(0.33568227)
+        B = f2r(0.03450997)
+        C = f2r(-0.18763176)
+        Omega0 = A * Mf + B * chif + C
+
+        # BOB computation begins here
+        # We build BOB for the news according to equation (1) for the amplitude and (13) for the phase in https://www.arxiv.org/abs/2510.25012
+        Omega_QNM = omega_qnm / 2
+        T = (t - t_p) / tau_qnm
+
+        # Eq. (10) and (11) in https://www.arxiv.org/abs/2510.25012 with t_0 = -infty
+        Omega_minus = Omega_QNM**2 - Omega0**2
+        Omega_plus = Omega_QNM**2 + Omega0**2
+        Omega_orb = sp.sqrt(
+            Omega_minus * sp.tanh(T) / sp.Integer(2) + Omega_plus / sp.Integer(2)
+        )
+        # Eq. (1) in https://www.arxiv.org/abs/2510.25012
+        Ap = news22NR_Ap / sp.cosh(T)
+
+        # Eq. (13) in https://www.arxiv.org/abs/2510.25012. Because we take t_0 = -infty, the phase has a closed form expression
+        Omega_minus_Q = (
+            Omega_QNM - Omega_orb
+        )  # equivalent to |Omega_orb - Omega_QNM| since Omega_orb < Omega_QNM
+        Omega_minus_0 = Omega_orb - Omega0
+        outer = tau_qnm / 2
+        inner1 = sp.log((Omega_orb + Omega_QNM) / (Omega_minus_Q))
+        inner2 = sp.log((Omega_orb + Omega0) / (Omega_minus_0))
+        Phi_orb = outer * (Omega_QNM * inner1 - Omega0 * inner2)
+        omega_news = -2 * Omega_orb
+        phi_news = -2 * Phi_orb
+
+        # Going from news to strain
+        # The BOB strain is given as
+        # h = H*exp(-i * m * Phi_orb)
+        # where H is complex and given by the infinite series
+        # H = Sum_n H_n
+        # First the series is truncated at N = N_provisional
+
+        # Prior standalone tests (Kankani & McWilliams) suggest N_provisional = 7 often minimizes
+        # news→strain mismatch, but that study did not assess NQC calibrations and some configurations
+        # (e.g., chi_eff <= 0) favor smaller N. We therefore default to 0 here until an NQC-optimized
+        # choice is established.
+        N_provisional = 0
+        i_times_omega = sp.I * omega_news
+        H_n = Ap / i_times_omega
+        Hbar_n = -Ap / i_times_omega
+        H = H_n
+        Hbar = Hbar_n
+        for _ in range(1, N_provisional + 1):
+            H_n = -1 * sp.diff(H_n, t) / i_times_omega
+            Hbar_n = sp.diff(Hbar_n, t) / i_times_omega
+            H += H_n
+            Hbar += Hbar_n
+        # Since the merger and NQC handling need amplitude and frequency
+        # we use the below two identities
+        # amp(z) = sqrt(z * zbar)
+        strain_amplitude = sp.sqrt(H * Hbar)
+        # frequency(z*exp(i * phi)) = phidot -i * (zbar * zdot - zbardot * z) / (2 * z * zbar)
+        strain_frequency = omega_news - sp.I * (
+            Hbar * sp.diff(H, t) - sp.diff(Hbar, t) * H
+        ) / (2 * H * Hbar)
+
+        self.h_complex = H * sp.exp(sp.I * phi_news)
+
+        # BOB strain peak values will not match the NR values
+        # Therefore we calculate the new BOB strain peak values and use those for NQCs
+        # Ask Sid for more
+
+        # Note:
+        # For initial guesses,
+        # we can use the closed-form solutions for N = 0
+        # t_p_guess = t_attach + tau_qnm * log(Omega_0/Omega_qnm)
+        # Omega_0_guess = omega22NR/2
+        # This guess is not perfect, but we only need a reasonable value for an initial guess, which this provides.
+
+        # Note 2: the NQC corrections uses
+        # the positive strain frequency convention.
+        # Since the BOB strain frequency is, by definition, negative.
+        # Therefore, we add a minus sign to wdot_t_attach
+        # for consistency.
+
+        # Note 3:
+        # We choose to force hdot_t_attach = 0 to help with attachment to the inspiral in the existing nrpy infrastructure.
+
+        # Note 4:
+        # We set the t_p_guess = t_attach purposely since we do not need to ensure continuity at the NR strain peak
+
+        self.t_p_condition = sp.diff(strain_amplitude, t).subs(t, t_attach)
+        self.t_p_guess = t_attach
+        self.h_t_attach = strain_amplitude.subs(t, t_attach)
+
+        self.hdot_t_attach = sp.sympify(0)
+        hddot = sp.diff(sp.diff(strain_amplitude, t), t)
+        self.hddot_t_attach = hddot.subs(t, t_attach)
+        self.w_t_attach = strain_frequency.subs(t, t_attach)
+        self.wdot_t_attach = -sp.diff(strain_frequency, t).subs(t, t_attach)
+
+
+if __name__ == "__main__":
+    import doctest
+    import os
+    import sys
+
+    import nrpy.validate_expressions.validate_expressions as ve
+
+    results = doctest.testmod()
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")
+
+    results_dict = ve.process_dictionary_of_expressions(
+        BOB_v2_waveform_quantities().__dict__,
+        fixed_mpfs_for_free_symbols=True,
+    )
+    ve.compare_or_generate_trusted_results(
+        os.path.abspath(__file__),
+        os.getcwd(),
+        # File basename. If this is set to "trusted_module_test1", then
+        #   trusted results_dict will be stored in tests/trusted_module_test1.py
+        f"{os.path.splitext(os.path.basename(__file__))[0]}",
+        results_dict,
+    )
