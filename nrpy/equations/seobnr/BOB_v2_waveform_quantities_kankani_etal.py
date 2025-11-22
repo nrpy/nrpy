@@ -167,8 +167,10 @@ class BOB_v2_waveform_quantities:
         # H = Sum_n H_n
         # First the series is truncated at N = N_provisional
 
-        # This is purposely set to 0 for testing right now, and can be changed later.
-        # The best choice will be determined post-testing as the Kankani and McWilliams paper did not study the effects on NQC calibtations
+        # Prior standalone tests (Kankani & McWilliams) suggest N_provisional = 7 often minimizes
+        # news→strain mismatch, but that study did not assess NQC calibrations and some configurations
+        # (e.g., chi_eff <= 0) favor smaller N. We therefore default to 0 here until an NQC-optimized
+        # choice is established.
         N_provisional = 0
         i_times_omega = sp.I * omega_news
         H_n = Ap / i_times_omega
