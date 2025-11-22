@@ -1,0 +1,15 @@
+mainmodule main {
+
+  include "commondata_object.h";
+  include "pup_stl.h";
+
+  readonly CProxy_Main mainProxy;
+  readonly CProxy_Timestepping timesteppingArray;
+
+  extern module timestepping;
+
+  mainchare Main {
+    entry Main(CkArgMsg * msg);
+    entry void done();
+  };
+}

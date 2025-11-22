@@ -1,0 +1,63 @@
+#include "BHaH_defines.h"
+#include "BHaH_function_prototypes.h"
+#include "diagnostics/diagnostic_gfs.h"
+
+/**
+ * @file diagnostic_gfs_set.c
+ * @brief Populate per-grid diagnostic arrays used by interpolation and integration routines.
+ *
+ * The function "diagnostic_gfs_set" loops over all grids and fills per-grid diagnostic arrays:
+ *   1) Compute a residual-type diagnostic at all points using a helper that evaluates the
+ *      finite-difference residual.
+ *   2) If enabled at code-generation time, apply inner boundary conditions to that residual by
+ *      copying from a source point to a destination point with a sign determined by the relevant
+ *      parity, ensuring parity-consistent values near symmetry or excision boundaries.
+ *   3) Copy selected evolved gridfunctions from the current time level (y_n_gfs) into designated
+ *      diagnostic channels for downstream consumers.
+ *   4) Set a per-point grid identifier channel to the grid index (converted to REAL).
+ *
+ * The routine assumes each per-grid output buffer is contiguous and large enough to store all
+ * diagnostic channels:
+ *     TOTAL_NUM_DIAG_GFS * Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2
+ * Loops over grid points may be parallelized with OpenMP if available.
+ *
+ * If a user-editable block is present in the implementation, users may add custom logic such as
+ * extra diagnostics or filtering before finalizing values.
+ *
+ * @param[in]  commondata
+ *     Pointer to global simulation metadata (e.g., counters and configuration) accessed by helpers
+ *     and used to determine the number of grids to process.
+ * @param[in]  griddata
+ *     Pointer to an array of per-grid data. For each grid, this provides parameters, coordinates,
+ *     boundary condition metadata, and gridfunctions (including y_n_gfs and any auxiliary data)
+ *     referenced by this routine and its helpers.
+ * @param[out] diagnostic_gfs
+ *     Array of per-grid output buffers. For each grid, diagnostic_gfs[grid] must point to a buffer
+ *     of size TOTAL_NUM_DIAG_GFS * Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2.
+ *
+ * @return void.
+ */
+void diagnostic_gfs_set(const commondata_struct *restrict commondata, const griddata_struct *restrict griddata,
+                        REAL *restrict diagnostic_gfs[MAXNUMGRIDS]) {
+  for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
+    const params_struct *restrict params = &griddata[grid].params;
+    SET_NXX_PLUS_2NGHOSTS_VARS(grid);
+    const REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
+
+    // Poison diagnostic_gfs (for debugging purposes only; WARNING: this might make valgrind ineffective)
+    // #pragma omp parallel for
+    //     for (int ii = 0; ii < TOTAL_NUM_DIAG_GFS * Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2; ii++) {
+    //       diagnostic_gfs[grid][ii] = NAN;
+    //     } // END LOOP over all points & gridfunctions, poisoning diagnostic_gfs
+
+    residual_H_compute_all_points(commondata, params, (REAL *restrict *)griddata[grid].xx, griddata[grid].gridfuncs.auxevol_gfs, y_n_gfs,
+                                  &diagnostic_gfs[grid][IDX4pt(DIAG_RESIDUAL, 0)]);
+
+    LOOP_OMP("omp parallel for", i0, 0, Nxx_plus_2NGHOSTS0, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
+      const int idx3 = IDX3(i0, i1, i2);
+      diagnostic_gfs[grid][IDX4pt(DIAG_UUGF, idx3)] = y_n_gfs[IDX4pt(UUGF, idx3)];
+      diagnostic_gfs[grid][IDX4pt(DIAG_VVGF, idx3)] = y_n_gfs[IDX4pt(VVGF, idx3)];
+      diagnostic_gfs[grid][IDX4pt(DIAG_GRIDINDEX, idx3)] = (REAL)grid;
+    } // END LOOP over all gridpoints to set diagnostic_gfs
+  } // END LOOP over grids
+} // END FUNCTION diagnostic_gfs_set

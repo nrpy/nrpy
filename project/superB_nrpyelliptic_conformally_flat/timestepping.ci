@@ -1,0 +1,938 @@
+module timestepping {
+  include "BHaH_defines.h";
+  include "BHaH_function_prototypes.h";
+  include "commondata_object.h";
+  include "ckio.h";
+  include "pup_stl.h";
+
+  array[3D] Timestepping {
+    entry Timestepping(CommondataObject & inData);
+    entry void ready_1d_y(Ck::IO::FileReadyMsg * m);
+    entry void ready_1d_z(Ck::IO::FileReadyMsg * m);
+    entry void ready_2d_xy(Ck::IO::FileReadyMsg * m);
+    entry void ready_2d_yz(Ck::IO::FileReadyMsg * m);
+    // Step 5: MAIN SIMULATION LOOP
+    entry void start() {
+
+      if (griddata_chare[grid].nonlocalinnerbcstruct.tot_num_src_chares > 0) {
+        serial { send_nonlocalinnerbc_idx3srcpts_toreceiv(); }
+      }
+      if (griddata_chare[grid].nonlocalinnerbcstruct.tot_num_dst_chares > 0) {
+        for (iter = 0; iter < griddata_chare[grid].nonlocalinnerbcstruct.tot_num_dst_chares; iter++) {
+          when receiv_nonlocalinnerbc_idx3srcpt_tosend(int idx3_of_sendingchare, int num_srcpts, int globalidx3_srcpts[num_srcpts]) {
+            serial { process_nonlocalinnerbc_idx3srcpt_tosend(idx3_of_sendingchare, num_srcpts, globalidx3_srcpts); }
+          }
+        }
+      }
+      serial {
+        initial_data(&commondata, griddata_chare);
+        // Step 4.a: Functions called after memory for non-y_n and auxevol gridfunctions is allocated.
+        auxevol_gfs_set_to_constant(&commondata, &griddata_chare[grid].params, griddata_chare[grid].xx, &griddata_chare[grid].gridfuncs);
+
+        send_wavespeed_at_outer_boundary(grid);
+      }
+      when receiv_wavespeed_at_outer_boundary(REAL wavespeed_at_outer_boundary) {
+        serial { griddata_chare[grid].params.wavespeed_at_outer_boundary = wavespeed_at_outer_boundary; }
+      }
+
+      serial { send_neighbor_data(Y_N_GFS, EAST_WEST, grid); }
+
+      if (thisIndex.x < commondata.Nchare0 - 1) {
+        when east_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+          serial { process_ghost(EAST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+        }
+      }
+      if (thisIndex.x > 0) {
+        when west_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+          serial { process_ghost(WEST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+        }
+      }
+      if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {
+        serial { send_neighbor_data(AUXEVOL_GFS, EAST_WEST, grid); }
+
+        if (thisIndex.x < commondata.Nchare0 - 1) {
+          when east_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial { process_ghost(EAST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+          }
+        }
+        if (thisIndex.x > 0) {
+          when west_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial { process_ghost(WEST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+          }
+        }
+      }
+      serial { send_neighbor_data(Y_N_GFS, NORTH_SOUTH, grid); }
+
+      if (thisIndex.y < commondata.Nchare1 - 1) {
+        when north_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+          serial { process_ghost(NORTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+        }
+      }
+      if (thisIndex.y > 0) {
+        when south_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+          serial { process_ghost(SOUTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+        }
+      }
+      if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {
+        serial { send_neighbor_data(AUXEVOL_GFS, NORTH_SOUTH, grid); }
+
+        if (thisIndex.y < commondata.Nchare1 - 1) {
+          when north_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial { process_ghost(NORTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+          }
+        }
+        if (thisIndex.y > 0) {
+          when south_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial { process_ghost(SOUTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+          }
+        }
+      }
+      serial { send_neighbor_data(Y_N_GFS, TOP_BOTTOM, grid); }
+
+      if (thisIndex.z < commondata.Nchare2 - 1) {
+        when top_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+          serial { process_ghost(TOP_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+        }
+      }
+      if (thisIndex.z > 0) {
+        when bottom_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+          serial { process_ghost(BOTTOM_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+        }
+      }
+      if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {
+        serial { send_neighbor_data(AUXEVOL_GFS, TOP_BOTTOM, grid); }
+
+        if (thisIndex.z < commondata.Nchare2 - 1) {
+          when top_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial { process_ghost(TOP_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+          }
+        }
+        if (thisIndex.z > 0) {
+          when bottom_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial { process_ghost(BOTTOM_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+          }
+        }
+      }
+      while (commondata.time < commondata.t_final) { // Main loop to progress forward in time.
+        serial { time_start = commondata.time; }
+
+        serial {
+          const int n_step = commondata.nn;
+          const int outevery = commondata.diagnostics_output_every;
+          write_diagnostics_this_step = n_step % outevery == 0;
+        }
+
+
+        //NEW
+        //START DIAGNOSTICS
+        if (write_diagnostics_this_step) {
+          serial {
+            // Allocate temporary storage for diagnostic_gfs.
+            for (int grid = 0; grid < commondata.NUMGRIDS; grid++) {
+              //~ SET_NXX_PLUS_2NGHOSTS_VARS(grid);
+              const int Nxx_plus_2NGHOSTS0 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS0;                                                                      \
+              const int Nxx_plus_2NGHOSTS1 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS1;                                                                      \
+              const int Nxx_plus_2NGHOSTS2 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS2;
+              const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
+              BHAH_MALLOC(diagnostic_gfs[grid], TOTAL_NUM_DIAG_GFS * Nxx_plus_2NGHOSTS_tot * sizeof(REAL));
+            } // END LOOP over grids
+
+            // Set diagnostics_gfs -- see nrpy/infrastructures/BHaH/[project]/diagnostics/ for definition.
+            diagnostic_gfs_set(&commondata, griddata_chare, diagnostic_gfs);
+
+            // Volume diagnostics,compute chare sums
+            //~ const int thisIndex_arr[3] = {thisIndex.x, thisIndex.y, thisIndex.z};
+            //~ diagnostics(&commondata, griddata_chare, griddata, which_grid_diagnostics, Ck::IO::Session{}, DIAGNOSTICS_VOLUME_EXECUTE_RECIPE_FOR_CHARE_GRID, thisIndex_arr);
+
+            // Contribute volume integral results for chare grid
+            //~ contribute_integration_sums(which_grid_diagnostics);
+          }
+
+          //~ // Volume diagnostics, write file
+          //~ if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
+            //~ when integration_results_set() {
+              //~ serial {
+                //~ const int thisIndex_arr[3] = {thisIndex.x, thisIndex.y, thisIndex.z};
+                //~ diagnostics(&commondata, griddata_chare, griddata, which_grid_diagnostics, Ck::IO::Session{}, DIAGNOSTICS_VOLUME_WRITE, thisIndex_arr) ;
+              //~ }
+            //~ }
+          //~ }
+        }
+
+        // Create sessions for ckio file writing from first chare only
+        if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
+          serial {
+            progress_indicator(&commondata, griddata_chare);
+            if (commondata.time + commondata.dt > commondata.t_final)
+              printf("\n");
+          }
+          if (write_diagnostics_this_step) {
+            serial {
+              count_filewritten = 0;
+              {
+                char filename[512];
+                //NEW
+                build_outfile_name(filename, sizeof filename, "out1d-y", griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_1d_y, &commondata, /*include_time=*/1);
+                Ck::IO::Options opts;
+                CkCallback opened_1d_y(CkIndex_Timestepping::ready_1d_y(NULL), thisProxy);
+                Ck::IO::open(filename, opened_1d_y, opts);
+              }
+              {
+                char filename[512];
+                //NEW
+                build_outfile_name(filename, sizeof filename, "out1d-z", griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_1d_z, &commondata, /*include_time=*/1);
+                Ck::IO::Options opts;
+                CkCallback opened_1d_z(CkIndex_Timestepping::ready_1d_z(NULL), thisProxy);
+                Ck::IO::open(filename, opened_1d_z, opts);
+              }
+              {
+                char filename[512];
+                //NEW
+                build_outfile_name(filename, sizeof filename, "out2d-xy", griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_2d_xy, &commondata, /*include_time=*/1);
+                Ck::IO::Options opts;
+                CkCallback opened_2d_xy(CkIndex_Timestepping::ready_2d_xy(NULL), thisProxy);
+                Ck::IO::open(filename, opened_2d_xy, opts);
+              }
+              {
+                char filename[512];
+                //NEW
+                build_outfile_name(filename, sizeof filename, "out2d-yz", griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_2d_yz, &commondata, /*include_time=*/1);
+                Ck::IO::Options opts;
+                CkCallback opened_2d_yz(CkIndex_Timestepping::ready_2d_yz(NULL), thisProxy);
+                Ck::IO::open(filename, opened_2d_yz, opts);
+              }
+            }
+
+            // 1d y
+            when ready_1d_y(Ck::IO::FileReadyMsg * m_1d_y) {
+              serial {
+                f_1d_y = m_1d_y->file;
+                CkCallback sessionStart_1d_y(CkIndex_Timestepping::start_write_1d_y(0), thisProxy);
+                CkCallback sessionEnd_1d_y(CkIndex_Timestepping::test_written_1d_y(0), thisProxy);
+                int num_fields = griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 1;
+                int tot_num_diagnostic_pts = griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_1d_y_pts;
+                //~ int totsizeinbytes = (23 + (24 * (num_fields - 1))) * tot_num_diagnostic_pts;
+                int totsizeinbytes = 23 * num_fields  * tot_num_diagnostic_pts;
+                Ck::IO::startSession(f_1d_y, totsizeinbytes, 0, sessionStart_1d_y, sessionEnd_1d_y);
+                delete m_1d_y;
+              }
+            }
+            when start_write_1d_y(Ck::IO::SessionReadyMsg * m_1d_y) {
+              serial {
+                thisProxy.diagnostics_ckio(m_1d_y->session, DIAGNOSTICS_WRITE_Y);
+                delete m_1d_y;
+              }
+            }
+            when test_written_1d_y(CkReductionMsg * m_1d_y) {
+              serial {
+
+                printf("when start_write_1d_y(Ck::IO::SessionReadyMsg * m_1d_y) {\n");
+
+                delete m_1d_y;
+                CkCallback cb_1d_y(CkIndex_Timestepping::closed_1d_y(0), thisProxy);
+                Ck::IO::close(f_1d_y, cb_1d_y);
+                count_filewritten++;
+              }
+            }
+            when closed_1d_y(CkReductionMsg * m_1d_y) {
+              serial { delete m_1d_y; }
+            }
+
+            // 1d z
+            when ready_1d_z(Ck::IO::FileReadyMsg * m_1d_z) {
+              serial {
+
+
+                printf("when ready_1d_z(Ck::IO::FileReadyMsg * m_1d_z) {\n");
+
+                f_1d_z = m_1d_z->file;
+                CkCallback sessionStart_1d_z(CkIndex_Timestepping::start_write_1d_z(0), thisProxy);
+                CkCallback sessionEnd_1d_z(CkIndex_Timestepping::test_written_1d_z(0), thisProxy);
+                int num_fields = griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 1;
+                int tot_num_diagnostic_pts = griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_1d_z_pts;
+                //~ int totsizeinbytes = (23 + (24 * (num_fields - 1))) * tot_num_diagnostic_pts;
+                int totsizeinbytes = 23 * num_fields  * tot_num_diagnostic_pts;
+                Ck::IO::startSession(f_1d_z, totsizeinbytes, 0, sessionStart_1d_z, sessionEnd_1d_z);
+                delete m_1d_z;
+              }
+            }
+            when start_write_1d_z(Ck::IO::SessionReadyMsg * m_1d_z) {
+              serial {
+                thisProxy.diagnostics_ckio(m_1d_z->session, DIAGNOSTICS_WRITE_Z);
+                delete m_1d_z;
+              }
+            }
+            when test_written_1d_z(CkReductionMsg * m_1d_z) {
+              serial {
+
+                printf("when test_written_1d_z(CkReductionMsg * m_1d_z)  {\n");
+
+
+                delete m_1d_z;
+                CkCallback cb_1d_z(CkIndex_Timestepping::closed_1d_z(0), thisProxy);
+                Ck::IO::close(f_1d_z, cb_1d_z);
+                count_filewritten++;
+              }
+            }
+            when closed_1d_z(CkReductionMsg * m_1d_z) {
+              serial { delete m_1d_z; }
+            }
+
+            // 2d xy
+            when ready_2d_xy(Ck::IO::FileReadyMsg * m_2d_xy) {
+              serial {
+                f_2d_xy = m_2d_xy->file;
+                CkCallback sessionStart_2d_xy(CkIndex_Timestepping::start_write_2d_xy(0), thisProxy);
+                CkCallback sessionEnd_2d_xy(CkIndex_Timestepping::test_written_2d_xy(0), thisProxy);
+                int num_fields = griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 2;
+                int tot_num_diagnostic_pts = griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_2d_xy_pts;
+                int totsizeinbytes = (23 + (24 * (num_fields - 1))) * tot_num_diagnostic_pts;
+                Ck::IO::startSession(f_2d_xy, totsizeinbytes, 0, sessionStart_2d_xy, sessionEnd_2d_xy);
+                delete m_2d_xy;
+              }
+            }
+            when start_write_2d_xy(Ck::IO::SessionReadyMsg * m_2d_xy) {
+              serial {
+                thisProxy.diagnostics_ckio(m_2d_xy->session, DIAGNOSTICS_WRITE_XY);
+                delete m_2d_xy;
+              }
+            }
+            when test_written_2d_xy(CkReductionMsg * m_2d_xy) {
+              serial {
+                delete m_2d_xy;
+                CkCallback cb_2d_xy(CkIndex_Timestepping::closed_2d_xy(0), thisProxy);
+                Ck::IO::close(f_2d_xy, cb_2d_xy);
+                count_filewritten++;
+              }
+            }
+            when closed_2d_xy(CkReductionMsg * m_2d_xy) {
+              serial { delete m_2d_xy; }
+            }
+
+            // 2d yz
+            when ready_2d_yz(Ck::IO::FileReadyMsg * m_2d_yz) {
+              serial {
+                f_2d_yz = m_2d_yz->file;
+                CkCallback sessionStart_2d_yz(CkIndex_Timestepping::start_write_2d_yz(0), thisProxy);
+                CkCallback sessionEnd_2d_yz(CkIndex_Timestepping::test_written_2d_yz(0), thisProxy);
+                int num_fields = griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 2;
+                int tot_num_diagnostic_pts = griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_2d_yz_pts;
+                int totsizeinbytes = (23 + (24 * (num_fields - 1))) * tot_num_diagnostic_pts;
+                Ck::IO::startSession(f_2d_yz, totsizeinbytes, 0, sessionStart_2d_yz, sessionEnd_2d_yz);
+                delete m_2d_yz;
+              }
+            }
+            when start_write_2d_yz(Ck::IO::SessionReadyMsg * m_2d_yz) {
+              serial {
+                thisProxy.diagnostics_ckio(m_2d_yz->session, DIAGNOSTICS_WRITE_YZ);
+                delete m_2d_yz;
+              }
+            }
+            when test_written_2d_yz(CkReductionMsg * m_2d_yz) {
+              serial {
+                delete m_2d_yz;
+                CkCallback cb_2d_yz(CkIndex_Timestepping::closed_2d_yz(0), thisProxy);
+                Ck::IO::close(f_2d_yz, cb_2d_yz);
+                count_filewritten++;
+              }
+            }
+            when closed_2d_yz(CkReductionMsg * m_2d_yz) {
+              serial { delete m_2d_yz; }
+            }
+
+            if (count_filewritten == expected_count_filewritten) {
+              serial { thisProxy.continue_timestepping(); }
+            }
+          } else {
+            serial { thisProxy.continue_timestepping(); }
+          }
+        }
+
+
+        when continue_timestepping() {
+
+          //NEW
+          //END DIAGNOSTICS
+          if (write_diagnostics_this_step) {
+            serial {
+              // Free temporary storage allocated to diagnostic_gfs.
+              for (int grid = 0; grid < commondata.NUMGRIDS; grid++)
+                free(diagnostic_gfs[grid]);
+            }
+          }
+        }
+
+
+        // (nothing here; specify by setting pre_MoL_step_forward_in_time string in register_CFunction_main_c().)
+
+        serial { MoL_step_forward_in_time(&commondata, griddata_chare, time_start, RK_SUBSTEP_K1, MOL_PRE_RK_UPDATE); }
+
+        if (griddata_chare[grid].nonlocalinnerbcstruct.tot_num_dst_chares > 0) {
+          serial { send_nonlocalinnerbc_data(K_ODD_GFS, grid); }
+        }
+
+        if (griddata_chare[grid].nonlocalinnerbcstruct.tot_num_src_chares > 0) {
+          for (iter = 0; iter < griddata_chare[grid].nonlocalinnerbcstruct.tot_num_src_chares; iter++) {
+            when receiv_nonlocalinnerbc_data_k_odd_gfs(int src_chare_idx3, int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+              serial {
+                set_tmpBuffer_innerbc_receiv(src_chare_idx3, len_tmpBuffer, tmpBuffer, grid);
+                type_gfs_nonlocal_innerbc = type_gfs;
+              }
+            }
+          }
+          serial { process_nonlocalinnerbc(type_gfs_nonlocal_innerbc, grid); }
+        }
+
+        serial { MoL_step_forward_in_time(&commondata, griddata_chare, time_start, RK_SUBSTEP_K1, MOL_RK_UPDATE); }
+
+        serial { MoL_step_forward_in_time(&commondata, griddata_chare, time_start, RK_SUBSTEP_K1, MOL_POST_RK_UPDATE); }
+
+        if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {
+          if (griddata_chare[grid].nonlocalinnerbcstruct.tot_num_dst_chares > 0) {
+            serial { send_nonlocalinnerbc_data(AUXEVOL_GFS, grid); }
+          }
+
+          if (griddata_chare[grid].nonlocalinnerbcstruct.tot_num_src_chares > 0) {
+            for (iter = 0; iter < griddata_chare[grid].nonlocalinnerbcstruct.tot_num_src_chares; iter++) {
+              when receiv_nonlocalinnerbc_data_auxevol_gfs(int src_chare_idx3, int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+                serial {
+                  set_tmpBuffer_innerbc_receiv(src_chare_idx3, len_tmpBuffer, tmpBuffer, grid);
+                  type_gfs_nonlocal_innerbc = type_gfs;
+                }
+              }
+            }
+            serial { process_nonlocalinnerbc(type_gfs_nonlocal_innerbc, grid); }
+          }
+        }
+
+        serial { send_neighbor_data(K_ODD_GFS, EAST_WEST, grid); }
+
+        if (thisIndex.x < commondata.Nchare0 - 1) {
+          when east_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial { process_ghost(EAST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+          }
+        }
+        if (thisIndex.x > 0) {
+          when west_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial { process_ghost(WEST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+          }
+        }
+        if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {
+          serial { send_neighbor_data(AUXEVOL_GFS, EAST_WEST, grid); }
+
+          if (thisIndex.x < commondata.Nchare0 - 1) {
+            when east_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+              serial { process_ghost(EAST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+            }
+          }
+          if (thisIndex.x > 0) {
+            when west_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+              serial { process_ghost(WEST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+            }
+          }
+        }
+        serial { send_neighbor_data(K_ODD_GFS, NORTH_SOUTH, grid); }
+
+        if (thisIndex.y < commondata.Nchare1 - 1) {
+          when north_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial { process_ghost(NORTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+          }
+        }
+        if (thisIndex.y > 0) {
+          when south_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial { process_ghost(SOUTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+          }
+        }
+        if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {
+          serial { send_neighbor_data(AUXEVOL_GFS, NORTH_SOUTH, grid); }
+
+          if (thisIndex.y < commondata.Nchare1 - 1) {
+            when north_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+              serial { process_ghost(NORTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+            }
+          }
+          if (thisIndex.y > 0) {
+            when south_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+              serial { process_ghost(SOUTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+            }
+          }
+        }
+        serial { send_neighbor_data(K_ODD_GFS, TOP_BOTTOM, grid); }
+
+        if (thisIndex.z < commondata.Nchare2 - 1) {
+          when top_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial { process_ghost(TOP_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+          }
+        }
+        if (thisIndex.z > 0) {
+          when bottom_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial { process_ghost(BOTTOM_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+          }
+        }
+        if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {
+          serial { send_neighbor_data(AUXEVOL_GFS, TOP_BOTTOM, grid); }
+
+          if (thisIndex.z < commondata.Nchare2 - 1) {
+            when top_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+              serial { process_ghost(TOP_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+            }
+          }
+          if (thisIndex.z > 0) {
+            when bottom_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+              serial { process_ghost(BOTTOM_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+            }
+          }
+        }
+        serial { MoL_step_forward_in_time(&commondata, griddata_chare, time_start, RK_SUBSTEP_K2, MOL_PRE_RK_UPDATE); }
+
+        if (griddata_chare[grid].nonlocalinnerbcstruct.tot_num_dst_chares > 0) {
+          serial { send_nonlocalinnerbc_data(K_EVEN_GFS, grid); }
+        }
+
+        if (griddata_chare[grid].nonlocalinnerbcstruct.tot_num_src_chares > 0) {
+          for (iter = 0; iter < griddata_chare[grid].nonlocalinnerbcstruct.tot_num_src_chares; iter++) {
+            when receiv_nonlocalinnerbc_data_k_even_gfs(int src_chare_idx3, int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+              serial {
+                set_tmpBuffer_innerbc_receiv(src_chare_idx3, len_tmpBuffer, tmpBuffer, grid);
+                type_gfs_nonlocal_innerbc = type_gfs;
+              }
+            }
+          }
+          serial { process_nonlocalinnerbc(type_gfs_nonlocal_innerbc, grid); }
+        }
+
+        serial { MoL_step_forward_in_time(&commondata, griddata_chare, time_start, RK_SUBSTEP_K2, MOL_RK_UPDATE); }
+
+        serial { MoL_step_forward_in_time(&commondata, griddata_chare, time_start, RK_SUBSTEP_K2, MOL_POST_RK_UPDATE); }
+
+        if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {
+          if (griddata_chare[grid].nonlocalinnerbcstruct.tot_num_dst_chares > 0) {
+            serial { send_nonlocalinnerbc_data(AUXEVOL_GFS, grid); }
+          }
+
+          if (griddata_chare[grid].nonlocalinnerbcstruct.tot_num_src_chares > 0) {
+            for (iter = 0; iter < griddata_chare[grid].nonlocalinnerbcstruct.tot_num_src_chares; iter++) {
+              when receiv_nonlocalinnerbc_data_auxevol_gfs(int src_chare_idx3, int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+                serial {
+                  set_tmpBuffer_innerbc_receiv(src_chare_idx3, len_tmpBuffer, tmpBuffer, grid);
+                  type_gfs_nonlocal_innerbc = type_gfs;
+                }
+              }
+            }
+            serial { process_nonlocalinnerbc(type_gfs_nonlocal_innerbc, grid); }
+          }
+        }
+
+        serial { send_neighbor_data(K_EVEN_GFS, EAST_WEST, grid); }
+
+        if (thisIndex.x < commondata.Nchare0 - 1) {
+          when east_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial { process_ghost(EAST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+          }
+        }
+        if (thisIndex.x > 0) {
+          when west_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial { process_ghost(WEST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+          }
+        }
+        if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {
+          serial { send_neighbor_data(AUXEVOL_GFS, EAST_WEST, grid); }
+
+          if (thisIndex.x < commondata.Nchare0 - 1) {
+            when east_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+              serial { process_ghost(EAST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+            }
+          }
+          if (thisIndex.x > 0) {
+            when west_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+              serial { process_ghost(WEST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+            }
+          }
+        }
+        serial { send_neighbor_data(K_EVEN_GFS, NORTH_SOUTH, grid); }
+
+        if (thisIndex.y < commondata.Nchare1 - 1) {
+          when north_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial { process_ghost(NORTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+          }
+        }
+        if (thisIndex.y > 0) {
+          when south_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial { process_ghost(SOUTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+          }
+        }
+        if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {
+          serial { send_neighbor_data(AUXEVOL_GFS, NORTH_SOUTH, grid); }
+
+          if (thisIndex.y < commondata.Nchare1 - 1) {
+            when north_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+              serial { process_ghost(NORTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+            }
+          }
+          if (thisIndex.y > 0) {
+            when south_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+              serial { process_ghost(SOUTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+            }
+          }
+        }
+        serial { send_neighbor_data(K_EVEN_GFS, TOP_BOTTOM, grid); }
+
+        if (thisIndex.z < commondata.Nchare2 - 1) {
+          when top_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial { process_ghost(TOP_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+          }
+        }
+        if (thisIndex.z > 0) {
+          when bottom_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial { process_ghost(BOTTOM_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+          }
+        }
+        if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {
+          serial { send_neighbor_data(AUXEVOL_GFS, TOP_BOTTOM, grid); }
+
+          if (thisIndex.z < commondata.Nchare2 - 1) {
+            when top_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+              serial { process_ghost(TOP_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+            }
+          }
+          if (thisIndex.z > 0) {
+            when bottom_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+              serial { process_ghost(BOTTOM_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+            }
+          }
+        }
+        serial { MoL_step_forward_in_time(&commondata, griddata_chare, time_start, RK_SUBSTEP_K3, MOL_PRE_RK_UPDATE); }
+
+        if (griddata_chare[grid].nonlocalinnerbcstruct.tot_num_dst_chares > 0) {
+          serial { send_nonlocalinnerbc_data(K_ODD_GFS, grid); }
+        }
+
+        if (griddata_chare[grid].nonlocalinnerbcstruct.tot_num_src_chares > 0) {
+          for (iter = 0; iter < griddata_chare[grid].nonlocalinnerbcstruct.tot_num_src_chares; iter++) {
+            when receiv_nonlocalinnerbc_data_k_odd_gfs(int src_chare_idx3, int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+              serial {
+                set_tmpBuffer_innerbc_receiv(src_chare_idx3, len_tmpBuffer, tmpBuffer, grid);
+                type_gfs_nonlocal_innerbc = type_gfs;
+              }
+            }
+          }
+          serial { process_nonlocalinnerbc(type_gfs_nonlocal_innerbc, grid); }
+        }
+
+        serial { MoL_step_forward_in_time(&commondata, griddata_chare, time_start, RK_SUBSTEP_K3, MOL_RK_UPDATE); }
+
+        serial { MoL_step_forward_in_time(&commondata, griddata_chare, time_start, RK_SUBSTEP_K3, MOL_POST_RK_UPDATE); }
+
+        if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {
+          if (griddata_chare[grid].nonlocalinnerbcstruct.tot_num_dst_chares > 0) {
+            serial { send_nonlocalinnerbc_data(AUXEVOL_GFS, grid); }
+          }
+
+          if (griddata_chare[grid].nonlocalinnerbcstruct.tot_num_src_chares > 0) {
+            for (iter = 0; iter < griddata_chare[grid].nonlocalinnerbcstruct.tot_num_src_chares; iter++) {
+              when receiv_nonlocalinnerbc_data_auxevol_gfs(int src_chare_idx3, int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+                serial {
+                  set_tmpBuffer_innerbc_receiv(src_chare_idx3, len_tmpBuffer, tmpBuffer, grid);
+                  type_gfs_nonlocal_innerbc = type_gfs;
+                }
+              }
+            }
+            serial { process_nonlocalinnerbc(type_gfs_nonlocal_innerbc, grid); }
+          }
+        }
+
+        serial { send_neighbor_data(K_ODD_GFS, EAST_WEST, grid); }
+
+        if (thisIndex.x < commondata.Nchare0 - 1) {
+          when east_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial { process_ghost(EAST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+          }
+        }
+        if (thisIndex.x > 0) {
+          when west_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial { process_ghost(WEST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+          }
+        }
+        if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {
+          serial { send_neighbor_data(AUXEVOL_GFS, EAST_WEST, grid); }
+
+          if (thisIndex.x < commondata.Nchare0 - 1) {
+            when east_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+              serial { process_ghost(EAST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+            }
+          }
+          if (thisIndex.x > 0) {
+            when west_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+              serial { process_ghost(WEST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+            }
+          }
+        }
+        serial { send_neighbor_data(K_ODD_GFS, NORTH_SOUTH, grid); }
+
+        if (thisIndex.y < commondata.Nchare1 - 1) {
+          when north_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial { process_ghost(NORTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+          }
+        }
+        if (thisIndex.y > 0) {
+          when south_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial { process_ghost(SOUTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+          }
+        }
+        if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {
+          serial { send_neighbor_data(AUXEVOL_GFS, NORTH_SOUTH, grid); }
+
+          if (thisIndex.y < commondata.Nchare1 - 1) {
+            when north_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+              serial { process_ghost(NORTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+            }
+          }
+          if (thisIndex.y > 0) {
+            when south_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+              serial { process_ghost(SOUTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+            }
+          }
+        }
+        serial { send_neighbor_data(K_ODD_GFS, TOP_BOTTOM, grid); }
+
+        if (thisIndex.z < commondata.Nchare2 - 1) {
+          when top_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial { process_ghost(TOP_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+          }
+        }
+        if (thisIndex.z > 0) {
+          when bottom_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial { process_ghost(BOTTOM_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+          }
+        }
+        if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {
+          serial { send_neighbor_data(AUXEVOL_GFS, TOP_BOTTOM, grid); }
+
+          if (thisIndex.z < commondata.Nchare2 - 1) {
+            when top_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+              serial { process_ghost(TOP_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+            }
+          }
+          if (thisIndex.z > 0) {
+            when bottom_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+              serial { process_ghost(BOTTOM_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+            }
+          }
+        }
+        serial { MoL_step_forward_in_time(&commondata, griddata_chare, time_start, RK_SUBSTEP_K4, MOL_PRE_RK_UPDATE); }
+
+        if (griddata_chare[grid].nonlocalinnerbcstruct.tot_num_dst_chares > 0) {
+          serial { send_nonlocalinnerbc_data(K_EVEN_GFS, grid); }
+        }
+
+        if (griddata_chare[grid].nonlocalinnerbcstruct.tot_num_src_chares > 0) {
+          for (iter = 0; iter < griddata_chare[grid].nonlocalinnerbcstruct.tot_num_src_chares; iter++) {
+            when receiv_nonlocalinnerbc_data_k_even_gfs(int src_chare_idx3, int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+              serial {
+                set_tmpBuffer_innerbc_receiv(src_chare_idx3, len_tmpBuffer, tmpBuffer, grid);
+                type_gfs_nonlocal_innerbc = type_gfs;
+              }
+            }
+          }
+          serial { process_nonlocalinnerbc(type_gfs_nonlocal_innerbc, grid); }
+        }
+
+        serial { MoL_step_forward_in_time(&commondata, griddata_chare, time_start, RK_SUBSTEP_K4, MOL_RK_UPDATE); }
+
+        serial { MoL_step_forward_in_time(&commondata, griddata_chare, time_start, RK_SUBSTEP_K4, MOL_POST_RK_UPDATE); }
+
+        if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {
+          if (griddata_chare[grid].nonlocalinnerbcstruct.tot_num_dst_chares > 0) {
+            serial { send_nonlocalinnerbc_data(AUXEVOL_GFS, grid); }
+          }
+
+          if (griddata_chare[grid].nonlocalinnerbcstruct.tot_num_src_chares > 0) {
+            for (iter = 0; iter < griddata_chare[grid].nonlocalinnerbcstruct.tot_num_src_chares; iter++) {
+              when receiv_nonlocalinnerbc_data_auxevol_gfs(int src_chare_idx3, int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+                serial {
+                  set_tmpBuffer_innerbc_receiv(src_chare_idx3, len_tmpBuffer, tmpBuffer, grid);
+                  type_gfs_nonlocal_innerbc = type_gfs;
+                }
+              }
+            }
+            serial { process_nonlocalinnerbc(type_gfs_nonlocal_innerbc, grid); }
+          }
+        }
+
+        serial { send_neighbor_data(Y_N_GFS, EAST_WEST, grid); }
+
+        if (thisIndex.x < commondata.Nchare0 - 1) {
+          when east_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial { process_ghost(EAST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+          }
+        }
+        if (thisIndex.x > 0) {
+          when west_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial { process_ghost(WEST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+          }
+        }
+        if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {
+          serial { send_neighbor_data(AUXEVOL_GFS, EAST_WEST, grid); }
+
+          if (thisIndex.x < commondata.Nchare0 - 1) {
+            when east_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+              serial { process_ghost(EAST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+            }
+          }
+          if (thisIndex.x > 0) {
+            when west_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+              serial { process_ghost(WEST_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+            }
+          }
+        }
+        serial { send_neighbor_data(Y_N_GFS, NORTH_SOUTH, grid); }
+
+        if (thisIndex.y < commondata.Nchare1 - 1) {
+          when north_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial { process_ghost(NORTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+          }
+        }
+        if (thisIndex.y > 0) {
+          when south_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial { process_ghost(SOUTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+          }
+        }
+        if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {
+          serial { send_neighbor_data(AUXEVOL_GFS, NORTH_SOUTH, grid); }
+
+          if (thisIndex.y < commondata.Nchare1 - 1) {
+            when north_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+              serial { process_ghost(NORTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+            }
+          }
+          if (thisIndex.y > 0) {
+            when south_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+              serial { process_ghost(SOUTH_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+            }
+          }
+        }
+        serial { send_neighbor_data(Y_N_GFS, TOP_BOTTOM, grid); }
+
+        if (thisIndex.z < commondata.Nchare2 - 1) {
+          when top_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial { process_ghost(TOP_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+          }
+        }
+        if (thisIndex.z > 0) {
+          when bottom_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+            serial { process_ghost(BOTTOM_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+          }
+        }
+        if (griddata_chare[grid].gridfuncs.num_auxevol_gfs_to_sync > 0) {
+          serial { send_neighbor_data(AUXEVOL_GFS, TOP_BOTTOM, grid); }
+
+          if (thisIndex.z < commondata.Nchare2 - 1) {
+            when top_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+              serial { process_ghost(TOP_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+            }
+          }
+          if (thisIndex.z > 0) {
+            when bottom_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+              serial { process_ghost(BOTTOM_GHOST, type_gfs, len_tmpBuffer, tmpBuffer, grid); }
+            }
+          }
+        }
+
+        serial {
+          stop_conditions_check(&commondata);
+          if (commondata.stop_relaxation) {
+            mainProxy.done();
+          }
+        }
+
+        serial {
+          // Adding dt to commondata.time many times will induce roundoff error,
+          //   so here we set time based on the iteration number.
+          commondata.time = (REAL)(commondata.nn + 1) * commondata.dt;
+          // Finally, increment the timestep n:
+          commondata.nn++;
+        }
+      } // End main loop to progress forward in time.
+
+      serial { mainProxy.done(); }
+    };
+    entry void start_write_1d_y(Ck::IO::SessionReadyMsg * m);
+    entry void start_write_1d_z(Ck::IO::SessionReadyMsg * m);
+    entry void start_write_2d_xy(Ck::IO::SessionReadyMsg * m);
+    entry void start_write_2d_yz(Ck::IO::SessionReadyMsg * m);
+    entry void test_written_1d_y(CkReductionMsg * m);
+    entry void test_written_1d_z(CkReductionMsg * m);
+    entry void test_written_2d_xy(CkReductionMsg * m);
+    entry void test_written_2d_yz(CkReductionMsg * m);
+    entry void closed_1d_y(CkReductionMsg * m);
+    entry void closed_1d_z(CkReductionMsg * m);
+    entry void closed_2d_xy(CkReductionMsg * m);
+    entry void closed_2d_yz(CkReductionMsg * m);
+    entry void diagnostics_ckio(Ck::IO::Session token, const int which_diagnostics_part) {
+      serial {
+
+        printf("entry void diagnostics_ckio(Ck::IO::Session token, const int which_diagnostics_part = %d) ", which_diagnostics_part);
+
+        const int thisIndex_arr[3] = {thisIndex.x, thisIndex.y, thisIndex.z};
+        //OLD
+        //REAL unused_var[2];
+        //~ diagnostics(&commondata, griddata_chare, griddata, token, which_output, which_grid_diagnostics, thisIndex_arr, unused_var);
+
+        //NEW
+        diagnostics(&commondata, griddata, griddata_chare, diagnostic_gfs, thisIndex_arr, which_grid_diagnostics, token, which_diagnostics_part);
+
+      }
+    }
+    entry void east_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
+    entry void west_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
+    entry void north_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
+    entry void south_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
+    entry void top_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
+    entry void bottom_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
+    entry void continue_timestepping();
+    entry void receiv_nonlocalinnerbc_idx3srcpt_tosend(int idx3_of_sendingchare, int num_srcpts, int globalidx3_srcpts[num_srcpts]);
+    entry void receiv_nonlocalinnerbc_data_y_nplus1_running_total_gfs(int src_chare_idx3, int type_gfs, int len_tmpBuffer,
+                                                                      REAL tmpBuffer[len_tmpBuffer]) {}
+    entry void receiv_nonlocalinnerbc_data_k_odd_gfs(int src_chare_idx3, int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
+    entry void receiv_nonlocalinnerbc_data_k_even_gfs(int src_chare_idx3, int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
+    entry void receiv_nonlocalinnerbc_data_y_n_gfs(int src_chare_idx3, int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {}
+    entry void receiv_nonlocalinnerbc_data_auxevol_gfs(int src_chare_idx3, int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
+    entry void receiv_nonlocalinnerbc_data_diagnostic_output_gfs(int src_chare_idx3, int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+    }
+    entry void receiv_nonlocalinnerbc_data_y_n_gfs_initialdata_part1(int src_chare_idx3, int type_gfs, int len_tmpBuffer,
+                                                                     REAL tmpBuffer[len_tmpBuffer]) {}
+    entry void receiv_nonlocalinnerbc_data_y_n_gfs_initialdata_part2(int src_chare_idx3, int type_gfs, int len_tmpBuffer,
+                                                                     REAL tmpBuffer[len_tmpBuffer]) {}
+    //~ entry void continue_after_residual_H_done();
+    //~ entry void report_sums_for_residualH(CkReductionMsg * msg) {
+      //~ serial {
+        //~ int reducedArrSize = msg->getSize() / sizeof(double);
+        //~ CkAssert(reducedArrSize == 2);
+        //~ double *output = (double *)msg->getData();
+        //~ // Update residual to be used in stop condition
+        //~ commondata.log10_current_residual = log10(1e-16 + sqrt(output[0] / output[1])); // 1e-16 + ... avoids log10(0)
+        //~ // Output l2-norm of Hamiltonian constraint violation to file
+        //~ if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
+          //~ char filename[256];
+          //~ sprintf(filename, "residual_l2_norm.txt");
+          //~ const int nn = commondata.nn;
+          //~ const REAL time = commondata.time;
+          //~ const REAL residual_H = commondata.log10_current_residual;
+          //~ FILE *outfile = (nn == 0) ? fopen(filename, "w") : fopen(filename, "a");
+          //~ if (!outfile) {
+            //~ fprintf(stderr, "Error: Cannot open file %s for writing.\n", filename);
+            //~ exit(1);
+          //~ }
+          //~ fprintf(outfile, "%6d %10.4e %.17e\n", nn, time, residual_H);
+          //~ fclose(outfile);
+        //~ }
+        //~ delete msg;
+        //~ thisProxy[CkArrayIndex3D(thisIndex.x, thisIndex.y, thisIndex.z)].continue_after_residual_H_done();
+      //~ }
+    //~ }
+    entry void receiv_wavespeed_at_outer_boundary(REAL wavespeed_at_outer_boundary);
+    //NEW
+    //~ entry void receive_integration_sums(CkReductionMsg* msg);
+    //~ entry void integration_results_set();
+  };
+};
