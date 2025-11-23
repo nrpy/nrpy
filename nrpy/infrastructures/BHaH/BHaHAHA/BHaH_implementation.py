@@ -110,7 +110,7 @@ def register_CFunction_bhahaha_find_horizons(
             "Number of resolutions for low-to-high multigrid pass",
             3,
         ),
-        "bah_BBH_mode_enable": (
+        "bah_enable_BBH_mode": (
             "BBH mode? Enable=1 ; Disable=0",
             0,
         ),
@@ -570,14 +570,14 @@ and result updates for multiple horizons.
 -          for each horizon using initial guess parameters.
 -       ii. Calls `initialize_bhahaha_solver_params_and_shapes` with `is_first_call_for_shapes = true`
 -           to allocate shape history arrays and set non-persistent solver params.
--       iii. Initializes `commondata->bah_BBH_mode_horizon_active` based on `bah_BBH_mode_enable`.
+-       iii. Initializes `commondata->bah_BBH_mode_horizon_active` based on `bah_enable_BBH_mode`.
 -           Exits if BBH mode is enabled with an invalid `bah_max_num_horizons` or invalid/overlapping indices.
 -    b. If not the first call:
 -       i. Calls `initialize_bhahaha_solver_params_and_shapes` with `is_first_call_for_shapes = false`
 -          to re-initialize non-persistent solver params (shape arrays are not re-allocated).
 - 4. Populates current iteration metadata (iteration number `nn`, simulation `time`) into each
 -    horizon's `bhahaha_params_and_data_struct`.
-- 5. Applies BBH mode logic if `commondata->bah_BBH_mode_enable` is true:
+- 5. Applies BBH mode logic if `commondata->bah_enable_BBH_mode` is true:
 -    a. Deactivates individual inspiral BH searches if the common horizon was found previously and is active.
 -    b. Activates the common horizon search if both individual BHs are active, the common horizon is not yet active,
 -       and the individual BHs (based on their previous find's center and max radius) meet a proximity criterion
@@ -683,10 +683,10 @@ and result updates for multiple horizons.
     } // END LOOP: for h (iteration 0 persistent data initialization)
 
     // STEP 3.a.iii: Initialize `commondata->bah_BBH_mode_horizon_active`.
-    if (commondata->bah_BBH_mode_enable) {
+    if (commondata->bah_enable_BBH_mode) {
       if (commondata->bah_max_num_horizons != 3) {
         fprintf(stderr,
-                "ERROR: bah_BBH_mode_enable requires bah_max_num_horizons==3, to account for common horizon, plus two individual horizons.\n");
+                "ERROR: bah_enable_BBH_mode requires bah_max_num_horizons==3, to account for common horizon, plus two individual horizons.\n");
         exit(EXIT_FAILURE);
       } // END IF: incorrect num_horizons for BBH mode
       const int bh1 = commondata->bah_BBH_mode_inspiral_BH_idxs[0];
@@ -705,7 +705,7 @@ and result updates for multiple horizons.
       for (int h = 0; h < commondata->bah_max_num_horizons; h++) {
         commondata->bah_BBH_mode_horizon_active[h] = 1; // Activate all configured horizons
       } // END LOOP: for h (activating all horizons if not BBH mode)
-    } // END ELSE: not BBH_mode_enable (iteration 0 horizon activity)
+    } // END ELSE: not enable_BBH_mode (iteration 0 horizon activity)
   } else { // Not the first call (nn != 0)
     // STEP 3.b: If not the first call:
     for (int h = 0; h < commondata->bah_max_num_horizons; h++) {
@@ -728,7 +728,7 @@ and result updates for multiple horizons.
   } // END LOOP: for h (populating current iteration metadata)
 
   // STEP 5: Apply BBH mode logic.
-  if (commondata->bah_BBH_mode_enable) {
+  if (commondata->bah_enable_BBH_mode) {
     const int bh1_idx = commondata->bah_BBH_mode_inspiral_BH_idxs[0];
     const int bh2_idx = commondata->bah_BBH_mode_inspiral_BH_idxs[1];
     const int com_idx = commondata->bah_BBH_mode_common_horizon_idx;
@@ -797,7 +797,7 @@ and result updates for multiple horizons.
         } // END IF: trigger condition met
       } // END IF: both inspiral BHs found previously
     } // END IF: check for activating common horizon
-  } // END IF: bah_BBH_mode_enable (BBH Mode Logic)
+  } // END IF: bah_enable_BBH_mode (BBH Mode Logic)
 
   // STEP 6: Apply robustness improvements and extrapolate horizon guesses.
   for (int h = 0; h < commondata->bah_max_num_horizons; h++) {
@@ -811,7 +811,7 @@ and result updates for multiple horizons.
       current_horizon_params->use_fixed_radius_guess_on_full_sphere = 1; // Force fixed radius if not found reliably.
 
       // STEP 6.a.iii: If BBH common horizon, adjust resolution/iterations.
-      if (commondata->bah_BBH_mode_enable && h == commondata->bah_BBH_mode_common_horizon_idx &&
+      if (commondata->bah_enable_BBH_mode && h == commondata->bah_BBH_mode_common_horizon_idx &&
           current_horizon_params->num_resolutions_multigrid >= 2) {
         current_horizon_params->Ntheta_array_multigrid[0] = commondata->bah_Ntheta_array_multigrid[1]; // Use 2nd level res for 1st.
         current_horizon_params->Nphi_array_multigrid[0] = commondata->bah_Nphi_array_multigrid[1];

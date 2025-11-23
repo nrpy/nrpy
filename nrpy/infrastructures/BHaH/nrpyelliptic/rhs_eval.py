@@ -26,7 +26,6 @@ from nrpy.infrastructures import BHaH
 # Define function to evaluate RHSs
 def register_CFunction_rhs_eval(
     CoordSystem: str,
-    enable_rfm_precompute: bool,
     enable_intrinsics: bool,
     OMP_collapse: int,
 ) -> Union[None, pcg.NRPyEnv_type]:
@@ -37,7 +36,6 @@ def register_CFunction_rhs_eval(
     selected coordinate system and specified parameters.
 
     :param CoordSystem: The coordinate system.
-    :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param enable_intrinsics: Whether to enable hardware intrinsics.
     :param OMP_collapse: Level of OpenMP loop collapsing.
 
@@ -57,17 +55,10 @@ def register_CFunction_rhs_eval(
     desc = r"""Set RHSs for hyperbolic relaxation equation."""
     cfunc_type = "void"
     name = "rhs_eval"
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], const REAL *restrict auxevol_gfs, const REAL *restrict in_gfs, REAL *restrict rhs_gfs"
-    if enable_rfm_precompute:
-        params = params.replace(
-            "REAL *restrict xx[3]", "const rfm_struct *restrict rfmstruct"
-        )
+    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const rfm_struct *restrict rfmstruct, const REAL *restrict auxevol_gfs, const REAL *restrict in_gfs, REAL *restrict rhs_gfs"
     body = ""
-    if not enable_rfm_precompute:
-        for i in range(3):
-            body += f"const REAL *restrict x{i} = xx[{i}];\n"
     # Populate uu_rhs, vv_rhs
-    rhs = HyperbolicRelaxationCurvilinearRHSs(CoordSystem, enable_rfm_precompute)
+    rhs = HyperbolicRelaxationCurvilinearRHSs(CoordSystem, enable_rfm_precompute=True)
     expr_list = [rhs.uu_rhs, rhs.vv_rhs]
     loop_body = BHaH.simple_loop.simple_loop(
         loop_body=ccg.c_codegen(
@@ -82,8 +73,8 @@ def register_CFunction_rhs_eval(
         loop_region="interior",
         enable_intrinsics=enable_intrinsics,
         CoordSystem=CoordSystem,
-        enable_rfm_precompute=enable_rfm_precompute,
-        read_xxs=not enable_rfm_precompute,
+        enable_rfm_precompute=True,
+        read_xxs=False,
         OMP_collapse=OMP_collapse,
     )
     # Since simd intrinsics only supports double precision, CCG has constants hardcoded as dbl,
@@ -125,11 +116,7 @@ def register_CFunction_rhs_eval(
     comments = "Kernel to evaluate RHS on the interior."
 
     # Prepare the argument dicts
-    arg_dict_cuda = (
-        {"rfmstruct": "const rfm_struct *restrict"}
-        if enable_rfm_precompute
-        else {f"x{i}": "const REAL *restrict" for i in range(3)}
-    )
+    arg_dict_cuda = {"rfmstruct": "const rfm_struct *restrict"}
     arg_dict_cuda.update(
         {
             "auxevol_gfs": "const REAL *restrict",
@@ -144,8 +131,8 @@ def register_CFunction_rhs_eval(
     }
 
     kernel_body = f"{loop_params}\n{loop_body}"
-    for i in range(3):
-        kernel_body = kernel_body.replace(f"xx[{i}]", f"x{i}")
+    # for i in range(3):
+    #     kernel_body = kernel_body.replace(f"xx[{i}]", f"x{i}")
     prefunc, new_body = parallel_utils.generate_kernel_and_launch_code(
         name,
         kernel_body,

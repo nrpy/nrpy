@@ -7,9 +7,9 @@ Author: Zachariah B. Etienne
 
 from typing import Any, Dict, Optional, Sequence, Tuple
 
-import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
+import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
-import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
+import nrpy.indexedexp as ixp  # NRPy: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 from nrpy.equations.general_relativity.ADM_to_BSSN import ADM_to_BSSN
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.equations.general_relativity.BSSN_to_ADM import BSSN_to_ADM

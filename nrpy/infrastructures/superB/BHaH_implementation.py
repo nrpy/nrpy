@@ -224,7 +224,7 @@ def string_for_step6_apply_robustness_improv_and_extrap_horizon_guesses(
     if enable_BBH_mode:
         outstring += r"""
       // STEP 6.a.iii: If BBH common horizon, adjust resolution/iterations.
-      if (commondata->bah_BBH_mode_enable && h == commondata->bah_BBH_mode_common_horizon_idx &&
+      if (commondata->bah_enable_BBH_mode && h == commondata->bah_BBH_mode_common_horizon_idx &&
           current_horizon_params->num_resolutions_multigrid >= 2) {
         current_horizon_params->Ntheta_array_multigrid[0] = commondata->bah_Ntheta_array_multigrid[1]; // Use 2nd level res for 1st.
         current_horizon_params->Nphi_array_multigrid[0] = commondata->bah_Nphi_array_multigrid[1];
@@ -299,10 +299,10 @@ def string_for_step3_initialize_bhahaha_data_structs_and_solver_params(
     if enable_BBH_mode:
         outstring += r"""
     // STEP 3.a.iii: Initialize `commondata->bah_BBH_mode_horizon_active`.
-    if (commondata->bah_BBH_mode_enable) {
+    if (commondata->bah_enable_BBH_mode) {
       if (commondata->bah_max_num_horizons != 3) {
         fprintf(stderr,
-                "ERROR: bah_BBH_mode_enable requires bah_max_num_horizons==3, to account for common horizon, plus two individual horizons.\n");
+                "ERROR: bah_enable_BBH_mode requires bah_max_num_horizons==3, to account for common horizon, plus two individual horizons.\n");
         exit(EXIT_FAILURE);
       } // END IF: incorrect num_horizons for BBH mode
       const int bh1 = commondata->bah_BBH_mode_inspiral_BH_idxs[0];
@@ -321,7 +321,7 @@ def string_for_step3_initialize_bhahaha_data_structs_and_solver_params(
       for (int h = 0; h < commondata->bah_max_num_horizons; h++) {
         commondata->bah_BBH_mode_horizon_active[h] = 1; // Activate all configured horizons
       } // END LOOP: for h (activating all horizons if not BBH mode)
-    } // END ELSE: not BBH_mode_enable (iteration 0 horizon activity)"""
+    } // END ELSE: not enable_BBH_mode (iteration 0 horizon activity)"""
     else:
         outstring += r"""
     // STEP 3.a.iii: Initialize `commondata->bah_BBH_mode_horizon_active` (non-BBH mode only).
@@ -717,7 +717,7 @@ def register_bhahaha_commondata_and_params(max_horizons: int) -> None:
             "Number of resolutions for low-to-high multigrid pass",
             3,
         ),
-        "bah_BBH_mode_enable": (
+        "bah_enable_BBH_mode": (
             "BBH mode? Enable=1 ; Disable=0",
             0,
         ),

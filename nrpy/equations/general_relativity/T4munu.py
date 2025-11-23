@@ -7,11 +7,11 @@ Author: Zachariah B. Etienne
 
 from typing import Any, Dict, Optional, Sequence, Tuple
 
-import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
+import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
-import nrpy.equations.general_relativity.g4munu_conversions as g4conv  # NRPy+: ADM/BSSN <-> 4-metric conversions
-import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
-import nrpy.params as par  # NRPy+: Parameter interface
+import nrpy.equations.general_relativity.g4munu_conversions as g4conv  # NRPy: ADM/BSSN <-> 4-metric conversions
+import nrpy.indexedexp as ixp  # NRPy: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
+import nrpy.params as par  # NRPy: Parameter interface
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.equations.general_relativity.BSSN_to_ADM import BSSN_to_ADM
 

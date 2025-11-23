@@ -1,5 +1,5 @@
 """
-Core NRPy+ module used for generating C code kernels.
+Core NRPy module used for generating C code kernels.
 
 Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
          Ken Sible; ksible **at** outlook **dot* com
@@ -16,7 +16,7 @@ from typing_extensions import Literal
 
 import nrpy.finite_difference as fin
 import nrpy.params as par
-from nrpy.helpers.cse_preprocess_postprocess import (  # NRPy+: CSE preprocessing and postprocessing
+from nrpy.helpers.cse_preprocess_postprocess import (  # NRPy: CSE preprocessing and postprocessing
     cse_postprocess,
     cse_preprocess,
 )
@@ -92,7 +92,7 @@ class CCodeGen:
         upwind_control_vec: Union[List[sp.Symbol], sp.Symbol] = sp.Symbol("unset"),
         symbol_to_Rational_dict: Optional[Dict[sp.Basic, sp.Rational]] = None,
         rational_const_alias: str = "static const",
-        clang_format_enable: bool = False,
+        enable_clang_format: bool = False,
     ) -> None:
         """
         Initialize the CCodeGen class with provided options for generating C code.
@@ -124,7 +124,7 @@ class CCodeGen:
         :param upwind_control_vec: Upwind control vector as a symbol or list of symbols.
         :param symbol_to_Rational_dict: Dictionary mapping sympy symbols to their corresponding sympy Rationals.
         :param rational_const_alias: Override default alias for specifying rational constness
-        :param clang_format_enable: Boolean to enable clang formatting.
+        :param enable_clang_format: Boolean to enable clang formatting.
 
         :raises ValueError: If 'fp_type' is not recognized as a valid floating-point type.
         :raises ValueError: If SIMD optimizations are enabled but the floating-point type is not 'double'.
@@ -190,7 +190,7 @@ class CCodeGen:
         self.upwind_control_vec = upwind_control_vec
         self.symbol_to_Rational_dict = symbol_to_Rational_dict
         self.rational_const_alias = rational_const_alias
-        self.clang_format_enable = clang_format_enable
+        self.enable_clang_format = enable_clang_format
         self.clang_format_options = par.parval_from_str("clang_format_options")
 
         self.fd_order = par.parval_from_str("finite_difference::fd_order")
@@ -200,7 +200,7 @@ class CCodeGen:
         # Set fp_type and fp_type_alias
         Infrastructure = par.parval_from_str("Infrastructure")
         if self.enable_simd:
-            if self.fp_type not in "double":
+            if self.fp_type != "double":
                 raise ValueError(
                     "SIMD output currently only supports double precision. Sorry!"
                 )
@@ -526,7 +526,7 @@ def c_codegen(
                     RATIONAL_decls += "\n"
 
         #####
-        # Prior to the introduction of the SCALAR_TMP type, NRPy+
+        # Prior to the introduction of the SCALAR_TMP type, NRPy
         # did not insert sympy.Eq objects into the list of functions
         # that were passed to the CSE. SCALAR_TMP places certain
         # ordering requirements on the system which can only be
@@ -818,7 +818,7 @@ def gridfunction_management_and_FD_codegen(
     ...          memread_Ccode, upwind_control_vec=upwind_control_vec,
     ...          enable_fd_functions=enable_fd_functions, enable_simd=enable_simd))
     /*
-     * NRPy+-Generated GF Access/FD Code, Step 1 of 3:
+     * NRPy-Generated GF Access/FD Code, Step 1 of 3:
      * Read gridfunction(s) from main memory and compute FD stencils as needed.
      */
     const REAL hDD01_i1m1 = in_gfs[IDX4(HDD01GF, i0, i1-1, i2)];
@@ -847,7 +847,7 @@ def gridfunction_management_and_FD_codegen(
     const REAL hDD_dD011 = FDPart1_Rational_1_2*invdxx1*(-hDD01_i1m1 + hDD01_i1p1);
     <BLANKLINE>
     /*
-     * NRPy+-Generated GF Access/FD Code, Step 2 of 3:
+     * NRPy-Generated GF Access/FD Code, Step 2 of 3:
      * Implement upwinding algorithm.
      */
     const REAL Upwind0 = UPWIND_ALG(UpwindControlVectorU0);
@@ -856,7 +856,7 @@ def gridfunction_management_and_FD_codegen(
     const REAL hDD_dupD022 = Upwind2*(-UpwindAlgInputhDD_ddnD022 + UpwindAlgInputhDD_dupD022) + UpwindAlgInputhDD_ddnD022;
     <BLANKLINE>
     /*
-     * NRPy+-Generated GF Access/FD Code, Step 3 of 3:
+     * NRPy-Generated GF Access/FD Code, Step 3 of 3:
      * Evaluate SymPy expressions and write to main memory.
      */
     a0 = b*hDD01 + c*hDD_dD011;
@@ -1015,7 +1015,7 @@ def gridfunction_management_and_FD_codegen(
     # Copy kwargs
     kwargs_FDPart1 = kwargs.copy()
     if len(read_from_memory_Ccode) > 0:
-        Coutput += f"""/*\n * NRPy+-Generated GF Access/FD Code, Step {NRPy_FD_StepNumber} of {NRPy_FD__Number_of_Steps}:
+        Coutput += f"""/*\n * NRPy-Generated GF Access/FD Code, Step {NRPy_FD_StepNumber} of {NRPy_FD__Number_of_Steps}:
  * Read gridfunction(s) from main memory and compute FD stencils as needed.\n */
 """
 
@@ -1078,7 +1078,7 @@ def gridfunction_management_and_FD_codegen(
     # Step 5.b.ii: Implement control-vector upwinding algorithm.
     if not isinstance(CCGParams.upwind_control_vec, str):
         if len(upwind_directions) > 0:
-            Coutput += f"""\n/*\n * NRPy+-Generated GF Access/FD Code, Step {NRPy_FD_StepNumber} of {NRPy_FD__Number_of_Steps}:
+            Coutput += f"""\n/*\n * NRPy-Generated GF Access/FD Code, Step {NRPy_FD_StepNumber} of {NRPy_FD__Number_of_Steps}:
  * Implement upwinding algorithm.\n */
 """
             NRPy_FD_StepNumber += 1
@@ -1143,7 +1143,7 @@ MAYBE_UNUSED const REAL_SIMD_ARRAY upwind_Integer_{n} = ConstSIMD(tmp_upwind_Int
     # Step 5.c.i: Add input RHS & LHS expressions from
     #             sympyexpr_list[]
     Coutput += f"""
-/*\n * NRPy+-Generated GF Access/FD Code, Step {NRPy_FD_StepNumber} of {NRPy_FD__Number_of_Steps}:
+/*\n * NRPy-Generated GF Access/FD Code, Step {NRPy_FD_StepNumber} of {NRPy_FD__Number_of_Steps}:
  * Evaluate SymPy expressions and write to main memory.
  */
 """
@@ -1186,7 +1186,7 @@ MAYBE_UNUSED const REAL_SIMD_ARRAY upwind_Integer_{n} = ConstSIMD(tmp_upwind_Int
     if write_to_mem_string != "":
         Coutput += f"\n{write_to_mem_string}"
 
-    if CCGParams.clang_format_enable:
+    if CCGParams.enable_clang_format:
         Coutput = clang_format(Coutput)
 
     return Coutput

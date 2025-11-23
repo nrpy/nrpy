@@ -16,8 +16,6 @@
 #include <stdlib.h>  // malloc/free, etc.
 #include <string.h>  // String handling functions, such as strlen, strcmp, etc.
 #include <time.h>    // Time-related functions and types, such as time(), clock(),
-// output_BHaH_defines_h(...,enable_intrinsics=True) was called so we intrinsics headers:
-#include "intrinsics/simd_intrinsics.h"
 #define REAL double
 #define DOUBLE double
 
@@ -102,7 +100,12 @@ typedef struct __params_struct__ {
 #define NO_INLINE __declspec(noinline)
 #else
 #define NO_INLINE // Fallback for unknown compilers
-#endif
+#endif            // NO_INLINE definition
+
+#ifndef UPWIND_ALG
+// When enable_intrinsics = False, this is the UPWIND_ALG() macro:
+#define UPWIND_ALG(UpwindVecU) UpwindVecU > 0.0 ? 1.0 : 0.0
+#endif // UPWIND_ALG
 
 // ----------------------------
 // Basic definitions for module
@@ -114,8 +117,6 @@ typedef struct __MoL_gridfunctions_struct__ {
   REAL *k_odd_gfs;
   REAL *k_even_gfs;
   REAL *auxevol_gfs;
-  REAL *diagnostic_output_gfs;
-  REAL *diagnostic_output_gfs2;
 } MoL_gridfunctions_struct;
 
 // ----------------------------
@@ -126,11 +127,11 @@ typedef struct __MoL_gridfunctions_struct__ {
 // EVOL VARIABLES:
 #define NUM_EVOL_GFS 0
 
-// AUX VARIABLES:
-#define NUM_AUX_GFS 0
-
 // AUXEVOL VARIABLES:
 #define NUM_AUXEVOL_GFS 0
+
+// AUX VARIABLES:
+#define NUM_AUX_GFS 0
 
 // ----------------------------
 // Indexing macros
@@ -209,6 +210,13 @@ typedef struct __griddata__ {
   rfm_struct *rfmstruct; // <- includes e.g., 1D arrays of reference metric quantities
 } griddata_struct;
 
+#ifdef __cplusplus
+#define restrict __restrict__
+#endif // __cplusplus
+#ifdef __CUDACC__
+#include "BHaH_device_defines.h"
+#endif // __CUDACC__
+
 #ifndef BHAH_TYPEOF
 #if __cplusplus >= 2000707L
 #define BHAH_TYPEOF(a) decltype(a)
@@ -243,4 +251,22 @@ typedef struct __griddata__ {
       BHAH_FREE(a->b);                                                                                                                               \
     }                                                                                                                                                \
   } while (0);
+
+#ifdef __CUDACC__
+/* Expand to the statement(s) you pass in */
+#define IFCUDARUN(...)                                                                                                                               \
+  do {                                                                                                                                               \
+    {                                                                                                                                                \
+      __VA_ARGS__;                                                                                                                                   \
+    }                                                                                                                                                \
+  } while (0)
+#else
+/* Compile away to nothing on non-CUDA builds */
+#define IFCUDARUN(...)                                                                                                                               \
+  do {                                                                                                                                               \
+    {                                                                                                                                                \
+      (void)0;                                                                                                                                       \
+    }                                                                                                                                                \
+  } while (0)
+#endif
 #endif

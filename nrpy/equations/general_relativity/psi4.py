@@ -8,9 +8,9 @@ Author: Zachariah B. Etienne
 # Step 1.a: import needed modules
 from typing import List, cast
 
-import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
+import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
-import nrpy.indexedexp as ixp  # NRPy+: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
+import nrpy.indexedexp as ixp  # NRPy: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 from nrpy.equations.general_relativity.BSSN_to_ADM import BSSN_to_ADM
 from nrpy.equations.general_relativity.psi4_tetrads import Psi4Tetrads
 
@@ -41,7 +41,7 @@ class Psi4:
         mim4U: List[sp.Expr]
         n4U: List[sp.Expr]
         if tetrad == "leave_symbolic":
-            # For code validation against NRPy+ psi_4 tutorial module (Tutorial-Psi4.ipynb);
+            # For code validation against NRPy psi_4 tutorial module (Tutorial-Psi4.ipynb);
             #   ensures a more complete code validation.
             mre4U = cast(List[sp.Expr], ixp.declarerank1("mre4U", dimension=4))
             mim4U = cast(List[sp.Expr], ixp.declarerank1("mim4U", dimension=4))

@@ -262,10 +262,13 @@ def register_CFunction_ds_min_radial_like_dirns_single_pt(
         ds_expr_list += [sp.Abs(rfm.scalefactor_orthog[dirn] * dxx[dirn])]
         ds_str_list += [f"ds{dirn}"]
     param_symbols, _ = get_params_commondata_symbols_from_expr_list(ds_expr_list)
-    params_definitions = generate_definition_header(
-        param_symbols,
-        enable_intrinsics=False,
-        var_access=parallel_utils.get_params_access("openmp"),
+    params_definitions = (
+        generate_definition_header(
+            param_symbols,
+            enable_intrinsics=False,
+            var_access=parallel_utils.get_params_access("openmp"),
+        )
+        + "\n"
     )
     body += params_definitions + ccg.c_codegen(
         ds_expr_list,
@@ -551,40 +554,36 @@ def register_CFunction_numerical_grids_and_timestep(
             else "griddata,"
         ),
     )
-    body = r"""
-  // Step 1.a: Set each CodeParameter in griddata.params to default, for MAXNUMGRIDS grids.
-  if(calling_for_first_time)
-    params_struct_set_to_default(commondata, griddata);"""
-    body += rf"""
-  // Step 1.b: Set commondata->NUMGRIDS to number of CoordSystems we have
-  commondata->NUMGRIDS = {len(set_of_CoordSystems)};
-"""
+    body = ""
     if gridding_approach == "independent grid(s)":
-        body += """
-  {
+        body += rf"""
+  // Step 1.a: Set up independent grids: first set NUMGRIDS == number of unique CoordSystems we have.
+  commondata->NUMGRIDS = {len(set_of_CoordSystems)};
+  {{
     // Independent grids
-    int Nx[3] = { -1, -1, -1 };
+    int Nx[3] = {{ -1, -1, -1 }};
 
-    // Step 1.c: For each grid, set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx based on grid_physical_size
+    // For each grid, set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx based on grid_physical_size
     const bool apply_convergence_factor_and_set_xxminmax_defaults = true;
     int grid=0;
 """
         for which_CoordSystem, CoordSystem in enumerate(sorted(set_of_CoordSystems)):
-            body += f"""// In multipatch, gridname is a helpful alias indicating position of the patch. E.g., "lower {CoordSystem} patch"
+            body += f"""
+    // In multipatch, gridname is a helpful alias indicating position of the patch. E.g., "lower {CoordSystem} patch"
     snprintf(griddata[grid].params.gridname, 100, "grid_{CoordSystem}");
+    griddata[grid].params.CoordSystem_hash = {CoordSystem.upper()};
+    griddata[grid].params.grid_physical_size = {list_of_grid_physical_sizes[which_CoordSystem]};
+    numerical_grid_params_Nxx_dxx_xx(commondata, &griddata[grid].params, griddata[grid].xx, Nx, apply_convergence_factor_and_set_xxminmax_defaults);
+
+#ifdef __CUDACC__
+    // Now that numerical grid parameters have been set, copy them over to host.
+    memcpy(&griddata_host[grid].params, &griddata[grid].params, sizeof(params_struct));
+    // After copying params struct, set is_host=true:
+    griddata_host[grid].params.is_host = true;
+#endif // __CUDACC__
+    grid++;
 """
-            body += (
-                f"  griddata[grid].params.CoordSystem_hash = {CoordSystem.upper()};\n"
-            )
-            body += f"  griddata[grid].params.grid_physical_size = {list_of_grid_physical_sizes[which_CoordSystem]};\n"
-            body += "  numerical_grid_params_Nxx_dxx_xx(commondata, &griddata[grid].params, griddata[grid].xx, Nx, apply_convergence_factor_and_set_xxminmax_defaults);\n"
-            body += (
-                "  memcpy(&griddata_host[grid].params, &griddata[grid].params, sizeof(params_struct));\n"
-                if parallelization in ["cuda"]
-                else ""
-            )
-            body += "  grid++;\n\n"
-        body += "}\n"
+        body += "} // END independent grid setup\n"
     elif gridding_approach == "multipatch":
         # fmt: off
         _ = par.CodeParameter("char[200]", __name__, "multipatch_choice", "", commondata=True, add_to_parfile=True)
@@ -604,7 +603,7 @@ def register_CFunction_numerical_grids_and_timestep(
                 add_to_set_CodeParameters_h=False,
             )
         body += """
-  // Step 1.c: Multipatch grid structures are set up algorithmically.
+  // Step 1.a: Multipatch grid structures are set up algorithmically.
   multipatch_grids_set_up(commondata, griddata);
 """
     else:
@@ -612,29 +611,35 @@ def register_CFunction_numerical_grids_and_timestep(
             f"""gridding_approach == "{gridding_approach}" not supported.
         Supported approaches include: "independent grid(s)" (default) and "multipatch"."""
         )
-    body += "\n// Step 1.d: Allocate memory for and define reference-metric precomputation lookup tables\n"
-    if enable_rfm_precompute:
-        body += r"""for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
-  BHAH_MALLOC(griddata[grid].rfmstruct, sizeof(rfm_struct))
+    body += """
+  // This populates griddata_host->xx, which (if rfm_precompute is enabled) is needed for host-side rfm_precompute_defines.
+  IFCUDARUN(cpyDevicetoHost__grid(commondata, griddata_host, griddata); BHAH_DEVICE_SYNC(););
+
+  // Step 1.b: Allocate memory for and define reference-metric precomputation lookup tables.
 """
-        if parallelization in ["cuda"]:
-            body = body.replace("BHAH_MALLOC", "BHAH_MALLOC_DEVICE")
-            body += "griddata_host->rfmstruct = nullptr;\n"
-            body += "\ncpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % NUM_STREAMS);"
-        body += r"""
+    if enable_rfm_precompute:
+        body += r"""  for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
+#ifdef __CUDACC__
+    // Set up device rfmstruct
+    BHAH_MALLOC_DEVICE(griddata[grid].rfmstruct, sizeof(rfm_struct));
+    cpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % NUM_STREAMS);
     rfm_precompute_malloc(commondata, &griddata[grid].params, griddata[grid].rfmstruct);
     rfm_precompute_defines(commondata, &griddata[grid].params, griddata[grid].rfmstruct, griddata[grid].xx);
-    }
+    // Set up host rfmstruct
+    BHAH_MALLOC(griddata_host[grid].rfmstruct, sizeof(rfm_struct));
+    rfm_precompute_malloc(commondata, &griddata_host[grid].params, griddata_host[grid].rfmstruct);
+    rfm_precompute_defines(commondata, &griddata_host[grid].params, griddata_host[grid].rfmstruct, griddata_host[grid].xx);
+#else // if NOT defined __CUDACC__
+    BHAH_MALLOC(griddata[grid].rfmstruct, sizeof(rfm_struct));
+    rfm_precompute_malloc(commondata, &griddata[grid].params, griddata[grid].rfmstruct);
+    rfm_precompute_defines(commondata, &griddata[grid].params, griddata[grid].rfmstruct, griddata[grid].xx);
+#endif // __CUDACC__
+  } // END LOOP over grids
 """
     else:
         body += "// (reference-metric precomputation disabled)\n"
 
-    if parallelization in ["cuda"]:
-        body += """
-  cpyDevicetoHost__grid(commondata, griddata_host, griddata);
-  BHAH_DEVICE_SYNC();
-"""
-    body += "\n// Step 1.e: Set up curvilinear boundary condition struct (bcstruct)\n"
+    body += "\n// Step 1.c: Set up curvilinear boundary condition struct (bcstruct)\n"
     if enable_CurviBCs:
         body += "for(int grid=0; grid<commondata->NUMGRIDS; grid++) {\n"
         mask_arg = ""
@@ -657,14 +662,14 @@ def register_CFunction_numerical_grids_and_timestep(
             else "cpyHosttoDevice_params__constant(&griddata[grid].params, griddata[grid].params.grid_idx % NUM_STREAMS);"
         )
         body += rf"""
-// Step 1.f: Set timestep based on minimum spacing between neighboring gridpoints.
+// Step 1.d: Set timestep based on minimum spacing between neighboring gridpoints.
 commondata->dt = 1e30;
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {{
   {sync_params}
   cfl_limited_timestep(commondata, &griddata[grid].params, griddata[grid].xx);
 }}"""
     body += r"""
-// Step 1.g: Initialize timestepping parameters to zero if this is the first time this function is called.
+// Step 1.e: Initialize timestepping parameters to zero if this is the first time this function is called.
 if(calling_for_first_time) {
   commondata->nn = 0;
   commondata->nn_0 = 0;
@@ -672,7 +677,7 @@ if(calling_for_first_time) {
   commondata->time = 0.0;
 }
 
-// Step 1.h: Set grid_idx for each grid.
+// Step 1.f: Set grid_idx for each grid.
 for(int grid=0;grid<commondata->NUMGRIDS;grid++) {
    griddata[grid].params.grid_idx = grid;
 }

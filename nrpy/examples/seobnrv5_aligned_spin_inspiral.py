@@ -25,14 +25,14 @@ par.set_parval_from_str("Infrastructure", "BHaH")
 # Code-generation-time parameters:
 project_name = "seobnrv5_aligned_spin_inspiral"
 
-parallel_codegen_enable = True
+enable_parallel_codegen = True
 
 project_dir = os.path.join("project", project_name)
 
 # First clean the project directory, if it exists.
 shutil.rmtree(project_dir, ignore_errors=True)
 
-par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
+par.set_parval_from_str("enable_parallel_codegen", enable_parallel_codegen)
 
 # Development flags (NOT command-line-tunable)
 # Flag to compute the SEOBNR waveform in the frequency domain.
@@ -173,6 +173,9 @@ return 0;
 BHaH.seobnr.utils.commondata_io.register_CFunction_commondata_io()
 BHaH.seobnr.utils.handle_gsl_return_status.register_CFunction_handle_gsl_return_status()
 BHaH.seobnr.utils.SEOBNRv5_aligned_spin_unwrap.register_CFunction_SEOBNRv5_aligned_spin_unwrap()
+BHaH.seobnr.utils.root_finding_1d.register_CFunction_root_finding_1d()
+BHaH.seobnr.utils.root_finding_multidimensional.register_CFunction_root_finding_multidimensional()
+
 
 # register SEOBNRv5 coefficients
 BHaH.seobnr.SEOBNRv5_aligned_spin_coefficients.register_CFunction_SEOBNRv5_aligned_spin_coefficients()
@@ -190,7 +193,6 @@ BHaH.seobnr.initial_conditions.SEOBNRv5_aligned_spin_initial_conditions_dissipat
 # register trajectory integration and processing routines
 BHaH.seobnr.dynamics.eval_abs_deriv.register_CFunction_eval_abs_deriv()
 BHaH.seobnr.dynamics.find_local_minimum_index.register_CFunction_find_local_minimum_index()
-BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_argrelmin.register_CFunction_SEOBNRv5_aligned_spin_argrelmin()
 BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_augments.register_CFunction_SEOBNRv5_aligned_spin_augments()
 BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_interpolate_dynamics.register_CFunction_SEOBNRv5_aligned_spin_interpolate_dynamics()
 BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_iterative_refinement.register_CFunction_SEOBNRv5_aligned_spin_iterative_refinement()
@@ -325,7 +327,6 @@ if frequency_domain_flag:
 BHaH.BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     additional_includes=additional_includes,
-    enable_intrinsics=False,
     enable_rfm_precompute=False,
     supplemental_defines_dict={
         "SEOBNR": """

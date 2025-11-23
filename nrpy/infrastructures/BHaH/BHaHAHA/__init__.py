@@ -11,6 +11,7 @@ from . import (
     diagnostics_integration_weights,
     diagnostics_min_max_mean_radii_wrt_centroid,
     diagnostics_proper_circumferences,
+    diagnostics_proper_circumferences_general,
     error_message,
     find_horizon,
     hDD_dD_and_W_dD_in_interp_src_grid_interior,

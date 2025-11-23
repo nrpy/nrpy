@@ -529,7 +529,7 @@ def generate_switch_statement_for_gf_types(
         non_y_n_gridfunctions_list,
         _diagnostic_gridfunctions_point_to,
         _diagnostic_gridfunctions2_point_to,
-    ) = BHaH.MoLtimestepping.gridfunction_names.generate_gridfunction_names(
+    ) = BHaH.MoLtimestepping.intermediate_gridfunction_names_list.generate_gridfunction_names(
         Butcher_dict, MoL_method=MoL_method
     )
 
@@ -618,7 +618,7 @@ def generate_switch_statement_for_gf_types_for_entry_method(
         non_y_n_gridfunctions_list,
         _diagnostic_gridfunctions_point_to,
         _diagnostic_gridfunctions2_point_to,
-    ) = BHaH.MoLtimestepping.gridfunction_names.generate_gridfunction_names(
+    ) = BHaH.MoLtimestepping.intermediate_gf_names_list.generate_gridfunction_names(
         Butcher_dict, MoL_method=MoL_method
     )
 
@@ -680,7 +680,7 @@ def generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
         non_y_n_gridfunctions_list,
         _diagnostic_gridfunctions_point_to,
         _diagnostic_gridfunctions2_point_to,
-    ) = BHaH.MoLtimestepping.gridfunction_names.generate_gridfunction_names(
+    ) = BHaH.MoLtimestepping.intermediate_gf_names_list.generate_gridfunction_names(
         Butcher_dict, MoL_method=MoL_method
     )
 
@@ -1784,7 +1784,7 @@ def output_timestepping_ci(
                 // Set psi4.
                 psi4(&commondata, &griddata_chare[grid].params, griddata_chare[grid].xx, griddata_chare[grid].gridfuncs.y_n_gfs, griddata_chare[grid].gridfuncs.diagnostic_output_gfs);
                 // Apply outer and inner bcs to psi4
-                apply_bcs_inner_only_specific_auxgfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].bcstruct, griddata_chare[grid].gridfuncs.diagnostic_output_gfs, griddata_chare[grid].gridfuncs.num_aux_gfs_to_sync, griddata_chare[grid].gridfuncs.aux_gfs_to_sync);
+                apply_bcs_inner_only_specific_gfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].bcstruct, griddata_chare[grid].gridfuncs.diagnostic_output_gfs, griddata_chare[grid].gridfuncs.num_aux_gfs_to_sync, griddata_chare[grid].gridfuncs.aux_gfs_to_sync);
               }"""
 
         file_output_str += generate_send_nonlocalinnerbc_data_code(

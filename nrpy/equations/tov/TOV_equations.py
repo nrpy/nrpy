@@ -7,8 +7,8 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-# Step 1.a: import all needed modules from NRPy+:
-import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
+# Step 1.a: import all needed modules from NRPy:
+import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
 
 class TOV_Equations:

@@ -5,16 +5,16 @@ This is a work in progress. The final SEBOBv2 contains
 the following improvements over the current SEBOBv1:
 
 []1. Higher multipolar modes
-[]    1.a. Inspiral modes (2,2), (2,1), (3,3), (3,2), (4,4), (4,3), (5,5)
+[*]    1.a. Inspiral modes (2,2), (2,1), (3,3), (3,2), (4,4), (4,3), (5,5); Currently computes all inspiral modes but only outputs (2,2) for now
 []    1.b. Merger-ringdown modes (2,2), (2,1), (3,3), (3,2), (4,4), (4,3), (5,5)
 []    1.c. NQCs for higher modes
 []    1.d. Computing mode-mixing coefficients for higher modes
 []    1.e. Transformation from co-precessing to inertial frame
 []2. Improved inspiral dynamics, including precession
-[]    2.a. Decoupled Quasi-precessing EOB Hamiltonian
-[]    2.b. Decoupled PN spin evolution equations
+[x]    2.a. Decoupled PN spin evolution equations
+[]    2.b. Decoupled Quasi-precessing EOB Hamiltonian
 []    2.c. Generic spin EOB Hamiltonian
-[]    2.d. Post-adiabatic dynamics
+[x]    2.d. Post-adiabatic dynamics
 []3. Improved BOBv2 merger-ringdown
 [x]    3.a. News-to-strain conversion
 []    3.b. Improved handling of precessing merger modes
@@ -31,6 +31,7 @@ Authors: Siddharth Mahesh
 """
 
 import os
+import pkgutil
 
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
@@ -48,14 +49,14 @@ par.set_parval_from_str("Infrastructure", "BHaH")
 # Code-generation-time parameters:
 project_name = "sebobv2"
 
-parallel_codegen_enable = True
+enable_parallel_codegen = True
 
 project_dir = os.path.join("project", project_name)
 
 # First clean the project directory, if it exists.
 shutil.rmtree(project_dir, ignore_errors=True)
 
-par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
+par.set_parval_from_str("enable_parallel_codegen", enable_parallel_codegen)
 
 # Development flags (NOT command-line-tunable)
 # Flag to compute the SEOBNR waveform in the frequency domain.
@@ -64,6 +65,7 @@ frequency_domain_flag = False
 # Once we have precession in place, we can make this more tunable
 precompute_waveform_coefficients_flag = False
 # Flag to output the commondata struct to a file.
+# Useful for fine-grained debugging.
 output_commondata_flag = False
 # Flag to output the SEOBNRv5 waveform using a print statement like lalsimulation does.
 # (set to False for performance checks)
@@ -79,6 +81,7 @@ perform_iterative_refinement = True
 #         cfc.CFunction_dict["function_name"]
 
 
+#  Note: Removing step numbers for now.
 def register_CFunction_main_c(
     output_waveform: bool = True,
     frequency_domain: bool = False,
@@ -95,46 +98,40 @@ def register_CFunction_main_c(
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """-={ main() function }=-
-Step 1.a: Set each commondata CodeParameter to default.
-Step 1.b: Overwrite default values to parfile values. Then overwrite parfile values with values set at cmd line.
-Step 2: Compute Hamiltonian and derivatives."""
+Main function for computing the SEBOBv2 waveform.
+"""
     cfunc_type = "int"
     name = "main"
     params = "int argc, const char *argv[]"
     body = r"""  commondata_struct commondata; // commondata contains parameters common to all grids.
-//Step 0: Initialize a loop parameter for outputs
-// Step 1.a: Set each commondata CodeParameter to default.
+// Step TBD: Initialize commondata 
+// Step TBD: Set each commondata CodeParameter to default.
 commondata_struct_set_to_default(&commondata);
-// Step 1.b: Overwrite default values to parfile values. Then overwrite parfile values with values set at cmd line.
+// Step TBD: Overwrite default values to parfile values. Then overwrite parfile values with values set at cmd line.
 cmdline_input_and_parfile_parser(&commondata, argc, argv);
-// Step 1.c: Overwrite default values of m1, m2, a6, and dSO.
-SEOBNRv5_aligned_spin_coefficients(&commondata);
+// Step TBD: Overwrite default values of m1, m2, a6, and dSO.
+SEOBNRv5_quasi_precessing_spin_coefficients(&commondata);
+// Step: compute the spin dynamics
+SEOBNRv5_quasi_precessing_spin_dynamics(&commondata);
 """
     if precompute_waveform_coefficients:
-        body += r"""// Step 1.d: Set the waveform coefficients
+        body += r"""// Step TBD: Set the waveform coefficients
 SEOBNRv5_aligned_spin_waveform_coefficients(&commondata);
 """
-    body += r"""// Step 2.a: Compute SEOBNRv5 conservative initial conditions.
+    body += r"""// Step TBD: Compute SEOBNRv5 conservative initial conditions.
 SEOBNRv5_aligned_spin_initial_conditions_conservative(&commondata);
-// Step 2.b: Print out the conservative initial conditions.
-//printf("r = %.15e\n",commondata.r);
-//printf("pphi = %.15e\n",commondata.pphi);
-// Step 3.a: Compute SEOBNRv5 dissipative initial conditions.
-SEOBNRv5_aligned_spin_initial_conditions_dissipative(&commondata);
-// Step 3.b: Print out the dissipative initial conditions.
-//printf("prstar = %.15e\n",commondata.prstar);
-// Step 4: Run the ODE integration.
-SEOBNRv5_aligned_spin_ode_integration(&commondata);
-// Step 5. Generate the waveform.
+// Step TBD: Run the trajectory generation.
+SEOBNRv5_aligned_spin_pa_integration(&commondata);
+// Step TBD: Generate the waveform.
 SEOBNRv5_aligned_spin_waveform_from_dynamics(&commondata);
-// Step 6. Compute and apply the NQC corrections
+// Step TBD: Compute and apply the NQC corrections
 SEBOBv2_NQC_corrections(&commondata);
-// Step 7.a Compute the IMR waveform
+// Step TBD: Compute the IMR waveform
 SEBOBv2_IMR_waveform(&commondata);
 """
     if frequency_domain:
         body += r"""
-// Step 7.b Compute the FFT-ed IMR waveform
+// Step TBD: Compute the FFT-ed IMR waveform
 // Specify wisdom file
 const char *wisdom_file = "fftw_wisdom.dat";
 SEOBNRv5_aligned_spin_FD_waveform(wisdom_file, &commondata);
@@ -142,7 +139,7 @@ SEOBNRv5_aligned_spin_FD_waveform(wisdom_file, &commondata);
     if output_waveform:
         if frequency_domain:
             body += r"""
-// Step 6.b: Print the resulting waveform.
+// Step TBD: Print the resulting waveform.
 for (size_t i = 0; i < commondata.nsteps_IMR_FD; i++) {
     printf("%.15e %.15e %.15e\n", creal(commondata.waveform_IMR_FD[IDX_WF(i,FREQ)])
     , creal(commondata.waveform_IMR_FD[IDX_WF(i,STRAIN)]), cimag(commondata.waveform_IMR_FD[IDX_WF(i,STRAIN)]));
@@ -150,7 +147,7 @@ for (size_t i = 0; i < commondata.nsteps_IMR_FD; i++) {
 """
         else:
             body += r"""
-// Step 6.b: Print the resulting waveform.
+// Step TBD: Print the resulting waveform.
 for (size_t i = 0; i < commondata.nsteps_IMR; i++) {
     printf("%.15e %.15e %.15e\n", creal(commondata.waveform_IMR[IDX_WF(i,TIME)])
     , creal(commondata.waveform_IMR[IDX_WF(i,STRAIN)]), cimag(commondata.waveform_IMR[IDX_WF(i,STRAIN)]));
@@ -190,9 +187,15 @@ return 0;
 BHaH.seobnr.utils.commondata_io.register_CFunction_commondata_io()
 BHaH.seobnr.utils.handle_gsl_return_status.register_CFunction_handle_gsl_return_status()
 BHaH.seobnr.utils.SEOBNRv5_aligned_spin_unwrap.register_CFunction_SEOBNRv5_aligned_spin_unwrap()
+BHaH.seobnr.utils.dy_dx.register_CFunction_dy_dx()
+BHaH.seobnr.utils.finite_difference_stencil.register_CFunction_finite_difference_stencil()
+BHaH.seobnr.utils.root_finding_1d.register_CFunction_root_finding_1d()
+BHaH.seobnr.utils.root_finding_multidimensional.register_CFunction_root_finding_multidimensional()
+BHaH.seobnr.utils.integration_stencil.register_CFunction_integration_stencil()
+BHaH.seobnr.utils.cumulative_integration.register_CFunction_cumulative_integration()
 
 # register SEOBNRv5 coefficients
-BHaH.seobnr.SEOBNRv5_aligned_spin_coefficients.register_CFunction_SEOBNRv5_aligned_spin_coefficients()
+BHaH.seobnr.SEOBNRv5_quasi_precessing_spin_coefficients.register_CFunction_SEOBNRv5_quasi_precessing_spin_coefficients()
 
 # register initial condition routines
 BHaH.seobnr.initial_conditions.SEOBNRv5_aligned_spin_multidimensional_root_wrapper.register_CFunction_SEOBNRv5_multidimensional_root_wrapper()
@@ -204,10 +207,22 @@ BHaH.seobnr.initial_conditions.SEOBNRv5_aligned_spin_initial_conditions_conserva
 BHaH.seobnr.initial_conditions.SEOBNRv5_aligned_spin_radial_momentum_condition.register_CFunction_SEOBNRv5_aligned_spin_radial_momentum_condition()
 BHaH.seobnr.initial_conditions.SEOBNRv5_aligned_spin_initial_conditions_dissipative.register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_dissipative()
 
+# register quasi-precessing spin initial conditions
+BHaH.seobnr.dynamics.SEOBNRv5_quasi_precessing_spin_angular_momentum.register_CFunction_SEOBNRv5_quasi_precessing_spin_angular_momentum()
+BHaH.seobnr.dynamics.SEOBNRv5_quasi_precessing_spin_dynamics.register_CFunction_SEOBNRv5_quasi_precessing_spin_dynamics()
+BHaH.seobnr.dynamics.SEOBNRv5_quasi_precessing_spin_equations.register_CFunction_SEOBNRv5_quasi_precessing_spin_equations()
+
+# register PA integration routines
+BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_pa_integration.register_CFunction_SEOBNRv5_aligned_spin_pa_integration()
+BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_pphi0_equation.register_CFunction_SEOBNRv5_pphi0_equation()
+BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_pphi_equation.register_CFunction_SEOBNRv5_pphi_equation()
+BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_pr_equation.register_CFunction_SEOBNRv5_pr_equation()
+BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_phi_equation.register_CFunction_SEOBNRv5_phi_equation()
+BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_t_equation.register_CFunction_SEOBNRv5_t_equation()
+
 # register trajectory integration and processing routines
 BHaH.seobnr.dynamics.eval_abs_deriv.register_CFunction_eval_abs_deriv()
 BHaH.seobnr.dynamics.find_local_minimum_index.register_CFunction_find_local_minimum_index()
-BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_argrelmin.register_CFunction_SEOBNRv5_aligned_spin_argrelmin()
 BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_augments.register_CFunction_SEOBNRv5_aligned_spin_augments()
 BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_interpolate_dynamics.register_CFunction_SEOBNRv5_aligned_spin_interpolate_dynamics()
 BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_iterative_refinement.register_CFunction_SEOBNRv5_aligned_spin_iterative_refinement()
@@ -219,13 +234,13 @@ BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_ode_integration.register_CFunction_SE
 # register inspiral waveform routines
 BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_gamma_wrapper.register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper()
 BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_interpolate_modes.register_CFunction_SEOBNRv5_aligned_spin_interpolate_modes()
-BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_waveform_from_dynamics.register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics()
+BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_waveform_from_dynamics_higher_mode.register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics()
 if precompute_waveform_coefficients_flag:
     BHaH.seobnr.inspiral_waveform_precomputed.SEOBNRv5_aligned_spin_waveform_coefficients.register_CFunction_SEOBNRv5_aligned_spin_waveform_coefficients()
     BHaH.seobnr.inspiral_waveform_precomputed.SEOBNRv5_aligned_spin_waveform_precomputed.register_CFunction_SEOBNRv5_aligned_spin_waveform()
     BHaH.seobnr.inspiral_waveform_precomputed.SEOBNRv5_aligned_spin_flux_precomputed.register_CFunction_SEOBNRv5_aligned_spin_flux()
 else:
-    BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_waveform.register_CFunction_SEOBNRv5_aligned_spin_waveform()
+    BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_waveform_higher_mode.register_CFunction_SEOBNRv5_aligned_spin_waveform()
     BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_flux.register_CFunction_SEOBNRv5_aligned_spin_flux()
 
 # register additional commondata parameters needed for SEBOBv2 (but not needed for SEOBNR)
@@ -294,6 +309,16 @@ BHaH.cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_par
     project_name=project_name,
     cmdline_inputs=["mass_ratio", "chi1", "chi2", "initial_omega", "total_mass", "dt"],
 )
+# Load the header file using pkgutil
+data_bytes = pkgutil.get_data("nrpy.infrastructures.BHaH.seobnr", "spline_struct.h")
+if data_bytes is None:
+    raise FileNotFoundError("spline_struct.h not found via pkgutil.get_data")
+
+spline_struct_h = data_bytes.decode("utf-8")
+
+# Write the updated content to the output file
+with Path(project_dir, "spline_struct.h").open("w", encoding="utf-8") as output_file:
+    output_file.write(spline_struct_h)
 
 additional_includes = [
     str(Path("gsl") / Path("gsl_vector.h")),
@@ -307,18 +332,30 @@ additional_includes = [
     str(Path("gsl") / Path("gsl_sf_gamma.h")),
     str(Path("gsl") / Path("gsl_linalg.h")),
     "complex.h",
+    "spline_struct.h",
 ]
 if frequency_domain_flag:
     additional_includes.append(str(Path("fftw3.h")))
 BHaH.BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     additional_includes=additional_includes,
-    enable_intrinsics=False,
     enable_rfm_precompute=False,
     supplemental_defines_dict={
         "SEOBNR": """
 #include<complex.h>
 #define COMPLEX double complex
+#define NUMVARS_SPIN 10
+#define LN_X 0
+#define LN_Y 1
+#define LN_Z 2
+#define CHI1_X 3
+#define CHI1_Y 4
+#define CHI1_Z 5
+#define CHI2_X 6
+#define CHI2_Y 7
+#define CHI2_Z 8
+#define OMEGA_PN 9
+#define IDX_SPIN(idx,var) ((idx)*NUMVARS_SPIN + (var))
 #define NUMVARS 8
 #define TIME 0
 #define FREQ 0
@@ -330,13 +367,17 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
 #define OMEGA 6
 #define OMEGA_CIRC 7
 #define IDX(idx, var) ((idx)*NUMVARS + (var))
-#define NUMMODES 2
+#define NUMMODES 8 
+#define STRAIN22 1
+#define STRAIN21 2
+#define STRAIN33 3
+#define STRAIN32 4
+#define STRAIN44 5
+#define STRAIN43 6
+#define STRAIN55 7
+#define NUMMODESSTORED 2 // process 2,2 mode for now
 #define STRAIN 1
-#define IDX_WF(idx,var) ((idx)*NUMMODES + (var))
-typedef struct {
-  gsl_spline *spline;
-  gsl_interp_accel *acc;
-} spline_data;
+#define IDX_WF(idx,var) ((idx)*NUMMODESSTORED + (var))
 """
     },
 )

@@ -16,11 +16,11 @@ import sys
 # Step P1: Import needed modules:
 from typing import Tuple
 
-import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy+ depends
+import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
 import nrpy.grid as gri
 import nrpy.indexedexp as ixp
-import nrpy.params as par  # NRPy+: Parameter interface
+import nrpy.params as par  # NRPy: Parameter interface
 
 
 class WaveEquation_solution_Cartesian:

@@ -47,29 +47,33 @@ int main(int argc, const char *argv[]) {
   // Step 1.e: Set up numerical grids, including parameters such as NUMGRIDS, xx[3], masks, Nxx, dxx, invdxx,
   //           bcstruct, rfm_precompute, timestep, and others.
   {
+    IFCUDARUN(for (int grid = 0; grid < MAXNUMGRIDS; grid++) griddata_device[grid].params.is_host = false;);
     // If this function is being called for the first time, initialize commondata.time, nn, t_0, and nn_0 to 0.
     const bool calling_for_first_time = true;
     numerical_grids_and_timestep(&commondata, griddata_device, griddata_host, calling_for_first_time);
-  }
+  } // END setup of numerical & temporal grids.
 
+  // Step 2: Allocate storage for the initial data (y_n_gfs gridfunctions) on each grid.
   for (int grid = 0; grid < commondata.NUMGRIDS; grid++) {
-    // Step 2: Allocate storage for the initial data (y_n_gfs gridfunctions) on each grid.
-    MoL_malloc_y_n_gfs(&commondata, &griddata_device[grid].params, &griddata_device[grid].gridfuncs);
-  }
+    const int Nxx_plus_2NGHOSTS_tot = (griddata_device[grid].params.Nxx_plus_2NGHOSTS0 * //
+                                       griddata_device[grid].params.Nxx_plus_2NGHOSTS1 * //
+                                       griddata_device[grid].params.Nxx_plus_2NGHOSTS2);
+    BHAH_MALLOC_DEVICE(griddata_device[grid].gridfuncs.y_n_gfs, sizeof(REAL) * Nxx_plus_2NGHOSTS_tot * NUM_EVOL_GFS);
+    if (NUM_AUXEVOL_GFS > 0) {
+      BHAH_MALLOC_DEVICE(griddata_device[grid].gridfuncs.auxevol_gfs, sizeof(REAL) * Nxx_plus_2NGHOSTS_tot * NUM_AUXEVOL_GFS);
+      IFCUDARUN(BHAH_MALLOC(griddata_host[grid].gridfuncs.auxevol_gfs, sizeof(REAL) * Nxx_plus_2NGHOSTS_tot * NUM_AUXEVOL_GFS););
+    } // END IF NUM_AUXEVOL_GFS > 0
 
-  for (int grid = 0; grid < commondata.NUMGRIDS; grid++) {
-    // Step 2.b: Allocate host storage for diagnostics
-    CUDA__malloc_host_gfs(&commondata, &griddata_device[grid].params, &griddata_host[grid].gridfuncs);
-    CUDA__malloc_host_aux_gfs(&commondata, &griddata_device[grid].params, &griddata_host[grid].gridfuncs);
-    CUDA__malloc_host_diagnostic_gfs(&commondata, &griddata_device[grid].params, &griddata_host[grid].gridfuncs);
-  }
+    // On GPU, separately allocate y_n_gfs on the host, for diagnostics purposes.
+    IFCUDARUN(BHAH_MALLOC_PINNED(griddata_host[grid].gridfuncs.y_n_gfs, sizeof(REAL) * Nxx_plus_2NGHOSTS_tot * NUM_EVOL_GFS););
+  } // END LOOP over grids
 
   // Step 3: Set up initial data.
   initial_data(&commondata, griddata_host, griddata_device);
 
   // Step 4: Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping.
   for (int grid = 0; grid < commondata.NUMGRIDS; grid++)
-    MoL_malloc_non_y_n_gfs(&commondata, &griddata_device[grid].params, &griddata_device[grid].gridfuncs);
+    MoL_malloc_intermediate_stage_gfs(&commondata, &griddata_device[grid].params, &griddata_device[grid].gridfuncs);
 
   // Step 5: MAIN SIMULATION LOOP
   while (commondata.time < commondata.t_final) { // Main loop to progress forward in time.

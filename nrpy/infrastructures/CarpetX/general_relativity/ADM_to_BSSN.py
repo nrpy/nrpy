@@ -17,7 +17,7 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.indexedexp as ixp
 import nrpy.infrastructures.CarpetX.simple_loop as lp
 import nrpy.params as par
-import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
+import nrpy.reference_metric as refmetric  # NRPy: Reference metric support
 from nrpy.equations.general_relativity.ADM_to_BSSN import ADM_to_BSSN
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.infrastructures.CarpetX.CarpetX_include_header import define_standard_includes

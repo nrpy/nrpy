@@ -1,5 +1,5 @@
 """
-Construct Makefile for superB C-code project, based on CFunctions registered in the c_function NRPy+ module.
+Construct Makefile for superB C-code project, based on CFunctions registered in the c_function NRPy module.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com

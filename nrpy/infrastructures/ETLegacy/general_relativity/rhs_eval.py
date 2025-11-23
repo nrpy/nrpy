@@ -24,7 +24,7 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.indexedexp as ixp
 import nrpy.infrastructures.ETLegacy.simple_loop as lp
 import nrpy.params as par
-import nrpy.reference_metric as refmetric  # NRPy+: Reference metric support
+import nrpy.reference_metric as refmetric  # NRPy: Reference metric support
 import nrpy.validate_expressions.validate_expressions as ve
 from nrpy.equations.general_relativity.BSSN_constraints import BSSN_constraints
 from nrpy.equations.general_relativity.BSSN_gauge_RHSs import BSSN_gauge_RHSs
@@ -437,21 +437,21 @@ if __name__ == "__main__":
     Coord = "Cartesian"
     LapseEvolOption = "OnePlusLog"
     ShiftEvolOption = "GammaDriving2ndOrder_Covariant"
-    for T4munu_enable in [True, False]:
-        for improvements_enable in [True, False]:
+    for enable_T4munu in [True, False]:
+        for enable_improvements in [True, False]:
             results_dict = register_CFunction_rhs_eval(
                 thorn_name="dummy_thorn_name",
                 CoordSystem=Coord,
                 enable_rfm_precompute=False,
-                enable_T4munu=T4munu_enable,
+                enable_T4munu=enable_T4munu,
                 enable_simd=False,
                 fd_order=4,  # unused for this validation.
                 LapseEvolutionOption=LapseEvolOption,
                 ShiftEvolutionOption=ShiftEvolOption,
                 enable_KreissOliger_dissipation=True,
-                enable_CAKO=improvements_enable,
-                enable_CAHD=improvements_enable,
-                enable_SSL=improvements_enable,
+                enable_CAKO=enable_improvements,
+                enable_CAHD=enable_improvements,
+                enable_SSL=enable_improvements,
                 validate_expressions=True,
                 return_validation_dict=True,
             )
@@ -460,6 +460,6 @@ if __name__ == "__main__":
                 os.getcwd(),
                 # File basename. If this is set to "trusted_module_test1", then
                 #   trusted results_dict will be stored in tests/trusted_module_test1.py
-                f"{os.path.splitext(os.path.basename(__file__))[0]}_{LapseEvolOption}_{ShiftEvolOption}_{Coord}_T4munu{T4munu_enable}_improvements{improvements_enable}",
+                f"{os.path.splitext(os.path.basename(__file__))[0]}_{LapseEvolOption}_{ShiftEvolOption}_{Coord}_T4munu{enable_T4munu}_improvements{enable_improvements}",
                 cast(Dict[str, Union[mpf, mpc]], results_dict),
             )

@@ -41,7 +41,6 @@ paper = args.paper
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
-
 # Code-generation-time parameters:
 project_name = "superB_blackhole_spectroscopy"
 CoordSystem = "SinhCylindrical"
@@ -89,7 +88,7 @@ fd_order = 8
 radiation_BC_fd_order = 4 if not paper else 8
 enable_intrinsics = True
 separate_Ricci_and_BSSN_RHS = True
-parallel_codegen_enable = True
+enable_parallel_codegen = True
 enable_fd_functions = True
 outer_bcs_type = "radiation"
 boundary_conditions_desc = "outgoing radiation"
@@ -122,7 +121,7 @@ project_dir = os.path.join("project", project_name)
 shutil.rmtree(project_dir, ignore_errors=True)
 
 # Set NRPy parameters that steer the code generation
-par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
+par.set_parval_from_str("enable_parallel_codegen", enable_parallel_codegen)
 par.set_parval_from_str("fd_order", fd_order)
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 
@@ -209,7 +208,7 @@ BHaH.general_relativity.BSSN.enforce_detgammabar_equals_detgammahat.register_CFu
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
-BHaH.general_relativity.BSSN.constraints.register_CFunction_constraints(
+BHaH.general_relativity.BSSN.constraints.register_CFunction_constraints_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
@@ -399,7 +398,6 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
     enable_rfm_precompute=enable_rfm_precompute,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
 )
-
 
 if enable_intrinsics:
     copy_files(

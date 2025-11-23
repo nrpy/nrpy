@@ -155,7 +155,7 @@ for (int dirn = 0; dirn < 3; dirn++) {{
     return return_str
 
 
-def generate_prefunc__apply_bcs_outerextrap_and_inner_only_specific_auxgfs() -> str:
+def generate_prefunc__apply_bcs_outerextrap_and_inner_only_specific_gfs() -> str:
     """
     Generate the prefunction string for apply_bcs_outerextrap_and_inner.
 
@@ -167,7 +167,7 @@ def generate_prefunc__apply_bcs_outerextrap_and_inner_only_specific_auxgfs() -> 
     # Header details for function that will launch the GPU kernel
     desc = "Apply BCs to pure boundary points"
     params = "const params_struct *restrict params, const bc_struct *restrict bcstruct, REAL *restrict gfs, const int num_gfs, const int *gfs_to_sync"
-    name = "apply_bcs_outerextrap_and_inner_only_specific_auxgfs"
+    name = "apply_bcs_outerextrap_and_inner_only_specific_gfs"
     cfunc_type = "static void"
     return_str = ""
     prefunc = ""
@@ -319,7 +319,7 @@ As derived in nrpytutorial's Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb,
 ###############################
 ## apply_bcs_outerextrap_and_inner(): Apply extrapolation outer boundary conditions.
 ##  Function is documented below in desc= and body=.
-def register_CFunction_apply_bcs_outerextrap_and_inner_specific_auxgfs() -> None:
+def register_CFunction_apply_bcs_outerextrap_and_inner_specific_gfs() -> None:
     """
     Register C function for filling boundary points with extrapolation and prescribed bcstruct for specific aux gridfunctions.
 
@@ -328,11 +328,11 @@ def register_CFunction_apply_bcs_outerextrap_and_inner_specific_auxgfs() -> None
     >>> import nrpy.c_function as cfc
     >>> import nrpy.params as par
     >>> supported_Parallelizations = ["openmp", "cuda"]
-    >>> name = "apply_bcs_outerextrap_and_inner_specific_auxgfs"
+    >>> name = "apply_bcs_outerextrap_and_inner_specific_gfs"
     >>> for parallelization in supported_Parallelizations:
     ...    par.set_parval_from_str("parallelization", parallelization)
     ...    c_function.CFunction_dict.clear()
-    ...    register_CFunction_apply_bcs_outerextrap_and_inner_specific_auxgfs()
+    ...    register_CFunction_apply_bcs_outerextrap_and_inner_specific_gfs()
     ...    generated_str = c_function.CFunction_dict[f'{name}'].full_function
     ...    validation_desc = f"{name}__{parallelization}"
     ...    validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
@@ -348,7 +348,7 @@ def register_CFunction_apply_bcs_outerextrap_and_inner_specific_auxgfs() -> None
 *  * f(x) = x. WOLOG suppose x0=0. Then f_{i0} = (-3dx) - 3(-2dx) + 3(-dx) = + dx(-3+6-3) = 0 <- CHECK!
 *  * f(x) = x^2. WOLOG suppose x0=0. Then f_{i0} = (-3dx)^2 - 3(-2dx)^2 + 3(-dx)^2 = + dx^2(9-12+3) = 0 <- CHECK!"""
     cfunc_type = "void"
-    name = "apply_bcs_outerextrap_and_inner_specific_auxgfs"
+    name = "apply_bcs_outerextrap_and_inner_specific_gfs"
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const bc_struct *restrict bcstruct, REAL *restrict gfs, const int num_gfs, const int *gfs_to_sync"
     body = r"""
   ////////////////////////////////////////////////////////
@@ -361,7 +361,7 @@ def register_CFunction_apply_bcs_outerextrap_and_inner_specific_auxgfs() -> None
   //              layer, we fill in +/- x0 faces first,
   //              then +/- x1 faces, finally +/- x2 faces,
   //              filling in the edges as we go.
-  apply_bcs_outerextrap_and_inner_only_specific_auxgfs__launcher(params, bcstruct, gfs, num_gfs, gfs_to_sync);
+  apply_bcs_outerextrap_and_inner_only_specific_gfs__launcher(params, bcstruct, gfs, num_gfs, gfs_to_sync);
 
   ///////////////////////////////////////////////////////
   // STEP 2 of 2: Apply BCs to inner boundary points.
@@ -371,9 +371,9 @@ def register_CFunction_apply_bcs_outerextrap_and_inner_specific_auxgfs() -> None
   //              that map to outer require that outer be
   //              populated first; hence this being
   //              STEP 2 OF 2.
-  apply_bcs_inner_only_specific_auxgfs(commondata, params, bcstruct, gfs, num_gfs, gfs_to_sync);
+  apply_bcs_inner_only_specific_gfs(commondata, params, bcstruct, gfs, num_gfs, gfs_to_sync);
 """
-    prefunc = generate_prefunc__apply_bcs_outerextrap_and_inner_only_specific_auxgfs()
+    prefunc = generate_prefunc__apply_bcs_outerextrap_and_inner_only_specific_gfs()
     c_function.register_CFunction(
         prefunc=prefunc,
         includes=includes,

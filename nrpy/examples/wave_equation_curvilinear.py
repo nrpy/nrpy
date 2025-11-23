@@ -22,16 +22,15 @@ parser = argparse.ArgumentParser(
     description="NRPyElliptic Solver for Conformally Flat BBH initial data"
 )
 parser.add_argument(
-    "--parallelization",
-    type=str,
-    help="Parallelization strategy to use (e.g. openmp, cuda).",
-    default="openmp",
-)
-parser.add_argument(
     "--floating_point_precision",
     type=str,
     help="Floating point precision (e.g. float, double).",
     default="double",
+)
+parser.add_argument(
+    "--cuda",
+    action="store_true",
+    help="Use CUDA parallelization.",
 )
 parser.add_argument(
     "--disable_intrinsics",
@@ -49,10 +48,11 @@ args = parser.parse_args()
 
 # Code-generation-time parameters:
 fp_type = args.floating_point_precision.lower()
-parallelization = args.parallelization.lower()
 enable_intrinsics = not args.disable_intrinsics
 enable_rfm_precompute = not args.disable_rfm_precompute
 
+# Default to openmp; override with cuda if --cuda is set
+parallelization = "cuda" if args.cuda else "openmp"
 if parallelization not in ["openmp", "cuda"]:
     raise ValueError(
         f"Invalid parallelization strategy: {parallelization}. "
@@ -64,9 +64,10 @@ par.set_parval_from_str("parallelization", parallelization)
 par.set_parval_from_str("fp_type", fp_type)
 
 # Code-generation-time parameters:
-project_name = "curviwavetoy"
+project_name = "wave_equation_curvilinear"
 WaveType = "SphericalGaussian"
 default_sigma = 3.0
+default_k0, default_k1, default_k2 = (1.0, 1.0, 1.0)
 grid_physical_size = 10.0
 t_final = 0.8 * grid_physical_size
 default_diagnostics_output_every = 0.5
@@ -105,7 +106,7 @@ MoL_method = "RK4"
 fd_order = 4
 radiation_BC_fd_order = 2
 enable_KreissOliger_dissipation = False
-parallel_codegen_enable = True
+enable_parallel_codegen = True
 boundary_conditions_desc = "outgoing radiation"
 
 project_dir = os.path.join("project", project_name)
@@ -113,7 +114,7 @@ project_dir = os.path.join("project", project_name)
 # First clean the project directory, if it exists.
 shutil.rmtree(project_dir, ignore_errors=True)
 
-par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
+par.set_parval_from_str("enable_parallel_codegen", enable_parallel_codegen)
 par.set_parval_from_str("fd_order", fd_order)
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
@@ -128,7 +129,12 @@ if parallelization == "cuda":
     BHaH.parallelization.cuda_utilities.register_CFunction_find_global_sum()
 
 BHaH.wave_equation.initial_data_exact_soln.register_CFunction_initial_data_exact(
-    OMP_collapse=OMP_collapse, WaveType=WaveType, default_sigma=default_sigma
+    OMP_collapse=OMP_collapse,
+    WaveType=WaveType,
+    default_sigma=default_sigma,
+    default_k0=default_k0,
+    default_k1=default_k1,
+    default_k2=default_k2,
 )
 BHaH.wave_equation.initial_data_exact_soln.register_CFunction_initial_data(
     enable_checkpointing=True,
@@ -152,23 +158,34 @@ for CoordSystem in set_of_CoordSystems:
     )
     BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
 
-BHaH.wave_equation.diagnostics.register_CFunction_diagnostics(
+# Diagnostics C code registration
+BHaH.diagnostics.diagnostics.register_all_diagnostics(
     set_of_CoordSystems=set_of_CoordSystems,
+    project_dir=project_dir,
     default_diagnostics_out_every=default_diagnostics_output_every,
-    grid_center_filename_tuple=("out0d-conv_factor%.2f.txt", "convergence_factor"),
-    axis_filename_tuple=(
-        "out1d-AXIS-conv_factor%.2f-t%08.2f.txt",
-        "convergence_factor, time",
-    ),
-    plane_filename_tuple=(
-        "out2d-PLANE-conv_factor%.2f-t%08.2f.txt",
-        "convergence_factor, time",
-    ),
-    out_quantities_dict="default",
+    enable_nearest_diagnostics=True,
+    enable_interp_diagnostics=False,
+    enable_volume_integration_diagnostics=False,
+    enable_free_auxevol=False,
 )
+BHaH.wave_equation.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
+    WaveType=WaveType,
+    default_k0=default_k0,
+    default_k1=default_k1,
+    default_k2=default_k2,
+    default_sigma=default_sigma,
+)
+BHaH.wave_equation.diagnostics_nearest.register_CFunction_diagnostics_nearest()
 
-if __name__ == "__main__" and parallel_codegen_enable:
+if __name__ == "__main__" and enable_parallel_codegen:
     pcg.do_parallel_codegen()
+
+#########################################################
+# STEP 3 (post parallel codegen): Generate header files,
+#         register remaining C functions and command-line
+#         parameters, set up boundary conditions, and
+#         create a Makefile for this project.
+#         Project is output to project/[project_name]/
 
 if enable_rfm_precompute:
     BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
@@ -200,12 +217,12 @@ BHaH.checkpointing.register_CFunctions(
 BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator()
 BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
-#########################################################
-# STEP 3: Generate header files, register C functions and
-#         command line parameters, set up boundary conditions,
-#         and create a Makefile for this project.
-#         Project is output to project/[project_name]/
 par.adjust_CodeParam_default("t_final", t_final)
+
+BHaH.diagnostics.diagnostic_gfs_h_create.diagnostics_gfs_h_create(
+    project_dir=project_dir,
+)
+
 BHaH.CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
 BHaH.CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
 BHaH.cmdline_input_and_parfiles.generate_default_parfile(
@@ -219,22 +236,10 @@ gpu_defines_filename = BHaH.BHaH_device_defines_h.output_device_headers(
 )
 BHaH.BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
-    enable_intrinsics=enable_intrinsics,
-    intrinsics_header_lst=(
-        ["cuda_intrinsics.h"] if parallelization == "cuda" else ["simd_intrinsics.h"]
-    ),
     enable_rfm_precompute=enable_rfm_precompute,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=enable_KreissOliger_dissipation,
     DOUBLE_means="double" if fp_type == "float" else "REAL",
     restrict_pointer_type="*" if parallelization == "cuda" else "*restrict",
-    supplemental_defines_dict=(
-        {
-            "C++/CUDA safe restrict": "#define restrict __restrict__",
-            "GPU Header": f'#include "{gpu_defines_filename}"',
-        }
-        if parallelization == "cuda"
-        else {}
-    ),
 )
 
 BHaH.main_c.register_CFunction_main_c(

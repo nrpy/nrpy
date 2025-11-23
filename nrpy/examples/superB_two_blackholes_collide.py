@@ -56,7 +56,7 @@ fd_order = 4
 radiation_BC_fd_order = 4
 enable_intrinsics = True
 separate_Ricci_and_BSSN_RHS = True
-parallel_codegen_enable = True
+enable_parallel_codegen = True
 enable_fd_functions = True
 enable_KreissOliger_dissipation = False
 enable_CAKO = True
@@ -96,7 +96,7 @@ project_dir = os.path.join("project", project_name)
 # First clean the project directory, if it exists.
 shutil.rmtree(project_dir, ignore_errors=True)
 
-par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
+par.set_parval_from_str("enable_parallel_codegen", enable_parallel_codegen)
 par.set_parval_from_str("fd_order", fd_order)
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 
@@ -154,7 +154,6 @@ if enable_BHaHAHA:
     )
     superB.interpolator3d_chare.output_interpolator3d_h_cpp_ci(project_dir=project_dir)
     superB.horizon_finder_chare.output_horizon_finder_h_cpp_ci(project_dir=project_dir)
-
 
 #########################################################
 # STEP 2: Declare core C functions & register each to
@@ -225,7 +224,7 @@ BHaH.general_relativity.BSSN.enforce_detgammabar_equals_detgammahat.register_CFu
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
-BHaH.general_relativity.BSSN.constraints.register_CFunction_constraints(
+BHaH.general_relativity.BSSN.constraints.register_CFunction_constraints_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
@@ -312,7 +311,6 @@ if enable_BHaHAHA:
         ],
     )
     par.adjust_CodeParam_default("bah_verbosity_level", 0)
-
 
 BHaH.CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
 BHaH.CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()

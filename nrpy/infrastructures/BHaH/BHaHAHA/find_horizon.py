@@ -55,12 +55,10 @@ static void free_all_but_external_input_gfs(commondata_struct *restrict commonda
     free(griddata[grid].bcstruct.pure_outer_bc_array[ng]);
   } // END LOOP: freeing pure outer boundary condition arrays
 
-  // Free grid functions allocated by the Method of Lines.
-  bah_MoL_free_memory_y_n_gfs(&griddata[grid].gridfuncs);
-  {
-    const bool free_auxevol_gfs_if_exist = true;
-    bah_MoL_free_memory_non_y_n_gfs(&griddata[grid].gridfuncs, free_auxevol_gfs_if_exist);
-  }
+  // Free y_n_gfs, intermediate-stage gfs, and auxevol_gfs, needed by MoL.
+  BHAH_FREE(griddata[grid].gridfuncs.y_n_gfs);
+  bah_MoL_free_intermediate_stage_gfs(&griddata[grid].gridfuncs);
+  BHAH_FREE(griddata[grid].gridfuncs.auxevol_gfs);
 
   // Free coordinate arrays for each dimension.
   for (int i = 0; i < 3; i++) {
@@ -180,15 +178,17 @@ to identify the apparent horizon with progressively refined grid resolutions.
     const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
     const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
     const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
+    const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
 
     {
       const int grid = 0;
 
       // Step 3.a: Allocate storage for initial grid functions (y_n_gfs).
-      bah_MoL_malloc_y_n_gfs(&commondata, params, &griddata[grid].gridfuncs);
+      BHAH_MALLOC(griddata[grid].gridfuncs.y_n_gfs, NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot * sizeof(REAL));
 
       // Step 3.b: Allocate storage for additional grid functions required for time-stepping.
-      bah_MoL_malloc_non_y_n_gfs(&commondata, params, &griddata[grid].gridfuncs);
+      bah_MoL_malloc_intermediate_stage_gfs(&commondata, params, &griddata[grid].gridfuncs);
+      BHAH_MALLOC(griddata[grid].gridfuncs.auxevol_gfs, NUM_AUXEVOL_GFS * Nxx_plus_2NGHOSTS_tot * sizeof(REAL));
 
       // Step 3.c: Initialize commondata.h_p = NULL, so that if Step 5.a (interp 1D) fails,
       //   it doesn't trigger a double free() of h_p.

@@ -209,6 +209,12 @@ typedef struct {
   REAL spin_a_z_from_xz_over_xy_prop_circumfs;
   REAL spin_a_z_from_yz_over_xy_prop_circumfs;
 
+  //==========================
+  // Used in general circumference ratio calculation
+  REAL BHAHAHA_SPIN_AXIS_X, BHAHAHA_SPIN_AXIS_Y, BHAHAHA_SPIN_AXIS_Z;
+  REAL BHAHAHA_CIRC_GENERAL_POLAR, BHAHAHA_CIRC_GENERAL_EQUATOR;
+  REAL BHAHAHA_CIRC_GENERAL_SPIN;
+
   // Benchmarking: Counts number of points where Theta is evaluated.
   long Theta_eval_points_counter;
   //==========================

@@ -63,7 +63,7 @@ MoL_method = "RK4"
 fd_order = 10
 radiation_BC_fd_order = 6
 enable_simd = True
-parallel_codegen_enable = True
+enable_parallel_codegen = True
 outer_bcs_type = "radiation"
 boundary_conditions_desc = "outgoing radiation"
 # fmt: off
@@ -128,7 +128,7 @@ project_dir = os.path.join("project", project_name)
 # First clean the project directory, if it exists.
 shutil.rmtree(project_dir, ignore_errors=True)
 
-par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
+par.set_parval_from_str("enable_parallel_codegen", enable_parallel_codegen)
 par.set_parval_from_str("fd_order", fd_order)
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 par.adjust_CodeParam_default("t_final", t_final)
@@ -188,7 +188,6 @@ BHaH.nrpyelliptic.rhs_eval.register_CFunction_rhs_eval(
 BHaH.nrpyelliptic.residual_H_compute_all_points.register_CFunction_residual_H_compute_all_points(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
-    enable_intrinsics=enable_simd,
     OMP_collapse=OMP_collapse,
 )
 
@@ -200,7 +199,7 @@ superB.nrpyelliptic.log10_L2norm_gf.register_CFunction_log10_L2norm_gf(
 # Register function to check for stop conditions
 BHaH.nrpyelliptic.stop_conditions_check.register_CFunction_stop_conditions_check()
 
-if __name__ == "__main__" and parallel_codegen_enable:
+if __name__ == "__main__" and enable_parallel_codegen:
     pcg.do_parallel_codegen()
 
 superB.chare_communication_maps.chare_comm_register_C_functions(
