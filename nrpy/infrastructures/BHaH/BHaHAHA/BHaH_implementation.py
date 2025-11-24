@@ -636,19 +636,7 @@ and result updates for multiple horizons.
     )
 
     body = r"""
-  // STEP 1: Check if horizon find is scheduled for the current iteration.
-  if (commondata->diagnostics_output_every <= 0 || (commondata->nn % (int)(commondata->diagnostics_output_every / commondata->dt + 0.5)) != 0) {
-    int bah_find_every = 1;                                      // Placeholder: find every iteration. This should be a commondata param.
-    if (commondata->diagnostics_output_every > commondata->dt) { // A basic way to get find_every from time interval
-      bah_find_every = (int)(commondata->diagnostics_output_every / commondata->dt + 0.5);
-      if (bah_find_every == 0)
-        bah_find_every = 1;
-    }
-    if (bah_find_every <= 0 || (commondata->nn % bah_find_every) != 0) {
-      return; // END IF: not scheduled this iteration
-    }
-  } // END IF: diagnostics_output_every > 0
-
+  // STEP 1: Check if horizon find is enabled; i.e., if max_num_horizons > 0.
   const int max_num_horizons = commondata->bah_max_num_horizons;
   if (max_num_horizons <= 0) {
     return; // END IF: no horizons
