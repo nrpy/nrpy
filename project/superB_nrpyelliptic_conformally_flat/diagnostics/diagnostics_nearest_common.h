@@ -30,6 +30,9 @@ extern "C" {
 
 //NEW
 #define DIAG_TIME_COMMENT_FMT "# [time] = %.15e\n"
+#define DIAG_HEADER_PREFIX_FMT   "# %s"
+#define DIAG_HEADER_GF_FMT       " %s(%d)"
+
 static inline void diag_write_time_comment(FILE *file_ptr, const REAL time) {
   fprintf(file_ptr, DIAG_TIME_COMMENT_FMT, time);
 }
@@ -53,18 +56,102 @@ static inline int diag_time_comment_size_bytes(const REAL time) {
  * @param[in] diagnostic_gf_names   Array of human-readable diagnostic gridfunction names.
  * @return void
  */
-static inline void diag_write_header(FILE *file_ptr, const char *coord_names, const int NUM_GFS, const int which_gfs[],
-                                     const char **diagnostic_gf_names) {
+//~ static inline void diag_write_header(FILE *file_ptr, const char *coord_names, const int NUM_GFS, const int which_gfs[],
+                                     //~ const char **diagnostic_gf_names) {
+  //~ int num_spaces_in_coord_names = 0;
+  //~ fprintf(file_ptr, "# %s", coord_names); // header prefix with coordinates
+  //~ // Count spaces in coord_names to determine the starting column index for gridfunctions.
+  //~ for (const char *cp = coord_names; *cp; ++cp)
+    //~ num_spaces_in_coord_names += (*cp == ' ');
+  //~ for (int i0 = 0; i0 < NUM_GFS; i0++) {
+    //~ fprintf(file_ptr, " %s(%d)", diagnostic_gf_names[which_gfs[i0]], i0 + (num_spaces_in_coord_names + 2));
+  //~ } // END LOOP over gf columns
+  //~ fprintf(file_ptr, "\n");
+//~ } // END FUNCTION diag_write_header
+//NEW
+/* existing header writer, just switched to macros (optional but keeps them in sync) */
+static inline void diag_write_header(FILE *file_ptr, const char *coord_names, const int NUM_GFS,
+                                     const int which_gfs[], const char **diagnostic_gf_names) {
   int num_spaces_in_coord_names = 0;
-  fprintf(file_ptr, "# %s", coord_names); // header prefix with coordinates
-  // Count spaces in coord_names to determine the starting column index for gridfunctions.
+  fprintf(file_ptr, DIAG_HEADER_PREFIX_FMT, coord_names); // "# %s"
   for (const char *cp = coord_names; *cp; ++cp)
     num_spaces_in_coord_names += (*cp == ' ');
   for (int i0 = 0; i0 < NUM_GFS; i0++) {
-    fprintf(file_ptr, " %s(%d)", diagnostic_gf_names[which_gfs[i0]], i0 + (num_spaces_in_coord_names + 2));
-  } // END LOOP over gf columns
+    fprintf(file_ptr, DIAG_HEADER_GF_FMT,
+            diagnostic_gf_names[which_gfs[i0]],
+            i0 + (num_spaces_in_coord_names + 2));
+  }
   fprintf(file_ptr, "\n");
-} // END FUNCTION diag_write_header
+}
+
+
+
+
+//NEW
+/* NEW: size in bytes for the header line, including '\n' */
+static inline int diag_header_size_bytes(const char *coord_names, const int NUM_GFS,
+                                         const int which_gfs[], const char **diagnostic_gf_names) {
+  int num_spaces_in_coord_names = 0;
+  for (const char *cp = coord_names; *cp; ++cp)
+    num_spaces_in_coord_names += (*cp == ' ');
+
+  int n = 0;
+
+  /* "# %s" part */
+  int tmp = snprintf(NULL, 0, DIAG_HEADER_PREFIX_FMT, coord_names);
+  if (tmp < 0) return 0;
+  n += tmp;
+
+  /* each " %s(col)" part */
+  for (int i0 = 0; i0 < NUM_GFS; i0++) {
+    const char *name = diagnostic_gf_names[which_gfs[i0]];
+    const int col_index = i0 + (num_spaces_in_coord_names + 2);
+    tmp = snprintf(NULL, 0, DIAG_HEADER_GF_FMT, name, col_index);
+    if (tmp < 0) return 0;
+    n += tmp;
+  }
+
+  /* final '\n' */
+  n += 1;
+
+  return n;
+}
+
+
+
+//NEW
+// Minimal CKIO helper: build "# [time] = ..." + header line into buf.
+// Returns number of bytes written.
+static inline int diag_ckio_build_time_comment_and_header(
+    char *buf, size_t buf_sz,
+    REAL time,
+    const char *coord_names,
+    int NUM_GFS,
+    const int which_gfs[],
+    const char **diagnostic_gf_names) {
+
+  int num_spaces_in_coord_names = 0;
+  for (const char *cp = coord_names; *cp; ++cp)
+    num_spaces_in_coord_names += (*cp == ' ');
+
+  int n = 0;
+
+  n += snprintf(buf + n, buf_sz - (size_t)n, DIAG_TIME_COMMENT_FMT, time);
+  n += snprintf(buf + n, buf_sz - (size_t)n, DIAG_HEADER_PREFIX_FMT, coord_names);
+
+  for (int i0 = 0; i0 < NUM_GFS; i0++) {
+    const char *name = diagnostic_gf_names[which_gfs[i0]];
+    const int col_index = i0 + (num_spaces_in_coord_names + 2);
+    n += snprintf(buf + n, buf_sz - (size_t)n,
+                  DIAG_HEADER_GF_FMT, name, col_index);
+  }
+
+  n += snprintf(buf + n, buf_sz - (size_t)n, "\n");
+  return n;
+}
+
+
+
 
 /**
  * @brief Write a single row of numeric data to a diagnostic output file.

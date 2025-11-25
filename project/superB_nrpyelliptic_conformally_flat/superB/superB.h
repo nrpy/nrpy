@@ -157,6 +157,15 @@ typedef struct __diagnostic_struct__ {
   int *locali1_diagnostic_2d_yz_pt;
   int *locali2_diagnostic_2d_yz_pt;
   int *offset_diagnostic_2d_yz_pt;
+
+  // NEW
+  int sizeinbytes_per_pt_1d;
+  int sizeinbytes_per_pt_2d;
+  int totsizeinbytes_1d_y;
+  int totsizeinbytes_1d_z;
+  int totsizeinbytes_2d_xy;
+  int totsizeinbytes_2d_yz;
+
   char filename_1d_y[256];
   char filename_1d_z[256];
   char filename_2d_xy[256];

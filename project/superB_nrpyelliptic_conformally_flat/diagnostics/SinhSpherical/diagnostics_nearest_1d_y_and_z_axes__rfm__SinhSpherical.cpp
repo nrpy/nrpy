@@ -93,7 +93,9 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
       diagnosticstruct->num_output_quantities = NUM_GFS_NEAREST;
 
       // compute offset in bytes for first field for each diagnostic pt
-      int sizeinbytes = 23 * (diagnosticstruct->num_output_quantities + 1);
+      //~ int sizeinbytes = 23 * (diagnosticstruct->num_output_quantities + 1);
+      diagnosticstruct->sizeinbytes_per_pt_1d = 23 * (diagnosticstruct->num_output_quantities + 1);
+      int time_bytes = diag_time_comment_size_bytes(commondata->time);
 
       // Interior counts
       const int N0int = params->Nxx_plus_2NGHOSTS0 - 2 * NGHOSTS;
@@ -128,6 +130,7 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
       // ----------------------
       // Build y-axis samples
       // ----------------------
+      int header_size_bytes_y = time_bytes + diag_header_size_bytes("y",  NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
       int count_y = 0;
       for (int i0 = NGHOSTS; i0 < params->Nxx_plus_2NGHOSTS0 - NGHOSTS; i0++) {
         const int i1 = i1_mid;
@@ -192,15 +195,22 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
           diagnosticstruct->locali0_diagnostic_1d_y_pt[which_diagnostics_chare] = MAP_GLOBAL_TO_LOCAL_IDX0(chare_index[0], i0, Nxx0chare);
           diagnosticstruct->locali1_diagnostic_1d_y_pt[which_diagnostics_chare] = MAP_GLOBAL_TO_LOCAL_IDX1(chare_index[1], i1, Nxx1chare);
           diagnosticstruct->locali2_diagnostic_1d_y_pt[which_diagnostics_chare] = MAP_GLOBAL_TO_LOCAL_IDX2(chare_index[2], i2, Nxx2chare);
-          diagnosticstruct->offset_diagnostic_1d_y_pt[which_diagnostics_chare] = which_diagnostic_global * sizeinbytes;
+          diagnosticstruct->offset_diagnostic_1d_y_pt[which_diagnostics_chare] = header_size_bytes_y + (which_diagnostic_global * diagnosticstruct->sizeinbytes_per_pt_1d);
           which_diagnostics_chare++;
         }
         which_diagnostic_global++;
       }
 
+
+
+      diagnosticstruct->totsizeinbytes_1d_y = header_size_bytes_y + (diagnosticstruct->sizeinbytes_per_pt_1d * diagnosticstruct->tot_num_diagnostic_1d_y_pts);
+
+
+
       // ----------------------
       // Build z-axis samples
       // ----------------------
+      int header_size_bytes_z = time_bytes + diag_header_size_bytes("z",  NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
       int count_z = 0;
       for (int i0 = NGHOSTS; i0 < params->Nxx_plus_2NGHOSTS0 - NGHOSTS; i0++) {
         const int i1 = i1_min;
@@ -266,11 +276,16 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
           diagnosticstruct->locali0_diagnostic_1d_z_pt[which_diagnostics_chare] = MAP_GLOBAL_TO_LOCAL_IDX0(chare_index[0], i0, Nxx0chare);
           diagnosticstruct->locali1_diagnostic_1d_z_pt[which_diagnostics_chare] = MAP_GLOBAL_TO_LOCAL_IDX1(chare_index[1], i1, Nxx1chare);
           diagnosticstruct->locali2_diagnostic_1d_z_pt[which_diagnostics_chare] = MAP_GLOBAL_TO_LOCAL_IDX2(chare_index[2], i2, Nxx2chare);
-          diagnosticstruct->offset_diagnostic_1d_z_pt[which_diagnostics_chare] = which_diagnostic_global * sizeinbytes;
+          //~ diagnosticstruct->offset_diagnostic_1d_z_pt[which_diagnostics_chare] = which_diagnostic_global * diagnosticstruct->sizeinbytes_per_pt_1d;
+          diagnosticstruct->offset_diagnostic_1d_z_pt[which_diagnostics_chare] = header_size_bytes_z + (which_diagnostic_global * diagnosticstruct->sizeinbytes_per_pt_1d);
           which_diagnostics_chare++;
         }
         which_diagnostic_global++;
       }
+
+
+      diagnosticstruct->totsizeinbytes_1d_z = header_size_bytes_z + (diagnosticstruct->sizeinbytes_per_pt_1d * diagnosticstruct->tot_num_diagnostic_1d_z_pts);
+
 
       // Cleanup
       free(data_points_y);
@@ -280,6 +295,21 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
   }
 
     case DIAGNOSTICS_WRITE_Y: {
+
+      // only chare (0,0,0) writes header
+      if (chare_index[0] == 0 && chare_index[1] == 0 && chare_index[2] == 0) {
+        int header_bytes = diag_time_comment_size_bytes(commondata->time)
+                 + diag_header_size_bytes("y", NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
+
+        char *hdr = (char *)malloc((size_t)header_bytes + 1);
+        int written = diag_ckio_build_time_comment_and_header(
+            hdr, (size_t)header_bytes + 1,
+            commondata->time, "y",
+            NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
+
+        Ck::IO::write(token, hdr, header_bytes, 0);
+        free(hdr);
+      }
 
 
       // Source pointer for this grid
@@ -309,7 +339,8 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
         REAL xOrig[3] = {xx_chare[0][i0], xx_chare[1][i1], xx_chare[2][i2]};
         xx_to_Cart(params_chare, xOrig, xCart);
 
-        int sizeinbytes = 23 * (diagnosticstruct->num_output_quantities + 1);
+        //~ int sizeinbytes = 23 * (diagnosticstruct->num_output_quantities + 1);
+        int sizeinbytes = diagnosticstruct->sizeinbytes_per_pt_1d;
         char out[sizeinbytes + 1];
         row[0] = xCart[1];
         for (int gf_i = 0; gf_i < NUM_GFS_NEAREST; ++gf_i) {
@@ -334,6 +365,23 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
     }
 
     case DIAGNOSTICS_WRITE_Z: {
+
+
+      // only chare (0,0,0) writes header
+      if (chare_index[0] == 0 && chare_index[1] == 0 && chare_index[2] == 0) {
+        int header_bytes = diag_time_comment_size_bytes(commondata->time)
+                 + diag_header_size_bytes("z", NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
+
+        char *hdr = (char *)malloc((size_t)header_bytes + 1);
+        int written = diag_ckio_build_time_comment_and_header(
+            hdr, (size_t)header_bytes + 1,
+            commondata->time, "z",
+            NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
+
+        Ck::IO::write(token, hdr, header_bytes, 0);
+        free(hdr);
+      }
+
 
       // Source pointer for this grid
       const REAL *restrict src = gridfuncs_diags[grid];
@@ -364,7 +412,8 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
         xx_to_Cart(params_chare, xOrig, xCart);
 
 
-        int sizeinbytes = 23 * (diagnosticstruct->num_output_quantities + 1);
+        //~ int sizeinbytes = 23 * (diagnosticstruct->num_output_quantities + 1);
+        int sizeinbytes = diagnosticstruct->sizeinbytes_per_pt_1d;
         char out[sizeinbytes + 1];
         row[0] = xCart[2];
         for (int gf_i = 0; gf_i < NUM_GFS_NEAREST; ++gf_i) {

@@ -218,9 +218,12 @@ module timestepping {
                 f_1d_y = m_1d_y->file;
                 CkCallback sessionStart_1d_y(CkIndex_Timestepping::start_write_1d_y(0), thisProxy);
                 CkCallback sessionEnd_1d_y(CkIndex_Timestepping::test_written_1d_y(0), thisProxy);
-                int num_fields = griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 1;
-                int tot_num_diagnostic_pts = griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_1d_y_pts;
-                int totsizeinbytes = 23 * num_fields  * tot_num_diagnostic_pts;
+
+                //~ int num_fields = griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 1;
+                //~ int tot_num_diagnostic_pts = griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_1d_y_pts;
+                //~ int totsizeinbytes = 23 * num_fields  * tot_num_diagnostic_pts;
+
+                int totsizeinbytes = griddata_chare[which_grid_diagnostics].diagnosticstruct.totsizeinbytes_1d_y;
 
 
 
@@ -263,9 +266,11 @@ module timestepping {
                 f_1d_z = m_1d_z->file;
                 CkCallback sessionStart_1d_z(CkIndex_Timestepping::start_write_1d_z(0), thisProxy);
                 CkCallback sessionEnd_1d_z(CkIndex_Timestepping::test_written_1d_z(0), thisProxy);
-                int num_fields = griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 1;
-                int tot_num_diagnostic_pts = griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_1d_z_pts;
-                int totsizeinbytes = 23 * num_fields  * tot_num_diagnostic_pts;
+                //~ int num_fields = griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 1;
+                //~ int tot_num_diagnostic_pts = griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_1d_z_pts;
+                //~ int totsizeinbytes = 23 * num_fields  * tot_num_diagnostic_pts;
+
+                int totsizeinbytes = griddata_chare[which_grid_diagnostics].diagnosticstruct.totsizeinbytes_1d_z;
 
 
 
