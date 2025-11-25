@@ -7,7 +7,7 @@ Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
 """
 
 import os
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 
 class PyFunction:
@@ -252,6 +252,7 @@ class PyFunction:
 
 
 PyFunction_dict: Dict[str, PyFunction] = {}
+
 
 def register_PyFunction(
     subdirectory: str = os.path.join("."),
