@@ -28,7 +28,7 @@ outer_bc_type = "radiation"        # (char[50])
 ###########################
 ###########################
 ### Module: nrpy.infrastructures.BHaH.diagnostics.diagnostics
-diagnostics_output_every = 100     # (REAL)
+diagnostics_output_every = 0.08     # (REAL)
 ###########################
 ###########################
 ### Module: nrpy.infrastructures.BHaH.diagnostics.progress_indicator
@@ -41,7 +41,7 @@ MINIMUM_GLOBAL_WAVESPEED = 0.7     # (REAL)
 ###########################
 ### Module: nrpy.infrastructures.BHaH.nrpyelliptic.stop_conditions_check
 log10_current_residual = 1.0       # (REAL)
-log10_residual_tolerance = -15.8   # (REAL)
+log10_residual_tolerance = -12.2   # (REAL)
 nn_max = 10000                     # (int)
 stop_relaxation = False            # (bool)
 ###########################
@@ -56,6 +56,6 @@ t_final = 0.1                # (REAL)
 ###########################
 ###########################
 ### Module: nrpy.infrastructures.superB.main_chare
-Nchare0 = 1                       # (int)
-Nchare1 = 1                        # (int)
+Nchare0 = 2                       # (int)
+Nchare1 = 2                        # (int)
 Nchare2 = 1                        # (int)

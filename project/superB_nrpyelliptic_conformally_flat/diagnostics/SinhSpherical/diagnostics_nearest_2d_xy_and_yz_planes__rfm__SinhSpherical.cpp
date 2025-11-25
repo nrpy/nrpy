@@ -71,6 +71,9 @@ void diagnostics_nearest_2d_xy_and_yz_planes__rfm__SinhSpherical(commondata_stru
 
       diagnosticstruct->num_output_quantities = NUM_GFS_NEAREST;
 
+      // compute offset in bytes for first field for each diagnostic pt
+      int sizeinbytes = 23 * (diagnosticstruct->num_output_quantities + 2);
+
       // Interior grid counts and loop bounds
       MAYBE_UNUSED const int N0int = params->Nxx_plus_2NGHOSTS0 - 2 * NGHOSTS;
       MAYBE_UNUSED const int N1int = params->Nxx_plus_2NGHOSTS1 - 2 * NGHOSTS;
@@ -109,9 +112,7 @@ void diagnostics_nearest_2d_xy_and_yz_planes__rfm__SinhSpherical(commondata_stru
         diagnosticstruct->locali2_diagnostic_2d_xy_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
         diagnosticstruct->localidx3_diagnostic_2d_xy_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
         diagnosticstruct->offset_diagnostic_2d_xy_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
-        // compute offset in bytes for first field for each diagnostic pt
-        //~ int sizeinbytes = 24 * (diagnosticstruct->num_output_quantities + 2);
-        int sizeinbytes = 23 + (24 * ((diagnosticstruct->num_output_quantities + 2) - 1));
+
 
 
 
@@ -160,10 +161,6 @@ void diagnostics_nearest_2d_xy_and_yz_planes__rfm__SinhSpherical(commondata_stru
         diagnosticstruct->locali2_diagnostic_2d_yz_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
         diagnosticstruct->localidx3_diagnostic_2d_yz_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
         diagnosticstruct->offset_diagnostic_2d_yz_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
-        // compute offset in bytes for first field for each diagnostic pt
-        //~ int sizeinbytes = 24 * (diagnosticstruct->num_output_quantities + 2);
-        int sizeinbytes = 23 + (24 * ((diagnosticstruct->num_output_quantities + 2) - 1));
-
 
 
         int which_diagnostics_chare = 0;
@@ -217,10 +214,13 @@ void diagnostics_nearest_2d_xy_and_yz_planes__rfm__SinhSpherical(commondata_stru
         const int i1 = i1_diagnostic_pt[which_pt];
         const int i2 = i2_diagnostic_pt[which_pt];
         REAL xCart[3];
-        REAL xOrig[3] = {xx[0][i0], xx[1][i1], xx[2][i2]};
-        xx_to_Cart(params, xOrig, xCart);
-        //~ int sizeinbytes = 24 * (diagnosticstruct->num_output_quantities + 2);
-        int sizeinbytes = 23 + (24 * ((diagnosticstruct->num_output_quantities + 2) - 1));
+
+        //~ REAL xOrig[3] = {xx[0][i0], xx[1][i1], xx[2][i2]};
+        //~ xx_to_Cart(params, xOrig, xCart);
+        REAL xOrig[3] = {xx_chare[0][i0], xx_chare[1][i1], xx_chare[2][i2]};
+        xx_to_Cart(params_chare, xOrig, xCart);
+
+        int sizeinbytes = 23 * (diagnosticstruct->num_output_quantities + 2);
         char out[sizeinbytes + 1];
         row[0] = xCart[0];
         row[1] = xCart[1];
@@ -234,7 +234,6 @@ void diagnostics_nearest_2d_xy_and_yz_planes__rfm__SinhSpherical(commondata_stru
         for (int col = 1; col < NUM_COLS; col++) {
           n += sprintf(out + n, " % .15e", row[col]);
         }
-        //~ out[n++] = '\n';
         out[sizeinbytes - 1] = '\n';
         Ck::IO::write(token, out, sizeinbytes, offsetpt_firstfield[which_pt]);
       }
@@ -268,10 +267,13 @@ void diagnostics_nearest_2d_xy_and_yz_planes__rfm__SinhSpherical(commondata_stru
         const int i1 = i1_diagnostic_pt[which_pt];
         const int i2 = i2_diagnostic_pt[which_pt];
         REAL xCart[3];
-        REAL xOrig[3] = {xx[0][i0], xx[1][i1], xx[2][i2]};
-        xx_to_Cart(params, xOrig, xCart);
-        //~ int sizeinbytes = 24 * (diagnosticstruct->num_output_quantities + 2);
-        int sizeinbytes = 23 + (24 * ((diagnosticstruct->num_output_quantities + 2) - 1));
+        //~ REAL xOrig[3] = {xx[0][i0], xx[1][i1], xx[2][i2]};
+        //~ xx_to_Cart(params, xOrig, xCart);
+        REAL xOrig[3] = {xx_chare[0][i0], xx_chare[1][i1], xx_chare[2][i2]};
+        xx_to_Cart(params_chare, xOrig, xCart);
+
+
+        int sizeinbytes = 23 * (diagnosticstruct->num_output_quantities + 2);
         char out[sizeinbytes + 1];
         row[0] = xCart[0];
         row[1] = xCart[1];
@@ -285,7 +287,6 @@ void diagnostics_nearest_2d_xy_and_yz_planes__rfm__SinhSpherical(commondata_stru
         for (int col = 1; col < NUM_COLS; col++) {
           n += sprintf(out + n, " % .15e", row[col]);
         }
-        //~ out[n++] = '\n';
         out[sizeinbytes - 1] = '\n';
         Ck::IO::write(token, out, sizeinbytes, offsetpt_firstfield[which_pt]);
       }

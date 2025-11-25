@@ -13,17 +13,32 @@
 extern "C" {
 #endif
 
-/**
- * @brief Write the simulation time as a header comment.
- *
- * Prints a single line:
- *   # [time] = <time>
- *
- * @param[in] file_ptr  File pointer to write to.
- * @param[in] time      Simulation time to print.
- * @return void
- */
-static inline void diag_write_time_comment(FILE *file_ptr, const REAL time) { fprintf(file_ptr, "# [time] = %.15e\n", time); }
+//OLD
+//~ /**
+ //~ * @brief Write the simulation time as a header comment.
+ //~ *
+ //~ * Prints a single line:
+ //~ *   # [time] = <time>
+ //~ *
+ //~ * @param[in] file_ptr  File pointer to write to.
+ //~ * @param[in] time      Simulation time to print.
+ //~ * @return void
+ //~ */
+//~ static inline void diag_write_time_comment(FILE *file_ptr, const REAL time) { fprintf(file_ptr, "# [time] = %.15e\n", time); }
+
+
+
+//NEW
+#define DIAG_TIME_COMMENT_FMT "# [time] = %.15e\n"
+static inline void diag_write_time_comment(FILE *file_ptr, const REAL time) {
+  fprintf(file_ptr, DIAG_TIME_COMMENT_FMT, time);
+}
+// Return the number of bytes written by diag_write_time_comment for this time
+static inline int diag_time_comment_size_bytes(const REAL time) {
+  int n = snprintf(NULL, 0, DIAG_TIME_COMMENT_FMT, time);
+  return (n < 0) ? 0 : n;
+}
+
 
 /**
  * @brief Write a standardized header line to a diagnostic output file.

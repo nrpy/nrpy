@@ -117,9 +117,16 @@ module timestepping {
         serial { time_start = commondata.time; }
 
         serial {
-          const int n_step = commondata.nn;
-          const int outevery = commondata.diagnostics_output_every;
-          write_diagnostics_this_step = n_step % outevery == 0;
+          //OLD
+          //~ const int n_step = commondata.nn;
+          //~ const int outevery = commondata.diagnostics_output_every;
+          //~ write_diagnostics_this_step = n_step % outevery == 0;
+
+          //NEW
+          const REAL currtime = commondata.time, currdt = commondata.dt, outevery = commondata.diagnostics_output_every;
+          write_diagnostics_this_step = fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt;
+
+
         }
 
 
@@ -206,19 +213,25 @@ module timestepping {
             // 1d y
             when ready_1d_y(Ck::IO::FileReadyMsg * m_1d_y) {
               serial {
+
+
                 f_1d_y = m_1d_y->file;
                 CkCallback sessionStart_1d_y(CkIndex_Timestepping::start_write_1d_y(0), thisProxy);
                 CkCallback sessionEnd_1d_y(CkIndex_Timestepping::test_written_1d_y(0), thisProxy);
                 int num_fields = griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 1;
                 int tot_num_diagnostic_pts = griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_1d_y_pts;
-                //~ int totsizeinbytes = (23 + (24 * (num_fields - 1))) * tot_num_diagnostic_pts;
                 int totsizeinbytes = 23 * num_fields  * tot_num_diagnostic_pts;
+
+
+
                 Ck::IO::startSession(f_1d_y, totsizeinbytes, 0, sessionStart_1d_y, sessionEnd_1d_y);
                 delete m_1d_y;
               }
             }
             when start_write_1d_y(Ck::IO::SessionReadyMsg * m_1d_y) {
               serial {
+
+
                 thisProxy.diagnostics_ckio(m_1d_y->session, DIAGNOSTICS_WRITE_Y);
                 delete m_1d_y;
               }
@@ -226,7 +239,6 @@ module timestepping {
             when test_written_1d_y(CkReductionMsg * m_1d_y) {
               serial {
 
-                printf("when start_write_1d_y(Ck::IO::SessionReadyMsg * m_1d_y) {\n");
 
                 delete m_1d_y;
                 CkCallback cb_1d_y(CkIndex_Timestepping::closed_1d_y(0), thisProxy);
@@ -235,29 +247,37 @@ module timestepping {
               }
             }
             when closed_1d_y(CkReductionMsg * m_1d_y) {
-              serial { delete m_1d_y; }
+              serial {
+
+
+                delete m_1d_y;
+              }
             }
 
-            // 1d z
+
             when ready_1d_z(Ck::IO::FileReadyMsg * m_1d_z) {
               serial {
 
 
-                printf("when ready_1d_z(Ck::IO::FileReadyMsg * m_1d_z) {\n");
 
                 f_1d_z = m_1d_z->file;
                 CkCallback sessionStart_1d_z(CkIndex_Timestepping::start_write_1d_z(0), thisProxy);
                 CkCallback sessionEnd_1d_z(CkIndex_Timestepping::test_written_1d_z(0), thisProxy);
                 int num_fields = griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 1;
                 int tot_num_diagnostic_pts = griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_1d_z_pts;
-                //~ int totsizeinbytes = (23 + (24 * (num_fields - 1))) * tot_num_diagnostic_pts;
                 int totsizeinbytes = 23 * num_fields  * tot_num_diagnostic_pts;
+
+
+
+
                 Ck::IO::startSession(f_1d_z, totsizeinbytes, 0, sessionStart_1d_z, sessionEnd_1d_z);
                 delete m_1d_z;
               }
             }
             when start_write_1d_z(Ck::IO::SessionReadyMsg * m_1d_z) {
               serial {
+
+
                 thisProxy.diagnostics_ckio(m_1d_z->session, DIAGNOSTICS_WRITE_Z);
                 delete m_1d_z;
               }
@@ -265,7 +285,6 @@ module timestepping {
             when test_written_1d_z(CkReductionMsg * m_1d_z) {
               serial {
 
-                printf("when test_written_1d_z(CkReductionMsg * m_1d_z)  {\n");
 
 
                 delete m_1d_z;
@@ -275,7 +294,12 @@ module timestepping {
               }
             }
             when closed_1d_z(CkReductionMsg * m_1d_z) {
-              serial { delete m_1d_z; }
+              serial {
+
+
+                delete m_1d_z;
+
+                }
             }
 
             // 2d xy
@@ -286,7 +310,9 @@ module timestepping {
                 CkCallback sessionEnd_2d_xy(CkIndex_Timestepping::test_written_2d_xy(0), thisProxy);
                 int num_fields = griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 2;
                 int tot_num_diagnostic_pts = griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_2d_xy_pts;
-                int totsizeinbytes = (23 + (24 * (num_fields - 1))) * tot_num_diagnostic_pts;
+                int totsizeinbytes = 23 * num_fields  * tot_num_diagnostic_pts;
+
+
                 Ck::IO::startSession(f_2d_xy, totsizeinbytes, 0, sessionStart_2d_xy, sessionEnd_2d_xy);
                 delete m_2d_xy;
               }
@@ -317,7 +343,9 @@ module timestepping {
                 CkCallback sessionEnd_2d_yz(CkIndex_Timestepping::test_written_2d_yz(0), thisProxy);
                 int num_fields = griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 2;
                 int tot_num_diagnostic_pts = griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_2d_yz_pts;
-                int totsizeinbytes = (23 + (24 * (num_fields - 1))) * tot_num_diagnostic_pts;
+                int totsizeinbytes = 23 * num_fields  * tot_num_diagnostic_pts;
+
+
                 Ck::IO::startSession(f_2d_yz, totsizeinbytes, 0, sessionStart_2d_yz, sessionEnd_2d_yz);
                 delete m_2d_yz;
               }
@@ -350,7 +378,6 @@ module timestepping {
 
 
         when continue_timestepping() {
-
           //NEW
           //END DIAGNOSTICS
           if (write_diagnostics_this_step) {
@@ -870,9 +897,6 @@ module timestepping {
     entry void closed_2d_yz(CkReductionMsg * m);
     entry void diagnostics_ckio(Ck::IO::Session token, const int which_diagnostics_part) {
       serial {
-
-        printf("entry void diagnostics_ckio(Ck::IO::Session token, const int which_diagnostics_part = %d) ", which_diagnostics_part);
-
         const int thisIndex_arr[3] = {thisIndex.x, thisIndex.y, thisIndex.z};
         //OLD
         //REAL unused_var[2];

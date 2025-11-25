@@ -72,26 +72,6 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
                                                              const int chare_index[3], Ck::IO::Session token, const int which_diagnostics_part) {
 
 
-  //~ //debug
-  //~ fprintf(stderr,
-          //~ "[XX_CHARE] %p %p %p\n",
-          //~ (const void *)xx_chare[0],
-          //~ (const void *)xx_chare[1],
-          //~ (const void *)xx_chare[2]);
-
-  //~ for (int d = 0; d < 3; d++) {
-    //~ if (!xx_chare[d]) continue;
-    //~ int N = (d == 0) ? params_chare->Nxx_plus_2NGHOSTS0
-          //~ : (d == 1) ? params_chare->Nxx_plus_2NGHOSTS1
-                     //~ : params_chare->Nxx_plus_2NGHOSTS2;
-    //~ for (int i = 0; i < N; i++) {
-      //~ fprintf(stderr, "xx_chare[%d][%d] = % .15e\n",
-              //~ d, i, xx_chare[d][i]);
-    //~ }
-  //~ }
-  //~ //
-
-
 
 
 
@@ -111,6 +91,9 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
       strcpy(diagnosticstruct->filename_2d_yz, coordsys_with_grid);
 
       diagnosticstruct->num_output_quantities = NUM_GFS_NEAREST;
+
+      // compute offset in bytes for first field for each diagnostic pt
+      int sizeinbytes = 23 * (diagnosticstruct->num_output_quantities + 1);
 
       // Interior counts
       const int N0int = params->Nxx_plus_2NGHOSTS0 - 2 * NGHOSTS;
@@ -196,10 +179,6 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
       diagnosticstruct->locali2_diagnostic_1d_y_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
       diagnosticstruct->offset_diagnostic_1d_y_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
 
-      // compute offset in bytes for first field for each diagnostic pt
-      //~ int sizeinbytes = 24 * (diagnosticstruct->num_output_quantities + 1);
-      int sizeinbytes = 23 * (diagnosticstruct->num_output_quantities + 1);
-      //~ int sizeinbytes = 23 + (24 * ((diagnosticstruct->num_output_quantities + 1) - 1));
       int which_diagnostics_chare = 0;
       int which_diagnostic_global = 0;
       for (int i = 0; i < count_y; i++) {
@@ -253,6 +232,9 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
       if (count_z > 1)
         qsort(data_points_z, (size_t)count_z, sizeof(data_point_1d_struct), compare_by_coord);
 
+
+      diagnosticstruct->tot_num_diagnostic_1d_z_pts = count_z;
+
       num_diagnostics_chare = 0;
       for (int i = 0; i < count_z; i++) {
         const int i0 = data_points_z[i].i0;
@@ -270,9 +252,7 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
       diagnosticstruct->locali2_diagnostic_1d_z_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
       diagnosticstruct->offset_diagnostic_1d_z_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
 
-      // compute offset in bztes for first field for each diagnostic pt
-      //~ int sizeinbytes = 24 * (diagnosticstruct->num_output_quantities + 1);
-      //~ int sizeinbytes = 23 + (24 * ((diagnosticstruct->num_output_quantities + 1) - 1));
+
       which_diagnostics_chare = 0;
       which_diagnostic_global = 0;
       for (int i = 0; i < count_z; i++) {
@@ -301,24 +281,6 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
 
     case DIAGNOSTICS_WRITE_Y: {
 
-       // DEBUG CHECK
-      //~ fprintf(stderr,
-        //~ "[DEBUG DIAG-WRITE-Y] grid=%d | gridfuncs_diags=%p | gridfuncs_diags[grid]=%p | diagnosticstruct=%p\n",
-        //~ grid, (void*)gridfuncs_diags,
-        //~ gridfuncs_diags ? (void*)gridfuncs_diags[grid] : (void*)0,
-        //~ (void*)diagnosticstruct);
-
-      //~ if (diagnosticstruct) {
-          //~ fprintf(stderr,
-            //~ "    num_diagnostic_1d_y_pts=%d | localidx3=%p | i0=%p | i1=%p | i2=%p | offset=%p\n",
-            //~ diagnosticstruct->num_diagnostic_1d_y_pts,
-            //~ (void*)diagnosticstruct->localidx3_diagnostic_1d_y_pt,
-            //~ (void*)diagnosticstruct->locali0_diagnostic_1d_y_pt,
-            //~ (void*)diagnosticstruct->locali1_diagnostic_1d_y_pt,
-            //~ (void*)diagnosticstruct->locali2_diagnostic_1d_y_pt,
-            //~ (void*)diagnosticstruct->offset_diagnostic_1d_y_pt);
-      //~ }
-
 
       // Source pointer for this grid
       const REAL *restrict src = gridfuncs_diags[grid];
@@ -344,22 +306,10 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
         const int i1 = i1_diagnostic_pt[which_pt];
         const int i2 = i2_diagnostic_pt[which_pt];
         REAL xCart[3];
-        //~ REAL xOrig[3] = {xx[0][i0], xx[1][i1], xx[2][i2]};
-
-
-        //debug
-        //~ printf("i0=%d, i1=%d, i2=%d \n",i0,i1,i2);
-        //~ printf("xx_chare[0][i0]=%f, xx_chare[1][i1]=%f, xx_chare[2][i2]=%f\n", xx_chare[0][i0], xx_chare[1][i1], xx_chare[2][i2]);
-
-
         REAL xOrig[3] = {xx_chare[0][i0], xx_chare[1][i1], xx_chare[2][i2]};
+        xx_to_Cart(params_chare, xOrig, xCart);
 
-
-        xx_to_Cart(params, xOrig, xCart);
-
-        //~ int sizeinbytes = 24 * (diagnosticstruct->num_output_quantities + 1);
         int sizeinbytes = 23 * (diagnosticstruct->num_output_quantities + 1);
-        //~ int sizeinbytes = 23 + (24 * ((diagnosticstruct->num_output_quantities + 1) - 1));
         char out[sizeinbytes + 1];
         row[0] = xCart[1];
         for (int gf_i = 0; gf_i < NUM_GFS_NEAREST; ++gf_i) {
@@ -369,23 +319,13 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
         } // END LOOP over gridfunctions
 
         int n = 0;
-        //~ n += snprintf(out + n, "% .15e", row[0]);
         n += snprintf(out + n, (size_t)(sizeinbytes + 1 - n), "% .15e", row[0]);
         for (int col = 1; col < NUM_COLS; col++) {
-          //~ n += snprintf(out + n, " % .15e", row[col]);
             n += snprintf(out + n, (size_t)(sizeinbytes + 1 - n), " % .15e", row[col]);
         }
-        //~ out[n++] = '\n';
         out[sizeinbytes - 1] = '\n';
         Ck::IO::write(token, out, sizeinbytes, offsetpt_firstfield[which_pt]);
       } // END LOOP over *sorted* points closest to y-axis.
-
-
-
-
-
-
-
 
       // Finalize
       free(row);
@@ -419,13 +359,12 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
         const int i1 = i1_diagnostic_pt[which_pt];
         const int i2 = i2_diagnostic_pt[which_pt];
         REAL xCart[3];
-        //~ REAL xOrig[3] = {xx[0][i0], xx[1][i1], xx[2][i2]};
-        REAL xOrig[3] = {xx_chare[0][i0], xx_chare[1][i1], xx_chare[2][i2]};
-        xx_to_Cart(params, xOrig, xCart);
 
-        //~ int sizeinbytes = 24 * (diagnosticstruct->num_output_quantities + 1);
+        REAL xOrig[3] = {xx_chare[0][i0], xx_chare[1][i1], xx_chare[2][i2]};
+        xx_to_Cart(params_chare, xOrig, xCart);
+
+
         int sizeinbytes = 23 * (diagnosticstruct->num_output_quantities + 1);
-        //~ int sizeinbytes = 23 + (24 * ((diagnosticstruct->num_output_quantities + 1) - 1));
         char out[sizeinbytes + 1];
         row[0] = xCart[2];
         for (int gf_i = 0; gf_i < NUM_GFS_NEAREST; ++gf_i) {
@@ -434,13 +373,10 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
         } // END LOOP over gridfunctions
 
         int n = 0;
-        //~ n += snprintf(out + n, "% .15e", row[0]);
         n += snprintf(out + n, (size_t)(sizeinbytes + 1 - n), "% .15e", row[0]);
         for (int col = 1; col < NUM_COLS; col++) {
-          //~ n += snprintf(out + n, " % .15e", row[col]);
             n += snprintf(out + n, (size_t)(sizeinbytes + 1 - n), " % .15e", row[col]);
         }
-        //~ out[n++] = '\n';
         out[sizeinbytes - 1] = '\n';
         Ck::IO::write(token, out, sizeinbytes, offsetpt_firstfield[which_pt]);
       } // END LOOP over *sorted* points closest to y-axis.

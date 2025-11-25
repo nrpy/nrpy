@@ -73,7 +73,6 @@ void diagnostics(commondata_struct *restrict commondata, griddata_struct *restri
     case DIAGNOSTICS_WRITE_XY:
     case DIAGNOSTICS_WRITE_YZ: {
 
-      printf("writing diagnostics!!!!!!!!!!!!! \n");
 
       // Nearest-point diagnostics at xy and yz planes (2D).
       diagnostics_nearest(commondata, griddata, griddata_chare, gridfuncs_diags, chare_index, token, which_diagnostics_part);

@@ -113,6 +113,7 @@ void diagnostics_nearest(commondata_struct *restrict commondata, griddata_struct
       case DIAGNOSTICS_WRITE_Y:
       case DIAGNOSTICS_WRITE_Z: {
 
+
         // 1D
         const int NUM_nearest_GFS_1d = (int)(sizeof which_gfs_1d / sizeof which_gfs_1d[0]);
         diagnostics_nearest_1d_y_and_z_axes(commondata, grid, params, params_chare, xx, xx_chare, NUM_nearest_GFS_1d, which_gfs_1d, diagnostic_gf_names, gridfuncs_diags, charecommstruct, diagnosticstruct, chare_index, token, which_diagnostics_part);
@@ -122,6 +123,7 @@ void diagnostics_nearest(commondata_struct *restrict commondata, griddata_struct
 
       case DIAGNOSTICS_WRITE_XY:
       case DIAGNOSTICS_WRITE_YZ: {
+
 
         // 2D
         const int NUM_nearest_GFS_2d = (int)(sizeof which_gfs_2d / sizeof which_gfs_2d[0]);
