@@ -57,7 +57,7 @@ class PyCodeGen:
         """
         validate_literal_arguments()
         Infrastructure = par.parval_from_str("Infrastructure")
-        if Infrastructure != "jax":
+        if Infrastructure != "JAX":
             raise ValueError("Infrastructure must be 'jax' for py_codegen")
         self.prestring = prestring
         self.poststring = poststring
@@ -263,7 +263,7 @@ def py_codegen(
 
 
 if __name__ == "__main__":
-    par.set_parval_from_str("Infrastructure", "jax")
+    par.set_parval_from_str("Infrastructure", "JAX")
     import doctest
 
     results = doctest.testmod()
