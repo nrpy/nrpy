@@ -22,7 +22,9 @@ except ImportError:
     known_constants = {k: "jnp." + v for k, v in _known_constants_numpy.items()}
 
 
-# adding a type ignore as mypy does not let me inherit from JaxPrinter
+# adding a type ignore as mypy does not let me inherit from JaxPrinter.
+# Disable specific pylint errors owing to sympy
+# pylint: disable=too-many-ancestors, abstract-method
 class NRPyJaxPrinter(Printer):  # type: ignore
     """Custom JAX printer to handle custom power simplification."""
 
@@ -48,6 +50,7 @@ class NRPyJaxPrinter(Printer):  # type: ignore
         """
         base, exp = expr.as_base_exp()
         b = self._print(base)
+        retval = None
 
         def muln(n: int) -> str:
             """
@@ -62,27 +65,28 @@ class NRPyJaxPrinter(Printer):  # type: ignore
         if exp == sp.Rational(1, 2) or (
             getattr(exp, "is_Float", False) and float(exp) == 0.5
         ):
-            return f"{self._module}.sqrt({b})"
+            retval = f"{self._module}.sqrt({b})"
         if exp == -sp.Rational(1, 2) or (
             getattr(exp, "is_Float", False) and float(exp) == -0.5
         ):
-            return f"(1.0/{self._module}.sqrt({b}))"
+            retval = f"(1.0/{self._module}.sqrt({b}))"
         if exp == sp.Rational(1, 3):
-            return f"{self._module}.cbrt({b})"
+            retval = f"{self._module}.cbrt({b})"
         if exp == -sp.Rational(1, 3):
-            return f"(1.0/{self._module}.cbrt({b}))"
+            retval = f"(1.0/{self._module}.cbrt({b}))"
         if exp == sp.Rational(1, 6):
-            return f"{self._module}.sqrt({self._module}.cbrt({b}))"
+            retval = f"{self._module}.sqrt({self._module}.cbrt({b}))"
         if exp == -sp.Rational(1, 6):
-            return f"(1.0/({self._module}.sqrt({self._module}.cbrt({b}))))"
-
+            retval = f"(1.0/({self._module}.sqrt({self._module}.cbrt({b}))))"
         # Small integer powers mapped to repeated multiplication
         if isinstance(exp, sp.Integer):
             n = int(exp)
             if n in (2, 3, 4, 5):
-                return muln(n)
+                retval = muln(n)
             if n in (-1, -2, -3, -4, -5):
-                return f"(1.0/({muln(-n)}))"
+                retval = f"(1.0/({muln(-n)}))"
 
         # Fallback to default JAX handling
-        return super()._print_Pow(expr, rational=rational)
+        if retval is None:
+            return super()._print_Pow(expr, rational=rational)
+        return retval
