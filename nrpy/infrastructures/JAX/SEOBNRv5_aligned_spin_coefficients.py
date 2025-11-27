@@ -11,10 +11,10 @@ from inspect import currentframe as cfr
 from types import FrameType as FT
 from typing import Union, cast
 
-import nrpy.py_codegen as pycg
-import nrpy.py_function as pyfc
 import nrpy.equations.seobnr.SEOBNRv5_aligned_spin_constants as SEOBNRv5_const
 import nrpy.helpers.parallel_codegen as pcg
+import nrpy.py_codegen as pycg
+import nrpy.py_function as pyfc
 
 
 def register_PyFunction_SEOBNRv5_aligned_spin_coefficients() -> (
@@ -32,7 +32,10 @@ def register_PyFunction_SEOBNRv5_aligned_spin_coefficients() -> (
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
-    imports = ["import jax","import jax.numpy as jnp",]
+    imports = [
+        "import jax",
+        "import jax.numpy as jnp",
+    ]
     desc = """
 Evaluate and store the SEOBNRv5 calibration coefficients and remnant properties.
 
@@ -126,8 +129,14 @@ return CommonData(
     chi2=chi2,
     initial_omega=initial_omega,
     dT=dT,
+    a6=a6,
+    dSO=dSO,
+    rISCO=rISCO,
+    rstop=rstop,
     omega_qnm=omega_qnm,
     tau_qnm=tau_qnm,
+    M_f=M_f,
+    a_f=a_f,
 )
 """
 
