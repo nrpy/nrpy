@@ -19,6 +19,33 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 from nrpy.infrastructures import JAX
 
+print(
+    """Generating a JAX project to calculate gravitational waveforms using the SEOBNRv5 and BOB model! 
+Currently, this example only sets up the SEOBNRv5 aligned spin coefficients.
+
+To generate the JAX project, run:
+python -m nrpy.examples.sebobv1_jax
+cd project/sebobv1_jax
+pip install -e .
+
+The JAX project is now ready to use! Currently, it only initializes the SEOBNRv5 aligned spin coefficients.
+An basic installation test is available by running:
+python -m tests.test_basic
+from the generated project directory.
+
+Ongoing project goals:
+- Set up Python class generation
+- Port all SEBOBv1 functions to JAX
+- Add waveform generation tests
+- Add documentation to the auto-generated README.md
+
+Future project goals:
+- Add mismatch/calibration utilities (using Nelder-Mead optimization)
+- Port SEBOBv2 functions to JAX simultaneously?
+"""
+)
+
+
 par.set_parval_from_str("Infrastructure", "JAX")
 
 # Code-generation-time parameters:
@@ -39,14 +66,8 @@ par.set_parval_from_str("enable_parallel_codegen", enable_parallel_codegen)
 
 
 # register SEOBNRv5 coefficients
-JAX.SEOBNRv5_aligned_spin_coefficients.register_PyFunction_SEOBNRv5_aligned_spin_coefficients()
-
+JAX.sebob.SEOBNRv5_aligned_spin_coefficients.register_PyFunction_SEOBNRv5_aligned_spin_coefficients()
 if __name__ == "__main__":
-    print(
-        """Generating a JAX project to calculate gravitational waveforms using the SEOBNRv5 and BOB model! 
-Currently, this example only sets up the SEOBNRv5 aligned spin coefficients.
-"""
-    )
     pcg.do_parallel_codegen()
     # Write the generated JAX functions to the project directory
     JAX.jax_project_generator.output_PyFunction_files_and_construct_project(
@@ -54,4 +75,5 @@ Currently, this example only sets up the SEOBNRv5 aligned spin coefficients.
         project_name=project_name,
         lib_function_prefix="",
     )
-    print(f"Finished! Now go into project/{project_name}")
+
+print(f"Finished! Now go into project/{project_name}")
