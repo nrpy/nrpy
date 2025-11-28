@@ -6,7 +6,6 @@ Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
 """
 
 import logging
-import re  # Regular expressions can be toxic due to edge cases -- we use them sparingly
 import sys
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
@@ -559,8 +558,12 @@ def c_codegen(
                 sympyexprs_SCALAR_TMPs_are_sp_Eq.append(expr)
 
         # Check sympy version and process the main group
-        sympy_version = tuple(map(int, re.findall(r"\d+", sp.__version__)))
-        if sympy_version < (1, 3):
+        sympy_version = sp.__version__.replace("rc", "...").replace("b", "...")
+        sympy_major_version = int(sympy_version.split(".")[0])
+        sympy_minor_version = int(sympy_version.split(".")[1])
+        if sympy_major_version < 1 or (
+            sympy_major_version == 1 and sympy_minor_version < 3
+        ):
             print(
                 f"Warning: SymPy version {sp.__version__} does not support CSE postprocessing."
             )
