@@ -78,7 +78,7 @@ dT = dt / total_mass / 4.925490947641266978197229498498379006e-6
             "Delta_t",
             "M_f",
             "a_f",
-            "r_ISCO",
+            "rISCO",
         ],
         verbose=False,
     )

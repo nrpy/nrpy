@@ -56,10 +56,12 @@ def _validate_inputs(
         )
 
     # Project name validation
-    if not project_name.replace("-", "").replace("_", "").isalnum():
+    if not project_name.replace("_", "").isalnum():
         raise ValueError(
-            "Project name must only contain alphanumeric characters, hyphens, or underscores"
+            "Project name must only contain alphanumeric characters or underscores"
         )
+    if project_name[0].isnumeric():
+        raise ValueError("Project name cannot start with a digit")
 
     # Directory validation
     project_path = Path(project_dir).resolve()
@@ -253,6 +255,10 @@ install_requires =
 [options.packages.find]
 where = src
 
+[options.extras_require]
+test =
+    pytest
+
 [egg_info]
 tag_build = 
 tag_date = 0
@@ -405,7 +411,7 @@ venv.bak/
             f"\nimport {project_name}\n",
             "\ndef test_import():",
             '    """Test that the package can be imported."""',
-            f'    assert "{project_name}" in dir({project_name})\n',
+            f'    assert hasattr({project_name},"__version__")\n',
         ]
         test_file.write_text("\n".join(test_content), encoding="utf-8")
         logger.debug("Created test file: %s", test_file)
@@ -486,7 +492,7 @@ if __name__ == "__main__":
         register_PyFunction(
             name=name,
             desc=desc,
-            imports=["import jax.numpy as jnp"],
+            imports=["import jax", "import jax.numpy as jnp"],
             params="x: jnp.ndarray",
             body="return 2.0 * x",
             subdirectory="utils",

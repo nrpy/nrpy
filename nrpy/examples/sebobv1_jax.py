@@ -76,4 +76,4 @@ if __name__ == "__main__":
         lib_function_prefix="",
     )
 
-print(f"Finished! Now go into project/{project_name}")
+    print(f"Finished! Now go into project/{project_name}")

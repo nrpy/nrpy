@@ -7,6 +7,7 @@ Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
 """
 
 import os
+import textwrap
 from typing import Dict, List, Optional
 
 
@@ -108,50 +109,17 @@ class PyFunction:
         :param input_string: The input multi-line string to be reformatted.
         :return: The modified string with \"\"\" prefixed and suffixed.
         """
-        # Strip only leading/trailing newline characters, preserving spaces/tabs at the ends.
-        input_string = input_string.strip("\n")
-
-        lines = input_string.split("\n")
-        out_lines = ['    """\n']
-
-        for raw in lines:
-            # Remove trailing whitespace first.
-            clean = raw.rstrip()
-
-            # Empty/whitespace-only line -> add a blank line.
-            if clean.strip() == "":
-                out_lines.append("\n")
-                continue
-
-            # If the line is exactly a lone " #" at column 0, keep it as an empty-content line.
-            if clean == " #":
-                out_lines.append("\n")
-                continue
-
-            # If the line already begins with the canonical prefix at column 0,
-            # normalize by removing that prefix and re-adding it.
-            if clean.startswith(" # "):
-                clean = clean[3:]
-            if clean.startswith(" #"):
-                clean = clean[2:]
-            if clean.startswith("#"):
-                clean = clean[1:]
-
-            # Compute indentation and the rest of the line.
-            i = 0
-            while i < len(clean) and clean[i] == " ":
-                i += 1
-            rest = clean[i:]
-
-            # Remove any leading hash.
-            if rest.startswith("#"):
-                rest = rest[1:]
-
-            # Build the reformatted line with standard 4-space indentation.
-            out_lines.append(f"    {rest}\n")
-
-        out_lines.append('    """')
-        return "".join(out_lines)
+        # remove leading/trailing whitespace
+        dedented = textwrap.dedent(input_string)
+        # remove any hashes from the string
+        hashes_removed = "\n".join(
+            line.lstrip("#").strip() for line in dedented.splitlines()
+        )
+        # add triple quotes
+        quotes_added = f'"""\n{hashes_removed}\n"""'
+        # indent the string
+        indented = textwrap.indent(quotes_added, "    ")
+        return indented
 
     @staticmethod
     def indent_body(body: str) -> str:
