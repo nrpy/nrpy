@@ -6,11 +6,11 @@ Author: Siddharth Mahesh
 """
 
 import textwrap
-from typing import Dict, Any, List
-
+from typing import Any, Dict, List
 
 # Dictionary to store registered Commondata parameters
 commondata_params_dict: Dict[str, Dict[str, Any]] = {}
+
 
 def register_commondata_param(
     name: str,
@@ -49,11 +49,12 @@ def register_commondata_param(
         "description": description,
     }
 
+
 def register_commondata_params(
     names: List[str],
     dtypes: List[str],
     defaults: List[Any],
-    descriptions: List[str] = [],
+    descriptions: List[str],
 ) -> None:
     """
     Register multiple parameters for the Commondata dataclass.
@@ -65,6 +66,7 @@ def register_commondata_params(
     """
     for name, dtype, default, description in zip(names, dtypes, defaults, descriptions):
         register_commondata_param(name, dtype, default, description)
+
 
 def generate_commondata_dataclass() -> str:
     """
