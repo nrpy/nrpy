@@ -35,6 +35,7 @@ def register_PyFunction_SEOBNRv5_aligned_spin_coefficients() -> (
     imports = [
         "import jax",
         "import jax.numpy as jnp",
+        "from .Commondata import Commondata",
     ]
     desc = """
 Evaluate and store the SEOBNRv5 calibration coefficients and remnant properties.
@@ -122,7 +123,7 @@ imomegaqnm22 = jnp.array([
 
 omega_qnm = jnp.interp(a_f, afinallist, reomegaqnm22)/M_f
 tau_qnm = M_f/jnp.interp(a_f, afinallist, imomegaqnm22)
-return CommonData(
+return Commondata(
     m1=m1,
     m2=m2,
     chi1=chi1,

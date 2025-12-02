@@ -17,6 +17,11 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Set, Union
 
+from nrpy.infrastructures.JAX.commondata import (
+    commondata_params_dict,
+    generate_commondata_dataclass,
+    register_commondata_param,
+)
 from nrpy.py_function import PyFunction_dict, register_PyFunction
 
 # Configure logging
@@ -91,9 +96,8 @@ def _generate_python_files_and_init(
     """
     if not PyFunction_dict:
         logger.warning(
-            "No functions found in PyFunction_dict. No files will be generated."
+            "No functions found in PyFunction_dict. Only Commondata module will be generated."
         )
-        return []
 
     src_path = project_path / "src" / project_path.name
     src_path.mkdir(parents=True, exist_ok=True)
@@ -151,6 +155,14 @@ def _generate_python_files_and_init(
                 )
                 raise
 
+        # Generate Commondata.py
+        commondata_content = generate_commondata_dataclass()
+        commondata_file_path = src_path / "Commondata.py"
+        with commondata_file_path.open("w", encoding="utf-8") as f:
+            f.write(commondata_content)
+        py_files.append(commondata_file_path.relative_to(project_path))
+        logger.debug("Generated module: %s", commondata_file_path)
+
         # Generate top-level __init__.py with all exports
         init_content = [
             f'"""{project_path.name} - JAX-accelerated numerical computations."""\n\n__version__ = "0.1.0"\n\n',
@@ -189,10 +201,13 @@ def _generate_python_files_and_init(
                 direct_imports.append(func_name)
                 init_content.append(f"from .{func_name} import {func_name}")
 
+        init_content.append("from .Commondata import Commondata")
+
         # Add __all__ for better IDE support
         if direct_imports:
+            all_exports = direct_imports + ["Commondata"]
             init_content.append(
-                "\n__all__ = [" + ", ".join(f'"{f}"' for f in direct_imports) + "]"
+                "\n__all__ = [" + ", ".join(f'"{f}"' for f in all_exports) + "]"
             )
 
         # Write the main __init__.py
@@ -460,10 +475,6 @@ def output_PyFunction_files_and_construct_project(
         logger_str = f"""
 Successfully generated project at {project_path}
 Generated {len(py_files)} Python modules
-Next steps:
-1. cd {project_path}
-2. pip install -e .  # Install in development mode
-3. Start coding!
 """
         logger.info(logger_str)
 
@@ -473,14 +484,15 @@ Next steps:
 
 
 if __name__ == "__main__":
-    import doctest
-
-    doctest.testmod()
     # Configure logging
     log_level = logging.DEBUG
     logging.basicConfig(level=log_level)
 
     logger.info("Running in test mode with sample functions")
+
+    # Clear dictionaries to ensure a clean slate for test run
+    PyFunction_dict.clear()
+    commondata_params_dict.clear()
 
     def create_test_function() -> None:
         """Create a test function in PyFunction_dict for testing purposes."""
@@ -499,7 +511,17 @@ if __name__ == "__main__":
             pyfunc_decorators="@jax.jit",
         )
 
+    def create_test_commondata() -> None:
+        """Create a test commondata parameter for testing purposes."""
+        register_commondata_param(
+            name="ETA",
+            dtype="float",
+            default=2.0,
+            description="Symmetric mass ratio",
+        )
+
     create_test_function()
+    create_test_commondata()
 
     output_PyFunction_files_and_construct_project(
         project_dir="project/tmp_project",

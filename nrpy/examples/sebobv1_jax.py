@@ -25,11 +25,9 @@ Currently, this example only sets up the SEOBNRv5 aligned spin coefficients.
 
 To generate the JAX project, run:
 python -m nrpy.examples.sebobv1_jax
-cd project/sebobv1_jax
-pip install -e .
 
-The JAX project is now ready to use! Currently, it only initializes the SEOBNRv5 aligned spin coefficients.
-An basic installation test is available by running:
+Currently, the project initializes the SEOBNRv5 aligned spin coefficients.
+A basic installation test is available by running:
 python -m tests.test_basic
 from the generated project directory.
 
@@ -66,6 +64,56 @@ par.set_parval_from_str("enable_parallel_codegen", enable_parallel_codegen)
 
 
 # register SEOBNRv5 coefficients
+JAX.commondata.register_commondata_params(
+    names=[
+        "m1",
+        "m2",
+        "chi1",
+        "chi2",
+        "initial_omega",
+        "dT",
+        "a6",
+        "dSO",
+        "rISCO",
+        "rstop",
+        "omega_qnm",
+        "tau_qnm",
+        "M_f",
+        "a_f",
+    ],
+    dtypes=[
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+    ],
+    defaults=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    descriptions=[
+        "Mass of the first object",
+        "Mass of the second object",
+        "Spin of the first object",
+        "Spin of the second object",
+        "Initial orbital frequency",
+        "Time step",
+        "a6",
+        "dSO",
+        "rISCO",
+        "rstop",
+        "omega_qnm",
+        "tau_qnm",
+        "M_f",
+        "a_f",
+    ],
+)
 JAX.sebob.SEOBNRv5_aligned_spin_coefficients.register_PyFunction_SEOBNRv5_aligned_spin_coefficients()
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
@@ -76,4 +124,11 @@ if __name__ == "__main__":
         lib_function_prefix="",
     )
 
-    print(f"Finished! Now go into project/{project_name}")
+    print(
+        f"""
+To work with the generated JAX project:
+1. cd project/{project_name}
+2. pip install -e .  # Install in development mode
+3. Start coding!
+"""
+    )
