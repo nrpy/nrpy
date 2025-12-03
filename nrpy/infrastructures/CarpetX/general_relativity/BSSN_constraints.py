@@ -107,7 +107,7 @@ def register_CFunction_BSSN_constraints(
     )
 
     schedule = f"""
-if(FD_order == {fd_order}) {{
+if(fd_order == {fd_order}) {{
   # Originally in MoL_PseudoEvolution; consider changing when subcycling is added
   schedule FUNC_NAME in ODESolvers_PostStep as {thorn_name}_BSSN_constraints
   {{
