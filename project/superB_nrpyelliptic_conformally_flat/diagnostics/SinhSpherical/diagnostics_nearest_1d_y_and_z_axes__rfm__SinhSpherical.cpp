@@ -87,8 +87,8 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
       // Build filename component with runtime coordinate system name and grid number
       char coordsys_with_grid[128];
       snprintf(coordsys_with_grid, sizeof(coordsys_with_grid), "%s-grid%02d", params->CoordSystemName, grid);
-      strcpy(diagnosticstruct->filename_2d_xy, coordsys_with_grid);
-      strcpy(diagnosticstruct->filename_2d_yz, coordsys_with_grid);
+      strcpy(diagnosticstruct->filename_1d_y, coordsys_with_grid);
+      strcpy(diagnosticstruct->filename_1d_z, coordsys_with_grid);
 
       diagnosticstruct->num_output_quantities = NUM_GFS_NEAREST;
 

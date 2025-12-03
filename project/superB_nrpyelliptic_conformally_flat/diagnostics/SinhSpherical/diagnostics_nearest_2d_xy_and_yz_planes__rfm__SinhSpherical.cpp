@@ -60,14 +60,8 @@ void diagnostics_nearest_2d_xy_and_yz_planes__rfm__SinhSpherical(commondata_stru
       // Build filename component with runtime coordinate system name and grid number
       char coordsys_with_grid[128];
       snprintf(coordsys_with_grid, sizeof(coordsys_with_grid), "%s-grid%02d", params->CoordSystemName, grid);
-
-      char filename[256];
-
-      build_outfile_name(filename, sizeof filename, "out2d-xy", coordsys_with_grid, commondata, /*include_time=*/0);
-      strcpy(diagnosticstruct->filename_2d_xy, filename);
-
-      build_outfile_name(filename, sizeof filename, "out2d-yz", coordsys_with_grid, commondata, /*include_time=*/0);
-      strcpy(diagnosticstruct->filename_2d_yz, filename);
+      strcpy(diagnosticstruct->filename_2d_xy, coordsys_with_grid);
+      strcpy(diagnosticstruct->filename_2d_yz, coordsys_with_grid);          
 
       diagnosticstruct->num_output_quantities = NUM_GFS_NEAREST;
 
