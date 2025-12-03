@@ -242,8 +242,13 @@ def declare_indexedexp(
         raise ValueError(
             "rank=N argument must be set, and N must be between 1 and 4 inclusive"
         )
+    # Optional: allow alphabetic indices instead of numeric ones, e.g.
+    # declarerank1("betaU", character_zero_index="x") -> [betaUx, betaUy, betaUz]
+    character_zero_index = kwargs.get("character_zero_index", "")
     indexedexp: Sequence[_recur_symbol_type] = create_tensor_symbolic(
-        rank * [dimension], idx_expr_basename
+        rank * [dimension],
+        idx_expr_basename,
+        character_zero_index=character_zero_index,
     )
     symmetry = kwargs.get("symmetry")
     if symmetry:
@@ -619,6 +624,10 @@ def declarerank1(idx_expr_basename: str, **kwargs: Any) -> _rank1_type:
     :param idx_expr_basename: The base name for the indexed expression.
     :param kwargs: Additional arguments passed to declare_indexedexp.
     :return: The declared rank-1 indexed expression.
+
+    Doctest:
+    >>> declarerank1("betaU", character_zero_index="x")
+    [betaUx, betaUy, betaUz]
     """
     kwargs["rank"] = 1
     return cast(_rank1_type, declare_indexedexp(idx_expr_basename, **kwargs))
