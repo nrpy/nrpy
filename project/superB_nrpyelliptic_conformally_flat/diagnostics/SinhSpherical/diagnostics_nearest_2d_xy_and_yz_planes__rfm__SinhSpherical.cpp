@@ -275,8 +275,8 @@ void diagnostics_nearest_2d_xy_and_yz_planes__rfm__SinhSpherical(commondata_stru
 
         int sizeinbytes = 23 * (diagnosticstruct->num_output_quantities + 2);
         char out[sizeinbytes + 1];
-        row[0] = xCart[0];
-        row[1] = xCart[1];
+        row[0] = xCart[1];
+        row[1] = xCart[2];
         for (int gf_idx = 0; gf_idx < NUM_GFS_NEAREST; gf_idx++) {
           const int gf = which_gfs[gf_idx];
           row[2 + gf_idx] = src[IDX4Ppt(params_chare, gf, idx3)];
