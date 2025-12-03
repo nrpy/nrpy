@@ -56,7 +56,7 @@ class ApproxKillingSpinClass:
         if CoordSystem not in ["Spherical", "Spherical_rfm_precompute"]:
             raise ValueError("Use 'Spherical' or 'Spherical_rfm_precompute'.")
         enable_rfm_precompute = CoordSystem.endswith("_rfm_precompute")
-        self.CoordSystem = "Spherical"
+        self.CoordSystem = CoordSystem
         self._rfm = refmetric.reference_metric[
             (
                 (self.CoordSystem + "_rfm_precompute")
