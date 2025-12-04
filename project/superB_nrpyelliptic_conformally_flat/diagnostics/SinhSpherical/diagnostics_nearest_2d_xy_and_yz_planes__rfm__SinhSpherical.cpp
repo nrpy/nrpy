@@ -65,8 +65,9 @@ void diagnostics_nearest_2d_xy_and_yz_planes__rfm__SinhSpherical(commondata_stru
 
       diagnosticstruct->num_output_quantities = NUM_GFS_NEAREST;
 
-      // compute offset in bytes for first field for each diagnostic pt
-      int sizeinbytes = 23 * (diagnosticstruct->num_output_quantities + 2);
+      // Compute bytes commmon to both xy and yz outputs
+      diagnosticstruct->sizeinbytes_per_pt_2d = 23 * (diagnosticstruct->num_output_quantities + 2);
+      int time_bytes = diag_time_comment_size_bytes(commondata->time);
 
       // Interior grid counts and loop bounds
       MAYBE_UNUSED const int N0int = params->Nxx_plus_2NGHOSTS0 - 2 * NGHOSTS;
@@ -87,7 +88,10 @@ void diagnostics_nearest_2d_xy_and_yz_planes__rfm__SinhSpherical(commondata_stru
 
       // --- Sample and setup data for the xy-plane---
       {
+        //Set values 
         diagnosticstruct->tot_num_diagnostic_2d_xy_pts = N0int * N2int;
+        int header_size_bytes_xy = time_bytes + diag_header_size_bytes("x y",  NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
+        diagnosticstruct->totsizeinbytes_2d_xy = header_size_bytes_xy + (diagnosticstruct->sizeinbytes_per_pt_2d * diagnosticstruct->tot_num_diagnostic_2d_xy_pts);        
 
         int num_diagnostics_chare = 0;
         int i1 = i1_mid;
@@ -120,7 +124,7 @@ void diagnostics_nearest_2d_xy_and_yz_planes__rfm__SinhSpherical(commondata_stru
               diagnosticstruct->locali0_diagnostic_2d_xy_pt[which_diagnostics_chare] = MAP_GLOBAL_TO_LOCAL_IDX0(chare_index[0], i0, Nxx0chare);
               diagnosticstruct->locali1_diagnostic_2d_xy_pt[which_diagnostics_chare] = MAP_GLOBAL_TO_LOCAL_IDX1(chare_index[1], i1, Nxx1chare);
               diagnosticstruct->locali2_diagnostic_2d_xy_pt[which_diagnostics_chare] = MAP_GLOBAL_TO_LOCAL_IDX2(chare_index[2], i2, Nxx2chare);
-              diagnosticstruct->offset_diagnostic_2d_xy_pt[which_diagnostics_chare] = which_diagnostic_global * sizeinbytes;
+              diagnosticstruct->offset_diagnostic_2d_xy_pt[which_diagnostics_chare] = header_size_bytes_xy + (which_diagnostic_global * diagnosticstruct->sizeinbytes_per_pt_2d);
               which_diagnostics_chare++;
             }
             which_diagnostic_global++;
@@ -129,8 +133,11 @@ void diagnostics_nearest_2d_xy_and_yz_planes__rfm__SinhSpherical(commondata_stru
       }
 
       // --- Sample and setup data for the yz-plane---
-      {
-        diagnosticstruct->tot_num_diagnostic_2d_yz_pts = 2* N0int * N1int; //2 slices??
+      {        
+        //Set values 
+        diagnosticstruct->tot_num_diagnostic_2d_yz_pts = 2* N0int * N1int;
+        int header_size_bytes_yz = time_bytes + diag_header_size_bytes("y z",  NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
+        diagnosticstruct->totsizeinbytes_2d_yz = header_size_bytes_yz + (diagnosticstruct->sizeinbytes_per_pt_2d * diagnosticstruct->tot_num_diagnostic_2d_yz_pts);                
 
         int num_diagnostics_chare = 0;
         int i2_slices[2] = {i2_q1, i2_q3};
@@ -168,7 +175,7 @@ void diagnostics_nearest_2d_xy_and_yz_planes__rfm__SinhSpherical(commondata_stru
                 diagnosticstruct->locali0_diagnostic_2d_yz_pt[which_diagnostics_chare] = MAP_GLOBAL_TO_LOCAL_IDX0(chare_index[0], i0, Nxx0chare);
                 diagnosticstruct->locali1_diagnostic_2d_yz_pt[which_diagnostics_chare] = MAP_GLOBAL_TO_LOCAL_IDX1(chare_index[1], i1, Nxx1chare);
                 diagnosticstruct->locali2_diagnostic_2d_yz_pt[which_diagnostics_chare] = MAP_GLOBAL_TO_LOCAL_IDX2(chare_index[2], i2, Nxx2chare);
-                diagnosticstruct->offset_diagnostic_2d_yz_pt[which_diagnostics_chare] = which_diagnostic_global * sizeinbytes;
+                diagnosticstruct->offset_diagnostic_2d_yz_pt[which_diagnostics_chare] = header_size_bytes_yz + (which_diagnostic_global * diagnosticstruct->sizeinbytes_per_pt_2d);
                 which_diagnostics_chare++;
               }
               which_diagnostic_global++;
@@ -181,6 +188,22 @@ void diagnostics_nearest_2d_xy_and_yz_planes__rfm__SinhSpherical(commondata_stru
     }
 
     case DIAGNOSTICS_WRITE_XY: {
+      
+      // only chare (0,0,0) writes header
+      if (chare_index[0] == 0 && chare_index[1] == 0 && chare_index[2] == 0) {
+        int header_bytes = diag_time_comment_size_bytes(commondata->time)
+                 + diag_header_size_bytes("x y", NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
+
+        char *hdr = (char *)malloc((size_t)header_bytes + 1);
+        int written = diag_ckio_build_time_comment_and_header(
+            hdr, (size_t)header_bytes + 1,
+            commondata->time, "x y",
+            NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
+
+        Ck::IO::write(token, hdr, header_bytes, 0);
+        free(hdr);
+      }
+
 
       // Active grid data pointer and reusable row buffer
       const REAL *restrict src = gridfuncs_diags[grid];
@@ -209,7 +232,7 @@ void diagnostics_nearest_2d_xy_and_yz_planes__rfm__SinhSpherical(commondata_stru
         REAL xOrig[3] = {xx_chare[0][i0], xx_chare[1][i1], xx_chare[2][i2]};
         xx_to_Cart(params_chare, xOrig, xCart);
 
-        int sizeinbytes = 23 * (diagnosticstruct->num_output_quantities + 2);
+        int sizeinbytes = diagnosticstruct->sizeinbytes_per_pt_2d;
         char out[sizeinbytes + 1];
         row[0] = xCart[0];
         row[1] = xCart[1];
@@ -232,6 +255,21 @@ void diagnostics_nearest_2d_xy_and_yz_planes__rfm__SinhSpherical(commondata_stru
     }
 
     case DIAGNOSTICS_WRITE_YZ: {
+            
+      // only chare (0,0,0) writes header
+      if (chare_index[0] == 0 && chare_index[1] == 0 && chare_index[2] == 0) {
+        int header_bytes = diag_time_comment_size_bytes(commondata->time)
+                 + diag_header_size_bytes("y z", NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
+
+        char *hdr = (char *)malloc((size_t)header_bytes + 1);
+        int written = diag_ckio_build_time_comment_and_header(
+            hdr, (size_t)header_bytes + 1,
+            commondata->time, "y z",
+            NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
+
+        Ck::IO::write(token, hdr, header_bytes, 0);
+        free(hdr);
+      }
 
       // Active grid data pointer and reusable row buffer
       const REAL *restrict src = gridfuncs_diags[grid];
@@ -259,7 +297,7 @@ void diagnostics_nearest_2d_xy_and_yz_planes__rfm__SinhSpherical(commondata_stru
         REAL xOrig[3] = {xx_chare[0][i0], xx_chare[1][i1], xx_chare[2][i2]};
         xx_to_Cart(params_chare, xOrig, xCart);
 
-        int sizeinbytes = 23 * (diagnosticstruct->num_output_quantities + 2);
+        int sizeinbytes = diagnosticstruct->sizeinbytes_per_pt_2d;
         char out[sizeinbytes + 1];
         row[0] = xCart[1];
         row[1] = xCart[2];
@@ -281,12 +319,4 @@ void diagnostics_nearest_2d_xy_and_yz_planes__rfm__SinhSpherical(commondata_stru
       break;
     }
   }
-
-  //~ // Write time comment and headers
-  //~ diag_write_time_comment(out_xy, commondata->time);
-  //~ diag_write_header(out_xy, "x y", NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
-  //~ diag_write_time_comment(out_yz, commondata->time);
-  //~ diag_write_header(out_yz, "y z", NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
-
-
 } // END FUNCTION

@@ -213,28 +213,16 @@ module timestepping {
             // 1d y
             when ready_1d_y(Ck::IO::FileReadyMsg * m_1d_y) {
               serial {
-
-
                 f_1d_y = m_1d_y->file;
                 CkCallback sessionStart_1d_y(CkIndex_Timestepping::start_write_1d_y(0), thisProxy);
                 CkCallback sessionEnd_1d_y(CkIndex_Timestepping::test_written_1d_y(0), thisProxy);
-
-                //~ int num_fields = griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 1;
-                //~ int tot_num_diagnostic_pts = griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_1d_y_pts;
-                //~ int totsizeinbytes = 23 * num_fields  * tot_num_diagnostic_pts;
-
                 int totsizeinbytes = griddata_chare[which_grid_diagnostics].diagnosticstruct.totsizeinbytes_1d_y;
-
-
-
                 Ck::IO::startSession(f_1d_y, totsizeinbytes, 0, sessionStart_1d_y, sessionEnd_1d_y);
                 delete m_1d_y;
               }
             }
             when start_write_1d_y(Ck::IO::SessionReadyMsg * m_1d_y) {
               serial {
-
-
                 thisProxy.diagnostics_ckio(m_1d_y->session, DIAGNOSTICS_WRITE_Y);
                 delete m_1d_y;
               }
@@ -251,8 +239,6 @@ module timestepping {
             }
             when closed_1d_y(CkReductionMsg * m_1d_y) {
               serial {
-
-
                 delete m_1d_y;
               }
             }
@@ -260,38 +246,22 @@ module timestepping {
 
             when ready_1d_z(Ck::IO::FileReadyMsg * m_1d_z) {
               serial {
-
-
-
                 f_1d_z = m_1d_z->file;
                 CkCallback sessionStart_1d_z(CkIndex_Timestepping::start_write_1d_z(0), thisProxy);
-                CkCallback sessionEnd_1d_z(CkIndex_Timestepping::test_written_1d_z(0), thisProxy);
-                //~ int num_fields = griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 1;
-                //~ int tot_num_diagnostic_pts = griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_1d_z_pts;
-                //~ int totsizeinbytes = 23 * num_fields  * tot_num_diagnostic_pts;
-
+                CkCallback sessionEnd_1d_z(CkIndex_Timestepping::test_written_1d_z(0), thisProxy);              
                 int totsizeinbytes = griddata_chare[which_grid_diagnostics].diagnosticstruct.totsizeinbytes_1d_z;
-
-
-
-
                 Ck::IO::startSession(f_1d_z, totsizeinbytes, 0, sessionStart_1d_z, sessionEnd_1d_z);
                 delete m_1d_z;
               }
             }
             when start_write_1d_z(Ck::IO::SessionReadyMsg * m_1d_z) {
               serial {
-
-
                 thisProxy.diagnostics_ckio(m_1d_z->session, DIAGNOSTICS_WRITE_Z);
                 delete m_1d_z;
               }
             }
             when test_written_1d_z(CkReductionMsg * m_1d_z) {
               serial {
-
-
-
                 delete m_1d_z;
                 CkCallback cb_1d_z(CkIndex_Timestepping::closed_1d_z(0), thisProxy);
                 Ck::IO::close(f_1d_z, cb_1d_z);
@@ -300,10 +270,7 @@ module timestepping {
             }
             when closed_1d_z(CkReductionMsg * m_1d_z) {
               serial {
-
-
                 delete m_1d_z;
-
                 }
             }
 
@@ -312,12 +279,8 @@ module timestepping {
               serial {
                 f_2d_xy = m_2d_xy->file;
                 CkCallback sessionStart_2d_xy(CkIndex_Timestepping::start_write_2d_xy(0), thisProxy);
-                CkCallback sessionEnd_2d_xy(CkIndex_Timestepping::test_written_2d_xy(0), thisProxy);
-                int num_fields = griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 2;
-                int tot_num_diagnostic_pts = griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_2d_xy_pts;
-                int totsizeinbytes = 23 * num_fields  * tot_num_diagnostic_pts;
-
-
+                CkCallback sessionEnd_2d_xy(CkIndex_Timestepping::test_written_2d_xy(0), thisProxy);                
+                int totsizeinbytes = griddata_chare[which_grid_diagnostics].diagnosticstruct.totsizeinbytes_2d_xy;
                 Ck::IO::startSession(f_2d_xy, totsizeinbytes, 0, sessionStart_2d_xy, sessionEnd_2d_xy);
                 delete m_2d_xy;
               }
@@ -346,11 +309,7 @@ module timestepping {
                 f_2d_yz = m_2d_yz->file;
                 CkCallback sessionStart_2d_yz(CkIndex_Timestepping::start_write_2d_yz(0), thisProxy);
                 CkCallback sessionEnd_2d_yz(CkIndex_Timestepping::test_written_2d_yz(0), thisProxy);
-                int num_fields = griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 2;
-                int tot_num_diagnostic_pts = griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_2d_yz_pts;
-                int totsizeinbytes = 23 * num_fields  * tot_num_diagnostic_pts;
-
-
+                int totsizeinbytes = griddata_chare[which_grid_diagnostics].diagnosticstruct.totsizeinbytes_2d_yz;
                 Ck::IO::startSession(f_2d_yz, totsizeinbytes, 0, sessionStart_2d_yz, sessionEnd_2d_yz);
                 delete m_2d_yz;
               }
