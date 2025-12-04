@@ -45,7 +45,7 @@ This code is based on Kranc's McLachlan/ML_BSSN/src/Boundaries.cc code."""
     body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
   DECLARE_CCTK_PARAMETERS;
   CCTK_INT ierr CCTK_ATTRIBUTE_UNUSED = 0;
-  const CCTK_INT bndsize = FD_order / 2 + 1; // <- bndsize = number of ghostzones
+  const CCTK_INT bndsize = fd_order / 2 + 1; // <- bndsize = number of ghostzones
 """
     for gfname, gf in sorted(gri.glb_gridfcs_dict.items()):
         if gf.group == "EVOL":
@@ -81,7 +81,7 @@ schedule FUNC_NAME in Driver_BoundarySelect
         body=body,
         ET_thorn_name=thorn_name,
         ET_schedule_bins_entries=ET_schedule_bins_entries,
-        ET_current_thorn_CodeParams_used=["FD_order"],
+        ET_current_thorn_CodeParams_used=["fd_order"],
     )
 
 
@@ -189,7 +189,7 @@ This code is based on Kranc's McLachlan/ML_BSSN/src/Boundaries.cc code."""
     body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
   DECLARE_CCTK_PARAMETERS;
   CCTK_INT ierr CCTK_ATTRIBUTE_UNUSED = 0;
-  const CCTK_INT bndsize = FD_order / 2 + 1; // <- bndsize = number of ghostzones
+  const CCTK_INT bndsize = fd_order / 2 + 1; // <- bndsize = number of ghostzones
 """
     for gfname, gf in sorted(gri.glb_gridfcs_dict.items()):
         if gf.group == "AUX":
