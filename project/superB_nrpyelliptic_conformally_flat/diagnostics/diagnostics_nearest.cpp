@@ -75,7 +75,7 @@ void diagnostics_nearest(commondata_struct *restrict commondata, griddata_struct
 
       case DIAGNOSTICS_SETUP_1D: {
 
-        // 1D
+        // 1D SETUP
         const int NUM_nearest_GFS_1d = (int)(sizeof which_gfs_1d / sizeof which_gfs_1d[0]);
         diagnostics_nearest_1d_y_and_z_axes(commondata, grid, params, params_chare, xx, xx_chare, NUM_nearest_GFS_1d, which_gfs_1d, diagnostic_gf_names, NULL, charecommstruct, diagnosticstruct, chare_index, token, which_diagnostics_part);
 
@@ -84,7 +84,7 @@ void diagnostics_nearest(commondata_struct *restrict commondata, griddata_struct
 
       case DIAGNOSTICS_SETUP_2D: {
 
-        // 2D
+        // 2D SETUP
         const int NUM_nearest_GFS_2d = (int)(sizeof which_gfs_2d / sizeof which_gfs_2d[0]);
         diagnostics_nearest_2d_xy_and_yz_planes(commondata, grid, params, params_chare, xx, xx_chare, NUM_nearest_GFS_2d, which_gfs_2d, diagnostic_gf_names, NULL, charecommstruct, diagnosticstruct, chare_index, token, which_diagnostics_part);
 
@@ -104,7 +104,7 @@ void diagnostics_nearest(commondata_struct *restrict commondata, griddata_struct
 
           const int NUM_nearest_GFS_0d = (int)(sizeof which_gfs_0d / sizeof which_gfs_0d[0]);
 
-          diagnostics_nearest_grid_center(commondata, grid, params, xx, NUM_nearest_GFS_0d, which_gfs_0d, diagnostic_gf_names, gridfuncs_diags);
+          diagnostics_nearest_grid_center(commondata, grid, params, params_chare, xx, NUM_nearest_GFS_0d, which_gfs_0d, diagnostic_gf_names, gridfuncs_diags, chare_index);
         }
 
         break;

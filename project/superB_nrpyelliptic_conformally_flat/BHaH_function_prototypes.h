@@ -57,12 +57,14 @@ void diagnostics_nearest_2d_xy_and_yz_planes__rfm__SinhSpherical(commondata_stru
                                                                  const REAL *restrict gridfuncs_diags[],
                                                                  const charecomm_struct *restrict charecommstruct, diagnostic_struct *restrict diagnosticstruct,
                                                                  const int chare_index[3], Ck::IO::Session token, const int which_diagnostics_part);
-void diagnostics_nearest_grid_center(commondata_struct *restrict commondata, const int grid, const params_struct *restrict params,
-                const REAL *restrict xx[3], const int NUM_GFS_NEAREST, const int which_gfs[],
-                const char **diagnostic_gf_names, const REAL *restrict gridfuncs_diags[]);
+void diagnostics_nearest_grid_center(commondata_struct *restrict commondata, const int grid, const params_struct *restrict params, const params_struct *restrict params_chare,
+                                     const REAL *restrict xx[3], const int NUM_GFS_NEAREST, const int which_gfs[], const char **diagnostic_gf_names,
+                                     const REAL *restrict gridfuncs_diags[], const int chare_index[3]);
 void diagnostics_nearest_grid_center__rfm__SinhSpherical(commondata_struct *restrict commondata, const int grid, const params_struct *restrict params,
-                const REAL *restrict xx[3], const int NUM_GFS_NEAREST, const int which_gfs[],
-                const char **diagnostic_gf_names, const REAL *restrict gridfuncs_diags[]);
+                                                        const params_struct *restrict params_chare,
+                                                         const REAL *restrict xx[3], const int NUM_GFS_NEAREST, const int which_gfs[],
+                                                         const char **diagnostic_gf_names, const REAL *restrict gridfuncs_diags[],
+                                                         const int chare_index[3]);
 void diagnostics_volume_integration(commondata_struct *restrict commondata, griddata_struct *restrict griddata, griddata_struct *restrict griddata_chare,
                                     const REAL *restrict gridfuncs_diags[MAXNUMGRIDS],
                                     const int chare_index[3],

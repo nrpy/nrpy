@@ -36,8 +36,10 @@
  *
  */
 void diagnostics_nearest_grid_center__rfm__SinhSpherical(commondata_struct *restrict commondata, const int grid, const params_struct *restrict params,
+                                                         const params_struct *restrict params_chare,
                                                          const REAL *restrict xx[3], const int NUM_GFS_NEAREST, const int which_gfs[],
-                                                         const char **diagnostic_gf_names, const REAL *restrict gridfuncs_diags[]) {
+                                                         const char **diagnostic_gf_names, const REAL *restrict gridfuncs_diags[],
+                                                         const int chare_index[3]) {
   // Suppress unused parameter warning for xx, required for API compatibility.
   (void)xx;
 
@@ -55,8 +57,16 @@ void diagnostics_nearest_grid_center__rfm__SinhSpherical(commondata_struct *rest
   const int i0_center = NGHOSTS;
   const int i1_center = params->Nxx_plus_2NGHOSTS1 / 2;
   const int i2_center = params->Nxx_plus_2NGHOSTS2 / 2;
+  
+  const int Nxx0chare = params_chare->Nxx0;
+  const int Nxx1chare = params_chare->Nxx1;
+  const int Nxx2chare = params_chare->Nxx2;
+      
+  const int i0_center_local = MAP_GLOBAL_TO_LOCAL_IDX0(chare_index[0], i0_center, Nxx0chare);
+  const int i1_center_local = MAP_GLOBAL_TO_LOCAL_IDX1(chare_index[1], i1_center, Nxx1chare);
+  const int i2_center_local = MAP_GLOBAL_TO_LOCAL_IDX2(chare_index[2], i2_center, Nxx2chare);
 
-  const int idx3 = IDX3P(params, i0_center, i1_center, i2_center);
+  const int idx3 = IDX3P(params_chare, i0_center_local, i1_center_local, i2_center_local);
 
   // Active grid data pointer.
   const REAL *restrict src = gridfuncs_diags[grid];
@@ -67,7 +77,7 @@ void diagnostics_nearest_grid_center__rfm__SinhSpherical(commondata_struct *rest
   row[0] = commondata->time;
   for (int ii = 0; ii < NUM_GFS_NEAREST; ii++) {
     const int gf = which_gfs[ii];
-    row[1 + ii] = src[IDX4Ppt(params, gf, idx3)];
+    row[1 + ii] = src[IDX4Ppt(params_chare, gf, idx3)];
   } // END LOOP over gridfunctions
 
   diag_write_row(out, NUM_COLS, row);

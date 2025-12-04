@@ -34,13 +34,13 @@
  * @return     void.
  *
  */
-void diagnostics_nearest_grid_center(commondata_struct *restrict commondata, const int grid, const params_struct *restrict params,
+void diagnostics_nearest_grid_center(commondata_struct *restrict commondata, const int grid, const params_struct *restrict params, const params_struct *restrict params_chare,
                                      const REAL *restrict xx[3], const int NUM_GFS_NEAREST, const int which_gfs[], const char **diagnostic_gf_names,
-                                     const REAL *restrict gridfuncs_diags[]) {
+                                     const REAL *restrict gridfuncs_diags[], const int chare_index[3]) {
   switch (params->CoordSystem_hash) {
   case SINHSPHERICAL:
-    diagnostics_nearest_grid_center__rfm__SinhSpherical(commondata, grid, params, xx, NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names,
-                                                        gridfuncs_diags);
+    diagnostics_nearest_grid_center__rfm__SinhSpherical(commondata, grid, params, params_chare, xx, NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names,
+                                                        gridfuncs_diags, chare_index);
     break;
   default:
     fprintf(stderr, "ERROR in diagnostics_nearest_grid_center(): CoordSystem hash = %d not #define'd!\n", params->CoordSystem_hash);

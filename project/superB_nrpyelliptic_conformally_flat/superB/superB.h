@@ -75,11 +75,11 @@
 
 
 //OLD
-#define OUTPUT_0D 0
-#define OUTPUT_1D_Y 1
-#define OUTPUT_1D_Z 2
-#define OUTPUT_2D_XY 3
-#define OUTPUT_2D_YZ 4
+//~ #define OUTPUT_0D 0
+//~ #define OUTPUT_1D_Y 1
+//~ #define OUTPUT_1D_Z 2
+//~ #define OUTPUT_2D_XY 3
+//~ #define OUTPUT_2D_YZ 4
 #define OUTPUT_PSI4 5
 #define OUTPUT_RESIDUAL 6
 #define OUTPUT_L2NORM_BSSN_CONSTRAINTS 7

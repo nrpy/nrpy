@@ -136,7 +136,6 @@ module timestepping {
           serial {
             // Allocate temporary storage for diagnostic_gfs.
             for (int grid = 0; grid < commondata.NUMGRIDS; grid++) {
-              //~ SET_NXX_PLUS_2NGHOSTS_VARS(grid);
               const int Nxx_plus_2NGHOSTS0 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS0;                                                                      \
               const int Nxx_plus_2NGHOSTS1 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS1;                                                                      \
               const int Nxx_plus_2NGHOSTS2 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS2;
@@ -146,6 +145,11 @@ module timestepping {
 
             // Set diagnostics_gfs -- see nrpy/infrastructures/BHaH/[project]/diagnostics/ for definition.
             diagnostic_gfs_set(&commondata, griddata_chare, diagnostic_gfs);
+            
+            
+            // Diagnostics center
+            //~ thisProxy[CkArrayIndex3D(thisIndex.x, thisIndex.y, thisIndex.z)].diagnostics_ckio(Ck::IO::Session(), DIAGNOSTICS_WRITE_CENTER);          
+            diagnostics_ckio(Ck::IO::Session(), DIAGNOSTICS_WRITE_CENTER);          
 
             // Volume diagnostics,compute chare sums
             //~ const int thisIndex_arr[3] = {thisIndex.x, thisIndex.y, thisIndex.z};
