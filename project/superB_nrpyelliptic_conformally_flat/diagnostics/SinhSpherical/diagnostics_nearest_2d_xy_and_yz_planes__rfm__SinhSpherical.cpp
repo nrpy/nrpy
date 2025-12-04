@@ -107,9 +107,6 @@ void diagnostics_nearest_2d_xy_and_yz_planes__rfm__SinhSpherical(commondata_stru
         diagnosticstruct->localidx3_diagnostic_2d_xy_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
         diagnosticstruct->offset_diagnostic_2d_xy_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
 
-
-
-
         int which_diagnostics_chare = 0;
         int which_diagnostic_global = 0;
         i1 = i1_mid;
@@ -209,8 +206,6 @@ void diagnostics_nearest_2d_xy_and_yz_planes__rfm__SinhSpherical(commondata_stru
         const int i2 = i2_diagnostic_pt[which_pt];
         REAL xCart[3];
 
-        //~ REAL xOrig[3] = {xx[0][i0], xx[1][i1], xx[2][i2]};
-        //~ xx_to_Cart(params, xOrig, xCart);
         REAL xOrig[3] = {xx_chare[0][i0], xx_chare[1][i1], xx_chare[2][i2]};
         xx_to_Cart(params_chare, xOrig, xCart);
 
@@ -247,7 +242,7 @@ void diagnostics_nearest_2d_xy_and_yz_planes__rfm__SinhSpherical(commondata_stru
         exit(1);
       } // END IF row allocation failure
 
-      // Unpack diagnosticptoffset struct:
+      // Unpack diagnosticstruct
       const int num_diagnostic_pts = diagnosticstruct->num_diagnostic_2d_yz_pts;
       const int *restrict idx3_diagnostic_pt = diagnosticstruct->localidx3_diagnostic_2d_yz_pt;
       const int *restrict i0_diagnostic_pt = diagnosticstruct->locali0_diagnostic_2d_yz_pt;
@@ -261,11 +256,8 @@ void diagnostics_nearest_2d_xy_and_yz_planes__rfm__SinhSpherical(commondata_stru
         const int i1 = i1_diagnostic_pt[which_pt];
         const int i2 = i2_diagnostic_pt[which_pt];
         REAL xCart[3];
-        //~ REAL xOrig[3] = {xx[0][i0], xx[1][i1], xx[2][i2]};
-        //~ xx_to_Cart(params, xOrig, xCart);
         REAL xOrig[3] = {xx_chare[0][i0], xx_chare[1][i1], xx_chare[2][i2]};
         xx_to_Cart(params_chare, xOrig, xCart);
-
 
         int sizeinbytes = 23 * (diagnosticstruct->num_output_quantities + 2);
         char out[sizeinbytes + 1];
@@ -289,22 +281,6 @@ void diagnostics_nearest_2d_xy_and_yz_planes__rfm__SinhSpherical(commondata_stru
       break;
     }
   }
-
-
-
-
-  // Open output files (one file per timestep, per plane, for this grid)
-  //~ FILE *out_xy = open_outfile("out2d-xy", coordsys_with_grid, commondata, /*include_time=*/1);
-  //~ FILE *out_yz = open_outfile("out2d-yz", coordsys_with_grid, commondata, /*include_time=*/1);
-
-  //~ if (!out_xy || !out_yz) {
-    //~ if (out_xy)
-      //~ fclose(out_xy);
-    //~ if (out_yz)
-      //~ fclose(out_yz);
-    //~ fprintf(stderr, "Error: Cannot open output files for grid %d.\n", grid);
-    //~ exit(1);
-  //~ } // END IF cannot open output files
 
   //~ // Write time comment and headers
   //~ diag_write_time_comment(out_xy, commondata->time);

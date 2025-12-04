@@ -92,8 +92,7 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
 
       diagnosticstruct->num_output_quantities = NUM_GFS_NEAREST;
 
-      // compute offset in bytes for first field for each diagnostic pt
-      //~ int sizeinbytes = 23 * (diagnosticstruct->num_output_quantities + 1);
+      // Compute bytes commmon to both y and z outputs
       diagnosticstruct->sizeinbytes_per_pt_1d = 23 * (diagnosticstruct->num_output_quantities + 1);
       int time_bytes = diag_time_comment_size_bytes(commondata->time);
 
@@ -129,8 +128,7 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
 
       // ----------------------
       // Build y-axis samples
-      // ----------------------
-      int header_size_bytes_y = time_bytes + diag_header_size_bytes("y",  NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
+      // ----------------------      
       int count_y = 0;
       for (int i0 = NGHOSTS; i0 < params->Nxx_plus_2NGHOSTS0 - NGHOSTS; i0++) {
         const int i1 = i1_mid;
@@ -162,8 +160,10 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
       if (count_y > 1)
         qsort(data_points_y, (size_t)count_y, sizeof(data_point_1d_struct), compare_by_coord);
 
-
+      //Set values 
       diagnosticstruct->tot_num_diagnostic_1d_y_pts = count_y;
+      int header_size_bytes_y = time_bytes + diag_header_size_bytes("y",  NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
+      diagnosticstruct->totsizeinbytes_1d_y = header_size_bytes_y + (diagnosticstruct->sizeinbytes_per_pt_1d * diagnosticstruct->tot_num_diagnostic_1d_y_pts);
 
       int num_diagnostics_chare = 0;
       for (int i = 0; i < count_y; i++) {
@@ -175,7 +175,11 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
           num_diagnostics_chare++;
         }
       }
+      
+      // Set values
       diagnosticstruct->num_diagnostic_1d_y_pts = num_diagnostics_chare;
+            
+      // Allocate memory
       diagnosticstruct->localidx3_diagnostic_1d_y_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
       diagnosticstruct->locali0_diagnostic_1d_y_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
       diagnosticstruct->locali1_diagnostic_1d_y_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
@@ -200,17 +204,11 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
         }
         which_diagnostic_global++;
       }
-
-
-
-      diagnosticstruct->totsizeinbytes_1d_y = header_size_bytes_y + (diagnosticstruct->sizeinbytes_per_pt_1d * diagnosticstruct->tot_num_diagnostic_1d_y_pts);
-
-
+      
 
       // ----------------------
       // Build z-axis samples
-      // ----------------------
-      int header_size_bytes_z = time_bytes + diag_header_size_bytes("z",  NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
+      // ----------------------      
       int count_z = 0;
       for (int i0 = NGHOSTS; i0 < params->Nxx_plus_2NGHOSTS0 - NGHOSTS; i0++) {
         const int i1 = i1_min;
@@ -241,9 +239,11 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
 
       if (count_z > 1)
         qsort(data_points_z, (size_t)count_z, sizeof(data_point_1d_struct), compare_by_coord);
-
-
+      
+      // Set values
       diagnosticstruct->tot_num_diagnostic_1d_z_pts = count_z;
+      int header_size_bytes_z = time_bytes + diag_header_size_bytes("z",  NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
+      diagnosticstruct->totsizeinbytes_1d_z = header_size_bytes_z + (diagnosticstruct->sizeinbytes_per_pt_1d * diagnosticstruct->tot_num_diagnostic_1d_z_pts);
 
       num_diagnostics_chare = 0;
       for (int i = 0; i < count_z; i++) {
@@ -255,13 +255,16 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
           num_diagnostics_chare++;
         }
       }
+            
+      // Set values
       diagnosticstruct->num_diagnostic_1d_z_pts = num_diagnostics_chare;
+      
+      // Allocate memory
       diagnosticstruct->localidx3_diagnostic_1d_z_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
       diagnosticstruct->locali0_diagnostic_1d_z_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
       diagnosticstruct->locali1_diagnostic_1d_z_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
       diagnosticstruct->locali2_diagnostic_1d_z_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
       diagnosticstruct->offset_diagnostic_1d_z_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
-
 
       which_diagnostics_chare = 0;
       which_diagnostic_global = 0;
@@ -276,16 +279,11 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
           diagnosticstruct->locali0_diagnostic_1d_z_pt[which_diagnostics_chare] = MAP_GLOBAL_TO_LOCAL_IDX0(chare_index[0], i0, Nxx0chare);
           diagnosticstruct->locali1_diagnostic_1d_z_pt[which_diagnostics_chare] = MAP_GLOBAL_TO_LOCAL_IDX1(chare_index[1], i1, Nxx1chare);
           diagnosticstruct->locali2_diagnostic_1d_z_pt[which_diagnostics_chare] = MAP_GLOBAL_TO_LOCAL_IDX2(chare_index[2], i2, Nxx2chare);
-          //~ diagnosticstruct->offset_diagnostic_1d_z_pt[which_diagnostics_chare] = which_diagnostic_global * diagnosticstruct->sizeinbytes_per_pt_1d;
           diagnosticstruct->offset_diagnostic_1d_z_pt[which_diagnostics_chare] = header_size_bytes_z + (which_diagnostic_global * diagnosticstruct->sizeinbytes_per_pt_1d);
           which_diagnostics_chare++;
         }
         which_diagnostic_global++;
-      }
-
-
-      diagnosticstruct->totsizeinbytes_1d_z = header_size_bytes_z + (diagnosticstruct->sizeinbytes_per_pt_1d * diagnosticstruct->tot_num_diagnostic_1d_z_pts);
-
+      }      
 
       // Cleanup
       free(data_points_y);
@@ -322,7 +320,7 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
         exit(1);
       } // END IF row allocation failure
 
-      // Unpack diagnosticptoffset struct:
+      // Unpack diagnosticstruct
       const int num_diagnostic_pts = diagnosticstruct->num_diagnostic_1d_y_pts;
       const int *restrict idx3_diagnostic_pt = diagnosticstruct->localidx3_diagnostic_1d_y_pt;
       const int *restrict i0_diagnostic_pt = diagnosticstruct->locali0_diagnostic_1d_y_pt;
@@ -339,7 +337,6 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
         REAL xOrig[3] = {xx_chare[0][i0], xx_chare[1][i1], xx_chare[2][i2]};
         xx_to_Cart(params_chare, xOrig, xCart);
 
-        //~ int sizeinbytes = 23 * (diagnosticstruct->num_output_quantities + 1);
         int sizeinbytes = diagnosticstruct->sizeinbytes_per_pt_1d;
         char out[sizeinbytes + 1];
         row[0] = xCart[1];
@@ -366,7 +363,6 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
 
     case DIAGNOSTICS_WRITE_Z: {
 
-
       // only chare (0,0,0) writes header
       if (chare_index[0] == 0 && chare_index[1] == 0 && chare_index[2] == 0) {
         int header_bytes = diag_time_comment_size_bytes(commondata->time)
@@ -382,7 +378,6 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
         free(hdr);
       }
 
-
       // Source pointer for this grid
       const REAL *restrict src = gridfuncs_diags[grid];
       // Row buffer: [axis_coord, gfs...]
@@ -393,7 +388,7 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
         exit(1);
       } // END IF row allocation failure
 
-      // Unpack diagnosticptoffset struct:
+      // Unpack diagnosticstruct
       const int num_diagnostic_pts = diagnosticstruct->num_diagnostic_1d_z_pts;
       const int *restrict idx3_diagnostic_pt = diagnosticstruct->localidx3_diagnostic_1d_z_pt;
       const int *restrict i0_diagnostic_pt = diagnosticstruct->locali0_diagnostic_1d_z_pt;
@@ -411,8 +406,6 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
         REAL xOrig[3] = {xx_chare[0][i0], xx_chare[1][i1], xx_chare[2][i2]};
         xx_to_Cart(params_chare, xOrig, xCart);
 
-
-        //~ int sizeinbytes = 23 * (diagnosticstruct->num_output_quantities + 1);
         int sizeinbytes = diagnosticstruct->sizeinbytes_per_pt_1d;
         char out[sizeinbytes + 1];
         row[0] = xCart[2];
@@ -428,7 +421,8 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
         }
         out[sizeinbytes - 1] = '\n';
         Ck::IO::write(token, out, sizeinbytes, offsetpt_firstfield[which_pt]);
-      } // END LOOP over *sorted* points closest to y-axis.
+      } // END LOOP over *sorted* points closest to z-axis.
+      
       // Finalize
       free(row);
 
@@ -437,10 +431,3 @@ void diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical(commondata_struct *
   }
 
 } // END FUNCTION diagnostics_nearest_1d_y_and_z_axes__rfm__SinhSpherical
-
-  // Emit time comment then axis-specific headers (no 'time' column)
-  //~ diag_write_time_comment(out_y, commondata->time);
-  //~ diag_write_time_comment(out_z, commondata->time);
-  //~ diag_write_header(out_y, "y", NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
-  //~ diag_write_header(out_z, "z", NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
-
