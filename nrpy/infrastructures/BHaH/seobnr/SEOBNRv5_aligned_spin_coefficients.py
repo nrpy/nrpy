@@ -171,6 +171,23 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients() -> (
         add_to_parfile=False,
     )
 
+    par.register_CodeParameters(
+        "REAL",
+        __name__,
+        [
+            "c_21",
+            "c_43",
+            "c_55",
+        ],
+        [
+            0,
+            0,
+            0,
+        ],
+        commondata=True,
+        add_to_parfile=False,
+    )
+
     # This is sufficient for initial conditions. Order is the same as pySEOBNR.
     par.register_CodeParameters(
         "REAL",
