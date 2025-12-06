@@ -150,9 +150,9 @@ Operations performed:
           a_y_xy_over_xz_spin,                               // (19) Spin y (xy/xz)
           a_z_xz_over_xy_spin,                               // (20) Spin z (xz/xy)
           a_z_yz_over_xy_spin,                               // (21) Spin z (yz/xy)
-          spin_chi_x_DH,                                     // (22) Spin x (AKV)
-          spin_chi_y_DH,                                     // (23) Spin y (AKV)
-          spin_chi_z_DH                                      // (24) Spin z (AKV)
+          spin_chi_x_spectre,                                // (22) Spin x (Omega)
+          spin_chi_y_spectre,                                // (23) Spin y (Omega)
+          spin_chi_z_spectre                                 // (24) Spin z (Omega)
   );
 
   fflush(fileptr);
