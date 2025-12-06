@@ -108,9 +108,9 @@ Operations performed:
     fprintf(fileptr, "# column 19 = Spin y-component (based on xy/xz)\n");
     fprintf(fileptr, "# column 20 = Spin z-component (based on xz/xy)\n");
     fprintf(fileptr, "# column 21 = Spin z-component (based on yz/xy)\n");
-    fprintf(fileptr, "# column 22 = Spin x-component (based on approximate Killing vector)\n");
-    fprintf(fileptr, "# column 23 = Spin y-component (based on approximate Killing vector)\n");
-    fprintf(fileptr, "# column 24 = Spin z-component (based on approximate Killing vector)\n");
+    fprintf(fileptr, "# column 22 = Spin x-component (based on spin function Omega)\n");
+    fprintf(fileptr, "# column 23 = Spin y-component (based on spin function Omega)\n");
+    fprintf(fileptr, "# column 24 = Spin z-component (based on spin function Omega)\n");
     fflush(fileptr);
   } // END IF file size zero -> need to write header
 
