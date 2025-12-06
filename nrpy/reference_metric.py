@@ -43,6 +43,15 @@ class ReferenceMetric:
         :param SymPySimplifyExpressions: A boolean indicating whether to simplify expressions using SymPy. Default is False.
         :raises ValueError: If an unrecognized coordinate system is specified.
         """
+        self.CoordSystem = CoordSystem
+        self.SymPySimplifyExpressions = SymPySimplifyExpressions
+
+        # For GeneralRFM, rfm_precompute is not supported
+        if CoordSystem == "GeneralRFM" and enable_rfm_precompute:
+            raise ValueError(
+                "Error: enable_rfm_precompute=True is not supported for CoordSystem='GeneralRFM'."
+            )
+
         # grid_physical_size is set based entirely on CoordSystem. So it is a rfm parameter not a grid parameter.
         par.register_param(bool, __name__, "enable_grid_physical_size", True)
         # For multipatch runs, set to "All". For single grid runs, set to the grid's CoordSystem.
@@ -70,9 +79,6 @@ class ReferenceMetric:
             add_to_parfile=False,
             add_to_set_CodeParameters_h=True,
         )
-
-        self.CoordSystem = CoordSystem
-        self.SymPySimplifyExpressions = SymPySimplifyExpressions
 
         # Lower corner of the grid:
         self.xxmin = [sp.sympify(0)] * 3
@@ -147,7 +153,12 @@ class ReferenceMetric:
         )
         # END: RFM PRECOMPUTE STUFF
 
-        if "Cartesian" in CoordSystem:
+        if CoordSystem == "GeneralRFM":
+            # Fully general reference metric coordinate system; coordinates are
+            # treated as Cartesian-labeled with identity maps to/from Cartesian.
+            self.EigenCoord = "Cartesian"
+            self.general_rfm_like()
+        elif "Cartesian" in CoordSystem:
             self.EigenCoord = "Cartesian"
             self.cartesian_like()
         elif "Spherical" in CoordSystem:
@@ -214,7 +225,24 @@ class ReferenceMetric:
         self.ReD = ixp.zerorank1()
         self.ReDD = ixp.zerorank2()
         self.ghatDD = ixp.zerorank2()
-        if not enable_rfm_precompute:
+        if self.CoordSystem == "GeneralRFM":
+            # In GeneralRFM, the reference metric is a fully general symmetric
+            # 3x3 tensor, and rescaling infrastructure is trivialized:
+            # ReU = ReD = 1, ReDD = 1 for all components.
+            for i in range(3):
+                self.ReU[i] = sp.sympify(1)
+                self.ReD[i] = sp.sympify(1)
+                for j in range(3):
+                    self.ReDD[i][j] = sp.sympify(1)
+
+            # Treat the six independent components of ghatDD[i][j] as primitive
+            # symmetric symbols.
+            for i in range(3):
+                for j in range(i, 3):
+                    sym = sp.Symbol(f"ghatDD{i}{j}", real=True)
+                    self.ghatDD[i][j] = sym
+                    self.ghatDD[j][i] = sym
+        elif not enable_rfm_precompute:
             for i in range(3):
                 self.scalefactor_orthog[i] = sp.sympify(self.scalefactor_orthog[i])
                 self.ghatDD[i][i] = self.scalefactor_orthog[i] ** 2
@@ -261,10 +289,6 @@ class ReferenceMetric:
         # Step 2: Compute det(ghat) and its 1st & 2nd derivatives
         self.detgammahatdD = ixp.zerorank1(3)
         self.detgammahatdDD = ixp.zerorank2(3)
-        for i in range(3):
-            self.detgammahatdD[i] = sp.diff(self.detgammahat, self.xx[i])
-            for j in range(3):
-                self.detgammahatdDD[i][j] = sp.diff(self.detgammahatdD[i], self.xx[j])
 
         # Step 3a: Compute 1st & 2nd derivatives of rescaling vectors.
         #          (E.g., needed in BSSN for betaUdDD computation)
@@ -272,54 +296,137 @@ class ReferenceMetric:
         self.ReUdDD = ixp.zerorank3(3)
         self.ReDdD = ixp.zerorank2(3)
         self.ReDdDD = ixp.zerorank3(3)
-        for i in range(3):
-            for j in range(3):
-                self.ReUdD[i][j] = sp.diff(self.ReU[i], self.xx[j])
-                self.ReDdD[i][j] = sp.diff(self.ReD[i], self.xx[j])
-                for k in range(3):
-                    self.ReUdDD[i][j][k] = sp.diff(self.ReUdD[i][j], self.xx[k])
-                    self.ReDdDD[i][j][k] = sp.diff(self.ReDdD[i][j], self.xx[k])
 
         # Step 3b: Compute 1st & 2nd derivatives of rescaling matrix.
         self.ReDDdD = ixp.zerorank3(3)
         self.ReDDdDD = ixp.zerorank4(3)
-        for i in range(3):
-            for j in range(3):
-                for k in range(3):
-                    self.ReDDdD[i][j][k] = sp.diff(self.ReDD[i][j], self.xx[k])
-                    for l in range(3):
-                        # Simplifying this doesn't appear to help overall NRPy run time.
-                        self.ReDDdDD[i][j][k][l] = sp.diff(
-                            self.ReDDdD[i][j][k], self.xx[l]
-                        )
 
         # Step 3c: Compute 1st & 2nd derivatives of reference metric.
         self.ghatDDdD = ixp.zerorank3(3)
         self.ghatDDdDD = ixp.zerorank4(3)
-        for i in range(3):
-            for j in range(3):
-                for k in range(3):
-                    if self.SymPySimplifyExpressions:
-                        #                    ghatDDdD[i][j][k] = sp.trigsimp(sp.diff(ghatDD[i][j], xx[k])) # FIXME: BAD: MUST BE SIMPLIFIED OR ANSWER IS INCORRECT! Must be some bug in sympy...
-                        self.ghatDDdD[i][j][k] = cached_simplify(
-                            sp.diff(self.ghatDD[i][j], self.xx[k])
-                        )  # FIXME: BAD: MUST BE SIMPLIFIED OR ANSWER IS INCORRECT! Must be some bug in sympy...
-                    else:
-                        self.ghatDDdD[i][j][k] = sp.diff(
-                            self.ghatDD[i][j], self.xx[k]
-                        )  # FIXME: BAD: MUST BE SIMPLIFIED OR ANSWER IS INCORRECT! Must be some bug in sympy...
-                    for l in range(3):
-                        self.ghatDDdDD[i][j][k][l] = sp.diff(
-                            self.ghatDDdD[i][j][k], self.xx[l]
-                        )
+
+        if self.CoordSystem == "GeneralRFM":
+            # In GeneralRFM, the first and second derivatives of the reference
+            # metric are treated as *primitive* tensors, never obtained by
+            # differentiating ghatDD inside ReferenceMetric.
+            # First derivatives: symmetric in (i,j).
+            for i in range(3):
+                for j in range(i, 3):
+                    for k in range(3):
+                        sym = sp.Symbol(f"ghatDDdD{i}{j}{k}", real=True)
+                        self.ghatDDdD[i][j][k] = sym
+                        self.ghatDDdD[j][i][k] = sym
+
+            # Second derivatives: symmetric in (i,j) and in (k,l).
+            for i in range(3):
+                for j in range(i, 3):
+                    for k in range(3):
+                        for l in range(k, 3):
+                            sym = sp.Symbol(f"ghatDDdDD{i}{j}{k}{l}", real=True)
+                            self.ghatDDdDD[i][j][k][l] = sym
+                            self.ghatDDdDD[j][i][k][l] = sym
+                            self.ghatDDdDD[i][j][l][k] = sym
+                            self.ghatDDdDD[j][i][l][k] = sym
+
+            # Algebraic computation of detgammahatdD using Jacobi's formula:
+            # D_{,k} = D * g^{ij} * g_{ij,k}
+            for k in range(3):
+                tmp = sp.sympify(0)
+                for i in range(3):
+                    for j in range(3):
+                        tmp += self.ghatUU[i][j] * self.ghatDDdD[i][j][k]
+                self.detgammahatdD[k] = self.detgammahat * tmp
+
+            # Algebraic computation of detgammahatdDD:
+            # D_{,kl} = D * [ g^{mn} g_{mn,l} * g^{ij} g_{ij,k}
+            #                - g^{ip} g^{jq} g_{pq,l} g_{ij,k}
+            #                + g^{ij} g_{ij,kl} ]
+            for k in range(3):
+                for l in range(3):
+                    # S_k = g^{ij} g_{ij,k}
+                    S_k = sp.sympify(0)
+                    for i in range(3):
+                        for j in range(3):
+                            S_k += self.ghatUU[i][j] * self.ghatDDdD[i][j][k]
+                    # T_l = g^{mn} g_{mn,l}
+                    T_l = sp.sympify(0)
+                    for m in range(3):
+                        for n in range(3):
+                            T_l += self.ghatUU[m][n] * self.ghatDDdD[m][n][l]
+                    # U_{kl} = -g^{ip} g^{jq} g_{pq,l} g_{ij,k}
+                    U_kl = sp.sympify(0)
+                    for i in range(3):
+                        for j in range(3):
+                            for p in range(3):
+                                for q in range(3):
+                                    U_kl -= (
+                                        self.ghatUU[i][p]
+                                        * self.ghatUU[j][q]
+                                        * self.ghatDDdD[p][q][l]
+                                        * self.ghatDDdD[i][j][k]
+                                    )
+                    # V_{kl} = g^{ij} g_{ij,kl}
+                    V_kl = sp.sympify(0)
+                    for i in range(3):
+                        for j in range(3):
+                            V_kl += self.ghatUU[i][j] * self.ghatDDdDD[i][j][k][l]
+                    self.detgammahatdDD[k][l] = self.detgammahat * (
+                        T_l * S_k + U_kl + V_kl
+                    )
+
+            # For GeneralRFM, all rescaling derivatives remain identically zero
+            # (already initialized above via zerorank* calls).
+
+        else:
+            # Standard computation via symbolic differentiation for other coordinate systems
+            for i in range(3):
+                self.detgammahatdD[i] = sp.diff(self.detgammahat, self.xx[i])
+                for j in range(3):
+                    self.detgammahatdDD[i][j] = sp.diff(
+                        self.detgammahatdD[i], self.xx[j]
+                    )
+
+            for i in range(3):
+                for j in range(3):
+                    self.ReUdD[i][j] = sp.diff(self.ReU[i], self.xx[j])
+                    self.ReDdD[i][j] = sp.diff(self.ReD[i], self.xx[j])
+                    for k in range(3):
+                        self.ReUdDD[i][j][k] = sp.diff(self.ReUdD[i][j], self.xx[k])
+                        self.ReDdDD[i][j][k] = sp.diff(self.ReDdD[i][j], self.xx[k])
+
+            for i in range(3):
+                for j in range(3):
+                    for k in range(3):
+                        self.ReDDdD[i][j][k] = sp.diff(self.ReDD[i][j], self.xx[k])
+                        for l in range(3):
+                            # Simplifying this doesn't appear to help overall NRPy run time.
+                            self.ReDDdDD[i][j][k][l] = sp.diff(
+                                self.ReDDdD[i][j][k], self.xx[l]
+                            )
+
+            for i in range(3):
+                for j in range(3):
+                    for k in range(3):
+                        if self.SymPySimplifyExpressions:
+                            self.ghatDDdD[i][j][k] = cached_simplify(
+                                sp.diff(self.ghatDD[i][j], self.xx[k])
+                            )
+                        else:
+                            self.ghatDDdD[i][j][k] = sp.diff(
+                                self.ghatDD[i][j], self.xx[k]
+                            )
+                        for l in range(3):
+                            self.ghatDDdDD[i][j][k][l] = sp.diff(
+                                self.ghatDDdD[i][j][k], self.xx[l]
+                            )
 
         # Step 4a: Compute Christoffel symbols of reference metric.
+        # (Standard algebraic construction works for all systems including GeneralRFM)
         self.GammahatUDD = ixp.zerorank3(3)
         for i in range(3):
             for k in range(3):
                 for l in range(3):
                     for m in range(3):
-                        #                    GammahatUDD[i][k][l] += sp.trigsimp((sp.Rational(1,2))*ghatUU[i][m]*\
                         self.GammahatUDD[i][k][l] += (
                             (sp.Rational(1, 2))
                             * self.ghatUU[i][m]
@@ -332,13 +439,50 @@ class ReferenceMetric:
 
         # Step 4b: Compute derivs of Christoffel symbols of reference metric.
         self.GammahatUDDdD = ixp.zerorank4(3)
-        for i in range(3):
-            for j in range(3):
-                for k in range(3):
-                    for l in range(3):
-                        self.GammahatUDDdD[i][j][k][l] = sp.diff(
-                            self.GammahatUDD[i][j][k], self.xx[l]
-                        )
+        if self.CoordSystem == "GeneralRFM":
+            # Algebraic construction of GammahatUDDdD from ghatUU, ghatDDdD, ghatDDdDD.
+            # Gamma^i_{jk,l} = 1/2 [ - g^{ip} g^{mq} g_{pq,l} C_{mjk} + g^{im} C_{mjk,l} ]
+            # where C_{mjk}   = g_{mj,k} + g_{mk,j} - g_{jk,m}
+            #       C_{mjk,l} = g_{mj,kl} + g_{mk,jl} - g_{jk,ml}
+            for i in range(3):
+                for j in range(3):
+                    for k in range(3):
+                        for l in range(3):
+                            term1 = sp.sympify(0)
+                            term2 = sp.sympify(0)
+                            for m in range(3):
+                                C_mjk = (
+                                    self.ghatDDdD[m][j][k]
+                                    + self.ghatDDdD[m][k][j]
+                                    - self.ghatDDdD[j][k][m]
+                                )
+                                C_mjk_l = (
+                                    self.ghatDDdDD[m][j][k][l]
+                                    + self.ghatDDdDD[m][k][j][l]
+                                    - self.ghatDDdDD[j][k][m][l]
+                                )
+                                # g^{im}_{,l} = -g^{ip} g^{mq} g_{pq,l}
+                                ghatUU_im_dD_l = sp.sympify(0)
+                                for p in range(3):
+                                    for q in range(3):
+                                        ghatUU_im_dD_l -= (
+                                            self.ghatUU[i][p]
+                                            * self.ghatUU[m][q]
+                                            * self.ghatDDdD[p][q][l]
+                                        )
+                                term1 += ghatUU_im_dD_l * C_mjk
+                                term2 += self.ghatUU[i][m] * C_mjk_l
+                            self.GammahatUDDdD[i][j][k][l] = sp.Rational(1, 2) * (
+                                term1 + term2
+                            )
+        else:
+            for i in range(3):
+                for j in range(3):
+                    for k in range(3):
+                        for l in range(3):
+                            self.GammahatUDDdD[i][j][k][l] = sp.diff(
+                                self.GammahatUDD[i][j][k], self.xx[l]
+                            )
 
         # Step 4c: If rfm_precompute is disabled, then we are finished with this function.
         #          Otherwise continue to Step 5.
@@ -1497,6 +1641,63 @@ class ReferenceMetric:
             add_to_glb_code_params_dict=True,
         )
 
+    def general_rfm_like(self) -> None:
+        """
+        Initialize class attributes for the GeneralRFM coordinate system.
+
+        The coordinates xx^i are treated as Cartesian-labeled coordinates
+        with identity maps to and from the Cartesian variables (Cartx,
+        Carty, Cartz). The reference metric itself is specified separately
+        and may be fully general and non-orthogonal.
+        """
+        # Neutral default domain; users are free to override these bounds.
+        par.register_CodeParameters(
+            "REAL",
+            self.CodeParam_modulename,
+            ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"],
+            [-1.0, 1.0, -1.0, 1.0, -1.0, 1.0],
+            add_to_parfile=self.add_rfm_params_to_parfile,
+            add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
+        )
+        self.xxmin = ["xmin", "ymin", "zmin"]
+        self.xxmax = ["xmax", "ymax", "zmax"]
+        self.grid_physical_size_dict = {
+            "xmin": "-grid_physical_size",
+            "ymin": "-grid_physical_size",
+            "zmin": "-grid_physical_size",
+            "xmax": "grid_physical_size",
+            "ymax": "grid_physical_size",
+            "zmax": "grid_physical_size",
+        }
+
+        # Identity map between reference-metric coordinates and Cartesian.
+        self.xx_to_Cart[0] = self.xx[0]
+        self.xx_to_Cart[1] = self.xx[1]
+        self.xx_to_Cart[2] = self.xx[2]
+
+        self.Cart_to_xx[0] = self.Cartx
+        self.Cart_to_xx[1] = self.Carty
+        self.Cart_to_xx[2] = self.Cartz
+
+        # Define spherical coordinates from these Cartesian-like coordinates
+        # (for ancillary purposes only; not used for metric construction).
+        self.xxSph[0] = sp.sqrt(self.xx[0] ** 2 + self.xx[1] ** 2 + self.xx[2] ** 2)
+        self.xxSph[1] = sp.acos(self.xx[2] / self.xxSph[0])
+        self.xxSph[2] = sp.atan2(self.xx[1], self.xx[0])
+
+        # Trivial scale factors (placeholders; not used to build metric in GeneralRFM).
+        self.scalefactor_orthog[0] = sp.sympify(1)
+        self.scalefactor_orthog[1] = sp.sympify(1)
+        self.scalefactor_orthog[2] = sp.sympify(1)
+
+        # Unit vectors: identity; all directions are "radial-like".
+        self.UnitVectors = [
+            [sp.sympify(1), sp.sympify(0), sp.sympify(0)],
+            [sp.sympify(0), sp.sympify(1), sp.sympify(0)],
+            [sp.sympify(0), sp.sympify(0), sp.sympify(1)],
+        ]
+        self.radial_like_dirns = [0, 1, 2]
+
 
 class rfm_dict(Dict[str, ReferenceMetric]):
     """Custom dictionary for storing ReferenceMetric objects."""
@@ -1507,13 +1708,20 @@ class rfm_dict(Dict[str, ReferenceMetric]):
 
             # In case [CoordSystem]_rfm_precompute is passed:
             CoordSystem = CoordSystem_in.replace("_rfm_precompute", "")
-            self.__setitem__(
-                CoordSystem, ReferenceMetric(CoordSystem, enable_rfm_precompute=False)
-            )
-            self.__setitem__(
-                CoordSystem + "_rfm_precompute",
-                ReferenceMetric(CoordSystem, enable_rfm_precompute=True),
-            )
+
+            # Base ReferenceMetric without precomputation:
+            base_rfm = ReferenceMetric(CoordSystem, enable_rfm_precompute=False)
+            self.__setitem__(CoordSystem, base_rfm)
+
+            # For GeneralRFM, rfm_precompute is disabled by design; map the
+            # _rfm_precompute variant to the same underlying object.
+            if CoordSystem == "GeneralRFM":
+                self.__setitem__(CoordSystem + "_rfm_precompute", base_rfm)
+            else:
+                self.__setitem__(
+                    CoordSystem + "_rfm_precompute",
+                    ReferenceMetric(CoordSystem, enable_rfm_precompute=True),
+                )
         return dict.__getitem__(self, CoordSystem_in)
 
     def __setitem__(self, CoordSystem: str, value: ReferenceMetric) -> None:
@@ -1540,6 +1748,7 @@ supported_CoordSystems = [
     "UWedgeHSinhSph",
     "RingHoleySinhSpherical",
     "HoleySinhSpherical",
+    "GeneralRFM",
 ]
 
 unittest_CoordSystems = [
