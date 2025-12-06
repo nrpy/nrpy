@@ -9,7 +9,7 @@ around a spinning black hole, following:
 - BL metric and inverse using Eq. 2.1 with shorthands from Eq. 3.5,
 - BL to Kerr-Schild transformation following the HARM implementation,
 - Kerr-Schild metric using Cook (Living Reviews, 2000) Eq. 79 and Appendix of Etienne et al. (2017, arXiv:1704.00599),
-- magnetic field seed with $B^i = \nabla \times A$ (Eq. 15 of Porth et al., 2015, arXiv:1501.07276),
+- magnetic field seed with $B^i = nabla times A$ (Eq. 15 of Porth et al., 2015, arXiv:1501.07276),
 - ADM quantities from Eq. 4.49 of Gourgoulhon (arXiv:0703035), consistent with B&S Eq. 2.122,
 - comoving magnetic field using Eqs. 23, 24, 27, and 31 of Noble et al. (2006, astro-ph/0503420),
 - Valencia velocity using Eq. 11 of Porth et al. (2015, arXiv:1501.07276).
@@ -252,7 +252,7 @@ class FishboneMoncriefID:
         )
 
         # Step 8: Build gPhys4UU from alpha, beta, and gamma (3-metric) [Eq. 4.49 of Gourgoulhon; B&S Eq. 2.122]
-        gammaKSUU, gammaKSDET = ixp.symm_matrix_inverter3x3(gammaKSDD)
+        gammaKSUU, _gammaKSDET = ixp.symm_matrix_inverter3x3(gammaKSDD)
         gPhys4UU = ixp.zerorank2(dimension=4)
         gPhys4UU[0][0] = -1 / alphaKS**2
         for i in range(1, 4):
