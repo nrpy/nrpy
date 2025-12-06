@@ -218,10 +218,10 @@ typedef struct {
   // Benchmarking: Counts number of points where Theta is evaluated.
   long Theta_eval_points_counter;
   //==========================
-  // Spin vector chi, based on approximate Killing vectors (AKVs) calculated by a dynamical horizon (DH) approach
-  REAL spin_chi_x_DH
-  REAL spin_chi_y_DH
-  REAL spin_chi_z_DH
+  // Dimensionless spin vector chi, based on a spin function Omega calculated based on a rotational one-form according to the same method as SpECTRE
+  REAL spin_chi_x
+  REAL spin_chi_y
+  REAL spin_chi_z
   
 } bhahaha_diagnostics_struct;
 
