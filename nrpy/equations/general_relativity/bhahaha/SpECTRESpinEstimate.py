@@ -364,7 +364,7 @@ class SpECTRESpinEstimateClass:
             lists of expressions.
         """
         out: Dict[str, Any] = {}
-        out["area_integrand"] = 1
+        out["area_integrand"] = sp.Integer(1)
         out["area_density"] = self._sqrtq
         out["ricci_scalar"] = self._R
         out["spin_function"] = self._Omega
@@ -856,7 +856,7 @@ class SpECTRESpinEstimateClass_dict(Dict[str, SpECTRESpinEstimateClass]):
                 enable_rfm_precompute = True
             else:
                 raise KeyError(
-                    "Unsupported key: '{key}'. Supported keys are "
+                    f"Unsupported key: '{key}'. Supported keys are "
                     "'Spherical' and 'Spherical_rfm_precompute'."
                 )
 
@@ -883,7 +883,7 @@ class SpECTRESpinEstimateClass_dict(Dict[str, SpECTRESpinEstimateClass]):
         """
         if key not in ["Spherical", "Spherical_rfm_precompute"]:
             raise KeyError(
-                "Unsupported key: '{key}'. Supported keys are "
+                f"Unsupported key: '{key}'. Supported keys are "
                 "'Spherical' and 'Spherical_rfm_precompute'."
             )
         dict.__setitem__(self, key, value)
