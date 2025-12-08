@@ -224,7 +224,7 @@ static void apply_bcs_pure_only_host(const params_struct *restrict params, const
   MAYBE_UNUSED const REAL invdxx1 = params->invdxx1;
   MAYBE_UNUSED const REAL invdxx2 = params->invdxx2;
 
-#pragma omp for // threads have been spawned; here we distribute across them
+#pragma omp parallel for
   for (int idx2d = 0; idx2d < num_pure_outer_boundary_points; idx2d++) {
     const short i0 = pure_outer_bc_array[idx2d].i0;
     const short i1 = pure_outer_bc_array[idx2d].i1;

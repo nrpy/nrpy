@@ -517,7 +517,7 @@ for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {
 """
     else:
         kernel_body += """
-#pragma omp for  // threads have been spawned; here we distribute across them
+#pragma omp parallel for
     for (int idx2d = 0; idx2d < num_pure_outer_boundary_points; idx2d++) {
 """
     kernel_body += """const short i0 = pure_outer_bc_array[idx2d].i0;
