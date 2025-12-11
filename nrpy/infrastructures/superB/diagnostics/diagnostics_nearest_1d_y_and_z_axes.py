@@ -25,6 +25,13 @@ from typing import Any, Dict, List, Union, cast
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 
+from nrpy.infrastructures.BHaH.diagnostics.diagnostics_nearest_1d_y_and_z_axes import (
+    bhah_family_from_coord,
+    bhah_axis_configs,
+    count_expr,
+    gen_fill,    
+)
+
 
 def register_CFunction_diagnostics_nearest_1d_y_and_z_axes(
     CoordSystem: str,
@@ -54,247 +61,26 @@ def register_CFunction_diagnostics_nearest_1d_y_and_z_axes(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    def _family() -> str:
-        if ("Spherical" in CoordSystem) and ("Ring" in CoordSystem):
-            return "Spherical_Ring"
-        for fam in ("Cartesian", "Spherical", "Cylindrical", "SymTP", "Wedge"):
-            if fam in CoordSystem:
-                return fam
-        raise ValueError(f"Unsupported CoordSystem: {CoordSystem}")
-
-    fam = _family()
-
-    # -------------------------------------------------------------------------
-    # axis_configs schema (dict of dicts):
-    # axis_configs[AXIS][FAMILY] -> list[LINE_SPEC], where:
-    #   AXIS   : "y" or "z" (the physical axis we will output as the first column)
-    #   FAMILY : one of {"Cartesian","Spherical","Cylindrical","SymTP","Wedge","Spherical_Ring"}
-    #   LINE_SPEC is a dict with:
-    #       "vary" : str      -> which grid index to iterate over ("i0", "i1", or "i2")
-    #       "fixed": dict     -> all *other* indices held fixed at named helper indices
-    #            keys   are "i0","i1","i2"
-    #            values are names of C locals defined in `body` (e.g. "i0_mid","i2_q1",...)
-    #
-    # Notes:
-    # - We always convert (xx -> Cartesian) and then take xCart[1] for y, xCart[2] for z.
-    # - The specific fixed-point choices differ by coordinate family to pick the line
-    #   that is geometrically "nearest" to the physical axis without interpolation.
-    # - An empty list means: no meaningful axis line exists for that (AXIS, FAMILY).
-    # -------------------------------------------------------------------------
-    axis_configs = {
-        "y": {  # Lines used to sample along the physical y-axis (output column 0 = y)
-            "Cartesian": [
-                {
-                    "vary": "i1",  # march along y-index to trace a y-line
-                    "fixed": {
-                        "i0": "i0_mid",  # hold x at domain midpoint
-                        "i2": "i2_mid",  # hold z at domain midpoint
-                    },
-                },
-            ],
-            "Spherical": [
-                {
-                    "vary": "i0",  # march in radius to sample a radial cut at a fixed (theta,phi)
-                    "fixed": {
-                        "i1": "i1_mid",  # theta ~ pi/2 (equator) for nearest y-line (Q1 longitude)
-                        "i2": "i2_q1",  # phi ~ +pi/2 (quadrant 1)
-                    },
-                },
-                {
-                    "vary": "i0",
-                    "fixed": {
-                        "i1": "i1_mid",  # theta ~ pi/2 (equator)
-                        "i2": "i2_q3",  # phi ~ -pi/2 (quadrant 3) — the opposite y-direction
-                    },
-                },
-            ],
-            "Cylindrical": [
-                {
-                    "vary": "i0",  # march in rho at fixed (phi,z) to follow a line aligned with y
-                    "fixed": {
-                        "i1": "i1_q1",  # phi ~ +pi/2 (quadrant 1) -> points toward +y
-                        "i2": "i2_mid",  # z mid-plane
-                    },
-                },
-                {
-                    "vary": "i0",
-                    "fixed": {
-                        "i1": "i1_q3",  # phi ~ -pi/2 (quadrant 3) -> points toward -y
-                        "i2": "i2_mid",  # z mid-plane
-                    },
-                },
-            ],
-            "SymTP": [
-                {
-                    "vary": "i0",  # march in radial-like coordinate at fixed angles
-                    "fixed": {
-                        "i1": "i1_mid",  # mid in the first angular coordinate
-                        "i2": "i2_q1",  # second angle set to quadrant 1 (y>0)
-                    },
-                },
-                {
-                    "vary": "i0",
-                    "fixed": {
-                        "i1": "i1_mid",
-                        "i2": "i2_q3",  # second angle set to quadrant 3 (y<0)
-                    },
-                },
-            ],
-            "Wedge": [
-                # No well-defined "nearest y-axis" line in wedge geometry -> no samples
-            ],
-            "Spherical_Ring": [
-                {
-                    "vary": "i0",  # march in radius within the ring
-                    "fixed": {
-                        "i1": "i1_mid",  # polar angle at mid (equatorial-like)
-                        "i2": "i2_q1",  # azimuth at quadrant 1 (y>0)
-                    },
-                },
-                {
-                    "vary": "i0",
-                    "fixed": {
-                        "i1": "i1_mid",
-                        "i2": "i2_q3",  # azimuth at quadrant 3 (y<0)
-                    },
-                },
-            ],
-        },
-        "z": {  # Lines used to sample along the physical z-axis (output column 0 = z)
-            "Cartesian": [
-                {
-                    "vary": "i2",  # march along z-index to trace a z-line
-                    "fixed": {
-                        "i0": "i0_mid",  # hold x at domain midpoint
-                        "i1": "i1_mid",  # hold y at domain midpoint
-                    },
-                },
-            ],
-            "Spherical": [
-                {
-                    "vary": "i0",  # march in radius at north pole direction
-                    "fixed": {
-                        "i1": "i1_min",  # theta ~ 0   (north pole)
-                        "i2": "i2_min",  # arbitrary reference phi for a single pole line
-                    },
-                },
-                {
-                    "vary": "i0",  # march in radius at south pole direction
-                    "fixed": {
-                        "i1": "i1_max",  # theta ~ pi  (south pole)
-                        "i2": "i2_min",  # same phi reference
-                    },
-                },
-            ],
-            "Cylindrical": [
-                {
-                    "vary": "i2",  # march along z at rho=0, phi=-pi (on the axis)
-                    "fixed": {
-                        "i0": "i0_rmin",  # rho = 0 -> cylindrical axis (the z-axis)
-                        "i1": "i1_pmin",  # phi = -pi (any phi is equivalent at rho=0)
-                    },
-                },
-            ],
-            "SymTP": [
-                {
-                    "vary": "i0",  # march in radial-like coordinate at one pole
-                    "fixed": {
-                        "i1": "i1_min",  # first angle min -> one pole (z>0)
-                        "i2": "i2_min",  # second angle ref
-                    },
-                },
-                {
-                    "vary": "i0",  # march in radial-like coordinate at the opposite pole
-                    "fixed": {
-                        "i1": "i1_max",  # first angle max -> opposite pole (z<0)
-                        "i2": "i2_min",  # second angle ref
-                    },
-                },
-            ],
-            "Wedge": [
-                {
-                    "vary": "i0",  # march in the radial-like direction that aligns with wedge's z
-                    "fixed": {
-                        "i1": "i1_mid",  # hold across-wedge index mid
-                        "i2": "i2_mid",  # hold the other index mid
-                    },
-                },
-            ],
-            "Spherical_Ring": [
-                # No unique z-axis line within a pure spherical ring configuration -> no samples
-            ],
-        },
-    }
+    fam = bhah_family_from_coord(CoordSystem)
+    axis_configs = bhah_axis_configs()
 
     y_lines = axis_configs["y"][fam]
     z_lines = axis_configs["z"][fam]
-
-    def _count_expr(lines: List[Dict[str, Any]]) -> str:
-        # Map each index name to the interior count symbol used in C.
-        # keys:   "i0","i1","i2" (grid indices)
-        # values: "N0int","N1int","N2int" (C locals representing interior sizes)
-        counts = {"i0": "N0int", "i1": "N1int", "i2": "N2int"}
-        # For each LINE_SPEC, the number of points equals the interior length
-        # of the varying dimension; sum across all lines to get the max buffer size.
-        terms = [counts[line["vary"]] for line in lines]
-        return " + ".join(terms) if terms else "0"
-
-    y_count_expr = _count_expr(y_lines)
-    z_count_expr = _count_expr(z_lines)
-
-    def _gen_fill(axis_char: str, lines: List[Dict[str, Any]]) -> str:
-        if not lines:
-            return "(void)xx;  // no points for this axis/family\n"
-
-        # coord_idx selects the physical axis to store in data_point_1d_struct.coord:
-        #   "y" -> xCart[1], "z" -> xCart[2]
-        coord_idx = "1" if axis_char == "y" else "2"
-
-        # Names of the C arrays/counters we fill for each axis
-        arr = "data_points_y" if axis_char == "y" else "data_points_z"
-        cnt = "count_y" if axis_char == "y" else "count_z"
-
-        # Map Python-side index labels to dimension numbers used in params->Nxx_plus_2NGHOSTS{d}
-        # i0 -> dim 0, i1 -> dim 1, i2 -> dim 2
-        dim_index = {"i0": "0", "i1": "1", "i2": "2"}
-
-        blocks = []
-        for line in lines:
-            vary = line["vary"]  # e.g., "i0"
-            vary_dim = dim_index[vary]  # e.g., "0"
-            fixed = line["fixed"]  # dict like {"i1":"i1_mid","i2":"i2_q1"}
-            blocks.append(
-                "\n".join(
-                    [
-                        # loop bounds use the correct dimension number from vary_dim
-                        f"for (int {vary} = NGHOSTS; {vary} < params->Nxx_plus_2NGHOSTS{vary_dim} - NGHOSTS; {vary}++) {{",
-                        *(
-                            # For each non-varying index, bind that index to the named constant
-                            f"  const int {i} = {fixed[i]};"
-                            for i in ("i0", "i1", "i2")
-                            if i != vary
-                        ),
-                        "  const int idx3 = IDX3P(params, i0, i1, i2);",
-                        "  REAL xCart[3], xOrig[3] = { xx[0][i0], xx[1][i1], xx[2][i2] };",
-                        "  xx_to_Cart(params, xOrig, xCart);",
-                        # Save the physical coordinate (y or z) and the flat 3D index
-                        f"  {arr}[{cnt}].coord = xCart[{coord_idx}];",
-                        f"  {arr}[{cnt}].idx3  = idx3;",
-                        f"  {cnt}++;",
-                        f"}} // END LOOP over {vary}",
-                    ]
-                )
-            )
-        return "\n".join(blocks) + "\n"
-
-    fill_y = _gen_fill("y", y_lines)
-    fill_z = _gen_fill("z", z_lines)
+    
+    y_count_expr = count_expr(y_lines)
+    z_count_expr = count_expr(z_lines)
+    
+    fill_y = gen_fill("y", y_lines)
+    fill_z = gen_fill("z", z_lines)
 
     prefunc = r"""
 // Data point for sorting by physical axis coordinate
 typedef struct {
   REAL coord; // physical y or z
   int idx3;   // 3D index
+  int i0;
+  int i1;
+  int i2;
 } data_point_1d_struct;
 
 // qsort comparator (file scope to satisfy -std=c11)
@@ -360,110 +146,342 @@ static int compare_by_coord(const void *a, const void *b) {
 
     cfunc_type = "void"
     name = "diagnostics_nearest_1d_y_and_z_axes"
-    params = """commondata_struct *restrict commondata, const int grid, const params_struct *restrict params,
-                const REAL *restrict xx[3], const int NUM_GFS_NEAREST, const int which_gfs[],
-                const char **diagnostic_gf_names, const REAL *restrict gridfuncs_diags[]"""
+    params = """commondata_struct *restrict commondata, const int grid,
+                const params_struct *restrict params, const params_struct *restrict params_chare,
+                const REAL *restrict xx[3], const REAL *restrict xx_chare[3],
+                const int NUM_GFS_NEAREST, const int which_gfs[],
+                const char **diagnostic_gf_names, const REAL *restrict gridfuncs_diags[],
+                const charecomm_struct *restrict charecommstruct,
+                diagnostic_struct *restrict diagnosticstruct,
+                const int chare_index[3], Ck::IO::Session token,
+                const int which_diagnostics_part"""
 
     body = rf"""
-  // Interior counts
-  const int N0int = params->Nxx_plus_2NGHOSTS0 - 2 * NGHOSTS;
-  const int N1int = params->Nxx_plus_2NGHOSTS1 - 2 * NGHOSTS;
-  const int N2int = params->Nxx_plus_2NGHOSTS2 - 2 * NGHOSTS;
+#include "set_CodeParameters.h"
+  switch (which_diagnostics_part) {{
 
-  // Common fixed-point helpers
-  MAYBE_UNUSED const int i0_mid = params->Nxx_plus_2NGHOSTS0 / 2;
-  MAYBE_UNUSED const int i1_mid = params->Nxx_plus_2NGHOSTS1 / 2;
-  MAYBE_UNUSED const int i2_mid = params->Nxx_plus_2NGHOSTS2 / 2;
+    case DIAGNOSTICS_SETUP_1D: {{
 
-  MAYBE_UNUSED const int i1_min = NGHOSTS;
-  MAYBE_UNUSED const int i1_max = params->Nxx_plus_2NGHOSTS1 - NGHOSTS - 1;
-  MAYBE_UNUSED const int i2_min = NGHOSTS;
+      const int Nxx0chare = params_chare->Nxx0;
+      const int Nxx1chare = params_chare->Nxx1;
+      const int Nxx2chare = params_chare->Nxx2;
 
-  MAYBE_UNUSED const int i0_rmin = NGHOSTS; // rho = 0 (Cylindrical)
-  MAYBE_UNUSED const int i1_pmin = NGHOSTS; // phi = -pi
+      // Build filename component with runtime coordinate system name and grid number
+      char coordsys_with_grid[128];
+      snprintf(coordsys_with_grid, sizeof(coordsys_with_grid), "%s-grid%02d", params->CoordSystemName, grid);
+      strcpy(diagnosticstruct->filename_1d_y, coordsys_with_grid);
+      strcpy(diagnosticstruct->filename_1d_z, coordsys_with_grid);
 
-  // Quarter-plane indices for cell-centered grids
-  MAYBE_UNUSED const int i2_q1 = (int)(NGHOSTS + 0.25 * (REAL)N2int - 0.5);
-  MAYBE_UNUSED const int i2_q3 = (int)(NGHOSTS + 0.75 * (REAL)N2int - 0.5);
-  MAYBE_UNUSED const int i1_q1 = (int)(NGHOSTS + 0.25 * (REAL)N1int - 0.5);
-  MAYBE_UNUSED const int i1_q3 = (int)(NGHOSTS + 0.75 * (REAL)N1int - 0.5);
+      diagnosticstruct->num_output_quantities = NUM_GFS_NEAREST;
 
-  // File naming: out1d-AXIS-<CoordSystemName>-gridXX-...
-  char coordsys_with_grid[128];
-  snprintf(coordsys_with_grid, sizeof(coordsys_with_grid), "%s-grid%02d", params->CoordSystemName, grid);
+      // Compute bytes common to both y and z outputs
+      diagnosticstruct->sizeinbytes_per_pt_1d = 23 * (diagnosticstruct->num_output_quantities + 1);
+      int time_bytes = diag_time_comment_size_bytes(commondata->time);
 
-  FILE *out_y = open_outfile("out1d-y", coordsys_with_grid, commondata, /*include_time=*/1);
-  FILE *out_z = open_outfile("out1d-z", coordsys_with_grid, commondata, /*include_time=*/1);
-  if (!out_y || !out_z) {{
-    if (out_y)
-      fclose(out_y);
-    if (out_z)
-      fclose(out_z);
-    fprintf(stderr, "Error: Cannot open output files for grid %d.\n", grid);
-    exit(1);
-  }} // END IF file open failure
+      // Interior counts
+      const int N0int = params->Nxx_plus_2NGHOSTS0 - 2 * NGHOSTS;
+      const int N1int = params->Nxx_plus_2NGHOSTS1 - 2 * NGHOSTS;
+      const int N2int = params->Nxx_plus_2NGHOSTS2 - 2 * NGHOSTS;
 
-  // Emit time comment then axis-specific headers (no 'time' column)
-  diag_write_time_comment(out_y, commondata->time);
-  diag_write_time_comment(out_z, commondata->time);
-  diag_write_header(out_y, "y", NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
-  diag_write_header(out_z, "z", NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
+      // Common fixed-point helpers
+      MAYBE_UNUSED const int i0_mid = params->Nxx_plus_2NGHOSTS0 / 2;
+      MAYBE_UNUSED const int i1_mid = params->Nxx_plus_2NGHOSTS1 / 2;
+      MAYBE_UNUSED const int i2_mid = params->Nxx_plus_2NGHOSTS2 / 2;
 
-  // Source pointer for this grid
-  const REAL *restrict src = gridfuncs_diags[grid];
+      MAYBE_UNUSED const int i1_min = NGHOSTS;
+      MAYBE_UNUSED const int i1_max = params->Nxx_plus_2NGHOSTS1 - NGHOSTS - 1;
+      MAYBE_UNUSED const int i2_min = NGHOSTS;
 
-  // Allocate buffers (tight upper bounds)
-  const int max_y = {y_count_expr};
-  const int max_z = {z_count_expr};
-  data_point_1d_struct *data_points_y = max_y > 0 ? (data_point_1d_struct*)malloc(sizeof(data_point_1d_struct)*(size_t)max_y) : NULL;
-  data_point_1d_struct *data_points_z = max_z > 0 ? (data_point_1d_struct*)malloc(sizeof(data_point_1d_struct)*(size_t)max_z) : NULL;
+      MAYBE_UNUSED const int i0_rmin = NGHOSTS; // rho = 0 (Cylindrical)
+      MAYBE_UNUSED const int i1_pmin = NGHOSTS; // phi = -pi
 
-  // Row buffer: [axis_coord, gfs...]
-  REAL *row = (REAL*)malloc(sizeof(REAL) * (size_t)(1 + NUM_GFS_NEAREST));
-  if ((max_y > 0 && !data_points_y) || (max_z > 0 && !data_points_z) || !row) {{
-    fprintf(stderr, "Error: Allocation failure in diagnostics_nearest_1d_y_and_z_axes.\\n");
-    free(data_points_y); free(data_points_z); free(row);
-    exit(1);
-  }} // END IF allocation failure
+      // Quarter-plane indices for cell-centered grids
+      MAYBE_UNUSED const int i2_q1 = (int)(NGHOSTS + 0.25 * (REAL)N2int - 0.5);
+      MAYBE_UNUSED const int i2_q3 = (int)(NGHOSTS + 0.75 * (REAL)N2int - 0.5);
+      MAYBE_UNUSED const int i1_q1 = (int)(NGHOSTS + 0.25 * (REAL)N1int - 0.5);
+      MAYBE_UNUSED const int i1_q3 = (int)(NGHOSTS + 0.75 * (REAL)N1int - 0.5);
 
-  // ----------------------
-  // Build y-axis samples
-  // ----------------------
-  int count_y = 0;
-  {fill_y}
-  if (count_y > 1) qsort(data_points_y, (size_t)count_y, sizeof(data_point_1d_struct), compare_by_coord);
-  for (int p = 0; p < count_y; ++p) {{
-    row[0] = data_points_y[p].coord;
-    const int idx3 = data_points_y[p].idx3;
-    for (int gf_i = 0; gf_i < NUM_GFS_NEAREST; ++gf_i) {{
-      const int gf = which_gfs[gf_i];
-      row[1 + gf_i] = src[IDX4Ppt(params, gf, idx3)];
-    }} // END LOOP over gridfunctions
-    diag_write_row(out_y, 1 + NUM_GFS_NEAREST, row);
-  }} // END LOOP over *sorted* points closest to y-axis.
+      // Allocate buffers (tight upper bounds)
+      const int max_y = {y_count_expr};
+      const int max_z = {z_count_expr};
+      data_point_1d_struct *data_points_y =
+        max_y > 0 ? (data_point_1d_struct *)malloc(sizeof(data_point_1d_struct) * (size_t)max_y) : NULL;
+      data_point_1d_struct *data_points_z =
+        max_z > 0 ? (data_point_1d_struct *)malloc(sizeof(data_point_1d_struct) * (size_t)max_z) : NULL;
 
-  // ----------------------
-  // Build z-axis samples
-  // ----------------------
-  int count_z = 0;
-  {fill_z}
-  if (count_z > 1) qsort(data_points_z, (size_t)count_z, sizeof(data_point_1d_struct), compare_by_coord);
-  for (int p = 0; p < count_z; ++p) {{
-    row[0] = data_points_z[p].coord;
-    const int idx3 = data_points_z[p].idx3;
-    for (int gf_i = 0; gf_i < NUM_GFS_NEAREST; ++gf_i) {{
-      const int gf = which_gfs[gf_i];
-      row[1 + gf_i] = src[IDX4Ppt(params, gf, idx3)];
-    }} // END LOOP over gridfunctions
-    diag_write_row(out_z, 1 + NUM_GFS_NEAREST, row);
-  }} // END LOOP over *sorted* points closest to z-axis.
+      // ----------------------
+      // Build y-axis samples
+      // ----------------------
+      int count_y = 0;
+      {fill_y}
+      if (count_y > 1)
+        qsort(data_points_y, (size_t)count_y, sizeof(data_point_1d_struct), compare_by_coord);
 
-  // Cleanup
-  free(data_points_y);
-  free(data_points_z);
-  free(row);
-  fclose(out_y);
-  fclose(out_z);
+      // Set values for y
+      diagnosticstruct->tot_num_diagnostic_1d_y_pts = count_y;
+      int header_size_bytes_y =
+        time_bytes + diag_header_size_bytes("y", NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
+      diagnosticstruct->totsizeinbytes_1d_y =
+        header_size_bytes_y + (diagnosticstruct->sizeinbytes_per_pt_1d *
+                               diagnosticstruct->tot_num_diagnostic_1d_y_pts);
+
+      int num_diagnostics_chare = 0;
+      for (int i = 0; i < count_y; i++) {{
+        const int i0 = data_points_y[i].i0;
+        const int i1 = data_points_y[i].i1;
+        const int i2 = data_points_y[i].i2;
+        const int idx3 = IDX3(i0, i1, i2);
+        if (charecommstruct->globalidx3pt_to_chareidx3[idx3] ==
+            IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])) {{
+          num_diagnostics_chare++;
+        }}
+      }}
+
+      diagnosticstruct->num_diagnostic_1d_y_pts = num_diagnostics_chare;
+
+      diagnosticstruct->localidx3_diagnostic_1d_y_pt =
+        (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
+      diagnosticstruct->locali0_diagnostic_1d_y_pt =
+        (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
+      diagnosticstruct->locali1_diagnostic_1d_y_pt =
+        (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
+      diagnosticstruct->locali2_diagnostic_1d_y_pt =
+        (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
+      diagnosticstruct->offset_diagnostic_1d_y_pt =
+        (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
+
+      int which_diagnostics_chare = 0;
+      int which_diagnostic_global = 0;
+      for (int i = 0; i < count_y; i++) {{
+        const int i0 = data_points_y[i].i0;
+        const int i1 = data_points_y[i].i1;
+        const int i2 = data_points_y[i].i2;
+        const int idx3 = IDX3(i0, i1, i2);
+        if (charecommstruct->globalidx3pt_to_chareidx3[idx3] ==
+            IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])) {{
+          int localidx3 = charecommstruct->globalidx3pt_to_localidx3pt[idx3];
+          diagnosticstruct->localidx3_diagnostic_1d_y_pt[which_diagnostics_chare] = localidx3;
+          diagnosticstruct->locali0_diagnostic_1d_y_pt[which_diagnostics_chare] =
+            MAP_GLOBAL_TO_LOCAL_IDX0(chare_index[0], i0, Nxx0chare);
+          diagnosticstruct->locali1_diagnostic_1d_y_pt[which_diagnostics_chare] =
+            MAP_GLOBAL_TO_LOCAL_IDX1(chare_index[1], i1, Nxx1chare);
+          diagnosticstruct->locali2_diagnostic_1d_y_pt[which_diagnostics_chare] =
+            MAP_GLOBAL_TO_LOCAL_IDX2(chare_index[2], i2, Nxx2chare);
+          diagnosticstruct->offset_diagnostic_1d_y_pt[which_diagnostics_chare] =
+            header_size_bytes_y + (which_diagnostic_global *
+                                   diagnosticstruct->sizeinbytes_per_pt_1d);
+          which_diagnostics_chare++;
+        }}
+        which_diagnostic_global++;
+      }}
+
+      // ----------------------
+      // Build z-axis samples
+      // ----------------------
+      int count_z = 0;
+      {fill_z}
+      if (count_z > 1)
+        qsort(data_points_z, (size_t)count_z, sizeof(data_point_1d_struct), compare_by_coord);
+
+      diagnosticstruct->tot_num_diagnostic_1d_z_pts = count_z;
+      int header_size_bytes_z =
+        time_bytes + diag_header_size_bytes("z", NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
+      diagnosticstruct->totsizeinbytes_1d_z =
+        header_size_bytes_z + (diagnosticstruct->sizeinbytes_per_pt_1d *
+                               diagnosticstruct->tot_num_diagnostic_1d_z_pts);
+
+      num_diagnostics_chare = 0;
+      for (int i = 0; i < count_z; i++) {{
+        const int i0 = data_points_z[i].i0;
+        const int i1 = data_points_z[i].i1;
+        const int i2 = data_points_z[i].i2;
+        const int idx3 = IDX3(i0, i1, i2);
+        if (charecommstruct->globalidx3pt_to_chareidx3[idx3] ==
+            IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])) {{
+          num_diagnostics_chare++;
+        }}
+      }}
+
+      diagnosticstruct->num_diagnostic_1d_z_pts = num_diagnostics_chare;
+
+      diagnosticstruct->localidx3_diagnostic_1d_z_pt =
+        (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
+      diagnosticstruct->locali0_diagnostic_1d_z_pt =
+        (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
+      diagnosticstruct->locali1_diagnostic_1d_z_pt =
+        (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
+      diagnosticstruct->locali2_diagnostic_1d_z_pt =
+        (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
+      diagnosticstruct->offset_diagnostic_1d_z_pt =
+        (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
+
+      which_diagnostics_chare = 0;
+      which_diagnostic_global = 0;
+      for (int i = 0; i < count_z; i++) {{
+        const int i0 = data_points_z[i].i0;
+        const int i1 = data_points_z[i].i1;
+        const int i2 = data_points_z[i].i2;
+        const int idx3 = IDX3(i0, i1, i2);
+        if (charecommstruct->globalidx3pt_to_chareidx3[idx3] ==
+            IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])) {{
+          int localidx3 = charecommstruct->globalidx3pt_to_localidx3pt[idx3];
+          diagnosticstruct->localidx3_diagnostic_1d_z_pt[which_diagnostics_chare] = localidx3;
+          diagnosticstruct->locali0_diagnostic_1d_z_pt[which_diagnostics_chare] =
+            MAP_GLOBAL_TO_LOCAL_IDX0(chare_index[0], i0, Nxx0chare);
+          diagnosticstruct->locali1_diagnostic_1d_z_pt[which_diagnostics_chare] =
+            MAP_GLOBAL_TO_LOCAL_IDX1(chare_index[1], i1, Nxx1chare);
+          diagnosticstruct->locali2_diagnostic_1d_z_pt[which_diagnostics_chare] =
+            MAP_GLOBAL_TO_LOCAL_IDX2(chare_index[2], i2, Nxx2chare);
+          diagnosticstruct->offset_diagnostic_1d_z_pt[which_diagnostics_chare] =
+            header_size_bytes_z + (which_diagnostic_global *
+                                   diagnosticstruct->sizeinbytes_per_pt_1d);
+          which_diagnostics_chare++;
+        }}
+        which_diagnostic_global++;
+      }}
+
+      // Cleanup temporary point buffers
+      free(data_points_y);
+      free(data_points_z);
+
+      break;
+    }}
+
+    case DIAGNOSTICS_WRITE_Y: {{
+
+      // only chare (0,0,0) writes header
+      if (chare_index[0] == 0 && chare_index[1] == 0 && chare_index[2] == 0) {{
+        int header_bytes = diag_time_comment_size_bytes(commondata->time)
+                         + diag_header_size_bytes("y", NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
+
+        char *hdr = (char *)malloc((size_t)header_bytes + 1);
+        int written = diag_ckio_build_time_comment_and_header(
+            hdr, (size_t)header_bytes + 1,
+            commondata->time, "y",
+            NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
+
+        Ck::IO::write(token, hdr, header_bytes, 0);
+        free(hdr);
+      }}
+
+      // Source pointer for this grid
+      const REAL *restrict src = gridfuncs_diags[grid];
+
+      // Row buffer: [axis_coord, gfs...]
+      const int NUM_COLS = 1 + NUM_GFS_NEAREST;
+      REAL *row = (REAL *)malloc(sizeof(REAL) * (size_t)NUM_COLS);
+      if (!row) {{
+        fprintf(stderr, "Error: Failed to allocate memory for row buffer.\\n");
+        exit(1);
+      }}
+
+      // Unpack diagnosticstruct
+      const int num_diagnostic_pts = diagnosticstruct->num_diagnostic_1d_y_pts;
+      const int *restrict idx3_diagnostic_pt = diagnosticstruct->localidx3_diagnostic_1d_y_pt;
+      const int *restrict i0_diagnostic_pt   = diagnosticstruct->locali0_diagnostic_1d_y_pt;
+      const int *restrict i1_diagnostic_pt   = diagnosticstruct->locali1_diagnostic_1d_y_pt;
+      const int *restrict i2_diagnostic_pt   = diagnosticstruct->locali2_diagnostic_1d_y_pt;
+      const int *restrict offsetpt_firstfield = diagnosticstruct->offset_diagnostic_1d_y_pt;
+
+      for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {{
+        const int idx3 = idx3_diagnostic_pt[which_pt];
+        const int i0   = i0_diagnostic_pt[which_pt];
+        const int i1   = i1_diagnostic_pt[which_pt];
+        const int i2   = i2_diagnostic_pt[which_pt];
+
+        REAL xCart[3];
+        REAL xOrig[3] = {{ xx_chare[0][i0], xx_chare[1][i1], xx_chare[2][i2] }};
+        xx_to_Cart(params_chare, xOrig, xCart);
+
+        int sizeinbytes = diagnosticstruct->sizeinbytes_per_pt_1d;
+        char out[sizeinbytes + 1];
+
+        row[0] = xCart[1];
+        for (int gf_i = 0; gf_i < NUM_GFS_NEAREST; ++gf_i) {{
+          const int gf = which_gfs[gf_i];
+          row[1 + gf_i] = src[IDX4Ppt(params_chare, gf, idx3)];
+        }}
+
+        int n = 0;
+        n += snprintf(out + n, (size_t)(sizeinbytes + 1 - n), "% .15e", row[0]);
+        for (int col = 1; col < NUM_COLS; col++) {{
+          n += snprintf(out + n, (size_t)(sizeinbytes + 1 - n), " % .15e", row[col]);
+        }}
+        out[sizeinbytes - 1] = '\\n';
+        Ck::IO::write(token, out, sizeinbytes, offsetpt_firstfield[which_pt]);
+      }}
+
+      free(row);
+      break;
+    }}
+
+    case DIAGNOSTICS_WRITE_Z: {{
+
+      // only chare (0,0,0) writes header
+      if (chare_index[0] == 0 && chare_index[1] == 0 && chare_index[2] == 0) {{
+        int header_bytes = diag_time_comment_size_bytes(commondata->time)
+                         + diag_header_size_bytes("z", NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
+
+        char *hdr = (char *)malloc((size_t)header_bytes + 1);
+        int written = diag_ckio_build_time_comment_and_header(
+            hdr, (size_t)header_bytes + 1,
+            commondata->time, "z",
+            NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
+
+        Ck::IO::write(token, hdr, header_bytes, 0);
+        free(hdr);
+      }}
+
+      // Source pointer for this grid
+      const REAL *restrict src = gridfuncs_diags[grid];
+
+      const int NUM_COLS = 1 + NUM_GFS_NEAREST;
+      REAL *row = (REAL *)malloc(sizeof(REAL) * (size_t)NUM_COLS);
+      if (!row) {{
+        fprintf(stderr, "Error: Failed to allocate memory for row buffer.\\n");
+        exit(1);
+      }}
+
+      // Unpack diagnosticstruct
+      const int num_diagnostic_pts = diagnosticstruct->num_diagnostic_1d_z_pts;
+      const int *restrict idx3_diagnostic_pt = diagnosticstruct->localidx3_diagnostic_1d_z_pt;
+      const int *restrict i0_diagnostic_pt   = diagnosticstruct->locali0_diagnostic_1d_z_pt;
+      const int *restrict i1_diagnostic_pt   = diagnosticstruct->locali1_diagnostic_1d_z_pt;
+      const int *restrict i2_diagnostic_pt   = diagnosticstruct->locali2_diagnostic_1d_z_pt;
+      const int *restrict offsetpt_firstfield = diagnosticstruct->offset_diagnostic_1d_z_pt;
+
+      for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {{
+        const int idx3 = idx3_diagnostic_pt[which_pt];
+        const int i0   = i0_diagnostic_pt[which_pt];
+        const int i1   = i1_diagnostic_pt[which_pt];
+        const int i2   = i2_diagnostic_pt[which_pt];
+
+        REAL xCart[3];
+        REAL xOrig[3] = {{ xx_chare[0][i0], xx_chare[1][i1], xx_chare[2][i2] }};
+        xx_to_Cart(params_chare, xOrig, xCart);
+
+        int sizeinbytes = diagnosticstruct->sizeinbytes_per_pt_1d;
+        char out[sizeinbytes + 1];
+
+        row[0] = xCart[2];
+        for (int gf_i = 0; gf_i < NUM_GFS_NEAREST; ++gf_i) {{
+          const int gf = which_gfs[gf_i];
+          row[1 + gf_i] = src[IDX4Ppt(params_chare, gf, idx3)];
+        }}
+
+        int n = 0;
+        n += snprintf(out + n, (size_t)(sizeinbytes + 1 - n), "% .15e", row[0]);
+        for (int col = 1; col < NUM_COLS; col++) {{
+          n += snprintf(out + n, (size_t)(sizeinbytes + 1 - n), " % .15e", row[col]);
+        }}
+        out[sizeinbytes - 1] = '\\n';
+        Ck::IO::write(token, out, sizeinbytes, offsetpt_firstfield[which_pt]);
+      }}
+
+      free(row);
+      break;
+    }}
+  }}
 """
 
     cfc.register_CFunction(
