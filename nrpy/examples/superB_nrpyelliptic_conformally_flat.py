@@ -166,7 +166,7 @@ superB.numerical_grids.register_CFunctions(
 )
 BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
 
-superB.diagnostics.register_all_diagnostics(
+superB.diagnostics.diagnostics.register_all_diagnostics(
     set_of_CoordSystems=set_of_CoordSystems,
     project_dir=project_dir,
     default_diagnostics_out_every=default_diagnostics_output_every,
