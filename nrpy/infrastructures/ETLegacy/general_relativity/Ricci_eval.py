@@ -93,7 +93,7 @@ def register_CFunction_Ricci_eval(
     )
 
     schedule = f"""
-if(FD_order == {fd_order}) {{
+if(fd_order == {fd_order}) {{
   schedule FUNC_NAME in MoL_CalcRHS as {thorn_name}_Ricci before {thorn_name}_RHS
   {{
     LANG: C

@@ -162,7 +162,6 @@ def generate_class_representation() -> str:
         v = getattr(calling_self_ref, d)
         if type(v) in [str, int]:
             args += [d + "=" + dumps(v)]
-    sorted(args)
     return calling_class_name + "(" + ", ".join(args) + ")"
 
 

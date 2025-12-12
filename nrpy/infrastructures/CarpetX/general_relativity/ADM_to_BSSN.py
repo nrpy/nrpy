@@ -178,7 +178,7 @@ as initial data are given in terms of ADM quantities, and {thorn_name} evolves t
 """
 
     schedule = f"""
-if(FD_order == {fd_order}) {{
+if(fd_order == {fd_order}) {{
   schedule FUNC_NAME at CCTK_INITIAL after ADMBaseX_PostInitial
   {{
     LANG: C

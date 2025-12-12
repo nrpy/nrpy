@@ -52,11 +52,13 @@ jobs:
 
       - name: Install sympy or DEVELOPMENT sympy based on Python version. sympy-dev requires Python 3.9 or higher.
         run: |
-          if [[ "${{ matrix.python-version }}" != "3.7.13" && "${{ matrix.python-version }}" != "3.8.12" ]]; then
-            pip install git+https://github.com/sympy/sympy.git
-          else
-            pip install sympy
-          fi
+          pip install sympy
+          # TODO: restore this after NRPy has been updated to sync with SymPy's type hinting.
+          # if [[ "${{ matrix.python-version }}" != "3.7.13" && "${{ matrix.python-version }}" != "3.8.12" ]]; then
+          #   pip install git+https://github.com/sympy/sympy.git
+          # else
+          #   pip install sympy
+          # fi
 
       - name: Display sympy and clang-format versions
         run: |
@@ -352,11 +354,15 @@ jobs:
           python -m nrpy.examples.sebobv2 && (cd project/sebobv2 && make && make clean) 
 
   codegen-mac:
-    runs-on: macos-13
+    # updated to macos-14 as requested
+    runs-on: macos-14
 
     strategy:
       matrix:
-        python-version: [ '3.6.15', '3.7.13', '3.x' ]
+        # Dropped 3.6/3.7 because macos-14 is Apple Silicon (ARM64).
+        # Python < 3.8 has poor/no support for ARM64 and causes architecture mismatches
+        # with Homebrew libraries (like GSL) which are installed as ARM64.
+        python-version: [ '3.9', '3.10', '3.11', '3.x' ]
 
     steps:
       - uses: actions/checkout@v4

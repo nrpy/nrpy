@@ -110,7 +110,7 @@ def register_CFunction_BSSN_constraints(
     )
 
     schedule = f"""
-if(FD_order == {fd_order}) {{
+if(fd_order == {fd_order}) {{
   schedule FUNC_NAME in MoL_PseudoEvolution as {thorn_name}_BSSN_constraints
   {{
     LANG: C

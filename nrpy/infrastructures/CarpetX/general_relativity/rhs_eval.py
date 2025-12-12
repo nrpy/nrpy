@@ -353,7 +353,7 @@ def register_CFunction_rhs_eval(
     )
 
     schedule = f"""
-if(FD_order == {fd_order}) {{
+if(fd_order == {fd_order}) {{
   schedule FUNC_NAME in ODESolvers_RHS as {thorn_name}_RHS after {thorn_name}_Ricci
   {{
     LANG: C
@@ -364,7 +364,7 @@ if(FD_order == {fd_order}) {{
 }}
 """
 
-    params = ["eta", "FD_order"]
+    params = ["eta", "fd_order"]
     if enable_CAKO:
         params += ["diss_strength_gauge", "diss_strength_nongauge"]
     else:

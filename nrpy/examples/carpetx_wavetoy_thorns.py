@@ -65,7 +65,7 @@ par.set_parval_from_str("fd_order", fd_order)
 _ = par.register_CodeParameter(
     "CCTK_INT",
     __name__,
-    "FD_order",
+    "fd_order",
     fd_order,
     add_to_glb_code_params_dict=True,
 )
