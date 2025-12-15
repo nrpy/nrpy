@@ -267,7 +267,7 @@ def register_all_diagnostics(
             superB.diagnostics.diagnostics_nearest_1d_y_and_z_axes.register_CFunction_diagnostics_nearest_1d_y_and_z_axes(
                 CoordSystem=CoordSystem
             )
-            BHaH.diagnostics.diagnostics_nearest_2d_xy_and_yz_planes.register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
+            superB.diagnostics.diagnostics_nearest_2d_xy_and_yz_planes.register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
                 CoordSystem=CoordSystem
             )
     if enable_volume_integration_diagnostics:
