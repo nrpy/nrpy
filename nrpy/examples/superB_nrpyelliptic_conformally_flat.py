@@ -178,7 +178,7 @@ superB.diagnostics.diagnostics.register_all_diagnostics(
 BHaH.nrpyelliptic.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
     enable_interp_diagnostics=False
 )
-BHaH.nrpyelliptic.diagnostics_nearest.register_CFunction_diagnostics_nearest()
+superB.nrpyelliptic.diagnostics_nearest.register_CFunction_diagnostics_nearest()
 BHaH.nrpyelliptic.diagnostics_volume_integration.register_CFunction_diagnostics_volume_integration()
 
 
@@ -200,11 +200,6 @@ BHaH.nrpyelliptic.residual_H_compute_all_points.register_CFunction_residual_H_co
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     OMP_collapse=OMP_collapse,
-)
-
-# Generate diagnostics functions
-superB.nrpyelliptic.log10_L2norm_gf.register_CFunction_log10_L2norm_gf(
-    CoordSystem=CoordSystem
 )
 
 # Register function to check for stop conditions
