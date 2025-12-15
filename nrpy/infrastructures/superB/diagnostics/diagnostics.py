@@ -135,67 +135,48 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
     cfunc_type = "void"
     name = "diagnostics"
     params = (
-        "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
+    "commondata_struct *restrict commondata, griddata_struct *restrict griddata, griddata_struct *restrict griddata_chare, "
+    "const REAL *restrict gridfuncs_diags[MAXNUMGRIDS], "
+    "const int chare_index[3], const int grid, Ck::IO::Session token, const int which_diagnostics_part"
     )
-    if parallelization == "cuda":
-        params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata_device, griddata_struct *restrict griddata"
+    
     newline = "\n"  # Backslashes aren't allowed in Python 3.7 f-strings; this is our workaround.
     rnewline = "\\n"  # Backslashes aren't allowed in Python 3.7 f-strings; this is our workaround.
-    body = f"""
-  const REAL currtime = commondata->time, currdt = commondata->dt, outevery = commondata->diagnostics_output_every;
-  // Explanation of the if() below:
-  // Step 1: round(currtime / outevery) rounds to the nearest integer multiple of currtime/outevery.
-  // Step 2: Multiplying by outevery yields the exact time we should output again, t_out.
-  // Step 3: If fabs(t_out - currtime) < 0.5 * currdt, then currtime is as close to t_out as possible!
-  if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {{
-    // Diagnostics require additional memory, so first free all scratch storage needed for MoL timestepping.
-    // FIXME: will address this later. Make code work first, then optimize later.
-    // for (int grid = 0; grid < commondata->NUMGRIDS; grid++)
-    //   MoL_free_intermediate_stage_gfs(&griddata[grid].gridfuncs);
+    body = r"""
+  switch (which_diagnostics_part) {
 
-    // Allocate temporary storage for diagnostic_gfs.
-    REAL *diagnostic_gfs[MAXNUMGRIDS];
-    for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {{
-      SET_NXX_PLUS_2NGHOSTS_VARS(grid);
-      const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
-      BHAH_MALLOC(diagnostic_gfs[grid], TOTAL_NUM_DIAG_GFS * Nxx_plus_2NGHOSTS_tot * sizeof(REAL));
+    case DIAGNOSTICS_SETUP_1D:
+    case DIAGNOSTICS_SETUP_2D: {
 
-#ifdef __CUDACC__
-      // This does not leverage async memory transfers using multiple streams at the moment
-      // given the current intent is one cuda stream per grid. This could be leveraged
-      // in the future by increasing NUM_STREAMS such that a diagnostic stream is included per grid
-      const params_struct *restrict params = &griddata_device[grid].params;
-      size_t streamid = params->grid_idx % NUM_STREAMS;
-      cpyHosttoDevice_params__constant(&griddata_device[grid].params, streamid);
-      // Copy solution to host
-      for(int gf=0;gf<NUM_EVOL_GFS;gf++)
-        cpyDevicetoHost__gf(commondata, params, griddata[grid].gridfuncs.y_n_gfs, griddata_device[grid].gridfuncs.y_n_gfs, gf,gf, streamid);
-      // Sync data before attempting to write to file
-      cudaStreamSynchronize(streams[streamid]);
-#endif // __CUDACC__
-    }} // END LOOP over grids
+      // Nearest-point diagnostics, at center, along y,z axes (1D)
+      diagnostics_nearest(commondata, griddata, griddata_chare, NULL, chare_index, token, which_diagnostics_part);
 
-    // Set diagnostics_gfs -- see nrpy/infrastructures/BHaH/[project]/diagnostics/ for definition.
-    diagnostic_gfs_set(commondata, griddata, diagnostic_gfs);
+      printf("Finished diag 1d and 2d setupts!!!!!!!!!!!!!!!!!!!\n");
 
-    {"// Nearest-point diagnostics, at center, along y,z axes (1D) and xy and yz planes (2D)." if enable_nearest_diagnostics else ""}
-    {"diagnostics_nearest(commondata, griddata, (const double **)diagnostic_gfs);" + newline if enable_nearest_diagnostics else ""}
-    {"// Interpolation diagnostics, at center, along x,y,z axes (1D) and xy and yz planes (2D)." if enable_interp_diagnostics else ""}
-    {"diagnostics_interp(commondata, griddata, (const double **)diagnostic_gfs);" + newline if enable_interp_diagnostics else ""}
-    {"// Volume-integration diagnostics." if enable_volume_integration_diagnostics else ""}
-    {"diagnostics_volume_integration(commondata, griddata, (const double **)diagnostic_gfs);" + newline if enable_volume_integration_diagnostics else ""}
-    // Free temporary storage allocated to diagnostic_gfs.
-    for(int grid=0; grid<commondata->NUMGRIDS; grid++)
-      free(diagnostic_gfs[grid]);
+      break;
+    }
 
-    // Re-allocate all scratch storage needed for resumption of MoL timestepping.
-    // FIXME: will address this later. Make code work first, then optimize later.
-    // for (int grid = 0; grid < commondata->NUMGRIDS; grid++)
-    //   MoL_malloc_intermediate_stage_gfs(commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
-  }} // END if output step
+    case DIAGNOSTICS_WRITE_CENTER:
+    case DIAGNOSTICS_WRITE_Y:
+    case DIAGNOSTICS_WRITE_Z:
+    case DIAGNOSTICS_WRITE_XY:
+    case DIAGNOSTICS_WRITE_YZ: {
 
-  progress_indicator(commondata, griddata);
-  if (commondata->time + commondata->dt > commondata->t_final) printf("{rnewline}");
+      // Nearest-point diagnostics at xy and yz planes (2D).
+      diagnostics_nearest(commondata, griddata, griddata_chare, gridfuncs_diags, chare_index, token, which_diagnostics_part);
+
+      break;
+    }
+
+    case DIAGNOSTICS_VOLUME_EXECUTE_RECIPE_FOR_CHARE_GRID:
+    case DIAGNOSTICS_VOLUME_WRITE: {
+
+      // Volume-integration diagnostics.
+      //diagnostics_volume_integration(commondata, griddata, griddata_chare, gridfuncs_diags, chare_index, which_diagnostics_part);
+
+      break;
+    }
+  }
 """
     cfc.register_CFunction(
         subdirectory="diagnostics",
