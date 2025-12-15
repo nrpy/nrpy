@@ -256,6 +256,13 @@ def register_all_diagnostics(
             BHaH.diagnostics.sqrt_detgammahat_d3xx_volume_element.register_CFunction_sqrt_detgammahat_d3xx_volume_element(
                 CoordSystem=CoordSystem
             )
+            
+    # Register diagnostic_struct's contribution to griddata_struct:
+    BHaH.griddata_commondata.register_griddata_commondata(
+        __name__,
+        "diagnostic_struct diagnosticstruct",
+        "store indices of 1d and 2d diagnostic points, the offset in the output file, etc",
+    )
 
 
 if __name__ == "__main__":
