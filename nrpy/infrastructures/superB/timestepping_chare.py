@@ -1659,31 +1659,22 @@ def output_timestepping_ci(
         serial {
           time_start = commondata.time;
         }
-        """
+      """
     if enable_residual_diagnostics:
         file_output_str += r"""        
         //when continue_after_residual_H_done() { }
         """
-    if enable_residual_diagnostics:
+    file_output_str += r"""
+        serial {
+          const REAL currtime = commondata.time, currdt = commondata.dt, outevery = commondata.diagnostics_output_every;
+          write_diagnostics_this_step = fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt;
+        """
+    if enable_charm_checkpointing:
         file_output_str += r"""
-            serial {
-              const int n_step = commondata.nn;
-              const int outevery = commondata.diagnostics_output_every;
-              write_diagnostics_this_step = n_step % outevery == 0;
-            }
-            """
-    else:
-        file_output_str += r"""
-            serial {
-              const REAL currtime = commondata.time, currdt = commondata.dt, outevery = commondata.diagnostics_output_every;
-              write_diagnostics_this_step = fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt;
-            """
-        if enable_charm_checkpointing:
-            file_output_str += r"""
-              write_chckpt_this_step = fabs(round(commondata.time / commondata.checkpoint_every) * commondata.checkpoint_every -
-                                             commondata.time) < 0.5 * commondata.dt;"""
-        file_output_str += r"""
-            }"""
+          write_chckpt_this_step = fabs(round(commondata.time / commondata.checkpoint_every) * commondata.checkpoint_every -
+                                         commondata.time) < 0.5 * commondata.dt;"""
+    file_output_str += r"""
+        }"""
             
     file_output_str += r"""    
             //START DIAGNOSTICS
@@ -1804,6 +1795,12 @@ def output_timestepping_ci(
         filename_format = "commondata.convergence_factor, commondata.time"
 
     file_output_str += rf"""
+        if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {{
+          serial {{
+            progress_indicator(&commondata, griddata_chare);
+            if (commondata.time + commondata.dt > commondata.t_final)
+              printf("\n");
+          }}
           if (write_diagnostics_this_step) {{
             serial {{
               count_filewritten = 0;
@@ -1843,7 +1840,7 @@ def output_timestepping_ci(
                 CkCallback opened_2d_yz(CkIndex_Timestepping::ready_2d_yz(NULL), thisProxy);
                 Ck::IO::open(filename, opened_2d_yz, opts);
               }}
-            }}
+            }}          
 """
 
     file_output_str += generate_diagnostics_code("1d","y",  "totsizeinbytes_1d_y",  "DIAGNOSTICS_WRITE_Y")
@@ -1857,7 +1854,8 @@ def output_timestepping_ci(
             }
           } else {
             serial {thisProxy.continue_timestepping(); }
-          }            
+          }
+        }            
 """
     file_output_str += r"""
         when continue_timestepping() {

@@ -29,8 +29,56 @@ from nrpy.infrastructures.BHaH.diagnostics.diagnostics_nearest_1d_y_and_z_axes i
     bhah_family_from_coord,
     bhah_axis_configs,
     count_expr,
-    gen_fill,    
 )
+
+def gen_fill(axis_char: str, lines: List[Dict[str, Any]]) -> str:
+    if not lines:
+        return "(void)xx;  // no points for this axis/family\n"
+
+    # coord_idx selects the physical axis to store in data_point_1d_struct.coord:
+    #   "y" -> xCart[1], "z" -> xCart[2]
+    coord_idx = "1" if axis_char == "y" else "2"
+
+    # Names of the C arrays/counters we fill for each axis
+    arr = "data_points_y" if axis_char == "y" else "data_points_z"
+    cnt = "count_y" if axis_char == "y" else "count_z"
+
+    # Map Python-side index labels to dimension numbers used in params->Nxx_plus_2NGHOSTS{d}
+    dim_index = {"i0": "0", "i1": "1", "i2": "2"}
+
+    blocks: List[str] = []
+    for line in lines:
+        vary = line["vary"]            # e.g., "i0"
+        vary_dim = dim_index[vary]     # e.g., "0"
+        fixed = line["fixed"]          # e.g., {"i1":"i1_mid","i2":"i2_q1"}
+
+        # Build the loop body
+        body_lines: List[str] = [
+            f"for (int {vary} = NGHOSTS; {vary} < params->Nxx_plus_2NGHOSTS{vary_dim} - NGHOSTS; {vary}++) {{",
+        ]
+
+        # Bind non-varying indices to named constants
+        for i in ("i0", "i1", "i2"):
+            if i != vary:
+                body_lines.append(f"  const int {i} = {fixed[i]};")
+
+        body_lines += [
+            "  const int idx3 = IDX3P(params, i0, i1, i2);",
+            "  REAL xCart[3], xOrig[3] = { xx[0][i0], xx[1][i1], xx[2][i2] };",
+            "  xx_to_Cart(params, xOrig, xCart);",
+            f"  {arr}[{cnt}].coord = xCart[{coord_idx}];",
+            f"  {arr}[{cnt}].idx3  = idx3;",
+            # NEW: store the indices too (your downstream code expects these!)
+            f"  {arr}[{cnt}].i0    = i0;",
+            f"  {arr}[{cnt}].i1    = i1;",
+            f"  {arr}[{cnt}].i2    = i2;",
+            f"  {cnt}++;",
+            f"}} // END LOOP over {vary}",
+        ]
+
+        blocks.append("\n".join(body_lines))
+
+    return "\n".join(blocks) + "\n"
 
 
 def register_CFunction_diagnostics_nearest_1d_y_and_z_axes(
@@ -407,7 +455,7 @@ static int compare_by_coord(const void *a, const void *b) {
         for (int col = 1; col < NUM_COLS; col++) {{
           n += snprintf(out + n, (size_t)(sizeinbytes + 1 - n), " % .15e", row[col]);
         }}
-        out[sizeinbytes - 1] = '\\n';
+        out[sizeinbytes - 1] = '\n';
         Ck::IO::write(token, out, sizeinbytes, offsetpt_firstfield[which_pt]);
       }}
 
@@ -474,7 +522,7 @@ static int compare_by_coord(const void *a, const void *b) {
         for (int col = 1; col < NUM_COLS; col++) {{
           n += snprintf(out + n, (size_t)(sizeinbytes + 1 - n), " % .15e", row[col]);
         }}
-        out[sizeinbytes - 1] = '\\n';
+        out[sizeinbytes - 1] = '\n';
         Ck::IO::write(token, out, sizeinbytes, offsetpt_firstfield[which_pt]);
       }}
 
