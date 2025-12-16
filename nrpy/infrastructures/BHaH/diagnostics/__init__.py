@@ -7,4 +7,3 @@ from . import (
     progress_indicator,
     sqrt_detgammahat_d3xx_volume_element,
 )
-from .diagnostics import _register_CFunction_diagnostics
