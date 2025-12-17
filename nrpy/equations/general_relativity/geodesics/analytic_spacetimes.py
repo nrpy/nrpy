@@ -3,7 +3,7 @@ Construct symbolic expressions for various analytic spacetime metrics.
 
 This module provides a class-based structure for generating the symbolic
 metric tensor for several common analytic solutions to Einstein's equations,
-such as Kerr-Schild and Schwarzschild. It is designed to integrate with
+such as Kerr-Schild. It is designed to integrate with
 nrpy's CodeParameter system.
 
 Author: Dalton J. Moone
@@ -54,8 +54,6 @@ class AnalyticSpacetimes:
 
         if self.spacetime_name == "KerrSchild_Cartesian":
             self.g4DD, self.xx = self._define_kerr_metric_Cartesian_Kerr_Schild()
-        elif self.spacetime_name == "Schwarzschild_Cartesian_Isotropic":
-            self.g4DD, self.xx = self._define_schwarzschild_Cartesian_isotropic()
         else:
             raise ValueError(f"Spacetime '{self.spacetime_name}' is not supported.")
 
@@ -116,49 +114,6 @@ class AnalyticSpacetimes:
 
         return g4DD, xx
 
-    @staticmethod
-    def _define_schwarzschild_Cartesian_isotropic() -> (
-        Tuple[List[List[sp.Expr]], List[sp.Symbol]]
-    ):
-        """
-        Define the Schwarzschild metric in Cartesian isotropic coordinates.
-
-        Reference:
-        Wikipedia: Schwarzschild metric
-        Permanent Link: https://en.wikipedia.org/w/index.php?title=Schwarzschild_metric&oldid=1322152082
-        (See Isotropic coordinates under section "Alternative coordinates")
-
-        :return: A tuple (g4DD, xx), where g4DD is the symbolic 4x4 metric tensor
-                 and xx is the list of symbolic coordinate variables (t, x, y, z).
-        """
-        # Step 1: Define coordinates and parameters.
-        t, x, y, z = sp.symbols("t x y z", real=True)
-        xx = [t, x, y, z]
-
-        # The isotropic radial coordinate R is the standard Euclidean distance.
-        R = sp.sqrt(x**2 + y**2 + z**2)
-
-        # The Schwarzschild radius rs = 2M.
-        rs = 2 * M_scale
-
-        # Step 2: Define the metric components from the line element.
-        # ds^2 = -f(R)^2 dt^2 + g(R)^2 (dx^2 + dy^2 + dz^2)
-        g4DD = ixp.zerorank2(dimension=4)
-
-        # g_tt component: -( (1 - rs/4R) / (1 + rs/4R) )^2
-        term_in_paren = rs / (4 * R)
-        g_tt_numerator = 1 - term_in_paren
-        g_tt_denominator = 1 + term_in_paren
-        g4DD[0][0] = -((g_tt_numerator / g_tt_denominator) ** 2)
-
-        # Spatial components: g_ii = (1 + rs/4R)^4
-        conformal_factor = (1 + term_in_paren) ** 4
-        g4DD[1][1] = conformal_factor
-        g4DD[2][2] = conformal_factor
-        g4DD[3][3] = conformal_factor
-
-        return g4DD, xx
-
 
 class AnalyticSpacetimes_dict(Dict[str, "AnalyticSpacetimes"]):
     """A caching dictionary for AnalyticSpacetimes instances."""
@@ -198,10 +153,7 @@ if __name__ == "__main__":
         print(f"Doctest passed: All {results.attempted} test(s) passed")
 
     # Use a distinct loop variable name to avoid pylint redefined-outer-name warnings.
-    for spacetime_name_str in [
-        "KerrSchild_Cartesian",
-        "Schwarzschild_Cartesian_Isotropic",
-    ]:
+    for spacetime_name_str in ["KerrSchild_Cartesian"]:
         spacetimes = Analytic_Spacetimes[spacetime_name_str]
         results_dict = ve.process_dictionary_of_expressions(
             spacetimes.__dict__, fixed_mpfs_for_free_symbols=True
