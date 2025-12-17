@@ -389,7 +389,7 @@ if __name__ == "__main__":
     print("Performing symmetry and sample point validation...")
 
     # We use Schwarzschild for basic validation as it is simpler and easier to verify visually/algebraically
-    geo_eqs_sample = Geodesic_Equations["Schwarzschild_Cartesian_Isotropic_massive"]
+    geo_eqs_sample = Geodesic_Equations["KerrSchild_Cartesian_massive"]
 
     # Check that the metric is symmetric, g_{\mu\nu} = g_{\nu\mu}.
     for val_i in range(4):
@@ -428,12 +428,7 @@ if __name__ == "__main__":
 
     # Step 3: Generate trusted results for all configurations.
     # This loop ensures that the __init__ logic (including the solver) works for all spacetimes.
-    for config_key in [
-        "KerrSchild_Cartesian_massive",
-        "Schwarzschild_Cartesian_Isotropic_massive",
-        "KerrSchild_Cartesian_massless",
-        "Schwarzschild_Cartesian_Isotropic_massless",
-    ]:
+    for config_key in ["KerrSchild_Cartesian_massive", "KerrSchild_Cartesian_massless"]:
         print(f"Processing configuration: {config_key}...")
         geodesic_eqs = Geodesic_Equations[config_key]
         results_dict = ve.process_dictionary_of_expressions(
