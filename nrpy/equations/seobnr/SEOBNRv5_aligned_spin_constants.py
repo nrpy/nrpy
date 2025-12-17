@@ -31,9 +31,10 @@ thismodule = __name__
 class SEOBNR_aligned_spin_constants:
     """Class for computing the SEOBNR aligned-spin constants."""
 
-    def __init__(self,
-    calibration_no_spin:bool = False,
-    calibration_spin:bool = False,
+    def __init__(
+        self,
+        calibration_no_spin: bool = False,
+        calibration_spin: bool = False,
     ) -> None:
         """
         Compute the SEOBNR aligned-spin constants.
@@ -46,12 +47,15 @@ class SEOBNR_aligned_spin_constants:
             - 'a_6' : the pseudo-5PN non-spinning Hamiltonian
                             calibration parameter for the SEOBNRv5 model.
                             Equation 78 of https://arxiv.org/pdf/2303.18039.
+                            This is only computed if calibration_no_spin is False.
             - 'Delta_t' : the time delay between the peak of the (l=2,m=2) mode
                             and the time when the EOB perturber crosses
                             the innermost stable circular orbit (ISCO) of the remnant.
                             Equation 79 & 80 of https://arxiv.org/pdf/2303.18039.
+                            This is only computed if calibration_no_spin and calibration_spin are False.
             - 'd_SO' : the spin-orbit calibration parameter for the SEOBNRv5 model.
                             Equation 81 of https://arxiv.org/pdf/2303.18039.
+                            This is only computed if calibration_spin is False.
             - 'a_f' : the final spin of the remnant black hole
                             using https://arxiv.org/pdf/1605.01938 and implemented in
                             https://lscsoft.docs.ligo.org/lalsuite/lalinference/nrutils_8py_source.html#l01020
@@ -66,19 +70,28 @@ class SEOBNR_aligned_spin_constants:
                             https://ui.adsabs.harvard.edu/abs/1972ApJ...178..347B/abstract
             - 'rstop' : the radius of the remnant black hole at the time of ISCO crossing.
 
+        :param calibration_no_spin: Flag to enable/disable calibration of the non-spinning parameters
+        :param calibration_spin: Flag to enable/disable calibration of the spinning parameters
+        :raises ValueError: If both calibration_no_spin and calibration_spin are True
         :return None:
         """
+        # The calibration process for the SEOBNRv5 is done in two steps:
+        # 1. Calibration of the non-spinning coefficients
+        # 2. Calibration of the spin-dependent coefficients
+        # Therefore, the C code can only be generated for one of the above calibration options.
         if calibration_no_spin and calibration_spin:
-            raise ValueError("calibration_no_spin and calibration_spin cannot both be True.")
+            raise ValueError(
+                "calibration_no_spin and calibration_spin cannot both be True."
+            )
         (self.m1, self.m2, self.chi1, self.chi2) = sp.symbols(
             "m1 m2 chi1 chi2", real=True
         )
         # compute calibration parameters
         if calibration_no_spin:
-            #This is the first (non-spinning) calibration stage so we have no precalculated values
+            # This is the first (non-spinning) calibration stage so we have no precalculated values
             self.a6, self.Delta_t_NS = sp.symbols("a6 Delta_t_NS", real=True)
-            self.dSO = 0.
-            self.Delta_t_S = 0.
+            self.dSO = 0.0
+            self.Delta_t_S = 0.0
         elif calibration_spin:
             # This is the second (spinning) calibration stage where we have precalculated values for a6 and Delta_t_NS
             self.compute_calibration_params()
