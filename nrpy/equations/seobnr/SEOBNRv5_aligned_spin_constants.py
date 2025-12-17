@@ -31,7 +31,10 @@ thismodule = __name__
 class SEOBNR_aligned_spin_constants:
     """Class for computing the SEOBNR aligned-spin constants."""
 
-    def __init__(self) -> None:
+    def __init__(self,
+    calibration_no_spin:bool = False,
+    calibration_spin:bool = False,
+    ) -> None:
         """
         Compute the SEOBNR aligned-spin constants.
 
@@ -65,11 +68,27 @@ class SEOBNR_aligned_spin_constants:
 
         :return None:
         """
+        if calibration_no_spin and calibration_spin:
+            raise ValueError("calibration_no_spin and calibration_spin cannot both be True.")
         (self.m1, self.m2, self.chi1, self.chi2) = sp.symbols(
             "m1 m2 chi1 chi2", real=True
         )
         # compute calibration parameters
-        self.compute_calibration_params()
+        if calibration_no_spin:
+            #This is the first (non-spinning) calibration stage so we have no precalculated values
+            self.a6, self.Delta_t_NS = sp.symbols("a6 Delta_t_NS", real=True)
+            self.dSO = 0.
+            self.Delta_t_S = 0.
+        elif calibration_spin:
+            # This is the second (spinning) calibration stage where we have precalculated values for a6 and Delta_t_NS
+            self.compute_calibration_params()
+            # overwrite Delta_t_S and dSO to symbols
+            self.dSO, self.Delta_t_S = sp.symbols("dSO Delta_t_S", real=True)
+        else:
+            # This is the post-calibration stage and all values are precalculated
+            self.compute_calibration_params()
+        # For all stages Delta_t is defined as the sum of non-spinning and spinning parameters
+        self.Delta_t = self.Delta_t_NS + self.Delta_t_S
         # Final mass and spin computation
         self.final_spin_non_precessing_HBR2016()
         self.final_mass_non_precessing_UIB2016()
@@ -149,7 +168,7 @@ class SEOBNR_aligned_spin_constants:
             - f2r(177.334831768076) * nu
             - f2r(37.6897780220529)
         )
-        Delta_t_S = nu ** (sp.Rational(-1, 5) + 0 * nu) * (
+        self.Delta_t_S = nu ** (sp.Rational(-1, 5) + 0 * nu) * (
             f2r(8.39238879807543) * am**2 * ap
             - f2r(16.9056858928167) * am**2 * nu
             + f2r(7.23410583477034) * am**2
@@ -174,10 +193,9 @@ class SEOBNR_aligned_spin_constants:
             -f2r(9.79317619e03),
             f2r(5.55652392e04),
         ]
-        Delta_t_NS = nu ** (sp.Rational(-1, 5) + par_dtns[0] * nu) * (
+        self.Delta_t_NS = nu ** (sp.Rational(-1, 5) + par_dtns[0] * nu) * (
             par_dtns[1] + par_dtns[2] * nu + par_dtns[3] * nu**2 + par_dtns[4] * nu**3
         )
-        self.Delta_t = Delta_t_NS + Delta_t_S
 
     def final_spin_non_precessing_HBR2016(
         self,
