@@ -1,10 +1,10 @@
 """
-Construct symbolic expressions for various analytic spacetime metrics.
+Construct symbolic expressions for analytic spacetime metrics.
 
 This module provides a class-based structure for generating the symbolic
-metric tensor for several common analytic solutions to Einstein's equations,
-such as Kerr-Schild. It is designed to integrate with
-nrpy's CodeParameter system.
+metric tensor for the Kerr-Schild analytic solution to Einstein's equations.
+It is designed to integrate with nrpy's CodeParameter system.
+
 
 Author: Dalton J. Moone
 """
