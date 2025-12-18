@@ -269,7 +269,6 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients(
             [
                 0.0,
                 0.0,
-                0.0,
             ],
             commondata=True,
             add_to_parfile=False,
