@@ -219,7 +219,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients(
             "REAL",
             __name__,
             [
-                "Deltat_t_S",
+                "Delta_t_S",
                 "dSO",
             ],
             [
@@ -263,7 +263,6 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients(
             "REAL",
             __name__,
             [
-                "Delta_t",
                 "a6",
                 "dSO",
             ],

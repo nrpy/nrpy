@@ -51,8 +51,11 @@ class SEOBNR_aligned_spin_constants:
             - 'Delta_t' : the time delay between the peak of the (l=2,m=2) mode
                             and the time when the EOB perturber crosses
                             the innermost stable circular orbit (ISCO) of the remnant.
-                            Equation 79 & 80 of https://arxiv.org/pdf/2303.18039.
-                            This is only computed if calibration_no_spin and calibration_spin are False.
+                            Always defined as Delta_t_NS + Delta_t_S.
+                            In production mode (calibration_no_spin and calibration_spin are False),
+                            it is evaluated fromEquation 79 & 80 of https://arxiv.org/pdf/2303.18039.
+                            In calibration modes either Delta_t_NS or Delta_t_S is
+                            treated as an external calibration input.
             - 'd_SO' : the spin-orbit calibration parameter for the SEOBNRv5 model.
                             Equation 81 of https://arxiv.org/pdf/2303.18039.
                             This is only computed if calibration_spin is False.
@@ -90,8 +93,10 @@ class SEOBNR_aligned_spin_constants:
         if calibration_no_spin:
             # This is the first (non-spinning) calibration stage so we have no precalculated values
             self.a6, self.Delta_t_NS = sp.symbols("a6 Delta_t_NS", real=True)
-            self.dSO = 0.0
-            self.Delta_t_S = 0.0
+            # Since the spins for the non-spinning calibrations are fixed to 0,
+            # dSO and Delta_t_S are set to 0 to avoid any undefined expressions.
+            self.dSO = sp.sympify(0)
+            self.Delta_t_S = sp.sympify(0)
         elif calibration_spin:
             # This is the second (spinning) calibration stage where we have precalculated values for a6 and Delta_t_NS
             self.compute_calibration_params()
