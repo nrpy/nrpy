@@ -1,9 +1,9 @@
 """
-Construct symbolic expressions for conserved quantities along geodesics.
+Construct symbolic expressions for diagnostic quantities along geodesics.
 
-This module provides a class-based structure for generating the symbolic
-expressions for quantities that are conserved along geodesics in certain
-spacetimes, such as energy, angular momentum, and the Carter constant.
+When the spacetime admits the relevant symmetries, this includes constants
+of motion such as Energy, L_z, and (in Kerr) the Carter constant. Other
+returned quantities may be non-conserved diagnostics.
 It supports both massive and massless (photon) particles.
 
 Author: Dalton J. Moone
@@ -47,9 +47,6 @@ Implementation & Logic Assumptions:
     without loading analytic expressions.
 12. **Contravariant Input:** The input pU is assumed to be the contravariant
     4-momentum vector p^mu.
-13. **Axis Regularization:** The code uses sp.Piecewise to return 0 for Q when
-    rho_sq < 1e-12. This assumes that on the z-axis, the computation should
-    default to 0 to avoid division-by-zero singularities.
 --------------------------------------------------------------------------------
 """
 
@@ -137,7 +134,8 @@ class GeodesicDiagnostics:
         pU = [sp.Symbol(f"p{i}", real=True) for i in range(4)]
 
         # Step 2: Compute quantities using modular functions.
-        # Energy is computed for all stationary spacetimes.
+        # Energy-like quantity: E := -p_0. It is conserved only if the spacetime is stationary
+        # (i.e., admits a timelike Killing vector aligned with the chosen time coordinate).
         self.E_expr = self.compute_energy(pU)
 
         # Angular Momentum is computed based on coordinate basis.
@@ -176,7 +174,10 @@ class GeodesicDiagnostics:
 
     def compute_angular_momentum_cartesian(self, pU: List[sp.Symbol]) -> List[sp.Expr]:
         """
-        Compute the angular momentum vector L_i.
+        Compute the angular momentum vector components L_i.
+
+        Note: In non-spherically symmetric spacetimes like Kerr, only the
+        component aligned with the symmetry axis (usually L_z) is conserved.
 
         Note: This implementation uses the cross-product formula L = x X p.
         This assumes the input coordinates `self.xx` are Cartesian-like, where
@@ -293,8 +294,8 @@ class GeodesicDiagnostics:
             )
 
         Q_formula = p_theta_sq + second_term
-        # Handle axial singularity
-        return sp.Piecewise((sp.sympify(0), rho_sq < 1e-12), (Q_formula, True))
+
+        return Q_formula
 
 
 class GeodesicDiagnostics_dict(Dict[str, GeodesicDiagnostics]):
@@ -363,10 +364,15 @@ if __name__ == "__main__":
     )
     L_z_sq_kerr = kerr_diag.L_exprs[2] ** 2
 
-    # Extract the main formula from the Piecewise object to avoid coordinate substitution.
-    # The Piecewise is ((0, rho < epsilon), (formula, True)). We want the formula.
+    # Extract the main formula from the diagnostic expression.
     assert kerr_diag.Q_expr is not None
-    Q_kerr_formula = kerr_diag.Q_expr.args[1][0]
+    Q_expr = kerr_diag.Q_expr
+    if isinstance(Q_expr, sp.Piecewise):
+        Q_kerr_formula = next(
+            expr for (expr, cond) in Q_expr.args if (cond is True) or (cond == sp.true)
+        )
+    else:
+        Q_kerr_formula = Q_expr
 
     # Substitute a_spin -> 0 in the formula and L^2
     Q_kerr_a0 = Q_kerr_formula.subs(a_spin, 0)

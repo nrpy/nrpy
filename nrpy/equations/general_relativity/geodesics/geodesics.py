@@ -388,7 +388,7 @@ if __name__ == "__main__":
     print("-" * 40)
     print("Performing symmetry and sample point validation...")
 
-    # We use Schwarzschild for basic validation as it is simpler and easier to verify visually/algebraically
+    # We use Kerr-Schild (Cartesian) for basic validation in this configuration.
     geo_eqs_sample = Geodesic_Equations["KerrSchild_Cartesian_massive"]
 
     # Check that the metric is symmetric, g_{\mu\nu} = g_{\nu\mu}.
