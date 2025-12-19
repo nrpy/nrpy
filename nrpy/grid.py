@@ -1,3 +1,4 @@
+# nrpy/grid.py
 """
 Provide registration functions for numerical grid parameters.
 

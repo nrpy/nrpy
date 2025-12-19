@@ -1,3 +1,4 @@
+# nrpy/c_codegen.py
 """
 Core NRPy module used for generating C code kernels.
 

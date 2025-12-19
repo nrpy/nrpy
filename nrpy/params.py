@@ -1,3 +1,4 @@
+# nrpy/params.py
 """
 Initialize, store, and recall parameters for NRPy.
 
