@@ -68,47 +68,51 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients() -> (
         add_to_parfile=False,
     )
 
-    qnm_param_names = [
-        "omega_qnm_l2_m1",
-        "tau_qnm_l2_m1",
-        "omega_qnm_l3_m3",
-        "tau_qnm_l3_m3",
-        "omega_qnm_l3_m2",
-        "tau_qnm_l3_m2",
-        "omega_qnm_l4_m4",
-        "tau_qnm_l4_m4",
-        "omega_qnm_l4_m3",
-        "tau_qnm_l4_m3",
-        "omega_qnm_l5_m5",
-        "tau_qnm_l5_m5",
+    # Define lists of parameter names for robust registration.
+    base_param_names = [
+        "Delta_t",
+        "dT",
+        "t_ISCO",
+        "t_attach",
+        "omega_qnm",
+        "tau_qnm",
+        "a_f",
+        "M_f",
+        "nr_amp_1",
+        "nr_amp_2",
+        "nr_amp_3",
+        "nr_omega_1",
+        "nr_omega_2",
+        "a_1_NQC",
+        "a_2_NQC",
+        "a_3_NQC",
+        "b_1_NQC",
+        "b_2_NQC",
+        "r_stop",
+        "r_ISCO",
     ]
+    qnm_param_names = [
+        "omega_qnm_l2m2",
+        "tau_qnm_l2m2",
+        "omega_qnm_l2m1",
+        "tau_qnm_l2m1",
+        "omega_qnm_l3m3",
+        "tau_qnm_l3m3",
+        "omega_qnm_l3m2",
+        "tau_qnm_l3m2",
+        "omega_qnm_l4m4",
+        "tau_qnm_l4m4",
+        "omega_qnm_l4m3",
+        "tau_qnm_l4m3",
+        "omega_qnm_l5m5",
+        "tau_qnm_l5m5",
+    ]
+    all_param_names = base_param_names + qnm_param_names
     par.register_CodeParameters(
         "REAL",
         __name__,
-        [
-            "Delta_t",
-            "dT",
-            "t_ISCO",
-            "t_attach",
-            "omega_qnm",
-            "tau_qnm",
-            "a_f",
-            "M_f",
-            "nr_amp_1",
-            "nr_amp_2",
-            "nr_amp_3",
-            "nr_omega_1",
-            "nr_omega_2",
-            "a_1_NQC",
-            "a_2_NQC",
-            "a_3_NQC",
-            "b_1_NQC",
-            "b_2_NQC",
-            "r_stop",
-            "r_ISCO",
-        ]
-        + qnm_param_names,
-        [0.0] * (20 + len(qnm_param_names)),
+        all_param_names,
+        [0.0] * len(all_param_names),
         commondata=True,
         add_to_parfile=False,
     )
@@ -169,7 +173,6 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients() -> (
         add_to_parfile=False,
     )
 
-    # This is sufficient for initial conditions. Order is the same as pySEOBNR.
     par.register_CodeParameters(
         "REAL",
         __name__,
@@ -181,7 +184,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients() -> (
             0.01118,
             50,
             2.4627455127717882e-05,
-        ],  # mass_ratio convention is m_greater/m_lesser, initial_omega chosen for r ~ 20M
+        ],
         commondata=True,
         add_to_parfile=True,
     )
@@ -238,7 +241,6 @@ commondata->dT = commondata->dt / commondata->total_mass / 4.9254909476412669781
         verbose=False,
         include_braces=False,
     )
-
     body += """
 const REAL afinallist[107] = { -0.9996, -0.9995, -0.9994, -0.9992, -0.999, -0.9989, -0.9988,
   -0.9987, -0.9986, -0.9985, -0.998, -0.9975, -0.997, -0.996, -0.995, -0.994, -0.992, -0.99, -0.988,
@@ -248,8 +250,9 @@ const REAL afinallist[107] = { -0.9996, -0.9995, -0.9994, -0.9992, -0.999, -0.99
   0.65, 0.7, 0.72, 0.74, 0.76, 0.78, 0.8, 0.82, 0.84, 0.86, 0.88, 0.9, 0.92, 0.94, 0.95, 0.96, 0.97,
   0.975, 0.98, 0.982, 0.984, 0.986, 0.988, 0.99, 0.992, 0.994, 0.995, 0.996, 0.997, 0.9975, 0.998,
   0.9985, 0.9986, 0.9987, 0.9988, 0.9989, 0.999, 0.9992, 0.9994, 0.9995, 0.9996
-  };
+};
 
+// NOTE: imomegaqnm_* tables store the positive damping rate |Im(ω)| (i.e., -Im(ω) for Im(ω)<0 convention).
 const REAL reomegaqnm_l2_m2[107] = {
   0.2915755, 0.2915810, 0.2915866, 0.2915976, 0.2916086, 0.2916142, 0.2916197, 0.2916252,
   0.2916307, 0.2916362, 0.2916638, 0.2916915, 0.2917191, 0.2917744, 0.2918297, 0.2918850,
@@ -488,7 +491,6 @@ const REAL imomegaqnm_l5_m5[107] = {
   0.0082744, 0.0075832, 0.0068122
 };
 
-
 gsl_spline *spline = gsl_spline_alloc(gsl_interp_cspline, 107);
 if (spline == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_coefficients(), gsl_spline_alloc failed to initialize\\n");
@@ -500,59 +502,73 @@ if (acc == NULL){
   exit(1);
 }
 
+// Clamp a_f to the range of the afinallist to prevent GSL extrapolation errors.
+const REAL a_f_clamped = (commondata->a_f < afinallist[0]) ? afinallist[0] :
+                      ((commondata->a_f > afinallist[106]) ? afinallist[106] : commondata->a_f);
+
 // (l=2, m=2) QNM
-gsl_spline_init(spline, afinallist, reomegaqnm_l2_m2, 107);
-commondata->omega_qnm = gsl_spline_eval(spline, commondata->a_f, acc) / commondata->M_f;
-gsl_spline_init(spline, afinallist, imomegaqnm_l2_m2, 107);
+gsl_spline_init(spline, afinallist, reomegaqnm_l2m2, 107);
 gsl_interp_accel_reset(acc);
-commondata->tau_qnm = 1./(gsl_spline_eval(spline, commondata->a_f, acc) / commondata->M_f);
+commondata->omega_qnm_l2m2 = gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f;
+gsl_spline_init(spline, afinallist, imomegaqnm_l2m2, 107);
+gsl_interp_accel_reset(acc);
+commondata->tau_qnm_l2m2 = 1./(gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f);
 
 // (l=2, m=1) QNM
-gsl_spline_init(spline, afinallist, reomegaqnm_l2_m1, 107);
-commondata->omega_qnm_l2_m1 = gsl_spline_eval(spline, commondata->a_f, acc) / commondata->M_f;
-gsl_spline_init(spline, afinallist, imomegaqnm_l2_m1, 107);
+gsl_spline_init(spline, afinallist, reomegaqnm_l2m1, 107);
 gsl_interp_accel_reset(acc);
-commondata->tau_qnm_l2_m1 = 1./(gsl_spline_eval(spline, commondata->a_f, acc) / commondata->M_f);
+commondata->omega_qnm_l2m1 = gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f;
+gsl_spline_init(spline, afinallist, imomegaqnm_l2m1, 107);
+gsl_interp_accel_reset(acc);
+commondata->tau_qnm_l2m1 = 1./(gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f);
 
 // (l=3, m=3) QNM
-gsl_spline_init(spline, afinallist, reomegaqnm_l3_m3, 107);
-commondata->omega_qnm_l3_m3 = gsl_spline_eval(spline, commondata->a_f, acc) / commondata->M_f;
-gsl_spline_init(spline, afinallist, imomegaqnm_l3_m3, 107);
+gsl_spline_init(spline, afinallist, reomegaqnm_l3m3, 107);
 gsl_interp_accel_reset(acc);
-commondata->tau_qnm_l3_m3 = 1./(gsl_spline_eval(spline, commondata->a_f, acc) / commondata->M_f);
+commondata->omega_qnm_l3m3 = gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f;
+gsl_spline_init(spline, afinallist, imomegaqnm_l3m3, 107);
+gsl_interp_accel_reset(acc);
+commondata->tau_qnm_l3m3 = 1./(gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f);
 
 // (l=3, m=2) QNM
-gsl_spline_init(spline, afinallist, reomegaqnm_l3_m2, 107);
-commondata->omega_qnm_l3_m2 = gsl_spline_eval(spline, commondata->a_f, acc) / commondata->M_f;
-gsl_spline_init(spline, afinallist, imomegaqnm_l3_m2, 107);
+gsl_spline_init(spline, afinallist, reomegaqnm_l3m2, 107);
 gsl_interp_accel_reset(acc);
-commondata->tau_qnm_l3_m2 = 1./(gsl_spline_eval(spline, commondata->a_f, acc) / commondata->M_f);
+commondata->omega_qnm_l3m2 = gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f;
+gsl_spline_init(spline, afinallist, imomegaqnm_l3m2, 107);
+gsl_interp_accel_reset(acc);
+commondata->tau_qnm_l3m2 = 1./(gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f);
 
 // (l=4, m=4) QNM
-gsl_spline_init(spline, afinallist, reomegaqnm_l4_m4, 107);
-commondata->omega_qnm_l4_m4 = gsl_spline_eval(spline, commondata->a_f, acc) / commondata->M_f;
-gsl_spline_init(spline, afinallist, imomegaqnm_l4_m4, 107);
+gsl_spline_init(spline, afinallist, reomegaqnm_l4m4, 107);
 gsl_interp_accel_reset(acc);
-commondata->tau_qnm_l4_m4 = 1./(gsl_spline_eval(spline, commondata->a_f, acc) / commondata->M_f);
+commondata->omega_qnm_l4m4 = gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f;
+gsl_spline_init(spline, afinallist, imomegaqnm_l4m4, 107);
+gsl_interp_accel_reset(acc);
+commondata->tau_qnm_l4m4 = 1./(gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f);
 
 // (l=4, m=3) QNM
-gsl_spline_init(spline, afinallist, reomegaqnm_l4_m3, 107);
-commondata->omega_qnm_l4_m3 = gsl_spline_eval(spline, commondata->a_f, acc) / commondata->M_f;
-gsl_spline_init(spline, afinallist, imomegaqnm_l4_m3, 107);
+gsl_spline_init(spline, afinallist, reomegaqnm_l4m3, 107);
 gsl_interp_accel_reset(acc);
-commondata->tau_qnm_l4_m3 = 1./(gsl_spline_eval(spline, commondata->a_f, acc) / commondata->M_f);
+commondata->omega_qnm_l4m3 = gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f;
+gsl_spline_init(spline, afinallist, imomegaqnm_l4m3, 107);
+gsl_interp_accel_reset(acc);
+commondata->tau_qnm_l4m3 = 1./(gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f);
 
 // (l=5, m=5) QNM
-gsl_spline_init(spline, afinallist, reomegaqnm_l5_m5, 107);
-commondata->omega_qnm_l5_m5 = gsl_spline_eval(spline, commondata->a_f, acc) / commondata->M_f;
-gsl_spline_init(spline, afinallist, imomegaqnm_l5_m5, 107);
+gsl_spline_init(spline, afinallist, reomegaqnm_l5m5, 107);
 gsl_interp_accel_reset(acc);
-commondata->tau_qnm_l5_m5 = 1./(gsl_spline_eval(spline, commondata->a_f, acc) / commondata->M_f);
+commondata->omega_qnm_l5m5 = gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f;
+gsl_spline_init(spline, afinallist, imomegaqnm_l5m5, 107);
+gsl_interp_accel_reset(acc);
+commondata->tau_qnm_l5m5 = 1./(gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f);
+
+// Set old (l=2,m=2) aliases for backward compatibility
+commondata->omega_qnm = commondata->omega_qnm_l2m2;
+commondata->tau_qnm   = commondata->tau_qnm_l2m2;
 
 gsl_spline_free(spline);
 gsl_interp_accel_free(acc);
 """
-
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
