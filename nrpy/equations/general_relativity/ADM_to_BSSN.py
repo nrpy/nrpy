@@ -6,7 +6,7 @@ Author: Zachariah B. Etienne
 """
 
 # Step 1: Import needed core NRPy modules
-from typing import List, Sequence, Tuple
+from typing import List, Tuple
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
@@ -23,10 +23,10 @@ class ADM_to_BSSN:
 
     def __init__(
         self,
-        gammaDD: Sequence[Sequence[sp.Expr]],
-        KDD: Sequence[Sequence[sp.Expr]],
-        betaU: Sequence[sp.Expr],
-        BU: Sequence[sp.Expr],
+        gammaDD: List[List[sp.Expr]],
+        KDD: List[List[sp.Expr]],
+        betaU: List[sp.Expr],
+        BU: List[sp.Expr],
         CoordSystem: str = "Cartesian",
         enable_rfm_precompute: bool = False,
         compute_cf_only: bool = False,

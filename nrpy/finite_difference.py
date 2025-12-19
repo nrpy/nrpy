@@ -1,3 +1,4 @@
+# nrpy/finite_difference.py
 """
 Provide helper functions for c_codegen to generate finite-difference C-code kernels.
 

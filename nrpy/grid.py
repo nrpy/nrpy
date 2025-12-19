@@ -1,3 +1,4 @@
+# nrpy/grid.py
 """
 Provide registration functions for numerical grid parameters.
 
@@ -13,7 +14,6 @@ from typing import (
     Dict,
     List,
     Optional,
-    Sequence,
     Tuple,
     Type,
     Union,
@@ -970,7 +970,7 @@ def register_gridfunctions(
 
 def register_gridfunctions_for_single_rank1(
     basename: str, dimension: int = 3, **kwargs: Any
-) -> Sequence[sp.Expr]:
+) -> List[sp.Expr]:
     """
     Register rank-1 gridfunction components based on a basename.
 
@@ -999,7 +999,7 @@ def register_gridfunctions_for_single_rank1(
 
 def register_gridfunctions_for_single_rank2(
     basename: str, symmetry: Optional[str] = None, dimension: int = 3, **kwargs: Any
-) -> Sequence[Sequence[sp.Expr]]:
+) -> List[List[sp.Expr]]:
     """
     Register gridfunctions for a single rank 2 variable.
 

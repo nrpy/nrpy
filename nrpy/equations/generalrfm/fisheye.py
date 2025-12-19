@@ -1,3 +1,4 @@
+# nrpy/equations/generalrfm/fisheye.py
 """
 General N transition fisheye raw to physical (xx -> Cart) mapping and reference metric.
 
@@ -84,7 +85,7 @@ Fisheye parameters are stored as NRPy code parameters so that they can be
 configured at code generation time.
 """
 
-from typing import List, Optional, Sequence, Union, cast
+from typing import List, Optional, Union, cast
 
 import sympy as sp
 
@@ -148,9 +149,9 @@ class FisheyeGeneralRFM:
     def __init__(
         self,
         num_transitions: int,
-        a_default: Optional[Sequence[float]] = None,
-        R_default: Optional[Sequence[float]] = None,
-        s_default: Optional[Sequence[float]] = None,
+        a_default: Optional[List[float]] = None,
+        R_default: Optional[List[float]] = None,
+        s_default: Optional[List[float]] = None,
         c_default: float = 1.0,
     ) -> None:
         """
@@ -500,9 +501,9 @@ class FisheyeGeneralRFM:
 
 def build_fisheye_generalrfm(
     n_fisheye_transitions: int,
-    a_default: Optional[Sequence[float]] = None,
-    R_default: Optional[Sequence[float]] = None,
-    s_default: Optional[Sequence[float]] = None,
+    a_default: Optional[List[float]] = None,
+    R_default: Optional[List[float]] = None,
+    s_default: Optional[List[float]] = None,
     c_default: float = 1.0,
 ) -> FisheyeGeneralRFM:
     """

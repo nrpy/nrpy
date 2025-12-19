@@ -43,9 +43,9 @@ class Psi4:
         if tetrad == "leave_symbolic":
             # For code validation against NRPy psi_4 tutorial module (Tutorial-Psi4.ipynb);
             #   ensures a more complete code validation.
-            mre4U = cast(List[sp.Expr], ixp.declarerank1("mre4U", dimension=4))
-            mim4U = cast(List[sp.Expr], ixp.declarerank1("mim4U", dimension=4))
-            n4U = cast(List[sp.Expr], ixp.declarerank1("n4U", dimension=4))
+            mre4U = ixp.declarerank1("mre4U", dimension=4)
+            mim4U = ixp.declarerank1("mim4U", dimension=4)
+            n4U = ixp.declarerank1("n4U", dimension=4)
         else:
             BP4t = Psi4Tetrads(
                 CoordSystem=CoordSystem,

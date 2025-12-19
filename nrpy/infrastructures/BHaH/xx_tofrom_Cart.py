@@ -1,3 +1,4 @@
+# nrpy/infrastructures/BHaH/xx_tofrom_Cart.py
 """
 C function registration for converting between grid coordinate (xx0,xx1,xx2) (uniform grid spacing) to Cartesian coordinate (x,y,z).
 
@@ -5,9 +6,10 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
+from functools import lru_cache
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import List, Set, Union, cast
+from typing import List, Set, Tuple, Union, cast
 
 import sympy as sp
 
@@ -17,6 +19,139 @@ import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
+
+
+def _coordsystem_is_fisheye(CoordSystem: str) -> bool:
+    """
+    Return True if CoordSystem indicates a fisheye mapping.
+
+    This intentionally uses only simple string operations (no regex), and is
+    case-insensitive.
+
+    :param CoordSystem: Coordinate system name string to test.
+    :return: True if CoordSystem is interpreted as a fisheye mapping; otherwise False.
+    """
+    return "fisheye" in CoordSystem.lower()
+
+
+def _default_n_fisheye_transitions() -> int:
+    """
+    Get the default number of fisheye transitions from the parameter system.
+
+    This is *lazy* (no import-time param registration side-effects). If the
+    parameter does not exist, it is registered with default value 1 and 1 is
+    returned.
+
+    :return: Default number of fisheye transitions (>= 1).
+    """
+    try:
+        N = int(par.parval_from_str("n_fisheye_transitions"))
+        return N if N >= 1 else 1
+    except (KeyError, ValueError, TypeError):
+        # Register only if missing; swallow errors in case of benign re-registration.
+        try:
+            par.register_param(int, __name__, "n_fisheye_transitions", 1)
+        except (KeyError, ValueError, TypeError, RuntimeError):
+            pass
+        return 1
+
+
+def _parse_fisheye_num_transitions(CoordSystem: str) -> int:
+    """
+    Determine N (# of fisheye transitions) from the CoordSystem string if present.
+
+    Determine N (# of fisheye transitions) from the CoordSystem string if present,
+    else fall back to the global param n_fisheye_transitions.
+
+    Supported examples (case-insensitive, no regex):
+      - "Fisheye"               -> param fallback
+      - "Fisheye2"              -> 2
+      - "FisheyeN2"             -> 2
+      - "GeneralRFM_FisheyeN3"  -> 3
+      - "Fisheye_N4"            -> 4
+      - "Fisheye-n5"            -> 5
+
+    :param CoordSystem: Coordinate system name string.
+    :return: Parsed number of transitions N (>= 1).
+    """
+    s_lower = CoordSystem.lower()
+    key = "fisheye"
+    pos = s_lower.find(key)
+    if pos < 0:
+        return _default_n_fisheye_transitions()
+
+    tail = s_lower[pos + len(key) :]
+
+    # Skip common separators after "fisheye"
+    while tail and tail[0] in "_-":
+        tail = tail[1:]
+
+    # Optional 'n' marker: "fisheyen2" or "fisheye_n2"
+    if tail.startswith("n"):
+        tail = tail[1:]
+        while tail and tail[0] in "_-":
+            tail = tail[1:]
+
+    # Parse contiguous digits (if any)
+    digits = ""
+    for ch in tail:
+        if ch.isdigit():
+            digits += ch
+        else:
+            break
+
+    if digits:
+        N = int(digits)
+        return N if N >= 1 else 1
+
+    # As a last resort, if the string ends in digits, interpret them as N.
+    # (Only attempted because "fisheye" was found somewhere in the string.)
+    digits_end = ""
+    for ch in reversed(s_lower):
+        if ch.isdigit():
+            digits_end = ch + digits_end
+        else:
+            break
+    if digits_end:
+        N = int(digits_end)
+        return N if N >= 1 else 1
+
+    return _default_n_fisheye_transitions()
+
+
+@lru_cache(maxsize=None)
+def _cached_fisheye_rbar_and_drbar_dr(
+    num_transitions: int,
+) -> Tuple[sp.Symbol, sp.Expr, sp.Expr]:
+    """
+    Return (r_sym, rbar(r_sym), drbar_dr(r_sym)) for the N-transition fisheye map.
+
+    IMPORTANT: Instantiating the fisheye builder registers the required CodeParameters
+    (fisheye_a*, fisheye_R*, fisheye_s*, fisheye_c).
+
+    :param num_transitions: Number of fisheye transitions N (>= 1).
+    :return: Tuple (r_sym, rbar(r_sym), drbar_dr(r_sym)).
+    :raises ValueError: If num_transitions is less than 1.
+    """
+    if num_transitions < 1:
+        raise ValueError(
+            f"num_transitions must be >= 1 for fisheye; got {num_transitions}."
+        )
+
+    # Local import to avoid imposing cost on non-fisheye codegen paths.
+    from nrpy.equations.generalrfm.fisheye import (  # pylint: disable=import-outside-toplevel
+        build_fisheye_generalrfm,
+    )
+
+    fisheye = build_fisheye_generalrfm(num_transitions)
+
+    r_sym = sp.symbols("r_fisheye", real=True, positive=True)
+    rbar_unscaled = fisheye._build_unscaled_radius_map(
+        r_sym
+    )  # pylint: disable=protected-access
+    rbar = fisheye.c * rbar_unscaled
+    drbar_dr = sp.diff(rbar, r_sym)
+    return r_sym, rbar, drbar_dr
 
 
 def _prepare_sympy_exprs_for_codegen(
@@ -122,8 +257,11 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
         )
 
     parallelization = par.parval_from_str("parallelization")
-    rfm = refmetric.reference_metric[CoordSystem]
-    local_C_vars = {"xx0", "xx1", "xx2", "Cartx", "Carty", "Cartz"}
+    is_fisheye = _coordsystem_is_fisheye(CoordSystem)
+    rfm = refmetric.reference_metric[CoordSystem] if not is_fisheye else None
+    local_C_vars = {"xx0", "xx1", "xx2", "Cartx", "Carty", "Cartz"} | (
+        {"r", "rCart"} if is_fisheye else set()
+    )
 
     namesuffix = f"_{relative_to}" if relative_to == "global_grid_center" else ""
     name = f"Cart_to_xx_and_nearest_i0i1i2{namesuffix}"
@@ -138,13 +276,128 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
 
     # Step 2: Generate the core C-code for the coordinate transformation.
     core_body_list: List[str] = []
-    if rfm.requires_NewtonRaphson_for_Cart_to_xx:
+    if is_fisheye:
+        # ---------------------------------------------------------------------
+        # Fisheye inverse map (Cart -> xx):
+        #
+        #   Cart^i = (rbar(r)/r) * xx^i,   with r = ||xx|| and rbar(r) monotone.
+        #
+        # Taking norms gives:
+        #   rCart = ||Cart|| = rbar(r)
+        #
+        # So we solve the 1D equation rbar(r) - rCart = 0 for r (Newton-Raphson),
+        # then recover:
+        #   xx^i = (r / rCart) * Cart^i    (with the rCart=0 limit giving xx=0).
+        # ---------------------------------------------------------------------
+        num_transitions = _parse_fisheye_num_transitions(CoordSystem)
+        r_sym, rbar_of_r, drbar_dr_of_r = _cached_fisheye_rbar_and_drbar_dr(
+            num_transitions
+        )
+
+        # Build Newton-Raphson expressions in terms of local C vars r and rCart:
+        r_local = sp.Symbol("r", real=True, nonnegative=True)
+        rCart_sym = sp.Symbol("rCart", real=True, nonnegative=True)
+        f_of_r_expr = (rbar_of_r - rCart_sym).subs(r_sym, r_local)
+        fprime_of_r_expr = drbar_dr_of_r.subs(r_sym, r_local)
+
+        nr_processed_exprs = _prepare_sympy_exprs_for_codegen(
+            [f_of_r_expr, fprime_of_r_expr],
+            local_C_vars,
+        )
+        nr_codegen_output = ccg.c_codegen(
+            nr_processed_exprs,
+            ["f_of_r", "fprime_of_r"],
+            include_braces=True,
+            verbose=False,
+        )
+
+        core_body_list.append(
+            f"""
+  const REAL rCart = sqrt(Cartx*Cartx + Carty*Carty + Cartz*Cartz);
+  if(rCart <= (REAL)0.0) {{
+    xx[0] = (REAL)0.0;
+    xx[1] = (REAL)0.0;
+    xx[2] = (REAL)0.0;
+  }} else {{
+    const REAL XX_TOLERANCE = (REAL)1e-12;
+    const REAL F_TOLERANCE  = (REAL)1e-12;
+    const int  ITER_MAX     = 100;
+
+    // Use a robust scale for convergence tests:
+    const REAL dxx_scale = (params->dxx0 + params->dxx1 + params->dxx2) / (REAL)3.0;
+    const REAL rscale = (rCart > dxx_scale) ? rCart : dxx_scale;
+
+    int iter = 0;
+    int tolerance_has_been_met = 0;
+
+    // Two heuristic initial guesses:
+    //   Near origin: rbar ~ c*a0*r  => r ~ rCart/(c*a0)
+    //   Far field  : rbar ~ c*aN*r  => r ~ rCart/(c*aN)
+    REAL r_guess0 = rCart / (params->fisheye_c * params->fisheye_a0);
+    REAL r_guessN = rCart / (params->fisheye_c * params->fisheye_a{num_transitions});
+    if(!(r_guess0 > (REAL)0.0)) r_guess0 = rCart;
+    if(!(r_guessN > (REAL)0.0)) r_guessN = rCart;
+
+    // Pick the initial guess that yields the smaller |f(r)|.
+    REAL r = r_guessN;
+    REAL f_of_r, fprime_of_r;
+{nr_codegen_output}
+    REAL fN = fabs(f_of_r);
+
+    r = r_guess0;
+{nr_codegen_output}
+    REAL f0 = fabs(f_of_r);
+
+    r = (f0 < fN) ? r_guess0 : r_guessN;
+
+    while(iter < ITER_MAX && !tolerance_has_been_met) {{
+      REAL f_of_r, fprime_of_r;
+
+{nr_codegen_output}
+
+      // Guard against division by zero in Newton step:
+      if(fprime_of_r == (REAL)0.0) {{
+        break;
+      }}
+
+      const REAL r_np1_unclamped = r - f_of_r / fprime_of_r;
+
+      // Keep r nonnegative (fisheye assumes r >= 0 and rbar(r) is odd/monotone).
+      REAL r_np1 = r_np1_unclamped;
+      if(r_np1 <= (REAL)0.0) r_np1 = (REAL)0.5 * r;
+
+      if( fabs(r - r_np1) <= XX_TOLERANCE * rscale && fabs(f_of_r) <= F_TOLERANCE * rscale ) {{
+        tolerance_has_been_met = 1;
+      }}
+      r = r_np1;
+      iter++;
+    }}
+
+    if(iter >= ITER_MAX || !tolerance_has_been_met) {{
+      fprintf(stderr, "ERROR: Newton-Raphson failed for {CoordSystem} (fisheye): rCart, x,y,z = %.15e %.15e %.15e %.15e\\n",
+              rCart, Cartx, Carty, Cartz);
+      exit(1);
+    }}
+
+    const REAL scale = r / rCart;
+    xx[0] = scale * Cartx;
+    xx[1] = scale * Carty;
+    xx[2] = scale * Cartz;
+  }}
+"""
+        )
+
+    elif cast(refmetric.ReferenceMetric, rfm).requires_NewtonRaphson_for_Cart_to_xx:
         # Part 2a: Handle mixed analytical and Newton-Raphson inversions.
         analytic_exprs: List[sp.Expr] = []
         analytic_names: List[str] = []
         for i in range(3):
-            if rfm.NewtonRaphson_f_of_xx[i] == sp.sympify(0):
-                analytic_exprs.append(rfm.Cart_to_xx[i])
+            if cast(refmetric.ReferenceMetric, rfm).NewtonRaphson_f_of_xx[
+                i
+            ] == sp.sympify(0):
+                analytic_exprs.append(
+                    cast(refmetric.ReferenceMetric, rfm).Cart_to_xx[i]
+                )
                 analytic_names.append(f"xx[{i}]")
 
         if analytic_exprs:
@@ -170,10 +423,15 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
 """
         )
         for i in range(3):
-            if rfm.NewtonRaphson_f_of_xx[i] != sp.sympify(0):
+            if cast(refmetric.ReferenceMetric, rfm).NewtonRaphson_f_of_xx[
+                i
+            ] != sp.sympify(0):
                 nr_input_exprs = [
-                    rfm.NewtonRaphson_f_of_xx[i],
-                    sp.diff(rfm.NewtonRaphson_f_of_xx[i], rfm.xx[i]),
+                    cast(refmetric.ReferenceMetric, rfm).NewtonRaphson_f_of_xx[i],
+                    sp.diff(
+                        cast(refmetric.ReferenceMetric, rfm).NewtonRaphson_f_of_xx[i],
+                        cast(refmetric.ReferenceMetric, rfm).xx[i],
+                    ),
                 ]
                 nr_processed_exprs = _prepare_sympy_exprs_for_codegen(
                     nr_input_exprs, local_C_vars
@@ -210,7 +468,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     else:
         # Part 2b: Handle purely analytical inversions.
         processed_exprs = _prepare_sympy_exprs_for_codegen(
-            list(rfm.Cart_to_xx), local_C_vars
+            list(cast(refmetric.ReferenceMetric, rfm).Cart_to_xx), local_C_vars
         )
         core_body_list.append(
             ccg.c_codegen(
@@ -321,28 +579,71 @@ def register_CFunction_xx_to_Cart(
         )
 
     parallelization = par.parval_from_str("parallelization")
-    rfm = refmetric.reference_metric[CoordSystem]
-    local_C_vars = {"xx0", "xx1", "xx2"}
+    is_fisheye = _coordsystem_is_fisheye(CoordSystem)
+    rfm = refmetric.reference_metric[CoordSystem] if not is_fisheye else None
+    local_C_vars = {"xx0", "xx1", "xx2"} | ({"r"} if is_fisheye else set())
 
     # Step 2: Prepare SymPy expressions for C code generation.
-    raw_xx_to_Cart_exprs = [rfm.xx_to_Cart[i] + gri.Cart_origin[i] for i in range(3)]
-    processed_exprs = _prepare_sympy_exprs_for_codegen(
-        raw_xx_to_Cart_exprs, local_C_vars
-    )
+    if is_fisheye:
+        num_transitions = _parse_fisheye_num_transitions(CoordSystem)
+        r_sym, rbar_of_r, _drbar_dr_of_r = _cached_fisheye_rbar_and_drbar_dr(
+            num_transitions
+        )
 
-    # Step 3: Construct the full C function body.
-    codegen_results = ccg.c_codegen(
-        processed_exprs,
-        ["xCart[0]", "xCart[1]", "xCart[2]"],
-    )
-    body = (
-        """
+        # Codegen for rbar(r) in terms of local C var r:
+        r_local = sp.Symbol("r", real=True, nonnegative=True)
+        rbar_expr_local = rbar_of_r.subs(r_sym, r_local)
+        rbar_processed = _prepare_sympy_exprs_for_codegen(
+            [rbar_expr_local], local_C_vars
+        )
+        rbar_codegen = ccg.c_codegen(rbar_processed, ["rbar"], include_braces=False)
+
+        # Safe r->0 limit: lam(0) = c*a0. (Even though xx=0 at r=0, this is the correct limit.)
+        body = f"""
+const REAL xx0 = xx[0];
+const REAL xx1 = xx[1];
+const REAL xx2 = xx[2];
+const REAL r2 = xx0*xx0 + xx1*xx1 + xx2*xx2;
+
+if(r2 <= (REAL)0.0) {{
+  // Fisheye map sends the origin to the origin (plus any patch offset).
+  xCart[0] = params->Cart_originx;
+  xCart[1] = params->Cart_originy;
+  xCart[2] = params->Cart_originz;
+}} else {{
+  const REAL r = sqrt(r2);
+  REAL rbar;
+{rbar_codegen}
+
+  const REAL lam = rbar / r;
+
+  xCart[0] = lam*xx0 + params->Cart_originx;
+  xCart[1] = lam*xx1 + params->Cart_originy;
+  xCart[2] = lam*xx2 + params->Cart_originz;
+}}
+"""
+    else:
+        raw_xx_to_Cart_exprs = [
+            cast(refmetric.ReferenceMetric, rfm).xx_to_Cart[i] + gri.Cart_origin[i]
+            for i in range(3)
+        ]
+        processed_exprs = _prepare_sympy_exprs_for_codegen(
+            raw_xx_to_Cart_exprs, local_C_vars
+        )
+
+        # Step 3: Construct the full C function body.
+        codegen_results = ccg.c_codegen(
+            processed_exprs,
+            ["xCart[0]", "xCart[1]", "xCart[2]"],
+        )
+        body = (
+            """
 const REAL xx0 = xx[0];
 const REAL xx1 = xx[1];
 const REAL xx2 = xx[2];
 """
-        + codegen_results
-    )
+            + codegen_results
+        )
 
     # Step 4: Register the C function.
     cfc.register_CFunction(

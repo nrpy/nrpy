@@ -1,3 +1,4 @@
+# nrpy/infrastructures/BHaH/CodeParameters.py
 """
 Provide functions to set params_struct and commondata_struct parameters to their default values specified when registering them within NRPy's CodeParameters.
 

@@ -1,3 +1,4 @@
+# nrpy/indexedexp.py
 """
 indexedexp.py: Functions related to indexed expressions including e.g. tensors and pseudotensors.
 
@@ -7,7 +8,7 @@ Authors: Zachariah Etienne, Kenneth Sible, Steven Brandt
 # Step 1: Load needed modules
 import string
 import sys  # Standard Python module for multiplatform OS-level functions
-from typing import Any, List, Optional, Sequence, Tuple, Union, cast
+from typing import Any, List, Optional, Tuple, Union, cast
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
@@ -18,11 +19,11 @@ import nrpy.params as par
 par.register_param(py_type=str, module=__name__, name="symmetry_axes", value="")
 
 _symbol_type = Any  # sp.Expr
-_rank1_type = Sequence[_symbol_type]
-_rank2_type = Sequence[_rank1_type]
-_rank3_type = Sequence[_rank2_type]
-_rank4_type = Sequence[_rank3_type]
-_recur_symbol_type = Union[sp.Expr, Sequence["_recur_symbol_type"]]
+_rank1_type = List[_symbol_type]
+_rank2_type = List[_rank1_type]
+_rank3_type = List[_rank2_type]
+_rank4_type = List[_rank3_type]
+_recur_symbol_type = Union[sp.Expr, List["_recur_symbol_type"]]
 
 
 # This function used to be called _init()
@@ -31,7 +32,7 @@ def create_tensor_symbolic(
     symbol: Union[str, None] = "",
     preindex: Optional[List[int]] = None,
     character_zero_index: Optional[str] = "",
-) -> Sequence[_recur_symbol_type]:
+) -> List[_recur_symbol_type]:
     """
     Create a multi-dimensional symbolic tensor of a specified shape.
 
@@ -179,10 +180,10 @@ def declare_indexedexp(
 
     def symmetrize(
         rank: int,
-        indexedexp: Sequence[_recur_symbol_type],
+        indexedexp: List[_recur_symbol_type],
         symmetry: str,
         dimension: int,
-    ) -> Sequence[_recur_symbol_type]:
+    ) -> List[_recur_symbol_type]:
         """
         Symmetrize the provided tensor of the given rank according to the specified symmetry.
 
@@ -245,7 +246,7 @@ def declare_indexedexp(
     # Optional: allow alphabetic indices instead of numeric ones, e.g.
     # declarerank1("betaU", character_zero_index="x") -> [betaUx, betaUy, betaUz]
     character_zero_index = kwargs.get("character_zero_index", "")
-    indexedexp: Sequence[_recur_symbol_type] = create_tensor_symbolic(
+    indexedexp: List[_recur_symbol_type] = create_tensor_symbolic(
         rank * [dimension],
         idx_expr_basename,
         character_zero_index=character_zero_index,
@@ -443,7 +444,7 @@ def zerorank1(dimension: int = -1) -> List[Union[sp.Expr, sp.Symbol]]:
     :param dimension: The dimension of the rank-1 indexed expression. Default is -1.
     :return: A rank-1 indexed expression initialized to zero.
     """
-    return declare_indexedexp(None, rank=1, dimension=dimension)  # type:ignore
+    return declare_indexedexp(None, rank=1, dimension=dimension)
 
 
 def zerorank2(dimension: int = -1) -> List[List[Union[sp.Expr, sp.Symbol]]]:
@@ -453,7 +454,7 @@ def zerorank2(dimension: int = -1) -> List[List[Union[sp.Expr, sp.Symbol]]]:
     :param dimension: The dimension of the rank-2 indexed expression. Default is -1.
     :return: A rank-2 indexed expression initialized to zero.
     """
-    return declare_indexedexp(None, rank=2, dimension=dimension)  # type:ignore
+    return declare_indexedexp(None, rank=2, dimension=dimension)
 
 
 def zerorank3(dimension: int = -1) -> List[List[List[Union[sp.Expr, sp.Symbol]]]]:
@@ -463,7 +464,7 @@ def zerorank3(dimension: int = -1) -> List[List[List[Union[sp.Expr, sp.Symbol]]]
     :param dimension: The dimension of the rank-3 indexed expression. Default is -1.
     :return: A rank-3 indexed expression initialized to zero.
     """
-    return declare_indexedexp(None, rank=3, dimension=dimension)  # type:ignore
+    return declare_indexedexp(None, rank=3, dimension=dimension)
 
 
 def zerorank4(dimension: int = -1) -> List[List[List[List[Union[sp.Expr, sp.Symbol]]]]]:
@@ -473,10 +474,10 @@ def zerorank4(dimension: int = -1) -> List[List[List[List[Union[sp.Expr, sp.Symb
     :param dimension: The dimension of the rank-4 indexed expression. Default is -1.
     :return: A rank-4 indexed expression initialized to zero.
     """
-    return declare_indexedexp(None, rank=4, dimension=dimension)  # type:ignore
+    return declare_indexedexp(None, rank=4, dimension=dimension)
 
 
-def get_rank(IDX_EXPR: Sequence[_recur_symbol_type]) -> int:
+def get_rank(IDX_EXPR: List[_recur_symbol_type]) -> int:
     """
     Get the rank of the expression based on the nested list structure.
 
@@ -506,7 +507,7 @@ def get_rank(IDX_EXPR: Sequence[_recur_symbol_type]) -> int:
 
 
 def zero_out_derivatives_across_symmetry_axes(
-    IDX_EXPR: Sequence[_recur_symbol_type],
+    IDX_EXPR: List[_recur_symbol_type],
 ) -> _recur_symbol_type:
     """
     Zero derivatives across specified symmetry axes in an indexed expression.
@@ -709,7 +710,7 @@ def symm_matrix_inverter2x2(
 
 
 def symm_matrix_inverter3x3(
-    a: Sequence[Sequence[Union[sp.Expr, sp.Symbol]]],
+    a: List[List[Union[sp.Expr, sp.Symbol]]],
 ) -> Tuple[List[List[Union[sp.Expr, sp.Symbol]]], Union[sp.Expr, sp.Symbol]]:
     """
     Calculate the inverse and determinant of a symmetric 3x3 matrix.

@@ -162,7 +162,7 @@ def test_example_BSSN() -> bool:
                 "bet_rhsU": trusted_bet_rhsU,
                 "H": bssncon.H,
                 "MU": bssncon.MU,
-                "RbarDD": cast(List[List[sp.Expr]], Bq.RbarDD),
+                "RbarDD": Bq.RbarDD,
             },
             suppress_message=False,
         )

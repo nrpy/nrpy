@@ -16,7 +16,7 @@ using NRPy's generic_matrix_inverter3x3() function.
 Author: Zachariah B. Etienne; zachetie **at** gmail **dot* com
 """
 
-from typing import Sequence
+from typing import List
 
 import sympy as sp
 
@@ -25,8 +25,8 @@ import nrpy.reference_metric as refmetric
 
 
 def basis_transform_vectorU_from_rfmbasis_to_Cartesian(
-    CoordSystem: str, src_vectorU: Sequence[sp.Expr]
-) -> Sequence[sp.Expr]:
+    CoordSystem: str, src_vectorU: List[sp.Expr]
+) -> List[sp.Expr]:
     """
     Transform a vector from the reference metric basis to the Cartesian basis.
 
@@ -43,8 +43,8 @@ def basis_transform_vectorU_from_rfmbasis_to_Cartesian(
 
 
 def basis_transform_vectorU_from_rfmbasis_to_Spherical(
-    CoordSystem: str, src_vectorU: Sequence[sp.Expr]
-) -> Sequence[sp.Expr]:
+    CoordSystem: str, src_vectorU: List[sp.Expr]
+) -> List[sp.Expr]:
     """
     Transform a vector from the reference metric basis to the Spherical basis.
 
@@ -61,8 +61,8 @@ def basis_transform_vectorU_from_rfmbasis_to_Spherical(
 
 
 def basis_transform_vectorD_from_rfmbasis_to_Cartesian(
-    CoordSystem: str, src_vectorD: Sequence[sp.Expr]
-) -> Sequence[sp.Expr]:
+    CoordSystem: str, src_vectorD: List[sp.Expr]
+) -> List[sp.Expr]:
     """
     Transform a covariant vector from the reference metric basis to the Cartesian basis.
 
@@ -79,8 +79,8 @@ def basis_transform_vectorD_from_rfmbasis_to_Cartesian(
 
 
 def basis_transform_vectorD_from_rfmbasis_to_Spherical(
-    CoordSystem: str, src_vectorD: Sequence[sp.Expr]
-) -> Sequence[sp.Expr]:
+    CoordSystem: str, src_vectorD: List[sp.Expr]
+) -> List[sp.Expr]:
     """
     Transform a covariant vector from the reference metric basis to the Spherical basis.
 
@@ -97,8 +97,8 @@ def basis_transform_vectorD_from_rfmbasis_to_Spherical(
 
 
 def basis_transform_tensorDD_from_rfmbasis_to_Cartesian(
-    CoordSystem: str, src_tensorDD: Sequence[Sequence[sp.Expr]]
-) -> Sequence[Sequence[sp.Expr]]:
+    CoordSystem: str, src_tensorDD: List[List[sp.Expr]]
+) -> List[List[sp.Expr]]:
     """
     Transform a rank-2 tensor from the reference metric basis to the Cartesian basis.
 
@@ -121,8 +121,8 @@ def basis_transform_tensorDD_from_rfmbasis_to_Cartesian(
 
 
 def basis_transform_tensorDD_from_rfmbasis_to_Spherical(
-    CoordSystem: str, src_tensorDD: Sequence[Sequence[sp.Expr]]
-) -> Sequence[Sequence[sp.Expr]]:
+    CoordSystem: str, src_tensorDD: List[List[sp.Expr]]
+) -> List[List[sp.Expr]]:
     """
     Transform a rank-2 tensor from the reference metric basis to the Spherical basis.
 
@@ -145,8 +145,8 @@ def basis_transform_tensorDD_from_rfmbasis_to_Spherical(
 
 
 def basis_transform_vectorU_from_Cartesian_to_rfmbasis(
-    CoordSystem: str, Cart_src_vectorU: Sequence[sp.Expr]
-) -> Sequence[sp.Expr]:
+    CoordSystem: str, Cart_src_vectorU: List[sp.Expr]
+) -> List[sp.Expr]:
     """
     Transform a vector from the Cartesian basis to the reference metric basis.
 
@@ -163,8 +163,8 @@ def basis_transform_vectorU_from_Cartesian_to_rfmbasis(
 
 
 def basis_transform_vectorU_from_Spherical_to_rfmbasis(
-    CoordSystem: str, Sph_src_vectorU: Sequence[sp.Expr]
-) -> Sequence[sp.Expr]:
+    CoordSystem: str, Sph_src_vectorU: List[sp.Expr]
+) -> List[sp.Expr]:
     """
     Transform a vector from the Spherical basis to the reference metric basis.
 
@@ -181,8 +181,8 @@ def basis_transform_vectorU_from_Spherical_to_rfmbasis(
 
 
 def basis_transform_vectorD_from_Cartesian_to_rfmbasis(
-    CoordSystem: str, Cart_src_vectorD: Sequence[sp.Expr]
-) -> Sequence[sp.Expr]:
+    CoordSystem: str, Cart_src_vectorD: List[sp.Expr]
+) -> List[sp.Expr]:
     """
     Transform a covariant vector from the Cartesian basis to the reference metric basis.
 
@@ -199,8 +199,8 @@ def basis_transform_vectorD_from_Cartesian_to_rfmbasis(
 
 
 def basis_transform_vectorD_from_Spherical_to_rfmbasis(
-    CoordSystem: str, Sph_src_vectorD: Sequence[sp.Expr]
-) -> Sequence[sp.Expr]:
+    CoordSystem: str, Sph_src_vectorD: List[sp.Expr]
+) -> List[sp.Expr]:
     """
     Transform a covariant vector from the Spherical basis to the reference metric basis.
 
@@ -217,8 +217,8 @@ def basis_transform_vectorD_from_Spherical_to_rfmbasis(
 
 
 def basis_transform_tensorDD_from_Cartesian_to_rfmbasis(
-    CoordSystem: str, Cart_src_tensorDD: Sequence[Sequence[sp.Expr]]
-) -> Sequence[Sequence[sp.Expr]]:
+    CoordSystem: str, Cart_src_tensorDD: List[List[sp.Expr]]
+) -> List[List[sp.Expr]]:
     """
     Transform a rank-2 tensor from the Cartesian basis to the reference metric basis.
 
@@ -241,8 +241,8 @@ def basis_transform_tensorDD_from_Cartesian_to_rfmbasis(
 
 
 def basis_transform_tensorDD_from_Spherical_to_rfmbasis(
-    CoordSystem: str, Sph_src_tensorDD: Sequence[Sequence[sp.Expr]]
-) -> Sequence[Sequence[sp.Expr]]:
+    CoordSystem: str, Sph_src_tensorDD: List[List[sp.Expr]]
+) -> List[List[sp.Expr]]:
     """
     Transform a rank-2 tensor from the Spherical basis to the reference metric basis.
 
@@ -266,8 +266,8 @@ def basis_transform_tensorDD_from_Spherical_to_rfmbasis(
 
 # Useful for stress-energy tensor; assumes reference metric is time-independent.
 def basis_transform_4tensorUU_from_time_indep_rfmbasis_to_Cartesian(
-    CoordSystem: str, T4UU: Sequence[Sequence[sp.Expr]]
-) -> Sequence[Sequence[sp.Expr]]:
+    CoordSystem: str, T4UU: List[List[sp.Expr]]
+) -> List[List[sp.Expr]]:
     """
     Transform a 4-tensor from time-independent reference metric basis to Cartesian basis.
 
@@ -298,8 +298,8 @@ def basis_transform_4tensorUU_from_time_indep_rfmbasis_to_Cartesian(
 
 # Useful for stress-energy tensor; assumes reference metric is time-independent.
 def basis_transform_4tensorUU_from_time_indep_rfmbasis_to_Spherical(
-    CoordSystem: str, T4UU: Sequence[Sequence[sp.Expr]]
-) -> Sequence[Sequence[sp.Expr]]:
+    CoordSystem: str, T4UU: List[List[sp.Expr]]
+) -> List[List[sp.Expr]]:
     """
     Transform a 4-tensor from time-independent reference metric basis to Spherical basis.
 
@@ -329,8 +329,8 @@ def basis_transform_4tensorUU_from_time_indep_rfmbasis_to_Spherical(
 
 
 def basis_transform_4tensorUU_from_Cartesian_to_time_indep_rfmbasis(
-    CoordSystem: str, T4UU: Sequence[Sequence[sp.Expr]]
-) -> Sequence[Sequence[sp.Expr]]:
+    CoordSystem: str, T4UU: List[List[sp.Expr]]
+) -> List[List[sp.Expr]]:
     """
     Transform a 4-tensor from Cartesian basis to time-independent reference metric basis.
 
@@ -360,8 +360,8 @@ def basis_transform_4tensorUU_from_Cartesian_to_time_indep_rfmbasis(
 
 
 def basis_transform_4tensorUU_from_Spherical_to_time_indep_rfmbasis(
-    CoordSystem: str, T4UU: Sequence[Sequence[sp.Expr]]
-) -> Sequence[Sequence[sp.Expr]]:
+    CoordSystem: str, T4UU: List[List[sp.Expr]]
+) -> List[List[sp.Expr]]:
     """
     Transform a 4-tensor from Spherical basis to time-independent reference metric basis.
 

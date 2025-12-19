@@ -39,6 +39,10 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients(
     :raises ValueError: If both calibration_no_spin and calibration_spin are True.
     :return: None if in registration phase, else the updated NRPy environment.
     """
+    # The calibration process for the SEOBNRv5 is done in two steps:
+    # 1. Calibration of the non-spinning coefficients
+    # 2. Calibration of the spin-dependent coefficients
+    # Therefore, the C code can only be generated for one of the above calibration options.
     if calibration_no_spin and calibration_spin:
         raise ValueError(
             "calibration_no_spin and calibration_spin cannot both be True."
@@ -51,8 +55,24 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients(
     par.register_CodeParameters(
         "REAL",
         __name__,
-        ["r", "phi", "m1", "m2", "prstar", "pphi", "t_stepback"],
-        [20, 0, 0.5, 0.5, 0.0, 3.3, 250.0],
+        [
+            "r",
+            "phi",
+            "m1",
+            "m2",
+            "prstar",
+            "pphi",
+            "t_stepback",
+        ],
+        [
+            20,
+            0,
+            0.5,
+            0.5,
+            0.0,
+            3.3,
+            250.0,
+        ],  # r, phi, m1, m2, prstar, pphi
         commondata=True,
         add_to_parfile=False,
     )
@@ -207,15 +227,94 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients(
         add_to_parfile=True,
     )
 
+    # register the calibration coefficients
+    if calibration_no_spin:
+        par.register_CodeParameters(
+            "REAL",
+            __name__,
+            [
+                "Delta_t_NS",
+                "a6",
+            ],
+            [
+                0.0,
+                0.0,
+            ],
+            commondata=True,
+            add_to_parfile=True,
+        )
+        par.register_CodeParameters(
+            "REAL",
+            __name__,
+            [
+                "Delta_t_S",
+                "dSO",
+            ],
+            [
+                0.0,
+                0.0,
+            ],
+            commondata=True,
+            add_to_parfile=False,
+        )
+    elif calibration_spin:
+        par.register_CodeParameters(
+            "REAL",
+            __name__,
+            [
+                "Delta_t_NS",
+                "a6",
+            ],
+            [
+                0.0,
+                0.0,
+            ],
+            commondata=True,
+            add_to_parfile=False,
+        )
+        par.register_CodeParameters(
+            "REAL",
+            __name__,
+            [
+                "Delta_t_S",
+                "dSO",
+            ],
+            [
+                0.0,
+                0.0,
+            ],
+            commondata=True,
+            add_to_parfile=True,
+        )
+    else:
+        par.register_CodeParameters(
+            "REAL",
+            __name__,
+            [
+                "a6",
+                "dSO",
+            ],
+            [
+                0.0,
+                0.0,
+            ],
+            commondata=True,
+            add_to_parfile=False,
+        )
+    # We must include gsl/gsl_spline.h for the QNM interpolation
     includes = ["BHaH_defines.h", "gsl/gsl_spline.h"]
-    desc = """Evaluate and store the SEOBNRv5 calibration coefficients and remnant properties."""
+    
+    desc = """
+Evaluate and store the SEOBNRv5 calibration coefficients and remnant properties.
+
+@param commondata - The Common data structure containing the model parameters.
+"""
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_coefficients"
     params = "commondata_struct *restrict commondata"
     v5_const = SEOBNRv5_const.SEOBNR_aligned_spin_constants(
         calibration_no_spin, calibration_spin
     )
-
     body = """
 REAL q = commondata->mass_ratio;
 REAL eta = q / (1.0 + q) / (1.0 + q);
@@ -232,7 +331,9 @@ const REAL chi2 = commondata->chi2;
 commondata->dT = commondata->dt / commondata->total_mass / 4.925490947641266978197229498498379006e-6;
 """
     if calibration_no_spin:
-        body += "const REAL Delta_t_NS = commondata->Delta_t_NS;\n"
+        body += """
+const REAL Delta_t_NS = commondata->Delta_t_NS;
+"""
         body += ccg.c_codegen(
             [
                 v5_const.Delta_t,
@@ -252,7 +353,9 @@ commondata->dT = commondata->dt / commondata->total_mass / 4.9254909476412669781
             include_braces=False,
         )
     elif calibration_spin:
-        body += "const REAL Delta_t_S = commondata->Delta_t_S;\n"
+        body += """
+const REAL Delta_t_S = commondata->Delta_t_S;
+"""
         body += ccg.c_codegen(
             [
                 v5_const.pyseobnr_a6,
@@ -296,7 +399,6 @@ commondata->dT = commondata->dt / commondata->total_mass / 4.9254909476412669781
             verbose=False,
             include_braces=False,
         )
-
     body += """
 const REAL afinallist[107] = { -0.9996, -0.9995, -0.9994, -0.9992, -0.999, -0.9989, -0.9988,
   -0.9987, -0.9986, -0.9985, -0.998, -0.9975, -0.997, -0.996, -0.995, -0.994, -0.992, -0.99, -0.988,
