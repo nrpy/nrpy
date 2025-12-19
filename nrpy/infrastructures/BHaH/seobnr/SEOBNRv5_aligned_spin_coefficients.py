@@ -18,18 +18,33 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 
 
-def register_CFunction_SEOBNRv5_aligned_spin_coefficients() -> (
-    Union[None, pcg.NRPyEnv_type]
-):
+def register_CFunction_SEOBNRv5_aligned_spin_coefficients(
+    calibration_no_spin: bool = False,
+    calibration_spin: bool = False,
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register CFunction for evaluating the masses and SEOBNRv5 coefficients.
     The inputs needed to generate an EOB approximant are mass ratio, spins and
     an initial orbital frequency. Therefore, one needs to compute the individual
-    masses from the mass ratio and the Hamiltonian coeffients which are a function
-    of mass ratio and spins.
+    masses from the mass ratio and the Hamiltonian coefficients which are a function
+    of mass ratio and spins. The Hamiltonian calibration coefficients can be pre-computed
+    or added to the parfile for calibrating the SEOBNRv5 approximant.
 
+    :param calibration_no_spin: If True, the non-spinning calibration coefficients are added to the parfile.
+                                pySEOBNR v5 calibration coefficients are used if False.
+    :param calibration_spin: If True, the spin-dependent calibration coefficients are added to the parfile.
+                                pySEOBNR v5 calibration coefficients are used if False.
+    :raises ValueError: If both calibration_no_spin and calibration_spin are True.
     :return: None if in registration phase, else the updated NRPy environment.
     """
+    # The calibration process for the SEOBNRv5 is done in two steps:
+    # 1. Calibration of the non-spinning coefficients
+    # 2. Calibration of the spin-dependent coefficients
+    # Therefore, the C code can only be generated for one of the above calibration options.
+    if calibration_no_spin and calibration_spin:
+        raise ValueError(
+            "calibration_no_spin and calibration_spin cannot both be True."
+        )
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
@@ -43,8 +58,6 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients() -> (
             "phi",
             "m1",
             "m2",
-            "a6",
-            "dSO",
             "prstar",
             "pphi",
             "t_stepback",
@@ -55,11 +68,9 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients() -> (
             0.5,
             0.5,
             0.0,
-            0.0,
-            0.0,
             3.3,
             250.0,
-        ],  # r, phi, m1, m2, a6, dSO, prstar, pphi
+        ],  # r, phi, m1, m2, prstar, pphi
         commondata=True,
         add_to_parfile=False,
     )
@@ -188,6 +199,80 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients() -> (
         add_to_parfile=True,
     )
 
+    # register the calibration coefficients
+    if calibration_no_spin:
+        par.register_CodeParameters(
+            "REAL",
+            __name__,
+            [
+                "Delta_t_NS",
+                "a6",
+            ],
+            [
+                0.0,
+                0.0,
+            ],
+            commondata=True,
+            add_to_parfile=True,
+        )
+        par.register_CodeParameters(
+            "REAL",
+            __name__,
+            [
+                "Delta_t_S",
+                "dSO",
+            ],
+            [
+                0.0,
+                0.0,
+            ],
+            commondata=True,
+            add_to_parfile=False,
+        )
+    elif calibration_spin:
+        par.register_CodeParameters(
+            "REAL",
+            __name__,
+            [
+                "Delta_t_NS",
+                "a6",
+            ],
+            [
+                0.0,
+                0.0,
+            ],
+            commondata=True,
+            add_to_parfile=False,
+        )
+        par.register_CodeParameters(
+            "REAL",
+            __name__,
+            [
+                "Delta_t_S",
+                "dSO",
+            ],
+            [
+                0.0,
+                0.0,
+            ],
+            commondata=True,
+            add_to_parfile=True,
+        )
+    else:
+        par.register_CodeParameters(
+            "REAL",
+            __name__,
+            [
+                "a6",
+                "dSO",
+            ],
+            [
+                0.0,
+                0.0,
+            ],
+            commondata=True,
+            add_to_parfile=False,
+        )
     includes = ["BHaH_defines.h"]
     desc = """
 Evaluate and store the SEOBNRv5 calibration coefficients and remnant properties.
@@ -197,7 +282,9 @@ Evaluate and store the SEOBNRv5 calibration coefficients and remnant properties.
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_coefficients"
     params = "commondata_struct *restrict commondata"
-    v5_const = SEOBNRv5_const.SEOBNR_aligned_spin_constants()
+    v5_const = SEOBNRv5_const.SEOBNR_aligned_spin_constants(
+        calibration_no_spin, calibration_spin
+    )
     body = """
 REAL q = commondata->mass_ratio;
 REAL eta = q / (1.0 + q) / (1.0 + q);
@@ -217,28 +304,75 @@ const REAL chi1 = commondata->chi1;
 const REAL chi2 = commondata->chi2;
 commondata->dT = commondata->dt / commondata->total_mass / 4.925490947641266978197229498498379006e-6;
 """
-    body += ccg.c_codegen(
-        [
-            v5_const.pyseobnr_a6,
-            v5_const.pyseobnr_dSO,
-            v5_const.Delta_t,
-            v5_const.M_f,
-            v5_const.a_f,
-            v5_const.rISCO,
-            v5_const.rstop,
-        ],
-        [
-            "commondata->a6",
-            "commondata->dSO",
-            "commondata->Delta_t",
-            "commondata->M_f",
-            "commondata->a_f",
-            "commondata->r_ISCO",
-            "commondata->r_stop",
-        ],
-        verbose=False,
-        include_braces=False,
-    )
+    if calibration_no_spin:
+        body += """
+const REAL Delta_t_NS = commondata->Delta_t_NS;
+"""
+        body += ccg.c_codegen(
+            [
+                v5_const.Delta_t,
+                v5_const.M_f,
+                v5_const.a_f,
+                v5_const.rISCO,
+                v5_const.rstop,
+            ],
+            [
+                "commondata->Delta_t",
+                "commondata->M_f",
+                "commondata->a_f",
+                "commondata->r_ISCO",
+                "commondata->r_stop",
+            ],
+            verbose=False,
+            include_braces=False,
+        )
+    elif calibration_spin:
+        body += """
+const REAL Delta_t_S = commondata->Delta_t_S;
+"""
+        body += ccg.c_codegen(
+            [
+                v5_const.pyseobnr_a6,
+                v5_const.Delta_t,
+                v5_const.M_f,
+                v5_const.a_f,
+                v5_const.rISCO,
+                v5_const.rstop,
+            ],
+            [
+                "commondata->a6",
+                "commondata->Delta_t",
+                "commondata->M_f",
+                "commondata->a_f",
+                "commondata->r_ISCO",
+                "commondata->r_stop",
+            ],
+            verbose=False,
+            include_braces=False,
+        )
+    else:
+        body += ccg.c_codegen(
+            [
+                v5_const.pyseobnr_a6,
+                v5_const.pyseobnr_dSO,
+                v5_const.Delta_t,
+                v5_const.M_f,
+                v5_const.a_f,
+                v5_const.rISCO,
+                v5_const.rstop,
+            ],
+            [
+                "commondata->a6",
+                "commondata->dSO",
+                "commondata->Delta_t",
+                "commondata->M_f",
+                "commondata->a_f",
+                "commondata->r_ISCO",
+                "commondata->r_stop",
+            ],
+            verbose=False,
+            include_braces=False,
+        )
     body += """
 const REAL afinallist[107] = { -0.9996, -0.9995, -0.9994, -0.9992, -0.999, -0.9989, -0.9988,
   -0.9987, -0.9986, -0.9985, -0.998, -0.9975, -0.997, -0.996, -0.995, -0.994, -0.992, -0.99, -0.988,
