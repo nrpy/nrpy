@@ -1,3 +1,4 @@
+# nrpy/infrastructures/BHaH/BHaH_defines_h.py
 """
 Construct BHaH_defines.h from data registered to griddata_commondata, CodeParameters, and NRPyParameters.
 
