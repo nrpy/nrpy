@@ -3,10 +3,8 @@ Set up C function library for SEOBNR initial conditions.
 
 Authors: Siddharth Mahesh
         sm0193 **at** mix **dot** wvu **dot** edu
-
         Suchindram Dasgupta
         sd00113 **at** mix **dot** wvu **dot** edu
-
         Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
@@ -22,18 +20,29 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 
 
-def register_CFunction_SEOBNRv5_aligned_spin_coefficients() -> (
-    Union[None, pcg.NRPyEnv_type]
-):
+def register_CFunction_SEOBNRv5_aligned_spin_coefficients(
+    calibration_no_spin: bool = False,
+    calibration_spin: bool = False,
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register CFunction for evaluating the masses and SEOBNRv5 coefficients.
     The inputs needed to generate an EOB approximant are mass ratio, spins and
     an initial orbital frequency. Therefore, one needs to compute the individual
-    masses from the mass ratio and the Hamiltonian coeffients which are a function
-    of mass ratio and spins.
+    masses from the mass ratio and the Hamiltonian coefficients which are a function
+    of mass ratio and spins. The Hamiltonian calibration coefficients can be pre-computed
+    or added to the parfile for calibrating the SEOBNRv5 approximant.
 
+    :param calibration_no_spin: If True, the non-spinning calibration coefficients are added to the parfile.
+                                pySEOBNR v5 calibration coefficients are used if False.
+    :param calibration_spin: If True, the spin-dependent calibration coefficients are added to the parfile.
+                                pySEOBNR v5 calibration coefficients are used if False.
+    :raises ValueError: If both calibration_no_spin and calibration_spin are True.
     :return: None if in registration phase, else the updated NRPy environment.
     """
+    if calibration_no_spin and calibration_spin:
+        raise ValueError(
+            "calibration_no_spin and calibration_spin cannot both be True."
+        )
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
@@ -42,28 +51,8 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients() -> (
     par.register_CodeParameters(
         "REAL",
         __name__,
-        [
-            "r",
-            "phi",
-            "m1",
-            "m2",
-            "a6",
-            "dSO",
-            "prstar",
-            "pphi",
-            "t_stepback",
-        ],
-        [
-            20,
-            0,
-            0.5,
-            0.5,
-            0.0,
-            0.0,
-            0.0,
-            3.3,
-            250.0,
-        ],  # r, phi, m1, m2, a6, dSO, prstar, pphi
+        ["r", "phi", "m1", "m2", "prstar", "pphi", "t_stepback"],
+        [20, 0, 0.5, 0.5, 0.0, 3.3, 250.0],
         commondata=True,
         add_to_parfile=False,
     )
@@ -117,14 +106,55 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients() -> (
         add_to_parfile=False,
     )
 
+    # Register the calibration coefficients conditionally
+    if calibration_no_spin:
+        par.register_CodeParameters(
+            "REAL",
+            __name__,
+            ["Delta_t_NS", "a6"],
+            [0.0, 0.0],
+            commondata=True,
+            add_to_parfile=True,
+        )
+        par.register_CodeParameters(
+            "REAL",
+            __name__,
+            ["Delta_t_S", "dSO"],
+            [0.0, 0.0],
+            commondata=True,
+            add_to_parfile=False,
+        )
+    elif calibration_spin:
+        par.register_CodeParameters(
+            "REAL",
+            __name__,
+            ["Delta_t_NS", "a6"],
+            [0.0, 0.0],
+            commondata=True,
+            add_to_parfile=False,
+        )
+        par.register_CodeParameters(
+            "REAL",
+            __name__,
+            ["Delta_t_S", "dSO"],
+            [0.0, 0.0],
+            commondata=True,
+            add_to_parfile=True,
+        )
+    else:
+        par.register_CodeParameters(
+            "REAL",
+            __name__,
+            ["a6", "dSO"],
+            [0.0, 0.0],
+            commondata=True,
+            add_to_parfile=False,
+        )
+
     par.register_CodeParameters(
         "REAL *restrict",
         __name__,
-        [
-            "dynamics_low",
-            "dynamics_fine",
-            "dynamics_raw",
-        ],
+        ["dynamics_low", "dynamics_fine", "dynamics_raw"],
         commondata=True,
         add_to_parfile=False,
         add_to_set_CodeParameters_h=False,
@@ -133,12 +163,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients() -> (
     par.register_CodeParameters(
         "double complex *restrict",
         __name__,
-        [
-            "waveform_low",
-            "waveform_fine",
-            "waveform_inspiral",
-            "waveform_IMR",
-        ],
+        ["waveform_low", "waveform_fine", "waveform_inspiral", "waveform_IMR"],
         commondata=True,
         add_to_parfile=False,
         add_to_set_CodeParameters_h=False,
@@ -177,39 +202,26 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients() -> (
         "REAL",
         __name__,
         ["mass_ratio", "chi1", "chi2", "initial_omega", "total_mass", "dt"],
-        [
-            1,
-            0.4,
-            -0.3,
-            0.01118,
-            50,
-            2.4627455127717882e-05,
-        ],
+        [1, 0.4, -0.3, 0.01118, 50, 2.4627455127717882e-05],
         commondata=True,
         add_to_parfile=True,
     )
 
     includes = ["BHaH_defines.h", "gsl/gsl_spline.h"]
-    desc = """
-Evaluate and store the SEOBNRv5 calibration coefficients, remnant properties,
-and QNM frequencies for all relevant modes.
-
-@param commondata - The Common data structure containing the model parameters.
-"""
+    desc = """Evaluate and store the SEOBNRv5 calibration coefficients and remnant properties."""
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_coefficients"
     params = "commondata_struct *restrict commondata"
-    v5_const = SEOBNRv5_const.SEOBNR_aligned_spin_constants()
+    v5_const = SEOBNRv5_const.SEOBNR_aligned_spin_constants(
+        calibration_no_spin, calibration_spin
+    )
+
     body = """
 REAL q = commondata->mass_ratio;
 REAL eta = q / (1.0 + q) / (1.0 + q);
 if (eta > 0.25){
-  if (fabs(q - 1.) < 1e-13){
-    q = 1.;
-  } else{
-    printf("mass ratio = %.15e causes eta = %.15e > 0.25\\n",q,eta);
-    exit(EXIT_FAILURE);
-  }
+  if (fabs(q - 1.) < 1e-13){ q = 1.; } 
+  else { printf("mass ratio = %.15e causes eta = %.15e > 0.25\\n",q,eta); exit(EXIT_FAILURE); }
 }
 commondata->m1 = q / (1.0 + q);
 commondata->m2 = 1.0 / (1.0 + q);
@@ -219,28 +231,72 @@ const REAL chi1 = commondata->chi1;
 const REAL chi2 = commondata->chi2;
 commondata->dT = commondata->dt / commondata->total_mass / 4.925490947641266978197229498498379006e-6;
 """
-    body += ccg.c_codegen(
-        [
-            v5_const.pyseobnr_a6,
-            v5_const.pyseobnr_dSO,
-            v5_const.Delta_t,
-            v5_const.M_f,
-            v5_const.a_f,
-            v5_const.rISCO,
-            v5_const.rstop,
-        ],
-        [
-            "commondata->a6",
-            "commondata->dSO",
-            "commondata->Delta_t",
-            "commondata->M_f",
-            "commondata->a_f",
-            "commondata->r_ISCO",
-            "commondata->r_stop",
-        ],
-        verbose=False,
-        include_braces=False,
-    )
+    if calibration_no_spin:
+        body += "const REAL Delta_t_NS = commondata->Delta_t_NS;\n"
+        body += ccg.c_codegen(
+            [
+                v5_const.Delta_t,
+                v5_const.M_f,
+                v5_const.a_f,
+                v5_const.rISCO,
+                v5_const.rstop,
+            ],
+            [
+                "commondata->Delta_t",
+                "commondata->M_f",
+                "commondata->a_f",
+                "commondata->r_ISCO",
+                "commondata->r_stop",
+            ],
+            verbose=False,
+            include_braces=False,
+        )
+    elif calibration_spin:
+        body += "const REAL Delta_t_S = commondata->Delta_t_S;\n"
+        body += ccg.c_codegen(
+            [
+                v5_const.pyseobnr_a6,
+                v5_const.Delta_t,
+                v5_const.M_f,
+                v5_const.a_f,
+                v5_const.rISCO,
+                v5_const.rstop,
+            ],
+            [
+                "commondata->a6",
+                "commondata->Delta_t",
+                "commondata->M_f",
+                "commondata->a_f",
+                "commondata->r_ISCO",
+                "commondata->r_stop",
+            ],
+            verbose=False,
+            include_braces=False,
+        )
+    else:
+        body += ccg.c_codegen(
+            [
+                v5_const.pyseobnr_a6,
+                v5_const.pyseobnr_dSO,
+                v5_const.Delta_t,
+                v5_const.M_f,
+                v5_const.a_f,
+                v5_const.rISCO,
+                v5_const.rstop,
+            ],
+            [
+                "commondata->a6",
+                "commondata->dSO",
+                "commondata->Delta_t",
+                "commondata->M_f",
+                "commondata->a_f",
+                "commondata->r_ISCO",
+                "commondata->r_stop",
+            ],
+            verbose=False,
+            include_braces=False,
+        )
+
     body += """
 const REAL afinallist[107] = { -0.9996, -0.9995, -0.9994, -0.9992, -0.999, -0.9989, -0.9988,
   -0.9987, -0.9986, -0.9985, -0.998, -0.9975, -0.997, -0.996, -0.995, -0.994, -0.992, -0.99, -0.988,
@@ -252,8 +308,8 @@ const REAL afinallist[107] = { -0.9996, -0.9995, -0.9994, -0.9992, -0.999, -0.99
   0.9985, 0.9986, 0.9987, 0.9988, 0.9989, 0.999, 0.9992, 0.9994, 0.9995, 0.9996
 };
 
-// NOTE: imomegaqnm_* tables store the positive damping rate |Im(ω)| (i.e., -Im(ω) for Im(ω)<0 convention).
-const REAL reomegaqnm_l2_m2[107] = {
+// NOTE: imomegaqnm_* tables store the positive damping rate |Im(ω)|.
+const REAL reomegaqnm_l2m2[107] = {
   0.2915755, 0.2915810, 0.2915866, 0.2915976, 0.2916086, 0.2916142, 0.2916197, 0.2916252,
   0.2916307, 0.2916362, 0.2916638, 0.2916915, 0.2917191, 0.2917744, 0.2918297, 0.2918850,
   0.2919958, 0.2921067, 0.2922178, 0.2923289, 0.2924403, 0.2925517, 0.2926633, 0.2929430,
@@ -270,7 +326,7 @@ const REAL reomegaqnm_l2_m2[107] = {
   0.9655139, 0.9684383, 0.9716904
 };
 
-const REAL imomegaqnm_l2_m2[107] = {
+const REAL imomegaqnm_l2m2[107] = {
   0.0880269, 0.0880272, 0.0880274, 0.0880280, 0.0880285, 0.0880288, 0.0880290, 0.0880293,
   0.0880296, 0.0880298, 0.0880311, 0.0880325, 0.0880338, 0.0880364, 0.0880391, 0.0880417,
   0.0880470, 0.0880523, 0.0880575, 0.0880628, 0.0880680, 0.0880733, 0.0880785, 0.0880915,
@@ -287,7 +343,7 @@ const REAL imomegaqnm_l2_m2[107] = {
   0.0082669, 0.0075770, 0.0068074
 };
 
-const REAL reomegaqnm_l2_m1[107] = {
+const REAL reomegaqnm_l2m1[107] = {
   0.3438626, 0.3438628, 0.3438631, 0.3438636, 0.3438642, 0.3438644, 0.3438647, 0.3438649,
   0.3438652, 0.3438655, 0.3438668, 0.3438681, 0.3438695, 0.3438722, 0.3438750, 0.3438778,
   0.3438837, 0.3438896, 0.3438958, 0.3439022, 0.3439087, 0.3439155, 0.3439224, 0.3439406,
@@ -304,7 +360,7 @@ const REAL reomegaqnm_l2_m1[107] = {
   0.5809502, 0.5810312, 0.5811120
 };
 
-const REAL imomegaqnm_l2_m1[107] = {
+const REAL imomegaqnm_l2m1[107] = {
   0.0833908, 0.0833925, 0.0833942, 0.0833976, 0.0834009, 0.0834026, 0.0834043, 0.0834060,
   0.0834077, 0.0834093, 0.0834177, 0.0834261, 0.0834345, 0.0834512, 0.0834679, 0.0834845,
   0.0835176, 0.0835506, 0.0835833, 0.0836159, 0.0836483, 0.0836806, 0.0837126, 0.0837921,
@@ -321,7 +377,7 @@ const REAL imomegaqnm_l2_m1[107] = {
   0.0388122, 0.0387200, 0.0386275
 };
 
-const REAL reomegaqnm_l3_m3[107] = {
+const REAL reomegaqnm_l3m3[107] = {
   0.4638620, 0.4638713, 0.4638807, 0.4638994, 0.4639182, 0.4639275, 0.4639369, 0.4639463,
   0.4639556, 0.4639650, 0.4640118, 0.4640587, 0.4641056, 0.4641994, 0.4642932, 0.4643871,
   0.4645751, 0.4647632, 0.4649516, 0.4651403, 0.4653291, 0.4655181, 0.4657074, 0.4661816,
@@ -338,7 +394,7 @@ const REAL reomegaqnm_l3_m3[107] = {
   1.4529527, 1.4569479, 1.4613898
 };
 
-const REAL imomegaqnm_l3_m3[107] = {
+const REAL imomegaqnm_l3m3[107] = {
   0.0909297, 0.0909301, 0.0909305, 0.0909312, 0.0909319, 0.0909323, 0.0909327, 0.0909330,
   0.0909334, 0.0909338, 0.0909356, 0.0909375, 0.0909393, 0.0909430, 0.0909466, 0.0909503,
   0.0909576, 0.0909650, 0.0909723, 0.0909796, 0.0909869, 0.0909942, 0.0910015, 0.0910197,
@@ -355,7 +411,7 @@ const REAL imomegaqnm_l3_m3[107] = {
   0.0082662, 0.0075764, 0.0068068
 };
 
-const REAL reomegaqnm_l3_m2[107] = {
+const REAL reomegaqnm_l3m2[107] = {
   0.5136068, 0.5136120, 0.5136172, 0.5136277, 0.5136381, 0.5136433, 0.5136486, 0.5136538,
   0.5136590, 0.5136642, 0.5136904, 0.5137165, 0.5137426, 0.5137950, 0.5138473, 0.5138998,
   0.5140048, 0.5141100, 0.5142154, 0.5143210, 0.5144268, 0.5145327, 0.5146389, 0.5149053,
@@ -372,7 +428,7 @@ const REAL reomegaqnm_l3_m2[107] = {
   1.0268617, 1.0271582, 1.0274485
 };
 
-const REAL imomegaqnm_l3_m2[107] = {
+const REAL imomegaqnm_l3m2[107] = {
   0.0892015, 0.0892023, 0.0892032, 0.0892048, 0.0892064, 0.0892072, 0.0892080, 0.0892089,
   0.0892097, 0.0892105, 0.0892146, 0.0892186, 0.0892227, 0.0892308, 0.0892390, 0.0892471,
   0.0892632, 0.0892794, 0.0892954, 0.0893115, 0.0893275, 0.0893434, 0.0893593, 0.0893988,
@@ -389,7 +445,7 @@ const REAL imomegaqnm_l3_m2[107] = {
   0.0206181, 0.0202839, 0.0199461
 };
 
-const REAL reomegaqnm_l4_m4[107] = {
+const REAL reomegaqnm_l4m4[107] = {
   0.6208855, 0.6208986, 0.6209116, 0.6209377, 0.6209638, 0.6209769, 0.6209899, 0.6210030,
   0.6210160, 0.6210291, 0.6210944, 0.6211597, 0.6212251, 0.6213558, 0.6214866, 0.6216175,
   0.6218794, 0.6221417, 0.6224043, 0.6226672, 0.6229304, 0.6231939, 0.6234577, 0.6241186,
@@ -406,7 +462,7 @@ const REAL reomegaqnm_l4_m4[107] = {
   1.9398909, 1.9450012, 1.9506815
 };
 
-const REAL imomegaqnm_l4_m4[107] = {
+const REAL imomegaqnm_l4m4[107] = {
   0.0917882, 0.0917886, 0.0917890, 0.0917898, 0.0917907, 0.0917911, 0.0917915, 0.0917919,
   0.0917923, 0.0917928, 0.0917948, 0.0917969, 0.0917990, 0.0918032, 0.0918073, 0.0918115,
   0.0918198, 0.0918281, 0.0918364, 0.0918447, 0.0918530, 0.0918613, 0.0918696, 0.0918903,
@@ -423,7 +479,7 @@ const REAL imomegaqnm_l4_m4[107] = {
   0.0082701, 0.0075796, 0.0068093
 };
 
-const REAL reomegaqnm_l4_m3[107] = {
+const REAL reomegaqnm_l4m3[107] = {
   0.6693002, 0.6693096, 0.6693190, 0.6693378, 0.6693566, 0.6693660, 0.6693754, 0.6693847,
   0.6693941, 0.6694035, 0.6694505, 0.6694975, 0.6695445, 0.6696385, 0.6697326, 0.6698268,
   0.6700154, 0.6702042, 0.6703932, 0.6705825, 0.6707721, 0.6709619, 0.6711520, 0.6716283,
@@ -440,7 +496,7 @@ const REAL reomegaqnm_l4_m3[107] = {
   1.4956504, 1.4968674, 1.4981358
 };
 
-const REAL imomegaqnm_l4_m3[107] = {
+const REAL imomegaqnm_l4m3[107] = {
   0.0909037, 0.0909044, 0.0909050, 0.0909063, 0.0909076, 0.0909082, 0.0909088, 0.0909095,
   0.0909101, 0.0909107, 0.0909139, 0.0909171, 0.0909203, 0.0909267, 0.0909330, 0.0909394,
   0.0909520, 0.0909647, 0.0909773, 0.0909899, 0.0910025, 0.0910151, 0.0910276, 0.0910588,
@@ -457,7 +513,7 @@ const REAL imomegaqnm_l4_m3[107] = {
   0.0113876, 0.0106515, 0.0098303
 };
 
-const REAL reomegaqnm_l5_m5[107] = {
+const REAL reomegaqnm_l5m5[107] = {
   0.7722084, 0.7722250, 0.7722417, 0.7722749, 0.7723082, 0.7723249, 0.7723415, 0.7723582,
   0.7723748, 0.7723915, 0.7724747, 0.7725580, 0.7726413, 0.7728080, 0.7729748, 0.7731417,
   0.7734757, 0.7738101, 0.7741450, 0.7744802, 0.7748158, 0.7751518, 0.7754882, 0.7763309,
@@ -474,7 +530,7 @@ const REAL reomegaqnm_l5_m5[107] = {
   2.4264542, 2.4327123, 2.4396670
 };
 
-const REAL imomegaqnm_l5_m5[107] = {
+const REAL imomegaqnm_l5m5[107] = {
   0.0921596, 0.0921600, 0.0921605, 0.0921613, 0.0921622, 0.0921627, 0.0921631, 0.0921635,
   0.0921640, 0.0921644, 0.0921666, 0.0921688, 0.0921711, 0.0921755, 0.0921799, 0.0921843,
   0.0921931, 0.0922019, 0.0922107, 0.0922195, 0.0922283, 0.0922371, 0.0922459, 0.0922679,
@@ -491,78 +547,29 @@ const REAL imomegaqnm_l5_m5[107] = {
   0.0082744, 0.0075832, 0.0068122
 };
 
-gsl_spline *spline = gsl_spline_alloc(gsl_interp_cspline, 107);
-if (spline == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_coefficients(), gsl_spline_alloc failed to initialize\\n");
-  exit(1);
-}
-gsl_interp_accel *acc = gsl_interp_accel_alloc();
-if (acc == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_coefficients(), gsl_interp_acc_alloc failed to initialize\\n");
-  exit(1);
-}
 
-// Clamp a_f to the range of the afinallist to prevent GSL extrapolation errors.
+gsl_spline *spline = gsl_spline_alloc(gsl_interp_cspline, 107);
+gsl_interp_accel *acc = gsl_interp_accel_alloc();
+
 const REAL a_f_clamped = (commondata->a_f < afinallist[0]) ? afinallist[0] :
                       ((commondata->a_f > afinallist[106]) ? afinallist[106] : commondata->a_f);
 
-// (l=2, m=2) QNM
-gsl_spline_init(spline, afinallist, reomegaqnm_l2m2, 107);
-gsl_interp_accel_reset(acc);
-commondata->omega_qnm_l2m2 = gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f;
-gsl_spline_init(spline, afinallist, imomegaqnm_l2m2, 107);
-gsl_interp_accel_reset(acc);
-commondata->tau_qnm_l2m2 = 1./(gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f);
+#define EVAL_QNM(L, M, TARGET_OMEGA, TARGET_TAU, RE_ARRAY, IM_ARRAY) \\
+    gsl_spline_init(spline, afinallist, RE_ARRAY, 107); \\
+    gsl_interp_accel_reset(acc); \\
+    commondata->TARGET_OMEGA = gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f; \\
+    gsl_spline_init(spline, afinallist, IM_ARRAY, 107); \\
+    gsl_interp_accel_reset(acc); \\
+    commondata->TARGET_TAU = 1. / (gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f);
 
-// (l=2, m=1) QNM
-gsl_spline_init(spline, afinallist, reomegaqnm_l2m1, 107);
-gsl_interp_accel_reset(acc);
-commondata->omega_qnm_l2m1 = gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f;
-gsl_spline_init(spline, afinallist, imomegaqnm_l2m1, 107);
-gsl_interp_accel_reset(acc);
-commondata->tau_qnm_l2m1 = 1./(gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f);
+EVAL_QNM(2, 2, omega_qnm_l2m2, tau_qnm_l2m2, reomegaqnm_l2m2, imomegaqnm_l2m2)
+EVAL_QNM(2, 1, omega_qnm_l2m1, tau_qnm_l2m1, reomegaqnm_l2m1, imomegaqnm_l2m1)
+EVAL_QNM(3, 3, omega_qnm_l3m3, tau_qnm_l3m3, reomegaqnm_l3m3, imomegaqnm_l3m3)
+EVAL_QNM(3, 2, omega_qnm_l3m2, tau_qnm_l3m2, reomegaqnm_l3m2, imomegaqnm_l3m2)
+EVAL_QNM(4, 4, omega_qnm_l4m4, tau_qnm_l4m4, reomegaqnm_l4m4, imomegaqnm_l4m4)
+EVAL_QNM(4, 3, omega_qnm_l4m3, tau_qnm_l4m3, reomegaqnm_l4m3, imomegaqnm_l4m3)
+EVAL_QNM(5, 5, omega_qnm_l5m5, tau_qnm_l5m5, reomegaqnm_l5m5, imomegaqnm_l5m5)
 
-// (l=3, m=3) QNM
-gsl_spline_init(spline, afinallist, reomegaqnm_l3m3, 107);
-gsl_interp_accel_reset(acc);
-commondata->omega_qnm_l3m3 = gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f;
-gsl_spline_init(spline, afinallist, imomegaqnm_l3m3, 107);
-gsl_interp_accel_reset(acc);
-commondata->tau_qnm_l3m3 = 1./(gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f);
-
-// (l=3, m=2) QNM
-gsl_spline_init(spline, afinallist, reomegaqnm_l3m2, 107);
-gsl_interp_accel_reset(acc);
-commondata->omega_qnm_l3m2 = gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f;
-gsl_spline_init(spline, afinallist, imomegaqnm_l3m2, 107);
-gsl_interp_accel_reset(acc);
-commondata->tau_qnm_l3m2 = 1./(gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f);
-
-// (l=4, m=4) QNM
-gsl_spline_init(spline, afinallist, reomegaqnm_l4m4, 107);
-gsl_interp_accel_reset(acc);
-commondata->omega_qnm_l4m4 = gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f;
-gsl_spline_init(spline, afinallist, imomegaqnm_l4m4, 107);
-gsl_interp_accel_reset(acc);
-commondata->tau_qnm_l4m4 = 1./(gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f);
-
-// (l=4, m=3) QNM
-gsl_spline_init(spline, afinallist, reomegaqnm_l4m3, 107);
-gsl_interp_accel_reset(acc);
-commondata->omega_qnm_l4m3 = gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f;
-gsl_spline_init(spline, afinallist, imomegaqnm_l4m3, 107);
-gsl_interp_accel_reset(acc);
-commondata->tau_qnm_l4m3 = 1./(gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f);
-
-// (l=5, m=5) QNM
-gsl_spline_init(spline, afinallist, reomegaqnm_l5m5, 107);
-gsl_interp_accel_reset(acc);
-commondata->omega_qnm_l5m5 = gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f;
-gsl_spline_init(spline, afinallist, imomegaqnm_l5m5, 107);
-gsl_interp_accel_reset(acc);
-commondata->tau_qnm_l5m5 = 1./(gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f);
-
-// Set old (l=2,m=2) aliases for backward compatibility
 commondata->omega_qnm = commondata->omega_qnm_l2m2;
 commondata->tau_qnm   = commondata->tau_qnm_l2m2;
 
@@ -575,7 +582,6 @@ gsl_interp_accel_free(acc);
         cfunc_type=cfunc_type,
         name=name,
         params=params,
-        include_CodeParameters_h=False,
         body=body,
     )
     return pcg.NRPyEnv()
