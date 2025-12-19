@@ -54,7 +54,7 @@ perform_iterative_refinement = True
 # Command-line-tunable flags (tuned through choice of approximant, defaults to all BOBs)
 # Flag to use numerical relativity fits to evaluate Non Quasi-Circular corrections to the inspiral.
 numerical_relativity_nqc_flag = False
-# Flag to compute SEOBNRv5's phenomological fit for the merger-ringdown waveform.
+# Flag to compute SEOBNRv5's phenomenological fit for the merger-ringdown waveform.
 seobnrv5_merger_ringdown_flag = False
 
 #########################################################

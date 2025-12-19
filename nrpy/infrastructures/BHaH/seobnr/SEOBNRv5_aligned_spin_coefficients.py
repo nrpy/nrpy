@@ -26,7 +26,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients(
     Register CFunction for evaluating the masses and SEOBNRv5 coefficients.
     The inputs needed to generate an EOB approximant are mass ratio, spins and
     an initial orbital frequency. Therefore, one needs to compute the individual
-    masses from the mass ratio and the Hamiltonian coeffients which are a function
+    masses from the mass ratio and the Hamiltonian coefficients which are a function
     of mass ratio and spins. The Hamiltonian calibration coefficients can be pre-computed
     or added to the parfile for calibrating the SEOBNRv5 approximant.
 
@@ -248,7 +248,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients(
             "REAL",
             __name__,
             [
-                "Deltat_t_S",
+                "Delta_t_S",
                 "dSO",
             ],
             [

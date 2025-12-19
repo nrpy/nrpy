@@ -53,7 +53,7 @@ class SEOBNR_aligned_spin_constants:
                             the innermost stable circular orbit (ISCO) of the remnant.
                             Always defined as Delta_t_NS + Delta_t_S.
                             In production mode (calibration_no_spin and calibration_spin are False),
-                            it is evaluated fromEquation 79 & 80 of https://arxiv.org/pdf/2303.18039.
+                            it is evaluated from Equations 79 & 80 of https://arxiv.org/pdf/2303.18039.
                             In calibration modes either Delta_t_NS or Delta_t_S is
                             treated as an external calibration input.
             - 'd_SO' : the spin-orbit calibration parameter for the SEOBNRv5 model.
@@ -93,8 +93,8 @@ class SEOBNR_aligned_spin_constants:
         if calibration_no_spin:
             # This is the first (non-spinning) calibration stage so we have no precalculated values
             self.a6, self.Delta_t_NS = sp.symbols("a6 Delta_t_NS", real=True)
-            # Since the spins for the non-spinning calibrations are fixed to 0,
-            # dSO and Delta_t_S are set to 0 to avoid any undefined expressions.
+            # In non-spinning calibration, spin-dependent calibration terms are disabled:
+            # we set dSO and Delta_t_S to 0. The calibration workflow should supply chi1=chi2=0.
             self.dSO = sp.sympify(0)
             self.Delta_t_S = sp.sympify(0)
         elif calibration_spin:
