@@ -1,3 +1,4 @@
+# nrpy/equations/generalrfm/fisheye.py
 """
 General N transition fisheye raw to physical (xx -> Cart) mapping and reference metric.
 
