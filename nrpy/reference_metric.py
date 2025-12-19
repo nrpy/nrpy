@@ -47,12 +47,6 @@ class ReferenceMetric:
         self.CoordSystem = CoordSystem
         self.SymPySimplifyExpressions = SymPySimplifyExpressions
 
-        # For GeneralRFM, rfm_precompute is not supported
-        if CoordSystem == "GeneralRFM" and enable_rfm_precompute:
-            raise ValueError(
-                "Error: enable_rfm_precompute=True is not supported for CoordSystem='GeneralRFM'."
-            )
-
         # grid_physical_size is set based entirely on CoordSystem. So it is a rfm parameter not a grid parameter.
         par.register_param(bool, __name__, "enable_grid_physical_size", True)
         # For multipatch runs, set to "All". For single grid runs, set to the grid's CoordSystem.
@@ -98,7 +92,7 @@ class ReferenceMetric:
             "enable_grid_physical_size"
         )
         # Grid coordinates. In Cartesian self.xx[0],xx[1],xx[2] = x,y,z; in Spherical r, theta, phi, etc.
-        self.xx = cast(List[sp.Symbol], ixp.declarerank1("xx", dimension=3))
+        self.xx = ixp.declarerank1("xx", dimension=3)
         # Cartesian coordinate; will only be a linear function of self.xx if CoordSystem==Cartesian.
         self.Cartx, self.Carty, self.Cartz = sp.symbols("Cartx Carty Cartz")
         # self.xx_to_Cart must be set as a function of (self.xx[0],xx[1],xx[2])
@@ -154,7 +148,7 @@ class ReferenceMetric:
         )
         # END: RFM PRECOMPUTE STUFF
 
-        if CoordSystem == "GeneralRFM":
+        if CoordSystem.startswith("GeneralRFM"):
             # Fully general reference metric coordinate system; coordinates are
             # treated as Cartesian-labeled with identity maps to/from Cartesian.
             self.EigenCoord = "Cartesian"
@@ -226,10 +220,12 @@ class ReferenceMetric:
         self.ReD = ixp.zerorank1()
         self.ReDD = ixp.zerorank2()
         self.ghatDD = ixp.zerorank2()
-        if self.CoordSystem == "GeneralRFM":
-            # In GeneralRFM, the reference metric is a fully general symmetric
-            # 3x3 tensor, and rescaling infrastructure is trivialized:
-            # ReU = ReD = 1, ReDD = 1 for all components.
+        if self.CoordSystem.startswith("GeneralRFM"):
+            # GeneralRFM* reference metrics are symmetric rank-2 tensors in 3 dimensions.
+            # Unlike all other reference metrics, it is *not* diagonal, and unlike
+            # *some* other reference metrics, it is *nonsingular*. As such the
+            # rescaling infrastructure (used to combat singular behavior) is *not needed*,
+            # so we set ReU = ReD = 1, and ReDD = 1 for all components.
             for i in range(3):
                 self.ReU[i] = sp.sympify(1)
                 self.ReD[i] = sp.sympify(1)
@@ -238,11 +234,7 @@ class ReferenceMetric:
 
             # Treat the six independent components of ghatDD[i][j] as primitive
             # symmetric symbols.
-            for i in range(3):
-                for j in range(i, 3):
-                    sym = sp.Symbol(f"ghatDD{i}{j}", real=True)
-                    self.ghatDD[i][j] = sym
-                    self.ghatDD[j][i] = sym
+            self.ghatDD = ixp.declarerank2("ghatDD", dimension=3, symmetry="sym01")
         elif not enable_rfm_precompute:
             for i in range(3):
                 self.scalefactor_orthog[i] = sp.sympify(self.scalefactor_orthog[i])
@@ -1714,7 +1706,7 @@ class rfm_dict(Dict[str, ReferenceMetric]):
             base_rfm = ReferenceMetric(CoordSystem, enable_rfm_precompute=False)
             self.__setitem__(CoordSystem, base_rfm)
 
-            # For GeneralRFM, rfm_precompute is disabled by design; map the
+            # For GeneralRFM, rfm_precompute is enabled by design; map the
             # _rfm_precompute variant to the same underlying object.
             if CoordSystem == "GeneralRFM":
                 self.__setitem__(CoordSystem + "_rfm_precompute", base_rfm)

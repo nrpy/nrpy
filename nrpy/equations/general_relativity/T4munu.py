@@ -5,7 +5,7 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import Any, Dict, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
@@ -17,9 +17,9 @@ from nrpy.equations.general_relativity.BSSN_to_ADM import BSSN_to_ADM
 
 
 def T4UU_and_ADM_to_SDD_SD_S_rho(
-    gammaDD: Optional[Sequence[Sequence[sp.Expr]]] = None,
-    betaU: Optional[Sequence[sp.Expr]] = None,
-) -> Tuple[Sequence[Sequence[sp.Expr]], Sequence[sp.Expr], sp.Expr, sp.Expr]:
+    gammaDD: Optional[List[List[sp.Expr]]] = None,
+    betaU: Optional[List[sp.Expr]] = None,
+) -> Tuple[List[List[sp.Expr]], List[sp.Expr], sp.Expr, sp.Expr]:
     """
     Define BSSN source terms in terms of T^{mu nu} and ADM variables.
 
@@ -83,7 +83,7 @@ def T4UU_and_ADM_to_SDD_SD_S_rho(
 
 def T4UU_and_BSSN_to_SDD_SD_S_rho(
     CoordSystem: str = "Cartesian", enable_rfm_precompute: bool = False
-) -> Tuple[Sequence[Sequence[sp.Expr]], Sequence[sp.Expr], sp.Expr, sp.Expr]:
+) -> Tuple[List[List[sp.Expr]], List[sp.Expr], sp.Expr, sp.Expr]:
     """
     Define BSSN source terms in terms of T^{mu nu} and BSSN variables.
 
@@ -101,7 +101,7 @@ def T4UU_and_BSSN_to_SDD_SD_S_rho(
 def BSSN_RHSs_T4UU_source_terms(
     CoordSystem: str = "Cartesian",
     enable_rfm_precompute: bool = False,
-) -> Tuple[sp.Expr, Sequence[Sequence[sp.Expr]], Sequence[sp.Expr]]:
+) -> Tuple[sp.Expr, List[List[sp.Expr]], List[sp.Expr]]:
     """
     Compute BSSN source terms from T^{mu nu} and contribute them to BSSN RHSs.
 
@@ -166,7 +166,7 @@ def BSSN_RHSs_T4UU_source_terms(
 # Add BSSN stress-energy source terms to BSSN constraints
 def BSSN_constraints_T4UU_source_terms(
     CoordSystem: str = "Cartesian", enable_rfm_precompute: bool = False
-) -> Tuple[sp.Expr, Sequence[sp.Expr]]:
+) -> Tuple[sp.Expr, List[sp.Expr]]:
     """
     Add BSSN stress-energy source terms to BSSN constraints.
 
