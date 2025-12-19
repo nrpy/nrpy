@@ -303,7 +303,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients(
         )
     # We must include gsl/gsl_spline.h for the QNM interpolation
     includes = ["BHaH_defines.h", "gsl/gsl_spline.h"]
-    
+
     desc = """
 Evaluate and store the SEOBNRv5 calibration coefficients and remnant properties.
 
