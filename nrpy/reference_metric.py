@@ -430,40 +430,56 @@ class ReferenceMetric:
         self.GammahatUDDdD = ixp.zerorank4(3)
         if self.CoordSystem == "GeneralRFM":
             # Algebraic construction of GammahatUDDdD from ghatUU, ghatDDdD, ghatDDdDD.
-            # Gamma^i_{jk,l} = 1/2 [ - g^{ip} g^{mq} g_{pq,l} C_{mjk} + g^{im} C_{mjk,l} ]
-            # where C_{mjk}   = g_{mj,k} + g_{mk,j} - g_{jk,m}
-            #       C_{mjk,l} = g_{mj,kl} + g_{mk,jl} - g_{jk,ml}
+            # Gamma^i_{jk,l} = [g^{mi} Gamma_{mjk}],l
+            #                = g^{mi}_{,l} Gamma_{mjk} + g^{mi} Gamma_{mjk,l},
+            #  where Gamma_{cab} = 1/2 ( g_{ca,b} + g_{cb,a} - g_{ab,c} )
+            GammahatDDD = ixp.zerorank3()
+            for c in range(3):
+                for a in range(3):
+                    for b in range(3):
+                        GammahatDDD[c][a][b] += sp.Rational(1, 2) * (
+                            self.ghatDDdD[c][a][b]
+                            + self.ghatDDdD[c][b][a]
+                            - self.ghatDDdD[a][b][c]
+                        )
+            #  Then, Gamma_{cab,d} = 1/2 ( g_{ca,bd} + g_{cb,ad} - g_{ab,cd} )
+            GammahatDDDdD = ixp.zerorank4()
+            for c in range(3):
+                for a in range(3):
+                    for b in range(3):
+                        for d in range(3):
+                            GammahatDDDdD[c][a][b][d] += sp.Rational(1, 2) * (
+                                self.ghatDDdDD[c][a][b][d]
+                                + self.ghatDDdDD[c][b][a][d]
+                                - self.ghatDDdDD[a][b][c][d]
+                            )
+            # So we have
+            # Gamma^i_{jk,l} = [g^{mi} Gamma_{mjk}],l
+            #                 = g^{mi}_{,l} Gamma_{mjk} + g^{mi} Gamma_{mjk,l},
+            # where we can use the identity g^{mi}_{,l} = -g^{ip} g^{mq} g_{pq,l}
+            ghatUUdD = ixp.zerorank3()
+            for i in range(3):
+                for l in range(3):
+                    for m in range(3):
+                        for p in range(3):
+                            for q in range(3):
+                                ghatUUdD[m][i][l] += (
+                                    -self.ghatUU[i][p]
+                                    * self.ghatUU[m][q]
+                                    * self.ghatDDdD[p][q][l]
+                                )
+            # Gamma^i_{jk,l} = [g^{mi} Gamma_{mjk}],l
+            #                 = g^{mi}_{,l} Gamma_{mjk} + g^{mi} Gamma_{mjk,l},
+            self.GammahatUDDdD = ixp.zerorank4()
             for i in range(3):
                 for j in range(3):
                     for k in range(3):
                         for l in range(3):
-                            term1 = sp.sympify(0)
-                            term2 = sp.sympify(0)
                             for m in range(3):
-                                C_mjk = (
-                                    self.ghatDDdD[m][j][k]
-                                    + self.ghatDDdD[m][k][j]
-                                    - self.ghatDDdD[j][k][m]
+                                self.GammahatUDDdD[i][j][k][l] += (
+                                    ghatUUdD[m][i][l] * GammahatDDD[m][j][k]
+                                    + self.ghatUU[m][i] * GammahatDDDdD[m][j][k][l]
                                 )
-                                C_mjk_l = (
-                                    self.ghatDDdDD[m][j][k][l]
-                                    + self.ghatDDdDD[m][k][j][l]
-                                    - self.ghatDDdDD[j][k][m][l]
-                                )
-                                # g^{im}_{,l} = -g^{ip} g^{mq} g_{pq,l}
-                                ghatUU_im_dD_l = sp.sympify(0)
-                                for p in range(3):
-                                    for q in range(3):
-                                        ghatUU_im_dD_l -= (
-                                            self.ghatUU[i][p]
-                                            * self.ghatUU[m][q]
-                                            * self.ghatDDdD[p][q][l]
-                                        )
-                                term1 += ghatUU_im_dD_l * C_mjk
-                                term2 += self.ghatUU[i][m] * C_mjk_l
-                            self.GammahatUDDdD[i][j][k][l] = sp.Rational(1, 2) * (
-                                term1 + term2
-                            )
         else:
             for i in range(3):
                 for j in range(3):
