@@ -388,8 +388,8 @@ def cse_postprocess(
         for repl in lookup.values():
             # Search through the expression symbols to find any unevaluated ones
             found = False
-            for sym in repl[1].free_symbols:
-                if str(sym) in lookup:
+            for free_sym in repl[1].free_symbols:
+                if str(free_sym) in lookup:
                     found = True
                     break
             # If found any unevaluated symbols, add this expression to the new lookup dictionary

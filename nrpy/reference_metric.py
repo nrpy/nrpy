@@ -10,7 +10,7 @@ Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
          Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
 """
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, cast
 
 import sympy as sp
 
@@ -76,9 +76,10 @@ class ReferenceMetric:
         )
 
         # Lower corner of the grid:
-        self.xxmin = [sp.sympify(0)] * 3
+        # Annotated as List[Any] because it can hold Integers, Exprs, or Strings ("xmin")
+        self.xxmin: List[Any] = [sp.sympify(0)] * 3
         # Upper corner of the grid:
-        self.xxmax = [sp.sympify(0)] * 3
+        self.xxmax: List[Any] = [sp.sympify(0)] * 3
         # Physical extent of the grid;
         # grid_physical_size_dict automatically sets rfm parameters related
         #    to domain size as functions of grid_physical_size CodeParameter
@@ -96,15 +97,16 @@ class ReferenceMetric:
         # Cartesian coordinate; will only be a linear function of self.xx if CoordSystem==Cartesian.
         self.Cartx, self.Carty, self.Cartz = sp.symbols("Cartx Carty Cartz")
         # self.xx_to_Cart must be set as a function of (self.xx[0],xx[1],xx[2])
-        self.xx_to_Cart = [sp.sympify(0)] * 3
+        self.xx_to_Cart: List[sp.Expr] = [sp.sympify(0)] * 3
         # self.Cart_to_xx must be set as a function of (Cartx, Carty, Cartz)
-        self.Cart_to_xx = [sp.sympify(0)] * 3
+        # Annotated as List[Any] because it may hold "NewtonRaphson" string
+        self.Cart_to_xx: List[Any] = [sp.sympify(0)] * 3
         # self.xxSph must be set as a function of (self.xx[0],xx[1],xx[2])
-        self.xxSph = [sp.sympify(0)] * 3
+        self.xxSph: List[sp.Expr] = [sp.sympify(0)] * 3
         # self.scalefactor_orthog must be set as a function of (self.xx[0],xx[1],xx[2])
-        self.scalefactor_orthog = [sp.sympify(0)] * 3
+        self.scalefactor_orthog: List[sp.Expr] = [sp.sympify(0)] * 3
         # UnitVectors must be set as a function of (self.xx[0],xx[1],xx[2])
-        self.UnitVectors = ixp.zerorank2(dimension=3)
+        self.UnitVectors: List[List[sp.Expr]] = ixp.zerorank2(dimension=3)
         # Non-angular coordinate directions
         self.radial_like_dirns: List[int] = []
         # module name for CodeParameters
@@ -127,6 +129,8 @@ class ReferenceMetric:
         self.f2_of_xx0_funcform = sp.Function("f2_of_xx0_funcform")(self.xx[0])
         self.f3_of_xx2_funcform = sp.Function("f3_of_xx2_funcform")(self.xx[2])
         self.f4_of_xx1_funcform = sp.Function("f4_of_xx1_funcform")(self.xx[1])
+
+        # Annotate these as Expr because they are initialized as Symbols but later assigned full Expressions
         (
             self.f0_of_xx0,
             self.f1_of_xx1,
@@ -180,7 +184,9 @@ class ReferenceMetric:
         ) -> Tuple[List[List[sp.Expr]], List[List[sp.Expr]]]:
             # Step 2.a: First construct Jacobian matrix:
 
-            Jac_dUCart_dDrfmUD = [[sp.sympify(0) for _ in range(3)] for _ in range(3)]
+            Jac_dUCart_dDrfmUD: List[List[sp.Expr]] = [
+                [sp.sympify(0) for _ in range(3)] for _ in range(3)
+            ]
             for i in range(3):
                 for j in range(3):
                     Jac_dUCart_dDrfmUD[i][j] = sp.diff(self.xx_to_Cart[i], self.xx[j])
@@ -516,7 +522,8 @@ class ReferenceMetric:
                         var, order = str(item.args[1])[2:], len(item.args) - 1
                     else:
                         # extract differentiation variable and derivative order (SymPy >= 1.2)
-                        var, order = str(item.args[1][0])[2:], item.args[1][1]
+                        args1 = cast(Tuple[Any, ...], item.args[1])
+                        var, order = str(args1[0])[2:], args1[1]
                     # build derivative operator with format: __DD...D(var)(var)...(var) where
                     # D and (var) are repeated for every derivative order
                     oper = "__D" + "D" * (order - 1) + var * order
@@ -618,7 +625,7 @@ class ReferenceMetric:
                         freevars.extend(self.ghatDDdDD[i][j][k][l].free_symbols)
                         freevars.extend(self.GammahatUDDdD[i][j][k][l].free_symbols)
 
-        freevars_uniq = superfast_uniq(freevars)
+        freevars_uniq = superfast_uniq(list(freevars))
 
         self.freevars_uniq_xx_indep = []
         for freevar in freevars_uniq:
@@ -663,7 +670,7 @@ class ReferenceMetric:
                         diff_result = sp.diff(diff_result, derivwrt)
             self.freevars_uniq_vals.append(diff_result)
 
-            frees_uniq = superfast_uniq(diff_result.free_symbols)
+            frees_uniq = superfast_uniq(list(diff_result.free_symbols))
             has_xx_dependence: bool = False
             for dirn in range(3):
                 if self.xx[dirn] in frees_uniq:
@@ -732,7 +739,7 @@ class ReferenceMetric:
                                 k
                             ][l].subs(freevar, self.freevars_uniq_xx_indep[varidx])
 
-    def Sinhv1(self, x: sp.Symbol, AMPL: sp.Symbol, SINHW: sp.Symbol) -> Any:
+    def Sinhv1(self, x: sp.Expr, AMPL: sp.Expr, SINHW: sp.Expr) -> Any:
         """
         Set the sinh transformation used by SinhSpherical, SinhCylindrical, and SinhCartesian.
 
@@ -747,9 +754,7 @@ class ReferenceMetric:
             / (sp.exp(1 / SINHW) - sp.exp(-1 / SINHW))
         )
 
-    def Sinhv2(
-        self, x: sp.Symbol, AMPL: sp.Symbol, SINHW: sp.Symbol, slope: sp.Symbol
-    ) -> Any:
+    def Sinhv2(self, x: sp.Expr, AMPL: sp.Expr, SINHW: sp.Expr, slope: sp.Expr) -> Any:
         """
         Set the sinh transformation used by SinhSphericalv2*, SinhCylindricalv2, and SinhCartesianv2 (future).
 
@@ -1382,10 +1387,10 @@ class ReferenceMetric:
 
             # Inverse transformation derived from Mathematica (see validation script)
             def acsch(x: sp.Expr) -> sp.Expr:
-                return sp.log(sp.sqrt(1 + x ** (-2)) + 1 / x)
+                return cast(sp.Expr, sp.log(sp.sqrt(1 + x ** (-2)) + 1 / x))
 
             def csch(x: sp.Expr) -> sp.Expr:
-                return 2 / (sp.exp(x) - sp.exp(-x))
+                return cast(sp.Expr, 2 / (sp.exp(x) - sp.exp(-x)))
 
             self.Cart_to_xx[0] = SINHWAA * acsch(
                 sp.sqrt(sp.Integer(2)) * AMAX * csch(1 / SINHWAA) / (denom_sqrt_x0)
@@ -1606,7 +1611,7 @@ class ReferenceMetric:
         ]
         # END: Set universal attributes for all Cylindrical-like coordinate systems:
 
-    def register_pi(self) -> sp.Symbol:
+    def register_pi(self) -> sp.Expr:
         """
         Register the mathematical constant pi as a code parameter and return PI as a sympy symbol.
 
@@ -1622,7 +1627,7 @@ class ReferenceMetric:
             add_to_glb_code_params_dict=True,
         )
 
-    def register_sqrt1_2(self) -> sp.Symbol:
+    def register_sqrt1_2(self) -> sp.Expr:
         """
         Register the mathematical constant sqrt(1/2) as a code parameter and return SQRT1_2 as a sympy symbol.
 
@@ -1790,7 +1795,8 @@ if __name__ == "__main__":
     rfm_sinhsymtp = reference_metric["SinhSymTP"]
 
     # Define the substitution dictionary: xx[0], xx[1], xx[2] mapped to Cart_to_xx expressions
-    sub_dict_backward_in_forward = {
+    # Typing as Dict[Any, Any] resolves the variance issue with sp.Expr.subs() expecting strict Mappings
+    sub_dict_backward_in_forward: Dict[Any, Any] = {
         rfm_sinhsymtp.xx[0]: rfm_sinhsymtp.Cart_to_xx[0],
         rfm_sinhsymtp.xx[1]: rfm_sinhsymtp.Cart_to_xx[1],
         rfm_sinhsymtp.xx[2]: rfm_sinhsymtp.Cart_to_xx[2],

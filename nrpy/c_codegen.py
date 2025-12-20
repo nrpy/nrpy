@@ -8,7 +8,7 @@ Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
 
 import logging
 import sys
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union, cast
 
 import sympy as sp
 import sympy.codegen.ast as sp_ast
@@ -89,7 +89,7 @@ class CCodeGen:
         enforce_c_parameters_must_be_defined: bool = False,
         enable_fd_functions: bool = False,
         mem_alloc_style: Literal["210", "012"] = "210",
-        upwind_control_vec: Union[List[sp.Symbol], sp.Symbol] = sp.Symbol("unset"),
+        upwind_control_vec: Union[List[sp.Expr], sp.Expr] = sp.Symbol("unset"),
         symbol_to_Rational_dict: Optional[Dict[sp.Basic, sp.Rational]] = None,
         rational_const_alias: str = "static const",
         enable_clang_format: bool = False,
@@ -1094,10 +1094,10 @@ MAYBE_UNUSED const REAL_SIMD_ARRAY upwind_Integer_{n} = ConstSIMD(tmp_upwind_Int
             for dirn in upwind_directions:
                 Coutput += f"const {CCGParams.fp_type_alias} Upwind{dirn} = UPWIND_ALG(UpwindControlVectorU{dirn});\n"
 
-        upwindU = [sp.sympify(0) for _ in range(3)]
+        upwindU = [cast(sp.Expr, sp.sympify(0)) for _ in range(3)]
         # Populate upwindU with symbolic expressions based on direction
         for direction in upwind_directions:
-            upwindU[direction] = sp.sympify(f"Upwind{direction}")
+            upwindU[direction] = cast(sp.Expr, sp.sympify(f"Upwind{direction}"))
 
         upwind_expr_list, var_list = [], []
 
@@ -1108,9 +1108,10 @@ MAYBE_UNUSED const REAL_SIMD_ARRAY upwind_Integer_{n} = ConstSIMD(tmp_upwind_Int
 
             # Check if the operator is a 5-length string and contains "dupD"
             if len(operator) == 5 and "dupD" in operator:
-                var_dupD = sp.sympify(f"UpwindAlgInput{deriv_var}")
-                var_ddnD = sp.sympify(
-                    f"UpwindAlgInput{deriv_var.replace('_dupD', '_ddnD')}"
+                var_dupD = cast(sp.Expr, sp.sympify(f"UpwindAlgInput{deriv_var}"))
+                var_ddnD = cast(
+                    sp.Expr,
+                    sp.sympify(f"UpwindAlgInput{deriv_var.replace('_dupD', '_ddnD')}"),
                 )
 
                 # Extract direction for upwind operation

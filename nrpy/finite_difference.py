@@ -8,7 +8,7 @@ Author: Zachariah B. Etienne
 
 import sys  # Standard Python module for multiplatform OS-level functions
 from operator import itemgetter
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union, cast
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
@@ -1014,8 +1014,8 @@ def proto_FD_operators_to_sympy_expressions(
     const REAL_SIMD_ARRAY UpwindAlgInputFDPROTO_dupD2
     """
     # Set invdxx symbol list:
-    invdxx = [sp.sympify(f"invdxx{d}") for d in range(3)]
-    FDexprs = [sp.sympify(0)] * len(list_of_proto_deriv_symbs)
+    invdxx = [cast(sp.Expr, sp.sympify(f"invdxx{d}")) for d in range(3)]
+    FDexprs = [cast(sp.Expr, sp.sympify(0))] * len(list_of_proto_deriv_symbs)
     FDlhsvarnames = [""] * len(list_of_proto_deriv_symbs)
     symbol_to_Rational_dicts: List[Dict[sp.Basic, sp.Rational]] = [{}] * len(
         list_of_proto_deriv_symbs
