@@ -818,8 +818,8 @@ class ReferenceMetric:
         # Extract the suffix after the prefix
         suffix = self.CoordSystem[len(prefix) :]
 
-        # Check if the suffix is an integer
-        if suffix.isdigit() and int(suffix) % 2 == 0:
+        # Check if the suffix is a positive even integer
+        if suffix.isdigit() and int(suffix) >= 2 and int(suffix) % 2 == 0:
             power_n = int(suffix)  # Convert the suffix to an integer
         else:
             raise ValueError(
@@ -1403,8 +1403,11 @@ class ReferenceMetric:
         self.scalefactor_orthog[1] = var1
         self.scalefactor_orthog[2] = AA * sp.sin(self.xx[1])
 
-        # In prolate-spheroidal-like coords, only the 2nd coordinate direction is angular everywhere;
-        #   the rest are radial-like near the foci, though the 1st is angular-like far away:
+        # In (Sinh)SymTP coords:
+        #   xx[2] (phi) is an azimuthal angle everywhere.
+        #   xx[1] (theta) approaches the usual polar angle for AA >> bScale, but as AA -> 0 it
+        #   primarily parametrizes the focal line segment via z -> bScale*cos(theta). Some
+        #   boundary/regularity logic therefore treats xx[1] as "radial-like" near AA ~ 0.
         self.radial_like_dirns = [0, 1]
 
         self.f0_of_xx0 = AA
@@ -1563,9 +1566,7 @@ class ReferenceMetric:
             self.NewtonRaphson_f_of_xx[0] = RHOCYL - sp.sqrt(
                 self.Cartx**2 + self.Carty**2
             )
-            self.Cart_to_xx[1] = sp.atan2(
-                sp.Symbol("Carty", real=True), sp.Symbol("Cartx", real=True)
-            )
+            self.Cart_to_xx[1] = sp.atan2(self.Carty, self.Cartx)
             self.Cart_to_xx[2] = "NewtonRaphson"
             self.NewtonRaphson_f_of_xx[2] = ZCYL - self.Cartz
         else:
