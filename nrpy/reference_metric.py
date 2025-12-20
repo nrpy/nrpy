@@ -495,15 +495,14 @@ class ReferenceMetric:
             :param expr: SymPy expression to be replaced
             :return: Expression with replaced variables
             """
-            sympy_version = sp.__version__.replace("rc", "...").replace(
-                "b", "..."
-            )  # Ignore the rc's and b's
-            # (release candidates & betas).
-            sympy_version_decimal = float(
-                int(sympy_version.split(".")[0])
-                + int(sympy_version.split(".")[1]) / 10.0
-            )
-            is_old_sympy_version = sympy_version_decimal < 1.2
+            sp_version = sp.__version__.lower()
+            sp_version = sp_version.replace("rc", ".").replace(
+                "b", "."
+            )  # turn 1.2rc1 -> 1.2.1, 1.11b1 -> 1.11.1
+            parts = sp_version.split(".")
+            major = int(parts[0])
+            minor = int(parts[1])
+            is_old_sympy_version = (major, minor) < (1, 2)
             # The derivative representation changed with SymPy 1.2, forcing version-dependent behavior.
 
             # Example: Derivative(f0_of_xx0_funcform(xx0)(xx0), (xx0, 2)) >> f0_of_xx0__DD00
