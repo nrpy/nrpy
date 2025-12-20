@@ -298,7 +298,7 @@ class ReferenceMetric:
         self.ghatDDdD = ixp.zerorank3(3)
         self.ghatDDdDD = ixp.zerorank4(3)
 
-        if self.CoordSystem == "GeneralRFM":
+        if self.CoordSystem.startswith("GeneralRFM"):
             # In GeneralRFM, the first and second derivatives of the reference
             # metric are treated as *primitive* tensors, never obtained by
             # differentiating ghatDD inside ReferenceMetric.
@@ -1711,7 +1711,7 @@ class rfm_dict(Dict[str, ReferenceMetric]):
 
             # For GeneralRFM, rfm_precompute is enabled by design; map the
             # _rfm_precompute variant to the same underlying object.
-            if CoordSystem == "GeneralRFM":
+            if CoordSystem.startswith("GeneralRFM"):
                 self.__setitem__(CoordSystem + "_rfm_precompute", base_rfm)
             else:
                 self.__setitem__(
