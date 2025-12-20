@@ -18,7 +18,7 @@ import nrpy.params as par
 # Used to specify axes of symmetry so that derivatives across these axes get set to zero
 par.register_param(py_type=str, module=__name__, name="symmetry_axes", value="")
 
-_symbol_type = Any  # sp.Expr
+_symbol_type = Any # sp.Expr
 _rank1_type = List[_symbol_type]
 _rank2_type = List[_rank1_type]
 _rank3_type = List[_rank2_type]
@@ -75,7 +75,8 @@ def create_tensor_symbolic(
     start_idx = alphabet.index(character_zero_index) if character_zero_index else 0
 
     # Generate the tensor
-    tensor = [
+    # Explicit annotation required to allow list to hold Union types (List invariance)
+    tensor: List[_recur_symbol_type] = [
         (
             sp.Symbol(
                 symbol
@@ -199,16 +200,19 @@ def declare_indexedexp(
                 return indexedexp
             raise ValueError("cannot symmetrize indexed expression of rank 1")
         if rank == 2:
-            indexedexp = symmetrize_rank2(
-                cast(_rank2_type, indexedexp), symmetry, dimension
+            indexedexp = cast(
+                List[_recur_symbol_type],
+                symmetrize_rank2(cast(_rank2_type, indexedexp), symmetry, dimension),
             )
         elif rank == 3:
-            indexedexp = symmetrize_rank3(
-                cast(_rank3_type, indexedexp), symmetry, dimension
+            indexedexp = cast(
+                List[_recur_symbol_type],
+                symmetrize_rank3(cast(_rank3_type, indexedexp), symmetry, dimension),
             )
         elif rank == 4:
-            indexedexp = symmetrize_rank4(
-                cast(_rank4_type, indexedexp), symmetry, dimension
+            indexedexp = cast(
+                List[_recur_symbol_type],
+                symmetrize_rank4(cast(_rank4_type, indexedexp), symmetry, dimension),
             )
         else:
             raise ValueError("unsupported rank for indexed expression")
@@ -257,9 +261,10 @@ def declare_indexedexp(
             raise ValueError(
                 f"Unsupported symmetry '{symmetry}' for indexed expression. Valid symmetry options must start with 'sym', 'anti', or 'nosym'"
             )
-        indexedexp = symmetrize(
-            rank, cast(_rank2_type, indexedexp), symmetry, dimension
-        )
+        # We must cast explicitly to List[_recur_symbol_type] because List is invariant
+        # and symmetrize expects the generic Union list but concrete implementations return specific lists.
+        # However, `symmetrize` internally handles the specific casting, and `indexedexp` is updated.
+        indexedexp = symmetrize(rank, indexedexp, symmetry, dimension)
     return zero_out_derivatives_across_symmetry_axes(indexedexp)
 
 
@@ -437,44 +442,44 @@ def symmetrize_rank4(
 
 
 # typehinting: Must allow for sp.Expr in the zerorank*()s, so that it can be modified later
-def zerorank1(dimension: int = -1) -> List[Union[sp.Expr, sp.Symbol]]:
+def zerorank1(dimension: int = -1) -> List[sp.Expr]:
     """
     Initialize rank-1 indexed expression to zero.
 
     :param dimension: The dimension of the rank-1 indexed expression. Default is -1.
     :return: A rank-1 indexed expression initialized to zero.
     """
-    return declare_indexedexp(None, rank=1, dimension=dimension)
+    return cast(_rank1_type, declare_indexedexp(None, rank=1, dimension=dimension))
 
 
-def zerorank2(dimension: int = -1) -> List[List[Union[sp.Expr, sp.Symbol]]]:
+def zerorank2(dimension: int = -1) -> List[List[sp.Expr]]:
     """
     Initialize rank-2 indexed expression to zero.
 
     :param dimension: The dimension of the rank-2 indexed expression. Default is -1.
     :return: A rank-2 indexed expression initialized to zero.
     """
-    return declare_indexedexp(None, rank=2, dimension=dimension)
+    return cast(_rank2_type, declare_indexedexp(None, rank=2, dimension=dimension))
 
 
-def zerorank3(dimension: int = -1) -> List[List[List[Union[sp.Expr, sp.Symbol]]]]:
+def zerorank3(dimension: int = -1) -> List[List[List[sp.Expr]]]:
     """
     Initialize rank-3 indexed expression to zero.
 
     :param dimension: The dimension of the rank-3 indexed expression. Default is -1.
     :return: A rank-3 indexed expression initialized to zero.
     """
-    return declare_indexedexp(None, rank=3, dimension=dimension)
+    return cast(_rank3_type, declare_indexedexp(None, rank=3, dimension=dimension))
 
 
-def zerorank4(dimension: int = -1) -> List[List[List[List[Union[sp.Expr, sp.Symbol]]]]]:
+def zerorank4(dimension: int = -1) -> List[List[List[List[sp.Expr]]]]:
     """
     Initialize rank-4 indexed expression to zero.
 
     :param dimension: The dimension of the rank-4 indexed expression. Default is -1.
     :return: A rank-4 indexed expression initialized to zero.
     """
-    return declare_indexedexp(None, rank=4, dimension=dimension)
+    return cast(_rank4_type, declare_indexedexp(None, rank=4, dimension=dimension))
 
 
 def get_rank(IDX_EXPR: List[_recur_symbol_type]) -> int:
@@ -495,7 +500,8 @@ def get_rank(IDX_EXPR: List[_recur_symbol_type]) -> int:
     5
     """
     rank = 0
-    temp = IDX_EXPR
+    # Use Any here because temp changes from List to Union to possibly Expr in loop
+    temp: Any = IDX_EXPR
 
     while isinstance(temp, list):
         rank += 1
@@ -573,48 +579,41 @@ def zero_out_derivatives_across_symmetry_axes(
         return False
 
     if rank == 1:
-        assert isinstance(IDX_EXPR, list)
-        DIM = len(IDX_EXPR)
+        # Cast to specific rank type to allow indexing.
+        # Modifications to rank1_expr reflect in IDX_EXPR since it's a list reference.
+        rank1_expr = cast(_rank1_type, IDX_EXPR)
+        DIM = len(rank1_expr)
         for i0 in range(DIM):
-            if performs_derivative_across_symmetry_axis(str(IDX_EXPR[i0])):
-                IDX_EXPR[i0] = sp.sympify(0)
+            if performs_derivative_across_symmetry_axis(str(rank1_expr[i0])):
+                rank1_expr[i0] = sp.sympify(0)
     if rank == 2:
-        assert isinstance(IDX_EXPR, list) and isinstance(IDX_EXPR[0], list)
-        DIM = len(IDX_EXPR[0])
+        rank2_expr = cast(_rank2_type, IDX_EXPR)
+        DIM = len(rank2_expr[0])
         for i0 in range(DIM):
             for i1 in range(DIM):
-                if performs_derivative_across_symmetry_axis(str(IDX_EXPR[i0][i1])):
-                    IDX_EXPR[i0][i1] = sp.sympify(0)
+                if performs_derivative_across_symmetry_axis(str(rank2_expr[i0][i1])):
+                    rank2_expr[i0][i1] = sp.sympify(0)
     if rank == 3:
-        assert (
-            isinstance(IDX_EXPR, list)
-            and isinstance(IDX_EXPR[0], list)
-            and isinstance(IDX_EXPR[0][0], list)
-        )
-        DIM = len(IDX_EXPR[0][0])
+        rank3_expr = cast(_rank3_type, IDX_EXPR)
+        DIM = len(rank3_expr[0][0])
         for i0 in range(DIM):
             for i1 in range(DIM):
                 for i2 in range(DIM):
                     if performs_derivative_across_symmetry_axis(
-                        str(IDX_EXPR[i0][i1][i2])
+                        str(rank3_expr[i0][i1][i2])
                     ):
-                        IDX_EXPR[i0][i1][i2] = sp.sympify(0)
+                        rank3_expr[i0][i1][i2] = sp.sympify(0)
     if rank == 4:
-        assert (
-            isinstance(IDX_EXPR, list)
-            and isinstance(IDX_EXPR[0], list)
-            and isinstance(IDX_EXPR[0][0], list)
-            and isinstance(IDX_EXPR[0][0][0], list)
-        )
-        DIM = len(IDX_EXPR[0][0][0])
+        rank4_expr = cast(_rank4_type, IDX_EXPR)
+        DIM = len(rank4_expr[0][0][0])
         for i0 in range(DIM):
             for i1 in range(DIM):
                 for i2 in range(DIM):
                     for i3 in range(DIM):
                         if performs_derivative_across_symmetry_axis(
-                            str(IDX_EXPR[i0][i1][i2][i3])
+                            str(rank4_expr[i0][i1][i2][i3])
                         ):
-                            IDX_EXPR[i0][i1][i2][i3] = sp.sympify(0)
+                            rank4_expr[i0][i1][i2][i3] = sp.sympify(0)
     return IDX_EXPR
 
 
@@ -676,8 +675,8 @@ class NonInvertibleMatrixError(ZeroDivisionError):
 
 # We use the following functions to evaluate 3-metric inverses
 def symm_matrix_inverter2x2(
-    a: List[List[Union[sp.Expr, sp.Symbol]]],
-) -> Tuple[List[List[Union[sp.Expr, sp.Symbol]]], Union[sp.Expr, sp.Symbol]]:
+    a: List[List[sp.Expr]],
+) -> Tuple[List[List[sp.Expr]], sp.Expr]:
     """
     Calculate the inverse and determinant of a symmetric 2x2 matrix.
 
@@ -699,7 +698,8 @@ def symm_matrix_inverter2x2(
     if outDET == 0:
         raise NonInvertibleMatrixError("matrix has determinant zero")
 
-    outINV = [[sp.sympify(0) for _ in range(2)] for __ in range(2)]
+    # Explicit type annotation necessary for mypy to allow Integers in List[List[Expr]]
+    outINV: List[List[sp.Expr]] = [[sp.sympify(0) for _ in range(2)] for __ in range(2)]
 
     # First fill in the upper-triangle of the gPhysINV matrix...
     outINV[0][0] = a[1][1] / outDET
@@ -710,8 +710,8 @@ def symm_matrix_inverter2x2(
 
 
 def symm_matrix_inverter3x3(
-    a: List[List[Union[sp.Expr, sp.Symbol]]],
-) -> Tuple[List[List[Union[sp.Expr, sp.Symbol]]], Union[sp.Expr, sp.Symbol]]:
+    a: List[List[sp.Expr]],
+) -> Tuple[List[List[sp.Expr]], sp.Expr]:
     """
     Calculate the inverse and determinant of a symmetric 3x3 matrix.
 
@@ -740,7 +740,7 @@ def symm_matrix_inverter3x3(
         # print(a)
         raise NonInvertibleMatrixError("matrix has determinant zero")
 
-    outINV = [[sp.sympify(0) for _ in range(3)] for __ in range(3)]
+    outINV: List[List[sp.Expr]] = [[sp.sympify(0) for _ in range(3)] for __ in range(3)]
 
     # First fill in the upper-triangle of the gPhysINV matrix...
     outINV[0][0] = (-a[1][2] ** 2 + a[1][1] * a[2][2]) / outDET
@@ -781,8 +781,8 @@ def symm_matrix_inverter3x3(
 #             print(check_zero(IsUnit[offdiag_i][offdiag_j]))
 # # ^^ all should output as True.
 def symm_matrix_inverter4x4(
-    a: List[List[Union[sp.Expr, sp.Symbol]]],
-) -> Tuple[List[List[Union[sp.Expr, sp.Symbol]]], Union[sp.Expr, sp.Symbol]]:
+    a: List[List[sp.Expr]],
+) -> Tuple[List[List[sp.Expr]], sp.Expr]:
     """
     Calculate the inverse and determinant of a 4x4 symmetric matrix.
 
@@ -844,7 +844,7 @@ def symm_matrix_inverter4x4(
     if outDET == 0:
         raise NonInvertibleMatrixError("matrix has determinant zero")
 
-    outINV = [[sp.sympify(0) for _ in range(4)] for __ in range(4)]
+    outINV: List[List[sp.Expr]] = [[sp.sympify(0) for _ in range(4)] for __ in range(4)]
 
     # First fill in the upper-triangle of the gPhysINV matrix...
     outINV[0][0] = (
@@ -938,8 +938,8 @@ def symm_matrix_inverter4x4(
 # SymPy's generic matrix inverter takes a long time to invert 3x3 matrices, so here we have an optimized version.
 # We use the following functions to evaluate 3-metric inverses
 def generic_matrix_inverter2x2(
-    a: List[List[Union[sp.Expr, sp.Symbol]]],
-) -> Tuple[List[List[Union[sp.Expr, sp.Symbol]]], Union[sp.Expr, sp.Symbol]]:
+    a: List[List[sp.Expr]],
+) -> Tuple[List[List[sp.Expr]], sp.Expr]:
     """
     Calculate the inverse and determinant of a general 2x2 matrix.
 
@@ -958,7 +958,7 @@ def generic_matrix_inverter2x2(
     if outDET == 0:
         raise NonInvertibleMatrixError("matrix has determinant zero")
 
-    outINV = [[sp.sympify(0) for _ in range(2)] for __ in range(2)]
+    outINV: List[List[sp.Expr]] = [[sp.sympify(0) for _ in range(2)] for __ in range(2)]
 
     outINV[0][0] = a[1][1] / outDET
     outINV[0][1] = -a[0][1] / outDET
@@ -968,8 +968,8 @@ def generic_matrix_inverter2x2(
 
 
 def generic_matrix_inverter3x3(
-    a: List[List[Union[sp.Expr, sp.Symbol]]],
-) -> Tuple[List[List[Union[sp.Expr, sp.Symbol]]], Union[sp.Expr, sp.Symbol]]:
+    a: List[List[sp.Expr]],
+) -> Tuple[List[List[sp.Expr]], sp.Expr]:
     """
     Calculate the inverse and determinant of a general 3x3 matrix.
 
@@ -995,7 +995,7 @@ def generic_matrix_inverter3x3(
     if outDET == 0:
         raise NonInvertibleMatrixError("matrix has determinant zero")
 
-    outINV = [[sp.sympify(0) for _ in range(3)] for __ in range(3)]
+    outINV: List[List[sp.Expr]] = [[sp.sympify(0) for _ in range(3)] for __ in range(3)]
 
     outINV[0][0] = -a[1][2] * a[2][1] + a[1][1] * a[2][2]
     outINV[0][1] = a[0][2] * a[2][1] - a[0][1] * a[2][2]
@@ -1015,8 +1015,8 @@ def generic_matrix_inverter3x3(
 
 
 def generic_matrix_inverter4x4(
-    a: List[List[Union[sp.Expr, sp.Symbol]]],
-) -> Tuple[List[List[Union[sp.Expr, sp.Symbol]]], Union[sp.Expr, sp.Symbol]]:
+    a: List[List[sp.Expr]],
+) -> Tuple[List[List[sp.Expr]], sp.Expr]:
     """
     Calculate the inverse and determinant of a general 4x4 matrix.
 
@@ -1032,9 +1032,9 @@ def generic_matrix_inverter4x4(
     >>> g4UU, det4g = generic_matrix_inverter4x4(g4DD)
     """
     # A = {{a00, a01, a02, a03},
-    #      {a10, a11, a12, a13},
-    #      {a20, a21, a22, a23},
-    #      {a30, a31, a32, a33}}
+    #       {a10, a11, a12, a13},
+    #       {a20, a21, a22, a23},
+    #       {a30, a31, a32, a33}}
     # A // MatrixForm
     # CForm[FullSimplify[Det[A]]] >>> t2.txt
     # cat t2.txt | sed "s/ //g" |sed "s/ //g;s/\([0-3]\)/[\1]/g"
@@ -1076,7 +1076,7 @@ def generic_matrix_inverter4x4(
     if outDET == 0:
         raise NonInvertibleMatrixError("matrix has determinant zero")
 
-    outINV = [[sp.sympify(0) for _ in range(4)] for __ in range(4)]
+    outINV: List[List[sp.Expr]] = [[sp.sympify(0) for _ in range(4)] for __ in range(4)]
 
     # CForm[FullSimplify[Inverse[A]*Det[A]]] >>> t.txt
     # cat t.txt | sed "s/,/\n/g;s/List(//g;s/))/)/g;s/)//g;s/(//g"|grep -v ^$|sed "s/ //g;s/\([0-3]\)/[\1]/g"| awk '{line[NR]=$0}END{count=1;for(i=0;i<4;i++) { for(j=0;j<4;j++) { printf "outINV[%d][%d] = %s\n", i,j,line[count];count++; }}}'
