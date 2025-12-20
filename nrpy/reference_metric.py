@@ -1403,7 +1403,8 @@ class ReferenceMetric:
         self.scalefactor_orthog[1] = var1
         self.scalefactor_orthog[2] = AA * sp.sin(self.xx[1])
 
-        # In prolate-spheroidal-like coords, only the 2th coordinate direction is angular; the rest are radial-like:
+        # In prolate-spheroidal-like coords, only the 2nd coordinate direction is angular everywhere;
+        #   the rest are radial-like near the foci, though the 1st is angular-like far away:
         self.radial_like_dirns = [0, 1]
 
         self.f0_of_xx0 = AA
