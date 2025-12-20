@@ -10,7 +10,7 @@ Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
          Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
 """
 
-from typing import Any, Dict, List, Tuple, cast
+from typing import Any, Dict, List, Tuple
 
 import sympy as sp
 
@@ -303,69 +303,65 @@ class ReferenceMetric:
             # metric are treated as *primitive* tensors, never obtained by
             # differentiating ghatDD inside ReferenceMetric.
             # First derivatives: symmetric in (i,j).
-            for i in range(3):
-                for j in range(i, 3):
-                    for k in range(3):
-                        sym = sp.Symbol(f"ghatDDdD{i}{j}{k}", real=True)
-                        self.ghatDDdD[i][j][k] = sym
-                        self.ghatDDdD[j][i][k] = sym
-
-            # Second derivatives: symmetric in (i,j) and in (k,l).
-            for i in range(3):
-                for j in range(i, 3):
-                    for k in range(3):
-                        for l in range(k, 3):
-                            sym = sp.Symbol(f"ghatDDdDD{i}{j}{k}{l}", real=True)
-                            self.ghatDDdDD[i][j][k][l] = sym
-                            self.ghatDDdDD[j][i][k][l] = sym
-                            self.ghatDDdDD[i][j][l][k] = sym
-                            self.ghatDDdDD[j][i][l][k] = sym
+            self.ghatDDdD = ixp.declarerank3("ghatDDdD", dimension=3, symmetry="sym01")
+            self.ghatDDdDD = ixp.declarerank4(
+                "ghatDDdDD", dimension=3, symmetry="sym01sym23"
+            )
 
             # Algebraic computation of detgammahatdD using Jacobi's formula:
             # D_{,k} = D * g^{ij} * g_{ij,k}
+            self.detgammahatdD = ixp.zerorank1(dimension=3)
             for k in range(3):
-                tmp = sp.sympify(0)
                 for i in range(3):
                     for j in range(3):
-                        tmp += self.ghatUU[i][j] * self.ghatDDdD[i][j][k]
-                self.detgammahatdD[k] = self.detgammahat * tmp
+                        self.detgammahatdD[k] += (
+                            self.detgammahat
+                            * self.ghatUU[i][j]
+                            * self.ghatDDdD[i][j][k]
+                        )
 
             # Algebraic computation of detgammahatdDD:
-            # D_{,kl} = D * [ g^{mn} g_{mn,l} * g^{ij} g_{ij,k}
-            #                - g^{ip} g^{jq} g_{pq,l} g_{ij,k}
-            #                + g^{ij} g_{ij,kl} ]
+            # D_{,kl} = D * [ g^{mn} g_{mn,l} * g^{ij} g_{ij,k} <- TERM 1
+            #                - g^{ip} g^{jq} g_{pq,l} g_{ij,k}  <- TERM 2
+            #                + g^{ij} g_{ij,kl} ]               <- TERM 3
+            self.detgammahatdDD = ixp.zerorank2(dimension=3)
+            # TERM 1:
+            # D * ( g^{mn} g_{mn,l} * g^{ij} g_{ij,k} )
             for k in range(3):
                 for l in range(3):
-                    # S_k = g^{ij} g_{ij,k}
-                    S_k = sp.sympify(0)
                     for i in range(3):
                         for j in range(3):
-                            S_k += self.ghatUU[i][j] * self.ghatDDdD[i][j][k]
-                    # T_l = g^{mn} g_{mn,l}
-                    T_l = sp.sympify(0)
-                    for m in range(3):
-                        for n in range(3):
-                            T_l += self.ghatUU[m][n] * self.ghatDDdD[m][n][l]
-                    # U_{kl} = -g^{ip} g^{jq} g_{pq,l} g_{ij,k}
-                    U_kl = sp.sympify(0)
+                            for m in range(3):
+                                for n in range(3):
+                                    self.detgammahatdDD[k][l] += self.detgammahat * (
+                                        self.ghatUU[m][n]
+                                        * self.ghatDDdD[m][n][l]
+                                        * self.ghatUU[i][j]
+                                        * self.ghatDDdD[i][j][k]
+                                    )
+            # TERM 2:
+            # D * ( - g^{ip} g^{jq} g_{pq,l} g_{ij,k} )
+            for k in range(3):
+                for l in range(3):
                     for i in range(3):
                         for j in range(3):
                             for p in range(3):
                                 for q in range(3):
-                                    U_kl -= (
-                                        self.ghatUU[i][p]
+                                    self.detgammahatdDD[k][l] += self.detgammahat * (
+                                        -self.ghatUU[i][p]
                                         * self.ghatUU[j][q]
                                         * self.ghatDDdD[p][q][l]
                                         * self.ghatDDdD[i][j][k]
                                     )
-                    # V_{kl} = g^{ij} g_{ij,kl}
-                    V_kl = sp.sympify(0)
+            # TERM 3:
+            # D * ( g^{ij} g_{ij,kl} )
+            for k in range(3):
+                for l in range(3):
                     for i in range(3):
                         for j in range(3):
-                            V_kl += self.ghatUU[i][j] * self.ghatDDdDD[i][j][k][l]
-                    self.detgammahatdDD[k][l] = self.detgammahat * (
-                        T_l * S_k + U_kl + V_kl
-                    )
+                            self.detgammahatdDD[k][l] += self.detgammahat * (
+                                self.ghatUU[i][j] * self.ghatDDdDD[i][j][k][l]
+                            )
 
             # For GeneralRFM, all rescaling derivatives remain identically zero
             # (already initialized above via zerorank* calls).
