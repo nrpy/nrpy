@@ -428,70 +428,61 @@ class ReferenceMetric:
 
         # Step 4b: Compute derivs of Christoffel symbols of reference metric.
         self.GammahatUDDdD = ixp.zerorank4(3)
-        if self.CoordSystem == "GeneralRFM":
-            # Algebraic construction of GammahatUDDdD from ghatUU, ghatDDdD, ghatDDdDD.
-            # Gamma^i_{jk,l} = [g^{mi} Gamma_{mjk}],l
-            #                = g^{mi}_{,l} Gamma_{mjk} + g^{mi} Gamma_{mjk,l},
-            #  where Gamma_{cab} = 1/2 ( g_{ca,b} + g_{cb,a} - g_{ab,c} )
-            GammahatDDD = ixp.zerorank3()
-            for c in range(3):
-                for a in range(3):
-                    for b in range(3):
-                        GammahatDDD[c][a][b] += sp.Rational(1, 2) * (
-                            self.ghatDDdD[c][a][b]
-                            + self.ghatDDdD[c][b][a]
-                            - self.ghatDDdD[a][b][c]
+        # Algebraic construction of GammahatUDDdD from ghatUU, ghatDDdD, ghatDDdDD.
+        # Gamma^i_{jk,l} = [g^{mi} Gamma_{mjk}],l
+        #                = g^{mi}_{,l} Gamma_{mjk} + g^{mi} Gamma_{mjk,l},
+        #  where Gamma_{cab} = 1/2 ( g_{ca,b} + g_{cb,a} - g_{ab,c} )
+        GammahatDDD = ixp.zerorank3()
+        for c in range(3):
+            for a in range(3):
+                for b in range(3):
+                    GammahatDDD[c][a][b] += sp.Rational(1, 2) * (
+                        self.ghatDDdD[c][a][b]
+                        + self.ghatDDdD[c][b][a]
+                        - self.ghatDDdD[a][b][c]
+                    )
+        #  Then, Gamma_{cab,d} = 1/2 ( g_{ca,bd} + g_{cb,ad} - g_{ab,cd} )
+        GammahatDDDdD = ixp.zerorank4()
+        for c in range(3):
+            for a in range(3):
+                for b in range(3):
+                    for d in range(3):
+                        GammahatDDDdD[c][a][b][d] += sp.Rational(1, 2) * (
+                            self.ghatDDdDD[c][a][b][d]
+                            + self.ghatDDdDD[c][b][a][d]
+                            - self.ghatDDdDD[a][b][c][d]
                         )
-            #  Then, Gamma_{cab,d} = 1/2 ( g_{ca,bd} + g_{cb,ad} - g_{ab,cd} )
-            GammahatDDDdD = ixp.zerorank4()
-            for c in range(3):
-                for a in range(3):
-                    for b in range(3):
-                        for d in range(3):
-                            GammahatDDDdD[c][a][b][d] += sp.Rational(1, 2) * (
-                                self.ghatDDdDD[c][a][b][d]
-                                + self.ghatDDdDD[c][b][a][d]
-                                - self.ghatDDdDD[a][b][c][d]
+        # So we have
+        # Gamma^i_{jk,l} = [g^{mi} Gamma_{mjk}],l
+        #                 = g^{mi}_{,l} Gamma_{mjk} + g^{mi} Gamma_{mjk,l},
+        # where we can use the identity g^{mi}_{,l} = -g^{ip} g^{mq} g_{pq,l}
+        ghatUUdD = ixp.zerorank3()
+        for i in range(3):
+            for l in range(3):
+                for m in range(3):
+                    for p in range(3):
+                        for q in range(3):
+                            ghatUUdD[m][i][l] += (
+                                -self.ghatUU[i][p]
+                                * self.ghatUU[m][q]
+                                * self.ghatDDdD[p][q][l]
                             )
-            # So we have
-            # Gamma^i_{jk,l} = [g^{mi} Gamma_{mjk}],l
-            #                 = g^{mi}_{,l} Gamma_{mjk} + g^{mi} Gamma_{mjk,l},
-            # where we can use the identity g^{mi}_{,l} = -g^{ip} g^{mq} g_{pq,l}
-            ghatUUdD = ixp.zerorank3()
-            for i in range(3):
-                for l in range(3):
-                    for m in range(3):
-                        for p in range(3):
-                            for q in range(3):
-                                ghatUUdD[m][i][l] += (
-                                    -self.ghatUU[i][p]
-                                    * self.ghatUU[m][q]
-                                    * self.ghatDDdD[p][q][l]
-                                )
-            # Gamma^i_{jk,l} = [g^{mi} Gamma_{mjk}],l
-            #                 = g^{mi}_{,l} Gamma_{mjk} + g^{mi} Gamma_{mjk,l},
-            self.GammahatUDDdD = ixp.zerorank4()
-            for i in range(3):
-                for j in range(3):
-                    for k in range(3):
-                        for l in range(3):
-                            for m in range(3):
-                                self.GammahatUDDdD[i][j][k][l] += (
-                                    ghatUUdD[m][i][l] * GammahatDDD[m][j][k]
-                                    + self.ghatUU[m][i] * GammahatDDDdD[m][j][k][l]
-                                )
-        else:
-            for i in range(3):
-                for j in range(3):
-                    for k in range(3):
-                        for l in range(3):
-                            self.GammahatUDDdD[i][j][k][l] = sp.diff(
-                                self.GammahatUDD[i][j][k], self.xx[l]
+        # Gamma^i_{jk,l} = [g^{mi} Gamma_{mjk}],l
+        #                 = g^{mi}_{,l} Gamma_{mjk} + g^{mi} Gamma_{mjk,l},
+        self.GammahatUDDdD = ixp.zerorank4()
+        for i in range(3):
+            for j in range(3):
+                for k in range(3):
+                    for l in range(3):
+                        for m in range(3):
+                            self.GammahatUDDdD[i][j][k][l] += (
+                                ghatUUdD[m][i][l] * GammahatDDD[m][j][k]
+                                + self.ghatUU[m][i] * GammahatDDDdD[m][j][k][l]
                             )
 
         # Step 4c: If rfm_precompute is disabled, then we are finished with this function.
         #          Otherwise continue to Step 5.
-        if not enable_rfm_precompute:
+        if not enable_rfm_precompute or CoordSystem.startswith("GeneralRFM"):
             return
 
         # Step 5: Now that all hatted quantities are written in terms of generic SymPy functions,
