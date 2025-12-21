@@ -7,7 +7,7 @@ Author: Ken Sible
 Email:  ksible *at* outlook *dot* com
 """
 
-from typing import List, Union, cast
+from typing import List, Tuple, Union, cast
 
 import sympy as sp
 
@@ -97,7 +97,7 @@ def rotate(
         :return: The result of Quaternion-matrix multiplication.
         """
         if isinstance(args[0], list):
-            q, M = args[1], args[0]
+            q, M = cast(sp.Quaternion, args[1]), args[0]
             for i, col in enumerate(M):
                 M[i] = col * q
         else:
@@ -107,21 +107,33 @@ def rotate(
         return M
 
     # Rotation Quaternion (Axis, Angle)
-    q = sp.Quaternion.from_axis_angle(axis, angle)
+    q = sp.Quaternion.from_axis_angle(
+        cast(Tuple[sp.Expr, sp.Expr, sp.Expr], tuple(axis)), cast(sp.Expr, angle)
+    )
     if isinstance(tensor[0], list):
         Matrix_from_tensor = sp.Matrix(tensor)
         if Matrix_from_tensor.shape != (3, 3):
             raise ValueError("Invalid sp.Matrix Size: Expected a (3x3) matrix.")
         # Rotation Formula: M' = (q.(q.M.q*)^T.q*)^T
         M = [
-            sp.Quaternion(0, *Matrix_from_tensor[:, i])
+            sp.Quaternion(
+                0,
+                Matrix_from_tensor[0, i],
+                Matrix_from_tensor[1, i],
+                Matrix_from_tensor[2, i],
+            )
             for i in range(Matrix_from_tensor.shape[1])
         ]
         M = mul(q, mul(M, q.conjugate()))
         for i in range(Matrix_from_tensor.shape[1]):
             Matrix_from_tensor[:, i] = [M[i].b, M[i].c, M[i].d]
         M = [
-            sp.Quaternion(0, *Matrix_from_tensor[i, :])
+            sp.Quaternion(
+                0,
+                Matrix_from_tensor[i, 0],
+                Matrix_from_tensor[i, 1],
+                Matrix_from_tensor[i, 2],
+            )
             for i in range(Matrix_from_tensor.shape[0])
         ]
         M = mul(q, mul(M, q.conjugate()))
