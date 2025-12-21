@@ -136,7 +136,9 @@ def HLL_solver(
     :param Ul: conserved quantity at left interface
     :return: HLL flux at an interface
     """
-    return cast(sp.Expr, (cmin * Fr + cmax * Fl - cmin * cmax * (Ur - Ul)) / (cmax + cmin))
+    return cast(
+        sp.Expr, (cmin * Fr + cmax * Fl - cmin * cmax * (Ur - Ul)) / (cmax + cmin)
+    )
 
 
 def calculate_HLL_fluxes(
