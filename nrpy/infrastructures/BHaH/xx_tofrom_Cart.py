@@ -9,7 +9,7 @@ Author: Zachariah B. Etienne
 from functools import lru_cache
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import List, Set, Tuple, Union, cast
+from typing import Any, Dict, List, Set, Tuple, Union, cast
 
 import sympy as sp
 
@@ -195,11 +195,16 @@ def _prepare_sympy_exprs_for_codegen(
     """
     # Create a single substitution dictionary for all unique parameters.
     all_symbols = set().union(*(expr.free_symbols for expr in sympy_exprs))
-    substitutions = {
-        symbol: sp.symbols(f"params->{symbol.name}")
-        for symbol in all_symbols
-        if symbol.name not in local_vars
-    }
+    # FIX: Use Dict[Any, Any] to satisfy mypy's variance checks for .subs()
+    substitutions: Dict[Any, Any] = {}
+
+    for sym in all_symbols:
+        # We explicitly cast Basic -> Symbol to access .name safely
+        symbol = cast(sp.Symbol, sym)
+
+        if symbol.name not in local_vars:
+            # We explicitly type the replacement as a Symbol (which is an Expr)
+            substitutions[symbol] = sp.symbols(f"params->{symbol.name}")
 
     # Apply the substitution to each expression.
     return [expr.subs(substitutions) for expr in sympy_exprs]
