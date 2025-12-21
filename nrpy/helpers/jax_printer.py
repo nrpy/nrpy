@@ -13,6 +13,14 @@ try:
     from sympy.printing.numpy import JaxPrinter as Printer
     from sympy.printing.numpy import _jax_known_constants as known_constants
     from sympy.printing.numpy import _jax_known_functions as known_functions
+
+    # SymPy's default JaxPrinter uses 'jax.numpy', but we want 'jnp'
+    known_functions = {
+        k: v.replace("jax.numpy", "jnp") for k, v in known_functions.items()
+    }
+    known_constants = {
+        k: v.replace("jax.numpy", "jnp") for k, v in known_constants.items()
+    }
 except ImportError:
     # Fallback for older SymPy versions
     from sympy.printing.numpy import NumPyPrinter as Printer  # type: ignore
