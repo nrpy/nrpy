@@ -6,7 +6,6 @@ Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
          Ken Sible; ksible **at** outlook **dot* com
 """
 
-import logging
 import sys
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union, cast
 
@@ -237,8 +236,8 @@ class CCodeGen:
             major = int(parts[0])
             minor = int(parts[1])
             if (major, minor) < (1, 3):
-                logging.warning(
-                    f"SymPy version {sp.__version__} does not support CSE preprocessing. Disabling..."
+                print(
+                    f"Warning: SymPy version {sp.__version__} does not support CSE preprocessing. Disabling..."
                 )
                 self.enable_cse_preprocess = False
 
