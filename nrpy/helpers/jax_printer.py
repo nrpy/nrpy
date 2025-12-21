@@ -11,9 +11,8 @@ import sympy as sp
 
 try:
     from sympy.printing.numpy import JaxPrinter as Printer
-
-    from sympy.printing.numpy import _known_constants_jax as known_constants  # type: ignore[attr-defined] # isort: skip
-    from sympy.printing.numpy import _known_functions_jax as known_functions  # type: ignore[attr-defined] # isort: skip
+    from sympy.printing.numpy import _jax_known_constants as known_constants
+    from sympy.printing.numpy import _jax_known_functions as known_functions
 except ImportError:
     # Fallback for older SymPy versions
     from sympy.printing.numpy import NumPyPrinter as Printer  # type: ignore
