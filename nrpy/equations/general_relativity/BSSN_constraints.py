@@ -1,3 +1,4 @@
+# nrpy/equations/general_relativity/BSSN_constraints.py
 """
 Construct expressions for the BSSN Hamiltonian and momentum constraint equations.
 
@@ -15,7 +16,6 @@ import nrpy.indexedexp as ixp  # NRPy: Symbolic indexed expression (e.g., tensor
 import nrpy.params as par  # NRPy: Parameter interface
 import nrpy.reference_metric as refmetric  # NRPy: Reference metric support
 from nrpy.equations.general_relativity import T4munu
-
 # NRPy: Computes useful BSSN quantities
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 

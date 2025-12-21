@@ -1,3 +1,4 @@
+# nrpy/equations/general_relativity/BSSN_RHSs.py
 """
 Construct the right-hand side (RHS) expressions for the BSSN (Baumgarte-Shapiro-Shibata-Nakamura) evolution equations.
 
@@ -8,7 +9,6 @@ Author: Zachariah B. Etienne
 """
 
 from collections import OrderedDict
-
 # Step 1.a: import all needed modules from NRPy:
 from typing import Dict
 

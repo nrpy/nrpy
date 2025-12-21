@@ -1,3 +1,4 @@
+# nrpy/equations/general_relativity/InitialData_Spherical.py
 """
 Set up initial data for solving Einstein's equations of general relativity, for data most naturally specified in Spherical coordinates.
 
@@ -7,13 +8,12 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import List, Tuple
+from typing import List, Tuple, cast
 
 import sympy as sp
 
 # NRPy: This module depends on the parameter EvolvedConformalFactor_cf,
 #        which is defined in BSSN.BSSN_quantities
-import nrpy.equations.general_relativity.BSSN_quantities  # pylint: disable=unused-import
 import nrpy.indexedexp as ixp
 import nrpy.params as par
 from nrpy.equations.general_relativity.ADM_to_BSSN import ADM_to_BSSN
@@ -27,7 +27,7 @@ class InitialData_Spherical:
 
         self.gammaDD = ixp.zerorank2()
         self.KDD = ixp.zerorank2()
-        self.alpha = sp.sympify(0)
+        self.alpha = cast(sp.Expr, sp.sympify(0))
         self.betaU = ixp.zerorank1()
         self.BU = ixp.zerorank1()
 

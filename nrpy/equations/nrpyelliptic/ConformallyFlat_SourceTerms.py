@@ -110,12 +110,12 @@ def replace_cart_coord_by_xx(rfm: refmetric.ReferenceMetric, expr: sp.Expr) -> s
 
 
 def VU_cart_two_punctures(
-    _x0U: List[sp.Symbol],
-    _P0U: List[sp.Symbol],
-    _S0U: List[sp.Symbol],
-    _x1U: List[sp.Symbol],
-    _P1U: List[sp.Symbol],
-    _S1U: List[sp.Symbol],
+    _x0U: List[sp.Expr],
+    _P0U: List[sp.Expr],
+    _S0U: List[sp.Expr],
+    _x1U: List[sp.Expr],
+    _P1U: List[sp.Expr],
+    _S1U: List[sp.Expr],
 ) -> List[sp.Expr]:
     """
     Compute Bowen-York vector for two punctures in Cartesian coordinates.
@@ -171,14 +171,14 @@ def VU_cart_two_punctures(
         return vec1_cross_vec2
 
     def VU_cart_single_puncture(
-        xU: List[sp.Symbol], PU: List[sp.Symbol], SU: List[sp.Symbol]
+        xU: List[sp.Expr], PU: List[sp.Expr], SU: List[sp.Expr]
     ) -> List[sp.Expr]:
         """
         Compute the Bowen-York vector for a single puncture, given the puncture's position, linear momentum, and spin.
 
-        :param xU: A list of sympy symbols representing the Cartesian coordinates of the puncture's position.
-        :param PU: A list of sympy symbols representing the Cartesian components of the puncture's linear momentum.
-        :param SU: A list of sympy symbols representing the Cartesian components of the puncture's spin.
+        :param xU: A list of sympy symbols/exprs representing the Cartesian coordinates of the puncture's position.
+        :param PU: A list of sympy symbols/exprs representing the Cartesian components of the puncture's linear momentum.
+        :param SU: A list of sympy symbols/exprs representing the Cartesian components of the puncture's spin.
 
         :return: A list of sympy expressions representing the Cartesian components of the Bowen-York vector field at the puncture.
         """

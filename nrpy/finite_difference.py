@@ -955,7 +955,7 @@ def proto_FD_operators_to_sympy_expressions(
     fdcoeffs: List[List[sp.Rational]],
     fdstencl: List[List[List[int]]],
     enable_simd: bool = False,
-) -> Tuple[List[sp.Basic], List[str], Dict[sp.Basic, sp.Rational]]:
+) -> Tuple[List[sp.Expr], List[str], Dict[sp.Basic, sp.Rational]]:
     """
     Convert finite difference (FD) operators to SymPy expressions.
 
@@ -1080,7 +1080,7 @@ def proto_FD_operators_to_sympy_expressions(
             negative=enable_simd,
             factor=True,
         )
-        FDexprs[i] = processed_FDexpr[0]
+        FDexprs[i] = cast(sp.Expr, processed_FDexpr[0])
 
         FDFunctions_dict[operator] = FDFunction(
             fp_type_alias=gf_type,

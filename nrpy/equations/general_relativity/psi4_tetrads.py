@@ -1,3 +1,4 @@
+# nrpy/equations/general_relativity/psi4_tetrads.py
 """
 Construct tetrads needed to compute psi_4 (as well as other Weyl scalars and invariants if desired).
 
@@ -204,7 +205,7 @@ class Psi4Tetrads:
             for i in range(3):
                 u4U[i + 1] = -Bq.betaU[i] / Bq.alpha
         else:
-            u4U[0] = 1
+            u4U[0] = sp.sympify(1)
 
         self.l4U = ixp.zerorank1(dimension=4)
         self.n4U = ixp.zerorank1(dimension=4)

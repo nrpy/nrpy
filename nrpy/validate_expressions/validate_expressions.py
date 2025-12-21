@@ -86,7 +86,7 @@ def assert_equal(
     if not isinstance(vardict_1, dict):
         vardict_1 = {"": cast(sp.Expr, sp.sympify(vardict_1))}
     if not isinstance(vardict_2, dict):
-        vardict_2 = {"": cast(sp.Expr, sp.sympify(vardict_2))}
+        vardict_2 = {"": sp.sympify(vardict_2)}
 
     vardict_1_results_dict = process_dictionary_of_expressions(
         vardict_1, fixed_mpfs_for_free_symbols=True

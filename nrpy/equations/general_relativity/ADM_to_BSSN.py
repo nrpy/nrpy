@@ -1,3 +1,4 @@
+# nrpy/equations/general_relativity/ADM_to_BSSN.py
 """
 Construct expressions for BSSN quantities in terms of ADM quantities.
 
@@ -12,7 +13,6 @@ import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy
 
 # NRPy: This module depends on the parameter EvolvedConformalFactor_cf,
 #        which is defined in BSSN.BSSN_quantities
-import nrpy.equations.general_relativity.BSSN_quantities  # pylint: disable=unused-import
 import nrpy.indexedexp as ixp  # NRPy: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 import nrpy.params as par  # NRPy: Parameter interface
 import nrpy.reference_metric as refmetric  # NRPy: Reference metric support
